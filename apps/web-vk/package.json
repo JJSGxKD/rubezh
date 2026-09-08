@@ -1,0 +1,18 @@
+{
+  "name": "web-vk",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite --mode vk",
+    "build": "vite build --mode vk",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bh/core-game": "*",
+    "@bh/adapter-vk": "*",
+    "phaser": "^3.80.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

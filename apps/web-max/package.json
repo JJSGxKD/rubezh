@@ -1,0 +1,18 @@
+{
+  "name": "web-max",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite --mode max",
+    "build": "vite build --mode max",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bh/core-game": "*",
+    "@bh/adapter-max": "*",
+    "phaser": "^3.80.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

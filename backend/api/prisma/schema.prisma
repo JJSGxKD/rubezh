@@ -1,0 +1,73 @@
+// Схема MVP-скоупа (docs/02-roadmap.md). Прогрессия/лига/снаряжение из
+// docs/10-progression-and-ladder.md — Фаза 2, сюда сознательно не добавлены,
+// чтобы не тащить неиспользуемые таблицы в MVP.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  telegram
+  max
+  vk
+  web
+}
+
+// Аккаунты НЕ связываются между платформами — один и тот же человек на
+// разных площадках это разные строки User. См. docs/08-web-and-identity.md §3.
+model User {
+  id            String    @id @default(uuid())
+  platform      Platform
+  platformUserId String   // ID пользователя на стороне платформы (initData/VK ID/и т.д.)
+  displayName   String
+  avatarUrl     String?
+  locale        String?   // только telegram/web, см. docs/01-tech-stack.md §7
+  createdAt     DateTime  @default(now())
+
+  runs      Run[]
+  purchases Purchase[]
+
+  @@unique([platform, platformUserId])
+}
+
+// Результат забега. Лучший результат уходит в Redis ZSET для лидерборда
+// (docs/01-tech-stack.md §3) — здесь хранится сырая история для антифрода
+// и аналитики, не для чтения лидерборда напрямую.
+model Run {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  score       Int
+  durationSec Int
+  waveReached Int
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum PurchaseItemKind {
+  skin
+  continue_run
+  character_unlock
+  ad_removal_pack
+  seasonal
+}
+
+model Purchase {
+  id            String            @id @default(uuid())
+  userId        String
+  user          User              @relation(fields: [userId], references: [id])
+  itemId        String
+  kind          PurchaseItemKind
+  platform      Platform
+  priceMinor    Int               // в минимальных единицах валюты платформы (копейки/Stars)
+  transactionId String            @unique
+  createdAt     DateTime          @default(now())
+
+  @@index([userId])
+}

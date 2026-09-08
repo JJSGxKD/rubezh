@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared-types" },
+    { "path": "packages/core-game" },
+    { "path": "packages/adapter-telegram" },
+    { "path": "packages/adapter-max" },
+    { "path": "packages/adapter-vk" },
+    { "path": "backend/api" }
+  ]
+}
