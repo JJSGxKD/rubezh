@@ -205,7 +205,20 @@ rate-limit через подделку `X-Forwarded-For`, неатомарный
   `A; if ($?) { B }`;
 - вместо `cp` / `rm -rf` — `Copy-Item` / `Remove-Item -Recurse -Force`;
 - `nvm-windows` не читает `.nvmrc`, версию Node называем явно;
-- CI при этом Linux — скрипты в `.github/workflows` пишутся под bash.
+- CI и **прод-сервер — Ubuntu Server LTS**: скрипты в `.github/workflows` и в
+  контейнерах пишутся под bash.
+
+Отсюда четыре правила, которые на Windows нарушаются незаметно:
+
+- **регистр имён файлов.** Linux различает `Enemy.png` и `enemy.png`, Windows
+  нет. TS-импорты прикрыты `forceConsistentCasingInFileNames`, но строковые
+  пути к ассетам — нет: локально работает, в проде 404. Имена ассетов —
+  строчными;
+- **бит исполняемости** у `.sh` не выставляется из Windows: либо
+  `git update-index --chmod=+x`, либо `chmod +x` в Dockerfile;
+- **пути** — только через `node:path`, без захардкоженных `\`;
+- **время** — сервер в UTC. В БД и логах всё в UTC, локальное время только на
+  отображении. Иначе поедут сутки в аналитике и hold-периоды выплат.
 
 Переводы строк нормализуются `.gitattributes` (всё хранится с LF): скрипт с
 CRLF внутри Linux-контейнера падает с `bad interpreter`.
