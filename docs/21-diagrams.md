@@ -184,6 +184,108 @@ erDiagram
 неизменяемый снапшот правил игры, а не пользовательские данные
 (`19-content-admin.md` §3).
 
+### 1.3 Привлечение, партнёры и аналитика (проектируется)
+
+Вынесено отдельной диаграммой намеренно: это другой домен со своим циклом
+жизни, и смешивать его с игровыми сущностями в одной схеме — путь к
+нечитаемой картинке.
+
+```mermaid
+erDiagram
+    CLICK ||--o| USER : "атрибутирует"
+    PARTNER ||--o{ PARTNER_LINK : "владеет"
+    PARTNER ||--o{ PROMO_CODE : "владеет"
+    PARTNER_LINK ||--o{ CLICK : "порождает"
+    PROMO_CODE ||--o{ USER : "привязывает"
+    PARTNER ||--o{ PARTNER_ACCRUAL : "получает"
+    PAYMENT ||--o| PARTNER_ACCRUAL : "порождает"
+    USER ||--o{ SHARE : "создаёт"
+    SHARE ||--o{ CLICK : "порождает"
+    USER ||--o{ ANALYTICS_EVENT : "порождает"
+
+    CLICK {
+        uuid click_id PK
+        string code UK "короткий непредсказуемый"
+        string utmSource
+        string utmCampaign
+        string referer
+        string ip "усекается по истечении срока"
+        string userAgent
+        uuid refId "nullable"
+        uuid partnerId "nullable"
+        uuid shareId "nullable"
+        datetime createdAt
+        datetime boundAt "когда связан с игроком"
+    }
+
+    PARTNER {
+        uuid id PK
+        string telegramId UK
+        enum payoutModel "REVSHARE|CPA_FTD|HYBRID"
+        decimal revsharePercent
+        int holdDays
+        bool isBlocked
+        datetime createdAt
+    }
+
+    PARTNER_LINK {
+        uuid id PK
+        uuid partnerId FK
+        string code UK
+        string campaign
+        datetime createdAt
+    }
+
+    PROMO_CODE {
+        uuid id PK
+        uuid partnerId FK
+        string code UK
+        int activationLimit
+        datetime expiresAt
+    }
+
+    PARTNER_ACCRUAL {
+        uuid id PK
+        uuid partnerId FK
+        uuid paymentId FK
+        decimal amount "Decimal, не Float"
+        enum status "HELD|PAYABLE|PAID|CANCELLED"
+        datetime holdUntil
+    }
+
+    SHARE {
+        uuid id PK
+        uuid userId FK
+        enum kind "RUN_RESULT|PROFILE_CARD"
+        string variant "оформление карточки, для A/B"
+        enum channel "CHAT|STORY|WALL|WEB_SHARE"
+        string code UK "своя ссылка на каждый шеринг"
+        datetime createdAt
+    }
+
+    ANALYTICS_EVENT {
+        uuid event_id PK
+        string event_type "только из словаря"
+        int schema_version
+        uuid userId "nullable"
+        json attribution "снимок на момент события"
+        json payload
+        datetime occurred_at
+        datetime received_at
+    }
+```
+
+Три решения, которые из схемы не очевидны:
+
+- **`CLICK` существует до пользователя.** Строка создаётся в момент клика,
+  когда игрока ещё нет; `boundAt` заполняется при первом запуске.
+- **`ANALYTICS_EVENT.attribution` — снимок, а не ссылка.** Иначе
+  перепривязка задним числом переписывает историю и отчёт за прошлый месяц
+  перестаёт воспроизводиться (`22-analytics-and-metrics.md` §3.1).
+- **У каждого шеринга своя ссылка.** `SHARE.code` — отдельный код на каждый
+  шеринг, а не общая реферальная ссылка игрока: только так измеряется, что
+  конвертит лучше (`24-attribution-and-sharing.md` §7.3).
+
 ---
 
 ## 2. Пакеты монорепо и направления зависимостей
@@ -411,6 +513,73 @@ flowchart TD
 ```
 
 Подробности и рамки — `19-content-admin.md`.
+
+### 4.5 Путь атрибуции: от клика до игрока
+
+```mermaid
+sequenceDiagram
+    participant U as Пользователь
+    participant R as Редирект-страница
+    participant DB as PostgreSQL
+    participant P as Платформа (Telegram/MAX/VK)
+    participant API as Бэкенд
+
+    U->>R: GET /r/{code} с UTM-метками
+    R->>R: собрать UA, IP, Referer, язык, время
+    R--)DB: записать CLICK (асинхронно)
+    alt прямая ссылка
+        R-->>U: редирект в платформу с click_id
+    else через хаб
+        R-->>U: страница с кнопками платформ
+        U->>R: выбор платформы
+        R-->>U: редирект с тем же click_id
+    end
+    U->>P: запуск Mini App
+    P->>API: авторизация + startParam = click_id
+    API->>DB: найти CLICK, проверить срок жизни
+    API->>API: правила приоритета атрибуции
+    API->>DB: заполнить слот источника, SESSION, ACQUISITION
+    API--)DB: события app_first_open, user_registered
+```
+
+Краулер мессенджера, запрашивающий превью ссылки, кликом **не считается** —
+иначе одна отправка в чат порождает фантомный клик и занижает конверсию
+(`24-attribution-and-sharing.md` §3.3).
+
+### 4.6 Аналитический конвейер
+
+```mermaid
+flowchart LR
+    MOD["Модули бэкенда<br/>и клиент"]
+    EMIT["Эмиттер событий"]
+    Q["BullMQ"]
+    RD[("Redis<br/>живые счётчики")]
+    W["Воркер<br/>батч-вставка"]
+    PG[("PostgreSQL<br/>сырые события")]
+    ROLL["Крон пересчёта<br/>витрин"]
+    MART[("Витрины<br/>mart_*")]
+    REPL[("Read-реплика")]
+    PROM["Prometheus"]
+    GRAF["Grafana"]
+
+    MOD --> EMIT
+    EMIT --> Q
+    EMIT --> RD
+    Q --> W
+    W --> PG
+    PG --> ROLL
+    ROLL --> MART
+    PG -.репликация.-> REPL
+    MART -.репликация.-> REPL
+    RD --> PROM
+    PROM --> GRAF
+    REPL --> GRAF
+```
+
+Существенное: **Grafana не ходит в горячие таблицы.** Живые панели читают
+Prometheus, всё остальное — витрины на реплике. Иначе открытый на стене
+дашборд с автообновлением становится постоянной паразитной нагрузкой на ту
+же БД, которая принимает забеги (`22-analytics-and-metrics.md` §1).
 
 ---
 
