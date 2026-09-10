@@ -2,14 +2,15 @@
   "name": "web-telegram",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite --mode telegram",
     "build": "vite build --mode telegram",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bh/core-game": "*",
-    "@bh/adapter-telegram": "*",
+    "@bh/core-game": "workspace:*",
+    "@bh/adapter-telegram": "workspace:*",
     "phaser": "^3.80.0"
   },
   "devDependencies": {

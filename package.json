@@ -2,19 +2,19 @@
   "name": "bullet-heaven-monorepo",
   "private": true,
   "version": "0.1.0",
-  "workspaces": [
-    "packages/*",
-    "apps/*",
-    "backend/api"
-  ],
+  "type": "module",
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
-    "dev:telegram": "npm run dev -w apps/web-telegram",
-    "dev:max": "npm run dev -w apps/web-max",
-    "dev:vk": "npm run dev -w apps/web-vk",
-    "dev:backend": "npm run start:dev -w backend/api",
-    "build": "npm run build --workspaces --if-present",
+    "dev:telegram": "pnpm --filter web-telegram dev",
+    "dev:max": "pnpm --filter web-max dev",
+    "dev:vk": "pnpm --filter web-vk dev",
+    "dev:backend": "pnpm --filter backend-api start:dev",
+    "build": "pnpm -r --if-present build",
     "typecheck": "tsc -b --pretty",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint ."
   },
   "devDependencies": {
     "typescript": "^5.6.0",

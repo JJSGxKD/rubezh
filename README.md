@@ -1,6 +1,8 @@
 # Bullet-heaven / dungeon-runner мини-игра
 
-Кроссплатформенная HTML5-игра для MAX, Telegram, VK и браузера.
+Кроссплатформенная HTML5-игра для Telegram, MAX, VK и браузера.
+Приоритет разработки — **Telegram первым**, MAX и VK портируются после
+(обоснование — `docs/02-roadmap.md` §«Приоритет платформ»).
 Полная проектная документация — в [`docs/`](./docs/00-README.md), начать
 оттуда. Этот файл — только техническая шпаргалка "как поднять и запустить".
 
@@ -12,15 +14,19 @@
 
 - Node.js 22 LTS (см. `.nvmrc` — `nvm use`)
 - Docker + Docker Compose (для Postgres/Redis локально)
-- npm 10+ (идёт вместе с Node)
+- **pnpm** — ставится одной командой через Corepack, входящий в Node:
+  `corepack enable pnpm`. Версия берётся из поля `packageManager` в корневом
+  `package.json`, поэтому у всех и в CI она одинаковая. Почему pnpm, а не npm
+  или bun — `docs/16-tech-stack-decisions.md` §2
 
 ## Установка
 
 ```bash
-git clone <URL этого репозитория>
-cd bullet-heaven-monorepo
+git clone https://github.com/JJSGxKD/rubezh.git
+cd rubezh
+corepack enable pnpm        # один раз на машину
 cp .env.example .env        # заполнить реальными ключами по мере подключения провайдеров
-npm install                 # ставит зависимости во все workspace-пакеты разом
+pnpm install                # ставит зависимости во все workspace-пакеты разом
 docker compose up -d        # поднимает Postgres + Redis для локальной разработки
 ```
 
@@ -30,19 +36,24 @@ docker compose up -d        # поднимает Postgres + Redis для лок�
 `docs/01-tech-stack.md` §1 и `docs/09-ci-cd.md`):
 
 ```bash
-npm run dev:telegram   # apps/web-telegram, http://localhost:5173
-npm run dev:max        # apps/web-max
-npm run dev:vk         # apps/web-vk
-npm run dev:backend    # backend/api (NestJS), http://localhost:3000
+pnpm dev:telegram   # apps/web-telegram, http://localhost:5173
+pnpm dev:max        # apps/web-max
+pnpm dev:vk         # apps/web-vk
+pnpm dev:backend    # backend/api (NestJS), http://localhost:3000
 ```
 
 ## Полезные команды
 
 ```bash
-npm run typecheck   # tsc -b по всем пакетам разом
-npm run lint         # eslint по всему репозиторию
-npm run build        # сборка всех пакетов/приложений
+pnpm typecheck   # tsc -b по всем пакетам разом
+pnpm lint        # eslint по всему репозиторию
+pnpm build       # сборка всех пакетов/приложений
 ```
+
+Пакеты ссылаются друг на друга через протокол `workspace:*`. Раскладка
+`node_modules` строгая: пакет видит только то, что объявил в своём
+`package.json` — это то, чем защищены границы слоёв из
+`docs/15-engineering-standards.md` §2.2.
 
 ## Структура репозитория
 

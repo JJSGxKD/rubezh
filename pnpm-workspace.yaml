@@ -1,0 +1,21 @@
+# Состав монорепо. Пакеты ссылаются друг на друга через протокол
+# `workspace:*` — см. docs/16-tech-stack-decisions.md §2.2 (почему pnpm,
+# а не npm workspaces и не bun install).
+packages:
+  - "packages/*"
+  - "apps/*"
+  - "backend/api"
+
+# pnpm 10 по умолчанию НЕ выполняет postinstall-скрипты зависимостей — это
+# защита от вредоносного кода в цепочке поставки. Разрешаем точечно только
+# тем пакетам, которым скрипт реально нужен для работы:
+#   esbuild        — распаковка нативного бинарника (без него не соберётся Vite)
+#   prisma / @prisma/*  — генерация клиента и загрузка движков
+#   msgpackr-extract    — нативное ускорение сериализации для BullMQ
+# Новый пакет в этом списке — отдельное решение на ревью, а не автоматика.
+onlyBuiltDependencies:
+  - esbuild
+  - prisma
+  - "@prisma/client"
+  - "@prisma/engines"
+  - msgpackr-extract
