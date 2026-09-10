@@ -12,7 +12,10 @@
 
 ## Требования
 
-- Node.js 22 LTS (см. `.nvmrc` — `nvm use`)
+- Node.js 22 LTS. **Внимание, Windows**: `nvm-windows` **не читает `.nvmrc`** —
+  версию нужно назвать явно: `nvm install 22.22.3` и `nvm use 22.22.3`.
+  Файл `.nvmrc` в репозитории остаётся источником истины о том, какая версия
+  нужна, и используется в CI
 - Docker + Docker Compose (для Postgres/Redis локально)
 - **pnpm** — ставится одной командой через Corepack, входящий в Node:
   `corepack enable pnpm`. Версия берётся из поля `packageManager` в корневом
@@ -21,33 +24,55 @@
 
 ## Установка
 
-```bash
+Команда работает на Windows в PowerShell — команды ниже даны под него.
+В PowerShell 5.1 нет оператора `&&`, поэтому команды разделены `;` и
+выполняются по одной.
+
+```powershell
 git clone https://github.com/JJSGxKD/rubezh.git
 cd rubezh
-corepack enable pnpm        # один раз на машину
-cp .env.example .env        # заполнить реальными ключами по мере подключения провайдеров
-pnpm install                # ставит зависимости во все workspace-пакеты разом
-docker compose up -d        # поднимает Postgres + Redis для локальной разработки
+corepack enable pnpm            # один раз на машину
+Copy-Item .env.example .env     # заполнить ключами по мере подключения провайдеров
+pnpm install                    # ставит зависимости во все workspace-пакеты разом
+docker compose up -d            # поднимает Postgres + Redis для локальной разработки
 ```
+
+Секреты (`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` и остальные) генерируются
+так — `openssl` идёт в комплекте с Git for Windows:
+
+```powershell
+openssl rand -hex 32
+```
+
+Для access и refresh значения должны быть **разными**.
 
 ## Запуск в разработке
 
 Каждая платформенная сборка — отдельный dev-сервер (Vite `--mode`, см.
 `docs/01-tech-stack.md` §1 и `docs/09-ci-cd.md`):
 
-```bash
+```powershell
 pnpm dev:telegram   # apps/web-telegram, http://localhost:5173
-pnpm dev:max        # apps/web-max
-pnpm dev:vk         # apps/web-vk
-pnpm dev:backend    # backend/api (NestJS), http://localhost:3000
+pnpm dev:max        # apps/web-max,      http://localhost:5174
+pnpm dev:vk         # apps/web-vk,       http://localhost:5175
+pnpm dev:backend    # backend/api,       http://localhost:4000
 ```
+
+Каждая команда — в своём окне терминала. Порты закреплены и не конфликтуют,
+карта портов — `docs/20-env-and-ports.md` §2.
 
 ## Полезные команды
 
-```bash
+```powershell
 pnpm typecheck   # tsc -b по всем пакетам разом
 pnpm lint        # eslint по всему репозиторию
 pnpm build       # сборка всех пакетов/приложений
+```
+
+Если после `git pull` что-то ведёт себя странно — переустановить зависимости:
+
+```powershell
+Remove-Item -Recurse -Force node_modules; pnpm install
 ```
 
 Пакеты ссылаются друг на друга через протокол `workspace:*`. Раскладка
