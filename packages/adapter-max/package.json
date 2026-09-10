@@ -8,6 +8,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bh/shared-types": "*"
+    "@bh/shared-types": "workspace:*"
   }
 }

@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bh/shared-types": "*",
+    "@bh/shared-types": "workspace:*",
     "phaser": "^3.80.0"
   }
 }

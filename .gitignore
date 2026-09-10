@@ -1,5 +1,6 @@
 node_modules/
 dist/
+*.tsbuildinfo
 build/
 .env
 .env.*
@@ -9,3 +10,4 @@ build/
 .turbo/
 coverage/
 backend/api/generated/
+.obsidian/
