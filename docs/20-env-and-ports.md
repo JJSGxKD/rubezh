@@ -46,6 +46,7 @@
 | Dev-сервер MAX | `WEB_MAX_PORT` | `5174` | — | — |
 | Dev-сервер VK | `WEB_VK_PORT` | `5175` | — | — |
 | Админка геймдизайнера | `ADMIN_PORT` | `5176` | через Caddy | через Caddy, отдельный поддомен |
+| Кабинет партнёра | `PARTNER_CABINET_PORT` | `5177` | через Caddy | через Caddy, отдельный поддомен |
 | PostgreSQL | `POSTGRES_PORT` | `127.0.0.1:5432` | `127.0.0.1:5532` | **не публикуется** |
 | Redis | `REDIS_PORT` | `127.0.0.1:6379` | `127.0.0.1:6479` | **не публикуется** |
 | Prometheus | `PROMETHEUS_PORT` | `9090` | `9190` | не публикуется |
@@ -94,7 +95,8 @@
 | 9. Реклама | `ADS_SESSION_SECRET`, ключи сетей | из кабинетов сетей; порядок и активность сетей — данные в БД, не переменные |
 | 10. Наблюдаемость | `LOG_LEVEL`, треды Telegram, Sentry, Grafana | id тредов — из супергруппы алертов |
 | 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md` |
-| 12. Публичные для клиента | `VITE_*` | только не-секреты |
+| 12. Программы роста и аналитика | домен редиректа, TTL клика, секрет подписи шеринга, кеш карточек, read-only пользователь Grafana, срок хранения сырых персональных данных | `22-analytics-and-metrics.md`, `23-referral-and-partner-program.md`, `24-attribution-and-sharing.md` |
+| 13. Публичные для клиента | `VITE_*` | только не-секреты |
 
 ---
 
