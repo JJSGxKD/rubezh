@@ -196,6 +196,20 @@ rate-limit через подделку `X-Forwarded-For`, неатомарный
     - `fix(adapter-telegram): Исправить дублирование спавна волны`
     - `docs: Обновить схему ролей в 06-team-and-workflow`
 
+## Окружение команды
+
+Все трое работают на **Windows, терминал — PowerShell**. При выдаче команд
+это учитывать:
+
+- в PowerShell 5.1 **нет `&&`** — разделять `;`, условное продолжение это
+  `A; if ($?) { B }`;
+- вместо `cp` / `rm -rf` — `Copy-Item` / `Remove-Item -Recurse -Force`;
+- `nvm-windows` не читает `.nvmrc`, версию Node называем явно;
+- CI при этом Linux — скрипты в `.github/workflows` пишутся под bash.
+
+Переводы строк нормализуются `.gitattributes` (всё хранится с LF): скрипт с
+CRLF внутри Linux-контейнера падает с `bad interpreter`.
+
 ## Сборка и проверка перед PR
 
 ```bash

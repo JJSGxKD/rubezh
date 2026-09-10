@@ -102,29 +102,46 @@
 
 ## 4. Работа в dev
 
+**Вся команда работает на Windows в PowerShell** — команды даны под него. Три
+особенности, о которые спотыкаются чаще всего:
+
+- в Windows PowerShell 5.1 **нет оператора `&&`**: команды разделяются `;`,
+  а «выполнить вторую только при успехе первой» — это `A; if ($?) { B }`;
+- `nvm-windows` **не читает `.nvmrc`** — версию Node называем явно:
+  `nvm install 22.22.3`, затем `nvm use 22.22.3`. Сам `.nvmrc` остаётся
+  источником истины и используется в CI;
+- Unix-команд (`cp`, `rm -rf`, `touch`) в PowerShell нет — эквиваленты ниже.
+
 Один раз на машину:
 
-```bash
+```powershell
 corepack enable pnpm
 ```
 
 В корне репозитория:
 
-```bash
-cp .env.example .env
+```powershell
+Copy-Item .env.example .env
 pnpm install
 docker compose up -d
 ```
 
 Проверить, что инфраструктура поднялась:
 
-```bash
+```powershell
 docker compose ps
 ```
 
-Запуск (каждая команда — свой терминал, порты не конфликтуют):
+Сгенерировать секреты (`openssl` идёт с Git for Windows; для access и refresh
+значения обязаны быть разными):
 
-```bash
+```powershell
+openssl rand -hex 32
+```
+
+Запуск (каждая команда — своё окно терминала, порты не конфликтуют):
+
+```powershell
 pnpm dev:backend     # API на http://localhost:4000
 pnpm dev:telegram    # http://localhost:5173
 pnpm dev:max         # http://localhost:5174
@@ -133,13 +150,24 @@ pnpm dev:vk          # http://localhost:5175
 
 Миграции и Prisma:
 
-```bash
+```powershell
 pnpm --filter backend-api prisma:migrate    # создать миграцию в dev
 pnpm --filter backend-api prisma:generate   # перегенерировать клиент
 ```
 
 Остановить инфраструктуру: `docker compose down` (данные останутся в томах),
 `docker compose down -v` — вместе с данными.
+
+Переустановить зависимости, если после `git pull` что-то ведёт себя странно:
+
+```powershell
+Remove-Item -Recurse -Force node_modules; pnpm install
+```
+
+**Переводы строк.** В репозитории лежит `.gitattributes`, который хранит всё
+с LF. Это не косметика: shell-скрипты с CRLF внутри Linux-контейнера падают с
+невнятным `bad interpreter`. Ничего настраивать вручную не нужно — файл
+работает сам, но и переопределять `core.autocrlf` под проект не стоит.
 
 **Тестирование Mini App локально.** Telegram не откроет `http://localhost` как
 Mini App — нужен публичный HTTPS-адрес. Варианты: туннель (cloudflared,

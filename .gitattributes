@@ -1,0 +1,44 @@
+# Нормализация переводов строк.
+#
+# Команда работает на Windows (у всех Git for Windows с core.autocrlf=true),
+# а деплой идёт в Linux-контейнеры. Без этого файла shell-скрипты попадают в
+# образ с CRLF, и контейнер падает с невнятным `bad interpreter` — в
+# vpnsibcom_api от этого до сих пор стоит костыль `sed -i 's/\r$//'` в
+# Dockerfile. Здесь проблема решается один раз и в правильном месте.
+#
+# Побочная польза: исчезают предупреждения «LF will be replaced by CRLF»
+# на каждом git add.
+
+* text=auto eol=lf
+
+# Обязаны быть LF: исполняются внутри Linux-контейнера или читаются
+# инструментами, которые не прощают CRLF
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Dockerfile  text eol=lf
+.env*       text eol=lf
+
+# Windows-специфичные скрипты — наоборот, CRLF
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# Бинарники не трогать и не показывать в диффах
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.webp      binary
+*.gif       binary
+*.ico       binary
+*.mp3       binary
+*.ogg       binary
+*.wav       binary
+*.ttf       binary
+*.otf       binary
+*.woff      binary
+*.woff2     binary
+*.mmdb      binary
+
+# Лок-файл не разворачиваем в ревью — он машинный и огромный
+pnpm-lock.yaml -diff linguist-generated
