@@ -1,27 +1,54 @@
-# Локальная разработка. Прод-деплой — тот же принцип Docker Compose на
-# VPS (docs/01-tech-stack.md §10), но с реальными секретами и без
-# проброса портов наружу — не копировать этот файл в прод как есть.
+# Локальная разработка. Порты берутся из `.env` — карта портов и различия
+# между dev / staging / production в docs/20-env-and-ports.md.
+#
+# ЭТОТ ФАЙЛ — ТОЛЬКО ДЛЯ DEV. Прод-схема описана в docs/20-env-and-ports.md §5:
+# тот же принцип Docker Compose на VPS, но без публикации портов БД и Redis
+# наружу, с реальными секретами и с Caddy перед API. Не копировать этот файл
+# в прод как есть.
+#
+# Порты БД и Redis публикуются на 127.0.0.1, а не на 0.0.0.0: иначе Postgres
+# с паролем `postgres` оказывается доступен из локальной сети.
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
+    container_name: rubezh-postgres-dev
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: bullet_heaven
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-bullet_heaven}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-bullet_heaven}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
+    container_name: rubezh-redis-dev
     restart: unless-stopped
+    # appendonly: лидерборды и сессии переживают перезапуск контейнера.
+    # Источник истины для лидербордов всё равно Postgres — ZSET восстановим
+    # (docs/14-scalability.md §4.3), но терять его на каждом рестарте незачем.
+    command: redis-server --appendonly yes --appendfsync everysec
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres-data:
