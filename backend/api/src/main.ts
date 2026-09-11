@@ -1,7 +1,8 @@
 import "reflect-metadata";
-import { json } from "express";
+import { fstatSync } from "node:fs";
 import { NestFactory } from "@nestjs/core";
 import type { INestApplication } from "@nestjs/common";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
 import { APP_CONFIG, type AppConfig } from "./config/app-config";
 import { DomainErrorFilter } from "./common/domain-error.filter";
@@ -14,13 +15,13 @@ import { DomainErrorFilter } from "./common/domain-error.filter";
  * процесс не поднимается (docs/20-env-and-ports.md §1, правило 3).
  */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get<AppConfig>(APP_CONFIG);
 
   // Отчёт испытания — это сотни корзин таймлайна, дефолтный лимит в 100 КБ
   // его не пропустит. Верхняя граница всё равно нужна: без неё эндпоинт
   // превращается в приём произвольных объёмов данных.
-  app.use(json({ limit: "2mb" }));
+  app.useBodyParser("json", { limit: "2mb" });
   app.useGlobalFilters(new DomainErrorFilter());
 
   // health остаётся на корне: пробы и мониторинг не должны знать о версии API.
@@ -82,17 +83,22 @@ function installShutdownHandlers(app: INestApplication): void {
  *
  * На Windows Ctrl+C не всегда доходит до внуков в дереве процессов: родитель
  * умирает, а бэкенд продолжает жить и держать порт до перезагрузки. Признак
- * такого состояния — закрытый stdin: поток от родителя оборвался, значит
- * родителя больше нет и работать не для кого.
+ * такого состояния — оборвавшаяся труба stdin: писать в неё больше некому.
  *
- * Только в разработке: в проде процессом управляет Docker, там stdin ничего
- * не значит и закрывать себя по нему нельзя.
+ * Сторож включается только когда stdin действительно труба от родителя.
+ * Запуск с `/dev/null` на входе — обычное дело для фоновых и служебных
+ * сценариев, и там «пустой stdin» означает не смерть родителя, а его
+ * отсутствие с самого начала: сторож в таком режиме убивал бы сервер сразу
+ * после старта.
+ *
+ * В проде выключен целиком: там процессом управляет Docker, и stdin ничего
+ * не значит.
  */
 function exitWhenOrphaned(app: INestApplication, isDevelopment: boolean): void {
   if (!isDevelopment) return;
-  // В живом терминале stdin не закроется, а Ctrl+C дойдёт штатно — сторож там
-  // не нужен и только мешал бы отладке.
+  // В живом терминале stdin не закроется, а Ctrl+C дойдёт штатно.
   if (process.stdin.isTTY) return;
+  if (!isPipe(0)) return;
 
   const quit = (): void => {
     console.log("Родительский процесс завершился — освобождаю порт");
@@ -102,6 +108,16 @@ function exitWhenOrphaned(app: INestApplication, isDevelopment: boolean): void {
   process.stdin.on("end", quit);
   process.stdin.on("close", quit);
   process.stdin.resume();
+}
+
+function isPipe(fileDescriptor: number): boolean {
+  try {
+    const stats = fstatSync(fileDescriptor);
+    return stats.isFIFO() || stats.isSocket();
+  } catch {
+    // Дескриптора нет вовсе — сторожить тем более нечего.
+    return false;
+  }
 }
 
 /**

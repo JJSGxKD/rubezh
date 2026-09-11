@@ -1,7 +1,12 @@
 import { CanActivate, ExecutionContext, Inject, Injectable } from "@nestjs/common";
-import type { Request } from "express";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config";
 import { DisabledError, RateLimitedError, UnauthorizedError } from "../../common/domain-error";
+
+/** Минимальная форма запроса вместо типов express — см. domain-error.filter.ts. */
+interface HttpRequest {
+  ip?: string;
+  header(name: string): string | undefined;
+}
 
 /** Сколько запросов с одного адреса пропускаем в окно. */
 const WINDOW_MS = 60_000;
@@ -33,7 +38,7 @@ export class BenchTokenGuard implements CanActivate {
       throw new DisabledError("Приём отчётов испытаний выключен");
     }
 
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<HttpRequest>();
     this.enforceRateLimit(request.ip ?? "unknown");
 
     const token = request.header("x-bench-token") ?? "";
