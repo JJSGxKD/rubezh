@@ -39,17 +39,20 @@
 ### 2.1 Карта слоёв
 
 ```
-apps/web-{telegram,max,vk}        сборка под платформу (Vite --mode)
-        │  импортирует
-        ▼
-packages/adapter-{telegram,max,vk}   платформенный слой: SDK площадки
-        │  реализует
-        ▼
-packages/shared-types                контракты: PlatformAdapter, DTO, контент
-        ▲                            (не зависит ни от чего)
-        │  импортирует
-packages/core-game                   игровой цикл (Phaser) + content/*
-                                     знает только shared-types
+apps/web-{telegram,max,vk}        сборка под платформу (Vite --mode):
+        │  импортирует             создаёт адаптер, монтирует оболочку
+        ├──────────────────────────────────┐
+        ▼                                  ▼
+packages/adapter-{telegram,max,vk}   packages/app-shell
+   платформенный слой: SDK площадки     React: дизайн-система, экраны,
+        │  реализует                    навигация; адаптер получает объектом
+        │                                  │  импортирует публичный API
+        │                                  ▼
+        │                            packages/core-game
+        │                               забег: симуляция + Phaser, content/*
+        ▼                                  │
+packages/shared-types  ◄───────────────────┘
+   контракты: PlatformAdapter, DTO, контент (не зависит ни от чего)
 
 backend/api                          NestJS: модули домена
         └── импортирует только shared-types (контракты DTO)
@@ -65,6 +68,9 @@ backend/api                          NestJS: модули домена
 | `shared-types` **не** импортирует ничего из монорепо | Это лист графа зависимостей |
 | `backend/api` **не** импортирует `core-game` | Симуляция на сервере (если понадобится для антифрода) — отдельный пакет, собранный из `core-game`, а не прямая зависимость на Phaser |
 | `content/*` **не** импортирует код из `game/*` | Контент — данные; импорт кода превращает таблицу в программу |
+| `app-shell` **не** импортирует `adapter-*` и Phaser | Адаптер приходит объектом из `apps/web-*`, иначе оболочка становится телеграм-оболочкой; Phaser — отдельный чанк, прямой импорт затянул бы его в первую загрузку (`27-design-system-and-app-shell.md` §2) |
+| `app-shell` импортирует `core-game` только через `index.ts` | Внутренности забега — не контракт |
+| `core-game` **не** импортирует `app-shell` и React | Движок не знает, кто рисует меню |
 
 Правила enforced в CI через `eslint-plugin-boundaries` и строгую раскладку
 `node_modules` (`16-tech-stack-decisions.md` §8). Ревьюеру не нужно держать их
