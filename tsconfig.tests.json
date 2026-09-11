@@ -1,0 +1,22 @@
+{
+  // Тесты не входят в сборку пакетов (rootDir там — src, и тестам нечего
+  // делать в dist), но выпадать из typecheck они не должны: тест с ошибкой
+  // типов — это тест, который не проверяет то, что думает автор.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    // Тесты бэкенда импортируют его исходники, а те опираются на декораторы
+    // Nest. Без этих двух флагов проверка типов падает на конструкторах с
+    // @Inject, хотя сама сборка бэкенда проходит.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": [
+    "packages/*/test/**/*.ts",
+    "backend/*/test/**/*.ts",
+    "scripts/test/**/*.ts",
+    "vitest.config.ts"
+  ]
+}
