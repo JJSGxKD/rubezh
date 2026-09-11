@@ -41,7 +41,8 @@
 
 | Сервис | Переменная | dev | staging | production |
 |---|---|---|---|---|
-| Бэкенд API | `API_PORT` | `4000` | `127.0.0.1:4100` | не публикуется, только через Caddy |
+| Бэкенд API | `API_PORT` | `4000` | `127.0.0.1:4100` | **не публикуется**: Caddy в Docker обращается по имени сервиса через общую внешнюю сеть (`26-stage2-plan.md`, Р16) |
+| Origin статики клиента | — | — | не публикуется | не публикуется, за Caddy и Bunny.net (`26-stage2-plan.md`, WP10) |
 | Dev-сервер Telegram | `WEB_TELEGRAM_PORT` | `5173` | — | — |
 | Dev-сервер MAX | `WEB_MAX_PORT` | `5174` | — | — |
 | Dev-сервер VK | `WEB_VK_PORT` | `5175` | — | — |
@@ -58,6 +59,10 @@
 - **Смещение staging = dev + 100** для инфраструктурных сервисов. Оба
   окружения живут на одном VPS (`09-ci-cd.md` §9), и без смещения они
   подрались бы за порты.
+- **Caddy на сервере — общий и работает в Docker.** На VPS уже есть инстанс
+  Caddy с другими сайтами; наш проект своего Caddy не поднимает, подключает
+  сервисы к его внешней Docker-сети и конфиг — отдельным файлом
+  (`26-stage2-plan.md`, WP10). Порты `80`/`443` в таблице — его, а не наши.
 - **В production наружу смотрит только Caddy.** Порты БД, Redis и Prometheus
   не публикуются вовсе — это пункт чек-листа безопасности
   (`15-engineering-standards.md` §7). В источнике переноса прод-compose
@@ -90,14 +95,15 @@
 | 4. Redis | `REDIS_*` | там же |
 | 5. Авторизация | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, сроки жизни, `INIT_DATA_EXPIRES_IN`, cookie | генерируется: `openssl rand -hex 32`, разные значения для access и refresh |
 | 6. CORS и адреса | `ALLOWED_ORIGINS`, `PUBLIC_*`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml` |
-| 7. Платформы | токены ботов, ключи Bridge, OAuth | из кабинетов площадок; для staging — **отдельный** бот |
+| 7. Платформы | токены ботов, секрет вебхука бота (`TELEGRAM_WEBHOOK_SECRET`, с этапа 2), ключи Bridge, OAuth | из кабинетов площадок; для staging — **отдельный** бот; секрет вебхука генерируется |
 | 8. Платежи | webhook-секрет, RU-эквайринг | из кабинета провайдера |
 | 9. Реклама | `ADS_SESSION_SECRET`, ключи сетей | из кабинетов сетей; порядок и активность сетей — данные в БД, не переменные |
 | 10. Наблюдаемость | `LOG_LEVEL`, треды Telegram, Sentry, Grafana | id тредов — из супергруппы алертов |
-| 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md` |
+| 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md`. `ADMIN_TELEGRAM_IDS` используется **с этапа 2** — администраторы выгрузки данных через бота (`28-diagnostics.md` §6.1.1) |
 | 12. Программы роста и аналитика | домен редиректа, TTL клика, секрет подписи шеринга, кеш карточек, read-only пользователь Grafana, срок хранения сырых персональных данных | `22-analytics-and-metrics.md`, `23-referral-and-partner-program.md`, `24-attribution-and-sharing.md` |
 | 13. Публичные для клиента | `VITE_*` | только не-секреты |
-| 14. Стенд FPS-испытаний | `VITE_BENCH_ENABLED`, `VITE_BENCH_INGEST_*`, `BENCH_INGEST_*`, `BENCH_REPORTS_DIR` | `25-week1-fps-trials.md` §2.1; временная группа недели 1, удаляется вместе со стендом |
+| 14. Стенд FPS-испытаний | `VITE_BENCH_ENABLED`, `VITE_BENCH_INGEST_*`, `BENCH_INGEST_*`, `BENCH_REPORTS_DIR` | `25-week1-fps-trials.md` §2.1; временная группа этапа 1. На этапе 2 заменяется группой «Диагностика и телеметрия»: приёмники, ключ псевдонимизации выгрузок, выключатель выгрузки через бота — состав в `28-diagnostics.md` §7 |
+| 15. CDN | ключ API Bunny.net для сброса кеша после деплоя | **только секреты CI**, на сервере не нужен (`26-stage2-plan.md`, WP10) |
 
 ---
 

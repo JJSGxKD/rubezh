@@ -286,6 +286,57 @@ erDiagram
   шеринг, а не общая реферальная ссылка игрока: только так измеряется, что
   конвертит лучше (`24-attribution-and-sharing.md` §7.3).
 
+### 1.4 Телеметрия закрытого теста (этап 2, проектируется)
+
+Первые таблицы, которые попадут в прод: до авторизации, поэтому без
+внешнего ключа на `USER`. Подробности — `28-diagnostics.md` §5.4 и
+`22-analytics-and-metrics.md` §3.1.
+
+```mermaid
+erDiagram
+    ANALYTICS_EVENT {
+        uuid event_id PK "ключ идемпотентности"
+        string event_type "только из словаря"
+        int schema_version
+        uuid install_id "устройство, до авторизации"
+        string platform_user_id "nullable, только при проверенной подписи initData"
+        uuid user_id "nullable, заполняется с этапа 3"
+        uuid session_id
+        enum platform
+        string app_version "из тега релиза"
+        json payload
+        datetime occurred_at
+        datetime received_at
+    }
+
+    DIAGNOSTIC_REPORT {
+        uuid report_id PK "ключ идемпотентности"
+        enum kind "bench|run"
+        int schema_version
+        string app_version
+        string content_hash "nullable, версия баланса"
+        uuid install_id
+        string platform_user_id "nullable"
+        enum platform
+        json device
+        json summary "поля для выборок"
+        json payload "таймлайн, события, лог ввода"
+        int size_bytes
+        datetime occurred_at
+        datetime received_at
+    }
+```
+
+Что важно:
+
+- **Связи с `USER` нет намеренно.** Пользователей до этапа 3 не существует;
+  на этапе 3 история закрытого теста привязывается к аккаунтам по
+  `platform_user_id`, а не переписывается.
+- **IP не хранится ни в одной из таблиц** — он нужен только лимиту частоты
+  на приёме.
+- Отчёты стенда этапа 1 лежали файлами в `var/bench-reports/`; в прод они
+  не переносятся — это другой формат и другие условия замера.
+
 ---
 
 ## 2. Пакеты монорепо и направления зависимостей
@@ -308,17 +359,20 @@ flowchart TD
         AV["adapter-vk"]
     end
 
-    CG["packages/core-game<br/>игровой цикл + content/*"]
+    SH["packages/app-shell<br/>React: дизайн-система, экраны<br/>этап 2, проектируется"]
+    CG["packages/core-game<br/>забег: симуляция + Phaser, content/*"]
     ST["packages/shared-types<br/>контракты, лист графа"]
     API["backend/api<br/>NestJS"]
 
-    WT --> CG
+    WT --> SH
     WT --> AT
-    WM --> CG
+    WM --> SH
     WM --> AM
-    WV --> CG
+    WV --> SH
     WV --> AV
 
+    SH --> CG
+    SH --> ST
     AT --> ST
     AM --> ST
     AV --> ST
@@ -326,10 +380,18 @@ flowchart TD
     API --> ST
 ```
 
+Сейчас, до реализации этапа 2, `apps/web-*` импортируют `core-game`
+напрямую; после появления `app-shell` прямой стрелки из приложения в движок
+не остаётся — забег запускает оболочка (`27-design-system-and-app-shell.md`
+§2–§3).
+
 Чего на схеме **нет** и не должно появиться:
 
 - стрелки из `core-game` в любой `adapter-*` — иначе движок становится
   платформозависимым и порт на MAX превращается в переписывание;
+- стрелки из `app-shell` в любой `adapter-*` или в Phaser — адаптер
+  приходит объектом, Phaser — отдельным чанком;
+- стрелки из `core-game` в `app-shell` — движок не знает, кто рисует меню;
 - стрелки между адаптерами — общее выносится в `shared-types`;
 - стрелки из `core-game` в `backend/api` — игровой цикл работает офлайн;
 - любых стрелок **из** `shared-types` — это лист графа.
@@ -347,7 +409,8 @@ flowchart TD
     subgraph headless["Работает без браузера и Phaser"]
         SIM["game/sim/*<br/>мир, шаг, спавн, сетка, ГПСЧ"]
         PAT["game/patterns/*<br/>поведение врагов"]
-        CNT["content/*<br/>враги, волны, апгрейды"]
+        WPN["game/weapons/*<br/>поведение оружия — этап 2, проектируется"]
+        CNT["content/*<br/>враги, волны, оружие, улучшения, карта"]
     end
 
     subgraph rendered["Требует Phaser"]
@@ -356,17 +419,25 @@ flowchart TD
         WR["game/render/WorldRenderer"]
     end
 
-    BM["game/bench/*<br/>метрики кадра, вердикт, автопилот,<br/>детектор просадки, отправка отчёта"]
+    BM["game/bench/*<br/>вердикт, автопилот,<br/>детектор просадки"]
+    DG["game/diagnostics/*<br/>метрики кадра, запись забега,<br/>лог ввода — этап 2, проектируется"]
 
     PAT --> SIM
+    WPN --> SIM
     SIM --> CNT
     MS --> SIM
     MS --> WR
+    MS --> DG
     BS --> SIM
     BS --> WR
     BS --> BM
+    BM --> DG
     WR --> SIM
 ```
+
+На этапе 2 сбор метрик кадра переезжает из `game/bench/*` в общий
+`game/diagnostics/*`: им пользуются и стенд, и обычный забег, а отправка
+отчётов уходит из движка в оболочку (`28-diagnostics.md` §3.1).
 
 Чего на схеме нет и не должно появиться:
 
@@ -399,8 +470,12 @@ flowchart LR
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
-        BENCH["bench-reports<br/>приём отчётов испытаний<br/>инструмент недели 1, не продукт"]
+        EVENTS["events<br/>приём событий, этап 2"]
+        DIAG["diagnostics<br/>отчёты стенда и забегов, этап 2<br/>заменяет bench-reports этапа 1"]
+        BOT["bot<br/>вебхук Telegram, выгрузка<br/>данных администратору, этап 2"]
     end
+
+    TGAPI["Telegram Bot API"]
 
     subgraph infra["Инфраструктура"]
         PG[("PostgreSQL<br/>источник истины")]
@@ -422,6 +497,17 @@ flowchart LR
     CADDY --> ADS
     CADDY --> REF
     CADDY --> CONTENT
+    CADDY --> EVENTS
+    CADDY --> DIAG
+
+    EVENTS --> REDIS
+    EVENTS --> QUEUE
+    DIAG --> REDIS
+    DIAG --> PG
+    TGAPI -- вебхук --> CADDY
+    CADDY --> BOT
+    BOT --> QUEUE
+    QUEUE -- sendDocument --> TGAPI
 
     AUTH --> PG
     AUTH --> REDIS
@@ -602,8 +688,11 @@ flowchart LR
     ROLL["Крон пересчёта<br/>витрин"]
     MART[("Витрины<br/>mart_*")]
     REPL[("Read-реплика")]
-    PROM["Prometheus"]
-    GRAF["Grafana"]
+    SEM["Семантический слой<br/>метрики как код, права"]
+    ADM["Админ-панель<br/>продуктовые дашборды"]
+    PC["Кабинет партнёра<br/>принудительный фильтр"]
+    PROM["Prometheus<br/>технические метрики API"]
+    GRAF["Grafana<br/>только техника"]
 
     MOD --> EMIT
     EMIT --> Q
@@ -614,15 +703,119 @@ flowchart LR
     ROLL --> MART
     PG -.репликация.-> REPL
     MART -.репликация.-> REPL
-    RD --> PROM
+    REPL --> SEM
+    RD --> SEM
+    SEM --> ADM
+    SEM --> PC
     PROM --> GRAF
-    REPL --> GRAF
 ```
 
-Существенное: **Grafana не ходит в горячие таблицы.** Живые панели читают
-Prometheus, всё остальное — витрины на реплике. Иначе открытый на стене
+Существенное: **продуктовая аналитика не ходит в горячие таблицы.**
+Админ-панель и кабинет партнёра читают витрины на реплике через
+семантический слой, живые счётчики — из Redis; Grafana смотрит только
+технические метрики Prometheus (`29-admin-panel.md` §5). Иначе открытый на стене
 дашборд с автообновлением становится постоянной паразитной нагрузкой на ту
 же БД, которая принимает забеги (`22-analytics-and-metrics.md` §1).
+
+### 4.7 Забег внутри оболочки (этап 2, проектируется)
+
+```mermaid
+sequenceDiagram
+    participant UI as app-shell (React)
+    participant E as core-game (RunSession)
+    participant S as Симуляция
+    participant T as Эмиттер событий
+
+    UI->>E: loadRunEngine() — чанк Phaser<br/>(предзагружен в простое)
+    UI->>E: start({ seed, mode: endless, startingWeaponId })
+    UI->>T: run_started
+    loop каждый тик
+        E->>S: stepWorld(квантованный ввод)
+    end
+    E-->>UI: hud (не чаще 10 Гц)
+    S-->>E: набран уровень
+    E-->>UI: levelUp (симуляция стоит)
+    UI->>T: upgrade_offered
+    UI->>E: chooseUpgrade(optionId) → в лог ввода
+    UI->>T: upgrade_chosen
+    S-->>E: игрок погиб
+    E-->>UI: finished(RunResult)
+    UI->>T: run_finished + сводка производительности
+    opt запись диагностики включена
+        E-->>UI: diagnosticsReady(отчёт)
+        UI->>UI: очередь отправки (§4.8)
+    end
+```
+
+Движок не ходит в сеть и не знает про аналитику: он отдаёт результат, а
+отправкой занимается оболочка (`27-design-system-and-app-shell.md` §3.1).
+
+### 4.8 Доставка отчёта диагностики (этап 2, проектируется)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant O as Очередь на устройстве
+    participant D as diagnostics
+    participant R as Redis
+    participant DB as PostgreSQL
+
+    C->>O: положить отчёт (reportId)
+    O->>D: POST /api/v1/diagnostics/reports<br/>+ initData в заголовке
+    D->>R: лимит частоты: IP, installId, platform_user_id — атомарно
+    alt лимит превышен или тело сверх размера
+        D-->>O: 429 / 413 — отчёт остаётся в очереди или отбрасывается
+    else
+        D->>D: Zod-схема, проверка подписи initData
+        D->>DB: INSERT ... ON CONFLICT (report_id) DO NOTHING
+        D-->>O: 200 (новый или дубликат)
+        O->>O: удалить из очереди
+    end
+    Note over O: нет сети — повтор при запуске<br/>и по появлению сети
+```
+
+Подпись `initData` здесь не авторизует, а только подтверждает Telegram ID
+тестера; неверная подпись не отклоняет отчёт, а обнуляет ID
+(`28-diagnostics.md` §5.2).
+
+### 4.9 Выгрузка данных администратору через бота (этап 2, проектируется)
+
+```mermaid
+sequenceDiagram
+    participant A as Администратор (Telegram)
+    participant TG as Telegram Bot API
+    participant B as bot
+    participant R as Redis
+    participant Q as BullMQ
+    participant W as Воркер выгрузки
+    participant DB as PostgreSQL
+
+    A->>TG: /export или кнопка, выбор периода
+    TG->>B: вебхук + секретный токен
+    B->>B: Zod-схема обновления
+    alt нет токена, не личный чат или from.id не в ADMIN_TELEGRAM_IDS
+        B-->>TG: 200, ответ как на неизвестную команду
+    else администратор
+        B->>R: SET NX update_id и лок выгрузки
+        alt уже выполняется или повтор
+            B-->>TG: 200, «выгрузка уже готовится»
+        else
+            B->>Q: задача выгрузки (период, adminId)
+            B-->>TG: 200 сразу
+            TG-->>A: «Готовлю выгрузку…»
+            Q->>W: задача
+            W->>DB: чтение пачками, курсором
+            W->>W: псевдонимизация, zip, части по 45 МБ
+            W->>TG: sendDocument в личный чат
+            TG-->>A: архив
+            W->>R: снять лок
+        end
+    end
+```
+
+Вебхук отвечает сразу, а архив собирает воркер: иначе Telegram посчитает
+медленный ответ ошибкой и повторит обновление. Скрытая кнопка — не защита,
+доступ проверяется на каждом обновлении (`28-diagnostics.md` §6.1).
 
 ---
 
@@ -679,5 +872,13 @@ flowchart TB
 ```
 
 Порты, смещения staging и правила публикации — `20-env-and-ports.md` §2.
+
+**Закрытый тест этапа 2** разворачивается на VPS, где **уже работает
+инстанс Caddy с другими сайтами**: своего Caddy в compose нет, наш конфиг
+подключается отдельным файлом, наши сервисы — к его внешней Docker-сети без
+публикации портов. Клиент на отдельных поддоменах отдаётся через Bunny.net,
+origin — наш контейнер статики за этим Caddy (`26-stage2-plan.md`, WP10). Grafana и Prometheus на
+схеме — техническая часть, появляется на этапе 5; продуктовая аналитика —
+в админ-панели (`29-admin-panel.md`).
 Этапы, на которых эта топология меняется при росте нагрузки, — 
 `14-scalability.md` §3.
