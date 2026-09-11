@@ -1,0 +1,41 @@
+# Гейт перед сборкой (docs/09-ci-cd.md §2).
+#
+# Реализованы шаги 2, 3, 5 и сборка. Пока НЕ реализованы и появляются
+# отдельными задачами вместе с инструментами, которых в репозитории ещё нет:
+#   1. prettier --check                    — форматирование
+#   3. ESLint в type-checked режиме        — сейчас линт базовый
+#   4. eslint-plugin-boundaries + dependency-cruiser — границы слоёв
+#   6. контрактные тесты адаптеров         — адаптеры пока заглушки
+#   7. бюджет бандла                       — порог ещё не объявлен
+#
+# Список выше — не украшение: расхождение CI и docs замечают тогда, когда
+# полагаются на проверку, которой нет.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # Только lock-файл: расхождение с ним должно ломать сборку, а не
+      # молча ставить другие версии (docs/16-tech-stack-decisions.md §9).
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build

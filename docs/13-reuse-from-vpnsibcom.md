@@ -310,7 +310,7 @@ TTL, а фоновый интервал продлевает его, пока з
 ## 4. Авторизация: Telegram initData + JWT
 
 **Что есть.** Полный цикл: `initData` → валидация через
-`@telegram-apps/init-data-node` → поиск/создание пользователя → пара
+`@tma.js/init-data-node` → поиск/создание пользователя → пара
 access/refresh → refresh в Redis с ротацией и блэклистом. Мультидевайс через
 `SET` на пользователя. Гвард умеет брать токен и из cookie, и из
 `Authorization`. Троттлинг 5/мин на `/auth/telegram` и `/auth/refresh`.

@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bh/shared-types": "workspace:*"
+    "@bh/shared-types": "workspace:*",
+    "@tma.js/sdk": "3.3.0"
   }
 }

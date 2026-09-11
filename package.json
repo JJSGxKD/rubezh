@@ -8,18 +8,27 @@
     "node": ">=22.0.0"
   },
   "scripts": {
+    "dev": "pnpm --parallel --filter backend-api --filter web-telegram run dev",
+    "dev:all": "pnpm --parallel --filter backend-api --filter \"web-*\" run dev",
+    "bench": "pnpm --filter web-telegram build && pnpm --parallel --filter backend-api --filter web-telegram run bench",
+    "tunnel": "frpc -c infra/frpc/frpc.local.toml",
+    "reports": "node scripts/bench-reports.mjs",
+    "stop": "node scripts/free-ports.mjs",
     "dev:telegram": "pnpm --filter web-telegram dev",
     "dev:max": "pnpm --filter web-max dev",
     "dev:vk": "pnpm --filter web-vk dev",
     "dev:backend": "pnpm --filter backend-api start:dev",
     "build": "pnpm -r --if-present build",
-    "typecheck": "tsc -b --pretty",
+    "typecheck": "tsc -b --pretty && tsc -p tsconfig.tests.json --pretty",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint ."
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "eslint": "^9.9.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.0.0"
+    "eslint": "^9.9.0",
+    "typescript": "^5.6.0",
+    "vitest": "3.2.7"
   }
 }

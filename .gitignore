@@ -9,5 +9,12 @@ build/
 .DS_Store
 .turbo/
 coverage/
+
+# Локальные данные: отчёты FPS-испытаний и прочее рантайм-состояние
+var/
 backend/api/generated/
 .obsidian/
+
+# Рабочий конфиг frpc: содержит токен туннеля
+infra/frpc/frpc.local.toml
+

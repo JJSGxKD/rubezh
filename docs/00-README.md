@@ -30,6 +30,7 @@
 - [22-analytics-and-metrics.md](./22-analytics-and-metrics.md) — сквозная аналитика: словарь событий, витрины, живые дашборды Grafana, приватность
 - [23-referral-and-partner-program.md](./23-referral-and-partner-program.md) — реферальная программа для игроков и партнёрская для промоутеров: награды, FTD, промокоды, приоритет атрибуции, антифрод
 - [24-attribution-and-sharing.md](./24-attribution-and-sharing.md) — редирект-страница и хэши атрибуции, хаб выбора платформы, шеринг результатов и карточки профиля
+- [25-week1-fps-trials.md](./25-week1-fps-trials.md) — стенд FPS-испытаний, протокол прогона на устройствах и критерий go/no-go по движку
 
 ## Ключевые решения (коротко)
 
