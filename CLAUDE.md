@@ -23,6 +23,7 @@
 | Аналитика, события, дашборды Grafana | `docs/22-analytics-and-metrics.md` |
 | Реферальная и партнёрская программы | `docs/23-referral-and-partner-program.md` |
 | Атрибуция, редирект-ссылки, шеринг | `docs/24-attribution-and-sharing.md` |
+| FPS-испытания и критерий go/no-go | `docs/25-week1-fps-trials.md` |
 
 ## Приоритет платформ
 
