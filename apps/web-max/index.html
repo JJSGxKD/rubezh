@@ -5,7 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Bullet Heaven — Max</title>
   </head>
-  <body style="margin:0;overflow:hidden;">
+  <body>
+    <!-- Контейнер обязан иметь ненулевой размер: Phaser в режиме RESIZE
+         тянется под родителя, а при высоте 0 создаёт framebuffer 0x0 и
+         падает с "Framebuffer status: Incomplete Attachment". -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0d0f14;
+      }
+      #game {
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
     <div id="game"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
