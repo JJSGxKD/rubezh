@@ -1,0 +1,68 @@
+# Публикация dev-серверов наружу через frp: Telegram не открывает
+# http://localhost как Mini App — нужен публичный HTTPS-адрес
+# (docs/20-env-and-ports.md §4).
+#
+# КАК ПОЛЬЗОВАТЬСЯ:
+#   Copy-Item infra/frpc/frpc.example.toml infra/frpc/frpc.local.toml
+#   # вписать токен в frpc.local.toml, он не коммитится
+#   frpc -c infra/frpc/frpc.local.toml
+#
+# Токена в этом файле нет и не будет: у секретов не бывает значений по
+# умолчанию (docs/20-env-and-ports.md §1, правило 4).
+
+serverAddr = "frp.gonet.fun"
+serverPort = 443
+loginFailExit = false
+
+[log]
+level = "info"
+
+[auth]
+method = "token"
+# Заполняется в frpc.local.toml
+token = ""
+
+[transport]
+# Порт 443 закрыт Caddy — идём через WebSocket Secure.
+protocol = "wss"
+
+# Локальные адреса — 127.0.0.1, а не 0.0.0.0: dev-серверы Vite слушают
+# только петлю, наружу их выводит frpc и никто больше. В публичном Wi-Fi
+# разница между этими двумя вариантами — это разница между «сосед по кафе
+# видит мой дев» и «не видит».
+
+[[proxies]]
+name = "rubezh-tg"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 5173
+customDomains = ["rubezh-tg.frps.gonet.fun"]
+
+[[proxies]]
+name = "rubezh-max"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 5174
+customDomains = ["rubezh-max.frps.gonet.fun"]
+
+[[proxies]]
+name = "rubezh-vk"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 5175
+customDomains = ["rubezh-vk.frps.gonet.fun"]
+
+# API публикуется ради приёмника отчётов испытаний: телефон должен куда-то
+# отправить результат прогона (docs/25-week1-fps-trials.md).
+#
+# Что это означает и что с этим сделано: наружу смотрит dev-бэкенд с тестовыми
+# секретами. Поэтому приёмник выключен по умолчанию (BENCH_INGEST_ENABLED),
+# требует токен, ограничен по частоте и отвечает 404, когда выключен.
+# ПОДНИМАТЬ ЭТОТ ПРОКСИ ТОЛЬКО НА ВРЕМЯ ПРОГОНОВ и гасить после — на dev-API
+# нет ни авторизации, ни защиты остальных эндпоинтов, которые появятся дальше.
+[[proxies]]
+name = "rubezh-api"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 4000
+customDomains = ["rubezh-api.frps.gonet.fun"]

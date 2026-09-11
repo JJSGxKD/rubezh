@@ -8,6 +8,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
+    "tunnel": "frpc -c infra/frpc/frpc.local.toml",
     "dev:telegram": "pnpm --filter web-telegram dev",
     "dev:max": "pnpm --filter web-max dev",
     "dev:vk": "pnpm --filter web-vk dev",
