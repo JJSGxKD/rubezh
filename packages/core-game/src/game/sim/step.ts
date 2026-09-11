@@ -1,5 +1,13 @@
-import { applyPattern } from "../patterns";
-import { spawnProjectile, TICK_SEC, type World } from "./world";
+import { applyPattern, MAX_PATTERN_RADIUS, onEnemyKilled } from "../patterns";
+import { vectorLength } from "./vector";
+import {
+  damagePlayer,
+  despawnEnemy,
+  NO_OWNER_TYPE,
+  spawnProjectile,
+  TICK_SEC,
+  type World,
+} from "./world";
 
 /**
  * Ввод игрока за тик. Нормализуется вызывающим кодом; симуляция принимает
@@ -17,8 +25,6 @@ export const IDLE_INPUT: SimInput = { moveX: 0, moveY: 0 };
 const MELEE_INTERVAL_SEC = 0.6;
 /** Время жизни снаряда игрока — страховка от снарядов, улетевших мимо всех. */
 const PLAYER_PROJECTILE_TTL_SEC = 1.6;
-/** Максимальный радиус врага в игровых единицах: расширяет запрос к сетке. */
-const MAX_ENEMY_RADIUS = 16;
 
 /**
  * Один шаг симуляции. Строго фиксированный dt: переменный шаг ломает
@@ -62,7 +68,7 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   const player = world.player;
   if (!player.alive) return;
 
-  const magnitude = Math.hypot(input.moveX, input.moveY);
+  const magnitude = vectorLength(input.moveX, input.moveY);
   const speed = world.config.player.speedPxSec;
   const desiredVx = magnitude < 1e-3 ? 0 : (input.moveX / magnitude) * speed;
   const desiredVy = magnitude < 1e-3 ? 0 : (input.moveY / magnitude) * speed;
@@ -93,17 +99,20 @@ function updateEnemies(world: World, dt: number): void {
   for (let i = 0; i < enemies.count; i++) {
     if (enemies.alive[i] === 0) continue;
 
-    const type = world.enemyTypes[enemies.type[i]];
+    const typeIndex = enemies.type[i];
+    const type = world.enemyTypes[typeIndex];
     applyPattern(type.pattern, world, i, dt);
+    // Паттерн мог убрать врага сам — например, подрывник взорвался.
+    if (enemies.alive[i] === 0) continue;
 
     enemies.x[i] += enemies.vx[i] * dt;
     enemies.y[i] += enemies.vy[i] * dt;
 
     if (!player.alive) continue;
 
-    // Контактный урон — только для паттернов ближнего боя; у стрелка тот же
-    // таймер занят перезарядкой выстрела.
-    if (type.pattern === "kite_and_shoot") continue;
+    // Бьёт ли касанием — возможность паттерна, а не проверка его имени: у
+    // стрелка таймер занят перезарядкой выстрела, подрывник бьёт взрывом.
+    if (!type.contactDamage) continue;
 
     const dx = player.x - enemies.x[i];
     const dy = player.y - enemies.y[i];
@@ -114,7 +123,7 @@ function updateEnemies(world: World, dt: number): void {
       continue;
     }
     if (dx * dx + dy * dy <= contactDistance * contactDistance) {
-      damagePlayer(world, type.damage);
+      damagePlayer(world, type.damage, typeIndex);
       enemies.attackCooldown[i] = MELEE_INTERVAL_SEC;
     }
   }
@@ -138,7 +147,7 @@ function playerAutoAttack(world: World, _input: SimInput, dt: number): void {
 
   const dx = world.enemies.x[target] - player.x;
   const dy = world.enemies.y[target] - player.y;
-  const distance = Math.hypot(dx, dy);
+  const distance = vectorLength(dx, dy);
   if (distance < 1e-3) return;
 
   const speed = world.config.player.projectileSpeedPxSec;
@@ -210,7 +219,8 @@ function updateProjectiles(world: World, dt: number): void {
     const dy = player.y - projectiles.y[p];
     const contact = playerRadius + projectileRadius;
     if (dx * dx + dy * dy <= contact * contact) {
-      damagePlayer(world, projectiles.damage[p]);
+      const owner = projectiles.ownerType[p];
+      damagePlayer(world, projectiles.damage[p], owner === NO_OWNER_TYPE ? -1 : owner);
       killProjectile(world, p);
     }
   }
@@ -220,7 +230,7 @@ function findHitEnemy(world: World, x: number, y: number, projectileRadius: numb
   const found = world.enemyGrid.queryInto(
     x,
     y,
-    projectileRadius + MAX_ENEMY_RADIUS * world.config.unitScale,
+    projectileRadius + MAX_PATTERN_RADIUS * world.config.unitScale,
     world.queryBuffer,
   );
   const enemies = world.enemies;
@@ -243,19 +253,17 @@ function isOutside(world: World, x: number, y: number): boolean {
   return x < -margin || y < -margin || x > world.config.width + margin || y > world.config.height + margin;
 }
 
-function damagePlayer(world: World, amount: number): void {
-  world.player.hp -= amount;
-  world.stats.damageTaken += amount;
-  if (world.player.hp <= 0) {
-    world.player.hp = 0;
-    world.player.alive = false;
-  }
-}
-
+/**
+ * Убийство врага игроком: счётчики, освобождение слота и реакция паттерна —
+ * именно в этом порядке. Слот освобождается до реакции, чтобы делящийся враг
+ * мог поставить потомка на своё место при почти полном пуле.
+ */
 function killEnemy(world: World, index: number): void {
-  world.enemies.alive[index] = 0;
-  world.enemies.aliveCount--;
+  const typeIndex = world.enemies.type[index];
   world.stats.enemiesKilled++;
+  world.stats.killsByType[typeIndex]++;
+  despawnEnemy(world, index);
+  onEnemyKilled(world.enemyTypes[typeIndex].pattern, world, index);
 }
 
 function killProjectile(world: World, index: number): void {

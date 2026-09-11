@@ -1,4 +1,5 @@
 import type { EnemyPattern, WaveDef } from "@bh/shared-types";
+import { vectorLength } from "./vector";
 import { spawnEnemy, type World } from "./world";
 
 /**
@@ -139,7 +140,7 @@ function pickWeightedType(world: World, weights: Partial<Record<EnemyPattern, nu
 function spawnAtRing(world: World, typeIndex: number): number {
   const angle = world.rng.nextRange(0, Math.PI * 2);
   const radius =
-    Math.hypot(world.config.width, world.config.height) / 2 +
+    vectorLength(world.config.width, world.config.height) / 2 +
     world.rng.nextRange(0, SPAWN_RING_MARGIN * world.config.unitScale);
 
   return spawnEnemy(

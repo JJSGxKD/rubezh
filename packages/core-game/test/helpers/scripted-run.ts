@@ -1,3 +1,4 @@
+import type { EnemyPattern } from "@bh/shared-types";
 import { ENEMIES } from "../../src/content/enemies";
 import { createWorld, DEFAULT_SIM_CONFIG, type World } from "../../src/game/sim/world";
 import { stepWorld } from "../../src/game/sim/step";
@@ -15,7 +16,23 @@ export interface ScriptedRunOptions {
   population: number;
   /** бессмертный игрок для нагрузочных прогонов — см. комментарий ниже */
   immortalPlayer?: boolean;
+  /**
+   * Доли паттернов в популяции. По умолчанию — смесь стенда испытаний этапа 1
+   * (рой, преследование, стрелок): на ней сравниваются сборки между собой.
+   */
+  weights?: Partial<Record<EnemyPattern, number>>;
 }
+
+/** Все паттерны сразу — нагрузка, которую создаёт игра, а не стенд этапа 1. */
+export const ALL_PATTERNS_WEIGHTS: Record<EnemyPattern, number> = {
+  swarm: 4,
+  chase: 1,
+  kite_and_shoot: 2,
+  dash: 1,
+  orbit: 2,
+  exploder: 1,
+  splitter: 1,
+};
 
 export interface ScriptedRunResult {
   world: World;
@@ -34,7 +51,7 @@ export function runScripted(options: ScriptedRunOptions): ScriptedRunResult {
       ? { player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 1_000_000 } }
       : undefined,
   });
-  const spawner = createConstantPopulationSpawner(options.population);
+  const spawner = createConstantPopulationSpawner(options.population, options.weights);
 
   for (let tick = 0; tick < options.ticks; tick++) {
     spawner.update(world, 1 / 60);
@@ -61,6 +78,8 @@ export function checksumWorld(world: World): number {
   fold(world.stats.enemiesKilled);
   fold(world.stats.damageTaken);
   fold(world.stats.shotsFired);
+  fold(world.stats.deathCauseType);
+  for (const kills of world.stats.killsByType) fold(kills);
 
   for (let i = 0; i < world.enemies.count; i++) {
     fold(world.enemies.alive[i]);
@@ -68,6 +87,8 @@ export function checksumWorld(world: World): number {
     fold(world.enemies.x[i]);
     fold(world.enemies.y[i]);
     fold(world.enemies.hp[i]);
+    fold(world.enemies.phase[i]);
+    fold(world.enemies.ringRadius[i]);
   }
   return hash;
 }
