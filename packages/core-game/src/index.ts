@@ -1,16 +1,33 @@
 import Phaser from "phaser";
 import type { PlatformAdapter } from "@bh/shared-types";
 import { MainScene } from "./game/MainScene";
+import type { BenchSceneData } from "./game/bench/types";
 
 export * from "./content/enemies";
 export * from "./content/waves";
 export * from "./content/upgrades";
+export * from "./game/bench";
 
 export interface CreateGameOptions {
   /** id элемента-контейнера в разметке приложения */
   parent: string;
   /** seed забега; фиксируется в баг-репорте и позволяет его воспроизвести */
   seed?: number;
+  /**
+   * Ограничение частоты отрисовки.
+   *
+   * По умолчанию Phaser рисует со скоростью экрана: на 120-герцовом телефоне
+   * это вдвое больше работы, чем на 60-герцовом, и замеры двух устройств
+   * перестают быть сопоставимыми. Для прогонов, которые нужно сравнивать,
+   * частота фиксируется.
+   */
+  renderCapFps?: number;
+  /**
+   * Режим стресс-испытания. Передаётся только сборкой со включённым стендом:
+   * приложение решает, включать ли его, и оно же собирает сведения об
+   * устройстве — движок про платформу ничего не знает (docs/01-tech-stack.md §1).
+   */
+  bench?: Omit<BenchSceneData, "seed">;
 }
 
 /**
@@ -27,6 +44,12 @@ export function createGame(adapter: PlatformAdapter, options: CreateGameOptions)
     type: Phaser.AUTO,
     parent: options.parent,
     backgroundColor: "#0d0f14",
+    // forceSetTimeOut уводит цикл с requestAnimationFrame на таймер — только
+    // так Phaser позволяет ограничить частоту сверху. Цена — чуть менее
+    // ровный ритм кадров, поэтому режим включается явно и только для замеров.
+    ...(options.renderCapFps === undefined
+      ? {}
+      : { fps: { target: options.renderCapFps, forceSetTimeOut: true } }),
     scale: {
       // Не RESIZE: этот режим берёт размер только у родителя, и если тот на
       // момент старта отдаёт ноль (WebView в момент открытия — обычное дело),
@@ -45,7 +68,22 @@ export function createGame(adapter: PlatformAdapter, options: CreateGameOptions)
     scene: [],
   });
 
-  game.scene.add("main", MainScene, true, { seed, unitScale: pixelRatio });
+  if (options.bench === undefined) {
+    game.scene.add("main", MainScene, true, { seed, unitScale: pixelRatio });
+  } else {
+    // Динамический импорт, а не обычный: стенд испытаний уезжает в отдельный
+    // чанк и не тянется в основной бандл, который грузят игроки.
+    const benchData: BenchSceneData = {
+      ...options.bench,
+      seed,
+      // Плотность берётся отсюда, а не из замера приложения: канва создана
+      // именно с этим множителем, и мир обязан считаться в тех же единицах.
+      device: { ...options.bench.device, devicePixelRatio: pixelRatio },
+    };
+    void import("./game/BenchScene").then(({ BenchScene }) => {
+      game.scene.add("bench", BenchScene, true, benchData);
+    });
+  }
 
   followParentSize(game, parentElement, pixelRatio);
 
