@@ -102,7 +102,7 @@
 | 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md`. `ADMIN_TELEGRAM_IDS` используется **с этапа 2** — администраторы выгрузки данных через бота (`28-diagnostics.md` §6.1.1) |
 | 12. Программы роста и аналитика | домен редиректа, TTL клика, секрет подписи шеринга, кеш карточек, read-only пользователь Grafana, срок хранения сырых персональных данных | `22-analytics-and-metrics.md`, `23-referral-and-partner-program.md`, `24-attribution-and-sharing.md` |
 | 13. Публичные для клиента | `VITE_*` | только не-секреты |
-| 14. Стенд FPS-испытаний | `VITE_BENCH_ENABLED`, `VITE_BENCH_INGEST_*`, `BENCH_INGEST_*`, `BENCH_REPORTS_DIR` | `25-week1-fps-trials.md` §2.1; временная группа этапа 1. На этапе 2 заменяется группой «Диагностика и телеметрия»: приёмники, соль псевдонимизации выгрузок, выключатель выгрузки через бота — состав в `28-diagnostics.md` §7 |
+| 14. Стенд FPS-испытаний | `VITE_BENCH_ENABLED`, `VITE_BENCH_INGEST_*`, `BENCH_INGEST_*`, `BENCH_REPORTS_DIR` | `25-week1-fps-trials.md` §2.1; временная группа этапа 1. На этапе 2 заменяется группой «Диагностика и телеметрия»: приёмники, ключ псевдонимизации выгрузок, выключатель выгрузки через бота — состав в `28-diagnostics.md` §7 |
 | 15. CDN | ключ API Bunny.net для сброса кеша после деплоя | **только секреты CI**, на сервере не нужен (`26-stage2-plan.md`, WP10) |
 
 ---
