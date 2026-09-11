@@ -13,6 +13,7 @@
     "bench": "pnpm --filter web-telegram build && pnpm --parallel --filter backend-api --filter web-telegram run bench",
     "tunnel": "frpc -c infra/frpc/frpc.local.toml",
     "reports": "node scripts/bench-reports.mjs",
+    "stop": "node scripts/free-ports.mjs",
     "dev:telegram": "pnpm --filter web-telegram dev",
     "dev:max": "pnpm --filter web-max dev",
     "dev:vk": "pnpm --filter web-vk dev",
