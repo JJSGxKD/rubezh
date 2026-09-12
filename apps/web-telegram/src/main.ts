@@ -81,10 +81,19 @@ const bench = benchAllowed ? readBenchMode(params.get("bench")) : null;
 // 120-герцовых экранах были сопоставимы (docs/25-week1-fps-trials.md §1.6).
 const renderCapFps = params.has("fps") ? numberParam("fps", 60) : undefined;
 
+// ?diag=1 — режим диагностики: на экране смерти видны seed и runId, а итог
+// забега печатается в консоль. Временный переключатель: постоянный живёт в
+// настройках оболочки, «Для тестировщиков» (docs/28-diagnostics.md §2, WP6).
+const diagnostics = params.get("diag") === "1";
+
 createGame(new TelegramAdapter(), {
   parent: "game",
   seed: numberParam("seed", 1),
   renderCapFps,
+  diagnostics,
+  // Отправку итога забега возьмёт на себя оболочка (WP5, WP8); до тех пор он
+  // хотя бы виден в консоли устройства, с которого снимают баг-репорт.
+  ...(diagnostics ? { onRunEnd: (result) => console.log("Итог забега:", result) } : {}),
   bench:
     bench === null
       ? undefined

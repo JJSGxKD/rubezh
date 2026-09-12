@@ -40,12 +40,30 @@ export interface PlatformAdapter {
   haptic(type: HapticType): void;
   /** опционально — не везде доступно, см. docs/01-tech-stack.md §6 */
   showAd?(): Promise<AdResult>;
+  /** опционально — площадка может не дать хранилища, см. KeyValueStorage */
+  storage?: KeyValueStorage;
 }
 
 export interface SharePayload {
   runScore: number;
   runDurationSec: number;
   imageUrl?: string;
+}
+
+/**
+ * Хранилище «ключ — значение» на устройстве: локальный рекорд, настройки,
+ * `installId` (docs/27-design-system-and-app-shell.md §7).
+ *
+ * Порт, а не прямой `localStorage`: на iOS он теряется вместе с данными сайта,
+ * и Telegram-адаптер должен уметь переехать на `DeviceStorage` площадки, не
+ * трогая ни оболочку, ни движок. Методы синхронные и ничего не бросают —
+ * в приватном режиме и при переполнении реализация возвращает `null` и молча
+ * пропускает запись: потерянный рекорд не стоит упавшего запуска.
+ */
+export interface KeyValueStorage {
+  get(key: string): string | null;
+  set(key: string, value: string): void;
+  remove(key: string): void;
 }
 
 // --- Контент как данные, см. docs/01-tech-stack.md §9 ---
@@ -247,6 +265,57 @@ export interface UpgradeOption {
   level: number;
   nameKey: string;
   descriptionKey: string;
+}
+
+// --- Итог забега, см. docs/26-stage2-plan.md, WP3 ---
+// Движок считает и отдаёт, оболочка показывает на экране смерти и отправляет
+// событием `run_finished` / `run_abandoned`. Сам движок в сеть не ходит и об
+// аналитике не знает (docs/27-design-system-and-app-shell.md §3.1).
+//
+// Считает это всё клиент, поэтому для сервера `RunResult` — заявление игрока,
+// а не факт (docs/15-engineering-standards.md §7.1). Приёмник телеметрии
+// (WP8) обязан относиться к нему так же: для аналитики закрытого теста этого
+// достаточно, для лидерборда этапа 4 — нет, там нужна перепроверка забега по
+// seed'у и логу ввода (docs/17-testing-strategy.md §3.5).
+
+/** Чем закончился забег: смертью или сдачей на экране паузы. */
+export type RunOutcome = "died" | "abandoned";
+
+export interface RunWeaponSummary {
+  id: string;
+  level: number;
+  /** нанесённый урон — главный вход геймдизайнера для баланса оружий */
+  damage: number;
+}
+
+export interface RunPassiveSummary {
+  id: string;
+  level: number;
+}
+
+export interface RunResult {
+  runId: string;
+  /** seed забега: с ним и логом ввода забег воспроизводится целиком */
+  seed: number;
+  outcome: RunOutcome;
+  startingWeaponId: string;
+  /** главный показатель забега (Р2) и будущая метрика лидерборда */
+  survivalSec: number;
+  level: number;
+  xpCollected: number;
+  enemiesKilled: number;
+  /** убийства по id врага; враги без убийств не попадают */
+  killsByEnemy: Record<string, number>;
+  damageDealt: number;
+  damageTaken: number;
+  weapons: RunWeaponSummary[];
+  passives: RunPassiveSummary[];
+  /** id врага, нанёсшего смертельный урон; null — забег кончился не смертью */
+  deathCause: string | null;
+  /** пройденное расстояние в игровых единицах — показатель стиля игры */
+  distance: number;
+  /** пик числа врагов одновременно в мире */
+  peakEnemies: number;
 }
 
 // --- Экономика / SKU, см. docs/05-game-design.md §5, docs/07-monetization-and-ads.md ---

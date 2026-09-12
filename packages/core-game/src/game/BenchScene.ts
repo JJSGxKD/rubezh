@@ -16,7 +16,7 @@ import { FrameRecorder, type BenchReport, type BenchStopReason } from "./bench/m
 import { DegradationDetector } from "./bench/degradation-detector";
 import { evaluateBench, type BenchVerdict } from "./bench/verdict";
 import { sendBenchReport } from "./bench/sender";
-import { createReportId } from "./bench/report-id";
+import { createUuid } from "./uuid";
 import { copyText, showReportOverlay } from "./bench/clipboard";
 import {
   BENCH_DEFAULT_RAMP_CAP,
@@ -132,7 +132,7 @@ export class BenchScene extends Phaser.Scene {
     // Единственное обращение ко времени за весь стенд — метка старта для
     // отчёта. В симуляции часов нет и быть не может.
     this.startedAt = new Date().toISOString();
-    this.reportId = createReportId();
+    this.reportId = createUuid();
 
     this.cameras.main.setBackgroundColor("#0d0f14");
     this.hud = this.add.text(0, 0, "", this.textStyle(16, "#cfd6e4")).setDepth(10);

@@ -6,7 +6,9 @@ import type {
   SharePayload,
   HapticType,
   AdResult,
+  KeyValueStorage,
 } from "@bh/shared-types";
+import { createDeviceStorage } from "./storage";
 
 /**
  * Telegram WebApp SDK. Валидация initData (HMAC-SHA256 токеном бота) —
@@ -18,6 +20,9 @@ import type {
  * (пассивные баннеры/промо-посты/квесты), см. docs/07-monetization-and-ads.md.
  */
 export class TelegramAdapter implements PlatformAdapter {
+  /** локальный рекорд, настройки и installId — docs/27-design-system-and-app-shell.md §7 */
+  readonly storage: KeyValueStorage = createDeviceStorage();
+
   async init(): Promise<UserContext> {
     // TODO: window.Telegram.WebApp.initData -> отправить на бэкенд для валидации
     throw new Error("TelegramAdapter.init: не реализовано");
@@ -93,3 +98,5 @@ export function describeTelegramClient(): TelegramClientInfo {
     return UNKNOWN_CLIENT;
   }
 }
+
+export { createDeviceStorage } from "./storage";

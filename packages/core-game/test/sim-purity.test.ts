@@ -16,6 +16,10 @@ const patternsRoot = fileURLToPath(new URL("../src/game/patterns", import.meta.u
 // значит на них распространяются те же запреты (docs/26-stage2-plan.md, WP2).
 const weaponsRoot = fileURLToPath(new URL("../src/game/weapons", import.meta.url));
 const progressionRoot = fileURLToPath(new URL("../src/game/progression", import.meta.url));
+// Итог забега и локальный рекорд: сам забег они не считают, но обязаны
+// работать headless — их гоняет тест статистики, а позже и серверная
+// перепроверка забега (docs/17-testing-strategy.md §3.5).
+const runRoot = fileURLToPath(new URL("../src/game/run", import.meta.url));
 
 /**
  * Комментарии вырезаются перед проверкой: иначе тест падает на собственных
@@ -49,6 +53,7 @@ const sources = [
   ...collectSources(patternsRoot),
   ...collectSources(weaponsRoot),
   ...collectSources(progressionRoot),
+  ...collectSources(runRoot),
 ];
 
 describe("чистота слоя симуляции", () => {
