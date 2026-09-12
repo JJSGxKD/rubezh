@@ -10,3 +10,4 @@ export * from "./vector";
 export * from "./pools";
 export * from "./combat";
 export * from "./gems";
+export * from "./create-world";
