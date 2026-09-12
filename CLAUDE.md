@@ -149,11 +149,14 @@ rate-limit через подделку `X-Forwarded-For`, неатомарный
 
 ```ts
 // packages/core-game/src/content/enemies.ts
-{ id: "new_enemy_id", hp: 10, speed: 60, damage: 4, pattern: "swarm" }
+{ id: "new_enemy_id", hp: 10, speed: 60, damage: 4, xp: 2, pattern: "swarm" }
 
 // с параметрами паттерна — всё незаданное берётся из умолчаний
-{ id: "fast_wolf", hp: 14, speed: 70, damage: 7, pattern: "dash", params: { telegraphSec: 0.4 } }
+{ id: "fast_wolf", hp: 14, speed: 70, damage: 7, xp: 3, pattern: "dash", params: { telegraphSec: 0.4 } }
 ```
+
+`xp` — ценность кристалла опыта за убийство: дорогой враг должен и качать
+быстрее, иначе его незачем убивать.
 
 `pattern` должен быть одним из уже реализованных в
 `packages/core-game/src/game/patterns/` — если нужен принципиально новый
@@ -186,6 +189,42 @@ rate-limit через подделку `X-Forwarded-For`, неатомарный
 Правка контента ломает golden-тесты баланса — это ожидаемо и правильно.
 Эталон обновляется в том же PR, чтобы в диффе было видно, как правка повлияла
 на длину забега (`docs/17-testing-strategy.md` §3.2).
+
+## Как добавить оружие или пассивку
+
+Оружие — в `packages/core-game/src/content/weapons.ts`, пассивные улучшения,
+слоты и кривая опыта — в `content/upgrades.ts`. Имена файлов фиксированы.
+
+```ts
+// оружие: поведение из готовых, числа по уровням
+{
+  id: "new_weapon",
+  behavior: "projectile_nearest",
+  nameKey: "weapon.new_weapon.name",
+  descriptionKey: "weapon.new_weapon.description",
+  starting: true,                       // можно выбрать на старте забега
+  levels: [{ damage: 6, cooldownSec: 0.3 }, { damage: 8, cooldownSec: 0.26 }],
+}
+
+// пассивка: значение в levels — итоговое для уровня, а не прибавка
+{ id: "might", nameKey: "…", descriptionKey: "…", stat: "damage", op: "mul", levels: [1.1, 1.2] }
+```
+
+| Поведение | Как атакует | Что значат числа уровня |
+|---|---|---|
+| `projectile_nearest` | Снаряд в ближайшего врага | `damage`, `cooldownSec`, `projectiles`, `pierce`, `projectileSpeed`, `ttlSec` |
+| `projectile_facing` | Снаряды по направлению движения | то же |
+| `orbit` | Обереги кружат вокруг игрока | `areaRadius` — радиус кольца, `projectileSpeed` — скорость по нему, `projectiles` — сколько оберегов (до 6), `cooldownSec` — пауза между ударами |
+| `aura` | Зона урона вокруг игрока | `areaRadius`, `cooldownSec` — период тика урона |
+| `area_strike` | Удар по площади в случайного врага | `areaRadius`, `projectiles` — сколько ударов за срабатывание |
+
+**Тексты — только ключи i18n** (`nameKey`, `descriptionKey`), а не русские
+строки: словарь подключается в оболочке приложения
+(`docs/01-tech-stack.md` §7).
+
+Новое **поведение** оружия — это код участника 1
+(`packages/core-game/src/game/weapons/`), как и новый паттерн врага. Новое
+оружие на существующем поведении и любые числа — данные.
 
 ## Стиль кода
 
