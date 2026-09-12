@@ -8,3 +8,5 @@ export * from "./spawner";
 export * from "./events";
 export * from "./vector";
 export * from "./pools";
+export * from "./combat";
+export * from "./gems";

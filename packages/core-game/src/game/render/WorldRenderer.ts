@@ -3,7 +3,10 @@ import type { EnemyPattern } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
+import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { drawShape, type ShapeKind } from "./shapes";
+
+const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
 
 /**
  * Рендер состояния симуляции. Отделён от неё полностью: симуляция не знает,
@@ -33,9 +36,12 @@ export class WorldRenderer {
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly player: Phaser.GameObjects.Image;
   private readonly textureKeyByType: string[] = [];
+  private readonly gemSprites: Phaser.GameObjects.Image[] = [];
+  private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
   private readonly blastStartTick: Int32Array = new Int32Array(MAX_BLASTS).fill(-1);
   private readonly blastRadius: Float32Array = new Float32Array(MAX_BLASTS);
+  private readonly blastKind: Uint8Array = new Uint8Array(MAX_BLASTS);
   private eventsRead = 0;
   private nextBlast = 0;
 
@@ -57,6 +63,9 @@ export class WorldRenderer {
     this.ensureTexture("bh-projectile", world.config.player.projectileRadius, 0xffe066, "circle");
     this.ensureTexture("bh-projectile-enemy", world.config.player.projectileRadius, 0xff6b6b, "circle");
     this.ensureTexture("bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
+    this.ensureTexture("bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
+    this.ensureTexture("bh-gem", GEM_RADIUS_UNITS * scale, 0x7ce7ff, "diamond");
+    this.ensureTexture("bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
     this.eventsRead = world.events.written;
@@ -74,6 +83,8 @@ export class WorldRenderer {
     const t = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
     this.syncEnemies(t);
     this.syncProjectiles(t);
+    this.syncGems(t);
+    this.syncOrbiters();
     this.syncBlasts();
 
     this.player.setPosition(
@@ -127,6 +138,47 @@ export class WorldRenderer {
     }
   }
 
+  private syncGems(t: number): void {
+    const gems = this.world.gems;
+    for (let i = 0; i < gems.count; i++) {
+      const sprite = this.gemSprite(i);
+      if (gems.alive[i] === 0) {
+        if (sprite.visible) sprite.setVisible(false);
+        continue;
+      }
+      sprite.setVisible(true);
+      sprite.setPosition(lerp(gems.prevX[i], gems.x[i], t), lerp(gems.prevY[i], gems.y[i], t));
+    }
+  }
+
+  /**
+   * Обереги не живут в пуле снарядов: их положение целиком задаётся
+   * состоянием оружия, поэтому рендер спрашивает его у самого оружия.
+   */
+  private syncOrbiters(): void {
+    const world = this.world;
+    let drawn = 0;
+
+    for (let slot = 0; slot < world.loadout.weapons.length; slot++) {
+      const weapon = world.loadout.weapons[slot];
+      const type = world.weaponTypes[weapon.typeIndex];
+      if (type.behavior !== "orbit") continue;
+
+      const level = type.levels[Math.min(weapon.level, type.levels.length) - 1];
+      const count = orbiterCount(level);
+      for (let k = 0; k < count; k++) {
+        orbiterPosition(world, slot, level, k, orbiterScratch);
+        const sprite = this.orbiterSprite(drawn++);
+        sprite.setVisible(true);
+        sprite.setPosition(orbiterScratch.x, orbiterScratch.y);
+      }
+    }
+
+    for (let i = drawn; i < this.orbiterSprites.length; i++) {
+      if (this.orbiterSprites[i].visible) this.orbiterSprites[i].setVisible(false);
+    }
+  }
+
   /**
    * Вид спрайта меняется только при смене состояния: вызов setAlpha и
    * setScale на каждого врага каждый кадр — лишняя работа на сотнях объектов.
@@ -152,8 +204,9 @@ export class WorldRenderer {
 
     for (let seq = first; seq < events.written; seq++) {
       const slot = seq % capacity;
-      if (events.kind[slot] !== SIM_EVENT.explosion) continue;
-      this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot]);
+      const kind = events.kind[slot];
+      if (kind !== SIM_EVENT.explosion && kind !== SIM_EVENT.strike) continue;
+      this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
     }
     this.eventsRead = events.written;
 
@@ -173,15 +226,35 @@ export class WorldRenderer {
     }
   }
 
-  private startBlast(x: number, y: number, radius: number, tick: number): void {
+  private startBlast(x: number, y: number, radius: number, tick: number, kind: number): void {
     const b = this.nextBlast;
     this.nextBlast = (this.nextBlast + 1) % MAX_BLASTS;
     while (this.blasts.length <= b) {
       this.blasts.push(this.scene.add.image(0, 0, "bh-blast").setVisible(false).setDepth(3));
     }
+    if (this.blastKind[b] !== kind) {
+      this.blasts[b].setTexture(kind === SIM_EVENT.strike ? "bh-strike" : "bh-blast");
+      this.blastKind[b] = kind;
+    }
     this.blasts[b].setPosition(x, y);
     this.blastStartTick[b] = tick;
     this.blastRadius[b] = radius;
+  }
+
+  private gemSprite(index: number): Phaser.GameObjects.Image {
+    while (this.gemSprites.length <= index) {
+      this.gemSprites.push(this.createHiddenSprite("bh-gem"));
+    }
+    return this.gemSprites[index];
+  }
+
+  private orbiterSprite(index: number): Phaser.GameObjects.Image {
+    while (this.orbiterSprites.length <= index) {
+      this.orbiterSprites.push(
+        this.scene.add.image(0, 0, "bh-orbiter").setVisible(false).setDepth(2),
+      );
+    }
+    return this.orbiterSprites[index];
   }
 
   /**
@@ -225,6 +298,8 @@ function lerp(from: number, to: number, t: number): number {
 const MAX_BLASTS = 24;
 const BLAST_LIFETIME_TICKS = 18;
 const BLAST_TEXTURE_UNITS = 32;
+const GEM_RADIUS_UNITS = 5;
+const ORBITER_RADIUS_UNITS = 9;
 
 const LOOK = {
   normal: 0,

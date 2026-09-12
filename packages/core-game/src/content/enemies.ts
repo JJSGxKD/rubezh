@@ -7,20 +7,24 @@ import type { EnemyDef } from "@bh/shared-types";
 // паттерна. Какие параметры есть у какого паттерна — подсказывает TypeScript,
 // смысл каждого — в EnemyPatternParams (packages/shared-types).
 //
+// `xp` — ценность кристалла опыта, который остаётся после смерти врага:
+// дорогой враг должен и качать быстрее, иначе его незачем убивать.
+//
 // Числа четырёх новых врагов — стартовые, до спецификации геймдизайнера
 // (docs/26-stage2-plan.md, WP1).
 export const ENEMIES: EnemyDef[] = [
-  { id: "swarm_rat", hp: 5, speed: 90, damage: 3, pattern: "swarm" },
-  { id: "tank_ghoul", hp: 60, speed: 30, damage: 8, pattern: "chase" },
-  { id: "shooter_wisp", hp: 12, speed: 40, damage: 5, pattern: "kite_and_shoot" },
-  { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, pattern: "dash" },
-  { id: "circler_crow", hp: 8, speed: 110, damage: 4, pattern: "orbit" },
-  { id: "bomber_imp", hp: 10, speed: 80, damage: 18, pattern: "exploder" },
+  { id: "swarm_rat", hp: 5, speed: 90, damage: 3, xp: 1, pattern: "swarm" },
+  { id: "tank_ghoul", hp: 60, speed: 30, damage: 8, xp: 6, pattern: "chase" },
+  { id: "shooter_wisp", hp: 12, speed: 40, damage: 5, xp: 3, pattern: "kite_and_shoot" },
+  { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, xp: 3, pattern: "dash" },
+  { id: "circler_crow", hp: 8, speed: 110, damage: 4, xp: 2, pattern: "orbit" },
+  { id: "bomber_imp", hp: 10, speed: 80, damage: 18, xp: 4, pattern: "exploder" },
   {
     id: "splitter_slime",
     hp: 24,
     speed: 40,
     damage: 5,
+    xp: 4,
     pattern: "splitter",
     params: { childEnemy: "swarm_rat", childCount: 3 },
   },

@@ -1,18 +1,47 @@
-import type { EnemyDef } from "@bh/shared-types";
+import type {
+  EnemyDef,
+  LevelCurveDef,
+  LoadoutLimits,
+  PassiveDef,
+  UpgradeOption,
+  WeaponDef,
+} from "@bh/shared-types";
 import { resolveEnemyTypes, type EnemyType } from "../patterns/enemy-types";
+import {
+  computePlayerStats,
+  resolvePassiveTypes,
+  type PassiveType,
+  type PlayerStats,
+  type PlayerStatsBase,
+} from "../progression/passives";
+import { addWeapon, createLoadout, type LoadoutState } from "../progression/loadout";
+import { xpForLevel } from "../progression/levels";
+import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, type Rng } from "./rng";
 import { SpatialGrid } from "./grid";
 import { createSimEvents, type SimEvents } from "./events";
 import {
   createEnemyPool,
+  createGemPool,
   createProjectilePool,
   NO_OWNER_TYPE,
   type EnemyPool,
+  type GemPool,
   type ProjectilePool,
 } from "./pools";
 
 export type { EnemyType } from "../patterns/enemy-types";
-export { NO_OWNER_TYPE, type EnemyPool, type ProjectilePool } from "./pools";
+export { NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
+
+/**
+ * Кривая опыта и слоты по умолчанию — заглушка для тестов симуляции, которым
+ * прокачка не нужна. Игра и стенд передают значения из контента.
+ */
+const FALLBACK_LEVEL_CURVE: LevelCurveDef = { baseXp: 6, growth: 1.22 };
+const FALLBACK_LOADOUT_LIMITS: LoadoutLimits = { weapons: 4, passives: 4 };
+
+/** Броня не делает неуязвимым: сквозь неё всегда проходит доля урона. */
+const MIN_DAMAGE_RATIO = 0.1;
 
 /** Шаг симуляции фиксирован: 60 Гц. Рендер к нему не привязан. */
 export const TICK_HZ = 60;
@@ -31,9 +60,12 @@ export interface PlayerConfig {
   accelerationPxSec2: number;
   attackDamage: number;
   attackCooldownSec: number;
+  /** дальность наведения оружия, которое само ищет цель */
   attackRangePx: number;
   projectileSpeedPxSec: number;
   projectileRadius: number;
+  /** базовый радиус притяжения кристаллов опыта */
+  pickupRadiusPx: number;
 }
 
 export interface SimConfig {
@@ -51,6 +83,18 @@ export interface SimConfig {
   unitScale: number;
   maxEnemies: number;
   maxProjectiles: number;
+  /**
+   * Потолок кристаллов опыта на поле. При его достижении кристаллы
+   * сливаются, а не копятся: опыт не должен стать третьей осью нагрузки
+   * после врагов и снарядов (docs/26-stage2-plan.md, WP2).
+   */
+  maxGems: number;
+  /**
+   * Опыт, уровни и выбор улучшений. Стенд испытаний выключает прокачку:
+   * растущая сила игрока меняет нагрузку по ходу прогона, и два замера
+   * перестают быть сравнимыми (docs/25-week1-fps-trials.md §1).
+   */
+  progressionEnabled: boolean;
   player: PlayerConfig;
 }
 
@@ -60,6 +104,8 @@ export const DEFAULT_SIM_CONFIG: SimConfig = {
   unitScale: 1,
   maxEnemies: 512,
   maxProjectiles: 512,
+  maxGems: 256,
+  progressionEnabled: true,
   player: {
     radius: 10,
     maxHp: 100,
@@ -70,6 +116,7 @@ export const DEFAULT_SIM_CONFIG: SimConfig = {
     attackRangePx: 320,
     projectileSpeedPxSec: 520,
     projectileRadius: 4,
+    pickupRadiusPx: 90,
   },
 };
 
@@ -81,6 +128,12 @@ export interface PlayerState {
   prevY: number;
   vx: number;
   vy: number;
+  /**
+   * Куда персонаж смотрит — единичный вектор последнего движения. Оружию,
+   * которое бьёт по направлению, нужна цель и на остановке.
+   */
+  faceX: number;
+  faceY: number;
   hp: number;
   maxHp: number;
   attackCooldown: number;
@@ -98,15 +151,49 @@ export interface RunStats {
   /** индекс типа врага, нанёсшего смертельный урон; -1 — игрок жив */
   deathCauseType: number;
   shotsFired: number;
+  damageDealt: number;
+  /**
+   * Нанесённый урон по номеру оружия в наборе — главный вход геймдизайнера
+   * для баланса оружий (docs/26-stage2-plan.md, WP3).
+   */
+  damageByWeapon: Float32Array;
+  xpCollected: number;
+}
+
+/** Опыт, уровень и очередь выборов внутри забега. */
+export interface ProgressionState {
+  level: number;
+  /** опыт на текущем уровне */
+  xp: number;
+  /** сколько опыта нужно до следующего уровня */
+  xpToNext: number;
+  totalXp: number;
+  /** набранные, но ещё не отыгранные уровни */
+  pendingLevelUps: number;
+  /** предложенные варианты; непустой список означает, что мир ждёт выбора */
+  offers: UpgradeOption[];
 }
 
 export interface World {
   config: SimConfig;
   rng: Rng;
   enemyTypes: EnemyType[];
+  weaponTypes: WeaponType[];
+  passiveTypes: PassiveType[];
+  levelCurve: LevelCurveDef;
+  loadoutLimits: LoadoutLimits;
   player: PlayerState;
+  /** характеристики игрока с учётом пассивок — пересчитываются при улучшении */
+  playerStats: PlayerStats;
+  /** значения без улучшений: от них считается пересчёт */
+  playerStatsBase: PlayerStatsBase;
+  loadout: LoadoutState;
+  progression: ProgressionState;
   enemies: EnemyPool;
   projectiles: ProjectilePool;
+  gems: GemPool;
+  /** с какого слота искать кристалл для слияния при переполнении пула */
+  gemMergeCursor: number;
   enemyGrid: SpatialGrid;
   stats: RunStats;
   /** события для рендера — симуляция о рендере не знает */
@@ -119,6 +206,13 @@ export interface CreateWorldOptions {
   seed: number;
   /** контент инжектируется, чтобы тесты гоняли симуляцию на фикстурах */
   enemies: readonly EnemyDef[];
+  /** без оружия персонаж не атакует вовсе — так гоняются тесты паттернов */
+  weapons?: readonly WeaponDef[];
+  passives?: readonly PassiveDef[];
+  levelCurve?: LevelCurveDef;
+  loadoutLimits?: LoadoutLimits;
+  /** чем игрок начинает забег; по умолчанию — первое стартовое оружие */
+  startingWeaponId?: string;
   config?: Partial<SimConfig>;
 }
 
@@ -128,6 +222,8 @@ export function createWorld(options: CreateWorldOptions): World {
 
   const scale = config.unitScale;
   const enemyTypes = resolveEnemyTypes(options.enemies, scale);
+  const weaponTypes = resolveWeaponTypes(options.weapons ?? [], scale);
+  const passiveTypes = resolvePassiveTypes(options.passives ?? []);
 
   // Игрок пересчитывается тем же множителем — иначе на устройстве с высокой
   // плотностью он окажется медленнее врагов просто из-за арифметики.
@@ -139,10 +235,35 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error("Слишком много типов врагов для Uint8Array-пула");
   }
 
+  const levelCurve = options.levelCurve ?? FALLBACK_LEVEL_CURVE;
+  const playerStatsBase: PlayerStatsBase = {
+    maxHp: config.player.maxHp,
+    pickupRadius: config.player.pickupRadiusPx,
+  };
+
+  const loadout = createLoadout();
+  const startingWeapon = findStartingWeapon(weaponTypes, options.startingWeaponId);
+  if (startingWeapon >= 0) addWeapon(loadout, startingWeapon);
+
   return {
     config,
     rng: createRng(options.seed),
     enemyTypes,
+    weaponTypes,
+    passiveTypes,
+    levelCurve,
+    loadoutLimits: options.loadoutLimits ?? FALLBACK_LOADOUT_LIMITS,
+    playerStats: computePlayerStats(playerStatsBase, passiveTypes, new Map()),
+    playerStatsBase,
+    loadout,
+    progression: {
+      level: 1,
+      xp: 0,
+      xpToNext: xpForLevel(levelCurve, 1),
+      totalXp: 0,
+      pendingLevelUps: 0,
+      offers: [],
+    },
     player: {
       x: config.width / 2,
       y: config.height / 2,
@@ -150,6 +271,8 @@ export function createWorld(options: CreateWorldOptions): World {
       prevY: config.height / 2,
       vx: 0,
       vy: 0,
+      faceX: 1,
+      faceY: 0,
       hp: config.player.maxHp,
       maxHp: config.player.maxHp,
       attackCooldown: 0,
@@ -157,6 +280,8 @@ export function createWorld(options: CreateWorldOptions): World {
     },
     enemies: createEnemyPool(maxEnemies),
     projectiles: createProjectilePool(maxProjectiles),
+    gems: createGemPool(config.progressionEnabled ? config.maxGems : 1),
+    gemMergeCursor: 0,
     // размер клетки — порядка диаметра крупного врага: мельче даёт много
     // пустых клеток на запрос, крупнее возвращает лишних кандидатов
     enemyGrid: new SpatialGrid(config.width, config.height, gridCellSize(config), maxEnemies),
@@ -169,6 +294,9 @@ export function createWorld(options: CreateWorldOptions): World {
       damageTaken: 0,
       deathCauseType: -1,
       shotsFired: 0,
+      damageDealt: 0,
+      damageByWeapon: new Float32Array(Math.max(1, (options.loadoutLimits ?? FALLBACK_LOADOUT_LIMITS).weapons)),
+      xpCollected: 0,
     },
     events: createSimEvents(),
     // Буфер под всю ёмкость пула, а не фиксированные 256: при плотной толпе
@@ -194,7 +322,17 @@ function scalePlayerConfig(player: PlayerConfig, scale: number): PlayerConfig {
     attackRangePx: player.attackRangePx * scale,
     projectileSpeedPxSec: player.projectileSpeedPxSec * scale,
     projectileRadius: player.projectileRadius * scale,
+    pickupRadiusPx: player.pickupRadiusPx * scale,
   };
+}
+
+/** Первое стартовое оружие или запрошенное по id; -1 — оружия нет вовсе. */
+function findStartingWeapon(types: readonly WeaponType[], requestedId?: string): number {
+  if (requestedId !== undefined) {
+    const requested = types.findIndex((type) => type.id === requestedId);
+    if (requested >= 0) return requested;
+  }
+  return types.findIndex((type) => type.starting);
 }
 
 export function resizeWorld(world: World, width: number, height: number): void {
@@ -272,10 +410,13 @@ export function despawnEnemy(world: World, index: number): void {
  */
 export function damagePlayer(world: World, amount: number, sourceType: number): void {
   const player = world.player;
-  if (!player.alive) return;
+  if (!player.alive || amount <= 0) return;
 
-  player.hp -= amount;
-  world.stats.damageTaken += amount;
+  // Броня вычитается, но не обнуляет урон: иначе несколько уровней брони
+  // делают рой безобидным, и вся кривая сложности перестаёт работать.
+  const reduced = Math.max(amount * MIN_DAMAGE_RATIO, amount - world.playerStats.armor);
+  player.hp -= reduced;
+  world.stats.damageTaken += reduced;
   if (player.hp <= 0) {
     player.hp = 0;
     player.alive = false;
@@ -306,9 +447,12 @@ export function spawnProjectile(
   pool.damage[slot] = damage;
   pool.ttl[slot] = ttlSec;
   pool.fromPlayer[slot] = fromPlayer ? 1 : 0;
-  // Владельца выставляет стреляющий паттерн после спавна; без сброса снаряд
-  // игрока унаследовал бы владельца от прежнего вражеского снаряда в слоте.
+  // Владельца и пробивание выставляет стреляющий после спавна; без сброса
+  // снаряд унаследовал бы их от прежнего снаряда в этом слоте.
   pool.ownerType[slot] = NO_OWNER_TYPE;
+  pool.ownerWeapon[slot] = NO_OWNER_TYPE;
+  pool.pierce[slot] = 0;
+  pool.lastHit[slot] = -1;
   pool.alive[slot] = 1;
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;

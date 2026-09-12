@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
+import { WEAPONS } from "../src/content/weapons";
 import { createWorld, resizeWorld, TICK_SEC } from "../src/game/sim/world";
 import { stepWorld, IDLE_INPUT } from "../src/game/sim/step";
 import { createConstantPopulationSpawner, createRampSpawner, rampTargetAt } from "../src/game/sim/spawner";
 
 function world(overrides = {}) {
-  return createWorld({ seed: 1, enemies: ENEMIES, config: { width: 800, height: 600, ...overrides } });
+  return createWorld({
+    seed: 1,
+    enemies: ENEMIES,
+    weapons: WEAPONS,
+    // Прокачка выключена: эти тесты про движение, спавн и коллизии, а
+    // растущая с уровнями сила игрока делала бы их результат плавающим.
+    config: { width: 800, height: 600, progressionEnabled: false, ...overrides },
+  });
 }
 
 describe("движение игрока", () => {

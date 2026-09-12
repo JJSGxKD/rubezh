@@ -1,9 +1,13 @@
-import type { EnemyDef } from "@bh/shared-types";
+import type { EnemyDef, PassiveDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { WAVES } from "../src/content/waves";
-import { UPGRADES } from "../src/content/upgrades";
+import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS } from "../src/game/patterns";
+import { findPassiveContentProblems } from "../src/game/progression/passives";
+import { xpForLevel } from "../src/game/progression/levels";
+import { findWeaponContentProblems, IMPLEMENTED_WEAPON_BEHAVIORS } from "../src/game/weapons";
 import { createWorld } from "../src/game/sim/world";
 
 // Дешёвые тесты, ловящие опечатки в контенте за миллисекунды
@@ -45,7 +49,7 @@ describe("контент врагов", () => {
 });
 
 describe("проверка параметров паттернов", () => {
-  const base = { hp: 10, speed: 50, damage: 1 };
+  const base = { hp: 10, speed: 50, damage: 1, xp: 1 };
   const swarm: EnemyDef = { id: "rat", ...base, pattern: "swarm" };
 
   function problemsOf(...defs: EnemyDef[]): string[] {
@@ -135,16 +139,114 @@ describe("контент волн", () => {
   });
 });
 
-describe("контент апгрейдов", () => {
-  it("не содержит дублирующихся id", () => {
-    const ids = UPGRADES.map((upgrade) => upgrade.id);
-    expect(new Set(ids).size).toBe(ids.length);
+describe("контент оружия", () => {
+  it("проходит проверку целиком", () => {
+    expect(findWeaponContentProblems(WEAPONS)).toEqual([]);
   });
 
-  it("задаёт положительное число стаков там, где оно указано", () => {
-    for (const upgrade of UPGRADES) {
-      if (upgrade.maxStacks === undefined) continue;
-      expect(upgrade.maxStacks, `апгрейд ${upgrade.id}`).toBeGreaterThan(0);
+  it("использует только реализованные поведения", () => {
+    for (const weapon of WEAPONS) {
+      expect(IMPLEMENTED_WEAPON_BEHAVIORS, `оружие ${weapon.id}`).toContain(weapon.behavior);
     }
+  });
+
+  it("даёт игроку выбор из трёх стартовых оружий", () => {
+    // Решение Р12 (docs/26-stage2-plan.md §2): выбор перед забегом из трёх.
+    expect(WEAPONS.filter((weapon) => weapon.starting === true)).toHaveLength(3);
+  });
+
+  it("содержит оружие на каждое реализованное поведение", () => {
+    const used = new Set(WEAPONS.map((weapon) => weapon.behavior));
+    for (const behavior of IMPLEMENTED_WEAPON_BEHAVIORS) {
+      expect(used, `поведение ${behavior}`).toContain(behavior);
+    }
+  });
+});
+
+describe("контент пассивок и прокачки", () => {
+  it("проходит проверку целиком", () => {
+    expect(findPassiveContentProblems(PASSIVES)).toEqual([]);
+  });
+
+  it("предлагает больше пассивок, чем помещается в слоты — иначе выбора нет", () => {
+    expect(PASSIVES.length).toBeGreaterThan(LOADOUT_LIMITS.passives);
+  });
+
+  it("даёт первый уровень в первые полминуты игры, а дальше дорожает", () => {
+    // Пустая первая минута без решений — самый дешёвый способ потерять игрока.
+    expect(xpForLevel(LEVEL_CURVE, 1)).toBeLessThanOrEqual(8);
+    for (let level = 1; level < 20; level++) {
+      expect(xpForLevel(LEVEL_CURVE, level + 1), `уровень ${level + 1}`).toBeGreaterThan(
+        xpForLevel(LEVEL_CURVE, level),
+      );
+    }
+  });
+});
+
+describe("проверка контента оружия", () => {
+  const base = { nameKey: "n", descriptionKey: "d" };
+  const ok: WeaponDef = {
+    id: "spark",
+    behavior: "projectile_nearest",
+    ...base,
+    starting: true,
+    levels: [{ damage: 5, cooldownSec: 0.3 }],
+  };
+
+  it("требует хотя бы одно стартовое оружие", () => {
+    const problems = findWeaponContentProblems([{ ...ok, starting: false }]);
+    expect(problems.join("\n")).toMatch(/нет ни одного стартового оружия/);
+  });
+
+  it("ловит нулевой урон и нулевую перезарядку", () => {
+    const problems = findWeaponContentProblems([
+      { ...ok, levels: [{ damage: 0, cooldownSec: 0 }] },
+    ]);
+    expect(problems).toHaveLength(2);
+  });
+
+  it("ловит дробное и нулевое число снарядов", () => {
+    const problems = findWeaponContentProblems([
+      { ...ok, levels: [{ damage: 5, cooldownSec: 0.3, projectiles: 0 }] },
+      { ...ok, id: "other", levels: [{ damage: 5, cooldownSec: 0.3, projectiles: 1.5 }] },
+    ]);
+    expect(problems).toHaveLength(2);
+  });
+
+  it("ловит оружие без уровней", () => {
+    expect(findWeaponContentProblems([{ ...ok, levels: [] }]).join("\n")).toMatch(
+      /нет ни одного уровня/,
+    );
+  });
+
+  it("ловит нереализованное поведение, даже если данные пришли мимо типов", () => {
+    // @ts-expect-error поведение из JSON админки может оказаться любым — проверяем реакцию
+    const broken: WeaponDef = { ...ok, behavior: "laser_beam" };
+    expect(findWeaponContentProblems([broken]).join("\n")).toMatch(/не реализовано/);
+  });
+});
+
+describe("проверка контента пассивок", () => {
+  const base = { nameKey: "n", descriptionKey: "d" };
+
+  it("не допускает нулевой и отрицательный множитель", () => {
+    const defs: PassiveDef[] = [
+      { id: "a", ...base, stat: "damage", op: "mul", levels: [0] },
+      { id: "b", ...base, stat: "damage", op: "mul", levels: [-1] },
+    ];
+    expect(findPassiveContentProblems(defs)).toHaveLength(2);
+  });
+
+  it("требует целое число снарядов и только слагаемым", () => {
+    const defs: PassiveDef[] = [
+      { id: "a", ...base, stat: "projectiles", op: "add", levels: [1.5] },
+      { id: "b", ...base, stat: "projectiles", op: "mul", levels: [2] },
+    ];
+    expect(findPassiveContentProblems(defs)).toHaveLength(2);
+  });
+
+  it("ловит пассивку без уровней", () => {
+    const defs: PassiveDef[] = [{ id: "a", ...base, stat: "damage", op: "mul", levels: [] }];
+    expect(findPassiveContentProblems(defs)).not.toEqual([]);
   });
 });

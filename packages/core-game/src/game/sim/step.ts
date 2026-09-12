@@ -1,13 +1,10 @@
-import { applyPattern, MAX_PATTERN_RADIUS, onEnemyKilled } from "../patterns";
+import { applyPattern, MAX_PATTERN_RADIUS } from "../patterns";
+import { isAwaitingChoice, prepareOffers } from "../progression/levels";
+import { updateWeapons } from "../weapons";
+import { damageEnemy } from "./combat";
+import { updateGems } from "./gems";
 import { vectorLength } from "./vector";
-import {
-  damagePlayer,
-  despawnEnemy,
-  NO_OWNER_TYPE,
-  spawnProjectile,
-  TICK_SEC,
-  type World,
-} from "./world";
+import { damagePlayer, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
 
 /**
  * Ввод игрока за тик. Нормализуется вызывающим кодом; симуляция принимает
@@ -23,23 +20,34 @@ export const IDLE_INPUT: SimInput = { moveX: 0, moveY: 0 };
 
 /** Интервал контактной атаки врага ближнего боя. */
 const MELEE_INTERVAL_SEC = 0.6;
-/** Время жизни снаряда игрока — страховка от снарядов, улетевших мимо всех. */
-const PLAYER_PROJECTILE_TTL_SEC = 1.6;
 
 /**
  * Один шаг симуляции. Строго фиксированный dt: переменный шаг ломает
  * воспроизводимость, а вместе с ней golden-прогоны и разбор баг-репортов.
  * Накопление реального времени и вызов нужного числа шагов — забота рендера.
+ *
+ * Пока игрок выбирает улучшение, мир стоит: шаг не делается вовсе. Так пауза
+ * получается детерминированной — в логе ввода выбор приходит на конкретный
+ * тик, и повтор забега попадает в тот же момент (docs/26-stage2-plan.md, WP2).
  */
 export function stepWorld(world: World, input: SimInput): void {
   const dt = TICK_SEC;
+  if (isAwaitingChoice(world)) return;
 
   snapshotPositions(world);
   movePlayer(world, input, dt);
+  regeneratePlayer(world, dt);
   world.enemyGrid.rebuild(world.enemies.x, world.enemies.y, world.enemies.alive, world.enemies.count);
   updateEnemies(world, dt);
-  playerAutoAttack(world, input, dt);
+  updateWeapons(world, dt);
   updateProjectiles(world, dt);
+
+  if (world.config.progressionEnabled) {
+    updateGems(world, dt);
+    // Варианты готовятся в конце шага: игрок увидит их на следующем кадре, а
+    // мир к этому моменту уже в согласованном состоянии.
+    prepareOffers(world);
+  }
 
   world.stats.tick++;
   world.stats.elapsedSec = world.stats.tick * dt;
@@ -69,9 +77,16 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   if (!player.alive) return;
 
   const magnitude = vectorLength(input.moveX, input.moveY);
-  const speed = world.config.player.speedPxSec;
+  const speed = world.config.player.speedPxSec * world.playerStats.moveSpeedMul;
   const desiredVx = magnitude < 1e-3 ? 0 : (input.moveX / magnitude) * speed;
   const desiredVy = magnitude < 1e-3 ? 0 : (input.moveY / magnitude) * speed;
+
+  // Направление взгляда запоминается только при движении: на остановке
+  // оружие, бьющее по направлению, должно смотреть туда же, куда игрок шёл.
+  if (magnitude >= 1e-3) {
+    player.faceX = input.moveX / magnitude;
+    player.faceY = input.moveY / magnitude;
+  }
 
   const maxDelta = world.config.player.accelerationPxSec2 * dt;
   player.vx += clamp(desiredVx - player.vx, -maxDelta, maxDelta);
@@ -89,6 +104,14 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
 
   player.x = nextX;
   player.y = nextY;
+}
+
+function regeneratePlayer(world: World, dt: number): void {
+  const regen = world.playerStats.regenPerSec;
+  const player = world.player;
+  if (regen <= 0 || !player.alive) return;
+
+  player.hp = Math.min(world.playerStats.maxHp, player.hp + regen * dt);
 }
 
 function updateEnemies(world: World, dt: number): void {
@@ -129,65 +152,8 @@ function updateEnemies(world: World, dt: number): void {
   }
 }
 
-/**
- * Автоатака бьёт по ближайшей цели постоянно, в том числе на бегу.
- * Изначально стрельба работала только на остановке (формулировка роадмапа
- * недели 1), но в связке с бесконечным напором врагов это заставляло стоять
- * под ударом — механика читалась как наказание за движение.
- */
-function playerAutoAttack(world: World, _input: SimInput, dt: number): void {
-  const player = world.player;
-  if (!player.alive) return;
-
-  if (player.attackCooldown > 0) player.attackCooldown -= dt;
-  if (player.attackCooldown > 0) return;
-
-  const target = findNearestEnemy(world, player.x, player.y, world.config.player.attackRangePx);
-  if (target < 0) return;
-
-  const dx = world.enemies.x[target] - player.x;
-  const dy = world.enemies.y[target] - player.y;
-  const distance = vectorLength(dx, dy);
-  if (distance < 1e-3) return;
-
-  const speed = world.config.player.projectileSpeedPxSec;
-  spawnProjectile(
-    world,
-    player.x,
-    player.y,
-    (dx / distance) * speed,
-    (dy / distance) * speed,
-    world.config.player.attackDamage,
-    PLAYER_PROJECTILE_TTL_SEC,
-    true,
-  );
-  player.attackCooldown = world.config.player.attackCooldownSec;
-  world.stats.shotsFired++;
-}
-
-function findNearestEnemy(world: World, x: number, y: number, radius: number): number {
-  const found = world.enemyGrid.queryInto(x, y, radius, world.queryBuffer);
-  const enemies = world.enemies;
-
-  let best = -1;
-  let bestDistanceSq = radius * radius;
-  for (let k = 0; k < found; k++) {
-    const i = world.queryBuffer[k];
-    if (enemies.alive[i] === 0) continue;
-    const dx = enemies.x[i] - x;
-    const dy = enemies.y[i] - y;
-    const distanceSq = dx * dx + dy * dy;
-    if (distanceSq < bestDistanceSq) {
-      bestDistanceSq = distanceSq;
-      best = i;
-    }
-  }
-  return best;
-}
-
 function updateProjectiles(world: World, dt: number): void {
   const projectiles = world.projectiles;
-  const enemies = world.enemies;
   const player = world.player;
   const playerRadius = world.config.player.radius;
   const projectileRadius = world.config.player.projectileRadius;
@@ -205,12 +171,7 @@ function updateProjectiles(world: World, dt: number): void {
     }
 
     if (projectiles.fromPlayer[p] === 1) {
-      const hit = findHitEnemy(world, projectiles.x[p], projectiles.y[p], projectileRadius);
-      if (hit >= 0) {
-        enemies.hp[hit] -= projectiles.damage[p];
-        if (enemies.hp[hit] <= 0) killEnemy(world, hit);
-        killProjectile(world, p);
-      }
+      hitEnemies(world, p, projectileRadius);
       continue;
     }
 
@@ -226,7 +187,33 @@ function updateProjectiles(world: World, dt: number): void {
   }
 }
 
-function findHitEnemy(world: World, x: number, y: number, projectileRadius: number): number {
+/**
+ * Попадание снаряда игрока. Пробивающий снаряд летит дальше, но по одному и
+ * тому же врагу не бьёт дважды подряд: перекрытие длится несколько тиков, и
+ * без отметки последнего задетого весь запас пробивания уходил бы в одного.
+ */
+function hitEnemies(world: World, p: number, projectileRadius: number): void {
+  const projectiles = world.projectiles;
+  const hit = findHitEnemy(world, projectiles.x[p], projectiles.y[p], projectileRadius, projectiles.lastHit[p]);
+  if (hit < 0) return;
+
+  damageEnemy(world, hit, projectiles.damage[p], projectiles.ownerWeapon[p]);
+  projectiles.lastHit[p] = hit;
+
+  if (projectiles.pierce[p] > 0) {
+    projectiles.pierce[p]--;
+    return;
+  }
+  killProjectile(world, p);
+}
+
+function findHitEnemy(
+  world: World,
+  x: number,
+  y: number,
+  projectileRadius: number,
+  exclude: number,
+): number {
   const found = world.enemyGrid.queryInto(
     x,
     y,
@@ -237,7 +224,7 @@ function findHitEnemy(world: World, x: number, y: number, projectileRadius: numb
 
   for (let k = 0; k < found; k++) {
     const i = world.queryBuffer[k];
-    if (enemies.alive[i] === 0) continue;
+    if (enemies.alive[i] === 0 || i === exclude) continue;
     const contact = world.enemyTypes[enemies.type[i]].radius + projectileRadius;
     const dx = enemies.x[i] - x;
     const dy = enemies.y[i] - y;
@@ -251,19 +238,6 @@ function isOutside(world: World, x: number, y: number): boolean {
   // «улетевшими» вместе со снарядами, которые в них летят.
   const margin = 64 * world.config.unitScale;
   return x < -margin || y < -margin || x > world.config.width + margin || y > world.config.height + margin;
-}
-
-/**
- * Убийство врага игроком: счётчики, освобождение слота и реакция паттерна —
- * именно в этом порядке. Слот освобождается до реакции, чтобы делящийся враг
- * мог поставить потомка на своё место при почти полном пуле.
- */
-function killEnemy(world: World, index: number): void {
-  const typeIndex = world.enemies.type[index];
-  world.stats.enemiesKilled++;
-  world.stats.killsByType[typeIndex]++;
-  despawnEnemy(world, index);
-  onEnemyKilled(world.enemyTypes[typeIndex].pattern, world, index);
 }
 
 function killProjectile(world: World, index: number): void {
