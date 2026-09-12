@@ -5,3 +5,6 @@ export * from "./grid";
 export * from "./world";
 export * from "./step";
 export * from "./spawner";
+export * from "./events";
+export * from "./vector";
+export * from "./pools";

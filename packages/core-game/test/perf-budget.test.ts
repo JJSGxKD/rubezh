@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runScripted } from "./helpers/scripted-run";
+import { ALL_PATTERNS_WEIGHTS, runScripted } from "./helpers/scripted-run";
 
 // Бюджет производительности (docs/17-testing-strategy.md §3.4).
 //
@@ -32,6 +32,25 @@ describe("бюджет производительности симуляции",
     const elapsedMs = performance.now() - startedAt;
 
     // Прогон должен быть настоящим: если популяция не набралась, меряется пустота.
+    expect(run.world.enemies.aliveCount).toBeGreaterThanOrEqual(POPULATION - 10);
+    expect(elapsedMs).toBeLessThan(BUDGET_MS);
+  });
+
+  // Смесь стенда этапа 1 — только рой, преследование и стрелок. Игра создаёт
+  // другую нагрузку: фазы рывка, орбиты, взрывы и распад на потомков. Бюджет
+  // тот же — новый паттерн не имеет права сделать симуляцию алгоритмически
+  // дороже старых.
+  it(`прогоняет ${POPULATION} врагов всех паттернов ${TICKS} тиков быстрее ${BUDGET_MS} мс`, () => {
+    const startedAt = performance.now();
+    const run = runScripted({
+      seed: 4243,
+      ticks: TICKS,
+      population: POPULATION,
+      immortalPlayer: true,
+      weights: ALL_PATTERNS_WEIGHTS,
+    });
+    const elapsedMs = performance.now() - startedAt;
+
     expect(run.world.enemies.aliveCount).toBeGreaterThanOrEqual(POPULATION - 10);
     expect(elapsedMs).toBeLessThan(BUDGET_MS);
   });

@@ -1,22 +1,22 @@
-import type { EnemyDef, EnemyPattern } from "@bh/shared-types";
+import type { EnemyDef } from "@bh/shared-types";
+import { resolveEnemyTypes, type EnemyType } from "../patterns/enemy-types";
 import { createRng, type Rng } from "./rng";
 import { SpatialGrid } from "./grid";
+import { createSimEvents, type SimEvents } from "./events";
+import {
+  createEnemyPool,
+  createProjectilePool,
+  NO_OWNER_TYPE,
+  type EnemyPool,
+  type ProjectilePool,
+} from "./pools";
+
+export type { EnemyType } from "../patterns/enemy-types";
+export { NO_OWNER_TYPE, type EnemyPool, type ProjectilePool } from "./pools";
 
 /** Шаг симуляции фиксирован: 60 Гц. Рендер к нему не привязан. */
 export const TICK_HZ = 60;
 export const TICK_SEC = 1 / TICK_HZ;
-
-/**
- * Радиус врага в контенте не задаётся: геймдизайнер оперирует hp/speed/damage,
- * а размер — свойство представления и хитбокса, привязанное к паттерну.
- * Держим здесь, а не в content/enemies.ts, чтобы не расширять таблицу полем,
- * которое геймдизайнеру нечем осмысленно заполнять.
- */
-const RADIUS_BY_PATTERN: Record<EnemyPattern, number> = {
-  swarm: 7,
-  chase: 12,
-  kite_and_shoot: 9,
-};
 
 export interface PlayerConfig {
   radius: number;
@@ -73,16 +73,6 @@ export const DEFAULT_SIM_CONFIG: SimConfig = {
   },
 };
 
-/** Тип врага, разложенный из контента в плоский вид для горячего цикла. */
-export interface EnemyType {
-  id: string;
-  hp: number;
-  speed: number;
-  damage: number;
-  pattern: EnemyPattern;
-  radius: number;
-}
-
 export interface PlayerState {
   x: number;
   y: number;
@@ -97,51 +87,16 @@ export interface PlayerState {
   alive: boolean;
 }
 
-/**
- * Пулы хранятся как структура массивов (SoA), а не массив объектов: обход
- * идёт по непрерывной памяти, а «убийство» врага не создаёт мусора — слот
- * помечается свободным и переиспользуется.
- */
-export interface EnemyPool {
-  x: Float32Array;
-  y: Float32Array;
-  /** позиции на предыдущем тике — для интерполяции при отрисовке */
-  prevX: Float32Array;
-  prevY: Float32Array;
-  vx: Float32Array;
-  vy: Float32Array;
-  hp: Float32Array;
-  /** таймер до следующей атаки: и контактной, и выстрела для kite_and_shoot */
-  attackCooldown: Float32Array;
-  type: Uint8Array;
-  alive: Uint8Array;
-  /** верхняя граница занятых слотов — обходим только её, а не всю ёмкость */
-  count: number;
-  aliveCount: number;
-}
-
-export interface ProjectilePool {
-  x: Float32Array;
-  y: Float32Array;
-  prevX: Float32Array;
-  prevY: Float32Array;
-  vx: Float32Array;
-  vy: Float32Array;
-  damage: Float32Array;
-  ttl: Float32Array;
-  /** 1 — снаряд игрока, 0 — снаряд врага */
-  fromPlayer: Uint8Array;
-  alive: Uint8Array;
-  count: number;
-  aliveCount: number;
-}
-
 export interface RunStats {
   tick: number;
   elapsedSec: number;
   enemiesSpawned: number;
   enemiesKilled: number;
+  /** убийства игроком по индексу типа врага */
+  killsByType: Uint32Array;
   damageTaken: number;
+  /** индекс типа врага, нанёсшего смертельный урон; -1 — игрок жив */
+  deathCauseType: number;
   shotsFired: number;
 }
 
@@ -154,6 +109,8 @@ export interface World {
   projectiles: ProjectilePool;
   enemyGrid: SpatialGrid;
   stats: RunStats;
+  /** события для рендера — симуляция о рендере не знает */
+  events: SimEvents;
   /** переиспользуемый буфер под результаты запросов к сетке */
   queryBuffer: Int32Array;
 }
@@ -170,21 +127,15 @@ export function createWorld(options: CreateWorldOptions): World {
   const { maxEnemies, maxProjectiles } = config;
 
   const scale = config.unitScale;
-  const enemyTypes = options.enemies.map<EnemyType>((def) => ({
-    id: def.id,
-    hp: def.hp,
-    speed: def.speed * scale,
-    damage: def.damage,
-    pattern: def.pattern,
-    radius: RADIUS_BY_PATTERN[def.pattern] * scale,
-  }));
+  const enemyTypes = resolveEnemyTypes(options.enemies, scale);
 
   // Игрок пересчитывается тем же множителем — иначе на устройстве с высокой
   // плотностью он окажется медленнее врагов просто из-за арифметики.
   config.player = scalePlayerConfig(config.player, scale);
 
-  if (enemyTypes.length > 255) {
-    // type хранится в Uint8Array — расширение потребует смены типа массива
+  if (enemyTypes.length >= NO_OWNER_TYPE) {
+    // Тип хранится в Uint8Array, а значение 255 занято под «снаряд игрока» —
+    // расширение потребует смены типа массивов
     throw new Error("Слишком много типов врагов для Uint8Array-пула");
   }
 
@@ -204,34 +155,8 @@ export function createWorld(options: CreateWorldOptions): World {
       attackCooldown: 0,
       alive: true,
     },
-    enemies: {
-      x: new Float32Array(maxEnemies),
-      y: new Float32Array(maxEnemies),
-      prevX: new Float32Array(maxEnemies),
-      prevY: new Float32Array(maxEnemies),
-      vx: new Float32Array(maxEnemies),
-      vy: new Float32Array(maxEnemies),
-      hp: new Float32Array(maxEnemies),
-      attackCooldown: new Float32Array(maxEnemies),
-      type: new Uint8Array(maxEnemies),
-      alive: new Uint8Array(maxEnemies),
-      count: 0,
-      aliveCount: 0,
-    },
-    projectiles: {
-      x: new Float32Array(maxProjectiles),
-      y: new Float32Array(maxProjectiles),
-      prevX: new Float32Array(maxProjectiles),
-      prevY: new Float32Array(maxProjectiles),
-      vx: new Float32Array(maxProjectiles),
-      vy: new Float32Array(maxProjectiles),
-      damage: new Float32Array(maxProjectiles),
-      ttl: new Float32Array(maxProjectiles),
-      fromPlayer: new Uint8Array(maxProjectiles),
-      alive: new Uint8Array(maxProjectiles),
-      count: 0,
-      aliveCount: 0,
-    },
+    enemies: createEnemyPool(maxEnemies),
+    projectiles: createProjectilePool(maxProjectiles),
     // размер клетки — порядка диаметра крупного врага: мельче даёт много
     // пустых клеток на запрос, крупнее возвращает лишних кандидатов
     enemyGrid: new SpatialGrid(config.width, config.height, gridCellSize(config), maxEnemies),
@@ -240,9 +165,12 @@ export function createWorld(options: CreateWorldOptions): World {
       elapsedSec: 0,
       enemiesSpawned: 0,
       enemiesKilled: 0,
+      killsByType: new Uint32Array(enemyTypes.length),
       damageTaken: 0,
+      deathCauseType: -1,
       shotsFired: 0,
     },
+    events: createSimEvents(),
     // Буфер под всю ёмкость пула, а не фиксированные 256: при плотной толпе
     // запрос к сетке возвращает больше кандидатов, чем помещается, и лишние
     // молча отбрасываются. В игре это промахи снарядов сквозь врагов, в
@@ -313,10 +241,46 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.attackCooldown[slot] = 0;
   pool.type[slot] = typeIndex;
   pool.alive[slot] = 1;
+  // Состояние паттерна сбрасывается целиком: слот мог принадлежать врагу с
+  // другим поведением, и его фаза рывка не должна достаться новому врагу.
+  pool.phase[slot] = 0;
+  pool.phaseTimer[slot] = 0;
+  pool.dirX[slot] = 0;
+  pool.dirY[slot] = 0;
+  pool.ringRadius[slot] = 0;
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;
   world.stats.enemiesSpawned++;
   return slot;
+}
+
+/**
+ * Убрать врага из мира без засчитанного убийства и без реакции на смерть —
+ * например, подрывник, взорвавшийся сам. Убийство игроком — `killEnemy` в
+ * шаге симуляции: там счётчики и реакции паттерна на смерть.
+ */
+export function despawnEnemy(world: World, index: number): void {
+  if (world.enemies.alive[index] === 0) return;
+  world.enemies.alive[index] = 0;
+  world.enemies.aliveCount--;
+}
+
+/**
+ * Урон игроку с указанием источника. Источник нужен статистике: какой враг
+ * убивает чаще всего — прямой вход геймдизайнера для баланса
+ * (docs/26-stage2-plan.md, WP1, «Аналитика»).
+ */
+export function damagePlayer(world: World, amount: number, sourceType: number): void {
+  const player = world.player;
+  if (!player.alive) return;
+
+  player.hp -= amount;
+  world.stats.damageTaken += amount;
+  if (player.hp <= 0) {
+    player.hp = 0;
+    player.alive = false;
+    world.stats.deathCauseType = sourceType;
+  }
 }
 
 export function spawnProjectile(
@@ -342,6 +306,9 @@ export function spawnProjectile(
   pool.damage[slot] = damage;
   pool.ttl[slot] = ttlSec;
   pool.fromPlayer[slot] = fromPlayer ? 1 : 0;
+  // Владельца выставляет стреляющий паттерн после спавна; без сброса снаряд
+  // игрока унаследовал бы владельца от прежнего вражеского снаряда в слоте.
+  pool.ownerType[slot] = NO_OWNER_TYPE;
   pool.alive[slot] = 1;
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;

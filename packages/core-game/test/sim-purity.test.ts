@@ -60,6 +60,23 @@ describe("чистота слоя симуляции", () => {
     }
   });
 
+  it("покрывает каждый паттерн поведения — новые файлы не выпадают из проверки", () => {
+    const files = sources.map(({ path }) => path.replace(/\\/g, "/"));
+    for (const name of ["swarm", "chase", "kite-and-shoot", "dash", "orbit", "exploder", "splitter"]) {
+      expect(files.some((file) => file.endsWith(`/patterns/${name}.ts`)), name).toBe(true);
+    }
+  });
+
+  it("не использует Math.hypot — он приближённый и расходится между JS-движками", () => {
+    // Повтор забега с iOS на машине разработчика требует побитово одинаковой
+    // математики (docs/26-stage2-plan.md, WP4.5). Длина вектора — через
+    // Math.sqrt, он по IEEE 754 точный. Запрет тригонометрии добавится вместе
+    // с переписыванием спавнера, где она пока живёт.
+    for (const { path, source } of sources) {
+      expect(source, path).not.toMatch(/Math\.hypot/);
+    }
+  });
+
   it("не использует Date.now и new Date", () => {
     for (const { path, source } of sources) {
       expect(source, path).not.toMatch(/Date\.now|new Date\(/);

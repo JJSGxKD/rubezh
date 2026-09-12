@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createRng } from "../src/game/sim/rng";
-import { runScripted } from "./helpers/scripted-run";
+import { ALL_PATTERNS_WEIGHTS, runScripted } from "./helpers/scripted-run";
 
 // Детерминизм — предусловие всей стратегии тестирования
 // (docs/17-testing-strategy.md §3.0). Сломается он — молча перестанут иметь
@@ -44,6 +44,18 @@ describe("симуляция", () => {
     const first = runScripted({ seed: 20260910, ticks: 1800, population: 60 });
     const second = runScripted({ seed: 20260910, ticks: 1800, population: 60 });
 
+    expect(second.checksum).toBe(first.checksum);
+    expect(second.world.stats).toEqual(first.world.stats);
+  });
+
+  it("остаётся детерминированной со всеми паттернами: фазы, рывки, взрывы, распад", () => {
+    const options = { seed: 20260912, ticks: 3600, population: 80, weights: ALL_PATTERNS_WEIGHTS };
+    const first = runScripted(options);
+    const second = runScripted(options);
+
+    // Прогон должен задействовать реакции паттернов, иначе проверка пустая.
+    expect(first.world.stats.enemiesSpawned).toBeGreaterThan(80);
+    expect(first.world.events.written).toBeGreaterThan(0);
     expect(second.checksum).toBe(first.checksum);
     expect(second.world.stats).toEqual(first.world.stats);
   });

@@ -150,11 +150,31 @@ rate-limit через подделку `X-Forwarded-For`, неатомарный
 ```ts
 // packages/core-game/src/content/enemies.ts
 { id: "new_enemy_id", hp: 10, speed: 60, damage: 4, pattern: "swarm" }
+
+// с параметрами паттерна — всё незаданное берётся из умолчаний
+{ id: "fast_wolf", hp: 14, speed: 70, damage: 7, pattern: "dash", params: { telegraphSec: 0.4 } }
 ```
 
 `pattern` должен быть одним из уже реализованных в
 `packages/core-game/src/game/patterns/` — если нужен принципиально новый
 паттерн поведения, это задача участника 1, не правка данных.
+
+| Паттерн | Что делает | Параметры (`params`, все необязательны, кроме отмеченного) |
+|---|---|---|
+| `swarm` | Прямо на игрока | нет |
+| `chase` | Преследует с инерцией | `steeringPerSec` |
+| `kite_and_shoot` | Держит дистанцию и стреляет, касанием не бьёт | `preferredDistance`, `shotIntervalSec`, `projectileSpeed` |
+| `dash` | Сближается, мигает, рывок по прямой | `triggerDistance`, `telegraphSec`, `dashSpeed`, `dashDurationSec`, `recoverSec` |
+| `orbit` | Кружит вокруг игрока, сужая кольцо | `orbitRadius`, `shrinkPerSec`, `minRadius` |
+| `exploder` | Подбегает, мигает, взрывается по площади, касанием не бьёт | `triggerDistance`, `fuseSec`, `blastRadius` |
+| `splitter` | Преследует, при смерти распадается | **`childEnemy`** (обязателен, не делящийся), `childCount` |
+
+Расстояния и скорости — в тех же единицах, что `speed`; время — в секундах.
+`damage` — урон касанием, взрывом или снарядом, в зависимости от паттерна.
+Смысл каждого параметра и умолчания — `EnemyPatternParams` в
+`packages/shared-types` и `PATTERN_DEFAULTS` в
+`packages/core-game/src/game/patterns/enemy-types.ts`. Ошибки в параметрах
+ловит тест контента и сообщает, какой враг и какое поле не так.
 
 ## Как добавить волну
 
