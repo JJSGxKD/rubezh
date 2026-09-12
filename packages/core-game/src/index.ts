@@ -1,10 +1,17 @@
 import Phaser from "phaser";
 import type { PlatformAdapter, RunResult } from "@bh/shared-types";
-import { MainScene, type MainSceneData, type RunPauseInfo } from "./game/MainScene";
+import {
+  MainScene,
+  type MainSceneData,
+  type RunPauseInfo,
+  type RunWaveInfo,
+} from "./game/MainScene";
 import type { BenchSceneData } from "./game/bench/types";
 
 export * from "./content/enemies";
 export * from "./content/waves";
+export * from "./content/maps";
+export * from "./content/hash";
 export * from "./content/upgrades";
 export * from "./content/weapons";
 export * from "./game/bench";
@@ -23,7 +30,7 @@ export {
 // (docs/26-stage2-plan.md, WP3).
 export { buildRunResult, type RunResultOptions } from "./game/run/run-result";
 export { loadBestSurvivalSec, submitRunResult, type RecordUpdate } from "./game/run/records";
-export type { RunPauseInfo, RunPauseReason } from "./game/MainScene";
+export type { RunPauseInfo, RunPauseReason, RunWaveInfo } from "./game/MainScene";
 
 export interface CreateGameOptions {
   /** id элемента-контейнера в разметке приложения */
@@ -54,6 +61,8 @@ export interface CreateGameOptions {
    */
   onRunEnd?: (result: RunResult) => void;
   onRunPaused?: (info: RunPauseInfo) => void;
+  /** новый отрезок таймлайна спавна — событие `wave_reached` для аналитики */
+  onWaveReached?: (info: RunWaveInfo) => void;
   /**
    * Режим стресс-испытания. Передаётся только сборкой со включённым стендом:
    * приложение решает, включать ли его, и оно же собирает сведения об
@@ -113,6 +122,7 @@ export function createGame(adapter: PlatformAdapter, options: CreateGameOptions)
         : { startingWeaponId: options.startingWeaponId }),
       ...(options.onRunEnd === undefined ? {} : { onRunEnd: options.onRunEnd }),
       ...(options.onRunPaused === undefined ? {} : { onRunPaused: options.onRunPaused }),
+      ...(options.onWaveReached === undefined ? {} : { onWaveReached: options.onWaveReached }),
     };
     game.scene.add("main", MainScene, true, sceneData);
   } else {

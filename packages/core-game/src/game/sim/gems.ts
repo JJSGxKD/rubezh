@@ -58,6 +58,12 @@ function mergeIntoExisting(world: World, value: number): void {
  * Притяжение и подбор. Кристалл в радиусе притяжения начинает лететь к игроку
  * и больше не останавливается, даже если игрок ушёл: иначе кристаллы
  * «отпускает» на границе радиуса и они дёргаются туда-сюда.
+ *
+ * За радиусом удержания кристалл исчезает. В бесконечном мире вернуться за
+ * ним нельзя — он остался дальше, чем игрок вообще видит, — а слот в пуле он
+ * занимает до конца забега (docs/26-stage2-plan.md, WP4.1). Таймера жизни у
+ * кристаллов нет сознательно: пул и так с потолком и слиянием, а таймер стал
+ * бы невидимым правилом «подбирай быстрее», которого никто не просил.
  */
 export function updateGems(world: World, dtSec: number): void {
   const gems = world.gems;
@@ -65,6 +71,7 @@ export function updateGems(world: World, dtSec: number): void {
   const pickupRadius = world.playerStats.pickupRadius;
   const collectDistance = world.config.player.radius + PICKUP_SLACK * world.config.unitScale;
   const speed = GEM_SPEED * world.config.unitScale;
+  const retention = world.config.view.retentionRadius;
 
   for (let i = 0; i < gems.count; i++) {
     if (gems.alive[i] === 0) continue;
@@ -76,6 +83,11 @@ export function updateGems(world: World, dtSec: number): void {
     const dy = player.y - gems.y[i];
     const distance = vectorLength(dx, dy);
 
+    if (distance > retention) {
+      gems.alive[i] = 0;
+      gems.aliveCount--;
+      continue;
+    }
     if (distance <= collectDistance) {
       collect(world, i);
       continue;

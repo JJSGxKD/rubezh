@@ -1,13 +1,17 @@
 import Phaser from "phaser";
 import type { KeyValueStorage, RunOutcome, RunResult } from "@bh/shared-types";
 import { ENEMIES } from "../content/enemies";
+import { CONTENT_HASH } from "../content/hash";
+import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
-import { WAVES } from "../content/waves";
+import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
 import { WEAPONS } from "../content/weapons";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
-import { createWorld, resizeWorld, TICK_SEC, type World } from "./sim/world";
+import { createWorld, TICK_SEC, type World } from "./sim/world";
 import { stepWorld, type SimInput } from "./sim/step";
-import { createWaveSpawner, type Spawner } from "./sim/spawner";
+import { createTimelineDirector } from "./sim/director";
+import type { Spawner } from "./sim/spawner";
+import { RunCamera } from "./render/run-camera";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { CanvasPanel, type PanelAction } from "./overlays/canvas-panel";
 import { RunHud } from "./overlays/run-hud";
@@ -56,6 +60,8 @@ export interface MainSceneData {
   unitScale?: number;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
+  /** карта забега; на этапе 2 она одна (решение Р8) */
+  mapId?: string;
   /** режим диагностики: на экране смерти видны seed и runId */
   diagnostics?: boolean;
   /** хранилище устройства под локальный рекорд; без него рекорд не переживёт запуск */
@@ -63,6 +69,19 @@ export interface MainSceneData {
   /** итог забега для аналитики — отправляет оболочка, движок только считает */
   onRunEnd?: (result: RunResult) => void;
   onRunPaused?: (info: RunPauseInfo) => void;
+  /**
+   * Начался новый отрезок таймлайна спавна. В аналитике это `wave_reached` —
+   * распределение по нему показывает, где режет кривая сложности
+   * (docs/22-analytics-and-metrics.md §5.3). Отправляет, как и всё остальное,
+   * оболочка: движок в сеть не ходит.
+   */
+  onWaveReached?: (info: RunWaveInfo) => void;
+}
+
+export interface RunWaveInfo {
+  /** номер отрезка таймлайна, считая с нуля */
+  index: number;
+  elapsedSec: number;
 }
 
 /**
@@ -84,11 +103,14 @@ export class MainScene extends Phaser.Scene {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
   };
+  private runCamera!: RunCamera;
   private phase: RunPhase = "running";
   private runId = "";
   private seed = 1;
   private accumulatorMs = 0;
   private unitScale = 1;
+  /** последний отрезок, о котором уже сообщили наружу */
+  private reportedWave = -1;
   /** ответ нажатой кнопки-заглушки — показывается на том же экране */
   private note = "";
   /** перерисовка открытого экрана: тексты меняются, кнопки и задержка — нет */
@@ -107,7 +129,12 @@ export class MainScene extends Phaser.Scene {
     this.accumulatorMs = 0;
     this.note = "";
     this.renderScreen = null;
+    this.reportedWave = -1;
 
+    // Карта задаёт границы мира и параметры камеры. Размер канвы в мир больше
+    // не передаётся вовсе: объём видимого мира нормализован по площади и от
+    // устройства не зависит (решение Р14, docs/26-stage2-plan.md, WP4.3).
+    const map = findMap(data.mapId ?? DEFAULT_MAP_ID) ?? MAPS[0];
     this.world = createWorld({
       seed: this.seed,
       enemies: ENEMIES,
@@ -115,15 +142,15 @@ export class MainScene extends Phaser.Scene {
       passives: PASSIVES,
       levelCurve: LEVEL_CURVE,
       loadoutLimits: LOADOUT_LIMITS,
+      map,
       ...(data.startingWeaponId === undefined ? {} : { startingWeaponId: data.startingWeaponId }),
-      config: {
-        width: this.scale.width,
-        height: this.scale.height,
-        unitScale: this.unitScale,
-      },
+      config: { unitScale: this.unitScale },
     });
-    this.spawner = createWaveSpawner(WAVES);
+    this.spawner = createTimelineDirector(TIMELINE, ENDLESS_CURVE);
     this.worldRenderer = new WorldRenderer(this, this.world);
+    this.runCamera = new RunCamera(map.camera, this.unitScale);
+    this.runCamera.snapTo(this.world, this.scale.width, this.scale.height);
+    this.syncCamera();
 
     this.cameras.main.setBackgroundColor("#0d0f14");
     this.hud = new RunHud(this, this.unitScale, () => this.pauseRun("manual"));
@@ -141,7 +168,10 @@ export class MainScene extends Phaser.Scene {
     if (this.phase !== "running") {
       // Мир стоит: накопитель сбрасывается, чтобы после возврата не прилетела
       // пачка «догоняющих» шагов, и рисуется последнее состояние без интерполяции.
+      // Камера тоже стоит — но кадр всё равно рисуется, поэтому её положение
+      // применяется заново: иначе поворот экрана на паузе сдвинет мир.
       this.accumulatorMs = 0;
+      this.syncCamera();
       this.worldRenderer.sync(0);
       return;
     }
@@ -161,14 +191,31 @@ export class MainScene extends Phaser.Scene {
       if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
     }
 
+    // Камера живёт в реальном времени кадра, а не в тиках симуляции: она к
+    // исходу забега отношения не имеет и на детерминизм не влияет.
+    this.runCamera.update(this.world, deltaMs / 1000);
+    this.syncCamera();
     this.worldRenderer.sync(this.accumulatorMs / TICK_MS);
     this.hud.update(this.world);
+    this.reportWave();
 
     if (!this.world.player.alive) {
       this.finishRun("died");
       return;
     }
     if (isAwaitingChoice(this.world)) this.showChoice();
+  }
+
+  private syncCamera(): void {
+    this.worldRenderer.applyCamera(this.runCamera.x, this.runCamera.y, this.runCamera.zoom);
+  }
+
+  /** Новый отрезок таймлайна — событие `wave_reached` для оболочки. */
+  private reportWave(): void {
+    const wave = this.world.difficulty.segment;
+    if (wave === this.reportedWave) return;
+    this.reportedWave = wave;
+    this.sceneData.onWaveReached?.({ index: wave, elapsedSec: this.world.stats.elapsedSec });
   }
 
   /**
@@ -226,8 +273,14 @@ export class MainScene extends Phaser.Scene {
     this.panel.destroy();
   }
 
+  /**
+   * Поворот экрана и изменение окна. Мир не трогаем вовсе — он бесконечен и о
+   * размере канвы не знает; пересчитывается только камера, и объём видимого
+   * мира при этом остаётся тем же (docs/27-design-system-and-app-shell.md §5.3).
+   */
   private handleResize(): void {
-    resizeWorld(this.world, this.scale.width, this.scale.height);
+    this.runCamera.resize(this.scale.width, this.scale.height);
+    this.syncCamera();
     this.layout();
   }
 
@@ -248,11 +301,15 @@ export class MainScene extends Phaser.Scene {
 
     // Тач: тянемся к точке касания. Достаточно для прототипа — виртуальный
     // джойстик появится вместе с оболочкой приложения (WP5).
+    // Точка касания переводится в мир вручную: камера забега — это
+    // трансформация слоя рендера, а не камера Phaser, поэтому `worldX` у
+    // указателя равен экранному и к миру отношения не имеет.
     const pointer = this.input.activePointer;
     if (moveX === 0 && moveY === 0 && pointer.isDown) {
-      const dx = pointer.worldX - this.world.player.x;
-      const dy = pointer.worldY - this.world.player.y;
-      if (Math.hypot(dx, dy) > this.world.config.player.radius) {
+      const zoom = this.runCamera.zoom;
+      const dx = this.runCamera.x + (pointer.x - this.scale.width / 2) / zoom - this.world.player.x;
+      const dy = this.runCamera.y + (pointer.y - this.scale.height / 2) / zoom - this.world.player.y;
+      if (Math.sqrt(dx * dx + dy * dy) > this.world.config.player.radius) {
         moveX = dx;
         moveY = dy;
       }
@@ -332,6 +389,7 @@ export class MainScene extends Phaser.Scene {
       seed: this.seed,
       outcome,
       startingWeaponId: this.startingWeaponId(),
+      contentHash: CONTENT_HASH,
     });
     const record = submitRunResult(this.sceneData.storage, result);
 

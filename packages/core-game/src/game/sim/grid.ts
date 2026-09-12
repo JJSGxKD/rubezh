@@ -1,20 +1,22 @@
 // Равномерная пространственная сетка для поиска соседей.
 //
 // Почему не попарный перебор: при 200 врагах и 100 снарядах наивная проверка
-// даёт десятки тысяч сравнений на тик, и FPS-испытание недели 1 померит
-// качество нашего алгоритма, а не потолок движка (docs/02-roadmap.md, неделя 1).
+// даёт десятки тысяч сравнений на тик, и FPS-испытание этапа 1 померит
+// качество нашего алгоритма, а не потолок движка (docs/02-roadmap.md, этап 1).
 // Тест бюджета производительности (docs/17-testing-strategy.md §3.4) ловит
 // возврат к квадратичной проверке в CI.
 //
-// Вся память выделяется один раз в конструкторе: аллокации внутри игрового
-// кадра — это работа сборщику мусора, а его паузы на бюджетном Android видны
-// как фризы и портят замер p99.
+// Сетка построена **вокруг игрока**, а не под размер мира: мир бесконечен, и
+// сетки под него не существует (docs/26-stage2-plan.md, WP4.1). Окно
+// фиксированного размера переезжает вместе с игроком, и при перестроении
+// меняется только начало координат — память выделяется один раз, в
+// конструкторе. Аллокации внутри игрового кадра — это работа сборщику мусора,
+// а его паузы на бюджетном Android видны как фризы и портят замер p99.
 
 /**
  * Размер клетки — порядка диаметра крупного врага: мельче даёт много пустых
  * клеток на запрос, крупнее возвращает лишних кандидатов. Живёт рядом с
- * сеткой, а не в мире: это её свойство, и создание мира с изменением размера
- * окна должны брать одно и то же значение.
+ * сеткой, а не в мире: это её свойство.
  */
 export function gridCellSize(unitScale: number): number {
   return 48 * unitScale;
@@ -28,11 +30,19 @@ export class SpatialGrid {
   private readonly starts: Int32Array;
   private readonly cursor: Int32Array;
   private readonly items: Int32Array;
+  private originX = 0;
+  private originY = 0;
 
-  constructor(width: number, height: number, cellSize: number, capacity: number) {
+  /**
+   * `extent` — сторона окна, которое сетка накрывает вокруг центра. Всё, что
+   * дальше, попадает в краевые клетки: такие объекты живут считанные тики —
+   * шаг симуляции уносит отставших врагов вперёд, а снаряды и кристаллы за
+   * радиусом удержания гибнут.
+   */
+  constructor(extent: number, cellSize: number, capacity: number) {
     this.cellSize = cellSize;
-    this.cols = Math.max(1, Math.ceil(width / cellSize));
-    this.rows = Math.max(1, Math.ceil(height / cellSize));
+    this.cols = Math.max(1, Math.ceil(extent / cellSize));
+    this.rows = this.cols;
     const cellCount = this.cols * this.rows;
     this.counts = new Int32Array(cellCount);
     this.starts = new Int32Array(cellCount + 1);
@@ -41,10 +51,20 @@ export class SpatialGrid {
   }
 
   /**
-   * Перестроить сетку по текущим позициям. Сортировка подсчётом: два прохода
-   * по массиву, без аллокаций и без сравнения элементов.
+   * Перестроить сетку по текущим позициям вокруг центра. Сортировка
+   * подсчётом: два прохода по массиву, без аллокаций и без сравнения
+   * элементов.
    */
-  rebuild(xs: Float32Array, ys: Float32Array, alive: Uint8Array, count: number): void {
+  rebuild(
+    centerX: number,
+    centerY: number,
+    xs: Float64Array,
+    ys: Float64Array,
+    alive: Uint8Array,
+    count: number,
+  ): void {
+    this.originX = centerX - (this.cols * this.cellSize) / 2;
+    this.originY = centerY - (this.rows * this.cellSize) / 2;
     this.counts.fill(0);
 
     for (let i = 0; i < count; i++) {
@@ -76,10 +96,10 @@ export class SpatialGrid {
    * дистанцию считает вызывающий код, ему всё равно нужен квадрат расстояния.
    */
   queryInto(x: number, y: number, radius: number, out: Int32Array): number {
-    const minCol = this.clampCol(Math.floor((x - radius) / this.cellSize));
-    const maxCol = this.clampCol(Math.floor((x + radius) / this.cellSize));
-    const minRow = this.clampRow(Math.floor((y - radius) / this.cellSize));
-    const maxRow = this.clampRow(Math.floor((y + radius) / this.cellSize));
+    const minCol = this.clampCol(Math.floor((x - radius - this.originX) / this.cellSize));
+    const maxCol = this.clampCol(Math.floor((x + radius - this.originX) / this.cellSize));
+    const minRow = this.clampRow(Math.floor((y - radius - this.originY) / this.cellSize));
+    const maxRow = this.clampRow(Math.floor((y + radius - this.originY) / this.cellSize));
 
     let found = 0;
     for (let row = minRow; row <= maxRow; row++) {
@@ -97,8 +117,8 @@ export class SpatialGrid {
   }
 
   private cellIndex(x: number, y: number): number {
-    const col = this.clampCol(Math.floor(x / this.cellSize));
-    const row = this.clampRow(Math.floor(y / this.cellSize));
+    const col = this.clampCol(Math.floor((x - this.originX) / this.cellSize));
+    const row = this.clampRow(Math.floor((y - this.originY) / this.cellSize));
     return row * this.cols + col;
   }
 

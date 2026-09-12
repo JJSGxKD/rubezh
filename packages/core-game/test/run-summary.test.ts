@@ -49,6 +49,7 @@ function resultOf(world: World, seed: number): RunResult {
     seed,
     outcome: "died",
     startingWeaponId: "spark",
+    contentHash: "test-hash",
   });
 }
 
@@ -139,35 +140,35 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 79.55,
-      level: 13,
-      xpCollected: 281,
-      enemiesKilled: 174,
+      survivalSec: 90.45,
+      level: 14,
+      xpCollected: 373,
+      enemiesKilled: 220,
       killsByEnemy: {
-        swarm_rat: 74,
-        tank_ghoul: 10,
-        shooter_wisp: 26,
-        dasher_wolf: 13,
-        circler_crow: 31,
-        bomber_imp: 9,
-        splitter_slime: 11,
+        swarm_rat: 106,
+        tank_ghoul: 12,
+        shooter_wisp: 31,
+        dasher_wolf: 16,
+        circler_crow: 32,
+        bomber_imp: 5,
+        splitter_slime: 18,
       },
-      damageDealt: 2080,
-      damageTaken: 104,
+      damageDealt: 2613,
+      damageTaken: 154,
       weapons: [
-        { id: "spark", level: 2, damage: 1786 },
-        { id: "wardstone", level: 2, damage: 114 },
-        { id: "hearth", level: 1, damage: 123 },
-        { id: "storm", level: 1, damage: 57 },
+        { id: "spark", level: 1, damage: 1387 },
+        { id: "hearth", level: 2, damage: 391 },
+        { id: "storm", level: 2, damage: 665 },
+        { id: "knife", level: 2, damage: 170 },
       ],
       passives: [
-        { id: "volley", level: 1 },
-        { id: "haste", level: 4 },
-        { id: "swiftness", level: 1 },
+        { id: "mending", level: 2 },
+        { id: "lodestone", level: 2 },
         { id: "reach", level: 1 },
+        { id: "haste", level: 2 },
       ],
       deathCause: "shooter_wisp",
-      distance: 12730,
+      distance: 13758,
       peakEnemies: 22,
     });
   });
@@ -208,6 +209,7 @@ describe("итог забега", () => {
       seed: 42,
       outcome: "died",
       startingWeaponId: "spark",
+      contentHash: "test-hash",
     });
     expect(world.player.alive).toBe(false);
     expect(result.outcome).toBe("died");
@@ -223,6 +225,7 @@ describe("итог забега", () => {
       seed: 42,
       outcome: "abandoned",
       startingWeaponId: "spark",
+      contentHash: "test-hash",
     });
     expect(result.outcome).toBe("abandoned");
     expect(result.deathCause).toBeNull();
@@ -238,6 +241,7 @@ describe("итог забега", () => {
       seed: 1,
       outcome: "abandoned",
       startingWeaponId: "spark",
+      contentHash: "test-hash",
     });
     expect(result.weapons).toHaveLength(1);
     expect(result.weapons[0].id).toBe("spark");
@@ -256,6 +260,7 @@ describe("итог забега", () => {
       seed: 1,
       outcome: "abandoned",
       startingWeaponId: "spark",
+      contentHash: "test-hash",
     });
     expect(result.killsByEnemy).toEqual({ dummy: 1 });
   });
@@ -284,6 +289,9 @@ describe("локальный рекорд", () => {
       seed: 1,
       outcome: "died",
       startingWeaponId: "spark",
+      contentHash: "test-hash",
+      mapId: "fallback",
+      waveReached: 0,
       survivalSec,
       level: 1,
       xpCollected: 0,
@@ -339,6 +347,9 @@ describe("тексты экранов забега", () => {
     seed: 777,
     outcome: "died",
     startingWeaponId: "spark",
+    contentHash: "test-hash",
+    mapId: "frontier",
+    waveReached: 6,
     survivalSec: 185.4,
     level: 7,
     xpCollected: 214,

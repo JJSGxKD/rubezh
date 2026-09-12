@@ -3,8 +3,9 @@ import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy } from "./combat";
 import { updateGems } from "./gems";
+import { recycleEnemyForward } from "./spawner";
 import { vectorLength } from "./vector";
-import { damagePlayer, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
+import { clampToBounds, damagePlayer, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
 
 /**
  * Ввод игрока за тик. Нормализуется вызывающим кодом; симуляция принимает
@@ -37,7 +38,17 @@ export function stepWorld(world: World, input: SimInput): void {
   snapshotPositions(world);
   movePlayer(world, input, dt);
   regeneratePlayer(world, dt);
-  world.enemyGrid.rebuild(world.enemies.x, world.enemies.y, world.enemies.alive, world.enemies.count);
+  // Отставшие уносятся вперёд до перестроения сетки: сетка строится вокруг
+  // игрока, и переехавший враг обязан попасть в неё уже на новом месте.
+  recycleLostEnemies(world);
+  world.enemyGrid.rebuild(
+    world.player.x,
+    world.player.y,
+    world.enemies.x,
+    world.enemies.y,
+    world.enemies.alive,
+    world.enemies.count,
+  );
   updateEnemies(world, dt);
   updateWeapons(world, dt);
   updateProjectiles(world, dt);
@@ -76,6 +87,10 @@ function snapshotPositions(world: World): void {
  * Движение с разгоном и торможением. Раньше скорость переключалась мгновенно,
  * и персонаж дёргался при каждой смене направления — особенно заметно при
  * управлении пальцем, где направление меняется каждый кадр.
+ *
+ * Мир бесконечен, поэтому упереться можно только в границу карты, если она у
+ * карты есть. Без границ обе проверки — сравнение с бесконечностью, то есть
+ * тождество (docs/26-stage2-plan.md, WP4.2).
  */
 function movePlayer(world: World, input: SimInput, dt: number): void {
   const player = world.player;
@@ -98,8 +113,9 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   player.vy += clamp(desiredVy - player.vy, -maxDelta, maxDelta);
 
   const radius = world.config.player.radius;
-  const nextX = clamp(player.x + player.vx * dt, radius, world.config.width - radius);
-  const nextY = clamp(player.y + player.vy * dt, radius, world.config.height - radius);
+  const bounds = world.config.bounds;
+  const nextX = clampToBounds(player.x + player.vx * dt, bounds.halfWidth - radius);
+  const nextY = clampToBounds(player.y + player.vy * dt, bounds.halfHeight - radius);
 
   // Упёрлись в край — гасим скорость по этой оси, иначе персонаж «залипает»
   // у стены и не начинает движение обратно, пока не сбросится накопленная
@@ -123,10 +139,34 @@ function regeneratePlayer(world: World, dt: number): void {
   player.hp = Math.min(world.playerStats.maxHp, player.hp + regen * dt);
 }
 
+/**
+ * Отставшие враги переносятся на кольцо спавна впереди игрока.
+ *
+ * В бесконечном мире убежать можно от кого угодно: без переноса за спиной
+ * копится хвост из тех, кого игрок никогда не убьёт, но которые каждый тик
+ * занимают слот пула, клетку сетки и время кадра. Перенос вперёд сохраняет
+ * давление и держит популяцию осмысленной (docs/26-stage2-plan.md, WP4.1).
+ */
+function recycleLostEnemies(world: World): void {
+  const enemies = world.enemies;
+  const player = world.player;
+  const limit = world.config.view.retentionRadius;
+  const limitSq = limit * limit;
+
+  for (let i = 0; i < enemies.count; i++) {
+    if (enemies.alive[i] === 0) continue;
+    const dx = enemies.x[i] - player.x;
+    const dy = enemies.y[i] - player.y;
+    if (dx * dx + dy * dy <= limitSq) continue;
+    recycleEnemyForward(world, i);
+  }
+}
+
 function updateEnemies(world: World, dt: number): void {
   const enemies = world.enemies;
   const player = world.player;
   const playerRadius = world.config.player.radius;
+  const bounds = world.config.bounds;
 
   for (let i = 0; i < enemies.count; i++) {
     if (enemies.alive[i] === 0) continue;
@@ -137,8 +177,8 @@ function updateEnemies(world: World, dt: number): void {
     // Паттерн мог убрать врага сам — например, подрывник взорвался.
     if (enemies.alive[i] === 0) continue;
 
-    enemies.x[i] += enemies.vx[i] * dt;
-    enemies.y[i] += enemies.vy[i] * dt;
+    enemies.x[i] = clampToBounds(enemies.x[i] + enemies.vx[i] * dt, bounds.halfWidth - type.radius);
+    enemies.y[i] = clampToBounds(enemies.y[i] + enemies.vy[i] * dt, bounds.halfHeight - type.radius);
 
     if (!player.alive) continue;
 
@@ -155,7 +195,7 @@ function updateEnemies(world: World, dt: number): void {
       continue;
     }
     if (dx * dx + dy * dy <= contactDistance * contactDistance) {
-      damagePlayer(world, type.damage, typeIndex);
+      damagePlayer(world, enemies.damage[i], typeIndex);
       enemies.attackCooldown[i] = MELEE_INTERVAL_SEC;
     }
   }
@@ -174,7 +214,7 @@ function updateProjectiles(world: World, dt: number): void {
     projectiles.x[p] += projectiles.vx[p] * dt;
     projectiles.y[p] += projectiles.vy[p] * dt;
 
-    if (projectiles.ttl[p] <= 0 || isOutside(world, projectiles.x[p], projectiles.y[p])) {
+    if (projectiles.ttl[p] <= 0 || isLost(world, projectiles.x[p], projectiles.y[p])) {
       killProjectile(world, p);
       continue;
     }
@@ -242,11 +282,22 @@ function findHitEnemy(
   return -1;
 }
 
-function isOutside(world: World, x: number, y: number): boolean {
-  // Запас за краем экрана: враги спавнятся снаружи и не должны считаться
-  // «улетевшими» вместе со снарядами, которые в них летят.
-  const margin = 64 * world.config.unitScale;
-  return x < -margin || y < -margin || x > world.config.width + margin || y > world.config.height + margin;
+/**
+ * Снаряд потерян: ушёл за радиус удержания или за границу карты.
+ *
+ * Границ у экрана больше нет — мир бесконечен, и «улетел за край экрана»
+ * перестало что-либо значить. Остались два честных признака: снаряд дальше,
+ * чем игрок вообще способен что-то встретить, и снаряд за стеной карты.
+ */
+function isLost(world: World, x: number, y: number): boolean {
+  const bounds = world.config.bounds;
+  if (x < -bounds.halfWidth || x > bounds.halfWidth) return true;
+  if (y < -bounds.halfHeight || y > bounds.halfHeight) return true;
+
+  const dx = x - world.player.x;
+  const dy = y - world.player.y;
+  const limit = world.config.view.retentionRadius;
+  return dx * dx + dy * dy > limit * limit;
 }
 
 function killProjectile(world: World, index: number): void {

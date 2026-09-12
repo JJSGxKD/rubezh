@@ -22,7 +22,8 @@
     "typecheck": "tsc -b --pretty && tsc -p tsconfig.tests.json --pretty",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "balance:sim": "vitest run --config vitest.balance.config.ts"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",

@@ -16,6 +16,12 @@ export interface RunResultOptions {
   seed: number;
   outcome: RunOutcome;
   startingWeaponId: string;
+  /**
+   * Отпечаток контента передаётся снаружи, а не читается отсюда: слой забега
+   * не импортирует content/* — иначе движок нельзя прогнать на фикстурах, и
+   * тест симуляции превращается в тест текущего баланса.
+   */
+  contentHash: string;
 }
 
 export function buildRunResult(world: World, options: RunResultOptions): RunResult {
@@ -26,6 +32,9 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     seed: options.seed,
     outcome: options.outcome,
     startingWeaponId: options.startingWeaponId,
+    mapId: world.mapId,
+    contentHash: options.contentHash,
+    waveReached: world.difficulty.segment,
     survivalSec: stats.elapsedSec,
     level: world.progression.level,
     xpCollected: stats.xpCollected,

@@ -6,15 +6,32 @@ export const NO_OWNER_TYPE = 255;
  * идёт по непрерывной памяти, а «убийство» врага не создаёт мусора — слот
  * помечается свободным и переиспользуется.
  */
+/**
+ * Позиции — двойной точности, а не одинарной.
+ *
+ * Мир бесконечен: за десятиминутный забег игрок уходит на сотню тысяч единиц
+ * от старта, а там шаг `Float32` уже около сотой доли единицы и растёт дальше.
+ * Движение начинает «залипать» на сетке представимых чисел, а два прогона с
+ * одним seed расходятся от округления. Цена — килобайты памяти пулов
+ * (docs/26-stage2-plan.md, WP4.1). Скорости, здоровье и таймеры остаются
+ * одинарными: они не накапливают смещение от начала координат.
+ */
 export interface EnemyPool {
-  x: Float32Array;
-  y: Float32Array;
+  x: Float64Array;
+  y: Float64Array;
   /** позиции на предыдущем тике — для интерполяции при отрисовке */
-  prevX: Float32Array;
-  prevY: Float32Array;
+  prevX: Float64Array;
+  prevY: Float64Array;
   vx: Float32Array;
   vy: Float32Array;
   hp: Float32Array;
+  /**
+   * Урон этого врага. В пуле, а не в типе: кривая сложности после потолка
+   * живых растёт здоровьем и уроном (docs/26-stage2-plan.md, WP4.4), и
+   * множитель обязан застывать в момент спавна — иначе уже вышедший враг
+   * усиливался бы задним числом вместе с таймлайном.
+   */
+  damage: Float32Array;
   /** таймер до следующей атаки: и контактной, и выстрела для kite_and_shoot */
   attackCooldown: Float32Array;
   type: Uint8Array;
@@ -35,10 +52,10 @@ export interface EnemyPool {
 }
 
 export interface ProjectilePool {
-  x: Float32Array;
-  y: Float32Array;
-  prevX: Float32Array;
-  prevY: Float32Array;
+  x: Float64Array;
+  y: Float64Array;
+  prevX: Float64Array;
+  prevY: Float64Array;
   vx: Float32Array;
   vy: Float32Array;
   damage: Float32Array;
@@ -65,13 +82,14 @@ export interface ProjectilePool {
 /** Вся память пула выделяется один раз, при создании мира. */
 export function createEnemyPool(capacity: number): EnemyPool {
   return {
-    x: new Float32Array(capacity),
-    y: new Float32Array(capacity),
-    prevX: new Float32Array(capacity),
-    prevY: new Float32Array(capacity),
+    x: new Float64Array(capacity),
+    y: new Float64Array(capacity),
+    prevX: new Float64Array(capacity),
+    prevY: new Float64Array(capacity),
     vx: new Float32Array(capacity),
     vy: new Float32Array(capacity),
     hp: new Float32Array(capacity),
+    damage: new Float32Array(capacity),
     attackCooldown: new Float32Array(capacity),
     type: new Uint8Array(capacity),
     alive: new Uint8Array(capacity),
@@ -92,10 +110,10 @@ export function createEnemyPool(capacity: number): EnemyPool {
  * (`sim/gems.ts`), а не копятся до конца забега.
  */
 export interface GemPool {
-  x: Float32Array;
-  y: Float32Array;
-  prevX: Float32Array;
-  prevY: Float32Array;
+  x: Float64Array;
+  y: Float64Array;
+  prevX: Float64Array;
+  prevY: Float64Array;
   value: Float32Array;
   /** 1 — кристалл уже притягивается к игроку и не сливается с другими */
   attracted: Uint8Array;
@@ -106,10 +124,10 @@ export interface GemPool {
 
 export function createGemPool(capacity: number): GemPool {
   return {
-    x: new Float32Array(capacity),
-    y: new Float32Array(capacity),
-    prevX: new Float32Array(capacity),
-    prevY: new Float32Array(capacity),
+    x: new Float64Array(capacity),
+    y: new Float64Array(capacity),
+    prevX: new Float64Array(capacity),
+    prevY: new Float64Array(capacity),
     value: new Float32Array(capacity),
     attracted: new Uint8Array(capacity),
     alive: new Uint8Array(capacity),
@@ -120,10 +138,10 @@ export function createGemPool(capacity: number): GemPool {
 
 export function createProjectilePool(capacity: number): ProjectilePool {
   return {
-    x: new Float32Array(capacity),
-    y: new Float32Array(capacity),
-    prevX: new Float32Array(capacity),
-    prevY: new Float32Array(capacity),
+    x: new Float64Array(capacity),
+    y: new Float64Array(capacity),
+    prevX: new Float64Array(capacity),
+    prevY: new Float64Array(capacity),
     vx: new Float32Array(capacity),
     vy: new Float32Array(capacity),
     damage: new Float32Array(capacity),

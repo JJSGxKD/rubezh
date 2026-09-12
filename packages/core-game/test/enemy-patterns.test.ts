@@ -93,7 +93,11 @@ const TEST_WEAPON: WeaponDef = {
   levels: [{ damage: 6, cooldownSec: 0.28, projectiles: 1, projectileSpeed: 520, ttlSec: 1.6 }],
 };
 
-const CENTER = 1000;
+/**
+ * Мир бесконечен, и игрок стартует в начале координат: тестам паттернов
+ * больше не нужен «центр канвы», всё считается от нуля.
+ */
+const CENTER = 0;
 
 interface SetupOptions {
   seed?: number;
@@ -115,8 +119,6 @@ function setup(options: SetupOptions = {}): World {
     // Прокачка в тестах паттернов выключена: кристаллы и уровни меняли бы
     // силу игрока по ходу теста и делали результат зависимым от неё.
     config: {
-      width: CENTER * 2,
-      height: CENTER * 2,
       maxEnemies: options.maxEnemies ?? 512,
       progressionEnabled: false,
       player,

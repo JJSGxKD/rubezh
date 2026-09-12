@@ -4,12 +4,14 @@ import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/p
 import type { LoadoutState } from "../progression/loadout";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { Rng } from "./rng";
-import { gridCellSize, SpatialGrid } from "./grid";
+import type { SpatialGrid } from "./grid";
 import type { SimEvents } from "./events";
+import type { ViewConfig, WorldBounds } from "./map-types";
 import { NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
 
 export type { EnemyType } from "../patterns/enemy-types";
 export { NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
+export type { ViewConfig, WorldBounds } from "./map-types";
 // Сборка мира живёт отдельно: здесь — состояние забега и операции над ним.
 export { createWorld, DEFAULT_SIM_CONFIG, type CreateWorldOptions } from "./create-world";
 
@@ -42,8 +44,6 @@ export interface PlayerConfig {
 }
 
 export interface SimConfig {
-  width: number;
-  height: number;
   /**
    * Сколько физических пикселей приходится на одну игровую единицу.
    *
@@ -54,6 +54,14 @@ export interface SimConfig {
    * более мелкую и медленную игру на том же телефоне.
    */
   unitScale: number;
+  /**
+   * Границы карты. Infinity по оси означает «границы нет» — так проверка
+   * остаётся одним сравнением, без ветвления на «а ограничена ли ось»
+   * (docs/26-stage2-plan.md, WP4.2).
+   */
+  bounds: WorldBounds;
+  /** радиусы спавна и удержания: размер экрана на них не влияет */
+  view: ViewConfig;
   maxEnemies: number;
   maxProjectiles: number;
   /**
@@ -81,7 +89,8 @@ export interface PlayerState {
   vy: number;
   /**
    * Куда персонаж смотрит — единичный вектор последнего движения. Оружию,
-   * которое бьёт по направлению, нужна цель и на остановке.
+   * которое бьёт по направлению, нужна цель и на остановке; кольцу спавна —
+   * чтобы понимать, где «впереди», когда игрок стоит.
    */
   faceX: number;
   faceY: number;
@@ -117,6 +126,8 @@ export interface RunStats {
   distance: number;
   /** пик числа живых врагов за забег — сколько игрок вытянул одновременно */
   peakEnemies: number;
+  /** сколько отставших врагов унесено вперёд — сигнал о темпе бегства игрока */
+  enemiesRecycled: number;
 }
 
 /** Опыт, уровень и очередь выборов внутри забега. */
@@ -133,8 +144,26 @@ export interface ProgressionState {
   offers: UpgradeOption[];
 }
 
+/**
+ * Сложность текущего отрезка таймлайна. Директор спавна выставляет её на
+ * границе отрезка, а мир применяет при спавне: после упора в потолок живых
+ * сложность растёт здоровьем и уроном, а не числом врагов
+ * (docs/26-stage2-plan.md, WP4.4).
+ */
+export interface DifficultyState {
+  /** индекс отрезка таймлайна; в аналитике это «волна» (wave_reached) */
+  segment: number;
+  /** секунда, на которой отрезок начался */
+  segmentStartedSec: number;
+  hpMul: number;
+  damageMul: number;
+  maxAlive: number;
+}
+
 export interface World {
   config: SimConfig;
+  /** карта забега: разрез аналитики и ключ к параметрам камеры */
+  mapId: string;
   rng: Rng;
   enemyTypes: EnemyType[];
   weaponTypes: WeaponType[];
@@ -148,6 +177,7 @@ export interface World {
   playerStatsBase: PlayerStatsBase;
   loadout: LoadoutState;
   progression: ProgressionState;
+  difficulty: DifficultyState;
   enemies: EnemyPool;
   projectiles: ProjectilePool;
   gems: GemPool;
@@ -161,34 +191,24 @@ export interface World {
   queryBuffer: Int32Array;
 }
 
-export function resizeWorld(world: World, width: number, height: number): void {
-  if (width <= 0 || height <= 0) return;
-  if (width === world.config.width && height === world.config.height) return;
-
-  world.config.width = width;
-  world.config.height = height;
-
-  const radius = world.config.player.radius;
-  world.player.x = clampTo(world.player.x, radius, width - radius);
-  world.player.y = clampTo(world.player.y, radius, height - radius);
-  world.player.prevX = world.player.x;
-  world.player.prevY = world.player.y;
-
-  // Сетка привязана к размерам поля — пересоздаём. Аллокация здесь допустима:
-  // это происходит при изменении размера окна, а не в кадре.
-  world.enemyGrid = new SpatialGrid(width, height, gridCellSize(world.config.unitScale), world.config.maxEnemies);
+/** Ограничить значение границей карты; с бесконечной границей это тождество. */
+export function clampToBounds(value: number, halfExtent: number): number {
+  return value < -halfExtent ? -halfExtent : value > halfExtent ? halfExtent : value;
 }
 
-function clampTo(value: number, min: number, max: number): number {
-  return value < min ? min : value > max ? max : value;
-}
-
-/** Занять свободный слот врага. -1, если пул исчерпан. */
+/**
+ * Занять свободный слот врага. -1, если пул исчерпан.
+ *
+ * Здоровье и урон берут множители текущего отрезка и застывают в слоте: враг,
+ * вышедший на пятой минуте, не должен крепчать вместе с таймлайном, пока
+ * игрок его добивает.
+ */
 export function spawnEnemy(world: World, typeIndex: number, x: number, y: number): number {
   const pool = world.enemies;
   const slot = findFreeSlot(pool.alive, pool.count, world.config.maxEnemies);
   if (slot < 0) return -1;
 
+  const type = world.enemyTypes[typeIndex];
   pool.x[slot] = x;
   pool.y[slot] = y;
   // Предыдущая позиция равна текущей: иначе только что заспавненный враг
@@ -197,7 +217,8 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.prevY[slot] = y;
   pool.vx[slot] = 0;
   pool.vy[slot] = 0;
-  pool.hp[slot] = world.enemyTypes[typeIndex].hp;
+  pool.hp[slot] = type.hp * world.difficulty.hpMul;
+  pool.damage[slot] = type.damage * world.difficulty.damageMul;
   pool.attackCooldown[slot] = 0;
   pool.type[slot] = typeIndex;
   pool.alive[slot] = 1;
@@ -216,7 +237,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
 
 /**
  * Убрать врага из мира без засчитанного убийства и без реакции на смерть —
- * например, подрывник, взорвавшийся сам. Убийство игроком — `killEnemy` в
+ * например, подрывник, взорвавшийся сам. Убийство игроком — killEnemy в
  * шаге симуляции: там счётчики и реакции паттерна на смерть.
  */
 export function despawnEnemy(world: World, index: number): void {

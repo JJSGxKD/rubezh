@@ -20,6 +20,13 @@ const progressionRoot = fileURLToPath(new URL("../src/game/progression", import.
 // работать headless — их гоняет тест статистики, а позже и серверная
 // перепроверка забега (docs/17-testing-strategy.md §3.5).
 const runRoot = fileURLToPath(new URL("../src/game/run", import.meta.url));
+// Бот калибровки гоняет ту же симуляцию и обязан быть таким же
+// детерминированным: иначе таблица `pnpm balance:sim` меняется от запуска к
+// запуску (docs/26-stage2-plan.md, WP4.6).
+const balanceRoot = fileURLToPath(new URL("../src/game/balance", import.meta.url));
+// Скрипт ввода стенда — часть прогона: от него зависит и замер, и эталонный
+// забег, значит на него распространяются те же запреты.
+const autopilotPath = fileURLToPath(new URL("../src/game/bench/autopilot.ts", import.meta.url));
 
 /**
  * Комментарии вырезаются перед проверкой: иначе тест падает на собственных
@@ -54,6 +61,8 @@ const sources = [
   ...collectSources(weaponsRoot),
   ...collectSources(progressionRoot),
   ...collectSources(runRoot),
+  ...collectSources(balanceRoot),
+  { path: autopilotPath, source: stripComments(readFileSync(autopilotPath, "utf8")) },
 ];
 
 describe("чистота слоя симуляции", () => {
@@ -88,14 +97,22 @@ describe("чистота слоя симуляции", () => {
     }
   });
 
-  it("не использует приближённые Math.hypot и Math.pow — они расходятся между JS-движками", () => {
+  it("не использует приближённую математику — она расходится между JS-движками", () => {
     // Повтор забега с iOS на машине разработчика требует побитово одинаковой
-    // математики (docs/26-stage2-plan.md, WP4.5). Длина вектора — через
-    // Math.sqrt, он по IEEE 754 точный; степень — умножением в цикле.
-    // Запрет тригонометрии добавится вместе с переписыванием спавнера, где
-    // она пока живёт.
+    // математики: `sin`, `cos`, `atan2`, `hypot`, `exp`, `pow` по спецификации
+    // ECMAScript приближённые, и V8 с JavaScriptCore вправе разойтись в
+    // последних битах (docs/26-stage2-plan.md, WP4.5).
+    //
+    // Чем заменяем: длина вектора — `Math.sqrt`, он по IEEE 754 точный;
+    // степень — умножением в цикле; направления — отбором в круге, разложением
+    // по базису и таблицей литералов (sim/directions.ts).
+    //
+    // Камера и рендер под запрет не попадают сознательно: на исход забега они
+    // не влияют, а `Math.exp` в сглаживании даёт независимость от частоты кадров.
+    const forbidden =
+      /Math\.(hypot|pow|sin|cos|tan|asin|acos|atan|atan2|exp|log|log2|log10|cbrt)\b/;
     for (const { path, source } of sources) {
-      expect(source, path).not.toMatch(/Math\.hypot|Math\.pow/);
+      expect(source, path).not.toMatch(forbidden);
     }
   });
 

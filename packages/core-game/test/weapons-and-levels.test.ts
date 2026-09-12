@@ -15,7 +15,8 @@ import {
 
 // Оружие, опыт и выбор улучшений (docs/26-stage2-plan.md, WP2).
 
-const CENTER = 1000;
+/** Игрок стартует в начале координат: мир бесконечен, центра канвы больше нет. */
+const CENTER = 0;
 
 const DUMMY: EnemyDef = { id: "dummy", hp: 400, speed: 0.001, damage: 0, xp: 3, pattern: "swarm" };
 const BITER: EnemyDef = { id: "biter", hp: 400, speed: 0.001, damage: 10, xp: 3, pattern: "swarm" };
@@ -79,8 +80,6 @@ function setup(options: Partial<CreateWorldOptions> = {}): World {
     loadoutLimits: { weapons: 2, passives: 2 },
     ...options,
     config: {
-      width: CENTER * 2,
-      height: CENTER * 2,
       player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 500 },
       ...options.config,
     },

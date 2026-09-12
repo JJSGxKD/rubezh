@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import { ENEMIES } from "../content/enemies";
+import { MAPS } from "../content/maps";
 import { WEAPONS } from "../content/weapons";
-import { createWorld, DEFAULT_SIM_CONFIG, resizeWorld, TICK_SEC, type World } from "./sim/world";
+import { createWorld, DEFAULT_SIM_CONFIG, TICK_SEC, type World } from "./sim/world";
 import { stepWorld } from "./sim/step";
 import {
   createConstantPopulationSpawner,
@@ -10,6 +11,7 @@ import {
   type RampOptions,
   type Spawner,
 } from "./sim/spawner";
+import { RunCamera } from "./render/run-camera";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { benchInput } from "./bench/autopilot";
 import { FrameRecorder, type BenchReport, type BenchStopReason } from "./bench/metrics";
@@ -68,6 +70,7 @@ export class BenchScene extends Phaser.Scene {
   private world!: World;
   private spawner!: Spawner;
   private worldRenderer!: WorldRenderer;
+  private runCamera!: RunCamera;
   private recorder!: FrameRecorder;
   /** живёт только в агрессивном режиме — в остальных прогон идёт до конца */
   private detector: DegradationDetector | null = null;
@@ -109,9 +112,11 @@ export class BenchScene extends Phaser.Scene {
       // прокачка выключена: растущая сила игрока по ходу прогона меняет
       // нагрузку, и два замера перестают быть сравнимыми.
       weapons: WEAPONS,
+      // Карта та же, что в игре: радиус кольца спавна теперь берётся от неё, а
+      // не от размера канвы, — значит замеры двух устройств наконец сравнимы
+      // по объёму мира, а не только по числу врагов (WP4.3).
+      map: MAPS[0],
       config: {
-        width: this.scale.width,
-        height: this.scale.height,
         unitScale: scale,
         progressionEnabled: false,
         // В агрессивном режиме пулы на тысячи: прогон обязан упереться в
@@ -127,6 +132,8 @@ export class BenchScene extends Phaser.Scene {
     });
     this.spawner = this.createSpawner();
     this.worldRenderer = new WorldRenderer(this, this.world);
+    this.runCamera = new RunCamera(MAPS[0].camera, scale);
+    this.runCamera.snapTo(this.world, this.scale.width, this.scale.height);
     this.recorder = new FrameRecorder();
     this.detector = this.sceneData.mode === "stress" ? new DegradationDetector() : null;
     // Единственное обращение ко времени за весь стенд — метка старта для
@@ -186,6 +193,10 @@ export class BenchScene extends Phaser.Scene {
       }
     }
 
+    // Камера стенда — та же, что в игре: иначе замер шёл бы на картинке,
+    // которой в забеге не бывает, и его нечем было бы подтвердить.
+    this.runCamera.update(this.world, deltaMs / 1000);
+    this.worldRenderer.applyCamera(this.runCamera.x, this.runCamera.y, this.runCamera.zoom);
     this.worldRenderer.sync(this.accumulatorMs / TICK_MS);
     this.updateHud();
   }
@@ -453,7 +464,7 @@ export class BenchScene extends Phaser.Scene {
   }
 
   private handleResize(): void {
-    resizeWorld(this.world, this.scale.width, this.scale.height);
+    this.runCamera.resize(this.scale.width, this.scale.height);
     this.layout();
   }
 
