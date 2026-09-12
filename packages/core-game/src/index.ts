@@ -1,6 +1,6 @@
 import Phaser from "phaser";
-import type { PlatformAdapter } from "@bh/shared-types";
-import { MainScene } from "./game/MainScene";
+import type { PlatformAdapter, RunResult } from "@bh/shared-types";
+import { MainScene, type MainSceneData, type RunPauseInfo } from "./game/MainScene";
 import type { BenchSceneData } from "./game/bench/types";
 
 export * from "./content/enemies";
@@ -19,6 +19,12 @@ export {
   OFFERS_PER_LEVEL,
 } from "./game/progression/levels";
 
+// Итог забега: движок считает, оболочка показывает и отправляет
+// (docs/26-stage2-plan.md, WP3).
+export { buildRunResult, type RunResultOptions } from "./game/run/run-result";
+export { loadBestSurvivalSec, submitRunResult, type RecordUpdate } from "./game/run/records";
+export type { RunPauseInfo, RunPauseReason } from "./game/MainScene";
+
 export interface CreateGameOptions {
   /** id элемента-контейнера в разметке приложения */
   parent: string;
@@ -35,6 +41,19 @@ export interface CreateGameOptions {
    * частота фиксируется.
    */
   renderCapFps?: number;
+  /**
+   * Режим диагностики: на экране смерти видны seed и `runId`, с которыми баг
+   * воспроизводится (docs/28-diagnostics.md §2). Включает его приложение —
+   * движок про настройки тестировщика не знает.
+   */
+  diagnostics?: boolean;
+  /**
+   * Итог забега и пауза — для аналитики `run_finished` / `run_abandoned` /
+   * `run_paused`. Отправляет приложение: движок в сеть не ходит
+   * (docs/27-design-system-and-app-shell.md §3.1).
+   */
+  onRunEnd?: (result: RunResult) => void;
+  onRunPaused?: (info: RunPauseInfo) => void;
   /**
    * Режим стресс-испытания. Передаётся только сборкой со включённым стендом:
    * приложение решает, включать ли его, и оно же собирает сведения об
@@ -82,13 +101,20 @@ export function createGame(adapter: PlatformAdapter, options: CreateGameOptions)
   });
 
   if (options.bench === undefined) {
-    game.scene.add("main", MainScene, true, {
+    const sceneData: MainSceneData = {
       seed,
       unitScale: pixelRatio,
+      diagnostics: options.diagnostics === true,
+      // Хранилище даёт площадка: локальный рекорд должен переживать не только
+      // забег, но и закрытие мини-аппа (docs/27-design-system-and-app-shell.md §7).
+      ...(adapter.storage === undefined ? {} : { storage: adapter.storage }),
       ...(options.startingWeaponId === undefined
         ? {}
         : { startingWeaponId: options.startingWeaponId }),
-    });
+      ...(options.onRunEnd === undefined ? {} : { onRunEnd: options.onRunEnd }),
+      ...(options.onRunPaused === undefined ? {} : { onRunPaused: options.onRunPaused }),
+    };
+    game.scene.add("main", MainScene, true, sceneData);
   } else {
     // Динамический импорт, а не обычный: стенд испытаний уезжает в отдельный
     // чанк и не тянется в основной бандл, который грузят игроки.

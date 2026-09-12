@@ -145,8 +145,10 @@ export function createWorld(options: CreateWorldOptions): World {
       deathCauseType: -1,
       shotsFired: 0,
       damageDealt: 0,
-      damageByWeapon: new Float32Array(Math.max(1, loadoutLimits.weapons)),
+      damageByWeapon: new Float64Array(Math.max(1, loadoutLimits.weapons)),
       xpCollected: 0,
+      distance: 0,
+      peakEnemies: 0,
     },
     events: createSimEvents(),
     // Буфер под всю ёмкость пула, а не фиксированные 256: при плотной толпе

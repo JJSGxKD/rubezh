@@ -31,7 +31,7 @@ export interface BenchSceneData {
 
 /** То, что уходит на сервер и лежит в буфере обмена. */
 export interface BenchSubmission {
-  /** ключ идемпотентности прогона, см. createReportId */
+  /** ключ идемпотентности прогона, см. createUuid */
   reportId: string;
   report: BenchReport;
   verdict: BenchVerdict;

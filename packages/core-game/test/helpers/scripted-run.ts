@@ -102,6 +102,7 @@ export function checksumWorld(world: World): number {
   fold(world.stats.damageTaken);
   fold(world.stats.shotsFired);
   fold(world.stats.deathCauseType);
+  fold(world.stats.distance);
   for (const kills of world.stats.killsByType) fold(kills);
 
   // Прокачка — часть состояния забега: без неё расхождение в выборе

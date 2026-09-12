@@ -6,6 +6,5 @@ export * from "./autopilot";
 export * from "./profiles";
 export * from "./types";
 export * from "./sender";
-export * from "./report-id";
 export * from "./clipboard";
 export * from "./degradation-detector";

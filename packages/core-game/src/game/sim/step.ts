@@ -51,6 +51,11 @@ export function stepWorld(world: World, input: SimInput): void {
 
   world.stats.tick++;
   world.stats.elapsedSec = world.stats.tick * dt;
+  // Пик считается в конце шага: спавн отрабатывает до него, значит сюда
+  // попадает та самая толпа, которую игрок видел на экране.
+  if (world.enemies.aliveCount > world.stats.peakEnemies) {
+    world.stats.peakEnemies = world.enemies.aliveCount;
+  }
 }
 
 /**
@@ -101,6 +106,10 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   // скорость.
   if (nextX === player.x && player.vx !== 0) player.vx = 0;
   if (nextY === player.y && player.vy !== 0) player.vy = 0;
+
+  // Расстояние берётся по факту перемещения, а не по скорости: у стены
+  // скорость есть, а движения нет, и километраж бы врал.
+  world.stats.distance += vectorLength(nextX - player.x, nextY - player.y);
 
   player.x = nextX;
   player.y = nextY;
