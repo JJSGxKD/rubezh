@@ -411,11 +411,13 @@ flowchart TD
         PAT["game/patterns/*<br/>поведение врагов"]
         WPN["game/weapons/*<br/>поведение оружия"]
         PRG["game/progression/*<br/>опыт, уровни, набор, пассивки"]
+        RUN["game/run/*<br/>итог забега, локальный рекорд"]
         CNT["content/*<br/>враги, волны, оружие, улучшения, карта"]
     end
 
     subgraph rendered["Требует Phaser"]
         MS["game/MainScene"]
+        OVL["game/overlays/*<br/>временные HUD и экраны<br/>до оболочки (WP5)"]
         BS["game/BenchScene<br/>только dev, отдельный чанк"]
         WR["game/render/WorldRenderer"]
     end
@@ -434,6 +436,10 @@ flowchart TD
     MS --> SIM
     MS --> WR
     MS --> DG
+    MS --> RUN
+    MS --> OVL
+    RUN --> SIM
+    OVL --> RUN
     BS --> SIM
     BS --> WR
     BS --> BM
@@ -452,6 +458,13 @@ flowchart TD
 На этапе 2 сбор метрик кадра переезжает из `game/bench/*` в общий
 `game/diagnostics/*`: им пользуются и стенд, и обычный забег, а отправка
 отчётов уходит из движка в оболочку (`28-diagnostics.md` §3.1).
+
+`game/run/*` считает итог забега и ведёт локальный рекорд, но Phaser и DOM не
+знает: его гоняет тест статистики, а позже — серверная перепроверка забега
+(§3.5 там же). Хранилище он получает портом снаружи, поэтому стрелки в
+адаптеры у него нет. `game/overlays/*` — временные экраны на канве до
+появления React-оболочки (`27-design-system-and-app-shell.md` §3.2); вместе с
+WP5 подграф `rendered` теряет их, а `RunResult` уходит в оболочку событием.
 
 Чего на схеме нет и не должно появиться:
 
