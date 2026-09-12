@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { WEAPONS } from "../src/content/weapons";
-import { createWorld, resizeWorld, TICK_SEC } from "../src/game/sim/world";
+import { createWorld, TICK_SEC } from "../src/game/sim/world";
 import { stepWorld, IDLE_INPUT } from "../src/game/sim/step";
 import { createConstantPopulationSpawner, createRampSpawner, rampTargetAt } from "../src/game/sim/spawner";
 
@@ -12,7 +12,7 @@ function world(overrides = {}) {
     weapons: WEAPONS,
     // Прокачка выключена: эти тесты про движение, спавн и коллизии, а
     // растущая с уровнями сила игрока делала бы их результат плавающим.
-    config: { width: 800, height: 600, progressionEnabled: false, ...overrides },
+    config: { progressionEnabled: false, ...overrides },
   });
 }
 
@@ -44,13 +44,6 @@ describe("движение игрока", () => {
     expect(w.player.vx).toBeLessThan(w.config.player.speedPxSec);
   });
 
-  it("гасит скорость у края, чтобы персонаж не залипал в стене", () => {
-    const w = world();
-    for (let i = 0; i < 600; i++) stepWorld(w, { moveX: -1, moveY: 0 });
-
-    expect(w.player.x).toBeCloseTo(w.config.player.radius, 3);
-    expect(w.player.vx).toBe(0);
-  });
 
   it("сохраняет позицию предыдущего тика для интерполяции рендера", () => {
     const w = world();
@@ -107,42 +100,31 @@ describe("нарастающая нагрузка", () => {
   });
 });
 
-describe("изменение размера окна", () => {
-  it("возвращает игрока в новые границы", () => {
-    const w = world();
-    for (let i = 0; i < 600; i++) stepWorld(w, { moveX: 1, moveY: 1 });
-
-    resizeWorld(w, 320, 240);
-
-    expect(w.config.width).toBe(320);
-    expect(w.player.x).toBeLessThanOrEqual(320 - w.config.player.radius);
-    expect(w.player.y).toBeLessThanOrEqual(240 - w.config.player.radius);
-  });
-
-  it("игнорирует нулевой размер: свёрнутое приложение не должно ломать мир", () => {
-    const w = world();
-    resizeWorld(w, 0, 0);
-
-    expect(w.config.width).toBe(800);
-    expect(w.config.height).toBe(600);
-  });
-
-  it("продолжает искать соседей после пересборки сетки", () => {
+describe("сетка коллизий вокруг игрока", () => {
+  // Сетка больше не строится под размер мира — мира такого размера нет
+  // (docs/26-stage2-plan.md, WP4.1). Окно переезжает за игроком, и поиск
+  // соседей обязан работать одинаково и в начале координат, и в сотне тысяч
+  // единиц от него.
+  it("продолжает попадать по врагам после долгого бега в одну сторону", () => {
     const w = world();
     const spawner = createRampSpawner({ startPopulation: 40, addPerSecond: 0, maxPopulation: 40 });
-    for (let i = 0; i < 120; i++) {
-      spawner.update(w, TICK_SEC);
-      stepWorld(w, IDLE_INPUT);
-    }
+    const away = { moveX: 1, moveY: 0.35 };
 
-    resizeWorld(w, 400, 300);
+    for (let i = 0; i < 60 * 30; i++) {
+      spawner.update(w, TICK_SEC);
+      stepWorld(w, away);
+    }
     const shotsBefore = w.stats.shotsFired;
-    for (let i = 0; i < 300; i++) {
+    const killsBefore = w.stats.enemiesKilled;
+
+    for (let i = 0; i < 60 * 10; i++) {
       spawner.update(w, TICK_SEC);
-      stepWorld(w, IDLE_INPUT);
+      stepWorld(w, away);
     }
 
+    expect(Math.abs(w.player.x)).toBeGreaterThan(4000);
     expect(w.stats.shotsFired).toBeGreaterThan(shotsBefore);
+    expect(w.stats.enemiesKilled).toBeGreaterThan(killsBefore);
   });
 });
 

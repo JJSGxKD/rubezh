@@ -60,6 +60,33 @@ describe("симуляция", () => {
     expect(second.world.stats).toEqual(first.world.stats);
   });
 
+  /**
+   * Эталонная контрольная сумма забега — та самая, с которой сверяется прогон
+   * на другом JS-движке (docs/26-stage2-plan.md, WP4.5).
+   *
+   * V8 на Android и в CI даёт это число здесь и сейчас. JavaScriptCore на iOS
+   * обязан дать то же: вся математика симуляции — сложение, умножение и
+   * `Math.sqrt`, то есть точные по IEEE 754 операции; приближённые `sin`,
+   * `cos` и `pow` из этого слоя вычищены и запрещены `sim-purity.test.ts`.
+   * Сверка на устройстве — пункт ручного QA (WP11), эта строка — его эталон.
+   *
+   * Число меняется при любой правке симуляции или контента. Это не повод его
+   * «подвинуть»: сначала человек смотрит, ожидал ли он такой правки.
+   */
+  it("совпадает с эталонной контрольной суммой забега", () => {
+    const run = runScripted({
+      seed: 20260912,
+      ticks: 3600,
+      population: 80,
+      weights: ALL_PATTERNS_WEIGHTS,
+      immortalPlayer: true,
+    });
+
+    expect(run.checksum).toBe(88774101);
+    expect(run.world.stats.enemiesKilled).toBe(610);
+    expect(run.world.progression.level).toBe(18);
+  });
+
   it("расходится на другом seed — иначе seed ни на что не влияет", () => {
     const first = runScripted({ seed: 1, ticks: 900, population: 60 });
     const second = runScripted({ seed: 2, ticks: 900, population: 60 });

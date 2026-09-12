@@ -51,7 +51,8 @@ function detonate(world: World, index: number): void {
   const dx = world.player.x - x;
   const dy = world.player.y - y;
   const reach = type.params.blastRadius + world.config.player.radius;
-  if (dx * dx + dy * dy <= reach * reach) damagePlayer(world, type.damage, typeIndex);
+  // Урон из слота, а не из типа: в нём застыл множитель сложности отрезка.
+  if (dx * dx + dy * dy <= reach * reach) damagePlayer(world, enemies.damage[index], typeIndex);
 
   pushSimEvent(world.events, {
     kind: SIM_EVENT.explosion,

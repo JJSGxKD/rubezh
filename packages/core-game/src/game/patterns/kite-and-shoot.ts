@@ -47,7 +47,9 @@ export const kiteAndShoot: PatternBehavior = {
       enemies.y[index],
       heading.nx * params.projectileSpeed,
       heading.ny * params.projectileSpeed,
-      type.damage,
+      // Урон берётся из слота, а не из типа: множитель сложности отрезка
+      // застыл в нём в момент спавна (docs/26-stage2-plan.md, WP4.4).
+      enemies.damage[index],
       PROJECTILE_TTL_SEC,
       false,
     );

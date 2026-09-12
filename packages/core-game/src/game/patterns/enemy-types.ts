@@ -26,10 +26,20 @@ export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
   splitter: { radius: 13, contactDamage: true },
 };
 
-/** Самый крупный хитбокс — на него расширяется запрос снаряда к сетке. */
-export const MAX_PATTERN_RADIUS = Math.max(
-  ...Object.values(PATTERN_TRAITS).map((traits) => traits.radius),
-);
+/**
+ * Во сколько раз крупнее элита. Единственное, чем ранг влияет на хитбокс:
+ * размер остаётся свойством поведения, а не свободным числом в контенте
+ * (docs/26-stage2-plan.md, WP4.4).
+ */
+export const ELITE_RADIUS_MUL = 1.7;
+
+/**
+ * Самый крупный хитбокс — на него расширяется запрос снаряда к сетке. Считаем
+ * по элите: если взять обычный радиус, снаряды начнут пролетать сквозь
+ * элиту — запрос к сетке вернёт её не во всех клетках, где она есть.
+ */
+export const MAX_PATTERN_RADIUS =
+  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * ELITE_RADIUS_MUL;
 
 /**
  * Параметры паттерна, разложенные в плоский объект с полным набором полей.
@@ -134,10 +144,24 @@ export interface EnemyType {
   damage: number;
   /** опыт за убийство — ценность кристалла на месте смерти */
   xp: number;
+  /** стоимость в бюджете угрозы отрезка таймлайна */
+  threat: number;
+  /** усиленная версия паттерна: крупнее, светлее, приходит только событием */
+  elite: boolean;
   pattern: EnemyPattern;
   radius: number;
   contactDamage: boolean;
   params: ResolvedPatternParams;
+}
+
+/**
+ * Стоимость угрозы, когда её не задали в контенте. Грубая оценка того, во что
+ * враг обходится игроку: здоровье надо прострелить, урон — пережить, скорость
+ * решает, успеет ли он вообще добежать. Осмысленные числа ставятся руками —
+ * формула не знает, что рой обязан приходить десятками (см. content/enemies.ts).
+ */
+export function defaultThreat(def: EnemyDef): number {
+  return Math.max(1, def.hp / 12 + def.damage / 4 + def.speed / 60);
 }
 
 /**
@@ -171,6 +195,9 @@ function findBaseProblems(def: EnemyDef): string[] {
   if (!(def.speed > 0)) problems.push(`враг ${def.id}: speed должен быть больше нуля`);
   if (!(def.damage >= 0)) problems.push(`враг ${def.id}: damage не может быть отрицательным`);
   if (!(def.xp >= 0)) problems.push(`враг ${def.id}: xp не может быть отрицательным`);
+  if (def.threat !== undefined && !(def.threat > 0)) {
+    problems.push(`враг ${def.id}: threat должен быть больше нуля`);
+  }
   return problems;
 }
 
@@ -260,8 +287,10 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       speed: def.speed * unitScale,
       damage: def.damage,
       xp: def.xp,
+      threat: def.threat ?? defaultThreat(def),
+      elite: def.elite === true,
       pattern: def.pattern,
-      radius: traits.radius * unitScale,
+      radius: traits.radius * (def.elite === true ? ELITE_RADIUS_MUL : 1) * unitScale,
       contactDamage: traits.contactDamage,
       params: resolveParams(def, indexById, unitScale),
     };

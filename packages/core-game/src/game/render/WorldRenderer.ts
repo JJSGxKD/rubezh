@@ -29,6 +29,16 @@ const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
 export class WorldRenderer {
   private readonly scene: Phaser.Scene;
   private readonly world: World;
+  /**
+   * Слой мира. Камера забега — это трансформация слоя, а не камера Phaser:
+   * HUD и экраны живут в том же дереве сцены и обязаны остаться в экранных
+   * координатах, не масштабируясь вместе с миром. Вторая камера Phaser
+   * потребовала бы вести список игнорирования для каждого создаваемого на ходу
+   * спрайта — легко забыть, и промах виден только на устройстве.
+   */
+  private readonly layer: Phaser.GameObjects.Container;
+  /** повторяющийся фон: единственное, что даёт почувствовать движение мира */
+  private readonly ground: Phaser.GameObjects.TileSprite;
   private readonly enemySprites: Phaser.GameObjects.Image[] = [];
   private readonly enemySpriteType: Int16Array;
   /** последний применённый вид спрайта — чтобы не дёргать Phaser каждый кадр */
@@ -54,11 +64,19 @@ export class WorldRenderer {
     for (const type of world.enemyTypes) {
       const key = `bh-enemy-${type.id}`;
       const look = LOOK_BY_PATTERN[type.pattern];
-      this.ensureTexture(key, type.radius, look.color, look.shape);
+      // Элита крупнее и светлее: одинаковые на глаз танк и элитный танк
+      // читаются как дефект, а не как контрольная точка сложности.
+      this.ensureTexture(key, type.radius, type.elite ? brighten(look.color) : look.color, look.shape);
       this.textureKeyByType.push(key);
     }
 
     const scale = world.config.unitScale;
+    this.ensureGroundTexture(scale);
+    this.ground = scene.add
+      .tileSprite(0, 0, scene.scale.width, scene.scale.height, "bh-ground")
+      .setOrigin(0, 0)
+      .setDepth(-10);
+    this.layer = scene.add.container(0, 0).setDepth(0);
     this.ensureTexture("bh-player", world.config.player.radius, 0x6ee7a8, "circle");
     this.ensureTexture("bh-projectile", world.config.player.projectileRadius, 0xffe066, "circle");
     this.ensureTexture("bh-projectile-enemy", world.config.player.projectileRadius, 0xff6b6b, "circle");
@@ -68,7 +86,28 @@ export class WorldRenderer {
     this.ensureTexture("bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
+    this.layer.add(this.player);
     this.eventsRead = world.events.written;
+  }
+
+  /**
+   * Перенести камеру забега на слой мира и на фон.
+   *
+   * Мир бесконечен, поэтому фон — повторяющаяся текстура, сдвинутая на
+   * положение камеры: без него на пустом участке карты движение не видно
+   * вовсе — персонаж и враги висят в чёрном, и игрок не понимает, бежит он
+   * или стоит (docs/26-stage2-plan.md, WP4.1).
+   */
+  applyCamera(x: number, y: number, zoom: number): void {
+    const width = this.scene.scale.width;
+    const height = this.scene.scale.height;
+
+    this.layer.setScale(zoom);
+    this.layer.setPosition(width / 2 - x * zoom, height / 2 - y * zoom);
+
+    this.ground.setSize(width, height);
+    this.ground.setTileScale(zoom, zoom);
+    this.ground.setTilePosition(x - width / (2 * zoom), y - height / (2 * zoom));
   }
 
   /**
@@ -230,7 +269,9 @@ export class WorldRenderer {
     const b = this.nextBlast;
     this.nextBlast = (this.nextBlast + 1) % MAX_BLASTS;
     while (this.blasts.length <= b) {
-      this.blasts.push(this.scene.add.image(0, 0, "bh-blast").setVisible(false).setDepth(3));
+      const sprite = this.scene.add.image(0, 0, "bh-blast").setVisible(false).setDepth(3);
+      this.layer.add(sprite);
+      this.blasts.push(sprite);
     }
     if (this.blastKind[b] !== kind) {
       this.blasts[b].setTexture(kind === SIM_EVENT.strike ? "bh-strike" : "bh-blast");
@@ -250,9 +291,9 @@ export class WorldRenderer {
 
   private orbiterSprite(index: number): Phaser.GameObjects.Image {
     while (this.orbiterSprites.length <= index) {
-      this.orbiterSprites.push(
-        this.scene.add.image(0, 0, "bh-orbiter").setVisible(false).setDepth(2),
-      );
+      const sprite = this.scene.add.image(0, 0, "bh-orbiter").setVisible(false).setDepth(2);
+      this.layer.add(sprite);
+      this.orbiterSprites.push(sprite);
     }
     return this.orbiterSprites[index];
   }
@@ -275,8 +316,31 @@ export class WorldRenderer {
     return this.projectileSprites[index];
   }
 
+  /** Все объекты мира живут в слое: камера — это его трансформация. */
   private createHiddenSprite(key: string): Phaser.GameObjects.Image {
-    return this.scene.add.image(0, 0, key).setVisible(false).setDepth(1);
+    const sprite = this.scene.add.image(0, 0, key).setVisible(false).setDepth(1);
+    this.layer.add(sprite);
+    return sprite;
+  }
+
+  /**
+   * Плитка фона. Размер в игровых единицах, а не в пикселях экрана: сетка
+   * обязана быть одинаковой на любом устройстве, иначе на телефоне с высокой
+   * плотностью она превращается в мелкую рябь.
+   */
+  private ensureGroundTexture(scale: number): void {
+    const key = "bh-ground";
+    if (this.scene.textures.exists(key)) return;
+
+    const size = Math.max(2, Math.round(GROUND_TILE_UNITS * scale));
+    const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
+    graphics.fillStyle(0x0d0f14, 1);
+    graphics.fillRect(0, 0, size, size);
+    graphics.fillStyle(0x171b24, 1);
+    graphics.fillRect(0, 0, size, Math.max(1, Math.round(scale)));
+    graphics.fillRect(0, 0, Math.max(1, Math.round(scale)), size);
+    graphics.generateTexture(key, size, size);
+    graphics.destroy();
   }
 
   private ensureTexture(key: string, radius: number, color: number, shape: ShapeKind): void {
@@ -294,8 +358,23 @@ function lerp(from: number, to: number, t: number): number {
   return from + (to - from) * t;
 }
 
+/**
+ * Осветлить цвет для элиты: половина пути к белому. Считается по каналам, а
+ * не подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
+ * останется без своего элитного цвета.
+ */
+function brighten(color: number): number {
+  const mix = (channel: number): number => Math.round(channel + (255 - channel) * 0.45);
+  const r = mix((color >> 16) & 0xff);
+  const g = mix((color >> 8) & 0xff);
+  const b = mix(color & 0xff);
+  return (r << 16) | (g << 8) | b;
+}
+
 /** Сколько взрывов показывается одновременно; дальше перезаписываются старые. */
 const MAX_BLASTS = 24;
+/** Сторона плитки фона в игровых единицах. */
+const GROUND_TILE_UNITS = 64;
 const BLAST_LIFETIME_TICKS = 18;
 const BLAST_TEXTURE_UNITS = 32;
 const GEM_RADIUS_UNITS = 5;

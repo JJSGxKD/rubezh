@@ -2,6 +2,7 @@ import type {
   EnemyDef,
   LevelCurveDef,
   LoadoutLimits,
+  MapDef,
   PassiveDef,
   WeaponDef,
 } from "@bh/shared-types";
@@ -12,14 +13,15 @@ import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng } from "./rng";
 import { gridCellSize, SpatialGrid } from "./grid";
+import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
 import { createEnemyPool, createGemPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
 import type { PlayerConfig, SimConfig, World } from "./world";
 
 /**
- * Создание мира вынесено из `world.ts`: там состояние забега и операции над
+ * Создание мира вынесено из world.ts: там состояние забега и операции над
  * ним, здесь — сборка мира из контента и конфигурации. Обратной зависимости
- * нет: отсюда из `world.ts` берутся только типы.
+ * нет: отсюда из world.ts берутся только типы.
  */
 
 /**
@@ -29,10 +31,37 @@ import type { PlayerConfig, SimConfig, World } from "./world";
 const FALLBACK_LEVEL_CURVE: LevelCurveDef = { baseXp: 6, growth: 1.22 };
 const FALLBACK_LOADOUT_LIMITS: LoadoutLimits = { weapons: 4, passives: 4 };
 
+/**
+ * Карта по умолчанию — тоже заглушка, и тоже не из контента: симуляция не
+ * импортирует content/*, иначе тест перестаёт быть тестом симуляции и
+ * становится тестом текущего баланса. Числа совпадают с боевой картой, чтобы
+ * прогоны тестов шли в том же масштабе мира, что и игра.
+ */
+const FALLBACK_MAP: MapDef = {
+  id: "fallback",
+  nameKey: "map.fallback.name",
+  camera: {
+    viewAreaMoving: 260_000,
+    viewAreaIdle: 175_000,
+    maxAspect: 2.2,
+    followSmoothingSec: 0.12,
+    zoomSmoothingSec: 0.5,
+    zoomInDelaySec: 0.7,
+  },
+};
+
+const FALLBACK_VIEW = resolveMap(FALLBACK_MAP, 1);
+
+/**
+ * Запас сетки коллизий за радиусом удержания: одна клетка с каждой стороны,
+ * чтобы объект ровно на границе попадал в свою клетку, а не в краевую.
+ */
+const GRID_MARGIN_CELLS = 2;
+
 export const DEFAULT_SIM_CONFIG: SimConfig = {
-  width: 960,
-  height: 640,
   unitScale: 1,
+  bounds: FALLBACK_VIEW.bounds,
+  view: FALLBACK_VIEW.view,
   maxEnemies: 512,
   maxProjectiles: 512,
   maxGems: 256,
@@ -60,6 +89,8 @@ export interface CreateWorldOptions {
   passives?: readonly PassiveDef[];
   levelCurve?: LevelCurveDef;
   loadoutLimits?: LoadoutLimits;
+  /** карта: границы мира и параметры, от которых считается кольцо спавна */
+  map?: MapDef;
   /** чем игрок начинает забег; по умолчанию — первое стартовое оружие */
   startingWeaponId?: string;
   config?: Partial<SimConfig>;
@@ -70,6 +101,12 @@ export function createWorld(options: CreateWorldOptions): World {
   const { maxEnemies, maxProjectiles } = config;
 
   const scale = config.unitScale;
+  // Границы и радиусы — производные карты, а не свободные поля конфигурации:
+  // иначе спавн на одном устройстве уедет относительно другого.
+  const map = resolveMap(options.map ?? FALLBACK_MAP, scale);
+  config.bounds = map.bounds;
+  config.view = map.view;
+
   const enemyTypes = resolveEnemyTypes(options.enemies, scale);
   const weaponTypes = resolveWeaponTypes(options.weapons ?? [], scale);
   const passiveTypes = resolvePassiveTypes(options.passives ?? []);
@@ -95,8 +132,10 @@ export function createWorld(options: CreateWorldOptions): World {
   const startingWeapon = findStartingWeapon(weaponTypes, options.startingWeaponId);
   if (startingWeapon >= 0) addWeapon(loadout, startingWeapon);
 
+  const cellSize = gridCellSize(scale);
   return {
     config,
+    mapId: map.id,
     rng: createRng(options.seed),
     enemyTypes,
     weaponTypes,
@@ -114,11 +153,22 @@ export function createWorld(options: CreateWorldOptions): World {
       pendingLevelUps: 0,
       offers: [],
     },
+    // До первого отрезка таймлайна сложность нейтральна: в мире без директора
+    // спавна — стенд испытаний, тесты паттернов — она такой и остаётся.
+    difficulty: {
+      segment: 0,
+      segmentStartedSec: 0,
+      hpMul: 1,
+      damageMul: 1,
+      maxAlive: maxEnemies,
+    },
+    // Игрок стартует в начале координат: центр карты, если у неё есть
+    // границы, и просто точка отсчёта, если мир бесконечен.
     player: {
-      x: config.width / 2,
-      y: config.height / 2,
-      prevX: config.width / 2,
-      prevY: config.height / 2,
+      x: 0,
+      y: 0,
+      prevX: 0,
+      prevY: 0,
       vx: 0,
       vy: 0,
       faceX: 1,
@@ -132,9 +182,13 @@ export function createWorld(options: CreateWorldOptions): World {
     projectiles: createProjectilePool(maxProjectiles),
     gems: createGemPool(config.progressionEnabled ? config.maxGems : 1),
     gemMergeCursor: 0,
-    // размер клетки — порядка диаметра крупного врага: мельче даёт много
-    // пустых клеток на запрос, крупнее возвращает лишних кандидатов
-    enemyGrid: new SpatialGrid(config.width, config.height, gridCellSize(scale), maxEnemies),
+    // Окно сетки накрывает радиус удержания целиком: всё, что дальше, живёт
+    // считанные тики и попадает в краевые клетки без вреда для запросов.
+    enemyGrid: new SpatialGrid(
+      config.view.retentionRadius * 2 + cellSize * GRID_MARGIN_CELLS,
+      cellSize,
+      maxEnemies,
+    ),
     stats: {
       tick: 0,
       elapsedSec: 0,
@@ -149,6 +203,7 @@ export function createWorld(options: CreateWorldOptions): World {
       xpCollected: 0,
       distance: 0,
       peakEnemies: 0,
+      enemiesRecycled: 0,
     },
     events: createSimEvents(),
     // Буфер под всю ёмкость пула, а не фиксированные 256: при плотной толпе

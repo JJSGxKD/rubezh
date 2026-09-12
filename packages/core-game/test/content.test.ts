@@ -1,10 +1,13 @@
 import type { EnemyDef, PassiveDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
-import { WAVES } from "../src/content/waves";
+import { MAPS } from "../src/content/maps";
+import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS } from "../src/game/patterns";
+import { findMapContentProblems } from "../src/game/sim/map-types";
+import { findTimelineProblems } from "../src/game/sim/timeline-content";
 import { findPassiveContentProblems } from "../src/game/progression/passives";
 import { xpForLevel } from "../src/game/progression/levels";
 import { findWeaponContentProblems, IMPLEMENTED_WEAPON_BEHAVIORS } from "../src/game/weapons";
@@ -113,29 +116,47 @@ describe("проверка параметров паттернов", () => {
   });
 });
 
-describe("контент волн", () => {
-  it("ссылается только на существующих врагов", () => {
-    const known = new Set(ENEMIES.map((enemy) => enemy.id));
-    for (const wave of WAVES) {
-      for (const spawn of wave.spawns) {
-        expect(known, `волна на ${wave.second}s`).toContain(spawn.enemy);
-      }
+describe("контент таймлайна спавна", () => {
+  it("проходит проверку целиком", () => {
+    // Сообщения читает геймдизайнер: пустой список — таймлайн корректен,
+    // иначе в выводе написано, какой отрезок и какое поле не так.
+    expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);
+  });
+
+  it("расписывает руками первые минуты, а дальше передаёт кривой", () => {
+    // Первую минуту видит каждый игрок, и угадывать её формулой нельзя;
+    // бесконечный режим, наоборот, руками не расписать (WP4.4).
+    expect(TIMELINE.length).toBeGreaterThanOrEqual(5);
+    expect(ENDLESS_CURVE.fromSec).toBeGreaterThan(TIMELINE[TIMELINE.length - 1].fromSec);
+  });
+
+  it("вводит каждый тип врага до того, как он попадёт в смесь бесконечного режима", () => {
+    const introduced = new Set<string>();
+    for (const segment of TIMELINE) {
+      for (const spawn of segment.spawns) introduced.add(spawn.enemy);
+    }
+    for (const id of ENDLESS_CURVE.pool) {
+      expect(introduced, `враг ${id} попадает в смесь, ни разу не показавшись отдельно`).toContain(id);
     }
   });
 
-  it("не содержит пустых волн и спавнов нулевого размера", () => {
-    for (const wave of WAVES) {
-      expect(wave.spawns.length, `волна на ${wave.second}s`).toBeGreaterThan(0);
-      for (const spawn of wave.spawns) {
-        expect(spawn.count, `спавн ${spawn.enemy}`).toBeGreaterThan(0);
-      }
+  it("держит элит вне обычного потока — они приходят событиями", () => {
+    const elites = new Set(ENEMIES.filter((enemy) => enemy.elite === true).map((enemy) => enemy.id));
+    expect(elites.size).toBeGreaterThan(0);
+    for (const segment of TIMELINE) {
+      for (const spawn of segment.spawns) expect(elites).not.toContain(spawn.enemy);
     }
+    for (const id of ENDLESS_CURVE.pool) expect(elites).not.toContain(id);
+  });
+});
+
+describe("контент карт", () => {
+  it("проходит проверку целиком", () => {
+    expect(findMapContentProblems(MAPS)).toEqual([]);
   });
 
-  it("идёт по строго возрастающей секунде", () => {
-    for (let i = 1; i < WAVES.length; i++) {
-      expect(WAVES[i].second).toBeGreaterThan(WAVES[i - 1].second);
-    }
+  it("содержит ровно одну карту — решение Р8 этапа 2", () => {
+    expect(MAPS).toHaveLength(1);
   });
 });
 
