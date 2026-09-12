@@ -1,3 +1,4 @@
+import { createNoopPlatformUi } from "@bh/shared-types";
 import type {
   PlatformAdapter,
   UserContext,
@@ -5,6 +6,8 @@ import type {
   SharePayload,
   HapticType,
   AdResult,
+  DisplayUser,
+  PlatformUi,
 } from "@bh/shared-types";
 
 /**
@@ -16,6 +19,16 @@ import type {
  * Владелец пакета — напарник (docs/06-team-and-workflow.md §2), фаза 2.
  */
 export class VkAdapter implements PlatformAdapter {
+  /**
+   * Возможности интерфейса площадки. Заглушка до портирования: адаптер честно
+   * сообщает, что ничего не умеет, и оболочка рисует неактивные переключатели
+   * вместо сломанных (docs/27-design-system-and-app-shell.md §5.2).
+   */
+  readonly ui: PlatformUi = createNoopPlatformUi();
+
+  /** параметры запуска площадки ещё не разбираются — портирование после лонча */
+  readonly displayUser: DisplayUser | null = null;
+
   async init(): Promise<UserContext> {
     // TODO: VKWebAppInit -> VKWebAppGetUserInfo, sign на бэкенд
     throw new Error("VkAdapter.init: не реализовано");

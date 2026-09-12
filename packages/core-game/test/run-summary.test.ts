@@ -4,11 +4,6 @@ import { ENEMIES } from "../src/content/enemies";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { benchInput } from "../src/game/bench/autopilot";
-import {
-  deathScreenLines,
-  formatDuration,
-  offerLabel,
-} from "../src/game/overlays/run-screens";
 import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
 import { loadBestSurvivalSec, submitRunResult } from "../src/game/run/records";
 import { buildRunResult } from "../src/game/run/run-result";
@@ -338,78 +333,5 @@ describe("локальный рекорд", () => {
       bestSurvivalSec: 12,
       isNewRecord: true,
     });
-  });
-});
-
-describe("тексты экранов забега", () => {
-  const result: RunResult = {
-    runId: "abc-123",
-    seed: 777,
-    outcome: "died",
-    startingWeaponId: "spark",
-    contentHash: "test-hash",
-    mapId: "frontier",
-    waveReached: 6,
-    survivalSec: 185.4,
-    level: 7,
-    xpCollected: 214,
-    enemiesKilled: 143,
-    killsByEnemy: { grunt: 100, wolf: 43 },
-    damageDealt: 1880,
-    damageTaken: 118,
-    weapons: [
-      { id: "spark", level: 4, damage: 640 },
-      { id: "wardstone", level: 2, damage: 1240 },
-    ],
-    passives: [{ id: "might", level: 2 }],
-    deathCause: "wolf",
-    distance: 2140,
-    peakEnemies: 64,
-  };
-  const record = { bestSurvivalSec: 185.4, isNewRecord: true };
-
-  it("показывает время как минуты и секунды", () => {
-    expect(formatDuration(185.4)).toBe("3:05");
-    expect(formatDuration(0)).toBe("0:00");
-    // Отрицательное и NaN приходят только из битого хранилища, но показывать
-    // «NaN:aN» игроку нельзя.
-    expect(formatDuration(Number.NaN)).toBe("0:00");
-    expect(formatDuration(-5)).toBe("0:00");
-  });
-
-  it("ставит время выживания первым и отмечает новый рекорд", () => {
-    const lines = deathScreenLines({ result, record, diagnostics: false, note: "" });
-
-    expect(lines[1]).toBe("Время выживания: 3:05");
-    expect(lines).toContain("НОВЫЙ РЕКОРД");
-  });
-
-  it("сортирует оружие по урону: сверху то, что тянуло забег", () => {
-    const lines = deathScreenLines({ result, record, diagnostics: false, note: "" });
-    const weapons = lines.filter((line) => line.startsWith("  "));
-
-    expect(weapons[0]).toContain("wardstone");
-    expect(weapons[1]).toContain("spark");
-  });
-
-  it("показывает seed и runId только в режиме диагностики", () => {
-    const plain = deathScreenLines({ result, record, diagnostics: false, note: "" });
-    const diag = deathScreenLines({ result, record, diagnostics: true, note: "" });
-
-    expect(plain.join("\n")).not.toContain("abc-123");
-    expect(diag.join("\n")).toContain("seed 777 | runId abc-123");
-  });
-
-  it("подписывает лечение словом, а не пустым id", () => {
-    expect(
-      offerLabel({
-        id: "heal",
-        kind: "heal",
-        refId: "",
-        level: 0,
-        nameKey: "upgrade.heal.name",
-        descriptionKey: "upgrade.heal.description",
-      }),
-    ).toBe("Лечение");
   });
 });

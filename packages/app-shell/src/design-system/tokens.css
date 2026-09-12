@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+/*
+ * Токены дизайн-системы — единственный источник визуальных значений
+ * (docs/27-design-system-and-app-shell.md §4.2). Цвет, отступ или радиус
+ * числом в компоненте — замечание на ревью: иначе смена визуального
+ * направления превращается в поиск по всем файлам.
+ *
+ * Значения нейтральные, это плейсхолдеры до визуального направления от
+ * участников 2 и 3. Каркас на них собирается и их решения не ждёт.
+ *
+ * Тема одна и тёмная: игровой мир тёмный, и светлое меню вокруг него — два
+ * разных продукта (§4.1).
+ */
+@source "../";
+
+@theme {
+  /* Цвет: основа */
+  --color-bg: #0d0f14;
+  --color-surface: #161a23;
+  --color-surface-raised: #1e2430;
+  --color-border: #2a3242;
+  --color-text: #e7ecf5;
+  --color-text-muted: #9aa6bd;
+  --color-text-disabled: #5d6880;
+
+  /* Цвет: действие */
+  --color-accent: #6ee7a8;
+  --color-accent-pressed: #4cc98a;
+  --color-on-accent: #07120c;
+
+  /* Цвет: состояние */
+  --color-danger: #ff6b6b;
+  --color-warning: #ffb347;
+  --color-success: #6ee7a8;
+  --color-info: #6bd5ff;
+
+  /* Цвет: игра. Семантика забега; те же значения читает канва через tokens.ts */
+  --color-hp: #6ee7a8;
+  --color-hp-low: #ff6b6b;
+  --color-xp: #7ce7ff;
+  --color-elite: #ffd36b;
+  --color-weapon: #ffe066;
+  --color-passive: #c06bff;
+
+  /*
+   * Типографика. Две гарнитуры: акцидентная для заголовков и крупных цифр,
+   * текстовая для остального. Пока — системные стеки с полноценной
+   * кириллицей; свои woff2 приходят вместе с визуальным направлением (§4.3).
+   */
+  --font-display: "Rubik", "Segoe UI", system-ui, sans-serif;
+  --font-text: system-ui, "Segoe UI", Roboto, sans-serif;
+
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 40px;
+
+  /* Радиусы */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
+
+  /* Движение: одна кривая замедления на всю систему (§4.5) */
+  --ease-base: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+:root {
+  /*
+   * Слои. Диагностика выше всего: FPS должен быть виден поверх модалки, иначе
+   * замер теряет смысл ровно в тот момент, когда он нужен.
+   */
+  --z-canvas: 0;
+  --z-hud: 10;
+  --z-overlay: 20;
+  --z-modal: 30;
+  --z-toast: 40;
+  --z-diagnostics: 50;
+
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+
+  /*
+   * Отступы безопасной зоны. Значения выставляет оболочка из данных адаптера
+   * (§5.1) — здесь нули, чтобы вёрстка не ждала площадку.
+   */
+  --app-inset-top: 0px;
+  --app-inset-right: 0px;
+  --app-inset-bottom: 0px;
+  --app-inset-left: 0px;
+
+  /* Стабильная высота вьюпорта от площадки, а не 100vh (§5.1). */
+  --app-viewport-height: 100dvh;
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-text);
+  font-size: var(--text-sm);
+  -webkit-tap-highlight-color: transparent;
+  /* Выделение текста пальцем в игре только мешает: длинное нажатие по кнопке
+     не должно подсвечивать надпись. */
+  user-select: none;
+}
+
+/* Игрок с включённым «уменьшить движение» получает проявление без перемещений (§4.5). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: var(--duration-fast) !important;
+  }
+}
