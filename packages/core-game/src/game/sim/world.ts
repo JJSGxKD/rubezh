@@ -1,18 +1,20 @@
-import type { EnemyDef } from "@bh/shared-types";
-import { resolveEnemyTypes, type EnemyType } from "../patterns/enemy-types";
-import { createRng, type Rng } from "./rng";
-import { SpatialGrid } from "./grid";
-import { createSimEvents, type SimEvents } from "./events";
-import {
-  createEnemyPool,
-  createProjectilePool,
-  NO_OWNER_TYPE,
-  type EnemyPool,
-  type ProjectilePool,
-} from "./pools";
+import type { LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
+import type { EnemyType } from "../patterns/enemy-types";
+import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
+import type { LoadoutState } from "../progression/loadout";
+import type { WeaponType } from "../weapons/weapon-types";
+import type { Rng } from "./rng";
+import { gridCellSize, SpatialGrid } from "./grid";
+import type { SimEvents } from "./events";
+import { NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
 
 export type { EnemyType } from "../patterns/enemy-types";
-export { NO_OWNER_TYPE, type EnemyPool, type ProjectilePool } from "./pools";
+export { NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
+// Сборка мира живёт отдельно: здесь — состояние забега и операции над ним.
+export { createWorld, DEFAULT_SIM_CONFIG, type CreateWorldOptions } from "./create-world";
+
+/** Броня не делает неуязвимым: сквозь неё всегда проходит доля урона. */
+const MIN_DAMAGE_RATIO = 0.1;
 
 /** Шаг симуляции фиксирован: 60 Гц. Рендер к нему не привязан. */
 export const TICK_HZ = 60;
@@ -31,9 +33,12 @@ export interface PlayerConfig {
   accelerationPxSec2: number;
   attackDamage: number;
   attackCooldownSec: number;
+  /** дальность наведения оружия, которое само ищет цель */
   attackRangePx: number;
   projectileSpeedPxSec: number;
   projectileRadius: number;
+  /** базовый радиус притяжения кристаллов опыта */
+  pickupRadiusPx: number;
 }
 
 export interface SimConfig {
@@ -51,27 +56,20 @@ export interface SimConfig {
   unitScale: number;
   maxEnemies: number;
   maxProjectiles: number;
+  /**
+   * Потолок кристаллов опыта на поле. При его достижении кристаллы
+   * сливаются, а не копятся: опыт не должен стать третьей осью нагрузки
+   * после врагов и снарядов (docs/26-stage2-plan.md, WP2).
+   */
+  maxGems: number;
+  /**
+   * Опыт, уровни и выбор улучшений. Стенд испытаний выключает прокачку:
+   * растущая сила игрока меняет нагрузку по ходу прогона, и два замера
+   * перестают быть сравнимыми (docs/25-week1-fps-trials.md §1).
+   */
+  progressionEnabled: boolean;
   player: PlayerConfig;
 }
-
-export const DEFAULT_SIM_CONFIG: SimConfig = {
-  width: 960,
-  height: 640,
-  unitScale: 1,
-  maxEnemies: 512,
-  maxProjectiles: 512,
-  player: {
-    radius: 10,
-    maxHp: 100,
-    speedPxSec: 190,
-    accelerationPxSec2: 1900,
-    attackDamage: 6,
-    attackCooldownSec: 0.28,
-    attackRangePx: 320,
-    projectileSpeedPxSec: 520,
-    projectileRadius: 4,
-  },
-};
 
 export interface PlayerState {
   x: number;
@@ -81,6 +79,12 @@ export interface PlayerState {
   prevY: number;
   vx: number;
   vy: number;
+  /**
+   * Куда персонаж смотрит — единичный вектор последнего движения. Оружию,
+   * которое бьёт по направлению, нужна цель и на остановке.
+   */
+  faceX: number;
+  faceY: number;
   hp: number;
   maxHp: number;
   attackCooldown: number;
@@ -98,103 +102,55 @@ export interface RunStats {
   /** индекс типа врага, нанёсшего смертельный урон; -1 — игрок жив */
   deathCauseType: number;
   shotsFired: number;
+  damageDealt: number;
+  /**
+   * Нанесённый урон по номеру оружия в наборе — главный вход геймдизайнера
+   * для баланса оружий (docs/26-stage2-plan.md, WP3).
+   */
+  damageByWeapon: Float32Array;
+  xpCollected: number;
+}
+
+/** Опыт, уровень и очередь выборов внутри забега. */
+export interface ProgressionState {
+  level: number;
+  /** опыт на текущем уровне */
+  xp: number;
+  /** сколько опыта нужно до следующего уровня */
+  xpToNext: number;
+  totalXp: number;
+  /** набранные, но ещё не отыгранные уровни */
+  pendingLevelUps: number;
+  /** предложенные варианты; непустой список означает, что мир ждёт выбора */
+  offers: UpgradeOption[];
 }
 
 export interface World {
   config: SimConfig;
   rng: Rng;
   enemyTypes: EnemyType[];
+  weaponTypes: WeaponType[];
+  passiveTypes: PassiveType[];
+  levelCurve: LevelCurveDef;
+  loadoutLimits: LoadoutLimits;
   player: PlayerState;
+  /** характеристики игрока с учётом пассивок — пересчитываются при улучшении */
+  playerStats: PlayerStats;
+  /** значения без улучшений: от них считается пересчёт */
+  playerStatsBase: PlayerStatsBase;
+  loadout: LoadoutState;
+  progression: ProgressionState;
   enemies: EnemyPool;
   projectiles: ProjectilePool;
+  gems: GemPool;
+  /** с какого слота искать кристалл для слияния при переполнении пула */
+  gemMergeCursor: number;
   enemyGrid: SpatialGrid;
   stats: RunStats;
   /** события для рендера — симуляция о рендере не знает */
   events: SimEvents;
   /** переиспользуемый буфер под результаты запросов к сетке */
   queryBuffer: Int32Array;
-}
-
-export interface CreateWorldOptions {
-  seed: number;
-  /** контент инжектируется, чтобы тесты гоняли симуляцию на фикстурах */
-  enemies: readonly EnemyDef[];
-  config?: Partial<SimConfig>;
-}
-
-export function createWorld(options: CreateWorldOptions): World {
-  const config: SimConfig = { ...DEFAULT_SIM_CONFIG, ...options.config };
-  const { maxEnemies, maxProjectiles } = config;
-
-  const scale = config.unitScale;
-  const enemyTypes = resolveEnemyTypes(options.enemies, scale);
-
-  // Игрок пересчитывается тем же множителем — иначе на устройстве с высокой
-  // плотностью он окажется медленнее врагов просто из-за арифметики.
-  config.player = scalePlayerConfig(config.player, scale);
-
-  if (enemyTypes.length >= NO_OWNER_TYPE) {
-    // Тип хранится в Uint8Array, а значение 255 занято под «снаряд игрока» —
-    // расширение потребует смены типа массивов
-    throw new Error("Слишком много типов врагов для Uint8Array-пула");
-  }
-
-  return {
-    config,
-    rng: createRng(options.seed),
-    enemyTypes,
-    player: {
-      x: config.width / 2,
-      y: config.height / 2,
-      prevX: config.width / 2,
-      prevY: config.height / 2,
-      vx: 0,
-      vy: 0,
-      hp: config.player.maxHp,
-      maxHp: config.player.maxHp,
-      attackCooldown: 0,
-      alive: true,
-    },
-    enemies: createEnemyPool(maxEnemies),
-    projectiles: createProjectilePool(maxProjectiles),
-    // размер клетки — порядка диаметра крупного врага: мельче даёт много
-    // пустых клеток на запрос, крупнее возвращает лишних кандидатов
-    enemyGrid: new SpatialGrid(config.width, config.height, gridCellSize(config), maxEnemies),
-    stats: {
-      tick: 0,
-      elapsedSec: 0,
-      enemiesSpawned: 0,
-      enemiesKilled: 0,
-      killsByType: new Uint32Array(enemyTypes.length),
-      damageTaken: 0,
-      deathCauseType: -1,
-      shotsFired: 0,
-    },
-    events: createSimEvents(),
-    // Буфер под всю ёмкость пула, а не фиксированные 256: при плотной толпе
-    // запрос к сетке возвращает больше кандидатов, чем помещается, и лишние
-    // молча отбрасываются. В игре это промахи снарядов сквозь врагов, в
-    // замере — заниженная стоимость коллизий, то есть враньё в отчёте.
-    queryBuffer: new Int32Array(maxEnemies),
-  };
-}
-
-/**
- * Пересобрать мир под новый размер окна. Вызывается при повороте экрана и
- * при изменении размера окна на десктопе: без этого игрок остаётся зажат в
- * границах старого размера, а враги спавнятся по старому радиусу.
- */
-function scalePlayerConfig(player: PlayerConfig, scale: number): PlayerConfig {
-  if (scale === 1) return player;
-  return {
-    ...player,
-    radius: player.radius * scale,
-    speedPxSec: player.speedPxSec * scale,
-    accelerationPxSec2: player.accelerationPxSec2 * scale,
-    attackRangePx: player.attackRangePx * scale,
-    projectileSpeedPxSec: player.projectileSpeedPxSec * scale,
-    projectileRadius: player.projectileRadius * scale,
-  };
 }
 
 export function resizeWorld(world: World, width: number, height: number): void {
@@ -212,11 +168,7 @@ export function resizeWorld(world: World, width: number, height: number): void {
 
   // Сетка привязана к размерам поля — пересоздаём. Аллокация здесь допустима:
   // это происходит при изменении размера окна, а не в кадре.
-  world.enemyGrid = new SpatialGrid(width, height, gridCellSize(world.config), world.config.maxEnemies);
-}
-
-function gridCellSize(config: SimConfig): number {
-  return 48 * config.unitScale;
+  world.enemyGrid = new SpatialGrid(width, height, gridCellSize(world.config.unitScale), world.config.maxEnemies);
 }
 
 function clampTo(value: number, min: number, max: number): number {
@@ -272,10 +224,13 @@ export function despawnEnemy(world: World, index: number): void {
  */
 export function damagePlayer(world: World, amount: number, sourceType: number): void {
   const player = world.player;
-  if (!player.alive) return;
+  if (!player.alive || amount <= 0) return;
 
-  player.hp -= amount;
-  world.stats.damageTaken += amount;
+  // Броня вычитается, но не обнуляет урон: иначе несколько уровней брони
+  // делают рой безобидным, и вся кривая сложности перестаёт работать.
+  const reduced = Math.max(amount * MIN_DAMAGE_RATIO, amount - world.playerStats.armor);
+  player.hp -= reduced;
+  world.stats.damageTaken += reduced;
   if (player.hp <= 0) {
     player.hp = 0;
     player.alive = false;
@@ -306,9 +261,12 @@ export function spawnProjectile(
   pool.damage[slot] = damage;
   pool.ttl[slot] = ttlSec;
   pool.fromPlayer[slot] = fromPlayer ? 1 : 0;
-  // Владельца выставляет стреляющий паттерн после спавна; без сброса снаряд
-  // игрока унаследовал бы владельца от прежнего вражеского снаряда в слоте.
+  // Владельца и пробивание выставляет стреляющий после спавна; без сброса
+  // снаряд унаследовал бы их от прежнего снаряда в этом слоте.
   pool.ownerType[slot] = NO_OWNER_TYPE;
+  pool.ownerWeapon[slot] = NO_OWNER_TYPE;
+  pool.pierce[slot] = 0;
+  pool.lastHit[slot] = -1;
   pool.alive[slot] = 1;
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;

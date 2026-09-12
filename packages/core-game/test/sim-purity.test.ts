@@ -12,6 +12,10 @@ import { describe, expect, it } from "vitest";
 
 const simRoot = fileURLToPath(new URL("../src/game/sim", import.meta.url));
 const patternsRoot = fileURLToPath(new URL("../src/game/patterns", import.meta.url));
+// Оружие и прокачка — такая же часть симуляции: от них зависит исход забега,
+// значит на них распространяются те же запреты (docs/26-stage2-plan.md, WP2).
+const weaponsRoot = fileURLToPath(new URL("../src/game/weapons", import.meta.url));
+const progressionRoot = fileURLToPath(new URL("../src/game/progression", import.meta.url));
 
 /**
  * Комментарии вырезаются перед проверкой: иначе тест падает на собственных
@@ -40,7 +44,12 @@ function collectSources(root: string): { path: string; source: string }[] {
   return result;
 }
 
-const sources = [...collectSources(simRoot), ...collectSources(patternsRoot)];
+const sources = [
+  ...collectSources(simRoot),
+  ...collectSources(patternsRoot),
+  ...collectSources(weaponsRoot),
+  ...collectSources(progressionRoot),
+];
 
 describe("чистота слоя симуляции", () => {
   it("вообще находит исходники — иначе тест зелёный впустую", () => {
@@ -67,13 +76,21 @@ describe("чистота слоя симуляции", () => {
     }
   });
 
-  it("не использует Math.hypot — он приближённый и расходится между JS-движками", () => {
+  it("покрывает каждое поведение оружия", () => {
+    const files = sources.map(({ path }) => path.replace(/\\/g, "/"));
+    for (const name of ["projectile-nearest", "projectile-facing", "orbit", "aura", "area-strike"]) {
+      expect(files.some((file) => file.endsWith(`/weapons/${name}.ts`)), name).toBe(true);
+    }
+  });
+
+  it("не использует приближённые Math.hypot и Math.pow — они расходятся между JS-движками", () => {
     // Повтор забега с iOS на машине разработчика требует побитово одинаковой
     // математики (docs/26-stage2-plan.md, WP4.5). Длина вектора — через
-    // Math.sqrt, он по IEEE 754 точный. Запрет тригонометрии добавится вместе
-    // с переписыванием спавнера, где она пока живёт.
+    // Math.sqrt, он по IEEE 754 точный; степень — умножением в цикле.
+    // Запрет тригонометрии добавится вместе с переписыванием спавнера, где
+    // она пока живёт.
     for (const { path, source } of sources) {
-      expect(source, path).not.toMatch(/Math\.hypot/);
+      expect(source, path).not.toMatch(/Math\.hypot|Math\.pow/);
     }
   });
 

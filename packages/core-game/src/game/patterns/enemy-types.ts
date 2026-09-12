@@ -132,6 +132,8 @@ export interface EnemyType {
   hp: number;
   speed: number;
   damage: number;
+  /** опыт за убийство — ценность кристалла на месте смерти */
+  xp: number;
   pattern: EnemyPattern;
   radius: number;
   contactDamage: boolean;
@@ -168,6 +170,7 @@ function findBaseProblems(def: EnemyDef): string[] {
   if (!(def.hp > 0)) problems.push(`враг ${def.id}: hp должен быть больше нуля`);
   if (!(def.speed > 0)) problems.push(`враг ${def.id}: speed должен быть больше нуля`);
   if (!(def.damage >= 0)) problems.push(`враг ${def.id}: damage не может быть отрицательным`);
+  if (!(def.xp >= 0)) problems.push(`враг ${def.id}: xp не может быть отрицательным`);
   return problems;
 }
 
@@ -256,6 +259,7 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       hp: def.hp,
       speed: def.speed * unitScale,
       damage: def.damage,
+      xp: def.xp,
       pattern: def.pattern,
       radius: traits.radius * unitScale,
       contactDamage: traits.contactDamage,

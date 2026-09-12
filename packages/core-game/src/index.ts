@@ -6,13 +6,26 @@ import type { BenchSceneData } from "./game/bench/types";
 export * from "./content/enemies";
 export * from "./content/waves";
 export * from "./content/upgrades";
+export * from "./content/weapons";
 export * from "./game/bench";
+
+// Прокачка внутри забега: оболочка приложения показывает варианты и
+// возвращает выбор игрока (docs/27-design-system-and-app-shell.md §3.1).
+export {
+  chooseUpgrade,
+  isAwaitingChoice,
+  prepareOffers,
+  xpForLevel,
+  OFFERS_PER_LEVEL,
+} from "./game/progression/levels";
 
 export interface CreateGameOptions {
   /** id элемента-контейнера в разметке приложения */
   parent: string;
   /** seed забега; фиксируется в баг-репорте и позволяет его воспроизвести */
   seed?: number;
+  /** стартовое оружие; по умолчанию — первое стартовое из контента */
+  startingWeaponId?: string;
   /**
    * Ограничение частоты отрисовки.
    *
@@ -69,7 +82,13 @@ export function createGame(adapter: PlatformAdapter, options: CreateGameOptions)
   });
 
   if (options.bench === undefined) {
-    game.scene.add("main", MainScene, true, { seed, unitScale: pixelRatio });
+    game.scene.add("main", MainScene, true, {
+      seed,
+      unitScale: pixelRatio,
+      ...(options.startingWeaponId === undefined
+        ? {}
+        : { startingWeaponId: options.startingWeaponId }),
+    });
   } else {
     // Динамический импорт, а не обычный: стенд испытаний уезжает в отдельный
     // чанк и не тянется в основной бандл, который грузят игроки.

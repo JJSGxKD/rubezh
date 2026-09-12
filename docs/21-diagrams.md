@@ -409,7 +409,8 @@ flowchart TD
     subgraph headless["Работает без браузера и Phaser"]
         SIM["game/sim/*<br/>мир, шаг, спавн, сетка, ГПСЧ"]
         PAT["game/patterns/*<br/>поведение врагов"]
-        WPN["game/weapons/*<br/>поведение оружия — этап 2, проектируется"]
+        WPN["game/weapons/*<br/>поведение оружия"]
+        PRG["game/progression/*<br/>опыт, уровни, набор, пассивки"]
         CNT["content/*<br/>враги, волны, оружие, улучшения, карта"]
     end
 
@@ -425,6 +426,9 @@ flowchart TD
     PAT --> SIM
     SIM -- "enemy-types:<br/>возможности и параметры" --> PAT
     WPN --> SIM
+    PRG --> SIM
+    SIM --> WPN
+    SIM --> PRG
     SIM --> CNT
     WR -- "фазы телеграфа" --> PAT
     MS --> SIM

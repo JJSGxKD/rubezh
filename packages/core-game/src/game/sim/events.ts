@@ -14,6 +14,8 @@
 
 export const SIM_EVENT = {
   explosion: 1,
+  /** удар оружия по площади */
+  strike: 2,
 } as const;
 
 export type SimEventKind = (typeof SIM_EVENT)[keyof typeof SIM_EVENT];

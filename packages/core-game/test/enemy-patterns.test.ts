@@ -1,4 +1,4 @@
-import type { EnemyDef } from "@bh/shared-types";
+import type { EnemyDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { DASH_PHASE, EXPLODER_PHASE } from "../src/game/patterns";
 import { SIM_EVENT } from "../src/game/sim/events";
@@ -18,14 +18,17 @@ import {
 // проверяет то, ради чего паттерн существует для игрока, а не внутреннюю
 // реализацию: «рывок нельзя начать до конца телеграфа», а не «фаза равна 2».
 
+// Опыт фикстурам не важен: в тестах паттернов прокачка выключена, кристаллы
+// не появляются. Поле обязательное, поэтому задаётся единицей.
 const FIXTURES: EnemyDef[] = [
-  { id: "t_swarm", hp: 10, speed: 100, damage: 1, pattern: "swarm" },
-  { id: "t_chase", hp: 10, speed: 100, damage: 1, pattern: "chase" },
+  { id: "t_swarm", hp: 10, speed: 100, damage: 1, xp: 1, pattern: "swarm" },
+  { id: "t_chase", hp: 10, speed: 100, damage: 1, xp: 1, pattern: "chase" },
   {
     id: "t_kite",
     hp: 10,
     speed: 60,
     damage: 2,
+    xp: 1,
     pattern: "kite_and_shoot",
     params: { preferredDistance: 200, shotIntervalSec: 0.5, projectileSpeed: 300 },
   },
@@ -34,6 +37,7 @@ const FIXTURES: EnemyDef[] = [
     hp: 10,
     speed: 60,
     damage: 3,
+    xp: 1,
     pattern: "dash",
     params: { triggerDistance: 150, telegraphSec: 0.5, dashSpeed: 600, dashDurationSec: 0.3, recoverSec: 0.5 },
   },
@@ -42,6 +46,7 @@ const FIXTURES: EnemyDef[] = [
     hp: 10,
     speed: 120,
     damage: 1,
+    xp: 1,
     pattern: "orbit",
     params: { orbitRadius: 150, shrinkPerSec: 20, minRadius: 50 },
   },
@@ -50,6 +55,7 @@ const FIXTURES: EnemyDef[] = [
     hp: 10,
     speed: 80,
     damage: 25,
+    xp: 1,
     pattern: "exploder",
     params: { triggerDistance: 60, fuseSec: 0.5, blastRadius: 80 },
   },
@@ -58,6 +64,7 @@ const FIXTURES: EnemyDef[] = [
     hp: 1,
     speed: 80,
     damage: 25,
+    xp: 1,
     pattern: "exploder",
     params: { triggerDistance: 60, fuseSec: 0.5, blastRadius: 80 },
   },
@@ -66,10 +73,25 @@ const FIXTURES: EnemyDef[] = [
     hp: 1,
     speed: 40,
     damage: 1,
+    xp: 1,
     pattern: "splitter",
     params: { childEnemy: "t_swarm", childCount: 3 },
   },
 ];
+
+/**
+ * Оружие подопытного игрока. В тестах паттернов атака чаще мешает — она
+ * убивает врага раньше, чем тот доберётся до своей фазы, — поэтому по
+ * умолчанию её нет вовсе.
+ */
+const TEST_WEAPON: WeaponDef = {
+  id: "t_spark",
+  behavior: "projectile_nearest",
+  nameKey: "weapon.t_spark.name",
+  descriptionKey: "weapon.t_spark.description",
+  starting: true,
+  levels: [{ damage: 6, cooldownSec: 0.28, projectiles: 1, projectileSpeed: 520, ttlSec: 1.6 }],
+};
 
 const CENTER = 1000;
 
@@ -85,12 +107,20 @@ function setup(options: SetupOptions = {}): World {
   const player: PlayerConfig = {
     ...DEFAULT_SIM_CONFIG.player,
     maxHp: options.maxHp ?? 1_000_000,
-    attackRangePx: options.playerAttacks === true ? DEFAULT_SIM_CONFIG.player.attackRangePx : 0,
   };
   return createWorld({
     seed: options.seed ?? 1,
     enemies: FIXTURES,
-    config: { width: CENTER * 2, height: CENTER * 2, maxEnemies: options.maxEnemies ?? 512, player },
+    weapons: options.playerAttacks === true ? [TEST_WEAPON] : [],
+    // Прокачка в тестах паттернов выключена: кристаллы и уровни меняли бы
+    // силу игрока по ходу теста и делали результат зависимым от неё.
+    config: {
+      width: CENTER * 2,
+      height: CENTER * 2,
+      maxEnemies: options.maxEnemies ?? 512,
+      progressionEnabled: false,
+      player,
+    },
   });
 }
 

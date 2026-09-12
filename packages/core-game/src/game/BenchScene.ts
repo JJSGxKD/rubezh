@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { ENEMIES } from "../content/enemies";
+import { WEAPONS } from "../content/weapons";
 import { createWorld, DEFAULT_SIM_CONFIG, resizeWorld, TICK_SEC, type World } from "./sim/world";
 import { stepWorld } from "./sim/step";
 import {
@@ -104,10 +105,15 @@ export class BenchScene extends Phaser.Scene {
     this.world = createWorld({
       seed: this.sceneData.seed,
       enemies: ENEMIES,
+      // Оружие стенду нужно — без атаки меряется мир без снарядов; а вот
+      // прокачка выключена: растущая сила игрока по ходу прогона меняет
+      // нагрузку, и два замера перестают быть сравнимыми.
+      weapons: WEAPONS,
       config: {
         width: this.scale.width,
         height: this.scale.height,
         unitScale: scale,
+        progressionEnabled: false,
         // В агрессивном режиме пулы на тысячи: прогон обязан упереться в
         // устройство, а не в размер массива.
         ...(this.sceneData.mode === "stress"
