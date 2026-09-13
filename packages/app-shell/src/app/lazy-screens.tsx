@@ -18,6 +18,7 @@ const loaders = {
   gallery: () => import("../screens/gallery"),
   tasks: () => import("../screens/meta/tasks"),
   arsenal: () => import("../screens/meta/arsenal"),
+  friends: () => import("../screens/meta/friends"),
   daily: () => import("../screens/meta/daily"),
   wheel: () => import("../screens/meta/wheel"),
 };
@@ -37,7 +38,7 @@ export const GalleryScreen = screen(loaders.gallery, "GalleryScreen");
 export const ArsenalScreen = screen(loaders.arsenal, "ArsenalScreen");
 export const ShopScreen = screen(loaders.stubs, "ShopScreen");
 export const RatingScreen = screen(loaders.stubs, "RatingScreen");
-export const FriendsScreen = screen(loaders.stubs, "FriendsScreen");
+export const FriendsScreen = screen(loaders.friends, "FriendsScreen");
 export const ProfileScreen = screen(loaders.stubs, "ProfileScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");

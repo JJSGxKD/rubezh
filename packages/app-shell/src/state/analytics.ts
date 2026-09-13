@@ -11,6 +11,8 @@ export type AnalyticsEvent =
   | "app_first_open"
   | "screen_viewed"
   | "settings_changed"
+  | "share_offered"
+  | "share_completed"
   | "run_started"
   | "run_resumed"
   | "run_finished"

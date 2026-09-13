@@ -37,6 +37,12 @@ export interface PlatformAdapter {
   init(): Promise<UserContext>;
   purchase(itemId: string): Promise<PurchaseResult>;
   share(payload: SharePayload): void;
+  /**
+   * Пригласить в игру: системный выбор чата площадки, а где его нет — копия
+   * ссылки. Без награды: приглашение на плейтест, не реферальная программа
+   * (docs/23-referral-and-partner-program.md).
+   */
+  invite(invite: InvitePayload): Promise<InviteResult>;
   haptic(type: HapticType): void;
   /**
    * Возможности интерфейса площадки: отступы безопасной зоны, полноэкранный
@@ -162,6 +168,16 @@ export interface PlatformUi {
    */
   applyThemeColors(colors: ThemeColors): void;
 }
+
+export interface InvitePayload {
+  /** ссылка на игру внутри площадки */
+  url: string;
+  /** текст, который уйдёт вместе со ссылкой */
+  text: string;
+}
+
+/** `shared` — открыт выбор чата, `copied` — ссылка в буфере, `unavailable` — не вышло ни то, ни другое. */
+export type InviteResult = "shared" | "copied" | "unavailable";
 
 export interface SharePayload {
   runScore: number;

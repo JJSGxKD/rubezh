@@ -1,15 +1,18 @@
-import { hapticFeedback, isTMA, retrieveLaunchParams } from "@tma.js/sdk";
+import { hapticFeedback, isTMA, retrieveLaunchParams, shareURL } from "@tma.js/sdk";
 import type {
   PlatformAdapter,
   UserContext,
   PurchaseResult,
   SharePayload,
+  InvitePayload,
+  InviteResult,
   HapticType,
   AdResult,
   DisplayUser,
   KeyValueStorage,
   PlatformUi,
 } from "@bh/shared-types";
+import { inviteFromBrowser } from "./invite";
 import { createDeviceStorage } from "./storage";
 import { createTelegramUi } from "./ui-telegram";
 
@@ -49,6 +52,19 @@ export class TelegramAdapter implements PlatformAdapter {
 
   share(_payload: SharePayload): void {
     // TODO: Telegram.WebApp.shareMessage / switchInlineQuery
+  }
+
+  /**
+   * Внутри Telegram — ссылка шеринга: клиент открывает выбор чата и
+   * сворачивает мини-приложение. В браузере — системный лист «поделиться», а
+   * без него копия ссылки: приглашение не должно молча не срабатывать.
+   */
+  async invite(invite: InvitePayload): Promise<InviteResult> {
+    if (isTMA() && shareURL.isAvailable()) {
+      shareURL(invite.url, invite.text);
+      return "shared";
+    }
+    return inviteFromBrowser(invite);
   }
 
   /**

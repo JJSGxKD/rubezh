@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Gift, Trophy, UserRound, Users } from "lucide-react";
+import { Gift, Trophy, UserRound } from "lucide-react";
 import {
   Avatar,
   Card,
@@ -51,17 +51,6 @@ export function RatingScreen(): ReactNode {
             </Card>
           ))}
         </div>
-      </ContentColumn>
-    </Screen>
-  );
-}
-
-export function FriendsScreen(): ReactNode {
-  return (
-    <Screen>
-      <ContentColumn>
-        <PageTitle>{t("friends.title")}</PageTitle>
-        <StubScreen icon={<Users size={40} />} title={t("friends.title")} text={t("friends.soon")} />
       </ContentColumn>
     </Screen>
   );
