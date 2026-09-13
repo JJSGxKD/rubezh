@@ -107,6 +107,7 @@
 
   "run.level": "Уровень {level}",
   "run.wave": "Волна {wave}",
+  "run.radar": "Радар: враги и аптечки вокруг",
   "run.pause": "Пауза",
   "run.pause.resume": "Продолжить",
   "run.pause.settings": "Настройки",

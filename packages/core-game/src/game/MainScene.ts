@@ -15,6 +15,7 @@ import { stepWorld, type SimInput } from "./sim/step";
 import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
 import { RunCamera } from "./render/run-camera";
+import { buildRadarSnapshot } from "./radar";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { Joystick } from "./joystick";
 import { buildRunResult } from "./run/run-result";
@@ -283,6 +284,8 @@ export class MainScene extends Phaser.Scene {
         id: world.passiveTypes[slot.typeIndex].id,
         level: slot.level,
       })),
+      distance: world.stats.distance,
+      radar: buildRadarSnapshot(world),
     };
     this.sceneData.bus.emit("hud", snapshot);
   }

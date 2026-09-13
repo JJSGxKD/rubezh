@@ -33,6 +33,27 @@ export interface HudSnapshot {
   enemiesKilled: number;
   weapons: RunSlotState[];
   passives: RunSlotState[];
+  /** пройденное расстояние в игровых единицах — подсказки обучения гаснут, когда игрок пошёл */
+  distance: number;
+  /** точки радара вокруг игрока */
+  radar: RadarSnapshot;
+}
+
+/**
+ * Вид точки радара: 0 — враг, 1 — элита, 2 — аптечка. Числом, а не строкой:
+ * точки лежат в типизированном массиве, и снимок не плодит объектов.
+ */
+export type RadarBlipKind = 0 | 1 | 2;
+
+/**
+ * Радар — что вокруг игрока в пределах кольца спавна, в том числе за краем
+ * экрана. Координаты — доли радиуса радара от −1 до 1 относительно игрока;
+ * дальние точки прижаты к краю, чтобы угроза оттуда не пропадала.
+ */
+export interface RadarSnapshot {
+  /** тройки подряд: x, y, вид (`RadarBlipKind`) */
+  blips: Float32Array;
+  count: number;
 }
 
 export interface RunSlotState {

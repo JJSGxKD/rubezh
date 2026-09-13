@@ -2,12 +2,14 @@ import Phaser from "phaser";
 import type { EnemyPattern } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
-import { GEM_LAND_TICKS } from "../sim/gems";
-import { MEDKIT_LAND_TICKS, MEDKIT_RADIUS_UNITS } from "../sim/medkits";
 import { NEVER_HIT } from "../sim/pools";
 import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
 import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
-import { drawShape, type ShapeKind } from "./shapes";
+import { CombatFeedback } from "./combat-feedback";
+import { PickupRenderer } from "./pickups";
+import type { ShapeKind } from "./shapes";
+import { Telegraphs } from "./telegraphs";
+import { ensureShapeTexture, lerp } from "./textures";
 
 const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
 
@@ -15,6 +17,10 @@ const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
  * Рендер состояния симуляции. Отделён от неё полностью: симуляция не знает,
  * что её кто-то рисует, и потому запускается headless
  * (docs/17-testing-strategy.md §3.0).
+ *
+ * Здесь — игрок, враги, снаряды, обереги и взрывы. Предметы на земле,
+ * телеграфы угроз и обратная связь боя живут в своих модулях рядом: у каждого
+ * свои пулы спрайтов и своя анимация, а общий у них только слой мира.
  *
  * Спрайты переиспользуются и никогда не уничтожаются: создание и уничтожение
  * объектов Phaser в кадре — источник пауз сборщика мусора, а именно они портят
@@ -49,16 +55,12 @@ export class WorldRenderer {
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly player: Phaser.GameObjects.Image;
   private readonly textureKeyByType: string[] = [];
-  private readonly gemSprites: Phaser.GameObjects.Image[] = [];
-  /** ступень ценности, под которую сейчас стоит текстура спрайта кристалла */
-  private readonly gemSpriteTier: Uint8Array;
-  /** спрайт кристалла сейчас не в масштабе 1 — после приземления его надо вернуть */
-  private readonly gemSpriteScaled: Uint8Array;
   private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
-  private readonly medkitSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
-  /** кольца телеграфа: показывают радиус будущего взрыва, пока горит фитиль */
-  private readonly telegraphs: Phaser.GameObjects.Image[] = [];
+  private readonly pickups: PickupRenderer;
+  private readonly telegraphs: Telegraphs;
+  /** числа урона и вспышки гибели */
+  private readonly feedback: CombatFeedback;
   /** тик последнего попадания по игроку — для вспышки персонажа */
   private playerHitTick = NEVER_HIT;
   /** тик последнего лечения — персонаж коротко вспыхивает зелёным */
@@ -74,17 +76,15 @@ export class WorldRenderer {
     this.world = world;
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
-    this.gemSpriteTier = new Uint8Array(world.gems.alive.length).fill(NO_TIER);
-    this.gemSpriteScaled = new Uint8Array(world.gems.alive.length);
 
-    for (const type of world.enemyTypes) {
+    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, type.elite));
+    world.enemyTypes.forEach((type, index) => {
       const key = `bh-enemy-${type.id}`;
-      const look = LOOK_BY_PATTERN[type.pattern];
       // Элита крупнее и светлее: одинаковые на глаз танк и элитный танк
       // читаются как дефект, а не как контрольная точка сложности.
-      this.ensureTexture(key, type.radius, type.elite ? brighten(look.color) : look.color, look.shape);
+      ensureShapeTexture(scene, key, type.radius, colorByType[index], LOOK_BY_PATTERN[type.pattern].shape);
       this.textureKeyByType.push(key);
-    }
+    });
 
     const scale = world.config.unitScale;
     this.ensureGroundTexture(scale);
@@ -93,18 +93,18 @@ export class WorldRenderer {
       .setOrigin(0, 0)
       .setDepth(-10);
     this.layer = scene.add.container(0, 0).setDepth(0);
-    this.ensureTexture("bh-player", world.config.player.radius, 0x6ee7a8, "circle");
-    this.ensureTexture("bh-projectile", world.config.player.projectileRadius, 0xffe066, "circle");
-    this.ensureTexture("bh-projectile-enemy", world.config.player.projectileRadius, 0xff6b6b, "circle");
-    this.ensureTexture("bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
-    this.ensureTexture("bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
-    this.ensureTexture("bh-telegraph", BLAST_TEXTURE_UNITS * scale, 0xff5a5a, "ring");
-    GEM_TIERS.forEach((tier, index) => {
-      this.ensureTexture(gemTextureKey(index), tier.radiusUnits * scale, tier.color, tier.shape);
-    });
-    this.ensureTexture("bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
-    this.ensureTexture("bh-medkit", MEDKIT_RADIUS_UNITS * scale, 0xff5d5d, "medkit");
-    this.ensureTexture("bh-heal", BLAST_TEXTURE_UNITS * scale, 0x5fe3a1, "ring");
+
+    ensureShapeTexture(scene, "bh-player", world.config.player.radius, 0x6ee7a8, "circle");
+    ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, 0xffe066, "circle");
+    ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius, 0xff6b6b, "circle");
+    ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
+    ensureShapeTexture(scene, "bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
+    ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, 0x5fe3a1, "ring");
+    ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
+
+    this.telegraphs = new Telegraphs(scene, world, this.layer);
+    this.pickups = new PickupRenderer(scene, world, this.layer);
+    this.feedback = new CombatFeedback(scene, world, this.layer, colorByType);
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
     this.layer.add(this.player);
@@ -143,48 +143,50 @@ export class WorldRenderer {
     const t = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
     this.syncEnemies(t);
     this.syncProjectiles(t);
-    this.syncGems(t);
-    this.syncMedkits(t);
+    this.pickups.sync(t);
     this.syncOrbiters();
     this.syncBlasts();
+    this.feedback.sync();
 
     this.player.setPosition(
       lerp(this.world.player.prevX, this.world.player.x, t),
       lerp(this.world.player.prevY, this.world.player.y, t),
     );
     this.player.setVisible(this.world.player.alive);
-    this.applyPlayerHit();
+    this.applyPlayerFlash();
   }
 
   /**
-   * Вспышка персонажа при получении урона.
+   * Вспышка персонажа: красная — при получении урона, зелёная — при лечении.
    *
    * Полоска здоровья в углу — не обратная связь: игрок смотрит на персонажа.
    * Без вспышки урон выглядит так, будто здоровье убывает само по себе, и
    * непонятно, кто и когда попал.
    */
-  private applyPlayerHit(): void {
-    const age = this.world.stats.tick - this.playerHitTick;
-    const healAge = this.world.stats.tick - this.playerHealTick;
+  private applyPlayerFlash(): void {
+    const tick = this.world.stats.tick;
+    const hitAge = tick - this.playerHitTick;
+    const healAge = tick - this.playerHealTick;
+
     // Попадание важнее лечения: если было и то и другое, игрок должен видеть урон.
-    if (age >= HIT_FLASH_TICKS && healAge < HIT_FLASH_TICKS) {
+    if (hitAge < HIT_FLASH_TICKS) {
+      this.player.setTintFill(0xff6b6b);
+      this.player.setScale(1 + 0.25 * (1 - hitAge / HIT_FLASH_TICKS));
+      return;
+    }
+    if (healAge < HIT_FLASH_TICKS) {
       this.player.setTintFill(0x5fe3a1);
       this.player.setScale(1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS));
       return;
     }
-    if (age >= HIT_FLASH_TICKS) {
-      this.player.clearTint();
-      this.player.setScale(1);
-      return;
-    }
-    this.player.setTintFill(0xff6b6b);
-    this.player.setScale(1 + 0.25 * (1 - age / HIT_FLASH_TICKS));
+    this.player.clearTint();
+    this.player.setScale(1);
   }
 
   private syncEnemies(t: number): void {
     const enemies = this.world.enemies;
     const tick = this.world.stats.tick;
-    let telegraphs = 0;
+    this.telegraphs.begin();
 
     for (let i = 0; i < enemies.count; i++) {
       const sprite = this.enemySprite(i);
@@ -212,36 +214,16 @@ export class WorldRenderer {
       const y = lerp(enemies.prevY[i], enemies.y[i], t);
       sprite.setPosition(x, y);
 
-      // Радиус будущего взрыва показывается кольцом, пока горит фитиль: без
-      // него игрок узнаёт границу поражения только по своему здоровью.
       if (type.pattern === "exploder" && enemies.phase[i] === EXPLODER_PHASE.fuse) {
-        this.showTelegraph(telegraphs++, x, y, type.params.blastRadius, tick);
+        this.telegraphs.ring(x, y, type.params.blastRadius, tick);
+      }
+      if (type.pattern === "dash" && enemies.phase[i] === DASH_PHASE.telegraph) {
+        const length = type.params.dashSpeed * type.params.dashDurationSec;
+        this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, tick);
       }
     }
 
-    for (let k = telegraphs; k < this.telegraphs.length; k++) {
-      if (this.telegraphs[k].visible) this.telegraphs[k].setVisible(false);
-    }
-  }
-
-  /**
-   * Кольцо телеграфа. Пульсирует по тикам симуляции, а не по времени кадра:
-   * на паузе мир замирает вместе с эффектом, и рендеру не нужны часы.
-   */
-  private showTelegraph(index: number, x: number, y: number, radius: number, tick: number): void {
-    while (this.telegraphs.length <= index) {
-      const sprite = this.scene.add.image(0, 0, "bh-telegraph").setDepth(0).setVisible(false);
-      this.layer.add(sprite);
-      this.telegraphs.push(sprite);
-    }
-
-    const textureRadius = BLAST_TEXTURE_UNITS * this.world.config.unitScale;
-    const pulse = 0.94 + 0.06 * ((tick >> 2) % 2);
-    const sprite = this.telegraphs[index];
-    sprite.setPosition(x, y);
-    sprite.setScale((radius / textureRadius) * pulse);
-    sprite.setAlpha(0.55);
-    sprite.setVisible(true);
+    this.telegraphs.end();
   }
 
   private syncProjectiles(t: number): void {
@@ -260,99 +242,6 @@ export class WorldRenderer {
         lerp(projectiles.prevX[p], projectiles.x[p], t),
         lerp(projectiles.prevY[p], projectiles.y[p], t),
       );
-    }
-  }
-
-  /**
-   * Кристаллы: ступень ценности — текстурой, полёт от места смерти — дугой.
-   *
-   * Полёт рисуется по тикам симуляции плюс доля до следующего шага: на паузе
-   * он замирает вместе с миром. Сам кристалл в симуляции с первого тика лежит в
-   * точке приземления, дуга — только картинка, поэтому на исход забега она не
-   * влияет.
-   */
-  private syncGems(t: number): void {
-    const gems = this.world.gems;
-    const tick = this.world.stats.tick;
-    const hop = GEM_HOP_UNITS * this.world.config.unitScale;
-
-    for (let i = 0; i < gems.count; i++) {
-      const sprite = this.gemSprite(i);
-      if (gems.alive[i] === 0) {
-        if (sprite.visible) sprite.setVisible(false);
-        continue;
-      }
-
-      // Ценность растёт при слиянии кристаллов, поэтому ступень проверяется
-      // каждый кадр, а текстура меняется только при переходе.
-      const tier = gemTier(gems.value[i]);
-      if (this.gemSpriteTier[i] !== tier) {
-        sprite.setTexture(gemTextureKey(tier));
-        this.gemSpriteTier[i] = tier;
-      }
-      sprite.setVisible(true);
-
-      // Шаг, на котором кристалл вылетел, уже прошёл: отсчёт от нуля.
-      const progress = (tick - gems.bornTick[i] - 1 + t) / GEM_LAND_TICKS;
-      if (progress < 1) {
-        const p = progress < 0 ? 0 : progress;
-        const eased = 1 - (1 - p) * (1 - p);
-        const x = lerp(gems.originX[i], gems.x[i], eased);
-        const y = lerp(gems.originY[i], gems.y[i], eased) - hop * 4 * p * (1 - p);
-        sprite.setPosition(x, y);
-        sprite.setScale(gemPopScale(p));
-        this.gemSpriteScaled[i] = 1;
-        continue;
-      }
-
-      sprite.setPosition(lerp(gems.prevX[i], gems.x[i], t), lerp(gems.prevY[i], gems.y[i], t));
-      if (tier >= SHIMMER_TIER) {
-        // Крупные кристаллы мерцают — их видно издалека, и за ними хочется идти.
-        sprite.setScale(1 + 0.1 * triangle((tick + i * 7) % SHIMMER_PERIOD_TICKS, SHIMMER_PERIOD_TICKS));
-        this.gemSpriteScaled[i] = 1;
-      } else if (this.gemSpriteScaled[i] === 1) {
-        sprite.setScale(1);
-        this.gemSpriteScaled[i] = 0;
-      }
-    }
-  }
-
-  /**
-   * Аптечки: тот же полёт от места смерти, что у кристаллов, а на земле —
-   * мягкая пульсация. Её должно быть видно издалека: за аптечкой идут.
-   */
-  private syncMedkits(t: number): void {
-    const medkits = this.world.medkits;
-    const tick = this.world.stats.tick;
-    const hop = MEDKIT_HOP_UNITS * this.world.config.unitScale;
-
-    for (let i = 0; i < medkits.alive.length; i++) {
-      if (i >= this.medkitSprites.length) {
-        if (medkits.alive[i] === 0) continue;
-        const sprite = this.scene.add.image(0, 0, "bh-medkit").setVisible(false).setDepth(1);
-        this.layer.add(sprite);
-        this.medkitSprites.push(sprite);
-      }
-      const sprite = this.medkitSprites[i];
-      if (medkits.alive[i] === 0) {
-        if (sprite.visible) sprite.setVisible(false);
-        continue;
-      }
-
-      sprite.setVisible(true);
-      const progress = (tick - medkits.bornTick[i] - 1 + t) / MEDKIT_LAND_TICKS;
-      if (progress < 1) {
-        const p = progress < 0 ? 0 : progress;
-        const eased = 1 - (1 - p) * (1 - p);
-        sprite.setPosition(
-          lerp(medkits.originX[i], medkits.x[i], eased),
-          lerp(medkits.originY[i], medkits.y[i], eased) - hop * 4 * p * (1 - p),
-        );
-        sprite.setScale(gemPopScale(p));
-        continue;
-      }
-      sprite.setPosition(medkits.x[i], medkits.y[i]);
-      sprite.setScale(1 + 0.12 * triangle(tick % MEDKIT_PULSE_TICKS, MEDKIT_PULSE_TICKS));
     }
   }
 
@@ -401,14 +290,15 @@ export class WorldRenderer {
   }
 
   /**
-   * Взрывы — из буфера событий симуляции. Длительность эффекта считается в
-   * тиках симуляции, а не в реальном времени: на паузе эффект замирает вместе
-   * с миром, и рендеру не нужно знать время кадра.
+   * Взрывы и лечение — из буфера событий симуляции. Длительность эффекта
+   * считается в тиках симуляции, а не в реальном времени: на паузе эффект
+   * замирает вместе с миром, и рендеру не нужно знать время кадра.
    */
   private syncBlasts(): void {
     const events = this.world.events;
     const capacity = events.kind.length;
     const first = Math.max(this.eventsRead, events.written - capacity);
+    const scale = this.world.config.unitScale;
 
     for (let seq = first; seq < events.written; seq++) {
       const slot = seq % capacity;
@@ -420,7 +310,7 @@ export class WorldRenderer {
       if (kind === SIM_EVENT.heal) {
         // Кольцо лечения расходится от игрока: аптечка сработала.
         this.playerHealTick = events.tick[slot];
-        this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * this.world.config.unitScale, events.tick[slot], kind);
+        this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
       if (kind !== SIM_EVENT.explosion && kind !== SIM_EVENT.strike) continue;
@@ -429,7 +319,7 @@ export class WorldRenderer {
     this.eventsRead = events.written;
 
     const tick = this.world.stats.tick;
-    const textureRadius = BLAST_TEXTURE_UNITS * this.world.config.unitScale;
+    const textureRadius = BLAST_TEXTURE_UNITS * scale;
     for (let b = 0; b < this.blasts.length; b++) {
       const sprite = this.blasts[b];
       const age = tick - this.blastStartTick[b];
@@ -453,21 +343,12 @@ export class WorldRenderer {
       this.blasts.push(sprite);
     }
     if (this.blastKind[b] !== kind) {
-      this.blasts[b].setTexture(
-        kind === SIM_EVENT.strike ? "bh-strike" : kind === SIM_EVENT.heal ? "bh-heal" : "bh-blast",
-      );
+      this.blasts[b].setTexture(BLAST_TEXTURE_BY_KIND[kind] ?? "bh-blast");
       this.blastKind[b] = kind;
     }
     this.blasts[b].setPosition(x, y);
     this.blastStartTick[b] = tick;
     this.blastRadius[b] = radius;
-  }
-
-  private gemSprite(index: number): Phaser.GameObjects.Image {
-    while (this.gemSprites.length <= index) {
-      this.gemSprites.push(this.createHiddenSprite(gemTextureKey(0)));
-    }
-    return this.gemSprites[index];
   }
 
   private orbiterSprite(index: number): Phaser.GameObjects.Image {
@@ -523,54 +404,16 @@ export class WorldRenderer {
     graphics.generateTexture(key, size, size);
     graphics.destroy();
   }
-
-  private ensureTexture(key: string, radius: number, color: number, shape: ShapeKind): void {
-    if (this.scene.textures.exists(key)) return;
-
-    const size = Math.ceil(radius * 2);
-    const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
-    drawShape(graphics, { shape, radius, color });
-    graphics.generateTexture(key, size, size);
-    graphics.destroy();
-  }
-}
-
-function lerp(from: number, to: number, t: number): number {
-  return from + (to - from) * t;
-}
-
-function gemTextureKey(tier: number): string {
-  return `bh-gem-${tier}`;
-}
-
-function gemTier(value: number): number {
-  for (let tier = GEM_TIERS.length - 1; tier > 0; tier--) {
-    if (value >= GEM_TIERS[tier].minValue) return tier;
-  }
-  return 0;
 }
 
 /**
- * Масштаб кристалла в полёте: выскакивает маленьким, на трети пути чуть
- * больше себя и оседает к обычному размеру — «пружина» без тригонометрии.
- */
-function gemPopScale(progress: number): number {
-  if (progress < 0.35) return 0.35 + (progress / 0.35) * 0.9;
-  return 1.25 - ((progress - 0.35) / 0.65) * 0.25;
-}
-
-/** Треугольная волна 0 → 1 → 0 за период. */
-function triangle(phase: number, period: number): number {
-  const half = period / 2;
-  return phase < half ? phase / half : (period - phase) / half;
-}
-
-/**
- * Осветлить цвет для элиты: половина пути к белому. Считается по каналам, а
- * не подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
+ * Цвет врага на канве. Элита — половина пути к белому: считается по каналам,
+ * а не подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
  * останется без своего элитного цвета.
  */
-function brighten(color: number): number {
+export function enemyColor(pattern: EnemyPattern, elite: boolean): number {
+  const color = LOOK_BY_PATTERN[pattern].color;
+  if (!elite) return color;
   const mix = (channel: number): number => Math.round(channel + (255 - channel) * 0.45);
   const r = mix((color >> 16) & 0xff);
   const g = mix((color >> 8) & 0xff);
@@ -584,25 +427,11 @@ const MAX_BLASTS = 24;
 const GROUND_TILE_UNITS = 64;
 const BLAST_LIFETIME_TICKS = 18;
 const BLAST_TEXTURE_UNITS = 32;
-/**
- * Ступени ценности кристалла: цвет, размер и форма. Порог — минимальная
- * ценность ступени. Самая ценная ступень отличается ещё и формой, а не только
- * цветом (docs/27-design-system-and-app-shell.md §4.4).
- */
-const GEM_TIERS: readonly { minValue: number; radiusUnits: number; color: number; shape: ShapeKind }[] = [
-  { minValue: 1, radiusUnits: 5, color: 0x5ccfff, shape: "diamond" },
-  { minValue: 3, radiusUnits: 6.5, color: 0x5fe3a1, shape: "diamond" },
-  { minValue: 8, radiusUnits: 8, color: 0xc47dff, shape: "diamond" },
-  { minValue: 20, radiusUnits: 10, color: 0xffd36b, shape: "hexagon" },
-];
-const NO_TIER = 255;
-/** С какой ступени кристалл мерцает. */
-const SHIMMER_TIER = 2;
-const SHIMMER_PERIOD_TICKS = 48;
-/** Высота подскока кристалла в полёте, игровые единицы. */
-const GEM_HOP_UNITS = 18;
-const MEDKIT_HOP_UNITS = 26;
-const MEDKIT_PULSE_TICKS = 40;
+const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
+  [SIM_EVENT.explosion]: "bh-blast",
+  [SIM_EVENT.strike]: "bh-strike",
+  [SIM_EVENT.heal]: "bh-heal",
+};
 /** Радиус кольца лечения при подборе аптечки, игровые единицы. */
 const HEAL_RING_UNITS = 40;
 const ORBITER_RADIUS_UNITS = 9;

@@ -73,8 +73,11 @@
 | Интервал контактной атаки | `game/sim/step.ts` → `MELEE_INTERVAL_SEC` |
 | Скорость притяжения кристаллов и запас подбора | `game/sim/gems.ts` → `GEM_SPEED`, `PICKUP_SLACK` |
 | Полёт кристалла от места смерти: длительность, разлёт, потолок горсти | `game/sim/gems.ts` → `GEM_LAND_TICKS`, `SCATTER_MIN`, `SCATTER_MAX`, `MAX_GEMS_PER_KILL` |
-| Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/WorldRenderer.ts` → `GEM_TIERS`, `GEM_HOP_UNITS`, `SHIMMER_*` |
-| Аптечка: радиус касания, полёт, потолок пула; вид, пульсация, кольцо лечения | `game/sim/medkits.ts` → `MEDKIT_RADIUS_UNITS`, `MEDKIT_LAND_TICKS`, `MAX_MEDKITS`; `WorldRenderer.ts` → `MEDKIT_*`, `HEAL_RING_UNITS` |
+| Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/pickups.ts` → `GEM_TIERS`, `GEM_HOP_UNITS`, `SHIMMER_*` |
+| Аптечка: радиус касания, полёт, потолок пула; вид, пульсация, кольцо лечения | `game/sim/medkits.ts` → `MEDKIT_RADIUS_UNITS`, `MEDKIT_LAND_TICKS`, `MAX_MEDKITS`; `render/pickups.ts` → `MEDKIT_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS` |
+| Числа урона: сколько на экране, сколько новых за кадр, жизнь, подъём, размер; вспышка гибели | `game/render/combat-feedback.ts` → `MAX_NUMBERS`, `MAX_NEW_NUMBERS_PER_FRAME`, `NUMBER_*`, `BURST_*` |
+| Телеграфы: кольцо взрыва, полоса рывка | `game/render/telegraphs.ts` |
+| Радар: сколько точек, радиус; размер и вид в HUD | `game/radar.ts` → `MAX_BLIPS`; `app-shell/src/screens/run/Radar.tsx` → `SIZE_PX`, `*_PX` |
 | Размер клетки сетки коллизий | `game/sim/grid.ts` → `gridCellSize` |
 | Хитбоксы и умолчания паттернов, множитель элиты | `game/patterns/enemy-types.ts` → `PATTERN_TRAITS`, `PATTERN_DEFAULTS`, `ELITE_RADIUS_MUL` |
 | Умолчания поведений оружия, потолок снарядов за выстрел | `game/weapons/weapon-types.ts` → `BEHAVIOR_DEFAULTS`, `MAX_PROJECTILES_PER_SHOT` |
