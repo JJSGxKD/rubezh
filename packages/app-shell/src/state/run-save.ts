@@ -1,3 +1,4 @@
+import { DIFFICULTY_IDS } from "@bh/shared-types";
 import { CONTENT_HASH, RUN_SNAPSHOT_FORMAT, type RunSnapshot } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
@@ -25,6 +26,7 @@ const savedRunSchema = z.object({
   runId: z.string(),
   seed: z.number(),
   mapId: z.string(),
+  difficultyId: z.enum(DIFFICULTY_IDS),
   startingWeaponId: z.string(),
   summary: z.object({
     survivalSec: z.number(),

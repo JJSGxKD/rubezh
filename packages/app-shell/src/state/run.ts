@@ -1,4 +1,4 @@
-import type { RunResult, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyId, RunResult, UpgradeOption } from "@bh/shared-types";
 import {
   loadRunEngine,
   type HudSnapshot,
@@ -33,6 +33,7 @@ export interface RunStartOptions {
   container: HTMLElement;
   startingWeaponId: string;
   mapId: string;
+  difficultyId: DifficultyId;
   /** плотность экрана; стенд испытаний фиксирует её ради сравнимости замеров */
   pixelRatio?: number;
   /** продолжить сохранённый забег вместо нового */
@@ -157,6 +158,7 @@ export const useRun = create<RunStore>((set, get) => ({
         seed,
         mode: "endless",
         mapId: options.mapId,
+        difficultyId: options.difficultyId,
         startingWeaponId: options.startingWeaponId,
         diagnostics: {
           recordRun: diagnostics.enabled && diagnostics.recordRuns,
@@ -192,6 +194,7 @@ export const useRun = create<RunStore>((set, get) => ({
         seed,
         weapon: options.startingWeaponId,
         map: options.mapId,
+        difficulty: options.difficultyId,
         screenMode: screenModeNow(),
         orientation: orientationNow(),
       });
@@ -236,6 +239,7 @@ export const useRun = create<RunStore>((set, get) => ({
       seed,
       weapon: startOptions?.startingWeaponId ?? "",
       map: startOptions?.mapId ?? "",
+      difficulty: startOptions?.difficultyId ?? "",
       screenMode: screenModeNow(),
       orientation: orientationNow(),
     });
@@ -345,6 +349,7 @@ function finishRun(
     enemiesKilled: result.enemiesKilled,
     weapon: result.startingWeaponId,
     map: result.mapId,
+    difficulty: result.difficultyId,
     contentHash: result.contentHash,
     isNewRecord,
   });

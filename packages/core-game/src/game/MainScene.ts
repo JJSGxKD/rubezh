@@ -1,8 +1,9 @@
 import Phaser from "phaser";
-import type { RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunOutcome } from "@bh/shared-types";
 import { ENEMIES } from "../content/enemies";
 import { CONTENT_HASH } from "../content/hash";
 import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
+import { DEFAULT_DIFFICULTY_ID, findDifficulty } from "../content/difficulty";
 import { DROPS } from "../content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
@@ -50,6 +51,7 @@ export interface MainSceneData {
   /** физических пикселей на игровую единицу — см. SimConfig.unitScale */
   unitScale: number;
   mapId: string;
+  difficultyId: DifficultyId;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   /** шина событий наружу: экраны рисует оболочка, движок только сообщает */
@@ -104,6 +106,7 @@ export class MainScene extends Phaser.Scene {
     this.ready = false;
 
     const mapId = resume?.mapId ?? data.mapId;
+    const difficulty = findDifficulty(resume?.difficultyId ?? data.difficultyId) ?? findDifficulty(DEFAULT_DIFFICULTY_ID);
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
     const map = findMap(mapId) ?? findMap(DEFAULT_MAP_ID) ?? MAPS[0];
     this.world = createWorld({
@@ -115,6 +118,7 @@ export class MainScene extends Phaser.Scene {
       loadoutLimits: LOADOUT_LIMITS,
       drops: DROPS,
       map,
+      ...(difficulty === undefined ? {} : { difficulty }),
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       config: { unitScale: data.unitScale },
     });
@@ -259,6 +263,7 @@ export class MainScene extends Phaser.Scene {
       runId: this.runId,
       seed: this.seed,
       mapId: world.mapId,
+      difficultyId: world.difficultyLevel.id,
       startingWeaponId: this.startingWeaponId(),
       summary: {
         survivalSec: world.stats.elapsedSec,

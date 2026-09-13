@@ -48,11 +48,17 @@ export function createTimelineDirector(
     // а держать массив по максимальной длине смеси — лишняя сложность.
     debt = new Array<number>(plan.spawns.length).fill(0);
 
+    // Уровень сложности ложится поверх кривой: план отрезка остаётся планом
+    // контента, а мир получает уже поправленные числа.
+    const level = world.difficultyLevel;
     world.difficulty.segment = plan.index;
     world.difficulty.segmentStartedSec = world.stats.elapsedSec;
-    world.difficulty.hpMul = plan.hpMul;
-    world.difficulty.damageMul = plan.damageMul;
-    world.difficulty.maxAlive = plan.maxAlive;
+    world.difficulty.hpMul = plan.hpMul * level.enemyHpMul;
+    world.difficulty.damageMul = plan.damageMul * level.enemyDamageMul;
+    world.difficulty.maxAlive = Math.min(
+      world.config.maxEnemies,
+      Math.round(plan.maxAlive * level.maxAliveMul),
+    );
 
     for (const burst of plan.bursts) {
       for (let n = 0; n < burst.count; n++) {
@@ -88,9 +94,10 @@ export function createTimelineDirector(
       }
       if (plan === null) return;
 
+      const spawnRateMul = world.difficultyLevel.spawnRateMul;
       for (let i = 0; i < plan.spawns.length; i++) {
         const spawn = plan.spawns[i];
-        debt[i] += spawn.perSec * dtSec;
+        debt[i] += spawn.perSec * spawnRateMul * dtSec;
 
         while (debt[i] >= 1) {
           if (atCap(world)) {

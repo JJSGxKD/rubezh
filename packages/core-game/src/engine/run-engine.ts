@@ -24,6 +24,7 @@ export function createRunEngine(): RunEngine {
         seed: options.seed,
         unitScale: host.pixelRatio,
         mapId: options.mapId,
+        difficultyId: options.difficultyId,
         ...(options.startingWeaponId === ""
           ? {}
           : { startingWeaponId: options.startingWeaponId }),

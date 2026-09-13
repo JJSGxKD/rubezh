@@ -1,4 +1,4 @@
-import type { DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -175,6 +175,11 @@ export interface World {
   loadoutLimits: LoadoutLimits;
   /** что падает с убитых врагов */
   drops: DropsDef;
+  /**
+   * Уровень сложности забега. Директор спавна накладывает его множители на
+   * каждый отрезок таймлайна; от забега к забегу он не меняется.
+   */
+  difficultyLevel: DifficultyDef;
   player: PlayerState;
   /** характеристики игрока с учётом пассивок — пересчитываются при улучшении */
   playerStats: PlayerStats;

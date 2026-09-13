@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { findDifficulty } from "../src/content/difficulty";
 import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
 import { MAPS } from "../src/content/maps";
@@ -92,6 +93,36 @@ describe("снимок забега", () => {
     expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
     expect(resumed.world.stats).toEqual(original.world.stats);
     expect(resumed.world.rng.getState()).toBe(original.world.rng.getState());
+  });
+
+  it("продолжает на той же сложности: мир из снимка создаётся с её поправками", () => {
+    const hard = findDifficulty("hard");
+    if (hard === undefined) throw new Error("нет сложности hard");
+    const make = (): Run => {
+      const run = newRun(12);
+      run.world = createWorld({
+        seed: 12,
+        enemies: ENEMIES,
+        weapons: WEAPONS,
+        passives: PASSIVES,
+        levelCurve: LEVEL_CURVE,
+        loadoutLimits: LOADOUT_LIMITS,
+        drops: DROPS,
+        map: MAPS[0],
+        difficulty: hard,
+      });
+      return run;
+    };
+
+    const original = make();
+    advance(original, 70 * 60);
+    const resumed = make();
+    restoreWorld(resumed.world, resumed.director, roundTrip(original));
+    advance(original, 30 * 60);
+    advance(resumed, 30 * 60);
+
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.difficulty.hpMul).toBeGreaterThan(1);
   });
 
   it("сохраняет забег, остановленный на выборе улучшения, вместе с вариантами", () => {

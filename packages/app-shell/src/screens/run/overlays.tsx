@@ -293,16 +293,18 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
       size="l"
     >
-      {props.isNewRecord ? (
-        <div className="-mt-1 mb-3 flex justify-center">
+      {/* Сложность рядом с итогом: рекорд засчитан именно на ней. */}
+      <div className="-mt-1 mb-3 flex flex-wrap justify-center gap-2">
+        <Badge>{t(`difficulty.${result.difficultyId}.name`)}</Badge>
+        {props.isNewRecord ? (
           <span className="animate-pop-in" style={staggerStyle(2)}>
             <Badge tone="accent">
               <Crown size={12} aria-hidden="true" />
               {t("run.death.record")}
             </Badge>
           </span>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {/* В ландшафте итоги слева, оружие и кнопки справа — «Ещё раз» видна без
           прокрутки (docs/27-design-system-and-app-shell.md §5.3). */}

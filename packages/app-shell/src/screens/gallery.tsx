@@ -331,6 +331,7 @@ const SAMPLE_RESULT: RunResult = {
   outcome: "died",
   startingWeaponId: "spark",
   mapId: "frontier",
+  difficultyId: "normal",
   contentHash: "gallery",
   waveReached: 6,
   survivalSec: 463,

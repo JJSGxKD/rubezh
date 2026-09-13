@@ -1,5 +1,7 @@
+import type { DifficultyId } from "@bh/shared-types";
 import { ENEMIES } from "../../content/enemies";
 import { MAPS } from "../../content/maps";
+import { findDifficulty } from "../../content/difficulty";
 import { DROPS } from "../../content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../../content/waves";
@@ -25,6 +27,8 @@ const DEFAULT_MAX_SEC = 900;
 export interface BalanceRunOptions {
   seed: number;
   skill: BotSkill;
+  /** уровень сложности; по умолчанию — «Лёгкая»: коридоры калибровки заданы для неё */
+  difficultyId?: DifficultyId;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   maxSec?: number;
@@ -48,6 +52,7 @@ export interface BalanceRunResult {
 }
 
 export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult {
+  const difficulty = findDifficulty(options.difficultyId ?? "easy");
   const world = createWorld({
     seed: options.seed,
     enemies: ENEMIES,
@@ -57,6 +62,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     loadoutLimits: LOADOUT_LIMITS,
     drops: DROPS,
     map: MAPS[0],
+    ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined
       ? {}
       : { startingWeaponId: options.startingWeaponId }),

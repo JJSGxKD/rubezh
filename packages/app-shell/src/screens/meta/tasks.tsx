@@ -10,7 +10,7 @@ import {
   StubNotice,
 } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
-import { useMeta } from "../../state/meta";
+import { bestOverall, useMeta } from "../../state/meta";
 import { RewardChip } from "./reward";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 import {
@@ -112,7 +112,7 @@ function TaskList(props: { period: ResetPeriod; tasks: readonly TaskDef[] }): Re
 
 function AchievementList(): ReactNode {
   const runs = useMeta((state) => state.runs);
-  const bestSurvivalSec = useMeta((state) => state.bestSurvivalSec);
+  const bestSurvivalSec = useMeta((state) => bestOverall(state.best));
 
   return (
     <div className="grid gap-2">

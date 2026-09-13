@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
 import { BALANCE_TARGETS } from "../../packages/core-game/src/content/balance-targets";
+import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
 import { WEAPONS } from "../../packages/core-game/src/content/weapons";
 import {
   simulateBalanceRun,
@@ -32,10 +33,20 @@ const REPORT_PATH = join(
   "balance-sim.md",
 );
 
+type DifficultyId = (typeof DIFFICULTIES)[number]["id"];
+
 interface Scenario {
   skill: BotSkill;
   startingWeaponId: string;
+  difficultyId: DifficultyId;
 }
+
+/**
+ * Коридоры калибровки заданы для «Лёгкой» — баланса без поправок. Остальные
+ * сложности идут отдельной таблицей: геймдизайнеру нужно видеть, насколько
+ * они строже, а не проверять их тем же коридором.
+ */
+const BASE_DIFFICULTY_ID: DifficultyId = "easy";
 
 it("свод калибровки баланса", () => {
   const scenarios = buildScenarios();
@@ -47,7 +58,8 @@ it("свод калибровки баланса", () => {
     for (let seed = 1; seed <= SEEDS; seed++) {
       runs.push(simulateBalanceRun({ ...scenario, seed }));
     }
-    byScenario.set(`${scenario.skill} / ${scenario.startingWeaponId}`, runs);
+    const suffix = scenario.difficultyId === BASE_DIFFICULTY_ID ? "" : ` / ${scenario.difficultyId}`;
+    byScenario.set(`${scenario.skill} / ${scenario.startingWeaponId}${suffix}`, runs);
   }
 
   rows.push("# Свод калибровки баланса");
@@ -82,9 +94,11 @@ function buildScenarios(): Scenario[] {
   // Пассивный прогоняется на одном оружии: он всё равно не стреляет осмысленно,
   // а отвечает на единственный вопрос — умирает ли игрок, который ничего не
   // делает.
-  scenarios.push({ skill: "passive", startingWeaponId: starting[0] });
-  for (const startingWeaponId of starting) {
-    scenarios.push({ skill: "dodging", startingWeaponId });
+  scenarios.push({ skill: "passive", startingWeaponId: starting[0], difficultyId: BASE_DIFFICULTY_ID });
+  for (const difficulty of DIFFICULTIES) {
+    for (const startingWeaponId of starting) {
+      scenarios.push({ skill: "dodging", startingWeaponId, difficultyId: difficulty.id });
+    }
   }
   return scenarios;
 }
@@ -100,6 +114,7 @@ function corridorLines(byScenario: ReadonlyMap<string, BalanceRunResult[]>): str
   let passive: BalanceRunResult[] = [];
 
   for (const [name, runs] of byScenario) {
+    if (isOtherDifficulty(name)) continue;
     if (name.startsWith("passive")) passive = runs;
     else dodging.push(...runs);
   }
@@ -143,7 +158,7 @@ function corridorLines(byScenario: ReadonlyMap<string, BalanceRunResult[]>): str
   // оружие вытягивает медиану за два слабых. Разбор по сценариям — отдельно.
   lines.push("", "## Перекос по стартовым оружиям", "");
   for (const [name, runs] of byScenario) {
-    if (name.startsWith("passive")) continue;
+    if (name.startsWith("passive") || isOtherDifficulty(name)) continue;
     const summary = summarizeRuns(runs);
     const inCorridor =
       summary.medianFirstLevelUpSec >= target.firstLevelUpSec.min &&
@@ -157,6 +172,10 @@ function corridorLines(byScenario: ReadonlyMap<string, BalanceRunResult[]>): str
     lines.push(`- ${name}: ${when}, медианный уровень ${summary.medianLevel}`);
   }
   return lines;
+}
+
+function isOtherDifficulty(name: string): boolean {
+  return DIFFICULTIES.some((difficulty) => difficulty.id !== BASE_DIFFICULTY_ID && name.endsWith(` / ${difficulty.id}`));
 }
 
 function verdict(what: string, ok: boolean, actual: string): string {

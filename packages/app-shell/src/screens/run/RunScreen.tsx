@@ -42,6 +42,7 @@ export function RunScreen(): ReactNode {
       container,
       startingWeaponId: resume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
       mapId: resume?.mapId ?? DEFAULT_MAP_ID,
+      difficultyId: resume?.difficultyId ?? useMeta.getState().lastDifficultyId,
       ...(resume === null ? {} : { resume }),
     });
 

@@ -517,6 +517,32 @@ export interface DropsDef {
   };
 }
 
+/**
+ * Уровень сложности забега. Выбирается перед забегом; рекорд и лидерборд
+ * ведутся по каждому отдельно — время на «Сложной» и на «Лёгкой» несравнимо.
+ */
+export type DifficultyId = "easy" | "normal" | "hard";
+
+export const DIFFICULTY_IDS: readonly DifficultyId[] = ["easy", "normal", "hard"];
+
+/**
+ * Во сколько раз сложность меняет врагов и темп. Единицы — таймлайн как в
+ * контенте; множители ложатся поверх кривой сложности, а не вместо неё.
+ */
+export interface DifficultyDef {
+  id: DifficultyId;
+  nameKey: string;
+  descriptionKey: string;
+  /** здоровье врагов */
+  enemyHpMul: number;
+  /** урон врагов: касание, взрыв, снаряд */
+  enemyDamageMul: number;
+  /** темп спавна — врагов в секунду */
+  spawnRateMul: number;
+  /** потолок живых врагов одновременно */
+  maxAliveMul: number;
+}
+
 /** Сколько оружий и пассивок каждой категории игрок держит одновременно. */
 export interface LoadoutLimits {
   weapons: number;
@@ -616,6 +642,8 @@ export interface RunResult {
   startingWeaponId: string;
   /** карта забега: на старте она одна, но разрез в аналитике нужен сразу */
   mapId: string;
+  /** уровень сложности: рекорд и лидерборд — отдельно по каждому */
+  difficultyId: DifficultyId;
   /**
    * Отпечаток игрового контента. Без него правку баланса не отделить от
    * сезонности: два забега с разной длиной могут отличаться и игроком, и

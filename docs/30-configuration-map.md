@@ -44,6 +44,7 @@
 | Бесконечный режим: бюджет угрозы, рост, потолок живых, пул типов, события | `content/waves.ts` → `ENDLESS_CURVE` | свойства баланса |
 | Оружие: поведение, числа по уровням, что даётся на старте | `content/weapons.ts` → `WEAPONS` | golden-прогон |
 | Пассивки и их категории, слоты оружия и каждой категории пассивок, кривая опыта | `content/upgrades.ts` → `PASSIVES` (`category`), `LOADOUT_LIMITS`, `LEVEL_CURVE` | golden-прогон |
+| Уровни сложности: множители здоровья и урона врагов, темпа спавна и потолка живых; какой открыт по умолчанию | `content/difficulty.ts` → `DIFFICULTIES`, `DEFAULT_DIFFICULTY_ID` | отпечаток контента; эталоны — нет: они идут на «Лёгкой» |
 | Что падает с врагов: на сколько кристаллов делится опыт; шанс аптечки с рядового и с элиты, сколько лечит, сколько лежит на поле | `content/drops.ts` → `DROPS` | golden-прогон, контрольная сумма |
 | Карта: границы мира, видимая область, поведение камеры | `content/maps.ts` → `MAPS` | радиус кольца спавна, а с ним весь баланс |
 | Целевые коридоры калибровки | `content/balance-targets.ts` → `BALANCE_TARGETS` | тест свойств баланса |
@@ -144,8 +145,8 @@
 |---|---|---|
 | `bh.settings.v1` | режим экрана, звук, музыка, вибрация | `app-shell/src/state/settings.ts` |
 | `bh.diagnostics.v1` | режим диагностики, запись забегов, оверлей FPS | `state/diagnostics.ts` |
-| `bh.meta.v1.profile` | число забегов, последнее стартовое оружие | `state/meta.ts` |
-| `bh.meta.v1.bestSurvivalSec` | локальный рекорд | `core-game/src/game/run/records.ts` |
+| `bh.meta.v1.profile` | число забегов, последнее стартовое оружие и сложность | `state/meta.ts` |
+| `bh.meta.v1.bestSurvivalSec.<сложность>` | локальный рекорд на каждой сложности; старый ключ без сложности переезжает на `easy` | `core-game/src/game/run/records.ts` |
 | `bh.install.v1.id` | `installId` устройства | `state/install.ts` |
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |

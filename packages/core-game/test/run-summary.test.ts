@@ -1,4 +1,4 @@
-import type { EnemyDef, KeyValueStorage, RunResult, WeaponDef } from "@bh/shared-types";
+import type { DifficultyId, EnemyDef, KeyValueStorage, RunResult, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { DROPS } from "../src/content/drops";
@@ -303,7 +303,7 @@ describe("локальный рекорд", () => {
     };
   }
 
-  function resultWith(survivalSec: number): RunResult {
+  function resultWith(survivalSec: number, difficultyId: DifficultyId = "normal"): RunResult {
     return {
       runId: "r",
       seed: 1,
@@ -311,6 +311,7 @@ describe("локальный рекорд", () => {
       startingWeaponId: "spark",
       contentHash: "test-hash",
       mapId: "fallback",
+      difficultyId,
       waveReached: 0,
       survivalSec,
       level: 1,
@@ -336,24 +337,44 @@ describe("локальный рекорд", () => {
       isNewRecord: false,
     });
     expect(submitRunResult(storage, resultWith(45)).bestSurvivalSec).toBe(45);
-    expect(loadBestSurvivalSec(storage)).toBe(45);
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(45);
+  });
+
+  it("ведёт рекорд по каждой сложности отдельно", () => {
+    const storage = memoryStorage();
+
+    submitRunResult(storage, resultWith(600, "easy"));
+    // Десять минут на «Лёгкой» не мешают первому рекорду на «Сложной».
+    expect(submitRunResult(storage, resultWith(90, "hard")).isNewRecord).toBe(true);
+    expect(loadBestSurvivalSec(storage, "easy")).toBe(600);
+    expect(loadBestSurvivalSec(storage, "hard")).toBe(90);
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(0);
+  });
+
+  it("переносит рекорд, поставленный до сложностей, на «Лёгкую» — тот же баланс", () => {
+    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec": "74.2" });
+
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(0);
+    expect(loadBestSurvivalSec(storage, "easy")).toBe(74.2);
+    expect(storage.values["bh.meta.v1.bestSurvivalSec"]).toBeUndefined();
+    expect(storage.values["bh.meta.v1.bestSurvivalSec.easy"]).toBe("74.2");
   });
 
   it("сбрасывает битое значение вместо того, чтобы показать его игроку", () => {
-    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec": "полтора часа" });
+    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec.normal": "полтора часа" });
 
-    expect(loadBestSurvivalSec(storage)).toBe(0);
-    expect(storage.values["bh.meta.v1.bestSurvivalSec"]).toBeUndefined();
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(0);
+    expect(storage.values["bh.meta.v1.bestSurvivalSec.normal"]).toBeUndefined();
   });
 
   it("не верит невозможному результату: забег длиннее суток — испорченное значение", () => {
-    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec": "999999999" });
+    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec.normal": "999999999" });
 
-    expect(loadBestSurvivalSec(storage)).toBe(0);
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(0);
   });
 
   it("живёт без хранилища: рекорд не переживёт запуск, но забег не упадёт", () => {
-    expect(loadBestSurvivalSec(undefined)).toBe(0);
+    expect(loadBestSurvivalSec(undefined, "normal")).toBe(0);
     expect(submitRunResult(undefined, resultWith(12))).toEqual({
       bestSurvivalSec: 12,
       isNewRecord: true,

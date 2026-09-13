@@ -38,6 +38,7 @@
   "lobby.saved.title": "Забег на паузе",
   "lobby.saved.meta": "{time} · уровень {level}",
   "lobby.record": "Лучший забег",
+  "lobby.record.on": "Лучший забег · {difficulty}",
   "lobby.tagline": "Держи рубеж, пока хватает сил. Оружие бьёт само — твоё дело не попасться.",
   "lobby.noRecord": "Первый забег ещё впереди",
   "lobby.runs": "{count} {count, plural, one {забег} few {забега} many {забегов}}",
@@ -83,7 +84,15 @@
   "mode.campaign": "Кампания",
   "mode.campaign.description": "Главы с сюжетом и боссами.",
 
+  "weapon.select.screen": "Перед забегом",
   "weapon.select.title": "Стартовое оружие",
+  "difficulty.title": "Сложность",
+  "difficulty.easy.name": "Лёгкая",
+  "difficulty.easy.description": "Враги слабее, приходят реже. Чтобы освоиться и попробовать оружие.",
+  "difficulty.normal.name": "Нормальная",
+  "difficulty.normal.description": "Враги крепче и бьют больнее, толпа плотнее. Задуманный темп игры.",
+  "difficulty.hard.name": "Сложная",
+  "difficulty.hard.description": "Каждый враг опасен, толпа не даёт передышки. Рекорд здесь — отдельная гордость.",
   "weapon.select.hint": "Дальше оружие добавляется прокачкой в забеге.",
   "weapon.select.start": "В бой",
 

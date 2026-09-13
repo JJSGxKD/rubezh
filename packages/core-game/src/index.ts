@@ -18,6 +18,7 @@ export * from "./content/hash";
 export * from "./content/upgrades";
 export * from "./content/weapons";
 export * from "./content/balance-targets";
+export * from "./content/difficulty";
 export * from "./game/bench";
 
 // Контракт забега — только типы, без реализации.

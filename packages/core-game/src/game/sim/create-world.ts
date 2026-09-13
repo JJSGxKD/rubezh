@@ -1,4 +1,5 @@
 import type {
+  DifficultyDef,
   DropsDef,
   EnemyDef,
   LevelCurveDef,
@@ -16,6 +17,7 @@ import { createRng } from "./rng";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
+import { BASE_DIFFICULTY, findDifficultyProblems } from "./difficulty";
 import { findDropsContentProblems } from "./gems";
 import { MAX_MEDKITS } from "./medkits";
 import { createEnemyPool, createGemPool, createMedkitPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
@@ -108,6 +110,8 @@ export interface CreateWorldOptions {
   loadoutLimits?: LoadoutLimits;
   /** что падает с убитых врагов; по умолчанию — один кристалл */
   drops?: DropsDef;
+  /** уровень сложности; по умолчанию — без поправок */
+  difficulty?: DifficultyDef;
   /** карта: границы мира и параметры, от которых считается кольцо спавна */
   map?: MapDef;
   /** чем игрок начинает забег; по умолчанию — первое стартовое оружие */
@@ -146,6 +150,12 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error(`Некорректный контент выпадения:\n${dropProblems.join("\n")}`);
   }
 
+  const difficultyLevel = options.difficulty ?? BASE_DIFFICULTY;
+  const difficultyProblems = findDifficultyProblems(difficultyLevel);
+  if (difficultyProblems.length > 0) {
+    throw new Error(`Некорректный уровень сложности:\n${difficultyProblems.join("\n")}`);
+  }
+
   const levelCurve = options.levelCurve ?? FALLBACK_LEVEL_CURVE;
   const loadoutLimits = options.loadoutLimits ?? FALLBACK_LOADOUT_LIMITS;
   const playerStatsBase: PlayerStatsBase = {
@@ -168,6 +178,7 @@ export function createWorld(options: CreateWorldOptions): World {
     levelCurve,
     loadoutLimits,
     drops,
+    difficultyLevel,
     playerStats: computePlayerStats(playerStatsBase, passiveTypes, new Map()),
     playerStatsBase,
     loadout,

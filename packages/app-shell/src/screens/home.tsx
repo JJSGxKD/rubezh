@@ -12,7 +12,8 @@ import {
   Trophy,
   User,
 } from "lucide-react";
-import { WEAPONS } from "@bh/core-game";
+import type { DifficultyId } from "@bh/shared-types";
+import { DIFFICULTIES, WEAPONS } from "@bh/core-game";
 import {
   Badge,
   Button,
@@ -24,6 +25,8 @@ import {
   IconButton,
   Modal,
   Screen,
+  SectionTitle,
+  SegmentedControl,
   Stat,
   Wordmark,
 } from "../design-system/components";
@@ -52,6 +55,7 @@ export function LobbyScreen(): ReactNode {
   const meta = useMeta();
   const saved = useSavedRun((state) => state.saved);
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
+  const best = meta.best[meta.lastDifficultyId];
   usePreloadEngine();
 
   return (
@@ -117,13 +121,15 @@ export function LobbyScreen(): ReactNode {
               <Trophy size={24} />
             </span>
             <div className="min-w-0 flex-1">
+              {/* Рекорд — на той сложности, что выбрана сейчас: время на разных
+                  сложностях несравнимо, и общий рекорд обманывал бы. */}
               <Stat
-                label={t("lobby.record")}
-                value={meta.bestSurvivalSec > 0 ? formatDuration(meta.bestSurvivalSec) : "—"}
+                label={t("lobby.record.on", { difficulty: t(`difficulty.${meta.lastDifficultyId}.name`) })}
+                value={best > 0 ? formatDuration(best) : "—"}
                 large
-                tone={meta.bestSurvivalSec > 0 ? "accent" : undefined}
+                tone={best > 0 ? "accent" : undefined}
               />
-              {meta.bestSurvivalSec > 0 ? null : (
+              {best > 0 ? null : (
                 <p className="mt-0.5 text-xs text-text-muted">{t("lobby.noRecord")}</p>
               )}
             </div>
@@ -321,8 +327,8 @@ export function ModeScreen(): ReactNode {
 }
 
 /**
- * Выбор стартового оружия: три карточки, последний выбор запомнен
- * (решение Р12 `docs/26-stage2-plan.md` §2).
+ * Выбор перед забегом: сложность и стартовое оружие, последний выбор того и
+ * другого запомнен (решение Р12 `docs/26-stage2-plan.md` §2).
  */
 export function WeaponScreen(): ReactNode {
   const navigation = useNavigation();
@@ -334,7 +340,7 @@ export function WeaponScreen(): ReactNode {
 
   return (
     <Screen
-      title={t("weapon.select.title")}
+      title={t("weapon.select.screen")}
       onBack={() => navigation.pop()}
       footer={
         <Button
@@ -354,7 +360,17 @@ export function WeaponScreen(): ReactNode {
       }
     >
       <ContentColumn>
-        <p className="mt-2 mb-3 text-xs text-text-muted">{t("weapon.select.hint")}</p>
+        <SectionTitle>{t("difficulty.title")}</SectionTitle>
+        <SegmentedControl
+          label={t("difficulty.title")}
+          activeId={meta.lastDifficultyId}
+          onSelect={(id) => meta.rememberDifficulty(id as DifficultyId)}
+          items={DIFFICULTIES.map((difficulty) => ({ id: difficulty.id, label: t(difficulty.nameKey) }))}
+        />
+        <p className="mt-2 text-xs text-text-muted">{t(`difficulty.${meta.lastDifficultyId}.description`)}</p>
+
+        <SectionTitle>{t("weapon.select.title")}</SectionTitle>
+        <p className="mb-3 text-xs text-text-muted">{t("weapon.select.hint")}</p>
         <div className="grid gap-3 landscape:grid-cols-3">
           {starting.map((weapon, index) => (
             <Card

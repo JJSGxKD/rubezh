@@ -40,6 +40,7 @@ function snapshot(patch: Partial<RunSnapshot> = {}): RunSnapshot {
     runId: "run-1",
     seed: 42,
     mapId: "frontier",
+    difficultyId: "hard",
     startingWeaponId: "knife",
     summary: { survivalSec: 95, level: 6, weapons: [{ id: "knife", level: 2 }], passives: [] },
     world: { version: 1 },
@@ -101,6 +102,7 @@ function options(resume?: RunSnapshot): Parameters<ReturnType<typeof useRun.getS
     container: {} as HTMLElement,
     startingWeaponId: "spark",
     mapId: "frontier",
+    difficultyId: "normal",
     ...(resume === undefined ? {} : { resume }),
   };
 }

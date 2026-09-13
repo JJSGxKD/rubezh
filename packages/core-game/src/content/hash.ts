@@ -1,3 +1,4 @@
+import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
@@ -33,6 +34,7 @@ function hashContent(): string {
     ENDLESS_CURVE,
     MAPS,
     DROPS,
+    DIFFICULTIES,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.

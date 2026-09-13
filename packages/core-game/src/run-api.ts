@@ -1,4 +1,4 @@
-import type { RunResult, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyId, RunResult, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -71,7 +71,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 1;
+export const RUN_SNAPSHOT_FORMAT = 2;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,
@@ -88,6 +88,7 @@ export interface RunSnapshot {
   runId: string;
   seed: number;
   mapId: string;
+  difficultyId: DifficultyId;
   startingWeaponId: string;
   summary: RunSnapshotSummary;
   /** состояние мира; формат знает только движок */
@@ -108,6 +109,8 @@ export interface RunOptions {
   /** на старте режим один — бесконечный (решение Р8) */
   mode: "endless";
   mapId: string;
+  /** уровень сложности; неизвестный id — базовая сложность без поправок */
+  difficultyId: DifficultyId;
   startingWeaponId: string;
   diagnostics: RunDiagnosticsOptions;
   /**
@@ -119,8 +122,8 @@ export interface RunOptions {
   /** ограничение частоты отрисовки — только для замеров */
   renderCapFps?: number;
   /**
-   * Продолжить забег из снимка. `seed`, карта и оружие тогда берутся из
-   * снимка, а забег стартует на паузе с причиной `restored`.
+   * Продолжить забег из снимка. `seed`, карта, сложность и оружие тогда
+   * берутся из снимка, а забег стартует на паузе с причиной `restored`.
    */
   resume?: RunSnapshot;
 }

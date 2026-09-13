@@ -1,4 +1,12 @@
-import { PASSIVE_CATEGORIES, type EnemyDef, type PassiveDef, type WeaponDef } from "@bh/shared-types";
+import {
+  DIFFICULTY_IDS,
+  PASSIVE_CATEGORIES,
+  type EnemyDef,
+  type PassiveDef,
+  type WeaponDef,
+} from "@bh/shared-types";
+import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES } from "../src/content/difficulty";
+import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { MAPS } from "../src/content/maps";
@@ -251,6 +259,26 @@ describe("проверка контента оружия", () => {
     // @ts-expect-error поведение из JSON админки может оказаться любым — проверяем реакцию
     const broken: WeaponDef = { ...ok, behavior: "laser_beam" };
     expect(findWeaponContentProblems([broken]).join("\n")).toMatch(/не реализовано/);
+  });
+});
+
+describe("контент уровней сложности", () => {
+  it("проходит проверку целиком и открывает по умолчанию существующий уровень", () => {
+    expect(findDifficultyContentProblems(DIFFICULTIES)).toEqual([]);
+    expect(DIFFICULTIES.map((difficulty) => difficulty.id)).toContain(DEFAULT_DIFFICULTY_ID);
+    expect(DIFFICULTIES.map((difficulty) => difficulty.id)).toEqual([...DIFFICULTY_IDS]);
+  });
+
+  it("ловит уровень, который по какой-то оси легче предыдущего", () => {
+    const easy = DIFFICULTIES[0];
+    const softer = { ...DIFFICULTIES[1], enemyHpMul: easy.enemyHpMul - 0.1 };
+    expect(findDifficultyContentProblems([easy, softer])).toEqual([
+      `сложность ${softer.id}: enemyHpMul меньше, чем у ${easy.id}`,
+    ]);
+  });
+
+  it("ловит нулевой множитель — он обнулил бы врагов молча", () => {
+    expect(findDifficultyContentProblems([{ ...DIFFICULTIES[0], spawnRateMul: 0 }])).not.toEqual([]);
   });
 });
 
