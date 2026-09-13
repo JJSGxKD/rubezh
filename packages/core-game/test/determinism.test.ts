@@ -82,8 +82,8 @@ describe("симуляция", () => {
       immortalPlayer: true,
     });
 
-    expect(run.checksum).toBe(-579035369);
-    expect(run.world.stats.enemiesKilled).toBe(387);
+    expect(run.checksum).toBe(-2145229990);
+    expect(run.world.stats.enemiesKilled).toBe(401);
     expect(run.world.progression.level).toBe(15);
   });
 

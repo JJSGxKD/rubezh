@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { EnemyPattern } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
+import { GEM_LAND_TICKS } from "../sim/gems";
 import { NEVER_HIT } from "../sim/pools";
 import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
 import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
@@ -48,6 +49,10 @@ export class WorldRenderer {
   private readonly player: Phaser.GameObjects.Image;
   private readonly textureKeyByType: string[] = [];
   private readonly gemSprites: Phaser.GameObjects.Image[] = [];
+  /** ступень ценности, под которую сейчас стоит текстура спрайта кристалла */
+  private readonly gemSpriteTier: Uint8Array;
+  /** спрайт кристалла сейчас не в масштабе 1 — после приземления его надо вернуть */
+  private readonly gemSpriteScaled: Uint8Array;
   private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
   /** кольца телеграфа: показывают радиус будущего взрыва, пока горит фитиль */
@@ -65,6 +70,8 @@ export class WorldRenderer {
     this.world = world;
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
+    this.gemSpriteTier = new Uint8Array(world.gems.alive.length).fill(NO_TIER);
+    this.gemSpriteScaled = new Uint8Array(world.gems.alive.length);
 
     for (const type of world.enemyTypes) {
       const key = `bh-enemy-${type.id}`;
@@ -88,7 +95,9 @@ export class WorldRenderer {
     this.ensureTexture("bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
     this.ensureTexture("bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
     this.ensureTexture("bh-telegraph", BLAST_TEXTURE_UNITS * scale, 0xff5a5a, "ring");
-    this.ensureTexture("bh-gem", GEM_RADIUS_UNITS * scale, 0x7ce7ff, "diamond");
+    GEM_TIERS.forEach((tier, index) => {
+      this.ensureTexture(gemTextureKey(index), tier.radiusUnits * scale, tier.color, tier.shape);
+    });
     this.ensureTexture("bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
@@ -240,16 +249,57 @@ export class WorldRenderer {
     }
   }
 
+  /**
+   * Кристаллы: ступень ценности — текстурой, полёт от места смерти — дугой.
+   *
+   * Полёт рисуется по тикам симуляции плюс доля до следующего шага: на паузе
+   * он замирает вместе с миром. Сам кристалл в симуляции с первого тика лежит в
+   * точке приземления, дуга — только картинка, поэтому на исход забега она не
+   * влияет.
+   */
   private syncGems(t: number): void {
     const gems = this.world.gems;
+    const tick = this.world.stats.tick;
+    const hop = GEM_HOP_UNITS * this.world.config.unitScale;
+
     for (let i = 0; i < gems.count; i++) {
       const sprite = this.gemSprite(i);
       if (gems.alive[i] === 0) {
         if (sprite.visible) sprite.setVisible(false);
         continue;
       }
+
+      // Ценность растёт при слиянии кристаллов, поэтому ступень проверяется
+      // каждый кадр, а текстура меняется только при переходе.
+      const tier = gemTier(gems.value[i]);
+      if (this.gemSpriteTier[i] !== tier) {
+        sprite.setTexture(gemTextureKey(tier));
+        this.gemSpriteTier[i] = tier;
+      }
       sprite.setVisible(true);
+
+      // Шаг, на котором кристалл вылетел, уже прошёл: отсчёт от нуля.
+      const progress = (tick - gems.bornTick[i] - 1 + t) / GEM_LAND_TICKS;
+      if (progress < 1) {
+        const p = progress < 0 ? 0 : progress;
+        const eased = 1 - (1 - p) * (1 - p);
+        const x = lerp(gems.originX[i], gems.x[i], eased);
+        const y = lerp(gems.originY[i], gems.y[i], eased) - hop * 4 * p * (1 - p);
+        sprite.setPosition(x, y);
+        sprite.setScale(gemPopScale(p));
+        this.gemSpriteScaled[i] = 1;
+        continue;
+      }
+
       sprite.setPosition(lerp(gems.prevX[i], gems.x[i], t), lerp(gems.prevY[i], gems.y[i], t));
+      if (tier >= SHIMMER_TIER) {
+        // Крупные кристаллы мерцают — их видно издалека, и за ними хочется идти.
+        sprite.setScale(1 + 0.1 * triangle((tick + i * 7) % SHIMMER_PERIOD_TICKS, SHIMMER_PERIOD_TICKS));
+        this.gemSpriteScaled[i] = 1;
+      } else if (this.gemSpriteScaled[i] === 1) {
+        sprite.setScale(1);
+        this.gemSpriteScaled[i] = 0;
+      }
     }
   }
 
@@ -354,7 +404,7 @@ export class WorldRenderer {
 
   private gemSprite(index: number): Phaser.GameObjects.Image {
     while (this.gemSprites.length <= index) {
-      this.gemSprites.push(this.createHiddenSprite("bh-gem"));
+      this.gemSprites.push(this.createHiddenSprite(gemTextureKey(0)));
     }
     return this.gemSprites[index];
   }
@@ -428,6 +478,32 @@ function lerp(from: number, to: number, t: number): number {
   return from + (to - from) * t;
 }
 
+function gemTextureKey(tier: number): string {
+  return `bh-gem-${tier}`;
+}
+
+function gemTier(value: number): number {
+  for (let tier = GEM_TIERS.length - 1; tier > 0; tier--) {
+    if (value >= GEM_TIERS[tier].minValue) return tier;
+  }
+  return 0;
+}
+
+/**
+ * Масштаб кристалла в полёте: выскакивает маленьким, на трети пути чуть
+ * больше себя и оседает к обычному размеру — «пружина» без тригонометрии.
+ */
+function gemPopScale(progress: number): number {
+  if (progress < 0.35) return 0.35 + (progress / 0.35) * 0.9;
+  return 1.25 - ((progress - 0.35) / 0.65) * 0.25;
+}
+
+/** Треугольная волна 0 → 1 → 0 за период. */
+function triangle(phase: number, period: number): number {
+  const half = period / 2;
+  return phase < half ? phase / half : (period - phase) / half;
+}
+
 /**
  * Осветлить цвет для элиты: половина пути к белому. Считается по каналам, а
  * не подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
@@ -447,7 +523,23 @@ const MAX_BLASTS = 24;
 const GROUND_TILE_UNITS = 64;
 const BLAST_LIFETIME_TICKS = 18;
 const BLAST_TEXTURE_UNITS = 32;
-const GEM_RADIUS_UNITS = 5;
+/**
+ * Ступени ценности кристалла: цвет, размер и форма. Порог — минимальная
+ * ценность ступени. Самая ценная ступень отличается ещё и формой, а не только
+ * цветом (docs/27-design-system-and-app-shell.md §4.4).
+ */
+const GEM_TIERS: readonly { minValue: number; radiusUnits: number; color: number; shape: ShapeKind }[] = [
+  { minValue: 1, radiusUnits: 5, color: 0x5ccfff, shape: "diamond" },
+  { minValue: 3, radiusUnits: 6.5, color: 0x5fe3a1, shape: "diamond" },
+  { minValue: 8, radiusUnits: 8, color: 0xc47dff, shape: "diamond" },
+  { minValue: 20, radiusUnits: 10, color: 0xffd36b, shape: "hexagon" },
+];
+const NO_TIER = 255;
+/** С какой ступени кристалл мерцает. */
+const SHIMMER_TIER = 2;
+const SHIMMER_PERIOD_TICKS = 48;
+/** Высота подскока кристалла в полёте, игровые единицы. */
+const GEM_HOP_UNITS = 18;
 const ORBITER_RADIUS_UNITS = 9;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */

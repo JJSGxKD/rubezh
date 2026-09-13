@@ -1,11 +1,11 @@
 import { onEnemyKilled } from "../patterns";
-import { spawnGem } from "./gems";
+import { dropGems } from "./gems";
 import { despawnEnemy, NO_OWNER_TYPE, type World } from "./world";
 
 /**
  * Урон врагу — одна точка входа для всего оружия и для снарядов.
  *
- * Здесь же живут последствия смерти: счётчики, кристалл опыта и реакция
+ * Здесь же живут последствия смерти: счётчики, выпадение опыта и реакция
  * паттерна (распад делящегося). Раньше это лежало в шаге симуляции и было
  * доступно только снарядам; теперь бьют ещё аура, орбита и удар по площади.
  *
@@ -51,6 +51,6 @@ export function killEnemy(world: World, index: number): void {
   const y = world.enemies.y[index];
   despawnEnemy(world, index);
 
-  if (world.config.progressionEnabled) spawnGem(world, x, y, type.xp);
+  if (world.config.progressionEnabled) dropGems(world, x, y, type.xp);
   onEnemyKilled(type.pattern, world, index);
 }

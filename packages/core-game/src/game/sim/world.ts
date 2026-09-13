@@ -1,4 +1,4 @@
-import type { LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
+import type { DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -171,6 +171,8 @@ export interface World {
   passiveTypes: PassiveType[];
   levelCurve: LevelCurveDef;
   loadoutLimits: LoadoutLimits;
+  /** что падает с убитых врагов */
+  drops: DropsDef;
   player: PlayerState;
   /** характеристики игрока с учётом пассивок — пересчитываются при улучшении */
   playerStats: PlayerStats;

@@ -3,6 +3,7 @@ import type { RunOutcome } from "@bh/shared-types";
 import { ENEMIES } from "../content/enemies";
 import { CONTENT_HASH } from "../content/hash";
 import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
+import { DROPS } from "../content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
 import { WEAPONS } from "../content/weapons";
@@ -102,6 +103,7 @@ export class MainScene extends Phaser.Scene {
       passives: PASSIVES,
       levelCurve: LEVEL_CURVE,
       loadoutLimits: LOADOUT_LIMITS,
+      drops: DROPS,
       map,
       ...(data.startingWeaponId === undefined ? {} : { startingWeaponId: data.startingWeaponId }),
       config: { unitScale: data.unitScale },

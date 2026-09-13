@@ -482,6 +482,21 @@ export interface PassiveDef {
   levels: number[];
 }
 
+/**
+ * Что остаётся после убитого врага. Данные геймдизайнера
+ * (`core-game/src/content/drops.ts`).
+ */
+export interface DropsDef {
+  gems: {
+    /**
+     * На сколько кристаллов максимум делится опыт одного врага. Сумма опыта
+     * от этого не меняется — меняется только, сколько кристаллов разлетится.
+     * 1 — всегда один кристалл.
+     */
+    maxPerKill: number;
+  };
+}
+
 /** Сколько оружий и пассивок игрок держит одновременно. */
 export interface LoadoutLimits {
   weapons: number;

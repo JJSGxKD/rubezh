@@ -1,4 +1,5 @@
 import type {
+  DropsDef,
   EnemyDef,
   LevelCurveDef,
   LoadoutLimits,
@@ -15,6 +16,7 @@ import { createRng } from "./rng";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
+import { findDropsContentProblems } from "./gems";
 import { createEnemyPool, createGemPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
 import type { PlayerConfig, SimConfig, World } from "./world";
 
@@ -30,6 +32,13 @@ import type { PlayerConfig, SimConfig, World } from "./world";
  */
 const FALLBACK_LEVEL_CURVE: LevelCurveDef = { baseXp: 6, growth: 1.22 };
 const FALLBACK_LOADOUT_LIMITS: LoadoutLimits = { weapons: 4, passives: 4 };
+
+/**
+ * Выпадение для тестов симуляции: один кристалл на врага. Горсть расходует
+ * генератор, и тест паттерна врага сдвигал бы свою последовательность
+ * случайных чисел от правки выпадения, к которому отношения не имеет.
+ */
+const FALLBACK_DROPS: DropsDef = { gems: { maxPerKill: 1 } };
 
 /**
  * Карта по умолчанию — тоже заглушка, и тоже не из контента: симуляция не
@@ -89,6 +98,8 @@ export interface CreateWorldOptions {
   passives?: readonly PassiveDef[];
   levelCurve?: LevelCurveDef;
   loadoutLimits?: LoadoutLimits;
+  /** что падает с убитых врагов; по умолчанию — один кристалл */
+  drops?: DropsDef;
   /** карта: границы мира и параметры, от которых считается кольцо спавна */
   map?: MapDef;
   /** чем игрок начинает забег; по умолчанию — первое стартовое оружие */
@@ -121,6 +132,12 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error("Слишком много типов врагов для Uint8Array-пула");
   }
 
+  const drops = options.drops ?? FALLBACK_DROPS;
+  const dropProblems = findDropsContentProblems(drops);
+  if (dropProblems.length > 0) {
+    throw new Error(`Некорректный контент выпадения:\n${dropProblems.join("\n")}`);
+  }
+
   const levelCurve = options.levelCurve ?? FALLBACK_LEVEL_CURVE;
   const loadoutLimits = options.loadoutLimits ?? FALLBACK_LOADOUT_LIMITS;
   const playerStatsBase: PlayerStatsBase = {
@@ -142,6 +159,7 @@ export function createWorld(options: CreateWorldOptions): World {
     passiveTypes,
     levelCurve,
     loadoutLimits,
+    drops,
     playerStats: computePlayerStats(playerStatsBase, passiveTypes, new Map()),
     playerStatsBase,
     loadout,
