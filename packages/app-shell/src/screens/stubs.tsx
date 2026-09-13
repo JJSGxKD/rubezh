@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Gift, Swords, Trophy, UserRound, Users } from "lucide-react";
+import { Gift, Trophy, UserRound, Users } from "lucide-react";
 import {
   Avatar,
   Card,
@@ -21,29 +21,6 @@ import { useShell } from "../state/shell";
  * Каждый заход пишется `screen_viewed` с признаком заглушки: к этапам 4–5 у
  * нас будут данные о том, какой раздел тестеры открывали чаще, а не мнения.
  */
-export function ArsenalScreen(): ReactNode {
-  return (
-    <Screen>
-      <ContentColumn>
-        <PageTitle>{t("arsenal.title")}</PageTitle>
-        <StubScreen
-          icon={<Swords size={40} />}
-          title={t("arsenal.characters")}
-          text={t("arsenal.characters.soon")}
-        />
-        <SectionTitle>{t("arsenal.weapons")}</SectionTitle>
-        <Card>
-          <p className="text-xs text-text-muted">{t("arsenal.weapons.soon")}</p>
-        </Card>
-        <SectionTitle>{t("arsenal.upgrades")}</SectionTitle>
-        <Card>
-          <p className="text-xs text-text-muted">{t("arsenal.upgrades.soon")}</p>
-        </Card>
-      </ContentColumn>
-    </Screen>
-  );
-}
-
 export function ShopScreen(): ReactNode {
   return (
     <Screen>

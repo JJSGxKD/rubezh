@@ -115,6 +115,7 @@
 | Любой текст интерфейса, включая имена оружия и пассивок | `app-shell/src/i18n/ru.json` | участник 1 |
 | Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | участник 1 |
 | Примеры в заглушках меты: награды семи дней, сектора и шансы колеса, задания, достижения | `app-shell/src/screens/meta/stub-content.ts`. Это не баланс: настоящие числа будут на сервере (`07-monetization-and-ads.md` §7) | геймдизайнер |
+| Пример снаряжения в заглушке арсенала: слоты, редкости, предметы | `app-shell/src/screens/meta/arsenal.tsx` → `EQUIPPED`, `INVENTORY`, `RARITY_TONE` | геймдизайнер, напарник |
 | Граница суток и недели для заданий и награды дня | `screens/meta/schedule.ts` → `MOSCOW_OFFSET_MS`, `MONDAY` | участник 1 |
 | Колесо удачи: сколько оборотов за крутку; длительность и кривая вращения | `screens/meta/wheel.tsx` → `SPIN_TURNS`; `tokens.css` → `--duration-spin`, `--ease-spin` | участник 1, напарник |
 | Цена «Второго шанса» в заглушке экрана смерти | `screens/run/SecondChance.tsx` → `PREMIUM_PRICE` | геймдизайнер |
