@@ -96,9 +96,30 @@ function findDevelopmentBuild() {
   return files.filter((name) => readFileSync(join(ASSETS, name), "utf8").includes("jsxDEV"));
 }
 
+/**
+ * Чанк движка в первой загрузке — не рост, а сломанная раскладка: вместе с ним
+ * игрок качает Phaser до главной. Так уже было, когда сборщик слил общие
+ * runtime-хелперы в чанк движка (scripts/vite/chunking.ts), и одно число
+ * «452 КБ» не говорило, что именно случилось.
+ */
+function findEngineInFirstLoad() {
+  const files = readdirSync(ASSETS).filter((name) => statSync(join(ASSETS, name)).isFile());
+  return [...firstLoadChunks(files)].filter((name) => ENGINE.test(name));
+}
+
 function main() {
   let failed = false;
   console.log("Бюджет бандла:\n");
+
+  const engineInFirstLoad = findEngineInFirstLoad();
+  if (engineInFirstLoad.length > 0) {
+    console.error(
+      `  Движок попал в первую загрузку: ${engineInFirstLoad.join(", ")}.\n` +
+        "  Какой-то чанк первой загрузки импортирует его статически — проверьте\n" +
+        "  раскладку чанков (scripts/vite/chunking.ts) и импорты из core-game.\n",
+    );
+    failed = true;
+  }
 
   const development = findDevelopmentBuild();
   if (development.length > 0) {

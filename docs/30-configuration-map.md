@@ -178,6 +178,7 @@
 | Сборка клиента: плагины, туннель, режимы | `apps/web-*/vite.config.ts` |
 | Поведение dev-сервера при обрыве связи: плашка вместо перезагрузки | `scripts/vite/stable-dev-session.ts` (`20-env-and-ports.md` §4) |
 | Режим сборки клиента: всегда production, `NODE_ENV` из `.env` не берётся | `scripts/vite/production-node-env.ts` |
+| Раскладка чанков клиента: без слияния общих чанков Rolldown | `scripts/vite/chunking.ts` → `clientRolldownOptions` (`27-design-system-and-app-shell.md` §3.4) |
 | Какие экраны грузятся по требованию | `packages/app-shell/src/app/lazy-screens.tsx` → `loaders` |
 | Версия Node | `.nvmrc` |
 | Правила TypeScript | `tsconfig.base.json`, проекты — `tsconfig.json` пакетов, тесты — `tsconfig.tests.json` |

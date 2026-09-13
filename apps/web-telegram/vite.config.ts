@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
+import { clientRolldownOptions } from "../../scripts/vite/chunking.ts";
 import { ignoreDotenvNodeEnvForBuild } from "../../scripts/vite/production-node-env.ts";
 import { stableDevSession } from "../../scripts/vite/stable-dev-session.ts";
 
@@ -55,6 +56,8 @@ export default defineConfig(({ mode, command }) => {
     },
     build: {
       outDir: "dist",
+      // Одинаковая раскладка чанков на Windows и в CI (scripts/vite/chunking.ts).
+      rolldownOptions: clientRolldownOptions,
     },
   };
 });
