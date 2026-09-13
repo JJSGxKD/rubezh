@@ -115,10 +115,8 @@ export function ProfileScreen(): ReactNode {
 }
 
 export function TasksScreen(): ReactNode {
-  const navigation = useNavigation();
-
   return (
-    <Screen title={t("tasks.title")} onBack={() => navigation.pop()}>
+    <Screen title={t("tasks.title")}>
       <ContentColumn>
         <StubScreen
           icon={<ListChecks size={40} />}

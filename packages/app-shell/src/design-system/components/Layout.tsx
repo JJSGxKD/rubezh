@@ -78,12 +78,25 @@ export interface TabBarProps {
   onSelect(id: string): void;
 }
 
+/**
+ * Нижняя панель разделов.
+ *
+ * Разделов шесть, и шесть подписей на экране телефона не помещаются, не
+ * превращаясь в мелкий шум. Поэтому подпись есть только у активного раздела, а
+ * сам он поднимается над панелью объёмной плиткой — где ты сейчас, видно
+ * издалека. Когда ширины хватает всем (планшет, десктоп, ландшафт), подписи
+ * показываются у всех: прятать их там незачем. Порог — по ширине самой панели
+ * (container query), а не экрана: панель живёт в колонке.
+ *
+ * Анимируются только transform и opacity (§3.3): плитка растёт и поднимается,
+ * подпись проявляется.
+ */
 export function TabBar(props: TabBarProps): ReactNode {
   const haptics = useSettings((state) => state.haptics);
 
   return (
-    <nav className="shrink-0 border-t border-border bg-surface pb-[var(--app-inset-bottom)]">
-      <div className="mx-auto flex w-full max-w-[560px]">
+    <nav className="@container shrink-0 border-t border-border bg-surface pb-[var(--app-inset-bottom)]">
+      <div className="mx-auto flex w-full max-w-[640px]">
         {props.items.map((item) => {
           const active = item.id === props.activeId;
           return (
@@ -91,35 +104,50 @@ export function TabBar(props: TabBarProps): ReactNode {
               key={item.id}
               type="button"
               aria-current={active ? "page" : undefined}
+              aria-label={item.label}
               onClick={() => {
                 if (!active && haptics) useShell.getState().adapter.haptic("light");
                 props.onSelect(item.id);
               }}
-              className={[
-                "relative flex min-h-16 flex-1 flex-col items-center justify-center gap-1",
-                "transition-colors duration-(--duration-fast) ease-base",
-                active ? "text-accent" : "text-text-muted active:text-text",
-              ].join(" ")}
+              className="group relative flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 pt-1"
             >
-              {/* Подложка активной вкладки проявляется и растёт — только opacity и transform. */}
+              <span
+                className={[
+                  "relative inline-flex size-11 items-center justify-center rounded-lg",
+                  "transition-transform duration-(--duration-base) ease-spring",
+                  active ? "-translate-y-3 scale-110" : "group-active:scale-90",
+                ].join(" ")}
+              >
+                {/* Плитка активного раздела проявляется под значком: сама
+                    подложка не анимирует ни фон, ни тень. */}
+                <span
+                  aria-hidden="true"
+                  className={[
+                    "btn-primary absolute inset-0 rounded-lg",
+                    "transition-[opacity,transform] duration-(--duration-base) ease-spring",
+                    active ? "scale-100 opacity-100" : "scale-75 opacity-0",
+                  ].join(" ")}
+                />
+                <span
+                  className={[
+                    "relative transition-colors duration-(--duration-fast) ease-base",
+                    active ? "text-on-accent" : "text-text-muted group-active:text-text",
+                  ].join(" ")}
+                >
+                  {item.icon}
+                </span>
+                {item.badge === undefined ? null : <TabBadge badge={item.badge} />}
+              </span>
               <span
                 aria-hidden="true"
                 className={[
-                  "absolute top-2 h-8 w-14 rounded-pill bg-accent/15",
-                  "transition-[opacity,transform] duration-(--duration-base) ease-spring",
-                  active ? "scale-100 opacity-100" : "scale-50 opacity-0",
-                ].join(" ")}
-              />
-              <span
-                className={[
-                  "relative transition-transform duration-(--duration-base) ease-spring",
-                  active ? "-translate-y-0.5" : "",
+                  "font-display text-xs whitespace-nowrap",
+                  "transition-[opacity,transform] duration-(--duration-base) ease-out",
+                  active
+                    ? "-translate-y-2 font-bold text-accent opacity-100"
+                    : "hidden text-text-muted @min-[560px]:block",
                 ].join(" ")}
               >
-                {item.icon}
-                {item.badge === undefined ? null : <TabBadge badge={item.badge} />}
-              </span>
-              <span className={`relative text-xs ${active ? "font-semibold" : ""}`}>
                 {item.label}
               </span>
             </button>
@@ -133,7 +161,7 @@ export function TabBar(props: TabBarProps): ReactNode {
 function TabBadge(props: { badge: string }): ReactNode {
   if (props.badge === "dot") {
     return (
-      <span aria-hidden="true" className="absolute -top-0.5 -right-1.5 inline-flex size-2.5">
+      <span aria-hidden="true" className="absolute top-1 right-1 inline-flex size-2.5">
         <span className="absolute inset-0 animate-ping-dot rounded-full bg-accent" />
         <span className="relative size-full rounded-full border-2 border-surface bg-accent" />
       </span>
@@ -141,7 +169,7 @@ function TabBadge(props: { badge: string }): ReactNode {
   }
 
   return (
-    <span className="absolute -top-1.5 -right-3 min-w-5 rounded-pill bg-danger px-1 text-center font-display text-xs font-bold text-text">
+    <span className="absolute -top-1 -right-1 min-w-5 rounded-pill bg-danger px-1 text-center font-display text-xs font-bold text-text">
       {props.badge}
     </span>
   );

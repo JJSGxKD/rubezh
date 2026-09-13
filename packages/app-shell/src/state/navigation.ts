@@ -25,7 +25,7 @@ export type ScreenId =
   | "about";
 
 /** Корни разделов нижней панели: переключение вкладки сбрасывает стек. */
-export const TAB_ROOTS = ["lobby", "arsenal", "shop", "rating", "friends"] as const;
+export const TAB_ROOTS = ["shop", "arsenal", "lobby", "tasks", "rating", "friends"] as const;
 export type TabId = (typeof TAB_ROOTS)[number];
 
 /** Экраны-заглушки: их заходы считаются отдельно — это замер интереса (§6). */

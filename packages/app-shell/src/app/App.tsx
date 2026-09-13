@@ -1,5 +1,5 @@
 import { Suspense, useEffect, type ReactNode } from "react";
-import { Gift, Home, Swords, Trophy, Users } from "lucide-react";
+import { Gift, Home, ListChecks, Swords, Trophy, Users } from "lucide-react";
 import { ScreenTransition, TabBar, type TabItem } from "../design-system/components";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
@@ -81,11 +81,16 @@ export function App(): ReactNode {
   );
 }
 
-/** Точка на разделе — «здесь скоро появится»: заглушки зовут зайти и посмотреть. */
+/**
+ * Порядок разделов — как в мобильных играх жанра: главная с кнопкой «Играть»
+ * ближе к центру, под большим пальцем. Точка на разделе — «здесь скоро
+ * появится»: заглушки зовут зайти и посмотреть.
+ */
 const TABS: readonly TabItem[] = [
-  { id: "lobby", label: t("tab.home"), icon: <Home size={22} /> },
-  { id: "arsenal", label: t("tab.arsenal"), icon: <Swords size={22} />, badge: "dot" },
   { id: "shop", label: t("tab.shop"), icon: <Gift size={22} />, badge: "dot" },
+  { id: "arsenal", label: t("tab.arsenal"), icon: <Swords size={22} />, badge: "dot" },
+  { id: "lobby", label: t("tab.home"), icon: <Home size={22} /> },
+  { id: "tasks", label: t("tab.tasks"), icon: <ListChecks size={22} />, badge: "dot" },
   { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} />, badge: "dot" },
   { id: "friends", label: t("tab.friends"), icon: <Users size={22} />, badge: "dot" },
 ];
