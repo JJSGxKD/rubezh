@@ -1,6 +1,25 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { Check } from "lucide-react";
 import { t } from "../../i18n";
 import { Button } from "./Button";
+
+/**
+ * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
+ * токенов, число здесь только порядковый номер.
+ */
+export function staggerStyle(index: number): CSSProperties {
+  return { animationDelay: `calc(var(--stagger-step) * ${index})` };
+}
+
+/** Цветная кромка карточки: что это за предмет, видно до чтения текста. */
+export type CardStripe = "weapon" | "passive" | "accent" | "info";
+
+const STRIPE_CLASS: Record<CardStripe, string> = {
+  weapon: "bg-weapon",
+  passive: "bg-passive",
+  accent: "bg-accent",
+  info: "bg-info",
+};
 
 /** Карточка: обычная и выбираемая (апгрейды, оружие, магазин). */
 export interface CardProps {
@@ -8,19 +27,54 @@ export interface CardProps {
   onClick?: () => void;
   selected?: boolean;
   disabled?: boolean;
+  stripe?: CardStripe;
+  /** порядковый номер в лесенке появления; без него карточка не анимируется */
+  appearIndex?: number;
 }
 
 export function Card(props: CardProps): ReactNode {
   const interactive = props.onClick !== undefined;
+  const selected = props.selected === true;
   const className = [
-    "w-full rounded-lg border p-4 text-left",
-    "transition-[transform,border-color] duration-(--duration-fast) ease-base",
-    props.selected === true ? "border-accent bg-surface-raised" : "border-border bg-surface",
-    interactive ? "active:scale-[0.99]" : "",
-    props.disabled === true ? "opacity-50" : "",
+    // flex-col: кнопка по умолчанию центрирует содержимое по вертикали, и в
+    // ряду карточек разной длины текст «плавал» бы на разной высоте.
+    "relative flex w-full flex-col overflow-hidden rounded-lg p-4 text-left",
+    "transition-transform duration-(--duration-fast) ease-base",
+    selected ? "surface-card-selected" : "surface-card",
+    interactive ? "active:scale-[0.98]" : "",
+    props.disabled === true ? "opacity-60" : "",
+    props.appearIndex === undefined ? "" : "animate-rise-in",
   ].join(" ");
+  const style = props.appearIndex === undefined ? undefined : staggerStyle(props.appearIndex);
 
-  if (!interactive) return <div className={className}>{props.children}</div>;
+  const body = (
+    <>
+      {props.stripe === undefined ? null : (
+        <span
+          aria-hidden="true"
+          className={`absolute inset-y-0 left-0 w-1 ${STRIPE_CLASS[props.stripe]}`}
+        />
+      )}
+      {/* Выбор отмечен значком, а не только цветом рамки (§4.4). */}
+      {selected ? (
+        <span
+          aria-hidden="true"
+          className="absolute top-3 right-3 inline-flex size-6 animate-pop-in items-center justify-center rounded-full bg-accent text-on-accent"
+        >
+          <Check size={16} strokeWidth={3} />
+        </span>
+      ) : null}
+      {props.children}
+    </>
+  );
+
+  if (!interactive) {
+    return (
+      <div className={className} style={style}>
+        {body}
+      </div>
+    );
+  }
 
   return (
     <button
@@ -29,8 +83,9 @@ export function Card(props: CardProps): ReactNode {
       disabled={props.disabled}
       onClick={props.onClick}
       className={className}
+      style={style}
     >
-      {props.children}
+      {body}
     </button>
   );
 }
@@ -42,14 +97,19 @@ export function Card(props: CardProps): ReactNode {
  */
 export interface ModalProps {
   title?: string;
+  /** значок над заголовком — у модалок забега он заменяет иллюстрацию */
+  icon?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   /** снизу — лист подтверждения, по центру — модалка забега */
   placement?: "center" | "bottom";
+  /** широкая — для трёх карточек в ряд в ландшафте (§5.3) */
+  size?: "m" | "l";
 }
 
 export function Modal(props: ModalProps): ReactNode {
   const bottom = props.placement === "bottom";
+  const wide = props.size === "l";
 
   return (
     <div
@@ -57,20 +117,77 @@ export function Modal(props: ModalProps): ReactNode {
       aria-modal="true"
       aria-label={props.title}
       className={[
-        "absolute inset-0 flex bg-bg/85 px-4",
-        "pt-[var(--app-inset-top)] pb-[var(--app-inset-bottom)]",
-        bottom ? "items-end pb-[calc(1rem+var(--app-inset-bottom))]" : "items-center justify-center",
+        "absolute inset-0 flex px-4",
+        "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
+        "pr-[calc(1rem+var(--app-inset-right))] pl-[calc(1rem+var(--app-inset-left))]",
+        bottom ? "items-end justify-center" : "items-center justify-center",
       ].join(" ")}
       style={{ zIndex: "var(--z-modal)" }}
     >
-      <div className="max-h-full w-full max-w-[420px] overflow-y-auto rounded-lg border border-border bg-surface p-5">
+      <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" />
+      <div
+        className={[
+          "surface-panel relative max-h-full w-full overflow-y-auto overscroll-contain rounded-xl p-5 landscape:p-4",
+          wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
+          bottom ? "animate-sheet-in" : "animate-pop-in",
+        ].join(" ")}
+      >
+        {/* В ландшафте значок прячется: высота там около 360 px, и каждая
+            строка на счету — кнопка «Ещё раз» не должна уходить под прокрутку (§5.3). */}
+        {props.icon === undefined ? null : (
+          <div className="mb-2 flex justify-center landscape:hidden">
+            <IconEmblem>{props.icon}</IconEmblem>
+          </div>
+        )}
         {props.title === undefined ? null : (
-          <h2 className="mb-3 font-display text-xl text-text">{props.title}</h2>
+          <h2
+            className={[
+              "mb-3 font-display text-2xl font-bold text-text landscape:mb-1 landscape:text-xl",
+              props.icon === undefined ? "" : "text-center",
+            ].join(" ")}
+          >
+            {props.title}
+          </h2>
         )}
         {props.children}
         {props.footer === undefined ? null : <div className="mt-5 grid gap-2">{props.footer}</div>}
       </div>
     </div>
+  );
+}
+
+/**
+ * Значок в светящемся круге: заменяет иллюстрацию, пока нет ассетов, и держит
+ * у заглушек и модалок единый «игровой» вид.
+ */
+export function IconEmblem(props: {
+  children: ReactNode;
+  tone?: "accent" | "info" | "muted";
+  size?: "m" | "l";
+}): ReactNode {
+  const tone = props.tone ?? "accent";
+  const large = props.size === "l";
+
+  return (
+    <span className={`relative isolate inline-flex ${large ? "size-20" : "size-14"}`}>
+      {tone === "muted" ? null : (
+        <span
+          aria-hidden="true"
+          className={[
+            "pointer-events-none absolute -inset-4 -z-10 animate-glow rounded-full",
+            tone === "accent" ? "halo-accent" : "halo-info",
+          ].join(" ")}
+        />
+      )}
+      <span
+        className={[
+          "surface-card inline-flex size-full items-center justify-center rounded-full",
+          tone === "accent" ? "text-accent" : tone === "info" ? "text-info" : "text-text-muted",
+        ].join(" ")}
+      >
+        {props.children}
+      </span>
+    </span>
   );
 }
 
@@ -87,10 +204,14 @@ export interface StubProps {
 
 export function StubScreen(props: StubProps): ReactNode {
   return (
-    <div className="flex flex-col items-center gap-3 px-2 py-10 text-center">
-      {props.icon === undefined ? null : <div className="text-text-disabled">{props.icon}</div>}
-      <h2 className="font-display text-lg text-text">{props.title}</h2>
-      <span className="rounded-md bg-surface-raised px-2 py-1 text-xs text-warning">
+    <div className="flex animate-rise-in flex-col items-center gap-3 px-2 py-10 text-center">
+      {props.icon === undefined ? null : (
+        <IconEmblem tone="info" size="l">
+          {props.icon}
+        </IconEmblem>
+      )}
+      <h2 className="mt-2 font-display text-xl font-bold text-text">{props.title}</h2>
+      <span className="rounded-pill bg-warning/15 px-3 py-1 font-display text-xs font-semibold tracking-wide text-warning uppercase">
         {t("app.inDevelopment")}
       </span>
       <p className="max-w-[320px] text-sm text-text-muted">{props.text}</p>
@@ -102,8 +223,8 @@ export function StubScreen(props: StubProps): ReactNode {
 /** Сообщение об ошибке с одним действием: без него игрок упирается в тупик. */
 export function ErrorState(props: { text: string; onRetry?: () => void }): ReactNode {
   return (
-    <div className="flex flex-col items-center gap-4 px-2 py-10 text-center">
-      <h2 className="font-display text-lg text-danger">{t("error.title")}</h2>
+    <div className="flex animate-rise-in flex-col items-center gap-4 px-2 py-10 text-center">
+      <h2 className="font-display text-xl font-bold text-danger">{t("error.title")}</h2>
       <p className="max-w-[320px] text-sm text-text-muted">{props.text}</p>
       {props.onRetry === undefined ? null : (
         <Button onClick={props.onRetry}>{t("app.retry")}</Button>

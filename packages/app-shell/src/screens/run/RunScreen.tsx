@@ -9,6 +9,7 @@ import { usePlatform } from "../../state/platform";
 import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
+import { RunLoading } from "./RunLoading";
 import { DeathOverlay, LevelUpOverlay, PauseOverlay } from "./overlays";
 
 /**
@@ -24,6 +25,7 @@ export function RunScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics((state) => state.enabled);
   const isActive = usePlatform((state) => state.isActive);
+  const weaponId = useMeta((state) => state.lastWeaponId);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -55,6 +57,8 @@ export function RunScreen(): ReactNode {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <div ref={containerRef} className="absolute inset-0" style={{ zIndex: "var(--z-canvas)" }} />
+
+      <RunLoading stage={run.phase === "error" ? null : run.loadingStage} weaponId={weaponId} />
 
       {run.hud === null || run.phase === "finished" ? null : (
         <RunHud hud={run.hud} onPause={() => useRun.getState().pause("manual")} />

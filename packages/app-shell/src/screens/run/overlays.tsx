@@ -1,7 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Crown, Pause, Skull, Sparkles, Star } from "lucide-react";
 import type { RunResult, UpgradeOption } from "@bh/shared-types";
-import { Button, Card, FullscreenButton, Modal, Stat } from "../../design-system/components";
+import {
+  Badge,
+  Button,
+  Card,
+  FullscreenButton,
+  Modal,
+  Stat,
+  staggerStyle,
+} from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
+import { ItemIcon, ItemTile, type ItemKind } from "../item-icons";
 
 /**
  * Оверлеи забега: пауза, выбор улучшения и смерть. Показываются поверх
@@ -14,7 +24,8 @@ import { formatDuration, formatNumber, t } from "../../i18n";
  *
  * Палец в этот момент ещё ведёт персонажа: без задержки тап по джойстику
  * выбирает улучшение за игрока и мгновенно закрывает экран смерти
- * (docs/26-stage2-plan.md, WP2).
+ * (docs/26-stage2-plan.md, WP2). Анимация появления короче задержки — к
+ * моменту, когда нажатие разрешено, карточки уже на месте.
  */
 const GUARD_MS = 350;
 
@@ -27,6 +38,17 @@ function useTapGuard(): boolean {
   }, []);
 
   return ready;
+}
+
+/**
+ * Обработчик, который до конца задержки молча ничего не делает. Кнопки при
+ * этом не выключаются: иначе на треть секунды они серели бы и гасили ореол
+ * ровно во время анимации появления.
+ */
+function guarded(ready: boolean, action: () => void): () => void {
+  return () => {
+    if (ready) action();
+  };
 }
 
 export interface PauseOverlayProps {
@@ -47,7 +69,7 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
         placement="bottom"
         footer={
           <>
-            <Button variant="danger" block disabled={!ready} onClick={props.onSurrender}>
+            <Button variant="danger" block onClick={guarded(ready, props.onSurrender)}>
               {t("run.surrender.confirm")}
             </Button>
             <Button variant="ghost" block onClick={() => setConfirming(false)}>
@@ -64,9 +86,10 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
   return (
     <Modal
       title={t("run.pause")}
+      icon={<Pause size={26} fill="currentColor" />}
       footer={
         <>
-          <Button block disabled={!ready} onClick={props.onResume}>
+          <Button size="l" block glow onClick={guarded(ready, props.onResume)}>
             {t("run.pause.resume")}
           </Button>
           <Button variant="secondary" block onClick={props.onSettings}>
@@ -79,7 +102,7 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
         </>
       }
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className="surface-sunken flex items-center justify-between gap-4 rounded-lg px-4 py-3">
         <Stat label={t("run.death.survived")} value={formatDuration(props.elapsedSec)} large />
         {/* Режим экрана переключается прямо отсюда: забег при этом не
             прерывается (docs/27-design-system-and-app-shell.md §5.2.1). */}
@@ -100,23 +123,53 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   const ready = useTapGuard();
 
   return (
-    <Modal title={t("run.levelUp.title", { level: props.level })}>
-      <p className="mb-4 text-sm text-text-muted">{t("run.levelUp.subtitle")}</p>
+    <Modal
+      title={t("run.levelUp.title", { level: props.level })}
+      icon={<Star size={28} fill="currentColor" />}
+      size="l"
+    >
+      <p className="-mt-1 mb-4 text-center text-sm text-text-muted landscape:mb-2">
+        {t("run.levelUp.subtitle")}
+      </p>
       {/*
         В ландшафте карточки идут в ряд, в портрете — столбцом: высота
         ландшафта на телефоне около 360 px, и три карточки столбцом туда не
-        помещаются (docs/27-design-system-and-app-shell.md §5.3).
+        помещаются (docs/27-design-system-and-app-shell.md §5.3). Метка «новое»
+        стоит отдельной строкой: рядом с длинным названием она не давала
+        колонке сжаться, и модалка уезжала в горизонтальную прокрутку.
       */}
       <div className="grid gap-2 landscape:grid-cols-3">
-        {props.offers.map((offer) => (
-          <Card key={offer.id} disabled={!ready} onClick={() => props.onChoose(offer.id)}>
-            <div className="flex items-start justify-between gap-2">
-              <span className="font-display text-base text-text">{t(offer.nameKey)}</span>
-              <span className="shrink-0 text-xs text-accent">{offerTag(offer)}</span>
-            </div>
-            <p className="mt-1 text-xs text-text-muted">{t(offer.descriptionKey)}</p>
-          </Card>
-        ))}
+        {props.offers.map((offer, index) => {
+          const kind = kindOf(offer);
+          return (
+            <Card
+              key={offer.id}
+              appearIndex={index}
+              stripe={kind === "passive" ? "passive" : kind === "weapon" ? "weapon" : "info"}
+              onClick={guarded(ready, () => props.onChoose(offer.id))}
+            >
+              {/* В ландшафте значок и метка в одну строку: колонка узкая, а
+                  высота экрана на счету. */}
+              <div className="flex items-start gap-3 landscape:flex-col landscape:gap-2">
+                <div className="flex items-center gap-2">
+                  <ItemTile kind={kind} id={offer.refId} />
+                  <span className="hidden landscape:inline">
+                    <OfferTag offer={offer} />
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="landscape:hidden">
+                    <OfferTag offer={offer} />
+                  </span>
+                  <span className="mt-1 block font-display text-base font-bold break-words text-text landscape:mt-0">
+                    {t(offer.nameKey)}
+                  </span>
+                  <p className="mt-1 text-xs text-text-muted">{t(offer.descriptionKey)}</p>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
       {props.queued > 0 ? (
         <p className="mt-3 text-center text-xs text-text-muted">
@@ -127,11 +180,28 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   );
 }
 
+function kindOf(offer: UpgradeOption): ItemKind {
+  if (offer.kind === "heal") return "heal";
+  return offer.kind === "weapon_new" || offer.kind === "weapon_level" ? "weapon" : "passive";
+}
+
 /** Новое это оружие или уровень к уже взятому — игрок должен видеть сразу. */
-function offerTag(offer: UpgradeOption): string {
-  if (offer.kind === "weapon_new" || offer.kind === "passive_new") return t("run.levelUp.new");
-  if (offer.kind === "heal") return "";
-  return t("run.levelUp.upgrade", { level: offer.level });
+function OfferTag(props: { offer: UpgradeOption }): ReactNode {
+  const { offer } = props;
+  if (offer.kind === "heal") return null;
+  if (offer.kind === "weapon_new" || offer.kind === "passive_new") {
+    return (
+      <Badge tone="accent">
+        <Sparkles size={12} aria-hidden="true" />
+        {t("run.levelUp.new")}
+      </Badge>
+    );
+  }
+  return (
+    <Badge tone={offer.kind === "weapon_level" ? "weapon" : "passive"}>
+      {t("run.levelUp.upgrade", { level: offer.level })}
+    </Badge>
+  );
 }
 
 export interface DeathOverlayProps {
@@ -149,65 +219,112 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   // Сверху то, что тянуло забег: урон по оружиям — главный вход
   // геймдизайнера для баланса (docs/26-stage2-plan.md, WP3).
   const weapons = [...result.weapons].sort((left, right) => right.damage - left.damage);
+  const topDamage = weapons[0]?.damage ?? 0;
 
   return (
-    <Modal title={result.outcome === "died" ? t("run.death.title") : t("run.death.abandoned")}>
+    <Modal
+      title={result.outcome === "died" ? t("run.death.title") : t("run.death.abandoned")}
+      icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
+      size="l"
+    >
       {props.isNewRecord ? (
-        <p className="mb-3 font-display text-sm text-accent">{t("run.death.record")}</p>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-4 landscape:grid-cols-4">
-        <Stat label={t("run.death.survived")} value={formatDuration(result.survivalSec)} large />
-        <Stat label={t("run.death.level")} value={String(result.level)} large />
-        <Stat label={t("run.death.killed")} value={formatNumber(result.enemiesKilled)} />
-        <Stat label={t("run.death.wave")} value={String(result.waveReached)} />
-      </div>
-
-      {result.deathCause === null ? null : (
-        <p className="mt-3 text-xs text-text-muted">
-          {t("run.death.cause", { enemy: result.deathCause })}
-        </p>
-      )}
-
-      {weapons.length === 0 ? null : (
-        <div className="mt-4">
-          <h3 className="mb-2 text-xs tracking-wide text-text-muted uppercase">
-            {t("run.death.weapons")}
-          </h3>
-          <ul className="grid gap-1">
-            {weapons.map((weapon) => (
-              <li key={weapon.id} className="flex items-center justify-between text-sm">
-                <span className="text-text">
-                  {t(`weapon.${weapon.id}.name`)}
-                  <span className="ml-1 text-text-muted">{weapon.level}</span>
-                </span>
-                <span className="tabular-nums text-text-muted">
-                  {formatNumber(weapon.damage)}
-                </span>
-              </li>
-            ))}
-          </ul>
+        <div className="-mt-1 mb-3 flex justify-center">
+          <span className="animate-pop-in" style={staggerStyle(2)}>
+            <Badge tone="accent">
+              <Crown size={12} aria-hidden="true" />
+              {t("run.death.record")}
+            </Badge>
+          </span>
         </div>
-      )}
-
-      {/* seed и runId видны только в режиме диагностики: с ними баг
-          воспроизводится, а обычному игроку они ни о чём не говорят. */}
-      {props.diagnostics ? (
-        <p className="mt-4 font-mono text-[11px] break-all text-text-disabled">
-          {t("run.death.diagnostics", { seed: result.seed, runId: result.runId })}
-        </p>
       ) : null}
 
-      <div className="mt-5 grid gap-2">
-        <Button block disabled={!ready} onClick={props.onRestart}>
-          {t("run.death.again")}
-        </Button>
-        <Button variant="secondary" block onClick={props.onMenu}>
-          {t("run.death.menu")}
-        </Button>
-        <Button variant="ghost" block onClick={props.onShare}>
-          {t("run.death.share")}
-        </Button>
+      {/* В ландшафте итоги слева, оружие и кнопки справа — «Ещё раз» видна без
+          прокрутки (docs/27-design-system-and-app-shell.md §5.3). */}
+      <div className="grid gap-4 landscape:grid-cols-2">
+        <div>
+          <div className="surface-sunken grid grid-cols-2 gap-4 rounded-lg p-4">
+            <Stat
+              label={t("run.death.survived")}
+              value={formatDuration(result.survivalSec)}
+              large
+              tone={props.isNewRecord ? "accent" : undefined}
+            />
+            <Stat label={t("run.death.level")} value={String(result.level)} large />
+            <Stat label={t("run.death.killed")} value={formatNumber(result.enemiesKilled)} />
+            <Stat label={t("run.death.wave")} value={String(result.waveReached)} />
+          </div>
+
+          {result.deathCause === null ? null : (
+            <p className="mt-3 text-xs text-text-muted">
+              {t("run.death.cause", { enemy: result.deathCause })}
+            </p>
+          )}
+        </div>
+
+        <div>
+          {weapons.length === 0 ? null : (
+            <div>
+              <h3 className="mb-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
+                {t("run.death.weapons")}
+              </h3>
+              <ul className="grid gap-2">
+                {weapons.map((weapon, index) => (
+                  <li
+                    key={weapon.id}
+                    className="flex animate-rise-in items-center gap-2 text-sm"
+                    style={staggerStyle(index + 1)}
+                  >
+                    <span className="text-weapon">
+                      <ItemIcon kind="weapon" id={weapon.id} size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-text">
+                          {t(`weapon.${weapon.id}.name`)}
+                          <span className="ml-1 text-text-muted">{weapon.level}</span>
+                        </span>
+                        <span className="font-display tabular-nums text-text-muted">
+                          {formatNumber(weapon.damage)}
+                        </span>
+                      </span>
+                      {/* Доля урона полосой: какое оружие тянуло забег, видно без цифр. */}
+                      <span className="surface-sunken mt-1 block h-1 overflow-hidden rounded-pill">
+                        <span
+                          className="fill-accent block h-full origin-left rounded-pill"
+                          style={{
+                            transform: `scaleX(${topDamage > 0 ? weapon.damage / topDamage : 0})`,
+                          }}
+                        />
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* seed и runId видны только в режиме диагностики: с ними баг
+              воспроизводится, а обычному игроку они ни о чём не говорят. */}
+          {props.diagnostics ? (
+            <p className="mt-4 font-mono text-xs break-all text-text-disabled">
+              {t("run.death.diagnostics", { seed: result.seed, runId: result.runId })}
+            </p>
+          ) : null}
+
+          <div className="mt-5 grid gap-2">
+            <Button size="l" block glow onClick={guarded(ready, props.onRestart)}>
+              {t("run.death.again")}
+            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" block onClick={props.onMenu}>
+                {t("run.death.menu")}
+              </Button>
+              <Button variant="ghost" block onClick={props.onShare}>
+                {t("run.death.share")}
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </Modal>
   );

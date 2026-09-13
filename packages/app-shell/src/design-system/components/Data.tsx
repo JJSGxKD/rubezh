@@ -13,14 +13,22 @@ export interface ProgressBarProps {
   /** цветовой токен полосы */
   tone?: "hp" | "hp-low" | "xp" | "accent";
   label?: string;
-  height?: "thin" | "base";
+  height?: "thin" | "base" | "thick";
+  /** бегущий блик — полоса «живая», пока идёт загрузка */
+  shimmer?: boolean;
 }
 
 const TONE_CLASS: Record<NonNullable<ProgressBarProps["tone"]>, string> = {
-  hp: "bg-hp",
-  "hp-low": "bg-hp-low",
-  xp: "bg-xp",
-  accent: "bg-accent",
+  hp: "fill-hp",
+  "hp-low": "fill-hp-low",
+  xp: "fill-xp",
+  accent: "fill-accent",
+};
+
+const HEIGHT_CLASS: Record<NonNullable<ProgressBarProps["height"]>, string> = {
+  thin: "h-1.5",
+  base: "h-2.5",
+  thick: "h-3.5",
 };
 
 export function ProgressBar(props: ProgressBarProps): ReactNode {
@@ -33,31 +41,39 @@ export function ProgressBar(props: ProgressBarProps): ReactNode {
       aria-valuemax={Math.round(props.max)}
       aria-label={props.label}
       className={[
-        "w-full overflow-hidden rounded-pill bg-surface-raised",
-        props.height === "thin" ? "h-1" : "h-2",
+        "surface-sunken relative w-full overflow-hidden rounded-pill",
+        HEIGHT_CLASS[props.height ?? "base"],
       ].join(" ")}
     >
       <div
         className={[
           "h-full origin-left rounded-pill",
-          "transition-transform duration-(--duration-fast) ease-base",
+          "transition-transform duration-(--duration-slow) ease-out",
           TONE_CLASS[props.tone ?? "accent"],
         ].join(" ")}
         style={{ transform: `scaleX(${ratio})` }}
       />
+      {props.shimmer === true ? (
+        <div aria-hidden="true" className="absolute inset-0 animate-shimmer">
+          <div className="h-full w-1/3 bg-linear-to-r from-transparent via-text/25 to-transparent" />
+        </div>
+      ) : null}
     </div>
   );
 }
 
 /** Подпись и значение. Крупный вариант — для экрана смерти. */
-export function Stat(props: { label: string; value: string; large?: boolean }): ReactNode {
+export function Stat(props: { label: string; value: string; large?: boolean; tone?: "accent" }): ReactNode {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-text-muted">{props.label}</span>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <span className="font-display text-xs font-semibold tracking-wide text-text-muted uppercase">
+        {props.label}
+      </span>
       <span
         className={[
-          "font-display tabular-nums text-text",
-          props.large === true ? "text-2xl" : "text-base",
+          "font-display font-bold tabular-nums",
+          props.tone === "accent" ? "text-accent" : "text-text",
+          props.large === true ? "text-2xl" : "text-lg",
         ].join(" ")}
       >
         {props.value}
@@ -66,17 +82,28 @@ export function Stat(props: { label: string; value: string; large?: boolean }): 
   );
 }
 
-export function Badge(props: { children: ReactNode; tone?: "muted" | "accent" | "warning" }): ReactNode {
-  const tone = props.tone ?? "muted";
-  const toneClass =
-    tone === "accent"
-      ? "bg-accent/15 text-accent"
-      : tone === "warning"
-        ? "bg-warning/15 text-warning"
-        : "bg-surface-raised text-text-muted";
+export type BadgeTone = "muted" | "accent" | "warning" | "info" | "weapon" | "passive";
 
+const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
+  muted: "bg-surface-raised text-text-muted",
+  accent: "bg-accent/15 text-accent",
+  warning: "bg-warning/15 text-warning",
+  info: "bg-info/15 text-info",
+  weapon: "bg-weapon/15 text-weapon",
+  passive: "bg-passive/15 text-passive",
+};
+
+export function Badge(props: { children: ReactNode; tone?: BadgeTone }): ReactNode {
   return (
-    <span className={`rounded-pill px-2 py-0.5 text-xs ${toneClass}`}>{props.children}</span>
+    <span
+      className={[
+        "inline-flex items-center gap-1 rounded-pill px-2 py-0.5",
+        "font-display text-xs font-semibold tracking-wide whitespace-nowrap uppercase",
+        BADGE_TONE_CLASS[props.tone ?? "muted"],
+      ].join(" ")}
+    >
+      {props.children}
+    </span>
   );
 }
 
@@ -97,7 +124,7 @@ export function Avatar(props: { name: string; url?: string | null; size?: number
         alt=""
         width={size}
         height={size}
-        className="rounded-full object-cover"
+        className="rounded-full border-2 border-border-strong object-cover"
       />
     );
   }
@@ -106,7 +133,7 @@ export function Avatar(props: { name: string; url?: string | null; size?: number
     <span
       aria-hidden="true"
       style={{ width: size, height: size }}
-      className="inline-flex items-center justify-center rounded-full bg-surface-raised font-display text-sm text-text-muted"
+      className="surface-card inline-flex items-center justify-center rounded-full font-display text-sm font-bold text-text-muted"
     >
       {initials === "" ? "?" : initials}
     </span>
@@ -116,9 +143,11 @@ export function Avatar(props: { name: string; url?: string | null; size?: number
 /** Валюта в верхней панели. На этапе 2 — заглушка с нулём. */
 export function CurrencyChip(props: { icon: ReactNode; value: string }): ReactNode {
   return (
-    <span className="inline-flex items-center gap-1 rounded-pill bg-surface-raised px-2 py-1 text-xs tabular-nums text-text-muted">
-      {props.icon}
-      {props.value}
+    <span className="surface-sunken inline-flex items-center gap-1.5 rounded-pill py-1 pr-3 pl-1">
+      <span className="inline-flex size-6 items-center justify-center rounded-full bg-info/15 text-info">
+        {props.icon}
+      </span>
+      <span className="font-display text-sm font-bold tabular-nums text-text">{props.value}</span>
     </span>
   );
 }

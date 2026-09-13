@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { Pause } from "lucide-react";
+import { Heart, Pause } from "lucide-react";
 import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
+import { ItemIcon } from "../item-icons";
 
 /**
  * HUD забега. Единственная часть оболочки, которая живёт во время забега, —
@@ -11,6 +12,10 @@ import { formatDuration, t } from "../../i18n";
  *
  * Слой не ловит касания: под ним канва с джойстиком, и палец должен попадать
  * в неё, а не в прозрачный прямоугольник HUD. Исключение — кнопка паузы.
+ *
+ * Оформление статичное: подложки без размытия и без анимаций поверх живой
+ * канвы (§3.3, правила 2 и 4). Единственная анимация — пульс низкого здоровья,
+ * и она на прозрачности.
  */
 export interface RunHudProps {
   hud: HudSnapshot;
@@ -26,74 +31,77 @@ export function RunHud(props: RunHudProps): ReactNode {
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 flex flex-col"
+      className="pointer-events-none absolute inset-0 flex animate-fade-in flex-col"
       style={{ zIndex: "var(--z-hud)" }}
     >
-      <div className="flex items-start gap-3 px-4 pt-[calc(0.5rem+var(--app-inset-top))]">
+      <div className="flex items-start gap-3 pt-[calc(0.5rem+var(--app-inset-top))] pr-[calc(1rem+var(--app-inset-right))] pl-[calc(1rem+var(--app-inset-left))]">
         {/* Полосы не растягиваются на всю ширину широкого окна: игра
             рассчитана на телефон, и HP во весь монитор читается хуже, а не
             лучше (docs/27-design-system-and-app-shell.md §5.3). */}
-        <div className="flex min-w-0 max-w-[240px] flex-1 flex-col gap-1">
+        <div className="flex min-w-0 max-w-[240px] flex-1 flex-col gap-1.5">
           <div className="flex items-center gap-2">
+            {/* Низкое здоровье передаётся не только цветом: сердце пульсирует
+                (§4.4). */}
+            <Heart
+              size={18}
+              aria-hidden="true"
+              fill="currentColor"
+              className={low ? "shrink-0 animate-pulse-soft text-hp-low" : "shrink-0 text-hp"}
+            />
             <ProgressBar
               value={hud.hp}
               max={hud.maxHp}
               tone={low ? "hp-low" : "hp"}
+              height="thick"
               label="HP"
             />
-            {/* Низкое здоровье передаётся не только цветом: часть игроков
-                различает оттенки хуже (§4.4). */}
-            {low ? (
-              <span className="animate-pulse font-display text-xs text-hp-low">!</span>
-            ) : null}
           </div>
-          <span className="font-display text-xs tabular-nums text-text-muted">
-            {t("run.level", { level: hud.level })}
-          </span>
-          <ProgressBar value={hud.xp} max={hud.xpToNext} tone="xp" height="thin" label="XP" />
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 rounded-sm bg-xp/15 px-1.5 font-display text-xs font-bold tabular-nums text-xp">
+              {t("run.level", { level: hud.level })}
+            </span>
+            <ProgressBar value={hud.xp} max={hud.xpToNext} tone="xp" height="thin" label="XP" />
+          </div>
         </div>
 
-        <span className="font-display text-xl tabular-nums text-text">
+        <span className="rounded-pill bg-bg/70 px-3 py-0.5 font-display text-xl font-bold tabular-nums text-text">
           {formatDuration(hud.survivalSec)}
         </span>
 
-        <div className="pointer-events-auto">
+        <div className="pointer-events-auto rounded-full bg-bg/70">
           <IconButton label={t("run.pause")} onClick={props.onPause}>
-            <Pause size={20} />
+            <Pause size={20} fill="currentColor" />
           </IconButton>
         </div>
       </div>
 
-      <div className="mt-auto flex flex-wrap gap-1 px-4 pb-[calc(0.75rem+var(--app-inset-bottom))]">
+      <div className="mt-auto flex flex-wrap gap-1.5 pr-[calc(1rem+var(--app-inset-right))] pb-[calc(0.75rem+var(--app-inset-bottom))] pl-[calc(1rem+var(--app-inset-left))]">
         {hud.weapons.map((slot) => (
-          <Slot key={`w-${slot.id}`} id={slot.id} level={slot.level} tone="weapon" />
+          <Slot key={`w-${slot.id}`} id={slot.id} level={slot.level} kind="weapon" />
         ))}
         {hud.passives.map((slot) => (
-          <Slot key={`p-${slot.id}`} id={slot.id} level={slot.level} tone="passive" />
+          <Slot key={`p-${slot.id}`} id={slot.id} level={slot.level} kind="passive" />
         ))}
       </div>
     </div>
   );
 }
 
-/**
- * Слот набора. Пока нет иконок, показывается короткое имя: пустой квадрат
- * игроку ничего не говорит, а сокращение хотя бы отличает оружие от оружия.
- */
-function Slot(props: { id: string; level: number; tone: "weapon" | "passive" }): ReactNode {
-  const name = t(`${props.tone === "weapon" ? "weapon" : "passive"}.${props.id}.name`);
-  const short = name.slice(0, 3);
+/** Слот набора: значок предмета и уровень — оружие отличается от пассивки цветом и рамкой. */
+function Slot(props: { id: string; level: number; kind: "weapon" | "passive" }): ReactNode {
+  const name = t(`${props.kind}.${props.id}.name`);
 
   return (
     <span
       title={`${name} · ${props.level}`}
       className={[
-        "inline-flex items-center gap-1 rounded-sm bg-bg/70 px-1.5 py-0.5 text-xs tabular-nums",
-        props.tone === "weapon" ? "text-weapon" : "text-passive",
+        "inline-flex items-center gap-1 rounded-sm border bg-bg/70 px-1.5 py-0.5",
+        "font-display text-xs font-bold tabular-nums",
+        props.kind === "weapon" ? "border-weapon/40 text-weapon" : "border-passive/40 text-passive",
       ].join(" ")}
     >
-      {short}
-      <span className="text-text-muted">{props.level}</span>
+      <ItemIcon kind={props.kind} id={props.id} size={14} />
+      <span className="text-text">{props.level}</span>
     </span>
   );
 }

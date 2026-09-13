@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { COLORS, CSS_VAR_BY_COLOR, DURATION, type ColorToken } from "../src/design-system/tokens";
+import {
+  COLORS,
+  CSS_VAR_BY_COLOR,
+  DURATION,
+  FONT_FAMILY,
+  type ColorToken,
+} from "../src/design-system/tokens";
 
 /**
  * Синхронизация `tokens.css` и `tokens.ts`
@@ -17,7 +23,7 @@ const CSS = readFileSync(
 );
 
 function cssValue(name: string): string | null {
-  const match = new RegExp(`${name}\s*:\s*([^;]+);`).exec(CSS);
+  const match = new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(CSS);
   return match === null ? null : match[1].trim();
 }
 
@@ -42,6 +48,24 @@ describe("токены дизайн-системы", () => {
     expect(cssValue("--duration-fast")).toBe(`${DURATION.fast}ms`);
     expect(cssValue("--duration-base")).toBe(`${DURATION.base}ms`);
     expect(cssValue("--duration-slow")).toBe(`${DURATION.slow}ms`);
+  });
+
+  it("ждёт при запуске те же гарнитуры, что стоят первыми в стеках шрифтов", () => {
+    // Разойдись имена — экран загрузки ждал бы шрифт, которого нет, и всегда
+    // уходил бы по таймауту.
+    expect(cssValue("--font-display")).toMatch(new RegExp(`^"${FONT_FAMILY.display}"`));
+    expect(cssValue("--font-text")).toMatch(new RegExp(`^"${FONT_FAMILY.text}"`));
+  });
+
+  it("подключает в fonts.css гарнитуры с теми же именами", () => {
+    const fonts = readFileSync(
+      fileURLToPath(new URL("../src/design-system/fonts.css", import.meta.url)),
+      "utf8",
+    );
+    const families = new Set(
+      [...fonts.matchAll(/font-family:\s*"([^"]+)"/g)].map((match) => match[1]),
+    );
+    expect([...families].sort()).toEqual([FONT_FAMILY.display, FONT_FAMILY.text].sort());
   });
 
   it("объявляет отступы безопасной зоны и высоту вьюпорта", () => {

@@ -41,6 +41,15 @@ const BUDGETS = [
     matches: (name) => LAZY.test(name),
     limitKb: 380,
   },
+  {
+    // woff2 уже сжат, gzip его не уменьшает — считаем как есть. Браузер
+    // качает подмножество, только встретив его символы, но на русском
+    // интерфейсе нужны оба: кириллица и латиница с цифрами.
+    name: "Шрифты",
+    matches: (name) => name.endsWith(".woff2"),
+    limitKb: 120,
+    compressed: true,
+  },
 ];
 
 /** Какое приложение считаем эталоном: оно уходит в закрытый тест первым. */
@@ -52,10 +61,10 @@ function measure() {
 
   for (const budget of BUDGETS) {
     const matched = files.filter((name) => budget.matches(name));
-    const bytes = matched.reduce(
-      (total, name) => total + gzipSync(readFileSync(join(APP_DIST, name))).length,
-      0,
-    );
+    const bytes = matched.reduce((total, name) => {
+      const content = readFileSync(join(APP_DIST, name));
+      return total + (budget.compressed === true ? content.length : gzipSync(content).length);
+    }, 0);
     rows.push({ ...budget, files: matched, kb: bytes / 1024 });
   }
   return rows;

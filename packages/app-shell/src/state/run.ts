@@ -15,6 +15,13 @@ import { reportError, track, useShell } from "./shell";
  */
 export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "finished" | "error";
 
+/**
+ * Этап загрузки забега для экрана загрузки: чанк движка, затем мир до первого
+ * снимка HUD. `null` — загрузки нет, в том числе при «Ещё раз»: сцена там уже
+ * жива, и экран загрузки только мигнул бы.
+ */
+export type RunLoadingStage = "engine" | "world";
+
 export interface RunStartOptions {
   container: HTMLElement;
   startingWeaponId: string;
@@ -25,6 +32,7 @@ export interface RunStartOptions {
 
 export interface RunStore {
   phase: RunPhase;
+  loadingStage: RunLoadingStage | null;
   hud: HudSnapshot | null;
   offers: UpgradeOption[];
   /** сколько уровней ещё ждёт выбора */
@@ -67,8 +75,12 @@ let startOptions: RunStartOptions | null = null;
  */
 let startToken = 0;
 
+/** Когда игрок начал забег — от этой точки считается время до первого кадра. */
+let firstFrameStartedAt: number | null = null;
+
 const IDLE = {
   phase: "idle" as RunPhase,
+  loadingStage: null as RunLoadingStage | null,
   hud: null,
   offers: [] as UpgradeOption[],
   queued: 0,
@@ -89,16 +101,19 @@ export const useRun = create<RunStore>((set, get) => ({
 
     const token = ++startToken;
     const seed = nextSeed();
-    set({ ...IDLE, phase: "loading", seed });
+    set({ ...IDLE, phase: "loading", loadingStage: "engine", seed });
     startOptions = options;
+    firstFrameStartedAt = performance.now();
 
     try {
-      // Движок приходит отдельным чанком: до этого момента Phaser не
-      // загружался вовсе (docs/27-design-system-and-app-shell.md §3.4).
+      // Движок приходит отдельным чанком; обычно он уже предзагружен из лобби
+      // (`preloadRunEngine`), и ожидание здесь мгновенное
+      // (docs/27-design-system-and-app-shell.md §3.4).
       const engine = await loadRunEngine();
       // Пока грузился чанк, нас могли остановить или запустить заново. Игру
       // в этом случае не создаём вовсе: лишний контекст WebGL дороже всего.
       if (token !== startToken) return;
+      set({ loadingStage: "world" });
 
       const diagnostics = useDiagnostics.getState();
       const created = engine.start({
@@ -134,7 +149,8 @@ export const useRun = create<RunStore>((set, get) => ({
       });
     } catch (error: unknown) {
       reportError("run", `движок не загрузился: ${String(error)}`);
-      set({ phase: "error", errorMessage: "error.engine" });
+      firstFrameStartedAt = null;
+      set({ phase: "error", loadingStage: null, errorMessage: "error.engine" });
     }
   },
 
@@ -185,6 +201,7 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.destroy();
     session = null;
     startOptions = null;
+    firstFrameStartedAt = null;
     setRunUiMode(false);
     set({ ...IDLE, phase: "idle" });
   },
@@ -195,7 +212,17 @@ type GetState = () => RunStore;
 
 function subscribe(created: RunSession, set: SetState, get: GetState): (() => void)[] {
   return [
-    created.on("hud", (hud) => set({ hud })),
+    created.on("hud", (hud) => {
+      // Первый снимок HUD — первый кадр забега: сцена создана и мир живёт.
+      if (firstFrameStartedAt !== null) {
+        track("load_time", {
+          phase: "run_first_frame",
+          ms: Math.round(performance.now() - firstFrameStartedAt),
+        });
+        firstFrameStartedAt = null;
+      }
+      set({ hud, loadingStage: null });
+    }),
 
     created.on("levelUp", ({ level, options, queued }) => {
       track("upgrade_offered", { level, count: options.length, queued });
@@ -222,7 +249,11 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
       // разные вещи: в первом случае не загрузилось, во втором замерла
       // картинка, и текст должен говорить именно об этом.
       const started = get().phase !== "loading";
-      set({ phase: "error", errorMessage: started ? "error.render" : "error.engine" });
+      set({
+        phase: "error",
+        loadingStage: null,
+        errorMessage: started ? "error.render" : "error.engine",
+      });
     }),
   ];
 }
@@ -248,6 +279,29 @@ function finishRun(
     map: result.mapId,
     contentHash: result.contentHash,
     isNewRecord,
+  });
+}
+
+let preloading = false;
+
+/**
+ * Предзагрузить чанк движка, пока игрок в лобби (docs/27-design-system-and-app-shell.md
+ * §3.4): тогда «Играть» открывает забег без ожидания сети.
+ *
+ * Не грузим, если игрок включил экономию трафика или сети нет. Второе важнее,
+ * чем кажется: браузер может запомнить неудавшийся динамический импорт, и
+ * предзагрузка без сети сломала бы и сам забег до перезапуска приложения.
+ */
+export function preloadRunEngine(): void {
+  if (preloading || session !== null) return;
+
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  if (connection?.saveData === true || navigator.onLine === false) return;
+
+  preloading = true;
+  loadRunEngine().catch((error: unknown) => {
+    preloading = false;
+    reportError("run", `предзагрузка движка не удалась: ${String(error)}`);
   });
 }
 

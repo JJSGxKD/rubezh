@@ -1,9 +1,11 @@
-import { StrictMode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { PlatformAdapter } from "@bh/shared-types";
 import { App } from "./app/App";
+import "./design-system/fonts.css";
 import "./design-system/tokens.css";
-import { PLATFORM_COLORS } from "./design-system/tokens";
+import { FONT_FAMILY, PLATFORM_COLORS } from "./design-system/tokens";
+import { BootScreen, type BootStage } from "./screens/gates";
 import { useDiagnostics } from "./state/diagnostics";
 import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
@@ -31,6 +33,13 @@ export interface MountedShell {
   unmount(): void;
 }
 
+/**
+ * Сколько запуск ждёт свои шрифты. Дольше ждать нельзя: на медленной сети
+ * игрок смотрел бы на заставку ради шрифта. Не дождались — главная откроется
+ * системным шрифтом, и свой подменит его, когда придёт (fonts.css, `swap`).
+ */
+const FONT_WAIT_MS = 800;
+
 export async function mountAppShell(options: MountOptions): Promise<MountedShell> {
   const startedAt = performance.now();
 
@@ -42,27 +51,39 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
     build: options.build,
   });
 
-  // Площадка готовится до первого кадра: пока она не смонтирована, отступы и
+  // Заставка React подменяет заставку из index.html сразу: раскладка у них
+  // одна, а этапы запуска дальше видны на полосе.
+  const root: Root = createRoot(options.container);
+  const render = (node: ReactNode): void => root.render(<StrictMode>{node}</StrictMode>);
+  const renderBoot = (stage: BootStage): void =>
+    render(<BootScreen stage={stage} version={options.build.version} />);
+
+  renderBoot("platform");
+  // Площадка готовится до главной: пока она не смонтирована, отступы и
   // размеры — нули, и интерфейс успел бы моргнуть неверной раскладкой.
+  // Заставке отступы не нужны — она по центру.
   await options.adapter.ui.ready();
   options.adapter.ui.applyThemeColors(PLATFORM_COLORS);
 
+  renderBoot("fonts");
+  const fontsLoaded = await waitForFonts(FONT_WAIT_MS);
+
+  renderBoot("ready");
   const stopWatching = watchPlatform();
   useInstall.getState().hydrate();
   useDiagnostics.getState().hydrate(options.capabilities.diagnosticsByDefault);
   useMeta.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
 
-  const root: Root = createRoot(options.container);
-  root.render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
+  render(<App />);
 
   // Время до интерактивной главной — бюджет первой загрузки проверяется не
   // только размером файлов, но и на устройствах тестеров (§3.4).
-  track("load_time", { phase: "shell_ready", ms: Math.round(performance.now() - startedAt) });
+  track("load_time", {
+    phase: "shell_ready",
+    ms: Math.round(performance.now() - startedAt),
+    fontsLoaded,
+  });
 
   return {
     unmount(): void {
@@ -70,6 +91,37 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
       root.unmount();
     },
   };
+}
+
+/**
+ * Дождаться своих гарнитур, но не дольше `timeoutMs`. `document.fonts.load`
+ * сам запускает загрузку файла из fonts.css — до этого браузер скачал бы его,
+ * только встретив текст этим шрифтом, то есть уже на главной.
+ */
+async function waitForFonts(timeoutMs: number): Promise<boolean> {
+  if (typeof document === "undefined" || !("fonts" in document)) return false;
+
+  // Образец с кириллицей и латиницей: иначе браузер загрузил бы только одно
+  // подмножество из двух (fonts.css, unicode-range).
+  const sample = "Рубеж Run 0";
+  const loading = Promise.all([
+    document.fonts.load(`700 16px "${FONT_FAMILY.display}"`, sample),
+    document.fonts.load(`400 16px "${FONT_FAMILY.text}"`, sample),
+  ]).then(
+    () => true,
+    () => false,
+  );
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([loading, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export type { ShellBuildInfo, ShellCapabilities } from "./state/shell";

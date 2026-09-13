@@ -21,16 +21,20 @@ export function ListItem(props: ListItemProps): ReactNode {
   const body = (
     <>
       {props.icon === undefined ? null : (
-        <span className="shrink-0 text-text-muted">{props.icon}</span>
+        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-raised text-text-muted">
+          {props.icon}
+        </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm text-text">{props.title}</span>
+        <span className="block truncate text-sm font-medium text-text">{props.title}</span>
         {props.hint === undefined ? null : (
           <span className="mt-0.5 block text-xs text-text-muted">{props.hint}</span>
         )}
       </span>
       {props.value === undefined ? null : (
-        <span className="shrink-0 text-sm text-text-muted tabular-nums">{props.value}</span>
+        <span className="shrink-0 font-display text-sm text-text-muted tabular-nums">
+          {props.value}
+        </span>
       )}
       {props.toggle === undefined ? null : (
         <Toggle
@@ -45,7 +49,9 @@ export function ListItem(props: ListItemProps): ReactNode {
   );
 
   const className = [
-    "flex min-h-14 w-full items-center gap-3 rounded-md bg-surface px-4 py-3 text-left",
+    "flex min-h-14 w-full items-center gap-3 bg-surface px-4 py-3 text-left",
+    "transition-colors duration-(--duration-fast) ease-base",
+    interactive ? "active:bg-surface-raised" : "",
     props.disabled === true ? "opacity-50" : "",
   ].join(" ");
 
@@ -79,18 +85,18 @@ export function Toggle(props: ToggleProps): ReactNode {
       disabled={props.disabled}
       onClick={props.onChange}
       className={[
-        "relative h-7 w-12 shrink-0 rounded-pill",
-        "transition-colors duration-(--duration-fast) ease-base",
-        props.checked ? "bg-accent" : "bg-surface-raised",
+        "relative h-8 w-13 shrink-0 rounded-pill",
+        "transition-colors duration-(--duration-base) ease-base",
+        props.checked ? "fill-accent" : "surface-sunken",
         props.disabled === true ? "opacity-40" : "",
       ].join(" ")}
     >
       <span
         aria-hidden="true"
         className={[
-          "absolute top-1 left-1 size-5 rounded-full bg-bg",
-          "transition-transform duration-(--duration-fast) ease-base",
-          props.checked ? "translate-x-5" : "translate-x-0",
+          "absolute top-1 left-1 size-6 rounded-full shadow-button",
+          "transition-transform duration-(--duration-base) ease-spring",
+          props.checked ? "translate-x-5 bg-on-accent" : "translate-x-0 bg-text-muted",
         ].join(" ")}
       />
     </button>
@@ -99,5 +105,9 @@ export function Toggle(props: ToggleProps): ReactNode {
 
 /** Группа строк с общим фоном: список настроек читается как один блок. */
 export function ListGroup(props: { children: ReactNode }): ReactNode {
-  return <div className="grid gap-px overflow-hidden rounded-md bg-border">{props.children}</div>;
+  return (
+    <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border shadow-card">
+      {props.children}
+    </div>
+  );
 }
