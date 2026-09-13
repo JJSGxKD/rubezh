@@ -1,6 +1,10 @@
+import type { DropsDef } from "@bh/shared-types";
 import { addXp } from "../progression/levels";
+import { createDirection, randomDirection } from "./directions";
+import { findMedkitContentProblems } from "./medkits";
+import { NEVER_HIT } from "./pools";
 import { vectorLength } from "./vector";
-import type { World } from "./world";
+import { clampToBounds, type World } from "./world";
 
 /** Скорость притянутого кристалла в игровых единицах. */
 const GEM_SPEED = 420;
@@ -8,14 +12,114 @@ const GEM_SPEED = 420;
 const PICKUP_SLACK = 6;
 
 /**
+ * Сколько тиков кристалл летит от места смерти до земли — треть секунды.
+ * Экспортируется для рендера: дуга полёта рисуется по этому же времени.
+ */
+export const GEM_LAND_TICKS = 20;
+
+/** Разлёт горсти кристаллов от места смерти, игровые единицы. */
+const SCATTER_MIN = 10;
+const SCATTER_MAX = 30;
+/** Одиночный кристалл падает почти на месте: разлетаться ему не от кого. */
+const SINGLE_SCATTER_RATIO = 0.25;
+/**
+ * Минимальная доля опыта в кристалле горсти. Без неё случайные веса дают
+ * «пылинки» по единице рядом с огромным кристаллом, и горсть читается как шум.
+ */
+const MIN_SHARE_WEIGHT = 0.35;
+
+/** Потолок горсти: больше кристаллов с одного врага не читаются, а только множат объекты. */
+export const MAX_GEMS_PER_KILL = 16;
+
+const scratch = createDirection();
+const shares = new Float64Array(MAX_GEMS_PER_KILL);
+const values = new Float64Array(MAX_GEMS_PER_KILL);
+
+/** Проблемы контента выпадения человеческим языком — для теста контента и создания мира. */
+export function findDropsContentProblems(drops: DropsDef): string[] {
+  const problems: string[] = [];
+  const perKill = drops.gems.maxPerKill;
+  if (!Number.isInteger(perKill) || perKill < 1 || perKill > MAX_GEMS_PER_KILL) {
+    problems.push(`drops.gems.maxPerKill — целое от 1 до ${MAX_GEMS_PER_KILL}, сейчас ${perKill}`);
+  }
+  problems.push(...findMedkitContentProblems(drops.medkits));
+  return problems;
+}
+
+/**
+ * Выпадение опыта с убитого врага: несколько кристаллов разной ценности,
+ * разлетающихся от места смерти. Сумма ценности всегда равна `xp` врага —
+ * разброс меняет ощущение добычи, а не скорость прокачки.
+ *
+ * Сколько кристаллов, решает генератор мира: одинаковый seed — одинаковая
+ * горсть. Когда делить нечего (опыт 1 или потолок 1), генератор не
+ * вызывается вовсе, и последовательность случайных чисел не сдвигается.
+ */
+export function dropGems(world: World, x: number, y: number, xp: number): void {
+  if (xp <= 0) return;
+
+  const maxCount = Math.max(1, Math.min(Math.floor(xp), world.drops.gems.maxPerKill, shares.length));
+  const count = maxCount === 1 ? 1 : world.rng.nextInt(1, maxCount + 1);
+  splitValue(world, xp, count);
+
+  const scatter = world.config.unitScale * (count === 1 ? SINGLE_SCATTER_RATIO : 1);
+  const bounds = world.config.bounds;
+  for (let k = 0; k < count; k++) {
+    randomDirection(world.rng, scratch);
+    const distance = world.rng.nextRange(SCATTER_MIN, SCATTER_MAX) * scatter;
+    const landX = clampToBounds(x + scratch.x * distance, bounds.halfWidth);
+    const landY = clampToBounds(y + scratch.y * distance, bounds.halfHeight);
+    spawnGem(world, landX, landY, values[k], x, y, true);
+  }
+}
+
+/**
+ * Разделить опыт на `count` целых частей не меньше единицы: случайные веса,
+ * округление вниз и остаток — самой крупной части. Дробный опыт (такого в
+ * контенте нет, но формула не должна его терять) целиком уходит в неё же.
+ */
+function splitValue(world: World, xp: number, count: number): void {
+  if (count === 1) {
+    values[0] = xp;
+    return;
+  }
+
+  let weightSum = 0;
+  for (let k = 0; k < count; k++) {
+    shares[k] = MIN_SHARE_WEIGHT + world.rng.nextFloat();
+    weightSum += shares[k];
+  }
+
+  let assigned = 0;
+  let largest = 0;
+  for (let k = 0; k < count; k++) {
+    values[k] = Math.max(1, Math.floor((xp * shares[k]) / weightSum));
+    assigned += values[k];
+    if (values[k] > values[largest]) largest = k;
+  }
+  values[largest] = Math.max(1, values[largest] + (xp - assigned));
+}
+
+/**
  * Положить кристалл опыта. Когда пул заполнен, значение добавляется к уже
  * лежащему кристаллу, а не теряется: суммарный опыт забега не зависит от того,
  * сколько врагов умерло одновременно.
  *
+ * `flying` — кристалл вылетает из точки `originX, originY` и до приземления
+ * не подбирается. Без полёта (по умолчанию) он лежит сразу.
+ *
  * Слияние идёт по кругу, без поиска ближайшего: поиск на каждом убийстве —
  * это проход по всему пулу в горячем цикле, а на глаз разницы нет.
  */
-export function spawnGem(world: World, x: number, y: number, value: number): void {
+export function spawnGem(
+  world: World,
+  x: number,
+  y: number,
+  value: number,
+  originX = x,
+  originY = y,
+  flying = false,
+): void {
   if (value <= 0) return;
 
   const gems = world.gems;
@@ -29,6 +133,9 @@ export function spawnGem(world: World, x: number, y: number, value: number): voi
     gems.y[slot] = y;
     gems.prevX[slot] = x;
     gems.prevY[slot] = y;
+    gems.originX[slot] = originX;
+    gems.originY[slot] = originY;
+    gems.bornTick[slot] = flying ? world.stats.tick : NEVER_HIT;
     gems.value[slot] = value;
     gems.attracted[slot] = 0;
     gems.alive[slot] = 1;
@@ -52,6 +159,11 @@ function mergeIntoExisting(world: World, value: number): void {
     world.gemMergeCursor = (slot + 1) % capacity;
     return;
   }
+}
+
+/** Кристалл ещё летит от места смерти и не может быть подобран. */
+export function isGemFlying(world: World, index: number): boolean {
+  return world.stats.tick - world.gems.bornTick[index] < GEM_LAND_TICKS;
 }
 
 /**
@@ -88,6 +200,7 @@ export function updateGems(world: World, dtSec: number): void {
       gems.aliveCount--;
       continue;
     }
+    if (isGemFlying(world, i)) continue;
     if (distance <= collectDistance) {
       collect(world, i);
       continue;

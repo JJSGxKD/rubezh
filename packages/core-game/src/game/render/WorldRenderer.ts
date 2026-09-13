@@ -5,7 +5,11 @@ import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
 import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
 import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
-import { drawShape, type ShapeKind } from "./shapes";
+import { CombatFeedback } from "./combat-feedback";
+import { PickupRenderer } from "./pickups";
+import type { ShapeKind } from "./shapes";
+import { Telegraphs } from "./telegraphs";
+import { ensureShapeTexture, lerp } from "./textures";
 
 const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
 
@@ -13,6 +17,10 @@ const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
  * Рендер состояния симуляции. Отделён от неё полностью: симуляция не знает,
  * что её кто-то рисует, и потому запускается headless
  * (docs/17-testing-strategy.md §3.0).
+ *
+ * Здесь — игрок, враги, снаряды, обереги и взрывы. Предметы на земле,
+ * телеграфы угроз и обратная связь боя живут в своих модулях рядом: у каждого
+ * свои пулы спрайтов и своя анимация, а общий у них только слой мира.
  *
  * Спрайты переиспользуются и никогда не уничтожаются: создание и уничтожение
  * объектов Phaser в кадре — источник пауз сборщика мусора, а именно они портят
@@ -47,13 +55,16 @@ export class WorldRenderer {
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly player: Phaser.GameObjects.Image;
   private readonly textureKeyByType: string[] = [];
-  private readonly gemSprites: Phaser.GameObjects.Image[] = [];
   private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
-  /** кольца телеграфа: показывают радиус будущего взрыва, пока горит фитиль */
-  private readonly telegraphs: Phaser.GameObjects.Image[] = [];
+  private readonly pickups: PickupRenderer;
+  private readonly telegraphs: Telegraphs;
+  /** числа урона и вспышки гибели */
+  private readonly feedback: CombatFeedback;
   /** тик последнего попадания по игроку — для вспышки персонажа */
   private playerHitTick = NEVER_HIT;
+  /** тик последнего лечения — персонаж коротко вспыхивает зелёным */
+  private playerHealTick = NEVER_HIT;
   private readonly blastStartTick: Int32Array = new Int32Array(MAX_BLASTS).fill(-1);
   private readonly blastRadius: Float32Array = new Float32Array(MAX_BLASTS);
   private readonly blastKind: Uint8Array = new Uint8Array(MAX_BLASTS);
@@ -66,14 +77,14 @@ export class WorldRenderer {
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
 
-    for (const type of world.enemyTypes) {
+    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, type.elite));
+    world.enemyTypes.forEach((type, index) => {
       const key = `bh-enemy-${type.id}`;
-      const look = LOOK_BY_PATTERN[type.pattern];
       // Элита крупнее и светлее: одинаковые на глаз танк и элитный танк
       // читаются как дефект, а не как контрольная точка сложности.
-      this.ensureTexture(key, type.radius, type.elite ? brighten(look.color) : look.color, look.shape);
+      ensureShapeTexture(scene, key, type.radius, colorByType[index], LOOK_BY_PATTERN[type.pattern].shape);
       this.textureKeyByType.push(key);
-    }
+    });
 
     const scale = world.config.unitScale;
     this.ensureGroundTexture(scale);
@@ -82,14 +93,18 @@ export class WorldRenderer {
       .setOrigin(0, 0)
       .setDepth(-10);
     this.layer = scene.add.container(0, 0).setDepth(0);
-    this.ensureTexture("bh-player", world.config.player.radius, 0x6ee7a8, "circle");
-    this.ensureTexture("bh-projectile", world.config.player.projectileRadius, 0xffe066, "circle");
-    this.ensureTexture("bh-projectile-enemy", world.config.player.projectileRadius, 0xff6b6b, "circle");
-    this.ensureTexture("bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
-    this.ensureTexture("bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
-    this.ensureTexture("bh-telegraph", BLAST_TEXTURE_UNITS * scale, 0xff5a5a, "ring");
-    this.ensureTexture("bh-gem", GEM_RADIUS_UNITS * scale, 0x7ce7ff, "diamond");
-    this.ensureTexture("bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
+
+    ensureShapeTexture(scene, "bh-player", world.config.player.radius, 0x6ee7a8, "circle");
+    ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, 0xffe066, "circle");
+    ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius, 0xff6b6b, "circle");
+    ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
+    ensureShapeTexture(scene, "bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
+    ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, 0x5fe3a1, "ring");
+    ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
+
+    this.telegraphs = new Telegraphs(scene, world, this.layer);
+    this.pickups = new PickupRenderer(scene, world, this.layer);
+    this.feedback = new CombatFeedback(scene, world, this.layer, colorByType);
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
     this.layer.add(this.player);
@@ -128,40 +143,50 @@ export class WorldRenderer {
     const t = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
     this.syncEnemies(t);
     this.syncProjectiles(t);
-    this.syncGems(t);
+    this.pickups.sync(t);
     this.syncOrbiters();
     this.syncBlasts();
+    this.feedback.sync();
 
     this.player.setPosition(
       lerp(this.world.player.prevX, this.world.player.x, t),
       lerp(this.world.player.prevY, this.world.player.y, t),
     );
     this.player.setVisible(this.world.player.alive);
-    this.applyPlayerHit();
+    this.applyPlayerFlash();
   }
 
   /**
-   * Вспышка персонажа при получении урона.
+   * Вспышка персонажа: красная — при получении урона, зелёная — при лечении.
    *
    * Полоска здоровья в углу — не обратная связь: игрок смотрит на персонажа.
    * Без вспышки урон выглядит так, будто здоровье убывает само по себе, и
    * непонятно, кто и когда попал.
    */
-  private applyPlayerHit(): void {
-    const age = this.world.stats.tick - this.playerHitTick;
-    if (age >= HIT_FLASH_TICKS) {
-      this.player.clearTint();
-      this.player.setScale(1);
+  private applyPlayerFlash(): void {
+    const tick = this.world.stats.tick;
+    const hitAge = tick - this.playerHitTick;
+    const healAge = tick - this.playerHealTick;
+
+    // Попадание важнее лечения: если было и то и другое, игрок должен видеть урон.
+    if (hitAge < HIT_FLASH_TICKS) {
+      this.player.setTintFill(0xff6b6b);
+      this.player.setScale(1 + 0.25 * (1 - hitAge / HIT_FLASH_TICKS));
       return;
     }
-    this.player.setTintFill(0xff6b6b);
-    this.player.setScale(1 + 0.25 * (1 - age / HIT_FLASH_TICKS));
+    if (healAge < HIT_FLASH_TICKS) {
+      this.player.setTintFill(0x5fe3a1);
+      this.player.setScale(1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS));
+      return;
+    }
+    this.player.clearTint();
+    this.player.setScale(1);
   }
 
   private syncEnemies(t: number): void {
     const enemies = this.world.enemies;
     const tick = this.world.stats.tick;
-    let telegraphs = 0;
+    this.telegraphs.begin();
 
     for (let i = 0; i < enemies.count; i++) {
       const sprite = this.enemySprite(i);
@@ -189,36 +214,16 @@ export class WorldRenderer {
       const y = lerp(enemies.prevY[i], enemies.y[i], t);
       sprite.setPosition(x, y);
 
-      // Радиус будущего взрыва показывается кольцом, пока горит фитиль: без
-      // него игрок узнаёт границу поражения только по своему здоровью.
       if (type.pattern === "exploder" && enemies.phase[i] === EXPLODER_PHASE.fuse) {
-        this.showTelegraph(telegraphs++, x, y, type.params.blastRadius, tick);
+        this.telegraphs.ring(x, y, type.params.blastRadius, tick);
+      }
+      if (type.pattern === "dash" && enemies.phase[i] === DASH_PHASE.telegraph) {
+        const length = type.params.dashSpeed * type.params.dashDurationSec;
+        this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, tick);
       }
     }
 
-    for (let k = telegraphs; k < this.telegraphs.length; k++) {
-      if (this.telegraphs[k].visible) this.telegraphs[k].setVisible(false);
-    }
-  }
-
-  /**
-   * Кольцо телеграфа. Пульсирует по тикам симуляции, а не по времени кадра:
-   * на паузе мир замирает вместе с эффектом, и рендеру не нужны часы.
-   */
-  private showTelegraph(index: number, x: number, y: number, radius: number, tick: number): void {
-    while (this.telegraphs.length <= index) {
-      const sprite = this.scene.add.image(0, 0, "bh-telegraph").setDepth(0).setVisible(false);
-      this.layer.add(sprite);
-      this.telegraphs.push(sprite);
-    }
-
-    const textureRadius = BLAST_TEXTURE_UNITS * this.world.config.unitScale;
-    const pulse = 0.94 + 0.06 * ((tick >> 2) % 2);
-    const sprite = this.telegraphs[index];
-    sprite.setPosition(x, y);
-    sprite.setScale((radius / textureRadius) * pulse);
-    sprite.setAlpha(0.55);
-    sprite.setVisible(true);
+    this.telegraphs.end();
   }
 
   private syncProjectiles(t: number): void {
@@ -237,19 +242,6 @@ export class WorldRenderer {
         lerp(projectiles.prevX[p], projectiles.x[p], t),
         lerp(projectiles.prevY[p], projectiles.y[p], t),
       );
-    }
-  }
-
-  private syncGems(t: number): void {
-    const gems = this.world.gems;
-    for (let i = 0; i < gems.count; i++) {
-      const sprite = this.gemSprite(i);
-      if (gems.alive[i] === 0) {
-        if (sprite.visible) sprite.setVisible(false);
-        continue;
-      }
-      sprite.setVisible(true);
-      sprite.setPosition(lerp(gems.prevX[i], gems.x[i], t), lerp(gems.prevY[i], gems.y[i], t));
     }
   }
 
@@ -298,14 +290,15 @@ export class WorldRenderer {
   }
 
   /**
-   * Взрывы — из буфера событий симуляции. Длительность эффекта считается в
-   * тиках симуляции, а не в реальном времени: на паузе эффект замирает вместе
-   * с миром, и рендеру не нужно знать время кадра.
+   * Взрывы и лечение — из буфера событий симуляции. Длительность эффекта
+   * считается в тиках симуляции, а не в реальном времени: на паузе эффект
+   * замирает вместе с миром, и рендеру не нужно знать время кадра.
    */
   private syncBlasts(): void {
     const events = this.world.events;
     const capacity = events.kind.length;
     const first = Math.max(this.eventsRead, events.written - capacity);
+    const scale = this.world.config.unitScale;
 
     for (let seq = first; seq < events.written; seq++) {
       const slot = seq % capacity;
@@ -314,13 +307,19 @@ export class WorldRenderer {
         this.playerHitTick = events.tick[slot];
         continue;
       }
+      if (kind === SIM_EVENT.heal) {
+        // Кольцо лечения расходится от игрока: аптечка сработала.
+        this.playerHealTick = events.tick[slot];
+        this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
+        continue;
+      }
       if (kind !== SIM_EVENT.explosion && kind !== SIM_EVENT.strike) continue;
       this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
     }
     this.eventsRead = events.written;
 
     const tick = this.world.stats.tick;
-    const textureRadius = BLAST_TEXTURE_UNITS * this.world.config.unitScale;
+    const textureRadius = BLAST_TEXTURE_UNITS * scale;
     for (let b = 0; b < this.blasts.length; b++) {
       const sprite = this.blasts[b];
       const age = tick - this.blastStartTick[b];
@@ -344,19 +343,12 @@ export class WorldRenderer {
       this.blasts.push(sprite);
     }
     if (this.blastKind[b] !== kind) {
-      this.blasts[b].setTexture(kind === SIM_EVENT.strike ? "bh-strike" : "bh-blast");
+      this.blasts[b].setTexture(BLAST_TEXTURE_BY_KIND[kind] ?? "bh-blast");
       this.blastKind[b] = kind;
     }
     this.blasts[b].setPosition(x, y);
     this.blastStartTick[b] = tick;
     this.blastRadius[b] = radius;
-  }
-
-  private gemSprite(index: number): Phaser.GameObjects.Image {
-    while (this.gemSprites.length <= index) {
-      this.gemSprites.push(this.createHiddenSprite("bh-gem"));
-    }
-    return this.gemSprites[index];
   }
 
   private orbiterSprite(index: number): Phaser.GameObjects.Image {
@@ -412,28 +404,16 @@ export class WorldRenderer {
     graphics.generateTexture(key, size, size);
     graphics.destroy();
   }
-
-  private ensureTexture(key: string, radius: number, color: number, shape: ShapeKind): void {
-    if (this.scene.textures.exists(key)) return;
-
-    const size = Math.ceil(radius * 2);
-    const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
-    drawShape(graphics, { shape, radius, color });
-    graphics.generateTexture(key, size, size);
-    graphics.destroy();
-  }
-}
-
-function lerp(from: number, to: number, t: number): number {
-  return from + (to - from) * t;
 }
 
 /**
- * Осветлить цвет для элиты: половина пути к белому. Считается по каналам, а
- * не подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
+ * Цвет врага на канве. Элита — половина пути к белому: считается по каналам,
+ * а не подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
  * останется без своего элитного цвета.
  */
-function brighten(color: number): number {
+export function enemyColor(pattern: EnemyPattern, elite: boolean): number {
+  const color = LOOK_BY_PATTERN[pattern].color;
+  if (!elite) return color;
   const mix = (channel: number): number => Math.round(channel + (255 - channel) * 0.45);
   const r = mix((color >> 16) & 0xff);
   const g = mix((color >> 8) & 0xff);
@@ -447,7 +427,13 @@ const MAX_BLASTS = 24;
 const GROUND_TILE_UNITS = 64;
 const BLAST_LIFETIME_TICKS = 18;
 const BLAST_TEXTURE_UNITS = 32;
-const GEM_RADIUS_UNITS = 5;
+const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
+  [SIM_EVENT.explosion]: "bh-blast",
+  [SIM_EVENT.strike]: "bh-strike",
+  [SIM_EVENT.heal]: "bh-heal",
+};
+/** Радиус кольца лечения при подборе аптечки, игровые единицы. */
+const HEAL_RING_UNITS = 40;
 const ORBITER_RADIUS_UNITS = 9;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */

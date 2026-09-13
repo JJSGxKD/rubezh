@@ -1,5 +1,5 @@
-import { useEffect, type ReactNode } from "react";
-import { Gift, Home, Swords, Trophy, Users } from "lucide-react";
+import { Suspense, useEffect, type ReactNode } from "react";
+import { Gift, Home, ListChecks, Swords, Trophy, Users } from "lucide-react";
 import { ScreenTransition, TabBar, type TabItem } from "../design-system/components";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
@@ -15,17 +15,24 @@ import { useRun } from "../state/run";
 import { useShell } from "../state/shell";
 import { CompactScreen, FirstRunScreen, OutsideScreen } from "../screens/gates";
 import { LobbyScreen, ModeScreen, WeaponScreen } from "../screens/home";
+import { RunScreen } from "../screens/run/RunScreen";
 import {
+  AboutScreen,
   ArsenalScreen,
+  DailyScreen,
+  DiagnosticsScreen,
   FriendsScreen,
+  GalleryScreen,
   ProfileScreen,
   RatingScreen,
+  ScreenBoundary,
+  ScreenFallback,
+  SettingsScreen,
   ShopScreen,
   TasksScreen,
-} from "../screens/stubs";
-import { AboutScreen, DiagnosticsScreen, SettingsScreen, TestersScreen } from "../screens/settings";
-import { GalleryScreen } from "../screens/gallery";
-import { RunScreen } from "../screens/run/RunScreen";
+  TestersScreen,
+  WheelScreen,
+} from "./lazy-screens";
 
 /**
  * Корень оболочки: стек экранов, нижняя панель разделов и связь с кнопками
@@ -59,7 +66,11 @@ export function App(): ReactNode {
   return (
     <div className="bg-app flex h-full flex-col">
       <main className="min-h-0 flex-1">
-        <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
+        <ScreenBoundary key={screen}>
+          <Suspense fallback={<ScreenFallback />}>
+            <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
+          </Suspense>
+        </ScreenBoundary>
       </main>
       {showTabs ? (
         <TabBar
@@ -72,11 +83,16 @@ export function App(): ReactNode {
   );
 }
 
-/** Точка на разделе — «здесь скоро появится»: заглушки зовут зайти и посмотреть. */
+/**
+ * Порядок разделов — как в мобильных играх жанра: главная с кнопкой «Играть»
+ * ближе к центру, под большим пальцем. Точка на разделе — «здесь скоро
+ * появится»: заглушки зовут зайти и посмотреть.
+ */
 const TABS: readonly TabItem[] = [
-  { id: "lobby", label: t("tab.home"), icon: <Home size={22} /> },
-  { id: "arsenal", label: t("tab.arsenal"), icon: <Swords size={22} />, badge: "dot" },
   { id: "shop", label: t("tab.shop"), icon: <Gift size={22} />, badge: "dot" },
+  { id: "arsenal", label: t("tab.arsenal"), icon: <Swords size={22} />, badge: "dot" },
+  { id: "lobby", label: t("tab.home"), icon: <Home size={22} /> },
+  { id: "tasks", label: t("tab.tasks"), icon: <ListChecks size={22} />, badge: "dot" },
   { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} />, badge: "dot" },
   { id: "friends", label: t("tab.friends"), icon: <Users size={22} />, badge: "dot" },
 ];
@@ -103,6 +119,10 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <ProfileScreen />;
     case "tasks":
       return <TasksScreen />;
+    case "daily":
+      return <DailyScreen />;
+    case "wheel":
+      return <WheelScreen />;
     case "settings":
       return <SettingsScreen />;
     case "testers":

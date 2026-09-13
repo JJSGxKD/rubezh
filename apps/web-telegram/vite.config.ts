@@ -2,6 +2,9 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
+import { clientRolldownOptions } from "../../scripts/vite/chunking.ts";
+import { ignoreDotenvNodeEnvForBuild } from "../../scripts/vite/production-node-env.ts";
+import { stableDevSession } from "../../scripts/vite/stable-dev-session.ts";
 
 // Корень монорепо — единственный .env на весь проект (см. docs/20-env-and-ports.md).
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -11,7 +14,8 @@ const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 // три dev-сервера можно было держать поднятыми одновременно; strictPort
 // намеренно включён — занятый порт должен падать явно, а не молча уезжать
 // на соседний (docs/20-env-and-ports.md §2).
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  ignoreDotenvNodeEnvForBuild(command);
   const env = loadEnv(mode, repoRoot, "");
   const port = Number(env.WEB_TELEGRAM_PORT ?? 5173);
 
@@ -35,7 +39,9 @@ export default defineConfig(({ mode }) => {
   return {
     // React — для оболочки, Tailwind 4 — для токенов дизайн-системы
     // (docs/27-design-system-and-app-shell.md §1.4).
-    plugins: [react(), tailwindcss()],
+    // stableDevSession — без перезагрузки страницы на обрыве связи с dev-сервером
+    // (scripts/vite/stable-dev-session.ts).
+    plugins: [react(), tailwindcss(), stableDevSession()],
     base: "./",
     envDir: repoRoot,
     server: {
@@ -50,6 +56,8 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: "dist",
+      // Одинаковая раскладка чанков на Windows и в CI (scripts/vite/chunking.ts).
+      rolldownOptions: clientRolldownOptions,
     },
   };
 });

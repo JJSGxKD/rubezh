@@ -82,9 +82,9 @@ describe("симуляция", () => {
       immortalPlayer: true,
     });
 
-    expect(run.checksum).toBe(-579035369);
-    expect(run.world.stats.enemiesKilled).toBe(387);
-    expect(run.world.progression.level).toBe(15);
+    expect(run.checksum).toBe(1970237143);
+    expect(run.world.stats.enemiesKilled).toBe(311);
+    expect(run.world.progression.level).toBe(14);
   });
 
   it("расходится на другом seed — иначе seed ни на что не влияет", () => {

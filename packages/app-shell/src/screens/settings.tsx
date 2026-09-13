@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { CONTENT_HASH } from "@bh/core-game";
 import {
   ContentColumn,
@@ -9,6 +9,7 @@ import {
 } from "../design-system/components";
 import { t } from "../i18n";
 import { useDiagnostics } from "../state/diagnostics";
+import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
 import { usePlatform } from "../state/platform";
@@ -27,6 +28,7 @@ export function SettingsScreen(): ReactNode {
   const settings = useSettings();
   const diagnostics = useDiagnostics((state) => state.enabled);
   const supportsFullscreen = useShell((state) => state.adapter.ui.supportsFullscreen);
+  const [hintsReset, setHintsReset] = useState(false);
 
   return (
     <Screen title={t("settings.title")} onBack={() => navigation.pop()}>
@@ -72,6 +74,18 @@ export function SettingsScreen(): ReactNode {
             value={t("settings.language.value")}
             hint={t("settings.language.soon")}
             disabled
+          />
+        </ListGroup>
+
+        <SectionTitle>{t("settings.hints")}</SectionTitle>
+        <ListGroup>
+          <ListItem
+            title={t("settings.hints.reset")}
+            hint={hintsReset ? t("settings.hints.done") : undefined}
+            onClick={() => {
+              useHints.getState().reset();
+              setHintsReset(true);
+            }}
           />
         </ListGroup>
 

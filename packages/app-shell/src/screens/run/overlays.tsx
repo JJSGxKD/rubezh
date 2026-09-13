@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Crown, Pause, Skull, Sparkles, Star } from "lucide-react";
-import type { RunResult, UpgradeOption } from "@bh/shared-types";
+import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import {
   Badge,
   Button,
@@ -12,6 +12,8 @@ import {
 } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
 import { ItemIcon, ItemTile, type ItemKind } from "../item-icons";
+import { SecondChance } from "./SecondChance";
+import { formatChange } from "./upgrade-format";
 
 /**
  * Оверлеи забега: пауза, выбор улучшения и смерть. Показываются поверх
@@ -164,7 +166,12 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
                   <span className="mt-1 block font-display text-base font-bold break-words text-text landscape:mt-0">
                     {t(offer.nameKey)}
                   </span>
-                  <p className="mt-1 text-xs text-text-muted">{t(offer.descriptionKey)}</p>
+                  {/* Описание — только у нового: у уровня к взятому предмету
+                      важнее, что именно поменяется, а описание игрок уже видел. */}
+                  {isNew(offer) || offer.changes.length === 0 ? (
+                    <p className="mt-1 text-xs text-text-muted">{t(offer.descriptionKey)}</p>
+                  ) : null}
+                  <ChangeList changes={offer.changes} />
                 </div>
               </div>
             </Card>
@@ -177,6 +184,45 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
         </p>
       ) : null}
     </Modal>
+  );
+}
+
+function isNew(offer: UpgradeOption): boolean {
+  return offer.kind === "weapon_new" || offer.kind === "passive_new";
+}
+
+/**
+ * Что даёт улучшение: «Урон 6 → 7», «Снаряды 1 → 2». Улучшение подсвечено
+ * акцентом и стрелкой — не только цветом (§4.4); у перезарядки лучше, когда
+ * число меньше, и цвет это учитывает.
+ */
+function ChangeList(props: { changes: readonly UpgradeChange[] }): ReactNode {
+  if (props.changes.length === 0) return null;
+
+  return (
+    <dl className="surface-sunken mt-2 grid gap-1 rounded-md px-2.5 py-2">
+      {props.changes.map((change) => {
+        const formatted = formatChange(change);
+        return (
+          <div key={change.labelKey} className="flex items-baseline justify-between gap-2 text-xs">
+            <dt className="min-w-0 text-text-muted">{t(change.labelKey)}</dt>
+            <dd className="shrink-0 font-display font-semibold tabular-nums whitespace-nowrap">
+              {formatted.from === null ? null : (
+                <>
+                  <span className="text-text-muted">{formatted.from}</span>
+                  <span aria-hidden="true" className="px-1 text-text-disabled">
+                    →
+                  </span>
+                </>
+              )}
+              <span className={formatted.better === false ? "text-warning" : "text-accent"}>
+                {formatted.to}
+              </span>
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
   );
 }
 
@@ -259,6 +305,13 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
               {t("run.death.cause", { enemy: result.deathCause })}
             </p>
           )}
+
+          {/* Второй шанс — только после смерти: сданный забег игрок закончил сам. */}
+          {result.outcome === "died" ? (
+            <div className="mt-3">
+              <SecondChance />
+            </div>
+          ) : null}
         </div>
 
         <div>

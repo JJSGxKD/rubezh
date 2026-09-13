@@ -1,3 +1,4 @@
+import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
@@ -31,6 +32,7 @@ function hashContent(): string {
     TIMELINE,
     ENDLESS_CURVE,
     MAPS,
+    DROPS,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.

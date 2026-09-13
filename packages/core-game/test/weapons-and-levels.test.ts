@@ -23,6 +23,8 @@ const BITER: EnemyDef = { id: "biter", hp: 400, speed: 0.001, damage: 10, xp: 3,
 const FRAGILE: EnemyDef = { id: "fragile", hp: 1, speed: 0.001, damage: 0, xp: 5, pattern: "swarm" };
 
 const text = { nameKey: "n", descriptionKey: "d" };
+/** Вариант выбора, собранный руками: что он меняет, эти тесты не проверяют. */
+const offerText = { ...text, changes: [] };
 
 const SPARK: WeaponDef = {
   id: "spark",
@@ -208,7 +210,7 @@ describe("пассивки", () => {
     const buffed = setup();
     place(buffed, "dummy", 100, 0);
     buffed.progression.offers = [
-      { id: "passive_new:might:1", kind: "passive_new", refId: "might", level: 1, ...text },
+      { id: "passive_new:might:1", kind: "passive_new", refId: "might", level: 1, ...offerText },
     ];
     chooseUpgrade(buffed, "passive_new:might:1");
     run(buffed, 60);
@@ -220,7 +222,7 @@ describe("пассивки", () => {
     const world = setup();
     place(world, "dummy", 100, 0);
     world.progression.offers = [
-      { id: "passive_new:volley:1", kind: "passive_new", refId: "volley", level: 1, ...text },
+      { id: "passive_new:volley:1", kind: "passive_new", refId: "volley", level: 1, ...offerText },
     ];
     chooseUpgrade(world, "passive_new:volley:1");
 
@@ -233,7 +235,7 @@ describe("пассивки", () => {
     const world = setup();
     world.player.hp = 100;
     world.progression.offers = [
-      { id: "passive_new:vitality:1", kind: "passive_new", refId: "vitality", level: 1, ...text },
+      { id: "passive_new:vitality:1", kind: "passive_new", refId: "vitality", level: 1, ...offerText },
     ];
     chooseUpgrade(world, "passive_new:vitality:1");
 
@@ -244,7 +246,7 @@ describe("пассивки", () => {
   it("броня снижает урон, но не делает неуязвимым", () => {
     const world = setup();
     world.progression.offers = [
-      { id: "passive_new:ward_p:1", kind: "passive_new", refId: "ward_p", level: 1, ...text },
+      { id: "passive_new:ward_p:1", kind: "passive_new", refId: "ward_p", level: 1, ...offerText },
     ];
     chooseUpgrade(world, "passive_new:ward_p:1");
 
@@ -369,7 +371,7 @@ describe("опыт и уровни", () => {
     run(world, 180);
 
     world.progression.offers = [
-      { id: "weapon_level:spark:2", kind: "weapon_level", refId: "spark", level: 2, ...text },
+      { id: "weapon_level:spark:2", kind: "weapon_level", refId: "spark", level: 2, ...offerText },
     ];
     chooseUpgrade(world, "weapon_level:spark:2");
 

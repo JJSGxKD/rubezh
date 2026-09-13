@@ -1,5 +1,16 @@
 import { useEffect, type ReactNode } from "react";
-import { Gem, Infinity as InfinityIcon, Lock, Map as MapIcon, Play, Settings, Trophy, User } from "lucide-react";
+import {
+  CalendarCheck,
+  Gem,
+  Infinity as InfinityIcon,
+  LoaderPinwheel,
+  Lock,
+  Map as MapIcon,
+  Play,
+  Settings,
+  Trophy,
+  User,
+} from "lucide-react";
 import { WEAPONS } from "@bh/core-game";
 import {
   Badge,
@@ -17,6 +28,7 @@ import {
 import { formatDuration, t } from "../i18n";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
+import { preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine } from "../state/run";
 import { ItemTile } from "./item-icons";
 
@@ -28,8 +40,8 @@ import { ItemTile } from "./item-icons";
 const PRELOAD_DELAY_MS = 1500;
 
 /**
- * Лобби. Кнопка «Играть» — единственное настоящее действие этапа 2; превью
- * персонажа и валюта нарисованы, но ведут в заглушки
+ * Лобби. Кнопка «Играть» — единственное настоящее действие этапа 2; валюта,
+ * награда дня и колесо нарисованы, но ведут в заглушки
  * (docs/27-design-system-and-app-shell.md §6).
  */
 export function LobbyScreen(): ReactNode {
@@ -88,8 +100,66 @@ export function LobbyScreen(): ReactNode {
             <Badge>{t("lobby.runs", { count: meta.runs })}</Badge>
           </div>
         </Card>
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <LobbyTile
+            appearIndex={2}
+            tone="accent"
+            icon={<CalendarCheck size={22} />}
+            title={t("lobby.daily")}
+            hint={t("lobby.daily.hint")}
+            onClick={() => navigation.push("daily")}
+          />
+          <LobbyTile
+            appearIndex={3}
+            tone="info"
+            icon={<LoaderPinwheel size={22} />}
+            title={t("lobby.wheel")}
+            hint={t("lobby.wheel.hint")}
+            onClick={() => navigation.push("wheel")}
+          />
+        </div>
       </ContentColumn>
     </Screen>
+  );
+}
+
+/**
+ * Плитка быстрого раздела лобби: награда дня, колесо. Точка зовёт зайти — как
+ * на вкладках нижней панели.
+ */
+function LobbyTile(props: {
+  appearIndex: number;
+  tone: "accent" | "info";
+  icon: ReactNode;
+  title: string;
+  hint: string;
+  onClick(): void;
+}): ReactNode {
+  return (
+    <Card appearIndex={props.appearIndex} onClick={props.onClick}>
+      <span aria-hidden="true" className="absolute top-2.5 right-2.5 inline-flex size-2.5">
+        <span className="absolute inset-0 animate-ping-dot rounded-full bg-accent" />
+        <span className="relative size-full rounded-full bg-accent" />
+      </span>
+      {/* Значок над подписью, а не сбоку: в половине ширины телефона рядом со
+          значком «Колесо удачи» переносилось на две строки. В ландшафте места
+          хватает — значок возвращается в строку. */}
+      <div className="flex flex-col items-start gap-2 landscape:flex-row landscape:items-center landscape:gap-3">
+        <span
+          className={[
+            "inline-flex size-10 shrink-0 items-center justify-center rounded-md",
+            props.tone === "accent" ? "bg-accent/15 text-accent" : "bg-info/15 text-info",
+          ].join(" ")}
+        >
+          {props.icon}
+        </span>
+        <span className="min-w-0">
+          <span className="block font-display text-sm font-bold text-text">{props.title}</span>
+          <span className="mt-0.5 block text-xs text-text-muted">{props.hint}</span>
+        </span>
+      </div>
+    </Card>
   );
 }
 
@@ -100,15 +170,24 @@ export function LobbyScreen(): ReactNode {
 function usePreloadEngine(): void {
   useEffect(() => {
     if (typeof globalThis.requestIdleCallback === "function") {
-      const id = globalThis.requestIdleCallback(() => preloadRunEngine(), {
+      const id = globalThis.requestIdleCallback(() => preloadEverything(), {
         timeout: PRELOAD_DELAY_MS,
       });
       return () => globalThis.cancelIdleCallback(id);
     }
     // В Safari простоя не сообщают — ждём фиксированно.
-    const timer = setTimeout(() => preloadRunEngine(), PRELOAD_DELAY_MS);
+    const timer = setTimeout(() => preloadEverything(), PRELOAD_DELAY_MS);
     return () => clearTimeout(timer);
   }, []);
+}
+
+/**
+ * Движок и ленивые экраны — одним заходом: и то и другое игроку понадобится
+ * через минуту, а сеть в лобби простаивает.
+ */
+function preloadEverything(): void {
+  preloadRunEngine();
+  preloadScreens();
 }
 
 /** Выбор режима. «Бесконечный» рабочий, «Кампания» — заглушка. */

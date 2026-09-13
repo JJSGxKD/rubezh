@@ -1,5 +1,6 @@
 import { ENEMIES } from "../../content/enemies";
 import { MAPS } from "../../content/maps";
+import { DROPS } from "../../content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../../content/waves";
 import { WEAPONS } from "../../content/weapons";
@@ -54,6 +55,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     passives: PASSIVES,
     levelCurve: LEVEL_CURVE,
     loadoutLimits: LOADOUT_LIMITS,
+    drops: DROPS,
     map: MAPS[0],
     ...(options.startingWeaponId === undefined
       ? {}

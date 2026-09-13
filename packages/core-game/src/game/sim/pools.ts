@@ -121,10 +121,20 @@ export function createEnemyPool(capacity: number): EnemyPool {
  * (`sim/gems.ts`), а не копятся до конца забега.
  */
 export interface GemPool {
+  /** куда кристалл упал; до приземления рендер ведёт его сюда от места смерти */
   x: Float64Array;
   y: Float64Array;
   prevX: Float64Array;
   prevY: Float64Array;
+  /** место смерти врага: откуда кристалл вылетел */
+  originX: Float64Array;
+  originY: Float64Array;
+  /**
+   * Тик вылета. Пока кристалл в полёте, его нельзя подобрать: иначе он
+   * исчезает в игроке, так и не долетев до земли. `NEVER_HIT` — положен сразу,
+   * без полёта (слияние, тесты).
+   */
+  bornTick: Int32Array;
   value: Float32Array;
   /** 1 — кристалл уже притягивается к игроку и не сливается с другими */
   attracted: Uint8Array;
@@ -139,8 +149,40 @@ export function createGemPool(capacity: number): GemPool {
     y: new Float64Array(capacity),
     prevX: new Float64Array(capacity),
     prevY: new Float64Array(capacity),
+    originX: new Float64Array(capacity),
+    originY: new Float64Array(capacity),
+    bornTick: new Int32Array(capacity).fill(NEVER_HIT),
     value: new Float32Array(capacity),
     attracted: new Uint8Array(capacity),
+    alive: new Uint8Array(capacity),
+    count: 0,
+    aliveCount: 0,
+  };
+}
+
+/**
+ * Аптечки. Их на поле единицы — потолок задаёт контент, — поэтому у пула нет
+ * слияния: не поместилась, значит не упала.
+ */
+export interface MedkitPool {
+  x: Float64Array;
+  y: Float64Array;
+  originX: Float64Array;
+  originY: Float64Array;
+  /** тик вылета; пока аптечка летит, её не подобрать — как у кристалла */
+  bornTick: Int32Array;
+  alive: Uint8Array;
+  count: number;
+  aliveCount: number;
+}
+
+export function createMedkitPool(capacity: number): MedkitPool {
+  return {
+    x: new Float64Array(capacity),
+    y: new Float64Array(capacity),
+    originX: new Float64Array(capacity),
+    originY: new Float64Array(capacity),
+    bornTick: new Int32Array(capacity).fill(NEVER_HIT),
     alive: new Uint8Array(capacity),
     count: 0,
     aliveCount: 0,

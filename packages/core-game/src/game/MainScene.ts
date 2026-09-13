@@ -3,6 +3,7 @@ import type { RunOutcome } from "@bh/shared-types";
 import { ENEMIES } from "../content/enemies";
 import { CONTENT_HASH } from "../content/hash";
 import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
+import { DROPS } from "../content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
 import { WEAPONS } from "../content/weapons";
@@ -14,6 +15,7 @@ import { stepWorld, type SimInput } from "./sim/step";
 import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
 import { RunCamera } from "./render/run-camera";
+import { buildRadarSnapshot } from "./radar";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { Joystick } from "./joystick";
 import { buildRunResult } from "./run/run-result";
@@ -102,6 +104,7 @@ export class MainScene extends Phaser.Scene {
       passives: PASSIVES,
       levelCurve: LEVEL_CURVE,
       loadoutLimits: LOADOUT_LIMITS,
+      drops: DROPS,
       map,
       ...(data.startingWeaponId === undefined ? {} : { startingWeaponId: data.startingWeaponId }),
       config: { unitScale: data.unitScale },
@@ -281,6 +284,8 @@ export class MainScene extends Phaser.Scene {
         id: world.passiveTypes[slot.typeIndex].id,
         level: slot.level,
       })),
+      distance: world.stats.distance,
+      radar: buildRadarSnapshot(world),
     };
     this.sceneData.bus.emit("hud", snapshot);
   }

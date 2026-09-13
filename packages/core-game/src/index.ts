@@ -23,6 +23,8 @@ export * from "./game/bench";
 // Контракт забега — только типы, без реализации.
 export type {
   HudSnapshot,
+  RadarBlipKind,
+  RadarSnapshot,
   RunDiagnosticsOptions,
   RunEngine,
   RunEvents,

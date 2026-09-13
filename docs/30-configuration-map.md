@@ -44,6 +44,7 @@
 | Бесконечный режим: бюджет угрозы, рост, потолок живых, пул типов, события | `content/waves.ts` → `ENDLESS_CURVE` | свойства баланса |
 | Оружие: поведение, числа по уровням, что даётся на старте | `content/weapons.ts` → `WEAPONS` | golden-прогон |
 | Пассивки, слоты набора, кривая опыта | `content/upgrades.ts` → `PASSIVES`, `LOADOUT_LIMITS`, `LEVEL_CURVE` | golden-прогон |
+| Что падает с врагов: на сколько кристаллов делится опыт; шанс аптечки с рядового и с элиты, сколько лечит, сколько лежит на поле | `content/drops.ts` → `DROPS` | golden-прогон, контрольная сумма |
 | Карта: границы мира, видимая область, поведение камеры | `content/maps.ts` → `MAPS` | радиус кольца спавна, а с ним весь баланс |
 | Целевые коридоры калибровки | `content/balance-targets.ts` → `BALANCE_TARGETS` | тест свойств баланса |
 
@@ -71,6 +72,12 @@
 | Ширина дуги роя с одной стороны | `game/sim/director.ts` → `FLANK_ARC_SIN` |
 | Интервал контактной атаки | `game/sim/step.ts` → `MELEE_INTERVAL_SEC` |
 | Скорость притяжения кристаллов и запас подбора | `game/sim/gems.ts` → `GEM_SPEED`, `PICKUP_SLACK` |
+| Полёт кристалла от места смерти: длительность, разлёт, потолок горсти | `game/sim/gems.ts` → `GEM_LAND_TICKS`, `SCATTER_MIN`, `SCATTER_MAX`, `MAX_GEMS_PER_KILL` |
+| Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/pickups.ts` → `GEM_TIERS`, `GEM_HOP_UNITS`, `SHIMMER_*` |
+| Аптечка: радиус касания, полёт, потолок пула; вид, пульсация, кольцо лечения | `game/sim/medkits.ts` → `MEDKIT_RADIUS_UNITS`, `MEDKIT_LAND_TICKS`, `MAX_MEDKITS`; `render/pickups.ts` → `MEDKIT_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS` |
+| Числа урона: сколько на экране, сколько новых за кадр, жизнь, подъём, размер; вспышка гибели | `game/render/combat-feedback.ts` → `MAX_NUMBERS`, `MAX_NEW_NUMBERS_PER_FRAME`, `NUMBER_*`, `BURST_*` |
+| Телеграфы: кольцо взрыва, полоса рывка | `game/render/telegraphs.ts` |
+| Радар: сколько точек, радиус; размер и вид в HUD | `game/radar.ts` → `MAX_BLIPS`; `app-shell/src/screens/run/Radar.tsx` → `SIZE_PX`, `*_PX` |
 | Размер клетки сетки коллизий | `game/sim/grid.ts` → `gridCellSize` |
 | Хитбоксы и умолчания паттернов, множитель элиты | `game/patterns/enemy-types.ts` → `PATTERN_TRAITS`, `PATTERN_DEFAULTS`, `ELITE_RADIUS_MUL` |
 | Умолчания поведений оружия, потолок снарядов за выстрел | `game/weapons/weapon-types.ts` → `BEHAVIOR_DEFAULTS`, `MAX_PROJECTILES_PER_SHOT` |
@@ -106,6 +113,11 @@
 | Значки оружия и пассивок | `app-shell/src/screens/item-icons.tsx` → `WEAPON_ICONS`, `PASSIVE_ICONS`; нет значка — общий | участник 1 |
 | Любой текст интерфейса, включая имена оружия и пассивок | `app-shell/src/i18n/ru.json` | участник 1 |
 | Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | участник 1 |
+| Примеры в заглушках меты: награды семи дней, сектора и шансы колеса, задания, достижения | `app-shell/src/screens/meta/stub-content.ts`. Это не баланс: настоящие числа будут на сервере (`07-monetization-and-ads.md` §7) | геймдизайнер |
+| Граница суток и недели для заданий и награды дня | `screens/meta/schedule.ts` → `MOSCOW_OFFSET_MS`, `MONDAY` | участник 1 |
+| Колесо удачи: сколько оборотов за крутку; длительность и кривая вращения | `screens/meta/wheel.tsx` → `SPIN_TURNS`; `tokens.css` → `--duration-spin`, `--ease-spin` | участник 1, напарник |
+| Цена «Второго шанса» в заглушке экрана смерти | `screens/run/SecondChance.tsx` → `PREMIUM_PRICE` | геймдизайнер |
+| Подсказки первого забега: порядок, когда гаснут | `app-shell/src/state/hints.ts` → `HINT_ORDER`, `MOVE_DONE_UNITS`, `DODGE_SHOW_SEC`; тексты — `ru.json` → `run.hint.*`, значки — `screens/run/HintBanner.tsx` | участник 1 |
 | Сколько запуск ждёт свои шрифты | `app-shell/src/index.tsx` → `FONT_WAIT_MS` | участник 1 |
 | Через сколько лобби предзагружает движок | `app-shell/src/screens/home.tsx` → `PRELOAD_DELAY_MS` | участник 1 |
 | Разделы нижней панели и какие экраны считаются заглушками | `app-shell/src/state/navigation.ts` → `TAB_ROOTS`, `STUB_SCREENS` | участник 1 |
@@ -135,6 +147,7 @@
 | `bh.meta.v1.bestSurvivalSec` | локальный рекорд | `core-game/src/game/run/records.ts` |
 | `bh.install.v1.id` | `installId` устройства | `state/install.ts` |
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
+| `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
 
 Само хранилище приходит от адаптера площадки портом `KeyValueStorage`, а не
 берётся из `localStorage` напрямую: переезд на `DeviceStorage` Telegram не
@@ -163,6 +176,10 @@
 | Порт сервиса | **только** карта портов `20-env-and-ports.md` §2, дальше переменная |
 | Конфигурация бэкенда и её проверка | `backend/api/src/config/app-config.ts` — единственное место, где читается `process.env` |
 | Сборка клиента: плагины, туннель, режимы | `apps/web-*/vite.config.ts` |
+| Поведение dev-сервера при обрыве связи: плашка вместо перезагрузки | `scripts/vite/stable-dev-session.ts` (`20-env-and-ports.md` §4) |
+| Режим сборки клиента: всегда production, `NODE_ENV` из `.env` не берётся | `scripts/vite/production-node-env.ts` |
+| Раскладка чанков клиента: без слияния общих чанков Rolldown | `scripts/vite/chunking.ts` → `clientRolldownOptions` (`27-design-system-and-app-shell.md` §3.4) |
+| Какие экраны грузятся по требованию | `packages/app-shell/src/app/lazy-screens.tsx` → `loaders` |
 | Версия Node | `.nvmrc` |
 | Правила TypeScript | `tsconfig.base.json`, проекты — `tsconfig.json` пакетов, тесты — `tsconfig.tests.json` |
 | Правила линта | `eslint.config.js` |

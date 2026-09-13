@@ -1,5 +1,6 @@
 import type { EnemyPattern, UpgradeOption } from "@bh/shared-types";
 import { ENEMIES } from "../../src/content/enemies";
+import { DROPS } from "../../src/content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../../src/content/upgrades";
 import { WEAPONS } from "../../src/content/weapons";
 import { chooseUpgrade, isAwaitingChoice } from "../../src/game/progression/levels";
@@ -58,6 +59,7 @@ export function runScripted(options: ScriptedRunOptions): ScriptedRunResult {
     passives: PASSIVES,
     levelCurve: LEVEL_CURVE,
     loadoutLimits: LOADOUT_LIMITS,
+    drops: DROPS,
     ...(options.startingWeaponId === undefined
       ? {}
       : { startingWeaponId: options.startingWeaponId }),

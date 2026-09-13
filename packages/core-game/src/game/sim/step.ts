@@ -3,6 +3,7 @@ import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy } from "./combat";
 import { updateGems } from "./gems";
+import { updateMedkits } from "./medkits";
 import { recycleEnemyForward } from "./spawner";
 import { vectorLength } from "./vector";
 import { clampToBounds, damagePlayer, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
@@ -55,6 +56,7 @@ export function stepWorld(world: World, input: SimInput): void {
 
   if (world.config.progressionEnabled) {
     updateGems(world, dt);
+    updateMedkits(world);
     // Варианты готовятся в конце шага: игрок увидит их на следующем кадре, а
     // мир к этому моменту уже в согласованном состоянии.
     prepareOffers(world);

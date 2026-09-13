@@ -1,6 +1,14 @@
 import type Phaser from "phaser";
 
-export type ShapeKind = "circle" | "square" | "triangle" | "diamond" | "ring" | "hexagon" | "double";
+export type ShapeKind =
+  | "circle"
+  | "square"
+  | "triangle"
+  | "diamond"
+  | "ring"
+  | "hexagon"
+  | "double"
+  | "medkit";
 
 export interface ShapeSpec {
   shape: ShapeKind;
@@ -37,6 +45,15 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
       graphics.lineStyle(Math.max(2, r * 0.35), spec.color, 1);
       graphics.strokeCircle(r, r, r * 0.8);
       return;
+    case "medkit":
+      // Светлая плашка с красным крестом: аптечку узнают по силуэту креста, а
+      // не по цвету — красного на поле и так много (§4.4).
+      graphics.fillStyle(MEDKIT_BODY, 1);
+      graphics.fillRoundedRect(r * 0.1, r * 0.1, r * 1.8, r * 1.8, r * 0.35);
+      graphics.fillStyle(spec.color, 1);
+      graphics.fillRect(r * 0.78, r * 0.4, r * 0.44, r * 1.2);
+      graphics.fillRect(r * 0.4, r * 0.78, r * 1.2, r * 0.44);
+      return;
     case "double":
       graphics.fillCircle(r * 0.65, r * 0.75, r * 0.6);
       graphics.fillCircle(r * 1.35, r * 1.25, r * 0.6);
@@ -45,6 +62,9 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
       graphics.fillCircle(r, r, r);
   }
 }
+
+/** Плашка аптечки: светлая, чтобы крест читался на тёмной земле. */
+const MEDKIT_BODY = 0xf3f6fc;
 
 /** Вершины в долях радиуса относительно центра фигуры. */
 const DIAMOND: readonly (readonly [number, number])[] = [

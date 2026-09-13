@@ -5,74 +5,130 @@
 // запретить рост, а в том, чтобы он был решением, а не случайностью —
 // добавленная библиотека роняет проверку, и в PR видно, чем за неё заплатили.
 //
-// Считается gzip: на устройство едет именно он.
+// JS и CSS считаются в gzip — на устройство едет именно он; шрифты — как есть.
 
 import { gzipSync } from "node:zlib";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-/**
- * Бюджеты в килобайтах gzip. Числа — замеренная сборка плюс запас на
- * колебания минификатора, а не желаемое: первоначальные бюджеты документа
- * (150 КБ на оболочку) исходили из оценки React в ~60 КБ gzip, а React 19
- * вместе с react-dom весит заметно больше. Расхождение вынесено в §3.4 и
- * ждёт решения команды — до него бюджет держит текущий вес, не давая ему
- * расти дальше.
- */
-/**
- * Чанки, которые грузятся по требованию и в первую загрузку не входят:
- * движок забега и стенд испытаний. Всё остальное считается первой загрузкой.
- *
- * Классификация «всё, кроме ленивого», а не список ожидаемых имён: сборщик
- * вправе выделить общий модуль в отдельный чанк, и такой чанк молча выпал бы
- * из бюджета. Так уже случилось при переходе на Vite 8.
- */
-const LAZY = /^(phaser-host|run-engine|bench-stand)-.*\.js$/;
-
-const BUDGETS = [
-  {
-    name: "Оболочка, первая загрузка",
-    matches: (name) => name.endsWith(".js") && !LAZY.test(name),
-    limitKb: 190,
-  },
-  { name: "CSS", matches: (name) => name.endsWith(".css"), limitKb: 30 },
-  {
-    name: "Чанки по требованию",
-    matches: (name) => LAZY.test(name),
-    limitKb: 380,
-  },
-  {
-    // woff2 уже сжат, gzip его не уменьшает — считаем как есть. Браузер
-    // качает подмножество, только встретив его символы, но на русском
-    // интерфейсе нужны оба: кириллица и латиница с цифрами.
-    name: "Шрифты",
-    matches: (name) => name.endsWith(".woff2"),
-    limitKb: 120,
-    compressed: true,
-  },
-];
-
 /** Какое приложение считаем эталоном: оно уходит в закрытый тест первым. */
-const APP_DIST = "apps/web-telegram/dist/assets";
+const APP_DIST = "apps/web-telegram/dist";
+const ASSETS = join(APP_DIST, "assets");
+
+/**
+ * Движок забега и стенд испытаний — отдельные двери с устойчивыми именами
+ * чанков: у них свой бюджет, потому что вес Phaser живёт по своим законам.
+ */
+const ENGINE = /^(phaser-host|run-engine|bench-stand)-.*\.js$/;
+
+/**
+ * Первая загрузка — то, что браузер качает до интерактивной главной: скрипт
+ * и `modulepreload` из index.html и всё, что они статически импортируют.
+ *
+ * Считается по ссылкам, а не по именам файлов: сборщик вправе выделить общий
+ * модуль в чанк с любым именем, и такой чанк молча выпал бы из бюджета — так
+ * уже случилось при переходе на Vite 8. Всё прочее — экраны по требованию.
+ */
+function firstLoadChunks(files) {
+  const html = readFileSync(join(APP_DIST, "index.html"), "utf8");
+  const queue = [...html.matchAll(/(?:src|href)="\.\/assets\/([^"]+\.js)"/g)].map((match) => match[1]);
+  const seen = new Set();
+
+  while (queue.length > 0) {
+    const name = queue.pop();
+    if (seen.has(name) || !files.includes(name)) continue;
+    seen.add(name);
+
+    // Статические импорты: `import … from "./x.js"` и `import "./x.js"`.
+    // Динамический `import("./x.js")` сюда не попадает — после `import` у него
+    // скобка.
+    const code = readFileSync(join(ASSETS, name), "utf8");
+    for (const match of code.matchAll(/\bimport\s*(?:[^"'()]*?\bfrom\s*)?["']\.\/([^"']+\.js)["']/g)) {
+      queue.push(match[1]);
+    }
+  }
+  return seen;
+}
 
 function measure() {
-  const files = readdirSync(APP_DIST).filter((name) => statSync(join(APP_DIST, name)).isFile());
-  const rows = [];
+  const files = readdirSync(ASSETS).filter((name) => statSync(join(ASSETS, name)).isFile());
+  const firstLoad = firstLoadChunks(files);
+  const isJs = (name) => name.endsWith(".js");
 
-  for (const budget of BUDGETS) {
+  const budgets = [
+    { name: "Оболочка, первая загрузка", limitKb: 150, matches: (name) => firstLoad.has(name) },
+    { name: "CSS", limitKb: 30, matches: (name) => name.endsWith(".css") },
+    {
+      name: "Экраны по требованию",
+      limitKb: 60,
+      matches: (name) => isJs(name) && !firstLoad.has(name) && !ENGINE.test(name),
+    },
+    { name: "Движок и стенд", limitKb: 380, matches: (name) => ENGINE.test(name) },
+    {
+      // woff2 уже сжат, gzip его не уменьшает. Браузер качает подмножество,
+      // только встретив его символы, но русскому интерфейсу нужны оба:
+      // кириллица и латиница с цифрами.
+      name: "Шрифты",
+      limitKb: 120,
+      matches: (name) => name.endsWith(".woff2"),
+      compressed: true,
+    },
+  ];
+
+  return budgets.map((budget) => {
     const matched = files.filter((name) => budget.matches(name));
     const bytes = matched.reduce((total, name) => {
-      const content = readFileSync(join(APP_DIST, name));
+      const content = readFileSync(join(ASSETS, name));
       return total + (budget.compressed === true ? content.length : gzipSync(content).length);
     }, 0);
-    rows.push({ ...budget, files: matched, kb: bytes / 1024 });
-  }
-  return rows;
+    return { ...budget, files: matched, kb: bytes / 1024 };
+  });
+}
+
+/**
+ * Сборка для игрока обязана быть production. Отладочный JSX (`jsxDEV`)
+ * появляется, только если собрали development, — как это и случилось, когда
+ * Vite взял `NODE_ENV` из общего `.env` (scripts/vite/production-node-env.ts).
+ * Такой бандл вдвое тяжелее, и бюджет мерил бы не то, что получит игрок.
+ */
+function findDevelopmentBuild() {
+  const files = readdirSync(ASSETS).filter((name) => name.endsWith(".js"));
+  return files.filter((name) => readFileSync(join(ASSETS, name), "utf8").includes("jsxDEV"));
+}
+
+/**
+ * Чанк движка в первой загрузке — не рост, а сломанная раскладка: вместе с ним
+ * игрок качает Phaser до главной. Так уже было, когда сборщик слил общие
+ * runtime-хелперы в чанк движка (scripts/vite/chunking.ts), и одно число
+ * «452 КБ» не говорило, что именно случилось.
+ */
+function findEngineInFirstLoad() {
+  const files = readdirSync(ASSETS).filter((name) => statSync(join(ASSETS, name)).isFile());
+  return [...firstLoadChunks(files)].filter((name) => ENGINE.test(name));
 }
 
 function main() {
   let failed = false;
-  console.log("Бюджет бандла (gzip):\n");
+  console.log("Бюджет бандла:\n");
+
+  const engineInFirstLoad = findEngineInFirstLoad();
+  if (engineInFirstLoad.length > 0) {
+    console.error(
+      `  Движок попал в первую загрузку: ${engineInFirstLoad.join(", ")}.\n` +
+        "  Какой-то чанк первой загрузки импортирует его статически — проверьте\n" +
+        "  раскладку чанков (scripts/vite/chunking.ts) и импорты из core-game.\n",
+    );
+    failed = true;
+  }
+
+  const development = findDevelopmentBuild();
+  if (development.length > 0) {
+    console.error(
+      `  Сборка development, а не production: отладочный JSX в ${development.join(", ")}.\n` +
+        "  Проверьте NODE_ENV в окружении и scripts/vite/production-node-env.ts.\n",
+    );
+    failed = true;
+  }
 
   for (const row of measure()) {
     const over = row.kb > row.limitKb;
@@ -81,6 +137,9 @@ function main() {
     console.log(
       `  ${row.name.padEnd(28)} ${row.kb.toFixed(1).padStart(7)} КБ / ${String(row.limitKb).padStart(4)} КБ  ${mark}`,
     );
+    if (process.argv.includes("--files")) {
+      for (const file of row.files) console.log(`      ${file}`);
+    }
     if (row.files.length === 0) {
       console.log(`    файлов не нашлось — сборка не та или её не делали`);
       failed = true;

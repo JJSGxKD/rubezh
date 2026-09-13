@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { RunResult, UpgradeOption } from "@bh/shared-types";
+import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import {
   Avatar,
   Badge,
@@ -16,7 +16,9 @@ import {
   ProgressBar,
   Screen,
   SectionTitle,
+  SegmentedControl,
   Stat,
+  StubNotice,
   StubScreen,
   Wordmark,
 } from "../design-system/components";
@@ -42,6 +44,7 @@ type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "de
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [segment, setSegment] = useState("daily");
 
   if (preview !== null) {
     return <PreviewFrame preview={preview} onClose={() => setPreview(null)} />;
@@ -119,6 +122,18 @@ export function GalleryScreen(): ReactNode {
           />
         </ListGroup>
 
+        <SectionTitle>{t("gallery.segmented")}</SectionTitle>
+        <SegmentedControl
+          label={t("gallery.segmented")}
+          activeId={segment}
+          onSelect={setSegment}
+          items={[
+            { id: "daily", label: t("tasks.daily") },
+            { id: "weekly", label: t("tasks.weekly") },
+            { id: "achievements", label: t("tasks.achievements") },
+          ]}
+        />
+
         <SectionTitle>{t("gallery.progress")}</SectionTitle>
         <div className="grid gap-3">
           <ProgressBar value={7} max={10} tone="hp" height="thick" label="HP" />
@@ -147,6 +162,7 @@ export function GalleryScreen(): ReactNode {
 
         <SectionTitle>{t("gallery.stub")}</SectionTitle>
         <StubScreen icon={<Star size={36} />} title="Заглушка раздела" text={t("shop.soon")} />
+        <StubNotice text={t("reward.stub")} />
       </ContentColumn>
     </Screen>
   );
@@ -207,17 +223,79 @@ function renderPreview(preview: Preview): ReactNode {
   }
 }
 
+function change(
+  labelKey: string,
+  from: number | null,
+  to: number,
+  format: UpgradeChange["format"] = "value",
+  lowerIsBetter = false,
+): UpgradeChange {
+  return { labelKey, from, to, format, lowerIsBetter };
+}
+
+const KNIFE_NEW: UpgradeOption = {
+  id: "w:knife",
+  kind: "weapon_new",
+  refId: "knife",
+  level: 1,
+  nameKey: "weapon.knife.name",
+  descriptionKey: "weapon.knife.description",
+  changes: [
+    change("upgrade.stat.damage", null, 5),
+    change("upgrade.stat.cooldownSec", null, 0.5, "value", true),
+    change("upgrade.stat.projectiles", null, 2),
+    change("upgrade.stat.pierce", null, 1),
+  ],
+};
+
 const SAMPLE_OFFERS: UpgradeOption[] = [
-  { id: "w:knife", kind: "weapon_new", refId: "knife", level: 1, nameKey: "weapon.knife.name", descriptionKey: "weapon.knife.description" },
-  { id: "w:spark", kind: "weapon_level", refId: "spark", level: 3, nameKey: "weapon.spark.name", descriptionKey: "weapon.spark.description" },
-  { id: "p:might", kind: "passive_level", refId: "might", level: 2, nameKey: "passive.might.name", descriptionKey: "passive.might.description" },
+  KNIFE_NEW,
+  {
+    id: "w:spark",
+    kind: "weapon_level",
+    refId: "spark",
+    level: 3,
+    nameKey: "weapon.spark.name",
+    descriptionKey: "weapon.spark.description",
+    changes: [
+      change("upgrade.stat.damage", 7, 8),
+      change("upgrade.stat.cooldownSec", 0.26, 0.24, "value", true),
+      change("upgrade.stat.projectiles", 1, 2),
+      change("upgrade.stat.projectileSpeed", 520, 540),
+    ],
+  },
+  {
+    id: "p:might",
+    kind: "passive_level",
+    refId: "might",
+    level: 2,
+    nameKey: "passive.might.name",
+    descriptionKey: "passive.might.description",
+    changes: [change("upgrade.stat.passive.damage", 1.1, 1.2, "percent")],
+  },
 ];
 
 /** Самые длинные тексты словаря — на них вёрстка ломается первой (§4.3). */
 const LONG_OFFERS: UpgradeOption[] = [
-  { id: "p:mending", kind: "passive_new", refId: "mending", level: 1, nameKey: "passive.mending.name", descriptionKey: "passive.mending.description" },
-  { id: "w:knife", kind: "weapon_new", refId: "knife", level: 1, nameKey: "weapon.knife.name", descriptionKey: "weapon.knife.description" },
-  { id: "heal", kind: "heal", refId: "", level: 1, nameKey: "upgrade.heal.name", descriptionKey: "upgrade.heal.description" },
+  {
+    id: "p:mending",
+    kind: "passive_new",
+    refId: "mending",
+    level: 1,
+    nameKey: "passive.mending.name",
+    descriptionKey: "passive.mending.description",
+    changes: [change("upgrade.stat.passive.regenPerSec", null, 0.4, "plus")],
+  },
+  KNIFE_NEW,
+  {
+    id: "heal",
+    kind: "heal",
+    refId: "",
+    level: 1,
+    nameKey: "upgrade.heal.name",
+    descriptionKey: "upgrade.heal.description",
+    changes: [change("upgrade.stat.heal", null, 30)],
+  },
 ];
 
 const SAMPLE_RESULT: RunResult = {

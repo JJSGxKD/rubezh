@@ -137,6 +137,7 @@
 | Партнёры | `partner_click`, `partner_registration`, `partner_ftd`, `partner_revenue_accrued`, `partner_payout` |
 | Шеринг | `share_offered`, `share_completed`, `shared_link_opened` |
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
+| Удержание | `daily_reward_claimed`, `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
 
 Добавлено на этапе 2 (`26-stage2-plan.md`):
