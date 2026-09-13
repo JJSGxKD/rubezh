@@ -16,6 +16,11 @@ export async function startBench(container: HTMLElement, params: URLSearchParams
   const mode = readBenchMode(params.get("bench"));
   if (mode === null) return;
 
+  // Заставку из index.html оболочка снимает сама, при монтировании React, а
+  // стенд оболочку не монтирует. Оставленная заставка занимает всю высоту
+  // контейнера и выталкивает канву за экран: на телефоне виден только логотип.
+  container.replaceChildren();
+
   await loadBenchStand({
     container,
     mode: mode.mode,
