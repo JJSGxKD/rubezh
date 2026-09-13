@@ -122,7 +122,8 @@
 | Сколько запуск ждёт свои шрифты | `app-shell/src/index.tsx` → `FONT_WAIT_MS` | участник 1 |
 | Через сколько лобби предзагружает движок | `app-shell/src/screens/home.tsx` → `PRELOAD_DELAY_MS` | участник 1 |
 | Разделы нижней панели и какие экраны считаются заглушками | `app-shell/src/state/navigation.ts` → `TAB_ROOTS`, `STUB_SCREENS` | участник 1 |
-| Состав верхней панели лобби, порядок вкладок, точки на вкладках | `app-shell/src/app/App.tsx` → `TABS` | участник 1 |
+| Порядок вкладок, их значки и точки | `app-shell/src/app/App.tsx` → `TABS`; нагрудник арсенала — `design-system/components/icons.tsx` | участник 1 |
+| Шапка разделов и её меню: что показывается, куда ведёт | `app-shell/src/app/AppHeader.tsx`, `app/MainMenu.tsx` | участник 1 |
 | Как часто забег сохраняется сам | `app-shell/src/state/run.ts` → `AUTOSAVE_SEC` | участник 1 |
 | Задержка от случайного тапа на оверлеях забега | `app-shell/src/screens/run/overlays.tsx` → `GUARD_MS` | участник 1 |
 | Порог «мало здоровья» в HUD | `app-shell/src/screens/run/RunHud.tsx` → `LOW_HP_RATIO` | участник 1 |

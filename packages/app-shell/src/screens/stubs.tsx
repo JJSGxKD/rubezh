@@ -4,6 +4,7 @@ import {
   Avatar,
   Card,
   ContentColumn,
+  PageTitle,
   Screen,
   SectionTitle,
   StubScreen,
@@ -22,8 +23,9 @@ import { useShell } from "../state/shell";
  */
 export function ArsenalScreen(): ReactNode {
   return (
-    <Screen title={t("arsenal.title")}>
+    <Screen>
       <ContentColumn>
+        <PageTitle>{t("arsenal.title")}</PageTitle>
         <StubScreen
           icon={<Swords size={40} />}
           title={t("arsenal.characters")}
@@ -44,8 +46,9 @@ export function ArsenalScreen(): ReactNode {
 
 export function ShopScreen(): ReactNode {
   return (
-    <Screen title={t("shop.title")}>
+    <Screen>
       <ContentColumn>
+        <PageTitle>{t("shop.title")}</PageTitle>
         <StubScreen icon={<Gift size={40} />} title={t("shop.title")} text={t("shop.soon")} />
       </ContentColumn>
     </Screen>
@@ -54,8 +57,9 @@ export function ShopScreen(): ReactNode {
 
 export function RatingScreen(): ReactNode {
   return (
-    <Screen title={t("rating.title")}>
+    <Screen>
       <ContentColumn>
+        <PageTitle>{t("rating.title")}</PageTitle>
         <StubScreen icon={<Trophy size={40} />} title={t("rating.title")} text={t("rating.soon")} />
         <SectionTitle>{t("rating.example")}</SectionTitle>
         <div className="grid gap-2">
@@ -77,8 +81,9 @@ export function RatingScreen(): ReactNode {
 
 export function FriendsScreen(): ReactNode {
   return (
-    <Screen title={t("friends.title")}>
+    <Screen>
       <ContentColumn>
+        <PageTitle>{t("friends.title")}</PageTitle>
         <StubScreen icon={<Users size={40} />} title={t("friends.title")} text={t("friends.soon")} />
       </ContentColumn>
     </Screen>

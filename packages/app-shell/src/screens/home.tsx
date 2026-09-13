@@ -1,16 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   CalendarCheck,
-  Gem,
   History,
   Infinity as InfinityIcon,
   LoaderPinwheel,
   Lock,
   Map as MapIcon,
   Play,
-  Settings,
   Trophy,
-  User,
 } from "lucide-react";
 import type { DifficultyId } from "@bh/shared-types";
 import { DIFFICULTIES, WEAPONS } from "@bh/core-game";
@@ -19,10 +16,7 @@ import {
   Button,
   Card,
   ContentColumn,
-  CurrencyChip,
   Emblem,
-  FullscreenButton,
-  IconButton,
   Modal,
   Screen,
   SectionTitle,
@@ -61,18 +55,6 @@ export function LobbyScreen(): ReactNode {
   return (
     <div className="relative h-full">
     <Screen
-      actions={
-        <>
-          <CurrencyChip icon={<Gem size={14} />} value="0" />
-          <FullscreenButton />
-          <IconButton label={t("profile.title")} onClick={() => navigation.push("profile")}>
-            <User size={20} />
-          </IconButton>
-          <IconButton label={t("settings.title")} onClick={() => navigation.push("settings")}>
-            <Settings size={20} />
-          </IconButton>
-        </>
-      }
       footer={
         saved === null ? (
           <Button size="l" block glow onClick={() => navigation.push("mode")}>

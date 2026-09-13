@@ -4,6 +4,7 @@ import {
   Badge,
   Card,
   ContentColumn,
+  PageTitle,
   ProgressBar,
   Screen,
   SegmentedControl,
@@ -46,8 +47,9 @@ export function TasksScreen(): ReactNode {
   const [view, setView] = useState<View>("daily");
 
   return (
-    <Screen title={t("tasks.title")}>
+    <Screen>
       <ContentColumn>
+        <PageTitle>{t("tasks.title")}</PageTitle>
         <div className="mt-2 grid gap-3">
           <SegmentedControl
             label={t("tasks.title")}

@@ -231,6 +231,14 @@ export function ContentColumn(props: { children: ReactNode }): ReactNode {
   return <div className="mx-auto w-full max-w-[480px]">{props.children}</div>;
 }
 
+/**
+ * Заголовок раздела нижней панели. Верхней панели у раздела нет — над ним
+ * шапка приложения, — и заголовок живёт в контенте, а не отнимает строку.
+ */
+export function PageTitle(props: { children: ReactNode }): ReactNode {
+  return <h1 className="mt-2 mb-1 font-display text-2xl font-bold text-text">{props.children}</h1>;
+}
+
 export function SectionTitle(props: { children: ReactNode }): ReactNode {
   return (
     <h2 className="mt-6 mb-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
