@@ -154,7 +154,7 @@ export class WorldRenderer {
       this.player.setScale(1);
       return;
     }
-    this.player.setTint(0xff6b6b);
+    this.player.setTint(0xff6b6b).setTintMode(Phaser.TintModes.FILL);
     this.player.setScale(1 + 0.25 * (1 - age / HIT_FLASH_TICKS));
   }
 
@@ -290,9 +290,14 @@ export class WorldRenderer {
     this.enemySpriteLook[index] = look;
     sprite.setAlpha(look === LOOK.dim ? 0.35 : 1);
     sprite.setScale(look === LOOK.normal ? 1 : look === LOOK.hit ? 1.25 : 1.2);
-    if (look === LOOK.warning) sprite.setTint(0xffffff);
-    else if (look === LOOK.hit) sprite.setTint(0xffe9e9);
-    else sprite.clearTint();
+    // Заливка, а не умножение: белый множитель цвет не меняет вовсе, и
+    // телеграф с попаданием читались бы только по размеру спрайта. Заливка
+    // перекрашивает спрайт целиком и сохраняет его форму по альфе.
+    if (look === LOOK.warning || look === LOOK.hit) {
+      sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    } else {
+      sprite.clearTint();
+    }
   }
 
   /**

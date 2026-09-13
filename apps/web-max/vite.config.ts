@@ -2,9 +2,18 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 
 // Корень монорепо — единственный .env на весь проект (см. docs/20-env-and-ports.md).
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+
+// Сборка Phaser без Matter.js: физику движка игра не использует, а Matter —
+// 33 КБ gzip в чанке движка (docs/16-tech-stack-decisions.md §9.3).
+const phaserWithoutMatter = join(
+  dirname(createRequire(import.meta.url).resolve("phaser/package.json")),
+  "dist/phaser-arcade-physics.js",
+);
 
 // Платформа определяется на этапе сборки через --mode, не в рантайме —
 // см. docs/01-tech-stack.md §1. Порт задаётся переменной WEB_MAX_PORT, чтобы
@@ -34,6 +43,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: [{ find: /^phaser$/, replacement: phaserWithoutMatter }],
+    },
     base: "./",
     envDir: repoRoot,
     server: {

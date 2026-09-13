@@ -13,7 +13,7 @@
   "dependencies": {
     "@bh/core-game": "workspace:*",
     "@bh/adapter-telegram": "workspace:*",
-    "phaser": "3.90.0",
+    "phaser": "4.2.1",
     "@bh/app-shell": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0"

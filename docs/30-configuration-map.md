@@ -155,6 +155,7 @@
 | Порт сервиса | **только** карта портов `20-env-and-ports.md` §2, дальше переменная |
 | Конфигурация бэкенда и её проверка | `backend/api/src/config/app-config.ts` — единственное место, где читается `process.env` |
 | Сборка клиента: плагины, туннель, режимы | `apps/web-*/vite.config.ts` |
+| Какая сборка Phaser попадает в чанк движка | `apps/web-*/vite.config.ts` → `phaserWithoutMatter`, во всех трёх одинаково (`16-tech-stack-decisions.md` §9.3) |
 | Версия Node | `.nvmrc` |
 | Правила TypeScript | `tsconfig.base.json`, проекты — `tsconfig.json` пакетов, тесты — `tsconfig.tests.json` |
 | Правила линта | `eslint.config.js` |

@@ -28,10 +28,10 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
       graphics.fillTriangle(r, 0, r * 2, r * 2, 0, r * 2);
       return;
     case "diamond":
-      graphics.fillPoints(points(r, DIAMOND), true);
+      fillPolygon(graphics, r, DIAMOND);
       return;
     case "hexagon":
-      graphics.fillPoints(points(r, HEXAGON), true);
+      fillPolygon(graphics, r, HEXAGON);
       return;
     case "ring":
       graphics.lineStyle(Math.max(2, r * 0.35), spec.color, 1);
@@ -63,6 +63,23 @@ const HEXAGON: readonly (readonly [number, number])[] = [
   [-0.5, -0.866],
 ];
 
-function points(radius: number, unit: readonly (readonly [number, number])[]): { x: number; y: number }[] {
-  return unit.map(([x, y]) => ({ x: radius + x * radius, y: radius + y * radius }));
+/**
+ * Многоугольник путём, а не `fillPoints`: в Phaser 4 тот принимает только
+ * экземпляры `Vector2`, а путь строится из чисел — без объектов-посредников и
+ * без импорта Phaser как значения в этот модуль.
+ */
+function fillPolygon(
+  graphics: Phaser.GameObjects.Graphics,
+  radius: number,
+  unit: readonly (readonly [number, number])[],
+): void {
+  graphics.beginPath();
+  unit.forEach(([x, y], index) => {
+    const px = radius + x * radius;
+    const py = radius + y * radius;
+    if (index === 0) graphics.moveTo(px, py);
+    else graphics.lineTo(px, py);
+  });
+  graphics.closePath();
+  graphics.fillPath();
 }

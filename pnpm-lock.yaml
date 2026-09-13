@@ -39,8 +39,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core-game
       phaser:
-        specifier: 3.90.0
-        version: 3.90.0
+        specifier: 4.2.1
+        version: 4.2.1
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -76,8 +76,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core-game
       phaser:
-        specifier: 3.90.0
-        version: 3.90.0
+        specifier: 4.2.1
+        version: 4.2.1
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -113,8 +113,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core-game
       phaser:
-        specifier: 3.90.0
-        version: 3.90.0
+        specifier: 4.2.1
+        version: 4.2.1
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -248,8 +248,8 @@ importers:
         specifier: workspace:*
         version: link:../shared-types
       phaser:
-        specifier: 3.90.0
-        version: 3.90.0
+        specifier: 4.2.1
+        version: 4.2.1
 
   packages/shared-types: {}
 
@@ -2146,8 +2146,8 @@ packages:
     resolution: {integrity: sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw==}
     engines: {node: '>=8'}
 
-  phaser@3.90.0:
-    resolution: {integrity: sha512-/cziz/5ZIn02uDkC9RzN8VF9x3Gs3XdFFf9nkiMEQT3p7hQlWuyjy4QWosU802qqno2YSLn2BfqwOKLv/sSVfQ==}
+  phaser@4.2.1:
+    resolution: {integrity: sha512-WUNwCPJpdjvZiuT6SgCfYVW8Qw/3j0jJ4ws7P2QkhFLFu74sbGuyHJcbFueGkY/AYO4Pi47bNQXn1OCJeLX//w==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -4727,7 +4727,7 @@ snapshots:
 
   path-type@4.0.0: {}
 
-  phaser@3.90.0:
+  phaser@4.2.1:
     dependencies:
       eventemitter3: 5.0.4
 
