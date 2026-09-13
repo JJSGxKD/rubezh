@@ -4,6 +4,7 @@ import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
 import { ItemIcon } from "../item-icons";
+import { HintBanner } from "./HintBanner";
 import { Radar } from "./Radar";
 
 /**
@@ -76,7 +77,11 @@ export function RunHud(props: RunHudProps): ReactNode {
         </div>
       </div>
 
-      <div className="mt-auto flex items-end gap-3 pr-[calc(1rem+var(--app-inset-right))] pb-[calc(0.75rem+var(--app-inset-bottom))] pl-[calc(1rem+var(--app-inset-left))]">
+      <div className="mt-auto px-4 pb-3">
+        <HintBanner hud={hud} />
+      </div>
+
+      <div className="flex items-end gap-3 pr-[calc(1rem+var(--app-inset-right))] pb-[calc(0.75rem+var(--app-inset-bottom))] pl-[calc(1rem+var(--app-inset-left))]">
         <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
           {hud.weapons.map((slot) => (
             <Slot key={`w-${slot.id}`} id={slot.id} level={slot.level} kind="weapon" />

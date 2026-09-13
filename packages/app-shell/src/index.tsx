@@ -7,6 +7,7 @@ import "./design-system/tokens.css";
 import { FONT_FAMILY, PLATFORM_COLORS } from "./design-system/tokens";
 import { BootScreen, type BootStage } from "./screens/gates";
 import { useDiagnostics } from "./state/diagnostics";
+import { useHints } from "./state/hints";
 import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
@@ -73,6 +74,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   useInstall.getState().hydrate();
   useDiagnostics.getState().hydrate(options.capabilities.diagnosticsByDefault);
   useMeta.getState().hydrate();
+  useHints.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
 
   render(<App />);

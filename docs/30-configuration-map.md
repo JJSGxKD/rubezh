@@ -113,6 +113,7 @@
 | Значки оружия и пассивок | `app-shell/src/screens/item-icons.tsx` → `WEAPON_ICONS`, `PASSIVE_ICONS`; нет значка — общий | участник 1 |
 | Любой текст интерфейса, включая имена оружия и пассивок | `app-shell/src/i18n/ru.json` | участник 1 |
 | Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | участник 1 |
+| Подсказки первого забега: порядок, когда гаснут | `app-shell/src/state/hints.ts` → `HINT_ORDER`, `MOVE_DONE_UNITS`, `DODGE_SHOW_SEC`; тексты — `ru.json` → `run.hint.*`, значки — `screens/run/HintBanner.tsx` | участник 1 |
 | Сколько запуск ждёт свои шрифты | `app-shell/src/index.tsx` → `FONT_WAIT_MS` | участник 1 |
 | Через сколько лобби предзагружает движок | `app-shell/src/screens/home.tsx` → `PRELOAD_DELAY_MS` | участник 1 |
 | Разделы нижней панели и какие экраны считаются заглушками | `app-shell/src/state/navigation.ts` → `TAB_ROOTS`, `STUB_SCREENS` | участник 1 |
@@ -142,6 +143,7 @@
 | `bh.meta.v1.bestSurvivalSec` | локальный рекорд | `core-game/src/game/run/records.ts` |
 | `bh.install.v1.id` | `installId` устройства | `state/install.ts` |
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
+| `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
 
 Само хранилище приходит от адаптера площадки портом `KeyValueStorage`, а не
 берётся из `localStorage` напрямую: переезд на `DeviceStorage` Telegram не
