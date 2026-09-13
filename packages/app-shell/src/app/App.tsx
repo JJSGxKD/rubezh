@@ -62,15 +62,35 @@ export function App(): ReactNode {
   // Забег занимает весь экран: панель разделов поверх канвы отнимала бы
   // высоту у мира и попадала под палец.
   const showTabs = tab !== null && screen !== "run" && stack.length === 1;
+  // Настройки, открытые с паузы, ложатся поверх забега, а не вместо него:
+  // размонтированный экран забега уничтожил бы движок, и возврат начинал бы
+  // забег заново. Забег в этот момент стоит на паузе и скрыт, но жив.
+  const runUnderneath = screen !== "run" && stack.includes("run");
 
   return (
     <div className="bg-app flex h-full flex-col">
-      <main className="min-h-0 flex-1">
-        <ScreenBoundary key={screen}>
-          <Suspense fallback={<ScreenFallback />}>
-            <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
-          </Suspense>
-        </ScreenBoundary>
+      <main className="relative min-h-0 flex-1">
+        {screen === "run" || runUnderneath ? (
+          <div
+            aria-hidden={runUnderneath}
+            className={runUnderneath ? "invisible absolute inset-0" : "h-full"}
+          >
+            <ScreenBoundary key="run">
+              <ScreenTransition screenKey="run">
+                <RunScreen />
+              </ScreenTransition>
+            </ScreenBoundary>
+          </div>
+        ) : null}
+        {screen === "run" ? null : (
+          <div className={runUnderneath ? "bg-app absolute inset-0" : "h-full"}>
+            <ScreenBoundary key={screen}>
+              <Suspense fallback={<ScreenFallback />}>
+                <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
+              </Suspense>
+            </ScreenBoundary>
+          </div>
+        )}
       </main>
       {showTabs ? (
         <TabBar
