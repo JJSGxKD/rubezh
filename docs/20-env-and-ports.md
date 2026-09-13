@@ -89,7 +89,7 @@
 
 | Группа | Что внутри | Где брать значения |
 |---|---|---|
-| 1. Окружение | `NODE_ENV`, `APP_PLATFORM`, `APP_VERSION` | задаётся сборкой; `APP_VERSION` — из тега релиза |
+| 1. Окружение | `NODE_ENV`, `APP_PLATFORM`, `APP_VERSION` | задаётся сборкой; `APP_VERSION` — из тега релиза. `NODE_ENV` из `.env` читает только бэкенд: сборка клиента его игнорирует и всегда production (`scripts/vite/production-node-env.ts`), иначе Vite собирал бы отладочный React |
 | 2. Порты | см. §2 | из таблицы выше |
 | 3. База данных | `POSTGRES_*`, `DATABASE_URL` | dev — из compose; прод — секреты окружения |
 | 4. Redis | `REDIS_*` | там же |
