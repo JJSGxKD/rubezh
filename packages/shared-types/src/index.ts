@@ -519,6 +519,32 @@ export interface UpgradeOption {
   level: number;
   nameKey: string;
   descriptionKey: string;
+  /**
+   * Что именно даёт вариант — по строке на характеристику. Без этого «Искра,
+   * уровень 3» ничего не говорит: больше снарядов, быстрее или сильнее? Для
+   * нового оружия — его главные числа, для уровня — только то, что меняется.
+   */
+  changes: UpgradeChange[];
+}
+
+/** Как показывать число изменения. */
+export type UpgradeChangeFormat =
+  /** как есть: урон 6 → 7, снарядов 1 → 2 */
+  | "value"
+  /** множитель как процент: 1.1 → «+10%», 0.92 → «−8%» */
+  | "percent"
+  /** прибавка со знаком: «+20» */
+  | "plus";
+
+export interface UpgradeChange {
+  /** ключ i18n подписи характеристики */
+  labelKey: string;
+  /** было; `null` — у нового оружия или пассивки, сравнивать не с чем */
+  from: number | null;
+  to: number;
+  format: UpgradeChangeFormat;
+  /** меньше — лучше (перезарядка): интерфейс красит улучшение, а не рост числа */
+  lowerIsBetter: boolean;
 }
 
 // --- Итог забега, см. docs/26-stage2-plan.md, WP3 ---

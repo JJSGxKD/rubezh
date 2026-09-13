@@ -1,6 +1,7 @@
 import type { LevelCurveDef, UpgradeOption } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import { computePlayerStats } from "./passives";
+import { healChanges, passiveChanges, weaponChanges } from "./upgrade-changes";
 import {
   addPassive,
   addWeapon,
@@ -97,6 +98,7 @@ function collectCandidates(world: World): Candidate[] {
           level: 1,
           nameKey: type.nameKey,
           descriptionKey: type.descriptionKey,
+          changes: weaponChanges(type, null, 1, world.config.unitScale),
         },
       });
       return;
@@ -113,6 +115,7 @@ function collectCandidates(world: World): Candidate[] {
         level: nextLevel,
         nameKey: type.nameKey,
         descriptionKey: type.descriptionKey,
+        changes: weaponChanges(type, nextLevel - 1, nextLevel, world.config.unitScale),
       },
     });
   });
@@ -130,6 +133,7 @@ function collectCandidates(world: World): Candidate[] {
           level: 1,
           nameKey: type.nameKey,
           descriptionKey: type.descriptionKey,
+          changes: passiveChanges(type, null, 1),
         },
       });
       return;
@@ -146,6 +150,7 @@ function collectCandidates(world: World): Candidate[] {
         level: nextLevel,
         nameKey: type.nameKey,
         descriptionKey: type.descriptionKey,
+        changes: passiveChanges(type, nextLevel - 1, nextLevel),
       },
     });
   });
@@ -190,6 +195,7 @@ function healOption(): UpgradeOption {
     level: 0,
     nameKey: "upgrade.heal.name",
     descriptionKey: "upgrade.heal.description",
+    changes: healChanges(HEAL_RATIO),
   };
 }
 

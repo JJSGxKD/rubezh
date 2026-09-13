@@ -75,3 +75,8 @@ export function formatDuration(seconds: number): string {
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat(LOCALE).format(Math.round(value));
 }
+
+/** Дробное число без хвоста нулей: 0,28 и 7, а не 0,280 и 7,00. */
+export function formatDecimal(value: number, maxFractionDigits = 2): string {
+  return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: maxFractionDigits }).format(value);
+}
