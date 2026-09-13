@@ -14,9 +14,10 @@ import { TICK_SEC, createWorld, type World } from "../src/game/sim/world";
 // Выпадение опыта: горсть кристаллов разной ценности с полётом от места смерти.
 
 const DUMMY: EnemyDef = { id: "dummy", hp: 10, speed: 0.001, damage: 0, xp: 1, pattern: "swarm" };
+const NO_MEDKITS = { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 };
 
 function setup(seed = 1, maxPerKill = 5): World {
-  return createWorld({ seed, enemies: [DUMMY], drops: { gems: { maxPerKill } } });
+  return createWorld({ seed, enemies: [DUMMY], drops: { gems: { maxPerKill }, medkits: NO_MEDKITS } });
 }
 
 function aliveGems(world: World): { value: number; x: number; y: number; flying: boolean }[] {
@@ -113,13 +114,13 @@ describe("контент выпадения", () => {
   });
 
   it("называет поле и допустимые границы", () => {
-    expect(findDropsContentProblems({ gems: { maxPerKill: 0 } }).join("\n")).toMatch(/maxPerKill/);
-    expect(findDropsContentProblems({ gems: { maxPerKill: MAX_GEMS_PER_KILL + 1 } })).toHaveLength(1);
-    expect(findDropsContentProblems({ gems: { maxPerKill: 2.5 } })).toHaveLength(1);
+    expect(findDropsContentProblems({ gems: { maxPerKill: 0 }, medkits: NO_MEDKITS }).join("\n")).toMatch(/maxPerKill/);
+    expect(findDropsContentProblems({ gems: { maxPerKill: MAX_GEMS_PER_KILL + 1 }, medkits: NO_MEDKITS })).toHaveLength(1);
+    expect(findDropsContentProblems({ gems: { maxPerKill: 2.5 }, medkits: NO_MEDKITS })).toHaveLength(1);
   });
 
   it("мир с некорректным выпадением не создаётся", () => {
-    expect(() => createWorld({ seed: 1, enemies: [DUMMY], drops: { gems: { maxPerKill: 0 } } })).toThrow(
+    expect(() => createWorld({ seed: 1, enemies: [DUMMY], drops: { gems: { maxPerKill: 0 }, medkits: NO_MEDKITS } })).toThrow(
       /выпадения/,
     );
   });

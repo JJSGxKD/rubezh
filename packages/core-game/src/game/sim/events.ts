@@ -18,6 +18,8 @@ export const SIM_EVENT = {
   strike: 2,
   /** игрок получил урон; `radius` несёт величину урона */
   playerHit: 3,
+  /** игрок подобрал аптечку; `radius` несёт, сколько здоровья она вернула */
+  heal: 4,
 } as const;
 
 export type SimEventKind = (typeof SIM_EVENT)[keyof typeof SIM_EVENT];

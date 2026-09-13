@@ -160,6 +160,35 @@ export function createGemPool(capacity: number): GemPool {
   };
 }
 
+/**
+ * Аптечки. Их на поле единицы — потолок задаёт контент, — поэтому у пула нет
+ * слияния: не поместилась, значит не упала.
+ */
+export interface MedkitPool {
+  x: Float64Array;
+  y: Float64Array;
+  originX: Float64Array;
+  originY: Float64Array;
+  /** тик вылета; пока аптечка летит, её не подобрать — как у кристалла */
+  bornTick: Int32Array;
+  alive: Uint8Array;
+  count: number;
+  aliveCount: number;
+}
+
+export function createMedkitPool(capacity: number): MedkitPool {
+  return {
+    x: new Float64Array(capacity),
+    y: new Float64Array(capacity),
+    originX: new Float64Array(capacity),
+    originY: new Float64Array(capacity),
+    bornTick: new Int32Array(capacity).fill(NEVER_HIT),
+    alive: new Uint8Array(capacity),
+    count: 0,
+    aliveCount: 0,
+  };
+}
+
 export function createProjectilePool(capacity: number): ProjectilePool {
   return {
     x: new Float64Array(capacity),

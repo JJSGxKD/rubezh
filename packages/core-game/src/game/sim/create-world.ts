@@ -17,7 +17,8 @@ import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
 import { findDropsContentProblems } from "./gems";
-import { createEnemyPool, createGemPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
+import { MAX_MEDKITS } from "./medkits";
+import { createEnemyPool, createGemPool, createMedkitPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
 import type { PlayerConfig, SimConfig, World } from "./world";
 
 /**
@@ -34,11 +35,15 @@ const FALLBACK_LEVEL_CURVE: LevelCurveDef = { baseXp: 6, growth: 1.22 };
 const FALLBACK_LOADOUT_LIMITS: LoadoutLimits = { weapons: 4, passives: 4 };
 
 /**
- * Выпадение для тестов симуляции: один кристалл на врага. Горсть расходует
- * генератор, и тест паттерна врага сдвигал бы свою последовательность
- * случайных чисел от правки выпадения, к которому отношения не имеет.
+ * Выпадение для тестов симуляции: один кристалл на врага и никаких аптечек.
+ * Горсть и бросок на аптечку расходуют генератор, и тест паттерна врага
+ * сдвигал бы свою последовательность случайных чисел от правки выпадения, к
+ * которому отношения не имеет.
  */
-const FALLBACK_DROPS: DropsDef = { gems: { maxPerKill: 1 } };
+const FALLBACK_DROPS: DropsDef = {
+  gems: { maxPerKill: 1 },
+  medkits: { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 },
+};
 
 /**
  * Карта по умолчанию — тоже заглушка, и тоже не из контента: симуляция не
@@ -200,6 +205,7 @@ export function createWorld(options: CreateWorldOptions): World {
     projectiles: createProjectilePool(maxProjectiles),
     gems: createGemPool(config.progressionEnabled ? config.maxGems : 1),
     gemMergeCursor: 0,
+    medkits: createMedkitPool(config.progressionEnabled ? MAX_MEDKITS : 1),
     // Окно сетки накрывает радиус удержания целиком: всё, что дальше, живёт
     // считанные тики и попадает в краевые клетки без вреда для запросов.
     enemyGrid: new SpatialGrid(
@@ -219,6 +225,7 @@ export function createWorld(options: CreateWorldOptions): World {
       damageDealt: 0,
       damageByWeapon: new Float64Array(Math.max(1, loadoutLimits.weapons)),
       xpCollected: 0,
+      medkitsCollected: 0,
       distance: 0,
       peakEnemies: 0,
       enemiesRecycled: 0,

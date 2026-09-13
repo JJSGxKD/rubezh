@@ -3,6 +3,7 @@ import type { EnemyPattern } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { GEM_LAND_TICKS } from "../sim/gems";
+import { MEDKIT_LAND_TICKS, MEDKIT_RADIUS_UNITS } from "../sim/medkits";
 import { NEVER_HIT } from "../sim/pools";
 import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
 import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
@@ -54,11 +55,14 @@ export class WorldRenderer {
   /** спрайт кристалла сейчас не в масштабе 1 — после приземления его надо вернуть */
   private readonly gemSpriteScaled: Uint8Array;
   private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
+  private readonly medkitSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
   /** кольца телеграфа: показывают радиус будущего взрыва, пока горит фитиль */
   private readonly telegraphs: Phaser.GameObjects.Image[] = [];
   /** тик последнего попадания по игроку — для вспышки персонажа */
   private playerHitTick = NEVER_HIT;
+  /** тик последнего лечения — персонаж коротко вспыхивает зелёным */
+  private playerHealTick = NEVER_HIT;
   private readonly blastStartTick: Int32Array = new Int32Array(MAX_BLASTS).fill(-1);
   private readonly blastRadius: Float32Array = new Float32Array(MAX_BLASTS);
   private readonly blastKind: Uint8Array = new Uint8Array(MAX_BLASTS);
@@ -99,6 +103,8 @@ export class WorldRenderer {
       this.ensureTexture(gemTextureKey(index), tier.radiusUnits * scale, tier.color, tier.shape);
     });
     this.ensureTexture("bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
+    this.ensureTexture("bh-medkit", MEDKIT_RADIUS_UNITS * scale, 0xff5d5d, "medkit");
+    this.ensureTexture("bh-heal", BLAST_TEXTURE_UNITS * scale, 0x5fe3a1, "ring");
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
     this.layer.add(this.player);
@@ -138,6 +144,7 @@ export class WorldRenderer {
     this.syncEnemies(t);
     this.syncProjectiles(t);
     this.syncGems(t);
+    this.syncMedkits(t);
     this.syncOrbiters();
     this.syncBlasts();
 
@@ -158,6 +165,13 @@ export class WorldRenderer {
    */
   private applyPlayerHit(): void {
     const age = this.world.stats.tick - this.playerHitTick;
+    const healAge = this.world.stats.tick - this.playerHealTick;
+    // Попадание важнее лечения: если было и то и другое, игрок должен видеть урон.
+    if (age >= HIT_FLASH_TICKS && healAge < HIT_FLASH_TICKS) {
+      this.player.setTintFill(0x5fe3a1);
+      this.player.setScale(1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS));
+      return;
+    }
     if (age >= HIT_FLASH_TICKS) {
       this.player.clearTint();
       this.player.setScale(1);
@@ -304,6 +318,45 @@ export class WorldRenderer {
   }
 
   /**
+   * Аптечки: тот же полёт от места смерти, что у кристаллов, а на земле —
+   * мягкая пульсация. Её должно быть видно издалека: за аптечкой идут.
+   */
+  private syncMedkits(t: number): void {
+    const medkits = this.world.medkits;
+    const tick = this.world.stats.tick;
+    const hop = MEDKIT_HOP_UNITS * this.world.config.unitScale;
+
+    for (let i = 0; i < medkits.alive.length; i++) {
+      if (i >= this.medkitSprites.length) {
+        if (medkits.alive[i] === 0) continue;
+        const sprite = this.scene.add.image(0, 0, "bh-medkit").setVisible(false).setDepth(1);
+        this.layer.add(sprite);
+        this.medkitSprites.push(sprite);
+      }
+      const sprite = this.medkitSprites[i];
+      if (medkits.alive[i] === 0) {
+        if (sprite.visible) sprite.setVisible(false);
+        continue;
+      }
+
+      sprite.setVisible(true);
+      const progress = (tick - medkits.bornTick[i] - 1 + t) / MEDKIT_LAND_TICKS;
+      if (progress < 1) {
+        const p = progress < 0 ? 0 : progress;
+        const eased = 1 - (1 - p) * (1 - p);
+        sprite.setPosition(
+          lerp(medkits.originX[i], medkits.x[i], eased),
+          lerp(medkits.originY[i], medkits.y[i], eased) - hop * 4 * p * (1 - p),
+        );
+        sprite.setScale(gemPopScale(p));
+        continue;
+      }
+      sprite.setPosition(medkits.x[i], medkits.y[i]);
+      sprite.setScale(1 + 0.12 * triangle(tick % MEDKIT_PULSE_TICKS, MEDKIT_PULSE_TICKS));
+    }
+  }
+
+  /**
    * Обереги не живут в пуле снарядов: их положение целиком задаётся
    * состоянием оружия, поэтому рендер спрашивает его у самого оружия.
    */
@@ -364,6 +417,12 @@ export class WorldRenderer {
         this.playerHitTick = events.tick[slot];
         continue;
       }
+      if (kind === SIM_EVENT.heal) {
+        // Кольцо лечения расходится от игрока: аптечка сработала.
+        this.playerHealTick = events.tick[slot];
+        this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * this.world.config.unitScale, events.tick[slot], kind);
+        continue;
+      }
       if (kind !== SIM_EVENT.explosion && kind !== SIM_EVENT.strike) continue;
       this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
     }
@@ -394,7 +453,9 @@ export class WorldRenderer {
       this.blasts.push(sprite);
     }
     if (this.blastKind[b] !== kind) {
-      this.blasts[b].setTexture(kind === SIM_EVENT.strike ? "bh-strike" : "bh-blast");
+      this.blasts[b].setTexture(
+        kind === SIM_EVENT.strike ? "bh-strike" : kind === SIM_EVENT.heal ? "bh-heal" : "bh-blast",
+      );
       this.blastKind[b] = kind;
     }
     this.blasts[b].setPosition(x, y);
@@ -540,6 +601,10 @@ const SHIMMER_TIER = 2;
 const SHIMMER_PERIOD_TICKS = 48;
 /** Высота подскока кристалла в полёте, игровые единицы. */
 const GEM_HOP_UNITS = 18;
+const MEDKIT_HOP_UNITS = 26;
+const MEDKIT_PULSE_TICKS = 40;
+/** Радиус кольца лечения при подборе аптечки, игровые единицы. */
+const HEAL_RING_UNITS = 40;
 const ORBITER_RADIUS_UNITS = 9;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */

@@ -44,7 +44,7 @@
 | Бесконечный режим: бюджет угрозы, рост, потолок живых, пул типов, события | `content/waves.ts` → `ENDLESS_CURVE` | свойства баланса |
 | Оружие: поведение, числа по уровням, что даётся на старте | `content/weapons.ts` → `WEAPONS` | golden-прогон |
 | Пассивки, слоты набора, кривая опыта | `content/upgrades.ts` → `PASSIVES`, `LOADOUT_LIMITS`, `LEVEL_CURVE` | golden-прогон |
-| Что падает с врагов: на сколько кристаллов делится опыт | `content/drops.ts` → `DROPS` | golden-прогон, контрольная сумма |
+| Что падает с врагов: на сколько кристаллов делится опыт; шанс аптечки с рядового и с элиты, сколько лечит, сколько лежит на поле | `content/drops.ts` → `DROPS` | golden-прогон, контрольная сумма |
 | Карта: границы мира, видимая область, поведение камеры | `content/maps.ts` → `MAPS` | радиус кольца спавна, а с ним весь баланс |
 | Целевые коридоры калибровки | `content/balance-targets.ts` → `BALANCE_TARGETS` | тест свойств баланса |
 
@@ -74,6 +74,7 @@
 | Скорость притяжения кристаллов и запас подбора | `game/sim/gems.ts` → `GEM_SPEED`, `PICKUP_SLACK` |
 | Полёт кристалла от места смерти: длительность, разлёт, потолок горсти | `game/sim/gems.ts` → `GEM_LAND_TICKS`, `SCATTER_MIN`, `SCATTER_MAX`, `MAX_GEMS_PER_KILL` |
 | Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/WorldRenderer.ts` → `GEM_TIERS`, `GEM_HOP_UNITS`, `SHIMMER_*` |
+| Аптечка: радиус касания, полёт, потолок пула; вид, пульсация, кольцо лечения | `game/sim/medkits.ts` → `MEDKIT_RADIUS_UNITS`, `MEDKIT_LAND_TICKS`, `MAX_MEDKITS`; `WorldRenderer.ts` → `MEDKIT_*`, `HEAL_RING_UNITS` |
 | Размер клетки сетки коллизий | `game/sim/grid.ts` → `gridCellSize` |
 | Хитбоксы и умолчания паттернов, множитель элиты | `game/patterns/enemy-types.ts` → `PATTERN_TRAITS`, `PATTERN_DEFAULTS`, `ELITE_RADIUS_MUL` |
 | Умолчания поведений оружия, потолок снарядов за выстрел | `game/weapons/weapon-types.ts` → `BEHAVIOR_DEFAULTS`, `MAX_PROJECTILES_PER_SHOT` |

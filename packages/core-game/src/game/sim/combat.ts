@@ -1,5 +1,6 @@
 import { onEnemyKilled } from "../patterns";
 import { dropGems } from "./gems";
+import { rollMedkit } from "./medkits";
 import { despawnEnemy, NO_OWNER_TYPE, type World } from "./world";
 
 /**
@@ -51,6 +52,9 @@ export function killEnemy(world: World, index: number): void {
   const y = world.enemies.y[index];
   despawnEnemy(world, index);
 
-  if (world.config.progressionEnabled) dropGems(world, x, y, type.xp);
+  if (world.config.progressionEnabled) {
+    dropGems(world, x, y, type.xp);
+    rollMedkit(world, x, y, type.elite);
+  }
   onEnemyKilled(type.pattern, world, index);
 }
