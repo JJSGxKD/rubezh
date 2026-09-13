@@ -61,7 +61,45 @@ export interface RunSlotState {
   level: number;
 }
 
-export type RunPauseReason = "manual" | "app_inactive";
+/**
+ * Почему забег стоит: игрок нажал паузу, приложение ушло в фон или забег
+ * только что продолжен из снимка и ждёт, пока игрок будет готов.
+ */
+export type RunPauseReason = "manual" | "app_inactive" | "restored";
+
+/**
+ * Версия формата снимка. Меняется при любой правке снимка или мира: старое
+ * сохранение тогда не продолжается, а не продолжается криво.
+ */
+export const RUN_SNAPSHOT_FORMAT = 1;
+
+/**
+ * Снимок прерванного забега — по нему забег продолжается после сворачивания,
+ * вылета или перезапуска. Для оболочки он непрозрачен: она хранит его и
+ * отдаёт обратно, а сама читает только заголовок и `summary` — для карточки
+ * «Продолжить» в лобби.
+ *
+ * Снимок годится только для того контента, на котором снят: `contentHash`
+ * другой — продолжать нельзя, числа врагов и оружия уже другие.
+ */
+export interface RunSnapshot {
+  format: number;
+  contentHash: string;
+  runId: string;
+  seed: number;
+  mapId: string;
+  startingWeaponId: string;
+  summary: RunSnapshotSummary;
+  /** состояние мира; формат знает только движок */
+  world: unknown;
+}
+
+export interface RunSnapshotSummary {
+  survivalSec: number;
+  level: number;
+  weapons: RunSlotState[];
+  passives: RunSlotState[];
+}
 
 export interface RunOptions {
   /** куда встроить канву забега */
@@ -80,6 +118,11 @@ export interface RunOptions {
   pixelRatio?: number;
   /** ограничение частоты отрисовки — только для замеров */
   renderCapFps?: number;
+  /**
+   * Продолжить забег из снимка. `seed`, карта и оружие тогда берутся из
+   * снимка, а забег стартует на паузе с причиной `restored`.
+   */
+  resume?: RunSnapshot;
 }
 
 export interface RunDiagnosticsOptions {
@@ -113,6 +156,11 @@ export interface RunSession {
   abandon(): void;
   /** начать заново в уже загруженном движке: от смерти до забега один тап */
   restart(seed: number): void;
+  /**
+   * Снять снимок для продолжения. `null`, если продолжать нечего: забег
+   * кончился или сцена ещё не создана.
+   */
+  snapshot(): RunSnapshot | null;
   destroy(): void;
 }
 

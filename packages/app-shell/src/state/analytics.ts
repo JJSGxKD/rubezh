@@ -12,6 +12,7 @@ export type AnalyticsEvent =
   | "screen_viewed"
   | "settings_changed"
   | "run_started"
+  | "run_resumed"
   | "run_finished"
   | "run_abandoned"
   | "run_paused"

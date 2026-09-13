@@ -32,7 +32,11 @@ export type {
   RunPauseReason,
   RunSession,
   RunSlotState,
+  RunSnapshot,
+  RunSnapshotSummary,
 } from "./run-api";
+// Версия формата снимка — оболочка сверяет сохранение до того, как предложить «Продолжить».
+export { RUN_SNAPSHOT_FORMAT } from "./run-api";
 
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).

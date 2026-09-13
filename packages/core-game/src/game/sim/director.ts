@@ -64,6 +64,20 @@ export function createTimelineDirector(
   }
 
   return {
+    /**
+     * План отрезка сохраняется целиком, а не пересчитывается по номеру:
+     * расчёт бесконечного отрезка тянет генератор, и пересчёт при
+     * восстановлении сдвинул бы всю дальнейшую последовательность.
+     */
+    saveState() {
+      return { index, plan, debt: [...debt] };
+    },
+    loadState(state) {
+      const saved = parseDirectorState(state);
+      index = saved.index;
+      plan = saved.plan;
+      debt = saved.debt;
+    },
     update(world, dtSec) {
       let steps = 0;
       while (
@@ -95,6 +109,50 @@ export function createTimelineDirector(
       }
     },
   };
+}
+
+interface DirectorState {
+  index: number;
+  plan: SegmentPlan | null;
+  debt: number[];
+}
+
+/**
+ * Состояние директора из снимка. Проверяется форма, а не смысл: план — те же
+ * данные, что директор сам сохранил, и сверять их с таймлайном значило бы
+ * пересчитать отрезок, от чего снимок и уберегает.
+ */
+function parseDirectorState(input: unknown): DirectorState {
+  if (typeof input !== "object" || input === null) throw new Error("Состояние директора спавна не читается");
+  const state = input as Record<string, unknown>;
+  const debt = state.debt;
+  if (
+    typeof state.index !== "number" ||
+    !Array.isArray(debt) ||
+    !debt.every((value) => typeof value === "number") ||
+    (state.plan !== null && !isSegmentPlan(state.plan))
+  ) {
+    throw new Error("Состояние директора спавна не читается");
+  }
+  const plan = state.plan as SegmentPlan | null;
+  if (plan !== null && plan.spawns.length !== debt.length) {
+    throw new Error("Состояние директора спавна не читается: долг не совпадает с планом");
+  }
+  return { index: state.index, plan, debt: debt as number[] };
+}
+
+function isSegmentPlan(value: unknown): value is SegmentPlan {
+  if (typeof value !== "object" || value === null) return false;
+  const plan = value as Record<string, unknown>;
+  return (
+    typeof plan.index === "number" &&
+    typeof plan.maxAlive === "number" &&
+    typeof plan.hpMul === "number" &&
+    typeof plan.damageMul === "number" &&
+    Array.isArray(plan.spawns) &&
+    Array.isArray(plan.bursts) &&
+    Array.isArray(plan.events)
+  );
 }
 
 function atCap(world: World): boolean {

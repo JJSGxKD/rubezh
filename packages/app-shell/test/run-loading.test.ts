@@ -30,6 +30,7 @@ function fakeEngine(): { engine: RunEngine; emitHud(): void } {
     resume: () => undefined,
     abandon: () => undefined,
     restart: () => undefined,
+    snapshot: () => null,
     destroy: () => undefined,
   } as unknown as RunSession;
 

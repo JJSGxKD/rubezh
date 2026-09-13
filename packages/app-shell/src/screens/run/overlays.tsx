@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Crown, Pause, Skull, Sparkles, Star } from "lucide-react";
+import { Crown, History, Pause, Skull, Sparkles, Star } from "lucide-react";
 import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import {
   Badge,
@@ -55,6 +55,8 @@ function guarded(ready: boolean, action: () => void): () => void {
 
 export interface PauseOverlayProps {
   elapsedSec: number;
+  /** забег только что продолжен из сохранения — экран говорит об этом, а не «пауза» */
+  restored?: boolean;
   onResume(): void;
   onSettings(): void;
   onSurrender(): void;
@@ -87,8 +89,8 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
 
   return (
     <Modal
-      title={t("run.pause")}
-      icon={<Pause size={26} fill="currentColor" />}
+      title={props.restored === true ? t("run.pause.restored") : t("run.pause")}
+      icon={props.restored === true ? <History size={26} /> : <Pause size={26} fill="currentColor" />}
       footer={
         <>
           <Button size="l" block glow onClick={guarded(ready, props.onResume)}>

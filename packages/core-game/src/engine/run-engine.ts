@@ -27,6 +27,7 @@ export function createRunEngine(): RunEngine {
         ...(options.startingWeaponId === ""
           ? {}
           : { startingWeaponId: options.startingWeaponId }),
+        ...(options.resume === undefined ? {} : { resume: options.resume }),
         bus,
       };
       host.game.scene.add("main", MainScene, true, sceneData);
@@ -62,6 +63,9 @@ export function createRunEngine(): RunEngine {
         },
         restart(seed: number): void {
           scene()?.restartRun(seed);
+        },
+        snapshot() {
+          return scene()?.captureSnapshot() ?? null;
         },
         destroy(): void {
           bus.clear();

@@ -122,6 +122,7 @@
 | Через сколько лобби предзагружает движок | `app-shell/src/screens/home.tsx` → `PRELOAD_DELAY_MS` | участник 1 |
 | Разделы нижней панели и какие экраны считаются заглушками | `app-shell/src/state/navigation.ts` → `TAB_ROOTS`, `STUB_SCREENS` | участник 1 |
 | Состав верхней панели лобби, порядок вкладок, точки на вкладках | `app-shell/src/app/App.tsx` → `TABS` | участник 1 |
+| Как часто забег сохраняется сам | `app-shell/src/state/run.ts` → `AUTOSAVE_SEC` | участник 1 |
 | Задержка от случайного тапа на оверлеях забега | `app-shell/src/screens/run/overlays.tsx` → `GUARD_MS` | участник 1 |
 | Порог «мало здоровья» в HUD | `app-shell/src/screens/run/RunHud.tsx` → `LOW_HP_RATIO` | участник 1 |
 
@@ -148,6 +149,7 @@
 | `bh.install.v1.id` | `installId` устройства | `state/install.ts` |
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
+| `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts` | `state/run-save.ts` |
 
 Само хранилище приходит от адаптера площадки портом `KeyValueStorage`, а не
 берётся из `localStorage` напрямую: переезд на `DeviceStorage` Telegram не

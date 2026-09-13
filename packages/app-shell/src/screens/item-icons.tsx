@@ -64,7 +64,20 @@ const TILE_TONE: Record<ItemKind, string> = {
 };
 
 /** Значок на цветной плитке: оружие жёлтое, пассивка фиолетовая, лечение зелёное. */
-export function ItemTile(props: { kind: ItemKind; id: string }): ReactNode {
+export function ItemTile(props: { kind: ItemKind; id: string; size?: "s" | "m" }): ReactNode {
+  if (props.size === "s") {
+    // Маленькие плитки ложатся стопкой внахлёст: у полупрозрачной плитки
+    // нужна непрозрачная подложка и кромка, иначе соседняя просвечивает.
+    return (
+      <span className="inline-flex size-8 shrink-0 rounded-md bg-surface ring-2 ring-surface-raised">
+        <span
+          className={`inline-flex size-full items-center justify-center rounded-md ${TILE_TONE[props.kind]}`}
+        >
+          <ItemIcon kind={props.kind} id={props.id} size={16} />
+        </span>
+      </span>
+    );
+  }
   return (
     <span
       className={`inline-flex size-11 shrink-0 items-center justify-center rounded-md ${TILE_TONE[props.kind]}`}

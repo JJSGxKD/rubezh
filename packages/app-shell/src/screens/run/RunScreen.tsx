@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_MAP_ID } from "@bh/core-game";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
@@ -25,7 +25,11 @@ export function RunScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics((state) => state.enabled);
   const isActive = usePlatform((state) => state.isActive);
-  const weaponId = useMeta((state) => state.lastWeaponId);
+  // Оружие для экрана загрузки фиксируется при входе: у продолженного забега
+  // оно своё, а ожидание старта движок снимает сразу, как только начал.
+  const [weaponId] = useState(
+    () => useRun.getState().pendingResume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -33,10 +37,12 @@ export function RunScreen(): ReactNode {
 
     // Оружие читается разово из стора, а не из подписки: смена запомненного
     // выбора посреди забега не должна его перезапускать.
+    const resume = useRun.getState().pendingResume;
     void useRun.getState().start({
       container,
-      startingWeaponId: useMeta.getState().lastWeaponId,
-      mapId: DEFAULT_MAP_ID,
+      startingWeaponId: resume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
+      mapId: resume?.mapId ?? DEFAULT_MAP_ID,
+      ...(resume === null ? {} : { resume }),
     });
 
     // Уход с экрана уносит с собой и движок: чанк остаётся загруженным, а
@@ -67,6 +73,7 @@ export function RunScreen(): ReactNode {
       {run.phase === "paused" ? (
         <PauseOverlay
           elapsedSec={run.hud?.survivalSec ?? 0}
+          restored={run.pauseReason === "restored"}
           onResume={() => useRun.getState().resume()}
           onSettings={() => navigation.push("settings")}
           onSurrender={() => useRun.getState().surrender()}
@@ -104,6 +111,7 @@ export function RunScreen(): ReactNode {
     </div>
   );
 }
+
 
 /**
  * Шеринг результата — заглушка этапа 2: адаптер о нём знает, но экрана и

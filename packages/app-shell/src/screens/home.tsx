@@ -1,7 +1,8 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   CalendarCheck,
   Gem,
+  History,
   Infinity as InfinityIcon,
   LoaderPinwheel,
   Lock,
@@ -21,6 +22,7 @@ import {
   Emblem,
   FullscreenButton,
   IconButton,
+  Modal,
   Screen,
   Stat,
   Wordmark,
@@ -29,7 +31,8 @@ import { formatDuration, t } from "../i18n";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
 import { preloadScreens } from "../app/lazy-screens";
-import { preloadRunEngine } from "../state/run";
+import { preloadRunEngine, useRun } from "../state/run";
+import { useSavedRun, type SavedRun } from "../state/run-save";
 import { ItemTile } from "./item-icons";
 
 /**
@@ -47,9 +50,12 @@ const PRELOAD_DELAY_MS = 1500;
 export function LobbyScreen(): ReactNode {
   const navigation = useNavigation();
   const meta = useMeta();
+  const saved = useSavedRun((state) => state.saved);
+  const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   usePreloadEngine();
 
   return (
+    <div className="relative h-full">
     <Screen
       actions={
         <>
@@ -64,10 +70,32 @@ export function LobbyScreen(): ReactNode {
         </>
       }
       footer={
-        <Button size="l" block glow onClick={() => navigation.push("mode")}>
-          <Play size={22} fill="currentColor" />
-          {t("lobby.play")}
-        </Button>
+        saved === null ? (
+          <Button size="l" block glow onClick={() => navigation.push("mode")}>
+            <Play size={22} fill="currentColor" />
+            {t("lobby.play")}
+          </Button>
+        ) : (
+          // Прерванный забег главнее нового: игрок, вернувшийся после звонка,
+          // хочет доиграть, а не начинать с нуля.
+          <div className="grid gap-1">
+            <Button
+              size="l"
+              block
+              glow
+              onClick={() => {
+                useRun.getState().prepareResume(saved);
+                navigation.push("run");
+              }}
+            >
+              <Play size={22} fill="currentColor" />
+              {t("lobby.continue")}
+            </Button>
+            <Button variant="ghost" block onClick={() => setConfirmingNewRun(true)}>
+              {t("lobby.newRun")}
+            </Button>
+          </div>
+        )
       }
     >
       <ContentColumn>
@@ -80,6 +108,8 @@ export function LobbyScreen(): ReactNode {
           <Wordmark size="l" />
           <p className="max-w-[300px] text-sm text-text-muted landscape:hidden">{t("lobby.tagline")}</p>
         </div>
+
+        {saved === null ? null : <SavedRunCard saved={saved} />}
 
         <Card appearIndex={1}>
           <div className="flex items-center gap-4">
@@ -121,6 +151,64 @@ export function LobbyScreen(): ReactNode {
         </div>
       </ContentColumn>
     </Screen>
+
+    {confirmingNewRun ? (
+      <Modal
+        title={t("lobby.newRun.title")}
+        placement="bottom"
+        footer={
+          <>
+            <Button
+              variant="danger"
+              block
+              onClick={() => {
+                useSavedRun.getState().clear();
+                setConfirmingNewRun(false);
+                navigation.push("mode");
+              }}
+            >
+              {t("lobby.newRun.confirm")}
+            </Button>
+            <Button variant="ghost" block onClick={() => setConfirmingNewRun(false)}>
+              {t("app.cancel")}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-text-muted">{t("lobby.newRun.text")}</p>
+      </Modal>
+    ) : null}
+    </div>
+  );
+}
+
+/** Прерванный забег: сколько продержался и с чем — чтобы игрок узнал свой забег. */
+function SavedRunCard(props: { saved: SavedRun }): ReactNode {
+  const { summary } = props.saved;
+
+  return (
+    <div className="mb-3">
+      <Card appearIndex={0} stripe="accent">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
+            <History size={24} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="font-display text-xs font-semibold tracking-wide text-text-muted uppercase">
+              {t("lobby.saved.title")}
+            </span>
+            <p className="font-display text-lg font-bold text-text tabular-nums">
+              {t("lobby.saved.meta", { time: formatDuration(summary.survivalSec), level: summary.level })}
+            </p>
+          </div>
+          <div className="flex shrink-0 -space-x-2">
+            {summary.weapons.map((weapon) => (
+              <ItemTile key={weapon.id} kind="weapon" id={weapon.id} size="s" />
+            ))}
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -257,6 +345,7 @@ export function WeaponScreen(): ReactNode {
             // Запоминаем даже выбор по умолчанию: забег должен стартовать с
             // тем оружием, которое подсвечено на экране.
             meta.rememberWeapon(selected);
+            useRun.getState().prepareResume(null);
             navigation.replace("run");
           }}
         >

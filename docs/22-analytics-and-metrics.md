@@ -129,7 +129,7 @@
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_finished`, `run_abandoned`, `run_paused`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
 | Интерфейс | `screen_viewed`, `settings_changed` |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded` |
 | Реклама | `ad_requested`, `ad_shown`, `ad_reward_claimed`, `ad_failed` |
@@ -146,6 +146,7 @@
 |---|---|---|
 | `upgrade_offered` | Выбор улучшения при наборе уровня. Без предложений частота выбора не считается: «выбрали 5 раз» ничего не значит, пока неизвестно, сколько раз предлагали. Отдельного события набора уровня нет — оно следует из этого | `runId`, `level`, `elapsedSec`, `options[]` (вид: новое оружие, уровень оружия, пассивка; id; уровень) |
 | `run_paused` | Как часто забег прерывается — вход для решения о длине забега | `runId`, `reason`: `manual` / `app_inactive`, `elapsedSec` |
+| `run_resumed` | Сколько прерванных забегов игроки продолжают — окупилось ли сохранение и как часто приложение закрывают посреди забега | `seed`, `elapsedSec`, `level` |
 | `screen_viewed` | Путь по интерфейсу; заходы в заглушки — замер интереса к будущим разделам | `screen`, `isStub` |
 | `settings_changed` | Какие настройки меняют — режим экрана, вибрацию | `key`, `value` |
 | `diagnostics_mode_changed` | Сколько тестеров включают диагностику и запись забегов | `setting`, `enabled` |
