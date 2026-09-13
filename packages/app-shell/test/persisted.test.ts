@@ -1,6 +1,6 @@
 import type { KeyValueStorage } from "@bh/shared-types";
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod/v4-mini";
+import { z } from "zod/mini";
 import { createPersistedValue, readNumber } from "../src/state/persisted";
 
 /**

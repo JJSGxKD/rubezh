@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@bh/shared-types": "workspace:*",
-    "phaser": "^3.80.0"
+    "phaser": "3.90.0"
   }
 }

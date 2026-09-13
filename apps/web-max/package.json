@@ -11,14 +11,14 @@
   "dependencies": {
     "@bh/core-game": "workspace:*",
     "@bh/adapter-max": "workspace:*",
-    "phaser": "^3.80.0",
+    "phaser": "3.90.0",
     "@bh/app-shell": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "vite": "^5.4.0",
-    "@vitejs/plugin-react": "4.7.0",
+    "vite": "8.3.0",
+    "@vitejs/plugin-react": "6.1.1",
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0"
