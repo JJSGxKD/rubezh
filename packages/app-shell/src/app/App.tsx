@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Gift, Home, Swords, Trophy, Users } from "lucide-react";
-import { TabBar, type TabItem } from "../design-system/components";
+import { ScreenTransition, TabBar, type TabItem } from "../design-system/components";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
 import {
@@ -57,8 +57,10 @@ export function App(): ReactNode {
   const showTabs = tab !== null && screen !== "run" && stack.length === 1;
 
   return (
-    <div className="flex h-full flex-col bg-bg">
-      <main className="min-h-0 flex-1">{renderScreen(screen)}</main>
+    <div className="bg-app flex h-full flex-col">
+      <main className="min-h-0 flex-1">
+        <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
+      </main>
       {showTabs ? (
         <TabBar
           items={TABS}
@@ -70,12 +72,13 @@ export function App(): ReactNode {
   );
 }
 
+/** Точка на разделе — «здесь скоро появится»: заглушки зовут зайти и посмотреть. */
 const TABS: readonly TabItem[] = [
-  { id: "lobby", label: t("tab.home"), icon: <Home size={20} /> },
-  { id: "arsenal", label: t("tab.arsenal"), icon: <Swords size={20} />, badge: "•" },
-  { id: "shop", label: t("tab.shop"), icon: <Gift size={20} />, badge: "•" },
-  { id: "rating", label: t("tab.rating"), icon: <Trophy size={20} />, badge: "•" },
-  { id: "friends", label: t("tab.friends"), icon: <Users size={20} />, badge: "•" },
+  { id: "lobby", label: t("tab.home"), icon: <Home size={22} /> },
+  { id: "arsenal", label: t("tab.arsenal"), icon: <Swords size={22} />, badge: "dot" },
+  { id: "shop", label: t("tab.shop"), icon: <Gift size={22} />, badge: "dot" },
+  { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} />, badge: "dot" },
+  { id: "friends", label: t("tab.friends"), icon: <Users size={22} />, badge: "dot" },
 ];
 
 function renderScreen(screen: ScreenId): ReactNode {

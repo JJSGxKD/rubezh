@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
-import { Button, ContentColumn, ProgressBar } from "../design-system/components";
+import { Maximize, Send, ShieldCheck } from "lucide-react";
+import {
+  Button,
+  ContentColumn,
+  Emblem,
+  IconEmblem,
+  ProgressBar,
+  Wordmark,
+} from "../design-system/components";
 import { t } from "../i18n";
 
 /**
@@ -8,14 +16,36 @@ import { t } from "../i18n";
  * (docs/27-design-system-and-app-shell.md §6).
  */
 
-/** Заставка и загрузка. Разметка совпадает с той, что лежит в index.html. */
-export function LoadingScreen(props: { version: string }): ReactNode {
+/**
+ * Этапы запуска оболочки. Порядок — порядок в `mountAppShell`; полоса
+ * показывает, сколько пройдено, а подпись — что происходит сейчас.
+ */
+export const BOOT_STAGES = ["platform", "fonts", "ready"] as const;
+export type BootStage = (typeof BOOT_STAGES)[number];
+
+/**
+ * Заставка запуска. Раскладка повторяет заставку из index.html — знак, имя,
+ * полоса, — поэтому смена статичной разметки на React не видна глазом, а
+ * полоса продолжает движение с того места, где её оставила разметка.
+ */
+export function BootScreen(props: { stage: BootStage; version: string }): ReactNode {
+  const done = BOOT_STAGES.indexOf(props.stage) + 1;
+
   return (
-    <Centered>
-      <h1 className="font-display text-3xl text-text">{t("app.name")}</h1>
-      <div className="w-40">
-        <ProgressBar value={1} max={3} tone="accent" height="thin" label={t("app.loading")} />
+    <Centered still>
+      <Emblem size={88} animated />
+      <Wordmark size="l" />
+      <div className="mt-4 w-48">
+        <ProgressBar
+          value={done}
+          max={BOOT_STAGES.length}
+          tone="accent"
+          height="thin"
+          shimmer
+          label={t("app.loading")}
+        />
       </div>
+      <p className="min-h-5 text-xs text-text-muted">{t(`boot.stage.${props.stage}`)}</p>
       <p className="text-xs text-text-disabled">{t("app.version", { version: props.version })}</p>
     </Centered>
   );
@@ -28,10 +58,12 @@ export function LoadingScreen(props: { version: string }): ReactNode {
 export function OutsideScreen(props: { botUrl: string }): ReactNode {
   return (
     <Centered>
-      <h1 className="font-display text-xl text-text">{t("gate.outside.title")}</h1>
+      <Emblem size={72} animated />
+      <h1 className="mt-2 font-display text-2xl font-bold text-text">{t("gate.outside.title")}</h1>
       <p className="max-w-[320px] text-sm text-text-muted">{t("gate.outside.text")}</p>
       {props.botUrl === "" ? null : (
-        <Button onClick={() => globalThis.open(props.botUrl, "_blank")}>
+        <Button glow onClick={() => globalThis.open(props.botUrl, "_blank")}>
+          <Send size={18} />
           {t("gate.outside.action")}
         </Button>
       )}
@@ -46,9 +78,14 @@ export function OutsideScreen(props: { botUrl: string }): ReactNode {
 export function CompactScreen(props: { onExpand(): void }): ReactNode {
   return (
     <Centered>
-      <h1 className="font-display text-xl text-text">{t("gate.compact.title")}</h1>
+      <IconEmblem tone="info">
+        <Maximize size={24} />
+      </IconEmblem>
+      <h1 className="mt-2 font-display text-xl font-bold text-text">{t("gate.compact.title")}</h1>
       <p className="max-w-[320px] text-sm text-text-muted">{t("gate.compact.text")}</p>
-      <Button onClick={props.onExpand}>{t("gate.compact.action")}</Button>
+      <Button glow onClick={props.onExpand}>
+        {t("gate.compact.action")}
+      </Button>
     </Centered>
   );
 }
@@ -61,18 +98,34 @@ export function CompactScreen(props: { onExpand(): void }): ReactNode {
 export function FirstRunScreen(props: { onAccept(): void }): ReactNode {
   return (
     <Centered>
-      <h1 className="font-display text-xl text-text">{t("gate.firstRun.title")}</h1>
-      <p className="max-w-[340px] text-sm text-text-muted">{t("gate.firstRun.text")}</p>
-      <Button onClick={props.onAccept}>{t("gate.firstRun.action")}</Button>
+      <Emblem size={72} animated />
+      <div className="surface-panel mt-2 flex animate-pop-in flex-col items-center gap-3 rounded-xl p-5">
+        <IconEmblem tone="info">
+          <ShieldCheck size={24} />
+        </IconEmblem>
+        <h1 className="font-display text-xl font-bold text-text">{t("gate.firstRun.title")}</h1>
+        <p className="max-w-[340px] text-sm text-text-muted">{t("gate.firstRun.text")}</p>
+        <Button size="l" block glow onClick={props.onAccept}>
+          {t("gate.firstRun.action")}
+        </Button>
+      </div>
     </Centered>
   );
 }
 
-function Centered(props: { children: ReactNode }): ReactNode {
+/** `still` — без анимации появления: заставка подменяет статичную разметку и не должна мигать. */
+function Centered(props: { children: ReactNode; still?: boolean }): ReactNode {
   return (
-    <div className="flex h-full items-center justify-center px-6 pt-[var(--app-inset-top)] pb-[var(--app-inset-bottom)]">
+    <div className="bg-app flex h-full items-center justify-center overflow-y-auto px-6 pt-[var(--app-inset-top)] pb-[var(--app-inset-bottom)]">
       <ContentColumn>
-        <div className="flex flex-col items-center gap-4 text-center">{props.children}</div>
+        <div
+          className={[
+            "flex flex-col items-center gap-3 text-center",
+            props.still === true ? "" : "animate-screen-in",
+          ].join(" ")}
+        >
+          {props.children}
+        </div>
       </ContentColumn>
     </div>
   );

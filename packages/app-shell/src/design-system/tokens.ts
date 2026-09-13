@@ -11,29 +11,33 @@
  * рисует оболочка: HUD, полосы, слоты, цвета площадки.
  */
 export const COLORS = {
-  bg: "#0d0f14",
-  surface: "#161a23",
-  surfaceRaised: "#1e2430",
-  border: "#2a3242",
-  text: "#e7ecf5",
-  textMuted: "#9aa6bd",
-  textDisabled: "#5d6880",
+  bg: "#07090e",
+  surface: "#121622",
+  surfaceRaised: "#1b2130",
+  surfaceSunken: "#0b0e15",
+  border: "#262e40",
+  borderStrong: "#3a4560",
+  text: "#f3f6fc",
+  textMuted: "#a8b2c6",
+  textDisabled: "#69738a",
 
-  accent: "#6ee7a8",
-  accentPressed: "#4cc98a",
-  onAccent: "#07120c",
+  accent: "#ffb22e",
+  accentPressed: "#f09a12",
+  accentGlow: "#ffd27a",
+  accentEdge: "#a85a06",
+  onAccent: "#1d1102",
 
-  danger: "#ff6b6b",
-  warning: "#ffb347",
-  success: "#6ee7a8",
-  info: "#6bd5ff",
+  danger: "#ff5d5d",
+  warning: "#ff8c42",
+  success: "#5fe3a1",
+  info: "#5ccfff",
 
-  hp: "#6ee7a8",
-  hpLow: "#ff6b6b",
-  xp: "#7ce7ff",
+  hp: "#5fe3a1",
+  hpLow: "#ff5d5d",
+  xp: "#5ccfff",
   elite: "#ffd36b",
   weapon: "#ffe066",
-  passive: "#c06bff",
+  passive: "#c47dff",
 } as const;
 
 export type ColorToken = keyof typeof COLORS;
@@ -47,12 +51,16 @@ export const CSS_VAR_BY_COLOR: Record<ColorToken, string> = {
   bg: "--color-bg",
   surface: "--color-surface",
   surfaceRaised: "--color-surface-raised",
+  surfaceSunken: "--color-surface-sunken",
   border: "--color-border",
+  borderStrong: "--color-border-strong",
   text: "--color-text",
   textMuted: "--color-text-muted",
   textDisabled: "--color-text-disabled",
   accent: "--color-accent",
   accentPressed: "--color-accent-pressed",
+  accentGlow: "--color-accent-glow",
+  accentEdge: "--color-accent-edge",
   onAccent: "--color-on-accent",
   danger: "--color-danger",
   warning: "--color-warning",
@@ -71,6 +79,16 @@ export const PLATFORM_COLORS = {
   header: COLORS.bg,
   background: COLORS.bg,
   bottomBar: COLORS.surface,
+} as const;
+
+/**
+ * Имена гарнитур — первые в стеках `--font-display` и `--font-text`. Экран
+ * загрузки дожидается именно их, чтобы главная не перескочила с системного
+ * шрифта на свой у игрока на глазах.
+ */
+export const FONT_FAMILY = {
+  display: "Rubik Variable",
+  text: "Inter Variable",
 } as const;
 
 /** Длительности переходов, мс. Совпадают с `--duration-*` в tokens.css. */

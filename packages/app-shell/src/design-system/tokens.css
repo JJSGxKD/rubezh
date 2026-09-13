@@ -6,50 +6,55 @@
  * числом в компоненте — замечание на ревью: иначе смена визуального
  * направления превращается в поиск по всем файлам.
  *
- * Значения нейтральные, это плейсхолдеры до визуального направления от
- * участников 2 и 3. Каркас на них собирается и их решения не ждёт.
- *
- * Тема одна и тёмная: игровой мир тёмный, и светлое меню вокруг него — два
- * разных продукта (§4.1).
+ * Направление этапа 2 — тёмная тема высокой контрастности с «игровой»
+ * энергией: объём, свечение, крупная акцидентная типографика (§4.1). Значения
+ * — предложение до решения по сеттингу; сеттинг меняет эти два файла, а не
+ * экраны.
  */
 @source "../";
 
 @theme {
-  /* Цвет: основа */
-  --color-bg: #0d0f14;
-  --color-surface: #161a23;
-  --color-surface-raised: #1e2430;
-  --color-border: #2a3242;
-  --color-text: #e7ecf5;
-  --color-text-muted: #9aa6bd;
-  --color-text-disabled: #5d6880;
+  /* Цвет: основа. Фон почти чёрный с холодным оттенком — на нём сильнее
+     читаются тёплый акцент и цвета забега. */
+  --color-bg: #07090e;
+  --color-surface: #121622;
+  --color-surface-raised: #1b2130;
+  --color-surface-sunken: #0b0e15;
+  --color-border: #262e40;
+  --color-border-strong: #3a4560;
+  --color-text: #f3f6fc;
+  --color-text-muted: #a8b2c6;
+  --color-text-disabled: #69738a;
 
-  /* Цвет: действие */
-  --color-accent: #6ee7a8;
-  --color-accent-pressed: #4cc98a;
-  --color-on-accent: #07120c;
+  /* Цвет: действие. Янтарь — главное действие экрана; кромка и блик дают
+     кнопке объём, а не просто заливку. */
+  --color-accent: #ffb22e;
+  --color-accent-pressed: #f09a12;
+  --color-accent-glow: #ffd27a;
+  --color-accent-edge: #a85a06;
+  --color-on-accent: #1d1102;
 
   /* Цвет: состояние */
-  --color-danger: #ff6b6b;
-  --color-warning: #ffb347;
-  --color-success: #6ee7a8;
-  --color-info: #6bd5ff;
+  --color-danger: #ff5d5d;
+  --color-warning: #ff8c42;
+  --color-success: #5fe3a1;
+  --color-info: #5ccfff;
 
   /* Цвет: игра. Семантика забега; те же значения читает канва через tokens.ts */
-  --color-hp: #6ee7a8;
-  --color-hp-low: #ff6b6b;
-  --color-xp: #7ce7ff;
+  --color-hp: #5fe3a1;
+  --color-hp-low: #ff5d5d;
+  --color-xp: #5ccfff;
   --color-elite: #ffd36b;
   --color-weapon: #ffe066;
-  --color-passive: #c06bff;
+  --color-passive: #c47dff;
 
   /*
-   * Типографика. Две гарнитуры: акцидентная для заголовков и крупных цифр,
-   * текстовая для остального. Пока — системные стеки с полноценной
-   * кириллицей; свои woff2 приходят вместе с визуальным направлением (§4.3).
+   * Типографика. Две гарнитуры (§4.3): Rubik — акцидентная для заголовков,
+   * кнопок и крупных цифр, Inter — текстовая. Обе с кириллицей, файлы — в
+   * бандле (fonts.css). Системные стеки за ними — на время загрузки файла.
    */
-  --font-display: "Rubik", "Segoe UI", system-ui, sans-serif;
-  --font-text: system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Rubik Variable", "Segoe UI", system-ui, sans-serif;
+  --font-text: "Inter Variable", system-ui, "Segoe UI", Roboto, sans-serif;
 
   --text-xs: 12px;
   --text-sm: 14px;
@@ -58,15 +63,126 @@
   --text-xl: 24px;
   --text-2xl: 32px;
   --text-3xl: 40px;
+  --text-4xl: 48px;
 
   /* Радиусы */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
   --radius-pill: 9999px;
 
-  /* Движение: одна кривая замедления на всю систему (§4.5) */
+  /*
+   * Тени. Статичные: анимировать тень запрещено (§3.3, правило 2) — там, где
+   * нужно «дышащее» свечение, анимируется прозрачность отдельного слоя.
+   */
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 24px -14px rgb(0 0 0 / 0.9);
+  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 24px 48px -16px rgb(0 0 0 / 0.95);
+  --shadow-button: 0 8px 18px -10px rgb(0 0 0 / 0.9);
+
+  /* Движение (§4.5): основная кривая, выход с торможением и пружина для появлений */
   --ease-base: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /*
+   * Анимации. Только transform и opacity — правило производительности
+   * оболочки (§3.3). Длительности — из переменных ниже.
+   */
+  --animate-screen-in: screen-in var(--duration-base) var(--ease-out) both;
+  --animate-fade-in: fade-in var(--duration-slow) var(--ease-base) both;
+  --animate-pop-in: pop-in var(--duration-slow) var(--ease-spring) both;
+  --animate-sheet-in: sheet-in var(--duration-slow) var(--ease-out) both;
+  --animate-rise-in: rise-in var(--duration-slow) var(--ease-out) both;
+  --animate-glow: glow 2.4s var(--ease-base) infinite;
+  --animate-float: float 3.2s var(--ease-base) infinite;
+  --animate-ping-dot: ping-dot 1.6s var(--ease-out) infinite;
+  --animate-shimmer: shimmer 1.4s var(--ease-base) infinite;
+  --animate-pulse-soft: pulse-soft 1s var(--ease-base) infinite;
+
+  @keyframes screen-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+  }
+
+  @keyframes sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+  }
+
+  @keyframes glow {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 0.95;
+    }
+  }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+
+  @keyframes ping-dot {
+    from {
+      opacity: 0.7;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(2.6);
+    }
+  }
+
+  @keyframes shimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes pulse-soft {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
 }
 
 :root {
@@ -85,6 +201,9 @@
   --duration-base: 200ms;
   --duration-slow: 300ms;
 
+  /* Шаг лесенки появления: карточки выезжают друг за другом, а не пачкой. */
+  --stagger-step: 50ms;
+
   /*
    * Отступы безопасной зоны. Значения выставляет оболочка из данных адаптера
    * (§5.1) — здесь нули, чтобы вёрстка не ждала площадку.
@@ -98,6 +217,101 @@
   --app-viewport-height: 100dvh;
 
   color-scheme: dark;
+}
+
+/*
+ * Поверхности и кнопки — составные значения из токенов выше: градиент,
+ * кромка, блик и тень одной утилитой. Компонент выбирает поверхность по имени,
+ * а смена стиля остаётся правкой этого файла.
+ */
+
+/* Фон приложения: два мягких пятна света, тёплое сверху и холодное снизу. */
+@utility bg-app {
+  background:
+    radial-gradient(120% 55% at 50% -12%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 62%),
+    radial-gradient(100% 45% at 50% 112%, color-mix(in oklab, var(--color-info) 10%, transparent), transparent 60%),
+    var(--color-bg);
+}
+
+@utility surface-card {
+  background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface));
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+}
+
+/* Выбранная карточка: кромка акцента и тёплая подложка — плюс значок, цветом одним не передаётся (§4.4). */
+@utility surface-card-selected {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised)), var(--color-surface));
+  border: 1px solid var(--color-accent);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px color-mix(in oklab, var(--color-accent) 40%, transparent),
+    0 0 24px -6px color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+
+@utility surface-panel {
+  background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface) 45%);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-panel);
+}
+
+@utility surface-sunken {
+  background: var(--color-surface-sunken);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.6);
+}
+
+/* Кнопки: заливка сверху светлее, внизу кромка — при нажатии кнопка «проседает». */
+@utility btn-primary {
+  color: var(--color-on-accent);
+  background: linear-gradient(180deg, var(--color-accent-glow), var(--color-accent) 48%, var(--color-accent-pressed));
+  box-shadow:
+    inset 0 -4px 0 var(--color-accent-edge),
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    var(--shadow-button);
+}
+
+@utility btn-secondary {
+  color: var(--color-text);
+  background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface));
+  border: 1px solid var(--color-border-strong);
+  box-shadow:
+    inset 0 -3px 0 var(--color-surface-sunken),
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    var(--shadow-button);
+}
+
+@utility btn-danger {
+  color: var(--color-danger);
+  background: color-mix(in oklab, var(--color-danger) 8%, var(--color-surface));
+  border: 1px solid color-mix(in oklab, var(--color-danger) 45%, transparent);
+  box-shadow: inset 0 -3px 0 var(--color-surface-sunken);
+}
+
+/* Мягкий ореол за главным действием; «дышит» прозрачностью, а не тенью. */
+@utility halo-accent {
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--color-accent) 60%, transparent), transparent);
+}
+
+@utility halo-info {
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--color-info) 45%, transparent), transparent);
+}
+
+/* Заливки полос: светлее к правому краю — полоса читается как «наполняется». */
+@utility fill-hp {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--color-hp) 70%, var(--color-bg)), var(--color-hp));
+}
+
+@utility fill-hp-low {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--color-hp-low) 70%, var(--color-bg)), var(--color-hp-low));
+}
+
+@utility fill-xp {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--color-xp) 70%, var(--color-bg)), var(--color-xp));
+}
+
+@utility fill-accent {
+  background: linear-gradient(90deg, var(--color-accent-pressed), var(--color-accent-glow));
 }
 
 html,
@@ -114,17 +328,23 @@ body {
   font-family: var(--font-text);
   font-size: var(--text-sm);
   -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
   /* Выделение текста пальцем в игре только мешает: длинное нажатие по кнопке
      не должно подсвечивать надпись. */
   user-select: none;
 }
 
-/* Игрок с включённым «уменьшить движение» получает проявление без перемещений (§4.5). */
+/*
+ * Игрок с включённым «уменьшить движение» получает проявление без перемещений
+ * (§4.5). Бесконечные анимации останавливаются на первом кадре, а не мелькают
+ * с нулевой длительностью.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: var(--duration-fast) !important;
   }
 }

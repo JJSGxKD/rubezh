@@ -7,13 +7,23 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <!-- Иконка встроена в разметку: отдельный файл дал бы 404 в консоли, а
-         тестеры читают консоль и принимают его за дефект. -->
+         тестеры читают консоль и принимают его за дефект. Рисунок — знак игры. -->
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%230d0f14%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%277%27 fill=%27%236ee7a8%27/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%2307090e%27/%3E%3Cpath d=%27M32 8 L56 32 L32 56 L8 32 Z%27 fill=%27none%27 stroke=%27%23ffb22e%27 stroke-width=%275%27 stroke-linejoin=%27round%27/%3E%3Cpath d=%27M32 19 L45 32 L32 45 L19 32 Z%27 fill=%27%23ffb22e%27/%3E%3C/svg%3E"
     />
-    <meta name="theme-color" content="#0d0f14" />
+    <meta name="theme-color" content="#07090e" />
     <title>Рубеж — VK</title>
+    <!--
+      Критичный CSS и заставка — прямо в разметке: между открытием мини-аппа и
+      первым кадром оболочки не должно быть белого экрана
+      (docs/27-design-system-and-app-shell.md §3.4).
+
+      Заставка повторяет BootScreen оболочки — знак, имя, полоса — и тем же
+      цветом: оболочка подменяет её своей, и подмена не должна быть видна.
+      Цвета здесь числами, а не токенами: CSS оболочки ещё не загружен. При
+      смене палитры в tokens.css правятся и они.
+    -->
     <style>
       html,
       body,
@@ -21,21 +31,89 @@
         margin: 0;
         height: 100%;
         overflow: hidden;
-        background: #0d0f14;
-        color: #e7ecf5;
+        background: #07090e;
+        color: #f3f6fc;
         font-family: system-ui, "Segoe UI", Roboto, sans-serif;
       }
       #splash {
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 12px;
         height: 100%;
-        font-size: 28px;
+        background:
+          radial-gradient(120% 55% at 50% -12%, rgba(255, 178, 46, 0.16), transparent 62%),
+          radial-gradient(100% 45% at 50% 112%, rgba(92, 207, 255, 0.1), transparent 60%),
+          #07090e;
+      }
+      #splash svg {
+        width: 88px;
+        height: 88px;
+        filter: drop-shadow(0 0 24px rgba(255, 178, 46, 0.45));
+      }
+      #splash b {
+        font-size: 48px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      #splash i {
+        position: relative;
+        overflow: hidden;
+        width: 192px;
+        height: 6px;
+        margin-top: 16px;
+        border-radius: 9999px;
+        background: #0b0e15;
+      }
+      #splash i::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 33%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #f09a12, #ffd27a);
+        animation: splash-run 1.4s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+      }
+      @keyframes splash-run {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(300%);
+        }
+      }
+      @media (orientation: landscape) {
+        #splash b {
+          font-size: 24px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash i::after {
+          animation: none;
+        }
       }
     </style>
   </head>
   <body>
-    <div id="app"><div id="splash">Рубеж</div></div>
+    <div id="app">
+      <div id="splash" aria-label="Загрузка">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <path
+            d="M32 4 L60 32 L32 60 L4 32 Z"
+            fill="none"
+            stroke="#ffb22e"
+            stroke-width="4"
+            stroke-linejoin="round"
+          />
+          <path d="M32 16 L48 32 L32 48 L16 32 Z" fill="#ffb22e" />
+          <path d="M10 32 H54" stroke="#07090e" stroke-width="3" />
+        </svg>
+        <b>Рубеж</b>
+        <i></i>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

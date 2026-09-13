@@ -97,11 +97,19 @@
 
 | Что меняю | Где | Владелец |
 |---|---|---|
-| Цвета, типографика, радиусы, слои, длительности переходов | `packages/app-shell/src/design-system/tokens.css` | напарник |
-| Те же значения числами для канвы и цветов площадки | `design-system/tokens.ts` → `COLORS`, `PLATFORM_COLORS`, `DURATION` | напарник |
+| Цвета, типографика, радиусы, тени, слои, длительности, кривые и анимации | `packages/app-shell/src/design-system/tokens.css` → `@theme`, `:root` | напарник |
+| Составные поверхности: фон приложения, карточки, панели, кнопки, заливки полос, ореолы | `tokens.css` → блоки `@utility` | напарник |
+| Те же значения числами для канвы и цветов площадки, имена гарнитур | `design-system/tokens.ts` → `COLORS`, `PLATFORM_COLORS`, `DURATION`, `FONT_FAMILY` | напарник |
+| Файлы шрифтов и подмножества алфавитов | `design-system/fonts.css`; новый алфавит — ещё и бюджет шрифтов ниже, §7 | напарник |
+| Заставка до загрузки JS: знак, цвета, полоса | `apps/web-*/index.html`, во всех трёх одинаково; цвета — копия токенов числами | напарник |
+| Знак игры | `design-system/components/Brand.tsx` → `Emblem` и та же фигура в `index.html` | напарник |
+| Значки оружия и пассивок | `app-shell/src/screens/item-icons.tsx` → `WEAPON_ICONS`, `PASSIVE_ICONS`; нет значка — общий | участник 1 |
 | Любой текст интерфейса, включая имена оружия и пассивок | `app-shell/src/i18n/ru.json` | участник 1 |
+| Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | участник 1 |
+| Сколько запуск ждёт свои шрифты | `app-shell/src/index.tsx` → `FONT_WAIT_MS` | участник 1 |
+| Через сколько лобби предзагружает движок | `app-shell/src/screens/home.tsx` → `PRELOAD_DELAY_MS` | участник 1 |
 | Разделы нижней панели и какие экраны считаются заглушками | `app-shell/src/state/navigation.ts` → `TAB_ROOTS`, `STUB_SCREENS` | участник 1 |
-| Состав верхней панели лобби, порядок вкладок | `app-shell/src/app/App.tsx` → `TABS` | участник 1 |
+| Состав верхней панели лобби, порядок вкладок, точки на вкладках | `app-shell/src/app/App.tsx` → `TABS` | участник 1 |
 | Задержка от случайного тапа на оверлеях забега | `app-shell/src/screens/run/overlays.tsx` → `GUARD_MS` | участник 1 |
 | Порог «мало здоровья» в HUD | `app-shell/src/screens/run/RunHud.tsx` → `LOW_HP_RATIO` | участник 1 |
 
@@ -183,7 +191,7 @@
 |---|---|
 | Что и где ищет тестовый раннер | `vitest.config.ts` |
 | Свод калибровки баланса отдельной командой | `vitest.balance.config.ts`, прогон — `scripts/balance/balance-sim.ts` |
-| Бюджеты размера бандла | `scripts/bundle-budget.mjs` → `BUDGETS` |
+| Бюджеты размера бандла: первая загрузка, CSS, ленивые чанки, шрифты | `scripts/bundle-budget.mjs` → `BUDGETS` |
 | Порог теста производительности симуляции | `packages/core-game/test/perf-budget.test.ts` |
 | Эталон забега и контрольная сумма | `test/run-summary.test.ts`, `test/determinism.test.ts` |
 | Правила границ слоёв | `scripts/test/layer-boundaries.test.ts` → `RULES` |

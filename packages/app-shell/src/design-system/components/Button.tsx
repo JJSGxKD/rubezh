@@ -6,6 +6,9 @@ import { useSettings } from "../../state/settings";
  * Кнопка. Минимальная область нажатия — 44×44 CSS px, даже если сама кнопка
  * выглядит меньше (docs/27-design-system-and-app-shell.md §4.6).
  *
+ * Объём — из токенов: заливка с бликом и кромка снизу. При нажатии кнопка
+ * «проседает» сдвигом, а не сменой тени: анимируется только transform (§3.3).
+ *
  * Отклик на нажатие — ещё и тактильный: там, где площадка его даёт и игрок не
  * выключил вибрацию в настройках (§4.5).
  */
@@ -21,28 +24,31 @@ export interface ButtonProps {
   loading?: boolean;
   /** растянуть на всю ширину — основное действие экрана */
   block?: boolean;
+  /** «дышащий» ореол — только у одного действия на экране, иначе он ничего не выделяет */
+  glow?: boolean;
   ariaLabel?: string;
 }
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-on-accent active:bg-accent-pressed",
-  secondary: "bg-surface-raised text-text border border-border active:bg-surface",
-  ghost: "bg-transparent text-text-muted active:bg-surface",
-  danger: "bg-transparent text-danger border border-danger/40 active:bg-danger/10",
+  primary: "btn-primary",
+  secondary: "btn-secondary",
+  ghost: "bg-transparent text-text-muted active:bg-surface-raised",
+  danger: "btn-danger",
 };
 
 const SIZE_CLASS: Record<ButtonSize, string> = {
-  m: "min-h-11 px-4 text-sm",
-  l: "min-h-14 px-5 text-base",
+  m: "min-h-12 rounded-md px-5 text-base font-semibold",
+  l: "min-h-16 rounded-lg px-6 text-lg font-bold tracking-wide uppercase",
 };
 
 export function Button(props: ButtonProps): ReactNode {
   const { variant = "primary", size = "m", disabled = false, loading = false } = props;
   const haptics = useSettings((state) => state.haptics);
+  const inactive = disabled || loading;
 
   const handleClick = (): void => {
-    if (disabled || loading) return;
-    if (haptics) useShell.getState().adapter.haptic("light");
+    if (inactive) return;
+    if (haptics) useShell.getState().adapter.haptic(size === "l" ? "medium" : "light");
     props.onClick?.();
   };
 
@@ -51,17 +57,23 @@ export function Button(props: ButtonProps): ReactNode {
       type="button"
       aria-label={props.ariaLabel}
       aria-busy={loading}
-      disabled={disabled || loading}
+      disabled={inactive}
       onClick={handleClick}
       className={[
-        "inline-flex items-center justify-center gap-2 rounded-md font-display font-medium",
-        "transition-[transform,background-color] duration-(--duration-fast) ease-base",
-        "active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100",
+        "relative isolate inline-flex items-center justify-center gap-2 font-display",
+        "transition-transform duration-(--duration-fast) ease-base",
+        "active:translate-y-0.5 active:scale-[0.98] disabled:opacity-45 disabled:active:translate-y-0 disabled:active:scale-100",
         VARIANT_CLASS[variant],
         SIZE_CLASS[size],
         props.block === true ? "w-full" : "",
       ].join(" ")}
     >
+      {props.glow === true && !inactive ? (
+        <span
+          aria-hidden="true"
+          className="halo-accent pointer-events-none absolute -inset-3 -z-10 animate-glow rounded-[inherit]"
+        />
+      ) : null}
       {loading ? <Spinner /> : props.children}
     </button>
   );
@@ -93,8 +105,8 @@ export function IconButton(props: IconButtonProps): ReactNode {
       onClick={handleClick}
       className={[
         "inline-flex size-11 items-center justify-center rounded-md text-text-muted",
-        "transition-colors duration-(--duration-fast) ease-base",
-        "active:bg-surface disabled:opacity-40",
+        "transition-[transform,color] duration-(--duration-fast) ease-base",
+        "active:scale-90 active:text-text disabled:opacity-40",
       ].join(" ")}
     >
       {props.children}
@@ -107,7 +119,7 @@ function Spinner(): ReactNode {
   return (
     <span
       aria-hidden="true"
-      className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+      className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent"
     />
   );
 }
