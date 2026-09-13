@@ -2,27 +2,40 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Bullet Heaven — Vk</title>
-  </head>
-  <body>
-    <!-- Контейнер обязан иметь ненулевой размер: Phaser в режиме RESIZE
-         тянется под родителя, а при высоте 0 создаёт framebuffer 0x0 и
-         падает с "Framebuffer status: Incomplete Attachment". -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <!-- Иконка встроена в разметку: отдельный файл дал бы 404 в консоли, а
+         тестеры читают консоль и принимают его за дефект. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%230d0f14%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%277%27 fill=%27%236ee7a8%27/%3E%3C/svg%3E"
+    />
+    <meta name="theme-color" content="#0d0f14" />
+    <title>Рубеж — VK</title>
     <style>
       html,
-      body {
+      body,
+      #app {
         margin: 0;
         height: 100%;
         overflow: hidden;
         background: #0d0f14;
+        color: #e7ecf5;
+        font-family: system-ui, "Segoe UI", Roboto, sans-serif;
       }
-      #game {
-        width: 100vw;
-        height: 100vh;
+      #splash {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-size: 28px;
       }
     </style>
-    <div id="game"></div>
-    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <div id="app"><div id="splash">Рубеж</div></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

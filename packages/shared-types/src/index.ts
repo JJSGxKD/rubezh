@@ -30,18 +30,137 @@ export interface AdResult {
 
 /**
  * Единый интерфейс платформенного адаптера.
- * core-game работает только через него, ничего не знает о конкретной
- * платформе. См. docs/01-tech-stack.md §1.
+ * core-game и оболочка работают только через него и ничего не знают о
+ * конкретной платформе. См. docs/01-tech-stack.md §1.
  */
 export interface PlatformAdapter {
   init(): Promise<UserContext>;
   purchase(itemId: string): Promise<PurchaseResult>;
   share(payload: SharePayload): void;
   haptic(type: HapticType): void;
+  /**
+   * Возможности интерфейса площадки: отступы безопасной зоны, полноэкранный
+   * режим, кнопки «назад» и «настройки», свайпы, активность приложения
+   * (docs/27-design-system-and-app-shell.md §5.2).
+   *
+   * Обязателен, а не опционален: оболочка должна получить одинаковый набор от
+   * любой площадки. Там, где площадка чего-то не умеет, адаптер возвращает
+   * честные умолчания — заглушка лучше проверки `if (adapter.ui)` в каждом
+   * компоненте.
+   */
+  ui: PlatformUi;
+  /**
+   * Имя и аватар из параметров запуска — **только для отображения**. Это не
+   * проверенная личность: подпись `initData` проверяется на бэкенде, и до
+   * этапа 3 этого не происходит вовсе (docs/08-web-and-identity.md §4).
+   */
+  displayUser: DisplayUser | null;
   /** опционально — не везде доступно, см. docs/01-tech-stack.md §6 */
   showAd?(): Promise<AdResult>;
   /** опционально — площадка может не дать хранилища, см. KeyValueStorage */
   storage?: KeyValueStorage;
+}
+
+/** Отписка от события площадки. */
+export type Unsubscribe = () => void;
+
+export interface DisplayUser {
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+/** Отступы безопасной зоны в CSS-пикселях. */
+export interface SafeAreaInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** Полноэкранный режим или обычный — выбор игрока (решение Р15). */
+export type ScreenMode = "fullscreen" | "normal";
+
+export interface ViewportState {
+  width: number;
+  /**
+   * Стабильная высота вьюпорта в CSS-пикселях — от площадки, а не `100vh`:
+   * во WebView iOS `100vh` включает зону под панелями, и нижняя кнопка
+   * уезжает за край (docs/27-design-system-and-app-shell.md §5.1).
+   */
+  height: number;
+  /**
+   * Развёрнуто ли приложение на полную высоту. В компактном режиме забег
+   * непригоден — вместо него экран с просьбой развернуть.
+   */
+  expanded: boolean;
+}
+
+export interface ThemeColors {
+  header: string;
+  background: string;
+  bottomBar: string;
+}
+
+/**
+ * Возможности интерфейса площадки.
+ *
+ * Оболочка знает только этот набор и никогда не обращается к SDK площадки
+ * напрямую — иначе она становится телеграм-оболочкой, и портирование на MAX
+ * превращается в её переписывание (docs/27-design-system-and-app-shell.md §2).
+ *
+ * Свойства читаются как текущее состояние, подписки сообщают об изменениях.
+ * Каждая подписка возвращает функцию отписки: оболочка монтирует и
+ * размонтирует экраны, и подписка без отписки — утечка на каждом переходе.
+ */
+export interface PlatformUi {
+  /**
+   * Подготовить возможности площадки: смонтировать SDK, подписаться на
+   * события. До её завершения остальные свойства отдают честные умолчания, а
+   * не врут: оболочка зовёт `ready()` на экране загрузки и только потом
+   * показывает интерфейс. Повторный вызов ничего не делает.
+   *
+   * Не бросает: площадка недоступна — работаем в браузерном режиме, а не
+   * падаем белым экраном.
+   */
+  ready(): Promise<void>;
+  /** умеет ли клиент полноэкранный режим; нет — переключатель неактивен */
+  readonly supportsFullscreen: boolean;
+  /** умолчание площадки: fullscreen на телефонах, обычный на десктопе (Р15) */
+  readonly defaultScreenMode: ScreenMode;
+  readonly screenMode: ScreenMode;
+  /** Возвращает режим, который получился: клиент вправе отказать. */
+  setScreenMode(mode: ScreenMode): Promise<ScreenMode>;
+  onScreenModeChange(handler: (mode: ScreenMode) => void): Unsubscribe;
+
+  readonly insets: SafeAreaInsets;
+  onInsetsChange(handler: (insets: SafeAreaInsets) => void): Unsubscribe;
+
+  readonly viewport: ViewportState;
+  onViewportChange(handler: (viewport: ViewportState) => void): Unsubscribe;
+  /** развернуть приложение из компактного режима на полную высоту */
+  expand(): void;
+
+  /** `null` — кнопку спрятать. Связана со стеком экранов оболочки */
+  setBackButton(handler: (() => void) | null): void;
+  setSettingsButton(handler: (() => void) | null): void;
+
+  /**
+   * Вертикальные свайпы на время забега выключаются: движение пальцем вниз по
+   * джойстику иначе сворачивает приложение.
+   */
+  setVerticalSwipesEnabled(enabled: boolean): void;
+  /** подтверждение закрытия — включено в забеге, выключено в меню */
+  setClosingConfirmation(enabled: boolean): void;
+
+  readonly isActive: boolean;
+  onActiveChange(handler: (active: boolean) => void): Unsubscribe;
+
+  /**
+   * Цвета шапки, фона и нижней панели — из наших токенов, а не из темы
+   * площадки: игра выглядит одинаково у всех, и при открытии не мигает чужой
+   * цвет (docs/27-design-system-and-app-shell.md §4.1).
+   */
+  applyThemeColors(colors: ThemeColors): void;
 }
 
 export interface SharePayload {
@@ -474,3 +593,5 @@ export interface EconomyItemDef {
   kind: "skin" | "continue" | "character_unlock" | "ad_removal_pack" | "seasonal";
   priceByPlatform: Partial<Record<Platform, number>>;
 }
+
+export { createNoopPlatformUi } from "./platform-ui-noop";

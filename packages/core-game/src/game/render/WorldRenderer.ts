@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { EnemyPattern } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
+import { NEVER_HIT } from "../sim/pools";
 import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
 import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { drawShape, type ShapeKind } from "./shapes";
@@ -49,6 +50,10 @@ export class WorldRenderer {
   private readonly gemSprites: Phaser.GameObjects.Image[] = [];
   private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
+  /** кольца телеграфа: показывают радиус будущего взрыва, пока горит фитиль */
+  private readonly telegraphs: Phaser.GameObjects.Image[] = [];
+  /** тик последнего попадания по игроку — для вспышки персонажа */
+  private playerHitTick = NEVER_HIT;
   private readonly blastStartTick: Int32Array = new Int32Array(MAX_BLASTS).fill(-1);
   private readonly blastRadius: Float32Array = new Float32Array(MAX_BLASTS);
   private readonly blastKind: Uint8Array = new Uint8Array(MAX_BLASTS);
@@ -82,6 +87,7 @@ export class WorldRenderer {
     this.ensureTexture("bh-projectile-enemy", world.config.player.projectileRadius, 0xff6b6b, "circle");
     this.ensureTexture("bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
     this.ensureTexture("bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
+    this.ensureTexture("bh-telegraph", BLAST_TEXTURE_UNITS * scale, 0xff5a5a, "ring");
     this.ensureTexture("bh-gem", GEM_RADIUS_UNITS * scale, 0x7ce7ff, "diamond");
     this.ensureTexture("bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
 
@@ -131,11 +137,31 @@ export class WorldRenderer {
       lerp(this.world.player.prevY, this.world.player.y, t),
     );
     this.player.setVisible(this.world.player.alive);
+    this.applyPlayerHit();
+  }
+
+  /**
+   * Вспышка персонажа при получении урона.
+   *
+   * Полоска здоровья в углу — не обратная связь: игрок смотрит на персонажа.
+   * Без вспышки урон выглядит так, будто здоровье убывает само по себе, и
+   * непонятно, кто и когда попал.
+   */
+  private applyPlayerHit(): void {
+    const age = this.world.stats.tick - this.playerHitTick;
+    if (age >= HIT_FLASH_TICKS) {
+      this.player.clearTint();
+      this.player.setScale(1);
+      return;
+    }
+    this.player.setTint(0xff6b6b);
+    this.player.setScale(1 + 0.25 * (1 - age / HIT_FLASH_TICKS));
   }
 
   private syncEnemies(t: number): void {
     const enemies = this.world.enemies;
     const tick = this.world.stats.tick;
+    let telegraphs = 0;
 
     for (let i = 0; i < enemies.count; i++) {
       const sprite = this.enemySprite(i);
@@ -149,13 +175,50 @@ export class WorldRenderer {
         sprite.setTexture(this.textureKeyByType[typeIndex]);
         this.enemySpriteType[i] = typeIndex;
       }
-      this.applyLook(sprite, i, lookFor(this.world.enemyTypes[typeIndex].pattern, enemies.phase[i], tick));
+
+      const type = this.world.enemyTypes[typeIndex];
+      // Попадание важнее телеграфа: игрок должен видеть, что снаряд дошёл.
+      const look =
+        tick - enemies.hitTick[i] < HIT_FLASH_TICKS
+          ? LOOK.hit
+          : lookFor(type.pattern, enemies.phase[i], tick);
+      this.applyLook(sprite, i, look);
       sprite.setVisible(true);
-      sprite.setPosition(
-        lerp(enemies.prevX[i], enemies.x[i], t),
-        lerp(enemies.prevY[i], enemies.y[i], t),
-      );
+
+      const x = lerp(enemies.prevX[i], enemies.x[i], t);
+      const y = lerp(enemies.prevY[i], enemies.y[i], t);
+      sprite.setPosition(x, y);
+
+      // Радиус будущего взрыва показывается кольцом, пока горит фитиль: без
+      // него игрок узнаёт границу поражения только по своему здоровью.
+      if (type.pattern === "exploder" && enemies.phase[i] === EXPLODER_PHASE.fuse) {
+        this.showTelegraph(telegraphs++, x, y, type.params.blastRadius, tick);
+      }
     }
+
+    for (let k = telegraphs; k < this.telegraphs.length; k++) {
+      if (this.telegraphs[k].visible) this.telegraphs[k].setVisible(false);
+    }
+  }
+
+  /**
+   * Кольцо телеграфа. Пульсирует по тикам симуляции, а не по времени кадра:
+   * на паузе мир замирает вместе с эффектом, и рендеру не нужны часы.
+   */
+  private showTelegraph(index: number, x: number, y: number, radius: number, tick: number): void {
+    while (this.telegraphs.length <= index) {
+      const sprite = this.scene.add.image(0, 0, "bh-telegraph").setDepth(0).setVisible(false);
+      this.layer.add(sprite);
+      this.telegraphs.push(sprite);
+    }
+
+    const textureRadius = BLAST_TEXTURE_UNITS * this.world.config.unitScale;
+    const pulse = 0.94 + 0.06 * ((tick >> 2) % 2);
+    const sprite = this.telegraphs[index];
+    sprite.setPosition(x, y);
+    sprite.setScale((radius / textureRadius) * pulse);
+    sprite.setAlpha(0.55);
+    sprite.setVisible(true);
   }
 
   private syncProjectiles(t: number): void {
@@ -226,8 +289,9 @@ export class WorldRenderer {
     if (this.enemySpriteLook[index] === look && sprite.visible) return;
     this.enemySpriteLook[index] = look;
     sprite.setAlpha(look === LOOK.dim ? 0.35 : 1);
-    sprite.setScale(look === LOOK.normal ? 1 : 1.2);
+    sprite.setScale(look === LOOK.normal ? 1 : look === LOOK.hit ? 1.25 : 1.2);
     if (look === LOOK.warning) sprite.setTint(0xffffff);
+    else if (look === LOOK.hit) sprite.setTint(0xffe9e9);
     else sprite.clearTint();
   }
 
@@ -244,6 +308,10 @@ export class WorldRenderer {
     for (let seq = first; seq < events.written; seq++) {
       const slot = seq % capacity;
       const kind = events.kind[slot];
+      if (kind === SIM_EVENT.playerHit) {
+        this.playerHitTick = events.tick[slot];
+        continue;
+      }
       if (kind !== SIM_EVENT.explosion && kind !== SIM_EVENT.strike) continue;
       this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
     }
@@ -380,12 +448,17 @@ const BLAST_TEXTURE_UNITS = 32;
 const GEM_RADIUS_UNITS = 5;
 const ORBITER_RADIUS_UNITS = 9;
 
+/** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
+const HIT_FLASH_TICKS = 7;
+
 const LOOK = {
   normal: 0,
   /** телеграф: враг вот-вот атакует */
   warning: 1,
   /** второй такт мигания */
   dim: 2,
+  /** только что получил урон */
+  hit: 3,
 } as const;
 
 /**

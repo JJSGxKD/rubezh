@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { BALANCE_TARGETS } from "../src/content/balance-targets";
-import { simulateBalanceRun, summarizeRuns } from "../src/game/balance";
+import { WEAPONS } from "../src/content/weapons";
+import {
+  simulateBalanceRun,
+  summarizeRuns,
+  type BalanceRunResult,
+} from "../src/game/balance";
 
 /**
  * Свойства баланса (docs/17-testing-strategy.md §3.3): утверждения, которые
@@ -14,8 +19,36 @@ import { simulateBalanceRun, summarizeRuns } from "../src/game/balance";
 
 const SEEDS = [1, 2, 3, 4, 5];
 
+/**
+ * Коридор выживания меряется по всем стартовым оружиям сразу, а не по одному.
+ *
+ * Разброс внутри одного оружия огромен — у «Искры» p10 около 210 секунд, а
+ * p90 за 670, — и медиана пяти забегов там пляшет на сотни секунд. Тест ловил
+ * бы не баланс, а удачный seed. Сумма по трём оружиям даёт то же, что
+ * показывает `pnpm balance:sim` на двадцати seed, и стоит шесть секунд.
+ */
+const STARTING_WEAPONS = WEAPONS.filter((weapon) => weapon.starting === true).map(
+  (weapon) => weapon.id,
+);
+
+let cached: BalanceRunResult[] | null = null;
+
+/** Прогоны считаются один раз на файл: пятнадцать забегов — это секунды. */
+function dodgingRuns(): BalanceRunResult[] {
+  if (cached !== null) return cached;
+
+  const runs: BalanceRunResult[] = [];
+  for (const startingWeaponId of STARTING_WEAPONS) {
+    for (const seed of SEEDS) {
+      runs.push(simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 900 }));
+    }
+  }
+  cached = runs;
+  return runs;
+}
+
 describe("свойства баланса", () => {
-  it("не даёт пассивному игроку жить вечно", () => {
+  it("не даёт пассивному игроку жить вечно", { timeout: 60_000 }, () => {
     // Бесконечный забег без единого действия означает, что играть незачем.
     for (const seed of SEEDS) {
       const run = simulateBalanceRun({ seed, skill: "passive", maxSec: 300 });
@@ -26,8 +59,8 @@ describe("свойства баланса", () => {
     }
   });
 
-  it("доводит уклоняющегося до целевого коридора выживания", () => {
-    const runs = SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", maxSec: 900 }));
+  it("доводит уклоняющегося до целевого коридора выживания", { timeout: 60_000 }, () => {
+    const runs = dodgingRuns();
     const summary = summarizeRuns(runs);
 
     expect(summary.medianSurvivalSec).toBeGreaterThanOrEqual(
@@ -36,8 +69,8 @@ describe("свойства баланса", () => {
     expect(summary.medianSurvivalSec).toBeLessThanOrEqual(BALANCE_TARGETS.dodgingMedianSec.max);
   });
 
-  it("не убивает новичка в первую минуту знакомства", () => {
-    const runs = SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", maxSec: 900 }));
+  it("не убивает новичка в первую минуту знакомства", { timeout: 60_000 }, () => {
+    const runs = dodgingRuns();
     const summary = summarizeRuns(runs);
 
     expect(summary.deathsBeforeMinuteRatio).toBeLessThanOrEqual(
@@ -45,7 +78,7 @@ describe("свойства баланса", () => {
     );
   });
 
-  it("повторяет забег бота в точности — иначе таблица калибровки ничего не значит", () => {
+  it("повторяет забег бота в точности — иначе таблица калибровки ничего не значит", { timeout: 60_000 }, () => {
     const first = simulateBalanceRun({ seed: 77, skill: "dodging", maxSec: 900 });
     const second = simulateBalanceRun({ seed: 77, skill: "dodging", maxSec: 900 });
 

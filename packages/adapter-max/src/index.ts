@@ -1,3 +1,4 @@
+import { createNoopPlatformUi } from "@bh/shared-types";
 import type {
   PlatformAdapter,
   UserContext,
@@ -5,6 +6,8 @@ import type {
   SharePayload,
   HapticType,
   AdResult,
+  DisplayUser,
+  PlatformUi,
 } from "@bh/shared-types";
 
 /**
@@ -18,6 +21,16 @@ import type {
  * через SocialLead — отдельно, не через этот метод.
  */
 export class MaxAdapter implements PlatformAdapter {
+  /**
+   * Возможности интерфейса площадки. Заглушка до портирования: адаптер честно
+   * сообщает, что ничего не умеет, и оболочка рисует неактивные переключатели
+   * вместо сломанных (docs/27-design-system-and-app-shell.md §5.2).
+   */
+  readonly ui: PlatformUi = createNoopPlatformUi();
+
+  /** параметры запуска площадки ещё не разбираются — портирование после лонча */
+  readonly displayUser: DisplayUser | null = null;
+
   async init(): Promise<UserContext> {
     // TODO: MAX Bridge init-данные -> валидация на бэкенде
     throw new Error("MaxAdapter.init: не реализовано");

@@ -1,4 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 
 // Корень монорепо — единственный .env на весь проект (см. docs/20-env-and-ports.md).
@@ -31,6 +33,7 @@ export default defineConfig(({ mode }) => {
         };
 
   return {
+    plugins: [react(), tailwindcss()],
     base: "./",
     envDir: repoRoot,
     server: {

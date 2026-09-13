@@ -5,7 +5,13 @@
     "rootDir": "src",
     "composite": false,
     "declaration": false,
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": [
+      "vite/client"
+    ]
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

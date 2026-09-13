@@ -1,4 +1,4 @@
-import { isTMA, retrieveLaunchParams } from "@tma.js/sdk";
+import { hapticFeedback, isTMA, retrieveLaunchParams } from "@tma.js/sdk";
 import type {
   PlatformAdapter,
   UserContext,
@@ -6,9 +6,12 @@ import type {
   SharePayload,
   HapticType,
   AdResult,
+  DisplayUser,
   KeyValueStorage,
+  PlatformUi,
 } from "@bh/shared-types";
 import { createDeviceStorage } from "./storage";
+import { createTelegramUi } from "./ui-telegram";
 
 /**
  * Telegram WebApp SDK. Валидация initData (HMAC-SHA256 токеном бота) —
@@ -22,6 +25,17 @@ import { createDeviceStorage } from "./storage";
 export class TelegramAdapter implements PlatformAdapter {
   /** локальный рекорд, настройки и installId — docs/27-design-system-and-app-shell.md §7 */
   readonly storage: KeyValueStorage = createDeviceStorage();
+
+  /** возможности интерфейса площадки — docs/27-design-system-and-app-shell.md §5.2 */
+  readonly ui: PlatformUi = createTelegramUi();
+
+  /**
+   * Имя и аватар из параметров запуска. Подпись `initData` здесь не
+   * проверяется — это делает бэкенд, и до этапа 3 не делает никто. Поэтому
+   * поле годится только для показа в профиле-заглушке и ни для чего больше
+   * (docs/08-web-and-identity.md §4).
+   */
+  readonly displayUser: DisplayUser | null = readDisplayUser();
 
   async init(): Promise<UserContext> {
     // TODO: window.Telegram.WebApp.initData -> отправить на бэкенд для валидации
@@ -37,8 +51,17 @@ export class TelegramAdapter implements PlatformAdapter {
     // TODO: Telegram.WebApp.shareMessage / switchInlineQuery
   }
 
-  haptic(_type: HapticType): void {
-    // TODO: Telegram.WebApp.HapticFeedback
+  /**
+   * Тактильный отклик на нажатия и попадания
+   * (docs/27-design-system-and-app-shell.md §4.5). Поддержка проверяется
+   * перед вызовом: на старом клиенте метода нет, и молчание здесь — не баг.
+   */
+  haptic(type: HapticType): void {
+    if (type === "success" || type === "error") {
+      hapticFeedback.notificationOccurred.ifAvailable(type);
+      return;
+    }
+    hapticFeedback.impactOccurred.ifAvailable(type);
   }
 
   async showAd(): Promise<AdResult> {
@@ -75,6 +98,15 @@ const UNKNOWN_CLIENT: TelegramClientInfo = {
   isFullscreen: null,
 };
 
+/**
+ * Открыто ли приложение внутри клиента Telegram. Приложение спрашивает это у
+ * адаптера, а не у SDK напрямую: SDK площадки — ровно та граница, ради
+ * которой адаптеры и заведены (docs/01-tech-stack.md §1).
+ */
+export function isTelegramEnvironment(): boolean {
+  return isTMA();
+}
+
 export function describeTelegramClient(): TelegramClientInfo {
   if (!isTMA()) return UNKNOWN_CLIENT;
 
@@ -99,4 +131,28 @@ export function describeTelegramClient(): TelegramClientInfo {
   }
 }
 
+/**
+ * Имя и аватар из параметров запуска. Вне клиента Telegram их нет — и это
+ * нормальный путь, а не ошибка: приложение открывают и в браузере.
+ */
+function readDisplayUser(): DisplayUser | null {
+  if (!isTMA()) return null;
+
+  try {
+    const user = retrieveLaunchParams().tgWebAppData?.user;
+    if (user === undefined) return null;
+
+    const name = [user.first_name, user.last_name].filter((part) => part !== undefined).join(" ");
+    return {
+      displayName: name.trim() === "" ? (user.username ?? "") : name.trim(),
+      avatarUrl: user.photo_url ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export { createDeviceStorage } from "./storage";
+export { createTelegramUi } from "./ui-telegram";
+export { createBrowserUi } from "./ui-browser";
+export { sameInsets, sumInsets } from "./insets";

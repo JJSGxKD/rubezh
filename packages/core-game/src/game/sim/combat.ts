@@ -25,6 +25,7 @@ export function damageEnemy(
   // здоровья не должно выглядеть как полный удар.
   const applied = Math.min(amount, enemies.hp[index]);
   enemies.hp[index] -= amount;
+  enemies.hitTick[index] = world.stats.tick;
   world.stats.damageDealt += applied;
   if (weaponSlot !== NO_OWNER_TYPE && weaponSlot < world.stats.damageByWeapon.length) {
     world.stats.damageByWeapon[weaponSlot] += applied;

@@ -19,11 +19,12 @@
     "dev:vk": "pnpm --filter web-vk dev",
     "dev:backend": "pnpm --filter backend-api start:dev",
     "build": "pnpm -r --if-present build",
-    "typecheck": "tsc -b --pretty && tsc -p tsconfig.tests.json --pretty",
+    "typecheck": "tsc -b --pretty && tsc -p tsconfig.tests.json --pretty && pnpm -r --filter \"./apps/*\" typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "balance:sim": "vitest run --config vitest.balance.config.ts"
+    "balance:sim": "vitest run --config vitest.balance.config.ts",
+    "budget": "node scripts/bundle-budget.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",

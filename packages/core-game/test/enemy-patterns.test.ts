@@ -126,6 +126,16 @@ function setup(options: SetupOptions = {}): World {
   });
 }
 
+/** События буфера заданного вида — в порядке записи. */
+function eventsOfKind(world: World, kind: number): { radius: number; tick: number }[] {
+  const found: { radius: number; tick: number }[] = [];
+  for (let i = 0; i < world.events.written; i++) {
+    if (world.events.kind[i] !== kind) continue;
+    found.push({ radius: world.events.radius[i], tick: world.events.tick[i] });
+  }
+  return found;
+}
+
 function typeIndex(world: World, id: string): number {
   const index = world.enemyTypes.findIndex((type) => type.id === id);
   if (index < 0) throw new Error(`Нет фикстуры ${id}`);
@@ -351,9 +361,12 @@ describe("подрывник", () => {
 
     run(world, 40);
 
-    expect(world.events.written).toBe(1);
-    expect(world.events.kind[0]).toBe(SIM_EVENT.explosion);
-    expect(world.events.radius[0]).toBeCloseTo(80, 3);
+    // Взрыв ищется по виду, а не по нулевому индексу: в том же тике в буфер
+    // попадает и попадание по игроку — рендеру нужны оба.
+    const explosions = eventsOfKind(world, SIM_EVENT.explosion);
+    expect(explosions).toHaveLength(1);
+    expect(explosions[0].radius).toBeCloseTo(80, 3);
+    expect(eventsOfKind(world, SIM_EVENT.playerHit)).toHaveLength(1);
     expect(world.stats.enemiesKilled).toBe(0);
   });
 
