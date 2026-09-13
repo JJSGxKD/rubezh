@@ -6,8 +6,10 @@ export {
   Screen,
   ScreenTransition,
   SectionTitle,
+  SegmentedControl,
   TabBar,
   TopBar,
+  type SegmentedItem,
   type TabItem,
 } from "./Layout";
 export {
@@ -15,6 +17,7 @@ export {
   ErrorState,
   IconEmblem,
   Modal,
+  StubNotice,
   StubScreen,
   staggerStyle,
   type CardStripe,

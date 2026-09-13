@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Check } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 import { t } from "../../i18n";
 import { Button } from "./Button";
+import { Badge } from "./Data";
 
 /**
  * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
@@ -216,6 +217,23 @@ export function StubScreen(props: StubProps): ReactNode {
       </span>
       <p className="max-w-[320px] text-sm text-text-muted">{props.text}</p>
       {props.children}
+    </div>
+  );
+}
+
+/**
+ * Компактная пометка «в разработке» над разделом, который уже нарисован как
+ * настоящий: большая заглушка закрыла бы сам макет, ради которого раздел и
+ * открывают.
+ */
+export function StubNotice(props: { text: string }): ReactNode {
+  return (
+    <div className="surface-sunken flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5">
+      <Badge tone="warning">
+        <Lock size={12} aria-hidden="true" />
+        {t("app.inDevelopment")}
+      </Badge>
+      <p className="min-w-0 flex-1 basis-48 text-xs text-text-muted">{props.text}</p>
     </div>
   );
 }

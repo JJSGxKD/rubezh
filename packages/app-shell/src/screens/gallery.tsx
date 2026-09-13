@@ -16,7 +16,9 @@ import {
   ProgressBar,
   Screen,
   SectionTitle,
+  SegmentedControl,
   Stat,
+  StubNotice,
   StubScreen,
   Wordmark,
 } from "../design-system/components";
@@ -42,6 +44,7 @@ type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "de
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [segment, setSegment] = useState("daily");
 
   if (preview !== null) {
     return <PreviewFrame preview={preview} onClose={() => setPreview(null)} />;
@@ -119,6 +122,18 @@ export function GalleryScreen(): ReactNode {
           />
         </ListGroup>
 
+        <SectionTitle>{t("gallery.segmented")}</SectionTitle>
+        <SegmentedControl
+          label={t("gallery.segmented")}
+          activeId={segment}
+          onSelect={setSegment}
+          items={[
+            { id: "daily", label: t("tasks.daily") },
+            { id: "weekly", label: t("tasks.weekly") },
+            { id: "achievements", label: t("tasks.achievements") },
+          ]}
+        />
+
         <SectionTitle>{t("gallery.progress")}</SectionTitle>
         <div className="grid gap-3">
           <ProgressBar value={7} max={10} tone="hp" height="thick" label="HP" />
@@ -147,6 +162,7 @@ export function GalleryScreen(): ReactNode {
 
         <SectionTitle>{t("gallery.stub")}</SectionTitle>
         <StubScreen icon={<Star size={36} />} title="Заглушка раздела" text={t("shop.soon")} />
+        <StubNotice text={t("reward.stub")} />
       </ContentColumn>
     </Screen>
   );

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Gift, ListChecks, Swords, Trophy, UserRound, Users } from "lucide-react";
+import { Gift, Swords, Trophy, UserRound, Users } from "lucide-react";
 import {
   Avatar,
   Card,
@@ -108,20 +108,6 @@ export function ProfileScreen(): ReactNode {
           icon={<UserRound size={40} />}
           title={t("profile.title")}
           text={t("profile.soon")}
-        />
-      </ContentColumn>
-    </Screen>
-  );
-}
-
-export function TasksScreen(): ReactNode {
-  return (
-    <Screen title={t("tasks.title")}>
-      <ContentColumn>
-        <StubScreen
-          icon={<ListChecks size={40} />}
-          title={t("tasks.title")}
-          text={t("tasks.soon")}
         />
       </ContentColumn>
     </Screen>

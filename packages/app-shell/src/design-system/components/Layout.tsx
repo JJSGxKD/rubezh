@@ -175,6 +175,57 @@ function TabBadge(props: { badge: string }): ReactNode {
   );
 }
 
+export interface SegmentedItem {
+  id: string;
+  label: string;
+}
+
+/**
+ * Переключатель видов внутри раздела: «ежедневные / недельные / достижения».
+ * Выбранный сегмент поднимается объёмной плашкой — как кнопка, а не просто
+ * цветом текста (§4.4).
+ */
+export function SegmentedControl(props: {
+  items: readonly SegmentedItem[];
+  activeId: string;
+  label: string;
+  onSelect(id: string): void;
+}): ReactNode {
+  const haptics = useSettings((state) => state.haptics);
+
+  return (
+    <div
+      role="tablist"
+      aria-label={props.label}
+      className="surface-sunken grid auto-cols-fr grid-flow-col gap-1 rounded-lg p-1"
+    >
+      {props.items.map((item) => {
+        const active = item.id === props.activeId;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => {
+              if (active) return;
+              if (haptics) useShell.getState().adapter.haptic("light");
+              props.onSelect(item.id);
+            }}
+            className={[
+              "min-h-11 truncate rounded-md px-2 font-display text-sm font-semibold",
+              "transition-transform duration-(--duration-fast) ease-base active:scale-[0.97]",
+              active ? "btn-secondary" : "text-text-muted",
+            ].join(" ")}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Колонка контента: на широком экране игра не растягивается на весь монитор. */
 export function ContentColumn(props: { children: ReactNode }): ReactNode {
   return <div className="mx-auto w-full max-w-[480px]">{props.children}</div>;

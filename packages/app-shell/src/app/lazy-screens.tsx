@@ -6,7 +6,7 @@ import { reportError } from "../state/shell";
 /**
  * Экраны, которые грузятся по требованию (docs/27-design-system-and-app-shell.md
  * §3.4). В первую загрузку идёт только путь до забега: заставки, лобби, выбор
- * режима и оружия, сам забег. Настройки, диагностика, витрина и разделы-заглушки
+ * режима и оружия, сам забег. Настройки, диагностика, витрина, разделы-заглушки и мета
  * игроку в первую минуту не нужны, а весят как весь путь до забега.
  *
  * Каждый файл экранов — отдельный чанк; загрузчики вынесены, чтобы лобби
@@ -16,6 +16,9 @@ const loaders = {
   settings: () => import("../screens/settings"),
   stubs: () => import("../screens/stubs"),
   gallery: () => import("../screens/gallery"),
+  tasks: () => import("../screens/meta/tasks"),
+  daily: () => import("../screens/meta/daily"),
+  wheel: () => import("../screens/meta/wheel"),
 };
 
 function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): ComponentType {
@@ -35,7 +38,9 @@ export const ShopScreen = screen(loaders.stubs, "ShopScreen");
 export const RatingScreen = screen(loaders.stubs, "RatingScreen");
 export const FriendsScreen = screen(loaders.stubs, "FriendsScreen");
 export const ProfileScreen = screen(loaders.stubs, "ProfileScreen");
-export const TasksScreen = screen(loaders.stubs, "TasksScreen");
+export const TasksScreen = screen(loaders.tasks, "TasksScreen");
+export const DailyScreen = screen(loaders.daily, "DailyScreen");
+export const WheelScreen = screen(loaders.wheel, "WheelScreen");
 
 /**
  * Подтянуть чанки экранов заранее. Неудача здесь не ошибка: экран попробует

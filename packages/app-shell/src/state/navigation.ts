@@ -18,6 +18,8 @@ export type ScreenId =
   | "friends"
   | "profile"
   | "tasks"
+  | "daily"
+  | "wheel"
   | "settings"
   | "testers"
   | "diagnostics"
@@ -36,6 +38,8 @@ const STUB_SCREENS: ReadonlySet<ScreenId> = new Set<ScreenId>([
   "friends",
   "profile",
   "tasks",
+  "daily",
+  "wheel",
 ]);
 
 export interface NavigationStore {

@@ -19,6 +19,7 @@ import { RunScreen } from "../screens/run/RunScreen";
 import {
   AboutScreen,
   ArsenalScreen,
+  DailyScreen,
   DiagnosticsScreen,
   FriendsScreen,
   GalleryScreen,
@@ -30,6 +31,7 @@ import {
   ShopScreen,
   TasksScreen,
   TestersScreen,
+  WheelScreen,
 } from "./lazy-screens";
 
 /**
@@ -117,6 +119,10 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <ProfileScreen />;
     case "tasks":
       return <TasksScreen />;
+    case "daily":
+      return <DailyScreen />;
+    case "wheel":
+      return <WheelScreen />;
     case "settings":
       return <SettingsScreen />;
     case "testers":
