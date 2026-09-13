@@ -49,7 +49,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
 
   const stopWatching = watchPlatform();
   useInstall.getState().hydrate();
-  useDiagnostics.getState().hydrate();
+  useDiagnostics.getState().hydrate(options.capabilities.diagnosticsByDefault);
   useMeta.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
 

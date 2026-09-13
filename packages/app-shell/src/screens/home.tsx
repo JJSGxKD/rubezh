@@ -6,6 +6,7 @@ import {
   Card,
   ContentColumn,
   CurrencyChip,
+  FullscreenButton,
   IconButton,
   Screen,
   Stat,
@@ -28,6 +29,7 @@ export function LobbyScreen(): ReactNode {
       actions={
         <>
           <CurrencyChip icon={<Gem size={14} />} value="0" />
+          <FullscreenButton />
           <IconButton label={t("profile.title")} onClick={() => navigation.push("profile")}>
             <User size={20} />
           </IconButton>

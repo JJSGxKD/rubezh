@@ -14,7 +14,21 @@ import { ALL_PATTERNS_WEIGHTS } from "./helpers/scripted-run";
 
 // Статистика забега и его итог (docs/26-stage2-plan.md, WP3).
 
-const MAX_TICKS = 60 * 240;
+/**
+ * Потолок сценария. Поднят с четырёх минут до восьми вместе с отдалением
+ * камеры: кольцо спавна считается от видимой области, стало шире, и те же
+ * двадцать врагов приходят разреженнее — прежних четырёх минут игроку стало
+ * хватать, чтобы дожить до конца сценария, а эталон про смерть.
+ */
+const MAX_TICKS = 60 * 480;
+
+/**
+ * Популяция эталонного сценария. Поднята с двадцати вместе с отдалением
+ * камеры: кольцо спавна считается от видимой области, стало шире, и прежние
+ * двадцать врагов приходили так разреженно, что игрок доживал до конца
+ * сценария. Эталон — про смерть, а не про то, как долго он не наступает.
+ */
+const GOLDEN_POPULATION = 28;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -52,7 +66,7 @@ describe("статистика забега", () => {
   // Популяция подобрана так, чтобы забег дожил до полного набора: с четырьмя
   // оружиями и четырьмя пассивками проверки разносят урон по слотам, а не
   // меряют одно стартовое оружие.
-  const world = runUntilDeath(7, 20);
+  const world = runUntilDeath(7, GOLDEN_POPULATION);
 
   it("доводит игрока до смерти с набранным арсеналом — иначе проверки ниже слабы", () => {
     expect(world.player.alive).toBe(false);
@@ -106,7 +120,8 @@ describe("статистика забега", () => {
   });
 
   /**
-   * Эталон забега: seed 7, популяция 20, выбор всегда первого варианта.
+   * Эталон забега: seed 7, популяция GOLDEN_POPULATION, выбор всегда первого
+   * варианта.
    *
    * Ломается при любой правке контента — и это правильно: в диффе PR видно,
    * как правка повлияла на длину забега и на то, чем игрок его прошёл
@@ -135,41 +150,40 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 90.45,
+      survivalSec: 132.63,
       level: 14,
-      xpCollected: 373,
-      enemiesKilled: 220,
+      xpCollected: 387,
+      enemiesKilled: 245,
       killsByEnemy: {
-        swarm_rat: 106,
-        tank_ghoul: 12,
-        shooter_wisp: 31,
-        dasher_wolf: 16,
-        circler_crow: 32,
-        bomber_imp: 5,
-        splitter_slime: 18,
+        swarm_rat: 124,
+        tank_ghoul: 14,
+        shooter_wisp: 30,
+        dasher_wolf: 17,
+        circler_crow: 30,
+        bomber_imp: 11,
+        splitter_slime: 19,
       },
-      damageDealt: 2613,
-      damageTaken: 154,
+      damageDealt: 2894,
+      damageTaken: 212,
       weapons: [
-        { id: "spark", level: 1, damage: 1387 },
-        { id: "hearth", level: 2, damage: 391 },
-        { id: "storm", level: 2, damage: 665 },
-        { id: "knife", level: 2, damage: 170 },
+        { id: "spark", level: 1, damage: 2525 },
+        { id: "storm", level: 1, damage: 360 },
+        { id: "wardstone", level: 1, damage: 9 },
       ],
       passives: [
-        { id: "mending", level: 2 },
-        { id: "lodestone", level: 2 },
-        { id: "reach", level: 1 },
-        { id: "haste", level: 2 },
+        { id: "ward", level: 2 },
+        { id: "vitality", level: 4 },
+        { id: "haste", level: 4 },
+        { id: "lodestone", level: 1 },
       ],
-      deathCause: "shooter_wisp",
-      distance: 13758,
-      peakEnemies: 22,
+      deathCause: "dasher_wolf",
+      distance: 20253,
+      peakEnemies: 30,
     });
   });
 
   it("не зависит от прогона: тот же seed даёт ту же статистику", () => {
-    const repeat = runUntilDeath(7, 20);
+    const repeat = runUntilDeath(7, GOLDEN_POPULATION);
     expect(resultOf(repeat, 7)).toEqual(resultOf(world, 7));
   });
 });

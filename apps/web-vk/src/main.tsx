@@ -22,5 +22,9 @@ void mountAppShell({
     contentHash: CONTENT_HASH,
     platform: "vk",
   },
-  capabilities: { platformAvailable: true, botUrl: "" },
+  capabilities: {
+    platformAvailable: true,
+    botUrl: "",
+    diagnosticsByDefault: import.meta.env.VITE_DIAGNOSTICS_DEFAULT === "1",
+  },
 });

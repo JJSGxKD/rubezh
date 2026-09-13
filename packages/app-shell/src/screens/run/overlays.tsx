@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { RunResult, UpgradeOption } from "@bh/shared-types";
-import { Button, Card, Modal, Stat } from "../../design-system/components";
+import { Button, Card, FullscreenButton, Modal, Stat } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
 
 /**
@@ -79,7 +79,12 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
         </>
       }
     >
-      <Stat label={t("run.death.survived")} value={formatDuration(props.elapsedSec)} large />
+      <div className="flex items-center justify-between gap-4">
+        <Stat label={t("run.death.survived")} value={formatDuration(props.elapsedSec)} large />
+        {/* Режим экрана переключается прямо отсюда: забег при этом не
+            прерывается (docs/27-design-system-and-app-shell.md §5.2.1). */}
+        <FullscreenButton />
+      </div>
     </Modal>
   );
 }

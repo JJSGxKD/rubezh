@@ -126,10 +126,9 @@ export const useRun = create<RunStore>((set, get) => ({
   choose(optionId: string): void {
     if (get().phase !== "levelUp") return;
     track("upgrade_chosen", { option: optionId, level: get().level });
+    // Фазу дальше ведёт движок: он пришлёт либо следующий выбор из очереди,
+    // либо `resumed`. Своя догадка здесь затирала бы первое вторым.
     session?.chooseUpgrade(optionId);
-    // Движок сам пришлёт следующий выбор, если уровней накопилось несколько;
-    // до этого момента считаем забег продолжившимся.
-    set({ phase: "running", offers: [] });
   },
 
   restart(): void {
@@ -180,7 +179,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
       track("run_paused", { reason, elapsedSec: Math.round(elapsedSec) });
     }),
 
-    created.on("resumed", () => set({ phase: "running", pauseReason: null })),
+    created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [] })),
 
     created.on("finished", (result) => finishRun(result, "run_finished", set)),
     created.on("abandoned", (result) => finishRun(result, "run_abandoned", set)),

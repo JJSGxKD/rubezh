@@ -7,10 +7,11 @@ import type { Rng } from "./rng";
 import type { SpatialGrid } from "./grid";
 import type { SimEvents } from "./events";
 import type { ViewConfig, WorldBounds } from "./map-types";
-import { NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
+import { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
+import { pushSimEvent, SIM_EVENT } from "./events";
 
 export type { EnemyType } from "../patterns/enemy-types";
-export { NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
+export { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type ProjectilePool } from "./pools";
 export type { ViewConfig, WorldBounds } from "./map-types";
 // Сборка мира живёт отдельно: здесь — состояние забега и операции над ним.
 export { createWorld, DEFAULT_SIM_CONFIG, type CreateWorldOptions } from "./create-world";
@@ -219,6 +220,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.vy[slot] = 0;
   pool.hp[slot] = type.hp * world.difficulty.hpMul;
   pool.damage[slot] = type.damage * world.difficulty.damageMul;
+  pool.hitTick[slot] = NEVER_HIT;
   pool.attackCooldown[slot] = 0;
   pool.type[slot] = typeIndex;
   pool.alive[slot] = 1;
@@ -260,6 +262,15 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
   const reduced = Math.max(amount * MIN_DAMAGE_RATIO, amount - world.playerStats.armor);
   player.hp -= reduced;
   world.stats.damageTaken += reduced;
+  // Рендер обязан показать момент попадания: полоска здоровья в углу — не
+  // обратная связь, игрок смотрит на персонажа, а не на цифры.
+  pushSimEvent(world.events, {
+    kind: SIM_EVENT.playerHit,
+    x: player.x,
+    y: player.y,
+    radius: reduced,
+    tick: world.stats.tick,
+  });
   if (player.hp <= 0) {
     player.hp = 0;
     player.alive = false;

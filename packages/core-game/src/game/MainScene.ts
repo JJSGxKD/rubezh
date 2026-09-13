@@ -209,7 +209,13 @@ export class MainScene extends Phaser.Scene {
       this.emitLevelUp();
       return;
     }
+
     this.phase = "running";
+    // О возврате в забег сообщаем событием, а не оставляем оболочке гадать.
+    // Раньше она сама переводила себя в «бежим» сразу после команды выбора —
+    // и затирала уже пришедший следующий выбор из очереди: экран пропадал, а
+    // мир оставался стоять.
+    this.sceneData.bus.emit("resumed", { elapsedSec: this.world.stats.elapsedSec });
   }
 
   restartRun(seed: number): void {

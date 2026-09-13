@@ -18,8 +18,12 @@ export const MAPS: MapDef[] = [
     id: "frontier",
     nameKey: "map.frontier.name",
     camera: {
-      viewAreaMoving: 260_000,
-      viewAreaIdle: 175_000,
+      // Сколько мира видно. Увеличено после первого плейтеста: с прежними
+      // 260 000 камера стояла слишком близко, и масштаб происходящего не
+      // читался — враги появлялись почти вплотную. Числа крутит геймдизайнер,
+      // от них же считается радиус кольца спавна.
+      viewAreaMoving: 380_000,
+      viewAreaIdle: 260_000,
       maxAspect: 2.2,
       followSmoothingSec: 0.12,
       zoomSmoothingSec: 0.5,

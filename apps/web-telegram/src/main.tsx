@@ -43,6 +43,10 @@ if (benchAllowed && params.get("bench") !== null) {
       // вырезается минификатором.
       platformAvailable: isTelegramEnvironment() || import.meta.env.DEV,
       botUrl: botUrl(),
+      // На время закрытого теста диагностика включена сразу: тестеру не нужно
+      // лезть в настройки, чтобы в отчёте о баге оказался seed. Выключить её
+      // он при этом может в любой момент.
+      diagnosticsByDefault: import.meta.env.VITE_DIAGNOSTICS_DEFAULT === "1",
     },
     analytics: createAnalytics(),
   });

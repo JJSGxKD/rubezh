@@ -1,6 +1,9 @@
 /** Снаряд без владельца-врага: выпущен игроком. */
 export const NO_OWNER_TYPE = 255;
 
+/** Тик «попаданий не было»: заведомо раньше любого тика забега. */
+export const NEVER_HIT = -1000;
+
 /**
  * Пулы хранятся как структура массивов (SoA), а не массив объектов: обход
  * идёт по непрерывной памяти, а «убийство» врага не создаёт мусора — слот
@@ -32,6 +35,13 @@ export interface EnemyPool {
    * усиливался бы задним числом вместе с таймлайном.
    */
   damage: Float32Array;
+  /**
+   * Тик последнего попадания. Нужен рендеру: без вспышки игрок не понимает,
+   * попал он или снаряд прошёл мимо, и бой читается как набор случайностей.
+   * Хранится в пуле, а не в буфере событий: попаданий за тик бывают десятки,
+   * и кольцевой буфер эффектов они вытеснили бы целиком.
+   */
+  hitTick: Int32Array;
   /** таймер до следующей атаки: и контактной, и выстрела для kite_and_shoot */
   attackCooldown: Float32Array;
   type: Uint8Array;
@@ -90,6 +100,7 @@ export function createEnemyPool(capacity: number): EnemyPool {
     vy: new Float32Array(capacity),
     hp: new Float32Array(capacity),
     damage: new Float32Array(capacity),
+    hitTick: new Int32Array(capacity).fill(NEVER_HIT),
     attackCooldown: new Float32Array(capacity),
     type: new Uint8Array(capacity),
     alive: new Uint8Array(capacity),

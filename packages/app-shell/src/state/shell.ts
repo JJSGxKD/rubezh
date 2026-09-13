@@ -26,6 +26,12 @@ export interface ShellCapabilities {
   platformAvailable: boolean;
   /** куда отправить игрока, открывшего игру мимо мессенджера */
   botUrl: string;
+  /**
+   * Включать ли режим диагностики по умолчанию. На время закрытого теста —
+   * да: тестеру не нужно лезть в настройки, чтобы в отчёте о баге оказался
+   * seed. Переключатель при этом остаётся, выключить можно всегда.
+   */
+  diagnosticsByDefault: boolean;
 }
 
 export interface ShellState {
@@ -41,7 +47,7 @@ const PLACEHOLDER: ShellState = {
   // появляются после `mountAppShell`. Пустой адаптер здесь честнее, чем
   // `null`, который пришлось бы проверять в каждом обращении.
   adapter: undefined as unknown as PlatformAdapter,
-  capabilities: { platformAvailable: false, botUrl: "" },
+  capabilities: { platformAvailable: false, botUrl: "", diagnosticsByDefault: false },
   storage: undefined,
   analytics: noopAnalytics,
   build: { version: "dev", contentHash: "", platform: "web" },

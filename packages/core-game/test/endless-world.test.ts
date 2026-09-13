@@ -22,7 +22,7 @@ const OPEN_MAP = MAPS[0];
 const WALLED_MAP: MapDef = {
   ...OPEN_MAP,
   id: "walled",
-  bounds: { halfWidth: 700, halfHeight: 700 },
+  bounds: { halfWidth: 900, halfHeight: 900 },
 };
 
 function makeWorld(map: MapDef = OPEN_MAP, overrides = {}): World {

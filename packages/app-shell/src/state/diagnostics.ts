@@ -10,15 +10,27 @@ import { reportError, track, useShell } from "./shell";
 const DIAGNOSTICS_KEY = "bh.diagnostics.v1";
 
 const schema = z.object({
-  enabled: z.boolean(),
+  /**
+   * `null` — игрок ещё не трогал переключатель, берётся умолчание сборки. На
+   * время закрытого теста оно включено: тестеру не нужно лезть в настройки,
+   * чтобы отчёт о баге содержал seed. В сборке для игроков умолчание
+   * выключено, а переключатель остаётся — выключить можно всегда.
+   */
+  enabled: z.nullable(z.boolean()),
   recordRuns: z.boolean(),
   fpsOverlay: z.boolean(),
 });
 
-export type DiagnosticsState = z.infer<typeof schema>;
+type StoredDiagnostics = z.infer<typeof schema>;
+
+export interface DiagnosticsState {
+  enabled: boolean;
+  recordRuns: boolean;
+  fpsOverlay: boolean;
+}
 
 export interface DiagnosticsStore extends DiagnosticsState {
-  hydrate(): void;
+  hydrate(defaultEnabled: boolean): void;
   toggle(key: keyof DiagnosticsState): void;
 }
 
@@ -27,8 +39,13 @@ export const useDiagnostics = create<DiagnosticsStore>((set, get) => ({
   recordRuns: false,
   fpsOverlay: false,
 
-  hydrate(): void {
-    set(value().read());
+  hydrate(defaultEnabled: boolean): void {
+    const stored = value().read();
+    set({
+      enabled: stored.enabled ?? defaultEnabled,
+      recordRuns: stored.recordRuns,
+      fpsOverlay: stored.fpsOverlay,
+    });
   },
 
   toggle(key): void {
@@ -50,12 +67,12 @@ export const useDiagnostics = create<DiagnosticsStore>((set, get) => ({
   },
 }));
 
-function value(): ReturnType<typeof createPersistedValue<DiagnosticsState>> {
-  return createPersistedValue<DiagnosticsState>({
+function value(): ReturnType<typeof createPersistedValue<StoredDiagnostics>> {
+  return createPersistedValue<StoredDiagnostics>({
     storage: useShell.getState().storage,
     key: DIAGNOSTICS_KEY,
     schema,
-    fallback: { enabled: false, recordRuns: false, fpsOverlay: false },
+    fallback: { enabled: null, recordRuns: false, fpsOverlay: false },
     onBroken: (key, reason) => reportError("diagnostics", `${key}: ${reason}`),
   });
 }
