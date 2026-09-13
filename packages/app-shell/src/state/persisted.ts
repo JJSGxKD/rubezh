@@ -1,5 +1,5 @@
 import type { KeyValueStorage } from "@bh/shared-types";
-import type { z } from "zod/v4-mini";
+import type { z } from "zod/mini";
 
 /**
  * Хранение на устройстве. Данные из хранилища — **граница системы**: их

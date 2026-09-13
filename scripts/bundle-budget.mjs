@@ -19,10 +19,28 @@ import { join } from "node:path";
  * ждёт решения команды — до него бюджет держит текущий вес, не давая ему
  * расти дальше.
  */
+/**
+ * Чанки, которые грузятся по требованию и в первую загрузку не входят:
+ * движок забега и стенд испытаний. Всё остальное считается первой загрузкой.
+ *
+ * Классификация «всё, кроме ленивого», а не список ожидаемых имён: сборщик
+ * вправе выделить общий модуль в отдельный чанк, и такой чанк молча выпал бы
+ * из бюджета. Так уже случилось при переходе на Vite 8.
+ */
+const LAZY = /^(phaser-host|run-engine|bench-stand)-.*\.js$/;
+
 const BUDGETS = [
-  { name: "Оболочка, первая загрузка", pattern: /^index-.*\.js$/, limitKb: 190 },
-  { name: "CSS", pattern: /\.css$/, limitKb: 30 },
-  { name: "Чанк движка", pattern: /^(phaser-host|run-engine)-.*\.js$/, limitKb: 380 },
+  {
+    name: "Оболочка, первая загрузка",
+    matches: (name) => name.endsWith(".js") && !LAZY.test(name),
+    limitKb: 190,
+  },
+  { name: "CSS", matches: (name) => name.endsWith(".css"), limitKb: 30 },
+  {
+    name: "Чанки по требованию",
+    matches: (name) => LAZY.test(name),
+    limitKb: 380,
+  },
 ];
 
 /** Какое приложение считаем эталоном: оно уходит в закрытый тест первым. */
@@ -33,7 +51,7 @@ function measure() {
   const rows = [];
 
   for (const budget of BUDGETS) {
-    const matched = files.filter((name) => budget.pattern.test(name));
+    const matched = files.filter((name) => budget.matches(name));
     const bytes = matched.reduce(
       (total, name) => total + gzipSync(readFileSync(join(APP_DIST, name))).length,
       0,
@@ -55,7 +73,7 @@ function main() {
       `  ${row.name.padEnd(28)} ${row.kb.toFixed(1).padStart(7)} КБ / ${String(row.limitKb).padStart(4)} КБ  ${mark}`,
     );
     if (row.files.length === 0) {
-      console.log(`    нет файлов под шаблон ${String(row.pattern)} — сборка не та или не собрана`);
+      console.log(`    файлов не нашлось — сборка не та или её не делали`);
       failed = true;
     }
   }

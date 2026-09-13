@@ -1,7 +1,7 @@
 import type { RunResult } from "@bh/shared-types";
 import { loadBestSurvivalSec, submitRunResult } from "@bh/core-game";
 import { create } from "zustand";
-import { z } from "zod/v4-mini";
+import { z } from "zod/mini";
 import { createPersistedValue } from "./persisted";
 import { reportError, useShell } from "./shell";
 

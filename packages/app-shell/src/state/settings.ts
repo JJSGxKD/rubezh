@@ -1,6 +1,6 @@
 import type { ScreenMode } from "@bh/shared-types";
 import { create } from "zustand";
-import { z } from "zod/v4-mini";
+import { z } from "zod/mini";
 import { createPersistedValue } from "./persisted";
 import { reportError, track, useShell } from "./shell";
 
