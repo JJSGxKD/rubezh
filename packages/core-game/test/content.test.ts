@@ -1,4 +1,4 @@
-import type { EnemyDef, PassiveDef, WeaponDef } from "@bh/shared-types";
+import { PASSIVE_CATEGORIES, type EnemyDef, type PassiveDef, type WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { MAPS } from "../src/content/maps";
@@ -189,8 +189,15 @@ describe("контент пассивок и прокачки", () => {
     expect(findPassiveContentProblems(PASSIVES)).toEqual([]);
   });
 
-  it("предлагает больше пассивок, чем помещается в слоты — иначе выбора нет", () => {
-    expect(PASSIVES.length).toBeGreaterThan(LOADOUT_LIMITS.passives);
+  it("в каждой категории пассивок больше, чем слотов под неё — иначе выбора нет", () => {
+    for (const category of PASSIVE_CATEGORIES) {
+      const inCategory = PASSIVES.filter((passive) => passive.category === category).length;
+      expect(inCategory, category).toBeGreaterThan(LOADOUT_LIMITS.passives[category]);
+    }
+  });
+
+  it("оружия больше, чем слотов под него", () => {
+    expect(WEAPONS.length).toBeGreaterThan(LOADOUT_LIMITS.weapons);
   });
 
   it("даёт первый уровень в первые полминуты игры, а дальше дорожает", () => {
@@ -248,7 +255,7 @@ describe("проверка контента оружия", () => {
 });
 
 describe("проверка контента пассивок", () => {
-  const base = { nameKey: "n", descriptionKey: "d" };
+  const base = { nameKey: "n", descriptionKey: "d", category: "attack" as const };
 
   it("не допускает нулевой и отрицательный множитель", () => {
     const defs: PassiveDef[] = [
@@ -269,5 +276,12 @@ describe("проверка контента пассивок", () => {
   it("ловит пассивку без уровней", () => {
     const defs: PassiveDef[] = [{ id: "a", ...base, stat: "damage", op: "mul", levels: [] }];
     expect(findPassiveContentProblems(defs)).not.toEqual([]);
+  });
+
+  it("ловит опечатку в категории — контент приходит и из JSON", () => {
+    const defs = [{ id: "a", ...base, category: "atack", stat: "damage", op: "mul", levels: [1.1] }];
+    expect(findPassiveContentProblems(defs as unknown as PassiveDef[])).toEqual([
+      "пассивка a: категория atack не из attack, defense, mobility",
+    ]);
   });
 });

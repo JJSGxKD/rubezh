@@ -32,7 +32,7 @@ const MAX_TICKS = 60 * 480;
 const GOLDEN_POPULATION = 28;
 
 /**
- * Seed эталона. Подобран так, чтобы забег дожил до полного набора: с четырьмя
+ * Seed эталона. Подобран так, чтобы забег дожил до полного набора: с тремя
  * оружиями проверки ниже разносят урон по слотам, а не меряют одно стартовое.
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов и броском на
@@ -75,8 +75,8 @@ function resultOf(world: World, seed: number): RunResult {
 }
 
 describe("статистика забега", () => {
-  // Популяция подобрана так, чтобы забег дожил до полного набора: с четырьмя
-  // оружиями и четырьмя пассивками проверки разносят урон по слотам, а не
+  // Популяция подобрана так, чтобы забег дожил до полного набора: с тремя
+  // оружиями и пассивками разных категорий проверки разносят урон по слотам, а не
   // меряют одно стартовое оружие.
   const world = runUntilDeath(GOLDEN_SEED, GOLDEN_POPULATION);
 
@@ -162,35 +162,34 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 77.12,
-      level: 13,
-      xpCollected: 300,
-      enemiesKilled: 253,
+      survivalSec: 50.15,
+      level: 9,
+      xpCollected: 131,
+      enemiesKilled: 108,
       killsByEnemy: {
-        swarm_rat: 114,
-        tank_ghoul: 9,
-        shooter_wisp: 38,
-        dasher_wolf: 25,
-        circler_crow: 34,
-        bomber_imp: 18,
-        splitter_slime: 15,
+        swarm_rat: 49,
+        tank_ghoul: 4,
+        shooter_wisp: 17,
+        dasher_wolf: 8,
+        circler_crow: 19,
+        bomber_imp: 6,
+        splitter_slime: 5,
       },
-      damageDealt: 2859,
-      damageTaken: 156,
+      damageDealt: 1203,
+      damageTaken: 145,
       weapons: [
-        { id: "spark", level: 1, damage: 2714 },
-        { id: "wardstone", level: 2, damage: 108 },
-        { id: "hearth", level: 1, damage: 37 },
+        { id: "spark", level: 2, damage: 864 },
+        { id: "wardstone", level: 2, damage: 51 },
+        { id: "storm", level: 1, damage: 288 },
       ],
       passives: [
-        { id: "swiftness", level: 3 },
-        { id: "volley", level: 2 },
-        { id: "mending", level: 2 },
-        { id: "haste", level: 2 },
+        { id: "swiftness", level: 1 },
+        { id: "reach", level: 1 },
+        { id: "vitality", level: 2 },
       ],
-      deathCause: "dasher_wolf",
-      distance: 13794,
-      peakEnemies: 32,
+      deathCause: "shooter_wisp",
+      distance: 8139,
+      peakEnemies: 30,
     });
   });
 

@@ -471,10 +471,20 @@ export type PlayerStat =
  * прибавка к предыдущему: так в таблице сразу видно, что даёт третий уровень,
  * и нельзя случайно получить произведение прибавок.
  */
+/**
+ * Категория пассивки. У каждой категории свои слоты: игрок выбирает, чем
+ * жертвует, и к десятой минуте не собирает всё сразу.
+ */
+export type PassiveCategory = "attack" | "defense" | "mobility";
+
+export const PASSIVE_CATEGORIES: readonly PassiveCategory[] = ["attack", "defense", "mobility"];
+
 export interface PassiveDef {
   id: string;
   nameKey: string;
   descriptionKey: string;
+  /** в слот какой категории встаёт пассивка */
+  category: PassiveCategory;
   stat: PlayerStat;
   /** `mul` — множитель (1.1 это +10%), `add` — слагаемое */
   op: "add" | "mul";
@@ -507,10 +517,10 @@ export interface DropsDef {
   };
 }
 
-/** Сколько оружий и пассивок игрок держит одновременно. */
+/** Сколько оружий и пассивок каждой категории игрок держит одновременно. */
 export interface LoadoutLimits {
   weapons: number;
-  passives: number;
+  passives: Record<PassiveCategory, number>;
 }
 
 /**

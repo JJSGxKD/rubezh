@@ -177,6 +177,11 @@
   "run.levelUp.queued": "Ещё выборов: {count}",
   "run.levelUp.new": "Новое",
   "run.levelUp.upgrade": "Уровень {level}",
+  "run.slots": "Занятые слоты",
+  "run.slots.weapons": "Оружие",
+  "passive.category.attack": "Атака",
+  "passive.category.defense": "Защита",
+  "passive.category.mobility": "Подвижность",
 
   "run.death.title": "Забег окончен",
   "run.death.abandoned": "Забег сдан",

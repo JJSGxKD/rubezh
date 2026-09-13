@@ -193,9 +193,36 @@ function renderPreview(preview: Preview): ReactNode {
     case "runLoading":
       return <RunLoading stage="world" weaponId="spark" />;
     case "levelUp":
-      return <LevelUpOverlay level={4} offers={SAMPLE_OFFERS} queued={0} onChoose={noop} />;
+      return (
+        <LevelUpOverlay
+          level={4}
+          offers={SAMPLE_OFFERS}
+          queued={0}
+          loadout={{ weapons: [{ id: "spark", level: 2 }], passives: [{ id: "might", level: 1 }] }}
+          onChoose={noop}
+        />
+      );
     case "levelUpLong":
-      return <LevelUpOverlay level={12} offers={LONG_OFFERS} queued={2} onChoose={noop} />;
+      return (
+        <LevelUpOverlay
+          level={12}
+          offers={LONG_OFFERS}
+          queued={2}
+          loadout={{
+            weapons: [
+              { id: "spark", level: 5 },
+              { id: "knife", level: 3 },
+              { id: "storm", level: 2 },
+            ],
+            passives: [
+              { id: "might", level: 3 },
+              { id: "haste", level: 2 },
+              { id: "ward", level: 1 },
+            ],
+          }}
+          onChoose={noop}
+        />
+      );
     case "pause":
       return <PauseOverlay elapsedSec={187} onResume={noop} onSettings={noop} onSurrender={noop} />;
     case "death":

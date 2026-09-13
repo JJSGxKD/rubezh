@@ -85,6 +85,7 @@ export function RunScreen(): ReactNode {
           level={run.level}
           offers={run.offers}
           queued={run.queued}
+          {...(run.hud === null ? {} : { loadout: run.hud })}
           onChoose={(optionId) => useRun.getState().choose(optionId)}
         />
       ) : null}

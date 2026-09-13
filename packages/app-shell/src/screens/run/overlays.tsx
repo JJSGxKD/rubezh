@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Crown, History, Pause, Skull, Sparkles, Star } from "lucide-react";
 import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { RunSlotState } from "@bh/core-game";
 import {
   Badge,
   Button,
@@ -13,6 +14,7 @@ import {
 import { formatDuration, formatNumber, t } from "../../i18n";
 import { ItemIcon, ItemTile, type ItemKind } from "../item-icons";
 import { SecondChance } from "./SecondChance";
+import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
 import { formatChange } from "./upgrade-format";
 
 /**
@@ -120,6 +122,8 @@ export interface LevelUpOverlayProps {
   level: number;
   offers: readonly UpgradeOption[];
   queued: number;
+  /** текущий набор — показать, сколько слотов каждой категории занято */
+  loadout?: { weapons: readonly RunSlotState[]; passives: readonly RunSlotState[] };
   onChoose(optionId: string): void;
 }
 
@@ -132,9 +136,12 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
       icon={<Star size={28} fill="currentColor" />}
       size="l"
     >
-      <p className="-mt-1 mb-4 text-center text-sm text-text-muted landscape:mb-2">
-        {t("run.levelUp.subtitle")}
-      </p>
+      <p className="-mt-1 mb-2 text-center text-sm text-text-muted">{t("run.levelUp.subtitle")}</p>
+      {props.loadout === undefined ? null : (
+        <div className="mb-3 landscape:mb-2">
+          <SlotSummary weapons={props.loadout.weapons} passives={props.loadout.passives} />
+        </div>
+      )}
       {/*
         В ландшафте карточки идут в ряд, в портрете — столбцом: высота
         ландшафта на телефоне около 360 px, и три карточки столбцом туда не
@@ -233,22 +240,33 @@ function kindOf(offer: UpgradeOption): ItemKind {
   return offer.kind === "weapon_new" || offer.kind === "weapon_level" ? "weapon" : "passive";
 }
 
-/** Новое это оружие или уровень к уже взятому — игрок должен видеть сразу. */
+/**
+ * Новое это оружие или уровень к уже взятому — игрок должен видеть сразу. У
+ * пассивки рядом её категория: слот займёт именно она.
+ */
 function OfferTag(props: { offer: UpgradeOption }): ReactNode {
   const { offer } = props;
   if (offer.kind === "heal") return null;
-  if (offer.kind === "weapon_new" || offer.kind === "passive_new") {
-    return (
+  const category = offer.kind === "passive_new" || offer.kind === "passive_level" ? passiveCategoryOf(offer.refId) : null;
+
+  const badge =
+    offer.kind === "weapon_new" || offer.kind === "passive_new" ? (
       <Badge tone="accent">
         <Sparkles size={12} aria-hidden="true" />
         {t("run.levelUp.new")}
       </Badge>
+    ) : (
+      <Badge tone={offer.kind === "weapon_level" ? "weapon" : "passive"}>
+        {t("run.levelUp.upgrade", { level: offer.level })}
+      </Badge>
     );
-  }
+
+  if (category === null) return badge;
   return (
-    <Badge tone={offer.kind === "weapon_level" ? "weapon" : "passive"}>
-      {t("run.levelUp.upgrade", { level: offer.level })}
-    </Badge>
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      {badge}
+      <CategoryLabel category={category} />
+    </span>
   );
 }
 

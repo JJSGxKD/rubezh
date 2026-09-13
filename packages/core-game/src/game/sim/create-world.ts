@@ -32,7 +32,10 @@ import type { PlayerConfig, SimConfig, World } from "./world";
  * прокачка не нужна. Игра и стенд передают значения из контента.
  */
 const FALLBACK_LEVEL_CURVE: LevelCurveDef = { baseXp: 6, growth: 1.22 };
-const FALLBACK_LOADOUT_LIMITS: LoadoutLimits = { weapons: 4, passives: 4 };
+const FALLBACK_LOADOUT_LIMITS: LoadoutLimits = {
+  weapons: 4,
+  passives: { attack: 4, defense: 4, mobility: 4 },
+};
 
 /**
  * Выпадение для тестов симуляции: один кристалл на врага и никаких аптечек.

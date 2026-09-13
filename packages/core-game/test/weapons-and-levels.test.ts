@@ -1,6 +1,13 @@
 import type { EnemyDef, LevelCurveDef, PassiveDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
-import { chooseUpgrade, isAwaitingChoice, xpForLevel } from "../src/game/progression/levels";
+import { addPassive } from "../src/game/progression/loadout";
+import {
+  chooseUpgrade,
+  isAwaitingChoice,
+  passivesInCategory,
+  prepareOffers,
+  xpForLevel,
+} from "../src/game/progression/levels";
 import { SIM_EVENT } from "../src/game/sim/events";
 import { spawnGem } from "../src/game/sim/gems";
 import { IDLE_INPUT, stepWorld } from "../src/game/sim/step";
@@ -65,10 +72,10 @@ const STORM: WeaponDef = {
   levels: [{ damage: 15, cooldownSec: 1, projectiles: 1, areaRadius: 60 }],
 };
 
-const MIGHT: PassiveDef = { id: "might", ...text, stat: "damage", op: "mul", levels: [2] };
-const VOLLEY: PassiveDef = { id: "volley", ...text, stat: "projectiles", op: "add", levels: [2] };
-const WARD_PASSIVE: PassiveDef = { id: "ward_p", ...text, stat: "armor", op: "add", levels: [4] };
-const VITALITY: PassiveDef = { id: "vitality", ...text, stat: "maxHp", op: "add", levels: [50] };
+const MIGHT: PassiveDef = { id: "might", ...text, category: "attack", stat: "damage", op: "mul", levels: [2] };
+const VOLLEY: PassiveDef = { id: "volley", ...text, category: "attack", stat: "projectiles", op: "add", levels: [2] };
+const WARD_PASSIVE: PassiveDef = { id: "ward_p", ...text, category: "defense", stat: "armor", op: "add", levels: [4] };
+const VITALITY: PassiveDef = { id: "vitality", ...text, category: "defense", stat: "maxHp", op: "add", levels: [50] };
 
 const FAST_CURVE: LevelCurveDef = { baseXp: 5, growth: 2 };
 
@@ -79,7 +86,7 @@ function setup(options: Partial<CreateWorldOptions> = {}): World {
     weapons: [SPARK],
     passives: [MIGHT, VOLLEY, WARD_PASSIVE, VITALITY],
     levelCurve: FAST_CURVE,
-    loadoutLimits: { weapons: 2, passives: 2 },
+    loadoutLimits: { weapons: 2, passives: { attack: 2, defense: 2, mobility: 2 } },
     ...options,
     config: {
       player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 500 },
@@ -322,7 +329,7 @@ describe("опыт и уровни", () => {
     const world = setup({
       weapons: [SPARK],
       passives: [MIGHT],
-      loadoutLimits: { weapons: 1, passives: 0 },
+      loadoutLimits: { weapons: 1, passives: { attack: 0, defense: 0, mobility: 0 } },
     });
     // Оружие одно и уже на максимуме, пассивок некуда брать — остаётся
     // только лечение.
@@ -336,6 +343,24 @@ describe("опыт и уровни", () => {
 
     chooseUpgrade(world, world.progression.offers[0].id);
     expect(world.player.hp).toBeGreaterThan(100);
+  });
+
+  it("держит слоты по категориям: занятая защита не закрывает атаку", () => {
+    const world = setup({
+      weapons: [SPARK],
+      passives: [MIGHT, VOLLEY, WARD_PASSIVE, VITALITY],
+      loadoutLimits: { weapons: 1, passives: { attack: 2, defense: 1, mobility: 0 } },
+    });
+    world.loadout.weapons[0].level = SPARK.levels.length;
+    addPassive(world.loadout, world.passiveTypes.findIndex((type) => type.id === "ward_p"));
+    world.progression.pendingLevelUps = 1;
+
+    const offered = prepareOffers(world).map((offer) => offer.refId);
+    // Защитный слот один и занят бронёй: живучести в выборе нет, а атакующие
+    // пассивки — есть.
+    expect(offered).not.toContain("vitality");
+    expect(offered).toEqual(expect.arrayContaining(["might", "volley"]));
+    expect(passivesInCategory(world, "defense")).toBe(1);
   });
 
   it("не принимает выбор, которого не предлагали", () => {
