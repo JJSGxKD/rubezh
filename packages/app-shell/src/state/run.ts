@@ -50,6 +50,23 @@ let session: RunSession | null = null;
 let unsubscribes: (() => void)[] = [];
 let startOptions: RunStartOptions | null = null;
 
+/**
+ * Номер попытки запуска. Загрузка движка асинхронная, а экран забега за это
+ * время успевает размонтироваться и смонтироваться заново — в режиме
+ * разработки React делает это на каждом заходе намеренно.
+ *
+ * Проверки «сессия ещё не создана» для этого мало: обе попытки видят `null`,
+ * обе доходят до конца и создают по игре Phaser. Каждая игра — это отдельный
+ * контекст WebGL; браузер держит их ограниченное число и тихо убивает самый
+ * старый. Убитый контекст выглядит как замершая картинка при живом HUD:
+ * игровой цикл идёт, а рисовать больше некуда. Отсюда же перезагрузки
+ * страницы на ровном месте.
+ *
+ * Поэтому у запуска есть номер: пока идёт загрузка, любой новый запуск или
+ * остановка делают предыдущий недействительным, и его игра не создаётся вовсе.
+ */
+let startToken = 0;
+
 const IDLE = {
   phase: "idle" as RunPhase,
   hud: null,
@@ -67,8 +84,10 @@ export const useRun = create<RunStore>((set, get) => ({
   seed: 1,
 
   async start(options: RunStartOptions): Promise<void> {
+    // Уже идущий забег не перезапускаем: за этим есть отдельная команда.
     if (session !== null) return;
 
+    const token = ++startToken;
     const seed = nextSeed();
     set({ ...IDLE, phase: "loading", seed });
     startOptions = options;
@@ -77,6 +96,10 @@ export const useRun = create<RunStore>((set, get) => ({
       // Движок приходит отдельным чанком: до этого момента Phaser не
       // загружался вовсе (docs/27-design-system-and-app-shell.md §3.4).
       const engine = await loadRunEngine();
+      // Пока грузился чанк, нас могли остановить или запустить заново. Игру
+      // в этом случае не создаём вовсе: лишний контекст WebGL дороже всего.
+      if (token !== startToken) return;
+
       const diagnostics = useDiagnostics.getState();
       const created = engine.start({
         container: options.container,
@@ -90,6 +113,12 @@ export const useRun = create<RunStore>((set, get) => ({
         },
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
       });
+
+      if (token !== startToken) {
+        // Остановили ровно в момент создания — убираем за собой сразу.
+        created.destroy();
+        return;
+      }
 
       session = created;
       unsubscribes = subscribe(created, set, get);
@@ -148,6 +177,9 @@ export const useRun = create<RunStore>((set, get) => ({
   },
 
   stop(): void {
+    // Незавершённый запуск тоже отменяем: иначе он доедет и создаст игру,
+    // которой уже некому владеть.
+    startToken++;
     for (const unsubscribe of unsubscribes) unsubscribe();
     unsubscribes = [];
     session?.destroy();
@@ -186,8 +218,11 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
 
     created.on("error", ({ message }) => {
       reportError("run", message);
-      set({ phase: "error", errorMessage: "error.engine" });
-      void get();
+      // Забег уже шёл — значит сломался не запуск, а отрисовка. Игроку это
+      // разные вещи: в первом случае не загрузилось, во втором замерла
+      // картинка, и текст должен говорить именно об этом.
+      const started = get().phase !== "loading";
+      set({ phase: "error", errorMessage: started ? "error.render" : "error.engine" });
     }),
   ];
 }

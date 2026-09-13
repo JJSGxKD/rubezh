@@ -91,7 +91,10 @@ export function RunScreen(): ReactNode {
 
       {run.phase === "error" ? (
         <div className="absolute inset-0 bg-bg" style={{ zIndex: "var(--z-modal)" }}>
-          <ErrorState text={t("error.engine")} onRetry={() => navigation.resetTo("lobby")} />
+          <ErrorState
+            text={t(run.errorMessage ?? "error.engine")}
+            onRetry={() => navigation.resetTo("lobby")}
+          />
         </div>
       ) : null}
     </div>

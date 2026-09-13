@@ -25,6 +25,8 @@ export interface PhaserHostOptions {
    * 60-герцовом, и замеры двух устройств перестают быть сопоставимыми.
    */
   renderCapFps?: number;
+  /** браузер отобрал контекст WebGL: картинка замрёт, и об этом надо сказать */
+  onContextLost?: (reason: string) => void;
 }
 
 /** Размер, с которым игра стартует, если контейнер ещё отдаёт ноль. */
@@ -34,6 +36,7 @@ const FALLBACK_HEIGHT = 600;
 export function createPhaserHost(options: PhaserHostOptions): PhaserHost {
   const pixelRatio = options.pixelRatio ?? devicePixelRatio();
   const size = measure(options.container);
+  removeLeftoverCanvases(options.container);
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -63,15 +66,49 @@ export function createPhaserHost(options: PhaserHostOptions): PhaserHost {
   });
 
   const stopFollowing = followContainerSize(game, options.container, pixelRatio);
+  const stopWatchingContext = watchContextLoss(game, options.onContextLost);
 
   return {
     game,
     pixelRatio,
     destroy(): void {
       stopFollowing();
+      stopWatchingContext();
+      // `true` убирает канву из разметки: контейнером владеет оболочка, и
+      // оставленная канва легла бы поверх следующего забега.
       game.destroy(true);
     },
   };
+}
+
+/**
+ * Убрать канвы, оставшиеся от прошлой игры.
+ *
+ * Их быть не должно: у каждой игры есть владелец, который её уничтожает. Но
+ * забытая канва — это живой контекст WebGL, а браузер держит их ограниченное
+ * число и молча убивает самый старый. Выглядит это как замершая картинка при
+ * живом HUD, и ищется потом дольше, чем стоит эта проверка.
+ */
+function removeLeftoverCanvases(container: HTMLElement): void {
+  for (const canvas of Array.from(container.querySelectorAll("canvas"))) canvas.remove();
+}
+
+/**
+ * Потеря контекста WebGL. Сама по себе она не ошибка приложения — так
+ * браузер освобождает память, — но игрок видит замершую картинку, и молчать
+ * об этом нельзя: без сообщения баг выглядит как «игра сломалась».
+ */
+function watchContextLoss(game: Phaser.Game, onLost?: (reason: string) => void): () => void {
+  const canvas = game.canvas;
+  if (canvas === null || canvas === undefined) return () => undefined;
+
+  const handler = (event: Event): void => {
+    // Отмена события даёт браузеру шанс восстановить контекст.
+    event.preventDefault();
+    onLost?.("контекст WebGL потерян");
+  };
+  canvas.addEventListener("webglcontextlost", handler);
+  return () => canvas.removeEventListener("webglcontextlost", handler);
 }
 
 function devicePixelRatio(): number {

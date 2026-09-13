@@ -12,12 +12,13 @@ import { RunBus } from "./run-bus";
 export function createRunEngine(): RunEngine {
   return {
     start(options: RunOptions): RunSession {
+      const bus = new RunBus();
       const host = createPhaserHost({
         container: options.container,
+        onContextLost: (message) => bus.emit("error", { message }),
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
         ...(options.renderCapFps === undefined ? {} : { renderCapFps: options.renderCapFps }),
       });
-      const bus = new RunBus();
 
       const sceneData: MainSceneData = {
         seed: options.seed,
