@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import { Gift, Home, Swords, Trophy, Users } from "lucide-react";
 import { ScreenTransition, TabBar, type TabItem } from "../design-system/components";
 import { t } from "../i18n";
@@ -15,17 +15,22 @@ import { useRun } from "../state/run";
 import { useShell } from "../state/shell";
 import { CompactScreen, FirstRunScreen, OutsideScreen } from "../screens/gates";
 import { LobbyScreen, ModeScreen, WeaponScreen } from "../screens/home";
+import { RunScreen } from "../screens/run/RunScreen";
 import {
+  AboutScreen,
   ArsenalScreen,
+  DiagnosticsScreen,
   FriendsScreen,
+  GalleryScreen,
   ProfileScreen,
   RatingScreen,
+  ScreenBoundary,
+  ScreenFallback,
+  SettingsScreen,
   ShopScreen,
   TasksScreen,
-} from "../screens/stubs";
-import { AboutScreen, DiagnosticsScreen, SettingsScreen, TestersScreen } from "../screens/settings";
-import { GalleryScreen } from "../screens/gallery";
-import { RunScreen } from "../screens/run/RunScreen";
+  TestersScreen,
+} from "./lazy-screens";
 
 /**
  * Корень оболочки: стек экранов, нижняя панель разделов и связь с кнопками
@@ -59,7 +64,11 @@ export function App(): ReactNode {
   return (
     <div className="bg-app flex h-full flex-col">
       <main className="min-h-0 flex-1">
-        <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
+        <ScreenBoundary key={screen}>
+          <Suspense fallback={<ScreenFallback />}>
+            <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
+          </Suspense>
+        </ScreenBoundary>
       </main>
       {showTabs ? (
         <TabBar

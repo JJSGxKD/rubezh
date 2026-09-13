@@ -164,6 +164,8 @@
 | Конфигурация бэкенда и её проверка | `backend/api/src/config/app-config.ts` — единственное место, где читается `process.env` |
 | Сборка клиента: плагины, туннель, режимы | `apps/web-*/vite.config.ts` |
 | Поведение dev-сервера при обрыве связи: плашка вместо перезагрузки | `scripts/vite/stable-dev-session.ts` (`20-env-and-ports.md` §4) |
+| Режим сборки клиента: всегда production, `NODE_ENV` из `.env` не берётся | `scripts/vite/production-node-env.ts` |
+| Какие экраны грузятся по требованию | `packages/app-shell/src/app/lazy-screens.tsx` → `loaders` |
 | Версия Node | `.nvmrc` |
 | Правила TypeScript | `tsconfig.base.json`, проекты — `tsconfig.json` пакетов, тесты — `tsconfig.tests.json` |
 | Правила линта | `eslint.config.js` |

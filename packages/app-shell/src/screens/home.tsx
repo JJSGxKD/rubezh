@@ -17,6 +17,7 @@ import {
 import { formatDuration, t } from "../i18n";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
+import { preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine } from "../state/run";
 import { ItemTile } from "./item-icons";
 
@@ -100,15 +101,24 @@ export function LobbyScreen(): ReactNode {
 function usePreloadEngine(): void {
   useEffect(() => {
     if (typeof globalThis.requestIdleCallback === "function") {
-      const id = globalThis.requestIdleCallback(() => preloadRunEngine(), {
+      const id = globalThis.requestIdleCallback(() => preloadEverything(), {
         timeout: PRELOAD_DELAY_MS,
       });
       return () => globalThis.cancelIdleCallback(id);
     }
     // В Safari простоя не сообщают — ждём фиксированно.
-    const timer = setTimeout(() => preloadRunEngine(), PRELOAD_DELAY_MS);
+    const timer = setTimeout(() => preloadEverything(), PRELOAD_DELAY_MS);
     return () => clearTimeout(timer);
   }, []);
+}
+
+/**
+ * Движок и ленивые экраны — одним заходом: и то и другое игроку понадобится
+ * через минуту, а сеть в лобби простаивает.
+ */
+function preloadEverything(): void {
+  preloadRunEngine();
+  preloadScreens();
 }
 
 /** Выбор режима. «Бесконечный» рабочий, «Кампания» — заглушка. */
