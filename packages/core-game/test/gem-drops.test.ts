@@ -14,10 +14,15 @@ import { TICK_SEC, createWorld, type World } from "../src/game/sim/world";
 // Выпадение опыта: горсть кристаллов разной ценности с полётом от места смерти.
 
 const DUMMY: EnemyDef = { id: "dummy", hp: 10, speed: 0.001, damage: 0, xp: 1, pattern: "swarm" };
-const NO_MEDKITS = { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 };
+/** Без подборов: их броски сдвигали бы генератор, а тест про кристаллы. */
+const NO_PICKUPS = {
+  medkits: { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 },
+  magnets: { chance: 0, eliteChance: 0, maxOnField: 0 },
+  dynamite: { chance: 0, eliteChance: 0, maxOnField: 0, radiusUnits: 200, eliteHpRatio: 0.3 },
+};
 
 function setup(seed = 1, maxPerKill = 5): World {
-  return createWorld({ seed, enemies: [DUMMY], drops: { gems: { maxPerKill }, medkits: NO_MEDKITS } });
+  return createWorld({ seed, enemies: [DUMMY], drops: { gems: { maxPerKill }, ...NO_PICKUPS } });
 }
 
 function aliveGems(world: World): { value: number; x: number; y: number; flying: boolean }[] {
@@ -114,13 +119,13 @@ describe("контент выпадения", () => {
   });
 
   it("называет поле и допустимые границы", () => {
-    expect(findDropsContentProblems({ gems: { maxPerKill: 0 }, medkits: NO_MEDKITS }).join("\n")).toMatch(/maxPerKill/);
-    expect(findDropsContentProblems({ gems: { maxPerKill: MAX_GEMS_PER_KILL + 1 }, medkits: NO_MEDKITS })).toHaveLength(1);
-    expect(findDropsContentProblems({ gems: { maxPerKill: 2.5 }, medkits: NO_MEDKITS })).toHaveLength(1);
+    expect(findDropsContentProblems({ gems: { maxPerKill: 0 }, ...NO_PICKUPS }).join("\n")).toMatch(/maxPerKill/);
+    expect(findDropsContentProblems({ gems: { maxPerKill: MAX_GEMS_PER_KILL + 1 }, ...NO_PICKUPS })).toHaveLength(1);
+    expect(findDropsContentProblems({ gems: { maxPerKill: 2.5 }, ...NO_PICKUPS })).toHaveLength(1);
   });
 
   it("мир с некорректным выпадением не создаётся", () => {
-    expect(() => createWorld({ seed: 1, enemies: [DUMMY], drops: { gems: { maxPerKill: 0 }, medkits: NO_MEDKITS } })).toThrow(
+    expect(() => createWorld({ seed: 1, enemies: [DUMMY], drops: { gems: { maxPerKill: 0 }, ...NO_PICKUPS } })).toThrow(
       /выпадения/,
     );
   });

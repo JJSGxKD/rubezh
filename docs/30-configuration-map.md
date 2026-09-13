@@ -45,7 +45,7 @@
 | Оружие: поведение, числа по уровням, что даётся на старте | `content/weapons.ts` → `WEAPONS` | golden-прогон |
 | Пассивки и их категории, слоты оружия и каждой категории пассивок, кривая опыта | `content/upgrades.ts` → `PASSIVES` (`category`), `LOADOUT_LIMITS`, `LEVEL_CURVE` | golden-прогон |
 | Уровни сложности: множители здоровья и урона врагов, темпа спавна и потолка живых; какой открыт по умолчанию | `content/difficulty.ts` → `DIFFICULTIES`, `DEFAULT_DIFFICULTY_ID` | отпечаток контента; эталоны — нет: они идут на «Лёгкой» |
-| Что падает с врагов: на сколько кристаллов делится опыт; шанс аптечки с рядового и с элиты, сколько лечит, сколько лежит на поле | `content/drops.ts` → `DROPS` | golden-прогон, контрольная сумма |
+| Что падает с врагов: на сколько кристаллов делится опыт; шансы аптечки, магнита и динамита с рядового и с элиты, сколько лежит на поле; сколько лечит аптечка; радиус взрыва динамита и какую долю здоровья он снимает с элиты | `content/drops.ts` → `DROPS` | golden-прогон, контрольная сумма |
 | Карта: границы мира, видимая область, поведение камеры | `content/maps.ts` → `MAPS` | радиус кольца спавна, а с ним весь баланс |
 | Целевые коридоры калибровки | `content/balance-targets.ts` → `BALANCE_TARGETS` | тест свойств баланса |
 
@@ -75,7 +75,7 @@
 | Скорость притяжения кристаллов и запас подбора | `game/sim/gems.ts` → `GEM_SPEED`, `PICKUP_SLACK` |
 | Полёт кристалла от места смерти: длительность, разлёт, потолок горсти | `game/sim/gems.ts` → `GEM_LAND_TICKS`, `SCATTER_MIN`, `SCATTER_MAX`, `MAX_GEMS_PER_KILL` |
 | Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/pickups.ts` → `GEM_TIERS`, `GEM_HOP_UNITS`, `SHIMMER_*` |
-| Аптечка: радиус касания, полёт, потолок пула; вид, пульсация, кольцо лечения | `game/sim/medkits.ts` → `MEDKIT_RADIUS_UNITS`, `MEDKIT_LAND_TICKS`, `MAX_MEDKITS`; `render/pickups.ts` → `MEDKIT_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS` |
+| Подборы (аптечка, магнит, динамит): радиус касания, полёт, потолок пула и потолок вида; вид на земле, пульсация, кольца лечения и магнита | `game/sim/pickups.ts` → `PICKUP_RADIUS_UNITS`, `PICKUP_LAND_TICKS`, `MAX_PICKUPS`, `MAX_PICKUPS_OF_KIND`; `render/pickups.ts` → `PICKUP_LOOKS`, `PICKUP_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS`, `MAGNET_RING_UNITS` |
 | Числа урона: сколько на экране, сколько новых за кадр, жизнь, подъём, размер; вспышка гибели | `game/render/combat-feedback.ts` → `MAX_NUMBERS`, `MAX_NEW_NUMBERS_PER_FRAME`, `NUMBER_*`, `BURST_*` |
 | Телеграфы: кольцо взрыва, полоса рывка | `game/render/telegraphs.ts` |
 | Радар: сколько точек, радиус; размер и вид в HUD | `game/radar.ts` → `MAX_BLIPS`; `app-shell/src/screens/run/Radar.tsx` → `SIZE_PX`, `*_PX` |

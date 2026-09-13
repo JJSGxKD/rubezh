@@ -1,7 +1,7 @@
 import type { EnemyDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { buildRadarSnapshot, MAX_BLIPS } from "../src/game/radar";
-import { spawnMedkit } from "../src/game/sim/medkits";
+import { PICKUP_KIND, spawnPickup } from "../src/game/sim/pickups";
 import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 
 // Снимок радара для HUD: точки вокруг игрока.
@@ -46,7 +46,7 @@ describe("радар", () => {
     const world = setup();
     for (let k = 0; k < MAX_BLIPS + 20; k++) spawnEnemy(world, 0, k, 0);
     spawnEnemy(world, 1, 5, 5);
-    spawnMedkit(world, -5, -5);
+    spawnPickup(world, PICKUP_KIND.medkit, -5, -5);
 
     const snapshot = buildRadarSnapshot(world);
     const kinds = Array.from({ length: snapshot.count }, (_, i) => blip(snapshot, i)[2]);

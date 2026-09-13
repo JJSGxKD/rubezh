@@ -4,7 +4,7 @@ import { COLORS } from "../../design-system/tokens";
 import { t } from "../../i18n";
 
 /**
- * Радар забега: враги, элиты и аптечки вокруг игрока в пределах кольца спавна
+ * Радар забега: враги, элиты и подборы вокруг игрока в пределах кольца спавна
  * (docs/27-design-system-and-app-shell.md §3.2).
  *
  * Рисуется на своей маленькой канве, а не разметкой: сотня точек элементами
@@ -77,7 +77,7 @@ function draw(context: CanvasRenderingContext2D, radar: RadarSnapshot, size: num
     dot(context, center + blips[i * 3] * radius, center + blips[i * 3 + 1] * radius, BLIP_PX * ratio);
   }
 
-  // Элиты и аптечки — поверх роя и крупнее: их важно заметить первыми.
+  // Элиты и подборы — поверх роя и крупнее: их важно заметить первыми.
   for (let i = 0; i < radar.count; i++) {
     const kind = blips[i * 3 + 2];
     const x = center + blips[i * 3] * radius;
@@ -102,7 +102,7 @@ function dot(context: CanvasRenderingContext2D, x: number, y: number, radius: nu
   context.fill();
 }
 
-/** Аптечка — крестом, а не только зелёным цветом (§4.4). */
+/** Подбор — крестом, а не только зелёным цветом (§4.4). */
 function cross(context: CanvasRenderingContext2D, x: number, y: number, half: number): void {
   const bar = half * 0.7;
   context.fillRect(x - half, y - bar / 2, half * 2, bar);

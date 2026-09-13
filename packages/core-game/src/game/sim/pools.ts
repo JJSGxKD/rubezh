@@ -161,28 +161,32 @@ export function createGemPool(capacity: number): GemPool {
 }
 
 /**
- * Аптечки. Их на поле единицы — потолок задаёт контент, — поэтому у пула нет
- * слияния: не поместилась, значит не упала.
+ * Подборы: аптечки, магниты, динамит (`sim/pickups.ts`). Их на поле единицы —
+ * потолок задаёт контент, — поэтому у пула нет слияния: не поместился, значит
+ * не упал.
  */
-export interface MedkitPool {
+export interface PickupPool {
   x: Float64Array;
   y: Float64Array;
   originX: Float64Array;
   originY: Float64Array;
-  /** тик вылета; пока аптечка летит, её не подобрать — как у кристалла */
+  /** тик вылета; пока подбор летит, его не подобрать — как у кристалла */
   bornTick: Int32Array;
+  /** вид подбора — `PICKUP_KIND` */
+  kind: Uint8Array;
   alive: Uint8Array;
   count: number;
   aliveCount: number;
 }
 
-export function createMedkitPool(capacity: number): MedkitPool {
+export function createPickupPool(capacity: number): PickupPool {
   return {
     x: new Float64Array(capacity),
     y: new Float64Array(capacity),
     originX: new Float64Array(capacity),
     originY: new Float64Array(capacity),
     bornTick: new Int32Array(capacity).fill(NEVER_HIT),
+    kind: new Uint8Array(capacity),
     alive: new Uint8Array(capacity),
     count: 0,
     aliveCount: 0,

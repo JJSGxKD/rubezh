@@ -35,11 +35,11 @@ const GOLDEN_POPULATION = 28;
  * Seed эталона. Подобран так, чтобы забег дожил до полного набора: с тремя
  * оружиями проверки ниже разносят урон по слотам, а не меряют одно стартовое.
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
- * перестаёт доживать до набора: так было с горстью кристаллов и броском на
- * аптечку. Распределение времени по seed при этом остаётся прежним, поэтому
+ * перестаёт доживать до набора: так было с горстью кристаллов, броском на
+ * аптечку и магнитом с динамитом. Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 3;
+const GOLDEN_SEED = 5;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -162,33 +162,34 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 50.15,
-      level: 9,
-      xpCollected: 131,
-      enemiesKilled: 108,
+      survivalSec: 29.97,
+      level: 7,
+      xpCollected: 82,
+      enemiesKilled: 53,
       killsByEnemy: {
-        swarm_rat: 49,
-        tank_ghoul: 4,
-        shooter_wisp: 17,
-        dasher_wolf: 8,
-        circler_crow: 19,
-        bomber_imp: 6,
-        splitter_slime: 5,
+        swarm_rat: 34,
+        tank_ghoul: 2,
+        shooter_wisp: 5,
+        dasher_wolf: 2,
+        circler_crow: 3,
+        bomber_imp: 4,
+        splitter_slime: 3,
       },
-      damageDealt: 1203,
-      damageTaken: 145,
+      damageDealt: 709,
+      damageTaken: 105,
       weapons: [
-        { id: "spark", level: 2, damage: 864 },
-        { id: "wardstone", level: 2, damage: 51 },
-        { id: "storm", level: 1, damage: 288 },
+        { id: "spark", level: 1, damage: 543 },
+        { id: "knife", level: 1, damage: 133 },
+        { id: "wardstone", level: 1, damage: 33 },
       ],
       passives: [
-        { id: "swiftness", level: 1 },
         { id: "reach", level: 1 },
-        { id: "vitality", level: 2 },
+        { id: "lodestone", level: 1 },
+        { id: "haste", level: 1 },
+        { id: "mending", level: 1 },
       ],
-      deathCause: "shooter_wisp",
-      distance: 8139,
+      deathCause: "swarm_rat",
+      distance: 4560,
       peakEnemies: 30,
     });
   });

@@ -515,6 +515,25 @@ export interface DropsDef {
     /** больше этого на поле не лежит — новые не падают, пока игрок не подберёт */
     maxOnField: number;
   };
+  /** магнит: подобранный, притягивает к игроку все кристаллы на поле */
+  magnets: {
+    chance: number;
+    eliteChance: number;
+    maxOnField: number;
+  };
+  /**
+   * динамит: подобранный, взрывается вокруг игрока — рядовых врагов в радиусе
+   * убивает, элите снимает долю здоровья, но не убивает
+   */
+  dynamite: {
+    chance: number;
+    eliteChance: number;
+    maxOnField: number;
+    /** радиус взрыва в игровых единицах */
+    radiusUnits: number;
+    /** доля базового здоровья элиты, которую снимает взрыв; меньше 1 */
+    eliteHpRatio: number;
+  };
 }
 
 /**

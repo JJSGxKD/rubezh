@@ -19,7 +19,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 1;
+export const WORLD_SNAPSHOT_VERSION = 2;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -63,7 +63,7 @@ export interface WorldSnapshot {
   enemies: EncodedPool;
   projectiles: EncodedPool;
   gems: EncodedPool;
-  medkits: EncodedPool;
+  pickups: EncodedPool;
   spawner: unknown;
 }
 
@@ -85,7 +85,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     enemies: encodeRecord(world.enemies, world.enemies.count),
     projectiles: encodeRecord(world.projectiles, world.projectiles.count),
     gems: encodeRecord(world.gems, world.gems.count),
-    medkits: encodeRecord(world.medkits, world.medkits.count),
+    pickups: encodeRecord(world.pickups, world.pickups.count),
     spawner: spawner.saveState?.() ?? null,
   };
 }
@@ -116,7 +116,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   decodeRecord(world.enemies, snapshot.enemies, "enemies");
   decodeRecord(world.projectiles, snapshot.projectiles, "projectiles");
   decodeRecord(world.gems, snapshot.gems, "gems");
-  decodeRecord(world.medkits, snapshot.medkits, "medkits");
+  decodeRecord(world.pickups, snapshot.pickups, "pickups");
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.

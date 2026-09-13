@@ -100,6 +100,8 @@ export class WorldRenderer {
     ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
     ensureShapeTexture(scene, "bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
     ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, 0x5fe3a1, "ring");
+    ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, 0x5ccfff, "wave");
+    ensureShapeTexture(scene, "bh-dynamite", WAVE_TEXTURE_UNITS * scale, 0xffb22e, "wave");
     ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
@@ -313,22 +315,36 @@ export class WorldRenderer {
         this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
+      if (kind === SIM_EVENT.magnet) {
+        // Магнит: кольцо расходится от игрока — кристаллы сейчас полетят к нему.
+        this.startBlast(events.x[slot], events.y[slot], MAGNET_RING_UNITS * scale, events.tick[slot], kind);
+        continue;
+      }
+      if (kind === SIM_EVENT.dynamite) {
+        // Динамит: ударная волна на весь радиус взрыва — видно, докуда выкосило.
+        this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
+        continue;
+      }
       if (kind !== SIM_EVENT.explosion && kind !== SIM_EVENT.strike) continue;
       this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
     }
     this.eventsRead = events.written;
 
     const tick = this.world.stats.tick;
-    const textureRadius = BLAST_TEXTURE_UNITS * scale;
     for (let b = 0; b < this.blasts.length; b++) {
       const sprite = this.blasts[b];
       const age = tick - this.blastStartTick[b];
-      if (this.blastStartTick[b] < 0 || age >= BLAST_LIFETIME_TICKS) {
+      const wave = isWave(this.blastKind[b]);
+      const lifetime = wave ? WAVE_LIFETIME_TICKS : BLAST_LIFETIME_TICKS;
+      if (this.blastStartTick[b] < 0 || age >= lifetime) {
         if (sprite.visible) sprite.setVisible(false);
         continue;
       }
-      const progress = age / BLAST_LIFETIME_TICKS;
-      sprite.setScale((this.blastRadius[b] / textureRadius) * (0.6 + 0.4 * progress));
+      const progress = age / lifetime;
+      const textureRadius = (wave ? WAVE_TEXTURE_UNITS : BLAST_TEXTURE_UNITS) * scale;
+      // Волна разбегается от игрока с торможением, обычный взрыв — чуть дорастает.
+      const grow = wave ? 0.15 + 0.85 * (1 - (1 - progress) * (1 - progress)) : 0.6 + 0.4 * progress;
+      sprite.setScale((this.blastRadius[b] / textureRadius) * grow);
       sprite.setAlpha(1 - progress);
       sprite.setVisible(true);
     }
@@ -431,7 +447,18 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.explosion]: "bh-blast",
   [SIM_EVENT.strike]: "bh-strike",
   [SIM_EVENT.heal]: "bh-heal",
+  [SIM_EVENT.magnet]: "bh-magnet",
+  [SIM_EVENT.dynamite]: "bh-dynamite",
 };
+/** Радиус кольца магнита при подборе, игровые единицы. */
+const MAGNET_RING_UNITS = 120;
+/** Волны магнита и динамита — крупной текстурой и дольше обычного взрыва. */
+const WAVE_TEXTURE_UNITS = 128;
+const WAVE_LIFETIME_TICKS = 30;
+
+function isWave(kind: number): boolean {
+  return kind === SIM_EVENT.magnet || kind === SIM_EVENT.dynamite;
+}
 /** Радиус кольца лечения при подборе аптечки, игровые единицы. */
 const HEAL_RING_UNITS = 40;
 const ORBITER_RADIUS_UNITS = 9;
