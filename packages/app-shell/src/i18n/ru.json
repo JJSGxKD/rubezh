@@ -184,6 +184,11 @@
   "run.death.menu": "В меню",
   "run.death.share": "Поделиться",
   "run.death.diagnostics": "seed {seed} · забег {runId}",
+  "run.continue.title": "Второй шанс",
+  "run.continue.text": "Враги вокруг исчезнут, здоровье восстановится — и забег продолжится.",
+  "run.continue.ad": "Продолжить за рекламу",
+  "run.continue.ad.short": "Реклама",
+  "run.continue.premium": "Продолжить за {amount} {amount, plural, one {самоцвет} few {самоцвета} many {самоцветов} other {самоцвета}}",
 
   "arsenal.title": "Арсенал",
   "arsenal.characters": "Персонажи",

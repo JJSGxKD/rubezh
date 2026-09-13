@@ -12,6 +12,7 @@ import {
 } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
 import { ItemIcon, ItemTile, type ItemKind } from "../item-icons";
+import { SecondChance } from "./SecondChance";
 import { formatChange } from "./upgrade-format";
 
 /**
@@ -304,6 +305,13 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
               {t("run.death.cause", { enemy: result.deathCause })}
             </p>
           )}
+
+          {/* Второй шанс — только после смерти: сданный забег игрок закончил сам. */}
+          {result.outcome === "died" ? (
+            <div className="mt-3">
+              <SecondChance />
+            </div>
+          ) : null}
         </div>
 
         <div>
