@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
+import { stableDevSession } from "../../scripts/vite/stable-dev-session";
 
 // Корень монорепо — единственный .env на весь проект (см. docs/20-env-and-ports.md).
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -33,7 +34,9 @@ export default defineConfig(({ mode }) => {
         };
 
   return {
-    plugins: [react(), tailwindcss()],
+    // stableDevSession — без перезагрузки страницы на обрыве связи с dev-сервером
+    // (scripts/vite/stable-dev-session.ts).
+    plugins: [react(), tailwindcss(), stableDevSession()],
     base: "./",
     envDir: repoRoot,
     server: {
