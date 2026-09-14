@@ -795,6 +795,11 @@ export interface PlaytestSubmitResult {
   isNewBest: boolean;
   /** место в лидерборде сложности, с единицы */
   rank: number | null;
+  /**
+   * `false` — забег с читами не записан: рейтинг и лучшее время прежние.
+   * Необязательное: сервер прошлой версии поля не присылает, и это запись.
+   */
+  recorded?: boolean;
 }
 
 export interface PlaytestLeaderboardEntry {

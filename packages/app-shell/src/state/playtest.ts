@@ -86,7 +86,7 @@ export interface PlaytestStore {
    */
   reportStress(submission: BenchSubmission): Promise<PlaytestFailure | null>;
   /** поставить итог забега в очередь и попробовать отправить */
-  submitRun(result: RunResult): void;
+  submitRun(result: RunResult, countInRating?: boolean): void;
   flush(trigger: FlushTrigger): Promise<void>;
   /** обновить лидерборд; `null` — удалось, иначе причина неудачи */
   loadLeaderboard(difficultyId: DifficultyId): Promise<PlaytestFailure | null>;
@@ -144,9 +144,9 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
     return null;
   },
 
-  submitRun(result): void {
+  submitRun(result, countInRating = false): void {
     if (api() === null) return;
-    const next = [...queue().read(), toSubmission(result)].slice(-QUEUE_LIMIT);
+    const next = [...queue().read(), toSubmission(result, countInRating)].slice(-QUEUE_LIMIT);
     queue().write(next);
     set({ pending: next.length });
     void get().flush("finish");
@@ -182,6 +182,7 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
             trigger,
             rank: response.data.rank,
             isNewBest: response.data.isNewBest,
+            recorded: response.data.recorded ?? true,
           });
         } else {
           // Сервер отверг сами данные — повтор этого забега не поможет, а
@@ -220,9 +221,14 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
   },
 }));
 
-/** Только поля, которые нужны лидерборду и профилю: урон и убийства по врагам серверу ни к чему. */
-export function toSubmission(result: RunResult): PlaytestRunSubmission {
+/**
+ * Только поля, которые нужны лидерборду и профилю: урон и убийства по врагам
+ * серверу ни к чему. `countInRating` — просьба администратора учесть забег с
+ * читами; сервер выполнит её, только если игрок и правда администратор.
+ */
+export function toSubmission(result: RunResult, countInRating = false): PlaytestRunSubmission {
   return {
+    ...(result.cheats ? { cheats: true, countInRating } : {}),
     runId: result.runId,
     difficultyId: result.difficultyId,
     outcome: result.outcome,

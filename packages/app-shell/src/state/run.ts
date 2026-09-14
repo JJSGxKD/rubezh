@@ -2,12 +2,15 @@ import type { DifficultyId, RunResult, UpgradeOption } from "@bh/shared-types";
 import {
   loadRunEngine,
   type HudSnapshot,
+  type RunDevCommand,
+  type RunDevInfo,
   type RunInspection,
   type RunPauseReason,
   type RunSession,
   type RunSnapshot,
 } from "@bh/core-game";
 import { create } from "zustand";
+import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
 import { useDiagnostics } from "./diagnostics";
 import { useMeta } from "./meta";
 import { usePlaytest } from "./playtest";
@@ -63,6 +66,10 @@ export interface RunStore {
   /** причина последней паузы: сворачивание приложения показывается иначе */
   pauseReason: RunPauseReason | null;
   seed: number;
+  /** забег разработчика: работают настройки и команды режима */
+  devRun: boolean;
+  /** техническая сводка — у забега разработчика и с FPS тестировщика */
+  devInfo: RunDevInfo | null;
 
   start(options: RunStartOptions): Promise<void>;
   pause(reason: RunPauseReason): void;
@@ -73,6 +80,8 @@ export interface RunStore {
   stop(): void;
   /** характеристики забега для листа «Характеристики»; `null` — забега нет */
   inspect(): RunInspection | null;
+  /** разовое действие разработчика; у обычного забега ничего не делает */
+  devCommand(command: RunDevCommand): void;
   /**
    * Забег, который откроет следующий заход на экран забега; `null` — новый.
    * Снимается с очереди, только когда сессия создана: в режиме разработки
@@ -120,6 +129,8 @@ const IDLE = {
   isNewRecord: false,
   errorMessage: null,
   pauseReason: null as RunPauseReason | null,
+  devRun: false,
+  devInfo: null as RunDevInfo | null,
 };
 
 export const useRun = create<RunStore>((set, get) => ({
@@ -157,6 +168,10 @@ export const useRun = create<RunStore>((set, get) => ({
       set({ loadingStage: "world" });
 
       const diagnostics = useDiagnostics.getState();
+      // Забег разработчика — по выбору в «Играть» или продолженный забег с
+      // читами: иначе бессмертие пропало бы после сворачивания, а пометка
+      // осталась. Право проверяется на каждом старте, а не при взводе.
+      const devRun = devModeAllowed() && (useDevMode.getState().armed || resume?.cheats === true);
       const created = engine.start({
         container: options.container,
         seed,
@@ -170,6 +185,7 @@ export const useRun = create<RunStore>((set, get) => ({
         },
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
         ...(resume === undefined ? {} : { resume }),
+        ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),
       });
 
       if (token !== startToken) {
@@ -180,7 +196,8 @@ export const useRun = create<RunStore>((set, get) => ({
 
       session = created;
       unsubscribes = subscribe(created, set, get);
-      set({ pendingResume: null });
+      if (devRun) unsubscribes.push(followDevSettings(created));
+      set({ pendingResume: null, devRun });
       // Продолженный забег движок сам ставит на паузу или на выбор — фазу
       // пришлёт событие, своя догадка здесь её затёрла бы.
       if (get().phase === "loading") set({ phase: "running" });
@@ -201,6 +218,7 @@ export const useRun = create<RunStore>((set, get) => ({
         difficulty: options.difficultyId,
         screenMode: screenModeNow(),
         orientation: orientationNow(),
+        devMode: devRun,
       });
     } catch (error: unknown) {
       reportError("run", `движок не загрузился: ${String(error)}`);
@@ -234,7 +252,8 @@ export const useRun = create<RunStore>((set, get) => ({
   restart(): void {
     if (session === null) return;
     const seed = nextSeed();
-    set({ ...IDLE, phase: "running", seed });
+    const devRun = get().devRun;
+    set({ ...IDLE, phase: "running", seed, devRun });
     lastSavedSec = 0;
     session.restart(seed);
     setRunUiMode(true);
@@ -246,11 +265,17 @@ export const useRun = create<RunStore>((set, get) => ({
       difficulty: startOptions?.difficultyId ?? "",
       screenMode: screenModeNow(),
       orientation: orientationNow(),
+      devMode: devRun,
     });
   },
 
   inspect(): RunInspection | null {
     return session?.inspect() ?? null;
+  },
+
+  devCommand(command): void {
+    if (!get().devRun) return;
+    session?.devCommand(command);
   },
 
   stop(): void {
@@ -311,8 +336,10 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
 
     created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [] })),
 
-    created.on("finished", (result) => finishRun(result, "run_finished", set)),
-    created.on("abandoned", (result) => finishRun(result, "run_abandoned", set)),
+    created.on("devInfo", (devInfo) => set({ devInfo })),
+
+    created.on("finished", (result) => finishRun(result, "run_finished", set, get)),
+    created.on("abandoned", (result) => finishRun(result, "run_abandoned", set, get)),
 
     created.on("error", ({ message }) => {
       reportError("run", message);
@@ -340,15 +367,19 @@ function finishRun(
   result: RunResult,
   event: "run_finished" | "run_abandoned",
   set: SetState,
+  get: GetState,
 ): void {
   // Кончившийся забег продолжать нечего.
   useSavedRun.getState().clear();
+  // Учесть забег с читами можно только в забеге разработчика: флаг из
+  // настроек у обычного забега ничего не значит.
+  const countInRating = get().devRun && useDevMode.getState().settings.countInRating;
   // Рекорд пишется здесь, а не в движке: хранилище устройства — забота
   // оболочки (docs/27-design-system-and-app-shell.md §7).
-  const isNewRecord = useMeta.getState().submitRun(result);
+  const isNewRecord = useMeta.getState().submitRun(result, countInRating);
   // Лидерборд плейтеста — поверх рекорда на устройстве, а не вместо него:
   // без сети игрок всё равно видит свой рекорд сразу.
-  usePlaytest.getState().submitRun(result);
+  usePlaytest.getState().submitRun(result, countInRating);
   setRunUiMode(false);
   set({ phase: "finished", result, isNewRecord });
 
@@ -363,6 +394,18 @@ function finishRun(
     difficulty: result.difficultyId,
     contentHash: result.contentHash,
     isNewRecord,
+    cheats: result.cheats,
+  });
+}
+
+/**
+ * Настройки разработчика, поменянные на паузе, уходят в движок сразу: лист
+ * режима правит стор, а стор — забег. Отписка — вместе с остальными
+ * подписками сессии.
+ */
+function followDevSettings(created: RunSession): () => void {
+  return useDevMode.subscribe((state, previous) => {
+    if (state.settings !== previous.settings) created.setDev(toRunDev(state.settings));
   });
 }
 

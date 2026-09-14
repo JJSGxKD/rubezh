@@ -92,6 +92,7 @@ const submitSchema = z.object({
   bestSurvivalSec: z.number(),
   isNewBest: z.boolean(),
   rank: z.nullable(z.number()),
+  recorded: z.optional(z.boolean()),
 });
 
 const leaderboardSchema = z.object({

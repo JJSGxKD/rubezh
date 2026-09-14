@@ -37,7 +37,7 @@ export interface MetaStore {
   rememberWeapon(weaponId: string): void;
   rememberDifficulty(difficultyId: DifficultyId): void;
   /** записать итог забега; возвращает `true`, если это новый рекорд его сложности */
-  submitRun(result: RunResult): boolean;
+  submitRun(result: RunResult, countInRating?: boolean): boolean;
   /**
    * Слить рекорды и счётчик забегов с сервера: игрок, сыгравший на телефоне,
    * видит тот же лучший забег на планшете. Берётся лучшее из двух.
@@ -74,7 +74,11 @@ export const useMeta = create<MetaStore>((set, get) => ({
     persist(get());
   },
 
-  submitRun(result: RunResult): boolean {
+  submitRun(result: RunResult, countInRating = false): boolean {
+    // Забег с читами не двигает ни рекорд, ни счётчик забегов — иначе
+    // бессмертный разработчик открыл бы себе все достижения. Кроме случая,
+    // когда администратор нарочно проверяет рейтинг.
+    if (result.cheats && !countInRating) return false;
     const record = submitRunResult(useShell.getState().storage, result);
     set({
       runs: get().runs + 1,

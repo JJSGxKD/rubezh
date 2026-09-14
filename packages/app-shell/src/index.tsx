@@ -6,6 +6,7 @@ import "./design-system/fonts.css";
 import "./design-system/tokens.css";
 import { FONT_FAMILY, PLATFORM_COLORS } from "./design-system/tokens";
 import { BootScreen, type BootStage } from "./screens/gates";
+import { useDevMode } from "./state/dev-mode";
 import { useDiagnostics } from "./state/diagnostics";
 import { useHints } from "./state/hints";
 import { useSavedRun } from "./state/run-save";
@@ -79,6 +80,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   useHints.getState().hydrate();
   useSavedRun.getState().hydrate();
   usePlaytest.getState().hydrate();
+  useDevMode.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
 
   render(<App />);
