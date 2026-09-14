@@ -32,6 +32,8 @@ import { BENCH_FULL_LOAD, equipFullLoadout, withEliteWaves } from "./bench/full-
 import type { BenchSceneData, BenchSubmission } from "./bench/types";
 
 const TICK_MS = TICK_SEC * 1000;
+/** Как часто оболочка получает прогресс: чаще React не перерисовывает HUD (CLAUDE.md). */
+const PROGRESS_INTERVAL_MS = 250;
 
 const MODE_LABELS: Record<BenchSceneData["mode"], string> = {
   ramp: "нарастающая нагрузка",
@@ -96,6 +98,7 @@ export class BenchScene extends Phaser.Scene {
   private skipFrames = 0;
   private interruptions = 0;
   private visibilityHandler: (() => void) | null = null;
+  private lastProgressAt = 0;
 
   constructor() {
     super("bench");
@@ -151,10 +154,14 @@ export class BenchScene extends Phaser.Scene {
     this.reportId = createUuid();
 
     this.cameras.main.setBackgroundColor("#0d0f14");
-    this.hud = this.add.text(0, 0, "", this.textStyle(16, "#cfd6e4")).setDepth(10);
-    this.summary = this.add.text(0, 0, "", this.textStyle(14, "#ffe066")).setDepth(10);
-    this.buildControls();
-    this.layout();
+    // В оболочке текст и кнопки рисует React поверх канвы: Phaser-текст там
+    // был бы вторым интерфейсом с другими шрифтами и без токенов.
+    if (!this.inShell) {
+      this.hud = this.add.text(0, 0, "", this.textStyle(16, "#cfd6e4")).setDepth(10);
+      this.summary = this.add.text(0, 0, "", this.textStyle(14, "#ffe066")).setDepth(10);
+      this.buildControls();
+      this.layout();
+    }
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.watchVisibility();
@@ -207,11 +214,54 @@ export class BenchScene extends Phaser.Scene {
     this.runCamera.update(this.world, deltaMs / 1000);
     this.worldRenderer.applyCamera(this.runCamera.x, this.runCamera.y, this.runCamera.zoom);
     this.worldRenderer.sync(this.accumulatorMs / TICK_MS);
-    this.updateHud();
+    if (this.inShell) this.emitProgress(time);
+    else this.updateHud();
+  }
+
+  /** Остановить прогон из оболочки: отчёт собирается по уже снятым кадрам. */
+  stopRun(): void {
+    this.finish("manual");
+  }
+
+  private get inShell(): boolean {
+    return this.sceneData.presentation === "shell";
   }
 
   private get loadout(): "starting" | "full" {
     return this.sceneData.loadout ?? "starting";
+  }
+
+  private emitProgress(time: number): void {
+    const listener = this.sceneData.listener;
+    if (listener === undefined) return;
+    // Итоговый прогресс уходит всегда: иначе последняя цифра на экране
+    // оболочки отстанет от отчёта на четверть секунды.
+    if (this.running && time - this.lastProgressAt < PROGRESS_INTERVAL_MS) return;
+    if (!this.running && this.lastProgressAt < 0) return;
+    this.lastProgressAt = this.running ? time : -1;
+
+    const timeline = this.recorder.buildTimeline();
+    const current = timeline[timeline.length - 1];
+    const enemies = this.world.enemies.aliveCount;
+    const projectiles = this.world.projectiles.aliveCount;
+    const gems = this.world.gems.aliveCount;
+    listener.progress({
+      elapsedSec: this.recorder.elapsedSec,
+      durationSec: this.durationSec,
+      running: this.running,
+      enemies,
+      projectiles,
+      gems,
+      objects: enemies + projectiles,
+      targetEnemies:
+        this.sceneData.mode === "fixed"
+          ? this.sceneData.population
+          : rampTargetAt(this.rampOptions(), this.world.stats.elapsedSec),
+      fps: current === undefined ? null : current.avgFps,
+      p95FrameMs: current === undefined ? null : current.p95FrameMs,
+      badWindows: this.detector?.badWindows ?? 0,
+      interruptions: this.interruptions,
+    });
   }
 
   /**
@@ -342,6 +392,13 @@ export class BenchScene extends Phaser.Scene {
       this.interruptions,
     );
     this.verdict = evaluateBench(this.report);
+
+    if (this.inShell) {
+      // Отправку и показ итога ведёт оболочка: она знает игрока и сервер.
+      const submission = this.submission();
+      if (submission !== null) this.sceneData.listener?.finished(submission);
+      return;
+    }
 
     this.renderSummary();
     // Отправляем сами: человек с телефоном в руках не должен копировать
@@ -487,7 +544,7 @@ export class BenchScene extends Phaser.Scene {
 
   private handleResize(): void {
     this.runCamera.resize(this.scale.width, this.scale.height);
-    this.layout();
+    if (!this.inShell) this.layout();
   }
 
   /**

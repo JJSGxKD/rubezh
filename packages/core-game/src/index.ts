@@ -1,5 +1,6 @@
 import type { RunEngine } from "./run-api";
 import type { BenchStand, BenchStandOptions } from "./engine/bench-stand";
+import type { StressEngine } from "./stress-api";
 
 /**
  * Публичная поверхность движка.
@@ -71,6 +72,7 @@ export {
 } from "./game/run/records";
 
 export type { BenchStand, BenchStandOptions } from "./engine/bench-stand";
+export type { StressEngine, StressEvents, StressOptions, StressSession } from "./stress-api";
 
 /**
  * Загрузить движок забега. Внутри — динамический импорт: Phaser и симуляция
@@ -88,4 +90,13 @@ export async function loadRunEngine(): Promise<RunEngine> {
 export async function loadBenchStand(options: BenchStandOptions): Promise<BenchStand> {
   const { createBenchStand } = await import("./engine/bench-stand");
   return createBenchStand(options);
+}
+
+/**
+ * Загрузить стресс-тест оболочки. Отдельная дверь от забега: сцена стенда
+ * игрокам без доступа не нужна (docs/28-diagnostics.md §2.3).
+ */
+export async function loadStressEngine(): Promise<StressEngine> {
+  const { createStressEngine } = await import("./engine/stress-engine");
+  return createStressEngine();
 }
