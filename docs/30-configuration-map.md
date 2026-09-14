@@ -263,6 +263,13 @@ pnpm budget
 | Профили нагрузки, длительность, потолки, агрессивный режим | `core-game/src/game/bench/profiles.ts` |
 | Нагрузка позднего забега для стресс-теста в оболочке: доли паттернов, частота и размер волны элит | `bench/full-load.ts` → `BENCH_FULL_LOAD` |
 | Как часто стресс-тест сообщает прогресс оболочке | `game/BenchScene.ts` → `PROGRESS_INTERVAL_MS` |
+| Звуки: слои синтеза, шина, громкость, голоса, интервал, реверберация | `app-shell/src/audio/recipes.ts` → `SOUND_RECIPES`; правка на устройстве — звуковая лаборатория (`docs/31-audio-and-haptics.md` §6) |
+| Звук: уровни и приоритеты шин, бюджет запусков, потолок голосов, плотность, глубина приглушения | `audio/recipes.ts` → `BUSES`, `MIX_RULES` |
+| Звук: какие звуки на сигналы забега, напряжение музыки, сердцебиение, серия кристаллов | `audio/sound-director.ts` → `planCueSounds`, `FULL_INTENSITY_ENEMIES`, `HEARTBEAT_*`, `GEM_STREAK_*` |
+| Музыка: лад, аккорды, темп сцен, мотивы, пороги слоёв | `audio/music.ts` → `SCALE`, `CHORDS`, `CONTEXTS`, `MOTIFS`, `LAYER_THRESHOLDS` |
+| Громкость по умолчанию и шкала регулятора | `audio/index.ts` → `DEFAULT_VOLUMES`; `audio/audio-engine.ts` → `volumeCurve` |
+| Звук интерфейса и вибрация на нажатия | `app-shell/src/state/ui-feedback.ts` → `FEEDBACK` |
+| Бюджет звукового чанка | `scripts/bundle-budget.mjs` → строка «Звук» |
 | Вибрация: вид и минимальный интервал каждого события, интервал между любыми двумя | `app-shell/src/state/haptics.ts` → `HAPTIC_RULES`, `GLOBAL_MIN_INTERVAL_MS` |
 | Вибрация вне Telegram: шаблоны `navigator.vibrate` | `adapter-telegram/src/index.ts` → `VIBRATE_PATTERNS` |
 | Сигналы забега для вибрации и звука: частота, что считать взрывом рядом | `core-game/src/game/MainScene.ts` → `CUE_INTERVAL_MS`; `game/run/cues.ts` → `NEAR_MARGIN_UNITS` |

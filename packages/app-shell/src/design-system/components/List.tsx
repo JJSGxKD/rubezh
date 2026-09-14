@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
+import { uiFeedback } from "../../state/ui-feedback";
 
 /**
  * Строка списка: иконка, заголовок, подпись и одно из окончаний — значение,
@@ -83,7 +84,10 @@ export function Toggle(props: ToggleProps): ReactNode {
       aria-checked={props.checked}
       aria-label={props.label}
       disabled={props.disabled}
-      onClick={props.onChange}
+      onClick={() => {
+        uiFeedback(props.checked ? "toggleOff" : "toggleOn");
+        props.onChange();
+      }}
       className={[
         "relative h-8 w-13 shrink-0 rounded-pill",
         "transition-colors duration-(--duration-base) ease-base",

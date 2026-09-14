@@ -6,6 +6,7 @@ import "./design-system/fonts.css";
 import "./design-system/tokens.css";
 import { FONT_FAMILY, PLATFORM_COLORS } from "./design-system/tokens";
 import { BootScreen, type BootStage } from "./screens/gates";
+import { startAudioSync } from "./state/audio-sync";
 import { useDevMode } from "./state/dev-mode";
 import { useDiagnostics } from "./state/diagnostics";
 import { useHints } from "./state/hints";
@@ -82,6 +83,8 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   usePlaytest.getState().hydrate();
   useDevMode.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
+  // Звук — после настроек: громкость игрока применяется с первого звука.
+  const stopAudio = startAudioSync();
 
   render(<App />);
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
@@ -105,6 +108,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   return {
     unmount(): void {
       stopWatching();
+      stopAudio();
       root.unmount();
     },
   };

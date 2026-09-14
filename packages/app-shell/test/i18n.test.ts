@@ -35,9 +35,9 @@ describe("переводы", () => {
   });
 
   it("не держит тексты инструментов команды в словаре первой загрузки", async () => {
-    expect(hasTranslation("stress.title")).toBe(false);
+    expect(hasTranslation("soundLab.title")).toBe(false);
     await import("../src/i18n/team");
-    expect(t("stress.title")).toBe("Стресс-тест");
+    expect(t("soundLab.title")).toBe("Звуковая лаборатория");
     // Плашка читов на экране смерти видна и без чанка команды.
     expect(hasTranslation("dev.cheats.notCounted")).toBe(true);
   });

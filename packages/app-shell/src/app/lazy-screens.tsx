@@ -25,6 +25,7 @@ const loaders = {
   daily: () => import("../screens/meta/daily"),
   wheel: () => import("../screens/meta/wheel"),
   stress: () => import("../screens/stress/StressScreen"),
+  soundLab: () => import("../screens/sound-lab"),
 };
 
 function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): ComponentType {
@@ -49,6 +50,7 @@ export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");
 export const GuideScreen = screen(loaders.guide, "GuideScreen");
 export const StressScreen = screen(loaders.stress, "StressScreen");
+export const SoundLabScreen = screen(loaders.soundLab, "SoundLabScreen");
 
 /**
  * Подтянуть чанки экранов заранее. Неудача здесь не ошибка: экран попробует

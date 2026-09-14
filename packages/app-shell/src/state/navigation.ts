@@ -26,6 +26,7 @@ export type ScreenId =
   | "diagnostics"
   | "gallery"
   | "guide"
+  | "soundLab"
   | "about";
 
 /** Корни разделов нижней панели: переключение вкладки сбрасывает стек. */

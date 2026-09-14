@@ -1,6 +1,7 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { Check, Lock } from "lucide-react";
 import { t } from "../../i18n";
+import { uiFeedback } from "../../state/ui-feedback";
 import { Button } from "./Button";
 import { Badge } from "./Data";
 
@@ -121,6 +122,14 @@ export function Modal(props: ModalProps): ReactNode {
   const bottom = props.placement === "bottom";
   const wide = props.size === "l";
   const { onDismiss } = props;
+
+  // Лист снизу шуршит на открытии и закрытии; модалки забега — уровень,
+  // пауза, смерть — звучат своими звуками событий, а не листом.
+  useEffect(() => {
+    if (!bottom) return;
+    uiFeedback("sheetOpen");
+    return () => uiFeedback("sheetClose");
+  }, [bottom]);
 
   useEffect(() => {
     if (onDismiss === undefined) return;
