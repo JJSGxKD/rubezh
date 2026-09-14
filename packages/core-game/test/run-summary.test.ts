@@ -6,7 +6,7 @@ import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { benchInput } from "../src/game/bench/autopilot";
 import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
-import { loadBestSurvivalSec, submitRunResult } from "../src/game/run/records";
+import { loadBestSurvivalSec, mergeBestSurvivalSec, submitRunResult } from "../src/game/run/records";
 import { buildRunResult } from "../src/game/run/run-result";
 import { stepWorld, IDLE_INPUT } from "../src/game/sim/step";
 import { createConstantPopulationSpawner } from "../src/game/sim/spawner";
@@ -380,5 +380,15 @@ describe("локальный рекорд", () => {
       bestSurvivalSec: 12,
       isNewRecord: true,
     });
+  });
+
+  it("принимает рекорд с другого устройства, только если он лучше местного", () => {
+    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec.normal": "120" });
+
+    expect(mergeBestSurvivalSec(storage, "normal", 90)).toBe(120);
+    expect(mergeBestSurvivalSec(storage, "normal", 300)).toBe(300);
+    expect(mergeBestSurvivalSec(storage, "normal", Number.NaN)).toBe(300);
+    // После слияния «Новый рекорд» загорается только на результате лучше серверного.
+    expect(submitRunResult(storage, { ...resultWith(200), difficultyId: "normal" }).isNewRecord).toBe(false);
   });
 });

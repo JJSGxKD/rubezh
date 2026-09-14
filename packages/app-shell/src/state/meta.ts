@@ -1,5 +1,5 @@
 import { DIFFICULTY_IDS, type DifficultyId, type RunResult } from "@bh/shared-types";
-import { DEFAULT_DIFFICULTY_ID, loadBestSurvivalSec, submitRunResult } from "@bh/core-game";
+import { DEFAULT_DIFFICULTY_ID, loadBestSurvivalSec, mergeBestSurvivalSec, submitRunResult } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
 import { createPersistedValue } from "./persisted";
@@ -38,6 +38,11 @@ export interface MetaStore {
   rememberDifficulty(difficultyId: DifficultyId): void;
   /** записать итог забега; возвращает `true`, если это новый рекорд его сложности */
   submitRun(result: RunResult): boolean;
+  /**
+   * Слить рекорды и счётчик забегов с сервера: игрок, сыгравший на телефоне,
+   * видит тот же лучший забег на планшете. Берётся лучшее из двух.
+   */
+  mergeRemote(remote: { runs?: number; best: Partial<Record<DifficultyId, number>> }): void;
 }
 
 export const useMeta = create<MetaStore>((set, get) => ({
@@ -77,6 +82,20 @@ export const useMeta = create<MetaStore>((set, get) => ({
     });
     persist(get());
     return record.isNewRecord;
+  },
+
+  mergeRemote(remote): void {
+    const storage = useShell.getState().storage;
+    const best = { ...get().best };
+    for (const id of DIFFICULTY_IDS) {
+      const seconds = remote.best[id];
+      // Рекорд пишется и в хранилище устройства, а не только в стор: иначе
+      // следующий забег сравнивался бы с местным рекордом и «Новый рекорд»
+      // загорался бы на результате хуже серверного.
+      if (seconds !== undefined) best[id] = mergeBestSurvivalSec(storage, id, seconds);
+    }
+    set({ best, runs: Math.max(get().runs, remote.runs ?? 0) });
+    persist(get());
   },
 }));
 

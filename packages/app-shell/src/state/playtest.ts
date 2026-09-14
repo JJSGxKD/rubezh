@@ -9,6 +9,7 @@ import {
 } from "@bh/shared-types";
 import { create } from "zustand";
 import { z } from "zod/mini";
+import { useMeta } from "./meta";
 import { createPersistedValue } from "./persisted";
 import { createPlaytestApi, type PlaytestApi, type PlaytestFailure } from "./playtest-api";
 import { reportError, track, useShell } from "./shell";
@@ -115,6 +116,7 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
         set({ pending: queue().read().length });
         if (response.ok) {
           set({ lastSubmitted: { runId: head.runId, result: response.data } });
+          useMeta.getState().mergeRemote({ best: { [head.difficultyId]: response.data.bestSurvivalSec } });
           track("playtest_run_synced", {
             result: "sent",
             trigger,
@@ -148,6 +150,12 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
     const response = await client.profile();
     if (!response.ok) return response.failure;
     set({ profile: response.data });
+    const best: Partial<Record<DifficultyId, number>> = {};
+    for (const id of DIFFICULTY_IDS) {
+      const entry = response.data.best[id];
+      if (entry !== null) best[id] = entry.survivalSec;
+    }
+    useMeta.getState().mergeRemote({ runs: response.data.runs, best });
     return null;
   },
 }));

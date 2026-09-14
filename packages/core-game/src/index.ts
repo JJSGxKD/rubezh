@@ -60,7 +60,12 @@ export { xpForLevel, OFFERS_PER_LEVEL } from "./game/progression/levels";
 
 // Итог забега: движок считает, оболочка показывает, хранит рекорд и отправляет
 // (docs/26-stage2-plan.md, WP3).
-export { loadBestSurvivalSec, submitRunResult, type RecordUpdate } from "./game/run/records";
+export {
+  loadBestSurvivalSec,
+  mergeBestSurvivalSec,
+  submitRunResult,
+  type RecordUpdate,
+} from "./game/run/records";
 
 export type { BenchStand, BenchStandOptions } from "./engine/bench-stand";
 

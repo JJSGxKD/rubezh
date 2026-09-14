@@ -83,8 +83,12 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
 
   render(<App />);
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
-  // них игрок не должен ждать заставку.
-  void usePlaytest.getState().flush("launch");
+  // них игрок не должен ждать заставку. Затем профиль: рекорд, поставленный
+  // на другом устройстве, появляется на главной.
+  void usePlaytest
+    .getState()
+    .flush("launch")
+    .then(() => usePlaytest.getState().loadProfile());
 
   // Время до интерактивной главной — бюджет первой загрузки проверяется не
   // только размером файлов, но и на устройствах тестеров (§3.4).

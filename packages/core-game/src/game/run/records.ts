@@ -67,6 +67,23 @@ export function submitRunResult(
   return { bestSurvivalSec: survived, isNewRecord: true };
 }
 
+/**
+ * Принять рекорд, пришедший извне — с сервера, где его поставили на другом
+ * устройстве. Записывается, только если он лучше местного: иначе «Новый
+ * рекорд» на втором телефоне загорался бы на результате хуже уже
+ * поставленного. Возвращает рекорд после слияния.
+ */
+export function mergeBestSurvivalSec(
+  storage: KeyValueStorage | undefined,
+  difficultyId: DifficultyId,
+  seconds: number,
+): number {
+  const local = loadBestSurvivalSec(storage, difficultyId);
+  if (!Number.isFinite(seconds) || seconds <= local || seconds > MAX_PLAUSIBLE_SEC) return local;
+  storage?.set(bestKey(difficultyId), String(seconds));
+  return seconds;
+}
+
 function readRecord(storage: KeyValueStorage, key: string): number {
   const raw = storage.get(key);
   if (raw === null) return 0;

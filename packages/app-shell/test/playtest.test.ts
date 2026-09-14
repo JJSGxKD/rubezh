@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter, type RunResult } from "@bh/shared-types";
 import { createPlaytestApi, PLAYTEST_TIMEOUT_MS } from "../src/state/playtest-api";
+import { useMeta } from "../src/state/meta";
 import { toSubmission, usePlaytest } from "../src/state/playtest";
 import { initShell } from "../src/state/shell";
 
@@ -223,6 +224,27 @@ describe("очередь итогов забега", () => {
     const queue = JSON.parse(storage.values[QUEUE_KEY] ?? "[]") as { runId: string }[];
     expect(queue).toHaveLength(20);
     expect(queue[0]?.runId).toBe("run-00000005");
+  });
+
+  it("рекорд с другого устройства приходит в лобби и в хранилище устройства", async () => {
+    reply = async () =>
+      json(200, {
+        data: {
+          runs: 12,
+          totalKills: 900,
+          totalSurvivalSec: 3000,
+          best: { easy: null, normal: { survivalSec: 420, rank: 2 }, hard: null },
+          recent: [],
+        },
+      });
+    mount();
+    storage.set("bh.meta.v1.bestSurvivalSec.normal", "300");
+    useMeta.getState().hydrate();
+
+    expect(await usePlaytest.getState().loadProfile()).toBeNull();
+    expect(useMeta.getState().best.normal).toBe(420);
+    expect(useMeta.getState().runs).toBe(12);
+    expect(storage.values["bh.meta.v1.bestSurvivalSec.normal"]).toBe("420");
   });
 
   it("сборка без бэкенда плейтеста ничего не копит и не отправляет", async () => {
