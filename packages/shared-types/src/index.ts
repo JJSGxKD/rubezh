@@ -49,6 +49,11 @@ export interface PlatformAdapter {
    * даёт (обычный браузер, dev), и сервер игрока не узнает.
    */
   signedLaunchData(): string | null;
+  /**
+   * Какой клиент площадки открыл игру — для статистики устройств плейтеста
+   * и отчётов производительности. `null` в полях — площадка не сообщила.
+   */
+  clientInfo(): PlatformClientInfo;
   haptic(type: HapticType): void;
   /**
    * Возможности интерфейса площадки: отступы безопасной зоны, полноэкранный
@@ -173,6 +178,13 @@ export interface PlatformUi {
    * цвет (docs/27-design-system-and-app-shell.md §4.1).
    */
   applyThemeColors(colors: ThemeColors): void;
+}
+
+export interface PlatformClientInfo {
+  /** клиент площадки: в Telegram — android, ios, tdesktop, macos, weba… */
+  platform: string | null;
+  /** версия API клиента площадки */
+  version: string | null;
 }
 
 export interface InvitePayload {
@@ -733,6 +745,42 @@ export interface PlaytestRunSubmission {
   startingWeaponId: string;
   weapons: { id: string; level: number }[];
   contentHash: string;
+  /**
+   * id врага, нанёсшего смертельный урон; `null` — сдача. Для сводки «кто чаще
+   * убивает». Необязательно: забег в очереди от прошлой сборки поля не знает.
+   */
+  deathCause?: string | null;
+  /** забег в режиме разработчика с читами — в рейтинг и статистику не идёт */
+  cheats?: boolean;
+  /** администратор просит учесть забег с читами в рейтинге — для проверки рейтинга */
+  countInRating?: boolean;
+}
+
+/**
+ * Запуск приложения — для статистики плейтеста: сколько людей открыли игру
+ * и на чём. Технические сведения об устройстве без идентификаторов, кроме
+ * `installId`, который уже есть у каждой установки (docs/28-diagnostics.md §5.2).
+ */
+export interface PlaytestSessionReport {
+  installId: string;
+  build: string;
+  contentHash: string;
+  device: PlaytestDevice;
+}
+
+export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
+export type DeviceFormFactor = "phone" | "tablet" | "desktop";
+
+export interface PlaytestDevice {
+  clientPlatform: string | null;
+  clientVersion: string | null;
+  os: DeviceOs;
+  formFactor: DeviceFormFactor;
+  screenWidth: number;
+  screenHeight: number;
+  pixelRatio: number;
+  cores: number | null;
+  memoryGb: number | null;
 }
 
 export interface PlaytestSubmitResult {

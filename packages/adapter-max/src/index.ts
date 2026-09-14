@@ -57,6 +57,10 @@ export class MaxAdapter implements PlatformAdapter {
     return null;
   }
 
+  clientInfo(): { platform: string | null; version: string | null } {
+    return { platform: "max", version: null };
+  }
+
   haptic(_type: HapticType): void {
     // TODO: MAX Bridge haptics, если доступно
   }

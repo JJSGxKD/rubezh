@@ -10,6 +10,8 @@ import {
 } from "@bh/shared-types";
 import { create } from "zustand";
 import { z } from "zod/mini";
+import { describeDevice } from "./device";
+import { useInstall } from "./install";
 import { useMeta } from "./meta";
 import { createPersistedValue } from "./persisted";
 import { createPlaytestApi, type PlaytestApi, type PlaytestFailure } from "./playtest-api";
@@ -44,6 +46,11 @@ const submissionSchema = z.object({
   startingWeaponId: z.string(),
   weapons: z.array(z.object({ id: z.string(), level: z.number() })),
   contentHash: z.string(),
+  // Необязательные: забеги в очереди от прошлой сборки этих полей не знают,
+  // и выбрасывать их из-за этого незачем — сервер примет их без полей.
+  deathCause: z.optional(z.nullable(z.string())),
+  cheats: z.optional(z.boolean()),
+  countInRating: z.optional(z.boolean()),
 });
 
 const queueSchema = z.array(submissionSchema);
@@ -67,6 +74,11 @@ export interface PlaytestStore {
 
   hydrate(): void;
   loadAccess(): Promise<PlaytestFailure | null>;
+  /**
+   * Сообщить о запуске: сколько людей открыли игру и на чём. Без очереди —
+   * пропущенный запуск статистику не исказит, а копить их незачем.
+   */
+  reportSession(): Promise<PlaytestFailure | null>;
   /** поставить итог забега в очередь и попробовать отправить */
   submitRun(result: RunResult): void;
   flush(trigger: FlushTrigger): Promise<void>;
@@ -87,6 +99,20 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
 
   hydrate(): void {
     set({ pending: api() === null ? 0 : queue().read().length });
+  },
+
+  async reportSession(): Promise<PlaytestFailure | null> {
+    const client = api();
+    const { adapter, build } = useShell.getState();
+    const installId = useInstall.getState().installId;
+    if (client === null || installId === "") return "disabled";
+    const response = await client.reportSession({
+      installId,
+      build: build.version,
+      contentHash: build.contentHash,
+      device: describeDevice(adapter.clientInfo()),
+    });
+    return response.ok ? null : response.failure;
   },
 
   async loadAccess(): Promise<PlaytestFailure | null> {
@@ -186,6 +212,7 @@ export function toSubmission(result: RunResult): PlaytestRunSubmission {
     startingWeaponId: result.startingWeaponId,
     weapons: result.weapons.map(({ id, level }) => ({ id, level })),
     contentHash: result.contentHash,
+    deathCause: result.deathCause,
   };
 }
 

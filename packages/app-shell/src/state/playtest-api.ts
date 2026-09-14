@@ -4,6 +4,7 @@ import {
   type PlaytestAccess,
   type PlaytestLeaderboard,
   type PlaytestProfile,
+  type PlaytestSessionReport,
   type PlaytestRunSubmission,
   type PlaytestSubmitResult,
 } from "@bh/shared-types";
@@ -59,6 +60,7 @@ export interface PlaytestApi {
   leaderboard(difficultyId: DifficultyId): Promise<PlaytestResult<PlaytestLeaderboard>>;
   profile(): Promise<PlaytestResult<PlaytestProfile>>;
   access(): Promise<PlaytestResult<PlaytestAccess>>;
+  reportSession(report: PlaytestSessionReport): Promise<PlaytestResult<{ recorded: boolean }>>;
 }
 
 /**
@@ -114,6 +116,7 @@ const profileSchema = z.object({
 });
 
 const accessSchema = z.object({ admin: z.boolean(), stressTest: z.boolean(), devMode: z.boolean() });
+const sessionSchema = z.object({ recorded: z.boolean() });
 
 type Fetch = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -171,6 +174,7 @@ export function createPlaytestApi(
       }),
     profile: () => request("/me", profileSchema, { method: "GET" }),
     access: () => request("/access", accessSchema, { method: "GET" }),
+    reportSession: (report) => request("/sessions", sessionSchema, { method: "POST", body: report }),
   };
 }
 

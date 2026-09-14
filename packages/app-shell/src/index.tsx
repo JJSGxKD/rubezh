@@ -90,6 +90,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
     .flush("launch")
     .then(() => usePlaytest.getState().loadProfile());
   void usePlaytest.getState().loadAccess();
+  void usePlaytest.getState().reportSession();
 
   // Время до интерактивной главной — бюджет первой загрузки проверяется не
   // только размером файлов, но и на устройствах тестеров (§3.4).

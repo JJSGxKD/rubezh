@@ -194,6 +194,7 @@ describe("очередь итогов забега", () => {
       startingWeaponId: "spark",
       weapons: [{ id: "spark", level: 4 }],
       contentHash: "abcd1234",
+      deathCause: "swarm_rat",
     });
   });
 

@@ -1,6 +1,7 @@
 import { hapticFeedback, isTMA, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
 import type {
   PlatformAdapter,
+  PlatformClientInfo,
   UserContext,
   PurchaseResult,
   SharePayload,
@@ -79,6 +80,11 @@ export class TelegramAdapter implements PlatformAdapter {
       // Клиент открыт без данных запуска (ссылка мимо бота) — сервер игрока не узнает.
       return null;
     }
+  }
+
+  clientInfo(): PlatformClientInfo {
+    const client = describeTelegramClient();
+    return { platform: client.platform, version: client.version };
   }
 
   /**
