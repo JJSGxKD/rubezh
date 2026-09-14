@@ -163,6 +163,7 @@ export function LobbyScreen(): ReactNode {
       <Modal
         title={t("lobby.newRun.title")}
         placement="bottom"
+        onDismiss={() => setConfirmingNewRun(false)}
         footer={
           <>
             <Button

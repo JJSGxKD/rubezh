@@ -24,6 +24,7 @@ export function MainMenu(props: { onClose(): void }): ReactNode {
     <Modal
       title={t("menu.title")}
       placement="bottom"
+      onDismiss={props.onClose}
       footer={
         <Button variant="ghost" block onClick={props.onClose}>
           {t("app.close")}

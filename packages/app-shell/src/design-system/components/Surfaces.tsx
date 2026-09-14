@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { Check, Lock } from "lucide-react";
 import { t } from "../../i18n";
 import { Button } from "./Button";
@@ -109,11 +109,27 @@ export interface ModalProps {
   placement?: "center" | "bottom";
   /** широкая — для трёх карточек в ряд в ландшафте (§5.3) */
   size?: "m" | "l";
+  /**
+   * Закрыть тапом по затемнению и клавишей Escape. Только у листов и
+   * подтверждений: модалки забега так не закрываются — промах пальцем мимо
+   * карточки улучшения не должен ничего делать.
+   */
+  onDismiss?: () => void;
 }
 
 export function Modal(props: ModalProps): ReactNode {
   const bottom = props.placement === "bottom";
   const wide = props.size === "l";
+  const { onDismiss } = props;
+
+  useEffect(() => {
+    if (onDismiss === undefined) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") onDismiss();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
 
   return (
     <div
@@ -128,7 +144,7 @@ export function Modal(props: ModalProps): ReactNode {
       ].join(" ")}
       style={{ zIndex: "var(--z-modal)" }}
     >
-      <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" />
+      <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" onClick={onDismiss} />
       <div
         className={[
           "surface-panel relative max-h-full w-full overflow-y-auto overscroll-contain rounded-xl p-5 short:p-4 landscape:p-4",

@@ -82,6 +82,7 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
       <Modal
         title={t("run.surrender.title")}
         placement="bottom"
+        onDismiss={() => setConfirming(false)}
         footer={
           <>
             <Button variant="danger" block onClick={guarded(ready, props.onSurrender)}>
