@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChartColumn, Crown, History, Layers, Pause, Skull, Sparkles, Star, Trophy } from "lucide-react";
+import { ChartColumn, Crown, History, Layers, Pause, Skull, Sparkles, Star, Trophy, Wrench } from "lucide-react";
 import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import type { RunSlotState } from "@bh/core-game";
 import {
@@ -72,6 +72,8 @@ export interface PauseOverlayProps {
   onSettings(): void;
   onSurrender(): void;
   onStats(): void;
+  /** лист режима разработчика — только у забега разработчика */
+  onDev?: () => void;
 }
 
 export function PauseOverlay(props: PauseOverlayProps): ReactNode {
@@ -120,6 +122,12 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
               {t("run.pause.settings")}
             </Button>
           </div>
+          {props.onDev === undefined ? null : (
+            <Button variant="secondary" block onClick={props.onDev}>
+              <Wrench size={18} aria-hidden="true" />
+              {t("dev.title")}
+            </Button>
+          )}
           {/* Сдача — с подтверждением: случайный тап не должен обнулять забег. */}
           <Button variant="danger" block onClick={() => setConfirming(true)}>
             {t("run.pause.surrender")}
@@ -319,6 +327,8 @@ export interface DeathOverlayProps {
   /** место в рейтинге плейтеста; нет — сервер ещё не ответил или его нет */
   rank?: number | null;
   diagnostics: boolean;
+  /** забег с читами учтён в рейтинге по просьбе администратора */
+  cheatsCounted?: boolean;
   onRestart(): void;
   onMenu(): void;
   onShare(): void;
@@ -341,6 +351,14 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       {/* Сложность рядом с итогом: рекорд засчитан именно на ней. */}
       <div className="-mt-1 mb-3 flex flex-wrap justify-center gap-2">
         <Badge>{t(`difficulty.${result.difficultyId}.name`)}</Badge>
+        {/* Читы — видно сразу: иначе «рекорд» бессмертного забега на скриншоте
+            выглядит настоящим. */}
+        {result.cheats ? (
+          <Badge tone="warning">
+            <Wrench size={12} aria-hidden="true" />
+            {props.cheatsCounted === true ? t("dev.cheats.counted") : t("dev.cheats.notCounted")}
+          </Badge>
+        ) : null}
         {props.isNewRecord ? (
           <span className="animate-pop-in" style={staggerStyle(2)}>
             <Badge tone="accent">

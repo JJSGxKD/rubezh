@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Heart, Pause } from "lucide-react";
+import { Heart, Pause, Wrench } from "lucide-react";
 import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
@@ -22,6 +22,8 @@ import { Radar } from "./Radar";
 export interface RunHudProps {
   hud: HudSnapshot;
   onPause(): void;
+  /** только у забега разработчика */
+  onDev?: () => void;
 }
 
 /** Ниже этой доли здоровья полоса меняет цвет и начинает пульсировать. */
@@ -81,6 +83,15 @@ export function RunHud(props: RunHudProps): ReactNode {
           {formatDuration(hud.survivalSec)}
         </span>
 
+        {/* Режим разработчика — отдельной кнопкой рядом с паузой: лист
+            открывается сразу, без лишнего шага через экран паузы. */}
+        {props.onDev === undefined ? null : (
+          <div className="pointer-events-auto rounded-full bg-bg/70">
+            <IconButton label={t("dev.title")} onClick={props.onDev}>
+              <Wrench size={20} />
+            </IconButton>
+          </div>
+        )}
         <div className="pointer-events-auto rounded-full bg-bg/70">
           <IconButton label={t("run.pause")} onClick={props.onPause}>
             <Pause size={20} fill="currentColor" />

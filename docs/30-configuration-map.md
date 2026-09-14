@@ -263,6 +263,10 @@ pnpm budget
 | Профили нагрузки, длительность, потолки, агрессивный режим | `core-game/src/game/bench/profiles.ts` |
 | Нагрузка позднего забега для стресс-теста в оболочке: доли паттернов, частота и размер волны элит | `bench/full-load.ts` → `BENCH_FULL_LOAD` |
 | Как часто стресс-тест сообщает прогресс оболочке | `game/BenchScene.ts` → `PROGRESS_INTERVAL_MS` |
+| Режим разработчика: цвета отладочной отрисовки | `core-game/src/game/render/looks.ts` → `DEBUG_COLORS` |
+| Режим разработчика: где появляется заспавненное, потолки количества и перемотки | `core-game/src/game/run/dev-commands.ts` → `SPAWN_DISTANCE_UNITS`, `PICKUP_DISTANCE_UNITS`, `MAX_SPAWN_COUNT`, `MAX_JUMP_MINUTE` |
+| Режим разработчика: окно технической сводки, потолок шагов на паузе | `core-game/src/game/MainScene.ts` → `DEV_INFO_INTERVAL_MS`, `MAX_DEV_STEP_TICKS` |
+| Режим разработчика: наборы, скорости времени, множители урона и бега, умолчания | `app-shell/src/state/dev-mode.ts` → `DEV_PRESETS`, `TIME_SCALES`, `DAMAGE_MULS`, `MOVE_SPEED_MULS`, `DEFAULT_DEV_SETTINGS` |
 | Что попадает в отчёт и версия его схемы | `bench/metrics.ts` → `BENCH_REPORT_SCHEMA` |
 | Критерии вердикта «тянет / не тянет» | `bench/verdict.ts` |
 | Определение просадки в агрессивном режиме | `bench/degradation-detector.ts` → `DEFAULT_DEGRADATION` |

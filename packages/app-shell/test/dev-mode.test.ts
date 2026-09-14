@@ -20,6 +20,8 @@ const { initShell } = await import("../src/state/shell");
 
 type Handlers = { [E in keyof RunEvents]?: (payload: RunEvents[E]) => void };
 
+const chosen: string[] = [];
+
 function fakeEngine(): { engine: RunEngine; started: RunOptions[]; setDev: RunDevOptions[]; emit: Handlers } {
   const handlers: Handlers = {};
   const started: RunOptions[] = [];
@@ -31,6 +33,7 @@ function fakeEngine(): { engine: RunEngine; started: RunOptions[]; setDev: RunDe
     },
     setDev: (options: RunDevOptions) => setDev.push(options),
     devCommand: () => undefined,
+    chooseUpgrade: (optionId: string) => chosen.push(optionId),
     snapshot: () => null,
     destroy: () => undefined,
     pause: () => undefined,
@@ -173,6 +176,28 @@ describe("забег разработчика", () => {
     const calls = fake.setDev.length;
     useDevMode.getState().update((settings) => ({ ...settings, timeScale: 2 }));
     expect(fake.setDev).toHaveLength(calls);
+  });
+
+  it("берёт первое улучшение сам, если так настроено, и только в забеге разработчика", async () => {
+    start(true);
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+    chosen.length = 0;
+    const offer = { level: 4, queued: 0, options: [{ id: "heal", kind: "heal", refId: "heal", level: 1, changes: [] }] } as unknown as RunEvents["levelUp"];
+
+    useDevMode.getState().update((settings) => ({ ...settings, autoPickUpgrades: true }));
+    useDevMode.getState().arm(true);
+    await useRun.getState().start(RUN);
+    fake.emit.levelUp?.(offer);
+    expect(chosen).toEqual(["heal"]);
+    expect(useRun.getState().phase).not.toBe("levelUp");
+    useRun.getState().stop();
+
+    useDevMode.getState().arm(false);
+    await useRun.getState().start(RUN);
+    fake.emit.levelUp?.(offer);
+    expect(chosen).toEqual(["heal"]);
+    expect(useRun.getState().phase).toBe("levelUp");
   });
 
   it("забег с читами не двигает рекорд, пока не попросили учесть", async () => {

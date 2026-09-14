@@ -315,6 +315,12 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
     }),
 
     created.on("levelUp", ({ level, options, queued }) => {
+      const first = options[0];
+      if (get().devRun && useDevMode.getState().settings.autoPickUpgrades && first !== undefined) {
+        // Без экрана и без аналитики выбора: это не решение игрока.
+        created.chooseUpgrade(first.id);
+        return;
+      }
       track("upgrade_offered", { level, count: options.length, queued });
       set({ phase: "levelUp", offers: options, queued, level });
       saveRun();

@@ -47,6 +47,12 @@ const settingsSchema = z.object({
   timeScale: z.number().check(z.minimum(0.1), z.maximum(4)),
   /** просьба учесть забег с читами в рейтинге и рекорде — для проверки самого рейтинга */
   countInRating: z.boolean(),
+  /**
+   * Брать первый вариант улучшения без экрана выбора. С полным арсеналом
+   * уровни идут каждые несколько секунд и предлагают одно лечение — экран
+   * выбора мешает смотреть на то, ради чего запущен забег.
+   */
+  autoPickUpgrades: z.boolean(),
   /** что сделать сразу на старте забега */
   start: z.object({
     allWeapons: z.boolean(),
@@ -74,6 +80,7 @@ export const DEFAULT_DEV_SETTINGS: DevSettings = {
   cheats: { godMode: false, oneHitKill: false, damageMul: 1, moveSpeedMul: 1, freezeEnemies: false, spawnPaused: false },
   timeScale: 1,
   countInRating: false,
+  autoPickUpgrades: false,
   start: { allWeapons: false, allPassives: false, minute: 0 },
 };
 
@@ -94,11 +101,13 @@ export const DEV_PRESETS = {
     ...DEFAULT_DEV_SETTINGS,
     visuals: { ...DEFAULT_DEV_SETTINGS.visuals, weaponRadii: true },
     cheats: { ...DEFAULT_DEV_SETTINGS.cheats, godMode: true },
+    autoPickUpgrades: true,
     start: { allWeapons: true, allPassives: true, minute: 0 },
   },
   lateGame: {
     ...DEFAULT_DEV_SETTINGS,
     cheats: { ...DEFAULT_DEV_SETTINGS.cheats, godMode: true },
+    autoPickUpgrades: true,
     start: { allWeapons: true, allPassives: true, minute: 10 },
   },
 } satisfies Record<string, DevSettings>;

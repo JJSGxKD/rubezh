@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_MAP_ID, type RunInspection } from "@bh/core-game";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
+import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
@@ -12,6 +13,8 @@ import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
 import { RunLoading } from "./RunLoading";
 import { DeathOverlay, LevelUpOverlay, PauseOverlay } from "./overlays";
+import { DevSheetLazy } from "./dev-sheet-lazy";
+import { DevTechPanel } from "./DevTechPanel";
 import { RunStatsSheet } from "./RunStatsSheet";
 
 /**
@@ -30,6 +33,16 @@ export function RunScreen(): ReactNode {
   const submitted = usePlaytest((state) => state.lastSubmitted);
   const [stats, setStats] = useState<RunInspection | null>(null);
   const openStats = (): void => setStats(useRun.getState().inspect());
+  const [devOpen, setDevOpen] = useState(false);
+  const fpsOverlay = useDiagnostics((state) => state.enabled && state.fpsOverlay);
+  const countInRating = useDevMode((state) => state.settings.countInRating);
+  const devTechInfo = useDevMode((state) => state.settings.visuals.techInfo);
+  // Лист разработчика открывается на паузе: команды «Мира» и шаг по тикам
+  // рассчитаны на стоящий мир, а бегущий забег под листом убил бы игрока.
+  const openDev = (): void => {
+    useRun.getState().pause("manual");
+    setDevOpen(true);
+  };
   // Оружие для экрана загрузки фиксируется при входе: у продолженного забега
   // оно своё, а ожидание старта движок снимает сразу, как только начал.
   const [weaponId] = useState(
@@ -73,10 +86,18 @@ export function RunScreen(): ReactNode {
       <RunLoading stage={run.phase === "error" ? null : run.loadingStage} weaponId={weaponId} />
 
       {run.hud === null || run.phase === "finished" ? null : (
-        <RunHud hud={run.hud} onPause={() => useRun.getState().pause("manual")} />
+        <RunHud
+          hud={run.hud}
+          onPause={() => useRun.getState().pause("manual")}
+          {...(run.devRun ? { onDev: openDev } : {})}
+        />
       )}
 
-      {run.phase === "paused" ? (
+      {run.devInfo !== null && run.phase !== "finished" && (run.devRun ? devTechInfo : fpsOverlay) ? (
+        <DevTechPanel info={run.devInfo} compact={!run.devRun} />
+      ) : null}
+
+      {run.phase === "paused" && !devOpen ? (
         <PauseOverlay
           elapsedSec={run.hud?.survivalSec ?? 0}
           restored={run.pauseReason === "restored"}
@@ -84,7 +105,12 @@ export function RunScreen(): ReactNode {
           onSettings={() => navigation.push("settings")}
           onSurrender={() => useRun.getState().surrender()}
           onStats={openStats}
+          {...(run.devRun ? { onDev: () => setDevOpen(true) } : {})}
         />
+      ) : null}
+
+      {devOpen && run.devRun && (run.phase === "paused" || run.phase === "levelUp") ? (
+        <DevSheetLazy inRun onClose={() => setDevOpen(false)} />
       ) : null}
 
       {run.phase === "levelUp" ? (
@@ -110,6 +136,7 @@ export function RunScreen(): ReactNode {
           isNewRecord={run.isNewRecord}
           rank={submitted?.runId === run.result.runId ? submitted.result.rank : null}
           diagnostics={diagnostics}
+          cheatsCounted={run.devRun && countInRating}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
           onShare={() => shareRun()}
