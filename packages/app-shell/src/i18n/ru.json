@@ -424,7 +424,7 @@
   "testers.diagnostics": "Режим диагностики",
   "testers.diagnostics.hint": "Показывает seed забега, отчёты и витрину компонентов.",
   "testers.recordRuns": "Запись забегов",
-  "testers.recordRuns.hint": "Сохраняет ход забега, чтобы разработчик повторил баг у себя.",
+  "testers.recordRuns.hint": "Запись хода забега появится в одной из следующих сборок — выбор уже запомнится. Включена вместе с диагностикой.",
   "testers.fpsOverlay": "Оверлей FPS",
   "testers.open": "Диагностика",
 
