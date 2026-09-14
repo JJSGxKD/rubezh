@@ -1,4 +1,4 @@
-import type { BenchDevice, BenchMode, BenchReport } from "./metrics";
+import type { BenchDevice, BenchLoadout, BenchMode, BenchReport } from "./metrics";
 import type { BenchVerdict } from "./verdict";
 
 /** Куда стенд отправляет готовый отчёт. null — отправка выключена. */
@@ -27,6 +27,8 @@ export interface BenchSceneData {
    */
   device: BenchDevice;
   ingest: BenchIngestConfig | null;
+  /** по умолчанию `starting` — профиль стенда этапа 1 */
+  loadout?: BenchLoadout;
 }
 
 /** То, что уходит на сервер и лежит в буфере обмена. */

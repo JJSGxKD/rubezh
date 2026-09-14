@@ -1,6 +1,8 @@
 import Phaser from "phaser";
+import { DROPS } from "../content/drops";
 import { ENEMIES } from "../content/enemies";
 import { MAPS } from "../content/maps";
+import { PASSIVES } from "../content/upgrades";
 import { WEAPONS } from "../content/weapons";
 import { createWorld, DEFAULT_SIM_CONFIG, TICK_SEC, type World } from "./sim/world";
 import { stepWorld } from "./sim/step";
@@ -26,6 +28,7 @@ import {
   BENCH_RAMP_START,
   BENCH_STRESS,
 } from "./bench/profiles";
+import { BENCH_FULL_LOAD, equipFullLoadout, withEliteWaves } from "./bench/full-load";
 import type { BenchSceneData, BenchSubmission } from "./bench/types";
 
 const TICK_MS = TICK_SEC * 1000;
@@ -104,6 +107,7 @@ export class BenchScene extends Phaser.Scene {
 
   create(): void {
     const scale = this.sceneData.device.devicePixelRatio;
+    const full = this.loadout === "full";
 
     this.world = createWorld({
       seed: this.sceneData.seed,
@@ -112,6 +116,7 @@ export class BenchScene extends Phaser.Scene {
       // прокачка выключена: растущая сила игрока по ходу прогона меняет
       // нагрузку, и два замера перестают быть сравнимыми.
       weapons: WEAPONS,
+      ...(full ? { passives: PASSIVES, drops: DROPS } : {}),
       // Карта та же, что в игре: радиус кольца спавна теперь берётся от неё, а
       // не от размера канвы, — значит замеры двух устройств наконец сравнимы
       // по объёму мира, а не только по числу врагов (WP4.3).
@@ -119,6 +124,9 @@ export class BenchScene extends Phaser.Scene {
       config: {
         unitScale: scale,
         progressionEnabled: false,
+        // Полная нагрузка несёт кристаллы и подборы: в позднем забеге их
+        // сотни на экране. Сила игрока при этом не растёт — он уже на максимуме.
+        lootEnabled: full,
         // В агрессивном режиме пулы на тысячи: прогон обязан упереться в
         // устройство, а не в размер массива.
         ...(this.sceneData.mode === "stress"
@@ -130,6 +138,7 @@ export class BenchScene extends Phaser.Scene {
         player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 1_000_000 },
       },
     });
+    if (full) equipFullLoadout(this.world);
     this.spawner = this.createSpawner();
     this.worldRenderer = new WorldRenderer(this, this.world);
     this.runCamera = new RunCamera(MAPS[0].camera, scale);
@@ -201,6 +210,10 @@ export class BenchScene extends Phaser.Scene {
     this.updateHud();
   }
 
+  private get loadout(): "starting" | "full" {
+    return this.sceneData.loadout ?? "starting";
+  }
+
   /**
    * Кадр годится для замера, только если приложение на экране.
    *
@@ -262,6 +275,14 @@ export class BenchScene extends Phaser.Scene {
   }
 
   private createSpawner(): Spawner {
+    if (this.loadout === "full") {
+      const weights = BENCH_FULL_LOAD.weights;
+      const inner =
+        this.sceneData.mode === "fixed"
+          ? createConstantPopulationSpawner(this.sceneData.population, weights)
+          : createRampSpawner(this.rampOptions(), weights);
+      return withEliteWaves(inner, BENCH_FULL_LOAD);
+    }
     if (this.sceneData.mode === "fixed") {
       return createConstantPopulationSpawner(this.sceneData.population);
     }
@@ -313,6 +334,7 @@ export class BenchScene extends Phaser.Scene {
         canvasHeight: this.scale.height,
         devicePixelRatio: this.sceneData.device.devicePixelRatio,
         renderer: this.game.renderer.type === Phaser.WEBGL ? "WEBGL" : "CANVAS",
+        loadout: this.loadout,
       },
       this.sceneData.device,
       this.startedAt,

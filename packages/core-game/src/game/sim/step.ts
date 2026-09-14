@@ -54,9 +54,11 @@ export function stepWorld(world: World, input: SimInput): void {
   updateWeapons(world, dt);
   updateProjectiles(world, dt);
 
-  if (world.config.progressionEnabled) {
+  if (world.config.lootEnabled) {
     updateGems(world, dt);
     updatePickups(world);
+  }
+  if (world.config.progressionEnabled) {
     // Варианты готовятся в конце шага: игрок увидит их на следующем кадре, а
     // мир к этому моменту уже в согласованном состоянии.
     prepareOffers(world);

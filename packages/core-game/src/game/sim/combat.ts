@@ -52,7 +52,7 @@ export function killEnemy(world: World, index: number): void {
   const y = world.enemies.y[index];
   despawnEnemy(world, index);
 
-  if (world.config.progressionEnabled) {
+  if (world.config.lootEnabled) {
     dropGems(world, x, y, type.xp);
     rollPickups(world, x, y, type.elite);
   }
