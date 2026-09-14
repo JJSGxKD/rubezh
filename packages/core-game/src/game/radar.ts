@@ -1,4 +1,5 @@
-import type { RadarSnapshot } from "../run-api";
+import { RADAR_BLIP, type RadarSnapshot } from "../run-api";
+import { PICKUP_KIND } from "./sim/pickups";
 import type { World } from "./sim/world";
 
 /**
@@ -14,9 +15,11 @@ import type { World } from "./sim/world";
  */
 export const MAX_BLIPS = 96;
 
-const KIND_ENEMY = 0;
-const KIND_ELITE = 1;
-const KIND_PICKUP = 2;
+const BLIP_BY_PICKUP: Record<number, number> = {
+  [PICKUP_KIND.medkit]: RADAR_BLIP.medkit,
+  [PICKUP_KIND.magnet]: RADAR_BLIP.magnet,
+  [PICKUP_KIND.dynamite]: RADAR_BLIP.dynamite,
+};
 
 export function buildRadarSnapshot(world: World): RadarSnapshot {
   const blips = new Float32Array(MAX_BLIPS * 3);
@@ -43,18 +46,18 @@ export function buildRadarSnapshot(world: World): RadarSnapshot {
 
   const pickups = world.pickups;
   for (let i = 0; i < pickups.count; i++) {
-    if (pickups.alive[i] === 1) push(pickups.x[i], pickups.y[i], KIND_PICKUP);
+    if (pickups.alive[i] === 1) push(pickups.x[i], pickups.y[i], BLIP_BY_PICKUP[pickups.kind[i]] ?? RADAR_BLIP.medkit);
   }
 
   const enemies = world.enemies;
   for (let i = 0; i < enemies.count; i++) {
     if (enemies.alive[i] === 1 && world.enemyTypes[enemies.type[i]].elite) {
-      push(enemies.x[i], enemies.y[i], KIND_ELITE);
+      push(enemies.x[i], enemies.y[i], RADAR_BLIP.elite);
     }
   }
   for (let i = 0; i < enemies.count && count < MAX_BLIPS; i++) {
     if (enemies.alive[i] === 1 && !world.enemyTypes[enemies.type[i]].elite) {
-      push(enemies.x[i], enemies.y[i], KIND_ENEMY);
+      push(enemies.x[i], enemies.y[i], RADAR_BLIP.enemy);
     }
   }
 
