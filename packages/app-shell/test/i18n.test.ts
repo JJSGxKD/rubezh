@@ -34,6 +34,14 @@ describe("переводы", () => {
     expect(hasTranslation("no.such.key")).toBe(false);
   });
 
+  it("не держит тексты инструментов команды в словаре первой загрузки", async () => {
+    expect(hasTranslation("stress.title")).toBe(false);
+    await import("../src/i18n/team");
+    expect(t("stress.title")).toBe("Стресс-тест");
+    // Плашка читов на экране смерти видна и без чанка команды.
+    expect(hasTranslation("dev.cheats.notCounted")).toBe(true);
+  });
+
   it("знает ключи контента: имена оружия и пассивок приходят из core-game", () => {
     for (const key of ["weapon.spark.name", "passive.might.name", "upgrade.heal.name"]) {
       expect(hasTranslation(key), key).toBe(true);

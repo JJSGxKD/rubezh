@@ -2,17 +2,9 @@ import { useState, type ReactNode } from "react";
 import { ENEMIES, PASSIVES, WEAPONS, type RunDevCommand, type RunDevPickup } from "@bh/core-game";
 import { Badge, Button, ListGroup, ListItem, Modal, SegmentedControl } from "../../design-system/components";
 import { t } from "../../i18n";
-import {
-  DAMAGE_MULS,
-  DEV_PRESETS,
-  MOVE_SPEED_MULS,
-  TIME_SCALES,
-  hasCheats,
-  useDevMode,
-  type DevPresetId,
-  type DevSettings,
-  type DevVisualKey,
-} from "../../state/dev-mode";
+import "../../i18n/team";
+import { hasCheats, useDevMode, type DevSettings, type DevVisualKey } from "../../state/dev-mode";
+import { DAMAGE_MULS, DEV_PRESETS, MOVE_SPEED_MULS, TIME_SCALES, type DevPresetId } from "./dev-presets";
 import { useRun } from "../../state/run";
 
 /**
@@ -60,7 +52,7 @@ export function DevSheet(props: { inRun: boolean; onClose(): void }): ReactNode 
     >
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         {(Object.keys(DEV_PRESETS) as DevPresetId[]).map((id) => (
-          <Chip key={id} onClick={() => useDevMode.getState().applyPreset(id)}>
+          <Chip key={id} onClick={() => update(() => DEV_PRESETS[id])}>
             {t(`dev.preset.${id}`)}
           </Chip>
         ))}

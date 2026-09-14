@@ -11,7 +11,6 @@ import {
 import type { BenchSubmission } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
-import { describeDevice } from "./device";
 import { useInstall } from "./install";
 import { useMeta } from "./meta";
 import { createPersistedValue } from "./persisted";
@@ -112,6 +111,9 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
     const { adapter, build } = useShell.getState();
     const installId = useInstall.getState().installId;
     if (client === null || installId === "") return "disabled";
+    // Разбор устройства — отдельным чанком: отчёт о запуске уходит после
+    // главной и первую загрузку ждать не должен.
+    const { describeDevice } = await import("./device");
     const response = await client.reportSession({
       installId,
       build: build.version,
@@ -126,6 +128,7 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
     const { adapter, build } = useShell.getState();
     const installId = useInstall.getState().installId;
     if (client === null || installId === "") return "disabled";
+    const { describeDevice } = await import("./device");
     const response = await client.reportStress({
       installId,
       build: build.version,

@@ -12,7 +12,8 @@ vi.mock("@bh/core-game", async (importOriginal) => ({
   loadRunEngine: engine.load,
 }));
 
-const { DEFAULT_DEV_SETTINGS, DEV_PRESETS, hasCheats, toRunDev, useDevMode } = await import("../src/state/dev-mode");
+const { DEFAULT_DEV_SETTINGS, hasCheats, toRunDev, useDevMode } = await import("../src/state/dev-mode");
+const { DEV_PRESETS } = await import("../src/screens/run/dev-presets");
 const { useRun } = await import("../src/state/run");
 const { useMeta } = await import("../src/state/meta");
 const { toSubmission, usePlaytest } = await import("../src/state/playtest");
@@ -116,9 +117,9 @@ describe("настройки режима разработчика", () => {
   });
 
   it("набор заменяет настройки целиком, а не добавляет к ним", () => {
-    useDevMode.getState().applyPreset("telegraphs");
+    useDevMode.getState().update(() => DEV_PRESETS.telegraphs);
     expect(useDevMode.getState().settings.timeScale).toBe(0.5);
-    useDevMode.getState().applyPreset("clean");
+    useDevMode.getState().update(() => DEV_PRESETS.clean);
     expect(useDevMode.getState().settings).toEqual(DEFAULT_DEV_SETTINGS);
     expect(hasCheats(DEFAULT_DEV_SETTINGS)).toBe(false);
     expect(hasCheats(DEV_PRESETS.arsenal)).toBe(true);

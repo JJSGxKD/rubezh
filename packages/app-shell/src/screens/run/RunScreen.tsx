@@ -14,7 +14,7 @@ import { RunHud } from "./RunHud";
 import { RunLoading } from "./RunLoading";
 import { DeathOverlay, LevelUpOverlay, PauseOverlay } from "./overlays";
 import { DevSheetLazy } from "./dev-sheet-lazy";
-import { DevTechPanel } from "./DevTechPanel";
+import { DevTechPanelLazy } from "./dev-tech-panel-lazy";
 import { RunStatsSheet } from "./RunStatsSheet";
 
 /**
@@ -94,7 +94,7 @@ export function RunScreen(): ReactNode {
       )}
 
       {run.devInfo !== null && run.phase !== "finished" && (run.devRun ? devTechInfo : fpsOverlay) ? (
-        <DevTechPanel info={run.devInfo} compact={!run.devRun} />
+        <DevTechPanelLazy info={run.devInfo} compact={!run.devRun} />
       ) : null}
 
       {run.phase === "paused" && !devOpen ? (

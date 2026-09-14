@@ -13,6 +13,7 @@ import {
   Stat,
 } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
+import "../../i18n/team";
 import { useNavigation } from "../../state/navigation";
 import { useStress, type StressPhase, type StressSendState } from "../../state/stress";
 
