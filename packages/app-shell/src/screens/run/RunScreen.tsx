@@ -6,6 +6,7 @@ import { useDiagnostics } from "../../state/diagnostics";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
 import { usePlatform } from "../../state/platform";
+import { usePlaytest } from "../../state/playtest";
 import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
@@ -25,6 +26,7 @@ export function RunScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics((state) => state.enabled);
   const isActive = usePlatform((state) => state.isActive);
+  const submitted = usePlaytest((state) => state.lastSubmitted);
   // Оружие для экрана загрузки фиксируется при входе: у продолженного забега
   // оно своё, а ожидание старта движок снимает сразу, как только начал.
   const [weaponId] = useState(
@@ -95,6 +97,7 @@ export function RunScreen(): ReactNode {
         <DeathOverlay
           result={run.result}
           isNewRecord={run.isNewRecord}
+          rank={submitted?.runId === run.result.runId ? submitted.result.rank : null}
           diagnostics={diagnostics}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}

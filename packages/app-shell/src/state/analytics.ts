@@ -21,6 +21,7 @@ export type AnalyticsEvent =
   | "upgrade_offered"
   | "upgrade_chosen"
   | "wave_reached"
+  | "playtest_run_synced"
   | "load_time"
   | "diagnostics_mode_changed"
   | "client_error";

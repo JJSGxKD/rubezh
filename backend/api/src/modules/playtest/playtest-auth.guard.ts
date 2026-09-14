@@ -51,7 +51,7 @@ export class PlaytestAuthGuard implements CanActivate {
       );
     }
 
-    const devUser = request.header("x-playtest-dev-user");
+    const devUser = decodeHeader(request.header("x-playtest-dev-user"));
     if (this.config.playtest.devAuth && devUser !== undefined) {
       const [id, ...name] = devUser.split(":");
       if (id !== undefined && /^dev-[a-z0-9-]{1,32}$/.test(id)) {
@@ -60,6 +60,20 @@ export class PlaytestAuthGuard implements CanActivate {
     }
 
     throw new UnauthorizedError("Откройте игру в Telegram, чтобы сохранять забеги");
+  }
+}
+
+/**
+ * Значение заголовка — только Latin-1, поэтому имя разработчика приходит в
+ * URI-кодировке: кириллица в сыром виде уронила бы `fetch` ещё на клиенте.
+ */
+function decodeHeader(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    // Битая кодировка — такой заголовок не принимается вовсе.
+    return undefined;
   }
 }
 

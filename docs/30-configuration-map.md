@@ -127,6 +127,8 @@
 | Порядок вкладок, их значки и точки | `app-shell/src/app/App.tsx` → `TABS`; нагрудник арсенала — `design-system/components/icons.tsx` | участник 1 |
 | Шапка разделов и её меню: что показывается, куда ведёт | `app-shell/src/app/AppHeader.tsx`, `app/MainMenu.tsx` | участник 1 |
 | Как часто забег сохраняется сам | `app-shell/src/state/run.ts` → `AUTOSAVE_SEC` | участник 1 |
+| Плейтест на клиенте: таймаут запроса, сколько неотправленных забегов хранить | `app-shell/src/state/playtest-api.ts` → `PLAYTEST_TIMEOUT_MS`; `state/playtest.ts` → `QUEUE_LIMIT` | участник 1 |
+| Плейтест на сервере: строк в лидерборде, последних забегов в профиле, сколько забегов хранится | `backend/api/src/modules/playtest/playtest.service.ts` → `LEADERBOARD_LIMIT`, `RECENT_RUNS_SHOWN`; `redis-playtest.store.ts` → `RECENT_RUNS_KEPT`; границы правдоподобия итога — `dto/run-submission.dto.ts` | участник 1 |
 | Задержка от случайного тапа на оверлеях забега | `app-shell/src/screens/run/overlays.tsx` → `GUARD_MS` | участник 1 |
 | Порог «мало здоровья» в HUD | `app-shell/src/screens/run/RunHud.tsx` → `LOW_HP_RATIO` | участник 1 |
 
@@ -154,6 +156,7 @@
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
 | `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts` | `state/run-save.ts` |
+| `bh.playtest.v1.pending` | итоги забегов, ещё не дошедшие до сервера плейтеста | `state/playtest.ts` |
 
 Само хранилище приходит от адаптера площадки портом `KeyValueStorage`, а не
 берётся из `localStorage` напрямую: переезд на `DeviceStorage` Telegram не
@@ -205,6 +208,12 @@
 | `VITE_DIAGNOSTICS_DEFAULT` | включает режим диагностики по умолчанию; переключатель остаётся |
 | `VITE_BENCH_INGEST_URL`, `VITE_BENCH_INGEST_TOKEN` | куда стенд отправляет отчёт |
 | `DEV_TUNNEL_TELEGRAM_HOST` | домен туннеля, чтобы Vite пустил запрос с телефона |
+| `PLAYTEST_ENABLED`, `TELEGRAM_BOT_TOKEN` | сохранения и лидерборд плейтеста на бэкенде; без токена бэкенд с включённым плейтестом не стартует |
+| `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC` | сколько живут данные плейтеста в Redis и подпись запуска Telegram |
+| `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | вход в плейтест без Telegram на машине разработчика; только `NODE_ENV=development` |
+
+Прокси dev-сервера на бэкенд плейтеста — `apps/web-telegram/vite.config.ts` →
+`apiProxy`: проксируется только `/api/v1/playtest` (`20-env-and-ports.md` §4).
 
 ---
 

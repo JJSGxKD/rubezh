@@ -34,9 +34,7 @@ export type TabId = (typeof TAB_ROOTS)[number];
 const STUB_SCREENS: ReadonlySet<ScreenId> = new Set<ScreenId>([
   "arsenal",
   "shop",
-  "rating",
   "friends",
-  "profile",
   "tasks",
   "daily",
   "wheel",

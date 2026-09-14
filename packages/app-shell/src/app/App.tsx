@@ -122,7 +122,7 @@ const TABS: readonly TabItem[] = [
   { id: "arsenal", label: t("tab.arsenal"), icon: <ArmorIcon size={22} />, badge: "dot" },
   { id: "lobby", label: t("tab.home"), icon: <Swords size={22} /> },
   { id: "tasks", label: t("tab.tasks"), icon: <ListChecks size={22} />, badge: "dot" },
-  { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} />, badge: "dot" },
+  { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} /> },
   { id: "friends", label: t("tab.friends"), icon: <Users size={22} />, badge: "dot" },
 ];
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Crown, History, Pause, Skull, Sparkles, Star } from "lucide-react";
+import { Crown, History, Pause, Skull, Sparkles, Star, Trophy } from "lucide-react";
 import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import type { RunSlotState } from "@bh/core-game";
 import {
@@ -273,6 +273,8 @@ function OfferTag(props: { offer: UpgradeOption }): ReactNode {
 export interface DeathOverlayProps {
   result: RunResult;
   isNewRecord: boolean;
+  /** место в рейтинге плейтеста; нет — сервер ещё не ответил или его нет */
+  rank?: number | null;
   diagnostics: boolean;
   onRestart(): void;
   onMenu(): void;
@@ -304,6 +306,16 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
             </Badge>
           </span>
         ) : null}
+        {/* Место приходит с сервера позже итога — плашка появляется, когда
+            ответ дошёл, и не задерживает сам экран. */}
+        {props.rank === undefined || props.rank === null ? null : (
+          <span className="animate-pop-in">
+            <Badge tone="info">
+              <Trophy size={12} aria-hidden="true" />
+              {t("run.death.rank", { rank: props.rank })}
+            </Badge>
+          </span>
+        )}
       </div>
 
       {/* В ландшафте итоги слева, оружие и кнопки справа — «Ещё раз» видна без

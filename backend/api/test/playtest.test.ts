@@ -97,7 +97,7 @@ describe("доступ к эндпоинтам плейтеста", () => {
   });
 
   it("без подписи — 401, а вход разработчика работает только с включённым флагом", () => {
-    const dev = { "x-playtest-dev-user": "dev-me:Разработчик" };
+    const dev = { "x-playtest-dev-user": encodeURIComponent("dev-me:Разработчик") };
     expect(statusOf(() => guard({ PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: BOT_TOKEN }).canActivate(context(dev).ctx))).toBe(401);
 
     const { ctx, request } = context(dev);

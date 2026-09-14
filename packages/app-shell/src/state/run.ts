@@ -9,6 +9,7 @@ import {
 import { create } from "zustand";
 import { useDiagnostics } from "./diagnostics";
 import { useMeta } from "./meta";
+import { usePlaytest } from "./playtest";
 import { useSavedRun } from "./run-save";
 import { reportError, track, useShell } from "./shell";
 
@@ -338,6 +339,9 @@ function finishRun(
   // Рекорд пишется здесь, а не в движке: хранилище устройства — забота
   // оболочки (docs/27-design-system-and-app-shell.md §7).
   const isNewRecord = useMeta.getState().submitRun(result);
+  // Лидерборд плейтеста — поверх рекорда на устройстве, а не вместо него:
+  // без сети игрок всё равно видит свой рекорд сразу.
+  usePlaytest.getState().submitRun(result);
   setRunUiMode(false);
   set({ phase: "finished", result, isNewRecord });
 

@@ -12,6 +12,7 @@ import { useSavedRun } from "./state/run-save";
 import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
+import { usePlaytest } from "./state/playtest";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { noopAnalytics, type AnalyticsSink } from "./state/analytics";
@@ -77,9 +78,13 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   useMeta.getState().hydrate();
   useHints.getState().hydrate();
   useSavedRun.getState().hydrate();
+  usePlaytest.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
 
   render(<App />);
+  // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
+  // них игрок не должен ждать заставку.
+  void usePlaytest.getState().flush("launch");
 
   // Время до интерактивной главной — бюджет первой загрузки проверяется не
   // только размером файлов, но и на устройствах тестеров (§3.4).
@@ -129,5 +134,6 @@ async function waitForFonts(timeoutMs: number): Promise<boolean> {
 }
 
 export type { ShellBuildInfo, ShellCapabilities } from "./state/shell";
+export type { PlaytestApiConfig } from "./state/playtest-api";
 export type { AnalyticsEvent, AnalyticsPayload, AnalyticsSink } from "./state/analytics";
 export { COLORS, PLATFORM_COLORS } from "./design-system/tokens";

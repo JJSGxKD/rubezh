@@ -139,6 +139,7 @@
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
 | Удержание | `daily_reward_claimed`, `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
+| Плейтест | `playtest_run_synced` — временное, на время закрытого теста (`26-stage2-plan.md`, WP13) |
 
 Добавлено на этапе 2 (`26-stage2-plan.md`):
 
@@ -152,6 +153,7 @@
 | `diagnostics_mode_changed` | Сколько тестеров включают диагностику и запись забегов | `setting`, `enabled` |
 | `share_offered`, `share_completed` | Приглашение друга на плейтест: сколько нажимают и чем кончается — выбор чата, копия ссылки или неудача | `context` (`friends_invite`), у завершения — `result` |
 | `bench_finished` | Сводка теста производительности; полный отчёт — в диагностике, не в событиях | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
+| `playtest_run_synced` | Дошёл ли итог забега до лидерборда плейтеста: сколько забегов ждут сети, сколько сервер отверг. Растущая доля `queued` с `unauthorized` — устаревшая подпись запуска, а не сеть | `result`: `sent` / `queued` / `dropped`; `trigger`: `finish` / `launch` / `screen`; у неудачи — `failure`; у отправленного — `rank`, `isNewBest` |
 
 Уточнения существующих событий на этапе 2:
 
