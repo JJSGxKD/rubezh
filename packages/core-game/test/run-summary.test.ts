@@ -1,4 +1,4 @@
-import type { EnemyDef, KeyValueStorage, RunResult, WeaponDef } from "@bh/shared-types";
+import type { DifficultyId, EnemyDef, KeyValueStorage, RunResult, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { DROPS } from "../src/content/drops";
@@ -32,14 +32,14 @@ const MAX_TICKS = 60 * 480;
 const GOLDEN_POPULATION = 28;
 
 /**
- * Seed эталона. Подобран так, чтобы забег дожил до полного набора: с четырьмя
+ * Seed эталона. Подобран так, чтобы забег дожил до полного набора: с тремя
  * оружиями проверки ниже разносят урон по слотам, а не меряют одно стартовое.
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
- * перестаёт доживать до набора: так было с горстью кристаллов и броском на
- * аптечку. Распределение времени по seed при этом остаётся прежним, поэтому
+ * перестаёт доживать до набора: так было с горстью кристаллов, броском на
+ * аптечку и магнитом с динамитом. Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 3;
+const GOLDEN_SEED = 5;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -75,8 +75,8 @@ function resultOf(world: World, seed: number): RunResult {
 }
 
 describe("статистика забега", () => {
-  // Популяция подобрана так, чтобы забег дожил до полного набора: с четырьмя
-  // оружиями и четырьмя пассивками проверки разносят урон по слотам, а не
+  // Популяция подобрана так, чтобы забег дожил до полного набора: с тремя
+  // оружиями и пассивками разных категорий проверки разносят урон по слотам, а не
   // меряют одно стартовое оружие.
   const world = runUntilDeath(GOLDEN_SEED, GOLDEN_POPULATION);
 
@@ -162,35 +162,35 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 77.12,
-      level: 13,
-      xpCollected: 300,
-      enemiesKilled: 253,
+      survivalSec: 29.97,
+      level: 7,
+      xpCollected: 82,
+      enemiesKilled: 53,
       killsByEnemy: {
-        swarm_rat: 114,
-        tank_ghoul: 9,
-        shooter_wisp: 38,
-        dasher_wolf: 25,
-        circler_crow: 34,
-        bomber_imp: 18,
-        splitter_slime: 15,
+        swarm_rat: 34,
+        tank_ghoul: 2,
+        shooter_wisp: 5,
+        dasher_wolf: 2,
+        circler_crow: 3,
+        bomber_imp: 4,
+        splitter_slime: 3,
       },
-      damageDealt: 2859,
-      damageTaken: 156,
+      damageDealt: 709,
+      damageTaken: 105,
       weapons: [
-        { id: "spark", level: 1, damage: 2714 },
-        { id: "wardstone", level: 2, damage: 108 },
-        { id: "hearth", level: 1, damage: 37 },
+        { id: "spark", level: 1, damage: 543 },
+        { id: "knife", level: 1, damage: 133 },
+        { id: "wardstone", level: 1, damage: 33 },
       ],
       passives: [
-        { id: "swiftness", level: 3 },
-        { id: "volley", level: 2 },
-        { id: "mending", level: 2 },
-        { id: "haste", level: 2 },
+        { id: "reach", level: 1 },
+        { id: "lodestone", level: 1 },
+        { id: "haste", level: 1 },
+        { id: "mending", level: 1 },
       ],
-      deathCause: "dasher_wolf",
-      distance: 13794,
-      peakEnemies: 32,
+      deathCause: "swarm_rat",
+      distance: 4560,
+      peakEnemies: 30,
     });
   });
 
@@ -304,7 +304,7 @@ describe("локальный рекорд", () => {
     };
   }
 
-  function resultWith(survivalSec: number): RunResult {
+  function resultWith(survivalSec: number, difficultyId: DifficultyId = "normal"): RunResult {
     return {
       runId: "r",
       seed: 1,
@@ -312,6 +312,7 @@ describe("локальный рекорд", () => {
       startingWeaponId: "spark",
       contentHash: "test-hash",
       mapId: "fallback",
+      difficultyId,
       waveReached: 0,
       survivalSec,
       level: 1,
@@ -337,24 +338,44 @@ describe("локальный рекорд", () => {
       isNewRecord: false,
     });
     expect(submitRunResult(storage, resultWith(45)).bestSurvivalSec).toBe(45);
-    expect(loadBestSurvivalSec(storage)).toBe(45);
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(45);
+  });
+
+  it("ведёт рекорд по каждой сложности отдельно", () => {
+    const storage = memoryStorage();
+
+    submitRunResult(storage, resultWith(600, "easy"));
+    // Десять минут на «Лёгкой» не мешают первому рекорду на «Сложной».
+    expect(submitRunResult(storage, resultWith(90, "hard")).isNewRecord).toBe(true);
+    expect(loadBestSurvivalSec(storage, "easy")).toBe(600);
+    expect(loadBestSurvivalSec(storage, "hard")).toBe(90);
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(0);
+  });
+
+  it("переносит рекорд, поставленный до сложностей, на «Лёгкую» — тот же баланс", () => {
+    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec": "74.2" });
+
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(0);
+    expect(loadBestSurvivalSec(storage, "easy")).toBe(74.2);
+    expect(storage.values["bh.meta.v1.bestSurvivalSec"]).toBeUndefined();
+    expect(storage.values["bh.meta.v1.bestSurvivalSec.easy"]).toBe("74.2");
   });
 
   it("сбрасывает битое значение вместо того, чтобы показать его игроку", () => {
-    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec": "полтора часа" });
+    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec.normal": "полтора часа" });
 
-    expect(loadBestSurvivalSec(storage)).toBe(0);
-    expect(storage.values["bh.meta.v1.bestSurvivalSec"]).toBeUndefined();
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(0);
+    expect(storage.values["bh.meta.v1.bestSurvivalSec.normal"]).toBeUndefined();
   });
 
   it("не верит невозможному результату: забег длиннее суток — испорченное значение", () => {
-    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec": "999999999" });
+    const storage = memoryStorage({ "bh.meta.v1.bestSurvivalSec.normal": "999999999" });
 
-    expect(loadBestSurvivalSec(storage)).toBe(0);
+    expect(loadBestSurvivalSec(storage, "normal")).toBe(0);
   });
 
   it("живёт без хранилища: рекорд не переживёт запуск, но забег не упадёт", () => {
-    expect(loadBestSurvivalSec(undefined)).toBe(0);
+    expect(loadBestSurvivalSec(undefined, "normal")).toBe(0);
     expect(submitRunResult(undefined, resultWith(12))).toEqual({
       bestSurvivalSec: 12,
       isNewRecord: true,

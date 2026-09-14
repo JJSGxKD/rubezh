@@ -1,8 +1,16 @@
-import type { RunResult, UpgradeOption } from "@bh/shared-types";
-import { loadRunEngine, type HudSnapshot, type RunPauseReason, type RunSession } from "@bh/core-game";
+import type { DifficultyId, RunResult, UpgradeOption } from "@bh/shared-types";
+import {
+  loadRunEngine,
+  type HudSnapshot,
+  type RunPauseReason,
+  type RunSession,
+  type RunSnapshot,
+} from "@bh/core-game";
 import { create } from "zustand";
 import { useDiagnostics } from "./diagnostics";
 import { useMeta } from "./meta";
+import { usePlaytest } from "./playtest";
+import { useSavedRun } from "./run-save";
 import { reportError, track, useShell } from "./shell";
 
 /**
@@ -26,9 +34,19 @@ export interface RunStartOptions {
   container: HTMLElement;
   startingWeaponId: string;
   mapId: string;
+  difficultyId: DifficultyId;
   /** плотность экрана; стенд испытаний фиксирует её ради сравнимости замеров */
   pixelRatio?: number;
+  /** продолжить сохранённый забег вместо нового */
+  resume?: RunSnapshot;
 }
+
+/**
+ * Как часто забег сохраняется сам, секунды забега. Кроме этого он
+ * сохраняется на паузе, на выборе улучшения и при уходе с экрана: вылет
+ * между сохранениями отнимает у игрока не больше этого времени.
+ */
+const AUTOSAVE_SEC = 15;
 
 export interface RunStore {
   phase: RunPhase;
@@ -52,6 +70,13 @@ export interface RunStore {
   choose(optionId: string): void;
   restart(): void;
   stop(): void;
+  /**
+   * Забег, который откроет следующий заход на экран забега; `null` — новый.
+   * Снимается с очереди, только когда сессия создана: в режиме разработки
+   * React запускает экран дважды, и первый запуск не должен съесть снимок.
+   */
+  pendingResume: RunSnapshot | null;
+  prepareResume(snapshot: RunSnapshot | null): void;
 }
 
 let session: RunSession | null = null;
@@ -78,6 +103,9 @@ let startToken = 0;
 /** Когда игрок начал забег — от этой точки считается время до первого кадра. */
 let firstFrameStartedAt: number | null = null;
 
+/** Секунда забега, на которой он сохранялся последний раз. */
+let lastSavedSec = 0;
+
 const IDLE = {
   phase: "idle" as RunPhase,
   loadingStage: null as RunLoadingStage | null,
@@ -94,16 +122,26 @@ const IDLE = {
 export const useRun = create<RunStore>((set, get) => ({
   ...IDLE,
   seed: 1,
+  pendingResume: null,
+
+  prepareResume(snapshot): void {
+    set({ pendingResume: snapshot });
+  },
 
   async start(options: RunStartOptions): Promise<void> {
     // Уже идущий забег не перезапускаем: за этим есть отдельная команда.
     if (session !== null) return;
 
     const token = ++startToken;
-    const seed = nextSeed();
+    const resume = options.resume;
+    const seed = resume?.seed ?? nextSeed();
     set({ ...IDLE, phase: "loading", loadingStage: "engine", seed });
     startOptions = options;
     firstFrameStartedAt = performance.now();
+    lastSavedSec = resume?.summary.survivalSec ?? 0;
+    // Новый забег занимает единственное место сохранения: старое игрок уже
+    // бросил, согласившись в лобби.
+    if (resume === undefined) useSavedRun.getState().clear();
 
     try {
       // Движок приходит отдельным чанком; обычно он уже предзагружен из лобби
@@ -121,12 +159,14 @@ export const useRun = create<RunStore>((set, get) => ({
         seed,
         mode: "endless",
         mapId: options.mapId,
+        difficultyId: options.difficultyId,
         startingWeaponId: options.startingWeaponId,
         diagnostics: {
           recordRun: diagnostics.enabled && diagnostics.recordRuns,
           fpsOverlay: diagnostics.enabled && diagnostics.fpsOverlay,
         },
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
+        ...(resume === undefined ? {} : { resume }),
       });
 
       if (token !== startToken) {
@@ -137,13 +177,25 @@ export const useRun = create<RunStore>((set, get) => ({
 
       session = created;
       unsubscribes = subscribe(created, set, get);
-      set({ phase: "running" });
+      set({ pendingResume: null });
+      // Продолженный забег движок сам ставит на паузу или на выбор — фазу
+      // пришлёт событие, своя догадка здесь её затёрла бы.
+      if (get().phase === "loading") set({ phase: "running" });
       setRunUiMode(true);
 
+      if (resume !== undefined) {
+        track("run_resumed", {
+          seed,
+          elapsedSec: Math.round(resume.summary.survivalSec),
+          level: resume.summary.level,
+        });
+        return;
+      }
       track("run_started", {
         seed,
         weapon: options.startingWeaponId,
         map: options.mapId,
+        difficulty: options.difficultyId,
         screenMode: screenModeNow(),
         orientation: orientationNow(),
       });
@@ -180,6 +232,7 @@ export const useRun = create<RunStore>((set, get) => ({
     if (session === null) return;
     const seed = nextSeed();
     set({ ...IDLE, phase: "running", seed });
+    lastSavedSec = 0;
     session.restart(seed);
     setRunUiMode(true);
 
@@ -187,12 +240,16 @@ export const useRun = create<RunStore>((set, get) => ({
       seed,
       weapon: startOptions?.startingWeaponId ?? "",
       map: startOptions?.mapId ?? "",
+      difficulty: startOptions?.difficultyId ?? "",
       screenMode: screenModeNow(),
       orientation: orientationNow(),
     });
   },
 
   stop(): void {
+    // Уход с экрана посреди забега — не конец забега: он сохраняется и ждёт
+    // в лобби.
+    if (isInProgress(get().phase)) saveRun();
     // Незавершённый запуск тоже отменяем: иначе он доедет и создаст игру,
     // которой уже некому владеть.
     startToken++;
@@ -222,11 +279,13 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
         firstFrameStartedAt = null;
       }
       set({ hud, loadingStage: null });
+      if (hud.survivalSec - lastSavedSec >= AUTOSAVE_SEC && get().phase === "running") saveRun();
     }),
 
     created.on("levelUp", ({ level, options, queued }) => {
       track("upgrade_offered", { level, count: options.length, queued });
       set({ phase: "levelUp", offers: options, queued, level });
+      saveRun();
     }),
 
     created.on("waveReached", ({ index, elapsedSec }) => {
@@ -235,7 +294,12 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
 
     created.on("paused", ({ reason, elapsedSec }) => {
       set({ phase: "paused", pauseReason: reason });
-      track("run_paused", { reason, elapsedSec: Math.round(elapsedSec) });
+      // Сворачивание — самый частый путь к закрытию приложения: сохраняемся
+      // сразу, а не на следующем автосохранении, до которого дело не дойдёт.
+      if (reason !== "restored") {
+        saveRun();
+        track("run_paused", { reason, elapsedSec: Math.round(elapsedSec) });
+      }
     }),
 
     created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [] })),
@@ -245,6 +309,13 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
 
     created.on("error", ({ message }) => {
       reportError("run", message);
+      // Не прочиталось сохранение — второй раз оно тоже не прочитается, и
+      // «Продолжить» в лобби вело бы в ту же ошибку.
+      if (startOptions?.resume !== undefined && get().hud === null) {
+        useSavedRun.getState().clear();
+        set({ phase: "error", loadingStage: null, errorMessage: "error.resume" });
+        return;
+      }
       // Забег уже шёл — значит сломался не запуск, а отрисовка. Игроку это
       // разные вещи: в первом случае не загрузилось, во втором замерла
       // картинка, и текст должен говорить именно об этом.
@@ -263,9 +334,14 @@ function finishRun(
   event: "run_finished" | "run_abandoned",
   set: SetState,
 ): void {
+  // Кончившийся забег продолжать нечего.
+  useSavedRun.getState().clear();
   // Рекорд пишется здесь, а не в движке: хранилище устройства — забота
   // оболочки (docs/27-design-system-and-app-shell.md §7).
   const isNewRecord = useMeta.getState().submitRun(result);
+  // Лидерборд плейтеста — поверх рекорда на устройстве, а не вместо него:
+  // без сети игрок всё равно видит свой рекорд сразу.
+  usePlaytest.getState().submitRun(result);
   setRunUiMode(false);
   set({ phase: "finished", result, isNewRecord });
 
@@ -277,9 +353,25 @@ function finishRun(
     enemiesKilled: result.enemiesKilled,
     weapon: result.startingWeaponId,
     map: result.mapId,
+    difficulty: result.difficultyId,
     contentHash: result.contentHash,
     isNewRecord,
   });
+}
+
+function isInProgress(phase: RunPhase): boolean {
+  return phase === "running" || phase === "paused" || phase === "levelUp";
+}
+
+/**
+ * Сохранить забег на устройство. Снимок снимается синхронно и весит десятки
+ * килобайт, поэтому не на каждом кадре, а по событиям и раз в `AUTOSAVE_SEC`.
+ */
+function saveRun(): void {
+  const snapshot = session?.snapshot() ?? null;
+  if (snapshot === null) return;
+  lastSavedSec = snapshot.summary.survivalSec;
+  useSavedRun.getState().save(snapshot);
 }
 
 let preloading = false;

@@ -1,7 +1,7 @@
 import type { DropsDef } from "@bh/shared-types";
 import { addXp } from "../progression/levels";
 import { createDirection, randomDirection } from "./directions";
-import { findMedkitContentProblems } from "./medkits";
+import { findPickupContentProblems } from "./pickups";
 import { NEVER_HIT } from "./pools";
 import { vectorLength } from "./vector";
 import { clampToBounds, type World } from "./world";
@@ -42,7 +42,7 @@ export function findDropsContentProblems(drops: DropsDef): string[] {
   if (!Number.isInteger(perKill) || perKill < 1 || perKill > MAX_GEMS_PER_KILL) {
     problems.push(`drops.gems.maxPerKill — целое от 1 до ${MAX_GEMS_PER_KILL}, сейчас ${perKill}`);
   }
-  problems.push(...findMedkitContentProblems(drops.medkits));
+  problems.push(...findPickupContentProblems(drops));
   return problems;
 }
 

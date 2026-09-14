@@ -10,6 +10,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "might",
     nameKey: "passive.might.name",
     descriptionKey: "passive.might.description",
+    category: "attack",
     stat: "damage",
     op: "mul",
     levels: [1.1, 1.2, 1.3, 1.45, 1.6],
@@ -18,6 +19,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "haste",
     nameKey: "passive.haste.name",
     descriptionKey: "passive.haste.description",
+    category: "attack",
     stat: "cooldown",
     op: "mul",
     levels: [0.92, 0.85, 0.79, 0.73, 0.68],
@@ -26,6 +28,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "reach",
     nameKey: "passive.reach.name",
     descriptionKey: "passive.reach.description",
+    category: "attack",
     stat: "area",
     op: "mul",
     levels: [1.1, 1.2, 1.32, 1.45, 1.6],
@@ -34,6 +37,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "volley",
     nameKey: "passive.volley.name",
     descriptionKey: "passive.volley.description",
+    category: "attack",
     stat: "projectiles",
     op: "add",
     levels: [1, 2],
@@ -42,6 +46,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "swiftness",
     nameKey: "passive.swiftness.name",
     descriptionKey: "passive.swiftness.description",
+    category: "mobility",
     stat: "moveSpeed",
     op: "mul",
     levels: [1.08, 1.15, 1.22, 1.3],
@@ -50,6 +55,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "vitality",
     nameKey: "passive.vitality.name",
     descriptionKey: "passive.vitality.description",
+    category: "defense",
     stat: "maxHp",
     op: "add",
     levels: [20, 45, 75, 110],
@@ -58,6 +64,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "mending",
     nameKey: "passive.mending.name",
     descriptionKey: "passive.mending.description",
+    category: "defense",
     stat: "regenPerSec",
     op: "add",
     levels: [0.4, 0.9, 1.5, 2.2],
@@ -66,6 +73,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "lodestone",
     nameKey: "passive.lodestone.name",
     descriptionKey: "passive.lodestone.description",
+    category: "mobility",
     stat: "pickupRadius",
     op: "mul",
     levels: [1.3, 1.7, 2.2, 2.8],
@@ -74,6 +82,7 @@ export const PASSIVES: PassiveDef[] = [
     id: "ward",
     nameKey: "passive.ward.name",
     descriptionKey: "passive.ward.description",
+    category: "defense",
     stat: "armor",
     op: "add",
     levels: [1, 2, 3],
@@ -81,11 +90,15 @@ export const PASSIVES: PassiveDef[] = [
 ];
 
 /**
- * Сколько оружий и пассивок игрок держит одновременно (решение Р13,
- * docs/26-stage2-plan.md §2). Шесть и шесть, как в Vampire Survivors, на
- * экране телефона делают и HUD, и выбор нечитаемыми.
+ * Слоты набора (решение Р13, docs/26-stage2-plan.md §2). Пассивки делятся на
+ * категории, и у каждой свои слоты: четыре слота «на что угодно» к десятой
+ * минуте забивались всем подряд, и выбирать становилось нечего. Теперь
+ * взятая «Живучесть» — это отказ от «Брони» и «Заживления».
  */
-export const LOADOUT_LIMITS: LoadoutLimits = { weapons: 4, passives: 4 };
+export const LOADOUT_LIMITS: LoadoutLimits = {
+  weapons: 3,
+  passives: { attack: 2, defense: 1, mobility: 1 },
+};
 
 /**
  * Кривая опыта. Темп начала важнее всего: первый уровень должен приходить в

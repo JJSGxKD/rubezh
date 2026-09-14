@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatDuration, hasTranslation, t } from "../src/i18n";
+import { PLAYTEST_FAILURES } from "../src/state/playtest-api";
 
 // Тексты интерфейса (docs/27-design-system-and-app-shell.md §8).
 
@@ -14,6 +15,18 @@ describe("переводы", () => {
     expect(t("lobby.runs", { count: 3 })).toBe("3 забега");
     expect(t("lobby.runs", { count: 11 })).toBe("11 забегов");
     expect(t("lobby.runs", { count: 22 })).toBe("22 забега");
+  });
+
+  it("склоняет число участников в рейтинге", () => {
+    expect(t("rating.me.of", { total: 1 })).toBe("из 1 участника");
+    expect(t("rating.me.of", { total: 5 })).toBe("из 5 участников");
+    expect(t("rating.pending", { count: 2 })).toContain("2 забега");
+  });
+
+  it("знает текст для каждой причины, по которой сервер плейтеста не ответил", () => {
+    for (const failure of PLAYTEST_FAILURES) {
+      expect(hasTranslation(`playtest.failure.${failure}`), failure).toBe(true);
+    }
   });
 
   it("возвращает неизвестный ключ как есть — в интерфейсе он заметен", () => {

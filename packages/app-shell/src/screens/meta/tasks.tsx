@@ -4,13 +4,14 @@ import {
   Badge,
   Card,
   ContentColumn,
+  PageTitle,
   ProgressBar,
   Screen,
   SegmentedControl,
   StubNotice,
 } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
-import { useMeta } from "../../state/meta";
+import { bestOverall, useMeta } from "../../state/meta";
 import { RewardChip } from "./reward";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 import {
@@ -46,8 +47,9 @@ export function TasksScreen(): ReactNode {
   const [view, setView] = useState<View>("daily");
 
   return (
-    <Screen title={t("tasks.title")}>
+    <Screen>
       <ContentColumn>
+        <PageTitle>{t("tasks.title")}</PageTitle>
         <div className="mt-2 grid gap-3">
           <SegmentedControl
             label={t("tasks.title")}
@@ -112,7 +114,7 @@ function TaskList(props: { period: ResetPeriod; tasks: readonly TaskDef[] }): Re
 
 function AchievementList(): ReactNode {
   const runs = useMeta((state) => state.runs);
-  const bestSurvivalSec = useMeta((state) => state.bestSurvivalSec);
+  const bestSurvivalSec = useMeta((state) => bestOverall(state.best));
 
   return (
     <div className="grid gap-2">

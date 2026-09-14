@@ -1,4 +1,4 @@
-import type { LevelCurveDef, UpgradeOption } from "@bh/shared-types";
+import type { LevelCurveDef, PassiveCategory, UpgradeOption } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import { computePlayerStats } from "./passives";
 import { healChanges, passiveChanges, weaponChanges } from "./upgrade-changes";
@@ -123,7 +123,8 @@ function collectCandidates(world: World): Candidate[] {
   world.passiveTypes.forEach((type, typeIndex) => {
     const slot = passiveSlotOf(loadout, typeIndex);
     if (slot < 0) {
-      if (loadout.passives.length >= world.loadoutLimits.passives) return;
+      // Слоты — по категории пассивки, а не общие на все.
+      if (passivesInCategory(world, type.category) >= world.loadoutLimits.passives[type.category]) return;
       candidates.push({
         weight: type.weight,
         option: {
@@ -156,6 +157,15 @@ function collectCandidates(world: World): Candidate[] {
   });
 
   return candidates;
+}
+
+/** Сколько пассивок этой категории уже в наборе. */
+export function passivesInCategory(world: World, category: PassiveCategory): number {
+  let count = 0;
+  for (const slot of world.loadout.passives) {
+    if (world.passiveTypes[slot.typeIndex].category === category) count++;
+  }
+  return count;
 }
 
 /** Взвешенный выбор без повторов: один и тот же вариант не предлагается дважды. */

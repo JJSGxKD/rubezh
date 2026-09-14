@@ -1,6 +1,8 @@
-import { Suspense, useEffect, type ReactNode } from "react";
-import { Gift, Home, ListChecks, Swords, Trophy, Users } from "lucide-react";
-import { ScreenTransition, TabBar, type TabItem } from "../design-system/components";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { ListChecks, Store, Swords, Trophy, Users } from "lucide-react";
+import { ArmorIcon, ScreenTransition, TabBar, type TabItem } from "../design-system/components";
+import { AppHeader } from "./AppHeader";
+import { MainMenu } from "./MainMenu";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
 import {
@@ -23,6 +25,7 @@ import {
   DiagnosticsScreen,
   FriendsScreen,
   GalleryScreen,
+  GuideScreen,
   ProfileScreen,
   RatingScreen,
   ScreenBoundary,
@@ -48,6 +51,7 @@ export function App(): ReactNode {
   const capabilities = useShell((state) => state.capabilities);
   const expanded = usePlatform((state) => state.viewport.expanded);
   const install = useInstall();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   usePlatformButtons(stack, screen);
 
@@ -62,15 +66,38 @@ export function App(): ReactNode {
   // Забег занимает весь экран: панель разделов поверх канвы отнимала бы
   // высоту у мира и попадала под палец.
   const showTabs = tab !== null && screen !== "run" && stack.length === 1;
+  // Настройки, открытые с паузы, ложатся поверх забега, а не вместо него:
+  // размонтированный экран забега уничтожил бы движок, и возврат начинал бы
+  // забег заново. Забег в этот момент стоит на паузе и скрыт, но жив.
+  const runUnderneath = screen !== "run" && stack.includes("run");
 
   return (
-    <div className="bg-app flex h-full flex-col">
-      <main className="min-h-0 flex-1">
-        <ScreenBoundary key={screen}>
-          <Suspense fallback={<ScreenFallback />}>
-            <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
-          </Suspense>
-        </ScreenBoundary>
+    <div className="bg-app relative flex h-full flex-col">
+      {/* Шапка — у разделов нижней панели: внутри раздела верх экрана занят
+          заголовком и кнопкой «назад». */}
+      {showTabs ? <AppHeader onMenu={() => setMenuOpen(true)} /> : null}
+      <main className="relative min-h-0 flex-1">
+        {screen === "run" || runUnderneath ? (
+          <div
+            aria-hidden={runUnderneath}
+            className={runUnderneath ? "invisible absolute inset-0" : "h-full"}
+          >
+            <ScreenBoundary key="run">
+              <ScreenTransition screenKey="run">
+                <RunScreen />
+              </ScreenTransition>
+            </ScreenBoundary>
+          </div>
+        ) : null}
+        {screen === "run" ? null : (
+          <div className={runUnderneath ? "bg-app absolute inset-0" : "h-full"}>
+            <ScreenBoundary key={screen}>
+              <Suspense fallback={<ScreenFallback />}>
+                <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
+              </Suspense>
+            </ScreenBoundary>
+          </div>
+        )}
       </main>
       {showTabs ? (
         <TabBar
@@ -79,6 +106,7 @@ export function App(): ReactNode {
           onSelect={(id) => useNavigation.getState().resetTo(id as ScreenId)}
         />
       ) : null}
+      {menuOpen && showTabs ? <MainMenu onClose={() => setMenuOpen(false)} /> : null}
     </div>
   );
 }
@@ -89,11 +117,13 @@ export function App(): ReactNode {
  * появится»: заглушки зовут зайти и посмотреть.
  */
 const TABS: readonly TabItem[] = [
-  { id: "shop", label: t("tab.shop"), icon: <Gift size={22} />, badge: "dot" },
-  { id: "arsenal", label: t("tab.arsenal"), icon: <Swords size={22} />, badge: "dot" },
-  { id: "lobby", label: t("tab.home"), icon: <Home size={22} /> },
+  // Значки говорят, что внутри: магазин — витрина, а не подарок; арсенал —
+  // снаряжение, а не бой; бой — на главной, откуда в него и уходят.
+  { id: "shop", label: t("tab.shop"), icon: <Store size={22} />, badge: "dot" },
+  { id: "arsenal", label: t("tab.arsenal"), icon: <ArmorIcon size={22} />, badge: "dot" },
+  { id: "lobby", label: t("tab.home"), icon: <Swords size={22} /> },
   { id: "tasks", label: t("tab.tasks"), icon: <ListChecks size={22} />, badge: "dot" },
-  { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} />, badge: "dot" },
+  { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} /> },
   { id: "friends", label: t("tab.friends"), icon: <Users size={22} />, badge: "dot" },
 ];
 
@@ -131,6 +161,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <DiagnosticsScreen />;
     case "gallery":
       return <GalleryScreen />;
+    case "guide":
+      return <GuideScreen />;
     default:
       return <AboutScreen />;
   }

@@ -4,6 +4,8 @@ import type {
   UserContext,
   PurchaseResult,
   SharePayload,
+  InvitePayload,
+  InviteResult,
   HapticType,
   AdResult,
   DisplayUser,
@@ -43,6 +45,16 @@ export class MaxAdapter implements PlatformAdapter {
 
   share(_payload: SharePayload): void {
     // TODO: нативный шеринг MAX
+  }
+
+  async invite(_invite: InvitePayload): Promise<InviteResult> {
+    // Площадка портируется после лонча в Telegram: приглашать пока некуда.
+    return "unavailable";
+  }
+
+  signedLaunchData(): string | null {
+    // Схема подписи площадки появится вместе с портированием.
+    return null;
   }
 
   haptic(_type: HapticType): void {

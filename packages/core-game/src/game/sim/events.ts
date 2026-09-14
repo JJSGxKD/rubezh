@@ -20,6 +20,10 @@ export const SIM_EVENT = {
   playerHit: 3,
   /** игрок подобрал аптечку; `radius` несёт, сколько здоровья она вернула */
   heal: 4,
+  /** игрок подобрал магнит; `radius` — докуда притянуло кристаллы */
+  magnet: 5,
+  /** взорвался подобранный динамит; `radius` — радиус взрыва */
+  dynamite: 6,
 } as const;
 
 export type SimEventKind = (typeof SIM_EVENT)[keyof typeof SIM_EVENT];

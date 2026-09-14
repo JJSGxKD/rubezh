@@ -9,14 +9,14 @@ import type { World } from "./sim/world";
  *
  * Радиус радара — кольцо спавна: там появляются враги, которых игрок ещё не
  * видит, и именно о них радар должен предупредить. Точек не больше
- * `MAX_BLIPS`: элиты и аптечки кладутся первыми — рядовой рой можно показать
+ * `MAX_BLIPS`: элиты и подборы кладутся первыми — рядовой рой можно показать
  * не весь, а босса за краем экрана пропустить нельзя.
  */
 export const MAX_BLIPS = 96;
 
 const KIND_ENEMY = 0;
 const KIND_ELITE = 1;
-const KIND_MEDKIT = 2;
+const KIND_PICKUP = 2;
 
 export function buildRadarSnapshot(world: World): RadarSnapshot {
   const blips = new Float32Array(MAX_BLIPS * 3);
@@ -41,9 +41,9 @@ export function buildRadarSnapshot(world: World): RadarSnapshot {
     count++;
   };
 
-  const medkits = world.medkits;
-  for (let i = 0; i < medkits.count; i++) {
-    if (medkits.alive[i] === 1) push(medkits.x[i], medkits.y[i], KIND_MEDKIT);
+  const pickups = world.pickups;
+  for (let i = 0; i < pickups.count; i++) {
+    if (pickups.alive[i] === 1) push(pickups.x[i], pickups.y[i], KIND_PICKUP);
   }
 
   const enemies = world.enemies;

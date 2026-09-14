@@ -1,8 +1,10 @@
 export { Button, IconButton, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { Emblem, Wordmark } from "./Brand";
 export { FullscreenButton } from "./FullscreenButton";
+export { ArmorIcon } from "./icons";
 export {
   ContentColumn,
+  PageTitle,
   Screen,
   ScreenTransition,
   SectionTitle,

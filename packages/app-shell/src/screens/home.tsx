@@ -1,27 +1,28 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
+  BookOpen,
   CalendarCheck,
-  Gem,
+  ChevronRight,
+  History,
   Infinity as InfinityIcon,
   LoaderPinwheel,
   Lock,
   Map as MapIcon,
   Play,
-  Settings,
   Trophy,
-  User,
 } from "lucide-react";
-import { WEAPONS } from "@bh/core-game";
+import type { DifficultyId } from "@bh/shared-types";
+import { DIFFICULTIES, WEAPONS } from "@bh/core-game";
 import {
   Badge,
   Button,
   Card,
   ContentColumn,
-  CurrencyChip,
   Emblem,
-  FullscreenButton,
-  IconButton,
+  Modal,
   Screen,
+  SectionTitle,
+  SegmentedControl,
   Stat,
   Wordmark,
 } from "../design-system/components";
@@ -29,7 +30,8 @@ import { formatDuration, t } from "../i18n";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
 import { preloadScreens } from "../app/lazy-screens";
-import { preloadRunEngine } from "../state/run";
+import { preloadRunEngine, useRun } from "../state/run";
+import { useSavedRun, type SavedRun } from "../state/run-save";
 import { ItemTile } from "./item-icons";
 
 /**
@@ -47,27 +49,41 @@ const PRELOAD_DELAY_MS = 1500;
 export function LobbyScreen(): ReactNode {
   const navigation = useNavigation();
   const meta = useMeta();
+  const saved = useSavedRun((state) => state.saved);
+  const [confirmingNewRun, setConfirmingNewRun] = useState(false);
+  const best = meta.best[meta.lastDifficultyId];
   usePreloadEngine();
 
   return (
+    <div className="relative h-full">
     <Screen
-      actions={
-        <>
-          <CurrencyChip icon={<Gem size={14} />} value="0" />
-          <FullscreenButton />
-          <IconButton label={t("profile.title")} onClick={() => navigation.push("profile")}>
-            <User size={20} />
-          </IconButton>
-          <IconButton label={t("settings.title")} onClick={() => navigation.push("settings")}>
-            <Settings size={20} />
-          </IconButton>
-        </>
-      }
       footer={
-        <Button size="l" block glow onClick={() => navigation.push("mode")}>
-          <Play size={22} fill="currentColor" />
-          {t("lobby.play")}
-        </Button>
+        saved === null ? (
+          <Button size="l" block glow onClick={() => navigation.push("mode")}>
+            <Play size={22} fill="currentColor" />
+            {t("lobby.play")}
+          </Button>
+        ) : (
+          // Прерванный забег главнее нового: игрок, вернувшийся после звонка,
+          // хочет доиграть, а не начинать с нуля.
+          <div className="grid gap-1">
+            <Button
+              size="l"
+              block
+              glow
+              onClick={() => {
+                useRun.getState().prepareResume(saved);
+                navigation.push("run");
+              }}
+            >
+              <Play size={22} fill="currentColor" />
+              {t("lobby.continue")}
+            </Button>
+            <Button variant="ghost" block onClick={() => setConfirmingNewRun(true)}>
+              {t("lobby.newRun")}
+            </Button>
+          </div>
+        )
       }
     >
       <ContentColumn>
@@ -81,19 +97,23 @@ export function LobbyScreen(): ReactNode {
           <p className="max-w-[300px] text-sm text-text-muted landscape:hidden">{t("lobby.tagline")}</p>
         </div>
 
+        {saved === null ? null : <SavedRunCard saved={saved} />}
+
         <Card appearIndex={1}>
           <div className="flex items-center gap-4">
             <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-elite/15 text-elite">
               <Trophy size={24} />
             </span>
             <div className="min-w-0 flex-1">
+              {/* Рекорд — на той сложности, что выбрана сейчас: время на разных
+                  сложностях несравнимо, и общий рекорд обманывал бы. */}
               <Stat
-                label={t("lobby.record")}
-                value={meta.bestSurvivalSec > 0 ? formatDuration(meta.bestSurvivalSec) : "—"}
+                label={t("lobby.record.on", { difficulty: t(`difficulty.${meta.lastDifficultyId}.name`) })}
+                value={best > 0 ? formatDuration(best) : "—"}
                 large
-                tone={meta.bestSurvivalSec > 0 ? "accent" : undefined}
+                tone={best > 0 ? "accent" : undefined}
               />
-              {meta.bestSurvivalSec > 0 ? null : (
+              {best > 0 ? null : (
                 <p className="mt-0.5 text-xs text-text-muted">{t("lobby.noRecord")}</p>
               )}
             </div>
@@ -119,8 +139,83 @@ export function LobbyScreen(): ReactNode {
             onClick={() => navigation.push("wheel")}
           />
         </div>
+
+        {/* Гайдбук на главной, а не только в меню: новичок не пойдёт искать
+            его по меню, пока не проиграет пару забегов непонятно кому. */}
+        <div className="mt-3">
+          <Card appearIndex={4} onClick={() => navigation.push("guide")}>
+            <div className="flex items-center gap-3">
+              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-passive/15 text-passive">
+                <BookOpen size={22} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display text-sm font-bold text-text">{t("guide.lobby.title")}</span>
+                <span className="mt-0.5 block text-xs text-text-muted">{t("guide.lobby.hint")}</span>
+              </span>
+              <ChevronRight size={20} aria-hidden="true" className="shrink-0 text-text-muted" />
+            </div>
+          </Card>
+        </div>
       </ContentColumn>
     </Screen>
+
+    {confirmingNewRun ? (
+      <Modal
+        title={t("lobby.newRun.title")}
+        placement="bottom"
+        footer={
+          <>
+            <Button
+              variant="danger"
+              block
+              onClick={() => {
+                useSavedRun.getState().clear();
+                setConfirmingNewRun(false);
+                navigation.push("mode");
+              }}
+            >
+              {t("lobby.newRun.confirm")}
+            </Button>
+            <Button variant="ghost" block onClick={() => setConfirmingNewRun(false)}>
+              {t("app.cancel")}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-text-muted">{t("lobby.newRun.text")}</p>
+      </Modal>
+    ) : null}
+    </div>
+  );
+}
+
+/** Прерванный забег: сколько продержался и с чем — чтобы игрок узнал свой забег. */
+function SavedRunCard(props: { saved: SavedRun }): ReactNode {
+  const { summary } = props.saved;
+
+  return (
+    <div className="mb-3">
+      <Card appearIndex={0} stripe="accent">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
+            <History size={24} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="font-display text-xs font-semibold tracking-wide text-text-muted uppercase">
+              {t("lobby.saved.title")}
+            </span>
+            <p className="font-display text-lg font-bold text-text tabular-nums">
+              {t("lobby.saved.meta", { time: formatDuration(summary.survivalSec), level: summary.level })}
+            </p>
+          </div>
+          <div className="flex shrink-0 -space-x-2">
+            {summary.weapons.map((weapon) => (
+              <ItemTile key={weapon.id} kind="weapon" id={weapon.id} size="s" />
+            ))}
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -233,8 +328,8 @@ export function ModeScreen(): ReactNode {
 }
 
 /**
- * Выбор стартового оружия: три карточки, последний выбор запомнен
- * (решение Р12 `docs/26-stage2-plan.md` §2).
+ * Выбор перед забегом: сложность и стартовое оружие, последний выбор того и
+ * другого запомнен (решение Р12 `docs/26-stage2-plan.md` §2).
  */
 export function WeaponScreen(): ReactNode {
   const navigation = useNavigation();
@@ -246,7 +341,7 @@ export function WeaponScreen(): ReactNode {
 
   return (
     <Screen
-      title={t("weapon.select.title")}
+      title={t("weapon.select.screen")}
       onBack={() => navigation.pop()}
       footer={
         <Button
@@ -257,6 +352,7 @@ export function WeaponScreen(): ReactNode {
             // Запоминаем даже выбор по умолчанию: забег должен стартовать с
             // тем оружием, которое подсвечено на экране.
             meta.rememberWeapon(selected);
+            useRun.getState().prepareResume(null);
             navigation.replace("run");
           }}
         >
@@ -265,7 +361,17 @@ export function WeaponScreen(): ReactNode {
       }
     >
       <ContentColumn>
-        <p className="mt-2 mb-3 text-xs text-text-muted">{t("weapon.select.hint")}</p>
+        <SectionTitle>{t("difficulty.title")}</SectionTitle>
+        <SegmentedControl
+          label={t("difficulty.title")}
+          activeId={meta.lastDifficultyId}
+          onSelect={(id) => meta.rememberDifficulty(id as DifficultyId)}
+          items={DIFFICULTIES.map((difficulty) => ({ id: difficulty.id, label: t(difficulty.nameKey) }))}
+        />
+        <p className="mt-2 text-xs text-text-muted">{t(`difficulty.${meta.lastDifficultyId}.description`)}</p>
+
+        <SectionTitle>{t("weapon.select.title")}</SectionTitle>
+        <p className="mb-3 text-xs text-text-muted">{t("weapon.select.hint")}</p>
         <div className="grid gap-3 landscape:grid-cols-3">
           {starting.map((weapon, index) => (
             <Card

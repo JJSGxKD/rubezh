@@ -129,7 +129,7 @@
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_finished`, `run_abandoned`, `run_paused`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
 | Интерфейс | `screen_viewed`, `settings_changed` |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded` |
 | Реклама | `ad_requested`, `ad_shown`, `ad_reward_claimed`, `ad_failed` |
@@ -139,6 +139,7 @@
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
 | Удержание | `daily_reward_claimed`, `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
+| Плейтест | `playtest_run_synced` — временное, на время закрытого теста (`26-stage2-plan.md`, WP13) |
 
 Добавлено на этапе 2 (`26-stage2-plan.md`):
 
@@ -146,14 +147,17 @@
 |---|---|---|
 | `upgrade_offered` | Выбор улучшения при наборе уровня. Без предложений частота выбора не считается: «выбрали 5 раз» ничего не значит, пока неизвестно, сколько раз предлагали. Отдельного события набора уровня нет — оно следует из этого | `runId`, `level`, `elapsedSec`, `options[]` (вид: новое оружие, уровень оружия, пассивка; id; уровень) |
 | `run_paused` | Как часто забег прерывается — вход для решения о длине забега | `runId`, `reason`: `manual` / `app_inactive`, `elapsedSec` |
+| `run_resumed` | Сколько прерванных забегов игроки продолжают — окупилось ли сохранение и как часто приложение закрывают посреди забега | `seed`, `elapsedSec`, `level` |
 | `screen_viewed` | Путь по интерфейсу; заходы в заглушки — замер интереса к будущим разделам | `screen`, `isStub` |
 | `settings_changed` | Какие настройки меняют — режим экрана, вибрацию | `key`, `value` |
 | `diagnostics_mode_changed` | Сколько тестеров включают диагностику и запись забегов | `setting`, `enabled` |
+| `share_offered`, `share_completed` | Приглашение друга на плейтест: сколько нажимают и чем кончается — выбор чата, копия ссылки или неудача | `context` (`friends_invite`), у завершения — `result` |
 | `bench_finished` | Сводка теста производительности; полный отчёт — в диагностике, не в событиях | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
+| `playtest_run_synced` | Дошёл ли итог забега до лидерборда плейтеста: сколько забегов ждут сети, сколько сервер отверг. Растущая доля `queued` с `unauthorized` — устаревшая подпись запуска, а не сеть | `result`: `sent` / `queued` / `dropped`; `trigger`: `finish` / `launch` / `screen`; у неудачи — `failure`; у отправленного — `rank`, `isNewBest` |
 
 Уточнения существующих событий на этапе 2:
 
-- `run_started` — стартовое оружие, карта, ориентация экрана и режим экрана
+- `run_started` — стартовое оружие, карта, сложность, ориентация экрана и режим экрана
   (полноэкранный или обычный);
 - `load_time` — `phase` и `ms`. Фазы: `shell_ready` — от старта оболочки до
   интерактивной главной, с признаком `fontsLoaded` (успели ли свои шрифты
@@ -172,7 +176,7 @@
   номер отрезка с нуля, `elapsedSec` — секунда забега, на которой он начался.
   Движок отдаёт это обратным вызовом, отправляет — оболочка.
 
-`run_finished` и `run_abandoned` несут ещё два поля, без которых распределения
+`run_finished` и `run_abandoned` несут сложность (`difficulty`) — время на разных сложностях несравнимо, и распределение без этого разреза смешивает их, — и ещё два поля, без которых распределения
 по волнам нечем разрезать: `mapId` (карта забега — на старте она одна, но
 разрез нужен сразу) и `contentHash` — отпечаток игрового контента. Хэш
 считается по всем таблицам контента разом и меняется от любой правки чисел:

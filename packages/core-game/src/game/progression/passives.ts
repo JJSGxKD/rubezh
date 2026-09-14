@@ -1,10 +1,11 @@
-import type { PassiveDef, PlayerStat } from "@bh/shared-types";
+import { PASSIVE_CATEGORIES, type PassiveCategory, type PassiveDef, type PlayerStat } from "@bh/shared-types";
 
 /** Пассивка с проверенными уровнями. */
 export interface PassiveType {
   id: string;
   nameKey: string;
   descriptionKey: string;
+  category: PassiveCategory;
   stat: PlayerStat;
   op: "add" | "mul";
   weight: number;
@@ -76,6 +77,10 @@ export function findPassiveContentProblems(defs: readonly PassiveDef[]): string[
     if (def.stat === "projectiles" && def.op !== "add") {
       problems.push(`пассивка ${def.id}: число снарядов задаётся только слагаемым`);
     }
+    // Контент приходит и из JSON админки: тип не спасает от опечатки в категории.
+    if (!PASSIVE_CATEGORIES.includes(def.category)) {
+      problems.push(`пассивка ${def.id}: категория ${String(def.category)} не из ${PASSIVE_CATEGORIES.join(", ")}`);
+    }
   }
   return problems;
 }
@@ -90,6 +95,7 @@ export function resolvePassiveTypes(defs: readonly PassiveDef[]): PassiveType[] 
     id: def.id,
     nameKey: def.nameKey,
     descriptionKey: def.descriptionKey,
+    category: def.category,
     stat: def.stat,
     op: def.op,
     weight: def.weight ?? 1,

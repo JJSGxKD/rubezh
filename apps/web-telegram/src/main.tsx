@@ -47,6 +47,15 @@ if (benchAllowed && params.get("bench") !== null) {
       // лезть в настройки, чтобы в отчёте о баге оказался seed. Выключить её
       // он при этом может в любой момент.
       diagnosticsByDefault: import.meta.env.VITE_DIAGNOSTICS_DEFAULT === "1",
+      // Сохранения и лидерборд плейтеста. Dev-сервер всегда ходит на свой же
+      // домен — запросы проксирует Vite, в том числе через туннель
+      // (vite.config.ts): адрес API из .env телефону через туннель недоступен.
+      // Сборка берёт VITE_API_URL, пустой — тоже тот же домен.
+      // Вход без Telegram — только из dev-сервера: в сборку имя не попадает.
+      playtest: {
+        baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? ""),
+        devUser: import.meta.env.DEV ? (import.meta.env.VITE_PLAYTEST_DEV_USER ?? "") : "",
+      },
     },
     analytics: createAnalytics(),
   });

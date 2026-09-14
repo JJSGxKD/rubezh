@@ -80,12 +80,17 @@ export function WheelScreen(): ReactNode {
         <StubNotice text={t("wheel.stub")} />
 
         <div className="relative mx-auto mt-6 aspect-square w-full max-w-[300px] landscape:max-w-[220px]">
-          <div
-            onTransitionEnd={onSpinEnd}
-            className="size-full transition-transform duration-(--duration-spin) ease-spin"
-            style={{ transform: `rotate(${rotation}deg)` }}
-          >
-            <WheelFace />
+          {/* Круглая маска вокруг вращения: повёрнутый квадрат колеса по
+              диагонали шире себя, и без маски после крутки у экрана
+              появлялась горизонтальная прокрутка. */}
+          <div className="absolute inset-0 overflow-hidden rounded-full">
+            <div
+              onTransitionEnd={onSpinEnd}
+              className="size-full transition-transform duration-(--duration-spin) ease-spin"
+              style={{ transform: `rotate(${rotation}deg)` }}
+            >
+              <WheelFace />
+            </div>
           </div>
           {/* Стрелка и ступица не вращаются: стрелка — точка отсчёта. */}
           <span

@@ -1,14 +1,15 @@
 import Phaser from "phaser";
-import type { RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunOutcome } from "@bh/shared-types";
 import { ENEMIES } from "../content/enemies";
 import { CONTENT_HASH } from "../content/hash";
 import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
+import { DEFAULT_DIFFICULTY_ID, findDifficulty } from "../content/difficulty";
 import { DROPS } from "../content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
 import { WEAPONS } from "../content/weapons";
 import type { RunBus } from "../engine/run-bus";
-import type { HudSnapshot, RunPauseReason } from "../run-api";
+import { RUN_SNAPSHOT_FORMAT, type HudSnapshot, type RunPauseReason, type RunSnapshot } from "../run-api";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { createWorld, TICK_SEC, type World } from "./sim/world";
 import { stepWorld, type SimInput } from "./sim/step";
@@ -19,6 +20,7 @@ import { buildRadarSnapshot } from "./radar";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { Joystick } from "./joystick";
 import { buildRunResult } from "./run/run-result";
+import { captureWorld, restoreWorld, SnapshotError } from "./run/snapshot";
 import { createUuid } from "./uuid";
 
 const TICK_MS = TICK_SEC * 1000;
@@ -49,10 +51,13 @@ export interface MainSceneData {
   /** физических пикселей на игровую единицу — см. SimConfig.unitScale */
   unitScale: number;
   mapId: string;
+  difficultyId: DifficultyId;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   /** шина событий наружу: экраны рисует оболочка, движок только сообщает */
   bus: RunBus;
+  /** продолжить забег из снимка вместо нового */
+  resume?: RunSnapshot;
 }
 
 /**
@@ -82,6 +87,8 @@ export class MainScene extends Phaser.Scene {
   private accumulatorMs = 0;
   private hudTimerMs = 0;
   private reportedWave = -1;
+  /** сцена собрана целиком; до этого команды и кадры её не трогают */
+  private ready = false;
 
   constructor() {
     super("main");
@@ -89,14 +96,19 @@ export class MainScene extends Phaser.Scene {
 
   create(data: MainSceneData): void {
     this.sceneData = data;
-    this.seed = data.seed;
-    this.runId = createUuid();
+    const resume = data.resume;
+    this.seed = resume?.seed ?? data.seed;
+    this.runId = resume?.runId ?? createUuid();
     this.accumulatorMs = 0;
     this.hudTimerMs = 0;
     this.reportedWave = -1;
     this.phase = "running";
+    this.ready = false;
 
-    const map = findMap(data.mapId) ?? findMap(DEFAULT_MAP_ID) ?? MAPS[0];
+    const mapId = resume?.mapId ?? data.mapId;
+    const difficulty = findDifficulty(resume?.difficultyId ?? data.difficultyId) ?? findDifficulty(DEFAULT_DIFFICULTY_ID);
+    const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
+    const map = findMap(mapId) ?? findMap(DEFAULT_MAP_ID) ?? MAPS[0];
     this.world = createWorld({
       seed: this.seed,
       enemies: ENEMIES,
@@ -106,10 +118,16 @@ export class MainScene extends Phaser.Scene {
       loadoutLimits: LOADOUT_LIMITS,
       drops: DROPS,
       map,
-      ...(data.startingWeaponId === undefined ? {} : { startingWeaponId: data.startingWeaponId }),
+      ...(difficulty === undefined ? {} : { difficulty }),
+      ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       config: { unitScale: data.unitScale },
     });
     this.spawner = createTimelineDirector(TIMELINE, ENDLESS_CURVE);
+
+    // Снимок переносится до рендера и камеры: они строятся уже по
+    // продолженному миру, и первый кадр не показывает пустое начало забега.
+    if (resume !== undefined && !this.restore(resume)) return;
+
     this.worldRenderer = new WorldRenderer(this, this.world);
     this.runCamera = new RunCamera(map.camera, data.unitScale);
     this.runCamera.snapTo(this.world, this.scale.width, this.scale.height);
@@ -124,11 +142,15 @@ export class MainScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     });
 
+    this.ready = true;
     this.emitHud();
     this.reportWave();
+    if (resume !== undefined) this.enterRestored();
   }
 
   update(_time: number, deltaMs: number): void {
+    // Снимок не прочитался: сцена так и не собралась, об ошибке уже сообщено.
+    if (!this.ready) return;
     if (this.phase !== "running") {
       // Мир стоит: накопитель сбрасывается, чтобы после возврата не прилетела
       // пачка «догоняющих» шагов, и рисуется последнее состояние без
@@ -222,10 +244,79 @@ export class MainScene extends Phaser.Scene {
   }
 
   restartRun(seed: number): void {
-    this.scene.restart({ ...this.sceneData, seed });
+    // «Ещё раз» — новый забег, а не повтор продолженного.
+    const next: MainSceneData = { ...this.sceneData, seed };
+    delete next.resume;
+    this.scene.restart(next);
+  }
+
+  /**
+   * Снимок для продолжения забега. Мёртвый забег продолжать нечего, а на
+   * выборе улучшения снимок годится: варианты сохраняются вместе с миром.
+   */
+  captureSnapshot(): RunSnapshot | null {
+    if (!this.ready || this.phase === "dead") return null;
+    const world = this.world;
+    return {
+      format: RUN_SNAPSHOT_FORMAT,
+      contentHash: CONTENT_HASH,
+      runId: this.runId,
+      seed: this.seed,
+      mapId: world.mapId,
+      difficultyId: world.difficultyLevel.id,
+      startingWeaponId: this.startingWeaponId(),
+      summary: {
+        survivalSec: world.stats.elapsedSec,
+        level: world.progression.level,
+        weapons: this.slotsOf("weapons"),
+        passives: this.slotsOf("passives"),
+      },
+      world: captureWorld(world, this.spawner),
+    };
   }
 
   // --- Внутреннее -----------------------------------------------------------
+
+  /**
+   * Перенести снимок в только что созданный мир. Снимок с другим контентом
+   * или форматом не продолжается: оболочка это проверяет и сама, здесь —
+   * последний рубеж, чтобы чужие числа не попали в мир.
+   */
+  private restore(snapshot: RunSnapshot): boolean {
+    try {
+      if (snapshot.format !== RUN_SNAPSHOT_FORMAT) {
+        throw new SnapshotError(`формат ${snapshot.format}, ожидался ${RUN_SNAPSHOT_FORMAT}`);
+      }
+      if (snapshot.contentHash !== CONTENT_HASH) {
+        throw new SnapshotError("снят на другой версии контента");
+      }
+      restoreWorld(this.world, this.spawner, snapshot.world);
+      return true;
+    } catch (error: unknown) {
+      this.phase = "dead";
+      this.sceneData.bus.emit("error", { message: error instanceof Error ? error.message : String(error) });
+      return false;
+    }
+  }
+
+  /**
+   * Продолженный забег не бежит сразу: игрок только что открыл приложение, и
+   * враги не должны нападать, пока он ищет палец для джойстика.
+   */
+  private enterRestored(): void {
+    if (isAwaitingChoice(this.world)) {
+      this.enterChoice();
+      return;
+    }
+    this.pauseRun("restored");
+  }
+
+  private slotsOf(kind: "weapons" | "passives"): { id: string; level: number }[] {
+    const world = this.world;
+    return kind === "weapons"
+      ? world.loadout.weapons.map((slot) => ({ id: world.weaponTypes[slot.typeIndex].id, level: slot.level }))
+      : world.loadout.passives.map((slot) => ({ id: world.passiveTypes[slot.typeIndex].id, level: slot.level }));
+  }
 
   private enterChoice(): void {
     if (this.phase === "choosing") return;
@@ -276,14 +367,8 @@ export class MainScene extends Phaser.Scene {
       wave: world.difficulty.segment,
       enemiesAlive: world.enemies.aliveCount,
       enemiesKilled: world.stats.enemiesKilled,
-      weapons: world.loadout.weapons.map((slot) => ({
-        id: world.weaponTypes[slot.typeIndex].id,
-        level: slot.level,
-      })),
-      passives: world.loadout.passives.map((slot) => ({
-        id: world.passiveTypes[slot.typeIndex].id,
-        level: slot.level,
-      })),
+      weapons: this.slotsOf("weapons"),
+      passives: this.slotsOf("passives"),
       distance: world.stats.distance,
       radar: buildRadarSnapshot(world),
     };

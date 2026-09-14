@@ -11,6 +11,12 @@ import { clampToBounds, spawnEnemy, type World } from "./world";
  */
 export interface Spawner {
   update(world: World, dtSec: number): void;
+  /**
+   * Состояние для снимка забега (game/run/snapshot.ts). Спавнеру, у которого
+   * нет своего состояния между тиками, методы не нужны.
+   */
+  saveState?(): unknown;
+  loadState?(state: unknown): void;
 }
 
 /** Разброс радиуса спавна, чтобы кольцо не читалось как ровная окружность. */

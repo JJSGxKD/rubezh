@@ -1,12 +1,13 @@
 import type Phaser from "phaser";
 import { GEM_LAND_TICKS } from "../sim/gems";
-import { MEDKIT_LAND_TICKS, MEDKIT_RADIUS_UNITS } from "../sim/medkits";
+import { PICKUP_KIND, PICKUP_LAND_TICKS, PICKUP_RADIUS_UNITS } from "../sim/pickups";
 import type { World } from "../sim/world";
-import type { ShapeKind } from "./shapes";
+import { GEM_TIERS, PICKUP_LOOKS } from "./looks";
 import { ensureShapeTexture, lerp, popScale, triangle } from "./textures";
 
 /**
- * Рендер того, что лежит на земле и подбирается: кристаллы опыта и аптечки.
+ * Рендер того, что лежит на земле и подбирается: кристаллы опыта, аптечки,
+ * магниты и динамит.
  *
  * Оба вылетают из места смерти врага дугой. Полёт рисуется по тикам симуляции
  * плюс доля до следующего шага: на паузе он замирает вместе с миром. Сам
@@ -22,7 +23,9 @@ export class PickupRenderer {
   private readonly gemSpriteTier: Uint8Array;
   /** спрайт кристалла сейчас не в масштабе 1 — после приземления его надо вернуть */
   private readonly gemSpriteScaled: Uint8Array;
-  private readonly medkitSprites: Phaser.GameObjects.Image[] = [];
+  private readonly pickupSprites: Phaser.GameObjects.Image[] = [];
+  /** вид подбора, под который сейчас стоит текстура спрайта */
+  private readonly pickupSpriteKind: Uint8Array;
 
   constructor(scene: Phaser.Scene, world: World, layer: Phaser.GameObjects.Container) {
     this.scene = scene;
@@ -30,17 +33,20 @@ export class PickupRenderer {
     this.layer = layer;
     this.gemSpriteTier = new Uint8Array(world.gems.alive.length).fill(NO_TIER);
     this.gemSpriteScaled = new Uint8Array(world.gems.alive.length);
+    this.pickupSpriteKind = new Uint8Array(world.pickups.alive.length).fill(NO_TIER);
 
     const scale = world.config.unitScale;
     GEM_TIERS.forEach((tier, index) => {
       ensureShapeTexture(scene, gemTextureKey(index), tier.radiusUnits * scale, tier.color, tier.shape);
     });
-    ensureShapeTexture(scene, MEDKIT_KEY, MEDKIT_RADIUS_UNITS * scale, 0xff5d5d, "medkit");
+    for (const look of PICKUP_LOOKS) {
+      ensureShapeTexture(scene, look.key, PICKUP_RADIUS_UNITS * scale * look.size, look.color, look.shape);
+    }
   }
 
   sync(t: number): void {
     this.syncGems(t);
-    this.syncMedkits(t);
+    this.syncPickups(t);
   }
 
   private syncGems(t: number): void {
@@ -90,33 +96,38 @@ export class PickupRenderer {
     }
   }
 
-  /** Аптечка на земле мягко пульсирует: за ней идут, её должно быть видно издалека. */
-  private syncMedkits(t: number): void {
-    const medkits = this.world.medkits;
+  /** Подбор на земле мягко пульсирует: за ним идут, его должно быть видно издалека. */
+  private syncPickups(t: number): void {
+    const pickups = this.world.pickups;
     const tick = this.world.stats.tick;
-    const hop = MEDKIT_HOP_UNITS * this.world.config.unitScale;
+    const hop = PICKUP_HOP_UNITS * this.world.config.unitScale;
 
-    for (let i = 0; i < medkits.count; i++) {
-      const sprite = this.medkitSprite(i);
-      if (medkits.alive[i] === 0) {
+    for (let i = 0; i < pickups.count; i++) {
+      const sprite = this.pickupSprite(i);
+      if (pickups.alive[i] === 0) {
         if (sprite.visible) sprite.setVisible(false);
         continue;
       }
 
+      const kind = pickups.kind[i];
+      if (this.pickupSpriteKind[i] !== kind) {
+        sprite.setTexture(PICKUP_LOOKS[kind]?.key ?? PICKUP_LOOKS[PICKUP_KIND.medkit].key);
+        this.pickupSpriteKind[i] = kind;
+      }
       sprite.setVisible(true);
-      const progress = (tick - medkits.bornTick[i] - 1 + t) / MEDKIT_LAND_TICKS;
+      const progress = (tick - pickups.bornTick[i] - 1 + t) / PICKUP_LAND_TICKS;
       if (progress < 1) {
         const p = progress < 0 ? 0 : progress;
         const eased = 1 - (1 - p) * (1 - p);
         sprite.setPosition(
-          lerp(medkits.originX[i], medkits.x[i], eased),
-          lerp(medkits.originY[i], medkits.y[i], eased) - hop * 4 * p * (1 - p),
+          lerp(pickups.originX[i], pickups.x[i], eased),
+          lerp(pickups.originY[i], pickups.y[i], eased) - hop * 4 * p * (1 - p),
         );
         sprite.setScale(popScale(p));
         continue;
       }
-      sprite.setPosition(medkits.x[i], medkits.y[i]);
-      sprite.setScale(1 + 0.12 * triangle(tick % MEDKIT_PULSE_TICKS, MEDKIT_PULSE_TICKS));
+      sprite.setPosition(pickups.x[i], pickups.y[i]);
+      sprite.setScale(1 + 0.12 * triangle((tick + i * 11) % PICKUP_PULSE_TICKS, PICKUP_PULSE_TICKS));
     }
   }
 
@@ -127,11 +138,11 @@ export class PickupRenderer {
     return this.gemSprites[index];
   }
 
-  private medkitSprite(index: number): Phaser.GameObjects.Image {
-    while (this.medkitSprites.length <= index) {
-      this.medkitSprites.push(this.hiddenSprite(MEDKIT_KEY));
+  private pickupSprite(index: number): Phaser.GameObjects.Image {
+    while (this.pickupSprites.length <= index) {
+      this.pickupSprites.push(this.hiddenSprite(PICKUP_LOOKS[PICKUP_KIND.medkit].key));
     }
-    return this.medkitSprites[index];
+    return this.pickupSprites[index];
   }
 
   private hiddenSprite(key: string): Phaser.GameObjects.Image {
@@ -141,26 +152,15 @@ export class PickupRenderer {
   }
 }
 
-/**
- * Ступени ценности кристалла: цвет, размер и форма. Порог — минимальная
- * ценность ступени. Самая ценная ступень отличается ещё и формой, а не только
- * цветом (docs/27-design-system-and-app-shell.md §4.4).
- */
-const GEM_TIERS: readonly { minValue: number; radiusUnits: number; color: number; shape: ShapeKind }[] = [
-  { minValue: 1, radiusUnits: 5, color: 0x5ccfff, shape: "diamond" },
-  { minValue: 3, radiusUnits: 6.5, color: 0x5fe3a1, shape: "diamond" },
-  { minValue: 8, radiusUnits: 8, color: 0xc47dff, shape: "diamond" },
-  { minValue: 20, radiusUnits: 10, color: 0xffd36b, shape: "hexagon" },
-];
 const NO_TIER = 255;
 /** С какой ступени кристалл мерцает. */
 const SHIMMER_TIER = 2;
 const SHIMMER_PERIOD_TICKS = 48;
 /** Высота подскока в полёте, игровые единицы. */
 const GEM_HOP_UNITS = 18;
-const MEDKIT_HOP_UNITS = 26;
-const MEDKIT_PULSE_TICKS = 40;
-const MEDKIT_KEY = "bh-medkit";
+const PICKUP_HOP_UNITS = 26;
+const PICKUP_PULSE_TICKS = 40;
+
 
 function gemTextureKey(tier: number): string {
   return `bh-gem-${tier}`;

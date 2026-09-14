@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Crown, Pause, Skull, Sparkles, Star } from "lucide-react";
+import { Crown, History, Layers, Pause, Skull, Sparkles, Star, Trophy } from "lucide-react";
 import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { RunSlotState } from "@bh/core-game";
 import {
   Badge,
   Button,
@@ -10,9 +11,10 @@ import {
   Stat,
   staggerStyle,
 } from "../../design-system/components";
-import { formatDuration, formatNumber, t } from "../../i18n";
+import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import { ItemIcon, ItemTile, type ItemKind } from "../item-icons";
 import { SecondChance } from "./SecondChance";
+import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
 import { formatChange } from "./upgrade-format";
 
 /**
@@ -53,8 +55,19 @@ function guarded(ready: boolean, action: () => void): () => void {
   };
 }
 
+/**
+ * Имя врага для игрока. Врагу, которого геймдизайнер добавил без имени в
+ * словаре, лучше показать id, чем ключ перевода.
+ */
+function enemyName(id: string): string {
+  const key = `enemy.${id}.name`;
+  return hasTranslation(key) ? t(key) : id;
+}
+
 export interface PauseOverlayProps {
   elapsedSec: number;
+  /** забег только что продолжен из сохранения — экран говорит об этом, а не «пауза» */
+  restored?: boolean;
   onResume(): void;
   onSettings(): void;
   onSurrender(): void;
@@ -87,8 +100,8 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
 
   return (
     <Modal
-      title={t("run.pause")}
-      icon={<Pause size={26} fill="currentColor" />}
+      title={props.restored === true ? t("run.pause.restored") : t("run.pause")}
+      icon={props.restored === true ? <History size={26} /> : <Pause size={26} fill="currentColor" />}
       footer={
         <>
           <Button size="l" block glow onClick={guarded(ready, props.onResume)}>
@@ -118,11 +131,20 @@ export interface LevelUpOverlayProps {
   level: number;
   offers: readonly UpgradeOption[];
   queued: number;
+  /** текущий набор — показать, сколько слотов каждой категории занято */
+  loadout?: { weapons: readonly RunSlotState[]; passives: readonly RunSlotState[] };
   onChoose(optionId: string): void;
 }
 
 export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   const ready = useTapGuard();
+  const queuedBadge =
+    props.queued > 0 ? (
+      <Badge tone="accent">
+        <Layers size={12} aria-hidden="true" />
+        {t("run.levelUp.queued", { count: props.queued })}
+      </Badge>
+    ) : null;
 
   return (
     <Modal
@@ -130,15 +152,32 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
       icon={<Star size={28} fill="currentColor" />}
       size="l"
     >
-      <p className="-mt-1 mb-4 text-center text-sm text-text-muted landscape:mb-2">
-        {t("run.levelUp.subtitle")}
-      </p>
+      {/* На невысоком экране подсказка уходит: что выбирать, говорят сами
+          карточки, а строка нужна третьей карточке. */}
+      <p className="-mt-1 mb-2 text-center text-sm text-text-muted short:hidden">{t("run.levelUp.subtitle")}</p>
+      {/* Сколько выборов ждёт — плашкой в ряду слотов, а не строкой под
+          карточками: в ландшафте отдельная строка уводила модалку в прокрутку. */}
+      {props.loadout === undefined ? (
+        queuedBadge === null ? null : <div className="mb-2 flex justify-center">{queuedBadge}</div>
+      ) : (
+        <div className="mb-3 short:mb-2">
+          <SlotSummary
+            weapons={props.loadout.weapons}
+            passives={props.loadout.passives}
+            {...(queuedBadge === null ? {} : { extra: queuedBadge })}
+          />
+        </div>
+      )}
       {/*
         В ландшафте карточки идут в ряд, в портрете — столбцом: высота
         ландшафта на телефоне около 360 px, и три карточки столбцом туда не
-        помещаются (docs/27-design-system-and-app-shell.md §5.3). Метка «новое»
-        стоит отдельной строкой: рядом с длинным названием она не давала
-        колонке сжаться, и модалка уезжала в горизонтальную прокрутку.
+        помещаются (docs/27-design-system-and-app-shell.md §5.3).
+
+        Значок, название и метка — одной строкой с переносом, а не столбцом
+        под значком: столбец съедал ширину у описания и строку у высоты, и на
+        экране 360×640 третья карточка уходила под прокрутку. Метка переносится
+        сама, когда рядом с длинным названием ей не хватает места, — колонка
+        при этом сжимается, а не уезжает в горизонтальную прокрутку.
       */}
       <div className="grid gap-2 landscape:grid-cols-3">
         {props.offers.map((offer, index) => {
@@ -147,42 +186,29 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
             <Card
               key={offer.id}
               appearIndex={index}
+              compact
               stripe={kind === "passive" ? "passive" : kind === "weapon" ? "weapon" : "info"}
               onClick={guarded(ready, () => props.onChoose(offer.id))}
             >
-              {/* В ландшафте значок и метка в одну строку: колонка узкая, а
-                  высота экрана на счету. */}
-              <div className="flex items-start gap-3 landscape:flex-col landscape:gap-2">
-                <div className="flex items-center gap-2">
-                  <ItemTile kind={kind} id={offer.refId} />
-                  <span className="hidden landscape:inline">
-                    <OfferTag offer={offer} />
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="landscape:hidden">
-                    <OfferTag offer={offer} />
-                  </span>
-                  <span className="mt-1 block font-display text-base font-bold break-words text-text landscape:mt-0">
-                    {t(offer.nameKey)}
-                  </span>
-                  {/* Описание — только у нового: у уровня к взятому предмету
-                      важнее, что именно поменяется, а описание игрок уже видел. */}
-                  {isNew(offer) || offer.changes.length === 0 ? (
-                    <p className="mt-1 text-xs text-text-muted">{t(offer.descriptionKey)}</p>
-                  ) : null}
-                  <ChangeList changes={offer.changes} />
-                </div>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <ItemTile kind={kind} id={offer.refId} size="s" />
+                <span className="min-w-0 font-display text-base font-bold break-words text-text">
+                  {t(offer.nameKey)}
+                </span>
+                <OfferTag offer={offer} />
               </div>
+              {/* Описание — только у нового: у уровня к взятому предмету
+                  важнее, что именно поменяется, а описание игрок уже видел. */}
+              {/* В ландшафте колонка узкая и описание расползается на три-четыре
+                  строки — там оно обрезается до двух: числа ниже важнее. */}
+              {isNew(offer) || offer.changes.length === 0 ? (
+                <p className="mt-1.5 text-xs text-text-muted landscape:line-clamp-2">{t(offer.descriptionKey)}</p>
+              ) : null}
+              <ChangeList changes={offer.changes} />
             </Card>
           );
         })}
       </div>
-      {props.queued > 0 ? (
-        <p className="mt-3 text-center text-xs text-text-muted">
-          {t("run.levelUp.queued", { count: props.queued })}
-        </p>
-      ) : null}
     </Modal>
   );
 }
@@ -200,7 +226,7 @@ function ChangeList(props: { changes: readonly UpgradeChange[] }): ReactNode {
   if (props.changes.length === 0) return null;
 
   return (
-    <dl className="surface-sunken mt-2 grid gap-1 rounded-md px-2.5 py-2">
+    <dl className="surface-sunken mt-2 grid gap-0.5 rounded-md px-2.5 py-1.5">
       {props.changes.map((change) => {
         const formatted = formatChange(change);
         return (
@@ -231,28 +257,41 @@ function kindOf(offer: UpgradeOption): ItemKind {
   return offer.kind === "weapon_new" || offer.kind === "weapon_level" ? "weapon" : "passive";
 }
 
-/** Новое это оружие или уровень к уже взятому — игрок должен видеть сразу. */
+/**
+ * Новое это оружие или уровень к уже взятому — игрок должен видеть сразу. У
+ * пассивки рядом её категория: слот займёт именно она.
+ */
 function OfferTag(props: { offer: UpgradeOption }): ReactNode {
   const { offer } = props;
   if (offer.kind === "heal") return null;
-  if (offer.kind === "weapon_new" || offer.kind === "passive_new") {
-    return (
+  const category = offer.kind === "passive_new" || offer.kind === "passive_level" ? passiveCategoryOf(offer.refId) : null;
+
+  const badge =
+    offer.kind === "weapon_new" || offer.kind === "passive_new" ? (
       <Badge tone="accent">
         <Sparkles size={12} aria-hidden="true" />
         {t("run.levelUp.new")}
       </Badge>
+    ) : (
+      <Badge tone={offer.kind === "weapon_level" ? "weapon" : "passive"}>
+        {t("run.levelUp.upgrade", { level: offer.level })}
+      </Badge>
     );
-  }
+
+  if (category === null) return badge;
   return (
-    <Badge tone={offer.kind === "weapon_level" ? "weapon" : "passive"}>
-      {t("run.levelUp.upgrade", { level: offer.level })}
-    </Badge>
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      {badge}
+      <CategoryLabel category={category} />
+    </span>
   );
 }
 
 export interface DeathOverlayProps {
   result: RunResult;
   isNewRecord: boolean;
+  /** место в рейтинге плейтеста; нет — сервер ещё не ответил или его нет */
+  rank?: number | null;
   diagnostics: boolean;
   onRestart(): void;
   onMenu(): void;
@@ -273,16 +312,28 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
       size="l"
     >
-      {props.isNewRecord ? (
-        <div className="-mt-1 mb-3 flex justify-center">
+      {/* Сложность рядом с итогом: рекорд засчитан именно на ней. */}
+      <div className="-mt-1 mb-3 flex flex-wrap justify-center gap-2">
+        <Badge>{t(`difficulty.${result.difficultyId}.name`)}</Badge>
+        {props.isNewRecord ? (
           <span className="animate-pop-in" style={staggerStyle(2)}>
             <Badge tone="accent">
               <Crown size={12} aria-hidden="true" />
               {t("run.death.record")}
             </Badge>
           </span>
-        </div>
-      ) : null}
+        ) : null}
+        {/* Место приходит с сервера позже итога — плашка появляется, когда
+            ответ дошёл, и не задерживает сам экран. */}
+        {props.rank === undefined || props.rank === null ? null : (
+          <span className="animate-pop-in">
+            <Badge tone="info">
+              <Trophy size={12} aria-hidden="true" />
+              {t("run.death.rank", { rank: props.rank })}
+            </Badge>
+          </span>
+        )}
+      </div>
 
       {/* В ландшафте итоги слева, оружие и кнопки справа — «Ещё раз» видна без
           прокрутки (docs/27-design-system-and-app-shell.md §5.3). */}
@@ -302,7 +353,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
 
           {result.deathCause === null ? null : (
             <p className="mt-3 text-xs text-text-muted">
-              {t("run.death.cause", { enemy: result.deathCause })}
+              {t("run.death.cause", { enemy: enemyName(result.deathCause) })}
             </p>
           )}
 

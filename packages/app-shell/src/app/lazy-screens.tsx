@@ -17,6 +17,11 @@ const loaders = {
   stubs: () => import("../screens/stubs"),
   gallery: () => import("../screens/gallery"),
   tasks: () => import("../screens/meta/tasks"),
+  arsenal: () => import("../screens/meta/arsenal"),
+  friends: () => import("../screens/meta/friends"),
+  rating: () => import("../screens/meta/rating"),
+  profile: () => import("../screens/meta/profile"),
+  guide: () => import("../screens/guide/GuideScreen"),
   daily: () => import("../screens/meta/daily"),
   wheel: () => import("../screens/meta/wheel"),
 };
@@ -33,14 +38,15 @@ export const TestersScreen = screen(loaders.settings, "TestersScreen");
 export const AboutScreen = screen(loaders.settings, "AboutScreen");
 export const DiagnosticsScreen = screen(loaders.settings, "DiagnosticsScreen");
 export const GalleryScreen = screen(loaders.gallery, "GalleryScreen");
-export const ArsenalScreen = screen(loaders.stubs, "ArsenalScreen");
+export const ArsenalScreen = screen(loaders.arsenal, "ArsenalScreen");
 export const ShopScreen = screen(loaders.stubs, "ShopScreen");
-export const RatingScreen = screen(loaders.stubs, "RatingScreen");
-export const FriendsScreen = screen(loaders.stubs, "FriendsScreen");
-export const ProfileScreen = screen(loaders.stubs, "ProfileScreen");
+export const RatingScreen = screen(loaders.rating, "RatingScreen");
+export const FriendsScreen = screen(loaders.friends, "FriendsScreen");
+export const ProfileScreen = screen(loaders.profile, "ProfileScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");
+export const GuideScreen = screen(loaders.guide, "GuideScreen");
 
 /**
  * Подтянуть чанки экранов заранее. Неудача здесь не ошибка: экран попробует

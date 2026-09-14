@@ -37,6 +37,18 @@ export interface PlatformAdapter {
   init(): Promise<UserContext>;
   purchase(itemId: string): Promise<PurchaseResult>;
   share(payload: SharePayload): void;
+  /**
+   * Пригласить в игру: системный выбор чата площадки, а где его нет — копия
+   * ссылки. Без награды: приглашение на плейтест, не реферальная программа
+   * (docs/23-referral-and-partner-program.md).
+   */
+  invite(invite: InvitePayload): Promise<InviteResult>;
+  /**
+   * Подписанные данные запуска для сервера — в Telegram строка `initData`.
+   * Сервер проверяет подпись и узнаёт по ней игрока; `null` — площадка их не
+   * даёт (обычный браузер, dev), и сервер игрока не узнает.
+   */
+  signedLaunchData(): string | null;
   haptic(type: HapticType): void;
   /**
    * Возможности интерфейса площадки: отступы безопасной зоны, полноэкранный
@@ -162,6 +174,16 @@ export interface PlatformUi {
    */
   applyThemeColors(colors: ThemeColors): void;
 }
+
+export interface InvitePayload {
+  /** ссылка на игру внутри площадки */
+  url: string;
+  /** текст, который уйдёт вместе со ссылкой */
+  text: string;
+}
+
+/** `shared` — открыт выбор чата, `copied` — ссылка в буфере, `unavailable` — не вышло ни то, ни другое. */
+export type InviteResult = "shared" | "copied" | "unavailable";
 
 export interface SharePayload {
   runScore: number;
@@ -471,10 +493,20 @@ export type PlayerStat =
  * прибавка к предыдущему: так в таблице сразу видно, что даёт третий уровень,
  * и нельзя случайно получить произведение прибавок.
  */
+/**
+ * Категория пассивки. У каждой категории свои слоты: игрок выбирает, чем
+ * жертвует, и к десятой минуте не собирает всё сразу.
+ */
+export type PassiveCategory = "attack" | "defense" | "mobility";
+
+export const PASSIVE_CATEGORIES: readonly PassiveCategory[] = ["attack", "defense", "mobility"];
+
 export interface PassiveDef {
   id: string;
   nameKey: string;
   descriptionKey: string;
+  /** в слот какой категории встаёт пассивка */
+  category: PassiveCategory;
   stat: PlayerStat;
   /** `mul` — множитель (1.1 это +10%), `add` — слагаемое */
   op: "add" | "mul";
@@ -505,12 +537,57 @@ export interface DropsDef {
     /** больше этого на поле не лежит — новые не падают, пока игрок не подберёт */
     maxOnField: number;
   };
+  /** магнит: подобранный, притягивает к игроку все кристаллы на поле */
+  magnets: {
+    chance: number;
+    eliteChance: number;
+    maxOnField: number;
+  };
+  /**
+   * динамит: подобранный, взрывается вокруг игрока — рядовых врагов в радиусе
+   * убивает, элите снимает долю здоровья, но не убивает
+   */
+  dynamite: {
+    chance: number;
+    eliteChance: number;
+    maxOnField: number;
+    /** радиус взрыва в игровых единицах */
+    radiusUnits: number;
+    /** доля базового здоровья элиты, которую снимает взрыв; меньше 1 */
+    eliteHpRatio: number;
+  };
 }
 
-/** Сколько оружий и пассивок игрок держит одновременно. */
+/**
+ * Уровень сложности забега. Выбирается перед забегом; рекорд и лидерборд
+ * ведутся по каждому отдельно — время на «Сложной» и на «Лёгкой» несравнимо.
+ */
+export type DifficultyId = "easy" | "normal" | "hard";
+
+export const DIFFICULTY_IDS: readonly DifficultyId[] = ["easy", "normal", "hard"];
+
+/**
+ * Во сколько раз сложность меняет врагов и темп. Единицы — таймлайн как в
+ * контенте; множители ложатся поверх кривой сложности, а не вместо неё.
+ */
+export interface DifficultyDef {
+  id: DifficultyId;
+  nameKey: string;
+  descriptionKey: string;
+  /** здоровье врагов */
+  enemyHpMul: number;
+  /** урон врагов: касание, взрыв, снаряд */
+  enemyDamageMul: number;
+  /** темп спавна — врагов в секунду */
+  spawnRateMul: number;
+  /** потолок живых врагов одновременно */
+  maxAliveMul: number;
+}
+
+/** Сколько оружий и пассивок каждой категории игрок держит одновременно. */
 export interface LoadoutLimits {
   weapons: number;
-  passives: number;
+  passives: Record<PassiveCategory, number>;
 }
 
 /**
@@ -606,6 +683,8 @@ export interface RunResult {
   startingWeaponId: string;
   /** карта забега: на старте она одна, но разрез в аналитике нужен сразу */
   mapId: string;
+  /** уровень сложности: рекорд и лидерборд — отдельно по каждому */
+  difficultyId: DifficultyId;
   /**
    * Отпечаток игрового контента. Без него правку баланса не отделить от
    * сезонности: два забега с разной длиной могут отличаться и игроком, и
@@ -635,6 +714,69 @@ export interface RunResult {
   distance: number;
   /** пик числа врагов одновременно в мире */
   peakEnemies: number;
+}
+
+// --- Плейтест: сохранения и лидерборд (docs/26-stage2-plan.md, WP13) ---
+//
+// Контракт клиента с бэкендом плейтеста. Сервер проверяет тело своей схемой;
+// здесь — форма, на которую опирается оболочка. Telegram ID других игроков
+// наружу не отдаются: строка лидерборда знает только, «моя» ли она.
+
+export interface PlaytestRunSubmission {
+  /** повтор с тем же `runId` не удваивает статистику */
+  runId: string;
+  difficultyId: DifficultyId;
+  outcome: RunOutcome;
+  survivalSec: number;
+  level: number;
+  enemiesKilled: number;
+  startingWeaponId: string;
+  weapons: { id: string; level: number }[];
+  contentHash: string;
+}
+
+export interface PlaytestSubmitResult {
+  /** лучшее время игрока на этой сложности после забега */
+  bestSurvivalSec: number;
+  isNewBest: boolean;
+  /** место в лидерборде сложности, с единицы */
+  rank: number | null;
+}
+
+export interface PlaytestLeaderboardEntry {
+  rank: number;
+  name: string;
+  photoUrl: string | null;
+  survivalSec: number;
+  level: number;
+  startingWeaponId: string;
+  enemiesKilled: number;
+  isMe: boolean;
+}
+
+export interface PlaytestLeaderboard {
+  difficultyId: DifficultyId;
+  entries: PlaytestLeaderboardEntry[];
+  /** своё место, даже если оно ниже показанных строк */
+  me: { rank: number; survivalSec: number } | null;
+  totalPlayers: number;
+}
+
+export interface PlaytestRecentRun {
+  difficultyId: DifficultyId;
+  survivalSec: number;
+  level: number;
+  startingWeaponId: string;
+  /** когда получен сервером, мс UTC */
+  at: number;
+}
+
+export interface PlaytestProfile {
+  runs: number;
+  totalKills: number;
+  totalSurvivalSec: number;
+  best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
+  recent: PlaytestRecentRun[];
 }
 
 // --- Экономика / SKU, см. docs/05-game-design.md §5, docs/07-monetization-and-ads.md ---

@@ -1,4 +1,4 @@
-import type { DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -7,11 +7,11 @@ import type { Rng } from "./rng";
 import type { SpatialGrid } from "./grid";
 import type { SimEvents } from "./events";
 import type { ViewConfig, WorldBounds } from "./map-types";
-import { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type MedkitPool, type ProjectilePool } from "./pools";
+import { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type PickupPool, type ProjectilePool } from "./pools";
 import { pushSimEvent, SIM_EVENT } from "./events";
 
 export type { EnemyType } from "../patterns/enemy-types";
-export { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type MedkitPool, type ProjectilePool } from "./pools";
+export { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type PickupPool, type ProjectilePool } from "./pools";
 export type { ViewConfig, WorldBounds } from "./map-types";
 // Сборка мира живёт отдельно: здесь — состояние забега и операции над ним.
 export { createWorld, DEFAULT_SIM_CONFIG, type CreateWorldOptions } from "./create-world";
@@ -125,6 +125,10 @@ export interface RunStats {
   xpCollected: number;
   /** подобранные аптечки */
   medkitsCollected: number;
+  /** подобранные магниты */
+  magnetsCollected: number;
+  /** подобранный динамит */
+  dynamiteCollected: number;
   /** пройденное расстояние: в бесконечном мире это показатель стиля игры */
   distance: number;
   /** пик числа живых врагов за забег — сколько игрок вытянул одновременно */
@@ -175,6 +179,11 @@ export interface World {
   loadoutLimits: LoadoutLimits;
   /** что падает с убитых врагов */
   drops: DropsDef;
+  /**
+   * Уровень сложности забега. Директор спавна накладывает его множители на
+   * каждый отрезок таймлайна; от забега к забегу он не меняется.
+   */
+  difficultyLevel: DifficultyDef;
   player: PlayerState;
   /** характеристики игрока с учётом пассивок — пересчитываются при улучшении */
   playerStats: PlayerStats;
@@ -188,7 +197,8 @@ export interface World {
   gems: GemPool;
   /** с какого слота искать кристалл для слияния при переполнении пула */
   gemMergeCursor: number;
-  medkits: MedkitPool;
+  /** аптечки, магниты и динамит на поле */
+  pickups: PickupPool;
   enemyGrid: SpatialGrid;
   stats: RunStats;
   /** события для рендера — симуляция о рендере не знает */

@@ -30,6 +30,7 @@ function fakeEngine(): { engine: RunEngine; emitHud(): void } {
     resume: () => undefined,
     abandon: () => undefined,
     restart: () => undefined,
+    snapshot: () => null,
     destroy: () => undefined,
   } as unknown as RunSession;
 
@@ -58,7 +59,7 @@ const HUD: HudSnapshot = {
 const events: { event: string; payload: Record<string, unknown> }[] = [];
 
 function startOptions(): Parameters<ReturnType<typeof useRun.getState>["start"]>[0] {
-  return { container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier" };
+  return { container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "normal" };
 }
 
 describe("загрузка забега", () => {

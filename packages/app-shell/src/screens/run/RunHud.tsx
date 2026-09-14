@@ -57,6 +57,17 @@ export function RunHud(props: RunHudProps): ReactNode {
               height="thick"
               label="HP"
             />
+            {/* Число рядом с полосой: полоса говорит «сколько примерно», а
+                решение «добежать до аптечки или нет» принимается по числу. */}
+            <span
+              className={[
+                "shrink-0 font-display text-xs font-bold tabular-nums",
+                low ? "text-hp-low" : "text-text",
+              ].join(" ")}
+            >
+              {Math.ceil(hud.hp)}
+              <span className="text-text-muted">/{Math.ceil(hud.maxHp)}</span>
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="shrink-0 rounded-sm bg-xp/15 px-1.5 font-display text-xs font-bold tabular-nums text-xp">

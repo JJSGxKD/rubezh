@@ -18,7 +18,23 @@ export * from "./content/hash";
 export * from "./content/upgrades";
 export * from "./content/weapons";
 export * from "./content/balance-targets";
+export * from "./content/difficulty";
+export * from "./content/drops";
 export * from "./game/bench";
+
+// Как выглядит мир забега — без Phaser: гайдбук оболочки рисует врагов и
+// подборы теми же формами и цветами, что и канва.
+export {
+  ENEMY_LOOKS,
+  enemyColor,
+  GEM_TIERS,
+  PICKUP_LOOKS,
+  WORLD_COLORS,
+  type ShapeKind,
+  type ShapeLook,
+} from "./game/render/looks";
+// Умолчания паттернов — гайдбук берёт из них то, что враг не задал сам.
+export { PATTERN_DEFAULTS } from "./game/patterns/enemy-types";
 
 // Контракт забега — только типы, без реализации.
 export type {
@@ -32,7 +48,11 @@ export type {
   RunPauseReason,
   RunSession,
   RunSlotState,
+  RunSnapshot,
+  RunSnapshotSummary,
 } from "./run-api";
+// Версия формата снимка — оболочка сверяет сохранение до того, как предложить «Продолжить».
+export { RUN_SNAPSHOT_FORMAT } from "./run-api";
 
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).

@@ -33,6 +33,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     outcome: options.outcome,
     startingWeaponId: options.startingWeaponId,
     mapId: world.mapId,
+    difficultyId: world.difficultyLevel.id,
     contentHash: options.contentHash,
     waveReached: world.difficulty.segment,
     survivalSec: stats.elapsedSec,

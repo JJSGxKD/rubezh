@@ -20,7 +20,7 @@ export function Emblem(props: { size?: number; animated?: boolean }): ReactNode 
     >
       <span
         aria-hidden="true"
-        className="halo-accent pointer-events-none absolute -inset-1/2 -z-10 animate-glow rounded-full"
+        className="halo-accent pointer-events-none absolute -inset-1/3 -z-10 animate-glow rounded-full"
       />
       <svg
         viewBox="0 0 64 64"

@@ -1,6 +1,7 @@
 import type { KeyValueStorage, PlatformAdapter } from "@bh/shared-types";
 import { create } from "zustand";
 import { noopAnalytics, type AnalyticsEvent, type AnalyticsPayload, type AnalyticsSink } from "./analytics";
+import type { PlaytestApiConfig } from "./playtest-api";
 
 /**
  * Окружение оболочки: площадка, хранилище, аналитика и сведения о сборке.
@@ -32,6 +33,12 @@ export interface ShellCapabilities {
    * seed. Переключатель при этом остаётся, выключить можно всегда.
    */
   diagnosticsByDefault: boolean;
+  /**
+   * Бэкенд плейтеста: сохранения итогов и лидерборд (docs/26-stage2-plan.md,
+   * WP13). Нет — сборка без него: рейтинг честно говорит, что недоступен, а
+   * рекорды живут только на устройстве.
+   */
+  playtest?: PlaytestApiConfig;
 }
 
 export interface ShellState {

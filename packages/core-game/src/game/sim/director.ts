@@ -48,11 +48,17 @@ export function createTimelineDirector(
     // а держать массив по максимальной длине смеси — лишняя сложность.
     debt = new Array<number>(plan.spawns.length).fill(0);
 
+    // Уровень сложности ложится поверх кривой: план отрезка остаётся планом
+    // контента, а мир получает уже поправленные числа.
+    const level = world.difficultyLevel;
     world.difficulty.segment = plan.index;
     world.difficulty.segmentStartedSec = world.stats.elapsedSec;
-    world.difficulty.hpMul = plan.hpMul;
-    world.difficulty.damageMul = plan.damageMul;
-    world.difficulty.maxAlive = plan.maxAlive;
+    world.difficulty.hpMul = plan.hpMul * level.enemyHpMul;
+    world.difficulty.damageMul = plan.damageMul * level.enemyDamageMul;
+    world.difficulty.maxAlive = Math.min(
+      world.config.maxEnemies,
+      Math.round(plan.maxAlive * level.maxAliveMul),
+    );
 
     for (const burst of plan.bursts) {
       for (let n = 0; n < burst.count; n++) {
@@ -64,6 +70,20 @@ export function createTimelineDirector(
   }
 
   return {
+    /**
+     * План отрезка сохраняется целиком, а не пересчитывается по номеру:
+     * расчёт бесконечного отрезка тянет генератор, и пересчёт при
+     * восстановлении сдвинул бы всю дальнейшую последовательность.
+     */
+    saveState() {
+      return { index, plan, debt: [...debt] };
+    },
+    loadState(state) {
+      const saved = parseDirectorState(state);
+      index = saved.index;
+      plan = saved.plan;
+      debt = saved.debt;
+    },
     update(world, dtSec) {
       let steps = 0;
       while (
@@ -74,9 +94,10 @@ export function createTimelineDirector(
       }
       if (plan === null) return;
 
+      const spawnRateMul = world.difficultyLevel.spawnRateMul;
       for (let i = 0; i < plan.spawns.length; i++) {
         const spawn = plan.spawns[i];
-        debt[i] += spawn.perSec * dtSec;
+        debt[i] += spawn.perSec * spawnRateMul * dtSec;
 
         while (debt[i] >= 1) {
           if (atCap(world)) {
@@ -95,6 +116,50 @@ export function createTimelineDirector(
       }
     },
   };
+}
+
+interface DirectorState {
+  index: number;
+  plan: SegmentPlan | null;
+  debt: number[];
+}
+
+/**
+ * Состояние директора из снимка. Проверяется форма, а не смысл: план — те же
+ * данные, что директор сам сохранил, и сверять их с таймлайном значило бы
+ * пересчитать отрезок, от чего снимок и уберегает.
+ */
+function parseDirectorState(input: unknown): DirectorState {
+  if (typeof input !== "object" || input === null) throw new Error("Состояние директора спавна не читается");
+  const state = input as Record<string, unknown>;
+  const debt = state.debt;
+  if (
+    typeof state.index !== "number" ||
+    !Array.isArray(debt) ||
+    !debt.every((value) => typeof value === "number") ||
+    (state.plan !== null && !isSegmentPlan(state.plan))
+  ) {
+    throw new Error("Состояние директора спавна не читается");
+  }
+  const plan = state.plan as SegmentPlan | null;
+  if (plan !== null && plan.spawns.length !== debt.length) {
+    throw new Error("Состояние директора спавна не читается: долг не совпадает с планом");
+  }
+  return { index: state.index, plan, debt: debt as number[] };
+}
+
+function isSegmentPlan(value: unknown): value is SegmentPlan {
+  if (typeof value !== "object" || value === null) return false;
+  const plan = value as Record<string, unknown>;
+  return (
+    typeof plan.index === "number" &&
+    typeof plan.maxAlive === "number" &&
+    typeof plan.hpMul === "number" &&
+    typeof plan.damageMul === "number" &&
+    Array.isArray(plan.spawns) &&
+    Array.isArray(plan.bursts) &&
+    Array.isArray(plan.events)
+  );
 }
 
 function atCap(world: World): boolean {

@@ -1,4 +1,5 @@
 import type {
+  DifficultyDef,
   DropsDef,
   EnemyDef,
   LevelCurveDef,
@@ -16,9 +17,10 @@ import { createRng } from "./rng";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
+import { BASE_DIFFICULTY, findDifficultyProblems } from "./difficulty";
 import { findDropsContentProblems } from "./gems";
-import { MAX_MEDKITS } from "./medkits";
-import { createEnemyPool, createGemPool, createMedkitPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
+import { MAX_PICKUPS } from "./pickups";
+import { createEnemyPool, createGemPool, createPickupPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
 import type { PlayerConfig, SimConfig, World } from "./world";
 
 /**
@@ -32,17 +34,22 @@ import type { PlayerConfig, SimConfig, World } from "./world";
  * прокачка не нужна. Игра и стенд передают значения из контента.
  */
 const FALLBACK_LEVEL_CURVE: LevelCurveDef = { baseXp: 6, growth: 1.22 };
-const FALLBACK_LOADOUT_LIMITS: LoadoutLimits = { weapons: 4, passives: 4 };
+const FALLBACK_LOADOUT_LIMITS: LoadoutLimits = {
+  weapons: 4,
+  passives: { attack: 4, defense: 4, mobility: 4 },
+};
 
 /**
- * Выпадение для тестов симуляции: один кристалл на врага и никаких аптечек.
- * Горсть и бросок на аптечку расходуют генератор, и тест паттерна врага
+ * Выпадение для тестов симуляции: один кристалл на врага и никаких подборов.
+ * Горсть и броски на подборы расходуют генератор, и тест паттерна врага
  * сдвигал бы свою последовательность случайных чисел от правки выпадения, к
  * которому отношения не имеет.
  */
 const FALLBACK_DROPS: DropsDef = {
   gems: { maxPerKill: 1 },
   medkits: { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 },
+  magnets: { chance: 0, eliteChance: 0, maxOnField: 0 },
+  dynamite: { chance: 0, eliteChance: 0, maxOnField: 0, radiusUnits: 420, eliteHpRatio: 0.3 },
 };
 
 /**
@@ -105,6 +112,8 @@ export interface CreateWorldOptions {
   loadoutLimits?: LoadoutLimits;
   /** что падает с убитых врагов; по умолчанию — один кристалл */
   drops?: DropsDef;
+  /** уровень сложности; по умолчанию — без поправок */
+  difficulty?: DifficultyDef;
   /** карта: границы мира и параметры, от которых считается кольцо спавна */
   map?: MapDef;
   /** чем игрок начинает забег; по умолчанию — первое стартовое оружие */
@@ -143,6 +152,12 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error(`Некорректный контент выпадения:\n${dropProblems.join("\n")}`);
   }
 
+  const difficultyLevel = options.difficulty ?? BASE_DIFFICULTY;
+  const difficultyProblems = findDifficultyProblems(difficultyLevel);
+  if (difficultyProblems.length > 0) {
+    throw new Error(`Некорректный уровень сложности:\n${difficultyProblems.join("\n")}`);
+  }
+
   const levelCurve = options.levelCurve ?? FALLBACK_LEVEL_CURVE;
   const loadoutLimits = options.loadoutLimits ?? FALLBACK_LOADOUT_LIMITS;
   const playerStatsBase: PlayerStatsBase = {
@@ -165,6 +180,7 @@ export function createWorld(options: CreateWorldOptions): World {
     levelCurve,
     loadoutLimits,
     drops,
+    difficultyLevel,
     playerStats: computePlayerStats(playerStatsBase, passiveTypes, new Map()),
     playerStatsBase,
     loadout,
@@ -205,7 +221,7 @@ export function createWorld(options: CreateWorldOptions): World {
     projectiles: createProjectilePool(maxProjectiles),
     gems: createGemPool(config.progressionEnabled ? config.maxGems : 1),
     gemMergeCursor: 0,
-    medkits: createMedkitPool(config.progressionEnabled ? MAX_MEDKITS : 1),
+    pickups: createPickupPool(config.progressionEnabled ? MAX_PICKUPS : 1),
     // Окно сетки накрывает радиус удержания целиком: всё, что дальше, живёт
     // считанные тики и попадает в краевые клетки без вреда для запросов.
     enemyGrid: new SpatialGrid(
@@ -226,6 +242,8 @@ export function createWorld(options: CreateWorldOptions): World {
       damageByWeapon: new Float64Array(Math.max(1, loadoutLimits.weapons)),
       xpCollected: 0,
       medkitsCollected: 0,
+      magnetsCollected: 0,
+      dynamiteCollected: 0,
       distance: 0,
       peakEnemies: 0,
       enemiesRecycled: 0,

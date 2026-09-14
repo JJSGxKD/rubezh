@@ -1,4 +1,5 @@
-import type { EndlessCurveDef, TimelineSegmentDef } from "@bh/shared-types";
+import type { DifficultyDef, EndlessCurveDef, TimelineSegmentDef } from "@bh/shared-types";
+import { findDifficulty } from "../src/content/difficulty";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { MAPS } from "../src/content/maps";
@@ -15,12 +16,13 @@ import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 /** Сколько врагов может добавить сверх потолка распад делящегося. */
 const SPLIT_SLACK = 8;
 
-function makeWorld(seed = 1): World {
+function makeWorld(seed = 1, difficulty?: DifficultyDef): World {
   return createWorld({
     seed,
     enemies: ENEMIES,
     weapons: WEAPONS,
     map: MAPS[0],
+    ...(difficulty === undefined ? {} : { difficulty }),
     config: {
       progressionEnabled: false,
       // Бессмертный: проверяются свойства спавна, а не то, сколько проживёт
@@ -190,6 +192,44 @@ describe("события отрезка", () => {
     const length = Math.hypot(meanX, meanY);
     // Все направления в узкой дуге: их сумма почти равна их числу по длине.
     expect(length / flank.length).toBeGreaterThan(0.9);
+  });
+});
+
+describe("уровни сложности", () => {
+  function difficulty(id: string): DifficultyDef {
+    const found = findDifficulty(id);
+    if (found === undefined) throw new Error(`нет сложности ${id}`);
+    return found;
+  }
+
+  it("«Лёгкая» — баланс без поправок: забег совпадает с забегом без сложности", () => {
+    const plain = makeWorld(5);
+    const easy = makeWorld(5, difficulty("easy"));
+    runDirector(plain, 120);
+    runDirector(easy, 120);
+
+    expect(easy.stats).toEqual(plain.stats);
+    expect(easy.difficulty).toEqual(plain.difficulty);
+  });
+
+  it("строже по всем осям: крепче и больнее враги, выше темп и потолок живых", () => {
+    const normal = makeWorld(5, difficulty("normal"));
+    const hard = makeWorld(5, difficulty("hard"));
+    runDirector(normal, 90);
+    runDirector(hard, 90);
+
+    expect(hard.difficulty.hpMul).toBeGreaterThan(normal.difficulty.hpMul);
+    expect(hard.difficulty.damageMul).toBeGreaterThan(normal.difficulty.damageMul);
+    expect(hard.difficulty.maxAlive).toBeGreaterThan(normal.difficulty.maxAlive);
+    expect(hard.stats.enemiesSpawned).toBeGreaterThan(normal.stats.enemiesSpawned);
+  });
+
+  it("не пускает потолок живых за ёмкость пула, как бы ни был строг множитель", () => {
+    const brutal: DifficultyDef = { ...difficulty("hard"), maxAliveMul: 50 };
+    const world = makeWorld(5, brutal);
+    runDirector(world, 5);
+
+    expect(world.difficulty.maxAlive).toBeLessThanOrEqual(world.config.maxEnemies);
   });
 });
 

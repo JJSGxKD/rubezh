@@ -1,14 +1,7 @@
 import type Phaser from "phaser";
+import { WORLD_COLORS, type ShapeKind } from "./looks";
 
-export type ShapeKind =
-  | "circle"
-  | "square"
-  | "triangle"
-  | "diamond"
-  | "ring"
-  | "hexagon"
-  | "double"
-  | "medkit";
+export type { ShapeKind } from "./looks";
 
 export interface ShapeSpec {
   shape: ShapeKind;
@@ -45,6 +38,15 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
       graphics.lineStyle(Math.max(2, r * 0.35), spec.color, 1);
       graphics.strokeCircle(r, r, r * 0.8);
       return;
+    case "wave":
+      // Ударная волна: тонкий контур и бледная заливка. Рисуется крупной
+      // текстурой, чтобы на радиусе взрыва в пол-экрана не превращаться в
+      // растянутый пиксельный бублик.
+      graphics.fillStyle(spec.color, 0.12);
+      graphics.fillCircle(r, r, r * 0.95);
+      graphics.lineStyle(Math.max(2, r * 0.05), spec.color, 1);
+      graphics.strokeCircle(r, r, r * 0.95);
+      return;
     case "medkit":
       // Светлая плашка с красным крестом: аптечку узнают по силуэту креста, а
       // не по цвету — красного на поле и так много (§4.4).
@@ -53,6 +55,31 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
       graphics.fillStyle(spec.color, 1);
       graphics.fillRect(r * 0.78, r * 0.4, r * 0.44, r * 1.2);
       graphics.fillRect(r * 0.4, r * 0.78, r * 1.2, r * 0.44);
+      return;
+    case "magnet":
+      // Подкова: цветная дуга и светлые полюса. Узнаётся по силуэту буквы U,
+      // а не по цвету (§4.4).
+      graphics.lineStyle(r * 0.5, spec.color, 1);
+      graphics.beginPath();
+      graphics.arc(r, r * 0.95, r * 0.6, 0, Math.PI, false);
+      graphics.strokePath();
+      graphics.fillStyle(spec.color, 1);
+      graphics.fillRect(r * 0.15, r * 0.25, r * 0.5, r * 0.7);
+      graphics.fillRect(r * 1.35, r * 0.25, r * 0.5, r * 0.7);
+      graphics.fillStyle(PICKUP_LIGHT, 1);
+      graphics.fillRect(r * 0.15, r * 0.1, r * 0.5, r * 0.35);
+      graphics.fillRect(r * 1.35, r * 0.1, r * 0.5, r * 0.35);
+      return;
+    case "dynamite":
+      // Шашка с фитилём и искрой: красная палка, тёмные полосы, жёлтая точка.
+      graphics.fillRoundedRect(r * 0.55, r * 0.5, r * 0.9, r * 1.45, r * 0.2);
+      graphics.fillStyle(DYNAMITE_BAND, 1);
+      graphics.fillRect(r * 0.55, r * 0.85, r * 0.9, r * 0.15);
+      graphics.fillRect(r * 0.55, r * 1.45, r * 0.9, r * 0.15);
+      graphics.lineStyle(Math.max(1, r * 0.12), PICKUP_LIGHT, 1);
+      graphics.lineBetween(r, r * 0.5, r * 1.3, r * 0.2);
+      graphics.fillStyle(DYNAMITE_SPARK, 1);
+      graphics.fillCircle(r * 1.35, r * 0.18, r * 0.2);
       return;
     case "double":
       graphics.fillCircle(r * 0.65, r * 0.75, r * 0.6);
@@ -64,7 +91,11 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
 }
 
 /** Плашка аптечки: светлая, чтобы крест читался на тёмной земле. */
-const MEDKIT_BODY = 0xf3f6fc;
+const MEDKIT_BODY = WORLD_COLORS.pickupLight;
+/** Светлые детали подборов: полюса магнита, фитиль. */
+const PICKUP_LIGHT = WORLD_COLORS.pickupLight;
+const DYNAMITE_BAND = WORLD_COLORS.dynamiteBand;
+const DYNAMITE_SPARK = WORLD_COLORS.dynamiteSpark;
 
 /** Вершины в долях радиуса относительно центра фигуры. */
 const DIAMOND: readonly (readonly [number, number])[] = [

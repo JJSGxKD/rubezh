@@ -7,7 +7,7 @@ import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
 import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { PickupRenderer } from "./pickups";
-import type { ShapeKind } from "./shapes";
+import { ENEMY_LOOKS, enemyColor, WORLD_COLORS } from "./looks";
 import { Telegraphs } from "./telegraphs";
 import { ensureShapeTexture, lerp } from "./textures";
 
@@ -82,7 +82,7 @@ export class WorldRenderer {
       const key = `bh-enemy-${type.id}`;
       // Элита крупнее и светлее: одинаковые на глаз танк и элитный танк
       // читаются как дефект, а не как контрольная точка сложности.
-      ensureShapeTexture(scene, key, type.radius, colorByType[index], LOOK_BY_PATTERN[type.pattern].shape);
+      ensureShapeTexture(scene, key, type.radius, colorByType[index], ENEMY_LOOKS[type.pattern].shape);
       this.textureKeyByType.push(key);
     });
 
@@ -94,13 +94,15 @@ export class WorldRenderer {
       .setDepth(-10);
     this.layer = scene.add.container(0, 0).setDepth(0);
 
-    ensureShapeTexture(scene, "bh-player", world.config.player.radius, 0x6ee7a8, "circle");
-    ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, 0xffe066, "circle");
-    ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius, 0xff6b6b, "circle");
-    ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, 0xffa24d, "ring");
-    ensureShapeTexture(scene, "bh-strike", BLAST_TEXTURE_UNITS * scale, 0x9bd0ff, "ring");
-    ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, 0x5fe3a1, "ring");
-    ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS_UNITS * scale, 0xffe0a3, "circle");
+    ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "circle");
+    ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, WORLD_COLORS.projectile, "circle");
+    ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius, WORLD_COLORS.enemyProjectile, "circle");
+    ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.blast, "ring");
+    ensureShapeTexture(scene, "bh-strike", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.strike, "ring");
+    ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.heal, "ring");
+    ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.magnetWave, "wave");
+    ensureShapeTexture(scene, "bh-dynamite", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.dynamiteWave, "wave");
+    ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS_UNITS * scale, WORLD_COLORS.orbiter, "circle");
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
     this.pickups = new PickupRenderer(scene, world, this.layer);
@@ -170,12 +172,12 @@ export class WorldRenderer {
 
     // Попадание важнее лечения: если было и то и другое, игрок должен видеть урон.
     if (hitAge < HIT_FLASH_TICKS) {
-      this.player.setTintFill(0xff6b6b);
+      this.player.setTintFill(WORLD_COLORS.hurt);
       this.player.setScale(1 + 0.25 * (1 - hitAge / HIT_FLASH_TICKS));
       return;
     }
     if (healAge < HIT_FLASH_TICKS) {
-      this.player.setTintFill(0x5fe3a1);
+      this.player.setTintFill(WORLD_COLORS.heal);
       this.player.setScale(1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS));
       return;
     }
@@ -313,22 +315,36 @@ export class WorldRenderer {
         this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
+      if (kind === SIM_EVENT.magnet) {
+        // Магнит: кольцо расходится от игрока — кристаллы сейчас полетят к нему.
+        this.startBlast(events.x[slot], events.y[slot], MAGNET_RING_UNITS * scale, events.tick[slot], kind);
+        continue;
+      }
+      if (kind === SIM_EVENT.dynamite) {
+        // Динамит: ударная волна на весь радиус взрыва — видно, докуда выкосило.
+        this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
+        continue;
+      }
       if (kind !== SIM_EVENT.explosion && kind !== SIM_EVENT.strike) continue;
       this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
     }
     this.eventsRead = events.written;
 
     const tick = this.world.stats.tick;
-    const textureRadius = BLAST_TEXTURE_UNITS * scale;
     for (let b = 0; b < this.blasts.length; b++) {
       const sprite = this.blasts[b];
       const age = tick - this.blastStartTick[b];
-      if (this.blastStartTick[b] < 0 || age >= BLAST_LIFETIME_TICKS) {
+      const wave = isWave(this.blastKind[b]);
+      const lifetime = wave ? WAVE_LIFETIME_TICKS : BLAST_LIFETIME_TICKS;
+      if (this.blastStartTick[b] < 0 || age >= lifetime) {
         if (sprite.visible) sprite.setVisible(false);
         continue;
       }
-      const progress = age / BLAST_LIFETIME_TICKS;
-      sprite.setScale((this.blastRadius[b] / textureRadius) * (0.6 + 0.4 * progress));
+      const progress = age / lifetime;
+      const textureRadius = (wave ? WAVE_TEXTURE_UNITS : BLAST_TEXTURE_UNITS) * scale;
+      // Волна разбегается от игрока с торможением, обычный взрыв — чуть дорастает.
+      const grow = wave ? 0.15 + 0.85 * (1 - (1 - progress) * (1 - progress)) : 0.6 + 0.4 * progress;
+      sprite.setScale((this.blastRadius[b] / textureRadius) * grow);
       sprite.setAlpha(1 - progress);
       sprite.setVisible(true);
     }
@@ -396,9 +412,9 @@ export class WorldRenderer {
 
     const size = Math.max(2, Math.round(GROUND_TILE_UNITS * scale));
     const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
-    graphics.fillStyle(0x0d0f14, 1);
+    graphics.fillStyle(WORLD_COLORS.ground, 1);
     graphics.fillRect(0, 0, size, size);
-    graphics.fillStyle(0x171b24, 1);
+    graphics.fillStyle(WORLD_COLORS.groundLine, 1);
     graphics.fillRect(0, 0, size, Math.max(1, Math.round(scale)));
     graphics.fillRect(0, 0, Math.max(1, Math.round(scale)), size);
     graphics.generateTexture(key, size, size);
@@ -406,20 +422,6 @@ export class WorldRenderer {
   }
 }
 
-/**
- * Цвет врага на канве. Элита — половина пути к белому: считается по каналам,
- * а не подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
- * останется без своего элитного цвета.
- */
-export function enemyColor(pattern: EnemyPattern, elite: boolean): number {
-  const color = LOOK_BY_PATTERN[pattern].color;
-  if (!elite) return color;
-  const mix = (channel: number): number => Math.round(channel + (255 - channel) * 0.45);
-  const r = mix((color >> 16) & 0xff);
-  const g = mix((color >> 8) & 0xff);
-  const b = mix(color & 0xff);
-  return (r << 16) | (g << 8) | b;
-}
 
 /** Сколько взрывов показывается одновременно; дальше перезаписываются старые. */
 const MAX_BLASTS = 24;
@@ -431,7 +433,18 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.explosion]: "bh-blast",
   [SIM_EVENT.strike]: "bh-strike",
   [SIM_EVENT.heal]: "bh-heal",
+  [SIM_EVENT.magnet]: "bh-magnet",
+  [SIM_EVENT.dynamite]: "bh-dynamite",
 };
+/** Радиус кольца магнита при подборе, игровые единицы. */
+const MAGNET_RING_UNITS = 120;
+/** Волны магнита и динамита — крупной текстурой и дольше обычного взрыва. */
+const WAVE_TEXTURE_UNITS = 128;
+const WAVE_LIFETIME_TICKS = 30;
+
+function isWave(kind: number): boolean {
+  return kind === SIM_EVENT.magnet || kind === SIM_EVENT.dynamite;
+}
 /** Радиус кольца лечения при подборе аптечки, игровые единицы. */
 const HEAL_RING_UNITS = 40;
 const ORBITER_RADIUS_UNITS = 9;
@@ -449,19 +462,6 @@ const LOOK = {
   hit: 3,
 } as const;
 
-/**
- * Плейсхолдеры до прихода ассетов: у каждого поведения своя форма и цвет,
- * чтобы типы различались на глаз без подписи (docs/26-stage2-plan.md, WP1).
- */
-const LOOK_BY_PATTERN: Record<EnemyPattern, { shape: ShapeKind; color: number }> = {
-  swarm: { shape: "circle", color: 0xff8f6b },
-  chase: { shape: "square", color: 0xc06bff },
-  kite_and_shoot: { shape: "triangle", color: 0x6bd5ff },
-  dash: { shape: "diamond", color: 0xffd36b },
-  orbit: { shape: "ring", color: 0x8cf0ff },
-  exploder: { shape: "hexagon", color: 0xff5a5a },
-  splitter: { shape: "double", color: 0x9be36b },
-};
 
 /**
  * Мигание телеграфа по тикам симуляции: рывок мигает медленнее, фитиль — чаще,
