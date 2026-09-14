@@ -92,7 +92,7 @@ const NEUTRAL_PARAMS: ResolvedPatternParams = {
  * достаточно hp, скорости и урона, а крутить параметры геймдизайнер начинает
  * тогда, когда умолчание не устроило.
  */
-const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam, number>>> = {
+export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam, number>>> = {
   swarm: {},
   chase: { steeringPerSec: 3.2 },
   kite_and_shoot: { preferredDistance: 220, shotIntervalSec: 2.2, projectileSpeed: 260 },

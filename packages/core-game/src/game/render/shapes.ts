@@ -1,17 +1,7 @@
 import type Phaser from "phaser";
+import { WORLD_COLORS, type ShapeKind } from "./looks";
 
-export type ShapeKind =
-  | "circle"
-  | "square"
-  | "triangle"
-  | "diamond"
-  | "ring"
-  | "wave"
-  | "hexagon"
-  | "double"
-  | "medkit"
-  | "magnet"
-  | "dynamite";
+export type { ShapeKind } from "./looks";
 
 export interface ShapeSpec {
   shape: ShapeKind;
@@ -101,11 +91,11 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
 }
 
 /** Плашка аптечки: светлая, чтобы крест читался на тёмной земле. */
-const MEDKIT_BODY = 0xf3f6fc;
+const MEDKIT_BODY = WORLD_COLORS.pickupLight;
 /** Светлые детали подборов: полюса магнита, фитиль. */
-const PICKUP_LIGHT = 0xf3f6fc;
-const DYNAMITE_BAND = 0x3a1414;
-const DYNAMITE_SPARK = 0xffe066;
+const PICKUP_LIGHT = WORLD_COLORS.pickupLight;
+const DYNAMITE_BAND = WORLD_COLORS.dynamiteBand;
+const DYNAMITE_SPARK = WORLD_COLORS.dynamiteSpark;
 
 /** Вершины в долях радиуса относительно центра фигуры. */
 const DIAMOND: readonly (readonly [number, number])[] = [

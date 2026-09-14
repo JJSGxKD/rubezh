@@ -13,6 +13,7 @@ import {
   updatePickups,
 } from "../src/game/sim/pickups";
 import { killEnemy } from "../src/game/sim/combat";
+import { PICKUP_LOOKS } from "../src/game/render/looks";
 import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 
 // Подборы: аптечка, магнит и динамит — выпадение с врагов, подбор касанием,
@@ -245,5 +246,14 @@ describe("контент подборов", () => {
     );
     expect(problems).toHaveLength(6);
     expect(problems.join("\n")).toMatch(/eliteHpRatio/);
+  });
+
+  it("вид подбора на канве и в гайдбуке совпадает с видом в симуляции", () => {
+    // Рендер берёт вид по индексу вида из симуляции: перестановка строк
+    // превратила бы аптечку в динамит на земле.
+    for (const [id, kind] of Object.entries(PICKUP_KIND)) {
+      expect(PICKUP_LOOKS[kind]?.id, id).toBe(id);
+    }
+    expect(PICKUP_LOOKS).toHaveLength(Object.keys(PICKUP_KIND).length);
   });
 });

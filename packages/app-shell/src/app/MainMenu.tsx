@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Info, MessageSquareWarning, Settings, UserRound } from "lucide-react";
+import { BookOpen, Info, MessageSquareWarning, Settings, UserRound } from "lucide-react";
 import { Button, ListGroup, ListItem, Modal } from "../design-system/components";
 import { t } from "../i18n";
 import { useNavigation, type ScreenId } from "../state/navigation";
@@ -32,6 +32,12 @@ export function MainMenu(props: { onClose(): void }): ReactNode {
     >
       <ListGroup>
         <ListItem icon={<UserRound size={18} />} title={t("profile.title")} onClick={() => open("profile")} />
+        <ListItem
+          icon={<BookOpen size={18} />}
+          title={t("guide.title")}
+          hint={t("guide.menu.hint")}
+          onClick={() => open("guide")}
+        />
         <ListItem icon={<Settings size={18} />} title={t("settings.title")} onClick={() => open("settings")} />
       </ListGroup>
 

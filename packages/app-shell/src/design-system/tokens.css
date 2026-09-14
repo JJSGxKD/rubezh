@@ -103,6 +103,22 @@
   --animate-shimmer: shimmer 1.4s var(--ease-base) infinite;
   --animate-pulse-soft: pulse-soft 1s var(--ease-base) infinite;
 
+  /*
+   * Мини-сцены гайдбука: поведение врага или оружия циклом. Откуда и куда
+   * двигаться, сцена задаёт переменными --guide-x и --guide-y на элементе —
+   * одна анимация на все направления, а не набор ключевых кадров на каждое.
+   */
+  --animate-guide-approach: guide-approach 2.4s var(--ease-base) infinite;
+  --animate-guide-shot: guide-shot 1.2s linear infinite;
+  --animate-guide-spin: guide-spin 2.4s linear infinite;
+  --animate-guide-lunge: guide-lunge 2.4s var(--ease-base) infinite;
+  --animate-guide-fuse: guide-fuse 2.4s var(--ease-base) infinite;
+  --animate-guide-blast: guide-blast 2.4s var(--ease-out) infinite;
+  --animate-guide-split: guide-split 2.4s var(--ease-base) infinite;
+  --animate-guide-scatter: guide-scatter 2.4s var(--ease-out) infinite;
+  --animate-guide-pulse: guide-pulse 1.6s var(--ease-base) infinite;
+  --animate-guide-strike: guide-strike 1.6s var(--ease-out) infinite;
+
   @keyframes screen-in {
     from {
       opacity: 0;
@@ -184,6 +200,180 @@
     }
     50% {
       opacity: 0.45;
+    }
+  }
+
+  /* Идёт из точки (--guide-x, --guide-y) к своему месту. */
+  @keyframes guide-approach {
+    0% {
+      opacity: 0;
+      transform: translate(var(--guide-x), var(--guide-y));
+    }
+    12% {
+      opacity: 1;
+    }
+    80% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+  }
+
+  /* Летит от своего места в точку (--guide-x, --guide-y). */
+  @keyframes guide-shot {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    10%,
+    85% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--guide-x), var(--guide-y));
+    }
+  }
+
+  @keyframes guide-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Мигает на месте — и рывок по прямой. */
+  @keyframes guide-lunge {
+    0%,
+    24% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    12%,
+    36% {
+      opacity: 0.35;
+    }
+    48% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    64%,
+    88% {
+      opacity: 1;
+      transform: translate(var(--guide-x), var(--guide-y));
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--guide-x), var(--guide-y));
+    }
+  }
+
+  /* Подходит, мигает фитилём и исчезает во взрыве. */
+  @keyframes guide-fuse {
+    0% {
+      opacity: 0;
+      transform: translate(var(--guide-x), var(--guide-y));
+    }
+    8% {
+      opacity: 1;
+    }
+    40%,
+    56% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    48%,
+    64% {
+      opacity: 0.35;
+    }
+    70% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    72%,
+    100% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+  }
+
+  /* Взрыв на том месте, где исчез подрывник. */
+  @keyframes guide-blast {
+    0%,
+    70% {
+      opacity: 0;
+      transform: scale(0.2);
+    }
+    72% {
+      opacity: 0.9;
+      transform: scale(0.3);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1);
+    }
+  }
+
+  /* Делящийся гибнет... */
+  @keyframes guide-split {
+    0%,
+    45% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    55%,
+    100% {
+      opacity: 0;
+      transform: scale(1.3);
+    }
+  }
+
+  /* ...и на его месте разбегается мелочь. */
+  @keyframes guide-scatter {
+    0%,
+    45% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    50% {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+    85% {
+      opacity: 1;
+      transform: translate(var(--guide-x), var(--guide-y));
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--guide-x), var(--guide-y));
+    }
+  }
+
+  @keyframes guide-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(0.92);
+    }
+    50% {
+      opacity: 0.9;
+      transform: scale(1.04);
+    }
+  }
+
+  @keyframes guide-strike {
+    0% {
+      opacity: 0;
+      transform: scale(0.2);
+    }
+    15% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1);
     }
   }
 }

@@ -74,8 +74,8 @@
 | Интервал контактной атаки | `game/sim/step.ts` → `MELEE_INTERVAL_SEC` |
 | Скорость притяжения кристаллов и запас подбора | `game/sim/gems.ts` → `GEM_SPEED`, `PICKUP_SLACK` |
 | Полёт кристалла от места смерти: длительность, разлёт, потолок горсти | `game/sim/gems.ts` → `GEM_LAND_TICKS`, `SCATTER_MIN`, `SCATTER_MAX`, `MAX_GEMS_PER_KILL` |
-| Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/pickups.ts` → `GEM_TIERS`, `GEM_HOP_UNITS`, `SHIMMER_*` |
-| Подборы (аптечка, магнит, динамит): радиус касания, полёт, потолок пула и потолок вида; вид на земле, пульсация, кольца лечения и магнита | `game/sim/pickups.ts` → `PICKUP_RADIUS_UNITS`, `PICKUP_LAND_TICKS`, `MAX_PICKUPS`, `MAX_PICKUPS_OF_KIND`; `render/pickups.ts` → `PICKUP_LOOKS`, `PICKUP_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS`, `MAGNET_RING_UNITS` |
+| Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/looks.ts` → `GEM_TIERS`; `render/pickups.ts` → `GEM_HOP_UNITS`, `SHIMMER_*` |
+| Подборы (аптечка, магнит, динамит): радиус касания, полёт, потолок пула и потолок вида; вид на земле, пульсация, кольца лечения и магнита | `game/sim/pickups.ts` → `PICKUP_RADIUS_UNITS`, `PICKUP_LAND_TICKS`, `MAX_PICKUPS`, `MAX_PICKUPS_OF_KIND`; `render/looks.ts` → `PICKUP_LOOKS`; `render/pickups.ts` → `PICKUP_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS`, `MAGNET_RING_UNITS` |
 | Числа урона: сколько на экране, сколько новых за кадр, жизнь, подъём, размер; вспышка гибели | `game/render/combat-feedback.ts` → `MAX_NUMBERS`, `MAX_NEW_NUMBERS_PER_FRAME`, `NUMBER_*`, `BURST_*` |
 | Телеграфы: кольцо взрыва, полоса рывка | `game/render/telegraphs.ts` |
 | Радар: сколько точек, радиус; размер и вид в HUD | `game/radar.ts` → `MAX_BLIPS`; `app-shell/src/screens/run/Radar.tsx` → `SIZE_PX`, `*_PX` |
@@ -87,7 +87,8 @@
 | Сколько вариантов при наборе уровня, сила запасного лечения | `game/progression/levels.ts` → `OFFERS_PER_LEVEL`, `HEAL_RATIO` |
 | Джойстик: размер кольца, мёртвая зона | `game/joystick.ts` → `RING_UNITS`, `DEAD_ZONE_UNITS` |
 | Порог «игрок стоит» для камеры | `game/render/run-camera.ts` → `IDLE_SPEED_RATIO` |
-| Формы и цвета врагов на канве, эффекты, вспышка попадания, плитка фона | `game/render/WorldRenderer.ts` → `LOOK_BY_PATTERN`, `HIT_FLASH_TICKS`, `BLAST_*`, `GROUND_TILE_UNITS` |
+| Формы и цвета врагов, кристаллов, подборов, персонажа и эффектов — на канве и в гайдбуке сразу | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `WORLD_COLORS` |
+| Вспышка попадания, взрывы, плитка фона | `game/render/WorldRenderer.ts` → `HIT_FLASH_TICKS`, `BLAST_*`, `GROUND_TILE_UNITS` |
 | Потолок шагов симуляции за кадр, частота снимков HUD | `game/MainScene.ts` → `MAX_STEPS_PER_FRAME`, `HUD_INTERVAL_MS` |
 | Бот калибровки: дистанции страха и сближения, стратегия выбора | `game/balance/bot.ts` |
 
@@ -116,6 +117,7 @@
 | Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | участник 1 |
 | Примеры в заглушках меты: награды семи дней, сектора и шансы колеса, задания, достижения | `app-shell/src/screens/meta/stub-content.ts`. Это не баланс: настоящие числа будут на сервере (`07-monetization-and-ads.md` §7) | геймдизайнер |
 | Приглашение друга: текст и параметр запуска в ссылке | `ru.json` → `friends.invite.text`; `screens/meta/friends.tsx` → `INVITE_START_PARAM`; адрес бота — `VITE_TELEGRAM_BOT_USERNAME` | участник 1 |
+| Гайдбук: тексты поведения и советы, имена врагов; пороги «медленный / быстрый»; мини-сцены | `ru.json` → `guide.*`, `enemy.<id>.name`; `screens/guide/guide-data.ts` → `speedClass`; `screens/guide/scenes.tsx`, анимации — `tokens.css` → `guide-*`. Числа врагов, оружия и пассивок — из контента, в гайдбуке их не правят | участник 1 |
 | Пример снаряжения в заглушке арсенала: слоты, редкости, предметы | `app-shell/src/screens/meta/arsenal.tsx` → `EQUIPPED`, `INVENTORY`, `RARITY_TONE` | геймдизайнер, напарник |
 | Граница суток и недели для заданий и награды дня | `screens/meta/schedule.ts` → `MOSCOW_OFFSET_MS`, `MONDAY` | участник 1 |
 | Колесо удачи: сколько оборотов за крутку; длительность и кривая вращения | `screens/meta/wheel.tsx` → `SPIN_TURNS`; `tokens.css` → `--duration-spin`, `--ease-spin` | участник 1, напарник |

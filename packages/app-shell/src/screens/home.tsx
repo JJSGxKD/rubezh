@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  BookOpen,
   CalendarCheck,
+  ChevronRight,
   History,
   Infinity as InfinityIcon,
   LoaderPinwheel,
@@ -136,6 +138,23 @@ export function LobbyScreen(): ReactNode {
             hint={t("lobby.wheel.hint")}
             onClick={() => navigation.push("wheel")}
           />
+        </div>
+
+        {/* Гайдбук на главной, а не только в меню: новичок не пойдёт искать
+            его по меню, пока не проиграет пару забегов непонятно кому. */}
+        <div className="mt-3">
+          <Card appearIndex={4} onClick={() => navigation.push("guide")}>
+            <div className="flex items-center gap-3">
+              <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-passive/15 text-passive">
+                <BookOpen size={22} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display text-sm font-bold text-text">{t("guide.lobby.title")}</span>
+                <span className="mt-0.5 block text-xs text-text-muted">{t("guide.lobby.hint")}</span>
+              </span>
+              <ChevronRight size={20} aria-hidden="true" className="shrink-0 text-text-muted" />
+            </div>
+          </Card>
         </div>
       </ContentColumn>
     </Screen>

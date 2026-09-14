@@ -25,6 +25,7 @@ import {
   DiagnosticsScreen,
   FriendsScreen,
   GalleryScreen,
+  GuideScreen,
   ProfileScreen,
   RatingScreen,
   ScreenBoundary,
@@ -160,6 +161,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <DiagnosticsScreen />;
     case "gallery":
       return <GalleryScreen />;
+    case "guide":
+      return <GuideScreen />;
     default:
       return <AboutScreen />;
   }

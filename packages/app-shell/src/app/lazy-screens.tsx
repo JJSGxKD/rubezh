@@ -21,6 +21,7 @@ const loaders = {
   friends: () => import("../screens/meta/friends"),
   rating: () => import("../screens/meta/rating"),
   profile: () => import("../screens/meta/profile"),
+  guide: () => import("../screens/guide/GuideScreen"),
   daily: () => import("../screens/meta/daily"),
   wheel: () => import("../screens/meta/wheel"),
 };
@@ -45,6 +46,7 @@ export const ProfileScreen = screen(loaders.profile, "ProfileScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");
+export const GuideScreen = screen(loaders.guide, "GuideScreen");
 
 /**
  * Подтянуть чанки экранов заранее. Неудача здесь не ошибка: экран попробует

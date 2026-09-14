@@ -24,6 +24,7 @@ export type ScreenId =
   | "testers"
   | "diagnostics"
   | "gallery"
+  | "guide"
   | "about";
 
 /** Корни разделов нижней панели: переключение вкладки сбрасывает стек. */

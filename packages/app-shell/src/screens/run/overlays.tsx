@@ -11,7 +11,7 @@ import {
   Stat,
   staggerStyle,
 } from "../../design-system/components";
-import { formatDuration, formatNumber, t } from "../../i18n";
+import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import { ItemIcon, ItemTile, type ItemKind } from "../item-icons";
 import { SecondChance } from "./SecondChance";
 import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
@@ -53,6 +53,15 @@ function guarded(ready: boolean, action: () => void): () => void {
   return () => {
     if (ready) action();
   };
+}
+
+/**
+ * Имя врага для игрока. Врагу, которого геймдизайнер добавил без имени в
+ * словаре, лучше показать id, чем ключ перевода.
+ */
+function enemyName(id: string): string {
+  const key = `enemy.${id}.name`;
+  return hasTranslation(key) ? t(key) : id;
 }
 
 export interface PauseOverlayProps {
@@ -336,7 +345,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
 
           {result.deathCause === null ? null : (
             <p className="mt-3 text-xs text-text-muted">
-              {t("run.death.cause", { enemy: result.deathCause })}
+              {t("run.death.cause", { enemy: enemyName(result.deathCause) })}
             </p>
           )}
 

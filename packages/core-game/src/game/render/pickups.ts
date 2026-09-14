@@ -2,7 +2,7 @@ import type Phaser from "phaser";
 import { GEM_LAND_TICKS } from "../sim/gems";
 import { PICKUP_KIND, PICKUP_LAND_TICKS, PICKUP_RADIUS_UNITS } from "../sim/pickups";
 import type { World } from "../sim/world";
-import type { ShapeKind } from "./shapes";
+import { GEM_TIERS, PICKUP_LOOKS } from "./looks";
 import { ensureShapeTexture, lerp, popScale, triangle } from "./textures";
 
 /**
@@ -152,17 +152,6 @@ export class PickupRenderer {
   }
 }
 
-/**
- * Ступени ценности кристалла: цвет, размер и форма. Порог — минимальная
- * ценность ступени. Самая ценная ступень отличается ещё и формой, а не только
- * цветом (docs/27-design-system-and-app-shell.md §4.4).
- */
-const GEM_TIERS: readonly { minValue: number; radiusUnits: number; color: number; shape: ShapeKind }[] = [
-  { minValue: 1, radiusUnits: 5, color: 0x5ccfff, shape: "diamond" },
-  { minValue: 3, radiusUnits: 6.5, color: 0x5fe3a1, shape: "diamond" },
-  { minValue: 8, radiusUnits: 8, color: 0xc47dff, shape: "diamond" },
-  { minValue: 20, radiusUnits: 10, color: 0xffd36b, shape: "hexagon" },
-];
 const NO_TIER = 255;
 /** С какой ступени кристалл мерцает. */
 const SHIMMER_TIER = 2;
@@ -172,15 +161,6 @@ const GEM_HOP_UNITS = 18;
 const PICKUP_HOP_UNITS = 26;
 const PICKUP_PULSE_TICKS = 40;
 
-/**
- * Как выглядит подбор каждого вида — по индексу `PICKUP_KIND`. Виды различаются
- * силуэтом: крест, подкова, шашка с фитилём (docs/27-design-system-and-app-shell.md §4.4).
- */
-const PICKUP_LOOKS: readonly { key: string; shape: ShapeKind; color: number; size: number }[] = [
-  { key: "bh-medkit", shape: "medkit", color: 0xff5d5d, size: 1 },
-  { key: "bh-magnet-pickup", shape: "magnet", color: 0x5ccfff, size: 1.2 },
-  { key: "bh-dynamite-pickup", shape: "dynamite", color: 0xff5d5d, size: 1.35 },
-];
 
 function gemTextureKey(tier: number): string {
   return `bh-gem-${tier}`;
