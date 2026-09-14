@@ -263,6 +263,9 @@ pnpm budget
 | Профили нагрузки, длительность, потолки, агрессивный режим | `core-game/src/game/bench/profiles.ts` |
 | Нагрузка позднего забега для стресс-теста в оболочке: доли паттернов, частота и размер волны элит | `bench/full-load.ts` → `BENCH_FULL_LOAD` |
 | Как часто стресс-тест сообщает прогресс оболочке | `game/BenchScene.ts` → `PROGRESS_INTERVAL_MS` |
+| Вибрация: вид и минимальный интервал каждого события, интервал между любыми двумя | `app-shell/src/state/haptics.ts` → `HAPTIC_RULES`, `GLOBAL_MIN_INTERVAL_MS` |
+| Вибрация вне Telegram: шаблоны `navigator.vibrate` | `adapter-telegram/src/index.ts` → `VIBRATE_PATTERNS` |
+| Сигналы забега для вибрации и звука: частота, что считать взрывом рядом | `core-game/src/game/MainScene.ts` → `CUE_INTERVAL_MS`; `game/run/cues.ts` → `NEAR_MARGIN_UNITS` |
 | Режим разработчика: цвета отладочной отрисовки | `core-game/src/game/render/looks.ts` → `DEBUG_COLORS` |
 | Режим разработчика: где появляется заспавненное, потолки количества и перемотки | `core-game/src/game/run/dev-commands.ts` → `SPAWN_DISTANCE_UNITS`, `PICKUP_DISTANCE_UNITS`, `MAX_SPAWN_COUNT`, `MAX_JUMP_MINUTE` |
 | Режим разработчика: окно технической сводки, потолок шагов на паузе | `core-game/src/game/MainScene.ts` → `DEV_INFO_INTERVAL_MS`, `MAX_DEV_STEP_TICKS` |

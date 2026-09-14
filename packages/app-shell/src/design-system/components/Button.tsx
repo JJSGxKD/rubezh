@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { useShell } from "../../state/shell";
-import { useSettings } from "../../state/settings";
+import { uiFeedback } from "../../state/ui-feedback";
 
 /**
  * Кнопка. Минимальная область нажатия — 44×44 CSS px, даже если сама кнопка
@@ -43,12 +42,11 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
 
 export function Button(props: ButtonProps): ReactNode {
   const { variant = "primary", size = "m", disabled = false, loading = false } = props;
-  const haptics = useSettings((state) => state.haptics);
   const inactive = disabled || loading;
 
   const handleClick = (): void => {
     if (inactive) return;
-    if (haptics) useShell.getState().adapter.haptic(size === "l" ? "medium" : "light");
+    uiFeedback(size === "l" ? "primary" : "tap");
     props.onClick?.();
   };
 
@@ -88,11 +86,9 @@ export interface IconButtonProps {
 }
 
 export function IconButton(props: IconButtonProps): ReactNode {
-  const haptics = useSettings((state) => state.haptics);
-
   const handleClick = (): void => {
     if (props.disabled === true) return;
-    if (haptics) useShell.getState().adapter.haptic("light");
+    uiFeedback("tap");
     props.onClick?.();
   };
 

@@ -21,7 +21,22 @@ export interface PurchaseResult {
   error?: string;
 }
 
-export type HapticType = "light" | "medium" | "heavy" | "success" | "error";
+/**
+ * Виды тактильного отклика — по возможностям Telegram: удар разной силы
+ * (`light`…`heavy`, `soft`, `rigid`), уведомление (`success`, `warning`,
+ * `error`) и щелчок выбора (`selection`). Площадка без такого вида берёт
+ * ближайший или молчит.
+ */
+export type HapticType =
+  | "light"
+  | "medium"
+  | "heavy"
+  | "soft"
+  | "rigid"
+  | "selection"
+  | "success"
+  | "warning"
+  | "error";
 
 export interface AdResult {
   shown: boolean;

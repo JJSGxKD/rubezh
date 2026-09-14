@@ -11,8 +11,7 @@ import {
 } from "../../design-system/components";
 import { formatDecimal, t } from "../../i18n";
 import { useNavigation } from "../../state/navigation";
-import { useSettings } from "../../state/settings";
-import { useShell } from "../../state/shell";
+import { uiFeedback } from "../../state/ui-feedback";
 import { RewardIcon, rewardAmount, rewardLabel, rewardTextTone } from "./reward";
 import { WHEEL_SECTORS } from "./stub-content";
 import { pickSector, sectorCenterDeg, sectorOdds, spinRotationDeg } from "./wheel-math";
@@ -34,7 +33,6 @@ const SPIN_TURNS = 5;
 
 export function WheelScreen(): ReactNode {
   const navigation = useNavigation();
-  const haptics = useSettings((state) => state.haptics);
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<number | null>(null);
@@ -54,7 +52,7 @@ export function WheelScreen(): ReactNode {
     if (event.target !== event.currentTarget || event.propertyName !== "transform") return;
     setSpinning(false);
     setResult(pending.current);
-    if (haptics) useShell.getState().adapter.haptic("medium");
+    uiFeedback("reward");
   };
 
   const won = result === null ? undefined : WHEEL_SECTORS[result];

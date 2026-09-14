@@ -11,6 +11,7 @@ import {
 } from "@bh/core-game";
 import { create } from "zustand";
 import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
+import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
 import { useMeta } from "./meta";
 import { usePlaytest } from "./playtest";
@@ -244,6 +245,7 @@ export const useRun = create<RunStore>((set, get) => ({
   choose(optionId: string): void {
     if (get().phase !== "levelUp") return;
     track("upgrade_chosen", { option: optionId, level: get().level });
+    haptic("upgrade");
     // Фазу дальше ведёт движок: он пришлёт либо следующий выбор из очереди,
     // либо `resumed`. Своя догадка здесь затирала бы первое вторым.
     session?.chooseUpgrade(optionId);
@@ -310,8 +312,15 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
         });
         firstFrameStartedAt = null;
       }
+      // Низкое здоровье — один раз на спуск ниже порога, а не на каждый снимок.
+      const previous = get().hud;
+      if (previous !== null && isLowHp(hud) && !isLowHp(previous) && hud.hp > 0) haptic("lowHp");
       set({ hud, loadingStage: null });
       if (hud.survivalSec - lastSavedSec >= AUTOSAVE_SEC && get().phase === "running") saveRun();
+    }),
+
+    created.on("cues", (cues) => {
+      hapticForCues(cues);
     }),
 
     created.on("levelUp", ({ level, options, queued }) => {
@@ -322,6 +331,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
         return;
       }
       track("upgrade_offered", { level, count: options.length, queued });
+      if (get().phase !== "levelUp") haptic("levelUp");
       set({ phase: "levelUp", offers: options, queued, level });
       saveRun();
     }),
@@ -388,6 +398,7 @@ function finishRun(
   usePlaytest.getState().submitRun(result, countInRating);
   setRunUiMode(false);
   set({ phase: "finished", result, isNewRecord });
+  haptic(isNewRecord ? "record" : result.outcome === "died" ? "death" : "tap");
 
   track(event, {
     seed: result.seed,
@@ -413,6 +424,13 @@ function followDevSettings(created: RunSession): () => void {
   return useDevMode.subscribe((state, previous) => {
     if (state.settings !== previous.settings) created.setDev(toRunDev(state.settings));
   });
+}
+
+/** Порог низкого здоровья — тот же, что у пульса сердца в HUD. */
+const LOW_HP_RATIO = 0.3;
+
+function isLowHp(hud: HudSnapshot): boolean {
+  return hud.maxHp > 0 && hud.hp / hud.maxHp <= LOW_HP_RATIO;
 }
 
 function isInProgress(phase: RunPhase): boolean {

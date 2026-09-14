@@ -93,11 +93,15 @@ export class TelegramAdapter implements PlatformAdapter {
    * перед вызовом: на старом клиенте метода нет, и молчание здесь — не баг.
    */
   haptic(type: HapticType): void {
-    if (type === "success" || type === "error") {
-      hapticFeedback.notificationOccurred.ifAvailable(type);
-      return;
-    }
-    hapticFeedback.impactOccurred.ifAvailable(type);
+    const call =
+      type === "success" || type === "error" || type === "warning"
+        ? hapticFeedback.notificationOccurred.ifAvailable(type)
+        : type === "selection"
+          ? hapticFeedback.selectionChanged.ifAvailable()
+          : hapticFeedback.impactOccurred.ifAvailable(type);
+    // Вне Telegram — в браузере Android при разработке — отклик даёт сам
+    // браузер. Там, где его нет (iOS Safari), `vibrate` просто отсутствует.
+    if (!call.ok) vibrateFallback(type);
   }
 
   async showAd(): Promise<AdResult> {
@@ -185,6 +189,34 @@ function readDisplayUser(): DisplayUser | null {
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Шаблоны вибрации браузера, мс. Короче и реже, чем кажется нужным: у
+ * `navigator.vibrate` нет силы удара, и длинная вибрация на каждое попадание
+ * превращается в гул.
+ */
+const VIBRATE_PATTERNS: Record<HapticType, number | number[]> = {
+  selection: 6,
+  light: 10,
+  soft: 12,
+  medium: 18,
+  rigid: 22,
+  heavy: 32,
+  success: [14, 50, 22],
+  warning: [22, 70, 22],
+  error: [40, 60, 40, 60, 60],
+};
+
+function vibrateFallback(type: HapticType): void {
+  const nav = globalThis.navigator as (Navigator & { vibrate?: (pattern: number | number[]) => boolean }) | undefined;
+  if (typeof nav?.vibrate !== "function") return;
+  try {
+    nav.vibrate(VIBRATE_PATTERNS[type]);
+  } catch (error: unknown) {
+    // Браузер вправе запретить вибрацию без жеста пользователя — это не ошибка игры.
+    console.debug("Вибрация браузера недоступна:", error);
   }
 }
 

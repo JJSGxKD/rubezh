@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { t } from "../../i18n";
-import { useSettings } from "../../state/settings";
-import { useShell } from "../../state/shell";
+import { uiFeedback } from "../../state/ui-feedback";
 import { IconButton } from "./Button";
 
 /**
@@ -92,8 +91,6 @@ export interface TabBarProps {
  * подпись проявляется.
  */
 export function TabBar(props: TabBarProps): ReactNode {
-  const haptics = useSettings((state) => state.haptics);
-
   return (
     <nav className="@container shrink-0 border-t border-border bg-surface pb-[var(--app-inset-bottom)]">
       <div className="mx-auto flex w-full max-w-[640px]">
@@ -106,7 +103,7 @@ export function TabBar(props: TabBarProps): ReactNode {
               aria-current={active ? "page" : undefined}
               aria-label={item.label}
               onClick={() => {
-                if (!active && haptics) useShell.getState().adapter.haptic("light");
+                if (!active) uiFeedback("select");
                 props.onSelect(item.id);
               }}
               className="group relative flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 pt-1"
@@ -191,8 +188,6 @@ export function SegmentedControl(props: {
   label: string;
   onSelect(id: string): void;
 }): ReactNode {
-  const haptics = useSettings((state) => state.haptics);
-
   return (
     <div
       role="tablist"
@@ -209,7 +204,7 @@ export function SegmentedControl(props: {
             aria-selected={active}
             onClick={() => {
               if (active) return;
-              if (haptics) useShell.getState().adapter.haptic("light");
+              uiFeedback("select");
               props.onSelect(item.id);
             }}
             className={[
