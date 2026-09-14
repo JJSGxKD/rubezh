@@ -94,6 +94,11 @@ export const WORLD_COLORS = {
   threat: 0xff5a5a,
   /** полоса рывка */
   dashLane: 0xffd36b,
+  /** граница зоны «Очага» */
+  aura: 0xff9a3c,
+  /** молния «Грозы»: ореол и светлый стержень */
+  lightning: 0x9bd0ff,
+  lightningCore: 0xf3f6fc,
   ground: 0x0d0f14,
   groundLine: 0x171b24,
   /** светлые детали подборов: плашка аптечки, полюса магнита, фитиль */

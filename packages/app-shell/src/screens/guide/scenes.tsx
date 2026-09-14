@@ -359,8 +359,10 @@ export function WeaponScene(props: { behavior: WeaponBehavior; label: string }):
     case "aura":
       return (
         <Stage label={props.label}>
+          {/* Граница зоны видна всегда и вспыхивает в момент удара — как на канве. */}
+          <circle cx={80} cy={py} r={34} fill={hex(WORLD_COLORS.aura)} fillOpacity={0.08} stroke={hex(WORLD_COLORS.aura)} strokeOpacity={0.45} strokeWidth={1.5} />
           <At x={80} y={py} className="animate-guide-pulse">
-            <circle r={34} fill={hex(WORLD_COLORS.blast)} fillOpacity={0.35} stroke={hex(WORLD_COLORS.blast)} strokeWidth={2} />
+            <circle r={34} fill={hex(WORLD_COLORS.aura)} fillOpacity={0.2} stroke={hex(WORLD_COLORS.aura)} strokeWidth={2} />
           </At>
           <Player x={80} y={py} />
           {foe(106, 36)}
@@ -376,7 +378,10 @@ export function WeaponScene(props: { behavior: WeaponBehavior; label: string }):
           {foe(130, 46)}
           {foe(110, 52)}
           <At x={120} y={44} className="animate-guide-strike">
-            <circle r={24} fill={hex(WORLD_COLORS.strike)} fillOpacity={0.2} stroke={hex(WORLD_COLORS.strike)} strokeWidth={3} />
+            <circle r={24} fill={hex(WORLD_COLORS.lightning)} fillOpacity={0.2} />
+            {/* Молния с неба в точку удара: ореол и светлый стержень. */}
+            <polyline points="-6,-44 3,-32 -4,-22 5,-12 -2,-4 0,0" fill="none" stroke={hex(WORLD_COLORS.lightning)} strokeOpacity={0.5} strokeWidth={4} />
+            <polyline points="-6,-44 3,-32 -4,-22 5,-12 -2,-4 0,0" fill="none" stroke={hex(WORLD_COLORS.lightningCore)} strokeWidth={1.4} />
           </At>
         </Stage>
       );

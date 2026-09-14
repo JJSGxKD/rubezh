@@ -9,6 +9,7 @@ import { CombatFeedback } from "./combat-feedback";
 import { PickupRenderer } from "./pickups";
 import { ENEMY_LOOKS, enemyColor, WORLD_COLORS } from "./looks";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
+import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
 
 const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
@@ -59,6 +60,8 @@ export class WorldRenderer {
   private readonly blasts: Phaser.GameObjects.Image[] = [];
   private readonly pickups: PickupRenderer;
   private readonly telegraphs: Telegraphs;
+  /** граница «Очага» и молнии «Грозы» */
+  private readonly weaponEffects: WeaponEffects;
   /** числа урона и вспышки гибели */
   private readonly feedback: CombatFeedback;
   /** тик последнего попадания по игроку — для вспышки персонажа */
@@ -98,13 +101,13 @@ export class WorldRenderer {
     ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, WORLD_COLORS.projectile, "circle");
     ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius, WORLD_COLORS.enemyProjectile, "circle");
     ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.blast, "ring");
-    ensureShapeTexture(scene, "bh-strike", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.strike, "ring");
     ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.heal, "ring");
     ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.magnetWave, "wave");
     ensureShapeTexture(scene, "bh-dynamite", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.dynamiteWave, "wave");
     ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS_UNITS * scale, WORLD_COLORS.orbiter, "circle");
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
+    this.weaponEffects = new WeaponEffects(scene, world, this.layer);
     this.pickups = new PickupRenderer(scene, world, this.layer);
     this.feedback = new CombatFeedback(scene, world, this.layer, colorByType);
 
@@ -148,6 +151,7 @@ export class WorldRenderer {
     this.pickups.sync(t);
     this.syncOrbiters();
     this.syncBlasts();
+    this.weaponEffects.sync(t);
     this.feedback.sync();
 
     this.player.setPosition(
@@ -333,7 +337,13 @@ export class WorldRenderer {
         this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
         continue;
       }
-      if (kind !== SIM_EVENT.explosion && kind !== SIM_EVENT.strike) continue;
+      if (kind === SIM_EVENT.strike) {
+        // Кольцо площади под молнией рисует сама молния — отдельный взрыв
+        // поверх неё превращал бы удар в два эффекта.
+        this.weaponEffects.strike(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot]);
+        continue;
+      }
+      if (kind !== SIM_EVENT.explosion) continue;
       this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
     }
     this.eventsRead = events.written;
@@ -439,7 +449,6 @@ const BLAST_LIFETIME_TICKS = 18;
 const BLAST_TEXTURE_UNITS = 32;
 const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.explosion]: "bh-blast",
-  [SIM_EVENT.strike]: "bh-strike",
   [SIM_EVENT.heal]: "bh-heal",
   [SIM_EVENT.magnet]: "bh-magnet",
   [SIM_EVENT.dynamite]: "bh-dynamite",
