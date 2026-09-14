@@ -43,6 +43,12 @@ export interface PlatformAdapter {
    * (docs/23-referral-and-partner-program.md).
    */
   invite(invite: InvitePayload): Promise<InviteResult>;
+  /**
+   * Подписанные данные запуска для сервера — в Telegram строка `initData`.
+   * Сервер проверяет подпись и узнаёт по ней игрока; `null` — площадка их не
+   * даёт (обычный браузер, dev), и сервер игрока не узнает.
+   */
+  signedLaunchData(): string | null;
   haptic(type: HapticType): void;
   /**
    * Возможности интерфейса площадки: отступы безопасной зоны, полноэкранный
@@ -708,6 +714,69 @@ export interface RunResult {
   distance: number;
   /** пик числа врагов одновременно в мире */
   peakEnemies: number;
+}
+
+// --- Плейтест: сохранения и лидерборд (docs/26-stage2-plan.md, WP13) ---
+//
+// Контракт клиента с бэкендом плейтеста. Сервер проверяет тело своей схемой;
+// здесь — форма, на которую опирается оболочка. Telegram ID других игроков
+// наружу не отдаются: строка лидерборда знает только, «моя» ли она.
+
+export interface PlaytestRunSubmission {
+  /** повтор с тем же `runId` не удваивает статистику */
+  runId: string;
+  difficultyId: DifficultyId;
+  outcome: RunOutcome;
+  survivalSec: number;
+  level: number;
+  enemiesKilled: number;
+  startingWeaponId: string;
+  weapons: { id: string; level: number }[];
+  contentHash: string;
+}
+
+export interface PlaytestSubmitResult {
+  /** лучшее время игрока на этой сложности после забега */
+  bestSurvivalSec: number;
+  isNewBest: boolean;
+  /** место в лидерборде сложности, с единицы */
+  rank: number | null;
+}
+
+export interface PlaytestLeaderboardEntry {
+  rank: number;
+  name: string;
+  photoUrl: string | null;
+  survivalSec: number;
+  level: number;
+  startingWeaponId: string;
+  enemiesKilled: number;
+  isMe: boolean;
+}
+
+export interface PlaytestLeaderboard {
+  difficultyId: DifficultyId;
+  entries: PlaytestLeaderboardEntry[];
+  /** своё место, даже если оно ниже показанных строк */
+  me: { rank: number; survivalSec: number } | null;
+  totalPlayers: number;
+}
+
+export interface PlaytestRecentRun {
+  difficultyId: DifficultyId;
+  survivalSec: number;
+  level: number;
+  startingWeaponId: string;
+  /** когда получен сервером, мс UTC */
+  at: number;
+}
+
+export interface PlaytestProfile {
+  runs: number;
+  totalKills: number;
+  totalSurvivalSec: number;
+  best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
+  recent: PlaytestRecentRun[];
 }
 
 // --- Экономика / SKU, см. docs/05-game-design.md §5, docs/07-monetization-and-ads.md ---

@@ -52,6 +52,11 @@ export class MaxAdapter implements PlatformAdapter {
     return "unavailable";
   }
 
+  signedLaunchData(): string | null {
+    // Схема подписи площадки появится вместе с портированием.
+    return null;
+  }
+
   haptic(_type: HapticType): void {
     // TODO: MAX Bridge haptics, если доступно
   }

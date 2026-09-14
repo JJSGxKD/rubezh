@@ -1,4 +1,4 @@
-import { hapticFeedback, isTMA, retrieveLaunchParams, shareURL } from "@tma.js/sdk";
+import { hapticFeedback, isTMA, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
 import type {
   PlatformAdapter,
   UserContext,
@@ -65,6 +65,20 @@ export class TelegramAdapter implements PlatformAdapter {
       return "shared";
     }
     return inviteFromBrowser(invite);
+  }
+
+  /**
+   * Сырая строка `initData` — ровно та, что подписана Telegram: разобранные и
+   * собранные обратно параметры подпись уже не пройдут.
+   */
+  signedLaunchData(): string | null {
+    if (!isTMA()) return null;
+    try {
+      return retrieveRawInitData() ?? null;
+    } catch {
+      // Клиент открыт без данных запуска (ссылка мимо бота) — сервер игрока не узнает.
+      return null;
+    }
   }
 
   /**
