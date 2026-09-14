@@ -1,7 +1,9 @@
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config";
+import { closeRedis, createPlaytestRedis } from "../src/modules/playtest/playtest-redis";
 import type { StoredRun } from "../src/modules/playtest/playtest.store";
+import { RedisPlaytestStatsStore } from "../src/modules/playtest/redis-playtest-stats.store";
 import { RedisPlaytestStore } from "../src/modules/playtest/redis-playtest.store";
 
 // Хранилище плейтеста на живом Redis. Сценарий тот же, что у хранилища в
@@ -32,18 +34,23 @@ function run(runId: string, survivalSec: number, patch: Partial<StoredRun> = {})
 
 describe.skipIf(url === "")("хранилище плейтеста на Redis", () => {
   let store: RedisPlaytestStore;
+  let stats: RedisPlaytestStatsStore;
+  let redis: Redis;
   let admin: Redis;
 
   beforeAll(async () => {
     admin = new Redis(url);
     await admin.flushdb();
-    store = new RedisPlaytestStore(loadAppConfig({ REDIS_URL: url, PLAYTEST_DATA_TTL_DAYS: "1" }));
+    const config = loadAppConfig({ REDIS_URL: url, PLAYTEST_DATA_TTL_DAYS: "1" });
+    redis = createPlaytestRedis(config);
+    store = new RedisPlaytestStore(redis, config);
+    stats = new RedisPlaytestStatsStore(redis, config);
   });
 
   afterAll(async () => {
     await admin.flushdb();
     await admin.quit();
-    await store.onModuleDestroy();
+    await closeRedis(redis);
   });
 
   it("обновляет лучшее время только улучшением, вместе с деталями забега", async () => {
@@ -81,8 +88,74 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
     expect(await store.rank("hard", "10")).toBeNull();
   });
 
+  it("собирает сводку: игроки за всё время и за сутки, устройства, забеги по сложностям", async () => {
+    const now = Date.parse("2026-09-14T12:00:00Z");
+    const device = {
+      clientPlatform: "android",
+      clientVersion: "8.0",
+      os: "android" as const,
+      formFactor: "phone" as const,
+      screenWidth: 412,
+      screenHeight: 915,
+      pixelRatio: 2.63,
+      cores: 8,
+      memoryGb: 8,
+    };
+    await stats.recordSession("10", { installId: "install-a", build: "0.3.0", contentHash: "abc", device }, now);
+    await stats.recordSession("20", { installId: "install-b", build: "0.3.0", contentHash: "abc", device: { ...device, os: "ios", clientPlatform: "ios" } }, now);
+    // Вчерашний запуск: в «сегодня» не попадает, в «всего» — да.
+    await stats.recordSession("30", { installId: "install-c", build: "0.3.0", contentHash: "abc", device: { ...device, formFactor: "tablet" } }, now - 86_400_000);
+    await stats.recordRun("10", run("s-1", 150, { deathCause: "swarm_rat" }), now);
+    await stats.recordRun("10", run("s-2", 30, { outcome: "abandoned", deathCause: null }), now);
+    await stats.recordRun("20", run("s-3", 700, { difficultyId: "hard", startingWeaponId: "spark" }), now);
+    await admin.set("pt:st:install:broken", "{not json");
+    await admin.sadd("pt:st:installs", "broken");
+
+    const snapshot = await stats.snapshot(now);
+    expect(snapshot).toMatchObject({
+      playersSeen: 3,
+      playersPlayed: 2,
+      playersSeenToday: 2,
+      playersPlayedToday: 2,
+      runsToday: 3,
+      installs: 3,
+    });
+    expect(snapshot.byOs).toEqual({ android: 2, ios: 1 });
+    expect(snapshot.byFormFactor).toEqual({ phone: 2, tablet: 1 });
+    expect(snapshot.difficulties.normal).toMatchObject({ runs: 2, totalSurvivalSec: 180, totalLevel: 10, abandoned: 1 });
+    expect(snapshot.difficulties.normal.buckets.slice(0, 3)).toEqual([1, 1, 0]);
+    // 700 с — почти двенадцать минут: корзина «от 10 до 15».
+    expect(snapshot.difficulties.hard.buckets[4]).toBe(1);
+    expect(snapshot.startingWeapons).toEqual({ knife: 2, spark: 1 });
+    expect(snapshot.deathCauses).toEqual({ swarm_rat: 1 });
+  });
+
+  it("не считает повтор отчёта стресс-теста", async () => {
+    const summary = { reportId: "stress-1", os: "android", formFactor: "phone", verdict: "ok", peakObjects: 900, avgFps: 58 };
+    expect(await stats.recordStress("10", summary, 1)).toBe(true);
+    expect(await stats.recordStress("10", summary, 1)).toBe(false);
+    expect((await stats.snapshot(1)).stress).toEqual({
+      reports: 1,
+      byOs: { android: { reports: 1, totalPeak: 900, verdicts: { ok: 1 } } },
+    });
+  });
+
   it("ставит срок жизни на ключи: данные плейтеста исчезают сами", async () => {
-    for (const key of ["pt:lb:normal", "pt:lbrun:normal", "pt:player:10", "pt:stats:10", "pt:runs:10", "pt:run:r-1"]) {
+    for (const key of [
+      "pt:lb:normal",
+      "pt:lbrun:normal",
+      "pt:player:10",
+      "pt:stats:10",
+      "pt:runs:10",
+      "pt:run:r-1",
+      "pt:st:seen",
+      "pt:st:played",
+      "pt:st:installs",
+      "pt:st:install:install-a",
+      "pt:st:diff:normal",
+      "pt:st:weapon",
+      "pt:st:stress",
+    ]) {
       const ttl = await admin.ttl(key);
       expect(ttl, key).toBeGreaterThan(0);
       expect(ttl, key).toBeLessThanOrEqual(86_400);

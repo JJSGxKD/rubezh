@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config";
-import { accessFor, type PlaytestAccess } from "./playtest-access";
+import { accessFor, isAdmin, type PlaytestAccess } from "./playtest-access";
 import { ValidationError } from "../../common/domain-error";
-import { difficultyQuerySchema, runSubmissionSchema } from "./dto/run-submission.dto";
+import { difficultyQuerySchema, runSubmissionSchema, sessionReportSchema } from "./dto/run-submission.dto";
 import { PlaytestAuthGuard, playerOf } from "./playtest-auth.guard";
 import {
   PlaytestService,
@@ -27,7 +27,15 @@ export class PlaytestController {
   @Post("runs")
   async submit(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SubmitResult }> {
     const submission = parse(() => runSubmissionSchema.parse(body), "Некорректный итог забега");
-    return { data: await this.service.submitRun(playerOf(request), submission, Date.now()) };
+    const player = playerOf(request);
+    return { data: await this.service.submitRun(player, submission, Date.now(), isAdmin(player, this.config)) };
+  }
+
+  @Post("sessions")
+  async session(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { recorded: boolean } }> {
+    const report = parse(() => sessionReportSchema.parse(body), "Некорректные сведения о запуске");
+    await this.service.recordSession(playerOf(request), report, Date.now());
+    return { data: { recorded: true } };
   }
 
   @Get("leaderboard")

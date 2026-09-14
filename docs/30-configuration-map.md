@@ -216,6 +216,8 @@
 | `PLAYTEST_ENABLED`, `TELEGRAM_BOT_TOKEN` | сохранения и лидерборд плейтеста на бэкенде; без токена бэкенд с включённым плейтестом не стартует |
 | `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC` | сколько живут данные плейтеста в Redis и подпись запуска Telegram |
 | `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | вход в плейтест без Telegram на машине разработчика; только `NODE_ENV=development` |
+| `PLAYTEST_STATS_ENABLED`, `PLAYTEST_STATS_CHAT_ID` | сводка статистики плейтеста в чат администраторов по `/stats`; без чата или токена бота бэкенд не стартует |
+| `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | когда бот присылает сводку сам и в каком поясе считаются «сутки»; пусто в `DAILY_AT` — только по команде |
 | `ADMIN_TELEGRAM_IDS` | администраторы: режим разработчика в клиенте и забеги с читами в рейтинге. Стресс-тест открыт всем, пока `PLAYTEST_ENABLED=true`; в dev-сервере инструменты открыты без сервера (`capabilities.devTools`). Правила — `backend/api/src/modules/playtest/playtest-access.ts` |
 
 Прокси dev-сервера на бэкенд плейтеста — `apps/web-telegram/vite.config.ts` →

@@ -1,5 +1,5 @@
-import { Inject, Injectable, type OnModuleDestroy } from "@nestjs/common";
-import { Redis } from "ioredis";
+import { Inject, Injectable } from "@nestjs/common";
+import type { Redis } from "ioredis";
 import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config";
 import type {
@@ -10,6 +10,7 @@ import type {
   RecordRunResult,
   StoredRun,
 } from "./playtest.store";
+import { PLAYTEST_REDIS } from "./playtest-redis";
 import type { TelegramPlayer } from "./telegram-init-data";
 
 /**
@@ -26,8 +27,8 @@ import type { TelegramPlayer } from "./telegram-init-data";
  * - `pt:stats:{id}` — хэш счётчиков; `pt:runs:{id}` — последние забеги;
  * - `pt:run:{runId}` — отметка «забег уже записан» против повторов.
  *
- * Каждая команда — с таймаутом клиента: недоступный Redis не должен вешать
- * запрос игрока (CLAUDE.md, «Стиль кода»).
+ * Подключение общее на модуль (`playtest-redis.ts`), с таймаутом на каждую
+ * команду: недоступный Redis не должен вешать запрос игрока.
  */
 
 const RECENT_RUNS_KEPT = 20;
@@ -71,28 +72,14 @@ const storedRunSchema = z.object({
 });
 
 @Injectable()
-export class RedisPlaytestStore implements PlaytestStore, OnModuleDestroy {
-  private readonly redis: Redis;
+export class RedisPlaytestStore implements PlaytestStore {
   private readonly ttlSec: number;
 
-  constructor(@Inject(APP_CONFIG) config: AppConfig) {
-    this.redis = new Redis(config.redisUrl, {
-      lazyConnect: true,
-      connectTimeout: 2_000,
-      commandTimeout: 2_000,
-      maxRetriesPerRequest: 1,
-    });
+  constructor(
+    @Inject(PLAYTEST_REDIS) private readonly redis: Redis,
+    @Inject(APP_CONFIG) config: AppConfig,
+  ) {
     this.ttlSec = config.playtest.dataTtlSec;
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    // С ленивым подключением клиент мог так и не подключиться: `quit` тогда
-    // сперва подключился бы, чтобы попрощаться.
-    if (this.redis.status === "wait") {
-      this.redis.disconnect();
-      return;
-    }
-    await this.redis.quit().catch(() => this.redis.disconnect());
   }
 
   async savePlayer(player: TelegramPlayer): Promise<void> {

@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionContext } from "@nestjs/common";
 import { loadAppConfig } from "../src/config/app-config";
 import { DomainError } from "../src/common/domain-error";
-import { runSubmissionSchema } from "../src/modules/playtest/dto/run-submission.dto";
+import { runSubmissionSchema, sessionReportSchema } from "../src/modules/playtest/dto/run-submission.dto";
 import { accessFor } from "../src/modules/playtest/playtest-access";
 import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard";
 import { PlaytestService } from "../src/modules/playtest/playtest.service";
 import { verifyInitData } from "../src/modules/playtest/telegram-init-data";
+import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store";
 import { MemoryPlaytestStore } from "./helpers/memory-playtest.store";
 
 // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
@@ -133,6 +134,7 @@ describe("доступ к эндпоинтам плейтеста", () => {
 
 describe("сервис плейтеста", () => {
   let store: MemoryPlaytestStore;
+  let stats: MemoryPlaytestStatsStore;
   let service: PlaytestService;
   const anna = { id: "1", name: "Анна", username: null, photoUrl: null };
   const boris = { id: "2", name: "Борис", username: null, photoUrl: "https://t.me/i/b.jpg" };
@@ -153,12 +155,23 @@ describe("сервис плейтеста", () => {
 
   beforeEach(() => {
     store = new MemoryPlaytestStore();
-    service = new PlaytestService(store);
+    stats = new MemoryPlaytestStatsStore();
+    service = new PlaytestService(store, stats);
   });
 
   it("обновляет лучшее время только улучшением и сообщает место", async () => {
-    expect(await service.submitRun(anna, run("a", 120), NOW)).toEqual({ bestSurvivalSec: 120, isNewBest: true, rank: 1 });
-    expect(await service.submitRun(anna, run("b", 90), NOW)).toEqual({ bestSurvivalSec: 120, isNewBest: false, rank: 1 });
+    expect(await service.submitRun(anna, run("a", 120), NOW)).toEqual({
+      bestSurvivalSec: 120,
+      isNewBest: true,
+      rank: 1,
+      recorded: true,
+    });
+    expect(await service.submitRun(anna, run("b", 90), NOW)).toEqual({
+      bestSurvivalSec: 120,
+      isNewBest: false,
+      rank: 1,
+      recorded: true,
+    });
     expect(await service.submitRun(boris, run("c", 300), NOW)).toMatchObject({ isNewBest: true, rank: 1 });
     expect(await store.rank("normal", anna.id)).toBe(2);
   });
@@ -167,6 +180,71 @@ describe("сервис плейтеста", () => {
     await service.submitRun(anna, run("same", 100), NOW);
     await service.submitRun(anna, run("same", 100), NOW);
     expect((await service.profile(anna.id)).runs).toBe(1);
+    expect((await stats.snapshot(NOW)).difficulties.normal.runs).toBe(1);
+  });
+
+  it("не пишет забег с читами ни в рейтинг, ни в статистику", async () => {
+    await service.submitRun(anna, run("honest", 100), NOW);
+    const cheated = { ...run("god", 5000), cheats: true, countInRating: true };
+
+    // Флаг «учесть в рейтинге» от обычного игрока не работает: право решает сервер.
+    expect(await service.submitRun(anna, cheated, NOW)).toEqual({
+      bestSurvivalSec: 100,
+      isNewBest: false,
+      rank: 1,
+      recorded: false,
+    });
+    expect((await service.profile(anna.id)).runs).toBe(1);
+    expect((await stats.snapshot(NOW)).difficulties.normal.runs).toBe(1);
+  });
+
+  it("учитывает забег с читами, если администратор явно попросил", async () => {
+    const cheated = { ...run("god", 5000), cheats: true };
+    expect(await service.submitRun(anna, cheated, NOW, true)).toMatchObject({ recorded: false });
+    expect(await service.submitRun(anna, { ...cheated, countInRating: true }, NOW, true)).toMatchObject({
+      bestSurvivalSec: 5000,
+      recorded: true,
+    });
+  });
+
+  it("считает игроков, установки и устройства по запускам", async () => {
+    const device = {
+      clientPlatform: "android",
+      clientVersion: "8.0",
+      os: "android",
+      formFactor: "phone",
+      screenWidth: 412,
+      screenHeight: 915,
+      pixelRatio: 2.63,
+      cores: 8,
+      memoryGb: 8,
+    };
+    // Схема разбирает сырое тело запроса — строки ОС здесь как с клиента.
+    const report = (installId: string, patch: Record<string, unknown> = {}) =>
+      sessionReportSchema.parse({ installId, build: "0.3.0", contentHash: "abc123", device: { ...device, ...patch } });
+
+    await service.recordSession(anna, report("install-anna-phone"), NOW);
+    await service.recordSession(anna, report("install-anna-phone"), NOW + 1000);
+    await service.recordSession(anna, report("install-anna-desk", { os: "windows", formFactor: "desktop", clientPlatform: "tdesktop" }), NOW);
+    await service.recordSession(boris, report("install-boris", { os: "ios", clientPlatform: "ios" }), NOW);
+    await service.submitRun(boris, { ...run("b", 200), deathCause: "swarm_rat" }, NOW);
+
+    const snapshot = await stats.snapshot(NOW);
+    expect(snapshot).toMatchObject({ playersSeen: 2, playersPlayed: 1, installs: 3, runsToday: 1 });
+    expect(snapshot.byOs).toEqual({ android: 1, windows: 1, ios: 1 });
+    expect(snapshot.byFormFactor).toEqual({ phone: 2, desktop: 1 });
+    expect(snapshot.deathCauses).toEqual({ swarm_rat: 1 });
+  });
+
+  it("не принимает запуск без установки и с неизвестной ОС", () => {
+    const base = { installId: "install-1", build: "0.3.0", contentHash: "abc", device: {} };
+    expect(() => sessionReportSchema.parse({ ...base, installId: "x" })).toThrow();
+    expect(() =>
+      sessionReportSchema.parse({
+        ...base,
+        device: { clientPlatform: null, clientVersion: null, os: "symbian", formFactor: "phone", screenWidth: 1, screenHeight: 1, pixelRatio: 1, cores: null, memoryGb: null },
+      }),
+    ).toThrow();
   });
 
   it("ведёт лидерборд по каждой сложности отдельно и не отдаёт чужие Telegram ID", async () => {

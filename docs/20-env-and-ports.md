@@ -104,7 +104,7 @@
 | 13. Публичные для клиента | `VITE_*` | только не-секреты |
 | 14. Стенд FPS-испытаний | `VITE_BENCH_ENABLED`, `VITE_BENCH_INGEST_*`, `BENCH_INGEST_*`, `BENCH_REPORTS_DIR` | `25-week1-fps-trials.md` §2.1; временная группа этапа 1. На этапе 2 заменяется группой «Диагностика и телеметрия»: приёмники, ключ псевдонимизации выгрузок, выключатель выгрузки через бота — состав в `28-diagnostics.md` §7 |
 | 15. CDN | ключ API Bunny.net для сброса кеша после деплоя | **только секреты CI**, на сервере не нужен (`26-stage2-plan.md`, WP10) |
-| 16. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | временная группа закрытого теста (`26-stage2-plan.md`, WP13). Игрок проверяется подписью initData токеном `TELEGRAM_BOT_TOKEN` из группы 7; вход без подписи — только `NODE_ENV=development`, иначе бэкенд не стартует |
+| 16. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_ENABLED`, `PLAYTEST_STATS_CHAT_ID`, `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Игрок проверяется подписью initData токеном `TELEGRAM_BOT_TOKEN` из группы 7; вход без подписи — только `NODE_ENV=development`, иначе бэкенд не стартует. `PLAYTEST_STATS_*` — сводка статистики картинкой в чат администраторов: включённая без чата или токена не стартует |
 
 `VITE_API_URL` пустой по умолчанию: собранный клиент ходит в API на свой же
 домен, маршрут `/api` держит Caddy. Отдельный адрес задаётся, только если API
