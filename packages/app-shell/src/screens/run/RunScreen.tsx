@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { DEFAULT_MAP_ID } from "@bh/core-game";
+import { DEFAULT_MAP_ID, type RunInspection } from "@bh/core-game";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
 import { useDiagnostics } from "../../state/diagnostics";
@@ -12,6 +12,7 @@ import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
 import { RunLoading } from "./RunLoading";
 import { DeathOverlay, LevelUpOverlay, PauseOverlay } from "./overlays";
+import { RunStatsSheet } from "./RunStatsSheet";
 
 /**
  * Экран забега: канва Phaser на весь экран, HUD слоем поверх и оверлеи
@@ -27,6 +28,8 @@ export function RunScreen(): ReactNode {
   const diagnostics = useDiagnostics((state) => state.enabled);
   const isActive = usePlatform((state) => state.isActive);
   const submitted = usePlaytest((state) => state.lastSubmitted);
+  const [stats, setStats] = useState<RunInspection | null>(null);
+  const openStats = (): void => setStats(useRun.getState().inspect());
   // Оружие для экрана загрузки фиксируется при входе: у продолженного забега
   // оно своё, а ожидание старта движок снимает сразу, как только начал.
   const [weaponId] = useState(
@@ -80,6 +83,7 @@ export function RunScreen(): ReactNode {
           onResume={() => useRun.getState().resume()}
           onSettings={() => navigation.push("settings")}
           onSurrender={() => useRun.getState().surrender()}
+          onStats={openStats}
         />
       ) : null}
 
@@ -90,7 +94,14 @@ export function RunScreen(): ReactNode {
           queued={run.queued}
           {...(run.hud === null ? {} : { loadout: run.hud })}
           onChoose={(optionId) => useRun.getState().choose(optionId)}
+          onStats={openStats}
         />
+      ) : null}
+
+      {/* Лист закрывается сам, если мир снова пошёл: характеристики — снимок
+          стоящего мира, над бегущим они врали бы. */}
+      {stats !== null && (run.phase === "paused" || run.phase === "levelUp") ? (
+        <RunStatsSheet inspection={stats} onClose={() => setStats(null)} />
       ) : null}
 
       {run.phase === "finished" && run.result !== null ? (

@@ -71,6 +71,66 @@ export interface RunSlotState {
 }
 
 /**
+ * Характеристики забега по запросу — лист «Характеристики» на паузе и на
+ * выборе улучшения. Снимается, только когда его просят, а не в каждом снимке
+ * HUD: мир в этот момент стоит, и считать его десять раз в секунду незачем.
+ *
+ * Расстояния и скорости — в игровых единицах, как в контенте, а не в пикселях
+ * устройства: иначе у игрока с плотным экраном «скорость бега» была бы вдвое
+ * больше, чем у соседа.
+ */
+export interface RunInspection {
+  survivalSec: number;
+  level: number;
+  enemiesKilled: number;
+  damageTaken: number;
+  player: {
+    hp: number;
+    maxHp: number;
+    regenPerSec: number;
+    armor: number;
+    moveSpeed: number;
+    pickupRadius: number;
+    damageMul: number;
+    cooldownMul: number;
+    areaMul: number;
+    projectileSpeedMul: number;
+    extraProjectiles: number;
+  };
+  weapons: RunWeaponInspection[];
+  passives: RunPassiveInspection[];
+}
+
+export interface RunWeaponInspection {
+  id: string;
+  behavior: string;
+  level: number;
+  maxLevel: number;
+  /** числа с учётом пассивок — ровно то, чем оружие бьёт сейчас */
+  damage: number;
+  cooldownSec: number;
+  projectiles: number;
+  pierce: number;
+  areaRadius: number;
+  damageDealt: number;
+  /** доля урона оружия в забеге, от 0 до 1 */
+  damageShare: number;
+  /** средний урон в секунду за весь забег */
+  dps: number;
+}
+
+export interface RunPassiveInspection {
+  id: string;
+  category: string;
+  level: number;
+  maxLevel: number;
+  stat: string;
+  op: "add" | "mul";
+  /** значение уровня: множитель или слагаемое, как в контенте */
+  value: number;
+}
+
+/**
  * Почему забег стоит: игрок нажал паузу, приложение ушло в фон или забег
  * только что продолжен из снимка и ждёт, пока игрок будет готов.
  */
@@ -173,6 +233,8 @@ export interface RunSession {
    * кончился или сцена ещё не создана.
    */
   snapshot(): RunSnapshot | null;
+  /** характеристики забега; `null`, пока сцена не создана */
+  inspect(): RunInspection | null;
   destroy(): void;
 }
 

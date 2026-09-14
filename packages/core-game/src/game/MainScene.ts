@@ -9,7 +9,14 @@ import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
 import { WEAPONS } from "../content/weapons";
 import type { RunBus } from "../engine/run-bus";
-import { RUN_SNAPSHOT_FORMAT, type HudSnapshot, type RunPauseReason, type RunSnapshot } from "../run-api";
+import {
+  RUN_SNAPSHOT_FORMAT,
+  type HudSnapshot,
+  type RunInspection,
+  type RunPauseReason,
+  type RunSnapshot,
+} from "../run-api";
+import { inspectWorld } from "./run/inspect";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { createWorld, TICK_SEC, type World } from "./sim/world";
 import { stepWorld, type SimInput } from "./sim/step";
@@ -248,6 +255,11 @@ export class MainScene extends Phaser.Scene {
     const next: MainSceneData = { ...this.sceneData, seed };
     delete next.resume;
     this.scene.restart(next);
+  }
+
+  /** Характеристики забега для листа «Характеристики». */
+  inspect(): RunInspection | null {
+    return this.ready ? inspectWorld(this.world) : null;
   }
 
   /**

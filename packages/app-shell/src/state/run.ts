@@ -2,6 +2,7 @@ import type { DifficultyId, RunResult, UpgradeOption } from "@bh/shared-types";
 import {
   loadRunEngine,
   type HudSnapshot,
+  type RunInspection,
   type RunPauseReason,
   type RunSession,
   type RunSnapshot,
@@ -70,6 +71,8 @@ export interface RunStore {
   choose(optionId: string): void;
   restart(): void;
   stop(): void;
+  /** характеристики забега для листа «Характеристики»; `null` — забега нет */
+  inspect(): RunInspection | null;
   /**
    * Забег, который откроет следующий заход на экран забега; `null` — новый.
    * Снимается с очереди, только когда сессия создана: в режиме разработки
@@ -244,6 +247,10 @@ export const useRun = create<RunStore>((set, get) => ({
       screenMode: screenModeNow(),
       orientation: orientationNow(),
     });
+  },
+
+  inspect(): RunInspection | null {
+    return session?.inspect() ?? null;
   },
 
   stop(): void {

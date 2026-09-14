@@ -68,6 +68,9 @@ export function createRunEngine(): RunEngine {
         snapshot() {
           return scene()?.captureSnapshot() ?? null;
         },
+        inspect() {
+          return scene()?.inspect() ?? null;
+        },
         destroy(): void {
           bus.clear();
           host.destroy();
