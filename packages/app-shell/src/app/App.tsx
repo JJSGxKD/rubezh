@@ -32,6 +32,7 @@ import {
   ScreenFallback,
   SettingsScreen,
   ShopScreen,
+  StressScreen,
   TasksScreen,
   TestersScreen,
   WheelScreen,
@@ -137,6 +138,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <WeaponScreen />;
     case "run":
       return <RunScreen />;
+    case "stress":
+      return <StressScreen />;
     case "arsenal":
       return <ArsenalScreen />;
     case "shop":

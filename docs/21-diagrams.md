@@ -988,6 +988,8 @@ sequenceDiagram
 
     S->>P: POST /playtest/sessions — установка и устройство
     P->>R: SADD pt:st:seen, устройство установки
+    S->>P: POST /playtest/stress — итог стресс-теста без кадров
+    P->>R: SET pt:st:stress:{reportId} NX, сводка по ОС, список последних
     S->>P: POST /playtest/runs
     alt читы без явного «учесть» от администратора
         P-->>S: recorded: false — ни рейтинг, ни статистика

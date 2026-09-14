@@ -261,6 +261,8 @@ pnpm budget
 | Что меняю | Где |
 |---|---|
 | Профили нагрузки, длительность, потолки, агрессивный режим | `core-game/src/game/bench/profiles.ts` |
+| Нагрузка позднего забега для стресс-теста в оболочке: доли паттернов, частота и размер волны элит | `bench/full-load.ts` → `BENCH_FULL_LOAD` |
+| Как часто стресс-тест сообщает прогресс оболочке | `game/BenchScene.ts` → `PROGRESS_INTERVAL_MS` |
 | Что попадает в отчёт и версия его схемы | `bench/metrics.ts` → `BENCH_REPORT_SCHEMA` |
 | Критерии вердикта «тянет / не тянет» | `bench/verdict.ts` |
 | Определение просадки в агрессивном режиме | `bench/degradation-detector.ts` → `DEFAULT_DEGRADATION` |

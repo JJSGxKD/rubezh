@@ -1,7 +1,9 @@
+import type { BenchSubmission } from "@bh/core-game";
 import {
   DIFFICULTY_IDS,
   type DifficultyId,
   type PlaytestAccess,
+  type PlaytestDevice,
   type PlaytestLeaderboard,
   type PlaytestProfile,
   type PlaytestSessionReport,
@@ -61,6 +63,19 @@ export interface PlaytestApi {
   profile(): Promise<PlaytestResult<PlaytestProfile>>;
   access(): Promise<PlaytestResult<PlaytestAccess>>;
   reportSession(report: PlaytestSessionReport): Promise<PlaytestResult<{ recorded: boolean }>>;
+  reportStress(report: PlaytestStressReport): Promise<PlaytestResult<{ recorded: boolean }>>;
+}
+
+/**
+ * Отчёт стресс-теста: формат стенда из движка и устройство тем же разбором,
+ * что у запуска. Тип здесь, а не в shared-types: отчёт описан в core-game,
+ * а shared-types ничего из монорепо не импортирует.
+ */
+export interface PlaytestStressReport {
+  installId: string;
+  build: string;
+  device: PlaytestDevice;
+  submission: BenchSubmission;
 }
 
 /**
@@ -175,6 +190,7 @@ export function createPlaytestApi(
     profile: () => request("/me", profileSchema, { method: "GET" }),
     access: () => request("/access", accessSchema, { method: "GET" }),
     reportSession: (report) => request("/sessions", sessionSchema, { method: "POST", body: report }),
+    reportStress: (report) => request("/stress", sessionSchema, { method: "POST", body: report }),
   };
 }
 
@@ -189,7 +205,8 @@ function identityHeader(config: PlaytestApiConfig, launchData: string | null): R
 
 function failureOf(status: number): PlaytestFailure {
   if (status === 401) return "unauthorized";
-  if (status === 404) return "disabled";
+  // 403 — функция закрыта для этого игрока: для него это то же, что выключена.
+  if (status === 404 || status === 403) return "disabled";
   if (status === 400 || status === 413 || status === 422) return "rejected";
   return "unavailable";
 }

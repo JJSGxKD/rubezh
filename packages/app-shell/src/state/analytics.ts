@@ -24,6 +24,7 @@ export type AnalyticsEvent =
   | "playtest_run_synced"
   | "load_time"
   | "diagnostics_mode_changed"
+  | "bench_finished"
   | "client_error";
 
 export type AnalyticsPayload = Record<string, string | number | boolean | null>;

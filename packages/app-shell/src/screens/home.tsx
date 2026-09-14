@@ -3,6 +3,7 @@ import {
   BookOpen,
   CalendarCheck,
   ChevronRight,
+  Flame,
   History,
   Infinity as InfinityIcon,
   LoaderPinwheel,
@@ -29,6 +30,7 @@ import {
 import { formatDuration, t } from "../i18n";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
+import { usePlaytestAccess } from "../state/playtest";
 import { preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine, useRun } from "../state/run";
 import { useSavedRun, type SavedRun } from "../state/run-save";
@@ -289,6 +291,9 @@ function preloadEverything(): void {
 /** Выбор режима. «Бесконечный» рабочий, «Кампания» — заглушка. */
 export function ModeScreen(): ReactNode {
   const navigation = useNavigation();
+  // Стресс-тест открыт всем на плейтесте и команде вне его: правило решает
+  // сервер (docs/28-diagnostics.md §2.3), здесь только не показываем лишнего.
+  const access = usePlaytestAccess();
 
   return (
     <Screen title={t("mode.title")} onBack={() => navigation.pop()}>
@@ -305,7 +310,23 @@ export function ModeScreen(): ReactNode {
               </div>
             </div>
           </Card>
-          <Card appearIndex={1} disabled>
+          {access.stressTest ? (
+            <Card appearIndex={1} stripe="info" onClick={() => navigation.push("stress")}>
+              <div className="flex items-center gap-4">
+                <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
+                  <Flame size={24} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-display text-lg font-bold text-text">{t("mode.stress")}</span>
+                    <Badge tone="info">{t("mode.stress.badge")}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-text-muted">{t("mode.stress.description")}</p>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+          <Card appearIndex={2} disabled>
             <div className="flex items-center gap-4">
               <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-surface-raised text-text-muted">
                 <MapIcon size={24} />

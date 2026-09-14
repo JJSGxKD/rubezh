@@ -12,6 +12,7 @@ export type ScreenId =
   | "mode"
   | "weapon"
   | "run"
+  | "stress"
   | "arsenal"
   | "shop"
   | "rating"

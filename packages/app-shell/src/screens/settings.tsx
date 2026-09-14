@@ -13,6 +13,7 @@ import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
 import { usePlatform } from "../state/platform";
+import { usePlaytestAccess } from "../state/playtest";
 import { useSettings } from "../state/settings";
 import { useShell } from "../state/shell";
 
@@ -172,6 +173,7 @@ export function AboutScreen(): ReactNode {
 /** Отступы и размеры — то, что чаще всего расходится между устройствами. */
 export function DiagnosticsScreen(): ReactNode {
   const navigation = useNavigation();
+  const access = usePlaytestAccess();
   const platform = usePlatform();
   const build = useShell((state) => state.build);
 
@@ -205,13 +207,13 @@ export function DiagnosticsScreen(): ReactNode {
         </ListGroup>
 
         <SectionTitle>{t("diagnostics.runBench")}</SectionTitle>
-        <p className="text-xs text-text-muted">{t("diagnostics.benchSoon")}</p>
-
-        <div className="mt-4">
-          <ListGroup>
-            <ListItem title={t("gallery.title")} onClick={() => navigation.push("gallery")} />
-          </ListGroup>
-        </div>
+        <ListGroup>
+          {access.stressTest ? (
+            <ListItem title={t("mode.stress")} onClick={() => navigation.push("stress")} />
+          ) : null}
+          <ListItem title={t("gallery.title")} onClick={() => navigation.push("gallery")} />
+        </ListGroup>
+        {access.stressTest ? null : <p className="mt-2 text-xs text-text-muted">{t("diagnostics.benchClosed")}</p>}
       </ContentColumn>
     </Screen>
   );
