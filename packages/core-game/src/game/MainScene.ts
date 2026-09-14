@@ -18,6 +18,7 @@ import {
   type RunPauseReason,
   type RunSnapshot,
 } from "../run-api";
+import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
 import { inspectWorld } from "./run/inspect";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
@@ -48,6 +49,13 @@ const MAX_STEPS_PER_FRAME = 5;
  * чаще человек всё равно не читает, а React перерисовывается каждый раз.
  */
 const HUD_INTERVAL_MS = 100;
+
+/**
+ * Как часто уходят сигналы для звука и вибрации. Реже тридцати раз в секунду
+ * звук попадания заметно отстаёт от вспышки; чаще — лишняя работа без разницы
+ * на слух.
+ */
+const CUE_INTERVAL_MS = 33;
 
 /** Окно технической сводки: четыре раза в секунду читается глазом и не дёргает React. */
 const DEV_INFO_INTERVAL_MS = 250;
@@ -112,6 +120,8 @@ export class MainScene extends Phaser.Scene {
   /** в забеге включали читы — пометка не снимается до конца забега */
   private cheatsUsed = false;
   private devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
+  private cueTracker!: CueTracker;
+  private cueTimerMs = 0;
 
   constructor() {
     super("main");
@@ -170,6 +180,10 @@ export class MainScene extends Phaser.Scene {
     this.applyDev(data.dev);
     this.ready = true;
     if (resume === undefined) for (const command of data.dev?.start ?? []) this.devCommand(command);
+    // Сигналы считаются от уже собранного мира: продолженный забег и команды
+    // старта не должны прозвучать залпом на первом кадре.
+    this.cueTracker = new CueTracker(this.world);
+    this.cueTimerMs = 0;
     this.emitHud();
     this.reportWave();
     if (resume !== undefined) this.enterRestored();
@@ -209,6 +223,13 @@ export class MainScene extends Phaser.Scene {
       if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
     }
     this.trackDevInfo(deltaMs, measure ? performance.now() - simStartedAt : 0, steps);
+
+    this.cueTimerMs += deltaMs;
+    if (this.cueTimerMs >= CUE_INTERVAL_MS) {
+      this.cueTimerMs = 0;
+      const cues = this.cueTracker.collect();
+      if (cues !== null) this.sceneData.bus.emit("cues", cues);
+    }
 
     // Камера живёт в реальном времени кадра, а не в тиках симуляции: она к
     // исходу забега отношения не имеет и на детерминизм не влияет.

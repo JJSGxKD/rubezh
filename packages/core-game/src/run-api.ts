@@ -222,6 +222,12 @@ export interface RunEvents {
   resumed: { elapsedSec: number };
   /** техническая сводка — только с `diagnostics.fpsOverlay` или `dev.visuals.techInfo` */
   devInfo: RunDevInfo;
+  /**
+   * Что случилось в забеге с прошлой сводки — для вибрации и звука, не чаще
+   * 30 раз в секунду и только когда что-то случилось. Объект переиспользуется:
+   * читать сразу, не хранить.
+   */
+  cues: RunCues;
   /** забег кончился смертью */
   finished: RunResult;
   /** игрок сдался на экране паузы */
@@ -322,6 +328,32 @@ export type RunDevCommand =
   | { kind: "jumpToMinute"; minute: number }
   /** шаг симуляции на паузе — разглядеть телеграф или столкновение по тикам */
   | { kind: "stepTicks"; ticks: number };
+
+/** Сигналы забега за окно: счётчики, а не отдельные события — толпа не превращается в сотни вызовов. */
+export interface RunCues {
+  playerHit: number;
+  /** подобрана аптечка */
+  heal: number;
+  magnet: number;
+  dynamite: number;
+  /** взрывы подрывников; `explosionsNear` — из них рядом с игроком */
+  explosions: number;
+  explosionsNear: number;
+  /** удары молний «Грозы» */
+  strikes: number;
+  kills: number;
+  eliteKills: number;
+  eliteSpawns: number;
+  /** собранный опыт — кристаллы */
+  xp: number;
+  /** начала угроз: подрывник поджёг фитиль, волк замер перед рывком и рванул, стрелок выстрелил */
+  fuses: number;
+  dashWarns: number;
+  dashes: number;
+  enemyShots: number;
+  /** срабатывания оружия: id оружия → сколько раз */
+  weapons: Record<string, number>;
+}
 
 /** Техническая сводка для оверлея разработчика и FPS тестировщика — четыре раза в секунду. */
 export interface RunDevInfo {
