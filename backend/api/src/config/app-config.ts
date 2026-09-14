@@ -50,6 +50,17 @@ const schema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+
+  // Администраторы — Telegram ID через запятую (docs/28-diagnostics.md §6.1.1).
+  // Список не секрет; мусор в нём — процесс не поднимается, пустой — функции
+  // администратора выключены.
+  ADMIN_TELEGRAM_IDS: z
+    .string()
+    .default("")
+    .transform((value) => value.split(",").map((id) => id.trim()).filter((id) => id !== ""))
+    .refine((ids) => ids.every((id) => /^\d{1,20}$/.test(id)), {
+      message: "ADMIN_TELEGRAM_IDS — Telegram ID цифрами через запятую",
+    }),
 });
 
 export interface AppConfig {
@@ -63,6 +74,8 @@ export interface AppConfig {
     reportsDir: string;
   };
   redisUrl: string;
+  /** Telegram ID администраторов строками — так же, как id игрока из initData */
+  adminTelegramIds: ReadonlySet<string>;
   playtest: {
     enabled: boolean;
     botToken: string;
@@ -128,6 +141,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       reportsDir: resolveFromRepoRoot(parsed.BENCH_REPORTS_DIR),
     },
     redisUrl: parsed.REDIS_URL,
+    adminTelegramIds: new Set(parsed.ADMIN_TELEGRAM_IDS),
     playtest: {
       enabled: parsed.PLAYTEST_ENABLED,
       botToken: parsed.TELEGRAM_BOT_TOKEN,

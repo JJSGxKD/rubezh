@@ -771,6 +771,16 @@ export interface PlaytestRecentRun {
   at: number;
 }
 
+/**
+ * Что игроку открыто в клиенте. Решает сервер по Telegram ID; скрытая кнопка
+ * — не защита, и то, что трогает чужие данные, сервер проверяет сам.
+ */
+export interface PlaytestAccess {
+  admin: boolean;
+  stressTest: boolean;
+  devMode: boolean;
+}
+
 export interface PlaytestProfile {
   runs: number;
   totalKills: number;

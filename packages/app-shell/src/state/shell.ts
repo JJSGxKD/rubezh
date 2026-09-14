@@ -39,6 +39,11 @@ export interface ShellCapabilities {
    * рекорды живут только на устройстве.
    */
   playtest?: PlaytestApiConfig;
+  /**
+   * Открыть инструменты команды — стресс-тест и режим разработчика — без
+   * ответа сервера. Только dev-сервер: в сборке доступ решает сервер.
+   */
+  devTools?: boolean;
 }
 
 export interface ShellState {

@@ -1,5 +1,7 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config";
+import { accessFor, type PlaytestAccess } from "./playtest-access";
 import { ValidationError } from "../../common/domain-error";
 import { difficultyQuerySchema, runSubmissionSchema } from "./dto/run-submission.dto";
 import { PlaytestAuthGuard, playerOf } from "./playtest-auth.guard";
@@ -17,7 +19,10 @@ import {
 @Controller("playtest")
 @UseGuards(PlaytestAuthGuard)
 export class PlaytestController {
-  constructor(private readonly service: PlaytestService) {}
+  constructor(
+    private readonly service: PlaytestService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
 
   @Post("runs")
   async submit(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SubmitResult }> {
@@ -37,6 +42,15 @@ export class PlaytestController {
   @Get("me")
   async me(@Req() request: unknown): Promise<{ data: ProfileView }> {
     return { data: await this.service.profile(playerOf(request).id) };
+  }
+
+  /**
+   * Что открыто игроку. Отдельно от профиля: хранилище для ответа не нужно,
+   * и недоступный Redis не должен прятать от администратора его инструменты.
+   */
+  @Get("access")
+  access(@Req() request: unknown): { data: PlaytestAccess } {
+    return { data: accessFor(playerOf(request), this.config) };
   }
 }
 

@@ -99,7 +99,7 @@
 | 8. Платежи | webhook-секрет, RU-эквайринг | из кабинета провайдера |
 | 9. Реклама | `ADS_SESSION_SECRET`, ключи сетей | из кабинетов сетей; порядок и активность сетей — данные в БД, не переменные |
 | 10. Наблюдаемость | `LOG_LEVEL`, треды Telegram, Sentry, Grafana | id тредов — из супергруппы алертов |
-| 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md`. `ADMIN_TELEGRAM_IDS` используется **с этапа 2** — администраторы выгрузки данных через бота (`28-diagnostics.md` §6.1.1) |
+| 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md`. `ADMIN_TELEGRAM_IDS` используется **с этапа 2**: режим разработчика и забеги с читами в рейтинге плейтеста (`26-stage2-plan.md`, WP14), затем выгрузка данных через бота (`28-diagnostics.md` §6.1.1). Цифры через запятую, мусор — бэкенд не стартует |
 | 12. Программы роста и аналитика | домен редиректа, TTL клика, секрет подписи шеринга, кеш карточек, read-only пользователь Grafana, срок хранения сырых персональных данных | `22-analytics-and-metrics.md`, `23-referral-and-partner-program.md`, `24-attribution-and-sharing.md` |
 | 13. Публичные для клиента | `VITE_*` | только не-секреты |
 | 14. Стенд FPS-испытаний | `VITE_BENCH_ENABLED`, `VITE_BENCH_INGEST_*`, `BENCH_INGEST_*`, `BENCH_REPORTS_DIR` | `25-week1-fps-trials.md` §2.1; временная группа этапа 1. На этапе 2 заменяется группой «Диагностика и телеметрия»: приёмники, ключ псевдонимизации выгрузок, выключатель выгрузки через бота — состав в `28-diagnostics.md` §7 |

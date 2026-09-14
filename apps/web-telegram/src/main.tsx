@@ -56,6 +56,9 @@ if (benchAllowed && params.get("bench") !== null) {
         baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? ""),
         devUser: import.meta.env.DEV ? (import.meta.env.VITE_PLAYTEST_DEV_USER ?? "") : "",
       },
+      // Стресс-тест и режим разработчика в dev открыты без сервера: команда
+      // правит их в браузере. В сборке доступ решает сервер по Telegram ID.
+      devTools: import.meta.env.DEV,
     },
     analytics: createAnalytics(),
   });

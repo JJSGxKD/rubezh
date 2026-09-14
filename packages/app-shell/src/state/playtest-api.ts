@@ -1,6 +1,7 @@
 import {
   DIFFICULTY_IDS,
   type DifficultyId,
+  type PlaytestAccess,
   type PlaytestLeaderboard,
   type PlaytestProfile,
   type PlaytestRunSubmission,
@@ -57,6 +58,7 @@ export interface PlaytestApi {
   submitRun(submission: PlaytestRunSubmission): Promise<PlaytestResult<PlaytestSubmitResult>>;
   leaderboard(difficultyId: DifficultyId): Promise<PlaytestResult<PlaytestLeaderboard>>;
   profile(): Promise<PlaytestResult<PlaytestProfile>>;
+  access(): Promise<PlaytestResult<PlaytestAccess>>;
 }
 
 /**
@@ -110,6 +112,8 @@ const profileSchema = z.object({
     }),
   ),
 });
+
+const accessSchema = z.object({ admin: z.boolean(), stressTest: z.boolean(), devMode: z.boolean() });
 
 type Fetch = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -166,6 +170,7 @@ export function createPlaytestApi(
         method: "GET",
       }),
     profile: () => request("/me", profileSchema, { method: "GET" }),
+    access: () => request("/access", accessSchema, { method: "GET" }),
   };
 }
 

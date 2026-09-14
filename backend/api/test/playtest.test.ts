@@ -4,6 +4,7 @@ import type { ExecutionContext } from "@nestjs/common";
 import { loadAppConfig } from "../src/config/app-config";
 import { DomainError } from "../src/common/domain-error";
 import { runSubmissionSchema } from "../src/modules/playtest/dto/run-submission.dto";
+import { accessFor } from "../src/modules/playtest/playtest-access";
 import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard";
 import { PlaytestService } from "../src/modules/playtest/playtest.service";
 import { verifyInitData } from "../src/modules/playtest/telegram-init-data";
@@ -109,6 +110,24 @@ describe("доступ к эндпоинтам плейтеста", () => {
   it("не поднимается с входом разработчика вне development и с плейтестом без токена бота", () => {
     expect(() => loadAppConfig({ NODE_ENV: "production", PLAYTEST_DEV_AUTH: "true" })).toThrow(/development/);
     expect(() => loadAppConfig({ PLAYTEST_ENABLED: "true" })).toThrow(/TELEGRAM_BOT_TOKEN/);
+  });
+
+  it("открывает стресс-тест всем на плейтесте, а режим разработчика — только администраторам", () => {
+    const player = (id: string) => ({ id, name: "Игрок", username: null, photoUrl: null });
+    const playtest = loadAppConfig({ PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: BOT_TOKEN, ADMIN_TELEGRAM_IDS: "111, 222" });
+
+    expect(accessFor(player("333"), playtest)).toEqual({ admin: false, stressTest: true, devMode: false });
+    expect(accessFor(player("222"), playtest)).toEqual({ admin: true, stressTest: true, devMode: true });
+    // Вход заголовком разработчика — ещё не администратор, пока вход не включён.
+    expect(accessFor(player("dev-me"), playtest).devMode).toBe(false);
+
+    const local = loadAppConfig({ NODE_ENV: "development", PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: BOT_TOKEN, PLAYTEST_DEV_AUTH: "true" });
+    expect(accessFor(player("dev-me"), local).devMode).toBe(true);
+  });
+
+  it("не поднимается с мусором в списке администраторов", () => {
+    expect(() => loadAppConfig({ ADMIN_TELEGRAM_IDS: "123,@admin" })).toThrow(/ADMIN_TELEGRAM_IDS/);
+    expect(loadAppConfig({ ADMIN_TELEGRAM_IDS: "" }).adminTelegramIds.size).toBe(0);
   });
 });
 

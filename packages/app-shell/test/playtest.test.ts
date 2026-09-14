@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter, type RunResult } from "@bh/shared-types";
 import { createPlaytestApi, PLAYTEST_TIMEOUT_MS } from "../src/state/playtest-api";
 import { useMeta } from "../src/state/meta";
-import { toSubmission, usePlaytest } from "../src/state/playtest";
+import { effectiveAccess, toSubmission, usePlaytest } from "../src/state/playtest";
 import { initShell } from "../src/state/shell";
 
 // Отправка итогов забега на сервер плейтеста и разбор его ответов
@@ -129,7 +129,7 @@ describe("очередь итогов забега", () => {
       analytics: (event, payload) => events.push([event, payload]),
       build: { version: "test", contentHash: "", platform: "web" },
     });
-    usePlaytest.setState({ pending: 0, lastSubmitted: null, leaderboards: {}, profile: null });
+    usePlaytest.setState({ pending: 0, lastSubmitted: null, leaderboards: {}, profile: null, access: null });
     usePlaytest.getState().hydrate();
   }
 
@@ -245,6 +245,16 @@ describe("очередь итогов забега", () => {
     expect(useMeta.getState().best.normal).toBe(420);
     expect(useMeta.getState().runs).toBe(12);
     expect(storage.values["bh.meta.v1.bestSurvivalSec.normal"]).toBe("420");
+  });
+
+  it("инструменты команды открывает сервер, а в dev-сборке они открыты без него", async () => {
+    reply = async () => json(200, { data: { admin: false, stressTest: true, devMode: false } });
+    mount();
+    expect(effectiveAccess(usePlaytest.getState().access, false).stressTest).toBe(false);
+
+    expect(await usePlaytest.getState().loadAccess()).toBeNull();
+    expect(effectiveAccess(usePlaytest.getState().access, false)).toEqual({ admin: false, stressTest: true, devMode: false });
+    expect(effectiveAccess(null, true).devMode).toBe(true);
   });
 
   it("сборка без бэкенда плейтеста ничего не копит и не отправляет", async () => {
