@@ -34,7 +34,13 @@ function snapshot(patch: Partial<StatsSnapshot> = {}): StatsSnapshot {
     },
     startingWeapons: { spark: 7, knife: 5, storm: 2 },
     deathCauses: { swarm_rat: 6, bomber_imp: 4 },
-    stress: { reports: 3, byOs: { android: { reports: 2, totalPeak: 1700, verdicts: { go: 2 } }, ios: { reports: 1, totalPeak: 900, verdicts: { borderline: 1 } } } },
+    stress: {
+      reports: 3,
+      byOs: {
+        android: { reports: 2, totalPeak: 1700, outcomes: { degradation: 2 } },
+        ios: { reports: 1, totalPeak: 900, outcomes: { manual: 1 } },
+      },
+    },
     ...patch,
   };
 }
@@ -81,6 +87,7 @@ describe("сводка плейтеста", () => {
   it("собирает стресс-тест по ОС со средним пиком", () => {
     const summary = buildStatsSummary(snapshot(), { easy: null, normal: null, hard: null }, NOW, 180);
     expect(summary.stress.byOs[0]).toMatchObject({ os: "android", reports: 2, avgPeak: 850 });
+    expect(renderStatsSvg(summary, 180)).toContain("предел найден 2");
   });
 });
 

@@ -71,17 +71,33 @@ export interface StatsSnapshot {
 
 export interface StressAggregate {
   reports: number;
-  /** по семейству ОС: сколько прогонов и какие вердикты */
-  byOs: Record<string, { reports: number; totalPeak: number; verdicts: Record<string, number> }>;
+  /** по семейству ОС: сколько прогонов, сумма пиков и чем они закончились */
+  byOs: Record<string, { reports: number; totalPeak: number; outcomes: Record<string, number> }>;
 }
 
+/**
+ * Итог стресс-теста без таймлайна кадров: для сводки и разбора по
+ * устройствам хватает пика и того, чем прогон закончился. Telegram ID здесь
+ * нет — прогоны лежат списком, который читает команда.
+ */
 export interface StressSummary {
   reportId: string;
-  os: string;
-  formFactor: string;
-  verdict: string;
+  build: string;
+  mode: string;
+  loadout: string;
+  /** почему прогон остановился: `degradation` — предел найден, `duration` — нет */
+  outcome: string;
+  device: StoredDevice;
   peakObjects: number;
+  peakEnemies: number;
+  peakProjectiles: number;
   avgFps: number;
+  p95FrameMs: number;
+  displayHz: number | null;
+  durationSec: number;
+  interruptions: number;
+  /** нагрузка, на которой устройство перестало держать порог; `null` — не перестало */
+  breakingLoad: number | null;
 }
 
 export interface PlaytestStatsStore {

@@ -40,7 +40,7 @@ export interface StatsSummary {
   difficulties: DifficultySummary[];
   topWeapons: Share[];
   topDeaths: Share[];
-  stress: { reports: number; byOs: { os: string; reports: number; avgPeak: number; verdicts: Share[] }[] };
+  stress: { reports: number; byOs: { os: string; reports: number; avgPeak: number; outcomes: Share[] }[] };
 }
 
 const TOP_LIMIT = 5;
@@ -78,7 +78,7 @@ export function buildStatsSummary(
           os,
           reports: entry.reports,
           avgPeak: entry.reports === 0 ? 0 : Math.round(entry.totalPeak / entry.reports),
-          verdicts: shares(entry.verdicts),
+          outcomes: shares(entry.outcomes),
         }))
         .sort((left, right) => right.reports - left.reports || left.os.localeCompare(right.os)),
     },

@@ -71,6 +71,18 @@ const CLIENT_LABELS: Record<string, string> = {
   unknown: "Вне площадки",
 };
 
+/** Чем закончился прогон стресс-теста — `BenchStopReason` движка. */
+const STRESS_OUTCOME_LABELS: Record<string, string> = {
+  degradation: "предел найден",
+  duration: "предел не найден",
+  pool_exhausted: "упёрлись в стенд",
+  manual: "остановлен",
+};
+
+export function stressOutcomeLabel(outcome: string): string {
+  return STRESS_OUTCOME_LABELS[outcome] ?? outcome;
+}
+
 export function osLabel(os: string): string {
   return OS_LABELS[os] ?? os;
 }
@@ -172,10 +184,10 @@ export function renderStatsSvg(summary: StatsSummary, offsetMin: number): string
     y += 50;
   } else {
     for (const entry of summary.stress.byOs.slice(0, 4)) {
-      const verdicts = entry.verdicts.map((verdict) => `${verdict.key} ${verdict.count}`).join(" · ");
+      const outcomes = entry.outcomes.map((outcome) => `${stressOutcomeLabel(outcome.key)} ${outcome.count}`).join(" · ");
       parts.push(text(PAD, y + 30, osLabel(entry.os), { size: 24, fill: PALETTE.text, weight: 600 }));
       parts.push(
-        text(PAD + 200, y + 30, `прогонов ${entry.reports} · пик объектов ≈${entry.avgPeak} · ${verdicts}`, {
+        text(PAD + 200, y + 30, `прогонов ${entry.reports} · пик объектов ≈${entry.avgPeak} · ${outcomes}`, {
           size: 22,
           fill: PALETTE.muted,
         }),

@@ -27,11 +27,14 @@ import {
  *   корзины длительности `b0…bN`;
  * - `pt:st:weapon`, `pt:st:death` — хэши: стартовое оружие, причина смерти;
  * - `pt:st:stress:{reportId}` — отметка против повтора отчёта,
- *   `pt:st:stress` — хэш сводки стресс-тестов по семейству ОС.
+ *   `pt:st:stress` — хэш сводки стресс-тестов по семейству ОС,
+ *   `pt:st:stress:recent` — последние итоги прогонов списком (JSON).
  *
  * Всё живёт `dataTtlSec` с последней записи — как остальные данные плейтеста.
  */
 const DAY_TTL_SEC = 3 * 24 * 60 * 60;
+/** Последние прогоны стресс-теста — для разбора по устройствам, без таймлайна кадров. */
+const STRESS_RECENT_KEPT = 200;
 
 @Injectable()
 export class RedisPlaytestStatsStore implements PlaytestStatsStore {
@@ -86,16 +89,20 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
     await tx.exec();
   }
 
-  async recordStress(_playerId: string, summary: StressSummary, _nowMs: number): Promise<boolean> {
+  async recordStress(_playerId: string, summary: StressSummary, nowMs: number): Promise<boolean> {
     const fresh = await this.redis.set(`pt:st:stress:${summary.reportId}`, "1", "EX", this.ttlSec, "NX");
     if (fresh === null) return false;
+    const os = summary.device.os;
     await this.redis
       .multi()
       .hincrby("pt:st:stress", "reports", 1)
-      .hincrby("pt:st:stress", `${summary.os}:reports`, 1)
-      .hincrby("pt:st:stress", `${summary.os}:peak`, Math.round(summary.peakObjects))
-      .hincrby("pt:st:stress", `${summary.os}:verdict:${summary.verdict}`, 1)
+      .hincrby("pt:st:stress", `${os}:reports`, 1)
+      .hincrby("pt:st:stress", `${os}:peak`, Math.round(summary.peakObjects))
+      .hincrby("pt:st:stress", `${os}:outcome:${summary.outcome}`, 1)
       .expire("pt:st:stress", this.ttlSec)
+      .lpush("pt:st:stress:recent", JSON.stringify({ ...summary, at: nowMs }))
+      .ltrim("pt:st:stress:recent", 0, STRESS_RECENT_KEPT - 1)
+      .expire("pt:st:stress:recent", this.ttlSec)
       .exec();
     return true;
   }
@@ -174,12 +181,12 @@ function parseDifficulty(raw: Record<string, string>): DifficultyAggregate {
 function parseStress(raw: Record<string, string>): StatsSnapshot["stress"] {
   const byOs: StatsSnapshot["stress"]["byOs"] = {};
   for (const [field, count] of Object.entries(raw)) {
-    const [os, kind, verdict] = field.split(":");
+    const [os, kind, outcome] = field.split(":");
     if (os === undefined || kind === undefined || os === "reports") continue;
-    const entry = (byOs[os] ??= { reports: 0, totalPeak: 0, verdicts: {} });
+    const entry = (byOs[os] ??= { reports: 0, totalPeak: 0, outcomes: {} });
     if (kind === "reports") entry.reports = Number(count);
     else if (kind === "peak") entry.totalPeak = Number(count);
-    else if (kind === "verdict" && verdict !== undefined) entry.verdicts[verdict] = Number(count);
+    else if (kind === "outcome" && outcome !== undefined) entry.outcomes[outcome] = Number(count);
   }
   return { reports: Number(raw.reports ?? 0), byOs };
 }

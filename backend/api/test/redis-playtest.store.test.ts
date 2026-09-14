@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config";
 import { closeRedis, createPlaytestRedis } from "../src/modules/playtest/playtest-redis";
 import { RedisStatsBotLocks } from "../src/modules/playtest/playtest-stats.bot";
+import type { StressSummary } from "../src/modules/playtest/playtest-stats.store";
 import type { StoredRun } from "../src/modules/playtest/playtest.store";
 import { RedisPlaytestStatsStore } from "../src/modules/playtest/redis-playtest-stats.store";
 import { RedisPlaytestStore } from "../src/modules/playtest/redis-playtest.store";
@@ -30,6 +31,36 @@ function run(runId: string, survivalSec: number, patch: Partial<StoredRun> = {})
     contentHash: "abc",
     at: 1,
     ...patch,
+  };
+}
+
+function stressSummary(reportId: string): StressSummary {
+  return {
+    reportId,
+    build: "0.3.0",
+    mode: "stress",
+    loadout: "full",
+    outcome: "degradation",
+    device: {
+      clientPlatform: "android",
+      clientVersion: "8.0",
+      os: "android",
+      formFactor: "phone",
+      screenWidth: 412,
+      screenHeight: 915,
+      pixelRatio: 2.63,
+      cores: 8,
+      memoryGb: 8,
+    },
+    peakObjects: 900,
+    peakEnemies: 700,
+    peakProjectiles: 200,
+    avgFps: 58,
+    p95FrameMs: 21,
+    displayHz: 60,
+    durationSec: 94,
+    interruptions: 0,
+    breakingLoad: 640,
   };
 }
 
@@ -132,13 +163,16 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
   });
 
   it("не считает повтор отчёта стресс-теста", async () => {
-    const summary = { reportId: "stress-1", os: "android", formFactor: "phone", verdict: "ok", peakObjects: 900, avgFps: 58 };
+    const summary = stressSummary("stress-1");
     expect(await stats.recordStress("10", summary, 1)).toBe(true);
     expect(await stats.recordStress("10", summary, 1)).toBe(false);
     expect((await stats.snapshot(1)).stress).toEqual({
       reports: 1,
-      byOs: { android: { reports: 1, totalPeak: 900, verdicts: { ok: 1 } } },
+      byOs: { android: { reports: 1, totalPeak: 900, outcomes: { degradation: 1 } } },
     });
+    const recent = await admin.lrange("pt:st:stress:recent", 0, -1);
+    expect(recent).toHaveLength(1);
+    expect(JSON.parse(recent[0] ?? "{}")).toMatchObject({ reportId: "stress-1", peakObjects: 900, at: 1 });
   });
 
   it("держит одного читателя обновлений бота и отдаёт роль только владелец", async () => {
@@ -179,6 +213,7 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
       "pt:st:diff:normal",
       "pt:st:weapon",
       "pt:st:stress",
+      "pt:st:stress:recent",
     ]) {
       const ttl = await admin.ttl(key);
       expect(ttl, key).toBeGreaterThan(0);

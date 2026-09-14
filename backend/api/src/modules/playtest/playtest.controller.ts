@@ -2,8 +2,13 @@ import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards } from "@nes
 import { ZodError } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config";
 import { accessFor, isAdmin, type PlaytestAccess } from "./playtest-access";
-import { ValidationError } from "../../common/domain-error";
-import { difficultyQuerySchema, runSubmissionSchema, sessionReportSchema } from "./dto/run-submission.dto";
+import { DomainError, ValidationError } from "../../common/domain-error";
+import {
+  difficultyQuerySchema,
+  runSubmissionSchema,
+  sessionReportSchema,
+  stressReportSchema,
+} from "./dto/run-submission.dto";
 import { PlaytestAuthGuard, playerOf } from "./playtest-auth.guard";
 import {
   PlaytestService,
@@ -36,6 +41,17 @@ export class PlaytestController {
     const report = parse(() => sessionReportSchema.parse(body), "Некорректные сведения о запуске");
     await this.service.recordSession(playerOf(request), report, Date.now());
     return { data: { recorded: true } };
+  }
+
+  @Post("stress")
+  async stress(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { recorded: boolean } }> {
+    const player = playerOf(request);
+    // Кнопка в клиенте спрятана по тому же правилу, но скрытая кнопка — не защита.
+    if (!accessFor(player, this.config).stressTest) {
+      throw new DomainError("forbidden", "Стресс-тест сейчас недоступен", 403);
+    }
+    const report = parse(() => stressReportSchema.parse(body), "Некорректный отчёт стресс-теста");
+    return { data: await this.service.recordStress(player, report, Date.now()) };
   }
 
   @Get("leaderboard")

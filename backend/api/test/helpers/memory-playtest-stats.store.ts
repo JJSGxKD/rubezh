@@ -30,6 +30,7 @@ export class MemoryPlaytestStatsStore implements PlaytestStatsStore {
   private readonly deaths: Record<string, number> = {};
   private readonly stressIds = new Set<string>();
   private readonly stress: StatsSnapshot["stress"] = { reports: 0, byOs: {} };
+  readonly stressRecent: StressSummary[] = [];
 
   constructor(private readonly offsetMin = 180) {}
 
@@ -68,10 +69,11 @@ export class MemoryPlaytestStatsStore implements PlaytestStatsStore {
     if (this.stressIds.has(summary.reportId)) return false;
     this.stressIds.add(summary.reportId);
     this.stress.reports++;
-    const entry = (this.stress.byOs[summary.os] ??= { reports: 0, totalPeak: 0, verdicts: {} });
+    const entry = (this.stress.byOs[summary.device.os] ??= { reports: 0, totalPeak: 0, outcomes: {} });
     entry.reports++;
     entry.totalPeak += Math.round(summary.peakObjects);
-    entry.verdicts[summary.verdict] = (entry.verdicts[summary.verdict] ?? 0) + 1;
+    entry.outcomes[summary.outcome] = (entry.outcomes[summary.outcome] ?? 0) + 1;
+    this.stressRecent.unshift(summary);
     return true;
   }
 
