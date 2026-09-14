@@ -195,7 +195,18 @@ export function EnemyScene(props: {
         <Stage label={props.label}>
           <Player x={px} y={py} />
           <At x={40} y={40}>{enemy}</At>
-          <At x={48} y={42} className="animate-guide-shot" style={offset(64, 5)}>
+          {/* Прицел заполняется к игроку — заполнился, снаряд вылетел. */}
+          <line x1={48} y1={42} x2={px} y2={py} stroke={hex(WORLD_COLORS.enemyProjectile)} strokeOpacity={0.18} strokeWidth={1.5} />
+          <line
+            x1={48}
+            y1={42}
+            x2={px}
+            y2={py}
+            stroke={hex(WORLD_COLORS.enemyProjectile)}
+            strokeWidth={1.5}
+            className={`animate-guide-aim [transform-box:fill-box] origin-left ${MOTION}`}
+          />
+          <At x={48} y={42} className="animate-guide-shot-late" style={offset(64, 5)}>
             <circle r={3} fill={hex(WORLD_COLORS.enemyProjectile)} />
           </At>
           {/* Пунктир — дистанция, которую стрелок держит. */}
@@ -206,8 +217,18 @@ export function EnemyScene(props: {
       return (
         <Stage label={props.label}>
           <Player x={px} y={py} />
-          {/* Полоса рывка: так её показывает телеграф в забеге. */}
-          <rect x={34} y={py - 5} width={70} height={10} rx={5} fill={hex(color)} fillOpacity={0.12} />
+          {/* Полоса рывка заполняется от волка: дошла до конца — сорвался. */}
+          <rect x={34} y={py - 5} width={70} height={10} rx={5} fill={hex(WORLD_COLORS.dashLane)} fillOpacity={0.14} />
+          <rect
+            x={34}
+            y={py - 5}
+            width={70}
+            height={10}
+            rx={5}
+            fill={hex(WORLD_COLORS.dashLane)}
+            fillOpacity={0.55}
+            className={`animate-guide-fill [transform-box:fill-box] origin-left ${MOTION}`}
+          />
           <At x={34} y={py} className="animate-guide-lunge" style={offset(66, 0)}>
             {enemy}
           </At>
@@ -230,6 +251,13 @@ export function EnemyScene(props: {
       return (
         <Stage label={props.label}>
           <Player x={px} y={py} />
+          {/* Кольцо взрыва сразу, внутри растёт второе: сомкнулись — взрыв. */}
+          <At x={96} y={py} className="animate-guide-fuse-ring">
+            <circle r={30} fill="none" stroke={hex(WORLD_COLORS.threat)} strokeOpacity={0.5} strokeWidth={1.5} />
+          </At>
+          <At x={96} y={py} className="animate-guide-fuse-grow">
+            <circle r={30} fill={hex(WORLD_COLORS.threat)} fillOpacity={0.2} stroke={hex(WORLD_COLORS.threat)} strokeWidth={2} />
+          </At>
           <At x={96} y={py} className="animate-guide-fuse" style={offset(-70, -10)}>
             {enemy}
           </At>

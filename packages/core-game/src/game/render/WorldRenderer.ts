@@ -8,7 +8,7 @@ import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { PickupRenderer } from "./pickups";
 import { ENEMY_LOOKS, enemyColor, WORLD_COLORS } from "./looks";
-import { Telegraphs } from "./telegraphs";
+import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { ensureShapeTexture, lerp } from "./textures";
 
 const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
@@ -188,6 +188,8 @@ export class WorldRenderer {
   private syncEnemies(t: number): void {
     const enemies = this.world.enemies;
     const tick = this.world.stats.tick;
+    const playerX = lerp(this.world.player.prevX, this.world.player.x, t);
+    const playerY = lerp(this.world.player.prevY, this.world.player.y, t);
     this.telegraphs.begin();
 
     for (let i = 0; i < enemies.count; i++) {
@@ -217,11 +219,17 @@ export class WorldRenderer {
       sprite.setPosition(x, y);
 
       if (type.pattern === "exploder" && enemies.phase[i] === EXPLODER_PHASE.fuse) {
-        this.telegraphs.ring(x, y, type.params.blastRadius, tick);
+        const progress = 1 - enemies.phaseTimer[i] / type.params.fuseSec;
+        this.telegraphs.ring(x, y, type.params.blastRadius, progress);
       }
       if (type.pattern === "dash" && enemies.phase[i] === DASH_PHASE.telegraph) {
         const length = type.params.dashSpeed * type.params.dashDurationSec;
-        this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, tick);
+        const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
+        this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, progress);
+      }
+      if (type.pattern === "kite_and_shoot" && enemies.attackCooldown[i] < AIM_TELEGRAPH_SEC) {
+        const progress = 1 - enemies.attackCooldown[i] / AIM_TELEGRAPH_SEC;
+        this.telegraphs.aim(x, y, playerX, playerY, progress);
       }
     }
 

@@ -90,6 +90,10 @@ export const WORLD_COLORS = {
   dynamiteWave: 0xffb22e,
   /** вспышка персонажа при попадании */
   hurt: 0xff6b6b,
+  /** телеграф взрыва: кольцо радиуса и растущий отсчёт */
+  threat: 0xff5a5a,
+  /** полоса рывка */
+  dashLane: 0xffd36b,
   ground: 0x0d0f14,
   groundLine: 0x171b24,
   /** светлые детали подборов: плашка аптечки, полюса магнита, фитиль */

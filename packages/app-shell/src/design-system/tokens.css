@@ -125,6 +125,11 @@
   --animate-guide-scatter: guide-scatter 2.4s var(--ease-out) infinite;
   --animate-guide-pulse: guide-pulse 1.6s var(--ease-base) infinite;
   --animate-guide-strike: guide-strike 1.6s var(--ease-out) infinite;
+  --animate-guide-fuse-ring: guide-fuse-ring 2.4s linear infinite;
+  --animate-guide-fuse-grow: guide-fuse-grow 2.4s linear infinite;
+  --animate-guide-fill: guide-fill 2.4s linear infinite;
+  --animate-guide-aim: guide-aim 2.4s linear infinite;
+  --animate-guide-shot-late: guide-shot-late 2.4s linear infinite;
 
   @keyframes screen-in {
     from {
@@ -367,6 +372,93 @@
     50% {
       opacity: 0.9;
       transform: scale(1.04);
+    }
+  }
+
+  /* Телеграф подрывника: кольцо радиуса видно всё время фитиля (40–72 %). */
+  @keyframes guide-fuse-ring {
+    0%,
+    39%,
+    73%,
+    100% {
+      opacity: 0;
+    }
+    40%,
+    72% {
+      opacity: 1;
+    }
+  }
+
+  /* ...а внутреннее растёт к нему и смыкается в момент взрыва. */
+  @keyframes guide-fuse-grow {
+    0%,
+    39% {
+      opacity: 0;
+      transform: scale(0);
+    }
+    40% {
+      opacity: 1;
+      transform: scale(0.02);
+    }
+    72% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    73%,
+    100% {
+      opacity: 0;
+      transform: scale(1);
+    }
+  }
+
+  /* Полоса рывка заполняется, пока волк мигает (0–48 % цикла guide-lunge). */
+  @keyframes guide-fill {
+    0% {
+      opacity: 1;
+      transform: scaleX(0);
+    }
+    48% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    50%,
+    100% {
+      opacity: 0;
+      transform: scaleX(1);
+    }
+  }
+
+  /* Прицел стрелка заполняется, затем вылетает снаряд. */
+  @keyframes guide-aim {
+    0% {
+      opacity: 1;
+      transform: scaleX(0);
+    }
+    40% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    42%,
+    100% {
+      opacity: 0;
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes guide-shot-late {
+    0%,
+    41% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    42%,
+    85% {
+      opacity: 1;
+    }
+    90%,
+    100% {
+      opacity: 0;
+      transform: translate(var(--guide-x), var(--guide-y));
     }
   }
 
