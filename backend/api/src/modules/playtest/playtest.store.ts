@@ -19,6 +19,8 @@ export interface StoredRun {
   startingWeaponId: string;
   weapons: { id: string; level: number }[];
   contentHash: string;
+  /** кто убил; `null` — сдача, нет поля — забег от прошлой версии клиента */
+  deathCause?: string | null;
   /** когда получен сервером, мс UTC */
   at: number;
 }

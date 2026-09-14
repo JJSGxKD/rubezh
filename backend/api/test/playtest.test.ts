@@ -3,10 +3,16 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionContext } from "@nestjs/common";
 import { loadAppConfig } from "../src/config/app-config";
 import { DomainError } from "../src/common/domain-error";
-import { runSubmissionSchema } from "../src/modules/playtest/dto/run-submission.dto";
+import {
+  runSubmissionSchema,
+  sessionReportSchema,
+  stressReportSchema,
+} from "../src/modules/playtest/dto/run-submission.dto";
+import { accessFor } from "../src/modules/playtest/playtest-access";
 import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard";
 import { PlaytestService } from "../src/modules/playtest/playtest.service";
 import { verifyInitData } from "../src/modules/playtest/telegram-init-data";
+import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store";
 import { MemoryPlaytestStore } from "./helpers/memory-playtest.store";
 
 // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
@@ -110,10 +116,29 @@ describe("доступ к эндпоинтам плейтеста", () => {
     expect(() => loadAppConfig({ NODE_ENV: "production", PLAYTEST_DEV_AUTH: "true" })).toThrow(/development/);
     expect(() => loadAppConfig({ PLAYTEST_ENABLED: "true" })).toThrow(/TELEGRAM_BOT_TOKEN/);
   });
+
+  it("открывает стресс-тест всем на плейтесте, а режим разработчика — только администраторам", () => {
+    const player = (id: string) => ({ id, name: "Игрок", username: null, photoUrl: null });
+    const playtest = loadAppConfig({ PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: BOT_TOKEN, ADMIN_TELEGRAM_IDS: "111, 222" });
+
+    expect(accessFor(player("333"), playtest)).toEqual({ admin: false, stressTest: true, devMode: false });
+    expect(accessFor(player("222"), playtest)).toEqual({ admin: true, stressTest: true, devMode: true });
+    // Вход заголовком разработчика — ещё не администратор, пока вход не включён.
+    expect(accessFor(player("dev-me"), playtest).devMode).toBe(false);
+
+    const local = loadAppConfig({ NODE_ENV: "development", PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: BOT_TOKEN, PLAYTEST_DEV_AUTH: "true" });
+    expect(accessFor(player("dev-me"), local).devMode).toBe(true);
+  });
+
+  it("не поднимается с мусором в списке администраторов", () => {
+    expect(() => loadAppConfig({ ADMIN_TELEGRAM_IDS: "123,@admin" })).toThrow(/ADMIN_TELEGRAM_IDS/);
+    expect(loadAppConfig({ ADMIN_TELEGRAM_IDS: "" }).adminTelegramIds.size).toBe(0);
+  });
 });
 
 describe("сервис плейтеста", () => {
   let store: MemoryPlaytestStore;
+  let stats: MemoryPlaytestStatsStore;
   let service: PlaytestService;
   const anna = { id: "1", name: "Анна", username: null, photoUrl: null };
   const boris = { id: "2", name: "Борис", username: null, photoUrl: "https://t.me/i/b.jpg" };
@@ -134,12 +159,23 @@ describe("сервис плейтеста", () => {
 
   beforeEach(() => {
     store = new MemoryPlaytestStore();
-    service = new PlaytestService(store);
+    stats = new MemoryPlaytestStatsStore();
+    service = new PlaytestService(store, stats);
   });
 
   it("обновляет лучшее время только улучшением и сообщает место", async () => {
-    expect(await service.submitRun(anna, run("a", 120), NOW)).toEqual({ bestSurvivalSec: 120, isNewBest: true, rank: 1 });
-    expect(await service.submitRun(anna, run("b", 90), NOW)).toEqual({ bestSurvivalSec: 120, isNewBest: false, rank: 1 });
+    expect(await service.submitRun(anna, run("a", 120), NOW)).toEqual({
+      bestSurvivalSec: 120,
+      isNewBest: true,
+      rank: 1,
+      recorded: true,
+    });
+    expect(await service.submitRun(anna, run("b", 90), NOW)).toEqual({
+      bestSurvivalSec: 120,
+      isNewBest: false,
+      rank: 1,
+      recorded: true,
+    });
     expect(await service.submitRun(boris, run("c", 300), NOW)).toMatchObject({ isNewBest: true, rank: 1 });
     expect(await store.rank("normal", anna.id)).toBe(2);
   });
@@ -148,6 +184,116 @@ describe("сервис плейтеста", () => {
     await service.submitRun(anna, run("same", 100), NOW);
     await service.submitRun(anna, run("same", 100), NOW);
     expect((await service.profile(anna.id)).runs).toBe(1);
+    expect((await stats.snapshot(NOW)).difficulties.normal.runs).toBe(1);
+  });
+
+  it("не пишет забег с читами ни в рейтинг, ни в статистику", async () => {
+    await service.submitRun(anna, run("honest", 100), NOW);
+    const cheated = { ...run("god", 5000), cheats: true, countInRating: true };
+
+    // Флаг «учесть в рейтинге» от обычного игрока не работает: право решает сервер.
+    expect(await service.submitRun(anna, cheated, NOW)).toEqual({
+      bestSurvivalSec: 100,
+      isNewBest: false,
+      rank: 1,
+      recorded: false,
+    });
+    expect((await service.profile(anna.id)).runs).toBe(1);
+    expect((await stats.snapshot(NOW)).difficulties.normal.runs).toBe(1);
+  });
+
+  it("учитывает забег с читами, если администратор явно попросил", async () => {
+    const cheated = { ...run("god", 5000), cheats: true };
+    expect(await service.submitRun(anna, cheated, NOW, true)).toMatchObject({ recorded: false });
+    expect(await service.submitRun(anna, { ...cheated, countInRating: true }, NOW, true)).toMatchObject({
+      bestSurvivalSec: 5000,
+      recorded: true,
+    });
+  });
+
+  it("считает игроков, установки и устройства по запускам", async () => {
+    const device = {
+      clientPlatform: "android",
+      clientVersion: "8.0",
+      os: "android",
+      formFactor: "phone",
+      screenWidth: 412,
+      screenHeight: 915,
+      pixelRatio: 2.63,
+      cores: 8,
+      memoryGb: 8,
+    };
+    // Схема разбирает сырое тело запроса — строки ОС здесь как с клиента.
+    const report = (installId: string, patch: Record<string, unknown> = {}) =>
+      sessionReportSchema.parse({ installId, build: "0.3.0", contentHash: "abc123", device: { ...device, ...patch } });
+
+    await service.recordSession(anna, report("install-anna-phone"), NOW);
+    await service.recordSession(anna, report("install-anna-phone"), NOW + 1000);
+    await service.recordSession(anna, report("install-anna-desk", { os: "windows", formFactor: "desktop", clientPlatform: "tdesktop" }), NOW);
+    await service.recordSession(boris, report("install-boris", { os: "ios", clientPlatform: "ios" }), NOW);
+    await service.submitRun(boris, { ...run("b", 200), deathCause: "swarm_rat" }, NOW);
+
+    const snapshot = await stats.snapshot(NOW);
+    expect(snapshot).toMatchObject({ playersSeen: 2, playersPlayed: 1, installs: 3, runsToday: 1 });
+    expect(snapshot.byOs).toEqual({ android: 1, windows: 1, ios: 1 });
+    expect(snapshot.byFormFactor).toEqual({ phone: 2, desktop: 1 });
+    expect(snapshot.deathCauses).toEqual({ swarm_rat: 1 });
+  });
+
+  it("сводит отчёт стресс-теста к итогу без таймлайна и не считает повтор", async () => {
+    const frame = { frames: 600, durationSec: 10, avgFps: 58.37, minFps: 31, p50FrameMs: 16.6, p95FrameMs: 21.44, p99FrameMs: 30, over33Ratio: 0 };
+    const report = stressReportSchema.parse({
+      installId: "install-anna-phone",
+      build: "0.3.0",
+      device: { clientPlatform: "android", clientVersion: "8.0", os: "android", formFactor: "phone", screenWidth: 412, screenHeight: 915, pixelRatio: 2.63, cores: 8, memoryGb: 8 },
+      submission: {
+        reportId: "11111111-2222-4333-8444-555555555555",
+        report: {
+          schema: "rubezh.bench.v4",
+          startedAt: "2026-09-14T12:00:00.000Z",
+          stoppedBy: "degradation",
+          interruptions: 0,
+          profile: { mode: "stress", targetPopulation: 4000, addPerSecond: 20, seed: 1, durationSec: 300, buildVersion: "0.3.0", canvasWidth: 1080, canvasHeight: 2400, devicePixelRatio: 2.63, renderer: "WEBGL", loadout: "full" },
+          device: { userAgent: "ua", platform: "Linux", hardwareConcurrency: 8, deviceMemoryGb: 8, screenWidth: 412, screenHeight: 915, devicePixelRatio: 2.63, telegramPlatform: "android", telegramVersion: "8.0", telegramUserId: "1", telegramLanguage: "ru", telegramIsPremium: false, telegramFullscreen: true },
+          totals: { ...frame, over20Ratio: 0.1, degradationRatio: 0.2, peakLoad: 900.4, peakProjectiles: 310, peakObjects: 1210.6, displayHz: 60 },
+          windows: [],
+          timeline: [{ ...frame, index: 0, startSec: 0, load: 100, projectiles: 20 }],
+        },
+        verdict: { level: "no-go", sustainedLoad: 640, breakingPoint: { atSec: 32, load: 660.2, avgFps: 44, p95FrameMs: 26 }, failures: [] },
+      },
+    });
+
+    expect(await service.recordStress(anna, report, NOW)).toEqual({ recorded: true });
+    expect(await service.recordStress(anna, report, NOW)).toEqual({ recorded: false });
+    expect(stats.stressRecent[0]).toEqual({
+      reportId: "11111111-2222-4333-8444-555555555555",
+      build: "0.3.0",
+      mode: "stress",
+      loadout: "full",
+      outcome: "degradation",
+      device: report.device,
+      peakObjects: 1211,
+      peakEnemies: 900,
+      peakProjectiles: 310,
+      avgFps: 58.4,
+      p95FrameMs: 21.4,
+      displayHz: 60,
+      durationSec: 10,
+      interruptions: 0,
+      breakingLoad: 660,
+    });
+    expect((await stats.snapshot(NOW)).stress.byOs.android).toEqual({ reports: 1, totalPeak: 1211, outcomes: { degradation: 1 } });
+  });
+
+  it("не принимает запуск без установки и с неизвестной ОС", () => {
+    const base = { installId: "install-1", build: "0.3.0", contentHash: "abc", device: {} };
+    expect(() => sessionReportSchema.parse({ ...base, installId: "x" })).toThrow();
+    expect(() =>
+      sessionReportSchema.parse({
+        ...base,
+        device: { clientPlatform: null, clientVersion: null, os: "symbian", formFactor: "phone", screenWidth: 1, screenHeight: 1, pixelRatio: 1, cores: null, memoryGb: null },
+      }),
+    ).toThrow();
   });
 
   it("ведёт лидерборд по каждой сложности отдельно и не отдаёт чужие Telegram ID", async () => {

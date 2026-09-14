@@ -89,6 +89,8 @@
 | Порог «игрок стоит» для камеры | `game/render/run-camera.ts` → `IDLE_SPEED_RATIO` |
 | Формы и цвета врагов, кристаллов, подборов, персонажа и эффектов — на канве и в гайдбуке сразу | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `WORLD_COLORS` |
 | Вспышка попадания, взрывы, плитка фона | `game/render/WorldRenderer.ts` → `HIT_FLASH_TICKS`, `BLAST_*`, `GROUND_TILE_UNITS` |
+| Телеграфы угроз: за сколько до выстрела виден прицел стрелка, толщина полос | `game/render/telegraphs.ts` → `AIM_TELEGRAPH_SEC`, `LANE_WIDTH_UNITS`, `AIM_WIDTH_UNITS`; отсчёт взрыва и рывка берётся из `fuseSec` и `telegraphSec` врага |
+| Граница «Очага» и молния «Грозы»: вспышка, высота и изгиб молнии | `game/render/weapon-effects.ts` → `AURA_FLASH_TICKS`, `BOLT_LIFETIME_TICKS`, `BOLT_HEIGHT_UNITS`, `BOLT_JITTER_UNITS` |
 | Потолок шагов симуляции за кадр, частота снимков HUD | `game/MainScene.ts` → `MAX_STEPS_PER_FRAME`, `HUD_INTERVAL_MS` |
 | Бот калибровки: дистанции страха и сближения, стратегия выбора | `game/balance/bot.ts` |
 
@@ -130,6 +132,8 @@
 | Шапка разделов и её меню: что показывается, куда ведёт | `app-shell/src/app/AppHeader.tsx`, `app/MainMenu.tsx` | участник 1 |
 | Как часто забег сохраняется сам | `app-shell/src/state/run.ts` → `AUTOSAVE_SEC` | участник 1 |
 | Плейтест на клиенте: таймаут запроса, сколько неотправленных забегов хранить | `app-shell/src/state/playtest-api.ts` → `PLAYTEST_TIMEOUT_MS`; `state/playtest.ts` → `QUEUE_LIMIT` | участник 1 |
+| Сводка плейтеста: корзины длины забега, сколько строк в топах, цвета и раскладка картинки | `backend/api/src/modules/playtest/playtest-stats.store.ts` → `DURATION_BUCKETS_MIN`; `playtest-stats.summary.ts` → `TOP_LIMIT`; `playtest-stats.image.ts` → `PALETTE`, `SERIES` (повторяют `tokens.css`) | участник 1 |
+| Бот сводки: long polling, лок читателя, частота команды, возраст команды из очереди | `backend/api/src/modules/playtest/playtest-stats.bot.ts` → `POLL_TIMEOUT_SEC`, `POLLER_LOCK_TTL_MS`, `COMMAND_WINDOW_SEC`, `STALE_COMMAND_SEC` | участник 1 |
 | Плейтест на сервере: строк в лидерборде, последних забегов в профиле, сколько забегов хранится | `backend/api/src/modules/playtest/playtest.service.ts` → `LEADERBOARD_LIMIT`, `RECENT_RUNS_SHOWN`; `redis-playtest.store.ts` → `RECENT_RUNS_KEPT`; границы правдоподобия итога — `dto/run-submission.dto.ts` | участник 1 |
 | С какой высоты экрана модалки забега уплотняются | `tokens.css` → `@custom-variant short` (`27-design-system-and-app-shell.md` §5.3) | напарник |
 | Задержка от случайного тапа на оверлеях забега | `app-shell/src/screens/run/overlays.tsx` → `GUARD_MS` | участник 1 |
@@ -214,6 +218,9 @@
 | `PLAYTEST_ENABLED`, `TELEGRAM_BOT_TOKEN` | сохранения и лидерборд плейтеста на бэкенде; без токена бэкенд с включённым плейтестом не стартует |
 | `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC` | сколько живут данные плейтеста в Redis и подпись запуска Telegram |
 | `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | вход в плейтест без Telegram на машине разработчика; только `NODE_ENV=development` |
+| `PLAYTEST_STATS_ENABLED`, `PLAYTEST_STATS_CHAT_ID` | сводка статистики плейтеста в чат администраторов по `/stats`; без чата или токена бота бэкенд не стартует |
+| `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | когда бот присылает сводку сам и в каком поясе считаются «сутки»; пусто в `DAILY_AT` — только по команде |
+| `ADMIN_TELEGRAM_IDS` | администраторы: режим разработчика в клиенте и забеги с читами в рейтинге. Стресс-тест открыт всем, пока `PLAYTEST_ENABLED=true`; в dev-сервере инструменты открыты без сервера (`capabilities.devTools`). Правила — `backend/api/src/modules/playtest/playtest-access.ts` |
 
 Прокси dev-сервера на бэкенд плейтеста — `apps/web-telegram/vite.config.ts` →
 `apiProxy`: проксируется только `/api/v1/playtest` (`20-env-and-ports.md` §4).
@@ -225,6 +232,7 @@
 | Что меняю | Где |
 |---|---|
 | Что и где ищет тестовый раннер | `vitest.config.ts` |
+| Проверка ссылок в документации: какие файлы и какие пути проверяются | `scripts/docs-check.mjs` → `CODE_ROOTS`, `documentationFiles`; запуск — `pnpm docs:check`, в гейте — `scripts/test/docs-check.test.ts` |
 | Свод калибровки баланса отдельной командой | `vitest.balance.config.ts`, прогон — `scripts/balance/balance-sim.ts` |
 | Бюджеты размера бандла: первая загрузка, CSS, ленивые чанки, шрифты | `scripts/bundle-budget.mjs` → `BUDGETS` |
 | Порог теста производительности симуляции | `packages/core-game/test/perf-budget.test.ts` |
@@ -253,6 +261,22 @@ pnpm budget
 | Что меняю | Где |
 |---|---|
 | Профили нагрузки, длительность, потолки, агрессивный режим | `core-game/src/game/bench/profiles.ts` |
+| Нагрузка позднего забега для стресс-теста в оболочке: доли паттернов, частота и размер волны элит | `bench/full-load.ts` → `BENCH_FULL_LOAD` |
+| Как часто стресс-тест сообщает прогресс оболочке | `game/BenchScene.ts` → `PROGRESS_INTERVAL_MS` |
+| Звуки: слои синтеза, шина, громкость, голоса, интервал, реверберация | `app-shell/src/audio/recipes.ts` → `SOUND_RECIPES`; правка на устройстве — звуковая лаборатория (`docs/31-audio-and-haptics.md` §6) |
+| Звук: уровни и приоритеты шин, бюджет запусков, потолок голосов, плотность, глубина приглушения | `audio/recipes.ts` → `BUSES`, `MIX_RULES` |
+| Звук: какие звуки на сигналы забега, напряжение музыки, сердцебиение, серия кристаллов | `audio/sound-director.ts` → `planCueSounds`, `FULL_INTENSITY_ENEMIES`, `HEARTBEAT_*`, `GEM_STREAK_*` |
+| Музыка: лад, аккорды, темп сцен, мотивы, пороги слоёв | `audio/music.ts` → `SCALE`, `CHORDS`, `CONTEXTS`, `MOTIFS`, `LAYER_THRESHOLDS` |
+| Громкость по умолчанию и шкала регулятора | `audio/index.ts` → `DEFAULT_VOLUMES`; `audio/audio-engine.ts` → `volumeCurve` |
+| Звук интерфейса и вибрация на нажатия | `app-shell/src/state/ui-feedback.ts` → `FEEDBACK` |
+| Бюджет звукового чанка | `scripts/bundle-budget.mjs` → строка «Звук» |
+| Вибрация: вид и минимальный интервал каждого события, интервал между любыми двумя | `app-shell/src/state/haptics.ts` → `HAPTIC_RULES`, `GLOBAL_MIN_INTERVAL_MS` |
+| Вибрация вне Telegram: шаблоны `navigator.vibrate` | `adapter-telegram/src/index.ts` → `VIBRATE_PATTERNS` |
+| Сигналы забега для вибрации и звука: частота, что считать взрывом рядом | `core-game/src/game/MainScene.ts` → `CUE_INTERVAL_MS`; `game/run/cues.ts` → `NEAR_MARGIN_UNITS` |
+| Режим разработчика: цвета отладочной отрисовки | `core-game/src/game/render/looks.ts` → `DEBUG_COLORS` |
+| Режим разработчика: где появляется заспавненное, потолки количества и перемотки | `core-game/src/game/run/dev-commands.ts` → `SPAWN_DISTANCE_UNITS`, `PICKUP_DISTANCE_UNITS`, `MAX_SPAWN_COUNT`, `MAX_JUMP_MINUTE` |
+| Режим разработчика: окно технической сводки, потолок шагов на паузе | `core-game/src/game/MainScene.ts` → `DEV_INFO_INTERVAL_MS`, `MAX_DEV_STEP_TICKS` |
+| Режим разработчика: наборы, скорости времени, множители урона и бега, умолчания | `app-shell/src/state/dev-mode.ts` → `DEV_PRESETS`, `TIME_SCALES`, `DAMAGE_MULS`, `MOVE_SPEED_MULS`, `DEFAULT_DEV_SETTINGS` |
 | Что попадает в отчёт и версия его схемы | `bench/metrics.ts` → `BENCH_REPORT_SCHEMA` |
 | Критерии вердикта «тянет / не тянет» | `bench/verdict.ts` |
 | Определение просадки в агрессивном режиме | `bench/degradation-detector.ts` → `DEFAULT_DEGRADATION` |

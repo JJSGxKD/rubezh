@@ -3,7 +3,9 @@ import {
   BookOpen,
   CalendarCheck,
   ChevronRight,
+  Flame,
   History,
+  Wrench,
   Infinity as InfinityIcon,
   LoaderPinwheel,
   Lock,
@@ -28,7 +30,10 @@ import {
 } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
 import { useMeta } from "../state/meta";
+import { hasCheats, useDevMode } from "../state/dev-mode";
 import { useNavigation } from "../state/navigation";
+import { usePlaytestAccess } from "../state/playtest";
+import { DevSheetLazy } from "./run/dev-sheet-lazy";
 import { preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine, useRun } from "../state/run";
 import { useSavedRun, type SavedRun } from "../state/run-save";
@@ -163,6 +168,7 @@ export function LobbyScreen(): ReactNode {
       <Modal
         title={t("lobby.newRun.title")}
         placement="bottom"
+        onDismiss={() => setConfirmingNewRun(false)}
         footer={
           <>
             <Button
@@ -288,12 +294,22 @@ function preloadEverything(): void {
 /** Выбор режима. «Бесконечный» рабочий, «Кампания» — заглушка. */
 export function ModeScreen(): ReactNode {
   const navigation = useNavigation();
+  // Стресс-тест открыт всем на плейтесте и команде вне его: правило решает
+  // сервер (docs/28-diagnostics.md §2.3), здесь только не показываем лишнего.
+  const access = usePlaytestAccess();
 
   return (
     <Screen title={t("mode.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
         <div className="mt-2 grid gap-3">
-          <Card appearIndex={0} stripe="accent" onClick={() => navigation.push("weapon")}>
+          <Card
+            appearIndex={0}
+            stripe="accent"
+            onClick={() => {
+              useDevMode.getState().arm(false);
+              navigation.push("weapon");
+            }}
+          >
             <div className="flex items-center gap-4">
               <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
                 <InfinityIcon size={26} />
@@ -304,7 +320,46 @@ export function ModeScreen(): ReactNode {
               </div>
             </div>
           </Card>
-          <Card appearIndex={1} disabled>
+          {access.devMode ? (
+            <Card
+              appearIndex={1}
+              stripe="passive"
+              onClick={() => {
+                useDevMode.getState().arm(true);
+                navigation.push("weapon");
+              }}
+            >
+              <div className="flex items-center gap-4">
+                <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-passive/15 text-passive">
+                  <Wrench size={24} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-display text-lg font-bold text-text">{t("mode.dev")}</span>
+                    <Badge tone="passive">{t("mode.dev.badge")}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-text-muted">{t("mode.dev.description")}</p>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+          {access.stressTest ? (
+            <Card appearIndex={2} stripe="info" onClick={() => navigation.push("stress")}>
+              <div className="flex items-center gap-4">
+                <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
+                  <Flame size={24} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-display text-lg font-bold text-text">{t("mode.stress")}</span>
+                    <Badge tone="info">{t("mode.stress.badge")}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-text-muted">{t("mode.stress.description")}</p>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+          <Card appearIndex={3} disabled>
             <div className="flex items-center gap-4">
               <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-surface-raised text-text-muted">
                 <MapIcon size={24} />
@@ -338,10 +393,15 @@ export function WeaponScreen(): ReactNode {
   const selected = starting.some((weapon) => weapon.id === meta.lastWeaponId)
     ? meta.lastWeaponId
     : (starting[0]?.id ?? "");
+  const access = usePlaytestAccess();
+  const devArmed = useDevMode((state) => state.armed) && access.devMode;
+  const devSettings = useDevMode((state) => state.settings);
+  const [devOpen, setDevOpen] = useState(false);
 
   return (
+    <>
     <Screen
-      title={t("weapon.select.screen")}
+      title={devArmed ? t("mode.dev") : t("weapon.select.screen")}
       onBack={() => navigation.pop()}
       footer={
         <Button
@@ -361,6 +421,28 @@ export function WeaponScreen(): ReactNode {
       }
     >
       <ContentColumn>
+        {devArmed ? (
+          <div className="mt-2">
+            <Card stripe="passive" onClick={() => setDevOpen(true)}>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-passive/15 text-passive">
+                  <Wrench size={20} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <span className="font-display text-base font-bold text-text">{t("dev.setup")}</span>
+                  <p className="mt-0.5 text-xs text-text-muted">
+                    {hasCheats(devSettings)
+                      ? devSettings.countInRating
+                        ? t("dev.cheats.counted")
+                        : t("dev.cheats.notCounted")
+                      : t("dev.setup.clean")}
+                  </p>
+                </div>
+                <ChevronRight size={18} className="shrink-0 text-text-disabled" />
+              </div>
+            </Card>
+          </div>
+        ) : null}
         <SectionTitle>{t("difficulty.title")}</SectionTitle>
         <SegmentedControl
           label={t("difficulty.title")}
@@ -393,5 +475,7 @@ export function WeaponScreen(): ReactNode {
         </div>
       </ContentColumn>
     </Screen>
+    {devOpen ? <DevSheetLazy inRun={false} onClose={() => setDevOpen(false)} /> : null}
+    </>
   );
 }

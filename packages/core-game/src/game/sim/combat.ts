@@ -22,10 +22,12 @@ export function damageEnemy(
   const enemies = world.enemies;
   if (enemies.alive[index] === 0 || amount <= 0) return;
 
+  const cheats = world.cheats;
+  const dealt = cheats.oneHitKill ? enemies.hp[index] : amount * cheats.damageMul;
   // В статистику идёт нанесённый урон, а не заявленный: добивание на единицу
   // здоровья не должно выглядеть как полный удар.
-  const applied = Math.min(amount, enemies.hp[index]);
-  enemies.hp[index] -= amount;
+  const applied = Math.min(dealt, enemies.hp[index]);
+  enemies.hp[index] -= dealt;
   enemies.hitTick[index] = world.stats.tick;
   world.stats.damageDealt += applied;
   if (weaponSlot !== NO_OWNER_TYPE && weaponSlot < world.stats.damageByWeapon.length) {
@@ -52,7 +54,7 @@ export function killEnemy(world: World, index: number): void {
   const y = world.enemies.y[index];
   despawnEnemy(world, index);
 
-  if (world.config.progressionEnabled) {
+  if (world.config.lootEnabled) {
     dropGems(world, x, y, type.xp);
     rollPickups(world, x, y, type.elite);
   }

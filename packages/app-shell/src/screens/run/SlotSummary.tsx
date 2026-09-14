@@ -50,7 +50,7 @@ export function SlotSummary(props: {
           tone="passive"
         />
       ))}
-      {props.extra === undefined ? null : <li className="inline-flex">{props.extra}</li>}
+      {props.extra === undefined ? null : <li className="inline-flex flex-wrap gap-1.5">{props.extra}</li>}
     </ul>
   );
 }

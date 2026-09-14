@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter, type RunResult } from "@bh/shared-types";
 import { createPlaytestApi, PLAYTEST_TIMEOUT_MS } from "../src/state/playtest-api";
-import { toSubmission, usePlaytest } from "../src/state/playtest";
+import { useMeta } from "../src/state/meta";
+import { effectiveAccess, toSubmission, usePlaytest } from "../src/state/playtest";
 import { initShell } from "../src/state/shell";
 
 // Отправка итогов забега на сервер плейтеста и разбор его ответов
@@ -31,6 +32,7 @@ function result(runId: string, patch: Partial<RunResult> = {}): RunResult {
     deathCause: "swarm_rat",
     distance: 9000,
     peakEnemies: 80,
+    cheats: false,
     ...patch,
   };
 }
@@ -128,7 +130,7 @@ describe("очередь итогов забега", () => {
       analytics: (event, payload) => events.push([event, payload]),
       build: { version: "test", contentHash: "", platform: "web" },
     });
-    usePlaytest.setState({ pending: 0, lastSubmitted: null, leaderboards: {}, profile: null });
+    usePlaytest.setState({ pending: 0, lastSubmitted: null, leaderboards: {}, profile: null, access: null });
     usePlaytest.getState().hydrate();
   }
 
@@ -193,6 +195,7 @@ describe("очередь итогов забега", () => {
       startingWeaponId: "spark",
       weapons: [{ id: "spark", level: 4 }],
       contentHash: "abcd1234",
+      deathCause: "swarm_rat",
     });
   });
 
@@ -223,6 +226,37 @@ describe("очередь итогов забега", () => {
     const queue = JSON.parse(storage.values[QUEUE_KEY] ?? "[]") as { runId: string }[];
     expect(queue).toHaveLength(20);
     expect(queue[0]?.runId).toBe("run-00000005");
+  });
+
+  it("рекорд с другого устройства приходит в лобби и в хранилище устройства", async () => {
+    reply = async () =>
+      json(200, {
+        data: {
+          runs: 12,
+          totalKills: 900,
+          totalSurvivalSec: 3000,
+          best: { easy: null, normal: { survivalSec: 420, rank: 2 }, hard: null },
+          recent: [],
+        },
+      });
+    mount();
+    storage.set("bh.meta.v1.bestSurvivalSec.normal", "300");
+    useMeta.getState().hydrate();
+
+    expect(await usePlaytest.getState().loadProfile()).toBeNull();
+    expect(useMeta.getState().best.normal).toBe(420);
+    expect(useMeta.getState().runs).toBe(12);
+    expect(storage.values["bh.meta.v1.bestSurvivalSec.normal"]).toBe("420");
+  });
+
+  it("инструменты команды открывает сервер, а в dev-сборке они открыты без него", async () => {
+    reply = async () => json(200, { data: { admin: false, stressTest: true, devMode: false } });
+    mount();
+    expect(effectiveAccess(usePlaytest.getState().access, false).stressTest).toBe(false);
+
+    expect(await usePlaytest.getState().loadAccess()).toBeNull();
+    expect(effectiveAccess(usePlaytest.getState().access, false)).toEqual({ admin: false, stressTest: true, devMode: false });
+    expect(effectiveAccess(null, true).devMode).toBe(true);
   });
 
   it("сборка без бэкенда плейтеста ничего не копит и не отправляет", async () => {

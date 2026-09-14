@@ -224,7 +224,7 @@ function renderPreview(preview: Preview): ReactNode {
         />
       );
     case "pause":
-      return <PauseOverlay elapsedSec={187} onResume={noop} onSettings={noop} onSurrender={noop} />;
+      return <PauseOverlay elapsedSec={187} onResume={noop} onSettings={noop} onSurrender={noop} onStats={noop} />;
     case "death":
       return (
         <DeathOverlay
@@ -350,4 +350,5 @@ const SAMPLE_RESULT: RunResult = {
   deathCause: "dasher_wolf",
   distance: 18400,
   peakEnemies: 212,
+  cheats: false,
 };

@@ -54,9 +54,11 @@ export function stepWorld(world: World, input: SimInput): void {
   updateWeapons(world, dt);
   updateProjectiles(world, dt);
 
-  if (world.config.progressionEnabled) {
+  if (world.config.lootEnabled) {
     updateGems(world, dt);
     updatePickups(world);
+  }
+  if (world.config.progressionEnabled) {
     // Варианты готовятся в конце шага: игрок увидит их на следующем кадре, а
     // мир к этому моменту уже в согласованном состоянии.
     prepareOffers(world);
@@ -99,7 +101,7 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   if (!player.alive) return;
 
   const magnitude = vectorLength(input.moveX, input.moveY);
-  const speed = world.config.player.speedPxSec * world.playerStats.moveSpeedMul;
+  const speed = world.config.player.speedPxSec * world.playerStats.moveSpeedMul * world.cheats.moveSpeedMul;
   const desiredVx = magnitude < 1e-3 ? 0 : (input.moveX / magnitude) * speed;
   const desiredVy = magnitude < 1e-3 ? 0 : (input.moveY / magnitude) * speed;
 
@@ -165,6 +167,9 @@ function recycleLostEnemies(world: World): void {
 }
 
 function updateEnemies(world: World, dt: number): void {
+  // Замороженные враги не двигаются, не бьют и не ведут таймеры телеграфов:
+  // картинку можно разглядывать, не опасаясь, что отсчёт дойдёт до взрыва.
+  if (world.cheats.freezeEnemies) return;
   const enemies = world.enemies;
   const player = world.player;
   const playerRadius = world.config.player.radius;

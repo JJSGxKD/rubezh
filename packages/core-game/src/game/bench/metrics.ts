@@ -16,7 +16,7 @@
  */
 
 /** Схема отчёта. Меняется формат — растёт версия, старые прогоны остаются читаемыми. */
-export const BENCH_REPORT_SCHEMA = "rubezh.bench.v3";
+export const BENCH_REPORT_SCHEMA = "rubezh.bench.v4";
 
 /** 60 кадров/с × 10 минут — с запасом на самый долгий прогон протокола. */
 const DEFAULT_CAPACITY = 36_000;
@@ -112,7 +112,16 @@ export interface BenchProfile {
   canvasHeight: number;
   devicePixelRatio: number;
   renderer: string;
+  /** с чем игрок идёт в прогон — от этого зависят снаряды, эффекты и кристаллы */
+  loadout: BenchLoadout;
 }
+
+/**
+ * `starting` — стартовое оружие без кристаллов и подборов, профиль замеров
+ * этапа 1; `full` — поздний забег: всё оружие и пассивки на максимуме, элиты,
+ * кристаллы и подборы (`bench/full-load.ts`).
+ */
+export type BenchLoadout = "starting" | "full";
 
 export interface BenchDevice {
   userAgent: string;

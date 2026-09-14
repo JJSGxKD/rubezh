@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Crown, History, Layers, Pause, Skull, Sparkles, Star, Trophy } from "lucide-react";
+import { ChartColumn, Crown, History, Layers, Pause, Skull, Sparkles, Star, Trophy, Wrench } from "lucide-react";
 import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import type { RunSlotState } from "@bh/core-game";
 import {
@@ -71,6 +71,9 @@ export interface PauseOverlayProps {
   onResume(): void;
   onSettings(): void;
   onSurrender(): void;
+  onStats(): void;
+  /** лист режима разработчика — только у забега разработчика */
+  onDev?: () => void;
 }
 
 export function PauseOverlay(props: PauseOverlayProps): ReactNode {
@@ -82,6 +85,7 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
       <Modal
         title={t("run.surrender.title")}
         placement="bottom"
+        onDismiss={() => setConfirming(false)}
         footer={
           <>
             <Button variant="danger" block onClick={guarded(ready, props.onSurrender)}>
@@ -107,9 +111,23 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
           <Button size="l" block glow onClick={guarded(ready, props.onResume)}>
             {t("run.pause.resume")}
           </Button>
-          <Button variant="secondary" block onClick={props.onSettings}>
-            {t("run.pause.settings")}
-          </Button>
+          {/* Характеристики и настройки — в ряд: вторичные действия паузы не
+              должны выталкивать «Продолжить» за край в ландшафте. */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" block onClick={props.onStats}>
+              <ChartColumn size={18} aria-hidden="true" />
+              {t("run.stats.open")}
+            </Button>
+            <Button variant="secondary" block onClick={props.onSettings}>
+              {t("run.pause.settings")}
+            </Button>
+          </div>
+          {props.onDev === undefined ? null : (
+            <Button variant="secondary" block onClick={props.onDev}>
+              <Wrench size={18} aria-hidden="true" />
+              {t("dev.title")}
+            </Button>
+          )}
           {/* Сдача — с подтверждением: случайный тап не должен обнулять забег. */}
           <Button variant="danger" block onClick={() => setConfirming(true)}>
             {t("run.pause.surrender")}
@@ -134,16 +152,32 @@ export interface LevelUpOverlayProps {
   /** текущий набор — показать, сколько слотов каждой категории занято */
   loadout?: { weapons: readonly RunSlotState[]; passives: readonly RunSlotState[] };
   onChoose(optionId: string): void;
+  /** открыть лист «Характеристики» — плашкой в ряду слотов, без лишней строки */
+  onStats?: () => void;
 }
 
 export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   const ready = useTapGuard();
-  const queuedBadge =
-    props.queued > 0 ? (
-      <Badge tone="accent">
-        <Layers size={12} aria-hidden="true" />
-        {t("run.levelUp.queued", { count: props.queued })}
-      </Badge>
+  const slotExtras =
+    props.queued > 0 || props.onStats !== undefined ? (
+      <>
+        {props.queued > 0 ? (
+          <Badge tone="accent">
+            <Layers size={12} aria-hidden="true" />
+            {t("run.levelUp.queued", { count: props.queued })}
+          </Badge>
+        ) : null}
+        {props.onStats === undefined ? null : (
+          <button
+            type="button"
+            onClick={props.onStats}
+            className="surface-sunken inline-flex items-center gap-1 rounded-pill px-2 py-0.5 font-display text-xs font-semibold text-info"
+          >
+            <ChartColumn size={12} aria-hidden="true" />
+            {t("run.stats.open")}
+          </button>
+        )}
+      </>
     ) : null;
 
   return (
@@ -158,13 +192,13 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
       {/* Сколько выборов ждёт — плашкой в ряду слотов, а не строкой под
           карточками: в ландшафте отдельная строка уводила модалку в прокрутку. */}
       {props.loadout === undefined ? (
-        queuedBadge === null ? null : <div className="mb-2 flex justify-center">{queuedBadge}</div>
+        slotExtras === null ? null : <div className="mb-2 flex justify-center">{slotExtras}</div>
       ) : (
         <div className="mb-3 short:mb-2">
           <SlotSummary
             weapons={props.loadout.weapons}
             passives={props.loadout.passives}
-            {...(queuedBadge === null ? {} : { extra: queuedBadge })}
+            {...(slotExtras === null ? {} : { extra: slotExtras })}
           />
         </div>
       )}
@@ -293,6 +327,8 @@ export interface DeathOverlayProps {
   /** место в рейтинге плейтеста; нет — сервер ещё не ответил или его нет */
   rank?: number | null;
   diagnostics: boolean;
+  /** забег с читами учтён в рейтинге по просьбе администратора */
+  cheatsCounted?: boolean;
   onRestart(): void;
   onMenu(): void;
   onShare(): void;
@@ -315,6 +351,14 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       {/* Сложность рядом с итогом: рекорд засчитан именно на ней. */}
       <div className="-mt-1 mb-3 flex flex-wrap justify-center gap-2">
         <Badge>{t(`difficulty.${result.difficultyId}.name`)}</Badge>
+        {/* Читы — видно сразу: иначе «рекорд» бессмертного забега на скриншоте
+            выглядит настоящим. */}
+        {result.cheats ? (
+          <Badge tone="warning">
+            <Wrench size={12} aria-hidden="true" />
+            {props.cheatsCounted === true ? t("dev.cheats.counted") : t("dev.cheats.notCounted")}
+          </Badge>
+        ) : null}
         {props.isNewRecord ? (
           <span className="animate-pop-in" style={staggerStyle(2)}>
             <Badge tone="accent">

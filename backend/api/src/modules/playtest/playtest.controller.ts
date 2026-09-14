@@ -1,7 +1,14 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
-import { ValidationError } from "../../common/domain-error";
-import { difficultyQuerySchema, runSubmissionSchema } from "./dto/run-submission.dto";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config";
+import { accessFor, isAdmin, type PlaytestAccess } from "./playtest-access";
+import { DomainError, ValidationError } from "../../common/domain-error";
+import {
+  difficultyQuerySchema,
+  runSubmissionSchema,
+  sessionReportSchema,
+  stressReportSchema,
+} from "./dto/run-submission.dto";
 import { PlaytestAuthGuard, playerOf } from "./playtest-auth.guard";
 import {
   PlaytestService,
@@ -17,12 +24,34 @@ import {
 @Controller("playtest")
 @UseGuards(PlaytestAuthGuard)
 export class PlaytestController {
-  constructor(private readonly service: PlaytestService) {}
+  constructor(
+    private readonly service: PlaytestService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
 
   @Post("runs")
   async submit(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SubmitResult }> {
     const submission = parse(() => runSubmissionSchema.parse(body), "Некорректный итог забега");
-    return { data: await this.service.submitRun(playerOf(request), submission, Date.now()) };
+    const player = playerOf(request);
+    return { data: await this.service.submitRun(player, submission, Date.now(), isAdmin(player, this.config)) };
+  }
+
+  @Post("sessions")
+  async session(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { recorded: boolean } }> {
+    const report = parse(() => sessionReportSchema.parse(body), "Некорректные сведения о запуске");
+    await this.service.recordSession(playerOf(request), report, Date.now());
+    return { data: { recorded: true } };
+  }
+
+  @Post("stress")
+  async stress(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { recorded: boolean } }> {
+    const player = playerOf(request);
+    // Кнопка в клиенте спрятана по тому же правилу, но скрытая кнопка — не защита.
+    if (!accessFor(player, this.config).stressTest) {
+      throw new DomainError("forbidden", "Стресс-тест сейчас недоступен", 403);
+    }
+    const report = parse(() => stressReportSchema.parse(body), "Некорректный отчёт стресс-теста");
+    return { data: await this.service.recordStress(player, report, Date.now()) };
   }
 
   @Get("leaderboard")
@@ -37,6 +66,15 @@ export class PlaytestController {
   @Get("me")
   async me(@Req() request: unknown): Promise<{ data: ProfileView }> {
     return { data: await this.service.profile(playerOf(request).id) };
+  }
+
+  /**
+   * Что открыто игроку. Отдельно от профиля: хранилище для ответа не нужно,
+   * и недоступный Redis не должен прятать от администратора его инструменты.
+   */
+  @Get("access")
+  access(@Req() request: unknown): { data: PlaytestAccess } {
+    return { data: accessFor(playerOf(request), this.config) };
   }
 }
 

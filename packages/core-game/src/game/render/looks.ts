@@ -90,10 +90,37 @@ export const WORLD_COLORS = {
   dynamiteWave: 0xffb22e,
   /** вспышка персонажа при попадании */
   hurt: 0xff6b6b,
+  /** телеграф взрыва: кольцо радиуса и растущий отсчёт */
+  threat: 0xff5a5a,
+  /** полоса рывка */
+  dashLane: 0xffd36b,
+  /** граница зоны «Очага» */
+  aura: 0xff9a3c,
+  /** молния «Грозы»: ореол и светлый стержень */
+  lightning: 0x9bd0ff,
+  lightningCore: 0xf3f6fc,
   ground: 0x0d0f14,
   groundLine: 0x171b24,
   /** светлые детали подборов: плашка аптечки, полюса магнита, фитиль */
   pickupLight: 0xf3f6fc,
   dynamiteBand: 0x3a1414,
   dynamiteSpark: 0xffe066,
+} as const;
+
+/**
+ * Отладочная отрисовка режима разработчика. Цвета нарочно «инженерные» —
+ * бирюза, фуксия, лайм: их нельзя спутать ни с врагом, ни с эффектом игры.
+ */
+export const DEBUG_COLORS = {
+  hitboxEnemy: 0x39ff88,
+  hitboxElite: 0xffe14d,
+  hitboxProjectile: 0xff4dd2,
+  hitboxPlayer: 0xffffff,
+  pickupRadius: 0x4de1ff,
+  weaponRadius: 0xff9a3c,
+  weaponRange: 0xffe066,
+  spawnRing: 0xff4d4d,
+  retentionRing: 0x9b6bff,
+  bounds: 0xff4dd2,
+  grid: 0x4de1ff,
 } as const;

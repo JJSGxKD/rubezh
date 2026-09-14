@@ -10,7 +10,17 @@ import ru from "./ru.json";
  * волна / 2 волны / 5 волн» руками не собирается, а в русском категорий три.
  */
 
-const DICTIONARY: Record<string, string> = ru;
+const DICTIONARY: Record<string, string> = { ...ru };
+
+/**
+ * Дополнить словарь. Тексты инструментов команды — режима разработчика,
+ * стресс-теста, звуковой лаборатории — приходят отдельным чанком вместе с
+ * их экранами (`i18n/team.ts`): игроку в первую загрузку они не нужны, а
+ * весят как половина словаря.
+ */
+export function addTranslations(entries: Record<string, string>): void {
+  Object.assign(DICTIONARY, entries);
+}
 const LOCALE = "ru-RU";
 const pluralRules = new Intl.PluralRules(LOCALE);
 

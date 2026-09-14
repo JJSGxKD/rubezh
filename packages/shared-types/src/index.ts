@@ -21,7 +21,22 @@ export interface PurchaseResult {
   error?: string;
 }
 
-export type HapticType = "light" | "medium" | "heavy" | "success" | "error";
+/**
+ * Виды тактильного отклика — по возможностям Telegram: удар разной силы
+ * (`light`…`heavy`, `soft`, `rigid`), уведомление (`success`, `warning`,
+ * `error`) и щелчок выбора (`selection`). Площадка без такого вида берёт
+ * ближайший или молчит.
+ */
+export type HapticType =
+  | "light"
+  | "medium"
+  | "heavy"
+  | "soft"
+  | "rigid"
+  | "selection"
+  | "success"
+  | "warning"
+  | "error";
 
 export interface AdResult {
   shown: boolean;
@@ -49,6 +64,11 @@ export interface PlatformAdapter {
    * даёт (обычный браузер, dev), и сервер игрока не узнает.
    */
   signedLaunchData(): string | null;
+  /**
+   * Какой клиент площадки открыл игру — для статистики устройств плейтеста
+   * и отчётов производительности. `null` в полях — площадка не сообщила.
+   */
+  clientInfo(): PlatformClientInfo;
   haptic(type: HapticType): void;
   /**
    * Возможности интерфейса площадки: отступы безопасной зоны, полноэкранный
@@ -173,6 +193,13 @@ export interface PlatformUi {
    * цвет (docs/27-design-system-and-app-shell.md §4.1).
    */
   applyThemeColors(colors: ThemeColors): void;
+}
+
+export interface PlatformClientInfo {
+  /** клиент площадки: в Telegram — android, ios, tdesktop, macos, weba… */
+  platform: string | null;
+  /** версия API клиента площадки */
+  version: string | null;
 }
 
 export interface InvitePayload {
@@ -714,6 +741,12 @@ export interface RunResult {
   distance: number;
   /** пик числа врагов одновременно в мире */
   peakEnemies: number;
+  /**
+   * В забеге включали читы режима разработчика. Такой забег не идёт в рекорд
+   * устройства и в рейтинг, пока администратор явно не попросит
+   * (docs/26-stage2-plan.md, WP14).
+   */
+  cheats: boolean;
 }
 
 // --- Плейтест: сохранения и лидерборд (docs/26-stage2-plan.md, WP13) ---
@@ -733,6 +766,42 @@ export interface PlaytestRunSubmission {
   startingWeaponId: string;
   weapons: { id: string; level: number }[];
   contentHash: string;
+  /**
+   * id врага, нанёсшего смертельный урон; `null` — сдача. Для сводки «кто чаще
+   * убивает». Необязательно: забег в очереди от прошлой сборки поля не знает.
+   */
+  deathCause?: string | null;
+  /** забег в режиме разработчика с читами — в рейтинг и статистику не идёт */
+  cheats?: boolean;
+  /** администратор просит учесть забег с читами в рейтинге — для проверки рейтинга */
+  countInRating?: boolean;
+}
+
+/**
+ * Запуск приложения — для статистики плейтеста: сколько людей открыли игру
+ * и на чём. Технические сведения об устройстве без идентификаторов, кроме
+ * `installId`, который уже есть у каждой установки (docs/28-diagnostics.md §5.2).
+ */
+export interface PlaytestSessionReport {
+  installId: string;
+  build: string;
+  contentHash: string;
+  device: PlaytestDevice;
+}
+
+export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
+export type DeviceFormFactor = "phone" | "tablet" | "desktop";
+
+export interface PlaytestDevice {
+  clientPlatform: string | null;
+  clientVersion: string | null;
+  os: DeviceOs;
+  formFactor: DeviceFormFactor;
+  screenWidth: number;
+  screenHeight: number;
+  pixelRatio: number;
+  cores: number | null;
+  memoryGb: number | null;
 }
 
 export interface PlaytestSubmitResult {
@@ -741,6 +810,11 @@ export interface PlaytestSubmitResult {
   isNewBest: boolean;
   /** место в лидерборде сложности, с единицы */
   rank: number | null;
+  /**
+   * `false` — забег с читами не записан: рейтинг и лучшее время прежние.
+   * Необязательное: сервер прошлой версии поля не присылает, и это запись.
+   */
+  recorded?: boolean;
 }
 
 export interface PlaytestLeaderboardEntry {
@@ -769,6 +843,16 @@ export interface PlaytestRecentRun {
   startingWeaponId: string;
   /** когда получен сервером, мс UTC */
   at: number;
+}
+
+/**
+ * Что игроку открыто в клиенте. Решает сервер по Telegram ID; скрытая кнопка
+ * — не защита, и то, что трогает чужие данные, сервер проверяет сам.
+ */
+export interface PlaytestAccess {
+  admin: boolean;
+  stressTest: boolean;
+  devMode: boolean;
 }
 
 export interface PlaytestProfile {

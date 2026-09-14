@@ -6,6 +6,8 @@ import "./design-system/fonts.css";
 import "./design-system/tokens.css";
 import { FONT_FAMILY, PLATFORM_COLORS } from "./design-system/tokens";
 import { BootScreen, type BootStage } from "./screens/gates";
+import { startAudioSync } from "./state/audio-sync";
+import { useDevMode } from "./state/dev-mode";
 import { useDiagnostics } from "./state/diagnostics";
 import { useHints } from "./state/hints";
 import { useSavedRun } from "./state/run-save";
@@ -79,12 +81,21 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   useHints.getState().hydrate();
   useSavedRun.getState().hydrate();
   usePlaytest.getState().hydrate();
+  useDevMode.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
+  // Звук — после настроек: громкость игрока применяется с первого звука.
+  const stopAudio = startAudioSync();
 
   render(<App />);
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
-  // них игрок не должен ждать заставку.
-  void usePlaytest.getState().flush("launch");
+  // них игрок не должен ждать заставку. Затем профиль: рекорд, поставленный
+  // на другом устройстве, появляется на главной.
+  void usePlaytest
+    .getState()
+    .flush("launch")
+    .then(() => usePlaytest.getState().loadProfile());
+  void usePlaytest.getState().loadAccess();
+  void usePlaytest.getState().reportSession();
 
   // Время до интерактивной главной — бюджет первой загрузки проверяется не
   // только размером файлов, но и на устройствах тестеров (§3.4).
@@ -97,6 +108,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   return {
     unmount(): void {
       stopWatching();
+      stopAudio();
       root.unmount();
     },
   };

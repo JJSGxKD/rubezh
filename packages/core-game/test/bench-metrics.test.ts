@@ -21,6 +21,7 @@ const PROFILE: BenchProfile = {
   canvasHeight: 1920,
   devicePixelRatio: 3,
   renderer: "WEBGL",
+  loadout: "starting",
 };
 
 const DEVICE: BenchDevice = {

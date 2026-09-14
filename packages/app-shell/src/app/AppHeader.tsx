@@ -3,7 +3,7 @@ import { Diamond, Gem, Menu, Plus } from "lucide-react";
 import { Avatar } from "../design-system/components";
 import { t } from "../i18n";
 import { useNavigation } from "../state/navigation";
-import { useSettings } from "../state/settings";
+import { uiFeedback } from "../state/ui-feedback";
 import { useShell } from "../state/shell";
 
 /**
@@ -17,7 +17,6 @@ import { useShell } from "../state/shell";
  */
 export function AppHeader(props: { onMenu(): void }): ReactNode {
   const user = useShell((state) => state.adapter.displayUser);
-  const haptics = useSettings((state) => state.haptics);
   const name = user?.displayName ?? t("profile.guest");
 
   return (
@@ -41,7 +40,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
           type="button"
           aria-label={t("menu.title")}
           onClick={() => {
-            if (haptics) useShell.getState().adapter.haptic("light");
+            uiFeedback("tap");
             props.onMenu();
           }}
           className="btn-secondary relative inline-flex size-11 shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90"

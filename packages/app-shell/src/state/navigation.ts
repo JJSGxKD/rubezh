@@ -12,6 +12,7 @@ export type ScreenId =
   | "mode"
   | "weapon"
   | "run"
+  | "stress"
   | "arsenal"
   | "shop"
   | "rating"
@@ -25,6 +26,7 @@ export type ScreenId =
   | "diagnostics"
   | "gallery"
   | "guide"
+  | "soundLab"
   | "about";
 
 /** Корни разделов нижней панели: переключение вкладки сбрасывает стек. */

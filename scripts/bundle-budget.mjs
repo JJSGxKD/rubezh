@@ -19,7 +19,14 @@ const ASSETS = join(APP_DIST, "assets");
  * Движок забега и стенд испытаний — отдельные двери с устойчивыми именами
  * чанков: у них свой бюджет, потому что вес Phaser живёт по своим законам.
  */
-const ENGINE = /^(phaser-host|run-engine|bench-stand)-.*\.js$/;
+const ENGINE = /^(phaser-host|run-engine|bench-stand|stress-engine)-.*\.js$/;
+
+/**
+ * Звук — своя дверь: движок звука, рецепты и музыка приходят после первого
+ * касания (docs/31-audio-and-haptics.md). Отдельная строка, чтобы рост
+ * звука был виден сам по себе, а не съедал молча запас экранов.
+ */
+const AUDIO = /^(sound-director|recipes|lab-overrides|music|synth|audio-engine)-.*\.js$/;
 
 /**
  * Первая загрузка — то, что браузер качает до интерактивной главной: скрипт
@@ -61,9 +68,10 @@ function measure() {
     {
       name: "Экраны по требованию",
       limitKb: 60,
-      matches: (name) => isJs(name) && !firstLoad.has(name) && !ENGINE.test(name),
+      matches: (name) => isJs(name) && !firstLoad.has(name) && !ENGINE.test(name) && !AUDIO.test(name),
     },
     { name: "Движок и стенд", limitKb: 380, matches: (name) => ENGINE.test(name) },
+    { name: "Звук", limitKb: 15, matches: (name) => AUDIO.test(name) && !firstLoad.has(name) },
     {
       // woff2 уже сжат, gzip его не уменьшает. Браузер качает подмножество,
       // только встретив его символы, но русскому интерфейсу нужны оба:

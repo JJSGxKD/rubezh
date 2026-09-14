@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useRef, type ReactNode } from "react";
-import type { RadarSnapshot } from "@bh/core-game";
+import { RADAR_BLIP, type RadarSnapshot } from "@bh/core-game";
 import { COLORS } from "../../design-system/tokens";
 import { t } from "../../i18n";
 
@@ -18,11 +18,7 @@ import { t } from "../../i18n";
 const SIZE_PX = 88;
 const BLIP_PX = 2.5;
 const ELITE_PX = 4.5;
-const MEDKIT_PX = 4;
-
-/** Виды точек — те же числа, что кладёт движок (`RadarBlipKind`). */
-const KIND_ELITE = 1;
-const KIND_MEDKIT = 2;
+const PICKUP_PX = 4;
 
 export const Radar = memo(function Radar(props: { radar: RadarSnapshot }): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -73,21 +69,33 @@ function draw(context: CanvasRenderingContext2D, radar: RadarSnapshot, size: num
   const blips = radar.blips;
   context.fillStyle = COLORS.danger;
   for (let i = 0; i < radar.count; i++) {
-    if (blips[i * 3 + 2] !== 0) continue;
+    if (blips[i * 3 + 2] !== RADAR_BLIP.enemy) continue;
     dot(context, center + blips[i * 3] * radius, center + blips[i * 3 + 1] * radius, BLIP_PX * ratio);
   }
 
-  // Элиты и подборы — поверх роя и крупнее: их важно заметить первыми.
+  // Элиты и подборы — поверх роя и крупнее: их важно заметить первыми. Подборы
+  // различаются и формой, и цветом (§4.4): крест — аптечка, кольцо — магнит,
+  // ромб — динамит, как их силуэты на земле.
   for (let i = 0; i < radar.count; i++) {
     const kind = blips[i * 3 + 2];
     const x = center + blips[i * 3] * radius;
     const y = center + blips[i * 3 + 1] * radius;
-    if (kind === KIND_ELITE) {
+    const size = PICKUP_PX * ratio;
+    if (kind === RADAR_BLIP.elite) {
       context.fillStyle = COLORS.elite;
       dot(context, x, y, ELITE_PX * ratio);
-    } else if (kind === KIND_MEDKIT) {
+    } else if (kind === RADAR_BLIP.medkit) {
       context.fillStyle = COLORS.hp;
-      cross(context, x, y, MEDKIT_PX * ratio);
+      cross(context, x, y, size);
+    } else if (kind === RADAR_BLIP.magnet) {
+      context.strokeStyle = COLORS.xp;
+      context.lineWidth = 1.6 * ratio;
+      context.beginPath();
+      context.arc(x, y, size * 0.8, 0, Math.PI * 2);
+      context.stroke();
+    } else if (kind === RADAR_BLIP.dynamite) {
+      context.fillStyle = COLORS.warning;
+      diamond(context, x, y, size);
     }
   }
 
@@ -107,6 +115,16 @@ function cross(context: CanvasRenderingContext2D, x: number, y: number, half: nu
   const bar = half * 0.7;
   context.fillRect(x - half, y - bar / 2, half * 2, bar);
   context.fillRect(x - bar / 2, y - half, bar, half * 2);
+}
+
+function diamond(context: CanvasRenderingContext2D, x: number, y: number, half: number): void {
+  context.beginPath();
+  context.moveTo(x, y - half);
+  context.lineTo(x + half * 0.8, y);
+  context.lineTo(x, y + half);
+  context.lineTo(x - half * 0.8, y);
+  context.closePath();
+  context.fill();
 }
 
 function withAlpha(hex: string, alpha: number): string {

@@ -31,6 +31,9 @@ const profileSchema = z.object({
   canvasHeight: z.number().nonnegative(),
   devicePixelRatio: z.number().positive(),
   renderer: z.string().max(32),
+  // Схема v4: с чем игрок шёл в прогон. Отчёт v3 поля не знает — это
+  // стартовое оружие без кристаллов.
+  loadout: z.enum(["starting", "full"]).default("starting"),
 });
 
 const deviceSchema = z.object({

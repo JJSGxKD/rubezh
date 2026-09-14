@@ -22,6 +22,8 @@ export interface RunResultOptions {
    * тест симуляции превращается в тест текущего баланса.
    */
   contentHash: string;
+  /** в забеге включали читы режима разработчика */
+  cheats?: boolean;
 }
 
 export function buildRunResult(world: World, options: RunResultOptions): RunResult {
@@ -50,6 +52,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     deathCause: deathCause(world, options.outcome),
     distance: stats.distance,
     peakEnemies: stats.peakEnemies,
+    cheats: options.cheats === true,
   };
 }
 

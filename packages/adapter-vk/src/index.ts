@@ -55,6 +55,10 @@ export class VkAdapter implements PlatformAdapter {
     return null;
   }
 
+  clientInfo(): { platform: string | null; version: string | null } {
+    return { platform: "vk", version: null };
+  }
+
   haptic(_type: HapticType): void {
     // TODO: VKWebAppTapticImpactOccurred
   }

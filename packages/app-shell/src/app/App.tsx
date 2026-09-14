@@ -32,6 +32,8 @@ import {
   ScreenFallback,
   SettingsScreen,
   ShopScreen,
+  SoundLabScreen,
+  StressScreen,
   TasksScreen,
   TestersScreen,
   WheelScreen,
@@ -137,6 +139,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <WeaponScreen />;
     case "run":
       return <RunScreen />;
+    case "stress":
+      return <StressScreen />;
     case "arsenal":
       return <ArsenalScreen />;
     case "shop":
@@ -163,6 +167,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <GalleryScreen />;
     case "guide":
       return <GuideScreen />;
+    case "soundLab":
+      return <SoundLabScreen />;
     default:
       return <AboutScreen />;
   }

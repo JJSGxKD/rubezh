@@ -1,14 +1,18 @@
 import {
   DIFFICULTY_IDS,
   type DifficultyId,
+  type PlaytestAccess,
   type PlaytestLeaderboard,
   type PlaytestProfile,
   type PlaytestRunSubmission,
   type PlaytestSubmitResult,
   type RunResult,
 } from "@bh/shared-types";
+import type { BenchSubmission } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
+import { useInstall } from "./install";
+import { useMeta } from "./meta";
 import { createPersistedValue } from "./persisted";
 import { createPlaytestApi, type PlaytestApi, type PlaytestFailure } from "./playtest-api";
 import { reportError, track, useShell } from "./shell";
@@ -42,6 +46,11 @@ const submissionSchema = z.object({
   startingWeaponId: z.string(),
   weapons: z.array(z.object({ id: z.string(), level: z.number() })),
   contentHash: z.string(),
+  // Необязательные: забеги в очереди от прошлой сборки этих полей не знают,
+  // и выбрасывать их из-за этого незачем — сервер примет их без полей.
+  deathCause: z.optional(z.nullable(z.string())),
+  cheats: z.optional(z.boolean()),
+  countInRating: z.optional(z.boolean()),
 });
 
 const queueSchema = z.array(submissionSchema);
@@ -60,10 +69,23 @@ export interface PlaytestStore {
   /** последний полученный лидерборд каждой сложности: вкладка открывается без мигания */
   leaderboards: Partial<Record<DifficultyId, PlaytestLeaderboard>>;
   profile: PlaytestProfile | null;
+  /** что открыто игроку; `null` — сервер ещё не ответил или его нет */
+  access: PlaytestAccess | null;
 
   hydrate(): void;
+  loadAccess(): Promise<PlaytestFailure | null>;
+  /**
+   * Сообщить о запуске: сколько людей открыли игру и на чём. Без очереди —
+   * пропущенный запуск статистику не исказит, а копить их незачем.
+   */
+  reportSession(): Promise<PlaytestFailure | null>;
+  /**
+   * Отправить отчёт стресс-теста. Без очереди: прогон на экране, и при
+   * неудаче человек сам нажмёт «Отправить ещё раз».
+   */
+  reportStress(submission: BenchSubmission): Promise<PlaytestFailure | null>;
   /** поставить итог забега в очередь и попробовать отправить */
-  submitRun(result: RunResult): void;
+  submitRun(result: RunResult, countInRating?: boolean): void;
   flush(trigger: FlushTrigger): Promise<void>;
   /** обновить лидерборд; `null` — удалось, иначе причина неудачи */
   loadLeaderboard(difficultyId: DifficultyId): Promise<PlaytestFailure | null>;
@@ -78,14 +100,56 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
   lastSubmitted: null,
   leaderboards: {},
   profile: null,
+  access: null,
 
   hydrate(): void {
     set({ pending: api() === null ? 0 : queue().read().length });
   },
 
-  submitRun(result): void {
+  async reportSession(): Promise<PlaytestFailure | null> {
+    const client = api();
+    const { adapter, build } = useShell.getState();
+    const installId = useInstall.getState().installId;
+    if (client === null || installId === "") return "disabled";
+    // Разбор устройства — отдельным чанком: отчёт о запуске уходит после
+    // главной и первую загрузку ждать не должен.
+    const { describeDevice } = await import("./device");
+    const response = await client.reportSession({
+      installId,
+      build: build.version,
+      contentHash: build.contentHash,
+      device: describeDevice(adapter.clientInfo()),
+    });
+    return response.ok ? null : response.failure;
+  },
+
+  async reportStress(submission: BenchSubmission): Promise<PlaytestFailure | null> {
+    const client = api();
+    const { adapter, build } = useShell.getState();
+    const installId = useInstall.getState().installId;
+    if (client === null || installId === "") return "disabled";
+    const { describeDevice } = await import("./device");
+    const response = await client.reportStress({
+      installId,
+      build: build.version,
+      device: describeDevice(adapter.clientInfo()),
+      submission,
+    });
+    return response.ok ? null : response.failure;
+  },
+
+  async loadAccess(): Promise<PlaytestFailure | null> {
+    const client = api();
+    if (client === null) return "disabled";
+    const response = await client.access();
+    if (!response.ok) return response.failure;
+    set({ access: response.data });
+    return null;
+  },
+
+  submitRun(result, countInRating = false): void {
     if (api() === null) return;
-    const next = [...queue().read(), toSubmission(result)].slice(-QUEUE_LIMIT);
+    const next = [...queue().read(), toSubmission(result, countInRating)].slice(-QUEUE_LIMIT);
     queue().write(next);
     set({ pending: next.length });
     void get().flush("finish");
@@ -115,11 +179,13 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
         set({ pending: queue().read().length });
         if (response.ok) {
           set({ lastSubmitted: { runId: head.runId, result: response.data } });
+          useMeta.getState().mergeRemote({ best: { [head.difficultyId]: response.data.bestSurvivalSec } });
           track("playtest_run_synced", {
             result: "sent",
             trigger,
             rank: response.data.rank,
             isNewBest: response.data.isNewBest,
+            recorded: response.data.recorded ?? true,
           });
         } else {
           // Сервер отверг сами данные — повтор этого забега не поможет, а
@@ -148,13 +214,24 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
     const response = await client.profile();
     if (!response.ok) return response.failure;
     set({ profile: response.data });
+    const best: Partial<Record<DifficultyId, number>> = {};
+    for (const id of DIFFICULTY_IDS) {
+      const entry = response.data.best[id];
+      if (entry !== null) best[id] = entry.survivalSec;
+    }
+    useMeta.getState().mergeRemote({ runs: response.data.runs, best });
     return null;
   },
 }));
 
-/** Только поля, которые нужны лидерборду и профилю: урон и убийства по врагам серверу ни к чему. */
-export function toSubmission(result: RunResult): PlaytestRunSubmission {
+/**
+ * Только поля, которые нужны лидерборду и профилю: урон и убийства по врагам
+ * серверу ни к чему. `countInRating` — просьба администратора учесть забег с
+ * читами; сервер выполнит её, только если игрок и правда администратор.
+ */
+export function toSubmission(result: RunResult, countInRating = false): PlaytestRunSubmission {
   return {
+    ...(result.cheats ? { cheats: true, countInRating } : {}),
     runId: result.runId,
     difficultyId: result.difficultyId,
     outcome: result.outcome,
@@ -164,7 +241,24 @@ export function toSubmission(result: RunResult): PlaytestRunSubmission {
     startingWeaponId: result.startingWeaponId,
     weapons: result.weapons.map(({ id, level }) => ({ id, level })),
     contentHash: result.contentHash,
+    deathCause: result.deathCause,
   };
+}
+
+/**
+ * Что открыто в клиенте с учётом сборки. Dev-сервер открывает всё: команда
+ * правит режим разработчика в браузере, часто без поднятого бэкенда. В сборке
+ * решает только сервер.
+ */
+export function effectiveAccess(access: PlaytestAccess | null, devTools: boolean): PlaytestAccess {
+  if (devTools) return { admin: true, stressTest: true, devMode: true };
+  return access ?? { admin: false, stressTest: false, devMode: false };
+}
+
+export function usePlaytestAccess(): PlaytestAccess {
+  const access = usePlaytest((state) => state.access);
+  const devTools = useShell((state) => state.capabilities.devTools === true);
+  return effectiveAccess(access, devTools);
 }
 
 function api(): PlaytestApi | null {

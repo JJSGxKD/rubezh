@@ -1,5 +1,6 @@
 import type { RunEngine } from "./run-api";
 import type { BenchStand, BenchStandOptions } from "./engine/bench-stand";
+import type { StressEngine } from "./stress-api";
 
 /**
  * Публичная поверхность движка.
@@ -41,10 +42,20 @@ export type {
   HudSnapshot,
   RadarBlipKind,
   RadarSnapshot,
+  RunCues,
+  RunDevCheats,
+  RunDevCommand,
+  RunDevInfo,
+  RunDevOptions,
+  RunDevPickup,
+  RunDevVisuals,
   RunDiagnosticsOptions,
   RunEngine,
   RunEvents,
+  RunInspection,
   RunOptions,
+  RunPassiveInspection,
+  RunWeaponInspection,
   RunPauseReason,
   RunSession,
   RunSlotState,
@@ -52,7 +63,7 @@ export type {
   RunSnapshotSummary,
 } from "./run-api";
 // Версия формата снимка — оболочка сверяет сохранение до того, как предложить «Продолжить».
-export { RUN_SNAPSHOT_FORMAT } from "./run-api";
+export { RADAR_BLIP, RUN_SNAPSHOT_FORMAT } from "./run-api";
 
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).
@@ -60,9 +71,15 @@ export { xpForLevel, OFFERS_PER_LEVEL } from "./game/progression/levels";
 
 // Итог забега: движок считает, оболочка показывает, хранит рекорд и отправляет
 // (docs/26-stage2-plan.md, WP3).
-export { loadBestSurvivalSec, submitRunResult, type RecordUpdate } from "./game/run/records";
+export {
+  loadBestSurvivalSec,
+  mergeBestSurvivalSec,
+  submitRunResult,
+  type RecordUpdate,
+} from "./game/run/records";
 
 export type { BenchStand, BenchStandOptions } from "./engine/bench-stand";
+export type { StressEngine, StressEvents, StressOptions, StressSession } from "./stress-api";
 
 /**
  * Загрузить движок забега. Внутри — динамический импорт: Phaser и симуляция
@@ -80,4 +97,13 @@ export async function loadRunEngine(): Promise<RunEngine> {
 export async function loadBenchStand(options: BenchStandOptions): Promise<BenchStand> {
   const { createBenchStand } = await import("./engine/bench-stand");
   return createBenchStand(options);
+}
+
+/**
+ * Загрузить стресс-тест оболочки. Отдельная дверь от забега: сцена стенда
+ * игрокам без доступа не нужна (docs/28-diagnostics.md §2.3).
+ */
+export async function loadStressEngine(): Promise<StressEngine> {
+  const { createStressEngine } = await import("./engine/stress-engine");
+  return createStressEngine();
 }

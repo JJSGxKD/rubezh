@@ -1,6 +1,7 @@
 import type { EnemyDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { buildRadarSnapshot, MAX_BLIPS } from "../src/game/radar";
+import { RADAR_BLIP } from "../src/run-api";
 import { PICKUP_KIND, spawnPickup } from "../src/game/sim/pickups";
 import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 
@@ -54,5 +55,16 @@ describe("радар", () => {
     expect(snapshot.count).toBe(MAX_BLIPS);
     expect(kinds).toContain(1);
     expect(kinds).toContain(2);
+  });
+
+  it("различает подборы по виду: магнит и динамит не выглядят аптечкой", () => {
+    const world = setup();
+    spawnPickup(world, PICKUP_KIND.medkit, 10, 0);
+    spawnPickup(world, PICKUP_KIND.magnet, 20, 0);
+    spawnPickup(world, PICKUP_KIND.dynamite, 30, 0);
+
+    const snapshot = buildRadarSnapshot(world);
+    const kinds = Array.from({ length: snapshot.count }, (_, i) => blip(snapshot, i)[2]);
+    expect(kinds.sort()).toEqual([RADAR_BLIP.medkit, RADAR_BLIP.magnet, RADAR_BLIP.dynamite].sort());
   });
 });

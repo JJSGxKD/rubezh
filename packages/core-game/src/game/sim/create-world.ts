@@ -21,7 +21,7 @@ import { BASE_DIFFICULTY, findDifficultyProblems } from "./difficulty";
 import { findDropsContentProblems } from "./gems";
 import { MAX_PICKUPS } from "./pickups";
 import { createEnemyPool, createGemPool, createPickupPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
-import type { PlayerConfig, SimConfig, World } from "./world";
+import { NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
 
 /**
  * Создание мира вынесено из world.ts: там состояние забега и операции над
@@ -87,6 +87,7 @@ export const DEFAULT_SIM_CONFIG: SimConfig = {
   maxProjectiles: 512,
   maxGems: 256,
   progressionEnabled: true,
+  lootEnabled: true,
   player: {
     radius: 10,
     maxHp: 100,
@@ -122,7 +123,11 @@ export interface CreateWorldOptions {
 }
 
 export function createWorld(options: CreateWorldOptions): World {
-  const config: SimConfig = { ...DEFAULT_SIM_CONFIG, ...options.config };
+  const config: SimConfig = {
+    ...DEFAULT_SIM_CONFIG,
+    ...options.config,
+    lootEnabled: options.config?.lootEnabled ?? options.config?.progressionEnabled ?? DEFAULT_SIM_CONFIG.lootEnabled,
+  };
   const { maxEnemies, maxProjectiles } = config;
 
   const scale = config.unitScale;
@@ -219,9 +224,9 @@ export function createWorld(options: CreateWorldOptions): World {
     },
     enemies: createEnemyPool(maxEnemies),
     projectiles: createProjectilePool(maxProjectiles),
-    gems: createGemPool(config.progressionEnabled ? config.maxGems : 1),
+    gems: createGemPool(config.lootEnabled ? config.maxGems : 1),
     gemMergeCursor: 0,
-    pickups: createPickupPool(config.progressionEnabled ? MAX_PICKUPS : 1),
+    pickups: createPickupPool(config.lootEnabled ? MAX_PICKUPS : 1),
     // Окно сетки накрывает радиус удержания целиком: всё, что дальше, живёт
     // считанные тики и попадает в краевые клетки без вреда для запросов.
     enemyGrid: new SpatialGrid(
@@ -254,6 +259,7 @@ export function createWorld(options: CreateWorldOptions): World {
     // молча отбрасываются. В игре это промахи снарядов сквозь врагов, в
     // замере — заниженная стоимость коллизий, то есть враньё в отчёте.
     queryBuffer: new Int32Array(maxEnemies),
+    cheats: { ...NO_CHEATS },
   };
 }
 

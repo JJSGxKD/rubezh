@@ -17,7 +17,12 @@ const schema = z.object({
    * выключено, а переключатель остаётся — выключить можно всегда.
    */
   enabled: z.nullable(z.boolean()),
-  recordRuns: z.boolean(),
+  /**
+   * `null` — не трогал: запись идёт вместе с умолчанием диагностики. Тестер,
+   * которому диагностику включили за него, должен присылать и запись забега,
+   * а не узнавать о переключателе, когда баг уже случился.
+   */
+  recordRuns: z.nullable(z.boolean()),
   fpsOverlay: z.boolean(),
 });
 
@@ -43,7 +48,7 @@ export const useDiagnostics = create<DiagnosticsStore>((set, get) => ({
     const stored = value().read();
     set({
       enabled: stored.enabled ?? defaultEnabled,
-      recordRuns: stored.recordRuns,
+      recordRuns: stored.recordRuns ?? defaultEnabled,
       fpsOverlay: stored.fpsOverlay,
     });
   },
@@ -72,7 +77,7 @@ function value(): ReturnType<typeof createPersistedValue<StoredDiagnostics>> {
     storage: useShell.getState().storage,
     key: DIAGNOSTICS_KEY,
     schema,
-    fallback: { enabled: null, recordRuns: false, fpsOverlay: false },
+    fallback: { enabled: null, recordRuns: null, fpsOverlay: false },
     onBroken: (key, reason) => reportError("diagnostics", `${key}: ${reason}`),
   });
 }

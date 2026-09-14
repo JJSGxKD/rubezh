@@ -2,7 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { DomainError } from "../../common/domain-error";
 import type { TelegramPlayer } from "./telegram-init-data";
 import { DIFFICULTIES, PLAYTEST_STORE, type Difficulty, type PlaytestStore, type StoredRun } from "./playtest.store";
-import type { RunSubmission } from "./dto/run-submission.dto";
+import type { RunSubmission, SessionReport, StressReport } from "./dto/run-submission.dto";
+import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store";
 
 /**
  * Сохранения и лидерборд плейтеста. Антифрода нет сознательно: это временная
@@ -27,6 +28,8 @@ export interface SubmitResult {
   bestSurvivalSec: number;
   isNewBest: boolean;
   rank: number | null;
+  /** `false` — забег с читами без права учесть его: ни рейтинг, ни статистика не тронуты */
+  recorded: boolean;
 }
 
 export interface LeaderboardView {
@@ -55,15 +58,79 @@ export interface ProfileView {
 
 @Injectable()
 export class PlaytestService {
-  constructor(@Inject(PLAYTEST_STORE) private readonly store: PlaytestStore) {}
+  constructor(
+    @Inject(PLAYTEST_STORE) private readonly store: PlaytestStore,
+    @Inject(PLAYTEST_STATS_STORE) private readonly statsStore: PlaytestStatsStore,
+  ) {}
 
-  async submitRun(player: TelegramPlayer, submission: RunSubmission, nowMs: number): Promise<SubmitResult> {
+  /**
+   * `admin` решает контроллер по Telegram ID, а не клиент: забег с читами
+   * попадает в рейтинг, только если администратор явно попросил об этом.
+   */
+  async submitRun(
+    player: TelegramPlayer,
+    submission: RunSubmission,
+    nowMs: number,
+    admin = false,
+  ): Promise<SubmitResult> {
     return this.guarded(async () => {
+      const { cheats, countInRating, ...run } = submission;
+      if (cheats && !(admin && countInRating)) {
+        const [best, rank] = await Promise.all([
+          this.store.best(run.difficultyId, player.id),
+          this.store.rank(run.difficultyId, player.id),
+        ]);
+        return { bestSurvivalSec: best ?? 0, isNewBest: false, rank, recorded: false };
+      }
+
       // Имя обновляется при каждом забеге: игрок мог сменить его в Telegram.
       await this.store.savePlayer(player);
-      const recorded = await this.store.recordRun(player.id, { ...submission, at: nowMs });
-      const rank = await this.store.rank(submission.difficultyId, player.id);
-      return { bestSurvivalSec: recorded.bestSurvivalSec, isNewBest: recorded.isNewBest, rank };
+      const stored = { ...run, at: nowMs };
+      const recorded = await this.store.recordRun(player.id, stored);
+      if (!recorded.duplicate) await this.statsStore.recordRun(player.id, stored, nowMs);
+      const rank = await this.store.rank(run.difficultyId, player.id);
+      return { bestSurvivalSec: recorded.bestSurvivalSec, isNewBest: recorded.isNewBest, rank, recorded: true };
+    });
+  }
+
+  async recordSession(player: TelegramPlayer, report: SessionReport, nowMs: number): Promise<void> {
+    await this.guarded(async () => {
+      await this.store.savePlayer(player);
+      await this.statsStore.recordSession(player.id, report, nowMs);
+    });
+  }
+
+  /**
+   * Итог стресс-теста. Кадры по секундам не хранятся: сводке и разбору по
+   * устройствам хватает пика и причины остановки, а таймлайн на сотни корзин
+   * при каждом прогоне раздул бы Redis плейтеста без пользы.
+   */
+  async recordStress(player: TelegramPlayer, report: StressReport, nowMs: number): Promise<{ recorded: boolean }> {
+    return this.guarded(async () => {
+      const { report: bench, verdict, reportId } = report.submission;
+      const totals = bench.totals;
+      const recorded = await this.statsStore.recordStress(
+        player.id,
+        {
+          reportId,
+          build: report.build,
+          mode: bench.profile.mode,
+          loadout: bench.profile.loadout,
+          outcome: bench.stoppedBy ?? "duration",
+          device: report.device,
+          peakObjects: Math.round(totals.peakObjects ?? totals.peakLoad),
+          peakEnemies: Math.round(totals.peakLoad),
+          peakProjectiles: Math.round(totals.peakProjectiles ?? 0),
+          avgFps: round1(totals.avgFps),
+          p95FrameMs: round1(totals.p95FrameMs),
+          displayHz: totals.displayHz ?? null,
+          durationSec: round1(totals.durationSec),
+          interruptions: bench.interruptions ?? 0,
+          breakingLoad: verdict.breakingPoint === null ? null : Math.round(verdict.breakingPoint.load),
+        },
+        nowMs,
+      );
+      return { recorded };
     });
   }
 
@@ -125,4 +192,8 @@ export class PlaytestService {
       throw new StoreUnavailableError();
     }
   }
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
 }

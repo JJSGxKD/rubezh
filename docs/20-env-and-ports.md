@@ -99,12 +99,12 @@
 | 8. Платежи | webhook-секрет, RU-эквайринг | из кабинета провайдера |
 | 9. Реклама | `ADS_SESSION_SECRET`, ключи сетей | из кабинетов сетей; порядок и активность сетей — данные в БД, не переменные |
 | 10. Наблюдаемость | `LOG_LEVEL`, треды Telegram, Sentry, Grafana | id тредов — из супергруппы алертов |
-| 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md`. `ADMIN_TELEGRAM_IDS` используется **с этапа 2** — администраторы выгрузки данных через бота (`28-diagnostics.md` §6.1.1) |
+| 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md`. `ADMIN_TELEGRAM_IDS` используется **с этапа 2**: режим разработчика и забеги с читами в рейтинге плейтеста (`26-stage2-plan.md`, WP14), затем выгрузка данных через бота (`28-diagnostics.md` §6.1.1). Цифры через запятую, мусор — бэкенд не стартует |
 | 12. Программы роста и аналитика | домен редиректа, TTL клика, секрет подписи шеринга, кеш карточек, read-only пользователь Grafana, срок хранения сырых персональных данных | `22-analytics-and-metrics.md`, `23-referral-and-partner-program.md`, `24-attribution-and-sharing.md` |
 | 13. Публичные для клиента | `VITE_*` | только не-секреты |
 | 14. Стенд FPS-испытаний | `VITE_BENCH_ENABLED`, `VITE_BENCH_INGEST_*`, `BENCH_INGEST_*`, `BENCH_REPORTS_DIR` | `25-week1-fps-trials.md` §2.1; временная группа этапа 1. На этапе 2 заменяется группой «Диагностика и телеметрия»: приёмники, ключ псевдонимизации выгрузок, выключатель выгрузки через бота — состав в `28-diagnostics.md` §7 |
 | 15. CDN | ключ API Bunny.net для сброса кеша после деплоя | **только секреты CI**, на сервере не нужен (`26-stage2-plan.md`, WP10) |
-| 16. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | временная группа закрытого теста (`26-stage2-plan.md`, WP13). Игрок проверяется подписью initData токеном `TELEGRAM_BOT_TOKEN` из группы 7; вход без подписи — только `NODE_ENV=development`, иначе бэкенд не стартует |
+| 16. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_ENABLED`, `PLAYTEST_STATS_CHAT_ID`, `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Игрок проверяется подписью initData токеном `TELEGRAM_BOT_TOKEN` из группы 7; вход без подписи — только `NODE_ENV=development`, иначе бэкенд не стартует. `PLAYTEST_STATS_*` — сводка статистики картинкой в чат администраторов: включённая без чата или токена не стартует |
 
 `VITE_API_URL` пустой по умолчанию: собранный клиент ходит в API на свой же
 домен, маршрут `/api` держит Caddy. Отдельный адрес задаётся, только если API
@@ -264,6 +264,16 @@ pnpm tunnel
 `VITE_PLAYTEST_DEV_USER="dev-1:Разработчик"` — клиент подставит заголовок
 вместо подписи. Обе переменные только для dev: бэкенд с `PLAYTEST_DEV_AUTH`
 вне `NODE_ENV=development` не стартует, а сборка клиента заголовок не шлёт.
+
+Сводка статистики в чат администраторов (`21-diagrams.md` §4.12) включается
+на **одной** машине: `PLAYTEST_STATS_ENABLED="true"` и
+`PLAYTEST_STATS_CHAT_ID` — id группы, куда добавлен бот. Бот читает команды
+long polling'ом, и два бэкенда на одном токене без общего Redis мешают друг
+другу: Telegram отвечает второму `409`, тот ждёт и пишет об этом в лог. У
+бота с вебхуком `getUpdates` не работает вовсе. Картинка рисуется системными
+шрифтами (Segoe UI на Windows); в Linux-контейнере без шрифтов с кириллицей
+текст на ней не появится — туда ставится `fonts-dejavu-core`, а главное
+всё равно продублировано подписью к фото.
 
 **Прокси на API поднимается только на время испытаний.** Он нужен, чтобы
 телефон мог отправить отчёт прогона (`25-week1-fps-trials.md` §2.1), и это

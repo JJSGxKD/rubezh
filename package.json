@@ -24,7 +24,8 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "balance:sim": "vitest run --config vitest.balance.config.ts",
-    "budget": "node scripts/bundle-budget.mjs"
+    "budget": "node scripts/bundle-budget.mjs",
+    "docs:check": "node scripts/docs-check.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.70.0",
