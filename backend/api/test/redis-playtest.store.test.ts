@@ -2,6 +2,7 @@ import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config";
 import { closeRedis, createPlaytestRedis } from "../src/modules/playtest/playtest-redis";
+import { RedisStatsBotLocks } from "../src/modules/playtest/playtest-stats.bot";
 import type { StoredRun } from "../src/modules/playtest/playtest.store";
 import { RedisPlaytestStatsStore } from "../src/modules/playtest/redis-playtest-stats.store";
 import { RedisPlaytestStore } from "../src/modules/playtest/redis-playtest.store";
@@ -138,6 +139,29 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
       reports: 1,
       byOs: { android: { reports: 1, totalPeak: 900, verdicts: { ok: 1 } } },
     });
+  });
+
+  it("держит одного читателя обновлений бота и отдаёт роль только владелец", async () => {
+    const locks = new RedisStatsBotLocks(redis);
+    expect(await locks.holdPoller("a", 60_000)).toBe(true);
+    expect(await locks.holdPoller("b", 60_000)).toBe(false);
+    // Продление своим владельцем — не захват заново.
+    expect(await locks.holdPoller("a", 60_000)).toBe(true);
+    await locks.releasePoller("b");
+    expect(await locks.holdPoller("b", 60_000)).toBe(false);
+    await locks.releasePoller("a");
+    expect(await locks.holdPoller("b", 60_000)).toBe(true);
+
+    expect(await locks.readOffset()).toBeNull();
+    await locks.saveOffset(42);
+    expect(await locks.readOffset()).toBe(42);
+
+    expect(await locks.claimDaily("2026-09-14")).toBe(true);
+    expect(await locks.claimDaily("2026-09-14")).toBe(false);
+    await locks.releaseDaily("2026-09-14");
+    expect(await locks.claimDaily("2026-09-14")).toBe(true);
+    expect(await locks.claimCommand("-100", 20)).toBe(true);
+    expect(await locks.claimCommand("-100", 20)).toBe(false);
   });
 
   it("ставит срок жизни на ключи: данные плейтеста исчезают сами", async () => {

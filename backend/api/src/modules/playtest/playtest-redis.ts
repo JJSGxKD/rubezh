@@ -1,4 +1,4 @@
-import { Inject, Injectable, type OnModuleDestroy } from "@nestjs/common";
+import { Inject, Injectable, type OnApplicationShutdown } from "@nestjs/common";
 import { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config";
 
@@ -20,11 +20,16 @@ export function createPlaytestRedis(config: AppConfig): Redis {
   });
 }
 
+/**
+ * Подключение закрывается последним — на `onApplicationShutdown`, а не
+ * `onModuleDestroy`: бот сводки на своём `onModuleDestroy` ещё отпускает лок
+ * в Redis, а порядок хуков внутри одной фазы Nest не гарантирует.
+ */
 @Injectable()
-export class PlaytestRedisLifecycle implements OnModuleDestroy {
+export class PlaytestRedisLifecycle implements OnApplicationShutdown {
   constructor(@Inject(PLAYTEST_REDIS) private readonly redis: Redis) {}
 
-  async onModuleDestroy(): Promise<void> {
+  async onApplicationShutdown(): Promise<void> {
     await closeRedis(this.redis);
   }
 }
