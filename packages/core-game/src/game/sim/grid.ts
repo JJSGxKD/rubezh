@@ -50,6 +50,23 @@ export class SpatialGrid {
     this.items = new Int32Array(capacity);
   }
 
+  /** окно сетки после последней перестройки — для отладочной отрисовки */
+  get left(): number {
+    return this.originX;
+  }
+
+  get top(): number {
+    return this.originY;
+  }
+
+  get cell(): number {
+    return this.cellSize;
+  }
+
+  get columns(): number {
+    return this.cols;
+  }
+
   /**
    * Перестроить сетку по текущим позициям вокруг центра. Сортировка
    * подсчётом: два прохода по массиву, без аллокаций и без сравнения

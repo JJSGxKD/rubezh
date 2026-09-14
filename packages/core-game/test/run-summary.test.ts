@@ -326,6 +326,7 @@ describe("локальный рекорд", () => {
       deathCause: null,
       distance: 0,
       peakEnemies: 0,
+      cheats: false,
     };
   }
 

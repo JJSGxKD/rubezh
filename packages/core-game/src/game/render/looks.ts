@@ -106,3 +106,21 @@ export const WORLD_COLORS = {
   dynamiteBand: 0x3a1414,
   dynamiteSpark: 0xffe066,
 } as const;
+
+/**
+ * Отладочная отрисовка режима разработчика. Цвета нарочно «инженерные» —
+ * бирюза, фуксия, лайм: их нельзя спутать ни с врагом, ни с эффектом игры.
+ */
+export const DEBUG_COLORS = {
+  hitboxEnemy: 0x39ff88,
+  hitboxElite: 0xffe14d,
+  hitboxProjectile: 0xff4dd2,
+  hitboxPlayer: 0xffffff,
+  pickupRadius: 0x4de1ff,
+  weaponRadius: 0xff9a3c,
+  weaponRange: 0xffe066,
+  spawnRing: 0xff4d4d,
+  retentionRing: 0x9b6bff,
+  bounds: 0xff4dd2,
+  grid: 0x4de1ff,
+} as const;

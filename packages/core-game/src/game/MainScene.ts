@@ -12,14 +12,17 @@ import type { RunBus } from "../engine/run-bus";
 import {
   RUN_SNAPSHOT_FORMAT,
   type HudSnapshot,
+  type RunDevCommand,
+  type RunDevOptions,
   type RunInspection,
   type RunPauseReason,
   type RunSnapshot,
 } from "../run-api";
+import { applyDevCommand } from "./run/dev-commands";
 import { inspectWorld } from "./run/inspect";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
-import { createWorld, TICK_SEC, type World } from "./sim/world";
-import { stepWorld, type SimInput } from "./sim/step";
+import { createWorld, hasActiveCheats, TICK_SEC, type World } from "./sim/world";
+import { IDLE_INPUT, stepWorld, type SimInput } from "./sim/step";
 import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
 import { RunCamera } from "./render/run-camera";
@@ -46,6 +49,12 @@ const MAX_STEPS_PER_FRAME = 5;
  */
 const HUD_INTERVAL_MS = 100;
 
+/** Окно технической сводки: четыре раза в секунду читается глазом и не дёргает React. */
+const DEV_INFO_INTERVAL_MS = 250;
+
+/** Сколько тиков за раз можно прошагать на паузе — десять секунд забега. */
+const MAX_DEV_STEP_TICKS = 600;
+
 /**
  * Состояние забега. Пока экран не «running», мир не делает ни одного шага:
  * пауза, выбор улучшения и смерть обязаны быть детерминированными — иначе
@@ -65,6 +74,10 @@ export interface MainSceneData {
   bus: RunBus;
   /** продолжить забег из снимка вместо нового */
   resume?: RunSnapshot;
+  /** забег разработчика; без поля команды разработчика не работают */
+  dev?: RunDevOptions;
+  /** FPS тестировщика — техническая сводка идёт и без режима разработчика */
+  fpsOverlay?: boolean;
 }
 
 /**
@@ -96,6 +109,9 @@ export class MainScene extends Phaser.Scene {
   private reportedWave = -1;
   /** сцена собрана целиком; до этого команды и кадры её не трогают */
   private ready = false;
+  /** в забеге включали читы — пометка не снимается до конца забега */
+  private cheatsUsed = false;
+  private devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
 
   constructor() {
     super("main");
@@ -111,6 +127,8 @@ export class MainScene extends Phaser.Scene {
     this.reportedWave = -1;
     this.phase = "running";
     this.ready = false;
+    this.cheatsUsed = resume?.cheats === true;
+    this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
 
     const mapId = resume?.mapId ?? data.mapId;
     const difficulty = findDifficulty(resume?.difficultyId ?? data.difficultyId) ?? findDifficulty(DEFAULT_DIFFICULTY_ID);
@@ -149,7 +167,9 @@ export class MainScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     });
 
+    this.applyDev(data.dev);
     this.ready = true;
+    if (resume === undefined) for (const command of data.dev?.start ?? []) this.devCommand(command);
     this.emitHud();
     this.reportWave();
     if (resume !== undefined) this.enterRestored();
@@ -166,23 +186,29 @@ export class MainScene extends Phaser.Scene {
       this.accumulatorMs = 0;
       this.syncCamera();
       this.worldRenderer.sync(0);
+      this.trackDevInfo(deltaMs, 0, 0);
       return;
     }
 
     const input = this.readInput();
+    const dev = this.sceneData.dev;
 
     // Ограничение сверху: после сворачивания приложения дельта прилетает
-    // огромная, и без обрезки игрок «телепортируется» на возврате.
-    this.accumulatorMs += Math.min(deltaMs, TICK_MS * MAX_STEPS_PER_FRAME);
+    // огромная, и без обрезки игрок «телепортируется» на возврате. Скорость
+    // времени разработчика умножает реальное время, а не шаг: симуляция
+    // по-прежнему идёт фиксированными тиками.
+    this.accumulatorMs += Math.min(deltaMs * (dev?.timeScale ?? 1), TICK_MS * MAX_STEPS_PER_FRAME);
 
+    const measure = this.wantsDevInfo();
+    const simStartedAt = measure ? performance.now() : 0;
     let steps = 0;
     while (this.accumulatorMs >= TICK_MS && steps < MAX_STEPS_PER_FRAME) {
-      this.spawner.update(this.world, TICK_SEC);
-      stepWorld(this.world, input);
+      this.step(input);
       this.accumulatorMs -= TICK_MS;
       steps++;
       if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
     }
+    this.trackDevInfo(deltaMs, measure ? performance.now() - simStartedAt : 0, steps);
 
     // Камера живёт в реальном времени кадра, а не в тиках симуляции: она к
     // исходу забега отношения не имеет и на детерминизм не влияет.
@@ -257,6 +283,34 @@ export class MainScene extends Phaser.Scene {
     this.scene.restart(next);
   }
 
+  /**
+   * Настройки режима разработчика на ходу. Забег, начатый без режима, так и
+   * остаётся обычным: включить читы посреди честного забега нельзя.
+   */
+  setDev(options: RunDevOptions): void {
+    if (this.sceneData.dev === undefined) return;
+    this.sceneData.dev = options;
+    if (this.ready) this.applyDev(options);
+  }
+
+  /** Разовое действие разработчика — между кадрами, то есть на границе тика. */
+  devCommand(command: RunDevCommand): void {
+    if (!this.ready || this.sceneData.dev === undefined || this.phase === "dead") return;
+
+    if (command.kind === "stepTicks") {
+      this.stepOnPause(command.ticks);
+      return;
+    }
+
+    const outcome = applyDevCommand(this.world, command);
+    if (!outcome.applied) return;
+    if (outcome.cheat) this.cheatsUsed = true;
+    this.worldRenderer.sync(0);
+    this.emitHud();
+    this.reportWave();
+    if (isAwaitingChoice(this.world)) this.enterChoice();
+  }
+
   /** Характеристики забега для листа «Характеристики». */
   inspect(): RunInspection | null {
     return this.ready ? inspectWorld(this.world) : null;
@@ -284,10 +338,91 @@ export class MainScene extends Phaser.Scene {
         passives: this.slotsOf("passives"),
       },
       world: captureWorld(world, this.spawner),
+      ...(this.cheatsUsed ? { cheats: true } : {}),
     };
   }
 
   // --- Внутреннее -----------------------------------------------------------
+
+  /** Один тик: директор спавна и шаг мира. Пауза спавна разработчика — пропуск директора. */
+  private step(input: SimInput): void {
+    if (this.sceneData.dev?.cheats.spawnPaused !== true) this.spawner.update(this.world, TICK_SEC);
+    stepWorld(this.world, input);
+  }
+
+  private applyDev(options: RunDevOptions | undefined): void {
+    if (options === undefined) return;
+    const world = this.world;
+    world.cheats.godMode = options.cheats.godMode;
+    world.cheats.oneHitKill = options.cheats.oneHitKill;
+    world.cheats.damageMul = options.cheats.damageMul;
+    world.cheats.moveSpeedMul = options.cheats.moveSpeedMul;
+    world.cheats.freezeEnemies = options.cheats.freezeEnemies;
+    // Замедление времени — тоже преимущество: на четверти скорости от толпы
+    // уворачивается кто угодно. Пауза спавна — тем более.
+    if (hasActiveCheats(world.cheats) || options.cheats.spawnPaused || options.timeScale !== 1) {
+      this.cheatsUsed = true;
+    }
+    this.worldRenderer.setDevVisuals(options.visuals);
+  }
+
+  /** Шаги на паузе: разглядеть телеграф или столкновение потиково. */
+  private stepOnPause(ticks: number): void {
+    if (this.phase !== "paused") return;
+    const count = Math.max(1, Math.min(MAX_DEV_STEP_TICKS, Math.round(ticks)));
+    for (let i = 0; i < count; i++) {
+      this.step(IDLE_INPUT);
+      if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
+    }
+    this.worldRenderer.sync(1);
+    this.emitHud();
+    this.reportWave();
+    if (!this.world.player.alive) {
+      this.finishRun("died");
+      return;
+    }
+    if (isAwaitingChoice(this.world)) this.enterChoice();
+  }
+
+  private wantsDevInfo(): boolean {
+    return this.sceneData.fpsOverlay === true || this.sceneData.dev?.visuals.techInfo === true;
+  }
+
+  private trackDevInfo(deltaMs: number, simMs: number, steps: number): void {
+    if (!this.wantsDevInfo()) return;
+    const window = this.devWindow;
+    window.elapsedMs += deltaMs;
+    window.frames++;
+    window.simMs += simMs;
+    window.steps += steps;
+    if (window.elapsedMs < DEV_INFO_INTERVAL_MS) return;
+
+    const world = this.world;
+    const scale = world.config.unitScale;
+    this.sceneData.bus.emit("devInfo", {
+      fps: (window.frames * 1000) / window.elapsedMs,
+      frameMs: window.elapsedMs / window.frames,
+      simMs: window.steps > 0 ? window.simMs / window.steps : 0,
+      stepsPerFrame: window.steps / window.frames,
+      tick: world.stats.tick,
+      elapsedSec: world.stats.elapsedSec,
+      seed: this.seed,
+      enemies: world.enemies.aliveCount,
+      projectiles: world.projectiles.aliveCount,
+      gems: world.gems.aliveCount,
+      pickups: countAlive(world.pickups.alive),
+      segment: world.difficulty.segment,
+      hpMul: world.difficulty.hpMul,
+      damageMul: world.difficulty.damageMul,
+      maxAlive: world.difficulty.maxAlive,
+      zoom: this.runCamera.zoom / scale,
+      playerX: world.player.x / scale,
+      playerY: world.player.y / scale,
+      timeScale: this.sceneData.dev?.timeScale ?? 1,
+      cheats: this.cheatsUsed,
+    });
+    this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
+  }
 
   /**
    * Перенести снимок в только что созданный мир. Снимок с другим контентом
@@ -359,6 +494,7 @@ export class MainScene extends Phaser.Scene {
       outcome,
       startingWeaponId: this.startingWeaponId(),
       contentHash: CONTENT_HASH,
+      cheats: this.cheatsUsed,
     });
 
     this.emitHud();
@@ -442,4 +578,10 @@ export class MainScene extends Phaser.Scene {
     const first = this.world.loadout.weapons[0];
     return first === undefined ? "" : this.world.weaponTypes[first.typeIndex].id;
   }
+}
+
+function countAlive(alive: Uint8Array): number {
+  let count = 0;
+  for (let i = 0; i < alive.length; i++) count += alive[i];
+  return count;
 }

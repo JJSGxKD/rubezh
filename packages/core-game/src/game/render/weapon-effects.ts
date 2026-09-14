@@ -26,6 +26,8 @@ export class WeaponEffects {
   private readonly auraFlashTick: number[] = [];
   private readonly bolts: { graphics: Phaser.GameObjects.Graphics; startTick: number }[] = [];
   private nextBolt = 0;
+  /** режим разработчика выключает эффекты — сравнить, как читается бой без них */
+  enabled = true;
 
   constructor(scene: Phaser.Scene, world: World, layer: Phaser.GameObjects.Container) {
     this.scene = scene;
@@ -36,6 +38,7 @@ export class WeaponEffects {
 
   /** Удар молнии — вызывается рендером на событие удара из симуляции. */
   strike(x: number, y: number, radius: number, tick: number): void {
+    if (!this.enabled) return;
     while (this.bolts.length < MAX_BOLTS) {
       const graphics = this.scene.add.graphics().setDepth(4).setVisible(false);
       this.layer.add(graphics);
@@ -49,6 +52,14 @@ export class WeaponEffects {
   }
 
   sync(t: number): void {
+    if (!this.enabled) {
+      for (const ring of this.auraRings) if (ring.visible) ring.setVisible(false);
+      for (const bolt of this.bolts) {
+        bolt.graphics.setVisible(false);
+        bolt.startTick = -1;
+      }
+      return;
+    }
     this.syncAuras(t);
     const tick = this.world.stats.tick;
     for (const bolt of this.bolts) {

@@ -58,6 +58,12 @@ export class CombatFeedback {
   private readonly numberX: Float32Array = new Float32Array(MAX_NUMBERS);
   private readonly numberY: Float32Array = new Float32Array(MAX_NUMBERS);
   private nextNumber = 0;
+  /**
+   * Режим разработчика выключает числа и вспышки. Память здоровья при этом
+   * ведётся дальше: включённые обратно, они не покажут урон, накопленный за
+   * время выключения, одним огромным числом.
+   */
+  enabled = true;
 
   private readonly bursts: Phaser.GameObjects.Image[] = [];
   private readonly burstBornTick: Int32Array = new Int32Array(MAX_BURSTS).fill(-1);
@@ -110,7 +116,7 @@ export class CombatFeedback {
       if (!alive && wasAlive) {
         this.lastAlive[i] = 0;
         // Самоподрыв и прочий уход без попадания — не убийство игроком.
-        if (tick - enemies.hitTick[i] > KILL_HIT_WINDOW_TICKS) continue;
+        if (!this.enabled || tick - enemies.hitTick[i] > KILL_HIT_WINDOW_TICKS) continue;
         const type = this.world.enemyTypes[enemies.type[i]];
         this.startBurst(enemies.x[i], enemies.y[i], type.radius, this.colorByType[enemies.type[i]] ?? 0xffffff, tick);
         if (created < MAX_NEW_NUMBERS_PER_FRAME && this.lastHp[i] > 0) {
@@ -123,7 +129,7 @@ export class CombatFeedback {
 
       if (enemies.hitTick[i] !== this.lastHitTick[i]) {
         const dealt = this.lastHp[i] - enemies.hp[i];
-        if (dealt > 0 && created < MAX_NEW_NUMBERS_PER_FRAME) {
+        if (this.enabled && dealt > 0 && created < MAX_NEW_NUMBERS_PER_FRAME) {
           const type = this.world.enemyTypes[enemies.type[i]];
           this.startNumber(enemies.x[i], enemies.y[i] - type.radius, dealt, false, tick);
           created++;

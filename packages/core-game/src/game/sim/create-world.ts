@@ -21,7 +21,7 @@ import { BASE_DIFFICULTY, findDifficultyProblems } from "./difficulty";
 import { findDropsContentProblems } from "./gems";
 import { MAX_PICKUPS } from "./pickups";
 import { createEnemyPool, createGemPool, createPickupPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
-import type { PlayerConfig, SimConfig, World } from "./world";
+import { NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
 
 /**
  * Создание мира вынесено из world.ts: там состояние забега и операции над
@@ -259,6 +259,7 @@ export function createWorld(options: CreateWorldOptions): World {
     // молча отбрасываются. В игре это промахи снарядов сквозь врагов, в
     // замере — заниженная стоимость коллизий, то есть враньё в отчёте.
     queryBuffer: new Int32Array(maxEnemies),
+    cheats: { ...NO_CHEATS },
   };
 }
 

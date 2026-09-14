@@ -29,6 +29,8 @@ export function createRunEngine(): RunEngine {
           ? {}
           : { startingWeaponId: options.startingWeaponId }),
         ...(options.resume === undefined ? {} : { resume: options.resume }),
+        ...(options.dev === undefined ? {} : { dev: options.dev }),
+        fpsOverlay: options.diagnostics.fpsOverlay,
         bus,
       };
       host.game.scene.add("main", MainScene, true, sceneData);
@@ -70,6 +72,12 @@ export function createRunEngine(): RunEngine {
         },
         inspect() {
           return scene()?.inspect() ?? null;
+        },
+        setDev(dev) {
+          scene()?.setDev(dev);
+        },
+        devCommand(command) {
+          scene()?.devCommand(command);
         },
         destroy(): void {
           bus.clear();

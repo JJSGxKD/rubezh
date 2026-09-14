@@ -350,4 +350,5 @@ const SAMPLE_RESULT: RunResult = {
   deathCause: "dasher_wolf",
   distance: 18400,
   peakEnemies: 212,
+  cheats: false,
 };

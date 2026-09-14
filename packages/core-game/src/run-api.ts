@@ -162,6 +162,11 @@ export interface RunSnapshot {
   summary: RunSnapshotSummary;
   /** состояние мира; формат знает только движок */
   world: unknown;
+  /**
+   * Забег уже помечен как с читами. Необязательное: снимок прошлой сборки поля
+   * не знает, и это обычный забег — формат из-за него не меняется.
+   */
+  cheats?: boolean;
 }
 
 export interface RunSnapshotSummary {
@@ -195,6 +200,8 @@ export interface RunOptions {
    * берутся из снимка, а забег стартует на паузе с причиной `restored`.
    */
   resume?: RunSnapshot;
+  /** забег разработчика; без поля — обычный забег, команды разработчика не работают */
+  dev?: RunDevOptions;
 }
 
 export interface RunDiagnosticsOptions {
@@ -213,6 +220,8 @@ export interface RunEvents {
   levelUp: { level: number; options: UpgradeOption[]; queued: number };
   paused: { reason: RunPauseReason; elapsedSec: number };
   resumed: { elapsedSec: number };
+  /** техническая сводка — только с `diagnostics.fpsOverlay` или `dev.visuals.techInfo` */
+  devInfo: RunDevInfo;
   /** забег кончился смертью */
   finished: RunResult;
   /** игрок сдался на экране паузы */
@@ -235,7 +244,113 @@ export interface RunSession {
   snapshot(): RunSnapshot | null;
   /** характеристики забега; `null`, пока сцена не создана */
   inspect(): RunInspection | null;
+  /**
+   * Настройки режима разработчика на ходу — с паузы и перед «Ещё раз». У
+   * забега, начатого без `dev`, команда ничего не делает: режим не
+   * включается посреди обычного забега.
+   */
+  setDev(options: RunDevOptions): void;
+  /** разовое действие разработчика на границе тика */
+  devCommand(command: RunDevCommand): void;
   destroy(): void;
+}
+
+/**
+ * Режим разработчика (docs/26-stage2-plan.md, WP14): отладочная отрисовка,
+ * время и читы. Доступ решает оболочка по ответу сервера — движок доверяет
+ * тому, что пришло в `RunOptions.dev`.
+ */
+export interface RunDevOptions {
+  visuals: RunDevVisuals;
+  cheats: RunDevCheats;
+  /**
+   * Скорость времени: 1 — обычная, 0.25 — замедление вчетверо. Сверху
+   * ограничена потолком шагов за кадр — ускорение не бывает дороже пяти шагов.
+   */
+  timeScale: number;
+  /**
+   * Команды на старте нового забега и на «Ещё раз» — «весь арсенал», «сразу
+   * десятая минута». Продолженный из снимка забег их не получает: он уже шёл.
+   */
+  start: RunDevCommand[];
+}
+
+export interface RunDevVisuals {
+  /** круги столкновений игрока, врагов и снарядов */
+  hitboxes: boolean;
+  /** радиус подбора кристаллов и подборов */
+  pickupRadius: boolean;
+  /** площадь ауры, кольцо оберегов, дальность стрельбы */
+  weaponRadii: boolean;
+  /** кольца спавна и удержания врагов */
+  spawnRings: boolean;
+  /** границы карты, если они есть */
+  bounds: boolean;
+  /** клетки сетки столкновений вокруг игрока */
+  grid: boolean;
+  /** телеграфы угроз; выключить — сравнить, как читается бой без них */
+  telegraphs: boolean;
+  /** всплывающие числа урона и вспышки гибели */
+  damageNumbers: boolean;
+  /** эффекты оружия: граница ауры, молнии, взрывы */
+  effects: boolean;
+  /** техническая сводка событием `devInfo` */
+  techInfo: boolean;
+}
+
+export interface RunDevCheats {
+  godMode: boolean;
+  oneHitKill: boolean;
+  damageMul: number;
+  moveSpeedMul: number;
+  freezeEnemies: boolean;
+  /** директор спавна стоит: новые враги не приходят */
+  spawnPaused: boolean;
+}
+
+export type RunDevPickup = "medkit" | "magnet" | "dynamite";
+
+export type RunDevCommand =
+  | { kind: "levelUp"; count: number }
+  | { kind: "giveWeapon"; id: string; level: number }
+  | { kind: "givePassive"; id: string; level: number }
+  | { kind: "spawnEnemy"; id: string; count: number }
+  | { kind: "spawnPickup"; pickup: RunDevPickup }
+  | { kind: "spawnGems"; value: number; count: number }
+  | { kind: "killAll" }
+  | { kind: "heal" }
+  | { kind: "jumpToMinute"; minute: number }
+  /** шаг симуляции на паузе — разглядеть телеграф или столкновение по тикам */
+  | { kind: "stepTicks"; ticks: number };
+
+/** Техническая сводка для оверлея разработчика и FPS тестировщика — четыре раза в секунду. */
+export interface RunDevInfo {
+  fps: number;
+  /** среднее время кадра за окно, мс */
+  frameMs: number;
+  /** среднее время одного шага симуляции, мс */
+  simMs: number;
+  /** шагов симуляции за кадр в среднем: больше одного — кадры не успевают */
+  stepsPerFrame: number;
+  tick: number;
+  elapsedSec: number;
+  seed: number;
+  enemies: number;
+  projectiles: number;
+  gems: number;
+  pickups: number;
+  /** отрезок таймлайна и его множители с учётом сложности */
+  segment: number;
+  hpMul: number;
+  damageMul: number;
+  maxAlive: number;
+  zoom: number;
+  /** позиция игрока в игровых единицах */
+  playerX: number;
+  playerY: number;
+  timeScale: number;
+  /** забег уже помечен как с читами */
+  cheats: boolean;
 }
 
 export interface RunEngine {

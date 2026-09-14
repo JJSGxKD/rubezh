@@ -1,11 +1,13 @@
 import Phaser from "phaser";
 import type { EnemyPattern } from "@bh/shared-types";
+import type { RunDevVisuals } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
 import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
 import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
+import { DebugOverlay } from "./debug-overlay";
 import { PickupRenderer } from "./pickups";
 import { ENEMY_LOOKS, enemyColor, WORLD_COLORS } from "./looks";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
@@ -73,6 +75,10 @@ export class WorldRenderer {
   private readonly blastKind: Uint8Array = new Uint8Array(MAX_BLASTS);
   private eventsRead = 0;
   private nextBlast = 0;
+  /** режим разработчика; `null` — обычный забег, всё как у игрока */
+  private visuals: RunDevVisuals | null = null;
+  private debug: DebugOverlay | null = null;
+  private zoom = 1;
 
   constructor(scene: Phaser.Scene, world: World) {
     this.scene = scene;
@@ -127,6 +133,7 @@ export class WorldRenderer {
   applyCamera(x: number, y: number, zoom: number): void {
     const width = this.scene.scale.width;
     const height = this.scene.scale.height;
+    this.zoom = zoom;
 
     this.layer.setScale(zoom);
     this.layer.setPosition(width / 2 - x * zoom, height / 2 - y * zoom);
@@ -160,6 +167,23 @@ export class WorldRenderer {
     );
     this.player.setVisible(this.world.player.alive);
     this.applyPlayerFlash();
+
+    if (this.debug !== null && this.visuals !== null) this.debug.draw(this.visuals, t, this.zoom);
+  }
+
+  /**
+   * Отладочная отрисовка и выключатели эффектов режима разработчика. Оверлей
+   * создаётся по первому включению: обычный забег его не держит.
+   */
+  setDevVisuals(visuals: RunDevVisuals | null): void {
+    this.visuals = visuals;
+    this.feedback.enabled = visuals?.damageNumbers ?? true;
+    this.weaponEffects.enabled = visuals?.effects ?? true;
+    const wantsDebug =
+      visuals !== null &&
+      (visuals.hitboxes || visuals.pickupRadius || visuals.weaponRadii || visuals.spawnRings || visuals.bounds || visuals.grid);
+    if (wantsDebug && this.debug === null) this.debug = new DebugOverlay(this.scene, this.world, this.layer);
+    this.debug?.setVisible(wantsDebug);
   }
 
   /**
@@ -194,6 +218,7 @@ export class WorldRenderer {
     const tick = this.world.stats.tick;
     const playerX = lerp(this.world.player.prevX, this.world.player.x, t);
     const playerY = lerp(this.world.player.prevY, this.world.player.y, t);
+    const telegraphsOn = this.visuals?.telegraphs ?? true;
     this.telegraphs.begin();
 
     for (let i = 0; i < enemies.count; i++) {
@@ -222,6 +247,7 @@ export class WorldRenderer {
       const y = lerp(enemies.prevY[i], enemies.y[i], t);
       sprite.setPosition(x, y);
 
+      if (!telegraphsOn) continue;
       if (type.pattern === "exploder" && enemies.phase[i] === EXPLODER_PHASE.fuse) {
         const progress = 1 - enemies.phaseTimer[i] / type.params.fuseSec;
         this.telegraphs.ring(x, y, type.params.blastRadius, progress);
@@ -313,12 +339,18 @@ export class WorldRenderer {
     const capacity = events.kind.length;
     const first = Math.max(this.eventsRead, events.written - capacity);
     const scale = this.world.config.unitScale;
+    const effectsOn = this.visuals?.effects ?? true;
 
     for (let seq = first; seq < events.written; seq++) {
       const slot = seq % capacity;
       const kind = events.kind[slot];
       if (kind === SIM_EVENT.playerHit) {
         this.playerHitTick = events.tick[slot];
+        continue;
+      }
+      // Вспышка персонажа — обратная связь, а не эффект: она остаётся.
+      if (!effectsOn) {
+        if (kind === SIM_EVENT.heal) this.playerHealTick = events.tick[slot];
         continue;
       }
       if (kind === SIM_EVENT.heal) {

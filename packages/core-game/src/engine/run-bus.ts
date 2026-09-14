@@ -18,6 +18,7 @@ export class RunBus {
     levelUp: new Set(),
     paused: new Set(),
     resumed: new Set(),
+    devInfo: new Set(),
     finished: new Set(),
     abandoned: new Set(),
     error: new Set(),

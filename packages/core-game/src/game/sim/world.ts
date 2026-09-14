@@ -212,6 +212,47 @@ export interface World {
   events: SimEvents;
   /** переиспользуемый буфер под результаты запросов к сетке */
   queryBuffer: Int32Array;
+  /** читы режима разработчика; у обычного забега — нейтральные значения */
+  cheats: WorldCheats;
+}
+
+/**
+ * Читы режима разработчика (docs/26-stage2-plan.md, WP14). Живут в мире, а не
+ * в сцене: урон и скорость считает симуляция, и проверка на границе тика —
+ * единственный способ не разойтись с тем, что видит игрок.
+ *
+ * Забег с любым включённым читом помечается и в рейтинг по умолчанию не
+ * идёт — это решает сцена, а здесь только правила мира.
+ */
+export interface WorldCheats {
+  /** урон по игроку не отнимает здоровья; вспышка попадания остаётся */
+  godMode: boolean;
+  /** любой урон по врагу убивает его */
+  oneHitKill: boolean;
+  /** множитель урона оружия поверх пассивок */
+  damageMul: number;
+  /** множитель скорости бега поверх пассивок */
+  moveSpeedMul: number;
+  /** враги стоят и не атакуют: паттерны не исполняются */
+  freezeEnemies: boolean;
+}
+
+export const NO_CHEATS: Readonly<WorldCheats> = {
+  godMode: false,
+  oneHitKill: false,
+  damageMul: 1,
+  moveSpeedMul: 1,
+  freezeEnemies: false,
+};
+
+export function hasActiveCheats(cheats: WorldCheats): boolean {
+  return (
+    cheats.godMode ||
+    cheats.oneHitKill ||
+    cheats.damageMul !== 1 ||
+    cheats.moveSpeedMul !== 1 ||
+    cheats.freezeEnemies
+  );
 }
 
 /** Ограничить значение границей карты; с бесконечной границей это тождество. */
@@ -282,8 +323,12 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
   // Броня вычитается, но не обнуляет урон: иначе несколько уровней брони
   // делают рой безобидным, и вся кривая сложности перестаёт работать.
   const reduced = Math.max(amount * MIN_DAMAGE_RATIO, amount - world.playerStats.armor);
-  player.hp -= reduced;
-  world.stats.damageTaken += reduced;
+  // Бессмертие не глушит само попадание: разработчику нужно видеть, кто и
+  // когда бьёт, иначе режим проверки телеграфов бесполезен.
+  if (!world.cheats.godMode) {
+    player.hp -= reduced;
+    world.stats.damageTaken += reduced;
+  }
   // Рендер обязан показать момент попадания: полоска здоровья в углу — не
   // обратная связь, игрок смотрит на персонажа, а не на цифры.
   pushSimEvent(world.events, {
