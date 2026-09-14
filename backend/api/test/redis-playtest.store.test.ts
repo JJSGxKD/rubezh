@@ -9,8 +9,9 @@ import { RedisPlaytestStore } from "../src/modules/playtest/redis-playtest.store
 // времени, повтор по `runId`, порядок и детали лидерборда.
 //
 // Идёт только с PLAYTEST_TEST_REDIS_URL — отдельной базой Redis, которую
-// тест очищает целиком: `redis://localhost:6379/15`. В CI Redis пока нет,
-// и там тест пропускается (docs/17-testing-strategy.md §4.2).
+// тест очищает целиком: `redis://localhost:6379/15`. В CI Redis пока не
+// поднят, и там тест пропускается; настоящий Redis в CI по
+// docs/17-testing-strategy.md §4.2 появится вместе с Testcontainers.
 const url = process.env.PLAYTEST_TEST_REDIS_URL ?? "";
 
 function run(runId: string, survivalSec: number, patch: Partial<StoredRun> = {}): StoredRun {
