@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Crown, History, Pause, Skull, Sparkles, Star, Trophy } from "lucide-react";
+import { Crown, History, Layers, Pause, Skull, Sparkles, Star, Trophy } from "lucide-react";
 import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import type { RunSlotState } from "@bh/core-game";
 import {
@@ -138,6 +138,13 @@ export interface LevelUpOverlayProps {
 
 export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   const ready = useTapGuard();
+  const queuedBadge =
+    props.queued > 0 ? (
+      <Badge tone="accent">
+        <Layers size={12} aria-hidden="true" />
+        {t("run.levelUp.queued", { count: props.queued })}
+      </Badge>
+    ) : null;
 
   return (
     <Modal
@@ -145,18 +152,32 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
       icon={<Star size={28} fill="currentColor" />}
       size="l"
     >
-      <p className="-mt-1 mb-2 text-center text-sm text-text-muted">{t("run.levelUp.subtitle")}</p>
-      {props.loadout === undefined ? null : (
-        <div className="mb-3 landscape:mb-2">
-          <SlotSummary weapons={props.loadout.weapons} passives={props.loadout.passives} />
+      {/* На невысоком экране подсказка уходит: что выбирать, говорят сами
+          карточки, а строка нужна третьей карточке. */}
+      <p className="-mt-1 mb-2 text-center text-sm text-text-muted short:hidden">{t("run.levelUp.subtitle")}</p>
+      {/* Сколько выборов ждёт — плашкой в ряду слотов, а не строкой под
+          карточками: в ландшафте отдельная строка уводила модалку в прокрутку. */}
+      {props.loadout === undefined ? (
+        queuedBadge === null ? null : <div className="mb-2 flex justify-center">{queuedBadge}</div>
+      ) : (
+        <div className="mb-3 short:mb-2">
+          <SlotSummary
+            weapons={props.loadout.weapons}
+            passives={props.loadout.passives}
+            {...(queuedBadge === null ? {} : { extra: queuedBadge })}
+          />
         </div>
       )}
       {/*
         В ландшафте карточки идут в ряд, в портрете — столбцом: высота
         ландшафта на телефоне около 360 px, и три карточки столбцом туда не
-        помещаются (docs/27-design-system-and-app-shell.md §5.3). Метка «новое»
-        стоит отдельной строкой: рядом с длинным названием она не давала
-        колонке сжаться, и модалка уезжала в горизонтальную прокрутку.
+        помещаются (docs/27-design-system-and-app-shell.md §5.3).
+
+        Значок, название и метка — одной строкой с переносом, а не столбцом
+        под значком: столбец съедал ширину у описания и строку у высоты, и на
+        экране 360×640 третья карточка уходила под прокрутку. Метка переносится
+        сама, когда рядом с длинным названием ей не хватает места, — колонка
+        при этом сжимается, а не уезжает в горизонтальную прокрутку.
       */}
       <div className="grid gap-2 landscape:grid-cols-3">
         {props.offers.map((offer, index) => {
@@ -165,42 +186,29 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
             <Card
               key={offer.id}
               appearIndex={index}
+              compact
               stripe={kind === "passive" ? "passive" : kind === "weapon" ? "weapon" : "info"}
               onClick={guarded(ready, () => props.onChoose(offer.id))}
             >
-              {/* В ландшафте значок и метка в одну строку: колонка узкая, а
-                  высота экрана на счету. */}
-              <div className="flex items-start gap-3 landscape:flex-col landscape:gap-2">
-                <div className="flex items-center gap-2">
-                  <ItemTile kind={kind} id={offer.refId} />
-                  <span className="hidden landscape:inline">
-                    <OfferTag offer={offer} />
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="landscape:hidden">
-                    <OfferTag offer={offer} />
-                  </span>
-                  <span className="mt-1 block font-display text-base font-bold break-words text-text landscape:mt-0">
-                    {t(offer.nameKey)}
-                  </span>
-                  {/* Описание — только у нового: у уровня к взятому предмету
-                      важнее, что именно поменяется, а описание игрок уже видел. */}
-                  {isNew(offer) || offer.changes.length === 0 ? (
-                    <p className="mt-1 text-xs text-text-muted">{t(offer.descriptionKey)}</p>
-                  ) : null}
-                  <ChangeList changes={offer.changes} />
-                </div>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <ItemTile kind={kind} id={offer.refId} size="s" />
+                <span className="min-w-0 font-display text-base font-bold break-words text-text">
+                  {t(offer.nameKey)}
+                </span>
+                <OfferTag offer={offer} />
               </div>
+              {/* Описание — только у нового: у уровня к взятому предмету
+                  важнее, что именно поменяется, а описание игрок уже видел. */}
+              {/* В ландшафте колонка узкая и описание расползается на три-четыре
+                  строки — там оно обрезается до двух: числа ниже важнее. */}
+              {isNew(offer) || offer.changes.length === 0 ? (
+                <p className="mt-1.5 text-xs text-text-muted landscape:line-clamp-2">{t(offer.descriptionKey)}</p>
+              ) : null}
+              <ChangeList changes={offer.changes} />
             </Card>
           );
         })}
       </div>
-      {props.queued > 0 ? (
-        <p className="mt-3 text-center text-xs text-text-muted">
-          {t("run.levelUp.queued", { count: props.queued })}
-        </p>
-      ) : null}
     </Modal>
   );
 }
@@ -218,7 +226,7 @@ function ChangeList(props: { changes: readonly UpgradeChange[] }): ReactNode {
   if (props.changes.length === 0) return null;
 
   return (
-    <dl className="surface-sunken mt-2 grid gap-1 rounded-md px-2.5 py-2">
+    <dl className="surface-sunken mt-2 grid gap-0.5 rounded-md px-2.5 py-1.5">
       {props.changes.map((change) => {
         const formatted = formatChange(change);
         return (

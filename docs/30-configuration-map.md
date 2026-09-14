@@ -131,6 +131,7 @@
 | Как часто забег сохраняется сам | `app-shell/src/state/run.ts` → `AUTOSAVE_SEC` | участник 1 |
 | Плейтест на клиенте: таймаут запроса, сколько неотправленных забегов хранить | `app-shell/src/state/playtest-api.ts` → `PLAYTEST_TIMEOUT_MS`; `state/playtest.ts` → `QUEUE_LIMIT` | участник 1 |
 | Плейтест на сервере: строк в лидерборде, последних забегов в профиле, сколько забегов хранится | `backend/api/src/modules/playtest/playtest.service.ts` → `LEADERBOARD_LIMIT`, `RECENT_RUNS_SHOWN`; `redis-playtest.store.ts` → `RECENT_RUNS_KEPT`; границы правдоподобия итога — `dto/run-submission.dto.ts` | участник 1 |
+| С какой высоты экрана модалки забега уплотняются | `tokens.css` → `@custom-variant short` (`27-design-system-and-app-shell.md` §5.3) | напарник |
 | Задержка от случайного тапа на оверлеях забега | `app-shell/src/screens/run/overlays.tsx` → `GUARD_MS` | участник 1 |
 | Порог «мало здоровья» в HUD | `app-shell/src/screens/run/RunHud.tsx` → `LOW_HP_RATIO` | участник 1 |
 

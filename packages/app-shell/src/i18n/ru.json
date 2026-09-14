@@ -186,7 +186,7 @@
 
   "run.levelUp.title": "Уровень {level}!",
   "run.levelUp.subtitle": "Выбери улучшение",
-  "run.levelUp.queued": "Ещё выборов: {count}",
+  "run.levelUp.queued": "Ещё {count} {count, plural, one {выбор} few {выбора} many {выборов} other {выбора}}",
   "run.levelUp.new": "Новое",
   "run.levelUp.upgrade": "Уровень {level}",
   "run.slots": "Занятые слоты",

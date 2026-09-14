@@ -19,7 +19,12 @@ export function passiveCategoryOf(id: string): PassiveCategory | null {
   return PASSIVES.find((passive) => passive.id === id)?.category ?? null;
 }
 
-export function SlotSummary(props: { weapons: readonly RunSlotState[]; passives: readonly RunSlotState[] }): ReactNode {
+export function SlotSummary(props: {
+  weapons: readonly RunSlotState[];
+  passives: readonly RunSlotState[];
+  /** ещё одна плашка в тот же ряд — например, сколько выборов ждёт */
+  extra?: ReactNode;
+}): ReactNode {
   const used: Record<PassiveCategory, number> = { attack: 0, defense: 0, mobility: 0 };
   for (const slot of props.passives) {
     const category = passiveCategoryOf(slot.id);
@@ -45,6 +50,7 @@ export function SlotSummary(props: { weapons: readonly RunSlotState[]; passives:
           tone="passive"
         />
       ))}
+      {props.extra === undefined ? null : <li className="inline-flex">{props.extra}</li>}
     </ul>
   );
 }

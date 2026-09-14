@@ -31,6 +31,8 @@ export interface CardProps {
   stripe?: CardStripe;
   /** порядковый номер в лесенке появления; без него карточка не анимируется */
   appearIndex?: number;
+  /** уменьшенные поля — для карточек, которые обязаны помещаться втроём в модалку */
+  compact?: boolean;
 }
 
 export function Card(props: CardProps): ReactNode {
@@ -39,7 +41,8 @@ export function Card(props: CardProps): ReactNode {
   const className = [
     // flex-col: кнопка по умолчанию центрирует содержимое по вертикали, и в
     // ряду карточек разной длины текст «плавал» бы на разной высоте.
-    "relative flex w-full flex-col overflow-hidden rounded-lg p-4 text-left",
+    "relative flex w-full flex-col overflow-hidden rounded-lg text-left",
+    props.compact === true ? "p-3" : "p-4",
     "transition-transform duration-(--duration-fast) ease-base",
     selected ? "surface-card-selected" : "surface-card",
     interactive ? "active:scale-[0.98]" : "",
@@ -128,22 +131,23 @@ export function Modal(props: ModalProps): ReactNode {
       <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" />
       <div
         className={[
-          "surface-panel relative max-h-full w-full overflow-y-auto overscroll-contain rounded-xl p-5 landscape:p-4",
+          "surface-panel relative max-h-full w-full overflow-y-auto overscroll-contain rounded-xl p-5 short:p-4 landscape:p-4",
           wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
           bottom ? "animate-sheet-in" : "animate-pop-in",
         ].join(" ")}
       >
-        {/* В ландшафте значок прячется: высота там около 360 px, и каждая
-            строка на счету — кнопка «Ещё раз» не должна уходить под прокрутку (§5.3). */}
+        {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
+            счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
+            прокрутку (§5.3). */}
         {props.icon === undefined ? null : (
-          <div className="mb-2 flex justify-center landscape:hidden">
+          <div className="mb-2 flex justify-center short:hidden landscape:hidden">
             <IconEmblem>{props.icon}</IconEmblem>
           </div>
         )}
         {props.title === undefined ? null : (
           <h2
             className={[
-              "mb-3 font-display text-2xl font-bold text-text landscape:mb-1 landscape:text-xl",
+              "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
               props.icon === undefined ? "" : "text-center",
             ].join(" ")}
           >
