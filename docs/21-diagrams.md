@@ -308,6 +308,22 @@ erDiagram
         datetime received_at
     }
 
+    DATA_EXPORT {
+        uuid export_id PK
+        enum source "bot|cli"
+        string requested_by "Telegram ID администратора или cli"
+        datetime period_from "nullable — с начала теста"
+        datetime period_to
+        enum status "running|sent|failed"
+        int events
+        int reports
+        int size_bytes
+        int parts
+        string error "nullable"
+        datetime created_at
+        datetime finished_at
+    }
+
     DIAGNOSTIC_REPORT {
         uuid report_id PK "ключ идемпотентности"
         enum kind "bench|run"
@@ -332,6 +348,9 @@ erDiagram
   на этапе 3 история закрытого теста привязывается к аккаунтам по
   `platform_user_id`, а не переписывается. Колонка `user_id` и атрибуция
   появятся миграцией вместе с кодом, который их заполняет.
+- **`DATA_EXPORT` — журнал доступа к данным, а не данные тестеров**: в нём
+  Telegram ID администратора, который выгружал, — это аудит (`28-diagnostics.md`
+  §6.1.4), по нему же считается «с последней выгрузки».
 - **Индексы** — по времени приёма (выгрузка и очистка), по установке и по
   `(event_type, received_at)` у событий, по `(app_version, kind)` у отчётов.
 - **IP не хранится ни в одной из таблиц** — он нужен только лимиту частоты

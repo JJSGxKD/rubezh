@@ -102,7 +102,7 @@
 | 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md`. `ADMIN_TELEGRAM_IDS` используется **с этапа 2**: режим разработчика и забеги с читами в рейтинге плейтеста (`26-stage2-plan.md`, WP14), затем выгрузка данных через бота (`28-diagnostics.md` §6.1.1). Цифры через запятую, мусор — бэкенд не стартует |
 | 12. Программы роста и аналитика | домен редиректа, TTL клика, секрет подписи шеринга, кеш карточек, read-only пользователь Grafana, срок хранения сырых персональных данных | `22-analytics-and-metrics.md`, `23-referral-and-partner-program.md`, `24-attribution-and-sharing.md` |
 | 13. Публичные для клиента | `VITE_*` | только не-секреты |
-| 14. Диагностика и телеметрия | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует. `ALLOWED_ORIGINS` у приёмников — ещё и проверка `Origin`: пустой список на машине разработчика её выключает, в проде домен клиента обязан в нём быть. `TRUST_PROXY_HOPS` (группа 6) — за Caddy `1` |
+| 14. Диагностика и телеметрия | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC`, `DIAGNOSTICS_RETENTION_DAYS`, `EXPORT_PSEUDONYM_KEY`, `DATA_EXPORT_BOT_ENABLED` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует. `ALLOWED_ORIGINS` у приёмников — ещё и проверка `Origin`: пустой список на машине разработчика её выключает, в проде домен клиента обязан в нём быть. `TRUST_PROXY_HOPS` (группа 6) — за Caddy `1` |
 | 15. CDN | ключ API Bunny.net для сброса кеша после деплоя | **только секреты CI**, на сервере не нужен (`26-stage2-plan.md`, WP10) |
 | 16. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_ENABLED`, `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Игрок проверяется подписью initData токеном `TELEGRAM_BOT_TOKEN` из группы 7; вход без подписи — только `NODE_ENV=development`, иначе бэкенд не стартует. `PLAYTEST_STATS_*` — сводка статистики картинкой в чат администраторов: включённая без чата администраторов или чтения обновлений бота не стартует |
 
@@ -171,6 +171,9 @@ pnpm dev:telegram    # http://localhost:5173
 pnpm dev:max         # http://localhost:5174
 pnpm dev:vk          # http://localhost:5175
 ```
+
+Выгрузка данных закрытого теста без бота — `pnpm closed-test:export -- --days 1`
+(архив в `var/exports`, нужен `EXPORT_PSEUDONYM_KEY`; `28-diagnostics.md` §6).
 
 Туннель для проверки в Telegram с телефона — `pnpm tunnel` отдельным окном
 (§4). Производительность на устройстве меряет стресс-тест в самом приложении

@@ -11,6 +11,8 @@ import { DiagnosticsHooks } from "../src/modules/diagnostics/diagnostics-hooks.j
 import { benchSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js";
 import { PrismaDiagnosticsRepository } from "../src/modules/diagnostics/diagnostics.repository.js";
 import { submitBenchReportSchema } from "../src/modules/diagnostics/dto/bench-report.dto.js";
+import { PrismaExportRepository, type EventExportRow, type PageCursor } from "../src/modules/export/export.repository.js";
+import { RetentionJob } from "../src/modules/export/retention.job.js";
 import { benchSubmission, DEVICE } from "./helpers/bench-report.js";
 import { PrismaEventsRepository, type EventRow } from "../src/modules/events/events.repository.js";
 import { QueuedEventsSink } from "../src/modules/events/events.sink.js";
@@ -136,6 +138,43 @@ describe.skipIf(!live)("приёмники на живых Postgres и Redis", (
     } finally {
       await notifier.onModuleDestroy();
     }
+  });
+
+  it("выгрузка читает страницы курсором без потерь при одинаковом времени приёма и ведёт журнал", async () => {
+    const events = new PrismaEventsRepository(prisma);
+    const receivedAt = "2026-09-15T09:00:00.000Z";
+    const rows = Array.from({ length: 5 }, () => row(`${install}-x`, { receivedAt }));
+    await events.insertMany(rows);
+    const repository = new PrismaExportRepository(prisma);
+    const period = { from: new Date("2026-09-15T08:59:59Z"), to: new Date("2026-09-15T09:00:01Z") };
+    const seen: string[] = [];
+    let cursor: PageCursor | null = null;
+    for (;;) {
+      const page: EventExportRow[] = await repository.eventsPage(period, cursor, 2);
+      if (page.length === 0) break;
+      seen.push(...page.filter((item) => item.installId === `${install}-x`).map((item) => item.eventId));
+      const last = page[page.length - 1]!;
+      cursor = { receivedAt: last.receivedAt, id: last.eventId };
+    }
+    expect(seen.sort()).toEqual(rows.map((item) => item.eventId).sort());
+
+    const requestedBy = `t${Date.now()}`.slice(0, 16);
+    const exportId = randomUUID();
+    await repository.start({ exportId, source: "bot", requestedBy, period });
+    expect(await repository.lastExportTo(requestedBy)).toBeNull();
+    await repository.finish(exportId, { status: "sent", events: 5, reports: 0, sizeBytes: 100, parts: 1, error: null });
+    expect(await repository.lastExportTo(requestedBy)).toEqual(period.to);
+    await prisma.dataExport.delete({ where: { exportId } });
+  });
+
+  it("очистка удаляет только строки старше срока хранения", async () => {
+    const events = new PrismaEventsRepository(prisma);
+    await events.insertMany([row(`${install}-old`, { receivedAt: "2020-01-01T00:00:00.000Z" }), row(`${install}-fresh`)]);
+    const job = new RetentionJob(loadAppConfig({ NODE_ENV: "test", DATABASE_URL, EVENTS_INGEST_ENABLED: "true", DIAGNOSTICS_RETENTION_DAYS: "90" }), prisma);
+    const result = await job.purge(new Date("2026-09-15T12:00:00Z"));
+    expect(result.events).toBeGreaterThanOrEqual(1);
+    expect(await prisma.analyticsEvent.count({ where: { installId: `${install}-old` } })).toBe(0);
+    expect(await prisma.analyticsEvent.count({ where: { installId: `${install}-fresh` } })).toBe(1);
   });
 
   it("повтор пачки — одна запись на событие", async () => {

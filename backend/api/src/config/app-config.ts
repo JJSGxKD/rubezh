@@ -43,6 +43,25 @@ const schema = z.object({
   // Окно свежести подписи запуска для приёмников — сутки (docs/28-diagnostics.md
   // §5.2): тестер играет часами, а приёмник в ответ ничего не выдаёт.
   INGEST_INIT_DATA_MAX_AGE_SEC: z.coerce.number().int().positive().default(86_400),
+  // Сколько дней хранить сырые события и отчёты диагностики (docs/28-diagnostics.md §5.4).
+  DIAGNOSTICS_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+
+  // Выгрузка данных закрытого теста (docs/28-diagnostics.md §6). Ключ HMAC для
+  // псевдонимов Telegram ID — секрет без значения по умолчанию: обычный хэш
+  // короткого числового ID обращается перебором за минуты. Смена ключа меняет
+  // все псевдонимы — выгрузки до и после перестают сопоставляться.
+  EXPORT_PSEUDONYM_KEY: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^[0-9a-f]{64,}$/i.test(value), {
+      message: "EXPORT_PSEUDONYM_KEY — не короче 64 шестнадцатеричных знаков: openssl rand -hex 32",
+    }),
+  // Выключатель выгрузки через бота: при утечке токена бота выгрузка
+  // отключается без релиза (docs/28-diagnostics.md §6.1.4).
+  DATA_EXPORT_BOT_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 
   // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
   // Выключены по умолчанию: без токена бота игрока не проверить.
@@ -134,6 +153,12 @@ export interface AppConfig {
     eventsEnabled: boolean;
     reportsEnabled: boolean;
     initDataMaxAgeSec: number;
+    retentionDays: number;
+  };
+  export: {
+    /** пусто — выгрузка невозможна: псевдонимизировать нечем */
+    pseudonymKey: string;
+    botEnabled: boolean;
   };
   /** уведомлять чат администраторов о новых отчётах диагностики */
   notifyReports: boolean;
@@ -211,6 +236,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.PLAYTEST_STATS_ENABLED && (parsed.ADMIN_CHAT_ID === "" || parsed.TELEGRAM_BOT_UPDATES === "off")) {
     throw new Error("PLAYTEST_STATS_ENABLED=true требует ADMIN_CHAT_ID и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
   }
+  if (parsed.DATA_EXPORT_BOT_ENABLED && (parsed.EXPORT_PSEUDONYM_KEY === "" || parsed.DATABASE_URL === "" || parsed.TELEGRAM_BOT_UPDATES === "off")) {
+    throw new Error("DATA_EXPORT_BOT_ENABLED=true требует EXPORT_PSEUDONYM_KEY, DATABASE_URL и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
+  }
   if ((parsed.EVENTS_INGEST_ENABLED || parsed.DIAGNOSTICS_INGEST_ENABLED) && parsed.DATABASE_URL === "") {
     throw new Error("Приёмники событий и отчётов пишут в Postgres: включённый приёмник требует DATABASE_URL");
   }
@@ -234,6 +262,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       eventsEnabled: parsed.EVENTS_INGEST_ENABLED,
       reportsEnabled: parsed.DIAGNOSTICS_INGEST_ENABLED,
       initDataMaxAgeSec: parsed.INGEST_INIT_DATA_MAX_AGE_SEC,
+      retentionDays: parsed.DIAGNOSTICS_RETENTION_DAYS,
+    },
+    export: {
+      pseudonymKey: parsed.EXPORT_PSEUDONYM_KEY,
+      botEnabled: parsed.DATA_EXPORT_BOT_ENABLED,
     },
     notifyReports: parsed.ADMIN_NOTIFY_REPORTS,
     adminTelegramIds: new Set(parsed.ADMIN_TELEGRAM_IDS),

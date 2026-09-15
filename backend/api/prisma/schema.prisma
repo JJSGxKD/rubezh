@@ -75,3 +75,37 @@ model DiagnosticReport {
   @@index([appVersion, kind])
   @@map("diagnostic_report")
 }
+
+enum ExportSource {
+  bot
+  cli
+}
+
+enum ExportStatus {
+  running
+  sent
+  failed
+}
+
+// Журнал выгрузок закрытого теста (docs/28-diagnostics.md §6.1.4): кто, когда,
+// за какой период и что получил. По нему же считается «с последней выгрузки».
+model DataExport {
+  exportId    String       @id @map("export_id") @db.Uuid
+  source      ExportSource
+  // Telegram ID администратора или «cli»: это аудит доступа к данным, а не
+  // данные тестеров — псевдоним здесь скрыл бы, кто выгружал.
+  requestedBy String       @map("requested_by") @db.VarChar(32)
+  periodFrom  DateTime?    @map("period_from") @db.Timestamptz(3)
+  periodTo    DateTime     @map("period_to") @db.Timestamptz(3)
+  status      ExportStatus
+  events      Int          @default(0)
+  reports     Int          @default(0)
+  sizeBytes   Int          @default(0) @map("size_bytes")
+  parts       Int          @default(0)
+  error       String?      @db.VarChar(512)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  finishedAt  DateTime?    @map("finished_at") @db.Timestamptz(3)
+
+  @@index([requestedBy, createdAt])
+  @@map("data_export")
+}

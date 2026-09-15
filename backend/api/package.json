@@ -10,6 +10,7 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate",
+    "export": "node --import @swc-node/register/esm-register src/cli/closed-test-export.ts",
     "bot:webhook": "node --import @swc-node/register/esm-register src/cli/bot-webhook.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

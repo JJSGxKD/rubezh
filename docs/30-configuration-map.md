@@ -137,6 +137,8 @@
 | Приветствие по `/start`: тексты на двух языках, какие языки читают по-русски | `backend/api/src/modules/welcome/welcome-texts.ts` → `WELCOME_TEXTS`, `RUSSIAN_READERS` | участник 1 |
 | Карточка приветствия: раскладка, длина имени, версия шаблона для кэша | `backend/api/src/modules/welcome/welcome-card.ts` → `CARD_VERSION` (поднять при любой правке вида), `NAME_MAX` | участник 1 |
 | Приветствие: сколько хранить `file_id` карточки, окно двойного нажатия, ожидание прогресса | `backend/api/src/modules/welcome/welcome.command.ts` → `CARD_CACHE_TTL_SEC`, `START_WINDOW_SEC`, `PROGRESS_TIMEOUT_MS` | участник 1 |
+| Выгрузка: размер частей, страницы чтения и пауза между ними, колонки таблицы забегов, формат архива | `backend/api/src/modules/export/export.service.ts` → `EXPORT_PART_BYTES`, `EVENTS_PAGE`, `REPORTS_PAGE`, `PAGE_PAUSE_MS`, `RUN_COLUMNS`, `EXPORT_FORMAT` | участник 1 |
+| Очистка старых данных: как часто и какими пачками | `backend/api/src/modules/export/retention.job.ts` → `EVERY_MS`, `BATCH`, `BATCH_PAUSE_MS` | участник 1 |
 | Уведомления об отчётах: темп отправки в чат, повторы, карточка стресс-теста — раскладка, порог плавности на графике | `backend/api/src/modules/admin-notify/report-notifier.ts` → `MESSAGES_PER_MINUTE`, параметры `queue.add`; `stress-card.ts` → `SMOOTH_FPS` | участник 1 |
 | Бот: сколько помнить обработанные обновления вебхука, какие обновления читать | `backend/api/src/modules/bot/bot-webhook.controller.ts` → `DEDUPE_TTL_SEC`; `modules/telegram/telegram-bot-api.ts` → `ALLOWED_UPDATES` | участник 1 |
 | Сводка плейтеста в Telegram: частота команды, возраст команды из очереди | `backend/api/src/modules/playtest/playtest-stats.reporter.ts` → `COMMAND_WINDOW_SEC`, `STALE_COMMAND_SEC` | участник 1 |
@@ -236,6 +238,9 @@
 | `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам, `webhook` — Telegram шлёт их на `PUBLIC_API_URL`; регистрация — `pnpm --filter backend-api bot:webhook` |
 | `TELEGRAM_WEBHOOK_SECRET` | секретный токен вебхука; без него режим `webhook` не стартует |
 | `PUBLIC_WEB_URL` | адрес Mini App; HTTPS — кнопка «Играть» под приветствием бота |
+| `EXPORT_PSEUDONYM_KEY` | ключ псевдонимов Telegram ID в выгрузках; без него выгрузка невозможна, смена меняет все псевдонимы |
+| `DATA_EXPORT_BOT_ENABLED` | выгрузка через бота; без ключа, базы и чтения обновлений бэкенд не стартует |
+| `DIAGNOSTICS_RETENTION_DAYS` | сколько дней хранить сырые события и отчёты |
 | `ADMIN_NOTIFY_REPORTS` | карточка в чат администраторов на каждый новый стресс-тест; нужны `ADMIN_CHAT_ID` и включённый приёмник отчётов |
 | `ADMIN_CHAT_ID` | групповой чат администраторов: сводка и уведомления. Прежнее имя `PLAYTEST_STATS_CHAT_ID` — бэкенд не стартует и называет новое |
 | `PLAYTEST_STATS_ENABLED` | сводка статистики плейтеста в чат администраторов по `/stats`; без чата или чтения обновлений бота бэкенд не стартует |
