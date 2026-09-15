@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { DIFFICULTIES } from "../playtest.store";
-import { submitBenchReportSchema } from "../../bench-reports/dto/bench-report.dto";
-import { DEVICE_OS, FORM_FACTORS } from "../playtest-stats.store";
+import { DIFFICULTIES } from "../playtest.store.js";
+import { submitBenchReportSchema } from "./stress-report.dto.js";
+import { DEVICE_OS, FORM_FACTORS } from "../playtest-stats.store.js";
 
 /**
  * Итог забега от клиента. Границы — форма правдоподобия, а не антифрод:

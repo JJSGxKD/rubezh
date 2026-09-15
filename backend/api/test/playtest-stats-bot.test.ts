@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadAppConfig, type AppConfig } from "../src/config/app-config";
+import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import {
   PlaytestStatsBot,
   dailyReportDay,
   decideUpdate,
   type StatsBotApi,
   type StatsBotLocks,
-} from "../src/modules/playtest/playtest-stats.bot";
-import { PlaytestStatsService } from "../src/modules/playtest/playtest-stats.service";
-import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/modules/playtest/telegram-bot-api";
-import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store";
-import { MemoryPlaytestStore } from "./helpers/memory-playtest.store";
+} from "../src/modules/playtest/playtest-stats.bot.js";
+import { PlaytestStatsService } from "../src/modules/playtest/playtest-stats.service.js";
+import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/modules/playtest/telegram-bot-api.js";
+import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
+import { MemoryPlaytestStore } from "./helpers/memory-playtest.store.js";
 
 // Бот сводки плейтеста: кому отвечать, когда слать отчёт, как говорить с Bot API.
 

@@ -116,7 +116,7 @@ describe("стресс-тест в оболочке", () => {
 
     await useStress.getState().start({} as HTMLElement);
     expect(useStress.getState().phase).toBe("loading");
-    expect(fake.started[0]).toMatchObject({ mode: "stress", buildVersion: "0.3.0" });
+    expect(fake.started[0]).toMatchObject({ buildVersion: "0.3.0" });
     expect(fake.started[0]?.device).toMatchObject({ userAgent: "", telegramUserId: null, telegramPlatform: "android" });
     // На прогоне случайный свайп не сворачивает приложение.
     expect(uiCalls).toEqual(["swipes:false", "confirm:true"]);

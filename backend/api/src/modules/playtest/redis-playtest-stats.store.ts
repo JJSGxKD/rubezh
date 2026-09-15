@@ -1,9 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { z } from "zod";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config";
-import { DIFFICULTIES, type Difficulty, type StoredRun } from "./playtest.store";
-import { PLAYTEST_REDIS } from "./playtest-redis";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { DIFFICULTIES, type Difficulty, type StoredRun } from "./playtest.store.js";
+import { PLAYTEST_REDIS } from "./playtest-redis.js";
 import {
   DURATION_BUCKETS_MIN,
   dayKey,
@@ -13,7 +13,7 @@ import {
   type SessionRecord,
   type StatsSnapshot,
   type StressSummary,
-} from "./playtest-stats.store";
+} from "./playtest-stats.store.js";
 
 /**
  * Агрегаты статистики плейтеста в Redis.

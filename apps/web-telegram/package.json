@@ -7,7 +7,6 @@
     "dev": "vite --mode telegram",
     "build": "vite build --mode telegram",
     "preview": "vite preview --mode telegram",
-    "bench": "vite preview --mode telegram",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

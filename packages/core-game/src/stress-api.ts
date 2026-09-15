@@ -1,4 +1,4 @@
-import type { BenchDevice, BenchMode } from "./game/bench/metrics";
+import type { BenchDevice } from "./game/bench/metrics";
 import type { BenchProgress, BenchSubmission } from "./game/bench/types";
 
 /**
@@ -8,18 +8,13 @@ import type { BenchProgress, BenchSubmission } from "./game/bench/types";
  *
  * Прогон идёт на нагрузке позднего забега: всё оружие и пассивки на
  * максимуме, все паттерны врагов, элиты, кристаллы и подборы
- * (`game/bench/full-load.ts`). Автопилот и бессмертие — как у стенда этапа 1:
+ * (`game/bench/full-load.ts`). Нагрузка растёт до подтверждённой просадки,
+ * пять минут — аварийный таймер. Автопилот и бессмертие — как у стенда этапа 1:
  * замер не должен зависеть от того, как человек играл.
  */
 
 export interface StressOptions {
   container: HTMLElement;
-  /**
-   * `stress` — предел устройства, останавливается сам на подтверждённой
-   * просадке; `ramp` — рабочий запас за три минуты; `fixed` — постоянная
-   * толпа для сравнения сборок
-   */
-  mode: BenchMode;
   seed: number;
   buildVersion: string;
   /** сведения об устройстве собирает оболочка: движок не знает площадку */

@@ -1,9 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config";
-import { DIFFICULTIES, PLAYTEST_STORE, type Difficulty, type PlaytestStore } from "./playtest.store";
-import { renderStatsCaption, renderStatsPng, renderStatsSvg } from "./playtest-stats.image";
-import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store";
-import { buildStatsSummary, type StatsSummary } from "./playtest-stats.summary";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { DIFFICULTIES, PLAYTEST_STORE, type Difficulty, type PlaytestStore } from "./playtest.store.js";
+import { renderStatsCaption, renderStatsPng, renderStatsSvg } from "./playtest-stats.image.js";
+import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store.js";
+import { buildStatsSummary, type StatsSummary } from "./playtest-stats.summary.js";
 
 export interface StatsReport {
   summary: StatsSummary;

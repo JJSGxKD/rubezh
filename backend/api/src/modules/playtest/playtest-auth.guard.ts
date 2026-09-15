@@ -1,11 +1,12 @@
 import { CanActivate, ExecutionContext, Inject, Injectable } from "@nestjs/common";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config";
-import { DisabledError, UnauthorizedError } from "../../common/domain-error";
-import { verifyInitData, type TelegramPlayer } from "./telegram-init-data";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { DisabledError, UnauthorizedError } from "../../common/domain-error.js";
+import { verifyInitData, type TelegramPlayer } from "./telegram-init-data.js";
 
-/** Минимальная форма запроса вместо типов express — см. domain-error.filter.ts. */
+/** Минимальная форма запроса вместо типов Fastify — см. domain-error.filter.ts. */
 interface HttpRequest {
-  header(name: string): string | undefined;
+  /** имена заголовков у Fastify — в нижнем регистре */
+  headers: Record<string, string | string[] | undefined>;
   playtestPlayer?: TelegramPlayer;
 }
 
@@ -35,7 +36,7 @@ export class PlaytestAuthGuard implements CanActivate {
   }
 
   private identify(request: HttpRequest): TelegramPlayer {
-    const authorization = request.header("authorization") ?? "";
+    const authorization = headerOf(request, "authorization") ?? "";
     if (authorization.startsWith("tma ")) {
       const check = verifyInitData(
         authorization.slice(4),
@@ -51,7 +52,7 @@ export class PlaytestAuthGuard implements CanActivate {
       );
     }
 
-    const devUser = decodeHeader(request.header("x-playtest-dev-user"));
+    const devUser = decodeHeader(headerOf(request, "x-playtest-dev-user"));
     if (this.config.playtest.devAuth && devUser !== undefined) {
       const [id, ...name] = devUser.split(":");
       if (id !== undefined && /^dev-[a-z0-9-]{1,32}$/.test(id)) {
@@ -61,6 +62,12 @@ export class PlaytestAuthGuard implements CanActivate {
 
     throw new UnauthorizedError("Откройте игру в Telegram, чтобы сохранять забеги");
   }
+}
+
+/** Повторённый заголовок — подозрительный запрос, а не выбор первого значения. */
+function headerOf(request: HttpRequest, name: string): string | undefined {
+  const value = request.headers[name];
+  return typeof value === "string" ? value : undefined;
 }
 
 /**

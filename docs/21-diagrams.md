@@ -531,7 +531,7 @@ flowchart LR
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
         EVENTS["events<br/>приём событий, этап 2"]
-        DIAG["diagnostics<br/>отчёты стенда и забегов, этап 2<br/>заменяет bench-reports этапа 1"]
+        DIAG["diagnostics<br/>отчёты стресс-теста и забегов, этап 2"]
         PT["playtest<br/>сохранения и лидерборд<br/>закрытого теста, реализовано"]
         BOT["bot<br/>вебхук Telegram, выгрузка<br/>данных администратору, этап 2"]
     end

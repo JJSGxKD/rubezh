@@ -1,12 +1,12 @@
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { loadAppConfig } from "../src/config/app-config";
-import { closeRedis, createPlaytestRedis } from "../src/modules/playtest/playtest-redis";
-import { RedisStatsBotLocks } from "../src/modules/playtest/playtest-stats.bot";
-import type { StressSummary } from "../src/modules/playtest/playtest-stats.store";
-import type { StoredRun } from "../src/modules/playtest/playtest.store";
-import { RedisPlaytestStatsStore } from "../src/modules/playtest/redis-playtest-stats.store";
-import { RedisPlaytestStore } from "../src/modules/playtest/redis-playtest.store";
+import { loadAppConfig } from "../src/config/app-config.js";
+import { closeRedis, createPlaytestRedis } from "../src/modules/playtest/playtest-redis.js";
+import { RedisStatsBotLocks } from "../src/modules/playtest/playtest-stats.bot.js";
+import type { StressSummary } from "../src/modules/playtest/playtest-stats.store.js";
+import type { StoredRun } from "../src/modules/playtest/playtest.store.js";
+import { RedisPlaytestStatsStore } from "../src/modules/playtest/redis-playtest-stats.store.js";
+import { RedisPlaytestStore } from "../src/modules/playtest/redis-playtest.store.js";
 
 // Хранилище плейтеста на живом Redis. Сценарий тот же, что у хранилища в
 // памяти, но проверяется то, что память не покажет: Lua-скрипт лучшего

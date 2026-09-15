@@ -1,5 +1,4 @@
 import type { RunEngine } from "./run-api";
-import type { BenchStand, BenchStandOptions } from "./engine/bench-stand";
 import type { StressEngine } from "./stress-api";
 
 /**
@@ -78,7 +77,6 @@ export {
   type RecordUpdate,
 } from "./game/run/records";
 
-export type { BenchStand, BenchStandOptions } from "./engine/bench-stand";
 export type { StressEngine, StressEvents, StressOptions, StressSession } from "./stress-api";
 
 /**
@@ -88,15 +86,6 @@ export type { StressEngine, StressEvents, StressOptions, StressSession } from ".
 export async function loadRunEngine(): Promise<RunEngine> {
   const { createRunEngine } = await import("./engine/run-engine");
   return createRunEngine();
-}
-
-/**
- * Загрузить стенд FPS-испытаний. Отдельный чанк и отдельная дверь: игрокам он
- * не нужен вовсе (docs/25-week1-fps-trials.md §2).
- */
-export async function loadBenchStand(options: BenchStandOptions): Promise<BenchStand> {
-  const { createBenchStand } = await import("./engine/bench-stand");
-  return createBenchStand(options);
 }
 
 /**
