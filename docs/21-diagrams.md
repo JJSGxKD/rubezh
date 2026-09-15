@@ -286,22 +286,21 @@ erDiagram
   шеринг, а не общая реферальная ссылка игрока: только так измеряется, что
   конвертит лучше (`24-attribution-and-sharing.md` §7.3).
 
-### 1.4 Телеметрия закрытого теста (этап 2, проектируется)
+### 1.4 Телеметрия закрытого теста (этап 2, реализовано)
 
-Первые таблицы, которые попадут в прод: до авторизации, поэтому без
-внешнего ключа на `USER`. Подробности — `28-diagnostics.md` §5.4 и
-`22-analytics-and-metrics.md` §3.1.
+Первые таблицы в проде: до авторизации, поэтому без внешнего ключа на
+`USER`. Схема — `backend/api/prisma/schema.prisma`, миграции — рядом.
+Подробности — `28-diagnostics.md` §5.4 и `22-analytics-and-metrics.md` §3.1.
 
 ```mermaid
 erDiagram
     ANALYTICS_EVENT {
         uuid event_id PK "ключ идемпотентности"
         string event_type "только из словаря"
-        int schema_version
-        uuid install_id "устройство, до авторизации"
+        smallint schema_version
+        string install_id "устройство до авторизации: uuid или 32 hex"
         string platform_user_id "nullable, только при проверенной подписи initData"
-        uuid user_id "nullable, заполняется с этапа 3"
-        uuid session_id
+        string session_id
         enum platform
         string app_version "из тега релиза"
         json payload
@@ -312,10 +311,10 @@ erDiagram
     DIAGNOSTIC_REPORT {
         uuid report_id PK "ключ идемпотентности"
         enum kind "bench|run"
-        int schema_version
+        string schema_version "rubezh.bench.v4 и т. п."
         string app_version
         string content_hash "nullable, версия баланса"
-        uuid install_id
+        string install_id
         string platform_user_id "nullable"
         enum platform
         json device
@@ -331,7 +330,10 @@ erDiagram
 
 - **Связи с `USER` нет намеренно.** Пользователей до этапа 3 не существует;
   на этапе 3 история закрытого теста привязывается к аккаунтам по
-  `platform_user_id`, а не переписывается.
+  `platform_user_id`, а не переписывается. Колонка `user_id` и атрибуция
+  появятся миграцией вместе с кодом, который их заполняет.
+- **Индексы** — по времени приёма (выгрузка и очистка), по установке и по
+  `(event_type, received_at)` у событий, по `(app_version, kind)` у отчётов.
 - **IP не хранится ни в одной из таблиц** — он нужен только лимиту частоты
   на приёме.
 - Отчёты стенда этапа 1 лежали файлами в `var/bench-reports/`; в прод они

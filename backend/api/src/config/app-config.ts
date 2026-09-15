@@ -20,6 +20,11 @@ const schema = z.object({
   // лежит в самом URL и в прод-окружении задаётся секретом.
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
+  // Postgres — события и отчёты диагностики. Строка подключения содержит
+  // пароль и значения по умолчанию не имеет: функции, которым нужна база,
+  // без неё не стартуют.
+  DATABASE_URL: z.string().default(""),
+
   // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
   // Выключены по умолчанию: без токена бота игрока не проверить.
   PLAYTEST_ENABLED: z
@@ -83,6 +88,8 @@ export interface AppConfig {
   apiHost: string;
   allowedOrigins: string[];
   redisUrl: string;
+  /** пусто — база не настроена */
+  databaseUrl: string;
   /** Telegram ID администраторов строками — так же, как id игрока из initData */
   adminTelegramIds: ReadonlySet<string>;
   telegram: {
@@ -162,6 +169,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       .map((origin) => origin.trim())
       .filter((origin) => origin !== ""),
     redisUrl: parsed.REDIS_URL,
+    databaseUrl: parsed.DATABASE_URL,
     adminTelegramIds: new Set(parsed.ADMIN_TELEGRAM_IDS),
     telegram: {
       botToken: parsed.TELEGRAM_BOT_TOKEN,

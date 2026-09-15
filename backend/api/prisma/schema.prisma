@@ -1,6 +1,6 @@
-// Схема MVP-скоупа (docs/02-roadmap.md). Прогрессия/лига/снаряжение из
-// docs/10-progression-and-ladder.md — Фаза 2, сюда сознательно не добавлены,
-// чтобы не тащить неиспользуемые таблицы в MVP.
+// Схема прод-базы. Таблицы появляются вместе с кодом, который в них пишет:
+// пользователи, забеги и покупки из docs/21-diagrams.md §1 придут с
+// авторизацией и платежами этапа 3, а не лежат пустыми в проде заранее.
 
 // Prisma 7: клиент генерируется в исходники бэкенда TypeScript-модулями в
 // ESM и в git не попадает (docs/16-tech-stack-decisions.md §5). Строка
@@ -23,56 +23,55 @@ enum Platform {
   web
 }
 
-// Аккаунты НЕ связываются между платформами — один и тот же человек на
-// разных площадках это разные строки User. См. docs/08-web-and-identity.md §3.
-model User {
-  id            String    @id @default(uuid())
-  platform      Platform
-  platformUserId String   // ID пользователя на стороне платформы (initData/VK ID/и т.д.)
-  displayName   String
-  avatarUrl     String?
-  locale        String?   // только telegram/web, см. docs/01-tech-stack.md §7
-  createdAt     DateTime  @default(now())
-
-  runs      Run[]
-  purchases Purchase[]
-
-  @@unique([platform, platformUserId])
+enum DiagnosticKind {
+  bench
+  run
 }
 
-// Результат забега. Лучший результат уходит в Redis ZSET для лидерборда
-// (docs/01-tech-stack.md §3) — здесь хранится сырая история для антифрода
-// и аналитики, не для чтения лидерборда напрямую.
-model Run {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  score       Int
-  durationSec Int
-  waveReached Int
-  createdAt   DateTime @default(now())
+// Событие аналитики закрытого теста (docs/22-analytics-and-metrics.md §3.1).
+// Строки только добавляются; повтор пачки отсекает первичный ключ event_id.
+// Пользователя до авторизации нет: устройство — install_id, Telegram ID —
+// только при проверенной подписи initData.
+model AnalyticsEvent {
+  eventId        String   @id @map("event_id") @db.Uuid
+  eventType      String   @map("event_type") @db.VarChar(64)
+  schemaVersion  Int      @map("schema_version") @db.SmallInt
+  installId      String   @map("install_id") @db.VarChar(64)
+  platformUserId String?  @map("platform_user_id") @db.VarChar(32)
+  sessionId      String   @map("session_id") @db.VarChar(64)
+  platform       Platform
+  appVersion     String   @map("app_version") @db.VarChar(64)
+  payload        Json
+  occurredAt     DateTime @map("occurred_at") @db.Timestamptz(3)
+  receivedAt     DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
 
-  @@index([userId])
+  // Выгрузка и очистка идут по времени приёма, разбор устройства — по установке.
+  @@index([receivedAt])
+  @@index([installId, occurredAt])
+  @@index([eventType, receivedAt])
+  @@map("analytics_event")
 }
 
-enum PurchaseItemKind {
-  skin
-  continue_run
-  character_unlock
-  ad_removal_pack
-  seasonal
-}
+// Отчёт диагностики (docs/28-diagnostics.md §5.4): стресс-тест или запись
+// забега. summary — поля для выборок без разбора payload.
+model DiagnosticReport {
+  reportId       String         @id @map("report_id") @db.Uuid
+  kind           DiagnosticKind
+  schemaVersion  String         @map("schema_version") @db.VarChar(64)
+  appVersion     String         @map("app_version") @db.VarChar(64)
+  contentHash    String?        @map("content_hash") @db.VarChar(64)
+  installId      String         @map("install_id") @db.VarChar(64)
+  platformUserId String?        @map("platform_user_id") @db.VarChar(32)
+  platform       Platform
+  device         Json
+  summary        Json
+  payload        Json
+  sizeBytes      Int            @map("size_bytes")
+  occurredAt     DateTime       @map("occurred_at") @db.Timestamptz(3)
+  receivedAt     DateTime       @default(now()) @map("received_at") @db.Timestamptz(3)
 
-model Purchase {
-  id            String            @id @default(uuid())
-  userId        String
-  user          User              @relation(fields: [userId], references: [id])
-  itemId        String
-  kind          PurchaseItemKind
-  platform      Platform
-  priceMinor    Int               // в минимальных единицах валюты платформы (копейки/Stars)
-  transactionId String            @unique
-  createdAt     DateTime          @default(now())
-
-  @@index([userId])
+  @@index([receivedAt])
+  @@index([installId])
+  @@index([appVersion, kind])
+  @@map("diagnostic_report")
 }

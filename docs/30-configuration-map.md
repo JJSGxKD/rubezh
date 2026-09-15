@@ -193,6 +193,8 @@
 | Порт сервиса | **только** карта портов `20-env-and-ports.md` §2, дальше переменная |
 | Конфигурация бэкенда и её проверка | `backend/api/src/config/app-config.ts` — единственное место, где читается `process.env` |
 | HTTP-приложение бэкенда: лимит тела запроса, префикс API, CORS, фильтр ошибок | `backend/api/src/http-app.ts` → `BODY_LIMIT_BYTES`, `createHttpApp` |
+| Postgres: схема, миграции, таймауты соединения и запроса, размер пула | `backend/api/prisma/schema.prisma`, `prisma/migrations/`; `src/infra/database.ts` → `CONNECT_TIMEOUT_MS`, `STATEMENT_TIMEOUT_MS`, `POOL_SIZE` |
+| Интеграционные тесты в CI: версии Postgres и Redis, адреса баз | `.github/workflows/ci.yml` → `services`, `env` |
 | Сборка клиента: плагины, туннель, режимы | `apps/web-*/vite.config.ts` |
 | Поведение dev-сервера при обрыве связи: плашка вместо перезагрузки | `scripts/vite/stable-dev-session.ts` (`20-env-and-ports.md` §4) |
 | Режим сборки клиента: всегда production, `NODE_ENV` из `.env` не берётся | `scripts/vite/production-node-env.ts` |

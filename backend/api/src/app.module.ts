@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AppConfigModule } from "./config/config.module.js";
+import { DatabaseModule } from "./infra/database.js";
 import { RedisModule } from "./infra/redis.js";
 import { BotModule } from "./modules/bot/bot.module.js";
 import { TelegramModule } from "./modules/telegram/telegram.module.js";
@@ -15,7 +16,7 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * и тоже выключены по умолчанию (docs/26-stage2-plan.md, WP13).
  */
 @Module({
-  imports: [AppConfigModule, RedisModule, TelegramModule, BotModule, PlaytestModule],
+  imports: [AppConfigModule, RedisModule, DatabaseModule, TelegramModule, BotModule, PlaytestModule],
   controllers: [HealthController],
 })
 export class AppModule {}
