@@ -640,10 +640,10 @@ golden-сценарии обновлены.
       Fastify (`backend/api/test/http-app.test.ts`)
 - [x] Р9: Prisma 7 с `@prisma/adapter-pg`, BullMQ 6, ioredis 6 до первых
       прод-таблиц
-- [ ] Р9: **точные версии** во всех `package.json` монорепо (сейчас `^` в
-      корне, в бэкенде и у Phaser), `save-exact=true` в `.npmrc`, чтобы новые
-      зависимости сразу ставились точными; одна версия Node в `.nvmrc`,
-      Dockerfile и CI
+- [x] Р9: **точные версии** во всех `package.json` монорепо,
+      `save-exact=true` в `.npmrc`, чтобы новые зависимости сразу ставились
+      точными; одна версия Node — `22.22.3` в `.nvmrc`, в CI и в `engines`
+      (NestJS 12 требует не ниже 22.12). Dockerfile с той же версией — WP10
 - [ ] Конверт события по `22-analytics-and-metrics.md` §3.1 с `install_id` и
       `platform_user_id`
 - [ ] Новые события — сначала в словарь и Zod-схему в `shared-types`, потом
