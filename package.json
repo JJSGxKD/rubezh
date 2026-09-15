@@ -24,7 +24,8 @@
     "balance:sim": "vitest run --config vitest.balance.config.ts",
     "budget": "node scripts/bundle-budget.mjs",
     "docs:check": "node scripts/docs-check.mjs",
-    "closed-test:export": "pnpm --filter backend-api export"
+    "closed-test:export": "pnpm --filter backend-api export",
+    "replay": "node scripts/replay.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.70.0",

@@ -294,7 +294,7 @@ function manifest(input: {
     appVersions: input.appVersions,
     files: {
       "events.ndjson": "события закрытого теста, по строке на событие: конверт docs/22-analytics-and-metrics.md §3.1, payload — по схеме из dictionary",
-      "diagnostic_reports.ndjson": "отчёты диагностики целиком: стресс-тест (kind=bench) с таймлайном кадров по 5 секунд",
+      "diagnostic_reports.ndjson": "отчёты диагностики целиком: стресс-тест (kind=bench) с таймлайном кадров по 5 секунд и записи забегов (kind=run) — таймлайн, события, лог ввода; повтор забега — pnpm replay <reportId> --from diagnostic_reports.ndjson",
       "runs.csv": "итоги забегов из событий run_finished и run_abandoned плоской таблицей",
     },
     pseudonymization:

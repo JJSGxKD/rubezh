@@ -175,6 +175,10 @@ pnpm dev:vk          # http://localhost:5175
 Выгрузка данных закрытого теста без бота — `pnpm closed-test:export -- --days 1`
 (архив в `var/exports`, нужен `EXPORT_PSEUDONYM_KEY`; `28-diagnostics.md` §6).
 
+Повтор забега тестера по записи из выгрузки —
+`pnpm replay <reportId> --from diagnostic_reports.ndjson` (архив сначала
+распаковать; `28-diagnostics.md` §3.4). Код выхода 1 — дефект детерминизма.
+
 Туннель для проверки в Telegram с телефона — `pnpm tunnel` отдельным окном
 (§4). Производительность на устройстве меряет стресс-тест в самом приложении
 (`28-diagnostics.md` §2.3).
