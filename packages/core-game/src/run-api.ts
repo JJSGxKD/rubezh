@@ -1,4 +1,4 @@
-import type { DifficultyId, RunResult, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyId, RunOutcome, RunResult, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -205,7 +205,7 @@ export interface RunOptions {
 }
 
 export interface RunDiagnosticsOptions {
-  /** запись забега для повтора (docs/28-diagnostics.md §3.4), WP7 */
+  /** полная запись забега: таймлайн, события и лог ввода (docs/28-diagnostics.md §3.3) */
   recordRun: boolean;
   /** оверлей FPS поверх забега */
   fpsOverlay: boolean;
@@ -232,7 +232,150 @@ export interface RunEvents {
   finished: RunResult;
   /** игрок сдался на экране паузы */
   abandoned: RunResult;
+  /**
+   * Технический итог забега — сразу перед `finished` или `abandoned`, в том
+   * же вызове: оболочка кладёт сводку в событие итога.
+   */
+  diagnostics: RunDiagnostics;
   error: { message: string };
+}
+
+/** Технический итог забега (docs/28-diagnostics.md §3). */
+export interface RunDiagnostics {
+  perf: RunPerfSummary;
+  /** полная запись — только с `diagnostics.recordRun` */
+  recording: RunRecording | null;
+}
+
+/** Версия формата записи. Меняется формат — растёт версия. */
+export const RUN_RECORDING_SCHEMA = "rubezh.run.v1";
+
+/**
+ * Почему забег по записи не повторить:
+ *
+ * - `resumed` — забег продолжен из снимка, лог начинается с середины;
+ * - `dev` — забег разработчика: читы и команды в лог не пишутся;
+ * - `input_overflow` — лог ввода не влез в потолок.
+ */
+export type RunReplayBlocker = "resumed" | "dev" | "input_overflow";
+
+/**
+ * Полная запись забега (docs/28-diagnostics.md §3.3–§3.4): по ней видно, где
+ * и почему было плохо, и по ней же забег повторяется headless.
+ */
+export interface RunRecording {
+  schema: typeof RUN_RECORDING_SCHEMA;
+  /** ключ идемпотентности отчёта: создаётся в начале забега */
+  reportId: string;
+  runId: string;
+  /** UTC */
+  startedAt: string;
+  seed: number;
+  mapId: string;
+  difficultyId: DifficultyId;
+  startingWeaponId: string;
+  contentHash: string;
+  /** физических пикселей на игровую единицу — мир считается в них, повтору он нужен */
+  unitScale: number;
+  outcome: RunOutcome;
+  /** `null` — забег повторяется */
+  replayBlocker: RunReplayBlocker | null;
+  result: RunRecordingResult;
+  /** строка видеоадаптера WebGL — где браузер её отдаёт */
+  gpu: string | null;
+  perf: RunPerfSummary;
+  timeline: RunTimelineBucket[];
+  /** забег дольше часа — таймлайн обрезан */
+  timelineTruncated: boolean;
+  events: RunRecordingEvent[];
+  eventsTruncated: boolean;
+  input: RunInputLog;
+  /** выборы улучшений: тик и вариант */
+  choices: [tick: number, optionId: string][];
+  /** свёртка мира раз в минуту забега: где повтор разошёлся с оригиналом */
+  checkpoints: [tick: number, checksum: number][];
+}
+
+export interface RunRecordingResult {
+  ticks: number;
+  survivalSec: number;
+  level: number;
+  enemiesKilled: number;
+  deathCause: string | null;
+  checksum: number;
+}
+
+export interface RunInputLog {
+  encoding: "rle-v1";
+  ticks: number;
+  /** base64 серий: см. `game/diagnostics/input-log.ts` */
+  data: string;
+  truncated: boolean;
+}
+
+/**
+ * Событие забега с тиком симуляции: `wave` — начало отрезка таймлайна,
+ * `level` — набран уровень, `offer` — варианты через запятую, `choice` —
+ * выбор, `pause` — с причиной, `resume`, `resize` — «ширина×высота» канвы,
+ * `death` — причина смерти, `abandon` — сдался.
+ */
+export type RunRecordingEvent = [tick: number, kind: RunRecordingEventKind, value: string | number | null];
+
+export type RunRecordingEventKind = "wave" | "level" | "offer" | "choice" | "pause" | "resume" | "resize" | "death" | "abandon";
+
+/** Корзина таймлайна записи — пять секунд кадров, которым можно верить. */
+export interface RunTimelineBucket {
+  /** начало корзины по времени кадров, без пауз и фона */
+  startSec: number;
+  /** тик симуляции в конце корзины */
+  tick: number;
+  wave: number;
+  frames: number;
+  avgFps: number;
+  p50FrameMs: number;
+  p95FrameMs: number;
+  p99FrameMs: number;
+  over33Ratio: number;
+  /** среднее время одного шага симуляции */
+  simMsAvg: number;
+  /** самое долгое время шагов за кадр */
+  simMsMax: number;
+  /** больше одного — устройство не успевало, игра замедлялась */
+  maxSteps: number;
+  /** кадров с догонянием: больше одного шага за кадр */
+  catchUpFrames: number;
+  renderMsAvg: number;
+  enemies: number;
+  projectiles: number;
+  maxObjects: number;
+  heapMb: number | null;
+}
+
+/**
+ * Сводка производительности — у всех игроков, в `run_finished`
+ * (docs/28-diagnostics.md §3.2). Первые две секунды и кадры после сворачивания
+ * в неё не входят.
+ */
+export interface RunPerfSummary {
+  /** сколько кадров вошло в оценку: мало — цифрам верить нельзя */
+  frames: number;
+  durationSec: number;
+  avgFps: number;
+  p95FrameMs: number;
+  /** доля кадров дольше 33 мс */
+  over33Ratio: number;
+  /** пик врагов и снарядов вместе — сумма в один момент */
+  peakObjects: number;
+  /** оценка частоты экрана: без неё FPS не с чем сравнивать */
+  displayHz: number;
+  /** ограничение частоты отрисовки; `null` — рисуем со скоростью экрана */
+  renderCapFps: number | null;
+  renderer: "webgl" | "canvas";
+  dpr: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  /** сколько раз забег прерывался сворачиванием */
+  interruptions: number;
 }
 
 export interface RunSession {

@@ -4,6 +4,7 @@ import {
   type HudSnapshot,
   type RunDevCommand,
   type RunDevInfo,
+  type RunDiagnostics,
   type RunInspection,
   type RunPauseReason,
   type RunSession,
@@ -17,7 +18,7 @@ import { useDiagnostics } from "./diagnostics";
 import { useMeta } from "./meta";
 import { usePlaytest } from "./playtest";
 import { useSavedRun } from "./run-save";
-import { reportError, track, useShell } from "./shell";
+import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
  * Текущий забег: состояние для оверлеев и команды движку
@@ -120,6 +121,15 @@ let firstFrameStartedAt: number | null = null;
 /** Секунда забега, на которой он сохранялся последний раз. */
 let lastSavedSec = 0;
 
+/**
+ * Технический итог кончившегося забега. Движок шлёт его в том же вызове прямо
+ * перед `finished`/`abandoned`, итог забирает его и обнуляет.
+ */
+let pendingDiagnostics: RunDiagnostics | null = null;
+
+/** Ошибок клиента к началу забега: запись несёт, сколько случилось за забег. */
+let errorsAtRunStart = 0;
+
 const IDLE = {
   phase: "idle" as RunPhase,
   loadingStage: null as RunLoadingStage | null,
@@ -154,6 +164,7 @@ export const useRun = create<RunStore>((set, get) => ({
     set({ ...IDLE, phase: "loading", loadingStage: "engine", seed });
     startOptions = options;
     firstFrameStartedAt = performance.now();
+    errorsAtRunStart = clientErrorCount();
     lastSavedSec = resume?.summary.survivalSec ?? 0;
     // Новый забег занимает единственное место сохранения: старое игрок уже
     // бросил, согласившись в лобби.
@@ -259,6 +270,7 @@ export const useRun = create<RunStore>((set, get) => ({
     const devRun = get().devRun;
     set({ ...IDLE, phase: "running", seed, devRun });
     lastSavedSec = 0;
+    errorsAtRunStart = clientErrorCount();
     session.restart(seed);
     setRunUiMode(true);
 
@@ -295,6 +307,7 @@ export const useRun = create<RunStore>((set, get) => ({
     session = null;
     startOptions = null;
     firstFrameStartedAt = null;
+    pendingDiagnostics = null;
     setRunUiMode(false);
     set({ ...IDLE, phase: "idle" });
   },
@@ -365,6 +378,16 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
 
     created.on("devInfo", (devInfo) => set({ devInfo })),
 
+    created.on("diagnostics", (diagnostics) => {
+      pendingDiagnostics = diagnostics;
+      const recording = diagnostics.recording;
+      if (recording === null) return;
+      const clientErrors = clientErrorCount() - errorsAtRunStart;
+      // Очередь — отдельным чанком: запись нужна тестерам, а не каждому игроку.
+      import("./run-report")
+        .then(({ queueRunReport }) => queueRunReport(recording, clientErrors))
+        .catch((error: unknown) => reportError("reports", `запись забега не поставлена в очередь: ${String(error)}`));
+    }),
     created.on("finished", (result) => finishRun(result, "run_finished", set, get)),
     created.on("abandoned", (result) => finishRun(result, "run_abandoned", set, get)),
 
@@ -414,6 +437,8 @@ function finishRun(
   if (result.outcome === "died") audio.runEvent("death");
   if (isNewRecord) audio.runEvent("record");
 
+  const diagnostics = pendingDiagnostics;
+  pendingDiagnostics = null;
   track(event, {
     seed: result.seed,
     survivalSec: Math.round(result.survivalSec),
@@ -426,7 +451,34 @@ function finishRun(
     contentHash: result.contentHash,
     isNewRecord,
     cheats: result.cheats,
+    ...(diagnostics === null ? {} : perfFields(diagnostics.perf)),
   });
+}
+
+/**
+ * Сводка производительности плоскими полями (docs/28-diagnostics.md §3.2):
+ * `payload` событий плоский, вложенный объект сервер не примет.
+ */
+function perfFields(perf: RunDiagnostics["perf"]): Record<string, string | number | null> {
+  return {
+    perfFrames: perf.frames,
+    perfAvgFps: round(perf.avgFps, 1),
+    perfP95FrameMs: round(perf.p95FrameMs, 2),
+    perfOver33Ratio: round(perf.over33Ratio, 4),
+    perfPeakObjects: perf.peakObjects,
+    perfDisplayHz: perf.displayHz,
+    perfRenderCapFps: perf.renderCapFps,
+    perfRenderer: perf.renderer,
+    perfDpr: round(perf.dpr, 2),
+    perfCanvasWidth: perf.canvasWidth,
+    perfCanvasHeight: perf.canvasHeight,
+    perfInterruptions: perf.interruptions,
+  };
+}
+
+function round(value: number, digits: number): number {
+  const scale = 10 ** digits;
+  return Math.round(value * scale) / scale;
 }
 
 /**

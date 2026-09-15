@@ -55,6 +55,17 @@ export interface StatsSnapshot {
   startingWeapons: Record<string, number>;
   deathCauses: Record<string, number>;
   stress: StressAggregate;
+  recordings: RecordingAggregate;
+}
+
+/**
+ * Записи забегов в сводке: сколько пришло и сколько проблемных по причинам.
+ * Проблемные приходят в чат карточками, а остальные видны только здесь.
+ */
+export interface RecordingAggregate {
+  reports: number;
+  problematic: number;
+  byProblem: Record<string, number>;
 }
 
 export interface StressAggregate {
@@ -92,6 +103,8 @@ export interface PlaytestStatsStore {
   recordSession(playerId: string, session: SessionRecord, nowMs: number): Promise<void>;
   recordRun(playerId: string, run: StoredRun, nowMs: number): Promise<void>;
   recordStress(summary: StressSummary, nowMs: number): Promise<boolean>;
+  /** `false` — эта запись уже учтена */
+  recordRecording(reportId: string, problems: readonly string[]): Promise<boolean>;
   snapshot(nowMs: number): Promise<StatsSnapshot>;
 }
 

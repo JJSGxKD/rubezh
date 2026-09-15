@@ -20,6 +20,7 @@ import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from ".
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
 import { installErrorReporting } from "./state/error-reporting";
 import { createId } from "./state/ids";
+import { REPORT_QUEUE_KEY } from "./state/report-keys";
 
 /**
  * Точка входа оболочки. Адаптер площадки приходит готовым объектом из
@@ -106,6 +107,13 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   void usePlaytest.getState().loadAccess();
   void usePlaytest.getState().reportSession();
   const stopTelemetry = startTelemetry(options, telemetrySink.attach);
+  // Записи забегов, не ушедшие в прошлый раз, досылаются после главной. Чанк
+  // очереди грузится, только если в ней что-то лежит: у обычного игрока пусто.
+  if (options.capabilities.telemetry !== undefined && (options.adapter.storage?.get(REPORT_QUEUE_KEY) ?? null) !== null) {
+    import("./state/run-report")
+      .then(({ startReportQueue }) => startReportQueue())
+      .catch((error: unknown) => console.warn("Очередь отчётов не загрузилась:", error));
+  }
 
   // Время до интерактивной главной — бюджет первой загрузки проверяется не
   // только размером файлов, но и на устройствах тестеров (§3.4).

@@ -11,6 +11,8 @@ import { RunCamera } from "./render/run-camera";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { benchInput } from "./bench/autopilot";
 import { FrameRecorder, type BenchStopReason } from "./bench/metrics";
+import { FrameClock } from "./diagnostics/frame-clock";
+import { watchVisibility } from "../engine/visibility";
 import { DegradationDetector } from "./bench/degradation-detector";
 import { evaluateBench } from "./bench/verdict";
 import { createUuid } from "./uuid";
@@ -51,15 +53,10 @@ export class BenchScene extends Phaser.Scene {
   private running = false;
   private accumulatorMs = 0;
   private tick = 0;
-  private lastTimestamp = 0;
   private startedAt = "";
   private reportId = "";
-  /** приложение свёрнуто: кадры в этот момент к производительности отношения не имеют */
-  private suspended = false;
-  /** сколько кадров пропустить после возврата из фона */
-  private skipFrames = 0;
-  private interruptions = 0;
-  private visibilityHandler: (() => void) | null = null;
+  /** каким кадрам верить: фон и возврат из него в замер не попадают */
+  private readonly clock = new FrameClock();
   private lastProgressAt = 0;
 
   constructor() {
@@ -112,12 +109,10 @@ export class BenchScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor("#0d0f14");
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-    this.watchVisibility();
+    const stopWatching = watchVisibility(this.clock);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-      if (this.visibilityHandler !== null) {
-        document.removeEventListener("visibilitychange", this.visibilityHandler);
-      }
+      stopWatching();
     });
 
     this.running = true;
@@ -125,13 +120,8 @@ export class BenchScene extends Phaser.Scene {
 
   update(time: number, deltaMs: number): void {
     if (this.running) {
-      // Второй аргумент update() Phaser сглаживает и обрезает сверху — по нему
-      // фризы не видны вовсе, а именно они решают вопрос играбельности.
-      // Меряем по сырым меткам времени кадра.
-      const rawFrameMs = this.lastTimestamp === 0 ? deltaMs : time - this.lastTimestamp;
-      this.lastTimestamp = time;
-
-      if (this.isFrameTrustworthy()) {
+      const rawFrameMs = this.clock.frame(time, deltaMs);
+      if (rawFrameMs !== null) {
         this.recorder.record(rawFrameMs, this.world.enemies.aliveCount, this.world.projectiles.aliveCount);
 
         this.accumulatorMs += Math.min(deltaMs, TICK_MS * MAX_STEPS_PER_FRAME);
@@ -189,26 +179,8 @@ export class BenchScene extends Phaser.Scene {
       fps: current === undefined ? null : current.avgFps,
       p95FrameMs: current === undefined ? null : current.p95FrameMs,
       badWindows: this.detector.badWindows,
-      interruptions: this.interruptions,
+      interruptions: this.clock.interruptions,
     });
-  }
-
-  /**
-   * Кадр годится для замера, только если приложение на экране.
-   *
-   * Возврат из фона даёт один кадр длиной в секунды: детектор видит в нём
-   * обвал и останавливает прогон, а перцентили и минимальный FPS оказываются
-   * испорчены. Это уже случалось на живом прогоне — результат пришлось
-   * выбросить. Поэтому кадры в фоне и первые кадры после возврата не
-   * записываются вовсе.
-   */
-  private isFrameTrustworthy(): boolean {
-    if (this.suspended) return false;
-    if (this.skipFrames > 0) {
-      this.skipFrames--;
-      return false;
-    }
-    return true;
   }
 
   private checkStopConditions(rawFrameMs: number): void {
@@ -229,25 +201,6 @@ export class BenchScene extends Phaser.Scene {
     }
 
     if (this.recorder.elapsedSec >= BENCH_STRESS.durationSec) this.finish("duration");
-  }
-
-  private watchVisibility(): void {
-    if (typeof document === "undefined") return;
-
-    this.visibilityHandler = (): void => {
-      if (document.hidden) {
-        this.suspended = true;
-        return;
-      }
-      this.suspended = false;
-      // Первые кадры после возврата ещё содержат хвост простоя, поэтому
-      // пропускаем не один, а несколько.
-      this.skipFrames = 3;
-      this.lastTimestamp = 0;
-      this.interruptions++;
-    };
-
-    document.addEventListener("visibilitychange", this.visibilityHandler);
   }
 
   private handleResize(): void {
@@ -275,7 +228,7 @@ export class BenchScene extends Phaser.Scene {
       this.sceneData.device,
       this.startedAt,
       reason,
-      this.interruptions,
+      this.clock.interruptions,
     );
 
     // Отправку и показ итога ведёт оболочка: она знает игрока и сервер.

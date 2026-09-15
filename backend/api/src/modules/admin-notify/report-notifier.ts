@@ -5,16 +5,18 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { createQueueConnection } from "../../infra/queues.js";
 import { DiagnosticsHooks, type ReceivedReport } from "../diagnostics/diagnostics-hooks.js";
-import { benchSummaryOf } from "../diagnostics/diagnostics-summary.js";
+import { benchSummaryOf, runSummaryOf } from "../diagnostics/diagnostics-summary.js";
 import { DIAGNOSTICS_REPOSITORY, type DiagnosticsRepository } from "../diagnostics/diagnostics.repository.js";
 import { TelegramApiError, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
+import { renderRunCardPng, runCaption, type RunCardInput } from "./run-card.js";
 import { renderStressCardPng, stressCaption, type StressCardInput } from "./stress-card.js";
 
 /**
  * Уведомления в чат администраторов о новых отчётах диагностики: каждый
- * стресс-тест — карточкой с графиком. Записи забегов (WP7) — только
- * проблемные, остальные уходят в ежедневную сводку.
+ * стресс-тест — карточкой с графиком, запись забега — только проблемная
+ * (рывки кадров, догоняние симуляции, ошибки клиента). Остальные записи —
+ * счётчиком в ежедневной сводке: карточка на каждый забег утопила бы чат.
  *
  * Отправка — через очередь, а не из обработчика отчёта:
  * - Telegram пускает в группу около 20 сообщений в минуту, и волна стресс-тестов
@@ -33,6 +35,8 @@ const ENQUEUE_TIMEOUT_MS = 2_000;
 
 interface NotifyJob {
   reportId: string;
+  /** задания до записей забегов вида не несли — это стресс-тесты */
+  kind?: "bench" | "run";
 }
 
 export type NotifierBotApi = Pick<TelegramBotApi, "sendPhoto">;
@@ -84,13 +88,14 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
   }
 
   async enqueue(report: ReceivedReport): Promise<void> {
-    if (report.kind !== "bench" || this.queue === null) return;
+    if (this.queue === null) return;
+    if (report.kind === "run" && report.summary.problems.length === 0) return;
     // jobId от reportId: повтор отчёта не породит второе уведомление. Двоеточие
     // BullMQ в своих идентификаторах не пускает — это разделитель его ключей.
     await withTimeout(
       this.queue.add(
         "report",
-        { reportId: report.reportId },
+        { reportId: report.reportId, kind: report.kind },
         {
           jobId: `report-${report.reportId}`,
           attempts: 6,
@@ -106,15 +111,14 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
 
   /** Одна отправка. Вынесена ради тестов: очередь вокруг неё — BullMQ. */
   async process(job: Pick<Job<NotifyJob>, "data">): Promise<void> {
-    const stored = await this.reports.findBench(job.data.reportId);
+    const card = await this.cardOf(job.data);
     // Отчёт удалён сроком хранения или не разбирается нынешней схемой —
     // повтор не поможет.
-    if (stored === null) throw new UnrecoverableError(`отчёт ${job.data.reportId} не найден`);
+    if (card === null) throw new UnrecoverableError(`отчёт ${job.data.reportId} не найден`);
 
-    const input: StressCardInput = { ...stored, summary: benchSummaryOf(stored.payload) };
     try {
-      await this.api.sendPhoto(this.config.telegram.adminChatId, renderStressCardPng(input), stressCaption(input));
-      this.log("log", "notify_sent", { reportId: stored.reportId });
+      await this.api.sendPhoto(this.config.telegram.adminChatId, card.png, card.caption);
+      this.log("log", "notify_sent", { reportId: job.data.reportId, kind: job.data.kind ?? "bench" });
     } catch (error: unknown) {
       if (error instanceof TelegramApiError && error.errorCode === 429 && error.retryAfterSec !== null && this.queue !== null) {
         // Telegram сам сказал, сколько ждать: притормаживаем всю очередь,
@@ -128,6 +132,20 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
       }
       throw error;
     }
+  }
+
+  /** Карточка по отчёту из базы: у записи забега и стресс-теста — своя. */
+  private async cardOf(job: NotifyJob): Promise<{ png: Buffer; caption: string } | null> {
+    if (job.kind === "run") {
+      const stored = await this.reports.findRun(job.reportId);
+      if (stored === null) return null;
+      const input: RunCardInput = { ...stored, summary: runSummaryOf(stored.payload) };
+      return { png: renderRunCardPng(input), caption: runCaption(input) };
+    }
+    const stored = await this.reports.findBench(job.reportId);
+    if (stored === null) return null;
+    const input: StressCardInput = { ...stored, summary: benchSummaryOf(stored.payload) };
+    return { png: renderStressCardPng(input), caption: stressCaption(input) };
   }
 
   private log(level: "log" | "warn", event: string, fields: Record<string, unknown>): void {

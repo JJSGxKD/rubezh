@@ -9,9 +9,10 @@ import { vectorLength } from "./vector";
 import { clampToBounds, damagePlayer, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
 
 /**
- * Ввод игрока за тик. Нормализуется вызывающим кодом; симуляция принимает
- * направление, а не координаты курсора — так один и тот же скрипт ввода
- * воспроизводится и с джойстика, и из теста (docs/17-testing-strategy.md §3.2).
+ * Ввод игрока за тик — направление, а не координаты курсора: так один и тот же
+ * скрипт ввода воспроизводится и с джойстика, и из теста
+ * (docs/17-testing-strategy.md §3.2). Длина не важна, шаг нормирует сам; живой
+ * забег приносит квантованную точку из `input-code.ts`.
  */
 export interface SimInput {
   moveX: number;

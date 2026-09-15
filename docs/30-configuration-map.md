@@ -174,6 +174,9 @@
 | `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts` | `state/run-save.ts` |
 | `bh.playtest.v1.pending` | итоги забегов, ещё не дошедшие до сервера плейтеста | `state/playtest.ts` |
 | `bh.telemetry.v1.queue` | события, ещё не дошедшие до приёмника; до 500 штук, старые вытесняются | `state/telemetry.ts` |
+| `bh.reports.v1.queue` | записи забегов, ещё не дошедшие до приёмника диагностики; до 10 штук и 1 МБ, старые вытесняются | `state/report-keys.ts`, очередь — `state/report-queue.ts` |
+| `bh.reports.v1.sent` | десять последних отправленных отчётов для экрана «Последние отчёты» | `state/report-queue.ts` |
+| `bh.reports.v1.evicted` | сколько отчётов вытеснено и ещё не сообщено серверу | `state/report-queue.ts` |
 
 Само хранилище приходит от адаптера площадки портом `KeyValueStorage`, а не
 берётся из `localStorage` напрямую: переезд на `DeviceStorage` Telegram не
@@ -304,10 +307,17 @@ pnpm budget
 | Режим разработчика: окно технической сводки, потолок шагов на паузе | `core-game/src/game/MainScene.ts` → `DEV_INFO_INTERVAL_MS`, `MAX_DEV_STEP_TICKS` |
 | Режим разработчика: наборы, скорости времени, множители урона и бега, умолчания | `app-shell/src/state/dev-mode.ts` → `DEV_PRESETS`, `TIME_SCALES`, `DAMAGE_MULS`, `MOVE_SPEED_MULS`, `DEFAULT_DEV_SETTINGS` |
 | Что попадает в отчёт и версия его схемы | `bench/metrics.ts` → `BENCH_REPORT_SCHEMA` |
+| Сводка производительности забега: шаг гистограммы, прогрев, порог рывка | `core-game/src/game/diagnostics/run-perf.ts` → `BIN_MS`, `BINS`, `WARMUP_MS`; `frame-stats.ts` → `JANK_FRAME_MS` |
+| Очередь отчётов на устройстве: потолки, паузы повтора, длина истории | `app-shell/src/state/report-queue.ts` → `REPORT_QUEUE_MAX_ITEMS`, `REPORT_QUEUE_MAX_BYTES`, `BASE_BACKOFF_MS`, `MAX_BACKOFF_MS`, `SENT_HISTORY_SIZE` |
+| Запись забега: корзина таймлайна и её потолок, свёртки мира, потолок событий, формат | `game/diagnostics/run-timeline.ts` → `TIMELINE_BUCKET_SEC`, `TIMELINE_MAX_BUCKETS`; `run-recorder.ts` → `CHECKPOINT_TICKS`, `MAX_RECORDED_EVENTS`; `run-api.ts` → `RUN_RECORDING_SCHEMA` |
+| Лог ввода: потолок и кодировка; квантование направления и гистерезис | `game/diagnostics/input-log.ts` → `INPUT_LOG_MAX_BYTES`, `INPUT_LOG_ENCODING`; `game/sim/input-code.ts` → `DIRECTION_CODES`, `HYSTERESIS` |
 | Критерии вердикта «тянет / не тянет» | `bench/verdict.ts` |
 | Определение просадки, на которой стресс-тест останавливается | `bench/degradation-detector.ts` → `DEFAULT_DEGRADATION` |
 | Скрипт движения автопилота | `bench/autopilot.ts` |
-| Приёмник отчётов диагностики: конверт, схема отчёта стресс-теста, итог для выборок, кому открыт стресс-тест | `backend/api/src/modules/diagnostics/dto/report-envelope.dto.ts`, `dto/bench-report.dto.ts`; `diagnostics-summary.ts` → `benchSummaryOf`; `diagnostics.service.ts` → `stressTestOpen` |
+| Приёмник отчётов диагностики: конверт, схемы стресс-теста и записи забега, итог для выборок, кому открыт стресс-тест | `backend/api/src/modules/diagnostics/dto/report-envelope.dto.ts`, `dto/bench-report.dto.ts`, `dto/run-report.dto.ts`; `diagnostics-summary.ts` → `benchSummaryOf`, `runSummaryOf`; `diagnostics.service.ts` → `stressTestOpen` |
+| Какой забег проблемный: минимум кадров, доля рывков, p95 кадра, доля догоняния, потолок шагов | `backend/api/src/modules/diagnostics/diagnostics-summary.ts` → `RUN_PROBLEM_THRESHOLDS` |
+| Карточка проблемного забега в чате администраторов: вид, подпись, названия причин | `backend/api/src/modules/admin-notify/run-card.ts`; `common/card/labels.ts` → `runProblemLabel` |
+| Записи забегов в ежедневной сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts`; `redis-playtest-stats.store.ts` → ключи `pt:st:rec*` |
 | Итог стресс-теста в сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts` |
 
 Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.

@@ -31,6 +31,9 @@ function payload<Shape extends z.ZodRawShape>(shape: Shape) {
     .refine((value) => Object.keys(value).length <= MAX_PAYLOAD_KEYS, { message: "слишком много полей" });
 }
 
+const amount = z.number().nonnegative();
+const ratio = z.number().min(0).max(1);
+
 const runOutcome = payload({
   seed: z.number().int(),
   survivalSec: seconds,
@@ -43,6 +46,20 @@ const runOutcome = payload({
   contentHash: id,
   isNewRecord: z.boolean(),
   cheats: z.boolean(),
+  // Сводка производительности (docs/28-diagnostics.md §3.2). Необязательная:
+  // сборки до неё её не шлют, а смысл остальных полей она не меняет.
+  perfFrames: count.optional(),
+  perfAvgFps: amount.optional(),
+  perfP95FrameMs: amount.optional(),
+  perfOver33Ratio: ratio.optional(),
+  perfPeakObjects: count.optional(),
+  perfDisplayHz: count.optional(),
+  perfRenderCapFps: count.nullable().optional(),
+  perfRenderer: z.enum(["webgl", "canvas"]).optional(),
+  perfDpr: z.number().positive().max(10).optional(),
+  perfCanvasWidth: count.optional(),
+  perfCanvasHeight: count.optional(),
+  perfInterruptions: count.optional(),
 });
 
 export const EVENT_DICTIONARY = {

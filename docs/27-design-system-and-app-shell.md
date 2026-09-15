@@ -148,7 +148,7 @@ export interface RunEvents {
   levelUp: { level: number; options: UpgradeOption[]; queued: number };
   finished: RunResult;               // смерть
   abandoned: RunResult;
-  diagnosticsReady: RunDiagnosticsReport; // только при recordRun
+  diagnostics: RunDiagnostics; // сводка у всех, запись — только при recordRun
   error: { message: string };
 }
 ```
@@ -159,7 +159,9 @@ export interface RunEvents {
 - добавлены события `waveReached`, `paused` и `resumed`: отрезок таймлайна
   уходит в аналитику как `wave_reached`, а пауза может прийти и от площадки
   (сворачивание приложения), не только от кнопки;
-- `diagnosticsReady` появится вместе с записью забега (WP7);
+- технический итог — событие `diagnostics` сразу перед `finished`/`abandoned`
+  в том же вызове: сводка производительности у всех игроков и полная запись
+  забега при `recordRun` (`28-diagnostics.md` §3);
 - у `RunOptions` есть `pixelRatio` и `renderCapFps` — их фиксирует стенд
   испытаний, чтобы прогоны на разных экранах были сравнимы.
 

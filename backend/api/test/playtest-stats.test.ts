@@ -41,6 +41,7 @@ function snapshot(patch: Partial<StatsSnapshot> = {}): StatsSnapshot {
         ios: { reports: 1, totalPeak: 900, outcomes: { manual: 1 } },
       },
     },
+    recordings: { reports: 9, problematic: 3, byProblem: { frame_drops: 2, catch_up: 1, client_errors: 1 } },
     ...patch,
   };
 }
@@ -124,10 +125,12 @@ describe("картинка сводки", () => {
       startingWeapons: {},
       deathCauses: {},
       stress: { reports: 0, byOs: {} },
+      recordings: { reports: 0, problematic: 0, byProblem: {} },
     });
     const svg = renderStatsSvg(buildStatsSummary(empty, { easy: null, normal: null, hard: null }, NOW, 180), 180);
     expect(svg).toContain("нет данных");
     expect(svg).toContain("Отчётов пока нет");
+    expect(svg).toContain("Записи забегов: пока нет");
   });
 
   it("растеризует в PNG", () => {

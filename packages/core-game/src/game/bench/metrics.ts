@@ -1,12 +1,16 @@
+import {
+  average,
+  estimateDisplayHz,
+  maximum,
+  maximumSum,
+  ratioOver,
+  summarizeFrames,
+  type FrameStats,
+} from "../diagnostics/frame-stats";
+
 /**
- * Сбор метрик кадра для стресс-теста (docs/28-diagnostics.md §2.3); протокол
- * замера выверен на FPS-испытаниях этапа 1 (docs/25-week1-fps-trials.md).
- *
- * Почему не `game.loop.actualFps` и не второй аргумент `update()`: первое —
- * сглаженное среднее, второе Phaser сглаживает по истории и обрезает сверху,
- * чтобы логика не «прыгала» после подвисания. В обоих случаях фриз, ради
- * поиска которого всё затевалось, в цифре не появляется. Поэтому стенд пишет
- * сырое время каждого кадра и считает по нему перцентили.
+ * Буфер кадров стресс-теста (docs/28-diagnostics.md §2.3). Статистика кадров
+ * общая с обычным забегом — `diagnostics/frame-stats.ts`.
  *
  * Вместе с каждым кадром пишется текущая нагрузка — число живых врагов.
  * Это то, что превращает замер из «тянет / не тянет» в ответ на вопрос
@@ -15,6 +19,8 @@
  * Модуль не знает про Phaser и DOM: его можно прогнать в тестах на
  * синтетическом наборе кадров и проверить, что метрики считаются как задумано.
  */
+
+export type { FrameStats } from "../diagnostics/frame-stats";
 
 /** Схема отчёта. Меняется формат — растёт версия, старые прогоны остаются читаемыми. */
 export const BENCH_REPORT_SCHEMA = "rubezh.bench.v4";
@@ -40,19 +46,6 @@ export type BenchStopReason =
   | "degradation"
   | "pool_exhausted"
   | "manual";
-
-export interface FrameStats {
-  frames: number;
-  durationSec: number;
-  avgFps: number;
-  /** FPS по самому долгому кадру — сколько было в худший момент */
-  minFps: number;
-  p50FrameMs: number;
-  p95FrameMs: number;
-  p99FrameMs: number;
-  /** доля кадров дольше 33 мс — заметные глазу рывки */
-  over33Ratio: number;
-}
 
 export interface WindowSample extends FrameStats {
   index: number;
@@ -223,7 +216,7 @@ export class FrameRecorder {
     return this.split(this.windowSec).map((slice, index) => ({
       index,
       startSec: slice.startSec,
-      ...summarize(this.frameMs.subarray(slice.from, slice.to)),
+      ...summarizeFrames(this.frameMs.subarray(slice.from, slice.to)),
       avgLoad: average(this.loads.subarray(slice.from, slice.to)),
       maxLoad: maximum(this.loads.subarray(slice.from, slice.to)),
       avgProjectiles: average(this.projectileLoads.subarray(slice.from, slice.to)),
@@ -238,7 +231,7 @@ export class FrameRecorder {
     return this.split(this.bucketSec).map((slice, index) => ({
       index,
       startSec: slice.startSec,
-      ...summarize(this.frameMs.subarray(slice.from, slice.to)),
+      ...summarizeFrames(this.frameMs.subarray(slice.from, slice.to)),
       load: average(this.loads.subarray(slice.from, slice.to)),
       projectiles: average(this.projectileLoads.subarray(slice.from, slice.to)),
     }));
@@ -264,7 +257,7 @@ export class FrameRecorder {
       profile,
       device,
       totals: {
-        ...summarize(frames),
+        ...summarizeFrames(frames),
         over20Ratio: ratioOver(frames, 20),
         degradationRatio: degradation(windows),
         displayHz: estimateDisplayHz(frames),
@@ -300,99 +293,6 @@ export class FrameRecorder {
 
     return slices;
   }
-}
-
-function summarize(frames: Float32Array): FrameStats {
-  if (frames.length === 0) {
-    return {
-      frames: 0,
-      durationSec: 0,
-      avgFps: 0,
-      minFps: 0,
-      p50FrameMs: 0,
-      p95FrameMs: 0,
-      p99FrameMs: 0,
-      over33Ratio: 0,
-    };
-  }
-
-  let totalMs = 0;
-  let worstFrameMs = 0;
-  for (let i = 0; i < frames.length; i++) {
-    totalMs += frames[i];
-    if (frames[i] > worstFrameMs) worstFrameMs = frames[i];
-  }
-
-  const sorted = Float32Array.from(frames).sort();
-
-  return {
-    frames: frames.length,
-    durationSec: totalMs / 1000,
-    avgFps: frames.length / (totalMs / 1000),
-    minFps: worstFrameMs > 0 ? 1000 / worstFrameMs : 0,
-    p50FrameMs: percentile(sorted, 0.5),
-    p95FrameMs: percentile(sorted, 0.95),
-    p99FrameMs: percentile(sorted, 0.99),
-    over33Ratio: ratioOver(frames, 33),
-  };
-}
-
-/** Ближайший ранг: без интерполяции — значение перцентиля реально встречалось. */
-function percentile(sorted: Float32Array, fraction: number): number {
-  if (sorted.length === 0) return 0;
-  const rank = Math.ceil(fraction * sorted.length) - 1;
-  return sorted[Math.min(Math.max(rank, 0), sorted.length - 1)];
-}
-
-function ratioOver(frames: Float32Array, thresholdMs: number): number {
-  if (frames.length === 0) return 0;
-  let count = 0;
-  for (let i = 0; i < frames.length; i++) {
-    if (frames[i] > thresholdMs) count++;
-  }
-  return count / frames.length;
-}
-
-function average(values: Float32Array): number {
-  if (values.length === 0) return 0;
-  let total = 0;
-  for (let i = 0; i < values.length; i++) total += values[i];
-  return total / values.length;
-}
-
-/**
- * Частота экрана берётся из начала прогона: там нагрузка ещё минимальна, и
- * время кадра упирается в вертикальную синхронизацию, а не в отрисовку.
- * Медиана, а не среднее — чтобы один долгий кадр на старте не сбивал оценку.
- */
-function estimateDisplayHz(frames: Float32Array): number {
-  if (frames.length === 0) return 0;
-
-  // Первые три секунды при 60 Гц — около 180 кадров; берём с запасом и
-  // пропускаем самое начало, где ещё идёт компиляция шейдеров.
-  const from = Math.min(30, frames.length - 1);
-  const to = Math.min(from + 240, frames.length);
-  const sample = Float32Array.from(frames.subarray(from, to)).sort();
-  const median = sample[Math.floor(sample.length / 2)];
-
-  return median > 0 ? Math.round(1000 / median) : 0;
-}
-
-function maximumSum(first: Float32Array, second: Float32Array): number {
-  let best = 0;
-  for (let i = 0; i < first.length; i++) {
-    const sum = first[i] + second[i];
-    if (sum > best) best = sum;
-  }
-  return best;
-}
-
-function maximum(values: Float32Array): number {
-  let best = 0;
-  for (let i = 0; i < values.length; i++) {
-    if (values[i] > best) best = values[i];
-  }
-  return best;
 }
 
 function degradation(windows: WindowSample[]): number {

@@ -8,6 +8,7 @@ import { createWorld, DEFAULT_SIM_CONFIG, type World } from "../../src/game/sim/
 import { stepWorld } from "../../src/game/sim/step";
 import { createConstantPopulationSpawner } from "../../src/game/sim/spawner";
 import { benchInput } from "../../src/game/bench/autopilot";
+import { checksumWorld } from "../../src/game/sim/checksum";
 
 /**
  * Общая обвязка для прогонов симуляции в тестах. Сценарий ввода — функция от
@@ -86,57 +87,5 @@ export function runScripted(options: ScriptedRunOptions): ScriptedRunResult {
   return { world, checksum: checksumWorld(world) };
 }
 
-/**
- * Свёртка позиций и статистики в 32-битное число. Сравнение точное, без
- * допусков: цель — заметить любое расхождение, а не оценить его величину.
- */
-export function checksumWorld(world: World): number {
-  let hash = 2166136261;
-  const fold = (value: number): void => {
-    hash = Math.imul(hash ^ Math.round(value * 1000), 16777619) | 0;
-  };
-
-  fold(world.player.x);
-  fold(world.player.y);
-  fold(world.player.hp);
-  fold(world.stats.enemiesSpawned);
-  fold(world.stats.enemiesKilled);
-  fold(world.stats.damageTaken);
-  fold(world.stats.shotsFired);
-  fold(world.stats.deathCauseType);
-  fold(world.stats.distance);
-  for (const kills of world.stats.killsByType) fold(kills);
-
-  // Прокачка — часть состояния забега: без неё расхождение в выборе
-  // улучшений или в опыте осталось бы незамеченным.
-  fold(world.progression.level);
-  fold(world.progression.xp);
-  fold(world.progression.totalXp);
-  for (const weapon of world.loadout.weapons) {
-    fold(weapon.typeIndex);
-    fold(weapon.level);
-    fold(weapon.cooldown);
-  }
-  for (const passive of world.loadout.passives) {
-    fold(passive.typeIndex);
-    fold(passive.level);
-  }
-  for (let i = 0; i < world.gems.count; i++) {
-    fold(world.gems.alive[i]);
-    if (world.gems.alive[i] === 0) continue;
-    fold(world.gems.x[i]);
-    fold(world.gems.y[i]);
-    fold(world.gems.value[i]);
-  }
-
-  for (let i = 0; i < world.enemies.count; i++) {
-    fold(world.enemies.alive[i]);
-    if (world.enemies.alive[i] === 0) continue;
-    fold(world.enemies.x[i]);
-    fold(world.enemies.y[i]);
-    fold(world.enemies.hp[i]);
-    fold(world.enemies.phase[i]);
-    fold(world.enemies.ringRadius[i]);
-  }
-  return hash;
-}
+/** Свёртка мира живёт в исходниках: ею же сверяет запись забега (sim/checksum.ts). */
+export { checksumWorld } from "../../src/game/sim/checksum";

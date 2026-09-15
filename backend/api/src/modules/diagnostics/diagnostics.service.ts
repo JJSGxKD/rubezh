@@ -4,11 +4,12 @@ import { ForbiddenError, RateLimitedError, UnavailableError, ValidationError } f
 import type { IngestIdentity } from "../ingest/ingest.guard.js";
 import { INGEST_LIMITS } from "../ingest/ingest-limits.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
-import { DiagnosticsHooks } from "./diagnostics-hooks.js";
 import { DIAGNOSTICS_REPOSITORY, type DiagnosticsRepository } from "./diagnostics.repository.js";
-import { benchSummaryOf } from "./diagnostics-summary.js";
+import { DiagnosticsHooks, type ReceivedReport } from "./diagnostics-hooks.js";
+import { benchSummaryOf, runSummaryOf } from "./diagnostics-summary.js";
 import { submitBenchReportSchema } from "./dto/bench-report.dto.js";
-import { reportEnvelopeSchema, type BenchSubmission } from "./dto/report-envelope.dto.js";
+import { reportEnvelopeSchema, type BenchSubmission, type ReportEnvelope } from "./dto/report-envelope.dto.js";
+import { submitRunReportSchema } from "./dto/run-report.dto.js";
 
 export interface ReceiveResult {
   reportId: string;
@@ -40,32 +41,24 @@ export class DiagnosticsService {
   async receive(body: unknown, identity: IngestIdentity, now: Date): Promise<ReceiveResult> {
     const envelope = reportEnvelopeSchema.safeParse(body);
     if (!envelope.success) throw new ValidationError("Некорректный отчёт диагностики");
-    const parsed = submitBenchReportSchema.safeParse(envelope.data.payload);
-    if (!parsed.success || parsed.data.reportId !== envelope.data.reportId) {
-      throw new ValidationError("Некорректный отчёт стресс-теста");
-    }
-    if (!stressTestOpen(this.config, identity.platformUserId)) {
-      throw new ForbiddenError("Стресс-тест сейчас недоступен");
-    }
+    const report = this.parse(envelope.data, identity, now);
     await this.enforceLimits(envelope.data.installId, identity.platformUserId);
 
-    const payload = withoutPersonalData(parsed.data);
-    const summary = benchSummaryOf(payload);
     let inserted: boolean;
     try {
       inserted = await this.repository.insert({
         reportId: envelope.data.reportId,
-        kind: envelope.data.kind,
-        schemaVersion: payload.report.schema,
+        kind: report.kind,
+        schemaVersion: report.kind === "bench" ? report.payload.report.schema : report.payload.recording.schema,
         appVersion: envelope.data.appVersion,
         contentHash: envelope.data.contentHash,
         installId: envelope.data.installId,
         platformUserId: identity.platformUserId,
         platform: envelope.data.platform,
         device: envelope.data.device,
-        summary,
-        payload,
-        sizeBytes: Buffer.byteLength(JSON.stringify(payload)),
+        summary: report.summary,
+        payload: report.payload,
+        sizeBytes: Buffer.byteLength(JSON.stringify(report.payload)),
         occurredAt: new Date(envelope.data.occurredAt),
         receivedAt: now,
       });
@@ -77,20 +70,40 @@ export class DiagnosticsService {
       throw new UnavailableError("Приём отчётов временно недоступен");
     }
 
-    if (inserted) {
-      void this.hooks.emit({
-        reportId: envelope.data.reportId,
-        kind: envelope.data.kind,
-        appVersion: envelope.data.appVersion,
-        installId: envelope.data.installId,
-        platformUserId: identity.platformUserId,
-        device: envelope.data.device,
-        summary,
-        payload,
-        receivedAt: now,
-      });
-    }
+    if (inserted) void this.hooks.emit(report);
     return { reportId: envelope.data.reportId, duplicate: !inserted };
+  }
+
+  /** `payload` по схеме своего вида; ключ идемпотентности внутри обязан совпасть с конвертом. */
+  private parse(envelope: ReportEnvelope, identity: IngestIdentity, now: Date): ReceivedReport {
+    const base = {
+      reportId: envelope.reportId,
+      appVersion: envelope.appVersion,
+      installId: envelope.installId,
+      platformUserId: identity.platformUserId,
+      device: envelope.device,
+      receivedAt: now,
+    };
+
+    if (envelope.kind === "run") {
+      // Запись забега не закрыта правом, как стресс-тест: забег играет каждый,
+      // а записывать его или нет, решает переключатель тестера.
+      const parsed = submitRunReportSchema.safeParse(envelope.payload);
+      if (!parsed.success || parsed.data.recording.reportId !== envelope.reportId) {
+        throw new ValidationError("Некорректная запись забега");
+      }
+      return { ...base, kind: "run", summary: runSummaryOf(parsed.data), payload: parsed.data };
+    }
+
+    const parsed = submitBenchReportSchema.safeParse(envelope.payload);
+    if (!parsed.success || parsed.data.reportId !== envelope.reportId) {
+      throw new ValidationError("Некорректный отчёт стресс-теста");
+    }
+    if (!stressTestOpen(this.config, identity.platformUserId)) {
+      throw new ForbiddenError("Стресс-тест сейчас недоступен");
+    }
+    const payload = withoutPersonalData(parsed.data);
+    return { ...base, kind: "bench", summary: benchSummaryOf(payload), payload };
   }
 
   private async enforceLimits(installId: string, platformUserId: string | null): Promise<void> {

@@ -4,9 +4,10 @@ import { DiagnosticsHooks, type ReceivedReport } from "../diagnostics/diagnostic
 import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store.js";
 
 /**
- * Стресс-тест в сводке плейтеста (docs/26-stage2-plan.md, WP14). Отчёт
+ * Отчёты диагностики в сводке плейтеста (docs/26-stage2-plan.md, WP14). Отчёт
  * принимает модуль диагностики и пишет в Postgres; сводке в Redis нужен
- * только итог прогона без таймлайна — пик, причина остановки, устройство.
+ * только итог: у стресс-теста — пик, причина остановки, устройство; у записи
+ * забега — пришла ли и чем проблемна (docs/28-diagnostics.md §6.2).
  */
 @Injectable()
 export class PlaytestStressListener implements OnModuleInit {
@@ -22,7 +23,10 @@ export class PlaytestStressListener implements OnModuleInit {
   }
 
   async record(report: ReceivedReport): Promise<void> {
-    if (report.kind !== "bench") return;
+    if (report.kind === "run") {
+      await this.statsStore.recordRecording(report.reportId, report.summary.problems);
+      return;
+    }
     const { summary } = report;
     await this.statsStore.recordStress(
       {

@@ -41,6 +41,7 @@ export interface StatsSummary {
   topWeapons: Share[];
   topDeaths: Share[];
   stress: { reports: number; byOs: { os: string; reports: number; avgPeak: number; outcomes: Share[] }[] };
+  recordings: { reports: number; problematic: number; byProblem: Share[] };
 }
 
 const TOP_LIMIT = 5;
@@ -81,6 +82,11 @@ export function buildStatsSummary(
           outcomes: shares(entry.outcomes),
         }))
         .sort((left, right) => right.reports - left.reports || left.os.localeCompare(right.os)),
+    },
+    recordings: {
+      reports: snapshot.recordings.reports,
+      problematic: snapshot.recordings.problematic,
+      byProblem: shares(snapshot.recordings.byProblem),
     },
   };
 }

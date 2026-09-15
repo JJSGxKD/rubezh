@@ -59,3 +59,43 @@ describe("бюджет производительности симуляции",
     expect(elapsedMs).toBeLessThan(BUDGET_MS);
   });
 });
+
+// Запись забега (docs/28-diagnostics.md §3.5): бюджет на устройстве — 0.2 мс
+// на кадр в среднем на бюджетном Android. Здесь — детектор регрессий того же
+// рода: сортировка кадров на каждом кадре вместо раза в корзину или рост
+// аллокаций видны сразу. Бюджетный Android медленнее рабочей машины раз в
+// двадцать, поэтому порог на рабочей машине — сотая доля миллисекунды на кадр.
+//
+// Ориентир: локальный прогон — около 11 мс на все кадры, запас тридцатикратный.
+const RECORDED_FRAMES = 36_000; // десять минут при 60 Гц
+const RECORDER_BUDGET_MS = RECORDED_FRAMES * 0.01;
+
+describe("бюджет накладных расходов записи забега", () => {
+  it(`пишет ${RECORDED_FRAMES} кадров быстрее ${RECORDER_BUDGET_MS} мс`, async () => {
+    const { RunRecorder } = await import("../src/game/diagnostics/run-recorder");
+    const { createRunWorld } = await import("../src/game/run-world");
+    const { world } = createRunWorld({ seed: 1, mapId: "", difficultyId: "normal", unitScale: 2 });
+    const recorder = new RunRecorder({
+      reportId: "00000000-0000-4000-8000-000000000003",
+      runId: "overhead",
+      startedAt: "2026-09-16T10:00:00.000Z",
+      seed: 1,
+      mapId: world.mapId,
+      difficultyId: "normal",
+      startingWeaponId: "spark",
+      contentHash: "hash",
+      unitScale: 2,
+      replayBlocker: null,
+    });
+
+    const startedAt = performance.now();
+    for (let tick = 1; tick <= RECORDED_FRAMES; tick++) {
+      world.stats.tick = tick;
+      recorder.stepped(tick % 3 === 0 ? (tick >> 2) % 256 : -1, world);
+      recorder.frame({ frameMs: 16 + (tick % 7), simMs: 2, steps: 1, renderMs: 3, enemies: 500, projectiles: 100, tick, wave: 3 });
+    }
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(elapsedMs).toBeLessThan(RECORDER_BUDGET_MS);
+  });
+});
