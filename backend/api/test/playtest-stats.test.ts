@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { formatDuration } from "../src/common/card/labels.js";
+import { escapeXml } from "../src/common/card/svg.js";
 import {
   dayLabel,
-  escapeXml,
-  formatDuration,
   offsetLabel,
   renderStatsCaption,
   renderStatsPng,
