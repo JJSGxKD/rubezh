@@ -304,6 +304,9 @@ pnpm budget
 | Режим разработчика: окно технической сводки, потолок шагов на паузе | `core-game/src/game/MainScene.ts` → `DEV_INFO_INTERVAL_MS`, `MAX_DEV_STEP_TICKS` |
 | Режим разработчика: наборы, скорости времени, множители урона и бега, умолчания | `app-shell/src/state/dev-mode.ts` → `DEV_PRESETS`, `TIME_SCALES`, `DAMAGE_MULS`, `MOVE_SPEED_MULS`, `DEFAULT_DEV_SETTINGS` |
 | Что попадает в отчёт и версия его схемы | `bench/metrics.ts` → `BENCH_REPORT_SCHEMA` |
+| Сводка производительности забега: шаг гистограммы, прогрев, порог рывка | `core-game/src/game/diagnostics/run-perf.ts` → `BIN_MS`, `BINS`, `WARMUP_MS`; `frame-stats.ts` → `JANK_FRAME_MS` |
+| Запись забега: корзина таймлайна и её потолок, свёртки мира, потолок событий, формат | `game/diagnostics/run-timeline.ts` → `TIMELINE_BUCKET_SEC`, `TIMELINE_MAX_BUCKETS`; `run-recorder.ts` → `CHECKPOINT_TICKS`, `MAX_RECORDED_EVENTS`; `run-api.ts` → `RUN_RECORDING_SCHEMA` |
+| Лог ввода: потолок и кодировка; квантование направления и гистерезис | `game/diagnostics/input-log.ts` → `INPUT_LOG_MAX_BYTES`, `INPUT_LOG_ENCODING`; `game/sim/input-code.ts` → `DIRECTION_CODES`, `HYSTERESIS` |
 | Критерии вердикта «тянет / не тянет» | `bench/verdict.ts` |
 | Определение просадки, на которой стресс-тест останавливается | `bench/degradation-detector.ts` → `DEFAULT_DEGRADATION` |
 | Скрипт движения автопилота | `bench/autopilot.ts` |

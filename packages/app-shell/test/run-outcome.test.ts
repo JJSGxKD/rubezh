@@ -51,6 +51,7 @@ const DIAGNOSTICS: RunDiagnostics = {
     canvasHeight: 2340,
     interruptions: 0,
   },
+  recording: null,
 };
 
 describe("итог забега в аналитике", () => {

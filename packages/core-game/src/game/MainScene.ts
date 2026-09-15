@@ -1,14 +1,8 @@
 import Phaser from "phaser";
 import type { DifficultyId, RunOutcome } from "@bh/shared-types";
-import { ENEMIES } from "../content/enemies";
 import { CONTENT_HASH } from "../content/hash";
-import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
-import { DEFAULT_DIFFICULTY_ID, findDifficulty } from "../content/difficulty";
-import { DROPS } from "../content/drops";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
-import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
-import { WEAPONS } from "../content/weapons";
 import type { RunBus } from "../engine/run-bus";
+import { RunProbe } from "../engine/run-probe";
 import {
   RUN_SNAPSHOT_FORMAT,
   type HudSnapshot,
@@ -22,20 +16,17 @@ import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
 import { inspectWorld } from "./run/inspect";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
-import { createWorld, hasActiveCheats, TICK_SEC, type World } from "./sim/world";
+import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { IDLE_INPUT, stepWorld, type SimInput } from "./sim/step";
 import { IDLE_CODE, inputOfCode, quantizeDirection } from "./sim/input-code";
-import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
+import { createRunWorld } from "./run-world";
 import { RunCamera } from "./render/run-camera";
 import { buildRadarSnapshot } from "./radar";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { Joystick } from "./joystick";
 import { buildRunResult } from "./run/run-result";
 import { captureWorld, restoreWorld, SnapshotError } from "./run/snapshot";
-import { FrameClock } from "./diagnostics/frame-clock";
-import { RunPerfTracker } from "./diagnostics/run-perf";
-import { watchVisibility } from "../engine/visibility";
 import { createUuid } from "./uuid";
 
 const TICK_MS = TICK_SEC * 1000;
@@ -92,6 +83,8 @@ export interface MainSceneData {
   fpsOverlay?: boolean;
   /** ограничение частоты отрисовки — в сводку производительности */
   renderCapFps?: number | null;
+  /** полная запись забега: таймлайн, события, лог ввода */
+  recordRun?: boolean;
 }
 
 /**
@@ -131,9 +124,8 @@ export class MainScene extends Phaser.Scene {
   /** направление прошлого кадра: от него считается гистерезис квантования */
   private inputCode = IDLE_CODE;
   private readonly simInput: SimInput = { moveX: 0, moveY: 0 };
-  /** каким кадрам верить: фон и возврат из него в сводку не попадают */
-  private clock = new FrameClock();
-  private perf = new RunPerfTracker();
+  /** замеры и запись: пересоздаются с каждым забегом */
+  private probe!: RunProbe;
 
   constructor() {
     super("main");
@@ -152,28 +144,17 @@ export class MainScene extends Phaser.Scene {
     this.cheatsUsed = resume?.cheats === true;
     this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
     this.inputCode = IDLE_CODE;
-    // «Ещё раз» пересоздаёт состояние сцены, а не объект: сводка — новому забегу.
-    this.clock = new FrameClock();
-    this.perf = new RunPerfTracker();
 
-    const mapId = resume?.mapId ?? data.mapId;
-    const difficulty = findDifficulty(resume?.difficultyId ?? data.difficultyId) ?? findDifficulty(DEFAULT_DIFFICULTY_ID);
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
-    const map = findMap(mapId) ?? findMap(DEFAULT_MAP_ID) ?? MAPS[0];
-    this.world = createWorld({
+    const { world, spawner, map } = createRunWorld({
       seed: this.seed,
-      enemies: ENEMIES,
-      weapons: WEAPONS,
-      passives: PASSIVES,
-      levelCurve: LEVEL_CURVE,
-      loadoutLimits: LOADOUT_LIMITS,
-      drops: DROPS,
-      map,
-      ...(difficulty === undefined ? {} : { difficulty }),
+      mapId: resume?.mapId ?? data.mapId,
+      difficultyId: resume?.difficultyId ?? data.difficultyId,
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
-      config: { unitScale: data.unitScale },
+      unitScale: data.unitScale,
     });
-    this.spawner = createTimelineDirector(TIMELINE, ENDLESS_CURVE);
+    this.world = world;
+    this.spawner = spawner;
 
     // Снимок переносится до рендера и камеры: они строятся уже по
     // продолженному миру, и первый кадр не показывает пустое начало забега.
@@ -188,11 +169,37 @@ export class MainScene extends Phaser.Scene {
     this.joystick = new Joystick(this, data.unitScale);
     this.bindKeyboard();
 
+    // «Ещё раз» пересоздаёт состояние сцены, а не объект: замеры — новому забегу.
+    const probe = new RunProbe({
+      game: this.game,
+      unitScale: data.unitScale,
+      renderCapFps: data.renderCapFps ?? null,
+      recording:
+        data.recordRun === true
+          ? {
+              reportId: createUuid(),
+              runId: this.runId,
+              // Метка начала — единственное обращение к часам ради записи; в
+              // симуляции часов нет и быть не может.
+              startedAt: new Date().toISOString(),
+              seed: this.seed,
+              mapId: world.mapId,
+              difficultyId: world.difficultyLevel.id,
+              startingWeaponId: this.startingWeaponId(),
+              contentHash: CONTENT_HASH,
+              unitScale: data.unitScale,
+              // Продолженный забег не повторить с начала, а в забеге
+              // разработчика читы и команды в лог не пишутся.
+              replayBlocker: resume !== undefined ? "resumed" : data.dev !== undefined ? "dev" : null,
+            }
+          : null,
+    });
+    this.probe = probe;
+
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-    const stopWatching = watchVisibility(this.clock);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-      stopWatching();
+      probe.destroy();
     });
 
     this.applyDev(data.dev);
@@ -210,9 +217,7 @@ export class MainScene extends Phaser.Scene {
   update(time: number, deltaMs: number): void {
     // Снимок не прочитался: сцена так и не собралась, об ошибке уже сообщено.
     if (!this.ready) return;
-    // Часы идут каждый кадр, даже на паузе: иначе первый кадр после неё
-    // принёс бы всё время паузы.
-    const frameMs = this.clock.frame(time, deltaMs);
+    this.probe.beginFrame(time, deltaMs);
     if (this.phase !== "running") {
       // Мир стоит: накопитель сбрасывается, чтобы после возврата не прилетела
       // пачка «догоняющих» шагов, и рисуется последнее состояние без
@@ -234,16 +239,19 @@ export class MainScene extends Phaser.Scene {
     // по-прежнему идёт фиксированными тиками.
     this.accumulatorMs += Math.min(deltaMs * (dev?.timeScale ?? 1), TICK_MS * MAX_STEPS_PER_FRAME);
 
-    const measure = this.wantsDevInfo();
+    // Замеры — вокруг симуляции, а не внутри: часы в `game/sim/*` запрещены.
+    const measure = this.wantsDevInfo() || this.probe.recording;
     const simStartedAt = measure ? performance.now() : 0;
     let steps = 0;
     while (this.accumulatorMs >= TICK_MS && steps < MAX_STEPS_PER_FRAME) {
       this.step(input);
+      this.probe.stepped(this.inputCode, this.world);
       this.accumulatorMs -= TICK_MS;
       steps++;
       if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
     }
-    this.trackDevInfo(deltaMs, measure ? performance.now() - simStartedAt : 0, steps);
+    const simMs = measure ? performance.now() - simStartedAt : 0;
+    this.trackDevInfo(deltaMs, simMs, steps);
 
     this.cueTimerMs += deltaMs;
     if (this.cueTimerMs >= CUE_INTERVAL_MS) {
@@ -256,7 +264,9 @@ export class MainScene extends Phaser.Scene {
     // исходу забега отношения не имеет и на детерминизм не влияет.
     this.runCamera.update(this.world, deltaMs / 1000);
     this.syncCamera();
+    const renderStartedAt = this.probe.recording ? performance.now() : 0;
     this.worldRenderer.sync(this.accumulatorMs / TICK_MS);
+    const renderMs = this.probe.recording ? performance.now() - renderStartedAt : 0;
     this.reportWave();
 
     this.hudTimerMs += deltaMs;
@@ -265,7 +275,7 @@ export class MainScene extends Phaser.Scene {
       this.emitHud();
     }
 
-    if (frameMs !== null) this.perf.frame(frameMs, this.world.enemies.aliveCount + this.world.projectiles.aliveCount);
+    this.probe.endFrame(this.world, simMs, steps, renderMs);
 
     if (!this.world.player.alive) {
       this.finishRun("died");
@@ -281,12 +291,14 @@ export class MainScene extends Phaser.Scene {
     this.phase = "paused";
     this.joystick.setVisible(false);
     this.emitHud();
+    this.probe.event(this.world, "pause", reason);
     this.sceneData.bus.emit("paused", { reason, elapsedSec: this.world.stats.elapsedSec });
   }
 
   resumeRun(): void {
     if (this.phase !== "paused") return;
     this.phase = "running";
+    this.probe.event(this.world, "resume");
     this.sceneData.bus.emit("resumed", { elapsedSec: this.world.stats.elapsedSec });
   }
 
@@ -303,6 +315,8 @@ export class MainScene extends Phaser.Scene {
   applyChoice(optionId: string): void {
     if (this.phase !== "choosing") return;
     if (!chooseUpgrade(this.world, optionId)) return;
+    // Выбор — часть лога ввода: на этом тике повтор применит тот же вариант.
+    this.probe.choice(this.world, optionId);
 
     this.emitHud();
     // Уровней могло накопиться несколько: пока очередь не пуста, мир стоит и
@@ -416,6 +430,7 @@ export class MainScene extends Phaser.Scene {
     const count = Math.max(1, Math.min(MAX_DEV_STEP_TICKS, Math.round(ticks)));
     for (let i = 0; i < count; i++) {
       this.step(IDLE_INPUT);
+      this.probe.stepped(IDLE_CODE, this.world);
       if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
     }
     this.worldRenderer.sync(1);
@@ -518,6 +533,8 @@ export class MainScene extends Phaser.Scene {
 
   private emitLevelUp(): void {
     const progression = this.world.progression;
+    this.probe.event(this.world, "level", progression.level);
+    this.probe.event(this.world, "offer", progression.offers.map((offer) => offer.id).join(","));
     this.sceneData.bus.emit("levelUp", {
       level: progression.level,
       options: [...progression.offers],
@@ -542,16 +559,11 @@ export class MainScene extends Phaser.Scene {
     });
 
     this.emitHud();
-    this.sceneData.bus.emit("diagnostics", {
-      perf: this.perf.summary({
-        renderer: this.game.renderer.type === Phaser.WEBGL ? "webgl" : "canvas",
-        renderCapFps: this.sceneData.renderCapFps ?? null,
-        dpr: this.sceneData.unitScale,
-        canvasWidth: this.scale.width,
-        canvasHeight: this.scale.height,
-        interruptions: this.clock.interruptions,
-      }),
-    });
+    this.probe.event(this.world, outcome === "died" ? "death" : "abandon", result.deathCause);
+    this.sceneData.bus.emit(
+      "diagnostics",
+      this.probe.finish(this.world, outcome, result.deathCause, this.scale.width, this.scale.height),
+    );
     // Локальный рекорд и аналитику ведёт оболочка: движок не знает ни о сети,
     // ни о хранилище устройства (docs/27-design-system-and-app-shell.md §3.1).
     this.sceneData.bus.emit(outcome === "died" ? "finished" : "abandoned", result);
@@ -582,6 +594,7 @@ export class MainScene extends Phaser.Scene {
     const wave = this.world.difficulty.segment;
     if (wave === this.reportedWave) return;
     this.reportedWave = wave;
+    this.probe.event(this.world, "wave", wave);
     this.sceneData.bus.emit("waveReached", { index: wave, elapsedSec: this.world.stats.elapsedSec });
   }
 
@@ -597,6 +610,7 @@ export class MainScene extends Phaser.Scene {
   private handleResize(): void {
     this.runCamera.resize(this.scale.width, this.scale.height);
     this.syncCamera();
+    this.probe.event(this.world, "resize", `${Math.round(this.scale.width)}x${Math.round(this.scale.height)}`);
   }
 
   private bindKeyboard(): void {
