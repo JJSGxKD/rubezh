@@ -137,6 +137,7 @@
 | Приветствие по `/start`: тексты на двух языках, какие языки читают по-русски | `backend/api/src/modules/welcome/welcome-texts.ts` → `WELCOME_TEXTS`, `RUSSIAN_READERS` | участник 1 |
 | Карточка приветствия: раскладка, длина имени, версия шаблона для кэша | `backend/api/src/modules/welcome/welcome-card.ts` → `CARD_VERSION` (поднять при любой правке вида), `NAME_MAX` | участник 1 |
 | Приветствие: сколько хранить `file_id` карточки, окно двойного нажатия, ожидание прогресса | `backend/api/src/modules/welcome/welcome.command.ts` → `CARD_CACHE_TTL_SEC`, `START_WINDOW_SEC`, `PROGRESS_TIMEOUT_MS` | участник 1 |
+| Уведомления об отчётах: темп отправки в чат, повторы, карточка стресс-теста — раскладка, порог плавности на графике | `backend/api/src/modules/admin-notify/report-notifier.ts` → `MESSAGES_PER_MINUTE`, параметры `queue.add`; `stress-card.ts` → `SMOOTH_FPS` | участник 1 |
 | Бот: сколько помнить обработанные обновления вебхука, какие обновления читать | `backend/api/src/modules/bot/bot-webhook.controller.ts` → `DEDUPE_TTL_SEC`; `modules/telegram/telegram-bot-api.ts` → `ALLOWED_UPDATES` | участник 1 |
 | Сводка плейтеста в Telegram: частота команды, возраст команды из очереди | `backend/api/src/modules/playtest/playtest-stats.reporter.ts` → `COMMAND_WINDOW_SEC`, `STALE_COMMAND_SEC` | участник 1 |
 | Плейтест на сервере: строк в лидерборде, последних забегов в профиле, сколько забегов хранится | `backend/api/src/modules/playtest/playtest.service.ts` → `LEADERBOARD_LIMIT`, `RECENT_RUNS_SHOWN`; `redis-playtest.store.ts` → `RECENT_RUNS_KEPT`; границы правдоподобия итога — `dto/run-submission.dto.ts` | участник 1 |
@@ -235,6 +236,7 @@
 | `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам, `webhook` — Telegram шлёт их на `PUBLIC_API_URL`; регистрация — `pnpm --filter backend-api bot:webhook` |
 | `TELEGRAM_WEBHOOK_SECRET` | секретный токен вебхука; без него режим `webhook` не стартует |
 | `PUBLIC_WEB_URL` | адрес Mini App; HTTPS — кнопка «Играть» под приветствием бота |
+| `ADMIN_NOTIFY_REPORTS` | карточка в чат администраторов на каждый новый стресс-тест; нужны `ADMIN_CHAT_ID` и включённый приёмник отчётов |
 | `ADMIN_CHAT_ID` | групповой чат администраторов: сводка и уведомления. Прежнее имя `PLAYTEST_STATS_CHAT_ID` — бэкенд не стартует и называет новое |
 | `PLAYTEST_STATS_ENABLED` | сводка статистики плейтеста в чат администраторов по `/stats`; без чата или чтения обновлений бота бэкенд не стартует |
 | `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | когда бот присылает сводку сам и в каком поясе считаются «сутки»; пусто в `DAILY_AT` — только по команде |

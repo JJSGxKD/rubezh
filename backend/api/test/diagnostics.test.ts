@@ -33,6 +33,9 @@ class MemoryRepository implements DiagnosticsRepository {
     this.records.set(record.reportId, record);
     return true;
   }
+  async findBench(): Promise<null> {
+    return null;
+  }
 }
 
 const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;

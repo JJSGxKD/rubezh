@@ -62,3 +62,13 @@ export function formatDuration(totalSec: number): string {
   const seconds = String(sec % 60).padStart(2, "0");
   return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
 }
+
+/** Русская форма числительного: «1 забег», «3 забега», «11 забегов». */
+export function pluralRu(count: number, one: string, few: string, many: string): string {
+  const mod100 = Math.abs(count) % 100;
+  const mod10 = mod100 % 10;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}

@@ -6,7 +6,12 @@ import { Redis } from "ioredis";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
+import { ReportNotifier } from "../src/modules/admin-notify/report-notifier.js";
+import { DiagnosticsHooks } from "../src/modules/diagnostics/diagnostics-hooks.js";
+import { benchSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js";
 import { PrismaDiagnosticsRepository } from "../src/modules/diagnostics/diagnostics.repository.js";
+import { submitBenchReportSchema } from "../src/modules/diagnostics/dto/bench-report.dto.js";
+import { benchSubmission, DEVICE } from "./helpers/bench-report.js";
 import { PrismaEventsRepository, type EventRow } from "../src/modules/events/events.repository.js";
 import { QueuedEventsSink } from "../src/modules/events/events.sink.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
@@ -78,6 +83,59 @@ describe.skipIf(!live)("приёмники на живых Postgres и Redis", (
     expect(results.filter(Boolean)).toHaveLength(1);
     expect(await repository.insert(record)).toBe(false);
     expect(await prisma.diagnosticReport.count({ where: { installId: `${install}-r` } })).toBe(1);
+    // Отчёт не по нынешней схеме читается как «нет» — уведомлению рисовать нечего.
+    expect(await repository.findBench(record.reportId)).toBeNull();
+  });
+
+  it("читает стресс-тест обратно и шлёт одно уведомление на отчёт, сколько бы раз он ни пришёл", async () => {
+    const repository = new PrismaDiagnosticsRepository(prisma);
+    const reportId = randomUUID();
+    const payload = submitBenchReportSchema.parse(benchSubmission(reportId));
+    await repository.insert({
+      reportId,
+      kind: "bench",
+      schemaVersion: payload.report.schema,
+      appVersion: "0.4.0",
+      contentHash: null,
+      installId: `${install}-n`,
+      platformUserId: null,
+      platform: "telegram",
+      device: DEVICE,
+      summary: benchSummaryOf(payload),
+      payload,
+      sizeBytes: 100,
+      occurredAt: new Date(),
+      receivedAt: new Date(),
+    });
+    expect((await repository.findBench(reportId))?.payload.verdict.sustainedLoad).toBe(640);
+
+    const sent: string[] = [];
+    const notifyConfig = loadAppConfig({
+      NODE_ENV: "test",
+      DATABASE_URL,
+      REDIS_URL,
+      TELEGRAM_BOT_TOKEN: "123:TEST",
+      ADMIN_CHAT_ID: "-100",
+      DIAGNOSTICS_INGEST_ENABLED: "true",
+    });
+    const notifier = new ReportNotifier(notifyConfig, new DiagnosticsHooks(), repository, {
+      sendPhoto: async (_chat, _photo, caption) => {
+        sent.push(caption);
+        return { messageId: 1, fileId: null };
+      },
+    });
+    notifier.onApplicationBootstrap();
+    try {
+      const report = { reportId, kind: "bench" as const, appVersion: "0.4.0", installId: `${install}-n`, platformUserId: null, device: DEVICE, summary: benchSummaryOf(payload), payload, receivedAt: new Date() };
+      await notifier.enqueue(report);
+      await notifier.enqueue(report);
+      for (let attempt = 0; attempt < 50 && sent.length === 0; attempt++) await sleep(100);
+      await sleep(300);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toContain(reportId);
+    } finally {
+      await notifier.onModuleDestroy();
+    }
   });
 
   it("повтор пачки — одна запись на событие", async () => {

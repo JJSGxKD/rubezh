@@ -86,6 +86,12 @@ const schema = z.object({
     .string()
     .default("")
     .refine((value) => value === "" || /^-?\d{1,20}$/.test(value), { message: "ADMIN_CHAT_ID — числовой id чата" }),
+  // Уведомлять чат администраторов о новых отчётах диагностики: стресс-тест —
+  // карточкой с графиком. Работает, когда задан ADMIN_CHAT_ID и включён приёмник.
+  ADMIN_NOTIFY_REPORTS: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
   // Переименована в ADMIN_CHAT_ID: чат теперь получает не только сводку.
   PLAYTEST_STATS_CHAT_ID: z.string().default(""),
 
@@ -129,6 +135,8 @@ export interface AppConfig {
     reportsEnabled: boolean;
     initDataMaxAgeSec: number;
   };
+  /** уведомлять чат администраторов о новых отчётах диагностики */
+  notifyReports: boolean;
   /** Telegram ID администраторов строками — так же, как id игрока из initData */
   adminTelegramIds: ReadonlySet<string>;
   telegram: {
@@ -227,6 +235,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       reportsEnabled: parsed.DIAGNOSTICS_INGEST_ENABLED,
       initDataMaxAgeSec: parsed.INGEST_INIT_DATA_MAX_AGE_SEC,
     },
+    notifyReports: parsed.ADMIN_NOTIFY_REPORTS,
     adminTelegramIds: new Set(parsed.ADMIN_TELEGRAM_IDS),
     telegram: {
       botToken: parsed.TELEGRAM_BOT_TOKEN,

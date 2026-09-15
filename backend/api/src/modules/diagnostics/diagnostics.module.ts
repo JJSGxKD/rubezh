@@ -16,6 +16,6 @@ import { DiagnosticsService } from "./diagnostics.service.js";
     DiagnosticsHooks,
     { provide: DIAGNOSTICS_REPOSITORY, useClass: PrismaDiagnosticsRepository },
   ],
-  exports: [DiagnosticsHooks],
+  exports: [DiagnosticsHooks, DIAGNOSTICS_REPOSITORY],
 })
 export class DiagnosticsModule {}

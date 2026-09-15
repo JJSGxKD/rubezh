@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import type { StoredDevice } from "./dto/device.dto.js";
-import type { ReportKind } from "./dto/report-envelope.dto.js";
+import { submitBenchReportSchema } from "./dto/bench-report.dto.js";
+import { deviceSchema, type StoredDevice } from "./dto/device.dto.js";
+import type { BenchSubmission, ReportKind } from "./dto/report-envelope.dto.js";
 
 export interface ReportRecord {
   reportId: string;
@@ -23,9 +24,19 @@ export interface ReportRecord {
 
 export const DIAGNOSTICS_REPOSITORY = Symbol("DIAGNOSTICS_REPOSITORY");
 
+/** Отчёт, прочитанный обратно: JSON из базы — граница системы, поэтому разобран схемами. */
+export interface StoredBenchReport {
+  reportId: string;
+  appVersion: string;
+  device: StoredDevice;
+  payload: BenchSubmission;
+}
+
 export interface DiagnosticsRepository {
   /** `false` — отчёт с этим `reportId` уже есть: повтор ничего не записывает */
   insert(record: ReportRecord): Promise<boolean>;
+  /** отчёт стресс-теста; `null` — нет такого или он не разбирается нынешней схемой */
+  findBench(reportId: string): Promise<StoredBenchReport | null>;
 }
 
 @Injectable()
@@ -48,5 +59,17 @@ export class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       skipDuplicates: true,
     });
     return result.count === 1;
+  }
+
+  async findBench(reportId: string): Promise<StoredBenchReport | null> {
+    const row = await this.prisma.diagnosticReport.findUnique({
+      where: { reportId },
+      select: { reportId: true, kind: true, appVersion: true, device: true, payload: true },
+    });
+    if (row === null || row.kind !== "bench") return null;
+    const device = deviceSchema.safeParse(row.device);
+    const payload = submitBenchReportSchema.safeParse(row.payload);
+    if (!device.success || !payload.success) return null;
+    return { reportId: row.reportId, appVersion: row.appVersion, device: device.data, payload: payload.data };
   }
 }

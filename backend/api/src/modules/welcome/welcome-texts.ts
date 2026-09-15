@@ -1,3 +1,5 @@
+import { pluralRu } from "../../common/card/labels.js";
+
 /**
  * Тексты приветствия по `/start` на языке пользователя
  * (docs/28-diagnostics.md §6.1.2). Игра пока только на русском, но бот
@@ -37,16 +39,6 @@ export interface WelcomeTexts {
 const RU_DIFFICULTIES: Record<Difficulty, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
 const EN_DIFFICULTIES: Record<Difficulty, string> = { easy: "Easy", normal: "Normal", hard: "Hard" };
 
-/** Русская форма числительного: «1 забег», «3 забега», «11 забегов». */
-function plural(count: number, one: string, few: string, many: string): string {
-  const mod100 = Math.abs(count) % 100;
-  const mod10 = mod100 % 10;
-  if (mod100 >= 11 && mod100 <= 14) return many;
-  if (mod10 === 1) return one;
-  if (mod10 >= 2 && mod10 <= 4) return few;
-  return many;
-}
-
 export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
   ru: {
     brand: "РУБЕЖ",
@@ -57,7 +49,7 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
     newcomerCall: "Жми «Играть» — первый забег займёт пару минут",
     recordLabel: (difficulty) => `рекорд · ${RU_DIFFICULTIES[difficulty]}`,
     rank: (rank, total) => `#${rank} из ${total}`,
-    runs: (count) => `${count} ${plural(count, "забег", "забега", "забегов")}`,
+    runs: (count) => `${count} ${pluralRu(count, "забег", "забега", "забегов")}`,
     veteranCall: "Побьёшь свой рекорд?",
     caption: (name, hasRecord) =>
       hasRecord

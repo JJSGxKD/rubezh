@@ -95,7 +95,7 @@
 | 4. Redis | `REDIS_*` | там же |
 | 5. Авторизация | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, сроки жизни, `INIT_DATA_EXPIRES_IN`, cookie | генерируется: `openssl rand -hex 32`, разные значения для access и refresh |
 | 6. CORS и адреса | `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `PUBLIC_*`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml` |
-| 7. Платформы | токены ботов, чтение обновлений бота (`TELEGRAM_BOT_UPDATES`), чат администраторов (`ADMIN_CHAT_ID`), секрет вебхука бота (`TELEGRAM_WEBHOOK_SECRET`, с этапа 2), ключи Bridge, OAuth | из кабинетов площадок; для staging — **отдельный** бот; секрет вебхука генерируется. `PLAYTEST_STATS_CHAT_ID` переименована в `ADMIN_CHAT_ID` — со старым именем бэкенд не стартует и называет новое |
+| 7. Платформы | токены ботов, чтение обновлений бота (`TELEGRAM_BOT_UPDATES`), чат администраторов (`ADMIN_CHAT_ID`) и уведомления в него (`ADMIN_NOTIFY_REPORTS`), секрет вебхука бота (`TELEGRAM_WEBHOOK_SECRET`, с этапа 2), ключи Bridge, OAuth | из кабинетов площадок; для staging — **отдельный** бот; секрет вебхука генерируется. `PLAYTEST_STATS_CHAT_ID` переименована в `ADMIN_CHAT_ID` — со старым именем бэкенд не стартует и называет новое |
 | 8. Платежи | webhook-секрет, RU-эквайринг | из кабинета провайдера |
 | 9. Реклама | `ADS_SESSION_SECRET`, ключи сетей | из кабинетов сетей; порядок и активность сетей — данные в БД, не переменные |
 | 10. Наблюдаемость | `LOG_LEVEL`, треды Telegram, Sentry, Grafana | id тредов — из супергруппы алертов |
