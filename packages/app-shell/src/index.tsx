@@ -17,7 +17,9 @@ import { watchPlatform } from "./state/platform";
 import { usePlaytest } from "./state/playtest";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
-import { noopAnalytics, type AnalyticsSink } from "./state/analytics";
+import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
+import { installErrorReporting } from "./state/error-reporting";
+import { createId } from "./state/ids";
 
 /**
  * Точка входа оболочки. Адаптер площадки приходит готовым объектом из
@@ -30,7 +32,10 @@ export interface MountOptions {
   adapter: PlatformAdapter;
   build: ShellBuildInfo;
   capabilities: ShellCapabilities;
-  /** приёмник событий; в WP8 сюда подключается конвейер аналитики */
+  /**
+   * Внешний получатель событий — консоль разработчика. На сервер события
+   * уходят сами, если задан `capabilities.telemetry`.
+   */
   analytics?: AnalyticsSink;
 }
 
@@ -47,14 +52,17 @@ const FONT_WAIT_MS = 800;
 
 export async function mountAppShell(options: MountOptions): Promise<MountedShell> {
   const startedAt = performance.now();
+  const telemetrySink = createDeferredSink();
+  const external = options.analytics ?? noopAnalytics;
 
   initShell({
     adapter: options.adapter,
     capabilities: options.capabilities,
     storage: options.adapter.storage,
-    analytics: options.analytics ?? noopAnalytics,
+    analytics: options.capabilities.telemetry === undefined ? external : fanOut(external, telemetrySink.sink),
     build: options.build,
   });
+  const stopErrorReporting = installErrorReporting();
 
   // Заставка React подменяет заставку из index.html сразу: раскладка у них
   // одна, а этапы запуска дальше видны на полосе.
@@ -76,6 +84,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   renderBoot("ready");
   const stopWatching = watchPlatform();
   useInstall.getState().hydrate();
+  if (useInstall.getState().firstOpen) track("app_first_open");
   useDiagnostics.getState().hydrate(options.capabilities.diagnosticsByDefault);
   useMeta.getState().hydrate();
   useHints.getState().hydrate();
@@ -96,6 +105,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
     .then(() => usePlaytest.getState().loadProfile());
   void usePlaytest.getState().loadAccess();
   void usePlaytest.getState().reportSession();
+  const stopTelemetry = startTelemetry(options, telemetrySink.attach);
 
   // Время до интерактивной главной — бюджет первой загрузки проверяется не
   // только размером файлов, но и на устройствах тестеров (§3.4).
@@ -109,8 +119,56 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
     unmount(): void {
       stopWatching();
       stopAudio();
+      stopErrorReporting();
+      stopTelemetry();
       root.unmount();
     },
+  };
+}
+
+/**
+ * Эмиттер событий грузится отдельным чанком после главной: игроку он в первые
+ * секунды не нужен, а события до него копит буфер (`createDeferredSink`).
+ * Сворачивание отправляет накопленное с keepalive, появление сети — сразу.
+ */
+function startTelemetry(options: MountOptions, attach: (target: TimedSink) => void): () => void {
+  const config = options.capabilities.telemetry;
+  if (config === undefined) return () => undefined;
+
+  let stopped = false;
+  let cleanup = (): void => undefined;
+  import("./state/telemetry")
+    .then(({ createTelemetry }) => {
+      if (stopped) return;
+      const telemetry = createTelemetry(config, {
+        storage: options.adapter.storage,
+        installId: () => useInstall.getState().installId,
+        sessionId: createId(),
+        appVersion: options.build.version,
+        platform: options.build.platform,
+        signedLaunchData: () => options.adapter.signedLaunchData(),
+      });
+      attach((event, payload, atMs) => telemetry.record(event, payload, atMs));
+      const onVisibility = (): void => {
+        if (document.visibilityState === "hidden") void telemetry.flush("hidden");
+      };
+      const onOnline = (): void => void telemetry.flush("online");
+      document.addEventListener("visibilitychange", onVisibility);
+      globalThis.addEventListener("online", onOnline);
+      void telemetry.flush("launch");
+      cleanup = () => {
+        telemetry.stop();
+        document.removeEventListener("visibilitychange", onVisibility);
+        globalThis.removeEventListener("online", onOnline);
+      };
+    })
+    .catch((error: unknown) => {
+      // Чанк не пришёл — события остаются у внешнего получателя, игра идёт.
+      console.warn("Эмиттер событий не загрузился:", error);
+    });
+  return () => {
+    stopped = true;
+    cleanup();
   };
 }
 

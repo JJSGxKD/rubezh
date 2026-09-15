@@ -15,10 +15,53 @@ const schema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_HOST: z.string().default("0.0.0.0"),
   ALLOWED_ORIGINS: z.string().default(""),
+  // Сколько прокси перед API добавляют X-Forwarded-For: за Caddy — 1. IP
+  // клиента нужен только лимиту частоты, и берётся он из req.ip Fastify, а не
+  // из сырого заголовка, который подделывается одной строкой
+  // (docs/13-reuse-from-vpnsibcom.md §2). 0 — API смотрит в сеть напрямую.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
 
   // Redis — кеш, лидерборды, очереди. Адрес не секрет; пароль, если он есть,
   // лежит в самом URL и в прод-окружении задаётся секретом.
   REDIS_URL: z.string().default("redis://localhost:6379"),
+
+  // Postgres — события и отчёты диагностики. Строка подключения содержит
+  // пароль и значения по умолчанию не имеет: функции, которым нужна база,
+  // без неё не стартуют.
+  DATABASE_URL: z.string().default(""),
+
+  // Приёмники событий и отчётов диагностики (docs/28-diagnostics.md §5).
+  // Выключенный приёмник отвечает 404 и не подтверждает, что он есть.
+  EVENTS_INGEST_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  DIAGNOSTICS_INGEST_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Окно свежести подписи запуска для приёмников — сутки (docs/28-diagnostics.md
+  // §5.2): тестер играет часами, а приёмник в ответ ничего не выдаёт.
+  INGEST_INIT_DATA_MAX_AGE_SEC: z.coerce.number().int().positive().default(86_400),
+  // Сколько дней хранить сырые события и отчёты диагностики (docs/28-diagnostics.md §5.4).
+  DIAGNOSTICS_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+
+  // Выгрузка данных закрытого теста (docs/28-diagnostics.md §6). Ключ HMAC для
+  // псевдонимов Telegram ID — секрет без значения по умолчанию: обычный хэш
+  // короткого числового ID обращается перебором за минуты. Смена ключа меняет
+  // все псевдонимы — выгрузки до и после перестают сопоставляться.
+  EXPORT_PSEUDONYM_KEY: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^[0-9a-f]{64,}$/i.test(value), {
+      message: "EXPORT_PSEUDONYM_KEY — не короче 64 шестнадцатеричных знаков: openssl rand -hex 32",
+    }),
+  // Выключатель выгрузки через бота: при утечке токена бота выгрузка
+  // отключается без релиза (docs/28-diagnostics.md §6.1.4).
+  DATA_EXPORT_BOT_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 
   // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
   // Выключены по умолчанию: без токена бота игрока не проверить.
@@ -39,17 +82,44 @@ const schema = z.object({
     .default("false")
     .transform((value) => value === "true"),
 
+  // Откуда бот берёт обновления (docs/28-diagnostics.md §6.1.3): `webhook` —
+  // сервер с публичным адресом, `polling` — машина разработчика без него,
+  // `off` — бот не отвечает.
+  TELEGRAM_BOT_UPDATES: z.enum(["off", "polling", "webhook"]).default("off"),
+  // Секретный токен вебхука: Telegram шлёт его заголовком, без него обновление
+  // отклоняется. Секрет, без значения по умолчанию; алфавит — из Bot API.
+  TELEGRAM_WEBHOOK_SECRET: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^[A-Za-z0-9_-]{32,256}$/.test(value), {
+      message: "TELEGRAM_WEBHOOK_SECRET — от 32 знаков A-Z, a-z, 0-9, _ и -",
+    }),
+  // Публичный адрес API — куда регистрировать вебхук (`pnpm bot:webhook`).
+  PUBLIC_API_URL: z.string().default(""),
+  // Адрес Mini App для кнопки «Играть» под приветствием. Telegram принимает
+  // только HTTPS: без него карточка уходит без кнопки.
+  PUBLIC_WEB_URL: z.string().default(""),
+  // Групповой чат администраторов: сводка плейтеста и уведомления. Числовой
+  // id, у супергруппы — с минусом.
+  ADMIN_CHAT_ID: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^-?\d{1,20}$/.test(value), { message: "ADMIN_CHAT_ID — числовой id чата" }),
+  // Уведомлять чат администраторов о новых отчётах диагностики: стресс-тест —
+  // карточкой с графиком. Работает, когда задан ADMIN_CHAT_ID и включён приёмник.
+  ADMIN_NOTIFY_REPORTS: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  // Переименована в ADMIN_CHAT_ID: чат теперь получает не только сводку.
+  PLAYTEST_STATS_CHAT_ID: z.string().default(""),
+
   // Сводка статистики плейтеста в чат администраторов (docs/26-stage2-plan.md, WP14).
-  // Бот читает команды сам (long polling): у машины разработчика нет публичного
-  // адреса для вебхука. Включённая сводка без чата не стартует.
+  // Включённая сводка без чата, токена или чтения обновлений не стартует.
   PLAYTEST_STATS_ENABLED: z
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-  PLAYTEST_STATS_CHAT_ID: z
-    .string()
-    .default("")
-    .refine((value) => value === "" || /^-?\d{1,20}$/.test(value), { message: "PLAYTEST_STATS_CHAT_ID — числовой id чата" }),
   // Когда присылать сводку сама, «ЧЧ:ММ» в поясе команды; пусто — только по команде.
   PLAYTEST_STATS_DAILY_AT: z
     .string()
@@ -75,18 +145,45 @@ export interface AppConfig {
   apiPort: number;
   apiHost: string;
   allowedOrigins: string[];
+  trustProxyHops: number;
   redisUrl: string;
+  /** пусто — база не настроена */
+  databaseUrl: string;
+  ingest: {
+    eventsEnabled: boolean;
+    reportsEnabled: boolean;
+    initDataMaxAgeSec: number;
+    retentionDays: number;
+  };
+  export: {
+    /** пусто — выгрузка невозможна: псевдонимизировать нечем */
+    pseudonymKey: string;
+    botEnabled: boolean;
+  };
+  /** уведомлять чат администраторов о новых отчётах диагностики */
+  notifyReports: boolean;
   /** Telegram ID администраторов строками — так же, как id игрока из initData */
   adminTelegramIds: ReadonlySet<string>;
+  telegram: {
+    /** бот закрытого теста: проверка подписи initData и сам бот */
+    botToken: string;
+    updates: "off" | "polling" | "webhook";
+    /** секретный токен вебхука; пусто — вебхук не настроен */
+    webhookSecret: string;
+    /** публичный адрес API без косой в конце — для регистрации вебхука */
+    publicApiUrl: string;
+    /** адрес Mini App для кнопки «Играть» */
+    webAppUrl: string;
+    /** групповой чат администраторов; пусто — писать некуда */
+    adminChatId: string;
+  };
   playtest: {
     enabled: boolean;
-    botToken: string;
     initDataMaxAgeSec: number;
     dataTtlSec: number;
     devAuth: boolean;
     stats: {
       enabled: boolean;
-      chatId: string;
       /** минута суток в поясе команды; `null` — сводка только по команде */
       dailyAtMin: number | null;
     };
@@ -127,8 +224,23 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.PLAYTEST_ENABLED && parsed.TELEGRAM_BOT_TOKEN === "") {
     throw new Error("PLAYTEST_ENABLED=true требует непустого TELEGRAM_BOT_TOKEN: без него игрока не проверить");
   }
-  if (parsed.PLAYTEST_STATS_ENABLED && (parsed.PLAYTEST_STATS_CHAT_ID === "" || parsed.TELEGRAM_BOT_TOKEN === "")) {
-    throw new Error("PLAYTEST_STATS_ENABLED=true требует PLAYTEST_STATS_CHAT_ID и TELEGRAM_BOT_TOKEN");
+  if (parsed.PLAYTEST_STATS_CHAT_ID !== "") {
+    throw new Error("PLAYTEST_STATS_CHAT_ID переименована в ADMIN_CHAT_ID: чат администраторов получает не только сводку");
+  }
+  if (parsed.TELEGRAM_BOT_UPDATES === "webhook" && parsed.TELEGRAM_WEBHOOK_SECRET === "") {
+    throw new Error("TELEGRAM_BOT_UPDATES=webhook требует TELEGRAM_WEBHOOK_SECRET: без него вебхук принимал бы обновления от кого угодно");
+  }
+  if (parsed.TELEGRAM_BOT_UPDATES !== "off" && parsed.TELEGRAM_BOT_TOKEN === "") {
+    throw new Error(`TELEGRAM_BOT_UPDATES=${parsed.TELEGRAM_BOT_UPDATES} требует TELEGRAM_BOT_TOKEN`);
+  }
+  if (parsed.PLAYTEST_STATS_ENABLED && (parsed.ADMIN_CHAT_ID === "" || parsed.TELEGRAM_BOT_UPDATES === "off")) {
+    throw new Error("PLAYTEST_STATS_ENABLED=true требует ADMIN_CHAT_ID и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
+  }
+  if (parsed.DATA_EXPORT_BOT_ENABLED && (parsed.EXPORT_PSEUDONYM_KEY === "" || parsed.DATABASE_URL === "" || parsed.TELEGRAM_BOT_UPDATES === "off")) {
+    throw new Error("DATA_EXPORT_BOT_ENABLED=true требует EXPORT_PSEUDONYM_KEY, DATABASE_URL и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
+  }
+  if ((parsed.EVENTS_INGEST_ENABLED || parsed.DIAGNOSTICS_INGEST_ENABLED) && parsed.DATABASE_URL === "") {
+    throw new Error("Приёмники событий и отчётов пишут в Postgres: включённый приёмник требует DATABASE_URL");
   }
   // Вход по заголовку без подписи — дыра, если попадёт куда-то кроме машины
   // разработчика. Процесс не поднимается, а не «предупреждает».
@@ -143,20 +255,53 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     allowedOrigins: parsed.ALLOWED_ORIGINS.split(",")
       .map((origin) => origin.trim())
       .filter((origin) => origin !== ""),
+    trustProxyHops: parsed.TRUST_PROXY_HOPS,
     redisUrl: parsed.REDIS_URL,
+    databaseUrl: parsed.DATABASE_URL,
+    ingest: {
+      eventsEnabled: parsed.EVENTS_INGEST_ENABLED,
+      reportsEnabled: parsed.DIAGNOSTICS_INGEST_ENABLED,
+      initDataMaxAgeSec: parsed.INGEST_INIT_DATA_MAX_AGE_SEC,
+      retentionDays: parsed.DIAGNOSTICS_RETENTION_DAYS,
+    },
+    export: {
+      pseudonymKey: parsed.EXPORT_PSEUDONYM_KEY,
+      botEnabled: parsed.DATA_EXPORT_BOT_ENABLED,
+    },
+    notifyReports: parsed.ADMIN_NOTIFY_REPORTS,
     adminTelegramIds: new Set(parsed.ADMIN_TELEGRAM_IDS),
+    telegram: {
+      botToken: parsed.TELEGRAM_BOT_TOKEN,
+      updates: parsed.TELEGRAM_BOT_UPDATES,
+      webhookSecret: parsed.TELEGRAM_WEBHOOK_SECRET,
+      publicApiUrl: parsed.PUBLIC_API_URL.replace(/\/+$/, ""),
+      webAppUrl: parsed.PUBLIC_WEB_URL,
+      adminChatId: parsed.ADMIN_CHAT_ID,
+    },
     playtest: {
       enabled: parsed.PLAYTEST_ENABLED,
-      botToken: parsed.TELEGRAM_BOT_TOKEN,
       initDataMaxAgeSec: parsed.PLAYTEST_INIT_DATA_MAX_AGE_SEC,
       dataTtlSec: parsed.PLAYTEST_DATA_TTL_DAYS * 24 * 60 * 60,
       devAuth: parsed.PLAYTEST_DEV_AUTH,
       stats: {
         enabled: parsed.PLAYTEST_STATS_ENABLED,
-        chatId: parsed.PLAYTEST_STATS_CHAT_ID,
         dailyAtMin: parsed.PLAYTEST_STATS_DAILY_AT === "" ? null : minuteOfDay(parsed.PLAYTEST_STATS_DAILY_AT),
       },
       statsUtcOffsetMin: parsed.PLAYTEST_STATS_UTC_OFFSET_MIN,
     },
   };
+}
+
+let environmentConfig: AppConfig | null = null;
+
+/**
+ * Конфигурация процесса из окружения — одна на процесс: её читают и модуль
+ * конфигурации, и точка входа, которой настройки Fastify нужны до DI.
+ */
+export function configFromEnvironment(): AppConfig {
+  if (environmentConfig === null) {
+    loadRootEnv();
+    environmentConfig = loadAppConfig(process.env);
+  }
+  return environmentConfig;
 }

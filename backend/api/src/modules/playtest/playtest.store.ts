@@ -1,4 +1,4 @@
-import type { TelegramPlayer } from "./telegram-init-data.js";
+import type { TelegramPlayer } from "../telegram/telegram-init-data.js";
 
 /**
  * Хранилище плейтеста. Интерфейс отдельно от Redis: сервис проверяется тестом

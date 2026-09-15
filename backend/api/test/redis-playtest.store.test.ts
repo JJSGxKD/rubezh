@@ -1,8 +1,9 @@
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import { closeRedis, createPlaytestRedis } from "../src/modules/playtest/playtest-redis.js";
-import { RedisStatsBotLocks } from "../src/modules/playtest/playtest-stats.bot.js";
+import { closeRedis, createRedis } from "../src/infra/redis.js";
+import { RedisBotPollerLocks } from "../src/modules/bot/bot-poller.js";
+import { RedisStatsReporterLocks } from "../src/modules/playtest/playtest-stats.reporter.js";
 import type { StressSummary } from "../src/modules/playtest/playtest-stats.store.js";
 import type { StoredRun } from "../src/modules/playtest/playtest.store.js";
 import { RedisPlaytestStatsStore } from "../src/modules/playtest/redis-playtest-stats.store.js";
@@ -74,7 +75,7 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
     admin = new Redis(url);
     await admin.flushdb();
     const config = loadAppConfig({ REDIS_URL: url, PLAYTEST_DATA_TTL_DAYS: "1" });
-    redis = createPlaytestRedis(config);
+    redis = createRedis(config);
     store = new RedisPlaytestStore(redis, config);
     stats = new RedisPlaytestStatsStore(redis, config);
   });
@@ -164,8 +165,8 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
 
   it("не считает повтор отчёта стресс-теста", async () => {
     const summary = stressSummary("stress-1");
-    expect(await stats.recordStress("10", summary, 1)).toBe(true);
-    expect(await stats.recordStress("10", summary, 1)).toBe(false);
+    expect(await stats.recordStress(summary, 1)).toBe(true);
+    expect(await stats.recordStress(summary, 1)).toBe(false);
     expect((await stats.snapshot(1)).stress).toEqual({
       reports: 1,
       byOs: { android: { reports: 1, totalPeak: 900, outcomes: { degradation: 1 } } },
@@ -175,8 +176,8 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
     expect(JSON.parse(recent[0] ?? "{}")).toMatchObject({ reportId: "stress-1", peakObjects: 900, at: 1 });
   });
 
-  it("держит одного читателя обновлений бота и отдаёт роль только владелец", async () => {
-    const locks = new RedisStatsBotLocks(redis);
+  it("держит одного читателя обновлений бота, а сводку — одну на сутки и на окно команды", async () => {
+    const locks = new RedisBotPollerLocks(redis);
     expect(await locks.holdPoller("a", 60_000)).toBe(true);
     expect(await locks.holdPoller("b", 60_000)).toBe(false);
     // Продление своим владельцем — не захват заново.
@@ -190,12 +191,13 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
     await locks.saveOffset(42);
     expect(await locks.readOffset()).toBe(42);
 
-    expect(await locks.claimDaily("2026-09-14")).toBe(true);
-    expect(await locks.claimDaily("2026-09-14")).toBe(false);
-    await locks.releaseDaily("2026-09-14");
-    expect(await locks.claimDaily("2026-09-14")).toBe(true);
-    expect(await locks.claimCommand("-100", 20)).toBe(true);
-    expect(await locks.claimCommand("-100", 20)).toBe(false);
+    const reporter = new RedisStatsReporterLocks(redis);
+    expect(await reporter.claimDaily("2026-09-14")).toBe(true);
+    expect(await reporter.claimDaily("2026-09-14")).toBe(false);
+    await reporter.releaseDaily("2026-09-14");
+    expect(await reporter.claimDaily("2026-09-14")).toBe(true);
+    expect(await reporter.claimCommand("-100", 20)).toBe(true);
+    expect(await reporter.claimCommand("-100", 20)).toBe(false);
   });
 
   it("ставит срок жизни на ключи: данные плейтеста исчезают сами", async () => {

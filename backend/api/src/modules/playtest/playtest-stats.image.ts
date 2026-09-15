@@ -1,4 +1,5 @@
-import { Resvg } from "@resvg/resvg-js";
+import { clientLabel, formatDuration, formFactorLabel, osLabel, stressOutcomeLabel } from "../../common/card/labels.js";
+import { estimateWidth, PALETTE, rect, renderPng, SERIES, svgDocument, text } from "../../common/card/svg.js";
 import type { Difficulty } from "./playtest.store.js";
 import type { Share, StatsSummary } from "./playtest-stats.summary.js";
 
@@ -10,32 +11,8 @@ import type { Share, StatsSummary } from "./playtest-stats.summary.js";
  * подписью к фото — на случай, если на машине бэкенда нет шрифтов с
  * кириллицей и текст на картинке не отрисуется.
  *
- * Цвета повторяют направление дизайн-системы клиента
- * (`app-shell/src/design-system/tokens.css`): бэкенд не читает CSS, поэтому
- * значения продублированы здесь и меняются вместе с токенами.
+ * Палитра и примитивы рисования — общие для карточек бота (`common/card`).
  */
-
-const PALETTE = {
-  bg: "#07090e",
-  surface: "#121622",
-  raised: "#1b2130",
-  border: "#262e40",
-  text: "#f3f6fc",
-  muted: "#a8b2c6",
-  faint: "#69738a",
-  accent: "#ffb22e",
-  danger: "#ff5d5d",
-  success: "#5fe3a1",
-} as const;
-
-/** Цвета долей в полосах: соседние доли различимы и на сжатом Telegram'ом фото. */
-const SERIES = ["#5ccfff", "#ffb22e", "#5fe3a1", "#c47dff", "#ff8c42", "#a8b2c6"] as const;
-
-/**
- * Системные гарнитуры с кириллицей по убыванию вероятности: Windows у
- * разработчика, Roboto и DejaVu в Linux-контейнере (docs/20-env-and-ports.md).
- */
-const FONT = "Segoe UI, Roboto, DejaVu Sans, Arial, sans-serif";
 
 const WIDTH = 1080;
 const PAD = 56;
@@ -44,56 +21,6 @@ const INNER = WIDTH - PAD * 2;
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
-
-const OS_LABELS: Record<string, string> = {
-  android: "Android",
-  ios: "iOS",
-  windows: "Windows",
-  macos: "macOS",
-  linux: "Linux",
-  other: "Другая",
-};
-
-const FORM_FACTOR_LABELS: Record<string, string> = { phone: "Телефон", tablet: "Планшет", desktop: "Компьютер" };
-
-/** Клиенты площадки по `tgWebAppPlatform`; неизвестный показывается как есть. */
-const CLIENT_LABELS: Record<string, string> = {
-  android: "TG Android",
-  android_x: "TG Android X",
-  ios: "TG iOS",
-  tdesktop: "TG Desktop",
-  macos: "TG macOS",
-  weba: "TG Web A",
-  webk: "TG Web K",
-  web: "TG Web",
-  max: "MAX",
-  vk: "VK",
-  unknown: "Вне площадки",
-};
-
-/** Чем закончился прогон стресс-теста — `BenchStopReason` движка. */
-const STRESS_OUTCOME_LABELS: Record<string, string> = {
-  degradation: "предел найден",
-  duration: "предел не найден",
-  pool_exhausted: "упёрлись в стенд",
-  manual: "остановлен",
-};
-
-export function stressOutcomeLabel(outcome: string): string {
-  return STRESS_OUTCOME_LABELS[outcome] ?? outcome;
-}
-
-export function osLabel(os: string): string {
-  return OS_LABELS[os] ?? os;
-}
-
-export function formFactorLabel(formFactor: string): string {
-  return FORM_FACTOR_LABELS[formFactor] ?? formFactor;
-}
-
-export function clientLabel(client: string): string {
-  return CLIENT_LABELS[client] ?? client;
-}
 
 export function dayLabel(day: string): string {
   const [, month, date] = day.split("-").map(Number);
@@ -105,15 +32,6 @@ export function offsetLabel(offsetMin: number): string {
   const abs = Math.abs(offsetMin);
   const minutes = abs % 60;
   return `UTC${sign}${Math.floor(abs / 60)}${minutes === 0 ? "" : `:${String(minutes).padStart(2, "0")}`}`;
-}
-
-/** «4:05», «1:02:40» — как таймер забега в клиенте. */
-export function formatDuration(totalSec: number): string {
-  const sec = Math.max(0, Math.round(totalSec));
-  const hours = Math.floor(sec / 3600);
-  const minutes = Math.floor((sec % 3600) / 60);
-  const seconds = String(sec % 60).padStart(2, "0");
-  return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
 }
 
 export function percent(share: number): string {
@@ -200,20 +118,11 @@ export function renderStatsSvg(summary: StatsSummary, offsetMin: number): string
   parts.push(text(PAD, y + 20, "Без имён и Telegram ID: только счётчики и доли", { size: 19, fill: PALETTE.faint }));
   const height = y + 20 + PAD;
 
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}">`,
-    rect(0, 0, WIDTH, height, { fill: PALETTE.bg }),
-    ...parts,
-    "</svg>",
-  ].join("\n");
+  return svgDocument(WIDTH, height, parts);
 }
 
 export function renderStatsPng(svg: string): Buffer {
-  const resvg = new Resvg(svg, {
-    font: { loadSystemFonts: true, defaultFontFamily: "Arial" },
-    fitTo: { mode: "original" },
-  });
-  return resvg.render().asPng();
+  return renderPng(svg);
 }
 
 /**
@@ -341,56 +250,4 @@ function barList(x: number, y: number, width: number, series: Share[], color: st
       ].join("\n");
     })
     .join("\n");
-}
-
-/**
- * Ширина подписи без измерения шрифта: у resvg нет метрик до отрисовки.
- * Средняя ширина знака ≈ 0,55 кегля — с запасом для кириллицы.
- */
-function estimateWidth(value: string, size: number): number {
-  return value.length * size * 0.55;
-}
-
-interface TextStyle {
-  size: number;
-  fill: string;
-  weight?: number;
-  spacing?: number;
-  anchor?: "start" | "middle" | "end";
-}
-
-function text(x: number, y: number, value: string, style: TextStyle): string {
-  const attributes = [
-    `x="${round(x)}"`,
-    `y="${round(y)}"`,
-    `font-family="${FONT}"`,
-    `font-size="${style.size}"`,
-    `fill="${style.fill}"`,
-    style.weight === undefined ? "" : `font-weight="${style.weight}"`,
-    style.spacing === undefined ? "" : `letter-spacing="${style.spacing}"`,
-    style.anchor === undefined || style.anchor === "start" ? "" : `text-anchor="${style.anchor}"`,
-  ].filter((attribute) => attribute !== "");
-  return `<text ${attributes.join(" ")}>${escapeXml(value)}</text>`;
-}
-
-function rect(x: number, y: number, width: number, height: number, style: { fill: string; stroke?: string; radius?: number }): string {
-  const attributes = [
-    `x="${round(x)}"`,
-    `y="${round(y)}"`,
-    `width="${round(width)}"`,
-    `height="${round(height)}"`,
-    `fill="${style.fill}"`,
-    style.radius === undefined ? "" : `rx="${style.radius}"`,
-    style.stroke === undefined ? "" : `stroke="${style.stroke}" stroke-width="2"`,
-  ].filter((attribute) => attribute !== "");
-  return `<rect ${attributes.join(" ")}/>`;
-}
-
-function round(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
-/** Ключи оружия и причин смерти приходят от клиента — в разметку только экранированными. */
-export function escapeXml(value: string): string {
-  return value.replace(/[<>&"']/g, (char) => `&#${char.charCodeAt(0)};`);
 }

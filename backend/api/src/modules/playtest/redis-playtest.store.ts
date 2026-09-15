@@ -10,8 +10,8 @@ import type {
   RecordRunResult,
   StoredRun,
 } from "./playtest.store.js";
-import { PLAYTEST_REDIS } from "./playtest-redis.js";
-import type { TelegramPlayer } from "./telegram-init-data.js";
+import { REDIS } from "../../infra/redis.js";
+import type { TelegramPlayer } from "../telegram/telegram-init-data.js";
 
 /**
  * Данные плейтеста в Redis (docs/26-stage2-plan.md, Р19 и WP13).
@@ -76,7 +76,7 @@ export class RedisPlaytestStore implements PlaytestStore {
   private readonly ttlSec: number;
 
   constructor(
-    @Inject(PLAYTEST_REDIS) private readonly redis: Redis,
+    @Inject(REDIS) private readonly redis: Redis,
     @Inject(APP_CONFIG) config: AppConfig,
   ) {
     this.ttlSec = config.playtest.dataTtlSec;

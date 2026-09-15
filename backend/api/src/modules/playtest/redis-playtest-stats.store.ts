@@ -3,7 +3,7 @@ import type { Redis } from "ioredis";
 import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DIFFICULTIES, type Difficulty, type StoredRun } from "./playtest.store.js";
-import { PLAYTEST_REDIS } from "./playtest-redis.js";
+import { REDIS } from "../../infra/redis.js";
 import {
   DURATION_BUCKETS_MIN,
   dayKey,
@@ -42,7 +42,7 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
   private readonly offsetMin: number;
 
   constructor(
-    @Inject(PLAYTEST_REDIS) private readonly redis: Redis,
+    @Inject(REDIS) private readonly redis: Redis,
     @Inject(APP_CONFIG) config: AppConfig,
   ) {
     this.ttlSec = config.playtest.dataTtlSec;
@@ -89,7 +89,7 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
     await tx.exec();
   }
 
-  async recordStress(_playerId: string, summary: StressSummary, nowMs: number): Promise<boolean> {
+  async recordStress(summary: StressSummary, nowMs: number): Promise<boolean> {
     const fresh = await this.redis.set(`pt:st:stress:${summary.reportId}`, "1", "EX", this.ttlSec, "NX");
     if (fresh === null) return false;
     const os = summary.device.os;

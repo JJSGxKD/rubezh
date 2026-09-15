@@ -7,8 +7,8 @@ import {
 } from "@bh/core-game";
 import { create } from "zustand";
 import { describeDevice } from "./device";
-import { usePlaytest } from "./playtest";
-import type { PlaytestFailure } from "./playtest-api";
+import { sendDiagnosticReport, type ReportFailure } from "./diagnostic-reports";
+import { useInstall } from "./install";
 import { reportError, track, useShell } from "./shell";
 
 /**
@@ -20,7 +20,7 @@ import { reportError, track, useShell } from "./shell";
  */
 export type StressPhase = "idle" | "loading" | "running" | "finished" | "error";
 
-/** `disabled` — отправлять некуда: плейтест выключен или игрок не опознан. */
+/** `disabled` — отправлять некуда: приёмник выключен или стресс-тест игроку закрыт. */
 export type StressSendState = "idle" | "sending" | "sent" | "failed" | "disabled";
 
 export interface StressStore {
@@ -28,7 +28,7 @@ export interface StressStore {
   progress: BenchProgress | null;
   submission: BenchSubmission | null;
   sendState: StressSendState;
-  sendFailure: PlaytestFailure | null;
+  sendFailure: ReportFailure | null;
   errorMessage: string | null;
 
   start(container: HTMLElement): Promise<void>;
@@ -125,11 +125,22 @@ export const useStress = create<StressStore>((set, get) => ({
     const submission = get().submission;
     if (submission === null || get().sendState === "sending") return;
     set({ sendState: "sending", sendFailure: null });
-    const failure = await usePlaytest.getState().reportStress(submission);
+    const { adapter, build } = useShell.getState();
+    const failure = await sendDiagnosticReport({
+      reportId: submission.reportId,
+      kind: "bench",
+      appVersion: build.version,
+      contentHash: build.contentHash === "" ? null : build.contentHash,
+      installId: useInstall.getState().installId,
+      platform: build.platform,
+      occurredAt: submission.report.startedAt,
+      device: describeDevice(adapter.clientInfo()),
+      payload: submission,
+    });
     // Пока шла отправка, человек мог уйти с экрана или начать заново.
     if (get().submission !== submission) return;
     if (failure === null) set({ sendState: "sent" });
-    else if (failure === "disabled" || failure === "no_identity") set({ sendState: "disabled", sendFailure: failure });
+    else if (failure === "disabled" || failure === "forbidden") set({ sendState: "disabled", sendFailure: failure });
     else set({ sendState: "failed", sendFailure: failure });
   },
 }));

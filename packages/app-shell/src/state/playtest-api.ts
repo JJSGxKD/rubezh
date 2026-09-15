@@ -1,9 +1,7 @@
-import type { BenchSubmission } from "@bh/core-game";
 import {
   DIFFICULTY_IDS,
   type DifficultyId,
   type PlaytestAccess,
-  type PlaytestDevice,
   type PlaytestLeaderboard,
   type PlaytestProfile,
   type PlaytestSessionReport,
@@ -63,19 +61,6 @@ export interface PlaytestApi {
   profile(): Promise<PlaytestResult<PlaytestProfile>>;
   access(): Promise<PlaytestResult<PlaytestAccess>>;
   reportSession(report: PlaytestSessionReport): Promise<PlaytestResult<{ recorded: boolean }>>;
-  reportStress(report: PlaytestStressReport): Promise<PlaytestResult<{ recorded: boolean }>>;
-}
-
-/**
- * Отчёт стресс-теста: формат стенда из движка и устройство тем же разбором,
- * что у запуска. Тип здесь, а не в shared-types: отчёт описан в core-game,
- * а shared-types ничего из монорепо не импортирует.
- */
-export interface PlaytestStressReport {
-  installId: string;
-  build: string;
-  device: PlaytestDevice;
-  submission: BenchSubmission;
 }
 
 /**
@@ -191,7 +176,6 @@ export function createPlaytestApi(
     profile: () => request("/me", profileSchema, { method: "GET" }),
     access: () => request("/access", accessSchema, { method: "GET" }),
     reportSession: (report) => request("/sessions", sessionSchema, { method: "POST", body: report }),
-    reportStress: (report) => request("/stress", sessionSchema, { method: "POST", body: report }),
   };
 }
 

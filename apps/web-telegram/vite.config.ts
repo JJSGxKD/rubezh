@@ -36,17 +36,21 @@ export default defineConfig(({ mode, command }) => {
           hmr: { protocol: "wss" as const, host: tunnelHost, clientPort: 443 },
         };
 
-  // Бэкенд плейтеста за тем же доменом, что и клиент: телефон через туннель
-  // достаёт до локального API без отдельного прокси и без CORS
-  // (docs/26-stage2-plan.md, Р19). Проксируется только префикс плейтеста —
-  // каждый его запрос проверяется подписью initData; остальное dev-API так
-  // наружу не выходит (docs/20-env-and-ports.md §4).
-  const apiProxy = {
-    "/api/v1/playtest": {
-      target: `http://127.0.0.1:${Number(env.API_PORT ?? 4000)}`,
-      changeOrigin: true,
-    },
-  };
+  // Бэкенд за тем же доменом, что и клиент: телефон через туннель достаёт до
+  // локального API без отдельного прокси и без CORS (docs/26-stage2-plan.md,
+  // Р19). Проксируются только префиксы, которые сами защищены: плейтест —
+  // подписью initData, приёмники — выключателем, лимитами и Origin
+  // (docs/28-diagnostics.md §5.3), вебхук бота — секретным токеном: через
+  // туннель машина разработчика может принимать обновления и вебхуком.
+  // Остальное dev-API наружу не выходит
+  // (docs/20-env-and-ports.md §4).
+  const apiTarget = `http://127.0.0.1:${Number(env.API_PORT ?? 4000)}`;
+  const apiProxy = Object.fromEntries(
+    ["/api/v1/playtest", "/api/v1/events", "/api/v1/diagnostics", "/api/v1/bot"].map((prefix) => [
+      prefix,
+      { target: apiTarget, changeOrigin: true },
+    ]),
+  );
 
   return {
     // React — для оболочки, Tailwind 4 — для токенов дизайн-системы
