@@ -4,6 +4,7 @@ import {
   type HudSnapshot,
   type RunDevCommand,
   type RunDevInfo,
+  type RunDiagnostics,
   type RunInspection,
   type RunPauseReason,
   type RunSession,
@@ -119,6 +120,12 @@ let firstFrameStartedAt: number | null = null;
 
 /** Секунда забега, на которой он сохранялся последний раз. */
 let lastSavedSec = 0;
+
+/**
+ * Технический итог кончившегося забега. Движок шлёт его в том же вызове прямо
+ * перед `finished`/`abandoned`, итог забирает его и обнуляет.
+ */
+let pendingDiagnostics: RunDiagnostics | null = null;
 
 const IDLE = {
   phase: "idle" as RunPhase,
@@ -295,6 +302,7 @@ export const useRun = create<RunStore>((set, get) => ({
     session = null;
     startOptions = null;
     firstFrameStartedAt = null;
+    pendingDiagnostics = null;
     setRunUiMode(false);
     set({ ...IDLE, phase: "idle" });
   },
@@ -365,6 +373,9 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
 
     created.on("devInfo", (devInfo) => set({ devInfo })),
 
+    created.on("diagnostics", (diagnostics) => {
+      pendingDiagnostics = diagnostics;
+    }),
     created.on("finished", (result) => finishRun(result, "run_finished", set, get)),
     created.on("abandoned", (result) => finishRun(result, "run_abandoned", set, get)),
 
@@ -414,6 +425,8 @@ function finishRun(
   if (result.outcome === "died") audio.runEvent("death");
   if (isNewRecord) audio.runEvent("record");
 
+  const diagnostics = pendingDiagnostics;
+  pendingDiagnostics = null;
   track(event, {
     seed: result.seed,
     survivalSec: Math.round(result.survivalSec),
@@ -426,7 +439,34 @@ function finishRun(
     contentHash: result.contentHash,
     isNewRecord,
     cheats: result.cheats,
+    ...(diagnostics === null ? {} : perfFields(diagnostics.perf)),
   });
+}
+
+/**
+ * Сводка производительности плоскими полями (docs/28-diagnostics.md §3.2):
+ * `payload` событий плоский, вложенный объект сервер не примет.
+ */
+function perfFields(perf: RunDiagnostics["perf"]): Record<string, string | number | null> {
+  return {
+    perfFrames: perf.frames,
+    perfAvgFps: round(perf.avgFps, 1),
+    perfP95FrameMs: round(perf.p95FrameMs, 2),
+    perfOver33Ratio: round(perf.over33Ratio, 4),
+    perfPeakObjects: perf.peakObjects,
+    perfDisplayHz: perf.displayHz,
+    perfRenderCapFps: perf.renderCapFps,
+    perfRenderer: perf.renderer,
+    perfDpr: round(perf.dpr, 2),
+    perfCanvasWidth: perf.canvasWidth,
+    perfCanvasHeight: perf.canvasHeight,
+    perfInterruptions: perf.interruptions,
+  };
+}
+
+function round(value: number, digits: number): number {
+  const scale = 10 ** digits;
+  return Math.round(value * scale) / scale;
 }
 
 /**

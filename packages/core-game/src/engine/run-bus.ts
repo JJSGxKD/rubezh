@@ -22,6 +22,7 @@ export class RunBus {
     cues: new Set(),
     finished: new Set(),
     abandoned: new Set(),
+    diagnostics: new Set(),
     error: new Set(),
   };
 

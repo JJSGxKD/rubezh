@@ -232,7 +232,44 @@ export interface RunEvents {
   finished: RunResult;
   /** игрок сдался на экране паузы */
   abandoned: RunResult;
+  /**
+   * Технический итог забега — сразу перед `finished` или `abandoned`, в том
+   * же вызове: оболочка кладёт сводку в событие итога.
+   */
+  diagnostics: RunDiagnostics;
   error: { message: string };
+}
+
+/** Технический итог забега (docs/28-diagnostics.md §3). */
+export interface RunDiagnostics {
+  perf: RunPerfSummary;
+}
+
+/**
+ * Сводка производительности — у всех игроков, в `run_finished`
+ * (docs/28-diagnostics.md §3.2). Первые две секунды и кадры после сворачивания
+ * в неё не входят.
+ */
+export interface RunPerfSummary {
+  /** сколько кадров вошло в оценку: мало — цифрам верить нельзя */
+  frames: number;
+  durationSec: number;
+  avgFps: number;
+  p95FrameMs: number;
+  /** доля кадров дольше 33 мс */
+  over33Ratio: number;
+  /** пик врагов и снарядов вместе — сумма в один момент */
+  peakObjects: number;
+  /** оценка частоты экрана: без неё FPS не с чем сравнивать */
+  displayHz: number;
+  /** ограничение частоты отрисовки; `null` — рисуем со скоростью экрана */
+  renderCapFps: number | null;
+  renderer: "webgl" | "canvas";
+  dpr: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  /** сколько раз забег прерывался сворачиванием */
+  interruptions: number;
 }
 
 export interface RunSession {

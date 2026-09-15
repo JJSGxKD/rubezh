@@ -836,8 +836,9 @@ sequenceDiagram
     UI->>E: chooseUpgrade(optionId) → в лог ввода
     UI->>T: upgrade_chosen
     S-->>E: игрок погиб
+    E-->>UI: diagnostics(сводка производительности)
     E-->>UI: finished(RunResult)
-    UI->>T: run_finished + сводка производительности
+    UI->>T: run_finished + поля perf*
     opt запись диагностики включена
         E-->>UI: diagnosticsReady(отчёт)
         UI->>UI: очередь отправки (§4.8)

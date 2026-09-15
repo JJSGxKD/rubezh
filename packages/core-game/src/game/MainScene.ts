@@ -33,6 +33,9 @@ import { WorldRenderer } from "./render/WorldRenderer";
 import { Joystick } from "./joystick";
 import { buildRunResult } from "./run/run-result";
 import { captureWorld, restoreWorld, SnapshotError } from "./run/snapshot";
+import { FrameClock } from "./diagnostics/frame-clock";
+import { RunPerfTracker } from "./diagnostics/run-perf";
+import { watchVisibility } from "../engine/visibility";
 import { createUuid } from "./uuid";
 
 const TICK_MS = TICK_SEC * 1000;
@@ -87,6 +90,8 @@ export interface MainSceneData {
   dev?: RunDevOptions;
   /** FPS тестировщика — техническая сводка идёт и без режима разработчика */
   fpsOverlay?: boolean;
+  /** ограничение частоты отрисовки — в сводку производительности */
+  renderCapFps?: number | null;
 }
 
 /**
@@ -126,6 +131,9 @@ export class MainScene extends Phaser.Scene {
   /** направление прошлого кадра: от него считается гистерезис квантования */
   private inputCode = IDLE_CODE;
   private readonly simInput: SimInput = { moveX: 0, moveY: 0 };
+  /** каким кадрам верить: фон и возврат из него в сводку не попадают */
+  private clock = new FrameClock();
+  private perf = new RunPerfTracker();
 
   constructor() {
     super("main");
@@ -144,6 +152,9 @@ export class MainScene extends Phaser.Scene {
     this.cheatsUsed = resume?.cheats === true;
     this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
     this.inputCode = IDLE_CODE;
+    // «Ещё раз» пересоздаёт состояние сцены, а не объект: сводка — новому забегу.
+    this.clock = new FrameClock();
+    this.perf = new RunPerfTracker();
 
     const mapId = resume?.mapId ?? data.mapId;
     const difficulty = findDifficulty(resume?.difficultyId ?? data.difficultyId) ?? findDifficulty(DEFAULT_DIFFICULTY_ID);
@@ -178,8 +189,10 @@ export class MainScene extends Phaser.Scene {
     this.bindKeyboard();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    const stopWatching = watchVisibility(this.clock);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+      stopWatching();
     });
 
     this.applyDev(data.dev);
@@ -194,9 +207,12 @@ export class MainScene extends Phaser.Scene {
     if (resume !== undefined) this.enterRestored();
   }
 
-  update(_time: number, deltaMs: number): void {
+  update(time: number, deltaMs: number): void {
     // Снимок не прочитался: сцена так и не собралась, об ошибке уже сообщено.
     if (!this.ready) return;
+    // Часы идут каждый кадр, даже на паузе: иначе первый кадр после неё
+    // принёс бы всё время паузы.
+    const frameMs = this.clock.frame(time, deltaMs);
     if (this.phase !== "running") {
       // Мир стоит: накопитель сбрасывается, чтобы после возврата не прилетела
       // пачка «догоняющих» шагов, и рисуется последнее состояние без
@@ -248,6 +264,8 @@ export class MainScene extends Phaser.Scene {
       this.hudTimerMs = 0;
       this.emitHud();
     }
+
+    if (frameMs !== null) this.perf.frame(frameMs, this.world.enemies.aliveCount + this.world.projectiles.aliveCount);
 
     if (!this.world.player.alive) {
       this.finishRun("died");
@@ -524,6 +542,16 @@ export class MainScene extends Phaser.Scene {
     });
 
     this.emitHud();
+    this.sceneData.bus.emit("diagnostics", {
+      perf: this.perf.summary({
+        renderer: this.game.renderer.type === Phaser.WEBGL ? "webgl" : "canvas",
+        renderCapFps: this.sceneData.renderCapFps ?? null,
+        dpr: this.sceneData.unitScale,
+        canvasWidth: this.scale.width,
+        canvasHeight: this.scale.height,
+        interruptions: this.clock.interruptions,
+      }),
+    });
     // Локальный рекорд и аналитику ведёт оболочка: движок не знает ни о сети,
     // ни о хранилище устройства (docs/27-design-system-and-app-shell.md §3.1).
     this.sceneData.bus.emit(outcome === "died" ? "finished" : "abandoned", result);

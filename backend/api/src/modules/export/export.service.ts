@@ -46,7 +46,7 @@ const REPORTS_PAGE = 100;
 const PAGE_PAUSE_MS = 25;
 
 const RUN_EVENTS = new Set(["run_finished", "run_abandoned"]);
-const RUN_COLUMNS = ["received_at", "occurred_at", "event_type", "install_id", "user", "app_version", "seed", "survivalSec", "level", "wave", "enemiesKilled", "weapon", "map", "difficulty", "contentHash", "isNewRecord", "cheats"] as const;
+const RUN_COLUMNS = ["received_at", "occurred_at", "event_type", "install_id", "user", "app_version", "seed", "survivalSec", "level", "wave", "enemiesKilled", "weapon", "map", "difficulty", "contentHash", "isNewRecord", "cheats", "perfAvgFps", "perfP95FrameMs", "perfOver33Ratio", "perfPeakObjects", "perfDisplayHz", "perfInterruptions"] as const;
 
 export interface ExportRequest {
   period: ExportPeriod;
