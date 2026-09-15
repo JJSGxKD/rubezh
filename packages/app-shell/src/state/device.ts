@@ -53,7 +53,7 @@ function formFactorOf(os: DeviceOs, env: DeviceEnvironment): DeviceFormFactor {
   return os === "other" && env.maxTouchPoints <= 1 ? "desktop" : "phone";
 }
 
-function readEnvironment(): DeviceEnvironment {
+export function readEnvironment(): DeviceEnvironment {
   const nav = navigator as Navigator & { deviceMemory?: number };
   return {
     userAgent: nav.userAgent,
