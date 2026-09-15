@@ -1058,6 +1058,35 @@ sequenceDiagram
   минуту: терять события тестеров хуже, чем на время сбоя ослабить лимит;
 - **Telegram ID — только из подписи**: поле в теле события игнорируется.
 
+### 4.14 Приветствие по /start (этап 2, реализовано)
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant TG as Telegram
+    participant B as BotRouter
+    participant S as StartCommand
+    participant P as Прогресс плейтеста
+    participant R as Redis
+
+    U->>TG: /start в личке
+    TG->>B: вебхук или getUpdates
+    B->>S: обновление
+    S->>R: SET bot:start:{чат} NX EX 3 — двойное нажатие
+    S->>P: рекорд, место, забеги (2 с, иначе карточка новичка)
+    S->>S: язык, имя без эмодзи → ключ SHA-256
+    S->>R: GET bot:card:{ключ}
+    alt file_id есть
+        S->>TG: sendPhoto(file_id) — без рендера и загрузки
+    else нет или Telegram его забыл
+        S->>S: SVG → PNG (одинаковые рендеры склеиваются)
+        S->>TG: sendPhoto(PNG) + кнопка «Играть»
+        TG-->>S: file_id крупнейшего размера
+        S->>R: SET bot:card:{ключ} file_id EX 30 дней
+    end
+    TG-->>U: карточка с подписью на языке игрока
+```
+
 ---
 
 ## 5. Топология развёртывания

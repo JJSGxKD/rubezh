@@ -77,6 +77,9 @@ const schema = z.object({
     }),
   // Публичный адрес API — куда регистрировать вебхук (`pnpm bot:webhook`).
   PUBLIC_API_URL: z.string().default(""),
+  // Адрес Mini App для кнопки «Играть» под приветствием. Telegram принимает
+  // только HTTPS: без него карточка уходит без кнопки.
+  PUBLIC_WEB_URL: z.string().default(""),
   // Групповой чат администраторов: сводка плейтеста и уведомления. Числовой
   // id, у супергруппы — с минусом.
   ADMIN_CHAT_ID: z
@@ -136,6 +139,8 @@ export interface AppConfig {
     webhookSecret: string;
     /** публичный адрес API без косой в конце — для регистрации вебхука */
     publicApiUrl: string;
+    /** адрес Mini App для кнопки «Играть» */
+    webAppUrl: string;
     /** групповой чат администраторов; пусто — писать некуда */
     adminChatId: string;
   };
@@ -228,6 +233,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       updates: parsed.TELEGRAM_BOT_UPDATES,
       webhookSecret: parsed.TELEGRAM_WEBHOOK_SECRET,
       publicApiUrl: parsed.PUBLIC_API_URL.replace(/\/+$/, ""),
+      webAppUrl: parsed.PUBLIC_WEB_URL,
       adminChatId: parsed.ADMIN_CHAT_ID,
     },
     playtest: {

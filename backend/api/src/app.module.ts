@@ -7,6 +7,7 @@ import { DiagnosticsModule } from "./modules/diagnostics/diagnostics.module.js";
 import { EventsModule } from "./modules/events/events.module.js";
 import { IngestModule } from "./modules/ingest/ingest.module.js";
 import { TelegramModule } from "./modules/telegram/telegram.module.js";
+import { WelcomeModule } from "./modules/welcome/welcome.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 
@@ -19,7 +20,7 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * и тоже выключены по умолчанию (docs/26-stage2-plan.md, WP13).
  */
 @Module({
-  imports: [AppConfigModule, RedisModule, DatabaseModule, IngestModule, TelegramModule, BotModule, EventsModule, DiagnosticsModule, PlaytestModule],
+  imports: [AppConfigModule, RedisModule, DatabaseModule, IngestModule, TelegramModule, BotModule, EventsModule, DiagnosticsModule, WelcomeModule, PlaytestModule],
   controllers: [HealthController],
 })
 export class AppModule {}
