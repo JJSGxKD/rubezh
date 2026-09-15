@@ -85,7 +85,9 @@ export class QueuedEventsSink implements EventsSink, OnApplicationBootstrap, OnM
           { rows: [...rows] },
           {
             attempts: 5,
-            backoff: { type: "exponential", delay: 2_000 },
+            // Джиттер разводит повторы пачек, упавших разом при сбое БД, — иначе
+            // они вернутся одной волной.
+            backoff: { type: "exponential", delay: 2_000, jitter: 0.5 },
             removeOnComplete: 1_000,
             removeOnFail: 5_000,
           },

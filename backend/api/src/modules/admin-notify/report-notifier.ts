@@ -94,7 +94,7 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
         {
           jobId: `report-${report.reportId}`,
           attempts: 6,
-          backoff: { type: "exponential", delay: 5_000 },
+          backoff: { type: "exponential", delay: 5_000, jitter: 0.5 },
           removeOnComplete: 500,
           removeOnFail: 500,
         },
