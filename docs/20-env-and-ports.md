@@ -183,6 +183,11 @@ pnpm --filter backend-api prisma:migrate    # создать миграцию в
 pnpm --filter backend-api prisma:generate   # перегенерировать клиент
 ```
 
+Схема — `backend/api/prisma/schema.prisma`, строка подключения `DATABASE_URL`
+читается из корневого `.env` в `backend/api/prisma.config.ts`: Prisma 7 сама
+окружение не загружает. Клиент генерируется в `backend/api/src/generated/prisma`
+и в git не хранится.
+
 Остановить инфраструктуру: `docker compose down` (данные останутся в томах),
 `docker compose down -v` — вместе с данными.
 

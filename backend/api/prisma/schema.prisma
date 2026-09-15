@@ -2,13 +2,18 @@
 // docs/10-progression-and-ladder.md — Фаза 2, сюда сознательно не добавлены,
 // чтобы не тащить неиспользуемые таблицы в MVP.
 
+// Prisma 7: клиент генерируется в исходники бэкенда TypeScript-модулями в
+// ESM и в git не попадает (docs/16-tech-stack-decisions.md §5). Строка
+// подключения — в prisma.config.ts, запросы идут через драйвер pg.
 generator client {
-  provider = "prisma-client-js"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Platform {

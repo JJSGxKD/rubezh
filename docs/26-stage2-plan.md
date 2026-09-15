@@ -638,7 +638,8 @@ golden-сценарии обновлены.
 
 - [x] Р9: NestJS 12 (ESM), Fastify вместо Express, HTTP-тесты на настоящем
       Fastify (`backend/api/test/http-app.test.ts`)
-- [ ] Р9: Prisma 7, BullMQ 6, ioredis 6 до первых прод-таблиц
+- [x] Р9: Prisma 7 с `@prisma/adapter-pg`, BullMQ 6, ioredis 6 до первых
+      прод-таблиц
 - [ ] Р9: **точные версии** во всех `package.json` монорепо (сейчас `^` в
       корне, в бэкенде и у Phaser), `save-exact=true` в `.npmrc`, чтобы новые
       зависимости сразу ставились точными; одна версия Node в `.nvmrc`,
