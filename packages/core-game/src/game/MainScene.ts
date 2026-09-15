@@ -24,6 +24,7 @@ import { inspectWorld } from "./run/inspect";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { createWorld, hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { IDLE_INPUT, stepWorld, type SimInput } from "./sim/step";
+import { IDLE_CODE, inputOfCode, quantizeDirection } from "./sim/input-code";
 import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
 import { RunCamera } from "./render/run-camera";
@@ -122,6 +123,9 @@ export class MainScene extends Phaser.Scene {
   private devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
   private cueTracker!: CueTracker;
   private cueTimerMs = 0;
+  /** направление прошлого кадра: от него считается гистерезис квантования */
+  private inputCode = IDLE_CODE;
+  private readonly simInput: SimInput = { moveX: 0, moveY: 0 };
 
   constructor() {
     super("main");
@@ -139,6 +143,7 @@ export class MainScene extends Phaser.Scene {
     this.ready = false;
     this.cheatsUsed = resume?.cheats === true;
     this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
+    this.inputCode = IDLE_CODE;
 
     const mapId = resume?.mapId ?? data.mapId;
     const difficulty = findDifficulty(resume?.difficultyId ?? data.difficultyId) ?? findDifficulty(DEFAULT_DIFFICULTY_ID);
@@ -579,20 +584,28 @@ export class MainScene extends Phaser.Scene {
     };
   }
 
+  /**
+   * Ввод кадра — квантованный: симуляция получает ровно то, что попадёт в лог
+   * ввода, иначе повтор забега разойдётся с оригиналом (docs/28-diagnostics.md §3.4).
+   */
   private readInput(): SimInput {
-    // Палец главнее клавиатуры: если джойстик активен, клавиши не мешают.
-    if (this.joystick.active) return this.joystick.input;
-
-    const cursors = this.input.keyboard?.createCursorKeys();
     let moveX = 0;
     let moveY = 0;
+    // Палец главнее клавиатуры: если джойстик активен, клавиши не мешают.
+    if (this.joystick.active) {
+      const raw = this.joystick.input;
+      moveX = raw.moveX;
+      moveY = raw.moveY;
+    } else {
+      const cursors = this.input.keyboard?.createCursorKeys();
+      if (this.keys?.left.isDown === true || cursors?.left.isDown === true) moveX -= 1;
+      if (this.keys?.right.isDown === true || cursors?.right.isDown === true) moveX += 1;
+      if (this.keys?.up.isDown === true || cursors?.up.isDown === true) moveY -= 1;
+      if (this.keys?.down.isDown === true || cursors?.down.isDown === true) moveY += 1;
+    }
 
-    if (this.keys?.left.isDown === true || cursors?.left.isDown === true) moveX -= 1;
-    if (this.keys?.right.isDown === true || cursors?.right.isDown === true) moveX += 1;
-    if (this.keys?.up.isDown === true || cursors?.up.isDown === true) moveY -= 1;
-    if (this.keys?.down.isDown === true || cursors?.down.isDown === true) moveY += 1;
-
-    return { moveX, moveY };
+    this.inputCode = quantizeDirection(moveX, moveY, this.inputCode);
+    return inputOfCode(this.inputCode, this.simInput);
   }
 
   private startingWeaponId(): string {
