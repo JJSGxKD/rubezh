@@ -89,7 +89,7 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
     await tx.exec();
   }
 
-  async recordStress(_playerId: string, summary: StressSummary, nowMs: number): Promise<boolean> {
+  async recordStress(summary: StressSummary, nowMs: number): Promise<boolean> {
     const fresh = await this.redis.set(`pt:st:stress:${summary.reportId}`, "1", "EX", this.ttlSec, "NX");
     if (fresh === null) return false;
     const os = summary.device.os;

@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { DomainError } from "../../common/domain-error.js";
 import type { TelegramPlayer } from "../telegram/telegram-init-data.js";
 import { DIFFICULTIES, PLAYTEST_STORE, type Difficulty, type PlaytestStore, type StoredRun } from "./playtest.store.js";
-import type { RunSubmission, SessionReport, StressReport } from "./dto/run-submission.dto.js";
+import type { RunSubmission, SessionReport } from "./dto/run-submission.dto.js";
 import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store.js";
 
 /**
@@ -100,40 +100,6 @@ export class PlaytestService {
     });
   }
 
-  /**
-   * Итог стресс-теста. Кадры по секундам не хранятся: сводке и разбору по
-   * устройствам хватает пика и причины остановки, а таймлайн на сотни корзин
-   * при каждом прогоне раздул бы Redis плейтеста без пользы.
-   */
-  async recordStress(player: TelegramPlayer, report: StressReport, nowMs: number): Promise<{ recorded: boolean }> {
-    return this.guarded(async () => {
-      const { report: bench, verdict, reportId } = report.submission;
-      const totals = bench.totals;
-      const recorded = await this.statsStore.recordStress(
-        player.id,
-        {
-          reportId,
-          build: report.build,
-          mode: bench.profile.mode,
-          loadout: bench.profile.loadout,
-          outcome: bench.stoppedBy,
-          device: report.device,
-          peakObjects: Math.round(totals.peakObjects),
-          peakEnemies: Math.round(totals.peakLoad),
-          peakProjectiles: Math.round(totals.peakProjectiles),
-          avgFps: round1(totals.avgFps),
-          p95FrameMs: round1(totals.p95FrameMs),
-          displayHz: totals.displayHz,
-          durationSec: round1(totals.durationSec),
-          interruptions: bench.interruptions,
-          breakingLoad: verdict.breakingPoint === null ? null : Math.round(verdict.breakingPoint.load),
-        },
-        nowMs,
-      );
-      return { recorded };
-    });
-  }
-
   async leaderboard(playerId: string, difficulty: Difficulty): Promise<LeaderboardView> {
     return this.guarded(async () => {
       const [rows, total, rank, best] = await Promise.all([
@@ -192,8 +158,4 @@ export class PlaytestService {
       throw new StoreUnavailableError();
     }
   }
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
 }

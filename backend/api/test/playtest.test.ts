@@ -6,8 +6,12 @@ import { DomainError } from "../src/common/domain-error.js";
 import {
   runSubmissionSchema,
   sessionReportSchema,
-  stressReportSchema,
 } from "../src/modules/playtest/dto/run-submission.dto.js";
+import { DiagnosticsHooks } from "../src/modules/diagnostics/diagnostics-hooks.js";
+import { benchSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js";
+import { submitBenchReportSchema } from "../src/modules/diagnostics/dto/bench-report.dto.js";
+import { PlaytestStressListener } from "../src/modules/playtest/playtest-stress.listener.js";
+import { benchSubmission, DEVICE, REPORT_ID } from "./helpers/bench-report.js";
 import { accessFor } from "../src/modules/playtest/playtest-access.js";
 import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard.js";
 import { PlaytestService } from "../src/modules/playtest/playtest.service.js";
@@ -240,38 +244,33 @@ describe("сервис плейтеста", () => {
     expect(snapshot.deathCauses).toEqual({ swarm_rat: 1 });
   });
 
-  it("сводит отчёт стресс-теста к итогу без таймлайна и не считает повтор", async () => {
-    const frame = { frames: 600, durationSec: 10, avgFps: 58.37, minFps: 31, p50FrameMs: 16.6, p95FrameMs: 21.44, p99FrameMs: 30, over33Ratio: 0 };
-    const report = stressReportSchema.parse({
+  it("сводит отчёт стресс-теста из приёмника диагностики к итогу без таймлайна и не считает повтор", async () => {
+    const hooks = new DiagnosticsHooks();
+    const listener = new PlaytestStressListener(loadAppConfig({ NODE_ENV: "test", PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: BOT_TOKEN }), hooks, stats);
+    listener.onModuleInit();
+    const payload = submitBenchReportSchema.parse(benchSubmission());
+    const report = {
+      reportId: REPORT_ID,
+      kind: "bench" as const,
+      appVersion: "0.3.0",
       installId: "install-anna-phone",
-      build: "0.3.0",
-      device: { clientPlatform: "android", clientVersion: "8.0", os: "android", formFactor: "phone", screenWidth: 412, screenHeight: 915, pixelRatio: 2.63, cores: 8, memoryGb: 8 },
-      submission: {
-        reportId: "11111111-2222-4333-8444-555555555555",
-        report: {
-          schema: "rubezh.bench.v4",
-          startedAt: "2026-09-14T12:00:00.000Z",
-          stoppedBy: "degradation",
-          interruptions: 0,
-          profile: { mode: "stress", targetPopulation: 4000, addPerSecond: 20, seed: 1, durationSec: 300, buildVersion: "0.3.0", canvasWidth: 1080, canvasHeight: 2400, devicePixelRatio: 2.63, renderer: "WEBGL", loadout: "full" },
-          device: { userAgent: "ua", platform: "Linux", hardwareConcurrency: 8, deviceMemoryGb: 8, screenWidth: 412, screenHeight: 915, devicePixelRatio: 2.63, telegramPlatform: "android", telegramVersion: "8.0", telegramUserId: "1", telegramLanguage: "ru", telegramIsPremium: false, telegramFullscreen: true },
-          totals: { ...frame, over20Ratio: 0.1, degradationRatio: 0.2, peakLoad: 900.4, peakProjectiles: 310, peakObjects: 1210.6, displayHz: 60 },
-          windows: [],
-          timeline: [{ ...frame, index: 0, startSec: 0, load: 100, projectiles: 20 }],
-        },
-        verdict: { level: "no-go", sustainedLoad: 640, breakingPoint: { atSec: 32, load: 660.2, avgFps: 44, p95FrameMs: 26 }, failures: [] },
-      },
-    });
+      platformUserId: "777000111",
+      device: DEVICE,
+      summary: benchSummaryOf(payload),
+      payload,
+      receivedAt: new Date(NOW),
+    };
 
-    expect(await service.recordStress(anna, report, NOW)).toEqual({ recorded: true });
-    expect(await service.recordStress(anna, report, NOW)).toEqual({ recorded: false });
+    await hooks.emit(report);
+    await hooks.emit(report);
+    expect(stats.stressRecent).toHaveLength(1);
     expect(stats.stressRecent[0]).toEqual({
-      reportId: "11111111-2222-4333-8444-555555555555",
+      reportId: REPORT_ID,
       build: "0.3.0",
       mode: "stress",
       loadout: "full",
       outcome: "degradation",
-      device: report.device,
+      device: DEVICE,
       peakObjects: 1211,
       peakEnemies: 900,
       peakProjectiles: 310,

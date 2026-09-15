@@ -3,8 +3,10 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Redis } from "ioredis";
-import { loadAppConfig } from "../src/config/app-config.js";
+import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
+import { PrismaDiagnosticsRepository } from "../src/modules/diagnostics/diagnostics.repository.js";
 import { PrismaEventsRepository, type EventRow } from "../src/modules/events/events.repository.js";
 import { QueuedEventsSink } from "../src/modules/events/events.sink.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
@@ -34,21 +36,48 @@ function row(installId: string, patch: Partial<EventRow> = {}): EventRow {
 }
 
 describe.skipIf(!live)("приёмники на живых Postgres и Redis", () => {
-  const config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL, REDIS_URL, EVENTS_INGEST_ENABLED: "true" });
-  const prisma = createPrisma(config);
   // У каждого прогона свой префикс установки: файлы тестов идут параллельно,
   // и чистить таблицы целиком нельзя.
   const install = `test-${randomUUID()}`;
+  let config: AppConfig;
+  let prisma: PrismaClient;
   let redis: Redis;
 
   beforeAll(() => {
+    config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL, REDIS_URL, EVENTS_INGEST_ENABLED: "true" });
+    prisma = createPrisma(config);
     redis = new Redis(REDIS_URL);
   });
 
   afterAll(async () => {
     await prisma.analyticsEvent.deleteMany({ where: { installId: { startsWith: install } } });
+    await prisma.diagnosticReport.deleteMany({ where: { installId: { startsWith: install } } });
     await prisma.$disconnect();
     redis.disconnect();
+  });
+
+  it("повтор отчёта диагностики — одна строка, второй раз «дубликат»", async () => {
+    const repository = new PrismaDiagnosticsRepository(prisma);
+    const record = {
+      reportId: randomUUID(),
+      kind: "bench" as const,
+      schemaVersion: "rubezh.bench.v4",
+      appVersion: "0.4.0",
+      contentHash: null,
+      installId: `${install}-r`,
+      platformUserId: null,
+      platform: "telegram" as const,
+      device: { clientPlatform: "android", clientVersion: "8.0", os: "android" as const, formFactor: "phone" as const, screenWidth: 412, screenHeight: 915, pixelRatio: 2.6, cores: 8, memoryGb: null },
+      summary: { peakObjects: 1200 },
+      payload: { timeline: [] },
+      sizeBytes: 20,
+      occurredAt: new Date("2026-09-15T10:00:00Z"),
+      receivedAt: new Date("2026-09-15T10:00:01Z"),
+    };
+    const results = await Promise.all([repository.insert(record), repository.insert(record)]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await repository.insert(record)).toBe(false);
+    expect(await prisma.diagnosticReport.count({ where: { installId: `${install}-r` } })).toBe(1);
   });
 
   it("повтор пачки — одна запись на событие", async () => {

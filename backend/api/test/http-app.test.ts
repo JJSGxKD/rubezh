@@ -87,7 +87,7 @@ describe("HTTP-приложение на Fastify", () => {
   it("отвечает 413 на тело сверх лимита", async () => {
     const response = await app.inject({
       method: "POST",
-      url: "/api/v1/playtest/stress",
+      url: "/api/v1/playtest/runs",
       headers: { ...DEV_USER, "content-type": "application/json" },
       payload: JSON.stringify({ padding: "x".repeat(BODY_LIMIT_BYTES) }),
     });

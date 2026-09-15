@@ -165,8 +165,8 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
 
   it("не считает повтор отчёта стресс-теста", async () => {
     const summary = stressSummary("stress-1");
-    expect(await stats.recordStress("10", summary, 1)).toBe(true);
-    expect(await stats.recordStress("10", summary, 1)).toBe(false);
+    expect(await stats.recordStress(summary, 1)).toBe(true);
+    expect(await stats.recordStress(summary, 1)).toBe(false);
     expect((await stats.snapshot(1)).stress).toEqual({
       reports: 1,
       byOs: { android: { reports: 1, totalPeak: 900, outcomes: { degradation: 1 } } },

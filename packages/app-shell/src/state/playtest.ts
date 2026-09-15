@@ -8,7 +8,6 @@ import {
   type PlaytestSubmitResult,
   type RunResult,
 } from "@bh/shared-types";
-import type { BenchSubmission } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
 import { useInstall } from "./install";
@@ -83,7 +82,6 @@ export interface PlaytestStore {
    * Отправить отчёт стресс-теста. Без очереди: прогон на экране, и при
    * неудаче человек сам нажмёт «Отправить ещё раз».
    */
-  reportStress(submission: BenchSubmission): Promise<PlaytestFailure | null>;
   /** поставить итог забега в очередь и попробовать отправить */
   submitRun(result: RunResult, countInRating?: boolean): void;
   flush(trigger: FlushTrigger): Promise<void>;
@@ -119,21 +117,6 @@ export const usePlaytest = create<PlaytestStore>((set, get) => ({
       build: build.version,
       contentHash: build.contentHash,
       device: describeDevice(adapter.clientInfo()),
-    });
-    return response.ok ? null : response.failure;
-  },
-
-  async reportStress(submission: BenchSubmission): Promise<PlaytestFailure | null> {
-    const client = api();
-    const { adapter, build } = useShell.getState();
-    const installId = useInstall.getState().installId;
-    if (client === null || installId === "") return "disabled";
-    const { describeDevice } = await import("./device");
-    const response = await client.reportStress({
-      installId,
-      build: build.version,
-      device: describeDevice(adapter.clientInfo()),
-      submission,
     });
     return response.ok ? null : response.failure;
   },

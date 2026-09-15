@@ -293,7 +293,8 @@ pnpm budget
 | Критерии вердикта «тянет / не тянет» | `bench/verdict.ts` |
 | Определение просадки, на которой стресс-тест останавливается | `bench/degradation-detector.ts` → `DEFAULT_DEGRADATION` |
 | Скрипт движения автопилота | `bench/autopilot.ts` |
-| Приёмник отчётов стресс-теста на бэкенде: схема и что хранится | `backend/api/src/modules/playtest/dto/stress-report.dto.ts`; `playtest.service.ts` → `recordStress` |
+| Приёмник отчётов диагностики: конверт, схема отчёта стресс-теста, итог для выборок, кому открыт стресс-тест | `backend/api/src/modules/diagnostics/dto/report-envelope.dto.ts`, `dto/bench-report.dto.ts`; `diagnostics-summary.ts` → `benchSummaryOf`; `diagnostics.service.ts` → `stressTestOpen` |
+| Итог стресс-теста в сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts` |
 
 Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.
 
