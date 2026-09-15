@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type PlatformAdapter, type RunResult } from "@bh/shared-types";
-import type { RunDiagnostics, RunEngine, RunEvents, RunSession } from "@bh/core-game";
+import type { RunDiagnostics, RunEngine, RunEvents, RunRecording, RunSession } from "@bh/core-game";
 
 // Итог забега в аналитике: сводка производительности плоскими полями
 // (docs/28-diagnostics.md §3.2).
 
 const engine = vi.hoisted(() => ({ load: vi.fn() }));
+const reports = vi.hoisted(() => ({ queueRunReport: vi.fn() }));
+
+vi.mock("../src/state/run-report", () => ({ queueRunReport: reports.queueRunReport }));
 
 vi.mock("@bh/core-game", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@bh/core-game")>()),
@@ -13,7 +16,7 @@ vi.mock("@bh/core-game", async (importOriginal) => ({
 }));
 
 const { useRun } = await import("../src/state/run");
-const { initShell } = await import("../src/state/shell");
+const { initShell, reportError } = await import("../src/state/shell");
 
 type Handlers = { [E in keyof RunEvents]?: (payload: RunEvents[E]) => void };
 
@@ -59,6 +62,7 @@ describe("итог забега в аналитике", () => {
 
   beforeEach(() => {
     engine.load.mockReset();
+    reports.queueRunReport.mockReset();
     events = [];
     initShell({
       adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
@@ -103,5 +107,30 @@ describe("итог забега в аналитике", () => {
 
     const abandoned = events.find((entry) => entry.event === "run_abandoned");
     expect(abandoned?.payload).not.toHaveProperty("perfAvgFps");
+  });
+
+  it("запись забега уходит в очередь отчётов вместе с числом ошибок за забег", async () => {
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+    reportError("before", "ошибка до забега не его");
+    await useRun.getState().start({ container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "normal" });
+    reportError("render", "текстура не загрузилась");
+
+    const recording = { reportId: "7f1c2b4e-0000-4000-8000-000000000000" } as RunRecording;
+    fake.emit("diagnostics", { ...DIAGNOSTICS, recording });
+    fake.emit("finished", RESULT);
+    await vi.waitFor(() => expect(reports.queueRunReport).toHaveBeenCalledTimes(1));
+
+    expect(reports.queueRunReport).toHaveBeenCalledWith(recording, 1);
+  });
+
+  it("без записи очередь отчётов не трогается", async () => {
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+    await useRun.getState().start({ container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "normal" });
+    fake.emit("diagnostics", DIAGNOSTICS);
+    fake.emit("finished", RESULT);
+    await Promise.resolve();
+    expect(reports.queueRunReport).not.toHaveBeenCalled();
   });
 });

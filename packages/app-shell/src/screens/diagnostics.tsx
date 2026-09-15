@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { CONTENT_HASH } from "@bh/core-game";
 import { Button, ContentColumn, ListGroup, ListItem, Screen, SectionTitle } from "../design-system/components";
 import { t } from "../i18n";
@@ -8,6 +8,8 @@ import { readEnvironment } from "../state/device";
 import { buildDeviceReport, formatDeviceReport, measureDisplayHz } from "../state/device-report";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
+import { reportQueue } from "../state/run-report";
+import type { ReportQueueState } from "../state/report-queue";
 import { usePlatform } from "../state/platform";
 import { usePlaytestAccess } from "../state/playtest";
 import { useShell } from "../state/shell";
@@ -17,7 +19,7 @@ type CopyState = "idle" | "copied" | "manual";
 
 /**
  * Экран диагностики (docs/28-diagnostics.md §2.2): сведения об устройстве для
- * баг-репорта одной кнопкой, стресс-тест и витрина компонентов.
+ * баг-репорта одной кнопкой, последние отчёты, стресс-тест и витрина компонентов.
  */
 export function DiagnosticsScreen(): ReactNode {
   const navigation = useNavigation();
@@ -92,6 +94,8 @@ export function DiagnosticsScreen(): ReactNode {
           ) : null}
         </div>
 
+        <RecentReports />
+
         <SectionTitle>{t("diagnostics.runBench")}</SectionTitle>
         <ListGroup>
           {access.stressTest ? <ListItem title={t("mode.stress")} onClick={() => navigation.push("stress")} /> : null}
@@ -101,4 +105,52 @@ export function DiagnosticsScreen(): ReactNode {
       </ContentColumn>
     </Screen>
   );
+}
+
+/**
+ * «Последние отчёты»: что ушло команде и что ждёт сети. Тестеру это ответ на
+ * вопрос «дошла ли запись моего забега», а не просьба поверить на слово.
+ */
+function RecentReports(): ReactNode {
+  const queue = reportQueue();
+  const state: ReportQueueState = useSyncExternalStore(queue.subscribe, queue.state);
+  const pendingBytes = state.pending.reduce((sum, report) => sum + report.bytes, 0);
+
+  return (
+    <>
+      <SectionTitle>{t("diagnostics.reports")}</SectionTitle>
+      <div className="grid gap-2 rounded-lg border border-border bg-surface p-4 text-sm shadow-card">
+        {state.pending.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-text">
+              {t("diagnostics.reports.pending", { count: state.pending.length, size: formatSize(pendingBytes) })}
+            </span>
+            <Button variant="secondary" onClick={() => void queue.flush("online")}>
+              {t("diagnostics.reports.retry")}
+            </Button>
+          </div>
+        ) : null}
+        {state.sent.length === 0 && state.pending.length === 0 ? (
+          <p className="text-text-muted">{t("diagnostics.reports.empty")}</p>
+        ) : null}
+        {state.sent.map((report) => (
+          <div key={report.reportId} className="flex items-baseline justify-between gap-3">
+            <span className="text-text">{t(`diagnostics.reports.kind.${report.kind}`)}</span>
+            <span className="min-w-0 text-right font-display text-text-muted tabular-nums">
+              {formatSentAt(report.sentAt)} · {formatSize(report.bytes)} · {report.reportId.slice(0, 8)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function formatSize(bytes: number): string {
+  return t("diagnostics.reports.size", { value: Math.max(1, Math.round(bytes / 1024)) });
+}
+
+/** Локальное время только на отображении: хранится UTC-метка. */
+function formatSentAt(atMs: number): string {
+  return new Date(atMs).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }

@@ -139,7 +139,10 @@ export const useStress = create<StressStore>((set, get) => ({
     });
     // Пока шла отправка, человек мог уйти с экрана или начать заново.
     if (get().submission !== submission) return;
-    if (failure === null) set({ sendState: "sent" });
+    if (failure === null) {
+      set({ sendState: "sent" });
+      rememberSentBench(submission.reportId, submission);
+    }
     else if (failure === "disabled" || failure === "forbidden") set({ sendState: "disabled", sendFailure: failure });
     else set({ sendState: "failed", sendFailure: failure });
   },
@@ -169,6 +172,17 @@ function benchDevice(): BenchDevice {
     telegramIsPremium: null,
     telegramFullscreen: adapter.ui.screenMode === "fullscreen",
   };
+}
+
+/**
+ * Стресс-тест шлёт отчёт сам и повторяет кнопкой, но в «Последних отчётах»
+ * он виден рядом с записями забегов. История — в чанке очереди отчётов.
+ */
+function rememberSentBench(reportId: string, submission: BenchSubmission): void {
+  const bytes = JSON.stringify(submission).length;
+  import("./run-report")
+    .then(({ reportQueue }) => reportQueue().rememberSent({ reportId, kind: "bench", bytes, sentAt: Date.now() }))
+    .catch((error: unknown) => reportError("reports", `история отчётов недоступна: ${String(error)}`));
 }
 
 /**

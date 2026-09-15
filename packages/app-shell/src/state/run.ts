@@ -18,7 +18,7 @@ import { useDiagnostics } from "./diagnostics";
 import { useMeta } from "./meta";
 import { usePlaytest } from "./playtest";
 import { useSavedRun } from "./run-save";
-import { reportError, track, useShell } from "./shell";
+import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
  * Текущий забег: состояние для оверлеев и команды движку
@@ -127,6 +127,9 @@ let lastSavedSec = 0;
  */
 let pendingDiagnostics: RunDiagnostics | null = null;
 
+/** Ошибок клиента к началу забега: запись несёт, сколько случилось за забег. */
+let errorsAtRunStart = 0;
+
 const IDLE = {
   phase: "idle" as RunPhase,
   loadingStage: null as RunLoadingStage | null,
@@ -161,6 +164,7 @@ export const useRun = create<RunStore>((set, get) => ({
     set({ ...IDLE, phase: "loading", loadingStage: "engine", seed });
     startOptions = options;
     firstFrameStartedAt = performance.now();
+    errorsAtRunStart = clientErrorCount();
     lastSavedSec = resume?.summary.survivalSec ?? 0;
     // Новый забег занимает единственное место сохранения: старое игрок уже
     // бросил, согласившись в лобби.
@@ -266,6 +270,7 @@ export const useRun = create<RunStore>((set, get) => ({
     const devRun = get().devRun;
     set({ ...IDLE, phase: "running", seed, devRun });
     lastSavedSec = 0;
+    errorsAtRunStart = clientErrorCount();
     session.restart(seed);
     setRunUiMode(true);
 
@@ -375,6 +380,13 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
 
     created.on("diagnostics", (diagnostics) => {
       pendingDiagnostics = diagnostics;
+      const recording = diagnostics.recording;
+      if (recording === null) return;
+      const clientErrors = clientErrorCount() - errorsAtRunStart;
+      // Очередь — отдельным чанком: запись нужна тестерам, а не каждому игроку.
+      import("./run-report")
+        .then(({ queueRunReport }) => queueRunReport(recording, clientErrors))
+        .catch((error: unknown) => reportError("reports", `запись забега не поставлена в очередь: ${String(error)}`));
     }),
     created.on("finished", (result) => finishRun(result, "run_finished", set, get)),
     created.on("abandoned", (result) => finishRun(result, "run_abandoned", set, get)),
