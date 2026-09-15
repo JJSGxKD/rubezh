@@ -3,29 +3,32 @@
  * движок и оболочка о сети не знают (docs/22-analytics-and-metrics.md §3.2,
  * docs/27-design-system-and-app-shell.md §3.1).
  *
- * Приёмник появится в WP8; до тех пор приложение подставляет вывод в консоль
- * или пустышку. Имя события берётся из словаря §3.3 — новое сначала
- * добавляется туда, потом в код.
+ * Имя события берётся из словаря §3.3 — новое сначала добавляется туда и в
+ * словарь сервера (`backend/api/src/modules/events/event-dictionary.ts`), потом
+ * в код. Расхождение трёх списков ловит `scripts/test/event-dictionary.test.ts`.
  */
-export type AnalyticsEvent =
-  | "app_first_open"
-  | "screen_viewed"
-  | "settings_changed"
-  | "share_offered"
-  | "share_completed"
-  | "run_started"
-  | "run_resumed"
-  | "run_finished"
-  | "run_abandoned"
-  | "run_paused"
-  | "upgrade_offered"
-  | "upgrade_chosen"
-  | "wave_reached"
-  | "playtest_run_synced"
-  | "load_time"
-  | "diagnostics_mode_changed"
-  | "bench_finished"
-  | "client_error";
+export const ANALYTICS_EVENTS = [
+  "app_first_open",
+  "screen_viewed",
+  "settings_changed",
+  "share_offered",
+  "share_completed",
+  "run_started",
+  "run_resumed",
+  "run_finished",
+  "run_abandoned",
+  "run_paused",
+  "upgrade_offered",
+  "upgrade_chosen",
+  "wave_reached",
+  "playtest_run_synced",
+  "load_time",
+  "diagnostics_mode_changed",
+  "bench_finished",
+  "client_error",
+] as const;
+
+export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];
 
 export type AnalyticsPayload = Record<string, string | number | boolean | null>;
 

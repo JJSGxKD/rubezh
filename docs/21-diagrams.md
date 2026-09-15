@@ -1022,6 +1022,38 @@ sequenceDiagram
 - **ежедневный отчёт один раз за сутки** в поясе команды: сетевой сбой
   отпускает отметку суток для повтора, отказ Telegram — нет.
 
+### 4.13 Приём событий закрытого теста (этап 2, реализовано)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant G as IngestGuard
+    participant S as EventsService
+    participant R as Redis
+    participant Q as BullMQ «events»
+    participant DB as PostgreSQL
+
+    C->>G: POST /api/v1/events — до 100 событий<br/>+ initData в заголовке
+    G->>G: выключатель (404), Origin (403), размер тела (413)
+    G->>R: лимит по IP — INCRBY + EXPIRE одним скриптом
+    G->>G: подпись initData → Telegram ID или null
+    G->>S: пачка
+    S->>S: конверт, словарь, версия, схема payload — по событию
+    S->>R: лимит по установке и Telegram ID — в событиях
+    alt очередь отвечает за 2 с
+        S->>Q: add(batch)
+        Q->>DB: воркер: createMany skipDuplicates
+    else Redis недоступен
+        S->>DB: createMany напрямую
+    end
+    S-->>C: 202 { accepted, rejected, rejectedBy }
+    Note over C,DB: база недоступна — 503, пачка остаётся на устройстве;<br/>повтор отсекает первичный ключ event_id
+```
+
+- **Redis лёг — лимит в памяти процесса** с предупреждением в лог раз в
+  минуту: терять события тестеров хуже, чем на время сбоя ослабить лимит;
+- **Telegram ID — только из подписи**: поле в теле события игнорируется.
+
 ---
 
 ## 5. Топология развёртывания

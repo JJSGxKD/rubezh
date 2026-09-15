@@ -39,3 +39,21 @@ export class DisabledError extends DomainError {
     super("endpoint_disabled", message, 404);
   }
 }
+
+export class ForbiddenError extends DomainError {
+  constructor(message: string) {
+    super("forbidden", message, 403);
+  }
+}
+
+export class PayloadTooLargeError extends DomainError {
+  constructor(message: string) {
+    super("payload_too_large", message, 413);
+  }
+}
+
+export class UnavailableError extends DomainError {
+  constructor(message: string) {
+    super("store_unavailable", message, 503);
+  }
+}

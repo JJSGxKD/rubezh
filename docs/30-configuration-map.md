@@ -193,6 +193,9 @@
 | Порт сервиса | **только** карта портов `20-env-and-ports.md` §2, дальше переменная |
 | Конфигурация бэкенда и её проверка | `backend/api/src/config/app-config.ts` — единственное место, где читается `process.env` |
 | HTTP-приложение бэкенда: лимит тела запроса, префикс API, CORS, фильтр ошибок | `backend/api/src/http-app.ts` → `BODY_LIMIT_BYTES`, `createHttpApp` |
+| Приёмники событий и отчётов: лимиты частоты по IP, установке и Telegram ID, потолок тела | `backend/api/src/modules/ingest/ingest-limits.ts` → `INGEST_LIMITS` |
+| Словарь событий сервера: имена, версии и схемы `payload`, потолок полей | `backend/api/src/modules/events/event-dictionary.ts` → `EVENT_DICTIONARY`, `MAX_PAYLOAD_KEYS`; размер пачки — `dto/event-batch.dto.ts` → `MAX_EVENTS_PER_BATCH` |
+| Очередь событий: ожидание постановки, параллельность воркера, повторы | `backend/api/src/modules/events/events.sink.ts` → `ENQUEUE_TIMEOUT_MS`, `WORKER_CONCURRENCY`, параметры `queue.add` |
 | Postgres: схема, миграции, таймауты соединения и запроса, размер пула | `backend/api/prisma/schema.prisma`, `prisma/migrations/`; `src/infra/database.ts` → `CONNECT_TIMEOUT_MS`, `STATEMENT_TIMEOUT_MS`, `POOL_SIZE` |
 | Интеграционные тесты в CI: версии Postgres и Redis, адреса баз | `.github/workflows/ci.yml` → `services`, `env` |
 | Сборка клиента: плагины, туннель, режимы | `apps/web-*/vite.config.ts` |
@@ -220,6 +223,8 @@
 | `PLAYTEST_ENABLED`, `TELEGRAM_BOT_TOKEN` | сохранения и лидерборд плейтеста на бэкенде; без токена бэкенд с включённым плейтестом не стартует |
 | `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC` | сколько живут данные плейтеста в Redis и подпись запуска Telegram |
 | `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | вход в плейтест без Telegram на машине разработчика; только `NODE_ENV=development` |
+| `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED` | приёмники событий и отчётов; без `DATABASE_URL` бэкенд не стартует |
+| `TRUST_PROXY_HOPS` | сколько прокси перед API; за Caddy — `1`, иначе лимит по IP посчитает всех тестеров одним адресом |
 | `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам |
 | `ADMIN_CHAT_ID` | групповой чат администраторов: сводка и уведомления. Прежнее имя `PLAYTEST_STATS_CHAT_ID` — бэкенд не стартует и называет новое |
 | `PLAYTEST_STATS_ENABLED` | сводка статистики плейтеста в чат администраторов по `/stats`; без чата или чтения обновлений бота бэкенд не стартует |

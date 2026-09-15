@@ -15,6 +15,11 @@ const schema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_HOST: z.string().default("0.0.0.0"),
   ALLOWED_ORIGINS: z.string().default(""),
+  // Сколько прокси перед API добавляют X-Forwarded-For: за Caddy — 1. IP
+  // клиента нужен только лимиту частоты, и берётся он из req.ip Fastify, а не
+  // из сырого заголовка, который подделывается одной строкой
+  // (docs/13-reuse-from-vpnsibcom.md §2). 0 — API смотрит в сеть напрямую.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
 
   // Redis — кеш, лидерборды, очереди. Адрес не секрет; пароль, если он есть,
   // лежит в самом URL и в прод-окружении задаётся секретом.
@@ -24,6 +29,20 @@ const schema = z.object({
   // пароль и значения по умолчанию не имеет: функции, которым нужна база,
   // без неё не стартуют.
   DATABASE_URL: z.string().default(""),
+
+  // Приёмники событий и отчётов диагностики (docs/28-diagnostics.md §5).
+  // Выключенный приёмник отвечает 404 и не подтверждает, что он есть.
+  EVENTS_INGEST_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  DIAGNOSTICS_INGEST_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Окно свежести подписи запуска для приёмников — сутки (docs/28-diagnostics.md
+  // §5.2): тестер играет часами, а приёмник в ответ ничего не выдаёт.
+  INGEST_INIT_DATA_MAX_AGE_SEC: z.coerce.number().int().positive().default(86_400),
 
   // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
   // Выключены по умолчанию: без токена бота игрока не проверить.
@@ -87,9 +106,15 @@ export interface AppConfig {
   apiPort: number;
   apiHost: string;
   allowedOrigins: string[];
+  trustProxyHops: number;
   redisUrl: string;
   /** пусто — база не настроена */
   databaseUrl: string;
+  ingest: {
+    eventsEnabled: boolean;
+    reportsEnabled: boolean;
+    initDataMaxAgeSec: number;
+  };
   /** Telegram ID администраторов строками — так же, как id игрока из initData */
   adminTelegramIds: ReadonlySet<string>;
   telegram: {
@@ -155,6 +180,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.PLAYTEST_STATS_ENABLED && (parsed.ADMIN_CHAT_ID === "" || parsed.TELEGRAM_BOT_UPDATES === "off")) {
     throw new Error("PLAYTEST_STATS_ENABLED=true требует ADMIN_CHAT_ID и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
   }
+  if ((parsed.EVENTS_INGEST_ENABLED || parsed.DIAGNOSTICS_INGEST_ENABLED) && parsed.DATABASE_URL === "") {
+    throw new Error("Приёмники событий и отчётов пишут в Postgres: включённый приёмник требует DATABASE_URL");
+  }
   // Вход по заголовку без подписи — дыра, если попадёт куда-то кроме машины
   // разработчика. Процесс не поднимается, а не «предупреждает».
   if (parsed.PLAYTEST_DEV_AUTH && parsed.NODE_ENV !== "development") {
@@ -168,8 +196,14 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     allowedOrigins: parsed.ALLOWED_ORIGINS.split(",")
       .map((origin) => origin.trim())
       .filter((origin) => origin !== ""),
+    trustProxyHops: parsed.TRUST_PROXY_HOPS,
     redisUrl: parsed.REDIS_URL,
     databaseUrl: parsed.DATABASE_URL,
+    ingest: {
+      eventsEnabled: parsed.EVENTS_INGEST_ENABLED,
+      reportsEnabled: parsed.DIAGNOSTICS_INGEST_ENABLED,
+      initDataMaxAgeSec: parsed.INGEST_INIT_DATA_MAX_AGE_SEC,
+    },
     adminTelegramIds: new Set(parsed.ADMIN_TELEGRAM_IDS),
     telegram: {
       botToken: parsed.TELEGRAM_BOT_TOKEN,
@@ -188,4 +222,18 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       statsUtcOffsetMin: parsed.PLAYTEST_STATS_UTC_OFFSET_MIN,
     },
   };
+}
+
+let environmentConfig: AppConfig | null = null;
+
+/**
+ * Конфигурация процесса из окружения — одна на процесс: её читают и модуль
+ * конфигурации, и точка входа, которой настройки Fastify нужны до DI.
+ */
+export function configFromEnvironment(): AppConfig {
+  if (environmentConfig === null) {
+    loadRootEnv();
+    environmentConfig = loadAppConfig(process.env);
+  }
+  return environmentConfig;
 }

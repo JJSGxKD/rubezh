@@ -20,8 +20,20 @@ export const BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 
 type EntryModule = Parameters<typeof NestFactory.create>[0];
 
-export async function createHttpApp(module: EntryModule, options: { logger?: boolean } = {}): Promise<NestFastifyApplication> {
-  const adapter = new FastifyAdapter({ bodyLimit: BODY_LIMIT_BYTES });
+export interface HttpAppOptions {
+  logger?: boolean;
+  /** сколько прокси перед API — `TRUST_PROXY_HOPS`; Fastify нужно знать это до создания */
+  trustProxyHops?: number;
+}
+
+export async function createHttpApp(module: EntryModule, options: HttpAppOptions = {}): Promise<NestFastifyApplication> {
+  const hops = options.trustProxyHops ?? 0;
+  const adapter = new FastifyAdapter({
+    bodyLimit: BODY_LIMIT_BYTES,
+    // Доверяем ровно стольким ближайшим прокси, сколько их перед API: адрес
+    // из X-Forwarded-For дальше этой цепочки — слова клиента, а не факт.
+    trustProxy: hops > 0 ? (_address: string, hop: number) => hop < hops : false,
+  });
   const app = await NestFactory.create<NestFastifyApplication>(module, adapter, options.logger === false ? { logger: false } : {});
   configureHttpApp(app, app.get<AppConfig>(APP_CONFIG));
   return app;

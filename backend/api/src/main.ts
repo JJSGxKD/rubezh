@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { fstatSync } from "node:fs";
 import type { INestApplication } from "@nestjs/common";
 import { AppModule } from "./app.module.js";
-import { APP_CONFIG, type AppConfig } from "./config/app-config.js";
+import { configFromEnvironment } from "./config/app-config.js";
 import { createHttpApp } from "./http-app.js";
 
 /**
@@ -13,8 +13,8 @@ import { createHttpApp } from "./http-app.js";
  * процесс не поднимается (docs/20-env-and-ports.md §1, правило 3).
  */
 async function bootstrap(): Promise<void> {
-  const app = await createHttpApp(AppModule);
-  const config = app.get<AppConfig>(APP_CONFIG);
+  const config = configFromEnvironment();
+  const app = await createHttpApp(AppModule, { trustProxyHops: config.trustProxyHops });
 
   installShutdownHandlers(app);
   exitWhenOrphaned(app, config.nodeEnv === "development");
