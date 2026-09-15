@@ -173,6 +173,14 @@ describe("/start в боте", () => {
     expect(bot.calls).toHaveLength(1);
   });
 
+  it("администратору с включённой выгрузкой — вторая кнопка, остальным — нет", async () => {
+    const bot = setup({ ADMIN_TELEGRAM_IDS: "7", DATA_EXPORT_BOT_ENABLED: "true", EXPORT_PSEUDONYM_KEY: "a".repeat(64), DATABASE_URL: "postgresql://unused" });
+    await bot.router.dispatch(start(7));
+    await bot.router.dispatch(start(8));
+    expect(bot.calls[0]?.options.keyboard?.[1]).toEqual([{ text: "📦 Выгрузка данных", callback_data: "export:menu" }]);
+    expect(bot.calls[1]?.options.keyboard).toHaveLength(1);
+  });
+
   it("без прогресса и без HTTPS-адреса игры — карточка новичка без кнопки", async () => {
     const bot = setup({ PUBLIC_WEB_URL: "http://localhost:5173" }, async () => Promise.reject(new Error("redis down")));
     await bot.router.dispatch(start(7, { language: "en", name: "Zoe" }));

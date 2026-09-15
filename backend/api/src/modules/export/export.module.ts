@@ -1,4 +1,6 @@
 import { Module } from "@nestjs/common";
+import { BotModule } from "../bot/bot.module.js";
+import { EXPORT_BOT_LOCKS, ExportBotCommand, RedisExportBotLocks } from "./export-bot.command.js";
 import { EXPORT_REPOSITORY, PrismaExportRepository } from "./export.repository.js";
 import { ExportService } from "./export.service.js";
 import { RetentionJob } from "./retention.job.js";
@@ -9,7 +11,14 @@ import { RetentionJob } from "./retention.job.js";
  * Доставку выгрузки ведёт бот, запасной путь — `pnpm closed-test:export`.
  */
 @Module({
-  providers: [ExportService, RetentionJob, { provide: EXPORT_REPOSITORY, useClass: PrismaExportRepository }],
+  imports: [BotModule],
+  providers: [
+    ExportService,
+    RetentionJob,
+    ExportBotCommand,
+    { provide: EXPORT_REPOSITORY, useClass: PrismaExportRepository },
+    { provide: EXPORT_BOT_LOCKS, useClass: RedisExportBotLocks },
+  ],
   exports: [ExportService],
 })
 export class ExportModule {}

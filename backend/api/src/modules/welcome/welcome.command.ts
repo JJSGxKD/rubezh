@@ -137,14 +137,14 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnApplicati
       name: displayName(message.from.first_name, language),
       progress: (await this.progressOf(String(message.from.id))) ?? { best: null, runs: 0 },
     };
-    await this.send(chatId, card);
+    await this.send(chatId, card, String(message.from.id));
     return true;
   }
 
-  private async send(chatId: string, card: WelcomeCard): Promise<void> {
+  private async send(chatId: string, card: WelcomeCard, userId: string): Promise<void> {
     const texts = WELCOME_TEXTS[card.language];
     const caption = texts.caption(card.name, card.progress.best !== null);
-    const keyboard = this.keyboard(card);
+    const keyboard = this.keyboard(card, userId);
     const options = keyboard.length === 0 ? {} : { keyboard };
     const key = welcomeCacheKey(card);
 
@@ -188,11 +188,18 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnApplicati
     return job;
   }
 
-  private keyboard(card: WelcomeCard): InlineButton[][] {
+  private keyboard(card: WelcomeCard, userId: string): InlineButton[][] {
+    const rows: InlineButton[][] = [];
     const url = this.config.telegram.webAppUrl;
     // Кнопка Mini App принимает только HTTPS: на машине разработчика без
     // туннеля её нет, и карточка уходит без кнопки.
-    return url.startsWith("https://") ? [[{ text: WELCOME_TEXTS[card.language].playButton, web_app: { url } }]] : [];
+    if (url.startsWith("https://")) rows.push([{ text: WELCOME_TEXTS[card.language].playButton, web_app: { url } }]);
+    // Администратору — вход в выгрузку. Кнопка лишь удобство: право проверяет
+    // обработчик нажатия (docs/28-diagnostics.md §6.1.4).
+    if (this.config.export.botEnabled && this.config.adminTelegramIds.has(userId)) {
+      rows.push([{ text: "📦 Выгрузка данных", callback_data: "export:menu" }]);
+    }
+    return rows;
   }
 
   private async claim(chatId: string): Promise<boolean> {
