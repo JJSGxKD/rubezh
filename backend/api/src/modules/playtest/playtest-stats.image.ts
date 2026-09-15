@@ -1,6 +1,6 @@
 import { Resvg } from "@resvg/resvg-js";
-import type { Difficulty } from "./playtest.store";
-import type { Share, StatsSummary } from "./playtest-stats.summary";
+import type { Difficulty } from "./playtest.store.js";
+import type { Share, StatsSummary } from "./playtest-stats.summary.js";
 
 /**
  * Сводка плейтеста картинкой: SVG-шаблон и растеризация в PNG.

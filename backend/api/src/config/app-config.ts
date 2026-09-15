@@ -110,7 +110,7 @@ export function loadRootEnv(): void {
  * запускают и из корня (`pnpm dev`), и из `backend/api`, и из контейнера.
  */
 function repoRoot(...segments: string[]): string {
-  return resolve(__dirname, "../../../../", ...segments);
+  return resolve(import.meta.dirname, "../../../../", ...segments);
 }
 
 function minuteOfDay(time: string): number {

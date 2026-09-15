@@ -2,14 +2,14 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 // Один раннер на весь монорепо (docs/16-tech-stack-decisions.md §8).
-//
-// Когда появятся тесты бэкенда, сюда добавляется unplugin-swc: NestJS
-// опирается на emitDecoratorMetadata, которого esbuild — движок Vitest по
-// умолчанию — не поддерживает, и DI в тестах просто не соберётся. Пока
-// бэкенд-тестов нет, зависимость не ставим, чтобы не тащить неиспользуемое.
 const repoRoot = fileURLToPath(new URL("./", import.meta.url));
 
 export default defineConfig({
+  // NestJS опирается на метаданные декораторов: без них DI в тестах бэкенда
+  // не соберётся. Oxc, которым Vite 8 разбирает TypeScript, умеет их сам —
+  // unplugin-swc, который закладывался под esbuild, не нужен. Для кода без
+  // декораторов настройка ничего не меняет.
+  oxc: { decorator: { legacy: true, emitDecoratorMetadata: true } },
   test: {
     environment: "node",
     include: [

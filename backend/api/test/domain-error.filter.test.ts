@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
-import { DomainErrorFilter } from "../src/common/domain-error.filter";
-import { RateLimitedError, ValidationError } from "../src/common/domain-error";
+import { DomainErrorFilter } from "../src/common/domain-error.filter.js";
+import { RateLimitedError, ValidationError } from "../src/common/domain-error.js";
 
 // Форма ответа — это контракт, на который завязывается клиент
 // (docs/15-engineering-standards.md §3). Он ветвится по коду, а не по тексту,
@@ -12,7 +12,7 @@ function capture(exception: unknown): { status: number; body: unknown } {
 
   const response = {
     status: (status: number) => ({
-      json: (body: unknown) => {
+      send: (body: unknown) => {
         captured = { status, body };
       },
     }),
@@ -41,16 +41,16 @@ describe("форма ответа при ошибке", () => {
   });
 
   it("отвечает 413 на слишком большое тело, а не 500", () => {
-    // Так ошибку отдаёт body-parser: она приходит из middleware и до
-    // доменного слоя не доходит.
-    const { status, body } = capture({ type: "entity.too.large", status: 413 });
+    // Так ошибку отдаёт разбор тела Fastify: она приходит до маршрутизации
+    // и до доменного слоя не доходит.
+    const { status, body } = capture({ code: "FST_ERR_CTP_BODY_TOO_LARGE", statusCode: 413 });
 
     expect(status).toBe(413);
     expect(body).toMatchObject({ error: { code: "payload_too_large" } });
   });
 
   it("отвечает 400 на битый JSON", () => {
-    const { status, body } = capture({ type: "entity.parse.failed", status: 400 });
+    const { status, body } = capture(Object.assign(new SyntaxError("Unexpected token"), { statusCode: 400 }));
 
     expect(status).toBe(400);
     expect(body).toMatchObject({ error: { code: "bad_request" } });
@@ -63,6 +63,10 @@ describe("форма ответа при ошибке", () => {
     );
 
     expect(JSON.stringify(capture(exception).body)).not.toMatch(/position 42/);
+  });
+
+  it("не выдаёт серверную ошибку с кодом за ошибку клиента", () => {
+    expect(capture({ statusCode: 503, message: "redis down" }).status).toBe(500);
   });
 
   it("прячет неопознанную ошибку за общим кодом", () => {

@@ -1,5 +1,5 @@
-import { DIFFICULTIES, type Difficulty } from "./playtest.store";
-import { DURATION_BUCKETS_MIN, dayKey, type DifficultyAggregate, type StatsSnapshot } from "./playtest-stats.store";
+import { DIFFICULTIES, type Difficulty } from "./playtest.store.js";
+import { DURATION_BUCKETS_MIN, dayKey, type DifficultyAggregate, type StatsSnapshot } from "./playtest-stats.store.js";
 
 /**
  * Сводка для чата администраторов: из сырых счётчиков — доли, средние и

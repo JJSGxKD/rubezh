@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { z } from "zod";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import type {
   Difficulty,
   LeaderboardRow,
@@ -9,9 +9,9 @@ import type {
   PlaytestStore,
   RecordRunResult,
   StoredRun,
-} from "./playtest.store";
-import { PLAYTEST_REDIS } from "./playtest-redis";
-import type { TelegramPlayer } from "./telegram-init-data";
+} from "./playtest.store.js";
+import { PLAYTEST_REDIS } from "./playtest-redis.js";
+import type { TelegramPlayer } from "./telegram-init-data.js";
 
 /**
  * Данные плейтеста в Redis (docs/26-stage2-plan.md, Р19 и WP13).

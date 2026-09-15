@@ -5,8 +5,8 @@ import type {
   PlaytestStore,
   RecordRunResult,
   StoredRun,
-} from "../../src/modules/playtest/playtest.store";
-import type { TelegramPlayer } from "../../src/modules/playtest/telegram-init-data";
+} from "../../src/modules/playtest/playtest.store.js";
+import type { TelegramPlayer } from "../../src/modules/playtest/telegram-init-data.js";
 
 /**
  * Хранилище плейтеста в памяти — для тестов сервиса. Повторяет смысл

@@ -1,9 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { DomainError } from "../../common/domain-error";
-import type { TelegramPlayer } from "./telegram-init-data";
-import { DIFFICULTIES, PLAYTEST_STORE, type Difficulty, type PlaytestStore, type StoredRun } from "./playtest.store";
-import type { RunSubmission, SessionReport, StressReport } from "./dto/run-submission.dto";
-import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store";
+import { DomainError } from "../../common/domain-error.js";
+import type { TelegramPlayer } from "./telegram-init-data.js";
+import { DIFFICULTIES, PLAYTEST_STORE, type Difficulty, type PlaytestStore, type StoredRun } from "./playtest.store.js";
+import type { RunSubmission, SessionReport, StressReport } from "./dto/run-submission.dto.js";
+import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store.js";
 
 /**
  * Сохранения и лидерборд плейтеста. Антифрода нет сознательно: это временная

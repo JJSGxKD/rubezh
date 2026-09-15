@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
-import { AppConfigModule } from "./config/config.module";
-import { HealthController } from "./health/health.controller";
-import { PlaytestModule } from "./modules/playtest/playtest.module";
+import { AppConfigModule } from "./config/config.module.js";
+import { HealthController } from "./health/health.controller.js";
+import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
