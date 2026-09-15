@@ -551,10 +551,14 @@ flowchart LR
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
-        EVENTS["events<br/>приём событий, этап 2"]
-        DIAG["diagnostics<br/>отчёты стресс-теста и забегов, этап 2"]
-        PT["playtest<br/>сохранения и лидерборд<br/>закрытого теста, реализовано"]
-        BOT["bot<br/>вебхук Telegram, выгрузка<br/>данных администратору, этап 2"]
+        INGEST["ingest<br/>выключатели, Origin, лимиты,<br/>подпись initData, реализовано"]
+        EVENTS["events<br/>приём событий, реализовано"]
+        DIAG["diagnostics<br/>отчёты стресс-теста, реализовано"]
+        PT["playtest<br/>сохранения, лидерборд, сводка<br/>закрытого теста, реализовано"]
+        BOT["bot<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
+        WELCOME["welcome<br/>/start с карточкой, реализовано"]
+        NOTIFY["admin-notify<br/>карточки отчётов в чат, реализовано"]
+        EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
     end
 
     TGAPI["Telegram Bot API"]
@@ -584,14 +588,23 @@ flowchart LR
     CADDY --> PT
 
     PT --> REDIS
-    EVENTS --> REDIS
+    EVENTS --> INGEST
+    DIAG --> INGEST
+    INGEST --> REDIS
     EVENTS --> QUEUE
-    DIAG --> REDIS
     DIAG --> PG
+    DIAG -. слушатели нового отчёта .-> PT
+    DIAG -. слушатели нового отчёта .-> NOTIFY
+    NOTIFY --> QUEUE
     TGAPI -- вебхук --> CADDY
     CADDY --> BOT
-    BOT --> QUEUE
-    QUEUE -- sendDocument --> TGAPI
+    BOT --> WELCOME
+    BOT --> PT
+    BOT --> EXPORT
+    WELCOME -. рекорд и место .-> PT
+    EXPORT --> QUEUE
+    EXPORT --> PG
+    QUEUE -- sendPhoto, sendDocument --> TGAPI
 
     AUTH --> PG
     AUTH --> REDIS
