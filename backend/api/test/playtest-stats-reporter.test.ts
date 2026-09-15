@@ -109,12 +109,14 @@ function fakeApi(): StatsReporterApi & { photos: { chatId: string; caption: stri
     photos: [] as { chatId: string; caption: string }[],
     messages: [] as string[],
     failPhoto: null as Error | null,
-    async sendPhoto(chatId: string, _png: Buffer, caption: string) {
+    async sendPhoto(chatId: string, _png: Buffer | string, caption: string) {
       if (api.failPhoto !== null) throw api.failPhoto;
       api.photos.push({ chatId, caption });
+      return { messageId: api.photos.length, fileId: null };
     },
     async sendMessage(_chatId: string, text: string) {
       api.messages.push(text);
+      return api.messages.length;
     },
     async setMyCommands() {},
   };

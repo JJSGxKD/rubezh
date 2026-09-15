@@ -134,6 +134,7 @@
 | Плейтест на клиенте: таймаут запроса, сколько неотправленных забегов хранить | `app-shell/src/state/playtest-api.ts` → `PLAYTEST_TIMEOUT_MS`; `state/playtest.ts` → `QUEUE_LIMIT` | участник 1 |
 | Сводка плейтеста: корзины длины забега, сколько строк в топах, цвета и раскладка картинки | `backend/api/src/modules/playtest/playtest-stats.store.ts` → `DURATION_BUCKETS_MIN`; `playtest-stats.summary.ts` → `TOP_LIMIT`; `playtest-stats.image.ts` → `PALETTE`, `SERIES` (повторяют `tokens.css`) | участник 1 |
 | Бот: long polling, лок читателя, паузы при конфликте и сбое | `backend/api/src/modules/bot/bot-poller.ts` → `POLL_TIMEOUT_SEC`, `POLLER_LOCK_TTL_MS`, `STANDBY_MS`, `RETRY_MS` | участник 1 |
+| Бот: сколько помнить обработанные обновления вебхука, какие обновления читать | `backend/api/src/modules/bot/bot-webhook.controller.ts` → `DEDUPE_TTL_SEC`; `modules/telegram/telegram-bot-api.ts` → `ALLOWED_UPDATES` | участник 1 |
 | Сводка плейтеста в Telegram: частота команды, возраст команды из очереди | `backend/api/src/modules/playtest/playtest-stats.reporter.ts` → `COMMAND_WINDOW_SEC`, `STALE_COMMAND_SEC` | участник 1 |
 | Плейтест на сервере: строк в лидерборде, последних забегов в профиле, сколько забегов хранится | `backend/api/src/modules/playtest/playtest.service.ts` → `LEADERBOARD_LIMIT`, `RECENT_RUNS_SHOWN`; `redis-playtest.store.ts` → `RECENT_RUNS_KEPT`; границы правдоподобия итога — `dto/run-submission.dto.ts` | участник 1 |
 | С какой высоты экрана модалки забега уплотняются | `tokens.css` → `@custom-variant short` (`27-design-system-and-app-shell.md` §5.3) | напарник |
@@ -228,7 +229,8 @@
 | `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | вход в плейтест без Telegram на машине разработчика; только `NODE_ENV=development` |
 | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED` | приёмники событий и отчётов; без `DATABASE_URL` бэкенд не стартует |
 | `TRUST_PROXY_HOPS` | сколько прокси перед API; за Caddy — `1`, иначе лимит по IP посчитает всех тестеров одним адресом |
-| `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам |
+| `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам, `webhook` — Telegram шлёт их на `PUBLIC_API_URL`; регистрация — `pnpm --filter backend-api bot:webhook` |
+| `TELEGRAM_WEBHOOK_SECRET` | секретный токен вебхука; без него режим `webhook` не стартует |
 | `ADMIN_CHAT_ID` | групповой чат администраторов: сводка и уведомления. Прежнее имя `PLAYTEST_STATS_CHAT_ID` — бэкенд не стартует и называет новое |
 | `PLAYTEST_STATS_ENABLED` | сводка статистики плейтеста в чат администраторов по `/stats`; без чата или чтения обновлений бота бэкенд не стартует |
 | `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | когда бот присылает сводку сам и в каком поясе считаются «сутки»; пусто в `DAILY_AT` — только по команде |

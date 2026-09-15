@@ -63,9 +63,20 @@ const schema = z.object({
     .default("false")
     .transform((value) => value === "true"),
 
-  // Откуда бот берёт обновления (docs/28-diagnostics.md §6.1.3): `polling` —
-  // машина разработчика без публичного адреса, `off` — бот не отвечает.
-  TELEGRAM_BOT_UPDATES: z.enum(["off", "polling"]).default("off"),
+  // Откуда бот берёт обновления (docs/28-diagnostics.md §6.1.3): `webhook` —
+  // сервер с публичным адресом, `polling` — машина разработчика без него,
+  // `off` — бот не отвечает.
+  TELEGRAM_BOT_UPDATES: z.enum(["off", "polling", "webhook"]).default("off"),
+  // Секретный токен вебхука: Telegram шлёт его заголовком, без него обновление
+  // отклоняется. Секрет, без значения по умолчанию; алфавит — из Bot API.
+  TELEGRAM_WEBHOOK_SECRET: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^[A-Za-z0-9_-]{32,256}$/.test(value), {
+      message: "TELEGRAM_WEBHOOK_SECRET — от 32 знаков A-Z, a-z, 0-9, _ и -",
+    }),
+  // Публичный адрес API — куда регистрировать вебхук (`pnpm bot:webhook`).
+  PUBLIC_API_URL: z.string().default(""),
   // Групповой чат администраторов: сводка плейтеста и уведомления. Числовой
   // id, у супергруппы — с минусом.
   ADMIN_CHAT_ID: z
@@ -120,7 +131,11 @@ export interface AppConfig {
   telegram: {
     /** бот закрытого теста: проверка подписи initData и сам бот */
     botToken: string;
-    updates: "off" | "polling";
+    updates: "off" | "polling" | "webhook";
+    /** секретный токен вебхука; пусто — вебхук не настроен */
+    webhookSecret: string;
+    /** публичный адрес API без косой в конце — для регистрации вебхука */
+    publicApiUrl: string;
     /** групповой чат администраторов; пусто — писать некуда */
     adminChatId: string;
   };
@@ -174,6 +189,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.PLAYTEST_STATS_CHAT_ID !== "") {
     throw new Error("PLAYTEST_STATS_CHAT_ID переименована в ADMIN_CHAT_ID: чат администраторов получает не только сводку");
   }
+  if (parsed.TELEGRAM_BOT_UPDATES === "webhook" && parsed.TELEGRAM_WEBHOOK_SECRET === "") {
+    throw new Error("TELEGRAM_BOT_UPDATES=webhook требует TELEGRAM_WEBHOOK_SECRET: без него вебхук принимал бы обновления от кого угодно");
+  }
   if (parsed.TELEGRAM_BOT_UPDATES !== "off" && parsed.TELEGRAM_BOT_TOKEN === "") {
     throw new Error(`TELEGRAM_BOT_UPDATES=${parsed.TELEGRAM_BOT_UPDATES} требует TELEGRAM_BOT_TOKEN`);
   }
@@ -208,6 +226,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     telegram: {
       botToken: parsed.TELEGRAM_BOT_TOKEN,
       updates: parsed.TELEGRAM_BOT_UPDATES,
+      webhookSecret: parsed.TELEGRAM_WEBHOOK_SECRET,
+      publicApiUrl: parsed.PUBLIC_API_URL.replace(/\/+$/, ""),
       adminChatId: parsed.ADMIN_CHAT_ID,
     },
     playtest: {

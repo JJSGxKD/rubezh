@@ -40,11 +40,13 @@ export default defineConfig(({ mode, command }) => {
   // локального API без отдельного прокси и без CORS (docs/26-stage2-plan.md,
   // Р19). Проксируются только префиксы, которые сами защищены: плейтест —
   // подписью initData, приёмники — выключателем, лимитами и Origin
-  // (docs/28-diagnostics.md §5.3). Остальное dev-API наружу не выходит
+  // (docs/28-diagnostics.md §5.3), вебхук бота — секретным токеном: через
+  // туннель машина разработчика может принимать обновления и вебхуком.
+  // Остальное dev-API наружу не выходит
   // (docs/20-env-and-ports.md §4).
   const apiTarget = `http://127.0.0.1:${Number(env.API_PORT ?? 4000)}`;
   const apiProxy = Object.fromEntries(
-    ["/api/v1/playtest", "/api/v1/events", "/api/v1/diagnostics"].map((prefix) => [
+    ["/api/v1/playtest", "/api/v1/events", "/api/v1/diagnostics", "/api/v1/bot"].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },
     ]),

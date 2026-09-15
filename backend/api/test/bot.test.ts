@@ -134,7 +134,7 @@ describe("клиент Bot API", () => {
   });
 
   it("отправляет фото формой, а ошибку Telegram разбирает с retry_after", async () => {
-    const ok = recorder({ ok: true, result: {} });
+    const ok = recorder({ ok: true, result: { message_id: 1 } });
     await ok.api.sendPhoto(CHAT, Buffer.from("png"), "подпись");
     const form = ok.calls[0]?.init.body;
     expect(form).toBeInstanceOf(FormData);

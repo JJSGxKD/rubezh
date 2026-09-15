@@ -274,7 +274,9 @@ pnpm tunnel
 
 Сводка статистики в чат администраторов (`21-diagrams.md` §4.12) включается
 на **одной** машине: `PLAYTEST_STATS_ENABLED="true"`, `ADMIN_CHAT_ID` — id
-группы, куда добавлен бот, и `TELEGRAM_BOT_UPDATES="polling"`. Бот читает
+группы, куда добавлен бот, и `TELEGRAM_BOT_UPDATES="polling"` (или `webhook`
+с `TELEGRAM_WEBHOOK_SECRET` и `PUBLIC_API_URL` — адресом туннеля: dev-сервер
+проксирует `/api/v1/bot`, регистрация — `pnpm --filter backend-api bot:webhook`). Бот читает
 команды long polling'ом, и два бэкенда на одном токене без общего Redis
 мешают друг другу: Telegram отвечает второму `409`, тот ждёт и пишет об этом
 в лог. У бота с вебхуком `getUpdates` не работает вовсе. Картинка рисуется системными
