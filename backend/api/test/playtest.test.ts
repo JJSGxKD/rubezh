@@ -11,7 +11,7 @@ import {
 import { accessFor } from "../src/modules/playtest/playtest-access.js";
 import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard.js";
 import { PlaytestService } from "../src/modules/playtest/playtest.service.js";
-import { verifyInitData } from "../src/modules/playtest/telegram-init-data.js";
+import { verifyInitData } from "../src/modules/telegram/telegram-init-data.js";
 import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
 import { MemoryPlaytestStore } from "./helpers/memory-playtest.store.js";
 

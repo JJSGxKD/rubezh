@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Inject, Injectable } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, UnauthorizedError } from "../../common/domain-error.js";
-import { verifyInitData, type TelegramPlayer } from "./telegram-init-data.js";
+import { verifyInitData, type TelegramPlayer } from "../telegram/telegram-init-data.js";
 
 /** Минимальная форма запроса вместо типов Fastify — см. domain-error.filter.ts. */
 interface HttpRequest {
@@ -40,7 +40,7 @@ export class PlaytestAuthGuard implements CanActivate {
     if (authorization.startsWith("tma ")) {
       const check = verifyInitData(
         authorization.slice(4),
-        this.config.playtest.botToken,
+        this.config.telegram.botToken,
         this.config.playtest.initDataMaxAgeSec,
         Date.now(),
       );

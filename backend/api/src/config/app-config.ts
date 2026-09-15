@@ -39,17 +39,24 @@ const schema = z.object({
     .default("false")
     .transform((value) => value === "true"),
 
+  // Откуда бот берёт обновления (docs/28-diagnostics.md §6.1.3): `polling` —
+  // машина разработчика без публичного адреса, `off` — бот не отвечает.
+  TELEGRAM_BOT_UPDATES: z.enum(["off", "polling"]).default("off"),
+  // Групповой чат администраторов: сводка плейтеста и уведомления. Числовой
+  // id, у супергруппы — с минусом.
+  ADMIN_CHAT_ID: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^-?\d{1,20}$/.test(value), { message: "ADMIN_CHAT_ID — числовой id чата" }),
+  // Переименована в ADMIN_CHAT_ID: чат теперь получает не только сводку.
+  PLAYTEST_STATS_CHAT_ID: z.string().default(""),
+
   // Сводка статистики плейтеста в чат администраторов (docs/26-stage2-plan.md, WP14).
-  // Бот читает команды сам (long polling): у машины разработчика нет публичного
-  // адреса для вебхука. Включённая сводка без чата не стартует.
+  // Включённая сводка без чата, токена или чтения обновлений не стартует.
   PLAYTEST_STATS_ENABLED: z
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-  PLAYTEST_STATS_CHAT_ID: z
-    .string()
-    .default("")
-    .refine((value) => value === "" || /^-?\d{1,20}$/.test(value), { message: "PLAYTEST_STATS_CHAT_ID — числовой id чата" }),
   // Когда присылать сводку сама, «ЧЧ:ММ» в поясе команды; пусто — только по команде.
   PLAYTEST_STATS_DAILY_AT: z
     .string()
@@ -78,15 +85,20 @@ export interface AppConfig {
   redisUrl: string;
   /** Telegram ID администраторов строками — так же, как id игрока из initData */
   adminTelegramIds: ReadonlySet<string>;
+  telegram: {
+    /** бот закрытого теста: проверка подписи initData и сам бот */
+    botToken: string;
+    updates: "off" | "polling";
+    /** групповой чат администраторов; пусто — писать некуда */
+    adminChatId: string;
+  };
   playtest: {
     enabled: boolean;
-    botToken: string;
     initDataMaxAgeSec: number;
     dataTtlSec: number;
     devAuth: boolean;
     stats: {
       enabled: boolean;
-      chatId: string;
       /** минута суток в поясе команды; `null` — сводка только по команде */
       dailyAtMin: number | null;
     };
@@ -127,8 +139,14 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.PLAYTEST_ENABLED && parsed.TELEGRAM_BOT_TOKEN === "") {
     throw new Error("PLAYTEST_ENABLED=true требует непустого TELEGRAM_BOT_TOKEN: без него игрока не проверить");
   }
-  if (parsed.PLAYTEST_STATS_ENABLED && (parsed.PLAYTEST_STATS_CHAT_ID === "" || parsed.TELEGRAM_BOT_TOKEN === "")) {
-    throw new Error("PLAYTEST_STATS_ENABLED=true требует PLAYTEST_STATS_CHAT_ID и TELEGRAM_BOT_TOKEN");
+  if (parsed.PLAYTEST_STATS_CHAT_ID !== "") {
+    throw new Error("PLAYTEST_STATS_CHAT_ID переименована в ADMIN_CHAT_ID: чат администраторов получает не только сводку");
+  }
+  if (parsed.TELEGRAM_BOT_UPDATES !== "off" && parsed.TELEGRAM_BOT_TOKEN === "") {
+    throw new Error(`TELEGRAM_BOT_UPDATES=${parsed.TELEGRAM_BOT_UPDATES} требует TELEGRAM_BOT_TOKEN`);
+  }
+  if (parsed.PLAYTEST_STATS_ENABLED && (parsed.ADMIN_CHAT_ID === "" || parsed.TELEGRAM_BOT_UPDATES === "off")) {
+    throw new Error("PLAYTEST_STATS_ENABLED=true требует ADMIN_CHAT_ID и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
   }
   // Вход по заголовку без подписи — дыра, если попадёт куда-то кроме машины
   // разработчика. Процесс не поднимается, а не «предупреждает».
@@ -145,15 +163,18 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       .filter((origin) => origin !== ""),
     redisUrl: parsed.REDIS_URL,
     adminTelegramIds: new Set(parsed.ADMIN_TELEGRAM_IDS),
+    telegram: {
+      botToken: parsed.TELEGRAM_BOT_TOKEN,
+      updates: parsed.TELEGRAM_BOT_UPDATES,
+      adminChatId: parsed.ADMIN_CHAT_ID,
+    },
     playtest: {
       enabled: parsed.PLAYTEST_ENABLED,
-      botToken: parsed.TELEGRAM_BOT_TOKEN,
       initDataMaxAgeSec: parsed.PLAYTEST_INIT_DATA_MAX_AGE_SEC,
       dataTtlSec: parsed.PLAYTEST_DATA_TTL_DAYS * 24 * 60 * 60,
       devAuth: parsed.PLAYTEST_DEV_AUTH,
       stats: {
         enabled: parsed.PLAYTEST_STATS_ENABLED,
-        chatId: parsed.PLAYTEST_STATS_CHAT_ID,
         dailyAtMin: parsed.PLAYTEST_STATS_DAILY_AT === "" ? null : minuteOfDay(parsed.PLAYTEST_STATS_DAILY_AT),
       },
       statsUtcOffsetMin: parsed.PLAYTEST_STATS_UTC_OFFSET_MIN,

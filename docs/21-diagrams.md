@@ -974,15 +974,18 @@ sequenceDiagram
 ### 4.12 Статистика плейтеста в чат администраторов (этап 2, реализовано)
 
 Счётчики пишутся рядом с забегами и запусками, а сводку собирает бот по
-команде или раз в сутки (`26-stage2-plan.md`, WP14). Бот читает обновления
-long polling'ом: у машины разработчика нет адреса для вебхука из §4.9.
+команде или раз в сутки (`26-stage2-plan.md`, WP14). Обновления читает модуль
+бота (`backend/api/src/modules/bot`) long polling'ом — у машины разработчика
+нет адреса для вебхука из §4.9 — и передаёт их обработчикам команд; `/stats`
+регистрирует сводка плейтеста.
 
 ```mermaid
 sequenceDiagram
     participant S as Оболочка
     participant P as PlaytestService
     participant R as Redis
-    participant B as PlaytestStatsBot
+    participant BP as BotPoller
+    participant B as PlaytestStatsReporter
     participant TG as Telegram Bot API
     participant A as Чат администраторов
 
@@ -997,16 +1000,17 @@ sequenceDiagram
         P->>R: рейтинг (§4.11) и счётчики pt:st:*
     end
 
-    loop пока держим лок pt:bot:poller
-        B->>TG: getUpdates (25 с, смещение из Redis)
-        TG-->>B: /stats из чата или лички администратора
-        B->>R: SET pt:bot:cmd:{чат} NX — не чаще раза в 20 с
+    loop пока держим лок bot:poller
+        BP->>TG: getUpdates (25 с, смещение bot:offset)
+        TG-->>BP: /stats из чата или лички администратора
+        BP->>B: BotRouter.dispatch
+        B->>R: SET pt:report:cmd:{чат} NX — не чаще раза в 20 с
         B->>R: снимок счётчиков и рекорды
         B->>B: SVG → PNG, подпись текстом
         B->>TG: sendPhoto
         TG-->>A: картинка сводки
     end
-    Note over B,R: раз в минуту: пора ли отчёт — SET pt:bot:daily:{сутки} NX
+    Note over B,R: раз в минуту: пора ли отчёт — SET pt:report:daily:{сутки} NX
 ```
 
 - **в агрегатах нет имён и Telegram ID** — только множества игроков для

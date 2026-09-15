@@ -95,7 +95,7 @@
 | 4. Redis | `REDIS_*` | там же |
 | 5. Авторизация | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, сроки жизни, `INIT_DATA_EXPIRES_IN`, cookie | генерируется: `openssl rand -hex 32`, разные значения для access и refresh |
 | 6. CORS и адреса | `ALLOWED_ORIGINS`, `PUBLIC_*`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml` |
-| 7. Платформы | токены ботов, секрет вебхука бота (`TELEGRAM_WEBHOOK_SECRET`, с этапа 2), ключи Bridge, OAuth | из кабинетов площадок; для staging — **отдельный** бот; секрет вебхука генерируется |
+| 7. Платформы | токены ботов, чтение обновлений бота (`TELEGRAM_BOT_UPDATES`), чат администраторов (`ADMIN_CHAT_ID`), секрет вебхука бота (`TELEGRAM_WEBHOOK_SECRET`, с этапа 2), ключи Bridge, OAuth | из кабинетов площадок; для staging — **отдельный** бот; секрет вебхука генерируется. `PLAYTEST_STATS_CHAT_ID` переименована в `ADMIN_CHAT_ID` — со старым именем бэкенд не стартует и называет новое |
 | 8. Платежи | webhook-секрет, RU-эквайринг | из кабинета провайдера |
 | 9. Реклама | `ADS_SESSION_SECRET`, ключи сетей | из кабинетов сетей; порядок и активность сетей — данные в БД, не переменные |
 | 10. Наблюдаемость | `LOG_LEVEL`, треды Telegram, Sentry, Grafana | id тредов — из супергруппы алертов |
@@ -104,7 +104,7 @@
 | 13. Публичные для клиента | `VITE_*` | только не-секреты |
 | 14. Диагностика и телеметрия | — | место группы стенда FPS-испытаний этапа 1, удалённого вместе с режимами `ramp` и `fixed` (`26-stage2-plan.md`, WP6). Заполняется в WP8: приёмники, ключ псевдонимизации выгрузок, выключатель выгрузки через бота — состав в `28-diagnostics.md` §7 |
 | 15. CDN | ключ API Bunny.net для сброса кеша после деплоя | **только секреты CI**, на сервере не нужен (`26-stage2-plan.md`, WP10) |
-| 16. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_ENABLED`, `PLAYTEST_STATS_CHAT_ID`, `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Игрок проверяется подписью initData токеном `TELEGRAM_BOT_TOKEN` из группы 7; вход без подписи — только `NODE_ENV=development`, иначе бэкенд не стартует. `PLAYTEST_STATS_*` — сводка статистики картинкой в чат администраторов: включённая без чата или токена не стартует |
+| 16. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_ENABLED`, `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Игрок проверяется подписью initData токеном `TELEGRAM_BOT_TOKEN` из группы 7; вход без подписи — только `NODE_ENV=development`, иначе бэкенд не стартует. `PLAYTEST_STATS_*` — сводка статистики картинкой в чат администраторов: включённая без чата администраторов или чтения обновлений бота не стартует |
 
 `VITE_API_URL` пустой по умолчанию: собранный клиент ходит в API на свой же
 домен, маршрут `/api` держит Caddy. Отдельный адрес задаётся, только если API
@@ -272,11 +272,11 @@ pnpm tunnel
 вне `NODE_ENV=development` не стартует, а сборка клиента заголовок не шлёт.
 
 Сводка статистики в чат администраторов (`21-diagrams.md` §4.12) включается
-на **одной** машине: `PLAYTEST_STATS_ENABLED="true"` и
-`PLAYTEST_STATS_CHAT_ID` — id группы, куда добавлен бот. Бот читает команды
-long polling'ом, и два бэкенда на одном токене без общего Redis мешают друг
-другу: Telegram отвечает второму `409`, тот ждёт и пишет об этом в лог. У
-бота с вебхуком `getUpdates` не работает вовсе. Картинка рисуется системными
+на **одной** машине: `PLAYTEST_STATS_ENABLED="true"`, `ADMIN_CHAT_ID` — id
+группы, куда добавлен бот, и `TELEGRAM_BOT_UPDATES="polling"`. Бот читает
+команды long polling'ом, и два бэкенда на одном токене без общего Redis
+мешают друг другу: Telegram отвечает второму `409`, тот ждёт и пишет об этом
+в лог. У бота с вебхуком `getUpdates` не работает вовсе. Картинка рисуется системными
 шрифтами (Segoe UI на Windows); в Linux-контейнере без шрифтов с кириллицей
 текст на ней не появится — туда ставится `fonts-dejavu-core`, а главное
 всё равно продублировано подписью к фото.
