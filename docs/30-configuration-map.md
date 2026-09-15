@@ -316,6 +316,8 @@ pnpm budget
 | Скрипт движения автопилота | `bench/autopilot.ts` |
 | Приёмник отчётов диагностики: конверт, схемы стресс-теста и записи забега, итог для выборок, кому открыт стресс-тест | `backend/api/src/modules/diagnostics/dto/report-envelope.dto.ts`, `dto/bench-report.dto.ts`, `dto/run-report.dto.ts`; `diagnostics-summary.ts` → `benchSummaryOf`, `runSummaryOf`; `diagnostics.service.ts` → `stressTestOpen` |
 | Какой забег проблемный: минимум кадров, доля рывков, p95 кадра, доля догоняния, потолок шагов | `backend/api/src/modules/diagnostics/diagnostics-summary.ts` → `RUN_PROBLEM_THRESHOLDS` |
+| Карточка проблемного забега в чате администраторов: вид, подпись, названия причин | `backend/api/src/modules/admin-notify/run-card.ts`; `common/card/labels.ts` → `runProblemLabel` |
+| Записи забегов в ежедневной сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts`; `redis-playtest-stats.store.ts` → ключи `pt:st:rec*` |
 | Итог стресс-теста в сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts` |
 
 Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.

@@ -1,4 +1,4 @@
-import { clientLabel, formatDuration, formFactorLabel, osLabel, stressOutcomeLabel } from "../../common/card/labels.js";
+import { clientLabel, formatDuration, formFactorLabel, osLabel, runProblemLabel, stressOutcomeLabel } from "../../common/card/labels.js";
 import { estimateWidth, PALETTE, rect, renderPng, SERIES, svgDocument, text } from "../../common/card/svg.js";
 import type { Difficulty } from "./playtest.store.js";
 import type { Share, StatsSummary } from "./playtest-stats.summary.js";
@@ -113,7 +113,9 @@ export function renderStatsSvg(summary: StatsSummary, offsetMin: number): string
       y += 44;
     }
   }
-  y += 36;
+  y += 8;
+  parts.push(text(PAD, y + 30, recordingsLine(summary), { size: 22, fill: PALETTE.muted }));
+  y += 36 + 36;
 
   parts.push(text(PAD, y + 20, "Без имён и Telegram ID: только счётчики и доли", { size: 19, fill: PALETTE.faint }));
   const height = y + 20 + PAD;
@@ -142,8 +144,20 @@ export function renderStatsCaption(summary: StatsSummary): string {
         (entry) =>
           `${DIFFICULTY_LABELS[entry.id]}: ${entry.runs} забегов, в среднем ${formatDuration(entry.avgSurvivalSec)}, рекорд ${entry.bestSurvivalSec === null ? "—" : formatDuration(entry.bestSurvivalSec)}`,
       ),
+    recordingsLine(summary),
   ];
   return lines.join("\n").slice(0, 1024);
+}
+
+/**
+ * Записи забегов одной строкой: проблемные пришли в чат карточками, здесь —
+ * сколько всего и чем проблемны.
+ */
+function recordingsLine(summary: StatsSummary): string {
+  const { reports, problematic, byProblem } = summary.recordings;
+  if (reports === 0) return "Записи забегов: пока нет";
+  const reasons = byProblem.length === 0 ? "" : ` (${byProblem.map((entry) => `${runProblemLabel(entry.key)} ${entry.count}`).join(", ")})`;
+  return `Записи забегов: ${reports}, проблемных ${problematic}${reasons}`;
 }
 
 function inline(series: Share[], name: (key: string) => string): string {

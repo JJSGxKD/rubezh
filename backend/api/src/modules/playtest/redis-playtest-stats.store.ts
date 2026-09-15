@@ -28,7 +28,9 @@ import {
  * - `pt:st:weapon`, `pt:st:death` — хэши: стартовое оружие, причина смерти;
  * - `pt:st:stress:{reportId}` — отметка против повтора отчёта,
  *   `pt:st:stress` — хэш сводки стресс-тестов по семейству ОС,
- *   `pt:st:stress:recent` — последние итоги прогонов списком (JSON).
+ *   `pt:st:stress:recent` — последние итоги прогонов списком (JSON);
+ * - `pt:st:rec:{reportId}` — отметка против повтора записи забега,
+ *   `pt:st:rec` — хэш: записей, проблемных и `problem:{причина}`.
  *
  * Всё живёт `dataTtlSec` с последней записи — как остальные данные плейтеста.
  */
@@ -107,6 +109,16 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
     return true;
   }
 
+  async recordRecording(reportId: string, problems: readonly string[]): Promise<boolean> {
+    const fresh = await this.redis.set(`pt:st:rec:${reportId}`, "1", "EX", this.ttlSec, "NX");
+    if (fresh === null) return false;
+    const tx = this.redis.multi().hincrby("pt:st:rec", "reports", 1);
+    if (problems.length > 0) tx.hincrby("pt:st:rec", "problematic", 1);
+    for (const problem of problems) tx.hincrby("pt:st:rec", `problem:${problem}`, 1);
+    await tx.expire("pt:st:rec", this.ttlSec).exec();
+    return true;
+  }
+
   async snapshot(nowMs: number): Promise<StatsSnapshot> {
     const day = dayKey(nowMs, this.offsetMin);
     const pipeline = this.redis
@@ -119,7 +131,8 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
       .smembers("pt:st:installs")
       .hgetall("pt:st:weapon")
       .hgetall("pt:st:death")
-      .hgetall("pt:st:stress");
+      .hgetall("pt:st:stress")
+      .hgetall("pt:st:rec");
     for (const difficulty of DIFFICULTIES) pipeline.hgetall(`pt:st:diff:${difficulty}`);
     const replies = (await pipeline.exec()) ?? [];
     const value = <T>(index: number, fallback: T): T => (replies[index]?.[1] as T | undefined) ?? fallback;
@@ -143,7 +156,7 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
 
     const difficulties = {} as Record<Difficulty, DifficultyAggregate>;
     DIFFICULTIES.forEach((difficulty, index) => {
-      difficulties[difficulty] = parseDifficulty(value<Record<string, string>>(9 + index, {}));
+      difficulties[difficulty] = parseDifficulty(value<Record<string, string>>(10 + index, {}));
     });
 
     return {
@@ -160,6 +173,7 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
       startingWeapons: numbers(value(6, {})),
       deathCauses: numbers(value(7, {})),
       stress: parseStress(value(8, {})),
+      recordings: parseRecordings(value(9, {})),
     };
   }
 }
@@ -176,6 +190,14 @@ function parseDifficulty(raw: Record<string, string>): DifficultyAggregate {
     abandoned: Number(raw.abandoned ?? 0),
     buckets: Array.from({ length: DURATION_BUCKETS_MIN.length + 1 }, (_, index) => Number(raw[`b${index}`] ?? 0)),
   };
+}
+
+function parseRecordings(raw: Record<string, string>): StatsSnapshot["recordings"] {
+  const byProblem: Record<string, number> = {};
+  for (const [field, count] of Object.entries(raw)) {
+    if (field.startsWith("problem:")) byProblem[field.slice("problem:".length)] = Number(count);
+  }
+  return { reports: Number(raw.reports ?? 0), problematic: Number(raw.problematic ?? 0), byProblem };
 }
 
 function parseStress(raw: Record<string, string>): StatsSnapshot["stress"] {

@@ -1039,6 +1039,7 @@ sequenceDiagram
     P->>R: SADD pt:st:seen, устройство установки
     S->>P: POST /diagnostics/reports — отчёт в Postgres (§4.8),<br/>итог без кадров приходит слушателем
     P->>R: SET pt:st:stress:{reportId} NX, сводка по ОС, список последних
+    P->>R: запись забега: SET pt:st:rec:{reportId} NX, записей и проблемных по причинам
     S->>P: POST /playtest/runs
     alt читы без явного «учесть» от администратора
         P-->>S: recorded: false — ни рейтинг, ни статистика
