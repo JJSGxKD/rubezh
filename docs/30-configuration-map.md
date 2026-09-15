@@ -165,6 +165,7 @@
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
 | `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts` | `state/run-save.ts` |
 | `bh.playtest.v1.pending` | итоги забегов, ещё не дошедшие до сервера плейтеста | `state/playtest.ts` |
+| `bh.telemetry.v1.queue` | события, ещё не дошедшие до приёмника; до 500 штук, старые вытесняются | `state/telemetry.ts` |
 
 Само хранилище приходит от адаптера площадки портом `KeyValueStorage`, а не
 берётся из `localStorage` напрямую: переезд на `DeviceStorage` Telegram не
@@ -177,8 +178,10 @@
 | Что меняю | Где |
 |---|---|
 | Словарь имён событий | `docs/22-analytics-and-metrics.md` §3.3 — **сначала сюда**, потом в код |
-| Типы событий в коде оболочки | `app-shell/src/state/analytics.ts` → `AnalyticsEvent` |
-| Куда события уходят | `apps/web-*/src/main.tsx`, функция `createAnalytics` |
+| Имена событий в коде оболочки | `app-shell/src/state/analytics.ts` → `ANALYTICS_EVENTS`; схемы `payload` на сервере — `backend/api/src/modules/events/event-dictionary.ts` |
+| Отправка на сервер: адрес, размер пачки, таймер, потолок очереди, пауза после сбоя, тело keepalive | `capabilities.telemetry` в `apps/web-telegram/src/main.tsx`; `app-shell/src/state/telemetry.ts` → `TELEMETRY_BATCH_SIZE`, `FLUSH_AT`, `FLUSH_INTERVAL_MS`, `TELEMETRY_MAX_QUEUED`, `MAX_BACKOFF_MS`, `KEEPALIVE_MAX_BYTES` |
+| Сколько `client_error` уходит: повтор одной ошибки, потолок на запуск | `app-shell/src/state/shell.ts` → `ERROR_REPEAT_MS`, `ERRORS_PER_LAUNCH` |
+| Консоль событий на устройстве разработчика | `apps/web-*/src/main.tsx`, функция `createAnalytics` |
 
 Порядок обязателен: имя сначала в словарь, потом в код. Иначе в базе заводятся
 `run_end`, `runFinished` и `end_run` одновременно, и ни один отчёт не сходится.

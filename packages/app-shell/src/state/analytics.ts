@@ -35,3 +35,44 @@ export type AnalyticsPayload = Record<string, string | number | boolean | null>;
 export type AnalyticsSink = (event: AnalyticsEvent, payload: AnalyticsPayload) => void;
 
 export const noopAnalytics: AnalyticsSink = () => undefined;
+
+/** Событие вместе с моментом, когда оно случилось, — отправка может быть позже. */
+export type TimedSink = (event: AnalyticsEvent, payload: AnalyticsPayload, atMs: number) => void;
+
+export interface DeferredSink {
+  sink: AnalyticsSink;
+  /** подключить настоящего получателя: накопленное уходит ему сразу, по порядку */
+  attach(target: TimedSink): void;
+}
+
+/**
+ * Буфер до загрузки эмиттера: эмиттер приходит отдельным чанком после
+ * главной, а `load_time` и `app_first_open` случаются раньше. Потолок — чтобы
+ * не пришедший чанк не копил события бесконечно.
+ */
+export function createDeferredSink(limit = 200): DeferredSink {
+  let pending: { event: AnalyticsEvent; payload: AnalyticsPayload; atMs: number }[] = [];
+  let target: TimedSink | null = null;
+  return {
+    sink(event, payload): void {
+      const atMs = Date.now();
+      if (target !== null) {
+        target(event, payload, atMs);
+        return;
+      }
+      if (pending.length < limit) pending.push({ event, payload, atMs });
+    },
+    attach(next): void {
+      target = next;
+      for (const item of pending) next(item.event, item.payload, item.atMs);
+      pending = [];
+    },
+  };
+}
+
+/** Раздать событие нескольким получателям: консоль разработчика и сервер. */
+export function fanOut(...sinks: AnalyticsSink[]): AnalyticsSink {
+  return (event, payload) => {
+    for (const sink of sinks) sink(event, payload);
+  };
+}

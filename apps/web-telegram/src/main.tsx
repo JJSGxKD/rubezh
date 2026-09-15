@@ -49,6 +49,9 @@ void mountAppShell({
     // Стресс-тест и режим разработчика в dev открыты без сервера: команда
     // правит их в браузере. В сборке доступ решает сервер по Telegram ID.
     devTools: import.meta.env.DEV,
+    // События и отчёты диагностики — тот же адрес API, что у плейтеста:
+    // dev-сервер проксирует и эти префиксы (vite.config.ts).
+    telemetry: { baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? "") },
   },
   analytics: createAnalytics(),
 });
@@ -59,9 +62,10 @@ function botUrl(): string {
 }
 
 /**
- * Приёмник событий. Конвейер аналитики появится в WP8; до тех пор события
- * видно в консоли устройства, с которого снимают баг-репорт, — и только в
- * режиме диагностики, чтобы не засорять консоль игрокам.
+ * Консоль событий: на сервер их отправляет оболочка сама
+ * (`capabilities.telemetry`), а здесь их видно на устройстве, с которого
+ * снимают баг-репорт, — только в dev и с `?diag=1`, чтобы не засорять
+ * консоль игрокам.
  */
 function createAnalytics(): AnalyticsSink {
   const verbose = import.meta.env.DEV || params.get("diag") === "1";

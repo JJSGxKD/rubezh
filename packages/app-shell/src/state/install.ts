@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createId } from "./ids";
 import { useShell } from "./shell";
 
 /**
@@ -12,6 +13,8 @@ export interface InstallStore {
   installId: string;
   /** принял ли игрок предупреждение о закрытом тесте */
   accepted: boolean;
+  /** установка создана в этом запуске — первый запуск на устройстве */
+  firstOpen: boolean;
   hydrate(): void;
   accept(): void;
 }
@@ -21,6 +24,7 @@ const ACCEPTED_KEY = "bh.install.v1.accepted";
 export const useInstall = create<InstallStore>((set) => ({
   installId: "",
   accepted: false,
+  firstOpen: false,
 
   hydrate(): void {
     const storage = useShell.getState().storage;
@@ -36,7 +40,7 @@ export const useInstall = create<InstallStore>((set) => ({
 
     const installId = createId();
     storage?.set(INSTALL_KEY, installId);
-    set({ installId });
+    set({ installId, firstOpen: true });
   },
 
   accept(): void {
@@ -44,19 +48,3 @@ export const useInstall = create<InstallStore>((set) => ({
     set({ accepted: true });
   },
 }));
-
-/**
- * `crypto.randomUUID` есть не во всех WebView, а идентификатор установки
- * нужен всегда. Запасной путь — случайные байты из `crypto`, и только если
- * нет и его, `Math.random`: это не симуляция, детерминизм здесь не нужен.
- */
-function createId(): string {
-  const cryptoApi = globalThis.crypto as Crypto | undefined;
-  if (typeof cryptoApi?.randomUUID === "function") return cryptoApi.randomUUID();
-
-  const bytes = new Uint8Array(16);
-  if (typeof cryptoApi?.getRandomValues === "function") cryptoApi.getRandomValues(bytes);
-  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
-
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
