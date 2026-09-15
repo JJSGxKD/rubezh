@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DIFFICULTIES } from "../playtest.store";
-import { submitBenchReportSchema } from "../../bench-reports/dto/bench-report.dto";
+import { submitBenchReportSchema } from "./stress-report.dto";
 import { DEVICE_OS, FORM_FACTORS } from "../playtest-stats.store";
 
 /**

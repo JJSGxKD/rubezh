@@ -147,7 +147,7 @@ export function isTelegramEnvironment(): boolean {
   return isTMA();
 }
 
-export function describeTelegramClient(): TelegramClientInfo {
+function describeTelegramClient(): TelegramClientInfo {
   if (!isTMA()) return UNKNOWN_CLIENT;
 
   try {

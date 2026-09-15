@@ -1,9 +1,4 @@
 import { BenchScene } from "../game/BenchScene";
-import {
-  BENCH_DEFAULT_DURATION_SEC,
-  BENCH_DEFAULT_RAMP_CAP,
-  BENCH_POPULATIONS,
-} from "../game/bench/profiles";
 import type { BenchSceneData } from "../game/bench/types";
 import type { StressEngine, StressEvents, StressOptions, StressSession } from "../stress-api";
 import { createPhaserHost } from "./phaser-host";
@@ -43,16 +38,9 @@ export function createStressEngine(): StressEngine {
       });
 
       const sceneData: BenchSceneData = {
-        mode: options.mode,
-        population: options.mode === "fixed" ? BENCH_POPULATIONS[0] : BENCH_DEFAULT_RAMP_CAP,
-        addPerSecond: 2,
         seed: options.seed,
-        durationSec: BENCH_DEFAULT_DURATION_SEC,
         buildVersion: options.buildVersion,
         device: options.device,
-        ingest: null,
-        loadout: "full",
-        presentation: "shell",
         listener: {
           progress: (progress) => emit("progress", progress),
           finished: (submission) => emit("finished", submission),

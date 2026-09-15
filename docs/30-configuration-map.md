@@ -211,9 +211,7 @@
 
 | Переменная | Что делает |
 |---|---|
-| `VITE_BENCH_ENABLED` | пускает стенд FPS-испытаний по `?bench=` в адресе |
 | `VITE_DIAGNOSTICS_DEFAULT` | включает режим диагностики по умолчанию; переключатель остаётся |
-| `VITE_BENCH_INGEST_URL`, `VITE_BENCH_INGEST_TOKEN` | куда стенд отправляет отчёт |
 | `DEV_TUNNEL_TELEGRAM_HOST` | домен туннеля, чтобы Vite пустил запрос с телефона |
 | `PLAYTEST_ENABLED`, `TELEGRAM_BOT_TOKEN` | сохранения и лидерборд плейтеста на бэкенде; без токена бэкенд с включённым плейтестом не стартует |
 | `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC` | сколько живут данные плейтеста в Redis и подпись запуска Telegram |
@@ -256,11 +254,11 @@ pnpm budget
 
 ---
 
-## 8. Стенд FPS-испытаний
+## 8. Стресс-тест, звук, вибрация и режим разработчика
 
 | Что меняю | Где |
 |---|---|
-| Профили нагрузки, длительность, потолки, агрессивный режим | `core-game/src/game/bench/profiles.ts` |
+| Стресс-тест: темп роста нагрузки, потолок, пулы, аварийный таймер | `core-game/src/game/bench/profiles.ts` → `BENCH_STRESS`, `BENCH_RAMP_START` |
 | Нагрузка позднего забега для стресс-теста в оболочке: доли паттернов, частота и размер волны элит | `bench/full-load.ts` → `BENCH_FULL_LOAD` |
 | Как часто стресс-тест сообщает прогресс оболочке | `game/BenchScene.ts` → `PROGRESS_INTERVAL_MS` |
 | Звуки: слои синтеза, шина, громкость, голоса, интервал, реверберация | `app-shell/src/audio/recipes.ts` → `SOUND_RECIPES`; правка на устройстве — звуковая лаборатория (`docs/31-audio-and-haptics.md` §6) |
@@ -279,11 +277,11 @@ pnpm budget
 | Режим разработчика: наборы, скорости времени, множители урона и бега, умолчания | `app-shell/src/state/dev-mode.ts` → `DEV_PRESETS`, `TIME_SCALES`, `DAMAGE_MULS`, `MOVE_SPEED_MULS`, `DEFAULT_DEV_SETTINGS` |
 | Что попадает в отчёт и версия его схемы | `bench/metrics.ts` → `BENCH_REPORT_SCHEMA` |
 | Критерии вердикта «тянет / не тянет» | `bench/verdict.ts` |
-| Определение просадки в агрессивном режиме | `bench/degradation-detector.ts` → `DEFAULT_DEGRADATION` |
+| Определение просадки, на которой стресс-тест останавливается | `bench/degradation-detector.ts` → `DEFAULT_DEGRADATION` |
 | Скрипт движения автопилота | `bench/autopilot.ts` |
-| Приёмник отчётов на бэкенде | `backend/api/src/modules/bench-reports/*`, включается `BENCH_INGEST_ENABLED` |
+| Приёмник отчётов стресс-теста на бэкенде: схема и что хранится | `backend/api/src/modules/playtest/dto/stress-report.dto.ts`; `playtest.service.ts` → `recordStress` |
 
-Подробности протокола — `25-week1-fps-trials.md`.
+Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.
 
 ---
 

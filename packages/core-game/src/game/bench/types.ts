@@ -1,41 +1,21 @@
-import type { BenchDevice, BenchLoadout, BenchMode, BenchReport } from "./metrics";
+import type { BenchDevice, BenchReport } from "./metrics";
 import type { BenchVerdict } from "./verdict";
 
-/** Куда стенд отправляет готовый отчёт. null — отправка выключена. */
-export interface BenchIngestConfig {
-  url: string;
-  token: string;
-}
-
 /**
- * Параметры стресс-прогона. Вынесены отдельно от сцены, чтобы точка входа
+ * Параметры стресс-теста. Вынесены отдельно от сцены, чтобы точка входа
  * игры могла их типизировать, не втягивая саму сцену в основной бандл:
- * BenchScene грузится динамически и только когда стенд включён.
+ * BenchScene грузится динамически и только когда тест запущен.
  */
 export interface BenchSceneData {
-  mode: BenchMode;
-  /** для fixed — целевая популяция, для ramp — потолок роста */
-  population: number;
-  /** прирост популяции в секунду в режиме ramp */
-  addPerSecond: number;
   seed: number;
-  durationSec: number;
   buildVersion: string;
   /**
-   * Сведения об устройстве собирает приложение платформы, а не движок:
-   * core-game не знает, что такое Telegram (docs/01-tech-stack.md §1).
+   * Сведения об устройстве собирает оболочка, а не движок: core-game не
+   * знает, что такое Telegram (docs/01-tech-stack.md §1).
    */
   device: BenchDevice;
-  ingest: BenchIngestConfig | null;
-  /** по умолчанию `starting` — профиль стенда этапа 1 */
-  loadout?: BenchLoadout;
-  /**
-   * `canvas` — стенд рисует свой текст и кнопки поверх канвы (`?bench=`);
-   * `shell` — канва без интерфейса, прогресс и итог уходят в `listener`, а
-   * показывает их оболочка (docs/28-diagnostics.md §2.3).
-   */
-  presentation?: "canvas" | "shell";
-  listener?: BenchListener;
+  /** прогресс и итог уходят в оболочку — она рисует интерфейс поверх канвы */
+  listener: BenchListener;
 }
 
 /** Сводка прогона для интерфейса оболочки — несколько раз в секунду, не каждый кадр. */
@@ -66,7 +46,7 @@ export interface BenchListener {
   finished(submission: BenchSubmission): void;
 }
 
-/** То, что уходит на сервер и лежит в буфере обмена. */
+/** То, что уходит на сервер. */
 export interface BenchSubmission {
   /** ключ идемпотентности прогона, см. createUuid */
   reportId: string;

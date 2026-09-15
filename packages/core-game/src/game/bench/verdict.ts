@@ -14,8 +14,6 @@ export interface BenchThresholds {
   maxP95FrameMs: number;
   /** доля кадров дольше 33 мс, считается по прогону без прогрева */
   maxOver33Ratio: number;
-  /** падение FPS к концу прогона относительно начала: тепловой троттлинг */
-  maxDegradationRatio: number;
   /** нагрузка, которую устройство обязано держать: цифра из критерия недели 1 */
   minSustainedLoad: number;
   /** прогон короче этого не считается прогоном: троттлинг не успевает начаться */
@@ -26,7 +24,6 @@ export const WEEK1_THRESHOLDS: BenchThresholds = {
   minAvgFps: 50,
   maxP95FrameMs: 20,
   maxOver33Ratio: 0.01,
-  maxDegradationRatio: 0.15,
   minSustainedLoad: 100,
   minDurationSec: 150,
 };
@@ -76,8 +73,8 @@ export function evaluateBench(
   //
   // Исключение — прогон, который стенд остановил сам по подтверждённой
   // просадке: это не обрыв, а достигнутая цель. Требование трёх минут писалось
-  // под режим с фиксированной нагрузкой, где короткий прогон означает, что
-  // троттлинг не успел проявиться.
+  // под режим с фиксированной нагрузкой этапа 1, где короткий прогон означал,
+  // что троттлинг не успел проявиться.
   const stoppedAtLimit =
     report.stoppedBy === "degradation" &&
     report.timeline.length >= WARMUP_BUCKETS + MIN_BUCKETS_AFTER_WARMUP;
@@ -109,19 +106,10 @@ export function evaluateBench(
       `Кадров дольше 33 мс: ${(over33Ratio * 100).toFixed(2)}% при допуске ${(thresholds.maxOver33Ratio * 100).toFixed(2)}%`,
     );
   }
-  // Падение FPS к концу прогона считается троттлингом только при постоянной
-  // нагрузке. В режимах с растущей нагрузкой FPS обязан падать — это и есть
-  // предмет измерения, и объявлять его троттлингом значит путать причину со
-  // следствием. Особенно ярко это на 120-герцовом экране: там прогон
-  // стартует со 120 FPS и «теряет» половину просто дойдя до 60.
-  if (
-    report.profile.mode === "fixed" &&
-    totals.degradationRatio > thresholds.maxDegradationRatio
-  ) {
-    failures.push(
-      `Падение FPS к концу прогона ${(totals.degradationRatio * 100).toFixed(1)}% при допуске ${(thresholds.maxDegradationRatio * 100).toFixed(1)}% — тепловой троттлинг`,
-    );
-  }
+  // Падение FPS к концу прогона троттлингом не считается: нагрузка растёт, и
+  // FPS обязан падать — это и есть предмет измерения. Особенно ярко это на
+  // 120-герцовом экране: прогон стартует со 120 FPS и «теряет» половину, просто
+  // дойдя до 60. Троттлинг мерили режимом с постоянной нагрузкой этапа 1.
 
   return {
     level: failures.length === 0 ? "go" : "no-go",

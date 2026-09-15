@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /**
- * Схема отчёта FPS-испытания. Данные приходят с границы системы — с телефона,
- * через публичный туннель — и потому парсятся, а не приводятся через `as`
- * (CLAUDE.md, «Стиль кода»).
+ * Схема отчёта стресс-теста (`rubezh.bench.v4`, docs/28-diagnostics.md §2.3).
+ * Данные приходят с границы системы — с телефона тестера — и потому
+ * парсятся, а не приводятся через `as` (CLAUDE.md, «Стиль кода»).
  *
  * Схема сознательно нестрогая к незнакомым полям верхнего уровня отчёта:
  * версия схемы отчёта живёт в клиенте, а клиент обновляется отдельно от
@@ -20,10 +20,12 @@ const frameStatsSchema = z.object({
   over33Ratio: z.number().min(0).max(1),
 });
 
+// Режимы `ramp` и `fixed` и стартовое оружие ушли вместе со стендом этапа 1:
+// отчёт другого режима сводку стресс-тестов только исказил бы.
 const profileSchema = z.object({
-  mode: z.enum(["ramp", "fixed", "stress"]),
+  mode: z.literal("stress"),
   targetPopulation: z.number().int().nonnegative(),
-  addPerSecond: z.number().nonnegative().nullable(),
+  addPerSecond: z.number().nonnegative(),
   seed: z.number().int(),
   durationSec: z.number().nonnegative(),
   buildVersion: z.string().max(64),
@@ -31,9 +33,7 @@ const profileSchema = z.object({
   canvasHeight: z.number().nonnegative(),
   devicePixelRatio: z.number().positive(),
   renderer: z.string().max(32),
-  // Схема v4: с чем игрок шёл в прогон. Отчёт v3 поля не знает — это
-  // стартовое оружие без кристаллов.
-  loadout: z.enum(["starting", "full"]).default("starting"),
+  loadout: z.literal("full"),
 });
 
 const deviceSchema = z.object({
@@ -69,8 +69,8 @@ const verdictSchema = z.object({
 export const submitBenchReportSchema = z.object({
   /**
    * Ключ идемпотентности. Генерируется на устройстве один раз на прогон:
-   * стенд отправляет отчёт автоматически, и у человека есть кнопка «отправить
-   * ещё раз» — без ключа повторные нажатия наплодили бы дубликаты.
+   * отчёт уходит автоматически, и у человека есть кнопка «отправить ещё
+   * раз» — без ключа повторные нажатия наплодили бы дубликаты.
    *
    * Хэш тела в этой роли не годится: два прогона на одном устройстве с одним
    * seed могут совпасть до байта (docs/13-reuse-from-vpnsibcom.md §2.2).
@@ -79,20 +79,17 @@ export const submitBenchReportSchema = z.object({
   report: z.object({
     schema: z.string().max(64),
     startedAt: z.string().datetime(),
-    stoppedBy: z.enum(["duration", "degradation", "pool_exhausted", "manual"]).optional(),
-    interruptions: z.number().int().nonnegative().optional(),
+    stoppedBy: z.enum(["duration", "degradation", "pool_exhausted", "manual"]),
+    interruptions: z.number().int().nonnegative(),
     profile: profileSchema,
     device: deviceSchema,
     totals: frameStatsSchema.extend({
       over20Ratio: z.number().min(0).max(1),
       degradationRatio: z.number().min(0),
       peakLoad: z.number().nonnegative(),
-      // Поля схемы v3. Необязательные: клиент обновляется отдельно от сервера
-      // (ревью-лаг площадок, docs/09-ci-cd.md §4), и отчёт со старого билда
-      // должен приниматься, а не отклоняться.
-      peakProjectiles: z.number().nonnegative().optional(),
-      peakObjects: z.number().nonnegative().optional(),
-      displayHz: z.number().nonnegative().optional(),
+      peakProjectiles: z.number().nonnegative(),
+      peakObjects: z.number().nonnegative(),
+      displayHz: z.number().nonnegative(),
     }),
     windows: z
       .array(
@@ -101,7 +98,7 @@ export const submitBenchReportSchema = z.object({
           startSec: z.number(),
           avgLoad: z.number(),
           maxLoad: z.number(),
-          avgProjectiles: z.number().optional(),
+          avgProjectiles: z.number(),
         }),
       )
       .max(120),
@@ -111,7 +108,7 @@ export const submitBenchReportSchema = z.object({
           index: z.number().int(),
           startSec: z.number(),
           load: z.number(),
-          projectiles: z.number().optional(),
+          projectiles: z.number(),
         }),
       )
       .max(600),
