@@ -59,7 +59,10 @@ class Reports implements DiagnosticsRepository {
   }
   async findBench(): Promise<StoredBenchReport | null> {
     return this.report;
+  }  async findRun(): Promise<null> {
+    return null;
   }
+
 }
 
 function notifier(env: Record<string, string> = {}) {

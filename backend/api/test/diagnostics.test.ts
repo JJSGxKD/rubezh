@@ -17,6 +17,9 @@ import { DiagnosticsService } from "../src/modules/diagnostics/diagnostics.servi
 import { IngestGuard } from "../src/modules/ingest/ingest.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { reportEnvelope, REPORT_ID } from "./helpers/bench-report.js";
+import { runBucket, runEnvelope, runSubmission, RUN_REPORT_ID } from "./helpers/run-report.js";
+import { runSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js";
+import { submitRunReportSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
 import { launchFor } from "./helpers/init-data.js";
 
 // Приёмник отчётов диагностики (docs/28-diagnostics.md §5).
@@ -34,6 +37,9 @@ class MemoryRepository implements DiagnosticsRepository {
     return true;
   }
   async findBench(): Promise<null> {
+    return null;
+  }
+  async findRun(): Promise<null> {
     return null;
   }
 }
@@ -133,6 +139,7 @@ describe("приёмник отчётов диагностики", () => {
   it("отклоняет отчёт не по схеме и чужой reportId внутри", async () => {
     const target = await start();
     expect((await post(target, reportEnvelope(REPORT_ID, { kind: "run" }))).statusCode).toBe(400);
+    expect((await post(target, reportEnvelope(REPORT_ID, { kind: "replay" }))).statusCode).toBe(400);
     const mismatched = reportEnvelope("22222222-2222-4333-8444-555555555555");
     (mismatched.payload as Record<string, unknown>).reportId = REPORT_ID;
     expect((await post(target, mismatched)).statusCode).toBe(400);
@@ -150,5 +157,60 @@ describe("приёмник отчётов диагностики", () => {
     const response = await post(target, reportEnvelope());
     expect(response.statusCode).toBe(503);
     expect(received).toHaveLength(0);
+  });
+
+  it("принимает запись забега без права на стресс-тест и отдаёт слушателям её итог", async () => {
+    const target = await start({ PLAYTEST_ENABLED: "false" });
+    const response = await post(target, runEnvelope(RUN_REPORT_ID, { clientErrors: 2 }));
+    expect(response.statusCode).toBe(200);
+    expect((await post(target, runEnvelope())).json()).toEqual({ data: { reportId: RUN_REPORT_ID, duplicate: true } });
+    await settle();
+
+    expect(repository.records.get(RUN_REPORT_ID)).toMatchObject({
+      kind: "run",
+      schemaVersion: "rubezh.run.v1",
+      summary: { outcome: "died", difficulty: "normal", survivalSec: 450, level: 21, clientErrors: 2, problems: ["client_errors"] },
+    });
+    expect(received).toHaveLength(1);
+    expect(received[0]?.kind).toBe("run");
+  });
+
+  it("отклоняет запись не по схеме: чужой reportId, таймлайн сверх часа, лог ввода не base64", async () => {
+    const target = await start();
+    const mismatched = runEnvelope("44444444-4444-4555-8666-777777777777");
+    ((mismatched.payload as Record<string, Record<string, unknown>>).recording as Record<string, unknown>).reportId = RUN_REPORT_ID;
+    expect((await post(target, mismatched)).statusCode).toBe(400);
+    const tooLong = runEnvelope(RUN_REPORT_ID, { timeline: Array.from({ length: 721 }, (_, index) => runBucket(index)) });
+    expect((await post(target, tooLong)).statusCode).toBe(400);
+    expect((await post(target, runEnvelope(RUN_REPORT_ID, { inputData: "не base64!" }))).statusCode).toBe(400);
+    expect(repository.records.size).toBe(0);
+  });
+});
+
+describe("итог записи забега", () => {
+  const summaryOf = (patch: Parameters<typeof runSubmission>[1]) => runSummaryOf(submitRunReportSchema.parse(runSubmission(RUN_REPORT_ID, patch)));
+
+  it("ровный забег проблемным не считается", () => {
+    expect(summaryOf({}).problems).toEqual([]);
+  });
+
+  it("рывки кадров, догоняние симуляции и ошибки клиента — разные причины", () => {
+    expect(summaryOf({ over33Ratio: 0.08 }).problems).toEqual(["frame_drops"]);
+    expect(summaryOf({ p95FrameMs: 41 }).problems).toEqual(["frame_drops"]);
+    expect(summaryOf({ catchUpFrames: 60 }).problems).toEqual(["catch_up"]);
+    // Упёрлись в потолок шагов хоть раз — игра замедлялась.
+    expect(summaryOf({ maxSteps: 5 }).problems).toEqual(["catch_up"]);
+    expect(summaryOf({ clientErrors: 1, over33Ratio: 0.2 }).problems).toEqual(["frame_drops", "client_errors"]);
+  });
+
+  it("короткий забег по кадрам не судит — загрузка и первая волна ничего не говорят об устройстве", () => {
+    const short = summaryOf({ frames: 300, over33Ratio: 0.5, timeline: [runBucket(0, { frames: 300, catchUpFrames: 100, maxSteps: 5 })] });
+    expect(short.problems).toEqual([]);
+  });
+
+  it("считает долю кадров с догонянием по всему таймлайну", () => {
+    const summary = summaryOf({ catchUpFrames: 45 });
+    expect(summary.catchUpRatio).toBeCloseTo(45 / 900, 4);
+    expect(summary.maxSteps).toBe(1);
   });
 });

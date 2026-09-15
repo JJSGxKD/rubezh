@@ -10,6 +10,7 @@ import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { splitFile, ZipWriter } from "../../common/zip/zip-writer.js";
 import { submitBenchReportSchema } from "../diagnostics/dto/bench-report.dto.js";
+import { submitRunReportSchema } from "../diagnostics/dto/run-report.dto.js";
 import { EVENT_DICTIONARY } from "../events/event-dictionary.js";
 import {
   EXPORT_REPOSITORY,
@@ -304,7 +305,10 @@ function manifest(input: {
         { version: definition.version, payload: z.toJSONSchema(definition.payload, { unrepresentable: "any" }) },
       ]),
     ),
-    reportSchemas: { bench: z.toJSONSchema(submitBenchReportSchema, { unrepresentable: "any" }) },
+    reportSchemas: {
+      bench: z.toJSONSchema(submitBenchReportSchema, { unrepresentable: "any" }),
+      run: z.toJSONSchema(submitRunReportSchema, { unrepresentable: "any" }),
+    },
   };
 }
 
