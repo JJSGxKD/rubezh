@@ -85,6 +85,24 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
           fill={fill}
         />
       );
+    case "mote":
+      return (
+        <polygon
+          points={[
+            [0, -1],
+            [0.3, -0.3],
+            [1, 0],
+            [0.3, 0.3],
+            [0, 1],
+            [-0.3, 0.3],
+            [-1, 0],
+            [-0.3, -0.3],
+          ]
+            .map(([x, y]) => `${x * r},${y * r}`)
+            .join(" ")}
+          fill={fill}
+        />
+      );
     case "ring":
       return <circle r={r * 0.8} fill="none" stroke={fill} strokeWidth={Math.max(1.5, r * 0.35)} />;
     case "chevron":
@@ -239,6 +257,24 @@ export function EnemyScene(props: {
           ].map(([x, y, dx, dy, delay]) => (
             <At key={`${x}-${y}`} x={x} y={y} className="animate-guide-approach" style={delayed(delay, offset(dx, dy))}>
               <WorldShape shape={look.shape} color={color} r={size * 0.8} />
+            </At>
+          ))}
+        </Stage>
+      );
+    case "rush":
+      return (
+        <Stage label={props.label}>
+          <Player x={px} y={py} />
+          {/* Стая идёт наискось мимо игрока и уходит за край: она не
+              преследует, и сцена обязана это показать. */}
+          {[
+            [92, 30, -86, -34, 0],
+            [104, 44, -92, -22, 0.25],
+            [88, 58, -78, -44, 0.5],
+            [110, 62, -96, -12, 0.75],
+          ].map(([x, y, dx, dy, delay]) => (
+            <At key={`${x}-${y}`} x={x} y={y} className={`animate-guide-rush ${MOTION}`} style={delayed(delay, offset(dx, dy))}>
+              <WorldShape shape={look.shape} color={color} r={size * 0.85} />
             </At>
           ))}
         </Stage>

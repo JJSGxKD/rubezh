@@ -37,6 +37,20 @@ export const ENEMIES: EnemyDef[] = [
     params: { orbitRadius: 220, shrinkPerSec: 34, minRadius: 0 },
   },
   { id: "bomber_imp", hp: 10, speed: 80, damage: 18, xp: 4, threat: 4, pattern: "exploder" },
+  // Нетопыри не преследуют вовсе: берут упреждение, проносятся мимо насквозь
+  // и через пару секунд заходят снова. Давление от них не в погоне, а в том,
+  // что поперёк пути отхода внезапно идёт стена тел — поэтому они и быстрые,
+  // и дешёвые, и приходят десятками.
+  {
+    id: "rushing_bats",
+    hp: 6,
+    speed: 300,
+    damage: 6,
+    xp: 1,
+    threat: 2,
+    pattern: "rush",
+    params: { leadSec: 0.55, runSec: 2.6 },
+  },
   {
     id: "splitter_slime",
     hp: 24,

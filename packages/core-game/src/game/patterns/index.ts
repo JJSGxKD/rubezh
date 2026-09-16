@@ -6,6 +6,7 @@ import { dash } from "./dash";
 import { exploder } from "./exploder";
 import { kiteAndShoot } from "./kite-and-shoot";
 import { orbit } from "./orbit";
+import { rush } from "./rush";
 import { splitter } from "./splitter";
 import { swarm } from "./swarm";
 
@@ -26,6 +27,7 @@ export const PATTERNS: Record<EnemyPattern, PatternBehavior> = {
   orbit,
   exploder,
   splitter,
+  rush,
 };
 
 export function applyPattern(
@@ -49,6 +51,7 @@ export type { PatternBehavior } from "./behavior";
 export { DASH_PHASE } from "./dash";
 export { ORBIT_PHASE } from "./orbit";
 export { EXPLODER_PHASE } from "./exploder";
+export { RUSH_PHASE } from "./rush";
 export {
   findEnemyContentProblems,
   MAX_PATTERN_RADIUS,

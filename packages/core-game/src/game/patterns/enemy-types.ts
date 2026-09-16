@@ -24,6 +24,7 @@ export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
   orbit: { radius: 8, contactDamage: true },
   exploder: { radius: 9, contactDamage: false },
   splitter: { radius: 13, contactDamage: true },
+  rush: { radius: 6, contactDamage: true },
 };
 
 /**
@@ -61,6 +62,8 @@ export interface ResolvedPatternParams {
   minRadius: number;
   fuseSec: number;
   blastRadius: number;
+  leadSec: number;
+  runSec: number;
   /** индекс типа, на который распадается делящийся; -1 — не распадается */
   childTypeIndex: number;
   childCount: number;
@@ -83,6 +86,8 @@ const NEUTRAL_PARAMS: ResolvedPatternParams = {
   minRadius: 0,
   fuseSec: 0,
   blastRadius: 0,
+  leadSec: 0,
+  runSec: 0,
   childTypeIndex: -1,
   childCount: 0,
 };
@@ -106,6 +111,7 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
   orbit: { orbitRadius: 180, shrinkPerSec: 18, minRadius: 0 },
   exploder: { triggerDistance: 40, fuseSec: 0.9, blastRadius: 90 },
   splitter: { steeringPerSec: 3.2, childCount: 3 },
+  rush: { leadSec: 0.55, runSec: 2.6 },
 };
 
 /** Параметры, которые геймдизайнер вправе задать каждому паттерну. */
@@ -117,6 +123,7 @@ const ALLOWED_PARAMS: Record<EnemyPattern, readonly string[]> = {
   orbit: ["orbitRadius", "shrinkPerSec", "minRadius"],
   exploder: ["triggerDistance", "fuseSec", "blastRadius"],
   splitter: ["childEnemy", "childCount"],
+  rush: ["leadSec", "runSec"],
 };
 
 /** Расстояния и скорости пересчитываются в пиксели устройства, время — нет. */

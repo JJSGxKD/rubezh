@@ -69,12 +69,13 @@ export const TIMELINE: TimelineSegmentDef[] = [
     events: [{ kind: "ring", enemy: "circler_crow", count: 16 }],
   },
   {
+    // Нетопыри показываются отдельно: поперёк поля идёт стая, и игрок должен
+    // успеть понять, что от неё уходят вбок, а не бегут по прямой.
     fromSec: 210,
     spawns: [
-      { enemy: "swarm_rat", perSec: 2.8 },
-      { enemy: "circler_crow", perSec: 1.1 },
-      { enemy: "dasher_wolf", perSec: 0.4 },
-      { enemy: "splitter_slime", perSec: 0.3, burst: 2 },
+      { enemy: "swarm_rat", perSec: 2.2 },
+      { enemy: "circler_crow", perSec: 0.9 },
+      { enemy: "rushing_bats", perSec: 2.2, burst: 12 },
     ],
   },
   {
@@ -82,16 +83,29 @@ export const TIMELINE: TimelineSegmentDef[] = [
     spawns: [
       { enemy: "swarm_rat", perSec: 2.8 },
       { enemy: "circler_crow", perSec: 1.1 },
+      { enemy: "dasher_wolf", perSec: 0.4 },
+      { enemy: "rushing_bats", perSec: 1.2 },
+      { enemy: "splitter_slime", perSec: 0.3, burst: 2 },
+    ],
+  },
+  {
+    fromSec: 270,
+    spawns: [
+      { enemy: "swarm_rat", perSec: 2.8 },
+      { enemy: "circler_crow", perSec: 1.1 },
+      { enemy: "rushing_bats", perSec: 0.8 },
+      { enemy: "shooter_wisp", perSec: 0.3 },
       { enemy: "bomber_imp", perSec: 0.45 },
       { enemy: "tank_ghoul", perSec: 0.2 },
     ],
     events: [{ kind: "flank", enemy: "swarm_rat", count: 18 }],
   },
   {
-    fromSec: 270,
+    fromSec: 300,
     spawns: [
       { enemy: "swarm_rat", perSec: 3 },
       { enemy: "circler_crow", perSec: 1.8 },
+      { enemy: "rushing_bats", perSec: 1 },
       { enemy: "shooter_wisp", perSec: 0.45 },
       { enemy: "dasher_wolf", perSec: 0.4 },
     ],
@@ -112,9 +126,9 @@ export const TIMELINE: TimelineSegmentDef[] = [
  * В `pool` только обычные враги: элиты и мини-боссы приходят событиями.
  */
 export const ENDLESS_CURVE: EndlessCurveDef = {
-  fromSec: 300,
+  fromSec: 330,
   segmentSec: 60,
-  threatPerSec: 11,
+  threatPerSec: 13,
   threatGrowth: 1.18,
   maxAlive: 240,
   hpGrowth: 1.12,
@@ -122,6 +136,7 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
   pool: [
     "swarm_rat",
     "circler_crow",
+    "rushing_bats",
     "dasher_wolf",
     "shooter_wisp",
     "bomber_imp",
