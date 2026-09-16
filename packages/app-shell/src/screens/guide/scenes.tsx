@@ -1,6 +1,15 @@
 import { useId, type CSSProperties, type ReactNode } from "react";
 import type { EnemyPattern, WeaponBehavior } from "@bh/shared-types";
-import { ENEMY_LOOKS, enemyColor, GEM_TIERS, PICKUP_LOOKS, WORLD_COLORS, type ShapeKind } from "@bh/core-game";
+import {
+  ENEMY_LOOKS,
+  enemyColor,
+  GEM_TIERS,
+  PICKUP_LOOKS,
+  stageColor,
+  stageCore,
+  WORLD_COLORS,
+  type ShapeKind,
+} from "@bh/core-game";
 
 /**
  * Мини-сцены гайдбука: как ведёт себя враг или бьёт оружие — циклом в
@@ -31,6 +40,23 @@ function offset(x: number, y: number): CSSProperties {
  * Фигура мира в точке (0, 0) — те же пропорции, что у текстур движка
  * (`render/shapes.ts`): фигура вписана в круг радиуса `r`.
  */
+/**
+ * Метка ступени врага: круг ройного врага в цвете ступени, с её ядром. Форма
+ * взята одна — ступень читается цветом и ядром, а не формой.
+ */
+export function StageMark(props: { stage: number; r?: number }): ReactNode {
+  const r = props.r ?? 11;
+  const base = ENEMY_LOOKS.swarm.color;
+  const core = stageCore(props.stage);
+
+  return (
+    <svg viewBox={`${-r - 1} ${-r - 1} ${(r + 1) * 2} ${(r + 1) * 2}`} className="h-8 w-8 shrink-0" aria-hidden="true">
+      <circle r={r} fill={hex(stageColor(base, props.stage))} />
+      {core === null ? null : <circle r={r * 0.34} fill={hex(core)} />}
+    </svg>
+  );
+}
+
 export function WorldShape(props: { shape: ShapeKind; color: number; r: number }): ReactNode {
   const { r } = props;
   const fill = hex(props.color);

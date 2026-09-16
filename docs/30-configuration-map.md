@@ -43,6 +43,7 @@
 | Первые минуты забега: состав, темп, выбросы, события отрезка | `content/waves.ts` → `TIMELINE` | golden-прогон, свойства баланса |
 | Бесконечный режим: бюджет угрозы, рост, потолок живых, пул типов, события | `content/waves.ts` → `ENDLESS_CURVE` | свойства баланса |
 | Оружие: поведение, числа по уровням, что даётся на старте | `content/weapons.ts` → `WEAPONS` | golden-прогон |
+| Ступени врагов: когда открываются, вес в потоке, множители | `content/stages.ts` → `ENEMY_STAGES` | golden-прогон |
 | Пассивки и их категории, слоты оружия и каждой категории пассивок, кривая опыта | `content/upgrades.ts` → `PASSIVES` (`category`), `LOADOUT_LIMITS`, `LEVEL_CURVE` | golden-прогон |
 | Уровни сложности: множители здоровья и урона врагов, темпа спавна и потолка живых; какой открыт по умолчанию | `content/difficulty.ts` → `DIFFICULTIES`, `DEFAULT_DIFFICULTY_ID` | отпечаток контента; эталоны — нет: они идут на «Лёгкой» |
 | Что падает с врагов: на сколько кристаллов делится опыт; шансы аптечки, магнита и динамита с рядового и с элиты, сколько лежит на поле; сколько лечит аптечка; радиус взрыва динамита и какую долю здоровья он снимает с элиты | `content/drops.ts` → `DROPS` | golden-прогон, контрольная сумма |
@@ -90,7 +91,7 @@
 | Сколько вариантов при наборе уровня, сила запасного лечения | `game/progression/levels.ts` → `OFFERS_PER_LEVEL`, `HEAL_RATIO` |
 | Джойстик: размер кольца, мёртвая зона | `game/joystick.ts` → `RING_UNITS`, `DEAD_ZONE_UNITS` |
 | Порог «игрок стоит» для камеры | `game/render/run-camera.ts` → `IDLE_SPEED_RATIO` |
-| Формы и цвета врагов, кристаллов, подборов, персонажа и эффектов — на канве и в гайдбуке сразу | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `WORLD_COLORS` |
+| Формы и цвета врагов, кристаллов, подборов, персонажа и эффектов — на канве и в гайдбуке сразу | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `STAGE_LOOKS`, `WORLD_COLORS` |
 | Вспышка попадания, взрывы, плитка фона | `game/render/WorldRenderer.ts` → `HIT_FLASH_TICKS`, `BLAST_*`, `GROUND_TILE_UNITS` |
 | Телеграфы угроз: за сколько до выстрела виден прицел стрелка, толщина полос | `game/render/telegraphs.ts` → `AIM_TELEGRAPH_SEC`, `LANE_WIDTH_UNITS`, `AIM_WIDTH_UNITS`; отсчёт взрыва и рывка берётся из `fuseSec` и `telegraphSec` врага |
 | Граница «Очага» и молния «Грозы»: вспышка, высота и изгиб молнии | `game/render/weapon-effects.ts` → `AURA_FLASH_TICKS`, `BOLT_LIFETIME_TICKS`, `BOLT_HEIGHT_UNITS`, `BOLT_JITTER_UNITS` |

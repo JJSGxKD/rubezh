@@ -8,6 +8,8 @@ export interface ShapeSpec {
   /** радиус описанной окружности — фигура вписана в квадрат 2r × 2r */
   radius: number;
   color: number;
+  /** светлое ядро поверх фигуры: так читается ступень врага */
+  core?: number | null;
 }
 
 /**
@@ -18,6 +20,20 @@ export interface ShapeSpec {
  * исход забега он не влияет, но таблица читается проще формулы.
  */
 export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void {
+  drawBody(graphics, spec);
+  const core = spec.core;
+  if (core === undefined || core === null) return;
+
+  // Ядро — круг в середине фигуры: одинаково садится и на круг, и на клин, и
+  // остаётся видимым, когда враг размером в полпальца.
+  graphics.fillStyle(core, 1);
+  graphics.fillCircle(spec.radius, spec.radius, spec.radius * CORE_RATIO);
+}
+
+/** Доля радиуса, которую занимает ядро ступени. */
+const CORE_RATIO = 0.34;
+
+function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void {
   const r = spec.radius;
   graphics.fillStyle(spec.color, 1);
 

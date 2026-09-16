@@ -20,6 +20,7 @@ export * from "./content/weapons";
 export * from "./content/balance-targets";
 export * from "./content/difficulty";
 export * from "./content/drops";
+export * from "./content/stages";
 export * from "./game/bench";
 
 // Как выглядит мир забега — без Phaser: гайдбук оболочки рисует врагов и
@@ -29,6 +30,8 @@ export {
   enemyColor,
   GEM_TIERS,
   PICKUP_LOOKS,
+  stageColor,
+  stageCore,
   WORLD_COLORS,
   type ShapeKind,
   type ShapeLook,

@@ -73,6 +73,9 @@ export class BenchScene extends Phaser.Scene {
     this.world = createWorld({
       seed: this.sceneData.seed,
       enemies: ENEMIES,
+      // Ступеней врагов на стенде нет: враг, матереющий по ходу прогона,
+      // меняет нагрузку так же, как растущая сила игрока, и два замера
+      // перестают быть сравнимыми (docs/25-week1-fps-trials.md §1).
       weapons: WEAPONS,
       passives: PASSIVES,
       drops: DROPS,

@@ -1,5 +1,6 @@
 import type { DifficultyId } from "@bh/shared-types";
 import { ENEMIES } from "../../content/enemies";
+import { ENEMY_STAGES } from "../../content/stages";
 import { MAPS } from "../../content/maps";
 import { findDifficulty } from "../../content/difficulty";
 import { DROPS } from "../../content/drops";
@@ -56,6 +57,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   const world = createWorld({
     seed: options.seed,
     enemies: ENEMIES,
+    stages: ENEMY_STAGES,
     weapons: WEAPONS,
     passives: PASSIVES,
     levelCurve: LEVEL_CURVE,

@@ -7,8 +7,10 @@ import {
 } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES } from "../src/content/difficulty";
 import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
+import { findStageProblems } from "../src/game/sim/stages";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
+import { ENEMY_STAGES } from "../src/content/stages";
 import { MAPS } from "../src/content/maps";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
@@ -279,6 +281,34 @@ describe("контент уровней сложности", () => {
 
   it("ловит нулевой множитель — он обнулил бы врагов молча", () => {
     expect(findDifficultyContentProblems([{ ...DIFFICULTIES[0], spawnRateMul: 0 }])).not.toEqual([]);
+  });
+});
+
+describe("контент ступеней врагов", () => {
+  it("проходит проверку целиком и открывает первую ступень с нулевой секунды", () => {
+    expect(findStageProblems(ENEMY_STAGES)).toEqual([]);
+    expect(ENEMY_STAGES[0].fromSec).toBe(0);
+  });
+
+  it("ловит ступень, которая по какой-то оси слабее предыдущей", () => {
+    const [base, hardened] = ENEMY_STAGES;
+    const weaker = { ...hardened, hpMul: base.hpMul - 0.1 };
+    expect(findStageProblems([base, weaker]).join("\n")).toMatch(/hpMul меньше, чем у предыдущей/);
+  });
+
+  it("ловит ступень с нулевым весом — она не пришла бы ни разу", () => {
+    expect(findStageProblems([{ ...ENEMY_STAGES[0], weight: 0 }]).join("\n")).toMatch(/weight/);
+  });
+
+  it("ловит ступень, открытую не позже предыдущей", () => {
+    const [base, hardened] = ENEMY_STAGES;
+    expect(findStageProblems([base, { ...hardened, fromSec: 0 }]).join("\n")).toMatch(/не позже предыдущей/);
+  });
+
+  it("опыт растёт вместе со здоровьем: матёрого врага должно быть выгодно бить", () => {
+    for (let i = 1; i < ENEMY_STAGES.length; i++) {
+      expect(ENEMY_STAGES[i].xpMul).toBeGreaterThan(ENEMY_STAGES[i - 1].xpMul);
+    }
   });
 });
 

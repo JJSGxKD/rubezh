@@ -2,6 +2,7 @@ import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
+import { ENEMY_STAGES } from "./stages";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "./waves";
 import { WEAPONS } from "./weapons";
@@ -26,6 +27,7 @@ function hashContent(): string {
   // значит и последовательность обращений к генератору.
   const source = JSON.stringify([
     ENEMIES,
+    ENEMY_STAGES,
     WEAPONS,
     PASSIVES,
     LEVEL_CURVE,

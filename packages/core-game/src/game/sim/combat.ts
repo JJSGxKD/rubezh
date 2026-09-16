@@ -1,6 +1,7 @@
 import { onEnemyKilled } from "../patterns";
 import { dropGems } from "./gems";
 import { rollPickups } from "./pickups";
+import { stageOf } from "./stages";
 import { despawnEnemy, NO_OWNER_TYPE, type World } from "./world";
 
 /**
@@ -46,6 +47,7 @@ export function damageEnemy(
 export function killEnemy(world: World, index: number): void {
   const typeIndex = world.enemies.type[index];
   const type = world.enemyTypes[typeIndex];
+  const stage = stageOf(world, index);
 
   world.stats.enemiesKilled++;
   world.stats.killsByType[typeIndex]++;
@@ -55,7 +57,9 @@ export function killEnemy(world: World, index: number): void {
   despawnEnemy(world, index);
 
   if (world.config.lootEnabled) {
-    dropGems(world, x, y, type.xp);
+    // Опыт по ступени: матёрый враг дороже стоит и лучше качает, иначе его
+    // незачем убивать — выгоднее убежать к обычным.
+    dropGems(world, x, y, Math.round(type.xp * stage.xpMul));
     rollPickups(world, x, y, type.elite);
   }
   onEnemyKilled(type.pattern, world, index);

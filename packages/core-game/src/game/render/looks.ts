@@ -66,6 +66,41 @@ export function enemyColor(pattern: EnemyPattern, elite: boolean): number {
 }
 
 /**
+ * Как читается ступень врага (content/stages.ts): тело уходит в цвет ступени,
+ * а в середину садится светлое ядро.
+ *
+ * Не размером: размер уже занят рангом — элита крупнее обычного врага, и
+ * второй смысл у того же признака читался бы как путаница. Не каймой: кайма
+ * по кругу режет углы у квадрата и клина.
+ */
+export const STAGE_LOOKS: readonly { mixColor: number; mix: number; core: number | null }[] = [
+  { mixColor: 0x000000, mix: 0, core: null },
+  { mixColor: 0xffb038, mix: 0.3, core: 0xffe9b0 },
+  { mixColor: 0xff3b2f, mix: 0.45, core: 0xffd9c0 },
+];
+
+/** Цвет тела врага на ступени: та же тварь, но матёрее. */
+export function stageColor(color: number, stage: number): number {
+  const look = STAGE_LOOKS[Math.min(stage, STAGE_LOOKS.length - 1)];
+  if (look === undefined || look.mix <= 0) return color;
+  return mixChannels(color, look.mixColor, look.mix);
+}
+
+/** Светлое ядро ступени; `null` — у обычного врага ядра нет. */
+export function stageCore(stage: number): number | null {
+  return STAGE_LOOKS[Math.min(stage, STAGE_LOOKS.length - 1)]?.core ?? null;
+}
+
+function mixChannels(from: number, to: number, ratio: number): number {
+  const channel = (shift: number): number => {
+    const a = (from >> shift) & 0xff;
+    const b = (to >> shift) & 0xff;
+    return Math.round(a + (b - a) * ratio);
+  };
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0);
+}
+
+/**
  * Ступени ценности кристалла: цвет, размер и форма. Порог — минимальная
  * ценность ступени. Самая ценная ступень отличается ещё и формой, а не только
  * цветом (docs/27-design-system-and-app-shell.md §4.4).

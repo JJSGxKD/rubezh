@@ -1,7 +1,7 @@
 import type { World } from "../sim/world";
 import { vectorLength } from "../sim/vector";
 import type { PatternBehavior } from "./behavior";
-import { createHeading, headingToPlayer, MIN_HEADING_DISTANCE, stopEnemy } from "./steering";
+import { createHeading, enemySpeed, headingToPlayer, MIN_HEADING_DISTANCE, stopEnemy } from "./steering";
 
 export const ORBIT_PHASE = {
   /** только что появился: кольцо и направление вращения ещё не выбраны */
@@ -55,8 +55,9 @@ export const orbit: PatternBehavior = {
     const desiredY = heading.nx * spin + heading.ny * inward;
     const length = vectorLength(desiredX, desiredY);
 
-    enemies.vx[index] = (desiredX / length) * type.speed;
-    enemies.vy[index] = (desiredY / length) * type.speed;
+    const speed = enemySpeed(world, index);
+    enemies.vx[index] = (desiredX / length) * speed;
+    enemies.vy[index] = (desiredY / length) * speed;
   },
 };
 

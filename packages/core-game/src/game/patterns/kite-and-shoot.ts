@@ -1,6 +1,6 @@
 import { spawnProjectile } from "../sim/world";
 import type { PatternBehavior } from "./behavior";
-import { createHeading, headingToPlayer, MIN_HEADING_DISTANCE } from "./steering";
+import { createHeading, enemySpeed, headingToPlayer, MIN_HEADING_DISTANCE } from "./steering";
 
 /** Мёртвая зона вокруг желаемой дистанции — без неё стрелок дрожит на месте. */
 const DEADZONE_UNITS = 24;
@@ -26,12 +26,13 @@ export const kiteAndShoot: PatternBehavior = {
     if (heading.distance < MIN_HEADING_DISTANCE) return;
 
     const deadzone = DEADZONE_UNITS * world.config.unitScale;
+    const speed = enemySpeed(world, index);
     if (heading.distance > params.preferredDistance + deadzone) {
-      enemies.vx[index] = heading.nx * type.speed;
-      enemies.vy[index] = heading.ny * type.speed;
+      enemies.vx[index] = heading.nx * speed;
+      enemies.vy[index] = heading.ny * speed;
     } else if (heading.distance < params.preferredDistance - deadzone) {
-      enemies.vx[index] = -heading.nx * type.speed;
-      enemies.vy[index] = -heading.ny * type.speed;
+      enemies.vx[index] = -heading.nx * speed;
+      enemies.vy[index] = -heading.ny * speed;
     } else {
       enemies.vx[index] = 0;
       enemies.vy[index] = 0;

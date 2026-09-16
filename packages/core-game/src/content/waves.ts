@@ -38,13 +38,14 @@ export const TIMELINE: TimelineSegmentDef[] = [
     fromSec: 90,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.2 },
-      { enemy: "circler_crow", perSec: 0.6, burst: 4 },
+      { enemy: "circler_crow", perSec: 1.4, burst: 8 },
     ],
   },
   {
     fromSec: 120,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.4 },
+      { enemy: "circler_crow", perSec: 0.9 },
       { enemy: "shooter_wisp", perSec: 0.25 },
       { enemy: "tank_ghoul", perSec: 0.12, burst: 1 },
     ],
@@ -53,6 +54,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
     fromSec: 150,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.2 },
+      { enemy: "circler_crow", perSec: 0.85 },
       { enemy: "dasher_wolf", perSec: 0.3 },
       { enemy: "bomber_imp", perSec: 0.35, burst: 2 },
     ],
@@ -61,15 +63,16 @@ export const TIMELINE: TimelineSegmentDef[] = [
     fromSec: 180,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.6 },
-      { enemy: "circler_crow", perSec: 0.7 },
+      { enemy: "circler_crow", perSec: 1.6 },
       { enemy: "shooter_wisp", perSec: 0.35 },
     ],
-    events: [{ kind: "ring", enemy: "circler_crow", count: 12 }],
+    events: [{ kind: "ring", enemy: "circler_crow", count: 16 }],
   },
   {
     fromSec: 210,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.8 },
+      { enemy: "circler_crow", perSec: 1.1 },
       { enemy: "dasher_wolf", perSec: 0.4 },
       { enemy: "splitter_slime", perSec: 0.3, burst: 2 },
     ],
@@ -78,6 +81,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
     fromSec: 240,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.8 },
+      { enemy: "circler_crow", perSec: 1.1 },
       { enemy: "bomber_imp", perSec: 0.45 },
       { enemy: "tank_ghoul", perSec: 0.2 },
     ],
@@ -87,7 +91,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
     fromSec: 270,
     spawns: [
       { enemy: "swarm_rat", perSec: 3 },
-      { enemy: "circler_crow", perSec: 0.8 },
+      { enemy: "circler_crow", perSec: 1.8 },
       { enemy: "shooter_wisp", perSec: 0.45 },
       { enemy: "dasher_wolf", perSec: 0.4 },
     ],
@@ -110,7 +114,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
 export const ENDLESS_CURVE: EndlessCurveDef = {
   fromSec: 300,
   segmentSec: 60,
-  threatPerSec: 7.5,
+  threatPerSec: 11,
   threatGrowth: 1.18,
   maxAlive: 240,
   hpGrowth: 1.12,
@@ -128,7 +132,7 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
   typesPerSegment: 1,
   mixSize: 3,
   events: [
-    { everySegments: 2, kind: "ring", enemy: "circler_crow", count: 14 },
+    { everySegments: 2, kind: "ring", enemy: "circler_crow", count: 20 },
     { everySegments: 3, kind: "flank", enemy: "swarm_rat", count: 20 },
     { everySegments: 4, kind: "ring", enemy: "elite_ghoul", count: 2 },
     { everySegments: 5, kind: "ring", enemy: "miniboss_maw", count: 1 },

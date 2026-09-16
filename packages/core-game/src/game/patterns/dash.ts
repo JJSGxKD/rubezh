@@ -1,6 +1,6 @@
 import type { World } from "../sim/world";
 import type { PatternBehavior } from "./behavior";
-import { createHeading, headingToPlayer, MIN_HEADING_DISTANCE, stopEnemy } from "./steering";
+import { createHeading, enemySpeed, headingToPlayer, MIN_HEADING_DISTANCE, stopEnemy } from "./steering";
 
 /** Фазы рывка. Рендер читает их, чтобы показать телеграф. */
 export const DASH_PHASE = {
@@ -48,8 +48,9 @@ function approach(world: World, index: number): void {
   const canTelegraph =
     heading.distance >= MIN_HEADING_DISTANCE && heading.distance <= type.params.triggerDistance;
   if (!canTelegraph) {
-    enemies.vx[index] = heading.nx * type.speed;
-    enemies.vy[index] = heading.ny * type.speed;
+    const speed = enemySpeed(world, index);
+    enemies.vx[index] = heading.nx * speed;
+    enemies.vy[index] = heading.ny * speed;
     return;
   }
 

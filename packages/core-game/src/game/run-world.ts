@@ -2,6 +2,7 @@ import type { DifficultyId, MapDef } from "@bh/shared-types";
 import { findDifficulty, DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
 import { DROPS } from "../content/drops";
 import { ENEMIES } from "../content/enemies";
+import { ENEMY_STAGES } from "../content/stages";
 import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
@@ -37,6 +38,7 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
   const world = createWorld({
     seed: options.seed,
     enemies: ENEMIES,
+    stages: ENEMY_STAGES,
     weapons: WEAPONS,
     passives: PASSIVES,
     levelCurve: LEVEL_CURVE,

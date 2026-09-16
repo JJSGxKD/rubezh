@@ -140,7 +140,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 3;
+export const RUN_SNAPSHOT_FORMAT = 4;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,

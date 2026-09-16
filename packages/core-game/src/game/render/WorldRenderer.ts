@@ -9,7 +9,7 @@ import { ORBITER_RADIUS, orbiterCount, orbiterPosition, type OrbiterPoint } from
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
 import { PickupRenderer } from "./pickups";
-import { ENEMY_LOOKS, enemyColor, WORLD_COLORS } from "./looks";
+import { ENEMY_LOOKS, enemyColor, stageColor, stageCore, WORLD_COLORS } from "./looks";
 import { PlayerRings } from "./player-rings";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
@@ -53,11 +53,14 @@ export class WorldRenderer {
   /** повторяющийся фон: единственное, что даёт почувствовать движение мира */
   private readonly ground: Phaser.GameObjects.TileSprite;
   private readonly enemySprites: Phaser.GameObjects.Image[] = [];
+  /** индекс текстуры врага: тип и ступень вместе, см. конструктор */
   private readonly enemySpriteType: Int16Array;
+  private readonly stageCount: number;
   /** последний применённый вид спрайта — чтобы не дёргать Phaser каждый кадр */
   private readonly enemySpriteLook: Uint8Array;
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly player: Phaser.GameObjects.Image;
+  /** ключи текстур по паре «тип и ступень»: индекс = тип × число ступеней + ступень */
   private readonly textureKeyByType: string[] = [];
   private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
@@ -92,12 +95,24 @@ export class WorldRenderer {
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
 
     const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, type.elite));
+    // Текстура на пару «тип и ступень»: ступень меняет цвет тела и садит в
+    // середину ядро, поэтому одной текстуры на тип не хватает.
+    this.stageCount = world.stages.length;
     world.enemyTypes.forEach((type, index) => {
-      const key = `bh-enemy-${type.id}`;
-      // Элита крупнее и светлее: одинаковые на глаз танк и элитный танк
-      // читаются как дефект, а не как контрольная точка сложности.
-      ensureShapeTexture(scene, key, type.radius, colorByType[index], ENEMY_LOOKS[type.pattern].shape);
-      this.textureKeyByType.push(key);
+      for (let stage = 0; stage < this.stageCount; stage++) {
+        const key = `bh-enemy-${type.id}-s${String(stage)}`;
+        // Элита крупнее и светлее: одинаковые на глаз танк и элитный танк
+        // читаются как дефект, а не как контрольная точка сложности.
+        ensureShapeTexture(
+          scene,
+          key,
+          type.radius,
+          stageColor(colorByType[index], stage),
+          ENEMY_LOOKS[type.pattern].shape,
+          stageCore(stage),
+        );
+        this.textureKeyByType.push(key);
+      }
     });
 
     const scale = world.config.unitScale;
@@ -251,9 +266,10 @@ export class WorldRenderer {
       }
 
       const typeIndex = enemies.type[i];
-      if (this.enemySpriteType[i] !== typeIndex) {
-        sprite.setTexture(this.textureKeyByType[typeIndex]);
-        this.enemySpriteType[i] = typeIndex;
+      const texture = typeIndex * this.stageCount + Math.min(enemies.stage[i], this.stageCount - 1);
+      if (this.enemySpriteType[i] !== texture) {
+        sprite.setTexture(this.textureKeyByType[texture]);
+        this.enemySpriteType[i] = texture;
       }
 
       const type = this.world.enemyTypes[typeIndex];
