@@ -194,6 +194,9 @@ export function updatePickups(world: World): void {
       continue;
     }
     if (!player.alive || isPickupFlying(world, i)) continue;
+    // То, что сейчас нельзя взять, и не тянется: аптечка при полном здоровье
+    // иначе ходила за игроком по пятам, подбираясь и не подбираясь.
+    if (!canTake(world, pool.kind[i])) continue;
     if (distance > touch) {
       pullToPlayer(world, i, distance);
       continue;
@@ -201,7 +204,6 @@ export function updatePickups(world: World): void {
 
     switch (pool.kind[i]) {
       case PICKUP_KIND.medkit:
-        if (player.hp >= world.playerStats.maxHp) continue;
         remove(world, i);
         heal(world);
         break;
@@ -214,6 +216,14 @@ export function updatePickups(world: World): void {
         detonate(world);
     }
   }
+}
+
+/**
+ * Можно ли взять подбор прямо сейчас. Аптечка при полном здоровье — нельзя:
+ * она ждёт на земле, пока не понадобится, и до тех пор игрока не касается.
+ */
+function canTake(world: World, kind: number): boolean {
+  return kind !== PICKUP_KIND.medkit || world.player.hp < world.playerStats.maxHp;
 }
 
 /**
