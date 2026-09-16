@@ -72,21 +72,28 @@ export function OutsideScreen(props: { botUrl: string }): ReactNode {
 }
 
 /**
- * Компактный режим: приложение занимает часть экрана. Забег в нём непригоден,
- * поэтому вместо него — просьба развернуть и кнопка, которая это делает (§5.2).
+ * Компактный режим: приложение занимает часть экрана, играть в нём нельзя
+ * (§5.2).
+ *
+ * Плашка ложится **поверх** приложения, а не вместо него. Подмена всего
+ * дерева размонтировала экран забега вместе с движком, и вернувшийся игрок
+ * получал не свой забег, а новый: четырнадцать минут исчезали ровно здесь.
+ * Забег под плашкой стоит на паузе и ждёт.
  */
-export function CompactScreen(props: { onExpand(): void }): ReactNode {
+export function CompactOverlay(props: { onExpand(): void }): ReactNode {
   return (
-    <Centered>
-      <IconEmblem tone="info">
-        <Maximize size={24} />
-      </IconEmblem>
-      <h1 className="mt-2 font-display text-xl font-bold text-text">{t("gate.compact.title")}</h1>
-      <p className="max-w-[320px] text-sm text-text-muted">{t("gate.compact.text")}</p>
-      <Button glow onClick={props.onExpand}>
-        {t("gate.compact.action")}
-      </Button>
-    </Centered>
+    <div className="bg-app/95 absolute inset-0" style={{ zIndex: "var(--z-modal)" }}>
+      <Centered>
+        <IconEmblem tone="info">
+          <Maximize size={24} />
+        </IconEmblem>
+        <h1 className="mt-2 font-display text-xl font-bold text-text">{t("gate.compact.title")}</h1>
+        <p className="max-w-[320px] text-sm text-text-muted">{t("gate.compact.text")}</p>
+        <Button glow onClick={props.onExpand}>
+          {t("gate.compact.action")}
+        </Button>
+      </Centered>
+    </div>
   );
 }
 
