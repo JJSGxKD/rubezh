@@ -84,27 +84,37 @@
 
 ## 3. Группы переменных
 
-Полный список с комментариями — в `.env.example`. Здесь — назначение групп и
-где брать значения.
+`.env.example` — точная копия того, что читает код: группы ниже совпадают с
+ним один в один. Переменная попадает туда вместе со схемой конфигурации,
+которая её читает (§7), и не раньше: шаблон с переменными «на будущее»
+перестаёт быть источником правды, и половина команды правит то, чего никто не
+читает.
 
-| Группа | Что внутри | Где брать значения |
+| Группа в `.env.example` | Что внутри | Где брать значения |
 |---|---|---|
-| 1. Окружение | `NODE_ENV`, `APP_PLATFORM`, `APP_VERSION` | задаётся сборкой; `APP_VERSION` — из тега релиза. `NODE_ENV` из `.env` читает только бэкенд: сборка клиента его игнорирует и всегда production (`scripts/vite/production-node-env.ts`), иначе Vite собирал бы отладочный React |
-| 2. Порты | см. §2 | из таблицы выше |
-| 3. База данных | `POSTGRES_*`, `DATABASE_URL` | dev — из compose; прод — секреты окружения |
-| 4. Redis | `REDIS_*` | там же |
-| 5. Авторизация | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, сроки жизни, `INIT_DATA_EXPIRES_IN`, cookie | генерируется: `openssl rand -hex 32`, разные значения для access и refresh |
-| 6. CORS и адреса | `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `PUBLIC_*`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml` |
-| 7. Платформы | токены ботов, чтение обновлений бота (`TELEGRAM_BOT_UPDATES`), чат администраторов (`ADMIN_CHAT_ID`) и уведомления в него (`ADMIN_NOTIFY_REPORTS`), секрет вебхука бота (`TELEGRAM_WEBHOOK_SECRET`, с этапа 2), ключи Bridge, OAuth | из кабинетов площадок; для staging — **отдельный** бот; секрет вебхука генерируется. `PLAYTEST_STATS_CHAT_ID` переименована в `ADMIN_CHAT_ID` — со старым именем бэкенд не стартует и называет новое |
-| 8. Платежи | webhook-секрет, RU-эквайринг | из кабинета провайдера |
-| 9. Реклама | `ADS_SESSION_SECRET`, ключи сетей | из кабинетов сетей; порядок и активность сетей — данные в БД, не переменные |
-| 10. Наблюдаемость | `LOG_LEVEL`, треды Telegram, Sentry, Grafana | id тредов — из супергруппы алертов |
-| 11. Админка | `ADMIN_TELEGRAM_IDS`, `ADMIN_SESSION_SECRET`, `CONTENT_PUBLISH_REQUIRE_SIMULATION` | см. `19-content-admin.md`. `ADMIN_TELEGRAM_IDS` используется **с этапа 2**: режим разработчика и забеги с читами в рейтинге плейтеста (`26-stage2-plan.md`, WP14), затем выгрузка данных через бота (`28-diagnostics.md` §6.1.1). Цифры через запятую, мусор — бэкенд не стартует |
-| 12. Программы роста и аналитика | домен редиректа, TTL клика, секрет подписи шеринга, кеш карточек, read-only пользователь Grafana, срок хранения сырых персональных данных | `22-analytics-and-metrics.md`, `23-referral-and-partner-program.md`, `24-attribution-and-sharing.md` |
-| 13. Публичные для клиента | `VITE_*` | только не-секреты |
-| 14. Диагностика и телеметрия | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC`, `DIAGNOSTICS_RETENTION_DAYS`, `EXPORT_PSEUDONYM_KEY`, `DATA_EXPORT_BOT_ENABLED` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует. `ALLOWED_ORIGINS` у приёмников — ещё и проверка `Origin`: пустой список на машине разработчика её выключает, в проде домен клиента обязан в нём быть. `TRUST_PROXY_HOPS` (группа 6) — за Caddy `1` |
-| 15. CDN | ключ API Bunny.net для сброса кеша после деплоя | **только секреты CI**, на сервере не нужен (`26-stage2-plan.md`, WP10) |
-| 16. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_ENABLED`, `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Игрок проверяется подписью initData токеном `TELEGRAM_BOT_TOKEN` из группы 7; вход без подписи — только `NODE_ENV=development`, иначе бэкенд не стартует. `PLAYTEST_STATS_*` — сводка статистики картинкой в чат администраторов: включённая без чата администраторов или чтения обновлений бота не стартует |
+| 1. Окружение и порты | `NODE_ENV`, `API_PORT`, `API_HOST`, `WEB_*_PORT`, `POSTGRES_PORT`, `REDIS_PORT` | из карты портов §2. `NODE_ENV` из `.env` читает только бэкенд: сборка клиента его игнорирует и всегда production (`scripts/vite/production-node-env.ts`), иначе Vite собирал бы отладочный React |
+| 2. Postgres и Redis | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `REDIS_URL` | dev — из `docker-compose.yml`; прод — секреты окружения. Миграции применяются отдельно: `pnpm --filter backend-api prisma:deploy` |
+| 3. Адреса, CORS и туннель | `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml`. За Caddy `TRUST_PROXY_HOPS=1` |
+| 4. Бот закрытого теста | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_UPDATES`, `TELEGRAM_WEBHOOK_SECRET`, `VITE_TELEGRAM_BOT_USERNAME` | из BotFather; для staging — **отдельный** бот, иначе два процесса дерутся за обновления. Секрет вебхука генерируется: `openssl rand -hex 32` |
+| 5. Администраторы и их чаты | `ADMIN_TELEGRAM_IDS`, `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_NOTIFY_REPORTS` | Telegram ID администраторов цифрами через запятую, мусор — бэкенд не стартует. Адреса чатов — ниже. `PLAYTEST_STATS_CHAT_ID` переименована в `ADMIN_CHAT_ID`: со старым именем бэкенд не стартует и называет новое |
+| 6. Приём данных закрытого теста | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC`, `DIAGNOSTICS_RETENTION_DAYS` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует |
+| 7. Выгрузка данных | `EXPORT_PSEUDONYM_KEY`, `DATA_EXPORT_BOT_ENABLED` | ключ псевдонимов генерируется `openssl rand -hex 32` и **не меняется просто так**: выгрузки до и после смены не сопоставляются (`28-diagnostics.md` §7) |
+| 8. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_*` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Вход без подписи — только при `NODE_ENV=development`, иначе бэкенд не стартует; сводка без адреса чата или чтения обновлений бота не стартует |
+| 9. Клиентская сборка | `VITE_API_URL`, `VITE_APP_VERSION`, `VITE_DIAGNOSTICS_DEFAULT`, `VITE_DEV_TOOLS` | только не-секреты: всё это попадает в бандл. `VITE_DEV_TOOLS=1` открывает инструменты команды без ответа сервера и работает только на dev-сервере |
+| 10. Тесты | `TEST_DATABASE_URL`, `PLAYTEST_TEST_REDIS_URL` | адреса настоящих Postgres и Redis для интеграционных тестов (`17-testing-strategy.md` §4.2); в CI их задают сервисы workflow, локально пусто — тесты пропускаются |
+
+**Адрес чата — `id` или `id:тема`.** Чат администраторов у нас супергруппа с
+темами, и разные потоки уведомлений живут в разных темах: `-1001234567890:57`.
+Пустой адрес потока означает «общий», то есть `ADMIN_CHAT_ID`; пустой общий —
+поток молчит. Мусор вместо адреса роняет старт, а не теряется молча
+(`backend/api/src/modules/telegram/chat-target.ts`).
+
+| Переменная | Что уходит по этому адресу |
+|---|---|
+| `ADMIN_CHAT_ID` | общий адрес и меню команд администратора |
+| `ADMIN_CHAT_STATS` | сводка плейтеста и ответы на `/stats` |
+| `ADMIN_CHAT_STRESS` | карточки стресс-тестов |
+| `ADMIN_CHAT_RUNS` | карточки проблемных забегов |
 
 `VITE_API_URL` пустой по умолчанию: собранный клиент ходит в API на свой же
 домен, маршрут `/api` держит Caddy. Отдельный адрес задаётся, только если API
@@ -113,6 +123,22 @@ Dev-сервер переменную не читает вовсе: запрос
 проксирует на локальный бэкенд (§4). Иначе старое значение
 `http://localhost:4000` из `.env` отправляло бы телефон через туннель в его
 собственный localhost.
+
+### 3.1 Чего в `.env.example` нет и почему
+
+Эти переменные описаны планом соответствующих этапов и появятся в шаблоне
+вместе с кодом, который их читает (§7). До тех пор их там нет — иначе шаблон
+обещает настройки, которых не существует.
+
+| Появится | Что примерно | Где описано |
+|---|---|---|
+| Авторизация (этап 3) | секреты JWT, сроки жизни токенов, cookie | `01-tech-stack.md` §5, `13-reuse-from-vpnsibcom.md` |
+| Платежи (этап 4) | секрет вебхука провайдера, ключи RU-эквайринга | `07-monetization-and-ads.md` |
+| Реклама (этап 4) | секрет сессии показа, ключи рекламных сетей | `07-monetization-and-ads.md` §5 |
+| Наблюдаемость (этап 5) | уровень логов, треды супергруппы алертов, Sentry, Grafana | `09-ci-cd.md` §6 |
+| Админка и контент (этап 4) | секрет сессии админки, требование симуляции перед публикацией | `19-content-admin.md` |
+| Программы роста (этап 5) | домен редиректа, TTL клика, подпись шеринга, срок хранения сырых персональных данных | `23-referral-and-partner-program.md`, `24-attribution-and-sharing.md` |
+| CDN и деплой (WP10) | ключ API Bunny.net для сброса кеша | **только секреты CI**, на сервере не нужен |
 
 ---
 

@@ -1,5 +1,6 @@
 import { openAsBlob } from "node:fs";
 import { z } from "zod";
+import { chatFields, chatTargetOf, type ChatRef } from "./chat-target.js";
 
 /**
  * Методы Bot API, которые нужны боту закрытого теста, — на `fetch`, без
@@ -54,6 +55,8 @@ export const updateSchema = z.object({
       date: z.number().int(),
       text: z.string().optional(),
       chat: chatSchema,
+      /** тема супергруппы, если сообщение пришло из неё — ответ уходит туда же */
+      message_thread_id: z.number().int().optional(),
       from: userSchema.optional(),
     })
     .optional(),
@@ -62,7 +65,9 @@ export const updateSchema = z.object({
       id: z.string().max(128),
       from: userSchema,
       data: z.string().max(64).optional(),
-      message: z.object({ message_id: z.number().int(), chat: chatSchema }).optional(),
+      message: z
+        .object({ message_id: z.number().int(), chat: chatSchema, message_thread_id: z.number().int().optional() })
+        .optional(),
     })
     .optional(),
 });
@@ -89,7 +94,14 @@ export interface BotCommand {
 }
 
 /** Встроенные кнопки под сообщением: запуск Mini App или нажатие с данными. */
-export type InlineButton = { text: string; web_app: { url: string } } | { text: string; callback_data: string };
+/**
+ * Кнопка под сообщением: Mini App (только HTTPS и только в личном чате),
+ * обычная ссылка или ответ боту.
+ */
+export type InlineButton =
+  | { text: string; web_app: { url: string } }
+  | { text: string; url: string }
+  | { text: string; callback_data: string };
 
 export interface SendOptions {
   keyboard?: InlineButton[][];
@@ -106,6 +118,13 @@ export class TelegramBotApi {
     private readonly token: string,
     private readonly fetchImpl: FetchLike = fetch,
   ) {}
+
+  /** Кто этот бот: имя нужно для ссылки на Mini App (`t.me/<бот>?startapp`). */
+  async getMe(signal?: AbortSignal): Promise<{ id: number; username: string | null }> {
+    const result = await this.call("getMe", {}, REQUEST_TIMEOUT_MS, signal);
+    const me = z.object({ id: z.number().int(), username: z.string().optional() }).parse(result);
+    return { id: me.id, username: me.username ?? null };
+  }
 
   /**
    * Long polling. Нераспознанное обновление пропускается, а не роняет цикл:
@@ -130,39 +149,40 @@ export class TelegramBotApi {
     return { updates, lastUpdateId };
   }
 
-  async sendMessage(chatId: string, text: string, signal?: AbortSignal, options: SendOptions = {}): Promise<number> {
+  async sendMessage(chat: ChatRef, text: string, signal?: AbortSignal, options: SendOptions = {}): Promise<number> {
     const result = await this.call(
       "sendMessage",
-      { chat_id: chatId, text, ...replyMarkup(options) },
+      { ...chatFields(chat), text, ...replyMarkup(options) },
       REQUEST_TIMEOUT_MS,
       signal,
     );
     return sentMessageSchema.parse(result).message_id;
   }
 
-  async editMessageText(chatId: string, messageId: number, text: string, signal?: AbortSignal): Promise<void> {
-    await this.call("editMessageText", { chat_id: chatId, message_id: messageId, text }, REQUEST_TIMEOUT_MS, signal);
+  async editMessageText(chat: ChatRef, messageId: number, text: string, signal?: AbortSignal): Promise<void> {
+    await this.call("editMessageText", { chat_id: chatTargetOf(chat).chatId, message_id: messageId, text }, REQUEST_TIMEOUT_MS, signal);
   }
 
   /**
    * Картинка байтами или уже загруженным `file_id`. Отправка по `file_id` не
    * гоняет файл второй раз — так кэш карточек отдаёт их мгновенно.
    */
-  async sendPhoto(chatId: string, photo: Buffer | string, caption: string, signal?: AbortSignal, options: SendOptions = {}): Promise<SentPhoto> {
+  async sendPhoto(chat: ChatRef, photo: Buffer | string, caption: string, signal?: AbortSignal, options: SendOptions = {}): Promise<SentPhoto> {
     const markup = replyMarkup(options);
+    const fields = chatFields(chat);
     const body: object | FormData =
       typeof photo === "string"
-        ? { chat_id: chatId, photo, caption, ...markup }
-        : formOf({ chat_id: chatId, caption, ...stringified(markup) }, "photo", new Blob([new Uint8Array(photo)], { type: "image/png" }), "card.png");
+        ? { ...fields, photo, caption, ...markup }
+        : formOf({ ...fields, caption, ...stringified(markup) }, "photo", new Blob([new Uint8Array(photo)], { type: "image/png" }), "card.png");
     const result = sentMessageSchema.parse(await this.call("sendPhoto", body, REQUEST_TIMEOUT_MS, signal));
     // Telegram отдаёт несколько размеров; самый крупный — последний.
     return { messageId: result.message_id, fileId: result.photo?.at(-1)?.file_id ?? null };
   }
 
   /** Документ с диска потоком: архив выгрузки не читается в память целиком. */
-  async sendDocument(chatId: string, path: string, fileName: string, caption: string, signal?: AbortSignal): Promise<void> {
+  async sendDocument(chat: ChatRef, path: string, fileName: string, caption: string, signal?: AbortSignal): Promise<void> {
     const blob = await openAsBlob(path, { type: "application/octet-stream" });
-    await this.call("sendDocument", formOf({ chat_id: chatId, caption }, "document", blob, fileName), UPLOAD_TIMEOUT_MS, signal);
+    await this.call("sendDocument", formOf({ ...chatFields(chat), caption }, "document", blob, fileName), UPLOAD_TIMEOUT_MS, signal);
   }
 
   async answerCallbackQuery(callbackQueryId: string, text?: string, signal?: AbortSignal): Promise<void> {
@@ -178,12 +198,12 @@ export class TelegramBotApi {
    * Команды меню. Без чата — для всех; с чатом — только в нём: меню
    * администратора не показывается остальным (docs/28-diagnostics.md §6.1.2).
    */
-  async setMyCommands(commands: BotCommand[], chatId: string | null, signal?: AbortSignal, languageCode?: string): Promise<void> {
+  async setMyCommands(commands: BotCommand[], chat: ChatRef | null, signal?: AbortSignal, languageCode?: string): Promise<void> {
     await this.call(
       "setMyCommands",
       {
         commands,
-        scope: chatId === null ? { type: "default" } : { type: "chat", chat_id: chatId },
+        scope: chat === null ? { type: "default" } : { type: "chat", chat_id: chatTargetOf(chat).chatId },
         ...(languageCode === undefined ? {} : { language_code: languageCode }),
       },
       REQUEST_TIMEOUT_MS,
@@ -247,9 +267,10 @@ function stringified(fields: Record<string, unknown>): Record<string, string> {
   return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, typeof value === "string" ? value : JSON.stringify(value)]));
 }
 
-function formOf(fields: Record<string, string>, fileField: string, file: Blob, fileName: string): FormData {
+/** Многочастный запрос: числа Telegram принимает строками, как и всё в форме. */
+function formOf(fields: Record<string, string | number>, fileField: string, file: Blob, fileName: string): FormData {
   const form = new FormData();
-  for (const [key, value] of Object.entries(fields)) form.set(key, value);
+  for (const [key, value] of Object.entries(fields)) form.set(key, String(value));
   form.set(fileField, file, fileName);
   return form;
 }

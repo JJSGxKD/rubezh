@@ -10,6 +10,7 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
 import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
+import { sameChat, type ChatTarget } from "../telegram/chat-target.js";
 import { TelegramApiError, type TelegramBotApi, type TelegramUpdate } from "../telegram/telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
 import { dayKey } from "./playtest-stats.store.js";
@@ -28,7 +29,7 @@ const STALE_COMMAND_SEC = 10 * 60;
 const COMMAND_WINDOW_SEC = 20;
 const DAY_LOCK_TTL_SEC = 2 * 24 * 60 * 60;
 
-export type StatsDecision = { kind: "stats"; chatId: string; place: "admin_chat" | "private" } | { kind: "ignore" };
+export type StatsDecision = { kind: "stats"; target: ChatTarget; place: "admin_chat" | "private" } | { kind: "ignore" };
 
 /**
  * Кому отвечать. Сводка — только счётчики без имён, поэтому в чате
@@ -43,10 +44,14 @@ export function decideUpdate(update: TelegramUpdate, config: AppConfig, nowMs: n
   if (nowMs / 1000 - message.date > STALE_COMMAND_SEC) return { kind: "ignore" };
 
   const chatId = String(message.chat.id);
-  if (chatId === config.telegram.adminChatId) return { kind: "stats", chatId, place: "admin_chat" };
+  // Отвечаем туда же, откуда спросили: в супергруппе с темами — в ту же тему,
+  // а не в общую ленту.
+  const target: ChatTarget = { chatId, threadId: message.message_thread_id ?? null };
+  const stats = config.telegram.chats.stats;
+  if (stats !== null && sameChat(stats, chatId)) return { kind: "stats", target, place: "admin_chat" };
   const fromId = String(message.from.id);
   if (message.chat.type === "private" && chatId === fromId && config.adminTelegramIds.has(fromId)) {
-    return { kind: "stats", chatId, place: "private" };
+    return { kind: "stats", target, place: "private" };
   }
   return { kind: "ignore" };
 }
@@ -91,6 +96,7 @@ export type StatsReporterApi = Pick<TelegramBotApi, "sendPhoto" | "sendMessage" 
 @Injectable()
 export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   readonly name = "playtest-stats";
+  readonly commands = [{ command: "stats", description: "Сводка плейтеста", audience: "admin" as const }];
   private readonly logger = new Logger("playtest-stats");
   private readonly stop = new AbortController();
   private dailyTimer: NodeJS.Timeout | null = null;
@@ -109,9 +115,6 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
 
   onApplicationBootstrap(): void {
     if (!this.config.playtest.stats.enabled) return;
-    void this.api
-      .setMyCommands([{ command: "stats", description: "Сводка плейтеста" }], this.config.telegram.adminChatId, this.stop.signal)
-      .catch((error: unknown) => this.log("warn", "commands_not_set", { reason: reasonOf(error) }));
     this.dailyTimer = setInterval(() => void this.tickDaily(), DAILY_TICK_MS);
     void this.tickDaily();
   }
@@ -124,8 +127,8 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
   async handle(update: TelegramUpdate): Promise<boolean> {
     const decision = decideUpdate(update, this.config, Date.now());
     if (decision.kind === "ignore") return false;
-    if (!(await this.locks.claimCommand(decision.chatId, COMMAND_WINDOW_SEC))) return true;
-    await this.sendReport(decision.chatId, decision.place === "admin_chat" ? "command" : "command_private");
+    if (!(await this.locks.claimCommand(decision.target.chatId, COMMAND_WINDOW_SEC))) return true;
+    await this.sendReport(decision.target, decision.place === "admin_chat" ? "command" : "command_private");
     return true;
   }
 
@@ -138,7 +141,7 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
       this.log("warn", "daily_lock_failed", { reason: reasonOf(error) });
       return;
     }
-    const sent = await this.sendReport(this.config.telegram.adminChatId, "daily");
+    const sent = await this.sendReport(this.config.telegram.chats.stats ?? { chatId: "", threadId: null }, "daily");
     // Сеть или Redis — повторим через минуту. Отказ Telegram (чат не найден,
     // бота выгнали) повтором не лечится: до завтра отчёт не пытается уйти.
     if (sent === "retry") {
@@ -148,10 +151,11 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
     }
   }
 
-  private async sendReport(chatId: string, trigger: "command" | "command_private" | "daily"): Promise<"sent" | "retry" | "failed"> {
+  private async sendReport(target: ChatTarget, trigger: "command" | "command_private" | "daily"): Promise<"sent" | "retry" | "failed"> {
+    if (target.chatId === "") return "failed";
     try {
       const report = await this.stats.report(Date.now());
-      await this.api.sendPhoto(chatId, report.png, report.caption, this.stop.signal);
+      await this.api.sendPhoto(target, report.png, report.caption, this.stop.signal);
       this.log("log", "report_sent", {
         trigger,
         players: report.summary.players.seen,
@@ -164,7 +168,7 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
       const permanent = error instanceof TelegramApiError && error.errorCode >= 400 && error.errorCode < 500 && error.errorCode !== 429;
       if (trigger !== "daily") {
         await this.api
-          .sendMessage(chatId, "Сводка не собралась, причина — в логе бэкенда", this.stop.signal)
+          .sendMessage(target, "Сводка не собралась, причина — в логе бэкенда", this.stop.signal)
           .catch((notice: unknown) => this.log("warn", "failure_notice_failed", { reason: reasonOf(notice) }));
       }
       return permanent ? "failed" : "retry";

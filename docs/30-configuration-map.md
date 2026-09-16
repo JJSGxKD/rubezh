@@ -319,6 +319,9 @@ pnpm budget
 | Карточка проблемного забега в чате администраторов: вид, подпись, названия причин | `backend/api/src/modules/admin-notify/run-card.ts`; `common/card/labels.ts` → `runProblemLabel` |
 | Записи забегов в ежедневной сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts`; `redis-playtest-stats.store.ts` → ключи `pt:st:rec*` |
 | Итог стресс-теста в сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts` |
+| Кому открыты инструменты команды: режим разработчика, стресс-тест, витрина компонентов, звуковая лаборатория | сервер — `backend/api/src/modules/playtest/playtest-access.ts` по `ADMIN_TELEGRAM_IDS`; на dev-сервере — `VITE_DEV_TOOLS=1` |
+| Команды бота: что видно всем и что администраторам, текст `/help` | `backend/api/src/modules/bot/bot-commands.ts`; сами команды — рядом с обработчиками (`welcome.command.ts`, `playtest-stats.reporter.ts`, `export-bot.command.ts`) |
+| Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`; разбор — `backend/api/src/modules/telegram/chat-target.ts` |
 
 Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.
 

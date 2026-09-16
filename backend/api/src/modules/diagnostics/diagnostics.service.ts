@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ForbiddenError, RateLimitedError, UnavailableError, ValidationError } from "../../common/domain-error.js";
+import { describeDbError } from "../../infra/database.js";
 import type { IngestIdentity } from "../ingest/ingest.guard.js";
 import { INGEST_LIMITS } from "../ingest/ingest-limits.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
@@ -64,7 +65,7 @@ export class DiagnosticsService {
       });
     } catch (error: unknown) {
       this.logger.error(
-        JSON.stringify({ module: "diagnostics", event: "insert_failed", reason: error instanceof Error ? error.message : "unknown" }),
+        JSON.stringify({ module: "diagnostics", event: "insert_failed", reason: describeDbError(error) }),
       );
       // Отчёт остаётся на устройстве и уйдёт повтором: reportId отсечёт дубль.
       throw new UnavailableError("Приём отчётов временно недоступен");

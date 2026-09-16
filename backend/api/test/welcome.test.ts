@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { BotRouter } from "../src/modules/bot/bot-router.js";
+import { BotIdentity } from "../src/modules/telegram/bot-identity.js";
+import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
 import { TelegramApiError, type SendOptions, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
 import {
   displayName,
@@ -100,29 +102,47 @@ interface SentPhotoCall {
   options: SendOptions;
 }
 
-function setup(env: Record<string, string> = {}, progress: () => Promise<WelcomeProgress | null> = async () => VETERAN) {
+function setup(
+  env: Record<string, string> = {},
+  progress: () => Promise<WelcomeProgress | null> = async () => VETERAN,
+  botUsername: string | null = "rubezh_test_bot",
+) {
   const config = loadAppConfig({ TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_UPDATES: "polling", PUBLIC_WEB_URL: "https://game.example", ...env });
   const cache = new MemoryCache();
   const calls: SentPhotoCall[] = [];
   let renders = 0;
   let rejectFileId = false;
   const api: WelcomeBotApi = {
-    async sendPhoto(chatId, photo, caption, _signal, options = {}) {
+    async sendPhoto(chat, photo, caption, _signal, options = {}) {
       if (typeof photo === "string" && rejectFileId) throw new TelegramApiError("sendPhoto", 400, "Bad Request: wrong file identifier", null);
-      calls.push({ chatId, photo: typeof photo === "string" ? photo : "bytes", caption, options });
+      calls.push({ chatId: chatTargetOf(chat).chatId, photo: typeof photo === "string" ? photo : "bytes", caption, options });
       return { messageId: calls.length, fileId: `file-${calls.length}` };
     },
-    async setMyCommands() {},
+    async sendMessage(chat, text, _signal, options = {}) {
+      calls.push({ chatId: chatTargetOf(chat).chatId, photo: "message", caption: text, options });
+      return calls.length;
+    },
   };
   const registry = new WelcomeProgressRegistry();
   registry.source = { progress };
   const router = new BotRouter();
-  const command = new StartCommand(config, router, registry, cache, api, (card) => {
-    renders++;
-    return Buffer.from(`png:${card.name}`);
-  });
+  const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: botUsername }; } });
+  const command = new StartCommand(
+    config,
+    router,
+    registry,
+    cache,
+    api,
+    (card) => {
+      renders++;
+      return Buffer.from(`png:${card.name}`);
+    },
+    identity,
+  );
+  const ready = identity.refresh();
   command.onModuleInit();
   return {
+    ready,
     router,
     cache,
     calls,
@@ -164,13 +184,23 @@ describe("/start в боте", () => {
     expect(bot.cache.files.size).toBe(1);
   });
 
-  it("двойное нажатие даёт одну карточку, группа и чужие команды — ни одной", async () => {
+  it("двойное нажатие даёт одну карточку, чужая команда — ни одной", async () => {
     const bot = setup();
     await bot.router.dispatch(start(7));
     await bot.router.dispatch(start(7));
-    await bot.router.dispatch(start(9, { chat: "supergroup" }));
     await bot.router.dispatch(start(10, { text: "/stats" }));
     expect(bot.calls).toHaveLength(1);
+  });
+
+  it("в группе отвечает ссылкой на бота, а не карточкой с именем", async () => {
+    const bot = setup();
+    await bot.ready;
+    await bot.router.dispatch(start(9, { chat: "supergroup" }));
+    expect(bot.calls).toHaveLength(1);
+    expect(bot.calls[0]?.photo).toBe("message");
+    expect(bot.calls[0]?.caption).toContain("личном чате");
+    expect(bot.calls[0]?.options.keyboard).toEqual([[{ text: "▶ Играть", url: "https://t.me/rubezh_test_bot?startapp" }]]);
+    expect(bot.renders()).toBe(0);
   });
 
   it("администратору с включённой выгрузкой — вторая кнопка, остальным — нет", async () => {
@@ -181,11 +211,15 @@ describe("/start в боте", () => {
     expect(bot.calls[1]?.options.keyboard).toHaveLength(1);
   });
 
-  it("без прогресса и без HTTPS-адреса игры — карточка новичка без кнопки", async () => {
+  it("без HTTPS-адреса игры кнопка ведёт на Mini App через бота, а без имени бота её нет", async () => {
     const bot = setup({ PUBLIC_WEB_URL: "http://localhost:5173" }, async () => Promise.reject(new Error("redis down")));
+    await bot.ready;
     await bot.router.dispatch(start(7, { language: "en", name: "Zoe" }));
-    expect(bot.calls).toHaveLength(1);
-    expect(bot.calls[0]?.options.keyboard).toBeUndefined();
+    expect(bot.calls[0]?.options.keyboard).toEqual([[{ text: "▶ Play", url: "https://t.me/rubezh_test_bot?startapp" }]]);
     expect(bot.calls[0]?.caption).toContain("welcome");
+
+    const nameless = setup({ PUBLIC_WEB_URL: "http://localhost:5173" }, undefined, null);
+    await nameless.router.dispatch(start(8));
+    expect(nameless.calls[0]?.options.keyboard).toBeUndefined();
   });
 });

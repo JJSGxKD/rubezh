@@ -37,8 +37,8 @@ pnpm install                    # ставит зависимости во вс�
 docker compose up -d            # поднимает Postgres + Redis для локальной разработки
 ```
 
-Секреты (`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` и остальные) генерируются
-так — `openssl` идёт в комплекте с Git for Windows:
+Секреты (`TELEGRAM_WEBHOOK_SECRET`, `EXPORT_PSEUDONYM_KEY` и те, что появятся
+дальше) генерируются так — `openssl` идёт в комплекте с Git for Windows:
 
 ```powershell
 openssl rand -hex 32

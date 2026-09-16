@@ -1,4 +1,4 @@
-import { Global, Inject, Injectable, Module, type OnApplicationShutdown } from "@nestjs/common";
+import { Global, Inject, Injectable, Logger, Module, type OnApplicationBootstrap, type OnApplicationShutdown } from "@nestjs/common";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { APP_CONFIG, type AppConfig } from "../config/app-config.js";
 import { PrismaClient } from "../generated/prisma/client.js";
@@ -32,6 +32,58 @@ export function createPrisma(config: AppConfig): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
+/** Таблицы, без которых включённая часть бэкенда работать не будет. */
+const REQUIRED_TABLES = ["analytics_event", "diagnostic_report", "data_export"] as const;
+
+const MIGRATION_HINT = "примените миграции: pnpm --filter backend-api prisma:deploy";
+
+/**
+ * Сообщение об ошибке базы для лога. Prisma на непринятых миграциях говорит
+ * «таблицы нет», но не говорит, что делать, — а это самая частая причина:
+ * поднятая база без миграций.
+ */
+export function describeDbError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "unknown";
+  return /does not exist in the current database|не существует/i.test(message) ? `${message} (${MIGRATION_HINT})` : message;
+}
+
+/**
+ * Проверка схемы на старте: непринятые миграции иначе видны только по
+ * бесконечным повторам записи пачек событий в логе, и то не сразу.
+ */
+@Injectable()
+export class DatabaseSchemaCheck implements OnApplicationBootstrap {
+  private readonly logger = new Logger("database");
+
+  constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+  ) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    if (this.config.databaseUrl === "") return;
+    try {
+      const missing = await this.missingTables();
+      if (missing.length === 0) return;
+      this.logger.error(
+        JSON.stringify({ module: "database", event: "schema_incomplete", missing, hint: MIGRATION_HINT }),
+      );
+    } catch (error: unknown) {
+      // База может быть ещё не поднята: это не повод не стартовать — приёмники
+      // переживают недоступную базу сами.
+      this.logger.warn(JSON.stringify({ module: "database", event: "schema_check_failed", reason: describeDbError(error) }));
+    }
+  }
+
+  private async missingTables(): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ table_name: string }[]>`
+      select table_name from information_schema.tables where table_schema = 'public'
+    `;
+    const present = new Set(rows.map((row) => row.table_name));
+    return REQUIRED_TABLES.filter((table) => !present.has(table));
+  }
+}
+
 @Injectable()
 export class DatabaseLifecycle implements OnApplicationShutdown {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
@@ -43,7 +95,7 @@ export class DatabaseLifecycle implements OnApplicationShutdown {
 
 @Global()
 @Module({
-  providers: [{ provide: PRISMA, inject: [APP_CONFIG], useFactory: createPrisma }, DatabaseLifecycle],
+  providers: [{ provide: PRISMA, inject: [APP_CONFIG], useFactory: createPrisma }, DatabaseLifecycle, DatabaseSchemaCheck],
   exports: [PRISMA],
 })
 export class DatabaseModule {}

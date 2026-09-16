@@ -48,7 +48,10 @@ void mountAppShell({
     },
     // Стресс-тест и режим разработчика в dev открыты без сервера: команда
     // правит их в браузере. В сборке доступ решает сервер по Telegram ID.
-    devTools: import.meta.env.DEV,
+    // Инструменты команды на dev-сервере — только по явному VITE_DEV_TOOLS=1:
+    // сам по себе dev-сервер их не открывает, иначе через туннель они
+    // достаются любому тестеру (docs/26-stage2-plan.md, WP14).
+    devTools: import.meta.env.DEV && import.meta.env.VITE_DEV_TOOLS === "1",
     // События и отчёты диагностики — тот же адрес API, что у плейтеста:
     // dev-сервер проксирует и эти префиксы (vite.config.ts).
     telemetry: { baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? "") },

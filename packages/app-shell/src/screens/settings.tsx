@@ -14,6 +14,7 @@ import { useDiagnostics } from "../state/diagnostics";
 import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
+import { usePlaytestAccess } from "../state/playtest";
 import { useSettings, type VolumeKey } from "../state/settings";
 import { useShell } from "../state/shell";
 
@@ -130,6 +131,7 @@ export function VolumeSliders(): ReactNode {
 export function TestersScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics();
+  const access = usePlaytestAccess();
 
   return (
     <Screen title={t("testers.title")} onBack={() => navigation.pop()}>
@@ -161,13 +163,15 @@ export function TestersScreen(): ReactNode {
 
         <div className="mt-4">
           <ListGroup>
-            {/* Лаборатория звука — не за переключателем диагностики: звук
-                проверяют и те, кому диагностика не нужна. */}
-            <ListItem
-              title={t("testers.soundLab")}
-              hint={t("testers.soundLab.hint")}
-              onClick={() => navigation.push("soundLab")}
-            />
+            {/* Лаборатория звука — инструмент команды, а не тестера: она
+                правит шины и мотивы, и услышанное там не то, что в игре. */}
+            {access.admin ? (
+              <ListItem
+                title={t("testers.soundLab")}
+                hint={t("testers.soundLab.hint")}
+                onClick={() => navigation.push("soundLab")}
+              />
+            ) : null}
             {diagnostics.enabled ? (
               <ListItem title={t("testers.open")} onClick={() => navigation.push("diagnostics")} />
             ) : null}

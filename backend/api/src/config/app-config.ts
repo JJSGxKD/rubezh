@@ -1,6 +1,7 @@
 import { config as loadDotenv } from "dotenv";
 import { resolve } from "node:path";
 import { z } from "zod";
+import { isChatTarget, parseChatTarget, type ChatTarget } from "../modules/telegram/chat-target.js";
 
 /**
  * Единая Zod-схема конфигурации: невалидное окружение = процесс не
@@ -101,10 +102,13 @@ const schema = z.object({
   PUBLIC_WEB_URL: z.string().default(""),
   // Групповой чат администраторов: сводка плейтеста и уведомления. Числовой
   // id, у супергруппы — с минусом.
-  ADMIN_CHAT_ID: z
-    .string()
-    .default("")
-    .refine((value) => value === "" || /^-?\d{1,20}$/.test(value), { message: "ADMIN_CHAT_ID — числовой id чата" }),
+  // Куда пишет бот. Значение — id чата или `id:тема` для супергруппы с темами
+  // (docs/20-env-and-ports.md §3). ADMIN_CHAT_ID — общий адрес; остальные
+  // переопределяют его для своего потока, пустые берут общий.
+  ADMIN_CHAT_ID: chatTarget("ADMIN_CHAT_ID"),
+  ADMIN_CHAT_STATS: chatTarget("ADMIN_CHAT_STATS"),
+  ADMIN_CHAT_STRESS: chatTarget("ADMIN_CHAT_STRESS"),
+  ADMIN_CHAT_RUNS: chatTarget("ADMIN_CHAT_RUNS"),
   // Уведомлять чат администраторов о новых отчётах диагностики: стресс-тест —
   // карточкой с графиком. Работает, когда задан ADMIN_CHAT_ID и включён приёмник.
   ADMIN_NOTIFY_REPORTS: z
@@ -174,8 +178,8 @@ export interface AppConfig {
     publicApiUrl: string;
     /** адрес Mini App для кнопки «Играть» */
     webAppUrl: string;
-    /** групповой чат администраторов; пусто — писать некуда */
-    adminChatId: string;
+    /** чаты администраторов; `null` — писать некуда */
+    chats: AdminChats;
   };
   playtest: {
     enabled: boolean;
@@ -189,6 +193,40 @@ export interface AppConfig {
     };
     statsUtcOffsetMin: number;
   };
+}
+
+/**
+ * Адреса чатов администраторов. Общий адрес — `ADMIN_CHAT_ID`, у каждого
+ * потока свой может отличаться темой или чатом: сводка, стресс-тесты и
+ * проблемные забеги не должны мешаться в одной ленте.
+ */
+export interface AdminChats {
+  /** общий адрес: меню команд администратора и всё, у чего нет своего потока */
+  general: ChatTarget | null;
+  /** сводка плейтеста и ответы на `/stats` */
+  stats: ChatTarget | null;
+  /** карточки стресс-тестов */
+  stressReports: ChatTarget | null;
+  /** карточки проблемных забегов */
+  runReports: ChatTarget | null;
+}
+
+function adminChats(parsed: { ADMIN_CHAT_ID: string; ADMIN_CHAT_STATS: string; ADMIN_CHAT_STRESS: string; ADMIN_CHAT_RUNS: string }): AdminChats {
+  const general = parseChatTarget(parsed.ADMIN_CHAT_ID);
+  const orGeneral = (value: string): ChatTarget | null => parseChatTarget(value) ?? general;
+  return {
+    general,
+    stats: orGeneral(parsed.ADMIN_CHAT_STATS),
+    stressReports: orGeneral(parsed.ADMIN_CHAT_STRESS),
+    runReports: orGeneral(parsed.ADMIN_CHAT_RUNS),
+  };
+}
+
+function chatTarget(name: string) {
+  return z
+    .string()
+    .default("")
+    .refine(isChatTarget, { message: `${name} — id чата или id:тема, например -1001234567890:57` });
 }
 
 export const APP_CONFIG = Symbol("APP_CONFIG");
@@ -233,8 +271,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.TELEGRAM_BOT_UPDATES !== "off" && parsed.TELEGRAM_BOT_TOKEN === "") {
     throw new Error(`TELEGRAM_BOT_UPDATES=${parsed.TELEGRAM_BOT_UPDATES} требует TELEGRAM_BOT_TOKEN`);
   }
-  if (parsed.PLAYTEST_STATS_ENABLED && (parsed.ADMIN_CHAT_ID === "" || parsed.TELEGRAM_BOT_UPDATES === "off")) {
-    throw new Error("PLAYTEST_STATS_ENABLED=true требует ADMIN_CHAT_ID и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
+  if (parsed.PLAYTEST_STATS_ENABLED && ((parsed.ADMIN_CHAT_STATS === "" && parsed.ADMIN_CHAT_ID === "") || parsed.TELEGRAM_BOT_UPDATES === "off")) {
+    throw new Error("PLAYTEST_STATS_ENABLED=true требует ADMIN_CHAT_ID (или ADMIN_CHAT_STATS) и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
   }
   if (parsed.DATA_EXPORT_BOT_ENABLED && (parsed.EXPORT_PSEUDONYM_KEY === "" || parsed.DATABASE_URL === "" || parsed.TELEGRAM_BOT_UPDATES === "off")) {
     throw new Error("DATA_EXPORT_BOT_ENABLED=true требует EXPORT_PSEUDONYM_KEY, DATABASE_URL и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
@@ -276,7 +314,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       webhookSecret: parsed.TELEGRAM_WEBHOOK_SECRET,
       publicApiUrl: parsed.PUBLIC_API_URL.replace(/\/+$/, ""),
       webAppUrl: parsed.PUBLIC_WEB_URL,
-      adminChatId: parsed.ADMIN_CHAT_ID,
+      chats: adminChats(parsed),
     },
     playtest: {
       enabled: parsed.PLAYTEST_ENABLED,
