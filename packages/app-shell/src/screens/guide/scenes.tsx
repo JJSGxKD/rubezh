@@ -218,7 +218,12 @@ function Stage(props: { label: string; children: ReactNode }): ReactNode {
 }
 
 function Player(props: { x: number; y: number }): ReactNode {
-  return <circle cx={props.x} cy={props.y} r={PLAYER_R} fill={hex(WORLD_COLORS.player)} />;
+  return (
+    <>
+      <circle cx={props.x} cy={props.y} r={PLAYER_R} fill={hex(WORLD_COLORS.playerEdge)} />
+      <circle cx={props.x} cy={props.y} r={PLAYER_R * 0.8} fill={hex(WORLD_COLORS.player)} />
+    </>
+  );
 }
 
 /** Элемент сцены в точке (x, y) с анимацией на вложенной группе. */
