@@ -12,6 +12,7 @@ import {
   useNavigation,
   type ScreenId,
 } from "../state/navigation";
+import { useMeta } from "../state/meta";
 import { usePlatform } from "../state/platform";
 import { useRun } from "../state/run";
 import { useShell } from "../state/shell";
@@ -58,7 +59,7 @@ export function App(): ReactNode {
   usePlatformButtons(stack, screen);
 
   if (!capabilities.platformAvailable) return <OutsideScreen botUrl={capabilities.botUrl} />;
-  if (!install.accepted) return <FirstRunScreen onAccept={() => install.accept()} />;
+  if (!install.accepted) return <FirstRunScreen onAccept={() => acceptAndPlay()} />;
 
   const tab = activeTab(stack);
   // Забег занимает весь экран: панель разделов поверх канвы отнимала бы
@@ -194,4 +195,20 @@ function usePlatformButtons(stack: readonly ScreenId[], screen: ScreenId): void 
     ui.setSettingsButton(() => useNavigation.getState().push("settings"));
     return () => ui.setSettingsButton(null);
   }, []);
+}
+
+/**
+ * Согласие на первом запуске и сразу первый забег.
+ *
+ * Новичок, которого высадили в лобби, видит витрину из карточек и не видит
+ * игры: интерес держится на первом бою, а не на меню. Поэтому после согласия
+ * забег начинается сам — на «Лёгкой», со стартовым оружием и подсказками
+ * первого забега. Выйти из него можно тем же способом, что из любого другого.
+ */
+function acceptAndPlay(): void {
+  useInstall.getState().accept();
+  // Первый забег — на «Лёгкой»: она и задумана как баланс без поправок.
+  useMeta.getState().rememberDifficulty("easy");
+  useRun.getState().intend({ kind: "new" });
+  useNavigation.getState().push("run");
 }
