@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ENEMIES, LOADOUT_LIMITS, PASSIVES, WEAPONS } from "@bh/core-game";
 import { hasTranslation } from "../src/i18n";
+// Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
+import "../src/i18n/guide";
 import {
   eliteEnemies,
   passiveCategories,

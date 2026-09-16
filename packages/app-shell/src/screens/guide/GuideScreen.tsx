@@ -11,6 +11,7 @@ import {
   SegmentedControl,
 } from "../../design-system/components";
 import { formatDecimal, formatDuration, t } from "../../i18n";
+import "../../i18n/guide";
 import { useNavigation } from "../../state/navigation";
 import { ItemIcon, ItemTile } from "../item-icons";
 import { formatChange } from "../run/upgrade-format";

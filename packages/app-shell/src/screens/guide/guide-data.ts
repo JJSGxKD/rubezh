@@ -8,7 +8,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, PATTERN_DEFAULTS, WEAPONS } from "@bh/core-game";
+import { ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, WEAPONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
