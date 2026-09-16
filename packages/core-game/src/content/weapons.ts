@@ -57,25 +57,28 @@ export const WEAPONS: WeaponDef[] = [
     ],
   },
   {
-    // Обереги бьют только то, чего касаются, поэтому кольцо держится близко к
-    // игроку: на радиусе в полкорпуса враг, дошедший вплотную, оказывался
-    // внутри кольца и не задевался вовсе. Растёт всё сразу — число оберегов,
-    // радиус и скорость вращения: именно скорость решает, как часто камень
-    // проходит по тому, кто жмёт с одной стороны.
+    // Один камень на старте, шесть к восьмому уровню — так это оружие и
+    // читается в жанре: «ещё один оберег» на карточке выбора видно сразу.
+    // Растёт всё сразу — число камней, радиус кольца и скорость вращения:
+    // скорость решает, как часто камень проходит по тому, кто жмёт с одной
+    // стороны, и потому прокачивается наравне с остальным.
+    //
+    // Кольцо держится близко к игроку: на радиусе в полкорпуса враг, дошедший
+    // вплотную, оказывался внутри кольца и не задевался вовсе.
     id: "wardstone",
     behavior: "orbit",
     nameKey: "weapon.wardstone.name",
     descriptionKey: "weapon.wardstone.description",
     starting: true,
     levels: [
-      { damage: 8, cooldownSec: 0.45, projectiles: 3, areaRadius: 56, projectileSpeed: 340 },
-      { damage: 10, cooldownSec: 0.42, projectiles: 3, areaRadius: 60, projectileSpeed: 350 },
-      { damage: 11, cooldownSec: 0.42, projectiles: 4, areaRadius: 64, projectileSpeed: 360 },
-      { damage: 13, cooldownSec: 0.38, projectiles: 4, areaRadius: 70, projectileSpeed: 370 },
-      { damage: 15, cooldownSec: 0.36, projectiles: 5, areaRadius: 76, projectileSpeed: 380 },
-      { damage: 18, cooldownSec: 0.34, projectiles: 5, areaRadius: 84, projectileSpeed: 390 },
-      { damage: 21, cooldownSec: 0.32, projectiles: 6, areaRadius: 90, projectileSpeed: 400 },
-      { damage: 25, cooldownSec: 0.3, projectiles: 6, areaRadius: 96, projectileSpeed: 420 },
+      { damage: 11, cooldownSec: 0.4, projectiles: 1, areaRadius: 60, projectileSpeed: 380 },
+      { damage: 12, cooldownSec: 0.38, projectiles: 2, areaRadius: 64, projectileSpeed: 395 },
+      { damage: 14, cooldownSec: 0.36, projectiles: 2, areaRadius: 68, projectileSpeed: 410 },
+      { damage: 16, cooldownSec: 0.34, projectiles: 3, areaRadius: 74, projectileSpeed: 425 },
+      { damage: 18, cooldownSec: 0.32, projectiles: 4, areaRadius: 80, projectileSpeed: 440 },
+      { damage: 20, cooldownSec: 0.31, projectiles: 4, areaRadius: 86, projectileSpeed: 455 },
+      { damage: 22, cooldownSec: 0.3, projectiles: 5, areaRadius: 92, projectileSpeed: 470 },
+      { damage: 24, cooldownSec: 0.28, projectiles: 6, areaRadius: 98, projectileSpeed: 490 },
     ],
   },
   {

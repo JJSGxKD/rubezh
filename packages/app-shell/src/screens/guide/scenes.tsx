@@ -454,8 +454,7 @@ export function WeaponScene(props: { behavior: WeaponBehavior; label: string }):
           <At x={80} y={py} className="animate-guide-spin">
             {[
               [28, 0],
-              [-14, 24],
-              [-14, -24],
+              [-28, 0],
             ].map(([x, y]) => (
               <circle key={x} cx={x} cy={y} r={5} fill={hex(WORLD_COLORS.orbiter)} />
             ))}

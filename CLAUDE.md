@@ -348,7 +348,7 @@ IEEE 754), степень — умножением в цикле, направл
 |---|---|---|
 | `projectile_nearest` | Снаряд в ближайшего врага | `damage`, `cooldownSec`, `projectiles`, `pierce`, `projectileSpeed`, `ttlSec` |
 | `projectile_facing` | Снаряды по направлению движения | то же |
-| `orbit` | Обереги кружат вокруг игрока, на бегу кольцо отстаёт назад | `areaRadius` — радиус кольца, `projectileSpeed` — скорость по нему, `projectiles` — сколько оберегов (до 6), `cooldownSec` — пауза между ударами кольца, делится на число оберегов |
+| `orbit` | Обереги кружат вокруг игрока | `areaRadius` — радиус кольца, `projectileSpeed` — скорость по нему, `projectiles` — сколько оберегов (до 6), `cooldownSec` — пауза между ударами кольца, делится на число оберегов |
 | `aura` | Зона урона вокруг игрока | `areaRadius`, `cooldownSec` — период тика урона |
 | `area_strike` | Удар по площади в случайного врага | `areaRadius`, `projectiles` — сколько ударов за срабатывание |
 

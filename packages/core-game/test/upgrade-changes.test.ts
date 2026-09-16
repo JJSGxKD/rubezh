@@ -33,11 +33,11 @@ describe("что даёт улучшение", () => {
   });
 
   it("показывает числа в единицах контента, а не в пикселях устройства", () => {
-    // На телефоне с плотностью 3 радиус в мире втрое больше, а в контенте — 56.
+    // На телефоне с плотностью 3 радиус в мире втрое больше, а в контенте — 60.
     const changes = weaponChanges(weapon("wardstone", 3), 1, 2, 3);
     const radius = changes.find((change) => change.labelKey === "upgrade.stat.areaRadius");
 
-    expect(radius).toMatchObject({ from: 56, to: 60 });
+    expect(radius).toMatchObject({ from: 60, to: 64 });
   });
 
   it("у нового оружия — главные числа без скорости и времени полёта", () => {
@@ -60,8 +60,9 @@ describe("что даёт улучшение", () => {
       "upgrade.stat.aura.areaRadius",
     ]);
 
-    // На втором уровне оберегов столько же: меняются урон, пауза и радиус.
-    const orbit = weaponChanges(weapon("wardstone"), 2, 3, 1);
+    // Второй уровень добавляет камень: у орбиты поле снарядов подписано как
+    // обереги, а не как снаряды.
+    const orbit = weaponChanges(weapon("wardstone"), 1, 2, 1);
     expect(labels(orbit)).toContain("upgrade.stat.orbit.projectiles");
   });
 

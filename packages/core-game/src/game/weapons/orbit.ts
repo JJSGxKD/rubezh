@@ -12,12 +12,6 @@ import type { ResolvedWeaponLevel } from "./weapon-types";
  */
 export const ORBITER_RADIUS = 16;
 
-/**
- * На сколько секунд хода кольцо отстаёт от игрока. Смещение считается от
- * скорости, а не от направления взгляда: на остановке оно само сходит в ноль.
- */
-const TRAIL_SEC = 0.28;
-
 /** Больше шести оберегов на кольце не читается на экране телефона. */
 export const MAX_ORBITERS = 6;
 
@@ -64,6 +58,9 @@ const RING_OFFSETS: readonly (readonly (readonly [number, number])[])[] = [
  * Обереги кружат вокруг игрока и бьют всё, чего касаются. Пауза между
  * ударами кольца делится на число оберегов: количество камней — это скорость
  * кольца в уроне, а не только площадь.
+ *
+ * Кольцо держится на игроке и никуда не отстаёт: оберег, тянущийся следом на
+ * бегу, читается как отдельная тварь за спиной, а не как своя защита.
  *
  * Вращение — доворот единичного вектора по перпендикуляру с нормировкой, а не
  * приращение угла: тот же запрет на тригонометрию. Цена — вращение чуть
@@ -157,10 +154,6 @@ export function orbiterPosition(
   const dirX = weapon.dirX * offset[0] - weapon.dirY * offset[1];
   const dirY = weapon.dirX * offset[1] + weapon.dirY * offset[0];
 
-  // Центр кольца отстаёт от игрока на бегу: иначе убегающий уносит обереги от
-  // тех, кто его догоняет, и контактное оружие не задевает вовсе никого.
-  // Стоящему игроку кольцо возвращается ровно в центр.
-  const player = world.player;
-  out.x = player.x - player.vx * TRAIL_SEC + dirX * level.areaRadius;
-  out.y = player.y - player.vy * TRAIL_SEC + dirY * level.areaRadius;
+  out.x = world.player.x + dirX * level.areaRadius;
+  out.y = world.player.y + dirY * level.areaRadius;
 }
