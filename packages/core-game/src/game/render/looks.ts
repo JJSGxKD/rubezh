@@ -17,6 +17,14 @@ export type ShapeKind =
   | "wave"
   | "hexagon"
   | "double"
+  /** остриё по направлению движения — рывковый враг */
+  | "chevron"
+  /** гранёный кристалл опыта: свет сверху, тень снизу */
+  | "gem"
+  /** крупный кристалл: те же грани и искра в центре */
+  | "gem_rich"
+  /** снаряд врага: раскалённое ядро с ореолом */
+  | "bolt"
   | "medkit"
   | "magnet"
   | "dynamite";
@@ -34,7 +42,9 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   swarm: { shape: "circle", color: 0xff8f6b },
   chase: { shape: "square", color: 0xc06bff },
   kite_and_shoot: { shape: "triangle", color: 0x6bd5ff },
-  dash: { shape: "diamond", color: 0xffd36b },
+  // Ромб отдан кристаллам опыта: рывковый враг — остриё, и цвет у него
+  // тревожный, а не «подбери меня».
+  dash: { shape: "chevron", color: 0xff7a1f },
   orbit: { shape: "ring", color: 0x8cf0ff },
   exploder: { shape: "hexagon", color: 0xff5a5a },
   splitter: { shape: "double", color: 0x9be36b },
@@ -61,10 +71,12 @@ export function enemyColor(pattern: EnemyPattern, elite: boolean): number {
  * цветом (docs/27-design-system-and-app-shell.md §4.4).
  */
 export const GEM_TIERS: readonly (ShapeLook & { minValue: number; radiusUnits: number })[] = [
-  { minValue: 1, radiusUnits: 5, color: 0x5ccfff, shape: "diamond" },
-  { minValue: 3, radiusUnits: 6.5, color: 0x5fe3a1, shape: "diamond" },
-  { minValue: 8, radiusUnits: 8, color: 0xc47dff, shape: "diamond" },
-  { minValue: 20, radiusUnits: 10, color: 0xffd36b, shape: "hexagon" },
+  { minValue: 1, radiusUnits: 5, color: 0x5ccfff, shape: "gem" },
+  { minValue: 3, radiusUnits: 6.5, color: 0x5fe3a1, shape: "gem" },
+  { minValue: 8, radiusUnits: 8, color: 0xc47dff, shape: "gem" },
+  // Самый ценный — тоже кристалл, а не другая фигура: ступень читается
+  // размером, цветом и искрой внутри, но остаётся кристаллом.
+  { minValue: 20, radiusUnits: 10.5, color: 0xffd36b, shape: "gem_rich" },
 ];
 
 /**
@@ -98,6 +110,10 @@ export const WORLD_COLORS = {
   aura: 0xff9a3c,
   /** молния «Грозы»: ореол и светлый стержень */
   lightning: 0x9bd0ff,
+  /** раскалённое ядро вражеского снаряда */
+  enemyProjectileCore: 0xfff1e6,
+  /** блик на грани кристалла */
+  gemLight: 0xffffff,
   lightningCore: 0xf3f6fc,
   ground: 0x0d0f14,
   groundLine: 0x171b24,
