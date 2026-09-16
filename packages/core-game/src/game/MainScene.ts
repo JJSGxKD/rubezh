@@ -402,6 +402,7 @@ export class MainScene extends Phaser.Scene {
       },
       world: captureWorld(world, this.spawner),
       ...(this.cheatsUsed ? { cheats: true } : {}),
+      ...(this.sceneData.dev === undefined ? {} : { dev: true }),
     };
   }
 
