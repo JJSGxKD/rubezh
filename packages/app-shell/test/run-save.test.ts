@@ -107,6 +107,16 @@ function options(resume?: RunSnapshot): Parameters<ReturnType<typeof useRun.getS
   };
 }
 
+/** Вход на экран забега: то, что знает сам экран, без намерения игрока. */
+function entry(): Parameters<ReturnType<typeof useRun.getState>["enter"]>[0] {
+  return {
+    container: {} as HTMLElement,
+    startingWeaponId: "spark",
+    mapId: "frontier",
+    difficultyId: "normal",
+  };
+}
+
 describe("сохранение прерванного забега", () => {
   beforeEach(() => {
     engine.load.mockReset();
@@ -188,18 +198,55 @@ describe("сохранение прерванного забега", () => {
     engine.load.mockReturnValueOnce(new Promise<RunEngine>((done) => (resolve = done)));
     engine.load.mockResolvedValue(fake.engine);
 
-    useRun.getState().prepareResume(snapshot());
-    const first = useRun.getState().start(options(useRun.getState().pendingResume ?? undefined));
+    useRun.getState().intend({ kind: "resume", snapshot: snapshot() });
+    const first = useRun.getState().enter(entry());
     useRun.getState().stop();
-    expect(useRun.getState().pendingResume).not.toBeNull();
+    expect(useRun.getState().intent).not.toBeNull();
 
-    await useRun.getState().start(options(useRun.getState().pendingResume ?? undefined));
+    await useRun.getState().enter(entry());
     resolve(fake.engine);
     await first;
 
     expect(fake.started).toHaveLength(1);
     expect(fake.started[0]?.resume?.runId).toBe("run-1");
-    expect(useRun.getState().pendingResume).toBeNull();
+    expect(useRun.getState().intent).toBeNull();
+  });
+
+  it("помнит, что забег был забегом разработчика, и после перезапуска приложения", () => {
+    // Признак режима хранится в снимке, а не во взведённом флаге стора: флаг
+    // живёт до перезапуска, а продолжают забег и через сутки.
+    useSavedRun.getState().save(snapshot({ dev: true, cheats: true }));
+
+    useSavedRun.setState({ saved: null });
+    useSavedRun.getState().hydrate();
+
+    expect(useSavedRun.getState().saved?.dev).toBe(true);
+    expect(useSavedRun.getState().saved?.cheats).toBe(true);
+  });
+
+  it("вход на экран без намерения продолжает сохранение, а не стирает его", async () => {
+    // Так экран забега монтируется заново после сворачивания: игрок ничего не
+    // выбирал, и начинать новый забег поверх четырнадцати минут нельзя.
+    useSavedRun.getState().save(snapshot());
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+
+    await useRun.getState().enter(entry());
+
+    expect(fake.started[0]?.resume?.runId).toBe("run-1");
+    expect(useSavedRun.getState().saved).not.toBeNull();
+  });
+
+  it("явный новый забег сохранение занимает: игрок бросил прежний сам", async () => {
+    useSavedRun.getState().save(snapshot());
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+
+    useRun.getState().intend({ kind: "new" });
+    await useRun.getState().enter(entry());
+
+    expect(fake.started[0]?.resume).toBeUndefined();
+    expect(useSavedRun.getState().saved).toBeNull();
   });
 
   it("битое сохранение, которое движок не смог прочитать, удаляется", async () => {

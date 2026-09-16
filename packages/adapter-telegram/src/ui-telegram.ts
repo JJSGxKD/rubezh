@@ -70,7 +70,11 @@ export function createTelegramUi(): PlatformUi {
     const next: ViewportState = {
       width: read(viewport.width, 0),
       height: read(viewport.stableHeight, 0),
-      expanded: read(viewport.isExpanded, true),
+      // Полноэкранный режим — развёрнутый по определению. Отдельный флаг
+      // `isExpanded` описывает высоту шторки и в полноэкранном режиме у части
+      // клиентов остаётся ложным: игрок видел просьбу развернуть уже
+      // развёрнутое окно (docs/27-design-system-and-app-shell.md §5.2).
+      expanded: read(viewport.isExpanded, true) || read(viewport.isFullscreen, false),
     };
     if (
       next.width === viewportState.width &&
@@ -111,6 +115,9 @@ export function createTelegramUi(): PlatformUi {
           viewport.stableHeight.sub(pushViewport),
           viewport.isExpanded.sub(pushViewport),
           viewport.isFullscreen.sub(pushScreenMode),
+          // Тот же сигнал меняет и «развёрнуто ли»: без этой подписки плашка
+          // висела бы до следующего изменения размеров окна.
+          viewport.isFullscreen.sub(pushViewport),
           miniApp.isActive.sub(pushActive),
         );
         pushInsets();

@@ -15,7 +15,7 @@ import {
 import { usePlatform } from "../state/platform";
 import { useRun } from "../state/run";
 import { useShell } from "../state/shell";
-import { CompactScreen, FirstRunScreen, OutsideScreen } from "../screens/gates";
+import { CompactOverlay, FirstRunScreen, OutsideScreen } from "../screens/gates";
 import { LobbyScreen, ModeScreen, WeaponScreen } from "../screens/home";
 import { RunScreen } from "../screens/run/RunScreen";
 import {
@@ -58,10 +58,6 @@ export function App(): ReactNode {
   usePlatformButtons(stack, screen);
 
   if (!capabilities.platformAvailable) return <OutsideScreen botUrl={capabilities.botUrl} />;
-  // Компактный режим: забег в нём непригоден, а раздел без забега бессмысленен.
-  if (!expanded) {
-    return <CompactScreen onExpand={() => useShell.getState().adapter.ui.expand()} />;
-  }
   if (!install.accepted) return <FirstRunScreen onAccept={() => install.accept()} />;
 
   const tab = activeTab(stack);
@@ -101,6 +97,9 @@ export function App(): ReactNode {
           </div>
         )}
       </main>
+      {/* Компактное окно — плашка поверх живого приложения: забег под ней
+          стоит на паузе и дожидается игрока (§5.2). */}
+      {expanded ? null : <CompactOverlay onExpand={() => useShell.getState().adapter.ui.expand()} />}
       {showTabs ? (
         <TabBar
           items={TABS}
