@@ -14,7 +14,8 @@ import { TELEGRAM_BOT_API, TelegramBotApi } from "./telegram-bot-api.js";
     {
       provide: TELEGRAM_BOT_API,
       inject: [APP_CONFIG],
-      useFactory: (config: AppConfig): TelegramBotApi => new TelegramBotApi(config.telegram.botToken),
+      useFactory: (config: AppConfig): TelegramBotApi =>
+        new TelegramBotApi(config.telegram.botToken, config.telegram.apiRoot),
     },
     BotIdentity,
   ],

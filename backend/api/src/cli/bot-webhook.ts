@@ -14,7 +14,7 @@ import { TelegramBotApi } from "../modules/telegram/telegram-bot-api.js";
 async function main(): Promise<void> {
   const config = configFromEnvironment();
   if (config.telegram.botToken === "") throw new Error("Нужен TELEGRAM_BOT_TOKEN");
-  const api = new TelegramBotApi(config.telegram.botToken);
+  const api = new TelegramBotApi(config.telegram.botToken, config.telegram.apiRoot);
 
   if (process.argv.includes("--delete")) {
     await api.deleteWebhook();

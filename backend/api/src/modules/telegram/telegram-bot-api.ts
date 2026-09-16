@@ -19,7 +19,6 @@ import { chatFields, chatTargetOf, type ChatRef } from "./chat-target.js";
  */
 export const TELEGRAM_BOT_API = Symbol("TELEGRAM_BOT_API");
 
-const API_ROOT = "https://api.telegram.org";
 /** Запас сверх long polling: Telegram держит запрос до `timeout` секунд и отвечает чуть позже. */
 const POLL_GRACE_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -124,6 +123,11 @@ export interface SentPhoto {
 export class TelegramBotApi {
   constructor(
     private readonly token: string,
+    /**
+     * Адрес Bot API. Не константа: у локального сервера Bot API свой хост, а
+     * методы и пути те же (docs/20-env-and-ports.md §3.1).
+     */
+    private readonly apiRoot: string,
     private readonly fetchImpl: FetchLike = fetch,
   ) {}
 
@@ -244,7 +248,7 @@ export class TelegramBotApi {
 
     let response: Response;
     try {
-      response = await this.fetchImpl(`${API_ROOT}/bot${this.token}/${method}`, init);
+      response = await this.fetchImpl(`${this.apiRoot}/bot${this.token}/${method}`, init);
     } catch (error: unknown) {
       // Сетевая ошибка undici может нести URL с токеном в `cause` — наружу
       // уходит только имя метода и тип ошибки.

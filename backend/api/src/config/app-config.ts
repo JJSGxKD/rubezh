@@ -11,6 +11,9 @@ import { isChatTarget, parseChatTarget, type ChatTarget } from "../modules/teleg
  * Это единственное место в бэкенде, где читается process.env
  * (CLAUDE.md, «Порты и переменные окружения»).
  */
+/** Облако Telegram — адрес по умолчанию, когда свой сервер Bot API не задан. */
+const TELEGRAM_CLOUD_API = "https://api.telegram.org";
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -83,6 +86,15 @@ const schema = z.object({
     .default("false")
     .transform((value) => value === "true"),
 
+  // Адрес Bot API. Пусто — облако Telegram; свой адрес нужен тем, кто держит
+  // локальный сервер Bot API (docs/20-env-and-ports.md §3.1): у него другой
+  // хост, а методы и пути те же.
+  TELEGRAM_API_ROOT: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^https?:\/\/[^\s]+$/.test(value), {
+      message: "TELEGRAM_API_ROOT — адрес с http:// или https://",
+    }),
   // Откуда бот берёт обновления (docs/28-diagnostics.md §6.1.3): `webhook` —
   // сервер с публичным адресом, `polling` — машина разработчика без него,
   // `off` — бот не отвечает.
@@ -172,6 +184,8 @@ export interface AppConfig {
     /** бот закрытого теста: проверка подписи initData и сам бот */
     botToken: string;
     updates: "off" | "polling" | "webhook";
+    /** адрес Bot API без косой в конце: облако Telegram или свой сервер */
+    apiRoot: string;
     /** секретный токен вебхука; пусто — вебхук не настроен */
     webhookSecret: string;
     /** публичный адрес API без косой в конце — для регистрации вебхука */
@@ -311,6 +325,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     telegram: {
       botToken: parsed.TELEGRAM_BOT_TOKEN,
       updates: parsed.TELEGRAM_BOT_UPDATES,
+      apiRoot: (parsed.TELEGRAM_API_ROOT === "" ? TELEGRAM_CLOUD_API : parsed.TELEGRAM_API_ROOT).replace(/\/+$/, ""),
       webhookSecret: parsed.TELEGRAM_WEBHOOK_SECRET,
       publicApiUrl: parsed.PUBLIC_API_URL.replace(/\/+$/, ""),
       webAppUrl: parsed.PUBLIC_WEB_URL,

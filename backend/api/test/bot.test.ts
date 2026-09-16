@@ -8,6 +8,7 @@ import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/mo
 // (docs/28-diagnostics.md §6.1).
 
 const TOKEN = "123456:SECRET-token";
+const CLOUD_API = "https://api.telegram.org";
 const CHAT = "-1001234567890";
 
 function update(id: number, text = "/start"): TelegramUpdate {
@@ -116,7 +117,7 @@ describe("клиент Bot API", () => {
       calls.push({ url, init });
       return new Response(JSON.stringify(reply), { status });
     };
-    return { calls, api: new TelegramBotApi(TOKEN, fetchImpl) };
+    return { calls, api: new TelegramBotApi(TOKEN, CLOUD_API, fetchImpl) };
   }
 
   it("пропускает нераспознанные обновления, но сдвигает смещение за них", async () => {
@@ -145,7 +146,7 @@ describe("клиент Bot API", () => {
   });
 
   it("не выносит токен бота в текст ошибки сети", async () => {
-    const api = new TelegramBotApi(TOKEN, async (url) => {
+    const api = new TelegramBotApi(TOKEN, CLOUD_API, async (url) => {
       throw new TypeError(`fetch failed: ${url}`);
     });
     const error = await api.sendMessage(CHAT, "x").catch((caught: unknown) => caught);
