@@ -19,7 +19,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 2;
+export const WORLD_SNAPSHOT_VERSION = 3;
 
 export class SnapshotError extends Error {
   constructor(message: string) {

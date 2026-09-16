@@ -45,6 +45,12 @@ export interface EnemyPool {
   /** таймер до следующей атаки: и контактной, и выстрела для kite_and_shoot */
   attackCooldown: Float32Array;
   type: Uint8Array;
+  /**
+   * Ступень врага (content/stages.ts). В пуле, а не в типе: ступень
+   * выбирается при спавне и застывает — иначе уже вышедший враг матерел бы
+   * задним числом вместе с таймлайном.
+   */
+  stage: Uint8Array;
   alive: Uint8Array;
   /**
    * Состояние паттерна: фаза и её таймер, зафиксированное направление,
@@ -103,6 +109,7 @@ export function createEnemyPool(capacity: number): EnemyPool {
     hitTick: new Int32Array(capacity).fill(NEVER_HIT),
     attackCooldown: new Float32Array(capacity),
     type: new Uint8Array(capacity),
+    stage: new Uint8Array(capacity),
     alive: new Uint8Array(capacity),
     phase: new Uint8Array(capacity),
     phaseTimer: new Float32Array(capacity),

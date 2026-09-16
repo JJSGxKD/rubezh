@@ -1,5 +1,15 @@
 import type { World } from "../sim/world";
+import { stageOf } from "../sim/stages";
 import { vectorLength } from "../sim/vector";
+
+/**
+ * Скорость врага с учётом его ступени. Читается всеми паттернами: ступень
+ * прибавляет к скорости немного, но заметно — матёрый догоняет там, где
+ * обычный отставал (content/stages.ts).
+ */
+export function enemySpeed(world: World, index: number): number {
+  return world.enemyTypes[world.enemies.type[index]].speed * stageOf(world, index).speedMul;
+}
 
 /** Ниже этой дистанции направление на игрока не определено. */
 export const MIN_HEADING_DISTANCE = 1e-3;
@@ -43,7 +53,7 @@ export function stopEnemy(world: World, index: number): void {
 
 /** Идти на игрока по прямой на полной скорости. */
 export function moveStraightToPlayer(world: World, index: number, heading: Heading): void {
-  const speed = world.enemyTypes[world.enemies.type[index]].speed;
+  const speed = enemySpeed(world, index);
   headingToPlayer(world, index, heading);
   world.enemies.vx[index] = heading.nx * speed;
   world.enemies.vy[index] = heading.ny * speed;
@@ -65,7 +75,8 @@ export function steerTowardPlayer(
   if (heading.distance < MIN_HEADING_DISTANCE) return;
 
   const steering = Math.min(1, type.params.steeringPerSec * dtSec);
+  const speed = enemySpeed(world, index);
   const enemies = world.enemies;
-  enemies.vx[index] += (heading.nx * type.speed - enemies.vx[index]) * steering;
-  enemies.vy[index] += (heading.ny * type.speed - enemies.vy[index]) * steering;
+  enemies.vx[index] += (heading.nx * speed - enemies.vx[index]) * steering;
+  enemies.vy[index] += (heading.ny * speed - enemies.vy[index]) * steering;
 }

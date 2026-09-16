@@ -1,7 +1,7 @@
 import { despawnEnemy, damagePlayer, type World } from "../sim/world";
 import { pushSimEvent, SIM_EVENT } from "../sim/events";
 import type { PatternBehavior } from "./behavior";
-import { createHeading, headingToPlayer, stopEnemy } from "./steering";
+import { createHeading, enemySpeed, headingToPlayer, stopEnemy } from "./steering";
 
 export const EXPLODER_PHASE = {
   approach: 0,
@@ -27,8 +27,9 @@ export const exploder: PatternBehavior = {
     if (enemies.phase[index] === EXPLODER_PHASE.approach) {
       headingToPlayer(world, index, heading);
       if (heading.distance > type.params.triggerDistance) {
-        enemies.vx[index] = heading.nx * type.speed;
-        enemies.vy[index] = heading.ny * type.speed;
+        const speed = enemySpeed(world, index);
+        enemies.vx[index] = heading.nx * speed;
+        enemies.vy[index] = heading.ny * speed;
         return;
       }
       enemies.phase[index] = EXPLODER_PHASE.fuse;
