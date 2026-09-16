@@ -1,6 +1,6 @@
 import { Inject, Injectable, type OnApplicationShutdown } from "@nestjs/common";
 import { Redis } from "ioredis";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 
 /**
  * Одно подключение к Redis на весь модуль плейтеста: хранилище забегов,

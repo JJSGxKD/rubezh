@@ -14,8 +14,6 @@ import { useDiagnostics } from "../state/diagnostics";
 import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
-import { usePlatform } from "../state/platform";
-import { usePlaytestAccess } from "../state/playtest";
 import { useSettings, type VolumeKey } from "../state/settings";
 import { useShell } from "../state/shell";
 
@@ -197,55 +195,6 @@ export function AboutScreen(): ReactNode {
 
         <SectionTitle>{t("about.licenses")}</SectionTitle>
         <p className="text-xs text-text-muted">{t("about.licenses.text")}</p>
-      </ContentColumn>
-    </Screen>
-  );
-}
-
-/** Отступы и размеры — то, что чаще всего расходится между устройствами. */
-export function DiagnosticsScreen(): ReactNode {
-  const navigation = useNavigation();
-  const access = usePlaytestAccess();
-  const platform = usePlatform();
-  const build = useShell((state) => state.build);
-
-  return (
-    <Screen title={t("diagnostics.title")} onBack={() => navigation.pop()}>
-      <ContentColumn>
-        <SectionTitle>{t("diagnostics.device")}</SectionTitle>
-        <ListGroup>
-          <ListItem
-            title={t("diagnostics.device.screen")}
-            value={`${platform.viewport.width}×${platform.viewport.height}`}
-          />
-          <ListItem
-            title={t("diagnostics.device.pixelRatio")}
-            value={String(globalThis.devicePixelRatio ?? 1)}
-          />
-          <ListItem
-            title={t("diagnostics.device.cores")}
-            value={String(navigator.hardwareConcurrency ?? 0)}
-          />
-          <ListItem title={t("diagnostics.device.platform")} value={build.platform} />
-        </ListGroup>
-
-        <SectionTitle>{t("diagnostics.insets")}</SectionTitle>
-        <ListGroup>
-          <ListItem
-            title={t("diagnostics.insets")}
-            value={`${platform.insets.top} / ${platform.insets.right} / ${platform.insets.bottom} / ${platform.insets.left}`}
-          />
-          <ListItem title={t("settings.fullscreen")} value={platform.screenMode} />
-        </ListGroup>
-
-        <SectionTitle>{t("diagnostics.runBench")}</SectionTitle>
-        <ListGroup>
-          {access.stressTest ? (
-            <ListItem title={t("mode.stress")} onClick={() => navigation.push("stress")} />
-          ) : null}
-          <ListItem title={t("gallery.title")} onClick={() => navigation.push("gallery")} />
-        </ListGroup>
-        {access.stressTest ? null : <p className="mt-2 text-xs text-text-muted">{t("diagnostics.benchClosed")}</p>}
       </ContentColumn>
     </Screen>
   );

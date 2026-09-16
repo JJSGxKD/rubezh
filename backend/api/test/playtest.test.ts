@@ -1,19 +1,19 @@
 import { createHmac } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionContext } from "@nestjs/common";
-import { loadAppConfig } from "../src/config/app-config";
-import { DomainError } from "../src/common/domain-error";
+import { loadAppConfig } from "../src/config/app-config.js";
+import { DomainError } from "../src/common/domain-error.js";
 import {
   runSubmissionSchema,
   sessionReportSchema,
   stressReportSchema,
-} from "../src/modules/playtest/dto/run-submission.dto";
-import { accessFor } from "../src/modules/playtest/playtest-access";
-import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard";
-import { PlaytestService } from "../src/modules/playtest/playtest.service";
-import { verifyInitData } from "../src/modules/playtest/telegram-init-data";
-import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store";
-import { MemoryPlaytestStore } from "./helpers/memory-playtest.store";
+} from "../src/modules/playtest/dto/run-submission.dto.js";
+import { accessFor } from "../src/modules/playtest/playtest-access.js";
+import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard.js";
+import { PlaytestService } from "../src/modules/playtest/playtest.service.js";
+import { verifyInitData } from "../src/modules/playtest/telegram-init-data.js";
+import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
+import { MemoryPlaytestStore } from "./helpers/memory-playtest.store.js";
 
 // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
 
@@ -73,7 +73,7 @@ describe("проверка initData", () => {
 
 describe("доступ к эндпоинтам плейтеста", () => {
   function context(headers: Record<string, string>): { ctx: ExecutionContext; request: Record<string, unknown> } {
-    const request: Record<string, unknown> = { header: (name: string) => headers[name.toLowerCase()] };
+    const request: Record<string, unknown> = { headers };
     const ctx = { switchToHttp: () => ({ getRequest: () => request }) } as unknown as ExecutionContext;
     return { ctx, request };
   }

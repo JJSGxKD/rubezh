@@ -1,11 +1,9 @@
 import "reflect-metadata";
 import { fstatSync } from "node:fs";
-import { NestFactory } from "@nestjs/core";
 import type { INestApplication } from "@nestjs/common";
-import type { NestExpressApplication } from "@nestjs/platform-express";
-import { AppModule } from "./app.module";
-import { APP_CONFIG, type AppConfig } from "./config/app-config";
-import { DomainErrorFilter } from "./common/domain-error.filter";
+import { AppModule } from "./app.module.js";
+import { APP_CONFIG, type AppConfig } from "./config/app-config.js";
+import { createHttpApp } from "./http-app.js";
 
 /**
  * Единая точка входа бэкенда для ВСЕХ платформ — Telegram/MAX/VK/Web
@@ -14,23 +12,9 @@ import { DomainErrorFilter } from "./common/domain-error.filter";
  * Конфигурация валидируется Zod-схемой при старте: невалидное окружение =
  * процесс не поднимается (docs/20-env-and-ports.md §1, правило 3).
  */
-async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+async function bootstrap(): Promise<void> {
+  const app = await createHttpApp(AppModule);
   const config = app.get<AppConfig>(APP_CONFIG);
-
-  // Отчёт испытания — это сотни корзин таймлайна, дефолтный лимит в 100 КБ
-  // его не пропустит. Верхняя граница всё равно нужна: без неё эндпоинт
-  // превращается в приём произвольных объёмов данных.
-  app.useBodyParser("json", { limit: "2mb" });
-  app.useGlobalFilters(new DomainErrorFilter());
-
-  // health остаётся на корне: пробы и мониторинг не должны знать о версии API.
-  app.setGlobalPrefix("api/v1", { exclude: ["health"] });
-
-  app.enableCors({
-    origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : false,
-    credentials: true,
-  });
 
   installShutdownHandlers(app);
   exitWhenOrphaned(app, config.nodeEnv === "development");
@@ -141,4 +125,4 @@ function reportListenFailure(error: unknown, port: number): void {
   console.error("Не удалось занять порт:", error);
 }
 
-bootstrap();
+void bootstrap();

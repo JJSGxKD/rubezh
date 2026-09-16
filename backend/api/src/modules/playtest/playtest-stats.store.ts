@@ -1,4 +1,4 @@
-import type { Difficulty, StoredRun } from "./playtest.store";
+import type { Difficulty, StoredRun } from "./playtest.store.js";
 
 /**
  * Агрегаты статистики плейтеста: кто открывал игру, на чём, как проходят

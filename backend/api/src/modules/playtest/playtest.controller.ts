@@ -1,21 +1,21 @@
 import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config";
-import { accessFor, isAdmin, type PlaytestAccess } from "./playtest-access";
-import { DomainError, ValidationError } from "../../common/domain-error";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { accessFor, isAdmin, type PlaytestAccess } from "./playtest-access.js";
+import { DomainError, ValidationError } from "../../common/domain-error.js";
 import {
   difficultyQuerySchema,
   runSubmissionSchema,
   sessionReportSchema,
   stressReportSchema,
-} from "./dto/run-submission.dto";
-import { PlaytestAuthGuard, playerOf } from "./playtest-auth.guard";
+} from "./dto/run-submission.dto.js";
+import { PlaytestAuthGuard, playerOf } from "./playtest-auth.guard.js";
 import {
   PlaytestService,
   type LeaderboardView,
   type ProfileView,
   type SubmitResult,
-} from "./playtest.service";
+} from "./playtest.service.js";
 
 /**
  * Сохранения и лидерборд плейтеста. В контроллере нет логики — только разбор

@@ -7,9 +7,9 @@ import {
   renderStatsCaption,
   renderStatsPng,
   renderStatsSvg,
-} from "../src/modules/playtest/playtest-stats.image";
-import { dayKey, durationBucket, type StatsSnapshot } from "../src/modules/playtest/playtest-stats.store";
-import { bucketLabel, buildStatsSummary, shares } from "../src/modules/playtest/playtest-stats.summary";
+} from "../src/modules/playtest/playtest-stats.image.js";
+import { dayKey, durationBucket, type StatsSnapshot } from "../src/modules/playtest/playtest-stats.store.js";
+import { bucketLabel, buildStatsSummary, shares } from "../src/modules/playtest/playtest-stats.summary.js";
 
 // Сводка статистики плейтеста для чата администраторов (docs/26-stage2-plan.md, WP14).
 

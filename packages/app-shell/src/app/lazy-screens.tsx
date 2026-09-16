@@ -26,6 +26,7 @@ const loaders = {
   wheel: () => import("../screens/meta/wheel"),
   stress: () => import("../screens/stress/StressScreen"),
   soundLab: () => import("../screens/sound-lab"),
+  diagnostics: () => import("../screens/diagnostics"),
 };
 
 function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): ComponentType {
@@ -38,7 +39,7 @@ function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): Componen
 export const SettingsScreen = screen(loaders.settings, "SettingsScreen");
 export const TestersScreen = screen(loaders.settings, "TestersScreen");
 export const AboutScreen = screen(loaders.settings, "AboutScreen");
-export const DiagnosticsScreen = screen(loaders.settings, "DiagnosticsScreen");
+export const DiagnosticsScreen = screen(loaders.diagnostics, "DiagnosticsScreen");
 export const GalleryScreen = screen(loaders.gallery, "GalleryScreen");
 export const ArsenalScreen = screen(loaders.arsenal, "ArsenalScreen");
 export const ShopScreen = screen(loaders.stubs, "ShopScreen");

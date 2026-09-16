@@ -1,5 +1,5 @@
 import { Global, Module } from "@nestjs/common";
-import { APP_CONFIG, loadAppConfig, loadRootEnv } from "./app-config";
+import { APP_CONFIG, loadAppConfig, loadRootEnv } from "./app-config.js";
 
 /**
  * Конфигурация читается один раз при старте и раздаётся через DI.

@@ -468,17 +468,6 @@
   "testers.soundLab.hint": "Все звуки, музыка и вибрация: послушать, поправить, проверить на симуляции боя.",
 
   "diagnostics.title": "Диагностика",
-  "diagnostics.device": "Устройство",
-  "diagnostics.device.screen": "Экран",
-  "diagnostics.device.pixelRatio": "Плотность",
-  "diagnostics.device.cores": "Ядер",
-  "diagnostics.device.platform": "Платформа",
-  "diagnostics.device.client": "Клиент",
-  "diagnostics.insets": "Отступы безопасной зоны",
-  "diagnostics.viewport": "Вьюпорт",
-  "diagnostics.runBench": "Прогнать тест производительности",
-  "diagnostics.benchClosed": "Стресс-тест открыт на время плейтеста и команде.",
-  "diagnostics.gallery": "Витрина компонентов",
   "diagnostics.install": "Установка",
 
   "gallery.title": "Витрина компонентов",

@@ -1,5 +1,6 @@
 /**
- * Сбор метрик кадра для FPS-испытаний (docs/25-week1-fps-trials.md).
+ * Сбор метрик кадра для стресс-теста (docs/28-diagnostics.md §2.3); протокол
+ * замера выверен на FPS-испытаниях этапа 1 (docs/25-week1-fps-trials.md).
  *
  * Почему не `game.loop.actualFps` и не второй аргумент `update()`: первое —
  * сглаженное среднее, второе Phaser сглаживает по истории и обрезает сверху,
@@ -26,16 +27,14 @@ const DEFAULT_WINDOW_SEC = 30;
 const DEFAULT_BUCKET_SEC = 5;
 
 /**
- * Режим прогона.
- *
- * `fixed` — постоянная популяция, для сравнения двух сборок на одном числе.
- * `ramp` — плавный рост, ищет рабочий запас на трёхминутном прогоне.
- * `stress` — агрессивный рост до отказа, ищет предел устройства и
- * останавливается сам, как только просадка подтверждена.
+ * Режим прогона. Остался один — `stress`: рост нагрузки до отказа, стенд
+ * останавливается сам, как только просадка подтверждена. Режимы этапа 1
+ * (`ramp`, `fixed`) удалены за ненадобностью, поле в отчёте осталось, чтобы
+ * формат не менялся.
  */
-export type BenchMode = "ramp" | "fixed" | "stress";
+export type BenchMode = "stress";
 
-/** Почему прогон закончился. Для `stress` это главная строка отчёта. */
+/** Почему прогон закончился — главная строка отчёта. */
 export type BenchStopReason =
   | "duration"
   | "degradation"
@@ -101,10 +100,10 @@ export interface BenchTotals extends FrameStats {
 
 export interface BenchProfile {
   mode: BenchMode;
-  /** для fixed — целевая популяция; для ramp — потолок роста */
+  /** потолок роста нагрузки */
   targetPopulation: number;
-  /** прирост нагрузки в секунду, только для ramp */
-  addPerSecond: number | null;
+  /** прирост нагрузки в секунду */
+  addPerSecond: number;
   seed: number;
   durationSec: number;
   buildVersion: string;
@@ -117,11 +116,11 @@ export interface BenchProfile {
 }
 
 /**
- * `starting` — стартовое оружие без кристаллов и подборов, профиль замеров
- * этапа 1; `full` — поздний забег: всё оружие и пассивки на максимуме, элиты,
- * кристаллы и подборы (`bench/full-load.ts`).
+ * `full` — поздний забег: всё оружие и пассивки на максимуме, элиты,
+ * кристаллы и подборы (`bench/full-load.ts`). Стартовое оружие этапа 1 ушло
+ * вместе с его режимами.
  */
-export type BenchLoadout = "starting" | "full";
+export type BenchLoadout = "full";
 
 export interface BenchDevice {
   userAgent: string;
@@ -233,7 +232,7 @@ export class FrameRecorder {
 
   /**
    * Таймлайн: короткие корзины, по которым видно, на какой именно нагрузке
-   * начинается просадка. Ради этого вопроса режим ramp и существует.
+   * начинается просадка.
    */
   buildTimeline(): TimelineBucket[] {
     return this.split(this.bucketSec).map((slice, index) => ({

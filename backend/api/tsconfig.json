@@ -1,8 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    // NestJS 12 выходит только в ESM: бэкенд — ESM-пакет, относительные
+    // импорты с расширением `.js` (docs/16-tech-stack-decisions.md §1).
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
     "outDir": "dist",
     "rootDir": "src",
     "experimentalDecorators": true,

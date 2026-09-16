@@ -11,9 +11,9 @@ import { evaluateBench, WEEK1_THRESHOLDS, type BenchThresholds } from "../src/ga
 // архитектурное решение.
 
 const PROFILE: BenchProfile = {
-  mode: "ramp",
-  targetPopulation: 480,
-  addPerSecond: 2,
+  mode: "stress",
+  targetPopulation: 4000,
+  addPerSecond: 20,
   seed: 42,
   durationSec: 180,
   buildVersion: "test",
@@ -21,7 +21,7 @@ const PROFILE: BenchProfile = {
   canvasHeight: 1920,
   devicePixelRatio: 3,
   renderer: "WEBGL",
-  loadout: "starting",
+  loadout: "full",
 };
 
 const DEVICE: BenchDevice = {
@@ -199,24 +199,6 @@ describe("вердикт по критерию недели 1", () => {
     expect(verdict.sustainedLoad).toBeCloseTo(120, 0);
   });
 
-  it("даёт no-go при троттлинге на постоянной нагрузке", () => {
-    const recorder = new FrameRecorder(30, 5);
-    recordSeconds(recorder, 150, 60, 200);
-    recordSeconds(recorder, 60, 45, 200);
-
-    const report = recorder.buildReport(
-      { ...PROFILE, mode: "fixed" },
-      DEVICE,
-      STARTED_AT,
-      "duration",
-    );
-    const verdict = evaluateBench(report);
-
-    expect(verdict.sustainedLoad).toBeGreaterThanOrEqual(WEEK1_THRESHOLDS.minSustainedLoad);
-    expect(verdict.level).toBe("no-go");
-    expect(verdict.failures.join(" ")).toMatch(/троттлинг/);
-  });
-
   it("не называет троттлингом падение FPS при растущей нагрузке", () => {
     const recorder = new FrameRecorder(30, 5);
     // 120-герцовый экран: прогон стартует со 120 FPS и по мере роста нагрузки
@@ -226,7 +208,7 @@ describe("вердикт по критерию недели 1", () => {
 
     const verdict = evaluateBench(recorder.buildReport(PROFILE, DEVICE, STARTED_AT, "duration"));
 
-    expect(verdict.failures.join(" ")).not.toMatch(/троттлинг/);
+    expect(verdict.failures).toEqual([]);
     expect(verdict.level).toBe("go");
   });
 

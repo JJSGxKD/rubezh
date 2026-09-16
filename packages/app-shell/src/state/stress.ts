@@ -66,7 +66,6 @@ export const useStress = create<StressStore>((set, get) => ({
       if (token !== startToken) return;
       const created = engine.start({
         container,
-        mode: "stress",
         seed: nextSeed(),
         buildVersion: useShell.getState().build.version,
         device: benchDevice(),

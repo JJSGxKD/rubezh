@@ -16,10 +16,10 @@ const APP_DIST = "apps/web-telegram/dist";
 const ASSETS = join(APP_DIST, "assets");
 
 /**
- * Движок забега и стенд испытаний — отдельные двери с устойчивыми именами
+ * Движок забега и стресс-тест — отдельные двери с устойчивыми именами
  * чанков: у них свой бюджет, потому что вес Phaser живёт по своим законам.
  */
-const ENGINE = /^(phaser-host|run-engine|bench-stand|stress-engine)-.*\.js$/;
+const ENGINE = /^(phaser-host|run-engine|stress-engine)-.*\.js$/;
 
 /**
  * Звук — своя дверь: движок звука, рецепты и музыка приходят после первого

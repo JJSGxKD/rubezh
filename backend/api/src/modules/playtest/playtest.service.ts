@@ -1,9 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { DomainError } from "../../common/domain-error";
-import type { TelegramPlayer } from "./telegram-init-data";
-import { DIFFICULTIES, PLAYTEST_STORE, type Difficulty, type PlaytestStore, type StoredRun } from "./playtest.store";
-import type { RunSubmission, SessionReport, StressReport } from "./dto/run-submission.dto";
-import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store";
+import { DomainError } from "../../common/domain-error.js";
+import type { TelegramPlayer } from "./telegram-init-data.js";
+import { DIFFICULTIES, PLAYTEST_STORE, type Difficulty, type PlaytestStore, type StoredRun } from "./playtest.store.js";
+import type { RunSubmission, SessionReport, StressReport } from "./dto/run-submission.dto.js";
+import { PLAYTEST_STATS_STORE, type PlaytestStatsStore } from "./playtest-stats.store.js";
 
 /**
  * Сохранения и лидерборд плейтеста. Антифрода нет сознательно: это временная
@@ -116,16 +116,16 @@ export class PlaytestService {
           build: report.build,
           mode: bench.profile.mode,
           loadout: bench.profile.loadout,
-          outcome: bench.stoppedBy ?? "duration",
+          outcome: bench.stoppedBy,
           device: report.device,
-          peakObjects: Math.round(totals.peakObjects ?? totals.peakLoad),
+          peakObjects: Math.round(totals.peakObjects),
           peakEnemies: Math.round(totals.peakLoad),
-          peakProjectiles: Math.round(totals.peakProjectiles ?? 0),
+          peakProjectiles: Math.round(totals.peakProjectiles),
           avgFps: round1(totals.avgFps),
           p95FrameMs: round1(totals.p95FrameMs),
-          displayHz: totals.displayHz ?? null,
+          displayHz: totals.displayHz,
           durationSec: round1(totals.durationSec),
-          interruptions: bench.interruptions ?? 0,
+          interruptions: bench.interruptions,
           breakingLoad: verdict.breakingPoint === null ? null : Math.round(verdict.breakingPoint.load),
         },
         nowMs,

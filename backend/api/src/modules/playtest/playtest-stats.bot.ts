@@ -8,11 +8,11 @@ import {
   type OnModuleDestroy,
 } from "@nestjs/common";
 import type { Redis } from "ioredis";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config";
-import { PLAYTEST_REDIS } from "./playtest-redis";
-import { dayKey } from "./playtest-stats.store";
-import { PlaytestStatsService } from "./playtest-stats.service";
-import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "./telegram-bot-api";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { PLAYTEST_REDIS } from "./playtest-redis.js";
+import { dayKey } from "./playtest-stats.store.js";
+import { PlaytestStatsService } from "./playtest-stats.service.js";
+import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "./telegram-bot-api.js";
 
 /**
  * Бот сводки плейтеста: `/stats` в чате администраторов и отчёт раз в сутки

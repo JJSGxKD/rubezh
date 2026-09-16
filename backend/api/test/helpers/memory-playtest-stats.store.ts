@@ -1,4 +1,4 @@
-import { DIFFICULTIES, type Difficulty, type StoredRun } from "../../src/modules/playtest/playtest.store";
+import { DIFFICULTIES, type Difficulty, type StoredRun } from "../../src/modules/playtest/playtest.store.js";
 import {
   DURATION_BUCKETS_MIN,
   dayKey,
@@ -9,7 +9,7 @@ import {
   type StatsSnapshot,
   type StoredDevice,
   type StressSummary,
-} from "../../src/modules/playtest/playtest-stats.store";
+} from "../../src/modules/playtest/playtest-stats.store.js";
 
 /**
  * Статистика плейтеста в памяти — для тестов сервиса и сводки. Повторяет
