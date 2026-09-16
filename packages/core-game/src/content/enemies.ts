@@ -22,7 +22,20 @@ export const ENEMIES: EnemyDef[] = [
   { id: "tank_ghoul", hp: 60, speed: 30, damage: 8, xp: 6, threat: 8, pattern: "chase" },
   { id: "shooter_wisp", hp: 12, speed: 40, damage: 5, xp: 3, threat: 3, pattern: "kite_and_shoot" },
   { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, xp: 3, threat: 3, pattern: "dash" },
-  { id: "circler_crow", hp: 8, speed: 110, damage: 4, xp: 2, threat: 2, pattern: "orbit" },
+  // Вороны берут числом и теснотой кольца: приходят стаей, заходят широко и
+  // сжимаются вдвое быстрее прежнего. Они единственные быстрее игрока —
+  // от кольца не убежать, его придётся разрывать. Здоровья вдвое больше
+  // прежнего: ворон, гибнущий с одного касания оружия, кольца не держит.
+  {
+    id: "circler_crow",
+    hp: 14,
+    speed: 200,
+    damage: 4,
+    xp: 2,
+    threat: 3,
+    pattern: "orbit",
+    params: { orbitRadius: 220, shrinkPerSec: 34, minRadius: 0 },
+  },
   { id: "bomber_imp", hp: 10, speed: 80, damage: 18, xp: 4, threat: 4, pattern: "exploder" },
   {
     id: "splitter_slime",
