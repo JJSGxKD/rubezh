@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleD
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import type { ChatTarget } from "../telegram/chat-target.js";
 import type { TelegramBotApi, TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
+import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
 import { BotRouter, type BotUpdateHandler } from "./bot-router.js";
 
 /**
