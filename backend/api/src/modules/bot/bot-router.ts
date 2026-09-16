@@ -9,8 +9,18 @@ import type { TelegramUpdate } from "../telegram/telegram-bot-api.js";
 export interface BotUpdateHandler {
   /** имя для логов: чей обработчик упал */
   readonly name: string;
+  /** команды обработчика — для меню Telegram и `/help`; без них команда скрытая */
+  readonly commands?: readonly BotCommandSpec[];
   /** `true` — обновление обработано, следующим обработчикам оно не передаётся */
   handle(update: TelegramUpdate): Promise<boolean>;
+}
+
+/** Команда бота: кому её показывать и что она делает. */
+export interface BotCommandSpec {
+  /** без ведущего слеша */
+  command: string;
+  description: string;
+  audience: "everyone" | "admin";
 }
 
 /**
@@ -24,6 +34,11 @@ export class BotRouter {
 
   register(handler: BotUpdateHandler): void {
     this.handlers.push(handler);
+  }
+
+  /** Все команды зарегистрированных обработчиков в порядке регистрации. */
+  commands(): BotCommandSpec[] {
+    return this.handlers.flatMap((handler) => [...(handler.commands ?? [])]);
   }
 
   async dispatch(update: TelegramUpdate): Promise<void> {

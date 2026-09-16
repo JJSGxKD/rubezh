@@ -96,6 +96,7 @@ export type StatsReporterApi = Pick<TelegramBotApi, "sendPhoto" | "sendMessage" 
 @Injectable()
 export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   readonly name = "playtest-stats";
+  readonly commands = [{ command: "stats", description: "Сводка плейтеста", audience: "admin" as const }];
   private readonly logger = new Logger("playtest-stats");
   private readonly stop = new AbortController();
   private dailyTimer: NodeJS.Timeout | null = null;
@@ -114,9 +115,6 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
 
   onApplicationBootstrap(): void {
     if (!this.config.playtest.stats.enabled) return;
-    void this.api
-      .setMyCommands([{ command: "stats", description: "Сводка плейтеста" }], this.config.telegram.chats.stats, this.stop.signal)
-      .catch((error: unknown) => this.log("warn", "commands_not_set", { reason: reasonOf(error) }));
     this.dailyTimer = setInterval(() => void this.tickDaily(), DAILY_TICK_MS);
     void this.tickDaily();
   }

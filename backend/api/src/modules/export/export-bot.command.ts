@@ -111,6 +111,7 @@ export function periodOf(kind: ExportPeriodKind, now: Date): ExportPeriod | null
 @Injectable()
 export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   readonly name = "export";
+  readonly commands = [{ command: "export", description: "Выгрузка данных закрытого теста", audience: "admin" as const }];
   private readonly logger = new Logger("export");
   private queue: Queue<ExportJob> | null = null;
   private worker: Worker<ExportJob> | null = null;
@@ -142,19 +143,6 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
     this.queue = new Queue("export", { connection: producer });
     this.worker = new Worker("export", (job) => this.run(job.data), { connection: consumer, concurrency: 1 });
     this.worker.on("error", (error) => this.log("warn", "worker_error", { reason: error.message }));
-    // Меню команд администратора — только в его личном чате: остальные
-    // команду не видят (docs/28-diagnostics.md §6.1.2).
-    for (const adminId of this.config.adminTelegramIds) {
-      void this.api
-        .setMyCommands(
-          [
-            { command: "start", description: "Открыть игру" },
-            { command: "export", description: "Выгрузка данных закрытого теста" },
-          ],
-          adminId,
-        )
-        .catch((error: unknown) => this.log("warn", "commands_not_set", { reason: reasonOf(error) }));
-    }
   }
 
   async onModuleDestroy(): Promise<void> {
