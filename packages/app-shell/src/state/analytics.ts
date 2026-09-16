@@ -25,6 +25,7 @@ export const ANALYTICS_EVENTS = [
   "load_time",
   "diagnostics_mode_changed",
   "bench_finished",
+  "feedback_sent",
   "client_error",
 ] as const;
 

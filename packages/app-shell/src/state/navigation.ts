@@ -26,6 +26,7 @@ export type ScreenId =
   | "diagnostics"
   | "gallery"
   | "guide"
+  | "feedback"
   | "soundLab"
   | "about";
 
