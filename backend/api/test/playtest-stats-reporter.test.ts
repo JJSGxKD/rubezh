@@ -9,6 +9,7 @@ import {
   type StatsReporterLocks,
 } from "../src/modules/playtest/playtest-stats.reporter.js";
 import { PlaytestStatsService } from "../src/modules/playtest/playtest-stats.service.js";
+import { chatTargetOf, type ChatRef } from "../src/modules/telegram/chat-target.js";
 import { TelegramApiError, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
 import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
 import { MemoryPlaytestStore } from "./helpers/memory-playtest.store.js";
@@ -51,10 +52,19 @@ describe("кому сводка отвечает", () => {
   it("отвечает любому участнику чата администраторов и адресной команде", () => {
     expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999), cfg, NOW)).toEqual({
       kind: "stats",
-      chatId: CHAT,
+      target: { chatId: CHAT, threadId: null },
       place: "admin_chat",
     });
     expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999, "/stats@rubezh_bot"), cfg, NOW).kind).toBe("stats");
+  });
+
+  it("в супергруппе с темами отвечает в ту же тему, а тема в настройке чат не меняет", () => {
+    const inThread = command({ id: Number(CHAT), type: "supergroup" }, 999);
+    if (inThread.message !== undefined) inThread.message.message_thread_id = 57;
+    expect(decideUpdate(inThread, cfg, NOW)).toMatchObject({ target: { chatId: CHAT, threadId: 57 } });
+    // Настройка с темой — тот же чат: команда из общей ленты тоже своя.
+    const threaded = config({ ADMIN_CHAT_ID: `${CHAT}:12` });
+    expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999), threaded, NOW).kind).toBe("stats");
   });
 
   it("в личке отвечает только администратору из списка", () => {
@@ -109,12 +119,12 @@ function fakeApi(): StatsReporterApi & { photos: { chatId: string; caption: stri
     photos: [] as { chatId: string; caption: string }[],
     messages: [] as string[],
     failPhoto: null as Error | null,
-    async sendPhoto(chatId: string, _png: Buffer | string, caption: string) {
+    async sendPhoto(chat: ChatRef, _png: Buffer | string, caption: string) {
       if (api.failPhoto !== null) throw api.failPhoto;
-      api.photos.push({ chatId, caption });
+      api.photos.push({ chatId: chatTargetOf(chat).chatId, caption });
       return { messageId: api.photos.length, fileId: null };
     },
-    async sendMessage(_chatId: string, text: string) {
+    async sendMessage(_chat: ChatRef, text: string) {
       api.messages.push(text);
       return api.messages.length;
     },

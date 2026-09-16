@@ -9,6 +9,7 @@ import { benchSummaryOf, runSummaryOf } from "../src/modules/diagnostics/diagnos
 import type { DiagnosticsRepository, StoredBenchReport, StoredRunReport } from "../src/modules/diagnostics/diagnostics.repository.js";
 import { submitBenchReportSchema } from "../src/modules/diagnostics/dto/bench-report.dto.js";
 import { submitRunReportSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
+import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
 import { TelegramApiError } from "../src/modules/telegram/telegram-bot-api.js";
 import { benchSubmission, DEVICE, REPORT_ID } from "./helpers/bench-report.js";
 import { runBucket, runSubmission, RUN_REPORT_ID, type RunPatch } from "./helpers/run-report.js";
@@ -118,9 +119,9 @@ function notifier(env: Record<string, string> = {}) {
   const sent: { chatId: string; caption: string }[] = [];
   let failure: Error | null = null;
   const api: NotifierBotApi = {
-    async sendPhoto(chatId, _photo, caption) {
+    async sendPhoto(chat, _photo, caption) {
       if (failure !== null) throw failure;
-      sent.push({ chatId, caption });
+      sent.push({ chatId: chatTargetOf(chat).chatId, caption });
       return { messageId: 1, fileId: null };
     },
   };
@@ -153,6 +154,17 @@ describe("отправка уведомления", () => {
     expect(notifier({ ADMIN_CHAT_ID: "" }).instance.enabled).toBe(false);
     expect(notifier({ DIAGNOSTICS_INGEST_ENABLED: "false" }).instance.enabled).toBe(false);
     expect(notifier({ ADMIN_NOTIFY_REPORTS: "false" }).instance.enabled).toBe(false);
+  });
+
+  it("шлёт каждый вид отчёта в свой чат и тему", async () => {
+    const split = notifier({ ADMIN_CHAT_STRESS: "-1001111111111:5", ADMIN_CHAT_RUNS: "-1002222222222" });
+    await split.instance.process({ data: { reportId: REPORT_ID, kind: "bench" } });
+    await split.instance.process({ data: { reportId: RUN_REPORT_ID, kind: "run" } });
+    expect(split.sent.map((item) => item.chatId)).toEqual(["-1001111111111", "-1002222222222"]);
+
+    // Поток без своего адреса берёт общий; выключенный поток — не enabled.
+    expect(notifier({ ADMIN_CHAT_ID: "" }).instance.enabled).toBe(false);
+    expect(notifier({ ADMIN_CHAT_ID: "", ADMIN_CHAT_RUNS: "-100" }).instance.enabled).toBe(true);
   });
 
   it("шлёт карточку проблемного забега по записи из базы", async () => {

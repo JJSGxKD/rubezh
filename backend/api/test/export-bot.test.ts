@@ -9,6 +9,7 @@ import {
   type ExportJob,
 } from "../src/modules/export/export-bot.command.js";
 import type { ExportArtifact, ExportRequest, ExportService } from "../src/modules/export/export.service.js";
+import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
 import type { TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
 
 // Выгрузка через бота (docs/28-diagnostics.md §6.1.5).
@@ -50,18 +51,18 @@ function setup(env: Record<string, string> = {}, parts = 1) {
   });
   const calls: Call[] = [];
   const api: ExportBotApi = {
-    async sendMessage(chatId, text, _signal, options) {
-      calls.push({ method: "sendMessage", chatId, text, keyboard: options?.keyboard });
+    async sendMessage(chat, text, _signal, options) {
+      calls.push({ method: "sendMessage", chatId: chatTargetOf(chat).chatId, text, keyboard: options?.keyboard });
       return calls.length;
     },
-    async editMessageText(chatId, _messageId, text) {
-      calls.push({ method: "editMessageText", chatId, text });
+    async editMessageText(chat, _messageId, text) {
+      calls.push({ method: "editMessageText", chatId: chatTargetOf(chat).chatId, text });
     },
     async answerCallbackQuery(_id, text) {
       calls.push({ method: "answerCallbackQuery", ...(text === undefined ? {} : { text }) });
     },
-    async sendDocument(chatId, _path, name, text) {
-      calls.push({ method: "sendDocument", chatId, name, text });
+    async sendDocument(chat, _path, name, text) {
+      calls.push({ method: "sendDocument", chatId: chatTargetOf(chat).chatId, name, text });
     },
     async setMyCommands() {},
   };

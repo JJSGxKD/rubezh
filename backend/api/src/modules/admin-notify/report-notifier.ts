@@ -7,6 +7,7 @@ import { createQueueConnection } from "../../infra/queues.js";
 import { DiagnosticsHooks, type ReceivedReport } from "../diagnostics/diagnostics-hooks.js";
 import { benchSummaryOf, runSummaryOf } from "../diagnostics/diagnostics-summary.js";
 import { DIAGNOSTICS_REPOSITORY, type DiagnosticsRepository } from "../diagnostics/diagnostics.repository.js";
+import type { ChatTarget } from "../telegram/chat-target.js";
 import { TelegramApiError, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
 import { renderRunCardPng, runCaption, type RunCardInput } from "./run-card.js";
@@ -57,7 +58,8 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
 
   get enabled(): boolean {
     const { telegram, notifyReports, ingest } = this.config;
-    return notifyReports && ingest.reportsEnabled && telegram.adminChatId !== "" && telegram.botToken !== "";
+    const anyChat = telegram.chats.stressReports !== null || telegram.chats.runReports !== null;
+    return notifyReports && ingest.reportsEnabled && anyChat && telegram.botToken !== "";
   }
 
   onModuleInit(): void {
@@ -88,7 +90,7 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
   }
 
   async enqueue(report: ReceivedReport): Promise<void> {
-    if (this.queue === null) return;
+    if (this.queue === null || this.chatFor(report.kind) === null) return;
     if (report.kind === "run" && report.summary.problems.length === 0) return;
     // jobId от reportId: повтор отчёта не породит второе уведомление. Двоеточие
     // BullMQ в своих идентификаторах не пускает — это разделитель его ключей.
@@ -116,8 +118,12 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
     // повтор не поможет.
     if (card === null) throw new UnrecoverableError(`отчёт ${job.data.reportId} не найден`);
 
+    const chat = this.chatFor(job.data.kind ?? "bench");
+    // Поток отключили, пока задание ждало очереди: слать некуда.
+    if (chat === null) throw new UnrecoverableError(`некуда слать отчёт ${job.data.reportId}`);
+
     try {
-      await this.api.sendPhoto(this.config.telegram.adminChatId, card.png, card.caption);
+      await this.api.sendPhoto(chat, card.png, card.caption);
       this.log("log", "notify_sent", { reportId: job.data.reportId, kind: job.data.kind ?? "bench" });
     } catch (error: unknown) {
       if (error instanceof TelegramApiError && error.errorCode === 429 && error.retryAfterSec !== null && this.queue !== null) {
@@ -132,6 +138,12 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
       }
       throw error;
     }
+  }
+
+  /** У каждого вида отчёта свой поток: стресс-тесты и забеги не мешаются. */
+  private chatFor(kind: "bench" | "run"): ChatTarget | null {
+    const { chats } = this.config.telegram;
+    return kind === "run" ? chats.runReports : chats.stressReports;
   }
 
   /** Карточка по отчёту из базы: у записи забега и стресс-теста — своя. */

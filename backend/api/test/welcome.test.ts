@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { BotRouter } from "../src/modules/bot/bot-router.js";
+import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
 import { TelegramApiError, type SendOptions, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
 import {
   displayName,
@@ -107,9 +108,9 @@ function setup(env: Record<string, string> = {}, progress: () => Promise<Welcome
   let renders = 0;
   let rejectFileId = false;
   const api: WelcomeBotApi = {
-    async sendPhoto(chatId, photo, caption, _signal, options = {}) {
+    async sendPhoto(chat, photo, caption, _signal, options = {}) {
       if (typeof photo === "string" && rejectFileId) throw new TelegramApiError("sendPhoto", 400, "Bad Request: wrong file identifier", null);
-      calls.push({ chatId, photo: typeof photo === "string" ? photo : "bytes", caption, options });
+      calls.push({ chatId: chatTargetOf(chat).chatId, photo: typeof photo === "string" ? photo : "bytes", caption, options });
       return { messageId: calls.length, fileId: `file-${calls.length}` };
     },
     async setMyCommands() {},
