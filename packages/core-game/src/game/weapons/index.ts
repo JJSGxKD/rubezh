@@ -73,4 +73,4 @@ export {
   type ResolvedWeaponLevel,
   type WeaponType,
 } from "./weapon-types";
-export { MAX_ORBITERS, orbiterCount, orbiterPosition, type OrbiterPoint } from "./orbit";
+export { MAX_ORBITERS, ORBITER_RADIUS, orbiterCount, orbiterPosition, type OrbiterPoint } from "./orbit";

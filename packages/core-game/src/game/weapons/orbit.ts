@@ -6,7 +6,7 @@ import type { WeaponBehaviorImpl } from "./behavior";
 import type { ResolvedWeaponLevel } from "./weapon-types";
 
 /** Радиус самого орбитера в игровых единицах. */
-const ORBITER_RADIUS = 12;
+export const ORBITER_RADIUS = 12;
 
 /** Больше шести оберегов на кольце не читается на экране телефона. */
 export const MAX_ORBITERS = 6;

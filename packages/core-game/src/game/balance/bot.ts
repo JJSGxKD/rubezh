@@ -1,6 +1,7 @@
 import type { UpgradeOption } from "@bh/shared-types";
 import type { SimInput } from "../sim/step";
 import type { World } from "../sim/world";
+import { ORBITER_RADIUS } from "../weapons";
 
 /**
  * Бот-игрок для калибровки баланса (docs/26-stage2-plan.md, WP4.6).
@@ -25,8 +26,17 @@ export interface Bot {
   choose(offers: readonly UpgradeOption[]): string;
 }
 
-/** Насколько близко враг должен подойти, чтобы бот начал уходить. */
+/**
+ * Насколько близко враг должен подойти, чтобы бот начал уходить, — для оружия,
+ * бьющего на расстоянии. Дальше этого бот врага просто не считает опасным.
+ */
 const DANGER_RADIUS_UNITS = 200;
+
+/**
+ * Запас поверх радиуса оружия ближнего боя: бот держит врагов у самой кромки
+ * своего кольца или ауры, а не убегает от них.
+ */
+const CONTACT_MARGIN_UNITS = 20;
 
 /**
  * Дальность, на которой бот ищет, к кому подойти. Чистое бегство — не модель
@@ -66,7 +76,7 @@ function dodgingBot(): Bot {
     input(world) {
       const player = world.player;
       const scale = world.config.unitScale;
-      const danger = DANGER_RADIUS_UNITS * scale;
+      const danger = holdDistance(world);
       const reach = APPROACH_RADIUS_UNITS * scale;
       // Сетка коллизий перестроена на прошлом шаге: тик задержки боту не
       // мешает, а полный проход по пулу на каждом тике стоил бы прогону минуты.
@@ -122,4 +132,31 @@ function dodgingBot(): Bot {
       return offers[0].id;
     },
   };
+}
+
+/**
+ * На каком расстоянии бот держит врагов. Дистанция берётся от оружия, а не
+ * задаётся числом: с «Искрой» игрок кайтит, с «Оберегом» обязан подпускать —
+ * иначе кольцо не касается никого, и таблица меряет не баланс оружия, а
+ * скорость бега. Из двух оружий побеждает дальнобойное: подставляться незачем,
+ * когда есть чем бить издали.
+ */
+function holdDistance(world: World): number {
+  const scale = world.config.unitScale;
+  let hold = 0;
+  for (const slot of world.loadout.weapons) {
+    const type = world.weaponTypes[slot.typeIndex];
+    if (type === undefined) continue;
+    const level = type.levels[Math.min(slot.level, type.levels.length) - 1];
+    if (level === undefined) continue;
+
+    const reach =
+      type.behavior === "orbit"
+        ? level.areaRadius + (ORBITER_RADIUS + CONTACT_MARGIN_UNITS) * scale
+        : type.behavior === "aura"
+          ? level.areaRadius + CONTACT_MARGIN_UNITS * scale
+          : DANGER_RADIUS_UNITS * scale;
+    if (reach > hold) hold = reach;
+  }
+  return hold === 0 ? DANGER_RADIUS_UNITS * scale : hold;
 }
