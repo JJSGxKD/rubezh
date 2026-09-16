@@ -99,7 +99,9 @@ export function DiagnosticsScreen(): ReactNode {
         <SectionTitle>{t("diagnostics.runBench")}</SectionTitle>
         <ListGroup>
           {access.stressTest ? <ListItem title={t("mode.stress")} onClick={() => navigation.push("stress")} /> : null}
-          <ListItem title={t("gallery.title")} onClick={() => navigation.push("gallery")} />
+          {/* Витрина компонентов — инструмент команды: игроку она показывает
+              экраны, которых в игре ещё нет. */}
+          {access.admin ? <ListItem title={t("gallery.title")} onClick={() => navigation.push("gallery")} /> : null}
         </ListGroup>
         {access.stressTest ? null : <p className="mt-2 text-xs text-text-muted">{t("diagnostics.benchClosed")}</p>}
       </ContentColumn>

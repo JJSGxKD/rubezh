@@ -249,14 +249,17 @@ describe("очередь итогов забега", () => {
     expect(storage.values["bh.meta.v1.bestSurvivalSec.normal"]).toBe("420");
   });
 
-  it("инструменты команды открывает сервер, а в dev-сборке они открыты без него", async () => {
+  it("инструменты команды открывает сервер, а на dev-сервере — явный VITE_DEV_TOOLS", async () => {
     reply = async () => json(200, { data: { admin: false, stressTest: true, devMode: false } });
     mount();
     expect(effectiveAccess(usePlaytest.getState().access, false).stressTest).toBe(false);
 
     expect(await usePlaytest.getState().loadAccess()).toBeNull();
     expect(effectiveAccess(usePlaytest.getState().access, false)).toEqual({ admin: false, stressTest: true, devMode: false });
-    expect(effectiveAccess(null, true).devMode).toBe(true);
+    expect(effectiveAccess(null, true)).toEqual({ admin: true, stressTest: true, devMode: true });
+    // Без ответа сервера и без явного разрешения не открыто ничего: через
+    // туннель к dev-серверу играют тестеры.
+    expect(effectiveAccess(null, false)).toEqual({ admin: false, stressTest: false, devMode: false });
   });
 
   it("сборка без бэкенда плейтеста ничего не копит и не отправляет", async () => {
