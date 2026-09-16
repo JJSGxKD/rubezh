@@ -123,6 +123,7 @@
   --animate-guide-blast: guide-blast 2.4s var(--ease-out) infinite;
   --animate-guide-split: guide-split 2.4s var(--ease-base) infinite;
   --animate-guide-scatter: guide-scatter 2.4s var(--ease-out) infinite;
+  --animate-guide-rush: guide-rush 2.4s linear infinite;
   --animate-guide-pulse: guide-pulse 1.6s var(--ease-base) infinite;
   --animate-guide-strike: guide-strike 1.6s var(--ease-out) infinite;
   --animate-guide-fuse-ring: guide-fuse-ring 2.4s linear infinite;
@@ -212,6 +213,24 @@
     }
     50% {
       opacity: 0.45;
+    }
+  }
+
+  /* Проносится мимо: входит с одной стороны и уходит за противоположную. */
+  @keyframes guide-rush {
+    0% {
+      opacity: 0;
+      transform: translate(var(--guide-x), var(--guide-y));
+    }
+    15% {
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(calc(var(--guide-x) * -1), calc(var(--guide-y) * -1));
     }
   }
 
