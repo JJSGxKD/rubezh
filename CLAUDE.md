@@ -183,6 +183,10 @@ IEEE 754), степень — умножением в цикле, направл
 
 // с параметрами паттерна — всё незаданное берётся из умолчаний
 { id: "fast_wolf", hp: 14, speed: 70, damage: 7, xp: 3, pattern: "dash", params: { telegraphSec: 0.4 } }
+
+// матрёшка: распадается смесью, а слизни внутри распадаются дальше
+{ id: "boss_x", hp: 900, speed: 44, damage: 22, xp: 80, rank: "boss", pattern: "splitter",
+  params: { children: [{ enemy: "splitter_slime", count: 3 }, { enemy: "dasher_wolf", count: 3 }] } }
 ```
 
 `xp` — сколько опыта за убийство: дорогой враг должен и качать быстрее,
@@ -245,7 +249,7 @@ IEEE 754), степень — умножением в цикле, направл
 | `dash` | Сближается, мигает, рывок по прямой | `triggerDistance`, `telegraphSec`, `dashSpeed`, `dashDurationSec`, `recoverSec` |
 | `orbit` | Кружит вокруг игрока, сужая кольцо | `orbitRadius`, `shrinkPerSec`, `minRadius` |
 | `exploder` | Подбегает, мигает, взрывается по площади, касанием не бьёт | `triggerDistance`, `fuseSec`, `blastRadius` |
-| `splitter` | Преследует, при смерти распадается | **`childEnemy`** (обязателен, не делящийся), `childCount` |
+| `splitter` | Преследует, при смерти распадается на смесь других | **`children`** (обязателен): `[{ enemy, count }]`, до четырёх видов и десяти потомков; потомок может быть делящимся, если цепочка кончается |
 | `rush` | Не преследует: целится с упреждением, проносится мимо насквозь и заходит снова | `leadSec`, `runSec` |
 
 Расстояния и скорости — в тех же единицах, что `speed`; время — в секундах.

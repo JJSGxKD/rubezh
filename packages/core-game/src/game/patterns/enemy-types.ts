@@ -79,12 +79,16 @@ export interface ResolvedPatternParams {
   blastRadius: number;
   leadSec: number;
   runSec: number;
-  /** индекс типа, на который распадается делящийся; -1 — не распадается */
-  childTypeIndex: number;
-  childCount: number;
+  /** на кого распадается делящийся: индексы типов и сколько каждого */
+  children: SplitChild[];
 }
 
-type NumericParam = Exclude<keyof ResolvedPatternParams, "childTypeIndex">;
+export interface SplitChild {
+  typeIndex: number;
+  count: number;
+}
+
+type NumericParam = Exclude<keyof ResolvedPatternParams, "children">;
 
 const NEUTRAL_PARAMS: ResolvedPatternParams = {
   steeringPerSec: 0,
@@ -103,8 +107,7 @@ const NEUTRAL_PARAMS: ResolvedPatternParams = {
   blastRadius: 0,
   leadSec: 0,
   runSec: 0,
-  childTypeIndex: -1,
-  childCount: 0,
+  children: [],
 };
 
 /**
@@ -125,7 +128,7 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
   },
   orbit: { orbitRadius: 180, shrinkPerSec: 18, minRadius: 0 },
   exploder: { triggerDistance: 40, fuseSec: 0.9, blastRadius: 90 },
-  splitter: { steeringPerSec: 3.2, childCount: 3 },
+  splitter: { steeringPerSec: 3.2 },
   rush: { leadSec: 0.55, runSec: 2.6 },
 };
 
@@ -137,7 +140,7 @@ const ALLOWED_PARAMS: Record<EnemyPattern, readonly string[]> = {
   dash: ["triggerDistance", "telegraphSec", "dashSpeed", "dashDurationSec", "recoverSec"],
   orbit: ["orbitRadius", "shrinkPerSec", "minRadius"],
   exploder: ["triggerDistance", "fuseSec", "blastRadius"],
-  splitter: ["childEnemy", "childCount"],
+  splitter: ["children"],
   rush: ["leadSec", "runSec"],
 };
 
@@ -156,7 +159,16 @@ const SCALED_PARAMS: readonly NumericParam[] = [
 /** Параметры, которые могут быть нулём; остальные строго положительны. */
 const ZERO_ALLOWED: ReadonlySet<string> = new Set(["minRadius"]);
 
-const MAX_CHILD_COUNT = 8;
+/** Сколько потомков выпускает распад — всего и по видам за раз. */
+const MAX_CHILD_COUNT = 10;
+const MAX_CHILD_KINDS = 4;
+const DEFAULT_CHILD_COUNT = 3;
+
+/**
+ * На сколько ступеней вглубь распадается матрёшка. Больше трёх игрок уже не
+ * читает как ступени — он видит лавину.
+ */
+const MAX_SPLIT_DEPTH = 3;
 
 /** Тип врага, разложенный из контента в плоский вид для горячего цикла. */
 export interface EnemyType {
@@ -236,7 +248,7 @@ function findParamProblems(def: EnemyDef, byId: ReadonlyMap<string, EnemyDef>): 
       problems.push(`враг ${def.id}: параметр ${key} не относится к паттерну ${def.pattern}`);
       continue;
     }
-    if (key === "childEnemy") continue;
+    if (key === "children") continue;
     if (typeof value !== "number" || !Number.isFinite(value)) {
       problems.push(`враг ${def.id}: ${key} должен быть числом`);
     } else if (ZERO_ALLOWED.has(key) ? value < 0 : value <= 0) {
@@ -268,24 +280,63 @@ function findSplitterProblems(
   byId: ReadonlyMap<string, EnemyDef>,
 ): string[] {
   const problems: string[] = [];
-  const childId = params["childEnemy"];
-  const child = typeof childId === "string" ? byId.get(childId) : undefined;
+  const children = params["children"];
 
-  if (typeof childId !== "string") {
-    problems.push(`враг ${id}: делящемуся врагу нужен childEnemy`);
-  } else if (child === undefined) {
-    problems.push(`враг ${id}: childEnemy ${childId} не найден`);
-  } else if (child.pattern === "splitter") {
-    // Делящийся из делящихся — геометрический рост популяции от одного
-    // выстрела: пул кончается мгновенно, а экран заполняется за секунду.
-    problems.push(`враг ${id}: childEnemy не может быть делящимся`);
+  if (!Array.isArray(children) || children.length === 0) {
+    return [`враг ${id}: делящемуся врагу нужен непустой children`];
+  }
+  if (children.length > MAX_CHILD_KINDS) {
+    problems.push(`враг ${id}: в children не больше ${MAX_CHILD_KINDS} видов`);
   }
 
-  const count = params["childCount"];
-  if (count !== undefined && (!Number.isInteger(count) || Number(count) > MAX_CHILD_COUNT)) {
-    problems.push(`враг ${id}: childCount — целое от 1 до ${MAX_CHILD_COUNT}`);
+  let total = 0;
+  for (const entry of children) {
+    const child = entry as { enemy?: unknown; count?: unknown };
+    if (typeof child.enemy !== "string" || !byId.has(child.enemy)) {
+      problems.push(`враг ${id}: в children нет врага ${String(child.enemy)}`);
+      continue;
+    }
+    const count = child.count ?? DEFAULT_CHILD_COUNT;
+    if (!Number.isInteger(count) || Number(count) < 1 || Number(count) > MAX_CHILD_COUNT) {
+      problems.push(`враг ${id}: count у ${child.enemy} — целое от 1 до ${MAX_CHILD_COUNT}`);
+      continue;
+    }
+    total += Number(count);
   }
+  if (total > MAX_CHILD_COUNT) {
+    // Иначе один выстрел выкидывает на поле толпу, которую не видно целиком.
+    problems.push(`враг ${id}: всего потомков ${String(total)}, больше ${MAX_CHILD_COUNT} за раз не выпускаем`);
+  }
+
+  problems.push(...findSplitChainProblems(id, byId));
   return problems;
+}
+
+/**
+ * Цепочка распада обязана кончаться. Матрёшка вложена по замыслу, но кольцо
+ * «А делится на Б, Б делится на А» множит популяцию от одного выстрела до
+ * конца пула, а слишком глубокая вложенность превращает смерть босса в
+ * лавину, которую игрок не читает.
+ */
+function findSplitChainProblems(id: string, byId: ReadonlyMap<string, EnemyDef>): string[] {
+  const seen = new Set<string>();
+  const walk = (current: string, depth: number): string[] => {
+    if (seen.has(current)) return [`враг ${id}: цепочка распада зациклена на ${current}`];
+    if (depth > MAX_SPLIT_DEPTH) return [`враг ${id}: цепочка распада глубже ${MAX_SPLIT_DEPTH} ступеней`];
+
+    const def = byId.get(current);
+    if (def === undefined || def.pattern !== "splitter") return [];
+
+    seen.add(current);
+    const children = (def.params as { children?: { enemy?: unknown }[] }).children ?? [];
+    const problems: string[] = [];
+    for (const child of children) {
+      if (typeof child.enemy === "string") problems.push(...walk(child.enemy, depth + 1));
+    }
+    seen.delete(current);
+    return problems;
+  };
+  return walk(id, 1);
 }
 
 function numberOr(value: unknown, fallback: number): number {
@@ -331,8 +382,8 @@ function resolveParams(
   const params: Readonly<Record<string, unknown>> = def.params ?? {};
 
   for (const [key, value] of Object.entries(params)) {
-    if (key === "childEnemy" && typeof value === "string") {
-      resolved.childTypeIndex = indexById.get(value) ?? -1;
+    if (key === "children" && Array.isArray(value)) {
+      resolved.children = resolveChildren(value, indexById);
     } else if (typeof value === "number" && isNumericParam(key)) {
       resolved[key] = value;
     }
@@ -342,6 +393,23 @@ function resolveParams(
   return resolved;
 }
 
+/** Потомки распада: id в индексы типов, умолчание числа — здесь же. */
+function resolveChildren(
+  entries: readonly unknown[],
+  indexById: ReadonlyMap<string, number>,
+): SplitChild[] {
+  const children: SplitChild[] = [];
+  for (const entry of entries) {
+    const child = entry as { enemy?: unknown; count?: unknown };
+    if (typeof child.enemy !== "string") continue;
+
+    const typeIndex = indexById.get(child.enemy) ?? -1;
+    if (typeIndex < 0) continue;
+    children.push({ typeIndex, count: typeof child.count === "number" ? child.count : DEFAULT_CHILD_COUNT });
+  }
+  return children;
+}
+
 function isNumericParam(key: string): key is NumericParam {
-  return key in NEUTRAL_PARAMS && key !== "childTypeIndex";
+  return key in NEUTRAL_PARAMS && key !== "children";
 }

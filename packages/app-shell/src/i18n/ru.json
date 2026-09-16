@@ -282,7 +282,7 @@
   "enemy.splitter_slime.name": "Слизень",
   "enemy.rushing_bats.name": "Нетопыри",
   "enemy.elite_ghoul.name": "Упырь-вожак",
-  "enemy.miniboss_maw.name": "Пасть",
+  "enemy.boss_matryoshka.name": "Матрёшка",
 
   "guide.title": "Гайдбук",
   "guide.menu.hint": "Враги, оружие, улучшения",
@@ -334,7 +334,7 @@
   "guide.enemy.speed.slow": "Медленный",
   "guide.enemy.speed.medium": "Средний",
   "guide.enemy.speed.fast": "Быстрый",
-  "guide.enemy.splits": "При смерти распадается: {count} × {child}",
+  "guide.enemy.splits": "При смерти распадается: {children}",
   "guide.pattern.swarm.name": "Рой",
   "guide.pattern.swarm.text": "Бежит прямо на тебя. По одному слабый, но приходит толпой.",
   "guide.pattern.swarm.tip": "Не давай окружить: веди толпу за собой, а не стой в центре.",

@@ -28,7 +28,7 @@ const SLIME: EnemyDef = {
   damage: 0,
   xp: 1,
   pattern: "splitter",
-  params: { childEnemy: "grunt", childCount: 2 },
+  params: { children: [{ enemy: "grunt", count: 2 }] },
 };
 
 const NONE = { chance: 0, eliteChance: 0, maxOnField: 0 };

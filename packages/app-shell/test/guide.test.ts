@@ -40,8 +40,8 @@ describe("гайдбук", () => {
     const splitters = [...regularEnemies(), ...eliteEnemies()].filter((enemy) => enemy.def.pattern === "splitter");
     expect(splitters.length).toBeGreaterThan(0);
     for (const splitter of splitters) {
-      expect(splitter.child, splitter.def.id).not.toBeNull();
-      expect(splitter.child?.count).toBeGreaterThan(0);
+      expect(splitter.children, splitter.def.id).not.toHaveLength(0);
+      for (const child of splitter.children) expect(child.count).toBeGreaterThan(0);
     }
   });
 

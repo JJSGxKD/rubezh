@@ -59,7 +59,7 @@ export const ENEMIES: EnemyDef[] = [
     xp: 4,
     threat: 5,
     pattern: "splitter",
-    params: { childEnemy: "swarm_rat", childCount: 3 },
+    params: { children: [{ enemy: "swarm_rat", count: 3 }] },
   },
 
   // Элиты и мини-боссы приходят только событиями таймлайна, в заданные минуты
@@ -77,15 +77,24 @@ export const ENEMIES: EnemyDef[] = [
     pattern: "chase",
     params: { steeringPerSec: 2.4 },
   },
+  // Матрёшка — босс на три ступени: сама рассыпается смесью, слизни внутри
+  // рассыпаются крысами. Смерть босса не кончает бой, а начинает второй его
+  // этап, и каждая ступень читается как свой бой, а не как та же толпа.
   {
-    id: "miniboss_maw",
-    hp: 700,
-    speed: 46,
-    damage: 20,
-    xp: 60,
-    threat: 200,
+    id: "boss_matryoshka",
+    hp: 900,
+    speed: 44,
+    damage: 22,
+    xp: 80,
+    threat: 240,
     rank: "boss",
     pattern: "splitter",
-    params: { childEnemy: "dasher_wolf", childCount: 6 },
+    params: {
+      children: [
+        { enemy: "splitter_slime", count: 3 },
+        { enemy: "dasher_wolf", count: 3 },
+        { enemy: "bomber_imp", count: 2 },
+      ],
+    },
   },
 ];

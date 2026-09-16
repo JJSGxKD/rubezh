@@ -227,7 +227,7 @@ function Enemies(): ReactNode {
 }
 
 function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
-  const { def, child } = props.enemy;
+  const { def, children } = props.enemy;
   const elite = def.rank !== undefined;
   const name = t(`enemy.${def.id}.name`);
 
@@ -240,7 +240,7 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
           pattern={def.pattern}
           elite={elite}
           label={name}
-          {...(child === null ? {} : { child: child.def.pattern })}
+          {...(children[0] === undefined ? {} : { child: children[0].def.pattern })}
         />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -252,10 +252,15 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
             {t("guide.enemy.stats", { hp: def.hp, damage: def.damage, xp: def.xp })} ·{" "}
             {t(`guide.enemy.speed.${speedClass(def.speed)}`).toLowerCase()}
           </p>
-          {child === null ? null : (
+          {children.length === 0 ? null : (
             <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
               <Shuffle size={12} aria-hidden="true" className="shrink-0" />
-              {t("guide.enemy.splits", { count: child.count, child: t(`enemy.${child.def.id}.name`) })}
+              {/* Матрёшка рассыпается смесью — перечисляем всех, кто в ней. */}
+              {t("guide.enemy.splits", {
+                children: children
+                  .map((child) => `${String(child.count)} × ${t(`enemy.${child.def.id}.name`)}`)
+                  .join(", "),
+              })}
             </p>
           )}
         </div>
