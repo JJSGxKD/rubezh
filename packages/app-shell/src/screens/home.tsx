@@ -77,7 +77,7 @@ export function LobbyScreen(): ReactNode {
               block
               glow
               onClick={() => {
-                useRun.getState().prepareResume(saved);
+                useRun.getState().intend({ kind: "resume", snapshot: saved });
                 navigation.push("run");
               }}
             >
@@ -412,7 +412,7 @@ export function WeaponScreen(): ReactNode {
             // Запоминаем даже выбор по умолчанию: забег должен стартовать с
             // тем оружием, которое подсвечено на экране.
             meta.rememberWeapon(selected);
-            useRun.getState().prepareResume(null);
+            useRun.getState().intend({ kind: "new" });
             navigation.replace("run");
           }}
         >

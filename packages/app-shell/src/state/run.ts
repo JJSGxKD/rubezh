@@ -38,6 +38,16 @@ export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "
  */
 export type RunLoadingStage = "engine" | "world";
 
+/**
+ * С чем игрок пришёл на экран забега: начать новый или продолжить
+ * сохранённый. Намерение нужно именно потому, что экран монтируется и сам —
+ * и тогда его нет вовсе (docs/27-design-system-and-app-shell.md §7).
+ */
+export type RunIntent = { kind: "new" } | { kind: "resume"; snapshot: RunSnapshot };
+
+/** Что знает о забеге сам экран; продолжать или начинать — решает стор. */
+export type RunEntryOptions = Omit<RunStartOptions, "resume">;
+
 export interface RunStartOptions {
   container: HTMLElement;
   startingWeaponId: string;
@@ -91,8 +101,14 @@ export interface RunStore {
    * Снимается с очереди, только когда сессия создана: в режиме разработки
    * React запускает экран дважды, и первый запуск не должен съесть снимок.
    */
-  pendingResume: RunSnapshot | null;
-  prepareResume(snapshot: RunSnapshot | null): void;
+  /**
+   * С чем игрок пришёл на экран забега. `null` — не приходил вовсе: экран
+   * смонтировался сам, например после сворачивания приложения.
+   */
+  intent: RunIntent | null;
+  intend(intent: RunIntent): void;
+  /** Войти на экран забега: продолжить, начать заново или поднять сохранение. */
+  enter(options: RunEntryOptions): Promise<void>;
 }
 
 let session: RunSession | null = null;
@@ -149,10 +165,27 @@ const IDLE = {
 export const useRun = create<RunStore>((set, get) => ({
   ...IDLE,
   seed: 1,
-  pendingResume: null,
+  intent: null,
 
-  prepareResume(snapshot): void {
-    set({ pendingResume: snapshot });
+  intend(intent): void {
+    set({ intent });
+  },
+
+  /**
+   * Вход на экран забега.
+   *
+   * Экран монтируется не только по нажатию игрока: свернули приложение,
+   * развернули — и он собрался заново. Начинать в этот момент новый забег
+   * нельзя, он затрёт сохранение, которого игрок не бросал, поэтому без
+   * намерения забег **продолжается**, а не начинается.
+   */
+  async enter(options): Promise<void> {
+    const intent = get().intent;
+    const saved = useSavedRun.getState().saved;
+    const resume =
+      intent?.kind === "resume" ? intent.snapshot : intent === null ? (saved ?? undefined) : undefined;
+
+    await get().start({ ...options, ...(resume === undefined ? {} : { resume }) });
   },
 
   async start(options: RunStartOptions): Promise<void> {
@@ -185,7 +218,11 @@ export const useRun = create<RunStore>((set, get) => ({
       // Забег разработчика — по выбору в «Играть» или продолженный забег с
       // читами: иначе бессмертие пропало бы после сворачивания, а пометка
       // осталась. Право проверяется на каждом старте, а не при взводе.
-      const devRun = devModeAllowed() && (useDevMode.getState().armed || resume?.cheats === true);
+      // Режим продолженного забега берётся из снимка, а не из взведённого
+      // флага: флаг живёт до перезапуска приложения, а продолжают забег и
+      // через сутки — иначе панель разработчика пропадает по дороге.
+      const devRun =
+        devModeAllowed() && (useDevMode.getState().armed || resume?.dev === true || resume?.cheats === true);
       const created = engine.start({
         container: options.container,
         seed,
@@ -212,7 +249,7 @@ export const useRun = create<RunStore>((set, get) => ({
       session = created;
       unsubscribes = subscribe(created, set, get);
       if (devRun) unsubscribes.push(followDevSettings(created));
-      set({ pendingResume: null, devRun });
+      set({ intent: null, devRun });
       // Продолженный забег движок сам ставит на паузу или на выбор — фазу
       // пришлёт событие, своя догадка здесь её затёрла бы.
       if (get().phase === "loading") set({ phase: "running" });

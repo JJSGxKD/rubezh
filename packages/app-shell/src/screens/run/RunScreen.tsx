@@ -30,6 +30,7 @@ export function RunScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics((state) => state.enabled);
   const isActive = usePlatform((state) => state.isActive);
+  const expanded = usePlatform((state) => state.viewport.expanded);
   const submitted = usePlaytest((state) => state.lastSubmitted);
   const [stats, setStats] = useState<RunInspection | null>(null);
   const openStats = (): void => setStats(useRun.getState().inspect());
@@ -45,23 +46,25 @@ export function RunScreen(): ReactNode {
   };
   // Оружие для экрана загрузки фиксируется при входе: у продолженного забега
   // оно своё, а ожидание старта движок снимает сразу, как только начал.
-  const [weaponId] = useState(
-    () => useRun.getState().pendingResume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
-  );
+  const [weaponId] = useState(() => {
+    const intent = useRun.getState().intent;
+    return intent?.kind === "resume" ? intent.snapshot.startingWeaponId : useMeta.getState().lastWeaponId;
+  });
 
   useEffect(() => {
     const container = containerRef.current;
     if (container === null) return;
 
     // Оружие читается разово из стора, а не из подписки: смена запомненного
-    // выбора посреди забега не должна его перезапускать.
-    const resume = useRun.getState().pendingResume;
-    void useRun.getState().start({
+    // выбора посреди забега не должна его перезапускать. Продолжать или
+    // начинать — решает стор: экран монтируется и сам, без выбора игрока.
+    const intent = useRun.getState().intent;
+    const resume = intent?.kind === "resume" ? intent.snapshot : null;
+    void useRun.getState().enter({
       container,
       startingWeaponId: resume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
       mapId: resume?.mapId ?? DEFAULT_MAP_ID,
       difficultyId: resume?.difficultyId ?? useMeta.getState().lastDifficultyId,
-      ...(resume === null ? {} : { resume }),
     });
 
     // Уход с экрана уносит с собой и движок: чанк остаётся загруженным, а
@@ -70,14 +73,15 @@ export function RunScreen(): ReactNode {
   }, []);
 
   /**
-   * Автопауза при сворачивании. Игрок, которому позвонили, не должен
-   * вернуться к экрану смерти: пока приложение в фоне, кадры не идут, а
-   * враги — идут.
+   * Автопауза при сворачивании и в компактном окне. Игрок, которому
+   * позвонили, не должен вернуться к экрану смерти: пока приложение в фоне,
+   * кадры не идут, а враги — идут. Компактное окно — то же самое: играть в
+   * нём нельзя, а забег бы шёл.
    */
   useEffect(() => {
-    if (isActive) return;
+    if (isActive && expanded) return;
     useRun.getState().pause("app_inactive");
-  }, [isActive]);
+  }, [isActive, expanded]);
 
   return (
     <div className="relative h-full w-full overflow-hidden">
