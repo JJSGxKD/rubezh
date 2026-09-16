@@ -10,6 +10,7 @@ import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
 import { PickupRenderer } from "./pickups";
 import { ENEMY_LOOKS, enemyColor, WORLD_COLORS } from "./looks";
+import { PlayerRings } from "./player-rings";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
@@ -70,6 +71,8 @@ export class WorldRenderer {
   private playerHitTick = NEVER_HIT;
   /** настройки графики игрока; `null` — рисуем всё */
   private graphics: RunGraphicsOptions | null = null;
+  /** кольца здоровья и опыта вокруг персонажа */
+  private readonly rings: PlayerRings;
   /** тик последнего лечения — персонаж коротко вспыхивает зелёным */
   private playerHealTick = NEVER_HIT;
   private readonly blastStartTick: Int32Array = new Int32Array(MAX_BLASTS).fill(-1);
@@ -121,6 +124,7 @@ export class WorldRenderer {
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
     this.layer.add(this.player);
+    this.rings = new PlayerRings(scene, world, this.layer);
     this.eventsRead = world.events.written;
   }
 
@@ -169,6 +173,7 @@ export class WorldRenderer {
     );
     this.player.setVisible(this.world.player.alive);
     this.applyPlayerFlash();
+    this.rings.draw(this.player.x, this.player.y);
 
     if (this.debug !== null && this.visuals !== null) this.debug.draw(this.visuals, t, this.zoom);
   }
