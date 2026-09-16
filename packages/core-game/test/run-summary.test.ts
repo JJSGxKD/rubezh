@@ -36,10 +36,10 @@ const GOLDEN_POPULATION = 28;
  * оружиями проверки ниже разносят урон по слотам, а не меряют одно стартовое.
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
- * аптечку и магнитом с динамитом. Распределение времени по seed при этом остаётся прежним, поэтому
+ * аптечку, магнитом с динамитом и появлением нетопырей в смеси. Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 5;
+const GOLDEN_SEED = 1;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -162,32 +162,35 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 29.35,
-      level: 5,
-      xpCollected: 39,
-      enemiesKilled: 37,
+      survivalSec: 64.15,
+      level: 14,
+      xpCollected: 394,
+      enemiesKilled: 210,
       killsByEnemy: {
-        swarm_rat: 23,
-        tank_ghoul: 1,
-        shooter_wisp: 5,
-        dasher_wolf: 2,
-        circler_crow: 3,
-        bomber_imp: 2,
-        splitter_slime: 1,
+        swarm_rat: 93,
+        tank_ghoul: 12,
+        shooter_wisp: 19,
+        dasher_wolf: 15,
+        circler_crow: 20,
+        bomber_imp: 11,
+        splitter_slime: 14,
+        rushing_bats: 26,
       },
-      damageDealt: 643,
-      damageTaken: 111,
+      damageDealt: 2664,
+      damageTaken: 100,
       weapons: [
-        { id: "spark", level: 1, damage: 505 },
-        { id: "storm", level: 1, damage: 138 },
+        { id: "spark", level: 1, damage: 1846 },
+        { id: "storm", level: 2, damage: 710 },
+        { id: "hearth", level: 1, damage: 108 },
       ],
       passives: [
-        { id: "mending", level: 1 },
-        { id: "might", level: 1 },
-        { id: "reach", level: 1 },
+        { id: "volley", level: 2 },
+        { id: "ward", level: 2 },
+        { id: "swiftness", level: 3 },
+        { id: "haste", level: 3 },
       ],
-      deathCause: "shooter_wisp",
-      distance: 4560,
+      deathCause: "tank_ghoul",
+      distance: 11213,
       peakEnemies: 30,
     });
   });

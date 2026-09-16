@@ -279,6 +279,7 @@
   "enemy.circler_crow.name": "Ворон",
   "enemy.bomber_imp.name": "Бес-подрывник",
   "enemy.splitter_slime.name": "Слизень",
+  "enemy.rushing_bats.name": "Нетопыри",
   "enemy.elite_ghoul.name": "Упырь-вожак",
   "enemy.miniboss_maw.name": "Пасть",
 
@@ -345,6 +346,9 @@
   "guide.pattern.dash.name": "Рывок",
   "guide.pattern.dash.text": "Подходит, мигает — и бросается по прямой. Полоса на земле — путь рывка, она заполняется до броска.",
   "guide.pattern.dash.tip": "Мигает — шагни в сторону: свернуть на рывке он не может.",
+  "guide.pattern.rush.name": "Пробегающий",
+  "guide.pattern.rush.text": "Не преследует: целится с упреждением, проносится мимо насквозь и заходит снова.",
+  "guide.pattern.rush.tip": "Не беги от него по прямой — шагни вбок, и стая пройдёт мимо.",
   "guide.pattern.orbit.name": "Кружащий",
   "guide.pattern.orbit.text": "Кружит вокруг, сужая кольцо. Быстрее тебя — не оторваться.",
   "guide.pattern.orbit.tip": "Убежать не выйдет: разрывай кольцо, пока оно не сомкнулось.",

@@ -19,6 +19,8 @@ export type ShapeKind =
   | "double"
   /** остриё по направлению движения — рывковый враг */
   | "chevron"
+  /** четыре тонких луча — пробегающий мимо рой */
+  | "mote"
   /** гранёный кристалл опыта: свет сверху, тень снизу */
   | "gem"
   /** крупный кристалл: те же грани и искра в центре */
@@ -48,6 +50,9 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   orbit: { shape: "ring", color: 0x8cf0ff },
   exploder: { shape: "hexagon", color: 0xff5a5a },
   splitter: { shape: "double", color: 0x9be36b },
+  // Рой проносится мимо: мелкая быстрая мошкара, не похожая на тех, кто идёт
+  // на игрока, — цвет холодный, форма угловатая.
+  rush: { shape: "mote", color: 0xd8dce8 },
 };
 
 /**

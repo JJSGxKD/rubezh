@@ -52,6 +52,11 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
       // не как подбираемый ромб.
       graphics.fillPoints(points(r, CHEVRON), true);
       return;
+    case "mote":
+      // Четыре тонких луча: рой не похож ни на тех, кто идёт на игрока, ни на
+      // кристалл — у кристалла грани и свет, здесь только острые лучи.
+      graphics.fillPoints(points(r, MOTE), true);
+      return;
     case "gem":
       drawGem(graphics, spec, false);
       return;
@@ -159,6 +164,18 @@ const DIAMOND: readonly (readonly [number, number])[] = [
   [0.75, 0],
   [0, 1],
   [-0.75, 0],
+];
+
+/** Четырёхлучевая искра: длинные лучи по осям, глубокие впадины по диагоналям. */
+const MOTE: readonly (readonly [number, number])[] = [
+  [0, -1],
+  [0.3, -0.3],
+  [1, 0],
+  [0.3, 0.3],
+  [0, 1],
+  [-0.3, 0.3],
+  [-1, 0],
+  [-0.3, -0.3],
 ];
 
 /** Клин остриём вверх: вершина, широкие плечи и вырез сзади. */

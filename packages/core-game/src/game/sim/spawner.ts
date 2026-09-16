@@ -134,6 +134,11 @@ export function recycleEnemyForward(world: World, index: number): void {
   enemies.prevY[index] = point.y;
   enemies.vx[index] = 0;
   enemies.vy[index] = 0;
+  // Фаза сбрасывается: враг перенесён в другое место, и его прежнее состояние
+  // там бессмысленно — недобежавший рывок, горящий фитиль, выбранное кольцо.
+  // Пробегающий рой без этого уносился бы в старом направлении.
+  enemies.phase[index] = 0;
+  enemies.phaseTimer[index] = 0;
   world.stats.enemiesRecycled++;
 }
 
