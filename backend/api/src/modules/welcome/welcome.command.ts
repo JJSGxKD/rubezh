@@ -2,7 +2,6 @@ import {
   Inject,
   Injectable,
   Logger,
-  type OnApplicationBootstrap,
   type OnModuleDestroy,
   type OnModuleInit,
 } from "@nestjs/common";
@@ -11,6 +10,7 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { REDIS } from "../../infra/redis.js";
 import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
+import { BotIdentity } from "../telegram/bot-identity.js";
 import { TelegramApiError, type InlineButton, type TelegramBotApi, type TelegramUpdate } from "../telegram/telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
 import { displayName, welcomeCacheKey, type WelcomeCard, type WelcomeProgress } from "./welcome-card.js";
@@ -77,13 +77,14 @@ export class RedisWelcomeCardCache implements WelcomeCardCache {
   }
 }
 
-export type WelcomeBotApi = Pick<TelegramBotApi, "sendPhoto" | "setMyCommands">;
+export type WelcomeBotApi = Pick<TelegramBotApi, "sendPhoto" | "sendMessage">;
 export type WelcomeRenderer = (card: WelcomeCard) => Buffer;
 export const WELCOME_RENDERER = Symbol("WELCOME_RENDERER");
 
 @Injectable()
-export class StartCommand implements BotUpdateHandler, OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
+export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDestroy {
   readonly name = "start";
+  readonly commands = [{ command: "start", description: "Открыть игру", audience: "everyone" as const }];
   private readonly logger = new Logger("welcome");
   private readonly stop = new AbortController();
   /** рендер одинаковой карточки, начатый другим `/start`, не повторяется в этом процессе */
@@ -96,25 +97,11 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnApplicati
     @Inject(WELCOME_CARD_CACHE) private readonly cache: WelcomeCardCache,
     @Inject(TELEGRAM_BOT_API) private readonly api: WelcomeBotApi,
     @Inject(WELCOME_RENDERER) private readonly render: WelcomeRenderer,
+    private readonly identity: BotIdentity,
   ) {}
 
   onModuleInit(): void {
     if (this.config.telegram.updates !== "off") this.router.register(this);
-  }
-
-  onApplicationBootstrap(): void {
-    if (this.config.telegram.updates === "off") return;
-    // Меню команд для всех, на двух языках: русский клиент видит русское описание.
-    for (const language of ["ru", "en"] as const) {
-      void this.api
-        .setMyCommands(
-          [{ command: "start", description: language === "ru" ? "Открыть игру" : "Open the game" }],
-          null,
-          this.stop.signal,
-          language === "ru" ? "ru" : undefined,
-        )
-        .catch((error: unknown) => this.log("warn", "commands_not_set", { reason: reasonOf(error) }));
-    }
   }
 
   onModuleDestroy(): void {
@@ -125,10 +112,21 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnApplicati
     const message = update.message;
     if (message?.text === undefined || message.from === undefined || message.from.is_bot) return false;
     if (!/^\/start(@\w+)?(\s|$)/.test(message.text)) return false;
-    // В группе приветствие с именем никому не нужно, а кнопка Mini App там не работает.
-    if (message.chat.type !== "private") return true;
 
     const chatId = String(message.chat.id);
+    // В группе персональная карточка никому не нужна, а кнопка Mini App там не
+    // работает — короткий ответ со ссылкой на бота. Молчать нельзя: команду
+    // набирают и в чате теста.
+    if (message.chat.type !== "private") {
+      await this.api.sendMessage(
+        { chatId, threadId: message.message_thread_id ?? null },
+        WELCOME_TEXTS.ru.groupHint,
+        this.stop.signal,
+        this.groupKeyboard(),
+      );
+      return true;
+    }
+
     if (!(await this.claim(chatId))) return true;
 
     const language = languageOf(message.from.language_code);
@@ -190,16 +188,36 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnApplicati
 
   private keyboard(card: WelcomeCard, userId: string): InlineButton[][] {
     const rows: InlineButton[][] = [];
-    const url = this.config.telegram.webAppUrl;
-    // Кнопка Mini App принимает только HTTPS: на машине разработчика без
-    // туннеля её нет, и карточка уходит без кнопки.
-    if (url.startsWith("https://")) rows.push([{ text: WELCOME_TEXTS[card.language].playButton, web_app: { url } }]);
+    const play = this.playButton(WELCOME_TEXTS[card.language].playButton);
+    // Кнопка игры — у всех, включая администраторов: у них она пропадала,
+    // когда адрес Mini App не HTTPS, и оставалась одна выгрузка.
+    if (play !== null) rows.push([play]);
     // Администратору — вход в выгрузку. Кнопка лишь удобство: право проверяет
     // обработчик нажатия (docs/28-diagnostics.md §6.1.4).
     if (this.config.export.botEnabled && this.config.adminTelegramIds.has(userId)) {
       rows.push([{ text: "📦 Выгрузка данных", callback_data: "export:menu" }]);
     }
     return rows;
+  }
+
+  /**
+   * Кнопка запуска игры. `web_app` принимает только HTTPS, поэтому на машине
+   * разработчика с `http://localhost` она заменяется ссылкой на Mini App
+   * через самого бота — её Telegram открывает на любом адресе.
+   */
+  private playButton(text: string): InlineButton | null {
+    const url = this.config.telegram.webAppUrl;
+    if (url.startsWith("https://")) return { text, web_app: { url } };
+    const link = this.identity.miniAppLink;
+    return link === null ? null : { text, url: link };
+  }
+
+  private groupKeyboard(): { keyboard?: InlineButton[][] } {
+    const play = this.playButton(WELCOME_TEXTS.ru.playButton);
+    // В группе `web_app` не работает даже с HTTPS: только ссылка на бота.
+    const link = this.identity.miniAppLink;
+    if (link !== null) return { keyboard: [[{ text: WELCOME_TEXTS.ru.playButton, url: link }]] };
+    return play !== null && "url" in play ? { keyboard: [[play]] } : {};
   }
 
   private async claim(chatId: string): Promise<boolean> {

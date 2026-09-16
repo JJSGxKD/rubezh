@@ -94,7 +94,14 @@ export interface BotCommand {
 }
 
 /** Встроенные кнопки под сообщением: запуск Mini App или нажатие с данными. */
-export type InlineButton = { text: string; web_app: { url: string } } | { text: string; callback_data: string };
+/**
+ * Кнопка под сообщением: Mini App (только HTTPS и только в личном чате),
+ * обычная ссылка или ответ боту.
+ */
+export type InlineButton =
+  | { text: string; web_app: { url: string } }
+  | { text: string; url: string }
+  | { text: string; callback_data: string };
 
 export interface SendOptions {
   keyboard?: InlineButton[][];
@@ -111,6 +118,13 @@ export class TelegramBotApi {
     private readonly token: string,
     private readonly fetchImpl: FetchLike = fetch,
   ) {}
+
+  /** Кто этот бот: имя нужно для ссылки на Mini App (`t.me/<бот>?startapp`). */
+  async getMe(signal?: AbortSignal): Promise<{ id: number; username: string | null }> {
+    const result = await this.call("getMe", {}, REQUEST_TIMEOUT_MS, signal);
+    const me = z.object({ id: z.number().int(), username: z.string().optional() }).parse(result);
+    return { id: me.id, username: me.username ?? null };
+  }
 
   /**
    * Long polling. Нераспознанное обновление пропускается, а не роняет цикл:

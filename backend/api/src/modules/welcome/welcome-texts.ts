@@ -34,6 +34,8 @@ export interface WelcomeTexts {
   veteranCall: string;
   caption(name: string, hasRecord: boolean): string;
   playButton: string;
+  /** ответ на `/start` в группе: карточка с именем там не нужна */
+  groupHint: string;
 }
 
 const RU_DIFFICULTIES: Record<Difficulty, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
@@ -56,6 +58,7 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
         ? `${name}, рубеж ждёт. Рекорд на картинке — побьёшь?`
         : `${name}, добро пожаловать на закрытый тест «Рубежа». Игра открывается кнопкой ниже.`,
     playButton: "▶ Играть",
+    groupHint: "Рубеж — игра закрытого теста. Открывается в личном чате с ботом: там же рекорд и место в рейтинге.",
   },
   en: {
     brand: "RUBEZH",
@@ -73,5 +76,6 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
         ? `${name}, the line is waiting. Can you beat the record on the card?`
         : `${name}, welcome to the Rubezh closed test. The game opens with the button below — it is in Russian for now.`,
     playButton: "▶ Play",
+    groupHint: "Rubezh is a closed-test game. Open it in a private chat with the bot — your record and rank live there too.",
   },
 };
