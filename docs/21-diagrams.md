@@ -286,22 +286,21 @@ erDiagram
   шеринг, а не общая реферальная ссылка игрока: только так измеряется, что
   конвертит лучше (`24-attribution-and-sharing.md` §7.3).
 
-### 1.4 Телеметрия закрытого теста (этап 2, проектируется)
+### 1.4 Телеметрия закрытого теста (этап 2, реализовано)
 
-Первые таблицы, которые попадут в прод: до авторизации, поэтому без
-внешнего ключа на `USER`. Подробности — `28-diagnostics.md` §5.4 и
-`22-analytics-and-metrics.md` §3.1.
+Первые таблицы в проде: до авторизации, поэтому без внешнего ключа на
+`USER`. Схема — `backend/api/prisma/schema.prisma`, миграции — рядом.
+Подробности — `28-diagnostics.md` §5.4 и `22-analytics-and-metrics.md` §3.1.
 
 ```mermaid
 erDiagram
     ANALYTICS_EVENT {
         uuid event_id PK "ключ идемпотентности"
         string event_type "только из словаря"
-        int schema_version
-        uuid install_id "устройство, до авторизации"
+        smallint schema_version
+        string install_id "устройство до авторизации: uuid или 32 hex"
         string platform_user_id "nullable, только при проверенной подписи initData"
-        uuid user_id "nullable, заполняется с этапа 3"
-        uuid session_id
+        string session_id
         enum platform
         string app_version "из тега релиза"
         json payload
@@ -309,13 +308,29 @@ erDiagram
         datetime received_at
     }
 
+    DATA_EXPORT {
+        uuid export_id PK
+        enum source "bot|cli"
+        string requested_by "Telegram ID администратора или cli"
+        datetime period_from "nullable — с начала теста"
+        datetime period_to
+        enum status "running|sent|failed"
+        int events
+        int reports
+        int size_bytes
+        int parts
+        string error "nullable"
+        datetime created_at
+        datetime finished_at
+    }
+
     DIAGNOSTIC_REPORT {
         uuid report_id PK "ключ идемпотентности"
         enum kind "bench|run"
-        int schema_version
+        string schema_version "rubezh.bench.v4 и т. п."
         string app_version
         string content_hash "nullable, версия баланса"
-        uuid install_id
+        string install_id
         string platform_user_id "nullable"
         enum platform
         json device
@@ -331,7 +346,13 @@ erDiagram
 
 - **Связи с `USER` нет намеренно.** Пользователей до этапа 3 не существует;
   на этапе 3 история закрытого теста привязывается к аккаунтам по
-  `platform_user_id`, а не переписывается.
+  `platform_user_id`, а не переписывается. Колонка `user_id` и атрибуция
+  появятся миграцией вместе с кодом, который их заполняет.
+- **`DATA_EXPORT` — журнал доступа к данным, а не данные тестеров**: в нём
+  Telegram ID администратора, который выгружал, — это аудит (`28-diagnostics.md`
+  §6.1.4), по нему же считается «с последней выгрузки».
+- **Индексы** — по времени приёма (выгрузка и очистка), по установке и по
+  `(event_type, received_at)` у событий, по `(app_version, kind)` у отчётов.
 - **IP не хранится ни в одной из таблиц** — он нужен только лимиту частоты
   на приёме.
 - Отчёты стенда этапа 1 лежали файлами в `var/bench-reports/`; в прод они
@@ -530,10 +551,14 @@ flowchart LR
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
-        EVENTS["events<br/>приём событий, этап 2"]
-        DIAG["diagnostics<br/>отчёты стресс-теста и забегов, этап 2"]
-        PT["playtest<br/>сохранения и лидерборд<br/>закрытого теста, реализовано"]
-        BOT["bot<br/>вебхук Telegram, выгрузка<br/>данных администратору, этап 2"]
+        INGEST["ingest<br/>выключатели, Origin, лимиты,<br/>подпись initData, реализовано"]
+        EVENTS["events<br/>приём событий, реализовано"]
+        DIAG["diagnostics<br/>отчёты стресс-теста, реализовано"]
+        PT["playtest<br/>сохранения, лидерборд, сводка<br/>закрытого теста, реализовано"]
+        BOT["bot<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
+        WELCOME["welcome<br/>/start с карточкой, реализовано"]
+        NOTIFY["admin-notify<br/>карточки отчётов в чат, реализовано"]
+        EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
     end
 
     TGAPI["Telegram Bot API"]
@@ -563,14 +588,23 @@ flowchart LR
     CADDY --> PT
 
     PT --> REDIS
-    EVENTS --> REDIS
+    EVENTS --> INGEST
+    DIAG --> INGEST
+    INGEST --> REDIS
     EVENTS --> QUEUE
-    DIAG --> REDIS
     DIAG --> PG
+    DIAG -. слушатели нового отчёта .-> PT
+    DIAG -. слушатели нового отчёта .-> NOTIFY
+    NOTIFY --> QUEUE
     TGAPI -- вебхук --> CADDY
     CADDY --> BOT
-    BOT --> QUEUE
-    QUEUE -- sendDocument --> TGAPI
+    BOT --> WELCOME
+    BOT --> PT
+    BOT --> EXPORT
+    WELCOME -. рекорд и место .-> PT
+    EXPORT --> QUEUE
+    EXPORT --> PG
+    QUEUE -- sendPhoto, sendDocument --> TGAPI
 
     AUTH --> PG
     AUTH --> REDIS
@@ -813,7 +847,11 @@ sequenceDiagram
 Движок не ходит в сеть и не знает про аналитику: он отдаёт результат, а
 отправкой занимается оболочка (`27-design-system-and-app-shell.md` §3.1).
 
-### 4.8 Доставка отчёта диагностики (этап 2, проектируется)
+### 4.8 Доставка отчёта диагностики (этап 2, приёмник реализован)
+
+Приёмник, лимиты и идемпотентность — реализованы
+(`backend/api/src/modules/diagnostics`); очередь на устройстве появится с
+записью забегов (WP7), стресс-тест пока повторяет отправку кнопкой.
 
 ```mermaid
 sequenceDiagram
@@ -841,7 +879,7 @@ sequenceDiagram
 тестера; неверная подпись не отклоняет отчёт, а обнуляет ID
 (`28-diagnostics.md` §5.2).
 
-### 4.9 Выгрузка данных администратору через бота (этап 2, проектируется)
+### 4.9 Выгрузка данных администратору через бота (этап 2, реализовано)
 
 ```mermaid
 sequenceDiagram
@@ -856,22 +894,27 @@ sequenceDiagram
     A->>TG: /export или кнопка, выбор периода
     TG->>B: вебхук + секретный токен
     B->>B: Zod-схема обновления
-    alt нет токена, не личный чат или from.id не в ADMIN_TELEGRAM_IDS
-        B-->>TG: 200, ответ как на неизвестную команду
-    else администратор
-        B->>R: SET NX update_id и лок выгрузки
-        alt уже выполняется или повтор
-            B-->>TG: 200, «выгрузка уже готовится»
+    B->>R: SET NX bot:update:{update_id} — повтор не обрабатывается
+    alt from.id не в ADMIN_TELEGRAM_IDS
+        B-->>TG: 200, молчание — как на неизвестную команду
+    else не личный чат
+        B->>TG: «только в личном чате» — без данных
+    else администратор в личке
+        B->>R: TTL bot:export:cooldown, SET NX bot:export:lock EX 30 мин
+        alt пауза после прошлой или лок занят
+            B->>TG: ответ на нажатие: «уже готовится» / «через N мин»
         else
-            B->>Q: задача выгрузки (период, adminId)
-            B-->>TG: 200 сразу
-            TG-->>A: «Готовлю выгрузку…»
-            Q->>W: задача
-            W->>DB: чтение пачками, курсором
-            W->>W: псевдонимизация, zip, части по 45 МБ
-            W->>TG: sendDocument в личный чат
+            B->>TG: «Готовлю выгрузку…»
+            B->>Q: задача «export» (период, adminId, сообщение статуса)
+            Q->>W: параллельность 1
+            W->>DB: data_export: running
+            W->>DB: страницы по received_at курсором, пауза между ними
+            W->>W: псевдонимы HMAC, NDJSON и CSV потоком в zip, части по 45 МБ
+            W->>TG: sendDocument — каждая часть с подписью
             TG-->>A: архив
-            W->>R: снять лок
+            W->>TG: статус меняется на итог
+            W->>DB: data_export: sent
+            W->>R: снять лок, пауза 5 минут
         end
     end
 ```
@@ -974,21 +1017,24 @@ sequenceDiagram
 ### 4.12 Статистика плейтеста в чат администраторов (этап 2, реализовано)
 
 Счётчики пишутся рядом с забегами и запусками, а сводку собирает бот по
-команде или раз в сутки (`26-stage2-plan.md`, WP14). Бот читает обновления
-long polling'ом: у машины разработчика нет адреса для вебхука из §4.9.
+команде или раз в сутки (`26-stage2-plan.md`, WP14). Обновления читает модуль
+бота (`backend/api/src/modules/bot`) long polling'ом — у машины разработчика
+нет адреса для вебхука из §4.9 — и передаёт их обработчикам команд; `/stats`
+регистрирует сводка плейтеста.
 
 ```mermaid
 sequenceDiagram
     participant S as Оболочка
     participant P as PlaytestService
     participant R as Redis
-    participant B as PlaytestStatsBot
+    participant BP as BotPoller
+    participant B as PlaytestStatsReporter
     participant TG as Telegram Bot API
     participant A as Чат администраторов
 
     S->>P: POST /playtest/sessions — установка и устройство
     P->>R: SADD pt:st:seen, устройство установки
-    S->>P: POST /playtest/stress — итог стресс-теста без кадров
+    S->>P: POST /diagnostics/reports — отчёт в Postgres (§4.8),<br/>итог без кадров приходит слушателем
     P->>R: SET pt:st:stress:{reportId} NX, сводка по ОС, список последних
     S->>P: POST /playtest/runs
     alt читы без явного «учесть» от администратора
@@ -997,16 +1043,17 @@ sequenceDiagram
         P->>R: рейтинг (§4.11) и счётчики pt:st:*
     end
 
-    loop пока держим лок pt:bot:poller
-        B->>TG: getUpdates (25 с, смещение из Redis)
-        TG-->>B: /stats из чата или лички администратора
-        B->>R: SET pt:bot:cmd:{чат} NX — не чаще раза в 20 с
+    loop пока держим лок bot:poller
+        BP->>TG: getUpdates (25 с, смещение bot:offset)
+        TG-->>BP: /stats из чата или лички администратора
+        BP->>B: BotRouter.dispatch
+        B->>R: SET pt:report:cmd:{чат} NX — не чаще раза в 20 с
         B->>R: снимок счётчиков и рекорды
         B->>B: SVG → PNG, подпись текстом
         B->>TG: sendPhoto
         TG-->>A: картинка сводки
     end
-    Note over B,R: раз в минуту: пора ли отчёт — SET pt:bot:daily:{сутки} NX
+    Note over B,R: раз в минуту: пора ли отчёт — SET pt:report:daily:{сутки} NX
 ```
 
 - **в агрегатах нет имён и Telegram ID** — только множества игроков для
@@ -1015,6 +1062,67 @@ sequenceDiagram
   на том же токене без общего Redis получит от Telegram `409` и ждёт;
 - **ежедневный отчёт один раз за сутки** в поясе команды: сетевой сбой
   отпускает отметку суток для повтора, отказ Telegram — нет.
+
+### 4.13 Приём событий закрытого теста (этап 2, реализовано)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant G as IngestGuard
+    participant S as EventsService
+    participant R as Redis
+    participant Q as BullMQ «events»
+    participant DB as PostgreSQL
+
+    C->>G: POST /api/v1/events — до 100 событий<br/>+ initData в заголовке
+    G->>G: выключатель (404), Origin (403), размер тела (413)
+    G->>R: лимит по IP — INCRBY + EXPIRE одним скриптом
+    G->>G: подпись initData → Telegram ID или null
+    G->>S: пачка
+    S->>S: конверт, словарь, версия, схема payload — по событию
+    S->>R: лимит по установке и Telegram ID — в событиях
+    alt очередь отвечает за 2 с
+        S->>Q: add(batch)
+        Q->>DB: воркер: createMany skipDuplicates
+    else Redis недоступен
+        S->>DB: createMany напрямую
+    end
+    S-->>C: 202 { accepted, rejected, rejectedBy }
+    Note over C,DB: база недоступна — 503, пачка остаётся на устройстве;<br/>повтор отсекает первичный ключ event_id
+```
+
+- **Redis лёг — лимит в памяти процесса** с предупреждением в лог раз в
+  минуту: терять события тестеров хуже, чем на время сбоя ослабить лимит;
+- **Telegram ID — только из подписи**: поле в теле события игнорируется.
+
+### 4.14 Приветствие по /start (этап 2, реализовано)
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant TG as Telegram
+    participant B as BotRouter
+    participant S as StartCommand
+    participant P as Прогресс плейтеста
+    participant R as Redis
+
+    U->>TG: /start в личке
+    TG->>B: вебхук или getUpdates
+    B->>S: обновление
+    S->>R: SET bot:start:{чат} NX EX 3 — двойное нажатие
+    S->>P: рекорд, место, забеги (2 с, иначе карточка новичка)
+    S->>S: язык, имя без эмодзи → ключ SHA-256
+    S->>R: GET bot:card:{ключ}
+    alt file_id есть
+        S->>TG: sendPhoto(file_id) — без рендера и загрузки
+    else нет или Telegram его забыл
+        S->>S: SVG → PNG (одинаковые рендеры склеиваются)
+        S->>TG: sendPhoto(PNG) + кнопка «Играть»
+        TG-->>S: file_id крупнейшего размера
+        S->>R: SET bot:card:{ключ} file_id EX 30 дней
+    end
+    TG-->>U: карточка с подписью на языке игрока
+```
 
 ---
 

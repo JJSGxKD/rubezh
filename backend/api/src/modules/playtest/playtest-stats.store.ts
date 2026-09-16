@@ -1,3 +1,4 @@
+import type { StoredDevice } from "../diagnostics/dto/device.dto.js";
 import type { Difficulty, StoredRun } from "./playtest.store.js";
 
 /**
@@ -9,20 +10,7 @@ import type { Difficulty, StoredRun } from "./playtest.store.js";
  * отправляют в групповой чат (docs/28-diagnostics.md §8).
  */
 
-export const DEVICE_OS = ["android", "ios", "windows", "macos", "linux", "other"] as const;
-export const FORM_FACTORS = ["phone", "tablet", "desktop"] as const;
-
-export interface StoredDevice {
-  clientPlatform: string | null;
-  clientVersion: string | null;
-  os: (typeof DEVICE_OS)[number];
-  formFactor: (typeof FORM_FACTORS)[number];
-  screenWidth: number;
-  screenHeight: number;
-  pixelRatio: number;
-  cores: number | null;
-  memoryGb: number | null;
-}
+export { DEVICE_OS, FORM_FACTORS, type StoredDevice } from "../diagnostics/dto/device.dto.js";
 
 export interface SessionRecord {
   installId: string;
@@ -103,7 +91,7 @@ export interface StressSummary {
 export interface PlaytestStatsStore {
   recordSession(playerId: string, session: SessionRecord, nowMs: number): Promise<void>;
   recordRun(playerId: string, run: StoredRun, nowMs: number): Promise<void>;
-  recordStress(playerId: string, summary: StressSummary, nowMs: number): Promise<boolean>;
+  recordStress(summary: StressSummary, nowMs: number): Promise<boolean>;
   snapshot(nowMs: number): Promise<StatsSnapshot>;
 }
 

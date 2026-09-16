@@ -5,6 +5,9 @@ import type { BenchProgress, BenchSubmission, StressEngine, StressEvents, Stress
 // Стресс-тест из раздела «Играть» (docs/28-diagnostics.md §2.3).
 
 const engine = vi.hoisted(() => ({ load: vi.fn() }));
+const reports = vi.hoisted(() => ({ send: vi.fn() }));
+
+vi.mock("../src/state/diagnostic-reports", () => ({ sendDiagnosticReport: reports.send }));
 
 vi.mock("@bh/core-game", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@bh/core-game")>()),
@@ -12,7 +15,6 @@ vi.mock("@bh/core-game", async (importOriginal) => ({
 }));
 
 const { useStress } = await import("../src/state/stress");
-const { usePlaytest } = await import("../src/state/playtest");
 const { initShell } = await import("../src/state/shell");
 
 type Handlers = { [E in keyof StressEvents]?: (payload: StressEvents[E]) => void };
@@ -72,6 +74,7 @@ const PROGRESS: BenchProgress = {
 const SUBMISSION = {
   reportId: "11111111-2222-4333-8444-555555555555",
   report: {
+    startedAt: "2026-09-15T10:00:00.000Z",
     stoppedBy: "degradation",
     profile: { mode: "stress" },
     totals: { peakObjects: 1210.4 },
@@ -87,6 +90,7 @@ describe("стресс-тест в оболочке", () => {
     events.length = 0;
     uiCalls.length = 0;
     engine.load.mockReset();
+    reports.send.mockReset();
     // Тесты идут в Node: экрана и плотности там нет, а сведения об устройстве их читают.
     vi.stubGlobal("screen", { width: 412, height: 915 });
     vi.stubGlobal("devicePixelRatio", 2.63);
@@ -125,31 +129,36 @@ describe("стресс-тест в оболочке", () => {
     expect(useStress.getState()).toMatchObject({ phase: "running", progress: PROGRESS });
   });
 
-  it("по итогу отправляет отчёт сам и пишет событие из словаря", async () => {
+  it("по итогу отправляет отчёт в приёмник диагностики и пишет событие из словаря", async () => {
     const fake = fakeEngine();
     engine.load.mockResolvedValue(fake.engine);
-    const reportStress = vi.spyOn(usePlaytest.getState(), "reportStress").mockResolvedValue(null);
+    reports.send.mockResolvedValue(null);
 
     await useStress.getState().start({} as HTMLElement);
     fake.emit("finished", SUBMISSION);
     await vi.waitFor(() => expect(useStress.getState().sendState).toBe("sent"));
 
-    expect(reportStress).toHaveBeenCalledWith(SUBMISSION);
+    expect(reports.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reportId: SUBMISSION.reportId,
+        kind: "bench",
+        appVersion: "0.3.0",
+        occurredAt: "2026-09-15T10:00:00.000Z",
+        device: expect.objectContaining({ os: expect.any(String), screenWidth: 412 }),
+        payload: SUBMISSION,
+      }),
+    );
     expect(useStress.getState().phase).toBe("finished");
     expect(events).toContainEqual({
       event: "bench_finished",
       payload: { mode: "stress", stopReason: "degradation", peakObjects: 1210, verdict: "no-go", reportId: SUBMISSION.reportId },
     });
-    reportStress.mockRestore();
   });
 
   it("неудачную отправку можно повторить, а выключенную — нет смысла", async () => {
     const fake = fakeEngine();
     engine.load.mockResolvedValue(fake.engine);
-    const reportStress = vi
-      .spyOn(usePlaytest.getState(), "reportStress")
-      .mockResolvedValueOnce("offline")
-      .mockResolvedValueOnce(null);
+    reports.send.mockResolvedValueOnce("offline").mockResolvedValueOnce(null);
 
     await useStress.getState().start({} as HTMLElement);
     fake.emit("finished", SUBMISSION);
@@ -157,11 +166,10 @@ describe("стресс-тест в оболочке", () => {
     await useStress.getState().send();
     expect(useStress.getState().sendState).toBe("sent");
 
-    reportStress.mockResolvedValueOnce("disabled");
+    reports.send.mockResolvedValueOnce("forbidden");
     useStress.setState({ sendState: "idle" });
     await useStress.getState().send();
     expect(useStress.getState().sendState).toBe("disabled");
-    reportStress.mockRestore();
   });
 
   it("уход с экрана во время загрузки чанка не создаёт движок", async () => {

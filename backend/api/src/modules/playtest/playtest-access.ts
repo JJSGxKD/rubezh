@@ -1,5 +1,5 @@
 import type { AppConfig } from "../../config/app-config.js";
-import type { TelegramPlayer } from "./telegram-init-data.js";
+import type { TelegramPlayer } from "../telegram/telegram-init-data.js";
 
 /**
  * Что игроку открыто в клиенте (docs/26-stage2-plan.md, WP14).

@@ -64,7 +64,7 @@ export class MemoryPlaytestStatsStore implements PlaytestStatsStore {
     }
   }
 
-  async recordStress(_playerId: string, summary: StressSummary, _nowMs: number): Promise<boolean> {
+  async recordStress(summary: StressSummary, _nowMs: number): Promise<boolean> {
     this.check();
     if (this.stressIds.has(summary.reportId)) return false;
     this.stressIds.add(summary.reportId);
