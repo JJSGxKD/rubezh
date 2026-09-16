@@ -13,12 +13,13 @@ export function ensureShapeTexture(
   radius: number,
   color: number,
   shape: ShapeKind,
+  core: number | null = null,
 ): void {
   if (scene.textures.exists(key)) return;
 
   const size = Math.ceil(radius * 2);
   const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
-  drawShape(graphics, { shape, radius, color });
+  drawShape(graphics, { shape, radius, color, core });
   graphics.generateTexture(key, size, size);
   graphics.destroy();
 }

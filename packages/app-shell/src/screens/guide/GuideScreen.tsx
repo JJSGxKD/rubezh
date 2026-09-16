@@ -10,12 +10,13 @@ import {
   SectionTitle,
   SegmentedControl,
 } from "../../design-system/components";
-import { formatDecimal, t } from "../../i18n";
+import { formatDecimal, formatDuration, t } from "../../i18n";
 import { useNavigation } from "../../state/navigation";
 import { ItemIcon, ItemTile } from "../item-icons";
 import { formatChange } from "../run/upgrade-format";
 import {
   eliteEnemies,
+  enemyStages,
   passiveCategories,
   passiveRange,
   regularEnemies,
@@ -25,7 +26,7 @@ import {
   weaponGrowth,
   type GuideEnemy,
 } from "./guide-data";
-import { EnemyScene, GemRow, PickupIcon, WeaponScene } from "./scenes";
+import { EnemyScene, GemRow, PickupIcon, StageMark, WeaponScene } from "./scenes";
 
 /**
  * Гайдбук: основы, враги, оружие и улучшения — с мини-сценами вместо
@@ -187,6 +188,34 @@ function Enemies(): ReactNode {
         <EnemyCard key={enemy.def.id} enemy={enemy} index={index} />
       ))}
       <p className="text-xs text-text-muted">{t("guide.enemies.basis")}</p>
+
+      <SectionTitle>{t("guide.enemies.stages")}</SectionTitle>
+      <p className="text-sm text-text-muted">{t("guide.enemies.stages.text")}</p>
+      <Card>
+        <ul className="flex flex-col gap-3">
+          {enemyStages().map((stage, index) => (
+            <li key={stage.fromSec} className="flex items-center gap-3">
+              <StageMark stage={index} />
+              <span className="min-w-0">
+                <span className="block font-display text-sm font-semibold text-text">
+                  {t(stage.nameKey ?? "enemy.stage.base")}
+                </span>
+                <span className="block text-xs text-text-muted">
+                  {index === 0
+                    ? t("guide.enemy.stage.first")
+                    : t("guide.enemy.stage.from", { time: formatDuration(stage.fromSec) })}
+                  {" · "}
+                  {t("guide.enemy.stage.stats", {
+                    hp: formatDecimal(stage.hpMul, 1),
+                    damage: formatDecimal(stage.damageMul, 2),
+                    xp: formatDecimal(stage.xpMul, 0),
+                  })}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
 
       <SectionTitle>{t("guide.enemies.elite")}</SectionTitle>
       <p className="text-sm text-text-muted">{t("guide.enemies.elite.text")}</p>

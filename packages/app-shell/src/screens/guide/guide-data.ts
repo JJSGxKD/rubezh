@@ -1,13 +1,14 @@
 import {
   PASSIVE_CATEGORIES,
   type EnemyDef,
+  type EnemyStageDef,
   type PassiveCategory,
   type PassiveDef,
   type UpgradeChange,
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ENEMIES, LOADOUT_LIMITS, PASSIVES, PATTERN_DEFAULTS, WEAPONS } from "@bh/core-game";
+import { ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, PATTERN_DEFAULTS, WEAPONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -49,6 +50,11 @@ export function regularEnemies(): GuideEnemy[] {
 /** Элита и мини-боссы: приходят только событиями таймлайна. */
 export function eliteEnemies(): GuideEnemy[] {
   return ENEMIES.filter((enemy) => enemy.elite === true).map(toGuideEnemy);
+}
+
+/** Ступени врагов по порядку открытия: та же тварь, но матёрее. */
+export function enemyStages(): EnemyStageDef[] {
+  return [...ENEMY_STAGES];
 }
 
 export function startingWeapons(): WeaponDef[] {
