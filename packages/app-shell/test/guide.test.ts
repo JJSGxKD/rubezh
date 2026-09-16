@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ENEMIES, LOADOUT_LIMITS, PASSIVES, WEAPONS } from "@bh/core-game";
 import { hasTranslation } from "../src/i18n";
+// Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
+import "../src/i18n/guide";
 import {
   eliteEnemies,
   passiveCategories,
@@ -33,15 +35,15 @@ describe("гайдбук", () => {
   it("показывает всех врагов ровно по одному разу: обычных и элиту отдельно", () => {
     const shown = [...regularEnemies(), ...eliteEnemies()].map((enemy) => enemy.def.id);
     expect(shown.sort()).toEqual(ENEMIES.map((enemy) => enemy.id).sort());
-    expect(eliteEnemies().every((enemy) => enemy.def.elite === true)).toBe(true);
+    expect(eliteEnemies().every((enemy) => enemy.def.rank !== undefined)).toBe(true);
   });
 
   it("говорит, на кого распадается делящийся, с числом из контента или умолчания", () => {
     const splitters = [...regularEnemies(), ...eliteEnemies()].filter((enemy) => enemy.def.pattern === "splitter");
     expect(splitters.length).toBeGreaterThan(0);
     for (const splitter of splitters) {
-      expect(splitter.child, splitter.def.id).not.toBeNull();
-      expect(splitter.child?.count).toBeGreaterThan(0);
+      expect(splitter.children, splitter.def.id).not.toHaveLength(0);
+      for (const child of splitter.children) expect(child.count).toBeGreaterThan(0);
     }
   });
 

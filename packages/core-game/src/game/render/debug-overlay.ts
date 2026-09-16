@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import type { RunDevVisuals } from "../../run-api";
+import { isElite } from "../patterns";
 import type { World } from "../sim/world";
 import { DEBUG_COLORS } from "./looks";
 import { lerp } from "./textures";
@@ -59,7 +60,7 @@ export class DebugOverlay {
     for (let i = 0; i < enemies.count; i++) {
       if (enemies.alive[i] === 0) continue;
       const type = world.enemyTypes[enemies.type[i]];
-      g.lineStyle(line, type.elite ? DEBUG_COLORS.hitboxElite : DEBUG_COLORS.hitboxEnemy, 0.85);
+      g.lineStyle(line, isElite(type) ? DEBUG_COLORS.hitboxElite : DEBUG_COLORS.hitboxEnemy, 0.85);
       g.strokeCircle(lerp(enemies.prevX[i], enemies.x[i], t), lerp(enemies.prevY[i], enemies.y[i], t), type.radius);
     }
     const projectiles = world.projectiles;

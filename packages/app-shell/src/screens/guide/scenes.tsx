@@ -85,6 +85,13 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
           fill={fill}
         />
       );
+    case "eye":
+      return (
+        <>
+          <circle r={r * 0.78} fill="none" stroke={fill} strokeWidth={Math.max(1.5, r * 0.22)} />
+          <circle r={r * 0.38} fill={fill} />
+        </>
+      );
     case "mote":
       return (
         <polygon

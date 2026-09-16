@@ -54,6 +54,7 @@ const HUD: HudSnapshot = {
   passives: [],
   distance: 0,
   radar: { blips: new Float32Array(0), count: 0 },
+  boss: null,
 };
 
 const events: { event: string; payload: Record<string, unknown> }[] = [];

@@ -4,7 +4,7 @@ import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
+import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE, isElite } from "../patterns";
 import { ORBITER_RADIUS, orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
@@ -94,7 +94,7 @@ export class WorldRenderer {
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
 
-    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, type.elite));
+    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, isElite(type)));
     // Текстура на пару «тип и ступень»: ступень меняет цвет тела и садит в
     // середину ядро, поэтому одной текстуры на тип не хватает.
     this.stageCount = world.stages.length;
@@ -297,6 +297,12 @@ export class WorldRenderer {
         const length = type.params.dashSpeed * type.params.dashDurationSec;
         const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
         this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, progress);
+      }
+      if (type.pattern === "caster" && enemies.phase[i] === CASTER_PHASE.windup) {
+        // Кольцо вокруг кастера растёт к моменту удара — та же грамматика
+        // телеграфа, что у фитиля подрывника: круг заполняется — сейчас будет.
+        const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
+        this.telegraphs.ring(x, y, type.params.preferredDistance * 0.35, progress);
       }
       if (type.pattern === "kite_and_shoot" && enemies.attackCooldown[i] < AIM_TELEGRAPH_SEC) {
         const progress = 1 - enemies.attackCooldown[i] / AIM_TELEGRAPH_SEC;
@@ -566,6 +572,9 @@ function lookFor(pattern: EnemyPattern, phase: number, tick: number): number {
   }
   if (pattern === "exploder" && phase === EXPLODER_PHASE.fuse) {
     return (tick >> 2) % 2 === 0 ? LOOK.warning : LOOK.dim;
+  }
+  if (pattern === "caster" && phase === CASTER_PHASE.windup) {
+    return (tick >> 2) % 2 === 0 ? LOOK.warning : LOOK.normal;
   }
   return LOOK.normal;
 }

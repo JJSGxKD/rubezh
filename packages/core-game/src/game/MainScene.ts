@@ -24,6 +24,7 @@ import type { Spawner } from "./sim/spawner";
 import { createRunWorld } from "./run-world";
 import { RunCamera } from "./render/run-camera";
 import { buildRadarSnapshot } from "./radar";
+import { buildBossSnapshot } from "./run/boss";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { Joystick } from "./joystick";
 import { buildRunResult } from "./run/run-result";
@@ -589,6 +590,7 @@ export class MainScene extends Phaser.Scene {
       passives: this.slotsOf("passives"),
       distance: world.stats.distance,
       radar: buildRadarSnapshot(world),
+      boss: buildBossSnapshot(world),
     };
     this.sceneData.bus.emit("hud", snapshot);
   }

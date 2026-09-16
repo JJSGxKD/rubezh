@@ -41,6 +41,7 @@ export { PATTERN_DEFAULTS } from "./game/patterns/enemy-types";
 
 // Контракт забега — только типы, без реализации.
 export type {
+  BossSnapshot,
   HudSnapshot,
   RadarBlipKind,
   RadarSnapshot,

@@ -44,6 +44,7 @@ export const ALL_PATTERNS_WEIGHTS: Record<EnemyPattern, number> = {
   orbit: 2,
   exploder: 1,
   rush: 2,
+  caster: 1,
   splitter: 1,
 };
 

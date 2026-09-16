@@ -1,6 +1,7 @@
 import type { DropsDef } from "@bh/shared-types";
 // Импорт по кругу (combat.ts зовёт выпадение подборов, динамит зовёт
 // убийство) безопасен: обе функции вызываются в игре, а не при загрузке модуля.
+import { isElite } from "../patterns";
 import { killEnemy } from "./combat";
 import { createDirection, randomDirection } from "./directions";
 import { pushSimEvent, SIM_EVENT } from "./events";
@@ -299,7 +300,7 @@ function detonate(world: World): void {
     const i = victims[k];
     const type = world.enemyTypes[enemies.type[i]];
     enemies.hitTick[i] = world.stats.tick;
-    if (!type.elite) {
+    if (!isElite(type)) {
       // Убийство взрывом — те же последствия, что у убийства оружием:
       // счётчики, кристаллы, подборы, реакция паттерна.
       killEnemy(world, i);

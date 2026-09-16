@@ -11,7 +11,7 @@ export interface ProgressBarProps {
   value: number;
   max: number;
   /** цветовой токен полосы */
-  tone?: "hp" | "hp-low" | "xp" | "accent";
+  tone?: "hp" | "hp-low" | "xp" | "accent" | "boss";
   label?: string;
   height?: "thin" | "base" | "thick";
   /** бегущий блик — полоса «живая», пока идёт загрузка */
@@ -23,6 +23,7 @@ const TONE_CLASS: Record<NonNullable<ProgressBarProps["tone"]>, string> = {
   "hp-low": "fill-hp-low",
   xp: "fill-xp",
   accent: "fill-accent",
+  boss: "fill-boss",
 };
 
 const HEIGHT_CLASS: Record<NonNullable<ProgressBarProps["height"]>, string> = {

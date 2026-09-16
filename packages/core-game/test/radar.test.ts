@@ -8,7 +8,7 @@ import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 // Снимок радара для HUD: точки вокруг игрока.
 
 const GRUNT: EnemyDef = { id: "grunt", hp: 10, speed: 0.001, damage: 0, xp: 1, pattern: "swarm" };
-const BOSS: EnemyDef = { id: "boss", hp: 10, speed: 0.001, damage: 0, xp: 1, pattern: "swarm", elite: true };
+const BOSS: EnemyDef = { id: "boss", hp: 10, speed: 0.001, damage: 0, xp: 1, pattern: "swarm", rank: "elite" };
 
 function setup(): World {
   return createWorld({ seed: 1, enemies: [GRUNT, BOSS], config: { maxEnemies: 256 } });

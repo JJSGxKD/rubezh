@@ -1,6 +1,7 @@
 import type { EnemyPattern } from "@bh/shared-types";
 import type { World } from "../sim/world";
 import type { PatternBehavior } from "./behavior";
+import { caster } from "./caster";
 import { chase } from "./chase";
 import { dash } from "./dash";
 import { exploder } from "./exploder";
@@ -28,6 +29,7 @@ export const PATTERNS: Record<EnemyPattern, PatternBehavior> = {
   exploder,
   splitter,
   rush,
+  caster,
 };
 
 export function applyPattern(
@@ -52,8 +54,13 @@ export { DASH_PHASE } from "./dash";
 export { ORBIT_PHASE } from "./orbit";
 export { EXPLODER_PHASE } from "./exploder";
 export { RUSH_PHASE } from "./rush";
+export { CASTER_PHASE } from "./caster";
 export {
+  BOSS_RADIUS_MUL,
+  ELITE_RADIUS_MUL,
   findEnemyContentProblems,
+  isBoss,
+  isElite,
   MAX_PATTERN_RADIUS,
   PATTERN_TRAITS,
   type EnemyType,

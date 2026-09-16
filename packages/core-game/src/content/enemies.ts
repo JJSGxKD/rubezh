@@ -59,7 +59,7 @@ export const ENEMIES: EnemyDef[] = [
     xp: 4,
     threat: 5,
     pattern: "splitter",
-    params: { childEnemy: "swarm_rat", childCount: 3 },
+    params: { children: [{ enemy: "swarm_rat", count: 3 }] },
   },
 
   // Элиты и мини-боссы приходят только событиями таймлайна, в заданные минуты
@@ -73,19 +73,42 @@ export const ENEMIES: EnemyDef[] = [
     damage: 14,
     xp: 25,
     threat: 30,
-    elite: true,
+    rank: "elite",
     pattern: "chase",
     params: { steeringPerSec: 2.4 },
   },
+  // Кастер держится в стороне и бьёт по площади: кольцо, веер или ползущая
+  // стена — какое заклинание пойдёт следующим, не угадать. Чем меньше у него
+  // здоровья, тем чаще и гуще каст, а в последней фазе он бьёт двумя сразу.
   {
-    id: "miniboss_maw",
-    hp: 700,
-    speed: 46,
-    damage: 20,
-    xp: 60,
-    threat: 200,
-    elite: true,
+    id: "boss_seer",
+    hp: 1100,
+    speed: 52,
+    damage: 16,
+    xp: 90,
+    threat: 260,
+    rank: "boss",
+    pattern: "caster",
+    params: { preferredDistance: 260, castIntervalSec: 3.2, telegraphSec: 0.7, burstCount: 8, projectileSpeed: 220 },
+  },
+  // Матрёшка — босс на три ступени: сама рассыпается смесью, слизни внутри
+  // рассыпаются крысами. Смерть босса не кончает бой, а начинает второй его
+  // этап, и каждая ступень читается как свой бой, а не как та же толпа.
+  {
+    id: "boss_matryoshka",
+    hp: 900,
+    speed: 44,
+    damage: 22,
+    xp: 80,
+    threat: 240,
+    rank: "boss",
     pattern: "splitter",
-    params: { childEnemy: "dasher_wolf", childCount: 6 },
+    params: {
+      children: [
+        { enemy: "splitter_slime", count: 3 },
+        { enemy: "dasher_wolf", count: 3 },
+        { enemy: "bomber_imp", count: 2 },
+      ],
+    },
   },
 ];

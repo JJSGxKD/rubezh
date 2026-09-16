@@ -70,23 +70,50 @@ describe("проверка параметров паттернов", () => {
   }
 
   it("ловит делящегося, который ссылается на несуществующего врага", () => {
-    const problems = problemsOf({ id: "blob", ...base, pattern: "splitter", params: { childEnemy: "ghost" } });
-    expect(problems.join("\n")).toMatch(/childEnemy ghost не найден/);
+    const problems = problemsOf({ id: "blob", ...base, pattern: "splitter", params: { children: [{ enemy: "ghost" }] } });
+    expect(problems.join("\n")).toMatch(/в children нет врага ghost/);
   });
 
-  it("не даёт делящемуся распадаться на делящихся", () => {
+  it("разрешает матрёшку: делящийся из делящихся, пока цепочка кончается", () => {
     const problems = problemsOf(
-      { id: "a", ...base, pattern: "splitter", params: { childEnemy: "b" } },
-      { id: "b", ...base, pattern: "splitter", params: { childEnemy: "rat" } },
+      { id: "a", ...base, pattern: "splitter", params: { children: [{ enemy: "b", count: 2 }] } },
+      { id: "b", ...base, pattern: "splitter", params: { children: [{ enemy: "rat", count: 2 }] } },
       swarm,
     );
-    expect(problems.join("\n")).toMatch(/не может быть делящимся/);
+    expect(problems).toEqual([]);
   });
 
-  it("ловит делящегося без childEnemy, даже если данные пришли мимо типов", () => {
-    // @ts-expect-error делящемуся врагу childEnemy обязателен — проверяем реакцию на данные из JSON
+  it("ловит кольцо в распаде — оно множило бы популяцию от одного выстрела", () => {
+    const problems = problemsOf(
+      { id: "a", ...base, pattern: "splitter", params: { children: [{ enemy: "b" }] } },
+      { id: "b", ...base, pattern: "splitter", params: { children: [{ enemy: "a" }] } },
+    );
+    expect(problems.join("\n")).toMatch(/цепочка распада зациклена/);
+  });
+
+  it("ловит слишком глубокую матрёшку: игрок читает ступени, а не лавину", () => {
+    const problems = problemsOf(
+      { id: "a", ...base, pattern: "splitter", params: { children: [{ enemy: "b" }] } },
+      { id: "b", ...base, pattern: "splitter", params: { children: [{ enemy: "c" }] } },
+      { id: "c", ...base, pattern: "splitter", params: { children: [{ enemy: "d" }] } },
+      { id: "d", ...base, pattern: "splitter", params: { children: [{ enemy: "rat" }] } },
+      swarm,
+    );
+    expect(problems.join("\n")).toMatch(/глубже 3 ступеней/);
+  });
+
+  it("ловит делящегося без потомков, даже если данные пришли мимо типов", () => {
+    // @ts-expect-error делящемуся врагу children обязателен — проверяем реакцию на данные из JSON
     const broken: EnemyDef = { id: "blob", ...base, pattern: "splitter" };
-    expect(problemsOf(broken).join("\n")).toMatch(/нужен childEnemy/);
+    expect(problemsOf(broken).join("\n")).toMatch(/нужен непустой children/);
+  });
+
+  it("ловит толпу потомков: за раз их не больше десяти", () => {
+    const problems = problemsOf(
+      { id: "blob", ...base, pattern: "splitter", params: { children: [{ enemy: "rat", count: 8 }, { enemy: "rat", count: 6 }] } },
+      swarm,
+    );
+    expect(problems.join("\n")).toMatch(/больше 10 за раз не выпускаем/);
   });
 
   it("ловит параметр чужого паттерна", () => {
@@ -111,12 +138,12 @@ describe("проверка параметров паттернов", () => {
   });
 
   it("требует целое число потомков в разумных пределах", () => {
-    for (const childCount of [0, 1.5, 9]) {
+    for (const count of [0, 1.5, 11]) {
       const problems = problemsOf(
-        { id: "blob", ...base, pattern: "splitter", params: { childEnemy: "rat", childCount } },
+        { id: "blob", ...base, pattern: "splitter", params: { children: [{ enemy: "rat", count }] } },
         swarm,
       );
-      expect(problems, `childCount ${childCount}`).not.toEqual([]);
+      expect(problems, `count ${count}`).not.toEqual([]);
     }
   });
 
@@ -151,7 +178,7 @@ describe("контент таймлайна спавна", () => {
   });
 
   it("держит элит вне обычного потока — они приходят событиями", () => {
-    const elites = new Set(ENEMIES.filter((enemy) => enemy.elite === true).map((enemy) => enemy.id));
+    const elites = new Set(ENEMIES.filter((enemy) => enemy.rank !== undefined).map((enemy) => enemy.id));
     expect(elites.size).toBeGreaterThan(0);
     for (const segment of TIMELINE) {
       for (const spawn of segment.spawns) expect(elites).not.toContain(spawn.enemy);

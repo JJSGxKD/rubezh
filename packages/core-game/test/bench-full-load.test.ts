@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DROPS } from "../src/content/drops";
+import { isElite } from "../src/game/patterns";
 import { ENEMIES } from "../src/content/enemies";
 import { MAPS } from "../src/content/maps";
 import { PASSIVES } from "../src/content/upgrades";
@@ -46,14 +47,14 @@ describe("полная нагрузка стенда", () => {
 
   it("приводит волну элит по расписанию: обычный поток их не выпускает", () => {
     const target = world();
-    const eliteTypes = target.enemyTypes.filter((type) => type.elite).length;
+    const eliteTypes = target.enemyTypes.filter((type) => isElite(type)).length;
     expect(eliteTypes).toBeGreaterThan(0);
 
     const spawner = withEliteWaves(createConstantPopulationSpawner(0), BENCH_FULL_LOAD);
     const countElites = (): number => {
       let count = 0;
       for (let i = 0; i < target.enemies.count; i++) {
-        if (target.enemies.alive[i] === 1 && target.enemyTypes[target.enemies.type[i]]?.elite === true) count++;
+        if (target.enemies.alive[i] === 1 && isElite(target.enemyTypes[target.enemies.type[i]])) count++;
       }
       return count;
     };

@@ -69,13 +69,27 @@ const FIXTURES: EnemyDef[] = [
     params: { triggerDistance: 60, fuseSec: 0.5, blastRadius: 80 },
   },
   {
+    id: "t_matryoshka",
+    hp: 1,
+    speed: 40,
+    damage: 1,
+    xp: 1,
+    pattern: "splitter",
+    params: {
+      children: [
+        { enemy: "t_splitter", count: 2 },
+        { enemy: "t_chase", count: 1 },
+      ],
+    },
+  },
+  {
     id: "t_splitter",
     hp: 1,
     speed: 40,
     damage: 1,
     xp: 1,
     pattern: "splitter",
-    params: { childEnemy: "t_swarm", childCount: 3 },
+    params: { children: [{ enemy: "t_swarm", count: 3 }] },
   },
 ];
 
@@ -395,14 +409,16 @@ describe("подрывник", () => {
 });
 
 describe("делящийся", () => {
-  function killSplitter(world: World, slot: number): { x: number; y: number } {
-    for (let i = 0; i < 120; i++) {
+  function killSplitter(world: World, slot: number, id = "t_splitter"): { x: number; y: number } {
+    const type = typeIndex(world, id);
+    const killed = world.stats.killsByType[type];
+    for (let i = 0; i < 240; i++) {
       const lastX = world.enemies.x[slot];
       const lastY = world.enemies.y[slot];
       stepWorld(world, IDLE_INPUT);
-      if (world.stats.killsByType[typeIndex(world, "t_splitter")] === 1) return { x: lastX, y: lastY };
+      if (world.stats.killsByType[type] > killed) return { x: lastX, y: lastY };
     }
-    throw new Error("Делящийся не погиб за две секунды");
+    throw new Error(`Делящийся ${id} не погиб за четыре секунды`);
   }
 
   it("распадается ровно на заданное число потомков", () => {
@@ -413,6 +429,26 @@ describe("делящийся", () => {
 
     expect(aliveOfType(world, "t_swarm")).toHaveLength(3);
     expect(world.stats.enemiesSpawned).toBe(4);
+  });
+
+  it("матрёшка рассыпается смесью, и внутренние ступени делятся дальше", () => {
+    const world = setup({ playerAttacks: true });
+    const slot = place(world, "t_matryoshka", 100, 0);
+
+    killSplitter(world, slot, "t_matryoshka");
+
+    // Первая ступень: два делящихся и один преследователь.
+    expect(aliveOfType(world, "t_splitter")).toHaveLength(2);
+    expect(aliveOfType(world, "t_chase")).toHaveLength(1);
+
+    // Вторая ступень: добиваем внутренних — каждый рассыпается своей тройкой.
+    // Считаем по спавнам, а не по живым: рой подопытный игрок выкашивает
+    // быстрее, чем тест успевает его пересчитать.
+    const spawnedBefore = world.stats.enemiesSpawned;
+    for (let i = 0; i < 600 && aliveOfType(world, "t_splitter").length > 0; i++) stepWorld(world, IDLE_INPUT);
+
+    expect(aliveOfType(world, "t_splitter")).toHaveLength(0);
+    expect(world.stats.enemiesSpawned - spawnedBefore).toBe(6);
   });
 
   it("ставит потомков рядом с местом гибели", () => {

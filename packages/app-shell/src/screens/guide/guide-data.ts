@@ -8,7 +8,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, PATTERN_DEFAULTS, WEAPONS } from "@bh/core-game";
+import { ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, WEAPONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -31,25 +31,32 @@ export function speedClass(speed: number): SpeedClass {
 
 export interface GuideEnemy {
   def: EnemyDef;
-  /** на кого распадается при смерти; `null` — не распадается */
-  child: { def: EnemyDef; count: number } | null;
+  /** на кого распадается при смерти; пусто — не распадается */
+  children: { def: EnemyDef; count: number }[];
 }
 
+/** Умолчание числа потомков живёт в движке — гайдбук берёт его оттуда же. */
+const DEFAULT_CHILD_COUNT = 3;
+
 function toGuideEnemy(def: EnemyDef): GuideEnemy {
-  if (def.pattern !== "splitter") return { def, child: null };
-  const child = ENEMIES.find((enemy) => enemy.id === def.params.childEnemy);
-  const count = def.params.childCount ?? PATTERN_DEFAULTS.splitter.childCount ?? 0;
-  return { def, child: child === undefined || count === 0 ? null : { def: child, count } };
+  if (def.pattern !== "splitter") return { def, children: [] };
+
+  const children = def.params.children.flatMap((entry) => {
+    const child = ENEMIES.find((enemy) => enemy.id === entry.enemy);
+    const count = entry.count ?? DEFAULT_CHILD_COUNT;
+    return child === undefined || count < 1 ? [] : [{ def: child, count }];
+  });
+  return { def, children };
 }
 
 /** Обычные враги в порядке контента — примерно в том, в каком они приходят. */
 export function regularEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.elite !== true).map(toGuideEnemy);
+  return ENEMIES.filter((enemy) => enemy.rank === undefined).map(toGuideEnemy);
 }
 
 /** Элита и мини-боссы: приходят только событиями таймлайна. */
 export function eliteEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.elite === true).map(toGuideEnemy);
+  return ENEMIES.filter((enemy) => enemy.rank !== undefined).map(toGuideEnemy);
 }
 
 /** Ступени врагов по порядку открытия: та же тварь, но матёрее. */

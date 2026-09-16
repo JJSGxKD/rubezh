@@ -1,5 +1,5 @@
 import type { RunCues } from "../../run-api";
-import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
+import { DASH_PHASE, EXPLODER_PHASE, isElite } from "../patterns";
 import { SIM_EVENT } from "../sim/events";
 import type { World } from "../sim/world";
 
@@ -144,7 +144,7 @@ export class CueTracker {
       const same = alive && this.enemyAlive[i] === 1 && this.enemyType[i] === typeIndex;
       if (alive) {
         const type = world.enemyTypes[typeIndex];
-        if (type?.elite === true) elites++;
+        if (type !== undefined && isElite(type)) elites++;
         if (same && cues !== null && type !== undefined && phase !== this.enemyPhase[i]) {
           if (type.pattern === "exploder" && phase === EXPLODER_PHASE.fuse) cues.fuses++;
           else if (type.pattern === "dash" && phase === DASH_PHASE.telegraph) cues.dashWarns++;
@@ -206,7 +206,7 @@ function resetCues(cues: RunCues): void {
 function countEliteKills(world: World): number {
   let total = 0;
   world.enemyTypes.forEach((type, index) => {
-    if (type.elite) total += world.stats.killsByType[index] ?? 0;
+    if (isElite(type)) total += world.stats.killsByType[index] ?? 0;
   });
   return total;
 }
