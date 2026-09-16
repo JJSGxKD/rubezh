@@ -11,6 +11,7 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { createQueueConnection } from "../../infra/queues.js";
+import { describeDbError } from "../../infra/database.js";
 import { REDIS } from "../../infra/redis.js";
 import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
 import type { InlineButton, TelegramBotApi, TelegramUpdate } from "../telegram/telegram-bot-api.js";
@@ -330,5 +331,5 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
 }
 
 function reasonOf(error: unknown): string {
-  return error instanceof Error ? error.message : "unknown";
+  return describeDbError(error);
 }

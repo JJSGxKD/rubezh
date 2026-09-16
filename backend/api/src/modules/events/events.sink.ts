@@ -4,6 +4,7 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { UnavailableError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
+import { describeDbError } from "../../infra/database.js";
 import { createQueueConnection } from "../../infra/queues.js";
 import { EVENTS_REPOSITORY, type EventRow, type EventsRepository } from "./events.repository.js";
 
@@ -54,7 +55,7 @@ export class QueuedEventsSink implements EventsSink, OnApplicationBootstrap, OnM
       concurrency: WORKER_CONCURRENCY,
     });
     this.worker.on("failed", (job, error) => {
-      this.log("warn", "batch_write_failed", { attempts: job?.attemptsMade ?? 0, reason: error.message });
+      this.log("warn", "batch_write_failed", { attempts: job?.attemptsMade ?? 0, reason: describeDbError(error) });
     });
     // Без обработчика ошибка соединения воркера роняла бы процесс.
     this.worker.on("error", (error) => this.logThrottled("worker_error", { reason: error.message }));
@@ -115,5 +116,5 @@ export class QueuedEventsSink implements EventsSink, OnApplicationBootstrap, OnM
 }
 
 function reasonOf(error: unknown): string {
-  return error instanceof Error ? error.message : "unknown";
+  return describeDbError(error);
 }
