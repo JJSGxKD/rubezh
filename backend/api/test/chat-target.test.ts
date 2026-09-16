@@ -37,6 +37,7 @@ describe("адрес чата", () => {
       stats: { chatId: "-100", threadId: 1 },
       stressReports: { chatId: "-100", threadId: 1 },
       runReports: { chatId: "-200", threadId: 5 },
+      feedback: { chatId: "-100", threadId: 1 },
     });
   });
 

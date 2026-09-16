@@ -109,6 +109,7 @@ const schema = z.object({
   ADMIN_CHAT_STATS: chatTarget("ADMIN_CHAT_STATS"),
   ADMIN_CHAT_STRESS: chatTarget("ADMIN_CHAT_STRESS"),
   ADMIN_CHAT_RUNS: chatTarget("ADMIN_CHAT_RUNS"),
+  ADMIN_CHAT_FEEDBACK: chatTarget("ADMIN_CHAT_FEEDBACK"),
   // Уведомлять чат администраторов о новых отчётах диагностики: стресс-тест —
   // карточкой с графиком. Работает, когда задан ADMIN_CHAT_ID и включён приёмник.
   ADMIN_NOTIFY_REPORTS: z
@@ -209,9 +210,17 @@ export interface AdminChats {
   stressReports: ChatTarget | null;
   /** карточки проблемных забегов */
   runReports: ChatTarget | null;
+  /** отзывы игроков с формы обратной связи */
+  feedback: ChatTarget | null;
 }
 
-function adminChats(parsed: { ADMIN_CHAT_ID: string; ADMIN_CHAT_STATS: string; ADMIN_CHAT_STRESS: string; ADMIN_CHAT_RUNS: string }): AdminChats {
+function adminChats(parsed: {
+  ADMIN_CHAT_ID: string;
+  ADMIN_CHAT_STATS: string;
+  ADMIN_CHAT_STRESS: string;
+  ADMIN_CHAT_RUNS: string;
+  ADMIN_CHAT_FEEDBACK: string;
+}): AdminChats {
   const general = parseChatTarget(parsed.ADMIN_CHAT_ID);
   const orGeneral = (value: string): ChatTarget | null => parseChatTarget(value) ?? general;
   return {
@@ -219,6 +228,7 @@ function adminChats(parsed: { ADMIN_CHAT_ID: string; ADMIN_CHAT_STATS: string; A
     stats: orGeneral(parsed.ADMIN_CHAT_STATS),
     stressReports: orGeneral(parsed.ADMIN_CHAT_STRESS),
     runReports: orGeneral(parsed.ADMIN_CHAT_RUNS),
+    feedback: orGeneral(parsed.ADMIN_CHAT_FEEDBACK),
   };
 }
 
