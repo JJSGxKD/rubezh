@@ -5,7 +5,8 @@ import { killEnemy } from "./combat";
 import { createDirection, randomDirection } from "./directions";
 import { pushSimEvent, SIM_EVENT } from "./events";
 import { vectorLength } from "./vector";
-import { clampToBounds, type World } from "./world";
+import { clampToBounds, TICK_SEC, type World } from "./world";
+import { GEM_SPEED } from "./gems";
 
 /**
  * Подборы — предметы, которые падают с убитых врагов и срабатывают от касания:
@@ -21,7 +22,9 @@ import { clampToBounds, type World } from "./world";
  *   элите снимает долю здоровья, но не убивает — контрольная точка сложности
  *   не должна пропускаться одним подбором.
  *
- * Притяжения, как у кристаллов, у подборов нет: к ним идут сами.
+ * Подбор в радиусе сбора медленно ползёт к игроку и ускоряется, чем ближе:
+ * бежать за аптечкой через пол-экрана не нужно, но и сама она в руки не
+ * прыгает, как кристалл. Магнит по-прежнему собирает только кристаллы.
  */
 
 export const PICKUP_KIND = {
@@ -43,6 +46,14 @@ export const PICKUP_LAND_TICKS = 24;
 
 /** Радиус подбора в игровых единицах: по нему считается касание. */
 export const PICKUP_RADIUS_UNITS = 9;
+
+/**
+ * Скорость подтягивания подбора, доли скорости кристалла: у края радиуса
+ * сбора — еле ползёт, у самого игрока — почти как кристалл. Из-за этого
+ * подбор «доходит сам», только если игрок и так рядом.
+ */
+const PULL_AT_EDGE = 0.18;
+const PULL_AT_PLAYER = 0.75;
 
 const SCATTER_MIN = 8;
 const SCATTER_MAX = 20;
@@ -181,7 +192,11 @@ export function updatePickups(world: World): void {
       remove(world, i);
       continue;
     }
-    if (!player.alive || isPickupFlying(world, i) || distance > touch) continue;
+    if (!player.alive || isPickupFlying(world, i)) continue;
+    if (distance > touch) {
+      pullToPlayer(world, i, distance);
+      continue;
+    }
 
     switch (pool.kind[i]) {
       case PICKUP_KIND.medkit:
@@ -198,6 +213,23 @@ export function updatePickups(world: World): void {
         detonate(world);
     }
   }
+}
+
+/**
+ * Подтянуть подбор к игроку. Скорость растёт линейно от края радиуса сбора к
+ * игроку: у края движение почти незаметно, вплотную — подбор сам доходит.
+ */
+function pullToPlayer(world: World, index: number, distance: number): void {
+  const pickupRadius = world.playerStats.pickupRadius;
+  if (distance > pickupRadius || distance <= 0) return;
+
+  const pool = world.pickups;
+  const player = world.player;
+  const closeness = 1 - distance / pickupRadius;
+  const speed = GEM_SPEED * (PULL_AT_EDGE + (PULL_AT_PLAYER - PULL_AT_EDGE) * closeness) * world.config.unitScale;
+  const step = Math.min(speed * TICK_SEC, distance);
+  pool.x[index] += ((player.x - pool.x[index]) / distance) * step;
+  pool.y[index] += ((player.y - pool.y[index]) / distance) * step;
 }
 
 function heal(world: World): void {
