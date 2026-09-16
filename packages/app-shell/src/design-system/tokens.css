@@ -619,6 +619,10 @@
   background: linear-gradient(90deg, color-mix(in oklab, var(--color-hp-low) 70%, var(--color-bg)), var(--color-hp-low));
 }
 
+@utility fill-boss {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--color-elite) 55%, var(--color-danger)), var(--color-elite));
+}
+
 @utility fill-xp {
   background: linear-gradient(90deg, color-mix(in oklab, var(--color-xp) 70%, var(--color-bg)), var(--color-xp));
 }

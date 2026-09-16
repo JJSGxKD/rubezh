@@ -19,6 +19,24 @@ import type { DifficultyId, RunOutcome, RunResult, UpgradeOption } from "@bh/sha
  */
 
 /** Снимок состояния для HUD. Приходит не чаще 10 раз в секунду. */
+/**
+ * Босс на поле: полоса здоровья на экране (docs/27-design-system-and-app-shell.md §3.3).
+ *
+ * Только у босса, не у элиты: элит за забег приходят десятки, и полоса на
+ * каждую превратилась бы в фон. Бой с боссом — отдельное событие забега, и
+ * игрок должен видеть, сколько ему осталось.
+ */
+export interface BossSnapshot {
+  /** id врага из контента — имя оболочка берёт по нему сама */
+  enemyId: string;
+  hp: number;
+  maxHp: number;
+  /** фаза боя: считается от остатка здоровья, чем выше — тем злее */
+  phase: number;
+  /** сколько фаз всего — столько делений на полосе */
+  phases: number;
+}
+
 export interface HudSnapshot {
   survivalSec: number;
   hp: number;
@@ -37,6 +55,8 @@ export interface HudSnapshot {
   distance: number;
   /** точки радара вокруг игрока */
   radar: RadarSnapshot;
+  /** живой босс, если он на поле; у элиты полосы нет */
+  boss: BossSnapshot | null;
 }
 
 /**
@@ -140,7 +160,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 4;
+export const RUN_SNAPSHOT_FORMAT = 5;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,

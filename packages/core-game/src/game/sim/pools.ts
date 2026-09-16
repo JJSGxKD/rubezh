@@ -29,6 +29,12 @@ export interface EnemyPool {
   vy: Float32Array;
   hp: Float32Array;
   /**
+   * Здоровье, с которым враг вышел. В пуле, а не в типе: множители отрезка и
+   * ступени застыли в нём при спавне, и полоса босса обязана мерить долю от
+   * того здоровья, что у него было, а не от числа в контенте.
+   */
+  maxHp: Float32Array;
+  /**
    * Урон этого врага. В пуле, а не в типе: кривая сложности после потолка
    * живых растёт здоровьем и уроном (docs/26-stage2-plan.md, WP4.4), и
    * множитель обязан застывать в момент спавна — иначе уже вышедший враг
@@ -105,6 +111,7 @@ export function createEnemyPool(capacity: number): EnemyPool {
     vx: new Float32Array(capacity),
     vy: new Float32Array(capacity),
     hp: new Float32Array(capacity),
+    maxHp: new Float32Array(capacity),
     damage: new Float32Array(capacity),
     hitTick: new Int32Array(capacity).fill(NEVER_HIT),
     attackCooldown: new Float32Array(capacity),

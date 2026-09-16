@@ -4,6 +4,7 @@ import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
 import { ItemIcon } from "../item-icons";
+import { BossBar } from "./BossBar";
 import { HintBanner } from "./HintBanner";
 import { Radar } from "./Radar";
 
@@ -98,6 +99,10 @@ export function RunHud(props: RunHudProps): ReactNode {
           </IconButton>
         </div>
       </div>
+
+      {/* Полоса босса — под верхними полосами и по центру: она появляется
+          редко и обязана быть замеченной, но не закрывать здоровье. */}
+      {hud.boss === null ? null : <BossBar boss={hud.boss} />}
 
       <div className="mt-auto px-4 pb-3">
         <HintBanner hud={hud} />
