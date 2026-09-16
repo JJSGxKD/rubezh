@@ -61,6 +61,19 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
       );
     case "ring":
       return <circle r={r * 0.8} fill="none" stroke={fill} strokeWidth={Math.max(1.5, r * 0.35)} />;
+    case "chevron":
+      return <polygon points={`0,${-r} ${r * 0.85},${r * 0.75} 0,${r * 0.25} ${-r * 0.85},${r * 0.75}`} fill={fill} />;
+    case "gem":
+    case "gem_rich":
+      return <Gem r={r} fill={fill} rich={props.shape === "gem_rich"} />;
+    case "bolt":
+      return (
+        <>
+          <circle r={r} fill={fill} opacity={0.25} />
+          <circle r={r * 0.68} fill={fill} />
+          <circle r={r * 0.3} fill={hex(WORLD_COLORS.enemyProjectileCore)} />
+        </>
+      );
     case "double":
       return (
         <>
@@ -104,6 +117,29 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
     default:
       return <circle r={r} fill={fill} />;
   }
+}
+
+/** Гранёный кристалл: тело, светлая верхняя грань, тень снизу и искра у ценного. */
+function Gem(props: { r: number; fill: string; rich: boolean }): ReactNode {
+  const { r, fill, rich } = props;
+  const body = `-0.36,-0.62 0.36,-0.62 0.78,-0.1 0,1 -0.78,-0.1`;
+  const scaled = (points: string, k = 1): string =>
+    points
+      .split(" ")
+      .map((pair) => {
+        const [x, y] = pair.split(",").map(Number);
+        return `${(x ?? 0) * r * k},${(y ?? 0) * r * k}`;
+      })
+      .join(" ");
+  const light = hex(WORLD_COLORS.gemLight);
+  return (
+    <>
+      <polygon points={scaled(body)} fill={fill} stroke={light} strokeOpacity={rich ? 0.85 : 0.5} strokeWidth={Math.max(1, r * 0.12)} />
+      <polygon points={scaled("-0.36,-0.62 0.36,-0.62 0.2,-0.24 -0.2,-0.24")} fill={light} opacity={0.55} />
+      <polygon points={scaled("0.2,-0.24 0.78,-0.1 0,1")} fill="#000" opacity={0.22} />
+      {rich ? <polygon points={scaled(body, 0.42)} fill={light} opacity={0.9} /> : null}
+    </>
+  );
 }
 
 /** Рамка сцены: земля забега с сеткой, как на канве. */

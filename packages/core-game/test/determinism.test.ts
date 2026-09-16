@@ -82,9 +82,12 @@ describe("симуляция", () => {
       immortalPlayer: true,
     });
 
-    expect(run.checksum).toBe(276993994);
-    expect(run.world.stats.enemiesKilled).toBe(947);
-    expect(run.world.progression.level).toBe(18);
+    // Эталон обновлён вместе с подтягиванием подборов: динамит и магнит
+    // теперь доползают до игрока сами, и за ту же минуту забег собирает их
+    // чаще — убийств стало 956 против 947, уровень 17 против 18.
+    expect(run.checksum).toBe(-1250466497);
+    expect(run.world.stats.enemiesKilled).toBe(956);
+    expect(run.world.progression.level).toBe(17);
   });
 
   it("расходится на другом seed — иначе seed ни на что не влияет", () => {

@@ -10,6 +10,7 @@ import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
 import { PickupRenderer } from "./pickups";
 import { ENEMY_LOOKS, enemyColor, WORLD_COLORS } from "./looks";
+import { PlayerRings } from "./player-rings";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
@@ -70,6 +71,8 @@ export class WorldRenderer {
   private playerHitTick = NEVER_HIT;
   /** настройки графики игрока; `null` — рисуем всё */
   private graphics: RunGraphicsOptions | null = null;
+  /** кольца здоровья и опыта вокруг персонажа */
+  private readonly rings: PlayerRings;
   /** тик последнего лечения — персонаж коротко вспыхивает зелёным */
   private playerHealTick = NEVER_HIT;
   private readonly blastStartTick: Int32Array = new Int32Array(MAX_BLASTS).fill(-1);
@@ -107,7 +110,9 @@ export class WorldRenderer {
 
     ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "circle");
     ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, WORLD_COLORS.projectile, "circle");
-    ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius, WORLD_COLORS.enemyProjectile, "circle");
+    // Снаряд врага крупнее и другой формы: он должен читаться как летящая
+    // угроза, а не как мелкий враг, на которого можно бежать.
+    ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius * 1.35, WORLD_COLORS.enemyProjectile, "bolt");
     ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.blast, "ring");
     ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.heal, "ring");
     ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.magnetWave, "wave");
@@ -121,6 +126,7 @@ export class WorldRenderer {
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
     this.layer.add(this.player);
+    this.rings = new PlayerRings(scene, world, this.layer);
     this.eventsRead = world.events.written;
   }
 
@@ -169,6 +175,7 @@ export class WorldRenderer {
     );
     this.player.setVisible(this.world.player.alive);
     this.applyPlayerFlash();
+    this.rings.draw(this.player.x, this.player.y);
 
     if (this.debug !== null && this.visuals !== null) this.debug.draw(this.visuals, t, this.zoom);
   }
@@ -261,6 +268,9 @@ export class WorldRenderer {
       const x = lerp(enemies.prevX[i], enemies.x[i], t);
       const y = lerp(enemies.prevY[i], enemies.y[i], t);
       sprite.setPosition(x, y);
+      // Клин рывкового врага смотрит туда, куда он целится: остриё вперёд —
+      // это и есть его телеграф, видный даже без линии на земле.
+      if (type.pattern === "dash") sprite.setRotation(Math.atan2(enemies.dirY[i], enemies.dirX[i]) + Math.PI / 2);
 
       if (!telegraphsOn) continue;
       if (type.pattern === "exploder" && enemies.phase[i] === EXPLODER_PHASE.fuse) {
@@ -289,14 +299,18 @@ export class WorldRenderer {
         if (sprite.visible) sprite.setVisible(false);
         continue;
       }
-      sprite.setTexture(
-        projectiles.fromPlayer[p] === 1 ? "bh-projectile" : "bh-projectile-enemy",
-      );
+      const fromPlayer = projectiles.fromPlayer[p] === 1;
+      sprite.setTexture(fromPlayer ? "bh-projectile" : "bh-projectile-enemy");
       sprite.setVisible(true);
       sprite.setPosition(
         lerp(projectiles.prevX[p], projectiles.x[p], t),
         lerp(projectiles.prevY[p], projectiles.y[p], t),
       );
+      // Вражеский снаряд вытянут по полёту: видно не только «что-то летит», а
+      // куда именно. Своим это не нужно — они и так летят от игрока.
+      if (fromPlayer) continue;
+      sprite.setRotation(Math.atan2(projectiles.vy[p], projectiles.vx[p]));
+      sprite.setScale(1.15, 0.8);
     }
   }
 

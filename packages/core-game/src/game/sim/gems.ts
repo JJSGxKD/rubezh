@@ -7,7 +7,8 @@ import { vectorLength } from "./vector";
 import { clampToBounds, type World } from "./world";
 
 /** Скорость притянутого кристалла в игровых единицах. */
-const GEM_SPEED = 420;
+/** Скорость притянутого кристалла: от неё же считается подтягивание подборов. */
+export const GEM_SPEED = 420;
 /** Запас к радиусу игрока, на котором кристалл считается подобранным. */
 const PICKUP_SLACK = 6;
 

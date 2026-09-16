@@ -143,12 +143,42 @@ describe("подбор касанием", () => {
     expect(world.pickups.aliveCount).toBe(1);
   });
 
-  it("не подбирается издалека: притяжения, как у кристаллов, нет", () => {
+  it("за радиусом сбора лежит и не двигается: бежать всё равно придётся", () => {
     const world = setup();
-    spawnPickup(world, PICKUP_KIND.magnet, world.player.x + 60, world.player.y);
+    const far = world.playerStats.pickupRadius * 2;
+    spawnPickup(world, PICKUP_KIND.magnet, world.player.x + far, world.player.y);
     land(world);
     updatePickups(world);
     expect(world.pickups.aliveCount).toBe(1);
+    expect(world.pickups.x[0] - world.player.x).toBe(far);
+  });
+
+  it("в радиусе сбора ползёт к игроку и ускоряется, чем ближе", () => {
+    const world = setup();
+    const radius = world.playerStats.pickupRadius;
+    spawnPickup(world, PICKUP_KIND.magnet, world.player.x + radius * 0.95, world.player.y);
+    spawnPickup(world, PICKUP_KIND.magnet, world.player.x + radius * 0.25, world.player.y);
+    land(world);
+    const [farStart, nearStart] = [world.pickups.x[0], world.pickups.x[1]];
+
+    updatePickups(world);
+
+    const farStep = farStart - world.pickups.x[0];
+    const nearStep = nearStart - world.pickups.x[1];
+    expect(farStep).toBeGreaterThan(0);
+    expect(nearStep).toBeGreaterThan(farStep * 2);
+    // Медленнее кристалла: кристалл с края радиуса долетает в разы быстрее.
+    expect(farStep).toBeLessThan(radius / 10);
+  });
+
+  it("подтянутый вплотную подбор срабатывает сам", () => {
+    const world = setup();
+    world.player.hp = 10;
+    spawnPickup(world, PICKUP_KIND.medkit, world.player.x + world.config.player.radius * 1.4, world.player.y);
+    land(world);
+    for (let tick = 0; tick < 60 && world.pickups.aliveCount > 0; tick++) updatePickups(world);
+    expect(world.pickups.aliveCount).toBe(0);
+    expect(world.player.hp).toBeGreaterThan(10);
   });
 });
 

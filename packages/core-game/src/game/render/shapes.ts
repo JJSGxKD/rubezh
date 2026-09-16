@@ -31,6 +31,27 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
     case "diamond":
       graphics.fillPoints(points(r, DIAMOND), true);
       return;
+    case "chevron":
+      // Остриё вперёд: рывковый враг читается как летящий на игрока клин, а
+      // не как подбираемый ромб.
+      graphics.fillPoints(points(r, CHEVRON), true);
+      return;
+    case "gem":
+      drawGem(graphics, spec, false);
+      return;
+    case "gem_rich":
+      drawGem(graphics, spec, true);
+      return;
+    case "bolt":
+      // Снаряд врага: тёмный ореол, цветное тело и почти белое ядро. Раньше
+      // это был ровный красный кружок, и его путали с мелким врагом.
+      graphics.fillStyle(spec.color, 0.25);
+      graphics.fillCircle(r, r, r);
+      graphics.fillStyle(spec.color, 1);
+      graphics.fillCircle(r, r, r * 0.68);
+      graphics.fillStyle(WORLD_COLORS.enemyProjectileCore, 1);
+      graphics.fillCircle(r, r, r * 0.3);
+      return;
     case "hexagon":
       graphics.fillPoints(points(r, HEXAGON), true);
       return;
@@ -90,6 +111,25 @@ export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec
   }
 }
 
+/**
+ * Кристалл опыта: гранёное тело, светлая верхняя грань и тёмная нижняя —
+ * камень, а не плоский ромб. У ценного добавляется искра в центре.
+ */
+function drawGem(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec, rich: boolean): void {
+  const r = spec.radius;
+  graphics.fillStyle(spec.color, 1);
+  graphics.fillPoints(points(r, GEM_BODY), true);
+  graphics.fillStyle(WORLD_COLORS.gemLight, 0.55);
+  graphics.fillPoints(points(r, GEM_TOP_FACET), true);
+  graphics.fillStyle(0x000000, 0.22);
+  graphics.fillPoints(points(r, GEM_BOTTOM_FACET), true);
+  graphics.lineStyle(Math.max(1, r * 0.12), WORLD_COLORS.gemLight, rich ? 0.85 : 0.5);
+  graphics.strokePoints(points(r, GEM_BODY), true, true);
+  if (!rich) return;
+  graphics.fillStyle(WORLD_COLORS.gemLight, 0.9);
+  graphics.fillPoints(points(r * 0.42, GEM_BODY).map((point) => ({ x: point.x + r * 0.58, y: point.y + r * 0.58 })), true);
+}
+
 /** Плашка аптечки: светлая, чтобы крест читался на тёмной земле. */
 const MEDKIT_BODY = WORLD_COLORS.pickupLight;
 /** Светлые детали подборов: полюса магнита, фитиль. */
@@ -103,6 +143,38 @@ const DIAMOND: readonly (readonly [number, number])[] = [
   [0.75, 0],
   [0, 1],
   [-0.75, 0],
+];
+
+/** Клин остриём вверх: вершина, широкие плечи и вырез сзади. */
+const CHEVRON: readonly (readonly [number, number])[] = [
+  [0, -1],
+  [0.85, 0.75],
+  [0, 0.25],
+  [-0.85, 0.75],
+];
+
+/** Восьмигранник кристалла: срезанная верхушка и острый низ. */
+const GEM_BODY: readonly (readonly [number, number])[] = [
+  [-0.36, -0.62],
+  [0.36, -0.62],
+  [0.78, -0.1],
+  [0, 1],
+  [-0.78, -0.1],
+];
+
+/** Верхняя грань — блик. */
+const GEM_TOP_FACET: readonly (readonly [number, number])[] = [
+  [-0.36, -0.62],
+  [0.36, -0.62],
+  [0.2, -0.24],
+  [-0.2, -0.24],
+];
+
+/** Нижняя грань — тень, от неё камень выглядит гранёным. */
+const GEM_BOTTOM_FACET: readonly (readonly [number, number])[] = [
+  [0.2, -0.24],
+  [0.78, -0.1],
+  [0, 1],
 ];
 
 const HEXAGON: readonly (readonly [number, number])[] = [

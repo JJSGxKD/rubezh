@@ -73,7 +73,10 @@
 | Ширина дуги роя с одной стороны | `game/sim/director.ts` → `FLANK_ARC_SIN` |
 | Интервал контактной атаки | `game/sim/step.ts` → `MELEE_INTERVAL_SEC` |
 | Скорость притяжения кристаллов и запас подбора | `game/sim/gems.ts` → `GEM_SPEED`, `PICKUP_SLACK` |
+| Как быстро подборы подползают к игроку в радиусе сбора | `game/sim/pickups.ts` → `PULL_AT_EDGE`, `PULL_AT_PLAYER` |
+| Кольца здоровья и опыта вокруг персонажа: радиусы, толщина, пороги цвета | `game/render/player-rings.ts` |
 | Полёт кристалла от места смерти: длительность, разлёт, потолок горсти | `game/sim/gems.ts` → `GEM_LAND_TICKS`, `SCATTER_MIN`, `SCATTER_MAX`, `MAX_GEMS_PER_KILL` |
+| Формы и цвета мира: враги по паттернам, кристаллы, подборы, снаряды | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `WORLD_COLORS`; рисование фигур — `render/shapes.ts` |
 | Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/looks.ts` → `GEM_TIERS`; `render/pickups.ts` → `GEM_HOP_UNITS`, `SHIMMER_*` |
 | Подборы (аптечка, магнит, динамит): радиус касания, полёт, потолок пула и потолок вида; вид на земле, пульсация, кольца лечения и магнита | `game/sim/pickups.ts` → `PICKUP_RADIUS_UNITS`, `PICKUP_LAND_TICKS`, `MAX_PICKUPS`, `MAX_PICKUPS_OF_KIND`; `render/looks.ts` → `PICKUP_LOOKS`; `render/pickups.ts` → `PICKUP_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS`, `MAGNET_RING_UNITS` |
 | Числа урона: сколько на экране, сколько новых за кадр, жизнь, подъём, размер; вспышка гибели | `game/render/combat-feedback.ts` → `MAX_NUMBERS`, `MAX_NEW_NUMBERS_PER_FRAME`, `NUMBER_*`, `BURST_*` |
