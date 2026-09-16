@@ -162,7 +162,7 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 29.97,
+      survivalSec: 29.57,
       level: 7,
       xpCollected: 82,
       enemiesKilled: 53,
@@ -175,12 +175,12 @@ describe("статистика забега", () => {
         bomber_imp: 4,
         splitter_slime: 3,
       },
-      damageDealt: 709,
-      damageTaken: 105,
+      damageDealt: 732,
+      damageTaken: 104,
       weapons: [
-        { id: "spark", level: 1, damage: 543 },
-        { id: "knife", level: 1, damage: 133 },
-        { id: "wardstone", level: 1, damage: 33 },
+        { id: "spark", level: 1, damage: 535 },
+        { id: "knife", level: 1, damage: 147 },
+        { id: "wardstone", level: 1, damage: 50 },
       ],
       passives: [
         { id: "reach", level: 1 },
@@ -188,7 +188,7 @@ describe("статистика забега", () => {
         { id: "haste", level: 1 },
         { id: "mending", level: 1 },
       ],
-      deathCause: "swarm_rat",
+      deathCause: "shooter_wisp",
       distance: 4560,
       peakEnemies: 30,
     });

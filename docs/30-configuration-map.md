@@ -86,7 +86,7 @@
 | Хитбоксы и умолчания паттернов, множитель элиты | `game/patterns/enemy-types.ts` → `PATTERN_TRAITS`, `PATTERN_DEFAULTS`, `ELITE_RADIUS_MUL` |
 | Умолчания поведений оружия, потолок снарядов за выстрел | `game/weapons/weapon-types.ts` → `BEHAVIOR_DEFAULTS`, `MAX_PROJECTILES_PER_SHOT` |
 | Разброс веера снарядов | `game/weapons/shooting.ts` → `SPREAD_STEP` |
-| Радиус и потолок оберегов | `game/weapons/orbit.ts` → `ORBITER_RADIUS`, `MAX_ORBITERS` |
+| Радиус оберега, потолок оберегов, отставание кольца на бегу | `game/weapons/orbit.ts` → `ORBITER_RADIUS`, `MAX_ORBITERS`, `TRAIL_SEC` |
 | Сколько вариантов при наборе уровня, сила запасного лечения | `game/progression/levels.ts` → `OFFERS_PER_LEVEL`, `HEAL_RATIO` |
 | Джойстик: размер кольца, мёртвая зона | `game/joystick.ts` → `RING_UNITS`, `DEAD_ZONE_UNITS` |
 | Порог «игрок стоит» для камеры | `game/render/run-camera.ts` → `IDLE_SPEED_RATIO` |

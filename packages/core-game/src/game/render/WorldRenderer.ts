@@ -5,7 +5,7 @@ import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
 import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
-import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
+import { ORBITER_RADIUS, orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
 import { PickupRenderer } from "./pickups";
@@ -117,7 +117,7 @@ export class WorldRenderer {
     ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.heal, "ring");
     ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.magnetWave, "wave");
     ensureShapeTexture(scene, "bh-dynamite", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.dynamiteWave, "wave");
-    ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS_UNITS * scale, WORLD_COLORS.orbiter, "circle");
+    ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS * scale, WORLD_COLORS.orbiter, "circle");
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
     this.weaponEffects = new WeaponEffects(scene, world, this.layer);
@@ -525,7 +525,6 @@ function isWave(kind: number): boolean {
 }
 /** Радиус кольца лечения при подборе аптечки, игровые единицы. */
 const HEAL_RING_UNITS = 40;
-const ORBITER_RADIUS_UNITS = 9;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;
