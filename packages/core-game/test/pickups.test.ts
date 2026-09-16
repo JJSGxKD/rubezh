@@ -20,7 +20,7 @@ import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 // действие.
 
 const GRUNT: EnemyDef = { id: "grunt", hp: 10, speed: 0.001, damage: 0, xp: 1, pattern: "swarm" };
-const BOSS: EnemyDef = { id: "boss", hp: 100, speed: 0.001, damage: 0, xp: 1, pattern: "swarm", elite: true };
+const BOSS: EnemyDef = { id: "boss", hp: 100, speed: 0.001, damage: 0, xp: 1, pattern: "swarm", rank: "elite" };
 const SLIME: EnemyDef = {
   id: "slime",
   hp: 10,

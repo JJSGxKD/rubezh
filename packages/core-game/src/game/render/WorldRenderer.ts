@@ -4,7 +4,7 @@ import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { DASH_PHASE, EXPLODER_PHASE } from "../patterns";
+import { DASH_PHASE, EXPLODER_PHASE, isElite } from "../patterns";
 import { ORBITER_RADIUS, orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
@@ -94,7 +94,7 @@ export class WorldRenderer {
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
 
-    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, type.elite));
+    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, isElite(type)));
     // Текстура на пару «тип и ступень»: ступень меняет цвет тела и садит в
     // середину ядро, поэтому одной текстуры на тип не хватает.
     this.stageCount = world.stages.length;

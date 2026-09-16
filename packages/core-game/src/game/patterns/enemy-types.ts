@@ -1,4 +1,4 @@
-import type { EnemyDef, EnemyPattern } from "@bh/shared-types";
+import type { EnemyDef, EnemyPattern, EnemyRank } from "@bh/shared-types";
 
 /**
  * Возможности паттерна — то, что зависит от поведения, а не от конкретного
@@ -28,19 +28,34 @@ export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
 };
 
 /**
- * Во сколько раз крупнее элита. Единственное, чем ранг влияет на хитбокс:
- * размер остаётся свойством поведения, а не свободным числом в контенте
- * (docs/26-stage2-plan.md, WP4.4).
+ * Во сколько раз крупнее элита и босс. Единственное, чем ранг влияет на
+ * хитбокс: размер остаётся свойством поведения, а не свободным числом в
+ * контенте (docs/26-stage2-plan.md, WP4.4).
  */
 export const ELITE_RADIUS_MUL = 1.7;
+export const BOSS_RADIUS_MUL = 2.4;
+
+/** Элита и босс: всё, что приходит событием и оставляет богатую добычу. */
+export function isElite(type: { rank: EnemyRank | "normal" }): boolean {
+  return type.rank !== "normal";
+}
+
+/** Босс: у него, в отличие от элиты, на экране висит полоса здоровья. */
+export function isBoss(type: { rank: EnemyRank | "normal" }): boolean {
+  return type.rank === "boss";
+}
+
+export function rankRadiusMul(rank: EnemyRank | "normal"): number {
+  return rank === "boss" ? BOSS_RADIUS_MUL : rank === "elite" ? ELITE_RADIUS_MUL : 1;
+}
 
 /**
  * Самый крупный хитбокс — на него расширяется запрос снаряда к сетке. Считаем
- * по элите: если взять обычный радиус, снаряды начнут пролетать сквозь
- * элиту — запрос к сетке вернёт её не во всех клетках, где она есть.
+ * по боссу: если взять обычный радиус, снаряды начнут пролетать сквозь
+ * крупного врага — запрос к сетке вернёт его не во всех клетках, где он есть.
  */
 export const MAX_PATTERN_RADIUS =
-  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * ELITE_RADIUS_MUL;
+  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * BOSS_RADIUS_MUL;
 
 /**
  * Параметры паттерна, разложенные в плоский объект с полным набором полей.
@@ -153,8 +168,11 @@ export interface EnemyType {
   xp: number;
   /** стоимость в бюджете угрозы отрезка таймлайна */
   threat: number;
-  /** усиленная версия паттерна: крупнее, светлее, приходит только событием */
-  elite: boolean;
+  /**
+   * Ранг: обычный, элита или босс. Элита и босс крупнее, светлее и приходят
+   * только событием таймлайна; у босса вдобавок полоса здоровья на экране.
+   */
+  rank: EnemyRank | "normal";
   pattern: EnemyPattern;
   radius: number;
   contactDamage: boolean;
@@ -295,9 +313,9 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       damage: def.damage,
       xp: def.xp,
       threat: def.threat ?? defaultThreat(def),
-      elite: def.elite === true,
+      rank: def.rank ?? "normal",
       pattern: def.pattern,
-      radius: traits.radius * (def.elite === true ? ELITE_RADIUS_MUL : 1) * unitScale,
+      radius: traits.radius * rankRadiusMul(def.rank ?? "normal") * unitScale,
       contactDamage: traits.contactDamage,
       params: resolveParams(def, indexById, unitScale),
     };

@@ -9,6 +9,7 @@ import type { SimEvents } from "./events";
 import type { ViewConfig, WorldBounds } from "./map-types";
 import { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type PickupPool, type ProjectilePool } from "./pools";
 import { pushSimEvent, SIM_EVENT } from "./events";
+import { isElite } from "../patterns";
 import { pickStage, type EnemyStage } from "./stages";
 
 export type { EnemyType } from "../patterns/enemy-types";
@@ -279,7 +280,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   const type = world.enemyTypes[typeIndex];
   // Элита ступеней не получает: она сама и есть контрольная точка сложности,
   // и приходит событием таймлайна в назначенную минуту.
-  const stageIndex = type.elite ? 0 : pickStage(world);
+  const stageIndex = isElite(type) ? 0 : pickStage(world);
   const stage = world.stages[stageIndex] ?? world.stages[0];
   pool.x[slot] = x;
   pool.y[slot] = y;
@@ -290,6 +291,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.vx[slot] = 0;
   pool.vy[slot] = 0;
   pool.hp[slot] = type.hp * world.difficulty.hpMul * stage.hpMul;
+  pool.maxHp[slot] = pool.hp[slot];
   pool.damage[slot] = type.damage * world.difficulty.damageMul * stage.damageMul;
   pool.hitTick[slot] = NEVER_HIT;
   pool.attackCooldown[slot] = 0;

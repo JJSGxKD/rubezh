@@ -20,7 +20,7 @@ export function findTimelineProblems(
   enemies: readonly EnemyDef[],
 ): string[] {
   const threatById = new Map(enemies.map((def) => [def.id, def.threat ?? defaultThreat(def)]));
-  const eliteIds = new Set(enemies.filter((def) => def.elite === true).map((def) => def.id));
+  const eliteIds = new Set(enemies.filter((def) => def.rank !== undefined).map((def) => def.id));
 
   const problems = [
     ...findSegmentProblems(timeline, threatById, eliteIds),

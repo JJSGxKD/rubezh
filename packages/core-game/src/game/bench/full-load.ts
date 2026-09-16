@@ -1,3 +1,4 @@
+import { isElite } from "../patterns";
 import type { EnemyPattern } from "@bh/shared-types";
 import { refreshPlayerStats } from "../progression/levels";
 import { addPassive, addWeapon, passiveSlotOf, weaponSlotOf } from "../progression/loadout";
@@ -64,7 +65,7 @@ export function withEliteWaves(inner: Spawner, preset: FullLoadPreset): Spawner 
       if (world.stats.elapsedSec < nextWaveSec) return;
       nextWaveSec += preset.eliteEverySec;
       world.enemyTypes.forEach((type, typeIndex) => {
-        if (!type.elite) return;
+        if (!isElite(type)) return;
         for (let i = 0; i < preset.elitesPerWave; i++) spawnRandomOnRing(world, typeIndex);
       });
     },

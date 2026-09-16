@@ -1,4 +1,4 @@
-import { onEnemyKilled } from "../patterns";
+import { isElite, onEnemyKilled } from "../patterns";
 import { dropGems } from "./gems";
 import { rollPickups } from "./pickups";
 import { stageOf } from "./stages";
@@ -60,7 +60,7 @@ export function killEnemy(world: World, index: number): void {
     // Опыт по ступени: матёрый враг дороже стоит и лучше качает, иначе его
     // незачем убивать — выгоднее убежать к обычным.
     dropGems(world, x, y, Math.round(type.xp * stage.xpMul));
-    rollPickups(world, x, y, type.elite);
+    rollPickups(world, x, y, isElite(type));
   }
   onEnemyKilled(type.pattern, world, index);
 }

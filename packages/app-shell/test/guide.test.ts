@@ -33,7 +33,7 @@ describe("гайдбук", () => {
   it("показывает всех врагов ровно по одному разу: обычных и элиту отдельно", () => {
     const shown = [...regularEnemies(), ...eliteEnemies()].map((enemy) => enemy.def.id);
     expect(shown.sort()).toEqual(ENEMIES.map((enemy) => enemy.id).sort());
-    expect(eliteEnemies().every((enemy) => enemy.def.elite === true)).toBe(true);
+    expect(eliteEnemies().every((enemy) => enemy.def.rank !== undefined)).toBe(true);
   });
 
   it("говорит, на кого распадается делящийся, с числом из контента или умолчания", () => {

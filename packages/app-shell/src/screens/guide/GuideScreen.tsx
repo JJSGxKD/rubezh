@@ -228,7 +228,7 @@ function Enemies(): ReactNode {
 
 function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
   const { def, child } = props.enemy;
-  const elite = def.elite === true;
+  const elite = def.rank !== undefined;
   const name = t(`enemy.${def.id}.name`);
 
   return (

@@ -7,7 +7,7 @@ import { enemySpeed } from "../src/game/patterns/steering";
 // Ступени врагов: та же тварь, но матёрее (docs/26-stage2-plan.md, WP4.8).
 
 const RAT: EnemyDef = { id: "rat", hp: 10, speed: 60, damage: 4, xp: 2, pattern: "swarm" };
-const BOSS: EnemyDef = { id: "elite", hp: 100, speed: 30, damage: 9, xp: 20, elite: true, pattern: "chase" };
+const BOSS: EnemyDef = { id: "elite", hp: 100, speed: 30, damage: 9, xp: 20, rank: "elite", pattern: "chase" };
 
 const STAGES: EnemyStageDef[] = [
   { fromSec: 0, weight: 1, hpMul: 1, damageMul: 1, speedMul: 1, xpMul: 1 },

@@ -151,7 +151,7 @@ describe("контент таймлайна спавна", () => {
   });
 
   it("держит элит вне обычного потока — они приходят событиями", () => {
-    const elites = new Set(ENEMIES.filter((enemy) => enemy.elite === true).map((enemy) => enemy.id));
+    const elites = new Set(ENEMIES.filter((enemy) => enemy.rank !== undefined).map((enemy) => enemy.id));
     expect(elites.size).toBeGreaterThan(0);
     for (const segment of TIMELINE) {
       for (const spawn of segment.spawns) expect(elites).not.toContain(spawn.enemy);

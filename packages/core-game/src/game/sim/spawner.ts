@@ -1,4 +1,5 @@
 import type { EnemyPattern } from "@bh/shared-types";
+import { isElite } from "../patterns";
 import { createDirection, directionInArc, randomDirection, type Direction } from "./directions";
 import { vectorLength } from "./vector";
 import { clampToBounds, spawnEnemy, type World } from "./world";
@@ -233,15 +234,15 @@ function createPopulationSpawner(
 function pickWeightedType(world: World, weights: Partial<Record<EnemyPattern, number>>): number {
   let total = 0;
   for (const type of world.enemyTypes) {
-    if (type.elite) continue;
+    if (isElite(type)) continue;
     total += weights[type.pattern] ?? 0;
   }
-  if (total <= 0) return world.enemyTypes.findIndex((type) => !type.elite);
+  if (total <= 0) return world.enemyTypes.findIndex((type) => !isElite(type));
 
   let roll = world.rng.nextFloat() * total;
   let last = -1;
   for (let i = 0; i < world.enemyTypes.length; i++) {
-    if (world.enemyTypes[i].elite) continue;
+    if (isElite(world.enemyTypes[i])) continue;
     last = i;
     roll -= weights[world.enemyTypes[i].pattern] ?? 0;
     if (roll <= 0) return i;

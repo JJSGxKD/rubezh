@@ -1,4 +1,5 @@
 import { RADAR_BLIP, type RadarSnapshot } from "../run-api";
+import { isElite } from "./patterns";
 import { PICKUP_KIND } from "./sim/pickups";
 import type { World } from "./sim/world";
 
@@ -51,12 +52,12 @@ export function buildRadarSnapshot(world: World): RadarSnapshot {
 
   const enemies = world.enemies;
   for (let i = 0; i < enemies.count; i++) {
-    if (enemies.alive[i] === 1 && world.enemyTypes[enemies.type[i]].elite) {
+    if (enemies.alive[i] === 1 && isElite(world.enemyTypes[enemies.type[i]])) {
       push(enemies.x[i], enemies.y[i], RADAR_BLIP.elite);
     }
   }
   for (let i = 0; i < enemies.count && count < MAX_BLIPS; i++) {
-    if (enemies.alive[i] === 1 && !world.enemyTypes[enemies.type[i]].elite) {
+    if (enemies.alive[i] === 1 && !isElite(world.enemyTypes[enemies.type[i]])) {
       push(enemies.x[i], enemies.y[i], RADAR_BLIP.enemy);
     }
   }

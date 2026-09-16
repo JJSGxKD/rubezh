@@ -44,12 +44,12 @@ function toGuideEnemy(def: EnemyDef): GuideEnemy {
 
 /** Обычные враги в порядке контента — примерно в том, в каком они приходят. */
 export function regularEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.elite !== true).map(toGuideEnemy);
+  return ENEMIES.filter((enemy) => enemy.rank === undefined).map(toGuideEnemy);
 }
 
 /** Элита и мини-боссы: приходят только событиями таймлайна. */
 export function eliteEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.elite === true).map(toGuideEnemy);
+  return ENEMIES.filter((enemy) => enemy.rank !== undefined).map(toGuideEnemy);
 }
 
 /** Ступени врагов по порядку открытия: та же тварь, но матёрее. */
