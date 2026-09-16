@@ -5,7 +5,7 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
 import { TelegramApiError, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
+import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
 import { BotRouter } from "./bot-router.js";
 
 /**

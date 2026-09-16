@@ -9,7 +9,7 @@ import { benchSummaryOf, runSummaryOf } from "../diagnostics/diagnostics-summary
 import { DIAGNOSTICS_REPOSITORY, type DiagnosticsRepository } from "../diagnostics/diagnostics.repository.js";
 import type { ChatTarget } from "../telegram/chat-target.js";
 import { TelegramApiError, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
+import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
 import { renderRunCardPng, runCaption, type RunCardInput } from "./run-card.js";
 import { renderStressCardPng, stressCaption, type StressCardInput } from "./stress-card.js";
 

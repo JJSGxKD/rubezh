@@ -11,6 +11,14 @@ import { chatFields, chatTargetOf, type ChatRef } from "./chat-target.js";
  * Токен живёт в URL запроса, поэтому URL не попадает ни в ошибки, ни в логи.
  */
 
+/**
+ * Токен внедрения клиента. Живёт рядом с самим клиентом, а не в модуле:
+ * модуль импортирует провайдеров, и всякий провайдер, которому нужен токен,
+ * замкнул бы круг импортов — в ESM это не предупреждение, а падение на старте
+ * («Cannot access before initialization»).
+ */
+export const TELEGRAM_BOT_API = Symbol("TELEGRAM_BOT_API");
+
 const API_ROOT = "https://api.telegram.org";
 /** Запас сверх long polling: Telegram держит запрос до `timeout` секунд и отвечает чуть позже. */
 const POLL_GRACE_MS = 10_000;

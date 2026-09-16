@@ -15,7 +15,7 @@ import { describeDbError } from "../../infra/database.js";
 import { REDIS } from "../../infra/redis.js";
 import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
 import type { InlineButton, TelegramBotApi, TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
+import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
 import type { ExportPeriod } from "./export.repository.js";
 import { ExportService } from "./export.service.js";
 

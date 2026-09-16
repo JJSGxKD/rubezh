@@ -1,7 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import type { TelegramBotApi } from "./telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "./telegram.module.js";
+import { TELEGRAM_BOT_API, type TelegramBotApi } from "./telegram-bot-api.js";
 
 /**
  * Имя бота — для ссылки на Mini App `https://t.me/<бот>?startapp`. Она нужна

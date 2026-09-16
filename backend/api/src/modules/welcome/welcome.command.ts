@@ -12,7 +12,7 @@ import { REDIS } from "../../infra/redis.js";
 import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
 import { BotIdentity } from "../telegram/bot-identity.js";
 import { TelegramApiError, type InlineButton, type TelegramBotApi, type TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram.module.js";
+import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
 import { displayName, welcomeCacheKey, type WelcomeCard, type WelcomeProgress } from "./welcome-card.js";
 import { languageOf, WELCOME_TEXTS } from "./welcome-texts.js";
 

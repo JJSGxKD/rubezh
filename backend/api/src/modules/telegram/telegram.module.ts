@@ -1,15 +1,13 @@
 import { Global, Module } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { BotIdentity } from "./bot-identity.js";
-import { TelegramBotApi } from "./telegram-bot-api.js";
+import { TELEGRAM_BOT_API, TelegramBotApi } from "./telegram-bot-api.js";
 
 /**
  * Telegram для всего бэкенда: клиент Bot API на токене бота закрытого теста.
  * Проверка подписи `initData` — чистая функция (`telegram-init-data.ts`) и в
  * DI не нуждается.
  */
-export const TELEGRAM_BOT_API = Symbol("TELEGRAM_BOT_API");
-
 @Global()
 @Module({
   providers: [
