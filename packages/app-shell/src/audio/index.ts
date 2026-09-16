@@ -19,7 +19,13 @@ import type { HudSound, RunSoundEvent, SoundDirector, SoundScene, UiSound } from
 
 export type { AudioVolumes, HudSound, RunSoundEvent, SoundScene, UiSound };
 
-export const DEFAULT_VOLUMES: AudioVolumes = { master: 60, effects: 85, ui: 70, music: 55 };
+/**
+ * Умолчания громкости. Музыка выключена: пока она однообразна и на третьем
+ * забеге надоедает — вернём ползунок вверх, когда она станет лучше
+ * (docs/31-audio-and-haptics.md §6). Интерфейс громче эффектов: щелчок
+ * подтверждает нажатие, и в бою он тонул.
+ */
+export const DEFAULT_VOLUMES: AudioVolumes = { master: 60, effects: 85, ui: 90, music: 0 };
 
 let director: SoundDirector | null = null;
 let loading: Promise<SoundDirector | null> | null = null;

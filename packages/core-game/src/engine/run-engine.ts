@@ -31,6 +31,7 @@ export function createRunEngine(): RunEngine {
         ...(options.resume === undefined ? {} : { resume: options.resume }),
         ...(options.dev === undefined ? {} : { dev: options.dev }),
         fpsOverlay: options.diagnostics.fpsOverlay,
+        ...(options.graphics === undefined ? {} : { graphics: options.graphics }),
         renderCapFps: options.renderCapFps ?? null,
         recordRun: options.diagnostics.recordRun,
         bus,

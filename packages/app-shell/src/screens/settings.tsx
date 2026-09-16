@@ -11,6 +11,7 @@ import { audio } from "../audio";
 import { Slider } from "../design-system/components/Slider";
 import { t } from "../i18n";
 import { useDiagnostics } from "../state/diagnostics";
+import { useGraphics } from "../state/graphics";
 import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
@@ -29,6 +30,7 @@ export function SettingsScreen(): ReactNode {
   const navigation = useNavigation();
   const settings = useSettings();
   const diagnostics = useDiagnostics((state) => state.enabled);
+  const graphics = useGraphics();
   const supportsFullscreen = useShell((state) => state.adapter.ui.supportsFullscreen);
   const [hintsReset, setHintsReset] = useState(false);
 
@@ -62,6 +64,27 @@ export function SettingsScreen(): ReactNode {
             />
           </ListGroup>
         </div>
+
+        <SectionTitle>{t("settings.graphics")}</SectionTitle>
+        <ListGroup>
+          <ListItem
+            title={t("settings.graphics.telegraphs")}
+            hint={t("settings.graphics.telegraphs.hint")}
+            toggle={{ checked: graphics.telegraphs, onChange: () => graphics.toggle("telegraphs") }}
+          />
+          <ListItem
+            title={t("settings.graphics.weaponEffects")}
+            hint={t("settings.graphics.weaponEffects.hint")}
+            toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
+          />
+          <ListItem
+            title={t("settings.graphics.damageNumbers")}
+            toggle={{ checked: graphics.damageNumbers, onChange: () => graphics.toggle("damageNumbers") }}
+          />
+        </ListGroup>
+        {/* Предупреждение обязательно: снятый телеграф — не «чуть проще
+            картинка», а другой бой. */}
+        <p className="mt-2 text-xs text-text-muted">{t("settings.graphics.warning")}</p>
 
         <SectionTitle>{t("settings.language")}</SectionTitle>
         <ListGroup>
@@ -107,23 +130,28 @@ export function VolumeSliders(): ReactNode {
   const volumes = useSettings((state) => state.volumes);
   const keys: readonly VolumeKey[] = ["master", "effects", "ui", "music"];
   return (
-    <ListGroup>
-      {keys.map((key) => (
-        <Slider
-          key={key}
-          label={t(`settings.volume.${key}`)}
-          value={volumes[key]}
-          valueLabel={volumes[key] === 0 ? t("settings.volume.off") : `${volumes[key]}%`}
-          onChange={(value) => useSettings.getState().setVolume(key, value)}
-          onCommit={() => {
-            useSettings.getState().commitVolume(key);
-            // Интерфейс звучит своим щелчком, эффекты — попаданием: игрок
-            // слышит ровно ту громкость, которую выставил.
-            if (key === "ui" || key === "master") audio.ui("select");
-          }}
-        />
-      ))}
-    </ListGroup>
+    <>
+      <ListGroup>
+        {keys.map((key) => (
+          <Slider
+            key={key}
+            label={t(`settings.volume.${key}`)}
+            value={volumes[key]}
+            valueLabel={volumes[key] === 0 ? t("settings.volume.off") : `${volumes[key]}%`}
+            onChange={(value) => useSettings.getState().setVolume(key, value)}
+            onCommit={() => {
+              useSettings.getState().commitVolume(key);
+              // Интерфейс звучит своим щелчком, эффекты — попаданием: игрок
+              // слышит ровно ту громкость, которую выставил.
+              if (key === "ui" || key === "master") audio.ui("select");
+            }}
+          />
+        ))}
+      </ListGroup>
+      {/* Музыка выключена по умолчанию: молчащий регулятор выглядит поломкой,
+          если не сказать, что так задумано. */}
+      {volumes.music === 0 ? <p className="mt-2 text-xs text-text-muted">{t("settings.volume.music.off")}</p> : null}
+    </>
   );
 }
 

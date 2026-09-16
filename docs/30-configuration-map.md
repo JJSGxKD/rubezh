@@ -296,7 +296,9 @@ pnpm budget
 | Звук: уровни и приоритеты шин, бюджет запусков, потолок голосов, плотность, глубина приглушения | `audio/recipes.ts` → `BUSES`, `MIX_RULES` |
 | Звук: какие звуки на сигналы забега, напряжение музыки, сердцебиение, серия кристаллов | `audio/sound-director.ts` → `planCueSounds`, `FULL_INTENSITY_ENEMIES`, `HEARTBEAT_*`, `GEM_STREAK_*` |
 | Музыка: лад, аккорды, темп сцен, мотивы, пороги слоёв | `audio/music.ts` → `SCALE`, `CHORDS`, `CONTEXTS`, `MOTIFS`, `LAYER_THRESHOLDS` |
-| Громкость по умолчанию и шкала регулятора | `audio/index.ts` → `DEFAULT_VOLUMES`; `audio/audio-engine.ts` → `volumeCurve` |
+| Громкость по умолчанию и шкала регулятора | `audio/index.ts` → `DEFAULT_VOLUMES` (музыка выключена, интерфейс громче боя); `audio/audio-engine.ts` → `volumeCurve` |
+| Правила грани звука: включены ли по умолчанию, бюджеты шин, потолок голосов | `audio/audio-engine.ts` → `rulesEnabled`; `audio/recipes.ts` → `MIX_RULES` |
+| Настройки графики игрока: что можно отключить и что включено по умолчанию | `app-shell/src/state/graphics.ts` → `DEFAULT_GRAPHICS`; применяет `core-game/src/game/render/WorldRenderer.ts` |
 | Звук интерфейса и вибрация на нажатия | `app-shell/src/state/ui-feedback.ts` → `FEEDBACK` |
 | Бюджет звукового чанка | `scripts/bundle-budget.mjs` → строка «Звук» |
 | Вибрация: вид и минимальный интервал каждого события, интервал между любыми двумя | `app-shell/src/state/haptics.ts` → `HAPTIC_RULES`, `GLOBAL_MIN_INTERVAL_MS` |

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { EnemyPattern } from "@bh/shared-types";
-import type { RunDevVisuals } from "../../run-api";
+import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
@@ -68,6 +68,8 @@ export class WorldRenderer {
   private readonly feedback: CombatFeedback;
   /** тик последнего попадания по игроку — для вспышки персонажа */
   private playerHitTick = NEVER_HIT;
+  /** настройки графики игрока; `null` — рисуем всё */
+  private graphics: RunGraphicsOptions | null = null;
   /** тик последнего лечения — персонаж коротко вспыхивает зелёным */
   private playerHealTick = NEVER_HIT;
   private readonly blastStartTick: Int32Array = new Int32Array(MAX_BLASTS).fill(-1);
@@ -172,18 +174,31 @@ export class WorldRenderer {
   }
 
   /**
+   * Настройки графики игрока. Режим разработчика поверх них — свои
+   * выключатели: он смотрит на то, что настроил, а не на то, что у игрока.
+   */
+  setGraphics(graphics: RunGraphicsOptions | null): void {
+    this.graphics = graphics;
+    this.applyEffectSwitches();
+  }
+
+  /**
    * Отладочная отрисовка и выключатели эффектов режима разработчика. Оверлей
    * создаётся по первому включению: обычный забег его не держит.
    */
   setDevVisuals(visuals: RunDevVisuals | null): void {
     this.visuals = visuals;
-    this.feedback.enabled = visuals?.damageNumbers ?? true;
-    this.weaponEffects.enabled = visuals?.effects ?? true;
+    this.applyEffectSwitches();
     const wantsDebug =
       visuals !== null &&
       (visuals.hitboxes || visuals.pickupRadius || visuals.weaponRadii || visuals.spawnRings || visuals.bounds || visuals.grid);
     if (wantsDebug && this.debug === null) this.debug = new DebugOverlay(this.scene, this.world, this.layer);
     this.debug?.setVisible(wantsDebug);
+  }
+
+  private applyEffectSwitches(): void {
+    this.feedback.enabled = this.visuals?.damageNumbers ?? this.graphics?.damageNumbers ?? true;
+    this.weaponEffects.enabled = this.visuals?.effects ?? this.graphics?.weaponEffects ?? true;
   }
 
   /**
@@ -218,7 +233,7 @@ export class WorldRenderer {
     const tick = this.world.stats.tick;
     const playerX = lerp(this.world.player.prevX, this.world.player.x, t);
     const playerY = lerp(this.world.player.prevY, this.world.player.y, t);
-    const telegraphsOn = this.visuals?.telegraphs ?? true;
+    const telegraphsOn = this.visuals?.telegraphs ?? this.graphics?.telegraphs ?? true;
     this.telegraphs.begin();
 
     for (let i = 0; i < enemies.count; i++) {

@@ -50,6 +50,7 @@ export type {
   RunDevVisuals,
   RunDiagnostics,
   RunDiagnosticsOptions,
+  RunGraphicsOptions,
   RunEngine,
   RunEvents,
   RunInspection,

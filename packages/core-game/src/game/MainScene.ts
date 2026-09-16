@@ -9,6 +9,7 @@ import {
   type RunDevCommand,
   type RunDevOptions,
   type RunInspection,
+  type RunGraphicsOptions,
   type RunPauseReason,
   type RunSnapshot,
 } from "../run-api";
@@ -85,6 +86,8 @@ export interface MainSceneData {
   renderCapFps?: number | null;
   /** полная запись забега: таймлайн, события, лог ввода */
   recordRun?: boolean;
+  /** настройки графики игрока; без них рисуется всё */
+  graphics?: RunGraphicsOptions;
 }
 
 /**
@@ -161,6 +164,7 @@ export class MainScene extends Phaser.Scene {
     if (resume !== undefined && !this.restore(resume)) return;
 
     this.worldRenderer = new WorldRenderer(this, this.world);
+    this.worldRenderer.setGraphics(data.graphics ?? null);
     this.runCamera = new RunCamera(map.camera, data.unitScale);
     this.runCamera.snapTo(this.world, this.scale.width, this.scale.height);
     this.syncCamera();

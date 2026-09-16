@@ -27,7 +27,7 @@ export const BUSES: Record<BusId, BusDef> = {
   rewards: { level: 0.8, priority: 2, group: "effects" },
   weapons: { level: 0.55, priority: 1, group: "effects" },
   enemies: { level: 0.5, priority: 0, group: "effects" },
-  ui: { level: 0.6, priority: 2, group: "ui" },
+  ui: { level: 0.8, priority: 2, group: "ui" },
   music: { level: 1, priority: 2, group: "music" },
 };
 
