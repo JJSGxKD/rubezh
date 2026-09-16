@@ -3,6 +3,7 @@ import { estimateWidth, PALETTE, rect, renderPng, SERIES, svgDocument, text } fr
 import type { BenchSummary } from "../diagnostics/diagnostics-summary.js";
 import type { StoredDevice } from "../diagnostics/dto/device.dto.js";
 import type { BenchSubmission } from "../diagnostics/dto/report-envelope.dto.js";
+import { niceCeil, niceFpsMax, round } from "./chart-scale.js";
 
 /**
  * Карточка стресс-теста для чата администраторов: на каком устройстве,
@@ -167,19 +168,4 @@ export function stressCaption(input: StressCardInput): string {
 
 function interruptionsLine(count: number): string {
   return `сворачивали ${count} ${pluralRu(count, "раз", "раза", "раз")}`;
-}
-
-function niceFpsMax(value: number): number {
-  for (const candidate of [30, 60, 90, 120, 144, 165, 240]) if (value <= candidate) return candidate;
-  return Math.ceil(value / 60) * 60;
-}
-
-function niceCeil(value: number): number {
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  for (const step of [1, 2, 2.5, 5, 10]) if (value <= step * magnitude) return step * magnitude;
-  return 10 * magnitude;
-}
-
-function round(value: number): number {
-  return Math.round(value * 10) / 10;
 }

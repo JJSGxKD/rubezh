@@ -202,6 +202,13 @@ Zod-схемы `payload` — в словаре сервера
   производительности (`28-diagnostics.md` §3.2), хэш контента. `fps_sample`
   при этом **не** шлётся поминутно: сводки на забег достаточно, а детальный
   таймлайн живёт в отчётах диагностики;
+- `run_finished`, `run_abandoned` — сводка производительности у всех игроков
+  плоскими полями с префиксом `perf`: `perfFrames`, `perfAvgFps`,
+  `perfP95FrameMs`, `perfOver33Ratio`, `perfPeakObjects`, `perfDisplayHz`,
+  `perfRenderCapFps`, `perfRenderer`, `perfDpr`, `perfCanvasWidth`,
+  `perfCanvasHeight`, `perfInterruptions`. Поля добавлены без смены версии:
+  они необязательные, и смысл остальных не меняют. Сборки до сводки их не
+  шлют;
 - `wave_reached` — «волна» означает **отрезок таймлайна спавна** (по
   умолчанию минута): волн с паузами в игре нет, спавн непрерывный
   (`26-stage2-plan.md`, WP4.4). Смысл уточнён, имя сохранено — событие ещё

@@ -48,12 +48,21 @@ export type {
   RunDevOptions,
   RunDevPickup,
   RunDevVisuals,
+  RunDiagnostics,
   RunDiagnosticsOptions,
   RunEngine,
   RunEvents,
   RunInspection,
   RunOptions,
   RunPassiveInspection,
+  RunPerfSummary,
+  RunInputLog,
+  RunRecording,
+  RunRecordingEvent,
+  RunRecordingEventKind,
+  RunRecordingResult,
+  RunReplayBlocker,
+  RunTimelineBucket,
   RunWeaponInspection,
   RunPauseReason,
   RunSession,
@@ -62,7 +71,7 @@ export type {
   RunSnapshotSummary,
 } from "./run-api";
 // Версия формата снимка — оболочка сверяет сохранение до того, как предложить «Продолжить».
-export { RADAR_BLIP, RUN_SNAPSHOT_FORMAT } from "./run-api";
+export { RADAR_BLIP, RUN_RECORDING_SCHEMA, RUN_SNAPSHOT_FORMAT } from "./run-api";
 
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).

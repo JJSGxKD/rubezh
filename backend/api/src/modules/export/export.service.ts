@@ -10,6 +10,7 @@ import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { splitFile, ZipWriter } from "../../common/zip/zip-writer.js";
 import { submitBenchReportSchema } from "../diagnostics/dto/bench-report.dto.js";
+import { submitRunReportSchema } from "../diagnostics/dto/run-report.dto.js";
 import { EVENT_DICTIONARY } from "../events/event-dictionary.js";
 import {
   EXPORT_REPOSITORY,
@@ -46,7 +47,7 @@ const REPORTS_PAGE = 100;
 const PAGE_PAUSE_MS = 25;
 
 const RUN_EVENTS = new Set(["run_finished", "run_abandoned"]);
-const RUN_COLUMNS = ["received_at", "occurred_at", "event_type", "install_id", "user", "app_version", "seed", "survivalSec", "level", "wave", "enemiesKilled", "weapon", "map", "difficulty", "contentHash", "isNewRecord", "cheats"] as const;
+const RUN_COLUMNS = ["received_at", "occurred_at", "event_type", "install_id", "user", "app_version", "seed", "survivalSec", "level", "wave", "enemiesKilled", "weapon", "map", "difficulty", "contentHash", "isNewRecord", "cheats", "perfAvgFps", "perfP95FrameMs", "perfOver33Ratio", "perfPeakObjects", "perfDisplayHz", "perfInterruptions"] as const;
 
 export interface ExportRequest {
   period: ExportPeriod;
@@ -293,7 +294,7 @@ function manifest(input: {
     appVersions: input.appVersions,
     files: {
       "events.ndjson": "события закрытого теста, по строке на событие: конверт docs/22-analytics-and-metrics.md §3.1, payload — по схеме из dictionary",
-      "diagnostic_reports.ndjson": "отчёты диагностики целиком: стресс-тест (kind=bench) с таймлайном кадров по 5 секунд",
+      "diagnostic_reports.ndjson": "отчёты диагностики целиком: стресс-тест (kind=bench) с таймлайном кадров по 5 секунд и записи забегов (kind=run) — таймлайн, события, лог ввода; повтор забега — pnpm replay <reportId> --from diagnostic_reports.ndjson",
       "runs.csv": "итоги забегов из событий run_finished и run_abandoned плоской таблицей",
     },
     pseudonymization:
@@ -304,7 +305,10 @@ function manifest(input: {
         { version: definition.version, payload: z.toJSONSchema(definition.payload, { unrepresentable: "any" }) },
       ]),
     ),
-    reportSchemas: { bench: z.toJSONSchema(submitBenchReportSchema, { unrepresentable: "any" }) },
+    reportSchemas: {
+      bench: z.toJSONSchema(submitBenchReportSchema, { unrepresentable: "any" }),
+      run: z.toJSONSchema(submitRunReportSchema, { unrepresentable: "any" }),
+    },
   };
 }
 

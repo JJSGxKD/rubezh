@@ -8,12 +8,14 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { ReportNotifier } from "../src/modules/admin-notify/report-notifier.js";
 import { DiagnosticsHooks } from "../src/modules/diagnostics/diagnostics-hooks.js";
-import { benchSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js";
+import { benchSummaryOf, runSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js";
 import { PrismaDiagnosticsRepository } from "../src/modules/diagnostics/diagnostics.repository.js";
 import { submitBenchReportSchema } from "../src/modules/diagnostics/dto/bench-report.dto.js";
+import { submitRunReportSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
 import { PrismaExportRepository, type EventExportRow, type PageCursor } from "../src/modules/export/export.repository.js";
 import { RetentionJob } from "../src/modules/export/retention.job.js";
 import { benchSubmission, DEVICE } from "./helpers/bench-report.js";
+import { runSubmission } from "./helpers/run-report.js";
 import { PrismaEventsRepository, type EventRow } from "../src/modules/events/events.repository.js";
 import { QueuedEventsSink } from "../src/modules/events/events.sink.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
@@ -138,6 +140,35 @@ describe.skipIf(!live)("приёмники на живых Postgres и Redis", (
     } finally {
       await notifier.onModuleDestroy();
     }
+  });
+
+  it("запись забега ложится в jsonb и читается обратно той же схемой, а стресс-тестом не притворяется", async () => {
+    const repository = new PrismaDiagnosticsRepository(prisma);
+    const reportId = randomUUID();
+    const payload = submitRunReportSchema.parse(runSubmission(reportId));
+    expect(
+      await repository.insert({
+        reportId,
+        kind: "run",
+        schemaVersion: payload.recording.schema,
+        appVersion: "0.4.0",
+        contentHash: "abc123",
+        installId: `${install}-run`,
+        platformUserId: null,
+        platform: "telegram",
+        device: DEVICE,
+        summary: runSummaryOf(payload),
+        payload,
+        sizeBytes: Buffer.byteLength(JSON.stringify(payload)),
+        occurredAt: new Date(),
+        receivedAt: new Date(),
+      }),
+    ).toBe(true);
+
+    const stored = await repository.findRun(reportId);
+    // Кортежи событий и выборов переживают jsonb: повтору нужен каждый тик.
+    expect(stored?.payload).toEqual(payload);
+    expect(await repository.findBench(reportId)).toBeNull();
   });
 
   it("выгрузка читает страницы курсором без потерь при одинаковом времени приёма и ведёт журнал", async () => {

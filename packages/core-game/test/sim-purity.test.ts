@@ -27,6 +27,10 @@ const balanceRoot = fileURLToPath(new URL("../src/game/balance", import.meta.url
 // Скрипт ввода стенда — часть прогона: от него зависит и замер, и эталонный
 // забег, значит на него распространяются те же запреты.
 const autopilotPath = fileURLToPath(new URL("../src/game/bench/autopilot.ts", import.meta.url));
+// Диагностика забега: статистика кадров, запись и повтор. Повтор гоняет
+// симуляцию и обязан дать тот же исход на любом движке, а запись не должна
+// сама читать часы — время кадра ей приносит сцена (docs/28-diagnostics.md §3.1).
+const diagnosticsRoot = fileURLToPath(new URL("../src/game/diagnostics", import.meta.url));
 
 /**
  * Комментарии вырезаются перед проверкой: иначе тест падает на собственных
@@ -62,6 +66,7 @@ const sources = [
   ...collectSources(progressionRoot),
   ...collectSources(runRoot),
   ...collectSources(balanceRoot),
+  ...collectSources(diagnosticsRoot),
   { path: autopilotPath, source: stripComments(readFileSync(autopilotPath, "utf8")) },
 ];
 
@@ -116,9 +121,9 @@ describe("чистота слоя симуляции", () => {
     }
   });
 
-  it("не использует Date.now и new Date", () => {
+  it("не использует Date.now, new Date и performance.now", () => {
     for (const { path, source } of sources) {
-      expect(source, path).not.toMatch(/Date\.now|new Date\(/);
+      expect(source, path).not.toMatch(/Date\.now|new Date\(|performance\.now/);
     }
   });
 

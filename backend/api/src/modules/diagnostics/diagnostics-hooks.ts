@@ -1,24 +1,26 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { BenchSummary } from "./diagnostics-summary.js";
+import type { BenchSummary, RunSummary } from "./diagnostics-summary.js";
 import type { StoredDevice } from "./dto/device.dto.js";
-import type { BenchSubmission, ReportKind } from "./dto/report-envelope.dto.js";
+import type { BenchSubmission } from "./dto/report-envelope.dto.js";
+import type { RunSubmission } from "./dto/run-report.dto.js";
 
 /**
  * Новый отчёт принят — кому это интересно: сводке плейтеста, уведомлениям в
  * чат администраторов. Модуль диагностики о них не знает: слушатели
  * подписываются сами, и новый потребитель не требует правки приёмника.
  */
-export interface ReceivedReport {
+interface ReceivedReportBase {
   reportId: string;
-  kind: ReportKind;
   appVersion: string;
   installId: string;
   platformUserId: string | null;
   device: StoredDevice;
-  summary: BenchSummary;
-  payload: BenchSubmission;
   receivedAt: Date;
 }
+
+export type ReceivedReport =
+  | (ReceivedReportBase & { kind: "bench"; summary: BenchSummary; payload: BenchSubmission })
+  | (ReceivedReportBase & { kind: "run"; summary: RunSummary; payload: RunSubmission });
 
 export type ReportListener = (report: ReceivedReport) => Promise<void>;
 

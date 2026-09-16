@@ -38,6 +38,17 @@ const STRESS_OUTCOME_LABELS: Record<string, string> = {
   manual: "остановлен",
 };
 
+/** Чем забег проблемный (docs/28-diagnostics.md §6.2) — в карточке и в сводке одинаково. */
+const RUN_PROBLEM_LABELS: Record<string, string> = {
+  frame_drops: "рывки кадров",
+  catch_up: "игра замедлялась",
+  client_errors: "ошибки клиента",
+};
+
+export function runProblemLabel(problem: string): string {
+  return RUN_PROBLEM_LABELS[problem] ?? problem;
+}
+
 export function stressOutcomeLabel(outcome: string): string {
   return STRESS_OUTCOME_LABELS[outcome] ?? outcome;
 }

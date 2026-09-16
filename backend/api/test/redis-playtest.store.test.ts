@@ -176,6 +176,17 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
     expect(JSON.parse(recent[0] ?? "{}")).toMatchObject({ reportId: "stress-1", peakObjects: 900, at: 1 });
   });
 
+  it("считает записи забегов и их проблемы, повтор записи — нет", async () => {
+    expect(await stats.recordRecording("rec-1", ["frame_drops", "client_errors"])).toBe(true);
+    expect(await stats.recordRecording("rec-1", ["frame_drops", "client_errors"])).toBe(false);
+    expect(await stats.recordRecording("rec-2", [])).toBe(true);
+    expect((await stats.snapshot(1)).recordings).toEqual({
+      reports: 2,
+      problematic: 1,
+      byProblem: { frame_drops: 1, client_errors: 1 },
+    });
+  });
+
   it("держит одного читателя обновлений бота, а сводку — одну на сутки и на окно команды", async () => {
     const locks = new RedisBotPollerLocks(redis);
     expect(await locks.holdPoller("a", 60_000)).toBe(true);
@@ -216,6 +227,7 @@ describe.skipIf(url === "")("хранилище плейтеста на Redis", 
       "pt:st:weapon",
       "pt:st:stress",
       "pt:st:stress:recent",
+      "pt:st:rec",
     ]) {
       const ttl = await admin.ttl(key);
       expect(ttl, key).toBeGreaterThan(0);

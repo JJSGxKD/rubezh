@@ -4,10 +4,10 @@ import { deviceSchema } from "./device.dto.js";
 
 /**
  * Общий конверт отчёта диагностики (docs/28-diagnostics.md §5.1): кто, когда и
- * на чём прислал, а `payload` — по схеме своего вида. Сейчас вид один —
- * стресс-тест (`bench`); запись забега (`run`) придёт своей схемой.
+ * на чём прислал, а `payload` — по схеме своего вида: стресс-тест (`bench`)
+ * или запись забега (`run`).
  */
-export const REPORT_KINDS = ["bench"] as const;
+export const REPORT_KINDS = ["bench", "run"] as const;
 
 export type ReportKind = (typeof REPORT_KINDS)[number];
 

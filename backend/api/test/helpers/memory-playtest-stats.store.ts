@@ -31,6 +31,8 @@ export class MemoryPlaytestStatsStore implements PlaytestStatsStore {
   private readonly stressIds = new Set<string>();
   private readonly stress: StatsSnapshot["stress"] = { reports: 0, byOs: {} };
   readonly stressRecent: StressSummary[] = [];
+  private readonly recordingIds = new Set<string>();
+  private readonly recordings: StatsSnapshot["recordings"] = { reports: 0, problematic: 0, byProblem: {} };
 
   constructor(private readonly offsetMin = 180) {}
 
@@ -77,6 +79,16 @@ export class MemoryPlaytestStatsStore implements PlaytestStatsStore {
     return true;
   }
 
+  async recordRecording(reportId: string, problems: readonly string[]): Promise<boolean> {
+    this.check();
+    if (this.recordingIds.has(reportId)) return false;
+    this.recordingIds.add(reportId);
+    this.recordings.reports++;
+    if (problems.length > 0) this.recordings.problematic++;
+    for (const problem of problems) this.recordings.byProblem[problem] = (this.recordings.byProblem[problem] ?? 0) + 1;
+    return true;
+  }
+
   async snapshot(nowMs: number): Promise<StatsSnapshot> {
     this.check();
     const day = dayKey(nowMs, this.offsetMin);
@@ -107,6 +119,7 @@ export class MemoryPlaytestStatsStore implements PlaytestStatsStore {
       startingWeapons: { ...this.weapons },
       deathCauses: { ...this.deaths },
       stress: structuredClone(this.stress),
+      recordings: structuredClone(this.recordings),
     };
   }
 
