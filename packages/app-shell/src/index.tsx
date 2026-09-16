@@ -19,6 +19,7 @@ import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
 import { installErrorReporting } from "./state/error-reporting";
+import { useGraphics } from "./state/graphics";
 import { createId } from "./state/ids";
 import { REPORT_QUEUE_KEY } from "./state/report-keys";
 
@@ -92,6 +93,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   useSavedRun.getState().hydrate();
   usePlaytest.getState().hydrate();
   useDevMode.getState().hydrate();
+  useGraphics.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
   // Звук — после настроек: громкость игрока применяется с первого звука.
   const stopAudio = startAudioSync();

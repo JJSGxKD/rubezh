@@ -15,6 +15,7 @@ import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
 import { audio } from "../audio";
 import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
+import { runGraphics } from "./graphics";
 import { useMeta } from "./meta";
 import { usePlaytest } from "./playtest";
 import { useSavedRun } from "./run-save";
@@ -196,6 +197,7 @@ export const useRun = create<RunStore>((set, get) => ({
           recordRun: diagnostics.enabled && diagnostics.recordRuns,
           fpsOverlay: diagnostics.enabled && diagnostics.fpsOverlay,
         },
+        graphics: runGraphics(),
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
         ...(resume === undefined ? {} : { resume }),
         ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),

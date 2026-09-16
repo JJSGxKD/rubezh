@@ -187,6 +187,8 @@ export interface RunOptions {
   difficultyId: DifficultyId;
   startingWeaponId: string;
   diagnostics: RunDiagnosticsOptions;
+  /** настройки графики игрока; без них рисуется всё */
+  graphics?: RunGraphicsOptions;
   /**
    * Физических пикселей на CSS-пиксель. Передаётся снаружи, а не читается из
    * `devicePixelRatio`: стенд испытаний фиксирует его, чтобы прогоны на
@@ -202,6 +204,20 @@ export interface RunOptions {
   resume?: RunSnapshot;
   /** забег разработчика; без поля — обычный забег, команды разработчика не работают */
   dev?: RunDevOptions;
+}
+
+/**
+ * Что рисовать в забеге (docs/27-design-system-and-app-shell.md §8). Это
+ * настройки игрока, а не отладка: телеграфы и эффекты помогают читать бой, но
+ * на слабом устройстве их можно снять.
+ */
+export interface RunGraphicsOptions {
+  /** телеграфы угроз: прицел стрелка, круг взрыва, полоса рывка */
+  telegraphs: boolean;
+  /** эффекты оружия: молния «Грозы», граница «Очага» */
+  weaponEffects: boolean;
+  /** всплывающие числа урона и вспышки гибели */
+  damageNumbers: boolean;
 }
 
 export interface RunDiagnosticsOptions {
