@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Skull } from "lucide-react";
 import type { BossSnapshot } from "@bh/core-game";
 import { ProgressBar } from "../../design-system/components";
 import { t } from "../../i18n";
@@ -22,7 +21,6 @@ export function BossBar(props: { boss: BossSnapshot }): ReactNode {
   return (
     <div className="mx-auto w-full max-w-[420px] px-4 pt-2">
       <div className="flex items-center gap-2">
-        <Skull size={16} aria-hidden="true" className="shrink-0 text-elite" />
         <span className="min-w-0 truncate font-display text-xs font-bold tracking-wide text-elite uppercase">{name}</span>
         <span className="ml-auto shrink-0 font-display text-xs font-bold tabular-nums text-text-muted">
           {t("run.boss.phase", { phase: boss.phase + 1, phases: boss.phases })}

@@ -293,6 +293,17 @@ export interface EnemyPatternParams {
      */
     children: { enemy: string; count?: number }[];
   };
+  caster: {
+    /** дистанция, которую кастер держит до игрока */
+    preferredDistance?: number;
+    /** пауза между кастами в первой фазе боя; дальше он бьёт чаще */
+    castIntervalSec?: number;
+    /** сколько он стоит и светится перед кастом — время игрока уйти с линии */
+    telegraphSec?: number;
+    /** сколько шаров в кольце и в стене на первой фазе */
+    burstCount?: number;
+    projectileSpeed?: number;
+  };
   rush: {
     /**
      * На сколько секунд хода игрока рой берёт упреждение: он целится не туда,

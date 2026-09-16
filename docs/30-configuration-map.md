@@ -86,6 +86,7 @@
 | Размер клетки сетки коллизий | `game/sim/grid.ts` → `gridCellSize` |
 | Хитбоксы и умолчания паттернов, множители элиты и босса | `game/patterns/enemy-types.ts` → `PATTERN_TRAITS`, `PATTERN_DEFAULTS`, `ELITE_RADIUS_MUL`, `BOSS_RADIUS_MUL` |
 | Фазы боя с боссом: сколько их и по каким долям здоровья | `game/run/boss.ts` → `BOSS_PHASES`, `bossPhase` |
+| Насколько кастер ускоряется за фазу, время жизни его снарядов, разброс веера | `game/patterns/caster.ts` → `PHASE_SPEEDUP`, `PROJECTILE_TTL_SEC`, `SPREAD_STEP`, `WALL_SPEED_RATIO` |
 | Умолчания поведений оружия, потолок снарядов за выстрел | `game/weapons/weapon-types.ts` → `BEHAVIOR_DEFAULTS`, `MAX_PROJECTILES_PER_SHOT` |
 | Разброс веера снарядов | `game/weapons/shooting.ts` → `SPREAD_STEP` |
 | Радиус оберега, потолок оберегов, отставание кольца на бегу | `game/weapons/orbit.ts` → `ORBITER_RADIUS`, `MAX_ORBITERS`, `TRAIL_SEC` |

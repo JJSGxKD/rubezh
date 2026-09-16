@@ -151,5 +151,6 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     { everySegments: 3, kind: "flank", enemy: "swarm_rat", count: 20 },
     { everySegments: 4, kind: "ring", enemy: "elite_ghoul", count: 2 },
     { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+    { everySegments: 7, kind: "ring", enemy: "boss_seer", count: 1 },
   ],
 };

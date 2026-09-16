@@ -25,6 +25,8 @@ export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
   exploder: { radius: 9, contactDamage: false },
   splitter: { radius: 13, contactDamage: true },
   rush: { radius: 6, contactDamage: true },
+  // Кастер бьёт заклинаниями, а не телом: касанием урона нет.
+  caster: { radius: 14, contactDamage: false },
 };
 
 /**
@@ -79,6 +81,8 @@ export interface ResolvedPatternParams {
   blastRadius: number;
   leadSec: number;
   runSec: number;
+  castIntervalSec: number;
+  burstCount: number;
   /** на кого распадается делящийся: индексы типов и сколько каждого */
   children: SplitChild[];
 }
@@ -107,6 +111,8 @@ const NEUTRAL_PARAMS: ResolvedPatternParams = {
   blastRadius: 0,
   leadSec: 0,
   runSec: 0,
+  castIntervalSec: 0,
+  burstCount: 0,
   children: [],
 };
 
@@ -130,6 +136,13 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
   exploder: { triggerDistance: 40, fuseSec: 0.9, blastRadius: 90 },
   splitter: { steeringPerSec: 3.2 },
   rush: { leadSec: 0.55, runSec: 2.6 },
+  caster: {
+    preferredDistance: 260,
+    castIntervalSec: 3.2,
+    telegraphSec: 0.7,
+    burstCount: 8,
+    projectileSpeed: 220,
+  },
 };
 
 /** Параметры, которые геймдизайнер вправе задать каждому паттерну. */
@@ -142,6 +155,7 @@ const ALLOWED_PARAMS: Record<EnemyPattern, readonly string[]> = {
   exploder: ["triggerDistance", "fuseSec", "blastRadius"],
   splitter: ["children"],
   rush: ["leadSec", "runSec"],
+  caster: ["preferredDistance", "castIntervalSec", "telegraphSec", "burstCount", "projectileSpeed"],
 };
 
 /** Расстояния и скорости пересчитываются в пиксели устройства, время — нет. */

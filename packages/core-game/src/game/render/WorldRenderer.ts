@@ -4,7 +4,7 @@ import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { DASH_PHASE, EXPLODER_PHASE, isElite } from "../patterns";
+import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE, isElite } from "../patterns";
 import { ORBITER_RADIUS, orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
@@ -298,6 +298,12 @@ export class WorldRenderer {
         const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
         this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, progress);
       }
+      if (type.pattern === "caster" && enemies.phase[i] === CASTER_PHASE.windup) {
+        // Кольцо вокруг кастера растёт к моменту удара — та же грамматика
+        // телеграфа, что у фитиля подрывника: круг заполняется — сейчас будет.
+        const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
+        this.telegraphs.ring(x, y, type.params.preferredDistance * 0.35, progress);
+      }
       if (type.pattern === "kite_and_shoot" && enemies.attackCooldown[i] < AIM_TELEGRAPH_SEC) {
         const progress = 1 - enemies.attackCooldown[i] / AIM_TELEGRAPH_SEC;
         this.telegraphs.aim(x, y, playerX, playerY, progress);
@@ -566,6 +572,9 @@ function lookFor(pattern: EnemyPattern, phase: number, tick: number): number {
   }
   if (pattern === "exploder" && phase === EXPLODER_PHASE.fuse) {
     return (tick >> 2) % 2 === 0 ? LOOK.warning : LOOK.dim;
+  }
+  if (pattern === "caster" && phase === CASTER_PHASE.windup) {
+    return (tick >> 2) % 2 === 0 ? LOOK.warning : LOOK.normal;
   }
   return LOOK.normal;
 }
