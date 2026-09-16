@@ -12,6 +12,8 @@ import { SIM_EVENT } from "../src/game/sim/events";
 import { spawnGem } from "../src/game/sim/gems";
 import { IDLE_INPUT, stepWorld } from "../src/game/sim/step";
 import { vectorLength } from "../src/game/sim/vector";
+import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../src/game/weapons";
+import type { ResolvedWeaponLevel } from "../src/game/weapons/weapon-types";
 import {
   createWorld,
   DEFAULT_SIM_CONFIG,
@@ -105,6 +107,20 @@ function place(world: World, id: string, dx: number, dy: number): number {
   return slot;
 }
 
+/** Центр кольца: среднее по оберегам — сами позиции считает оружие. */
+function ringCenter(world: World, level: ResolvedWeaponLevel): OrbiterPoint {
+  const count = orbiterCount(level);
+  const point: OrbiterPoint = { x: 0, y: 0 };
+  let x = 0;
+  let y = 0;
+  for (let k = 0; k < count; k++) {
+    orbiterPosition(world, 0, level, k, point);
+    x += point.x;
+    y += point.y;
+  }
+  return { x: x / count, y: y / count };
+}
+
 function run(world: World, ticks: number): void {
   for (let i = 0; i < ticks; i++) stepWorld(world, IDLE_INPUT);
 }
@@ -171,6 +187,21 @@ describe("оружие", () => {
     expect(world.loadout.weapons[0].dirX).not.toBe(before);
     expect(hpOf(world, onRing)).toBeLessThan(DUMMY.hp);
     expect(hpOf(world, outside)).toBe(DUMMY.hp);
+  });
+
+  it("на бегу кольцо оберегов отстаёт назад, на остановке возвращается", () => {
+    const world = setup({ weapons: [{ ...WARD, starting: true }] });
+    const level = world.weaponTypes[world.loadout.weapons[0].typeIndex].levels[0];
+
+    for (let i = 0; i < 30; i++) stepWorld(world, { moveX: 1, moveY: 0 });
+    const running = ringCenter(world, level);
+    // Кольцо позади игрока ровно на пройденном за TRAIL_SEC пути.
+    expect(world.player.x - running.x).toBeCloseTo(world.player.vx * 0.28, 3);
+    expect(running.y).toBeCloseTo(world.player.y, 6);
+
+    run(world, 30);
+    const standing = ringCenter(world, level);
+    expect(standing.x).toBeCloseTo(world.player.x, 6);
   });
 
   it("аура бьёт всех в радиусе и никого снаружи", () => {
