@@ -29,16 +29,15 @@ describe("что даёт улучшение", () => {
       { labelKey: "upgrade.stat.damage", from: 7, to: 8, format: "value", lowerIsBetter: false },
       { labelKey: "upgrade.stat.cooldownSec", from: 0.26, to: 0.24, format: "value", lowerIsBetter: true },
       { labelKey: "upgrade.stat.projectiles", from: 1, to: 2, format: "value", lowerIsBetter: false },
-      { labelKey: "upgrade.stat.projectileSpeed", from: 520, to: 540, format: "value", lowerIsBetter: false },
     ]);
   });
 
   it("показывает числа в единицах контента, а не в пикселях устройства", () => {
-    // На телефоне с плотностью 3 радиус в мире втрое больше, а в контенте — 70.
+    // На телефоне с плотностью 3 радиус в мире втрое больше, а в контенте — 56.
     const changes = weaponChanges(weapon("wardstone", 3), 1, 2, 3);
     const radius = changes.find((change) => change.labelKey === "upgrade.stat.areaRadius");
 
-    expect(radius).toMatchObject({ from: 70, to: 74 });
+    expect(radius).toMatchObject({ from: 56, to: 60 });
   });
 
   it("у нового оружия — главные числа без скорости и времени полёта", () => {
@@ -61,7 +60,8 @@ describe("что даёт улучшение", () => {
       "upgrade.stat.aura.areaRadius",
     ]);
 
-    const orbit = weaponChanges(weapon("wardstone"), 1, 2, 1);
+    // На втором уровне оберегов столько же: меняются урон, пауза и радиус.
+    const orbit = weaponChanges(weapon("wardstone"), 2, 3, 1);
     expect(labels(orbit)).toContain("upgrade.stat.orbit.projectiles");
   });
 
@@ -84,6 +84,6 @@ describe("что даёт улучшение", () => {
   });
 
   it("за пределами уровней оружия не выдумывает чисел", () => {
-    expect(weaponChanges(weapon("spark"), 5, 6, 1)).toEqual([]);
+    expect(weaponChanges(weapon("spark"), 8, 9, 1)).toEqual([]);
   });
 });

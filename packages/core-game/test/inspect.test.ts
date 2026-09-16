@@ -30,7 +30,7 @@ describe("характеристики забега", () => {
     const spark = inspection.weapons[0];
     const sparkLevel = WEAPONS.find((weapon) => weapon.id === "spark")?.levels[0];
 
-    expect(spark).toMatchObject({ id: "spark", level: 1, maxLevel: 5, damageShare: 0.75, dps: 7.5 });
+    expect(spark).toMatchObject({ id: "spark", level: 1, maxLevel: 8, damageShare: 0.75, dps: 7.5 });
     expect(spark?.damage).toBeCloseTo((sparkLevel?.damage ?? 0) * 1.2, 5);
     expect(inspection.player.damageMul).toBeCloseTo(1.2, 5);
     expect(inspection.passives.map((passive) => [passive.id, passive.level, passive.value])).toEqual([
