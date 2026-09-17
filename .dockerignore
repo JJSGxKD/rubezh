@@ -1,0 +1,32 @@
+# Что не должно попадать в контекст сборки образа.
+#
+# Дело не только в размере: .env с секретами в контексте — это секрет, уехавший
+# в слой образа, а чужие node_modules и dist ломают воспроизводимость сборки
+# (docs/09-ci-cd.md §12).
+
+.git
+.github
+.claude
+
+**/node_modules
+**/dist
+**/.turbo
+**/.vite
+
+# Клиент Prisma генерируется внутри образа; локально сгенерированный может быть
+# собран под другую платформу.
+backend/api/src/generated
+
+.env
+.env.*
+!.env.example
+
+var
+docs
+*.md
+!README.md
+
+**/*.log
+**/coverage
+**/.vitest
+**/*.tsbuildinfo
