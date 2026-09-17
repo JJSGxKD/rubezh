@@ -1,0 +1,20 @@
+# Группировка автозаметок GitHub Release по меткам PR (docs/09-ci-cd.md §8.1).
+# Порядок категорий важен: PR попадает в первую подходящую.
+changelog:
+  exclude:
+    labels:
+      - "release: none"
+  categories:
+    - title: Ломающие изменения
+      labels:
+        - breaking
+        - "release: major"
+    - title: Новое
+      labels:
+        - "release: minor"
+    - title: Исправления
+      labels:
+        - "release: patch"
+    - title: Прочее
+      labels:
+        - "*"
