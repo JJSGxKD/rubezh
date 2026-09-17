@@ -1,0 +1,39 @@
+# Заголовок PR и метка релиза (docs/09-ci-cd.md §8.1, «Проверка PR»).
+#
+# Логика — в scripts/release/pr-check.mjs (покрыта тестами в
+# scripts/test/pr-check.test.ts), а не в стороннем action: короткая проверка
+# регулярным выражением и сравнение меток не стоят внешней зависимости с
+# правами на репозиторий.
+
+name: PR checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, labeled, unlabeled, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Полная история нужна, чтобы найти последний стабильный тег и
+          # определить, действует ли ещё запрет release: major до 1.0.0.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: node scripts/release/pr-check.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
