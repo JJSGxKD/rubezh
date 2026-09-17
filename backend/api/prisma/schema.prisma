@@ -76,6 +76,31 @@ model DiagnosticReport {
   @@map("diagnostic_report")
 }
 
+// Отзыв игрока из формы обратной связи (docs/29-admin-panel.md §6). Хранится
+// вместе с ответами опроса: свободный текст объясняет «почему», а ответы дают
+// разрез, по которому эти «почему» можно сложить.
+//
+// Отзыв уходит в чат администраторов сразу и параллельно ложится сюда: чат
+// читают сегодня, а сводку по неделе собирают из таблицы.
+model Feedback {
+  feedbackId     String   @id @map("feedback_id") @db.Uuid
+  installId      String   @map("install_id") @db.VarChar(64)
+  platformUserId String?  @map("platform_user_id") @db.VarChar(32)
+  platform       Platform
+  appVersion     String   @map("app_version") @db.VarChar(64)
+  /// ответы опроса: ключ вопроса → выбранный вариант
+  answers        Json
+  /// свободный текст; пусто — игрок ответил только на опрос
+  text           String   @db.VarChar(2000)
+  /// сколько забегов сыграл к моменту отзыва — отзыв новичка и ветерана весят разное
+  runs           Int
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([installId])
+  @@map("feedback")
+}
+
 enum ExportSource {
   bot
   cli

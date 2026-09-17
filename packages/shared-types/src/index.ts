@@ -321,6 +321,27 @@ export interface EnemyPatternParams {
 
 export type EnemyPattern = keyof EnemyPatternParams;
 
+/**
+ * Опрос обратной связи (docs/29-admin-panel.md §6). Список общий для клиента
+ * и сервера: клиент рисует по нему кнопки и берёт тексты по ключам, сервер
+ * проверяет, что пришло ровно это. Свободный текст — отдельным полем.
+ *
+ * Вопросов немного и они короткие: длинная анкета в игре не заполняется.
+ */
+export const FEEDBACK_QUESTIONS = [
+  { id: "difficulty", options: ["easy", "fine", "hard"] },
+  { id: "liked", options: ["fight", "upgrades", "look", "nothing"] },
+  { id: "keepPlaying", options: ["yes", "maybe", "no"] },
+] as const;
+
+export type FeedbackQuestionId = (typeof FEEDBACK_QUESTIONS)[number]["id"];
+
+/** Ответы: вопрос → выбранный вариант. Пропущенный вопрос просто отсутствует. */
+export type FeedbackAnswers = Partial<Record<FeedbackQuestionId, string>>;
+
+/** Потолок свободного текста: столько же, сколько держит колонка в базе. */
+export const FEEDBACK_TEXT_MAX = 2000;
+
 export type EnemyRank = "elite" | "boss";
 
 interface EnemyDefBase {

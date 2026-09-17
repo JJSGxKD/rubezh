@@ -26,6 +26,7 @@ import {
   DiagnosticsScreen,
   FriendsScreen,
   GalleryScreen,
+  FeedbackScreen,
   GuideScreen,
   ProfileScreen,
   RatingScreen,
@@ -139,6 +140,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <WeaponScreen />;
     case "run":
       return <RunScreen />;
+    case "feedback":
+      return <FeedbackScreen />;
     case "stress":
       return <StressScreen />;
     case "arsenal":

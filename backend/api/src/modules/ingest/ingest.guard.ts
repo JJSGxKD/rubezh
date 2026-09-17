@@ -69,7 +69,11 @@ export class IngestGuard implements CanActivate {
   }
 
   private enabled(kind: IngestKind): boolean {
-    return kind === "events" ? this.config.ingest.eventsEnabled : this.config.ingest.reportsEnabled;
+    if (kind === "events") return this.config.ingest.eventsEnabled;
+    // Отзывы принимаются, пока есть куда их писать: своего выключателя у формы
+    // нет — она и появилась, чтобы игроку было куда сказать.
+    if (kind === "feedback") return this.config.databaseUrl !== "";
+    return this.config.ingest.reportsEnabled;
   }
 
   /**

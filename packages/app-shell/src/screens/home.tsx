@@ -10,6 +10,7 @@ import {
   LoaderPinwheel,
   Lock,
   Map as MapIcon,
+  MessageSquareHeart,
   Play,
   Trophy,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import {
   Wordmark,
 } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
+import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
 import { hasCheats, useDevMode } from "../state/dev-mode";
 import { useNavigation } from "../state/navigation";
@@ -57,6 +59,7 @@ export function LobbyScreen(): ReactNode {
   const saved = useSavedRun((state) => state.saved);
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   const best = meta.best[meta.lastDifficultyId];
+  const askFeedback = shouldAskFeedback(meta.runs, useFeedback((state) => state.sentAtRuns));
   usePreloadEngine();
 
   return (
@@ -161,6 +164,26 @@ export function LobbyScreen(): ReactNode {
             </div>
           </Card>
         </div>
+
+        {/* Отзыв зовут оставить после первого же забега и дальше раз в
+            десяток: спрашивать в каждый запуск — верный способ, чтобы форму
+            перестали замечать (docs/29-admin-panel.md §6). */}
+        {askFeedback ? (
+          <div className="mt-3">
+            <Card appearIndex={5} stripe="accent" onClick={() => navigation.push("feedback")}>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
+                  <MessageSquareHeart size={22} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-display text-sm font-bold text-text">{t("feedback.lobby.title")}</span>
+                  <span className="mt-0.5 block text-xs text-text-muted">{t("feedback.lobby.hint")}</span>
+                </span>
+                <ChevronRight size={20} aria-hidden="true" className="shrink-0 text-text-muted" />
+              </div>
+            </Card>
+          </div>
+        ) : null}
       </ContentColumn>
     </Screen>
 

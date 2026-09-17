@@ -22,6 +22,7 @@ const loaders = {
   rating: () => import("../screens/meta/rating"),
   profile: () => import("../screens/meta/profile"),
   guide: () => import("../screens/guide/GuideScreen"),
+  feedback: () => import("../screens/feedback"),
   daily: () => import("../screens/meta/daily"),
   wheel: () => import("../screens/meta/wheel"),
   stress: () => import("../screens/stress/StressScreen"),
@@ -50,6 +51,7 @@ export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");
 export const GuideScreen = screen(loaders.guide, "GuideScreen");
+export const FeedbackScreen = screen(loaders.feedback, "FeedbackScreen");
 export const StressScreen = screen(loaders.stress, "StressScreen");
 export const SoundLabScreen = screen(loaders.soundLab, "SoundLabScreen");
 

@@ -167,6 +167,7 @@ Zod-схемы `payload` — в словаре сервера
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
 | Удержание | `daily_reward_claimed`, `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
+| Обратная связь | `feedback_sent` — отзыв с формы обратной связи (`29-admin-panel.md` §6) |
 | Плейтест | `playtest_run_synced` — временное, на время закрытого теста (`26-stage2-plan.md`, WP13) |
 
 Добавлено на этапе 2 (`26-stage2-plan.md`):
@@ -184,6 +185,7 @@ Zod-схемы `payload` — в словаре сервера
 | `client_error` | Ошибки клиента на тестера по версии и устройству (`26-stage2-plan.md` §7) | `scope` — где случилась, `message` — текст без стека, до 512 знаков |
 | `share_offered`, `share_completed` | Приглашение друга на плейтест: сколько нажимают и чем кончается — выбор чата, копия ссылки или неудача | `context` (`friends_invite`), у завершения — `result` |
 | `bench_finished` | Сводка теста производительности — стресс-теста из «Играть» (`28-diagnostics.md` §2.3); полный отчёт уходит в приёмник диагностики (`28-diagnostics.md` §5), не в события | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
+| `feedback_sent` | Сколько игроков доходит до формы обратной связи и отвечают ли они текстом или только опросом. Сам отзыв в события не попадает: он уходит в чат администраторов и в свою таблицу, а здесь — только факт и разрез | `answers` — сколько вопросов отвечено, `hasText` — был ли свободный текст, `runs` — сколько забегов сыграно к этому моменту |
 | `playtest_run_synced` | Дошёл ли итог забега до лидерборда плейтеста: сколько забегов ждут сети, сколько сервер отверг. Растущая доля `queued` с `unauthorized` — устаревшая подпись запуска, а не сеть | `result`: `sent` / `queued` / `dropped`; `trigger`: `finish` / `launch` / `screen`; у неудачи — `failure`; у отправленного — `rank`, `isNewBest`, `recorded` (`false` — забег с читами сервер не записал) |
 
 Уточнения существующих событий на этапе 2:
