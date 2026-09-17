@@ -16,6 +16,7 @@ import { TelegramBotApi, type TelegramUpdate } from "../src/modules/telegram/tel
 // Вебхук бота (docs/28-diagnostics.md §6.1.3–§6.1.5).
 
 const TOKEN = "123456:TEST-webhook";
+const CLOUD_API = "https://api.telegram.org";
 const SECRET = "s3cret-webhook-token-0123456789abcdef";
 
 /** Redis в памяти: ровно те команды, которыми вебхук отсекает повторы. */
@@ -128,7 +129,7 @@ describe("вебхук бота", () => {
 describe("клиент Bot API: кнопки, картинки, документы", () => {
   function recorder(result: unknown) {
     const calls: { url: string; init: RequestInit }[] = [];
-    const api = new TelegramBotApi(TOKEN, async (url, init) => {
+    const api = new TelegramBotApi(TOKEN, CLOUD_API, async (url, init) => {
       calls.push({ url, init });
       return new Response(JSON.stringify({ ok: true, result }), { status: 200 });
     });
