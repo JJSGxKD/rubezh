@@ -130,6 +130,15 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
       graphics.fillStyle(DYNAMITE_SPARK, 1);
       graphics.fillCircle(r * 1.35, r * 0.18, r * 0.2);
       return;
+    case "player":
+      // Тёмный кант и светлое тело: персонаж не теряется ни на светлом
+      // (рой, кристаллы), ни на тёмной земле, и не спорит цветом с кольцами
+      // здоровья и опыта вокруг себя.
+      graphics.fillStyle(WORLD_COLORS.playerEdge, 1);
+      graphics.fillCircle(r, r, r);
+      graphics.fillStyle(spec.color, 1);
+      graphics.fillCircle(r, r, r * 0.8);
+      return;
     case "double":
       graphics.fillCircle(r * 0.65, r * 0.75, r * 0.6);
       graphics.fillCircle(r * 1.35, r * 1.25, r * 0.6);

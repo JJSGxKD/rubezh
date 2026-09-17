@@ -218,7 +218,12 @@ function Stage(props: { label: string; children: ReactNode }): ReactNode {
 }
 
 function Player(props: { x: number; y: number }): ReactNode {
-  return <circle cx={props.x} cy={props.y} r={PLAYER_R} fill={hex(WORLD_COLORS.player)} />;
+  return (
+    <>
+      <circle cx={props.x} cy={props.y} r={PLAYER_R} fill={hex(WORLD_COLORS.playerEdge)} />
+      <circle cx={props.x} cy={props.y} r={PLAYER_R * 0.8} fill={hex(WORLD_COLORS.player)} />
+    </>
+  );
 }
 
 /** Элемент сцены в точке (x, y) с анимацией на вложенной группе. */
@@ -454,8 +459,7 @@ export function WeaponScene(props: { behavior: WeaponBehavior; label: string }):
           <At x={80} y={py} className="animate-guide-spin">
             {[
               [28, 0],
-              [-14, 24],
-              [-14, -24],
+              [-28, 0],
             ].map(([x, y]) => (
               <circle key={x} cx={x} cy={y} r={5} fill={hex(WORLD_COLORS.orbiter)} />
             ))}

@@ -95,13 +95,20 @@
 | 1. Окружение и порты | `NODE_ENV`, `API_PORT`, `API_HOST`, `WEB_*_PORT`, `POSTGRES_PORT`, `REDIS_PORT` | из карты портов §2. `NODE_ENV` из `.env` читает только бэкенд: сборка клиента его игнорирует и всегда production (`scripts/vite/production-node-env.ts`), иначе Vite собирал бы отладочный React |
 | 2. Postgres и Redis | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `REDIS_URL` | dev — из `docker-compose.yml`; прод — секреты окружения. Миграции применяются отдельно: `pnpm --filter backend-api prisma:deploy` |
 | 3. Адреса, CORS и туннель | `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml`. За Caddy `TRUST_PROXY_HOPS=1` |
-| 4. Бот закрытого теста | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_UPDATES`, `TELEGRAM_WEBHOOK_SECRET`, `VITE_TELEGRAM_BOT_USERNAME` | из BotFather; для staging — **отдельный** бот, иначе два процесса дерутся за обновления. Секрет вебхука генерируется: `openssl rand -hex 32` |
+| 4. Бот закрытого теста | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_API_ROOT`, `TELEGRAM_BOT_UPDATES`, `TELEGRAM_WEBHOOK_SECRET`, `VITE_TELEGRAM_BOT_USERNAME` | из BotFather; для staging — **отдельный** бот, иначе два процесса дерутся за обновления. Секрет вебхука генерируется: `openssl rand -hex 32` |
 | 5. Администраторы и их чаты | `ADMIN_TELEGRAM_IDS`, `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_NOTIFY_REPORTS` | Telegram ID администраторов цифрами через запятую, мусор — бэкенд не стартует. Адреса чатов — ниже. `PLAYTEST_STATS_CHAT_ID` переименована в `ADMIN_CHAT_ID`: со старым именем бэкенд не стартует и называет новое |
 | 6. Приём данных закрытого теста | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC`, `DIAGNOSTICS_RETENTION_DAYS` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует |
 | 7. Выгрузка данных | `EXPORT_PSEUDONYM_KEY`, `DATA_EXPORT_BOT_ENABLED` | ключ псевдонимов генерируется `openssl rand -hex 32` и **не меняется просто так**: выгрузки до и после смены не сопоставляются (`28-diagnostics.md` §7) |
 | 8. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_*` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Вход без подписи — только при `NODE_ENV=development`, иначе бэкенд не стартует; сводка без адреса чата или чтения обновлений бота не стартует |
 | 9. Клиентская сборка | `VITE_API_URL`, `VITE_APP_VERSION`, `VITE_DIAGNOSTICS_DEFAULT`, `VITE_DEV_TOOLS` | только не-секреты: всё это попадает в бандл. `VITE_DEV_TOOLS=1` открывает инструменты команды без ответа сервера и работает только на dev-сервере |
 | 10. Тесты | `TEST_DATABASE_URL`, `PLAYTEST_TEST_REDIS_URL` | адреса настоящих Postgres и Redis для интеграционных тестов (`17-testing-strategy.md` §4.2); в CI их задают сервисы workflow, локально пусто — тесты пропускаются |
+
+**Свой сервер Bot API.** `TELEGRAM_API_ROOT` пустой — бот ходит в облако
+Telegram (`https://api.telegram.org`). Если поднят локальный сервер Bot API,
+адрес задаётся этой переменной целиком, со схемой: `http://127.0.0.1:8081`.
+Методы и пути у него те же, меняется только хост, поэтому весь остальной код
+о подмене не знает. Проверяется формат: адрес без `http://` или `https://`
+бэкенд не примет и не стартует.
 
 **Адрес чата — `id` или `id:тема`.** Чат администраторов у нас супергруппа с
 темами, и разные потоки уведомлений живут в разных темах: `-1001234567890:57`.

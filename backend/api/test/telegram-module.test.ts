@@ -24,6 +24,41 @@ function providersOf(module: unknown): unknown[] {
   return (Reflect.getMetadata("providers", module as object) as unknown[] | undefined) ?? [];
 }
 
+describe("адрес Bot API", () => {
+  it("по умолчанию — облако Telegram", () => {
+    const config = loadAppConfig({ NODE_ENV: "test", TELEGRAM_BOT_TOKEN: "1:TEST" });
+    expect(config.telegram.apiRoot).toBe("https://api.telegram.org");
+  });
+
+  it("берётся из окружения и теряет косую в конце: свой сервер Bot API", () => {
+    const config = loadAppConfig({
+      NODE_ENV: "test",
+      TELEGRAM_BOT_TOKEN: "1:TEST",
+      TELEGRAM_API_ROOT: "http://127.0.0.1:8081/",
+    });
+    expect(config.telegram.apiRoot).toBe("http://127.0.0.1:8081");
+  });
+
+  it("без схемы не принимается: бэкенд не стартует с адресом, по которому не сходить", () => {
+    expect(() =>
+      loadAppConfig({ NODE_ENV: "test", TELEGRAM_BOT_TOKEN: "1:TEST", TELEGRAM_API_ROOT: "127.0.0.1:8081" }),
+    ).toThrow(/TELEGRAM_API_ROOT/);
+  });
+
+  it("клиент зовёт методы по заданному адресу, а не по облачному", async () => {
+    const calls: string[] = [];
+    const api = new TelegramBotApi("1:TEST", "http://127.0.0.1:8081", async (url) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ ok: true, result: { id: 1, username: "bot" } }), {
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    await api.getMe();
+    expect(calls[0]).toBe("http://127.0.0.1:8081/bot1:TEST/getMe");
+  });
+});
+
 describe("модуль Telegram", () => {
   it("раздаёт клиент Bot API по токену и знает про имя бота", () => {
     const config = loadAppConfig({ NODE_ENV: "test", TELEGRAM_BOT_TOKEN: "1:TEST" });

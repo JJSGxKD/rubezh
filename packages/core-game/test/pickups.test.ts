@@ -131,6 +131,22 @@ describe("аптечка", () => {
     updatePickups(world);
     expect(world.pickups.aliveCount).toBe(1);
   });
+
+  it("с полным здоровьем не ходит за игроком: её не тянет радиусом сбора", () => {
+    const world = setup();
+    const start = world.player.x + world.playerStats.pickupRadius * 0.5;
+    spawnPickup(world, PICKUP_KIND.medkit, start, world.player.y);
+    const slot = 0;
+    land(world);
+
+    for (let i = 0; i < 60; i++) updatePickups(world);
+    expect(world.pickups.x[slot]).toBe(start);
+
+    // Стоит здоровью просесть — та же аптечка сама доходит до игрока.
+    world.player.hp = 10;
+    for (let i = 0; i < 60; i++) updatePickups(world);
+    expect(world.pickups.x[slot]).not.toBe(start);
+  });
 });
 
 describe("подбор касанием", () => {
