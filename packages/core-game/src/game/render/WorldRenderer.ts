@@ -123,7 +123,7 @@ export class WorldRenderer {
       .setDepth(-10);
     this.layer = scene.add.container(0, 0).setDepth(0);
 
-    ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "circle");
+    ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "player");
     ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, WORLD_COLORS.projectile, "circle");
     // Снаряд врага крупнее и другой формы: он должен читаться как летящая
     // угроза, а не как мелкий враг, на которого можно бежать.
@@ -284,9 +284,18 @@ export class WorldRenderer {
       const x = lerp(enemies.prevX[i], enemies.x[i], t);
       const y = lerp(enemies.prevY[i], enemies.y[i], t);
       sprite.setPosition(x, y);
-      // Клин рывкового врага смотрит туда, куда он целится: остриё вперёд —
-      // это и есть его телеграф, видный даже без линии на земле.
-      if (type.pattern === "dash") sprite.setRotation(Math.atan2(enemies.dirY[i], enemies.dirX[i]) + Math.PI / 2);
+      // Остриё смотрит туда, куда враг идёт, а на замахе — куда ударит: клин,
+      // повёрнутый не в ту сторону, читается как чужой враг. Фигуры без
+      // острия разворот не трогает — и сбрасывает его, если слот пула достался
+      // им от клина.
+      if (ENEMY_LOOKS[type.pattern].shape === "chevron") {
+        const aimed = enemies.phase[i] === DASH_PHASE.telegraph || enemies.phase[i] === DASH_PHASE.dash;
+        const faceX = aimed ? enemies.dirX[i] : enemies.vx[i];
+        const faceY = aimed ? enemies.dirY[i] : enemies.vy[i];
+        if (faceX !== 0 || faceY !== 0) sprite.setRotation(Math.atan2(faceY, faceX) + Math.PI / 2);
+      } else if (sprite.rotation !== 0) {
+        sprite.setRotation(0);
+      }
 
       if (!telegraphsOn) continue;
       if (type.pattern === "exploder" && enemies.phase[i] === EXPLODER_PHASE.fuse) {
