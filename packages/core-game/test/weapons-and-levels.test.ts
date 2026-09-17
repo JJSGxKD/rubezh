@@ -189,19 +189,17 @@ describe("оружие", () => {
     expect(hpOf(world, outside)).toBe(DUMMY.hp);
   });
 
-  it("на бегу кольцо оберегов отстаёт назад, на остановке возвращается", () => {
+  it("кольцо оберегов держится на игроке и на бегу не отстаёт", () => {
     const world = setup({ weapons: [{ ...WARD, starting: true }] });
     const level = world.weaponTypes[world.loadout.weapons[0].typeIndex].levels[0];
 
     for (let i = 0; i < 30; i++) stepWorld(world, { moveX: 1, moveY: 0 });
-    const running = ringCenter(world, level);
-    // Кольцо позади игрока ровно на пройденном за TRAIL_SEC пути.
-    expect(world.player.x - running.x).toBeCloseTo(world.player.vx * 0.28, 3);
-    expect(running.y).toBeCloseTo(world.player.y, 6);
 
-    run(world, 30);
-    const standing = ringCenter(world, level);
-    expect(standing.x).toBeCloseTo(world.player.x, 6);
+    // Центр кольца — это игрок: оберег, тянущийся следом, читается как
+    // отдельная тварь за спиной, а не как своя защита.
+    const center = ringCenter(world, level);
+    expect(center.x).toBeCloseTo(world.player.x, 6);
+    expect(center.y).toBeCloseTo(world.player.y, 6);
   });
 
   it("аура бьёт всех в радиусе и никого снаружи", () => {

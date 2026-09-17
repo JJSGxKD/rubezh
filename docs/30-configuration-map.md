@@ -89,7 +89,7 @@
 | Насколько кастер ускоряется за фазу, время жизни его снарядов, разброс веера | `game/patterns/caster.ts` → `PHASE_SPEEDUP`, `PROJECTILE_TTL_SEC`, `SPREAD_STEP`, `WALL_SPEED_RATIO` |
 | Умолчания поведений оружия, потолок снарядов за выстрел | `game/weapons/weapon-types.ts` → `BEHAVIOR_DEFAULTS`, `MAX_PROJECTILES_PER_SHOT` |
 | Разброс веера снарядов | `game/weapons/shooting.ts` → `SPREAD_STEP` |
-| Радиус оберега, потолок оберегов, отставание кольца на бегу | `game/weapons/orbit.ts` → `ORBITER_RADIUS`, `MAX_ORBITERS`, `TRAIL_SEC` |
+| Радиус оберега и потолок оберегов | `game/weapons/orbit.ts` → `ORBITER_RADIUS`, `MAX_ORBITERS` |
 | Сколько вариантов при наборе уровня, сила запасного лечения | `game/progression/levels.ts` → `OFFERS_PER_LEVEL`, `HEAL_RATIO` |
 | Джойстик: размер кольца, мёртвая зона | `game/joystick.ts` → `RING_UNITS`, `DEAD_ZONE_UNITS` |
 | Порог «игрок стоит» для камеры | `game/render/run-camera.ts` → `IDLE_SPEED_RATIO` |
