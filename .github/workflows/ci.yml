@@ -17,6 +17,11 @@ on:
   push:
     branches: [main]
 
+# Минимальные права по умолчанию (docs/09-ci-cd.md §12, §8.1 «Права»):
+# contents: write выдаётся точечно только джобу релиза.
+permissions:
+  contents: read
+
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -74,3 +79,66 @@ jobs:
       # Бюджет бандла — после сборки: он меряет то, что реально уезжает на
       # устройство (docs/27-design-system-and-app-shell.md §3.4).
       - run: pnpm budget
+
+  # Версия по типу изменений в PR (docs/09-ci-cd.md §8.1). Доведён до тега и
+  # GitHub Release; деплой staging НЕ вызывается — deploy-staging.yml ещё не
+  # существует (WP10, docs/26-stage2-plan.md). Матрица сборок по платформам
+  # (§1) и прикладывание клиентского артефакта к Release — тоже WP10:
+  # `pnpm build` ниже собирает всё как один прогон, не per-platform-env.
+  release:
+    needs: gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Без отмены выполняющегося прогона: если за время одного релиза в
+    # очередь встали два мерджа, GitHub оставит только последний, а
+    # next-version.mjs всё равно посчитает максимум меток с базы
+    # (docs/09-ci-cd.md §8.1, «Вычисление номера»).
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Вычислить версию
+        id: version
+        run: node scripts/release/next-version.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Пересборка с настоящей версией: гейт выше собирал без неё, а версия
+      # обязана попасть в бандл, события и отчёты (docs/09-ci-cd.md §8.1,
+      # «Версия не коммитится обратно в репозиторий»). Прикладывание
+      # артефакта к GitHub Release и матрица платформ — WP10.
+      - if: steps.version.outputs.has_release == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.version.outputs.has_release == 'true'
+        run: pnpm build
+        env:
+          VITE_APP_VERSION: ${{ steps.version.outputs.version }}
+
+      # Тег ставится после успешной сборки — иначе появляются теги без
+      # артефакта (docs/09-ci-cd.md §8.1, «Ловушки»).
+      - if: steps.version.outputs.has_release == 'true'
+        run: |
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}
+
+      - if: steps.version.outputs.has_release == 'true'
+        run: >-
+          gh release create ${{ steps.version.outputs.version }}
+          --generate-notes
+          ${{ steps.version.outputs.previous_tag != '' && format('--notes-start-tag {0}', steps.version.outputs.previous_tag) || '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
