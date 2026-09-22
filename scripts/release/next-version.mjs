@@ -1,5 +1,6 @@
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { isServicePr } from "./branches.mjs";
 import { RELEASE_LEVELS, bumpVersion, compareReleaseLevels, formatVersion, parseStableTag } from "./semver.mjs";
 import { commitsSince, latestStableTag, pullRequestsForCommit } from "./git.mjs";
 
@@ -13,25 +14,19 @@ import { commitsSince, latestStableTag, pullRequestsForCommit } from "./git.mjs"
  * Чистая часть (эта функция) тестируется без обращения к git/GitHub; CLI в
  * конце файла подтягивает коммиты и метки PR через `scripts/release/git.mjs`.
  */
+function maxLevel(levels) {
+  return levels.reduce((acc, level) => (compareReleaseLevels(level, acc) > 0 ? level : acc), "none");
+}
+
 export function nextVersion(baseTagName, releaseLevels) {
   if (releaseLevels.length === 0) return null;
 
   const base = baseTagName ? parseStableTag(baseTagName) : { major: 0, minor: 0, patch: 0 };
-  const maxLevel = releaseLevels.reduce(
-    (acc, level) => (compareReleaseLevels(level, acc) > 0 ? level : acc),
-    "none",
-  );
-  if (maxLevel === "none") return null;
-
-  return formatVersion(bumpVersion(base, maxLevel));
+  const level = maxLevel(releaseLevels);
+  return level === "none" ? null : formatVersion(bumpVersion(base, level));
 }
 
-/** Коммит без PR или без ровно одной метки `release: *` — джоб должен упасть, а не молча посчитать патчем. */
-export function releaseLevelForCommit(sha, pullRequests) {
-  if (pullRequests.length === 0) {
-    throw new Error(`коммит ${sha} слит без PR (прямой push в main?) — версия не вычисляется`);
-  }
-  const pr = pullRequests[0];
+function releaseLevelOfPr(sha, pr) {
   const labels = (pr.labels ?? [])
     .map((label) => label.name)
     .filter((name) => name.startsWith("release: "))
@@ -41,6 +36,31 @@ export function releaseLevelForCommit(sha, pullRequests) {
     throw new Error(`PR #${pr.number} (коммит ${sha}) без ровно одной метки release: * — версия не вычисляется`);
   }
   return labels[0];
+}
+
+/**
+ * Уровень релиза, который принёс коммит.
+ *
+ * GitHub связывает коммит со всеми PR, где он есть: с его собственным, со
+ * стековым поверх него, с релизным `dev` → `main`. Поэтому учитываются только
+ * смерженные — открытый стековый PR не должен влиять на версию того, что под
+ * ним, — и не служебные: у релизного и синк-PR метки нет по замыслу. Если
+ * настоящих PR несколько, берётся максимум: он не завышает итог, потому что
+ * каждый из этих PR и так попадает в диапазон.
+ *
+ * Коммит, связанный только со служебным PR, — это сам его merge-коммит. Коммит
+ * без смерженного PR — прямой push; джоб должен упасть, а не молча посчитать
+ * его патчем.
+ */
+export function releaseLevelForCommit(sha, pullRequests) {
+  const merged = pullRequests.filter((pr) => pr.merged_at);
+  const real = merged.filter((pr) => !isServicePr(pr.head?.ref, pr.base?.ref));
+
+  if (real.length === 0) {
+    if (merged.length > 0) return "none";
+    throw new Error(`коммит ${sha} слит без PR (прямой push?) — версия не вычисляется`);
+  }
+  return maxLevel(real.map((pr) => releaseLevelOfPr(sha, pr)));
 }
 
 function main() {
