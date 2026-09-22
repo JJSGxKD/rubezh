@@ -27,57 +27,89 @@
 
 ## 1. База данных
 
-### 1.1 Текущая схема (MVP, реализовано)
+### 1.1 Текущая схема (что есть в базе сегодня)
 
-Соответствует `backend/api/prisma/schema.prisma` на сегодня.
+Соответствует `backend/api/prisma/schema.prisma`. Таблицы появляются вместе с
+кодом, который в них пишет, а не лежат пустыми заранее, — поэтому забегов и
+покупок здесь пока нет, они придут в WP4 и WP5 этапа 3
+(`34-stage3-plan.md`).
 
 ```mermaid
 erDiagram
-    USER ||--o{ RUN : "совершает"
-    USER ||--o{ PURCHASE : "оплачивает"
-
-    USER {
-        uuid id PK
+    ACCOUNT {
+        uuid account_id PK
         enum platform "telegram|max|vk|web"
-        string platformUserId "id на стороне площадки"
-        string displayName
-        string avatarUrl "nullable"
-        string locale "nullable, только telegram и web"
-        datetime createdAt
+        string platform_user_id "id на стороне площадки"
+        string display_name
+        string username "nullable"
+        string photo_url "nullable"
+        datetime created_at
+        datetime last_seen_at
+        datetime banned_at "nullable"
+        string ban_reason "nullable"
     }
 
-    RUN {
-        uuid id PK
-        uuid userId FK
-        int score
-        int durationSec
-        int waveReached
-        datetime createdAt
-    }
-
-    PURCHASE {
-        uuid id PK
-        uuid userId FK
-        string itemId
-        enum kind "skin|continue_run|character_unlock|ad_removal_pack|seasonal"
+    ANALYTICS_EVENT {
+        uuid event_id PK
+        string event_type
+        int schema_version
+        string install_id "устройство"
+        string platform_user_id "nullable, только при проверенной подписи"
+        string session_id
         enum platform
-        int priceMinor "в минимальных единицах валюты площадки"
-        string transactionId UK
-        datetime createdAt
+        string app_version
+        json payload
+        datetime occurred_at
+        datetime received_at
+    }
+
+    DIAGNOSTIC_REPORT {
+        uuid report_id PK
+        enum kind "bench|run"
+        string install_id
+        string platform_user_id "nullable"
+        enum platform
+        json device
+        json summary
+        json payload
+        datetime occurred_at
+        datetime received_at
+    }
+
+    FEEDBACK {
+        uuid feedback_id PK
+        string install_id
+        string platform_user_id "nullable"
+        json answers "ответы опроса"
+        string text
+        int runs "забегов к моменту отзыва"
+        datetime created_at
+    }
+
+    DATA_EXPORT {
+        uuid export_id PK
+        enum source "bot|cli"
+        string requested_by "Telegram ID администратора"
+        enum status
+        datetime period_to
+        datetime created_at
     }
 ```
 
 Что важно понимать по этой схеме:
 
+- **Связей внешними ключами здесь нет, и это осознанно.** Телеметрия
+  закрытого теста писалась до аккаунтов: событие и отчёт опознают
+  **устройство** (`install_id`), а Telegram ID кладут только при проверенной
+  подписи запуска. Связать историю с аккаунтом можно запросом по
+  `platform_user_id`, но внешнего ключа между ними нет: событие не должно
+  пропадать оттого, что аккаунт завели позже или не завели вовсе.
 - **Аккаунты не связываются между платформами.** Один человек в Telegram и в
-  MAX — две разные строки `USER`, уникальность по паре
-  `(platform, platformUserId)`. Обоснование — `08-web-and-identity.md` §3.
-- **`RUN` — это сырая история** для антифрода и аналитики, а не источник
-  чтения лидерборда: лидерборд отдаётся из Redis ZSET, а `RUN` остаётся
-  источником истины, из которого ZSET можно перестроить
-  (`14-scalability.md` §4.3).
-- **`transactionId` уникален** — это ключ идемпотентности платежа
-  (`15-engineering-standards.md` §4.1).
+  MAX — две разные строки `ACCOUNT`, уникальность по паре
+  `(platform, platform_user_id)`. Обоснование — `08-web-and-identity.md` §3.
+- **Сессии игрока в Postgres не хранятся.** Токены продления живут в Redis:
+  им нужен срок жизни, атомарное гашение и мгновенный отзыв, а не история
+  (`34-stage3-plan.md`, WP1).
 
 ### 1.2 Планируемое расширение (этапы 3–4, ещё не реализовано)
 

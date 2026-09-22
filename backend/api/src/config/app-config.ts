@@ -145,6 +145,33 @@ const schema = z.object({
   // Пояс команды для «сегодня» и времени отчёта: сервер живёт в UTC.
   PLAYTEST_STATS_UTC_OFFSET_MIN: z.coerce.number().int().min(-720).max(840).default(180),
 
+  // Авторизация игроков (docs/34-stage3-plan.md, WP1). Выключена по
+  // умолчанию: без секрета подписи и токена бота вход невозможен, а
+  // выключенные эндпоинты отвечают 404 — как приёмники и плейтест.
+  AUTH_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Секрет подписи токена доступа. Без значения по умолчанию: подписанный
+  // известным секретом токен — это отсутствие авторизации.
+  JWT_ACCESS_SECRET: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^[0-9a-f]{64,}$/i.test(value), {
+      message: "JWT_ACCESS_SECRET — не короче 64 шестнадцатеричных знаков: openssl rand -hex 32",
+    }),
+  // Токен доступа живёт минутами: украденный не должен работать до вечера, а
+  // клиент молча обновляет его по токену продления.
+  AUTH_ACCESS_TTL_SEC: z.coerce.number().int().min(60).max(3600).default(900),
+  AUTH_REFRESH_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  // Окно свежести данных запуска для входа — не больше часа: на этой сессии
+  // работают деньги (docs/33-telegram-mini-app-pitfalls.md §1.2). Потолок в
+  // схеме, а не в договорённости: иначе однажды его поднимут «на время».
+  AUTH_INIT_DATA_MAX_AGE_SEC: z.coerce.number().int().min(60).max(3600).default(3600),
+  // Сколько устройств помнит аккаунт. Сверх лимита вытесняется самое старое:
+  // без потолка список сессий рос бы бесконечно.
+  AUTH_MAX_SESSIONS: z.coerce.number().int().min(1).max(50).default(10),
+
   // Администраторы — Telegram ID через запятую (docs/28-diagnostics.md §6.1.1).
   // Список не секрет; мусор в нём — процесс не поднимается, пустой — функции
   // администратора выключены.
@@ -195,6 +222,17 @@ export interface AppConfig {
     webAppUrl: string;
     /** чаты администраторов; `null` — писать некуда */
     chats: AdminChats;
+  };
+  auth: {
+    enabled: boolean;
+    /** секрет подписи токена доступа; пусто — авторизация выключена */
+    accessSecret: string;
+    accessTtlSec: number;
+    refreshTtlSec: number;
+    /** окно свежести данных запуска при входе — не больше часа */
+    initDataMaxAgeSec: number;
+    /** сколько устройств помнит аккаунт */
+    maxSessions: number;
   };
   playtest: {
     enabled: boolean;
@@ -309,6 +347,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.PLAYTEST_DEV_AUTH && parsed.NODE_ENV !== "development") {
     throw new Error("PLAYTEST_DEV_AUTH=true допустим только при NODE_ENV=development");
   }
+  if (parsed.AUTH_ENABLED && (parsed.JWT_ACCESS_SECRET === "" || parsed.TELEGRAM_BOT_TOKEN === "" || parsed.DATABASE_URL === "")) {
+    throw new Error(
+      "AUTH_ENABLED=true требует JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN и DATABASE_URL: без них вход не проверить и аккаунт негде хранить",
+    );
+  }
 
   return {
     nodeEnv: parsed.NODE_ENV,
@@ -340,6 +383,14 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       publicApiUrl: parsed.PUBLIC_API_URL.replace(/\/+$/, ""),
       webAppUrl: parsed.PUBLIC_WEB_URL,
       chats: adminChats(parsed),
+    },
+    auth: {
+      enabled: parsed.AUTH_ENABLED,
+      accessSecret: parsed.JWT_ACCESS_SECRET,
+      accessTtlSec: parsed.AUTH_ACCESS_TTL_SEC,
+      refreshTtlSec: parsed.AUTH_REFRESH_TTL_DAYS * 24 * 60 * 60,
+      initDataMaxAgeSec: parsed.AUTH_INIT_DATA_MAX_AGE_SEC,
+      maxSessions: parsed.AUTH_MAX_SESSIONS,
     },
     playtest: {
       enabled: parsed.PLAYTEST_ENABLED,

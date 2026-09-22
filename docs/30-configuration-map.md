@@ -247,6 +247,10 @@
 | `DEV_HTTPS_CERT`, `DEV_HTTPS_KEY` | сертификат разработки: без HTTPS Telegram не откроет Mini App даже с локального адреса. Задаются вместе |
 | `DEV_LAN_HOST` | адрес для открытия с телефона в той же сети; **включает прослушивание сети** вместо одной петли |
 | `DEV_TUNNEL_TELEGRAM_HOST` | домен туннеля, чтобы Vite пустил запрос с телефона |
+| `AUTH_ENABLED` | вход игроков по аккаунтам; без `JWT_ACCESS_SECRET`, токена бота и `DATABASE_URL` бэкенд не стартует, выключённые эндпоинты отвечают 404 |
+| `JWT_ACCESS_SECRET` | секрет подписи токена доступа; смена разлогинивает всех |
+| `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_MAX_SESSIONS` | сколько живут токены и сколько устройств помнит аккаунт |
+| `AUTH_INIT_DATA_MAX_AGE_SEC` | окно свежести подписи запуска при входе; потолок в час зашит в схему |
 | `PLAYTEST_ENABLED`, `TELEGRAM_BOT_TOKEN` | сохранения и лидерборд плейтеста на бэкенде; без токена бэкенд с включённым плейтестом не стартует |
 | `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC` | сколько живут данные плейтеста в Redis и подпись запуска Telegram |
 | `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | вход в плейтест без Telegram на машине разработчика; только `NODE_ENV=development` |

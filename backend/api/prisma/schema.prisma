@@ -28,6 +28,34 @@ enum DiagnosticKind {
   run
 }
 
+// Аккаунт игрока (docs/34-stage3-plan.md, WP1).
+//
+// Ключ идентичности — пара «площадка + её идентификатор», а не Telegram ID:
+// аккаунты между площадками не связываются (docs/08-web-and-identity.md §3),
+// и тот же игрок в MAX — это другой аккаунт, а не тот же самый.
+//
+// Имя и аватар — снимок на момент входа: Telegram отдаёт их в данных запуска,
+// и обновляются они там же. Это данные для показа, а не источник истины о
+// человеке.
+model Account {
+  accountId      String    @id @map("account_id") @db.Uuid
+  platform       Platform
+  platformUserId String    @map("platform_user_id") @db.VarChar(32)
+  displayName    String    @map("display_name") @db.VarChar(128)
+  username       String?   @db.VarChar(64)
+  photoUrl       String?   @map("photo_url") @db.VarChar(512)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  // Блокировка — поле аккаунта, а не отдельная таблица: состояние одно, а
+  // история блокировок придёт в аудит вместе с ролями (WP2).
+  bannedAt       DateTime? @map("banned_at") @db.Timestamptz(3)
+  banReason      String?   @map("ban_reason") @db.VarChar(256)
+
+  @@unique([platform, platformUserId])
+  @@index([lastSeenAt])
+  @@map("account")
+}
+
 // Событие аналитики закрытого теста (docs/22-analytics-and-metrics.md §3.1).
 // Строки только добавляются; повтор пачки отсекает первичный ключ event_id.
 // Пользователя до авторизации нет: устройство — install_id, Telegram ID —
