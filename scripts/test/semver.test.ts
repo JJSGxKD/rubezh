@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { bumpVersion, compareReleaseLevels, formatVersion, parseStableTag } from "../release/semver.mjs";
+import { bumpVersion, compareReleaseLevels, formatVersion, latestPrereleaseTag, nextPrereleaseNumber, parsePrereleaseTag, parseStableTag } from "../release/semver.mjs";
 
 describe("разбор и сравнение SemVer", () => {
   it("разбирает стабильный тег vX.Y.Z", () => {
@@ -21,6 +21,32 @@ describe("разбор и сравнение SemVer", () => {
     expect(compareReleaseLevels("patch", "minor")).toBeLessThan(0);
     expect(compareReleaseLevels("major", "none")).toBeGreaterThan(0);
     expect(compareReleaseLevels("minor", "minor")).toBe(0);
+  });
+});
+
+describe("предрелизы", () => {
+  const v050 = { major: 0, minor: 5, patch: 0 };
+
+  it("разбирает предрелизный тег vX.Y.Z-rc.N", () => {
+    expect(parsePrereleaseTag("v0.5.0-rc.3")).toEqual({ version: v050, rc: 3 });
+  });
+
+  it("не принимает стабильный тег и чужие суффиксы за предрелиз", () => {
+    expect(parsePrereleaseTag("v0.5.0")).toBeNull();
+    expect(parsePrereleaseTag("v0.5.0-beta.1")).toBeNull();
+  });
+
+  it("счётчик идёт от максимума, а не от числа тегов — удалённый rc не повторится", () => {
+    expect(nextPrereleaseNumber(v050, ["v0.5.0-rc.1", "v0.5.0-rc.3"])).toBe(4);
+  });
+
+  it("считает только предрелизы своего номера", () => {
+    expect(nextPrereleaseNumber(v050, ["v0.4.3-rc.7", "v0.5.0"])).toBe(1);
+  });
+
+  it("последний предрелиз номера — или ничего, если их не было", () => {
+    expect(latestPrereleaseTag(v050, ["v0.5.0-rc.1", "v0.5.0-rc.2"])).toBe("v0.5.0-rc.2");
+    expect(latestPrereleaseTag(v050, ["v0.4.3-rc.1"])).toBeNull();
   });
 });
 

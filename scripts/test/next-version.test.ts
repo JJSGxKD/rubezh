@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { nextVersion, releaseLevelForCommit } from "../release/next-version.mjs";
+import { nextPrereleaseVersion, nextVersion, prereleaseNotesStart, releaseLevelForCommit } from "../release/next-version.mjs";
 
 // Критерий приёмки WP9 (docs/26-stage2-plan.md): release: minor после мерджа
-// даёт минорный тег; все release: none — без тега.
+// даёт минорный тег; все release: none — без тега. Ветка dev — предрелизы
+// rc.N того же номера (docs/09-ci-cd.md §8.1).
 
 const MERGED = "2026-09-20T10:00:00Z";
 
@@ -40,6 +41,43 @@ describe("nextVersion", () => {
 
   it("без базового тега считает от 0.0.0", () => {
     expect(nextVersion(null, ["patch"])).toBe("v0.0.1");
+  });
+});
+
+describe("nextPrereleaseVersion", () => {
+  it("первый предрелиз номера — rc.1", () => {
+    expect(nextPrereleaseVersion("v0.4.2", ["minor"], ["v0.4.2"])).toBe("v0.5.0-rc.1");
+  });
+
+  it("следующий предрелиз того же номера продолжает счётчик", () => {
+    const tags = ["v0.4.2", "v0.5.0-rc.1", "v0.5.0-rc.2"];
+    expect(nextPrereleaseVersion("v0.4.2", ["minor", "patch"], tags)).toBe("v0.5.0-rc.3");
+  });
+
+  it("новый номер начинает счётчик заново: патч сменился минором", () => {
+    const tags = ["v0.4.2", "v0.4.3-rc.1", "v0.4.3-rc.2"];
+    expect(nextPrereleaseVersion("v0.4.2", ["patch", "minor"], tags)).toBe("v0.5.0-rc.1");
+  });
+
+  it("совпадает со стабильным номером без суффикса — релиз dev → main выпускает его", () => {
+    const levels = ["minor", "patch"];
+    const rc = nextPrereleaseVersion("v0.4.2", levels, ["v0.4.2"]);
+    expect(rc?.replace(/-rc\.\d+$/, "")).toBe(nextVersion("v0.4.2", levels));
+  });
+
+  it("все PR с release: none — предрелиза нет", () => {
+    expect(nextPrereleaseVersion("v0.4.2", ["none"], ["v0.4.2"])).toBeNull();
+  });
+});
+
+describe("prereleaseNotesStart", () => {
+  it("заметки нового предрелиза — от предыдущего предрелиза того же номера", () => {
+    const tags = ["v0.4.2", "v0.5.0-rc.1", "v0.5.0-rc.2"];
+    expect(prereleaseNotesStart("v0.4.2", ["minor"], tags)).toBe("v0.5.0-rc.2");
+  });
+
+  it("первого предрелиза номера — от стабильной базы", () => {
+    expect(prereleaseNotesStart("v0.4.2", ["minor"], ["v0.4.2", "v0.4.3-rc.1"])).toBe("v0.4.2");
   });
 });
 

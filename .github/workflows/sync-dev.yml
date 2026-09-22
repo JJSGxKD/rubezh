@@ -1,0 +1,36 @@
+# Возврат main в dev после каждого push в main (docs/09-ci-cd.md §8.1, «Ветка dev»).
+#
+# Логика — в scripts/release/sync-dev.mjs (решение покрыто тестами в
+# scripts/test/release-branches.test.ts). Сразу после релиза dev → main ветка dev
+# просто перематывается; если она за это время ушла вперёд — открывается PR.
+
+name: Sync dev
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Два push в main подряд не должны открыть два одинаковых PR.
+concurrency:
+  group: sync-dev
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: node scripts/release/sync-dev.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
