@@ -1,7 +1,16 @@
 import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { RELEASE_LEVELS, bumpVersion, compareReleaseLevels, formatVersion, parseStableTag } from "./semver.mjs";
-import { commitsSince, latestStableTag, pullRequestsForCommit } from "./git.mjs";
+import { isServicePr } from "./branches.mjs";
+import {
+  RELEASE_LEVELS,
+  bumpVersion,
+  compareReleaseLevels,
+  formatVersion,
+  latestPrereleaseTag,
+  nextPrereleaseNumber,
+  parseStableTag,
+} from "./semver.mjs";
+import { commitsSince, latestStableTag, listAllTags, pullRequestsForCommit } from "./git.mjs";
 
 /**
  * Вычисление следующей версии (docs/09-ci-cd.md §8.1, «Вычисление номера»).
@@ -10,28 +19,54 @@ import { commitsSince, latestStableTag, pullRequestsForCommit } from "./git.mjs"
  * релиза стоит в группе `concurrency` без отмены, и если за время одного
  * прогона встали два мерджа, метка отменённого прогона не должна теряться.
  *
- * Чистая часть (эта функция) тестируется без обращения к git/GitHub; CLI в
- * конце файла подтягивает коммиты и метки PR через `scripts/release/git.mjs`.
+ * База — максимальный стабильный тег по номеру, а не ближайший достижимый из
+ * коммита. Это существенно для `dev`: тег релиза стоит на merge-коммите в
+ * `main`, из `dev` он недостижим, и «достижимая» база откатилась бы к
+ * предыдущему релизу — предрелиз получил бы номер уже вышедшей версии. А
+ * `база..HEAD` сам отсекает выпущенное: те коммиты достижимы из тега через
+ * второго родителя merge-коммита.
+ *
+ * Чистая часть тестируется без git и GitHub; CLI в конце файла подтягивает
+ * коммиты и PR через `scripts/release/git.mjs`.
  */
-export function nextVersion(baseTagName, releaseLevels) {
-  if (releaseLevels.length === 0) return null;
 
-  const base = baseTagName ? parseStableTag(baseTagName) : { major: 0, minor: 0, patch: 0 };
-  const maxLevel = releaseLevels.reduce(
-    (acc, level) => (compareReleaseLevels(level, acc) > 0 ? level : acc),
-    "none",
-  );
-  if (maxLevel === "none") return null;
+export const CHANNELS = ["stable", "prerelease"];
 
-  return formatVersion(bumpVersion(base, maxLevel));
+function maxLevel(levels) {
+  return levels.reduce((acc, level) => (compareReleaseLevels(level, acc) > 0 ? level : acc), "none");
 }
 
-/** Коммит без PR или без ровно одной метки `release: *` — джоб должен упасть, а не молча посчитать патчем. */
-export function releaseLevelForCommit(sha, pullRequests) {
-  if (pullRequests.length === 0) {
-    throw new Error(`коммит ${sha} слит без PR (прямой push в main?) — версия не вычисляется`);
-  }
-  const pr = pullRequests[0];
+function nextStableVersion(baseTagName, releaseLevels) {
+  if (releaseLevels.length === 0) return null;
+  const base = baseTagName ? parseStableTag(baseTagName) : { major: 0, minor: 0, patch: 0 };
+  const level = maxLevel(releaseLevels);
+  return level === "none" ? null : bumpVersion(base, level);
+}
+
+export function nextVersion(baseTagName, releaseLevels) {
+  const version = nextStableVersion(baseTagName, releaseLevels);
+  return version ? formatVersion(version) : null;
+}
+
+/**
+ * Предрелиз из `dev`: `X.Y.Z` считается так же, как стабильный номер, а `rc.N`
+ * — счётчик предрелизов этого номера. Поэтому стабильный релиз после мерджа
+ * `dev` → `main` получает ровно номер последнего предрелиза без суффикса.
+ */
+export function nextPrereleaseVersion(baseTagName, releaseLevels, tags) {
+  const version = nextStableVersion(baseTagName, releaseLevels);
+  if (!version) return null;
+  return `${formatVersion(version)}-rc.${nextPrereleaseNumber(version, tags)}`;
+}
+
+/** Заметки предрелиза — от предыдущего предрелиза того же номера, иначе от стабильной базы. */
+export function prereleaseNotesStart(baseTagName, releaseLevels, tags) {
+  const version = nextStableVersion(baseTagName, releaseLevels);
+  if (!version) return baseTagName;
+  return latestPrereleaseTag(version, tags) ?? baseTagName;
+}
+
+function releaseLevelOfPr(sha, pr) {
   const labels = (pr.labels ?? [])
     .map((label) => label.name)
     .filter((name) => name.startsWith("release: "))
@@ -43,16 +78,56 @@ export function releaseLevelForCommit(sha, pullRequests) {
   return labels[0];
 }
 
+/**
+ * Уровень релиза, который принёс коммит.
+ *
+ * GitHub связывает коммит со всеми PR, где он есть: с его собственным, со
+ * стековым поверх него, с релизным `dev` → `main`. Поэтому учитываются только
+ * смерженные — открытый стековый PR не должен влиять на версию того, что под
+ * ним, — и не служебные: у релизного и синк-PR метки нет по замыслу. Если
+ * настоящих PR несколько, берётся максимум: он не завышает итог, потому что
+ * каждый из этих PR и так попадает в диапазон.
+ *
+ * Коммит, связанный только со служебным PR, — это сам его merge-коммит. Коммит
+ * без смерженного PR — прямой push; джоб должен упасть, а не молча посчитать
+ * его патчем.
+ */
+export function releaseLevelForCommit(sha, pullRequests) {
+  const merged = pullRequests.filter((pr) => pr.merged_at);
+  const real = merged.filter((pr) => !isServicePr(pr.head?.ref, pr.base?.ref));
+
+  if (real.length === 0) {
+    if (merged.length > 0) return "none";
+    throw new Error(`коммит ${sha} слит без PR (прямой push?) — версия не вычисляется`);
+  }
+  return maxLevel(real.map((pr) => releaseLevelOfPr(sha, pr)));
+}
+
 function main() {
+  const channel = process.env.RELEASE_CHANNEL ?? "stable";
+  if (!CHANNELS.includes(channel)) {
+    throw new Error(`RELEASE_CHANNEL=${channel}: допустимо ${CHANNELS.join(" или ")}`);
+  }
+
   const baseTag = latestStableTag();
   const commits = commitsSince(baseTag);
   const releaseLevels = commits.map((sha) => releaseLevelForCommit(sha, pullRequestsForCommit(sha)));
-  const version = nextVersion(baseTag, releaseLevels);
+
+  const prerelease = channel === "prerelease";
+  const tags = prerelease ? listAllTags() : [];
+  const version = prerelease ? nextPrereleaseVersion(baseTag, releaseLevels, tags) : nextVersion(baseTag, releaseLevels);
+  const notesStart = prerelease ? prereleaseNotesStart(baseTag, releaseLevels, tags) : baseTag;
 
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(
       process.env.GITHUB_OUTPUT,
-      `version=${version ?? ""}\nprevious_tag=${baseTag ?? ""}\nhas_release=${version ? "true" : "false"}\n`,
+      [
+        `version=${version ?? ""}`,
+        `previous_tag=${notesStart ?? ""}`,
+        `has_release=${version ? "true" : "false"}`,
+        `prerelease=${prerelease ? "true" : "false"}`,
+        "",
+      ].join("\n"),
     );
   }
   console.log(version ? `следующая версия: ${version}` : "все PR с этой базы — release: none, тега не будет");

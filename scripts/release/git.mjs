@@ -20,12 +20,15 @@ function git(args) {
   return run("git", args);
 }
 
-export function listStableTags() {
-  const raw = git(["tag", "--list", "v*"]);
-  return raw
+export function listAllTags() {
+  return git(["tag", "--list", "v*"])
     .split("\n")
     .map((line) => line.trim())
-    .filter((tag) => parseStableTag(tag) !== null);
+    .filter(Boolean);
+}
+
+export function listStableTags() {
+  return listAllTags().filter((tag) => parseStableTag(tag) !== null);
 }
 
 /** Последний стабильный тег по номеру, а не по времени создания — теги ретегируют редко, но лучше не полагаться на порядок. */
@@ -57,7 +60,7 @@ export function pullRequestsForCommit(sha) {
 }
 
 export function viewPr(number) {
-  const json = gh(["pr", "view", String(number), "--json", "number,title,body,labels"]);
+  const json = gh(["pr", "view", String(number), "--json", "number,title,body,labels,headRefName,baseRefName"]);
   return JSON.parse(json);
 }
 
@@ -77,6 +80,34 @@ export function postComment(number, body) {
 export function createTag(tag) {
   git(["tag", tag]);
   git(["push", "origin", tag]);
+}
+
+export function remoteBranchExists(branch) {
+  return git(["ls-remote", "--heads", "origin", branch]) !== "";
+}
+
+/** Предок ли `ancestor` для `descendant` — `merge-base --is-ancestor` отвечает кодом выхода. */
+export function isAncestor(ancestor, descendant) {
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], { stdio: "ignore" });
+    return true;
+  } catch (error) {
+    if (error && typeof error === "object" && "status" in error && error.status === 1) return false;
+    throw error;
+  }
+}
+
+export function pushRef(source, targetBranch) {
+  git(["push", "origin", `${source}:refs/heads/${targetBranch}`]);
+}
+
+export function openPullRequestExists(head, base) {
+  const json = gh(["pr", "list", "--head", head, "--base", base, "--state", "open", "--json", "number"]);
+  return JSON.parse(json).length > 0;
+}
+
+export function createPullRequest({ head, base, title, body }) {
+  return gh(["pr", "create", "--head", head, "--base", base, "--title", title, "--body", body]);
 }
 
 export function createRelease(tag, notesStartTag) {

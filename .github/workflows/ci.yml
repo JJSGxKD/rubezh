@@ -15,7 +15,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 # Минимальные права по умолчанию (docs/09-ci-cd.md §12, §8.1 «Права»):
 # contents: write выдаётся точечно только джобу релиза.
@@ -92,14 +92,14 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build --file backend/api/Dockerfile --tag rubezh-api:pr .
 
-  # Версия по типу изменений в PR (docs/09-ci-cd.md §8.1). Доведён до тега,
-  # GitHub Release, образа в GHCR и артефакта клиента; деплой staging НЕ
-  # вызывается — deploy-staging.yml ещё не существует (WP10,
-  # docs/26-stage2-plan.md). Матрица сборок по платформам (§1) — тоже WP10:
-  # `pnpm build` ниже собирает всё как один прогон, не per-platform-env.
+  # Версия по типу изменений в PR (docs/09-ci-cd.md §8.1): из main — стабильная
+  # vX.Y.Z, из dev — предрелиз vX.Y.Z-rc.N. Доведён до тега, GitHub Release,
+  # образа в GHCR и артефакта клиента; деплой НЕ вызывается — deploy-*.yml ещё
+  # не существует (пакет выпуска, docs/26-stage2-plan.md §6). Матрица сборок по
+  # платформам (§1) — там же: `pnpm build` ниже собирает всё одним прогоном.
   release:
     needs: gate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -128,6 +128,7 @@ jobs:
         run: node scripts/release/next-version.mjs
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_CHANNEL: ${{ github.ref == 'refs/heads/dev' && 'prerelease' || 'stable' }}
 
       # Пересборка с настоящей версией: гейт выше собирал без неё, а версия
       # обязана попасть в бандл, события и отчёты (docs/09-ci-cd.md §8.1,
@@ -177,6 +178,7 @@ jobs:
         run: >-
           gh release create ${{ steps.version.outputs.version }}
           --generate-notes
+          ${{ steps.version.outputs.prerelease == 'true' && '--prerelease' || '' }}
           ${{ steps.version.outputs.previous_tag != '' && format('--notes-start-tag {0}', steps.version.outputs.previous_tag) || '' }}
         env:
           GH_TOKEN: ${{ github.token }}

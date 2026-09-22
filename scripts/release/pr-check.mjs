@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { isServicePr } from "./branches.mjs";
 import { RELEASE_LEVELS, compareReleaseLevels, parseStableTag } from "./semver.mjs";
 import { addLabel, latestStableTag, listComments, postComment, viewPr } from "./git.mjs";
 
@@ -97,7 +98,13 @@ function main() {
     for (const error of title.errors) errors.push(`заголовок: ${error}`);
   }
 
-  if (title.valid) {
+  // Релизный и синк-PR метку не несут по замыслу (scripts/release/branches.mjs):
+  // требовать её — значит заставить поставить «none» на PR, который выпускает
+  // версию, а подставлять автоматически — вводить в заблуждение ревьюера.
+  const service = isServicePr(pr.headRefName, pr.baseRefName);
+  if (service) console.log(`служебный PR ${pr.headRefName} → ${pr.baseRefName}: метка релиза не проверяется`);
+
+  if (title.valid && !service) {
     const baseTag = latestStableTag();
     const baseMajor = baseTag ? parseStableTag(baseTag).major : 0;
     const minimum = minimumReleaseLevel(title, baseMajor);
