@@ -16,10 +16,6 @@ import { pathToFileURL } from "node:url";
 /** Порты из карты в docs/20-env-and-ports.md §2, плюс staging-смещение API. */
 export const DEFAULT_PORTS = [4000, 4001, 5173, 5174, 5175, 5176, 5177];
 
-// Запуск только при прямом вызове: разбор вывода netstat покрыт тестами, и
-// импорт модуля не должен никого убивать.
-if (import.meta.url === pathToFileURL(process.argv[1]).href) freePorts(readPortsFromArgs());
-
 function readPortsFromArgs() {
   const ports = process.argv
     .slice(2)
@@ -53,8 +49,17 @@ function listenersOn(port) {
   return process.platform === "win32" ? windowsListeners(port) : unixListeners(port);
 }
 
+/**
+ * Аргументы netstat. Без фильтра по протоколу: `-p tcp` на Windows
+ * показывает **только IPv4**, а IPv6-слушатели живут под `-p tcpv6` — и порт,
+ * занятый процессом на `[::1]`, скрипт не находил вовсе, отвечая «все порты
+ * свободны». Именно так слушает dev-сервер Vite, ради которого скрипт и
+ * написан. UDP-строки отсеивает сам разбор: у них нет колонки состояния.
+ */
+export const NETSTAT_ARGS = ["-ano"];
+
 function windowsListeners(port) {
-  return parseWindowsListeners(run("netstat", ["-ano", "-p", "tcp"]), port);
+  return parseWindowsListeners(run("netstat", NETSTAT_ARGS), port);
 }
 
 /**
@@ -113,3 +118,9 @@ function run(command, args) {
     return typeof error.stdout === "string" ? error.stdout : "";
   }
 }
+
+// Запуск только при прямом вызове: разбор вывода netstat покрыт тестами, и
+// импорт модуля не должен никого убивать. Блок стоит в конце файла, а не в
+// начале: сверху он выполнялся раньше объявлений const ниже и падал на них
+// временной мёртвой зоной — как в scripts/release/*.mjs, где он всегда внизу.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) freePorts(readPortsFromArgs());

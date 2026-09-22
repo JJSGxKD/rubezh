@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { parseWindowsListeners, DEFAULT_PORTS } from "../free-ports.mjs";
+import { parseWindowsListeners, DEFAULT_PORTS, NETSTAT_ARGS } from "../free-ports.mjs";
 
 // Скрипт убивает процессы, поэтому цена ошибки разбора — снесённый чужой
 // процесс, а не просто незакрытый порт. Отсюда и тесты.
@@ -14,6 +14,7 @@ const NETSTAT_OUTPUT = [
   "  TCP    127.0.0.1:5173         0.0.0.0:0              LISTENING       2048",
   "  TCP    0.0.0.0:40010          0.0.0.0:0              LISTENING       9999",
   "  TCP    [::]:4001              [::]:0                 LISTENING       31664",
+  "  TCP    [::1]:5198             [::]:0                 LISTENING       53368",
   "  TCP    127.0.0.1:4001         127.0.0.1:54321        ESTABLISHED     777",
   "  UDP    0.0.0.0:4001           *:*                                    555",
 ].join("\r\n");
@@ -37,6 +38,16 @@ describe("разбор вывода netstat", () => {
     const pids = parseWindowsListeners(NETSTAT_OUTPUT, 4001);
     expect(pids).not.toContain(777);
     expect(pids).not.toContain(555);
+  });
+
+  it("находит процесс, слушающий только IPv6 — так слушает dev-сервер Vite", () => {
+    expect(parseWindowsListeners(NETSTAT_OUTPUT, 5198)).toEqual([53368]);
+  });
+
+  it("не фильтрует netstat по протоколу: с -p tcp Windows прячет IPv6", () => {
+    // Порт, занятый процессом на [::1], так не находился вовсе, и скрипт
+    // отвечал «все порты свободны» ровно в том случае, ради которого написан.
+    expect(NETSTAT_ARGS).not.toContain("-p");
   });
 
   it("возвращает пусто, когда порт свободен", () => {
