@@ -257,7 +257,7 @@ export class Music {
     const panner = ctx.createStereoPanner();
     panner.pan.value = pan;
     source.connect(gainNode(ctx, gain)).connect(panner).connect(this.engine.musicInput);
-    panner.connect(gainNode(ctx, 0.25)).connect(this.engine.reverbIn);
+    panner.connect(gainNode(ctx, 0.25)).connect(this.engine.reverbSends.music);
     source.start(t);
   }
 
@@ -276,7 +276,7 @@ export class Music {
     amp.gain.setValueAtTime(0.035, t + seconds * 0.8);
     amp.gain.linearRampToValueAtTime(0.0001, t + seconds + 0.2);
     lowpass.connect(amp).connect(this.engine.musicInput);
-    amp.connect(this.engine.reverbIn);
+    amp.connect(this.engine.reverbSends.music);
     for (const degree of chord) {
       for (const cents of [-6, 6]) {
         const osc = ctx.createOscillator();
@@ -328,7 +328,7 @@ export class Music {
     low.connect(amp);
     high.connect(gainNode(ctx, 0.5)).connect(amp);
     amp.connect(this.engine.musicInput);
-    amp.connect(gainNode(ctx, 0.6)).connect(this.engine.reverbIn);
+    amp.connect(gainNode(ctx, 0.6)).connect(this.engine.reverbSends.music);
     const vibrato = ctx.createOscillator();
     vibrato.frequency.value = 5.2;
     const depth = gainNode(ctx, 3.5);

@@ -12,13 +12,16 @@
 
 export type BusId = "threats" | "player" | "rewards" | "weapons" | "enemies" | "ui" | "music";
 
+/** Группа — то, чем управляет один регулятор громкости в настройках. */
+export type BusGroup = "effects" | "ui" | "music";
+
 export interface BusDef {
   /** уровень шины в миксе, 0…1 */
   level: number;
   /** угроза перекрывает всё, оружие — подложка, толпа режется первой */
   priority: number;
   /** куда шина идёт: регулятор эффектов, интерфейса или музыки */
-  group: "effects" | "ui" | "music";
+  group: BusGroup;
 }
 
 export const BUSES: Record<BusId, BusDef> = {

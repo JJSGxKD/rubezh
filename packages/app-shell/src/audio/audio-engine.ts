@@ -1,4 +1,4 @@
-import { BUSES, MIX_RULES, SOUND_RECIPES, UI_SOUNDS, type BusId, type MixRules, type SoundId, type SoundRecipe } from "./recipes";
+import { BUSES, MIX_RULES, SOUND_RECIPES, UI_SOUNDS, type BusGroup, type BusId, type MixRules, type SoundId, type SoundRecipe } from "./recipes";
 import { filterNode, gainNode, renderRecipe, reverbImpulse } from "./synth";
 
 /**
@@ -70,13 +70,20 @@ export class AudioEngine {
   effectsMuted = false;
   readonly stats = { starts: 0, dropped: 0 };
 
-  readonly reverbIn: GainNode;
+  /**
+   * Посыл в реверб — отдельный на каждую группу и после её регулятора. Реверб
+   * один на всех, и если слать в него прямо от голоса, регулятор группы
+   * глушит только сухой звук: хвост реверба уходит в компрессор в обход и
+   * звучит на нуле.
+   */
+  readonly reverbSends: Record<BusGroup, GainNode>;
   readonly musicInput: GainNode;
   readonly musicFilter: BiquadFilterNode;
 
   private readonly master: GainNode;
   private readonly masterMeter: AnalyserNode;
-  private readonly groups: Record<"effects" | "ui" | "music", GainNode>;
+  private readonly reverbIn: GainNode;
+  private readonly groups: Record<BusGroup, GainNode>;
   private readonly buses = {} as Record<BusId, BusNodes>;
   private readonly bank = new Map<SoundId, AudioBuffer[]>();
   private readonly voices = new Map<SoundId, Voice[]>();
@@ -112,6 +119,8 @@ export class AudioEngine {
     convolver.buffer = reverbImpulse(ctx, 1.9);
     this.reverbIn = gainNode(ctx, 1);
     this.reverbIn.connect(convolver).connect(gainNode(ctx, 0.45)).connect(compressor);
+    this.reverbSends = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0), music: gainNode(ctx, 0) };
+    for (const send of Object.values(this.reverbSends)) send.connect(this.reverbIn);
 
     this.groups = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0), music: gainNode(ctx, 0) };
     this.groups.effects.connect(compressor);
@@ -203,7 +212,7 @@ export class AudioEngine {
     const panner = this.ctx.createStereoPanner();
     panner.pan.value = options.pan ?? 0;
     source.connect(amp).connect(panner).connect(this.buses[recipe.bus].input);
-    if (recipe.send > 0) panner.connect(gainNode(this.ctx, recipe.send)).connect(this.reverbIn);
+    if (recipe.send > 0) panner.connect(gainNode(this.ctx, recipe.send)).connect(this.reverbSends[BUSES[recipe.bus].group]);
     source.start(when);
 
     live.push({ source, amp, end: when + buffer.duration / (options.rate ?? 1) });
@@ -218,9 +227,11 @@ export class AudioEngine {
   setVolumes(volumes: AudioVolumes): void {
     const t = this.ctx.currentTime;
     this.master.gain.setTargetAtTime(volumeCurve(volumes.master), t, 0.05);
-    this.groups.effects.gain.setTargetAtTime(volumeCurve(volumes.effects), t, 0.05);
-    this.groups.ui.gain.setTargetAtTime(volumeCurve(volumes.ui), t, 0.05);
-    this.groups.music.gain.setTargetAtTime(volumeCurve(volumes.music), t, 0.05);
+    for (const group of Object.keys(this.groups) as BusGroup[]) {
+      const level = volumeCurve(volumes[group]);
+      this.groups[group].gain.setTargetAtTime(level, t, 0.05);
+      this.reverbSends[group].gain.setTargetAtTime(level, t, 0.05);
+    }
   }
 
   activeVoices(): number {
