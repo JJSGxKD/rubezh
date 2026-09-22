@@ -20,9 +20,9 @@ export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, repoRoot, "");
   const port = Number(env.WEB_MAX_PORT ?? 5174);
 
-  // Порт, туннель и прокси — общие для трёх площадок
+  // Порт, туннель, HTTPS и доступ с телефона — общие для трёх площадок
   // (scripts/vite/dev-server.ts).
-  const { server, preview } = devServerConfig({ env, port, tunnelHostVar: "DEV_TUNNEL_MAX_HOST" });
+  const { server, preview } = devServerConfig({ env, repoRoot, port, tunnelHostVar: "DEV_TUNNEL_MAX_HOST" });
 
   return {
     // stableDevSession — без перезагрузки страницы на обрыве связи с dev-сервером

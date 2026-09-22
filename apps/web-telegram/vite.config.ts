@@ -36,10 +36,11 @@ export default defineConfig(({ mode, command }) => {
     ]),
   );
 
-  // Порт, туннель и прокси — общие для трёх площадок
+  // Порт, туннель, HTTPS и доступ с телефона — общие для трёх площадок
   // (scripts/vite/dev-server.ts).
   const { server, preview } = devServerConfig({
     env,
+    repoRoot,
     port,
     tunnelHostVar: "DEV_TUNNEL_TELEGRAM_HOST",
     proxy: apiProxy,
