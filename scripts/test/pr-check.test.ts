@@ -58,8 +58,10 @@ describe("minimumReleaseLevel", () => {
     expect(minimumReleaseLevel({ type: "fix", breaking: true }, 1)).toBe("major");
   });
 
-  it("feat(dev) — хватает patch: инструменты разработчика до игрока не доходят", () => {
-    expect(minimumReleaseLevel({ type: "feat", scope: "dev", breaking: false }, 0)).toBe("patch");
+  it("feat(dev), feat(ci), feat(infra) — хватает patch: до игрока это не доходит", () => {
+    for (const scope of ["dev", "ci", "infra"]) {
+      expect(minimumReleaseLevel({ type: "feat", scope, breaking: false }, 0)).toBe("patch");
+    }
   });
 
   it("послабление только для своей области: feat в любой другой — по-прежнему minor", () => {
