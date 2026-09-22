@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { nextPrereleaseVersion, nextVersion, prereleaseNotesStart, releaseLevelForCommit } from "../release/next-version.mjs";
+import { nextPrereleaseVersion, nextVersion, prereleaseNotesStart, releaseLevelForCommit, releaseSummary } from "../release/next-version.mjs";
 
 // Критерий приёмки WP9 (docs/26-stage2-plan.md): release: minor после мерджа
 // даёт минорный тег; все release: none — без тега. Ветка dev — предрелизы
@@ -130,5 +130,19 @@ describe("releaseLevelForCommit", () => {
     const own = pr(39, "patch", "a", "main");
     const stacked = pr(40, "minor", "b", "a");
     expect(releaseLevelForCommit("abc123", [own, stacked])).toBe("minor");
+  });
+});
+
+describe("releaseSummary", () => {
+  it("ветка стоит на теге — так и пишет, а не «все PR с меткой none»", () => {
+    expect(releaseSummary("v0.4.0", 0, null)).toBe("новых коммитов после v0.4.0 нет — тега не будет");
+  });
+
+  it("влили только release: none — выпускать нечего", () => {
+    expect(releaseSummary("v0.4.0", 3, null)).toBe("все PR после v0.4.0 — release: none, тега не будет");
+  });
+
+  it("есть версия — называет её", () => {
+    expect(releaseSummary("v0.4.0", 3, "v0.5.0-rc.1")).toBe("следующая версия: v0.5.0-rc.1");
   });
 });

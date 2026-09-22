@@ -103,6 +103,19 @@ export function releaseLevelForCommit(sha, pullRequests) {
   return maxLevel(real.map((pr) => releaseLevelOfPr(sha, pr)));
 }
 
+/**
+ * Строка для лога релизного джоба. «Новых коммитов нет» и «все PR с меткой
+ * none» — разные ситуации: первая означает, что ветка стоит на теге, вторая —
+ * что в неё что-то влили, но выпускать нечего. По одной строке лога их надо
+ * различать.
+ */
+export function releaseSummary(baseTagName, commitCount, version) {
+  if (version) return `следующая версия: ${version}`;
+  const base = baseTagName ?? "начала истории";
+  if (commitCount === 0) return `новых коммитов после ${base} нет — тега не будет`;
+  return `все PR после ${base} — release: none, тега не будет`;
+}
+
 function main() {
   const channel = process.env.RELEASE_CHANNEL ?? "stable";
   if (!CHANNELS.includes(channel)) {
@@ -130,7 +143,7 @@ function main() {
       ].join("\n"),
     );
   }
-  console.log(version ? `следующая версия: ${version}` : "все PR с этой базы — release: none, тега не будет");
+  console.log(releaseSummary(baseTag, commits.length, version));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
