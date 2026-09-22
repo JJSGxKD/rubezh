@@ -575,10 +575,10 @@ Phaser 3 + Vite (`01-tech-stack.md` §2). Компоненты не перено
 | Когда | Что | Разделы |
 |---|---|---|
 | Перед этапом 3 | Каркас бэкенда, `LockService`, Prisma/Docker-обвязка, атомарный троттлер, логи в Telegram | §3, §9 |
-| Неделя 3 | Авторизация + JWT/refresh, `startParam` → `Sessions`/`Acquisition`, Telegram Stars, API-клиент и инициализация SDK на фронте | §4, §6, §8, §11 |
-| Неделя 4 | Рекламный модуль (сессия показа + `AdsBlocks`/`AdsNetworks`), рефералка, `Events` | §5, §6, §7 |
-| Неделя 5 | `pg-backup` + **учебное восстановление**, Grafana/Prometheus, дежурные метрики | §9, `14-scalability.md` §6 |
-| Недели 7-8 | `MaxAuthGuard` рядом с `TelegramAuthGuard`, рублёвый эквайринг | §4, §8 |
+| Этап 3 | Авторизация + JWT/refresh, `startParam` → `Sessions`/`Acquisition`, Telegram Stars, API-клиент и инициализация SDK на фронте | §4, §6, §8, §11 |
+| Этап 4 | Рекламный модуль (сессия показа + `AdsBlocks`/`AdsNetworks`), рефералка, `Events` | §5, §6, §7 |
+| Этап 5 | `pg-backup` + **учебное восстановление**, Grafana/Prometheus, дежурные метрики | §9, `14-scalability.md` §6 |
+| Этап 7 | `MaxAuthGuard` рядом с `TelegramAuthGuard`, рублёвый эквайринг | §4, §8 |
 
 ---
 
