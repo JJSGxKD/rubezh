@@ -143,7 +143,7 @@ describe("маршрутизация шин", () => {
     return audibility(source, ctx.destination as FakeNode);
   }
 
-  const loud: AudioVolumes = { master: 60, effects: 85, ui: 90, music: 50 };
+  const loud: AudioVolumes = { master: 60, effects: 85, ui: 90 };
 
   it("у эффектов есть звук с посылом в реверб — иначе проверке не на чем стоять", () => {
     expect(soundWithReverb("effects")).toBeDefined();

@@ -1,6 +1,5 @@
 import type { RunCues } from "@bh/core-game";
 import { AudioEngine, type AudioVolumes, type PlayOptions } from "./audio-engine";
-import { Music } from "./music";
 import type { SoundId, SoundRecipe } from "./recipes";
 
 /**
@@ -17,7 +16,6 @@ export type RunSoundEvent = "levelUp" | "choose" | "death" | "abandon" | "record
 export type UiSound = "tap" | "select" | "primary" | "back" | "toggleOn" | "toggleOff" | "sheetOpen" | "sheetClose" | "reward" | "error";
 
 export interface HudSound {
-  enemies: number;
   hpRatio: number;
   weapons: number;
 }
@@ -43,8 +41,6 @@ const WEAPON_SOUNDS: Partial<Record<string, SoundId>> = {
   hearth: "hearth",
 };
 
-/** Толпа в сотню живых врагов — полное напряжение музыки. */
-const FULL_INTENSITY_ENEMIES = 110;
 const LOW_HP_RATIO = 0.3;
 /** Сердце бьётся чаще, чем ниже здоровье: от раза в 0,9 с до раза в 0,55 с. */
 const HEARTBEAT_SLOW_SEC = 0.9;
@@ -100,7 +96,6 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
 
 export class SoundDirector {
   readonly engine: AudioEngine;
-  readonly music: Music;
   private scene: SoundScene = "lobby";
   private hpRatio = 1;
   private heartbeatAt = 0;
@@ -109,13 +104,11 @@ export class SoundDirector {
 
   constructor(ctx: AudioContext, overrides: Partial<Record<SoundId, SoundRecipe>>) {
     this.engine = new AudioEngine(ctx, overrides);
-    this.music = new Music(this.engine);
   }
 
   async prepare(): Promise<void> {
     await this.engine.renderBank();
-    await this.music.prepare();
-    // Сцена могла смениться, пока рисовался банк: музыка стартует с текущей.
+    // Сцена могла смениться, пока рисовался банк: движок узнаёт текущую.
     this.applyScene();
   }
 
@@ -135,9 +128,7 @@ export class SoundDirector {
 
   setHud(hud: HudSound): void {
     this.engine.weaponCount = Math.max(1, hud.weapons);
-    this.music.setIntensity(hud.enemies / FULL_INTENSITY_ENEMIES);
     this.hpRatio = hud.hpRatio;
-    this.music.setHealth(this.hpRatio, this.scene === "run" ? "play" : "pause");
     this.heartbeat();
   }
 
@@ -145,17 +136,13 @@ export class SoundDirector {
     if (event === "levelUp") this.engine.play("levelUp");
     else if (event === "choose") this.engine.play("choose");
     else if (event === "record") this.engine.play("record");
-    else if (event === "death") {
-      this.engine.play("defeat");
-      this.music.defeat();
-    }
+    else if (event === "death") this.engine.play("defeat");
   }
 
   cues(cues: RunCues): void {
     if (this.scene !== "run") return;
     const { engine } = this;
     const now = engine.ctx.currentTime;
-    if (cues.eliteSpawns > 0) this.music.eliteBoost();
     if (cues.xp > 0) {
       this.gemStreak = now - this.lastGemAt < GEM_STREAK_RESET_SEC ? Math.min(GEM_STREAK_MAX, this.gemStreak + 1) : 0;
       this.lastGemAt = now;
@@ -172,15 +159,7 @@ export class SoundDirector {
   }
 
   private applyScene(): void {
-    const { music, engine } = this;
-    engine.effectsMuted = this.scene === "silent";
-    if (this.scene === "silent" || this.scene === "finished") {
-      if (this.scene === "silent") music.stop(0.4);
-      return;
-    }
-    const context = this.scene === "lobby" ? "lobby" : "run";
-    if (!music.running || music.currentContext !== context) music.start(context);
-    music.setScene(this.scene === "pause" ? "pause" : this.scene === "choice" ? "choice" : "play");
+    this.engine.effectsMuted = this.scene === "silent";
   }
 
   private heartbeat(): void {

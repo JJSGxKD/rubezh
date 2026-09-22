@@ -370,7 +370,6 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
       const previous = get().hud;
       if (previous !== null && isLowHp(hud) && !isLowHp(previous) && hud.hp > 0) haptic("lowHp");
       audio.hud({
-        enemies: hud.enemiesAlive,
         hpRatio: hud.maxHp > 0 ? hud.hp / hud.maxHp : 1,
         weapons: hud.weapons.length,
       });

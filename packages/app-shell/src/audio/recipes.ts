@@ -10,17 +10,17 @@
  * бюджет запусков, прореживание частых звуков и приглушение под угрозу.
  */
 
-export type BusId = "threats" | "player" | "rewards" | "weapons" | "enemies" | "ui" | "music";
+export type BusId = "threats" | "player" | "rewards" | "weapons" | "enemies" | "ui";
 
 /** Группа — то, чем управляет один регулятор громкости в настройках. */
-export type BusGroup = "effects" | "ui" | "music";
+export type BusGroup = "effects" | "ui";
 
 export interface BusDef {
   /** уровень шины в миксе, 0…1 */
   level: number;
   /** угроза перекрывает всё, оружие — подложка, толпа режется первой */
   priority: number;
-  /** куда шина идёт: регулятор эффектов, интерфейса или музыки */
+  /** куда шина идёт: регулятор эффектов или интерфейса */
   group: BusGroup;
 }
 
@@ -31,7 +31,6 @@ export const BUSES: Record<BusId, BusDef> = {
   weapons: { level: 0.55, priority: 1, group: "effects" },
   enemies: { level: 0.5, priority: 0, group: "effects" },
   ui: { level: 0.8, priority: 2, group: "ui" },
-  music: { level: 1, priority: 2, group: "music" },
 };
 
 /**
@@ -55,7 +54,7 @@ export const MIX_RULES: MixRules = {
   globalVoices: 20,
   densitySoftness: 3,
   densityFloor: 0.4,
-  duckDepth: { music: 0.55, enemies: 0.4, weapons: 0.5, rewards: 0.5 },
+  duckDepth: { enemies: 0.4, weapons: 0.5, rewards: 0.5 },
 };
 
 export type SoundLayer =

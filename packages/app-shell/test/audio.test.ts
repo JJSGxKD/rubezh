@@ -131,4 +131,30 @@ describe("сцены и громкость", () => {
       expect(useSettings.getState().volumes).toEqual({ ...DEFAULT_VOLUMES, effects: 0, ui: 0 });
     });
   });
+
+  describe("настройки сборки с музыкой", () => {
+    beforeEach(() => {
+      initShell({
+        adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
+        capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false },
+        storage: memoryStorage({
+          "bh.settings.v1": JSON.stringify({
+            screenMode: "fullscreen",
+            volumes: { master: 40, effects: 70, ui: 50, music: 55 },
+            haptics: false,
+          }),
+        }),
+        analytics: () => undefined,
+        build: { version: "test", contentHash: "", platform: "web" },
+      });
+    });
+
+    it("громкость музыки отбрасывается, а остальные настройки игрока не сбрасываются", () => {
+      useSettings.getState().hydrate("normal");
+      const state = useSettings.getState();
+      expect(state.volumes).toEqual({ master: 40, effects: 70, ui: 50 });
+      // Сброс настроек выглядел бы так: вибрация вернулась бы к умолчанию.
+      expect(state.haptics).toBe(false);
+    });
+  });
 });

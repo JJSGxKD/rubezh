@@ -1,5 +1,5 @@
 import { BUSES, MIX_RULES, SOUND_RECIPES, UI_SOUNDS, type BusGroup, type BusId, type MixRules, type SoundId, type SoundRecipe } from "./recipes";
-import { filterNode, gainNode, renderRecipe, reverbImpulse } from "./synth";
+import { gainNode, renderRecipe, reverbImpulse } from "./synth";
 
 /**
  * Звуковой движок (docs/31-audio-and-haptics.md): шины, правила грани,
@@ -11,7 +11,6 @@ export interface AudioVolumes {
   master: number;
   effects: number;
   ui: number;
-  music: number;
 }
 
 export interface PlayOptions {
@@ -76,9 +75,7 @@ export class AudioEngine {
    * глушит только сухой звук: хвост реверба уходит в компрессор в обход и
    * звучит на нуле.
    */
-  readonly reverbSends: Record<BusGroup, GainNode>;
-  readonly musicInput: GainNode;
-  readonly musicFilter: BiquadFilterNode;
+  private readonly reverbSends: Record<BusGroup, GainNode>;
 
   private readonly master: GainNode;
   private readonly masterMeter: AnalyserNode;
@@ -119,14 +116,12 @@ export class AudioEngine {
     convolver.buffer = reverbImpulse(ctx, 1.9);
     this.reverbIn = gainNode(ctx, 1);
     this.reverbIn.connect(convolver).connect(gainNode(ctx, 0.45)).connect(compressor);
-    this.reverbSends = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0), music: gainNode(ctx, 0) };
+    this.reverbSends = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0) };
     for (const send of Object.values(this.reverbSends)) send.connect(this.reverbIn);
 
-    this.groups = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0), music: gainNode(ctx, 0) };
+    this.groups = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0) };
     this.groups.effects.connect(compressor);
     this.groups.ui.connect(compressor);
-    this.musicFilter = filterNode(ctx, "lowpass", 16_000);
-    this.groups.music.connect(this.musicFilter).connect(compressor);
 
     for (const [id, bus] of Object.entries(BUSES) as [BusId, (typeof BUSES)[BusId]][]) {
       const input = gainNode(ctx, bus.level);
@@ -137,7 +132,6 @@ export class AudioEngine {
       duck.connect(meter);
       this.buses[id] = { input, duck, meter };
     }
-    this.musicInput = this.buses.music.input;
     compressor.connect(limiter).connect(this.master).connect(this.masterMeter).connect(ctx.destination);
   }
 
