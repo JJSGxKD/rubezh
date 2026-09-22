@@ -57,6 +57,23 @@ describe("minimumReleaseLevel", () => {
     expect(minimumReleaseLevel({ type: "fix", breaking: true }, 0)).toBe("minor");
     expect(minimumReleaseLevel({ type: "fix", breaking: true }, 1)).toBe("major");
   });
+
+  it("feat(dev) — хватает patch: инструменты разработчика до игрока не доходят", () => {
+    expect(minimumReleaseLevel({ type: "feat", scope: "dev", breaking: false }, 0)).toBe("patch");
+  });
+
+  it("послабление только для своей области: feat в любой другой — по-прежнему minor", () => {
+    for (const scope of ["core-game", "app-shell", "api", null]) {
+      expect(minimumReleaseLevel({ type: "feat", scope, breaking: false }, 0)).toBe("minor");
+    }
+  });
+
+  it("ломающее изменение послаблением не пользуется", () => {
+    // `!` означает, что у кого-то ломается рабочий процесс, и номер версии
+    // обязан это показать, в какой бы области изменение ни лежало.
+    expect(minimumReleaseLevel({ type: "feat", scope: "dev", breaking: true }, 0)).toBe("minor");
+    expect(minimumReleaseLevel({ type: "feat", scope: "dev", breaking: true }, 1)).toBe("major");
+  });
 });
 
 describe("evaluateReleaseLabels", () => {
