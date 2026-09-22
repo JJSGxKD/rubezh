@@ -204,8 +204,11 @@ docker compose up -d
 docker compose ps
 ```
 
-Сгенерировать секреты (`openssl` идёт с Git for Windows; для access и refresh
-значения обязаны быть разными):
+Сгенерировать секреты (`openssl` идёт с Git for Windows). Так делаются
+`JWT_ACCESS_SECRET`, `TELEGRAM_WEBHOOK_SECRET` и `EXPORT_PSEUDONYM_KEY` —
+каждый свой, и у каждого окружения свои. Отдельного секрета для токена
+продления нет: он непрозрачный и ничем не подписан
+(`34-stage3-plan.md`, Р15):
 
 ```powershell
 openssl rand -hex 32
