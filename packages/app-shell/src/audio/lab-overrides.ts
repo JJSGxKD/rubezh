@@ -70,7 +70,7 @@ const layerSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const recipeSchema = z.object({
-  bus: z.enum(["threats", "player", "rewards", "weapons", "enemies", "ui", "music"]),
+  bus: z.enum(["threats", "player", "rewards", "weapons", "enemies", "ui"]),
   level: amplitude,
   voices: z.int().check(z.minimum(1), z.maximum(8)),
   gap: seconds,

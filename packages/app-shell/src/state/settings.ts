@@ -26,12 +26,13 @@ const schema = z.object({
   screenMode: z.nullable(z.enum(["fullscreen", "normal"])),
   /**
    * Громкость по регуляторам (docs/31-audio-and-haptics.md). Нет поля —
-   * настройки сборки до звука: тогда учитываются прежние выключатели звука и
-   * музыки, чтобы выключенное игроком не заиграло после обновления.
+   * настройки сборки до звука: тогда учитывается прежний выключатель звука,
+   * чтобы выключенное игроком не заиграло после обновления. Громкость музыки,
+   * сохранённая до её удаления, схемой молча отбрасывается — остальное
+   * читается как было.
    */
-  volumes: z.optional(z.object({ master: volume, effects: volume, ui: volume, music: volume })),
+  volumes: z.optional(z.object({ master: volume, effects: volume, ui: volume })),
   sound: z.optional(z.boolean()),
-  music: z.optional(z.boolean()),
   haptics: z.boolean(),
 });
 
@@ -118,7 +119,6 @@ function volumesOf(stored: StoredSettings): AudioVolumes {
     ...DEFAULT_VOLUMES,
     effects: stored.sound === false ? 0 : DEFAULT_VOLUMES.effects,
     ui: stored.sound === false ? 0 : DEFAULT_VOLUMES.ui,
-    music: stored.music === false ? 0 : DEFAULT_VOLUMES.music,
   };
 }
 

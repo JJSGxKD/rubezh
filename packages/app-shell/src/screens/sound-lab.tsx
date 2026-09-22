@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Pause, Play, RotateCcw, Square } from "lucide-react";
+import { Play, RotateCcw, Square } from "lucide-react";
 import type { RunCues } from "@bh/core-game";
 import { audio } from "../audio";
 import { isSoundId, readLabOverrides, recipeSchema, writeLabOverrides } from "../audio/lab-overrides";
-import type { MusicState } from "../audio/music";
 import { BUSES, SOUND_RECIPES, type BusId, type SoundId } from "../audio/recipes";
 import type { SoundDirector } from "../audio/sound-director";
 import {
-  Badge,
   Button,
   ContentColumn,
   ListGroup,
@@ -29,10 +27,10 @@ import { VolumeSliders } from "./settings";
 /**
  * Звуковая лаборатория (docs/31-audio-and-haptics.md §6): послушать каждый
  * звук, поправить рецепт на горячую, проверить грань на симуляции боя с
- * индикаторами шин, покрутить музыку и вибрацию. Правки живут на этом
- * устройстве; команде уходит копия рецепта.
+ * индикаторами шин, покрутить вибрацию. Правки живут на этом устройстве;
+ * команде уходит копия рецепта.
  */
-const TABS = ["sounds", "battle", "music", "feedback"] as const;
+const TABS = ["sounds", "battle", "feedback"] as const;
 type Tab = (typeof TABS)[number];
 
 const BUS_ORDER: readonly BusId[] = ["threats", "player", "rewards", "weapons", "enemies", "ui"];
@@ -69,7 +67,6 @@ export function SoundLabScreen(): ReactNode {
           <>
             {tab === "sounds" ? <SoundsTab director={director} /> : null}
             {tab === "battle" ? <BattleTab director={director} /> : null}
-            {tab === "music" ? <MusicTab director={director} /> : null}
           </>
         )}
         {tab === "feedback" ? <FeedbackTab /> : null}
@@ -263,7 +260,7 @@ function BattleTab(props: { director: SoundDirector }): ReactNode {
     director.setScene("run");
     const timer = setInterval(() => {
       const { weapons: count, crowd: density } = settings.current;
-      director.setHud({ enemies: density * 1.2, hpRatio: 1, weapons: count });
+      director.setHud({ hpRatio: 1, weapons: count });
       director.cues(simulatedCues(count, density / 100));
     }, 33);
     return () => {
@@ -333,64 +330,6 @@ function simulatedCues(weapons: number, density: number): RunCues {
     enemyShots: chance(1.2 * density),
     weapons: fired,
   };
-}
-
-function MusicTab(props: { director: SoundDirector }): ReactNode {
-  const { music } = props.director;
-  const [state, setState] = useState<MusicState>({ running: music.running, context: music.currentContext, layers: 0, boost: false });
-  const [intensity, setIntensity] = useState(40);
-  const [lowHp, setLowHp] = useState(false);
-
-  useEffect(() => music.onChange(setState), [music]);
-  useEffect(() => music.setIntensity(intensity / 100), [music, intensity]);
-  useEffect(() => music.setHealth(lowHp ? 0.12 : 1, "play"), [music, lowHp]);
-  // Уход из вкладки возвращает музыку сцене оболочки.
-  useEffect(() => () => props.director.setScene("lobby"), [props.director]);
-
-  return (
-    <>
-      <SectionTitle>{t("soundLab.music.state")}</SectionTitle>
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={state.running ? "accent" : "muted"}>{state.running ? t(`soundLab.music.${state.context}`) : t("soundLab.music.off")}</Badge>
-        <Badge tone="info">{t("soundLab.music.layers", { layers: state.layers })}</Badge>
-        {state.boost ? <Badge tone="warning">{t("soundLab.music.boost")}</Badge> : null}
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <Button variant="secondary" block onClick={() => music.start("lobby")}>
-          {t("soundLab.music.lobby")}
-        </Button>
-        <Button variant="secondary" block onClick={() => music.start("run")}>
-          {t("soundLab.music.run")}
-        </Button>
-        <Button variant="ghost" block onClick={() => music.stop()}>
-          <Pause size={16} />
-        </Button>
-      </div>
-      <div className="mt-3">
-        <ListGroup>
-          <Slider label={t("soundLab.music.intensity")} value={intensity} onChange={setIntensity} />
-          <ListItem title={t("soundLab.music.lowHp")} toggle={{ checked: lowHp, onChange: () => setLowHp(!lowHp) }} />
-        </ListGroup>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <Button variant="secondary" block onClick={() => music.setScene("pause")}>
-          {t("soundLab.music.pause")}
-        </Button>
-        <Button variant="secondary" block onClick={() => music.setScene("choice")}>
-          {t("soundLab.music.choice")}
-        </Button>
-        <Button variant="secondary" block onClick={() => music.setScene("play")}>
-          {t("soundLab.music.play")}
-        </Button>
-        <Button variant="secondary" block onClick={() => music.eliteBoost()}>
-          {t("soundLab.music.boost")}
-        </Button>
-        <Button variant="danger" block onClick={() => props.director.runEvent("death")}>
-          {t("soundLab.music.defeat")}
-        </Button>
-      </div>
-    </>
-  );
 }
 
 function FeedbackTab(): ReactNode {

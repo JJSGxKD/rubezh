@@ -1,5 +1,5 @@
-import { BUSES, MIX_RULES, SOUND_RECIPES, UI_SOUNDS, type BusId, type MixRules, type SoundId, type SoundRecipe } from "./recipes";
-import { filterNode, gainNode, renderRecipe, reverbImpulse } from "./synth";
+import { BUSES, MIX_RULES, SOUND_RECIPES, UI_SOUNDS, type BusGroup, type BusId, type MixRules, type SoundId, type SoundRecipe } from "./recipes";
+import { gainNode, renderRecipe, reverbImpulse } from "./synth";
 
 /**
  * Звуковой движок (docs/31-audio-and-haptics.md): шины, правила грани,
@@ -11,7 +11,6 @@ export interface AudioVolumes {
   master: number;
   effects: number;
   ui: number;
-  music: number;
 }
 
 export interface PlayOptions {
@@ -70,13 +69,18 @@ export class AudioEngine {
   effectsMuted = false;
   readonly stats = { starts: 0, dropped: 0 };
 
-  readonly reverbIn: GainNode;
-  readonly musicInput: GainNode;
-  readonly musicFilter: BiquadFilterNode;
+  /**
+   * Посыл в реверб — отдельный на каждую группу и после её регулятора. Реверб
+   * один на всех, и если слать в него прямо от голоса, регулятор группы
+   * глушит только сухой звук: хвост реверба уходит в компрессор в обход и
+   * звучит на нуле.
+   */
+  private readonly reverbSends: Record<BusGroup, GainNode>;
 
   private readonly master: GainNode;
   private readonly masterMeter: AnalyserNode;
-  private readonly groups: Record<"effects" | "ui" | "music", GainNode>;
+  private readonly reverbIn: GainNode;
+  private readonly groups: Record<BusGroup, GainNode>;
   private readonly buses = {} as Record<BusId, BusNodes>;
   private readonly bank = new Map<SoundId, AudioBuffer[]>();
   private readonly voices = new Map<SoundId, Voice[]>();
@@ -112,12 +116,12 @@ export class AudioEngine {
     convolver.buffer = reverbImpulse(ctx, 1.9);
     this.reverbIn = gainNode(ctx, 1);
     this.reverbIn.connect(convolver).connect(gainNode(ctx, 0.45)).connect(compressor);
+    this.reverbSends = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0) };
+    for (const send of Object.values(this.reverbSends)) send.connect(this.reverbIn);
 
-    this.groups = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0), music: gainNode(ctx, 0) };
+    this.groups = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0) };
     this.groups.effects.connect(compressor);
     this.groups.ui.connect(compressor);
-    this.musicFilter = filterNode(ctx, "lowpass", 16_000);
-    this.groups.music.connect(this.musicFilter).connect(compressor);
 
     for (const [id, bus] of Object.entries(BUSES) as [BusId, (typeof BUSES)[BusId]][]) {
       const input = gainNode(ctx, bus.level);
@@ -128,7 +132,6 @@ export class AudioEngine {
       duck.connect(meter);
       this.buses[id] = { input, duck, meter };
     }
-    this.musicInput = this.buses.music.input;
     compressor.connect(limiter).connect(this.master).connect(this.masterMeter).connect(ctx.destination);
   }
 
@@ -203,7 +206,7 @@ export class AudioEngine {
     const panner = this.ctx.createStereoPanner();
     panner.pan.value = options.pan ?? 0;
     source.connect(amp).connect(panner).connect(this.buses[recipe.bus].input);
-    if (recipe.send > 0) panner.connect(gainNode(this.ctx, recipe.send)).connect(this.reverbIn);
+    if (recipe.send > 0) panner.connect(gainNode(this.ctx, recipe.send)).connect(this.reverbSends[BUSES[recipe.bus].group]);
     source.start(when);
 
     live.push({ source, amp, end: when + buffer.duration / (options.rate ?? 1) });
@@ -218,9 +221,11 @@ export class AudioEngine {
   setVolumes(volumes: AudioVolumes): void {
     const t = this.ctx.currentTime;
     this.master.gain.setTargetAtTime(volumeCurve(volumes.master), t, 0.05);
-    this.groups.effects.gain.setTargetAtTime(volumeCurve(volumes.effects), t, 0.05);
-    this.groups.ui.gain.setTargetAtTime(volumeCurve(volumes.ui), t, 0.05);
-    this.groups.music.gain.setTargetAtTime(volumeCurve(volumes.music), t, 0.05);
+    for (const group of Object.keys(this.groups) as BusGroup[]) {
+      const level = volumeCurve(volumes[group]);
+      this.groups[group].gain.setTargetAtTime(level, t, 0.05);
+      this.reverbSends[group].gain.setTargetAtTime(level, t, 0.05);
+    }
   }
 
   activeVoices(): number {
