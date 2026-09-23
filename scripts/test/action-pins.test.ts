@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { checkPins, classifyUses, findUses } from "../action-pins.mjs";
+import { checkPins, classifyUses, findUses, tagCommitFromLsRemote, verifyPins } from "../action-pins.mjs";
 
 // Сторонние actions — только по SHA (docs/09-ci-cd.md §12): тег владелец
 // action может перевесить на другой код, SHA — нет.
@@ -165,5 +165,82 @@ describe("checkPins", () => {
       ".github/workflows/ci.yml:3",
       ".github/workflows/deploy.yaml:2",
     ]);
+  });
+});
+
+// Сверка SHA с тегом идёт по сети в pr-checks.yml; здесь — логика решения
+// с подставным источником тегов.
+describe("verifyPins", () => {
+  const OTHER = "34e114876b0b11c390a56381ad16ebd13914f8d5";
+
+  function pin(where: string, sha = SHA, version = "v4.4.0") {
+    return { kind: "pinned", repo: "actions/checkout", path: "actions/checkout", sha, version, where };
+  }
+
+  it("SHA, на который указывает тег из комментария, проходит", () => {
+    expect(verifyPins([pin("ci.yml:58")], () => SHA)).toEqual([]);
+  });
+
+  it("SHA не от этой версии — ошибка с обоими SHA и местом в файле", () => {
+    const [error] = verifyPins([pin("ci.yml:58", OTHER)], () => SHA);
+
+    expect(error).toContain("ci.yml:58");
+    expect(error).toContain(`указывает на ${SHA}`);
+    expect(error).toContain(`закреплён ${OTHER}`);
+  });
+
+  it("тега из комментария в репозитории нет — ошибка, а не молчаливый пропуск", () => {
+    expect(verifyPins([pin("ci.yml:58")], () => null)).toEqual([
+      "ci.yml:58 в actions/checkout нет тега v4.4.0: версия в комментарии ничем не подтверждена",
+    ]);
+  });
+
+  it("сбой при чтении тегов — ошибка на каждом месте, остальные actions всё равно сверяются", () => {
+    const pins = [pin("ci.yml:58"), pin("ci.yml:92"), { ...pin("ci.yml:60"), repo: "pnpm/action-setup", sha: OTHER }];
+    const resolve = (repo: string) => {
+      if (repo === "actions/checkout") throw new Error("git ls-remote не ответил за 30 секунд");
+      return OTHER;
+    };
+
+    expect(verifyPins(pins, resolve)).toEqual([
+      "ci.yml:58 actions/checkout: не удалось прочитать теги, SHA не сверен — git ls-remote не ответил за 30 секунд",
+      "ci.yml:92 actions/checkout: не удалось прочитать теги, SHA не сверен — git ls-remote не ответил за 30 секунд",
+    ]);
+  });
+
+  it("одна пара «репозиторий + версия» спрашивается один раз, сколько бы шагов её ни использовали", () => {
+    const asked: string[] = [];
+    const resolve = (repo: string, version: string) => {
+      asked.push(`${repo}@${version}`);
+      return SHA;
+    };
+
+    verifyPins([pin("ci.yml:58"), pin("ci.yml:92"), pin("ci.yml:115"), pin("sync-dev.yml:26", SHA, "v4.3.1")], resolve);
+
+    expect(asked).toEqual(["actions/checkout@v4.4.0", "actions/checkout@v4.3.1"]);
+  });
+});
+
+describe("tagCommitFromLsRemote", () => {
+  it("у аннотированного тега берёт коммит из строки ^{}, а не SHA объекта тега", () => {
+    const output = [`c336a2788d9774dccfdeb4823a5058ccc9f07453\trefs/tags/v4.3.0`, `${SHA}\trefs/tags/v4.3.0^{}`].join("\n");
+
+    expect(tagCommitFromLsRemote(output, "v4.3.0")).toBe(SHA);
+  });
+
+  it("у лёгкого тега строки ^{} нет — коммит в строке самого тега", () => {
+    expect(tagCommitFromLsRemote(`${SHA}\trefs/tags/v4.4.0\n`, "v4.4.0")).toBe(SHA);
+  });
+
+  it("не принимает тег с похожим именем", () => {
+    expect(tagCommitFromLsRemote(`${SHA}\trefs/tags/v4.4.0-beta\n`, "v4.4.0")).toBeNull();
+  });
+
+  it("пустой вывод — тега нет", () => {
+    expect(tagCommitFromLsRemote("", "v4.4.0")).toBeNull();
+  });
+
+  it("не спотыкается о перевод строки CRLF", () => {
+    expect(tagCommitFromLsRemote(`${SHA}\trefs/tags/v4.4.0\r\n`, "v4.4.0")).toBe(SHA);
   });
 });

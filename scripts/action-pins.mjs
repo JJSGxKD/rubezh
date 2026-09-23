@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,10 +14,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
  *
  *     uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
  *
- * Проверка идёт по тексту всех `.yml` в `.github/`, построчно, без разбора
- * YAML: строку с `uses:`, которую она не поняла, она считает ошибкой, а не
- * пропускает — иначе `{ uses: x@v4 }` прошёл бы мимо. Её прогоняет тест в
- * `pnpm test`, то есть гейт CI и локальный прогон перед PR.
+ * Проверок две:
+ *
+ * - по тексту всех `.yml` в `.github/` (`checkPins`) — построчно, без разбора
+ *   YAML: строку с `uses:`, которую проверка не поняла, она считает ошибкой, а
+ *   не пропускает — иначе `{ uses: x@v4 }` прошёл бы мимо. Её прогоняет тест
+ *   в `pnpm test`, то есть гейт CI и локальный прогон перед PR;
+ * - по сети (`--verify`, `verifyPins`) — SHA совпадает с тегом из
+ *   комментария в самом репозитории action. Идёт в `pr-checks.yml`: тестам
+ *   в сеть ходить нельзя.
  */
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -32,10 +38,13 @@ const USES_VALUE_RE = /^\s*(["']?)([^\s"'#]+)\1\s*(?:#\s*(.*?))?\s*$/;
 const USES_ANYWHERE_RE = /\buses["']?\s*:/;
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const verify = process.argv.includes("--verify");
   const report = checkPins(ROOT);
-  for (const problem of report.errors) console.error(`ошибка  ${problem}`);
-  console.log(`\nФайлов: ${report.files}, закреплённых actions: ${report.pins.length}, ошибок: ${report.errors.length}`);
-  if (report.errors.length > 0) process.exit(1);
+  const errors = [...report.errors, ...(verify ? verifyPins(report.pins, resolveTagCommit) : [])];
+  for (const problem of errors) console.error(`ошибка  ${problem}`);
+  const verified = verify ? ", сверено с тегами" : "";
+  console.log(`\nФайлов: ${report.files}, закреплённых actions: ${report.pins.length}${verified}, ошибок: ${errors.length}`);
+  if (errors.length > 0) process.exit(1);
 }
 
 export function checkPins(root) {
@@ -106,6 +115,101 @@ export function classifyUses(ref, comment) {
     );
   }
   return { kind: "pinned", repo, path, sha: pin, version: comment };
+}
+
+/**
+ * SHA из `uses:` — ровно тот коммит, на который в репозитории action указывает
+ * тег из комментария. Сорок знаков глазами не сверить, и без этой проверки
+ * ревьюер верит комментарию на слово. Она же отсекает коммит из форка: GitHub
+ * исполнит его и по пути исходного репозитория, а тег исходного репозитория
+ * на такой коммит не укажет.
+ *
+ * `resolveTag(repo, version)` отдаёт SHA коммита под тегом или null, если
+ * тега нет. Пара «репозиторий + версия» спрашивается один раз, сколько бы
+ * шагов её ни использовали. Сбой сети — тоже ошибка проверки, а не пропуск:
+ * непроверенный SHA не должен выглядеть проверенным.
+ */
+export function verifyPins(pins, resolveTag) {
+  const resolved = new Map();
+  const errors = [];
+
+  for (const pin of pins) {
+    const key = `${pin.repo}@${pin.version}`;
+    if (!resolved.has(key)) {
+      try {
+        resolved.set(key, { commit: resolveTag(pin.repo, pin.version) });
+      } catch (error) {
+        resolved.set(key, { failure: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
+    const { commit, failure } = resolved.get(key);
+    if (failure !== undefined) {
+      errors.push(`${pin.where} ${pin.repo}: не удалось прочитать теги, SHA не сверен — ${failure}`);
+    } else if (commit === null) {
+      errors.push(`${pin.where} в ${pin.repo} нет тега ${pin.version}: версия в комментарии ничем не подтверждена`);
+    } else if (commit !== pin.sha) {
+      errors.push(
+        `${pin.where} ${pin.repo}: тег ${pin.version} указывает на ${commit}, а закреплён ${pin.sha} — ` +
+          "это другая версия или коммит не из этого репозитория",
+      );
+    }
+  }
+  return errors;
+}
+
+/**
+ * Коммит под тегом из вывода `git ls-remote`. Аннотированный тег — отдельный
+ * объект, и коммит за ним стоит в строке `^{}`; у лёгкого тега такой строки
+ * нет, и коммит — в строке самого тега.
+ */
+export function tagCommitFromLsRemote(output, version) {
+  const refs = new Map(
+    output
+      .split(/\r?\n/)
+      .filter((line) => line.trim() !== "")
+      .map((line) => {
+        const [sha, ref] = line.split("\t");
+        return [ref, sha];
+      }),
+  );
+  return refs.get(`refs/tags/${version}^{}`) ?? refs.get(`refs/tags/${version}`) ?? null;
+}
+
+/**
+ * Теги — через `git ls-remote`, а не API: репозитории actions публичные, токен
+ * не нужен, лимита запросов нет. `repo` и `version` уже прошли проверку формата
+ * в `classifyUses`, так что в аргументы git не попадёт ничего похожего на ключ.
+ *
+ * Помощник учётных данных и запрос пароля выключены: на несуществующий
+ * репозиторий GitHub отвечает требованием авторизации, и без этого проверка
+ * повисла бы на вводе, а не упала.
+ */
+export function resolveTagCommit(repo, version) {
+  const ref = `refs/tags/${version}`;
+  let output;
+  try {
+    output = execFileSync(
+      "git",
+      ["-c", "credential.helper=", "ls-remote", "--tags", `https://github.com/${repo}`, ref, `${ref}^{}`],
+      {
+        encoding: "utf8",
+        timeout: 30_000,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      },
+    );
+  } catch (error) {
+    throw new Error(describeLsRemoteFailure(error), { cause: error });
+  }
+  return tagCommitFromLsRemote(output, version);
+}
+
+function describeLsRemoteFailure(error) {
+  if (error?.code === "ETIMEDOUT") return "git ls-remote не ответил за 30 секунд";
+  const stderr = String(error?.stderr ?? "").trim();
+  if (stderr.includes("could not read Username")) return "репозитория нет или он закрыт: GitHub потребовал авторизацию";
+  return stderr || String(error?.message ?? error);
 }
 
 function problem(message) {
