@@ -67,24 +67,19 @@ const schema = z.object({
     .default("false")
     .transform((value) => value === "true"),
 
-  // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
-  // Выключены по умолчанию: без токена бота игрока не проверить.
+  // Плейтест: сводка, отчёты о запуске, стресс-тест для всех
+  // (docs/26-stage2-plan.md, WP14). Забеги и рейтинг — модуль runs под
+  // авторизацией, поэтому плейтест без неё не включается.
   PLAYTEST_ENABLED: z
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
   TELEGRAM_BOT_TOKEN: z.string().default(""),
-  // Сколько живут данные запуска Telegram. Для плейтеста — сутки: итог забега
-  // уходит через десять минут после открытия приложения, а короткое окно из
-  // INIT_DATA_EXPIRES_IN рассчитано на обмен на токен сразу при входе.
-  PLAYTEST_INIT_DATA_MAX_AGE_SEC: z.coerce.number().int().positive().default(86_400),
-  // Через сколько дней без записей данные плейтеста исчезают сами.
+  // Через сколько дней без записей данные сводки плейтеста исчезают сами.
   PLAYTEST_DATA_TTL_DAYS: z.coerce.number().int().positive().default(45),
-  // Вход без Telegram по заголовку — только для локальной разработки в браузере.
-  PLAYTEST_DEV_AUTH: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
+  // Переименована в AUTH_DEV_LOGIN: вход разработчика теперь заводит аккаунт,
+  // а не подписывает запросы плейтеста.
+  PLAYTEST_DEV_AUTH: z.string().default(""),
 
   // Адрес Bot API. Пусто — облако Telegram; свой адрес нужен тем, кто держит
   // локальный сервер Bot API (docs/20-env-and-ports.md §3.1): у него другой
@@ -280,9 +275,7 @@ export interface AppConfig {
   };
   playtest: {
     enabled: boolean;
-    initDataMaxAgeSec: number;
     dataTtlSec: number;
-    devAuth: boolean;
     stats: {
       enabled: boolean;
       /** минута суток в поясе команды; `null` — сводка только по команде */
@@ -369,8 +362,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   // У секретов не бывает значений по умолчанию: включённая функция без
   // токена не стартует, а не «пока сойдёт» (docs/20-env-and-ports.md §1,
   // правило 4).
-  if (parsed.PLAYTEST_ENABLED && parsed.TELEGRAM_BOT_TOKEN === "") {
-    throw new Error("PLAYTEST_ENABLED=true требует непустого TELEGRAM_BOT_TOKEN: без него игрока не проверить");
+  if (parsed.PLAYTEST_ENABLED && !parsed.AUTH_ENABLED) {
+    throw new Error("PLAYTEST_ENABLED=true требует AUTH_ENABLED=true: забеги и отчёты о запуске приходят под аккаунтом");
   }
   if (parsed.PLAYTEST_STATS_CHAT_ID !== "") {
     throw new Error("PLAYTEST_STATS_CHAT_ID переименована в ADMIN_CHAT_ID: чат администраторов получает не только сводку");
@@ -390,11 +383,13 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if ((parsed.EVENTS_INGEST_ENABLED || parsed.DIAGNOSTICS_INGEST_ENABLED) && parsed.DATABASE_URL === "") {
     throw new Error("Приёмники событий и отчётов пишут в Postgres: включённый приёмник требует DATABASE_URL");
   }
-  // Вход по заголовку без подписи — дыра, если попадёт куда-то кроме машины
-  // разработчика. Процесс не поднимается, а не «предупреждает».
-  if (parsed.PLAYTEST_DEV_AUTH && parsed.NODE_ENV !== "development") {
-    throw new Error("PLAYTEST_DEV_AUTH=true допустим только при NODE_ENV=development");
+  // Молча игнорировать нельзя только включённую: у всей команды в `.env`
+  // осталась строка "false" из прошлого `.env.example`.
+  if (parsed.PLAYTEST_DEV_AUTH === "true") {
+    throw new Error("PLAYTEST_DEV_AUTH переименована в AUTH_DEV_LOGIN: вход разработчика теперь заводит аккаунт");
   }
+  // Вход без подписи — дыра, если попадёт куда-то кроме машины разработчика.
+  // Процесс не поднимается, а не «предупреждает».
   if (parsed.AUTH_DEV_LOGIN && parsed.NODE_ENV !== "development") {
     throw new Error("AUTH_DEV_LOGIN=true допустим только при NODE_ENV=development");
   }
@@ -456,9 +451,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     },
     playtest: {
       enabled: parsed.PLAYTEST_ENABLED,
-      initDataMaxAgeSec: parsed.PLAYTEST_INIT_DATA_MAX_AGE_SEC,
       dataTtlSec: parsed.PLAYTEST_DATA_TTL_DAYS * 24 * 60 * 60,
-      devAuth: parsed.PLAYTEST_DEV_AUTH,
       stats: {
         enabled: parsed.PLAYTEST_STATS_ENABLED,
         dailyAtMin: parsed.PLAYTEST_STATS_DAILY_AT === "" ? null : minuteOfDay(parsed.PLAYTEST_STATS_DAILY_AT),

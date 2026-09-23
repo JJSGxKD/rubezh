@@ -1,4 +1,4 @@
-import { DIFFICULTIES, type Difficulty, type StoredRun } from "../../src/modules/playtest/playtest.store.js";
+import { DIFFICULTIES, type Difficulty } from "../../src/modules/runs/run-rules.js";
 import {
   DURATION_BUCKETS_MIN,
   dayKey,
@@ -6,6 +6,7 @@ import {
   type DifficultyAggregate,
   type PlaytestStatsStore,
   type SessionRecord,
+  type StatsRun,
   type StatsSnapshot,
   type StoredDevice,
   type StressSummary,
@@ -44,7 +45,7 @@ export class MemoryPlaytestStatsStore implements PlaytestStatsStore {
     this.devices.set(session.installId, session.device);
   }
 
-  async recordRun(playerId: string, run: StoredRun, nowMs: number): Promise<void> {
+  async recordRun(playerId: string, run: StatsRun, nowMs: number): Promise<void> {
     this.check();
     const day = dayKey(nowMs, this.offsetMin);
     this.played.add(playerId);
@@ -61,7 +62,7 @@ export class MemoryPlaytestStatsStore implements PlaytestStatsStore {
     this.difficulties.set(run.difficultyId, aggregate);
 
     this.weapons[run.startingWeaponId] = (this.weapons[run.startingWeaponId] ?? 0) + 1;
-    if (run.deathCause !== undefined && run.deathCause !== null) {
+    if (run.deathCause !== null) {
       this.deaths[run.deathCause] = (this.deaths[run.deathCause] ?? 0) + 1;
     }
   }

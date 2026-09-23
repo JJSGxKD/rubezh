@@ -12,7 +12,7 @@ import { PlaytestStatsService } from "../src/modules/playtest/playtest-stats.ser
 import { chatTargetOf, type ChatRef } from "../src/modules/telegram/chat-target.js";
 import { TelegramApiError, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
 import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
-import { MemoryPlaytestStore } from "./helpers/memory-playtest.store.js";
+import { MemoryLeaderboardStore } from "./helpers/memory-runs.js";
 
 // Сводка плейтеста в Telegram: кому отвечать, когда слать отчёт.
 
@@ -146,7 +146,7 @@ describe("сводка в Telegram", () => {
     locks = new MemoryLocks();
     api = fakeApi();
     router = new BotRouter();
-    const stats = new PlaytestStatsService(new MemoryPlaytestStatsStore(), new MemoryPlaytestStore(), cfg);
+    const stats = new PlaytestStatsService(new MemoryPlaytestStatsStore(), new MemoryLeaderboardStore(), cfg);
     reporter = new PlaytestStatsReporter(cfg, stats, router, locks, api);
     reporter.onModuleInit();
   });

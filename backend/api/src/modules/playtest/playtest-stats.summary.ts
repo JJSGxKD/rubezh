@@ -1,4 +1,4 @@
-import { DIFFICULTIES, type Difficulty } from "./playtest.store.js";
+import { DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
 import { DURATION_BUCKETS_MIN, dayKey, type DifficultyAggregate, type StatsSnapshot } from "./playtest-stats.store.js";
 
 /**
