@@ -172,6 +172,33 @@ const schema = z.object({
   // без потолка список сессий рос бы бесконечно.
   AUTH_MAX_SESSIONS: z.coerce.number().int().min(1).max(50).default(10),
 
+  // Пороги антифрода забегов, фаза 1 (docs/34-stage3-plan.md, WP4, Р7).
+  //
+  // В коде — только структура проверок, а числа — здесь: опубликованный порог
+  // говорит читеру, сколько ровно можно. Умолчания нарочно мягкие и ловят
+  // лишь невозможное: замер по 108 забегам ботов (три сложности, три
+  // стартовых оружия, два уровня игры) дал максимум 8,6 убийства в секунду и
+  // 4,6 уровня в минуту, умолчания взяты с пятикратным запасом. Боевые
+  // значения задаются окружением прода.
+  RUNS_MAX_KILLS_PER_SEC: z.coerce.number().positive().default(40),
+  RUNS_MAX_LEVELS_PER_MIN: z.coerce.number().positive().default(12),
+  // Сборки, чьи забеги принимаются без вопросов: отпечатки контента через
+  // запятую. Пусто — проверка выключена. Незнакомый отпечаток — не отказ, а
+  // `suspicious`: новая сборка могла выйти раньше, чем обновили список.
+  RUNS_KNOWN_CONTENT_HASHES: z
+    .string()
+    .default("")
+    .transform((value) => value.split(",").map((hash) => hash.trim()).filter((hash) => hash !== "")),
+  // Запас на заявленное время выживания сверх прошедшего по часам сервера.
+  // Честный забег длиннее прошедшего времени не бывает: пауза в игровое время
+  // не идёт. Запас — на округление и на опоздание сообщения о старте.
+  RUNS_WALL_CLOCK_TOLERANCE_SEC: z.coerce.number().min(0).max(300).default(10),
+  // Насколько поздно может прийти сообщение о старте, чтобы ему ещё верить.
+  // Пришло позже — время забега не проверяется: иначе честный игрок, у
+  // которого старт пролежал в очереди без сети, получил бы «дольше, чем
+  // прошло».
+  RUNS_START_MAX_DELAY_SEC: z.coerce.number().min(0).max(600).default(30),
+
   // Администраторы — Telegram ID через запятую (docs/28-diagnostics.md §6.1.1).
   // Список не секрет; мусор в нём — процесс не поднимается, пустой — функции
   // администратора выключены.
@@ -233,6 +260,14 @@ export interface AppConfig {
     initDataMaxAgeSec: number;
     /** сколько устройств помнит аккаунт */
     maxSessions: number;
+  };
+  runs: {
+    maxKillsPerSec: number;
+    maxLevelsPerMin: number;
+    /** пусто — проверка отпечатка контента выключена */
+    knownContentHashes: ReadonlySet<string>;
+    wallClockToleranceSec: number;
+    startMaxDelaySec: number;
   };
   playtest: {
     enabled: boolean;
@@ -391,6 +426,13 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       refreshTtlSec: parsed.AUTH_REFRESH_TTL_DAYS * 24 * 60 * 60,
       initDataMaxAgeSec: parsed.AUTH_INIT_DATA_MAX_AGE_SEC,
       maxSessions: parsed.AUTH_MAX_SESSIONS,
+    },
+    runs: {
+      maxKillsPerSec: parsed.RUNS_MAX_KILLS_PER_SEC,
+      maxLevelsPerMin: parsed.RUNS_MAX_LEVELS_PER_MIN,
+      knownContentHashes: new Set(parsed.RUNS_KNOWN_CONTENT_HASHES),
+      wallClockToleranceSec: parsed.RUNS_WALL_CLOCK_TOLERANCE_SEC,
+      startMaxDelaySec: parsed.RUNS_START_MAX_DELAY_SEC,
     },
     playtest: {
       enabled: parsed.PLAYTEST_ENABLED,
