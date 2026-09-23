@@ -5,11 +5,14 @@ import { DisabledError, RateLimitedError, ValidationError } from "../../common/d
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { AUTH_LIMITS } from "./auth-limits.js";
 import { AuthGuard, accountOf } from "./auth.guard.js";
+import { Public } from "../roles/permission.guard.js";
 import { AuthService } from "./auth.service.js";
 import { refreshSchema, telegramLoginSchema } from "./dto/auth.dto.js";
 
 /**
- * Вход, продление и выход (docs/34-stage3-plan.md, WP1). В контроллере нет
+ * Вход, продление и выход (docs/34-stage3-plan.md, WP1). Вход, продление и
+ * выход открыты по сути: токена у игрока в этот момент ещё нет, а защищают их
+ * подпись запуска и лимит частоты. В контроллере нет
  * логики — только разбор границы и форма ответа
  * (docs/15-engineering-standards.md §2.3).
  *
@@ -43,6 +46,7 @@ export class AuthController {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
+  @Public()
   @Post("telegram")
   async telegram(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SessionView }> {
     this.ensureEnabled();
@@ -52,6 +56,7 @@ export class AuthController {
     return { data: view(await this.service.loginWithTelegram(initData)) };
   }
 
+  @Public()
   @Post("refresh")
   async refresh(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SessionView }> {
     this.ensureEnabled();
@@ -61,6 +66,7 @@ export class AuthController {
     return { data: view(await this.service.refreshSession(refreshToken)) };
   }
 
+  @Public()
   @Post("logout")
   async logout(@Body() body: unknown): Promise<{ data: { loggedOut: true } }> {
     this.ensureEnabled();
