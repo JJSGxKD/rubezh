@@ -97,8 +97,8 @@ jobs:
       - run: docker build --file backend/api/Dockerfile --tag rubezh-api:pr .
 
   # Версия по типу изменений в PR (docs/09-ci-cd.md §8.1): из main — стабильная
-  # vX.Y.Z, из dev — предрелиз vX.Y.Z-rc.N. Доведён до тега, GitHub Release,
-  # образа в GHCR и артефакта клиента; деплой НЕ вызывается — deploy-*.yml ещё
+  # vX.Y.Z, из dev — предрелиз vX.Y.Z-rc.N. Доведён до тега, образа в GHCR,
+  # GitHub Release и артефакта клиента; деплой НЕ вызывается — deploy-*.yml ещё
   # не существует (пакет выпуска, docs/26-stage2-plan.md §6). Матрица сборок по
   # платформам (§1) — там же: `pnpm build` ниже собирает всё одним прогоном.
   release:
@@ -134,63 +134,111 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_CHANNEL: ${{ github.ref == 'refs/heads/dev' && 'prerelease' || 'stable' }}
 
+      # Выпускается только вершина ветки (docs/09-ci-cd.md §8.1, «Выпускается
+      # вершина ветки»): если, пока прогон ждал в очереди, в ветку влили
+      # следующий PR, эти изменения выпустит прогон новой вершины — вместе с
+      # меткой этого PR. Собирать то, что не будет выпущено, незачем.
+      - if: steps.version.outputs.has_release == 'true'
+        name: Проверить вершину ветки
+        id: tip
+        run: node scripts/release/release-tag.mjs check
+        env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+
       # Пересборка с настоящей версией: гейт выше собирал без неё, а версия
       # обязана попасть в бандл, события и отчёты (docs/09-ci-cd.md §8.1,
       # «Версия не коммитится обратно в репозиторий»).
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         run: pnpm install --frozen-lockfile
 
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         run: pnpm build
         env:
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
 
       # Артефакт клиента: то, что раскатывается на статику, берётся из этого
       # же прогона — пересборка перед деплоем запрещена (docs/09-ci-cd.md §7).
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         run: tar -czf "rubezh-web-telegram-${{ steps.version.outputs.version }}.tar.gz" -C apps/web-telegram/dist .
 
       # Имя пакета в GHCR должно быть в нижнем регистре, а владелец
       # репозитория пишется как есть — отсюда приведение регистра.
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         id: image
         run: echo "name=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/rubezh-api" >> "$GITHUB_OUTPUT"
 
+      # Образ собирается здесь, а публикуется после тега: до тега наружу не
+      # уходит ничего с номером версии (docs/09-ci-cd.md §8.1, «Порядок
+      # публикации»).
+      - if: steps.tip.outputs.current == 'true'
+        run: >-
+          docker build --file backend/api/Dockerfile
+          --tag "${IMAGE}:${VERSION}"
+          --tag "${IMAGE}:sha-${GITHUB_SHA::12}" .
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ steps.version.outputs.version }}
+
+      # Тег — первым из того, что видно снаружи: отказать может именно он
+      # (GitHub сверяет новый ref с workflow вершин веток), и отказ не должен
+      # оставить в реестре образ под номером, которого нет в git. Ветка ушла
+      # за время сборки — тега нет, created=false, и дальше ничего не
+      # публикуется: это не ошибка, а тот же обгон, что и выше.
+      - if: steps.tip.outputs.current == 'true'
+        name: Поставить тег
+        id: tag
+        run: node scripts/release/release-tag.mjs create
+        env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+
+      # Черновик не виден снаружи и не рассылает уведомлений: релиз появится,
+      # когда опубликован и образ. Артефакт клиента живёт у релиза, а не среди
+      # артефактов прогона: у последних срок хранения ограничен, а откат на
+      # версию месячной давности должен работать (docs/09-ci-cd.md §8.1,
+      # «Права»).
+      - if: steps.tag.outputs.created == 'true'
+        name: Черновик релиза
+        run: >-
+          gh release create "$VERSION" "rubezh-web-telegram-${VERSION}.tar.gz"
+          --draft --verify-tag --generate-notes
+          ${{ steps.version.outputs.prerelease == 'true' && '--prerelease' || '' }}
+          ${{ steps.version.outputs.previous_tag != '' && format('--notes-start-tag {0}', steps.version.outputs.previous_tag) || '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+
       # Токен передаётся через окружение, а не подставляется в текст команды:
-      # так он не окажется в трассировке шага (docs/09-ci-cd.md §12).
-      - if: steps.version.outputs.has_release == 'true'
+      # так он не окажется в трассировке шага (docs/09-ci-cd.md §12). Образ
+      # под sha — первым, под номером версии — последним: оборвись push
+      # посередине, в реестре останется только образ, версию не объявляющий.
+      - if: steps.tag.outputs.created == 'true'
+        name: Опубликовать образ
+        id: publish_image
         run: |
-          docker build --file backend/api/Dockerfile \
-            --tag "${IMAGE}:${VERSION}" \
-            --tag "${IMAGE}:sha-${GITHUB_SHA::12}" .
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push --all-tags "${IMAGE}"
+          docker push "${IMAGE}:sha-${GITHUB_SHA::12}"
+          docker push "${IMAGE}:${VERSION}"
         env:
           GH_TOKEN: ${{ github.token }}
           IMAGE: ${{ steps.image.outputs.name }}
           VERSION: ${{ steps.version.outputs.version }}
 
-      # Тег ставится после успешной сборки и публикации образа — иначе
-      # появляется тег, по которому нечего деплоить (docs/09-ci-cd.md §8.1,
-      # «Ловушки»).
-      - if: steps.version.outputs.has_release == 'true'
-        run: |
-          git tag ${{ steps.version.outputs.version }}
-          git push origin ${{ steps.version.outputs.version }}
-
-      - if: steps.version.outputs.has_release == 'true'
-        run: >-
-          gh release create ${{ steps.version.outputs.version }}
-          --generate-notes
-          ${{ steps.version.outputs.prerelease == 'true' && '--prerelease' || '' }}
-          ${{ steps.version.outputs.previous_tag != '' && format('--notes-start-tag {0}', steps.version.outputs.previous_tag) || '' }}
+      - if: steps.tag.outputs.created == 'true'
+        name: Опубликовать релиз
+        run: gh release edit "$VERSION" --draft=false
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
 
-      # Артефакт живёт у релиза, а не среди артефактов прогона: у последних
-      # срок хранения ограничен, а откат на версию месячной давности должен
-      # работать (docs/09-ci-cd.md §8.1, «Права»).
-      - if: steps.version.outputs.has_release == 'true'
-        run: gh release upload ${{ steps.version.outputs.version }} "rubezh-web-telegram-${{ steps.version.outputs.version }}.tar.gz"
+      # Сбой после тега: пока образа под номером нет, тег и черновик
+      # удаляются, и номер достаётся следующему прогону; образ уже в реестре —
+      # тег остаётся при нём (docs/09-ci-cd.md §8.1, «Порядок публикации»).
+      - if: (failure() || cancelled()) && steps.tag.outputs.created == 'true'
+        name: Откатить тег
+        run: node scripts/release/release-tag.mjs rollback
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          IMAGE_PUSHED: ${{ steps.publish_image.outcome == 'success' }}
