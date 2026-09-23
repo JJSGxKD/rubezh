@@ -31,7 +31,8 @@ jobs:
     # поэтому локальный `pnpm test` работает и без контейнеров.
     #
     # Образы — те же версия и digest, что в docker-compose.yml: CI проверяет
-    # ту базу, на которой идёт разработка (docs/09-ci-cd.md §12).
+    # ту базу, на которой идёт разработка (docs/09-ci-cd.md §12). Разойтись
+    # им не даёт scripts/image-pins.mjs.
     services:
       postgres:
         image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24

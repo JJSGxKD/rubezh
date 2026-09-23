@@ -292,6 +292,7 @@
 | Порог теста производительности симуляции | `packages/core-game/test/perf-budget.test.ts` |
 | Эталон забега и контрольная сумма | `test/run-summary.test.ts`, `test/determinism.test.ts` |
 | Правила границ слоёв | `scripts/test/layer-boundaries.test.ts` → `RULES` |
+| Закрепление Docker-образов: где ищутся и что считается ошибкой | `scripts/image-pins.mjs` → `fileKind`, `classifyImage`; запуск — `node scripts/image-pins.mjs`, в гейте — `scripts/test/image-pins.test.ts` |
 | Шаги гейта в CI | `.github/workflows/ci.yml` |
 
 Гейт целиком:
