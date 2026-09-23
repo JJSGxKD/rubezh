@@ -150,7 +150,8 @@ function rollback() {
 
   if (rollbackPlan({ imagePushed: process.env.IMAGE_PUSHED === "true" }) === "keep") {
     writeSummary(
-      `Тег ${version} и образ опубликованы, релиз — нет. Выложить черновик: \`gh release edit ${version} --draft=false\``,
+      `Тег ${version} и образ опубликованы, релиз — нет. Выложить черновик: \`gh release edit ${version} --draft=false\`. ` +
+        "Перезапускать джоб не нужно: тег занят, и прогон посчитает уже следующий номер.",
     );
     return;
   }
