@@ -40,7 +40,7 @@ const SEPARATOR = "———————";
  * Раздел `## Заголовок` из описания PR — до следующего заголовка второго
  * уровня. Нет раздела или он пуст — `null`: отправлять нечего, и это не
  * ошибка (служебные PR сводку не пишут). HTML-комментарии — подсказки шаблона
- * — вырезаются.
+ * — вырезаются, подпись генератора в хвосте — тоже.
  */
 export function extractSection(body, title) {
   if (typeof body !== "string" || body === "") return null;
@@ -50,8 +50,46 @@ export function extractSection(body, title) {
 
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((line) => /^##\s/.test(line));
-  const section = (end < 0 ? rest : rest.slice(0, end)).join("\n").replace(/<!--[\s\S]*?-->/g, "").trim();
+  const text = (end < 0 ? rest : rest.slice(0, end)).join("\n").replace(/<!--[\s\S]*?-->/g, "");
+  const section = withoutGeneratorSignature(text).trim();
   return section === "" ? null : section;
+}
+
+/**
+ * Подписи, которые генераторы дописывают последней строкой описания PR. По
+ * шаблону последние разделы — сводка и пост, так что подпись попадает в них
+ * и уехала бы в чат команды и в черновик для канала.
+ *
+ * Список явный, а не общий признак вроде черты `---`: черта бывает и
+ * законной частью текста, а подпись — единственное, про что точно известно,
+ * что это не наше. Новый генератор — новая строка здесь.
+ */
+const GENERATOR_SIGNATURES = [/^🤖 Generated with\b/u];
+const HORIZONTAL_RULE = /^(?:-{3,}|\*{3,}|_{3,})$/;
+
+/**
+ * Текст без подписи генератора в хвосте — вместе с пустыми строками и чертой
+ * `---` перед ней, которую ставят, чтобы отделить подпись. Такая же строка
+ * посреди текста остаётся: отрезается только хвост. Подписи нет — текст
+ * возвращается как есть, черта в конце тоже.
+ */
+function withoutGeneratorSignature(text) {
+  const lines = text.split("\n");
+  let end = lines.length;
+  let signed = false;
+  while (end > 0) {
+    const line = lines[end - 1].trim();
+    if (line === "") {
+      end--;
+    } else if (GENERATOR_SIGNATURES.some((signature) => signature.test(line))) {
+      end--;
+      signed = true;
+    } else {
+      if (signed && HORIZONTAL_RULE.test(line)) end--;
+      break;
+    }
+  }
+  return signed ? lines.slice(0, end).join("\n") : text;
 }
 
 /**

@@ -65,6 +65,61 @@ describe("раздел из описания PR", () => {
   });
 });
 
+describe("подпись генератора в конце описания", () => {
+  // Агент дописывает подпись последней строкой описания, а по шаблону
+  // последние разделы — сводка и пост. Без обрезки подпись уезжает в чат
+  // команды и в черновик для публичного канала (так было в PR #51).
+  const SIGNATURE = "🤖 Generated with [Claude Code](https://claude.com/claude-code)";
+  const TEAM = `## ${TEAM_SECTION}\n📋 **СВОДКА**\n\nтекст сводки`;
+  const CHANNEL = `## ${CHANNEL_SECTION}\n🎮 **ПОСТ**\n\nтекст поста`;
+
+  it("отрезается от сводки, если она последний раздел", () => {
+    expect(extractSection(`${TEAM}\n\n${SIGNATURE}\n`, TEAM_SECTION)).toBe("📋 **СВОДКА**\n\nтекст сводки");
+  });
+
+  it("отрезается от поста в канал, если он последний раздел", () => {
+    expect(extractSection(`${TEAM}\n\n${CHANNEL}\n\n${SIGNATURE}`, CHANNEL_SECTION)).toBe("🎮 **ПОСТ**\n\nтекст поста");
+  });
+
+  it("не доходит ни до чата команды, ни до черновика", () => {
+    const team = parseChatTarget("-1001234567890:57");
+    const drafts = parseChatTarget("-1001234567890:142");
+
+    const { messages } = plannedMessages(`${TEAM}\n\n${CHANNEL}\n\n${SIGNATURE}`, { team, drafts });
+
+    expect(messages.length).toBeGreaterThan(0);
+    expect(messages.every((message: { text: string }) => !message.text.includes("Generated with"))).toBe(true);
+  });
+
+  it("черта перед подписью уходит вместе с ней", () => {
+    expect(extractSection(`${TEAM}\n\n---\n\n${SIGNATURE}`, TEAM_SECTION)).toBe("📋 **СВОДКА**\n\nтекст сводки");
+  });
+
+  it("раздел без подписи не меняется, даже с чертой в конце: черта сама по себе не подпись", () => {
+    expect(extractSection(`${TEAM}\n\n---`, TEAM_SECTION)).toBe("📋 **СВОДКА**\n\nтекст сводки\n\n---");
+    expect(extractSection(BODY, TEAM_SECTION)).toBe("📋 **СВОДКА: В DEV ВЛИТ PR #50**\n\nКороткое вступление.\n\n🔐 **Раздел**\n\nТекст с `кодом`.");
+  });
+
+  it("раздел не последний — подпись в конце описания его не задевает", () => {
+    const body = `${TEAM}\n\n${CHANNEL}\n\n${SIGNATURE}`;
+
+    expect(extractSection(body, TEAM_SECTION)).toBe(extractSection(`${TEAM}\n\n${CHANNEL}`, TEAM_SECTION));
+  });
+
+  it("такая же строка посреди раздела остаётся: отрезается только хвост", () => {
+    const section = extractSection(`${TEAM}\n\n${SIGNATURE}\n\nпоследний абзац`, TEAM_SECTION);
+
+    expect(section).toContain(SIGNATURE);
+    expect(section?.endsWith("последний абзац")).toBe(true);
+  });
+
+  it("раздел из одной подписи — пустой: забытый в шаблоне пост не уходит черновиком", () => {
+    const body = `${TEAM}\n\n## ${CHANNEL_SECTION}\n<!-- не нужен — удалить раздел -->\n\n${SIGNATURE}`;
+
+    expect(extractSection(body, CHANNEL_SECTION)).toBeNull();
+  });
+});
+
 describe("разметка для Telegram", () => {
   it("жирный, код и ссылки — в теги Bot API", () => {
     expect(toTelegramHtml("**важно** и `pnpm test`, см. [план](https://example.org/plan)")).toBe(
