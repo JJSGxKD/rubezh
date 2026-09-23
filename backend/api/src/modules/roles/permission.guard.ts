@@ -1,34 +1,15 @@
-import { CanActivate, ExecutionContext, Injectable, SetMetadata, type CustomDecorator } from "@nestjs/common";
+import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
+import { PERMISSION_METADATA } from "../../common/access.js";
 import { accountOf } from "../auth/auth.guard.js";
 import type { Permission } from "./permissions.js";
 import { RolesService } from "./roles.service.js";
 
 /**
- * Право на эндпоинте (docs/29-admin-panel.md §3.4, «закрыто по умолчанию»).
+ * Проверка права на маршруте. Сами декораторы — в `common/access.ts`: они
+ * метаданные и ничего не тянут за собой, а этот гвард тянет сервис ролей и
+ * через него базу.
  *
- * Каждый маршрут объявляет либо требуемое право, либо явную публичность.
- * Маршрут, не объявивший ничего, — не «забыли», а падающий тест
- * (`backend/api/test/route-permissions.test.ts`): забытая проверка тихо
- * открывает эндпоинт, и заметить это по коду невозможно.
- *
- * `@Public()` не значит «без защиты»: приёмники телеметрии и плейтеста
- * проверяют подпись запуска своими гвардами, а вход и здоровье открыты по
- * сути. Значит она ровно одно — решение принято осознанно.
- */
-
-export const PERMISSION_METADATA = "rubezh:permission";
-export const PUBLIC_METADATA = "rubezh:public";
-
-export function RequirePermission(permission: Permission): CustomDecorator<string> {
-  return SetMetadata(PERMISSION_METADATA, permission);
-}
-
-export function Public(): CustomDecorator<string> {
-  return SetMetadata(PUBLIC_METADATA, true);
-}
-
-/**
  * Ставится **после** `AuthGuard`: аккаунт в запрос кладёт он, и без него
  * проверять права не у кого.
  */

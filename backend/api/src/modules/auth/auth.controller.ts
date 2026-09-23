@@ -5,7 +5,7 @@ import { DisabledError, RateLimitedError, ValidationError } from "../../common/d
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { AUTH_LIMITS } from "./auth-limits.js";
 import { AuthGuard, accountOf } from "./auth.guard.js";
-import { Public } from "../roles/permission.guard.js";
+import { Public } from "../../common/access.js";
 import { AuthService } from "./auth.service.js";
 import { refreshSchema, telegramLoginSchema } from "./dto/auth.dto.js";
 

@@ -6,7 +6,7 @@ import { DisabledError, UnauthorizedError } from "../../common/domain-error.js";
 import { REDIS } from "../../infra/redis.js";
 import { updateSchema } from "../telegram/telegram-bot-api.js";
 import { BotRouter } from "./bot-router.js";
-import { Public } from "../roles/permission.guard.js";
+import { Public } from "../../common/access.js";
 
 /**
  * Вебхук бота (docs/28-diagnostics.md §6.1.3–§6.1.4).

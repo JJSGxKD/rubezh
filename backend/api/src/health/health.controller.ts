@@ -1,5 +1,5 @@
 import { Controller, Get } from "@nestjs/common";
-import { Public } from "../modules/roles/permission.guard.js";
+import { Public } from "../common/access.js";
 
 @Controller("health")
 export class HealthController {

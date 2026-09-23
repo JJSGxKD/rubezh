@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { describe, expect, it } from "vitest";
 import type { Type } from "@nestjs/common";
 import { AppModule } from "../src/app.module.js";
-import { PERMISSION_METADATA, PUBLIC_METADATA } from "../src/modules/roles/permission.guard.js";
+import { PERMISSION_METADATA, PUBLIC_METADATA } from "../src/common/access.js";
 import { PERMISSIONS } from "../src/modules/roles/permissions.js";
 
 /**
