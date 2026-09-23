@@ -31,8 +31,21 @@ describe("настройки dev-сервера", () => {
   it("без переменных слушает только петлю и не просит сертификат", () => {
     const { server, preview } = config({});
 
-    expect(server).toEqual({ port: 5173, strictPort: true });
-    expect(preview).toEqual({ port: 5173, strictPort: true });
+    for (const options of [server, preview]) {
+      expect(options.host).toBeUndefined();
+      expect(options.https).toBeUndefined();
+      expect(options.allowedHosts).toBeUndefined();
+    }
+    expect(server.hmr).toBeUndefined();
+  });
+
+  it("отдаёт политику источников: мягкую на dev-сервере, строгую на просмотре сборки", () => {
+    // Строгая — на просмотре собранной версии: если сборка под ней ломается,
+    // это видно на машине разработчика, а не у тестера.
+    const { server, preview } = config({});
+
+    expect(server.headers?.["content-security-policy"]).toContain("'unsafe-inline'");
+    expect(preview.headers?.["content-security-policy"]).toMatch(/script-src 'self';/);
   });
 
   it("с туннелем пускает его домен и уводит туда HMR", () => {
