@@ -77,11 +77,6 @@ export function postComment(number, body) {
   gh(["pr", "comment", String(number), "--body", body]);
 }
 
-export function createTag(tag) {
-  git(["tag", tag]);
-  git(["push", "origin", tag]);
-}
-
 export function remoteBranchExists(branch) {
   return git(["ls-remote", "--heads", "origin", branch]) !== "";
 }
@@ -108,10 +103,4 @@ export function openPullRequestExists(head, base) {
 
 export function createPullRequest({ head, base, title, body }) {
   return gh(["pr", "create", "--head", head, "--base", base, "--title", title, "--body", body]);
-}
-
-export function createRelease(tag, notesStartTag) {
-  const args = ["release", "create", tag, "--generate-notes"];
-  if (notesStartTag) args.push("--notes-start-tag", notesStartTag);
-  gh(args);
 }
