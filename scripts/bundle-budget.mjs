@@ -63,7 +63,11 @@ function measure() {
   const isJs = (name) => name.endsWith(".js");
 
   const budgets = [
-    { name: "Оболочка, первая загрузка", limitKb: 150, matches: (name) => firstLoad.has(name) },
+    // 152, а не 150: порог поднят на этапе 3 вместе с проверкой версии
+    // клиента и экраном обновления (docs/27-design-system-and-app-shell.md
+    // §3.4). Запас снова почти нулевой — следующая правка первой загрузки
+    // упрётся сюда же, и это по замыслу.
+    { name: "Оболочка, первая загрузка", limitKb: 152, matches: (name) => firstLoad.has(name) },
     { name: "CSS", limitKb: 30, matches: (name) => name.endsWith(".css") },
     {
       name: "Экраны по требованию",

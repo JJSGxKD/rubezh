@@ -72,6 +72,24 @@ export function OutsideScreen(props: { botUrl: string }): ReactNode {
 }
 
 /**
+ * Клиент площадки слишком старый. Не «что-то пошло не так», а объяснение с
+ * действием: на старом клиенте вертикальный свайп закрывает приложение прямо
+ * посреди забега, и играть в него нельзя (docs/34-stage3-plan.md, Р11).
+ */
+export function OutdatedScreen(props: { version: string | null }): ReactNode {
+  return (
+    <Centered>
+      <Emblem size={72} animated />
+      <h1 className="mt-2 font-display text-2xl font-bold text-text">{t("gate.outdated.title")}</h1>
+      <p className="max-w-[320px] text-sm text-text-muted">{t("gate.outdated.text")}</p>
+      {props.version === null ? null : (
+        <p className="text-xs text-text-disabled">{t("gate.outdated.version", { version: props.version })}</p>
+      )}
+    </Centered>
+  );
+}
+
+/**
  * Компактный режим: приложение занимает часть экрана, играть в нём нельзя
  * (§5.2).
  *

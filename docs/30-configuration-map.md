@@ -232,6 +232,7 @@
 | Правила линта | `eslint.config.js` |
 | Что и как запускается | `package.json` в корне, раздел `scripts` |
 | Локальные Postgres и Redis | `docker-compose.yml` |
+| Минимальная версия клиента площадки | `apps/web-telegram/src/main.tsx`, `minPlatformVersion` (обоснование — `27-design-system-and-app-shell.md` §5.2) |
 | Туннель для открытия Mini App с телефона | `infra/frpc/frpc.local.toml` (не коммитится: в нём токен) |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 
