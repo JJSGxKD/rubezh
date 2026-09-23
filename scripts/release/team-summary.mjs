@@ -1,0 +1,197 @@
+import { pathToFileURL } from "node:url";
+
+/**
+ * Сводка для команды и черновик поста в канал — из описания PR в Telegram
+ * (docs/09-ci-cd.md §7, «Сводка в Telegram»).
+ *
+ * Текст пишется **один раз, в описании PR**, разделами `## Сводка для
+ * команды` и `## Пост в канал`, и проходит ревью вместе с кодом. При мердже
+ * workflow `team-summary.yml` отправляет его ботом: сводку — в чат
+ * администраторов, пост — туда же черновиком. Публикует пост человек —
+ * пересылкой «без автора», которая сохраняет оформление целиком. Автопост в
+ * публичный канал сознательно не делается: опечатка или лишняя подробность
+ * ушли бы сразу всем подписчикам, а удалённый пост успевают прочитать.
+ *
+ * Чистые функции — разбор раздела, перевод разметки, нарезка — покрыты
+ * тестами; `main` в конце файла — тонкая обвязка над Bot API.
+ */
+
+export const TEAM_SECTION = "Сводка для команды";
+export const CHANNEL_SECTION = "Пост в канал";
+
+/** Предел длины сообщения Bot API. */
+export const TELEGRAM_LIMIT = 4096;
+
+/** Закрывашка поста в канал: без неё у пересланного текста теряется источник. */
+export const CHANNEL_SIGNATURE = "🚀 @KennixDev | 🙏 <a href=\"https://t.me/KennixDev/35\">Поддержать</a>";
+const DEFAULT_HASHTAGS = "#Разработка #Dev #GameDev #Telegram";
+const SEPARATOR = "———————";
+
+/**
+ * Раздел `## Заголовок` из описания PR — до следующего заголовка второго
+ * уровня. Нет раздела или он пуст — `null`: отправлять нечего, и это не
+ * ошибка (служебные PR сводку не пишут). HTML-комментарии — подсказки шаблона
+ * — вырезаются.
+ */
+export function extractSection(body, title) {
+  if (typeof body !== "string" || body === "") return null;
+  const lines = body.replace(/\r\n/g, "\n").split("\n");
+  const start = lines.findIndex((line) => line.trim() === `## ${title}`);
+  if (start < 0) return null;
+
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^##\s/.test(line));
+  const section = (end < 0 ? rest : rest.slice(0, end)).join("\n").replace(/<!--[\s\S]*?-->/g, "").trim();
+  return section === "" ? null : section;
+}
+
+/**
+ * Разметка описания PR → HTML Bot API.
+ *
+ * Правила — те, по которым текст и так пишется (память команды об
+ * оформлении): первая строка — заголовок, жирный; строка «эмодзи +
+ * **жирное**» — заголовок раздела, и бот сразу оборачивает его в цитату,
+ * которую раньше ставили руками; `` `код` `` — моноширинный; `[текст](адрес)`
+ * — ссылка. Остальное — как есть: списков в Telegram нет, `•` остаётся `•`.
+ */
+export function toTelegramHtml(markdown) {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  return lines
+    .map((line, index) => {
+      const html = inline(escapeHtml(line));
+      if (index > 0 && isSectionHeader(line)) return `<blockquote>${html}</blockquote>`;
+      return html;
+    })
+    .join("\n");
+}
+
+/** Строка — это заголовок раздела: эмодзи, пробел, целиком жирный текст. */
+export function isSectionHeader(line) {
+  return /^\p{Extended_Pictographic}[\p{Extended_Pictographic}️‍]*\s+\*\*[^*]+\*\*\s*(\([^)]*\))?\s*$/u.test(line.trim());
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function inline(text) {
+  return text
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_match, label, url) => `<a href="${url.replace(/"/g, "&quot;")}">${label}</a>`)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+}
+
+/**
+ * Пост в канал всегда кончается закрывашкой. Её допишет сам скрипт, если
+ * автор забыл: хэштеги — свои, если строка с ними есть, иначе общие.
+ */
+export function withChannelSignature(html) {
+  if (html.includes("@KennixDev")) return html;
+  const hasHashtags = /(^|\n)#\S/.test(html.split(SEPARATOR).at(-1) ?? "");
+  const tail = [SEPARATOR, ...(hasHashtags ? [] : [DEFAULT_HASHTAGS]), CHANNEL_SIGNATURE];
+  return `${html.trimEnd()}\n${tail.join("\n")}`;
+}
+
+/**
+ * Нарезать по пределу Bot API — по абзацам, а не посреди слова или тега.
+ * Абзац длиннее предела режется по строкам; строка длиннее — по символам,
+ * но такого текста в сводке быть не должно.
+ */
+export function splitMessage(text, limit = TELEGRAM_LIMIT) {
+  if (text.length <= limit) return [text];
+  const parts = [];
+  let current = "";
+  for (const block of text.split("\n\n")) {
+    const candidate = current === "" ? block : `${current}\n\n${block}`;
+    if (candidate.length <= limit) {
+      current = candidate;
+      continue;
+    }
+    if (current !== "") parts.push(current);
+    if (block.length <= limit) {
+      current = block;
+      continue;
+    }
+    for (let offset = 0; offset < block.length; offset += limit) parts.push(block.slice(offset, offset + limit));
+    current = "";
+  }
+  if (current !== "") parts.push(current);
+  return parts;
+}
+
+/** Адрес чата: `id` или `id:тема` — та же запись, что у ADMIN_CHAT_* бэкенда. */
+export function parseChatTarget(value) {
+  const match = /^(-?\d+)(?::(\d+))?$/.exec((value ?? "").trim());
+  if (match === null) return null;
+  return { chatId: match[1], threadId: match[2] === undefined ? null : Number(match[2]) };
+}
+
+/** Что и куда отправить по событию мерджа. Пустой список — отправлять нечего. */
+export function plannedMessages(body, chats) {
+  const messages = [];
+  const team = extractSection(body, TEAM_SECTION);
+  if (team !== null && chats.team !== null) {
+    for (const part of splitMessage(toTelegramHtml(team))) messages.push({ target: chats.team, text: part });
+  }
+  const channel = extractSection(body, CHANNEL_SECTION);
+  const draftsChat = chats.drafts ?? chats.team;
+  if (channel !== null && draftsChat !== null) {
+    const draft = withChannelSignature(toTelegramHtml(channel));
+    messages.push({ target: draftsChat, text: "✍️ <b>Черновик поста в канал</b> — перешлите «без автора», оформление сохранится" });
+    for (const part of splitMessage(draft)) messages.push({ target: draftsChat, text: part });
+  }
+  return messages;
+}
+
+async function send(token, message) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: message.target.chatId,
+        ...(message.target.threadId === null ? {} : { message_thread_id: message.target.threadId }),
+        text: message.text,
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+      }),
+      signal: controller.signal,
+    });
+    const answer = await response.json().catch(() => ({}));
+    // Токен в текст ошибки не попадает: адрес с ним здесь не печатается.
+    if (!response.ok || answer.ok !== true) throw new Error(`Bot API ответил ${response.status}: ${answer.description ?? "без описания"}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function main() {
+  const token = process.env.TELEGRAM_BOT_TOKEN ?? "";
+  const chats = {
+    team: parseChatTarget(process.env.TEAM_TELEGRAM_CHAT),
+    drafts: parseChatTarget(process.env.TEAM_TELEGRAM_DRAFTS_CHAT),
+  };
+  const messages = plannedMessages(process.env.PR_BODY ?? "", chats);
+
+  if (messages.length === 0) {
+    console.log(`PR #${process.env.PR_NUMBER ?? "?"}: разделов «${TEAM_SECTION}» и «${CHANNEL_SECTION}» нет — отправлять нечего`);
+    return;
+  }
+  // Секрета нет — например, PR из форка: GitHub не даёт ему секретов. Это не
+  // падение сборки, но и не молчание: предупреждение видно в сводке workflow.
+  if (token === "") {
+    console.log("::warning::TELEGRAM_BOT_TOKEN не задан — сводка не отправлена (docs/09-ci-cd.md §7)");
+    return;
+  }
+  for (const message of messages) await send(token, message);
+  console.log(`PR #${process.env.PR_NUMBER ?? "?"}: отправлено сообщений — ${messages.length}`);
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

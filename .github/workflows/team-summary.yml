@@ -1,0 +1,49 @@
+# Сводка в Telegram по влитому PR (docs/09-ci-cd.md §7, «Сводка в Telegram»).
+#
+# Текст берётся из описания PR — разделы «## Сводка для команды» и
+# «## Пост в канал»: он пишется один раз, вместе с PR, и проходит ревью.
+# Сводка уходит в чат администраторов, пост — туда же черновиком: публикует
+# его человек, пересылкой «без автора». Автопоста в публичный канал нет
+# сознательно.
+#
+# Безопасность:
+# - событие `pull_request`, а не `pull_request_target`: PR из форка секретов не
+#   получает, и чужой код с токеном не запускается никогда;
+# - код PR не собирается и не запускается — только скрипт из базовой ветки,
+#   куда PR уже влит;
+# - описание PR передаётся через переменную окружения, а не подставляется в
+#   `run:` — иначе текст PR выполнился бы как команда shell.
+name: team-summary
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    # Секрет и адреса чатов — в окружении `telegram`, а не в секретах
+    # репозитория: так их видит только этот джоб.
+    environment: telegram
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Отправить сводку
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TEAM_TELEGRAM_BOT_TOKEN }}
+          TEAM_TELEGRAM_CHAT: ${{ vars.TEAM_TELEGRAM_CHAT }}
+          TEAM_TELEGRAM_DRAFTS_CHAT: ${{ vars.TEAM_TELEGRAM_DRAFTS_CHAT }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/release/team-summary.mjs
