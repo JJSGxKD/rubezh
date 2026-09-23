@@ -42,6 +42,31 @@ enum Role {
   stakeholder
 }
 
+enum Difficulty {
+  easy
+  normal
+  hard
+}
+
+enum RunStatus {
+  started
+  finished
+}
+
+enum RunOutcome {
+  died
+  abandoned
+}
+
+// Вердикт антифрода фазы 1 (docs/34-stage3-plan.md, WP4). В рейтинг идёт
+// только `ok`; остальные хранятся для разбора, а не выбрасываются: ошибиться
+// может и проверка.
+enum RunVerdict {
+  ok
+  suspicious
+  rejected
+}
+
 // Аккаунт игрока (docs/34-stage3-plan.md, WP1).
 //
 // Ключ идентичности — пара «площадка + её идентификатор», а не Telegram ID:
@@ -66,6 +91,7 @@ model Account {
   banReason      String?   @map("ban_reason") @db.VarChar(256)
 
   roles AccountRole[]
+  runs  Run[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -221,4 +247,51 @@ model AuditEntry {
   @@index([actorAccountId, createdAt])
   @@index([action, createdAt])
   @@map("audit_entry")
+}
+
+// Забег (docs/34-stage3-plan.md, WP4). Источник истины по результатам:
+// лидерборд в Redis — проекция отсюда и пересобирается одной командой.
+//
+// Строка появляется на старте забега, а не в конце: сервер отмечает начало по
+// своим часам, и по ним потом проверяет, что заявленное время выживания
+// вообще могло пройти (решение Р5.2). Старт не дошёл — строка заводится в
+// конце, без времени начала, и время забега остаётся непроверенным.
+//
+// `run_id` — ключ идемпотентности от клиента: повтор итога из очереди не
+// удваивает ни рейтинг, ни статистику (docs/15-engineering-standards.md §4.1).
+model Run {
+  runId            String      @id @map("run_id") @db.VarChar(64)
+  accountId        String      @map("account_id") @db.Uuid
+  status           RunStatus
+  difficulty       Difficulty
+  startingWeaponId String      @map("starting_weapon_id") @db.VarChar(64)
+  contentHash      String      @map("content_hash") @db.VarChar(32)
+  /// когда забег начался по часам сервера; `null` — старт не дошёл или пришёл слишком поздно
+  startedAt        DateTime?   @map("started_at") @db.Timestamptz(3)
+  finishedAt       DateTime?   @map("finished_at") @db.Timestamptz(3)
+  outcome          RunOutcome?
+  survivalSec      Float?      @map("survival_sec")
+  level            Int?
+  enemiesKilled    Int?        @map("enemies_killed")
+  /// оружие и уровни к концу забега: `[{ id, level }]`
+  weapons          Json?
+  deathCause       String?     @map("death_cause") @db.VarChar(64)
+  /// в забеге включали читы режима разработчика
+  cheats           Boolean     @default(false)
+  /// попал ли в рейтинг: вердикт `ok` и без читов (или администратор просил учесть)
+  ranked           Boolean     @default(false)
+  verdict          RunVerdict?
+  /// коды причин вердикта, в том числе сведения, не меняющие его
+  verdictReasons   String[]    @map("verdict_reasons")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Профиль игрока: его забеги, свежие первыми.
+  @@index([accountId, finishedAt])
+  // Пересборка лидерборда: лучший рейтинговый забег каждого по сложности.
+  @@index([difficulty, ranked, survivalSec])
+  // Очередь разбора: подозрительные и отклонённые, свежие первыми.
+  @@index([verdict, finishedAt])
+  @@map("run")
 }

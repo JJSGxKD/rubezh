@@ -234,6 +234,8 @@
 | Локальные Postgres и Redis | `docker-compose.yml` |
 | Минимальная версия клиента площадки | `apps/web-telegram/src/main.tsx`, `minPlatformVersion` (обоснование — `27-design-system-and-app-shell.md` §5.2) |
 | Туннель для открытия Mini App с телефона | `infra/frpc/frpc.local.toml` (не коммитится: в нём токен) |
+| Лимиты приёма забегов (по аккаунту) | `backend/api/src/modules/runs/runs-limits.ts` |
+| Правила игры для проверки забега (слоты, сложности) | `backend/api/src/modules/runs/run-rules.ts` — копия контента, сверяется тестом `scripts/test/run-rules.test.ts` |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 
 Три правила, которые нарушают чаще всего: порт **не выбирается на месте**;
@@ -249,6 +251,9 @@
 | `DEV_LAN_HOST` | адрес для открытия с телефона в той же сети; **включает прослушивание сети** вместо одной петли |
 | `DEV_TUNNEL_TELEGRAM_HOST` | домен туннеля, чтобы Vite пустил запрос с телефона |
 | `ADMIN_TELEGRAM_IDS` | аварийный путь к роли владельца: действует, только пока владельца нет в базе. Дальше доступ решают роли (`29-admin-panel.md` §3) |
+| `RUNS_MAX_KILLS_PER_SEC`, `RUNS_MAX_LEVELS_PER_MIN` | пороги антифрода забегов фазы 1: выше — вердикт `suspicious`, забег не в рейтинге. Умолчания мягкие, боевые — только в окружении прода (`34-stage3-plan.md`, Р7) |
+| `RUNS_KNOWN_CONTENT_HASHES` | отпечатки контента выпущенных сборок; незнакомый — `suspicious`. Пусто — проверка выключена |
+| `RUNS_WALL_CLOCK_TOLERANCE_SEC`, `RUNS_START_MAX_DELAY_SEC` | запас на время забега сверх прошедшего по часам сервера и предел опоздания старта, которому ещё верят |
 | `AUTH_ENABLED` | вход игроков по аккаунтам; без `JWT_ACCESS_SECRET`, токена бота и `DATABASE_URL` бэкенд не стартует, выключённые эндпоинты отвечают 404 |
 | `JWT_ACCESS_SECRET` | секрет подписи токена доступа; смена разлогинивает всех |
 | `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_MAX_SESSIONS` | сколько живут токены и сколько устройств помнит аккаунт |

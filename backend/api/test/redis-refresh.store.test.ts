@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { closeRedis, createRedis } from "../src/infra/redis.js";
 import { RedisRefreshStore } from "../src/modules/auth/redis-refresh.store.js";
+import { redisDatabase } from "./helpers/redis-database.js";
 
 /**
  * Токены продления на живом Redis. В памяти это не проверить: здесь важны
@@ -19,22 +20,7 @@ import { RedisRefreshStore } from "../src/modules/auth/redis-refresh.store.js";
  * общей базе он снёс бы эти ключи прямо посреди прогона. Сама база здесь не
  * очищается вовсе: у каждого случая свои аккаунт и токены.
  */
-const url = ownDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "");
-
-/** Тот же Redis, но база на единицу младше: у соседей свой `flushdb`. */
-function ownDatabase(source: string): string {
-  if (source === "") return "";
-  try {
-    const parsed = new URL(source);
-    const index = Number(parsed.pathname.replace("/", ""));
-    parsed.pathname = `/${Number.isInteger(index) && index > 0 ? index - 1 : 14}`;
-    return parsed.toString();
-  } catch {
-    // Адрес не разобрался — пусть тест упадёт на подключении, а не молча
-    // уедет на чужую базу.
-    return source;
-  }
-}
+const url = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 1);
 
 const config = (patch: Record<string, string> = {}): AppConfig =>
   loadAppConfig({

@@ -30,9 +30,8 @@
 ### 1.1 Текущая схема (что есть в базе сегодня)
 
 Соответствует `backend/api/prisma/schema.prisma`. Таблицы появляются вместе с
-кодом, который в них пишет, а не лежат пустыми заранее, — поэтому забегов и
-покупок здесь пока нет, они придут в WP4 и WP5 этапа 3
-(`34-stage3-plan.md`).
+кодом, который в них пишет, а не лежат пустыми заранее, — поэтому покупок
+здесь пока нет, они придут в WP5 этапа 3 (`34-stage3-plan.md`).
 
 ```mermaid
 erDiagram
@@ -50,6 +49,27 @@ erDiagram
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
+    ACCOUNT ||--o{ RUN : "играет"
+
+    RUN {
+        string run_id PK "ключ идемпотентности от клиента"
+        uuid account_id FK
+        enum status "started|finished"
+        enum difficulty "easy|normal|hard"
+        string starting_weapon_id
+        string content_hash
+        datetime started_at "nullable: по часам сервера; старт не дошёл — пусто"
+        datetime finished_at "nullable"
+        enum outcome "nullable: died|abandoned"
+        float survival_sec "nullable"
+        int level "nullable"
+        int enemies_killed "nullable"
+        json weapons "nullable"
+        boolean cheats
+        boolean ranked "в рейтинге: вердикт ok и без читов"
+        enum verdict "nullable: ok|suspicious|rejected"
+        string[] verdict_reasons
+    }
 
     ACCOUNT_ROLE {
         uuid account_id PK,FK
@@ -132,6 +152,14 @@ erDiagram
 - **Роль — данные, состав роли — код.** В базе лежит только «у кого какая
   роль»; какие права даёт роль, меняется через ревью
   (`29-admin-panel.md` §3.2).
+- **`RUN` — источник истины по результатам.** Лидерборд живёт в Redis
+  ZSET как проекция отсюда и пересобирается одной командой
+  (`pnpm --filter backend-api runs:rebuild-leaderboard`,
+  `14-scalability.md` §4.3). Строка появляется на **старте** забега — сервер
+  ставит своё время начала, и по нему потом проверяет, что заявленное время
+  выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
+  подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
+  разбора.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
