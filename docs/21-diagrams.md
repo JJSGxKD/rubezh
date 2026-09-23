@@ -49,6 +49,25 @@ erDiagram
         string ban_reason "nullable"
     }
 
+    ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
+
+    ACCOUNT_ROLE {
+        uuid account_id PK,FK
+        enum role PK "owner|admin|game_designer|moderator|marketer|finance|analyst|stakeholder"
+        uuid granted_by "nullable: выдано на старте по списку в окружении"
+        datetime granted_at
+    }
+
+    AUDIT_ENTRY {
+        uuid entry_id PK
+        uuid actor_account_id "nullable: действие системы, а не человека"
+        string action "roles.assign, roles.revoke, …"
+        string target "nullable"
+        json before "nullable"
+        json after "nullable"
+        datetime created_at
+    }
+
     ANALYTICS_EVENT {
         uuid event_id PK
         string event_type
@@ -110,6 +129,12 @@ erDiagram
 - **Сессии игрока в Postgres не хранятся.** Токены продления живут в Redis:
   им нужен срок жизни, атомарное гашение и мгновенный отзыв, а не история
   (`34-stage3-plan.md`, WP1).
+- **Роль — данные, состав роли — код.** В базе лежит только «у кого какая
+  роль»; какие права даёт роль, меняется через ревью
+  (`29-admin-panel.md` §3.2).
+- **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
+  удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
+  наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
 
 ### 1.2 Планируемое расширение (этапы 3–4, ещё не реализовано)
 
