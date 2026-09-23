@@ -4,6 +4,7 @@ import { LEADERBOARD_STORE, RedisLeaderboardStore } from "./leaderboard.store.js
 import { RunsController } from "./runs.controller.js";
 import { PrismaRunsRepository, RUNS_REPOSITORY } from "./runs.repository.js";
 import { RunsService } from "./runs.service.js";
+import { RunsHooks } from "./runs-hooks.js";
 import { RunsViewService } from "./runs-view.service.js";
 
 /**
@@ -19,9 +20,12 @@ import { RunsViewService } from "./runs-view.service.js";
   providers: [
     RunsService,
     RunsViewService,
+    RunsHooks,
     { provide: RUNS_REPOSITORY, useClass: PrismaRunsRepository },
     { provide: LEADERBOARD_STORE, useClass: RedisLeaderboardStore },
   ],
-  exports: [RunsService],
+  // Хуки, чтение и рейтинг — сводке плейтеста, карточке `/start` и
+  // уведомлениям в чат: они читают забеги, но не принимают их.
+  exports: [RunsService, RunsViewService, RunsHooks, RUNS_REPOSITORY, LEADERBOARD_STORE],
 })
 export class RunsModule {}

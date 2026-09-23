@@ -9,6 +9,7 @@ import { rebuildLeaderboard } from "./leaderboard-rebuild.js";
 import type { Difficulty } from "./run-rules.js";
 import { judgeRun, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RUNS_REPOSITORY, type RunsRepository } from "./runs.repository.js";
+import { RunsHooks } from "./runs-hooks.js";
 
 /**
  * Приём забегов (docs/34-stage3-plan.md, WP4): старт, итог и пересборка
@@ -38,6 +39,7 @@ export class RunsService {
     @Inject(RUNS_REPOSITORY) private readonly runs: RunsRepository,
     @Inject(LEADERBOARD_STORE) private readonly leaderboard: LeaderboardStore,
     private readonly roles: RolesService,
+    private readonly hooks: RunsHooks,
   ) {}
 
   /** Старт забега: сервер ставит свою отметку времени. Повтор из очереди — не ошибка. */
@@ -98,7 +100,26 @@ export class RunsService {
     if (outcome === "duplicate") return await this.replay(account, run.runId);
 
     if (judged.verdict !== "ok") this.logSuspicious(account, run.runId, judged.verdict, judged.reasons);
-    return await this.resultOf(account, run.difficultyId, run.survivalSec, judged.verdict, ranked);
+    const result = await this.resultOf(account, run.difficultyId, run.survivalSec, judged.verdict, ranked);
+    // Слушатели — после записи и без ожидания: ответ игроку не ждёт ни
+    // сводки, ни очереди уведомлений.
+    void this.hooks.emit({
+      runId: run.runId,
+      accountId: account.accountId,
+      difficulty: run.difficultyId,
+      outcome: run.outcome,
+      survivalSec: run.survivalSec,
+      level: run.level,
+      enemiesKilled: run.enemiesKilled,
+      startingWeaponId: run.startingWeaponId,
+      deathCause: run.deathCause,
+      cheats: run.cheats,
+      ranked,
+      verdict: judged.verdict,
+      reasons: judged.reasons,
+      finishedAt: new Date(nowMs),
+    });
+    return result;
   }
 
   /**
@@ -150,9 +171,8 @@ export class RunsService {
   }
 
   /**
-   * Подозрительный забег — в лог с причинами. Сейчас это и есть очередь для
-   * администратора вместе с `GET /runs/review`; карточка в чат появится вместе
-   * с переходом клиента на этот модуль.
+   * Подозрительный забег — в лог с причинами. Карточку в чат администраторов
+   * шлёт слушатель хуков (`admin-notify`), а очередь целиком — `GET /runs/review`.
    */
   private logSuspicious(account: AccountRef, runId: string, verdict: RunVerdict, reasons: VerdictReason[]): void {
     this.logger.warn(JSON.stringify({ module: "runs", event: "run_flagged", runId, accountId: account.accountId, verdict, reasons }));
