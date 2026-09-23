@@ -5,6 +5,7 @@ import { DomainError } from "../src/common/domain-error.js";
 import { secretKey, signAccessToken, verifyAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard, accountOf } from "../src/modules/auth/auth.guard.js";
 import { AuthService, hashToken } from "../src/modules/auth/auth.service.js";
+import { parseDevUser } from "../src/modules/auth/dev-login.js";
 import { MemoryAccountRepository, MemoryRefreshStore } from "./helpers/memory-auth.js";
 import { launchFor, signInitData } from "./helpers/init-data.js";
 
@@ -188,6 +189,54 @@ describe("конфигурация авторизации", () => {
     // (docs/33-telegram-mini-app-pitfalls.md §1.2).
     expect(() => config({ AUTH_INIT_DATA_MAX_AGE_SEC: "86400" })).toThrow();
     expect(config({ AUTH_INIT_DATA_MAX_AGE_SEC: "3600" }).auth.initDataMaxAgeSec).toBe(3600);
+  });
+});
+
+describe("вход разработчика без Telegram", () => {
+  // Вход без подписи: цена ошибки — чужой аккаунт или такой вход в проде.
+  // Поэтому проверяется не только «пускает», но и где не пускает.
+  const DEV = { NODE_ENV: "development", AUTH_DEV_LOGIN: "true" };
+
+  it("имя разбирается, пустое заменяется, длинное обрезается", () => {
+    expect(parseDevUser("dev-1:Иван Петров")).toEqual({ platformUserId: "dev-1", displayName: "Иван Петров" });
+    expect(parseDevUser("dev-1")).toEqual({ platformUserId: "dev-1", displayName: "Разработчик" });
+    expect(parseDevUser("dev-1:  ")?.displayName).toBe("Разработчик");
+    expect(parseDevUser("dev-1:a:b")?.displayName).toBe("a:b");
+    expect(parseDevUser(`dev-1:${"я".repeat(100)}`)?.displayName).toHaveLength(64);
+  });
+
+  it("не принимает то, что может совпасть с игроком или сломать ключ", () => {
+    // Числовой ID — это настоящий игрок Telegram: войти за него без подписи
+    // нельзя даже на машине разработчика.
+    for (const value of ["555", "dev-", "dev-UPPER", "dev-a b", "игрок:dev-1", `dev-${"a".repeat(33)}`]) {
+      expect(parseDevUser(value), value).toBeNull();
+    }
+  });
+
+  it("заводит аккаунт и выдаёт обычную сессию", async () => {
+    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore());
+
+    const result = await service.loginAsDeveloper("dev-1:Проверка");
+
+    expect(result.account).toMatchObject({ platform: "telegram", platformUserId: "dev-1", displayName: "Проверка", created: true });
+    expect(result.refreshToken).not.toBe("");
+  });
+
+  it("выключенный вход не пускает, даже если контроллер пропустил", async () => {
+    const service = new AuthService(config({ NODE_ENV: "development" }), new MemoryAccountRepository(), new MemoryRefreshStore());
+
+    await expect(service.loginAsDeveloper("dev-1:Проверка")).rejects.toMatchObject({ code: "endpoint_disabled" });
+  });
+
+  it("битое имя — ошибка разбора, а не аккаунт", async () => {
+    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore());
+
+    await expect(service.loginAsDeveloper("555:Чужой")).rejects.toMatchObject({ code: "validation_failed" });
+  });
+
+  it("вне development и без авторизации процесс не поднимается", () => {
+    expect(() => config({ NODE_ENV: "production", AUTH_DEV_LOGIN: "true" })).toThrow(/development/);
+    expect(() => config({ ...DEV, AUTH_ENABLED: "false" })).toThrow(/AUTH_ENABLED/);
   });
 });
 

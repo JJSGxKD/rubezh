@@ -171,6 +171,12 @@ const schema = z.object({
   // Сколько устройств помнит аккаунт. Сверх лимита вытесняется самое старое:
   // без потолка список сессий рос бы бесконечно.
   AUTH_MAX_SESSIONS: z.coerce.number().int().min(1).max(50).default(10),
+  // Вход без Telegram по имени — только для локальной разработки в браузере:
+  // так команда проверяет рейтинг и профиль, не открывая клиент Telegram.
+  AUTH_DEV_LOGIN: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 
   // Пороги антифрода забегов, фаза 1 (docs/34-stage3-plan.md, WP4, Р7).
   //
@@ -260,6 +266,8 @@ export interface AppConfig {
     initDataMaxAgeSec: number;
     /** сколько устройств помнит аккаунт */
     maxSessions: number;
+    /** вход разработчика по имени, без подписи; только в development */
+    devLogin: boolean;
   };
   runs: {
     maxKillsPerSec: number;
@@ -382,6 +390,12 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.PLAYTEST_DEV_AUTH && parsed.NODE_ENV !== "development") {
     throw new Error("PLAYTEST_DEV_AUTH=true допустим только при NODE_ENV=development");
   }
+  if (parsed.AUTH_DEV_LOGIN && parsed.NODE_ENV !== "development") {
+    throw new Error("AUTH_DEV_LOGIN=true допустим только при NODE_ENV=development");
+  }
+  if (parsed.AUTH_DEV_LOGIN && !parsed.AUTH_ENABLED) {
+    throw new Error("AUTH_DEV_LOGIN=true требует AUTH_ENABLED=true: вход разработчика выдаёт ту же сессию, что вход по Telegram");
+  }
   if (parsed.AUTH_ENABLED && (parsed.JWT_ACCESS_SECRET === "" || parsed.TELEGRAM_BOT_TOKEN === "" || parsed.DATABASE_URL === "")) {
     throw new Error(
       "AUTH_ENABLED=true требует JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN и DATABASE_URL: без них вход не проверить и аккаунт негде хранить",
@@ -426,6 +440,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       refreshTtlSec: parsed.AUTH_REFRESH_TTL_DAYS * 24 * 60 * 60,
       initDataMaxAgeSec: parsed.AUTH_INIT_DATA_MAX_AGE_SEC,
       maxSessions: parsed.AUTH_MAX_SESSIONS,
+      devLogin: parsed.AUTH_DEV_LOGIN,
     },
     runs: {
       maxKillsPerSec: parsed.RUNS_MAX_KILLS_PER_SEC,
