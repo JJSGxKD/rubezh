@@ -1,7 +1,8 @@
-# Заголовок PR и метка релиза (docs/09-ci-cd.md §8.1, «Проверка PR»).
+# Заголовок PR и метка релиза (docs/09-ci-cd.md §8.1, «Проверка PR»); SHA
+# сторонних actions — сверка с тегом из комментария (§12).
 #
-# Логика — в scripts/release/pr-check.mjs (покрыта тестами в
-# scripts/test/pr-check.test.ts), а не в стороннем action: короткая проверка
+# Логика — в scripts/release/pr-check.mjs и scripts/action-pins.mjs (покрыты
+# тестами в scripts/test/), а не в стороннем action: короткая проверка
 # регулярным выражением и сравнение меток не стоят внешней зависимости с
 # правами на репозиторий.
 
@@ -23,13 +24,13 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Полная история нужна, чтобы найти последний стабильный тег и
           # определить, действует ли ещё запрет release: major до 1.0.0.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
 
@@ -37,3 +38,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+
+      # Шагом этого же джоба, а не отдельным: `check` обязателен в ruleset
+      # ветки main, и новый джоб оставался бы необязательным. Идёт и при
+      # упавшей проверке заголовка — одна ошибка не должна прятать другую.
+      - if: ${{ !cancelled() }}
+        run: node scripts/action-pins.mjs --verify
