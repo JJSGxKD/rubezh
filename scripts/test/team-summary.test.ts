@@ -8,8 +8,10 @@ import {
   plannedMessages,
   pullRequestForPush,
   splitMessage,
+  teamUsernames,
   toTelegramHtml,
   withChannelSignature,
+  withMentions,
   // @ts-expect-error — утилита CI на чистом JS, типов у неё нет и не нужно
 } from "../release/team-summary.mjs";
 
@@ -148,17 +150,83 @@ describe("что и куда уходит", () => {
   it("без темы для черновиков пост не отправляется, и об этом сказано", () => {
     const body = `${BODY}\n\n## ${CHANNEL_SECTION}\n🎮 **ПОСТ**\n\nтекст`;
 
-    const { messages, skipped } = plannedMessages(body, { team, drafts: null });
+    const { messages, warnings } = plannedMessages(body, { team, drafts: null });
 
     expect(messages.every((message: { text: string }) => !message.text.includes("Черновик"))).toBe(true);
-    expect(skipped.join(" ")).toContain("TEAM_TELEGRAM_DRAFTS_CHAT");
+    expect(warnings.join(" ")).toContain("TEAM_TELEGRAM_DRAFTS_CHAT");
   });
 
   it("без чата не отправляет ничего, а не падает", () => {
-    const { messages, skipped } = plannedMessages(BODY, { team: null, drafts: null });
+    const { messages, warnings } = plannedMessages(BODY, { team: null, drafts: null });
 
     expect(messages).toEqual([]);
-    expect(skipped.join(" ")).toContain("TEAM_TELEGRAM_CHAT");
+    expect(warnings.join(" ")).toContain("TEAM_TELEGRAM_CHAT");
+  });
+});
+
+describe("упоминания участников", () => {
+  // Юзернеймы живут в секретах: репозиторий публичный. Главное здесь — чтобы
+  // юзернейм не утёк туда, где его увидят посторонние, и чтобы ненастроенный
+  // секрет не превращал сводку в «@участник1» без смысла.
+  const usernames = { участник1: "lead_dev", участник3: "game_designer" };
+
+  it("заглушка становится упоминанием", () => {
+    expect(withMentions("@участник1, проверь на телефоне", usernames).text).toBe("@lead_dev, проверь на телефоне");
+  });
+
+  it("@команда зовёт всех, у кого задан юзернейм", () => {
+    expect(withMentions("@команда — голосуем", usernames).text).toBe("@lead_dev @game_designer — голосуем");
+  });
+
+  it("юзернейм не задан — имя роли, и сказано, какого секрета не хватило", () => {
+    const { text, missing } = withMentions("@Участник2, нужна проверка", usernames);
+
+    expect(text).toBe("Участник 2, нужна проверка");
+    expect(missing).toEqual(["TEAM_TELEGRAM_MEMBER_2"]);
+  });
+
+  it("внутри кода заглушка не трогается: там синтаксис описывают, а не зовут", () => {
+    expect(withMentions("пишите <code>@участник1</code>", usernames).text).toBe("пишите <code>@участник1</code>");
+  });
+
+  it("похожее слово заглушкой не считается", () => {
+    expect(withMentions("@участник12 и @командами", usernames).text).toBe("@участник12 и @командами");
+  });
+
+  it("юзернейм берётся с @ и без, а мусор отбрасывается без показа значения", () => {
+    const { usernames: parsed, invalid } = teamUsernames({
+      TEAM_TELEGRAM_MEMBER_1: "@lead_dev",
+      TEAM_TELEGRAM_MEMBER_2: "https://t.me/partner",
+      TEAM_TELEGRAM_MEMBER_3: " game_designer ",
+    });
+
+    expect(parsed).toEqual({ участник1: "lead_dev", участник3: "game_designer" });
+    expect(invalid).toEqual(["TEAM_TELEGRAM_MEMBER_2"]);
+  });
+
+  it("в сводке — юзернеймы, в черновике поста — никогда: он уйдёт в публичный канал", () => {
+    const team = parseChatTarget("-1001234567890:57");
+    const drafts = parseChatTarget("-1001234567890:142");
+    const body = `## ${TEAM_SECTION}\n📋 **СВОДКА**\n\n@участник1, проверь\n\n## ${CHANNEL_SECTION}\n🎮 **ПОСТ**\n\n@участник1 проверил`;
+
+    const { messages } = plannedMessages(body, { team, drafts }, usernames);
+    const text = (target: unknown) =>
+      messages
+        .filter((message: { target: unknown }) => message.target === target)
+        .map((message: { text: string }) => message.text)
+        .join("\n");
+
+    expect(text(team)).toContain("@lead_dev, проверь");
+    expect(text(drafts)).not.toContain("lead_dev");
+    expect(text(drafts)).toContain("участник 1 проверил");
+  });
+
+  it("незаданный юзернейм в сводке — предупреждение в прогоне, а не молчание", () => {
+    const body = `## ${TEAM_SECTION}\n📋 **СВОДКА**\n\n@участник2, проверь`;
+
+    const { warnings } = plannedMessages(body, { team: parseChatTarget("-100123"), drafts: null }, usernames);
+
+    expect(warnings.join(" ")).toContain("TEAM_TELEGRAM_MEMBER_2");
   });
 });
 

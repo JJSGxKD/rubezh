@@ -128,6 +128,73 @@ export function splitMessage(text, limit = TELEGRAM_LIMIT) {
   return parts;
 }
 
+/**
+ * Участники команды для упоминаний. Юзернеймы — в секретах окружения, а не в
+ * репозитории: он публичный, а светить свой юзернейм хотят не все. В описании
+ * PR пишется заглушка `@участник1`, бот при отправке подставляет юзернейм.
+ *
+ * Упоминание — явная заглушка, а не каждое «участник 1» в тексте: упоминание
+ * будит человека уведомлением, и оно нужно там, где от него что-то требуется,
+ * а не везде, где он назван.
+ */
+export const MEMBERS = [
+  { placeholder: "участник1", role: "участник 1", secret: "TEAM_TELEGRAM_MEMBER_1" },
+  { placeholder: "участник2", role: "участник 2", secret: "TEAM_TELEGRAM_MEMBER_2" },
+  { placeholder: "участник3", role: "участник 3", secret: "TEAM_TELEGRAM_MEMBER_3" },
+];
+/** `@команда` — все, у кого задан юзернейм. */
+const EVERYONE = "команда";
+const MENTION = /@(участник[123]|команда)(?![\p{L}\p{N}_])/giu;
+
+/**
+ * Юзернеймы из окружения. Значение с `@` или без; то, что не похоже на
+ * юзернейм Telegram, отбрасывается целиком — в `invalid` попадает имя секрета,
+ * но не значение: оно секретное.
+ */
+export function teamUsernames(env) {
+  const usernames = {};
+  const invalid = [];
+  for (const member of MEMBERS) {
+    const value = (env[member.secret] ?? "").trim().replace(/^@/, "");
+    if (value === "") continue;
+    if (/^[A-Za-z0-9_]{4,32}$/.test(value)) usernames[member.placeholder] = value;
+    else invalid.push(member.secret);
+  }
+  return { usernames, invalid };
+}
+
+/**
+ * Заглушки → `@юзернейм`. Юзернейм не задан — имя роли: сообщение остаётся
+ * читаемым, а `missing` называет секреты, которых не хватило. Внутри
+ * `<code>` заглушки не трогаются: там синтаксис описывают, а не зовут людей.
+ */
+export function withMentions(html, usernames) {
+  const missing = new Set();
+  const render = (member) => {
+    const username = usernames[member.placeholder];
+    if (username === undefined) missing.add(member.secret);
+    return username === undefined ? member.role : `@${username}`;
+  };
+  const replace = (_match, name) => {
+    const key = name.toLowerCase();
+    let text;
+    if (key === EVERYONE) {
+      const present = MEMBERS.filter((member) => usernames[member.placeholder] !== undefined);
+      for (const member of MEMBERS) if (usernames[member.placeholder] === undefined) missing.add(member.secret);
+      text = present.length > 0 ? present.map(render).join(" ") : EVERYONE;
+    } else {
+      text = render(MEMBERS.find((member) => member.placeholder === key));
+    }
+    // «@Участник1, проверь…» в начале фразы не должно стать «участник 1, проверь…».
+    return name[0] === name[0].toUpperCase() ? text[0].toUpperCase() + text.slice(1) : text;
+  };
+  const text = html
+    .split(/(<code>[\s\S]*?<\/code>)/)
+    .map((part, index) => (index % 2 === 1 ? part : part.replace(MENTION, replace)))
+    .join("");
+  return { text, missing: [...missing] };
+}
+
 /** Адрес чата: `id` или `id:тема` — та же запись, что у ADMIN_CHAT_* бэкенда. */
 export function parseChatTarget(value) {
   const match = /^(-?\d+)(?::(\d+))?$/.exec((value ?? "").trim());
@@ -140,29 +207,37 @@ export function parseChatTarget(value) {
  *
  * Черновик поста уходит **только** в свою тему: запасного пути в ленту
  * команды нет намеренно — ради этого тема и заведена. Нет темы — черновик
- * не отправляется, а `skipped` объясняет почему.
+ * не отправляется, а `warnings` объясняет почему.
+ *
+ * Юзернеймы подставляются только в сводку. В черновике заглушка становится
+ * именем роли: пост уйдёт в публичный канал, а юзернеймы прячут именно от него.
  */
-export function plannedMessages(body, chats) {
+export function plannedMessages(body, chats, usernames = {}) {
   const messages = [];
-  const skipped = [];
+  const warnings = [];
 
   const team = extractSection(body, TEAM_SECTION);
   if (team !== null) {
-    if (chats.team === null) skipped.push("сводка: не задан TEAM_TELEGRAM_CHAT");
-    else for (const part of splitMessage(toTelegramHtml(team))) messages.push({ target: chats.team, text: part });
+    if (chats.team === null) {
+      warnings.push("сводка: не задан TEAM_TELEGRAM_CHAT");
+    } else {
+      const { text, missing } = withMentions(toTelegramHtml(team), usernames);
+      if (missing.length > 0) warnings.push(`упоминания: не заданы ${missing.join(", ")} — в сводке вместо юзернейма имя роли`);
+      for (const part of splitMessage(text)) messages.push({ target: chats.team, text: part });
+    }
   }
 
   const channel = extractSection(body, CHANNEL_SECTION);
   if (channel !== null) {
     if (chats.drafts === null) {
-      skipped.push("черновик поста: не задан TEAM_TELEGRAM_DRAFTS_CHAT — в ленту команды он не идёт");
+      warnings.push("черновик поста: не задан TEAM_TELEGRAM_DRAFTS_CHAT — в ленту команды он не идёт");
     } else {
-      const draft = withChannelSignature(toTelegramHtml(channel));
+      const draft = withChannelSignature(withMentions(toTelegramHtml(channel), {}).text);
       messages.push({ target: chats.drafts, text: "✍️ <b>Черновик поста в канал</b> — перешлите «без автора», оформление сохранится" });
       for (const part of splitMessage(draft)) messages.push({ target: chats.drafts, text: part });
     }
   }
-  return { messages, skipped };
+  return { messages, warnings };
 }
 
 /**
@@ -211,8 +286,10 @@ async function main() {
     team: parseChatTarget(process.env.TEAM_TELEGRAM_CHAT),
     drafts: parseChatTarget(process.env.TEAM_TELEGRAM_DRAFTS_CHAT),
   };
-  const { messages, skipped } = plannedMessages(pr.body ?? "", chats);
-  for (const reason of skipped) console.log(`::warning::PR #${pr.number}: ${reason}`);
+  const { usernames, invalid } = teamUsernames(process.env);
+  for (const secret of invalid) console.log(`::warning::${secret} не похож на юзернейм Telegram — вместо упоминания будет имя роли`);
+  const { messages, warnings } = plannedMessages(pr.body ?? "", chats, usernames);
+  for (const reason of warnings) console.log(`::warning::PR #${pr.number}: ${reason}`);
 
   if (messages.length === 0) {
     console.log(`PR #${pr.number}: разделов «${TEAM_SECTION}» и «${CHANNEL_SECTION}» нет — отправлять нечего`);

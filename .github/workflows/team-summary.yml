@@ -46,4 +46,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TEAM_TELEGRAM_BOT_TOKEN }}
           TEAM_TELEGRAM_CHAT: ${{ vars.TEAM_TELEGRAM_CHAT }}
           TEAM_TELEGRAM_DRAFTS_CHAT: ${{ vars.TEAM_TELEGRAM_DRAFTS_CHAT }}
+          # Юзернеймы для упоминаний — секретами, а не переменными: репозиторий
+          # публичный, а светить свой юзернейм хотят не все.
+          TEAM_TELEGRAM_MEMBER_1: ${{ secrets.TEAM_TELEGRAM_MEMBER_1 }}
+          TEAM_TELEGRAM_MEMBER_2: ${{ secrets.TEAM_TELEGRAM_MEMBER_2 }}
+          TEAM_TELEGRAM_MEMBER_3: ${{ secrets.TEAM_TELEGRAM_MEMBER_3 }}
         run: node scripts/release/team-summary.mjs
