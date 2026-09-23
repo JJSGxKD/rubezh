@@ -23,7 +23,7 @@ export const ANALYTICS_EVENTS = [
   "upgrade_offered",
   "upgrade_chosen",
   "wave_reached",
-  "playtest_run_synced",
+  "run_synced",
   "load_time",
   "diagnostics_mode_changed",
   "bench_finished",

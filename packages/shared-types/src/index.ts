@@ -836,13 +836,26 @@ export interface RunResult {
   cheats: boolean;
 }
 
-// --- Плейтест: сохранения и лидерборд (docs/26-stage2-plan.md, WP13) ---
+// --- Забеги под аккаунтом: старт, итог, рейтинг (docs/34-stage3-plan.md, WP4) ---
 //
-// Контракт клиента с бэкендом плейтеста. Сервер проверяет тело своей схемой;
-// здесь — форма, на которую опирается оболочка. Telegram ID других игроков
-// наружу не отдаются: строка лидерборда знает только, «моя» ли она.
+// Контракт клиента с модулем забегов бэкенда. Сервер проверяет тело своей
+// схемой; здесь — форма, на которую опирается оболочка. Идентификаторы других
+// аккаунтов наружу не отдаются: строка лидерборда знает только, «моя» ли она.
 
-export interface PlaytestRunSubmission {
+/**
+ * Старт забега. Уходит в очередь в начале забега — не на горячем пути: по нему
+ * сервер ставит своё время начала и сверяет с ним длительность итога.
+ */
+export interface RunStartSubmission {
+  runId: string;
+  difficultyId: DifficultyId;
+  startingWeaponId: string;
+  contentHash: string;
+  /** сколько секунд прошло от начала забега до отправки: старт мог ждать сеть */
+  elapsedSec: number;
+}
+
+export interface RunFinishSubmission {
   /** повтор с тем же `runId` не удваивает статистику */
   runId: string;
   difficultyId: DifficultyId;
@@ -891,20 +904,24 @@ export interface PlaytestDevice {
   memoryGb: number | null;
 }
 
-export interface PlaytestSubmitResult {
+/**
+ * Что решил антифрод: `ok` — прошёл проверки, `suspicious` — сохранён, но не в
+ * рейтинге до разбора, `rejected` — невозможный забег.
+ */
+export type RunVerdict = "ok" | "suspicious" | "rejected";
+
+export interface RunFinishResult {
   /** лучшее время игрока на этой сложности после забега */
   bestSurvivalSec: number;
   isNewBest: boolean;
   /** место в лидерборде сложности, с единицы */
   rank: number | null;
-  /**
-   * `false` — забег с читами не записан: рейтинг и лучшее время прежние.
-   * Необязательное: сервер прошлой версии поля не присылает, и это запись.
-   */
-  recorded?: boolean;
+  /** `false` — забег не в рейтинге: читы или вердикт не `ok` */
+  recorded: boolean;
+  verdict: RunVerdict;
 }
 
-export interface PlaytestLeaderboardEntry {
+export interface LeaderboardEntry {
   rank: number;
   name: string;
   photoUrl: string | null;
@@ -915,15 +932,15 @@ export interface PlaytestLeaderboardEntry {
   isMe: boolean;
 }
 
-export interface PlaytestLeaderboard {
+export interface Leaderboard {
   difficultyId: DifficultyId;
-  entries: PlaytestLeaderboardEntry[];
+  entries: LeaderboardEntry[];
   /** своё место, даже если оно ниже показанных строк */
   me: { rank: number; survivalSec: number } | null;
   totalPlayers: number;
 }
 
-export interface PlaytestRecentRun {
+export interface RecentRun {
   difficultyId: DifficultyId;
   survivalSec: number;
   level: number;
@@ -933,8 +950,8 @@ export interface PlaytestRecentRun {
 }
 
 /**
- * Что игроку открыто в клиенте. Решает сервер по Telegram ID; скрытая кнопка
- * — не защита, и то, что трогает чужие данные, сервер проверяет сам.
+ * Что игроку открыто в клиенте. Решает сервер по праву аккаунта; скрытая
+ * кнопка — не защита, и то, что трогает чужие данные, сервер проверяет сам.
  */
 export interface PlaytestAccess {
   admin: boolean;
@@ -942,12 +959,12 @@ export interface PlaytestAccess {
   devMode: boolean;
 }
 
-export interface PlaytestProfile {
+export interface RunProfile {
   runs: number;
   totalKills: number;
   totalSurvivalSec: number;
   best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
-  recent: PlaytestRecentRun[];
+  recent: RecentRun[];
 }
 
 // --- Экономика / SKU, см. docs/05-game-design.md §5, docs/07-monetization-and-ads.md ---

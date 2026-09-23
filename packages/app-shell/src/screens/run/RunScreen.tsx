@@ -7,7 +7,7 @@ import { useDiagnostics } from "../../state/diagnostics";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
 import { usePlatform } from "../../state/platform";
-import { usePlaytest } from "../../state/playtest";
+import { useRuns } from "../../state/runs";
 import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
@@ -31,7 +31,7 @@ export function RunScreen(): ReactNode {
   const diagnostics = useDiagnostics((state) => state.enabled);
   const isActive = usePlatform((state) => state.isActive);
   const expanded = usePlatform((state) => state.viewport.expanded);
-  const submitted = usePlaytest((state) => state.lastSubmitted);
+  const submitted = useRuns((state) => state.lastSubmitted);
   const [stats, setStats] = useState<RunInspection | null>(null);
   const openStats = (): void => setStats(useRun.getState().inspect());
   const [devOpen, setDevOpen] = useState(false);

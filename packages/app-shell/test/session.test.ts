@@ -12,12 +12,12 @@ import type { AnalyticsEvent, AnalyticsPayload } from "../src/state/analytics";
 
 const events: { event: AnalyticsEvent; payload: AnalyticsPayload }[] = [];
 
-function shell(options: { launchData?: string | null; auth?: boolean } = {}): void {
+function shell(options: { launchData?: string | null; auth?: boolean; devUser?: string } = {}): void {
   const capabilities: ShellCapabilities = {
     platformAvailable: true,
     botUrl: "",
     diagnosticsByDefault: false,
-    ...(options.auth === false ? {} : { auth: { baseUrl: "https://api.test" } }),
+    ...(options.auth === false ? {} : { auth: { baseUrl: "https://api.test", ...(options.devUser === undefined ? {} : { devUser: options.devUser }) } }),
   };
 
   initShell({
@@ -117,6 +117,31 @@ describe("вход в сессию", () => {
 
     expect(calls).toEqual([]);
     expect(useSession.getState().failure).toBe("no_identity");
+  });
+
+  it("мимо площадки входит разработчик по имени, если dev-сервер его передал", async () => {
+    // Браузер без Telegram: данных запуска нет, но команда проверяет рейтинг
+    // и профиль под своим аккаунтом (docs/34-stage3-plan.md, WP4).
+    shell({ launchData: null, devUser: "dev-1:Разработчик" });
+    const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", (input: string, init: RequestInit) => {
+      bodies.push({ url: input, body: JSON.parse(String(init.body)) });
+      return Promise.resolve(ok(sessionBody()));
+    });
+
+    await useSession.getState().signIn();
+
+    expect(useSession.getState().status).toBe("ready");
+    expect(bodies).toEqual([{ url: "https://api.test/api/v1/auth/dev", body: { devUser: "dev-1:Разработчик" } }]);
+  });
+
+  it("имя разработчика не заменяет данные запуска: в Telegram входят по подписи", async () => {
+    shell({ devUser: "dev-1:Разработчик" });
+    const { calls } = stubFetch([() => ok(sessionBody())]);
+
+    await useSession.getState().signIn();
+
+    expect(calls).toEqual(["https://api.test/api/v1/auth/telegram"]);
   });
 
   it("на блокировку показывает причину от сервера: её знает только он", async () => {

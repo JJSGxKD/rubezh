@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatDuration, hasTranslation, t } from "../src/i18n";
-import { PLAYTEST_FAILURES } from "../src/state/playtest-api";
+import { API_FAILURES } from "../src/state/api-request";
 
 // Тексты интерфейса (docs/27-design-system-and-app-shell.md §8).
 
@@ -23,9 +23,9 @@ describe("переводы", () => {
     expect(t("rating.pending", { count: 2 })).toContain("2 забега");
   });
 
-  it("знает текст для каждой причины, по которой сервер плейтеста не ответил", () => {
-    for (const failure of PLAYTEST_FAILURES) {
-      expect(hasTranslation(`playtest.failure.${failure}`), failure).toBe(true);
+  it("знает текст для каждой причины, по которой сервер не ответил", () => {
+    for (const failure of API_FAILURES) {
+      expect(hasTranslation(`sync.failure.${failure}`), failure).toBe(true);
     }
   });
 

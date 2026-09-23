@@ -11,6 +11,12 @@ import { z } from "zod/mini";
 export interface AuthApiConfig {
   /** адрес API без косой в конце; пусто — тот же домен, что у приложения */
   baseUrl: string;
+  /**
+   * Вход без площадки на машине разработчика — «dev-<id>:Имя». Пусто или нет
+   * — выключен. Приложение передаёт его только из dev-сервера, а бэкенд
+   * принимает только в development (`AUTH_DEV_LOGIN`).
+   */
+  devUser?: string;
 }
 
 export interface AuthAccount {
@@ -59,6 +65,7 @@ export type AuthResult<T> =
 
 export interface AuthApi {
   login(signedLaunchData: string): Promise<AuthResult<Session>>;
+  devLogin(devUser: string): Promise<AuthResult<Session>>;
   refresh(refreshToken: string): Promise<AuthResult<Session>>;
   logout(refreshToken: string): Promise<void>;
 }
@@ -122,6 +129,7 @@ export function createAuthApi(
 
   return {
     login: (signedLaunchData) => post("/telegram", { initData: signedLaunchData }, sessionSchema),
+    devLogin: (devUser) => post("/dev", { devUser }, sessionSchema),
     refresh: (refreshToken) => post("/refresh", { refreshToken }, sessionSchema),
     async logout(refreshToken) {
       // Выход — лучшее усилие: не дошёл до сервера, и ладно, токен всё равно

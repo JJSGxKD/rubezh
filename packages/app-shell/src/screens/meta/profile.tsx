@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { DIFFICULTY_IDS, type PlaytestRecentRun } from "@bh/shared-types";
+import { DIFFICULTY_IDS, type RecentRun } from "@bh/shared-types";
 import {
   Avatar,
   Badge,
@@ -13,11 +13,11 @@ import {
 import { formatDuration, formatNumber, t } from "../../i18n";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
-import { usePlaytest } from "../../state/playtest";
-import type { PlaytestFailure } from "../../state/playtest-api";
+import type { ApiFailure } from "../../state/api-request";
+import { useRuns } from "../../state/runs";
 import { useShell } from "../../state/shell";
 import { ItemIcon } from "../item-icons";
-import { PlaytestProblem, SurvivalTime } from "./playtest-ui";
+import { SurvivalTime, SyncProblem } from "./sync-ui";
 
 /**
  * Профиль игрока: счётчики и рекорды с сервера плейтеста, последние забеги
@@ -30,15 +30,15 @@ import { PlaytestProblem, SurvivalTime } from "./playtest-ui";
 export function ProfileScreen(): ReactNode {
   const navigation = useNavigation();
   const user = useShell((state) => state.adapter.displayUser);
-  const profile = usePlaytest((state) => state.profile);
-  const pending = usePlaytest((state) => state.pending);
+  const profile = useRuns((state) => state.profile);
+  const pending = useRuns((state) => state.pending);
   const local = useMeta();
-  const [failure, setFailure] = useState<PlaytestFailure | null>(null);
+  const [failure, setFailure] = useState<ApiFailure | null>(null);
 
   const load = async (): Promise<void> => {
     setFailure(null);
-    await usePlaytest.getState().flush("screen");
-    setFailure(await usePlaytest.getState().loadProfile());
+    await useRuns.getState().flush("screen");
+    setFailure(await useRuns.getState().loadProfile());
   };
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export function ProfileScreen(): ReactNode {
 
         {failure === null ? null : (
           <div className="mt-3">
-            <PlaytestProblem failure={failure} compact onRetry={() => void load()} />
+            <SyncProblem failure={failure} compact onRetry={() => void load()} />
           </div>
         )}
         {pending > 0 ? (
@@ -124,7 +124,7 @@ export function ProfileScreen(): ReactNode {
   );
 }
 
-function RecentRunRow(props: { run: PlaytestRecentRun }): ReactNode {
+function RecentRunRow(props: { run: RecentRun }): ReactNode {
   const { run } = props;
   return (
     <li className="surface-card flex items-center gap-3 rounded-lg px-3 py-2.5">

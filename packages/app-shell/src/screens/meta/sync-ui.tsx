@@ -2,14 +2,14 @@ import type { ReactNode } from "react";
 import { CloudOff } from "lucide-react";
 import { Button } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
-import type { PlaytestFailure } from "../../state/playtest-api";
+import type { ApiFailure } from "../../state/api-request";
 
 /**
- * Общее у рейтинга и профиля: что сказать игроку, когда сервер плейтеста не
- * ответил. Причина разная — и совет разный: «проверь связь» тому, у кого
- * выключена подпись, не поможет.
+ * Общее у рейтинга и профиля: что сказать игроку, когда сервер не ответил.
+ * Причина разная — и совет разный: «проверь связь» тому, кто открыл игру мимо
+ * Telegram, не поможет.
  */
-export function PlaytestProblem(props: { failure: PlaytestFailure; onRetry?: () => void; compact?: boolean }): ReactNode {
+export function SyncProblem(props: { failure: ApiFailure; onRetry?: () => void; compact?: boolean }): ReactNode {
   const retryable = props.failure === "offline" || props.failure === "unavailable";
 
   return (
@@ -22,7 +22,7 @@ export function PlaytestProblem(props: { failure: PlaytestFailure; onRetry?: () 
     >
       <CloudOff size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-text-muted">{t(`playtest.failure.${props.failure}`)}</p>
+        <p className="text-sm text-text-muted">{t(`sync.failure.${props.failure}`)}</p>
         {retryable && props.onRetry !== undefined ? (
           <div className="mt-2">
             <Button variant="secondary" onClick={props.onRetry}>
