@@ -8,10 +8,13 @@
 #
 # Порты БД и Redis публикуются на 127.0.0.1, а не на 0.0.0.0: иначе Postgres
 # с паролем `postgres` оказывается доступен из локальной сети.
+#
+# Образы — точная версия и digest, те же, что у сервисов CI в
+# .github/workflows/ci.yml. Как обновить — docs/16-tech-stack-decisions.md §9.4.
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     container_name: rubezh-postgres-dev
     restart: unless-stopped
     environment:
@@ -33,7 +36,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine3.21@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     container_name: rubezh-redis-dev
     restart: unless-stopped
     # appendonly: лидерборды и сессии переживают перезапуск контейнера.

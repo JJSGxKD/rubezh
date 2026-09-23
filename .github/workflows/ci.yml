@@ -29,9 +29,12 @@ jobs:
     # Интеграционные тесты — на настоящих Postgres и Redis, а не на моках
     # (docs/17-testing-strategy.md §4.2). Без адресов ниже они пропускаются,
     # поэтому локальный `pnpm test` работает и без контейнеров.
+    #
+    # Образы — те же версия и digest, что в docker-compose.yml: CI проверяет
+    # ту базу, на которой идёт разработка (docs/09-ci-cd.md §12).
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
@@ -42,7 +45,7 @@ jobs:
           --health-cmd "pg_isready -U test -d rubezh_test"
           --health-interval 5s --health-timeout 5s --health-retries 12
       redis:
-        image: redis:7-alpine
+        image: redis:7.4.11-alpine3.21@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
         ports:
           - 6379:6379
         options: >-
