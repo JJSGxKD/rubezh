@@ -511,7 +511,7 @@ Staging на том же хосте — сознательный компром�
 - **сторонние actions пинуются по SHA**, не по тегу: тег перемещаемый, а это
   вектор атаки на цепочку поставки. Полный SHA коммита и версия комментарием
   в той же строке —
-  `uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0`:
+  `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`:
   без комментария сорок знаков на ревью не прочитать. Проверяет
   `scripts/action-pins.mjs`, дважды:
   - тестом в `pnpm test` — `uses:` по тегу, по ветке, без версии или в виде,
@@ -526,7 +526,7 @@ Staging на том же хосте — сознательный компром�
 **Как обновить action.** SHA берётся у тега в самом репозитории action:
 
 ```bash
-git ls-remote --tags https://github.com/actions/checkout "refs/tags/v4.4.0" "refs/tags/v4.4.0^{}"
+git ls-remote --tags https://github.com/actions/checkout "refs/tags/v7.0.1" "refs/tags/v7.0.1^{}"
 ```
 
 Если строк две, нужна та, что с `^{}`: тег аннотированный, и SHA в первой
