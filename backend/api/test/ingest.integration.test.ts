@@ -19,6 +19,8 @@ import { runSubmission } from "./helpers/run-report.js";
 import { PrismaEventsRepository, type EventRow } from "../src/modules/events/events.repository.js";
 import { QueuedEventsSink } from "../src/modules/events/events.sink.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 
 // Приёмники на настоящих Postgres и Redis (docs/17-testing-strategy.md §4.2).
 // Адреса — TEST_DATABASE_URL и PLAYTEST_TEST_REDIS_URL; без них тесты пропускаются.
@@ -122,12 +124,21 @@ describe.skipIf(!live)("приёмники на живых Postgres и Redis", (
       ADMIN_CHAT_ID: "-100",
       DIAGNOSTICS_INGEST_ENABLED: "true",
     });
-    const notifier = new ReportNotifier(notifyConfig, new DiagnosticsHooks(), repository, {
-      sendPhoto: async (_chat, _photo, caption) => {
-        sent.push(caption);
-        return { messageId: 1, fileId: null };
+    const notifier = new ReportNotifier(
+      notifyConfig,
+      new DiagnosticsHooks(),
+      repository,
+      {
+        sendPhoto: async (_chat, _photo, caption) => {
+          sent.push(caption);
+          return { messageId: 1, fileId: null };
+        },
+        sendMessage: async () => 1,
       },
-    });
+      new RunsHooks(),
+      new MemoryAccountRepository(),
+      { claim: async () => true },
+    );
     notifier.onApplicationBootstrap();
     try {
       const report = { reportId, kind: "bench" as const, appVersion: "0.4.0", installId: `${install}-n`, platformUserId: null, device: DEVICE, summary: benchSummaryOf(payload), payload, receivedAt: new Date() };

@@ -62,7 +62,6 @@ describe("приёмник отчётов диагностики", () => {
     const config = loadAppConfig({
       NODE_ENV: "test",
       DIAGNOSTICS_INGEST_ENABLED: "true",
-      DATABASE_URL: "postgresql://unused",
       ...AUTH_ENV,
       TELEGRAM_BOT_TOKEN: TOKEN,
       PLAYTEST_ENABLED: "true",
