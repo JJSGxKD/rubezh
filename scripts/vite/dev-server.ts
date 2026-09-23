@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { PreviewOptions, ServerOptions } from "vite";
+import { contentSecurityPolicy } from "./content-security-policy";
 
 /**
  * Настройки dev-сервера, общие для трёх площадок (docs/20-env-and-ports.md §4).
@@ -68,9 +69,18 @@ export function devServerConfig({ env, repoRoot, port, tunnelHostVar, proxy }: D
     ...listenHost(lanHost, https.https !== undefined),
   };
 
+  // Политика источников — та же, что увидит игрок (content-security-policy.ts).
+  // На dev-сервере она мягче ровно на то, что нужно самой разработке; просмотр
+  // собранной версии получает строгую, и если сборка под ней ломается, это
+  // видно здесь, а не у тестера.
+  const apiOrigin = (env.VITE_API_URL ?? "").trim();
+  const policy = (mode: "dev" | "build") => ({
+    headers: { "content-security-policy": contentSecurityPolicy({ mode, apiOrigin }) },
+  });
+
   return {
-    server: { ...common, ...hmr },
-    preview: common,
+    server: { ...common, ...hmr, ...policy("dev") },
+    preview: { ...common, ...policy("build") },
   };
 }
 
