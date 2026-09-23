@@ -123,8 +123,9 @@
 | 6. Приём данных закрытого теста | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC`, `DIAGNOSTICS_RETENTION_DAYS` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует |
 | 7. Выгрузка данных | `EXPORT_PSEUDONYM_KEY`, `DATA_EXPORT_BOT_ENABLED` | ключ псевдонимов генерируется `openssl rand -hex 32` и **не меняется просто так**: выгрузки до и после смены не сопоставляются (`28-diagnostics.md` §7) |
 | 8. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER`, `PLAYTEST_STATS_*` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Вход без подписи — только при `NODE_ENV=development`, иначе бэкенд не стартует; сводка без адреса чата или чтения обновлений бота не стартует |
-| 9. Клиентская сборка | `VITE_API_URL`, `VITE_APP_VERSION`, `VITE_DIAGNOSTICS_DEFAULT`, `VITE_DEV_TOOLS` | только не-секреты: всё это попадает в бандл. `VITE_DEV_TOOLS=1` открывает инструменты команды без ответа сервера и работает только на dev-сервере |
-| 10. Тесты | `TEST_DATABASE_URL`, `PLAYTEST_TEST_REDIS_URL` | адреса настоящих Postgres и Redis для интеграционных тестов (`17-testing-strategy.md` §4.2); в CI их задают сервисы workflow, локально пусто — тесты пропускаются |
+| 9. Авторизация игроков и приём забегов | `AUTH_ENABLED`, `JWT_ACCESS_SECRET`, `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_INIT_DATA_MAX_AGE_SEC`, `AUTH_MAX_SESSIONS`, `RUNS_*` | секрет подписи генерируется `openssl rand -hex 32`, свой на окружение; включённая авторизация без него, токена бота и базы не стартует. Окно данных запуска для входа — не больше часа, потолок в схеме. Пороги `RUNS_*` в `.env.example` нарочно мягкие: боевые задаются только в окружении прода (`34-stage3-plan.md`, Р7) |
+| 10. Клиентская сборка | `VITE_API_URL`, `VITE_APP_VERSION`, `VITE_DIAGNOSTICS_DEFAULT`, `VITE_DEV_TOOLS` | только не-секреты: всё это попадает в бандл. `VITE_DEV_TOOLS=1` открывает инструменты команды без ответа сервера и работает только на dev-сервере |
+| 11. Тесты | `TEST_DATABASE_URL`, `PLAYTEST_TEST_REDIS_URL` | адреса настоящих Postgres и Redis для интеграционных тестов (`17-testing-strategy.md` §4.2); в CI их задают сервисы workflow, локально пусто — тесты пропускаются |
 
 **Свой сервер Bot API.** `TELEGRAM_API_ROOT` пустой — бот ходит в облако
 Telegram (`https://api.telegram.org`). Если поднят локальный сервер Bot API,
@@ -233,6 +234,11 @@ pnpm dev:vk          # http://localhost:5175
 
 Выгрузка данных закрытого теста без бота — `pnpm closed-test:export -- --days 1`
 (архив в `var/exports`, нужен `EXPORT_PSEUDONYM_KEY`; `28-diagnostics.md` §6).
+
+Пересобрать рейтинг забегов из базы — после потери Redis или если проекция
+разошлась с таблицей `run` (`34-stage3-plan.md`, WP4):
+`pnpm --filter backend-api runs:rebuild-leaderboard`. Безопасно повторять:
+рейтинг собирается во временный ключ и подменяет рабочий одной командой.
 
 Повтор забега тестера по записи из выгрузки —
 `pnpm replay <reportId> --from diagnostic_reports.ndjson` (архив сначала
