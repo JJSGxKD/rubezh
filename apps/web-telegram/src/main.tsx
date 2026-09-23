@@ -55,6 +55,13 @@ void mountAppShell({
     // События и отчёты диагностики — тот же адрес API, что у плейтеста:
     // dev-сервер проксирует и эти префиксы (vite.config.ts).
     telemetry: { baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? "") },
+    // Аккаунты и сессии — тот же адрес API (docs/34-stage3-plan.md, WP1).
+    auth: { baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? "") },
+    // Минимальная версия Bot API. 7.7 — версия, с которой клиент умеет
+    // отключать вертикальные свайпы: без этого свайп закрывает приложение
+    // посреди забега, и игра не «беднее», а сломана
+    // (docs/33-telegram-mini-app-pitfalls.md §2.3).
+    minPlatformVersion: "7.7",
   },
   analytics: createAnalytics(),
 });

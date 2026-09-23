@@ -24,6 +24,8 @@ export interface AccountView {
   displayName: string;
   photoUrl: string | null;
   createdAt: string;
+  /** аккаунт заведён этим входом: по нему клиент шлёт `user_registered` ровно раз */
+  created: boolean;
 }
 
 interface SessionView {
@@ -97,7 +99,7 @@ export class AuthController {
   }
 }
 
-function view(result: { accessToken: string; expiresInSec: number; refreshToken: string; account: { accountId: string; displayName: string; photoUrl: string | null; createdAt: Date } }): SessionView {
+function view(result: { accessToken: string; expiresInSec: number; refreshToken: string; account: { accountId: string; displayName: string; photoUrl: string | null; createdAt: Date; created: boolean } }): SessionView {
   return {
     accessToken: result.accessToken,
     expiresInSec: result.expiresInSec,
@@ -107,6 +109,7 @@ function view(result: { accessToken: string; expiresInSec: number; refreshToken:
       displayName: result.account.displayName,
       photoUrl: result.account.photoUrl,
       createdAt: result.account.createdAt.toISOString(),
+      created: result.account.created,
     },
   };
 }

@@ -15,8 +15,9 @@ import {
 import { useMeta } from "../state/meta";
 import { usePlatform } from "../state/platform";
 import { useRun } from "../state/run";
+import { isVersionAtLeast } from "../state/platform-version";
 import { useShell } from "../state/shell";
-import { CompactOverlay, FirstRunScreen, OutsideScreen } from "../screens/gates";
+import { CompactOverlay, FirstRunScreen, OutdatedScreen, OutsideScreen } from "../screens/gates";
 import { LobbyScreen, ModeScreen, WeaponScreen } from "../screens/home";
 import { RunScreen } from "../screens/run/RunScreen";
 import {
@@ -60,6 +61,9 @@ export function App(): ReactNode {
   usePlatformButtons(stack, screen);
 
   if (!capabilities.platformAvailable) return <OutsideScreen botUrl={capabilities.botUrl} />;
+  // Версия клиента проверяется после самой площадки: вне её версии нет, и
+  // спрашивать не у кого.
+  if (outdated(capabilities.minPlatformVersion)) return <OutdatedScreen version={clientVersion()} />;
   if (!install.accepted) return <FirstRunScreen onAccept={() => acceptAndPlay()} />;
 
   const tab = activeTab(stack);
@@ -214,4 +218,14 @@ function acceptAndPlay(): void {
   useMeta.getState().rememberDifficulty("easy");
   useRun.getState().intend({ kind: "new" });
   useNavigation.getState().push("run");
+}
+
+/** Клиент площадки старше минимума, объявленного сборкой. */
+function outdated(minimum: string | undefined): boolean {
+  if (minimum === undefined) return false;
+  return !isVersionAtLeast(clientVersion(), minimum);
+}
+
+function clientVersion(): string | null {
+  return useShell.getState().adapter.clientInfo().version;
 }

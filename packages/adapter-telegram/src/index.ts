@@ -41,9 +41,37 @@ export class TelegramAdapter implements PlatformAdapter {
    */
   readonly displayUser: DisplayUser | null = readDisplayUser();
 
+  /**
+   * Контекст игрока из параметров запуска: кто открыл приложение по версии
+   * площадки.
+   *
+   * **Это не проверенная личность.** Подпись `initData` проверяет бэкенд, и
+   * настоящий аккаунт приходит оттуда — `app-shell/src/state/session.ts`.
+   * Здешний `id` годится ровно для показа и разрезов аналитики; решать по
+   * нему, чей это прогресс, чьи деньги и чьё место в топе, нельзя
+   * (docs/08-web-and-identity.md §4).
+   *
+   * SDK к этому моменту уже смонтирован: его поднимает `ui.ready()`, с
+   * которого начинается запуск оболочки.
+   */
   async init(): Promise<UserContext> {
-    // TODO: window.Telegram.WebApp.initData -> отправить на бэкенд для валидации
-    throw new Error("TelegramAdapter.init: не реализовано");
+    if (!isTMA()) throw new Error("TelegramAdapter.init: приложение открыто вне Telegram");
+
+    const client = describeTelegramClient();
+    if (client.userId === null) {
+      // Mini App без пользователя в параметрах запуска — открыто по прямой
+      // ссылке мимо бота. Сервер такого игрока не узнает, и притворяться, что
+      // контекст есть, нельзя.
+      throw new Error("TelegramAdapter.init: в параметрах запуска нет пользователя");
+    }
+
+    return {
+      id: client.userId,
+      platform: "telegram",
+      displayName: this.displayUser?.displayName ?? "Игрок",
+      avatarUrl: this.displayUser?.avatarUrl ?? null,
+      ...(client.languageCode === null ? {} : { locale: client.languageCode }),
+    };
   }
 
   async purchase(_itemId: string): Promise<PurchaseResult> {
