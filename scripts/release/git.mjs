@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { parseStableTag } from "./semver.mjs";
 
 /**
@@ -75,6 +75,37 @@ export function listComments(number) {
 
 export function postComment(number, body) {
   gh(["pr", "comment", String(number), "--body", body]);
+}
+
+/**
+ * Тег на удалённом одним push, без локального тега. Повторный push на тот же
+ * коммит git считает «up-to-date», так что перезапуск шага не падает; тег,
+ * уже стоящий на другом коммите, — отказ. Ошибку не бросает: что значит отказ,
+ * решает вызывающий (`scripts/release/release-tag.mjs`), а для этого ему нужен
+ * текст ответа сервера.
+ */
+export function pushTag(sha, tag) {
+  const result = spawnSync("git", ["push", "origin", `${sha}:refs/tags/${tag}`], { encoding: "utf8" });
+  const message = [result.stdout, result.stderr, result.error?.message].filter(Boolean).join("\n").trim();
+  return { ok: result.status === 0, message };
+}
+
+/** Коммит, на который указывает тег на удалённом, или `null`, если тега нет. */
+export function remoteTagSha(tag) {
+  const line = git(["ls-remote", "origin", `refs/tags/${tag}`]);
+  return line === "" ? null : line.split(/\s+/)[0];
+}
+
+export function deleteRemoteTag(tag) {
+  git(["push", "origin", "--delete", `refs/tags/${tag}`]);
+}
+
+/** Удаляет релиз (и черновик) по тегу; релиза нет — не ошибка, откатывать нечего. */
+export function deleteRelease(tag) {
+  const result = spawnSync("gh", ["release", "delete", tag, "--yes"], { encoding: "utf8" });
+  if (result.status === 0) return true;
+  if (/release not found/i.test(result.stderr ?? "")) return false;
+  throw new Error(`релиз ${tag} не удалён: ${(result.stderr || result.error?.message || "").trim()}`);
 }
 
 export function remoteBranchExists(branch) {
