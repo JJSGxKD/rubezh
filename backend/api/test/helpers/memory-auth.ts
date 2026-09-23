@@ -34,6 +34,11 @@ export class MemoryAccountRepository implements AccountRepository {
     return account;
   }
 
+  async byPlatformUser(platform: string, platformUserId: string): Promise<Account | null> {
+    const account = this.byKey.get(`${platform}:${platformUserId}`);
+    return account === undefined ? null : { ...account, created: false };
+  }
+
   async byId(accountId: string): Promise<Account | null> {
     for (const account of this.byKey.values()) {
       if (account.accountId === accountId) return { ...account, created: false };

@@ -18,6 +18,7 @@ import type { InlineButton, TelegramBotApi, TelegramUpdate } from "../telegram/t
 import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
 import type { ExportPeriod } from "./export.repository.js";
 import { ExportService } from "./export.service.js";
+import { RolesService } from "../roles/roles.service.js";
 
 /**
  * Выгрузка через бота (docs/28-diagnostics.md §6.1): администратор нажимает
@@ -125,6 +126,7 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
     @Inject(EXPORT_BOT_LOCKS) private readonly locks: ExportBotLocks,
     @Inject(TELEGRAM_BOT_API) private readonly api: ExportBotApi,
     private readonly exports: ExportService,
+    private readonly roles: RolesService,
   ) {}
 
   get enabled(): boolean {
@@ -159,8 +161,11 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
 
   private async handleCommand(message: NonNullable<TelegramUpdate["message"]>): Promise<boolean> {
     if (message.text === undefined || !/^\/export(@\w+)?(\s|$)/.test(message.text)) return false;
-    if (message.from === undefined || !this.config.adminTelegramIds.has(String(message.from.id))) {
-      // Не-администратор: молчание, как на неизвестную команду.
+    // Выгрузка — по праву `data.export`, а не по списку Telegram ID
+    // (docs/34-stage3-plan.md, WP2). Список остался аварийным путём внутри
+    // ролей: он действует, пока в системе нет ни одного владельца.
+    if (message.from === undefined || !(await this.canExport(String(message.from.id)))) {
+      // Нет права: молчание, как на неизвестную команду.
       return true;
     }
     const chatId = String(message.chat.id);
@@ -172,12 +177,17 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
     return true;
   }
 
+  /** Право на выгрузку у отправителя команды бота. */
+  private async canExport(telegramId: string): Promise<boolean> {
+    return await this.roles.canByPlatformUser("telegram", telegramId, "data.export");
+  }
+
   private async handleCallback(query: NonNullable<TelegramUpdate["callback_query"]>): Promise<boolean> {
     const data = query.data ?? "";
     if (!data.startsWith("export:")) return false;
     const adminId = String(query.from.id);
     const chat = query.message?.chat;
-    const allowed = this.config.adminTelegramIds.has(adminId) && chat !== undefined && chat.type === "private" && String(chat.id) === adminId;
+    const allowed = (await this.canExport(adminId)) && chat !== undefined && chat.type === "private" && String(chat.id) === adminId;
     if (!allowed) {
       // Подделанное нажатие или кнопка из пересланного сообщения: гасим часики
       // у нажавшего и ничего не делаем.

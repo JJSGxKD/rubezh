@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { RolesService } from "../roles/roles.service.js";
 import { accessFor, isAdmin, type PlaytestAccess } from "./playtest-access.js";
 import { ValidationError } from "../../common/domain-error.js";
 import {
@@ -25,6 +26,7 @@ import {
 export class PlaytestController {
   constructor(
     private readonly service: PlaytestService,
+    private readonly roles: RolesService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -32,7 +34,8 @@ export class PlaytestController {
   async submit(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SubmitResult }> {
     const submission = parse(() => runSubmissionSchema.parse(body), "Некорректный итог забега");
     const player = playerOf(request);
-    return { data: await this.service.submitRun(player, submission, Date.now(), isAdmin(player, this.config)) };
+    const admin = await isAdmin(player, this.config, this.roles);
+    return { data: await this.service.submitRun(player, submission, Date.now(), admin) };
   }
 
   @Post("sessions")
@@ -61,8 +64,8 @@ export class PlaytestController {
    * и недоступный Redis не должен прятать от администратора его инструменты.
    */
   @Get("access")
-  access(@Req() request: unknown): { data: PlaytestAccess } {
-    return { data: accessFor(playerOf(request), this.config) };
+  async access(@Req() request: unknown): Promise<{ data: PlaytestAccess }> {
+    return { data: await accessFor(playerOf(request), this.config, this.roles) };
   }
 }
 

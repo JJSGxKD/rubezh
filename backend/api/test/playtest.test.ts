@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ExecutionContext } from "@nestjs/common";
-import { loadAppConfig } from "../src/config/app-config.js";
+import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
 import {
   runSubmissionSchema,
@@ -13,6 +13,9 @@ import { submitBenchReportSchema } from "../src/modules/diagnostics/dto/bench-re
 import { PlaytestStressListener } from "../src/modules/playtest/playtest-stress.listener.js";
 import { benchSubmission, DEVICE, REPORT_ID } from "./helpers/bench-report.js";
 import { accessFor } from "../src/modules/playtest/playtest-access.js";
+import { RolesService } from "../src/modules/roles/roles.service.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard.js";
 import { PlaytestService } from "../src/modules/playtest/playtest.service.js";
 import { verifyInitData } from "../src/modules/telegram/telegram-init-data.js";
@@ -121,17 +124,20 @@ describe("доступ к эндпоинтам плейтеста", () => {
     expect(() => loadAppConfig({ PLAYTEST_ENABLED: "true" })).toThrow(/TELEGRAM_BOT_TOKEN/);
   });
 
-  it("открывает стресс-тест всем на плейтесте, а режим разработчика — только администраторам", () => {
+  it("открывает стресс-тест всем на плейтесте, а режим разработчика — по праву", async () => {
     const player = (id: string) => ({ id, name: "Игрок", username: null, photoUrl: null });
+    // Ролей в базе нет, поэтому работает аварийный путь: список в окружении
+    // даёт владельца, пока владельца нет (docs/34-stage3-plan.md, WP2).
+    const roles = (config: AppConfig) => new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());
     const playtest = loadAppConfig({ PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: BOT_TOKEN, ADMIN_TELEGRAM_IDS: "111, 222" });
 
-    expect(accessFor(player("333"), playtest)).toEqual({ admin: false, stressTest: true, devMode: false });
-    expect(accessFor(player("222"), playtest)).toEqual({ admin: true, stressTest: true, devMode: true });
+    expect(await accessFor(player("333"), playtest, roles(playtest))).toEqual({ admin: false, stressTest: true, devMode: false });
+    expect(await accessFor(player("222"), playtest, roles(playtest))).toEqual({ admin: true, stressTest: true, devMode: true });
     // Вход заголовком разработчика — ещё не администратор, пока вход не включён.
-    expect(accessFor(player("dev-me"), playtest).devMode).toBe(false);
+    expect((await accessFor(player("dev-me"), playtest, roles(playtest))).devMode).toBe(false);
 
     const local = loadAppConfig({ NODE_ENV: "development", PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: BOT_TOKEN, PLAYTEST_DEV_AUTH: "true" });
-    expect(accessFor(player("dev-me"), local).devMode).toBe(true);
+    expect((await accessFor(player("dev-me"), local, roles(local))).devMode).toBe(true);
   });
 
   it("не поднимается с мусором в списке администраторов", () => {
