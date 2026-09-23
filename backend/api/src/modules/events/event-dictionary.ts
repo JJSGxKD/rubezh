@@ -64,6 +64,13 @@ const runOutcome = payload({
 
 export const EVENT_DICTIONARY = {
   app_first_open: { version: 1, payload: payload({}) },
+  // Аккаунт заведён — ровно один раз за его жизнь: о том, что вход был
+  // первым, знает только сервер (docs/34-stage3-plan.md, WP1).
+  user_registered: { version: 1, payload: payload({}) },
+  // Как игрок получил сессию: `launch` — вход на запуске, `refresh` —
+  // плановое продление, `reauth` — сервер не принял токен посреди работы.
+  // Доля `reauth` показывает, часто ли сессии теряются на самом деле.
+  user_authenticated: { version: 1, payload: payload({ reason: z.enum(["launch", "refresh", "reauth"]) }) },
   screen_viewed: { version: 1, payload: payload({ screen: id, stub: z.boolean() }) },
   settings_changed: { version: 1, payload: payload({ setting: id, value: flatValue }) },
   share_offered: { version: 1, payload: payload({ context: id }) },

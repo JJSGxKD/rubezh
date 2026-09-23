@@ -109,6 +109,14 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
     .flush("launch")
     .then(() => usePlaytest.getState().loadProfile());
   void usePlaytest.getState().loadAccess();
+  // Сессия игрока — отдельным чанком после главной: деньгам и рейтингу она
+  // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический
+  // импорт утащил бы её и клиента авторизации в первую загрузку.
+  if (options.capabilities.auth !== undefined) {
+    import("./state/session")
+      .then(({ useSession }) => useSession.getState().signIn())
+      .catch((error: unknown) => console.warn("Вход не загрузился:", error));
+  }
   void usePlaytest.getState().reportSession();
   const stopTelemetry = startTelemetry(options, telemetrySink.attach);
   // Записи забегов, не ушедшие в прошлый раз, досылаются после главной. Чанк

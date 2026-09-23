@@ -1,6 +1,6 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { Redis } from "ioredis";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { closeRedis, createRedis } from "../src/infra/redis.js";
 import { RedisRefreshStore } from "../src/modules/auth/redis-refresh.store.js";
@@ -10,11 +10,31 @@ import { RedisRefreshStore } from "../src/modules/auth/redis-refresh.store.js";
  * именно атомарность гашения Lua-скриптом, вытеснение старых устройств и
  * срок жизни набора сессий, который продлевается только вверх.
  *
- * Идёт только с PLAYTEST_TEST_REDIS_URL — отдельной базой Redis, которую тест
- * очищает целиком: `redis://localhost:6379/15`. В CI Redis пока не поднят, и
- * там тест пропускается (docs/17-testing-strategy.md §4.2).
+ * Идёт только с PLAYTEST_TEST_REDIS_URL: `redis://localhost:6379/15`. В CI
+ * Redis пока не поднят, и там тест пропускается (docs/17-testing-strategy.md
+ * §4.2).
+ *
+ * **Своя база Redis, соседняя с той, что в переменной.** Хранилище плейтеста
+ * очищает свою базу целиком (`flushdb`), а файлы тестов идут параллельно — на
+ * общей базе он снёс бы эти ключи прямо посреди прогона. Сама база здесь не
+ * очищается вовсе: у каждого случая свои аккаунт и токены.
  */
-const url = process.env.PLAYTEST_TEST_REDIS_URL ?? "";
+const url = ownDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "");
+
+/** Тот же Redis, но база на единицу младше: у соседей свой `flushdb`. */
+function ownDatabase(source: string): string {
+  if (source === "") return "";
+  try {
+    const parsed = new URL(source);
+    const index = Number(parsed.pathname.replace("/", ""));
+    parsed.pathname = `/${Number.isInteger(index) && index > 0 ? index - 1 : 14}`;
+    return parsed.toString();
+  } catch {
+    // Адрес не разобрался — пусть тест упадёт на подключении, а не молча
+    // уедет на чужую базу.
+    return source;
+  }
+}
 
 const config = (patch: Record<string, string> = {}): AppConfig =>
   loadAppConfig({
@@ -30,87 +50,94 @@ const config = (patch: Record<string, string> = {}): AppConfig =>
 describe.skipIf(url === "")("токены продления в Redis", () => {
   let redis: Redis;
   let store: RedisRefreshStore;
+  /** Свой аккаунт на каждый случай: общая база чистится не между тестами, а никогда. */
+  const account = (): string => `test-${randomUUID()}`;
+  const hash = (): string => `hash-${randomUUID()}`;
 
   beforeAll(async () => {
     redis = createRedis(config());
     await redis.connect();
+    store = new RedisRefreshStore(redis, config());
   });
 
   afterAll(async () => {
     await closeRedis(redis);
   });
 
-  beforeEach(async () => {
-    await redis.flushdb();
-    store = new RedisRefreshStore(redis, config());
-  });
-
   it("выданный токен забирается один раз", async () => {
-    await store.issue("account-1", "hash-1", 1_000);
+    const [id, token] = [account(), hash()];
+    await store.issue(id, token, 1_000);
 
-    expect(await store.take("hash-1")).toEqual({ status: "ok", session: { accountId: "account-1", issuedAtMs: 1_000 } });
-    expect(await store.take("hash-1")).toEqual({ status: "reused", accountId: "account-1" });
+    expect(await store.take(token)).toEqual({ status: "ok", session: { accountId: id, issuedAtMs: 1_000 } });
+    expect(await store.take(token)).toEqual({ status: "reused", accountId: id });
   });
 
   it("незнакомый токен — не «повторный»: отличать важно, на повторный сбрасываются сессии", async () => {
-    expect(await store.take("никогда-не-выдавался")).toEqual({ status: "unknown" });
+    expect(await store.take(hash())).toEqual({ status: "unknown" });
   });
 
   it("два одновременных гашения — только одно успешное", async () => {
-    await store.issue("account-1", "hash-1", 1_000);
+    const token = hash();
+    await store.issue(account(), token, 1_000);
 
-    const [first, second] = await Promise.all([store.take("hash-1"), store.take("hash-1")]);
+    const [first, second] = await Promise.all([store.take(token), store.take(token)]);
 
-    const statuses = [first.status, second.status].sort();
-    expect(statuses).toEqual(["ok", "reused"]);
+    expect([first.status, second.status].sort()).toEqual(["ok", "reused"]);
   });
 
   it("возврат оживляет погашенный токен", async () => {
-    await store.issue("account-1", "hash-1", Date.now());
-    const taken = await store.take("hash-1");
+    const token = hash();
+    await store.issue(account(), token, Date.now());
+    const taken = await store.take(token);
     if (taken.status !== "ok") throw new Error("токен должен был погаситься");
 
-    await store.restore(taken.session, "hash-1");
+    await store.restore(taken.session, token);
 
-    expect(await store.take("hash-1")).toMatchObject({ status: "ok" });
+    expect(await store.take(token)).toMatchObject({ status: "ok" });
   });
 
   it("возвращать нечего, когда срок уже вышел", async () => {
+    const token = hash();
     const longAgo = Date.now() - 40 * 24 * 60 * 60 * 1000;
 
-    await store.restore({ accountId: "account-1", issuedAtMs: longAgo }, "hash-old");
+    await store.restore({ accountId: account(), issuedAtMs: longAgo }, token);
 
-    expect(await store.take("hash-old")).toEqual({ status: "unknown" });
+    expect(await store.take(token)).toEqual({ status: "unknown" });
   });
 
   it("сверх потолка устройств вытесняется самое старое", async () => {
     const limited = new RedisRefreshStore(redis, config({ AUTH_MAX_SESSIONS: "2" }));
-    await limited.issue("account-1", "hash-1", 1_000);
-    await limited.issue("account-1", "hash-2", 2_000);
-    await limited.issue("account-1", "hash-3", 3_000);
+    const id = account();
+    const [first, second, third] = [hash(), hash(), hash()];
+    await limited.issue(id, first, 1_000);
+    await limited.issue(id, second, 2_000);
+    await limited.issue(id, third, 3_000);
 
-    expect(await limited.take("hash-1")).toEqual({ status: "unknown" });
-    expect(await limited.take("hash-3")).toMatchObject({ status: "ok" });
+    expect(await limited.take(first)).toEqual({ status: "unknown" });
+    expect(await limited.take(third)).toMatchObject({ status: "ok" });
   });
 
   it("выход со всех устройств гасит все токены аккаунта и не трогает чужие", async () => {
-    await store.issue("account-1", "hash-1", 1_000);
-    await store.issue("account-1", "hash-2", 2_000);
-    await store.issue("account-2", "hash-3", 3_000);
+    const [mine, other] = [account(), account()];
+    const [first, second, alien] = [hash(), hash(), hash()];
+    await store.issue(mine, first, 1_000);
+    await store.issue(mine, second, 2_000);
+    await store.issue(other, alien, 3_000);
 
-    expect(await store.revokeAll("account-1")).toBe(2);
-    expect(await store.take("hash-1")).toEqual({ status: "unknown" });
-    expect(await store.take("hash-3")).toMatchObject({ status: "ok" });
+    expect(await store.revokeAll(mine)).toBe(2);
+    expect(await store.take(first)).toEqual({ status: "unknown" });
+    expect(await store.take(alien)).toMatchObject({ status: "ok" });
   });
 
   it("срок жизни набора сессий продлевается только вверх", async () => {
     // Вход с одного устройства не должен укорачивать жизнь сессиям остальных
     // (docs/13-reuse-from-vpnsibcom.md §4).
-    await store.issue("account-1", "hash-1", 1_000);
-    await redis.expire("auth:sessions:account-1", 10);
+    const id = account();
+    await store.issue(id, hash(), 1_000);
+    await redis.expire(`auth:sessions:${id}`, 10);
 
-    await store.issue("account-1", "hash-2", 2_000);
+    await store.issue(id, hash(), 2_000);
 
-    expect(await redis.ttl("auth:sessions:account-1")).toBeGreaterThan(1000);
+    expect(await redis.ttl(`auth:sessions:${id}`)).toBeGreaterThan(1000);
   });
 });
