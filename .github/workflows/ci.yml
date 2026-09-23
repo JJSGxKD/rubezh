@@ -134,32 +134,44 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_CHANNEL: ${{ github.ref == 'refs/heads/dev' && 'prerelease' || 'stable' }}
 
+      # Выпускается только вершина ветки (docs/09-ci-cd.md §8.1, «Выпускается
+      # вершина ветки»): если, пока прогон ждал в очереди, в ветку влили
+      # следующий PR, эти изменения выпустит прогон новой вершины — вместе с
+      # меткой этого PR. Собирать то, что не будет выпущено, незачем.
+      - if: steps.version.outputs.has_release == 'true'
+        name: Проверить вершину ветки
+        id: tip
+        run: node scripts/release/release-tag.mjs check
+        env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+
       # Пересборка с настоящей версией: гейт выше собирал без неё, а версия
       # обязана попасть в бандл, события и отчёты (docs/09-ci-cd.md §8.1,
       # «Версия не коммитится обратно в репозиторий»).
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         run: pnpm install --frozen-lockfile
 
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         run: pnpm build
         env:
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
 
       # Артефакт клиента: то, что раскатывается на статику, берётся из этого
       # же прогона — пересборка перед деплоем запрещена (docs/09-ci-cd.md §7).
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         run: tar -czf "rubezh-web-telegram-${{ steps.version.outputs.version }}.tar.gz" -C apps/web-telegram/dist .
 
       # Имя пакета в GHCR должно быть в нижнем регистре, а владелец
       # репозитория пишется как есть — отсюда приведение регистра.
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         id: image
         run: echo "name=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/rubezh-api" >> "$GITHUB_OUTPUT"
 
       # Образ собирается здесь, а публикуется после тега: до тега наружу не
       # уходит ничего с номером версии (docs/09-ci-cd.md §8.1, «Порядок
       # публикации»).
-      - if: steps.version.outputs.has_release == 'true'
+      - if: steps.tip.outputs.current == 'true'
         run: >-
           docker build --file backend/api/Dockerfile
           --tag "${IMAGE}:${VERSION}"
@@ -170,12 +182,15 @@ jobs:
 
       # Тег — первым из того, что видно снаружи: отказать может именно он
       # (GitHub сверяет новый ref с workflow вершин веток), и отказ не должен
-      # оставить в реестре образ под номером, которого нет в git.
-      - if: steps.version.outputs.has_release == 'true'
+      # оставить в реестре образ под номером, которого нет в git. Ветка ушла
+      # за время сборки — тега нет, created=false, и дальше ничего не
+      # публикуется: это не ошибка, а тот же обгон, что и выше.
+      - if: steps.tip.outputs.current == 'true'
         name: Поставить тег
         id: tag
         run: node scripts/release/release-tag.mjs create
         env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
           VERSION: ${{ steps.version.outputs.version }}
 
       # Черновик не виден снаружи и не рассылает уведомлений: релиз появится,

@@ -90,6 +90,16 @@ export function pushTag(sha, tag) {
   return { ok: result.status === 0, message };
 }
 
+/**
+ * Вершина ветки на удалённом сейчас, вместе с объектами — чтобы проверить,
+ * есть ли в ней коммит прогона. Ветки нет — `null`.
+ */
+export function fetchBranchTip(branch) {
+  if (git(["ls-remote", "origin", `refs/heads/${branch}`]) === "") return null;
+  git(["fetch", "--quiet", "--no-tags", "origin", `refs/heads/${branch}`]);
+  return git(["rev-parse", "FETCH_HEAD"]);
+}
+
 /** Коммит, на который указывает тег на удалённом, или `null`, если тега нет. */
 export function remoteTagSha(tag) {
   const line = git(["ls-remote", "origin", `refs/tags/${tag}`]);
