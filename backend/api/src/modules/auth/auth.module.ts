@@ -25,6 +25,6 @@ import { RedisRefreshStore } from "./redis-refresh.store.js";
     { provide: ACCOUNT_REPOSITORY, useClass: PrismaAccountRepository },
     { provide: REFRESH_STORE, useClass: RedisRefreshStore },
   ],
-  exports: [AuthService, AuthGuard],
+  exports: [AuthService, AuthGuard, ACCOUNT_REPOSITORY],
 })
 export class AuthModule {}

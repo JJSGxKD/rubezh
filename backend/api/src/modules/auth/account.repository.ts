@@ -36,6 +36,8 @@ export interface AccountRepository {
    */
   upsert(identity: AccountIdentity, nowMs: number): Promise<Account>;
   byId(accountId: string): Promise<Account | null>;
+  /** Найти по площадке и её идентификатору — так аккаунт ищут по Telegram ID */
+  byPlatformUser(platform: AccountPlatform, platformUserId: string): Promise<Account | null>;
 }
 
 @Injectable()
@@ -64,6 +66,13 @@ export class PrismaAccountRepository implements AccountRepository {
 
   async byId(accountId: string): Promise<Account | null> {
     const row = await this.prisma.account.findUnique({ where: { accountId } });
+    return row === null ? null : toAccount(row, false);
+  }
+
+  async byPlatformUser(platform: AccountPlatform, platformUserId: string): Promise<Account | null> {
+    const row = await this.prisma.account.findUnique({
+      where: { platform_platformUserId: { platform, platformUserId } },
+    });
     return row === null ? null : toAccount(row, false);
   }
 }

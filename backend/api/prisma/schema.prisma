@@ -28,6 +28,20 @@ enum DiagnosticKind {
   run
 }
 
+// Роли в панели управления (docs/29-admin-panel.md §3.1). Состав роли —
+// код, а не данные: менять его должно ревью, а не клик. Данные — только то,
+// у кого какая роль.
+enum Role {
+  owner
+  admin
+  game_designer
+  moderator
+  marketer
+  finance
+  analyst
+  stakeholder
+}
+
 // Аккаунт игрока (docs/34-stage3-plan.md, WP1).
 //
 // Ключ идентичности — пара «площадка + её идентификатор», а не Telegram ID:
@@ -50,6 +64,8 @@ model Account {
   // история блокировок придёт в аудит вместе с ролями (WP2).
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(3)
   banReason      String?   @map("ban_reason") @db.VarChar(256)
+
+  roles AccountRole[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -161,4 +177,48 @@ model DataExport {
 
   @@index([requestedBy, createdAt])
   @@map("data_export")
+}
+
+// Роль, выданная аккаунту (docs/34-stage3-plan.md, WP2). Ролей у человека
+// может быть несколько: участник 2 — администратор, маркетолог и участник
+// проекта разом.
+//
+// Кто выдал — обязательная часть строки, а не удобство: без неё журнал
+// аудита отвечает «кому выдали», но не «кто выдал».
+model AccountRole {
+  accountId String   @map("account_id") @db.Uuid
+  role      Role
+  /// `null` — выдано на старте по списку в окружении, а не человеком
+  grantedBy String?  @map("granted_by") @db.Uuid
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, role])
+  @@index([role])
+  @@map("account_role")
+}
+
+// Журнал аудита (docs/29-admin-panel.md §3.4): кто, когда, что, было → стало.
+//
+// Пишется на изменения и на чувствительное чтение — просмотр персональных
+// данных и выгрузки. Из приложения не редактируется вовсе: журнал, который
+// можно поправить, не журнал.
+model AuditEntry {
+  entryId        String   @id @map("entry_id") @db.Uuid
+  /// `null` — действие системы, а не человека: например, выдача роли на старте
+  actorAccountId String?  @map("actor_account_id") @db.Uuid
+  /// что сделали: имя права или действия, `roles.assign` и подобные
+  action         String   @db.VarChar(64)
+  /// над чем: идентификатор аккаунта, выгрузки, записи — своё у каждого действия
+  target         String?  @db.VarChar(128)
+  /// было и стало; `null` там, где состояния не было или оно не изменилось
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([actorAccountId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_entry")
 }

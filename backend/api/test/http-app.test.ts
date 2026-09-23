@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Module, type Type } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
-import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
+import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { HealthController } from "../src/health/health.controller.js";
 import { BODY_LIMIT_BYTES, createHttpApp } from "../src/http-app.js";
 import { PlaytestAuthGuard } from "../src/modules/playtest/playtest-auth.guard.js";
@@ -12,6 +12,9 @@ import { PLAYTEST_STATS_STORE } from "../src/modules/playtest/playtest-stats.sto
 import { PLAYTEST_STORE } from "../src/modules/playtest/playtest.store.js";
 import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
 import { MemoryPlaytestStore } from "./helpers/memory-playtest.store.js";
+import { RolesService } from "../src/modules/roles/roles.service.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 // HTTP-слой на настоящем Fastify (docs/17-testing-strategy.md §4): префикс,
 // форма ошибок, лимит тела, гвард и CORS — так, как их увидит клиент.
@@ -23,6 +26,13 @@ function moduleFor(env: Record<string, string>): Type<unknown> {
       { provide: APP_CONFIG, useValue: loadAppConfig({ NODE_ENV: "development", ...env }) },
       PlaytestAuthGuard,
       PlaytestService,
+      // Плейтест спрашивает права: инструменты команды открываются по
+      // `tools.dev`, а не по списку Telegram ID (docs/34-stage3-plan.md, WP2).
+      {
+        provide: RolesService,
+        useFactory: (config: AppConfig) => new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository()),
+        inject: [APP_CONFIG],
+      },
       { provide: PLAYTEST_STORE, useValue: new MemoryPlaytestStore() },
       { provide: PLAYTEST_STATS_STORE, useValue: new MemoryPlaytestStatsStore() },
     ],

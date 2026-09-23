@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadAppConfig } from "../src/config/app-config.js";
+import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { BotRouter } from "../src/modules/bot/bot-router.js";
 import {
   ExportBotCommand,
@@ -11,6 +11,9 @@ import {
 import type { ExportArtifact, ExportRequest, ExportService } from "../src/modules/export/export.service.js";
 import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
 import type { TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { RolesService } from "../src/modules/roles/roles.service.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 // Выгрузка через бота (docs/28-diagnostics.md §6.1.5).
 
@@ -96,7 +99,7 @@ function setup(env: Record<string, string> = {}, parts = 1) {
   } as unknown as ExportService;
   const locks = new MemoryLocks();
   const router = new BotRouter();
-  const command = new ExportBotCommand(config, router, locks, api, exports);
+  const command = new ExportBotCommand(config, router, locks, api, exports, rolesService(config));
   const jobs: ExportJob[] = [];
   command.jobs = { add: async (job) => void jobs.push(job) };
   command.onModuleInit();
@@ -119,6 +122,15 @@ function message(fromId: number, text: string, chat: { id: number; type: string 
 
 function press(fromId: number, data: string, chat: { id: number; type: string } = { id: fromId, type: "private" }): TelegramUpdate {
   return { update_id: 2, callback_query: { id: `cb-${Math.random()}`, from: { id: fromId, is_bot: false }, data, message: { message_id: 5, chat } } };
+}
+
+/**
+ * Права выгрузки: ролей в базе нет, поэтому работает аварийный путь —
+ * список ADMIN_TELEGRAM_IDS даёт владельца, пока владельца нет
+ * (docs/34-stage3-plan.md, WP2).
+ */
+function rolesService(config: AppConfig): RolesService {
+  return new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());
 }
 
 describe("выгрузка через бота", () => {

@@ -6,6 +6,7 @@ import { DisabledError, UnauthorizedError } from "../../common/domain-error.js";
 import { REDIS } from "../../infra/redis.js";
 import { updateSchema } from "../telegram/telegram-bot-api.js";
 import { BotRouter } from "./bot-router.js";
+import { Public } from "../../common/access.js";
 
 /**
  * Вебхук бота (docs/28-diagnostics.md §6.1.3–§6.1.4).
@@ -56,6 +57,9 @@ export class BotWebhookController {
     private readonly dedupe: BotUpdateDedupe,
   ) {}
 
+  // Открыт наружу по замыслу: обновления шлёт Telegram, а не игрок. Проверка
+  // — секретный токен в заголовке, её делает сам обработчик.
+  @Public()
   @Post("webhook")
   @HttpCode(200)
   async receive(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { accepted: boolean } }> {
