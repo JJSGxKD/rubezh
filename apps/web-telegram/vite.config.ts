@@ -22,15 +22,15 @@ export default defineConfig(({ mode, command }) => {
 
   // Бэкенд за тем же доменом, что и клиент: телефон через туннель достаёт до
   // локального API без отдельного прокси и без CORS (docs/26-stage2-plan.md,
-  // Р19). Проксируются только префиксы, которые сами защищены: плейтест —
-  // подписью initData, приёмники — выключателем, лимитами и Origin
-  // (docs/28-diagnostics.md §5.3), вебхук бота — секретным токеном: через
-  // туннель машина разработчика может принимать обновления и вебхуком.
-  // Остальное dev-API наружу не выходит
-  // (docs/20-env-and-ports.md §4).
+  // Р19). Проксируются только префиксы, которые сами защищены: вход — подписью
+  // запуска и лимитом частоты, забеги и плейтест — токеном сессии, приёмники —
+  // выключателем, лимитами и Origin (docs/28-diagnostics.md §5.3), вебхук
+  // бота — секретным токеном: через туннель машина разработчика может
+  // принимать обновления и вебхуком. Остальное dev-API — роли, журнал —
+  // наружу не выходит (docs/20-env-and-ports.md §4).
   const apiTarget = `http://127.0.0.1:${Number(env.API_PORT ?? 4000)}`;
   const apiProxy = Object.fromEntries(
-    ["/api/v1/playtest", "/api/v1/events", "/api/v1/diagnostics", "/api/v1/bot"].map((prefix) => [
+    ["/api/v1/auth", "/api/v1/runs", "/api/v1/playtest", "/api/v1/events", "/api/v1/diagnostics", "/api/v1/bot"].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },
     ]),
