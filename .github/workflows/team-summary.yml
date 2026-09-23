@@ -2,48 +2,48 @@
 #
 # Текст берётся из описания PR — разделы «## Сводка для команды» и
 # «## Пост в канал»: он пишется один раз, вместе с PR, и проходит ревью.
-# Сводка уходит в чат администраторов, пост — туда же черновиком: публикует
-# его человек, пересылкой «без автора». Автопоста в публичный канал нет
-# сознательно.
+# Сводка уходит в чат администраторов, пост — черновиком в свою тему:
+# публикует его человек, пересылкой «без автора». Автопоста в публичный
+# канал нет сознательно.
 #
-# Безопасность:
-# - событие `pull_request`, а не `pull_request_target`: PR из форка секретов не
-#   получает, и чужой код с токеном не запускается никогда;
-# - код PR не собирается и не запускается — только скрипт из базовой ветки,
-#   куда PR уже влит;
-# - описание PR передаётся через переменную окружения, а не подставляется в
-#   `run:` — иначе текст PR выполнился бы как команда shell.
+# Запуск — на push в `dev` и `main`, то есть на мердж, а PR находится по
+# коммиту. Не на событие pull_request: его GitHub сверяет с правилом веток
+# окружения как `refs/pull/N/merge`, и окружение, открытое только `dev` и
+# `main`, такой джоб не пустило бы. Открыть окружение PR-ссылкам значит отдать
+# секрет любому PR, даже невлитому, — вместе с правкой этого самого файла.
+#
+# Отсюда и безопасность: секрет виден только джобу, который бежит на `dev`
+# или `main`, то есть на уже влитом и прошедшем ревью коде; описание PR
+# приходит через API и не подставляется в `run:`.
 name: team-summary
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches: [main, dev]
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   send:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    # Секрет и адреса чатов — в окружении `telegram`, а не в секретах
-    # репозитория: так их видит только этот джоб.
+    # Секрет и адреса чатов — в окружении `telegram`, открытом только веткам
+    # `main` и `dev`. Обязательных ревьюеров у окружения быть не должно:
+    # иначе каждая сводка ждала бы ручного одобрения.
     environment: telegram
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
       - name: Отправить сводку
         env:
+          GH_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TEAM_TELEGRAM_BOT_TOKEN }}
           TEAM_TELEGRAM_CHAT: ${{ vars.TEAM_TELEGRAM_CHAT }}
           TEAM_TELEGRAM_DRAFTS_CHAT: ${{ vars.TEAM_TELEGRAM_DRAFTS_CHAT }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_BODY: ${{ github.event.pull_request.body }}
         run: node scripts/release/team-summary.mjs

@@ -6,6 +6,7 @@ import {
   isSectionHeader,
   parseChatTarget,
   plannedMessages,
+  pullRequestForPush,
   splitMessage,
   toTelegramHtml,
   withChannelSignature,
@@ -125,23 +126,67 @@ describe("что и куда уходит", () => {
   });
 
   it("сводка уходит в чат команды", () => {
-    const messages = plannedMessages(BODY, { team, drafts: null });
+    const { messages } = plannedMessages(BODY, { team, drafts: null });
 
     expect(messages).toHaveLength(1);
     expect(messages[0].target).toEqual(team);
   });
 
-  it("черновик поста — туда же, если отдельной темы для черновиков нет", () => {
+  it("черновик поста — только в свою тему, в ленту команды он не идёт", () => {
+    const drafts = parseChatTarget("-1001234567890:142");
     const body = `${BODY}\n\n## ${CHANNEL_SECTION}\n🎮 **ПОСТ**\n\nтекст`;
 
-    const messages = plannedMessages(body, { team, drafts: null });
+    const { messages } = plannedMessages(body, { team, drafts });
+    const toDrafts = messages.filter((message: { target: unknown }) => message.target === drafts);
 
-    expect(messages.map((message: { text: string }) => message.text).join("\n")).toContain("Черновик поста");
-    expect(messages.at(-1).text).toContain("@KennixDev");
+    expect(toDrafts.map((message: { text: string }) => message.text).join("\n")).toContain("Черновик поста");
+    expect(toDrafts.at(-1).text).toContain("@KennixDev");
+    // В ленту команды ушла только сводка — черновик её не засоряет.
+    expect(messages.filter((message: { target: unknown }) => message.target === team)).toHaveLength(1);
+  });
+
+  it("без темы для черновиков пост не отправляется, и об этом сказано", () => {
+    const body = `${BODY}\n\n## ${CHANNEL_SECTION}\n🎮 **ПОСТ**\n\nтекст`;
+
+    const { messages, skipped } = plannedMessages(body, { team, drafts: null });
+
+    expect(messages.every((message: { text: string }) => !message.text.includes("Черновик"))).toBe(true);
+    expect(skipped.join(" ")).toContain("TEAM_TELEGRAM_DRAFTS_CHAT");
   });
 
   it("без чата не отправляет ничего, а не падает", () => {
-    expect(plannedMessages(BODY, { team: null, drafts: null })).toEqual([]);
+    const { messages, skipped } = plannedMessages(BODY, { team: null, drafts: null });
+
+    expect(messages).toEqual([]);
+    expect(skipped.join(" ")).toContain("TEAM_TELEGRAM_CHAT");
+  });
+});
+
+describe("PR по коммиту из push", () => {
+  const sha = "abc123";
+
+  it("находит PR, чьим мерджем стал коммит", () => {
+    const merged = { number: 51, merged_at: "2026-09-23T10:00:00Z", merge_commit_sha: sha, body: "" };
+
+    expect(pullRequestForPush(sha, [merged])).toBe(merged);
+  });
+
+  it("открытый релизный PR, куда коммит уже попал, — не тот", () => {
+    // GitHub связывает коммит со всеми PR, где он есть: сводку прислал бы
+    // релизный PR, а не тот, что его принёс.
+    const release = { number: 60, merged_at: null, merge_commit_sha: null, body: "" };
+
+    expect(pullRequestForPush(sha, [release])).toBeNull();
+  });
+
+  it("влитый PR с другим коммитом мерджа — тоже не тот", () => {
+    const other = { number: 40, merged_at: "2026-09-20T10:00:00Z", merge_commit_sha: "другой", body: "" };
+
+    expect(pullRequestForPush(sha, [other])).toBeNull();
+  });
+
+  it("перемотка синка без PR — отправлять нечего", () => {
+    expect(pullRequestForPush(sha, [])).toBeNull();
   });
 });
 

@@ -1,16 +1,25 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
+import { pullRequestsForCommit } from "./git.mjs";
 
 /**
  * Сводка для команды и черновик поста в канал — из описания PR в Telegram
  * (docs/09-ci-cd.md §7, «Сводка в Telegram»).
  *
  * Текст пишется **один раз, в описании PR**, разделами `## Сводка для
- * команды` и `## Пост в канал`, и проходит ревью вместе с кодом. При мердже
- * workflow `team-summary.yml` отправляет его ботом: сводку — в чат
- * администраторов, пост — туда же черновиком. Публикует пост человек —
- * пересылкой «без автора», которая сохраняет оформление целиком. Автопост в
- * публичный канал сознательно не делается: опечатка или лишняя подробность
- * ушли бы сразу всем подписчикам, а удалённый пост успевают прочитать.
+ * команды` и `## Пост в канал`, и проходит ревью вместе с кодом. После
+ * мерджа workflow `team-summary.yml` отправляет его ботом: сводку — в чат
+ * администраторов, пост — черновиком в отдельную тему, чтобы не забивать
+ * ленту. Публикует пост человек — пересылкой «без автора», которая
+ * сохраняет оформление целиком. Автопост в публичный канал сознательно не
+ * делается: опечатка или лишняя подробность ушли бы сразу всем подписчикам,
+ * а удалённый пост успевают прочитать.
+ *
+ * Запуск — на push в `dev` и `main`, а PR находится по коммиту. Не на
+ * событие PR: его GitHub сверяет с правилом веток окружения как
+ * `refs/pull/N/merge`, и окружение, открытое только `dev` и `main`, такой
+ * джоб не пустило бы; а открыть его PR-ссылкам значит отдать секрет любому
+ * PR, даже невлитому.
  *
  * Чистые функции — разбор раздела, перевод разметки, нарезка — покрыты
  * тестами; `main` в конце файла — тонкая обвязка над Bot API.
@@ -126,21 +135,44 @@ export function parseChatTarget(value) {
   return { chatId: match[1], threadId: match[2] === undefined ? null : Number(match[2]) };
 }
 
-/** Что и куда отправить по событию мерджа. Пустой список — отправлять нечего. */
+/**
+ * Что и куда отправить по влитому PR. Пустой список — отправлять нечего.
+ *
+ * Черновик поста уходит **только** в свою тему: запасного пути в ленту
+ * команды нет намеренно — ради этого тема и заведена. Нет темы — черновик
+ * не отправляется, а `skipped` объясняет почему.
+ */
 export function plannedMessages(body, chats) {
   const messages = [];
+  const skipped = [];
+
   const team = extractSection(body, TEAM_SECTION);
-  if (team !== null && chats.team !== null) {
-    for (const part of splitMessage(toTelegramHtml(team))) messages.push({ target: chats.team, text: part });
+  if (team !== null) {
+    if (chats.team === null) skipped.push("сводка: не задан TEAM_TELEGRAM_CHAT");
+    else for (const part of splitMessage(toTelegramHtml(team))) messages.push({ target: chats.team, text: part });
   }
+
   const channel = extractSection(body, CHANNEL_SECTION);
-  const draftsChat = chats.drafts ?? chats.team;
-  if (channel !== null && draftsChat !== null) {
-    const draft = withChannelSignature(toTelegramHtml(channel));
-    messages.push({ target: draftsChat, text: "✍️ <b>Черновик поста в канал</b> — перешлите «без автора», оформление сохранится" });
-    for (const part of splitMessage(draft)) messages.push({ target: draftsChat, text: part });
+  if (channel !== null) {
+    if (chats.drafts === null) {
+      skipped.push("черновик поста: не задан TEAM_TELEGRAM_DRAFTS_CHAT — в ленту команды он не идёт");
+    } else {
+      const draft = withChannelSignature(toTelegramHtml(channel));
+      messages.push({ target: chats.drafts, text: "✍️ <b>Черновик поста в канал</b> — перешлите «без автора», оформление сохранится" });
+      for (const part of splitMessage(draft)) messages.push({ target: chats.drafts, text: part });
+    }
   }
-  return messages;
+  return { messages, skipped };
+}
+
+/**
+ * PR, чьим мерджем стал этот коммит. GitHub связывает коммит со всеми PR, где
+ * он есть, — в том числе с открытым релизным `dev` → `main`, куда он уже
+ * попал. Нужен ровно тот, у которого этот коммит — коммит мерджа.
+ * Не нашёлся — это перемотка синка или прямой push: сводки у них нет.
+ */
+export function pullRequestForPush(sha, pullRequests) {
+  return pullRequests.find((pr) => pr.merged_at && pr.merge_commit_sha === sha) ?? null;
 }
 
 async function send(token, message) {
@@ -168,25 +200,47 @@ async function send(token, message) {
 }
 
 async function main() {
-  const token = process.env.TELEGRAM_BOT_TOKEN ?? "";
+  const sha = process.env.GITHUB_SHA ?? "";
+  const pr = await findPullRequest(sha);
+  if (pr === null) {
+    console.log(`коммит ${sha}: влитого PR нет — перемотка или прямой push, отправлять нечего`);
+    return;
+  }
+
   const chats = {
     team: parseChatTarget(process.env.TEAM_TELEGRAM_CHAT),
     drafts: parseChatTarget(process.env.TEAM_TELEGRAM_DRAFTS_CHAT),
   };
-  const messages = plannedMessages(process.env.PR_BODY ?? "", chats);
+  const { messages, skipped } = plannedMessages(pr.body ?? "", chats);
+  for (const reason of skipped) console.log(`::warning::PR #${pr.number}: ${reason}`);
 
   if (messages.length === 0) {
-    console.log(`PR #${process.env.PR_NUMBER ?? "?"}: разделов «${TEAM_SECTION}» и «${CHANNEL_SECTION}» нет — отправлять нечего`);
+    console.log(`PR #${pr.number}: разделов «${TEAM_SECTION}» и «${CHANNEL_SECTION}» нет — отправлять нечего`);
     return;
   }
-  // Секрета нет — например, PR из форка: GitHub не даёт ему секретов. Это не
-  // падение сборки, но и не молчание: предупреждение видно в сводке workflow.
+  const token = process.env.TELEGRAM_BOT_TOKEN ?? "";
+  // Секрета нет — окружение не настроено. Это не падение сборки, но и не
+  // молчание: предупреждение видно в сводке прогона.
   if (token === "") {
     console.log("::warning::TELEGRAM_BOT_TOKEN не задан — сводка не отправлена (docs/09-ci-cd.md §7)");
     return;
   }
   for (const message of messages) await send(token, message);
-  console.log(`PR #${process.env.PR_NUMBER ?? "?"}: отправлено сообщений — ${messages.length}`);
+  console.log(`PR #${pr.number}: отправлено сообщений — ${messages.length}`);
+}
+
+/**
+ * Связь коммита с PR у GitHub появляется не мгновенно: сразу после мерджа
+ * список бывает пуст. Несколько коротких повторов дешевле пропавшей сводки.
+ */
+async function findPullRequest(sha) {
+  const attempts = 4;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const found = pullRequestForPush(sha, pullRequestsForCommit(sha));
+    if (found !== null || attempt === attempts) return found;
+    await sleep(3_000);
+  }
+  return null;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
