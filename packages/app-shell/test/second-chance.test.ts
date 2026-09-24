@@ -65,7 +65,7 @@ function fakeEngine() {
       (handlers as Record<string, unknown>)[event] = handler;
       return () => undefined;
     },
-    continueRun: () => calls.push("continue"),
+    continueRun: (options?: { cheat?: boolean }) => calls.push(options?.cheat === true ? "continue:cheat" : "continue"),
     declineContinue: () => {
       calls.push("decline");
       emit("finished", final);
@@ -100,6 +100,7 @@ function memoryStorage(): KeyValueStorage & { values: Record<string, string> } {
 
 let storage = memoryStorage();
 let events: string[] = [];
+let payloads: { event: string; payload: Record<string, unknown> }[] = [];
 
 const OPTIONS = { container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "normal" as const };
 
@@ -120,11 +121,15 @@ describe("экран смерти со вторым шансом", () => {
     engine.load.mockReset();
     storage = memoryStorage();
     events = [];
+    payloads = [];
     initShell({
       adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
       capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false },
       storage,
-      analytics: (event) => events.push(event),
+      analytics: (event, payload) => {
+        events.push(event);
+        payloads.push({ event, payload: payload ?? {} });
+      },
       build: { version: "test", contentHash: "", platform: "web" },
     });
     useMeta.getState().hydrate();
@@ -149,7 +154,7 @@ describe("экран смерти со вторым шансом", () => {
 
   it("продолжение — команда движку, а записан будет только итог продолженного забега", async () => {
     const fake = await downed();
-    useRun.getState().continueRun();
+    useRun.getState().continueRun("premium");
     fake.emit("revived", { elapsedSec: 250, continuesUsed: 1 });
 
     expect(fake.calls).toEqual(["continue"]);
@@ -160,6 +165,21 @@ describe("экран смерти со вторым шансом", () => {
     fake.emit("finished", result({ survivalSec: 600, continues: [250] }));
     expect(useMeta.getState().runs).toBe(1);
     expect(useMeta.getState().best.normal).toBe(600);
+  });
+
+  it("бесплатное продолжение — только в забеге разработчика и с пометкой чита", async () => {
+    const player = await downed();
+    useRun.getState().continueRun("dev");
+    expect(player.calls).toEqual([]);
+    useRun.getState().stop();
+
+    const dev = await downed();
+    useRun.setState({ devRun: true });
+    useRun.getState().continueRun("dev");
+    dev.emit("revived", { elapsedSec: 250, continuesUsed: 1 });
+
+    expect(dev.calls).toEqual(["continue:cheat"]);
+    expect(payloads.find((entry) => entry.event === "continue_used")?.payload).toMatchObject({ source: "dev" });
   });
 
   it("отказ закрывает забег смертью ровно один раз", async () => {

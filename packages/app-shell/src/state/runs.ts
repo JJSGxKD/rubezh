@@ -61,6 +61,7 @@ const finishFields = {
   deathCause: z.optional(z.nullable(z.string())),
   cheats: z.optional(z.boolean()),
   countInRating: z.optional(z.boolean()),
+  continues: z.optional(z.array(z.number())),
 };
 
 const startEntrySchema = z.object({
@@ -234,6 +235,9 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     weapons: result.weapons.map(({ id, level }) => ({ id, level })),
     contentHash: result.contentHash,
     deathCause: result.deathCause,
+    // Без секунд продолжений сервер счёл бы купленный второй шанс
+    // неоплаченным — и наоборот, не нашёл бы, что сверять с покупкой.
+    continues: [...result.continues],
   };
 }
 

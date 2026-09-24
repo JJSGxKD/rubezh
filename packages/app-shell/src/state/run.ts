@@ -43,6 +43,9 @@ export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "
  */
 export type RunLoadingStage = "engine" | "world";
 
+/** Откуда второй шанс: бесплатно в забеге разработчика или оплачен звёздами. */
+export type ContinueSource = "dev" | "premium";
+
 /**
  * С чем игрок пришёл на экран забега: начать новый или продолжить
  * сохранённый. Намерение нужно именно потому, что экран монтируется и сам —
@@ -96,8 +99,11 @@ export interface RunStore {
   pause(reason: RunPauseReason): void;
   resume(): void;
   surrender(): void;
-  /** второй шанс на экране смерти */
-  continueRun(): void;
+  /**
+   * Второй шанс на экране смерти. `dev` — бесплатно в забеге разработчика,
+   * это чит; `premium` — продолжение, оплату которого подтвердил сервер.
+   */
+  continueRun(source: ContinueSource): void;
   /** отказ от второго шанса: забег закрывается смертью */
   declineContinue(): void;
   choose(optionId: string): void;
@@ -123,6 +129,8 @@ export interface RunStore {
 }
 
 let session: RunSession | null = null;
+/** Откуда взят второй шанс — до события `revived`, где он попадёт в аналитику. */
+let continueSource: ContinueSource = "premium";
 let unsubscribes: (() => void)[] = [];
 let startOptions: RunStartOptions | null = null;
 
@@ -309,9 +317,13 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.abandon();
   },
 
-  continueRun(): void {
+  continueRun(source): void {
     if (get().phase !== "downed") return;
-    session?.continueRun();
+    // Бесплатное продолжение — только у забега разработчика: у игрока оно
+    // было бы вторым шансом без оплаты.
+    if (source === "dev" && !get().devRun) return;
+    continueSource = source;
+    session?.continueRun({ cheat: source === "dev" });
   },
 
   declineContinue(): void {
@@ -474,7 +486,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
     created.on("revived", ({ elapsedSec }) => {
       clearDownedRun();
       track("continue_used", {
-        source: get().devRun ? "dev" : "premium",
+        source: continueSource,
         elapsedSec: Math.round(elapsedSec),
         wave: get().hud?.wave ?? 0,
       });

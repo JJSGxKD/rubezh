@@ -162,6 +162,7 @@ describe("очередь забегов", () => {
       weapons: [{ id: "spark", level: 4 }],
       contentHash: "abcd1234",
       deathCause: "swarm_rat",
+      continues: [],
     });
     expect(useRuns.getState().pending).toBe(0);
   });
@@ -308,3 +309,11 @@ describe("причины неудачи запроса", () => {
     expect(sessionFailure(null)).toBe("disabled");
   });
 });
+
+describe("второй шанс в итоге забега", () => {
+  it("секунды продолжений уходят на сервер: по ним он сверяет покупки", () => {
+    expect(toSubmission({ ...result("run-00000001"), continues: [250.5] }).continues).toEqual([250.5]);
+    expect(toSubmission(result("run-00000001")).continues).toEqual([]);
+  });
+});
+

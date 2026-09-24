@@ -144,7 +144,7 @@ export function RunScreen(): ReactNode {
           diagnostics={diagnostics}
           cheatsCounted={run.devRun && countInRating}
           {...(run.phase === "downed" && run.devRun
-            ? { secondChance: { onDevContinue: () => useRun.getState().continueRun() } }
+            ? { secondChance: { onDevContinue: () => useRun.getState().continueRun("dev") } }
             : {})}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
