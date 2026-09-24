@@ -20,6 +20,7 @@ import { useMeta } from "./meta";
 import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
 import { clearDownedRun, saveDownedRun, takeDownedRun } from "./downed-run";
+import { canOfferPaidContinue } from "./payments-availability";
 import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
@@ -42,6 +43,9 @@ export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "
  * жива, и экран загрузки только мигнул бы.
  */
 export type RunLoadingStage = "engine" | "world";
+
+/** Откуда второй шанс: бесплатно в забеге разработчика или оплачен звёздами. */
+export type ContinueSource = "dev" | "premium";
 
 /**
  * С чем игрок пришёл на экран забега: начать новый или продолжить
@@ -96,8 +100,11 @@ export interface RunStore {
   pause(reason: RunPauseReason): void;
   resume(): void;
   surrender(): void;
-  /** второй шанс на экране смерти */
-  continueRun(): void;
+  /**
+   * Второй шанс на экране смерти. `dev` — бесплатно в забеге разработчика,
+   * это чит; `premium` — продолжение, оплату которого подтвердил сервер.
+   */
+  continueRun(source: ContinueSource): void;
   /** отказ от второго шанса: забег закрывается смертью */
   declineContinue(): void;
   choose(optionId: string): void;
@@ -123,6 +130,8 @@ export interface RunStore {
 }
 
 let session: RunSession | null = null;
+/** Откуда взят второй шанс — до события `revived`, где он попадёт в аналитику. */
+let continueSource: ContinueSource = "premium";
 let unsubscribes: (() => void)[] = [];
 let startOptions: RunStartOptions | null = null;
 
@@ -250,10 +259,10 @@ export const useRun = create<RunStore>((set, get) => ({
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
         ...(resume === undefined ? {} : { resume }),
         ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),
-        // Второй шанс пока — только в забеге разработчика, бесплатно: купить
-        // его игрок сможет вместе с платежами Stars (docs/34-stage3-plan.md,
-        // WP5). До тех пор смерть обычного забега закрывает его сразу.
-        continues: devRun,
+        // Второй шанс — в забеге разработчика бесплатно, а игроку — если его
+        // можно купить: иначе смерть ждала бы решения, которого не принять
+        // (docs/34-stage3-plan.md, WP5).
+        continues: devRun || canOfferPaidContinue(),
       });
 
       if (token !== startToken) {
@@ -309,9 +318,13 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.abandon();
   },
 
-  continueRun(): void {
+  continueRun(source): void {
     if (get().phase !== "downed") return;
-    session?.continueRun();
+    // Бесплатное продолжение — только у забега разработчика: у игрока оно
+    // было бы вторым шансом без оплаты.
+    if (source === "dev" && !get().devRun) return;
+    continueSource = source;
+    session?.continueRun({ cheat: source === "dev" });
   },
 
   declineContinue(): void {
@@ -474,7 +487,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
     created.on("revived", ({ elapsedSec }) => {
       clearDownedRun();
       track("continue_used", {
-        source: get().devRun ? "dev" : "premium",
+        source: continueSource,
         elapsedSec: Math.round(elapsedSec),
         wave: get().hud?.wave ?? 0,
       });

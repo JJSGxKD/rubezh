@@ -11,7 +11,8 @@ import { uiFeedback } from "../../state/ui-feedback";
  * Отклик на нажатие — ещё и тактильный: там, где площадка его даёт и игрок не
  * выключил вибрацию в настройках (§4.5).
  */
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+/** `stars` — оплата звёздами Telegram: вторичная кнопка в цвете Stars. */
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "stars";
 export type ButtonSize = "m" | "l";
 
 export interface ButtonProps {
@@ -33,6 +34,7 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
   secondary: "btn-secondary",
   ghost: "bg-transparent text-text-muted active:bg-surface-raised",
   danger: "btn-danger",
+  stars: "btn-stars",
 };
 
 const SIZE_CLASS: Record<ButtonSize, string> = {

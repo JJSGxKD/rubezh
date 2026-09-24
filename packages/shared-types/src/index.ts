@@ -14,12 +14,16 @@ export interface UserContext {
   locale?: string;
 }
 
-export interface PurchaseResult {
-  success: boolean;
-  itemId: string;
-  transactionId?: string;
-  error?: string;
-}
+/**
+ * Чем кончилось окно оплаты площадки. Это подсказка, а не факт оплаты: право
+ * на покупку выдаёт сервер по подтверждению от площадки
+ * (docs/34-stage3-plan.md, Р13).
+ *
+ * - `paid` — площадка говорит, что оплачено; `pending` — оплата ещё идёт;
+ * - `cancelled` — игрок закрыл окно; `failed` — оплата не прошла;
+ * - `unsupported` — окна нет: открыто вне клиента или клиент слишком старый.
+ */
+export type InvoiceStatus = "paid" | "pending" | "cancelled" | "failed" | "unsupported";
 
 /**
  * Виды тактильного отклика — по возможностям Telegram: удар разной силы
@@ -50,7 +54,12 @@ export interface AdResult {
  */
 export interface PlatformAdapter {
   init(): Promise<UserContext>;
-  purchase(itemId: string): Promise<PurchaseResult>;
+  /**
+   * Открыть счёт, который выставил сервер: в Telegram — ссылка на счёт Stars.
+   * Цену назначает сервер, адаптер её не знает (docs/34-stage3-plan.md, Р5.1).
+   * Нет метода — площадка оплату не умеет, и оболочка покупку не предлагает.
+   */
+  openInvoice?(url: string): Promise<InvoiceStatus>;
   share(payload: SharePayload): void;
   /**
    * Пригласить в игру: системный выбор чата площадки, а где его нет — копия
@@ -899,6 +908,12 @@ export interface RunFinishSubmission {
   cheats?: boolean;
   /** администратор просит учесть забег с читами в рейтинге — для проверки рейтинга */
   countInRating?: boolean;
+  /**
+   * Секунда каждого второго шанса: сервер сверяет их с покупками
+   * (docs/34-stage3-plan.md, WP5). Необязательно: забег в очереди от прошлой
+   * сборки поля не знает.
+   */
+  continues?: number[];
 }
 
 /**

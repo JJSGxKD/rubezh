@@ -26,7 +26,10 @@ import { t } from "../i18n";
 import { useNavigation } from "../state/navigation";
 import { BootScreen } from "./gates";
 import { RunLoading } from "./run/RunLoading";
-import { DeathOverlay, LevelUpOverlay, PauseOverlay } from "./run/overlays";
+import { DeathOverlay } from "./run/DeathOverlay";
+import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
+import { SecondChance } from "./run/SecondChance";
+import type { ContinueStage } from "../state/continue-purchase";
 
 /**
  * Витрина компонентов — экран внутри приложения, доступный в режиме
@@ -142,6 +145,16 @@ export function GalleryScreen(): ReactNode {
           <ProgressBar value={2} max={3} tone="accent" shimmer label={t("app.loading")} />
         </div>
 
+        {/* Покупка второго шанса во всех состояниях: без Telegram и сервера их
+            иначе не увидеть — окно оплаты есть только в клиенте. */}
+        <SectionTitle>{t("run.continue.title")}</SectionTitle>
+        <div className="grid gap-3">
+          <SecondChance />
+          {CONTINUE_STAGES.map((stage, index) => (
+            <SecondChance key={index} paidPreview={stage} />
+          ))}
+        </div>
+
         <SectionTitle>{t("gallery.stats")}</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
           <Stat label="Время выживания" value="7:42" large tone="accent" />
@@ -249,6 +262,18 @@ function renderPreview(preview: Preview): ReactNode {
       );
   }
 }
+
+const LIVE_OFFER = { continueNo: 1, priceStars: 7, chargedStars: 7, mode: "live" } as const;
+
+/** Состояния покупки для витрины — по одному на каждую строку, которую видит игрок. */
+const CONTINUE_STAGES: readonly ContinueStage[] = [
+  { kind: "ready", offer: LIVE_OFFER },
+  { kind: "ready", offer: { ...LIVE_OFFER, chargedStars: 1, mode: "test" } },
+  { kind: "confirming", offer: LIVE_OFFER, purchaseId: "preview" },
+  { kind: "retry", reason: "slow_confirmation", offer: LIVE_OFFER, purchaseId: "preview" },
+  { kind: "retry", reason: "offline", offer: null, purchaseId: null },
+  { kind: "unavailable", reason: "unverified" },
+];
 
 function change(
   labelKey: string,

@@ -61,6 +61,7 @@ const finishFields = {
   deathCause: z.optional(z.nullable(z.string())),
   cheats: z.optional(z.boolean()),
   countInRating: z.optional(z.boolean()),
+  continues: z.optional(z.array(z.number())),
 };
 
 const startEntrySchema = z.object({
@@ -82,9 +83,9 @@ type QueueEntry = z.infer<typeof startEntrySchema> | z.infer<typeof finishEntryS
 
 /**
  * Что запустило отправку — разрез события: начало или конец забега, запуск
- * приложения, открытие рейтинга и профиля.
+ * приложения, открытие рейтинга и профиля, вопрос о цене второго шанса.
  */
-type FlushTrigger = "start" | "finish" | "launch" | "screen";
+type FlushTrigger = "start" | "finish" | "launch" | "screen" | "continue";
 
 export interface RunsStore {
   /** сколько итогов ждёт отправки; старты игроку не показываются */
@@ -234,6 +235,9 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     weapons: result.weapons.map(({ id, level }) => ({ id, level })),
     contentHash: result.contentHash,
     deathCause: result.deathCause,
+    // Без секунд продолжений сервер счёл бы купленный второй шанс
+    // неоплаченным — и наоборот, не нашёл бы, что сверять с покупкой.
+    continues: [...result.continues],
   };
 }
 

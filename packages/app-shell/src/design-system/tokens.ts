@@ -38,6 +38,9 @@ export const COLORS = {
   elite: "#ffd36b",
   weapon: "#ffe066",
   passive: "#c47dff",
+
+  stars: "#ffd000",
+  onStars: "#2a1f00",
 } as const;
 
 export type ColorToken = keyof typeof COLORS;
@@ -72,6 +75,8 @@ export const CSS_VAR_BY_COLOR: Record<ColorToken, string> = {
   elite: "--color-elite",
   weapon: "--color-weapon",
   passive: "--color-passive",
+  stars: "--color-stars",
+  onStars: "--color-on-stars",
 };
 
 /** Цвета площадки: шапка, фон и нижняя панель Telegram — из наших токенов. */
