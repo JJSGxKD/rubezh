@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { BotModule } from "../bot/bot.module.js";
 import { RunsModule } from "../runs/runs.module.js";
+import { PaymentsContinueLedger } from "./continue-ledger.js";
 import { PaymentConfirmation } from "./payment-confirmation.js";
 import { PaymentsBotHandler } from "./payments-bot.handler.js";
 import { PaymentsController } from "./payments.controller.js";
@@ -16,7 +17,9 @@ import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.rep
  *
  * Забеги модуль читает, но не принимает: продолжение продаётся к забегу,
  * который начался на сервере, — отсюда зависимость от `RunsModule`, а не
- * наоборот. Обновления оплаты приходят через общий маршрутизатор бота.
+ * наоборот; сверку продолжений в итоге забега модуль подключает к приёму
+ * забегов сам (`continue-ledger.ts`). Обновления оплаты приходят через общий
+ * маршрутизатор бота.
  */
 @Module({
   imports: [AuthModule, RunsModule, BotModule],
@@ -26,6 +29,7 @@ import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.rep
     PaymentConfirmation,
     PaymentsQueue,
     PaymentsBotHandler,
+    PaymentsContinueLedger,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
   ],
 })

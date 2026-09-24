@@ -253,6 +253,7 @@ function recorded(patch: Partial<RecordedRun> = {}): RecordedRun {
     startingWeaponId: "knife",
     deathCause: "swarm_rat",
     cheats: false,
+    continues: 0,
     ranked: false,
     verdict: "suspicious",
     reasons: ["kill_rate"],

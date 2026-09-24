@@ -37,6 +37,8 @@ export interface RunFinishRecord {
   weapons: { id: string; level: number }[];
   deathCause: string | null;
   cheats: boolean;
+  /** секунда каждого второго шанса */
+  continues: number[];
   ranked: boolean;
   verdict: RunVerdict;
   verdictReasons: VerdictReason[];
@@ -151,6 +153,7 @@ export class PrismaRunsRepository implements RunsRepository {
       weapons: record.weapons,
       deathCause: record.deathCause,
       cheats: record.cheats,
+      continues: record.continues,
       ranked: record.ranked,
       verdict: record.verdict,
       verdictReasons: record.verdictReasons,

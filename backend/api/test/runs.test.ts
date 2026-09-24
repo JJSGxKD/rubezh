@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
-import type { RunFinish } from "../src/modules/runs/dto/runs.dto.js";
+import { runFinishSchema, type RunFinish } from "../src/modules/runs/dto/runs.dto.js";
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
+import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-continues.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
@@ -43,6 +44,7 @@ function finish(runId: string, patch: Partial<RunFinish> = {}): RunFinish {
     deathCause: "swarm_rat",
     cheats: false,
     countInRating: false,
+    continues: [],
     ...patch,
   };
 }
@@ -63,7 +65,7 @@ describe("приём забегов", () => {
     hooks.onRecorded("test", async (run) => {
       recorded.push(run);
     });
-    service = new RunsService(config(), runs, board, roles, hooks);
+    service = new RunsService(config(), runs, board, roles, hooks, new RunContinues());
     view = new RunsViewService(runs, board);
   });
 
@@ -93,7 +95,7 @@ describe("приём забегов", () => {
       throw new Error("сводка недоступна");
     });
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    const fragile = new RunsService(config(), runs, board, roles, hooks);
+    const fragile = new RunsService(config(), runs, board, roles, hooks, new RunContinues());
 
     await expect(fragile.finish(account(), finish(randomUUID()))).resolves.toMatchObject({ recorded: true });
   });
@@ -225,11 +227,72 @@ describe("приём забегов", () => {
   });
 });
 
+describe("второй шанс в итоге забега", () => {
+  class FakeLedger implements ContinueLedger {
+    paid = 0;
+    underpaid = false;
+    readonly asked: string[] = [];
+    async check(runId: string): Promise<{ paid: number; underpaid: boolean }> {
+      this.asked.push(runId);
+      return { paid: this.paid, underpaid: this.underpaid };
+    }
+  }
+
+  function setup() {
+    const runs = new MemoryRunsRepository();
+    const board = new MemoryLeaderboardStore();
+    const hooks = new RunsHooks();
+    const recorded: RecordedRun[] = [];
+    hooks.onRecorded("test", async (run) => void recorded.push(run));
+    const continues = new RunContinues();
+    const ledger = new FakeLedger();
+    continues.provide(ledger);
+    const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
+    return { service: new RunsService(config(), runs, board, roles, hooks, continues), ledger, recorded, runs, board };
+  }
+
+  it("продолжение без покупки — отказ и мимо рейтинга, но забег записан", async () => {
+    const { service, recorded, board } = setup();
+    const me = account();
+
+    const result = await service.finish(me, finish(randomUUID(), { survivalSec: 600, continues: [250] }));
+
+    expect(result).toMatchObject({ verdict: "rejected", recorded: false });
+    expect(recorded[0]).toMatchObject({ continues: 1, reasons: expect.arrayContaining(["unpaid_continue"]) });
+    expect(await board.best("normal", me.accountId)).toBeNull();
+  });
+
+  it("оплаченное продолжение — обычный забег в рейтинге", async () => {
+    const { service, ledger, runs } = setup();
+    ledger.paid = 1;
+    const runId = randomUUID();
+
+    await expect(service.finish(account(), finish(runId, { survivalSec: 600, continues: [250] }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
+    expect(runs.rows.get(runId)?.record?.continues).toEqual([250]);
+  });
+
+  it("забег без продолжений за покупками не ходит", async () => {
+    const { service, ledger } = setup();
+
+    await service.finish(account(), finish(randomUUID()));
+
+    expect(ledger.asked).toEqual([]);
+  });
+
+  it("секунды продолжений вне забега — битые данные, а не вердикт", () => {
+    const base = { ...finish(randomUUID(), { survivalSec: 300 }) };
+
+    expect(runFinishSchema.safeParse({ ...base, continues: [301] }).success).toBe(false);
+    expect(runFinishSchema.safeParse({ ...base, continues: [200, 100] }).success).toBe(false);
+    expect(runFinishSchema.parse({ ...base, continues: undefined }).continues).toEqual([]);
+  });
+});
+
 describe("чтение забегов", () => {
   it("лидерборд отмечает свою строку и не выдаёт чужих идентификаторов", async () => {
     const runs = new MemoryRunsRepository();
     const board = new MemoryLeaderboardStore();
-    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks());
+    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues());
     const view = new RunsViewService(runs, board);
     const [me, other] = [account("1"), account("2")];
     await service.finish(me, finish(randomUUID(), { survivalSec: 100 }));

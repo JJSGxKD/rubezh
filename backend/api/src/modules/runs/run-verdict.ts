@@ -13,11 +13,13 @@ import { MAX_WEAPONS } from "./run-rules.js";
  *
  * - **отказ (`rejected`)** — то, чего честный клиент не пришлёт никогда:
  *   оружий больше, чем слотов; забег длиннее, чем прошло времени по часам
- *   сервера. Пауза в игровое время не идёт, поэтому честный забег всегда
- *   короче прошедшего;
+ *   сервера (пауза в игровое время не идёт, поэтому честный забег всегда
+ *   короче прошедшего); второй шанс, за который не заплачено, — честный
+ *   клиент продолжает только после подтверждения оплаты сервером;
  * - **подозрение (`suspicious`)** — статистика: слишком быстро убивал, слишком
- *   быстро качался, незнакомая сборка. Здесь бывают и честные исключения,
- *   поэтому забег сохраняется, но в рейтинг не идёт и ждёт разбора.
+ *   быстро качался, незнакомая сборка, продолжение оплачено по меньшему
+ *   числу минут, чем прошло. Здесь бывают и честные исключения, поэтому
+ *   забег сохраняется, но в рейтинг не идёт и ждёт разбора.
  *
  * Ни то ни другое не выбрасывает забег: он пишется в базу с вердиктом.
  * Ошибиться может и проверка, а данные, выброшенные сегодня, завтра не
@@ -32,6 +34,10 @@ export type VerdictReason =
   | "kill_rate"
   | "level_rate"
   | "unknown_content"
+  /** продолжений больше, чем оплачено */
+  | "unpaid_continue"
+  /** за продолжение заплачено по меньшему числу минут, чем прошло к нему (Р5.2) */
+  | "underpaid_continue"
   /** время забега не проверено: старт не дошёл или пришёл слишком поздно — вердикт не меняет */
   | "unverified_time";
 
@@ -45,6 +51,16 @@ export interface VerdictInput {
   startedAtMs: number | null;
   /** когда пришёл итог, по часам сервера */
   finishedAtMs: number;
+  /** сколько вторых шансов в забеге */
+  continues: number;
+  /** сколько из них оплачено */
+  paidContinues: number;
+  underpaidContinues: boolean;
+  /**
+   * Забег с читами: бесплатное продолжение в забеге разработчика — тоже чит,
+   * и отказом оно не считается. В рейтинг такой забег не идёт и так.
+   */
+  cheats: boolean;
 }
 
 export interface Verdict {
@@ -52,8 +68,8 @@ export interface Verdict {
   reasons: VerdictReason[];
 }
 
-const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock"]);
-const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content"]);
+const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue"]);
+const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue"]);
 
 export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdict {
   const reasons: VerdictReason[] = [];
@@ -81,6 +97,9 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
   if (limits.knownContentHashes.size > 0 && !limits.knownContentHashes.has(input.contentHash)) {
     reasons.push("unknown_content");
   }
+
+  if (!input.cheats && input.continues > input.paidContinues) reasons.push("unpaid_continue");
+  if (input.underpaidContinues) reasons.push("underpaid_continue");
 
   return { verdict: verdictOf(reasons), reasons };
 }

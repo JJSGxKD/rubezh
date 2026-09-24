@@ -27,6 +27,10 @@ function run(patch: Partial<VerdictInput> = {}): VerdictInput {
     contentHash: "abc",
     startedAtMs: START,
     finishedAtMs: START + 310_000,
+    continues: 0,
+    paidContinues: 0,
+    underpaidContinues: false,
+    cheats: false,
     ...patch,
   };
 }
@@ -111,5 +115,23 @@ describe("время начала, которому можно верить", ()
     // Заявленное «прошло много» иначе подарило бы запас читеру.
     expect(trustedStartMs(100_000, 31, 30)).toBeNull();
     expect(trustedStartMs(100_000, 30, 30)).toBe(70_000);
+  });
+});
+
+describe("второй шанс в вердикте", () => {
+  it("продолжение без оплаты — отказ: честный клиент продолжает только после подтверждения сервером", () => {
+    expect(judgeRun(run({ continues: 1, paidContinues: 0 }), limits)).toEqual({ verdict: "rejected", reasons: ["unpaid_continue"] });
+    expect(judgeRun(run({ continues: 1, paidContinues: 1 }), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("бесплатное продолжение забега разработчика — чит, а не отказ", () => {
+    expect(judgeRun(run({ continues: 1, paidContinues: 0, cheats: true }), limits).reasons).not.toContain("unpaid_continue");
+  });
+
+  it("продолжение, оплаченное за меньшее время, — подозрение, а не отказ", () => {
+    expect(judgeRun(run({ continues: 1, paidContinues: 1, underpaidContinues: true }), limits)).toEqual({
+      verdict: "suspicious",
+      reasons: ["underpaid_continue"],
+    });
   });
 });

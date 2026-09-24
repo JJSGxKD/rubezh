@@ -310,6 +310,8 @@ model Run {
   deathCause       String?     @map("death_cause") @db.VarChar(64)
   /// в забеге включали читы режима разработчика
   cheats           Boolean     @default(false)
+  /// секунда каждого второго шанса; сверяется с оплаченными покупками
+  continues        Float[]     @default([])
   /// попал ли в рейтинг: вердикт `ok` и без читов (или администратор просил учесть)
   ranked           Boolean     @default(false)
   verdict          RunVerdict?

@@ -94,6 +94,7 @@ describe("сводка плейтеста", () => {
       startingWeaponId: "spark",
       deathCause: "swarm_rat",
       cheats: false,
+      continues: 0,
       ranked: true,
       verdict: "ok",
       reasons: [],

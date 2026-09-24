@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
+import { PaymentsContinueLedger } from "../src/modules/payments/continue-ledger.js";
 import { continuePrice, startedMinutes } from "../src/modules/payments/continue-price.js";
 import { continueRequestSchema } from "../src/modules/payments/dto/payments.dto.js";
 import { PaymentsService, type InvoiceBotApi } from "../src/modules/payments/payments.service.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
+import { RunContinues } from "../src/modules/runs/run-continues.js";
 import { TelegramApiError, type StarsInvoice } from "../src/modules/telegram/telegram-bot-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
@@ -144,6 +146,7 @@ describe("счёт второго шанса", () => {
       weapons: [],
       deathCause: null,
       cheats: false,
+      continues: [],
       ranked: true,
       verdict: "ok",
       verdictReasons: [],
@@ -217,6 +220,37 @@ describe("счёт второго шанса", () => {
 
     await expect(service.purchase(me, purchaseId)).resolves.toMatchObject({ purchaseId, status: "pending", granted: false });
     expect(await codeOf(service.purchase(player("555000333"), purchaseId))).toBe("purchase_not_found");
+  });
+});
+
+describe("сверка итога забега с покупками", () => {
+  const RUN = "run-with-continue";
+
+  async function ledgerWith(elapsedSec: number | null, settings: AppConfig = config()) {
+    const purchases = new MemoryPurchasesRepository();
+    if (elapsedSec !== null) {
+      await purchases.openInvoice({ purchaseId: randomUUID(), accountId: "a", runId: RUN, continueNo: 1, elapsedSec, priceStars: 3, chargedStars: 3, mode: "live", invoicedAt: new Date(NOW) });
+      const row = [...purchases.rows.values()][0];
+      if (row !== undefined) Object.assign(row, { status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
+    }
+    return new PaymentsContinueLedger(settings, purchases, new RunContinues());
+  }
+
+  it("оплата за ту же минуту — сошлось; за меньшее число минут, чем прошло, — недоплата", async () => {
+    const ledger = await ledgerWith(125);
+
+    await expect(ledger.check(RUN, [130])).resolves.toEqual({ paid: 1, underpaid: false });
+    await expect(ledger.check(RUN, [200])).resolves.toEqual({ paid: 1, underpaid: true });
+  });
+
+  it("выше потолка цены лишние минуты не стоили ни звезды — это не недоплата", async () => {
+    const ledger = await ledgerWith(125, config({ CONTINUE_MAX_STARS: "3" }));
+
+    await expect(ledger.check(RUN, [900])).resolves.toEqual({ paid: 1, underpaid: false });
+  });
+
+  it("продолжение без покупки не оплачено", async () => {
+    await expect((await ledgerWith(null)).check(RUN, [130])).resolves.toEqual({ paid: 0, underpaid: false });
   });
 });
 

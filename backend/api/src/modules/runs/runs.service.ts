@@ -9,6 +9,7 @@ import { rebuildLeaderboard } from "./leaderboard-rebuild.js";
 import type { Difficulty } from "./run-rules.js";
 import { judgeRun, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RUNS_REPOSITORY, type RunsRepository } from "./runs.repository.js";
+import { RunContinues } from "./run-continues.js";
 import { RunsHooks } from "./runs-hooks.js";
 
 /**
@@ -40,6 +41,7 @@ export class RunsService {
     @Inject(LEADERBOARD_STORE) private readonly leaderboard: LeaderboardStore,
     private readonly roles: RolesService,
     private readonly hooks: RunsHooks,
+    private readonly continues: RunContinues,
   ) {}
 
   /** Старт забега: сервер ставит свою отметку времени. Повтор из очереди — не ошибка. */
@@ -63,6 +65,7 @@ export class RunsService {
     // Повтор итога — тот же ответ, что в первый раз, без новой записи.
     if (existing?.status === "finished") return await this.replay(account, run.runId);
 
+    const paid = await this.continues.check(run.runId, run.continues);
     const judged = judgeRun(
       {
         survivalSec: run.survivalSec,
@@ -72,6 +75,10 @@ export class RunsService {
         contentHash: run.contentHash,
         startedAtMs: existing?.startedAt?.getTime() ?? null,
         finishedAtMs: nowMs,
+        continues: run.continues.length,
+        paidContinues: paid.paid,
+        underpaidContinues: paid.underpaid,
+        cheats: run.cheats,
       },
       this.config.runs,
     );
@@ -91,6 +98,7 @@ export class RunsService {
       weapons: run.weapons,
       deathCause: run.deathCause,
       cheats: run.cheats,
+      continues: run.continues,
       ranked,
       verdict: judged.verdict,
       verdictReasons: judged.reasons,
@@ -114,6 +122,7 @@ export class RunsService {
       startingWeaponId: run.startingWeaponId,
       deathCause: run.deathCause,
       cheats: run.cheats,
+      continues: run.continues.length,
       ranked,
       verdict: judged.verdict,
       reasons: judged.reasons,

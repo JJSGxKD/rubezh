@@ -67,6 +67,7 @@ erDiagram
         int enemies_killed "nullable"
         json weapons "nullable"
         boolean cheats
+        float[] continues "секунда каждого второго шанса"
         boolean ranked "в рейтинге: вердикт ok и без читов"
         enum verdict "nullable: ok|suspicious|rejected"
         string[] verdict_reasons
@@ -747,6 +748,7 @@ flowchart LR
     RUNS --> REDIS
     PAY --> PG
     PAY -. забег, который продолжают .-> RUNS
+    RUNS -. сверка продолжений с покупками .-> PAY
     PAY -- createInvoiceLink --> TGAPI
     ADS --> REDIS
     REF --> PG

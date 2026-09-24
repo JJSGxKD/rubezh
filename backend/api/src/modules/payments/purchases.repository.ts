@@ -79,6 +79,8 @@ export interface PurchasesRepository {
   byId(purchaseId: string): Promise<StoredPurchase | null>;
   /** Сколько продолжений забега оплачено — возвраты не отзывают выданное */
   grantedContinues(runId: string): Promise<number>;
+  /** Оплаченные продолжения забега: какое по счёту и по какой секунде посчитана цена */
+  grantedForRun(runId: string): Promise<{ continueNo: number; elapsedSec: number }[]>;
   checkout(purchaseId: string): Promise<CheckoutView | null>;
   markPaid(record: PaymentRecord): Promise<ConfirmOutcome>;
   /** Звёзды вернулись. Причину, если её не заказывали мы, записывает как `external` */
@@ -158,6 +160,14 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
 
   async grantedContinues(runId: string): Promise<number> {
     return await this.prisma.purchase.count({ where: { runId, paidAt: { not: null } } });
+  }
+
+  async grantedForRun(runId: string): Promise<{ continueNo: number; elapsedSec: number }[]> {
+    return await this.prisma.purchase.findMany({
+      where: { runId, paidAt: { not: null } },
+      orderBy: { continueNo: "asc" },
+      select: { continueNo: true, elapsedSec: true },
+    });
   }
 
   async checkout(purchaseId: string): Promise<CheckoutView | null> {

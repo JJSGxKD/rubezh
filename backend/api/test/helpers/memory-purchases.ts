@@ -65,6 +65,13 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     return [...this.rows.values()].filter((row) => row.runId === runId && isGranted(row)).length;
   }
 
+  async grantedForRun(runId: string): Promise<{ continueNo: number; elapsedSec: number }[]> {
+    return [...this.rows.values()]
+      .filter((row) => row.runId === runId && isGranted(row))
+      .sort((a, b) => a.continueNo - b.continueNo)
+      .map(({ continueNo, elapsedSec }) => ({ continueNo, elapsedSec }));
+  }
+
   async checkout(purchaseId: string): Promise<CheckoutView | null> {
     const row = this.rows.get(purchaseId);
     if (row === undefined) return null;
