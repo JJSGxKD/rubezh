@@ -3,6 +3,7 @@ import { loadAppConfig } from "../src/config/app-config.js";
 import { BotPoller, type BotPollerLocks, type PollerBotApi } from "../src/modules/bot/bot-poller.js";
 import { BotRouter, type BotUpdateHandler } from "../src/modules/bot/bot-router.js";
 import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { multipartOf } from "./helpers/multipart.js";
 
 // Бот: откуда приходят обновления, куда уходят и как говорить с Bot API
 // (docs/28-diagnostics.md §6.1).
@@ -137,12 +138,28 @@ describe("клиент Bot API", () => {
   it("отправляет фото формой, а ошибку Telegram разбирает с retry_after", async () => {
     const ok = recorder({ ok: true, result: { message_id: 1 } });
     await ok.api.sendPhoto(CHAT, Buffer.from("png"), "подпись");
-    const form = ok.calls[0]?.init.body;
-    expect(form).toBeInstanceOf(FormData);
-    expect((form as FormData).get("chat_id")).toBe(CHAT);
+    const form = await multipartOf(ok.calls[0]?.init ?? {});
+    expect(form.get("chat_id")).toBe(CHAT);
+    expect(form.get("caption")).toBe("подпись");
+    expect(await (form.get("photo") as File).text()).toBe("png");
 
     const limited = recorder({ ok: false, error_code: 429, description: "Too Many Requests", parameters: { retry_after: 12 } }, 429);
     await expect(limited.api.sendMessage(CHAT, "x")).rejects.toMatchObject({ errorCode: 429, retryAfterSec: 12 });
+  });
+
+  it("обрывает зависший запрос по сигналу: срок задаёт вызов, а не транспорт", async () => {
+    // Сигнал проходит через grammY до нашего fetch — иначе долгий опрос или
+    // остановка процесса ждали бы ответа Telegram без срока.
+    const api = new TelegramBotApi(TOKEN, CLOUD_API, (_url, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      }),
+    );
+    const stop = new AbortController();
+    const pending = api.sendMessage(CHAT, "x", stop.signal).catch((caught: unknown) => caught);
+    stop.abort();
+
+    expect(await pending).toMatchObject({ errorCode: 0 });
   });
 
   it("не выносит токен бота в текст ошибки сети", async () => {
