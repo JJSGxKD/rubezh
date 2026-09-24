@@ -17,7 +17,7 @@ import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
 import { runGraphics } from "./graphics";
 import { useMeta } from "./meta";
-import { usePlaytest } from "./playtest";
+import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
 import { clientErrorCount, reportError, track, useShell } from "./shell";
 
@@ -357,6 +357,10 @@ type GetState = () => RunStore;
 
 function subscribe(created: RunSession, set: SetState, get: GetState): (() => void)[] {
   return [
+    // Старт — в очередь сразу, раньше итога: по нему сервер сверит длительность
+    // забега со своими часами (docs/34-stage3-plan.md, WP4). Продолженный
+    // забег события не присылает — его начало уже было.
+    created.on("started", (started) => useRuns.getState().registerStart(started)),
     created.on("hud", (hud) => {
       // Первый снимок HUD — первый кадр забега: сцена создана и мир живёт.
       if (firstFrameStartedAt !== null) {
@@ -465,9 +469,9 @@ function finishRun(
   // Рекорд пишется здесь, а не в движке: хранилище устройства — забота
   // оболочки (docs/27-design-system-and-app-shell.md §7).
   const isNewRecord = useMeta.getState().submitRun(result, countInRating);
-  // Лидерборд плейтеста — поверх рекорда на устройстве, а не вместо него:
-  // без сети игрок всё равно видит свой рекорд сразу.
-  usePlaytest.getState().submitRun(result, countInRating);
+  // Забег на сервере — поверх рекорда на устройстве, а не вместо него: без
+  // сети игрок всё равно видит свой рекорд сразу.
+  useRuns.getState().submitRun(result, countInRating);
   setRunUiMode(false);
   set({ phase: "finished", result, isNewRecord });
   haptic(isNewRecord ? "record" : result.outcome === "died" ? "death" : "tap");

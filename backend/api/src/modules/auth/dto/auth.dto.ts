@@ -18,5 +18,10 @@ export const refreshSchema = z.object({
   refreshToken: z.string().min(16).max(128),
 });
 
+/** Вход разработчика: `dev-<id>:Имя` (dev-login.ts). */
+export const devLoginSchema = z.object({
+  devUser: z.string().min(1).max(128),
+});
+
 export type TelegramLogin = z.infer<typeof telegramLoginSchema>;
 export type RefreshRequest = z.infer<typeof refreshSchema>;

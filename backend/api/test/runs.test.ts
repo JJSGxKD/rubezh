@@ -5,6 +5,7 @@ import { DomainError } from "../src/common/domain-error.js";
 import type { RunFinish } from "../src/modules/runs/dto/runs.dto.js";
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
+import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
@@ -51,13 +52,50 @@ describe("приём забегов", () => {
   let board: MemoryLeaderboardStore;
   let service: RunsService;
   let view: RunsViewService;
+  let recorded: RecordedRun[];
 
   beforeEach(() => {
     runs = new MemoryRunsRepository();
     board = new MemoryLeaderboardStore();
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    service = new RunsService(config(), runs, board, roles);
+    const hooks = new RunsHooks();
+    recorded = [];
+    hooks.onRecorded("test", async (run) => {
+      recorded.push(run);
+    });
+    service = new RunsService(config(), runs, board, roles, hooks);
     view = new RunsViewService(runs, board);
+  });
+
+  it("слушатели узнают о записанном забеге с вердиктом", async () => {
+    const me = account();
+    const runId = randomUUID();
+
+    await service.finish(me, finish(runId, { survivalSec: 600 }));
+
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ runId, accountId: me.accountId, survivalSec: 600, ranked: true, verdict: "ok" });
+  });
+
+  it("повтор итога слушателей не зовёт: сводка не посчитает забег дважды", async () => {
+    const me = account();
+    const runId = randomUUID();
+    await service.finish(me, finish(runId));
+
+    await service.finish(me, finish(runId));
+
+    expect(recorded).toHaveLength(1);
+  });
+
+  it("упавший слушатель не роняет приём забега", async () => {
+    const hooks = new RunsHooks();
+    hooks.onRecorded("broken", async () => {
+      throw new Error("сводка недоступна");
+    });
+    const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
+    const fragile = new RunsService(config(), runs, board, roles, hooks);
+
+    await expect(fragile.finish(account(), finish(randomUUID()))).resolves.toMatchObject({ recorded: true });
   });
 
   it("стартованный и законченный забег попадает в рейтинг с проверенным временем", async () => {
@@ -191,7 +229,7 @@ describe("чтение забегов", () => {
   it("лидерборд отмечает свою строку и не выдаёт чужих идентификаторов", async () => {
     const runs = new MemoryRunsRepository();
     const board = new MemoryLeaderboardStore();
-    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()));
+    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks());
     const view = new RunsViewService(runs, board);
     const [me, other] = [account("1"), account("2")];
     await service.finish(me, finish(randomUUID(), { survivalSec: 100 }));

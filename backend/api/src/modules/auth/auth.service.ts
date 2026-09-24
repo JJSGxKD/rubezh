@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import { ForbiddenError, UnauthorizedError } from "../../common/domain-error.js";
+import { DisabledError, ForbiddenError, UnauthorizedError, ValidationError } from "../../common/domain-error.js";
 import { verifyInitData } from "../telegram/telegram-init-data.js";
 import { ACCOUNT_REPOSITORY, type Account, type AccountRepository } from "./account.repository.js";
 import { secretKey, signAccessToken } from "./access-token.js";
+import { parseDevUser } from "./dev-login.js";
 import { REFRESH_STORE, type RefreshStore } from "./refresh.store.js";
 
 /**
@@ -63,6 +64,28 @@ export class AuthService {
         username: check.player.username,
         photoUrl: check.player.photoUrl,
       },
+      nowMs,
+    );
+    ensureNotBanned(account);
+
+    const tokens = await this.issue(account, nowMs);
+    return { ...tokens, account };
+  }
+
+  /**
+   * Вход разработчика по имени — без подписи. Аккаунт заводится так же, как
+   * по Telegram, и дальше сессия ничем не отличается: рейтинг, профиль и
+   * права проверяются теми же путями, что у игрока.
+   */
+  async loginAsDeveloper(devUser: string, nowMs = Date.now()): Promise<AuthResult> {
+    // Флаг проверяет и контроллер, но вход без подписи слишком дорог, чтобы
+    // полагаться на одну проверку.
+    if (!this.config.auth.devLogin) throw new DisabledError("Вход разработчика выключен");
+    const developer = parseDevUser(devUser);
+    if (developer === null) throw new ValidationError("Вход разработчика — dev-<id>:Имя");
+
+    const account = await this.accounts.upsert(
+      { platform: "telegram", platformUserId: developer.platformUserId, displayName: developer.displayName, username: null, photoUrl: null },
       nowMs,
     );
     ensureNotBanned(account);

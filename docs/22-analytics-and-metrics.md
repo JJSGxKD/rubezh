@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
 | Интерфейс | `screen_viewed`, `settings_changed` |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded` |
 | Реклама | `ad_requested`, `ad_shown`, `ad_reward_claimed`, `ad_failed` |
@@ -168,7 +168,6 @@ Zod-схемы `payload` — в словаре сервера
 | Удержание | `daily_reward_claimed`, `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
 | Обратная связь | `feedback_sent` — отзыв с формы обратной связи (`29-admin-panel.md` §6) |
-| Плейтест | `playtest_run_synced` — временное, на время закрытого теста (`26-stage2-plan.md`, WP13) |
 
 Добавлено на этапе 2 (`26-stage2-plan.md`):
 
@@ -186,7 +185,6 @@ Zod-схемы `payload` — в словаре сервера
 | `share_offered`, `share_completed` | Приглашение друга на плейтест: сколько нажимают и чем кончается — выбор чата, копия ссылки или неудача | `context` (`friends_invite`), у завершения — `result` |
 | `bench_finished` | Сводка теста производительности — стресс-теста из «Играть» (`28-diagnostics.md` §2.3); полный отчёт уходит в приёмник диагностики (`28-diagnostics.md` §5), не в события | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
 | `feedback_sent` | Сколько игроков доходит до формы обратной связи и отвечают ли они текстом или только опросом. Сам отзыв в события не попадает: он уходит в чат администраторов и в свою таблицу, а здесь — только факт и разрез | `answers` — сколько вопросов отвечено, `hasText` — был ли свободный текст, `runs` — сколько забегов сыграно к этому моменту |
-| `playtest_run_synced` | Дошёл ли итог забега до лидерборда плейтеста: сколько забегов ждут сети, сколько сервер отверг. Растущая доля `queued` с `unauthorized` — устаревшая подпись запуска, а не сеть | `result`: `sent` / `queued` / `dropped`; `trigger`: `finish` / `launch` / `screen`; у неудачи — `failure`; у отправленного — `rank`, `isNewBest`, `recorded` (`false` — забег с читами сервер не записал) |
 
 Добавлено на этапе 3 (`26-stage2-plan.md` → `34-stage3-plan.md`, WP1):
 
@@ -194,6 +192,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|---|
 | `user_registered` | Аккаунт заведён — знаменатель всех воронок по игрокам, а не по установкам. Ровно один раз за жизнь аккаунта: о том, что вход был первым, знает только сервер, и признак приходит в ответе входа | без полей: площадка и идентификатор и так в конверте |
 | `user_authenticated` | Как игрок получил сессию. Доля `reauth` показывает, часто ли сессии теряются на самом деле, — а это прямая проверка решения хранить токен продления в памяти вкладки (`34-stage3-plan.md`, Р3) | `reason`: `launch` — вход на запуске, `refresh` — плановое продление, `reauth` — сервер не принял токен посреди работы |
+| `run_synced` | Дошли ли старт и итог забега до сервера (WP4; заменило `playtest_run_synced` этапа 2). Доля стартов с `trusted: false` у честных игроков — это доля забегов без проверки времени, по ней решается О5 (`34-stage3-plan.md`). Растущая доля `queued` с `unauthorized` — теряются сессии, а не сеть | `kind`: `start` / `finish`; `result`: `sent` / `queued` / `dropped`; `trigger`: `start` / `finish` / `launch` / `screen`; у отправленного старта — `trusted`, у итога — `verdict`, `rank`, `isNewBest`, `recorded`; у неотправленного — `failure` |
 
 Уточнения существующих событий на этапе 2:
 

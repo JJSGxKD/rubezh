@@ -214,6 +214,15 @@ export class MainScene extends Phaser.Scene {
     // старта не должны прозвучать залпом на первом кадре.
     this.cueTracker = new CueTracker(this.world);
     this.cueTimerMs = 0;
+    // До первого HUD: оболочка ставит начало в очередь раньше, чем игрок
+    // успеет умереть, — порядок старта и итога в очереди важен серверу.
+    if (resume === undefined) {
+      this.sceneData.bus.emit("started", {
+        runId: this.runId,
+        difficultyId: this.world.difficultyLevel.id,
+        startingWeaponId: this.startingWeaponId(),
+      });
+    }
     this.emitHud();
     this.reportWave();
     if (resume !== undefined) this.enterRestored();

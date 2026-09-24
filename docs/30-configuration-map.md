@@ -182,7 +182,8 @@
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
 | `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts` | `state/run-save.ts` |
-| `bh.playtest.v1.pending` | итоги забегов, ещё не дошедшие до сервера плейтеста | `state/playtest.ts` |
+| `bh.runs.v1.pending` | старты и итоги забегов, ещё не дошедшие до сервера, — по порядку, до 40 записей, старые вытесняются | `state/runs.ts` |
+| `bh.playtest.v1.pending` | очередь прошлой сборки, одни итоги; при запуске переносится в `bh.runs.v1.pending` и снимается | `state/runs.ts` |
 | `bh.telemetry.v1.queue` | события, ещё не дошедшие до приёмника; до 500 штук, старые вытесняются | `state/telemetry.ts` |
 | `bh.reports.v1.queue` | записи забегов, ещё не дошедшие до приёмника диагностики; до 10 штук и 1 МБ, старые вытесняются | `state/report-keys.ts`, очередь — `state/report-queue.ts` |
 | `bh.reports.v1.sent` | десять последних отправленных отчётов для экрана «Последние отчёты» | `state/report-queue.ts` |
@@ -259,9 +260,9 @@
 | `JWT_ACCESS_SECRET` | секрет подписи токена доступа; смена разлогинивает всех |
 | `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_MAX_SESSIONS` | сколько живут токены и сколько устройств помнит аккаунт |
 | `AUTH_INIT_DATA_MAX_AGE_SEC` | окно свежести подписи запуска при входе; потолок в час зашит в схему |
-| `PLAYTEST_ENABLED`, `TELEGRAM_BOT_TOKEN` | сохранения и лидерборд плейтеста на бэкенде; без токена бэкенд с включённым плейтестом не стартует |
-| `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC` | сколько живут данные плейтеста в Redis и подпись запуска Telegram |
-| `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | вход в плейтест без Telegram на машине разработчика; только `NODE_ENV=development` |
+| `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER` | вход разработчика без Telegram по имени `dev-<id>:Имя`: обычный аккаунт с ролью владельца. Требует `AUTH_ENABLED`, только `NODE_ENV=development`; имя передаёт только dev-сервер. Прежний `PLAYTEST_DEV_AUTH="true"` останавливает запуск и называет новое имя |
+| `PLAYTEST_ENABLED` | сводка плейтеста, отчёты о запуске и стресс-тест для всех. Забеги и рейтинг — модуль `runs` под авторизацией, поэтому без `AUTH_ENABLED` бэкенд с включённым плейтестом не стартует |
+| `PLAYTEST_DATA_TTL_DAYS` | сколько живут счётчики сводки плейтеста в Redis |
 | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED` | приёмники событий и отчётов; без `DATABASE_URL` бэкенд не стартует |
 | `TRUST_PROXY_HOPS` | сколько прокси перед API; за Caddy — `1`, иначе лимит по IP посчитает всех тестеров одним адресом |
 | `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам, `webhook` — Telegram шлёт их на `PUBLIC_API_URL`; регистрация — `pnpm --filter backend-api bot:webhook` |
@@ -348,7 +349,7 @@ pnpm budget
 | Итог стресс-теста в сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts` |
 | Кому открыты инструменты команды: режим разработчика, стресс-тест, витрина компонентов, звуковая лаборатория | сервер — `backend/api/src/modules/playtest/playtest-access.ts` по `ADMIN_TELEGRAM_IDS`; на dev-сервере — `VITE_DEV_TOOLS=1` |
 | Команды бота: что видно всем и что администраторам, текст `/help` | `backend/api/src/modules/bot/bot-commands.ts`; сами команды — рядом с обработчиками (`welcome.command.ts`, `playtest-stats.reporter.ts`, `export-bot.command.ts`) |
-| Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`; разбор — `backend/api/src/modules/telegram/chat-target.ts` |
+| Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`; разбор — `backend/api/src/modules/telegram/chat-target.ts` |
 
 Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.
 

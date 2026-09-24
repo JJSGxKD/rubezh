@@ -15,6 +15,7 @@ import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
 import { usePlaytest } from "./state/playtest";
+import { useRuns } from "./state/runs";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
@@ -92,7 +93,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   useMeta.getState().hydrate();
   useHints.getState().hydrate();
   useSavedRun.getState().hydrate();
-  usePlaytest.getState().hydrate();
+  useRuns.getState().hydrate();
   useDevMode.getState().hydrate();
   useGraphics.getState().hydrate();
   useFeedback.getState().hydrate();
@@ -104,10 +105,10 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
   // них игрок не должен ждать заставку. Затем профиль: рекорд, поставленный
   // на другом устройстве, появляется на главной.
-  void usePlaytest
+  void useRuns
     .getState()
     .flush("launch")
-    .then(() => usePlaytest.getState().loadProfile());
+    .then(() => useRuns.getState().loadProfile());
   void usePlaytest.getState().loadAccess();
   // Сессия игрока — отдельным чанком после главной: деньгам и рейтингу она
   // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический
@@ -224,6 +225,5 @@ async function waitForFonts(timeoutMs: number): Promise<boolean> {
 }
 
 export type { ShellBuildInfo, ShellCapabilities } from "./state/shell";
-export type { PlaytestApiConfig } from "./state/playtest-api";
 export type { AnalyticsEvent, AnalyticsPayload, AnalyticsSink } from "./state/analytics";
 export { COLORS, PLATFORM_COLORS } from "./design-system/tokens";

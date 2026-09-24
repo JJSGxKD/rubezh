@@ -1,6 +1,6 @@
 import { clientLabel, formatDuration, formFactorLabel, osLabel, runProblemLabel, stressOutcomeLabel } from "../../common/card/labels.js";
 import { estimateWidth, PALETTE, rect, renderPng, SERIES, svgDocument, text } from "../../common/card/svg.js";
-import type { Difficulty } from "./playtest.store.js";
+import type { Difficulty } from "../runs/run-rules.js";
 import type { Share, StatsSummary } from "./playtest-stats.summary.js";
 
 /**

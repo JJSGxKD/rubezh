@@ -299,27 +299,40 @@ pnpm --filter backend-api prisma:deploy
 в этом репозитории ломает установку. Библиотеки ставятся только через
 `pnpm install`.
 
-### Шаг 11. Включить сохранения и лидерборд
+### Шаг 11. Включить аккаунт, сохранения и лидерборд
 
-В обычном браузере Telegram не может подтвердить, кто вы, поэтому для
-локальной работы сервер пускает по имени из настроек. Откройте `.env`:
+Забеги сохраняются под аккаунтом. В обычном браузере Telegram не может
+подтвердить, кто вы, поэтому для локальной работы сервер пускает по имени из
+настроек. Сначала получите секрет для подписи входа — эта команда печатает
+64 случайных знака:
+
+```powershell
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })
+```
+
+Скопируйте результат. Откройте `.env`:
 
 ```powershell
 notepad .env
 ```
 
-и поменяйте четыре строки (искать — `Ctrl+F`):
+и поменяйте шесть строк (искать — `Ctrl+F`):
 
 ```dotenv
-PLAYTEST_ENABLED="true"
+AUTH_ENABLED="true"
+JWT_ACCESS_SECRET="сюда — 64 знака из команды выше"
 TELEGRAM_BOT_TOKEN="local-dev-no-bot"
-PLAYTEST_DEV_AUTH="true"
-VITE_PLAYTEST_DEV_USER="dev-1:Tester"
+AUTH_DEV_LOGIN="true"
+VITE_AUTH_DEV_USER="dev-1:Tester"
+PLAYTEST_ENABLED="true"
 ```
 
 - `TELEGRAM_BOT_TOKEN` — здесь подойдёт любой непустой текст. Настоящий токен
   бота нужен только для запуска внутри Telegram и никуда не выкладывается.
-- `dev-1:Tester` — ваш id и имя в лидерборде, латиницей надёжнее.
+- `dev-1:Tester` — ваш id и имя в лидерборде, латиницей надёжнее. Начало
+  `dev-` обязательно: так сервер отличает вас от игроков Telegram.
+- Если в `.env` осталась строка `PLAYTEST_DEV_AUTH="true"` из старой
+  инструкции — удалите её: сервер с ней не запустится и подскажет новое имя.
 
 Сохранить (`Ctrl+S`) и закрыть Блокнот.
 
@@ -367,8 +380,10 @@ pnpm dev                                  # второй способ; для п
 | Docker Desktop: «WSL needs updating» / «WSL 2 installation is incomplete» | В терминале от администратора `wsl --update`, затем перезагрузка |
 | Docker Desktop: «Virtualization support not detected» | В BIOS выключена виртуализация. Включить Intel VT-x или AMD SVM — у каждой материнской платы по-своему, искать по её модели |
 | `docker compose up` — `port is already allocated` на 5432 или 6379 | На компьютере уже стоит свой Postgres или Redis. Остановить его в «Службах» Windows или поменять `POSTGRES_PORT` / `REDIS_PORT` в `.env` вместе с портом в `DATABASE_URL` / `REDIS_URL` |
-| Сервер падает с `PLAYTEST_ENABLED=true требует непустого TELEGRAM_BOT_TOKEN` | Не заполнен `TELEGRAM_BOT_TOKEN`, см. шаг 11 |
-| В игре «Откройте игру в Telegram, чтобы сохранять забеги» | Не заданы `PLAYTEST_DEV_AUTH` и `VITE_PLAYTEST_DEV_USER` (шаг 11) или страница не обновлена после правки `.env` — `F5` |
+| Сервер падает с `AUTH_ENABLED=true требует JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN и DATABASE_URL` | Не заполнены секрет или токен бота, см. шаг 11 |
+| Сервер падает с `PLAYTEST_ENABLED=true требует AUTH_ENABLED=true` | Не включена авторизация, см. шаг 11 |
+| Сервер падает с `PLAYTEST_DEV_AUTH переименована в AUTH_DEV_LOGIN` | В `.env` старая строка — удалить её и включить `AUTH_DEV_LOGIN`, см. шаг 11 |
+| В рейтинге «Рейтинг работает, когда игра открыта в Telegram» | Не задан `VITE_AUTH_DEV_USER` (шаг 11) или страница не обновлена после правки `.env` — `F5` |
 | Белый экран, игра не грузится | `F12` → вкладка «Console». Скриншот красного текста вместе со скриншотом терминала — владельцу репозитория |
 | После `git pull` что-то странное | `Remove-Item -Recurse -Force node_modules`, затем `pnpm install` |
 

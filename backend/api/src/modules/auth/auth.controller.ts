@@ -7,7 +7,7 @@ import { AUTH_LIMITS } from "./auth-limits.js";
 import { AuthGuard, accountOf } from "./auth.guard.js";
 import { Public } from "../../common/access.js";
 import { AuthService } from "./auth.service.js";
-import { refreshSchema, telegramLoginSchema } from "./dto/auth.dto.js";
+import { devLoginSchema, refreshSchema, telegramLoginSchema } from "./dto/auth.dto.js";
 
 /**
  * Вход, продление и выход (docs/34-stage3-plan.md, WP1). Вход, продление и
@@ -54,6 +54,21 @@ export class AuthController {
 
     const { initData } = parse(() => telegramLoginSchema.parse(body), "Некорректные данные запуска");
     return { data: view(await this.service.loginWithTelegram(initData)) };
+  }
+
+  /**
+   * Вход разработчика в браузере без Telegram (`AUTH_DEV_LOGIN`). Выключенный
+   * отвечает 404, как вся выключенная авторизация.
+   */
+  @Public()
+  @Post("dev")
+  async dev(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SessionView }> {
+    this.ensureEnabled();
+    if (!this.config.auth.devLogin) throw new DisabledError("Вход разработчика выключен");
+    await this.limit(AUTH_LIMITS.login, request);
+
+    const { devUser } = parse(() => devLoginSchema.parse(body), "Некорректный вход разработчика");
+    return { data: view(await this.service.loginAsDeveloper(devUser)) };
   }
 
   @Public()

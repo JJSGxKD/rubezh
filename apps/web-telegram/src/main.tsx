@@ -37,26 +37,24 @@ void mountAppShell({
     // лезть в настройки, чтобы в отчёте о баге оказался seed. Выключить её
     // он при этом может в любой момент.
     diagnosticsByDefault: import.meta.env.VITE_DIAGNOSTICS_DEFAULT === "1",
-    // Сохранения и лидерборд плейтеста. Dev-сервер всегда ходит на свой же
-    // домен — запросы проксирует Vite, в том числе через туннель
-    // (vite.config.ts): адрес API из .env телефону через туннель недоступен.
-    // Сборка берёт VITE_API_URL, пустой — тоже тот же домен.
-    // Вход без Telegram — только из dev-сервера: в сборку имя не попадает.
-    playtest: {
-      baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? ""),
-      devUser: import.meta.env.DEV ? (import.meta.env.VITE_PLAYTEST_DEV_USER ?? "") : "",
-    },
     // Стресс-тест и режим разработчика в dev открыты без сервера: команда
-    // правит их в браузере. В сборке доступ решает сервер по Telegram ID.
+    // правит их в браузере. В сборке доступ решает сервер по праву аккаунта.
     // Инструменты команды на dev-сервере — только по явному VITE_DEV_TOOLS=1:
     // сам по себе dev-сервер их не открывает, иначе через туннель они
     // достаются любому тестеру (docs/26-stage2-plan.md, WP14).
     devTools: import.meta.env.DEV && import.meta.env.VITE_DEV_TOOLS === "1",
-    // События и отчёты диагностики — тот же адрес API, что у плейтеста:
-    // dev-сервер проксирует и эти префиксы (vite.config.ts).
+    // Dev-сервер всегда ходит в API на свой же домен — запросы проксирует
+    // Vite, в том числе через туннель (vite.config.ts): адрес API из .env
+    // телефону через туннель недоступен. Сборка берёт VITE_API_URL, пустой —
+    // тоже тот же домен.
     telemetry: { baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? "") },
-    // Аккаунты и сессии — тот же адрес API (docs/34-stage3-plan.md, WP1).
-    auth: { baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? "") },
+    // Аккаунты и сессии (docs/34-stage3-plan.md, WP1): под сессией уходят и
+    // забеги с рейтингом. Вход без Telegram — только из dev-сервера: в
+    // сборку имя разработчика не попадает.
+    auth: {
+      baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? ""),
+      devUser: import.meta.env.DEV ? (import.meta.env.VITE_AUTH_DEV_USER ?? "") : "",
+    },
     // Минимальная версия Bot API. 7.7 — версия, с которой клиент умеет
     // отключать вертикальные свайпы: без этого свайп закрывает приложение
     // посреди забега, и игра не «беднее», а сломана

@@ -87,7 +87,8 @@ export const useSession = create<SessionState>((set, get) => ({
 
 /**
  * Запрос от имени игрока: токен подставляется сам, протухший обновляется
- * молча. Первый потребитель — забеги и покупки этапа 3 (WP4, WP5).
+ * молча. Забеги, отчёты о запуске и доступ идут через него (`api-request.ts`),
+ * покупки этапа 3 — тоже.
  *
  * Повтор ровно один: если и после свежего входа сервер отвечает «не
  * авторизован», повторять бессмысленно — так делается цикл, а не сессия.
@@ -140,8 +141,17 @@ async function runRenewal(reason: "launch" | "refresh" | "reauth"): Promise<Auth
     if (refreshed.failure === "banned") return reject(refreshed.failure, refreshed.message);
   }
 
-  const launchData = useShell.getState().adapter.signedLaunchData();
-  if (launchData === null || launchData === "") return reject("no_identity");
+  const { adapter, capabilities } = useShell.getState();
+  const launchData = adapter.signedLaunchData();
+  if (launchData === null || launchData === "") {
+    // Мимо площадки входит только разработчик на dev-сервере: в сборку имя
+    // не попадает, а бэкенд вне development такой вход не принимает.
+    const devUser = capabilities.auth?.devUser ?? "";
+    if (devUser === "") return reject("no_identity");
+    const dev = await api.devLogin(devUser);
+    if (!dev.ok) return reject(dev.failure, dev.message);
+    return accept(dev.data, reason);
+  }
 
   const login = await api.login(launchData);
   if (!login.ok) return reject(login.failure, login.message);

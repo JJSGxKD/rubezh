@@ -93,6 +93,21 @@ describe("кто что может", () => {
     expect(await service.can(moderator, "data.export")).toBe(false);
   });
 
+  it("разработчик при локальном входе — владелец, а без флага — никто", async () => {
+    // Вход разработчика существует только в development: там он открывает
+    // инструменты команды, как раньше заголовок плейтеста.
+    const local = new RolesService(
+      config({ NODE_ENV: "development", AUTH_ENABLED: "true", AUTH_DEV_LOGIN: "true", JWT_ACCESS_SECRET: "a".repeat(64), TELEGRAM_BOT_TOKEN: "1:T", DATABASE_URL: "postgresql://localhost/test" }),
+      roles,
+      accounts,
+    );
+
+    expect(await local.rolesFor(account("dev-1"))).toEqual(["owner"]);
+    expect(await service.rolesFor(account("dev-1"))).toEqual([]);
+    // Числовой ID — настоящий игрок: флаг его не касается.
+    expect(await local.rolesFor(account("555"))).toEqual([]);
+  });
+
   it("список в окружении даёт владельца, пока владельца нет в базе", async () => {
     expect(await service.rolesFor(account(ADMIN_TELEGRAM_ID))).toEqual(["owner"]);
   });

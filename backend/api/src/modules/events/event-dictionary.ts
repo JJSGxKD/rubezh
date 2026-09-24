@@ -94,7 +94,17 @@ export const EVENT_DICTIONARY = {
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },
   wave_reached: { version: 1, payload: payload({ wave: count, elapsedSec: seconds }) },
-  playtest_run_synced: { version: 1, payload: payload({ result: id, trigger: id }) },
+  // Дошёл ли старт или итог забега до сервера (docs/34-stage3-plan.md, WP4).
+  // По старту видно, какая доля честных забегов теряет проверку времени —
+  // вход для решения О5; по итогу — вердикт антифрода.
+  run_synced: {
+    version: 1,
+    payload: payload({
+      kind: z.enum(["start", "finish"]),
+      result: z.enum(["sent", "queued", "dropped"]),
+      trigger: id,
+    }),
+  },
   load_time: { version: 1, payload: payload({ phase: id, ms: seconds }) },
   diagnostics_mode_changed: { version: 1, payload: payload({ setting: id, value: z.boolean() }) },
   bench_finished: {

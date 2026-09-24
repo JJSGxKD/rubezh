@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import { DIFFICULTIES, type Difficulty, type StoredRun } from "./playtest.store.js";
+import { DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
 import { REDIS } from "../../infra/redis.js";
 import {
   DURATION_BUCKETS_MIN,
@@ -11,6 +11,7 @@ import {
   type DifficultyAggregate,
   type PlaytestStatsStore,
   type SessionRecord,
+  type StatsRun,
   type StatsSnapshot,
   type StressSummary,
 } from "./playtest-stats.store.js";
@@ -51,14 +52,14 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
     this.offsetMin = config.playtest.statsUtcOffsetMin;
   }
 
-  async recordSession(playerId: string, session: SessionRecord, nowMs: number): Promise<void> {
+  async recordSession(accountId: string, session: SessionRecord, nowMs: number): Promise<void> {
     const day = dayKey(nowMs, this.offsetMin);
     const installKey = `pt:st:install:${session.installId}`;
     await this.redis
       .multi()
-      .sadd("pt:st:seen", playerId)
+      .sadd("pt:st:seen", accountId)
       .expire("pt:st:seen", this.ttlSec)
-      .sadd(`pt:st:day:${day}:seen`, playerId)
+      .sadd(`pt:st:day:${day}:seen`, accountId)
       .expire(`pt:st:day:${day}:seen`, DAY_TTL_SEC)
       .sadd("pt:st:installs", session.installId)
       .expire("pt:st:installs", this.ttlSec)
@@ -66,14 +67,14 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
       .exec();
   }
 
-  async recordRun(playerId: string, run: StoredRun, nowMs: number): Promise<void> {
+  async recordRun(accountId: string, run: StatsRun, nowMs: number): Promise<void> {
     const day = dayKey(nowMs, this.offsetMin);
     const diffKey = `pt:st:diff:${run.difficultyId}`;
     const tx = this.redis
       .multi()
-      .sadd("pt:st:played", playerId)
+      .sadd("pt:st:played", accountId)
       .expire("pt:st:played", this.ttlSec)
-      .sadd(`pt:st:day:${day}:played`, playerId)
+      .sadd(`pt:st:day:${day}:played`, accountId)
       .expire(`pt:st:day:${day}:played`, DAY_TTL_SEC)
       .incr(`pt:st:day:${day}:runs`)
       .expire(`pt:st:day:${day}:runs`, DAY_TTL_SEC)
@@ -85,7 +86,7 @@ export class RedisPlaytestStatsStore implements PlaytestStatsStore {
       .hincrby("pt:st:weapon", run.startingWeaponId, 1)
       .expire("pt:st:weapon", this.ttlSec);
     if (run.outcome === "abandoned") tx.hincrby(diffKey, "abandoned", 1);
-    if (run.deathCause !== undefined && run.deathCause !== null) {
+    if (run.deathCause !== null) {
       tx.hincrby("pt:st:death", run.deathCause, 1).expire("pt:st:death", this.ttlSec);
     }
     await tx.exec();

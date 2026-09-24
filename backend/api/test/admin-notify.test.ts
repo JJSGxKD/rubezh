@@ -13,6 +13,10 @@ import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
 import { TelegramApiError } from "../src/modules/telegram/telegram-bot-api.js";
 import { benchSubmission, DEVICE, REPORT_ID } from "./helpers/bench-report.js";
 import { runBucket, runSubmission, RUN_REPORT_ID, type RunPatch } from "./helpers/run-report.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { reviewCardText, type ReviewCardRun } from "../src/modules/admin-notify/run-review-card.js";
+import type { ReviewThrottle } from "../src/modules/admin-notify/review-throttle.js";
+import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 
 // Уведомления об отчётах диагностики в чат администраторов (docs/28-diagnostics.md §6.2).
 
@@ -124,8 +128,36 @@ function notifier(env: Record<string, string> = {}) {
       sent.push({ chatId: chatTargetOf(chat).chatId, caption });
       return { messageId: 1, fileId: null };
     },
+    async sendMessage(chat, text) {
+      if (failure !== null) throw failure;
+      sent.push({ chatId: chatTargetOf(chat).chatId, caption: text });
+      return 1;
+    },
   };
-  return { instance: new ReportNotifier(config, hooks, reports, api), reports, sent, fail: (error: Error) => (failure = error) };
+  const accounts = new MemoryAccountRepository();
+  const throttle = new MemoryThrottle();
+  const instance = new ReportNotifier(config, hooks, reports, api, new RunsHooks(), accounts, throttle);
+  return { instance, reports, sent, accounts, throttle, fail: (error: Error) => (failure = error) };
+}
+
+/** Окно карточек разбора без Redis: занятый аккаунт отвечает «уже было». */
+class MemoryThrottle implements ReviewThrottle {
+  private readonly claimed = new Set<string>();
+
+  async claim(accountId: string): Promise<boolean> {
+    if (this.claimed.has(accountId)) return false;
+    this.claimed.add(accountId);
+    return true;
+  }
+}
+
+/** Очередь BullMQ поднимается на старте приложения; в тестах — её место. */
+function captureQueue(instance: ReportNotifier): { data: unknown; jobId: string }[] {
+  const added: { data: unknown; jobId: string }[] = [];
+  (instance as unknown as { queue: { add: (name: string, data: unknown, options: { jobId: string }) => Promise<void> } }).queue = {
+    add: async (_name, data, options) => void added.push({ data, jobId: options.jobId }),
+  };
+  return added;
 }
 
 describe("отправка уведомления", () => {
@@ -175,11 +207,7 @@ describe("отправка уведомления", () => {
 
   it("в очередь ставит каждый стресс-тест, а запись забега — только проблемную", async () => {
     const { instance } = notifier();
-    const added: { data: unknown; jobId: string }[] = [];
-    // Очередь BullMQ поднимается на старте приложения; здесь — её место.
-    (instance as unknown as { queue: { add: (name: string, data: unknown, options: { jobId: string }) => Promise<void> } }).queue = {
-      add: async (_name, data, options) => void added.push({ data, jobId: options.jobId }),
-    };
+    const added = captureQueue(instance);
     const base = { appVersion: "0.4.0", installId: "install", platformUserId: null, device: DEVICE, receivedAt: new Date() };
     const bench = stored();
     const calm = storedRun();
@@ -201,5 +229,95 @@ describe("отправка уведомления", () => {
     const { instance, sent } = notifier();
     await instance.process({ data: { reportId: REPORT_ID } });
     expect(sent[0]?.caption).toContain("Стресс-тест");
+  });
+});
+
+// Забеги на разбор антифрода (docs/34-stage3-plan.md, WP4): карточка зовёт
+// администратора посмотреть, очередь целиком — GET /runs/review.
+
+const REVIEW_ENV = {
+  AUTH_ENABLED: "true",
+  JWT_ACCESS_SECRET: "a".repeat(64),
+  DATABASE_URL: "postgresql://unused",
+};
+
+function recorded(patch: Partial<RecordedRun> = {}): RecordedRun {
+  return {
+    runId: "3502c9bc-fd1c-47e8-aa63-d7af145ee9df",
+    accountId: "1b6a2c8e-df0c-491f-8b4a-6802a9058be6",
+    difficulty: "normal",
+    outcome: "died",
+    survivalSec: 754,
+    level: 18,
+    enemiesKilled: 34_000,
+    startingWeaponId: "knife",
+    deathCause: "swarm_rat",
+    cheats: false,
+    ranked: false,
+    verdict: "suspicious",
+    reasons: ["kill_rate"],
+    finishedAt: new Date(),
+    ...patch,
+  };
+}
+
+describe("карточка забега на разбор", () => {
+  const run: ReviewCardRun = { ...recorded(), verdict: "rejected", reasons: ["longer_than_wall_clock", "unverified_time"] };
+
+  it("называет вердикт, игрока, числа забега и каждую причину словами", () => {
+    const text = reviewCardText(run, { displayName: "Иван", username: "ivan" });
+
+    expect(text).toContain("Забег на разбор · отклонён");
+    expect(text).toContain("Иван (@ivan) · аккаунт 1b6a2c8e");
+    expect(text).toContain("Нормальная · 12:34 · уровень 18 · убийств 34000 · погиб от swarm_rat");
+    expect(text).toContain("забег дольше, чем прошло по часам сервера; старт не дошёл");
+    expect(text).toContain(`Забег ${run.runId}`);
+  });
+
+  it("без аккаунта — полный идентификатор: по нему его ещё можно найти", () => {
+    expect(reviewCardText(run, null)).toContain(`аккаунт ${run.accountId}`);
+  });
+});
+
+describe("отправка забега на разбор", () => {
+  it("в очередь идёт только подозрительный и отклонённый, без читов", async () => {
+    const { instance } = notifier(REVIEW_ENV);
+    const added = captureQueue(instance);
+
+    await instance.enqueueReview(recorded({ verdict: "ok", reasons: [] }));
+    await instance.enqueueReview(recorded({ cheats: true, accountId: "с-читами" }));
+    await instance.enqueueReview(recorded());
+
+    expect(added).toHaveLength(1);
+    expect(added[0]?.jobId).toBe("review-3502c9bc-fd1c-47e8-aa63-d7af145ee9df");
+  });
+
+  it("читер не засыпает чат: одна карточка на аккаунт за окно", async () => {
+    const { instance } = notifier(REVIEW_ENV);
+    const added = captureQueue(instance);
+
+    await instance.enqueueReview(recorded({ runId: "первый" }));
+    await instance.enqueueReview(recorded({ runId: "второй" }));
+    await instance.enqueueReview(recorded({ runId: "чужой", accountId: "другой-аккаунт" }));
+
+    expect(added.map((job) => job.jobId)).toEqual(["review-первый", "review-чужой"]);
+  });
+
+  it("шлёт текст в свой поток с именем на момент отправки", async () => {
+    const { instance, sent, accounts } = notifier({ ...REVIEW_ENV, ADMIN_CHAT_RUN_REVIEW: "-1003333333333:9" });
+    const account = await accounts.upsert({ platform: "telegram", platformUserId: "555", displayName: "Иван", username: null, photoUrl: null }, Date.now());
+    const run: ReviewCardRun = { ...recorded({ accountId: account.accountId }), verdict: "suspicious" };
+
+    await instance.process({ data: { kind: "review", run } });
+
+    expect(sent).toEqual([{ chatId: "-1003333333333", caption: expect.stringContaining("Иван · аккаунт") }]);
+  });
+
+  it("включается адресом и авторизацией, а не флагом отчётов диагностики", () => {
+    expect(notifier(REVIEW_ENV).instance.reviewEnabled).toBe(true);
+    expect(notifier({ ...REVIEW_ENV, ADMIN_NOTIFY_REPORTS: "false" }).instance.reviewEnabled).toBe(true);
+    expect(notifier({ ...REVIEW_ENV, ADMIN_CHAT_ID: "" }).instance.reviewEnabled).toBe(false);
+    // Без авторизации забегов под аккаунтом нет — и разбирать нечего.
+    expect(notifier().instance.reviewEnabled).toBe(false);
   });
 });
