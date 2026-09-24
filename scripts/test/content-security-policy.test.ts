@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { contentSecurityPolicy } from "../vite/content-security-policy";
 
@@ -26,6 +29,19 @@ function directives(policy: string): Map<string, string[]> {
 const build = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "" }));
 const dev = directives(contentSecurityPolicy({ mode: "dev", apiOrigin: "" }));
 
+/**
+ * Ожидание сервера после обрыва HMR в установленном клиенте Vite — ради него
+ * dev-политика пускает воркеры из `blob:`.
+ */
+function vitePingWait(): string {
+  const require = createRequire(import.meta.url);
+  const client = readFileSync(join(dirname(require.resolve("vite/package.json")), "dist/client/client.mjs"), "utf8");
+  const start = client.indexOf("function waitForSuccessfulPing(");
+  if (start === -1) return "";
+  const end = client.indexOf("\nfunction ", start + 1);
+  return client.slice(start, end === -1 ? undefined : end);
+}
+
 describe("политика источников клиента", () => {
   it("в сборке скрипты только свои: ни встроенных, ни eval", () => {
     expect(build.get("script-src")).toEqual(["'self'"]);
@@ -51,6 +67,25 @@ describe("политика источников клиента", () => {
     // Сегодня графика процедурная и blob: не нужен, но первый спрайт из
     // assets/ без него молча не нарисуется.
     expect(build.get("img-src")).toContain("blob:");
+  });
+
+  it("в сборке воркеры только свои: клиента Vite там нет, а свой код воркеров не создаёт", () => {
+    expect(build.get("worker-src")).toEqual(["'self'"]);
+  });
+
+  it("в разработке пускает воркер из blob: — иначе после обрыва HMR страница не узнает, что сервер вернулся", () => {
+    // Заблокированный воркер не бросает исключение, а молча не отвечает: нет
+    // ни перезагрузки, ни плашки stable-dev-session.
+    expect(dev.get("worker-src")).toEqual(["'self'", "blob:"]);
+  });
+
+  it("причина blob: на dev-сервере на месте: клиент Vite ждёт сервер в воркере из blob:", () => {
+    const wait = vitePingWait();
+
+    expect(wait, "ожидание сервера в клиенте Vite не найдено — сверьте worker-src с новым клиентом").not.toBe("");
+    // Перестанет создавать — blob: в worker-src больше не нужен и убирается.
+    expect(wait).toContain("URL.createObjectURL(");
+    expect(wait).toContain("new SharedWorker(");
   });
 
   it("разрешает встроенные стили: без них вернётся белый экран до первого кадра", () => {
