@@ -678,7 +678,7 @@ flowchart LR
     subgraph api["backend/api"]
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
-        PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение оплаты, реализовано"]
+        PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение, возвраты, реализовано"]
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
@@ -740,7 +740,7 @@ flowchart LR
     WELCOME -. рекорд и место .-> PT
     EXPORT --> QUEUE
     EXPORT --> PG
-    QUEUE -- sendPhoto, sendDocument --> TGAPI
+    QUEUE -- sendPhoto, sendDocument, refundStarPayment --> TGAPI
 
     AUTH --> PG
     AUTH --> REDIS
@@ -749,6 +749,7 @@ flowchart LR
     PAY --> PG
     PAY -. забег, который продолжают .-> RUNS
     RUNS -. сверка продолжений с покупками .-> PAY
+    RUNS -. слушатели записанного забега .-> PAY
     PAY -- createInvoiceLink --> TGAPI
     ADS --> REDIS
     REF --> PG
@@ -1295,6 +1296,11 @@ sequenceDiagram
   оплаты.
 - **Отказаться от денег можно только на проверке.** После
   `successful_payment` звёзды уже у нас, и дальше остаётся только возврат.
+  Его сервер делает сам — через ту же очередь, с повтором: тестовая оплата
+  (Р14), продолжение, которое не взяли (оплата пришла к закрытому забегу
+  или забег записан без него), вторая оплата того же продолжения и оплата
+  без покупки. Заказ возврата пишется в базу раньше обращения к Telegram —
+  после перезапуска очередь поднимает незавершённые оттуда.
 
 ---
 

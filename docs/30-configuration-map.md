@@ -244,7 +244,8 @@
 | Правило цены второго шанса: начатые минуты, минимум в звезду, потолок | `backend/api/src/modules/payments/continue-price.ts`; сами числа — `CONTINUE_*` в окружении |
 | Тексты окна оплаты Telegram, пометка тестовой оплаты | `backend/api/src/modules/payments/invoice-text.ts` |
 | Оплата: сколько живёт счёт, отказы предварительной проверки и их тексты для игрока | `payments-limits.ts` → `INVOICE_TTL_SEC`; `checkout-answer.ts` |
-| Оплата: сроки ответа на предварительную проверку и чтения покупки для неё, повторы очереди подтверждений | `telegram-bot-api.ts` → `PRE_CHECKOUT_TIMEOUT_MS`; `payment-confirmation.ts` → `CHECKOUT_READ_TIMEOUT_MS`; `payments-queue.ts` → `JOB_OPTIONS` |
+| Оплата: сроки ответа на предварительную проверку и чтения покупки для неё, повторы очереди подтверждений и возвратов, сколько незавершённых возвратов поднимать на старте | `telegram-bot-api.ts` → `PRE_CHECKOUT_TIMEOUT_MS`; `payment-confirmation.ts` → `CHECKOUT_READ_TIMEOUT_MS`; `payments-queue.ts` → `JOB_OPTIONS`, `PENDING_REFUNDS_ON_START` |
+| Когда звёзды возвращаются сами: тестовая оплата, продолжение не взято, вторая оплата, оплата без покупки | `backend/api/src/modules/payments/payment-refunds.ts` |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 
 Три правила, которые нарушают чаще всего: порт **не выбирается на месте**;
@@ -264,6 +265,7 @@
 | `RUNS_KNOWN_CONTENT_HASHES` | отпечатки контента выпущенных сборок; незнакомый — `suspicious`. Пусто — проверка выключена |
 | `RUNS_WALL_CLOCK_TOLERANCE_SEC`, `RUNS_START_MAX_DELAY_SEC` | запас на время забега сверх прошедшего по часам сервера и предел опоздания старта, которому ещё верят |
 | `PAYMENTS_ENABLED` | оплата второго шанса за Stars; без `AUTH_ENABLED` и чтения обновлений бота бэкенд не стартует — оплату подтверждает обновление от Telegram |
+| `PAYMENTS_TEST_MODE` | тестовая оплата: настоящая цена в окне оплаты, списывается одна звезда и тут же возвращается, продолжение засчитано. Только `NODE_ENV=development`, иначе бэкенд не стартует (`34-stage3-plan.md`, Р14) |
 | `CONTINUE_STARS_PER_MINUTE`, `CONTINUE_MAX_STARS` | цена второго шанса: звёзд за каждую начатую минуту забега и потолок цены. Рабочие значения до решения геймдизайнера (`34-stage3-plan.md`, О1) |
 | `AUTH_ENABLED` | вход игроков по аккаунтам; без `JWT_ACCESS_SECRET`, токена бота и `DATABASE_URL` бэкенд не стартует, выключённые эндпоинты отвечают 404 |
 | `JWT_ACCESS_SECRET` | секрет подписи токена доступа; смена разлогинивает всех |

@@ -75,12 +75,14 @@ export class PaymentConfirmation {
         break;
       case "already_paid":
         // Игрок заплатил за одно продолжение дважды: проверка пропустила обе
-        // оплаты, пока ни одна не была подтверждена.
+        // оплаты, пока ни одна не была подтверждена. Вторая вернётся
+        // (`payment-refunds.ts`), но так быть не должно — отсюда ошибка.
         this.log("error", "payment_twice", { ...fields, firstChargeId: outcome.purchase.telegramChargeId });
         break;
       case "unknown":
         // Проверка не пускает оплату без покупки, так что это потерянная база
-        // или чужой счёт от нашего бота. Звёзды у нас — разбираться человеку.
+        // или чужой счёт от нашего бота. Звёзды вернутся, а разбираться, как
+        // так вышло, — человеку.
         this.log("error", "payment_unmatched", fields);
         break;
     }

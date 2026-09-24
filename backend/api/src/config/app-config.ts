@@ -210,6 +210,14 @@ const schema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  // Тестовая оплата (Р14): игрок видит настоящую цену, списывается одна
+  // звезда и тут же возвращается, покупка засчитана. Песочницы у Stars нет,
+  // а копить звёзды на тестовом боте незачем. Только в development: в проде
+  // с ней продолжение стоило бы звезду.
+  PAYMENTS_TEST_MODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   // Цена второго шанса (Р5.1): звёзд за каждую начатую минуту забега и
   // потолок цены. Считает сервер, клиент цену только показывает. Рабочие
   // значения до решения геймдизайнера (О1). Потолок схемы — с запасом под
@@ -283,6 +291,8 @@ export interface AppConfig {
   };
   payments: {
     enabled: boolean;
+    /** тестовая оплата: одна звезда с немедленным возвратом; только development */
+    testMode: boolean;
     /** звёзд за каждую начатую минуту забега */
     starsPerMinute: number;
     /** потолок цены второго шанса */
@@ -424,6 +434,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       "AUTH_ENABLED=true требует JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN и DATABASE_URL: без них вход не проверить и аккаунт негде хранить",
     );
   }
+  // Тот же приём, что у входа разработчика: процесс не поднимается, а не
+  // «предупреждает» — иначе в проде однажды продолжение стоило бы звезду.
+  if (parsed.PAYMENTS_TEST_MODE && parsed.NODE_ENV !== "development") {
+    throw new Error("PAYMENTS_TEST_MODE=true допустим только при NODE_ENV=development: вне разработки оплата настоящая");
+  }
   if (parsed.PAYMENTS_ENABLED && (!parsed.AUTH_ENABLED || parsed.TELEGRAM_BOT_UPDATES === "off")) {
     throw new Error(
       "PAYMENTS_ENABLED=true требует AUTH_ENABLED=true и чтения обновлений бота (TELEGRAM_BOT_UPDATES): покупка принадлежит аккаунту, а оплату подтверждает обновление от Telegram",
@@ -472,6 +487,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     },
     payments: {
       enabled: parsed.PAYMENTS_ENABLED,
+      testMode: parsed.PAYMENTS_TEST_MODE,
       starsPerMinute: parsed.CONTINUE_STARS_PER_MINUTE,
       maxStars: parsed.CONTINUE_MAX_STARS,
     },

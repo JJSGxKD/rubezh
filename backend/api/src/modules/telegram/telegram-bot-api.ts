@@ -312,6 +312,11 @@ export class TelegramBotApi {
     );
   }
 
+  /** Вернуть звёзды игроку. Отказ `CHARGE_ALREADY_REFUNDED` — повтор уже сделанного возврата. */
+  async refundStarPayment(userId: number, chargeId: string, signal?: AbortSignal): Promise<void> {
+    await this.call("refundStarPayment", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.refundStarPayment(userId, chargeId, abort));
+  }
+
   async setWebhook(url: string, secretToken: string, signal?: AbortSignal): Promise<void> {
     await this.call("setWebhook", REQUEST_TIMEOUT_MS, signal, (abort) =>
       this.api.setWebhook(url, { secret_token: secretToken, allowed_updates: [...ALLOWED_UPDATES], drop_pending_updates: false }, abort),

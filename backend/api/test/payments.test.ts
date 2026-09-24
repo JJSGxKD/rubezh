@@ -185,6 +185,17 @@ describe("счёт второго шанса", () => {
     expect(purchases.rows.get(invoice.purchaseId)).toMatchObject({ status: "pending", runId, continueNo: 1, priceStars: 3 });
   });
 
+  it("тестовая оплата: игрок видит настоящую цену, списывается одна звезда, и окно оплаты говорит об этом", async () => {
+    build(config({ NODE_ENV: "development", PAYMENTS_TEST_MODE: "true" }));
+
+    const invoice = await service.invoice(me, { runId, continueNo: 1, elapsedSec: 6 * 60 + 30 }, NOW);
+
+    expect(invoice).toMatchObject({ priceStars: 7, chargedStars: 1, mode: "test" });
+    expect(invoices.sent[0]).toMatchObject({ stars: 1, title: "Второй шанс — тест" });
+    expect(invoices.sent[0]?.description).toContain("Настоящая цена — 7 ⭐");
+    expect(purchases.rows.get(invoice.purchaseId)).toMatchObject({ mode: "test", priceStars: 7, chargedStars: 1 });
+  });
+
   it("повторный счёт на то же продолжение — та же покупка, а не вторая", async () => {
     const first = await service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW);
     const second = await service.invoice(me, { runId, continueNo: 1, elapsedSec: 130 }, NOW + 1000);
@@ -258,6 +269,6 @@ describe("конфигурация оплаты", () => {
   it("без авторизации и чтения обновлений бота оплата не стартует", () => {
     expect(() => loadAppConfig({ NODE_ENV: "test", PAYMENTS_ENABLED: "true" } as NodeJS.ProcessEnv)).toThrow(/AUTH_ENABLED/);
     expect(() => config({ TELEGRAM_BOT_UPDATES: "off" })).toThrow(/TELEGRAM_BOT_UPDATES/);
-    expect(config().payments).toEqual({ enabled: true, starsPerMinute: 1, maxStars: 30 });
+    expect(config().payments).toEqual({ enabled: true, testMode: false, starsPerMinute: 1, maxStars: 30 });
   });
 });

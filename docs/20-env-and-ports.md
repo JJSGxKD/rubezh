@@ -123,7 +123,7 @@
 | 6. Приём данных закрытого теста | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC`, `DIAGNOSTICS_RETENTION_DAYS` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует |
 | 7. Выгрузка данных | `EXPORT_PSEUDONYM_KEY`, `DATA_EXPORT_BOT_ENABLED` | ключ псевдонимов генерируется `openssl rand -hex 32` и **не меняется просто так**: выгрузки до и после смены не сопоставляются (`28-diagnostics.md` §7) |
 | 8. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_STATS_*` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Вход без подписи — только при `NODE_ENV=development`, иначе бэкенд не стартует; сводка без адреса чата или чтения обновлений бота не стартует |
-| 9. Авторизация игроков, приём забегов и оплата | `AUTH_ENABLED`, `JWT_ACCESS_SECRET`, `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_INIT_DATA_MAX_AGE_SEC`, `AUTH_MAX_SESSIONS`, `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER`, `RUNS_*`, `PAYMENTS_ENABLED`, `CONTINUE_*` | секрет подписи генерируется `openssl rand -hex 32`, свой на окружение; включённая авторизация без него, токена бота и базы не стартует. Окно данных запуска для входа — не больше часа, потолок в схеме. `AUTH_DEV_LOGIN` — вход разработчика без подписи, только в development. Пороги `RUNS_*` в `.env.example` нарочно мягкие: боевые задаются только в окружении прода (`34-stage3-plan.md`, Р7). Оплата не стартует без авторизации и чтения обновлений бота: подтверждение оплаты — обновление от Telegram. Цены `CONTINUE_*` — рабочие до решения О1 |
+| 9. Авторизация игроков, приём забегов и оплата | `AUTH_ENABLED`, `JWT_ACCESS_SECRET`, `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_INIT_DATA_MAX_AGE_SEC`, `AUTH_MAX_SESSIONS`, `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER`, `RUNS_*`, `PAYMENTS_ENABLED`, `PAYMENTS_TEST_MODE`, `CONTINUE_*` | секрет подписи генерируется `openssl rand -hex 32`, свой на окружение; включённая авторизация без него, токена бота и базы не стартует. Окно данных запуска для входа — не больше часа, потолок в схеме. `AUTH_DEV_LOGIN` — вход разработчика без подписи, только в development. Пороги `RUNS_*` в `.env.example` нарочно мягкие: боевые задаются только в окружении прода (`34-stage3-plan.md`, Р7). Оплата не стартует без авторизации и чтения обновлений бота: подтверждение оплаты — обновление от Telegram. `PAYMENTS_TEST_MODE` — одна звезда с немедленным возвратом, только в development. Цены `CONTINUE_*` — рабочие до решения О1 |
 | 10. Клиентская сборка | `VITE_API_URL`, `VITE_APP_VERSION`, `VITE_DIAGNOSTICS_DEFAULT`, `VITE_DEV_TOOLS` | только не-секреты: всё это попадает в бандл. `VITE_DEV_TOOLS=1` открывает инструменты команды без ответа сервера и работает только на dev-сервере |
 | 11. Тесты | `TEST_DATABASE_URL`, `PLAYTEST_TEST_REDIS_URL` | адреса настоящих Postgres и Redis для интеграционных тестов (`17-testing-strategy.md` §4.2); в CI их задают сервисы workflow, локально пусто — тесты пропускаются |
 
@@ -416,6 +416,15 @@ pnpm tunnel
 вне `NODE_ENV=development` не стартует, а сборка клиента имени не знает.
 Прежние `PLAYTEST_DEV_AUTH` и `VITE_PLAYTEST_DEV_USER` больше не действуют;
 с `PLAYTEST_DEV_AUTH="true"` бэкенд не стартует и называет новое имя.
+
+Оплата второго шанса в разработке — настоящими звёздами тестового бота, но
+по одной и с возвратом: `PAYMENTS_ENABLED="true"`, `PAYMENTS_TEST_MODE="true"`
+и `TELEGRAM_BOT_UPDATES="polling"` — без чтения обновлений бот не ответит на
+предварительную проверку, и Telegram сорвёт оплату через десять секунд.
+Окно оплаты покажет настоящую цену и пометку «тест», спишется одна звезда и
+тут же вернётся (`34-stage3-plan.md`, Р14). Платит только аккаунт из
+Telegram: вход разработчика по имени звёзд не имеет. Бэкенд с
+`PAYMENTS_TEST_MODE="true"` вне `NODE_ENV=development` не стартует.
 
 Сводка статистики в чат администраторов (`21-diagrams.md` §4.12) включается
 на **одной** машине: `PLAYTEST_STATS_ENABLED="true"`, `ADMIN_CHAT_ID` — id

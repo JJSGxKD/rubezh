@@ -4,6 +4,7 @@ import { BotModule } from "../bot/bot.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
 import { PaymentConfirmation } from "./payment-confirmation.js";
+import { PaymentRefunds } from "./payment-refunds.js";
 import { PaymentsBotHandler } from "./payments-bot.handler.js";
 import { PaymentsController } from "./payments.controller.js";
 import { PaymentsQueue } from "./payments-queue.js";
@@ -12,8 +13,9 @@ import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.rep
 
 /**
  * Второй шанс за Telegram Stars (docs/34-stage3-plan.md, WP5): цена, счёт,
- * подтверждение оплаты ботом и состояние покупки. Продажа выключена по
- * умолчанию (`PAYMENTS_ENABLED`).
+ * подтверждение оплаты ботом, возвраты и состояние покупки. Продажа
+ * выключена по умолчанию (`PAYMENTS_ENABLED`), тестовая оплата — только в
+ * разработке (`PAYMENTS_TEST_MODE`).
  *
  * Забеги модуль читает, но не принимает: продолжение продаётся к забегу,
  * который начался на сервере, — отсюда зависимость от `RunsModule`, а не
@@ -27,6 +29,7 @@ import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.rep
   providers: [
     PaymentsService,
     PaymentConfirmation,
+    PaymentRefunds,
     PaymentsQueue,
     PaymentsBotHandler,
     PaymentsContinueLedger,

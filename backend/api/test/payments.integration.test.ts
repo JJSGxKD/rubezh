@@ -152,6 +152,33 @@ describe.skipIf(DATABASE_URL === "")("покупки на живом Postgres", 
     await expect(purchases.refundStats(accountId)).resolves.toEqual({ paid: 1, refunded: 0 });
   });
 
+  it("заказ возврата: первая причина остаётся, незавершённый виден после перезапуска", async () => {
+    const { accountId, runId } = await startedRun();
+    const opened = await purchases.openInvoice(invoice(accountId, runId));
+    if (opened.kind !== "opened") throw new Error("счёт не открылся");
+    const { purchaseId } = opened.purchase;
+
+    // Не оплачено — возвращать нечего.
+    await expect(purchases.requestRefund(purchaseId, "unused", new Date())).resolves.toBeNull();
+
+    const chargeId = `charge-${randomUUID()}`;
+    await purchases.markPaid({ purchaseId, chargeId, chargedStars: 3, paidAt: new Date() });
+    expect(await purchases.unusedGrants(runId, 0)).toEqual([purchaseId]);
+    expect(await purchases.unusedGrants(runId, 1)).toEqual([]);
+
+    const order = await purchases.requestRefund(purchaseId, "unused", new Date());
+    await purchases.requestRefund(purchaseId, "test_mode", new Date());
+    const account = await prisma.account.findUniqueOrThrow({ where: { accountId } });
+
+    expect(order).toEqual({ purchaseId, chargeId, userId: Number(account.platformUserId), reason: "unused" });
+    expect(await purchases.unusedGrants(runId, 0)).toEqual([]);
+    expect((await purchases.pendingRefunds(500)).map((pending) => pending.purchaseId)).toContain(purchaseId);
+
+    await purchases.markRefunded(chargeId, new Date());
+    expect((await purchases.pendingRefunds(500)).map((pending) => pending.purchaseId)).not.toContain(purchaseId);
+    await expect(purchases.requestRefund(purchaseId, "unused", new Date())).resolves.toBeNull();
+  });
+
   it("аккаунт с покупками не удаляется вместе с деньгами", async () => {
     const { accountId, runId } = await startedRun();
     await purchases.openInvoice(invoice(accountId, runId));

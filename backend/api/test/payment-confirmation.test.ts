@@ -6,9 +6,11 @@ import { BotRouter } from "../src/modules/bot/bot-router.js";
 import { decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmationBotApi, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PaymentsBotHandler } from "../src/modules/payments/payments-bot.handler.js";
+import { PaymentRefunds, type RefundBotApi } from "../src/modules/payments/payment-refunds.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
+import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
-import { ALLOWED_UPDATES, updateSchema, type PreCheckoutAnswer, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { ALLOWED_UPDATES, TelegramApiError, updateSchema, type PreCheckoutAnswer, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 
@@ -49,6 +51,15 @@ function pending(patch: Partial<StoredPurchase> = {}): StoredPurchase {
 
 function query(purchase: StoredPurchase, patch: Partial<PreCheckout> = {}): PreCheckout {
   return { queryId: "q-1", fromUserId: PLAYER_ID, currency: "XTR", totalAmount: purchase.chargedStars, payload: purchase.purchaseId, ...patch };
+}
+
+class FakeRefundApi implements RefundBotApi {
+  readonly refunded: { userId: number; chargeId: string }[] = [];
+  failWith: Error | null = null;
+  async refundStarPayment(userId: number, chargeId: string): Promise<void> {
+    if (this.failWith !== null) throw this.failWith;
+    this.refunded.push({ userId, chargeId });
+  }
 }
 
 class FakeCheckoutApi implements ConfirmationBotApi {
@@ -223,7 +234,7 @@ describe("очередь оплаты", () => {
       },
     } as unknown as PaymentConfirmation;
     // Очередь не поднята — как при недоступном Redis.
-    const queue = new PaymentsQueue(config(), confirmation);
+    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(new MemoryPurchasesRepository(), new FakeRefundApi()), new RunsHooks());
     const payment = { chargeId: "charge-1", payload: randomUUID(), userId: PLAYER_ID, currency: "XTR", totalAmount: 3 };
 
     await queue.confirm(payment);
@@ -233,3 +244,131 @@ describe("очередь оплаты", () => {
     expect(confirmed).toEqual(["charge-1"]);
   });
 });
+
+describe("возвраты звёзд", () => {
+  let purchases: MemoryPurchasesRepository;
+  let refundApi: FakeRefundApi;
+  let refunds: PaymentRefunds;
+  let confirmation: PaymentConfirmation;
+  let hooks: RunsHooks;
+  let queue: PaymentsQueue;
+
+  function purchaseIn(mode: "live" | "test", patch: Partial<StoredPurchase> = {}): StoredPurchase {
+    const purchase = pending({ mode, chargedStars: mode === "test" ? 1 : 3, ...patch });
+    purchases.rows.set(purchase.purchaseId, purchase);
+    purchases.owners.set(purchase.accountId, String(PLAYER_ID));
+    return purchase;
+  }
+
+  function payment(purchase: StoredPurchase, chargeId = "charge-1"): ConfirmedPayment {
+    return { chargeId, payload: purchase.purchaseId, userId: PLAYER_ID, currency: "XTR", totalAmount: purchase.chargedStars };
+  }
+
+  beforeEach(() => {
+    purchases = new MemoryPurchasesRepository();
+    refundApi = new FakeRefundApi();
+    refunds = new PaymentRefunds(purchases, refundApi);
+    confirmation = new PaymentConfirmation(config(), purchases, new FakeCheckoutApi());
+    hooks = new RunsHooks();
+    // Очередь без Redis выполняет задания сразу — так видно всю цепочку.
+    queue = new PaymentsQueue(config(), confirmation, refunds, hooks);
+    queue.onModuleInit();
+  });
+
+  it("тестовая оплата: звезда возвращается сразу, продолжение засчитано", async () => {
+    const purchase = purchaseIn("test");
+
+    await queue.confirm(payment(purchase));
+
+    expect(refundApi.refunded).toEqual([{ userId: PLAYER_ID, chargeId: "charge-1" }]);
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "refunded", refundReason: "test_mode" });
+    expect(await purchases.grantedContinues(purchase.runId)).toBe(1);
+  });
+
+  it("настоящая оплата живого забега не возвращается", async () => {
+    const purchase = purchaseIn("live");
+
+    await queue.confirm(payment(purchase));
+
+    expect(refundApi.refunded).toEqual([]);
+    expect(purchases.rows.get(purchase.purchaseId)?.status).toBe("paid");
+  });
+
+  it("оплата пришла, когда забег уже закончен: товар не выдан — звёзды назад", async () => {
+    const purchase = purchaseIn("live");
+    purchases.finishedRuns.add(purchase.runId);
+
+    await queue.confirm(payment(purchase));
+
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "refunded", refundReason: "unused" });
+  });
+
+  it("забег записан без взятого продолжения, за которое заплатили, — звёзды назад", async () => {
+    const purchase = purchaseIn("live");
+    await queue.confirm(payment(purchase));
+
+    await hooks.emit({
+      runId: purchase.runId,
+      accountId: purchase.accountId,
+      difficulty: "normal",
+      outcome: "died",
+      survivalSec: 125,
+      level: 5,
+      enemiesKilled: 90,
+      startingWeaponId: "knife",
+      deathCause: "swarm_rat",
+      cheats: false,
+      continues: 0,
+      ranked: true,
+      verdict: "ok",
+      reasons: [],
+      finishedAt: new Date(NOW),
+    });
+
+    expect(refundApi.refunded).toEqual([{ userId: PLAYER_ID, chargeId: "charge-1" }]);
+    expect(purchases.rows.get(purchase.purchaseId)?.refundReason).toBe("unused");
+  });
+
+  it("вторая оплата того же продолжения возвращается, первая остаётся", async () => {
+    const purchase = purchaseIn("live");
+    await queue.confirm(payment(purchase, "charge-1"));
+
+    await queue.confirm(payment(purchase, "charge-2"));
+
+    expect(refundApi.refunded).toEqual([{ userId: PLAYER_ID, chargeId: "charge-2" }]);
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "paid", telegramChargeId: "charge-1" });
+  });
+
+  it("повтор уже сделанного возврата — не ошибка", async () => {
+    const purchase = purchaseIn("test", { status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
+    const order = await purchases.requestRefund(purchase.purchaseId, "test_mode", new Date(NOW));
+    if (order === null) throw new Error("возврат не заказан");
+    refundApi.failWith = new TelegramApiError("refundStarPayment", 400, "Bad Request: CHARGE_ALREADY_REFUNDED", null);
+
+    await expect(refunds.refund(order)).resolves.toBeUndefined();
+    expect(purchases.rows.get(purchase.purchaseId)?.status).toBe("refunded");
+  });
+
+  it("сбой сети — повтор через очередь, отказ Telegram — разбор человеку, а не вечный повтор", async () => {
+    const purchase = purchaseIn("test", { status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
+    const order = await purchases.requestRefund(purchase.purchaseId, "test_mode", new Date(NOW));
+    if (order === null) throw new Error("возврат не заказан");
+
+    refundApi.failWith = new TelegramApiError("refundStarPayment", 0, "сеть недоступна", null);
+    await expect(refunds.refund(order)).rejects.toThrow(TelegramApiError);
+    refundApi.failWith = new TelegramApiError("refundStarPayment", 400, "Bad Request: CHARGE_NOT_FOUND", null);
+    await expect(refunds.refund(order)).rejects.toMatchObject({ name: "UnrecoverableError" });
+
+    // Возврат не прошёл — заказ остаётся в базе, после перезапуска его поднимут.
+    await expect(refunds.pending(10)).resolves.toEqual([order]);
+  });
+});
+
+describe("тестовая оплата в конфигурации", () => {
+  it("вне разработки бэкенд с ней не стартует: продолжение в проде стоило бы звезду", () => {
+    expect(() => config({ PAYMENTS_TEST_MODE: "true" })).toThrow(/PAYMENTS_TEST_MODE/);
+    expect(() => config({ NODE_ENV: "production", PAYMENTS_TEST_MODE: "true" })).toThrow(/PAYMENTS_TEST_MODE/);
+    expect(config({ NODE_ENV: "development", PAYMENTS_TEST_MODE: "true" }).payments.testMode).toBe(true);
+  });
+});
+

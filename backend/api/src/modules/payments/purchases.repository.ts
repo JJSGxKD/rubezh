@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { isGranted, type PaymentMode, type StoredPurchase } from "./purchase-types.js";
+import { isGranted, isTelegramUserId, type PaymentMode, type RefundReason, type StoredPurchase } from "./purchase-types.js";
 
 /**
  * Покупки в Postgres (docs/34-stage3-plan.md, WP5). Запрос к базе живёт
@@ -66,6 +66,18 @@ export type ConfirmOutcome =
   | { kind: "already_paid"; purchase: StoredPurchase }
   | { kind: "unknown" };
 
+/**
+ * Возврат, который надо сделать: кому и какую оплату. `purchaseId` пуст у
+ * лишней оплаты — второй за то же продолжение или без покупки вовсе: строки
+ * под неё нет, возвращается сама оплата.
+ */
+export interface RefundOrder {
+  purchaseId: string | null;
+  chargeId: string;
+  userId: number;
+  reason: RefundReason | "duplicate" | "unmatched";
+}
+
 export interface RefundedRecord {
   purchase: StoredPurchase;
   /** `false` — возврат уже был записан: повтор обновления */
@@ -87,6 +99,16 @@ export interface PurchasesRepository {
   markRefunded(chargeId: string, refundedAt: Date): Promise<RefundedRecord | null>;
   /** Настоящие оплаты аккаунта и возвраты по ним не по нашей воле — доля возвратов (О4) */
   refundStats(accountId: string): Promise<{ paid: number; refunded: number }>;
+  /**
+   * Заказать возврат оплаченной покупки: причина и время заказа пишутся
+   * раньше обращения к Telegram, чтобы после перезапуска его было кому
+   * повторить. `null` — возвращать нечего: не оплачено или уже возвращено.
+   */
+  requestRefund(purchaseId: string, reason: RefundReason, at: Date): Promise<RefundOrder | null>;
+  /** Заказанные и не подтверждённые возвраты — их очередь поднимает после перезапуска */
+  pendingRefunds(limit: number): Promise<RefundOrder[]>;
+  /** Оплаченные продолжения забега сверх взятых — их не использовали */
+  unusedGrants(runId: string, usedContinues: number): Promise<string[]>;
 }
 
 const SELECT = {
@@ -225,6 +247,56 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
     ]);
     return { paid, refunded };
   }
+
+  async requestRefund(purchaseId: string, reason: RefundReason, at: Date): Promise<RefundOrder | null> {
+    // Первая причина остаётся: повторный заказ того же возврата её не меняет.
+    await this.prisma.purchase.updateMany({
+      where: { purchaseId, paidAt: { not: null }, refundRequestedAt: null, refundedAt: null },
+      data: { refundReason: reason, refundRequestedAt: at },
+    });
+    const row = await this.prisma.purchase.findUnique({ where: { purchaseId }, select: REFUND_SELECT });
+    return row === null ? null : refundOrderOf(row);
+  }
+
+  async pendingRefunds(limit: number): Promise<RefundOrder[]> {
+    const rows = await this.prisma.purchase.findMany({
+      where: { refundRequestedAt: { not: null }, refundedAt: null },
+      orderBy: { refundRequestedAt: "asc" },
+      take: limit,
+      select: REFUND_SELECT,
+    });
+    return rows.map(refundOrderOf).filter((order) => order !== null);
+  }
+
+  async unusedGrants(runId: string, usedContinues: number): Promise<string[]> {
+    const rows = await this.prisma.purchase.findMany({
+      where: { runId, paidAt: { not: null }, continueNo: { gt: usedContinues }, refundRequestedAt: null },
+      select: { purchaseId: true },
+    });
+    return rows.map((row) => row.purchaseId);
+  }
+}
+
+const REFUND_SELECT = {
+  purchaseId: true,
+  telegramChargeId: true,
+  refundReason: true,
+  refundRequestedAt: true,
+  refundedAt: true,
+  account: { select: { platformUserId: true } },
+} as const;
+
+function refundOrderOf(row: {
+  purchaseId: string;
+  telegramChargeId: string | null;
+  refundReason: RefundReason | null;
+  refundRequestedAt: Date | null;
+  refundedAt: Date | null;
+  account: { platformUserId: string };
+}): RefundOrder | null {
+  if (row.telegramChargeId === null || row.refundRequestedAt === null || row.refundedAt !== null || row.refundReason === null) return null;
+  if (!isTelegramUserId(row.account.platformUserId)) return null;
+  return { purchaseId: row.purchaseId, chargeId: row.telegramChargeId, userId: Number(row.account.platformUserId), reason: row.refundReason };
 }
 
 function isUniqueViolation(error: unknown): boolean {

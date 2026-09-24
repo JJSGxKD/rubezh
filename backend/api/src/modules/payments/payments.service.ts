@@ -17,7 +17,7 @@ import {
   PurchaseNotFoundError,
   RunUnverifiedError,
 } from "./payments-errors.js";
-import { isGranted, type PaymentMode, type PurchaseStatus, type StoredPurchase } from "./purchase-types.js";
+import { isGranted, isTelegramUserId, type PaymentMode, type PurchaseStatus, type StoredPurchase } from "./purchase-types.js";
 import { PURCHASES_REPOSITORY, type PurchasesRepository } from "./purchases.repository.js";
 
 /**
@@ -64,9 +64,6 @@ export interface PurchaseView {
 }
 
 export type InvoiceBotApi = Pick<TelegramBotApi, "createInvoiceLink">;
-
-/** Telegram ID — цифры; у входа разработчика `dev-…`, и платить ему нечем. */
-const TELEGRAM_USER_ID = /^\d{1,20}$/;
 
 @Injectable()
 export class PaymentsService {
@@ -133,7 +130,7 @@ export class PaymentsService {
 
   private async offer(account: AccountRef, request: ContinueRequest, nowMs: number): Promise<ContinueOffer> {
     this.assertEnabled();
-    if (account.platform !== "telegram" || !TELEGRAM_USER_ID.test(account.platformUserId)) throw new PaymentsUnsupportedError();
+    if (account.platform !== "telegram" || !isTelegramUserId(account.platformUserId)) throw new PaymentsUnsupportedError();
     if (request.continueNo > CONTINUES_PER_RUN) throw new ContinueUnavailableError("Продолжения этого забега закончились");
 
     const run = await this.runs.find(request.runId);
@@ -155,7 +152,10 @@ export class PaymentsService {
     }
 
     const priceStars = continuePrice(request.elapsedSec, this.config.payments);
-    return { continueNo: request.continueNo, priceStars, chargedStars: priceStars, mode: "live" };
+    // Тестовая оплата (Р14): цена настоящая — её игрок и видит, — а
+    // списывается одна звезда, и та вернётся сразу после подтверждения.
+    const mode: PaymentMode = this.config.payments.testMode ? "test" : "live";
+    return { continueNo: request.continueNo, priceStars, chargedStars: mode === "test" ? 1 : priceStars, mode };
   }
 
   private async invoiceLink(purchase: StoredPurchase): Promise<string> {

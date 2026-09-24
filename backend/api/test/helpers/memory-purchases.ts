@@ -1,4 +1,4 @@
-import { isGranted, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
+import { isGranted, isTelegramUserId, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
 import type {
   CheckoutView,
   ConfirmOutcome,
@@ -7,6 +7,7 @@ import type {
   PaymentRecord,
   PurchasesRepository,
   RefundedRecord,
+  RefundOrder,
 } from "../../src/modules/payments/purchases.repository.js";
 
 /**
@@ -100,5 +101,32 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
   async refundStats(accountId: string): Promise<{ paid: number; refunded: number }> {
     const live = [...this.rows.values()].filter((row) => row.accountId === accountId && row.mode === "live");
     return { paid: live.filter(isGranted).length, refunded: live.filter((row) => row.refundReason === "external").length };
+  }
+
+  async requestRefund(purchaseId: string, reason: RefundReason, at: Date): Promise<RefundOrder | null> {
+    const row = this.rows.get(purchaseId);
+    if (row === undefined || !isGranted(row) || row.refundedAt !== null) return null;
+    if (row.refundRequestedAt === null) Object.assign(row, { refundReason: reason, refundRequestedAt: at });
+    return this.orderOf(row);
+  }
+
+  async pendingRefunds(limit: number): Promise<RefundOrder[]> {
+    return [...this.rows.values()]
+      .map((row) => this.orderOf(row))
+      .filter((order) => order !== null)
+      .slice(0, limit);
+  }
+
+  async unusedGrants(runId: string, usedContinues: number): Promise<string[]> {
+    return [...this.rows.values()]
+      .filter((row) => row.runId === runId && isGranted(row) && row.continueNo > usedContinues && row.refundRequestedAt === null)
+      .map((row) => row.purchaseId);
+  }
+
+  private orderOf(row: StoredPurchase): RefundOrder | null {
+    const owner = this.owners.get(row.accountId) ?? "";
+    if (row.telegramChargeId === null || row.refundRequestedAt === null || row.refundedAt !== null || row.refundReason === null) return null;
+    if (!isTelegramUserId(owner)) return null;
+    return { purchaseId: row.purchaseId, chargeId: row.telegramChargeId, userId: Number(owner), reason: row.refundReason };
   }
 }
