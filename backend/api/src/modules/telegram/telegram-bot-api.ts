@@ -1,14 +1,22 @@
-import { openAsBlob } from "node:fs";
+import { Api, GrammyError, HttpError, InputFile } from "grammy";
 import { z } from "zod";
 import { chatFields, chatTargetOf, type ChatRef } from "./chat-target.js";
 
 /**
- * Методы Bot API, которые нужны боту закрытого теста, — на `fetch`, без
- * библиотеки бота (docs/16-tech-stack-decisions.md §5): обновления, сообщения
- * с кнопками, картинки, документы, команды меню и вебхук. Ответы Telegram —
- * граница системы и разбираются схемой.
+ * Методы Bot API, которые нужны боту, — поверх клиента grammY
+ * (docs/16-tech-stack-decisions.md §5): обновления, сообщения с кнопками,
+ * картинки, документы, команды меню и вебхук.
  *
- * Токен живёт в URL запроса, поэтому URL не попадает ни в ошибки, ни в логи.
+ * **grammY — транспорт, а не каркас бота.** Он даёт методы и типы Bot API,
+ * которые отслеживают спецификацию, многочастную отправку файлов и разбор
+ * ошибок; модули же зависят от этого класса, а не от grammY, и подменяют его
+ * в тестах узким срезом (`Pick<TelegramBotApi, …>`). Маршрутизация
+ * (`BotRouter`), распределённый лок опроса и вебхук с секретом остаются
+ * нашими: у grammY нет лока на несколько процессов.
+ *
+ * Ответы Telegram — граница системы: то, что мы из них берём, по-прежнему
+ * разбирается схемой, типы grammY — не проверка. Токен живёт в URL запроса, и
+ * grammY его в ошибки не выносит (`sensitiveLogs` выключен).
  */
 
 /**
@@ -29,6 +37,19 @@ const UPLOAD_TIMEOUT_MS = 5 * 60_000;
 export const ALLOWED_UPDATES = ["message", "callback_query"] as const;
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
+
+/** Разметка кнопок под сообщением — в том виде, в каком её ждёт grammY. */
+type ReplyMarkup = { reply_markup?: { inline_keyboard: InlineButton[][] } };
+
+/**
+ * Сигнал отмены в типах grammY. На Node они описывают его через полифил
+ * `abort-controller`, и нативный `AbortSignal` с ним структурно не сходится,
+ * хотя grammY лишь передаёт сигнал дальше — в наш нативный `fetch`.
+ */
+type GrammySignal = NonNullable<Parameters<Api["getMe"]>[0]>;
+
+/** Языки меню команд — те, на которых говорит бот. */
+export type CommandsLanguage = "ru" | "en";
 
 export class TelegramApiError extends Error {
   constructor(
@@ -82,14 +103,6 @@ export const updateSchema = z.object({
 export type TelegramUpdate = z.infer<typeof updateSchema>;
 export type TelegramUser = z.infer<typeof userSchema>;
 
-const envelopeSchema = z.object({
-  ok: z.boolean(),
-  result: z.unknown().optional(),
-  error_code: z.number().int().optional(),
-  description: z.string().optional(),
-  parameters: z.object({ retry_after: z.number().int().optional() }).optional(),
-});
-
 const sentMessageSchema = z.object({
   message_id: z.number().int(),
   photo: z.array(z.object({ file_id: z.string() })).optional(),
@@ -121,19 +134,34 @@ export interface SentPhoto {
 }
 
 export class TelegramBotApi {
+  private readonly api: Api;
+
   constructor(
-    private readonly token: string,
+    token: string,
     /**
      * Адрес Bot API. Не константа: у локального сервера Bot API свой хост, а
      * методы и пути те же (docs/20-env-and-ports.md §3.1).
      */
-    private readonly apiRoot: string,
-    private readonly fetchImpl: FetchLike = fetch,
-  ) {}
+    apiRoot: string,
+    /**
+     * Сеть — нативный `fetch` (undici), а не `node-fetch`, который grammY
+     * берёт на Node по умолчанию: один HTTP-клиент на бэкенд
+     * (docs/16-tech-stack-decisions.md §5), и тесты подменяют его так же.
+     */
+    fetchImpl: FetchLike = fetch,
+  ) {
+    this.api = new Api(token, {
+      apiRoot,
+      fetch: fetchImpl as typeof fetch,
+      // Срок задаёт каждый вызов своим сигналом: у долгого опроса и загрузки
+      // документа он другой, а свой таймер grammY оборвал бы их раньше.
+      timeoutSeconds: UPLOAD_TIMEOUT_MS / 1000,
+    });
+  }
 
   /** Кто этот бот: имя нужно для ссылки на Mini App (`t.me/<бот>?startapp`). */
   async getMe(signal?: AbortSignal): Promise<{ id: number; username: string | null }> {
-    const result = await this.call("getMe", {}, REQUEST_TIMEOUT_MS, signal);
+    const result = await this.call("getMe", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.getMe(abort));
     const me = z.object({ id: z.number().int(), username: z.string().optional() }).parse(result);
     return { id: me.id, username: me.username ?? null };
   }
@@ -143,11 +171,8 @@ export class TelegramBotApi {
    * Telegram добавляет поля, и схема обязана быть к этому терпима.
    */
   async getUpdates(offset: number | null, timeoutSec: number, signal?: AbortSignal): Promise<{ updates: TelegramUpdate[]; lastUpdateId: number | null }> {
-    const result = await this.call(
-      "getUpdates",
-      { offset: offset ?? undefined, timeout: timeoutSec, allowed_updates: ALLOWED_UPDATES },
-      timeoutSec * 1000 + POLL_GRACE_MS,
-      signal,
+    const result = await this.call("getUpdates", timeoutSec * 1000 + POLL_GRACE_MS, signal, (abort) =>
+      this.api.getUpdates({ ...(offset === null ? {} : { offset }), timeout: timeoutSec, allowed_updates: [...ALLOWED_UPDATES] }, abort),
     );
     const raw = z.array(z.unknown()).parse(result);
     const updates: TelegramUpdate[] = [];
@@ -162,17 +187,17 @@ export class TelegramBotApi {
   }
 
   async sendMessage(chat: ChatRef, text: string, signal?: AbortSignal, options: SendOptions = {}): Promise<number> {
-    const result = await this.call(
-      "sendMessage",
-      { ...chatFields(chat), text, ...replyMarkup(options) },
-      REQUEST_TIMEOUT_MS,
-      signal,
+    const { chat_id, ...thread } = chatFields(chat);
+    const result = await this.call("sendMessage", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.sendMessage(chat_id, text, { ...thread, ...replyMarkup(options) }, abort),
     );
     return sentMessageSchema.parse(result).message_id;
   }
 
   async editMessageText(chat: ChatRef, messageId: number, text: string, signal?: AbortSignal): Promise<void> {
-    await this.call("editMessageText", { chat_id: chatTargetOf(chat).chatId, message_id: messageId, text }, REQUEST_TIMEOUT_MS, signal);
+    await this.call("editMessageText", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.editMessageText(chatTargetOf(chat).chatId, messageId, text, undefined, abort),
+    );
   }
 
   /**
@@ -180,29 +205,27 @@ export class TelegramBotApi {
    * гоняет файл второй раз — так кэш карточек отдаёт их мгновенно.
    */
   async sendPhoto(chat: ChatRef, photo: Buffer | string, caption: string, signal?: AbortSignal, options: SendOptions = {}): Promise<SentPhoto> {
-    const markup = replyMarkup(options);
-    const fields = chatFields(chat);
-    const body: object | FormData =
-      typeof photo === "string"
-        ? { ...fields, photo, caption, ...markup }
-        : formOf({ ...fields, caption, ...stringified(markup) }, "photo", new Blob([new Uint8Array(photo)], { type: "image/png" }), "card.png");
-    const result = sentMessageSchema.parse(await this.call("sendPhoto", body, REQUEST_TIMEOUT_MS, signal));
+    const { chat_id, ...thread } = chatFields(chat);
+    const file = typeof photo === "string" ? photo : new InputFile(photo, "card.png");
+    const sent = await this.call("sendPhoto", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.sendPhoto(chat_id, file, { ...thread, caption, ...replyMarkup(options) }, abort),
+    );
+    const result = sentMessageSchema.parse(sent);
     // Telegram отдаёт несколько размеров; самый крупный — последний.
     return { messageId: result.message_id, fileId: result.photo?.at(-1)?.file_id ?? null };
   }
 
   /** Документ с диска потоком: архив выгрузки не читается в память целиком. */
   async sendDocument(chat: ChatRef, path: string, fileName: string, caption: string, signal?: AbortSignal): Promise<void> {
-    const blob = await openAsBlob(path, { type: "application/octet-stream" });
-    await this.call("sendDocument", formOf({ ...chatFields(chat), caption }, "document", blob, fileName), UPLOAD_TIMEOUT_MS, signal);
+    const { chat_id, ...thread } = chatFields(chat);
+    await this.call("sendDocument", UPLOAD_TIMEOUT_MS, signal, (abort) =>
+      this.api.sendDocument(chat_id, new InputFile(path, fileName), { ...thread, caption }, abort),
+    );
   }
 
   async answerCallbackQuery(callbackQueryId: string, text?: string, signal?: AbortSignal): Promise<void> {
-    await this.call(
-      "answerCallbackQuery",
-      { callback_query_id: callbackQueryId, ...(text === undefined ? {} : { text }) },
-      REQUEST_TIMEOUT_MS,
-      signal,
+    await this.call("answerCallbackQuery", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.answerCallbackQuery(callbackQueryId, text === undefined ? {} : { text }, abort),
     );
   }
 
@@ -210,79 +233,54 @@ export class TelegramBotApi {
    * Команды меню. Без чата — для всех; с чатом — только в нём: меню
    * администратора не показывается остальным (docs/28-diagnostics.md §6.1.2).
    */
-  async setMyCommands(commands: BotCommand[], chat: ChatRef | null, signal?: AbortSignal, languageCode?: string): Promise<void> {
-    await this.call(
-      "setMyCommands",
-      {
+  async setMyCommands(commands: BotCommand[], chat: ChatRef | null, signal?: AbortSignal, languageCode?: CommandsLanguage): Promise<void> {
+    await this.call("setMyCommands", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.setMyCommands(
         commands,
-        scope: chat === null ? { type: "default" } : { type: "chat", chat_id: chatTargetOf(chat).chatId },
-        ...(languageCode === undefined ? {} : { language_code: languageCode }),
-      },
-      REQUEST_TIMEOUT_MS,
-      signal,
+        {
+          scope: chat === null ? { type: "default" } : { type: "chat", chat_id: chatTargetOf(chat).chatId },
+          ...(languageCode === undefined ? {} : { language_code: languageCode }),
+        },
+        abort,
+      ),
     );
   }
 
   async setWebhook(url: string, secretToken: string, signal?: AbortSignal): Promise<void> {
-    await this.call(
-      "setWebhook",
-      { url, secret_token: secretToken, allowed_updates: ALLOWED_UPDATES, drop_pending_updates: false },
-      REQUEST_TIMEOUT_MS,
-      signal,
+    await this.call("setWebhook", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.setWebhook(url, { secret_token: secretToken, allowed_updates: [...ALLOWED_UPDATES], drop_pending_updates: false }, abort),
     );
   }
 
   async deleteWebhook(signal?: AbortSignal): Promise<void> {
-    await this.call("deleteWebhook", { drop_pending_updates: false }, REQUEST_TIMEOUT_MS, signal);
+    await this.call("deleteWebhook", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.deleteWebhook({ drop_pending_updates: false }, abort));
   }
 
-  private async call(method: string, body: object | FormData, timeoutMs: number, signal?: AbortSignal): Promise<unknown> {
+  /**
+   * Вызов с таймаутом и нашей ошибкой. Модули ветвятся по `TelegramApiError`
+   * — коду и `retry_after`, — а не по классам grammY: так они не зависят от
+   * библиотеки, и замена транспорта их не трогает.
+   */
+  private async call<T>(method: string, timeoutMs: number, signal: AbortSignal | undefined, run: (abort: GrammySignal) => Promise<T>): Promise<T> {
     const timeout = AbortSignal.timeout(timeoutMs);
-    const init: RequestInit = {
-      method: "POST",
-      signal: signal === undefined ? timeout : AbortSignal.any([timeout, signal]),
-      ...(body instanceof FormData
-        ? { body }
-        : { body: JSON.stringify(body), headers: { "content-type": "application/json" } }),
-    };
-
-    let response: Response;
+    const abort = signal === undefined ? timeout : AbortSignal.any([timeout, signal]);
     try {
-      response = await this.fetchImpl(`${this.apiRoot}/bot${this.token}/${method}`, init);
+      // Расхождение только в типах полифила (см. GrammySignal): во время
+      // работы это тот же нативный сигнал, который понимает наш `fetch`.
+      return await run(abort as unknown as GrammySignal);
     } catch (error: unknown) {
-      // Сетевая ошибка undici может нести URL с токеном в `cause` — наружу
-      // уходит только имя метода и тип ошибки.
-      const reason = error instanceof Error ? error.name : "unknown";
+      if (error instanceof GrammyError) {
+        throw new TelegramApiError(method, error.error_code, error.description, error.parameters.retry_after ?? null);
+      }
+      // Сетевая ошибка может нести URL с токеном в `cause` — наружу уходит
+      // только имя метода и тип исходной ошибки.
+      const cause = error instanceof HttpError ? error.error : error;
+      const reason = cause instanceof Error ? cause.name : "unknown";
       throw new TelegramApiError(method, 0, `сеть недоступна (${reason})`, null);
     }
-
-    const envelope = envelopeSchema.safeParse(await response.json().catch(() => null));
-    if (!envelope.success) throw new TelegramApiError(method, response.status, "ответ не по схеме Bot API", null);
-    if (!envelope.data.ok) {
-      throw new TelegramApiError(
-        method,
-        envelope.data.error_code ?? response.status,
-        envelope.data.description ?? "без описания",
-        envelope.data.parameters?.retry_after ?? null,
-      );
-    }
-    return envelope.data.result;
   }
 }
 
-function replyMarkup(options: SendOptions): { reply_markup?: { inline_keyboard: InlineButton[][] } } {
+function replyMarkup(options: SendOptions): ReplyMarkup {
   return options.keyboard === undefined ? {} : { reply_markup: { inline_keyboard: options.keyboard } };
-}
-
-/** Поля формы — строки: разметку кнопок Telegram ждёт в ней JSON-строкой. */
-function stringified(fields: Record<string, unknown>): Record<string, string> {
-  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, typeof value === "string" ? value : JSON.stringify(value)]));
-}
-
-/** Многочастный запрос: числа Telegram принимает строками, как и всё в форме. */
-function formOf(fields: Record<string, string | number>, fileField: string, file: Blob, fileName: string): FormData {
-  const form = new FormData();
-  for (const [key, value] of Object.entries(fields)) form.set(key, String(value));
-  form.set(fileField, file, fileName);
-  return form;
 }

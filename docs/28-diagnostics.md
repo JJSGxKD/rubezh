@@ -645,9 +645,10 @@ Telegram ──вебхук──► модуль bot
 - Сервис сборки архива — **тот же**, что у `pnpm closed-test:export`: два
   входа, одна реализация, одинаковый результат.
 
-**Библиотеки бота нет** — свой тонкий клиент Bot API на `fetch`
-(`backend/api/src/modules/telegram/telegram-bot-api.ts`), решение и проверка
-Telegraf и grammY — `16-tech-stack-decisions.md` §5.
+**Клиент Bot API** — класс `TelegramBotApi`
+(`backend/api/src/modules/telegram/telegram-bot-api.ts`) поверх grammY:
+библиотека — транспорт и типы, маршрутизация, опрос под локом и вебхук —
+свои. Решение и его история — `16-tech-stack-decisions.md` §5.
 
 **Как реализовано** (`backend/api/src/modules/bot`): обновления приходят
 вебхуком `POST /api/v1/bot/webhook` (`TELEGRAM_BOT_UPDATES=webhook`) или long
