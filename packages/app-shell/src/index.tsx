@@ -16,6 +16,7 @@ import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
 import { usePlaytest } from "./state/playtest";
 import { useRuns } from "./state/runs";
+import { recoverDownedRun } from "./state/run";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
@@ -94,6 +95,9 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   useHints.getState().hydrate();
   useSavedRun.getState().hydrate();
   useRuns.getState().hydrate();
+  // Забег, брошенный на экране смерти, закрывается смертью — после рекорда и
+  // очереди забегов, которые он пополнит (state/downed-run.ts).
+  recoverDownedRun();
   useDevMode.getState().hydrate();
   useGraphics.getState().hydrate();
   useFeedback.getState().hydrate();

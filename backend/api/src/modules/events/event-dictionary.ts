@@ -94,6 +94,10 @@ export const EVENT_DICTIONARY = {
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },
   wave_reached: { version: 1, payload: payload({ wave: count, elapsedSec: seconds }) },
+  // Второй шанс взят (docs/07-monetization-and-ads.md §8): откуда — `dev`
+  // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
+  // на какой секунде и волне забега.
+  continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
   // Дошёл ли старт или итог забега до сервера (docs/34-stage3-plan.md, WP4).
   // По старту видно, какая доля честных забегов теряет проверку времени —
   // вход для решения О5; по итогу — вердикт антифрода.

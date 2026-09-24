@@ -13,7 +13,7 @@ import {
 } from "../../design-system/components";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import { ItemIcon, ItemTile, type ItemKind } from "../item-icons";
-import { SecondChance } from "./SecondChance";
+import { SecondChance, type SecondChanceProps } from "./SecondChance";
 import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
 import { formatChange } from "./upgrade-format";
 
@@ -329,6 +329,11 @@ export interface DeathOverlayProps {
   diagnostics: boolean;
   /** забег с читами учтён в рейтинге по просьбе администратора */
   cheatsCounted?: boolean;
+  /**
+   * Забег ждёт решения о втором шансе: итог предварительный. Без поля —
+   * забег закрыт, и блок второго шанса — только витрина.
+   */
+  secondChance?: SecondChanceProps;
   onRestart(): void;
   onMenu(): void;
   onShare(): void;
@@ -404,7 +409,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
           {/* Второй шанс — только после смерти: сданный забег игрок закончил сам. */}
           {result.outcome === "died" ? (
             <div className="mt-3">
-              <SecondChance />
+              <SecondChance {...props.secondChance} />
             </div>
           ) : null}
         </div>

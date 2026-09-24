@@ -24,6 +24,7 @@ export const ANALYTICS_EVENTS = [
   "upgrade_chosen",
   "wave_reached",
   "run_synced",
+  "continue_used",
   "load_time",
   "diagnostics_mode_changed",
   "bench_finished",
