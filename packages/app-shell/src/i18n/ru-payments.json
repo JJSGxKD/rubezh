@@ -1,0 +1,12 @@
+{
+  "run.continue.stars": "Продолжить за {amount} {amount, plural, one {звезду} few {звезды} many {звёзд} other {звезды}}",
+  "run.continue.test": "Тестовая оплата: спишется {charged} ⭐ и сразу вернётся",
+  "run.continue.confirming": "Подтверждаем оплату…",
+  "run.continue.retry": "Повторить",
+  "run.continue.retry.offline": "Нет связи с сервером",
+  "run.continue.retry.payment_failed": "Оплата не прошла",
+  "run.continue.retry.slow_confirmation": "Оплата ещё подтверждается. Если не подтвердится, звёзды вернутся",
+  "run.continue.unavailable.not_offered": "Сейчас второй шанс не купить",
+  "run.continue.unavailable.unverified": "Сервер не видел начала забега — второй шанс недоступен",
+  "run.continue.unavailable.used_up": "Второй шанс в этом забеге уже взят"
+}

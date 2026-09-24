@@ -83,9 +83,9 @@ type QueueEntry = z.infer<typeof startEntrySchema> | z.infer<typeof finishEntryS
 
 /**
  * Что запустило отправку — разрез события: начало или конец забега, запуск
- * приложения, открытие рейтинга и профиля.
+ * приложения, открытие рейтинга и профиля, вопрос о цене второго шанса.
  */
-type FlushTrigger = "start" | "finish" | "launch" | "screen";
+type FlushTrigger = "start" | "finish" | "launch" | "screen" | "continue";
 
 export interface RunsStore {
   /** сколько итогов ждёт отправки; старты игроку не показываются */

@@ -246,6 +246,9 @@
 | Оплата: сколько живёт счёт, отказы предварительной проверки и их тексты для игрока | `payments-limits.ts` → `INVOICE_TTL_SEC`; `checkout-answer.ts` |
 | Оплата: сроки ответа на предварительную проверку и чтения покупки для неё, повторы очереди подтверждений и возвратов, сколько незавершённых возвратов поднимать на старте | `telegram-bot-api.ts` → `PRE_CHECKOUT_TIMEOUT_MS`; `payment-confirmation.ts` → `CHECKOUT_READ_TIMEOUT_MS`; `payments-queue.ts` → `JOB_OPTIONS`, `PENDING_REFUNDS_ON_START` |
 | Когда звёзды возвращаются сами: тестовая оплата, продолжение не взято, вторая оплата, оплата без покупки | `backend/api/src/modules/payments/payment-refunds.ts` |
+| Клиент: как часто и сколько ждать подтверждения оплаты сервером | `packages/app-shell/src/state/continue-purchase.ts` → `CONFIRM_POLL_MS`, `CONFIRM_TIMEOUT_MS` |
+| Клиент: когда покупку второго шанса вообще предлагают | `packages/app-shell/src/state/payments-availability.ts` |
+| Тексты покупки второго шанса — отдельный словарь, едет в чанке экрана смерти | `packages/app-shell/src/i18n/ru-payments.json` |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 
 Три правила, которые нарушают чаще всего: порт **не выбирается на месте**;

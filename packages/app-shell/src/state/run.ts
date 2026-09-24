@@ -20,6 +20,7 @@ import { useMeta } from "./meta";
 import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
 import { clearDownedRun, saveDownedRun, takeDownedRun } from "./downed-run";
+import { canOfferPaidContinue } from "./payments-availability";
 import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
@@ -258,10 +259,10 @@ export const useRun = create<RunStore>((set, get) => ({
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
         ...(resume === undefined ? {} : { resume }),
         ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),
-        // Второй шанс пока — только в забеге разработчика, бесплатно: купить
-        // его игрок сможет вместе с платежами Stars (docs/34-stage3-plan.md,
-        // WP5). До тех пор смерть обычного забега закрывает его сразу.
-        continues: devRun,
+        // Второй шанс — в забеге разработчика бесплатно, а игроку — если его
+        // можно купить: иначе смерть ждала бы решения, которого не принять
+        // (docs/34-stage3-plan.md, WP5).
+        continues: devRun || canOfferPaidContinue(),
       });
 
       if (token !== startToken) {

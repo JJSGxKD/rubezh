@@ -219,7 +219,7 @@ describe("экран смерти со вторым шансом", () => {
     expect(events.filter((event) => event === "run_finished")).toHaveLength(1);
   });
 
-  it("второй шанс пока только в забеге разработчика: купить его ещё негде", async () => {
+  it("где окна оплаты нет, второй шанс — только в забеге разработчика: купить его негде", async () => {
     const fake = fakeEngine();
     engine.load.mockResolvedValue(fake.engine);
     await useRun.getState().start(OPTIONS);

@@ -29,7 +29,14 @@ export const API_FAILURES = ["no_identity", "offline", "unauthorized", "disabled
 
 export type ApiFailure = (typeof API_FAILURES)[number];
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; failure: ApiFailure };
+/**
+ * `code` — код ошибки сервера, когда он есть (`{ error: { code } }`). Нужен
+ * там, где за одной причиной стоят разные исходы: «старт забега не дошёл» и
+ * «продолжения кончились» — оба отказ, но игроку говорится разное.
+ */
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; failure: ApiFailure; code?: string };
+
+const errorBodySchema = z.object({ error: z.object({ code: z.string() }) });
 
 export type ApiRequest = <T>(
   path: string,
@@ -52,7 +59,10 @@ export const apiRequest: ApiRequest = async (path, schema, init) => {
   }
   // Сессии нет — запрос и не уходил: причину знает сессия.
   if (response === null) return { ok: false, failure: sessionFailure(useSession.getState().failure) };
-  if (!response.ok) return { ok: false, failure: failureOf(response.status) };
+  if (!response.ok) {
+    const code = await errorCodeOf(response);
+    return { ok: false, failure: failureOf(response.status), ...(code === null ? {} : { code }) };
+  }
 
   try {
     const parsed = z.object({ data: schema }).safeParse(await response.json());
@@ -81,6 +91,16 @@ export function sessionFailure(failure: AuthFailure | null): ApiFailure {
       return "unauthorized";
     case null:
       return "disabled";
+  }
+}
+
+async function errorCodeOf(response: Response): Promise<string | null> {
+  try {
+    const parsed = errorBodySchema.safeParse(await response.json());
+    return parsed.success ? parsed.data.error.code : null;
+  } catch {
+    // Страница ошибки прокси вместо ответа API — кода нет, хватит причины.
+    return null;
   }
 }
 

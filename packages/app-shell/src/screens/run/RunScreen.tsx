@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_MAP_ID, type RunInspection } from "@bh/core-game";
+import type { RunResult } from "@bh/shared-types";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
+import { canOfferPaidContinue } from "../../state/payments-availability";
 import { usePlatform } from "../../state/platform";
 import { useRuns } from "../../state/runs";
 import { useRun } from "../../state/run";
@@ -17,6 +19,7 @@ import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
 import { DevSheetLazy } from "./dev-sheet-lazy";
 import { DevTechPanelLazy } from "./dev-tech-panel-lazy";
 import { RunStatsSheet } from "./RunStatsSheet";
+import type { SecondChanceProps } from "./SecondChance";
 
 /**
  * Экран забега: канва Phaser на весь экран, HUD слоем поверх и оверлеи
@@ -151,9 +154,7 @@ export function RunScreen(): ReactNode {
           rank={run.phase === "finished" && submitted?.runId === run.result.runId ? submitted.result.rank : null}
           diagnostics={diagnostics}
           cheatsCounted={run.devRun && countInRating}
-          {...(run.phase === "downed" && run.devRun
-            ? { secondChance: { onDevContinue: () => useRun.getState().continueRun("dev") } }
-            : {})}
+          {...(run.phase === "downed" ? { secondChance: secondChanceFor(run.result, run.devRun) } : {})}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
           onShare={() => shareRun()}
@@ -172,6 +173,17 @@ export function RunScreen(): ReactNode {
   );
 }
 
+
+/**
+ * Что можно на экране смерти: купить продолжение звёздами — где площадка
+ * умеет оплату, — а в забеге разработчика ещё и взять его бесплатно.
+ */
+function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps {
+  return {
+    ...(devRun ? { onDevContinue: () => useRun.getState().continueRun("dev") } : {}),
+    ...(canOfferPaidContinue() ? { paidFor: result } : {}),
+  };
+}
 
 /**
  * Шеринг результата — заглушка этапа 2: адаптер о нём знает, но экрана и

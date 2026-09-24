@@ -234,7 +234,7 @@
   "run.continue.ad": "Продолжить за рекламу",
   "run.continue.ad.short": "Реклама",
   "run.continue.dev": "Продолжить бесплатно — режим разработчика",
-  "run.continue.premium": "Продолжить за {amount} {amount, plural, one {самоцвет} few {самоцвета} many {самоцветов} other {самоцвета}}",
+  "run.continue.stars.unknown": "Продолжить за звёзды",
   "arsenal.title": "Арсенал",
   "arsenal.stub": "Снаряжение появится вместе с прогрессией между забегами. Сейчас раздел показывает, как он будет выглядеть.",
   "arsenal.attack": "Атака",
