@@ -51,6 +51,8 @@ erDiagram
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN ||--o{ PURCHASE : "продолжен за"
+    ACCOUNT ||--o{ ACCOUNT_SESSION : "запускает игру"
+    ACCOUNT ||--o| ACQUISITION : "пришёл через"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -71,6 +73,37 @@ erDiagram
         boolean ranked "в рейтинге: вердикт ok и без читов"
         enum verdict "nullable: ok|suspicious|rejected"
         string[] verdict_reasons
+    }
+
+    ACCOUNT_SESSION {
+        uuid session_id PK
+        uuid account_id FK
+        enum platform
+        enum place "miniapp|web"
+        enum start_kind "organic|click|invite|telegram_affiliate|unknown"
+        string start_param "nullable: из подписанного initData"
+        string start_ref "nullable: код клика, id партнёра Telegram"
+        string client_platform "nullable: подсказка клиента"
+        string client_version "nullable"
+        enum device_class "mobile|desktop|web|unknown"
+        string os
+        string ip_prefix "nullable: /24 или /48, не адрес"
+        datetime started_at
+    }
+
+    ACQUISITION {
+        uuid account_id PK,FK
+        datetime first_at "самая ранняя сессия"
+        enum first_start_kind
+        string first_start_param "nullable"
+        string first_start_ref "nullable"
+        string first_client_platform "nullable"
+        enum first_device_class
+        datetime last_seen_at
+        datetime last_touch_at "nullable: последняя сессия по ссылке"
+        enum last_start_kind "nullable"
+        string last_start_param "nullable"
+        string last_start_ref "nullable"
     }
 
     PURCHASE {
@@ -181,6 +214,15 @@ erDiagram
   выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
   подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
   разбора.
+- **`ACCOUNT_SESSION` — запуск игры, `ACQUISITION` — откуда игрок пришёл**
+  (`34-stage3-plan.md`, WP6). Сессия пишется из очереди, мимо ответа на
+  вход, а повтор запуска в течение 30 секунд отсекает ключ в Redis — не
+  блокировка строки, как в источнике переноса (`13-reuse-from-vpnsibcom.md`
+  §6). Первое касание — самая ранняя сессия, органическая тоже; последнее —
+  последняя сессия по ссылке. Обе строки считает одна вставка с
+  `ON CONFLICT`. Персональных данных — минимум: подсеть вместо адреса и
+  класс устройства вместо строки User-Agent (`24-attribution-and-sharing.md`
+  §6). Уходят вместе с аккаунтом.
 - **`PURCHASE` — запись бухгалтерии, а не состояние игры.** Внешние ключи
   на аккаунт и забег запрещают удаление (`Restrict`): удалить игрока, за
   которым числятся звёзды, база не даст — деньги не исчезают вместе с ним.
@@ -677,6 +719,7 @@ flowchart LR
 
     subgraph api["backend/api"]
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
+        ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
         PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение, возвраты, реализовано"]
         ADS["ads<br/>сессии показа, награды"]
@@ -744,6 +787,9 @@ flowchart LR
 
     AUTH --> PG
     AUTH --> REDIS
+    AUTH -. слушатели входа .-> ATTR
+    ATTR --> REDIS
+    ATTR --> QUEUE
     RUNS --> PG
     RUNS --> REDIS
     PAY --> PG

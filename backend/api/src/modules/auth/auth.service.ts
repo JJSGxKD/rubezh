@@ -2,9 +2,11 @@ import { createHash, randomBytes } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, ForbiddenError, UnauthorizedError, ValidationError } from "../../common/domain-error.js";
+import { parseStartParam, type StartParam } from "../attribution/start-param.js";
 import { verifyInitData } from "../telegram/telegram-init-data.js";
 import { ACCOUNT_REPOSITORY, type Account, type AccountRepository } from "./account.repository.js";
 import { secretKey, signAccessToken } from "./access-token.js";
+import { AuthHooks, PLAIN_LOGIN, type LoginContext } from "./auth-hooks.js";
 import { parseDevUser } from "./dev-login.js";
 import { REFRESH_STORE, type RefreshStore } from "./refresh.store.js";
 
@@ -33,6 +35,11 @@ export interface AuthResult extends AuthTokens {
   account: Account;
 }
 
+/** Вход с данными запуска: откуда открыли игру — клиенту для события сессии. */
+export interface LoginResult extends AuthResult {
+  startParam: StartParam;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger("auth");
@@ -41,10 +48,11 @@ export class AuthService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     @Inject(REFRESH_STORE) private readonly refresh: RefreshStore,
+    private readonly hooks: AuthHooks,
   ) {}
 
   /** Вход по подписанным данным запуска Telegram. */
-  async loginWithTelegram(initData: string, nowMs = Date.now()): Promise<AuthResult> {
+  async loginWithTelegram(initData: string, context: LoginContext = PLAIN_LOGIN, nowMs = Date.now()): Promise<LoginResult> {
     const check = verifyInitData(initData, this.config.telegram.botToken, this.config.auth.initDataMaxAgeSec, nowMs);
     if (!check.ok) {
       // Причины не раскрываем подробнее, чем нужно клиенту: истекло — открыть
@@ -69,7 +77,11 @@ export class AuthService {
     ensureNotBanned(account);
 
     const tokens = await this.issue(account, nowMs);
-    return { ...tokens, account };
+    // Параметр — из подписи, а не из тела запроса: подменить его значит
+    // сломать подпись (docs/33-telegram-mini-app-pitfalls.md §5.2).
+    const startParam = parseStartParam(check.startParam);
+    this.announce(account, "miniapp", startParam, context, nowMs);
+    return { ...tokens, account, startParam };
   }
 
   /**
@@ -77,7 +89,7 @@ export class AuthService {
    * по Telegram, и дальше сессия ничем не отличается: рейтинг, профиль и
    * права проверяются теми же путями, что у игрока.
    */
-  async loginAsDeveloper(devUser: string, nowMs = Date.now()): Promise<AuthResult> {
+  async loginAsDeveloper(devUser: string, context: LoginContext = PLAIN_LOGIN, nowMs = Date.now()): Promise<LoginResult> {
     // Флаг проверяет и контроллер, но вход без подписи слишком дорог, чтобы
     // полагаться на одну проверку.
     if (!this.config.auth.devLogin) throw new DisabledError("Вход разработчика выключен");
@@ -91,7 +103,9 @@ export class AuthService {
     ensureNotBanned(account);
 
     const tokens = await this.issue(account, nowMs);
-    return { ...tokens, account };
+    const startParam = parseStartParam(null);
+    this.announce(account, "web", startParam, context, nowMs);
+    return { ...tokens, account, startParam };
   }
 
   /** Продление сессии: старый токен гасится, выдаётся новая пара. */
@@ -130,6 +144,22 @@ export class AuthService {
   /** Выход со всех устройств. */
   async logoutEverywhere(accountId: string): Promise<number> {
     return await this.refresh.revokeAll(accountId);
+  }
+
+  /**
+   * Сообщить слушателям о входе — без ожидания: запись сессии и атрибуции
+   * идёт после ответа игроку и не отменяет вход, если упала.
+   */
+  private announce(account: Account, place: "miniapp" | "web", startParam: StartParam, context: LoginContext, nowMs: number): void {
+    void this.hooks.emit({
+      ...context,
+      accountId: account.accountId,
+      platform: account.platform,
+      place,
+      startParam,
+      created: account.created,
+      at: new Date(nowMs),
+    });
   }
 
   private async issue(account: Account, nowMs: number): Promise<AuthTokens> {

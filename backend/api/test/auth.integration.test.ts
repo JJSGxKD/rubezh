@@ -7,6 +7,7 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { closeRedis, createRedis } from "../src/infra/redis.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { AuthHooks } from "../src/modules/auth/auth-hooks.js";
 import { AuthService } from "../src/modules/auth/auth.service.js";
 import { RedisRefreshStore } from "../src/modules/auth/redis-refresh.store.js";
 import { launchFor } from "./helpers/init-data.js";
@@ -47,7 +48,7 @@ describe.skipIf(!live)("вход на живых Postgres и Redis", () => {
     prisma = createPrisma(config);
     redis = createRedis(config);
     await redis.connect();
-    service = new AuthService(config, new PrismaAccountRepository(prisma), new RedisRefreshStore(redis, config));
+    service = new AuthService(config, new PrismaAccountRepository(prisma), new RedisRefreshStore(redis, config), new AuthHooks());
   });
 
   afterAll(async () => {

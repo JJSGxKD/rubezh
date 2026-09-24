@@ -98,6 +98,30 @@ enum RefundReason {
   external
 }
 
+// Откуда открыли игру (docs/34-stage3-plan.md, WP6): разбор параметра запуска
+// — `modules/attribution/start-param.ts`.
+enum StartKind {
+  organic
+  click
+  invite
+  telegram_affiliate
+  unknown
+}
+
+// Где началась сессия: в Mini App площадки или в браузере (вход разработчика,
+// позже веб-версия).
+enum SessionPlace {
+  miniapp
+  web
+}
+
+enum DeviceClass {
+  mobile
+  desktop
+  web
+  unknown
+}
+
 // Аккаунт игрока (docs/34-stage3-plan.md, WP1).
 //
 // Ключ идентичности — пара «площадка + её идентификатор», а не Telegram ID:
@@ -121,9 +145,11 @@ model Account {
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(3)
   banReason      String?   @map("ban_reason") @db.VarChar(256)
 
-  roles     AccountRole[]
-  runs      Run[]
-  purchases Purchase[]
+  roles       AccountRole[]
+  runs        Run[]
+  purchases   Purchase[]
+  sessions    AccountSession[]
+  acquisition Acquisition?
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -382,4 +408,76 @@ model Purchase {
   // Незавершённые возвраты — очередь поднимает их после перезапуска.
   @@index([refundRequestedAt])
   @@map("purchase")
+}
+
+// Сессия — запуск игры (docs/34-stage3-plan.md, WP6). Продление токена
+// сессией не считается: это та же сессия, а не новый запуск.
+//
+// Пишется из очереди, а не на горячем пути входа: в источнике переноса запись
+// сессии блокировала строку пользователя на каждый вход
+// (docs/13-reuse-from-vpnsibcom.md §6). Повтор запуска в течение 30 секунд
+// отсекает ключ в Redis — один запуск Mini App иначе пишет несколько сессий.
+//
+// Персональных данных — ровно столько, сколько нужно разрезам и антифроду
+// (docs/24-attribution-and-sharing.md §6): усечённый IP и класс устройства,
+// а не сырой адрес и строка User-Agent.
+model AccountSession {
+  sessionId      String       @id @map("session_id") @db.Uuid
+  accountId      String       @map("account_id") @db.Uuid
+  platform       Platform
+  place          SessionPlace
+  startKind      StartKind    @map("start_kind")
+  /// параметр запуска как пришёл, из подписанных данных; `null` — не было или мусор
+  startParam     String?      @map("start_param") @db.VarChar(64)
+  /// идентификатор внутри параметра: код клика, id партнёра Telegram
+  startRef       String?      @map("start_ref") @db.VarChar(64)
+  /// что клиент говорит о себе (`tgWebAppPlatform`) — подсказка, не факт
+  clientPlatform String?      @map("client_platform") @db.VarChar(16)
+  clientVersion  String?      @map("client_version") @db.VarChar(16)
+  deviceClass    DeviceClass  @map("device_class")
+  os             String       @db.VarChar(16)
+  /// подсеть: /24 для IPv4, /48 для IPv6 — адрес целиком не хранится
+  ipPrefix       String?      @map("ip_prefix") @db.VarChar(64)
+  startedAt      DateTime     @map("started_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Сессии игрока и удержание по дням.
+  @@index([accountId, startedAt])
+  @@index([startedAt])
+  // Запуски по ссылке: сколько пришло по клику, приглашению, партнёрке.
+  @@index([startKind, startRef])
+  @@map("account_session")
+}
+
+// Первое и последнее касание аккаунта (docs/13-reuse-from-vpnsibcom.md §6).
+//
+// Первое — самая ранняя сессия, органическая тоже: пришёл сам — значит сам,
+// и поздняя рекламная ссылка это не переписывает. Последнее — последняя
+// сессия **по ссылке**: открытие из меню бота не стирает кампанию, которая
+// привела игрока обратно.
+//
+// Обе строки считает одна вставка с `ON CONFLICT` — без блокировки строки и
+// без ремонтного крона, которым источник чинил параллельные записи.
+model Acquisition {
+  accountId           String      @id @map("account_id") @db.Uuid
+  firstAt             DateTime    @map("first_at") @db.Timestamptz(3)
+  firstStartKind      StartKind   @map("first_start_kind")
+  firstStartParam     String?     @map("first_start_param") @db.VarChar(64)
+  firstStartRef       String?     @map("first_start_ref") @db.VarChar(64)
+  firstClientPlatform String?     @map("first_client_platform") @db.VarChar(16)
+  firstDeviceClass    DeviceClass @map("first_device_class")
+  /// последняя сессия любая — для «давно не заходил»
+  lastSeenAt          DateTime    @map("last_seen_at") @db.Timestamptz(3)
+  /// последняя сессия по ссылке; `null` — по ссылкам не приходил ни разу
+  lastTouchAt         DateTime?   @map("last_touch_at") @db.Timestamptz(3)
+  lastStartKind       StartKind?  @map("last_start_kind")
+  lastStartParam      String?     @map("last_start_param") @db.VarChar(64)
+  lastStartRef        String?     @map("last_start_ref") @db.VarChar(64)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Когорты по источнику первого касания.
+  @@index([firstStartKind, firstAt])
+  @@map("acquisition")
 }
