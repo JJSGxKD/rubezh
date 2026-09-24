@@ -243,6 +243,8 @@
 | Лимиты оплаты: цена, счёт, опрос состояния покупки (по аккаунту) | `backend/api/src/modules/payments/payments-limits.ts` |
 | Правило цены второго шанса: начатые минуты, минимум в звезду, потолок | `backend/api/src/modules/payments/continue-price.ts`; сами числа — `CONTINUE_*` в окружении |
 | Тексты окна оплаты Telegram, пометка тестовой оплаты | `backend/api/src/modules/payments/invoice-text.ts` |
+| Оплата: сколько живёт счёт, отказы предварительной проверки и их тексты для игрока | `payments-limits.ts` → `INVOICE_TTL_SEC`; `checkout-answer.ts` |
+| Оплата: сроки ответа на предварительную проверку и чтения покупки для неё, повторы очереди подтверждений | `telegram-bot-api.ts` → `PRE_CHECKOUT_TIMEOUT_MS`; `payment-confirmation.ts` → `CHECKOUT_READ_TIMEOUT_MS`; `payments-queue.ts` → `JOB_OPTIONS` |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 
 Три правила, которые нарушают чаще всего: порт **не выбирается на месте**;

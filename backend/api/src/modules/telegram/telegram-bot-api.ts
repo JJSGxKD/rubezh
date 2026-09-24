@@ -32,9 +32,19 @@ const POLL_GRACE_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 /** Документ до 50 МБ по мобильному каналу сервера — ждём дольше обычного запроса. */
 const UPLOAD_TIMEOUT_MS = 5 * 60_000;
+/**
+ * На предварительную проверку оплаты Telegram ждёт ответа десять секунд, а
+ * дальше срывает оплату. Свой срок вдвое короче: часть окна уже ушла на
+ * доставку обновления и чтение покупки.
+ */
+const PRE_CHECKOUT_TIMEOUT_MS = 5_000;
 
-/** Какие обновления бот читает: команды и нажатия кнопок. Остальное Telegram не шлёт вовсе. */
-export const ALLOWED_UPDATES = ["message", "callback_query"] as const;
+/**
+ * Какие обновления бот читает: команды, нажатия кнопок и предварительная
+ * проверка оплаты. Подтверждение и возврат оплаты приходят сообщениями.
+ * Остальное Telegram не шлёт вовсе.
+ */
+export const ALLOWED_UPDATES = ["message", "callback_query", "pre_checkout_query"] as const;
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -75,6 +85,18 @@ const userSchema = z.object({
 
 const chatSchema = z.object({ id: z.number().int(), type: z.string() });
 
+/**
+ * Оплата и её возврат в Stars — сообщения от Telegram в личном чате с
+ * игроком. Границы щедрые: обновление, не прошедшее схему, пропускается, а
+ * пропущенная оплата — это звёзды без продолжения.
+ */
+const paymentSchema = z.object({
+  currency: z.string().max(16),
+  total_amount: z.number().int(),
+  invoice_payload: z.string().max(256),
+  telegram_payment_charge_id: z.string().min(1).max(256),
+});
+
 export const updateSchema = z.object({
   update_id: z.number().int(),
   message: z
@@ -86,6 +108,8 @@ export const updateSchema = z.object({
       /** тема супергруппы, если сообщение пришло из неё — ответ уходит туда же */
       message_thread_id: z.number().int().optional(),
       from: userSchema.optional(),
+      successful_payment: paymentSchema.optional(),
+      refunded_payment: paymentSchema.optional(),
     })
     .optional(),
   callback_query: z
@@ -96,6 +120,15 @@ export const updateSchema = z.object({
       message: z
         .object({ message_id: z.number().int(), chat: chatSchema, message_thread_id: z.number().int().optional() })
         .optional(),
+    })
+    .optional(),
+  pre_checkout_query: z
+    .object({
+      id: z.string().max(256),
+      from: userSchema,
+      currency: z.string().max(16),
+      total_amount: z.number().int(),
+      invoice_payload: z.string().max(256),
     })
     .optional(),
 });
@@ -139,6 +172,9 @@ export interface StarsInvoice {
   label: string;
   stars: number;
 }
+
+/** Ответ на предварительную проверку: отказ Telegram покажет игроку этим текстом. */
+export type PreCheckoutAnswer = { ok: true } | { ok: false; errorMessage: string };
 
 export interface SentPhoto {
   messageId: number;
@@ -268,6 +304,12 @@ export class TelegramBotApi {
       this.api.createInvoiceLink(invoice.title, invoice.description, invoice.payload, "", "XTR", [{ label: invoice.label, amount: invoice.stars }], undefined, abort),
     );
     return z.url().parse(result);
+  }
+
+  async answerPreCheckoutQuery(queryId: string, answer: PreCheckoutAnswer, signal?: AbortSignal): Promise<void> {
+    await this.call("answerPreCheckoutQuery", PRE_CHECKOUT_TIMEOUT_MS, signal, (abort) =>
+      this.api.answerPreCheckoutQuery(queryId, answer.ok, answer.ok ? undefined : { error_message: answer.errorMessage }, abort),
+    );
   }
 
   async setWebhook(url: string, secretToken: string, signal?: AbortSignal): Promise<void> {

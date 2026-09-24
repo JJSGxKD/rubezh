@@ -677,7 +677,7 @@ flowchart LR
     subgraph api["backend/api"]
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
-        PAY["payments<br/>второй шанс за Stars:<br/>цена и счёт, реализовано"]
+        PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение оплаты, реализовано"]
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
@@ -728,11 +728,14 @@ flowchart LR
     RUNS -. слушатели записанного забега .-> NOTIFY
     PT -. рейтинг и профиль аккаунта .-> RUNS
     NOTIFY --> QUEUE
+    PAY -- answerPreCheckoutQuery --> TGAPI
     TGAPI -- вебхук --> CADDY
     CADDY --> BOT
     BOT --> WELCOME
     BOT --> PT
     BOT --> EXPORT
+    BOT -- проверка и подтверждение оплаты --> PAY
+    PAY --> QUEUE
     WELCOME -. рекорд и место .-> PT
     EXPORT --> QUEUE
     EXPORT --> PG
@@ -1246,6 +1249,50 @@ sequenceDiagram
     end
     TG-->>U: карточка с подписью на языке игрока
 ```
+
+### 4.15 Покупка второго шанса за Stars (этап 3, реализовано)
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant C as Клиент
+    participant P as payments
+    participant DB as Postgres
+    participant TG as Telegram
+    participant B as BotRouter
+    participant Q as Очередь payments
+
+    U->>C: смерть — забег ждёт решения
+    C->>P: POST /payments/continue/quote { runId, continueNo, elapsedSec }
+    P->>DB: забег: чей, начат ли по часам сервера, не закончен ли
+    P-->>C: priceStars — клиент только показывает
+    U->>C: «Продолжить за N ⭐»
+    C->>P: POST /payments/continue/invoice
+    P->>DB: purchase pending — или та же, если счёт уже выставляли
+    P->>TG: createInvoiceLink(XTR, payload = purchaseId)
+    P-->>C: invoiceUrl
+    C->>TG: openInvoice(invoiceUrl)
+    TG->>B: pre_checkout_query — первой в пачке обновлений
+    B->>P: чей счёт, та ли сумма, свежий ли, жив ли забег
+    P->>TG: answerPreCheckoutQuery — до 10 секунд
+    TG->>B: successful_payment — сообщением в личке
+    B->>Q: подтверждение, jobId от id оплаты
+    Q->>DB: pending → paid, telegram_charge_id UK
+    C->>P: GET /payments/{id} — пока не granted
+    P-->>C: granted: true
+    C->>C: continueRun — продолжение выдал сервер (Р13)
+```
+
+- **Право на продолжение — по `successful_payment`, а не по ответу
+  `openInvoice`** (`34-stage3-plan.md`, Р13): ответ Mini App — подсказка,
+  что можно перестать ждать.
+- **Подтверждение идёт через очередь**, потому что смещение опроса
+  сохраняется до обработки, а вебхук отвечает сразу: упавшая запись второй
+  раз не придёт. Задание в Redis повторяется, пока запись не пройдёт; Redis
+  недоступен — запись сразу, не прошла и так — ошибка в лог со всеми полями
+  оплаты.
+- **Отказаться от денег можно только на проверке.** После
+  `successful_payment` звёзды уже у нас, и дальше остаётся только возврат.
 
 ---
 

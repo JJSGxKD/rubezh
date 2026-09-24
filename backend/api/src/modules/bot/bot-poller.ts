@@ -4,7 +4,7 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleD
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
-import { TelegramApiError, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
+import { TelegramApiError, type TelegramBotApi, type TelegramUpdate } from "../telegram/telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
 import { BotRouter } from "./bot-router.js";
 
@@ -123,7 +123,7 @@ export class BotPoller implements OnApplicationBootstrap, OnModuleDestroy {
     // Смещение сохраняется до обработки: упавшая отправка не должна
     // превратиться в бесконечный повтор одной и той же команды.
     if (lastUpdateId !== null) await this.locks.saveOffset(lastUpdateId + 1);
-    for (const update of updates) await this.router.dispatch(update);
+    for (const update of urgentFirst(updates)) await this.router.dispatch(update);
   }
 
   private async pollLoop(): Promise<void> {
@@ -162,6 +162,17 @@ export class BotPoller implements OnApplicationBootstrap, OnModuleDestroy {
   private log(level: "log" | "warn" | "error", event: string, fields: Record<string, unknown>): void {
     this.logger[level](JSON.stringify({ module: "bot", event, ...fields }));
   }
+}
+
+/**
+ * Предварительную проверку оплаты Telegram ждёт десять секунд, а карточка
+ * приветствия рисуется секунды: в одной пачке с командами проверка идёт
+ * первой, иначе оплата сорвалась бы из-за чужого `/start`. Остальной порядок
+ * сохраняется.
+ */
+export function urgentFirst(updates: readonly TelegramUpdate[]): TelegramUpdate[] {
+  const urgent = updates.filter((update) => update.pre_checkout_query !== undefined);
+  return urgent.length === 0 ? [...updates] : [...urgent, ...updates.filter((update) => update.pre_checkout_query === undefined)];
 }
 
 function reasonOf(error: unknown): string {

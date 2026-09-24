@@ -12,8 +12,9 @@ import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
  * TEST_DATABASE_URL; без него пропускается.
  *
  * Память этого не покажет: два одновременных счёта на одно продолжение
- * упираются в уникальный индекс базы, а удалить аккаунт, за которым числятся
- * деньги, не даёт внешний ключ.
+ * упираются в уникальный индекс базы, два одновременных подтверждения одной
+ * оплаты — в уникальный идентификатор оплаты, а удалить аккаунт, за которым
+ * числятся деньги, не даёт внешний ключ.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -92,6 +93,63 @@ describe.skipIf(DATABASE_URL === "")("покупки на живом Postgres", 
     await purchases.openInvoice(invoice(owner.accountId, owner.runId));
 
     await expect(purchases.openInvoice(invoice(stranger.accountId, owner.runId))).resolves.toEqual({ kind: "foreign" });
+  });
+
+  it("одновременные подтверждения одной оплаты — одна запись", async () => {
+    const { accountId, runId } = await startedRun();
+    const opened = await purchases.openInvoice(invoice(accountId, runId));
+    if (opened.kind !== "opened") throw new Error("счёт не открылся");
+    const chargeId = `charge-${randomUUID()}`;
+    const record = { purchaseId: opened.purchase.purchaseId, chargeId, chargedStars: 3, paidAt: new Date() };
+
+    const outcomes = await Promise.all(Array.from({ length: 4 }, () => purchases.markPaid(record)));
+
+    expect(outcomes.filter((outcome) => outcome.kind === "paid")).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.kind === "duplicate")).toHaveLength(3);
+  });
+
+  it("вторая оплата той же покупки не перезаписывает первую", async () => {
+    const { accountId, runId } = await startedRun();
+    const opened = await purchases.openInvoice(invoice(accountId, runId));
+    if (opened.kind !== "opened") throw new Error("счёт не открылся");
+    const { purchaseId } = opened.purchase;
+
+    const [first, second] = await Promise.all([
+      purchases.markPaid({ purchaseId, chargeId: `charge-${randomUUID()}`, chargedStars: 3, paidAt: new Date() }),
+      purchases.markPaid({ purchaseId, chargeId: `charge-${randomUUID()}`, chargedStars: 3, paidAt: new Date() }),
+    ]);
+
+    expect([first.kind, second.kind].sort()).toEqual(["already_paid", "paid"]);
+    expect(await purchases.grantedContinues(runId)).toBe(1);
+  });
+
+  it("проверка оплаты видит владельца и закрытый забег одним запросом", async () => {
+    const { accountId, runId } = await startedRun();
+    const opened = await purchases.openInvoice(invoice(accountId, runId));
+    if (opened.kind !== "opened") throw new Error("счёт не открылся");
+    const account = await prisma.account.findUniqueOrThrow({ where: { accountId } });
+
+    await expect(purchases.checkout(opened.purchase.purchaseId)).resolves.toMatchObject({ platformUserId: account.platformUserId, runFinished: false });
+    await prisma.run.update({ where: { runId }, data: { status: "finished" } });
+    await expect(purchases.checkout(opened.purchase.purchaseId)).resolves.toMatchObject({ runFinished: true });
+    await expect(purchases.checkout(randomUUID())).resolves.toBeNull();
+  });
+
+  it("возврат записывается один раз и не стирает причину, заказанную нами", async () => {
+    const { accountId, runId } = await startedRun();
+    const opened = await purchases.openInvoice(invoice(accountId, runId));
+    if (opened.kind !== "opened") throw new Error("счёт не открылся");
+    const chargeId = `charge-${randomUUID()}`;
+    await purchases.markPaid({ purchaseId: opened.purchase.purchaseId, chargeId, chargedStars: 3, paidAt: new Date() });
+    await prisma.purchase.update({ where: { telegramChargeId: chargeId }, data: { refundReason: "unused", refundRequestedAt: new Date() } });
+
+    const first = await purchases.markRefunded(chargeId, new Date(Date.now() + 1000));
+    const repeat = await purchases.markRefunded(chargeId, new Date(Date.now() + 5000));
+
+    expect(first).toMatchObject({ firstTime: true, purchase: { status: "refunded", refundReason: "unused" } });
+    expect(repeat?.firstTime).toBe(false);
+    expect(repeat?.purchase.refundedAt).toEqual(first?.purchase.refundedAt);
+    await expect(purchases.refundStats(accountId)).resolves.toEqual({ paid: 1, refunded: 0 });
   });
 
   it("аккаунт с покупками не удаляется вместе с деньгами", async () => {

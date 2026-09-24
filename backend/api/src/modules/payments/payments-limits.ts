@@ -14,3 +14,11 @@ export const PAYMENTS_LIMITS: Record<"quote" | "invoice" | "status", RateLimit> 
   invoice: { scope: "payments:invoice", limit: 60, windowSec: 3600 },
   status: { scope: "payments:status", limit: 1200, windowSec: 3600 },
 };
+
+/**
+ * Сколько живёт выставленный счёт. Ссылка на счёт в Telegram не истекает
+ * сама, а цена привязана к секунде смерти: оплату по ссылке, открытой через
+ * час, предварительная проверка отклонит, и клиент выставит новый счёт.
+ * Полчаса — с запасом на игрока, задумавшегося на экране смерти.
+ */
+export const INVOICE_TTL_SEC = 30 * 60;

@@ -10,7 +10,8 @@ import { isGranted, type PaymentMode, type StoredPurchase } from "./purchase-typ
  *
  * Идемпотентность — уникальными индексами, а не проверкой в коде: два
  * одновременных запроса счёта на одно продолжение упираются в
- * `(run_id, continue_no)`, и строка остаётся одна.
+ * `(run_id, continue_no)`, и строка остаётся одна; два подтверждения одной
+ * оплаты — в `telegram_charge_id`, и оплата записывается один раз.
  */
 
 export interface InvoiceRecord {
@@ -36,6 +37,41 @@ export type InvoiceOutcome =
   | { kind: "paid"; purchase: StoredPurchase }
   | { kind: "foreign" };
 
+/** Покупка глазами предварительной проверки оплаты: кому выставлен счёт и жив ли забег. */
+export interface CheckoutView {
+  purchase: StoredPurchase;
+  /** Telegram ID владельца покупки */
+  platformUserId: string;
+  /** забег уже закончен — продолжать нечего */
+  runFinished: boolean;
+}
+
+export interface PaymentRecord {
+  purchaseId: string;
+  chargeId: string;
+  /** сколько списал Telegram — на случай, если это не то, что стояло в счёте */
+  chargedStars: number;
+  paidAt: Date;
+}
+
+/**
+ * `paid` — оплата записана сейчас. `duplicate` — эта же оплата уже записана:
+ * Telegram повторил обновление. `already_paid` — покупка оплачена другой
+ * оплатой: игрок заплатил дважды, и лишнее придётся вернуть. `unknown` —
+ * покупки нет.
+ */
+export type ConfirmOutcome =
+  | { kind: "paid"; purchase: StoredPurchase; runFinished: boolean }
+  | { kind: "duplicate"; purchase: StoredPurchase }
+  | { kind: "already_paid"; purchase: StoredPurchase }
+  | { kind: "unknown" };
+
+export interface RefundedRecord {
+  purchase: StoredPurchase;
+  /** `false` — возврат уже был записан: повтор обновления */
+  firstTime: boolean;
+}
+
 export const PURCHASES_REPOSITORY = Symbol("PURCHASES_REPOSITORY");
 
 export interface PurchasesRepository {
@@ -43,6 +79,12 @@ export interface PurchasesRepository {
   byId(purchaseId: string): Promise<StoredPurchase | null>;
   /** Сколько продолжений забега оплачено — возвраты не отзывают выданное */
   grantedContinues(runId: string): Promise<number>;
+  checkout(purchaseId: string): Promise<CheckoutView | null>;
+  markPaid(record: PaymentRecord): Promise<ConfirmOutcome>;
+  /** Звёзды вернулись. Причину, если её не заказывали мы, записывает как `external` */
+  markRefunded(chargeId: string, refundedAt: Date): Promise<RefundedRecord | null>;
+  /** Настоящие оплаты аккаунта и возвраты по ним не по нашей воле — доля возвратов (О4) */
+  refundStats(accountId: string): Promise<{ paid: number; refunded: number }>;
 }
 
 const SELECT = {
@@ -116,6 +158,62 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
 
   async grantedContinues(runId: string): Promise<number> {
     return await this.prisma.purchase.count({ where: { runId, paidAt: { not: null } } });
+  }
+
+  async checkout(purchaseId: string): Promise<CheckoutView | null> {
+    // Одним запросом: на всю проверку у Telegram десять секунд.
+    const row = await this.prisma.purchase.findUnique({
+      where: { purchaseId },
+      select: { ...SELECT, account: { select: { platformUserId: true } }, run: { select: { status: true } } },
+    });
+    if (row === null) return null;
+    const { account, run, ...purchase } = row;
+    return { purchase, platformUserId: account.platformUserId, runFinished: run.status === "finished" };
+  }
+
+  async markPaid(record: PaymentRecord): Promise<ConfirmOutcome> {
+    const known = await this.prisma.purchase.findUnique({ where: { telegramChargeId: record.chargeId }, select: SELECT });
+    if (known !== null) return { kind: "duplicate", purchase: known };
+
+    let updated = 0;
+    try {
+      // Условие на статус — защита от второй оплаты той же покупки: оплату
+      // принимает ровно одна, вторая увидит ноль обновлённых строк.
+      const result = await this.prisma.purchase.updateMany({
+        where: { purchaseId: record.purchaseId, status: "pending" },
+        data: { status: "paid", paidAt: record.paidAt, telegramChargeId: record.chargeId, chargedStars: record.chargedStars },
+      });
+      updated = result.count;
+    } catch (error: unknown) {
+      // Тот же платёж записали параллельно — уникальный индекс не пустил второй.
+      if (!isUniqueViolation(error)) throw error;
+    }
+
+    const view = await this.checkout(record.purchaseId);
+    if (view === null) return { kind: "unknown" };
+    if (updated === 1) return { kind: "paid", purchase: view.purchase, runFinished: view.runFinished };
+    return view.purchase.telegramChargeId === record.chargeId
+      ? { kind: "duplicate", purchase: view.purchase }
+      : { kind: "already_paid", purchase: view.purchase };
+  }
+
+  async markRefunded(chargeId: string, refundedAt: Date): Promise<RefundedRecord | null> {
+    // Одной транзакцией: время возврата — первое, а причина остаётся той,
+    // что записали при заказе возврата, если его заказывали мы.
+    const [refunded] = await this.prisma.$transaction([
+      this.prisma.purchase.updateMany({ where: { telegramChargeId: chargeId, refundedAt: null }, data: { status: "refunded", refundedAt } }),
+      this.prisma.purchase.updateMany({ where: { telegramChargeId: chargeId, refundReason: null }, data: { refundReason: "external" } }),
+    ]);
+    const purchase = await this.prisma.purchase.findUnique({ where: { telegramChargeId: chargeId }, select: SELECT });
+    return purchase === null ? null : { purchase, firstTime: refunded.count === 1 };
+  }
+
+  async refundStats(accountId: string): Promise<{ paid: number; refunded: number }> {
+    const [paid, refunded] = await Promise.all([
+      this.prisma.purchase.count({ where: { accountId, mode: "live", paidAt: { not: null } } }),
+      this.prisma.purchase.count({ where: { accountId, mode: "live", refundReason: "external" } }),
+    ]);
+    return { paid, refunded };
   }
 }
 
