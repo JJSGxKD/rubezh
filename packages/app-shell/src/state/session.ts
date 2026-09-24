@@ -148,12 +148,12 @@ async function runRenewal(reason: "launch" | "refresh" | "reauth"): Promise<Auth
     // не попадает, а бэкенд вне development такой вход не принимает.
     const devUser = capabilities.auth?.devUser ?? "";
     if (devUser === "") return reject("no_identity");
-    const dev = await api.devLogin(devUser);
+    const dev = await api.devLogin(devUser, loginReason(reason));
     if (!dev.ok) return reject(dev.failure, dev.message);
     return accept(dev.data, reason);
   }
 
-  const login = await api.login(launchData);
+  const login = await api.login(launchData, { client: adapter.clientInfo(), reason: loginReason(reason) });
   if (!login.ok) return reject(login.failure, login.message);
   return accept(login.data, reason);
 }
@@ -170,7 +170,20 @@ function accept(session: Session, reason: "launch" | "refresh" | "reauth"): null
   // этим входом, знает только сервер.
   if (session.account.created) track("user_registered");
   track("user_authenticated", { reason });
+  // Сессия — запуск игры, и откуда её открыли, говорит сервер по подписи:
+  // сам клиент видит параметр запуска неподписанным (docs/34-stage3-plan.md, WP6).
+  if (reason === "launch" && session.launch !== undefined) {
+    track("session_started", { startKind: session.launch.startKind, first: session.account.created });
+  }
   return null;
+}
+
+/**
+ * Вход на запуске — новая сессия; вход посреди работы (продление не принято,
+ * сервер не узнал токен) — та же сессия, и сервер не должен заводить вторую.
+ */
+function loginReason(reason: "launch" | "refresh" | "reauth"): "launch" | "reauth" {
+  return reason === "launch" ? "launch" : "reauth";
 }
 
 function reject(failure: AuthFailure, message?: string): AuthFailure {

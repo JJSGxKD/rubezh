@@ -11,6 +11,7 @@ export const ANALYTICS_EVENTS = [
   "app_first_open",
   "user_registered",
   "user_authenticated",
+  "session_started",
   "screen_viewed",
   "settings_changed",
   "share_offered",

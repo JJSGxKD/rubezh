@@ -83,6 +83,10 @@ export const EVENT_DICTIONARY = {
   // плановое продление, `reauth` — сервер не принял токен посреди работы.
   // Доля `reauth` показывает, часто ли сессии теряются на самом деле.
   user_authenticated: { version: 1, payload: payload({ reason: z.enum(["launch", "refresh", "reauth"]) }) },
+  // Запуск игры со снимком атрибуции (docs/34-stage3-plan.md, WP6): откуда
+  // открыли — по подписи, которую проверил сервер; `first` — аккаунт заведён
+  // этим запуском. Сама сессия с подробностями — в таблице `account_session`.
+  session_started: { version: 1, payload: payload({ startKind: id, first: z.boolean() }) },
   screen_viewed: { version: 1, payload: payload({ screen: id, stub: z.boolean() }) },
   settings_changed: { version: 1, payload: payload({ setting: id, value: flatValue }) },
   share_offered: { version: 1, payload: payload({ context: id }) },

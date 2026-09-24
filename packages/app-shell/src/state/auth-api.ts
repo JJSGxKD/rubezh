@@ -34,6 +34,21 @@ export interface Session {
   expiresInSec: number;
   refreshToken: string;
   account: AuthAccount;
+  /**
+   * Откуда открыли игру — по подписи, которую проверил сервер. Есть только у
+   * входа, не у продления: продление — та же сессия.
+   */
+  launch?: { startKind: string };
+}
+
+/**
+ * Что вход сообщает о себе сверх подписи. `client` — платформа и версия
+ * клиента площадки, подсказка для разрезов. `reason` — вход на запуске или
+ * повторно посреди работы: сессией сервер считает только запуск.
+ */
+export interface LoginDetails {
+  client: { platform: string | null; version: string | null } | null;
+  reason: "launch" | "reauth";
 }
 
 /**
@@ -64,8 +79,8 @@ export type AuthResult<T> =
   | { ok: false; failure: AuthFailure; message?: string };
 
 export interface AuthApi {
-  login(signedLaunchData: string): Promise<AuthResult<Session>>;
-  devLogin(devUser: string): Promise<AuthResult<Session>>;
+  login(signedLaunchData: string, details: LoginDetails): Promise<AuthResult<Session>>;
+  devLogin(devUser: string, reason: LoginDetails["reason"]): Promise<AuthResult<Session>>;
   refresh(refreshToken: string): Promise<AuthResult<Session>>;
   logout(refreshToken: string): Promise<void>;
 }
@@ -89,6 +104,7 @@ const sessionSchema = z.object({
     createdAt: z.string(),
     created: z.boolean(),
   }),
+  launch: z.optional(z.object({ startKind: z.string() })),
 });
 
 /** Тело ошибки бэкенда: код для ветвления, текст — человеку. */
@@ -128,8 +144,9 @@ export function createAuthApi(
   }
 
   return {
-    login: (signedLaunchData) => post("/telegram", { initData: signedLaunchData }, sessionSchema),
-    devLogin: (devUser) => post("/dev", { devUser }, sessionSchema),
+    login: (signedLaunchData, details) =>
+      post("/telegram", { initData: signedLaunchData, reason: details.reason, ...(details.client === null ? {} : { client: details.client }) }, sessionSchema),
+    devLogin: (devUser, reason) => post("/dev", { devUser, reason }, sessionSchema),
     refresh: (refreshToken) => post("/refresh", { refreshToken }, sessionSchema),
     async logout(refreshToken) {
       // Выход — лучшее усилие: не дошёл до сервера, и ладно, токен всё равно
