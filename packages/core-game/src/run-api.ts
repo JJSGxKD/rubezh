@@ -468,6 +468,15 @@ export interface RunPerfSummary {
   interruptions: number;
 }
 
+export interface RunContinueOptions {
+  /**
+   * Продолжение без оплаты — бесплатное в забеге разработчика. Это чит: забег
+   * получает пометку `cheats`, и сервер не считает такое продолжение
+   * неоплаченным (docs/34-stage3-plan.md, WP5).
+   */
+  cheat?: boolean;
+}
+
 export interface RunSession {
   on<E extends keyof RunEvents>(event: E, handler: (payload: RunEvents[E]) => void): () => void;
   chooseUpgrade(optionId: string): void;
@@ -475,7 +484,7 @@ export interface RunSession {
   resume(): void;
   abandon(): void;
   /** второй шанс на экране смерти: враги убраны, здоровье возвращено */
-  continueRun(): void;
+  continueRun(options?: RunContinueOptions): void;
   /** отказ от второго шанса: забег закрывается смертью */
   declineContinue(): void;
   /** начать заново в уже загруженном движке: от смерти до забега один тап */

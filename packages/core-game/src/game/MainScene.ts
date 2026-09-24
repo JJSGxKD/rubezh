@@ -6,6 +6,7 @@ import { RunProbe } from "../engine/run-probe";
 import {
   RUN_SNAPSHOT_FORMAT,
   type HudSnapshot,
+  type RunContinueOptions,
   type RunDevCommand,
   type RunDevOptions,
   type RunInspection,
@@ -331,9 +332,10 @@ export class MainScene extends Phaser.Scene {
    * Команда попадает в запись забега, иначе повтор разошёлся бы с оригиналом
    * (docs/28-diagnostics.md §3.4).
    */
-  continueRun(): void {
+  continueRun(options: RunContinueOptions = {}): void {
     if (this.phase !== "downed") return;
     if (!applyContinue(this.world)) return;
+    if (options.cheat === true) this.cheatsUsed = true;
     this.probe.continued(this.world);
     this.phase = "running";
     this.worldRenderer.sync(1);
