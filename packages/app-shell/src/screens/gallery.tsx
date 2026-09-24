@@ -26,7 +26,8 @@ import { t } from "../i18n";
 import { useNavigation } from "../state/navigation";
 import { BootScreen } from "./gates";
 import { RunLoading } from "./run/RunLoading";
-import { DeathOverlay, LevelUpOverlay, PauseOverlay } from "./run/overlays";
+import { DeathOverlay } from "./run/DeathOverlay";
+import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 
 /**
  * Витрина компонентов — экран внутри приложения, доступный в режиме

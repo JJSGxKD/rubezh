@@ -12,7 +12,8 @@ import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
 import { RunLoading } from "./RunLoading";
-import { DeathOverlay, LevelUpOverlay, PauseOverlay } from "./overlays";
+import { LevelUpOverlay, PauseOverlay } from "./overlays";
+import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
 import { DevSheetLazy } from "./dev-sheet-lazy";
 import { DevTechPanelLazy } from "./dev-tech-panel-lazy";
 import { RunStatsSheet } from "./RunStatsSheet";
@@ -83,6 +84,13 @@ export function RunScreen(): ReactNode {
     useRun.getState().pause("app_inactive");
   }, [isActive, expanded]);
 
+  // Экран смерти — отдельный чанк: подтягиваем его, как только забег пошёл,
+  // чтобы смерть не ждала сети.
+  const running = run.phase === "running";
+  useEffect(() => {
+    if (running) prefetchDeathOverlay();
+  }, [running]);
+
   return (
     <div className="relative h-full w-full overflow-hidden">
       <div ref={containerRef} className="absolute inset-0" style={{ zIndex: "var(--z-canvas)" }} />
@@ -137,7 +145,7 @@ export function RunScreen(): ReactNode {
       {/* На экране смерти до решения о втором шансе итог предварительный:
           ни рекорда, ни места ещё нет — они появятся после отказа. */}
       {(run.phase === "finished" || run.phase === "downed") && run.result !== null ? (
-        <DeathOverlay
+        <DeathOverlayLazy
           result={run.result}
           isNewRecord={run.isNewRecord}
           rank={run.phase === "finished" && submitted?.runId === run.result.runId ? submitted.result.rank : null}
