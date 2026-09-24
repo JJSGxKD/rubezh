@@ -236,54 +236,25 @@ erDiagram
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
 
-### 1.2 Планируемое расширение (этапы 3–4, ещё не реализовано)
+### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 
-Модель, к которой идём при переносе авторизации, атрибуции, рекламы и
-рефералки (`13-reuse-from-vpnsibcom.md` §4-§7). Приведена, чтобы решения
-принимались с оглядкой на целевую картину, а не только на сегодняшнюю.
+Модель, к которой идём при переносе рекламы и рефералки
+(`13-reuse-from-vpnsibcom.md` §3, §7). Приведена, чтобы решения принимались с
+оглядкой на целевую картину, а не только на сегодняшнюю. Аккаунт, сессии,
+касания, роли и покупки отсюда ушли: на этапе 3 они легли в базу — §1.1.
 
 ```mermaid
 erDiagram
-    USER ||--o{ RUN : "совершает"
-    USER ||--o{ PURCHASE : "оплачивает"
-    USER ||--o{ SESSION : "открывает"
-    USER ||--|| ACQUISITION : "имеет"
-    USER ||--o{ EVENT : "порождает"
-    USER ||--o{ ADS_VIEW : "смотрит"
-    USER ||--o{ REFERRAL : "приглашает"
-    USER ||--|| BALANCE : "владеет"
+    ACCOUNT ||--o{ EVENT : "порождает"
+    ACCOUNT ||--o{ ADS_VIEW : "смотрит"
+    ACCOUNT ||--o{ REFERRAL : "приглашает"
+    ACCOUNT ||--o| BALANCE : "владеет"
     ADS_BLOCK ||--o{ ADS_VIEW : "показан в"
     ADS_NETWORK ||--o{ ADS_BLOCK : "обслуживает"
 
-    USER {
-        uuid id PK
-        enum platform
-        string platformUserId
-        enum role "user|designer|admin"
-        datetime createdAt
-    }
-
-    SESSION {
-        uuid id PK
-        uuid userId FK
-        string source "из startParam"
-        string campaignId
-        string ip
-        json device "разобранный UA"
-        datetime startedAt
-    }
-
-    ACQUISITION {
-        uuid id PK
-        string firstSource "первое касание"
-        string lastSource "последнее касание"
-        datetime firstAt
-        datetime lastAt
-    }
-
     EVENT {
         uuid id PK
-        uuid userId FK
+        uuid account_id FK
         enum eventType "FIRST_RUN|RUN_COMPLETED|FIRST_PURCHASE|AD_REWARD_CLAIMED|D1_RETURN"
         json payload
         datetime createdAt
@@ -291,7 +262,7 @@ erDiagram
 
     ADS_VIEW {
         uuid id PK
-        uuid userId FK
+        uuid account_id FK
         uuid blockId FK
         string sessionKey UK "одноразовый ключ показа"
         decimal reward
@@ -337,9 +308,15 @@ erDiagram
     }
 ```
 
-`CONFIG_VERSION` намеренно не связана с `USER` внешним ключом: это
+`CONFIG_VERSION` намеренно не связана с `ACCOUNT` внешним ключом: это
 неизменяемый снапшот правил игры, а не пользовательские данные
-(`19-content-admin.md` §3).
+(`19-content-admin.md` §3). `BALANCE` ждёт второго товара: пока за звёзды
+продаётся один второй шанс, валюта не нужна (`34-stage3-plan.md`, Р5).
+`EVENT` — вехи воронки игрока, которые знает только сервер: первый забег,
+первая покупка, возврат на второй день (`13-reuse-from-vpnsibcom.md` §6).
+Это не клиентская аналитика — та в `ANALYTICS_EVENT` (§1.1). На этапе 3
+таблица не заведена: вехи пока выводятся запросом из `run`, `purchase` и
+`account_session`, а понадобится она партнёрским начислениям.
 
 ### 1.3 Привлечение, партнёры и аналитика (проектируется)
 
@@ -349,16 +326,16 @@ erDiagram
 
 ```mermaid
 erDiagram
-    CLICK ||--o| USER : "атрибутирует"
+    CLICK ||--o| ACCOUNT : "атрибутирует"
     PARTNER ||--o{ PARTNER_LINK : "владеет"
     PARTNER ||--o{ PROMO_CODE : "владеет"
     PARTNER_LINK ||--o{ CLICK : "порождает"
-    PROMO_CODE ||--o{ USER : "привязывает"
+    PROMO_CODE ||--o{ ACCOUNT : "привязывает"
     PARTNER ||--o{ PARTNER_ACCRUAL : "получает"
-    PAYMENT ||--o| PARTNER_ACCRUAL : "порождает"
-    USER ||--o{ SHARE : "создаёт"
+    PURCHASE ||--o| PARTNER_ACCRUAL : "порождает"
+    ACCOUNT ||--o{ SHARE : "создаёт"
     SHARE ||--o{ CLICK : "порождает"
-    USER ||--o{ ANALYTICS_EVENT : "порождает"
+    ACCOUNT ||--o{ ANALYTICS_EVENT : "порождает"
 
     CLICK {
         uuid click_id PK
@@ -404,7 +381,7 @@ erDiagram
     PARTNER_ACCRUAL {
         uuid id PK
         uuid partnerId FK
-        uuid paymentId FK
+        uuid purchase_id FK
         decimal amount "Decimal, не Float"
         enum status "HELD|PAYABLE|PAID|CANCELLED"
         datetime holdUntil
@@ -412,7 +389,7 @@ erDiagram
 
     SHARE {
         uuid id PK
-        uuid userId FK
+        uuid account_id FK
         enum kind "RUN_RESULT|PROFILE_CARD"
         string variant "оформление карточки, для A/B"
         enum channel "CHAT|STORY|WALL|WEB_SHARE"
@@ -424,7 +401,7 @@ erDiagram
         uuid event_id PK
         string event_type "только из словаря"
         int schema_version
-        uuid userId "nullable"
+        uuid account_id "nullable"
         json attribution "снимок на момент события"
         json payload
         datetime occurred_at
@@ -434,8 +411,11 @@ erDiagram
 
 Три решения, которые из схемы не очевидны:
 
-- **`CLICK` существует до пользователя.** Строка создаётся в момент клика,
-  когда игрока ещё нет; `boundAt` заполняется при первом запуске.
+- **`CLICK` существует до игрока.** Строка создаётся в момент клика,
+  когда аккаунта ещё нет; `boundAt` заполняется при первом запуске. Код
+  клика (`c-<код>` в параметре запуска) уже сейчас пишется в
+  `account_session.start_ref` и в касания `acquisition` (§1.1) — строка клика
+  свяжется с ними по нему, задним числом тоже.
 - **`ANALYTICS_EVENT.attribution` — снимок, а не ссылка.** Иначе
   перепривязка задним числом переписывает историю и отчёт за прошлый месяц
   перестаёт воспроизводиться (`22-analytics-and-metrics.md` §3.1).
@@ -822,27 +802,51 @@ flowchart LR
 
 ### 4.1 Авторизация
 
+Реализовано на этапе 3 (`34-stage3-plan.md`, WP1, WP6).
+
 ```mermaid
 sequenceDiagram
     participant C as Клиент (Mini App)
     participant A as auth
-    participant R as Redis
     participant DB as PostgreSQL
+    participant R as Redis
+    participant S as attribution
 
-    C->>A: POST /api/v1/auth/telegram { initData }
-    A->>A: Проверка подписи токеном бота<br/>+ явное окно свежести
-    alt подпись неверна или initData просрочен
+    C->>A: POST /api/v1/auth/telegram<br/>{ initData, client, reason }
+    A->>A: подпись токеном бота,<br/>окно свежести — час
+    alt подпись неверна или данные запуска устарели
         A-->>C: 401
     else
-        A->>DB: найти или создать пользователя<br/>по (platform, platformUserId)
-        A->>R: сохранить refresh (jti → userId, TTL)
-        A-->>C: access + refresh, профиль
-        A->>A: запись сессии и атрибуции → очередь
+        A->>DB: найти или завести аккаунт<br/>по (platform, platformUserId)
+        alt аккаунт заблокирован
+            A-->>C: 403 с причиной
+        else
+            A->>R: SHA-256 токена продления, TTL,<br/>потолок устройств
+            A-->>C: access (JWT) и refresh, аккаунт, launch.startKind
+            A--)S: вход: параметр запуска из подписи,<br/>клиент, цель — без ожидания
+            S->>R: окно 30 с: SET NX EX
+            S->>DB: сессия и касания — через очередь sessions
+        end
+    end
+
+    Note over C,A: access истёк — клиент молча продлевает сессию
+    C->>A: POST /api/v1/auth/refresh { refreshToken }
+    A->>R: погасить токен атомарно
+    alt токен уже погашен — его украли или повторили
+        A->>R: сбросить все сессии аккаунта
+        A-->>C: 401 «Сессия сброшена»
+    else
+        A->>R: новый токен продления
+        A-->>C: новая пара
     end
 ```
 
-Валидация подписи — **только на сервере**. Детали и краевые случаи —
-`13-reuse-from-vpnsibcom.md` §4.
+Валидация подписи — **только на сервере**. Роли в токен не входят и
+проверяются по базе на каждом запросе с правом: отзыв действует сразу, а не
+через четверть часа (`34-stage3-plan.md`, Р1). Сессию и касания вход не
+ждёт: упавшая запись атрибуции не отменяет вход. Сессией считается только
+запуск (`reason: "launch"`), а не повторный вход посреди работы. Детали и
+краевые случаи — `13-reuse-from-vpnsibcom.md` §4 и §6.
 
 ### 4.2 Сдача результата забега
 
