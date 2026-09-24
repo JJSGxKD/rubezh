@@ -306,7 +306,7 @@
 | Что и где ищет тестовый раннер | `vitest.config.ts` |
 | Проверка ссылок в документации: какие файлы и какие пути проверяются | `scripts/docs-check.mjs` → `CODE_ROOTS`, `documentationFiles`; запуск — `pnpm docs:check`, в гейте — `scripts/test/docs-check.test.ts` |
 | Свод калибровки баланса отдельной командой | `vitest.balance.config.ts`, прогон — `scripts/balance/balance-sim.ts` |
-| Бюджеты размера бандла: первая загрузка, CSS, ленивые чанки, шрифты | `scripts/bundle-budget.mjs` → `BUDGETS` |
+| Бюджеты размера бандла: первая загрузка, CSS, ленивые экраны игрока, инструменты команды, шрифты | `scripts/bundle-budget.mjs` → `budgets`; какие чанки — инструменты команды, решает `TEAM` там же |
 | Порог теста производительности симуляции | `packages/core-game/test/perf-budget.test.ts` |
 | Эталон забега и контрольная сумма | `test/run-summary.test.ts`, `test/determinism.test.ts` |
 | Правила границ слоёв | `scripts/test/layer-boundaries.test.ts` → `RULES` |
