@@ -6,7 +6,7 @@ import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
 import { recycleEnemyForward } from "./spawner";
 import { vectorLength } from "./vector";
-import { clampToBounds, damagePlayer, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
+import { clampToBounds, damagePlayer, despawnProjectile, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
 
 /**
  * Ввод игрока за тик — направление, а не координаты курсора: так один и тот же
@@ -223,7 +223,7 @@ function updateProjectiles(world: World, dt: number): void {
     projectiles.y[p] += projectiles.vy[p] * dt;
 
     if (projectiles.ttl[p] <= 0 || isLost(world, projectiles.x[p], projectiles.y[p])) {
-      killProjectile(world, p);
+      despawnProjectile(world, p);
       continue;
     }
 
@@ -239,7 +239,7 @@ function updateProjectiles(world: World, dt: number): void {
     if (dx * dx + dy * dy <= contact * contact) {
       const owner = projectiles.ownerType[p];
       damagePlayer(world, projectiles.damage[p], owner === NO_OWNER_TYPE ? -1 : owner);
-      killProjectile(world, p);
+      despawnProjectile(world, p);
     }
   }
 }
@@ -261,7 +261,7 @@ function hitEnemies(world: World, p: number, projectileRadius: number): void {
     projectiles.pierce[p]--;
     return;
   }
-  killProjectile(world, p);
+  despawnProjectile(world, p);
 }
 
 function findHitEnemy(
@@ -306,11 +306,6 @@ function isLost(world: World, x: number, y: number): boolean {
   const dy = y - world.player.y;
   const limit = world.config.view.retentionRadius;
   return dx * dx + dy * dy > limit * limit;
-}
-
-function killProjectile(world: World, index: number): void {
-  world.projectiles.alive[index] = 0;
-  world.projectiles.aliveCount--;
 }
 
 function clamp(value: number, min: number, max: number): number {

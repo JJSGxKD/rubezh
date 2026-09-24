@@ -322,6 +322,12 @@ export function despawnEnemy(world: World, index: number): void {
   world.enemies.aliveCount--;
 }
 
+/** Снять снаряд с поля: попал, истёк или улетел за пределы удержания. */
+export function despawnProjectile(world: World, index: number): void {
+  world.projectiles.alive[index] = 0;
+  world.projectiles.aliveCount--;
+}
+
 /**
  * Урон игроку с указанием источника. Источник нужен статистике: какой враг
  * убивает чаще всего — прямой вход геймдизайнера для баланса
