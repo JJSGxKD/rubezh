@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ACCOUNT_REPOSITORY, PrismaAccountRepository } from "./account.repository.js";
 import { AuthController } from "./auth.controller.js";
+import { AuthHooks } from "./auth-hooks.js";
 import { AuthGuard } from "./auth.guard.js";
 import { AuthService } from "./auth.service.js";
 import { REFRESH_STORE } from "./refresh.store.js";
@@ -22,9 +23,11 @@ import { RedisRefreshStore } from "./redis-refresh.store.js";
   providers: [
     AuthService,
     AuthGuard,
+    AuthHooks,
     { provide: ACCOUNT_REPOSITORY, useClass: PrismaAccountRepository },
     { provide: REFRESH_STORE, useClass: RedisRefreshStore },
   ],
-  exports: [AuthService, AuthGuard, ACCOUNT_REPOSITORY],
+  // Хуки входа — сессиям и атрибуции: они слушают вход, но в него не вмешиваются.
+  exports: [AuthService, AuthGuard, AuthHooks, ACCOUNT_REPOSITORY],
 })
 export class AuthModule {}

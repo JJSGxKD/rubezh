@@ -6,6 +6,8 @@ import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { AUTH_LIMITS } from "./auth-limits.js";
 import { AuthGuard, accountOf } from "./auth.guard.js";
 import { Public } from "../../common/access.js";
+import type { StartKind } from "../attribution/start-param.js";
+import type { LoginClient, LoginContext } from "./auth-hooks.js";
 import { AuthService } from "./auth.service.js";
 import { devLoginSchema, refreshSchema, telegramLoginSchema } from "./dto/auth.dto.js";
 
@@ -38,6 +40,15 @@ interface SessionView {
   account: AccountView;
 }
 
+/**
+ * Вход на запуске: вдобавок — откуда открыли игру, по проверенной подписи.
+ * Клиент кладёт это в событие `session_started`: сам он параметр запуска
+ * видит неподписанным.
+ */
+interface LaunchSessionView extends SessionView {
+  launch: { startKind: StartKind };
+}
+
 @Controller("auth")
 export class AuthController {
   constructor(
@@ -48,12 +59,13 @@ export class AuthController {
 
   @Public()
   @Post("telegram")
-  async telegram(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SessionView }> {
+  async telegram(@Req() request: unknown, @Body() body: unknown): Promise<{ data: LaunchSessionView }> {
     this.ensureEnabled();
     await this.limit(AUTH_LIMITS.login, request);
 
-    const { initData } = parse(() => telegramLoginSchema.parse(body), "Некорректные данные запуска");
-    return { data: view(await this.service.loginWithTelegram(initData)) };
+    const { initData, client, reason } = parse(() => telegramLoginSchema.parse(body), "Некорректные данные запуска");
+    const result = await this.service.loginWithTelegram(initData, contextOf(request, client ?? null, reason));
+    return { data: { ...view(result), launch: { startKind: result.startParam.kind } } };
   }
 
   /**
@@ -62,13 +74,14 @@ export class AuthController {
    */
   @Public()
   @Post("dev")
-  async dev(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SessionView }> {
+  async dev(@Req() request: unknown, @Body() body: unknown): Promise<{ data: LaunchSessionView }> {
     this.ensureEnabled();
     if (!this.config.auth.devLogin) throw new DisabledError("Вход разработчика выключен");
     await this.limit(AUTH_LIMITS.login, request);
 
-    const { devUser } = parse(() => devLoginSchema.parse(body), "Некорректный вход разработчика");
-    return { data: view(await this.service.loginAsDeveloper(devUser)) };
+    const { devUser, reason } = parse(() => devLoginSchema.parse(body), "Некорректный вход разработчика");
+    const result = await this.service.loginAsDeveloper(devUser, contextOf(request, null, reason));
+    return { data: { ...view(result), launch: { startKind: result.startParam.kind } } };
   }
 
   @Public()
@@ -132,6 +145,19 @@ function view(result: { accessToken: string; expiresInSec: number; refreshToken:
       createdAt: result.account.createdAt.toISOString(),
       created: result.account.created,
     },
+  };
+}
+
+/** Обстоятельства входа для слушателей: адрес, клиент и зачем вход. */
+function contextOf(request: unknown, client: LoginClient | null, reason: LoginContext["reason"]): LoginContext {
+  const agent = (request as { headers?: Record<string, unknown> }).headers?.["user-agent"];
+  const address = addressOf(request);
+  return {
+    ip: address === "unknown" ? null : address,
+    // Строка UA не хранится — по ней лишь уточняется ОС; длиннее и не бывает у честных клиентов.
+    userAgent: typeof agent === "string" ? agent.slice(0, 512) : null,
+    client,
+    reason,
   };
 }
 

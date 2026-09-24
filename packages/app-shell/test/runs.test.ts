@@ -70,6 +70,7 @@ describe("очередь забегов", () => {
         ui: createNoopPlatformUi(),
         haptic: () => undefined,
         signedLaunchData: () => "signed",
+        clientInfo: () => ({ platform: "android", version: "8.0" }),
       } as unknown as PlatformAdapter,
       capabilities: {
         platformAvailable: true,

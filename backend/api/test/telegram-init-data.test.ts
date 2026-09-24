@@ -58,3 +58,16 @@ describe("проверка initData", () => {
     expect(verifyInitData(noUser, BOT_TOKEN, 86_400, NOW)).toEqual({ ok: false, reason: "no_user" });
   });
 });
+
+describe("параметр запуска в initData", () => {
+  it("берётся из подписанных данных", () => {
+    expect(verifyInitData(launch({ start_param: "c-Ab12Cd34" }), BOT_TOKEN, 86_400, NOW)).toMatchObject({ ok: true, startParam: "c-Ab12Cd34" });
+    expect(verifyInitData(launch(), BOT_TOKEN, 86_400, NOW)).toMatchObject({ ok: true, startParam: null });
+  });
+
+  it("подменённый параметр ломает подпись: приписать себе чужую ссылку нельзя", () => {
+    const tampered = launch({ start_param: "invite" }).replace("start_param=invite", "start_param=c-Stolen123");
+    expect(verifyInitData(tampered, BOT_TOKEN, 86_400, NOW)).toEqual({ ok: false, reason: "bad_signature" });
+  });
+});
+

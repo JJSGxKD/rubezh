@@ -35,9 +35,10 @@ function shell(options: { launchData?: string | null; auth?: boolean; devUser?: 
 }
 
 /** Ответ сервера: `data` в конверте — как отдаёт бэкенд. */
-function sessionBody(patch: { created?: boolean; expiresInSec?: number; refresh?: string } = {}): string {
+function sessionBody(patch: { created?: boolean; expiresInSec?: number; refresh?: string; startKind?: string } = {}): string {
   return JSON.stringify({
     data: {
+      ...(patch.startKind === undefined ? {} : { launch: { startKind: patch.startKind } }),
       accessToken: `access-${Math.random()}`,
       expiresInSec: patch.expiresInSec ?? 900,
       refreshToken: patch.refresh ?? `refresh-${Math.random()}`,
@@ -64,16 +65,18 @@ function fail(status: number, code = "unauthorized", message = "нет"): Respon
 }
 
 /** Что запрашивали и чем отвечаем — по порядку вызовов. */
-function stubFetch(responses: ((url: string) => Response)[]): { calls: string[] } {
+function stubFetch(responses: ((url: string) => Response)[]): { calls: string[]; bodies: unknown[] } {
   const calls: string[] = [];
+  const bodies: unknown[] = [];
   let index = 0;
-  vi.stubGlobal("fetch", (input: string) => {
+  vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
     calls.push(input);
+    bodies.push(typeof init?.body === "string" ? JSON.parse(init.body) : null);
     const next = responses[Math.min(index, responses.length - 1)];
     index++;
     return Promise.resolve(next(input));
   });
-  return { calls };
+  return { calls, bodies };
 }
 
 beforeEach(() => {
@@ -99,6 +102,44 @@ describe("вход в сессию", () => {
 
     expect(events.map((entry) => entry.event)).toEqual(["user_registered", "user_authenticated"]);
     expect(events[1]?.payload).toEqual({ reason: "launch" });
+  });
+
+  it("вход сообщает о себе: платформу клиента и что это запуск, а не повтор посреди работы", async () => {
+    const { bodies } = stubFetch([() => ok(sessionBody())]);
+
+    await useSession.getState().signIn();
+
+    expect(bodies[0]).toEqual({ initData: "user=%7B%7D&hash=abc", reason: "launch", client: { platform: "android", version: "8.0" } });
+  });
+
+  it("запуск — сессия со снимком атрибуции от сервера: откуда открыли, по подписи", async () => {
+    stubFetch([() => ok(sessionBody({ created: true, startKind: "click" }))]);
+
+    await useSession.getState().signIn();
+
+    expect(events.find((entry) => entry.event === "session_started")?.payload).toEqual({ startKind: "click", first: true });
+  });
+
+  it("повторный вход посреди работы сессией не считается ни у сервера, ни в событиях", async () => {
+    // Сервер не узнал токен, продление тоже не принято — входим заново по данным запуска.
+    let runCalls = 0;
+    const { calls, bodies } = stubFetch([
+      () => ok(sessionBody({ startKind: "organic" })),
+      (url) => {
+        if (url.endsWith("/refresh")) return fail(401);
+        if (url.endsWith("/telegram")) return ok(sessionBody({ startKind: "organic" }));
+        runCalls++;
+        return runCalls === 1 ? fail(401) : ok("{}");
+      },
+    ]);
+    await useSession.getState().signIn();
+    events.length = 0;
+
+    await authorizedFetch("/api/v1/runs");
+
+    const relogin = calls.lastIndexOf(calls.find((url) => url.endsWith("/telegram")) ?? "");
+    expect(bodies[relogin]).toMatchObject({ reason: "reauth" });
+    expect(events.map((entry) => entry.event)).not.toContain("session_started");
   });
 
   it("не шлёт регистрацию, когда аккаунт уже был", async () => {
@@ -132,7 +173,7 @@ describe("вход в сессию", () => {
     await useSession.getState().signIn();
 
     expect(useSession.getState().status).toBe("ready");
-    expect(bodies).toEqual([{ url: "https://api.test/api/v1/auth/dev", body: { devUser: "dev-1:Разработчик" } }]);
+    expect(bodies).toEqual([{ url: "https://api.test/api/v1/auth/dev", body: { devUser: "dev-1:Разработчик", reason: "launch" } }]);
   });
 
   it("имя разработчика не заменяет данные запуска: в Telegram входят по подписи", async () => {

@@ -15,6 +15,7 @@ import { IngestModule } from "./modules/ingest/ingest.module.js";
 import { TelegramModule } from "./modules/telegram/telegram.module.js";
 import { WelcomeModule } from "./modules/welcome/welcome.module.js";
 import { PaymentsModule } from "./modules/payments/payments.module.js";
+import { AttributionModule } from "./modules/attribution/attribution.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 
@@ -30,10 +31,11 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * auth — аккаунты и сессии игроков (docs/34-stage3-plan.md, WP1);
  * roles — права, роли и журнал аудита (там же, WP2);
  * runs — забеги под аккаунтом и рейтинг на них (там же, WP4);
- * payments — второй шанс за Telegram Stars (там же, WP5).
+ * payments — второй шанс за Telegram Stars (там же, WP5);
+ * attribution — сессии, первое и последнее касание (там же, WP6).
  */
 @Module({
-  imports: [AppConfigModule, RedisModule, DatabaseModule, IngestModule, TelegramModule, RolesModule, AuthModule, RunsModule, PaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
+  imports: [AppConfigModule, RedisModule, DatabaseModule, IngestModule, TelegramModule, RolesModule, AuthModule, AttributionModule, RunsModule, PaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
   controllers: [HealthController],
 })
 export class AppModule {}

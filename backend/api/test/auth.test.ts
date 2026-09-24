@@ -4,6 +4,7 @@ import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
 import { secretKey, signAccessToken, verifyAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard, accountOf } from "../src/modules/auth/auth.guard.js";
+import { AuthHooks } from "../src/modules/auth/auth-hooks.js";
 import { AuthService, hashToken } from "../src/modules/auth/auth.service.js";
 import { parseDevUser } from "../src/modules/auth/dev-login.js";
 import { MemoryAccountRepository, MemoryRefreshStore } from "./helpers/memory-auth.js";
@@ -77,7 +78,7 @@ describe("вход и продление сессии", () => {
   beforeEach(() => {
     accounts = new MemoryAccountRepository();
     refresh = new MemoryRefreshStore();
-    service = new AuthService(config(), accounts, refresh);
+    service = new AuthService(config(), accounts, refresh, new AuthHooks());
   });
 
   it("заводит аккаунт по подписанным данным запуска", async () => {
@@ -214,7 +215,7 @@ describe("вход разработчика без Telegram", () => {
   });
 
   it("заводит аккаунт и выдаёт обычную сессию", async () => {
-    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore());
+    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks());
 
     const result = await service.loginAsDeveloper("dev-1:Проверка");
 
@@ -223,13 +224,13 @@ describe("вход разработчика без Telegram", () => {
   });
 
   it("выключенный вход не пускает, даже если контроллер пропустил", async () => {
-    const service = new AuthService(config({ NODE_ENV: "development" }), new MemoryAccountRepository(), new MemoryRefreshStore());
+    const service = new AuthService(config({ NODE_ENV: "development" }), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks());
 
     await expect(service.loginAsDeveloper("dev-1:Проверка")).rejects.toMatchObject({ code: "endpoint_disabled" });
   });
 
   it("битое имя — ошибка разбора, а не аккаунт", async () => {
-    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore());
+    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks());
 
     await expect(service.loginAsDeveloper("555:Чужой")).rejects.toMatchObject({ code: "validation_failed" });
   });
