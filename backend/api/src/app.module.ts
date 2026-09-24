@@ -22,8 +22,9 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * payments, economy. Добавляются по мере реализации в роадмапе
  * (docs/02-roadmap.md).
  *
- * playtest — сохранения и лидерборд закрытого теста в Redis, тоже временные
- * и тоже выключены по умолчанию (docs/26-stage2-plan.md, WP13).
+ * playtest — сводка закрытого теста, отчёты о запуске и доступ к
+ * инструментам, выключен по умолчанию (docs/26-stage2-plan.md, WP14). Забеги
+ * и рейтинг из него переехали в runs.
  *
  * auth — аккаунты и сессии игроков (docs/34-stage3-plan.md, WP1);
  * roles — права, роли и журнал аудита (там же, WP2);
