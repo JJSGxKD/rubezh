@@ -5,7 +5,7 @@ import { chatFields, chatTargetOf, type ChatRef } from "./chat-target.js";
 /**
  * Методы Bot API, которые нужны боту, — поверх клиента grammY
  * (docs/16-tech-stack-decisions.md §5): обновления, сообщения с кнопками,
- * картинки, документы, команды меню и вебхук.
+ * картинки, документы, команды меню, вебхук и оплата в Stars.
  *
  * **grammY — транспорт, а не каркас бота.** Он даёт методы и типы Bot API,
  * которые отслеживают спецификацию, многочастную отправку файлов и разбор
@@ -127,6 +127,19 @@ export interface SendOptions {
   keyboard?: InlineButton[][];
 }
 
+/** Счёт в Telegram Stars: одна позиция, сумма целыми звёздами. */
+export interface StarsInvoice {
+  /** 1–32 знака: заголовок окна оплаты */
+  title: string;
+  /** 1–255 знаков */
+  description: string;
+  /** 1–128 байт; игрок его не видит, он возвращается в проверке и подтверждении оплаты */
+  payload: string;
+  /** подпись позиции в счёте */
+  label: string;
+  stars: number;
+}
+
 export interface SentPhoto {
   messageId: number;
   /** идентификатор файла на серверах Telegram — повторная отправка без загрузки */
@@ -244,6 +257,17 @@ export class TelegramBotApi {
         abort,
       ),
     );
+  }
+
+  /**
+   * Ссылка на счёт для `openInvoice` в Mini App. Валюта — `XTR`, токен
+   * провайдера для Stars пустой: платёж идёт через Telegram, а не эквайринг.
+   */
+  async createInvoiceLink(invoice: StarsInvoice, signal?: AbortSignal): Promise<string> {
+    const result = await this.call("createInvoiceLink", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.createInvoiceLink(invoice.title, invoice.description, invoice.payload, "", "XTR", [{ label: invoice.label, amount: invoice.stars }], undefined, abort),
+    );
+    return z.url().parse(result);
   }
 
   async setWebhook(url: string, secretToken: string, signal?: AbortSignal): Promise<void> {

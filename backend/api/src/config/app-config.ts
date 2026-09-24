@@ -201,6 +201,22 @@ const schema = z.object({
   // прошло».
   RUNS_START_MAX_DELAY_SEC: z.coerce.number().min(0).max(600).default(30),
 
+  // Оплата второго шанса за Telegram Stars (docs/34-stage3-plan.md, WP5).
+  // Выключена по умолчанию. Включённая требует авторизации — покупка
+  // принадлежит аккаунту — и чтения обновлений бота: без ответа на
+  // предварительную проверку Telegram срывает каждую оплату через десять
+  // секунд, а подтверждение оплаты приходит тоже обновлением.
+  PAYMENTS_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Цена второго шанса (Р5.1): звёзд за каждую начатую минуту забега и
+  // потолок цены. Считает сервер, клиент цену только показывает. Рабочие
+  // значения до решения геймдизайнера (О1). Потолок схемы — с запасом под
+  // ограничение Telegram на сумму одного счёта.
+  CONTINUE_STARS_PER_MINUTE: z.coerce.number().int().min(1).max(100).default(1),
+  CONTINUE_MAX_STARS: z.coerce.number().int().min(1).max(2500).default(30),
+
   // Администраторы — Telegram ID через запятую (docs/28-diagnostics.md §6.1.1).
   // Список не секрет; мусор в нём — процесс не поднимается, пустой — функции
   // администратора выключены.
@@ -264,6 +280,13 @@ export interface AppConfig {
     maxSessions: number;
     /** вход разработчика по имени, без подписи; только в development */
     devLogin: boolean;
+  };
+  payments: {
+    enabled: boolean;
+    /** звёзд за каждую начатую минуту забега */
+    starsPerMinute: number;
+    /** потолок цены второго шанса */
+    maxStars: number;
   };
   runs: {
     maxKillsPerSec: number;
@@ -401,6 +424,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       "AUTH_ENABLED=true требует JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN и DATABASE_URL: без них вход не проверить и аккаунт негде хранить",
     );
   }
+  if (parsed.PAYMENTS_ENABLED && (!parsed.AUTH_ENABLED || parsed.TELEGRAM_BOT_UPDATES === "off")) {
+    throw new Error(
+      "PAYMENTS_ENABLED=true требует AUTH_ENABLED=true и чтения обновлений бота (TELEGRAM_BOT_UPDATES): покупка принадлежит аккаунту, а оплату подтверждает обновление от Telegram",
+    );
+  }
 
   return {
     nodeEnv: parsed.NODE_ENV,
@@ -441,6 +469,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       initDataMaxAgeSec: parsed.AUTH_INIT_DATA_MAX_AGE_SEC,
       maxSessions: parsed.AUTH_MAX_SESSIONS,
       devLogin: parsed.AUTH_DEV_LOGIN,
+    },
+    payments: {
+      enabled: parsed.PAYMENTS_ENABLED,
+      starsPerMinute: parsed.CONTINUE_STARS_PER_MINUTE,
+      maxStars: parsed.CONTINUE_MAX_STARS,
     },
     runs: {
       maxKillsPerSec: parsed.RUNS_MAX_KILLS_PER_SEC,

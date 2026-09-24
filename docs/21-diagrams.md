@@ -30,8 +30,7 @@
 ### 1.1 Текущая схема (что есть в базе сегодня)
 
 Соответствует `backend/api/prisma/schema.prisma`. Таблицы появляются вместе с
-кодом, который в них пишет, а не лежат пустыми заранее, — поэтому покупок
-здесь пока нет, они придут в WP5 этапа 3 (`34-stage3-plan.md`).
+кодом, который в них пишет, а не лежат пустыми заранее.
 
 ```mermaid
 erDiagram
@@ -50,6 +49,8 @@ erDiagram
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
     ACCOUNT ||--o{ RUN : "играет"
+    ACCOUNT ||--o{ PURCHASE : "оплачивает"
+    RUN ||--o{ PURCHASE : "продолжен за"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -69,6 +70,25 @@ erDiagram
         boolean ranked "в рейтинге: вердикт ok и без читов"
         enum verdict "nullable: ok|suspicious|rejected"
         string[] verdict_reasons
+    }
+
+    PURCHASE {
+        uuid purchase_id PK "он же payload счёта"
+        uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
+        enum product "continue_run"
+        string run_id FK "UK вместе с continue_no"
+        int continue_no "какое продолжение забега, с единицы"
+        float elapsed_sec "секунда забега, по которой посчитана цена"
+        int price_stars "цена по правилу Р5.1 — её видит игрок"
+        int charged_stars "сколько списано: в тестовом режиме — одна звезда"
+        enum mode "live|test"
+        enum status "pending|paid|refunded"
+        string telegram_charge_id UK "nullable: id оплаты в Telegram"
+        datetime invoiced_at "когда выставлен последний счёт"
+        datetime paid_at "nullable: продолжение выдано"
+        enum refund_reason "nullable: test_mode|unused|external"
+        datetime refund_requested_at "nullable"
+        datetime refunded_at "nullable"
     }
 
     ACCOUNT_ROLE {
@@ -160,6 +180,15 @@ erDiagram
   выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
   подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
   разбора.
+- **`PURCHASE` — запись бухгалтерии, а не состояние игры.** Внешние ключи
+  на аккаунт и забег запрещают удаление (`Restrict`): удалить игрока, за
+  которым числятся звёзды, база не даст — деньги не исчезают вместе с ним.
+  Ключей идемпотентности два: `(run_id, continue_no)` — повторный счёт на то
+  же продолжение возвращает ту же покупку, `telegram_charge_id` — повтор
+  подтверждения оплаты ничего не удваивает. Цены две, показанная и
+  списанная, и режим оплаты: тестовые звёзды не попадают в отчёт о выручке
+  (`34-stage3-plan.md`, Р14). Звёзды — `int`, а не `decimal`: по протоколу
+  Telegram они целые, и точность здесь не теряется.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -648,7 +677,7 @@ flowchart LR
     subgraph api["backend/api"]
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
-        PAY["payments"]
+        PAY["payments<br/>второй шанс за Stars:<br/>цена и счёт, реализовано"]
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
@@ -713,7 +742,9 @@ flowchart LR
     AUTH --> REDIS
     RUNS --> PG
     RUNS --> REDIS
-    PAY --> QUEUE
+    PAY --> PG
+    PAY -. забег, который продолжают .-> RUNS
+    PAY -- createInvoiceLink --> TGAPI
     ADS --> REDIS
     REF --> PG
     CONTENT --> PG

@@ -1,6 +1,5 @@
-// Схема прод-базы. Таблицы появляются вместе с кодом, который в них пишет:
-// пользователи, забеги и покупки из docs/21-diagrams.md §1 придут с
-// авторизацией и платежами этапа 3, а не лежат пустыми в проде заранее.
+// Схема прод-базы. Таблицы появляются вместе с кодом, который в них пишет,
+// а не лежат пустыми в проде заранее (docs/21-diagrams.md §1).
 
 // Prisma 7: клиент генерируется в исходники бэкенда TypeScript-модулями в
 // ESM и в git не попадает (docs/16-tech-stack-decisions.md §5). Строка
@@ -67,6 +66,38 @@ enum RunVerdict {
   rejected
 }
 
+// Что продаётся за Stars (docs/34-stage3-plan.md, Р5): пока один товар —
+// второй шанс, прямой покупкой, без донатной валюты.
+enum PurchaseProduct {
+  continue_run
+}
+
+// Режим оплаты (docs/34-stage3-plan.md, Р14). `test` — разработка: игрок
+// видит настоящую цену, списывается одна звезда и тут же возвращается.
+// Тестовые покупки в отчёты о выручке не попадают.
+enum PaymentMode {
+  live
+  test
+}
+
+enum PurchaseStatus {
+  /// счёт выставлен, оплаты нет
+  pending
+  /// Telegram подтвердил оплату — продолжение выдано
+  paid
+  /// звёзды вернулись игроку; выданное продолжение остаётся выданным
+  refunded
+}
+
+enum RefundReason {
+  /// тестовая оплата: звезда возвращается сразу после подтверждения
+  test_mode
+  /// продолжением не воспользовались: забег закончился раньше
+  unused
+  /// вернули не мы: спор игрока, поддержка Telegram
+  external
+}
+
 // Аккаунт игрока (docs/34-stage3-plan.md, WP1).
 //
 // Ключ идентичности — пара «площадка + её идентификатор», а не Telegram ID:
@@ -90,8 +121,9 @@ model Account {
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(3)
   banReason      String?   @map("ban_reason") @db.VarChar(256)
 
-  roles AccountRole[]
-  runs  Run[]
+  roles     AccountRole[]
+  runs      Run[]
+  purchases Purchase[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -285,7 +317,8 @@ model Run {
   verdictReasons   String[]    @map("verdict_reasons")
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  account   Account    @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchases Purchase[]
 
   // Профиль игрока: его забеги, свежие первыми.
   @@index([accountId, finishedAt])
@@ -294,4 +327,57 @@ model Run {
   // Очередь разбора: подозрительные и отклонённые, свежие первыми.
   @@index([verdict, finishedAt])
   @@map("run")
+}
+
+// Покупка за Telegram Stars (docs/34-stage3-plan.md, WP5). Строка заводится,
+// когда выставлен счёт, и дальше живёт записью бухгалтерии: удалить аккаунт
+// или забег, за продолжение которого заплатили, база не даст (`Restrict`) —
+// деньги не исчезают вместе с игроком.
+//
+// Цены две — показанная и списанная (Р14): в тестовом режиме игрок видит
+// настоящую цену, а списывается одна звезда. Звёзды по протоколу Telegram
+// целые, поэтому `Int`, а не `Decimal`: дробной звезды не бывает, и точность
+// здесь не теряется.
+//
+// Ключей идемпотентности два. `(run_id, continue_no)` — повторный запрос
+// счёта на то же продолжение возвращает ту же покупку, а не заводит вторую.
+// `telegram_charge_id` — повтор подтверждения оплаты от Telegram ничего не
+// удваивает (docs/15-engineering-standards.md §4.1).
+model Purchase {
+  purchaseId        String          @id @map("purchase_id") @db.Uuid
+  accountId         String          @map("account_id") @db.Uuid
+  product           PurchaseProduct
+  runId             String          @map("run_id") @db.VarChar(64)
+  /// какое по счёту продолжение забега оплачивается, с единицы
+  continueNo        Int             @map("continue_no") @db.SmallInt
+  /// секунда забега, по которой посчитана цена
+  elapsedSec        Float           @map("elapsed_sec")
+  /// цена по правилу Р5.1 — её видит игрок
+  priceStars        Int             @map("price_stars")
+  /// сколько списано на самом деле: в тестовом режиме — одна звезда
+  chargedStars      Int             @map("charged_stars")
+  mode              PaymentMode
+  status            PurchaseStatus
+  /// идентификатор оплаты в Telegram; `null` — оплаты ещё не было
+  telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(128)
+  /// когда выставлен последний счёт: к устаревшему счёту оплата не принимается
+  invoicedAt        DateTime        @map("invoiced_at") @db.Timestamptz(3)
+  paidAt            DateTime?       @map("paid_at") @db.Timestamptz(3)
+  refundReason      RefundReason?   @map("refund_reason")
+  /// возврат заказан, но Telegram его ещё не подтвердил — очередь повторяет
+  refundRequestedAt DateTime?       @map("refund_requested_at") @db.Timestamptz(3)
+  refundedAt        DateTime?       @map("refunded_at") @db.Timestamptz(3)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Restrict)
+
+  @@unique([runId, continueNo])
+  // Покупки игрока и доля возвратов на аккаунт (О4).
+  @@index([accountId, createdAt])
+  // Выручка: настоящие оплаты по времени, тестовые отсекаются первым полем.
+  @@index([mode, paidAt])
+  // Незавершённые возвраты — очередь поднимает их после перезапуска.
+  @@index([refundRequestedAt])
+  @@map("purchase")
 }

@@ -239,7 +239,10 @@
 | Минимальная версия клиента площадки | `apps/web-telegram/src/main.tsx`, `minPlatformVersion` (обоснование — `27-design-system-and-app-shell.md` §5.2) |
 | Туннель для открытия Mini App с телефона | `infra/frpc/frpc.local.toml` (не коммитится: в нём токен) |
 | Лимиты приёма забегов (по аккаунту) | `backend/api/src/modules/runs/runs-limits.ts` |
-| Правила игры для проверки забега (слоты, сложности) | `backend/api/src/modules/runs/run-rules.ts` — копия контента, сверяется тестом `scripts/test/run-rules.test.ts` |
+| Правила игры для проверки забега (слоты, сложности, вторые шансы за забег) | `backend/api/src/modules/runs/run-rules.ts` — копия контента, сверяется тестом `scripts/test/run-rules.test.ts` |
+| Лимиты оплаты: цена, счёт, опрос состояния покупки (по аккаунту) | `backend/api/src/modules/payments/payments-limits.ts` |
+| Правило цены второго шанса: начатые минуты, минимум в звезду, потолок | `backend/api/src/modules/payments/continue-price.ts`; сами числа — `CONTINUE_*` в окружении |
+| Тексты окна оплаты Telegram, пометка тестовой оплаты | `backend/api/src/modules/payments/invoice-text.ts` |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 
 Три правила, которые нарушают чаще всего: порт **не выбирается на месте**;
@@ -258,6 +261,8 @@
 | `RUNS_MAX_KILLS_PER_SEC`, `RUNS_MAX_LEVELS_PER_MIN` | пороги антифрода забегов фазы 1: выше — вердикт `suspicious`, забег не в рейтинге. Умолчания мягкие, боевые — только в окружении прода (`34-stage3-plan.md`, Р7) |
 | `RUNS_KNOWN_CONTENT_HASHES` | отпечатки контента выпущенных сборок; незнакомый — `suspicious`. Пусто — проверка выключена |
 | `RUNS_WALL_CLOCK_TOLERANCE_SEC`, `RUNS_START_MAX_DELAY_SEC` | запас на время забега сверх прошедшего по часам сервера и предел опоздания старта, которому ещё верят |
+| `PAYMENTS_ENABLED` | оплата второго шанса за Stars; без `AUTH_ENABLED` и чтения обновлений бота бэкенд не стартует — оплату подтверждает обновление от Telegram |
+| `CONTINUE_STARS_PER_MINUTE`, `CONTINUE_MAX_STARS` | цена второго шанса: звёзд за каждую начатую минуту забега и потолок цены. Рабочие значения до решения геймдизайнера (`34-stage3-plan.md`, О1) |
 | `AUTH_ENABLED` | вход игроков по аккаунтам; без `JWT_ACCESS_SECRET`, токена бота и `DATABASE_URL` бэкенд не стартует, выключённые эндпоинты отвечают 404 |
 | `JWT_ACCESS_SECRET` | секрет подписи токена доступа; смена разлогинивает всех |
 | `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_MAX_SESSIONS` | сколько живут токены и сколько устройств помнит аккаунт |
