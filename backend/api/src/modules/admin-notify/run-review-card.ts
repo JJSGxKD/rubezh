@@ -44,6 +44,8 @@ const REASON_LABELS: Record<VerdictReason, string> = {
   kill_rate: "убийств в секунду больше порога",
   level_rate: "уровни растут быстрее порога",
   unknown_content: "незнакомый отпечаток контента — сборка не из выпущенных",
+  unpaid_continue: "второй шанс без оплаты",
+  underpaid_continue: "второй шанс оплачен за меньшее время, чем прошло",
   unverified_time: "старт не дошёл — время забега не проверено",
 };
 

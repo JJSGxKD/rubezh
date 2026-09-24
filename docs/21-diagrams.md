@@ -30,8 +30,7 @@
 ### 1.1 Текущая схема (что есть в базе сегодня)
 
 Соответствует `backend/api/prisma/schema.prisma`. Таблицы появляются вместе с
-кодом, который в них пишет, а не лежат пустыми заранее, — поэтому покупок
-здесь пока нет, они придут в WP5 этапа 3 (`34-stage3-plan.md`).
+кодом, который в них пишет, а не лежат пустыми заранее.
 
 ```mermaid
 erDiagram
@@ -50,6 +49,8 @@ erDiagram
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
     ACCOUNT ||--o{ RUN : "играет"
+    ACCOUNT ||--o{ PURCHASE : "оплачивает"
+    RUN ||--o{ PURCHASE : "продолжен за"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -66,9 +67,29 @@ erDiagram
         int enemies_killed "nullable"
         json weapons "nullable"
         boolean cheats
+        float[] continues "секунда каждого второго шанса"
         boolean ranked "в рейтинге: вердикт ok и без читов"
         enum verdict "nullable: ok|suspicious|rejected"
         string[] verdict_reasons
+    }
+
+    PURCHASE {
+        uuid purchase_id PK "он же payload счёта"
+        uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
+        enum product "continue_run"
+        string run_id FK "UK вместе с continue_no"
+        int continue_no "какое продолжение забега, с единицы"
+        float elapsed_sec "секунда забега, по которой посчитана цена"
+        int price_stars "цена по правилу Р5.1 — её видит игрок"
+        int charged_stars "сколько списано: в тестовом режиме — одна звезда"
+        enum mode "live|test"
+        enum status "pending|paid|refunded"
+        string telegram_charge_id UK "nullable: id оплаты в Telegram"
+        datetime invoiced_at "когда выставлен последний счёт"
+        datetime paid_at "nullable: продолжение выдано"
+        enum refund_reason "nullable: test_mode|unused|external"
+        datetime refund_requested_at "nullable"
+        datetime refunded_at "nullable"
     }
 
     ACCOUNT_ROLE {
@@ -160,6 +181,15 @@ erDiagram
   выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
   подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
   разбора.
+- **`PURCHASE` — запись бухгалтерии, а не состояние игры.** Внешние ключи
+  на аккаунт и забег запрещают удаление (`Restrict`): удалить игрока, за
+  которым числятся звёзды, база не даст — деньги не исчезают вместе с ним.
+  Ключей идемпотентности два: `(run_id, continue_no)` — повторный счёт на то
+  же продолжение возвращает ту же покупку, `telegram_charge_id` — повтор
+  подтверждения оплаты ничего не удваивает. Цены две, показанная и
+  списанная, и режим оплаты: тестовые звёзды не попадают в отчёт о выручке
+  (`34-stage3-plan.md`, Р14). Звёзды — `int`, а не `decimal`: по протоколу
+  Telegram они целые, и точность здесь не теряется.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -648,7 +678,7 @@ flowchart LR
     subgraph api["backend/api"]
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
-        PAY["payments"]
+        PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение, возвраты, реализовано"]
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
@@ -699,21 +729,28 @@ flowchart LR
     RUNS -. слушатели записанного забега .-> NOTIFY
     PT -. рейтинг и профиль аккаунта .-> RUNS
     NOTIFY --> QUEUE
+    PAY -- answerPreCheckoutQuery --> TGAPI
     TGAPI -- вебхук --> CADDY
     CADDY --> BOT
     BOT --> WELCOME
     BOT --> PT
     BOT --> EXPORT
+    BOT -- проверка и подтверждение оплаты --> PAY
+    PAY --> QUEUE
     WELCOME -. рекорд и место .-> PT
     EXPORT --> QUEUE
     EXPORT --> PG
-    QUEUE -- sendPhoto, sendDocument --> TGAPI
+    QUEUE -- sendPhoto, sendDocument, refundStarPayment --> TGAPI
 
     AUTH --> PG
     AUTH --> REDIS
     RUNS --> PG
     RUNS --> REDIS
-    PAY --> QUEUE
+    PAY --> PG
+    PAY -. забег, который продолжают .-> RUNS
+    RUNS -. сверка продолжений с покупками .-> PAY
+    RUNS -. слушатели записанного забега .-> PAY
+    PAY -- createInvoiceLink --> TGAPI
     ADS --> REDIS
     REF --> PG
     CONTENT --> PG
@@ -1215,6 +1252,55 @@ sequenceDiagram
     end
     TG-->>U: карточка с подписью на языке игрока
 ```
+
+### 4.15 Покупка второго шанса за Stars (этап 3, реализовано)
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant C as Клиент
+    participant P as payments
+    participant DB as Postgres
+    participant TG as Telegram
+    participant B as BotRouter
+    participant Q as Очередь payments
+
+    U->>C: смерть — забег ждёт решения
+    C->>P: POST /payments/continue/quote { runId, continueNo, elapsedSec }
+    P->>DB: забег: чей, начат ли по часам сервера, не закончен ли
+    P-->>C: priceStars — клиент только показывает
+    U->>C: «Продолжить за N ⭐»
+    C->>P: POST /payments/continue/invoice
+    P->>DB: purchase pending — или та же, если счёт уже выставляли
+    P->>TG: createInvoiceLink(XTR, payload = purchaseId)
+    P-->>C: invoiceUrl
+    C->>TG: openInvoice(invoiceUrl)
+    TG->>B: pre_checkout_query — первой в пачке обновлений
+    B->>P: чей счёт, та ли сумма, свежий ли, жив ли забег
+    P->>TG: answerPreCheckoutQuery — до 10 секунд
+    TG->>B: successful_payment — сообщением в личке
+    B->>Q: подтверждение, jobId от id оплаты
+    Q->>DB: pending → paid, telegram_charge_id UK
+    C->>P: GET /payments/{id} — пока не granted
+    P-->>C: granted: true
+    C->>C: continueRun — продолжение выдал сервер (Р13)
+```
+
+- **Право на продолжение — по `successful_payment`, а не по ответу
+  `openInvoice`** (`34-stage3-plan.md`, Р13): ответ Mini App — подсказка,
+  что можно перестать ждать.
+- **Подтверждение идёт через очередь**, потому что смещение опроса
+  сохраняется до обработки, а вебхук отвечает сразу: упавшая запись второй
+  раз не придёт. Задание в Redis повторяется, пока запись не пройдёт; Redis
+  недоступен — запись сразу, не прошла и так — ошибка в лог со всеми полями
+  оплаты.
+- **Отказаться от денег можно только на проверке.** После
+  `successful_payment` звёзды уже у нас, и дальше остаётся только возврат.
+  Его сервер делает сам — через ту же очередь, с повтором: тестовая оплата
+  (Р14), продолжение, которое не взяли (оплата пришла к закрытому забегу
+  или забег записан без него), вторая оплата того же продолжения и оплата
+  без покупки. Заказ возврата пишется в базу раньше обращения к Telegram —
+  после перезапуска очередь поднимает незавершённые оттуда.
 
 ---
 

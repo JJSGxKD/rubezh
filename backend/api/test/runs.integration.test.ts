@@ -58,6 +58,7 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
       weapons: [{ id: "knife", level: 2 }],
       deathCause: null,
       cheats: false,
+      continues: [],
       ranked: true,
       verdict: "ok",
       verdictReasons: [],

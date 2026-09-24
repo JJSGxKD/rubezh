@@ -14,6 +14,7 @@ import { ExportModule } from "./modules/export/export.module.js";
 import { IngestModule } from "./modules/ingest/ingest.module.js";
 import { TelegramModule } from "./modules/telegram/telegram.module.js";
 import { WelcomeModule } from "./modules/welcome/welcome.module.js";
+import { PaymentsModule } from "./modules/payments/payments.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 
@@ -22,15 +23,17 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * payments, economy. Добавляются по мере реализации в роадмапе
  * (docs/02-roadmap.md).
  *
- * playtest — сохранения и лидерборд закрытого теста в Redis, тоже временные
- * и тоже выключены по умолчанию (docs/26-stage2-plan.md, WP13).
+ * playtest — сводка закрытого теста, отчёты о запуске и доступ к
+ * инструментам, выключен по умолчанию (docs/26-stage2-plan.md, WP14). Забеги
+ * и рейтинг из него переехали в runs.
  *
  * auth — аккаунты и сессии игроков (docs/34-stage3-plan.md, WP1);
  * roles — права, роли и журнал аудита (там же, WP2);
- * runs — забеги под аккаунтом и рейтинг на них (там же, WP4).
+ * runs — забеги под аккаунтом и рейтинг на них (там же, WP4);
+ * payments — второй шанс за Telegram Stars (там же, WP5).
  */
 @Module({
-  imports: [AppConfigModule, RedisModule, DatabaseModule, IngestModule, TelegramModule, RolesModule, AuthModule, RunsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
+  imports: [AppConfigModule, RedisModule, DatabaseModule, IngestModule, TelegramModule, RolesModule, AuthModule, RunsModule, PaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
   controllers: [HealthController],
 })
 export class AppModule {}

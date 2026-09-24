@@ -23,6 +23,8 @@ export interface RecordedRun {
   startingWeaponId: string;
   deathCause: string | null;
   cheats: boolean;
+  /** сколько вторых шансов взято: оплаченные сверх этого числа не использованы */
+  continues: number;
   /** попал ли в рейтинг */
   ranked: boolean;
   verdict: RunVerdict;
