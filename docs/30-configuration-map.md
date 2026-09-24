@@ -252,6 +252,7 @@
 | Клиент: как часто и сколько ждать подтверждения оплаты сервером | `packages/app-shell/src/state/continue-purchase.ts` → `CONFIRM_POLL_MS`, `CONFIRM_TIMEOUT_MS` |
 | Клиент: когда покупку второго шанса вообще предлагают | `packages/app-shell/src/state/payments-availability.ts` |
 | Тексты покупки второго шанса — отдельный словарь, едет в чанке экрана смерти | `packages/app-shell/src/i18n/ru-payments.json` |
+| Тексты об аккаунте и состоянии входа — отдельный словарь профиля и рейтинга; что сказать на какой отказ входа | `packages/app-shell/src/i18n/ru-account.json`; `state/session-notice.ts` → `KIND_BY_FAILURE` |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 
 Три правила, которые нарушают чаще всего: порт **не выбирается на месте**;
@@ -306,7 +307,7 @@
 | Что и где ищет тестовый раннер | `vitest.config.ts` |
 | Проверка ссылок в документации: какие файлы и какие пути проверяются | `scripts/docs-check.mjs` → `CODE_ROOTS`, `documentationFiles`; запуск — `pnpm docs:check`, в гейте — `scripts/test/docs-check.test.ts` |
 | Свод калибровки баланса отдельной командой | `vitest.balance.config.ts`, прогон — `scripts/balance/balance-sim.ts` |
-| Бюджеты размера бандла: первая загрузка, CSS, ленивые чанки, шрифты | `scripts/bundle-budget.mjs` → `BUDGETS` |
+| Бюджеты размера бандла: первая загрузка, CSS, ленивые экраны игрока, инструменты команды, шрифты | `scripts/bundle-budget.mjs` → `budgets`; какие чанки — инструменты команды, решает `TEAM` там же |
 | Порог теста производительности симуляции | `packages/core-game/test/perf-budget.test.ts` |
 | Эталон забега и контрольная сумма | `test/run-summary.test.ts`, `test/determinism.test.ts` |
 | Правила границ слоёв | `scripts/test/layer-boundaries.test.ts` → `RULES` |
