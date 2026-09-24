@@ -22,7 +22,17 @@ export interface TelegramPlayer {
 }
 
 export type InitDataCheck =
-  | { ok: true; player: TelegramPlayer; authDate: number }
+  | {
+      ok: true;
+      player: TelegramPlayer;
+      authDate: number;
+      /**
+       * Параметр запуска (`startapp` в ссылке) — из подписанных данных, а не
+       * из тела запроса: там его напишет кто угодно
+       * (docs/33-telegram-mini-app-pitfalls.md §5.2). `null` — его не было.
+       */
+      startParam: string | null;
+    }
   | { ok: false; reason: "missing_hash" | "bad_signature" | "expired" | "no_user" | "malformed" };
 
 const userSchema = z.object({
@@ -71,9 +81,11 @@ export function verifyInitData(
   }
 
   const name = [parsed.first_name, parsed.last_name].filter((part) => part !== undefined && part !== "").join(" ");
+  const startParam = params.get("start_param");
   return {
     ok: true,
     authDate,
+    startParam: startParam === null || startParam === "" ? null : startParam,
     player: {
       id: String(parsed.id),
       name: name === "" ? (parsed.username ?? "Игрок") : name,
