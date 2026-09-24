@@ -14,6 +14,7 @@ import { PlayerRings } from "./player-rings";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
+import { invulnerableAlpha } from "./invulnerable";
 
 const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
 
@@ -189,6 +190,7 @@ export class WorldRenderer {
       lerp(this.world.player.prevY, this.world.player.y, t),
     );
     this.player.setVisible(this.world.player.alive);
+    this.player.setAlpha(invulnerableAlpha(this.world.player.invulnerableTicks));
     this.applyPlayerFlash();
     this.rings.draw(this.player.x, this.player.y);
 

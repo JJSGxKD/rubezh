@@ -36,7 +36,7 @@ function fakeEngine(): { engine: RunEngine; emit<E extends keyof RunEvents>(even
   };
 }
 
-const RESULT = { survivalSec: 100.4, seed: 42, outcome: "died", cheats: false } as RunResult;
+const RESULT = { survivalSec: 100.4, seed: 42, outcome: "died", cheats: false, continues: [] as number[] } as RunResult;
 
 const DIAGNOSTICS: RunDiagnostics = {
   perf: {

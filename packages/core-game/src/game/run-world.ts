@@ -1,5 +1,6 @@
 import type { DifficultyId, MapDef } from "@bh/shared-types";
 import { findDifficulty, DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
+import { CONTINUE } from "../content/continue";
 import { DROPS } from "../content/drops";
 import { ENEMIES } from "../content/enemies";
 import { ENEMY_STAGES } from "../content/stages";
@@ -44,6 +45,7 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     levelCurve: LEVEL_CURVE,
     loadoutLimits: LOADOUT_LIMITS,
     drops: DROPS,
+    continueRules: CONTINUE,
     map,
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined ? {} : { startingWeaponId: options.startingWeaponId }),

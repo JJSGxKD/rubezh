@@ -351,4 +351,5 @@ const SAMPLE_RESULT: RunResult = {
   distance: 18400,
   peakEnemies: 212,
   cheats: false,
+  continues: [],
 };

@@ -88,6 +88,7 @@ function result(patch: Partial<RunResult> = {}): RunResult {
     distance: 0,
     peakEnemies: 0,
     cheats: true,
+    continues: [],
     ...patch,
   };
 }

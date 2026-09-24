@@ -37,6 +37,9 @@ export function stepWorld(world: World, input: SimInput): void {
   const dt = TICK_SEC;
   if (isAwaitingChoice(world)) return;
 
+  // Неуязвимость после второго шанса тикает вместе с миром: пауза и выбор
+  // улучшения её не съедают.
+  if (world.player.invulnerableTicks > 0) world.player.invulnerableTicks--;
   snapshotPositions(world);
   movePlayer(world, input, dt);
   regeneratePlayer(world, dt);
