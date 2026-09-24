@@ -1,9 +1,9 @@
-import { hapticFeedback, isTMA, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
+import { hapticFeedback, invoice, isTMA, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
 import type {
   PlatformAdapter,
   PlatformClientInfo,
   UserContext,
-  PurchaseResult,
+  InvoiceStatus,
   SharePayload,
   InvitePayload,
   InviteResult,
@@ -14,6 +14,7 @@ import type {
   PlatformUi,
 } from "@bh/shared-types";
 import { inviteFromBrowser } from "./invite";
+import { openInvoiceWith } from "./invoice";
 import { createDeviceStorage } from "./storage";
 import { createTelegramUi } from "./ui-telegram";
 
@@ -74,9 +75,9 @@ export class TelegramAdapter implements PlatformAdapter {
     };
   }
 
-  async purchase(_itemId: string): Promise<PurchaseResult> {
-    // TODO: Telegram Stars invoice flow
-    throw new Error("TelegramAdapter.purchase: не реализовано");
+  /** Счёт Stars от сервера — в окне оплаты Telegram (`invoice.ts`). */
+  async openInvoice(url: string): Promise<InvoiceStatus> {
+    return await openInvoiceWith({ isAvailable: () => isTMA() && invoice.openUrl.isAvailable(), open: (link) => invoice.openUrl(link) }, url);
   }
 
   share(_payload: SharePayload): void {

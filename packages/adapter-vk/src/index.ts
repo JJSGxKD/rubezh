@@ -2,7 +2,6 @@ import { createNoopPlatformUi } from "@bh/shared-types";
 import type {
   PlatformAdapter,
   UserContext,
-  PurchaseResult,
   SharePayload,
   InvitePayload,
   InviteResult,
@@ -36,10 +35,8 @@ export class VkAdapter implements PlatformAdapter {
     throw new Error("VkAdapter.init: не реализовано");
   }
 
-  async purchase(_itemId: string): Promise<PurchaseResult> {
-    // TODO: VKWebAppShowOrderBox
-    throw new Error("VkAdapter.purchase: не реализовано");
-  }
+  // Оплата — VKWebAppShowOrderBox; до портирования метода `openInvoice` нет,
+  // и оболочка покупку здесь не предлагает.
 
   share(_payload: SharePayload): void {
     // TODO: VKWebAppShowWallPostBox / VKWebAppShare

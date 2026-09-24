@@ -2,7 +2,6 @@ import { createNoopPlatformUi } from "@bh/shared-types";
 import type {
   PlatformAdapter,
   UserContext,
-  PurchaseResult,
   SharePayload,
   InvitePayload,
   InviteResult,
@@ -16,7 +15,9 @@ import type {
  * MAX Bridge / Web Apps SDK. Схема валидации initData уточняется по
  * актуальной документации dev.max.ru перед началом этапа 3 — см.
  * docs/03-notes-and-risks.md (открытый вопрос).
- * Оплата — СБП/VK Pay через нативный платёжный API MAX, прямые рубли.
+ * Оплата — СБП/VK Pay через нативный платёжный API MAX, прямые рубли:
+ * появится как `openInvoice`, а до тех пор метода нет, и оболочка покупку
+ * здесь не предлагает.
  * Реклама — нет нативного rewarded-SDK; showAd() значим только при
  * активном антирекламном пакете (мгновенная выдача без ролика) — см.
  * docs/07-monetization-and-ads.md §3. Пассивный доход с баннеров/промо-постов
@@ -36,11 +37,6 @@ export class MaxAdapter implements PlatformAdapter {
   async init(): Promise<UserContext> {
     // TODO: MAX Bridge init-данные -> валидация на бэкенде
     throw new Error("MaxAdapter.init: не реализовано");
-  }
-
-  async purchase(_itemId: string): Promise<PurchaseResult> {
-    // TODO: СБП/VK Pay через MAX payment API
-    throw new Error("MaxAdapter.purchase: не реализовано");
   }
 
   share(_payload: SharePayload): void {
