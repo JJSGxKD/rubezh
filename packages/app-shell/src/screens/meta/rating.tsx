@@ -17,6 +17,7 @@ import { useMeta } from "../../state/meta";
 import type { ApiFailure } from "../../state/api-request";
 import { useRuns } from "../../state/runs";
 import { ItemIcon } from "../item-icons";
+import { SessionNotice, useSessionNotice } from "./session-notice";
 import { RankMark, SurvivalTime, SyncProblem } from "./sync-ui";
 
 /**
@@ -34,6 +35,7 @@ export function RatingScreen(): ReactNode {
   const pending = useRuns((state) => state.pending);
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState<ApiFailure | null>(null);
+  const notice = useSessionNotice();
 
   // Ответ на переключённую уже сложность не должен затереть состояние текущей.
   const latest = useRef<DifficultyId>(difficultyId);
@@ -69,7 +71,11 @@ export function RatingScreen(): ReactNode {
         />
 
         <div className="mt-4 grid grid-cols-1 gap-3" aria-busy={loading}>
-          {failure === null ? null : (
+          {/* Нет сессии — сказать почему; ошибка запроса лишь повторила бы то
+              же другими словами, а у блокировки ещё и потеряла бы причину. */}
+          {notice !== null ? (
+            <SessionNotice notice={notice} />
+          ) : failure === null ? null : (
             <SyncProblem failure={failure} compact={board !== undefined} onRetry={() => void load(difficultyId)} />
           )}
 
