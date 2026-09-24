@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { RunReportClient } from "../../packages/app-shell/src/state/diagnostic-reports";
 import { circling, recordHeadlessRun } from "../../packages/core-game/test/helpers/recorded-run";
-import { submitRunReportSchema } from "../../backend/api/src/modules/diagnostics/dto/run-report.dto.js";
+import { RUN_RECORDING_EVENT_KINDS } from "../../packages/core-game/src/run-api";
+import { RECORDING_EVENT_KINDS, submitRunReportSchema } from "../../backend/api/src/modules/diagnostics/dto/run-report.dto.js";
 
 // Запись забега на трёх сторонах: движок пишет, оболочка кладёт в конверт,
 // приёмник разбирает своей схемой (docs/28-diagnostics.md §3.3, §5.1). Схема
@@ -23,6 +24,20 @@ describe("схема записи забега", () => {
     expect(parsed.error?.issues ?? []).toEqual([]);
     // Схема строгая к форме, но не выбрасывает поля движка: повтору нужно всё.
     expect(parsed.data?.recording).toEqual(recording);
+  });
+
+  it("и запись со вторым шансом: продолжение не теряется по дороге", () => {
+    // Без поля в схеме приёмник молча выбросил бы тики продолжений, и повтор
+    // продолженного забега разошёлся бы с оригиналом.
+    const recording = recordHeadlessRun({ seed: 99, maxTicks: 40_000, difficultyId: "hard", steer: () => null, continues: true });
+    const parsed = submitRunReportSchema.safeParse({ recording, client: CLIENT });
+
+    expect(recording.continues?.length).toBeGreaterThan(0);
+    expect(parsed.data?.recording).toEqual(recording);
+  });
+
+  it("виды событий движка и приёмника совпадают", () => {
+    expect([...RECORDING_EVENT_KINDS].sort()).toEqual([...RUN_RECORDING_EVENT_KINDS].sort());
   });
 
   it("и запись погибшего игрока с причиной смерти", () => {

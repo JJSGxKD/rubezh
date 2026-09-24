@@ -69,6 +69,11 @@ export class RunProbe {
     this.recorder?.stepped(code, world);
   }
 
+  /** второй шанс применён на этом тике — повтор применит его там же */
+  continued(world: World): void {
+    this.recorder?.continued(world.stats.tick);
+  }
+
   choice(world: World, optionId: string): void {
     this.recorder?.choice(world.stats.tick, optionId);
   }

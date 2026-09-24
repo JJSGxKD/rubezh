@@ -89,7 +89,7 @@ export function RunScreen(): ReactNode {
 
       <RunLoading stage={run.phase === "error" ? null : run.loadingStage} weaponId={weaponId} />
 
-      {run.hud === null || run.phase === "finished" ? null : (
+      {run.hud === null || run.phase === "finished" || run.phase === "downed" ? null : (
         <RunHud
           hud={run.hud}
           onPause={() => useRun.getState().pause("manual")}
@@ -97,7 +97,7 @@ export function RunScreen(): ReactNode {
         />
       )}
 
-      {run.devInfo !== null && run.phase !== "finished" && (run.devRun ? devTechInfo : fpsOverlay) ? (
+      {run.devInfo !== null && run.phase !== "finished" && run.phase !== "downed" && (run.devRun ? devTechInfo : fpsOverlay) ? (
         <DevTechPanelLazy info={run.devInfo} compact={!run.devRun} />
       ) : null}
 
@@ -134,13 +134,18 @@ export function RunScreen(): ReactNode {
         <RunStatsSheet inspection={stats} onClose={() => setStats(null)} />
       ) : null}
 
-      {run.phase === "finished" && run.result !== null ? (
+      {/* На экране смерти до решения о втором шансе итог предварительный:
+          ни рекорда, ни места ещё нет — они появятся после отказа. */}
+      {(run.phase === "finished" || run.phase === "downed") && run.result !== null ? (
         <DeathOverlay
           result={run.result}
           isNewRecord={run.isNewRecord}
-          rank={submitted?.runId === run.result.runId ? submitted.result.rank : null}
+          rank={run.phase === "finished" && submitted?.runId === run.result.runId ? submitted.result.rank : null}
           diagnostics={diagnostics}
           cheatsCounted={run.devRun && countInRating}
+          {...(run.phase === "downed" && run.devRun
+            ? { secondChance: { onDevContinue: () => useRun.getState().continueRun() } }
+            : {})}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
           onShare={() => shareRun()}

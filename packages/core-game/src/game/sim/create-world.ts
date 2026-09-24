@@ -1,4 +1,5 @@
 import type {
+  ContinueDef,
   DifficultyDef,
   DropsDef,
   EnemyDef,
@@ -20,10 +21,11 @@ import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
 import { BASE_DIFFICULTY, findDifficultyProblems } from "./difficulty";
 import { findStageProblems, resolveStages } from "./stages";
+import { findContinueProblems } from "./continue";
 import { findDropsContentProblems } from "./gems";
 import { MAX_PICKUPS } from "./pickups";
 import { createEnemyPool, createGemPool, createPickupPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
-import { NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
+import { MAX_CONTINUES_PER_RUN, NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
 
 /**
  * Создание мира вынесено из world.ts: там состояние забега и операции над
@@ -53,6 +55,12 @@ const FALLBACK_DROPS: DropsDef = {
   magnets: { chance: 0, eliteChance: 0, maxOnField: 0 },
   dynamite: { chance: 0, eliteChance: 0, maxOnField: 0, radiusUnits: 420, eliteHpRatio: 0.3 },
 };
+
+/**
+ * Второй шанс для тестов симуляции: одно продолжение с полным здоровьем. Мир
+ * без смерти его не замечает, а тест продолжения задаёт свои числа.
+ */
+const FALLBACK_CONTINUE: ContinueDef = { perRun: 1, restoreHpRatio: 1, invulnerableSec: 3 };
 
 /**
  * Карта по умолчанию — тоже заглушка, и тоже не из контента: симуляция не
@@ -115,6 +123,8 @@ export interface CreateWorldOptions {
   loadoutLimits?: LoadoutLimits;
   /** что падает с убитых врагов; по умолчанию — один кристалл */
   drops?: DropsDef;
+  /** второй шанс; по умолчанию — одно продолжение */
+  continueRules?: ContinueDef;
   /** уровень сложности; по умолчанию — без поправок */
   difficulty?: DifficultyDef;
   /** ступени врагов; по умолчанию — одна базовая, без усиления */
@@ -161,6 +171,12 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error(`Некорректный контент выпадения:\n${dropProblems.join("\n")}`);
   }
 
+  const continueRules = options.continueRules ?? FALLBACK_CONTINUE;
+  const continueProblems = findContinueProblems(continueRules);
+  if (continueProblems.length > 0) {
+    throw new Error(`Некорректный второй шанс:\n${continueProblems.join("\n")}`);
+  }
+
   const difficultyLevel = options.difficulty ?? BASE_DIFFICULTY;
   const difficultyProblems = findDifficultyProblems(difficultyLevel);
   if (difficultyProblems.length > 0) {
@@ -195,6 +211,7 @@ export function createWorld(options: CreateWorldOptions): World {
     levelCurve,
     loadoutLimits,
     drops,
+    continueRules,
     difficultyLevel,
     playerStats: computePlayerStats(playerStatsBase, passiveTypes, new Map()),
     playerStatsBase,
@@ -231,6 +248,7 @@ export function createWorld(options: CreateWorldOptions): World {
       maxHp: config.player.maxHp,
       attackCooldown: 0,
       alive: true,
+      invulnerableTicks: 0,
     },
     enemies: createEnemyPool(maxEnemies),
     projectiles: createProjectilePool(maxProjectiles),
@@ -262,6 +280,8 @@ export function createWorld(options: CreateWorldOptions): World {
       distance: 0,
       peakEnemies: 0,
       enemiesRecycled: 0,
+      continuesUsed: 0,
+      continueTicks: new Int32Array(MAX_CONTINUES_PER_RUN),
     },
     events: createSimEvents(),
     // Буфер под всю ёмкость пула, а не фиксированные 256: при плотной толпе

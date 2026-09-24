@@ -34,6 +34,7 @@ export function createRunEngine(): RunEngine {
         ...(options.graphics === undefined ? {} : { graphics: options.graphics }),
         renderCapFps: options.renderCapFps ?? null,
         recordRun: options.diagnostics.recordRun,
+        ...(options.continues === undefined ? {} : { continues: options.continues }),
         bus,
       };
       host.game.scene.add("main", MainScene, true, sceneData);
@@ -66,6 +67,12 @@ export function createRunEngine(): RunEngine {
         },
         abandon(): void {
           scene()?.abandonRun();
+        },
+        continueRun(): void {
+          scene()?.continueRun();
+        },
+        declineContinue(): void {
+          scene()?.declineContinue();
         },
         restart(seed: number): void {
           scene()?.restartRun(seed);

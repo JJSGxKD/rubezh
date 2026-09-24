@@ -160,7 +160,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 5;
+export const RUN_SNAPSHOT_FORMAT = 6;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,
@@ -230,6 +230,12 @@ export interface RunOptions {
   resume?: RunSnapshot;
   /** забег разработчика; без поля — обычный забег, команды разработчика не работают */
   dev?: RunDevOptions;
+  /**
+   * Предлагать второй шанс при смерти (docs/07-monetization-and-ads.md §8).
+   * Без поля смерть сразу закрывает забег — как в сборке, где продолжение
+   * купить негде.
+   */
+  continues?: boolean;
 }
 
 /**
@@ -263,6 +269,15 @@ export interface RunEvents {
    * оболочка не знает, какое это.
    */
   started: { runId: string; difficultyId: DifficultyId; startingWeaponId: string };
+  /**
+   * Игрок умер, но второй шанс ещё есть: мир стоит и ждёт решения оболочки —
+   * `continueRun` или `declineContinue`. `result` — итог, каким он будет при
+   * отказе: оболочка сохраняет его на устройстве, чтобы закрытое на экране
+   * смерти приложение не потеряло забег.
+   */
+  downed: { result: RunResult; continuesLeft: number };
+  /** второй шанс применён — забег идёт дальше */
+  revived: { elapsedSec: number; continuesUsed: number };
   /** снимок для HUD, не чаще 10 Гц */
   hud: HudSnapshot;
   /** начался новый отрезок таймлайна спавна — `wave_reached` в аналитике */
@@ -343,6 +358,11 @@ export interface RunRecording {
   input: RunInputLog;
   /** выборы улучшений: тик и вариант */
   choices: [tick: number, optionId: string][];
+  /**
+   * Тики, на которых игрок продолжил после смерти. Необязательное: запись
+   * прошлой сборки поля не знает, и это забег без второго шанса.
+   */
+  continues?: number[];
   /** свёртка мира раз в минуту забега: где повтор разошёлся с оригиналом */
   checkpoints: [tick: number, checksum: number][];
 }
@@ -372,7 +392,26 @@ export interface RunInputLog {
  */
 export type RunRecordingEvent = [tick: number, kind: RunRecordingEventKind, value: string | number | null];
 
-export type RunRecordingEventKind = "wave" | "level" | "offer" | "choice" | "pause" | "resume" | "resize" | "death" | "abandon";
+/**
+ * Виды событий записи. Значением, а не только типом: приёмник на сервере
+ * держит свой перечень, и тест сверяет их — разойдутся, и каждая запись с
+ * новым видом получит 400 целиком (scripts/test/run-report-schema.test.ts).
+ */
+export const RUN_RECORDING_EVENT_KINDS = [
+  "wave",
+  "level",
+  "offer",
+  "choice",
+  "pause",
+  "resume",
+  "resize",
+  "downed",
+  "continue",
+  "death",
+  "abandon",
+] as const;
+
+export type RunRecordingEventKind = (typeof RUN_RECORDING_EVENT_KINDS)[number];
 
 /** Корзина таймлайна записи — пять секунд кадров, которым можно верить. */
 export interface RunTimelineBucket {
@@ -435,6 +474,10 @@ export interface RunSession {
   pause(reason: RunPauseReason): void;
   resume(): void;
   abandon(): void;
+  /** второй шанс на экране смерти: враги убраны, здоровье возвращено */
+  continueRun(): void;
+  /** отказ от второго шанса: забег закрывается смертью */
+  declineContinue(): void;
   /** начать заново в уже загруженном движке: от смерти до забега один тап */
   restart(seed: number): void;
   /**

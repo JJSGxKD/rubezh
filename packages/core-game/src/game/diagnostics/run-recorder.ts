@@ -48,6 +48,7 @@ export class RunRecorder {
   private readonly timeline: RunTimeline;
   private readonly events: RunRecordingEvent[] = [];
   private readonly choices: [number, string][] = [];
+  private readonly continues: number[] = [];
   private readonly checkpoints: [number, number][] = [];
   private eventsTruncated = false;
 
@@ -63,6 +64,11 @@ export class RunRecorder {
   stepped(code: number, world: World): void {
     this.input.push(code);
     if (world.stats.tick % CHECKPOINT_TICKS === 0) this.checkpoints.push([world.stats.tick, checksumWorld(world)]);
+  }
+
+  continued(tick: number): void {
+    this.continues.push(tick);
+    this.event(tick, "continue");
   }
 
   choice(tick: number, optionId: string): void {
@@ -106,6 +112,7 @@ export class RunRecorder {
       eventsTruncated: this.eventsTruncated,
       input,
       choices: this.choices,
+      continues: this.continues,
       checkpoints: this.checkpoints,
     };
   }

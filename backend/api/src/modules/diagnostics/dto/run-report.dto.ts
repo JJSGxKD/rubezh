@@ -57,7 +57,11 @@ const bucketSchema = z.object({
   heapMb: amount.nullable(),
 });
 
-const EVENT_KINDS = ["wave", "level", "offer", "choice", "pause", "resume", "resize", "death", "abandon"] as const;
+/** Виды событий записи — копия `RUN_RECORDING_EVENT_KINDS` движка; сверяет тест. */
+export const RECORDING_EVENT_KINDS = ["wave", "level", "offer", "choice", "pause", "resume", "resize", "downed", "continue", "death", "abandon"] as const;
+
+/** Потолок продолжений за забег — `MAX_CONTINUES_PER_RUN` движка. */
+const MAX_CONTINUES = 5;
 
 const resultSchema = z.object({
   ticks: count,
@@ -86,7 +90,7 @@ export const runRecordingSchema = z.object({
   perf: perfSchema,
   timeline: z.array(bucketSchema).max(720),
   timelineTruncated: z.boolean(),
-  events: z.array(z.tuple([count, z.enum(EVENT_KINDS), z.union([z.string().max(512), z.number(), z.null()])])).max(4000),
+  events: z.array(z.tuple([count, z.enum(RECORDING_EVENT_KINDS), z.union([z.string().max(512), z.number(), z.null()])])).max(4000),
   eventsTruncated: z.boolean(),
   input: z.object({
     encoding: z.literal("rle-v1"),
@@ -98,6 +102,9 @@ export const runRecordingSchema = z.object({
     truncated: z.boolean(),
   }),
   choices: z.array(z.tuple([count, id])).max(2000),
+  // Тики второго шанса (docs/07-monetization-and-ads.md §8). Запись прошлой
+  // сборки поля не несёт — это забег без продолжений.
+  continues: z.array(count).max(MAX_CONTINUES).default([]),
   checkpoints: z.array(z.tuple([count, z.number().int()])).max(240),
 });
 
