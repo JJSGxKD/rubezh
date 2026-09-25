@@ -60,8 +60,11 @@ export class RedisAdminSessionStore implements AdminSessionStore {
       .multi()
       .set(sessionKey(tokenHash), JSON.stringify(session), "EX", ttlSec)
       .sadd(sessions, tokenHash)
-      // Набор живёт не короче самой длинной сессии: вход с второго устройства
-      // не должен укорачивать жизнь набору первого.
+      // Набор живёт не короче самой длинной сессии: вход со второго устройства
+      // не должен укорачивать жизнь набору первого. Одного GT мало: ключ без
+      // срока Redis считает бесконечным и GT его не трогает, а SADD как раз
+      // создаёт набор без срока — NX ставит первый срок, GT продлевает.
+      .expire(sessions, ttlSec, "NX")
       .expire(sessions, ttlSec, "GT")
       .exec();
   }

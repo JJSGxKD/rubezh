@@ -190,7 +190,10 @@ describe.skipIf(!live)("панель на живых Postgres и Redis", () => {
 
     expect(await store.get(first)).toEqual(session);
     expect(await redis.ttl(`admin:session:${first}`)).toBeLessThanOrEqual(60);
-    // Набор аккаунта живёт не короче самой долгой сессии.
+    // Набор аккаунта живёт не короче самой долгой сессии: первый вход даёт
+    // ему срок, второй, более долгий, продлевает, а короткий не укорачивает.
+    expect(await redis.ttl(`admin:sessions:${accountId}`)).toBeGreaterThan(60);
+    await store.put(hashSessionToken("third"), { ...session, expiresAtMs: Date.now() + 10_000 });
     expect(await redis.ttl(`admin:sessions:${accountId}`)).toBeGreaterThan(60);
 
     await store.delete(first);
@@ -200,7 +203,7 @@ describe.skipIf(!live)("панель на живых Postgres и Redis", () => {
     await redis.set(`admin:session:${hashSessionToken("broken")}`, "не json");
     expect(await store.get(hashSessionToken("broken"))).toBeNull();
 
-    expect(await store.revokeAll(accountId)).toBe(1);
+    expect(await store.revokeAll(accountId)).toBe(2);
     expect(await store.get(second)).toBeNull();
     expect(await store.revokeAll(accountId)).toBe(0);
   });
