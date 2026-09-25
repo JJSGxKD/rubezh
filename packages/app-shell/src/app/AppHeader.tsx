@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { Diamond, Gem, Menu, Plus } from "lucide-react";
+import { Menu, Plus } from "lucide-react";
 import { Avatar } from "../design-system/components";
+import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { t } from "../i18n";
 import { useNavigation } from "../state/navigation";
 import { uiFeedback } from "../state/ui-feedback";
 import { useShell } from "../state/shell";
+import { useWallet } from "../state/wallet";
 
 /**
  * Шапка разделов нижней панели: кто играет, сколько у него валюты и одна
@@ -13,11 +15,13 @@ import { useShell } from "../state/shell";
  *
  * Имя и аватар — из параметров запуска площадки и только для отображения:
  * это не проверенная личность (docs/08-web-and-identity.md §4). Валюты —
- * заглушки с нулём до экономики; «плюс» ведёт в магазин, а не в пустоту.
+ * монеты и самоцветы с сервера (state/wallet.ts), пока ответа нет — нули;
+ * «плюс» ведёт в магазин, а не в пустоту.
  */
 export function AppHeader(props: { onMenu(): void }): ReactNode {
   const user = useShell((state) => state.adapter.displayUser);
   const name = user?.displayName ?? t("profile.guest");
+  const balances = useWallet((state) => state.balances);
 
   return (
     <header className="shrink-0 px-3 pt-[calc(0.5rem+var(--app-inset-top))] pr-[calc(0.75rem+var(--app-inset-right))] pb-2 pl-[calc(0.75rem+var(--app-inset-left))]">
@@ -33,8 +37,8 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
           <span className="min-w-0 truncate font-display text-sm font-bold text-text">{name}</span>
         </button>
 
-        <CurrencyButton icon={<Gem size={14} />} tone="info" label={t("currency.shards")} value={0} />
-        <CurrencyButton icon={<Diamond size={14} />} tone="passive" label={t("currency.premium")} value={0} />
+        <CurrencyButton icon={<CoinIcon size={22} />} label={t("currency.coins")} value={balances?.coins ?? 0} />
+        <CurrencyButton icon={<GemIcon size={22} />} label={t("currency.premium")} value={balances?.gems ?? 0} />
 
         <button
           type="button"
@@ -56,12 +60,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
  * Валюта с «плюсом»: вся плашка — одна кнопка в магазин. Маленький «плюс»
  * отдельной целью нажатия был бы меньше 44 px (§4.6).
  */
-function CurrencyButton(props: {
-  icon: ReactNode;
-  tone: "info" | "passive";
-  label: string;
-  value: number;
-}): ReactNode {
+function CurrencyButton(props: { icon: ReactNode; label: string; value: number }): ReactNode {
   return (
     <button
       type="button"
@@ -69,14 +68,7 @@ function CurrencyButton(props: {
       onClick={() => useNavigation.getState().resetTo("shop")}
       className="surface-sunken inline-flex min-h-11 shrink-0 items-center gap-1 rounded-pill py-1 pr-1 pl-1 transition-transform duration-(--duration-fast) ease-base active:scale-95"
     >
-      <span
-        className={[
-          "inline-flex size-6 items-center justify-center rounded-full",
-          props.tone === "info" ? "bg-info/15 text-info" : "bg-passive/15 text-passive",
-        ].join(" ")}
-      >
-        {props.icon}
-      </span>
+      <span className="inline-flex size-6 items-center justify-center">{props.icon}</span>
       <span className="min-w-6 font-display text-sm font-bold tabular-nums text-text">{props.value}</span>
       <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-on-accent">
         <Plus size={14} strokeWidth={3} />

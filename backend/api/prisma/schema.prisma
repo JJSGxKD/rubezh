@@ -166,6 +166,9 @@ model Account {
   acquisition Acquisition?
   funnel      AccountFunnel?
   messaging   AccountMessaging?
+  wallet      WalletEntry[]
+  balances    WalletBalance[]
+  walletDaily WalletDaily[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -543,4 +546,80 @@ model AccountMessaging {
   // Сегмент рассылки: кому можно писать.
   @@index([canMessage])
   @@map("account_messaging")
+}
+
+// Ресурсы кошелька (docs/35-stage4-plan.md, Р2, Р34): две валюты и осколки
+// по редкостям. Осколки — материал, а не валюта: не продаются и ни на что не
+// меняются, но живут тем же журналом, потому что и начисляются, и тратятся
+// так же — с ключом и без гонок.
+enum WalletResource {
+  coins
+  gems
+  shard_common
+  shard_uncommon
+  shard_rare
+  shard_epic
+  shard_legendary
+  shard_mythic
+}
+
+// Журнал кошелька (docs/35-stage4-plan.md, Р12, §3.2): каждое начисление и
+// списание — строка с причиной, источником и ключом идемпотентности.
+// Повтор с тем же ключом ничего не удваивает: уникальный индекс в базе, а
+// не проверка в коде.
+//
+// Партиций пока нет, хотя план их хотел с первого дня: уникальный индекс
+// партиционированной таблицы обязан включать колонку разбиения, а ключ
+// идемпотентности должен быть уникален глобально. Разбиение — вместе с
+// окном повторов (WP19): повтор начисления приходит в пределах дней, а не
+// месяцев.
+model WalletEntry {
+  entryId        String         @id @map("entry_id") @db.Uuid
+  accountId      String         @map("account_id") @db.Uuid
+  resource       WalletResource
+  /// со знаком: начисление — плюс, списание — минус; ноль — начисление упёрлось в суточный потолок
+  amount         BigInt
+  /// почему: награда за забег, покупка, перековка — список в `wallet-reasons.ts`
+  reason         String         @db.VarChar(32)
+  /// откуда: id забега, покупки, задания; `null` — ручная операция
+  source         String?        @db.VarChar(64)
+  idempotencyKey String         @unique @map("idempotency_key") @db.VarChar(160)
+  createdAt      DateTime       @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // История кошелька игрока — в карточке игрока и разборе.
+  @@index([accountId, createdAt])
+  @@map("wallet_entry")
+}
+
+// Баланс — проекция журнала, обновляется в той же транзакции. Читается одним
+// запросом по ключу: для баланса журнал не нужен. Отрицательным не бывает —
+// проверка в базе, а не только в коде.
+model WalletBalance {
+  accountId String         @map("account_id") @db.Uuid
+  resource  WalletResource
+  balance   BigInt         @default(0)
+  updatedAt DateTime       @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, resource])
+  @@map("wallet_balance")
+}
+
+// Сколько начислено за московские сутки по причине — для суточного потолка
+// (docs/35-stage4-plan.md, §3.2). Отдельной строкой, а не суммой по журналу:
+// строку можно запереть, и параллельные начисления не пройдут мимо потолка.
+model WalletDaily {
+  accountId String         @map("account_id") @db.Uuid
+  resource  WalletResource
+  reason    String         @db.VarChar(32)
+  day       DateTime       @db.Date
+  granted   BigInt         @default(0)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, resource, reason, day])
+  @@map("wallet_daily")
 }

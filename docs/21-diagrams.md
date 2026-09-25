@@ -55,6 +55,9 @@ erDiagram
     ACCOUNT ||--o| ACQUISITION : "пришёл через"
     ACCOUNT ||--o| ACCOUNT_FUNNEL : "прошёл вехи"
     ACCOUNT ||--o| ACCOUNT_MESSAGING : "можно ли писать"
+    ACCOUNT ||--o{ WALLET_ENTRY : "журнал кошелька"
+    ACCOUNT ||--o{ WALLET_BALANCE : "баланс по ресурсу"
+    ACCOUNT ||--o{ WALLET_DAILY : "начислено за сутки"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -127,6 +130,32 @@ erDiagram
         boolean can_message
         enum reason "entered|write_access|blocked|unblocked"
         datetime changed_at "побеждает более позднее событие"
+    }
+
+    WALLET_ENTRY {
+        uuid entry_id PK
+        uuid account_id FK
+        enum resource "coins|gems|shard_common…shard_mythic"
+        bigint amount "со знаком, 0 — упёрлось в потолок"
+        string reason "run_reward, purchase, unlock, admin_adjust…"
+        string source "nullable: забег, покупка, admin:<кто>"
+        string idempotency_key UK "повтор упирается в индекс"
+        datetime created_at
+    }
+
+    WALLET_BALANCE {
+        uuid account_id PK,FK
+        enum resource PK
+        bigint balance "не меньше нуля, проекция журнала"
+        datetime updated_at
+    }
+
+    WALLET_DAILY {
+        uuid account_id PK,FK
+        enum resource PK
+        string reason PK
+        date day PK "игровые сутки, по Москве"
+        bigint granted "блокируется на время начисления"
     }
 
     PURCHASE {
@@ -237,6 +266,15 @@ erDiagram
   выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
   подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
   разбора.
+- **`WALLET_ENTRY` — журнал кошелька, `WALLET_BALANCE` — его проекция**
+  (`35-stage4-plan.md`, WP3). Любая ценность игрока — строка журнала с
+  уникальным ключом идемпотентности; баланс меняется в той же транзакции и
+  только если строка вставилась, поэтому повтор ничего не удваивает, а сумма
+  журнала обязана совпасть с балансом — это проверяет
+  `pnpm --filter backend-api wallet:reconcile`. `WALLET_DAILY` — сколько
+  источник уже дал за игровые сутки: строка блокируется на время начисления,
+  и параллельные начисления не пробивают потолок. Журнал пока не
+  партиционирован — почему, в WP3 плана этапа.
 - **`ACCOUNT_FUNNEL` — вехи игрока, `ACCOUNT_MESSAGING` — можно ли ему писать**
   (`35-stage4-plan.md`, WP2). Вехи ставят слушатели входа, забегов и оплаты
   одной вставкой с `COALESCE`, поэтому таблица — отметки первого раза, а не

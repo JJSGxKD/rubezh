@@ -41,6 +41,14 @@ export const COLORS = {
 
   stars: "#ffd000",
   onStars: "#2a1f00",
+
+  coinHi: "#fff16a",
+  coin: "#ffd400",
+  coinLo: "#ff9f00",
+  gemHi: "#ffc9cc",
+  gemLight: "#ff8891",
+  gem: "#ff515e",
+  gemLo: "#f0303e",
 } as const;
 
 export type ColorToken = keyof typeof COLORS;
@@ -77,6 +85,13 @@ export const CSS_VAR_BY_COLOR: Record<ColorToken, string> = {
   passive: "--color-passive",
   stars: "--color-stars",
   onStars: "--color-on-stars",
+  coinHi: "--color-coin-hi",
+  coin: "--color-coin",
+  coinLo: "--color-coin-lo",
+  gemHi: "--color-gem-hi",
+  gemLight: "--color-gem-light",
+  gem: "--color-gem",
+  gemLo: "--color-gem-lo",
 };
 
 /** Цвета площадки: шапка, фон и нижняя панель Telegram — из наших токенов. */

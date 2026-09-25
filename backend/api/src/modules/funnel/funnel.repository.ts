@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
+import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { PRISMA } from "../../infra/database.js";
 
 /**
@@ -9,9 +10,6 @@ import { PRISMA } from "../../infra/database.js";
  * Выражения `SET` видят строку до обновления — на этом держатся счётчик
  * забегов и возвраты по суткам.
  */
-
-/** Граница суток — по Москве, как у всех суточных механик (`05-game-design.md` §3). */
-export const FUNNEL_TIME_ZONE = "Europe/Moscow";
 
 export const FUNNEL_REPOSITORY = Symbol("FUNNEL_REPOSITORY");
 
@@ -48,11 +46,11 @@ export class PrismaFunnelRepository implements FunnelRepository {
         app_opened_at = COALESCE(account_funnel.app_opened_at, EXCLUDED.app_opened_at),
         returned_d1_at = COALESCE(account_funnel.returned_d1_at, CASE
           WHEN account_funnel.app_opened_at IS NOT NULL
-            AND (EXCLUDED.app_opened_at AT TIME ZONE ${FUNNEL_TIME_ZONE})::date >= (account_funnel.app_opened_at AT TIME ZONE ${FUNNEL_TIME_ZONE})::date + 1
+            AND (EXCLUDED.app_opened_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date >= (account_funnel.app_opened_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date + 1
           THEN EXCLUDED.app_opened_at END),
         returned_d7_at = COALESCE(account_funnel.returned_d7_at, CASE
           WHEN account_funnel.app_opened_at IS NOT NULL
-            AND (EXCLUDED.app_opened_at AT TIME ZONE ${FUNNEL_TIME_ZONE})::date >= (account_funnel.app_opened_at AT TIME ZONE ${FUNNEL_TIME_ZONE})::date + 7
+            AND (EXCLUDED.app_opened_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date >= (account_funnel.app_opened_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date + 7
           THEN EXCLUDED.app_opened_at END)
     `;
   }
