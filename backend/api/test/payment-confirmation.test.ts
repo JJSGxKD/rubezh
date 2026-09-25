@@ -230,7 +230,7 @@ describe("очередь оплаты", () => {
       confirm: async (payment: ConfirmedPayment) => {
         if (failing) throw new Error("база недоступна");
         confirmed.push(payment.chargeId);
-        return { kind: "paid" };
+        return { kind: "paid", purchase: pending({ status: "paid", telegramChargeId: payment.chargeId }), runFinished: false };
       },
     } as unknown as PaymentConfirmation;
     // Очередь не поднята — как при недоступном Redis.

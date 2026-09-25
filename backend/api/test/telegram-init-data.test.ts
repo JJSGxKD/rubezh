@@ -49,6 +49,16 @@ describe("проверка initData", () => {
     expect(verifyInitData(old, BOT_TOKEN, 86_400, NOW)).toEqual({ ok: false, reason: "expired" });
   });
 
+  it("пускает дату из будущего только в пределах расхождения часов", () => {
+    const nowSec = Math.floor(NOW / 1000);
+    // Часы телефона спешат на пару минут — это не подделка.
+    const ahead = launch({ auth_date: String(nowSec + 120) });
+    expect(verifyInitData(ahead, BOT_TOKEN, 3_600, NOW)).toMatchObject({ ok: true });
+    // Дата на час вперёд продлила бы окно свежести на тот же час.
+    const future = launch({ auth_date: String(nowSec + 3_600) });
+    expect(verifyInitData(future, BOT_TOKEN, 3_600, NOW)).toEqual({ ok: false, reason: "expired" });
+  });
+
   it("отвергает данные без подписи и без пользователя", () => {
     expect(verifyInitData("auth_date=1&user=%7B%7D", BOT_TOKEN, 86_400, NOW)).toEqual({
       ok: false,
