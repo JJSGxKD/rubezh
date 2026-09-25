@@ -5,6 +5,9 @@
       "path": "packages/shared-types"
     },
     {
+      "path": "packages/fx"
+    },
+    {
       "path": "packages/core-game"
     },
     {

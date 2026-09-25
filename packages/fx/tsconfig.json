@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Первый пакет, который бэкенд берёт собранным: собранный бэкенд не
+    // импортирует исходники пакетов (docs/34-stage3-plan.md, Р6). Поэтому
+    // ESM с NodeNext, как у бэкенда, и без DOM — ядро живёт и в сервисе.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    // Рантайм — Node: бэкенд и будущий сервис курсов. Из его типов нужны
+    // только глобальные `fetch` и `AbortSignal` адаптеров источников.
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

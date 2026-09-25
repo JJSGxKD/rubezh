@@ -149,6 +149,10 @@
 | Кошелёк: что дают обмены — покупка только самоцветы, разбор только осколки | `backend/api/src/modules/wallet/wallet-limits.ts` → `EXCHANGE_RESOURCES` | участник 1 |
 | Кошелёк: потолок одной операции и лимиты частоты чтения и ручных операций | `backend/api/src/modules/wallet/wallet-limits.ts` → `WALLET_MAX_OPERATION`, `WALLET_LIMITS` | участник 1 |
 | Кошелёк: источники начислений и трат — список причин журнала | `backend/api/src/modules/wallet/wallet-types.ts` → `EARN_REASONS`, `EXCHANGE_REASONS`, `SPEND_REASONS` | участник 1 |
+| Курсы: валюты модуля — код, вид (фиат, крипта, валюта площадки), разрядность, прежние названия | `packages/fx/src/currencies.ts` → `CURRENCIES` | участник 1 |
+| Курсы: приём котировок — возраст котировки, порог скачка без подтверждения вторым источником, согласие источников | `packages/fx/src/policy.ts` → `ACCEPT_POLICY` | участник 1 |
+| Курсы: свежесть — когда курс устарел (алерт) и сколько по нему ещё можно продавать | `packages/fx/src/policy.ts` → `FRESHNESS_POLICY` | участник 1 |
+| Курсы: пауза источника после отказа по лимиту без `Retry-After` | `packages/fx/src/budget.ts` → `RATE_LIMIT_PAUSE_MS` | участник 1 |
 | Граница игровых суток — Москва, одна на все суточные механики: возвраты D1 и D7 воронки, суточные потолки кошелька, дальше задания и награда дня (`05-game-design.md` §3) | `backend/api/src/common/game-day.ts` → `GAME_DAY_TIME_ZONE` | участник 1 |
 | Приветствие по `/start`: тексты на двух языках, какие языки читают по-русски | `backend/api/src/platforms/telegram/welcome-texts.ts` → `WELCOME_TEXTS`, `RUSSIAN_READERS` | участник 1 |
 | Карточка приветствия: раскладка, длина имени, версия шаблона для кэша | `backend/api/src/platforms/telegram/welcome-card.ts` → `CARD_VERSION` (поднять при любой правке вида), `NAME_MAX` | участник 1 |
