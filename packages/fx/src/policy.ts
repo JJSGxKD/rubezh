@@ -19,6 +19,12 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+/** Срок одного запроса к источнику: ответ курсов — килобайты, дольше десяти секунд — уже сбой. */
+export const SOURCE_TIMEOUT_MS = 10_000;
+
+/** Неизменный курс пишется в историю не чаще раза в час (`refresh.ts`). */
+export const HISTORY_REPEAT_MS = HOUR;
+
 export const ACCEPT_POLICY: Record<Exclude<CurrencyKind, "platform">, AcceptPolicy> = {
   fiat: { maxQuoteAgeMs: 7 * DAY, maxClockSkewMs: DAY, jumpThreshold: new Decimal("0.05"), agreement: new Decimal("0.01") },
   crypto: { maxQuoteAgeMs: 30 * MINUTE, maxClockSkewMs: 5 * MINUTE, jumpThreshold: new Decimal("0.15"), agreement: new Decimal("0.03") },
