@@ -182,6 +182,8 @@ model Account {
   requestsReceived FriendRequest[] @relation("friend_request_to")
   giftsSent        FriendGift[]    @relation("friend_gift_from")
   giftsReceived    FriendGift[]    @relation("friend_gift_to")
+  referredBy       ReferralBinding? @relation("referral_referred")
+  referrals        ReferralBinding[] @relation("referral_referrer")
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -832,5 +834,35 @@ model FriendGift {
   @@id([fromAccountId, toAccountId, day])
   @@index([toAccountId, claimedAt])
   @@map("friend_gift")
+}
+
+// Рефералка (WP14, docs/23-referral-and-partner-program.md §2). Засчитывается
+// не регистрация, а активация: награда за регистрацию оплачивала бы пустые
+// аккаунты.
+enum ReferralStatus {
+  /// привязан, ждёт активации
+  bound
+  /// сыграл нужное — награда пригласившему начислена
+  activated
+  /// привязка отклонена антифродом; строка остаётся — привязка одна и навсегда
+  rejected
+}
+
+// Привязка одна и навсегда: ключ — приглашённый. Отклонённая тоже остаётся,
+// иначе её переприсвоили бы следующей ссылкой.
+model ReferralBinding {
+  referredId   String         @id @map("referred_account_id") @db.Uuid
+  referrerId   String         @map("referrer_account_id") @db.Uuid
+  status       ReferralStatus @default(bound)
+  boundAt      DateTime       @default(now()) @map("bound_at") @db.Timestamptz(3)
+  activatedAt  DateTime?      @map("activated_at") @db.Timestamptz(3)
+  /// почему отклонена: `same_network`
+  rejectReason String?        @map("reject_reason") @db.VarChar(32)
+
+  referred Account @relation("referral_referred", fields: [referredId], references: [accountId], onDelete: Cascade)
+  referrer Account @relation("referral_referrer", fields: [referrerId], references: [accountId], onDelete: Cascade)
+
+  @@index([referrerId, activatedAt])
+  @@map("referral_binding")
 }
 

@@ -40,6 +40,9 @@ class MemorySessions implements SessionsRepository {
   async acquisition(): Promise<AcquisitionView | null> {
     return null;
   }
+  async recentIpPrefixes(): Promise<string[]> {
+    return [];
+  }
 }
 
 /** Окно дедупликации в памяти — со смыслом ключа Redis: тот же аккаунт и параметр. */

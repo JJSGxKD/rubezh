@@ -44,6 +44,12 @@ export interface SessionsRepository {
   /** Записать сессию и пересчитать касания. Повтор той же сессии — не ошибка. */
   record(session: SessionRecord): Promise<"recorded" | "duplicate">;
   acquisition(accountId: string): Promise<AcquisitionView | null>;
+  /**
+   * Подсети последних сессий аккаунта, свежие первыми, без повторов. Нужны
+   * антифроду рефералки: новичок из той же подсети, что пригласивший, — это
+   * скорее тот же человек (docs/23-referral-and-partner-program.md §2.4).
+   */
+  recentIpPrefixes(accountId: string, limit: number): Promise<string[]>;
 }
 
 @Injectable()
@@ -126,5 +132,15 @@ export class PrismaSessionsRepository implements SessionsRepository {
         lastStartRef: true,
       },
     });
+  }
+
+  async recentIpPrefixes(accountId: string, limit: number): Promise<string[]> {
+    const rows = await this.prisma.accountSession.findMany({
+      where: { accountId, ipPrefix: { not: null } },
+      select: { ipPrefix: true },
+      orderBy: { startedAt: "desc" },
+      take: limit,
+    });
+    return [...new Set(rows.map((row) => row.ipPrefix).filter((prefix): prefix is string => prefix !== null))];
   }
 }

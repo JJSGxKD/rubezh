@@ -230,6 +230,10 @@ WP3). `currency_earned` и `currency_spent`, которые план стави�
 (`source`: `link` или `request`, `created_at`); виральность ссылки — это
 `friendship` с `source = link` против `account_session` с
 `start_kind = friend`. Вид запуска `friend` уже приходит в `session_started`.
+`referral_bound` и `referral_activated` тоже **отложены** — их порождает
+сервер: привязка, её статус (`bound`, `activated`, `rejected` с причиной) и
+время активации лежат в `referral_binding`, награды — в `wallet_entry` с
+причиной `referral_reward`. K-фактор считается по этой таблице.
 `friend_gift_sent` отложено так же: подарок — строка `friend_gift` с сутками
 и временем, когда забран, а монеты — `wallet_entry` с причиной `friend_gift`.
 

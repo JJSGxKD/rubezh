@@ -28,6 +28,7 @@ import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 import { AdminModule } from "./modules/admin/admin.module.js";
 import { FriendsModule } from "./modules/friends/friends.module.js";
+import { ReferralsModule } from "./modules/referrals/referrals.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -79,6 +80,7 @@ export const APP_MODULES = [
   PlaytestModule,
   AdminModule,
   FriendsModule,
+  ReferralsModule,
 ];
 
 /**
