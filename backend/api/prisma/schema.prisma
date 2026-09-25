@@ -153,6 +153,7 @@ model Account {
   purchases   Purchase[]
   sessions    AccountSession[]
   acquisition Acquisition?
+  funnel      AccountFunnel?
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -483,4 +484,35 @@ model Acquisition {
   // Когорты по источнику первого касания.
   @@index([firstStartKind, firstAt])
   @@map("acquisition")
+}
+
+// Воронка аккаунта (docs/35-stage4-plan.md, Р30, §3.10): у каждой вехи —
+// дата первого раза. Вехи ставятся одним UPDATE с COALESCE из слушателей
+// входа, забегов и оплаты, поэтому повторное событие ничего не двигает, а
+// воронка по источнику — это count(веха) рядом с первым касанием.
+//
+// Строка — не история, а отметки: подробности времени и разрезов — в
+// сессиях (`account_session`) и событиях аналитики.
+model AccountFunnel {
+  accountId          String    @id @map("account_id") @db.Uuid
+  /// вошёл в канал площадки: бот, сообщество, страница
+  enteredAt          DateTime? @map("entered_at") @db.Timestamptz(3)
+  /// открыл приложение и вошёл — полная регистрация
+  appOpenedAt        DateTime? @map("app_opened_at") @db.Timestamptz(3)
+  firstRunStartedAt  DateTime? @map("first_run_started_at") @db.Timestamptz(3)
+  firstRunFinishedAt DateTime? @map("first_run_finished_at") @db.Timestamptz(3)
+  /// сколько забегов записано — счётчик для вех «второй» и «пятый»
+  runsRecorded       Int       @default(0) @map("runs_recorded")
+  runs2At            DateTime? @map("runs_2_at") @db.Timestamptz(3)
+  runs5At            DateTime? @map("runs_5_at") @db.Timestamptz(3)
+  /// первый запуск приложения в сутки после первого открытия и позже — по Москве
+  returnedD1At       DateTime? @map("returned_d1_at") @db.Timestamptz(3)
+  /// первый запуск на седьмые сутки после первого открытия и позже
+  returnedD7At       DateTime? @map("returned_d7_at") @db.Timestamptz(3)
+  /// первая настоящая оплата, тестовая не считается
+  firstPurchaseAt    DateTime? @map("first_purchase_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("account_funnel")
 }

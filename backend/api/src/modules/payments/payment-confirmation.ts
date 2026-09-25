@@ -5,6 +5,7 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { answerOf, decideCheckout, refuse, type CheckoutDecision, type PreCheckout } from "./checkout-answer.js";
+import { PaymentsHooks } from "./payments-hooks.js";
 import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository } from "./purchases.repository.js";
 
 /**
@@ -46,6 +47,8 @@ export class PaymentConfirmation {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(PURCHASES_REPOSITORY) private readonly purchases: PurchasesRepository,
     private readonly providers: PaymentProviders,
+    // Слушатели нужны модулю, а не каждому тесту подтверждения: без них — пустой список.
+    private readonly hooks: PaymentsHooks = new PaymentsHooks(),
   ) {}
 
   async answerCheckout(query: PreCheckout, nowMs = Date.now()): Promise<CheckoutDecision> {
@@ -77,6 +80,7 @@ export class PaymentConfirmation {
     switch (outcome.kind) {
       case "paid":
         this.log("log", "payment_confirmed", { ...fields, runId: outcome.purchase.runId, mode: outcome.purchase.mode });
+        void this.hooks.emitPaid({ purchaseId: outcome.purchase.purchaseId, accountId: outcome.purchase.accountId, mode: outcome.purchase.mode, at: new Date(nowMs) });
         break;
       case "duplicate":
         this.log("log", "payment_duplicate_update", fields);

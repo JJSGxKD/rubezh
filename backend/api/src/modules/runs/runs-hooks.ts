@@ -34,13 +34,49 @@ export interface RecordedRun {
 
 export type RunListener = (run: RecordedRun) => Promise<void>;
 
+/** Забег начался на сервере — впервые: повтор старта из очереди клиента слушателей не зовёт. */
+export interface StartedRun {
+  runId: string;
+  accountId: string;
+  /** по часам сервера */
+  at: Date;
+}
+
+export type StartListener = (run: StartedRun) => Promise<void>;
+
 @Injectable()
 export class RunsHooks {
   private readonly logger = new Logger("runs");
   private readonly listeners: { name: string; listener: RunListener }[] = [];
+  private readonly startListeners: { name: string; listener: StartListener }[] = [];
 
   onRecorded(name: string, listener: RunListener): void {
     this.listeners.push({ name, listener });
+  }
+
+  onStarted(name: string, listener: StartListener): void {
+    this.startListeners.push({ name, listener });
+  }
+
+  /** Как `emit`: после ответа игроку, упавший слушатель не мешает остальным. */
+  emitStarted(run: StartedRun): Promise<void> {
+    return Promise.all(
+      this.startListeners.map(async ({ name, listener }) => {
+        try {
+          await listener(run);
+        } catch (error: unknown) {
+          this.logger.error(
+            JSON.stringify({
+              module: "runs",
+              event: "start_listener_failed",
+              listener: name,
+              runId: run.runId,
+              reason: error instanceof Error ? error.message : "unknown",
+            }),
+          );
+        }
+      }),
+    ).then(() => undefined);
   }
 
   /**
