@@ -272,6 +272,19 @@ importers:
         specifier: 3.90.0
         version: 3.90.0
 
+  packages/fx:
+    dependencies:
+      zod:
+        specifier: 4.6.4
+        version: 4.6.4
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.2
+        version: 22.20.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   packages/shared-types: {}
 
 packages:

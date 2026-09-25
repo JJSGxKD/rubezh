@@ -1,0 +1,18 @@
+{
+  // Первый пакет монорепо, который собирается в JS для бэкенда
+  // (docs/35-stage4-plan.md §3.12): собранный бэкенд не импортирует исходники
+  // пакетов, поэтому у пакета настоящий dist, а не `main: src/index.ts`, как у
+  // клиентских пакетов. Раскладка модулей — та же, что у бэкенда: ESM,
+  // относительные импорты с расширением `.js`.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

@@ -25,6 +25,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@bh/shared-types": `${repoRoot}packages/shared-types/src/index.ts`,
+      // У @bh/fx настоящий dist для бэкенда; тестам сборка не нужна — они
+      // читают исходники, как и у остальных пакетов.
+      "@bh/fx": `${repoRoot}packages/fx/src/index.ts`,
     },
   },
 });
