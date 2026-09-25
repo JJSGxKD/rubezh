@@ -16,6 +16,7 @@ import { IngestModule } from "./modules/ingest/ingest.module.js";
 import { TelegramModule } from "./platforms/telegram/telegram.module.js";
 import { WelcomeModule } from "./modules/welcome/welcome.module.js";
 import { PaymentsModule } from "./modules/payments/payments.module.js";
+import { TelegramPaymentsModule } from "./platforms/telegram/telegram-payments.module.js";
 import { AttributionModule } from "./modules/attribution/attribution.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
@@ -36,7 +37,7 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * attribution — сессии, первое и последнее касание (там же, WP6).
  */
 @Module({
-  imports: [AppConfigModule, RedisModule, DatabaseModule, PlatformsModule, IngestModule, TelegramModule, RolesModule, AuthModule, AttributionModule, RunsModule, PaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
+  imports: [AppConfigModule, RedisModule, DatabaseModule, PlatformsModule, IngestModule, TelegramModule, RolesModule, AuthModule, AttributionModule, RunsModule, PaymentsModule, TelegramPaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
   controllers: [HealthController],
 })
 export class AppModule {}

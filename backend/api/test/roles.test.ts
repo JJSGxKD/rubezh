@@ -22,7 +22,7 @@ function config(patch: Record<string, string> = {}): AppConfig {
   return loadAppConfig({ NODE_ENV: "test", ADMIN_TELEGRAM_IDS: ADMIN_TELEGRAM_ID, ...patch } as NodeJS.ProcessEnv);
 }
 
-function account(platformUserId = "555", platform = "telegram"): AccountRef {
+function account(platformUserId = "555", platform: AccountRef["platform"] = "telegram"): AccountRef {
   return { accountId: randomUUID(), platform, platformUserId };
 }
 

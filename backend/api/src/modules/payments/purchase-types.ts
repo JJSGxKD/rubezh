@@ -27,14 +27,6 @@ export interface StoredPurchase {
 }
 
 /**
- * Платить и получать возврат может только настоящий Telegram ID — цифры. У
- * входа разработчика `dev-…`: звёзд у него нет.
- */
-export function isTelegramUserId(platformUserId: string): boolean {
-  return /^\d{1,20}$/.test(platformUserId);
-}
-
-/**
  * Продолжение выдано — если оплата была. Возврат его не отзывает: к моменту
  * возврата продолжение обычно давно потрачено (docs/34-stage3-plan.md, WP5,
  * п. 8).

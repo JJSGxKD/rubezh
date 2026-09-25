@@ -5,7 +5,7 @@ import { DisabledError, ValidationError } from "../../common/domain-error.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { CONTINUES_PER_RUN } from "../runs/run-rules.js";
 import { RUNS_REPOSITORY, type RunsRepository } from "../runs/runs.repository.js";
-import { TelegramApiError, TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
+import { PaymentProviders, PaymentProviderUnavailableError } from "../../platforms/ports/payment-provider.js";
 import { continuePrice } from "./continue-price.js";
 import type { ContinueRequest } from "./dto/payments.dto.js";
 import { continueInvoice } from "./invoice-text.js";
@@ -17,19 +17,21 @@ import {
   PurchaseNotFoundError,
   RunUnverifiedError,
 } from "./payments-errors.js";
-import { isGranted, isTelegramUserId, type PaymentMode, type PurchaseStatus, type StoredPurchase } from "./purchase-types.js";
+import { isGranted, type PaymentMode, type PurchaseStatus, type StoredPurchase } from "./purchase-types.js";
 import { PURCHASES_REPOSITORY, type PurchasesRepository } from "./purchases.repository.js";
 
 /**
- * Второй шанс за Telegram Stars (docs/34-stage3-plan.md, WP5): цена и счёт.
- * Подтверждение оплаты приходит обновлением бота — `payments-bot.handler.ts`.
+ * Второй шанс за деньги площадки (docs/34-stage3-plan.md, WP5): цена и счёт.
+ * Счёт выставляет способ оплаты площадки аккаунта (порт оплаты), подтверждение
+ * приносит её адаптер — у Telegram это обновление бота
+ * (`platforms/telegram/telegram-payments.handler.ts`).
  *
  * **Цену считает сервер** (Р5.1) — по секунде забега, которую сообщил
  * клиент, но не больше, чем прошло по часам сервера от начала забега
  * (Р5.2). Заявить меньше можно: итог забега потом приезжает с секундой
  * каждого продолжения, и недоплату ловит вердикт забега.
  *
- * **Право на продолжение выдаёт подтверждение от Telegram**, а не ответ
+ * **Право на продолжение выдаёт подтверждение от площадки**, а не ответ
  * `openInvoice` в клиенте (Р13): клиент только ждёт, пока покупка станет
  * оплаченной.
  */
@@ -63,8 +65,6 @@ export interface PurchaseView {
   mode: PaymentMode;
 }
 
-export type InvoiceBotApi = Pick<TelegramBotApi, "createInvoiceLink">;
-
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger("payments");
@@ -73,7 +73,7 @@ export class PaymentsService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(PURCHASES_REPOSITORY) private readonly purchases: PurchasesRepository,
     @Inject(RUNS_REPOSITORY) private readonly runs: Pick<RunsRepository, "find">,
-    @Inject(TELEGRAM_BOT_API) private readonly api: InvoiceBotApi,
+    private readonly providers: PaymentProviders,
   ) {}
 
   /** Сколько стоит продолжить — без записи и без обращения к Telegram: спрашивают на каждой смерти. */
@@ -100,7 +100,7 @@ export class PaymentsService {
     }
 
     const { purchase } = outcome;
-    const invoiceUrl = await this.invoiceLink(purchase);
+    const invoiceUrl = await this.invoiceLink(account, purchase);
     this.log("log", "invoice_created", {
       accountId: account.accountId,
       runId: purchase.runId,
@@ -130,7 +130,8 @@ export class PaymentsService {
 
   private async offer(account: AccountRef, request: ContinueRequest, nowMs: number): Promise<ContinueOffer> {
     this.assertEnabled();
-    if (account.platform !== "telegram" || !isTelegramUserId(account.platformUserId)) throw new PaymentsUnsupportedError();
+    const provider = this.providers.for(account.platform);
+    if (provider === null || !provider.accepts(account.platformUserId)) throw new PaymentsUnsupportedError();
     if (request.continueNo > CONTINUES_PER_RUN) throw new ContinueUnavailableError("Продолжения этого забега закончились");
 
     const run = await this.runs.find(request.runId);
@@ -158,11 +159,13 @@ export class PaymentsService {
     return { continueNo: request.continueNo, priceStars, chargedStars: mode === "test" ? 1 : priceStars, mode };
   }
 
-  private async invoiceLink(purchase: StoredPurchase): Promise<string> {
+  private async invoiceLink(account: AccountRef, purchase: StoredPurchase): Promise<string> {
+    const provider = this.providers.for(account.platform);
+    if (provider === null) throw new PaymentsUnsupportedError();
     try {
-      return await this.api.createInvoiceLink(continueInvoice(purchase));
+      return await provider.createInvoice(continueInvoice(purchase));
     } catch (error: unknown) {
-      if (!(error instanceof TelegramApiError)) throw error;
+      if (!(error instanceof PaymentProviderUnavailableError)) throw error;
       // Строка покупки остаётся ждать оплаты: повтор запроса выставит счёт на
       // неё же, а не заведёт вторую.
       this.log("warn", "invoice_failed", { purchaseId: purchase.purchaseId, reason: error.message });

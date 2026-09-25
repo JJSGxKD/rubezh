@@ -1,20 +1,23 @@
-import type { PreCheckoutAnswer } from "../../platforms/telegram/telegram-bot-api.js";
+import type { CheckoutAnswer } from "../../platforms/ports/payment-provider.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 import { INVOICE_TTL_SEC } from "./payments-limits.js";
 import type { CheckoutView } from "./purchases.repository.js";
 
 /**
  * Предварительная проверка оплаты (docs/34-stage3-plan.md, WP5, п. 6):
  * последняя точка, где можно отказаться от денег, а не возвращать их.
- * Функция чистая — покупка, запрос Telegram и часы приходят снаружи, —
+ * Функция чистая — покупка, запрос площадки и часы приходят снаружи, —
  * поэтому каждый отказ проверяется отдельно.
  *
- * Отказ Telegram показывает игроку текстом из ответа, поэтому текст — для
+ * Отказ площадка показывает игроку текстом из ответа, поэтому текст — для
  * игрока: что случилось и что делать, без внутренних подробностей.
  */
 
 export interface PreCheckout {
+  platform: PlatformId;
   queryId: string;
-  fromUserId: number;
+  /** кто платит — идентификатор на площадке */
+  payerId: string;
   currency: string;
   totalAmount: number;
   payload: string;
@@ -49,7 +52,7 @@ export function decideCheckout(view: CheckoutView | null, query: PreCheckout, no
   const { purchase } = view;
   // Счёт по пересланной ссылке оплачивает не тот, кому он выставлен: забег,
   // а значит и продолжение, — чужие.
-  if (String(query.fromUserId) !== view.platformUserId) return refuse("foreign_user");
+  if (query.payerId !== view.platformUserId) return refuse("foreign_user");
   if (purchase.status !== "pending") return refuse("already_paid");
   // Сумма — та, на которую выставлен последний счёт. Старая ссылка после
   // повторного счёта с другой ценой сюда не пройдёт.
@@ -59,7 +62,7 @@ export function decideCheckout(view: CheckoutView | null, query: PreCheckout, no
   return { ok: true };
 }
 
-export function answerOf(decision: CheckoutDecision): PreCheckoutAnswer {
+export function answerOf(decision: CheckoutDecision): CheckoutAnswer {
   return decision.ok ? { ok: true } : { ok: false, errorMessage: MESSAGES[decision.reason] };
 }
 

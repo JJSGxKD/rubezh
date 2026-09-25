@@ -4,13 +4,14 @@ import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { urgentFirst } from "../src/platforms/telegram/bot-poller.js";
 import { BotRouter } from "../src/platforms/telegram/bot-router.js";
 import { decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
-import { PaymentConfirmation, type ConfirmationBotApi, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
-import { PaymentsBotHandler } from "../src/modules/payments/payments-bot.handler.js";
-import { PaymentRefunds, type RefundBotApi } from "../src/modules/payments/payment-refunds.js";
+import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
+import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
-import { ALLOWED_UPDATES, TelegramApiError, updateSchema, type PreCheckoutAnswer, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
+import { ALLOWED_UPDATES, TelegramApiError, updateSchema, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
+import { TelegramPaymentsHandler } from "../src/platforms/telegram/telegram-payments.handler.js";
+import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 
@@ -50,23 +51,7 @@ function pending(patch: Partial<StoredPurchase> = {}): StoredPurchase {
 }
 
 function query(purchase: StoredPurchase, patch: Partial<PreCheckout> = {}): PreCheckout {
-  return { queryId: "q-1", fromUserId: PLAYER_ID, currency: "XTR", totalAmount: purchase.chargedStars, payload: purchase.purchaseId, ...patch };
-}
-
-class FakeRefundApi implements RefundBotApi {
-  readonly refunded: { userId: number; chargeId: string }[] = [];
-  failWith: Error | null = null;
-  async refundStarPayment(userId: number, chargeId: string): Promise<void> {
-    if (this.failWith !== null) throw this.failWith;
-    this.refunded.push({ userId, chargeId });
-  }
-}
-
-class FakeCheckoutApi implements ConfirmationBotApi {
-  readonly answers: { queryId: string; answer: PreCheckoutAnswer }[] = [];
-  async answerPreCheckoutQuery(queryId: string, answer: PreCheckoutAnswer): Promise<void> {
-    this.answers.push({ queryId, answer });
-  }
+  return { platform: "telegram", queryId: "q-1", payerId: String(PLAYER_ID), currency: "XTR", totalAmount: purchase.chargedStars, payload: purchase.purchaseId, ...patch };
 }
 
 describe("предварительная проверка оплаты", () => {
@@ -80,7 +65,7 @@ describe("предварительная проверка оплаты", () => {
   it.each([
     ["оплата выключена", (p: StoredPurchase) => decideCheckout(view(p), query(p), NOW, false), "disabled"],
     ["счёта нет", (p: StoredPurchase) => decideCheckout(null, query(p), NOW, true), "unknown_invoice"],
-    ["счёт переслали другому игроку", (p: StoredPurchase) => decideCheckout(view(p), query(p, { fromUserId: 42 }), NOW, true), "foreign_user"],
+    ["счёт переслали другому игроку", (p: StoredPurchase) => decideCheckout(view(p), query(p, { payerId: "42" }), NOW, true), "foreign_user"],
     ["сумма не та, что в последнем счёте", (p: StoredPurchase) => decideCheckout(view(p), query(p, { totalAmount: 1 }), NOW, true), "price_mismatch"],
     ["валюта не звёзды", (p: StoredPurchase) => decideCheckout(view(p), query(p, { currency: "USD" }), NOW, true), "price_mismatch"],
     ["счёт старше получаса", (p: StoredPurchase) => decideCheckout(view(p), query(p), NOW + 30 * 60_000, true), "stale_invoice"],
@@ -97,18 +82,18 @@ describe("предварительная проверка оплаты", () => {
 
 describe("подтверждение оплаты", () => {
   let purchases: MemoryPurchasesRepository;
-  let api: FakeCheckoutApi;
+  let api: FakeStarsApi;
   let confirmation: PaymentConfirmation;
   let purchase: StoredPurchase;
 
   function payment(patch: Partial<ConfirmedPayment> = {}): ConfirmedPayment {
-    return { chargeId: "charge-1", payload: purchase.purchaseId, userId: PLAYER_ID, currency: "XTR", totalAmount: 3, ...patch };
+    return { platform: "telegram", chargeId: "charge-1", payload: purchase.purchaseId, payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3, ...patch };
   }
 
   beforeEach(() => {
     purchases = new MemoryPurchasesRepository();
-    api = new FakeCheckoutApi();
-    confirmation = new PaymentConfirmation(config(), purchases, api);
+    api = new FakeStarsApi();
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(api));
     purchase = pending();
     purchases.rows.set(purchase.purchaseId, purchase);
     purchases.owners.set(purchase.accountId, String(PLAYER_ID));
@@ -188,7 +173,7 @@ describe("обновления оплаты в боте", () => {
     } as unknown as PaymentConfirmation;
     const queue = { enabled: true, confirm: async (payment: ConfirmedPayment) => void confirmed.push(payment) } as unknown as PaymentsQueue;
     const router = new BotRouter();
-    const handler = new PaymentsBotHandler(router, confirmation, queue);
+    const handler = new TelegramPaymentsHandler(router, confirmation, queue);
     handler.onModuleInit();
     return { router, calls, confirmed };
   }
@@ -208,7 +193,7 @@ describe("обновления оплаты в боте", () => {
     await router.dispatch(privateMessage({ text: "/start" }));
 
     expect(calls).toEqual(["checkout:p-1", "refunded:charge-1"]);
-    expect(confirmed).toEqual([{ chargeId: "charge-1", payload: charge.invoice_payload, userId: PLAYER_ID, currency: "XTR", totalAmount: 3 }]);
+    expect(confirmed).toEqual([{ platform: "telegram", chargeId: "charge-1", payload: charge.invoice_payload, payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3 }]);
   });
 
   it("в пачке обновлений проверка оплаты идёт первой, остальные — по порядку", () => {
@@ -234,8 +219,8 @@ describe("очередь оплаты", () => {
       },
     } as unknown as PaymentConfirmation;
     // Очередь не поднята — как при недоступном Redis.
-    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(new MemoryPurchasesRepository(), new FakeRefundApi()), new RunsHooks());
-    const payment = { chargeId: "charge-1", payload: randomUUID(), userId: PLAYER_ID, currency: "XTR", totalAmount: 3 };
+    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(new MemoryPurchasesRepository(), starsProviders()), new RunsHooks(), starsProviders());
+    const payment: ConfirmedPayment = { platform: "telegram", chargeId: "charge-1", payload: randomUUID(), payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3 };
 
     await queue.confirm(payment);
     failing = true;
@@ -247,7 +232,7 @@ describe("очередь оплаты", () => {
 
 describe("возвраты звёзд", () => {
   let purchases: MemoryPurchasesRepository;
-  let refundApi: FakeRefundApi;
+  let refundApi: FakeStarsApi;
   let refunds: PaymentRefunds;
   let confirmation: PaymentConfirmation;
   let hooks: RunsHooks;
@@ -261,17 +246,17 @@ describe("возвраты звёзд", () => {
   }
 
   function payment(purchase: StoredPurchase, chargeId = "charge-1"): ConfirmedPayment {
-    return { chargeId, payload: purchase.purchaseId, userId: PLAYER_ID, currency: "XTR", totalAmount: purchase.chargedStars };
+    return { platform: "telegram", chargeId, payload: purchase.purchaseId, payerId: String(PLAYER_ID), currency: "XTR", totalAmount: purchase.chargedStars };
   }
 
   beforeEach(() => {
     purchases = new MemoryPurchasesRepository();
-    refundApi = new FakeRefundApi();
-    refunds = new PaymentRefunds(purchases, refundApi);
-    confirmation = new PaymentConfirmation(config(), purchases, new FakeCheckoutApi());
+    refundApi = new FakeStarsApi();
+    refunds = new PaymentRefunds(purchases, starsProviders(refundApi));
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(refundApi));
     hooks = new RunsHooks();
     // Очередь без Redis выполняет задания сразу — так видно всю цепочку.
-    queue = new PaymentsQueue(config(), confirmation, refunds, hooks);
+    queue = new PaymentsQueue(config(), confirmation, refunds, hooks, starsProviders(refundApi));
     queue.onModuleInit();
   });
 
@@ -343,7 +328,7 @@ describe("возвраты звёзд", () => {
     const purchase = purchaseIn("test", { status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
     const order = await purchases.requestRefund(purchase.purchaseId, "test_mode", new Date(NOW));
     if (order === null) throw new Error("возврат не заказан");
-    refundApi.failWith = new TelegramApiError("refundStarPayment", 400, "Bad Request: CHARGE_ALREADY_REFUNDED", null);
+    refundApi.refundFailWith = new TelegramApiError("refundStarPayment", 400, "Bad Request: CHARGE_ALREADY_REFUNDED", null);
 
     await expect(refunds.refund(order)).resolves.toBeUndefined();
     expect(purchases.rows.get(purchase.purchaseId)?.status).toBe("refunded");
@@ -354,9 +339,9 @@ describe("возвраты звёзд", () => {
     const order = await purchases.requestRefund(purchase.purchaseId, "test_mode", new Date(NOW));
     if (order === null) throw new Error("возврат не заказан");
 
-    refundApi.failWith = new TelegramApiError("refundStarPayment", 0, "сеть недоступна", null);
+    refundApi.refundFailWith = new TelegramApiError("refundStarPayment", 0, "сеть недоступна", null);
     await expect(refunds.refund(order)).rejects.toThrow(TelegramApiError);
-    refundApi.failWith = new TelegramApiError("refundStarPayment", 400, "Bad Request: CHARGE_NOT_FOUND", null);
+    refundApi.refundFailWith = new TelegramApiError("refundStarPayment", 400, "Bad Request: CHARGE_NOT_FOUND", null);
     await expect(refunds.refund(order)).rejects.toMatchObject({ name: "UnrecoverableError" });
 
     // Возврат не прошёл — заказ остаётся в базе, после перезапуска его поднимут.

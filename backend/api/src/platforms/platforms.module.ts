@@ -1,6 +1,9 @@
 import { Global, Module } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../config/app-config.js";
 import { LaunchVerifiers } from "./ports/launch-verifier.js";
+import { PaymentProviders } from "./ports/payment-provider.js";
+import { TELEGRAM_BOT_API, type TelegramBotApi } from "./telegram/telegram-bot-api.js";
+import { TelegramStarsProvider } from "./telegram/telegram-stars-provider.js";
 import { TelegramLaunchVerifier } from "./telegram/telegram-launch-verifier.js";
 import { UnsupportedLaunchVerifier } from "./unsupported.js";
 
@@ -18,9 +21,17 @@ export function launchVerifiersFor(config: AppConfig): LaunchVerifiers {
   ]);
 }
 
+/** Оплата: у Telegram — звёзды; у MAX и VK способов оплаты пока нет, и продажа там не предлагается. */
+export function paymentProvidersFor(config: AppConfig, telegramApi: TelegramBotApi): PaymentProviders {
+  return new PaymentProviders([new TelegramStarsProvider(telegramApi, config.telegram.updates !== "off")]);
+}
+
 @Global()
 @Module({
-  providers: [{ provide: LaunchVerifiers, inject: [APP_CONFIG], useFactory: launchVerifiersFor }],
-  exports: [LaunchVerifiers],
+  providers: [
+    { provide: LaunchVerifiers, inject: [APP_CONFIG], useFactory: launchVerifiersFor },
+    { provide: PaymentProviders, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: paymentProvidersFor },
+  ],
+  exports: [LaunchVerifiers, PaymentProviders],
 })
 export class PlatformsModule {}
