@@ -60,6 +60,9 @@ erDiagram
     ACCOUNT ||--o{ WALLET_DAILY : "начислено за сутки"
     ACCOUNT ||--o| ACCOUNT_PROGRESS : "уровень и опыт"
     ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
+    ACCOUNT ||--o| FRIEND_LINK : "ссылка дружбы"
+    ACCOUNT ||--o{ FRIENDSHIP : "дружит (обе стороны пары)"
+    ACCOUNT ||--o{ FRIEND_REQUEST : "заявки: от кого и кому"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -87,7 +90,7 @@ erDiagram
         uuid account_id FK
         enum platform
         enum place "miniapp|web|channel: channel — /start бота"
-        enum start_kind "organic|click|invite|telegram_affiliate|unknown"
+        enum start_kind "organic|click|invite|telegram_affiliate|friend|unknown"
         string start_param "nullable: из подписанного initData"
         string start_ref "nullable: код клика, id партнёра Telegram"
         string client_platform "nullable: подсказка клиента"
@@ -312,6 +315,25 @@ erDiagram
         datetime period_to
         datetime created_at
     }
+
+    FRIEND_LINK {
+        string code PK "случайный, ключ к строке — не данные"
+        uuid account_id FK,UK "одна ссылка на аккаунт, постоянная"
+        datetime created_at
+    }
+
+    FRIENDSHIP {
+        uuid account_a PK,FK "меньший идентификатор пары, CHECK a < b"
+        uuid account_b PK,FK
+        enum source "link|request"
+        datetime created_at
+    }
+
+    FRIEND_REQUEST {
+        uuid from_account_id PK,FK
+        uuid to_account_id PK,FK "CHECK: не самому себе"
+        datetime created_at "принятая или отклонённая — удаляется"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -386,6 +408,12 @@ erDiagram
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
+- **`FRIENDSHIP` — дружба, одна строка на пару** (`35-stage4-plan.md` §3.8,
+  WP14). Меньший идентификатор первым — это проверка базы, а не соглашение
+  кода: иначе одна дружба могла бы лечь двумя строками. Потолок друзей и
+  заявок проверяется в транзакции под блокировкой строк обоих аккаунтов.
+  Заявка живёт до ответа; история дружбы — в самой дружбе (`source`,
+  `created_at`). Всё уходит вместе с аккаунтом.
 
 ### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 
