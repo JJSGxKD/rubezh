@@ -34,6 +34,9 @@ export const PERMISSIONS = [
   "players.view",
   "players.pii.view",
   "players.ban",
+  // Ручное начисление и списание в кошельке игрока — только владельцу: право
+  // начислять валюту дороже любого другого права над игроками
+  "players.wallet.adjust",
   // Рассылки и каналы
   "broadcast.edit",
   "broadcast.send",
