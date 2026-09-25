@@ -280,7 +280,7 @@
   "settings.graphics.telegraphs": "Телеграфы угроз",
   "settings.graphics.telegraphs.hint": "Прицел стрелка, круг взрыва, полоса рывка — по ним видно, откуда сейчас прилетит",
   "settings.graphics.weaponEffects": "Эффекты оружия",
-  "settings.graphics.weaponEffects.hint": "Молния «Грозы», граница «Очага»",
+  "settings.graphics.weaponEffects.hint": "Молния «Грозы», граница «Очага», тон горящих и замёрзших",
   "settings.graphics.damageNumbers": "Числа урона",
   "settings.graphics.warning": "Отключение меняет ощущение от игры: телеграфы и эффекты не украшение, а способ прочитать бой. Снимайте их, только если устройство не тянет.",
   "settings.language": "Язык",
