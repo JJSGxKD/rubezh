@@ -35,9 +35,38 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * runs — забеги под аккаунтом и рейтинг на них (там же, WP4);
  * payments — второй шанс за Telegram Stars (там же, WP5);
  * attribution — сессии, первое и последнее касание (там же, WP6).
+ *
+ * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
+ */
+export const APP_MODULES = [
+  RedisModule,
+  DatabaseModule,
+  PlatformsModule,
+  IngestModule,
+  TelegramModule,
+  RolesModule,
+  AuthModule,
+  AttributionModule,
+  RunsModule,
+  PaymentsModule,
+  TelegramPaymentsModule,
+  BotModule,
+  EventsModule,
+  DiagnosticsModule,
+  FeedbackModule,
+  AdminNotifyModule,
+  ExportModule,
+  WelcomeModule,
+  PlaytestModule,
+];
+
+/**
+ * Приложение — это модули выше и конфигурация из окружения. Список вынесен,
+ * чтобы тест старта собирал то же приложение со своей конфигурацией, не
+ * читая `.env` разработчика (`test/app-boot.integration.test.ts`).
  */
 @Module({
-  imports: [AppConfigModule, RedisModule, DatabaseModule, PlatformsModule, IngestModule, TelegramModule, RolesModule, AuthModule, AttributionModule, RunsModule, PaymentsModule, TelegramPaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
+  imports: [AppConfigModule, ...APP_MODULES],
   controllers: [HealthController],
 })
 export class AppModule {}
