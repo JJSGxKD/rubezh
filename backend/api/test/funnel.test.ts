@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AuthHooks, type LoginEvent } from "../src/modules/auth/auth-hooks.js";
 import { FunnelTracker } from "../src/modules/funnel/funnel-tracker.js";
-import type { FunnelRepository } from "../src/modules/funnel/funnel.repository.js";
+import type { FunnelMilestones, FunnelRepository } from "../src/modules/funnel/funnel.repository.js";
 import { PaymentsHooks } from "../src/modules/payments/payments-hooks.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 
@@ -23,6 +23,12 @@ class MemoryFunnel implements FunnelRepository {
   }
   async runRecorded(accountId: string): Promise<void> {
     this.calls.push(`run_recorded:${accountId}`);
+  }
+  async milestones(): Promise<FunnelMilestones | null> {
+    return null;
+  }
+  async report(): Promise<[]> {
+    return [];
   }
   async firstPurchase(accountId: string): Promise<void> {
     this.calls.push(`purchase:${accountId}`);
