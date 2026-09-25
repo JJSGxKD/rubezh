@@ -10,8 +10,11 @@
  *   опрос реже сам, а не отказ `429` за неделю до конца;
  * - отказ по лимиту — пауза этого источника, а не ошибка модуля.
  *
- * **Платный ключ — настройкой, а не кодом.** У источника два тарифа; ключ в
- * окружении выбирает платный, и интервал уплотняется из его лимитов.
+ * **Ключ — настройкой, а не кодом.** Тариф выбирает фабрика адаптера по
+ * тому, какой ключ ей передали: у CoinGecko без ключа — общий лимит по
+ * адресу, с бесплатным демо-ключом — свой месячный, с платным — другой адрес
+ * и лимиты. Пары «бесплатный — платный» на всех не хватило бы. Интервал
+ * уплотняется из лимитов выбранного тарифа сам.
  */
 
 export interface Tariff {
@@ -24,12 +27,6 @@ export interface Tariff {
   minIntervalMs: number;
 }
 
-export interface SourceTariffs {
-  free: Tariff;
-  /** нет — у источника только бесплатный тариф */
-  paid?: Tariff;
-}
-
 export interface SourceUsage {
   /** `ГГГГ-ММ` по UTC — месяц, к которому относится `used` */
   month: string;
@@ -40,10 +37,6 @@ export interface SourceUsage {
 
 /** Пауза после отказа по лимиту, если источник не сказал `Retry-After`. */
 export const RATE_LIMIT_PAUSE_MS = 15 * 60_000;
-
-export function tariffFor(tariffs: SourceTariffs, hasKey: boolean): Tariff {
-  return hasKey && tariffs.paid !== undefined ? tariffs.paid : tariffs.free;
-}
 
 export function monthOf(at: Date): string {
   return at.toISOString().slice(0, 7);

@@ -1,19 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { RATE_LIMIT_PAUSE_MS, monthOf, nextPollDelayMs, pauseAfterRateLimit, recordPoll, tariffFor, type SourceTariffs, type SourceUsage } from "../src/budget.js";
+import { RATE_LIMIT_PAUSE_MS, monthOf, nextPollDelayMs, pauseAfterRateLimit, recordPoll, type SourceUsage, type Tariff } from "../src/budget.js";
 
 /**
  * Бюджет запросов (docs/35-stage4-plan.md, WP9, Р35): бесплатный тариф не
- * исчерпывается раньше конца месяца, `429` — пауза источника, а ключ в
- * окружении уплотняет опрос без правки кода.
+ * исчерпывается раньше конца месяца, `429` — пауза источника. Выбор тарифа
+ * по ключу — в тестах адаптеров.
  */
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-const TARIFFS: SourceTariffs = {
+const TARIFFS: Record<"free", Tariff> = {
   free: { name: "demo", perMinute: 30, perMonth: 10_000, minIntervalMs: MINUTE },
-  paid: { name: "pro", perMinute: 500, perMonth: 500_000, minIntervalMs: 10_000 },
 };
 
 const fresh = (month: string): SourceUsage => ({ month, used: 0, pausedUntil: null });
@@ -71,15 +70,5 @@ describe("бюджет запросов", () => {
     expect(nextPollDelayMs(TARIFFS.free, long, now)).toBe(2 * HOUR);
     // успешный опрос снимает паузу
     expect(recordPoll(long, new Date(now.getTime() + 2 * HOUR)).pausedUntil).toBeNull();
-  });
-
-  it("появился ключ — платный тариф и частый опрос, без правки кода", () => {
-    const now = new Date("2026-09-01T00:00:00Z");
-    const free = nextPollDelayMs(tariffFor(TARIFFS, false), fresh("2026-09"), now);
-    const paid = nextPollDelayMs(tariffFor(TARIFFS, true), fresh("2026-09"), now);
-    expect(tariffFor(TARIFFS, true).name).toBe("pro");
-    expect(paid).toBeLessThan(free);
-    // у источника без платного тарифа ключ ничего не меняет
-    expect(tariffFor({ free: TARIFFS.free }, true).name).toBe("demo");
   });
 });

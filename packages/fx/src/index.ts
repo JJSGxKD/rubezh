@@ -11,8 +11,6 @@ export {
   nextPollDelayMs,
   pauseAfterRateLimit,
   recordPoll,
-  tariffFor,
-  type SourceTariffs,
   type SourceUsage,
   type Tariff,
 } from "./budget.js";
