@@ -234,6 +234,12 @@ export interface World {
   events: SimEvents;
   /** переиспользуемый буфер под результаты запросов к сетке */
   queryBuffer: Int32Array;
+  /**
+   * Второй буфер — для перескока молнии (`sim/elements.ts`): его ищут
+   * посреди цикла оружия по `queryBuffer`, и общий буфер затёр бы цикл
+   * вызывающего.
+   */
+  chainBuffer: Int32Array;
   /** читы режима разработчика; у обычного забега — нейтральные значения */
   cheats: WorldCheats;
 }

@@ -124,9 +124,16 @@ describe("таймлайн записи", () => {
   });
 });
 
+/**
+ * Seed забега, который при круговании доживает до двух свёрток. Выбран по
+ * контенту: правка врагов или оружия может уронить игрока раньше — тогда
+ * тест скажет `died`, и seed подбирается заново, а не ослабляется проверка.
+ */
+const CIRCLING_SEED = 1235;
+
 describe("повтор забега по записи", () => {
   it("кругование вокруг толпы повторяется до свёртки мира", () => {
-    const recording = recordHeadlessRun({ seed: 1234, maxTicks: 2 * CHECKPOINT_TICKS + 30, steer: circling(150) });
+    const recording = recordHeadlessRun({ seed: CIRCLING_SEED, maxTicks: 2 * CHECKPOINT_TICKS + 30, steer: circling(150) });
     expect(recording.outcome).toBe("abandoned");
     expect(recording.checkpoints).toHaveLength(2);
     expect(recording.choices.length).toBeGreaterThan(0);
@@ -145,7 +152,7 @@ describe("повтор забега по записи", () => {
   });
 
   it("чужой ввод посреди забега — расхождение не раньше подмены и не позже минуты", () => {
-    const recording = recordHeadlessRun({ seed: 1234, maxTicks: 2 * CHECKPOINT_TICKS + 30, steer: circling(150) });
+    const recording = recordHeadlessRun({ seed: CIRCLING_SEED, maxTicks: 2 * CHECKPOINT_TICKS + 30, steer: circling(150) });
     const codes = Array.from(decodeInputLog(recording.input));
     for (let tick = 1000; tick < 1300; tick++) codes[tick] = codes[tick] === IDLE_CODE ? 0 : (codes[tick] + 128) % DIRECTION_CODES;
     const tampered: RunRecording = { ...recording, input: encode(codes) };
@@ -159,7 +166,7 @@ describe("повтор забега по записи", () => {
   });
 
   it("выбор, которого не было в предложении, — расхождение, а не молчаливый пропуск", () => {
-    const recording = recordHeadlessRun({ seed: 1234, maxTicks: CHECKPOINT_TICKS, steer: circling(150) });
+    const recording = recordHeadlessRun({ seed: CIRCLING_SEED, maxTicks: CHECKPOINT_TICKS, steer: circling(150) });
     const [tick] = recording.choices[0];
     const outcome = replayRecording({ ...recording, choices: [[tick, "not_an_option"], ...recording.choices.slice(1)] });
     expect(outcome.verdict).toBe("mismatch");

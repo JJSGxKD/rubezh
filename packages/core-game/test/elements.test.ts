@@ -5,6 +5,8 @@ import { damageEnemy } from "../src/game/sim/combat";
 import {
   BURN_DPS_SHARE,
   BURN_SEC,
+  CHAIN_RADIUS,
+  CHAIN_SHARE,
   ELEMENT_COLD,
   ELEMENT_FIRE,
   ELEMENT_LIGHTNING,
@@ -30,11 +32,12 @@ const DUMMY: EnemyDef = { id: "dummy", hp: 10_000, speed: 0.001, damage: 0, xp: 
 const SALAMANDER: EnemyDef = { id: "salamander", hp: 10_000, speed: 0.001, damage: 0, xp: 1, pattern: "swarm", resist: { fire: 0.5, cold: -0.5 } };
 const BOSS: EnemyDef = { id: "boss", hp: 100_000, speed: 0.001, damage: 0, xp: 1, pattern: "swarm", rank: "boss" };
 const WALKER: EnemyDef = { id: "walker", hp: 10_000, speed: 60, damage: 10, xp: 1, pattern: "swarm" };
+const INSULATED: EnemyDef = { id: "insulated", hp: 10_000, speed: 0.001, damage: 0, xp: 1, pattern: "swarm", resist: { lightning: 0.5 } };
 
 function setup(seed = 1): World {
   return createWorld({
     seed,
-    enemies: [DUMMY, SALAMANDER, BOSS, WALKER],
+    enemies: [DUMMY, SALAMANDER, BOSS, WALKER, INSULATED],
     weapons: [],
     config: { player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 10_000 } },
   });
@@ -184,6 +187,71 @@ describe("состояния", () => {
     expect(reused).toBe(enemy);
     expect(world.enemies.burnTimer[reused]).toBe(0);
     expect(world.enemies.poisonStacks[reused]).toBe(0);
+  });
+});
+
+describe("перескок молнии", () => {
+  /** Сетку строит шаг мира; в тесте без шага её перестраивают руками. */
+  function rebuildGrid(world: World): void {
+    const enemies = world.enemies;
+    world.enemyGrid.rebuild(world.player.x, world.player.y, enemies.x, enemies.y, enemies.alive, enemies.count);
+  }
+
+  function crowd(world: World) {
+    const reach = CHAIN_RADIUS * world.config.unitScale;
+    const target = place(world, "dummy", 300, 0);
+    const nearest = place(world, "dummy", 300 + reach * 0.2, 0);
+    const second = place(world, "dummy", 300, reach * 0.4);
+    const third = place(world, "dummy", 300 - reach * 0.7, 0);
+    const outside = place(world, "dummy", 300 + reach * 1.2, 0);
+    rebuildGrid(world);
+    return { target, nearest, second, third, outside };
+  }
+
+  it("удар по шокированному бьёт двух ближайших долей удара, остальных — нет", () => {
+    const world = setup();
+    const { target, nearest, second, third, outside } = crowd(world);
+    const hp = world.enemies.hp[nearest];
+    damageEnemy(world, target, 1, 0, ELEMENT_LIGHTNING, 1);
+    damageEnemy(world, target, 100, 0, ELEMENT_LIGHTNING);
+
+    expect(lost(world, nearest, hp)).toBeCloseTo(100 * CHAIN_SHARE, 5);
+    expect(lost(world, second, hp)).toBeCloseTo(100 * CHAIN_SHARE, 5);
+    expect(lost(world, third, hp)).toBe(0);
+    expect(lost(world, outside, hp)).toBe(0);
+  });
+
+  it("удар, который шок только наложил, и не-молния по шокированному не перескакивают", () => {
+    const world = setup();
+    const { target, nearest } = crowd(world);
+    const hp = world.enemies.hp[nearest];
+    damageEnemy(world, target, 100, 0, ELEMENT_LIGHTNING, 1);
+    damageEnemy(world, target, 100, 0, ELEMENT_FIRE);
+    damageEnemy(world, target, 100, 0, ELEMENT_PHYSICAL);
+    expect(lost(world, nearest, hp)).toBe(0);
+  });
+
+  it("перескок гасится стойкостью соседа к молнии", () => {
+    const world = setup();
+    const reach = CHAIN_RADIUS * world.config.unitScale;
+    const target = place(world, "dummy", 300, 0);
+    const insulated = place(world, "insulated", 300 + reach * 0.3, 0);
+    rebuildGrid(world);
+    const hp = world.enemies.hp[insulated];
+    damageEnemy(world, target, 1, 0, ELEMENT_LIGHTNING, 1);
+    damageEnemy(world, target, 100, 0, ELEMENT_LIGHTNING);
+    expect(lost(world, insulated, hp)).toBeCloseTo(100 * CHAIN_SHARE * 0.5, 5);
+  });
+
+  it("добивающий удар тоже перескакивает — от места, где стоял враг", () => {
+    const world = setup();
+    const { target, nearest } = crowd(world);
+    const hp = world.enemies.hp[nearest];
+    damageEnemy(world, target, 1, 0, ELEMENT_LIGHTNING, 1);
+    world.enemies.hp[target] = 1;
+    damageEnemy(world, target, 100, 0, ELEMENT_LIGHTNING);
+    expect(world.enemies.alive[target]).toBe(0);
+    expect(lost(world, nearest, hp)).toBeCloseTo(100 * CHAIN_SHARE, 5);
   });
 });
 

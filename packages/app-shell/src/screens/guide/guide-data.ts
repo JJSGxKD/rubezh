@@ -1,9 +1,11 @@
 import {
+  ELEMENTS,
   PASSIVE_CATEGORIES,
   type EnemyDef,
   type EnemyStageDef,
   type PassiveCategory,
   type PassiveDef,
+  type StatusElement,
   type UpgradeChange,
   type WeaponDef,
   type WeaponLevel,
@@ -89,12 +91,54 @@ export function weaponGrowth(weapon: WeaponDef): UpgradeChange[] {
     { key: "areaRadius", lowerIsBetter: false },
   ];
 
-  return fields.flatMap(({ key, lowerIsBetter }) => {
+  const growth = fields.flatMap(({ key, lowerIsBetter }) => {
     const from = first[key];
     const to = last[key];
     if (from === undefined || to === undefined || from === to) return [];
     return [{ labelKey: statLabelKey(weapon, key), from, to, format: "value" as const, lowerIsBetter }];
   });
+
+  // Шанс — в процентах и с глаголом стихии, как на карточке выбора в забеге.
+  const element = weaponElement(weapon);
+  const fromChance = first.statusChance;
+  const toChance = last.statusChance;
+  if (element !== null && fromChance !== undefined && toChance !== undefined && fromChance !== toChance) {
+    growth.push({
+      labelKey: `upgrade.stat.statusChance.${element}`,
+      from: Math.round(fromChance * 100),
+      to: Math.round(toChance * 100),
+      format: "value",
+      lowerIsBetter: false,
+    });
+  }
+  return growth;
+}
+
+/** Стихия оружия; физическое — `null`: ему нечего показывать. */
+export function weaponElement(weapon: WeaponDef): StatusElement | null {
+  return weapon.element === undefined || weapon.element === "physical" ? null : weapon.element;
+}
+
+/**
+ * Стихии, которые есть у оружия в контенте, — в порядке перечня. Состояние
+ * стихии без оружия гайдбук не описывает: игроку его не наложить.
+ */
+export function weaponElements(): StatusElement[] {
+  const used = new Set(WEAPONS.map(weaponElement));
+  return ELEMENTS.filter((element): element is StatusElement => element !== "physical" && used.has(element));
+}
+
+/** Какие стихии берут врага хуже (`strong`) и какие лучше (`weak`) — в порядке перечня. */
+export function enemyResists(def: EnemyDef): { strong: StatusElement[]; weak: StatusElement[] } {
+  const strong: StatusElement[] = [];
+  const weak: StatusElement[] = [];
+  for (const element of ELEMENTS) {
+    if (element === "physical") continue;
+    const value = def.resist?.[element] ?? 0;
+    if (value > 0) strong.push(element);
+    else if (value < 0) weak.push(element);
+  }
+  return { strong, weak };
 }
 
 /** Подпись поля — с уточнением поведения там, где у поля другой смысл. */

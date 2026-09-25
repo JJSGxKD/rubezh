@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Crosshair, History, Hourglass, Lightbulb, Shuffle, Swords } from "lucide-react";
+import { Crosshair, Flame, History, Hourglass, Lightbulb, Shuffle, Swords } from "lucide-react";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
 import { DIFFICULTIES, DROPS, LOADOUT_LIMITS } from "@bh/core-game";
@@ -25,9 +25,11 @@ import {
   speedClass,
   startingWeapons,
   unlockableWeapons,
+  weaponElement,
   weaponGrowth,
   type GuideEnemy,
 } from "./guide-data";
+import { ElementList, ElementTag, ResistLine } from "./elements";
 import { EnemyScene, GemRow, PickupIcon, StageMark, WeaponScene } from "./scenes";
 
 /**
@@ -142,7 +144,11 @@ function Basics(): ReactNode {
         </div>
       </Topic>
 
-      <Topic index={6} icon={<Swords size={20} />} title={t("guide.basics.difficulty.title")} text={t("guide.basics.difficulty.text")}>
+      <Topic index={6} icon={<Flame size={20} />} title={t("guide.basics.elements.title")} text={t("guide.basics.elements.text")}>
+        <ElementList />
+      </Topic>
+
+      <Topic index={7} icon={<Swords size={20} />} title={t("guide.basics.difficulty.title")} text={t("guide.basics.difficulty.text")}>
         <ul className="grid gap-2">
           {DIFFICULTIES.map((difficulty) => (
             <li key={difficulty.id} className="surface-sunken rounded-md px-3 py-2">
@@ -161,9 +167,9 @@ function Basics(): ReactNode {
         </ul>
       </Topic>
 
-      <Topic index={7} icon={<History size={20} />} title={t("guide.basics.save.title")} text={t("guide.basics.save.text")} />
+      <Topic index={8} icon={<History size={20} />} title={t("guide.basics.save.title")} text={t("guide.basics.save.text")} />
 
-      <Topic index={8} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
+      <Topic index={9} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
     </>
   );
 }
@@ -256,6 +262,7 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
             {t("guide.enemy.stats", { hp: def.hp, damage: def.damage, xp: def.xp })} ·{" "}
             {t(`guide.enemy.speed.${speedClass(def.speed)}`).toLowerCase()}
           </p>
+          <ResistLine def={def} />
           {children.length === 0 ? null : (
             <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
               <Shuffle size={12} aria-hidden="true" className="shrink-0" />
@@ -296,6 +303,7 @@ function Weapons(): ReactNode {
 function WeaponCard(props: { weapon: WeaponDef; index: number }): ReactNode {
   const { weapon } = props;
   const name = t(weapon.nameKey);
+  const element = weaponElement(weapon);
 
   return (
     <Card appearIndex={Math.min(props.index, 6)} stripe="weapon">
@@ -308,6 +316,7 @@ function WeaponCard(props: { weapon: WeaponDef; index: number }): ReactNode {
             </span>
             <h3 className="font-display text-base font-bold text-text">{name}</h3>
             {weapon.starting === true ? <Badge tone="weapon">{t("guide.weapon.starting")}</Badge> : null}
+            {element === null ? null : <ElementTag element={element} />}
           </div>
           <p className="mt-1 text-sm text-text-muted">{t(`guide.behavior.${weapon.behavior}`)}</p>
         </div>

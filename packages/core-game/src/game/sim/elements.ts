@@ -33,6 +33,15 @@ export const FREEZE_SEC = 1;
 /** Шок: насколько больше урона получает шокированный. */
 export const SHOCK_BONUS = 0.25;
 export const SHOCK_SEC = 4;
+/**
+ * Перескок молнии: удар молнией по уже шокированному врагу перескакивает на
+ * ближайших — вот зачем шок, кроме лишнего урона. Бьёт долей удара и не
+ * перескакивает дальше: цепь без конца выкосила бы толпу одним ударом.
+ */
+export const CHAIN_TARGETS = 2;
+export const CHAIN_RADIUS = 70;
+export const CHAIN_SHARE = 0.4;
+
 /** Отравление: доля урона попадания в секунду за слой, потолок слоёв и длительность. */
 export const POISON_DPS_SHARE = 0.08;
 export const POISON_MAX_STACKS = 10;
@@ -157,4 +166,44 @@ export function clearStatuses(world: World, index: number, noOwner: number): voi
   enemies.poisonStacks[index] = 0;
   enemies.poisonDps[index] = 0;
   enemies.poisonSlot[index] = noOwner;
+}
+
+/**
+ * Куда перескакивает молния: до `CHAIN_TARGETS` ближайших живых врагов в
+ * радиусе, кроме того, по кому ударили. Результат — индексы в `out`, число —
+ * возвращается. Два ближайших — простым проходом без сортировки: в радиусе
+ * их десятки, и сортировка на каждый удар молнии — лишняя работа.
+ * Порядок обхода задаёт сетка, поэтому выбор детерминирован.
+ */
+export function chainTargets(world: World, index: number, out: Int32Array): number {
+  const enemies = world.enemies;
+  const radius = CHAIN_RADIUS * world.config.unitScale;
+  const x = enemies.x[index];
+  const y = enemies.y[index];
+  const found = world.enemyGrid.queryInto(x, y, radius, world.chainBuffer);
+  let first = -1;
+  let second = -1;
+  let firstDistance = Infinity;
+  let secondDistance = Infinity;
+  for (let k = 0; k < found; k++) {
+    const other = world.chainBuffer[k];
+    if (other === index || enemies.alive[other] === 0) continue;
+    const dx = enemies.x[other] - x;
+    const dy = enemies.y[other] - y;
+    const distance = dx * dx + dy * dy;
+    if (distance > radius * radius) continue;
+    if (distance < firstDistance) {
+      second = first;
+      secondDistance = firstDistance;
+      first = other;
+      firstDistance = distance;
+    } else if (distance < secondDistance) {
+      second = other;
+      secondDistance = distance;
+    }
+  }
+  let count = 0;
+  if (first >= 0 && CHAIN_TARGETS > 0) out[count++] = first;
+  if (second >= 0 && CHAIN_TARGETS > 1) out[count++] = second;
+  return count;
 }

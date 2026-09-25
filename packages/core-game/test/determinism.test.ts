@@ -82,12 +82,12 @@ describe("симуляция", () => {
       immortalPlayer: true,
     });
 
-    // Эталон обновлён вместе с боссами: в смеси паттернов прогона появился
-    // кастующий, и порядок обращений к генератору сместился с первой же
-    // секунды.
-    expect(run.checksum).toBe(-584561969);
-    expect(run.world.stats.enemiesKilled).toBe(431);
-    expect(run.world.progression.level).toBe(18);
+    // Эталон обновлён вместе со стихиями в контенте: статусы тянут генератор
+    // на каждом попадании стихийного оружия, а перескок молнии добивает
+    // соседей, и мир расходится с первого удара.
+    expect(run.checksum).toBe(727189984);
+    expect(run.world.stats.enemiesKilled).toBe(552);
+    expect(run.world.progression.level).toBe(19);
   });
 
   it("расходится на другом seed — иначе seed ни на что не влияет", () => {

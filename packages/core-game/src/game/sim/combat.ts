@@ -2,7 +2,7 @@ import { isElite, onEnemyKilled } from "../patterns";
 import { dropGems } from "./gems";
 import { rollPickups } from "./pickups";
 import { stageOf } from "./stages";
-import { damageMultiplier, ELEMENT_PHYSICAL, tryApplyStatus } from "./elements";
+import { CHAIN_SHARE, chainTargets, damageMultiplier, ELEMENT_LIGHTNING, ELEMENT_PHYSICAL, tryApplyStatus } from "./elements";
 import { despawnEnemy, NO_OWNER_TYPE, type World } from "./world";
 
 /**
@@ -28,10 +28,25 @@ export function damageEnemy(
   statusChance = 0,
 ): void {
   if (world.enemies.alive[index] === 0 || amount <= 0) return;
+  // Шок проверяется до удара: перескакивает молния, которая пришла в уже
+  // шокированного, а не та, что шок только что наложила.
+  const chains = element === ELEMENT_LIGHTNING && world.enemies.shockTimer[index] > 0;
   const multiplied = amount * damageMultiplier(world, index, element);
   const applied = inflictDamage(world, index, multiplied, weaponSlot);
   if (world.enemies.alive[index] === 1) tryApplyStatus(world, index, element, statusChance, applied, weaponSlot);
+  if (!chains) return;
+
+  // Цели ищутся от места удара — и тогда, когда удар добил врага: его
+  // координаты в слоте ещё целы.
+  const count = chainTargets(world, index, chainScratch);
+  for (let k = 0; k < count; k++) {
+    const target = chainScratch[k] ?? -1;
+    inflictDamage(world, target, amount * CHAIN_SHARE * damageMultiplier(world, target, ELEMENT_LIGHTNING), weaponSlot);
+  }
 }
+
+/** Цели перескока — два индекса; массив на модуль, без аллокаций на удар. */
+const chainScratch = new Int32Array(2);
 
 /**
  * Урон без стихийных множителей — им бьют и попадания, и урон по времени:

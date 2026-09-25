@@ -289,6 +289,7 @@ export function createWorld(options: CreateWorldOptions): World {
     // молча отбрасываются. В игре это промахи снарядов сквозь врагов, в
     // замере — заниженная стоимость коллизий, то есть враньё в отчёте.
     queryBuffer: new Int32Array(maxEnemies),
+    chainBuffer: new Int32Array(maxEnemies),
     cheats: { ...NO_CHEATS },
   };
 }

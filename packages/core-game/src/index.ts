@@ -36,6 +36,8 @@ export {
   type ShapeKind,
   type ShapeLook,
 } from "./game/render/looks";
+// Цвета состояний — гайдбук красит стихию так же, как канва красит врага.
+export { ELEMENT_TONE, STATUS_TONE_COLORS } from "./game/render/status-tones";
 // Умолчания паттернов — гайдбук берёт из них то, что враг не задал сам.
 export { PATTERN_DEFAULTS } from "./game/patterns/enemy-types";
 

@@ -100,6 +100,7 @@
 | Порог «игрок стоит» для камеры | `game/render/run-camera.ts` → `IDLE_SPEED_RATIO` |
 | Формы и цвета врагов, кристаллов, подборов, персонажа и эффектов — на канве и в гайдбуке сразу | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `STAGE_LOOKS`, `WORLD_COLORS` |
 | Вспышка попадания, взрывы, плитка фона | `game/render/WorldRenderer.ts` → `HIT_FLASH_TICKS`, `BLAST_*`, `GROUND_TILE_UNITS` |
+| Тон состояния врага: цвета стихий на канве и в гайдбуке, пульс, порядок важности | `game/render/status-tones.ts` → `STATUS_TONE_COLORS`, `ELEMENT_TONE`, `STATUS_PULSE_*` |
 | Телеграфы угроз: за сколько до выстрела виден прицел стрелка, толщина полос | `game/render/telegraphs.ts` → `AIM_TELEGRAPH_SEC`, `LANE_WIDTH_UNITS`, `AIM_WIDTH_UNITS`; отсчёт взрыва и рывка берётся из `fuseSec` и `telegraphSec` врага |
 | Граница «Очага» и молния «Грозы»: вспышка, высота и изгиб молнии | `game/render/weapon-effects.ts` → `AURA_FLASH_TICKS`, `BOLT_LIFETIME_TICKS`, `BOLT_HEIGHT_UNITS`, `BOLT_JITTER_UNITS` |
 | Потолок шагов симуляции за кадр, частота снимков HUD | `game/MainScene.ts` → `MAX_STEPS_PER_FRAME`, `HUD_INTERVAL_MS` |
@@ -165,7 +166,7 @@
 | Награда за забег — утверждены как отправная точка (Р36): монеты и опыт за минуту и за убийства, множители сложности, потолки забега, минимум 30 секунд | `backend/api/src/modules/progress/progress-rules.ts` → `runReward`, `DIFFICULTY_REWARD_MUL`, `MAX_COINS_PER_RUN`, `MIN_REWARDED_SEC` | участник 1 |
 | Уровень аккаунта — утверждены как отправная точка (Р36): кривая опыта `150·(n−1)^1.6`, потолок уровня, награда за уровень | `backend/api/src/modules/progress/progress-rules.ts` → `xpForLevel`, `MAX_LEVEL`, `levelReward` | участник 1 |
 | Как часто экран итогов спрашивает награду, пока её считает очередь | `packages/app-shell/src/state/progress-api.ts` → `REWARD_POLL_DELAYS_MS` | участник 1 |
-| Стихии: сила и длительность состояний — горение, охлаждение и заморозка, шок, отравление; рабочие числа | `packages/core-game/src/game/sim/elements.ts` → `BURN_*`, `CHILL_*`, `FREEZE_*`, `SHOCK_*`, `POISON_*` | участник 1 |
+| Стихии: сила и длительность состояний — горение, охлаждение и заморозка, шок, отравление, перескок молнии по шокированным; рабочие числа | `packages/core-game/src/game/sim/elements.ts` → `BURN_*`, `CHILL_*`, `FREEZE_*`, `SHOCK_*`, `POISON_*`, `CHAIN_*` | участник 1 |
 | Стихии: коридор сопротивления врага в контенте — от −1 до 0,9 | `packages/core-game/src/game/sim/element-ids.ts` → `MIN_RESIST`, `MAX_RESIST` | участник 1 |
 | Стихии: сопротивления врагов, стихия и шанс состояния у оружия | `packages/core-game/src/content/enemies.ts` → `resist`, `content/weapons.ts` → `element`, `levels[].statusChance` | геймдизайнер |
 | Курсы: заданные курсы валют площадок — звезда игроку 1,72 ₽, выплата $0,013 (Р37), со сроком годности до 90 дней | база, `fx_manual_rate`; ставятся `pnpm --filter backend-api fx:manual` или `POST /api/v1/fx/admin/manual` | участник 1 |
