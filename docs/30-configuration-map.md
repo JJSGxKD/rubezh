@@ -159,6 +159,7 @@
 | Курсы: опрос источников включён — `FX_ENABLED`; ключи CoinGecko — `FX_COINGECKO_DEMO_KEY`, `FX_COINGECKO_PRO_KEY`, необязательные секреты | `.env`, схема — `backend/api/src/config/app-config.ts` | участник 1 |
 | Курсы: тик прохода, срок распределённого лока | `backend/api/src/modules/fx/fx.refresher.ts` → `TICK_MS`, `LOCK_TTL_MS` | участник 1 |
 | Курсы: окно тишины алертов в чат команды | `backend/api/src/modules/admin-notify/fx-alert-notifier.ts` → `QUIET_SEC` | участник 1 |
+| Цены: правило округления цены по валюте — звёзды целые, рубли на «…9» и «…99», доллары и евро на .99, Gram и USDT до сотых; всегда вверх | `packages/fx/src/pricing/rounding.ts` → `PRICE_ROUNDING` | участник 1 |
 | Граница игровых суток — Москва, одна на все суточные механики: возвраты D1 и D7 воронки, суточные потолки кошелька, дальше задания и награда дня (`05-game-design.md` §3) | `backend/api/src/common/game-day.ts` → `GAME_DAY_TIME_ZONE` | участник 1 |
 | Приветствие по `/start`: тексты на двух языках, какие языки читают по-русски | `backend/api/src/platforms/telegram/welcome-texts.ts` → `WELCOME_TEXTS`, `RUSSIAN_READERS` | участник 1 |
 | Карточка приветствия: раскладка, длина имени, версия шаблона для кэша | `backend/api/src/platforms/telegram/welcome-card.ts` → `CARD_VERSION` (поднять при любой правке вида), `NAME_MAX` | участник 1 |
