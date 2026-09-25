@@ -56,6 +56,7 @@ export class RunsService {
       startedAt: startedAtMs === null ? null : new Date(startedAtMs),
     });
     if (outcome === "foreign") throw new ValidationError("Некорректный забег");
+    if (outcome === "created") void this.hooks.emitStarted({ runId: start.runId, accountId: account.accountId, at: new Date(nowMs) });
     return { trusted: startedAtMs !== null };
   }
 

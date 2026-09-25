@@ -4,8 +4,8 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repo
 import { LEADERBOARD_STORE, type LeaderboardStore } from "../runs/leaderboard.store.js";
 import type { Difficulty } from "../runs/run-rules.js";
 import { RunsViewService } from "../runs/runs-view.service.js";
-import type { WelcomeProgress } from "../welcome/welcome-card.js";
-import { WelcomeProgressRegistry, type WelcomeProgressSource } from "../welcome/welcome.command.js";
+import type { WelcomeProgress } from "../../platforms/telegram/welcome-card.js";
+import { WelcomeProgressRegistry, type WelcomeProgressSource } from "../../platforms/telegram/welcome.command.js";
 
 /** Сложнее — выше: рекорд на «Сложной» говорит об игроке больше, чем на «Лёгкой». */
 const HARDEST_FIRST: readonly Difficulty[] = ["hard", "normal", "easy"];

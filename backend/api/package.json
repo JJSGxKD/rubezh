@@ -13,6 +13,7 @@
     "export": "node --import @swc-node/register/esm-register src/cli/closed-test-export.ts",
     "bot:webhook": "node --import @swc-node/register/esm-register src/cli/bot-webhook.ts",
     "runs:rebuild-leaderboard": "node --import @swc-node/register/esm-register src/cli/runs-rebuild-leaderboard.ts",
+    "funnel:report": "node --import @swc-node/register/esm-register src/cli/funnel-report.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy"

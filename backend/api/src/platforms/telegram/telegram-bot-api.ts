@@ -44,7 +44,11 @@ const PRE_CHECKOUT_TIMEOUT_MS = 5_000;
  * проверка оплаты. Подтверждение и возврат оплаты приходят сообщениями.
  * Остальное Telegram не шлёт вовсе.
  */
-export const ALLOWED_UPDATES = ["message", "callback_query", "pre_checkout_query"] as const;
+/**
+ * `my_chat_member` — игрок заблокировал или разблокировал бота: без него
+ * рассылка шла бы тем, кто нас уже не слушает (docs/35-stage4-plan.md, §3.10).
+ */
+export const ALLOWED_UPDATES = ["message", "callback_query", "pre_checkout_query", "my_chat_member"] as const;
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -110,6 +114,8 @@ export const updateSchema = z.object({
       from: userSchema.optional(),
       successful_payment: paymentSchema.optional(),
       refunded_payment: paymentSchema.optional(),
+      /** служебное: игрок разрешил боту писать ему — из Mini App (`requestWriteAccess`) или при входе */
+      write_access_allowed: z.object({}).optional(),
     })
     .optional(),
   callback_query: z
@@ -129,6 +135,15 @@ export const updateSchema = z.object({
       currency: z.string().max(16),
       total_amount: z.number().int(),
       invoice_payload: z.string().max(256),
+    })
+    .optional(),
+  /** статус бота в чате изменился: в личке `kicked` — игрок заблокировал бота, `member` — разблокировал */
+  my_chat_member: z
+    .object({
+      chat: chatSchema,
+      from: userSchema,
+      date: z.number().int(),
+      new_chat_member: z.object({ status: z.string().max(32) }),
     })
     .optional(),
 });

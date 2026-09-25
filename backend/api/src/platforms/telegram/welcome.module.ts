@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
-import { BotModule } from "../../platforms/telegram/bot.module.js";
+import { AuthModule } from "../../modules/auth/auth.module.js";
+import { BotModule } from "./bot.module.js";
 import { renderWelcomePng } from "./welcome-card.js";
 import {
   RedisWelcomeCardCache,
@@ -14,7 +15,7 @@ import {
  * подключает модуль с данными через `WelcomeProgressRegistry`.
  */
 @Module({
-  imports: [BotModule],
+  imports: [BotModule, AuthModule],
   providers: [
     StartCommand,
     WelcomeProgressRegistry,

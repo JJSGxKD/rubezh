@@ -14,10 +14,13 @@ import { EventsModule } from "./modules/events/events.module.js";
 import { ExportModule } from "./modules/export/export.module.js";
 import { IngestModule } from "./modules/ingest/ingest.module.js";
 import { TelegramModule } from "./platforms/telegram/telegram.module.js";
-import { WelcomeModule } from "./modules/welcome/welcome.module.js";
+import { WelcomeModule } from "./platforms/telegram/welcome.module.js";
 import { PaymentsModule } from "./modules/payments/payments.module.js";
 import { TelegramPaymentsModule } from "./platforms/telegram/telegram-payments.module.js";
 import { AttributionModule } from "./modules/attribution/attribution.module.js";
+import { FunnelModule } from "./modules/funnel/funnel.module.js";
+import { MessagingModule } from "./modules/messaging/messaging.module.js";
+import { TelegramMessagingModule } from "./platforms/telegram/telegram-messaging.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 
@@ -34,7 +37,9 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * roles — права, роли и журнал аудита (там же, WP2);
  * runs — забеги под аккаунтом и рейтинг на них (там же, WP4);
  * payments — второй шанс за Telegram Stars (там же, WP5);
- * attribution — сессии, первое и последнее касание (там же, WP6).
+ * attribution — сессии, первое и последнее касание (там же, WP6);
+ * funnel — вехи воронки аккаунта, messaging — можно ли писать игроку
+ * (docs/35-stage4-plan.md, WP2).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -47,6 +52,9 @@ export const APP_MODULES = [
   RolesModule,
   AuthModule,
   AttributionModule,
+  FunnelModule,
+  MessagingModule,
+  TelegramMessagingModule,
   RunsModule,
   PaymentsModule,
   TelegramPaymentsModule,

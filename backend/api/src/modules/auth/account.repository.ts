@@ -16,6 +16,14 @@ export interface AccountIdentity {
   photoUrl: string | null;
 }
 
+/**
+ * Что площадка сообщила об игроке при входе. Аватар бывает неизвестен: в
+ * обновлении бота его нет, а в подписи запуска Mini App есть. Неизвестный
+ * (`undefined`) не затирает сохранённый — иначе `/start` стирал бы аватар,
+ * полученный при входе в приложение.
+ */
+export type AccountArrival = Omit<AccountIdentity, "photoUrl"> & { photoUrl?: string | null };
+
 export interface Account extends AccountIdentity {
   accountId: string;
   createdAt: Date;
@@ -34,7 +42,7 @@ export interface AccountRepository {
    * входе: игрок сменил их в Telegram — мы показываем новые, а не те, что
    * запомнили при регистрации.
    */
-  upsert(identity: AccountIdentity, nowMs: number): Promise<Account>;
+  upsert(identity: AccountArrival, nowMs: number): Promise<Account>;
   byId(accountId: string): Promise<Account | null>;
   /** Найти по площадке и её идентификатору — так аккаунт ищут по Telegram ID */
   byPlatformUser(platform: AccountPlatform, platformUserId: string): Promise<Account | null>;
@@ -44,7 +52,7 @@ export interface AccountRepository {
 export class PrismaAccountRepository implements AccountRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
-  async upsert(identity: AccountIdentity, nowMs: number): Promise<Account> {
+  async upsert(identity: AccountArrival, nowMs: number): Promise<Account> {
     const now = new Date(nowMs);
     const key = { platform: identity.platform, platformUserId: identity.platformUserId };
 
@@ -56,7 +64,7 @@ export class PrismaAccountRepository implements AccountRepository {
       update: {
         displayName: identity.displayName,
         username: identity.username,
-        photoUrl: identity.photoUrl,
+        ...(identity.photoUrl === undefined ? {} : { photoUrl: identity.photoUrl }),
         lastSeenAt: now,
       },
     });

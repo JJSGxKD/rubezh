@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
+import { PaymentsHooks } from "./payments-hooks.js";
 import { PaymentConfirmation } from "./payment-confirmation.js";
 import { PaymentRefunds } from "./payment-refunds.js";
 import { PaymentsController } from "./payments.controller.js";
@@ -31,8 +32,9 @@ import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.rep
     PaymentRefunds,
     PaymentsQueue,
     PaymentsContinueLedger,
+    PaymentsHooks,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
   ],
-  exports: [PaymentConfirmation, PaymentsQueue],
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks],
 })
 export class PaymentsModule {}

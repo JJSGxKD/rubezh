@@ -11,14 +11,15 @@ import {
   welcomeCacheKey,
   type WelcomeCard,
   type WelcomeProgress,
-} from "../src/modules/welcome/welcome-card.js";
-import { languageOf } from "../src/modules/welcome/welcome-texts.js";
+} from "../src/platforms/telegram/welcome-card.js";
+import { languageOf } from "../src/platforms/telegram/welcome-texts.js";
 import {
   StartCommand,
   WelcomeProgressRegistry,
   type WelcomeBotApi,
   type WelcomeCardCache,
-} from "../src/modules/welcome/welcome.command.js";
+} from "../src/platforms/telegram/welcome.command.js";
+import type { AuthService, ChannelEntry } from "../src/modules/auth/auth.service.js";
 
 // Приветствие по /start (docs/28-diagnostics.md §6.1.2).
 
@@ -127,6 +128,14 @@ function setup(
   registry.source = { progress };
   const router = new BotRouter();
   const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: botUsername }; } });
+  const entries: ChannelEntry[] = [];
+  let entryFails = false;
+  const auth = {
+    async enterChannel(entry: ChannelEntry) {
+      if (entryFails) throw new Error("база недоступна");
+      entries.push(entry);
+    },
+  } as unknown as AuthService;
   const command = new StartCommand(
     config,
     router,
@@ -138,6 +147,7 @@ function setup(
       return Buffer.from(`png:${card.name}`);
     },
     identity,
+    auth,
   );
   const ready = identity.refresh();
   command.onModuleInit();
@@ -150,8 +160,48 @@ function setup(
     rejectCachedFiles: () => {
       rejectFileId = true;
     },
+    entries,
+    failEntries: () => {
+      entryFails = true;
+    },
   };
 }
+
+describe("/start — вход в канал", () => {
+  const AUTH = { AUTH_ENABLED: "true", JWT_ACCESS_SECRET: "a1".repeat(32), DATABASE_URL: "postgresql://unused" };
+
+  it("заводит аккаунт с параметром ссылки ещё до карточки", async () => {
+    const bot = setup(AUTH);
+    await bot.router.dispatch(start(7, { text: "/start c-promo2026" }));
+    expect(bot.entries).toEqual([{ platform: "telegram", platformUserId: "7", displayName: "Анна", username: null, startParam: "c-promo2026" }]);
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  it("без параметра — органика; повтор в окне тоже доходит: окно повтора — забота атрибуции", async () => {
+    const bot = setup(AUTH);
+    await bot.router.dispatch(start(7));
+    await bot.router.dispatch(start(7));
+    expect(bot.entries.map((entry) => entry.startParam)).toEqual([null, null]);
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  it("упавшая запись аккаунта не отменяет карточку", async () => {
+    const bot = setup(AUTH);
+    bot.failEntries();
+    await bot.router.dispatch(start(7));
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  it("без авторизации и в группе вход не зовётся", async () => {
+    const off = setup();
+    await off.router.dispatch(start(7));
+    expect(off.entries).toEqual([]);
+
+    const group = setup(AUTH);
+    await group.router.dispatch(start(9, { chat: "supergroup" }));
+    expect(group.entries).toEqual([]);
+  });
+});
 
 describe("/start в боте", () => {
   it("рисует карточку один раз: повторный /start того же игрока уходит по file_id", async () => {

@@ -53,6 +53,8 @@ erDiagram
     RUN ||--o{ PURCHASE : "продолжен за"
     ACCOUNT ||--o{ ACCOUNT_SESSION : "запускает игру"
     ACCOUNT ||--o| ACQUISITION : "пришёл через"
+    ACCOUNT ||--o| ACCOUNT_FUNNEL : "прошёл вехи"
+    ACCOUNT ||--o| ACCOUNT_MESSAGING : "можно ли писать"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -79,7 +81,7 @@ erDiagram
         uuid session_id PK
         uuid account_id FK
         enum platform
-        enum place "miniapp|web"
+        enum place "miniapp|web|channel: channel — /start бота"
         enum start_kind "organic|click|invite|telegram_affiliate|unknown"
         string start_param "nullable: из подписанного initData"
         string start_ref "nullable: код клика, id партнёра Telegram"
@@ -104,6 +106,27 @@ erDiagram
         enum last_start_kind "nullable"
         string last_start_param "nullable"
         string last_start_ref "nullable"
+    }
+
+    ACCOUNT_FUNNEL {
+        uuid account_id PK,FK
+        datetime entered_at "nullable: вошёл в канал площадки"
+        datetime app_opened_at "nullable: полная регистрация"
+        datetime first_run_started_at "nullable"
+        datetime first_run_finished_at "nullable"
+        int runs_recorded "счётчик для вех второго и пятого"
+        datetime runs_2_at "nullable"
+        datetime runs_5_at "nullable"
+        datetime returned_d1_at "nullable: по московским суткам"
+        datetime returned_d7_at "nullable"
+        datetime first_purchase_at "nullable: только настоящая оплата"
+    }
+
+    ACCOUNT_MESSAGING {
+        uuid account_id PK,FK
+        boolean can_message
+        enum reason "entered|write_access|blocked|unblocked"
+        datetime changed_at "побеждает более позднее событие"
     }
 
     PURCHASE {
@@ -214,6 +237,11 @@ erDiagram
   выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
   подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
   разбора.
+- **`ACCOUNT_FUNNEL` — вехи игрока, `ACCOUNT_MESSAGING` — можно ли ему писать**
+  (`35-stage4-plan.md`, WP2). Вехи ставят слушатели входа, забегов и оплаты
+  одной вставкой с `COALESCE`, поэтому таблица — отметки первого раза, а не
+  история: подробности времени — в сессиях. «Можно писать» меняют обновления
+  площадки, а не клиент, и более раннее событие не перебивает позднее.
 - **`ACCOUNT_SESSION` — запуск игры, `ACQUISITION` — откуда игрок пришёл**
   (`34-stage3-plan.md`, WP6). Сессия пишется из очереди, мимо ответа на
   вход, а повтор запуска в течение 30 секунд отсекает ключ в Redis — не
@@ -1313,6 +1341,39 @@ sequenceDiagram
     end
     TG-->>U: карточка с подписью на языке игрока
 ```
+
+### 4.16 Вход в бота, воронка и «можно писать» (этап 4, реализовано)
+
+`35-stage4-plan.md`, WP2. Кто нажал `/start`, тот уже наш: аккаунт заводится
+в канале площадки, до первого открытия игры.
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant TG as Telegram
+    participant S as platforms/telegram<br/>приветствие /start
+    participant A as auth
+    participant H as Слушатели входа<br/>attribution, funnel, messaging
+    participant DB as Postgres
+    participant M as platforms/telegram<br/>обновления о разрешении
+
+    U->>TG: t.me/<бот>?start=c-<код>
+    TG->>S: /start c-<код>
+    S->>A: enterChannel: имя, юзернейм, параметр
+    A->>DB: аккаунт — одна вставка, аватар не затирается
+    A--)H: вход с местом «канал» — без ожидания
+    H->>DB: сессия и касание (очередь sessions), веха entered, «можно писать»
+    S-->>U: карточка приветствия — даже если запись упала
+    Note over U,DB: позже — вход в игру, забеги, оплата
+    H->>DB: вехи: открыл игру, первый забег, второй, пятый, D1, D7, покупка
+    U->>TG: блокирует бота
+    TG->>M: my_chat_member: kicked
+    M->>DB: «писать нельзя» — если событие не старше записанного
+```
+
+Вехи — дата первого раза: одна вставка с `ON CONFLICT` и `COALESCE`, и
+повтор события ничего не двигает. Воронка — `count(веха)` рядом с первым
+касанием: `pnpm --filter backend-api funnel:report`.
 
 ### 4.15 Покупка второго шанса за Stars (этап 3, реализовано)
 

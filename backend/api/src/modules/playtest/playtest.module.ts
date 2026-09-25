@@ -3,7 +3,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { BotModule } from "../../platforms/telegram/bot.module.js";
 import { DiagnosticsModule } from "../diagnostics/diagnostics.module.js";
 import { RunsModule } from "../runs/runs.module.js";
-import { WelcomeModule } from "../welcome/welcome.module.js";
+import { WelcomeModule } from "../../platforms/telegram/welcome.module.js";
 import { PlaytestController } from "./playtest.controller.js";
 import { PlaytestService } from "./playtest.service.js";
 import { PlaytestRunsListener } from "./playtest-runs.listener.js";

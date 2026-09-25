@@ -7,7 +7,7 @@ import { LaunchVerifiers } from "../../platforms/ports/launch-verifier.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { ACCOUNT_REPOSITORY, type Account, type AccountRepository } from "./account.repository.js";
 import { secretKey, signAccessToken } from "./access-token.js";
-import { AuthHooks, PLAIN_LOGIN, type LoginContext } from "./auth-hooks.js";
+import { AuthHooks, PLAIN_LOGIN, type LoginContext, type LoginEvent } from "./auth-hooks.js";
 import { parseDevUser } from "./dev-login.js";
 import { REFRESH_STORE, type RefreshStore } from "./refresh.store.js";
 
@@ -34,6 +34,20 @@ export interface AuthTokens {
 
 export interface AuthResult extends AuthTokens {
   account: Account;
+}
+
+/**
+ * Вход в канал площадки до приложения (docs/35-stage4-plan.md, Р29): игрок
+ * нажал `/start` в боте. Подписи здесь нет, но и нужна она не для этого:
+ * обновление бота приходит от самой площадки, а не от клиента.
+ */
+export interface ChannelEntry {
+  platform: PlatformId;
+  platformUserId: string;
+  displayName: string;
+  username: string | null;
+  /** параметр ссылки на канал — `t.me/<бот>?start=<параметр>` */
+  startParam: string | null;
 }
 
 /** Вход с данными запуска: откуда открыли игру — клиенту для события сессии. */
@@ -117,6 +131,25 @@ export class AuthService {
     return { ...tokens, account, startParam };
   }
 
+  /**
+   * Игрок вошёл в канал площадки — нажал `/start` в боте. Аккаунт заводится
+   * сразу: он уже наш, его можно прогревать, и воронка начинается здесь, а не
+   * с первого открытия игры. Токенов нет — в приложение игрок войдёт сам, по
+   * подписи запуска. Аватара в обновлении бота нет, и сохранённый не
+   * затирается.
+   *
+   * Заблокированного не отмечаем: прогревать его незачем.
+   */
+  async enterChannel(entry: ChannelEntry, nowMs = Date.now()): Promise<Account> {
+    const account = await this.accounts.upsert(
+      { platform: entry.platform, platformUserId: entry.platformUserId, displayName: entry.displayName, username: entry.username },
+      nowMs,
+    );
+    if (account.bannedAt !== null) return account;
+    this.announce(account, "channel", parseStartParam(entry.startParam), PLAIN_LOGIN, nowMs);
+    return account;
+  }
+
   /** Продление сессии: старый токен гасится, выдаётся новая пара. */
   async refreshSession(refreshToken: string, nowMs = Date.now()): Promise<AuthResult> {
     const hash = hashToken(refreshToken);
@@ -159,7 +192,7 @@ export class AuthService {
    * Сообщить слушателям о входе — без ожидания: запись сессии и атрибуции
    * идёт после ответа игроку и не отменяет вход, если упала.
    */
-  private announce(account: Account, place: "miniapp" | "web", startParam: StartParam, context: LoginContext, nowMs: number): void {
+  private announce(account: Account, place: LoginEvent["place"], startParam: StartParam, context: LoginContext, nowMs: number): void {
     void this.hooks.emit({
       ...context,
       accountId: account.accountId,
