@@ -353,6 +353,18 @@ export const FEEDBACK_TEXT_MAX = 2000;
 
 export type EnemyRank = "elite" | "boss";
 
+/**
+ * Стихии урона (docs/35-stage4-plan.md, §3.3, Р24): четыре поверх
+ * физического. Новая стихия — строка здесь и одно состояние в
+ * `core-game/src/game/sim/elements.ts`, без правки остального.
+ */
+export const ELEMENTS = ["physical", "fire", "cold", "lightning", "poison"] as const;
+
+export type ElementId = (typeof ELEMENTS)[number];
+
+/** Стихии, у которых есть состояние и сопротивление, — всё, кроме физического. */
+export type StatusElement = Exclude<ElementId, "physical">;
+
 interface EnemyDefBase {
   id: string;
   hp: number;
@@ -384,6 +396,14 @@ interface EnemyDefBase {
    * минуту и в обычный поток не попадают.
    */
   rank?: EnemyRank;
+  /**
+   * Сопротивление стихиям — доля урона, которую враг гасит: 0.5 — вдвое
+   * меньше урона, −0.5 — в полтора раза больше. Не задано — ноль. Стихийное
+   * оружие должно быть ощутимо сильнее против уязвимого врага и слабее
+   * против стойкого: на этом держится сборка против конкретных врагов.
+   * Физическому сопротивления нет — его роль играет здоровье.
+   */
+  resist?: Partial<Record<StatusElement, number>>;
 }
 
 /**
@@ -582,6 +602,8 @@ export interface WeaponLevel {
   projectileSpeed?: number;
   /** время жизни снаряда или зоны */
   ttlSec?: number;
+  /** шанс наложить состояние своей стихии за попадание, от 0 до 1 */
+  statusChance?: number;
 }
 
 export interface WeaponDef {
@@ -593,6 +615,8 @@ export interface WeaponDef {
   starting?: boolean;
   /** вес в выборе улучшений; по умолчанию 1 */
   weight?: number;
+  /** стихия урона; не задана — физический */
+  element?: ElementId;
   /** уровни по порядку: levels[0] — первый уровень */
   levels: WeaponLevel[];
 }

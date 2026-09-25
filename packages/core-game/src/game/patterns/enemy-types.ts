@@ -1,4 +1,5 @@
-import type { EnemyDef, EnemyPattern, EnemyRank } from "@bh/shared-types";
+import { ELEMENTS, type EnemyDef, type EnemyPattern, type EnemyRank } from "@bh/shared-types";
+import { MAX_RESIST, MIN_RESIST } from "../sim/element-ids";
 
 /**
  * Возможности паттерна — то, что зависит от поведения, а не от конкретного
@@ -203,6 +204,12 @@ export interface EnemyType {
   radius: number;
   contactDamage: boolean;
   params: ResolvedPatternParams;
+  /**
+   * Множитель урона по стихиям, по индексу стихии (`sim/elements.ts`):
+   * `1 − сопротивление`. Посчитан один раз при разборе контента — в бою его
+   * читают на каждое попадание.
+   */
+  resistMul: readonly number[];
 }
 
 /**
@@ -248,6 +255,12 @@ function findBaseProblems(def: EnemyDef): string[] {
   if (!(def.xp >= 0)) problems.push(`враг ${def.id}: xp не может быть отрицательным`);
   if (def.threat !== undefined && !(def.threat > 0)) {
     problems.push(`враг ${def.id}: threat должен быть больше нуля`);
+  }
+  for (const [element, value] of Object.entries(def.resist ?? {})) {
+    const known = element !== "physical" && (ELEMENTS as readonly string[]).includes(element);
+    if (!known || !(typeof value === "number" && value >= MIN_RESIST && value <= MAX_RESIST)) {
+      problems.push(`враг ${def.id}: resist.${element} вне ${MIN_RESIST}…${MAX_RESIST}`);
+    }
   }
   return problems;
 }
@@ -383,6 +396,7 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       radius: traits.radius * rankRadiusMul(def.rank ?? "normal") * unitScale,
       contactDamage: traits.contactDamage,
       params: resolveParams(def, indexById, unitScale),
+      resistMul: ELEMENTS.map((element) => (element === "physical" ? 1 : 1 - (def.resist?.[element] ?? 0))),
     };
   });
 }

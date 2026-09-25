@@ -163,6 +163,9 @@
 | Награда за забег — рабочие числа (О1): монеты и опыт за минуту и за убийства, множители сложности, потолки забега, минимум 30 секунд | `backend/api/src/modules/progress/progress-rules.ts` → `runReward`, `DIFFICULTY_REWARD_MUL`, `MAX_COINS_PER_RUN`, `MIN_REWARDED_SEC` | участник 1 |
 | Уровень аккаунта — рабочие числа (О2): кривая опыта `150·(n−1)^1.6`, потолок уровня, награда за уровень | `backend/api/src/modules/progress/progress-rules.ts` → `xpForLevel`, `MAX_LEVEL`, `levelReward` | участник 1 |
 | Как часто экран итогов спрашивает награду, пока её считает очередь | `packages/app-shell/src/state/progress-api.ts` → `REWARD_POLL_DELAYS_MS` | участник 1 |
+| Стихии: сила и длительность состояний — горение, охлаждение и заморозка, шок, отравление; рабочие числа | `packages/core-game/src/game/sim/elements.ts` → `BURN_*`, `CHILL_*`, `FREEZE_*`, `SHOCK_*`, `POISON_*` | участник 1 |
+| Стихии: коридор сопротивления врага в контенте — от −1 до 0,9 | `packages/core-game/src/game/sim/element-ids.ts` → `MIN_RESIST`, `MAX_RESIST` | участник 1 |
+| Стихии: сопротивления врагов, стихия и шанс состояния у оружия | `packages/core-game/src/content/enemies.ts` → `resist`, `content/weapons.ts` → `element`, `levels[].statusChance` | геймдизайнер |
 | Граница игровых суток — Москва, одна на все суточные механики: возвраты D1 и D7 воронки, суточные потолки кошелька, дальше задания и награда дня (`05-game-design.md` §3) | `backend/api/src/common/game-day.ts` → `GAME_DAY_TIME_ZONE` | участник 1 |
 | Приветствие по `/start`: тексты на двух языках, какие языки читают по-русски | `backend/api/src/platforms/telegram/welcome-texts.ts` → `WELCOME_TEXTS`, `RUSSIAN_READERS` | участник 1 |
 | Карточка приветствия: раскладка, длина имени, версия шаблона для кэша | `backend/api/src/platforms/telegram/welcome-card.ts` → `CARD_VERSION` (поднять при любой правке вида), `NAME_MAX` | участник 1 |

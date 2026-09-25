@@ -2,10 +2,15 @@ import { isElite, onEnemyKilled } from "../patterns";
 import { dropGems } from "./gems";
 import { rollPickups } from "./pickups";
 import { stageOf } from "./stages";
+import { damageMultiplier, ELEMENT_PHYSICAL, tryApplyStatus } from "./elements";
 import { despawnEnemy, NO_OWNER_TYPE, type World } from "./world";
 
 /**
  * Урон врагу — одна точка входа для всего оружия и для снарядов.
+ *
+ * Стихия умножает урон на сопротивление типа врага и на шок, а после
+ * попадания пробует наложить своё состояние (`sim/elements.ts`). Физический
+ * урон с нулевым шансом идёт прежним путём и генератор не трогает.
  *
  * Здесь же живут последствия смерти: счётчики, выпадение опыта и реакция
  * паттерна (распад делящегося). Раньше это лежало в шаге симуляции и было
@@ -19,9 +24,23 @@ export function damageEnemy(
   index: number,
   amount: number,
   weaponSlot: number,
+  element: number = ELEMENT_PHYSICAL,
+  statusChance = 0,
 ): void {
+  if (world.enemies.alive[index] === 0 || amount <= 0) return;
+  const multiplied = amount * damageMultiplier(world, index, element);
+  const applied = inflictDamage(world, index, multiplied, weaponSlot);
+  if (world.enemies.alive[index] === 1) tryApplyStatus(world, index, element, statusChance, applied, weaponSlot);
+}
+
+/**
+ * Урон без стихийных множителей — им бьют и попадания, и урон по времени:
+ * горение и яд уже посчитаны от урона с сопротивлением, второй раз его
+ * применять нельзя. Возвращает нанесённый урон.
+ */
+export function inflictDamage(world: World, index: number, amount: number, weaponSlot: number): number {
   const enemies = world.enemies;
-  if (enemies.alive[index] === 0 || amount <= 0) return;
+  if (enemies.alive[index] === 0 || amount <= 0) return 0;
 
   const cheats = world.cheats;
   const dealt = cheats.oneHitKill ? enemies.hp[index] : amount * cheats.damageMul;
@@ -35,8 +54,9 @@ export function damageEnemy(
     world.stats.damageByWeapon[weaponSlot] += applied;
   }
 
-  if (enemies.hp[index] > 0) return;
+  if (enemies.hp[index] > 0) return applied;
   killEnemy(world, index);
+  return applied;
 }
 
 /**
