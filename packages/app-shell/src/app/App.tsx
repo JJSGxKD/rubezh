@@ -19,7 +19,6 @@ import { isVersionAtLeast } from "../state/platform-version";
 import { useShell } from "../state/shell";
 import { CompactOverlay, FirstRunScreen, OutdatedScreen, OutsideScreen } from "../screens/gates";
 import { LobbyScreen, ModeScreen, WeaponScreen } from "../screens/home";
-import { RunScreen } from "../screens/run/RunScreen";
 import {
   AboutScreen,
   ArsenalScreen,
@@ -31,6 +30,7 @@ import {
   GuideScreen,
   ProfileScreen,
   RatingScreen,
+  RunScreen,
   ScreenBoundary,
   ScreenFallback,
   SettingsScreen,
@@ -87,9 +87,11 @@ export function App(): ReactNode {
             className={runUnderneath ? "invisible absolute inset-0" : "h-full"}
           >
             <ScreenBoundary key="run">
-              <ScreenTransition screenKey="run">
-                <RunScreen />
-              </ScreenTransition>
+              <Suspense fallback={<ScreenFallback />}>
+                <ScreenTransition screenKey="run">
+                  <RunScreen />
+                </ScreenTransition>
+              </Suspense>
             </ScreenBoundary>
           </div>
         ) : null}

@@ -3,6 +3,7 @@ import { Heart, Pause, Wrench } from "lucide-react";
 import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
+import "../../i18n/run";
 import { ItemIcon } from "../item-icons";
 import { BossBar } from "./BossBar";
 import { HintBanner } from "./HintBanner";

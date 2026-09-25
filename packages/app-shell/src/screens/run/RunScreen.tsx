@@ -3,6 +3,7 @@ import { DEFAULT_MAP_ID, type RunInspection } from "@bh/core-game";
 import type { RunResult } from "@bh/shared-types";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
+import "../../i18n/run";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
 import { useMeta } from "../../state/meta";

@@ -4,6 +4,7 @@ import { RotateCw } from "lucide-react";
 import { Button } from "../../design-system/components";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
 import { t } from "../../i18n";
+import "../../i18n/run";
 import "../../i18n/payments";
 import { useContinuePurchase, type ContinueStage } from "../../state/continue-purchase";
 

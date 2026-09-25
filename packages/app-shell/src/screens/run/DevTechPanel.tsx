@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { RunDevInfo } from "@bh/core-game";
 import { formatDecimal, formatNumber, t } from "../../i18n";
+import "../../i18n/run";
 import "../../i18n/team";
 
 /**
