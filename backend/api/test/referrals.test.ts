@@ -4,7 +4,8 @@ import { parseStartParam } from "../src/modules/attribution/start-param.js";
 import type { SessionsRepository } from "../src/modules/attribution/sessions.repository.js";
 import type { Account } from "../src/modules/auth/account.repository.js";
 import { AuthHooks, PLAIN_LOGIN, type LoginEvent } from "../src/modules/auth/auth-hooks.js";
-import { REFERRAL_RULES } from "../src/modules/referrals/referral-rules.js";
+import type { FriendReturnsRepository, PendingReturn } from "../src/modules/referrals/friend-returns.repository.js";
+import { REFERRAL_RULES, RETURN_RULES } from "../src/modules/referrals/referral-rules.js";
 import type { ReferralBinding, ReferralRow, ReferralsRepository } from "../src/modules/referrals/referrals.repository.js";
 import { ReferralsService } from "../src/modules/referrals/referrals.service.js";
 import type { RunsRepository } from "../src/modules/runs/runs.repository.js";
@@ -62,6 +63,27 @@ class MemoryReferrals implements ReferralsRepository {
   }
 }
 
+class MemoryReturns implements FriendReturnsRepository {
+  readonly rows = new Map<string, { returnedAt: Date; rewardedAt: Date | null }>();
+  async record(returnedId: string, friendId: string, period: number, at: Date): Promise<boolean> {
+    const key = `${returnedId}|${friendId}|${period}`;
+    if (this.rows.has(key)) return false;
+    this.rows.set(key, { returnedAt: at, rewardedAt: null });
+    return true;
+  }
+  async pending(returnedId: string, since: Date): Promise<PendingReturn[]> {
+    return [...this.rows]
+      .filter(([key, row]) => key.startsWith(`${returnedId}|`) && row.rewardedAt === null && row.returnedAt >= since)
+      .map(([key]) => ({ friendId: key.split("|")[1] ?? "", period: Number(key.split("|")[2]) }));
+  }
+  async markRewarded(returnedId: string, friendId: string, period: number, at: Date): Promise<boolean> {
+    const row = this.rows.get(`${returnedId}|${friendId}|${period}`);
+    if (row === undefined || row.rewardedAt !== null) return false;
+    row.rewardedAt = at;
+    return true;
+  }
+}
+
 class FakeWallet {
   readonly grants = new Map<string, GrantInput>();
   async grant(input: GrantInput): Promise<GrantResult> {
@@ -77,6 +99,8 @@ let referrals: MemoryReferrals;
 let wallet: FakeWallet;
 let networks: Map<string, string[]>;
 let runCounts: Map<string, number>;
+let lastSessions: Map<string, Date>;
+let returns: MemoryReturns;
 let service: ReferralsService;
 
 async function player(id: string, createdMs = Date.now()): Promise<Account> {
@@ -122,11 +146,19 @@ beforeEach(() => {
   wallet = new FakeWallet();
   networks = new Map();
   runCounts = new Map();
-  const sessions = { record: async () => "recorded" as const, acquisition: async () => null, recentIpPrefixes: async (id: string) => networks.get(id) ?? [], lastSessionBefore: async () => null } satisfies SessionsRepository;
+  lastSessions = new Map();
+  returns = new MemoryReturns();
+  const sessions = {
+    record: async () => "recorded" as const,
+    acquisition: async () => null,
+    recentIpPrefixes: async (id: string) => networks.get(id) ?? [],
+    lastSessionBefore: async (id: string) => lastSessions.get(id) ?? null,
+  } satisfies SessionsRepository;
   const runs = { stats: async (id: string) => ({ runs: runCounts.get(id) ?? 0, totalKills: 0, totalSurvivalSec: 0 }) } as unknown as RunsRepository;
   service = new ReferralsService(
     loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv),
     referrals,
+    returns,
     friends,
     accounts,
     sessions,
@@ -232,5 +264,56 @@ describe("активация", () => {
     const late = invited[invited.length - 1] as Account;
     expect(referrals.bindings.get(late.accountId)?.status).toBe("bound");
     expect(await referrals.activatedToday(owner.accountId)).toBe(REFERRAL_RULES.maxActivationsPerDay);
+  });
+});
+
+describe("возвращение", () => {
+  const DAY = 86_400_000;
+
+  async function veteran(id: string, absentDays: number): Promise<Account> {
+    const account = await player(id, Date.now() - 400 * DAY);
+    lastSessions.set(account.accountId, new Date(Date.now() - absentDays * DAY));
+    return account;
+  }
+
+  it("ушедший открыл ссылку друга и сыграл — монеты обоим, один раз", async () => {
+    const friend = await player("friend");
+    const gone = await veteran("gone", RETURN_RULES.absenceDays + 1);
+    await service.onLogin(login(gone, await inviteLink(friend), { created: false }));
+    expect(returns.rows.size).toBe(1);
+    expect(wallet.grants.size).toBe(0);
+
+    await service.onRun(run(gone));
+    const grants = [...wallet.grants.values()];
+    expect(grants.map((grant) => grant.accountId).sort()).toEqual([friend.accountId, gone.accountId].sort());
+    expect(grants.every((grant) => grant.amount === RETURN_RULES.coins && grant.reason === "referral_reward")).toBe(true);
+
+    await service.onRun(run(gone));
+    expect(wallet.grants.size).toBe(2);
+  });
+
+  it("недолгое отсутствие, новый аккаунт и забег с читами — не возвращение", async () => {
+    const friend = await player("friend");
+    const recent = await veteran("recent", RETURN_RULES.absenceDays - 1);
+    await service.onLogin(login(recent, await inviteLink(friend), { created: false }));
+    const newcomer = await player("new");
+    await service.onLogin(login(newcomer, await inviteLink(friend)));
+    expect(returns.rows.size).toBe(0);
+
+    const gone = await veteran("gone", 60);
+    await service.onLogin(login(gone, await inviteLink(friend), { created: false }));
+    await service.onRun(run(gone, { cheats: true }));
+    expect([...wallet.grants.keys()].some((key) => key.startsWith("friend_return:"))).toBe(false);
+  });
+
+  it("пара — не чаще раза в период: второе возвращение того же периода не отмечается", async () => {
+    const friend = await player("friend");
+    const gone = await veteran("gone", 40);
+    const link = await inviteLink(friend);
+    await service.onLogin(login(gone, link, { created: false }));
+    await service.onRun(run(gone));
+    await service.onLogin(login(gone, link, { created: false }));
+    await service.onRun(run(gone));
+    expect([...wallet.grants.keys()].filter((key) => key.startsWith("friend_return:"))).toHaveLength(2);
   });
 });

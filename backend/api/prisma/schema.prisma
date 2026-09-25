@@ -184,6 +184,8 @@ model Account {
   giftsReceived    FriendGift[]    @relation("friend_gift_to")
   referredBy       ReferralBinding? @relation("referral_referred")
   referrals        ReferralBinding[] @relation("referral_referrer")
+  returns          FriendReturn[]  @relation("friend_return_returned")
+  returnsHelped    FriendReturn[]  @relation("friend_return_friend")
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -864,5 +866,26 @@ model ReferralBinding {
 
   @@index([referrerId, activatedAt])
   @@map("referral_binding")
+}
+
+// Возвращение (WP14, docs/35-stage4-plan.md §3.8): игрок, не заходивший N
+// дней, открыл ссылку друга и сыграл — награда обоим. Пара награждается не
+// чаще раза в период: номер периода — в ключе, второе возвращение того же
+// периода упирается в него.
+model FriendReturn {
+  returnedId String    @map("returned_account_id") @db.Uuid
+  friendId   String    @map("friend_account_id") @db.Uuid
+  /// номер периода: сутки от начала эпохи, делённые на длину периода
+  period     Int
+  returnedAt DateTime  @default(now()) @map("returned_at") @db.Timestamptz(3)
+  /// `null` — вернувшийся ещё не сыграл
+  rewardedAt DateTime? @map("rewarded_at") @db.Timestamptz(3)
+
+  returned Account @relation("friend_return_returned", fields: [returnedId], references: [accountId], onDelete: Cascade)
+  friend   Account @relation("friend_return_friend", fields: [friendId], references: [accountId], onDelete: Cascade)
+
+  @@id([returnedId, friendId, period])
+  @@index([returnedId, rewardedAt])
+  @@map("friend_return")
 }
 

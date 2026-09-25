@@ -21,6 +21,23 @@ export const REFERRAL_RULES = {
   networkLookback: 20,
 } as const;
 
+/**
+ * Возвращение (О15), **рабочее**: игрок, не заходивший `absenceDays`, открыл
+ * ссылку друга и в течение `playWithinDays` сыграл — оба получают монеты.
+ * Пара награждается не чаще раза в `periodDays`: иначе двое передавали бы
+ * друг другу «возвращение» каждые две недели.
+ */
+export const RETURN_RULES = {
+  /** после скольких суток без входа игрок считается ушедшим — рабочее */
+  absenceDays: 14,
+  /** сколько суток после возвращения ждём первого забега */
+  playWithinDays: 7,
+  /** монет каждому из пары — рабочее */
+  coins: 150,
+  /** не чаще раза в столько суток на пару — рабочее */
+  periodDays: 30,
+} as const;
+
 export const REFERRAL_LIMITS = {
   read: { scope: "referrals:read", limit: 600, windowSec: 3600 },
 } as const satisfies Record<string, RateLimit>;

@@ -5,6 +5,7 @@ import { FriendsModule } from "../friends/friends.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { ReferralsController } from "./referrals.controller.js";
+import { FRIEND_RETURNS_REPOSITORY, PrismaFriendReturnsRepository } from "./friend-returns.repository.js";
 import { PrismaReferralsRepository, REFERRALS_REPOSITORY } from "./referrals.repository.js";
 import { ReferralsService } from "./referrals.service.js";
 
@@ -16,7 +17,11 @@ import { ReferralsService } from "./referrals.service.js";
 @Module({
   imports: [AuthModule, AttributionModule, FriendsModule, RunsModule, WalletModule],
   controllers: [ReferralsController],
-  providers: [ReferralsService, { provide: REFERRALS_REPOSITORY, useClass: PrismaReferralsRepository }],
+  providers: [
+    ReferralsService,
+    { provide: REFERRALS_REPOSITORY, useClass: PrismaReferralsRepository },
+    { provide: FRIEND_RETURNS_REPOSITORY, useClass: PrismaFriendReturnsRepository },
+  ],
   exports: [REFERRALS_REPOSITORY],
 })
 export class ReferralsModule {}

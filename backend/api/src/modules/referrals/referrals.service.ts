@@ -8,7 +8,8 @@ import { FRIENDS_REPOSITORY, type FriendsRepository } from "../friends/friends.r
 import { RUNS_REPOSITORY, type RunsRepository } from "../runs/runs.repository.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
-import { REFERRAL_RULES } from "./referral-rules.js";
+import { FRIEND_RETURNS_REPOSITORY, type FriendReturnsRepository } from "./friend-returns.repository.js";
+import { REFERRAL_RULES, RETURN_RULES } from "./referral-rules.js";
 import { REFERRALS_REPOSITORY, type ReferralRow, type ReferralsRepository } from "./referrals.repository.js";
 
 /**
@@ -27,9 +28,21 @@ import { REFERRALS_REPOSITORY, type ReferralRow, type ReferralsRepository } from
  *   потолка в сутки на пригласившего: сверх потолка активация ждёт следующего
  *   забега. Награда пригласившему — ключом кошелька по приглашённому.
  *
+ * - **возвращение** — игрок, не заходивший `RETURN_RULES.absenceDays`, открыл
+ *   ссылку друга: возвращение отмечается, а после его первого забега монеты
+ *   получают оба. Пара — не чаще раза в период.
+ *
  * Оба слушателя работают после ответа игроку; упавший пишет в лог и не мешает
  * ни входу, ни забегу.
  */
+
+const DAY_MS = 86_400_000;
+/** Текущая сессия пишется очередью после входа: всё, что моложе минуты, — это она, а не прошлый визит. */
+const SAME_VISIT_MS = 60_000;
+
+export function returnPeriod(at: Date): number {
+  return Math.floor(at.getTime() / DAY_MS / RETURN_RULES.periodDays);
+}
 @Injectable()
 export class ReferralsService implements OnModuleInit {
   private readonly logger = new Logger("referrals");
@@ -37,6 +50,7 @@ export class ReferralsService implements OnModuleInit {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(REFERRALS_REPOSITORY) private readonly referrals: ReferralsRepository,
+    @Inject(FRIEND_RETURNS_REPOSITORY) private readonly returns: FriendReturnsRepository,
     @Inject(FRIENDS_REPOSITORY) private readonly friends: FriendsRepository,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     @Inject(SESSIONS_REPOSITORY) private readonly sessions: SessionsRepository,
@@ -60,8 +74,28 @@ export class ReferralsService implements OnModuleInit {
   async onLogin(login: LoginEvent): Promise<void> {
     const { startParam } = login;
     if (startParam.kind !== "friend" || startParam.ref === null || login.reason !== "launch") return;
-    const referrerId = await this.friends.ownerOf(startParam.ref);
-    if (referrerId === null || referrerId === login.accountId) return;
+    const ownerId = await this.friends.ownerOf(startParam.ref);
+    if (ownerId === null || ownerId === login.accountId) return;
+    if (login.created) return await this.bindReferral(login, ownerId);
+    await this.noteReturn(login, ownerId);
+    await this.bindReferral(login, ownerId);
+  }
+
+  /**
+   * Возвращение: игрок не заходил дольше `absenceDays` до этого входа. Новый
+   * аккаунт — это реферал, а не возвращение.
+   */
+  private async noteReturn(login: LoginEvent, friendId: string): Promise<void> {
+    const [returned, friend] = await Promise.all([this.accounts.byId(login.accountId), this.accounts.byId(friendId)]);
+    if (returned === null || friend === null || friend.bannedAt !== null || friend.platform !== returned.platform) return;
+    const last = await this.sessions.lastSessionBefore(login.accountId, new Date(login.at.getTime() - SAME_VISIT_MS));
+    if (last === null || login.at.getTime() - last.getTime() < RETURN_RULES.absenceDays * DAY_MS) return;
+    if (await this.returns.record(login.accountId, friendId, returnPeriod(login.at), login.at)) {
+      this.log("player_returned", { accountId: login.accountId, friendId, absentDays: Math.floor((login.at.getTime() - last.getTime()) / DAY_MS) });
+    }
+  }
+
+  private async bindReferral(login: LoginEvent, referrerId: string): Promise<void> {
     if ((await this.referrals.binding(login.accountId)) !== null) return;
 
     const [referred, referrer] = await Promise.all([this.accounts.byId(login.accountId), this.accounts.byId(referrerId)]);
@@ -90,6 +124,24 @@ export class ReferralsService implements OnModuleInit {
 
   async onRun(run: RecordedRun): Promise<void> {
     if (run.cheats || run.verdict === "rejected") return;
+    await this.rewardReturns(run);
+    await this.activateReferral(run);
+  }
+
+  /** Первый забег вернувшегося — монеты ему и другу, по ключу пары и периода. */
+  private async rewardReturns(run: RecordedRun): Promise<void> {
+    const pending = await this.returns.pending(run.accountId, new Date(run.finishedAt.getTime() - RETURN_RULES.playWithinDays * DAY_MS));
+    for (const { friendId, period } of pending) {
+      if (!(await this.returns.markRewarded(run.accountId, friendId, period, run.finishedAt))) continue;
+      const key = `friend_return:${run.accountId}:${friendId}:${period}`;
+      for (const [accountId, side] of [[run.accountId, "returned"], [friendId, "friend"]] as const) {
+        await this.wallet.grant({ accountId, resource: "coins", amount: RETURN_RULES.coins, reason: "referral_reward", source: key, idempotencyKey: `${key}:${side}` });
+      }
+      this.log("player_return_rewarded", { accountId: run.accountId, friendId });
+    }
+  }
+
+  private async activateReferral(run: RecordedRun): Promise<void> {
     const binding = await this.referrals.binding(run.accountId);
     if (binding === null || binding.status !== "bound") return;
     const { runs } = await this.runs.stats(run.accountId);
