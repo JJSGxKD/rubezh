@@ -25,6 +25,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@bh/shared-types": `${repoRoot}packages/shared-types/src/index.ts`,
+      // Бэкенд берёт ядро курсов собранным (`dist`), а тесты — исходником:
+      // иначе прогон тестов зависел бы от того, собран ли пакет.
+      "@bh/fx": `${repoRoot}packages/fx/src/index.ts`,
     },
   },
 });

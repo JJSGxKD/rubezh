@@ -95,6 +95,8 @@ rate-limit через подделку `X-Forwarded-For`, неатомарный
 - `core-game` не импортирует `adapter-*` и ничего из `backend`
 - `adapter-*` не импортирует другой `adapter-*`
 - `shared-types` не импортирует ничего из монорепо
+- `fx` (ядро курсов) не импортирует ничего из монорепо, Nest и Prisma: им
+  станет отдельный сервис курсов (`docs/35-stage4-plan.md`, Р32)
 - `content/*` не импортирует код из `game/*`
 - `app-shell` не импортирует `adapter-*` и Phaser, а `core-game` берёт только
   через его `index.ts`; `core-game` не импортирует `app-shell` и React

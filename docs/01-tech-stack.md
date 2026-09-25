@@ -11,6 +11,7 @@
   /adapter-vk          <- тонкий слой под VK Bridge (опционально, фаза 2)
   /adapter-web         <- браузерная версия, несколько auth-провайдеров внутри одного адаптера (см. 08)
   /shared-types        <- общие TS-интерфейсы (PlatformAdapter, User, PurchaseResult)
+  /fx                  <- курсы валют и пересчёт — самодостаточное ядро (35-stage4-plan.md, §3.12)
 /apps
   /web-telegram        <- сборка под Telegram (env=telegram)
   /web-max             <- сборка под MAX (env=max)
