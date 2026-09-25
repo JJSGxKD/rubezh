@@ -152,6 +152,7 @@
 | Кошелёк: что дают обмены — покупка только самоцветы, разбор только осколки | `backend/api/src/modules/wallet/wallet-limits.ts` → `EXCHANGE_RESOURCES` | участник 1 |
 | Кошелёк: потолок одной операции и лимиты частоты чтения и ручных операций | `backend/api/src/modules/wallet/wallet-limits.ts` → `WALLET_MAX_OPERATION`, `WALLET_LIMITS` | участник 1 |
 | Друзья: потолок друзей, входящих и своих заявок — рабочие (О15, Р31); лимиты частоты раздела и суточный лимит заявок | `backend/api/src/modules/friends/friends-rules.ts` → `FRIENDS_RULES`, `FRIENDS_LIMITS` | участник 1 |
+| Подарки друзьям: монет в подарке, сколько забрать за сутки, через сколько дней незабранный сгорает — рабочие (О15, Р31) | `backend/api/src/modules/friends/friends-rules.ts` → `GIFT_RULES`; страховка — `WALLET_DAILY_CAPS.friend_gift` | участник 1 |
 | Кошелёк: источники начислений и трат — список причин журнала | `backend/api/src/modules/wallet/wallet-types.ts` → `EARN_REASONS`, `EXCHANGE_REASONS`, `SPEND_REASONS` | участник 1 |
 | Курсы: валюты модуля — код, вид (фиат, крипта, валюта площадки), разрядность, прежние названия | `packages/fx/src/currencies.ts` → `CURRENCIES` | участник 1 |
 | Курсы: приём котировок — возраст котировки, порог скачка без подтверждения вторым источником, согласие источников | `packages/fx/src/policy.ts` → `ACCEPT_POLICY` | участник 1 |
