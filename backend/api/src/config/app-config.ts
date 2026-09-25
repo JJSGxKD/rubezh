@@ -246,6 +246,18 @@ const schema = z.object({
     .refine((ids) => ids.every((id) => /^\d{1,20}$/.test(id)), {
       message: "ADMIN_TELEGRAM_IDS — Telegram ID цифрами через запятую",
     }),
+
+  // Серверная часть панели (docs/35-stage4-plan.md, WP17; docs/29-admin-panel.md
+  // §4, §8): своя cookie-сессия под `/api/v1/admin/*`. Выключена по умолчанию
+  // и отвечает 404, как остальные выключенные части; включённая живёт на
+  // аккаунтах и ролях, поэтому требует авторизации.
+  ADMIN_PANEL_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Срок жизни сессии панели в минутах — без продления по активности: забытый
+  // ноутбук не должен держать вход в панель сутками (§8).
+  ADMIN_SESSION_TTL_MIN: z.coerce.number().int().min(5).max(1440).default(480),
 });
 
 export interface AppConfig {
@@ -272,6 +284,12 @@ export interface AppConfig {
   notifyReports: boolean;
   /** Telegram ID администраторов строками — так же, как id игрока из initData */
   adminTelegramIds: ReadonlySet<string>;
+  admin: {
+    /** серверная часть панели под `/api/v1/admin/*` */
+    enabled: boolean;
+    /** сколько живёт cookie-сессия панели, без продления */
+    sessionTtlSec: number;
+  };
   telegram: {
     /** бот закрытого теста: проверка подписи initData и сам бот */
     botToken: string;
@@ -446,6 +464,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.AUTH_DEV_LOGIN && !parsed.AUTH_ENABLED) {
     throw new Error("AUTH_DEV_LOGIN=true требует AUTH_ENABLED=true: вход разработчика выдаёт ту же сессию, что вход по Telegram");
   }
+  if (parsed.ADMIN_PANEL_ENABLED && !parsed.AUTH_ENABLED) {
+    throw new Error("ADMIN_PANEL_ENABLED=true требует AUTH_ENABLED=true: панель живёт на аккаунтах и ролях, которые заводит вход");
+  }
   if (parsed.AUTH_ENABLED && (parsed.JWT_ACCESS_SECRET === "" || parsed.TELEGRAM_BOT_TOKEN === "" || parsed.DATABASE_URL === "")) {
     throw new Error(
       "AUTH_ENABLED=true требует JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN и DATABASE_URL: без них вход не проверить и аккаунт негде хранить",
@@ -484,6 +505,10 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     },
     notifyReports: parsed.ADMIN_NOTIFY_REPORTS,
     adminTelegramIds: new Set(parsed.ADMIN_TELEGRAM_IDS),
+    admin: {
+      enabled: parsed.ADMIN_PANEL_ENABLED,
+      sessionTtlSec: parsed.ADMIN_SESSION_TTL_MIN * 60,
+    },
     telegram: {
       botToken: parsed.TELEGRAM_BOT_TOKEN,
       updates: parsed.TELEGRAM_BOT_UPDATES,
