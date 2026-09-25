@@ -5,14 +5,18 @@ import { reportError } from "../state/shell";
 
 /**
  * Экраны, которые грузятся по требованию (docs/27-design-system-and-app-shell.md
- * §3.4). В первую загрузку идёт только путь до забега: заставки, лобби, выбор
- * режима и оружия, сам забег. Настройки, диагностика, витрина, разделы-заглушки и мета
- * игроку в первую минуту не нужны, а весят как весь путь до забега.
+ * §3.4). В первую загрузку идёт только путь до «Играть»: заставки, лобби,
+ * выбор режима и оружия. Сам забег — HUD, пауза, выбор улучшения — чанком,
+ * который лобби подтягивает в простое вместе с движком: без движка он всё
+ * равно не начнётся, а первая загрузка за него не платит. Настройки,
+ * диагностика, витрина, разделы-заглушки и мета игроку в первую минуту не
+ * нужны.
  *
  * Каждый файл экранов — отдельный чанк; загрузчики вынесены, чтобы лобби
  * могло подтянуть их заранее в простое браузера.
  */
 const loaders = {
+  run: () => import("../screens/run/RunScreen"),
   settings: () => import("../screens/settings"),
   stubs: () => import("../screens/stubs"),
   gallery: () => import("../screens/gallery"),
@@ -37,6 +41,7 @@ function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): Componen
   });
 }
 
+export const RunScreen = screen(loaders.run, "RunScreen");
 export const SettingsScreen = screen(loaders.settings, "SettingsScreen");
 export const TestersScreen = screen(loaders.settings, "TestersScreen");
 export const AboutScreen = screen(loaders.settings, "AboutScreen");

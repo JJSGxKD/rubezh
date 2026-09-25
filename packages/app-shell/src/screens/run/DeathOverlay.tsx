@@ -3,6 +3,7 @@ import { Crown, Skull, Trophy, Wrench } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
 import { Badge, Button, Modal, Stat, staggerStyle } from "../../design-system/components";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
+import "../../i18n/run";
 // Строки награды — в словаре аккаунта: он приезжает с этим чанком, а не с
 // первой загрузкой.
 import "../../i18n/account";

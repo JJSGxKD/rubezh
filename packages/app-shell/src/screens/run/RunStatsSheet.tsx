@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { RunInspection, RunWeaponInspection } from "@bh/core-game";
 import { Button, Modal, SegmentedControl } from "../../design-system/components";
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
+import "../../i18n/run";
 import { ItemIcon, ItemTile } from "../item-icons";
 import { CategoryLabel } from "./SlotSummary";
 

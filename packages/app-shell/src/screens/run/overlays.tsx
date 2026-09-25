@@ -11,6 +11,7 @@ import {
   Stat,
 } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
+import "../../i18n/run";
 import { ItemTile, type ItemKind } from "../item-icons";
 import { guarded, useTapGuard } from "./overlay-guard";
 import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";

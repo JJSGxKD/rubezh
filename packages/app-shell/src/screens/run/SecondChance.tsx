@@ -4,6 +4,7 @@ import { HeartPulse, Lock, Tv, Wrench } from "lucide-react";
 import { Badge, Button } from "../../design-system/components";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
 import { t } from "../../i18n";
+import "../../i18n/run";
 import type { ContinueStage } from "../../state/continue-purchase";
 import { PaidContinue, PaidContinueView } from "./PaidContinue";
 

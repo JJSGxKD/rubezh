@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatDuration, hasTranslation, t } from "../src/i18n";
+// Ключ примера — из словаря забега: он подгружается с чанком экрана забега.
+import "../src/i18n/run";
 import { API_FAILURES } from "../src/state/api-request";
 
 // Тексты интерфейса (docs/27-design-system-and-app-shell.md §8).
