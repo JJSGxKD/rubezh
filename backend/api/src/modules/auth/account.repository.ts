@@ -46,6 +46,19 @@ export interface AccountRepository {
   byId(accountId: string): Promise<Account | null>;
   /** Найти по площадке и её идентификатору — так аккаунт ищут по Telegram ID */
   byPlatformUser(platform: AccountPlatform, platformUserId: string): Promise<Account | null>;
+  /**
+   * Поиск для панели: идентификатор на площадке — точно, юзернейм — по
+   * началу, имя — по вхождению; недавние первыми. Пустой запрос — пусто, а не
+   * вся таблица.
+   */
+  search(query: string, limit: number): Promise<Account[]>;
+  /** Заблокировать или снять блокировку; `null` — аккаунта нет. */
+  setBan(accountId: string, ban: AccountBan | null): Promise<Account | null>;
+}
+
+export interface AccountBan {
+  at: Date;
+  reason: string;
 }
 
 @Injectable()
@@ -82,6 +95,35 @@ export class PrismaAccountRepository implements AccountRepository {
       where: { platform_platformUserId: { platform, platformUserId } },
     });
     return row === null ? null : toAccount(row, false);
+  }
+
+  async search(query: string, limit: number): Promise<Account[]> {
+    // `@` перед юзернеймом — привычка из Telegram, а не часть значения.
+    const text = query.trim().replace(/^@/, "");
+    if (text === "") return [];
+    // Вхождение в имя — просмотр таблицы: на закрытом тесте игроков сотни, и
+    // индекс по имени понадобится вместе с ростом (docs/14-scalability.md).
+    const rows = await this.prisma.account.findMany({
+      where: {
+        OR: [
+          { platformUserId: text },
+          { username: { startsWith: text, mode: "insensitive" } },
+          { displayName: { contains: text, mode: "insensitive" } },
+        ],
+      },
+      orderBy: { lastSeenAt: "desc" },
+      take: limit,
+    });
+    return rows.map((row) => toAccount(row, false));
+  }
+
+  async setBan(accountId: string, ban: AccountBan | null): Promise<Account | null> {
+    // updateMany, а не update: несуществующий аккаунт — `null`, а не исключение Prisma.
+    const updated = await this.prisma.account.updateMany({
+      where: { accountId },
+      data: { bannedAt: ban?.at ?? null, banReason: ban?.reason ?? null },
+    });
+    return updated.count === 0 ? null : await this.byId(accountId);
   }
 }
 

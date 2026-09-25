@@ -1,4 +1,4 @@
-import type { Account, AccountArrival, AccountRepository } from "../../src/modules/auth/account.repository.js";
+import type { Account, AccountArrival, AccountBan, AccountRepository } from "../../src/modules/auth/account.repository.js";
 import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/modules/auth/refresh.store.js";
 
 /**
@@ -48,7 +48,31 @@ export class MemoryAccountRepository implements AccountRepository {
     return null;
   }
 
-  /** Заблокировать аккаунт — так же, как это сделает администратор в WP2. */
+  async search(query: string, limit: number): Promise<Account[]> {
+    const text = query.trim().replace(/^@/, "").toLowerCase();
+    if (text === "") return [];
+    return [...this.byKey.values()]
+      .filter(
+        (account) =>
+          account.platformUserId === text ||
+          (account.username?.toLowerCase().startsWith(text) ?? false) ||
+          account.displayName.toLowerCase().includes(text),
+      )
+      .slice(0, limit)
+      .map((account) => ({ ...account, created: false }));
+  }
+
+  async setBan(accountId: string, ban: AccountBan | null): Promise<Account | null> {
+    for (const [key, account] of this.byKey.entries()) {
+      if (account.accountId !== accountId) continue;
+      const updated: Account = { ...account, bannedAt: ban?.at ?? null, banReason: ban?.reason ?? null, created: false };
+      this.byKey.set(key, updated);
+      return updated;
+    }
+    return null;
+  }
+
+  /** Заблокировать аккаунт — так же, как это сделает администратор из панели. */
   ban(accountId: string, reason: string): void {
     for (const [key, account] of this.byKey.entries()) {
       if (account.accountId === accountId) this.byKey.set(key, { ...account, bannedAt: new Date(), banReason: reason });
