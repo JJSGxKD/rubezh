@@ -25,7 +25,7 @@
 | # | Задача | Где | Что даёт соседу |
 |---|---|---|---|
 | Л1 | ✅ **Диета первой загрузки**: интерфейс забега и его словарь — ленивым чанком со своей строкой бюджета; первая загрузка 143 из 150 КБ, экраны меню 56 из 58 (`27-design-system-and-app-shell.md` §3.4) | `packages/app-shell`, `packages/core-game/src/index.ts`, `packages/shared-types` | место в бюджете под экраны друзей и шеринга |
-| Л2 | **Пакет токенов дизайна** `packages/design-tokens` — палитра и шкалы из `app-shell/src/design-system/tokens.*` (`29-admin-panel.md` §4) | `packages/design-tokens`, `packages/app-shell/src/design-system` | панель берёт токены из пакета, а не копией |
+| Л2 | ✅ **Пакет токенов дизайна** `packages/design-tokens` — палитра и шкалы из `app-shell/src/design-system/tokens.*` (`29-admin-panel.md` §4) | `packages/design-tokens`, `packages/app-shell/src/design-system` | панель берёт токены из пакета, а не копией |
 | Л3 | ✅ **Курс звёзд в рублях** (Р37): заданный курс в валюте котировки, команда установки заданных курсов на сервере | `packages/fx`, `backend/api/src/modules/fx` | эндпоинт курсов для раздела курсов в панели не меняется |
 | Л4 | **WP0 — сервер** вместе с участником 1: compose, Caddy, деплой, бэкапы, наблюдаемость | `infra/`, `.github/workflows/`, `backend/api/Dockerfile` | адрес панели и вход через виджет Telegram |
 | Л5 | **WP6, часть 2** — стихии на канве, HUD, гайдбук, враги и оружие со стихиями | `packages/core-game`, `packages/app-shell/src/screens/{run,guide}` | — |
@@ -38,7 +38,7 @@
 | # | Задача | Где | Зависит от |
 |---|---|---|---|
 | О1 | **WP17, серверная часть панели**: `/api/v1/admin/*` — своя стратегия сессии (cookie) и вход разработчика, карточка игрока (вехи воронки, забеги, покупки, журнал кошелька, блокировка), курсы валют и заданные курсы звёзд, роли и журнал аудита, очередь разбора забегов, воронка по источникам, отчёты диагностики и выгрузки | `backend/api/src/modules/admin/` (новый) | — |
-| О2 | **WP17, приложение `apps/admin`**: React 19, Vite, Tailwind 4, Zustand (`29-admin-panel.md` §4) — разделы из О1. Десктоп прежде всего, плотные таблицы, свои компоненты. Порт — `ADMIN_PORT` (`20-env-and-ports.md` §2) | `apps/admin/` (новый) | токены — после Л2, до того — импорт `packages/app-shell/src/design-system/tokens.css` **без копирования** |
+| О2 | **WP17, приложение `apps/admin`**: React 19, Vite, Tailwind 4, Zustand (`29-admin-panel.md` §4) — разделы из О1. Десктоп прежде всего, плотные таблицы, свои компоненты. Порт — `ADMIN_PORT` (`20-env-and-ports.md` §2) | `apps/admin/` (новый) | токены — пакет `@bh/design-tokens` (Л2): `@import "@bh/design-tokens/tokens.css"` после Tailwind и `COLORS` для графиков, копий палитры нет |
 | О3 | **WP14, серверная часть**: друзья, приглашения, рефералка, подарок в день — числа рабочие (Р31, О15, О16) | `backend/api/src/modules/{friends,referrals}/` (новые) | — |
 | О4 | **WP16, серверная часть**: редирект-ссылки с атрибуцией кликов, карточки шеринга в очереди с кешем по хэшу параметров (`24-attribution-and-sharing.md`) | `backend/api/src/modules/links/` (новый) | — |
 | О5 | **Клиент WP14 и WP16**: экран друзей вместо заглушки, кнопка «Поделиться» на экране смерти | `packages/app-shell/src/screens/meta/friends.tsx`, свой ленивый словарь `i18n/ru-friends.json` | **после Л1**: без запаса бюджета экранам некуда расти |
