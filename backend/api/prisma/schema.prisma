@@ -106,6 +106,8 @@ enum StartKind {
   invite
   telegram_affiliate
   unknown
+  /// ссылка дружбы `f-<код>` (WP14)
+  friend
 }
 
 // Где началась сессия: в Mini App площадки, в браузере (вход разработчика,
@@ -171,6 +173,13 @@ model Account {
   walletDaily WalletDaily[]
   progress    AccountProgress?
   runRewards  RunReward[]
+
+  // Друзья (WP14)
+  friendLink       FriendLink?
+  friendsAsA       Friendship[]    @relation("friendship_a")
+  friendsAsB       Friendship[]    @relation("friendship_b")
+  requestsSent     FriendRequest[] @relation("friend_request_from")
+  requestsReceived FriendRequest[] @relation("friend_request_to")
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -745,4 +754,59 @@ model RunReward {
 
   @@index([accountId, createdAt])
   @@map("run_reward")
+}
+
+// Друзья (WP14, docs/35-stage4-plan.md §3.8). Дружбу строим сами: у Telegram
+// нет API друзей, и на любой площадке так же. Дружба — внутри площадки:
+// аккаунты разных площадок не связываются (docs/08-web-and-identity.md §3).
+
+// Ссылка дружбы: код из параметра запуска `f-<код>` — ключ к строке, а не
+// данные (docs/24-attribution-and-sharing.md §3.1). Одна на аккаунт и
+// постоянная: ссылку, разосланную вчера, нельзя сломать новой.
+model FriendLink {
+  /// случайный, не угадывается перебором
+  code      String   @id @db.VarChar(32)
+  accountId String   @unique @map("account_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("friend_link")
+}
+
+// Как стали друзьями: открыли ссылку или приняли заявку.
+enum FriendSource {
+  link
+  request
+}
+
+// Дружба взаимна — одна строка на пару, меньший идентификатор первым: так
+// пара не задвоится, а «друзья ли A и B» — поиск по ключу.
+model Friendship {
+  accountA  String       @map("account_a") @db.Uuid
+  accountB  String       @map("account_b") @db.Uuid
+  source    FriendSource
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  a Account @relation("friendship_a", fields: [accountA], references: [accountId], onDelete: Cascade)
+  b Account @relation("friendship_b", fields: [accountB], references: [accountId], onDelete: Cascade)
+
+  @@id([accountA, accountB])
+  @@index([accountB])
+  @@map("friendship")
+}
+
+// Заявка в друзья: ждёт ответа получателя. Принятая или отклонённая —
+// удаляется: история дружбы — в самой дружбе.
+model FriendRequest {
+  fromAccountId String   @map("from_account_id") @db.Uuid
+  toAccountId   String   @map("to_account_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  from Account @relation("friend_request_from", fields: [fromAccountId], references: [accountId], onDelete: Cascade)
+  to   Account @relation("friend_request_to", fields: [toAccountId], references: [accountId], onDelete: Cascade)
+
+  @@id([fromAccountId, toAccountId])
+  @@index([toAccountId, createdAt])
+  @@map("friend_request")
 }
