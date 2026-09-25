@@ -52,7 +52,7 @@ export interface ReportExportRow {
 
 export interface ExportJournalEntry {
   exportId: string;
-  source: "bot" | "cli";
+  source: "bot" | "cli" | "panel";
   requestedBy: string;
   period: ExportPeriod;
 }
@@ -66,9 +66,27 @@ export interface ExportJournalResult {
   error: string | null;
 }
 
+/** Строка журнала выгрузок — раздел выгрузок в панели. */
+export interface ExportJournalRow {
+  exportId: string;
+  source: "bot" | "cli" | "panel";
+  requestedBy: string;
+  period: ExportPeriod;
+  status: "running" | "sent" | "failed";
+  events: number;
+  reports: number;
+  sizeBytes: number;
+  parts: number;
+  error: string | null;
+  createdAt: Date;
+  finishedAt: Date | null;
+}
+
 export const EXPORT_REPOSITORY = Symbol("EXPORT_REPOSITORY");
 
 export interface ExportRepository {
+  /** последние выгрузки, свежие первыми */
+  recent(limit: number): Promise<ExportJournalRow[]>;
   eventsPage(period: ExportPeriod, after: PageCursor | null, limit: number): Promise<EventExportRow[]>;
   reportsPage(period: ExportPeriod, after: PageCursor | null, limit: number): Promise<ReportExportRow[]>;
   /** конец периода последней удачной выгрузки этого человека — для «с последней выгрузки» */
@@ -105,6 +123,24 @@ export class PrismaExportRepository implements ExportRepository {
       orderBy: [{ receivedAt: "asc" }, { reportId: "asc" }],
       take: limit,
     });
+  }
+
+  async recent(limit: number): Promise<ExportJournalRow[]> {
+    const rows = await this.prisma.dataExport.findMany({ orderBy: { createdAt: "desc" }, take: limit });
+    return rows.map((row) => ({
+      exportId: row.exportId,
+      source: row.source,
+      requestedBy: row.requestedBy,
+      period: { from: row.periodFrom, to: row.periodTo },
+      status: row.status,
+      events: row.events,
+      reports: row.reports,
+      sizeBytes: row.sizeBytes,
+      parts: row.parts,
+      error: row.error,
+      createdAt: row.createdAt,
+      finishedAt: row.finishedAt,
+    }));
   }
 
   async lastExportTo(requestedBy: string): Promise<Date | null> {

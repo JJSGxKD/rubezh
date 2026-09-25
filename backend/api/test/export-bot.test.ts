@@ -80,7 +80,8 @@ function setup(env: Record<string, string> = {}, parts = 1) {
       return {
         exportId: "e1e2e3e4-0000-4000-8000-000000000000",
         period: request.period,
-        fileName: "rubezh-export.zip",
+        zipPath: "",
+      fileName: "rubezh-export.zip",
         parts: Array.from({ length: parts }, (_, index) => `/tmp/part-${index}`),
         sizeBytes: 90 * 1024 * 1024,
         counts: { events: 1200, reports: 3, runs: 40 },

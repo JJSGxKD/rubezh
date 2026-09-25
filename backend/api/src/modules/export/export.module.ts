@@ -19,6 +19,7 @@ import { RetentionJob } from "./retention.job.js";
     { provide: EXPORT_REPOSITORY, useClass: PrismaExportRepository },
     { provide: EXPORT_BOT_LOCKS, useClass: RedisExportBotLocks },
   ],
-  exports: [ExportService],
+  // Журнал выгрузок — разделу выгрузок в панели.
+  exports: [ExportService, EXPORT_REPOSITORY],
 })
 export class ExportModule {}
