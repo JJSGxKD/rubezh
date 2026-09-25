@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { FunnelScreen } from "./funnel/FunnelScreen";
+import { FxScreen } from "./fx/FxScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
 import { ReviewScreen } from "./review/ReviewScreen";
 import { AuditScreen } from "./roles/AuditScreen";
@@ -15,4 +16,5 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   funnel: () => <FunnelScreen />,
   roles: () => <RolesScreen />,
   audit: () => <AuditScreen />,
+  fx: () => <FxScreen />,
 };
