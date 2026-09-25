@@ -26,6 +26,7 @@ import { ProgressModule } from "./modules/progress/progress.module.js";
 import { TelegramMessagingModule } from "./platforms/telegram/telegram-messaging.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
+import { AdminModule } from "./modules/admin/admin.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -44,7 +45,8 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * funnel — вехи воронки аккаунта, messaging — можно ли писать игроку
  * (docs/35-stage4-plan.md, WP2); wallet — кошелёк журналом (там же, WP3);
  * fx — курсы валют вокруг ядра packages/fx (там же, WP9); progress — уровень
- * аккаунта и награды за забег (там же, WP4).
+ * аккаунта и награды за забег (там же, WP4); admin — серверная часть панели
+ * под своей cookie-сессией (там же, WP17), выключена по умолчанию.
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -74,6 +76,7 @@ export const APP_MODULES = [
   ExportModule,
   WelcomeModule,
   PlaytestModule,
+  AdminModule,
 ];
 
 /**

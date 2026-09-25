@@ -253,6 +253,8 @@ model Feedback {
 enum ExportSource {
   bot
   cli
+  /// кнопка в панели (docs/35-stage4-plan.md, WP17)
+  panel
 }
 
 enum ExportStatus {

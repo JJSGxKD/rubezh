@@ -104,6 +104,12 @@ class Reports implements DiagnosticsRepository {
   async findBench(): Promise<StoredBenchReport | null> {
     return this.report;
   }
+  async list(): Promise<[]> {
+    return [];
+  }
+  async find(): Promise<null> {
+    return null;
+  }
   async findRun(): Promise<StoredRunReport | null> {
     return this.run;
   }

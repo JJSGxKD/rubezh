@@ -51,8 +51,8 @@ const RUN_COLUMNS = ["received_at", "occurred_at", "event_type", "install_id", "
 
 export interface ExportRequest {
   period: ExportPeriod;
-  source: "bot" | "cli";
-  /** Telegram ID администратора или `cli` — в журнал выгрузок */
+  source: "bot" | "cli" | "panel";
+  /** Telegram ID администратора — из бота или панели — либо `cli`; в журнал выгрузок */
   requestedBy: string;
 }
 
@@ -60,6 +60,8 @@ export interface ExportArtifact {
   exportId: string;
   period: ExportPeriod;
   fileName: string;
+  /** архив целиком — для отдачи файлом из панели, где предела в 50 МБ нет */
+  zipPath: string;
   /** файлы для отправки: один архив или его части по порядку */
   parts: string[];
   sizeBytes: number;
@@ -154,7 +156,7 @@ export class ExportService {
           parts: parts.length,
         }),
       );
-      return { exportId, period: request.period, fileName, parts, sizeBytes, counts, appVersions: [...appVersions].sort(), cleanup };
+      return { exportId, period: request.period, fileName, zipPath, parts, sizeBytes, counts, appVersions: [...appVersions].sort(), cleanup };
     } catch (error: unknown) {
       await cleanup();
       await this.finish(exportId, { status: "failed", events: 0, reports: 0, sizeBytes: 0, parts: 0, error: error instanceof Error ? error.message : "unknown" });

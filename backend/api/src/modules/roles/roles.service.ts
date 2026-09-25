@@ -5,7 +5,7 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repo
 import type { AccountPlatform } from "../auth/access-token.js";
 import { isDeveloperAccount } from "../auth/dev-login.js";
 import { permissionsOf, type Permission, type Role } from "./permissions.js";
-import { ROLES_REPOSITORY, type AuditEntry, type RolesRepository } from "./roles.repository.js";
+import { ROLES_REPOSITORY, type AuditEntry, type AuditRecord, type RoleAssignment, type RolesRepository } from "./roles.repository.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 
 /**
@@ -96,6 +96,18 @@ export class RolesService {
     const revoked = await this.repository.revoke(accountId, role);
     if (revoked) await this.audit({ actorAccountId: actor.accountId, action: "roles.revoke", target: accountId, before: { role } });
     return revoked;
+  }
+
+  /** Все выданные роли — раздел ролей в панели; читать их вправе тот, кто их раздаёт. */
+  async assignments(actor: AccountRef): Promise<RoleAssignment[]> {
+    await this.require(actor, "roles.assign");
+    return await this.repository.assignments();
+  }
+
+  /** Последние записи журнала — под правом на чтение аудита. */
+  async recentAudit(actor: AccountRef, limit: number): Promise<AuditRecord[]> {
+    await this.require(actor, "audit.view");
+    return await this.repository.recentAudit(limit);
   }
 
   /**

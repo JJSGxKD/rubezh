@@ -13,5 +13,7 @@ import { FUNNEL_REPOSITORY, PrismaFunnelRepository } from "./funnel.repository.j
 @Module({
   imports: [AuthModule, RunsModule, PaymentsModule],
   providers: [FunnelTracker, { provide: FUNNEL_REPOSITORY, useClass: PrismaFunnelRepository }],
+  // Карточке игрока в панели — вехи, воронке в панели — отчёт по источникам.
+  exports: [FUNNEL_REPOSITORY],
 })
 export class FunnelModule {}

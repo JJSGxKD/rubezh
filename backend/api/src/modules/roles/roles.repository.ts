@@ -29,8 +29,18 @@ export interface AuditRecord extends AuditEntry {
 
 export const ROLES_REPOSITORY = Symbol("ROLES_REPOSITORY");
 
+/** Кому какая роль выдана и кем — раздел ролей в панели. */
+export interface RoleAssignment {
+  accountId: string;
+  role: Role;
+  grantedBy: string | null;
+  grantedAt: Date;
+}
+
 export interface RolesRepository {
   rolesOf(accountId: string): Promise<Role[]>;
+  /** Все выданные роли, свежие первыми */
+  assignments(): Promise<RoleAssignment[]>;
   /** `false` — роль уже была: повторная выдача не событие и в журнал не идёт */
   grant(accountId: string, role: Role, grantedBy: string | null): Promise<boolean>;
   /** `false` — роли и не было */
@@ -49,6 +59,12 @@ export class PrismaRolesRepository implements RolesRepository {
   async rolesOf(accountId: string): Promise<Role[]> {
     const rows = await this.prisma.accountRole.findMany({ where: { accountId }, select: { role: true } });
     return rows.map((row) => row.role as Role);
+  }
+
+  async assignments(): Promise<RoleAssignment[]> {
+    // Ролей — десятки на всю команду, страниц не нужно.
+    const rows = await this.prisma.accountRole.findMany({ orderBy: { grantedAt: "desc" } });
+    return rows.map((row) => ({ accountId: row.accountId, role: row.role as Role, grantedBy: row.grantedBy, grantedAt: row.grantedAt }));
   }
 
   async grant(accountId: string, role: Role, grantedBy: string | null): Promise<boolean> {

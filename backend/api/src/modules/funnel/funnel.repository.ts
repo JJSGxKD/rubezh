@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { PRISMA } from "../../infra/database.js";
+import { funnelReport, type FunnelRow } from "./funnel-report.js";
 
 /**
  * Вехи воронки аккаунта (docs/35-stage4-plan.md, Р30, §3.10). Каждая веха —
@@ -13,7 +14,25 @@ import { PRISMA } from "../../infra/database.js";
 
 export const FUNNEL_REPOSITORY = Symbol("FUNNEL_REPOSITORY");
 
+/** Вехи одного аккаунта — карточка игрока в панели; `null` у вехи — ещё не случилось. */
+export interface FunnelMilestones {
+  enteredAt: Date | null;
+  appOpenedAt: Date | null;
+  firstRunStartedAt: Date | null;
+  firstRunFinishedAt: Date | null;
+  runsRecorded: number;
+  runs2At: Date | null;
+  runs5At: Date | null;
+  returnedD1At: Date | null;
+  returnedD7At: Date | null;
+  firstPurchaseAt: Date | null;
+}
+
 export interface FunnelRepository {
+  /** вехи аккаунта; `null` — строки нет: игрок ни разу не входил */
+  milestones(accountId: string): Promise<FunnelMilestones | null>;
+  /** воронка по источникам за период — тот же отчёт, что у команды `funnel:report` */
+  report(from: Date, to: Date): Promise<FunnelRow[]>;
   /** вошёл в канал площадки: бот, сообщество, страница */
   entered(accountId: string, at: Date): Promise<void>;
   /** запуск приложения: первый — полная регистрация, следующие — возвраты на D1 и D7 */
@@ -80,5 +99,26 @@ export class PrismaFunnelRepository implements FunnelRepository {
       INSERT INTO account_funnel (account_id, first_purchase_at) VALUES (${accountId}::uuid, ${at})
       ON CONFLICT (account_id) DO UPDATE SET first_purchase_at = COALESCE(account_funnel.first_purchase_at, EXCLUDED.first_purchase_at)
     `;
+  }
+
+  async milestones(accountId: string): Promise<FunnelMilestones | null> {
+    const row = await this.prisma.accountFunnel.findUnique({ where: { accountId } });
+    if (row === null) return null;
+    return {
+      enteredAt: row.enteredAt,
+      appOpenedAt: row.appOpenedAt,
+      firstRunStartedAt: row.firstRunStartedAt,
+      firstRunFinishedAt: row.firstRunFinishedAt,
+      runsRecorded: row.runsRecorded,
+      runs2At: row.runs2At,
+      runs5At: row.runs5At,
+      returnedD1At: row.returnedD1At,
+      returnedD7At: row.returnedD7At,
+      firstPurchaseAt: row.firstPurchaseAt,
+    };
+  }
+
+  async report(from: Date, to: Date): Promise<FunnelRow[]> {
+    return await funnelReport(this.prisma, from, to);
   }
 }

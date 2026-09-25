@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Role } from "../../src/modules/roles/permissions.js";
-import type { AuditEntry, AuditRecord, RolesRepository } from "../../src/modules/roles/roles.repository.js";
+import type { AuditEntry, AuditRecord, RoleAssignment, RolesRepository } from "../../src/modules/roles/roles.repository.js";
 
 /**
  * Роли и журнал в памяти — для тестов сервиса. Смысл тот же, что у
@@ -17,6 +17,14 @@ export class MemoryRolesRepository implements RolesRepository {
 
   async rolesOf(accountId: string): Promise<Role[]> {
     return [...(this.byAccount.get(accountId) ?? [])];
+  }
+
+  async assignments(): Promise<RoleAssignment[]> {
+    const result: RoleAssignment[] = [];
+    for (const [accountId, roles] of this.byAccount) {
+      for (const role of roles) result.push({ accountId, role, grantedBy: this.grantedBy.get(`${accountId}:${role}`) ?? null, grantedAt: new Date(0) });
+    }
+    return result;
   }
 
   async grant(accountId: string, role: Role, grantedBy: string | null): Promise<boolean> {
