@@ -889,3 +889,49 @@ model FriendReturn {
   @@map("friend_return")
 }
 
+// Редирект-ссылки (WP16, docs/24-attribution-and-sharing.md §3). Ссылка —
+// кампания команды: `/r/<код>` ведёт в приложение, а каждый клик получает
+// свой код и уходит в параметр запуска `c-<код клика>` — так клик связан с
+// сессией и касанием игрока (`account_session.start_ref`).
+model Link {
+  /// случайный, не угадывается перебором и не несёт данных
+  code      String      @id @db.VarChar(16)
+  /// куда ведёт прямой режим
+  platform  Platform    @default(telegram)
+  campaign  String      @db.VarChar(64)
+  source    String?     @db.VarChar(64)
+  medium    String?     @db.VarChar(64)
+  note      String?     @db.VarChar(200)
+  /// кто завёл; без внешнего ключа — ссылка кампании переживает аккаунт
+  createdBy String?     @map("created_by") @db.Uuid
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  clicks    LinkClick[]
+
+  @@index([createdAt])
+  @@map("link")
+}
+
+// Клик по ссылке. Краулеры превью кликами не считаются и сюда не пишутся.
+// Сырые данные — минимум для атрибуции и антифрода: подсеть, а не адрес;
+// класс устройства, а не строка браузера; хост `Referer`, а не адрес целиком.
+model LinkClick {
+  /// уходит в параметр запуска `c-<clickId>`
+  clickId     String   @id @map("click_id") @db.VarChar(16)
+  linkCode    String   @map("link_code") @db.VarChar(16)
+  at          DateTime @default(now()) @db.Timestamptz(3)
+  utmSource   String?  @map("utm_source") @db.VarChar(128)
+  utmMedium   String?  @map("utm_medium") @db.VarChar(128)
+  utmCampaign String?  @map("utm_campaign") @db.VarChar(128)
+  utmContent  String?  @map("utm_content") @db.VarChar(128)
+  utmTerm     String?  @map("utm_term") @db.VarChar(128)
+  refererHost String?  @map("referer_host") @db.VarChar(255)
+  deviceClass String?  @map("device_class") @db.VarChar(16)
+  ipPrefix    String?  @map("ip_prefix") @db.VarChar(64)
+  language    String?  @db.VarChar(16)
+
+  link Link @relation(fields: [linkCode], references: [code], onDelete: Cascade)
+
+  @@index([linkCode, at])
+  @@map("link_click")
+}
+
