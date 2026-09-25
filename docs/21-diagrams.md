@@ -64,6 +64,8 @@ erDiagram
     ACCOUNT ||--o{ FRIENDSHIP : "дружит (обе стороны пары)"
     ACCOUNT ||--o{ FRIEND_REQUEST : "заявки: от кого и кому"
     ACCOUNT ||--o{ FRIEND_GIFT : "подарки: от кого и кому"
+    ACCOUNT ||--o| REFERRAL_BINDING : "кем приглашён — один раз"
+    ACCOUNT ||--o{ REFERRAL_BINDING : "кого пригласил"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -343,6 +345,15 @@ erDiagram
         datetime created_at
         datetime claimed_at "nullable: ещё не забран"
     }
+
+    REFERRAL_BINDING {
+        uuid referred_account_id PK,FK "привязка одна и навсегда"
+        uuid referrer_account_id FK "CHECK: не сам себе"
+        enum status "bound|activated|rejected"
+        datetime bound_at
+        datetime activated_at "nullable"
+        string reject_reason "nullable: same_network"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -425,6 +436,12 @@ erDiagram
   `created_at`). Всё уходит вместе с аккаунтом. `FRIEND_GIFT` — подарок за
   игровые сутки: сутки в ключе, забранный помечается, монеты лежат в журнале
   кошелька с причиной `friend_gift` и ключом подарка.
+- **`REFERRAL_BINDING` — привязка реферала** (`23-referral-and-partner-program.md`
+  §2). Ключ — приглашённый: привязка одна и навсегда. Отклонённая антифродом
+  остаётся строкой со статусом `rejected`, иначе её переприсвоила бы
+  следующая ссылка. Награды — в журнале кошелька с причиной
+  `referral_reward`: приглашённому ключом `referral_welcome:<id>`,
+  пригласившему — `referral:<id>`.
 
 ### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 
