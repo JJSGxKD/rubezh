@@ -1,21 +1,25 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_MAP_ID, type RunInspection } from "@bh/core-game";
+import type { RunResult } from "@bh/shared-types";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
+import { canOfferPaidContinue } from "../../state/payments-availability";
 import { usePlatform } from "../../state/platform";
-import { usePlaytest } from "../../state/playtest";
+import { useRuns } from "../../state/runs";
 import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
 import { RunLoading } from "./RunLoading";
-import { DeathOverlay, LevelUpOverlay, PauseOverlay } from "./overlays";
+import { LevelUpOverlay, PauseOverlay } from "./overlays";
+import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
 import { DevSheetLazy } from "./dev-sheet-lazy";
 import { DevTechPanelLazy } from "./dev-tech-panel-lazy";
 import { RunStatsSheet } from "./RunStatsSheet";
+import type { SecondChanceProps } from "./SecondChance";
 
 /**
  * Экран забега: канва Phaser на весь экран, HUD слоем поверх и оверлеи
@@ -31,7 +35,7 @@ export function RunScreen(): ReactNode {
   const diagnostics = useDiagnostics((state) => state.enabled);
   const isActive = usePlatform((state) => state.isActive);
   const expanded = usePlatform((state) => state.viewport.expanded);
-  const submitted = usePlaytest((state) => state.lastSubmitted);
+  const submitted = useRuns((state) => state.lastSubmitted);
   const [stats, setStats] = useState<RunInspection | null>(null);
   const openStats = (): void => setStats(useRun.getState().inspect());
   const [devOpen, setDevOpen] = useState(false);
@@ -83,13 +87,20 @@ export function RunScreen(): ReactNode {
     useRun.getState().pause("app_inactive");
   }, [isActive, expanded]);
 
+  // Экран смерти — отдельный чанк: подтягиваем его, как только забег пошёл,
+  // чтобы смерть не ждала сети.
+  const running = run.phase === "running";
+  useEffect(() => {
+    if (running) prefetchDeathOverlay();
+  }, [running]);
+
   return (
     <div className="relative h-full w-full overflow-hidden">
       <div ref={containerRef} className="absolute inset-0" style={{ zIndex: "var(--z-canvas)" }} />
 
       <RunLoading stage={run.phase === "error" ? null : run.loadingStage} weaponId={weaponId} />
 
-      {run.hud === null || run.phase === "finished" ? null : (
+      {run.hud === null || run.phase === "finished" || run.phase === "downed" ? null : (
         <RunHud
           hud={run.hud}
           onPause={() => useRun.getState().pause("manual")}
@@ -97,7 +108,7 @@ export function RunScreen(): ReactNode {
         />
       )}
 
-      {run.devInfo !== null && run.phase !== "finished" && (run.devRun ? devTechInfo : fpsOverlay) ? (
+      {run.devInfo !== null && run.phase !== "finished" && run.phase !== "downed" && (run.devRun ? devTechInfo : fpsOverlay) ? (
         <DevTechPanelLazy info={run.devInfo} compact={!run.devRun} />
       ) : null}
 
@@ -134,13 +145,16 @@ export function RunScreen(): ReactNode {
         <RunStatsSheet inspection={stats} onClose={() => setStats(null)} />
       ) : null}
 
-      {run.phase === "finished" && run.result !== null ? (
-        <DeathOverlay
+      {/* На экране смерти до решения о втором шансе итог предварительный:
+          ни рекорда, ни места ещё нет — они появятся после отказа. */}
+      {(run.phase === "finished" || run.phase === "downed") && run.result !== null ? (
+        <DeathOverlayLazy
           result={run.result}
           isNewRecord={run.isNewRecord}
-          rank={submitted?.runId === run.result.runId ? submitted.result.rank : null}
+          rank={run.phase === "finished" && submitted?.runId === run.result.runId ? submitted.result.rank : null}
           diagnostics={diagnostics}
           cheatsCounted={run.devRun && countInRating}
+          {...(run.phase === "downed" ? { secondChance: secondChanceFor(run.result, run.devRun) } : {})}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
           onShare={() => shareRun()}
@@ -159,6 +173,17 @@ export function RunScreen(): ReactNode {
   );
 }
 
+
+/**
+ * Что можно на экране смерти: купить продолжение звёздами — где площадка
+ * умеет оплату, — а в забеге разработчика ещё и взять его бесплатно.
+ */
+function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps {
+  return {
+    ...(devRun ? { onDevContinue: () => useRun.getState().continueRun("dev") } : {}),
+    ...(canOfferPaidContinue() ? { paidFor: result } : {}),
+  };
+}
 
 /**
  * Шеринг результата — заглушка этапа 2: адаптер о нём знает, но экрана и

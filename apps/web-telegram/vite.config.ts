@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { clientRolldownOptions } from "../../scripts/vite/chunking.ts";
 import { ignoreDotenvNodeEnvForBuild } from "../../scripts/vite/production-node-env.ts";
 import { stableDevSession } from "../../scripts/vite/stable-dev-session.ts";
+import { devServerConfig } from "../../scripts/vite/dev-server.ts";
 
 // Корень монорепо — единственный .env на весь проект (см. docs/20-env-and-ports.md).
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -19,38 +20,41 @@ export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, repoRoot, "");
   const port = Number(env.WEB_TELEGRAM_PORT ?? 5173);
 
-  // Адрес туннеля frp, если он поднят: Telegram не открывает http://localhost
-  // как Mini App, нужен публичный HTTPS (docs/20-env-and-ports.md §4).
-  //
-  // Сервер при этом продолжает слушать только петлю — наружу его выводит frpc.
-  // Это сознательно: host: true отдал бы dev-сборку всей локальной сети.
-  const tunnelHost = (env.DEV_TUNNEL_TELEGRAM_HOST ?? "").trim();
-  const tunnelServerOptions =
-    tunnelHost === ""
-      ? {}
-      : {
-          // Без этого Vite отклонит запрос с чужим заголовком Host
-          allowedHosts: [tunnelHost],
-          // HMR идёт на тот же домен по wss через 443 — иначе клиент стучится
-          // на localhost телефона и молча остаётся без обновлений
-          hmr: { protocol: "wss" as const, host: tunnelHost, clientPort: 443 },
-        };
-
   // Бэкенд за тем же доменом, что и клиент: телефон через туннель достаёт до
   // локального API без отдельного прокси и без CORS (docs/26-stage2-plan.md,
-  // Р19). Проксируются только префиксы, которые сами защищены: плейтест —
-  // подписью initData, приёмники — выключателем, лимитами и Origin
-  // (docs/28-diagnostics.md §5.3), вебхук бота — секретным токеном: через
-  // туннель машина разработчика может принимать обновления и вебхуком.
-  // Остальное dev-API наружу не выходит
-  // (docs/20-env-and-ports.md §4).
+  // Р19). Проксируются только префиксы, которые сами защищены: вход — подписью
+  // запуска и лимитом частоты, забеги, оплата и плейтест — токеном сессии, приёмники и
+  // отзывы — выключателем, лимитами и Origin (docs/28-diagnostics.md §5.3), вебхук
+  // бота — секретным токеном: через туннель машина разработчика может
+  // принимать обновления и вебхуком. Остальное dev-API — роли, журнал —
+  // наружу не выходит (docs/20-env-and-ports.md §4). Префикс, к которому ходит
+  // клиент, но которого нет здесь, ловит scripts/test/dev-proxy.test.ts.
   const apiTarget = `http://127.0.0.1:${Number(env.API_PORT ?? 4000)}`;
   const apiProxy = Object.fromEntries(
-    ["/api/v1/playtest", "/api/v1/events", "/api/v1/diagnostics", "/api/v1/bot"].map((prefix) => [
+    [
+      "/api/v1/auth",
+      "/api/v1/runs",
+      "/api/v1/payments",
+      "/api/v1/playtest",
+      "/api/v1/events",
+      "/api/v1/diagnostics",
+      "/api/v1/feedback",
+      "/api/v1/bot",
+    ].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },
     ]),
   );
+
+  // Порт, туннель, HTTPS и доступ с телефона — общие для трёх площадок
+  // (scripts/vite/dev-server.ts).
+  const { server, preview } = devServerConfig({
+    env,
+    repoRoot,
+    port,
+    tunnelHostVar: "DEV_TUNNEL_TELEGRAM_HOST",
+    proxy: apiProxy,
+  });
 
   return {
     // React — для оболочки, Tailwind 4 — для токенов дизайн-системы
@@ -60,18 +64,8 @@ export default defineConfig(({ mode, command }) => {
     plugins: [react(), tailwindcss(), stableDevSession()],
     base: "./",
     envDir: repoRoot,
-    server: {
-      port,
-      strictPort: true,
-      proxy: apiProxy,
-      ...tunnelServerOptions,
-    },
-    preview: {
-      port,
-      strictPort: true,
-      proxy: apiProxy,
-      ...(tunnelHost === "" ? {} : { allowedHosts: [tunnelHost] }),
-    },
+    server,
+    preview,
     build: {
       outDir: "dist",
       // Одинаковая раскладка чанков на Windows и в CI (scripts/vite/chunking.ts).

@@ -1,6 +1,5 @@
-// Схема прод-базы. Таблицы появляются вместе с кодом, который в них пишет:
-// пользователи, забеги и покупки из docs/21-diagrams.md §1 придут с
-// авторизацией и платежами этапа 3, а не лежат пустыми в проде заранее.
+// Схема прод-базы. Таблицы появляются вместе с кодом, который в них пишет,
+// а не лежат пустыми в проде заранее (docs/21-diagrams.md §1).
 
 // Prisma 7: клиент генерируется в исходники бэкенда TypeScript-модулями в
 // ESM и в git не попадает (docs/16-tech-stack-decisions.md §5). Строка
@@ -26,6 +25,135 @@ enum Platform {
 enum DiagnosticKind {
   bench
   run
+}
+
+// Роли в панели управления (docs/29-admin-panel.md §3.1). Состав роли —
+// код, а не данные: менять его должно ревью, а не клик. Данные — только то,
+// у кого какая роль.
+enum Role {
+  owner
+  admin
+  game_designer
+  moderator
+  marketer
+  finance
+  analyst
+  stakeholder
+}
+
+enum Difficulty {
+  easy
+  normal
+  hard
+}
+
+enum RunStatus {
+  started
+  finished
+}
+
+enum RunOutcome {
+  died
+  abandoned
+}
+
+// Вердикт антифрода фазы 1 (docs/34-stage3-plan.md, WP4). В рейтинг идёт
+// только `ok`; остальные хранятся для разбора, а не выбрасываются: ошибиться
+// может и проверка.
+enum RunVerdict {
+  ok
+  suspicious
+  rejected
+}
+
+// Что продаётся за Stars (docs/34-stage3-plan.md, Р5): пока один товар —
+// второй шанс, прямой покупкой, без донатной валюты.
+enum PurchaseProduct {
+  continue_run
+}
+
+// Режим оплаты (docs/34-stage3-plan.md, Р14). `test` — разработка: игрок
+// видит настоящую цену, списывается одна звезда и тут же возвращается.
+// Тестовые покупки в отчёты о выручке не попадают.
+enum PaymentMode {
+  live
+  test
+}
+
+enum PurchaseStatus {
+  /// счёт выставлен, оплаты нет
+  pending
+  /// Telegram подтвердил оплату — продолжение выдано
+  paid
+  /// звёзды вернулись игроку; выданное продолжение остаётся выданным
+  refunded
+}
+
+enum RefundReason {
+  /// тестовая оплата: звезда возвращается сразу после подтверждения
+  test_mode
+  /// продолжением не воспользовались: забег закончился раньше
+  unused
+  /// вернули не мы: спор игрока, поддержка Telegram
+  external
+}
+
+// Откуда открыли игру (docs/34-stage3-plan.md, WP6): разбор параметра запуска
+// — `modules/attribution/start-param.ts`.
+enum StartKind {
+  organic
+  click
+  invite
+  telegram_affiliate
+  unknown
+}
+
+// Где началась сессия: в Mini App площадки или в браузере (вход разработчика,
+// позже веб-версия).
+enum SessionPlace {
+  miniapp
+  web
+}
+
+enum DeviceClass {
+  mobile
+  desktop
+  web
+  unknown
+}
+
+// Аккаунт игрока (docs/34-stage3-plan.md, WP1).
+//
+// Ключ идентичности — пара «площадка + её идентификатор», а не Telegram ID:
+// аккаунты между площадками не связываются (docs/08-web-and-identity.md §3),
+// и тот же игрок в MAX — это другой аккаунт, а не тот же самый.
+//
+// Имя и аватар — снимок на момент входа: Telegram отдаёт их в данных запуска,
+// и обновляются они там же. Это данные для показа, а не источник истины о
+// человеке.
+model Account {
+  accountId      String    @id @map("account_id") @db.Uuid
+  platform       Platform
+  platformUserId String    @map("platform_user_id") @db.VarChar(32)
+  displayName    String    @map("display_name") @db.VarChar(128)
+  username       String?   @db.VarChar(64)
+  photoUrl       String?   @map("photo_url") @db.VarChar(512)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  // Блокировка — поле аккаунта, а не отдельная таблица: состояние одно, а
+  // история блокировок придёт в аудит вместе с ролями (WP2).
+  bannedAt       DateTime? @map("banned_at") @db.Timestamptz(3)
+  banReason      String?   @map("ban_reason") @db.VarChar(256)
+
+  roles       AccountRole[]
+  runs        Run[]
+  purchases   Purchase[]
+  sessions    AccountSession[]
+  acquisition Acquisition?
+
+  @@unique([platform, platformUserId])
+  @@index([lastSeenAt])
+  @@map("account")
 }
 
 // Событие аналитики закрытого теста (docs/22-analytics-and-metrics.md §3.1).
@@ -133,4 +261,223 @@ model DataExport {
 
   @@index([requestedBy, createdAt])
   @@map("data_export")
+}
+
+// Роль, выданная аккаунту (docs/34-stage3-plan.md, WP2). Ролей у человека
+// может быть несколько: участник 2 — администратор, маркетолог и участник
+// проекта разом.
+//
+// Кто выдал — обязательная часть строки, а не удобство: без неё журнал
+// аудита отвечает «кому выдали», но не «кто выдал».
+model AccountRole {
+  accountId String   @map("account_id") @db.Uuid
+  role      Role
+  /// `null` — выдано на старте по списку в окружении, а не человеком
+  grantedBy String?  @map("granted_by") @db.Uuid
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, role])
+  @@index([role])
+  @@map("account_role")
+}
+
+// Журнал аудита (docs/29-admin-panel.md §3.4): кто, когда, что, было → стало.
+//
+// Пишется на изменения и на чувствительное чтение — просмотр персональных
+// данных и выгрузки. Из приложения не редактируется вовсе: журнал, который
+// можно поправить, не журнал.
+model AuditEntry {
+  entryId        String   @id @map("entry_id") @db.Uuid
+  /// `null` — действие системы, а не человека: например, выдача роли на старте
+  actorAccountId String?  @map("actor_account_id") @db.Uuid
+  /// что сделали: имя права или действия, `roles.assign` и подобные
+  action         String   @db.VarChar(64)
+  /// над чем: идентификатор аккаунта, выгрузки, записи — своё у каждого действия
+  target         String?  @db.VarChar(128)
+  /// было и стало; `null` там, где состояния не было или оно не изменилось
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([actorAccountId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_entry")
+}
+
+// Забег (docs/34-stage3-plan.md, WP4). Источник истины по результатам:
+// лидерборд в Redis — проекция отсюда и пересобирается одной командой.
+//
+// Строка появляется на старте забега, а не в конце: сервер отмечает начало по
+// своим часам, и по ним потом проверяет, что заявленное время выживания
+// вообще могло пройти (решение Р5.2). Старт не дошёл — строка заводится в
+// конце, без времени начала, и время забега остаётся непроверенным.
+//
+// `run_id` — ключ идемпотентности от клиента: повтор итога из очереди не
+// удваивает ни рейтинг, ни статистику (docs/15-engineering-standards.md §4.1).
+model Run {
+  runId            String      @id @map("run_id") @db.VarChar(64)
+  accountId        String      @map("account_id") @db.Uuid
+  status           RunStatus
+  difficulty       Difficulty
+  startingWeaponId String      @map("starting_weapon_id") @db.VarChar(64)
+  contentHash      String      @map("content_hash") @db.VarChar(32)
+  /// когда забег начался по часам сервера; `null` — старт не дошёл или пришёл слишком поздно
+  startedAt        DateTime?   @map("started_at") @db.Timestamptz(3)
+  finishedAt       DateTime?   @map("finished_at") @db.Timestamptz(3)
+  outcome          RunOutcome?
+  survivalSec      Float?      @map("survival_sec")
+  level            Int?
+  enemiesKilled    Int?        @map("enemies_killed")
+  /// оружие и уровни к концу забега: `[{ id, level }]`
+  weapons          Json?
+  deathCause       String?     @map("death_cause") @db.VarChar(64)
+  /// в забеге включали читы режима разработчика
+  cheats           Boolean     @default(false)
+  /// секунда каждого второго шанса; сверяется с оплаченными покупками
+  continues        Float[]     @default([])
+  /// попал ли в рейтинг: вердикт `ok` и без читов (или администратор просил учесть)
+  ranked           Boolean     @default(false)
+  verdict          RunVerdict?
+  /// коды причин вердикта, в том числе сведения, не меняющие его
+  verdictReasons   String[]    @map("verdict_reasons")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account   Account    @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchases Purchase[]
+
+  // Профиль игрока: его забеги, свежие первыми.
+  @@index([accountId, finishedAt])
+  // Пересборка лидерборда: лучший рейтинговый забег каждого по сложности.
+  @@index([difficulty, ranked, survivalSec])
+  // Очередь разбора: подозрительные и отклонённые, свежие первыми.
+  @@index([verdict, finishedAt])
+  @@map("run")
+}
+
+// Покупка за Telegram Stars (docs/34-stage3-plan.md, WP5). Строка заводится,
+// когда выставлен счёт, и дальше живёт записью бухгалтерии: удалить аккаунт
+// или забег, за продолжение которого заплатили, база не даст (`Restrict`) —
+// деньги не исчезают вместе с игроком.
+//
+// Цены две — показанная и списанная (Р14): в тестовом режиме игрок видит
+// настоящую цену, а списывается одна звезда. Звёзды по протоколу Telegram
+// целые, поэтому `Int`, а не `Decimal`: дробной звезды не бывает, и точность
+// здесь не теряется.
+//
+// Ключей идемпотентности два. `(run_id, continue_no)` — повторный запрос
+// счёта на то же продолжение возвращает ту же покупку, а не заводит вторую.
+// `telegram_charge_id` — повтор подтверждения оплаты от Telegram ничего не
+// удваивает (docs/15-engineering-standards.md §4.1).
+model Purchase {
+  purchaseId        String          @id @map("purchase_id") @db.Uuid
+  accountId         String          @map("account_id") @db.Uuid
+  product           PurchaseProduct
+  runId             String          @map("run_id") @db.VarChar(64)
+  /// какое по счёту продолжение забега оплачивается, с единицы
+  continueNo        Int             @map("continue_no") @db.SmallInt
+  /// секунда забега, по которой посчитана цена
+  elapsedSec        Float           @map("elapsed_sec")
+  /// цена по правилу Р5.1 — её видит игрок
+  priceStars        Int             @map("price_stars")
+  /// сколько списано на самом деле: в тестовом режиме — одна звезда
+  chargedStars      Int             @map("charged_stars")
+  mode              PaymentMode
+  status            PurchaseStatus
+  /// идентификатор оплаты в Telegram; `null` — оплаты ещё не было
+  telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(128)
+  /// когда выставлен последний счёт: к устаревшему счёту оплата не принимается
+  invoicedAt        DateTime        @map("invoiced_at") @db.Timestamptz(3)
+  paidAt            DateTime?       @map("paid_at") @db.Timestamptz(3)
+  refundReason      RefundReason?   @map("refund_reason")
+  /// возврат заказан, но Telegram его ещё не подтвердил — очередь повторяет
+  refundRequestedAt DateTime?       @map("refund_requested_at") @db.Timestamptz(3)
+  refundedAt        DateTime?       @map("refunded_at") @db.Timestamptz(3)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Restrict)
+
+  @@unique([runId, continueNo])
+  // Покупки игрока и доля возвратов на аккаунт (О4).
+  @@index([accountId, createdAt])
+  // Выручка: настоящие оплаты по времени, тестовые отсекаются первым полем.
+  @@index([mode, paidAt])
+  // Незавершённые возвраты — очередь поднимает их после перезапуска.
+  @@index([refundRequestedAt])
+  @@map("purchase")
+}
+
+// Сессия — запуск игры (docs/34-stage3-plan.md, WP6). Продление токена
+// сессией не считается: это та же сессия, а не новый запуск.
+//
+// Пишется из очереди, а не на горячем пути входа: в источнике переноса запись
+// сессии блокировала строку пользователя на каждый вход
+// (docs/13-reuse-from-vpnsibcom.md §6). Повтор запуска в течение 30 секунд
+// отсекает ключ в Redis — один запуск Mini App иначе пишет несколько сессий.
+//
+// Персональных данных — ровно столько, сколько нужно разрезам и антифроду
+// (docs/24-attribution-and-sharing.md §6): усечённый IP и класс устройства,
+// а не сырой адрес и строка User-Agent.
+model AccountSession {
+  sessionId      String       @id @map("session_id") @db.Uuid
+  accountId      String       @map("account_id") @db.Uuid
+  platform       Platform
+  place          SessionPlace
+  startKind      StartKind    @map("start_kind")
+  /// параметр запуска как пришёл, из подписанных данных; `null` — не было или мусор
+  startParam     String?      @map("start_param") @db.VarChar(64)
+  /// идентификатор внутри параметра: код клика, id партнёра Telegram
+  startRef       String?      @map("start_ref") @db.VarChar(64)
+  /// что клиент говорит о себе (`tgWebAppPlatform`) — подсказка, не факт
+  clientPlatform String?      @map("client_platform") @db.VarChar(16)
+  clientVersion  String?      @map("client_version") @db.VarChar(16)
+  deviceClass    DeviceClass  @map("device_class")
+  os             String       @db.VarChar(16)
+  /// подсеть: /24 для IPv4, /48 для IPv6 — адрес целиком не хранится
+  ipPrefix       String?      @map("ip_prefix") @db.VarChar(64)
+  startedAt      DateTime     @map("started_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Сессии игрока и удержание по дням.
+  @@index([accountId, startedAt])
+  @@index([startedAt])
+  // Запуски по ссылке: сколько пришло по клику, приглашению, партнёрке.
+  @@index([startKind, startRef])
+  @@map("account_session")
+}
+
+// Первое и последнее касание аккаунта (docs/13-reuse-from-vpnsibcom.md §6).
+//
+// Первое — самая ранняя сессия, органическая тоже: пришёл сам — значит сам,
+// и поздняя рекламная ссылка это не переписывает. Последнее — последняя
+// сессия **по ссылке**: открытие из меню бота не стирает кампанию, которая
+// привела игрока обратно.
+//
+// Обе строки считает одна вставка с `ON CONFLICT` — без блокировки строки и
+// без ремонтного крона, которым источник чинил параллельные записи.
+model Acquisition {
+  accountId           String      @id @map("account_id") @db.Uuid
+  firstAt             DateTime    @map("first_at") @db.Timestamptz(3)
+  firstStartKind      StartKind   @map("first_start_kind")
+  firstStartParam     String?     @map("first_start_param") @db.VarChar(64)
+  firstStartRef       String?     @map("first_start_ref") @db.VarChar(64)
+  firstClientPlatform String?     @map("first_client_platform") @db.VarChar(16)
+  firstDeviceClass    DeviceClass @map("first_device_class")
+  /// последняя сессия любая — для «давно не заходил»
+  lastSeenAt          DateTime    @map("last_seen_at") @db.Timestamptz(3)
+  /// последняя сессия по ссылке; `null` — по ссылкам не приходил ни разу
+  lastTouchAt         DateTime?   @map("last_touch_at") @db.Timestamptz(3)
+  lastStartKind       StartKind?  @map("last_start_kind")
+  lastStartParam      String?     @map("last_start_param") @db.VarChar(64)
+  lastStartRef        String?     @map("last_start_ref") @db.VarChar(64)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Когорты по источнику первого касания.
+  @@index([firstStartKind, firstAt])
+  @@map("acquisition")
 }

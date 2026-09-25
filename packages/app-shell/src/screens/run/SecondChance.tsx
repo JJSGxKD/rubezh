@@ -1,24 +1,34 @@
 import type { ReactNode } from "react";
-import { Diamond, HeartPulse, Lock, Tv } from "lucide-react";
+import type { RunResult } from "@bh/shared-types";
+import { HeartPulse, Lock, Tv, Wrench } from "lucide-react";
 import { Badge, Button } from "../../design-system/components";
+import { StarsIcon } from "../../design-system/components/StarsIcon";
 import { t } from "../../i18n";
+import type { ContinueStage } from "../../state/continue-purchase";
+import { PaidContinue, PaidContinueView } from "./PaidContinue";
+
+export interface SecondChanceProps {
+  /**
+   * Бесплатное продолжение в забеге разработчика — так механика проверяется
+   * без денег. Нет — кнопки нет.
+   */
+  onDevContinue?: () => void;
+  /**
+   * Забег, чей второй шанс можно купить звёздами. Нет — купить негде: вне
+   * Telegram, без входа или забег уже закрыт, и кнопка — только витрина.
+   */
+  paidFor?: RunResult;
+  /** Состояние покупки для витрины компонентов — без сети и без стора. */
+  paidPreview?: ContinueStage;
+}
 
 /**
- * Цена второго шанса в самоцветах — пример для заглушки, а не прайс: цены
- * появятся вместе с экономикой (docs/07-monetization-and-ads.md §8).
+ * «Второй шанс» на экране смерти: продолжить забег за звёзды или, позже, за
+ * рекламу — все враги вокруг исчезают, здоровье восстанавливается
+ * (docs/07-monetization-and-ads.md §8). Реклама — этап 4, её кнопка пока
+ * недоступна.
  */
-const PREMIUM_PRICE = 10;
-
-/**
- * «Второй шанс» на экране смерти: продолжить забег за рекламу или за
- * самоцветы — все враги вокруг исчезают, здоровье восстанавливается.
- *
- * Пока заглушка: кнопки недоступны и помечены. Живая механика приходит вместе
- * с платежами и рекламой (docs/26-stage2-plan.md §1.2) и требует от движка
- * не закрывать забег сразу после смерти — итог, рекорд и `run_finished`
- * откладываются, пока игрок не откажется от продолжения.
- */
-export function SecondChance(): ReactNode {
+export function SecondChance(props: SecondChanceProps = {}): ReactNode {
   return (
     <section
       aria-label={t("run.continue.title")}
@@ -33,10 +43,13 @@ export function SecondChance(): ReactNode {
             <span className="font-display text-base font-bold text-text">
               {t("run.continue.title")}
             </span>
-            <Badge tone="warning">
-              <Lock size={12} aria-hidden="true" />
-              {t("app.inDevelopment")}
-            </Badge>
+            {/* Купить нельзя — блок честно помечен, а не выглядит сломанным. */}
+            {props.paidFor === undefined && props.paidPreview === undefined ? (
+              <Badge tone="warning">
+                <Lock size={12} aria-hidden="true" />
+                {t("app.inDevelopment")}
+              </Badge>
+            ) : null}
           </div>
           <p className="mt-0.5 text-xs text-text-muted">{t("run.continue.text")}</p>
         </div>
@@ -49,16 +62,31 @@ export function SecondChance(): ReactNode {
           <Tv size={18} aria-hidden="true" />
           {t("run.continue.ad.short")}
         </Button>
-        <Button
-          variant="secondary"
-          block
-          disabled
-          ariaLabel={t("run.continue.premium", { amount: PREMIUM_PRICE })}
-        >
-          <Diamond size={18} aria-hidden="true" className="text-passive" />
-          <span className="tabular-nums">{PREMIUM_PRICE}</span>
-        </Button>
+        {props.paidFor !== undefined ? (
+          <PaidContinue result={props.paidFor} />
+        ) : props.paidPreview !== undefined ? (
+          <PaidContinueView stage={props.paidPreview} onBuy={() => undefined} onRetry={() => undefined} />
+        ) : (
+          <StarsPlaceholder />
+        )}
       </div>
+      {props.onDevContinue === undefined ? null : (
+        <div className="mt-2">
+          <Button block onClick={props.onDevContinue}>
+            <Wrench size={18} aria-hidden="true" />
+            {t("run.continue.dev")}
+          </Button>
+        </div>
+      )}
     </section>
+  );
+}
+
+function StarsPlaceholder(): ReactNode {
+  return (
+    <Button variant="secondary" block disabled ariaLabel={t("run.continue.stars.unknown")}>
+      <StarsIcon size={18} />
+      <span>—</span>
+    </Button>
   );
 }

@@ -29,6 +29,16 @@ const ENGINE = /^(phaser-host|run-engine|stress-engine)-.*\.js$/;
 const AUDIO = /^(sound-director|recipes|lab-overrides|music|synth|audio-engine)-.*\.js$/;
 
 /**
+ * Инструменты команды — витрина компонентов, звуковая лаборатория, лист и
+ * техническая панель разработчика. Игроку они не открываются вовсе: доступ
+ * решает сервер по ролям. Своя строка, чтобы они не съедали запас экранов,
+ * которые качает игрок, и чтобы бюджет игровых экранов мерил то, что к
+ * игроку и едет. Стресс-тест и диагностика сюда не входят: их видят
+ * тестировщики закрытого теста.
+ */
+const TEAM = /^(gallery|sound-lab|DevSheet|DevTechPanel)-.*\.js$/;
+
+/**
  * Первая загрузка — то, что браузер качает до интерактивной главной: скрипт
  * и `modulepreload` из index.html и всё, что они статически импортируют.
  *
@@ -63,13 +73,20 @@ function measure() {
   const isJs = (name) => name.endsWith(".js");
 
   const budgets = [
-    { name: "Оболочка, первая загрузка", limitKb: 150, matches: (name) => firstLoad.has(name) },
+    // 152, а не 150: порог поднят на этапе 3 вместе с проверкой версии
+    // клиента и экраном обновления (docs/27-design-system-and-app-shell.md
+    // §3.4). Запас снова почти нулевой — следующая правка первой загрузки
+    // упрётся сюда же, и это по замыслу.
+    { name: "Оболочка, первая загрузка", limitKb: 152, matches: (name) => firstLoad.has(name) },
     { name: "CSS", limitKb: 30, matches: (name) => name.endsWith(".css") },
     {
+      // 55: из прежних 60 вынесены инструменты команды (9 КБ), запас игровых
+      // экранов остался прежним — около 4 КБ, а не вырос на их вес.
       name: "Экраны по требованию",
-      limitKb: 60,
-      matches: (name) => isJs(name) && !firstLoad.has(name) && !ENGINE.test(name) && !AUDIO.test(name),
+      limitKb: 55,
+      matches: (name) => isJs(name) && !firstLoad.has(name) && !ENGINE.test(name) && !AUDIO.test(name) && !TEAM.test(name),
     },
+    { name: "Инструменты команды", limitKb: 14, matches: (name) => TEAM.test(name) && !firstLoad.has(name) },
     { name: "Движок и стенд", limitKb: 380, matches: (name) => ENGINE.test(name) },
     { name: "Звук", limitKb: 15, matches: (name) => AUDIO.test(name) && !firstLoad.has(name) },
     {

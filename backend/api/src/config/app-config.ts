@@ -67,24 +67,19 @@ const schema = z.object({
     .default("false")
     .transform((value) => value === "true"),
 
-  // Сохранения и лидерборд плейтеста (docs/26-stage2-plan.md, WP13).
-  // Выключены по умолчанию: без токена бота игрока не проверить.
+  // Плейтест: сводка, отчёты о запуске, стресс-тест для всех
+  // (docs/26-stage2-plan.md, WP14). Забеги и рейтинг — модуль runs под
+  // авторизацией, поэтому плейтест без неё не включается.
   PLAYTEST_ENABLED: z
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
   TELEGRAM_BOT_TOKEN: z.string().default(""),
-  // Сколько живут данные запуска Telegram. Для плейтеста — сутки: итог забега
-  // уходит через десять минут после открытия приложения, а короткое окно из
-  // INIT_DATA_EXPIRES_IN рассчитано на обмен на токен сразу при входе.
-  PLAYTEST_INIT_DATA_MAX_AGE_SEC: z.coerce.number().int().positive().default(86_400),
-  // Через сколько дней без записей данные плейтеста исчезают сами.
+  // Через сколько дней без записей данные сводки плейтеста исчезают сами.
   PLAYTEST_DATA_TTL_DAYS: z.coerce.number().int().positive().default(45),
-  // Вход без Telegram по заголовку — только для локальной разработки в браузере.
-  PLAYTEST_DEV_AUTH: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
+  // Переименована в AUTH_DEV_LOGIN: вход разработчика теперь заводит аккаунт,
+  // а не подписывает запросы плейтеста.
+  PLAYTEST_DEV_AUTH: z.string().default(""),
 
   // Адрес Bot API. Пусто — облако Telegram; свой адрес нужен тем, кто держит
   // локальный сервер Bot API (docs/20-env-and-ports.md §3.1): у него другой
@@ -122,6 +117,7 @@ const schema = z.object({
   ADMIN_CHAT_STRESS: chatTarget("ADMIN_CHAT_STRESS"),
   ADMIN_CHAT_RUNS: chatTarget("ADMIN_CHAT_RUNS"),
   ADMIN_CHAT_FEEDBACK: chatTarget("ADMIN_CHAT_FEEDBACK"),
+  ADMIN_CHAT_RUN_REVIEW: chatTarget("ADMIN_CHAT_RUN_REVIEW"),
   // Уведомлять чат администраторов о новых отчётах диагностики: стресс-тест —
   // карточкой с графиком. Работает, когда задан ADMIN_CHAT_ID и включён приёмник.
   ADMIN_NOTIFY_REPORTS: z
@@ -144,6 +140,90 @@ const schema = z.object({
     .refine((value) => value === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(value), { message: "PLAYTEST_STATS_DAILY_AT — время ЧЧ:ММ" }),
   // Пояс команды для «сегодня» и времени отчёта: сервер живёт в UTC.
   PLAYTEST_STATS_UTC_OFFSET_MIN: z.coerce.number().int().min(-720).max(840).default(180),
+
+  // Авторизация игроков (docs/34-stage3-plan.md, WP1). Выключена по
+  // умолчанию: без секрета подписи и токена бота вход невозможен, а
+  // выключенные эндпоинты отвечают 404 — как приёмники и плейтест.
+  AUTH_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Секрет подписи токена доступа. Без значения по умолчанию: подписанный
+  // известным секретом токен — это отсутствие авторизации.
+  JWT_ACCESS_SECRET: z
+    .string()
+    .default("")
+    .refine((value) => value === "" || /^[0-9a-f]{64,}$/i.test(value), {
+      message: "JWT_ACCESS_SECRET — не короче 64 шестнадцатеричных знаков: openssl rand -hex 32",
+    }),
+  // Токен доступа живёт минутами: украденный не должен работать до вечера, а
+  // клиент молча обновляет его по токену продления.
+  AUTH_ACCESS_TTL_SEC: z.coerce.number().int().min(60).max(3600).default(900),
+  AUTH_REFRESH_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  // Окно свежести данных запуска для входа — не больше часа: на этой сессии
+  // работают деньги (docs/33-telegram-mini-app-pitfalls.md §1.2). Потолок в
+  // схеме, а не в договорённости: иначе однажды его поднимут «на время».
+  AUTH_INIT_DATA_MAX_AGE_SEC: z.coerce.number().int().min(60).max(3600).default(3600),
+  // Сколько устройств помнит аккаунт. Сверх лимита вытесняется самое старое:
+  // без потолка список сессий рос бы бесконечно.
+  AUTH_MAX_SESSIONS: z.coerce.number().int().min(1).max(50).default(10),
+  // Вход без Telegram по имени — только для локальной разработки в браузере:
+  // так команда проверяет рейтинг и профиль, не открывая клиент Telegram.
+  AUTH_DEV_LOGIN: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
+  // Пороги антифрода забегов, фаза 1 (docs/34-stage3-plan.md, WP4, Р7).
+  //
+  // В коде — только структура проверок, а числа — здесь: опубликованный порог
+  // говорит читеру, сколько ровно можно. Умолчания нарочно мягкие и ловят
+  // лишь невозможное: замер по 108 забегам ботов (три сложности, три
+  // стартовых оружия, два уровня игры) дал максимум 8,6 убийства в секунду и
+  // 4,6 уровня в минуту, умолчания взяты с пятикратным запасом. Боевые
+  // значения задаются окружением прода.
+  RUNS_MAX_KILLS_PER_SEC: z.coerce.number().positive().default(40),
+  RUNS_MAX_LEVELS_PER_MIN: z.coerce.number().positive().default(12),
+  // Сборки, чьи забеги принимаются без вопросов: отпечатки контента через
+  // запятую. Пусто — проверка выключена. Незнакомый отпечаток — не отказ, а
+  // `suspicious`: новая сборка могла выйти раньше, чем обновили список.
+  RUNS_KNOWN_CONTENT_HASHES: z
+    .string()
+    .default("")
+    .transform((value) => value.split(",").map((hash) => hash.trim()).filter((hash) => hash !== "")),
+  // Запас на заявленное время выживания сверх прошедшего по часам сервера.
+  // Честный забег длиннее прошедшего времени не бывает: пауза в игровое время
+  // не идёт. Запас — на округление и на опоздание сообщения о старте.
+  RUNS_WALL_CLOCK_TOLERANCE_SEC: z.coerce.number().min(0).max(300).default(10),
+  // Насколько поздно может прийти сообщение о старте, чтобы ему ещё верить.
+  // Пришло позже — время забега не проверяется: иначе честный игрок, у
+  // которого старт пролежал в очереди без сети, получил бы «дольше, чем
+  // прошло».
+  RUNS_START_MAX_DELAY_SEC: z.coerce.number().min(0).max(600).default(30),
+
+  // Оплата второго шанса за Telegram Stars (docs/34-stage3-plan.md, WP5).
+  // Выключена по умолчанию. Включённая требует авторизации — покупка
+  // принадлежит аккаунту — и чтения обновлений бота: без ответа на
+  // предварительную проверку Telegram срывает каждую оплату через десять
+  // секунд, а подтверждение оплаты приходит тоже обновлением.
+  PAYMENTS_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Тестовая оплата (Р14): игрок видит настоящую цену, списывается одна
+  // звезда и тут же возвращается, покупка засчитана. Песочницы у Stars нет,
+  // а копить звёзды на тестовом боте незачем. Только в development: в проде
+  // с ней продолжение стоило бы звезду.
+  PAYMENTS_TEST_MODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Цена второго шанса (Р5.1): звёзд за каждую начатую минуту забега и
+  // потолок цены. Считает сервер, клиент цену только показывает. Рабочие
+  // значения до решения геймдизайнера (О1). Потолок схемы — с запасом под
+  // ограничение Telegram на сумму одного счёта.
+  CONTINUE_STARS_PER_MINUTE: z.coerce.number().int().min(1).max(100).default(1),
+  CONTINUE_MAX_STARS: z.coerce.number().int().min(1).max(2500).default(30),
 
   // Администраторы — Telegram ID через запятую (docs/28-diagnostics.md §6.1.1).
   // Список не секрет; мусор в нём — процесс не поднимается, пустой — функции
@@ -196,11 +276,39 @@ export interface AppConfig {
     /** чаты администраторов; `null` — писать некуда */
     chats: AdminChats;
   };
+  auth: {
+    enabled: boolean;
+    /** секрет подписи токена доступа; пусто — авторизация выключена */
+    accessSecret: string;
+    accessTtlSec: number;
+    refreshTtlSec: number;
+    /** окно свежести данных запуска при входе — не больше часа */
+    initDataMaxAgeSec: number;
+    /** сколько устройств помнит аккаунт */
+    maxSessions: number;
+    /** вход разработчика по имени, без подписи; только в development */
+    devLogin: boolean;
+  };
+  payments: {
+    enabled: boolean;
+    /** тестовая оплата: одна звезда с немедленным возвратом; только development */
+    testMode: boolean;
+    /** звёзд за каждую начатую минуту забега */
+    starsPerMinute: number;
+    /** потолок цены второго шанса */
+    maxStars: number;
+  };
+  runs: {
+    maxKillsPerSec: number;
+    maxLevelsPerMin: number;
+    /** пусто — проверка отпечатка контента выключена */
+    knownContentHashes: ReadonlySet<string>;
+    wallClockToleranceSec: number;
+    startMaxDelaySec: number;
+  };
   playtest: {
     enabled: boolean;
-    initDataMaxAgeSec: number;
     dataTtlSec: number;
-    devAuth: boolean;
     stats: {
       enabled: boolean;
       /** минута суток в поясе команды; `null` — сводка только по команде */
@@ -226,6 +334,8 @@ export interface AdminChats {
   runReports: ChatTarget | null;
   /** отзывы игроков с формы обратной связи */
   feedback: ChatTarget | null;
+  /** подозрительные и отклонённые забеги — очередь разбора антифрода */
+  runReview: ChatTarget | null;
 }
 
 function adminChats(parsed: {
@@ -234,6 +344,7 @@ function adminChats(parsed: {
   ADMIN_CHAT_STRESS: string;
   ADMIN_CHAT_RUNS: string;
   ADMIN_CHAT_FEEDBACK: string;
+  ADMIN_CHAT_RUN_REVIEW: string;
 }): AdminChats {
   const general = parseChatTarget(parsed.ADMIN_CHAT_ID);
   const orGeneral = (value: string): ChatTarget | null => parseChatTarget(value) ?? general;
@@ -243,6 +354,7 @@ function adminChats(parsed: {
     stressReports: orGeneral(parsed.ADMIN_CHAT_STRESS),
     runReports: orGeneral(parsed.ADMIN_CHAT_RUNS),
     feedback: orGeneral(parsed.ADMIN_CHAT_FEEDBACK),
+    runReview: orGeneral(parsed.ADMIN_CHAT_RUN_REVIEW),
   };
 }
 
@@ -283,8 +395,8 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   // У секретов не бывает значений по умолчанию: включённая функция без
   // токена не стартует, а не «пока сойдёт» (docs/20-env-and-ports.md §1,
   // правило 4).
-  if (parsed.PLAYTEST_ENABLED && parsed.TELEGRAM_BOT_TOKEN === "") {
-    throw new Error("PLAYTEST_ENABLED=true требует непустого TELEGRAM_BOT_TOKEN: без него игрока не проверить");
+  if (parsed.PLAYTEST_ENABLED && !parsed.AUTH_ENABLED) {
+    throw new Error("PLAYTEST_ENABLED=true требует AUTH_ENABLED=true: забеги и отчёты о запуске приходят под аккаунтом");
   }
   if (parsed.PLAYTEST_STATS_CHAT_ID !== "") {
     throw new Error("PLAYTEST_STATS_CHAT_ID переименована в ADMIN_CHAT_ID: чат администраторов получает не только сводку");
@@ -304,10 +416,33 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if ((parsed.EVENTS_INGEST_ENABLED || parsed.DIAGNOSTICS_INGEST_ENABLED) && parsed.DATABASE_URL === "") {
     throw new Error("Приёмники событий и отчётов пишут в Postgres: включённый приёмник требует DATABASE_URL");
   }
-  // Вход по заголовку без подписи — дыра, если попадёт куда-то кроме машины
-  // разработчика. Процесс не поднимается, а не «предупреждает».
-  if (parsed.PLAYTEST_DEV_AUTH && parsed.NODE_ENV !== "development") {
-    throw new Error("PLAYTEST_DEV_AUTH=true допустим только при NODE_ENV=development");
+  // Молча игнорировать нельзя только включённую: у всей команды в `.env`
+  // осталась строка "false" из прошлого `.env.example`.
+  if (parsed.PLAYTEST_DEV_AUTH === "true") {
+    throw new Error("PLAYTEST_DEV_AUTH переименована в AUTH_DEV_LOGIN: вход разработчика теперь заводит аккаунт");
+  }
+  // Вход без подписи — дыра, если попадёт куда-то кроме машины разработчика.
+  // Процесс не поднимается, а не «предупреждает».
+  if (parsed.AUTH_DEV_LOGIN && parsed.NODE_ENV !== "development") {
+    throw new Error("AUTH_DEV_LOGIN=true допустим только при NODE_ENV=development");
+  }
+  if (parsed.AUTH_DEV_LOGIN && !parsed.AUTH_ENABLED) {
+    throw new Error("AUTH_DEV_LOGIN=true требует AUTH_ENABLED=true: вход разработчика выдаёт ту же сессию, что вход по Telegram");
+  }
+  if (parsed.AUTH_ENABLED && (parsed.JWT_ACCESS_SECRET === "" || parsed.TELEGRAM_BOT_TOKEN === "" || parsed.DATABASE_URL === "")) {
+    throw new Error(
+      "AUTH_ENABLED=true требует JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN и DATABASE_URL: без них вход не проверить и аккаунт негде хранить",
+    );
+  }
+  // Тот же приём, что у входа разработчика: процесс не поднимается, а не
+  // «предупреждает» — иначе в проде однажды продолжение стоило бы звезду.
+  if (parsed.PAYMENTS_TEST_MODE && parsed.NODE_ENV !== "development") {
+    throw new Error("PAYMENTS_TEST_MODE=true допустим только при NODE_ENV=development: вне разработки оплата настоящая");
+  }
+  if (parsed.PAYMENTS_ENABLED && (!parsed.AUTH_ENABLED || parsed.TELEGRAM_BOT_UPDATES === "off")) {
+    throw new Error(
+      "PAYMENTS_ENABLED=true требует AUTH_ENABLED=true и чтения обновлений бота (TELEGRAM_BOT_UPDATES): покупка принадлежит аккаунту, а оплату подтверждает обновление от Telegram",
+    );
   }
 
   return {
@@ -341,11 +476,31 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       webAppUrl: parsed.PUBLIC_WEB_URL,
       chats: adminChats(parsed),
     },
+    auth: {
+      enabled: parsed.AUTH_ENABLED,
+      accessSecret: parsed.JWT_ACCESS_SECRET,
+      accessTtlSec: parsed.AUTH_ACCESS_TTL_SEC,
+      refreshTtlSec: parsed.AUTH_REFRESH_TTL_DAYS * 24 * 60 * 60,
+      initDataMaxAgeSec: parsed.AUTH_INIT_DATA_MAX_AGE_SEC,
+      maxSessions: parsed.AUTH_MAX_SESSIONS,
+      devLogin: parsed.AUTH_DEV_LOGIN,
+    },
+    payments: {
+      enabled: parsed.PAYMENTS_ENABLED,
+      testMode: parsed.PAYMENTS_TEST_MODE,
+      starsPerMinute: parsed.CONTINUE_STARS_PER_MINUTE,
+      maxStars: parsed.CONTINUE_MAX_STARS,
+    },
+    runs: {
+      maxKillsPerSec: parsed.RUNS_MAX_KILLS_PER_SEC,
+      maxLevelsPerMin: parsed.RUNS_MAX_LEVELS_PER_MIN,
+      knownContentHashes: new Set(parsed.RUNS_KNOWN_CONTENT_HASHES),
+      wallClockToleranceSec: parsed.RUNS_WALL_CLOCK_TOLERANCE_SEC,
+      startMaxDelaySec: parsed.RUNS_START_MAX_DELAY_SEC,
+    },
     playtest: {
       enabled: parsed.PLAYTEST_ENABLED,
-      initDataMaxAgeSec: parsed.PLAYTEST_INIT_DATA_MAX_AGE_SEC,
       dataTtlSec: parsed.PLAYTEST_DATA_TTL_DAYS * 24 * 60 * 60,
-      devAuth: parsed.PLAYTEST_DEV_AUTH,
       stats: {
         enabled: parsed.PLAYTEST_STATS_ENABLED,
         dailyAtMin: parsed.PLAYTEST_STATS_DAILY_AT === "" ? null : minuteOfDay(parsed.PLAYTEST_STATS_DAILY_AT),

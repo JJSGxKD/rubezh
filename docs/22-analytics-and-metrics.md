@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
 | Интерфейс | `screen_viewed`, `settings_changed` |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded` |
 | Реклама | `ad_requested`, `ad_shown`, `ad_reward_claimed`, `ad_failed` |
@@ -168,7 +168,6 @@ Zod-схемы `payload` — в словаре сервера
 | Удержание | `daily_reward_claimed`, `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
 | Обратная связь | `feedback_sent` — отзыв с формы обратной связи (`29-admin-panel.md` §6) |
-| Плейтест | `playtest_run_synced` — временное, на время закрытого теста (`26-stage2-plan.md`, WP13) |
 
 Добавлено на этапе 2 (`26-stage2-plan.md`):
 
@@ -186,7 +185,17 @@ Zod-схемы `payload` — в словаре сервера
 | `share_offered`, `share_completed` | Приглашение друга на плейтест: сколько нажимают и чем кончается — выбор чата, копия ссылки или неудача | `context` (`friends_invite`), у завершения — `result` |
 | `bench_finished` | Сводка теста производительности — стресс-теста из «Играть» (`28-diagnostics.md` §2.3); полный отчёт уходит в приёмник диагностики (`28-diagnostics.md` §5), не в события | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
 | `feedback_sent` | Сколько игроков доходит до формы обратной связи и отвечают ли они текстом или только опросом. Сам отзыв в события не попадает: он уходит в чат администраторов и в свою таблицу, а здесь — только факт и разрез | `answers` — сколько вопросов отвечено, `hasText` — был ли свободный текст, `runs` — сколько забегов сыграно к этому моменту |
-| `playtest_run_synced` | Дошёл ли итог забега до лидерборда плейтеста: сколько забегов ждут сети, сколько сервер отверг. Растущая доля `queued` с `unauthorized` — устаревшая подпись запуска, а не сеть | `result`: `sent` / `queued` / `dropped`; `trigger`: `finish` / `launch` / `screen`; у неудачи — `failure`; у отправленного — `rank`, `isNewBest`, `recorded` (`false` — забег с читами сервер не записал) |
+
+Добавлено на этапе 3 (`34-stage3-plan.md`):
+
+| Событие | Зачем | Ключевые поля `payload` |
+|---|---|---|
+| `user_registered` | Аккаунт заведён — знаменатель всех воронок по игрокам, а не по установкам. Ровно один раз за жизнь аккаунта: о том, что вход был первым, знает только сервер, и признак приходит в ответе входа | без полей: площадка и идентификатор и так в конверте |
+| `user_authenticated` | Как игрок получил сессию. Доля `reauth` показывает, часто ли сессии теряются на самом деле, — а это прямая проверка решения хранить токен продления в памяти вкладки (`34-stage3-plan.md`, Р3) | `reason`: `launch` — вход на запуске, `refresh` — плановое продление, `reauth` — сервер не принял токен посреди работы |
+| `purchase_initiated`, `purchase_completed`, `purchase_failed` | Воронка покупки второго шанса (WP5): сколько нажали «продолжить за звёзды», сколько дошли до продолжения и где сорвалось. Это взгляд клиента: выручка и возвраты — по таблице `purchase` (§5.4), клиент о возврате и не узнает. `purchase_refunded` клиент не шлёт по той же причине | `product` (`continue_run`), `priceStars` — показанная цена, `chargedStars` — сколько спишется, `mode`: `live` / `test`, `continueNo`; у неудачи — `reason`: `cancelled`, `failed`, `unsupported`, `timeout` или код отказа сервера |
+| `continue_used` | Сколько забегов продолжают после смерти и чем (WP5). Пара к `purchase_completed`: оплата без продолжения — продолжение, которое не взяли, и сервер вернёт за него звёзды. Вместе с `purchase_*` — данные для решения О7 о цене рядом с рекламой | `source`: `premium` — за звёзды, `dev` — бесплатно в забеге разработчика, позже `ad`; `elapsedSec` — секунда забега, `wave` |
+| `session_started` | Запуск игры (WP6) — знаменатель удержания по дням и воронок по источнику. Снимок атрибуции — откуда открыли, по подписи, проверенной сервером: клиент сам видит параметр запуска неподписанным. Продление токена и повторный вход посреди работы запуском не считаются. Подробности сессии — класс устройства, подсеть, код клика — в таблице `account_session`, а первое и последнее касание — в `acquisition` (`21-diagrams.md` §1.1) | `startKind`: `organic` / `click` / `invite` / `telegram_affiliate` / `unknown`; `first` — аккаунт заведён этим запуском |
+| `run_synced` | Дошли ли старт и итог забега до сервера (WP4; заменило `playtest_run_synced` этапа 2). Доля стартов с `trusted: false` у честных игроков — это доля забегов без проверки времени, по ней решается О5 (`34-stage3-plan.md`). Растущая доля `queued` с `unauthorized` — теряются сессии, а не сеть | `kind`: `start` / `finish`; `result`: `sent` / `queued` / `dropped`; `trigger`: `start` / `finish` / `launch` / `screen` / `continue`; у отправленного старта — `trusted`, у итога — `verdict`, `rank`, `isNewBest`, `recorded`; у неотправленного — `failure` |
 
 Уточнения существующих событий на этапе 2:
 
@@ -308,6 +317,14 @@ DAU / WAU / MAU и sticky (DAU/MAU). Сессии в сутки, длитель�
 Разрез по платформе обязателен: экономика считается раздельно
 (`03-notes-and-risks.md`), и складывать Stars с рублями в один график —
 способ принять неверное решение.
+
+Источник сумм — таблица `purchase` (`21-diagrams.md` §1.1), а не события:
+оплату подтверждает Telegram серверу, и клиент о ней может не узнать вовсе.
+**В выручку идут только `mode = live`** — тестовые оплаты разработки
+(`34-stage3-plan.md`, Р14) иначе однажды оказались бы в отчёте. Сумма —
+`charged_stars`, списанная, а не показанная; возврат — `refunded_at` с
+причиной: `external` — возврат не по нашей воле, по ним считается доля
+возвратов аккаунта (О4).
 
 ### 5.5 Реклама
 

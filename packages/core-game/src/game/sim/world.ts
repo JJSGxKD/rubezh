@@ -1,4 +1,4 @@
-import type { DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
+import type { ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -109,6 +109,8 @@ export interface PlayerState {
   maxHp: number;
   attackCooldown: number;
   alive: boolean;
+  /** сколько тиков игрока ещё нельзя ранить — после второго шанса */
+  invulnerableTicks: number;
 }
 
 export interface RunStats {
@@ -145,7 +147,18 @@ export interface RunStats {
   peakEnemies: number;
   /** сколько отставших врагов унесено вперёд — сигнал о темпе бегства игрока */
   enemiesRecycled: number;
+  /** сколько раз игрок продолжил после смерти */
+  continuesUsed: number;
+  /** тик каждого продолжения; первые `continuesUsed` значимы */
+  continueTicks: Int32Array;
 }
+
+/**
+ * Потолок продолжений за забег — ёмкость `continueTicks`. Сколько их на самом
+ * деле, решает контент (`content/continue.ts`); больше этого числа тест
+ * контента не пропустит.
+ */
+export const MAX_CONTINUES_PER_RUN = 5;
 
 /** Опыт, уровень и очередь выборов внутри забега. */
 export interface ProgressionState {
@@ -191,6 +204,8 @@ export interface World {
   loadoutLimits: LoadoutLimits;
   /** что падает с убитых врагов */
   drops: DropsDef;
+  /** второй шанс: сколько раз и с чем игрок возвращается после смерти */
+  continueRules: ContinueDef;
   /**
    * Уровень сложности забега. Директор спавна накладывает его множители на
    * каждый отрезок таймлайна; от забега к забегу он не меняется.
@@ -322,6 +337,12 @@ export function despawnEnemy(world: World, index: number): void {
   world.enemies.aliveCount--;
 }
 
+/** Снять снаряд с поля: попал, истёк или улетел за пределы удержания. */
+export function despawnProjectile(world: World, index: number): void {
+  world.projectiles.alive[index] = 0;
+  world.projectiles.aliveCount--;
+}
+
 /**
  * Урон игроку с указанием источника. Источник нужен статистике: какой враг
  * убивает чаще всего — прямой вход геймдизайнера для баланса
@@ -329,7 +350,7 @@ export function despawnEnemy(world: World, index: number): void {
  */
 export function damagePlayer(world: World, amount: number, sourceType: number): void {
   const player = world.player;
-  if (!player.alive || amount <= 0) return;
+  if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
 
   // Броня вычитается, но не обнуляет урон: иначе несколько уровней брони
   // делают рой безобидным, и вся кривая сложности перестаёт работать.

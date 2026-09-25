@@ -16,7 +16,7 @@ const { DEFAULT_DEV_SETTINGS, hasCheats, toRunDev, useDevMode } = await import("
 const { DEV_PRESETS } = await import("../src/screens/run/dev-presets");
 const { useRun } = await import("../src/state/run");
 const { useMeta } = await import("../src/state/meta");
-const { toSubmission, usePlaytest } = await import("../src/state/playtest");
+const { toSubmission, useRuns } = await import("../src/state/runs");
 const { initShell } = await import("../src/state/shell");
 
 type Handlers = { [E in keyof RunEvents]?: (payload: RunEvents[E]) => void };
@@ -88,6 +88,7 @@ function result(patch: Partial<RunResult> = {}): RunResult {
     distance: 0,
     peakEnemies: 0,
     cheats: true,
+    continues: [],
     ...patch,
   };
 }
@@ -205,7 +206,7 @@ describe("забег разработчика", () => {
     start(true);
     const fake = fakeEngine();
     engine.load.mockResolvedValue(fake.engine);
-    const submitRun = vi.spyOn(usePlaytest.getState(), "submitRun").mockImplementation(() => undefined);
+    const submitRun = vi.spyOn(useRuns.getState(), "submitRun").mockImplementation(() => undefined);
     useDevMode.getState().arm(true);
     await useRun.getState().start(RUN);
 

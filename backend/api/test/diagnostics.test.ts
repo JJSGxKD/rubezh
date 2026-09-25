@@ -20,6 +20,7 @@ import { reportEnvelope, REPORT_ID } from "./helpers/bench-report.js";
 import { runBucket, runEnvelope, runSubmission, RUN_REPORT_ID } from "./helpers/run-report.js";
 import { runSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js";
 import { submitRunReportSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
+import { AUTH_ENV } from "./helpers/auth-env.js";
 import { launchFor } from "./helpers/init-data.js";
 
 // Приёмник отчётов диагностики (docs/28-diagnostics.md §5).
@@ -61,7 +62,7 @@ describe("приёмник отчётов диагностики", () => {
     const config = loadAppConfig({
       NODE_ENV: "test",
       DIAGNOSTICS_INGEST_ENABLED: "true",
-      DATABASE_URL: "postgresql://unused",
+      ...AUTH_ENV,
       TELEGRAM_BOT_TOKEN: TOKEN,
       PLAYTEST_ENABLED: "true",
       ADMIN_TELEGRAM_IDS: String(ADMIN),

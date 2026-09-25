@@ -45,6 +45,7 @@ export type {
   HudSnapshot,
   RadarBlipKind,
   RadarSnapshot,
+  RunContinueOptions,
   RunCues,
   RunDevCheats,
   RunDevCommand,

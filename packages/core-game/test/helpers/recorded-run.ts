@@ -6,6 +6,7 @@ import { chooseUpgrade, isAwaitingChoice } from "../../src/game/progression/leve
 import { buildRunResult } from "../../src/game/run/run-result";
 import { createRunWorld } from "../../src/game/run-world";
 import { IDLE_CODE, inputOfCode, quantizeDirection } from "../../src/game/sim/input-code";
+import { applyContinue } from "../../src/game/sim/continue";
 import { stepWorld, type SimInput } from "../../src/game/sim/step";
 import { TICK_SEC } from "../../src/game/sim/world";
 import type { RunRecording } from "../../src/run-api";
@@ -23,6 +24,8 @@ export interface RecordedRunOptions {
   /** сырое направление пальца на тике; `null` — палец не на экране */
   steer: (tick: number) => readonly [number, number] | null;
   choose?: (offers: readonly UpgradeOption[]) => string;
+  /** брать второй шанс при смерти, пока он есть, — как сцена по команде оболочки */
+  continues?: boolean;
 }
 
 export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
@@ -51,7 +54,12 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
   let code = IDLE_CODE;
 
   recorder.event(0, "wave", world.difficulty.segment);
-  while (world.stats.tick < options.maxTicks && world.player.alive) {
+  while (world.stats.tick < options.maxTicks) {
+    if (!world.player.alive) {
+      if (options.continues !== true || !applyContinue(world)) break;
+      recorder.continued(world.stats.tick);
+      continue;
+    }
     if (isAwaitingChoice(world)) {
       const optionId = choose(world.progression.offers);
       chooseUpgrade(world, optionId);

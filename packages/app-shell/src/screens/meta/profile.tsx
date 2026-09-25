@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { DIFFICULTY_IDS, type PlaytestRecentRun } from "@bh/shared-types";
+import { DIFFICULTY_IDS, type RecentRun } from "@bh/shared-types";
 import {
   Avatar,
   Badge,
@@ -13,49 +13,60 @@ import {
 import { formatDuration, formatNumber, t } from "../../i18n";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
-import { usePlaytest } from "../../state/playtest";
-import type { PlaytestFailure } from "../../state/playtest-api";
+import type { ApiFailure } from "../../state/api-request";
+import { useRuns } from "../../state/runs";
+import { useSession } from "../../state/session";
 import { useShell } from "../../state/shell";
 import { ItemIcon } from "../item-icons";
-import { PlaytestProblem, SurvivalTime } from "./playtest-ui";
+import { SessionNotice, useSessionNotice } from "./session-notice";
+import { SurvivalTime, SyncProblem } from "./sync-ui";
 
 /**
- * Профиль игрока: счётчики и рекорды с сервера плейтеста, последние забеги
- * (docs/26-stage2-plan.md, WP13).
+ * Профиль игрока: аккаунт, счётчики и рекорды с сервера, последние забеги
+ * (docs/34-stage3-plan.md, WP7).
  *
- * Имя и аватар — из параметров запуска площадки и только для отображения
- * (docs/08-web-and-identity.md §4). Нет сервера — профиль собирается из того,
- * что знает устройство, и честно говорит, что это не всё.
+ * Имя, аватар и дата — из аккаунта на сервере: профиль совпадает с тем, что
+ * в базе. Сессии нет — имя из параметров запуска площадки, только для
+ * отображения (docs/08-web-and-identity.md §4), и профиль собирается из того,
+ * что знает устройство, честно говоря, почему это не всё (`session-notice.tsx`).
  */
 export function ProfileScreen(): ReactNode {
   const navigation = useNavigation();
   const user = useShell((state) => state.adapter.displayUser);
-  const profile = usePlaytest((state) => state.profile);
-  const pending = usePlaytest((state) => state.pending);
+  const profile = useRuns((state) => state.profile);
+  const pending = useRuns((state) => state.pending);
   const local = useMeta();
-  const [failure, setFailure] = useState<PlaytestFailure | null>(null);
+  const account = useSession((state) => state.account);
+  const status = useSession((state) => state.status);
+  const notice = useSessionNotice();
+  const [failure, setFailure] = useState<ApiFailure | null>(null);
 
   const load = async (): Promise<void> => {
     setFailure(null);
-    await usePlaytest.getState().flush("screen");
-    setFailure(await usePlaytest.getState().loadProfile());
+    await useRuns.getState().flush("screen");
+    setFailure(await useRuns.getState().loadProfile());
   };
 
+  // Вход наладился — после повтора или уже открытого экрана — профиль
+  // загружается заново: иначе игрок смотрел бы на пустоту до следующего захода.
   useEffect(() => {
     void load();
-  }, []);
+  }, [status === "ready"]);
 
-  const name = user?.displayName ?? t("profile.guest");
+  const name = account?.displayName ?? user?.displayName ?? t("profile.guest");
+  const avatar = account === null ? user?.avatarUrl : account.photoUrl;
 
   return (
     <Screen title={t("profile.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
         <Card>
           <div className="flex items-center gap-3">
-            <Avatar name={name} url={user?.avatarUrl} size={56} />
+            <Avatar name={name} url={avatar ?? null} size={56} />
             <div className="min-w-0">
               <p className="truncate font-display text-lg font-bold text-text">{name}</p>
-              <p className="text-xs text-text-muted">{t("profile.playtest")}</p>
+              <p className="text-xs text-text-muted">
+                {account === null ? t("profile.local") : t("profile.since", { date: formatSince(account.createdAt) })}
+              </p>
             </div>
           </div>
           <div className="surface-sunken mt-4 grid grid-cols-3 gap-3 rounded-lg p-3">
@@ -68,9 +79,13 @@ export function ProfileScreen(): ReactNode {
           </div>
         </Card>
 
-        {failure === null ? null : (
+        {notice !== null ? (
           <div className="mt-3">
-            <PlaytestProblem failure={failure} compact onRetry={() => void load()} />
+            <SessionNotice notice={notice} />
+          </div>
+        ) : failure === null ? null : (
+          <div className="mt-3">
+            <SyncProblem failure={failure} compact onRetry={() => void load()} />
           </div>
         )}
         {pending > 0 ? (
@@ -124,7 +139,7 @@ export function ProfileScreen(): ReactNode {
   );
 }
 
-function RecentRunRow(props: { run: PlaytestRecentRun }): ReactNode {
+function RecentRunRow(props: { run: RecentRun }): ReactNode {
   const { run } = props;
   return (
     <li className="surface-card flex items-center gap-3 rounded-lg px-3 py-2.5">
@@ -143,6 +158,14 @@ function RecentRunRow(props: { run: PlaytestRecentRun }): ReactNode {
       <span className="font-display text-sm font-bold tabular-nums text-text">{formatDuration(run.survivalSec)}</span>
     </li>
   );
+}
+
+const SINCE_FORMAT = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+
+/** С какого дня игрок с нами — по дате аккаунта на сервере. */
+function formatSince(createdAt: string): string {
+  const date = new Date(createdAt);
+  return Number.isNaN(date.getTime()) ? "—" : SINCE_FORMAT.format(date);
 }
 
 const WHEN_FORMAT = new Intl.DateTimeFormat("ru-RU", {

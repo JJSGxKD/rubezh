@@ -38,12 +38,24 @@ export function parsePrTitle(title) {
 }
 
 /**
+ * Области, до игрока не доходящие: инструменты разработчика (`dev`), пайплайн
+ * (`ci`) и обвязка развёртывания (`infra`). Версия всё равно поднимается —
+ * монорепо выпускается одним номером, и собрать сборку из тега нужно любой, —
+ * но на патч, а не на минор: иначе правка dev-сервера или workflow двигает
+ * номер так же, как новая механика в игре, и минорный номер перестаёт
+ * что-либо значить.
+ *
+ * Ломающее изменение под это послабление не попадает: `!` остаётся `!`.
+ */
+const TOOLING_SCOPES = ["dev", "ci", "infra"];
+
+/**
  * Минимально допустимая метка по типу коммита и текущей базовой версии
  * (docs/09-ci-cd.md §8.1, таблица «Проверка PR», п.3). Выше можно, ниже нет.
  */
-export function minimumReleaseLevel({ type, breaking }, baseMajor) {
+export function minimumReleaseLevel({ type, scope, breaking }, baseMajor) {
   if (breaking) return baseMajor === 0 ? "minor" : "major";
-  if (type === "feat") return "minor";
+  if (type === "feat") return TOOLING_SCOPES.includes(scope) ? "patch" : "minor";
   if (["fix", "perf", "refactor", "revert"].includes(type)) return "patch";
   return "none";
 }

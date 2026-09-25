@@ -14,12 +14,16 @@ export interface UserContext {
   locale?: string;
 }
 
-export interface PurchaseResult {
-  success: boolean;
-  itemId: string;
-  transactionId?: string;
-  error?: string;
-}
+/**
+ * Чем кончилось окно оплаты площадки. Это подсказка, а не факт оплаты: право
+ * на покупку выдаёт сервер по подтверждению от площадки
+ * (docs/34-stage3-plan.md, Р13).
+ *
+ * - `paid` — площадка говорит, что оплачено; `pending` — оплата ещё идёт;
+ * - `cancelled` — игрок закрыл окно; `failed` — оплата не прошла;
+ * - `unsupported` — окна нет: открыто вне клиента или клиент слишком старый.
+ */
+export type InvoiceStatus = "paid" | "pending" | "cancelled" | "failed" | "unsupported";
 
 /**
  * Виды тактильного отклика — по возможностям Telegram: удар разной силы
@@ -50,7 +54,12 @@ export interface AdResult {
  */
 export interface PlatformAdapter {
   init(): Promise<UserContext>;
-  purchase(itemId: string): Promise<PurchaseResult>;
+  /**
+   * Открыть счёт, который выставил сервер: в Telegram — ссылка на счёт Stars.
+   * Цену назначает сервер, адаптер её не знает (docs/34-stage3-plan.md, Р5.1).
+   * Нет метода — площадка оплату не умеет, и оболочка покупку не предлагает.
+   */
+  openInvoice?(url: string): Promise<InvoiceStatus>;
   share(payload: SharePayload): void;
   /**
    * Пригласить в игру: системный выбор чата площадки, а где его нет — копия
@@ -632,6 +641,24 @@ export interface PassiveDef {
  * Что остаётся после убитого врага. Данные геймдизайнера
  * (`core-game/src/content/drops.ts`).
  */
+/**
+ * Второй шанс — продолжение забега после смерти
+ * (docs/07-monetization-and-ads.md §8). Числа решает геймдизайнер
+ * (docs/34-stage3-plan.md, О1); проверку диапазонов делает тест контента.
+ */
+export interface ContinueDef {
+  /** сколько продолжений за забег; 0 — второго шанса нет */
+  perRun: number;
+  /** сколько здоровья возвращается: доля максимального, больше 0 и не больше 1 */
+  restoreHpRatio: number;
+  /**
+   * Сколько секунд после возврата игрока нельзя ранить. Врагов на поле к этому
+   * моменту нет, но новые подходят с кольца спавна, а снаряды летят с края
+   * экрана — без неуязвимости игрок умирал бы, не успев сориентироваться.
+   */
+  invulnerableSec: number;
+}
+
 export interface DropsDef {
   gems: {
     /**
@@ -834,15 +861,34 @@ export interface RunResult {
    * (docs/26-stage2-plan.md, WP14).
    */
   cheats: boolean;
+  /**
+   * Секунды забега, на которых игрок продолжил после смерти (второй шанс,
+   * docs/07-monetization-and-ads.md §8); пусто — не продолжал. Сервер сверяет
+   * их с покупками: продолжение без оплаты — подозрительный забег.
+   */
+  continues: number[];
 }
 
-// --- Плейтест: сохранения и лидерборд (docs/26-stage2-plan.md, WP13) ---
+// --- Забеги под аккаунтом: старт, итог, рейтинг (docs/34-stage3-plan.md, WP4) ---
 //
-// Контракт клиента с бэкендом плейтеста. Сервер проверяет тело своей схемой;
-// здесь — форма, на которую опирается оболочка. Telegram ID других игроков
-// наружу не отдаются: строка лидерборда знает только, «моя» ли она.
+// Контракт клиента с модулем забегов бэкенда. Сервер проверяет тело своей
+// схемой; здесь — форма, на которую опирается оболочка. Идентификаторы других
+// аккаунтов наружу не отдаются: строка лидерборда знает только, «моя» ли она.
 
-export interface PlaytestRunSubmission {
+/**
+ * Старт забега. Уходит в очередь в начале забега — не на горячем пути: по нему
+ * сервер ставит своё время начала и сверяет с ним длительность итога.
+ */
+export interface RunStartSubmission {
+  runId: string;
+  difficultyId: DifficultyId;
+  startingWeaponId: string;
+  contentHash: string;
+  /** сколько секунд прошло от начала забега до отправки: старт мог ждать сеть */
+  elapsedSec: number;
+}
+
+export interface RunFinishSubmission {
   /** повтор с тем же `runId` не удваивает статистику */
   runId: string;
   difficultyId: DifficultyId;
@@ -862,6 +908,12 @@ export interface PlaytestRunSubmission {
   cheats?: boolean;
   /** администратор просит учесть забег с читами в рейтинге — для проверки рейтинга */
   countInRating?: boolean;
+  /**
+   * Секунда каждого второго шанса: сервер сверяет их с покупками
+   * (docs/34-stage3-plan.md, WP5). Необязательно: забег в очереди от прошлой
+   * сборки поля не знает.
+   */
+  continues?: number[];
 }
 
 /**
@@ -891,20 +943,24 @@ export interface PlaytestDevice {
   memoryGb: number | null;
 }
 
-export interface PlaytestSubmitResult {
+/**
+ * Что решил антифрод: `ok` — прошёл проверки, `suspicious` — сохранён, но не в
+ * рейтинге до разбора, `rejected` — невозможный забег.
+ */
+export type RunVerdict = "ok" | "suspicious" | "rejected";
+
+export interface RunFinishResult {
   /** лучшее время игрока на этой сложности после забега */
   bestSurvivalSec: number;
   isNewBest: boolean;
   /** место в лидерборде сложности, с единицы */
   rank: number | null;
-  /**
-   * `false` — забег с читами не записан: рейтинг и лучшее время прежние.
-   * Необязательное: сервер прошлой версии поля не присылает, и это запись.
-   */
-  recorded?: boolean;
+  /** `false` — забег не в рейтинге: читы или вердикт не `ok` */
+  recorded: boolean;
+  verdict: RunVerdict;
 }
 
-export interface PlaytestLeaderboardEntry {
+export interface LeaderboardEntry {
   rank: number;
   name: string;
   photoUrl: string | null;
@@ -915,15 +971,15 @@ export interface PlaytestLeaderboardEntry {
   isMe: boolean;
 }
 
-export interface PlaytestLeaderboard {
+export interface Leaderboard {
   difficultyId: DifficultyId;
-  entries: PlaytestLeaderboardEntry[];
+  entries: LeaderboardEntry[];
   /** своё место, даже если оно ниже показанных строк */
   me: { rank: number; survivalSec: number } | null;
   totalPlayers: number;
 }
 
-export interface PlaytestRecentRun {
+export interface RecentRun {
   difficultyId: DifficultyId;
   survivalSec: number;
   level: number;
@@ -933,8 +989,8 @@ export interface PlaytestRecentRun {
 }
 
 /**
- * Что игроку открыто в клиенте. Решает сервер по Telegram ID; скрытая кнопка
- * — не защита, и то, что трогает чужие данные, сервер проверяет сам.
+ * Что игроку открыто в клиенте. Решает сервер по праву аккаунта; скрытая
+ * кнопка — не защита, и то, что трогает чужие данные, сервер проверяет сам.
  */
 export interface PlaytestAccess {
   admin: boolean;
@@ -942,12 +998,12 @@ export interface PlaytestAccess {
   devMode: boolean;
 }
 
-export interface PlaytestProfile {
+export interface RunProfile {
   runs: number;
   totalKills: number;
   totalSurvivalSec: number;
   best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
-  recent: PlaytestRecentRun[];
+  recent: RecentRun[];
 }
 
 // --- Экономика / SKU, см. docs/05-game-design.md §5, docs/07-monetization-and-ads.md ---

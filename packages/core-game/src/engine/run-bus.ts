@@ -13,6 +13,9 @@ type HandlerSets = { [E in keyof RunEvents]: Set<Handler<E>> };
  */
 export class RunBus {
   private readonly handlers: HandlerSets = {
+    started: new Set(),
+    downed: new Set(),
+    revived: new Set(),
     hud: new Set(),
     waveReached: new Set(),
     levelUp: new Set(),

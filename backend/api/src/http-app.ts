@@ -2,6 +2,7 @@ import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { APP_CONFIG, type AppConfig } from "./config/app-config.js";
 import { DomainErrorFilter } from "./common/domain-error.filter.js";
+import { API_SECURITY_HEADERS } from "./common/security-headers.js";
 
 /**
  * Сборка HTTP-приложения — одна для `main.ts` и HTTP-тестов: префикс,
@@ -52,4 +53,19 @@ function configureHttpApp(app: NestFastifyApplication, config: AppConfig): void 
     origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : false,
     credentials: true,
   });
+
+  // Заголовки безопасности — на каждый ответ, в том числе на ошибки: ответ
+  // с 401 тоже не должен ни кешироваться, ни встраиваться
+  // (common/security-headers.ts). Маршрут, выставивший свой заголовок сам,
+  // остаётся при своём: общая защита не должна молча перебивать решение,
+  // принятое в конкретном месте.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook("onSend", async (_request, reply, payload) => {
+      for (const [name, value] of Object.entries(API_SECURITY_HEADERS)) {
+        if (!reply.hasHeader(name)) reply.header(name, value);
+      }
+      return payload;
+    });
 }

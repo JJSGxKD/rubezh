@@ -34,6 +34,18 @@ function payload<Shape extends z.ZodRawShape>(shape: Shape) {
 const amount = z.number().nonnegative();
 const ratio = z.number().min(0).max(1);
 
+// Покупка глазами клиента (docs/34-stage3-plan.md, WP5): воронка от нажатия до
+// продолжения. Суммы здесь — разрез, а не выручка: выручку и возвраты
+// считают по таблице `purchase` (docs/22-analytics-and-metrics.md §5.4).
+// Режим обязателен: тестовые оплаты не должны смешиваться с настоящими.
+const purchaseFields = {
+  product: id,
+  priceStars: count,
+  chargedStars: count,
+  mode: z.enum(["live", "test"]),
+  continueNo: count,
+};
+
 const runOutcome = payload({
   seed: z.number().int(),
   survivalSec: seconds,
@@ -64,6 +76,17 @@ const runOutcome = payload({
 
 export const EVENT_DICTIONARY = {
   app_first_open: { version: 1, payload: payload({}) },
+  // Аккаунт заведён — ровно один раз за его жизнь: о том, что вход был
+  // первым, знает только сервер (docs/34-stage3-plan.md, WP1).
+  user_registered: { version: 1, payload: payload({}) },
+  // Как игрок получил сессию: `launch` — вход на запуске, `refresh` —
+  // плановое продление, `reauth` — сервер не принял токен посреди работы.
+  // Доля `reauth` показывает, часто ли сессии теряются на самом деле.
+  user_authenticated: { version: 1, payload: payload({ reason: z.enum(["launch", "refresh", "reauth"]) }) },
+  // Запуск игры со снимком атрибуции (docs/34-stage3-plan.md, WP6): откуда
+  // открыли — по подписи, которую проверил сервер; `first` — аккаунт заведён
+  // этим запуском. Сама сессия с подробностями — в таблице `account_session`.
+  session_started: { version: 1, payload: payload({ startKind: id, first: z.boolean() }) },
   screen_viewed: { version: 1, payload: payload({ screen: id, stub: z.boolean() }) },
   settings_changed: { version: 1, payload: payload({ setting: id, value: flatValue }) },
   share_offered: { version: 1, payload: payload({ context: id }) },
@@ -87,7 +110,28 @@ export const EVENT_DICTIONARY = {
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },
   wave_reached: { version: 1, payload: payload({ wave: count, elapsedSec: seconds }) },
-  playtest_run_synced: { version: 1, payload: payload({ result: id, trigger: id }) },
+  // Второй шанс взят (docs/07-monetization-and-ads.md §8): откуда — `dev`
+  // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
+  // на какой секунде и волне забега.
+  continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
+  // Нажал «продолжить за звёзды» — счёт запрошен.
+  purchase_initiated: { version: 1, payload: payload(purchaseFields) },
+  // Сервер подтвердил оплату, продолжение выдано.
+  purchase_completed: { version: 1, payload: payload(purchaseFields) },
+  // Не дошло до продолжения: `reason` — `cancelled` (закрыл окно), `failed`,
+  // `unsupported`, `timeout` (подтверждение не дождались) или код отказа сервера.
+  purchase_failed: { version: 1, payload: payload({ ...purchaseFields, reason: id }) },
+  // Дошёл ли старт или итог забега до сервера (docs/34-stage3-plan.md, WP4).
+  // По старту видно, какая доля честных забегов теряет проверку времени —
+  // вход для решения О5; по итогу — вердикт антифрода.
+  run_synced: {
+    version: 1,
+    payload: payload({
+      kind: z.enum(["start", "finish"]),
+      result: z.enum(["sent", "queued", "dropped"]),
+      trigger: id,
+    }),
+  },
   load_time: { version: 1, payload: payload({ phase: id, ms: seconds }) },
   diagnostics_mode_changed: { version: 1, payload: payload({ setting: id, value: z.boolean() }) },
   bench_finished: {

@@ -1,0 +1,54 @@
+# Сводка в Telegram по влитому PR (docs/09-ci-cd.md §7, «Сводка в Telegram»).
+#
+# Текст берётся из описания PR — разделы «## Сводка для команды» и
+# «## Пост в канал»: он пишется один раз, вместе с PR, и проходит ревью.
+# Сводка уходит в чат администраторов, пост — черновиком в свою тему:
+# публикует его человек, пересылкой «без автора». Автопоста в публичный
+# канал нет сознательно.
+#
+# Запуск — на push в `dev` и `main`, то есть на мердж, а PR находится по
+# коммиту. Не на событие pull_request: его GitHub сверяет с правилом веток
+# окружения как `refs/pull/N/merge`, и окружение, открытое только `dev` и
+# `main`, такой джоб не пустило бы. Открыть окружение PR-ссылкам значит отдать
+# секрет любому PR, даже невлитому, — вместе с правкой этого самого файла.
+#
+# Отсюда и безопасность: секрет виден только джобу, который бежит на `dev`
+# или `main`, то есть на уже влитом и прошедшем ревью коде; описание PR
+# приходит через API и не подставляется в `run:`.
+name: team-summary
+
+on:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    # Секрет и адреса чатов — в окружении `telegram`, открытом только веткам
+    # `main` и `dev`. Обязательных ревьюеров у окружения быть не должно:
+    # иначе каждая сводка ждала бы ручного одобрения.
+    environment: telegram
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Отправить сводку
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TEAM_TELEGRAM_BOT_TOKEN }}
+          TEAM_TELEGRAM_CHAT: ${{ vars.TEAM_TELEGRAM_CHAT }}
+          TEAM_TELEGRAM_DRAFTS_CHAT: ${{ vars.TEAM_TELEGRAM_DRAFTS_CHAT }}
+          # Юзернеймы для упоминаний — секретами, а не переменными: репозиторий
+          # публичный, а светить свой юзернейм хотят не все.
+          TEAM_TELEGRAM_MEMBER_1: ${{ secrets.TEAM_TELEGRAM_MEMBER_1 }}
+          TEAM_TELEGRAM_MEMBER_2: ${{ secrets.TEAM_TELEGRAM_MEMBER_2 }}
+          TEAM_TELEGRAM_MEMBER_3: ${{ secrets.TEAM_TELEGRAM_MEMBER_3 }}
+        run: node scripts/release/team-summary.mjs

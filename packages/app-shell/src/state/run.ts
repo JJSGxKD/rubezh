@@ -17,8 +17,10 @@ import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
 import { runGraphics } from "./graphics";
 import { useMeta } from "./meta";
-import { usePlaytest } from "./playtest";
+import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
+import { clearDownedRun, saveDownedRun, takeDownedRun } from "./downed-run";
+import { canOfferPaidContinue } from "./payments-availability";
 import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
@@ -29,7 +31,11 @@ import { clientErrorCount, reportError, track, useShell } from "./shell";
  * нечего делать в сторе, который сравнивают по ссылкам. Он живёт рядом в
  * модуле, а стор держит только то, что рисуется.
  */
-export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "finished" | "error";
+/**
+ * `downed` — игрок умер, но второй шанс ещё есть: мир стоит, итог отложен до
+ * решения (docs/07-monetization-and-ads.md §8).
+ */
+export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "downed" | "finished" | "error";
 
 /**
  * Этап загрузки забега для экрана загрузки: чанк движка, затем мир до первого
@@ -37,6 +43,9 @@ export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "
  * жива, и экран загрузки только мигнул бы.
  */
 export type RunLoadingStage = "engine" | "world";
+
+/** Откуда второй шанс: бесплатно в забеге разработчика или оплачен звёздами. */
+export type ContinueSource = "dev" | "premium";
 
 /**
  * С чем игрок пришёл на экран забега: начать новый или продолжить
@@ -84,11 +93,20 @@ export interface RunStore {
   devRun: boolean;
   /** техническая сводка — у забега разработчика и с FPS тестировщика */
   devInfo: RunDevInfo | null;
+  /** сколько продолжений ещё можно взять — на экране смерти */
+  continuesLeft: number;
 
   start(options: RunStartOptions): Promise<void>;
   pause(reason: RunPauseReason): void;
   resume(): void;
   surrender(): void;
+  /**
+   * Второй шанс на экране смерти. `dev` — бесплатно в забеге разработчика,
+   * это чит; `premium` — продолжение, оплату которого подтвердил сервер.
+   */
+  continueRun(source: ContinueSource): void;
+  /** отказ от второго шанса: забег закрывается смертью */
+  declineContinue(): void;
   choose(optionId: string): void;
   restart(): void;
   stop(): void;
@@ -112,6 +130,8 @@ export interface RunStore {
 }
 
 let session: RunSession | null = null;
+/** Откуда взят второй шанс — до события `revived`, где он попадёт в аналитику. */
+let continueSource: ContinueSource = "premium";
 let unsubscribes: (() => void)[] = [];
 let startOptions: RunStartOptions | null = null;
 
@@ -160,6 +180,7 @@ const IDLE = {
   pauseReason: null as RunPauseReason | null,
   devRun: false,
   devInfo: null as RunDevInfo | null,
+  continuesLeft: 0,
 };
 
 export const useRun = create<RunStore>((set, get) => ({
@@ -238,6 +259,10 @@ export const useRun = create<RunStore>((set, get) => ({
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
         ...(resume === undefined ? {} : { resume }),
         ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),
+        // Второй шанс — в забеге разработчика бесплатно, а игроку — если его
+        // можно купить: иначе смерть ждала бы решения, которого не принять
+        // (docs/34-stage3-plan.md, WP5).
+        continues: devRun || canOfferPaidContinue(),
       });
 
       if (token !== startToken) {
@@ -293,6 +318,20 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.abandon();
   },
 
+  continueRun(source): void {
+    if (get().phase !== "downed") return;
+    // Бесплатное продолжение — только у забега разработчика: у игрока оно
+    // было бы вторым шансом без оплаты.
+    if (source === "dev" && !get().devRun) return;
+    continueSource = source;
+    session?.continueRun({ cheat: source === "dev" });
+  },
+
+  declineContinue(): void {
+    if (get().phase !== "downed") return;
+    session?.declineContinue();
+  },
+
   choose(optionId: string): void {
     if (get().phase !== "levelUp") return;
     track("upgrade_chosen", { option: optionId, level: get().level });
@@ -305,6 +344,9 @@ export const useRun = create<RunStore>((set, get) => ({
 
   restart(): void {
     if (session === null) return;
+    // «Ещё раз» с экрана смерти — отказ от второго шанса: забег закрывается
+    // смертью раньше, чем начнётся следующий.
+    if (get().phase === "downed") session.declineContinue();
     const seed = nextSeed();
     const devRun = get().devRun;
     set({ ...IDLE, phase: "running", seed, devRun });
@@ -335,8 +377,9 @@ export const useRun = create<RunStore>((set, get) => ({
 
   stop(): void {
     // Уход с экрана посреди забега — не конец забега: он сохраняется и ждёт
-    // в лобби.
+    // в лобби. Уход с экрана смерти — отказ от второго шанса.
     if (isInProgress(get().phase)) saveRun();
+    if (get().phase === "downed") session?.declineContinue();
     // Незавершённый запуск тоже отменяем: иначе он доедет и создаст игру,
     // которой уже некому владеть.
     startToken++;
@@ -357,6 +400,10 @@ type GetState = () => RunStore;
 
 function subscribe(created: RunSession, set: SetState, get: GetState): (() => void)[] {
   return [
+    // Старт — в очередь сразу, раньше итога: по нему сервер сверит длительность
+    // забега со своими часами (docs/34-stage3-plan.md, WP4). Продолженный
+    // забег события не присылает — его начало уже было.
+    created.on("started", (started) => useRuns.getState().registerStart(started)),
     created.on("hud", (hud) => {
       // Первый снимок HUD — первый кадр забега: сцена создана и мир живёт.
       if (firstFrameStartedAt !== null) {
@@ -370,7 +417,6 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
       const previous = get().hud;
       if (previous !== null && isLowHp(hud) && !isLowHp(previous) && hud.hp > 0) haptic("lowHp");
       audio.hud({
-        enemies: hud.enemiesAlive,
         hpRatio: hud.maxHp > 0 ? hud.hp / hud.maxHp : 1,
         weapons: hud.weapons.length,
       });
@@ -427,6 +473,27 @@ function subscribe(created: RunSession, set: SetState, get: GetState): (() => vo
         .then(({ queueRunReport }) => queueRunReport(recording, clientErrors))
         .catch((error: unknown) => reportError("reports", `запись забега не поставлена в очередь: ${String(error)}`));
     }),
+    created.on("downed", ({ result, continuesLeft }) => {
+      // Сохранение снимается сразу: продолжив из него, игрок вернулся бы в
+      // мир, где он ещё жив. Итог «как при отказе» ложится на устройство —
+      // закрытое на экране смерти приложение не потеряет забег.
+      useSavedRun.getState().clear();
+      saveDownedRun({ result, countInRating: countsInRating(get) });
+      set({ phase: "downed", result, continuesLeft, isNewRecord: false });
+      haptic("death");
+      audio.runEvent("death");
+    }),
+
+    created.on("revived", ({ elapsedSec }) => {
+      clearDownedRun();
+      track("continue_used", {
+        source: continueSource,
+        elapsedSec: Math.round(elapsedSec),
+        wave: get().hud?.wave ?? 0,
+      });
+      set({ phase: "running", result: null, continuesLeft: 0 });
+    }),
+
     created.on("finished", (result) => finishRun(result, "run_finished", set, get)),
     created.on("abandoned", (result) => finishRun(result, "run_abandoned", set, get)),
 
@@ -458,27 +525,60 @@ function finishRun(
   set: SetState,
   get: GetState,
 ): void {
-  // Кончившийся забег продолжать нечего.
+  // Смерть уже прозвучала на экране второго шанса — отказ её не повторяет.
+  const wasDowned = get().phase === "downed";
+  // Кончившийся забег продолжать нечего, а решение на экране смерти принято.
   useSavedRun.getState().clear();
-  // Учесть забег с читами можно только в забеге разработчика: флаг из
-  // настроек у обычного забега ничего не значит.
-  const countInRating = get().devRun && useDevMode.getState().settings.countInRating;
+  clearDownedRun();
+  const countInRating = countsInRating(get);
   // Рекорд пишется здесь, а не в движке: хранилище устройства — забота
   // оболочки (docs/27-design-system-and-app-shell.md §7).
-  const isNewRecord = useMeta.getState().submitRun(result, countInRating);
-  // Лидерборд плейтеста — поверх рекорда на устройстве, а не вместо него:
-  // без сети игрок всё равно видит свой рекорд сразу.
-  usePlaytest.getState().submitRun(result, countInRating);
+  const isNewRecord = recordResult(result, countInRating);
   setRunUiMode(false);
-  set({ phase: "finished", result, isNewRecord });
-  haptic(isNewRecord ? "record" : result.outcome === "died" ? "death" : "tap");
+  set({ phase: "finished", result, isNewRecord, continuesLeft: 0 });
+  if (!wasDowned) haptic(isNewRecord ? "record" : result.outcome === "died" ? "death" : "tap");
   // Рекорд звучит поверх поражения: смерть ожидаема, рекорд — нет.
-  if (result.outcome === "died") audio.runEvent("death");
+  if (result.outcome === "died" && !wasDowned) audio.runEvent("death");
   if (isNewRecord) audio.runEvent("record");
 
   const diagnostics = pendingDiagnostics;
   pendingDiagnostics = null;
   track(event, {
+    ...outcomeFields(result, isNewRecord),
+    ...(diagnostics === null ? {} : perfFields(diagnostics.perf)),
+  });
+}
+
+/**
+ * Забег, брошенный на экране смерти в прошлый запуск (downed-run.ts), —
+ * закрыть обычной смертью: рекорд, рейтинг и `run_finished`. Сводки
+ * производительности у него нет: она живёт только в памяти сцены.
+ */
+export function recoverDownedRun(): void {
+  const downed = takeDownedRun();
+  if (downed === null) return;
+  const isNewRecord = recordResult(downed.result, downed.countInRating);
+  track("run_finished", { ...outcomeFields(downed.result, isNewRecord), recovered: true });
+}
+
+/** Рекорд на устройстве и забег на сервере — поверх рекорда, а не вместо него. */
+function recordResult(result: RunResult, countInRating: boolean): boolean {
+  const isNewRecord = useMeta.getState().submitRun(result, countInRating);
+  // Без сети игрок всё равно видит свой рекорд сразу.
+  useRuns.getState().submitRun(result, countInRating);
+  return isNewRecord;
+}
+
+/**
+ * Учесть забег с читами можно только в забеге разработчика: флаг из
+ * настроек у обычного забега ничего не значит.
+ */
+function countsInRating(get: GetState): boolean {
+  return get().devRun && useDevMode.getState().settings.countInRating;
+}
+
+function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, string | number | boolean> {
+  return {
     seed: result.seed,
     survivalSec: Math.round(result.survivalSec),
     level: result.level,
@@ -490,8 +590,8 @@ function finishRun(
     contentHash: result.contentHash,
     isNewRecord,
     cheats: result.cheats,
-    ...(diagnostics === null ? {} : perfFields(diagnostics.perf)),
-  });
+    continues: result.continues.length,
+  };
 }
 
 /**

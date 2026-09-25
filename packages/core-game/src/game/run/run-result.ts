@@ -1,4 +1,5 @@
 import type { RunOutcome, RunPassiveSummary, RunResult, RunWeaponSummary } from "@bh/shared-types";
+import { continueSeconds } from "../sim/continue";
 import type { World } from "../sim/world";
 
 /**
@@ -53,6 +54,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     distance: stats.distance,
     peakEnemies: stats.peakEnemies,
     cheats: options.cheats === true,
+    continues: continueSeconds(world),
   };
 }
 

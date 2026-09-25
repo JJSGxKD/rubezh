@@ -27,7 +27,7 @@
 ```ts
 interface PlatformAdapter {
   init(): Promise<UserContext>;          // id, имя, аватар
-  purchase(itemId: string): Promise<PurchaseResult>;
+  openInvoice?(url: string): Promise<InvoiceStatus>; // счёт выставляет сервер, решает тоже он
   share(payload: SharePayload): void;    // шеринг результата забега
   haptic(type: HapticType): void;
   showAd?(): Promise<AdResult>;          // опционально, не везде доступно

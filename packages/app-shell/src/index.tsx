@@ -15,6 +15,8 @@ import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
 import { usePlaytest } from "./state/playtest";
+import { useRuns } from "./state/runs";
+import { recoverDownedRun } from "./state/run";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
@@ -92,7 +94,10 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   useMeta.getState().hydrate();
   useHints.getState().hydrate();
   useSavedRun.getState().hydrate();
-  usePlaytest.getState().hydrate();
+  useRuns.getState().hydrate();
+  // Забег, брошенный на экране смерти, закрывается смертью — после рекорда и
+  // очереди забегов, которые он пополнит (state/downed-run.ts).
+  recoverDownedRun();
   useDevMode.getState().hydrate();
   useGraphics.getState().hydrate();
   useFeedback.getState().hydrate();
@@ -104,11 +109,19 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
   // них игрок не должен ждать заставку. Затем профиль: рекорд, поставленный
   // на другом устройстве, появляется на главной.
-  void usePlaytest
+  void useRuns
     .getState()
     .flush("launch")
-    .then(() => usePlaytest.getState().loadProfile());
+    .then(() => useRuns.getState().loadProfile());
   void usePlaytest.getState().loadAccess();
+  // Сессия игрока — отдельным чанком после главной: деньгам и рейтингу она
+  // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический
+  // импорт утащил бы её и клиента авторизации в первую загрузку.
+  if (options.capabilities.auth !== undefined) {
+    import("./state/session")
+      .then(({ useSession }) => useSession.getState().signIn())
+      .catch((error: unknown) => console.warn("Вход не загрузился:", error));
+  }
   void usePlaytest.getState().reportSession();
   const stopTelemetry = startTelemetry(options, telemetrySink.attach);
   // Записи забегов, не ушедшие в прошлый раз, досылаются после главной. Чанк
@@ -216,6 +229,5 @@ async function waitForFonts(timeoutMs: number): Promise<boolean> {
 }
 
 export type { ShellBuildInfo, ShellCapabilities } from "./state/shell";
-export type { PlaytestApiConfig } from "./state/playtest-api";
 export type { AnalyticsEvent, AnalyticsPayload, AnalyticsSink } from "./state/analytics";
 export { COLORS, PLATFORM_COLORS } from "./design-system/tokens";

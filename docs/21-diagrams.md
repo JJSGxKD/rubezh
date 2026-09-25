@@ -27,106 +27,234 @@
 
 ## 1. База данных
 
-### 1.1 Текущая схема (MVP, реализовано)
+### 1.1 Текущая схема (что есть в базе сегодня)
 
-Соответствует `backend/api/prisma/schema.prisma` на сегодня.
+Соответствует `backend/api/prisma/schema.prisma`. Таблицы появляются вместе с
+кодом, который в них пишет, а не лежат пустыми заранее.
 
 ```mermaid
 erDiagram
-    USER ||--o{ RUN : "совершает"
-    USER ||--o{ PURCHASE : "оплачивает"
-
-    USER {
-        uuid id PK
+    ACCOUNT {
+        uuid account_id PK
         enum platform "telegram|max|vk|web"
-        string platformUserId "id на стороне площадки"
-        string displayName
-        string avatarUrl "nullable"
-        string locale "nullable, только telegram и web"
-        datetime createdAt
+        string platform_user_id "id на стороне площадки"
+        string display_name
+        string username "nullable"
+        string photo_url "nullable"
+        datetime created_at
+        datetime last_seen_at
+        datetime banned_at "nullable"
+        string ban_reason "nullable"
     }
 
+    ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
+    ACCOUNT ||--o{ RUN : "играет"
+    ACCOUNT ||--o{ PURCHASE : "оплачивает"
+    RUN ||--o{ PURCHASE : "продолжен за"
+    ACCOUNT ||--o{ ACCOUNT_SESSION : "запускает игру"
+    ACCOUNT ||--o| ACQUISITION : "пришёл через"
+
     RUN {
-        uuid id PK
-        uuid userId FK
-        int score
-        int durationSec
-        int waveReached
-        datetime createdAt
+        string run_id PK "ключ идемпотентности от клиента"
+        uuid account_id FK
+        enum status "started|finished"
+        enum difficulty "easy|normal|hard"
+        string starting_weapon_id
+        string content_hash
+        datetime started_at "nullable: по часам сервера; старт не дошёл — пусто"
+        datetime finished_at "nullable"
+        enum outcome "nullable: died|abandoned"
+        float survival_sec "nullable"
+        int level "nullable"
+        int enemies_killed "nullable"
+        json weapons "nullable"
+        boolean cheats
+        float[] continues "секунда каждого второго шанса"
+        boolean ranked "в рейтинге: вердикт ok и без читов"
+        enum verdict "nullable: ok|suspicious|rejected"
+        string[] verdict_reasons
+    }
+
+    ACCOUNT_SESSION {
+        uuid session_id PK
+        uuid account_id FK
+        enum platform
+        enum place "miniapp|web"
+        enum start_kind "organic|click|invite|telegram_affiliate|unknown"
+        string start_param "nullable: из подписанного initData"
+        string start_ref "nullable: код клика, id партнёра Telegram"
+        string client_platform "nullable: подсказка клиента"
+        string client_version "nullable"
+        enum device_class "mobile|desktop|web|unknown"
+        string os
+        string ip_prefix "nullable: /24 или /48, не адрес"
+        datetime started_at
+    }
+
+    ACQUISITION {
+        uuid account_id PK,FK
+        datetime first_at "самая ранняя сессия"
+        enum first_start_kind
+        string first_start_param "nullable"
+        string first_start_ref "nullable"
+        string first_client_platform "nullable"
+        enum first_device_class
+        datetime last_seen_at
+        datetime last_touch_at "nullable: последняя сессия по ссылке"
+        enum last_start_kind "nullable"
+        string last_start_param "nullable"
+        string last_start_ref "nullable"
     }
 
     PURCHASE {
-        uuid id PK
-        uuid userId FK
-        string itemId
-        enum kind "skin|continue_run|character_unlock|ad_removal_pack|seasonal"
+        uuid purchase_id PK "он же payload счёта"
+        uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
+        enum product "continue_run"
+        string run_id FK "UK вместе с continue_no"
+        int continue_no "какое продолжение забега, с единицы"
+        float elapsed_sec "секунда забега, по которой посчитана цена"
+        int price_stars "цена по правилу Р5.1 — её видит игрок"
+        int charged_stars "сколько списано: в тестовом режиме — одна звезда"
+        enum mode "live|test"
+        enum status "pending|paid|refunded"
+        string telegram_charge_id UK "nullable: id оплаты в Telegram"
+        datetime invoiced_at "когда выставлен последний счёт"
+        datetime paid_at "nullable: продолжение выдано"
+        enum refund_reason "nullable: test_mode|unused|external"
+        datetime refund_requested_at "nullable"
+        datetime refunded_at "nullable"
+    }
+
+    ACCOUNT_ROLE {
+        uuid account_id PK,FK
+        enum role PK "owner|admin|game_designer|moderator|marketer|finance|analyst|stakeholder"
+        uuid granted_by "nullable: выдано на старте по списку в окружении"
+        datetime granted_at
+    }
+
+    AUDIT_ENTRY {
+        uuid entry_id PK
+        uuid actor_account_id "nullable: действие системы, а не человека"
+        string action "roles.assign, roles.revoke, …"
+        string target "nullable"
+        json before "nullable"
+        json after "nullable"
+        datetime created_at
+    }
+
+    ANALYTICS_EVENT {
+        uuid event_id PK
+        string event_type
+        int schema_version
+        string install_id "устройство"
+        string platform_user_id "nullable, только при проверенной подписи"
+        string session_id
         enum platform
-        int priceMinor "в минимальных единицах валюты площадки"
-        string transactionId UK
-        datetime createdAt
+        string app_version
+        json payload
+        datetime occurred_at
+        datetime received_at
+    }
+
+    DIAGNOSTIC_REPORT {
+        uuid report_id PK
+        enum kind "bench|run"
+        string install_id
+        string platform_user_id "nullable"
+        enum platform
+        json device
+        json summary
+        json payload
+        datetime occurred_at
+        datetime received_at
+    }
+
+    FEEDBACK {
+        uuid feedback_id PK
+        string install_id
+        string platform_user_id "nullable"
+        json answers "ответы опроса"
+        string text
+        int runs "забегов к моменту отзыва"
+        datetime created_at
+    }
+
+    DATA_EXPORT {
+        uuid export_id PK
+        enum source "bot|cli"
+        string requested_by "Telegram ID администратора"
+        enum status
+        datetime period_to
+        datetime created_at
     }
 ```
 
 Что важно понимать по этой схеме:
 
+- **Связей внешними ключами здесь нет, и это осознанно.** Телеметрия
+  закрытого теста писалась до аккаунтов: событие и отчёт опознают
+  **устройство** (`install_id`), а Telegram ID кладут только при проверенной
+  подписи запуска. Связать историю с аккаунтом можно запросом по
+  `platform_user_id`, но внешнего ключа между ними нет: событие не должно
+  пропадать оттого, что аккаунт завели позже или не завели вовсе.
 - **Аккаунты не связываются между платформами.** Один человек в Telegram и в
-  MAX — две разные строки `USER`, уникальность по паре
-  `(platform, platformUserId)`. Обоснование — `08-web-and-identity.md` §3.
-- **`RUN` — это сырая история** для антифрода и аналитики, а не источник
-  чтения лидерборда: лидерборд отдаётся из Redis ZSET, а `RUN` остаётся
-  источником истины, из которого ZSET можно перестроить
-  (`14-scalability.md` §4.3).
-- **`transactionId` уникален** — это ключ идемпотентности платежа
-  (`15-engineering-standards.md` §4.1).
+  MAX — две разные строки `ACCOUNT`, уникальность по паре
+  `(platform, platform_user_id)`. Обоснование — `08-web-and-identity.md` §3.
+- **Сессии игрока в Postgres не хранятся.** Токены продления живут в Redis:
+  им нужен срок жизни, атомарное гашение и мгновенный отзыв, а не история
+  (`34-stage3-plan.md`, WP1).
+- **Роль — данные, состав роли — код.** В базе лежит только «у кого какая
+  роль»; какие права даёт роль, меняется через ревью
+  (`29-admin-panel.md` §3.2).
+- **`RUN` — источник истины по результатам.** Лидерборд живёт в Redis
+  ZSET как проекция отсюда и пересобирается одной командой
+  (`pnpm --filter backend-api runs:rebuild-leaderboard`,
+  `14-scalability.md` §4.3). Строка появляется на **старте** забега — сервер
+  ставит своё время начала, и по нему потом проверяет, что заявленное время
+  выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
+  подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
+  разбора.
+- **`ACCOUNT_SESSION` — запуск игры, `ACQUISITION` — откуда игрок пришёл**
+  (`34-stage3-plan.md`, WP6). Сессия пишется из очереди, мимо ответа на
+  вход, а повтор запуска в течение 30 секунд отсекает ключ в Redis — не
+  блокировка строки, как в источнике переноса (`13-reuse-from-vpnsibcom.md`
+  §6). Первое касание — самая ранняя сессия, органическая тоже; последнее —
+  последняя сессия по ссылке. Обе строки считает одна вставка с
+  `ON CONFLICT`. Персональных данных — минимум: подсеть вместо адреса и
+  класс устройства вместо строки User-Agent (`24-attribution-and-sharing.md`
+  §6). Уходят вместе с аккаунтом.
+- **`PURCHASE` — запись бухгалтерии, а не состояние игры.** Внешние ключи
+  на аккаунт и забег запрещают удаление (`Restrict`): удалить игрока, за
+  которым числятся звёзды, база не даст — деньги не исчезают вместе с ним.
+  Ключей идемпотентности два: `(run_id, continue_no)` — повторный счёт на то
+  же продолжение возвращает ту же покупку, `telegram_charge_id` — повтор
+  подтверждения оплаты ничего не удваивает. Цены две, показанная и
+  списанная, и режим оплаты: тестовые звёзды не попадают в отчёт о выручке
+  (`34-stage3-plan.md`, Р14). Звёзды — `int`, а не `decimal`: по протоколу
+  Telegram они целые, и точность здесь не теряется.
+- **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
+  удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
+  наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
 
-### 1.2 Планируемое расширение (этапы 3–4, ещё не реализовано)
+### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 
-Модель, к которой идём при переносе авторизации, атрибуции, рекламы и
-рефералки (`13-reuse-from-vpnsibcom.md` §4-§7). Приведена, чтобы решения
-принимались с оглядкой на целевую картину, а не только на сегодняшнюю.
+Модель, к которой идём при переносе рекламы и рефералки
+(`13-reuse-from-vpnsibcom.md` §3, §7). Приведена, чтобы решения принимались с
+оглядкой на целевую картину, а не только на сегодняшнюю. Аккаунт, сессии,
+касания, роли и покупки отсюда ушли: на этапе 3 они легли в базу — §1.1.
 
 ```mermaid
 erDiagram
-    USER ||--o{ RUN : "совершает"
-    USER ||--o{ PURCHASE : "оплачивает"
-    USER ||--o{ SESSION : "открывает"
-    USER ||--|| ACQUISITION : "имеет"
-    USER ||--o{ EVENT : "порождает"
-    USER ||--o{ ADS_VIEW : "смотрит"
-    USER ||--o{ REFERRAL : "приглашает"
-    USER ||--|| BALANCE : "владеет"
+    ACCOUNT ||--o{ EVENT : "порождает"
+    ACCOUNT ||--o{ ADS_VIEW : "смотрит"
+    ACCOUNT ||--o{ REFERRAL : "приглашает"
+    ACCOUNT ||--o| BALANCE : "владеет"
     ADS_BLOCK ||--o{ ADS_VIEW : "показан в"
     ADS_NETWORK ||--o{ ADS_BLOCK : "обслуживает"
 
-    USER {
-        uuid id PK
-        enum platform
-        string platformUserId
-        enum role "user|designer|admin"
-        datetime createdAt
-    }
-
-    SESSION {
-        uuid id PK
-        uuid userId FK
-        string source "из startParam"
-        string campaignId
-        string ip
-        json device "разобранный UA"
-        datetime startedAt
-    }
-
-    ACQUISITION {
-        uuid id PK
-        string firstSource "первое касание"
-        string lastSource "последнее касание"
-        datetime firstAt
-        datetime lastAt
-    }
-
     EVENT {
         uuid id PK
-        uuid userId FK
+        uuid account_id FK
         enum eventType "FIRST_RUN|RUN_COMPLETED|FIRST_PURCHASE|AD_REWARD_CLAIMED|D1_RETURN"
         json payload
         datetime createdAt
@@ -134,7 +262,7 @@ erDiagram
 
     ADS_VIEW {
         uuid id PK
-        uuid userId FK
+        uuid account_id FK
         uuid blockId FK
         string sessionKey UK "одноразовый ключ показа"
         decimal reward
@@ -180,9 +308,15 @@ erDiagram
     }
 ```
 
-`CONFIG_VERSION` намеренно не связана с `USER` внешним ключом: это
+`CONFIG_VERSION` намеренно не связана с `ACCOUNT` внешним ключом: это
 неизменяемый снапшот правил игры, а не пользовательские данные
-(`19-content-admin.md` §3).
+(`19-content-admin.md` §3). `BALANCE` ждёт второго товара: пока за звёзды
+продаётся один второй шанс, валюта не нужна (`34-stage3-plan.md`, Р5).
+`EVENT` — вехи воронки игрока, которые знает только сервер: первый забег,
+первая покупка, возврат на второй день (`13-reuse-from-vpnsibcom.md` §6).
+Это не клиентская аналитика — та в `ANALYTICS_EVENT` (§1.1). На этапе 3
+таблица не заведена: вехи пока выводятся запросом из `run`, `purchase` и
+`account_session`, а понадобится она партнёрским начислениям.
 
 ### 1.3 Привлечение, партнёры и аналитика (проектируется)
 
@@ -192,16 +326,16 @@ erDiagram
 
 ```mermaid
 erDiagram
-    CLICK ||--o| USER : "атрибутирует"
+    CLICK ||--o| ACCOUNT : "атрибутирует"
     PARTNER ||--o{ PARTNER_LINK : "владеет"
     PARTNER ||--o{ PROMO_CODE : "владеет"
     PARTNER_LINK ||--o{ CLICK : "порождает"
-    PROMO_CODE ||--o{ USER : "привязывает"
+    PROMO_CODE ||--o{ ACCOUNT : "привязывает"
     PARTNER ||--o{ PARTNER_ACCRUAL : "получает"
-    PAYMENT ||--o| PARTNER_ACCRUAL : "порождает"
-    USER ||--o{ SHARE : "создаёт"
+    PURCHASE ||--o| PARTNER_ACCRUAL : "порождает"
+    ACCOUNT ||--o{ SHARE : "создаёт"
     SHARE ||--o{ CLICK : "порождает"
-    USER ||--o{ ANALYTICS_EVENT : "порождает"
+    ACCOUNT ||--o{ ANALYTICS_EVENT : "порождает"
 
     CLICK {
         uuid click_id PK
@@ -247,7 +381,7 @@ erDiagram
     PARTNER_ACCRUAL {
         uuid id PK
         uuid partnerId FK
-        uuid paymentId FK
+        uuid purchase_id FK
         decimal amount "Decimal, не Float"
         enum status "HELD|PAYABLE|PAID|CANCELLED"
         datetime holdUntil
@@ -255,7 +389,7 @@ erDiagram
 
     SHARE {
         uuid id PK
-        uuid userId FK
+        uuid account_id FK
         enum kind "RUN_RESULT|PROFILE_CARD"
         string variant "оформление карточки, для A/B"
         enum channel "CHAT|STORY|WALL|WEB_SHARE"
@@ -267,7 +401,7 @@ erDiagram
         uuid event_id PK
         string event_type "только из словаря"
         int schema_version
-        uuid userId "nullable"
+        uuid account_id "nullable"
         json attribution "снимок на момент события"
         json payload
         datetime occurred_at
@@ -277,8 +411,11 @@ erDiagram
 
 Три решения, которые из схемы не очевидны:
 
-- **`CLICK` существует до пользователя.** Строка создаётся в момент клика,
-  когда игрока ещё нет; `boundAt` заполняется при первом запуске.
+- **`CLICK` существует до игрока.** Строка создаётся в момент клика,
+  когда аккаунта ещё нет; `boundAt` заполняется при первом запуске. Код
+  клика (`c-<код>` в параметре запуска) уже сейчас пишется в
+  `account_session.start_ref` и в касания `acquisition` (§1.1) — строка клика
+  свяжется с ними по нему, задним числом тоже.
 - **`ANALYTICS_EVENT.attribution` — снимок, а не ссылка.** Иначе
   перепривязка задним числом переписывает историю и отчёт за прошлый месяц
   перестаёт воспроизводиться (`22-analytics-and-metrics.md` §3.1).
@@ -561,20 +698,20 @@ flowchart LR
     CADDY["Caddy<br/>TLS, единственный вход"]
 
     subgraph api["backend/api"]
-        AUTH["auth<br/>initData → JWT"]
-        RUNS["runs<br/>приём забегов, антифрод"]
-        LB["leaderboard"]
-        PAY["payments"]
+        AUTH["auth<br/>initData → JWT, роли, реализовано"]
+        ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
+        RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
+        PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение, возвраты, реализовано"]
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
         INGEST["ingest<br/>выключатели, Origin, лимиты,<br/>подпись initData, реализовано"]
         EVENTS["events<br/>приём событий, реализовано"]
         DIAG["diagnostics<br/>отчёты стресс-теста, реализовано"]
-        PT["playtest<br/>сохранения, лидерборд, сводка<br/>закрытого теста, реализовано"]
+        PT["playtest<br/>сводка, запуски, доступ<br/>закрытого теста, реализовано"]
         BOT["bot<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
         WELCOME["welcome<br/>/start с карточкой, реализовано"]
-        NOTIFY["admin-notify<br/>карточки отчётов в чат, реализовано"]
+        NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
     end
 
@@ -595,7 +732,6 @@ flowchart LR
 
     CADDY --> AUTH
     CADDY --> RUNS
-    CADDY --> LB
     CADDY --> PAY
     CADDY --> ADS
     CADDY --> REF
@@ -612,23 +748,35 @@ flowchart LR
     DIAG --> PG
     DIAG -. слушатели нового отчёта .-> PT
     DIAG -. слушатели нового отчёта .-> NOTIFY
+    RUNS -. слушатели записанного забега .-> PT
+    RUNS -. слушатели записанного забега .-> NOTIFY
+    PT -. рейтинг и профиль аккаунта .-> RUNS
     NOTIFY --> QUEUE
+    PAY -- answerPreCheckoutQuery --> TGAPI
     TGAPI -- вебхук --> CADDY
     CADDY --> BOT
     BOT --> WELCOME
     BOT --> PT
     BOT --> EXPORT
+    BOT -- проверка и подтверждение оплаты --> PAY
+    PAY --> QUEUE
     WELCOME -. рекорд и место .-> PT
     EXPORT --> QUEUE
     EXPORT --> PG
-    QUEUE -- sendPhoto, sendDocument --> TGAPI
+    QUEUE -- sendPhoto, sendDocument, refundStarPayment --> TGAPI
 
     AUTH --> PG
     AUTH --> REDIS
+    AUTH -. слушатели входа .-> ATTR
+    ATTR --> REDIS
+    ATTR --> QUEUE
+    RUNS --> PG
     RUNS --> REDIS
-    RUNS --> QUEUE
-    LB --> REDIS
-    PAY --> QUEUE
+    PAY --> PG
+    PAY -. забег, который продолжают .-> RUNS
+    RUNS -. сверка продолжений с покупками .-> PAY
+    RUNS -. слушатели записанного забега .-> PAY
+    PAY -- createInvoiceLink --> TGAPI
     ADS --> REDIS
     REF --> PG
     CONTENT --> PG
@@ -640,9 +788,13 @@ flowchart LR
     TG -.статика и конфиг.-> CDN
 ```
 
-Читается так: **горячий путь не ходит в Postgres напрямую.** Приём забега
-пишет в Redis и ставит задачу в очередь, а запись в БД делает воркер —
-поэтому ответ игроку не ждёт диска (`14-scalability.md` §4.1).
+Читается так: **Postgres — источник истины, Redis — проекция.** Приём забега
+пишет его в базу одной строкой по первичному ключу и только потом — место в
+рейтинг Redis: упавший Redis забег не теряет, рейтинг догонит повтор итога
+или пересборка (`34-stage3-plan.md`, Р4). Запись синхронная сознательно: на
+нынешнем объёме это одна вставка, а очередь перед ней — первый шаг
+`14-scalability.md` §4.1, когда запись станет узким местом. Уведомления и
+сводка работают после ответа игроку — слушателями записанного забега.
 
 ---
 
@@ -650,54 +802,101 @@ flowchart LR
 
 ### 4.1 Авторизация
 
+Реализовано на этапе 3 (`34-stage3-plan.md`, WP1, WP6).
+
 ```mermaid
 sequenceDiagram
     participant C as Клиент (Mini App)
     participant A as auth
-    participant R as Redis
     participant DB as PostgreSQL
+    participant R as Redis
+    participant S as attribution
 
-    C->>A: POST /api/v1/auth/telegram { initData }
-    A->>A: Проверка подписи токеном бота<br/>+ явное окно свежести
-    alt подпись неверна или initData просрочен
+    C->>A: POST /api/v1/auth/telegram<br/>{ initData, client, reason }
+    A->>A: подпись токеном бота,<br/>окно свежести — час
+    alt подпись неверна или данные запуска устарели
         A-->>C: 401
     else
-        A->>DB: найти или создать пользователя<br/>по (platform, platformUserId)
-        A->>R: сохранить refresh (jti → userId, TTL)
-        A-->>C: access + refresh, профиль
-        A->>A: запись сессии и атрибуции → очередь
+        A->>DB: найти или завести аккаунт<br/>по (platform, platformUserId)
+        alt аккаунт заблокирован
+            A-->>C: 403 с причиной
+        else
+            A->>R: SHA-256 токена продления, TTL,<br/>потолок устройств
+            A-->>C: access (JWT) и refresh, аккаунт, launch.startKind
+            A--)S: вход: параметр запуска из подписи,<br/>клиент, цель — без ожидания
+            S->>R: окно 30 с: SET NX EX
+            S->>DB: сессия и касания — через очередь sessions
+        end
+    end
+
+    Note over C,A: access истёк — клиент молча продлевает сессию
+    C->>A: POST /api/v1/auth/refresh { refreshToken }
+    A->>R: погасить токен атомарно
+    alt токен уже погашен — его украли или повторили
+        A->>R: сбросить все сессии аккаунта
+        A-->>C: 401 «Сессия сброшена»
+    else
+        A->>R: новый токен продления
+        A-->>C: новая пара
     end
 ```
 
-Валидация подписи — **только на сервере**. Детали и краевые случаи —
-`13-reuse-from-vpnsibcom.md` §4.
+Валидация подписи — **только на сервере**. Роли в токен не входят и
+проверяются по базе на каждом запросе с правом: отзыв действует сразу, а не
+через четверть часа (`34-stage3-plan.md`, Р1). Сессию и касания вход не
+ждёт: упавшая запись атрибуции не отменяет вход. Сессией считается только
+запуск (`reason: "launch"`), а не повторный вход посреди работы. Детали и
+краевые случаи — `13-reuse-from-vpnsibcom.md` §4 и §6.
 
 ### 4.2 Сдача результата забега
 
+Реализовано на этапе 3 (`34-stage3-plan.md`, WP4).
+
 ```mermaid
 sequenceDiagram
-    participant C as Клиент
+    participant C as Оболочка
+    participant Q as Очередь на устройстве<br/>bh.runs.v1.pending
     participant RU as runs
-    participant R as Redis
-    participant Q as BullMQ
     participant DB as PostgreSQL
+    participant R as Redis
+    participant H as Слушатели забега
 
-    C->>RU: POST /api/v1/runs { runId, score, wave, duration }
-    RU->>R: SET NX runId (идемпотентность)
-    alt runId уже был
-        RU-->>C: результат первой обработки
-    else
-        RU->>RU: антифрод: границы score/время/волна
-        RU->>R: ZADD lb:{platform}:{season}:{mode}
-        RU-->>C: место в лидерборде (сразу)
-        RU->>Q: задача «записать забег»
-        Q->>DB: INSERT run (батчем), начисления, события
+    C->>Q: старт — по событию движка started
+    C->>Q: итог — в конце забега
+    loop по одному и по порядку, Authorization: Bearer
+        Q->>RU: POST /api/v1/runs/start { runId, elapsedSec }
+        RU->>DB: строка забега, status=started,<br/>начало = приём − elapsedSec
+        Q->>RU: POST /api/v1/runs { runId, survivalSec, уровень, … }
+        alt забег с этим runId уже записан
+            RU-->>Q: ответ по записанному, а не по телу повтора
+        else
+            RU->>RU: вердикт: слоты оружия, время по часам сервера,<br/>темп убийств и уровней, отпечаток контента
+            RU->>DB: итог с вердиктом и причинами
+            opt вердикт ok и без читов
+                RU->>R: ZADD GT runs:leaderboard:{сложность}
+            end
+            RU-->>Q: место, лучшее время, вердикт
+            RU--)H: записан новый забег
+            H--)R: сводка плейтеста — счётчики
+            H--)R: подозрительный — карточка в очередь admin-notify,<br/>не чаще раза в час на аккаунт
+        end
     end
 ```
 
-Игрок видит результат немедленно, БД догоняет. Идемпотентность — по
-клиентскому `runId`, **не** по хэшу тела: два честных забега с одинаковым
-счётом дали бы одинаковый хэш (`15-engineering-standards.md` §4.1).
+Три свойства, ради которых схема такая:
+
+- **время забега проверяет сервер своими часами.** Старт уходит в начале
+  забега и ставит серверное время начала; итог длиннее прошедшего получает
+  отказ. Старт, пролежавший без сети дольше `RUNS_START_MAX_DELAY_SEC`, время
+  не проверяет — такой забег помечается `unverified_time` (О5);
+- **повтор отвечает по записанному.** Идемпотентность — по клиентскому
+  `runId`, **не** по хэшу тела: два честных забега с одинаковым счётом дали
+  бы одинаковый хэш (`15-engineering-standards.md` §4.1). А ответ на повтор
+  строится из базы, иначе забег сдавали бы дважды: с малым временем, чтобы
+  пройти проверки, и тем же ключом — с огромным;
+- **игрок не ждёт ни сводки, ни чата.** Слушатели зовутся после ответа и
+  только на первую запись: повтор из очереди не посчитает забег дважды и не
+  пришлёт вторую карточку.
 
 ### 4.3 Награда за просмотр рекламы
 
@@ -985,59 +1184,22 @@ flowchart TD
   допустимые дуги — смещение зеркалится по нарушенной оси, длина при этом не
   меняется, значит враг по-прежнему появляется за краем видимости.
 
-### 4.11 Сохранения и лидерборд плейтеста (этап 2, реализовано)
+### 4.11 Сохранения и лидерборд плейтеста (этап 2, заменено на этапе 3)
 
-Временный путь закрытого теста (`26-stage2-plan.md`, Р19 и WP13): без
-авторизации, Postgres и очередей — подпись `initData` на каждом запросе и
-Redis. Целевой путь сдачи забега — §4.2, этот его не заменяет.
-
-```mermaid
-sequenceDiagram
-    participant S as Оболочка
-    participant Q as Очередь на устройстве<br/>bh.playtest.v1.pending
-    participant V as Dev-сервер Vite<br/>через туннель
-    participant G as PlaytestAuthGuard
-    participant P as PlaytestService
-    participant R as Redis
-
-    S->>Q: итог забега (сразу после рекорда на устройстве)
-    loop по одному, старые первыми
-        Q->>V: POST /api/v1/playtest/runs<br/>Authorization: tma initData
-        V->>G: прокси только /api/v1/playtest
-        alt плейтест выключен
-            G-->>Q: 404 — забег ждёт
-        else подпись не сошлась или устарела
-            G-->>Q: 401 — забег ждёт нового запуска
-        else
-            G->>P: игрок из подписи
-            P->>R: SET pt:run:{runId} NX
-            alt забег уже был
-                P-->>Q: лучшее время без пересчёта
-            else
-                P->>R: счётчики и последние забеги
-                P->>R: Lua: ZADD pt:lb:{сложность}<br/>и детали лучшего забега атомарно
-                P-->>Q: лучшее время и место
-            end
-            Q->>S: место — на экран смерти
-        end
-    end
-```
-
-Три свойства, ради которых схема такая:
-
-- **забег не теряется без сети.** Очередь на устройстве разбирается сразу
-  после забега, при запуске приложения и при открытии рейтинга; сервер отверг
-  данные (400) — забег выбрасывается, остальное ждёт;
-- **повтор безопасен.** Ретрай после обрыва узнаётся по `runId` и не удваивает
-  статистику;
-- **чужие Telegram ID наружу не уходят.** Строка лидерборда знает имя, фото и
-  признак «моя», но не идентификатор игрока. Каждый ключ Redis живёт
-  `PLAYTEST_DATA_TTL_DAYS` с последней записи — данные теста исчезают сами.
+Временный путь закрытого теста (`26-stage2-plan.md`, Р19 и WP13) — подпись
+`initData` на каждом запросе и Redis со сроком жизни — снят вместе с
+переездом клиента на аккаунты (`34-stage3-plan.md`, WP4). Забеги, рейтинг и
+профиль — §4.2; от плейтеста остались сводка, отчёты о запуске и доступ к
+инструментам (§4.12), уже под сессией аккаунта. Неотправленные итоги из
+прежней очереди `bh.playtest.v1.pending` клиент переносит в новую при первом
+запуске.
 
 ### 4.12 Статистика плейтеста в чат администраторов (этап 2, реализовано)
 
 Счётчики пишутся рядом с забегами и запусками, а сводку собирает бот по
-команде или раз в сутки (`26-stage2-plan.md`, WP14). Обновления читает модуль
+команде или раз в сутки (`26-stage2-plan.md`, WP14). Забеги сводка получает
+слушателем записанного забега из модуля `runs` (§4.2), рекорды — из его
+рейтинга; игроков считает по аккаунту. Обновления читает модуль
 бота (`backend/api/src/modules/bot`) long polling'ом — у машины разработчика
 нет адреса для вебхука из §4.9 — и передаёт их обработчикам команд; `/stats`
 регистрирует сводка плейтеста.
@@ -1052,24 +1214,20 @@ sequenceDiagram
     participant TG as Telegram Bot API
     participant A as Чат администраторов
 
-    S->>P: POST /playtest/sessions — установка и устройство
-    P->>R: SADD pt:st:seen, устройство установки
+    S->>P: POST /playtest/sessions под сессией — установка и устройство
+    P->>R: SADD pt:st:seen {аккаунт}, устройство установки
     S->>P: POST /diagnostics/reports — отчёт в Postgres (§4.8),<br/>итог без кадров приходит слушателем
     P->>R: SET pt:st:stress:{reportId} NX, сводка по ОС, список последних
     P->>R: запись забега: SET pt:st:rec:{reportId} NX, записей и проблемных по причинам
-    S->>P: POST /playtest/runs
-    alt читы без явного «учесть» от администратора
-        P-->>S: recorded: false — ни рейтинг, ни статистика
-    else новый забег
-        P->>R: рейтинг (§4.11) и счётчики pt:st:*
-    end
+    Note over S,P: забег — POST /runs (§4.2), в сводку его приносит<br/>слушатель: новый, без читов и не отклонённый
+    P->>R: счётчики pt:st:*
 
     loop пока держим лок bot:poller
         BP->>TG: getUpdates (25 с, смещение bot:offset)
         TG-->>BP: /stats из чата или лички администратора
         BP->>B: BotRouter.dispatch
         B->>R: SET pt:report:cmd:{чат} NX — не чаще раза в 20 с
-        B->>R: снимок счётчиков и рекорды
+        B->>R: снимок счётчиков и рекорды рейтинга runs
         B->>B: SVG → PNG, подпись текстом
         B->>TG: sendPhoto
         TG-->>A: картинка сводки
@@ -1109,7 +1267,7 @@ sequenceDiagram
         S->>DB: createMany напрямую
     end
     S-->>C: 202 { accepted, rejected, rejectedBy }
-    Note over C,DB: база недоступна — 503, пачка остаётся на устройстве;<br/>повтор отсекает первичный ключ event_id
+    Note over C,DB: база недоступна — 503, пачка остаётся на устройстве.<br/>Повтор отсекает первичный ключ event_id
 ```
 
 - **Redis лёг — лимит в памяти процесса** с предупреждением в лог раз в
@@ -1124,7 +1282,7 @@ sequenceDiagram
     participant TG as Telegram
     participant B as BotRouter
     participant S as StartCommand
-    participant P as Прогресс плейтеста
+    participant P as Прогресс аккаунта<br/>по Telegram ID
     participant R as Redis
 
     U->>TG: /start в личке
@@ -1144,6 +1302,55 @@ sequenceDiagram
     end
     TG-->>U: карточка с подписью на языке игрока
 ```
+
+### 4.15 Покупка второго шанса за Stars (этап 3, реализовано)
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant C as Клиент
+    participant P as payments
+    participant DB as Postgres
+    participant TG as Telegram
+    participant B as BotRouter
+    participant Q as Очередь payments
+
+    U->>C: смерть — забег ждёт решения
+    C->>P: POST /payments/continue/quote { runId, continueNo, elapsedSec }
+    P->>DB: забег: чей, начат ли по часам сервера, не закончен ли
+    P-->>C: priceStars — клиент только показывает
+    U->>C: «Продолжить за N ⭐»
+    C->>P: POST /payments/continue/invoice
+    P->>DB: purchase pending — или та же, если счёт уже выставляли
+    P->>TG: createInvoiceLink(XTR, payload = purchaseId)
+    P-->>C: invoiceUrl
+    C->>TG: openInvoice(invoiceUrl)
+    TG->>B: pre_checkout_query — первой в пачке обновлений
+    B->>P: чей счёт, та ли сумма, свежий ли, жив ли забег
+    P->>TG: answerPreCheckoutQuery — до 10 секунд
+    TG->>B: successful_payment — сообщением в личке
+    B->>Q: подтверждение, jobId от id оплаты
+    Q->>DB: pending → paid, telegram_charge_id UK
+    C->>P: GET /payments/{id} — пока не granted
+    P-->>C: granted: true
+    C->>C: continueRun — продолжение выдал сервер (Р13)
+```
+
+- **Право на продолжение — по `successful_payment`, а не по ответу
+  `openInvoice`** (`34-stage3-plan.md`, Р13): ответ Mini App — подсказка,
+  что можно перестать ждать.
+- **Подтверждение идёт через очередь**, потому что смещение опроса
+  сохраняется до обработки, а вебхук отвечает сразу: упавшая запись второй
+  раз не придёт. Задание в Redis повторяется, пока запись не пройдёт; Redis
+  недоступен — запись сразу, не прошла и так — ошибка в лог со всеми полями
+  оплаты.
+- **Отказаться от денег можно только на проверке.** После
+  `successful_payment` звёзды уже у нас, и дальше остаётся только возврат.
+  Его сервер делает сам — через ту же очередь, с повтором: тестовая оплата
+  (Р14), продолжение, которое не взяли (оплата пришла к закрытому забегу
+  или забег записан без него), вторая оплата того же продолжения и оплата
+  без покупки. Заказ возврата пишется в базу раньше обращения к Telegram —
+  после перезапуска очередь поднимает незавершённые оттуда.
 
 ---
 

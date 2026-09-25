@@ -9,6 +9,9 @@
  */
 export const ANALYTICS_EVENTS = [
   "app_first_open",
+  "user_registered",
+  "user_authenticated",
+  "session_started",
   "screen_viewed",
   "settings_changed",
   "share_offered",
@@ -21,7 +24,11 @@ export const ANALYTICS_EVENTS = [
   "upgrade_offered",
   "upgrade_chosen",
   "wave_reached",
-  "playtest_run_synced",
+  "run_synced",
+  "continue_used",
+  "purchase_initiated",
+  "purchase_completed",
+  "purchase_failed",
   "load_time",
   "diagnostics_mode_changed",
   "bench_finished",

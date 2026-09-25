@@ -152,7 +152,7 @@ describe("сохранение прерванного забега", () => {
     await useRun.getState().start(options());
     fake.emit("paused", { reason: "manual", elapsedSec: 95 });
 
-    fake.emit("finished", { survivalSec: 100, seed: 42 } as RunResult);
+    fake.emit("finished", { survivalSec: 100, seed: 42, continues: [] as number[] } as RunResult);
     expect(useSavedRun.getState().saved).toBeNull();
     useSavedRun.getState().hydrate();
     expect(useSavedRun.getState().saved).toBeNull();

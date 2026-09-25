@@ -4,6 +4,7 @@ import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { buildRunResult } from "../run/run-result";
 import { createRunWorld } from "../run-world";
 import { checksumWorld } from "../sim/checksum";
+import { applyContinue } from "../sim/continue";
 import { inputOfCode } from "../sim/input-code";
 import { stepWorld, type SimInput } from "../sim/step";
 import { TICK_SEC } from "../sim/world";
@@ -78,6 +79,8 @@ export function replayRecording(recording: RunRecording, contentHash: string = C
 
   const input: SimInput = { moveX: 0, moveY: 0 };
   let choiceIndex = 0;
+  const continues = recording.continues ?? [];
+  let continueIndex = 0;
   let checkpointIndex = 0;
   let divergedAtTick: number | null = null;
 
@@ -91,7 +94,18 @@ export function replayRecording(recording: RunRecording, contentHash: string = C
     return null;
   };
 
+  /** Второй шанс — там же, где его применила сцена: на тике смерти. */
+  const applyContinues = (): string | null => {
+    while (continueIndex < continues.length && continues[continueIndex] === world.stats.tick) {
+      const tick = continues[continueIndex++];
+      if (!applyContinue(world)) return `второй шанс на тике ${tick} не ложится на забег`;
+    }
+    return null;
+  };
+
   for (let step = 0; step < codes.length; step++) {
+    const continueProblem = applyContinues();
+    if (continueProblem !== null) return verdict("mismatch", continueProblem, resultOf(), divergedAtTick ?? world.stats.tick);
     const choiceProblem = applyChoices();
     if (choiceProblem !== null) return verdict("mismatch", choiceProblem, resultOf(), divergedAtTick ?? world.stats.tick);
     // Сцена не шагает ни после смерти, ни на выборе улучшения: лог, который
@@ -108,6 +122,9 @@ export function replayRecording(recording: RunRecording, contentHash: string = C
   if (trailing !== null) return verdict("mismatch", trailing, resultOf(), divergedAtTick ?? world.stats.tick);
   if (choiceIndex < recording.choices.length) {
     return verdict("broken", `${recording.choices.length - choiceIndex} выборов после конца лога`, resultOf());
+  }
+  if (continueIndex < continues.length) {
+    return verdict("broken", `${continues.length - continueIndex} продолжений после конца лога`, resultOf());
   }
 
   const actual = resultOf();

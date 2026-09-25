@@ -1,68 +1,45 @@
-import { Body, Controller, Get, Inject, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import { accessFor, isAdmin, type PlaytestAccess } from "./playtest-access.js";
-import { ValidationError } from "../../common/domain-error.js";
-import {
-  difficultyQuerySchema,
-  runSubmissionSchema,
-  sessionReportSchema,
-} from "./dto/run-submission.dto.js";
-import { PlaytestAuthGuard, playerOf } from "./playtest-auth.guard.js";
-import {
-  PlaytestService,
-  type LeaderboardView,
-  type ProfileView,
-  type SubmitResult,
-} from "./playtest.service.js";
+import { DisabledError, ValidationError } from "../../common/domain-error.js";
+import { AuthGuard, accountOf } from "../auth/auth.guard.js";
+import { RolesService } from "../roles/roles.service.js";
+import { sessionReportSchema } from "./dto/session-report.dto.js";
+import { accessFor, type PlaytestAccess } from "./playtest-access.js";
+import { PlaytestService } from "./playtest.service.js";
 
 /**
- * Сохранения и лидерборд плейтеста. В контроллере нет логики — только разбор
+ * Отчёты о запуске и доступ к инструментам. Под сессией аккаунта, как
+ * забеги: подпись запуска на каждом запросе больше не проверяется
+ * (docs/34-stage3-plan.md, WP4). В контроллере нет логики — только разбор
  * границы и форма ответа (docs/15-engineering-standards.md §2.3).
  */
 @Controller("playtest")
-@UseGuards(PlaytestAuthGuard)
+@UseGuards(AuthGuard)
 export class PlaytestController {
   constructor(
     private readonly service: PlaytestService,
+    private readonly roles: RolesService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  @Post("runs")
-  async submit(@Req() request: unknown, @Body() body: unknown): Promise<{ data: SubmitResult }> {
-    const submission = parse(() => runSubmissionSchema.parse(body), "Некорректный итог забега");
-    const player = playerOf(request);
-    return { data: await this.service.submitRun(player, submission, Date.now(), isAdmin(player, this.config)) };
-  }
-
+  /** Выключенный плейтест отвечает 404, как любой выключенный эндпоинт. */
   @Post("sessions")
   async session(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { recorded: boolean } }> {
+    if (!this.config.playtest.enabled) throw new DisabledError("Плейтест выключен");
     const report = parse(() => sessionReportSchema.parse(body), "Некорректные сведения о запуске");
-    await this.service.recordSession(playerOf(request), report, Date.now());
+    await this.service.recordSession(accountOf(request).accountId, report, Date.now());
     return { data: { recorded: true } };
   }
 
-  @Get("leaderboard")
-  async leaderboard(
-    @Req() request: unknown,
-    @Query("difficulty") difficulty?: string,
-  ): Promise<{ data: LeaderboardView }> {
-    const parsed = parse(() => difficultyQuerySchema.parse(difficulty), "Неизвестная сложность");
-    return { data: await this.service.leaderboard(playerOf(request).id, parsed) };
-  }
-
-  @Get("me")
-  async me(@Req() request: unknown): Promise<{ data: ProfileView }> {
-    return { data: await this.service.profile(playerOf(request).id) };
-  }
-
   /**
-   * Что открыто игроку. Отдельно от профиля: хранилище для ответа не нужно,
-   * и недоступный Redis не должен прятать от администратора его инструменты.
+   * Что открыто игроку. Работает и после плейтеста: режим разработчика нужен
+   * команде и тогда. Хранилище для ответа не нужно — недоступный Redis не
+   * прячет от администратора его инструменты.
    */
   @Get("access")
-  access(@Req() request: unknown): { data: PlaytestAccess } {
-    return { data: accessFor(playerOf(request), this.config) };
+  async access(@Req() request: unknown): Promise<{ data: PlaytestAccess }> {
+    return { data: await accessFor(accountOf(request), this.config, this.roles) };
   }
 }
 

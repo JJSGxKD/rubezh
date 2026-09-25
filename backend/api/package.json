@@ -12,6 +12,7 @@
     "postinstall": "prisma generate",
     "export": "node --import @swc-node/register/esm-register src/cli/closed-test-export.ts",
     "bot:webhook": "node --import @swc-node/register/esm-register src/cli/bot-webhook.ts",
+    "runs:rebuild-leaderboard": "node --import @swc-node/register/esm-register src/cli/runs-rebuild-leaderboard.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy"
@@ -26,7 +27,9 @@
     "bullmq": "6.3.6",
     "dotenv": "16.4.7",
     "fastify": "5.12.4",
+    "grammy": "1.46.0",
     "ioredis": "6.0.0",
+    "jose": "6.2.12",
     "prisma": "7.10.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",

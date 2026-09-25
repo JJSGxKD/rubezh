@@ -6,6 +6,7 @@ import { RunProbe } from "../engine/run-probe";
 import {
   RUN_SNAPSHOT_FORMAT,
   type HudSnapshot,
+  type RunContinueOptions,
   type RunDevCommand,
   type RunDevOptions,
   type RunInspection,
@@ -18,6 +19,7 @@ import { applyDevCommand } from "./run/dev-commands";
 import { inspectWorld } from "./run/inspect";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
+import { applyContinue, canContinue } from "./sim/continue";
 import { IDLE_INPUT, stepWorld, type SimInput } from "./sim/step";
 import { IDLE_CODE, inputOfCode, quantizeDirection } from "./sim/input-code";
 import type { Spawner } from "./sim/spawner";
@@ -65,7 +67,7 @@ const MAX_DEV_STEP_TICKS = 600;
  * пауза, выбор улучшения и смерть обязаны быть детерминированными — иначе
  * повтор забега по логу ввода разойдётся с оригиналом.
  */
-type RunPhase = "running" | "choosing" | "paused" | "dead";
+type RunPhase = "running" | "choosing" | "paused" | "downed" | "dead";
 
 export interface MainSceneData {
   seed: number;
@@ -87,6 +89,8 @@ export interface MainSceneData {
   renderCapFps?: number | null;
   /** полная запись забега: таймлайн, события, лог ввода */
   recordRun?: boolean;
+  /** предлагать второй шанс при смерти; без поля смерть сразу закрывает забег */
+  continues?: boolean;
   /** настройки графики игрока; без них рисуется всё */
   graphics?: RunGraphicsOptions;
 }
@@ -214,6 +218,15 @@ export class MainScene extends Phaser.Scene {
     // старта не должны прозвучать залпом на первом кадре.
     this.cueTracker = new CueTracker(this.world);
     this.cueTimerMs = 0;
+    // До первого HUD: оболочка ставит начало в очередь раньше, чем игрок
+    // успеет умереть, — порядок старта и итога в очереди важен серверу.
+    if (resume === undefined) {
+      this.sceneData.bus.emit("started", {
+        runId: this.runId,
+        difficultyId: this.world.difficultyLevel.id,
+        startingWeaponId: this.startingWeaponId(),
+      });
+    }
     this.emitHud();
     this.reportWave();
     if (resume !== undefined) this.enterRestored();
@@ -283,7 +296,7 @@ export class MainScene extends Phaser.Scene {
     this.probe.endFrame(this.world, simMs, steps, renderMs);
 
     if (!this.world.player.alive) {
-      this.finishRun("died");
+      this.handleDeath();
       return;
     }
     if (isAwaitingChoice(this.world)) this.enterChoice();
@@ -309,7 +322,34 @@ export class MainScene extends Phaser.Scene {
 
   abandonRun(): void {
     if (this.phase === "dead") return;
-    this.finishRun("abandoned");
+    // Сдаться на экране смерти — это отказ от второго шанса, а не сдача: игрок
+    // уже умер, и исход забега — смерть.
+    this.finishRun(this.phase === "downed" ? "died" : "abandoned");
+  }
+
+  /**
+   * Второй шанс: команда миру на границе тика — мир на экране смерти стоит.
+   * Команда попадает в запись забега, иначе повтор разошёлся бы с оригиналом
+   * (docs/28-diagnostics.md §3.4).
+   */
+  continueRun(options: RunContinueOptions = {}): void {
+    if (this.phase !== "downed") return;
+    if (!applyContinue(this.world)) return;
+    if (options.cheat === true) this.cheatsUsed = true;
+    this.probe.continued(this.world);
+    this.phase = "running";
+    this.worldRenderer.sync(1);
+    this.emitHud();
+    this.sceneData.bus.emit("revived", {
+      elapsedSec: this.world.stats.elapsedSec,
+      continuesUsed: this.world.stats.continuesUsed,
+    });
+  }
+
+  /** Отказ от второго шанса — забег закрывается смертью, как без него. */
+  declineContinue(): void {
+    if (this.phase !== "downed") return;
+    this.finishRun("died");
   }
 
   /**
@@ -358,7 +398,7 @@ export class MainScene extends Phaser.Scene {
 
   /** Разовое действие разработчика — между кадрами, то есть на границе тика. */
   devCommand(command: RunDevCommand): void {
-    if (!this.ready || this.sceneData.dev === undefined || this.phase === "dead") return;
+    if (!this.ready || this.sceneData.dev === undefined || this.phase === "dead" || this.phase === "downed") return;
 
     if (command.kind === "stepTicks") {
       this.stepOnPause(command.ticks);
@@ -384,7 +424,9 @@ export class MainScene extends Phaser.Scene {
    * выборе улучшения снимок годится: варианты сохраняются вместе с миром.
    */
   captureSnapshot(): RunSnapshot | null {
-    if (!this.ready || this.phase === "dead") return null;
+    // На экране смерти снимка нет: продолжив из него, игрок вернулся бы в мир,
+    // где он ещё жив, — второй шанс без второго шанса.
+    if (!this.ready || this.phase === "dead" || this.phase === "downed") return null;
     const world = this.world;
     return {
       format: RUN_SNAPSHOT_FORMAT,
@@ -443,7 +485,7 @@ export class MainScene extends Phaser.Scene {
     this.emitHud();
     this.reportWave();
     if (!this.world.player.alive) {
-      this.finishRun("died");
+      this.handleDeath();
       return;
     }
     if (isAwaitingChoice(this.world)) this.enterChoice();
@@ -550,12 +592,31 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
-  private finishRun(outcome: RunOutcome): void {
-    if (this.phase === "dead") return;
-    this.phase = "dead";
+  /**
+   * Смерть. Пока второй шанс есть и оболочка его предлагает, забег не
+   * закрывается: мир стоит, а итог, рекорд и `run_finished` ждут решения
+   * игрока (docs/07-monetization-and-ads.md §8). Иначе продолженный забег
+   * записался бы дважды.
+   */
+  private handleDeath(): void {
+    if (this.phase === "dead" || this.phase === "downed") return;
+    if (this.sceneData.continues !== true || !canContinue(this.world)) {
+      this.finishRun("died");
+      return;
+    }
+    this.phase = "downed";
     this.joystick.setVisible(false);
+    this.emitHud();
+    const result = this.resultOf("died");
+    this.probe.event(this.world, "downed", result.deathCause);
+    this.sceneData.bus.emit("downed", {
+      result,
+      continuesLeft: this.world.continueRules.perRun - this.world.stats.continuesUsed,
+    });
+  }
 
-    const result = buildRunResult(this.world, {
+  private resultOf(outcome: RunOutcome) {
+    return buildRunResult(this.world, {
       runId: this.runId,
       seed: this.seed,
       outcome,
@@ -563,6 +624,14 @@ export class MainScene extends Phaser.Scene {
       contentHash: CONTENT_HASH,
       cheats: this.cheatsUsed,
     });
+  }
+
+  private finishRun(outcome: RunOutcome): void {
+    if (this.phase === "dead") return;
+    this.phase = "dead";
+    this.joystick.setVisible(false);
+
+    const result = this.resultOf(outcome);
 
     this.emitHud();
     this.probe.event(this.world, outcome === "died" ? "death" : "abandon", result.deathCause);

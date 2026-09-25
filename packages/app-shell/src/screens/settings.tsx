@@ -123,35 +123,30 @@ export function SettingsScreen(): ReactNode {
 
 /**
  * Громкость по регуляторам (docs/31-audio-and-haptics.md §5). Общая — поверх
- * всех; эффекты, интерфейс и музыка — отдельно: игрок вправе оставить бой и
+ * всех; эффекты и интерфейс — отдельно: игрок вправе оставить бой и
  * убрать щелчки кнопок. Экспорт — для лаборатории звука, те же регуляторы.
  */
 export function VolumeSliders(): ReactNode {
   const volumes = useSettings((state) => state.volumes);
-  const keys: readonly VolumeKey[] = ["master", "effects", "ui", "music"];
+  const keys: readonly VolumeKey[] = ["master", "effects", "ui"];
   return (
-    <>
-      <ListGroup>
-        {keys.map((key) => (
-          <Slider
-            key={key}
-            label={t(`settings.volume.${key}`)}
-            value={volumes[key]}
-            valueLabel={volumes[key] === 0 ? t("settings.volume.off") : `${volumes[key]}%`}
-            onChange={(value) => useSettings.getState().setVolume(key, value)}
-            onCommit={() => {
-              useSettings.getState().commitVolume(key);
-              // Интерфейс звучит своим щелчком, эффекты — попаданием: игрок
-              // слышит ровно ту громкость, которую выставил.
-              if (key === "ui" || key === "master") audio.ui("select");
-            }}
-          />
-        ))}
-      </ListGroup>
-      {/* Музыка выключена по умолчанию: молчащий регулятор выглядит поломкой,
-          если не сказать, что так задумано. */}
-      {volumes.music === 0 ? <p className="mt-2 text-xs text-text-muted">{t("settings.volume.music.off")}</p> : null}
-    </>
+    <ListGroup>
+      {keys.map((key) => (
+        <Slider
+          key={key}
+          label={t(`settings.volume.${key}`)}
+          value={volumes[key]}
+          valueLabel={volumes[key] === 0 ? t("settings.volume.off") : `${volumes[key]}%`}
+          onChange={(value) => useSettings.getState().setVolume(key, value)}
+          onCommit={() => {
+            useSettings.getState().commitVolume(key);
+            // Интерфейс звучит своим щелчком, эффекты — попаданием: игрок
+            // слышит ровно ту громкость, которую выставил.
+            if (key === "ui" || key === "master") audio.ui("select");
+          }}
+        />
+      ))}
+    </ListGroup>
   );
 }
 

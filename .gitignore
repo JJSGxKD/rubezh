@@ -19,3 +19,6 @@ backend/api/src/generated/
 # Рабочий конфиг frpc: содержит токен туннеля
 infra/frpc/frpc.local.toml
 
+# Сертификаты разработки: закрытый ключ не коммитится, даже локальный
+infra/certs/
+

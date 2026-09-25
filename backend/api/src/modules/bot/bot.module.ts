@@ -10,8 +10,8 @@ import { BotUpdateDedupe, BotWebhookController } from "./bot-webhook.controller.
  * регистрируют модули-владельцы через `BotRouter`, а меню Telegram и `/help`
  * собираются из них в `BotCommands`.
  *
- * Библиотеки бота нет: нужен десяток методов Bot API, и тонкий клиент на
- * `fetch` с разбором ответов схемой проще фреймворка вокруг них
+ * Транспорт — grammY за нашим `TelegramBotApi`, а маршрутизация, лок опроса
+ * и вебхук — свои: у grammY нет лока на несколько процессов
  * (docs/16-tech-stack-decisions.md §5).
  */
 @Module({

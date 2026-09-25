@@ -48,6 +48,7 @@
 | Уровни сложности: множители здоровья и урона врагов, темпа спавна и потолка живых; какой открыт по умолчанию | `content/difficulty.ts` → `DIFFICULTIES`, `DEFAULT_DIFFICULTY_ID` | отпечаток контента; эталоны — нет: они идут на «Лёгкой» |
 | Что падает с врагов: на сколько кристаллов делится опыт; шансы аптечки, магнита и динамита с рядового и с элиты, сколько лежит на поле; сколько лечит аптечка; радиус взрыва динамита и какую долю здоровья он снимает с элиты | `content/drops.ts` → `DROPS` | golden-прогон, контрольная сумма |
 | Карта: границы мира, видимая область, поведение камеры | `content/maps.ts` → `MAPS` | радиус кольца спавна, а с ним весь баланс |
+| Второй шанс: сколько продолжений за забег, сколько здоровья возвращается, секунды неуязвимости | `content/continue.ts` → `CONTINUE` | тест контента (`findContinueProblems`); числа рабочие до решения геймдизайнера (О1) |
 | Целевые коридоры калибровки | `content/balance-targets.ts` → `BALANCE_TARGETS` | тест свойств баланса |
 
 Как добавлять врага, отрезок таймлайна, оружие и границы карты — `CLAUDE.md`,
@@ -174,7 +175,7 @@
 
 | Ключ | Что лежит | Где объявлен |
 |---|---|---|
-| `bh.settings.v1` | режим экрана, звук, музыка, вибрация | `app-shell/src/state/settings.ts` |
+| `bh.settings.v1` | режим экрана, громкость звука, вибрация | `app-shell/src/state/settings.ts` |
 | `bh.diagnostics.v1` | режим диагностики, запись забегов, оверлей FPS | `state/diagnostics.ts` |
 | `bh.meta.v1.profile` | число забегов, последнее стартовое оружие и сложность | `state/meta.ts` |
 | `bh.meta.v1.bestSurvivalSec.<сложность>` | локальный рекорд на каждой сложности; старый ключ без сложности переезжает на `easy` | `core-game/src/game/run/records.ts` |
@@ -182,7 +183,9 @@
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
 | `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts` | `state/run-save.ts` |
-| `bh.playtest.v1.pending` | итоги забегов, ещё не дошедшие до сервера плейтеста | `state/playtest.ts` |
+| `bh.run.v1.downed` | итог забега, который ждёт решения о втором шансе; брошенный на экране смерти уходит смертью при следующем запуске | `state/downed-run.ts` |
+| `bh.runs.v1.pending` | старты и итоги забегов, ещё не дошедшие до сервера, — по порядку, до 40 записей, старые вытесняются | `state/runs.ts` |
+| `bh.playtest.v1.pending` | очередь прошлой сборки, одни итоги; при запуске переносится в `bh.runs.v1.pending` и снимается | `state/runs.ts` |
 | `bh.telemetry.v1.queue` | события, ещё не дошедшие до приёмника; до 500 штук, старые вытесняются | `state/telemetry.ts` |
 | `bh.reports.v1.queue` | записи забегов, ещё не дошедшие до приёмника диагностики; до 10 штук и 1 МБ, старые вытесняются | `state/report-keys.ts`, очередь — `state/report-queue.ts` |
 | `bh.reports.v1.sent` | десять последних отправленных отчётов для экрана «Последние отчёты» | `state/report-queue.ts` |
@@ -232,7 +235,25 @@
 | Правила линта | `eslint.config.js` |
 | Что и как запускается | `package.json` в корне, раздел `scripts` |
 | Локальные Postgres и Redis | `docker-compose.yml` |
+| Версии образов Postgres и Redis | `docker-compose.yml` и сервисы джоба `gate` в `.github/workflows/ci.yml`, одни и те же; база бэкенда — `FROM` в `backend/api/Dockerfile`. Точная версия и digest, как обновить — `16-tech-stack-decisions.md` §9.4 |
+| Минимальная версия клиента площадки | `apps/web-telegram/src/main.tsx`, `minPlatformVersion` (обоснование — `27-design-system-and-app-shell.md` §5.2) |
 | Туннель для открытия Mini App с телефона | `infra/frpc/frpc.local.toml` (не коммитится: в нём токен) |
+| Лимиты приёма забегов (по аккаунту) | `backend/api/src/modules/runs/runs-limits.ts` |
+| Правила игры для проверки забега (слоты, сложности, вторые шансы за забег) | `backend/api/src/modules/runs/run-rules.ts` — копия контента, сверяется тестом `scripts/test/run-rules.test.ts` |
+| Лимиты оплаты: цена, счёт, опрос состояния покупки (по аккаунту) | `backend/api/src/modules/payments/payments-limits.ts` |
+| Правило цены второго шанса: начатые минуты, минимум в звезду, потолок | `backend/api/src/modules/payments/continue-price.ts`; сами числа — `CONTINUE_*` в окружении |
+| Тексты окна оплаты Telegram, пометка тестовой оплаты | `backend/api/src/modules/payments/invoice-text.ts` |
+| Оплата: сколько живёт счёт, отказы предварительной проверки и их тексты для игрока | `payments-limits.ts` → `INVOICE_TTL_SEC`; `checkout-answer.ts` |
+| Оплата: сроки ответа на предварительную проверку и чтения покупки для неё, повторы очереди подтверждений и возвратов, сколько незавершённых возвратов поднимать на старте | `telegram-bot-api.ts` → `PRE_CHECKOUT_TIMEOUT_MS`; `payment-confirmation.ts` → `CHECKOUT_READ_TIMEOUT_MS`; `payments-queue.ts` → `JOB_OPTIONS`, `PENDING_REFUNDS_ON_START` |
+| Когда звёзды возвращаются сами: тестовая оплата, продолжение не взято, вторая оплата, оплата без покупки | `backend/api/src/modules/payments/payment-refunds.ts` |
+| Сессии: окно, в котором повторный вход — тот же запуск; повторы очереди сессий | `backend/api/src/modules/attribution/session-dedupe.ts` → `SESSION_WINDOW_SEC`; `session-recorder.ts` → `JOB_OPTIONS` |
+| Разбор параметра запуска: формат клика `c-<код>`, приглашение, партнёрка Telegram | `backend/api/src/modules/attribution/start-param.ts` |
+| Класс устройства по платформе клиента Telegram, усечение IP до подсети | `attribution/client-class.ts` → `KNOWN_PLATFORMS`; `attribution/ip-prefix.ts` |
+| Клиент: как часто и сколько ждать подтверждения оплаты сервером | `packages/app-shell/src/state/continue-purchase.ts` → `CONFIRM_POLL_MS`, `CONFIRM_TIMEOUT_MS` |
+| Клиент: когда покупку второго шанса вообще предлагают | `packages/app-shell/src/state/payments-availability.ts` |
+| Тексты покупки второго шанса — отдельный словарь, едет в чанке экрана смерти | `packages/app-shell/src/i18n/ru-payments.json` |
+| Тексты об аккаунте и состоянии входа — отдельный словарь профиля и рейтинга; что сказать на какой отказ входа | `packages/app-shell/src/i18n/ru-account.json`; `state/session-notice.ts` → `KIND_BY_FAILURE` |
+| Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 
 Три правила, которые нарушают чаще всего: порт **не выбирается на месте**;
 `process.env` за пределами модуля конфигурации запрещён; **у секретов не бывает
@@ -243,10 +264,23 @@
 | Переменная | Что делает |
 |---|---|
 | `VITE_DIAGNOSTICS_DEFAULT` | включает режим диагностики по умолчанию; переключатель остаётся |
+| `DEV_HTTPS_CERT`, `DEV_HTTPS_KEY` | сертификат разработки: без HTTPS Telegram не откроет Mini App даже с локального адреса. Задаются вместе |
+| `DEV_LAN_HOST` | адрес для открытия с телефона в той же сети; **включает прослушивание сети** вместо одной петли |
 | `DEV_TUNNEL_TELEGRAM_HOST` | домен туннеля, чтобы Vite пустил запрос с телефона |
-| `PLAYTEST_ENABLED`, `TELEGRAM_BOT_TOKEN` | сохранения и лидерборд плейтеста на бэкенде; без токена бэкенд с включённым плейтестом не стартует |
-| `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_INIT_DATA_MAX_AGE_SEC` | сколько живут данные плейтеста в Redis и подпись запуска Telegram |
-| `PLAYTEST_DEV_AUTH`, `VITE_PLAYTEST_DEV_USER` | вход в плейтест без Telegram на машине разработчика; только `NODE_ENV=development` |
+| `ADMIN_TELEGRAM_IDS` | аварийный путь к роли владельца: действует, только пока владельца нет в базе. Дальше доступ решают роли (`29-admin-panel.md` §3) |
+| `RUNS_MAX_KILLS_PER_SEC`, `RUNS_MAX_LEVELS_PER_MIN` | пороги антифрода забегов фазы 1: выше — вердикт `suspicious`, забег не в рейтинге. Умолчания мягкие, боевые — только в окружении прода (`34-stage3-plan.md`, Р7) |
+| `RUNS_KNOWN_CONTENT_HASHES` | отпечатки контента выпущенных сборок; незнакомый — `suspicious`. Пусто — проверка выключена |
+| `RUNS_WALL_CLOCK_TOLERANCE_SEC`, `RUNS_START_MAX_DELAY_SEC` | запас на время забега сверх прошедшего по часам сервера и предел опоздания старта, которому ещё верят |
+| `PAYMENTS_ENABLED` | оплата второго шанса за Stars; без `AUTH_ENABLED` и чтения обновлений бота бэкенд не стартует — оплату подтверждает обновление от Telegram |
+| `PAYMENTS_TEST_MODE` | тестовая оплата: настоящая цена в окне оплаты, списывается одна звезда и тут же возвращается, продолжение засчитано. Только `NODE_ENV=development`, иначе бэкенд не стартует (`34-stage3-plan.md`, Р14) |
+| `CONTINUE_STARS_PER_MINUTE`, `CONTINUE_MAX_STARS` | цена второго шанса: звёзд за каждую начатую минуту забега и потолок цены. Рабочие значения до решения геймдизайнера (`34-stage3-plan.md`, О1) |
+| `AUTH_ENABLED` | вход игроков по аккаунтам; без `JWT_ACCESS_SECRET`, токена бота и `DATABASE_URL` бэкенд не стартует, выключённые эндпоинты отвечают 404 |
+| `JWT_ACCESS_SECRET` | секрет подписи токена доступа; смена разлогинивает всех |
+| `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_MAX_SESSIONS` | сколько живут токены и сколько устройств помнит аккаунт |
+| `AUTH_INIT_DATA_MAX_AGE_SEC` | окно свежести подписи запуска при входе; потолок в час зашит в схему |
+| `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER` | вход разработчика без Telegram по имени `dev-<id>:Имя`: обычный аккаунт с ролью владельца. Требует `AUTH_ENABLED`, только `NODE_ENV=development`; имя передаёт только dev-сервер. Прежний `PLAYTEST_DEV_AUTH="true"` останавливает запуск и называет новое имя |
+| `PLAYTEST_ENABLED` | сводка плейтеста, отчёты о запуске и стресс-тест для всех. Забеги и рейтинг — модуль `runs` под авторизацией, поэтому без `AUTH_ENABLED` бэкенд с включённым плейтестом не стартует |
+| `PLAYTEST_DATA_TTL_DAYS` | сколько живут счётчики сводки плейтеста в Redis |
 | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED` | приёмники событий и отчётов; без `DATABASE_URL` бэкенд не стартует |
 | `TRUST_PROXY_HOPS` | сколько прокси перед API; за Caddy — `1`, иначе лимит по IP посчитает всех тестеров одним адресом |
 | `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам, `webhook` — Telegram шлёт их на `PUBLIC_API_URL`; регистрация — `pnpm --filter backend-api bot:webhook` |
@@ -273,10 +307,11 @@
 | Что и где ищет тестовый раннер | `vitest.config.ts` |
 | Проверка ссылок в документации: какие файлы и какие пути проверяются | `scripts/docs-check.mjs` → `CODE_ROOTS`, `documentationFiles`; запуск — `pnpm docs:check`, в гейте — `scripts/test/docs-check.test.ts` |
 | Свод калибровки баланса отдельной командой | `vitest.balance.config.ts`, прогон — `scripts/balance/balance-sim.ts` |
-| Бюджеты размера бандла: первая загрузка, CSS, ленивые чанки, шрифты | `scripts/bundle-budget.mjs` → `BUDGETS` |
+| Бюджеты размера бандла: первая загрузка, CSS, ленивые экраны игрока, инструменты команды, шрифты | `scripts/bundle-budget.mjs` → `budgets`; какие чанки — инструменты команды, решает `TEAM` там же |
 | Порог теста производительности симуляции | `packages/core-game/test/perf-budget.test.ts` |
 | Эталон забега и контрольная сумма | `test/run-summary.test.ts`, `test/determinism.test.ts` |
 | Правила границ слоёв | `scripts/test/layer-boundaries.test.ts` → `RULES` |
+| Закрепление Docker-образов: где ищутся и что считается ошибкой | `scripts/image-pins.mjs` → `fileKind`, `classifyImage`; запуск — `node scripts/image-pins.mjs`, в гейте — `scripts/test/image-pins.test.ts` |
 | Шаги гейта в CI | `.github/workflows/ci.yml` |
 
 Гейт целиком:
@@ -304,9 +339,8 @@ pnpm budget
 | Как часто стресс-тест сообщает прогресс оболочке | `game/BenchScene.ts` → `PROGRESS_INTERVAL_MS` |
 | Звуки: слои синтеза, шина, громкость, голоса, интервал, реверберация | `app-shell/src/audio/recipes.ts` → `SOUND_RECIPES`; правка на устройстве — звуковая лаборатория (`docs/31-audio-and-haptics.md` §6) |
 | Звук: уровни и приоритеты шин, бюджет запусков, потолок голосов, плотность, глубина приглушения | `audio/recipes.ts` → `BUSES`, `MIX_RULES` |
-| Звук: какие звуки на сигналы забега, напряжение музыки, сердцебиение, серия кристаллов | `audio/sound-director.ts` → `planCueSounds`, `FULL_INTENSITY_ENEMIES`, `HEARTBEAT_*`, `GEM_STREAK_*` |
-| Музыка: лад, аккорды, темп сцен, мотивы, пороги слоёв | `audio/music.ts` → `SCALE`, `CHORDS`, `CONTEXTS`, `MOTIFS`, `LAYER_THRESHOLDS` |
-| Громкость по умолчанию и шкала регулятора | `audio/index.ts` → `DEFAULT_VOLUMES` (музыка выключена, интерфейс громче боя); `audio/audio-engine.ts` → `volumeCurve` |
+| Звук: какие звуки на сигналы забега, сердцебиение, серия кристаллов | `audio/sound-director.ts` → `planCueSounds`, `HEARTBEAT_*`, `GEM_STREAK_*` |
+| Громкость по умолчанию и шкала регулятора | `audio/index.ts` → `DEFAULT_VOLUMES` (интерфейс громче боя); `audio/audio-engine.ts` → `volumeCurve` |
 | Правила грани звука: включены ли по умолчанию, бюджеты шин, потолок голосов | `audio/audio-engine.ts` → `rulesEnabled`; `audio/recipes.ts` → `MIX_RULES` |
 | Настройки графики игрока: что можно отключить и что включено по умолчанию | `app-shell/src/state/graphics.ts` → `DEFAULT_GRAPHICS`; применяет `core-game/src/game/render/WorldRenderer.ts` |
 | Звук интерфейса и вибрация на нажатия | `app-shell/src/state/ui-feedback.ts` → `FEEDBACK` |
@@ -333,7 +367,7 @@ pnpm budget
 | Итог стресс-теста в сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts` |
 | Кому открыты инструменты команды: режим разработчика, стресс-тест, витрина компонентов, звуковая лаборатория | сервер — `backend/api/src/modules/playtest/playtest-access.ts` по `ADMIN_TELEGRAM_IDS`; на dev-сервере — `VITE_DEV_TOOLS=1` |
 | Команды бота: что видно всем и что администраторам, текст `/help` | `backend/api/src/modules/bot/bot-commands.ts`; сами команды — рядом с обработчиками (`welcome.command.ts`, `playtest-stats.reporter.ts`, `export-bot.command.ts`) |
-| Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`; разбор — `backend/api/src/modules/telegram/chat-target.ts` |
+| Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`; разбор — `backend/api/src/modules/telegram/chat-target.ts` |
 
 Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.
 

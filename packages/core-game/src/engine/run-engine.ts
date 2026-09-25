@@ -1,5 +1,5 @@
 import { MainScene, type MainSceneData } from "../game/MainScene";
-import type { RunEngine, RunEvents, RunOptions, RunPauseReason, RunSession } from "../run-api";
+import type { RunContinueOptions, RunEngine, RunEvents, RunOptions, RunPauseReason, RunSession } from "../run-api";
 import { createPhaserHost } from "./phaser-host";
 import { RunBus } from "./run-bus";
 
@@ -34,6 +34,7 @@ export function createRunEngine(): RunEngine {
         ...(options.graphics === undefined ? {} : { graphics: options.graphics }),
         renderCapFps: options.renderCapFps ?? null,
         recordRun: options.diagnostics.recordRun,
+        ...(options.continues === undefined ? {} : { continues: options.continues }),
         bus,
       };
       host.game.scene.add("main", MainScene, true, sceneData);
@@ -66,6 +67,12 @@ export function createRunEngine(): RunEngine {
         },
         abandon(): void {
           scene()?.abandonRun();
+        },
+        continueRun(options?: RunContinueOptions): void {
+          scene()?.continueRun(options);
+        },
+        declineContinue(): void {
+          scene()?.declineContinue();
         },
         restart(seed: number): void {
           scene()?.restartRun(seed);

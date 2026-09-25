@@ -12,6 +12,7 @@ import { REDIS } from "../src/infra/redis.js";
 import { BotRouter } from "../src/modules/bot/bot-router.js";
 import { BotUpdateDedupe, BotWebhookController } from "../src/modules/bot/bot-webhook.controller.js";
 import { TelegramBotApi, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { multipartOf } from "./helpers/multipart.js";
 
 // Вебхук бота (docs/28-diagnostics.md §6.1.3–§6.1.5).
 
@@ -142,7 +143,7 @@ describe("клиент Bot API: кнопки, картинки, документ
       keyboard: [[{ text: "Играть", web_app: { url: "https://game.example" } }]],
     });
     expect(sent).toEqual({ messageId: 5, fileId: "large" });
-    const form = calls[0]?.init.body as FormData;
+    const form = await multipartOf(calls[0]?.init ?? {});
     expect(JSON.parse(String(form.get("reply_markup")))).toEqual({ inline_keyboard: [[{ text: "Играть", web_app: { url: "https://game.example" } }]] });
 
     await api.sendPhoto("7", "large", "подпись");
@@ -164,7 +165,7 @@ describe("клиент Bot API: кнопки, картинки, документ
       writeFileSync(path, "zip-bytes");
       const { calls, api } = recorder({ message_id: 9 });
       await api.sendDocument("111", path, "rubezh-export.zip", "Выгрузка");
-      const form = calls[0]?.init.body as FormData;
+      const form = await multipartOf(calls[0]?.init ?? {});
       const file = form.get("document") as File;
       expect(file.name).toBe("rubezh-export.zip");
       expect(await file.text()).toBe("zip-bytes");

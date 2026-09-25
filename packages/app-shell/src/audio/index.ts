@@ -5,7 +5,7 @@ import type { HudSound, RunSoundEvent, SoundDirector, SoundScene, UiSound } from
 
 /**
  * Звук оболочки и забега — тонкая дверь в первой загрузке
- * (docs/31-audio-and-haptics.md). Сам движок, рецепты и музыка приходят
+ * (docs/31-audio-and-haptics.md). Сам движок и рецепты приходят
  * отдельным чанком после первого касания: до него звук всё равно нельзя
  * включить, а весит он как пол-экрана.
  *
@@ -20,12 +20,10 @@ import type { HudSound, RunSoundEvent, SoundDirector, SoundScene, UiSound } from
 export type { AudioVolumes, HudSound, RunSoundEvent, SoundScene, UiSound };
 
 /**
- * Умолчания громкости. Музыка выключена: пока она однообразна и на третьем
- * забеге надоедает — вернём ползунок вверх, когда она станет лучше
- * (docs/31-audio-and-haptics.md §6). Интерфейс громче эффектов: щелчок
- * подтверждает нажатие, и в бою он тонул.
+ * Умолчания громкости. Интерфейс громче эффектов: щелчок подтверждает
+ * нажатие, и в бою он тонул (docs/31-audio-and-haptics.md §6).
  */
-export const DEFAULT_VOLUMES: AudioVolumes = { master: 60, effects: 85, ui: 90, music: 0 };
+export const DEFAULT_VOLUMES: AudioVolumes = { master: 60, effects: 85, ui: 90 };
 
 let director: SoundDirector | null = null;
 let loading: Promise<SoundDirector | null> | null = null;
@@ -110,7 +108,7 @@ export const audio = {
     volumes = next;
     director?.setVolumes(next);
   },
-  /** Приложение ушло в фон: звук останавливается целиком, а не только музыка. */
+  /** Приложение ушло в фон: контекст звука приостанавливается целиком. */
   setActive(active: boolean): void {
     suspended = !active;
     if (context === null) return;

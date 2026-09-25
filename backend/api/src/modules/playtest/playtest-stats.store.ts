@@ -1,5 +1,5 @@
 import type { StoredDevice } from "../diagnostics/dto/device.dto.js";
-import type { Difficulty, StoredRun } from "./playtest.store.js";
+import type { Difficulty } from "../runs/run-rules.js";
 
 /**
  * Агрегаты статистики плейтеста: кто открывал игру, на чём, как проходят
@@ -7,10 +7,22 @@ import type { Difficulty, StoredRun } from "./playtest.store.js";
  * запрос сводки: сводка — это чтение десятка счётчиков.
  *
  * Только числа и распределения. Имён и Telegram ID в агрегатах нет: сводку
- * отправляют в групповой чат (docs/28-diagnostics.md §8).
+ * отправляют в групповой чат (docs/28-diagnostics.md §8). Игроков считают по
+ * аккаунту — и запуски, и забеги приходят под сессией.
  */
 
 export { DEVICE_OS, FORM_FACTORS, type StoredDevice } from "../diagnostics/dto/device.dto.js";
+
+/** Что сводке нужно от забега: записанный забег приходит из модуля `runs`. */
+export interface StatsRun {
+  difficultyId: Difficulty;
+  outcome: "died" | "abandoned";
+  survivalSec: number;
+  level: number;
+  startingWeaponId: string;
+  /** кто убил; `null` — сдача или причина неизвестна */
+  deathCause: string | null;
+}
 
 export interface SessionRecord {
   installId: string;
@@ -100,8 +112,8 @@ export interface StressSummary {
 }
 
 export interface PlaytestStatsStore {
-  recordSession(playerId: string, session: SessionRecord, nowMs: number): Promise<void>;
-  recordRun(playerId: string, run: StoredRun, nowMs: number): Promise<void>;
+  recordSession(accountId: string, session: SessionRecord, nowMs: number): Promise<void>;
+  recordRun(accountId: string, run: StatsRun, nowMs: number): Promise<void>;
   recordStress(summary: StressSummary, nowMs: number): Promise<boolean>;
   /** `false` — эта запись уже учтена */
   recordRecording(reportId: string, problems: readonly string[]): Promise<boolean>;

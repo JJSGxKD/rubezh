@@ -1,3 +1,4 @@
+import { CONTINUE } from "./continue";
 import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
@@ -37,6 +38,7 @@ function hashContent(): string {
     MAPS,
     DROPS,
     DIFFICULTIES,
+    CONTINUE,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.

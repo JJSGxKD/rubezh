@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Crown, Trophy } from "lucide-react";
-import { DIFFICULTY_IDS, type DifficultyId, type PlaytestLeaderboardEntry } from "@bh/shared-types";
+import { DIFFICULTY_IDS, type DifficultyId, type LeaderboardEntry } from "@bh/shared-types";
 import {
   Avatar,
   Badge,
@@ -14,25 +14,28 @@ import {
 } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import { useMeta } from "../../state/meta";
-import { usePlaytest } from "../../state/playtest";
-import type { PlaytestFailure } from "../../state/playtest-api";
+import type { ApiFailure } from "../../state/api-request";
+import { useRuns } from "../../state/runs";
 import { ItemIcon } from "../item-icons";
-import { PlaytestProblem, RankMark, SurvivalTime } from "./playtest-ui";
+import { SessionNotice, useSessionNotice } from "./session-notice";
+import { RankMark, SurvivalTime, SyncProblem } from "./sync-ui";
 
 /**
  * Рейтинг закрытого теста: лучшее время каждого игрока, отдельно по
  * сложностям (docs/26-stage2-plan.md, Р18 и WP13). Время на разных
  * сложностях несравнимо, поэтому общей таблицы нет.
  *
- * Антифрода нет сознательно — это витрина «для интереса», и экран говорит,
- * что данные теста сотрутся.
+ * Таблица — по аккаунтам и из базы: в неё попадает забег, прошедший проверки
+ * антифрода (docs/34-stage3-plan.md, WP4). Подозрительный забег остаётся в
+ * профиле, но не здесь.
  */
 export function RatingScreen(): ReactNode {
   const [difficultyId, setDifficultyId] = useState<DifficultyId>(() => useMeta.getState().lastDifficultyId);
-  const board = usePlaytest((state) => state.leaderboards[difficultyId]);
-  const pending = usePlaytest((state) => state.pending);
+  const board = useRuns((state) => state.leaderboards[difficultyId]);
+  const pending = useRuns((state) => state.pending);
   const [loading, setLoading] = useState(false);
-  const [failure, setFailure] = useState<PlaytestFailure | null>(null);
+  const [failure, setFailure] = useState<ApiFailure | null>(null);
+  const notice = useSessionNotice();
 
   // Ответ на переключённую уже сложность не должен затереть состояние текущей.
   const latest = useRef<DifficultyId>(difficultyId);
@@ -43,8 +46,8 @@ export function RatingScreen(): ReactNode {
     setFailure(null);
     // Неотправленные забеги сперва уходят на сервер: иначе игрок не нашёл
     // бы в таблице забег, который только что сыграл.
-    await usePlaytest.getState().flush("screen");
-    const problem = await usePlaytest.getState().loadLeaderboard(id);
+    await useRuns.getState().flush("screen");
+    const problem = await useRuns.getState().loadLeaderboard(id);
     if (latest.current !== id) return;
     setFailure(problem);
     setLoading(false);
@@ -68,8 +71,12 @@ export function RatingScreen(): ReactNode {
         />
 
         <div className="mt-4 grid grid-cols-1 gap-3" aria-busy={loading}>
-          {failure === null ? null : (
-            <PlaytestProblem failure={failure} compact={board !== undefined} onRetry={() => void load(difficultyId)} />
+          {/* Нет сессии — сказать почему; ошибка запроса лишь повторила бы то
+              же другими словами, а у блокировки ещё и потеряла бы причину. */}
+          {notice !== null ? (
+            <SessionNotice notice={notice} />
+          ) : failure === null ? null : (
+            <SyncProblem failure={failure} compact={board !== undefined} onRetry={() => void load(difficultyId)} />
           )}
 
           {board === undefined ? (
@@ -137,7 +144,7 @@ function MyPlace(props: {
   );
 }
 
-function LeaderboardRow(props: { entry: PlaytestLeaderboardEntry; index: number }): ReactNode {
+function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): ReactNode {
   const { entry } = props;
 
   return (
