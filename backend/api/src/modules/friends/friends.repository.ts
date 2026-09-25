@@ -51,6 +51,8 @@ export interface FriendsRepository {
   /** Чья ссылка; `null` — такого кода нет. */
   ownerOf(code: string): Promise<string | null>;
   friends(accountId: string, limit: number): Promise<FriendRow[]>;
+  /** Сколько друзей — для карточки игрока в панели. */
+  count(accountId: string): Promise<number>;
   incoming(accountId: string, limit: number): Promise<RequestRow[]>;
   outgoing(accountId: string, limit: number): Promise<RequestRow[]>;
   areFriends(a: string, b: string): Promise<boolean>;
@@ -111,6 +113,10 @@ export class PrismaFriendsRepository implements FriendsRepository {
       take: limit,
     });
     return rows.map((row) => ({ ...(row.accountA === accountId ? row.b : row.a), since: row.createdAt, source: row.source }));
+  }
+
+  async count(accountId: string): Promise<number> {
+    return await this.prisma.friendship.count({ where: { OR: [{ accountA: accountId }, { accountB: accountId }] } });
   }
 
   async incoming(accountId: string, limit: number): Promise<RequestRow[]> {

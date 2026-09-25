@@ -46,6 +46,10 @@ export class MemoryFriendsRepository implements FriendsRepository {
     return rows.slice(0, limit);
   }
 
+  async count(accountId: string): Promise<number> {
+    return (await this.friends(accountId, Number.MAX_SAFE_INTEGER)).length;
+  }
+
   async incoming(accountId: string, limit: number): Promise<RequestRow[]> {
     return (await this.requestRows((from, to) => (to === accountId ? from : null))).slice(0, limit);
   }
