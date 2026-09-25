@@ -45,6 +45,7 @@ export { PATTERN_DEFAULTS } from "./game/patterns/enemy-types";
 export type {
   BossSnapshot,
   HudSnapshot,
+  PlayerStatusSnapshot,
   RadarBlipKind,
   RadarSnapshot,
   RunContinueOptions,

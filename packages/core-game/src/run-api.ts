@@ -1,4 +1,4 @@
-import type { DifficultyId, RunOutcome, RunResult, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyId, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -37,6 +37,18 @@ export interface BossSnapshot {
   phases: number;
 }
 
+/**
+ * Состояние на игроке для HUD (docs/35-stage4-plan.md, WP6). Игрок должен
+ * понимать, почему здоровье тает без попаданий и почему он бежит медленнее.
+ */
+export interface PlayerStatusSnapshot {
+  element: StatusElement;
+  /** сколько секунд ещё держится */
+  sec: number;
+  /** слоёв яда; у остальных состояний — 1 */
+  stacks: number;
+}
+
 export interface HudSnapshot {
   survivalSec: number;
   hp: number;
@@ -57,6 +69,8 @@ export interface HudSnapshot {
   radar: RadarSnapshot;
   /** живой босс, если он на поле; у элиты полосы нет */
   boss: BossSnapshot | null;
+  /** состояния на игроке, от важнейшего для боя; пусто — чист */
+  statuses: PlayerStatusSnapshot[];
 }
 
 /**

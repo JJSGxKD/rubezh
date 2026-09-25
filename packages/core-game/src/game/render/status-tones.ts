@@ -1,5 +1,6 @@
 import type { StatusElement } from "@bh/shared-types";
 import type { EnemyPool } from "../sim/pools";
+import type { PlayerState } from "../sim/world";
 
 /**
  * Тон состояния врага на канве (docs/35-stage4-plan.md, WP6): без него стихия
@@ -58,5 +59,19 @@ export function statusTone(enemies: EnemyPool, index: number, tick: number): num
   if (enemies.burnTimer[index] > 0) return STATUS_TONE.burn;
   if (enemies.poisonTimer[index] > 0) return STATUS_TONE.poison;
   if (enemies.chillTimer[index] > 0) return STATUS_TONE.chill;
+  return STATUS_TONE.none;
+}
+
+/**
+ * Тон персонажа: то же правило, что у врага, но без заморозки — игрока не
+ * заморозить (`sim/player-status.ts`). Пульс без сдвига: персонаж один, и
+ * мерцать вразнобой ему не с кем.
+ */
+export function playerStatusTone(player: PlayerState, tick: number): number {
+  if (tick % STATUS_PULSE_TICKS >= STATUS_PULSE_ON) return STATUS_TONE.none;
+  if (player.shockTimer > 0) return STATUS_TONE.shock;
+  if (player.burnTimer > 0) return STATUS_TONE.burn;
+  if (player.poisonTimer > 0) return STATUS_TONE.poison;
+  if (player.chillTimer > 0) return STATUS_TONE.chill;
   return STATUS_TONE.none;
 }

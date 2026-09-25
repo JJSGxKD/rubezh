@@ -11,7 +11,7 @@ import { DebugOverlay } from "./debug-overlay";
 import { PickupRenderer } from "./pickups";
 import { ENEMY_LOOKS, enemyColor, stageColor, stageCore, WORLD_COLORS } from "./looks";
 import { PlayerRings } from "./player-rings";
-import { STATUS_TONE_COLORS, statusTone } from "./status-tones";
+import { playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
@@ -247,6 +247,15 @@ export class WorldRenderer {
     if (healAge < HIT_FLASH_TICKS) {
       this.player.setTintFill(WORLD_COLORS.heal);
       this.player.setScale(1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS));
+      return;
+    }
+    // Тон состояния на персонаже — без переключателя: это его собственное
+    // состояние, и без тона непонятно, почему здоровье тает без попаданий
+    // (docs/27-design-system-and-app-shell.md §7.1).
+    const tone = playerStatusTone(this.world.player, tick);
+    if (tone !== STATUS_TONE.none) {
+      this.player.setTintFill(STATUS_TONE_COLORS[tone] ?? WORLD_COLORS.hurt);
+      this.player.setScale(1);
       return;
     }
     this.player.clearTint();
