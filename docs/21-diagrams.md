@@ -67,6 +67,8 @@ erDiagram
     ACCOUNT ||--o| REFERRAL_BINDING : "кем приглашён — один раз"
     ACCOUNT ||--o{ REFERRAL_BINDING : "кого пригласил"
     ACCOUNT ||--o{ FRIEND_RETURN : "вернулся по ссылке друга / помог вернуть"
+    LINK ||--o{ LINK_CLICK : "клики; краулеры превью не пишутся"
+    LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -362,6 +364,27 @@ erDiagram
         int period PK "сутки эпохи / длина периода: пара — раз в период"
         datetime returned_at
         datetime rewarded_at "nullable: ещё не сыграл"
+    }
+
+    LINK {
+        string code PK "случайный: /r/<код>"
+        enum platform "куда ведёт прямой режим"
+        string campaign
+        string source "nullable"
+        string medium "nullable"
+        uuid created_by "nullable, без внешнего ключа"
+        datetime created_at
+    }
+
+    LINK_CLICK {
+        string click_id PK "уходит в параметр запуска c-<код>"
+        string link_code FK
+        datetime at
+        string utm_source "nullable, и прочие utm_*"
+        string referer_host "nullable: только хост"
+        string device_class "nullable"
+        string ip_prefix "nullable: подсеть, не адрес"
+        string language "nullable"
     }
 ```
 
@@ -944,7 +967,8 @@ flowchart LR
         FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
         WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
-        ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>реализовано"]
+        ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, реализовано"]
+        LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1035,6 +1059,9 @@ flowchart LR
 
     PANEL["apps/admin<br/>панель команды,<br/>свой поддомен"] -- "/api/v1/admin, cookie" --> CADDY
     CADDY --> ADMINAPI
+    CADDY -- "/r/*" --> LINKS
+    LINKS --> PG
+    LINKS -. "порт AppLinks: ссылка запуска" .-> TGADP
     ADMINAPI -- сессии панели --> REDIS
     ADMINAPI -. сервисы и репозитории соседей .-> AUTH
     ADMINAPI -. карточка: забеги, кошелёк .-> RUNS
