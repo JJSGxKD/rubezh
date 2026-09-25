@@ -20,6 +20,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "audit", title: "Аудит", permission: "audit.view" },
   { id: "fx", title: "Курсы", permission: "analytics.revenue.view" },
   { id: "diagnostics", title: "Диагностика", permission: "diagnostics.view" },
+  { id: "exports", title: "Выгрузки", permission: "data.export" },
 ];
 
 export interface Route {

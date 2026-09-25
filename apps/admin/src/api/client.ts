@@ -125,6 +125,40 @@ export class AdminApi {
     if (kind === "unauthorized") for (const listener of this.unauthorizedListeners) listener();
     return failure(kind, response.status, code, envelope.success ? envelope.data.error.message : undefined);
   }
+
+  /**
+   * Файл вместо JSON — архив выгрузки. Ошибка приходит тем же конвертом
+   * `{ error }`, что у остальных запросов, а успех — телом файла.
+   */
+  async download(path: string, body: unknown, timeoutMs: number): Promise<ApiResult<{ blob: Blob; fileName: string }>> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(urlOf(path), {
+        method: "POST",
+        headers: { accept: "application/zip, application/json", "content-type": "application/json", [CSRF_HEADER]: CSRF_VALUE },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+      return failure("offline", null, null, timedOut ? "Архив не собрался вовремя — сузьте период" : undefined);
+    }
+    if (response.ok) return { ok: true, data: { blob: await response.blob(), fileName: fileNameOf(response.headers.get("content-disposition")) } };
+
+    const envelope = errorEnvelope.safeParse(await readJson(response));
+    const code = envelope.success ? envelope.data.error.code : null;
+    const kind = kindOf(response.status, code);
+    if (kind === "unauthorized") for (const listener of this.unauthorizedListeners) listener();
+    return failure(kind, response.status, code, envelope.success ? envelope.data.error.message : undefined);
+  }
+}
+
+/** Имя файла из `content-disposition`; без него — общее имя, а не ошибка. */
+export function fileNameOf(header: string | null): string {
+  const match = /filename="([^"]+)"/.exec(header ?? "");
+  return match?.[1] ?? "rubezh-export.zip";
 }
 
 export function urlOf(path: string, query: Record<string, QueryValue> = {}): string {

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { DiagnosticsScreen } from "./diagnostics/DiagnosticsScreen";
+import { ExportsScreen } from "./exports/ExportsScreen";
 import { FunnelScreen } from "./funnel/FunnelScreen";
 import { FxScreen } from "./fx/FxScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
@@ -19,4 +20,5 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
+  exports: () => <ExportsScreen />,
 };
