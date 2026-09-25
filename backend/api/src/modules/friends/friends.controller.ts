@@ -4,7 +4,7 @@ import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { friendIdSchema, friendRequestSchema } from "./dto/friends.dto.js";
 import { FRIENDS_LIMITS } from "./friends-rules.js";
-import { FriendsService, type FriendsView, type RequestResult } from "./friends.service.js";
+import { FriendsService, type ClaimResult, type FriendsView, type RequestResult } from "./friends.service.js";
 
 /**
  * Раздел «Друзья» игрока (docs/35-stage4-plan.md, WP14). Всё — под токеном
@@ -62,6 +62,21 @@ export class FriendsController {
     const account = accountOf(request);
     await this.limit(FRIENDS_LIMITS.change, account.accountId);
     return { data: await this.friends.cancel(account, idOf(to)) };
+  }
+
+  /** Забрать подарки друзей — до потолка игровых суток. */
+  @Post("gifts/claim")
+  async claimGifts(@Req() request: unknown): Promise<{ data: ClaimResult }> {
+    const account = accountOf(request);
+    await this.limit(FRIENDS_LIMITS.change, account.accountId);
+    return { data: await this.friends.claimGifts(account) };
+  }
+
+  @Post(":accountId/gift")
+  async gift(@Req() request: unknown, @Param("accountId") friend: string): Promise<{ data: { sent: boolean } }> {
+    const account = accountOf(request);
+    await this.limit(FRIENDS_LIMITS.change, account.accountId);
+    return { data: await this.friends.sendGift(account, idOf(friend)) };
   }
 
   @Delete(":accountId")

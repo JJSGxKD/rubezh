@@ -180,6 +180,8 @@ model Account {
   friendsAsB       Friendship[]    @relation("friendship_b")
   requestsSent     FriendRequest[] @relation("friend_request_from")
   requestsReceived FriendRequest[] @relation("friend_request_to")
+  giftsSent        FriendGift[]    @relation("friend_gift_from")
+  giftsReceived    FriendGift[]    @relation("friend_gift_to")
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -810,3 +812,25 @@ model FriendRequest {
   @@index([toAccountId, createdAt])
   @@map("friend_request")
 }
+
+// Подарок другу: раз в игровые сутки каждому другу (docs/35-stage4-plan.md
+// §3.8). Ключ с сутками — второй подарок того же дня упирается в него, а не
+// в проверку кода. Получатель забирает сам, с потолком в сутки; забранный
+// помечается, монеты кладёт кошелёк своим ключом `friend_gift:…`.
+model FriendGift {
+  fromAccountId String    @map("from_account_id") @db.Uuid
+  toAccountId   String    @map("to_account_id") @db.Uuid
+  /// игровые сутки отправки, по Москве
+  day           DateTime  @db.Date
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// `null` — ещё не забран
+  claimedAt     DateTime? @map("claimed_at") @db.Timestamptz(3)
+
+  from Account @relation("friend_gift_from", fields: [fromAccountId], references: [accountId], onDelete: Cascade)
+  to   Account @relation("friend_gift_to", fields: [toAccountId], references: [accountId], onDelete: Cascade)
+
+  @@id([fromAccountId, toAccountId, day])
+  @@index([toAccountId, claimedAt])
+  @@map("friend_gift")
+}
+

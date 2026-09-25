@@ -18,7 +18,9 @@ import { FriendsService } from "../src/modules/friends/friends.service.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
-import { MemoryFriendsRepository } from "./helpers/memory-friends.js";
+import { MemoryFriendsRepository, shiftDay } from "./helpers/memory-friends.js";
+import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
+import { GIFT_RULES } from "../src/modules/friends/friends-rules.js";
 
 /**
  * Друзья (docs/35-stage4-plan.md, WP14): ссылка дружбы делает друзьями без
@@ -33,6 +35,17 @@ function config(): AppConfig {
 let accounts: MemoryAccountRepository;
 let repository: MemoryFriendsRepository;
 let service: FriendsService;
+let wallet: FakeWallet;
+
+/** Кошелёк с ключом идемпотентности — ровно то, на что опираются подарки. */
+class FakeWallet {
+  readonly grants = new Map<string, GrantInput>();
+  async grant(input: GrantInput): Promise<GrantResult> {
+    const duplicate = this.grants.has(input.idempotencyKey);
+    if (!duplicate) this.grants.set(input.idempotencyKey, input);
+    return { credited: duplicate ? 0 : input.amount, balance: 0, duplicate };
+  }
+}
 
 async function player(platformUserId: string, platform: "telegram" | "vk" = "telegram"): Promise<Account> {
   return await accounts.upsert({ platform, platformUserId, displayName: `Игрок ${platformUserId}`, username: null, photoUrl: null }, Date.now());
@@ -58,7 +71,8 @@ function login(account: Account, startParam: string | null, overrides: Partial<L
 beforeEach(() => {
   accounts = new MemoryAccountRepository();
   repository = new MemoryFriendsRepository(accounts);
-  service = new FriendsService(config(), repository, accounts, new AuthHooks());
+  wallet = new FakeWallet();
+  service = new FriendsService(config(), repository, accounts, new AuthHooks(), wallet as unknown as WalletService);
 });
 
 describe("ссылка дружбы", () => {
@@ -168,6 +182,60 @@ describe("заявки", () => {
   });
 });
 
+describe("подарки", () => {
+  async function friendsPair(): Promise<[Account, Account]> {
+    const ann = await player("1");
+    const bob = await player("2");
+    await service.request(claims(ann), bob.accountId);
+    await service.accept(claims(bob), ann.accountId);
+    return [ann, bob];
+  }
+
+  it("подарок — раз в сутки и только другу; получатель видит его и забирает монетами", async () => {
+    const [ann, bob] = await friendsPair();
+    const stranger = await player("3");
+    await expect(service.sendGift(claims(ann), stranger.accountId)).rejects.toMatchObject({ code: "friend_not_found" });
+
+    expect(await service.sendGift(claims(ann), bob.accountId)).toEqual({ sent: true });
+    expect(await service.sendGift(claims(ann), bob.accountId)).toEqual({ sent: false });
+    expect((await service.view(ann.accountId)).gifts.sentToday).toEqual([bob.accountId]);
+    expect((await service.view(bob.accountId)).gifts).toMatchObject({ pending: 1, claimableToday: 1, coins: GIFT_RULES.coins });
+
+    expect(await service.claimGifts(claims(bob))).toEqual({ claimed: 1, coins: GIFT_RULES.coins });
+    expect([...wallet.grants.values()][0]).toMatchObject({ accountId: bob.accountId, reason: "friend_gift", amount: GIFT_RULES.coins });
+    expect(await service.claimGifts(claims(bob))).toEqual({ claimed: 0, coins: 0 });
+
+    repository.today = shiftDay(repository.today, 1);
+    expect(await service.sendGift(claims(ann), bob.accountId)).toEqual({ sent: true });
+  });
+
+  it("забрать можно не больше потолка суток, остальное ждёт следующих; старые сгорают", async () => {
+    const receiver = await player("receiver");
+    const extra = 3;
+    for (let index = 0; index < GIFT_RULES.maxClaimsPerDay + extra; index++) {
+      const giver = await player(`g${index}`);
+      await service.request(claims(giver), receiver.accountId);
+      await service.accept(claims(receiver), giver.accountId);
+      await service.sendGift(claims(giver), receiver.accountId);
+    }
+    expect((await service.claimGifts(claims(receiver))).claimed).toBe(GIFT_RULES.maxClaimsPerDay);
+    expect((await service.view(receiver.accountId)).gifts).toMatchObject({ pending: extra, claimableToday: 0 });
+
+    repository.today = shiftDay(repository.today, GIFT_RULES.maxAgeDays);
+    expect((await service.view(receiver.accountId)).gifts.pending).toBe(0);
+  });
+
+  it("начисленный, но не помеченный подарок кошелёк узнаёт по ключу — дважды не платит", async () => {
+    const [ann, bob] = await friendsPair();
+    await service.sendGift(claims(ann), bob.accountId);
+    const day = repository.today;
+    await wallet.grant({ accountId: bob.accountId, resource: "coins", amount: GIFT_RULES.coins, reason: "friend_gift", idempotencyKey: `friend_gift:${ann.accountId}:${bob.accountId}:${day}` });
+
+    expect(await service.claimGifts(claims(bob))).toEqual({ claimed: 1, coins: 0 });
+    expect(wallet.grants.size).toBe(1);
+  });
+});
+
 describe("HTTP раздела друзей", () => {
   let app: NestFastifyApplication | null = null;
   const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
@@ -219,6 +287,11 @@ describe("HTTP раздела друзей", () => {
 
     const view = await target.inject({ method: "GET", url: "/api/v1/friends", headers: { authorization: await bearer(bob) } });
     expect(view.json().data.friends[0].accountId).toBe(ann.accountId);
+
+    const gift = await target.inject({ method: "POST", url: `/api/v1/friends/${bob.accountId}/gift`, headers: { authorization: await bearer(ann) } });
+    expect(gift.json()).toEqual({ data: { sent: true } });
+    const claim = await target.inject({ method: "POST", url: "/api/v1/friends/gifts/claim", headers: { authorization: await bearer(bob) } });
+    expect(claim.json()).toEqual({ data: { claimed: 1, coins: GIFT_RULES.coins } });
   });
 
   it("мусор в теле и в пути — 400, чужой игрок — 404", async () => {

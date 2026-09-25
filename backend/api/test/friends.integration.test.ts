@@ -77,6 +77,28 @@ describe.skipIf(DATABASE_URL === "")("дружба на живом Postgres", ()
     expect(await friends.friends(star, 10)).toHaveLength(3);
   });
 
+  it("подарки: раз в сутки, ожидание, пометка и счёт забранных за сутки", async () => {
+    const giver = await account();
+    const receiver = await account();
+    expect(await friends.sendGift(giver, receiver)).toBe(true);
+    expect(await friends.sendGift(giver, receiver)).toBe(false);
+    expect(await friends.giftedToday(giver)).toEqual([receiver]);
+
+    const [pending] = await friends.pendingGifts(receiver, 7, 10);
+    expect(pending?.fromAccountId).toBe(giver);
+    expect(pending?.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(await friends.pendingGiftCount(receiver, 7)).toBe(1);
+    expect(await friends.claimedToday(receiver)).toBe(0);
+
+    await friends.markClaimed(giver, receiver, pending?.day ?? "");
+    expect(await friends.pendingGifts(receiver, 7, 10)).toEqual([]);
+    expect(await friends.claimedToday(receiver)).toBe(1);
+
+    // Старый подарок за пределом срока — не ждёт.
+    await prisma.$executeRaw`INSERT INTO friend_gift (from_account_id, to_account_id, day) VALUES (${receiver}::uuid, ${giver}::uuid, current_date - 30)`;
+    expect(await friends.pendingGiftCount(giver, 7)).toBe(0);
+  });
+
   it("заявки: повтор — «есть», потолки входящих и исходящих, отклонение", async () => {
     const target = await account();
     const [first, second, third] = await Promise.all([account(), account(), account()]);
