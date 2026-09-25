@@ -43,6 +43,9 @@ class MemorySessions implements SessionsRepository {
   async recentIpPrefixes(): Promise<string[]> {
     return [];
   }
+  async lastSessionBefore(): Promise<Date | null> {
+    return null;
+  }
 }
 
 /** Окно дедупликации в памяти — со смыслом ключа Redis: тот же аккаунт и параметр. */

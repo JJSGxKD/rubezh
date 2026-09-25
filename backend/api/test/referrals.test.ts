@@ -122,7 +122,7 @@ beforeEach(() => {
   wallet = new FakeWallet();
   networks = new Map();
   runCounts = new Map();
-  const sessions = { record: async () => "recorded" as const, acquisition: async () => null, recentIpPrefixes: async (id: string) => networks.get(id) ?? [] } satisfies SessionsRepository;
+  const sessions = { record: async () => "recorded" as const, acquisition: async () => null, recentIpPrefixes: async (id: string) => networks.get(id) ?? [], lastSessionBefore: async () => null } satisfies SessionsRepository;
   const runs = { stats: async (id: string) => ({ runs: runCounts.get(id) ?? 0, totalKills: 0, totalSurvivalSec: 0 }) } as unknown as RunsRepository;
   service = new ReferralsService(
     loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv),

@@ -72,7 +72,7 @@ function setup() {
   const adminSessions = new AdminSessionService(cfg, accounts, store, roles);
   const gameSessionsRevoked: string[] = [];
 
-  const sessions = { record: async () => "recorded" as const, acquisition: async () => null, recentIpPrefixes: async () => [] } satisfies SessionsRepository;
+  const sessions = { record: async () => "recorded" as const, acquisition: async () => null, recentIpPrefixes: async () => [], lastSessionBefore: async () => null } satisfies SessionsRepository;
   const messaging = { state: async () => ({ canMessage: true, reason: "entered" as const, changedAt: NOW }) } as unknown as MessagingService;
   const progress = { view: async () => ({ xp: 120, level: 2, nextLevelXp: 300, levelXp: 150 }) } as unknown as ProgressService;
   const runs = { profile: async () => ({ runs: 3, totalKills: 40, totalSurvivalSec: 500, best: { easy: null, normal: null, hard: null }, recent: [] }) } as unknown as RunsViewService;
