@@ -6,5 +6,20 @@
   "session.banned.reason": "Аккаунт заблокирован: {reason}",
   "session.rejected": "Сервер не принял вход. Обнови игру и открой её заново.",
   "profile.since": "В игре с {date}",
-  "profile.local": "Без аккаунта — рекорды только на этом устройстве"
+  "profile.local": "Без аккаунта — рекорды только на этом устройстве",
+  "run.reward.pending": "Считаем награду…",
+  "run.reward.coins": "+{amount}",
+  "run.reward.coinsLabel": "Монеты за забег: {amount}",
+  "run.reward.xp": "+{amount} опыта",
+  "run.reward.levelUp": "Новый уровень: {level}",
+  "run.reward.capped": "Дневной предел монет за забеги исчерпан — опыт засчитан",
+  "run.reward.none.too_short": "Слишком короткий забег — без награды",
+  "run.reward.none.cheats": "Забег с читами — без награды",
+  "run.reward.none.rejected": "Забег не засчитан — без награды",
+  "run.reward.none.other": "За этот забег награды нет",
+  "profile.level": "Уровень {level}",
+  "profile.level.xp": "{current} / {next} опыта",
+  "profile.level.max": "Наивысший уровень",
+  "profile.level.nextReward": "За следующий уровень: {coins} монет",
+  "profile.level.nextRewardGems": "За следующий уровень: {coins} монет и {gems} самоцветов"
 }

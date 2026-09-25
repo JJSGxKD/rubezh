@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApiRequest } from "../src/state/api-request";
-import { createWalletApi, useWallet } from "../src/state/wallet";
+import { useWallet } from "../src/state/wallet";
+import { createWalletApi, loadWallet } from "../src/state/wallet-api";
 
 /**
  * Кошелёк в шапке (docs/35-stage4-plan.md, WP3). Ответ сервера — граница:
@@ -19,7 +20,7 @@ describe("кошелёк клиента", () => {
   it("показывает монеты и самоцветы и пропускает ресурсы, которых клиент не знает", async () => {
     const api = createWalletApi(answering({ balances: { coins: 120, gems: 7, shard_rare: 3 } }));
 
-    expect(await useWallet.getState().load(api)).toBeNull();
+    expect(await loadWallet(api)).toBeNull();
     expect(useWallet.getState().balances).toEqual({ coins: 120, gems: 7 });
   });
 
@@ -27,7 +28,7 @@ describe("кошелёк клиента", () => {
     useWallet.setState({ balances: { coins: 5, gems: 1 } });
     const offline = createWalletApi(async () => ({ ok: false, failure: "offline" }));
 
-    expect(await useWallet.getState().load(offline)).toBe("offline");
+    expect(await loadWallet(offline)).toBe("offline");
     expect(useWallet.getState().balances).toEqual({ coins: 5, gems: 1 });
   });
 
@@ -35,7 +36,7 @@ describe("кошелёк клиента", () => {
     useWallet.setState({ balances: null });
     const broken = createWalletApi(answering({ balances: { coins: "много" } }));
 
-    expect(await useWallet.getState().load(broken)).toBe("unavailable");
+    expect(await loadWallet(broken)).toBe("unavailable");
     expect(useWallet.getState().balances).toBeNull();
   });
 });

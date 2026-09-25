@@ -1,8 +1,15 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Crown, Skull, Trophy, Wrench } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
 import { Badge, Button, Modal, Stat, staggerStyle } from "../../design-system/components";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
+// Строки награды — в словаре аккаунта: он приезжает с этим чанком, а не с
+// первой загрузкой.
+import "../../i18n/account";
+import { CoinIcon } from "../../design-system/components/CurrencyIcons";
+import { useProgress, type RunRewardView } from "../../state/progress";
+import { awaitReward } from "../../state/progress-api";
+import { useRuns } from "../../state/runs";
 import { ItemIcon } from "../item-icons";
 import { guarded, useTapGuard } from "./overlay-guard";
 import { SecondChance, type SecondChanceProps } from "./SecondChance";
@@ -35,6 +42,14 @@ export interface DeathOverlayProps {
    * забег закрыт, и блок второго шанса — только витрина.
    */
   secondChance?: SecondChanceProps;
+  /**
+   * Показать награду за забег с сервера (docs/35-stage4-plan.md, WP4) — когда
+   * забег закрыт. Подписка на награду живёт здесь, в ленивом чанке экрана, а
+   * не в экране забега: первая загрузка за неё не платит.
+   */
+  showReward?: boolean;
+  /** награда напрямую — для витрины компонентов */
+  reward?: RunRewardView;
   onRestart(): void;
   onMenu(): void;
   onShare(): void;
@@ -43,6 +58,15 @@ export interface DeathOverlayProps {
 export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   const ready = useTapGuard();
   const { result } = props;
+  const stored = useProgress((state) => state.rewards[result.runId]);
+  const reward = props.reward ?? (props.showReward === true ? stored : undefined);
+  // Награду считает сервер после ответа на итог — спрашиваем, как только итог
+  // этого забега принят. Экран ушёл раньше — опрос доработает сам и обновит
+  // шапку.
+  const accepted = useRuns((state) => state.lastSubmitted?.runId === result.runId);
+  useEffect(() => {
+    if (props.showReward === true && accepted && useProgress.getState().rewards[result.runId] === undefined) void awaitReward(result.runId);
+  }, [props.showReward, accepted, result.runId]);
   // Сверху то, что тянуло забег: урон по оружиям — главный вход
   // геймдизайнера для баланса (docs/26-stage2-plan.md, WP3).
   const weapons = [...result.weapons].sort((left, right) => right.damage - left.damage);
@@ -100,6 +124,8 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
             <Stat label={t("run.death.killed")} value={formatNumber(result.enemiesKilled)} />
             <Stat label={t("run.death.wave")} value={String(result.waveReached)} />
           </div>
+
+          {reward === undefined ? null : <RewardRow reward={reward} />}
 
           {result.deathCause === null ? null : (
             <p className="mt-3 text-xs text-text-muted">
@@ -181,5 +207,37 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Что дал забег. Считает сервер заданием очереди, поэтому сначала «считаем»,
+ * потом числа — без перезапуска экрана. Причина отказа видна прямо: игрок,
+ * сдавшийся на десятой секунде, должен понять, почему монет нет.
+ */
+function RewardRow(props: { reward: RunRewardView }): ReactNode {
+  const { reward } = props;
+  if (reward.status === "pending") return <p className="mt-3 text-xs text-text-muted">{t("run.reward.pending")}</p>;
+  if (reward.status === "none") {
+    const key = `run.reward.none.${reward.reason}`;
+    return <p className="mt-3 text-xs text-text-muted">{hasTranslation(key) ? t(key) : t("run.reward.none.other")}</p>;
+  }
+  const levelUp = reward.levelAfter > reward.levelBefore;
+  return (
+    <div className="mt-3 animate-rise-in">
+      <div className="surface-sunken flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg px-4 py-3">
+        <span className="inline-flex items-center gap-1.5 font-display text-lg font-bold tabular-nums text-text" aria-label={t("run.reward.coinsLabel", { amount: reward.coins })}>
+          <CoinIcon size={20} />
+          {t("run.reward.coins", { amount: formatNumber(reward.coins) })}
+        </span>
+        <span className="font-display text-sm font-semibold tabular-nums text-xp">{t("run.reward.xp", { amount: formatNumber(reward.xp) })}</span>
+        {levelUp ? (
+          <span className="animate-pop-in">
+            <Badge tone="accent">{t("run.reward.levelUp", { level: reward.levelAfter })}</Badge>
+          </span>
+        ) : null}
+      </div>
+      {reward.coinsCapped ? <p className="mt-1 text-xs text-text-muted">{t("run.reward.capped")}</p> : null}
+    </div>
   );
 }
