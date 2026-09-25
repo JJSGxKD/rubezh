@@ -464,6 +464,7 @@ Remove-Item -Recurse -Force node_modules; pnpm install
 ```
 /packages
   /shared-types      <- общие TS-интерфейсы (PlatformAdapter, EnemyDef и т.д.)
+  /fx                <- курсы валют и цены: ядро без Nest и Prisma, собирается в JS для бэкенда
   /core-game         <- игровой движок (Phaser), контент как данные в src/content/*
   /app-shell         <- React-оболочка: экраны, дизайн-система, звук, состояние
   /adapter-telegram  <- реализация PlatformAdapter под Telegram WebApp SDK
