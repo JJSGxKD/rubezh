@@ -37,8 +37,12 @@ export interface LoginContext {
 export interface LoginEvent extends LoginContext {
   accountId: string;
   platform: AccountPlatform;
-  /** `web` — вход разработчика в браузере */
-  place: "miniapp" | "web";
+  /**
+   * `web` — вход разработчика в браузере; `channel` — вход в канал площадки
+   * до приложения: `/start` бота, «Начать» сообщества (docs/35-stage4-plan.md,
+   * §3.10). Токенов у такого входа нет — это знакомство, а не сессия.
+   */
+  place: "miniapp" | "web" | "channel";
   /** параметр запуска из подписанных данных */
   startParam: StartParam;
   /** аккаунт заведён этим входом */

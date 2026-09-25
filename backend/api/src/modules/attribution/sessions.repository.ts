@@ -16,7 +16,7 @@ export interface SessionRecord {
   sessionId: string;
   accountId: string;
   platform: AccountPlatform;
-  place: "miniapp" | "web";
+  place: "miniapp" | "web" | "channel";
   startKind: StartKind;
   startParam: string | null;
   startRef: string | null;

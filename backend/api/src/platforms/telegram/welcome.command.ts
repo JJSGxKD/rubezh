@@ -15,6 +15,8 @@ import { TelegramApiError, type InlineButton, type TelegramBotApi, type Telegram
 import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
 import { displayName, welcomeCacheKey, type WelcomeCard, type WelcomeProgress } from "./welcome-card.js";
 import { languageOf, WELCOME_TEXTS } from "./welcome-texts.js";
+import { AuthService } from "../../modules/auth/auth.service.js";
+import type { TelegramUser } from "./telegram-bot-api.js";
 
 /**
  * `/start` у всех (docs/28-diagnostics.md §6.1.2): персональная карточка на
@@ -98,6 +100,7 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
     @Inject(TELEGRAM_BOT_API) private readonly api: WelcomeBotApi,
     @Inject(WELCOME_RENDERER) private readonly render: WelcomeRenderer,
     private readonly identity: BotIdentity,
+    private readonly auth: AuthService,
   ) {}
 
   onModuleInit(): void {
@@ -127,6 +130,9 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
       return true;
     }
 
+    // Вход в канал — раньше окна повтора: второй `/start` по новой ссылке —
+    // это новое касание, а повтор в том же окне отсекает атрибуция сама.
+    await this.enter(message.from, message.text);
     if (!(await this.claim(chatId))) return true;
 
     const language = languageOf(message.from.language_code);
@@ -137,6 +143,27 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
     };
     await this.send(chatId, card, String(message.from.id));
     return true;
+  }
+
+  /**
+   * `/start` в личке — вход в канал площадки (docs/35-stage4-plan.md, Р29):
+   * аккаунт заводится сразу, параметр ссылки `t.me/<бот>?start=…` становится
+   * касанием. Не вышло — карточка всё равно уходит: ответ игроку важнее
+   * записи, а следующий вход её догонит.
+   */
+  private async enter(from: TelegramUser, text: string): Promise<void> {
+    if (!this.config.auth.enabled) return;
+    try {
+      await this.auth.enterChannel({
+        platform: "telegram",
+        platformUserId: String(from.id),
+        displayName: telegramName(from),
+        username: from.username ?? null,
+        startParam: text.trim().split(/\s+/)[1] ?? null,
+      });
+    } catch (error: unknown) {
+      this.log("warn", "entry_lost", { reason: reasonOf(error) });
+    }
   }
 
   private async send(chatId: string, card: WelcomeCard, userId: string): Promise<void> {
@@ -247,4 +274,10 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
 
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : "unknown";
+}
+
+/** Имя игрока для аккаунта — так же, как из подписи запуска: имя и фамилия, иначе юзернейм. */
+function telegramName(user: TelegramUser): string {
+  const name = [user.first_name, user.last_name].filter((part) => part !== undefined && part !== "").join(" ");
+  return name === "" ? (user.username ?? "Игрок") : name;
 }

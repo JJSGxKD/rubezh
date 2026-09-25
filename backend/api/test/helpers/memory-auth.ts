@@ -1,4 +1,4 @@
-import type { Account, AccountIdentity, AccountRepository } from "../../src/modules/auth/account.repository.js";
+import type { Account, AccountArrival, AccountRepository } from "../../src/modules/auth/account.repository.js";
 import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/modules/auth/refresh.store.js";
 
 /**
@@ -12,12 +12,13 @@ import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/module
 export class MemoryAccountRepository implements AccountRepository {
   private readonly byKey = new Map<string, Account>();
 
-  async upsert(identity: AccountIdentity, nowMs: number): Promise<Account> {
+  async upsert(identity: AccountArrival, nowMs: number): Promise<Account> {
     const key = `${identity.platform}:${identity.platformUserId}`;
     const existing = this.byKey.get(key);
 
     if (existing !== undefined) {
-      const updated: Account = { ...existing, ...identity, created: false };
+      const { photoUrl, ...rest } = identity;
+      const updated: Account = { ...existing, ...rest, ...(photoUrl === undefined ? {} : { photoUrl }), created: false };
       this.byKey.set(key, updated);
       return updated;
     }
@@ -25,6 +26,7 @@ export class MemoryAccountRepository implements AccountRepository {
     const account: Account = {
       accountId: crypto.randomUUID(),
       ...identity,
+      photoUrl: identity.photoUrl ?? null,
       createdAt: new Date(nowMs),
       bannedAt: null,
       banReason: null,
