@@ -94,6 +94,7 @@
 | Клиент staging | `stage.rubezh.gonet.fun` | файлсервер статики staging |
 | API staging | `api.stage.rubezh.gonet.fun` | `api:4000` проекта staging |
 | Туннели разработчиков | `dev-tg.rubezh.gonet.fun`, `dev-max.…`, `dev-vk.…` | frps на том же VPS (§4) |
+| Редирект-ссылки | `rubezh.gonet.fun/r/<код>` | путь `/r/*` клиентского домена — в `api:4000` без префикса API (`24-attribution-and-sharing.md` §3.1); адрес ссылки в панели строится от `PUBLIC_WEB_URL` |
 
 Клиент и API разнесены по разным поддоменам намеренно: статика однажды уедет
 за CDN, а API — нет. Расплата — CORS, поэтому `ALLOWED_ORIGINS` в каждом

@@ -58,6 +58,8 @@ export const PERMISSIONS = [
   "partners.edit",
   "partners.payout.create",
   "partners.payout.approve",
+  // Редирект-ссылки кампаний (WP16, docs/24-attribution-and-sharing.md §3)
+  "links.manage",
   // Эксплуатация
   "flags.edit",
   "diagnostics.view",
@@ -114,6 +116,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "ads.edit",
     "partners.view",
     "partners.edit",
+    "links.manage",
     "flags.edit",
     "diagnostics.view",
     "data.export",
@@ -148,6 +151,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "ads.view",
     "partners.view",
     "partners.edit",
+    "links.manage",
   ],
 
   // Операции и подготовка выплат; период закрывает только владелец.

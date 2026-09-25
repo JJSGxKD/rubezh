@@ -1,3 +1,5 @@
+import { LinksModule } from "../links/links.module.js";
+import { AdminLinksController } from "./admin-links.controller.js";
 import { FriendsModule } from "../friends/friends.module.js";
 import { ReferralsModule } from "../referrals/referrals.module.js";
 import { AdminSocialController } from "./admin-social.controller.js";
@@ -37,7 +39,7 @@ import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.sto
  * `ADMIN_PANEL_ENABLED`; выключенный отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -47,6 +49,7 @@ import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.sto
     AdminDiagnosticsController,
     AdminExportsController,
     AdminSocialController,
+    AdminLinksController,
   ],
   providers: [
     AdminSessionService,
