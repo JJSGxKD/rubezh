@@ -6,7 +6,8 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repo
 import { AuthHooks, type LoginEvent } from "../auth/auth-hooks.js";
 import { friendStartParam } from "./friend-code.js";
 import { FriendLimitError, FriendNotFoundError, FriendRequestNotFoundError } from "./friends-errors.js";
-import { FRIENDS_RULES } from "./friends-rules.js";
+import { WalletService } from "../wallet/wallet.service.js";
+import { FRIENDS_RULES, GIFT_RULES } from "./friends-rules.js";
 import { FRIENDS_REPOSITORY, type FriendRow, type FriendsRepository, type RequestRow } from "./friends.repository.js";
 
 /**
@@ -27,6 +28,20 @@ export interface FriendsView {
   incoming: RequestRow[];
   outgoing: RequestRow[];
   limits: { maxFriends: number };
+  gifts: {
+    /** кому уже подарено сегодня — у этих друзей кнопка подарка неактивна */
+    sentToday: string[];
+    /** сколько подарков ждёт, сколько ещё можно забрать сегодня и почём один */
+    pending: number;
+    claimableToday: number;
+    coins: number;
+  };
+}
+
+export interface ClaimResult {
+  claimed: number;
+  /** сколько монет легло: меньше `claimed × coins` — упёрлись в суточный потолок кошелька */
+  coins: number;
 }
 
 export type RequestResult = { status: "requested" } | { status: "friends" };
@@ -40,6 +55,7 @@ export class FriendsService implements OnModuleInit {
     @Inject(FRIENDS_REPOSITORY) private readonly friends: FriendsRepository,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     private readonly hooks: AuthHooks,
+    private readonly wallet: WalletService,
   ) {}
 
   onModuleInit(): void {
@@ -47,12 +63,57 @@ export class FriendsService implements OnModuleInit {
   }
 
   async view(accountId: string): Promise<FriendsView> {
-    const [friends, incoming, outgoing] = await Promise.all([
+    const [friends, incoming, outgoing, sentToday, pending, claimed] = await Promise.all([
       this.friends.friends(accountId, FRIENDS_RULES.maxFriends),
       this.friends.incoming(accountId, FRIENDS_RULES.maxIncomingRequests),
       this.friends.outgoing(accountId, FRIENDS_RULES.maxOutgoingRequests),
+      this.friends.giftedToday(accountId),
+      this.friends.pendingGiftCount(accountId, GIFT_RULES.maxAgeDays),
+      this.friends.claimedToday(accountId),
     ]);
-    return { friends, incoming, outgoing, limits: { maxFriends: FRIENDS_RULES.maxFriends } };
+    const claimableToday = Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
+    return {
+      friends,
+      incoming,
+      outgoing,
+      limits: { maxFriends: FRIENDS_RULES.maxFriends },
+      gifts: { sentToday, pending, claimableToday, coins: GIFT_RULES.coins },
+    };
+  }
+
+  /** Подарок другу — раз в игровые сутки; повтор в те же сутки — не ошибка, а «уже». */
+  async sendGift(actor: AccessTokenClaims, friendId: string): Promise<{ sent: boolean }> {
+    if (!(await this.friends.areFriends(actor.accountId, friendId))) throw new FriendNotFoundError("Подарок можно сделать только другу");
+    const sent = await this.friends.sendGift(actor.accountId, friendId);
+    if (sent) this.log("friend_gift_sent", { accountId: actor.accountId, friendId });
+    return { sent };
+  }
+
+  /**
+   * Забрать подарки — старые первыми, не больше суточного потолка. Монеты
+   * кладёт кошелёк ключом подарка: повтор после сбоя не начислит дважды, а
+   * подарок, начисленный, но не помеченный, при следующем заходе кошелёк
+   * узнает и только пометит.
+   */
+  async claimGifts(actor: AccessTokenClaims): Promise<ClaimResult> {
+    const room = GIFT_RULES.maxClaimsPerDay - (await this.friends.claimedToday(actor.accountId));
+    if (room <= 0) return { claimed: 0, coins: 0 };
+    const gifts = await this.friends.pendingGifts(actor.accountId, GIFT_RULES.maxAgeDays, room);
+
+    let coins = 0;
+    for (const gift of gifts) {
+      const result = await this.wallet.grant({
+        accountId: actor.accountId,
+        resource: "coins",
+        amount: GIFT_RULES.coins,
+        reason: "friend_gift",
+        source: `friend:${gift.fromAccountId}`,
+        idempotencyKey: `friend_gift:${gift.fromAccountId}:${actor.accountId}:${gift.day}`,
+      });
+      coins += result.credited;
+      await this.friends.markClaimed(gift.fromAccountId, actor.accountId, gift.day);
+    }
+    return { claimed: gifts.length, coins };
   }
 
   async link(accountId: string): Promise<{ code: string; startParam: string }> {

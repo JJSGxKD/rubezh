@@ -230,6 +230,8 @@ WP3). `currency_earned` и `currency_spent`, которые план стави�
 (`source`: `link` или `request`, `created_at`); виральность ссылки — это
 `friendship` с `source = link` против `account_session` с
 `start_kind = friend`. Вид запуска `friend` уже приходит в `session_started`.
+`friend_gift_sent` отложено так же: подарок — строка `friend_gift` с сутками
+и временем, когда забран, а монеты — `wallet_entry` с причиной `friend_gift`.
 
 **Награды и уровень — таблицы, а не события** (`35-stage4-plan.md`, WP4).
 `run_rewarded` и серверный `level_up` отложены по той же причине, что

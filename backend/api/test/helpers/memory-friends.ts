@@ -6,6 +6,7 @@ import {
   type FriendRow,
   type FriendSource,
   type FriendsRepository,
+  type PendingGift,
   type RequestLimits,
   type RequestOutcome,
   type RequestRow,
@@ -17,6 +18,10 @@ export class MemoryFriendsRepository implements FriendsRepository {
   readonly links = new Map<string, string>();
   readonly pairs = new Map<string, { since: Date; source: FriendSource }>();
   readonly requests = new Map<string, Date>();
+  /** ключ `от|кому|сутки` → когда забран; `null` — ждёт */
+  readonly gifts = new Map<string, Date | null>();
+  /** «сегодня» в игровых сутках; тест двигает его, чтобы проверить смену суток */
+  today = moscowDay(new Date());
 
   constructor(private readonly accounts: MemoryAccountRepository) {}
 
@@ -85,6 +90,49 @@ export class MemoryFriendsRepository implements FriendsRepository {
     return this.pairs.delete(orderedPair(a, b).join("|"));
   }
 
+  async sendGift(from: string, to: string): Promise<boolean> {
+    const key = `${from}|${to}|${this.today}`;
+    if (this.gifts.has(key)) return false;
+    this.gifts.set(key, null);
+    return true;
+  }
+
+  async giftedToday(from: string): Promise<string[]> {
+    return this.giftRows().filter((gift) => gift.from === from && gift.day === this.today).map((gift) => gift.to);
+  }
+
+  async pendingGifts(to: string, maxAgeDays: number, limit: number): Promise<PendingGift[]> {
+    return this.giftRows()
+      .filter((gift) => gift.to === to && gift.claimedAt === null && this.age(gift.day) < maxAgeDays)
+      .sort((left, right) => left.day.localeCompare(right.day))
+      .slice(0, limit)
+      .map((gift) => ({ fromAccountId: gift.from, day: gift.day }));
+  }
+
+  async pendingGiftCount(to: string, maxAgeDays: number): Promise<number> {
+    return (await this.pendingGifts(to, maxAgeDays, Number.MAX_SAFE_INTEGER)).length;
+  }
+
+  async claimedToday(to: string): Promise<number> {
+    return this.giftRows().filter((gift) => gift.to === to && gift.claimedAt !== null && gift.claimedDay === this.today).length;
+  }
+
+  async markClaimed(from: string, to: string, day: string): Promise<void> {
+    const key = `${from}|${to}|${day}`;
+    if (this.gifts.get(key) === null) this.gifts.set(key, dayStart(this.today));
+  }
+
+  private giftRows(): { from: string; to: string; day: string; claimedAt: Date | null; claimedDay: string | null }[] {
+    return [...this.gifts].map(([key, claimedAt]) => {
+      const [from, to, day] = key.split("|") as [string, string, string];
+      return { from, to, day, claimedAt, claimedDay: claimedAt === null ? null : moscowDay(claimedAt) };
+    });
+  }
+
+  private age(day: string): number {
+    return Math.round((Date.parse(`${this.today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86_400_000);
+  }
+
   private dropBoth(a: string, b: string): void {
     this.requests.delete(`${a}|${b}`);
     this.requests.delete(`${b}|${a}`);
@@ -104,4 +152,18 @@ export class MemoryFriendsRepository implements FriendsRepository {
     const account = await this.accounts.byId(accountId);
     return { accountId, displayName: account?.displayName ?? "?", photoUrl: account?.photoUrl ?? null };
   }
+}
+
+/** Игровые сутки по Москве — как их считает база (`common/game-day.ts`). */
+export function moscowDay(at: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+}
+
+/** Полдень по Москве этих суток — момент, который точно попадает в них. */
+function dayStart(day: string): Date {
+  return new Date(`${day}T09:00:00Z`);
+}
+
+export function shiftDay(day: string, days: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }

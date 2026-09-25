@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
+import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { PRISMA } from "../../infra/database.js";
 import { newFriendCode } from "./friend-code.js";
 
@@ -31,6 +32,12 @@ export interface RequestRow extends FriendPeer {
 export type BefriendOutcome = { outcome: "added" } | { outcome: "already" } | { outcome: "limit"; accountId: string };
 export type RequestOutcome = "sent" | "exists" | "incoming_full" | "outgoing_full";
 
+/** Незабранный подарок: от кого и за какие игровые сутки (`YYYY-MM-DD`). */
+export interface PendingGift {
+  fromAccountId: string;
+  day: string;
+}
+
 export interface RequestLimits {
   maxIncoming: number;
   maxOutgoing: number;
@@ -53,6 +60,16 @@ export interface FriendsRepository {
   request(from: string, to: string, limits: RequestLimits): Promise<RequestOutcome>;
   dropRequest(from: string, to: string): Promise<boolean>;
   remove(a: string, b: string): Promise<boolean>;
+  /** Подарок за текущие игровые сутки; `false` — сегодня этому другу уже дарили. */
+  sendGift(from: string, to: string): Promise<boolean>;
+  /** Кому аккаунт уже подарил сегодня. */
+  giftedToday(from: string): Promise<string[]>;
+  /** Незабранные подарки не старше `maxAgeDays`, старые первыми. */
+  pendingGifts(to: string, maxAgeDays: number, limit: number): Promise<PendingGift[]>;
+  pendingGiftCount(to: string, maxAgeDays: number): Promise<number>;
+  /** Сколько подарков забрано за текущие игровые сутки. */
+  claimedToday(to: string): Promise<number>;
+  markClaimed(from: string, to: string, day: string): Promise<void>;
 }
 
 /** Пара хранится меньшим идентификатором первым — так же проверяет база. */
@@ -166,7 +183,53 @@ export class PrismaFriendsRepository implements FriendsRepository {
     const { count } = await this.prisma.friendship.deleteMany({ where: { accountA, accountB } });
     return count > 0;
   }
+
+  async sendGift(from: string, to: string): Promise<boolean> {
+    const inserted = await this.prisma.$executeRaw`
+      INSERT INTO friend_gift (from_account_id, to_account_id, day)
+      VALUES (${from}::uuid, ${to}::uuid, ${TODAY})
+      ON CONFLICT DO NOTHING`;
+    return inserted > 0;
+  }
+
+  async giftedToday(from: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ to_account_id: string }[]>`
+      SELECT to_account_id FROM friend_gift WHERE from_account_id = ${from}::uuid AND day = ${TODAY}`;
+    return rows.map((row) => row.to_account_id);
+  }
+
+  async pendingGifts(to: string, maxAgeDays: number, limit: number): Promise<PendingGift[]> {
+    const rows = await this.prisma.$queryRaw<{ from_account_id: string; day: string }[]>`
+      SELECT from_account_id, to_char(day, 'YYYY-MM-DD') AS day FROM friend_gift
+      WHERE to_account_id = ${to}::uuid AND claimed_at IS NULL AND day > ${TODAY} - ${maxAgeDays}::int
+      ORDER BY day, created_at LIMIT ${limit}`;
+    return rows.map((row) => ({ fromAccountId: row.from_account_id, day: row.day }));
+  }
+
+  async pendingGiftCount(to: string, maxAgeDays: number): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM friend_gift
+      WHERE to_account_id = ${to}::uuid AND claimed_at IS NULL AND day > ${TODAY} - ${maxAgeDays}::int`;
+    return row?.count ?? 0;
+  }
+
+  async claimedToday(to: string): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM friend_gift
+      WHERE to_account_id = ${to}::uuid AND claimed_at IS NOT NULL
+        AND (claimed_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date = ${TODAY}`;
+    return row?.count ?? 0;
+  }
+
+  async markClaimed(from: string, to: string, day: string): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE friend_gift SET claimed_at = now()
+      WHERE from_account_id = ${from}::uuid AND to_account_id = ${to}::uuid AND day = ${day}::date AND claimed_at IS NULL`;
+  }
 }
+
+/** Игровые сутки считает база — так граница одна у всех реплик (`common/game-day.ts`). */
+const TODAY = Prisma.sql`(now() AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date`;
 
 /** Строки аккаунтов — по порядку идентификаторов: встречные транзакции не встанут в клинч. */
 async function lockAccounts(tx: Prisma.TransactionClient, first: string, second: string): Promise<void> {
