@@ -11,14 +11,14 @@ import {
   welcomeCacheKey,
   type WelcomeCard,
   type WelcomeProgress,
-} from "../src/modules/welcome/welcome-card.js";
-import { languageOf } from "../src/modules/welcome/welcome-texts.js";
+} from "../src/platforms/telegram/welcome-card.js";
+import { languageOf } from "../src/platforms/telegram/welcome-texts.js";
 import {
   StartCommand,
   WelcomeProgressRegistry,
   type WelcomeBotApi,
   type WelcomeCardCache,
-} from "../src/modules/welcome/welcome.command.js";
+} from "../src/platforms/telegram/welcome.command.js";
 
 // Приветствие по /start (docs/28-diagnostics.md §6.1.2).
 

@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { BotModule } from "../../platforms/telegram/bot.module.js";
+import { BotModule } from "./bot.module.js";
 import { renderWelcomePng } from "./welcome-card.js";
 import {
   RedisWelcomeCardCache,

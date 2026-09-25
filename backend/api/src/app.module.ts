@@ -14,7 +14,7 @@ import { EventsModule } from "./modules/events/events.module.js";
 import { ExportModule } from "./modules/export/export.module.js";
 import { IngestModule } from "./modules/ingest/ingest.module.js";
 import { TelegramModule } from "./platforms/telegram/telegram.module.js";
-import { WelcomeModule } from "./modules/welcome/welcome.module.js";
+import { WelcomeModule } from "./platforms/telegram/welcome.module.js";
 import { PaymentsModule } from "./modules/payments/payments.module.js";
 import { TelegramPaymentsModule } from "./platforms/telegram/telegram-payments.module.js";
 import { AttributionModule } from "./modules/attribution/attribution.module.js";

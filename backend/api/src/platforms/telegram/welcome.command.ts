@@ -9,10 +9,10 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { REDIS } from "../../infra/redis.js";
-import { BotRouter, type BotUpdateHandler } from "../../platforms/telegram/bot-router.js";
-import { BotIdentity } from "../../platforms/telegram/bot-identity.js";
-import { TelegramApiError, type InlineButton, type TelegramBotApi, type TelegramUpdate } from "../../platforms/telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
+import { BotRouter, type BotUpdateHandler } from "./bot-router.js";
+import { BotIdentity } from "./bot-identity.js";
+import { TelegramApiError, type InlineButton, type TelegramBotApi, type TelegramUpdate } from "./telegram-bot-api.js";
+import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
 import { displayName, welcomeCacheKey, type WelcomeCard, type WelcomeProgress } from "./welcome-card.js";
 import { languageOf, WELCOME_TEXTS } from "./welcome-texts.js";
 
