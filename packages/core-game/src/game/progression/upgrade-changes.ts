@@ -1,4 +1,4 @@
-import type { UpgradeChange, WeaponBehavior } from "@bh/shared-types";
+import { ELEMENTS, type UpgradeChange, type WeaponBehavior } from "@bh/shared-types";
 import type { WeaponType, ResolvedWeaponLevel } from "../weapons/weapon-types";
 import type { PassiveType } from "./passives";
 
@@ -71,7 +71,20 @@ export function weaponChanges(
     if (from === to) continue;
     changes.push(change(weaponLabel(type.behavior, field), from, to, "value", field === "cooldownSec"));
   }
+
+  // Шанс состояния — у стихийного оружия главное число наравне с уроном:
+  // «шанс поджечь 15 → 17» и есть то, за что берут уровень «Очага».
+  const chance = round(next.statusChance * 100);
+  const previousChance = previous === null || previous === undefined ? null : round(previous.statusChance * 100);
+  if (chance > 0 && chance !== previousChance) {
+    changes.push(change(statusChanceLabel(next.element), previousChance, chance, "value", false));
+  }
   return changes;
+}
+
+/** Подпись шанса — глаголом стихии: «шанс поджечь», а не «шанс состояния». */
+export function statusChanceLabel(element: number): string {
+  return `upgrade.stat.statusChance.${ELEMENTS[element] ?? "physical"}`;
 }
 
 export function passiveChanges(type: PassiveType, fromLevel: number | null, toLevel: number): UpgradeChange[] {

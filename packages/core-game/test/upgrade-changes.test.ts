@@ -58,12 +58,26 @@ describe("что даёт улучшение", () => {
       "upgrade.stat.damage",
       "upgrade.stat.aura.cooldownSec",
       "upgrade.stat.aura.areaRadius",
+      "upgrade.stat.statusChance.fire",
     ]);
 
     // Второй уровень добавляет камень: у орбиты поле снарядов подписано как
     // обереги, а не как снаряды.
     const orbit = weaponChanges(weapon("wardstone"), 1, 2, 1);
     expect(labels(orbit)).toContain("upgrade.stat.orbit.projectiles");
+  });
+
+  it("у стихийного оружия — шанс состояния в процентах, подписанный глаголом стихии", () => {
+    expect(weaponChanges(weapon("hearth"), 1, 2, 1)).toContainEqual({
+      labelKey: "upgrade.stat.statusChance.fire",
+      from: 15,
+      to: 17,
+      format: "value",
+      lowerIsBetter: false,
+    });
+    expect(weaponChanges(weapon("storm"), null, 1, 1)).toContainEqual(
+      expect.objectContaining({ labelKey: "upgrade.stat.statusChance.lightning", from: null, to: 35 }),
+    );
   });
 
   it("у пассивки-множителя — процентом, у перезарядки меньше — лучше", () => {
