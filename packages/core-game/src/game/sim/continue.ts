@@ -1,4 +1,5 @@
 import type { ContinueDef } from "@bh/shared-types";
+import { clearPlayerStatuses } from "./player-status";
 import { despawnEnemy, despawnProjectile, MAX_CONTINUES_PER_RUN, TICK_SEC, type World } from "./world";
 
 /**
@@ -38,6 +39,9 @@ export function applyContinue(world: World): boolean {
   // игрока мёртвым.
   player.hp = Math.max(1, world.playerStats.maxHp * rules.restoreHpRatio);
   player.invulnerableTicks = Math.round(rules.invulnerableSec / TICK_SEC);
+  // Горение и яд, с которыми игрок умер, не переживают второй шанс: иначе он
+  // снова погиб бы от них, едва кончится неуязвимость.
+  clearPlayerStatuses(player);
   world.stats.deathCauseType = -1;
   world.stats.continueTicks[world.stats.continuesUsed] = world.stats.tick;
   world.stats.continuesUsed++;

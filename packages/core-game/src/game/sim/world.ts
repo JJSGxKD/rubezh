@@ -6,6 +6,7 @@ import type { WeaponType } from "../weapons/weapon-types";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
+import { applyPlayerStatus, playerDamageTakenMul, playerResist } from "./player-status";
 import type { SpatialGrid } from "./grid";
 import type { SimEvents } from "./events";
 import type { ViewConfig, WorldBounds } from "./map-types";
@@ -113,6 +114,21 @@ export interface PlayerState {
   alive: boolean;
   /** сколько тиков игрока ещё нельзя ранить — после второго шанса */
   invulnerableTicks: number;
+  /**
+   * Состояния от стихийных атак врагов (`sim/player-status.ts`): таймеры в
+   * секундах, урон по времени в секунду, источник — тип врага, наложившего
+   * состояние, или −1. Числами прямо в игроке: снимок забега переносит их
+   * вместе с остальным.
+   */
+  burnTimer: number;
+  burnDps: number;
+  burnSource: number;
+  chillTimer: number;
+  shockTimer: number;
+  poisonTimer: number;
+  poisonStacks: number;
+  poisonDps: number;
+  poisonSource: number;
 }
 
 export interface RunStats {
@@ -355,15 +371,20 @@ export function despawnProjectile(world: World, index: number): void {
 /**
  * Урон игроку с указанием источника. Источник нужен статистике: какой враг
  * убивает чаще всего — прямой вход геймдизайнера для баланса
- * (docs/26-stage2-plan.md, WP1, «Аналитика»).
+ * (docs/26-stage2-plan.md, WP1, «Аналитика»). И он же знает стихию атаки:
+ * касание, взрыв и снаряд врага несут стихию его типа, поэтому паттернам не
+ * нужно передавать её каждому попаданию.
  */
 export function damagePlayer(world: World, amount: number, sourceType: number): void {
   const player = world.player;
   if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
 
+  const source = sourceType >= 0 ? world.enemyTypes[sourceType] : undefined;
+  const element = source?.element ?? ELEMENT_PHYSICAL;
+  const incoming = amount * (1 - playerResist(world, element)) * playerDamageTakenMul(player);
   // Броня вычитается, но не обнуляет урон: иначе несколько уровней брони
   // делают рой безобидным, и вся кривая сложности перестаёт работать.
-  const reduced = Math.max(amount * MIN_DAMAGE_RATIO, amount - world.playerStats.armor);
+  const reduced = Math.max(incoming * MIN_DAMAGE_RATIO, incoming - world.playerStats.armor);
   // Бессмертие не глушит само попадание: разработчику нужно видеть, кто и
   // когда бьёт, иначе режим проверки телеграфов бесполезен.
   if (!world.cheats.godMode) {
@@ -383,7 +404,9 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
     player.hp = 0;
     player.alive = false;
     world.stats.deathCauseType = sourceType;
+    return;
   }
+  if (source !== undefined) applyPlayerStatus(world, element, source.statusChance, reduced, sourceType);
 }
 
 export function spawnProjectile(

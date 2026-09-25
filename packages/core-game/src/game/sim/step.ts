@@ -3,6 +3,7 @@ import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy, inflictDamage } from "./combat";
 import { isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
+import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
 import { recycleEnemyForward } from "./spawner";
@@ -47,6 +48,7 @@ export function stepWorld(world: World, input: SimInput): void {
   snapshotPositions(world);
   movePlayer(world, input, dt);
   regeneratePlayer(world, dt);
+  tickPlayerStatuses(world, dt);
   // Отставшие уносятся вперёд до перестроения сетки: сетка строится вокруг
   // игрока, и переехавший враг обязан попасть в неё уже на новом месте.
   recycleLostEnemies(world);
@@ -109,7 +111,8 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   if (!player.alive) return;
 
   const magnitude = vectorLength(input.moveX, input.moveY);
-  const speed = world.config.player.speedPxSec * world.playerStats.moveSpeedMul * world.cheats.moveSpeedMul;
+  const speed =
+    world.config.player.speedPxSec * world.playerStats.moveSpeedMul * world.cheats.moveSpeedMul * playerSlowFactor(player);
   const desiredVx = magnitude < 1e-3 ? 0 : (input.moveX / magnitude) * speed;
   const desiredVy = magnitude < 1e-3 ? 0 : (input.moveY / magnitude) * speed;
 
