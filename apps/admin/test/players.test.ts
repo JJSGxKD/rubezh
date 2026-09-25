@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { adjustWallet, fetchPlayerCard, playerCardSchema, resourceName, searchPlayers, walletAdjustProblem, WALLET_MAX_OPERATION } from "../src/api/players";
+import { adjustWallet, fetchPlayerCard, fetchSocial, playerCardSchema, rejectReferral, resourceName, searchPlayers, walletAdjustProblem, WALLET_MAX_OPERATION } from "../src/api/players";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -119,6 +119,17 @@ describe("раздел «Игроки»", () => {
     expect(walletAdjustProblem(Number.NaN, "компенсация")).not.toBeNull();
     expect(walletAdjustProblem(WALLET_MAX_OPERATION + 1, "компенсация")).not.toBeNull();
     expect(walletAdjustProblem(10, "ок")).not.toBeNull();
+  });
+
+  it("друзья и рефералка: разбор ответа и отклонение привязки с причиной", async () => {
+    const social = { friends: 3, referredBy: { referredId: ACCOUNT_ID, referrerId: "r1", referrerName: "Боб", status: "bound", boundAt: AT, activatedAt: null, rejectReason: null }, referrals: { bound: 1, activated: 2, rejected: 0 } };
+    const { fetch, calls } = fakeFetch(json(200, { data: social }), json(200, { data: { rejected: true } }));
+    const api = new AdminApi(fetch);
+    const loaded = await fetchSocial(api, ACCOUNT_ID);
+    expect(loaded.ok && loaded.data.referredBy?.referrerName).toBe("Боб");
+    await rejectReferral(api, ACCOUNT_ID, "ферма");
+    expect(calls[1]?.url).toBe(`/api/v1/admin/players/${ACCOUNT_ID}/referral/reject`);
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ reason: "ферма" });
   });
 
   it("имена ресурсов — как у игрока, неизвестный — своим id", () => {

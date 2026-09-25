@@ -7,6 +7,7 @@ import { Badge, Button, DataTable, ErrorNotice, KeyValue, Loading, Panel } from 
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { BanPanel, WalletAdjustPanel } from "./PlayerActions";
+import { SocialPanel } from "./SocialPanel";
 
 /**
  * Карточка игрока (docs/29-admin-panel.md §2, «Игроки»). Что в ней видно,
@@ -32,6 +33,7 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
             <Acquisition card={state.data} />
             <Runs card={state.data} />
             <Wallet card={state.data} />
+            <SocialPanel accountId={accountId} />
             {can(view, "players.ban") ? <BanPanel card={state.data} onChanged={reload} /> : null}
             {can(view, "players.wallet.adjust") ? <WalletAdjustPanel card={state.data} onChanged={reload} /> : null}
           </div>
