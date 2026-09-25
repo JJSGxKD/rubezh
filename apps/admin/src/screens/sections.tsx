@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+import { FunnelScreen } from "./funnel/FunnelScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
+import { ReviewScreen } from "./review/ReviewScreen";
 
 /**
  * Экраны разделов по идентификатору из `SECTIONS` (routes.ts). `id` —
@@ -7,4 +9,6 @@ import { PlayersScreen } from "./players/PlayersScreen";
  */
 export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> = {
   players: (id) => <PlayersScreen id={id} />,
+  review: () => <ReviewScreen />,
+  funnel: () => <FunnelScreen />,
 };
