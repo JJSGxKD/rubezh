@@ -76,11 +76,13 @@ export function rateStoreContract(fresh: () => Promise<{ store: RateStore; sourc
     const { store, source } = await fresh();
     const who = source("owner");
     const base = { currency: "XTR" as const, setBy: who, expiresAt: later(30 * 86_400_000), note: "" };
-    await store.appendManual(manualRate({ ...base, purpose: "price", usdPerUnit: "0.013", setAt: T0 }));
-    await store.appendManual(manualRate({ ...base, purpose: "payout", usdPerUnit: "0.0105", setAt: later(1000) }));
-    await store.appendManual(manualRate({ ...base, purpose: "price", usdPerUnit: "0.0135", setAt: later(2000) }));
+    await store.appendManual(manualRate({ ...base, purpose: "price", price: "1.72", quote: "RUB", setAt: T0 }));
+    await store.appendManual(manualRate({ ...base, purpose: "payout", price: "0.013", setAt: later(1000) }));
+    await store.appendManual(manualRate({ ...base, purpose: "price", price: "1.74", quote: "RUB", setAt: later(2000) }));
 
-    expect((await store.currentManual("XTR", "price"))?.usdPerUnit.toString()).toBe("0.0135");
-    expect((await store.currentManual("XTR", "payout"))?.usdPerUnit.toString()).toBe("0.0105");
+    expect(await store.currentManual("XTR", "price")).toMatchObject({ quote: "RUB" });
+    expect((await store.currentManual("XTR", "price"))?.price.toString()).toBe("1.74");
+    expect(await store.currentManual("XTR", "payout")).toMatchObject({ quote: "USD" });
+    expect((await store.currentManual("XTR", "payout"))?.price.toString()).toBe("0.013");
   });
 }

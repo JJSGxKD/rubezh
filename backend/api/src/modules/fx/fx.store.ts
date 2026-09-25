@@ -93,7 +93,10 @@ export class PrismaRateStore implements RateStore {
   async currentManual(currency: CurrencyCode, purpose: ManualRatePurpose): Promise<ManualRate | null> {
     const row = await this.prisma.fxManualRate.findFirst({ where: { currency, purpose }, orderBy: { setAt: "desc" } });
     if (row === null) return null;
-    return { currency, purpose, usdPerUnit: decimal(row.usdPerUnit.toFixed()), setBy: row.setBy, setAt: row.setAt, expiresAt: row.expiresAt, note: row.note };
+    // Котировка из базы — граница: незнакомая валюта значит, что строку писал
+    // кто-то мимо ядра, и доверять такому курсу нельзя.
+    if (!isCurrencyCode(row.quote)) return null;
+    return { currency, purpose, price: decimal(row.price.toFixed()), quote: row.quote, setBy: row.setBy, setAt: row.setAt, expiresAt: row.expiresAt, note: row.note };
   }
 
   async appendManual(rate: ManualRate): Promise<void> {
@@ -101,7 +104,8 @@ export class PrismaRateStore implements RateStore {
       data: {
         currency: rate.currency,
         purpose: rate.purpose,
-        usdPerUnit: rate.usdPerUnit.toFixed(),
+        price: rate.price.toFixed(),
+        quote: rate.quote,
         setBy: rate.setBy,
         setAt: rate.setAt,
         expiresAt: rate.expiresAt,

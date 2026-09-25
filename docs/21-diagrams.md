@@ -181,7 +181,8 @@ erDiagram
         uuid id PK
         string currency "только валюты площадок"
         string purpose "price — игроку, payout — нам"
-        decimal usd_per_unit
+        decimal price "цена единицы в валюте котировки"
+        string quote "USD, EUR, RUB: звезда игроку — в рублях"
         string set_by "кто поставил — и в аудите"
         datetime set_at
         datetime expires_at "просрочен — алерт и вне снимка"

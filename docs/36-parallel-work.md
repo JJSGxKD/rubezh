@@ -26,7 +26,7 @@
 |---|---|---|---|
 | Л1 | ✅ **Диета первой загрузки**: интерфейс забега и его словарь — ленивым чанком со своей строкой бюджета; первая загрузка 143 из 150 КБ, экраны меню 56 из 58 (`27-design-system-and-app-shell.md` §3.4) | `packages/app-shell`, `packages/core-game/src/index.ts`, `packages/shared-types` | место в бюджете под экраны друзей и шеринга |
 | Л2 | **Пакет токенов дизайна** `packages/design-tokens` — палитра и шкалы из `app-shell/src/design-system/tokens.*` (`29-admin-panel.md` §4) | `packages/design-tokens`, `packages/app-shell/src/design-system` | панель берёт токены из пакета, а не копией |
-| Л3 | **Курс звёзд в рублях** (Р37): заданный курс в валюте котировки, команда установки заданных курсов на сервере | `packages/fx`, `backend/api/src/modules/fx` | эндпоинт курсов для раздела курсов в панели не меняется |
+| Л3 | ✅ **Курс звёзд в рублях** (Р37): заданный курс в валюте котировки, команда установки заданных курсов на сервере | `packages/fx`, `backend/api/src/modules/fx` | эндпоинт курсов для раздела курсов в панели не меняется |
 | Л4 | **WP0 — сервер** вместе с участником 1: compose, Caddy, деплой, бэкапы, наблюдаемость | `infra/`, `.github/workflows/`, `backend/api/Dockerfile` | адрес панели и вход через виджет Telegram |
 | Л5 | **WP6, часть 2** — стихии на канве, HUD, гайдбук, враги и оружие со стихиями | `packages/core-game`, `packages/app-shell/src/screens/{run,guide}` | — |
 | Л6 | **WP7** — снаряжение, арсенал, мета, генератор случайности | `packages/core-game`, `backend/api/src/modules/items`, `packages/app-shell/src/screens/meta/arsenal*` | — |

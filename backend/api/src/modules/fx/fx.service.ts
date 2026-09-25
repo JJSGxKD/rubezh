@@ -6,6 +6,7 @@ import {
   FRESHNESS_POLICY,
   freshness,
   manualRate,
+  manualToRate,
   takeSnapshot,
   type CurrencyCode,
   type Freshness,
@@ -37,8 +38,13 @@ export interface RateView {
   freshness: Freshness;
 }
 
-export interface ManualView extends RateView {
+export interface ManualView extends Omit<RateView, "usdPerUnit" | "unitsPerUsd"> {
   purpose: ManualRatePurpose;
+  /** цена в валюте котировки — как её поставили */
+  price: string;
+  quote: CurrencyCode;
+  /** она же в долларах по текущему курсу котировки; нет курса — `null` */
+  usdPerUnit: string | null;
   setBy: string;
   expiresAt: string;
   note: string;
@@ -64,7 +70,9 @@ export interface FxOverview {
 export interface ManualInput {
   currency: CurrencyCode;
   purpose: ManualRatePurpose;
-  usdPerUnit: string;
+  /** цена единицы в валюте котировки */
+  price: string;
+  quote: CurrencyCode;
   expiresInDays: number;
   note: string;
 }
@@ -93,14 +101,7 @@ export class FxService {
       for (const purpose of ["price", "payout"] as const) {
         const rate = await this.store.currentManual(code, purpose);
         if (rate === null) continue;
-        manual.push({
-          ...view(code, rate.usdPerUnit, [`manual:${rate.setBy}`], rate.setAt),
-          freshness: freshness(rate.expiresAt, now, FRESHNESS_POLICY.platform),
-          purpose,
-          setBy: rate.setBy,
-          expiresAt: rate.expiresAt.toISOString(),
-          note: rate.note,
-        });
+        manual.push(await this.manualView(rate, now));
       }
     }
 
@@ -133,14 +134,15 @@ export class FxService {
       rate = manualRate({
         currency: input.currency,
         purpose: input.purpose,
-        usdPerUnit: input.usdPerUnit,
+        price: input.price,
+        quote: input.quote,
         setBy: actor.accountId,
         setAt: now,
         expiresAt: new Date(now.getTime() + input.expiresInDays * DAY_MS),
         note: input.note,
       });
     } catch (error: unknown) {
-      if (error instanceof RangeError) throw new ValidationError("Курс — число больше нуля");
+      if (error instanceof RangeError) throw new ValidationError(error.message);
       throw error;
     }
 
@@ -150,13 +152,24 @@ export class FxService {
       actorAccountId: actor.accountId,
       action: "fx.manual_rate",
       target: `${input.currency}:${input.purpose}`,
-      before: before === null ? null : { usdPerUnit: before.usdPerUnit.toFixed(), expiresAt: before.expiresAt.toISOString() },
-      after: { usdPerUnit: rate.usdPerUnit.toFixed(), expiresAt: rate.expiresAt.toISOString(), note: rate.note },
+      before: before === null ? null : { price: before.price.toFixed(), quote: before.quote, expiresAt: before.expiresAt.toISOString() },
+      after: { price: rate.price.toFixed(), quote: rate.quote, expiresAt: rate.expiresAt.toISOString(), note: rate.note },
     });
+    return await this.manualView(rate, now);
+  }
+
+  /** Заданный курс для панели: как поставили и сколько это в долларах сейчас. */
+  private async manualView(rate: ManualRate, now: Date): Promise<ManualView> {
+    const quoteUsd = rate.quote === BASE_CURRENCY ? new Decimal(1) : (await this.store.currentRate(rate.quote))?.usdPerUnit;
     return {
-      ...view(rate.currency, rate.usdPerUnit, [`manual:${rate.setBy}`], rate.setAt),
-      freshness: "fresh",
+      currency: rate.currency,
       purpose: rate.purpose,
+      price: rate.price.toFixed(),
+      quote: rate.quote,
+      usdPerUnit: quoteUsd === undefined ? null : manualToRate(rate, quoteUsd).usdPerUnit.toSignificantDigits(12).toFixed(),
+      sources: [`manual:${rate.setBy}`],
+      observedAt: rate.setAt.toISOString(),
+      freshness: freshness(rate.expiresAt, now, FRESHNESS_POLICY.platform),
       setBy: rate.setBy,
       expiresAt: rate.expiresAt.toISOString(),
       note: rate.note,

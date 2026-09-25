@@ -674,7 +674,9 @@ model FxManualRate {
   currency   String   @db.VarChar(8)
   /// price — цена для игрока, payout — выплата нам
   purpose    String   @db.VarChar(16)
-  usdPerUnit Decimal  @map("usd_per_unit") @db.Decimal(80, 50)
+  /// цена единицы в валюте котировки: звезда игроку — в рублях, выплата — в долларах (Р37)
+  price      Decimal  @db.Decimal(80, 50)
+  quote      String   @default("USD") @db.VarChar(8)
   setBy      String   @map("set_by") @db.VarChar(64)
   setAt      DateTime @map("set_at") @db.Timestamptz(3)
   expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)

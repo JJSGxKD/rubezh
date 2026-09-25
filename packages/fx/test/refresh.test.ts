@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { manualRate } from "../src/manual.js";
 import { MemoryRateStore } from "../src/memory-store.js";
 import { quoteInUsd, type Quote } from "../src/quote.js";
-import { convert, MissingRateError, payoutUsdPerUnit } from "../src/rates.js";
+import { Decimal } from "../src/decimal.js";
+import { convert, MissingRateError, payoutUsdPerUnit, rateOf } from "../src/rates.js";
 import { refreshRates, takeSnapshot, type RateAlerts } from "../src/refresh.js";
 import { SourceRateLimitedError, SourceUnavailableError, type RateSource } from "../src/sources.js";
 import { rateStoreContract } from "./store-contract.js";
@@ -129,8 +130,8 @@ describe("проход обновления", () => {
 
   it("просроченный заданный курс — алерт, в снимок он не попадает", async () => {
     const store = new MemoryRateStore();
-    await store.appendManual(manualRate({ currency: "XTR", purpose: "price", usdPerUnit: "0.013", setBy: "owner", setAt: at(-60 * 86_400_000), expiresAt: at(-31 * 86_400_000), note: "" }));
-    await store.appendManual(manualRate({ currency: "XTR", purpose: "payout", usdPerUnit: "0.0105", setBy: "owner", setAt: T0, expiresAt: at(30 * 86_400_000), note: "" }));
+    await store.appendManual(manualRate({ currency: "XTR", purpose: "price", price: "0.013", setBy: "owner", setAt: at(-60 * 86_400_000), expiresAt: at(-31 * 86_400_000), note: "" }));
+    await store.appendManual(manualRate({ currency: "XTR", purpose: "payout", price: "0.0105", setBy: "owner", setAt: T0, expiresAt: at(30 * 86_400_000), note: "" }));
     const alerts = alertsLog();
     await refreshRates({ sources: [], store, alerts, now: T0 });
     expect(alerts.log).toContain("stale XTR expired price");
@@ -144,11 +145,26 @@ describe("проход обновления", () => {
     const now = T0;
     const store = new MemoryRateStore();
     await refreshRates({ sources: [source("a", gram("a", "1.3"), () => now)], store, alerts: alertsLog(), now });
-    await store.appendManual(manualRate({ currency: "XTR", purpose: "price", usdPerUnit: "0.013", setBy: "owner", setAt: T0, expiresAt: at(30 * 86_400_000), note: "" }));
+    await store.appendManual(manualRate({ currency: "XTR", purpose: "price", price: "0.013", setBy: "owner", setAt: T0, expiresAt: at(30 * 86_400_000), note: "" }));
 
     const snapshot = await takeSnapshot(store, now);
     expect((await store.snapshot(snapshot.id))?.rates.size).toBe(2);
     expect(convert(50, "XTR", "GRAM", snapshot).toString()).toBe("0.5");
+  });
+});
+
+describe("курс звезды в рублях", () => {
+  it("снимок переводит его по принятому курсу рубля, без курса рубля звезды нет", async () => {
+    const store = new MemoryRateStore();
+    await store.appendManual(manualRate({ currency: "XTR", purpose: "price", price: "1.72", quote: "RUB", setBy: "owner", setAt: T0, expiresAt: at(90 * 86_400_000), note: "" }));
+    const withoutRub = await takeSnapshot(store, T0);
+    expect(withoutRub.rates.has("XTR")).toBe(false);
+
+    await store.setCurrentRate(rateOf("RUB", new Decimal(1).div("84.6952"), ["cbr"], T0), T0);
+    const snapshot = await takeSnapshot(store, T0);
+    expect(snapshot.rates.get("XTR")?.usdPerUnit.toDecimalPlaces(5).toString()).toBe("0.02031");
+    // 0,99 $ — 48,7 звезды: пересчёт по звезде в рублях
+    expect(convert("0.99", "USD", "XTR", snapshot).toDecimalPlaces(1).toString()).toBe("48.7");
   });
 });
 
