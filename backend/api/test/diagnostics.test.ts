@@ -22,6 +22,8 @@ import { runSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js"
 import { submitRunReportSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { launchFor } from "./helpers/init-data.js";
+import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
+import { LaunchVerifiers } from "../src/platforms/ports/launch-verifier.js";
 
 // Приёмник отчётов диагностики (docs/28-diagnostics.md §5).
 
@@ -76,6 +78,7 @@ describe("приёмник отчётов диагностики", () => {
         { provide: DIAGNOSTICS_REPOSITORY, useValue: repository },
         { provide: DiagnosticsHooks, useValue: hooks },
         RateLimiter,
+        { provide: LaunchVerifiers, useValue: launchVerifiersFor(config) },
         IngestGuard,
         DiagnosticsService,
       ],

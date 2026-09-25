@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify, errors } from "jose";
 import { z } from "zod";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 
 /**
  * Токен доступа: подписанный JWT, который проверяется без обращения к
@@ -27,7 +28,8 @@ import { z } from "zod";
 export const TOKEN_ISSUER = "rubezh";
 const ALGORITHM = "HS256";
 
-export type AccountPlatform = "telegram" | "max" | "vk" | "web";
+/** Площадка аккаунта — тот же список, что у портов площадок. */
+export type AccountPlatform = PlatformId;
 
 export interface AccessTokenClaims {
   accountId: string;

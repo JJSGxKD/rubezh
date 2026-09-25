@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import { chatFields, isChatTarget, parseChatTarget, sameChat } from "../src/modules/telegram/chat-target.js";
+import { chatFields, isChatTarget, parseChatTarget, sameChat } from "../src/platforms/telegram/chat-target.js";
 
 // Адрес чата: id или id:тема (docs/20-env-and-ports.md §3). У каждого потока
 // уведомлений свой адрес, пустой — берётся общий.

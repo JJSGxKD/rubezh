@@ -5,6 +5,7 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { createQueueConnection } from "../../infra/queues.js";
+import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import { RunsHooks } from "../runs/runs-hooks.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "./payment-confirmation.js";
 import { PaymentRefunds } from "./payment-refunds.js";
@@ -53,11 +54,12 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     private readonly confirmation: PaymentConfirmation,
     private readonly refunds: PaymentRefunds,
     private readonly runsHooks: RunsHooks,
+    private readonly providers: PaymentProviders,
   ) {}
 
-  /** Оплату есть куда записать и есть кому о ней сообщить: база и бот, читающий обновления. */
+  /** Оплату есть куда записать и есть кому о ней сообщить: база и площадка, которая присылает подтверждения. */
   get enabled(): boolean {
-    return this.config.auth.enabled && this.config.telegram.updates !== "off";
+    return this.config.auth.enabled && this.providers.anyConfirms;
   }
 
   onModuleInit(): void {
@@ -156,10 +158,10 @@ function fingerprint(chargeId: string): string {
 function describeJob(job: PaymentsJob): Record<string, unknown> {
   if (job.kind === "refund") {
     const { order } = job;
-    return { kind: job.kind, chargeId: order.chargeId, purchaseId: order.purchaseId, userId: order.userId, reason: order.reason };
+    return { kind: job.kind, platform: order.platform, chargeId: order.chargeId, purchaseId: order.purchaseId, payerId: order.payerId, reason: order.reason };
   }
   const { payment } = job;
-  return { kind: job.kind, chargeId: payment.chargeId, purchaseId: payment.payload, userId: payment.userId, stars: payment.totalAmount };
+  return { kind: job.kind, platform: payment.platform, chargeId: payment.chargeId, purchaseId: payment.payload, payerId: payment.payerId, amount: payment.totalAmount };
 }
 
 function reasonOf(error: unknown): string {

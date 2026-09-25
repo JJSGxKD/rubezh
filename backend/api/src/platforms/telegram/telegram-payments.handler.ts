@@ -1,13 +1,14 @@
 import { Injectable, type OnModuleInit } from "@nestjs/common";
-import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
-import type { TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { PaymentConfirmation } from "./payment-confirmation.js";
-import { PaymentsQueue } from "./payments-queue.js";
+import { PaymentConfirmation } from "../../modules/payments/payment-confirmation.js";
+import { PaymentsQueue } from "../../modules/payments/payments-queue.js";
+import { BotRouter, type BotUpdateHandler } from "./bot-router.js";
+import type { TelegramUpdate } from "./telegram-bot-api.js";
 
 /**
- * Обновления оплаты от Telegram — в общем маршрутизаторе бота рядом с
+ * Что Telegram сообщает об оплате — в общем маршрутизаторе бота рядом с
  * командами: откуда пришло обновление, опросом или вебхуком, оплате всё
- * равно.
+ * равно. Обработчик только переводит обновление в вызов домена оплаты: что
+ * с ним делать, решает домен.
  *
  * Зарегистрирован, даже когда продажа выключена (`PAYMENTS_ENABLED=false`):
  * по старой ссылке на счёт игрок может дойти до оплаты и после выключения, и
@@ -15,7 +16,7 @@ import { PaymentsQueue } from "./payments-queue.js";
  * записаться. Не зарегистрирован без базы: оплату некуда записать.
  */
 @Injectable()
-export class PaymentsBotHandler implements BotUpdateHandler, OnModuleInit {
+export class TelegramPaymentsHandler implements BotUpdateHandler, OnModuleInit {
   readonly name = "payments";
 
   constructor(
@@ -32,8 +33,9 @@ export class PaymentsBotHandler implements BotUpdateHandler, OnModuleInit {
     const query = update.pre_checkout_query;
     if (query !== undefined) {
       await this.confirmation.answerCheckout({
+        platform: "telegram",
         queryId: query.id,
-        fromUserId: query.from.id,
+        payerId: String(query.from.id),
         currency: query.currency,
         totalAmount: query.total_amount,
         payload: query.invoice_payload,
@@ -45,10 +47,11 @@ export class PaymentsBotHandler implements BotUpdateHandler, OnModuleInit {
     if (message?.successful_payment !== undefined) {
       const payment = message.successful_payment;
       await this.queue.confirm({
+        platform: "telegram",
         chargeId: payment.telegram_payment_charge_id,
         payload: payment.invoice_payload,
         // Оплата приходит в личный чат с игроком: без отправителя его id — это id чата.
-        userId: message.from?.id ?? message.chat.id,
+        payerId: String(message.from?.id ?? message.chat.id),
         currency: payment.currency,
         totalAmount: payment.total_amount,
       });

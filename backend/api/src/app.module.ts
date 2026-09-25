@@ -1,20 +1,22 @@
 import { Module } from "@nestjs/common";
 import { AppConfigModule } from "./config/config.module.js";
+import { PlatformsModule } from "./platforms/platforms.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { RolesModule } from "./modules/roles/roles.module.js";
 import { RunsModule } from "./modules/runs/runs.module.js";
 import { DatabaseModule } from "./infra/database.js";
 import { RedisModule } from "./infra/redis.js";
 import { AdminNotifyModule } from "./modules/admin-notify/admin-notify.module.js";
-import { BotModule } from "./modules/bot/bot.module.js";
+import { BotModule } from "./platforms/telegram/bot.module.js";
 import { DiagnosticsModule } from "./modules/diagnostics/diagnostics.module.js";
 import { FeedbackModule } from "./modules/feedback/feedback.module.js";
 import { EventsModule } from "./modules/events/events.module.js";
 import { ExportModule } from "./modules/export/export.module.js";
 import { IngestModule } from "./modules/ingest/ingest.module.js";
-import { TelegramModule } from "./modules/telegram/telegram.module.js";
+import { TelegramModule } from "./platforms/telegram/telegram.module.js";
 import { WelcomeModule } from "./modules/welcome/welcome.module.js";
 import { PaymentsModule } from "./modules/payments/payments.module.js";
+import { TelegramPaymentsModule } from "./platforms/telegram/telegram-payments.module.js";
 import { AttributionModule } from "./modules/attribution/attribution.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
@@ -33,9 +35,38 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * runs — забеги под аккаунтом и рейтинг на них (там же, WP4);
  * payments — второй шанс за Telegram Stars (там же, WP5);
  * attribution — сессии, первое и последнее касание (там же, WP6).
+ *
+ * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
+ */
+export const APP_MODULES = [
+  RedisModule,
+  DatabaseModule,
+  PlatformsModule,
+  IngestModule,
+  TelegramModule,
+  RolesModule,
+  AuthModule,
+  AttributionModule,
+  RunsModule,
+  PaymentsModule,
+  TelegramPaymentsModule,
+  BotModule,
+  EventsModule,
+  DiagnosticsModule,
+  FeedbackModule,
+  AdminNotifyModule,
+  ExportModule,
+  WelcomeModule,
+  PlaytestModule,
+];
+
+/**
+ * Приложение — это модули выше и конфигурация из окружения. Список вынесен,
+ * чтобы тест старта собирал то же приложение со своей конфигурацией, не
+ * читая `.env` разработчика (`test/app-boot.integration.test.ts`).
  */
 @Module({
-  imports: [AppConfigModule, RedisModule, DatabaseModule, IngestModule, TelegramModule, RolesModule, AuthModule, AttributionModule, RunsModule, PaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
+  imports: [AppConfigModule, ...APP_MODULES],
   controllers: [HealthController],
 })
 export class AppModule {}

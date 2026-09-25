@@ -6,6 +6,7 @@ import type { AccountPlatform } from "../auth/access-token.js";
 import { isDeveloperAccount } from "../auth/dev-login.js";
 import { permissionsOf, type Permission, type Role } from "./permissions.js";
 import { ROLES_REPOSITORY, type AuditEntry, type RolesRepository } from "./roles.repository.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 
 /**
  * Кто что может (docs/34-stage3-plan.md, WP2).
@@ -25,7 +26,7 @@ import { ROLES_REPOSITORY, type AuditEntry, type RolesRepository } from "./roles
 
 export interface AccountRef {
   accountId: string;
-  platform: string;
+  platform: PlatformId;
   platformUserId: string;
 }
 
@@ -65,7 +66,7 @@ export class RolesService {
   async canByPlatformUser(platform: string, platformUserId: string, permission: Permission): Promise<boolean> {
     const account = await this.accounts.byPlatformUser(platform as AccountPlatform, platformUserId);
     if (account !== null) {
-      return await this.can({ accountId: account.accountId, platform, platformUserId }, permission);
+      return await this.can({ accountId: account.accountId, platform: account.platform, platformUserId }, permission);
     }
     if (!(await this.isEnvAdminWithoutOwner(platform, platformUserId))) return false;
     return permissionsOf(["owner"]).has(permission);

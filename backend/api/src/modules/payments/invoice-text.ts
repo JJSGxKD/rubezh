@@ -1,9 +1,9 @@
-import type { StarsInvoice } from "../telegram/telegram-bot-api.js";
+import type { ProviderInvoice } from "../../platforms/ports/payment-provider.js";
 import { startedMinutes } from "./continue-price.js";
 import type { PaymentMode } from "./purchase-types.js";
 
 /**
- * Что игрок видит в окне оплаты Telegram. Окно рисует Telegram, а не игра,
+ * Что игрок видит в окне оплаты площадки. Окно рисует площадка, а не игра,
  * поэтому тестовую оплату приходится называть прямо здесь: иначе через месяц
  * никто не вспомнит, почему продолжение на двадцатой минуте стоило одну
  * звезду (docs/34-stage3-plan.md, Р14).
@@ -19,7 +19,7 @@ export interface ContinueInvoiceInput {
 
 const LABEL = "Второй шанс";
 
-export function continueInvoice(input: ContinueInvoiceInput): StarsInvoice {
+export function continueInvoice(input: ContinueInvoiceInput): ProviderInvoice {
   const minute = startedMinutes(input.elapsedSec);
   if (input.mode === "test") {
     return {
@@ -27,7 +27,7 @@ export function continueInvoice(input: ContinueInvoiceInput): StarsInvoice {
       description: `Тестовая оплата: списывается ${input.chargedStars} ⭐ и сразу возвращается. Настоящая цена — ${input.priceStars} ⭐.`,
       payload: input.purchaseId,
       label: LABEL,
-      stars: input.chargedStars,
+      amount: input.chargedStars,
     };
   }
   return {
@@ -35,6 +35,6 @@ export function continueInvoice(input: ContinueInvoiceInput): StarsInvoice {
     description: `Продолжить забег с ${minute}-й минуты: враги уходят с поля, здоровье возвращается.`,
     payload: input.purchaseId,
     label: LABEL,
-    stars: input.chargedStars,
+    amount: input.chargedStars,
   };
 }

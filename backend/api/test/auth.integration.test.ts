@@ -11,6 +11,7 @@ import { AuthHooks } from "../src/modules/auth/auth-hooks.js";
 import { AuthService } from "../src/modules/auth/auth.service.js";
 import { RedisRefreshStore } from "../src/modules/auth/redis-refresh.store.js";
 import { launchFor } from "./helpers/init-data.js";
+import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
 
 /**
  * Вход на настоящих Postgres и Redis (docs/17-testing-strategy.md §4.2).
@@ -48,7 +49,7 @@ describe.skipIf(!live)("вход на живых Postgres и Redis", () => {
     prisma = createPrisma(config);
     redis = createRedis(config);
     await redis.connect();
-    service = new AuthService(config, new PrismaAccountRepository(prisma), new RedisRefreshStore(redis, config), new AuthHooks());
+    service = new AuthService(config, new PrismaAccountRepository(prisma), new RedisRefreshStore(redis, config), new AuthHooks(), launchVerifiersFor(config));
   });
 
   afterAll(async () => {
@@ -59,8 +60,8 @@ describe.skipIf(!live)("вход на живых Postgres и Redis", () => {
   it("первый вход заводит аккаунт, второй находит тот же", async () => {
     const id = telegramId();
 
-    const first = await service.loginWithTelegram(launchFor(id, BOT_TOKEN));
-    const second = await service.loginWithTelegram(launchFor(id, BOT_TOKEN));
+    const first = await service.loginWithLaunch("telegram", launchFor(id, BOT_TOKEN));
+    const second = await service.loginWithLaunch("telegram", launchFor(id, BOT_TOKEN));
 
     expect(first.account.created).toBe(true);
     expect(second.account.created).toBe(false);
@@ -69,9 +70,9 @@ describe.skipIf(!live)("вход на живых Postgres и Redis", () => {
 
   it("имя обновляется на каждом входе: игрок сменил его в Telegram", async () => {
     const id = telegramId();
-    await service.loginWithTelegram(launchFor(id, BOT_TOKEN, Date.now(), "Анна"));
+    await service.loginWithLaunch("telegram", launchFor(id, BOT_TOKEN, Date.now(), "Анна"));
 
-    const renamed = await service.loginWithTelegram(launchFor(id, BOT_TOKEN, Date.now(), "Анна Петрова"));
+    const renamed = await service.loginWithLaunch("telegram", launchFor(id, BOT_TOKEN, Date.now(), "Анна Петрова"));
 
     expect(renamed.account.displayName).toBe("Анна Петрова");
   });
@@ -92,7 +93,7 @@ describe.skipIf(!live)("вход на живых Postgres и Redis", () => {
   it("тот же идентификатор на другой площадке — другой аккаунт", async () => {
     // Аккаунты между площадками не связываются (docs/08-web-and-identity.md §3).
     const id = String(telegramId());
-    const telegram = await service.loginWithTelegram(launchFor(Number(id), BOT_TOKEN));
+    const telegram = await service.loginWithLaunch("telegram", launchFor(Number(id), BOT_TOKEN));
     const max = await prisma.account.create({
       data: { accountId: randomUUID(), platform: "max", platformUserId: id, displayName: "Тот же человек" },
     });
@@ -101,7 +102,7 @@ describe.skipIf(!live)("вход на живых Postgres и Redis", () => {
   });
 
   it("вход, продление и выход проходят целиком", async () => {
-    const login = await service.loginWithTelegram(launchFor(telegramId(), BOT_TOKEN));
+    const login = await service.loginWithLaunch("telegram", launchFor(telegramId(), BOT_TOKEN));
 
     const renewed = await service.refreshSession(login.refreshToken);
     await service.logout(renewed.refreshToken);

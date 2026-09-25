@@ -9,10 +9,10 @@ import {
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
-import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
-import { sameChat, type ChatTarget } from "../telegram/chat-target.js";
-import { TelegramApiError, type TelegramBotApi, type TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
+import { BotRouter, type BotUpdateHandler } from "../../platforms/telegram/bot-router.js";
+import { sameChat, type ChatTarget } from "../../platforms/telegram/chat-target.js";
+import { TelegramApiError, type TelegramBotApi, type TelegramUpdate } from "../../platforms/telegram/telegram-bot-api.js";
+import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
 import { dayKey } from "./playtest-stats.store.js";
 import { PlaytestStatsService } from "./playtest-stats.service.js";
 

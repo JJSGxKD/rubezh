@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import { BotRouter } from "../src/modules/bot/bot-router.js";
-import { BotIdentity } from "../src/modules/telegram/bot-identity.js";
-import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
-import { TelegramApiError, type SendOptions, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { BotRouter } from "../src/platforms/telegram/bot-router.js";
+import { BotIdentity } from "../src/platforms/telegram/bot-identity.js";
+import { chatTargetOf } from "../src/platforms/telegram/chat-target.js";
+import { TelegramApiError, type SendOptions, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import {
   displayName,
   renderWelcomePng,

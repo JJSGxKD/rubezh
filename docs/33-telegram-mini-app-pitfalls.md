@@ -34,7 +34,7 @@
 токен бота, удобно для сторонних сервисов). Подпись там в base64url без
 выравнивания: в части языков `=` приходится дописывать вручную.
 
-**У нас.** Сделано: `backend/api/src/modules/telegram/telegram-init-data.ts`
+**У нас.** Сделано: `backend/api/src/platforms/telegram/telegram-init-data.ts`
 (HMAC, `timingSafeEqual`). Клиент идентификатор игрока из `initDataUnsafe`
 как источник истины не использует.
 

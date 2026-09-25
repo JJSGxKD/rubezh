@@ -124,3 +124,45 @@ describe("границы слоёв", () => {
     }
   });
 });
+
+/**
+ * Бэкенд: домен не знает, на какой он площадке (docs/35-stage4-plan.md, Р22,
+ * §3.11). Доменные модули просят порты из `platforms/ports`, адаптеры живут в
+ * `platforms/<площадка>`. Модуль считается доменным по умолчанию — новый не
+ * проскочит мимо правила, — а исключения названы поимённо.
+ */
+const BACKEND_MODULES = "backend/api/src/modules";
+
+/**
+ * Инструменты команды, а не игра: карточки отчётов, сводка, выгрузка и
+ * отзывы живут в чате администраторов в Telegram, и порт им не нужен.
+ * `welcome` — ответ бота на `/start`; он уйдёт за порт входа в канал вместе с
+ * воронкой (WP2).
+ */
+const TEAM_TOOLS = new Set(["admin-notify", "export", "feedback", "playtest", "welcome"]);
+
+/** Импорт адаптера площадки — `../../platforms/telegram/…` и старый `../telegram/…` — или библиотеки Bot API. */
+const PLATFORM_ADAPTER = /from ["'][./]*(?:platforms\/)?(?:telegram|max|vk)\/|["']grammy["']/;
+
+describe("границы бэкенда", () => {
+  const modules = readdirSync(join(ROOT, BACKEND_MODULES)).filter((name) => statSync(join(ROOT, BACKEND_MODULES, name)).isDirectory());
+
+  it("вообще находит модули, а исключения — существуют", () => {
+    expect(modules.length).toBeGreaterThan(8);
+    for (const tool of TEAM_TOOLS) expect(modules, `исключение ${tool} больше не модуль — убрать из списка`).toContain(tool);
+  });
+
+  for (const name of modules.filter((module) => !TEAM_TOOLS.has(module))) {
+    it(`модуль ${name} говорит с площадкой только через порты`, () => {
+      for (const { path, source } of collect(`${BACKEND_MODULES}/${name}`)) {
+        expect(source, shown(path)).not.toMatch(PLATFORM_ADAPTER);
+      }
+    });
+  }
+
+  it("порты не знают ни адаптеров, ни домена: это контракт, а не реализация", () => {
+    for (const { path, source } of collect("backend/api/src/platforms/ports")) {
+      expect(source, shown(path)).not.toMatch(/from ["']\.\.\/(?:telegram|max|vk)\/|["'](?:\.\.\/)+modules\//);
+    }
+  });
+});

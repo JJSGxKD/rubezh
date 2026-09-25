@@ -3,7 +3,8 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, ForbiddenError, UnauthorizedError, ValidationError } from "../../common/domain-error.js";
 import { parseStartParam, type StartParam } from "../attribution/start-param.js";
-import { verifyInitData } from "../telegram/telegram-init-data.js";
+import { LaunchVerifiers } from "../../platforms/ports/launch-verifier.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 import { ACCOUNT_REPOSITORY, type Account, type AccountRepository } from "./account.repository.js";
 import { secretKey, signAccessToken } from "./access-token.js";
 import { AuthHooks, PLAIN_LOGIN, type LoginContext } from "./auth-hooks.js";
@@ -49,24 +50,32 @@ export class AuthService {
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     @Inject(REFRESH_STORE) private readonly refresh: RefreshStore,
     private readonly hooks: AuthHooks,
+    private readonly launches: LaunchVerifiers,
   ) {}
 
-  /** Вход по подписанным данным запуска Telegram. */
-  async loginWithTelegram(initData: string, context: LoginContext = PLAIN_LOGIN, nowMs = Date.now()): Promise<LoginResult> {
-    const check = verifyInitData(initData, this.config.telegram.botToken, this.config.auth.initDataMaxAgeSec, nowMs);
+  /**
+   * Вход по подписанным данным запуска площадки. Как проверяется подпись,
+   * решает адаптер площадки (docs/35-stage4-plan.md, §3.11); сервису важно
+   * только, кто играет и откуда пришёл.
+   */
+  async loginWithLaunch(platform: PlatformId, launchData: string, context: LoginContext = PLAIN_LOGIN, nowMs = Date.now()): Promise<LoginResult> {
+    const verifier = this.launches.for(platform);
+    const check = verifier === null
+      ? ({ ok: false, reason: "unsupported" } as const)
+      : verifier.verify(launchData, this.config.auth.initDataMaxAgeSec, nowMs);
     if (!check.ok) {
       // Причины не раскрываем подробнее, чем нужно клиенту: истекло — открыть
       // заново, остальное — не наш игрок.
       throw new UnauthorizedError(
         check.reason === "expired"
           ? "Данные запуска устарели — откройте игру заново"
-          : "Данные запуска Telegram не прошли проверку",
+          : "Данные запуска не прошли проверку",
       );
     }
 
     const account = await this.accounts.upsert(
       {
-        platform: "telegram",
+        platform,
         platformUserId: check.player.id,
         displayName: check.player.name,
         username: check.player.username,

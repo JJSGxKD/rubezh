@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { BotRouter } from "../src/modules/bot/bot-router.js";
+import { BotRouter } from "../src/platforms/telegram/bot-router.js";
 import {
   PlaytestStatsReporter,
   dailyReportDay,
@@ -9,8 +9,8 @@ import {
   type StatsReporterLocks,
 } from "../src/modules/playtest/playtest-stats.reporter.js";
 import { PlaytestStatsService } from "../src/modules/playtest/playtest-stats.service.js";
-import { chatTargetOf, type ChatRef } from "../src/modules/telegram/chat-target.js";
-import { TelegramApiError, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { chatTargetOf, type ChatRef } from "../src/platforms/telegram/chat-target.js";
+import { TelegramApiError, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
 import { MemoryLeaderboardStore } from "./helpers/memory-runs.js";
 

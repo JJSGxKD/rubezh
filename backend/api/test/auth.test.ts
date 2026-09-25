@@ -9,6 +9,7 @@ import { AuthService, hashToken } from "../src/modules/auth/auth.service.js";
 import { parseDevUser } from "../src/modules/auth/dev-login.js";
 import { MemoryAccountRepository, MemoryRefreshStore } from "./helpers/memory-auth.js";
 import { launchFor, signInitData } from "./helpers/init-data.js";
+import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
 
 /**
  * Вход и сессии (docs/34-stage3-plan.md, WP1).
@@ -78,11 +79,11 @@ describe("вход и продление сессии", () => {
   beforeEach(() => {
     accounts = new MemoryAccountRepository();
     refresh = new MemoryRefreshStore();
-    service = new AuthService(config(), accounts, refresh, new AuthHooks());
+    service = new AuthService(config(), accounts, refresh, new AuthHooks(), launchVerifiersFor(config()));
   });
 
   it("заводит аккаунт по подписанным данным запуска", async () => {
-    const result = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const result = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
 
     expect(result.account.platformUserId).toBe("555");
     expect(result.account.created).toBe(true);
@@ -90,15 +91,15 @@ describe("вход и продление сессии", () => {
   });
 
   it("второй вход — тот же аккаунт, а не новый", async () => {
-    const first = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
-    const second = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const first = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
+    const second = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
 
     expect(second.account.accountId).toBe(first.account.accountId);
     expect(second.account.created).toBe(false);
   });
 
   it("подделанную подпись не пускает", async () => {
-    await expect(service.loginWithTelegram(launchFor(555, "999:ЧУЖОЙ"))).rejects.toThrow(DomainError);
+    await expect(service.loginWithLaunch("telegram", launchFor(555, "999:ЧУЖОЙ"))).rejects.toThrow(DomainError);
   });
 
   it("данные запуска старше окна не пускает", async () => {
@@ -107,18 +108,18 @@ describe("вход и продление сессии", () => {
       BOT_TOKEN,
     );
 
-    await expect(service.loginWithTelegram(stale)).rejects.toThrow(/устарели/);
+    await expect(service.loginWithLaunch("telegram", stale)).rejects.toThrow(/устарели/);
   });
 
   it("заблокированный аккаунт не входит", async () => {
-    const { account } = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const { account } = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
     accounts.ban(account.accountId, "Читы в забегах");
 
-    await expect(service.loginWithTelegram(launchFor(555, BOT_TOKEN))).rejects.toThrow(/Читы/);
+    await expect(service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN))).rejects.toThrow(/Читы/);
   });
 
   it("продление выдаёт новую пару и гасит старую", async () => {
-    const login = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const login = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
 
     const renewed = await service.refreshSession(login.refreshToken);
 
@@ -128,7 +129,7 @@ describe("вход и продление сессии", () => {
   });
 
   it("повторное использование погашенного сбрасывает все сессии аккаунта", async () => {
-    const login = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const login = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
     const renewed = await service.refreshSession(login.refreshToken);
 
     // Украденный токен: им уже воспользовались, и второй раз он приходит от
@@ -138,7 +139,7 @@ describe("вход и продление сессии", () => {
   });
 
   it("упавший выпуск новой пары возвращает старый токен: иначе игрок заперт", async () => {
-    const login = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const login = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
     refresh.failIssue = true;
 
     await expect(service.refreshSession(login.refreshToken)).rejects.toThrow("хранилище недоступно");
@@ -149,7 +150,7 @@ describe("вход и продление сессии", () => {
   });
 
   it("выход гасит токен этого устройства", async () => {
-    const login = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const login = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
 
     await service.logout(login.refreshToken);
 
@@ -157,15 +158,15 @@ describe("вход и продление сессии", () => {
   });
 
   it("выход со всех устройств гасит все сессии аккаунта", async () => {
-    const first = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
-    await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const first = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
+    await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
 
     expect(await service.logoutEverywhere(first.account.accountId)).toBe(2);
     expect(refresh.liveCount).toBe(0);
   });
 
   it("в хранилище уходит хэш, а не сам токен: слепок базы не даёт входа", async () => {
-    const login = await service.loginWithTelegram(launchFor(555, BOT_TOKEN));
+    const login = await service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN));
 
     expect(hashToken(login.refreshToken)).toMatch(/^[0-9a-f]{64}$/);
     expect(hashToken(login.refreshToken)).not.toBe(login.refreshToken);
@@ -215,7 +216,7 @@ describe("вход разработчика без Telegram", () => {
   });
 
   it("заводит аккаунт и выдаёт обычную сессию", async () => {
-    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks());
+    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks(), launchVerifiersFor(config(DEV)));
 
     const result = await service.loginAsDeveloper("dev-1:Проверка");
 
@@ -224,13 +225,13 @@ describe("вход разработчика без Telegram", () => {
   });
 
   it("выключенный вход не пускает, даже если контроллер пропустил", async () => {
-    const service = new AuthService(config({ NODE_ENV: "development" }), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks());
+    const service = new AuthService(config({ NODE_ENV: "development" }), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks(), launchVerifiersFor(config({ NODE_ENV: "development" })));
 
     await expect(service.loginAsDeveloper("dev-1:Проверка")).rejects.toMatchObject({ code: "endpoint_disabled" });
   });
 
   it("битое имя — ошибка разбора, а не аккаунт", async () => {
-    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks());
+    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks(), launchVerifiersFor(config(DEV)));
 
     await expect(service.loginAsDeveloper("555:Чужой")).rejects.toMatchObject({ code: "validation_failed" });
   });

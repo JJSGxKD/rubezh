@@ -705,11 +705,12 @@ flowchart LR
         ADS["ads<br/>сессии показа, награды"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
-        INGEST["ingest<br/>выключатели, Origin, лимиты,<br/>подпись initData, реализовано"]
+        INGEST["ingest<br/>выключатели, Origin, лимиты,<br/>подпись запуска, реализовано"]
         EVENTS["events<br/>приём событий, реализовано"]
         DIAG["diagnostics<br/>отчёты стресс-теста, реализовано"]
         PT["playtest<br/>сводка, запуски, доступ<br/>закрытого теста, реализовано"]
-        BOT["bot<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
+        BOT["platforms/telegram: бот<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
+        TGADP["platforms/telegram: адаптер<br/>проверка запуска, оплата Stars,<br/>обновления оплаты, реализовано"]
         WELCOME["welcome<br/>/start с карточкой, реализовано"]
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
@@ -752,18 +753,22 @@ flowchart LR
     RUNS -. слушатели записанного забега .-> NOTIFY
     PT -. рейтинг и профиль аккаунта .-> RUNS
     NOTIFY --> QUEUE
-    PAY -- answerPreCheckoutQuery --> TGAPI
     TGAPI -- вебхук --> CADDY
     CADDY --> BOT
     BOT --> WELCOME
     BOT --> PT
     BOT --> EXPORT
-    BOT -- проверка и подтверждение оплаты --> PAY
+    BOT -- обновления оплаты --> TGADP
+    TGADP -- проверка и подтверждение оплаты --> PAY
+    PAY -- порт оплаты --> TGADP
+    AUTH -- порт проверки запуска --> TGADP
+    INGEST -- порт проверки запуска --> TGADP
+    TGADP -- createInvoiceLink, answerPreCheckoutQuery, refundStarPayment --> TGAPI
     PAY --> QUEUE
     WELCOME -. рекорд и место .-> PT
     EXPORT --> QUEUE
     EXPORT --> PG
-    QUEUE -- sendPhoto, sendDocument, refundStarPayment --> TGAPI
+    QUEUE -- sendPhoto, sendDocument --> TGAPI
 
     AUTH --> PG
     AUTH --> REDIS
@@ -776,7 +781,6 @@ flowchart LR
     PAY -. забег, который продолжают .-> RUNS
     RUNS -. сверка продолжений с покупками .-> PAY
     RUNS -. слушатели записанного забега .-> PAY
-    PAY -- createInvoiceLink --> TGAPI
     ADS --> REDIS
     REF --> PG
     CONTENT --> PG
@@ -787,6 +791,13 @@ flowchart LR
 
     TG -.статика и конфиг.-> CDN
 ```
+
+**Площадка — за портами** (`35-stage4-plan.md`, Р22, §3.11): модули домена —
+вход, приёмник, оплата — не знают Telegram, а просят порты
+`platforms/ports/`. Как проверяется подпись запуска, как выставляется счёт
+и что значит ответ Bot API, знает адаптер `platforms/telegram/`; у MAX и VK
+— заглушки. Бот и инструменты команды в чате администраторов порта не
+требуют: это наш инструмент, а не игра.
 
 Читается так: **Postgres — источник истины, Redis — проекция.** Приём забега
 пишет его в базу одной строкой по первичному ключу и только потом — место в
@@ -1200,7 +1211,7 @@ flowchart TD
 команде или раз в сутки (`26-stage2-plan.md`, WP14). Забеги сводка получает
 слушателем записанного забега из модуля `runs` (§4.2), рекорды — из его
 рейтинга; игроков считает по аккаунту. Обновления читает модуль
-бота (`backend/api/src/modules/bot`) long polling'ом — у машины разработчика
+бота (`backend/api/src/platforms/telegram`) long polling'ом — у машины разработчика
 нет адреса для вебхука из §4.9 — и передаёт их обработчикам команд; `/stats`
 регистрирует сводка плейтеста.
 

@@ -9,8 +9,8 @@ import { benchSummaryOf, runSummaryOf } from "../src/modules/diagnostics/diagnos
 import type { DiagnosticsRepository, StoredBenchReport, StoredRunReport } from "../src/modules/diagnostics/diagnostics.repository.js";
 import { submitBenchReportSchema } from "../src/modules/diagnostics/dto/bench-report.dto.js";
 import { submitRunReportSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
-import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
-import { TelegramApiError } from "../src/modules/telegram/telegram-bot-api.js";
+import { chatTargetOf } from "../src/platforms/telegram/chat-target.js";
+import { TelegramApiError } from "../src/platforms/telegram/telegram-bot-api.js";
 import { benchSubmission, DEVICE, REPORT_ID } from "./helpers/bench-report.js";
 import { runBucket, runSubmission, RUN_REPORT_ID, type RunPatch } from "./helpers/run-report.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";

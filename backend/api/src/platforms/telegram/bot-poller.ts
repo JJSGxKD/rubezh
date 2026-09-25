@@ -4,8 +4,8 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleD
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
-import { TelegramApiError, type TelegramBotApi, type TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
+import { TelegramApiError, type TelegramBotApi, type TelegramUpdate } from "./telegram-bot-api.js";
+import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
 import { BotRouter } from "./bot-router.js";
 
 /**

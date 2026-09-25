@@ -14,6 +14,7 @@ import type { Redis } from "ioredis";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { launchFor, signInitData } from "./helpers/init-data.js";
 import { MemoryAccountRepository, MemoryRefreshStore } from "./helpers/memory-auth.js";
+import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
 
 /**
  * Сессии и атрибуция (docs/34-stage3-plan.md, WP6). Проверяется то, где запись
@@ -168,21 +169,21 @@ describe("вход и сессия", () => {
     hooks.onLogin("test", async (event) => void heard.push(event));
     // Слушатель, который не отвечает никогда: вход обязан пройти и без него.
     hooks.onLogin("stuck", () => new Promise<void>(() => undefined));
-    const service = new AuthService(config(), new MemoryAccountRepository(), new MemoryRefreshStore(), hooks);
+    const service = new AuthService(config(), new MemoryAccountRepository(), new MemoryRefreshStore(), hooks, launchVerifiersFor(config()));
     const initData = signInitData(
       { auth_date: String(Math.floor(Date.now() / 1000) - 60), user: JSON.stringify({ id: 555_000_111, first_name: "Анна" }), start_param: "c-Ab12Cd34" },
       BOT_TOKEN,
     );
 
-    const result = await service.loginWithTelegram(initData, { ip: "203.0.113.57", userAgent: null, client: null, reason: "launch" });
+    const result = await service.loginWithLaunch("telegram", initData, { ip: "203.0.113.57", userAgent: null, client: null, reason: "launch" });
 
     expect(result.startParam).toEqual({ kind: "click", raw: "c-Ab12Cd34", ref: "Ab12Cd34" });
     expect(heard[0]).toMatchObject({ place: "miniapp", created: true, reason: "launch", startParam: { kind: "click" } });
   });
 
   it("запуск без параметра — органический", async () => {
-    const service = new AuthService(config(), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks());
+    const service = new AuthService(config(), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks(), launchVerifiersFor(config()));
 
-    await expect(service.loginWithTelegram(launchFor(555, BOT_TOKEN))).resolves.toMatchObject({ startParam: { kind: "organic" } });
+    await expect(service.loginWithLaunch("telegram", launchFor(555, BOT_TOKEN))).resolves.toMatchObject({ startParam: { kind: "organic" } });
   });
 });

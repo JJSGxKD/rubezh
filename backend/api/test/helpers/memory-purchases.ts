@@ -1,4 +1,4 @@
-import { isGranted, isTelegramUserId, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
+import { isGranted, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
 import type {
   CheckoutView,
   ConfirmOutcome,
@@ -126,7 +126,6 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
   private orderOf(row: StoredPurchase): RefundOrder | null {
     const owner = this.owners.get(row.accountId) ?? "";
     if (row.telegramChargeId === null || row.refundRequestedAt === null || row.refundedAt !== null || row.refundReason === null) return null;
-    if (!isTelegramUserId(owner)) return null;
-    return { purchaseId: row.purchaseId, chargeId: row.telegramChargeId, userId: Number(owner), reason: row.refundReason };
+    return { purchaseId: row.purchaseId, platform: "telegram", chargeId: row.telegramChargeId, payerId: owner, reason: row.refundReason };
   }
 }

@@ -4,7 +4,7 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, UnauthorizedError } from "../../common/domain-error.js";
 import { REDIS } from "../../infra/redis.js";
-import { updateSchema } from "../telegram/telegram-bot-api.js";
+import { updateSchema } from "./telegram-bot-api.js";
 import { BotRouter } from "./bot-router.js";
 import { Public } from "../../common/access.js";
 

@@ -2,7 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { isGranted, isTelegramUserId, type PaymentMode, type RefundReason, type StoredPurchase } from "./purchase-types.js";
+import { isGranted, type PaymentMode, type RefundReason, type StoredPurchase } from "./purchase-types.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 
 /**
  * Покупки в Postgres (docs/34-stage3-plan.md, WP5). Запрос к базе живёт
@@ -73,8 +74,11 @@ export type ConfirmOutcome =
  */
 export interface RefundOrder {
   purchaseId: string | null;
+  /** площадка, через которую платили: она и вернёт */
+  platform: PlatformId;
   chargeId: string;
-  userId: number;
+  /** кому вернуть — идентификатор на площадке */
+  payerId: string;
   reason: RefundReason | "duplicate" | "unmatched";
 }
 
@@ -283,7 +287,7 @@ const REFUND_SELECT = {
   refundReason: true,
   refundRequestedAt: true,
   refundedAt: true,
-  account: { select: { platformUserId: true } },
+  account: { select: { platform: true, platformUserId: true } },
 } as const;
 
 function refundOrderOf(row: {
@@ -292,11 +296,16 @@ function refundOrderOf(row: {
   refundReason: RefundReason | null;
   refundRequestedAt: Date | null;
   refundedAt: Date | null;
-  account: { platformUserId: string };
+  account: { platform: PlatformId; platformUserId: string };
 }): RefundOrder | null {
   if (row.telegramChargeId === null || row.refundRequestedAt === null || row.refundedAt !== null || row.refundReason === null) return null;
-  if (!isTelegramUserId(row.account.platformUserId)) return null;
-  return { purchaseId: row.purchaseId, chargeId: row.telegramChargeId, userId: Number(row.account.platformUserId), reason: row.refundReason };
+  return {
+    purchaseId: row.purchaseId,
+    platform: row.account.platform,
+    chargeId: row.telegramChargeId,
+    payerId: row.account.platformUserId,
+    reason: row.refundReason,
+  };
 }
 
 function isUniqueViolation(error: unknown): boolean {

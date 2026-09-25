@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { BotModule } from "../bot/bot.module.js";
+import { BotModule } from "../../platforms/telegram/bot.module.js";
 import { EXPORT_BOT_LOCKS, ExportBotCommand, RedisExportBotLocks } from "./export-bot.command.js";
 import { EXPORT_REPOSITORY, PrismaExportRepository } from "./export.repository.js";
 import { ExportService } from "./export.service.js";

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { TelegramUpdate } from "../telegram/telegram-bot-api.js";
+import type { TelegramUpdate } from "./telegram-bot-api.js";
 
 /**
  * Обработчик обновлений бота. Модули регистрируют свои команды сами —

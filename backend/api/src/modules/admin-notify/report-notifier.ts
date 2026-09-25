@@ -9,9 +9,9 @@ import { benchSummaryOf, runSummaryOf } from "../diagnostics/diagnostics-summary
 import { DIAGNOSTICS_REPOSITORY, type DiagnosticsRepository } from "../diagnostics/diagnostics.repository.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
-import type { ChatTarget } from "../telegram/chat-target.js";
-import { TelegramApiError, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
+import type { ChatTarget } from "../../platforms/telegram/chat-target.js";
+import { TelegramApiError, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
+import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
 import { renderRunCardPng, runCaption, type RunCardInput } from "./run-card.js";
 import { renderStressCardPng, stressCaption, type StressCardInput } from "./stress-card.js";
 import { REVIEW_THROTTLE, type ReviewThrottle } from "./review-throttle.js";
