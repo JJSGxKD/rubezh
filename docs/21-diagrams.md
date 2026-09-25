@@ -677,6 +677,7 @@ flowchart TD
         WT["web-telegram"]
         WM["web-max"]
         WV["web-vk"]
+        ADM["admin<br/>панель команды"]
     end
 
     subgraph adapters["packages/adapter-* — платформенный слой"]
@@ -690,6 +691,7 @@ flowchart TD
     ST["packages/shared-types<br/>контракты, лист графа"]
     FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
     API["backend/api<br/>NestJS"]
+    DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
 
     WT --> SH
     WT --> AT
@@ -706,6 +708,8 @@ flowchart TD
     CG --> ST
     API --> ST
     API --> FX
+    SH --> DT
+    ADM --> DT
 ```
 
 Стрелка из `apps/web-*` в `core-game` осталась одна и узкая: приложение берёт
@@ -962,6 +966,7 @@ flowchart LR
     QUEUE --> PG
     QUEUE --> REDIS
 
+    PANEL["apps/admin<br/>панель команды,<br/>свой поддомен"] -- "/api/v1/admin, cookie" --> CADDY
     CADDY --> ADMINAPI
     ADMINAPI -- сессии панели --> REDIS
     ADMINAPI -. сервисы и репозитории соседей .-> AUTH
@@ -976,8 +981,11 @@ flowchart LR
 **Панель — модуль того же монолита** (`35-stage4-plan.md`, WP17): свои
 контроллеры под `/api/v1/admin/*` и своя cookie-сессия в Redis, а данные —
 через экспортированные сервисы и репозитории соседей: модуль панели сам в
-базу не ходит (`36-parallel-work.md` §2). Клиент панели `apps/admin` — О2,
-пока его нет.
+базу не ходит (`36-parallel-work.md` §2). Клиент панели `apps/admin` ходит в
+эти маршруты только на свой домен: Caddy поддомена панели отдаёт её статику и
+проксирует `/api/v1/admin`, поэтому CORS нет, а cookie с `SameSite=Strict`
+уходит сама. С игрой панель роднят только токены дизайна — движка, оболочки
+и адаптеров в её бандле нет, это проверяет тест границ слоёв.
 
 **Площадка — за портами** (`35-stage4-plan.md`, Р22, §3.11): модули домена —
 вход, приёмник, оплата — не знают Telegram, а просят порты

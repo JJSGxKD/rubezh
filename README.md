@@ -43,11 +43,17 @@ pnpm dev:telegram   # apps/web-telegram, http://localhost:5173
 pnpm dev:max        # apps/web-max,      http://localhost:5174
 pnpm dev:vk         # apps/web-vk,       http://localhost:5175
 pnpm dev:backend    # backend/api,       http://localhost:4000
+pnpm dev:admin      # apps/admin,        http://127.0.0.1:5176 — панель команды
 pnpm stop           # освободить порты, если процесс пережил Ctrl+C
 ```
 
 Порты закреплены, карта — `docs/20-env-and-ports.md` §2. Туннель для
 проверки в Telegram с телефона, бот и секреты — там же, §4.
+
+Панели нужен бэкенд с `ADMIN_PANEL_ENABLED="true"` и, пока нет домена и
+входа через Telegram, `AUTH_DEV_LOGIN="true"`: вход разработчика `dev-1:Имя`
+даёт владельца. Dev-сервер панели слушает только `127.0.0.1` и без туннеля —
+это блокировки и начисления, телефону тестера там делать нечего.
 
 Секреты (`TELEGRAM_WEBHOOK_SECRET`, `EXPORT_PSEUDONYM_KEY` и те, что появятся
 дальше) генерируются командой `openssl rand -hex 32` — `openssl` идёт вместе с
