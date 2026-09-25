@@ -218,6 +218,17 @@ const schema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  // Курсы валют (docs/35-stage4-plan.md, §3.12, WP9): опрос бесплатных
+  // источников. Выключен по умолчанию — включённый ходит в интернет.
+  FX_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // Ключи CoinGecko — необязательные секреты, у них нет значения по умолчанию:
+  // пусто и значит «без ключа». С ключом адаптер сам берёт тариф и частоту
+  // опроса (packages/fx/src/sources/crypto.ts).
+  FX_COINGECKO_DEMO_KEY: z.string().trim().default(""),
+  FX_COINGECKO_PRO_KEY: z.string().trim().default(""),
   // Цена второго шанса (Р5.1): звёзд за каждую начатую минуту забега и
   // потолок цены. Считает сервер, клиент цену только показывает. Рабочие
   // значения до решения геймдизайнера (О1). Потолок схемы — с запасом под
@@ -288,6 +299,12 @@ export interface AppConfig {
     maxSessions: number;
     /** вход разработчика по имени, без подписи; только в development */
     devLogin: boolean;
+  };
+  fx: {
+    /** опрос источников курсов */
+    enabled: boolean;
+    /** ключ CoinGecko: платный важнее демо, нет обоих — без ключа */
+    coingeckoKey: { plan: "demo" | "pro"; value: string } | null;
   };
   payments: {
     enabled: boolean;
@@ -484,6 +501,15 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       initDataMaxAgeSec: parsed.AUTH_INIT_DATA_MAX_AGE_SEC,
       maxSessions: parsed.AUTH_MAX_SESSIONS,
       devLogin: parsed.AUTH_DEV_LOGIN,
+    },
+    fx: {
+      enabled: parsed.FX_ENABLED,
+      coingeckoKey:
+        parsed.FX_COINGECKO_PRO_KEY !== ""
+          ? { plan: "pro", value: parsed.FX_COINGECKO_PRO_KEY }
+          : parsed.FX_COINGECKO_DEMO_KEY !== ""
+            ? { plan: "demo", value: parsed.FX_COINGECKO_DEMO_KEY }
+            : null,
     },
     payments: {
       enabled: parsed.PAYMENTS_ENABLED,
