@@ -7,7 +7,7 @@ import {
   PayloadTooLargeError,
   RateLimitedError,
 } from "../../common/domain-error.js";
-import { verifyInitData } from "../../platforms/telegram/telegram-init-data.js";
+import { LaunchVerifiers } from "../../platforms/ports/launch-verifier.js";
 import { INGEST_LIMITS, type IngestKind } from "./ingest-limits.js";
 import { RateLimiter } from "./rate-limiter.js";
 
@@ -45,6 +45,7 @@ export class IngestGuard implements CanActivate {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly reflector: Reflector,
     private readonly limiter: RateLimiter,
+    private readonly launches: LaunchVerifiers,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -89,15 +90,14 @@ export class IngestGuard implements CanActivate {
     }
   }
 
+  /** Подпись запуска площадки в `Authorization: <схема> <данные>` — схема называет площадку. */
   private platformUserId(request: IngestRequest): string | null {
     const authorization = headerOf(request, "authorization") ?? "";
-    if (!authorization.startsWith("tma ") || this.config.telegram.botToken === "") return null;
-    const check = verifyInitData(
-      authorization.slice(4),
-      this.config.telegram.botToken,
-      this.config.ingest.initDataMaxAgeSec,
-      Date.now(),
-    );
+    const space = authorization.indexOf(" ");
+    if (space <= 0) return null;
+    const verifier = this.launches.byScheme(authorization.slice(0, space));
+    if (verifier === null || !verifier.configured) return null;
+    const check = verifier.verify(authorization.slice(space + 1), this.config.ingest.initDataMaxAgeSec, Date.now());
     return check.ok ? check.player.id : null;
   }
 }

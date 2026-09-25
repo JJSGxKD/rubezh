@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AppConfigModule } from "./config/config.module.js";
+import { PlatformsModule } from "./platforms/platforms.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { RolesModule } from "./modules/roles/roles.module.js";
 import { RunsModule } from "./modules/runs/runs.module.js";
@@ -35,7 +36,7 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * attribution — сессии, первое и последнее касание (там же, WP6).
  */
 @Module({
-  imports: [AppConfigModule, RedisModule, DatabaseModule, IngestModule, TelegramModule, RolesModule, AuthModule, AttributionModule, RunsModule, PaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
+  imports: [AppConfigModule, RedisModule, DatabaseModule, PlatformsModule, IngestModule, TelegramModule, RolesModule, AuthModule, AttributionModule, RunsModule, PaymentsModule, BotModule, EventsModule, DiagnosticsModule, FeedbackModule, AdminNotifyModule, ExportModule, WelcomeModule, PlaytestModule],
   controllers: [HealthController],
 })
 export class AppModule {}
