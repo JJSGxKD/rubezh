@@ -117,6 +117,17 @@ enum SessionPlace {
   channel
 }
 
+// Почему игроку можно или нельзя писать (docs/35-stage4-plan.md, §3.10).
+enum MessagingReason {
+  // вошёл в канал площадки сам — боту можно ему отвечать
+  entered
+  // разрешил писать из приложения
+  write_access
+  // заблокировал бота или отписался
+  blocked
+  // снова разрешил после блокировки
+  unblocked
+}
 
 enum DeviceClass {
   mobile
@@ -154,6 +165,7 @@ model Account {
   sessions    AccountSession[]
   acquisition Acquisition?
   funnel      AccountFunnel?
+  messaging   AccountMessaging?
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -515,4 +527,20 @@ model AccountFunnel {
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
   @@map("account_funnel")
+}
+
+// Можно ли писать игроку (docs/35-stage4-plan.md, §3.10). Одна строка на
+// аккаунт: аккаунты площадок не связаны, и канал у аккаунта один — бот его
+// площадки. Состояние меняют обновления площадки, а не слова клиента.
+model AccountMessaging {
+  accountId  String          @id @map("account_id") @db.Uuid
+  canMessage Boolean         @map("can_message")
+  reason     MessagingReason
+  changedAt  DateTime        @map("changed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Сегмент рассылки: кому можно писать.
+  @@index([canMessage])
+  @@map("account_messaging")
 }

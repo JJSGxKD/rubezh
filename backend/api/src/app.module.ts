@@ -19,6 +19,8 @@ import { PaymentsModule } from "./modules/payments/payments.module.js";
 import { TelegramPaymentsModule } from "./platforms/telegram/telegram-payments.module.js";
 import { AttributionModule } from "./modules/attribution/attribution.module.js";
 import { FunnelModule } from "./modules/funnel/funnel.module.js";
+import { MessagingModule } from "./modules/messaging/messaging.module.js";
+import { TelegramMessagingModule } from "./platforms/telegram/telegram-messaging.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 
@@ -36,7 +38,8 @@ import { PlaytestModule } from "./modules/playtest/playtest.module.js";
  * runs — забеги под аккаунтом и рейтинг на них (там же, WP4);
  * payments — второй шанс за Telegram Stars (там же, WP5);
  * attribution — сессии, первое и последнее касание (там же, WP6);
- * funnel — вехи воронки аккаунта (docs/35-stage4-plan.md, WP2).
+ * funnel — вехи воронки аккаунта, messaging — можно ли писать игроку
+ * (docs/35-stage4-plan.md, WP2).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -50,6 +53,8 @@ export const APP_MODULES = [
   AuthModule,
   AttributionModule,
   FunnelModule,
+  MessagingModule,
+  TelegramMessagingModule,
   RunsModule,
   PaymentsModule,
   TelegramPaymentsModule,
