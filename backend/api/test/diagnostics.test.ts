@@ -45,6 +45,12 @@ class MemoryRepository implements DiagnosticsRepository {
   async findRun(): Promise<null> {
     return null;
   }
+  async list(): Promise<[]> {
+    return [];
+  }
+  async find(reportId: string): Promise<ReportRecord | null> {
+    return this.records.get(reportId) ?? null;
+  }
 }
 
 const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;

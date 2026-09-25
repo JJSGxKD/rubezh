@@ -40,9 +40,45 @@ export interface StoredRunReport {
   payload: RunSubmission;
 }
 
+/** Строка списка отчётов в панели: без `payload` — он весит сотни килобайт. */
+export interface ReportListRow {
+  reportId: string;
+  kind: ReportKind;
+  appVersion: string;
+  contentHash: string | null;
+  platform: "telegram" | "max" | "vk" | "web";
+  /** Telegram ID есть только у отчётов с проверенной подписью; панели он нужен, чтобы дойти до игрока */
+  platformUserId: string | null;
+  device: unknown;
+  summary: unknown;
+  sizeBytes: number;
+  occurredAt: Date;
+  receivedAt: Date;
+}
+
+export interface ReportListFilter {
+  kind?: ReportKind;
+  platform?: "telegram" | "max" | "vk" | "web";
+  appVersion?: string;
+  /** отчёты, принятые раньше этого момента — страница «дальше» */
+  before?: Date;
+  limit: number;
+}
+
+/**
+ * Отчёт целиком, как записан: устройство и сводка — JSON как есть. Панель
+ * показывает их, а не читает поля; кому нужны поля — разбирает схемой сам,
+ * как `findBench` и `findRun`.
+ */
+export type StoredReport = Omit<ReportRecord, "device" | "summary"> & { device: unknown; summary: unknown };
+
 export interface DiagnosticsRepository {
   /** `false` — отчёт с этим `reportId` уже есть: повтор ничего не записывает */
   insert(record: ReportRecord): Promise<boolean>;
+  /** список для панели, свежие первыми */
+  list(filter: ReportListFilter): Promise<ReportListRow[]>;
+  /** отчёт целиком, как записан; `null` — нет такого */
+  find(reportId: string): Promise<StoredReport | null>;
   /** отчёт стресс-теста; `null` — нет такого или он не разбирается нынешней схемой */
   findBench(reportId: string): Promise<StoredBenchReport | null>;
   /** запись забега; `null` — нет такой или она не разбирается нынешней схемой */
@@ -69,6 +105,36 @@ export class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       skipDuplicates: true,
     });
     return result.count === 1;
+  }
+
+  async list(filter: ReportListFilter): Promise<ReportListRow[]> {
+    return await this.prisma.diagnosticReport.findMany({
+      where: {
+        ...(filter.kind === undefined ? {} : { kind: filter.kind }),
+        ...(filter.platform === undefined ? {} : { platform: filter.platform }),
+        ...(filter.appVersion === undefined ? {} : { appVersion: filter.appVersion }),
+        ...(filter.before === undefined ? {} : { receivedAt: { lt: filter.before } }),
+      },
+      orderBy: { receivedAt: "desc" },
+      take: filter.limit,
+      select: {
+        reportId: true,
+        kind: true,
+        appVersion: true,
+        contentHash: true,
+        platform: true,
+        platformUserId: true,
+        device: true,
+        summary: true,
+        sizeBytes: true,
+        occurredAt: true,
+        receivedAt: true,
+      },
+    });
+  }
+
+  async find(reportId: string): Promise<StoredReport | null> {
+    return await this.prisma.diagnosticReport.findUnique({ where: { reportId } });
   }
 
   async findBench(reportId: string): Promise<StoredBenchReport | null> {
