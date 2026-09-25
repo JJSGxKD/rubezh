@@ -169,6 +169,8 @@ model Account {
   wallet      WalletEntry[]
   balances    WalletBalance[]
   walletDaily WalletDaily[]
+  progress    AccountProgress?
+  runRewards  RunReward[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -703,4 +705,40 @@ model FxSourceState {
   nextPollAt  DateTime  @map("next_poll_at") @db.Timestamptz(3)
 
   @@map("fx_source_state")
+}
+
+// Уровень аккаунта и награды за забег (docs/35-stage4-plan.md, WP4).
+// Опыт — счётчик аккаунта, а не валюта кошелька: его не тратят, и журнал
+// ему не нужен. Повтор не удваивает опыт по той же причине, что кошелёк —
+// строка награды с первичным ключом `run_id` вставляется в той же
+// транзакции, что прибавка опыта.
+
+model AccountProgress {
+  accountId String   @id @map("account_id") @db.Uuid
+  xp        BigInt   @default(0)
+  level     Int      @default(1)
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("account_progress")
+}
+
+/// Награда за забег — одна на забег. `coinsCredited` пусто, пока монеты не
+/// легли в кошелёк; `skipped` — почему награды нет вовсе.
+model RunReward {
+  runId         String   @id @map("run_id") @db.VarChar(64)
+  accountId     String   @map("account_id") @db.Uuid
+  coins         Int
+  coinsCredited Int?     @map("coins_credited")
+  xp            Int
+  levelBefore   Int      @map("level_before")
+  levelAfter    Int      @map("level_after")
+  skipped       String?  @db.VarChar(32)
+  createdAt     DateTime @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("run_reward")
 }

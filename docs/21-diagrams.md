@@ -58,6 +58,8 @@ erDiagram
     ACCOUNT ||--o{ WALLET_ENTRY : "журнал кошелька"
     ACCOUNT ||--o{ WALLET_BALANCE : "баланс по ресурсу"
     ACCOUNT ||--o{ WALLET_DAILY : "начислено за сутки"
+    ACCOUNT ||--o| ACCOUNT_PROGRESS : "уровень и опыт"
+    ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -201,6 +203,25 @@ erDiagram
         datetime next_poll_at
     }
 
+    ACCOUNT_PROGRESS {
+        uuid account_id PK,FK
+        bigint xp "только растёт"
+        int level "по кривой из progress-rules.ts"
+        datetime updated_at
+    }
+
+    RUN_REWARD {
+        string run_id PK "повтор задания упирается в ключ"
+        uuid account_id FK
+        int coins "по формуле забега"
+        int coins_credited "nullable: пусто, пока монеты не в кошельке"
+        int xp
+        int level_before
+        int level_after
+        string skipped "nullable: too_short, cheats, rejected"
+        datetime created_at
+    }
+
     WALLET_DAILY {
         uuid account_id PK,FK
         enum resource PK
@@ -317,6 +338,12 @@ erDiagram
   выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
   подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
   разбора.
+- **`ACCOUNT_PROGRESS` — уровень аккаунта, `RUN_REWARD` — награда за забег**
+  (`35-stage4-plan.md`, WP4). Опыт — счётчик аккаунта, а не валюта: его не
+  тратят, и журнал ему не нужен. Повтор не удваивает опыт тем же приёмом,
+  что кошелёк: строка награды с первичным ключом `run_id` вставляется в одной
+  транзакции с прибавкой опыта. Монеты начисляет кошелёк по своему ключу;
+  `coins_credited` показывает, сколько легло после суточного потолка.
 - **`FX_*` — курсы валют** (`35-stage4-plan.md`, §3.12, WP9). Таблицы не
   связаны с аккаунтами и друг с другом ключами: курс — факт о мире, а не об
   игроке. Коды валют — строкой, а не перечислением базы: перечень живёт в
@@ -843,6 +870,8 @@ flowchart LR
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
         FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
+        WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
+        PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -902,6 +931,13 @@ flowchart LR
     FXM --> PG
     FXM --> REDIS
     FXM -. алерты курсов .-> NOTIFY
+    RUNS -. слушатели записанного забега .-> PROG
+    PROG --> QUEUE
+    PROG -- монеты, награды за уровень --> WALLET
+    WALLET --> PG
+    PROG --> PG
+    CADDY --> WALLET
+    CADDY --> PROG
     EXPORT --> PG
     QUEUE -- sendPhoto, sendDocument --> TGAPI
 
@@ -1448,6 +1484,39 @@ sequenceDiagram
     end
     TG-->>U: карточка с подписью на языке игрока
 ```
+
+### 4.17 Награда за забег (этап 4, реализовано)
+
+`35-stage4-plan.md`, WP4. Итог забега пишется синхронно, как на этапе 3, а
+награда — заданием очереди: волна итогов после поста в канале не ждёт опыта и
+монет.
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant R as runs
+    participant Q as Очередь rewards
+    participant P as progress
+    participant W as wallet
+    participant DB as Postgres
+
+    C->>R: POST /runs — итог забега
+    R->>DB: забег одной строкой, вердикт
+    R-->>C: место и рекорд
+    R--)Q: слушатель записанного забега — задание с ключом run_id
+    Q->>P: формула награды: монеты, опыт; с читами, отклонённый, короче 30 с — без
+    P->>DB: строка награды ON CONFLICT и прибавка опыта — одна транзакция
+    P->>W: монеты run:<runId>:coins, награды за уровень level:<аккаунт>:<уровень>
+    W->>DB: журнал и баланс, суточный потолок
+    P->>DB: сколько легло после потолка
+    C->>P: GET /progress/runs/:runId — с растущей паузой, пока не посчитано
+    P-->>C: монеты, опыт, новый уровень — экран итогов и шапка
+```
+
+Повтор задания безопасен целиком: опыт держит ключ строки награды, монеты —
+ключ кошелька. Упало между опытом и монетами — повтор найдёт строку и
+доначислит по тому же ключу. Redis недоступен — награда считается сразу, мимо
+ответа игроку.
 
 ### 4.16 Вход в бота, воронка и «можно писать» (этап 4, реализовано)
 
