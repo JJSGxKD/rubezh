@@ -12,7 +12,7 @@ export interface Section {
 }
 
 /** Разделы в порядке меню. Новый раздел — строка здесь и экран в `screens/sections.tsx`. */
-export const SECTIONS: readonly Section[] = [];
+export const SECTIONS: readonly Section[] = [{ id: "players", title: "Игроки", permission: "players.view" }];
 
 export interface Route {
   section: string;
