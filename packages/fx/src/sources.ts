@@ -1,4 +1,4 @@
-import type { SourceTariffs } from "./budget.js";
+import type { Tariff } from "./budget.js";
 import type { CurrencyCode } from "./currencies.js";
 import type { Quote } from "./quote.js";
 
@@ -23,9 +23,8 @@ export interface SourceCurrency {
 export interface RateSource {
   id: string;
   currencies: readonly SourceCurrency[];
-  tariffs: SourceTariffs;
-  /** имя переменной окружения с ключом платного тарифа; нет — ключа не бывает */
-  keyEnv?: string;
+  /** тариф, под который собран адаптер: без ключа, с бесплатным или с платным */
+  tariff: Tariff;
   /**
    * Один опрос — все валюты источника одним запросом, если источник это
    * умеет. Бросает `SourceRateLimitedError` на `429` и

@@ -153,6 +153,9 @@
 | Курсы: приём котировок — возраст котировки, порог скачка без подтверждения вторым источником, согласие источников | `packages/fx/src/policy.ts` → `ACCEPT_POLICY` | участник 1 |
 | Курсы: свежесть — когда курс устарел (алерт) и сколько по нему ещё можно продавать | `packages/fx/src/policy.ts` → `FRESHNESS_POLICY` | участник 1 |
 | Курсы: пауза источника после отказа по лимиту без `Retry-After` | `packages/fx/src/budget.ts` → `RATE_LIMIT_PAUSE_MS` | участник 1 |
+| Курсы: источники фиата — ЦБ, ЕЦБ, ExchangeRate-API: адреса, метки валют, интервал опроса | `packages/fx/src/sources/fiat.ts` → `create*Source`, `*_CURRENCIES` | участник 1 |
+| Курсы: источники крипты — CoinGecko, TON API, Binance: метки (Gram — `the-open-network`, `ton`, `GRAMUSDT`), тарифы CoinGecko по ключу | `packages/fx/src/sources/crypto.ts` → `COINGECKO_TARIFFS`, `*_CURRENCIES` | участник 1 |
+| Курсы: срок запроса к источнику и как часто неизменный курс пишется в историю | `packages/fx/src/policy.ts` → `SOURCE_TIMEOUT_MS`, `HISTORY_REPEAT_MS` | участник 1 |
 | Граница игровых суток — Москва, одна на все суточные механики: возвраты D1 и D7 воронки, суточные потолки кошелька, дальше задания и награда дня (`05-game-design.md` §3) | `backend/api/src/common/game-day.ts` → `GAME_DAY_TIME_ZONE` | участник 1 |
 | Приветствие по `/start`: тексты на двух языках, какие языки читают по-русски | `backend/api/src/platforms/telegram/welcome-texts.ts` → `WELCOME_TEXTS`, `RUSSIAN_READERS` | участник 1 |
 | Карточка приветствия: раскладка, длина имени, версия шаблона для кэша | `backend/api/src/platforms/telegram/welcome-card.ts` → `CARD_VERSION` (поднять при любой правке вида), `NAME_MAX` | участник 1 |

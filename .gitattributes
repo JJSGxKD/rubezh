@@ -40,5 +40,9 @@ Dockerfile  text eol=lf
 *.woff2     binary
 *.mmdb      binary
 
+# Ответ ЦБ хранится как пришёл — в windows-1251: адаптер обязан
+# раскодировать его сам, и фикстура не должна тихо стать UTF-8
+packages/fx/test/fixtures/cbr-*.xml binary
+
 # Лок-файл не разворачиваем в ревью — он машинный и огромный
 pnpm-lock.yaml -diff linguist-generated
