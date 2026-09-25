@@ -5,7 +5,7 @@ import { DisabledError, ValidationError } from "../../common/domain-error.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { CONTINUES_PER_RUN } from "../runs/run-rules.js";
 import { RUNS_REPOSITORY, type RunsRepository } from "../runs/runs.repository.js";
-import { TelegramApiError, TELEGRAM_BOT_API, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
+import { TelegramApiError, TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 import { continuePrice } from "./continue-price.js";
 import type { ContinueRequest } from "./dto/payments.dto.js";
 import { continueInvoice } from "./invoice-text.js";

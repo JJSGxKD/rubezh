@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import { BotPoller, type BotPollerLocks, type PollerBotApi } from "../src/modules/bot/bot-poller.js";
-import { BotRouter, type BotUpdateHandler } from "../src/modules/bot/bot-router.js";
-import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { BotPoller, type BotPollerLocks, type PollerBotApi } from "../src/platforms/telegram/bot-poller.js";
+import { BotRouter, type BotUpdateHandler } from "../src/platforms/telegram/bot-router.js";
+import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { multipartOf } from "./helpers/multipart.js";
 
 // Бот: откуда приходят обновления, куда уходят и как говорить с Bot API

@@ -1,6 +1,6 @@
 import { Injectable, type OnModuleInit } from "@nestjs/common";
-import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
-import type { TelegramUpdate } from "../telegram/telegram-bot-api.js";
+import { BotRouter, type BotUpdateHandler } from "../../platforms/telegram/bot-router.js";
+import type { TelegramUpdate } from "../../platforms/telegram/telegram-bot-api.js";
 import { PaymentConfirmation } from "./payment-confirmation.js";
 import { PaymentsQueue } from "./payments-queue.js";
 

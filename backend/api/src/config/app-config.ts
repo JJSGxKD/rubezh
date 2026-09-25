@@ -1,7 +1,7 @@
 import { config as loadDotenv } from "dotenv";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { isChatTarget, parseChatTarget, type ChatTarget } from "../modules/telegram/chat-target.js";
+import { isChatTarget, parseChatTarget, type ChatTarget } from "../platforms/telegram/chat-target.js";
 
 /**
  * Единая Zod-схема конфигурации: невалидное окружение = процесс не

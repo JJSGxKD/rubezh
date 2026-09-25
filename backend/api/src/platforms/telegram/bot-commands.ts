@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import type { ChatTarget } from "../telegram/chat-target.js";
-import type { TelegramBotApi, TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
+import type { ChatTarget } from "./chat-target.js";
+import type { TelegramBotApi, TelegramUpdate } from "./telegram-bot-api.js";
+import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
 import { BotRouter, type BotUpdateHandler } from "./bot-router.js";
 
 /**

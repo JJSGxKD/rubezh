@@ -1,4 +1,4 @@
-import type { StarsInvoice } from "../telegram/telegram-bot-api.js";
+import type { StarsInvoice } from "../../platforms/telegram/telegram-bot-api.js";
 import { startedMinutes } from "./continue-price.js";
 import type { PaymentMode } from "./purchase-types.js";
 

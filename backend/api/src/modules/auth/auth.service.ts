@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, ForbiddenError, UnauthorizedError, ValidationError } from "../../common/domain-error.js";
 import { parseStartParam, type StartParam } from "../attribution/start-param.js";
-import { verifyInitData } from "../telegram/telegram-init-data.js";
+import { verifyInitData } from "../../platforms/telegram/telegram-init-data.js";
 import { ACCOUNT_REPOSITORY, type Account, type AccountRepository } from "./account.repository.js";
 import { secretKey, signAccessToken } from "./access-token.js";
 import { AuthHooks, PLAIN_LOGIN, type LoginContext } from "./auth-hooks.js";

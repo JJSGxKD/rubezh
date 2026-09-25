@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { urgentFirst } from "../src/modules/bot/bot-poller.js";
-import { BotRouter } from "../src/modules/bot/bot-router.js";
+import { urgentFirst } from "../src/platforms/telegram/bot-poller.js";
+import { BotRouter } from "../src/platforms/telegram/bot-router.js";
 import { decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmationBotApi, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PaymentsBotHandler } from "../src/modules/payments/payments-bot.handler.js";
@@ -10,7 +10,7 @@ import { PaymentRefunds, type RefundBotApi } from "../src/modules/payments/payme
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
-import { ALLOWED_UPDATES, TelegramApiError, updateSchema, type PreCheckoutAnswer, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { ALLOWED_UPDATES, TelegramApiError, updateSchema, type PreCheckoutAnswer, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 

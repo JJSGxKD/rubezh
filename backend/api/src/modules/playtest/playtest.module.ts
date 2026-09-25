@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
-import { BotModule } from "../bot/bot.module.js";
+import { BotModule } from "../../platforms/telegram/bot.module.js";
 import { DiagnosticsModule } from "../diagnostics/diagnostics.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WelcomeModule } from "../welcome/welcome.module.js";

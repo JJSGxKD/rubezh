@@ -1,4 +1,4 @@
-import type { PreCheckoutAnswer } from "../telegram/telegram-bot-api.js";
+import type { PreCheckoutAnswer } from "../../platforms/telegram/telegram-bot-api.js";
 import { INVOICE_TTL_SEC } from "./payments-limits.js";
 import type { CheckoutView } from "./purchases.repository.js";
 

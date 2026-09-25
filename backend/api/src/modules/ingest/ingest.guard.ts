@@ -7,7 +7,7 @@ import {
   PayloadTooLargeError,
   RateLimitedError,
 } from "../../common/domain-error.js";
-import { verifyInitData } from "../telegram/telegram-init-data.js";
+import { verifyInitData } from "../../platforms/telegram/telegram-init-data.js";
 import { INGEST_LIMITS, type IngestKind } from "./ingest-limits.js";
 import { RateLimiter } from "./rate-limiter.js";
 

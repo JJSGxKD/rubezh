@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { BotRouter } from "../src/modules/bot/bot-router.js";
+import { BotRouter } from "../src/platforms/telegram/bot-router.js";
 import {
   ExportBotCommand,
   periodOf,
@@ -9,8 +9,8 @@ import {
   type ExportJob,
 } from "../src/modules/export/export-bot.command.js";
 import type { ExportArtifact, ExportRequest, ExportService } from "../src/modules/export/export.service.js";
-import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
-import type { TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { chatTargetOf } from "../src/platforms/telegram/chat-target.js";
+import type { TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";

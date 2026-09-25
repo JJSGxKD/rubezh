@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { UnrecoverableError } from "bullmq";
-import { TelegramApiError, TELEGRAM_BOT_API, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
+import { TelegramApiError, TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 import type { ConfirmedPayment } from "./payment-confirmation.js";
 import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, type RefundOrder } from "./purchases.repository.js";
 

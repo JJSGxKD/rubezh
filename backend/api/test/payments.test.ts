@@ -8,7 +8,7 @@ import { continueRequestSchema } from "../src/modules/payments/dto/payments.dto.
 import { PaymentsService, type InvoiceBotApi } from "../src/modules/payments/payments.service.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunContinues } from "../src/modules/runs/run-continues.js";
-import { TelegramApiError, type StarsInvoice } from "../src/modules/telegram/telegram-bot-api.js";
+import { TelegramApiError, type StarsInvoice } from "../src/platforms/telegram/telegram-bot-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
