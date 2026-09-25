@@ -50,6 +50,12 @@ export interface SessionsRepository {
    * скорее тот же человек (docs/23-referral-and-partner-program.md §2.4).
    */
   recentIpPrefixes(accountId: string, limit: number): Promise<string[]>;
+  /**
+   * Когда началась последняя сессия аккаунта до момента `before`; `null` —
+   * раньше не заходил. Нужно возвращению (docs/35-stage4-plan.md §3.8): сколько
+   * игрок отсутствовал до этого входа.
+   */
+  lastSessionBefore(accountId: string, before: Date): Promise<Date | null>;
 }
 
 @Injectable()
@@ -132,6 +138,15 @@ export class PrismaSessionsRepository implements SessionsRepository {
         lastStartRef: true,
       },
     });
+  }
+
+  async lastSessionBefore(accountId: string, before: Date): Promise<Date | null> {
+    const last = await this.prisma.accountSession.findFirst({
+      where: { accountId, startedAt: { lt: before } },
+      select: { startedAt: true },
+      orderBy: { startedAt: "desc" },
+    });
+    return last?.startedAt ?? null;
   }
 
   async recentIpPrefixes(accountId: string, limit: number): Promise<string[]> {

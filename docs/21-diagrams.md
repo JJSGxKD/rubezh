@@ -66,6 +66,7 @@ erDiagram
     ACCOUNT ||--o{ FRIEND_GIFT : "подарки: от кого и кому"
     ACCOUNT ||--o| REFERRAL_BINDING : "кем приглашён — один раз"
     ACCOUNT ||--o{ REFERRAL_BINDING : "кого пригласил"
+    ACCOUNT ||--o{ FRIEND_RETURN : "вернулся по ссылке друга / помог вернуть"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -352,7 +353,15 @@ erDiagram
         enum status "bound|activated|rejected"
         datetime bound_at
         datetime activated_at "nullable"
-        string reject_reason "nullable: same_network"
+        string reject_reason "nullable: same_network, moderator"
+    }
+
+    FRIEND_RETURN {
+        uuid returned_account_id PK,FK "CHECK: не сам себе"
+        uuid friend_account_id PK,FK
+        int period PK "сутки эпохи / длина периода: пара — раз в период"
+        datetime returned_at
+        datetime rewarded_at "nullable: ещё не сыграл"
     }
 ```
 
@@ -441,7 +450,9 @@ erDiagram
   остаётся строкой со статусом `rejected`, иначе её переприсвоила бы
   следующая ссылка. Награды — в журнале кошелька с причиной
   `referral_reward`: приглашённому ключом `referral_welcome:<id>`,
-  пригласившему — `referral:<id>`.
+  пригласившему — `referral:<id>`. `FRIEND_RETURN` — возвращение ушедшего
+  по ссылке друга: номер периода в ключе, награда обоим после первого забега
+  ключами `friend_return:<вернувшийся>:<друг>:<период>:returned|friend`.
 
 ### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 

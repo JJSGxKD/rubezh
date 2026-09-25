@@ -3,6 +3,7 @@ import { loadAppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { PrismaFriendReturnsRepository } from "../src/modules/referrals/friend-returns.repository.js";
 import { PrismaReferralsRepository } from "../src/modules/referrals/referrals.repository.js";
 
 /** Привязки рефералов на живом Postgres: одна и навсегда, активация — один раз. Без базы — пропуск. */
@@ -63,5 +64,22 @@ describe.skipIf(DATABASE_URL === "")("рефералка на живом Postgre
     expect(await referrals.activate(twin, new Date())).toBe(false);
     expect(await referrals.byReferrer(referrer, 10)).toEqual([]);
     await expect(referrals.bind(referrer, referrer, "bound", null)).rejects.toThrow();
+  });
+
+  it("возвращение: одно на пару в периоде, награда помечается один раз, старое не ждёт", async () => {
+    const returns = new PrismaFriendReturnsRepository(prisma);
+    const returned = await account();
+    const friend = await account();
+    const now = new Date();
+    expect(await returns.record(returned, friend, 700, now)).toBe(true);
+    expect(await returns.record(returned, friend, 700, now)).toBe(false);
+    expect(await returns.pending(returned, new Date(now.getTime() - 60_000))).toEqual([{ friendId: friend, period: 700 }]);
+    expect(await returns.markRewarded(returned, friend, 700, now)).toBe(true);
+    expect(await returns.markRewarded(returned, friend, 700, now)).toBe(false);
+    expect(await returns.pending(returned, new Date(0))).toEqual([]);
+
+    await returns.record(returned, friend, 701, new Date(now.getTime() - 30 * 86_400_000));
+    expect(await returns.pending(returned, new Date(now.getTime() - 7 * 86_400_000))).toEqual([]);
+    await expect(returns.record(returned, returned, 702, now)).rejects.toThrow();
   });
 });
