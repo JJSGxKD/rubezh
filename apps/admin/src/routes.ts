@@ -16,6 +16,8 @@ export const SECTIONS: readonly Section[] = [
   { id: "players", title: "Игроки", permission: "players.view" },
   { id: "review", title: "Разбор забегов", permission: "players.view" },
   { id: "funnel", title: "Воронка", permission: "analytics.gameplay.view" },
+  { id: "roles", title: "Роли", permission: "roles.assign" },
+  { id: "audit", title: "Аудит", permission: "audit.view" },
 ];
 
 export interface Route {
