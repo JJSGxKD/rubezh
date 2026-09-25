@@ -872,6 +872,7 @@ flowchart LR
         FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
         WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
+        ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -960,8 +961,22 @@ flowchart LR
     QUEUE --> PG
     QUEUE --> REDIS
 
+    CADDY --> ADMINAPI
+    ADMINAPI -- сессии панели --> REDIS
+    ADMINAPI -. сервисы и репозитории соседей .-> AUTH
+    ADMINAPI -. карточка: забеги, кошелёк .-> RUNS
+    ADMINAPI -. карточка: кошелёк .-> WALLET
+    ADMINAPI -. курсы, заданные курсы .-> FXM
+    ADMINAPI -. отчёты, архив .-> EXPORT
+
     TG -.статика и конфиг.-> CDN
 ```
+
+**Панель — модуль того же монолита** (`35-stage4-plan.md`, WP17): свои
+контроллеры под `/api/v1/admin/*` и своя cookie-сессия в Redis, а данные —
+через экспортированные сервисы и репозитории соседей: модуль панели сам в
+базу не ходит (`36-parallel-work.md` §2). Клиент панели `apps/admin` — О2,
+пока его нет.
 
 **Площадка — за портами** (`35-stage4-plan.md`, Р22, §3.11): модули домена —
 вход, приёмник, оплата — не знают Telegram, а просят порты
@@ -1599,6 +1614,53 @@ sequenceDiagram
   или забег записан без него), вторая оплата того же продолжения и оплата
   без покупки. Заказ возврата пишется в базу раньше обращения к Telegram —
   после перезапуска очередь поднимает незавершённые оттуда.
+
+---
+
+### 4.16 Вход в панель и действие под cookie-сессией (этап 4, реализовано)
+
+Серверная часть панели (`35-stage4-plan.md`, WP17, часть 1). Сессия панели
+— не токен игрока: cookie `HttpOnly; SameSite=Strict` только на маршруты
+панели, в Redis — хэш токена и срок без продления. Права — тем же гвардом,
+что у игры: гвард панели кладёт в запрос тот же `account`.
+
+```mermaid
+sequenceDiagram
+    participant B as Браузер панели
+    participant AD as admin
+    participant RO as roles
+    participant DB as PostgreSQL
+    participant R as Redis
+
+    B->>AD: POST /api/v1/admin/session/dev { devUser }
+    AD->>AD: панель включена? флаг разработчика?<br/>лимит по адресу
+    AD->>DB: найти или завести аккаунт
+    AD->>RO: роли аккаунта — по базе, не из cookie
+    alt ролей нет или аккаунт заблокирован
+        AD-->>B: 403
+    else
+        AD->>R: SET admin:session:<sha256> EX ttl,<br/>SADD admin:sessions:<аккаунт>
+        AD->>DB: аудит admin.login
+        AD-->>B: Set-Cookie HttpOnly SameSite=Strict<br/>Path=/api/v1/admin; роли и права
+    end
+
+    Note over B,AD: любой запрос панели — cookie; изменяющий — ещё и X-Requested-With: rubezh-admin
+    B->>AD: POST /api/v1/admin/players/:id/ban { reason }
+    AD->>R: GET admin:session:<sha256>
+    alt сессии нет или истекла
+        AD-->>B: 401
+    else
+        AD->>DB: аккаунт жив, роли всё ещё есть
+        AD->>RO: право players.ban
+        AD->>DB: блокировка, аудит было → стало
+        AD->>R: отозвать сессии игры и панели игрока
+        AD-->>B: 201 { account, revokedSessions }
+    end
+```
+
+Отзыв роли и блокировка действуют сразу: роли перечитываются на каждом
+запросе, а сессии панели отзываются в тот же момент. Выключенная панель
+(`ADMIN_PANEL_ENABLED=false`) отвечает 404 на всё, включая вход.
 
 ---
 
