@@ -234,6 +234,8 @@ WP3). `currency_earned` и `currency_spent`, которые план стави�
 сервер: привязка, её статус (`bound`, `activated`, `rejected` с причиной) и
 время активации лежат в `referral_binding`, награды — в `wallet_entry` с
 причиной `referral_reward`. K-фактор считается по этой таблице.
+`player_returned` отложено так же: возвращение по ссылке друга и время
+награды лежат в `friend_return`.
 `friend_gift_sent` отложено так же: подарок — строка `friend_gift` с сутками
 и временем, когда забран, а монеты — `wallet_entry` с причиной `friend_gift`.
 
