@@ -35,6 +35,7 @@ import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.rep
     PaymentsHooks,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
   ],
-  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks],
+  // Репозиторий — карточке игрока в панели: покупки аккаунта читаются, не меняются.
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PURCHASES_REPOSITORY],
 })
 export class PaymentsModule {}

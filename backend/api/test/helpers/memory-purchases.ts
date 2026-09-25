@@ -57,6 +57,14 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     return { kind: "opened", purchase: { ...created } };
   }
 
+  async byAccount(accountId: string, limit: number): Promise<StoredPurchase[]> {
+    return [...this.rows.values()]
+      .filter((row) => row.accountId === accountId)
+      .sort((a, b) => b.invoicedAt.getTime() - a.invoicedAt.getTime())
+      .slice(0, limit)
+      .map((row) => ({ ...row }));
+  }
+
   async byId(purchaseId: string): Promise<StoredPurchase | null> {
     const row = this.rows.get(purchaseId);
     return row === undefined ? null : { ...row };

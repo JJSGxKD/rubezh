@@ -113,6 +113,8 @@ export interface PurchasesRepository {
   pendingRefunds(limit: number): Promise<RefundOrder[]>;
   /** Оплаченные продолжения забега сверх взятых — их не использовали */
   unusedGrants(runId: string, usedContinues: number): Promise<string[]>;
+  /** Покупки аккаунта, свежие первыми — карточка игрока в панели */
+  byAccount(accountId: string, limit: number): Promise<StoredPurchase[]>;
 }
 
 const SELECT = {
@@ -278,6 +280,11 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
       select: { purchaseId: true },
     });
     return rows.map((row) => row.purchaseId);
+  }
+
+  async byAccount(accountId: string, limit: number): Promise<StoredPurchase[]> {
+    // Второй ключ сортировки — чтобы две покупки одной миллисекунды шли в одном порядке от запроса к запросу.
+    return await this.prisma.purchase.findMany({ where: { accountId }, orderBy: [{ createdAt: "desc" }, { continueNo: "desc" }], take: limit, select: SELECT });
   }
 }
 
