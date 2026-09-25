@@ -4,6 +4,8 @@ import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/p
 import type { LoadoutState } from "../progression/loadout";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { Rng } from "./rng";
+import { ELEMENT_PHYSICAL } from "./element-ids";
+import { clearStatuses } from "./elements";
 import type { SpatialGrid } from "./grid";
 import type { SimEvents } from "./events";
 import type { ViewConfig, WorldBounds } from "./map-types";
@@ -320,6 +322,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.dirX[slot] = 0;
   pool.dirY[slot] = 0;
   pool.ringRadius[slot] = 0;
+  clearStatuses(world, slot, NO_OWNER_TYPE);
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;
   world.stats.enemiesSpawned++;
@@ -406,6 +409,8 @@ export function spawnProjectile(
   pool.ownerWeapon[slot] = NO_OWNER_TYPE;
   pool.pierce[slot] = 0;
   pool.lastHit[slot] = -1;
+  pool.element[slot] = ELEMENT_PHYSICAL;
+  pool.statusChance[slot] = 0;
   pool.alive[slot] = 1;
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;

@@ -116,7 +116,7 @@ function strikeTouched(world: World, slot: number, level: ResolvedWeaponLevel): 
       const contact = reach + world.enemyTypes[world.enemies.type[enemy]].radius;
       if (dx * dx + dy * dy > contact * contact) continue;
 
-      damageEnemy(world, enemy, level.damage, slot);
+      damageEnemy(world, enemy, level.damage, slot, level.element, level.statusChance);
       touched = true;
     }
   }
