@@ -231,6 +231,9 @@ importers:
       '@bh/core-game':
         specifier: workspace:*
         version: link:../core-game
+      '@bh/design-tokens':
+        specifier: workspace:*
+        version: link:../design-tokens
       '@bh/shared-types':
         specifier: workspace:*
         version: link:../shared-types
@@ -274,6 +277,8 @@ importers:
       phaser:
         specifier: 3.90.0
         version: 3.90.0
+
+  packages/design-tokens: {}
 
   packages/fx:
     dependencies:

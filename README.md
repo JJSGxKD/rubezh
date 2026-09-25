@@ -465,6 +465,7 @@ Remove-Item -Recurse -Force node_modules; pnpm install
 /packages
   /shared-types      <- общие TS-интерфейсы (PlatformAdapter, EnemyDef и т.д.)
   /fx                <- курсы валют и пересчёт: ядро без игры, Nest и Prisma, собирается в JS
+  /design-tokens     <- базовые токены дизайна: палитра, шрифты, радиусы, движение — общие для игры и панели
   /core-game         <- игровой движок (Phaser), контент как данные в src/content/*
   /app-shell         <- React-оболочка: экраны, дизайн-система, звук, состояние
   /adapter-telegram  <- реализация PlatformAdapter под Telegram WebApp SDK

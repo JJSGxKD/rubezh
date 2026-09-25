@@ -61,6 +61,11 @@ const RULES: Rule[] = [
     why: "shared-types — корень зависимостей и не импортирует ничего из монорепо",
   },
   {
+    from: "packages/design-tokens/src",
+    forbidden: /["']@bh\//,
+    why: "токены дизайна — корень визуального стиля игры и панели и не зависят ни от чего в монорепо",
+  },
+  {
     from: "packages/fx/src",
     forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
     why: "ядро курсов самодостаточно: ни игры, ни Nest, ни Prisma — им станет отдельный сервис (docs/35-stage4-plan.md, Р32)",

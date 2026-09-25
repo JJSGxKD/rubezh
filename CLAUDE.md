@@ -82,8 +82,10 @@ rate-limit через подделку `X-Forwarded-For`, неатомарный
 - `packages/core-game/src/content/*` (враги, волны, апгрейды) — геймдизайнер
 - `packages/adapter-telegram`, `packages/adapter-max`, `backend/api` — участник 1
 - `packages/adapter-vk`, `assets/` (когда появится) — напарник
-- `packages/app-shell` — участник 1; `app-shell/src/design-system/tokens.css`
-  и `tokens.ts` (визуальный стиль) — напарник по направлению геймдизайнера.
+- `packages/app-shell` — участник 1; визуальный стиль — напарник по направлению
+  геймдизайнера: базовые токены `packages/design-tokens` (палитра, шрифты,
+  радиусы, движение — общие с панелью) и `app-shell/src/design-system/tokens.css`
+  (поверхности, кнопки, анимации игры).
   Значения там — направление этапа 2 (тёмная тема высокой контрастности,
   `docs/27-design-system-and-app-shell.md` §4.1) до решения по сеттингу: смена
   визуального направления — правка двух файлов с токенами, а не всех экранов
@@ -98,6 +100,7 @@ rate-limit через подделку `X-Forwarded-For`, неатомарный
 - `shared-types` не импортирует ничего из монорепо
 - `fx` (ядро курсов) не импортирует ничего из монорепо, Nest и Prisma: им
   станет отдельный сервис курсов (`docs/35-stage4-plan.md`, Р32)
+- `design-tokens` не импортирует ничего из монорепо
 - `content/*` не импортирует код из `game/*`
 - `app-shell` не импортирует `adapter-*` и Phaser, а `core-game` берёт только
   через его `index.ts`; `core-game` не импортирует `app-shell` и React

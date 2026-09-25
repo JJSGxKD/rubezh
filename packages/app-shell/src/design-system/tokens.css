@@ -1,8 +1,12 @@
 @import "tailwindcss";
+@import "@bh/design-tokens/tokens.css";
 
 /*
  * Токены дизайн-системы — единственный источник визуальных значений
- * (docs/27-design-system-and-app-shell.md §4.2). Цвет, отступ или радиус
+ * (docs/27-design-system-and-app-shell.md §4.2). Базовые — палитра,
+ * гарнитуры, шкала текста, радиусы, тени, кривые и длительности — в пакете
+ * `@bh/design-tokens`, общем с панелью управления; здесь — то, что нужно
+ * только игре. Цвет, отступ или радиус
  * числом в компоненте — замечание на ревью: иначе смена визуального
  * направления превращается в поиск по всем файлам.
  *
@@ -21,95 +25,6 @@
 @custom-variant short (@media (max-height: 759px));
 
 @theme {
-  /* Цвет: основа. Фон почти чёрный с холодным оттенком — на нём сильнее
-     читаются тёплый акцент и цвета забега. */
-  --color-bg: #07090e;
-  --color-surface: #121622;
-  --color-surface-raised: #1b2130;
-  --color-surface-sunken: #0b0e15;
-  --color-border: #262e40;
-  --color-border-strong: #3a4560;
-  --color-text: #f3f6fc;
-  --color-text-muted: #a8b2c6;
-  --color-text-disabled: #69738a;
-
-  /* Цвет: действие. Янтарь — главное действие экрана; кромка и блик дают
-     кнопке объём, а не просто заливку. */
-  --color-accent: #ffb22e;
-  --color-accent-pressed: #f09a12;
-  --color-accent-glow: #ffd27a;
-  --color-accent-edge: #a85a06;
-  --color-on-accent: #1d1102;
-
-  /* Цвет: состояние */
-  --color-danger: #ff5d5d;
-  --color-warning: #ff8c42;
-  --color-success: #5fe3a1;
-  --color-info: #5ccfff;
-
-  /* Цвет: игра. Семантика забега; те же значения читает канва через tokens.ts */
-  --color-hp: #5fe3a1;
-  --color-hp-low: #ff5d5d;
-  --color-xp: #5ccfff;
-  --color-elite: #ffd36b;
-  --color-weapon: #ffe066;
-  --color-passive: #c47dff;
-
-  /* Цвет: валюты оплаты. Фирменные цвета чужих валют — Telegram Stars, а
-     вместе с MAX и VK рубли: их задают площадки, и при смене нашего
-     направления они не меняются, как чужой логотип. Отправная точка —
-     палитра vpnsibcom_web (`--tg-star`, `--on-tg-star`). */
-  --color-stars: #ffd000;
-  --color-on-stars: #2a1f00;
-
-  /* Цвет: наши валюты. Иконки многотонные и перекрашиваются палитрой, а не
-     одним цветом (docs/35-stage4-plan.md, Р27): каждый тон — переменная.
-     Монета — золото, самоцвет — алый кристалл; в отличие от звёзд, это наш
-     стиль и меняется вместе с направлением. */
-  --color-coin-hi: #fff16a;
-  --color-coin: #ffd400;
-  --color-coin-lo: #ff9f00;
-  --color-gem-hi: #ffc9cc;
-  --color-gem-light: #ff8891;
-  --color-gem: #ff515e;
-  --color-gem-lo: #f0303e;
-
-  /*
-   * Типографика. Две гарнитуры (§4.3): Rubik — акцидентная для заголовков,
-   * кнопок и крупных цифр, Inter — текстовая. Обе с кириллицей, файлы — в
-   * бандле (fonts.css). Системные стеки за ними — на время загрузки файла.
-   */
-  --font-display: "Rubik Variable", "Segoe UI", system-ui, sans-serif;
-  --font-text: "Inter Variable", system-ui, "Segoe UI", Roboto, sans-serif;
-
-  --text-xs: 12px;
-  --text-sm: 14px;
-  --text-base: 16px;
-  --text-lg: 20px;
-  --text-xl: 24px;
-  --text-2xl: 32px;
-  --text-3xl: 40px;
-  --text-4xl: 48px;
-
-  /* Радиусы */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
-  --radius-pill: 9999px;
-
-  /*
-   * Тени. Статичные: анимировать тень запрещено (§3.3, правило 2) — там, где
-   * нужно «дышащее» свечение, анимируется прозрачность отдельного слоя.
-   */
-  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 24px -14px rgb(0 0 0 / 0.9);
-  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 24px 48px -16px rgb(0 0 0 / 0.95);
-  --shadow-button: 0 8px 18px -10px rgb(0 0 0 / 0.9);
-
-  /* Движение (§4.5): основная кривая, выход с торможением и пружина для появлений */
-  --ease-base: cubic-bezier(0.2, 0, 0.2, 1);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   /* Колесо удачи: быстрый разгон и долгое торможение — последний сектор
      проходит под стрелкой медленно, и видно, где оно остановится. */
   --ease-spin: cubic-bezier(0.12, 0.62, 0.08, 1);
@@ -527,9 +442,6 @@
   --z-toast: 40;
   --z-diagnostics: 50;
 
-  --duration-fast: 120ms;
-  --duration-base: 200ms;
-  --duration-slow: 300ms;
   /* Оборот колеса удачи целиком: короче — не успеваешь следить, длиннее — ждёшь. */
   --duration-spin: 4200ms;
 

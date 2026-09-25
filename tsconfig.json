@@ -8,6 +8,9 @@
       "path": "packages/fx"
     },
     {
+      "path": "packages/design-tokens"
+    },
+    {
       "path": "packages/core-game"
     },
     {
