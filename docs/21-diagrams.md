@@ -150,6 +150,57 @@ erDiagram
         datetime updated_at
     }
 
+    FX_QUOTE {
+        string source PK
+        string currency PK "код ядра: RUB, GRAM, XTR…"
+        decimal usd_per_unit "numeric(80,50): цена единицы в долларах"
+        datetime observed_at "когда курс видели у источника"
+        datetime saved_at
+    }
+
+    FX_RATE_CURRENT {
+        string currency PK
+        decimal usd_per_unit
+        string_array sources "голоса медианы"
+        datetime observed_at "по нему считается свежесть"
+        datetime accepted_at
+    }
+
+    FX_RATE_HISTORY {
+        uuid id PK
+        string currency
+        decimal usd_per_unit
+        string_array sources
+        datetime observed_at
+        datetime accepted_at "неизменный курс — не чаще раза в час"
+    }
+
+    FX_MANUAL_RATE {
+        uuid id PK
+        string currency "только валюты площадок"
+        string purpose "price — игроку, payout — нам"
+        decimal usd_per_unit
+        string set_by "кто поставил — и в аудите"
+        datetime set_at
+        datetime expires_at "просрочен — алерт и вне снимка"
+        string note
+    }
+
+    FX_SNAPSHOT {
+        uuid id PK "на него ссылаются цена и платёж"
+        datetime taken_at
+        json rates "цены для игрока, десятичные строкой"
+        json payout "курсы выплаты валют площадок"
+    }
+
+    FX_SOURCE_STATE {
+        string source PK
+        string month "ГГГГ-ММ по UTC"
+        int used "запросов в этом месяце"
+        datetime paused_until "nullable: после 429"
+        datetime next_poll_at
+    }
+
     WALLET_DAILY {
         uuid account_id PK,FK
         enum resource PK
@@ -266,6 +317,12 @@ erDiagram
   выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
   подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
   разбора.
+- **`FX_*` — курсы валют** (`35-stage4-plan.md`, §3.12, WP9). Таблицы не
+  связаны с аккаунтами и друг с другом ключами: курс — факт о мире, а не об
+  игроке. Коды валют — строкой, а не перечислением базы: перечень живёт в
+  ядре `packages/fx`, и новая валюта не требует миграции. Котировка — одна
+  на источник и валюту, текущий курс — один на валюту, история и заданные
+  курсы — только добавлением, снимок неизменяем.
 - **`WALLET_ENTRY` — журнал кошелька, `WALLET_BALANCE` — его проекция**
   (`35-stage4-plan.md`, WP3). Любая ценность игрока — строка журнала с
   уникальным ключом идемпотентности; баланс меняется в той же транзакции и
@@ -603,6 +660,7 @@ flowchart TD
     SH["packages/app-shell<br/>React: дизайн-система, экраны,<br/>состояние, навигация"]
     CG["packages/core-game<br/>забег: симуляция + Phaser, content/*"]
     ST["packages/shared-types<br/>контракты, лист графа"]
+    FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
     API["backend/api<br/>NestJS"]
 
     WT --> SH
@@ -619,6 +677,7 @@ flowchart TD
     AV --> ST
     CG --> ST
     API --> ST
+    API --> FX
 ```
 
 Стрелка из `apps/web-*` в `core-game` осталась одна и узкая: приложение берёт
@@ -640,7 +699,10 @@ flowchart TD
 - стрелки из `core-game` в `app-shell` — движок не знает, кто рисует меню;
 - стрелки между адаптерами — общее выносится в `shared-types`;
 - стрелки из `core-game` в `backend/api` — игровой цикл работает офлайн;
-- любых стрелок **из** `shared-types` — это лист графа.
+- любых стрелок **из** `shared-types` — это лист графа;
+- любых стрелок **из** `fx` — ядро курсов станет отдельным сервисом и не
+  знает ни об игре, ни о Nest, ни о Prisma. Бэкенд берёт его собранным
+  (`dist`), тесты и dev-запуск — исходником.
 
 ### 2.1 Внутреннее устройство core-game
 
@@ -780,7 +842,10 @@ flowchart LR
         WELCOME["welcome<br/>/start с карточкой, реализовано"]
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
+        FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
     end
+
+    FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
 
     TGAPI["Telegram Bot API"]
 
@@ -833,6 +898,10 @@ flowchart LR
     PAY --> QUEUE
     WELCOME -. рекорд и место .-> PT
     EXPORT --> QUEUE
+    FXM -- раз в минуту, под локом --> FXSRC
+    FXM --> PG
+    FXM --> REDIS
+    FXM -. алерты курсов .-> NOTIFY
     EXPORT --> PG
     QUEUE -- sendPhoto, sendDocument --> TGAPI
 

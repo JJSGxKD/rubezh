@@ -39,19 +39,24 @@ COPY packages/adapter-telegram/package.json packages/adapter-telegram/
 COPY packages/adapter-vk/package.json packages/adapter-vk/
 COPY packages/app-shell/package.json packages/app-shell/
 COPY packages/core-game/package.json packages/core-game/
+COPY packages/fx/package.json packages/fx/
 COPY packages/shared-types/package.json packages/shared-types/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter backend-api...
 
 # --- Сборка ------------------------------------------------------------------
-# Бэкенд не импортирует @bh/shared-types, поэтому остального монорепо здесь
-# нет: собирается только backend/api.
+# Из монорепо бэкенд берёт только ядро курсов packages/fx — собранным, как
+# зависимость (docs/35-stage4-plan.md, §3.12). @bh/shared-types он не
+# импортирует, и остального монорепо здесь нет. Фильтр `backend-api...`
+# собирает пакет курсов раньше бэкенда: типы бэкенд берёт из его dist.
 FROM deps AS build
 COPY tsconfig.base.json ./
+COPY packages/fx/tsconfig.json packages/fx/
+COPY packages/fx/src packages/fx/src
 COPY backend/api/tsconfig.json backend/api/
 COPY backend/api/src backend/api/src
 RUN pnpm --filter backend-api prisma:generate \
- && pnpm --filter backend-api build
+ && pnpm --filter "backend-api..." build
 
 # --- Рантайм -----------------------------------------------------------------
 # Ставятся только прод-зависимости, без devDependencies. Prisma CLI среди них:
@@ -64,6 +69,7 @@ ENV NODE_ENV="production" \
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY backend/api/package.json backend/api/prisma.config.ts backend/api/
 COPY backend/api/prisma backend/api/prisma
+COPY packages/fx/package.json packages/fx/
 # Скрипты установки здесь не отключаются намеренно: postinstall @prisma/engines
 # кладёт движок миграций в образ. Без него Prisma полезет скачивать его при
 # старте контейнера — в прод-сети это отказ деплоя, а не задержка.
@@ -71,6 +77,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --filter backend-api...
 
 COPY --from=build /app/backend/api/dist backend/api/dist
+COPY --from=build /app/packages/fx/dist packages/fx/dist
 
 # Бит исполняемости не приезжает из Windows (CLAUDE.md, «Окружение команды»),
 # поэтому выставляется здесь, а не ожидается от git.

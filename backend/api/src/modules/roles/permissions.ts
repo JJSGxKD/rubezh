@@ -46,6 +46,9 @@ export const PERMISSIONS = [
   // Бухгалтерия и распределение дохода (docs/11-revenue-split.md)
   "finance.entry.create",
   "finance.period.close",
+  // Заданные руками курсы валют площадок — курс выплаты звёзд определяет
+  // выручку, поэтому только владельцу (docs/35-stage4-plan.md, §3.12)
+  "fx.rates.edit",
   "revenue.split.view",
   "revenue.split.own.view",
   // Реклама и партнёры

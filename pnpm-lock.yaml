@@ -140,6 +140,9 @@ importers:
 
   backend/api:
     dependencies:
+      '@bh/fx':
+        specifier: workspace:*
+        version: link:../../packages/fx
       '@nestjs/common':
         specifier: 12.0.3
         version: 12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2)

@@ -623,3 +623,84 @@ model WalletDaily {
   @@id([accountId, resource, reason, day])
   @@map("wallet_daily")
 }
+
+// Курсы валют (docs/35-stage4-plan.md, §3.12, WP9). Курс — цена единицы в
+// долларах, `Decimal` на 50 знаков после запятой: у рубля в долларах сорок
+// значащих цифр начинаются со второго знака. Коды валют — строкой, а не
+// перечислением базы: перечень валют живёт в ядре `packages/fx`, и новая
+// валюта не должна требовать миграции.
+
+/// Последняя котировка источника по валюте — голос медианы.
+model FxQuote {
+  source     String   @db.VarChar(32)
+  currency   String   @db.VarChar(8)
+  usdPerUnit Decimal  @map("usd_per_unit") @db.Decimal(80, 50)
+  observedAt DateTime @map("observed_at") @db.Timestamptz(3)
+  savedAt    DateTime @map("saved_at") @db.Timestamptz(3)
+
+  @@id([source, currency])
+  @@map("fx_quote")
+}
+
+/// Текущий принятый курс — по нему считаются свежесть и снимок.
+model FxRateCurrent {
+  currency   String   @id @db.VarChar(8)
+  usdPerUnit Decimal  @map("usd_per_unit") @db.Decimal(80, 50)
+  sources    String[] @db.VarChar(64)
+  observedAt DateTime @map("observed_at") @db.Timestamptz(3)
+  acceptedAt DateTime @map("accepted_at") @db.Timestamptz(3)
+
+  @@map("fx_rate_current")
+}
+
+/// История принятых курсов — только добавлением.
+model FxRateHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  currency   String   @db.VarChar(8)
+  usdPerUnit Decimal  @map("usd_per_unit") @db.Decimal(80, 50)
+  sources    String[] @db.VarChar(64)
+  observedAt DateTime @map("observed_at") @db.Timestamptz(3)
+  acceptedAt DateTime @map("accepted_at") @db.Timestamptz(3)
+
+  @@index([currency, acceptedAt])
+  @@map("fx_rate_history")
+}
+
+/// Заданный руками курс валюты площадки — с целью и сроком годности.
+model FxManualRate {
+  id         String   @id @default(uuid()) @db.Uuid
+  currency   String   @db.VarChar(8)
+  /// price — цена для игрока, payout — выплата нам
+  purpose    String   @db.VarChar(16)
+  usdPerUnit Decimal  @map("usd_per_unit") @db.Decimal(80, 50)
+  setBy      String   @map("set_by") @db.VarChar(64)
+  setAt      DateTime @map("set_at") @db.Timestamptz(3)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  note       String   @db.VarChar(200)
+
+  @@index([currency, purpose, setAt])
+  @@map("fx_manual_rate")
+}
+
+/// Снимок курсов — на него ссылаются цена и платёж. Неизменяем.
+model FxSnapshot {
+  id      String   @id @default(uuid()) @db.Uuid
+  takenAt DateTime @map("taken_at") @db.Timestamptz(3)
+  /// { КОД: { usdPerUnit, sources, observedAt } } — десятичные строкой
+  rates   Json
+  payout  Json
+
+  @@index([takenAt])
+  @@map("fx_snapshot")
+}
+
+/// Бюджет запросов источника и когда спрашивать его снова.
+model FxSourceState {
+  source      String    @id @db.VarChar(32)
+  month       String    @db.VarChar(7)
+  used        Int
+  pausedUntil DateTime? @map("paused_until") @db.Timestamptz(3)
+  nextPollAt  DateTime  @map("next_poll_at") @db.Timestamptz(3)
+
+  @@map("fx_source_state")
+}

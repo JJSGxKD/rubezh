@@ -12,5 +12,8 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Ядро курсов бэкенд берёт собранным: `tsc -b` соберёт пакет первым, а
+  // типы придут из его `dist` (docs/35-stage4-plan.md, §3.12).
+  "references": [{ "path": "../../packages/fx" }]
 }
