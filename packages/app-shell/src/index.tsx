@@ -16,7 +16,6 @@ import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
 import { usePlaytest } from "./state/playtest";
 import { useRuns } from "./state/runs";
-import { useWallet } from "./state/wallet";
 import { recoverDownedRun } from "./state/run";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
@@ -110,11 +109,17 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
   // них игрок не должен ждать заставку. Затем профиль и кошелёк: рекорд,
   // поставленный на другом устройстве, появляется на главной, награды за
-  // досланные забеги — в шапке.
+  // досланные забеги — в шапке и уровне.
   void useRuns
     .getState()
     .flush("launch")
-    .then(() => Promise.all([useRuns.getState().loadProfile(), useWallet.getState().load()]));
+    .then(() =>
+      Promise.all([
+        useRuns.getState().loadProfile(),
+        // Кошелёк и уровень — отдельным чанком: запрос к ним не нужен первому кадру.
+        import("./state/progress-api").then(({ loadAccountState }) => loadAccountState()),
+      ]),
+    );
   void usePlaytest.getState().loadAccess();
   // Сессия игрока — отдельным чанком после главной: деньгам и рейтингу она
   // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический

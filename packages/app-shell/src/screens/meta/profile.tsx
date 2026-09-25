@@ -14,6 +14,7 @@ import { formatDuration, formatNumber, t } from "../../i18n";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
 import type { ApiFailure } from "../../state/api-request";
+import { useProgress, type ProgressView } from "../../state/progress";
 import { useRuns } from "../../state/runs";
 import { useSession } from "../../state/session";
 import { useShell } from "../../state/shell";
@@ -34,6 +35,7 @@ export function ProfileScreen(): ReactNode {
   const navigation = useNavigation();
   const user = useShell((state) => state.adapter.displayUser);
   const profile = useRuns((state) => state.profile);
+  const progress = useProgress((state) => state.progress);
   const pending = useRuns((state) => state.pending);
   const local = useMeta();
   const account = useSession((state) => state.account);
@@ -44,7 +46,12 @@ export function ProfileScreen(): ReactNode {
   const load = async (): Promise<void> => {
     setFailure(null);
     await useRuns.getState().flush("screen");
-    setFailure(await useRuns.getState().loadProfile());
+    const [runs] = await Promise.all([
+      useRuns.getState().loadProfile(),
+      // Запрос уровня — отдельным чанком, как и сам вопрос о награде.
+      import("../../state/progress-api").then(({ loadProgress }) => loadProgress()),
+    ]);
+    setFailure(runs);
   };
 
   // Вход наладился — после повтора или уже открытого экрана — профиль
@@ -77,6 +84,7 @@ export function ProfileScreen(): ReactNode {
               value={profile === null ? "—" : formatPlayTime(profile.totalSurvivalSec)}
             />
           </div>
+          {progress === null ? null : <AccountLevel progress={progress} />}
         </Card>
 
         {notice !== null ? (
@@ -185,4 +193,35 @@ function formatPlayTime(seconds: number): string {
   if (seconds < 3600) return formatDuration(seconds);
   const hours = Math.floor(seconds / 3600);
   return t("time.hoursMinutes", { hours, minutes: Math.floor((seconds % 3600) / 60) });
+}
+
+/**
+ * Уровень аккаунта (docs/35-stage4-plan.md, WP4): сколько набрано внутри
+ * уровня и что даст следующий — чтобы уровень был целью, а не цифрой.
+ */
+function AccountLevel(props: { progress: ProgressView }): ReactNode {
+  const { progress } = props;
+  const share = progress.xpForNext === null || progress.xpForNext === 0 ? 1 : Math.min(1, progress.xpIntoLevel / progress.xpForNext);
+  return (
+    <div className="mt-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-display text-sm font-bold text-text">{t("profile.level", { level: progress.level })}</span>
+        <span className="text-xs tabular-nums text-text-muted">
+          {progress.xpForNext === null
+            ? t("profile.level.max")
+            : t("profile.level.xp", { current: formatNumber(progress.xpIntoLevel), next: formatNumber(progress.xpForNext) })}
+        </span>
+      </div>
+      <span className="surface-sunken mt-1.5 block h-2 overflow-hidden rounded-pill">
+        <span className="fill-xp block h-full origin-left rounded-pill" style={{ transform: `scaleX(${share})` }} />
+      </span>
+      {progress.nextReward === null ? null : (
+        <p className="mt-1.5 text-xs text-text-muted">
+          {progress.nextReward.gems > 0
+            ? t("profile.level.nextRewardGems", { coins: formatNumber(progress.nextReward.coins), gems: progress.nextReward.gems })
+            : t("profile.level.nextReward", { coins: formatNumber(progress.nextReward.coins) })}
+        </p>
+      )}
+    </div>
+  );
 }

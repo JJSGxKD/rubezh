@@ -155,6 +155,7 @@ export function RunScreen(): ReactNode {
           diagnostics={diagnostics}
           cheatsCounted={run.devRun && countInRating}
           {...(run.phase === "downed" ? { secondChance: secondChanceFor(run.result, run.devRun) } : {})}
+          showReward={run.phase === "finished"}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
           onShare={() => shareRun()}

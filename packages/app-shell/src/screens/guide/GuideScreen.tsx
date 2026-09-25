@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Crosshair, History, Hourglass, Lightbulb, Shuffle, Swords } from "lucide-react";
+import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
 import { DIFFICULTIES, DROPS, LOADOUT_LIMITS } from "@bh/core-game";
 import {
@@ -161,6 +162,8 @@ function Basics(): ReactNode {
       </Topic>
 
       <Topic index={7} icon={<History size={20} />} title={t("guide.basics.save.title")} text={t("guide.basics.save.text")} />
+
+      <Topic index={8} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
     </>
   );
 }

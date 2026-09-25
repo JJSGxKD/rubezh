@@ -244,6 +244,7 @@ function renderPreview(preview: Preview): ReactNode {
           result={SAMPLE_RESULT}
           isNewRecord={false}
           diagnostics
+          reward={{ status: "pending" }}
           onRestart={noop}
           onMenu={noop}
           onShare={noop}
@@ -255,6 +256,15 @@ function renderPreview(preview: Preview): ReactNode {
           result={SAMPLE_RESULT}
           isNewRecord
           diagnostics={false}
+          reward={{
+            status: "granted",
+            coins: 88,
+            coinsCapped: false,
+            xp: 165,
+            levelBefore: 4,
+            levelAfter: 5,
+            progress: { level: 5, xp: 1400, xpIntoLevel: 21, xpForNext: 545, nextReward: { coins: 300, gems: 0 } },
+          }}
           onRestart={noop}
           onMenu={noop}
           onShare={noop}
