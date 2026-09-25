@@ -5,10 +5,12 @@ import { hasTranslation } from "../src/i18n";
 import "../src/i18n/guide";
 import {
   eliteEnemies,
+  enemyResists,
   passiveCategories,
   passiveRange,
   regularEnemies,
   speedClass,
+  weaponElements,
   weaponGrowth,
 } from "../src/screens/guide/guide-data";
 
@@ -61,6 +63,38 @@ describe("гайдбук", () => {
         expect(change.from).not.toBe(change.to);
         expect(hasTranslation(change.labelKey), change.labelKey).toBe(true);
       }
+    }
+  });
+
+  it("называет и объясняет каждую стихию оружия и стойкости врагов", () => {
+    const elements = weaponElements();
+    expect(elements.length).toBeGreaterThan(0);
+    for (const element of elements) {
+      expect(hasTranslation(`guide.element.${element}`), element).toBe(true);
+      expect(hasTranslation(`guide.status.${element}`), element).toBe(true);
+      expect(hasTranslation(`upgrade.stat.statusChance.${element}`), element).toBe(true);
+    }
+    for (const enemy of ENEMIES) {
+      const { strong, weak } = enemyResists(enemy);
+      for (const element of [...strong, ...weak]) expect(hasTranslation(`guide.element.${element}`), enemy.id).toBe(true);
+    }
+  });
+
+  it("делит стойкость врага на стойкость и слабость, а без стойкостей — пусто", () => {
+    const [anyEnemy] = ENEMIES;
+    if (anyEnemy === undefined) throw new Error("контент без врагов");
+    expect(enemyResists({ ...anyEnemy, resist: { fire: 0.5, cold: -0.5, lightning: 0 } })).toEqual({
+      strong: ["fire"],
+      weak: ["cold"],
+    });
+    expect(enemyResists({ ...anyEnemy, resist: undefined })).toEqual({ strong: [], weak: [] });
+  });
+
+  it("показывает рост шанса состояния у стихийного оружия в процентах", () => {
+    for (const weapon of WEAPONS.filter((candidate) => candidate.element !== undefined)) {
+      const chance = weaponGrowth(weapon).find((change) => change.labelKey.startsWith("upgrade.stat.statusChance."));
+      expect(chance, weapon.id).toBeDefined();
+      expect(Number.isInteger(chance?.from) && Number.isInteger(chance?.to), weapon.id).toBe(true);
     }
   });
 

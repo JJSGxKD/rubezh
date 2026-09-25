@@ -1,3 +1,4 @@
+import type { StatusElement } from "@bh/shared-types";
 import type { EnemyPool } from "../sim/pools";
 
 /**
@@ -20,6 +21,17 @@ export const STATUS_TONE = {
 
 /** Цвет заливки по тону. Заморозка — светлее холода: это его предел, а не другая стихия. */
 export const STATUS_TONE_COLORS: readonly number[] = [0, 0xb8ecff, 0xfff06a, 0xff7a2e, 0x8ee05a, 0x4f9dff];
+
+/**
+ * Тон, которым стихия красит врага. Гайдбук показывает стихию тем же цветом:
+ * игрок, прочитавший «огонь», узнаёт горящего по цвету на поле.
+ */
+export const ELEMENT_TONE: Readonly<Record<StatusElement, number>> = {
+  fire: STATUS_TONE.burn,
+  cold: STATUS_TONE.chill,
+  lightning: STATUS_TONE.shock,
+  poison: STATUS_TONE.poison,
+};
 
 /**
  * Пульс тона: `STATUS_PULSE_ON` тиков заливки из каждых `STATUS_PULSE_TICKS`.
