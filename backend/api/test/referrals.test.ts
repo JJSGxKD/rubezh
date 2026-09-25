@@ -40,6 +40,17 @@ class MemoryReferrals implements ReferralsRepository {
   async activatedToday(referrerId: string): Promise<number> {
     return [...this.bindings.values()].filter((row) => row.referrerId === referrerId && row.status === "activated").length;
   }
+  async counts(referrerId: string): Promise<Record<"bound" | "activated" | "rejected", number>> {
+    const counts = { bound: 0, activated: 0, rejected: 0 };
+    for (const row of this.bindings.values()) if (row.referrerId === referrerId) counts[row.status]++;
+    return counts;
+  }
+  async reject(referredId: string, reason: string): Promise<boolean> {
+    const binding = this.bindings.get(referredId);
+    if (binding?.status !== "bound") return false;
+    this.bindings.set(referredId, { ...binding, status: "rejected", rejectReason: reason });
+    return true;
+  }
   async byReferrer(referrerId: string): Promise<ReferralRow[]> {
     const rows: ReferralRow[] = [];
     for (const binding of this.bindings.values()) {
@@ -186,6 +197,16 @@ describe("активация", () => {
     expect(wallet.grants.get(`referral:${newcomer.accountId}`)).toMatchObject({ accountId: owner.accountId, amount: REFERRAL_RULES.referrerCoins });
     expect([...wallet.grants.keys()].filter((key) => key.startsWith("referral:"))).toHaveLength(1);
     expect((await service.mine(owner.accountId)).activated).toBe(1);
+  });
+
+  it("привязка, отклонённая модератором до активации, награды пригласившему не даёт", async () => {
+    const owner = await player("1");
+    const newcomer = await player("2");
+    await service.onLogin(login(newcomer, await inviteLink(owner)));
+    expect(await referrals.reject(newcomer.accountId, "moderator")).toBe(true);
+    await playRuns(newcomer, REFERRAL_RULES.activationRuns);
+    expect(wallet.grants.has(`referral:${newcomer.accountId}`)).toBe(false);
+    expect(await referrals.counts(owner.accountId)).toEqual({ bound: 0, activated: 0, rejected: 1 });
   });
 
   it("забег с читами или отклонённый не продвигает активацию", async () => {

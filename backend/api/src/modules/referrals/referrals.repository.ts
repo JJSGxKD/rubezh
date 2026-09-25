@@ -32,6 +32,14 @@ export interface ReferralsRepository {
   /** Сколько приглашённых пригласившего активировано за текущие игровые сутки. */
   activatedToday(referrerId: string): Promise<number>;
   byReferrer(referrerId: string, limit: number): Promise<ReferralRow[]>;
+  /** Сколько приведённых по статусам — для карточки игрока в панели. */
+  counts(referrerId: string): Promise<Record<ReferralStatus, number>>;
+  /**
+   * Отклонить привязку, пока награда пригласившему не начислена: модератор
+   * нашёл накрутку (docs/23-referral-and-partner-program.md §2.4).
+   * `false` — привязки нет или она уже активирована либо отклонена.
+   */
+  reject(referredId: string, reason: string): Promise<boolean>;
 }
 
 @Injectable()
@@ -61,6 +69,18 @@ export class PrismaReferralsRepository implements ReferralsRepository {
       WHERE referrer_account_id = ${referrerId}::uuid AND status = 'activated'
         AND (activated_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date = (now() AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date`;
     return row?.count ?? 0;
+  }
+
+  async counts(referrerId: string): Promise<Record<ReferralStatus, number>> {
+    const groups = await this.prisma.referralBinding.groupBy({ by: ["status"], where: { referrerId }, _count: { _all: true } });
+    const counts: Record<ReferralStatus, number> = { bound: 0, activated: 0, rejected: 0 };
+    for (const group of groups) counts[group.status] = group._count._all;
+    return counts;
+  }
+
+  async reject(referredId: string, reason: string): Promise<boolean> {
+    const { count } = await this.prisma.referralBinding.updateMany({ where: { referredId, status: "bound" }, data: { status: "rejected", rejectReason: reason } });
+    return count > 0;
   }
 
   async byReferrer(referrerId: string, limit: number): Promise<ReferralRow[]> {

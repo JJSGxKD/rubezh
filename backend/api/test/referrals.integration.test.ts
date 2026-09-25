@@ -41,6 +41,19 @@ describe.skipIf(DATABASE_URL === "")("рефералка на живом Postgre
     expect(await referrals.activate(referred, new Date())).toBe(false);
     expect(await referrals.activatedToday(referrer)).toBe(1);
     expect((await referrals.byReferrer(referrer, 10))[0]).toMatchObject({ referredId: referred, status: "activated", displayName: "Приглашённый" });
+    // Активированную задним числом отклонить нельзя: награда уже начислена.
+    expect(await referrals.reject(referred, "moderator")).toBe(false);
+  });
+
+  it("модератор отклоняет ожидающую привязку; счётчики по статусам", async () => {
+    const referrer = await account();
+    const [first, second] = await Promise.all([account(), account()]);
+    await referrals.bind(first, referrer, "bound", null);
+    await referrals.bind(second, referrer, "bound", null);
+    expect(await referrals.reject(first, "moderator")).toBe(true);
+    expect(await referrals.binding(first)).toMatchObject({ status: "rejected", rejectReason: "moderator" });
+    await referrals.activate(second, new Date());
+    expect(await referrals.counts(referrer)).toEqual({ bound: 0, activated: 1, rejected: 1 });
   });
 
   it("отклонённая привязка остаётся, не активируется и не видна пригласившему", async () => {

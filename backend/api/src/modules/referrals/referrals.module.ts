@@ -17,5 +17,6 @@ import { ReferralsService } from "./referrals.service.js";
   imports: [AuthModule, AttributionModule, FriendsModule, RunsModule, WalletModule],
   controllers: [ReferralsController],
   providers: [ReferralsService, { provide: REFERRALS_REPOSITORY, useClass: PrismaReferralsRepository }],
+  exports: [REFERRALS_REPOSITORY],
 })
 export class ReferralsModule {}
