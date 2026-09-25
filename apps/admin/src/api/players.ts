@@ -170,3 +170,31 @@ export function walletAdjustProblem(delta: number, note: string, maxOperation = 
   if (length < 3 || length > 200) return "Причина — от 3 до 200 символов: она попадёт в журнал кошелька и в аудит";
   return null;
 }
+
+/** Друзья и рефералка игрока (`GET /admin/players/:id/social`). */
+export const socialSchema = z.object({
+  friends: z.number(),
+  referredBy: z
+    .object({
+      referrerId: z.string(),
+      referrerName: z.string().nullable(),
+      status: z.string(),
+      boundAt: iso,
+      activatedAt: isoOrNull,
+      rejectReason: z.string().nullable(),
+    })
+    .nullable(),
+  referrals: z.object({ bound: z.number(), activated: z.number(), rejected: z.number() }),
+});
+
+export type Social = z.infer<typeof socialSchema>;
+
+export const REFERRAL_STATUSES: Record<string, string> = { bound: "ждёт активации", activated: "активирован", rejected: "отклонён" };
+
+export function fetchSocial(api: AdminApi, accountId: string): Promise<ApiResult<Social>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/social`, { schema: socialSchema });
+}
+
+export function rejectReferral(api: AdminApi, accountId: string, reason: string): Promise<ApiResult<{ rejected: boolean }>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/referral/reject`, { method: "POST", body: { reason }, schema: z.object({ rejected: z.boolean() }) });
+}

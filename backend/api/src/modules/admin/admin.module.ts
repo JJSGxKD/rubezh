@@ -1,3 +1,7 @@
+import { FriendsModule } from "../friends/friends.module.js";
+import { ReferralsModule } from "../referrals/referrals.module.js";
+import { AdminSocialController } from "./admin-social.controller.js";
+import { AdminSocialService } from "./admin-social.service.js";
 import { Module } from "@nestjs/common";
 import { AttributionModule } from "../attribution/attribution.module.js";
 import { AuthModule } from "../auth/auth.module.js";
@@ -33,7 +37,7 @@ import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.sto
  * `ADMIN_PANEL_ENABLED`; выключенный отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -42,6 +46,7 @@ import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.sto
     AdminRolesController,
     AdminDiagnosticsController,
     AdminExportsController,
+    AdminSocialController,
   ],
   providers: [
     AdminSessionService,
@@ -49,6 +54,7 @@ import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.sto
     AdminPlayersService,
     AdminRolesService,
     AdminExportsService,
+    AdminSocialService,
     { provide: ADMIN_SESSION_STORE, useClass: RedisAdminSessionStore },
   ],
 })

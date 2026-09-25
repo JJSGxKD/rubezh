@@ -55,6 +55,7 @@ describe.skipIf(DATABASE_URL === "")("дружба на живом Postgres", ()
     expect(await prisma.friendship.count({ where: { accountA, accountB } })).toBe(1);
     expect((await friends.friends(a, 10))[0]).toMatchObject({ accountId: b, source: "request", displayName: `Друг ${marker}` });
     expect((await friends.friends(b, 10))[0]?.accountId).toBe(a);
+    expect(await friends.count(a)).toBe(1);
 
     expect(await friends.remove(b, a)).toBe(true);
     expect(await friends.areFriends(a, b)).toBe(false);
