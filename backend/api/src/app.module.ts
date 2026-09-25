@@ -27,6 +27,7 @@ import { TelegramMessagingModule } from "./platforms/telegram/telegram-messaging
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 import { AdminModule } from "./modules/admin/admin.module.js";
+import { FriendsModule } from "./modules/friends/friends.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -77,6 +78,7 @@ export const APP_MODULES = [
   WelcomeModule,
   PlaytestModule,
   AdminModule,
+  FriendsModule,
 ];
 
 /**
