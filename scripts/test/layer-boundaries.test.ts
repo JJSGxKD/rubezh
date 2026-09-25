@@ -71,6 +71,11 @@ const RULES: Rule[] = [
     why: "ядро курсов самодостаточно: ни игры, ни Nest, ни Prisma — им станет отдельный сервис (docs/35-stage4-plan.md, Р32)",
   },
   {
+    from: "apps/admin/src",
+    forbidden: /["']@bh\/(core-game|app-shell|adapter-)|["']phaser["']/i,
+    why: "панель — отдельное приложение команды: ни движка, ни оболочки игры, ни площадок; с игрой её роднят только токены дизайна (docs/29-admin-panel.md §4)",
+  },
+  {
     from: "packages/core-game/src/content",
     forbidden: /["']\.\.\/game\//,
     why: "контент — это данные: он не знает о коде движка",

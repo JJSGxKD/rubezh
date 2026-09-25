@@ -1,0 +1,31 @@
+@import "tailwindcss";
+@import "@bh/design-tokens/tokens.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/rubik";
+
+/*
+ * Панель берёт палитру, гарнитуры и шкалы из общего пакета токенов, а
+ * компоненты у неё свои (docs/29-admin-panel.md §4): плотная таблица и форма
+ * операции не похожи на карточку апгрейда. Смена визуального направления
+ * игры меняет и панель — правкой пакета, а не этого файла.
+ */
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-text);
+    font-size: var(--text-sm);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
+
+  /* Таблицы панели плотные: цифры в колонках должны стоять ровно. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}

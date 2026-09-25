@@ -115,7 +115,7 @@
 
 | Группа в `.env.example` | Что внутри | Где брать значения |
 |---|---|---|
-| 1. Окружение и порты | `NODE_ENV`, `API_PORT`, `API_HOST`, `WEB_*_PORT`, `POSTGRES_PORT`, `REDIS_PORT` | из карты портов §2. `NODE_ENV` из `.env` читает только бэкенд: сборка клиента его игнорирует и всегда production (`scripts/vite/production-node-env.ts`), иначе Vite собирал бы отладочный React |
+| 1. Окружение и порты | `NODE_ENV`, `API_PORT`, `API_HOST`, `WEB_*_PORT`, `ADMIN_PORT`, `POSTGRES_PORT`, `REDIS_PORT` | из карты портов §2. `NODE_ENV` из `.env` читает только бэкенд: сборка клиента его игнорирует и всегда production (`scripts/vite/production-node-env.ts`), иначе Vite собирал бы отладочный React |
 | 2. Postgres и Redis | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `REDIS_URL` | dev — из `docker-compose.yml`; прод — секреты окружения. Миграции применяются отдельно: `pnpm --filter backend-api prisma:deploy` |
 | 3. Адреса, CORS и туннель | `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml`. За Caddy `TRUST_PROXY_HOPS=1` |
 | 4. Бот закрытого теста | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_API_ROOT`, `TELEGRAM_BOT_UPDATES`, `TELEGRAM_WEBHOOK_SECRET`, `VITE_TELEGRAM_BOT_USERNAME` | из BotFather; для staging — **отдельный** бот, иначе два процесса дерутся за обновления. Секрет вебхука генерируется: `openssl rand -hex 32` |

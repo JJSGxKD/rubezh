@@ -17,6 +17,7 @@
     "packages/*/test/**/*.ts",
     "backend/*/test/**/*.ts",
     "scripts/test/**/*.ts",
+    "apps/admin/test/**/*.ts",
     "scripts/balance/**/*.ts",
     "vitest.config.ts",
     "vitest.balance.config.ts"
