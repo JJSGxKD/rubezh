@@ -1,6 +1,7 @@
 import { acceptQuotes, type AcceptDecision } from "./accept.js";
 import { nextPollDelayMs, pauseAfterRateLimit, recordPoll, type SourceUsage } from "./budget.js";
 import { BASE_CURRENCY, CURRENCIES, type CurrencyCode } from "./currencies.js";
+import { Decimal } from "./decimal.js";
 import { freshness, type Freshness } from "./freshness.js";
 import { manualToRate, type ManualRatePurpose } from "./manual.js";
 import { ACCEPT_POLICY, FRESHNESS_POLICY, HISTORY_REPEAT_MS, SOURCE_TIMEOUT_MS } from "./policy.js";
@@ -97,18 +98,25 @@ export async function refreshRates(input: { sources: readonly RateSource[]; stor
 export async function takeSnapshot(store: RateStore, now: Date): Promise<RatesSnapshot> {
   const rates = new Map<CurrencyCode, Rate>();
   const payout = new Map<CurrencyCode, Rate>();
-  for (const code of Object.keys(CURRENCIES) as CurrencyCode[]) {
-    if (code === BASE_CURRENCY) continue;
+  const codes = (Object.keys(CURRENCIES) as CurrencyCode[]).filter((code) => code !== BASE_CURRENCY);
+
+  // Сначала рыночные курсы: через них переводятся заданные в рублях.
+  for (const code of codes) {
     const kind = CURRENCIES[code].kind;
-    if (kind !== "platform") {
-      const rate = await store.currentRate(code);
-      if (rate !== null && freshness(rate.observedAt, now, FRESHNESS_POLICY[kind]) !== "expired") rates.set(code, stripAccepted(rate));
-      continue;
-    }
+    if (kind === "platform") continue;
+    const rate = await store.currentRate(code);
+    if (rate !== null && freshness(rate.observedAt, now, FRESHNESS_POLICY[kind]) !== "expired") rates.set(code, stripAccepted(rate));
+  }
+  for (const code of codes) {
+    if (CURRENCIES[code].kind !== "platform") continue;
     for (const purpose of ["price", "payout"] as const) {
       const manual = await store.currentManual(code, purpose);
       if (manual === null || freshness(manual.expiresAt, now, FRESHNESS_POLICY.platform) === "expired") continue;
-      (purpose === "price" ? rates : payout).set(code, manualToRate(manual));
+      // Котировки нет в снимке — курс рубля просрочен или ещё не принят:
+      // посчитать звезду не через что, и продавать по догадке нельзя.
+      const quote = manual.quote === BASE_CURRENCY ? new Decimal(1) : rates.get(manual.quote)?.usdPerUnit;
+      if (quote === undefined) continue;
+      (purpose === "price" ? rates : payout).set(code, manualToRate(manual, quote));
     }
   }
   return await store.saveSnapshot({ takenAt: now, rates, payout });

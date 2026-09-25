@@ -148,10 +148,24 @@ describe("числа с границы", () => {
 describe("заданный курс площадки", () => {
   it("живёт в срок годности и без него не заводится", () => {
     const setAt = new Date("2026-09-25T00:00:00Z");
-    expect(() => manualRate({ currency: "XTR", purpose: "price", usdPerUnit: "0.013", setBy: "a1", setAt, expiresAt: setAt, note: "" })).toThrow(RangeError);
-    expect(() => manualRate({ currency: "XTR", purpose: "price", usdPerUnit: "0", setBy: "a1", setAt, expiresAt: new Date("2026-10-25T00:00:00Z"), note: "" })).toThrow(RangeError);
+    expect(() => manualRate({ currency: "XTR", purpose: "price", price: "0.013", setBy: "a1", setAt, expiresAt: setAt, note: "" })).toThrow(RangeError);
+    expect(() => manualRate({ currency: "XTR", purpose: "price", price: "0", setBy: "a1", setAt, expiresAt: new Date("2026-10-25T00:00:00Z"), note: "" })).toThrow(RangeError);
 
-    const rate = manualToRate(manualRate({ currency: "XTR", purpose: "payout", usdPerUnit: "0.0105", setBy: "a1", setAt, expiresAt: new Date("2026-10-25T00:00:00Z"), note: "Fragment" }));
+    const rate = manualToRate(manualRate({ currency: "XTR", purpose: "payout", price: "0.013", setBy: "a1", setAt, expiresAt: new Date("2026-10-25T00:00:00Z"), note: "вывод" }), new Decimal(1));
     expect(rate).toMatchObject({ currency: "XTR", sources: ["manual:a1"], observedAt: new Date("2026-10-25T00:00:00Z") });
+    expect(rate.usdPerUnit.toString()).toBe("0.013");
+  });
+
+  it("цена в рублях переводится в доллары по курсу рубля (Р37)", () => {
+    const setAt = new Date("2026-09-25T00:00:00Z");
+    const rate = manualRate({ currency: "XTR", purpose: "price", price: "1.72", quote: "RUB", setBy: "a1", setAt, expiresAt: new Date("2026-12-25T00:00:00Z"), note: "прайс-лист клиента" });
+    const converted = manualToRate(rate, new Decimal(1).div("84.6952"));
+    expect(converted.usdPerUnit.toDecimalPlaces(5).toString()).toBe("0.02031");
+    expect(converted.sources).toEqual(["manual:a1", "via:RUB"]);
+  });
+
+  it("котировка в валюте площадки запрещена: у неё самой нет рынка", () => {
+    const setAt = new Date("2026-09-25T00:00:00Z");
+    expect(() => manualRate({ currency: "XTR", purpose: "price", price: "1", quote: "XTR", setBy: "a1", setAt, expiresAt: new Date("2026-12-25T00:00:00Z"), note: "" })).toThrow(/нет рынка/);
   });
 });

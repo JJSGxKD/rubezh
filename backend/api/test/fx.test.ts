@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { MemoryRateStore, quoteInUsd, type RateSource } from "@bh/fx";
+import { Decimal, MemoryRateStore, quoteInUsd, rateOf, type RateSource } from "@bh/fx";
 import { describe, expect, it } from "vitest";
 import { ForbiddenError, ValidationError } from "../src/common/domain-error.js";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
@@ -116,14 +116,14 @@ describe("заданные курсы", () => {
     return { service, roles };
   }
   const owner: AccountRef = { accountId: randomUUID(), platform: "telegram", platformUserId: OWNER_ID };
-  const input = { currency: "XTR" as const, purpose: "payout" as const, usdPerUnit: "0.0105", expiresInDays: 30, note: "вывод через Fragment" };
+  const input = { currency: "XTR" as const, purpose: "payout" as const, price: "0.013", quote: "USD" as const, expiresInDays: 30, note: "вывод звёзд" };
 
   it("ставится под правом, с аудитом и сроком годности", async () => {
     const { service, roles } = setup();
     const saved = await service.setManual(owner, input, NOW);
 
-    expect(saved).toMatchObject({ currency: "XTR", purpose: "payout", usdPerUnit: "0.0105", expiresAt: "2026-10-25T12:00:00.000Z" });
-    expect(roles.entries[0]).toMatchObject({ action: "fx.manual_rate", target: "XTR:payout", before: null, after: { usdPerUnit: "0.0105" } });
+    expect(saved).toMatchObject({ currency: "XTR", purpose: "payout", price: "0.013", quote: "USD", usdPerUnit: "0.013", expiresAt: "2026-10-25T12:00:00.000Z" });
+    expect(roles.entries[0]).toMatchObject({ action: "fx.manual_rate", target: "XTR:payout", before: null, after: { price: "0.013", quote: "USD" } });
     const overview = await service.overview(NOW);
     expect(overview.manual.map((rate) => [rate.purpose, rate.freshness])).toEqual([["payout", "fresh"]]);
     expect(overview.missing).toEqual(expect.arrayContaining(["RUB", "EUR", "GRAM", "USDT"]));
@@ -133,7 +133,19 @@ describe("заданные курсы", () => {
     const { service } = setup();
     await expect(service.setManual({ ...owner, platformUserId: "555" }, input, NOW)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(service.setManual(owner, { ...input, currency: "GRAM" as never }, NOW)).rejects.toThrow("только валюты площадки");
-    await expect(service.setManual(owner, { ...input, usdPerUnit: "0" }, NOW)).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.setManual(owner, { ...input, price: "0" }, NOW)).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("цена звезды в рублях показывается и в долларах по курсу рубля, без курса — честное «нет»", async () => {
+    const store = new MemoryRateStore();
+    const service = new FxService(store, config(), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()));
+    const rub = { ...input, purpose: "price" as const, price: "1.72", quote: "RUB" as const };
+    expect((await service.setManual(owner, rub, NOW)).usdPerUnit).toBeNull();
+
+    await store.setCurrentRate(rateOf("RUB", new Decimal(1).div("84.6952"), ["cbr"], NOW), NOW);
+    const [price] = (await service.overview(NOW)).manual;
+    expect(price).toMatchObject({ purpose: "price", price: "1.72", quote: "RUB" });
+    expect(Number(price?.usdPerUnit)).toBeCloseTo(0.02031, 5);
   });
 });
 

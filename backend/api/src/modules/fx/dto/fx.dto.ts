@@ -8,11 +8,15 @@ import { z } from "zod";
  */
 
 const platformCodes = (Object.keys(CURRENCIES) as CurrencyCode[]).filter((code) => CURRENCIES[code].kind === "platform");
+// Котировка — только фиат: цена звезды для игрока держится в рублях по прайс-листу,
+// выплата — в долларах; в крипте заданный курс звёзд смысла не имеет.
+const quoteCodes = (Object.keys(CURRENCIES) as CurrencyCode[]).filter((code) => CURRENCIES[code].kind === "fiat");
 
 export const manualRateSchema = z.object({
   currency: z.enum(platformCodes as [CurrencyCode, ...CurrencyCode[]]),
   purpose: z.enum(MANUAL_RATE_PURPOSES),
-  usdPerUnit: z.string().regex(/^\d{1,12}(\.\d{1,40})?$/),
+  price: z.string().regex(/^\d{1,12}(\.\d{1,40})?$/),
+  quote: z.enum(quoteCodes as [CurrencyCode, ...CurrencyCode[]]).default("USD"),
   // Срок годности обязателен: заданный курс без него устаревал бы молча.
   expiresInDays: z.number().int().min(1).max(90),
   note: z.string().trim().min(3).max(200),
