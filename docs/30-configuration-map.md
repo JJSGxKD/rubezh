@@ -256,7 +256,9 @@
 | HTTP-приложение бэкенда: лимит тела запроса, префикс API, CORS, фильтр ошибок | `backend/api/src/http-app.ts` → `BODY_LIMIT_BYTES`, `createHttpApp` |
 | Панель: включена ли серверная часть, срок cookie-сессии | `.env` → `ADMIN_PANEL_ENABLED`, `ADMIN_SESSION_TTL_MIN` (`20-env-and-ports.md` §3, группа 5) |
 | Панель: имя и путь cookie, заголовок против подделки запроса | `backend/api/src/modules/admin/admin-cookie.ts` → `ADMIN_SESSION_COOKIE`, `ADMIN_COOKIE_PATH`, `ADMIN_CSRF_HEADER`, `ADMIN_CSRF_VALUE` |
-| Панель: лимиты частоты входа, действий и выгрузок | `backend/api/src/modules/admin/admin-limits.ts` → `ADMIN_LIMITS` |
+| Панель: лимиты частоты входа, действий, выгрузок и теста рассылки себе | `backend/api/src/modules/admin/admin-limits.ts` → `ADMIN_LIMITS` |
+| Рассылки: порог аудитории для второго ключа, «не писать получавшим за N дней» по умолчанию, отсрочек до отказа, длина пачки, срок захвата | `backend/api/src/modules/broadcasts/broadcast-rules.ts` → `BROADCAST_RULES` |
+| Рассылки: темп бота площадки в сообщениях в секунду | `backend/api/src/platforms/telegram/telegram-messenger.ts` → `TelegramMessenger.ratePerSec` |
 | Панель: сколько строк журнала кошелька и покупок в карточке игрока; период отчётов по умолчанию и его потолок | `backend/api/src/modules/admin/admin-players.service.ts` → `WALLET_ENTRIES_SHOWN`, `PURCHASES_SHOWN`; `admin-parse.ts` → `DEFAULT_PERIOD_DAYS`, `MAX_PERIOD_DAYS` |
 | Приёмники событий и отчётов: лимиты частоты по IP, установке и Telegram ID, потолок тела | `backend/api/src/modules/ingest/ingest-limits.ts` → `INGEST_LIMITS` |
 | Словарь событий сервера: имена, версии и схемы `payload`, потолок полей | `backend/api/src/modules/events/event-dictionary.ts` → `EVENT_DICTIONARY`, `MAX_PAYLOAD_KEYS`; размер пачки — `dto/event-batch.dto.ts` → `MAX_EVENTS_PER_BATCH` |
