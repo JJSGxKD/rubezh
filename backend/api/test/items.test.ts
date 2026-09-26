@@ -76,7 +76,8 @@ interface Call {
   args: unknown[];
 }
 
-function stubService(calls: Call[]): Partial<ItemsService> {
+/** Заглушка сервиса: контроллеру важно, с чем его позвали, а не что внутри. */
+function stubService(calls: Call[]): Record<string, (...args: unknown[]) => Promise<unknown>> {
   const record =
     (method: string, result: unknown) =>
     async (...args: unknown[]) => {
@@ -85,8 +86,8 @@ function stubService(calls: Call[]): Partial<ItemsService> {
     };
   return {
     inventory: record("inventory", { items: [] }),
-    equip: async (accountId: string, itemId: string) => {
-      calls.push({ method: "equip", args: [accountId, itemId] });
+    equip: async (...args: unknown[]) => {
+      calls.push({ method: "equip", args });
       throw new ItemNotFoundError();
     },
     upgrade: async (...args: unknown[]) => {

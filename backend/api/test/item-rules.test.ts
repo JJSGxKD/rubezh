@@ -1,4 +1,4 @@
-import { LOADOUT_STATS } from "@bh/shared-types";
+import { LOADOUT_STATS } from "../../../packages/shared-types/src/index";
 import { describe, expect, it } from "vitest";
 import { LOADOUT_BOUNDS } from "../../../packages/core-game/src/game/progression/run-loadout";
 import {
