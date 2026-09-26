@@ -314,6 +314,47 @@ export class TelegramBotApi {
    * Ссылка на счёт для `openInvoice` в Mini App. Валюта — `XTR`, токен
    * провайдера для Stars пустой: платёж идёт через Telegram, а не эквайринг.
    */
+  /**
+   * Профиль бота: имя, описание в пустом чате и короткое описание в профиле
+   * и при пересылке. Без языка — по умолчанию для всех, с языком — для тех,
+   * у кого такой язык интерфейса (bot-profile.ts).
+   */
+  async setMyName(name: string, languageCode: CommandsLanguage | null, signal?: AbortSignal): Promise<void> {
+    await this.call("setMyName", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.setMyName(name, languageOf(languageCode), abort));
+  }
+
+  async setMyDescription(description: string, languageCode: CommandsLanguage | null, signal?: AbortSignal): Promise<void> {
+    await this.call("setMyDescription", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.setMyDescription(description, languageOf(languageCode), abort),
+    );
+  }
+
+  async setMyShortDescription(shortDescription: string, languageCode: CommandsLanguage | null, signal?: AbortSignal): Promise<void> {
+    await this.call("setMyShortDescription", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.setMyShortDescription(shortDescription, languageOf(languageCode), abort),
+    );
+  }
+
+  /**
+   * Кнопка меню — открыть Mini App. Без чата — по умолчанию для всех; у
+   * кнопки нет языка, поэтому своя надпись на языке игрока ставится на его чат.
+   */
+  async setMenuWebApp(text: string, url: string, chatId: string | null, signal?: AbortSignal): Promise<void> {
+    await this.call("setChatMenuButton", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.setChatMenuButton(
+        { ...(chatId === null ? {} : { chat_id: Number(chatId) }), menu_button: { type: "web_app", text, web_app: { url } } },
+        abort,
+      ),
+    );
+  }
+
+  /** Фото профиля бота — PNG; загрузка, поэтому срок как у документа. */
+  async setMyProfilePhoto(png: Buffer, signal?: AbortSignal): Promise<void> {
+    await this.call("setMyProfilePhoto", UPLOAD_TIMEOUT_MS, signal, (abort) =>
+      this.api.setMyProfilePhoto({ type: "static", photo: new InputFile(png, "avatar.png") }, abort),
+    );
+  }
+
   async createInvoiceLink(invoice: StarsInvoice, signal?: AbortSignal): Promise<string> {
     const result = await this.call("createInvoiceLink", REQUEST_TIMEOUT_MS, signal, (abort) =>
       this.api.createInvoiceLink(invoice.title, invoice.description, invoice.payload, "", "XTR", [{ label: invoice.label, amount: invoice.stars }], undefined, abort),
@@ -365,6 +406,11 @@ export class TelegramBotApi {
       throw new TelegramApiError(method, 0, `сеть недоступна (${reason})`, null);
     }
   }
+}
+
+/** Язык профиля: `null` — по умолчанию для всех, без поля в запросе. */
+function languageOf(languageCode: CommandsLanguage | null): { language_code?: CommandsLanguage } {
+  return languageCode === null ? {} : { language_code: languageCode };
 }
 
 function replyMarkup(options: SendOptions): ReplyMarkup {
