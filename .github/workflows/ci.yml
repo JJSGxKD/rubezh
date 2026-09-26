@@ -169,6 +169,8 @@ jobs:
         env:
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
           VITE_TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
+          # Ключ Graspil — тоже переменная: он виден в сборке клиента.
+          VITE_GRASPIL_KEY: ${{ vars.GRASPIL_KEY }}
 
       # Артефакт клиента: то, что раскатывается на статику, берётся из этого
       # же прогона — пересборка перед деплоем запрещена (docs/09-ci-cd.md §7).

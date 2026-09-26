@@ -47,6 +47,13 @@ describe("политика источников клиента", () => {
     expect(build.get("script-src")).toEqual(["'self'"]);
   });
 
+  it("Graspil — только с ключом: скрипт со своего домена, отчёты на другой, встроенных скриптов нет", () => {
+    const withGraspil = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", graspil: true }));
+    expect(withGraspil.get("script-src")).toEqual(["'self'", "https://w.graspil.com"]);
+    expect(withGraspil.get("connect-src")).toContain("https://wb.graspil.com");
+    expect(build.get("connect-src")).not.toContain("https://wb.graspil.com");
+  });
+
   it("пускает во фрейм Telegram Web — иначе игра там не откроется", () => {
     expect(build.get("frame-ancestors")).toContain("https://web.telegram.org");
   });
