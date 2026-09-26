@@ -86,7 +86,9 @@ export function svgDocument(width: number, height: number, parts: readonly strin
 
 export function renderPng(svg: string): Buffer {
   const resvg = new Resvg(svg, {
-    font: { loadSystemFonts: true, defaultFontFamily: "Arial" },
+    // Запасная гарнитура — та, что точно есть в прод-образе (Dockerfile):
+    // Arial в Linux-контейнере не бывает.
+    font: { loadSystemFonts: true, defaultFontFamily: "DejaVu Sans" },
     fitTo: { mode: "original" },
   });
   return resvg.render().asPng();
