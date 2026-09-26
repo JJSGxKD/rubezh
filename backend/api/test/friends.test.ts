@@ -15,6 +15,10 @@ import { FriendsController } from "../src/modules/friends/friends.controller.js"
 import { FRIENDS_REPOSITORY } from "../src/modules/friends/friends.repository.js";
 import { FRIENDS_RULES } from "../src/modules/friends/friends-rules.js";
 import { FriendsService } from "../src/modules/friends/friends.service.js";
+import { FriendNotifier, requestText } from "../src/modules/friends/friend-notifier.js";
+import type { MessagingService } from "../src/modules/messaging/messaging.service.js";
+import { AppLinks } from "../src/platforms/ports/app-links.js";
+import { Messengers, type Messenger, type OutgoingMessage, type SendOutcome } from "../src/platforms/ports/messenger.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
@@ -38,6 +42,7 @@ let accounts: MemoryAccountRepository;
 let repository: MemoryFriendsRepository;
 let service: FriendsService;
 let wallet: FakeWallet;
+let notified: [string, string][];
 
 /** Кошелёк с ключом идемпотентности — ровно то, на что опираются подарки. */
 class FakeWallet {
@@ -74,7 +79,9 @@ beforeEach(() => {
   accounts = new MemoryAccountRepository();
   repository = new MemoryFriendsRepository(accounts);
   wallet = new FakeWallet();
-  service = new FriendsService(config(), repository, accounts, new AuthHooks(), wallet as unknown as WalletService);
+  notified = [];
+  const notifier = { requestSent: async (from: string, to: string) => (notified.push([from, to]), "sent" as const) } as unknown as FriendNotifier;
+  service = new FriendsService(config(), repository, accounts, new AuthHooks(), wallet as unknown as WalletService, notifier);
 });
 
 describe("ссылка дружбы", () => {
@@ -235,6 +242,64 @@ describe("подарки", () => {
 
     expect(await service.claimGifts(claims(bob))).toEqual({ claimed: 1, coins: 0 });
     expect(wallet.grants.size).toBe(1);
+  });
+});
+
+describe("сообщение о заявке", () => {
+  it("о новой заявке пишет получателю, о повторной и встречной — нет", async () => {
+    const ann = await player("1");
+    const bob = await player("2");
+    await service.request(claims(ann), bob.accountId);
+    await service.request(claims(ann), bob.accountId);
+    await service.request(claims(bob), ann.accountId);
+    expect(notified).toEqual([[ann.accountId, bob.accountId]]);
+  });
+
+  class FakeMessenger implements Messenger {
+    readonly platform = "telegram" as const;
+    readonly configured = true;
+    readonly ratePerSec = 25;
+    readonly sent: { to: string; message: OutgoingMessage }[] = [];
+    outcome: SendOutcome = { status: "sent" };
+    async send(to: string, message: OutgoingMessage): Promise<SendOutcome> {
+      this.sent.push({ to, message });
+      return this.outcome;
+    }
+  }
+
+  function notifierWith(canMessage: boolean | null) {
+    const messenger = new FakeMessenger();
+    const blocked: string[] = [];
+    const messaging = {
+      state: async () => (canMessage === null ? null : { canMessage, reason: "entered", changedAt: new Date() }),
+      platformChanged: async (_platform: string, platformUserId: string) => void blocked.push(platformUserId),
+    } as unknown as MessagingService;
+    const links = new AppLinks([{ platform: "telegram", launch: (param: string) => `https://t.me/rubezh_bot?startapp=${param}` }]);
+    return { messenger, blocked, notifier: new FriendNotifier(repository, accounts, messaging, new Messengers([messenger]), links) };
+  }
+
+  it("кнопка «Принять» открывает игру по ссылке дружбы позвавшего", async () => {
+    const ann = await player("1");
+    const bob = await player("2");
+    const { messenger, notifier } = notifierWith(true);
+    expect(await notifier.requestSent(ann.accountId, bob.accountId)).toBe("sent");
+    const code = await repository.linkOf(ann.accountId);
+    expect(messenger.sent).toEqual([{ to: "2", message: { text: requestText("Игрок 1"), button: { text: "Принять", url: `https://t.me/rubezh_bot?startapp=f-${code}` } } }]);
+  });
+
+  it("кому писать нельзя — молчим; заблокировал бота — отметка у игрока", async () => {
+    const ann = await player("1");
+    const bob = await player("2");
+    for (const state of [false, null]) {
+      const { messenger, notifier } = notifierWith(state);
+      expect(await notifier.requestSent(ann.accountId, bob.accountId)).toBe("skipped");
+      expect(messenger.sent).toEqual([]);
+    }
+    const { messenger, blocked, notifier } = notifierWith(true);
+    messenger.outcome = { status: "blocked" };
+    expect(await notifier.requestSent(ann.accountId, bob.accountId)).toBe("blocked");
+    expect(blocked).toEqual(["2"]);
+    expect(requestText("x".repeat(100))).toContain(`${"x".repeat(63)}…`);
   });
 });
 

@@ -1026,6 +1026,7 @@ flowchart LR
         LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, реализовано"]
         FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
         BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
+        FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1131,6 +1132,9 @@ flowchart LR
     BCAST -- "очередь broadcasts, лимитер" --> REDIS
     BCAST -. "порт Messengers: sendMessage" .-> TGADP
     BCAST -. кнопка — ссылка кампании .-> LINKS
+    FRIENDS --> PG
+    FRIENDS -. подарки и бонус .-> WALLET
+    FRIENDS -. "порт Messengers: сообщение о заявке" .-> TGADP
     CADDY -- "/api/v1/flags" --> FLAGS
     FLAGS --> PG
 
