@@ -56,6 +56,19 @@ export interface StoredRun {
   ranked: boolean;
 }
 
+/** Итог законченного забега — то, что показывает карточка шеринга (docs/24-attribution-and-sharing.md §7.1). */
+export interface RunSummary {
+  runId: string;
+  accountId: string;
+  difficulty: Difficulty;
+  survivalSec: number;
+  level: number;
+  enemiesKilled: number;
+  cheats: boolean;
+  verdict: RunVerdict | null;
+  finishedAt: Date;
+}
+
 /** `foreign` — забег с таким ключом уже принадлежит другому аккаунту. */
 export type StartOutcome = "created" | "exists" | "foreign";
 export type FinishOutcome = "finished" | "duplicate" | "foreign";
@@ -94,6 +107,8 @@ export const RUNS_REPOSITORY = Symbol("RUNS_REPOSITORY");
 
 export interface RunsRepository {
   find(runId: string): Promise<StoredRun | null>;
+  /** Итог забега; `null` — нет такого или он не закончен. */
+  summary(runId: string): Promise<RunSummary | null>;
   start(record: RunStartRecord): Promise<StartOutcome>;
   finish(record: RunFinishRecord): Promise<FinishOutcome>;
   stats(accountId: string): Promise<{ runs: number; totalKills: number; totalSurvivalSec: number }>;
@@ -108,6 +123,25 @@ export interface RunsRepository {
 @Injectable()
 export class PrismaRunsRepository implements RunsRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+
+  async summary(runId: string): Promise<RunSummary | null> {
+    const row = await this.prisma.run.findUnique({
+      where: { runId },
+      select: { runId: true, accountId: true, status: true, difficulty: true, survivalSec: true, level: true, enemiesKilled: true, cheats: true, verdict: true, finishedAt: true },
+    });
+    if (row === null || row.status !== "finished" || row.survivalSec === null || row.finishedAt === null) return null;
+    return {
+      runId: row.runId,
+      accountId: row.accountId,
+      difficulty: row.difficulty,
+      survivalSec: row.survivalSec,
+      level: row.level ?? 1,
+      enemiesKilled: row.enemiesKilled ?? 0,
+      cheats: row.cheats,
+      verdict: row.verdict,
+      finishedAt: row.finishedAt,
+    };
+  }
 
   async find(runId: string): Promise<StoredRun | null> {
     const row = await this.prisma.run.findUnique({

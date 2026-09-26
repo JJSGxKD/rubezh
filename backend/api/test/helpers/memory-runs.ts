@@ -8,6 +8,7 @@ import type {
   RunFinishRecord,
   RunsRepository,
   RunStartRecord,
+  RunSummary,
   StartOutcome,
   StoredRun,
 } from "../../src/modules/runs/runs.repository.js";
@@ -24,6 +25,22 @@ interface Row extends StoredRun {
 
 export class MemoryRunsRepository implements RunsRepository {
   readonly rows = new Map<string, Row>();
+
+  async summary(runId: string): Promise<RunSummary | null> {
+    const record = this.rows.get(runId)?.record;
+    if (record === undefined) return null;
+    return {
+      runId: record.runId,
+      accountId: record.accountId,
+      difficulty: record.difficulty,
+      survivalSec: record.survivalSec,
+      level: record.level,
+      enemiesKilled: record.enemiesKilled,
+      cheats: record.cheats,
+      verdict: record.verdict,
+      finishedAt: record.finishedAt,
+    };
+  }
 
   async find(runId: string): Promise<StoredRun | null> {
     const row = this.rows.get(runId);

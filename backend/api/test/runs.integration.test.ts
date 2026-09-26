@@ -104,6 +104,18 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect((await runs.find(runId))?.startedAt).not.toBeNull();
   });
 
+  it("итог забега для карточки: только законченный, с уровнем, убийствами и читами", async () => {
+    const accountId = await account();
+    const started = randomUUID();
+    await runs.start({ runId: started, accountId, difficulty: "hard", startingWeaponId: "knife", contentHash: "abc", startedAt: new Date() });
+    expect(await runs.summary(started)).toBeNull();
+    expect(await runs.summary(randomUUID())).toBeNull();
+
+    const done = randomUUID();
+    await runs.finish(finished(done, accountId, { survivalSec: 754.5, level: 17, enemiesKilled: 1234, cheats: true, verdict: "suspicious" }));
+    expect(await runs.summary(done)).toMatchObject({ runId: done, accountId, difficulty: "hard", survivalSec: 754.5, level: 17, enemiesKilled: 1234, cheats: true, verdict: "suspicious" });
+  });
+
   it("чужой ключ забега виден как чужой", async () => {
     const [owner, stranger] = [await account(), await account()];
     const runId = randomUUID();
