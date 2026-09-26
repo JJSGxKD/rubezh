@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
 import { DiagnosticsScreen } from "./diagnostics/DiagnosticsScreen";
 import { ExportsScreen } from "./exports/ExportsScreen";
 import { FunnelScreen } from "./funnel/FunnelScreen";
@@ -25,4 +26,5 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   exports: () => <ExportsScreen />,
   links: () => <LinksScreen />,
   flags: () => <FlagsScreen />,
+  broadcasts: (id) => <BroadcastsScreen id={id} />,
 };
