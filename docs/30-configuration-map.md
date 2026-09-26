@@ -180,6 +180,7 @@
 | Прод: переменные compose и API, их прод-значения | `infra/prod/env.example`, `infra/prod/api.env.example`; сами файлы — только на сервере | участник 1 |
 | Выкат и бэкап: сколько версий статики хранить, расписание и срок хранения бэкапов | `infra/prod/deploy.sh` → `KEEP_WEB_VERSIONS`, строка crontab; `infra/prod/backup.sh` → `KEEP_LOCAL` | участник 1 |
 | Выкат предрелизов из dev на прод | переменная репозитория `DEPLOY_DEV_RELEASES` | участник 1 |
+| Профиль бота: имя, описания, надпись кнопки меню на каждом языке, фото | `backend/api/src/platforms/telegram/bot-profile-texts.ts`, `bot-avatar.ts` | участник 1 |
 | Набор на забег: какие параметры меняет снаряжение и предел каждой прибавки против битых данных, потолок бустов | `packages/shared-types/src/index.ts` → `LOADOUT_STATS`; `packages/core-game/src/game/progression/run-loadout.ts` → `LOADOUT_BOUNDS`, `MAX_LOADOUT_BOOSTS` | участник 1 |
 | Стихии: коридор сопротивления врага в контенте — от −1 до 0,9 | `packages/core-game/src/game/sim/element-ids.ts` → `MIN_RESIST`, `MAX_RESIST` | участник 1 |
 | Стихии: сопротивления врагов, стихия и шанс состояния у оружия | `packages/core-game/src/content/enemies.ts` → `resist`, `content/weapons.ts` → `element`, `levels[].statusChance` | геймдизайнер |
