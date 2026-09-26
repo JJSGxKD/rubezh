@@ -2,12 +2,14 @@ import { Global, Module } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../config/app-config.js";
 import { AppLinks } from "./ports/app-links.js";
 import { LaunchVerifiers } from "./ports/launch-verifier.js";
+import { Messengers } from "./ports/messenger.js";
 import { PaymentProviders } from "./ports/payment-provider.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "./telegram/telegram-bot-api.js";
 import { BotIdentity } from "./telegram/bot-identity.js";
 import { TelegramAppLinks } from "./telegram/telegram-app-links.js";
 import { TelegramStarsProvider } from "./telegram/telegram-stars-provider.js";
 import { TelegramLaunchVerifier } from "./telegram/telegram-launch-verifier.js";
+import { TelegramMessenger } from "./telegram/telegram-messenger.js";
 import { UnsupportedLaunchVerifier } from "./unsupported.js";
 
 /**
@@ -34,13 +36,19 @@ export function appLinksFor(identity: BotIdentity): AppLinks {
   return new AppLinks([new TelegramAppLinks(identity)]);
 }
 
+/** Сообщения игрокам: пока только бот Telegram — у MAX и VK ботов ещё нет. */
+export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): Messengers {
+  return new Messengers([new TelegramMessenger(telegramApi, config.telegram.botToken !== "")]);
+}
+
 @Global()
 @Module({
   providers: [
     { provide: LaunchVerifiers, inject: [APP_CONFIG], useFactory: launchVerifiersFor },
     { provide: PaymentProviders, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: paymentProvidersFor },
     { provide: AppLinks, inject: [BotIdentity], useFactory: appLinksFor },
+    { provide: Messengers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messengersFor },
   ],
-  exports: [LaunchVerifiers, PaymentProviders, AppLinks],
+  exports: [LaunchVerifiers, PaymentProviders, AppLinks, Messengers],
 })
 export class PlatformsModule {}
