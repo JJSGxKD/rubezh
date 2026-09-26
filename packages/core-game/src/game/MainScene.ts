@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { DifficultyId, RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../content/hash";
 import type { RunBus } from "../engine/run-bus";
 import { RunProbe } from "../engine/run-probe";
@@ -18,6 +18,7 @@ import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
 import { inspectWorld } from "./run/inspect";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
+import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { applyContinue, canContinue } from "./sim/continue";
 import { IDLE_INPUT, stepWorld, type SimInput } from "./sim/step";
@@ -94,6 +95,8 @@ export interface MainSceneData {
   continues?: boolean;
   /** настройки графики игрока; без них рисуется всё */
   graphics?: RunGraphicsOptions;
+  /** снаряжение и бусты нового забега; продолженный берёт набор из снимка */
+  loadout?: RunLoadout;
 }
 
 /**
@@ -155,12 +158,16 @@ export class MainScene extends Phaser.Scene {
     this.inputCode = IDLE_CODE;
 
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
+    // Продолженный забег — с тем набором, с которым начался: надетое могло
+    // смениться, пока забег лежал в снимке.
+    const loadout = resume !== undefined ? resume.loadout : data.loadout;
     const { world, spawner, map } = createRunWorld({
       seed: this.seed,
       mapId: resume?.mapId ?? data.mapId,
       difficultyId: resume?.difficultyId ?? data.difficultyId,
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       unitScale: data.unitScale,
+      ...(loadout === undefined ? {} : { loadout }),
     });
     this.world = world;
     this.spawner = spawner;
@@ -201,6 +208,7 @@ export class MainScene extends Phaser.Scene {
               // Продолженный забег не повторить с начала, а в забеге
               // разработчика читы и команды в лог не пишутся.
               replayBlocker: resume !== undefined ? "resumed" : data.dev !== undefined ? "dev" : null,
+              ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
             }
           : null,
     });
@@ -446,6 +454,7 @@ export class MainScene extends Phaser.Scene {
       world: captureWorld(world, this.spawner),
       ...(this.cheatsUsed ? { cheats: true } : {}),
       ...(this.sceneData.dev === undefined ? {} : { dev: true }),
+      ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
     };
   }
 

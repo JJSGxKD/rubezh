@@ -1,4 +1,4 @@
-import type { DifficultyId, MapDef } from "@bh/shared-types";
+import type { DifficultyId, MapDef, RunLoadout } from "@bh/shared-types";
 import { findDifficulty, DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
 import { CONTINUE } from "../content/continue";
 import { DROPS } from "../content/drops";
@@ -25,6 +25,8 @@ export interface RunWorldOptions {
   startingWeaponId?: string;
   /** физических пикселей на игровую единицу: мир считается в них */
   unitScale: number;
+  /** снаряжение и бусты; без поля — забег без снаряжения */
+  loadout?: RunLoadout;
 }
 
 export interface RunWorld {
@@ -49,6 +51,7 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     map,
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined ? {} : { startingWeaponId: options.startingWeaponId }),
+    ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
     config: { unitScale: options.unitScale },
   });
   return { world, spawner: createTimelineDirector(TIMELINE, ENDLESS_CURVE), map };

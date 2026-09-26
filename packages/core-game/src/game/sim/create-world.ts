@@ -8,11 +8,13 @@ import type {
   LoadoutLimits,
   MapDef,
   PassiveDef,
+  RunLoadout,
   WeaponDef,
 } from "@bh/shared-types";
 import { ELEMENTS } from "@bh/shared-types";
 import { resolveEnemyTypes } from "../patterns/enemy-types";
 import { computePlayerStats, resolvePassiveTypes, type PlayerStatsBase } from "../progression/passives";
+import { EMPTY_LOADOUT, sanitizeLoadout } from "../progression/run-loadout";
 import { addWeapon, createLoadout } from "../progression/loadout";
 import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
@@ -134,6 +136,8 @@ export interface CreateWorldOptions {
   map?: MapDef;
   /** чем игрок начинает забег; по умолчанию — первое стартовое оружие */
   startingWeaponId?: string;
+  /** снаряжение и бусты на забег; по умолчанию — пустой набор */
+  loadout?: RunLoadout;
   config?: Partial<SimConfig>;
 }
 
@@ -200,6 +204,9 @@ export function createWorld(options: CreateWorldOptions): World {
   const startingWeapon = findStartingWeapon(weaponTypes, options.startingWeaponId);
   if (startingWeapon >= 0) addWeapon(loadout, startingWeapon);
 
+  const runLoadout = sanitizeLoadout(options.loadout ?? EMPTY_LOADOUT);
+  const playerStats = computePlayerStats(playerStatsBase, passiveTypes, new Map(), runLoadout.modifiers);
+
   const cellSize = gridCellSize(scale);
   return {
     config,
@@ -214,7 +221,8 @@ export function createWorld(options: CreateWorldOptions): World {
     drops,
     continueRules,
     difficultyLevel,
-    playerStats: computePlayerStats(playerStatsBase, passiveTypes, new Map()),
+    playerStats,
+    runLoadout,
     playerStatsBase,
     loadout,
     progression: {
@@ -245,8 +253,9 @@ export function createWorld(options: CreateWorldOptions): World {
       vy: 0,
       faceX: 1,
       faceY: 0,
-      hp: config.player.maxHp,
-      maxHp: config.player.maxHp,
+      // Здоровье со снаряжением — с первого тика: игрок начинает полным.
+      hp: playerStats.maxHp,
+      maxHp: playerStats.maxHp,
       attackCooldown: 0,
       alive: true,
       invulnerableTicks: 0,

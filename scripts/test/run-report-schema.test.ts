@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { RunReportClient } from "../../packages/app-shell/src/state/diagnostic-reports";
 import { circling, recordHeadlessRun } from "../../packages/core-game/test/helpers/recorded-run";
 import { RUN_RECORDING_EVENT_KINDS } from "../../packages/core-game/src/run-api";
-import { RECORDING_EVENT_KINDS, submitRunReportSchema } from "../../backend/api/src/modules/diagnostics/dto/run-report.dto.js";
+import { LOADOUT_STATS as SERVER_LOADOUT_STATS, RECORDING_EVENT_KINDS, submitRunReportSchema } from "../../backend/api/src/modules/diagnostics/dto/run-report.dto.js";
+import { LOADOUT_STATS } from "../../packages/shared-types/src/index";
 
 // Запись забега на трёх сторонах: движок пишет, оболочка кладёт в конверт,
 // приёмник разбирает своей схемой (docs/28-diagnostics.md §3.3, §5.1). Схема
@@ -34,6 +35,23 @@ describe("схема записи забега", () => {
 
     expect(recording.continues?.length).toBeGreaterThan(0);
     expect(parsed.data?.recording).toEqual(recording);
+  });
+
+  it("и запись со снаряжением: без набора повтор разошёлся бы с первого удара", () => {
+    const recording = recordHeadlessRun({
+      seed: 42,
+      maxTicks: 3_000,
+      steer: circling(200),
+      loadout: { modifiers: { damage: 0.25, maxHp: 30, resistCold: 0.1 }, boosts: ["magnet_start"] },
+    });
+    const parsed = submitRunReportSchema.safeParse({ recording, client: CLIENT });
+
+    expect(parsed.error?.issues ?? []).toEqual([]);
+    expect(parsed.data?.recording).toEqual(recording);
+  });
+
+  it("параметры набора движка и приёмника совпадают", () => {
+    expect([...SERVER_LOADOUT_STATS].sort()).toEqual([...LOADOUT_STATS].sort());
   });
 
   it("виды событий движка и приёмника совпадают", () => {

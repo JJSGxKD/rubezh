@@ -630,6 +630,54 @@ export interface WeaponDef {
   levels: WeaponLevel[];
 }
 
+/**
+ * Параметры, которые снаряжение, дерево и бусты меняют на весь забег
+ * (docs/35-stage4-plan.md §3.3, WP7). Движок получает их готовым набором и не
+ * знает про предметы: снаряжение — понятие экономики, а не боя.
+ *
+ * Значение — прибавка, и её смысл зависит от параметра:
+ * - `damage`, `area`, `projectileSpeed`, `duration`, `moveSpeed`,
+ *   `pickupRadius`, урон стихии `damageFire` … `damagePoison` и
+ *   `statusChance` — к множителю: `0.12` — это +12%;
+ * - `cooldown` — ускорение: `0.05` — перезарядка на 5% короче;
+ * - `maxHp`, `regenPerSec`, `armor` — числом: `20` — +20 здоровья;
+ * - `resistFire` … `resistPoison` — доля сопротивления: `0.1` — +10%.
+ */
+export const LOADOUT_STATS = [
+  "damage",
+  "cooldown",
+  "area",
+  "projectileSpeed",
+  "duration",
+  "moveSpeed",
+  "pickupRadius",
+  "maxHp",
+  "regenPerSec",
+  "armor",
+  "resistFire",
+  "resistCold",
+  "resistLightning",
+  "resistPoison",
+  "damageFire",
+  "damageCold",
+  "damageLightning",
+  "damagePoison",
+  "statusChance",
+] as const;
+
+export type LoadoutStat = (typeof LOADOUT_STATS)[number];
+
+/**
+ * Набор на забег: модификаторы параметров и активные бусты. Пишется в запись
+ * и снимок забега — иначе повтор и продолженный забег разошлись бы с
+ * оригиналом. Пустой набор — забег без снаряжения.
+ */
+export interface RunLoadout {
+  modifiers: Partial<Record<LoadoutStat, number>>;
+  /** id активных бустов; движок их пока только записывает (WP8) */
+  boosts: string[];
+}
+
 /** Характеристики игрока, которые меняют пассивки. */
 export type PlayerStat =
   | "damage"
