@@ -52,12 +52,16 @@ export default defineConfig(({ mode, command }) => {
 
   // Порт, туннель, HTTPS и доступ с телефона — общие для трёх площадок
   // (scripts/vite/dev-server.ts).
+  // Аналитика Graspil — только со своим ключом: без него в политике нет ни
+  // одного чужого скрипта (src/graspil.ts).
+  const graspil = (env.VITE_GRASPIL_KEY ?? "").trim() !== "";
   const { server, preview } = devServerConfig({
     env,
     repoRoot,
     port,
     tunnelHostVar: "DEV_TUNNEL_TELEGRAM_HOST",
     proxy: apiProxy,
+    graspil,
   });
 
   return {
@@ -71,7 +75,7 @@ export default defineConfig(({ mode, command }) => {
       react(),
       tailwindcss(),
       stableDevSession(),
-      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim() })),
+      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim(), graspil })),
     ],
     base: "./",
     envDir: repoRoot,

@@ -95,10 +95,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build --file backend/api/Dockerfile --tag rubezh-api:pr .
-      # Карточки бота рисуются системными шрифтами: без шрифта с кириллицей в
-      # образе вместо текста выходят квадраты, а тесты на машине с Windows
-      # этого не видят — там шрифты есть.
-      - run: docker run --rm --entrypoint sh rubezh-api:pr -c 'test -f /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+      # Карточки бота рисуются системными шрифтами: без шрифта в образе — или
+      # когда resvg его не находит — текст пропадает целиком, а тесты на машине
+      # с Windows этого не видят. Поэтому карточка рисуется в самом образе.
+      - run: >-
+          docker run --rm --entrypoint node
+          -v "$PWD/backend/api/scripts/card-smoke.mjs:/app/backend/api/card-smoke.mjs:ro"
+          rubezh-api:pr card-smoke.mjs
 
   # Версия по типу изменений в PR (docs/09-ci-cd.md §8.1): из main — стабильная
   # vX.Y.Z, из dev — предрелиз vX.Y.Z-rc.N. Доведён до тега, образа в GHCR,
@@ -166,6 +169,8 @@ jobs:
         env:
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
           VITE_TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
+          # Ключ Graspil — тоже переменная: он виден в сборке клиента.
+          VITE_GRASPIL_KEY: ${{ vars.GRASPIL_KEY }}
 
       # Артефакт клиента: то, что раскатывается на статику, берётся из этого
       # же прогона — пересборка перед деплоем запрещена (docs/09-ci-cd.md §7).

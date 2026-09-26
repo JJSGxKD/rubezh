@@ -1,6 +1,7 @@
 import { mountAppShell, type AnalyticsSink } from "@bh/app-shell";
 import { CONTENT_HASH } from "@bh/core-game";
 import { isTelegramEnvironment, TelegramAdapter } from "@bh/adapter-telegram";
+import { loadGraspil } from "./graspil";
 
 /**
  * Точка входа Telegram-сборки: собирает адаптер площадки и монтирует
@@ -15,6 +16,7 @@ if (container === null) {
   throw new Error("Нет контейнера #app в разметке");
 }
 
+// Аналитика Graspil — после оболочки: первый экран её не ждёт (src/graspil.ts).
 void mountAppShell({
   container,
   adapter: new TelegramAdapter(),
@@ -62,7 +64,7 @@ void mountAppShell({
     minPlatformVersion: "7.7",
   },
   analytics: createAnalytics(),
-});
+}).then(() => loadGraspil((import.meta.env.VITE_GRASPIL_KEY ?? "").trim()));
 
 function botUrl(): string {
   const username = import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "";

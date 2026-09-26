@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 /**
  * Полоса: здоровье, опыт, загрузка.
@@ -111,6 +111,10 @@ export function Badge(props: { children: ReactNode; tone?: BadgeTone }): ReactNo
 /** Аватар с запасным вариантом из инициалов: фото площадка отдаёт не всегда. */
 export function Avatar(props: { name: string; url?: string | null; size?: number }): ReactNode {
   const size = props.size ?? 36;
+  // Фото не загрузилось — инициалы, а не значок битой картинки: адрес
+  // приходит с t.me, а он открывается не из любой сети. Запоминается сам
+  // адрес — новое фото пробуется заново.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const initials = props.name
     .split(" ")
     .filter((part) => part !== "")
@@ -118,10 +122,12 @@ export function Avatar(props: { name: string; url?: string | null; size?: number
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
 
-  if (props.url !== null && props.url !== undefined && props.url !== "") {
+  const url = props.url;
+  if (url !== null && url !== undefined && url !== "" && url !== failedUrl) {
     return (
       <img
-        src={props.url}
+        src={url}
+        onError={() => setFailedUrl(url)}
         alt=""
         width={size}
         height={size}
