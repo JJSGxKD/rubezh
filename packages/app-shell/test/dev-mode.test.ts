@@ -82,6 +82,7 @@ function result(patch: Partial<RunResult> = {}): RunResult {
     killsByEnemy: {},
     damageDealt: 0,
     damageTaken: 0,
+    damageByElement: {},
     weapons: [],
     passives: [],
     deathCause: null,

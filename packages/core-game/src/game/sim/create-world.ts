@@ -10,6 +10,7 @@ import type {
   PassiveDef,
   WeaponDef,
 } from "@bh/shared-types";
+import { ELEMENTS } from "@bh/shared-types";
 import { resolveEnemyTypes } from "../patterns/enemy-types";
 import { computePlayerStats, resolvePassiveTypes, type PlayerStatsBase } from "../progression/passives";
 import { addWeapon, createLoadout } from "../progression/loadout";
@@ -282,6 +283,7 @@ export function createWorld(options: CreateWorldOptions): World {
       shotsFired: 0,
       damageDealt: 0,
       damageByWeapon: new Float64Array(Math.max(1, loadoutLimits.weapons)),
+      damageByElement: new Float64Array(ELEMENTS.length),
       xpCollected: 0,
       medkitsCollected: 0,
       magnetsCollected: 0,

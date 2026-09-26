@@ -886,6 +886,12 @@ export interface RunResult {
   killsByEnemy: Record<string, number>;
   damageDealt: number;
   damageTaken: number;
+  /**
+   * Урон по стихиям (docs/35-stage4-plan.md, WP6, «Аналитика»): физическим и
+   * каждой стихией, считая горение, яд и перескок молнии. Стихии без урона
+   * не попадают — как враги без убийств в `killsByEnemy`.
+   */
+  damageByElement: Partial<Record<ElementId, number>>;
   weapons: RunWeaponSummary[];
   passives: RunPassiveSummary[];
   /** id врага, нанёсшего смертельный урон; null — забег кончился не смертью */

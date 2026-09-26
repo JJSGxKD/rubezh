@@ -1,4 +1,4 @@
-import type { RunOutcome, RunPassiveSummary, RunResult, RunWeaponSummary } from "@bh/shared-types";
+import { ELEMENTS, type ElementId, type RunOutcome, type RunPassiveSummary, type RunResult, type RunWeaponSummary } from "@bh/shared-types";
 import { continueSeconds } from "../sim/continue";
 import type { World } from "../sim/world";
 
@@ -46,6 +46,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     killsByEnemy: killsByEnemy(world),
     damageDealt: stats.damageDealt,
     damageTaken: stats.damageTaken,
+    damageByElement: damageByElement(world),
     weapons: weaponSummaries(world),
     passives: passiveSummaries(world),
     // Сдача — это не смерть: причина смерти у неё пустая, иначе в аналитике
@@ -70,6 +71,16 @@ function killsByEnemy(world: World): Record<string, number> {
     if (count > 0) kills[world.enemyTypes[typeIndex].id] = count;
   }
   return kills;
+}
+
+/** Урон по стихиям; стихии без урона не попадают. */
+function damageByElement(world: World): Partial<Record<ElementId, number>> {
+  const damage: Partial<Record<ElementId, number>> = {};
+  ELEMENTS.forEach((element, index) => {
+    const dealt = world.stats.damageByElement[index] ?? 0;
+    if (dealt > 0) damage[element] = dealt;
+  });
+  return damage;
 }
 
 /**

@@ -104,6 +104,15 @@ describe("статистика забега", () => {
     expect(byWeapon).toBeCloseTo(world.stats.damageDealt, 6);
   });
 
+  it("сходится: сумма урона по стихиям равна общему — горение и яд засчитаны своей стихии", () => {
+    const result = resultOf(world, GOLDEN_SEED);
+    const byElement = Object.values(result.damageByElement).reduce((sum, damage) => sum + damage, 0);
+    expect(byElement).toBeCloseTo(result.damageDealt, 6);
+    // В эталоне есть «Жало»: яд обязан попасть в свою стихию, а не в физический.
+    expect(result.damageByElement.poison ?? 0).toBeGreaterThan(0);
+    expect(Object.values(result.damageByElement).every((damage) => damage > 0)).toBe(true);
+  });
+
   it("сходится: сумма убийств по типам равна общему числу убитых", () => {
     let byType = 0;
     for (const kills of world.stats.killsByType) byType += kills;
@@ -323,6 +332,7 @@ describe("локальный рекорд", () => {
       killsByEnemy: {},
       damageDealt: 0,
       damageTaken: 0,
+      damageByElement: {},
       weapons: [],
       passives: [],
       deathCause: null,

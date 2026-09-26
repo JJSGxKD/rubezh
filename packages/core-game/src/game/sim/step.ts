@@ -2,7 +2,7 @@ import { applyPattern, MAX_PATTERN_RADIUS } from "../patterns";
 import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy, inflictDamage } from "./combat";
-import { isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
+import { ELEMENT_FIRE, ELEMENT_POISON, isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
 import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
@@ -194,8 +194,8 @@ function updateEnemies(world: World, dt: number): void {
 
     // Урон по времени — до хода: сгоревший враг не делает последний шаг.
     tickStatuses(world, i, dt, statusTick);
-    if (statusTick.burn > 0) inflictDamage(world, i, statusTick.burn, enemies.burnSlot[i]);
-    if (statusTick.poison > 0 && enemies.alive[i] === 1) inflictDamage(world, i, statusTick.poison, enemies.poisonSlot[i]);
+    if (statusTick.burn > 0) inflictDamage(world, i, statusTick.burn, enemies.burnSlot[i], ELEMENT_FIRE);
+    if (statusTick.poison > 0 && enemies.alive[i] === 1) inflictDamage(world, i, statusTick.poison, enemies.poisonSlot[i], ELEMENT_POISON);
     if (enemies.alive[i] === 0) continue;
 
     // Замороженный стоит и не бьёт: паттерн не ходит вовсе, иначе рывок и

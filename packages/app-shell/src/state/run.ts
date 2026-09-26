@@ -1,4 +1,4 @@
-import type { DifficultyId, RunResult, UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   loadRunEngine,
   type HudSnapshot,
@@ -591,7 +591,22 @@ function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, 
     isNewRecord,
     cheats: result.cheats,
     continues: result.continues.length,
+    ...elementDamageFields(result.damageByElement),
   };
+}
+
+/**
+ * Урон по стихиям плоскими полями `damagePhysical` … `damagePoison`
+ * (docs/22-analytics-and-metrics.md §3.3): payload плоский. Нули тоже едут —
+ * у каждого забега одинаковый набор столбцов, и доля стихии считается без
+ * оглядки на пропуски.
+ */
+function elementDamageFields(damage: RunResult["damageByElement"]): Record<string, number> {
+  const fields: Record<string, number> = {};
+  for (const element of ELEMENTS) {
+    fields[`damage${element.charAt(0).toUpperCase()}${element.slice(1)}`] = Math.round(damage[element] ?? 0);
+  }
+  return fields;
 }
 
 /**

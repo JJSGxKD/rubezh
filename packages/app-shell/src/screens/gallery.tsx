@@ -376,6 +376,7 @@ const SAMPLE_RESULT: RunResult = {
   killsByEnemy: {},
   damageDealt: 48210,
   damageTaken: 930,
+  damageByElement: { physical: 9400, fire: 2100, cold: 800, lightning: 1600 },
   weapons: [
     { id: "spark", level: 5, damage: 21840 },
     { id: "wardstone", level: 3, damage: 15320 },

@@ -152,6 +152,8 @@ export interface RunStats {
    * тест этой сходимости ловил бы округление, а не ошибку в коде.
    */
   damageByWeapon: Float64Array;
+  /** нанесённый урон по индексу стихии (`sim/element-ids.ts`) */
+  damageByElement: Float64Array;
   xpCollected: number;
   /** подобранные аптечки */
   medkitsCollected: number;
