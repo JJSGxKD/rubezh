@@ -28,7 +28,7 @@
 | Л2 | ✅ **Пакет токенов дизайна** `packages/design-tokens` — палитра и шкалы из `app-shell/src/design-system/tokens.*` (`29-admin-panel.md` §4) | `packages/design-tokens`, `packages/app-shell/src/design-system` | панель берёт токены из пакета, а не копией |
 | Л3 | ✅ **Курс звёзд в рублях** (Р37): заданный курс в валюте котировки, команда установки заданных курсов на сервере | `packages/fx`, `backend/api/src/modules/fx` | эндпоинт курсов для раздела курсов в панели не меняется |
 | Л4 | **WP0 — сервер** вместе с участником 1: compose, Caddy, деплой, бэкапы, наблюдаемость | `infra/`, `.github/workflows/`, `backend/api/Dockerfile` | адрес панели и вход через виджет Telegram |
-| Л5 | **WP6, часть 2** — ✅ 2а: тон состояний, перескок молнии, стихии в контенте и гайдбуке; дальше 2б — стихийные атаки врагов, сопротивления игрока, HUD, оружие с ядом | `packages/core-game`, `packages/app-shell/src/screens/{run,guide}` | — |
+| Л5 | ✅ **WP6, часть 2**: тон состояний, перескок молнии, стихии в контенте и гайдбуке (2а); стихийные атаки врагов, состояния и сопротивления игрока, HUD, «Жало», урон по стихиям в итогах (2б). Остался стресс-тест на устройстве | `packages/core-game`, `packages/app-shell/src/screens/{run,guide}` | — |
 | Л6 | **WP7** — снаряжение, арсенал, мета, генератор случайности | `packages/core-game`, `backend/api/src/modules/items`, `packages/app-shell/src/screens/meta/arsenal*` | — |
 | Л7 | **WP5** — перепроверка забегов, `sim-worker` | `apps/sim-worker`, `backend/api/src/modules/runs` | редактор баланса в панели прогоняет симуляцию через него |
 | Л8 | WP8 бусты, WP10 магазин и подписка, WP11 второй шанс | `backend/api/src/modules/{shop,payments}`, `packages/app-shell/src/screens/meta/shop*` | — |
