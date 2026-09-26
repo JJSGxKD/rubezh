@@ -907,9 +907,18 @@ model Link {
   /// кто завёл; без внешнего ключа — ссылка кампании переживает аккаунт
   createdBy String?     @map("created_by") @db.Uuid
   createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// шеринг игрока (docs/24-attribution-and-sharing.md §7.3): кто поделился;
+  /// `null` — ссылка кампании команды. Без внешнего ключа, как и `created_by`
+  sharedBy  String?     @map("shared_by") @db.Uuid
+  /// чем поделился: `run` — результат забега
+  shareKind String?     @map("share_kind") @db.VarChar(16)
+  /// что именно: идентификатор забега
+  shareRef  String?     @map("share_ref") @db.VarChar(64)
   clicks    LinkClick[]
 
   @@index([createdAt])
+  // Шеринги игрока и лимит на них.
+  @@index([sharedBy, createdAt])
   @@map("link")
 }
 

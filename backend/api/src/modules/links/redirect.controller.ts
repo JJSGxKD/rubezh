@@ -5,6 +5,7 @@ import { RateLimiter } from "../ingest/rate-limiter.js";
 import { LINK_CODE } from "./link-code.js";
 import { linkPage, notFoundPage } from "./link-page.js";
 import { LinksService, type VisitorInfo } from "./links.service.js";
+import { ShareService } from "./share.service.js";
 
 /**
  * `/r/<код>` — редирект-страница (docs/24-attribution-and-sharing.md §3). Не
@@ -19,10 +20,12 @@ import { LinksService, type VisitorInfo } from "./links.service.js";
 interface PageReply {
   status(code: number): PageReply;
   header(name: string, value: string): PageReply;
-  send(body?: string): unknown;
+  send(body?: string | Buffer): unknown;
 }
 
 const VISITS_PER_MINUTE = { scope: "links:visit", limit: 120, windowSec: 60 } as const;
+/** Картинку спрашивают краулеры и превью — реже переходов, но с одного адреса пачкой. */
+const CARDS_PER_MINUTE = { scope: "links:card", limit: 60, windowSec: 60 } as const;
 
 const text = z.string().trim().min(1).max(128).optional().catch(undefined);
 const requestSchema = z.object({
@@ -43,6 +46,7 @@ const requestSchema = z.object({
 export class RedirectController {
   constructor(
     private readonly links: LinksService,
+    private readonly shares: ShareService,
     private readonly limiter: RateLimiter,
   ) {}
 
@@ -59,9 +63,25 @@ export class RedirectController {
     const visit = await this.links.visit(code, visitor);
     if (visit.kind === "not_found") return html(404, notFoundPage(), "no-store");
     // Превью краулеру кешируется: мессенджеры спрашивают страницу повторно.
-    if (visit.kind === "preview") return html(200, linkPage({ url: visit.url, target: null }), "public, max-age=300");
+    if (visit.kind === "preview") {
+      const override = await this.shares.preview(visit.link);
+      return html(200, linkPage({ url: visit.url, target: null, override }), "public, max-age=300");
+    }
     if (visit.kind === "unavailable") return html(503, linkPage({ url: visit.url, target: null }), "no-store");
     void reply.status(302).header("location", visit.target).header("cache-control", "no-store").send();
+  }
+
+  /** Картинка результата для превью и историй (docs/24-attribution-and-sharing.md §7.4). */
+  @Public()
+  @Get(":code/card.png")
+  async card(@Param("code") code: string, @Req() request: unknown, @Res() reply: PageReply): Promise<void> {
+    const missing = () => void reply.status(404).header("content-type", "text/html; charset=utf-8").header("cache-control", "no-store").send(notFoundPage());
+    if (!LINK_CODE.test(code)) return missing();
+    if (!(await this.limiter.consume(CARDS_PER_MINUTE, visitorOf(request).ip ?? "unknown"))) return missing();
+    const png = await this.shares.card(code);
+    if (png === null) return missing();
+    // Сутки: забег не меняется, а превью мессенджеры спрашивают повторно.
+    void reply.status(200).header("content-type", "image/png").header("cache-control", "public, max-age=86400").header("x-robots-tag", "noindex").send(png);
   }
 }
 

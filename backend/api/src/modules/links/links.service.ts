@@ -31,7 +31,8 @@ export interface VisitorInfo {
 /** Что сделать с посетителем: краулеру — страница превью, человеку — переход в приложение. */
 export type Visit =
   | { kind: "not_found" }
-  | { kind: "preview"; url: string | null }
+  /** превью краулеру; ссылка — чтобы страница шеринга показала свою картинку */
+  | { kind: "preview"; url: string | null; link: LinkRecord }
   | { kind: "redirect"; target: string }
   | { kind: "unavailable"; url: string | null };
 
@@ -58,7 +59,7 @@ export class LinksService {
     const link = await this.links.byCode(code);
     if (link === null) return { kind: "not_found" };
     const url = this.publicUrl(link.code);
-    if (isCrawler(visitor.userAgent)) return { kind: "preview", url };
+    if (isCrawler(visitor.userAgent)) return { kind: "preview", url, link };
 
     const clickId = newClickId();
     const target = this.appLinks.launch(link.platform, `c-${clickId}`);
@@ -83,7 +84,7 @@ export class LinksService {
 
   async create(actor: AccountRef, input: NewLink): Promise<LinkRecord & { url: string }> {
     await this.roles.require(actor, "links.manage");
-    const link = await this.links.create({ ...input, code: newLinkCode(), createdBy: actor.accountId });
+    const link = await this.links.create({ ...input, code: newLinkCode(), createdBy: actor.accountId, sharedBy: null, shareKind: null, shareRef: null });
     await this.roles.audit({ actorAccountId: actor.accountId, action: "links.create", target: link.code, after: { campaign: link.campaign, source: link.source, platform: link.platform } });
     return { ...link, url: this.publicUrl(link.code) ?? `/r/${link.code}` };
   }
@@ -94,7 +95,7 @@ export class LinksService {
   }
 
   /** Адрес ссылки на домене клиента: Caddy отдаёт `/r/*` бэкенду (docs/20-env-and-ports.md §2.1). */
-  private publicUrl(code: string): string | null {
+  publicUrl(code: string): string | null {
     const base = this.config.telegram.webAppUrl;
     if (base === "") return null;
     try {

@@ -9,12 +9,19 @@ import { REDIS } from "../src/infra/redis.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { isCrawler } from "../src/modules/links/crawler.js";
 import { escapeHtml, linkPage } from "../src/modules/links/link-page.js";
-import { LINKS_REPOSITORY, type ClickInput, type LinkInput, type LinkRecord, type LinksRepository, type LinkStats } from "../src/modules/links/links.repository.js";
+import { LINKS_REPOSITORY } from "../src/modules/links/links.repository.js";
 import { hostOf, languageOf, LinksService, type VisitorInfo } from "../src/modules/links/links.service.js";
 import { RedirectController } from "../src/modules/links/redirect.controller.js";
+import { SHARE_CARD_CACHE } from "../src/modules/links/share-card.cache.js";
+import { ShareService } from "../src/modules/links/share.service.js";
+import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
+import { RUNS_REPOSITORY } from "../src/modules/runs/runs.repository.js";
 import type { RolesService } from "../src/modules/roles/roles.service.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryLinks } from "./helpers/memory-links.js";
+import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 
 /**
  * Редирект-ссылки (docs/24-attribution-and-sharing.md §3): краулер получает
@@ -23,25 +30,6 @@ import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.j
  */
 
 const HUMAN = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36";
-
-class MemoryLinks implements LinksRepository {
-  readonly links = new Map<string, LinkRecord>();
-  readonly clicks: ClickInput[] = [];
-  async create(link: LinkInput): Promise<LinkRecord> {
-    const record = { ...link, createdAt: new Date() };
-    this.links.set(link.code, record);
-    return record;
-  }
-  async byCode(code: string): Promise<LinkRecord | null> {
-    return this.links.get(code) ?? null;
-  }
-  async recordClick(click: ClickInput): Promise<void> {
-    this.clicks.push(click);
-  }
-  async list(): Promise<LinkStats[]> {
-    return [...this.links.values()].map((link) => ({ ...link, clicks: this.clicks.filter((click) => click.linkCode === link.code).length, clicks30d: 0, launches: 0 }));
-  }
-}
 
 function config(env: Record<string, string> = {}): AppConfig {
   return loadAppConfig({ NODE_ENV: "test", PUBLIC_WEB_URL: "https://rubezh.example", ...env } as NodeJS.ProcessEnv);
@@ -94,7 +82,7 @@ describe("переход по ссылке", () => {
 
   it("краулер получает превью и кликом не считается; неизвестная ссылка — не найдена", async () => {
     const link = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "c", source: null, medium: null, note: null, platform: "telegram" });
-    expect(await service.visit(link.code, visitor({ userAgent: "TelegramBot (like TwitterBot)" }))).toEqual({ kind: "preview", url: `https://rubezh.example/r/${link.code}` });
+    expect(await service.visit(link.code, visitor({ userAgent: "TelegramBot (like TwitterBot)" }))).toMatchObject({ kind: "preview", url: `https://rubezh.example/r/${link.code}`, link: { code: link.code } });
     expect(await service.visit("NoSuchCode9", visitor())).toEqual({ kind: "not_found" });
     await new Promise((resolve) => setImmediate(resolve));
     expect(repository.clicks).toEqual([]);
@@ -147,6 +135,10 @@ describe("HTTP /r/:code", () => {
         { provide: REDIS, useValue: unavailableRedis },
         { provide: LINKS_REPOSITORY, useValue: repository },
         { provide: LinksService, useValue: service },
+        { provide: RUNS_REPOSITORY, useValue: new MemoryRunsRepository() },
+        { provide: ACCOUNT_REPOSITORY, useValue: new MemoryAccountRepository() },
+        { provide: SHARE_CARD_CACHE, useValue: { get: async () => null, set: async () => undefined } },
+        ShareService,
         RateLimiter,
       ],
     })

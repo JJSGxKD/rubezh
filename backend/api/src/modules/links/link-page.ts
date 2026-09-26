@@ -8,14 +8,30 @@ export const LINK_PAGE = {
   description: "Продержись под натиском как можно дольше — прямо в Telegram.",
 } as const;
 
-export function linkPage(options: { url: string | null; target: string | null }): string {
-  const title = escapeHtml(LINK_PAGE.title);
-  const description = escapeHtml(LINK_PAGE.description);
+/** Превью шеринга: свой заголовок и картинка результата вместо общих. */
+export interface PageOverride {
+  title: string;
+  description: string;
+  imageUrl: string | null;
+}
+
+export function linkPage(options: { url: string | null; target: string | null; override?: PageOverride | null }): string {
+  const title = escapeHtml(options.override?.title ?? LINK_PAGE.title);
+  const description = escapeHtml(options.override?.description ?? LINK_PAGE.description);
+  const image = options.override?.imageUrl ?? null;
   const og = [
     `<meta property="og:type" content="website">`,
     `<meta property="og:title" content="${title}">`,
     `<meta property="og:description" content="${description}">`,
     ...(options.url === null ? [] : [`<meta property="og:url" content="${escapeHtml(options.url)}">`]),
+    ...(image === null
+      ? []
+      : [
+          `<meta property="og:image" content="${escapeHtml(image)}">`,
+          `<meta property="og:image:width" content="1200">`,
+          `<meta property="og:image:height" content="630">`,
+          `<meta name="twitter:card" content="summary_large_image">`,
+        ]),
   ].join("\n    ");
   const action = options.target === null ? "<p>Ссылка скоро заработает — попробуйте через минуту.</p>" : `<p><a href="${escapeHtml(options.target)}">Открыть игру</a></p>`;
   return `<!doctype html>

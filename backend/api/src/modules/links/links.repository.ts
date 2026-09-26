@@ -13,7 +13,16 @@ export interface LinkInput {
   medium: string | null;
   note: string | null;
   createdBy: string | null;
+  /** кто поделился — у ссылки шеринга; у ссылки кампании команды `null` */
+  sharedBy: string | null;
+  /** чем поделился: `run` — результат забега */
+  shareKind: ShareKind | null;
+  /** что именно: идентификатор забега */
+  shareRef: string | null;
 }
+
+export const SHARE_KINDS = ["run"] as const;
+export type ShareKind = (typeof SHARE_KINDS)[number];
 
 export interface LinkRecord extends LinkInput {
   createdAt: Date;
@@ -51,11 +60,12 @@ export class PrismaLinksRepository implements LinksRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   async create(link: LinkInput): Promise<LinkRecord> {
-    return await this.prisma.link.create({ data: link });
+    return toRecord(await this.prisma.link.create({ data: link }));
   }
 
   async byCode(code: string): Promise<LinkRecord | null> {
-    return await this.prisma.link.findUnique({ where: { code } });
+    const row = await this.prisma.link.findUnique({ where: { code } });
+    return row === null ? null : toRecord(row);
   }
 
   async recordClick(click: ClickInput): Promise<void> {
@@ -78,7 +88,9 @@ export class PrismaLinksRepository implements LinksRepository {
   }
 
   async list(limit: number): Promise<LinkStats[]> {
-    const links = await this.prisma.link.findMany({ orderBy: { createdAt: "desc" }, take: limit });
+    // Шеринги игроков — свои ссылки на каждое «поделиться», их тысячи: в
+    // списке кампаний команды их нет.
+    const links = (await this.prisma.link.findMany({ where: { sharedBy: null }, orderBy: { createdAt: "desc" }, take: limit })).map(toRecord);
     if (links.length === 0) return [];
     const codes = links.map((link) => link.code);
     // Запуски — по сессиям с кодом клика этой ссылки: связь клика с игроком
@@ -99,4 +111,12 @@ export class PrismaLinksRepository implements LinksRepository {
       return { ...link, clicks: row?.clicks ?? 0, clicks30d: row?.clicks_30d ?? 0, launches: row?.launches ?? 0 };
     });
   }
+}
+
+type LinkRow = Prisma.LinkGetPayload<object>;
+
+/** Вид шеринга из базы — строка: неизвестный не выдаётся за результат забега. */
+function toRecord(row: LinkRow): LinkRecord {
+  const shareKind = SHARE_KINDS.find((kind) => kind === row.shareKind) ?? null;
+  return { ...row, shareKind };
 }
