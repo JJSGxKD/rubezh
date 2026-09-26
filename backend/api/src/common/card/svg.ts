@@ -84,11 +84,17 @@ export function svgDocument(width: number, height: number, parts: readonly strin
   ].join("\n");
 }
 
+/** Каталог шрифтов Debian — туда ставит DejaVu пакет из Dockerfile. */
+const FONT_DIRS = ["/usr/share/fonts"];
+
 export function renderPng(svg: string): Buffer {
   const resvg = new Resvg(svg, {
-    // Запасная гарнитура — та, что точно есть в прод-образе (Dockerfile):
-    // Arial в Linux-контейнере не бывает.
-    font: { loadSystemFonts: true, defaultFontFamily: "DejaVu Sans" },
+    // Системные шрифты resvg в Linux ищет через конфигурацию fontconfig, а в
+    // slim-образе её нет: без явного каталога DejaVu из Dockerfile не находится,
+    // и текст на карточке пропадает целиком. Каталога нет (Windows) — не ошибка.
+    // Запасная гарнитура — та, что точно есть в прод-образе: Arial в
+    // Linux-контейнере не бывает.
+    font: { loadSystemFonts: true, fontDirs: FONT_DIRS, defaultFontFamily: "DejaVu Sans" },
     fitTo: { mode: "original" },
   });
   return resvg.render().asPng();
