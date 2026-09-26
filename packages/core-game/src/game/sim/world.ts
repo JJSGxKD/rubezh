@@ -1,4 +1,4 @@
-import type { ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
+import type { ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -236,6 +236,11 @@ export interface World {
   playerStats: PlayerStats;
   /** значения без улучшений: от них считается пересчёт */
   playerStatsBase: PlayerStatsBase;
+  /**
+   * Набор на забег — снаряжение, дерево, бусты (`progression/run-loadout.ts`).
+   * Не путать с `loadout` — оружием и пассивками, собранными в самом забеге.
+   */
+  runLoadout: RunLoadout;
   loadout: LoadoutState;
   progression: ProgressionState;
   difficulty: DifficultyState;

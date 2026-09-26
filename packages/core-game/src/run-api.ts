@@ -1,4 +1,4 @@
-import type { DifficultyId, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -207,6 +207,8 @@ export interface RunSnapshot {
    * остаться забегом разработчика, а не превратиться тихо в обычный.
    */
   dev?: boolean;
+  /** набор на забег; нет поля — забег без снаряжения, в том числе снимок прошлой сборки */
+  loadout?: RunLoadout;
 }
 
 export interface RunSnapshotSummary {
@@ -250,6 +252,12 @@ export interface RunOptions {
    * купить негде.
    */
   continues?: boolean;
+  /**
+   * Снаряжение и бусты на забег (docs/35-stage4-plan.md §3.3, WP7) — из
+   * подписанного снимка надетого. Без поля — забег без снаряжения. Продолженный
+   * забег берёт набор из своего снимка, а не этот: надетое могло смениться.
+   */
+  loadout?: RunLoadout;
 }
 
 /**
@@ -377,6 +385,11 @@ export interface RunRecording {
    * прошлой сборки поля не знает, и это забег без второго шанса.
    */
   continues?: number[];
+  /**
+   * Набор на забег — снаряжение и бусты. Нет поля — забег без снаряжения:
+   * без набора повтор снаряжённого забега разошёлся бы с первого удара.
+   */
+  loadout?: RunLoadout;
   /** свёртка мира раз в минуту забега: где повтор разошёлся с оригиналом */
   checkpoints: [tick: number, checksum: number][];
 }

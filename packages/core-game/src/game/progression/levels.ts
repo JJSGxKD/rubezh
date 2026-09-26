@@ -262,6 +262,7 @@ export function refreshPlayerStats(world: World): void {
     world.playerStatsBase,
     world.passiveTypes,
     passiveLevels(world.loadout),
+    world.runLoadout.modifiers,
   );
 
   const gained = world.playerStats.maxHp - previousMaxHp;

@@ -47,11 +47,31 @@ export const POISON_DPS_SHARE = 0.08;
 export const POISON_MAX_STACKS = 10;
 export const POISON_SEC = 4;
 
-/** Множитель урона стихией по врагу: сопротивление типа и шок. */
+/**
+ * Множитель урона стихией по врагу: сопротивление типа, шок и усиление
+ * стихии снаряжением игрока. Урон по времени и перескок проходят через тот
+ * же множитель — сборка «под огонь» усиливает и горение.
+ */
 export function damageMultiplier(world: World, index: number, element: number): number {
   const type = world.enemyTypes[world.enemies.type[index]];
-  const resist = type.resistMul[element] ?? 1;
+  const resist = (type.resistMul[element] ?? 1) * elementDamageMul(world, element);
   return world.enemies.shockTimer[index] > 0 ? resist * (1 + SHOCK_BONUS) : resist;
+}
+
+function elementDamageMul(world: World, element: number): number {
+  const stats = world.playerStats;
+  switch (element) {
+    case ELEMENT_FIRE:
+      return stats.fireDamageMul;
+    case ELEMENT_COLD:
+      return stats.coldDamageMul;
+    case ELEMENT_LIGHTNING:
+      return stats.lightningDamageMul;
+    case ELEMENT_POISON:
+      return stats.poisonDamageMul;
+    default:
+      return 1;
+  }
 }
 
 /**
@@ -59,8 +79,11 @@ export function damageMultiplier(world: World, index: number, element: number): 
  * попадания уже с сопротивлением: горение и яд считаются от него, и стойкий
  * к огню враг горит слабее.
  */
-export function tryApplyStatus(world: World, index: number, element: number, chance: number, dealt: number, weaponSlot: number): void {
-  if (element === ELEMENT_PHYSICAL || chance <= 0) return;
+export function tryApplyStatus(world: World, index: number, element: number, baseChance: number, dealt: number, weaponSlot: number): void {
+  if (element === ELEMENT_PHYSICAL || baseChance <= 0) return;
+  // Шанс от снаряжения растёт до единицы, а не за неё: дальше генератор не
+  // нужен — и не трогается.
+  const chance = Math.min(1, baseChance * world.playerStats.statusChanceMul);
   if (chance < 1 && world.rng.nextFloat() >= chance) return;
   const enemies = world.enemies;
   switch (element) {

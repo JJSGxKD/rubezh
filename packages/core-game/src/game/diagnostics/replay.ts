@@ -75,6 +75,7 @@ export function replayRecording(recording: RunRecording, contentHash: string = C
     difficultyId: recording.difficultyId,
     ...(recording.startingWeaponId === "" ? {} : { startingWeaponId: recording.startingWeaponId }),
     unitScale: recording.unitScale,
+    ...(recording.loadout === undefined ? {} : { loadout: recording.loadout }),
   });
 
   const input: SimInput = { moveX: 0, moveY: 0 };
