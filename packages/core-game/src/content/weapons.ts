@@ -125,4 +125,25 @@ export const WEAPONS: WeaponDef[] = [
       { damage: 30, cooldownSec: 1.3, projectiles: 4, areaRadius: 120, statusChance: 0.6 },
     ],
   },
+  {
+    // Яд: медленная пробивающая игла в ближайшего. Урон попадания скромный —
+    // сила в слоях: игла прошивает строй, и каждый задетый травится сильнее
+    // с каждым следующим попаданием. Шанс к восьмому уровню — каждое
+    // попадание, и тогда генератор не нужен вовсе.
+    id: "sting",
+    behavior: "projectile_nearest",
+    nameKey: "weapon.sting.name",
+    descriptionKey: "weapon.sting.description",
+    element: "poison",
+    levels: [
+      { damage: 4, cooldownSec: 0.46, projectiles: 1, pierce: 2, projectileSpeed: 480, ttlSec: 1.6, statusChance: 0.6 },
+      { damage: 5, cooldownSec: 0.43, projectiles: 1, pierce: 2, projectileSpeed: 490, ttlSec: 1.6, statusChance: 0.65 },
+      { damage: 5, cooldownSec: 0.4, projectiles: 2, pierce: 2, projectileSpeed: 500, ttlSec: 1.7, statusChance: 0.7 },
+      { damage: 6, cooldownSec: 0.37, projectiles: 2, pierce: 3, projectileSpeed: 510, ttlSec: 1.7, statusChance: 0.75 },
+      { damage: 7, cooldownSec: 0.34, projectiles: 2, pierce: 3, projectileSpeed: 520, ttlSec: 1.8, statusChance: 0.8 },
+      { damage: 8, cooldownSec: 0.32, projectiles: 3, pierce: 3, projectileSpeed: 530, ttlSec: 1.8, statusChance: 0.85 },
+      { damage: 9, cooldownSec: 0.3, projectiles: 3, pierce: 4, projectileSpeed: 540, ttlSec: 1.9, statusChance: 0.9 },
+      { damage: 11, cooldownSec: 0.27, projectiles: 3, pierce: 4, projectileSpeed: 560, ttlSec: 1.9, statusChance: 1 },
+    ],
+  },
 ];

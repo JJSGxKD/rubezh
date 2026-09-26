@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import {
+  Anvil,
   BicepsFlexed,
+  Bug,
   CloudLightning,
   Flame,
   Footprints,
@@ -33,6 +35,7 @@ const WEAPON_ICONS: Readonly<Record<string, LucideIcon>> = {
   wardstone: Orbit,
   hearth: Flame,
   storm: CloudLightning,
+  sting: Bug,
 };
 
 const PASSIVE_ICONS: Readonly<Record<string, LucideIcon>> = {
@@ -45,6 +48,7 @@ const PASSIVE_ICONS: Readonly<Record<string, LucideIcon>> = {
   mending: HeartPulse,
   lodestone: Magnet,
   ward: Shield,
+  tempering: Anvil,
 };
 
 export type ItemKind = "weapon" | "passive" | "heal";

@@ -76,7 +76,8 @@ describe("гайдбук", () => {
     }
     for (const enemy of ENEMIES) {
       const { strong, weak } = enemyResists(enemy);
-      for (const element of [...strong, ...weak]) expect(hasTranslation(`guide.element.${element}`), enemy.id).toBe(true);
+      const attack = enemy.element === undefined ? [] : [enemy.element];
+      for (const element of [...strong, ...weak, ...attack]) expect(hasTranslation(`guide.element.${element}`), enemy.id).toBe(true);
     }
   });
 
@@ -108,5 +109,8 @@ describe("гайдбук", () => {
       const range = passiveRange(passive);
       expect(range === null ? false : hasTranslation(range.labelKey), passive.id).toBe(true);
     }
+    // Сопротивление — процентами, как на карточке выбора.
+    const tempering = PASSIVES.find((passive) => passive.stat === "resist");
+    expect(tempering === undefined ? null : passiveRange(tempering)).toMatchObject({ from: 15, to: 60 });
   });
 });
