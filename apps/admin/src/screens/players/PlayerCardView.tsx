@@ -1,4 +1,4 @@
-import { api } from "../../app";
+import { api } from "../../services";
 import { fetchPlayerCard, FUNNEL_MILESTONES, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../../format";
 import { can } from "../../state/session";

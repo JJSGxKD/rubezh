@@ -87,6 +87,19 @@ export const PASSIVES: PassiveDef[] = [
     op: "add",
     levels: [1, 2, 3],
   },
+  {
+    // Сопротивление всем стихиям: гасит урон и укорачивает горение, холод,
+    // шок и яд. Встаёт в тот же слот защиты, что «Броня» и «Живучесть», —
+    // против стихийных врагов это выбор, а не бесплатная прибавка. Потолок
+    // игрока 75% (`sim/player-status.ts`) до четвёртого уровня не достаётся.
+    id: "tempering",
+    nameKey: "passive.tempering.name",
+    descriptionKey: "passive.tempering.description",
+    category: "defense",
+    stat: "resist",
+    op: "add",
+    levels: [0.15, 0.3, 0.45, 0.6],
+  },
 ];
 
 /**

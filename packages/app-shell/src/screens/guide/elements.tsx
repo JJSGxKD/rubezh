@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { EnemyDef, StatusElement } from "@bh/shared-types";
 import { ELEMENT_TONE, STATUS_TONE_COLORS } from "@bh/core-game";
 import { t } from "../../i18n";
-import { enemyResists, weaponElements } from "./guide-data";
+import { enemyAttackElement, enemyResists, weaponElements } from "./guide-data";
 import { hex } from "./scenes";
 
 /**
@@ -49,12 +49,14 @@ export function ElementTag(props: { element: StatusElement }): ReactNode {
   );
 }
 
-/** «Стойкость: огонь · Слабость: холод» на карточке врага; у роя строки нет. */
+/** «Атака: огонь · Стойкость: огонь · Слабость: холод» на карточке врага; у роя строки нет. */
 export function ResistLine(props: { def: EnemyDef }): ReactNode {
   const { strong, weak } = enemyResists(props.def);
-  if (strong.length === 0 && weak.length === 0) return null;
+  const attack = enemyAttackElement(props.def);
+  if (strong.length === 0 && weak.length === 0 && attack === null) return null;
   return (
     <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+      {attack === null ? null : <ElementGroup label={t("guide.enemy.attack")} elements={[attack]} />}
       {strong.length === 0 ? null : <ElementGroup label={t("guide.enemy.strong")} elements={strong} />}
       {weak.length === 0 ? null : <ElementGroup label={t("guide.enemy.weak")} elements={weak} />}
     </p>

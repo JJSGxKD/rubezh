@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../../app";
+import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { fetchSocial, REFERRAL_STATUSES, rejectReferral } from "../../api/players";
 import { formatDateTime } from "../../format";

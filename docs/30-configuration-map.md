@@ -174,6 +174,7 @@
 | Уровень аккаунта — утверждены как отправная точка (Р36): кривая опыта `150·(n−1)^1.6`, потолок уровня, награда за уровень | `backend/api/src/modules/progress/progress-rules.ts` → `xpForLevel`, `MAX_LEVEL`, `levelReward` | участник 1 |
 | Как часто экран итогов спрашивает награду, пока её считает очередь | `packages/app-shell/src/state/progress-api.ts` → `REWARD_POLL_DELAYS_MS` | участник 1 |
 | Стихии: сила и длительность состояний — горение, охлаждение и заморозка, шок, отравление, перескок молнии по шокированным; рабочие числа | `packages/core-game/src/game/sim/elements.ts` → `BURN_*`, `CHILL_*`, `FREEZE_*`, `SHOCK_*`, `POISON_*`, `CHAIN_*` | участник 1 |
+| Стихии на игроке: сила и длительность состояний от атак врагов, потолок сопротивления игрока; рабочие числа | `packages/core-game/src/game/sim/player-status.ts` → `PLAYER_BURN_*`, `PLAYER_CHILL_*`, `PLAYER_SHOCK_*`, `PLAYER_POISON_*`, `MAX_PLAYER_RESIST` | участник 1 |
 | Стихии: коридор сопротивления врага в контенте — от −1 до 0,9 | `packages/core-game/src/game/sim/element-ids.ts` → `MIN_RESIST`, `MAX_RESIST` | участник 1 |
 | Стихии: сопротивления врагов, стихия и шанс состояния у оружия | `packages/core-game/src/content/enemies.ts` → `resist`, `content/weapons.ts` → `element`, `levels[].statusChance` | геймдизайнер |
 | Курсы: заданные курсы валют площадок — звезда игроку 1,72 ₽, выплата $0,013 (Р37), со сроком годности до 90 дней | база, `fx_manual_rate`; ставятся `pnpm --filter backend-api fx:manual` или `POST /api/v1/fx/admin/manual` | участник 1 |

@@ -7,6 +7,7 @@ import "../../i18n/run";
 import { ItemIcon } from "../item-icons";
 import { BossBar } from "./BossBar";
 import { HintBanner } from "./HintBanner";
+import { PlayerStatuses } from "./PlayerStatuses";
 import { Radar } from "./Radar";
 
 /**
@@ -79,6 +80,7 @@ export function RunHud(props: RunHudProps): ReactNode {
             </span>
             <ProgressBar value={hud.xp} max={hud.xpToNext} tone="xp" height="thin" label="XP" />
           </div>
+          <PlayerStatuses statuses={hud.statuses} />
         </div>
 
         <span className="rounded-pill bg-bg/70 px-3 py-0.5 font-display text-xl font-bold tabular-nums text-text">

@@ -27,6 +27,7 @@ import { createRunWorld } from "./run-world";
 import { RunCamera } from "./render/run-camera";
 import { buildRadarSnapshot } from "./radar";
 import { buildBossSnapshot } from "./run/boss";
+import { buildPlayerStatuses } from "./run/player-statuses";
 import { WorldRenderer } from "./render/WorldRenderer";
 import { Joystick } from "./joystick";
 import { buildRunResult } from "./run/run-result";
@@ -661,6 +662,7 @@ export class MainScene extends Phaser.Scene {
       distance: world.stats.distance,
       radar: buildRadarSnapshot(world),
       boss: buildBossSnapshot(world),
+      statuses: buildPlayerStatuses(world),
     };
     this.sceneData.bus.emit("hud", snapshot);
   }

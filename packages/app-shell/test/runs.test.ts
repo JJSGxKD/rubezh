@@ -31,6 +31,7 @@ function result(runId: string, patch: Partial<RunResult> = {}): RunResult {
     killsByEnemy: { swarm_rat: 200 },
     damageDealt: 5000,
     damageTaken: 120,
+    damageByElement: {},
     weapons: [{ id: "spark", level: 4, damage: 4000 }],
     passives: [{ id: "might", level: 2 }],
     deathCause: "swarm_rat",

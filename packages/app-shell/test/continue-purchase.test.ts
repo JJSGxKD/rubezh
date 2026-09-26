@@ -41,6 +41,7 @@ function result(): RunResult {
     killsByEnemy: { swarm_rat: 700 },
     damageDealt: 9000,
     damageTaken: 300,
+    damageByElement: {},
     weapons: [{ id: "spark", level: 5, damage: 9000 }],
     passives: [],
     deathCause: "swarm_rat",

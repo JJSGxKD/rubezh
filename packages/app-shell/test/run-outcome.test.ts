@@ -36,7 +36,14 @@ function fakeEngine(): { engine: RunEngine; emit<E extends keyof RunEvents>(even
   };
 }
 
-const RESULT = { survivalSec: 100.4, seed: 42, outcome: "died", cheats: false, continues: [] as number[] } as RunResult;
+const RESULT = {
+  survivalSec: 100.4,
+  seed: 42,
+  outcome: "died",
+  cheats: false,
+  continues: [] as number[],
+  damageByElement: { physical: 1200.4, fire: 310.6 },
+} as RunResult;
 
 const DIAGNOSTICS: RunDiagnostics = {
   perf: {
@@ -94,6 +101,24 @@ describe("итог забега в аналитике", () => {
       perfDpr: 2.63,
     });
     expect(Object.values(finished?.payload ?? {}).every((value) => typeof value !== "object" || value === null)).toBe(true);
+  });
+
+  it("кладёт урон по стихиям в run_finished целыми и с нулями", async () => {
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+    await useRun.getState().start({ container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "normal" });
+
+    fake.emit("diagnostics", DIAGNOSTICS);
+    fake.emit("finished", RESULT);
+
+    const finished = events.find((entry) => entry.event === "run_finished");
+    expect(finished?.payload).toMatchObject({
+      damagePhysical: 1200,
+      damageFire: 311,
+      damageCold: 0,
+      damageLightning: 0,
+      damagePoison: 0,
+    });
   });
 
   it("без технического итога шлёт итог как раньше, и чужая сводка к следующему забегу не прилипает", async () => {

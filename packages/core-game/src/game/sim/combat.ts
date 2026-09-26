@@ -32,7 +32,7 @@ export function damageEnemy(
   // шокированного, а не та, что шок только что наложила.
   const chains = element === ELEMENT_LIGHTNING && world.enemies.shockTimer[index] > 0;
   const multiplied = amount * damageMultiplier(world, index, element);
-  const applied = inflictDamage(world, index, multiplied, weaponSlot);
+  const applied = inflictDamage(world, index, multiplied, weaponSlot, element);
   if (world.enemies.alive[index] === 1) tryApplyStatus(world, index, element, statusChance, applied, weaponSlot);
   if (!chains) return;
 
@@ -41,7 +41,7 @@ export function damageEnemy(
   const count = chainTargets(world, index, chainScratch);
   for (let k = 0; k < count; k++) {
     const target = chainScratch[k] ?? -1;
-    inflictDamage(world, target, amount * CHAIN_SHARE * damageMultiplier(world, target, ELEMENT_LIGHTNING), weaponSlot);
+    inflictDamage(world, target, amount * CHAIN_SHARE * damageMultiplier(world, target, ELEMENT_LIGHTNING), weaponSlot, ELEMENT_LIGHTNING);
   }
 }
 
@@ -53,7 +53,13 @@ const chainScratch = new Int32Array(2);
  * горение и яд уже посчитаны от урона с сопротивлением, второй раз его
  * применять нельзя. Возвращает нанесённый урон.
  */
-export function inflictDamage(world: World, index: number, amount: number, weaponSlot: number): number {
+export function inflictDamage(
+  world: World,
+  index: number,
+  amount: number,
+  weaponSlot: number,
+  element: number = ELEMENT_PHYSICAL,
+): number {
   const enemies = world.enemies;
   if (enemies.alive[index] === 0 || amount <= 0) return 0;
 
@@ -65,6 +71,7 @@ export function inflictDamage(world: World, index: number, amount: number, weapo
   enemies.hp[index] -= dealt;
   enemies.hitTick[index] = world.stats.tick;
   world.stats.damageDealt += applied;
+  world.stats.damageByElement[element] += applied;
   if (weaponSlot !== NO_OWNER_TYPE && weaponSlot < world.stats.damageByWeapon.length) {
     world.stats.damageByWeapon[weaponSlot] += applied;
   }

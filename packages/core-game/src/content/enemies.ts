@@ -21,12 +21,21 @@ import type { EnemyDef } from "@bh/shared-types";
 // стихии против него просто хуже. Рой стойкостей не несёт: он приходит
 // десятками, и стихия на нём должна просто работать.
 //
+// `element` — стихия атаки: касание, взрыв или снаряд накладывают на игрока
+// её состояние (docs/35-stage4-plan.md §3.3), `statusChance` — как часто.
+// Стихия атаки — у тех, чья угроза и так читается: у стрелка, подрывника,
+// волка, слизня и кастера. Рой бьёт физически: состояние от каждой крысы
+// превратило бы толпу в сплошное горение.
+//
 // Числа — стартовые, до спецификации геймдизайнера (docs/26-stage2-plan.md, WP1).
 export const ENEMIES: EnemyDef[] = [
   { id: "swarm_rat", hp: 5, speed: 90, damage: 3, xp: 1, threat: 1, pattern: "swarm" },
   { id: "tank_ghoul", hp: 60, speed: 30, damage: 8, xp: 6, threat: 8, pattern: "chase", resist: { fire: -0.3, cold: 0.4 } },
-  { id: "shooter_wisp", hp: 12, speed: 40, damage: 5, xp: 3, threat: 3, pattern: "kite_and_shoot", resist: { fire: 0.5, cold: -0.5 } },
-  { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, xp: 3, threat: 3, pattern: "dash", resist: { cold: 0.4, fire: -0.25 } },
+  // Огонёк стреляет огнём, но через раз: снаряды летят часто, и горение с
+  // каждого сделало бы стрелка вдвое опаснее.
+  { id: "shooter_wisp", hp: 12, speed: 40, damage: 5, xp: 3, threat: 3, pattern: "kite_and_shoot", resist: { fire: 0.5, cold: -0.5 }, element: "fire", statusChance: 0.5 },
+  // Волк морозит: замедление после рывка — вторая причина от него уходить.
+  { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, xp: 3, threat: 3, pattern: "dash", resist: { cold: 0.4, fire: -0.25 }, element: "cold" },
   // Вороны берут числом и теснотой кольца: приходят стаей, заходят широко и
   // сжимаются вдвое быстрее прежнего. Они единственные быстрее игрока —
   // от кольца не убежать, его придётся разрывать. Здоровья вдвое больше
@@ -41,7 +50,7 @@ export const ENEMIES: EnemyDef[] = [
     pattern: "orbit",
     params: { orbitRadius: 220, shrinkPerSec: 34, minRadius: 0 },
   },
-  { id: "bomber_imp", hp: 10, speed: 80, damage: 18, xp: 4, threat: 4, pattern: "exploder", resist: { fire: 0.7, cold: -0.3 } },
+  { id: "bomber_imp", hp: 10, speed: 80, damage: 18, xp: 4, threat: 4, pattern: "exploder", resist: { fire: 0.7, cold: -0.3 }, element: "fire" },
   // Нетопыри не преследуют вовсе: берут упреждение, проносятся мимо насквозь
   // и через пару секунд заходят снова. Давление от них не в погоне, а в том,
   // что поперёк пути отхода внезапно идёт стена тел — поэтому они и быстрые,
@@ -65,7 +74,9 @@ export const ENEMIES: EnemyDef[] = [
     threat: 5,
     pattern: "splitter",
     params: { children: [{ enemy: "swarm_rat", count: 3 }] },
-    resist: { lightning: -0.4, fire: 0.3 },
+    // Слизень ядовит — и к яду стоек сам.
+    resist: { lightning: -0.4, fire: 0.3, poison: 0.5 },
+    element: "poison",
   },
 
   // Элиты и мини-боссы приходят только событиями таймлайна, в заданные минуты
@@ -97,6 +108,9 @@ export const ENEMIES: EnemyDef[] = [
     rank: "boss",
     pattern: "caster",
     params: { preferredDistance: 260, castIntervalSec: 3.2, telegraphSec: 0.7, burstCount: 8, projectileSpeed: 220 },
+    // Кольцо и веер кастера шокируют: попавший под первую волну получает
+    // больше и от второй — повод не стоять в его узоре.
+    element: "lightning",
   },
   // Матрёшка — босс на три ступени: сама рассыпается смесью, слизни внутри
   // рассыпаются крысами. Смерть босса не кончает бой, а начинает второй его

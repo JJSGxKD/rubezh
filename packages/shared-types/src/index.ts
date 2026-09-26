@@ -404,6 +404,15 @@ interface EnemyDefBase {
    * Физическому сопротивления нет — его роль играет здоровье.
    */
   resist?: Partial<Record<StatusElement, number>>;
+  /**
+   * Стихия атаки врага — касания, взрыва, снаряда, удара кастера
+   * (docs/35-stage4-plan.md §3.3). Не задана — физическая. Стихийную атаку
+   * гасит сопротивление игрока этой стихии, и она накладывает на игрока
+   * состояние: горение, холод, шок или яд.
+   */
+  element?: StatusElement;
+  /** шанс наложить состояние за попадание, от 0 до 1; не задан — каждое попадание */
+  statusChance?: number;
 }
 
 /**
@@ -633,7 +642,13 @@ export type PlayerStat =
   | "maxHp"
   | "regenPerSec"
   | "pickupRadius"
-  | "armor";
+  | "armor"
+  /** сопротивление всем стихиям сразу — доля урона, которую гасит игрок */
+  | "resist"
+  | "resistFire"
+  | "resistCold"
+  | "resistLightning"
+  | "resistPoison";
 
 /**
  * Пассивное улучшение. `levels` — итоговое значение на каждом уровне, а не
@@ -871,6 +886,12 @@ export interface RunResult {
   killsByEnemy: Record<string, number>;
   damageDealt: number;
   damageTaken: number;
+  /**
+   * Урон по стихиям (docs/35-stage4-plan.md, WP6, «Аналитика»): физическим и
+   * каждой стихией, считая горение, яд и перескок молнии. Стихии без урона
+   * не попадают — как враги без убийств в `killsByEnemy`.
+   */
+  damageByElement: Partial<Record<ElementId, number>>;
   weapons: RunWeaponSummary[];
   passives: RunPassiveSummary[];
   /** id врага, нанёсшего смертельный урон; null — забег кончился не смертью */

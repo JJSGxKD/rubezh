@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { create } from "zustand";
-import { api } from "../../app";
+import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { searchPlayers, type PlayerRow } from "../../api/players";
 import { formatDateTime } from "../../format";

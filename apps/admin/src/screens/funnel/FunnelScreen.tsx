@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { api } from "../../app";
+import { api } from "../../services";
 import { fetchFunnel, FUNNEL_STEPS, funnelTotal, periodFromDates, shareOfEntered, type FunnelRow, type Period } from "../../api/funnel";
 import { formatDateTime, formatNumber } from "../../format";
 import { Button, DataTable, ErrorNotice, Field, Input, Loading, Panel, type Column } from "../../ui/kit";

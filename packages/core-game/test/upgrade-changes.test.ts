@@ -90,6 +90,13 @@ describe("что даёт улучшение", () => {
       lowerIsBetter: true,
     });
     expect(passiveChanges(passive("vitality"), 1, 2)[0]).toMatchObject({ from: 20, to: 45, format: "plus" });
+    // Сопротивление — доля в контенте, а на карточке — проценты.
+    expect(passiveChanges(passive("tempering"), 1, 2)[0]).toMatchObject({
+      labelKey: "upgrade.stat.passive.resist",
+      from: 15,
+      to: 30,
+      format: "plus",
+    });
   });
 
   it("лечение — в процентах здоровья", () => {

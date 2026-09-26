@@ -128,6 +128,11 @@ export function weaponElements(): StatusElement[] {
   return ELEMENTS.filter((element): element is StatusElement => element !== "physical" && used.has(element));
 }
 
+/** Стихия атаки врага; физическая — `null`. */
+export function enemyAttackElement(def: EnemyDef): StatusElement | null {
+  return def.element ?? null;
+}
+
 /** Какие стихии берут врага хуже (`strong`) и какие лучше (`weak`) — в порядке перечня. */
 export function enemyResists(def: EnemyDef): { strong: StatusElement[]; weak: StatusElement[] } {
   const strong: StatusElement[] = [];
@@ -172,13 +177,15 @@ export function passiveCategories(): GuideCategory[] {
 
 /** Эффект пассивки на первом и последнем уровне — в том же виде, что на карточке выбора. */
 export function passiveRange(passive: PassiveDef): UpgradeChange | null {
-  const from = passive.levels[0];
-  const to = passive.levels[passive.levels.length - 1];
-  if (from === undefined || to === undefined) return null;
+  const first = passive.levels[0];
+  const last = passive.levels[passive.levels.length - 1];
+  if (first === undefined || last === undefined) return null;
+  // Сопротивление — доля, на карточке выбора оно в процентах; здесь так же.
+  const scale = passive.stat.startsWith("resist") ? 100 : 1;
   return {
     labelKey: `upgrade.stat.passive.${passive.stat}`,
-    from,
-    to,
+    from: Math.round(first * scale * 100) / 100,
+    to: Math.round(last * scale * 100) / 100,
     format: passive.op === "mul" ? "percent" : "plus",
     lowerIsBetter: passive.stat === "cooldown",
   };

@@ -88,9 +88,13 @@ export function statusChanceLabel(element: number): string {
 }
 
 export function passiveChanges(type: PassiveType, fromLevel: number | null, toLevel: number): UpgradeChange[] {
-  const to = type.levels[toLevel - 1];
-  if (to === undefined) return [];
-  const from = fromLevel === null ? null : (type.levels[fromLevel - 1] ?? null);
+  const rawTo = type.levels[toLevel - 1];
+  if (rawTo === undefined) return [];
+  const rawFrom = fromLevel === null ? null : (type.levels[fromLevel - 1] ?? null);
+  // Сопротивление — доля, а игроку нужны проценты: «+15 → +30», а не «+0,15».
+  const scale = type.stat.startsWith("resist") ? 100 : 1;
+  const to = round(rawTo * scale);
+  const from = rawFrom === null ? null : round(rawFrom * scale);
 
   return [
     change(

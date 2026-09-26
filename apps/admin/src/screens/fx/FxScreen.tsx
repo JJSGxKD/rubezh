@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../../app";
+import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { fetchFxOverview, MANUAL_PURPOSES, manualRateProblem, PLATFORM_CURRENCIES, QUOTE_CURRENCIES, setManualRate, type ManualRateInput } from "../../api/fx";
 import { formatDateTime, formatNumber } from "../../format";

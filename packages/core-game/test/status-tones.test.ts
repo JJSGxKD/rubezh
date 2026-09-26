@@ -1,6 +1,7 @@
 import type { EnemyDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
-import { STATUS_PULSE_ON, STATUS_PULSE_TICKS, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "../src/game/render/status-tones";
+import { playerStatusTone, STATUS_PULSE_ON, STATUS_PULSE_TICKS, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "../src/game/render/status-tones";
+import { buildPlayerStatuses } from "../src/game/run/player-statuses";
 import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 
 /**
@@ -83,5 +84,33 @@ describe("тон состояния", () => {
     const tones = Object.values(STATUS_TONE).filter((tone) => tone !== STATUS_TONE.none);
     expect(new Set(tones.map((tone) => STATUS_TONE_COLORS[tone])).size).toBe(tones.length);
     expect(STATUS_TONE_COLORS).toHaveLength(tones.length + 1);
+  });
+});
+
+describe("состояния персонажа", () => {
+  it("тон персонажа — пульсом и по той же важности, заморозки у него нет", () => {
+    const { world } = withEnemy();
+    const player = world.player;
+    player.chillTimer = 1;
+    player.burnTimer = 1;
+    const tones = Array.from({ length: STATUS_PULSE_TICKS }, (_, tick) => playerStatusTone(player, tick));
+    expect(tones.filter((tone) => tone !== STATUS_TONE.none)).toHaveLength(STATUS_PULSE_ON);
+    expect(new Set(tones)).toEqual(new Set([STATUS_TONE.burn, STATUS_TONE.none]));
+  });
+
+  it("HUD получает состояния от важнейшего и слои яда, у чистого — пусто", () => {
+    const { world } = withEnemy();
+    expect(buildPlayerStatuses(world)).toEqual([]);
+
+    const player = world.player;
+    player.chillTimer = 0.5;
+    player.poisonTimer = 3;
+    player.poisonStacks = 4;
+    player.shockTimer = 2;
+    expect(buildPlayerStatuses(world)).toEqual([
+      { element: "lightning", sec: 2, stacks: 1 },
+      { element: "poison", sec: 3, stacks: 4 },
+      { element: "cold", sec: 0.5, stacks: 1 },
+    ]);
   });
 });

@@ -1,5 +1,5 @@
 import { ELEMENTS, type EnemyDef, type EnemyPattern, type EnemyRank } from "@bh/shared-types";
-import { MAX_RESIST, MIN_RESIST } from "../sim/element-ids";
+import { ELEMENT_PHYSICAL, MAX_RESIST, MIN_RESIST } from "../sim/element-ids";
 
 /**
  * Возможности паттерна — то, что зависит от поведения, а не от конкретного
@@ -210,6 +210,10 @@ export interface EnemyType {
    * читают на каждое попадание.
    */
   resistMul: readonly number[];
+  /** стихия атаки — индекс из `sim/elements.ts`; физическая — ноль */
+  element: number;
+  /** шанс наложить состояние на игрока за попадание */
+  statusChance: number;
 }
 
 /**
@@ -261,6 +265,12 @@ function findBaseProblems(def: EnemyDef): string[] {
     if (!known || !(typeof value === "number" && value >= MIN_RESIST && value <= MAX_RESIST)) {
       problems.push(`враг ${def.id}: resist.${element} вне ${MIN_RESIST}…${MAX_RESIST}`);
     }
+  }
+  const elemental = def.element !== undefined && def.element !== ("physical" as string) && (ELEMENTS as readonly string[]).includes(def.element);
+  if (def.element !== undefined && !elemental) problems.push(`враг ${def.id}: element ${String(def.element)} — не стихия`);
+  const chance = def.statusChance;
+  if (chance !== undefined && (!(chance >= 0 && chance <= 1) || !elemental)) {
+    problems.push(`враг ${def.id}: statusChance от 0 до 1 и только со стихией`);
   }
   return problems;
 }
@@ -397,6 +407,8 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       contactDamage: traits.contactDamage,
       params: resolveParams(def, indexById, unitScale),
       resistMul: ELEMENTS.map((element) => (element === "physical" ? 1 : 1 - (def.resist?.[element] ?? 0))),
+      element: def.element === undefined ? ELEMENT_PHYSICAL : ELEMENTS.indexOf(def.element),
+      statusChance: def.element === undefined ? 0 : (def.statusChance ?? 1),
     };
   });
 }

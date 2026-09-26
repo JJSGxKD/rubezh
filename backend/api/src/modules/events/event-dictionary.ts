@@ -72,6 +72,13 @@ const runOutcome = payload({
   perfCanvasWidth: count.optional(),
   perfCanvasHeight: count.optional(),
   perfInterruptions: count.optional(),
+  // Урон по стихиям (docs/35-stage4-plan.md, WP6), округлённый до целого.
+  // Необязательный: сборки до стихий его не шлют.
+  damagePhysical: count.optional(),
+  damageFire: count.optional(),
+  damageCold: count.optional(),
+  damageLightning: count.optional(),
+  damagePoison: count.optional(),
 });
 
 export const EVENT_DICTIONARY = {

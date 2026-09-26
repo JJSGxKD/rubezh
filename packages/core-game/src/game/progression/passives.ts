@@ -30,6 +30,15 @@ export interface PlayerStats {
   regenPerSec: number;
   pickupRadius: number;
   armor: number;
+  /**
+   * Сопротивление стихиям — доля урона и длительности состояния, которую
+   * гасит игрок (`sim/player-status.ts`). Отдельными числами, а не массивом:
+   * снимок забега переносит характеристики как набор чисел.
+   */
+  resistFire: number;
+  resistCold: number;
+  resistLightning: number;
+  resistPoison: number;
 }
 
 /** База, к которой применяются пассивки: значения игрока без улучшений. */
@@ -51,6 +60,24 @@ const MULTIPLIER_STATS: Partial<Record<PlayerStat, keyof PlayerStats>> = {
 };
 
 const MAX_PASSIVE_LEVELS = 12;
+
+/** Какие сопротивления меняет пассивка: «всем стихиям» — все четыре сразу. */
+const RESIST_STATS: Partial<Record<PlayerStat, readonly ResistKey[]>> = {
+  resist: ["resistFire", "resistCold", "resistLightning", "resistPoison"],
+  resistFire: ["resistFire"],
+  resistCold: ["resistCold"],
+  resistLightning: ["resistLightning"],
+  resistPoison: ["resistPoison"],
+};
+
+type ResistKey = "resistFire" | "resistCold" | "resistLightning" | "resistPoison";
+
+/**
+ * Сопротивление с одной пассивки — не больше этого: потолок игрока
+ * (`MAX_PLAYER_RESIST`) держит сумму, а здесь ловится опечатка «50» вместо
+ * «0.5».
+ */
+const MAX_PASSIVE_RESIST = 0.9;
 
 export function findPassiveContentProblems(defs: readonly PassiveDef[]): string[] {
   const problems: string[] = [];
@@ -76,6 +103,14 @@ export function findPassiveContentProblems(defs: readonly PassiveDef[]): string[
     }
     if (def.stat === "projectiles" && def.op !== "add") {
       problems.push(`пассивка ${def.id}: число снарядов задаётся только слагаемым`);
+    }
+    if (RESIST_STATS[def.stat] !== undefined) {
+      // Сопротивление — доля, и умножать ноль бессмысленно: у игрока без
+      // пассивок его нет.
+      if (def.op !== "add") problems.push(`пассивка ${def.id}: сопротивление задаётся только слагаемым`);
+      if (def.levels.some((value) => !(value > 0 && value <= MAX_PASSIVE_RESIST))) {
+        problems.push(`пассивка ${def.id}: сопротивление — доля от 0 до ${MAX_PASSIVE_RESIST}`);
+      }
     }
     // Контент приходит и из JSON админки: тип не спасает от опечатки в категории.
     if (!PASSIVE_CATEGORIES.includes(def.category)) {
@@ -116,6 +151,10 @@ export function createBaseStats(base: PlayerStatsBase): PlayerStats {
     regenPerSec: 0,
     pickupRadius: base.pickupRadius,
     armor: 0,
+    resistFire: 0,
+    resistCold: 0,
+    resistLightning: 0,
+    resistPoison: 0,
   };
 }
 
@@ -154,6 +193,11 @@ function applyPassive(
   }
   if (type.stat === "regenPerSec" || type.stat === "armor") {
     stats[type.stat === "armor" ? "armor" : "regenPerSec"] += value;
+    return;
+  }
+  const resists = RESIST_STATS[type.stat];
+  if (resists !== undefined) {
+    for (const key of resists) stats[key] += value;
     return;
   }
 

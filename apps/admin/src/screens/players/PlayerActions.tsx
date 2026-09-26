@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { api } from "../../app";
+import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { adjustWallet, banPlayer, resourceName, unbanPlayer, WALLET_RESOURCES, walletAdjustProblem, type PlayerCard } from "../../api/players";
 import { formatDelta, formatNumber } from "../../format";
