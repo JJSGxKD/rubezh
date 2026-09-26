@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
+import { edgePolicyFile } from "../../scripts/vite/edge-policy.ts";
 import { ignoreDotenvNodeEnvForBuild } from "../../scripts/vite/production-node-env.ts";
 import { adminContentSecurityPolicy } from "./src/csp.ts";
 
@@ -33,7 +34,8 @@ export default defineConfig(({ mode, command }) => {
   });
 
   return {
-    plugins: [react(), tailwindcss()],
+    // Политика — ещё и файлом в сборку: в проде её ставит Caddy (scripts/vite/edge-policy.ts).
+    plugins: [react(), tailwindcss(), edgePolicyFile(adminContentSecurityPolicy("build"))],
     base: "./",
     envDir: repoRoot,
     server: { ...common, ...policy("dev") },

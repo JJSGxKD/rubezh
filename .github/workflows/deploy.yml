@@ -1,0 +1,81 @@
+# Выкат версии на прод (docs/09-ci-cd.md §10). Выкатывает уже выпущенный
+# релиз — образ из GHCR и статику из GitHub Release, — пересборки нет.
+#
+# Запуск: вручную с номером версии (предрелизы из dev на закрытом тесте) или
+# из ci.yml после релиза main. Конфигурация стека берётся из того же тега,
+# что и код: выкатывается ровно то, что выпущено.
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия релиза, например v0.6.0-rc.29"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      DEPLOY_SSH_KEY:
+        required: true
+      DEPLOY_HOST:
+        required: true
+      DEPLOY_KNOWN_HOSTS:
+        required: true
+
+permissions:
+  contents: read
+
+# Два выката одновременно переписали бы друг другу тег и ссылки статики.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # Номер уходит в команду на сервере — только формат версии, иначе ручной
+      # запуск со строкой вида «v1; …» выполнил бы её там.
+      - name: Проверить номер версии
+        run: '[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "не номер версии: $VERSION"; exit 1; }'
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.version }}
+
+      # Ключ — из секрета во временный файл; отпечаток сервера закреплён
+      # секретом, а не принимается при первом входе: иначе подмена адреса
+      # получила бы и конфигурацию, и команду выката.
+      - name: Доступ к серверу
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      # Секреты сервера (.env, api.env) не трогаются: их нет в репозитории.
+      - name: Конфигурация стека
+        run: |
+          scp -i ~/.ssh/deploy -o BatchMode=yes \
+            infra/prod/compose.yml infra/prod/Caddyfile infra/prod/frps.toml \
+            infra/prod/deploy.sh infra/prod/backup.sh \
+            "deploy@${DEPLOY_HOST}:/srv/rubezh/app/"
+          scp -i ~/.ssh/deploy -o BatchMode=yes infra/prod/caddy/Dockerfile "deploy@${DEPLOY_HOST}:/srv/rubezh/app/caddy/"
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+
+      - name: Выкат
+        run: ssh -i ~/.ssh/deploy -o BatchMode=yes "deploy@${DEPLOY_HOST}" "cd /srv/rubezh/app && chmod 755 deploy.sh backup.sh && ./deploy.sh '${VERSION}'"
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          VERSION: ${{ inputs.version }}

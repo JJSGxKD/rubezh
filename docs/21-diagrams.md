@@ -1899,52 +1899,46 @@ flowchart TB
         DA --> DR
     end
 
-    subgraph vps["VPS — production и staging рядом"]
-        CAD["Caddy :80 / :443<br/>единственный вход"]
+    subgraph vps["VPS 2 vCPU / 4 ГБ — только production"]
+        CAD["Caddy :80 / :443<br/>единственный вход, TLS через DNS Bunny"]
+        STAT["статика по версиям<br/>/srv/rubezh/web/*/current"]
+        PAPI["API + воркеры BullMQ<br/>порт не публикуется"]
+        PPG[("Postgres")]
+        PR[("Redis")]
+        FRPS["frps<br/>туннели разработчиков"]
+        BAK["backup.sh раз в сутки<br/>дамп → age ключом владельца"]
 
-        subgraph prod["compose-проект production"]
-            PAPI["API<br/>порт не публикуется"]
-            PPG[("Postgres")]
-            PR[("Redis")]
-            PW["Воркеры BullMQ"]
-        end
-
-        subgraph stg["compose-проект staging"]
-            SAPI["API :4100 (127.0.0.1)"]
-            SPG[("Postgres :5532")]
-            SR[("Redis :6479")]
-        end
-
-        MON["Prometheus + Grafana"]
-        BAK["pg-backup<br/>каждые 6 часов → Telegram"]
-
+        CAD --> STAT
         CAD --> PAPI
-        CAD --> SAPI
+        CAD --> FRPS
         PAPI --> PPG
         PAPI --> PR
-        PW --> PPG
-        PW --> PR
-        SAPI --> SPG
-        SAPI --> SR
-        MON -.метрики.-> PAPI
         BAK -.дамп.-> PPG
     end
 
-    CDNP["CDN: статика игры<br/>+ снапшоты конфигурации"]
+    TGP["tgrasp.ru<br/>прокси Bot API"]
+    TG["Telegram Bot API"]
+    DEVM["машина разработчика<br/>frpc"]
     PLAYER(("Игрок"))
+    OWNER(("Владелец"))
 
-    PLAYER --> CDNP
     PLAYER --> CAD
+    DEVM -.WebSocket.-> CAD
+    PAPI -.long polling и отправка.-> TGP
+    TGP --> TG
+    BAK -.документ в личку бота.-> TGP
+    TG -.бэкап.-> OWNER
 ```
 
 Порты, смещения staging и правила публикации — `20-env-and-ports.md` §2.
 
-**Закрытый тест этапа 2** разворачивается на VPS, где **уже работает
-инстанс Caddy с другими сайтами**: своего Caddy в compose нет, наш конфиг
-подключается отдельным файлом, наши сервисы — к его внешней Docker-сети без
-публикации портов. Клиент на отдельных поддоменах отдаётся через Bunny.net,
-origin — наш контейнер статики за этим Caddy (`26-stage2-plan.md`, WP10). Grafana и Prometheus на
-схеме — техническая часть, появляется на этапе 5; продуктовая аналитика —
-в админ-панели (`29-admin-panel.md`).
+**Прод с 26.09.2026** — свой VPS целиком наш, стек `infra/prod` (`09-ci-cd.md`
+§10): свой Caddy в compose, статика каталогами версий, наружу — только Caddy.
+Staging появится, когда сервер вырастет (`20-env-and-ports.md` §6); CDN Bunny
+встанет перед статикой к публичному лончу. Из российской сети Bot API
+недоступен в обе стороны, поэтому бот ходит через прокси `tgrasp.ru` и
+забирает обновления long polling'ом, а не вебхуком (`20-env-and-ports.md`
+§5.2). Grafana и Prometheus — техническая часть, появляется на этапе 5;
+продуктовая аналитика — в админ-панели (`29-admin-panel.md`).
 Этапы, на которых эта топология меняется при росте нагрузки, — 
 `14-scalability.md` §3.

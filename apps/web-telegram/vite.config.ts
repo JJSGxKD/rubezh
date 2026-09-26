@@ -6,6 +6,8 @@ import { clientRolldownOptions } from "../../scripts/vite/chunking.ts";
 import { ignoreDotenvNodeEnvForBuild } from "../../scripts/vite/production-node-env.ts";
 import { stableDevSession } from "../../scripts/vite/stable-dev-session.ts";
 import { devServerConfig } from "../../scripts/vite/dev-server.ts";
+import { contentSecurityPolicy } from "../../scripts/vite/content-security-policy.ts";
+import { edgePolicyFile } from "../../scripts/vite/edge-policy.ts";
 
 // Корень монорепо — единственный .env на весь проект (см. docs/20-env-and-ports.md).
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -63,7 +65,14 @@ export default defineConfig(({ mode, command }) => {
     // (docs/27-design-system-and-app-shell.md §1.4).
     // stableDevSession — без перезагрузки страницы на обрыве связи с dev-сервером
     // (scripts/vite/stable-dev-session.ts).
-    plugins: [react(), tailwindcss(), stableDevSession()],
+    // edgePolicyFile — та же политика файлом в сборку: в проде её ставит Caddy
+    // (scripts/vite/edge-policy.ts).
+    plugins: [
+      react(),
+      tailwindcss(),
+      stableDevSession(),
+      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim() })),
+    ],
     base: "./",
     envDir: repoRoot,
     server,

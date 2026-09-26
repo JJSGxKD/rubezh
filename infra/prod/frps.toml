@@ -1,0 +1,17 @@
+# Сервер туннелей разработчиков (docs/20-env-and-ports.md §4). Снаружи его
+# не видно: frpc подключается к frp.<домен> по WebSocket через Caddy, а
+# dev-адреса Caddy отдаёт в vhostHTTPPort.
+bindPort = 7000
+vhostHTTPPort = 8080
+
+# Токен — из окружения контейнера: у секретов не бывает значений по
+# умолчанию, и в репозитории его нет.
+auth.method = "token"
+auth.token = "{{ .Envs.FRP_TOKEN }}"
+
+# Туннели держатся на WebSocket за Caddy: отвалившийся ноутбук должен
+# освобождать адрес быстро, а не через минуты.
+transport.heartbeatTimeout = 30
+
+log.to = "console"
+log.level = "info"

@@ -1,0 +1,120 @@
+# Край прода (docs/09-ci-cd.md §10, docs/20-env-and-ports.md §2.1).
+#
+# Сертификаты — DNS-проверкой через Bunny: зона домена там, и так они
+# выпускаются и за CDN. Статика лежит каталогами версий в /srv/web/<app>/,
+# `current` — ссылка на выкаченную; откат — переключение ссылки.
+#
+# Политика источников (CSP) клиента и панели — не здесь: её кладёт сборка
+# файлом `csp.txt`, а deploy.sh делает из него сниппет edge/<app>.caddy.
+# Своя строка политики здесь была бы второй копией, которая однажды
+# разойдётся с проверенной под забегом.
+
+# Почта ACME не задаётся: Caddy продлевает сертификаты сам, а письма об
+# истечении нам не нужны.
+{
+	acme_dns bunny {env.BUNNY_API_KEY}
+}
+
+(edge) {
+	encode zstd gzip
+	header {
+		# HSTS — только на краю: TLS завершается здесь, и API не знает протокол.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Одностраничное приложение из каталога версий. Файлы сборки с хэшем в имени
+# кэшируются навсегда, index.html — никогда: иначе игрок остался бы на
+# старой версии до очистки кэша.
+(spa) {
+	root * /srv/web/{args[0]}/current
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@entry path / /index.html
+	header @entry Cache-Control "no-cache"
+	# csp.txt — служебный: политика и так уходит заголовком.
+	@internal path /csp.txt
+	respond @internal 404
+	try_files {path} /index.html
+	file_server
+}
+
+# Лендинг — пока заглушка: сам лендинг — задача О7 (docs/36-parallel-work.md).
+{$DOMAIN} {
+	import edge
+	handle /r/* {
+		reverse_proxy api:4000
+	}
+	handle {
+		import spa landing
+	}
+}
+
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
+
+# Клиент Telegram. API — на своём же домене: без CORS, и сборке не нужен
+# адрес прода. Префикс панели сюда не пускается — у неё свой домен и
+# cookie-сессия.
+tg.{$DOMAIN} {
+	import edge
+	import edge/web-telegram*.caddy
+	handle /api/v1/admin/* {
+		respond 404
+	}
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /r/* {
+		reverse_proxy api:4000
+	}
+	handle {
+		import spa web-telegram
+	}
+}
+
+# Панель: API только своим префиксом — как у dev-сервера панели.
+admin.{$DOMAIN} {
+	import edge
+	import edge/admin*.caddy
+	header X-Frame-Options DENY
+	handle /api/v1/admin/* {
+		reverse_proxy api:4000
+	}
+	handle /api/* {
+		respond 404
+	}
+	handle {
+		import spa admin
+	}
+}
+
+# API снаружи — вебхук бота и то, что ходит не со страниц клиента.
+api.{$DOMAIN} {
+	import edge
+	reverse_proxy api:4000
+}
+
+# Веб и гостевая — WP18; до неё адрес ведёт на лендинг.
+play.{$DOMAIN} {
+	redir https://{$DOMAIN} temporary
+}
+
+# Управляющее соединение туннелей: frpc ходит сюда по WebSocket.
+frp.{$DOMAIN} {
+	reverse_proxy frps:7000
+}
+
+# Dev-серверы разработчиков через туннели. Host сохраняется — по нему frps
+# выбирает, чей туннель.
+tg.dev.{$DOMAIN}, max.dev.{$DOMAIN}, vk.dev.{$DOMAIN}, admin.dev.{$DOMAIN} {
+	reverse_proxy frps:8080
+}
