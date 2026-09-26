@@ -18,6 +18,7 @@ import { openInvoiceWith } from "./invoice";
 import { createDeviceStorage } from "./storage";
 import { createTelegramUi } from "./ui-telegram";
 
+
 /**
  * Telegram WebApp SDK. Валидация initData (HMAC-SHA256 токеном бота) —
  * на бэкенде, не здесь. См. docs/01-tech-stack.md §4.
@@ -253,3 +254,4 @@ export { createDeviceStorage } from "./storage";
 export { createTelegramUi } from "./ui-telegram";
 export { createBrowserUi } from "./ui-browser";
 export { sameInsets, sumInsets } from "./insets";
+export { installTelegramWebAppCompat, type TelegramWebAppCompat } from "./webapp-compat";
