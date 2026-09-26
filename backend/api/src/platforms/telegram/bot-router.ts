@@ -20,6 +20,11 @@ export interface BotCommandSpec {
   /** без ведущего слеша */
   command: string;
   description: string;
+  /**
+   * Описание для английского интерфейса Telegram. Нужно командам для всех:
+   * их видят игроки на любом языке; команды администратора — только русские.
+   */
+  descriptionEn?: string;
   audience: "everyone" | "admin";
 }
 

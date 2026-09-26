@@ -14,7 +14,8 @@ import { BotIdentity } from "./bot-identity.js";
 import { TelegramApiError, type InlineButton, type TelegramBotApi, type TelegramUpdate } from "./telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
 import { displayName, welcomeCacheKey, type WelcomeCard, type WelcomeProgress } from "./welcome-card.js";
-import { languageOf, WELCOME_TEXTS } from "./welcome-texts.js";
+import { languageOf, WELCOME_TEXTS, type WelcomeLanguage } from "./welcome-texts.js";
+import { BOT_PROFILE_TEXTS, DEFAULT_PROFILE_LANGUAGE } from "./bot-profile-texts.js";
 import { AuthService } from "../../modules/auth/auth.service.js";
 import type { TelegramUser } from "./telegram-bot-api.js";
 
@@ -79,14 +80,14 @@ export class RedisWelcomeCardCache implements WelcomeCardCache {
   }
 }
 
-export type WelcomeBotApi = Pick<TelegramBotApi, "sendPhoto" | "sendMessage">;
+export type WelcomeBotApi = Pick<TelegramBotApi, "sendPhoto" | "sendMessage" | "setMenuWebApp">;
 export type WelcomeRenderer = (card: WelcomeCard) => Buffer;
 export const WELCOME_RENDERER = Symbol("WELCOME_RENDERER");
 
 @Injectable()
 export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDestroy {
   readonly name = "start";
-  readonly commands = [{ command: "start", description: "Открыть игру", audience: "everyone" as const }];
+  readonly commands = [{ command: "start", description: "Открыть игру", descriptionEn: "Open the game", audience: "everyone" as const }];
   private readonly logger = new Logger("welcome");
   private readonly stop = new AbortController();
   /** рендер одинаковой карточки, начатый другим `/start`, не повторяется в этом процессе */
@@ -142,7 +143,23 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
       progress: (await this.progressOf(String(message.from.id))) ?? { best: null, runs: 0 },
     };
     await this.send(chatId, card, String(message.from.id));
+    await this.localizeMenu(chatId, language);
     return true;
+  }
+
+  /**
+   * Надпись кнопки меню на языке игрока. У кнопки нет языка в Bot API, и по
+   * умолчанию она русская (bot-profile.ts) — остальным её ставим на их чат.
+   * Не вышло — не беда: кнопка работает и с русской надписью.
+   */
+  private async localizeMenu(chatId: string, language: WelcomeLanguage): Promise<void> {
+    const url = this.config.telegram.webAppUrl;
+    if (language === DEFAULT_PROFILE_LANGUAGE || url === "") return;
+    try {
+      await this.api.setMenuWebApp(BOT_PROFILE_TEXTS[language].menuButton, url, chatId, this.stop.signal);
+    } catch (error: unknown) {
+      this.log("warn", "menu_not_localized", { reason: reasonOf(error) });
+    }
   }
 
   /**

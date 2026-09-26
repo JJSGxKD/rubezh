@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { BOT_POLLER_LOCKS, BotPoller, RedisBotPollerLocks } from "./bot-poller.js";
 import { BotCommands } from "./bot-commands.js";
+import { BOT_PROFILE_STATE, BotProfile, RedisBotProfileState } from "./bot-profile.js";
 import { BotRouter } from "./bot-router.js";
 import { BotUpdateDedupe, BotWebhookController } from "./bot-webhook.controller.js";
 
@@ -16,7 +17,15 @@ import { BotUpdateDedupe, BotWebhookController } from "./bot-webhook.controller.
  */
 @Module({
   controllers: [BotWebhookController],
-  providers: [BotRouter, BotCommands, BotPoller, BotUpdateDedupe, { provide: BOT_POLLER_LOCKS, useClass: RedisBotPollerLocks }],
+  providers: [
+    BotRouter,
+    BotCommands,
+    BotProfile,
+    BotPoller,
+    BotUpdateDedupe,
+    { provide: BOT_POLLER_LOCKS, useClass: RedisBotPollerLocks },
+    { provide: BOT_PROFILE_STATE, useClass: RedisBotProfileState },
+  ],
   exports: [BotRouter],
 })
 export class BotModule {}

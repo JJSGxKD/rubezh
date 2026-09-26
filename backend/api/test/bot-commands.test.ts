@@ -25,21 +25,25 @@ function setup(env: Record<string, string> = {}) {
     ...env,
   });
   const sent: { chatId: string; threadId: number | null; text: string }[] = [];
-  const menus: { chat: string | null; commands: string[] }[] = [];
+  const menus: { chat: string | null; commands: string[]; language?: string; descriptions?: string[] }[] = [];
   const api: CommandsBotApi = {
     async sendMessage(chat: ChatRef, text: string) {
       const target = chatTargetOf(chat);
       sent.push({ chatId: target.chatId, threadId: target.threadId, text });
       return sent.length;
     },
-    async setMyCommands(commands, chat) {
-      menus.push({ chat: chat === null ? null : chatTargetOf(chat).chatId, commands: commands.map((item) => item.command) });
+    async setMyCommands(commands, chat, _signal, language) {
+      menus.push({
+        chat: chat === null ? null : chatTargetOf(chat).chatId,
+        commands: commands.map((item) => item.command),
+        ...(language === undefined ? {} : { language, descriptions: commands.map((item) => item.description) }),
+      });
     },
   };
   const router = new BotRouter();
   const help = new BotCommands(config, router, api);
   help.onModuleInit();
-  router.register(handler("start", [{ command: "start", description: "Открыть игру", audience: "everyone" }]));
+  router.register(handler("start", [{ command: "start", description: "Открыть игру", descriptionEn: "Open the game", audience: "everyone" }]));
   router.register(handler("stats", [{ command: "stats", description: "Сводка плейтеста", audience: "admin" }]));
   router.register(handler("export", [{ command: "export", description: "Выгрузка данных закрытого теста", audience: "admin" }]));
   return { help, router, sent, menus };
@@ -92,6 +96,8 @@ describe("/help", () => {
     await bot.help.publish();
     expect(bot.menus).toEqual([
       { chat: null, commands: ["help", "start"] },
+      // Английский интерфейс — те же общие команды своими описаниями.
+      { chat: null, commands: ["help", "start"], language: "en", descriptions: ["What the bot can do", "Open the game"] },
       { chat: ADMIN_CHAT, commands: ["help", "start", "stats", "export"] },
       { chat: ADMIN, commands: ["help", "start", "stats", "export"] },
     ]);

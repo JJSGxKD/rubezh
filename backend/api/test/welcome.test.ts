@@ -111,6 +111,7 @@ function setup(
   const config = loadAppConfig({ TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_UPDATES: "polling", PUBLIC_WEB_URL: "https://game.example", ...env });
   const cache = new MemoryCache();
   const calls: SentPhotoCall[] = [];
+  const menus: { text: string; url: string; chatId: string | null }[] = [];
   let renders = 0;
   let rejectFileId = false;
   const api: WelcomeBotApi = {
@@ -122,6 +123,9 @@ function setup(
     async sendMessage(chat, text, _signal, options = {}) {
       calls.push({ chatId: chatTargetOf(chat).chatId, photo: "message", caption: text, options });
       return calls.length;
+    },
+    async setMenuWebApp(text, url, chatId) {
+      menus.push({ text, url, chatId });
     },
   };
   const registry = new WelcomeProgressRegistry();
@@ -156,6 +160,7 @@ function setup(
     router,
     cache,
     calls,
+    menus,
     renders: () => renders,
     rejectCachedFiles: () => {
       rejectFileId = true;

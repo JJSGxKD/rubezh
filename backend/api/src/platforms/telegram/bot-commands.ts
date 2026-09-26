@@ -26,7 +26,7 @@ export type CommandsBotApi = Pick<TelegramBotApi, "sendMessage" | "setMyCommands
 @Injectable()
 export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   readonly name = "help";
-  readonly commands = [{ command: "help", description: "Что умеет бот", audience: "everyone" as const }];
+  readonly commands = [{ command: "help", description: "Что умеет бот", descriptionEn: "What the bot can do", audience: "everyone" as const }];
   private readonly logger = new Logger("bot");
   private readonly stop = new AbortController();
 
@@ -57,6 +57,8 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
     const everyone = this.menuFor(false);
     const admin = this.menuFor(true);
     await this.api.setMyCommands(everyone, null, this.stop.signal);
+    // Английский интерфейс Telegram получает те же команды со своими описаниями.
+    await this.api.setMyCommands(this.englishMenu(), null, this.stop.signal, "en");
     for (const chat of this.adminChats()) await this.api.setMyCommands(admin, chat, this.stop.signal);
     for (const adminId of this.config.adminTelegramIds) await this.api.setMyCommands(admin, adminId, this.stop.signal);
     this.log("log", "commands_published", { everyone: everyone.length, admin: admin.length });
@@ -75,6 +77,13 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
       this.stop.signal,
     );
     return true;
+  }
+
+  private englishMenu(): { command: string; description: string }[] {
+    return this.router
+      .commands()
+      .filter((spec) => spec.audience === "everyone")
+      .map(({ command, description, descriptionEn }) => ({ command, description: descriptionEn ?? description }));
   }
 
   private menuFor(admin: boolean): { command: string; description: string }[] {
