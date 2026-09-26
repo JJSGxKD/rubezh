@@ -26,15 +26,31 @@ export function loadoutKey(sessionSecret: string): Buffer {
   return Buffer.from(hkdfSync("sha256", sessionSecret, Buffer.alloc(0), SIGNING_LABEL, 32));
 }
 
+/** Снимок, как он вернулся от клиента: параметры — какие угодно, решает подпись. */
+export interface ClaimedLoadout {
+  accountId: string;
+  modifiers: Readonly<Record<string, number | undefined>>;
+  issuedAtMs: number;
+  signature: string;
+}
+
 /**
- * Каноническая строка: ключи параметров по алфавиту. Одинаковый набор обязан
- * давать одну подпись, в каком бы порядке его ни собрали.
+ * Параметры по алфавиту. Одинаковый набор обязан давать одну подпись и
+ * считаться тем же набором, в каком бы порядке его ни собрали.
  */
-function canonical(accountId: string, modifiers: Partial<Record<ItemStat, number>>, issuedAtMs: number): string {
-  const sorted = Object.keys(modifiers)
+function sortedModifiers(modifiers: Readonly<Record<string, number | undefined>>): [string, number | undefined][] {
+  return Object.keys(modifiers)
     .sort()
-    .map((stat) => [stat, modifiers[stat as ItemStat]]);
-  return JSON.stringify([accountId, sorted, issuedAtMs]);
+    .map((stat) => [stat, modifiers[stat]]);
+}
+
+function canonical(accountId: string, modifiers: Readonly<Record<string, number | undefined>>, issuedAtMs: number): string {
+  return JSON.stringify([accountId, sortedModifiers(modifiers), issuedAtMs]);
+}
+
+/** Тот же набор параметров — значения сравниваются точно: оба посчитаны одной функцией. */
+export function sameModifiers(a: Readonly<Record<string, number | undefined>>, b: Readonly<Record<string, number | undefined>>): boolean {
+  return JSON.stringify(sortedModifiers(a)) === JSON.stringify(sortedModifiers(b));
 }
 
 export function signLoadout(key: Buffer, accountId: string, modifiers: Partial<Record<ItemStat, number>>, issuedAtMs: number): LoadoutSnapshot {
@@ -43,7 +59,7 @@ export function signLoadout(key: Buffer, accountId: string, modifiers: Partial<R
 }
 
 /** Снимок подписан этим сервером и не тронут. Сравнение — за постоянное время. */
-export function verifyLoadout(key: Buffer, snapshot: LoadoutSnapshot): boolean {
+export function verifyLoadout(key: Buffer, snapshot: ClaimedLoadout): boolean {
   const expected = createHmac("sha256", key).update(canonical(snapshot.accountId, snapshot.modifiers, snapshot.issuedAtMs)).digest();
   const given = Buffer.from(snapshot.signature, "base64url");
   return given.length === expected.length && timingSafeEqual(given, expected);

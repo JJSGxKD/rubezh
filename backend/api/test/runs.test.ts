@@ -6,6 +6,7 @@ import { runFinishSchema, type RunFinish } from "../src/modules/runs/dto/runs.dt
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-continues.js";
+import { RunLoadouts, type LoadoutCheck, type SignedLoadout } from "../src/modules/runs/run-loadouts.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
@@ -65,7 +66,7 @@ describe("приём забегов", () => {
     hooks.onRecorded("test", async (run) => {
       recorded.push(run);
     });
-    service = new RunsService(config(), runs, board, roles, hooks, new RunContinues());
+    service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts());
     view = new RunsViewService(runs, board);
   });
 
@@ -95,7 +96,7 @@ describe("приём забегов", () => {
       throw new Error("сводка недоступна");
     });
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    const fragile = new RunsService(config(), runs, board, roles, hooks, new RunContinues());
+    const fragile = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts());
 
     await expect(fragile.finish(account(), finish(randomUUID()))).resolves.toMatchObject({ recorded: true });
   });
@@ -248,7 +249,7 @@ describe("второй шанс в итоге забега", () => {
     const ledger = new FakeLedger();
     continues.provide(ledger);
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    return { service: new RunsService(config(), runs, board, roles, hooks, continues), ledger, recorded, runs, board };
+    return { service: new RunsService(config(), runs, board, roles, hooks, continues, new RunLoadouts()), ledger, recorded, runs, board };
   }
 
   it("продолжение без покупки — отказ и мимо рейтинга, но забег записан", async () => {
@@ -288,11 +289,59 @@ describe("второй шанс в итоге забега", () => {
   });
 });
 
+describe("снаряжение в итоге забега", () => {
+  const snapshot = (accountId: string): SignedLoadout => ({ accountId, modifiers: { damage: 0.1 }, issuedAtMs: 1, signature: "подпись" });
+
+  class FakeCheck implements LoadoutCheck {
+    answer: "valid" | "forged" | "stale" = "valid";
+    asked: SignedLoadout[] = [];
+    async check(_accountId: string, claimed: SignedLoadout): Promise<"valid" | "forged" | "stale"> {
+      this.asked.push(claimed);
+      return this.answer;
+    }
+  }
+
+  function setup(checker: LoadoutCheck | null) {
+    const runs = new MemoryRunsRepository();
+    const board = new MemoryLeaderboardStore();
+    const loadouts = new RunLoadouts();
+    if (checker !== null) loadouts.provide(checker);
+    const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
+    return { service: new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), loadouts), board };
+  }
+
+  it("подделанный снимок — отказ и мимо рейтинга, устаревший — подозрение", async () => {
+    const check = new FakeCheck();
+    const { service, board } = setup(check);
+    const me = account();
+
+    check.answer = "forged";
+    await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "rejected" });
+    check.answer = "stale";
+    await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "suspicious" });
+    expect(await board.best("normal", me.accountId)).toBeNull();
+
+    check.answer = "valid";
+    await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
+  });
+
+  it("забег без снимка проверку не зовёт, а без проверки снимку не верят", async () => {
+    const check = new FakeCheck();
+    const { service } = setup(check);
+    await service.finish(account(), finish(randomUUID()));
+    expect(check.asked).toEqual([]);
+
+    const unchecked = setup(null).service;
+    const me = account();
+    await expect(unchecked.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "rejected" });
+  });
+});
+
 describe("чтение забегов", () => {
   it("лидерборд отмечает свою строку и не выдаёт чужих идентификаторов", async () => {
     const runs = new MemoryRunsRepository();
     const board = new MemoryLeaderboardStore();
-    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues());
+    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts());
     const view = new RunsViewService(runs, board);
     const [me, other] = [account("1"), account("2")];
     await service.finish(me, finish(randomUUID(), { survivalSec: 100 }));

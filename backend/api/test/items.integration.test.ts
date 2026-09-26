@@ -160,6 +160,23 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
       expect((await items.inventory(id)).equipped).toEqual({ boots });
     });
 
+    it("снимок в итоге забега: свой и свежий — настоящий, после смены надетого — устаревший, чужой и правленый — подделка", async () => {
+      const id = await account();
+      const other = await account();
+      const weapon = await give(id, "weapon", "rare");
+      await items.equip(id, weapon);
+      const snapshot = await items.loadout(id);
+
+      expect(await items.checkLoadout(id, snapshot)).toBe("valid");
+      expect(await items.checkLoadout(other, snapshot)).toBe("forged");
+      expect(await items.checkLoadout(id, { ...snapshot, modifiers: { ...snapshot.modifiers, maxHp: 500 } })).toBe("forged");
+
+      await items.unequip(id, weapon);
+      expect(await items.checkLoadout(id, snapshot)).toBe("stale");
+      await items.equip(id, weapon);
+      expect(await items.checkLoadout(id, snapshot)).toBe("valid");
+    });
+
     it("чужой предмет неотличим от несуществующего", async () => {
       const owner = await account();
       const stranger = await account();

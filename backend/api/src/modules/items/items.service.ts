@@ -7,7 +7,7 @@ import { InsufficientBalance } from "../wallet/wallet-ledger.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
 import { INVENTORY_CAP, ITEM_SLOTS, MERGE_COUNT, type ItemRarity, type ItemSlot } from "./item-catalog.js";
-import { loadoutKey, signLoadout, type LoadoutSnapshot } from "./item-loadout.js";
+import { loadoutKey, sameModifiers, signLoadout, verifyLoadout, type ClaimedLoadout, type LoadoutSnapshot } from "./item-loadout.js";
 import { levelCap, loadoutOf, mergeCost, nextRarity, rerollCost, rerollExtra, rollItem, rollLoot, salvageYield, seededRandom, upgradeCost, type RunVerdict } from "./item-rules.js";
 import { inventoryView, itemView, type InventoryView, type ItemView } from "./item-views.js";
 import { ItemNotFoundError, ItemRuleError } from "./items-errors.js";
@@ -69,6 +69,17 @@ export class ItemsService {
     if (this.signingKey === null) throw new DisabledError("Вход выключен — снимок снаряжения не подписать");
     const equipped = (await this.items.alive(accountId)).filter((item) => item.equipped);
     return signLoadout(this.signingKey, accountId, loadoutOf(equipped), nowMs);
+  }
+
+  /**
+   * Снимок, с которым пришёл итог забега: подписан ли он этим сервером для
+   * этого игрока и совпадает ли с надетым сейчас. Устаревший — не подделка:
+   * честный игрок мог сменить снаряжение, пока итог ждал сети.
+   */
+  async checkLoadout(accountId: string, snapshot: ClaimedLoadout): Promise<"valid" | "forged" | "stale"> {
+    if (this.signingKey === null || snapshot.accountId !== accountId || !verifyLoadout(this.signingKey, snapshot)) return "forged";
+    const equipped = (await this.items.alive(accountId)).filter((item) => item.equipped);
+    return sameModifiers(loadoutOf(equipped), snapshot.modifiers) ? "valid" : "stale";
   }
 
   async equip(accountId: string, itemId: string, at = new Date()): Promise<ItemView> {
