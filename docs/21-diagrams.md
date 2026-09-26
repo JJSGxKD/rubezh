@@ -978,8 +978,9 @@ flowchart LR
         FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
         WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
-        ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, реализовано"]
+        ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, реализовано"]
         LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, реализовано"]
+        FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1079,6 +1080,9 @@ flowchart LR
     ADMINAPI -. карточка: кошелёк .-> WALLET
     ADMINAPI -. курсы, заданные курсы .-> FXM
     ADMINAPI -. отчёты, архив .-> EXPORT
+    ADMINAPI -. флаги и выкат .-> FLAGS
+    CADDY -- "/api/v1/flags" --> FLAGS
+    FLAGS --> PG
 
     TG -.статика и конфиг.-> CDN
 ```
