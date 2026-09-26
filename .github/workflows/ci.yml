@@ -98,9 +98,9 @@ jobs:
 
   # Версия по типу изменений в PR (docs/09-ci-cd.md §8.1): из main — стабильная
   # vX.Y.Z, из dev — предрелиз vX.Y.Z-rc.N. Доведён до тега, образа в GHCR,
-  # GitHub Release и артефакта клиента; деплой НЕ вызывается — deploy-*.yml ещё
-  # не существует (пакет выпуска, docs/26-stage2-plan.md §6). Матрица сборок по
-  # платформам (§1) — там же: `pnpm build` ниже собирает всё одним прогоном.
+  # GitHub Release и артефактов клиента и панели; выкат — job `deploy` ниже.
+  # Матрица сборок по платформам (§1) — там же: `pnpm build` ниже собирает всё
+  # одним прогоном.
   release:
     needs: gate
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
@@ -108,6 +108,9 @@ jobs:
     permissions:
       contents: write
       packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      published: ${{ steps.published.outcome == 'success' }}
     # Без отмены выполняющегося прогона: если за время одного релиза в
     # очередь встали два мерджа, GitHub оставит только последний, а
     # next-version.mjs всё равно посчитает максимум меток с базы
@@ -152,15 +155,20 @@ jobs:
       - if: steps.tip.outputs.current == 'true'
         run: pnpm install --frozen-lockfile
 
+      # Имя бота — переменная репозитория, а не секрет: оно и так видно в
+      # ссылках шеринга (docs/20-env-and-ports.md §7).
       - if: steps.tip.outputs.current == 'true'
         run: pnpm build
         env:
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
+          VITE_TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
 
       # Артефакт клиента: то, что раскатывается на статику, берётся из этого
       # же прогона — пересборка перед деплоем запрещена (docs/09-ci-cd.md §7).
       - if: steps.tip.outputs.current == 'true'
-        run: tar -czf "rubezh-web-telegram-${{ steps.version.outputs.version }}.tar.gz" -C apps/web-telegram/dist .
+        run: |
+          tar -czf "rubezh-web-telegram-${{ steps.version.outputs.version }}.tar.gz" -C apps/web-telegram/dist .
+          tar -czf "rubezh-admin-${{ steps.version.outputs.version }}.tar.gz" -C apps/admin/dist .
 
       # Имя пакета в GHCR должно быть в нижнем регистре, а владелец
       # репозитория пишется как есть — отсюда приведение регистра.
@@ -201,7 +209,7 @@ jobs:
       - if: steps.tag.outputs.created == 'true'
         name: Черновик релиза
         run: >-
-          gh release create "$VERSION" "rubezh-web-telegram-${VERSION}.tar.gz"
+          gh release create "$VERSION" "rubezh-web-telegram-${VERSION}.tar.gz" "rubezh-admin-${VERSION}.tar.gz"
           --draft --verify-tag --generate-notes
           ${{ steps.version.outputs.prerelease == 'true' && '--prerelease' || '' }}
           ${{ steps.version.outputs.previous_tag != '' && format('--notes-start-tag {0}', steps.version.outputs.previous_tag) || '' }}
@@ -227,6 +235,7 @@ jobs:
 
       - if: steps.tag.outputs.created == 'true'
         name: Опубликовать релиз
+        id: published
         run: gh release edit "$VERSION" --draft=false
         env:
           GH_TOKEN: ${{ github.token }}
@@ -242,3 +251,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
           IMAGE_PUSHED: ${{ steps.publish_image.outcome == 'success' }}
+
+  # Выкат выпущенного на прод (docs/09-ci-cd.md §10). Стабильный релиз из main
+  # выкатывается всегда; предрелизы из dev — пока на закрытом тесте включена
+  # переменная репозитория DEPLOY_DEV_RELEASES: тестеры получают свежую сборку
+  # после каждого мерджа, а выключить это — одна переменная, а не правка
+  # workflow.
+  deploy:
+    needs: release
+    if: needs.release.outputs.published == 'true' && (github.ref == 'refs/heads/main' || vars.DEPLOY_DEV_RELEASES == 'true')
+    uses: ./.github/workflows/deploy.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
+

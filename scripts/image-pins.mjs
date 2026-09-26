@@ -2,6 +2,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+/** Свои образы в GHCR с тегом релиза из переменной выката. */
+const OWN_RELEASE_IMAGE_RE = /^ghcr\.io\/[a-z0-9-]+\/rubezh-[a-z-]+:\$\{API_TAG\}$/;
+
 /**
  * Docker-образы — только точным тегом и digest (docs/09-ci-cd.md §12,
  * docs/16-tech-stack-decisions.md §9.4).
@@ -135,6 +138,10 @@ export function findFromImages(text) {
  * как исправить.
  */
 export function classifyImage(ref) {
+  // Свой образ из этого же репозитория по номеру релиза: тег — версия, его
+  // ставит релиз один раз и не перевешивает (docs/09-ci-cd.md §8.1), а
+  // закрепить его в файле нельзя — выкат меняет его на каждой версии.
+  if (OWN_RELEASE_IMAGE_RE.test(ref)) return { kind: "own" };
   if (ref.includes("$")) {
     return problem(
       `${ref} — образ задан переменной: по файлу не видно, какой образ запустится. ` +
@@ -177,17 +184,28 @@ export function classifyImage(ref) {
  * никто не разрабатывает.
  */
 export function findVersionDrift(pins) {
+  // Сравниваются места одного варианта образа: сборочный `caddy:…-builder` и
+  // рабочий `caddy` — разные образы. Версия Alpine в вариант не входит —
+  // её смена в одном месте из двух и есть расхождение.
   const byName = new Map();
-  for (const pin of pins) byName.set(pin.name, [...(byName.get(pin.name) ?? []), pin]);
+  for (const pin of pins) {
+    const key = `${pin.name}${variantOf(pin.tag)}`;
+    byName.set(key, [...(byName.get(key) ?? []), pin]);
+  }
 
   const errors = [];
   for (const [name, group] of byName) {
     const versions = new Set(group.map((pin) => `${pin.tag}@${pin.digest}`));
     if (versions.size < 2) continue;
     const places = group.map((pin) => `${pin.where} ${pin.tag}@${pin.digest.slice(0, 19)}…`).join(", ");
-    errors.push(`${name} — разные версии в разных местах (${places}): обновляются все места разом`);
+    errors.push(`${group[0]?.name ?? name} — разные версии в разных местах (${places}): обновляются все места разом`);
   }
   return errors;
+}
+
+/** Вариант образа по тегу: `2.11.4-builder` → `-builder`, `17.11-alpine3.24` → `-alpine`. */
+function variantOf(tag) {
+  return tag.replace(/^v?\d+(?:\.\d+)*/, "").replace(/-alpine\d+(?:\.\d+)*/, "-alpine");
 }
 
 /** `docker.io/library/postgres` и `postgres` — один образ. */

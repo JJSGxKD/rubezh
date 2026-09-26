@@ -1,0 +1,124 @@
+# Прод «Рубежа» на одном VPS (docs/20-env-and-ports.md §5, docs/09-ci-cd.md §10).
+# Живёт на сервере в /srv/rubezh/app, выкатывается скриптом deploy.sh.
+#
+# Наружу публикует порты только Caddy: опубликованные порты Docker идут мимо
+# ufw, поэтому Postgres, Redis, API и frps живут во внутренних сетях.
+# Переменные compose — в .env рядом (шаблон — env.example), переменные API —
+# в api.env; оба файла только на сервере, с правами 600.
+#
+# Образы — точная версия и digest. Postgres и Redis — те же, что в dev и CI
+# (docs/16-tech-stack-decisions.md §9.4).
+
+name: rubezh
+
+services:
+  caddy:
+    build: ./caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      BUNNY_API_KEY: ${BUNNY_API_KEY}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./edge:/etc/caddy/edge:ro
+      - /srv/rubezh/web:/srv/web:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  api:
+    # Свой образ по номеру релиза: тег переписывает deploy.sh.
+    image: ghcr.io/jjsgxkd/rubezh-api:${API_TAG}
+    restart: unless-stopped
+    env_file: ./api.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [edge, data]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    # Половина памяти сервера — на Postgres и остальное: утечка в API не
+    # должна уронить базу.
+    mem_limit: 1g
+
+  postgres:
+    image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # Под 4 ГБ на весь сервер: четверть памяти — буферам, остальное — кэшу ОС.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=60
+    shm_size: 256mb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4.11-alpine3.21@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    restart: unless-stopped
+    # appendonly — лидерборды и очереди переживают перезапуск; источник истины
+    # у лидерборда всё равно Postgres (docs/14-scalability.md §4.3).
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 384mb --maxmemory-policy noeviction
+    volumes:
+      - redis-data:/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Туннели разработчиков (docs/20-env-and-ports.md §4): Caddy принимает
+  # frpc по WebSocket на frp.<домен> и отдаёт dev-адреса в vhost frps.
+  frps:
+    image: fatedier/frps:v0.71.0@sha256:cd8b947ba61678b200baa4f71ccc33f3c52e4e2cc0059700ba3b8354e36af7c3
+    restart: unless-stopped
+    command: ["-c", "/etc/frp/frps.toml"]
+    environment:
+      FRP_TOKEN: ${FRP_TOKEN}
+    volumes:
+      - ./frps.toml:/etc/frp/frps.toml:ro
+    networks: [edge]
+
+networks:
+  edge: {}
+  # Базе и Redis в интернет не нужно ничего: internal-сеть без выхода наружу.
+  data:
+    internal: true
+
+volumes:
+  postgres-data: {}
+  redis-data: {}
+  caddy-data: {}
+  caddy-config: {}

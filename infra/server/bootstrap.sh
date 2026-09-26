@@ -23,7 +23,7 @@ step() { printf '\n==> %s\n' "$1"; }
 step "Обновления и пакеты"
 apt-get update -q
 apt-get -yq -o Dpkg::Options::=--force-confold upgrade
-apt-get install -yq ca-certificates curl gnupg ufw fail2ban unattended-upgrades jq
+apt-get install -yq ca-certificates curl gnupg ufw fail2ban unattended-upgrades jq age
 
 step "Часовой пояс UTC"
 # Сервер в UTC: иначе поедут сутки в аналитике и hold-периоды выплат (CLAUDE.md).
