@@ -12,7 +12,7 @@ import { WELCOME_TEXTS, type Difficulty, type WelcomeLanguage } from "./welcome-
  * Сменой версии сбрасываются и картинки, нарисованные без шрифта: их
  * `file_id` Telegram отдаёт так же охотно, как хорошие.
  */
-export const CARD_VERSION = 2;
+export const CARD_VERSION = 3;
 
 const WIDTH = 1200;
 const HEIGHT = 675;
