@@ -2,6 +2,7 @@ import { z } from "zod/mini";
 import { apiRequest, type ApiFailure, type ApiRequest, type ApiResult } from "./api-request";
 import { useProgress } from "./progress";
 import { useShell } from "./shell";
+import { refreshLoadout } from "./items-api";
 import { loadWallet } from "./wallet-api";
 
 /**
@@ -66,11 +67,13 @@ export const REWARD_POLL_DELAYS_MS = [600, 1_200, 2_500, 5_000, 10_000] as const
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Уровень и кошелёк — при запуске, одним ленивым модулем: первой загрузке
- * хватает одного динамического импорта вместо двух.
+ * Уровень, кошелёк и снимок надетого — при запуске, одним ленивым модулем:
+ * первой загрузке хватает одного динамического импорта вместо трёх. Снимок —
+ * чтобы следующий забег начался с тем, что надето сейчас, даже если сеть
+ * пропадёт до него.
  */
 export async function loadAccountState(): Promise<void> {
-  await Promise.all([loadProgress(), loadWallet()]);
+  await Promise.all([loadProgress(), loadWallet(), refreshLoadout()]);
 }
 
 export async function loadProgress(api?: ProgressApi): Promise<ApiFailure | null> {

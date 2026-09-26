@@ -229,7 +229,9 @@ export const useRun = create<RunStore>((set, get) => ({
       // Движок приходит отдельным чанком; обычно он уже предзагружен из лобби
       // (`preloadRunEngine`), и ожидание здесь мгновенное
       // (docs/27-design-system-and-app-shell.md §3.4).
-      const engine = await loadRunEngine();
+      // Снимок снаряжения — своим чанком, параллельно с движком. Не
+      // загрузился — забег идёт без снаряжения, а не падает целиком.
+      const [engine, loadouts] = await Promise.all([loadRunEngine(), import("./run-loadouts").catch(() => null)]);
       // Пока грузился чанк, нас могли остановить или запустить заново. Игру
       // в этом случае не создаём вовсе: лишний контекст WebGL дороже всего.
       if (token !== startToken) return;
@@ -244,6 +246,10 @@ export const useRun = create<RunStore>((set, get) => ({
       // через сутки — иначе панель разработчика пропадает по дороге.
       const devRun =
         devModeAllowed() && (useDevMode.getState().armed || resume?.dev === true || resume?.cheats === true);
+      // Снаряжение — из подписанного снимка на устройстве: забег без сети
+      // начинается с надетым. Продолженный забег берёт набор из своего
+      // снимка, а надетое с тех пор могло смениться.
+      const signed = resume === undefined && loadouts !== null ? loadouts.equippedLoadout() : null;
       const created = engine.start({
         container: options.container,
         seed,
@@ -263,6 +269,7 @@ export const useRun = create<RunStore>((set, get) => ({
         // можно купить: иначе смерть ждала бы решения, которого не принять
         // (docs/34-stage3-plan.md, WP5).
         continues: devRun || canOfferPaidContinue(),
+        ...(signed === null || loadouts === null ? {} : { loadout: { modifiers: loadouts.knownModifiers(signed), boosts: [] } }),
       });
 
       if (token !== startToken) {
@@ -272,7 +279,7 @@ export const useRun = create<RunStore>((set, get) => ({
       }
 
       session = created;
-      unsubscribes = subscribe(created, set, get);
+      unsubscribes = subscribe(created, set, get, signed === null || loadouts === null ? null : (runId) => loadouts.rememberRunLoadout(runId, signed));
       if (devRun) unsubscribes.push(followDevSettings(created));
       set({ intent: null, devRun });
       // Продолженный забег движок сам ставит на паузу или на выбор — фазу
@@ -398,12 +405,16 @@ export const useRun = create<RunStore>((set, get) => ({
 type SetState = (partial: Partial<RunStore>) => void;
 type GetState = () => RunStore;
 
-function subscribe(created: RunSession, set: SetState, get: GetState): (() => void)[] {
+function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadout: ((runId: string) => void) | null): (() => void)[] {
   return [
     // Старт — в очередь сразу, раньше итога: по нему сервер сверит длительность
     // забега со своими часами (docs/34-stage3-plan.md, WP4). Продолженный
-    // забег события не присылает — его начало уже было.
-    created.on("started", (started) => useRuns.getState().registerStart(started)),
+    // забег события не присылает — его начало уже было, и снимок снаряжения
+    // к нему привязан тогда же: итог понесёт его серверу.
+    created.on("started", (started) => {
+      bindLoadout?.(started.runId);
+      useRuns.getState().registerStart(started);
+    }),
     created.on("hud", (hud) => {
       // Первый снимок HUD — первый кадр забега: сцена создана и мир живёт.
       if (firstFrameStartedAt !== null) {
@@ -685,6 +696,7 @@ export function preloadRunEngine(): void {
   if (connection?.saveData === true || navigator.onLine === false) return;
 
   preloading = true;
+  void import("./run-loadouts").catch(() => undefined);
   loadRunEngine().catch((error: unknown) => {
     preloading = false;
     reportError("run", `предзагрузка движка не удалась: ${String(error)}`);
