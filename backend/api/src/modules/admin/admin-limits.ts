@@ -10,4 +10,6 @@ export const ADMIN_LIMITS = {
   mutate: { scope: "admin:mutate", limit: 60, windowSec: 60 },
   /** сборка архива читает всю базу выгрузки — не чаще нескольких раз за десять минут */
   export: { scope: "admin:export", limit: 3, windowSec: 600 },
+  /** тест рассылки себе — сообщение живому человеку, пусть и себе: десяток за десять минут */
+  broadcastTest: { scope: "admin:broadcast-test", limit: 10, windowSec: 600 },
 } satisfies Record<string, RateLimit>;
