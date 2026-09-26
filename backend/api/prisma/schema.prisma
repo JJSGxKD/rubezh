@@ -188,6 +188,8 @@ model Account {
   returnsHelped    FriendReturn[]  @relation("friend_return_friend")
   friendBonuses    FriendBonus[]
   broadcasts       BroadcastDelivery[]
+  items            Item[]
+  itemEvents       ItemEvent[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1050,3 +1052,76 @@ model BroadcastDelivery {
   @@index([accountId, sentAt])
   @@map("broadcast_delivery")
 }
+
+// Снаряжение (WP7, docs/35-stage4-plan.md §3.4, Р38)
+
+enum ItemSlot {
+  weapon
+  amulet
+  gloves
+  armor
+  belt
+  boots
+}
+
+enum ItemRarity {
+  common
+  uncommon
+  rare
+  epic
+  legendary
+  mythic
+}
+
+/// Предмет инвентаря. Хранятся броски свойств, а не значения: значение
+/// считается из редкости, уровня и броска (modules/items/item-rules.ts), и
+/// улучшение уровня поднимает все свойства разом. `seed` — зерно, от которого
+/// брошен предмет (Р14): спорный бросок повторяется при разборе. Разобранный
+/// или объединённый предмет не удаляется, а помечается `removedAt` — журнал
+/// ссылается на него.
+model Item {
+  itemId    String     @id @map("item_id") @db.Uuid
+  accountId String     @map("account_id") @db.Uuid
+  slot      ItemSlot
+  rarity    ItemRarity
+  level     Int
+  seed      BigInt
+  /// броски: { main: { stat, roll }, extras: [{ stat, roll }] }
+  rolls     Json
+  /// надет ли; надетый в слоте один — частичный уникальный индекс в миграции
+  equipped  Boolean    @default(false)
+  /// откуда: loot:<runId>, merge:<ключ>, admin:<актор>
+  source    String     @db.VarChar(96)
+  createdAt DateTime   @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime   @map("updated_at") @db.Timestamptz(3)
+  removedAt DateTime?  @map("removed_at") @db.Timestamptz(3)
+
+  account Account     @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  events  ItemEvent[]
+
+  // Инвентарь игрока — живые предметы аккаунта.
+  @@index([accountId, removedAt])
+  @@map("item")
+}
+
+/// Журнал предметов — источник истины и аналитики снаряжения (как кошелёк
+/// для валют): получение, надевание, улучшение, перековка, разбор,
+/// объединение. Ключ идемпотентности уникален: повтор запроса не улучшит
+/// предмет дважды и не спишет дважды.
+model ItemEvent {
+  eventId        String   @id @map("event_id") @db.Uuid
+  itemId         String   @map("item_id") @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  /// obtained | equipped | unequipped | upgraded | rerolled | salvaged | merged
+  kind           String   @db.VarChar(16)
+  payload        Json
+  idempotencyKey String   @unique @map("idempotency_key") @db.VarChar(160)
+  createdAt      DateTime @map("created_at") @db.Timestamptz(3)
+
+  item    Item    @relation(fields: [itemId], references: [itemId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("item_event")
+}
+

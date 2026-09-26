@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { PrismaItemsRepository } from "../src/modules/items/items.repository.js";
+import { ItemsService, cryptoSeeds } from "../src/modules/items/items.service.js";
 import { xpForLevel } from "../src/modules/progress/progress-rules.js";
 import { PrismaProgressRepository } from "../src/modules/progress/progress.repository.js";
 import { ProgressService } from "../src/modules/progress/progress.service.js";
@@ -70,7 +72,7 @@ describe.skipIf(DATABASE_URL === "")("награды за забег на жив
     const roles = new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());
     wallet = new WalletService(new PrismaWalletRepository(prisma), config, roles);
     progress = new PrismaProgressRepository(prisma);
-    rewards = new RunRewards(config, new RunsHooks(), progress, wallet);
+    rewards = new RunRewards(config, new RunsHooks(), progress, wallet, new ItemsService(new PrismaItemsRepository(prisma), wallet, config, cryptoSeeds));
     view = new ProgressService(progress);
   });
 

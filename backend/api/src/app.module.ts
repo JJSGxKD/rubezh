@@ -23,6 +23,7 @@ import { MessagingModule } from "./modules/messaging/messaging.module.js";
 import { WalletModule } from "./modules/wallet/wallet.module.js";
 import { FxModule } from "./modules/fx/fx.module.js";
 import { ProgressModule } from "./modules/progress/progress.module.js";
+import { ItemsModule } from "./modules/items/items.module.js";
 import { TelegramMessagingModule } from "./platforms/telegram/telegram-messaging.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { PlaytestModule } from "./modules/playtest/playtest.module.js";
@@ -50,7 +51,8 @@ import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module.js";
  * funnel — вехи воронки аккаунта, messaging — можно ли писать игроку
  * (docs/35-stage4-plan.md, WP2); wallet — кошелёк журналом (там же, WP3);
  * fx — курсы валют вокруг ядра packages/fx (там же, WP9); progress — уровень
- * аккаунта и награды за забег (там же, WP4); admin — серверная часть панели
+ * аккаунта и награды за забег (там же, WP4); items — снаряжение и добыча
+ * (там же, WP7); admin — серверная часть панели
  * под своей cookie-сессией (там же, WP17), выключена по умолчанию.
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
@@ -69,6 +71,7 @@ export const APP_MODULES = [
   TelegramMessagingModule,
   RunsModule,
   WalletModule,
+  ItemsModule,
   ProgressModule,
   FxModule,
   PaymentsModule,

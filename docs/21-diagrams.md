@@ -58,6 +58,8 @@ erDiagram
     ACCOUNT ||--o{ WALLET_ENTRY : "журнал кошелька"
     ACCOUNT ||--o{ WALLET_BALANCE : "баланс по ресурсу"
     ACCOUNT ||--o{ WALLET_DAILY : "начислено за сутки"
+    ACCOUNT ||--o{ ITEM : "инвентарь"
+    ITEM ||--o{ ITEM_EVENT : "журнал предмета"
     ACCOUNT ||--o| ACCOUNT_PROGRESS : "уровень и опыт"
     ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
     ACCOUNT ||--o| FRIEND_LINK : "ссылка дружбы"
@@ -164,6 +166,29 @@ erDiagram
         enum resource PK
         bigint balance "не меньше нуля, проекция журнала"
         datetime updated_at
+    }
+
+    ITEM {
+        uuid item_id PK
+        uuid account_id FK
+        enum slot "weapon|amulet|gloves|armor|belt|boots"
+        enum rarity "common…mythic"
+        int level
+        bigint seed "зерно броска, Р14"
+        json rolls "броски свойств, не значения"
+        boolean equipped "в слоте один — частичный уникальный индекс"
+        string source "loot:<runId>, merge:<ключ>"
+        datetime removed_at "nullable: разобран или объединён"
+    }
+
+    ITEM_EVENT {
+        uuid event_id PK
+        uuid item_id FK
+        uuid account_id FK
+        string kind "obtained|equipped|upgraded|rerolled|salvaged|merged…"
+        json payload "цена, зерно, было и стало"
+        string idempotency_key UK "повтор упирается в индекс"
+        datetime created_at
     }
 
     FX_QUOTE {
@@ -482,6 +507,15 @@ erDiagram
   источник уже дал за игровые сутки: строка блокируется на время начисления,
   и параллельные начисления не пробивают потолок. Журнал пока не
   партиционирован — почему, в WP3 плана этапа.
+- **`ITEM` — инвентарь, `ITEM_EVENT` — его журнал** (`35-stage4-plan.md`,
+  §3.4, WP7, Р38). У предмета хранятся броски, а не значения: значение
+  считается из редкости, уровня и броска, и улучшение поднимает все свойства
+  разом. Операции аккаунта идут по очереди под транзакционной блокировкой на
+  аккаунт; изменение предмета, списание из `WALLET_ENTRY` и строка журнала —
+  одна транзакция, повтор находит свою строку по ключу. Разобранный и
+  объединённый предмет не удаляется, а помечается `removed_at`: журнал на него
+  ссылается. Добыча забега — ключ `loot:<runId>`, второй предмет за один забег
+  не выпадет.
 - **`ACCOUNT_FUNNEL` — вехи игрока, `ACCOUNT_MESSAGING` — можно ли ему писать**
   (`35-stage4-plan.md`, WP2). Вехи ставят слушатели входа, забегов и оплаты
   одной вставкой с `COALESCE`, поэтому таблица — отметки первого раза, а не
