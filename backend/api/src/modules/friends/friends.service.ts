@@ -5,6 +5,7 @@ import type { AccessTokenClaims } from "../auth/access-token.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { AuthHooks, type LoginEvent } from "../auth/auth-hooks.js";
 import { friendStartParam } from "./friend-code.js";
+import { FriendNotifier } from "./friend-notifier.js";
 import { FriendLimitError, FriendNotFoundError, FriendRequestNotFoundError } from "./friends-errors.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { bonusView, readySteps, type BonusView } from "./friend-bonus.js";
@@ -59,6 +60,7 @@ export class FriendsService implements OnModuleInit {
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     private readonly hooks: AuthHooks,
     private readonly wallet: WalletService,
+    private readonly notifier: FriendNotifier,
   ) {}
 
   onModuleInit(): void {
@@ -166,6 +168,13 @@ export class FriendsService implements OnModuleInit {
     });
     if (outcome === "incoming_full") throw new FriendLimitError("У игрока слишком много заявок — попробуйте позже");
     if (outcome === "outgoing_full") throw new FriendLimitError("Слишком много заявок ждут ответа — отмените часть");
+    // Сообщение — только о новой заявке и мимо ответа: повтор той же заявки
+    // не пишет второй раз, а медленный Telegram не держит игрока.
+    if (outcome === "sent") {
+      void this.notifier.requestSent(actor.accountId, targetId).catch((error: unknown) => {
+        this.logger.warn(JSON.stringify({ module: "friends", event: "friend_request_notify_failed", toId: targetId, reason: error instanceof Error ? error.message : "unknown" }));
+      });
+    }
     return { status: "requested" };
   }
 
