@@ -22,14 +22,14 @@ const GRASPIL_SCRIPT = "https://w.graspil.com";
 /** Имя очереди — как в сниппете Graspil: по нему скрипт находит свой ключ. */
 const DATA_LAYER = "graspil";
 
-type GraspilWindow = Window & Record<string, unknown>;
-
 export function loadGraspil(key: string): void {
   if (key === "") return;
   const webApp = installTelegramWebAppCompat();
 
-  const target = window as GraspilWindow;
-  const queue = Array.isArray(target[DATA_LAYER]) ? (target[DATA_LAYER] as unknown[]) : [];
+  // Очередь — глобальная переменная с именем из сниппета: типа у неё нет,
+  // поэтому читается и пишется через Reflect, без приведения window.
+  const existing: unknown = Reflect.get(window, DATA_LAYER);
+  const queue: unknown[] = Array.isArray(existing) ? existing : [];
   // Клики — только по размеченным элементам, а не по каждому касанию канвы
   // забега; события площадки — выключены: прослойка их не транслирует.
   queue.push({ key, trackClicks: "tagged", trackTgEvents: false });
@@ -43,7 +43,7 @@ export function loadGraspil(key: string): void {
       ...startParam(webApp.initDataUnsafe),
     });
   }
-  target[DATA_LAYER] = queue;
+  Reflect.set(window, DATA_LAYER, queue);
 
   const script = document.createElement("script");
   script.async = true;
