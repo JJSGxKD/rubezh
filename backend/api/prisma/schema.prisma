@@ -187,6 +187,7 @@ model Account {
   returns          FriendReturn[]  @relation("friend_return_returned")
   returnsHelped    FriendReturn[]  @relation("friend_return_friend")
   friendBonuses    FriendBonus[]
+  broadcasts       BroadcastDelivery[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -970,4 +971,82 @@ model FriendBonus {
 
   @@id([accountId, friends])
   @@map("friend_bonus")
+}
+
+// Рассылка в бота (WP17, docs/29-admin-panel.md §7). Черновик правится, пока
+// не запущен; после старта содержимое неизменно — иначе половина аудитории
+// получила бы не тот текст, что виден в отчёте. Кто создал, одобрил и
+// запустил — без внешних ключей: рассылка — запись истории, она переживает
+// аккаунт.
+enum BroadcastStatus {
+  draft
+  sending
+  paused
+  done
+  cancelled
+}
+
+model Broadcast {
+  broadcastId String          @id @map("broadcast_id") @db.Uuid
+  title       String          @db.VarChar(120)
+  /// бот какой площадки пишет — у аккаунта канал один, бот его площадки
+  platform    Platform
+  text        String          @db.VarChar(4096)
+  buttonText  String?         @map("button_text") @db.VarChar(64)
+  /// ссылка кампании рассылки: кнопка ведёт через `/r/<код>`, клики и запуски — по ней
+  linkCode    String?         @map("link_code") @db.VarChar(16)
+  /// адрес кнопки на момент создания: домен клиента мог смениться, а текст — нет
+  buttonUrl   String?         @map("button_url") @db.VarChar(512)
+  /// фильтры аудитории, как их задала панель (`broadcasts/segment.ts`)
+  segment     Json
+  status      BroadcastStatus @default(draft)
+  /// сколько получателей набралось на старте
+  audience    Int?
+  createdBy   String          @map("created_by") @db.Uuid
+  approvedBy  String?         @map("approved_by") @db.Uuid
+  startedBy   String?         @map("started_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  startedAt   DateTime?       @map("started_at") @db.Timestamptz(3)
+  finishedAt  DateTime?       @map("finished_at") @db.Timestamptz(3)
+
+  deliveries BroadcastDelivery[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@map("broadcast")
+}
+
+enum DeliveryStatus {
+  queued
+  sent
+  blocked
+  failed
+}
+
+// Доставка рассылки одному игроку. Ключ — пара (рассылка, игрок): повтор
+// задания очереди или второй старт не напишут игроку дважды
+// (docs/29-admin-panel.md §7.3).
+model BroadcastDelivery {
+  broadcastId String         @map("broadcast_id") @db.Uuid
+  accountId   String         @map("account_id") @db.Uuid
+  status      DeliveryStatus @default(queued)
+  /// сколько раз площадка просила подождать
+  attempts    Int            @default(0)
+  /// код отказа площадки для итога; текст ответа не храним
+  error       String?        @db.VarChar(32)
+  sentAt      DateTime?      @map("sent_at") @db.Timestamptz(3)
+  /// строку взяло задание очереди до этого момента: второе задание её не возьмёт,
+  /// а упавшее отпустит по сроку
+  claimedUntil DateTime?     @map("claimed_until") @db.Timestamptz(3)
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [broadcastId], onDelete: Cascade)
+  account   Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([broadcastId, accountId])
+  // Очередь отправки: следующие ожидающие рассылки.
+  @@index([broadcastId, status])
+  // Исключение из аудитории: получал рассылку за последние дни.
+  @@index([accountId, sentAt])
+  @@map("broadcast_delivery")
 }
