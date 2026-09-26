@@ -935,3 +935,22 @@ model LinkClick {
   @@map("link_click")
 }
 
+// Фича-флаги (WP17, docs/09-ci-cd.md §11): рискованное прячется за флагом на
+// бэкенде и выключается мгновенно, не дожидаясь модерации клиента. Выкат —
+// по площадке и доле игроков; доля устойчивая: игрок не прыгает туда-обратно.
+model FeatureFlag {
+  /// `ads.rewarded`, `shop.v2` — латиница, точки, дефисы
+  key       String     @id @db.VarChar(64)
+  enabled   Boolean    @default(false)
+  /// пусто — все площадки
+  platforms Platform[]
+  /// доля игроков в процентах, 0–100
+  percent   Int        @default(100)
+  note      String?    @db.VarChar(200)
+  /// кто менял последним; без внешнего ключа — флаг переживает аккаунт
+  updatedBy String?    @map("updated_by") @db.Uuid
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("feature_flag")
+}
+

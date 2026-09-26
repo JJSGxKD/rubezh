@@ -30,6 +30,7 @@ import { AdminModule } from "./modules/admin/admin.module.js";
 import { FriendsModule } from "./modules/friends/friends.module.js";
 import { ReferralsModule } from "./modules/referrals/referrals.module.js";
 import { LinksModule } from "./modules/links/links.module.js";
+import { FlagsModule } from "./modules/flags/flags.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -83,6 +84,7 @@ export const APP_MODULES = [
   FriendsModule,
   ReferralsModule,
   LinksModule,
+  FlagsModule,
 ];
 
 /**
