@@ -71,6 +71,9 @@ erDiagram
     LINK ||--o{ LINK_CLICK : "клики; краулеры превью не пишутся"
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
     FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
+    BROADCAST ||--o{ BROADCAST_DELIVERY : "доставка каждому получателю"
+    ACCOUNT ||--o{ BROADCAST_DELIVERY : "получал рассылки"
+    BROADCAST }o..o| LINK : "кнопка — ссылка кампании, без внешнего ключа"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -405,6 +408,32 @@ erDiagram
         uuid updated_by "nullable, без внешнего ключа"
         datetime updated_at
     }
+
+    BROADCAST {
+        uuid broadcast_id PK
+        string title
+        enum platform "бот какой площадки пишет"
+        string text "до 4096, неизменен после старта"
+        string button_text "nullable"
+        string button_url "nullable: /r/<код> на домене клиента"
+        string link_code "nullable: ссылка кампании рассылки"
+        json segment "фильтры аудитории, разбираются схемой"
+        enum status "draft|sending|paused|done|cancelled"
+        int audience "nullable: набрано на старте"
+        uuid created_by "без внешнего ключа, как и approved_by, started_by"
+        datetime started_at "nullable"
+        datetime finished_at "nullable"
+    }
+
+    BROADCAST_DELIVERY {
+        uuid broadcast_id PK,FK
+        uuid account_id PK,FK "пара — ключ: дважды не напишет"
+        enum status "queued|sent|blocked|failed"
+        int attempts "сколько раз площадка просила подождать"
+        string error "nullable: код отказа"
+        datetime sent_at "nullable"
+        datetime claimed_until "nullable: срок захвата заданием очереди"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -497,6 +526,11 @@ erDiagram
   ключами `friend_return:<вернувшийся>:<друг>:<период>:returned|friend`.
   `FRIEND_BONUS` — забранные ступени бонуса за число друзей; монеты —
   причиной `friend_bonus` и ключом `friend_bonus:<аккаунт>:<порог>`.
+- **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
+  после — запись истории: текст неизменен, кто создал, одобрил и запустил —
+  без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
+  пара — ключ; её же читает сегмент следующей рассылки, чтобы не писать
+  тому, кто получал недавно.
 
 ### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 
@@ -991,6 +1025,7 @@ flowchart LR
         ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, реализовано"]
         LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, реализовано"]
         FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
+        BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1091,6 +1126,11 @@ flowchart LR
     ADMINAPI -. курсы, заданные курсы .-> FXM
     ADMINAPI -. отчёты, архив .-> EXPORT
     ADMINAPI -. флаги и выкат .-> FLAGS
+    ADMINAPI -. рассылки .-> BCAST
+    BCAST --> PG
+    BCAST -- "очередь broadcasts, лимитер" --> REDIS
+    BCAST -. "порт Messengers: sendMessage" .-> TGADP
+    BCAST -. кнопка — ссылка кампании .-> LINKS
     CADDY -- "/api/v1/flags" --> FLAGS
     FLAGS --> PG
 
@@ -1789,6 +1829,55 @@ sequenceDiagram
 Отзыв роли и блокировка действуют сразу: роли перечитываются на каждом
 запросе, а сессии панели отзываются в тот же момент. Выключенная панель
 (`ADMIN_PANEL_ENABLED=false`) отвечает 404 на всё, включая вход.
+
+### 4.18 Рассылка из панели (этап 4, реализовано)
+
+Базовые рассылки (`35-stage4-plan.md`, WP17; `29-admin-panel.md` §7). Одна
+и та же функция условия считает аудиторию в панели и набирает получателей
+на старте, поэтому оценка и отправка не расходятся. Темп общий на все
+рассылки и реплики: лимитер очереди живёт в Redis.
+
+```mermaid
+sequenceDiagram
+    participant P as Панель
+    participant BC as broadcasts
+    participant DB as PostgreSQL
+    participant Q as Очередь (Redis)
+    participant M as Порт Messengers
+    participant TG as Telegram Bot API
+
+    P->>BC: POST /admin/broadcasts/:id/start
+    BC->>DB: count(сегмент): можно писать, не заблокирован
+    alt аудитория больше порога и нет чужого одобрения
+        BC-->>P: 403 approval_required
+    else
+        BC->>DB: черновик → sending, INSERT доставок ON CONFLICT DO NOTHING
+        BC->>DB: аудит broadcast.start
+        BC->>Q: задание-пачка
+        BC-->>P: { audience }
+    end
+
+    loop пачка: темп площадки × batchSec, одна за batchSec на всю очередь
+        Q->>BC: задание
+        BC->>DB: рассылка всё ещё sending?
+        BC->>DB: взять получателей: срок захвата, SKIP LOCKED
+        BC->>M: send(игрок, текст, кнопка /r/<код>)
+        M->>TG: sendMessage
+        alt доставлено
+            BC->>DB: sent, sent_at
+        else 403 или нет чата
+            BC->>DB: blocked; «можно писать» — нет
+        else 429 или сбой сети
+            BC->>DB: отсрочка, остаток пачки отпущен
+            BC->>Q: следующая пачка через retry_after
+        end
+    end
+    BC->>DB: очередь пуста — done
+```
+
+Пауза и отмена видны со следующей пачки — через несколько секунд. После
+перезапуска идущие рассылки поднимаются сами; лишнее задание безопасно:
+одну строку два задания не возьмут.
 
 ---
 
