@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { api } from "../../app";
+import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { fetchAssignments, grantRole, revokeRole, roleName, roleTargetOf, ROLE_NAMES, type Assignment } from "../../api/roles";
 import { formatDateTime } from "../../format";

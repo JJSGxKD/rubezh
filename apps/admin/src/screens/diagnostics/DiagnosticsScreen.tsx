@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../../app";
+import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { compactJson } from "../../api/roles";
 import { fetchReport, fetchReports, formatBytes, prettyJson, REPORTS_PAGE, type ReportFilter, type ReportRow } from "../../api/diagnostics";

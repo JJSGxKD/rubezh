@@ -1,4 +1,4 @@
-import { api } from "../../app";
+import { api } from "../../services";
 import { compactJson, fetchAudit } from "../../api/roles";
 import { formatDateTime } from "../../format";
 import { Button, DataTable, ErrorNotice, Loading, Panel } from "../../ui/kit";

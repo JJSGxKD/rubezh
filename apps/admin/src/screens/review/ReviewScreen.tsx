@@ -1,4 +1,4 @@
-import { api } from "../../app";
+import { api } from "../../services";
 import { fetchReviewQueue } from "../../api/review";
 import { formatDateTime, formatDuration, formatNumber } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Loading, Panel } from "../../ui/kit";
