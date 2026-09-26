@@ -9,8 +9,10 @@ import { WELCOME_TEXTS, type Difficulty, type WelcomeLanguage } from "./welcome-
  * Одинаковые входные данные — одинаковая картинка, поэтому она рисуется один
  * раз: ключ кэша — хэш всего, что на ней видно, плюс версия шаблона. Смена
  * шаблона — смена `CARD_VERSION`, иначе старые картинки отдавались бы из кэша.
+ * Сменой версии сбрасываются и картинки, нарисованные без шрифта: их
+ * `file_id` Telegram отдаёт так же охотно, как хорошие.
  */
-export const CARD_VERSION = 1;
+export const CARD_VERSION = 2;
 
 const WIDTH = 1200;
 const HEIGHT = 675;

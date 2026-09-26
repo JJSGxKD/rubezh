@@ -17,8 +17,12 @@ ENV PNPM_HOME="/pnpm" \
 # Движку миграций Prisma нужен libssl: без него он не определяет версию
 # OpenSSL, откатывается на openssl-1.1.x и падает уже в рантайме, на
 # `migrate deploy`. В slim-образе пакета нет — ставим явно.
+#
+# Шрифт с кириллицей — для карточек бота (`src/common/card/svg.ts`): resvg
+# рисует текст системными гарнитурами, а в slim-образе их нет ни одной, и
+# вместо текста на картинке выходят пустые квадраты.
 RUN apt-get update \
- && apt-get install --no-install-recommends --yes openssl ca-certificates \
+ && apt-get install --no-install-recommends --yes openssl ca-certificates fonts-dejavu-core \
  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app
