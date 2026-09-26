@@ -41,6 +41,14 @@ function runDirector(world: World, seconds: number, onTick?: () => void): void {
   }
 }
 
+/**
+ * Тесты, которые гоняют мир минутами, — полторы-три секунды каждый в
+ * одиночку. В полном прогоне монорепо файлы идут параллельно, и умолчания
+ * Vitest в пять секунд им перестало хватать: падение по тайм-ауту говорит о
+ * загрузке машины, а не о спавне.
+ */
+const LONG_RUN = { timeout: 30_000 };
+
 describe("таймлайн спавна", () => {
   it("идёт непрерывным потоком, а не волнами с паузами", () => {
     const world = makeWorld();
@@ -58,7 +66,7 @@ describe("таймлайн спавна", () => {
     }
   });
 
-  it("двигает отрезки по времени и не откатывает их назад", () => {
+  it("двигает отрезки по времени и не откатывает их назад", LONG_RUN, () => {
     const world = makeWorld();
     let previous = -1;
 
@@ -72,7 +80,7 @@ describe("таймлайн спавна", () => {
     expect(world.difficulty.segment).toBeGreaterThan(TIMELINE.length - 1);
   });
 
-  it("не превышает потолок живых", () => {
+  it("не превышает потолок живых", LONG_RUN, () => {
     const world = makeWorld();
     let peak = 0;
 
@@ -90,7 +98,7 @@ describe("таймлайн спавна", () => {
     expect(peak).toBeGreaterThan(50);
   });
 
-  it("повторяется побитово на одном seed, включая сгенерированную часть", () => {
+  it("повторяется побитово на одном seed, включая сгенерированную часть", LONG_RUN, () => {
     const first = makeWorld(4242);
     const second = makeWorld(4242);
     runDirector(first, 420);
