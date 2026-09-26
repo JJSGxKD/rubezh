@@ -25,7 +25,7 @@ log() { printf '[deploy %s] %s\n' "$(date -u +%H:%M:%S)" "$1"; }
 
 # Переменная из .env compose — без source: в файле секреты, и исполнять его
 # как скрипт незачем.
-env_value() { grep -E "^$1=" .env | tail -1 | cut -d= -f2-; }
+env_value() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- | sed -E "s/^\"(.*)\"\$/\1/; s/^'(.*)'\$/\1/"; }
 set_env_value() {
   if grep -qE "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else printf '%s=%s\n' "$1" "$2" >> .env; fi
 }
@@ -103,8 +103,8 @@ fi
 # Недоступный Telegram выкат не останавливает: игра работает и без бота, а
 # вебхук перерегистрирует следующий выкат.
 case "$(grep -E '^TELEGRAM_BOT_UPDATES=' api.env | tail -1 | cut -d= -f2-)" in
-  webhook) docker compose exec -T api node dist/cli/bot-webhook.js || log "вебхук бота не зарегистрирован — Bot API недоступен" ;;
-  polling) docker compose exec -T api node dist/cli/bot-webhook.js --delete || log "вебхук бота не снят — Bot API недоступен" ;;
+  webhook) docker compose exec -T api node dist/cli/bot-webhook.js < /dev/null || log "вебхук бота не зарегистрирован — Bot API недоступен" ;;
+  polling) docker compose exec -T api node dist/cli/bot-webhook.js --delete < /dev/null || log "вебхук бота не снят — Bot API недоступен" ;;
 esac
 
 for app in "${apps[@]}"; do switch_web "$app"; done
@@ -112,7 +112,7 @@ for app in "${apps[@]}"; do switch_web "$app"; done
 # Остальные сервисы — по конфигурации из этого выката; Caddy перечитывает
 # сниппеты политики без разрыва соединений.
 docker compose up -d --build --remove-orphans
-docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile < /dev/null
 
 # Ежедневный бэкап — у пользователя деплоя, без sudo; строка ставится один раз.
 cron_line="17 3 * * * ${APP}/backup.sh >> /srv/rubezh/backups/backup.log 2>&1"

@@ -17,7 +17,8 @@ KEEP_LOCAL=14
 TELEGRAM_MAX_BYTES=$((49 * 1024 * 1024))
 
 cd "$APP"
-value() { grep -E "^$2=" "$1" | tail -1 | cut -d= -f2-; }
+# Значение без кавычек: compose снимает их сам, а здесь строка идёт в URL.
+value() { grep -E "^$2=" "$1" | tail -1 | cut -d= -f2- | sed -E "s/^\"(.*)\"\$/\1/; s/^'(.*)'\$/\1/"; }
 POSTGRES_USER="$(value .env POSTGRES_USER)"
 POSTGRES_DB="$(value .env POSTGRES_DB)"
 TOKEN="$(value api.env TELEGRAM_BOT_TOKEN)"
@@ -48,15 +49,22 @@ trap on_error ERR
 stamp="$(date -u +%Y%m%dT%H%MZ)"
 file="${OUT}/rubezh-${stamp}.dump.age"
 mkdir -p "$OUT"
-docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom |
+# Стандартный ввод закрыт: иначе `exec` съел бы то, что идёт за скриптом, —
+# вызов из heredoc по SSH молча обрывался бы на этой строке.
+docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom < /dev/null |
   age -R "${APP}/backup-recipient.pub" > "${file}.part"
 mv "${file}.part" "$file"
 
 size="$(stat -c %s "$file")"
 human="$(numfmt --to=iec "$size")"
 if [ "$size" -le "$TELEGRAM_MAX_BYTES" ] && [ -n "$OWNER_CHAT" ]; then
-  telegram sendDocument -F "chat_id=${OWNER_CHAT}" -F "document=@${file}" \
-    -F "caption=Бэкап базы ${stamp}, ${human}. Расшифровка — своим SSH-ключом: age -d -i ~/.ssh/id_ed25519"
+  # Неотправленный бэкап — не успех: об этом говорят и отчёт, и код выхода.
+  if ! telegram sendDocument -F "chat_id=${OWNER_CHAT}" -F "document=@${file}" \
+    -F "caption=Бэкап базы ${stamp}, ${human}. Расшифровка — своим SSH-ключом: age -d -i ~/.ssh/id_ed25519"; then
+    trap - ERR
+    report "⚠️ Бэкап базы ${stamp}: ${human} — владельцу не отправлен, лежит на сервере"
+    exit 1
+  fi
   report "✅ Бэкап базы ${stamp}: ${human}, отправлен владельцу"
 else
   report "⚠️ Бэкап базы ${stamp}: ${human} — больше лимита бота, лежит только на сервере"
