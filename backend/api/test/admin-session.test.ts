@@ -182,7 +182,10 @@ describe("гвард", () => {
 
   beforeEach(async () => {
     s = setup();
-    token = (await s.service.loginAsDeveloper("dev-1:Ира", NOW)).token;
+    // Гвард проверяет сессию по настоящим часам, поэтому и открывается она
+    // сейчас, а не на фиксированный NOW: иначе тест падал бы через час после
+    // NOW — сессия «истекала».
+    token = (await s.service.loginAsDeveloper("dev-1:Ира", Date.now())).token;
   });
 
   it("кладёт аккаунт и хэш сессии в запрос", async () => {
