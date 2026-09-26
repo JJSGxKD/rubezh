@@ -4,6 +4,7 @@ import type { Redis } from "ioredis";
 import { withTimeout } from "../../common/with-timeout.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { createQueueConnection } from "../../infra/queues.js";
+import { ItemsService } from "../items/items.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { levelReward, runReward } from "./progress-rules.js";
@@ -17,9 +18,9 @@ import { PROGRESS_REPOSITORY, type ProgressRepository, type RunRewardRow } from 
  *
  * Задание безопасно повторять целиком: строка награды с опытом —
  * `ON CONFLICT` по `run_id`, монеты — ключ кошелька `run:<runId>:coins`,
- * награда за уровень — `level:<аккаунт>:<уровень>:<ресурс>`. Упало между
- * опытом и монетами — повтор найдёт строку и доначислит монеты по тому же
- * ключу.
+ * награда за уровень — `level:<аккаунт>:<уровень>:<ресурс>`, добыча —
+ * `loot:<runId>` в журнале предметов. Упало между опытом и монетами — повтор
+ * найдёт строку и доначислит монеты по тому же ключу.
  *
  * Redis недоступен — награда считается сразу, тоже мимо ответа игроку:
  * терять монеты за честный забег хуже, чем на время сбоя нагрузить базу.
@@ -50,6 +51,7 @@ export class RunRewards implements OnModuleInit, OnApplicationBootstrap, OnModul
     private readonly runs: RunsHooks,
     @Inject(PROGRESS_REPOSITORY) private readonly progress: ProgressRepository,
     private readonly wallet: WalletService,
+    private readonly items: ItemsService,
   ) {}
 
   onModuleInit(): void {
@@ -123,6 +125,15 @@ export class RunRewards implements OnModuleInit, OnApplicationBootstrap, OnModul
       if (reward.coins > 0) await this.wallet.grant({ ...grant, resource: "coins", amount: reward.coins, idempotencyKey: `level:${row.accountId}:${level}:coins` });
       if (reward.gems > 0) await this.wallet.grant({ ...grant, resource: "gems", amount: reward.gems, idempotencyKey: `level:${row.accountId}:${level}:gems` });
     }
+    // До отметки о начислении: упала добыча — повтор задания дойдёт до неё снова.
+    await this.items.dropForRun({
+      accountId: row.accountId,
+      runId: row.runId,
+      survivalSec: job.survivalSec,
+      difficultyId: job.difficulty,
+      verdict: job.verdict,
+      at,
+    });
     await this.progress.markCredited(row.runId, credited);
     if (row.levelAfter > row.levelBefore) this.log("log", "level_up", { accountId: row.accountId, from: row.levelBefore, to: row.levelAfter });
     return { ...row, coinsCredited: credited };
