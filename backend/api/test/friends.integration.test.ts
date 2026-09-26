@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
@@ -113,5 +114,52 @@ describe.skipIf(DATABASE_URL === "")("дружба на живом Postgres", ()
     expect(await friends.request(first, third, { maxIncoming: 5, maxOutgoing: 1 })).toBe("outgoing_full");
     expect(await friends.dropRequest(first, target)).toBe(true);
     expect(await friends.dropRequest(first, target)).toBe(false);
+  });
+
+  it("бонус: засчитан только друг с честным забегом, ступень отмечается один раз", async () => {
+    const owner = await account();
+    const run = async (accountId: string, patch: { status?: "started" | "finished"; cheats?: boolean; verdict?: "ok" | "rejected" | null } = {}) => {
+      const status = patch.status ?? "finished";
+      await prisma.run.create({
+        data: {
+          runId: `run-${randomUUID()}`,
+          accountId,
+          status,
+          difficulty: "easy",
+          startingWeaponId: "bolt",
+          contentHash: "c",
+          finishedAt: status === "finished" ? new Date() : null,
+          cheats: patch.cheats ?? false,
+          verdict: patch.verdict === undefined ? "ok" : patch.verdict,
+        },
+      });
+    };
+    const befriend = async (): Promise<string> => {
+      const friend = await account();
+      expect(await friends.befriend(owner, friend, "link", 100)).toEqual({ outcome: "added" });
+      return friend;
+    };
+
+    const honest = await befriend();
+    await run(honest);
+    await run(honest);
+    const unchecked = await befriend();
+    await run(unchecked, { verdict: null });
+    await run(await befriend(), { cheats: true });
+    await run(await befriend(), { verdict: "rejected" });
+    await run(await befriend(), { status: "started" });
+    const banned = await befriend();
+    await run(banned);
+    await accounts.setBan(banned, { at: new Date(), reason: "накрутка" });
+    await run(await account());
+
+    expect(await friends.qualifiedCount(owner)).toBe(2);
+    expect(await friends.qualifiedCount(honest)).toBe(0);
+
+    expect(await friends.bonusClaimed(owner)).toEqual([]);
+    await friends.markBonusClaimed(owner, 1, 50);
+    await friends.markBonusClaimed(owner, 1, 70);
+    expect(await friends.bonusClaimed(owner)).toEqual([1]);
+    expect((await prisma.friendBonus.findFirst({ where: { accountId: owner } }))?.coins).toBe(50);
   });
 });

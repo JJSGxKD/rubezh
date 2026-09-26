@@ -20,6 +20,10 @@ export class MemoryFriendsRepository implements FriendsRepository {
   readonly requests = new Map<string, Date>();
   /** ключ `от|кому|сутки` → когда забран; `null` — ждёт */
   readonly gifts = new Map<string, Date | null>();
+  /** кто сыграл честный забег — тест отмечает сам, забегов в памяти нет */
+  readonly played = new Set<string>();
+  /** ключ `аккаунт|порог` → монеты забранной ступени */
+  readonly bonuses = new Map<string, number>();
   /** «сегодня» в игровых сутках; тест двигает его, чтобы проверить смену суток */
   today = moscowDay(new Date());
 
@@ -124,6 +128,24 @@ export class MemoryFriendsRepository implements FriendsRepository {
   async markClaimed(from: string, to: string, day: string): Promise<void> {
     const key = `${from}|${to}|${day}`;
     if (this.gifts.get(key) === null) this.gifts.set(key, dayStart(this.today));
+  }
+
+  async qualifiedCount(accountId: string): Promise<number> {
+    let count = 0;
+    for (const friend of await this.friends(accountId, Number.MAX_SAFE_INTEGER)) {
+      const account = await this.accounts.byId(friend.accountId);
+      if (account !== null && account.bannedAt === null && this.played.has(friend.accountId)) count++;
+    }
+    return count;
+  }
+
+  async bonusClaimed(accountId: string): Promise<number[]> {
+    return [...this.bonuses.keys()].filter((key) => key.startsWith(`${accountId}|`)).map((key) => Number(key.split("|")[1]));
+  }
+
+  async markBonusClaimed(accountId: string, friends: number, coins: number): Promise<void> {
+    const key = `${accountId}|${friends}`;
+    if (!this.bonuses.has(key)) this.bonuses.set(key, coins);
   }
 
   private giftRows(): { from: string; to: string; day: string; claimedAt: Date | null; claimedDay: string | null }[] {

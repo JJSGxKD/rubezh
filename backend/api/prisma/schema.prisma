@@ -186,6 +186,7 @@ model Account {
   referrals        ReferralBinding[] @relation("referral_referrer")
   returns          FriendReturn[]  @relation("friend_return_returned")
   returnsHelped    FriendReturn[]  @relation("friend_return_friend")
+  friendBonuses    FriendBonus[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -954,3 +955,19 @@ model FeatureFlag {
   @@map("feature_flag")
 }
 
+// Забранные ступени бонуса за число друзей (WP14, docs/35-stage4-plan.md
+// §3.8). Ступень — один раз навсегда: ключ — аккаунт и порог. Монеты кладёт
+// кошелёк своим ключом, эта строка — чтобы показать игроку, что уже забрано.
+model FriendBonus {
+  accountId String   @map("account_id") @db.Uuid
+  /// порог ступени в засчитанных друзьях
+  friends   Int
+  /// сколько монет обещала ступень, когда её забрали: числа рабочие и меняются
+  coins     Int
+  claimedAt DateTime @default(now()) @map("claimed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, friends])
+  @@map("friend_bonus")
+}
