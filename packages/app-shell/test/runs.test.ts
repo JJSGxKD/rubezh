@@ -3,6 +3,7 @@ import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter, type 
 import { failureOf, sessionFailure } from "../src/state/api-request";
 import { useMeta } from "../src/state/meta";
 import { effectiveAccess, usePlaytest } from "../src/state/playtest";
+import { rememberRunLoadout } from "../src/state/run-loadouts";
 import { toStart, toSubmission, useRuns } from "../src/state/runs";
 import { resetSessionForTests } from "../src/state/session";
 import { initShell } from "../src/state/shell";
@@ -115,6 +116,20 @@ describe("очередь забегов", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("итог несёт снимок снаряжения, с которым забег начался, а забег без него — без поля", async () => {
+    reply = async (url) => json(200, url === "/api/v1/runs/start" ? STARTED : FINISHED);
+    mount();
+    const loadout = { accountId: "acc", modifiers: { damage: 0.12, будущее: 1 }, issuedAtMs: 1_000, signature: "подпись" };
+    rememberRunLoadout("run-00000011", loadout);
+
+    useRuns.getState().submitRun(result("run-00000011"));
+    useRuns.getState().submitRun(result("run-00000012"));
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+
+    expect(requests[0]?.body).toMatchObject({ runId: "run-00000011", loadout });
+    expect(requests[1]?.body).not.toHaveProperty("loadout");
   });
 
   it("старт уходит раньше итога, а место из ответа ждёт экран смерти", async () => {

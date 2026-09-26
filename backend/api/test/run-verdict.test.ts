@@ -31,6 +31,7 @@ function run(patch: Partial<VerdictInput> = {}): VerdictInput {
     paidContinues: 0,
     underpaidContinues: false,
     cheats: false,
+    loadout: "none",
     ...patch,
   };
 }
@@ -133,5 +134,14 @@ describe("второй шанс в вердикте", () => {
       verdict: "suspicious",
       reasons: ["underpaid_continue"],
     });
+  });
+});
+
+describe("снаряжение в вердикте", () => {
+  it("снимок, которого сервер не подписывал, — отказ; устаревший — подозрение; настоящий — обычный забег", () => {
+    expect(judgeRun(run({ loadout: "forged" }), limits)).toEqual({ verdict: "rejected", reasons: ["loadout_forged"] });
+    expect(judgeRun(run({ loadout: "stale" }), limits)).toEqual({ verdict: "suspicious", reasons: ["loadout_stale"] });
+    expect(judgeRun(run({ loadout: "valid" }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ loadout: "none" }), limits)).toEqual({ verdict: "ok", reasons: [] });
   });
 });

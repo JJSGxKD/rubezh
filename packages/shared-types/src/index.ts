@@ -678,6 +678,23 @@ export interface RunLoadout {
   boosts: string[];
 }
 
+/**
+ * Подписанный снимок надетого (Р17): сервер выдаёт его, клиент берёт с собой
+ * в забег — в том числе без сети — и возвращает в итоге. Подпись проверяет
+ * только сервер; клиенту снимок — непрозрачный пропуск и числа для движка.
+ */
+export interface SignedLoadout {
+  accountId: string;
+  /**
+   * Параметры — строками, а не `LoadoutStat`: сервер новее клиента может
+   * прислать параметр, которого движок не знает, а подпись считается по всем.
+   */
+  modifiers: Record<string, number>;
+  /** UTC, миллисекунды */
+  issuedAtMs: number;
+  signature: string;
+}
+
 /** Характеристики игрока, которые меняют пассивки. */
 export type PlayerStat =
   | "damage"
@@ -1007,6 +1024,11 @@ export interface RunFinishSubmission {
    * сборки поля не знает.
    */
   continues?: number[];
+  /**
+   * Снимок надетого, с которым забег начался (docs/35-stage4-plan.md §3.4,
+   * WP7). Нет поля — забег без снаряжения.
+   */
+  loadout?: SignedLoadout;
 }
 
 /**

@@ -1056,6 +1056,7 @@ flowchart LR
         FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
         WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
+        ITEMS["items<br/>снаряжение: инвентарь, операции,<br/>добыча, подписанный снимок, реализовано"]
         ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, реализовано"]
         LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, реализовано"]
         FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
@@ -1127,6 +1128,11 @@ flowchart LR
     PROG --> PG
     CADDY --> WALLET
     CADDY --> PROG
+    CADDY --> ITEMS
+    PROG -- добыча забега --> ITEMS
+    ITEMS -- цена операций, осколки разбора --> WALLET
+    RUNS -- порт проверки снимка снаряжения --> ITEMS
+    ITEMS --> PG
     EXPORT --> PG
     QUEUE -- sendPhoto, sendDocument --> TGAPI
 

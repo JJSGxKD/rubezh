@@ -10,6 +10,7 @@ import type { Difficulty } from "./run-rules.js";
 import { judgeRun, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RUNS_REPOSITORY, type RunsRepository } from "./runs.repository.js";
 import { RunContinues } from "./run-continues.js";
+import { RunLoadouts } from "./run-loadouts.js";
 import { RunsHooks } from "./runs-hooks.js";
 
 /**
@@ -42,6 +43,7 @@ export class RunsService {
     private readonly roles: RolesService,
     private readonly hooks: RunsHooks,
     private readonly continues: RunContinues,
+    private readonly loadouts: RunLoadouts,
   ) {}
 
   /** Старт забега: сервер ставит свою отметку времени. Повтор из очереди — не ошибка. */
@@ -66,7 +68,10 @@ export class RunsService {
     // Повтор итога — тот же ответ, что в первый раз, без новой записи.
     if (existing?.status === "finished") return await this.replay(account, run.runId);
 
-    const paid = await this.continues.check(run.runId, run.continues);
+    const [paid, loadout] = await Promise.all([
+      this.continues.check(run.runId, run.continues),
+      this.loadouts.check(account.accountId, run.loadout),
+    ]);
     const judged = judgeRun(
       {
         survivalSec: run.survivalSec,
@@ -80,6 +85,7 @@ export class RunsService {
         paidContinues: paid.paid,
         underpaidContinues: paid.underpaid,
         cheats: run.cheats,
+        loadout,
       },
       this.config.runs,
     );

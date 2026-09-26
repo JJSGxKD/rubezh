@@ -38,6 +38,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/runs",
       "/api/v1/payments",
       "/api/v1/wallet",
+      "/api/v1/items",
       "/api/v1/progress",
       "/api/v1/playtest",
       "/api/v1/events",

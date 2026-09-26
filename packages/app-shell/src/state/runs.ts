@@ -152,7 +152,18 @@ export const useRuns = create<RunsStore>((set, get) => ({
         const head = queue().read()[0];
         if (head === undefined) break;
 
-        const response = head.kind === "start" ? await client.start(toStart(head, Date.now())) : await client.finish(toFinish(head));
+        let response: Awaited<ReturnType<RunsApi["start"]>> | Awaited<ReturnType<RunsApi["finish"]>>;
+        if (head.kind === "start") {
+          response = await client.start(toStart(head, Date.now()));
+        } else {
+          const finish = await withLoadout(toFinish(head));
+          if (finish === null) {
+            // Чанк снимка не загрузился — сети нет: итог подождёт вместе со всеми.
+            track("run_synced", { kind: "finish", result: "queued", failure: "offline", trigger });
+            break;
+          }
+          response = await client.finish(finish);
+        }
         if (!response.ok && response.failure !== "rejected") {
           // Сеть, сервер, сессия — всё это проходит само: запись ждёт
           // следующей попытки, а остальные за ней — тем более.
@@ -255,6 +266,19 @@ export function toStart(entry: z.infer<typeof startEntrySchema>, nowMs: number):
     contentHash: entry.contentHash,
     elapsedSec: Math.round(elapsedSec * 10) / 10,
   };
+}
+
+/**
+ * Снимок снаряжения — тот, с которым забег начался: сервер сверит подпись.
+ * Берётся при отправке, а не кладётся в очередь: связка «забег → снимок»
+ * и так лежит на устройстве, а схема снимка — в своём чанке, не в первой
+ * загрузке.
+ */
+async function withLoadout(submission: RunFinishSubmission): Promise<RunFinishSubmission | null> {
+  const loadouts = await import("./run-loadouts").catch(() => null);
+  if (loadouts === null) return null;
+  const loadout = loadouts.runLoadoutOf(submission.runId);
+  return loadout === undefined ? submission : { ...submission, loadout };
 }
 
 /** Запись очереди без её вида — ровно то тело, что ждёт сервер. */

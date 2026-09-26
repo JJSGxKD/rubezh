@@ -29,6 +29,20 @@ export const runStartSchema = z.object({
  */
 const MAX_CONTINUES = 5;
 
+/**
+ * Снимок надетого, который сервер выдал до забега (`GET /api/v1/items/loadout`).
+ * Форма — только от битых данных: какие параметры бывают и чего стоит снимок,
+ * решает проверка подписи, а не схема.
+ */
+const signedLoadoutSchema = z.object({
+  accountId: z.string().uuid(),
+  modifiers: z
+    .record(z.string().max(32), z.number().finite())
+    .refine((value) => Object.keys(value).length <= 32, { message: "слишком много параметров" }),
+  issuedAtMs: z.number().int().min(0),
+  signature: z.string().min(1).max(128),
+});
+
 /** Итог забега. */
 export const runFinishSchema = z
   .object({
@@ -50,6 +64,8 @@ export const runFinishSchema = z
     // Секунда каждого второго шанса (docs/07-monetization-and-ads.md §8).
     // Сборки до второго шанса поля не шлют — это забег без продолжений.
     continues: z.array(z.number().min(0).max(86_400)).max(MAX_CONTINUES).default([]),
+    // Нет поля — забег без снаряжения: и сборки до снаряжения, и игрок без него.
+    loadout: signedLoadoutSchema.optional(),
   })
   // Продолжение позже конца забега или раньше предыдущего — не забег, а
   // битые данные: честный клиент берёт секунды из одного мира.
