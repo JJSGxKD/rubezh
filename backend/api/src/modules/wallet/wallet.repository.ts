@@ -4,6 +4,7 @@ import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { debitWithin, InsufficientBalance, type Tx } from "./wallet-ledger.js";
 import { emptyBalances, type ADMIN_REASON, type Balances, type GrantReason, type SpendReason, type WalletResource } from "./wallet-types.js";
 
 /**
@@ -90,21 +91,7 @@ export interface WalletRepository {
 }
 
 /** Ключ строки списания: у каждого ресурса своя строка журнала, а ключ уникален. */
-export function debitLineKey(idempotencyKey: string, resource: WalletResource): string {
-  return `${idempotencyKey}:${resource}`;
-}
-
-/** Сигнал отката: не хватило средств, транзакция откатывается целиком. */
-class Insufficient extends Error {
-  constructor(
-    readonly resource: WalletResource,
-    readonly needed: number,
-  ) {
-    super("insufficient");
-  }
-}
-
-type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
+export { debitLineKey } from "./wallet-ledger.js";
 
 @Injectable()
 export class PrismaWalletRepository implements WalletRepository {
@@ -156,41 +143,14 @@ export class PrismaWalletRepository implements WalletRepository {
   }
 
   async debit(input: DebitInput): Promise<DebitOutcome> {
-    // Строки баланса блокируются в одном порядке у всех: две параллельные
-    // траты одного игрока иначе могли бы взять их крест-накрест.
-    const lines = [...input.lines].sort((a, b) => a.resource.localeCompare(b.resource));
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const balances: Partial<Balances> = {};
-        for (const [index, line] of lines.entries()) {
-          const key = debitLineKey(input.idempotencyKey, line.resource);
-          const inserted = await tx.$queryRaw<{ entry_id: string }[]>`
-            INSERT INTO wallet_entry (entry_id, account_id, resource, amount, reason, source, idempotency_key, created_at)
-            VALUES (${randomUUID()}::uuid, ${input.accountId}::uuid, ${line.resource}::"WalletResource", ${BigInt(-line.amount)},
-                    ${input.reason}, ${input.source}, ${key}, ${input.at})
-            ON CONFLICT (idempotency_key) DO NOTHING
-            RETURNING entry_id
-          `;
-          if (inserted.length === 0) {
-            // Строки одной операции пишутся одной транзакцией: занят ключ
-            // первой — значит, операция уже прошла целиком.
-            if (index === 0) return { status: "duplicate", existing: await this.existing(tx, key) };
-            throw new Error(`ключ ${key} занят другой операцией`);
-          }
-
-          const [row] = await tx.$queryRaw<{ balance: bigint }[]>`
-            UPDATE wallet_balance SET balance = balance - ${BigInt(line.amount)}, updated_at = ${input.at}
-            WHERE account_id = ${input.accountId}::uuid AND resource = ${line.resource}::"WalletResource"
-              AND balance >= ${BigInt(line.amount)}
-            RETURNING balance
-          `;
-          if (row === undefined) throw new Insufficient(line.resource, line.amount);
-          balances[line.resource] = Number(row.balance);
-        }
-        return { status: "debited", balances };
+        const outcome = await debitWithin(tx, input);
+        if (outcome.status === "duplicate") return { status: "duplicate", existing: await this.existing(tx, outcome.firstKey) };
+        return outcome;
       }, TX_OPTIONS);
     } catch (error: unknown) {
-      if (!(error instanceof Insufficient)) throw error;
+      if (!(error instanceof InsufficientBalance)) throw error;
       const balance = (await this.balances(input.accountId))[error.resource];
       return { status: "insufficient", resource: error.resource, needed: error.needed, balance };
     }
