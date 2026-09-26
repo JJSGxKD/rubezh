@@ -173,7 +173,7 @@ pnpm tunnel     # frpc, отдельным окном
 сборку):
 
 ```
-https://rubezh-tg.frps.gonet.fun/?bench=ramp&seed=42&duration=180&v=<хеш сборки>
+https://tg.dev.gonet.fun/?bench=ramp&seed=42&duration=180&v=<хеш сборки>
 ```
 
 | Параметр | Значение | Смысл |
