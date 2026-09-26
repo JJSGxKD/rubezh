@@ -72,6 +72,14 @@ export class FriendsController {
     return { data: await this.friends.claimGifts(account) };
   }
 
+  /** Забрать бонус за число друзей — все достигнутые ступени разом. */
+  @Post("bonus/claim")
+  async claimBonus(@Req() request: unknown): Promise<{ data: ClaimResult }> {
+    const account = accountOf(request);
+    await this.limit(FRIENDS_LIMITS.change, account.accountId);
+    return { data: await this.friends.claimBonus(account) };
+  }
+
   @Post(":accountId/gift")
   async gift(@Req() request: unknown, @Param("accountId") friend: string): Promise<{ data: { sent: boolean } }> {
     const account = accountOf(request);

@@ -32,6 +32,7 @@ export const EARN_REASONS = [
   "achievement_reward",
   "wheel_reward",
   "friend_gift",
+  "friend_bonus",
   "referral_reward",
   "ad_reward",
   "subscription_daily",

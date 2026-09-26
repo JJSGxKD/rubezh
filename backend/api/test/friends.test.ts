@@ -20,7 +20,9 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryFriendsRepository, shiftDay } from "./helpers/memory-friends.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
-import { GIFT_RULES } from "../src/modules/friends/friends-rules.js";
+import { FRIEND_BONUS_RULES, GIFT_RULES } from "../src/modules/friends/friends-rules.js";
+import { bonusView, readySteps } from "../src/modules/friends/friend-bonus.js";
+import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 
 /**
  * Друзья (docs/35-stage4-plan.md, WP14): ссылка дружбы делает друзьями без
@@ -236,6 +238,75 @@ describe("подарки", () => {
   });
 });
 
+describe("бонус за число друзей", () => {
+  async function befriend(owner: Account, id: string, played = true): Promise<Account> {
+    const friend = await player(id);
+    await service.request(claims(friend), owner.accountId);
+    await service.accept(claims(owner), friend.accountId);
+    if (played) repository.played.add(friend.accountId);
+    return friend;
+  }
+
+  const [first, second] = FRIEND_BONUS_RULES.steps;
+
+  it("друг засчитывается после честного забега; ступень забирается один раз", async () => {
+    const owner = await player("owner");
+    await befriend(owner, "1");
+    const idle = await befriend(owner, "2", false);
+    await befriend(owner, "3", false);
+
+    const view = (await service.view(owner.accountId)).bonus;
+    expect(view.qualified).toBe(1);
+    expect(view.steps.map((step) => step.state)).toEqual(["ready", "locked", "locked", "locked", "locked"]);
+    expect(view.readyCoins).toBe(first?.coins);
+
+    expect(await service.claimBonus(claims(owner))).toEqual({ claimed: 1, coins: first?.coins });
+    expect(await service.claimBonus(claims(owner))).toEqual({ claimed: 0, coins: 0 });
+    expect([...wallet.grants.values()]).toEqual([expect.objectContaining({ accountId: owner.accountId, reason: "friend_bonus", idempotencyKey: `friend_bonus:${owner.accountId}:1` })]);
+
+    repository.played.add(idle.accountId);
+    expect((await service.view(owner.accountId)).bonus.qualified).toBe(2);
+    expect(await service.claimBonus(claims(owner))).toEqual({ claimed: 0, coins: 0 });
+  });
+
+  it("несколько ступеней — разом; удалить друзей и набрать заново ничего не даёт", async () => {
+    const owner = await player("owner");
+    const friends = [await befriend(owner, "1"), await befriend(owner, "2"), await befriend(owner, "3")];
+    expect(await service.claimBonus(claims(owner))).toEqual({ claimed: 2, coins: (first?.coins ?? 0) + (second?.coins ?? 0) });
+
+    for (const friend of friends) await service.remove(claims(owner), friend.accountId);
+    for (const friend of friends) {
+      await service.request(claims(friend), owner.accountId);
+      await service.accept(claims(owner), friend.accountId);
+    }
+    expect((await service.view(owner.accountId)).bonus.readyCoins).toBe(0);
+    expect(await service.claimBonus(claims(owner))).toEqual({ claimed: 0, coins: 0 });
+  });
+
+  it("заблокированный друг не в счёт; начисленную, но не отмеченную ступень кошелёк узнаёт по ключу", async () => {
+    const owner = await player("owner");
+    const cheater = await befriend(owner, "1");
+    await accounts.setBan(cheater.accountId, { at: new Date(), reason: "накрутка" });
+    expect((await service.view(owner.accountId)).bonus.qualified).toBe(0);
+
+    await befriend(owner, "2");
+    await wallet.grant({ accountId: owner.accountId, resource: "coins", amount: first?.coins ?? 0, reason: "friend_bonus", idempotencyKey: `friend_bonus:${owner.accountId}:1` });
+    expect(await service.claimBonus(claims(owner))).toEqual({ claimed: 1, coins: 0 });
+    expect((await service.view(owner.accountId)).bonus.steps[0]?.state).toBe("claimed");
+  });
+
+  it("ступени: порядок, потолок и суточная страховка кошелька", () => {
+    const steps = FRIEND_BONUS_RULES.steps;
+    expect(steps.every((step, index) => index === 0 || step.friends > (steps[index - 1]?.friends ?? 0))).toBe(true);
+    expect(steps.at(-1)?.friends).toBeLessThanOrEqual(FRIENDS_RULES.maxFriends);
+    const total = steps.reduce((sum, step) => sum + step.coins, 0);
+    expect(total).toBeLessThanOrEqual(WALLET_DAILY_CAPS.friend_bonus.coins ?? 0);
+
+    expect(bonusView(100, [], steps).readyCoins).toBe(total);
+    expect(readySteps(4, [3], [{ friends: 3, coins: 1 }, { friends: 1, coins: 1 }, { friends: 5, coins: 1 }])).toEqual([{ friends: 1, coins: 1 }]);
+  });
+});
+
 describe("HTTP раздела друзей", () => {
   let app: NestFastifyApplication | null = null;
   const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
@@ -292,6 +363,10 @@ describe("HTTP раздела друзей", () => {
     expect(gift.json()).toEqual({ data: { sent: true } });
     const claim = await target.inject({ method: "POST", url: "/api/v1/friends/gifts/claim", headers: { authorization: await bearer(bob) } });
     expect(claim.json()).toEqual({ data: { claimed: 1, coins: GIFT_RULES.coins } });
+
+    repository.played.add(ann.accountId);
+    const bonus = await target.inject({ method: "POST", url: "/api/v1/friends/bonus/claim", headers: { authorization: await bearer(bob) } });
+    expect(bonus.json()).toEqual({ data: { claimed: 1, coins: FRIEND_BONUS_RULES.steps[0]?.coins } });
   });
 
   it("мусор в теле и в пути — 400, чужой игрок — 404", async () => {

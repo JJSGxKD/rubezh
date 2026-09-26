@@ -7,7 +7,8 @@ import { AuthHooks, type LoginEvent } from "../auth/auth-hooks.js";
 import { friendStartParam } from "./friend-code.js";
 import { FriendLimitError, FriendNotFoundError, FriendRequestNotFoundError } from "./friends-errors.js";
 import { WalletService } from "../wallet/wallet.service.js";
-import { FRIENDS_RULES, GIFT_RULES } from "./friends-rules.js";
+import { bonusView, readySteps, type BonusView } from "./friend-bonus.js";
+import { FRIEND_BONUS_RULES, FRIENDS_RULES, GIFT_RULES } from "./friends-rules.js";
 import { FRIENDS_REPOSITORY, type FriendRow, type FriendsRepository, type RequestRow } from "./friends.repository.js";
 
 /**
@@ -36,11 +37,13 @@ export interface FriendsView {
     claimableToday: number;
     coins: number;
   };
+  /** бонус за число друзей: ступени, что забрано и что ждёт */
+  bonus: BonusView;
 }
 
 export interface ClaimResult {
   claimed: number;
-  /** сколько монет легло: меньше `claimed × coins` — упёрлись в суточный потолок кошелька */
+  /** сколько монет легло: меньше обещанного — упёрлись в суточный потолок кошелька */
   coins: number;
 }
 
@@ -63,13 +66,15 @@ export class FriendsService implements OnModuleInit {
   }
 
   async view(accountId: string): Promise<FriendsView> {
-    const [friends, incoming, outgoing, sentToday, pending, claimed] = await Promise.all([
+    const [friends, incoming, outgoing, sentToday, pending, claimed, qualified, bonusClaimed] = await Promise.all([
       this.friends.friends(accountId, FRIENDS_RULES.maxFriends),
       this.friends.incoming(accountId, FRIENDS_RULES.maxIncomingRequests),
       this.friends.outgoing(accountId, FRIENDS_RULES.maxOutgoingRequests),
       this.friends.giftedToday(accountId),
       this.friends.pendingGiftCount(accountId, GIFT_RULES.maxAgeDays),
       this.friends.claimedToday(accountId),
+      this.friends.qualifiedCount(accountId),
+      this.friends.bonusClaimed(accountId),
     ]);
     const claimableToday = Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
     return {
@@ -78,7 +83,35 @@ export class FriendsService implements OnModuleInit {
       outgoing,
       limits: { maxFriends: FRIENDS_RULES.maxFriends },
       gifts: { sentToday, pending, claimableToday, coins: GIFT_RULES.coins },
+      bonus: bonusView(qualified, bonusClaimed, FRIEND_BONUS_RULES.steps),
     };
+  }
+
+  /**
+   * Забрать бонус за число друзей — все достигнутые и не забранные ступени.
+   * Ключ кошелька — аккаунт и ступень, поэтому ступень даёт монеты один раз
+   * навсегда: удалить друзей и набрать заново ничего не принесёт. Начислено,
+   * но не отмечено после сбоя — следующий забор кошелёк узнает по ключу.
+   */
+  async claimBonus(actor: AccessTokenClaims): Promise<ClaimResult> {
+    const [qualified, claimed] = await Promise.all([this.friends.qualifiedCount(actor.accountId), this.friends.bonusClaimed(actor.accountId)]);
+    const steps = readySteps(qualified, claimed, FRIEND_BONUS_RULES.steps);
+
+    let coins = 0;
+    for (const step of steps) {
+      const result = await this.wallet.grant({
+        accountId: actor.accountId,
+        resource: "coins",
+        amount: step.coins,
+        reason: "friend_bonus",
+        source: `friends:${step.friends}`,
+        idempotencyKey: `friend_bonus:${actor.accountId}:${step.friends}`,
+      });
+      if (!result.duplicate) coins += result.credited;
+      await this.friends.markBonusClaimed(actor.accountId, step.friends, step.coins);
+    }
+    if (steps.length > 0) this.log("friend_bonus_claimed", { accountId: actor.accountId, steps: steps.map((step) => step.friends), qualified });
+    return { claimed: steps.length, coins };
   }
 
   /** Подарок другу — раз в игровые сутки; повтор в те же сутки — не ошибка, а «уже». */

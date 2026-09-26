@@ -23,6 +23,8 @@ export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource
   achievement_reward: { coins: 20_000, gems: 200 },
   wheel_reward: { coins: 5_000, gems: 20 },
   friend_gift: { coins: 2_000 },
+  // все ступени бонуса за друзей — 950 монет: даже забранные разом, они проходят
+  friend_bonus: { coins: 1_000 },
   referral_reward: { coins: 20_000, gems: 100 },
   ad_reward: { coins: 10_000 },
   subscription_daily: { gems: 30 },

@@ -72,6 +72,12 @@ export interface FriendsRepository {
   /** Сколько подарков забрано за текущие игровые сутки. */
   claimedToday(to: string): Promise<number>;
   markClaimed(from: string, to: string, day: string): Promise<void>;
+  /** Друзья, сыгравшие хоть один честный забег, — для бонуса за число друзей; заблокированные не в счёт. */
+  qualifiedCount(accountId: string): Promise<number>;
+  /** Какие ступени бонуса уже забраны — порогами в друзьях. */
+  bonusClaimed(accountId: string): Promise<number[]>;
+  /** Отметить ступень забранной; повтор — тихо. */
+  markBonusClaimed(accountId: string, friends: number, coins: number): Promise<void>;
 }
 
 /** Пара хранится меньшим идентификатором первым — так же проверяет база. */
@@ -231,6 +237,33 @@ export class PrismaFriendsRepository implements FriendsRepository {
     await this.prisma.$executeRaw`
       UPDATE friend_gift SET claimed_at = now()
       WHERE from_account_id = ${from}::uuid AND to_account_id = ${to}::uuid AND day = ${day}::date AND claimed_at IS NULL`;
+  }
+
+  async qualifiedCount(accountId: string): Promise<number> {
+    // Честный забег — завершённый, без читов и не отклонённый проверкой: так же
+    // его засчитывает рефералка. Друзей не больше потолка, поэтому EXISTS по
+    // индексу забегов аккаунта — сотня коротких проверок, а не скан.
+    const [row] = await this.prisma.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count
+      FROM (
+        SELECT CASE WHEN account_a = ${accountId}::uuid THEN account_b ELSE account_a END AS friend_id
+        FROM friendship WHERE account_a = ${accountId}::uuid OR account_b = ${accountId}::uuid
+      ) f
+      JOIN account a ON a.account_id = f.friend_id AND a.banned_at IS NULL
+      WHERE EXISTS (
+        SELECT 1 FROM run r
+        WHERE r.account_id = f.friend_id AND r.status = 'finished' AND r.cheats = false AND r.verdict IS DISTINCT FROM 'rejected'
+      )`;
+    return row?.count ?? 0;
+  }
+
+  async bonusClaimed(accountId: string): Promise<number[]> {
+    const rows = await this.prisma.friendBonus.findMany({ where: { accountId }, select: { friends: true } });
+    return rows.map((row) => row.friends);
+  }
+
+  async markBonusClaimed(accountId: string, friends: number, coins: number): Promise<void> {
+    await this.prisma.friendBonus.createMany({ data: [{ accountId, friends, coins }], skipDuplicates: true });
   }
 }
 
