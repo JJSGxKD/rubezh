@@ -67,6 +67,7 @@ erDiagram
     ACCOUNT ||--o| REFERRAL_BINDING : "кем приглашён — один раз"
     ACCOUNT ||--o{ REFERRAL_BINDING : "кого пригласил"
     ACCOUNT ||--o{ FRIEND_RETURN : "вернулся по ссылке друга / помог вернуть"
+    ACCOUNT ||--o{ FRIEND_BONUS : "забранные ступени бонуса за друзей"
     LINK ||--o{ LINK_CLICK : "клики; краулеры превью не пишутся"
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
     FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
@@ -350,6 +351,13 @@ erDiagram
         datetime claimed_at "nullable: ещё не забран"
     }
 
+    FRIEND_BONUS {
+        uuid account_id PK,FK
+        int friends PK "порог ступени: каждая один раз навсегда"
+        int coins "сколько обещала ступень в момент забора"
+        datetime claimed_at
+    }
+
     REFERRAL_BINDING {
         uuid referred_account_id PK,FK "привязка одна и навсегда"
         uuid referrer_account_id FK "CHECK: не сам себе"
@@ -487,6 +495,8 @@ erDiagram
   пригласившему — `referral:<id>`. `FRIEND_RETURN` — возвращение ушедшего
   по ссылке друга: номер периода в ключе, награда обоим после первого забега
   ключами `friend_return:<вернувшийся>:<друг>:<период>:returned|friend`.
+  `FRIEND_BONUS` — забранные ступени бонуса за число друзей; монеты —
+  причиной `friend_bonus` и ключом `friend_bonus:<аккаунт>:<порог>`.
 
 ### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 
