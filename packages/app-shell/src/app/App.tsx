@@ -19,6 +19,7 @@ import { isVersionAtLeast } from "../state/platform-version";
 import { useShell } from "../state/shell";
 import { CompactOverlay, FirstRunScreen, OutdatedScreen, OutsideScreen } from "../screens/gates";
 import { LobbyScreen, ModeScreen, WeaponScreen } from "../screens/home";
+import { playedBefore, skipFirstRunHints } from "../state/first-run";
 import {
   AboutScreen,
   ArsenalScreen,
@@ -64,7 +65,7 @@ export function App(): ReactNode {
   // Версия клиента проверяется после самой площадки: вне её версии нет, и
   // спрашивать не у кого.
   if (outdated(capabilities.minPlatformVersion)) return <OutdatedScreen version={clientVersion()} />;
-  if (!install.accepted) return <FirstRunScreen onAccept={() => acceptAndPlay()} />;
+  if (!install.accepted) return <FirstRunScreen onAccept={() => void acceptAndPlay()} />;
 
   const tab = activeTab(stack);
   // Забег занимает весь экран: панель разделов поверх канвы отнимала бы
@@ -214,8 +215,14 @@ function usePlatformButtons(stack: readonly ScreenId[], screen: ScreenId): void 
  * забег начинается сам — на «Лёгкой», со стартовым оружием и подсказками
  * первого забега. Выйти из него можно тем же способом, что из любого другого.
  */
-function acceptAndPlay(): void {
+async function acceptAndPlay(): Promise<void> {
   useInstall.getState().accept();
+  // Согласие — на устройстве, а аккаунт мог уже играть на другом: тогда
+  // учебного забега нет, игрок остаётся в лобби (state/first-run.ts).
+  if (await playedBefore()) {
+    skipFirstRunHints();
+    return;
+  }
   // Первый забег — на «Лёгкой»: она и задумана как баланс без поправок.
   useMeta.getState().rememberDifficulty("easy");
   useRun.getState().intend({ kind: "new" });
