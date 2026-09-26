@@ -69,6 +69,7 @@ erDiagram
     ACCOUNT ||--o{ FRIEND_RETURN : "вернулся по ссылке друга / помог вернуть"
     LINK ||--o{ LINK_CLICK : "клики; краулеры превью не пишутся"
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
+    FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -385,6 +386,16 @@ erDiagram
         string device_class "nullable"
         string ip_prefix "nullable: подсеть, не адрес"
         string language "nullable"
+    }
+
+    FEATURE_FLAG {
+        string key PK "shop.v2: читает игра"
+        bool enabled
+        enum_array platforms "пусто — все площадки"
+        int percent "0–100, CHECK в базе"
+        string note "nullable"
+        uuid updated_by "nullable, без внешнего ключа"
+        datetime updated_at
     }
 ```
 
