@@ -219,8 +219,8 @@
   "diagnostics.report.viewport": "Окно",
   "diagnostics.report.canvas": "Канва, пикс.",
   "diagnostics.report.displayHz": "Частота экрана, Гц",
-  "diagnostics.report.cores": "Ядер",
-  "diagnostics.report.memory": "Память, ГБ",
+  "diagnostics.report.cores": "Потоки процессора",
+  "diagnostics.report.memory": "Память, ГБ (браузер округляет вниз)",
   "diagnostics.report.screenMode": "Режим экрана",
   "diagnostics.report.insets": "Отступы"
 }

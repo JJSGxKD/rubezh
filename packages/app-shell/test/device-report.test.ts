@@ -62,6 +62,12 @@ describe("текст для команды", () => {
     expect(text).toContain("insets: 24 / 0 / 16 / 0");
   });
 
+  it("потоки — числом, память — нижней границей: браузер округляет её вниз и обрезает сверху", () => {
+    const text = formatDeviceReport(rows, (key) => key);
+    expect(text).toContain("cores: 8");
+    expect(text).toContain("memory: ≥ 8");
+  });
+
   it("у каждой строки есть подпись в словаре команды", () => {
     for (const row of rows) expect(hasTranslation(`diagnostics.report.${row.key}`), row.key).toBe(true);
   });
