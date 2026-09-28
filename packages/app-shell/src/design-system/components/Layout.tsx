@@ -67,8 +67,12 @@ export interface TabItem {
   id: string;
   label: string;
   icon: ReactNode;
-  /** `dot` — точка «здесь что-то появится»; строка — число или короткая метка */
-  badge?: "dot" | string;
+  /**
+   * Число или короткая метка — только с полезной нагрузкой: сколько наград
+   * забрать, сколько новых предметов (`35-stage4-plan.md`, Р50). Точки
+   * «загляни сюда» нет сознательно.
+   */
+  badge?: string;
 }
 
 export interface TabBarProps {
@@ -156,15 +160,6 @@ export function TabBar(props: TabBarProps): ReactNode {
 }
 
 function TabBadge(props: { badge: string }): ReactNode {
-  if (props.badge === "dot") {
-    return (
-      <span aria-hidden="true" className="absolute top-1 right-1 inline-flex size-2.5">
-        <span className="absolute inset-0 animate-ping-dot rounded-full bg-accent" />
-        <span className="relative size-full rounded-full border-2 border-surface bg-accent" />
-      </span>
-    );
-  }
-
   return (
     <span className="absolute -top-1 -right-1 min-w-5 rounded-pill bg-danger px-1 text-center font-display text-xs font-bold text-text">
       {props.badge}

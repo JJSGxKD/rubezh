@@ -123,18 +123,20 @@ export function App(): ReactNode {
 
 /**
  * Порядок разделов — как в мобильных играх жанра: главная с кнопкой «Играть»
- * ближе к центру, под большим пальцем. Точка на разделе — «здесь скоро
- * появится»: заглушки зовут зайти и посмотреть.
+ * ближе к центру, под большим пальцем. Знак на разделе — только с
+ * полезной нагрузкой, числом: награды к выдаче, новые предметы, подарки
+ * (`35-stage4-plan.md`, Р50). Точек «зайди посмотреть» нет: знак, который
+ * горит всегда, перестают замечать.
  */
 const TABS: readonly TabItem[] = [
   // Значки говорят, что внутри: магазин — витрина, а не подарок; арсенал —
   // снаряжение, а не бой; бой — на главной, откуда в него и уходят.
-  { id: "shop", label: t("tab.shop"), icon: <Store size={22} />, badge: "dot" },
-  { id: "arsenal", label: t("tab.arsenal"), icon: <ArmorIcon size={22} />, badge: "dot" },
+  { id: "shop", label: t("tab.shop"), icon: <Store size={22} /> },
+  { id: "arsenal", label: t("tab.arsenal"), icon: <ArmorIcon size={22} /> },
   { id: "lobby", label: t("tab.home"), icon: <Swords size={22} /> },
-  { id: "tasks", label: t("tab.tasks"), icon: <ListChecks size={22} />, badge: "dot" },
+  { id: "tasks", label: t("tab.tasks"), icon: <ListChecks size={22} /> },
   { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} /> },
-  { id: "friends", label: t("tab.friends"), icon: <Users size={22} />, badge: "dot" },
+  { id: "friends", label: t("tab.friends"), icon: <Users size={22} /> },
 ];
 
 function renderScreen(screen: ScreenId): ReactNode {

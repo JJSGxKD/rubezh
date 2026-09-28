@@ -253,8 +253,8 @@ function SavedRunCard(props: { saved: SavedRun }): ReactNode {
 }
 
 /**
- * Плитка быстрого раздела лобби: награда дня, колесо. Точка зовёт зайти — как
- * на вкладках нижней панели.
+ * Плитка быстрого раздела лобби: награда дня, колесо. Без мигающей точки:
+ * знак появится, когда награду можно будет забрать (`35-stage4-plan.md`, Р50).
  */
 function LobbyTile(props: {
   appearIndex: number;
@@ -266,10 +266,6 @@ function LobbyTile(props: {
 }): ReactNode {
   return (
     <Card appearIndex={props.appearIndex} onClick={props.onClick}>
-      <span aria-hidden="true" className="absolute top-2.5 right-2.5 inline-flex size-2.5">
-        <span className="absolute inset-0 animate-ping-dot rounded-full bg-accent" />
-        <span className="relative size-full rounded-full bg-accent" />
-      </span>
       {/* Значок над подписью, а не сбоку: в половине ширины телефона рядом со
           значком «Колесо удачи» переносилось на две строки. В ландшафте места
           хватает — значок возвращается в строку. */}
