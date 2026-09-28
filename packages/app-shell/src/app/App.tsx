@@ -23,6 +23,7 @@ import { playedBefore, skipFirstRunHints } from "../state/first-run";
 import {
   AboutScreen,
   ArsenalScreen,
+  BoostsScreen,
   DailyScreen,
   DiagnosticsScreen,
   FriendsScreen,
@@ -147,6 +148,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <ModeScreen />;
     case "weapon":
       return <WeaponScreen />;
+    case "boosts":
+      return <BoostsScreen />;
     case "run":
       return <RunScreen />;
     case "feedback":

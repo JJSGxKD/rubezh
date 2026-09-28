@@ -33,6 +33,8 @@ export interface BoostPickerProps {
   onCatalog(catalog: BoostCatalog | null): void;
   /** почему покупка не прошла: код ошибки сервера или причина неудачи */
   error: string | null;
+  /** свой заголовок раздела; на отдельном экране бустов его даёт шапка */
+  heading?: boolean;
 }
 
 export function BoostPicker(props: BoostPickerProps): ReactNode {
@@ -70,8 +72,8 @@ export function BoostPicker(props: BoostPickerProps): ReactNode {
 
   return (
     <>
-      <SectionTitle>{t("boosts.title")}</SectionTitle>
-      <p className="mb-3 text-xs text-text-muted">{t("boosts.hint", { max: catalog.maxPerRun })}</p>
+      {props.heading === false ? null : <SectionTitle>{t("boosts.title")}</SectionTitle>}
+      <p className="mt-2 mb-3 text-xs text-text-muted">{t("boosts.hint", { max: catalog.maxPerRun })}</p>
       <ul className="grid gap-2 landscape:grid-cols-2">
         {BOOSTS.map((boost) => {
           const price = catalog.boosts.find((entry) => entry.id === boost.id);
