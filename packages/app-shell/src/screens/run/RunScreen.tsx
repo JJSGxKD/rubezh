@@ -20,6 +20,7 @@ import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
 import { DevSheetLazy } from "./dev-sheet-lazy";
 import { DevTechPanelLazy } from "./dev-tech-panel-lazy";
 import { RunStatsSheet } from "./RunStatsSheet";
+import { useRunKeyboard } from "./run-keys";
 import type { SecondChanceProps } from "./SecondChance";
 
 /**
@@ -45,6 +46,8 @@ export function RunScreen(): ReactNode {
   const devTechInfo = useDevMode((state) => state.settings.visuals.techInfo);
   // Лист разработчика открывается на паузе: команды «Мира» и шаг по тикам
   // рассчитаны на стоящий мир, а бегущий забег под листом убил бы игрока.
+  // Клавиши забега — пока не открыт лист: у листа Esc закрывает его.
+  useRunKeyboard(stats === null && !devOpen);
   const openDev = (): void => {
     useRun.getState().pause("manual");
     setDevOpen(true);

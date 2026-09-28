@@ -75,5 +75,7 @@
   "run.status.cold": "Замедлен холодом",
   "run.status.lightning": "Шок: урон по тебе больше",
   "run.status.poison": "Отравлен, слоёв: {stacks}",
-  "run.shield": "Щит: погасит попаданий — {count}"
+  "run.shield": "Щит: погасит попаданий — {count}",
+  "run.keys.pause": "Esc или P — продолжить",
+  "run.keys.choose": "Клавиши 1–4 — выбрать карточку"
 }

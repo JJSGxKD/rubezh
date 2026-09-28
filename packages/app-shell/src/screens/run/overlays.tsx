@@ -70,6 +70,7 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
           <Button size="l" block glow onClick={guarded(ready, props.onResume)}>
             {t("run.pause.resume")}
           </Button>
+          <KeyHint text={t("run.keys.pause")} />
           {/* Характеристики и настройки — в ряд: вторичные действия паузы не
               должны выталкивать «Продолжить» за край в ландшафте. */}
           <div className="grid grid-cols-2 gap-2">
@@ -148,6 +149,7 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
       {/* На невысоком экране подсказка уходит: что выбирать, говорят сами
           карточки, а строка нужна третьей карточке. */}
       <p className="-mt-1 mb-2 text-center text-sm text-text-muted short:hidden">{t("run.levelUp.subtitle")}</p>
+      <KeyHint text={t("run.keys.choose")} />
       {/* Сколько выборов ждёт — плашкой в ряду слотов, а не строкой под
           карточками: в ландшафте отдельная строка уводила модалку в прокрутку. */}
       {props.loadout === undefined ? (
@@ -278,4 +280,14 @@ function OfferTag(props: { offer: UpgradeOption }): ReactNode {
       <CategoryLabel category={category} />
     </span>
   );
+}
+
+/**
+ * Подсказка клавиш — только там, где есть клавиатура и мышь: на телефоне она
+ * была бы шумом.
+ */
+function KeyHint(props: { text: string }): ReactNode {
+  const keyboard = typeof window !== "undefined" && window.matchMedia?.("(hover: hover) and (pointer: fine)").matches === true;
+  if (!keyboard) return null;
+  return <p className="text-center text-xs text-text-muted">{props.text}</p>;
 }

@@ -145,6 +145,8 @@ export function Modal(props: ModalProps): ReactNode {
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
+      // Закрываемый лист сам отвечает на Esc — клавиши экрана ему уступают.
+      data-dismissable={onDismiss === undefined ? undefined : "true"}
       className={[
         "absolute inset-0 flex px-4",
         "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
