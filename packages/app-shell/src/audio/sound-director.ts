@@ -45,10 +45,34 @@ const LOW_HP_RATIO = 0.3;
 /** Сердце бьётся чаще, чем ниже здоровье: от раза в 0,9 с до раза в 0,55 с. */
 const HEARTBEAT_SLOW_SEC = 0.9;
 const HEARTBEAT_FAST_SEC = 0.55;
-/** Кристаллы подряд звучат выше — серия слышна как серия. */
-const GEM_STREAK_STEP = 0.035;
-const GEM_STREAK_MAX = 8;
-const GEM_STREAK_RESET_SEC = 0.6;
+/**
+ * Сбор опыта — лесенкой (`35-stage4-plan.md`, Р57): каждый следующий
+ * кристалл серии — ступенью выше по пентатонике в пределах октавы. Наверху
+ * лесенка не упирается в одну ноту, а чередует две верхние ступени — долгая
+ * серия не превращается в один и тот же звук на кулдауне. Пауза в серии —
+ * лесенка снова снизу.
+ */
+const GEM_LADDER = [0, 2, 4, 7, 9, 12] as const;
+const GEM_STREAK_RESET_SEC = 0.8;
+/** Крупный сбор за раз — магнит, горсть с элиты — арпеджио до стольких нот. */
+const GEM_BURST_MAX = 6;
+const GEM_BURST_STEP_SEC = 0.04;
+
+/**
+ * Ноты сбора опыта за один опрос: сколько — по объёму опыта (логарифмом,
+ * чтобы магнит на сотню кристаллов не стал сотней звуков), какие — по
+ * ступени серии.
+ */
+export function gemNotes(xp: number, streak: number): { rate: number; delay: number }[] {
+  if (xp <= 0) return [];
+  const count = Math.min(GEM_BURST_MAX, 1 + Math.floor(Math.log2(xp)));
+  const top = GEM_LADDER.length - 1;
+  return Array.from({ length: count }, (_, i) => {
+    const step = streak + i;
+    const index = step <= top ? step : top - 1 + ((step - top + 1) % 2);
+    return { rate: 2 ** ((GEM_LADDER[index] ?? 0) / 12), delay: Math.round(i * GEM_BURST_STEP_SEC * 1000) / 1000 };
+  });
+}
 
 export interface SoundRequest {
   id: SoundId;
@@ -65,17 +89,14 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
     plan.push({ id, options });
   };
 
+  // Атаки врагов не звучат — фитиль, рывок, выстрел, взрыв подрывника
+  // (`35-stage4-plan.md`, Р57): угрозу читают глазами по телеграфу, а ухо
+  // слышит результат — попадание по игроку. Появление элиты остаётся: это
+  // предупреждение, а не атака.
   if (cues.playerHit > 0) add("hurt");
   if (cues.dynamite > 0) add("dynamite");
-  // Взрыв вдали тише: он не опасен, но толпа подрывников должна быть слышна.
-  if (cues.explosionsNear > 0) add("blast");
-  else if (cues.explosions > 0) add("blast", { gain: 0.35 });
   if (cues.eliteSpawns > 0) add("eliteHorn");
   if (cues.eliteKills > 0) add("eliteDown");
-  if (cues.fuses > 0) add("fuseTick");
-  if (cues.dashWarns > 0) add("dashWarn");
-  if (cues.dashes > 0) add("dashGo");
-  if (cues.enemyShots > 0) add("enemyShot");
   if (cues.heal > 0) add("heal");
   if (cues.magnet > 0) add("magnet");
   if (cues.strikes > 0) add("storm");
@@ -90,7 +111,7 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
   const pops = Math.min(3, cues.kills - cues.eliteKills);
   for (let i = 0; i < pops; i++) add("popSmall", { delay: i * 0.035, pan: (i - 1) * 0.3 });
 
-  if (cues.xp > 0) add("gem", { rate: 1 + Math.min(GEM_STREAK_MAX, gemStreak) * GEM_STREAK_STEP });
+  for (const note of gemNotes(cues.xp, gemStreak)) add("gem", note.delay === 0 ? { rate: note.rate } : { rate: note.rate, delay: note.delay });
   return plan;
 }
 
@@ -143,11 +164,12 @@ export class SoundDirector {
     if (this.scene !== "run") return;
     const { engine } = this;
     const now = engine.ctx.currentTime;
+    if (cues.xp > 0 && now - this.lastGemAt >= GEM_STREAK_RESET_SEC) this.gemStreak = 0;
+    for (const request of planCueSounds(cues, this.gemStreak)) engine.play(request.id, request.options);
     if (cues.xp > 0) {
-      this.gemStreak = now - this.lastGemAt < GEM_STREAK_RESET_SEC ? Math.min(GEM_STREAK_MAX, this.gemStreak + 1) : 0;
+      this.gemStreak += gemNotes(cues.xp, this.gemStreak).length;
       this.lastGemAt = now;
     }
-    for (const request of planCueSounds(cues, this.gemStreak)) engine.play(request.id, request.options);
   }
 
   suspend(): Promise<void> {
