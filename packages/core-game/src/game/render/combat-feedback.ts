@@ -17,8 +17,12 @@ import type { World } from "../sim/world";
  * Бережём кадр на бюджетном Android: текст — самый дорогой объект Phaser
  * (своя канва и загрузка текстуры на каждое изменение), поэтому чисел на
  * экране не больше `MAX_NUMBERS`, новых за кадр — не больше
- * `MAX_NEW_NUMBERS_PER_FRAME`, а мелкие попадания одного врага за кадр
- * складываются в одно число.
+ * `MAX_NEW_NUMBERS_PER_FRAME`.
+ *
+ * Попадания по одному врагу подряд — в одно число (`MERGE_WINDOW_TICKS`):
+ * иначе быстро отброшенный враг, по которому бьют раз за разом, оставлял за
+ * собой шлейф чисел вдоль всего пути (`35-stage4-plan.md`, Р57). Слитое
+ * число держится у врага и растёт суммой, а не множится.
  */
 
 /** Сколько чисел урона живёт одновременно; новые вытесняют самые старые. */
@@ -41,6 +45,9 @@ const BURST_TEXTURE_UNITS = 24;
 
 /** Попадание засчитывается как убийство, если тик попадания не старше этого. */
 const KILL_HIT_WINDOW_TICKS = 2;
+/** Попадания по одному врагу ближе этого — в одно число: около 0,2 с. */
+const MERGE_WINDOW_TICKS = 12;
+const NO_NUMBER = -1;
 
 export class CombatFeedback {
   private readonly scene: Phaser.Scene;
@@ -57,6 +64,12 @@ export class CombatFeedback {
   private readonly numberBornTick: Int32Array = new Int32Array(MAX_NUMBERS).fill(-1);
   private readonly numberX: Float32Array = new Float32Array(MAX_NUMBERS);
   private readonly numberY: Float32Array = new Float32Array(MAX_NUMBERS);
+  private readonly numberAmount: Float32Array = new Float32Array(MAX_NUMBERS);
+  /** чьё число: слот врага, `NO_NUMBER` — ничьё */
+  private readonly numberOwner: Int32Array = new Int32Array(MAX_NUMBERS).fill(NO_NUMBER);
+  /** последнее число врага и тик последнего попадания в него */
+  private readonly enemyNumber: Int32Array;
+  private readonly enemyNumberTick: Int32Array;
   private nextNumber = 0;
   /**
    * Режим разработчика выключает числа и вспышки. Память здоровья при этом
@@ -85,6 +98,8 @@ export class CombatFeedback {
     this.lastHp = new Float32Array(capacity);
     this.lastHitTick = new Int32Array(capacity);
     this.lastAlive = new Uint8Array(capacity);
+    this.enemyNumber = new Int32Array(capacity).fill(NO_NUMBER);
+    this.enemyNumberTick = new Int32Array(capacity);
     this.remember();
 
     this.ensureBurstTexture();
@@ -111,16 +126,22 @@ export class CombatFeedback {
         this.lastHp[i] = enemies.hp[i];
         this.lastHitTick[i] = enemies.hitTick[i];
         this.lastAlive[i] = 1;
+        this.enemyNumber[i] = NO_NUMBER;
         continue;
       }
       if (!alive && wasAlive) {
         this.lastAlive[i] = 0;
+        const merged = this.mergeTarget(i, tick);
+        this.enemyNumber[i] = NO_NUMBER;
         // Самоподрыв и прочий уход без попадания — не убийство игроком.
         if (!this.enabled || tick - enemies.hitTick[i] > KILL_HIT_WINDOW_TICKS) continue;
         const type = this.world.enemyTypes[enemies.type[i]];
         this.startBurst(enemies.x[i], enemies.y[i], type.radius, this.colorByType[enemies.type[i]] ?? 0xffffff, tick);
-        if (created < MAX_NEW_NUMBERS_PER_FRAME && this.lastHp[i] > 0) {
-          this.startNumber(enemies.x[i], enemies.y[i] - type.radius, this.lastHp[i], true, tick);
+        if (this.lastHp[i] <= 0) continue;
+        if (merged !== NO_NUMBER) {
+          this.addToNumber(merged, enemies.x[i], enemies.y[i] - type.radius, this.lastHp[i], true, tick);
+        } else if (created < MAX_NEW_NUMBERS_PER_FRAME) {
+          this.startNumber(enemies.x[i], enemies.y[i] - type.radius, this.lastHp[i], true, tick, NO_NUMBER);
           created++;
         }
         continue;
@@ -129,10 +150,17 @@ export class CombatFeedback {
 
       if (enemies.hitTick[i] !== this.lastHitTick[i]) {
         const dealt = this.lastHp[i] - enemies.hp[i];
-        if (this.enabled && dealt > 0 && created < MAX_NEW_NUMBERS_PER_FRAME) {
+        if (this.enabled && dealt > 0) {
           const type = this.world.enemyTypes[enemies.type[i]];
-          this.startNumber(enemies.x[i], enemies.y[i] - type.radius, dealt, false, tick);
-          created++;
+          const merged = this.mergeTarget(i, tick);
+          if (merged !== NO_NUMBER) {
+            this.addToNumber(merged, enemies.x[i], enemies.y[i] - type.radius, dealt, false, tick);
+            this.enemyNumberTick[i] = tick;
+          } else if (created < MAX_NEW_NUMBERS_PER_FRAME) {
+            this.enemyNumber[i] = this.startNumber(enemies.x[i], enemies.y[i] - type.radius, dealt, false, tick, i);
+            this.enemyNumberTick[i] = tick;
+            created++;
+          }
         }
         this.lastHitTick[i] = enemies.hitTick[i];
       }
@@ -149,7 +177,26 @@ export class CombatFeedback {
     }
   }
 
-  private startNumber(x: number, y: number, amount: number, kill: boolean, tick: number): void {
+  /** Число врага, в которое слить попадание: ещё живое, его и недавнее. */
+  private mergeTarget(enemy: number, tick: number): number {
+    const n = this.enemyNumber[enemy];
+    if (n === NO_NUMBER || this.numberOwner[n] !== enemy || tick - this.enemyNumberTick[enemy] > MERGE_WINDOW_TICKS) return NO_NUMBER;
+    if (this.numberBornTick[n] < 0 || tick - this.numberBornTick[n] >= NUMBER_LIFETIME_TICKS) return NO_NUMBER;
+    return n;
+  }
+
+  /** Попадание в уже показанное число: сумма растёт, число переезжает к врагу и живёт заново. */
+  private addToNumber(n: number, x: number, y: number, amount: number, kill: boolean, tick: number): void {
+    this.numberAmount[n] += amount;
+    const text = this.numbers[n];
+    text.setText(String(Math.max(1, Math.round(this.numberAmount[n]))));
+    if (kill) text.setColor("#ffd27a");
+    this.numberBornTick[n] = tick;
+    this.numberX[n] = x;
+    this.numberY[n] = y;
+  }
+
+  private startNumber(x: number, y: number, amount: number, kill: boolean, tick: number, owner: number): number {
     const n = this.nextNumber;
     this.nextNumber = (this.nextNumber + 1) % MAX_NUMBERS;
 
@@ -179,6 +226,9 @@ export class CombatFeedback {
     this.numberBornTick[n] = tick;
     this.numberX[n] = x;
     this.numberY[n] = y;
+    this.numberAmount[n] = amount;
+    this.numberOwner[n] = owner;
+    return n;
   }
 
   private animateNumbers(tick: number): void {
