@@ -36,6 +36,7 @@ export function createRunEngine(): RunEngine {
         recordRun: options.diagnostics.recordRun,
         ...(options.continues === undefined ? {} : { continues: options.continues }),
         ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
+        ...(options.runId === undefined ? {} : { runId: options.runId }),
         bus,
       };
       host.game.scene.add("main", MainScene, true, sceneData);

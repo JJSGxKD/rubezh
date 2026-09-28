@@ -26,6 +26,7 @@ export const ANALYTICS_EVENTS = [
   "wave_reached",
   "run_synced",
   "continue_used",
+  "boost_used",
   "purchase_initiated",
   "purchase_completed",
   "purchase_failed",

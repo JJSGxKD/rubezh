@@ -62,6 +62,7 @@ const finishFields = {
   cheats: z.optional(z.boolean()),
   countInRating: z.optional(z.boolean()),
   continues: z.optional(z.array(z.number())),
+  boosts: z.optional(z.array(z.string())),
 };
 
 const startEntrySchema = z.object({
@@ -249,6 +250,8 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     // Без секунд продолжений сервер счёл бы купленный второй шанс
     // неоплаченным — и наоборот, не нашёл бы, что сверять с покупкой.
     continues: [...result.continues],
+    // Бусты — те, что применил движок: сервер сверит их с покупкой на забег.
+    ...(result.boosts === undefined || result.boosts.length === 0 ? {} : { boosts: [...result.boosts] }),
   };
 }
 

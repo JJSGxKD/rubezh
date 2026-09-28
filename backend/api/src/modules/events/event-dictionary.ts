@@ -121,6 +121,8 @@ export const EVENT_DICTIONARY = {
   // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
   // на какой секунде и волне забега.
   continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
+  // Сервер подтвердил покупку буста на забег (WP8): по событию на буст.
+  boost_used: { version: 1, payload: payload({ boost: id, source: id, amount, count }) },
   // Нажал «продолжить за звёзды» — счёт запрошен.
   purchase_initiated: { version: 1, payload: payload(purchaseFields) },
   // Сервер подтвердил оплату, продолжение выдано.

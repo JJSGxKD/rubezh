@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `boost_used` |
 | Интерфейс | `screen_viewed`, `settings_changed` |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded` |
 | Реклама | `ad_requested`, `ad_shown`, `ad_reward_claimed`, `ad_failed` |
@@ -196,6 +196,12 @@ Zod-схемы `payload` — в словаре сервера
 | `continue_used` | Сколько забегов продолжают после смерти и чем (WP5). Пара к `purchase_completed`: оплата без продолжения — продолжение, которое не взяли, и сервер вернёт за него звёзды. Вместе с `purchase_*` — данные для решения О7 о цене рядом с рекламой | `source`: `premium` — за звёзды, `dev` — бесплатно в забеге разработчика, позже `ad`; `elapsedSec` — секунда забега, `wave` |
 | `session_started` | Запуск игры (WP6) — знаменатель удержания по дням и воронок по источнику. Снимок атрибуции — откуда открыли, по подписи, проверенной сервером: клиент сам видит параметр запуска неподписанным. Продление токена и повторный вход посреди работы запуском не считаются. Подробности сессии — класс устройства, подсеть, код клика — в таблице `account_session`, а первое и последнее касание — в `acquisition` (`21-diagrams.md` §1.1) | `startKind`: `organic` / `click` / `invite` / `telegram_affiliate` / `unknown`; `first` — аккаунт заведён этим запуском |
 | `run_synced` | Дошли ли старт и итог забега до сервера (WP4; заменило `playtest_run_synced` этапа 2). Доля стартов с `trusted: false` у честных игроков — это доля забегов без проверки времени, по ней решается О5 (`34-stage3-plan.md`). Растущая доля `queued` с `unauthorized` — теряются сессии, а не сеть | `kind`: `start` / `finish`; `result`: `sent` / `queued` / `dropped`; `trigger`: `start` / `finish` / `launch` / `screen` / `continue`; у отправленного старта — `trusted`, у итога — `verdict`, `rank`, `isNewBest`, `recorded`; у неотправленного — `failure` |
+
+Добавлено на этапе 4 (`35-stage4-plan.md`):
+
+| Событие | Зачем | Ключевые поля `payload` |
+|---|---|---|
+| `boost_used` | Какие бусты берут и чем за них платят (WP8, Р39): вход для пересмотра их силы и цен. Шлёт клиент, когда сервер подтвердил покупку на забег, — по событию на буст. Списание само лежит в журнале кошелька, а событие связывает покупку с устройством и забегом | `boost` — id буста, `source`: `coins` / `gems` — чем оплачен, позже `wheel` и `task` — буст за игру (WP13), `amount` — цена, `count` — сколько бустов взято на этот забег |
 
 **Воронка аккаунта — таблица, а не события** (`35-stage4-plan.md`, Р30,
 WP2). Вехи — вошёл в бота, открыл игру, первый забег начат и закончен,

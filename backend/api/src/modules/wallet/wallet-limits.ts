@@ -33,11 +33,14 @@ export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource
 
 /**
  * Что даёт обмен. Монеты не продаются (Р2), поэтому покупка — только
- * самоцветы; разбор предмета — только осколки.
+ * самоцветы; разбор предмета — только осколки; возврат буста — то, чем он
+ * оплачен.
  */
 export const EXCHANGE_RESOURCES: Record<ExchangeReason, readonly WalletResource[]> = {
   purchase: ["gems"],
   salvage: ["shard_common", "shard_uncommon", "shard_rare", "shard_epic", "shard_legendary", "shard_mythic"],
+  // Возвращается ровно то, чем бусты оплачивают (Р39), — не больше.
+  boost_refund: ["coins", "gems"],
 };
 
 /**

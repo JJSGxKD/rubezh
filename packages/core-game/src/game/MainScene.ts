@@ -97,6 +97,11 @@ export interface MainSceneData {
   graphics?: RunGraphicsOptions;
   /** снаряжение и бусты нового забега; продолженный берёт набор из снимка */
   loadout?: RunLoadout;
+  /**
+   * id нового забега, выданный оболочкой: на него куплены бусты
+   * (docs/35-stage4-plan.md §3.5). Без поля движок заводит id сам.
+   */
+  runId?: string;
 }
 
 /**
@@ -147,7 +152,7 @@ export class MainScene extends Phaser.Scene {
     this.sceneData = data;
     const resume = data.resume;
     this.seed = resume?.seed ?? data.seed;
-    this.runId = resume?.runId ?? createUuid();
+    this.runId = resume?.runId ?? data.runId ?? createUuid();
     this.accumulatorMs = 0;
     this.hudTimerMs = 0;
     this.reportedWave = -1;
@@ -389,9 +394,14 @@ export class MainScene extends Phaser.Scene {
   }
 
   restartRun(seed: number): void {
-    // «Ещё раз» — новый забег, а не повтор продолженного.
+    // «Ещё раз» — новый забег, а не повтор продолженного: со своим id и без
+    // бустов. Буст — расходник на один забег, и перенести его на следующий
+    // значило бы дать его даром, а сервер отклонил бы такой забег как
+    // неоплаченный. Снаряжение остаётся: снимок надетого всё тот же.
     const next: MainSceneData = { ...this.sceneData, seed };
     delete next.resume;
+    delete next.runId;
+    if (next.loadout !== undefined) next.loadout = { ...next.loadout, boosts: [] };
     this.scene.restart(next);
   }
 

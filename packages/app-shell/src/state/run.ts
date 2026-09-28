@@ -52,7 +52,16 @@ export type ContinueSource = "dev" | "premium";
  * сохранённый. Намерение нужно именно потому, что экран монтируется и сам —
  * и тогда его нет вовсе (docs/27-design-system-and-app-shell.md §7).
  */
-export type RunIntent = { kind: "new" } | { kind: "resume"; snapshot: RunSnapshot };
+export type RunIntent = { kind: "new"; boosts?: BoughtBoosts } | { kind: "resume"; snapshot: RunSnapshot };
+
+/**
+ * Бусты, купленные на новый забег до «В бой» (docs/35-stage4-plan.md §3.5):
+ * сервер записал покупку на этот id, и забег обязан начаться с ним.
+ */
+export interface BoughtBoosts {
+  runId: string;
+  ids: string[];
+}
 
 /** Что знает о забеге сам экран; продолжать или начинать — решает стор. */
 export type RunEntryOptions = Omit<RunStartOptions, "resume">;
@@ -66,6 +75,8 @@ export interface RunStartOptions {
   pixelRatio?: number;
   /** продолжить сохранённый забег вместо нового */
   resume?: RunSnapshot;
+  /** бусты, купленные на этот забег; у продолженного — свои из снимка */
+  boosts?: BoughtBoosts;
 }
 
 /**
@@ -205,8 +216,9 @@ export const useRun = create<RunStore>((set, get) => ({
     const saved = useSavedRun.getState().saved;
     const resume =
       intent?.kind === "resume" ? intent.snapshot : intent === null ? (saved ?? undefined) : undefined;
+    const boosts = intent?.kind === "new" ? intent.boosts : undefined;
 
-    await get().start({ ...options, ...(resume === undefined ? {} : { resume }) });
+    await get().start({ ...options, ...(resume === undefined ? {} : { resume }), ...(boosts === undefined ? {} : { boosts }) });
   },
 
   async start(options: RunStartOptions): Promise<void> {
@@ -215,6 +227,7 @@ export const useRun = create<RunStore>((set, get) => ({
 
     const token = ++startToken;
     const resume = options.resume;
+    const bought = resume === undefined ? options.boosts : undefined;
     const seed = resume?.seed ?? nextSeed();
     set({ ...IDLE, phase: "loading", loadingStage: "engine", seed });
     startOptions = options;
@@ -234,7 +247,13 @@ export const useRun = create<RunStore>((set, get) => ({
       const [engine, loadouts] = await Promise.all([loadRunEngine(), import("./run-loadouts").catch(() => null)]);
       // Пока грузился чанк, нас могли остановить или запустить заново. Игру
       // в этом случае не создаём вовсе: лишний контекст WebGL дороже всего.
-      if (token !== startToken) return;
+      if (token !== startToken) {
+        // Новая попытка с той же покупкой — это не отказ от забега: в режиме
+        // разработки React запускает экран дважды, и первый старт прерывает
+        // второй. Возврат — только если с этой покупкой больше никто не стартует.
+        if (startOptions?.boosts?.runId !== bought?.runId) releaseBought(bought, set, get);
+        return;
+      }
       set({ loadingStage: "world" });
 
       const diagnostics = useDiagnostics.getState();
@@ -250,8 +269,10 @@ export const useRun = create<RunStore>((set, get) => ({
       // начинается с надетым. Продолженный забег берёт набор из своего
       // снимка, а надетое с тех пор могло смениться.
       const signed = resume === undefined && loadouts !== null ? loadouts.equippedLoadout() : null;
-      // Бусты разработчика — только новому забегу: продолженный несёт свои.
+      // Купленные бусты — новому забегу; бесплатные бусты разработчика — если
+      // не куплено ничего. Продолженный забег несёт свои из снимка.
       const devBoosts = devRun && resume === undefined ? (useDevMode.getState().settings.start.boosts ?? []) : [];
+      const boostIds = bought?.ids ?? devBoosts;
       const created = engine.start({
         container: options.container,
         seed,
@@ -271,9 +292,10 @@ export const useRun = create<RunStore>((set, get) => ({
         // можно купить: иначе смерть ждала бы решения, которого не принять
         // (docs/34-stage3-plan.md, WP5).
         continues: devRun || canOfferPaidContinue(),
-        ...(signed === null && devBoosts.length === 0
+        ...(signed === null && boostIds.length === 0
           ? {}
-          : { loadout: { modifiers: signed === null || loadouts === null ? {} : loadouts.knownModifiers(signed), boosts: [...devBoosts] } }),
+          : { loadout: { modifiers: signed === null || loadouts === null ? {} : loadouts.knownModifiers(signed), boosts: [...boostIds] } }),
+        ...(bought === undefined ? {} : { runId: bought.runId }),
       });
 
       if (token !== startToken) {
@@ -310,6 +332,8 @@ export const useRun = create<RunStore>((set, get) => ({
       });
     } catch (error: unknown) {
       reportError("run", `движок не загрузился: ${String(error)}`);
+      // Забег не начался — купленные на него бусты возвращаются.
+      releaseBought(bought, set, get);
       firstFrameStartedAt = null;
       set({ phase: "error", loadingStage: null, errorMessage: "error.engine" });
     }
@@ -405,6 +429,21 @@ export const useRun = create<RunStore>((set, get) => ({
     set({ ...IDLE, phase: "idle" });
   },
 }));
+
+/**
+ * Вернуть бусты забегу, который не начался. Не дошло — сервер вернёт сам
+ * фоновым проходом, поэтому ошибка только пишется. Из намерения бусты
+ * снимаются сразу: повтор «В бой» с экрана ошибки или повторный заход на экран
+ * забега не должны начать забег с бустами, которых уже нет.
+ */
+function releaseBought(bought: BoughtBoosts | undefined, set: SetState, get: GetState): void {
+  if (bought === undefined) return;
+  const intent = get().intent;
+  if (intent?.kind === "new" && intent.boosts?.runId === bought.runId) set({ intent: { kind: "new" } });
+  import("./boosts-api")
+    .then(({ refundBoosts }) => refundBoosts(bought.runId))
+    .catch((error: unknown) => reportError("boosts", `возврат бустов: ${String(error)}`));
+}
 
 type SetState = (partial: Partial<RunStore>) => void;
 type GetState = () => RunStore;

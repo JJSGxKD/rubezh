@@ -46,6 +46,7 @@ function finish(runId: string, patch: Partial<RunFinish> = {}): RunFinish {
     cheats: false,
     countInRating: false,
     continues: [],
+    boosts: [],
     ...patch,
   };
 }
