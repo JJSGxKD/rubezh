@@ -68,9 +68,10 @@ export class RunsService {
     // Повтор итога — тот же ответ, что в первый раз, без новой записи.
     if (existing?.status === "finished") return await this.replay(account, run.runId);
 
-    const [paid, loadout] = await Promise.all([
+    const [paid, loadout, boosts] = await Promise.all([
       this.continues.check(run.runId, run.continues),
       this.loadouts.check(account.accountId, run.loadout),
+      this.loadouts.checkBoosts(account.accountId, run.runId, run.boosts),
     ]);
     const judged = judgeRun(
       {
@@ -86,6 +87,7 @@ export class RunsService {
         underpaidContinues: paid.underpaid,
         cheats: run.cheats,
         loadout,
+        boosts,
       },
       this.config.runs,
     );

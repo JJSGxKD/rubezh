@@ -60,6 +60,7 @@ erDiagram
     ACCOUNT ||--o{ WALLET_DAILY : "начислено за сутки"
     ACCOUNT ||--o{ ITEM : "инвентарь"
     ITEM ||--o{ ITEM_EVENT : "журнал предмета"
+    ACCOUNT ||--o{ RUN_BOOST : "бусты на забег"
     ACCOUNT ||--o| ACCOUNT_PROGRESS : "уровень и опыт"
     ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
     ACCOUNT ||--o| FRIEND_LINK : "ссылка дружбы"
@@ -179,6 +180,15 @@ erDiagram
         boolean equipped "в слоте один — частичный уникальный индекс"
         string source "loot:<runId>, merge:<ключ>"
         datetime removed_at "nullable: разобран или объединён"
+    }
+
+    RUN_BOOST {
+        string run_id PK "одна покупка на забег"
+        uuid account_id FK
+        string_array boosts "id бустов контента движка"
+        json cost "сколько списано: coins, gems"
+        datetime created_at
+        datetime refunded_at "nullable: забег так и не начался"
     }
 
     ITEM_EVENT {
@@ -516,6 +526,13 @@ erDiagram
   объединённый предмет не удаляется, а помечается `removed_at`: журнал на него
   ссылается. Добыча забега — ключ `loot:<runId>`, второй предмет за один забег
   не выпадет.
+- **`RUN_BOOST` — бусты, купленные на забег** (`35-stage4-plan.md` §3.5, WP8,
+  Р39). Строка и списание из `WALLET_ENTRY` — одна транзакция, ключ — забег:
+  повтор покупки ничего не спишет. Внешнего ключа на `RUN` нет сознательно:
+  бусты покупаются **до** старта, когда строки забега ещё нет, а после старта
+  покупка запрещена. Забег, который так и не начался, получает бусты назад —
+  `refunded_at` и строки `boost_refund` в журнале; итог забега сверяет
+  заявленные бусты с этой строкой.
 - **`ACCOUNT_FUNNEL` — вехи игрока, `ACCOUNT_MESSAGING` — можно ли ему писать**
   (`35-stage4-plan.md`, WP2). Вехи ставят слушатели входа, забегов и оплаты
   одной вставкой с `COALESCE`, поэтому таблица — отметки первого раза, а не
@@ -1057,6 +1074,7 @@ flowchart LR
         WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
         ITEMS["items<br/>снаряжение: инвентарь, операции,<br/>добыча, подписанный снимок, реализовано"]
+        BOOSTS["boosts<br/>бусты: покупка до старта,<br/>возврат, сверка в итоге, реализовано"]
         ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, реализовано"]
         LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, реализовано"]
         FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
@@ -1132,6 +1150,10 @@ flowchart LR
     PROG -- добыча забега --> ITEMS
     ITEMS -- цена операций, осколки разбора --> WALLET
     RUNS -- порт проверки снимка снаряжения --> ITEMS
+    CADDY --> BOOSTS
+    BOOSTS -- цена бустов, возврат --> WALLET
+    RUNS -- порт сверки бустов --> BOOSTS
+    BOOSTS --> PG
     ITEMS --> PG
     EXPORT --> PG
     QUEUE -- sendPhoto, sendDocument --> TGAPI

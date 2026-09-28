@@ -32,6 +32,7 @@ function run(patch: Partial<VerdictInput> = {}): VerdictInput {
     underpaidContinues: false,
     cheats: false,
     loadout: "none",
+    boosts: "none",
     ...patch,
   };
 }
@@ -143,5 +144,10 @@ describe("снаряжение в вердикте", () => {
     expect(judgeRun(run({ loadout: "stale" }), limits)).toEqual({ verdict: "suspicious", reasons: ["loadout_stale"] });
     expect(judgeRun(run({ loadout: "valid" }), limits)).toEqual({ verdict: "ok", reasons: [] });
     expect(judgeRun(run({ loadout: "none" }), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("буст, не купленный на забег, — отказ: без оплаты честный клиент его не применит", () => {
+    expect(judgeRun(run({ boosts: "unpaid" }), limits)).toEqual({ verdict: "rejected", reasons: ["boost_unpaid"] });
+    expect(judgeRun(run({ boosts: "paid" }), limits)).toEqual({ verdict: "ok", reasons: [] });
   });
 });

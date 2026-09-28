@@ -190,6 +190,7 @@ model Account {
   broadcasts       BroadcastDelivery[]
   items            Item[]
   itemEvents       ItemEvent[]
+  runBoosts        RunBoost[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1125,3 +1126,21 @@ model ItemEvent {
   @@map("item_event")
 }
 
+/// Бусты, купленные на забег (docs/35-stage4-plan.md §3.5, Р39). Одна строка
+/// на забег: повтор покупки по тому же `runId` ничего не спишет, а итог забега
+/// сверяет с ней заявленные бусты. Покупка — до старта, онлайн (Р17); забег,
+/// который так и не начался, получает бусты назад — `refundedAt`.
+model RunBoost {
+  runId      String    @id @map("run_id") @db.VarChar(64)
+  accountId  String    @map("account_id") @db.Uuid
+  boosts     String[]
+  /// сколько списано по ресурсам: { "coins": 270, "gems": 4 }
+  cost       Json
+  createdAt  DateTime  @map("created_at") @db.Timestamptz(3)
+  refundedAt DateTime? @map("refunded_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("run_boost")
+}

@@ -1,5 +1,5 @@
 import type { AppConfig } from "../../config/app-config.js";
-import type { LoadoutStatus } from "./run-loadouts.js";
+import type { BoostStatus, LoadoutStatus } from "./run-loadouts.js";
 import { MAX_WEAPONS } from "./run-rules.js";
 
 /**
@@ -17,7 +17,7 @@ import { MAX_WEAPONS } from "./run-rules.js";
  *   сервера (пауза в игровое время не идёт, поэтому честный забег всегда
  *   короче прошедшего); второй шанс, за который не заплачено, — честный
  *   клиент продолжает только после подтверждения оплаты сервером; снимок
- *   снаряжения, которого сервер не подписывал;
+ *   снаряжения, которого сервер не подписывал; буст, не купленный на забег;
  * - **подозрение (`suspicious`)** — статистика: слишком быстро убивал, слишком
  *   быстро качался, незнакомая сборка, продолжение оплачено по меньшему
  *   числу минут, чем прошло, снимок снаряжения устарел. Здесь бывают и
@@ -46,7 +46,9 @@ export type VerdictReason =
   /** снимок снаряжения не подписан сервером или чужой */
   | "loadout_forged"
   /** снимок настоящий, но надетое с тех пор изменилось */
-  | "loadout_stale";
+  | "loadout_stale"
+  /** буст не куплен на этот забег или возвращён */
+  | "boost_unpaid";
 
 export interface VerdictInput {
   survivalSec: number;
@@ -70,6 +72,8 @@ export interface VerdictInput {
   cheats: boolean;
   /** снаряжение забега против подписанного снимка (`run-loadouts.ts`) */
   loadout: LoadoutStatus;
+  /** заявленные бусты против покупок на забег */
+  boosts: BoostStatus;
 }
 
 export interface Verdict {
@@ -77,7 +81,7 @@ export interface Verdict {
   reasons: VerdictReason[];
 }
 
-const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue", "loadout_forged"]);
+const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue", "loadout_forged", "boost_unpaid"]);
 const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale"]);
 
 export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdict {
@@ -112,6 +116,7 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
 
   if (input.loadout === "forged") reasons.push("loadout_forged");
   if (input.loadout === "stale") reasons.push("loadout_stale");
+  if (input.boosts === "unpaid") reasons.push("boost_unpaid");
 
   return { verdict: verdictOf(reasons), reasons };
 }
