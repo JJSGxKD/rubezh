@@ -1,0 +1,14 @@
+{
+  "boost.fury.name": "Ярость",
+  "boost.fury.description": "Урон всего оружия выше на 15% весь забег.",
+  "boost.bulwark.name": "Крепость",
+  "boost.bulwark.description": "На 30 здоровья больше с первой секунды.",
+  "boost.lure.name": "Приманка",
+  "boost.lure.description": "Кристаллы и подборы тянутся к вам издалека: радиус подбора больше на 60%.",
+  "boost.aegis.name": "Щит",
+  "boost.aegis.description": "Первое попадание не наносит урона, а за ним полсекунды неуязвимости.",
+  "boost.head_start.name": "Фора",
+  "boost.head_start.description": "Забег с третьего уровня: два улучшения на выбор сразу.",
+  "boost.insight.name": "Чутьё",
+  "boost.insight.description": "Четыре карточки на каждом выборе улучшения вместо трёх."
+}

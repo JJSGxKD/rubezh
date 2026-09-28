@@ -250,6 +250,8 @@ export const useRun = create<RunStore>((set, get) => ({
       // начинается с надетым. Продолженный забег берёт набор из своего
       // снимка, а надетое с тех пор могло смениться.
       const signed = resume === undefined && loadouts !== null ? loadouts.equippedLoadout() : null;
+      // Бусты разработчика — только новому забегу: продолженный несёт свои.
+      const devBoosts = devRun && resume === undefined ? (useDevMode.getState().settings.start.boosts ?? []) : [];
       const created = engine.start({
         container: options.container,
         seed,
@@ -269,7 +271,9 @@ export const useRun = create<RunStore>((set, get) => ({
         // можно купить: иначе смерть ждала бы решения, которого не принять
         // (docs/34-stage3-plan.md, WP5).
         continues: devRun || canOfferPaidContinue(),
-        ...(signed === null || loadouts === null ? {} : { loadout: { modifiers: loadouts.knownModifiers(signed), boosts: [] } }),
+        ...(signed === null && devBoosts.length === 0
+          ? {}
+          : { loadout: { modifiers: signed === null || loadouts === null ? {} : loadouts.knownModifiers(signed), boosts: [...devBoosts] } }),
       });
 
       if (token !== startToken) {

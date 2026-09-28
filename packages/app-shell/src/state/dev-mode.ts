@@ -54,6 +54,11 @@ const settingsSchema = z.object({
     allWeapons: z.boolean(),
     allPassives: z.boolean(),
     minute: z.int().check(z.minimum(0), z.maximum(60)),
+    /**
+     * Бусты без оплаты — проверить их в бою до магазина. Необязательное:
+     * настройки прошлой сборки поля не знают и не должны сбрасываться целиком.
+     */
+    boosts: z.optional(z.array(z.string())),
   }),
 });
 
@@ -136,7 +141,9 @@ export function hasCheats(settings: DevSettings): boolean {
     settings.timeScale !== 1 ||
     start.allWeapons ||
     start.allPassives ||
-    start.minute > 0
+    start.minute > 0 ||
+    // Буст без оплаты — усиление, которого честный игрок так не получит.
+    (start.boosts ?? []).length > 0
   );
 }
 

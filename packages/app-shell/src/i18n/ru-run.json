@@ -74,5 +74,6 @@
   "run.status.fire": "Горишь",
   "run.status.cold": "Замедлен холодом",
   "run.status.lightning": "Шок: урон по тебе больше",
-  "run.status.poison": "Отравлен, слоёв: {stacks}"
+  "run.status.poison": "Отравлен, слоёв: {stacks}",
+  "run.shield": "Щит: погасит попаданий — {count}"
 }

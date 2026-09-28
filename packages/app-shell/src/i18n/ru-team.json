@@ -43,6 +43,8 @@
   "dev.start.allWeapons": "Всё оружие на максимуме",
   "dev.start.allPassives": "Все навыки на максимуме",
   "dev.start.minute": "Начать с минуты",
+  "dev.start.boosts": "Бусты",
+  "dev.start.boostsHint": "Без оплаты — забег пойдёт с читами. Не больше {max}, со следующего забега из меню.",
   "dev.world.levelUp": "Уровень +1",
   "dev.world.heal": "Вылечить",
   "dev.world.killAll": "Убить всех",
