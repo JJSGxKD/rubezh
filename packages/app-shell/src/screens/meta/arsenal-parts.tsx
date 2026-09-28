@@ -34,7 +34,8 @@ const RARITY_TONE: Record<string, Tone> = {
   rare: { tile: "bg-info/15 text-info ring-info/50", text: "text-info" },
   epic: { tile: "bg-passive/15 text-passive ring-passive/50", text: "text-passive" },
   legendary: { tile: "bg-elite/15 text-elite ring-elite/60", text: "text-elite" },
-  mythic: { tile: "bg-hp/15 text-hp ring-hp/60", text: "text-hp" },
+  // Красный — тон опасности: тон здоровья зелёный, и мифическая путалась бы с добротной.
+  mythic: { tile: "bg-danger/15 text-danger ring-danger/60", text: "text-danger" },
 };
 
 export function toneOf(rarity: string): Tone {
