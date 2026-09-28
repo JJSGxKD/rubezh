@@ -1,7 +1,8 @@
-import type { ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, RunLoadout, UpgradeOption } from "@bh/shared-types";
+import type { ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
+import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
@@ -112,8 +113,10 @@ export interface PlayerState {
   maxHp: number;
   attackCooldown: number;
   alive: boolean;
-  /** сколько тиков игрока ещё нельзя ранить — после второго шанса */
+  /** сколько тиков игрока ещё нельзя ранить — после второго шанса и сработавшего щита */
   invulnerableTicks: number;
+  /** сколько попаданий ещё погасит щит буста (`progression/boosts.ts`) */
+  shieldHits: number;
   /**
    * Состояния от стихийных атак врагов (`sim/player-status.ts`): таймеры в
    * секундах, урон по времени в секунду, источник — тип врага, наложившего
@@ -241,6 +244,10 @@ export interface World {
    * Не путать с `loadout` — оружием и пассивками, собранными в самом забеге.
    */
   runLoadout: RunLoadout;
+  /** бусты набора — эффекты, которые читает симуляция */
+  boosts: RunBoosts;
+  /** прибавки снаряжения и бустов вместе — от них считаются характеристики */
+  loadoutModifiers: Partial<Record<LoadoutStat, number>>;
   loadout: LoadoutState;
   progression: ProgressionState;
   difficulty: DifficultyState;
@@ -375,6 +382,9 @@ export function despawnProjectile(world: World, index: number): void {
   world.projectiles.aliveCount--;
 }
 
+/** Неуязвимость после сработавшего щита: полсекунды, за которые игрок выходит из толпы. */
+export const SHIELD_GRACE_TICKS = Math.round(0.5 * TICK_HZ);
+
 /**
  * Урон игроку с указанием источника. Источник нужен статистике: какой враг
  * убивает чаще всего — прямой вход геймдизайнера для баланса
@@ -385,6 +395,16 @@ export function despawnProjectile(world: World, index: number): void {
 export function damagePlayer(world: World, amount: number, sourceType: number): void {
   const player = world.player;
   if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
+
+  // Щит буста гасит попадание целиком — вместе со стихией: игрок должен
+  // понять, что его спасло, а не гадать, почему урон вышел меньше. Короткая
+  // неуязвимость после — иначе толпа вокруг сняла бы его в тот же тик.
+  if (player.shieldHits > 0) {
+    player.shieldHits--;
+    player.invulnerableTicks = Math.max(player.invulnerableTicks, SHIELD_GRACE_TICKS);
+    pushSimEvent(world.events, { kind: SIM_EVENT.shield, x: player.x, y: player.y, radius: amount, tick: world.stats.tick });
+    return;
+  }
 
   const source = sourceType >= 0 ? world.enemyTypes[sourceType] : undefined;
   const element = source?.element ?? ELEMENT_PHYSICAL;

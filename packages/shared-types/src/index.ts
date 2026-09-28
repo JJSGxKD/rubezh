@@ -742,6 +742,26 @@ export interface PassiveDef {
 }
 
 /**
+ * Буст — разовое усиление на один забег (docs/35-stage4-plan.md §3.5, Р39).
+ * Данные геймдизайнера (`core-game/src/content/boosts.ts`); цену и списание
+ * знает сервер, движок — только эффект. Эффекты складываются: буст может
+ * и прибавить параметр, и дать щит.
+ */
+export interface BoostDef {
+  id: string;
+  nameKey: string;
+  descriptionKey: string;
+  /** прибавки к параметрам на весь забег — та же шкала, что у снаряжения */
+  modifiers?: Partial<Record<LoadoutStat, number>>;
+  /** сколько попаданий гасит щит целиком */
+  shieldHits?: number;
+  /** на сколько уровней забег начинается выше первого — столько выборов сразу */
+  startLevels?: number;
+  /** сколько лишних карточек на каждом выборе улучшения */
+  extraOffers?: number;
+}
+
+/**
  * Что остаётся после убитого врага. Данные геймдизайнера
  * (`core-game/src/content/drops.ts`).
  */

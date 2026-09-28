@@ -71,6 +71,8 @@ export interface HudSnapshot {
   boss: BossSnapshot | null;
   /** состояния на игроке, от важнейшего для боя; пусто — чист */
   statuses: PlayerStatusSnapshot[];
+  /** сколько попаданий ещё погасит щит буста; 0 — щита нет */
+  shield: number;
 }
 
 /**
@@ -174,7 +176,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 6;
+export const RUN_SNAPSHOT_FORMAT = 7;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,

@@ -31,7 +31,7 @@
 | Л5 | ✅ **WP6, часть 2**: тон состояний, перескок молнии, стихии в контенте и гайдбуке (2а); стихийные атаки врагов, состояния и сопротивления игрока, HUD, «Жало», урон по стихиям в итогах (2б). Остался стресс-тест на устройстве | `packages/core-game`, `packages/app-shell/src/screens/{run,guide}` | — |
 | Л6 | **WP7** — снаряжение, арсенал, мета, генератор случайности: ✅ набор на забег в движке (часть 1), ✅ предметы на сервере — каталог, операции, добыча, подписанный снимок (часть 2); дальше — экран арсенала и снимок в забеге (часть 3) | `packages/core-game`, `backend/api/src/modules/items`, `packages/app-shell/src/screens/meta/arsenal*` | — |
 | Л7 | **WP5** — перепроверка забегов, `sim-worker` | `apps/sim-worker`, `backend/api/src/modules/runs` | редактор баланса в панели прогоняет симуляцию через него |
-| Л8 | WP8 бусты, WP10 магазин и подписка, WP11 второй шанс | `backend/api/src/modules/{shop,payments}`, `packages/app-shell/src/screens/meta/shop*` | — |
+| Л8 | WP8 бусты (✅ часть 1 — бусты в движке; дальше — покупка на сервере и выбор перед забегом), WP10 магазин и подписка, WP11 второй шанс | `backend/api/src/modules/{shop,payments}`, `packages/app-shell/src/screens/meta/shop*` | — |
 
 ### 1.2 Облачный агент
 

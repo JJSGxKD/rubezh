@@ -1,4 +1,5 @@
 import type {
+  BoostDef,
   ContinueDef,
   DifficultyDef,
   DropsDef,
@@ -15,6 +16,7 @@ import { ELEMENTS } from "@bh/shared-types";
 import { resolveEnemyTypes } from "../patterns/enemy-types";
 import { computePlayerStats, resolvePassiveTypes, type PlayerStatsBase } from "../progression/passives";
 import { EMPTY_LOADOUT, sanitizeLoadout } from "../progression/run-loadout";
+import { combineModifiers, findBoostProblems, resolveBoosts } from "../progression/boosts";
 import { addWeapon, createLoadout } from "../progression/loadout";
 import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
@@ -138,6 +140,10 @@ export interface CreateWorldOptions {
   startingWeaponId?: string;
   /** снаряжение и бусты на забег; по умолчанию — пустой набор */
   loadout?: RunLoadout;
+  /** что умеют бусты; без контента id бустов в наборе ничего не делают */
+  boosts?: readonly BoostDef[];
+  /** сколько бустов действует на забег; по умолчанию — все из набора */
+  maxBoostsPerRun?: number;
   config?: Partial<SimConfig>;
 }
 
@@ -204,8 +210,17 @@ export function createWorld(options: CreateWorldOptions): World {
   const startingWeapon = findStartingWeapon(weaponTypes, options.startingWeaponId);
   if (startingWeapon >= 0) addWeapon(loadout, startingWeapon);
 
+  const boostProblems = findBoostProblems(options.boosts ?? []);
+  if (boostProblems.length > 0) {
+    throw new Error(`Некорректные бусты:\n${boostProblems.join("\n")}`);
+  }
   const runLoadout = sanitizeLoadout(options.loadout ?? EMPTY_LOADOUT);
-  const playerStats = computePlayerStats(playerStatsBase, passiveTypes, new Map(), runLoadout.modifiers);
+  const boosts = resolveBoosts(options.boosts ?? [], runLoadout.boosts, options.maxBoostsPerRun ?? runLoadout.boosts.length);
+  const loadoutModifiers = combineModifiers(runLoadout.modifiers, boosts.modifiers);
+  const playerStats = computePlayerStats(playerStatsBase, passiveTypes, new Map(), loadoutModifiers);
+  // «Фора»: уровни сразу в очередь выбора — как если бы опыт набрался на
+  // первом тике. Порог следующего — уже от нового уровня.
+  const startLevel = 1 + boosts.startLevels;
 
   const cellSize = gridCellSize(scale);
   return {
@@ -223,14 +238,16 @@ export function createWorld(options: CreateWorldOptions): World {
     difficultyLevel,
     playerStats,
     runLoadout,
+    boosts,
+    loadoutModifiers,
     playerStatsBase,
     loadout,
     progression: {
-      level: 1,
+      level: startLevel,
       xp: 0,
-      xpToNext: xpForLevel(levelCurve, 1),
+      xpToNext: xpForLevel(levelCurve, startLevel),
       totalXp: 0,
-      pendingLevelUps: 0,
+      pendingLevelUps: boosts.startLevels,
       offers: [],
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора
@@ -259,6 +276,7 @@ export function createWorld(options: CreateWorldOptions): World {
       attackCooldown: 0,
       alive: true,
       invulnerableTicks: 0,
+      shieldHits: boosts.shieldHits,
       burnTimer: 0,
       burnDps: 0,
       burnSource: -1,

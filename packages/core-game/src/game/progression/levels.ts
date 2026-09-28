@@ -72,7 +72,7 @@ export function prepareOffers(world: World): UpgradeOption[] {
 
   const candidates = collectCandidates(world);
   progression.offers =
-    candidates.length === 0 ? [healOption()] : pickWeighted(world, candidates, OFFERS_PER_LEVEL);
+    candidates.length === 0 ? [healOption()] : pickWeighted(world, candidates, OFFERS_PER_LEVEL + world.boosts.extraOffers);
   return progression.offers;
 }
 
@@ -262,7 +262,7 @@ export function refreshPlayerStats(world: World): void {
     world.playerStatsBase,
     world.passiveTypes,
     passiveLevels(world.loadout),
-    world.runLoadout.modifiers,
+    world.loadoutModifiers,
   );
 
   const gained = world.playerStats.maxHp - previousMaxHp;
