@@ -14,8 +14,8 @@
  *   кадра, и вынести его в файл значит вернуть белый экран. Внедрение стиля —
  *   куда меньшая дыра, чем внедрение скрипта, а скрипты закрыты строго;
  * - **картинки** — свои, `data:` (иконка в разметке и служебные текстуры
- *   Phaser), `blob:` и аватары игроков с `t.me`: их адрес приходит в данных
- *   запуска. `blob:` сегодня не нужен никому — вся графика процедурная, — но
+ *   Phaser), `blob:` и аватары игроков: их адрес приходит в данных запуска
+ *   (`AVATAR_ORIGINS` ниже). `blob:` сегодня не нужен никому — вся графика процедурная, — но
  *   загрузчик Phaser грузит файл текстуры через `fetch` и отдаёт картинке
  *   адрес `blob:`. Без него первый же спрайт из `assets/` молча не
  *   нарисуется, и разбираться, почему, будет тот, кто о политике не знает;
@@ -65,8 +65,15 @@ export const GRASPIL_CONNECT_ORIGINS = ["https://wb.graspil.com"] as const;
 /** Кто вправе встраивать приложение во фрейм: Telegram Web, и больше никто. */
 export const FRAME_ANCESTORS = ["'self'", "https://web.telegram.org"] as const;
 
-/** Откуда приходят аватары: адрес фото в данных запуска Telegram. */
-export const AVATAR_ORIGINS = ["https://t.me"] as const;
+/**
+ * Откуда приходят аватары. Адрес фото в данных запуска Telegram —
+ * `t.me/i/userpic/…`, но это перенаправление на CDN Telegram
+ * (`cdnN.telesco.pe`), а политика проверяет и адрес после перенаправления:
+ * с одним `t.me` картинка молча не грузится, и игрок видит инициалы вместо
+ * фото. Номер сервера CDN меняется, поэтому — весь поддомен; `cdn-telegram.org`
+ * — второе имя того же CDN.
+ */
+export const AVATAR_ORIGINS = ["https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"] as const;
 
 export function contentSecurityPolicy({ mode, apiOrigin, graspil = false }: PolicyInput): string {
   const dev = mode === "dev";

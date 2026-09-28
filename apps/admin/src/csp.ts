@@ -15,8 +15,12 @@
 
 export type PolicyMode = "dev" | "build";
 
-/** Откуда приходят аватары игроков: адрес фото в данных запуска Telegram. */
-export const AVATAR_ORIGINS = ["https://t.me"] as const;
+/**
+ * Откуда приходят аватары игроков — тот же список, что у игры
+ * (`scripts/vite/content-security-policy.ts`, там же почему): `t.me` лишь
+ * перенаправляет на CDN Telegram, и без него фото не грузится.
+ */
+export const AVATAR_ORIGINS = ["https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"] as const;
 
 export function adminContentSecurityPolicy(mode: PolicyMode): string {
   const dev = mode === "dev";
