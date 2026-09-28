@@ -7,6 +7,7 @@ import { replayRecording } from "../src/game/diagnostics/replay";
 import { findBoostProblems, resolveBoosts } from "../src/game/progression/boosts";
 import { OFFERS_PER_LEVEL, prepareOffers } from "../src/game/progression/levels";
 import { LOADOUT_BOUNDS } from "../src/game/progression/run-loadout";
+import { buildRunResult } from "../src/game/run/run-result";
 import { captureWorld, restoreWorld } from "../src/game/run/snapshot";
 import { createRunWorld } from "../src/game/run-world";
 import { SIM_EVENT } from "../src/game/sim/events";
@@ -94,6 +95,14 @@ describe("бусты в бою", () => {
     const insightful = world(["head_start", "insight"]);
     expect(prepareOffers(plain)).toHaveLength(OFFERS_PER_LEVEL);
     expect(prepareOffers(insightful)).toHaveLength(OFFERS_PER_LEVEL + 1);
+  });
+});
+
+describe("бусты в итоге забега", () => {
+  it("итог перечисляет применённые бусты — сервер сверит их с покупкой; без бустов поля нет", () => {
+    const options = { runId: "run-x", seed: 1, outcome: "abandoned" as const, startingWeaponId: "spark", contentHash: "abc" };
+    expect(buildRunResult(world(["fury", "nope", "aegis"]), options).boosts).toEqual(["fury", "aegis"]);
+    expect("boosts" in buildRunResult(world([]), options)).toBe(false);
   });
 });
 

@@ -56,6 +56,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     peakEnemies: stats.peakEnemies,
     cheats: options.cheats === true,
     continues: continueSeconds(world),
+    ...(world.boosts.ids.length === 0 ? {} : { boosts: [...world.boosts.ids] }),
   };
 }
 
