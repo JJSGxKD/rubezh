@@ -62,8 +62,9 @@ describe("политика источников клиента", () => {
     expect(build.get("frame-ancestors")).toEqual(["'self'", "https://web.telegram.org"]);
   });
 
-  it("показывает аватары игроков с t.me — их адрес приходит в данных запуска", () => {
-    expect(build.get("img-src")).toContain("https://t.me");
+  it("показывает аватары игроков: t.me и CDN, на который он перенаправляет", () => {
+    // Политика проверяет и адрес после перенаправления: с одним t.me фото не грузится.
+    expect(build.get("img-src")).toEqual(expect.arrayContaining(["https://t.me", "https://*.telesco.pe"]));
   });
 
   it("пускает data: для картинок: иконка в разметке и служебные текстуры Phaser", () => {
