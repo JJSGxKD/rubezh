@@ -1,5 +1,5 @@
-import { INVENTORY_CAP, ITEM_RARITIES, type ItemRarity, type ItemSlot, type ItemStat } from "./item-catalog.js";
-import { itemPower, levelCap, mergeCost, rerollCost, salvageYield, statValue, upgradeCost, type ItemCost, type ItemShape } from "./item-rules.js";
+import { INVENTORY_CAP, ITEM_RARITIES, ITEM_STATS, type ItemRarity, type ItemSlot, type ItemStat } from "./item-catalog.js";
+import { itemPower, levelCap, loadoutOf, mergeCost, rerollCost, salvageYield, statValue, upgradeCost, type ItemCost, type ItemShape } from "./item-rules.js";
 import type { ItemRow } from "./items.repository.js";
 
 /**
@@ -29,6 +29,11 @@ export interface InventoryView {
   equipped: Partial<Record<ItemSlot, string>>;
   /** мощь надетого — её видно в профиле и рейтинге */
   power: number;
+  /**
+   * Что даёт всё надетое вместе — по параметрам, в порядке каталога: игрок
+   * видит итог, а не складывает свойства предметов в уме (`35-stage4-plan.md`, Р57).
+   */
+  totals: { stat: ItemStat; value: number }[];
   capacity: number;
   /** потолок уровня предметов у аккаунта сейчас */
   levelCap: number;
@@ -67,5 +72,7 @@ export function inventoryView(rows: readonly ItemRow[], accountLevel: number): I
     const cost = mergeCost(rarity);
     if (cost !== null) merge[rarity] = cost;
   }
-  return { items, equipped, power, capacity: INVENTORY_CAP, levelCap: levelCap(accountLevel), merge };
+  const modifiers = loadoutOf(rows.filter((row) => row.equipped));
+  const totals = ITEM_STATS.flatMap((stat) => (modifiers[stat] === undefined ? [] : [{ stat, value: modifiers[stat] }]));
+  return { items, equipped, power, totals, capacity: INVENTORY_CAP, levelCap: levelCap(accountLevel), merge };
 }

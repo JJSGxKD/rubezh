@@ -17,11 +17,11 @@ function answering(body: unknown): ApiRequest {
 }
 
 describe("кошелёк клиента", () => {
-  it("показывает монеты и самоцветы и пропускает ресурсы, которых клиент не знает", async () => {
-    const api = createWalletApi(answering({ balances: { coins: 120, gems: 7, shard_rare: 3 } }));
+  it("показывает монеты, самоцветы и осколки и пропускает ресурсы, которых клиент не знает", async () => {
+    const api = createWalletApi(answering({ balances: { coins: 120, gems: 7, shard_rare: 3, shard_epic: 1, tickets: 9 } }));
 
     expect(await loadWallet(api)).toBeNull();
-    expect(useWallet.getState().balances).toEqual({ coins: 120, gems: 7 });
+    expect(useWallet.getState().balances).toEqual({ coins: 120, gems: 7, shards: { rare: 3, epic: 1 } });
   });
 
   it("неудача оставляет показанный баланс и называет причину", async () => {

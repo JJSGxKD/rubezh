@@ -8,6 +8,8 @@ import { create } from "zustand";
 export interface WalletBalances {
   coins: number;
   gems: number;
+  /** осколки по редкостям; нет ключа — ноль или сервер старше осколков */
+  shards?: Partial<Record<string, number>>;
 }
 
 interface WalletState {

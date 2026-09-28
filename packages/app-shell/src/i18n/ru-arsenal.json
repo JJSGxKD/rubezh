@@ -72,5 +72,6 @@
   "item.stat.damageCold": "Урон холодом",
   "item.stat.damageLightning": "Урон молнией",
   "item.stat.damagePoison": "Урон ядом",
-  "item.stat.statusChance": "Шанс состояния"
+  "item.stat.statusChance": "Шанс состояния",
+  "arsenal.totals": "Итог надетого"
 }
