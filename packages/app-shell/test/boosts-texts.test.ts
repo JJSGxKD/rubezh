@@ -14,6 +14,7 @@ describe("тексты бустов", () => {
 
   it("в словаре нет текстов бустов, которых нет в контенте", () => {
     const known = new Set(BOOSTS.flatMap((boost) => [boost.nameKey, boost.descriptionKey]));
-    expect(Object.keys(boosts).filter((key) => !known.has(key))).toEqual([]);
+    // `boost.<id>.*` — тексты бустов; `boosts.*` — тексты экрана выбора.
+    expect(Object.keys(boosts).filter((key) => key.startsWith("boost.") && !known.has(key))).toEqual([]);
   });
 });

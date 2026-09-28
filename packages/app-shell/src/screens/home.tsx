@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   BookOpen,
   CalendarCheck,
@@ -36,6 +36,10 @@ import { hasCheats, useDevMode } from "../state/dev-mode";
 import { useNavigation } from "../state/navigation";
 import { usePlaytestAccess } from "../state/playtest";
 import { DevSheetLazy } from "./run/dev-sheet-lazy";
+import { BoostPickerLazy } from "./boost-picker-lazy";
+import type { BoostCatalog } from "../state/boosts-api";
+import { createId } from "../state/ids";
+import { useShell } from "../state/shell";
 import { preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine, useRun } from "../state/run";
 import { useSavedRun, type SavedRun } from "../state/run-save";
@@ -420,6 +424,38 @@ export function WeaponScreen(): ReactNode {
   const devArmed = useDevMode((state) => state.armed) && access.devMode;
   const devSettings = useDevMode((state) => state.settings);
   const [devOpen, setDevOpen] = useState(false);
+  // Бусты — только с входом: покупка идёт на сервер (Р17).
+  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
+  const [boosts, setBoosts] = useState<string[]>([]);
+  const [catalog, setCatalog] = useState<BoostCatalog | null>(null);
+  const [buying, setBuying] = useState(false);
+  const [buyError, setBuyError] = useState<string | null>(null);
+  const onCatalog = useCallback((next: BoostCatalog | null) => setCatalog(next), []);
+
+  const start = async (): Promise<void> => {
+    // Запоминаем даже выбор по умолчанию: забег должен стартовать с
+    // тем оружием, которое подсвечено на экране.
+    meta.rememberWeapon(selected);
+    if (boosts.length === 0 || catalog === null) {
+      useRun.getState().intend({ kind: "new" });
+      navigation.replace("run");
+      return;
+    }
+    // Бусты покупаются на забег до старта: id заводит оболочка, и итог
+    // придёт с ним же. Не купилось — игрок остаётся здесь и видит причину.
+    setBuying(true);
+    setBuyError(null);
+    const runId = createId();
+    const { buyBoosts } = await import("../state/boosts-api");
+    const bought = await buyBoosts(runId, boosts, catalog);
+    setBuying(false);
+    if (!bought.ok) {
+      setBuyError(bought.code === "insufficient_funds" ? "boosts.error.funds" : bought.failure === "offline" ? "boosts.error.offline" : "boosts.error.generic");
+      return;
+    }
+    useRun.getState().intend({ kind: "new", boosts: { runId: bought.runId, ids: bought.boosts } });
+    navigation.replace("run");
+  };
 
   return (
     <>
@@ -427,18 +463,7 @@ export function WeaponScreen(): ReactNode {
       title={devArmed ? t("mode.dev") : t("weapon.select.screen")}
       onBack={() => navigation.pop()}
       footer={
-        <Button
-          size="l"
-          block
-          glow
-          onClick={() => {
-            // Запоминаем даже выбор по умолчанию: забег должен стартовать с
-            // тем оружием, которое подсвечено на экране.
-            meta.rememberWeapon(selected);
-            useRun.getState().intend({ kind: "new" });
-            navigation.replace("run");
-          }}
-        >
+        <Button size="l" block glow loading={buying} disabled={buying} onClick={() => void start()}>
           {t("weapon.select.start")}
         </Button>
       }
@@ -496,6 +521,7 @@ export function WeaponScreen(): ReactNode {
             </Card>
           ))}
         </div>
+        {withAccount ? <BoostPickerLazy selected={boosts} onChange={setBoosts} onCatalog={onCatalog} error={buyError} /> : null}
       </ContentColumn>
     </Screen>
     {devOpen ? <DevSheetLazy inRun={false} onClose={() => setDevOpen(false)} /> : null}
