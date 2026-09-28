@@ -1,5 +1,6 @@
 import type { DifficultyId, MapDef, RunLoadout } from "@bh/shared-types";
 import { findDifficulty, DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
+import { BOOSTS, MAX_BOOSTS_PER_RUN } from "../content/boosts";
 import { CONTINUE } from "../content/continue";
 import { DROPS } from "../content/drops";
 import { ENEMIES } from "../content/enemies";
@@ -48,6 +49,8 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     loadoutLimits: LOADOUT_LIMITS,
     drops: DROPS,
     continueRules: CONTINUE,
+    boosts: BOOSTS,
+    maxBoostsPerRun: MAX_BOOSTS_PER_RUN,
     map,
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined ? {} : { startingWeaponId: options.startingWeaponId }),

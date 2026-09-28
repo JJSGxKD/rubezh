@@ -440,6 +440,12 @@ export class WorldRenderer {
         this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
+      if (kind === SIM_EVENT.shield) {
+        // Щит принял удар: кольцо от игрока вместо вспышки урона — видно, что
+        // спасло, и что щита больше нет.
+        this.startBlast(events.x[slot], events.y[slot], SHIELD_RING_UNITS * scale, events.tick[slot], kind);
+        continue;
+      }
       if (kind === SIM_EVENT.magnet) {
         // Магнит: кольцо расходится от игрока — кристаллы сейчас полетят к нему.
         this.startBlast(events.x[slot], events.y[slot], MAGNET_RING_UNITS * scale, events.tick[slot], kind);
@@ -565,7 +571,10 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.heal]: "bh-heal",
   [SIM_EVENT.magnet]: "bh-magnet",
   [SIM_EVENT.dynamite]: "bh-dynamite",
+  [SIM_EVENT.shield]: "bh-magnet",
 };
+/** Радиус кольца сработавшего щита, игровые единицы. */
+const SHIELD_RING_UNITS = 60;
 /** Радиус кольца магнита при подборе, игровые единицы. */
 const MAGNET_RING_UNITS = 120;
 /** Волны магнита и динамита — крупной текстурой и дольше обычного взрыва. */

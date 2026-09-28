@@ -672,6 +672,7 @@ export class MainScene extends Phaser.Scene {
       radar: buildRadarSnapshot(world),
       boss: buildBossSnapshot(world),
       statuses: buildPlayerStatuses(world),
+      shield: world.player.shieldHits,
     };
     this.sceneData.bus.emit("hud", snapshot);
   }

@@ -21,6 +21,7 @@ export * from "./content/balance-targets";
 export * from "./content/difficulty";
 export * from "./content/drops";
 export * from "./content/stages";
+export * from "./content/boosts";
 export * from "./game/bench";
 
 // Как выглядит мир забега — без Phaser: гайдбук оболочки рисует врагов и

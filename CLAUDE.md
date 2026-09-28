@@ -402,6 +402,28 @@ IEEE 754), степень — умножением в цикле, направл
 (`packages/core-game/src/game/weapons/`), как и новый паттерн врага. Новое
 оружие на существующем поведении и любые числа — данные.
 
+## Как добавить буст
+
+Буст — разовое усиление на один забег (`docs/35-stage4-plan.md` §3.5, Р39).
+Эффект — данные в `packages/core-game/src/content/boosts.ts`, цена и списание —
+на сервере. Эффекты складываются, у буста их может быть несколько:
+
+```ts
+// прибавка к параметрам на весь забег — та же шкала, что у снаряжения
+{ id: "fury", nameKey: "boost.fury.name", descriptionKey: "boost.fury.description", modifiers: { damage: 0.15 } }
+// щит на попадания, старт с уровня, лишняя карточка на выборе улучшения
+{ id: "aegis", nameKey: "…", descriptionKey: "…", shieldHits: 1 }
+{ id: "head_start", nameKey: "…", descriptionKey: "…", startLevels: 2 }
+{ id: "insight", nameKey: "…", descriptionKey: "…", extraOffers: 1 }
+```
+
+Прибавки вместе со снаряжением упираются в пределы движка (`LOADOUT_BOUNDS`),
+буст без эффекта и повтор id ловит тест контента. Сколько бустов на забег —
+`MAX_BOOSTS_PER_RUN` там же. Тексты — ключи в
+`packages/app-shell/src/i18n/ru-boosts.json`. Новый **вид** эффекта — код участника
+1 (`game/progression/boosts.ts`), новый буст на готовых эффектах и любые числа
+— данные.
+
 ## Стиль кода
 
 Полный свод — `docs/15-engineering-standards.md` §5. Здесь — то, что нарушают

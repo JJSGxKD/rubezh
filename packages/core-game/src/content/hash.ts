@@ -1,3 +1,4 @@
+import { BOOSTS, MAX_BOOSTS_PER_RUN } from "./boosts";
 import { CONTINUE } from "./continue";
 import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
@@ -39,6 +40,8 @@ function hashContent(): string {
     DROPS,
     DIFFICULTIES,
     CONTINUE,
+    BOOSTS,
+    MAX_BOOSTS_PER_RUN,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.
