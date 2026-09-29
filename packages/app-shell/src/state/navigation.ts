@@ -19,6 +19,7 @@ export type ScreenId =
   | "rating"
   | "friends"
   | "profile"
+  | "level"
   | "tasks"
   | "daily"
   | "wheel"

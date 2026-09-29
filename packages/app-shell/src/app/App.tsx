@@ -30,6 +30,7 @@ import {
   GalleryScreen,
   FeedbackScreen,
   GuideScreen,
+  LevelScreen,
   ProfileScreen,
   RatingScreen,
   RunScreen,
@@ -167,6 +168,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <FriendsScreen />;
     case "profile":
       return <ProfileScreen />;
+    case "level":
+      return <LevelScreen />;
     case "tasks":
       return <TasksScreen />;
     case "daily":

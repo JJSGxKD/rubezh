@@ -8,6 +8,7 @@ import "../../i18n/run";
 // первой загрузкой.
 import "../../i18n/account";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
+import { unlockLabel, unlocksGainedBetween } from "../../state/level-unlocks";
 import { useProgress, type RunRewardView } from "../../state/progress";
 import { awaitReward } from "../../state/progress-api";
 import { useRuns } from "../../state/runs";
@@ -224,6 +225,8 @@ function RewardRow(props: { reward: RunRewardView }): ReactNode {
     return <p className="mt-3 text-xs text-text-muted">{hasTranslation(key) ? t(key) : t("run.reward.none.other")}</p>;
   }
   const levelUp = reward.levelAfter > reward.levelBefore;
+  // Что открыл новый уровень (Р42): следующий забег пойдёт уже с этим.
+  const unlocked = levelUp ? unlocksGainedBetween(reward.levelBefore, reward.levelAfter) : [];
   return (
     <div className="mt-3 animate-rise-in">
       <div className="surface-sunken flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg px-4 py-3">
@@ -238,6 +241,9 @@ function RewardRow(props: { reward: RunRewardView }): ReactNode {
           </span>
         ) : null}
       </div>
+      {unlocked.length === 0 ? null : (
+        <p className="mt-1.5 animate-rise-in text-sm text-text">{t("run.reward.unlocked", { list: unlocked.map(unlockLabel).join(", ") })}</p>
+      )}
       {reward.coinsCapped ? <p className="mt-1 text-xs text-text-muted">{t("run.reward.capped")}</p> : null}
     </div>
   );
