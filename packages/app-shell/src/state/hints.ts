@@ -52,6 +52,8 @@ export interface HintsStore {
   markSeen(id: HintId): void;
   /** показать подсказки заново — из настроек */
   reset(): void;
+  /** усвоенное на другом устройстве аккаунта (`account-settings.ts`) */
+  applyAccount(seen: HintId[]): void;
 }
 
 export const useHints = create<HintsStore>((set, get) => ({
@@ -66,13 +68,25 @@ export const useHints = create<HintsStore>((set, get) => ({
     const seen = [...get().seen, id];
     set({ seen });
     value().write({ seen });
+    noteSeen(seen);
   },
 
   reset(): void {
     set({ seen: [] });
     value().write({ seen: [] });
+    noteSeen([]);
+  },
+
+  applyAccount(seen): void {
+    set({ seen });
+    value().write({ seen });
   },
 }));
+
+/** Усвоенное идёт за аккаунтом: подсказка, пройденная на ПК, не всплывёт на телефоне. */
+function noteSeen(seen: readonly HintId[]): void {
+  void import("./account-settings").then(({ noteAccountSetting }) => noteAccountSetting("hints.seen", [...seen]));
+}
 
 function value(): ReturnType<typeof createPersistedValue<{ seen: HintId[] }>> {
   return createPersistedValue<{ seen: HintId[] }>({

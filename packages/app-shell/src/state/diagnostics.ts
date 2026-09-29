@@ -37,6 +37,8 @@ export interface DiagnosticsState {
 export interface DiagnosticsStore extends DiagnosticsState {
   hydrate(defaultEnabled: boolean): void;
   toggle(key: keyof DiagnosticsState): void;
+  /** значение с другого устройства аккаунта (`account-settings.ts`) — не выбор игрока здесь */
+  applyAccount(values: Partial<Pick<DiagnosticsState, "enabled" | "recordRuns">>): void;
 }
 
 export const useDiagnostics = create<DiagnosticsStore>((set, get) => ({
@@ -59,18 +61,29 @@ export const useDiagnostics = create<DiagnosticsStore>((set, get) => ({
     else if (key === "recordRuns") set({ recordRuns: next });
     else set({ fpsOverlay: next });
 
-    const state = get();
-    value().write({
-      enabled: state.enabled,
-      recordRuns: state.recordRuns,
-      fpsOverlay: state.fpsOverlay,
-    });
-    track(key === "enabled" ? "diagnostics_mode_changed" : "settings_changed", {
-      setting: key,
-      value: next,
-    });
+    save({ [key]: next });
+    // Участие в тестировании и запись забегов — за аккаунтом, счётчик кадров
+    // — у устройства: на слабом телефоне он лишний, даже если на ПК включён.
+    if (key === "enabled") track("diagnostics_mode_changed", { setting: key, value: next });
+    else track("settings_changed", { setting: key, value: next, scope: key === "fpsOverlay" ? "device" : "account" });
+    if (key !== "fpsOverlay") {
+      void import("./account-settings").then(({ noteAccountSetting }) => noteAccountSetting(key === "enabled" ? "testing.enabled" : "testing.recordRuns", next));
+    }
+  },
+
+  applyAccount(values): void {
+    set(values);
+    save(values);
   },
 }));
+
+/**
+ * Сохранить только тронутое: нетронутый ключ остаётся `null` и следует
+ * умолчанию сборки, даже когда игрок переключил соседний.
+ */
+function save(patch: Partial<DiagnosticsState>): void {
+  value().write({ ...value().read(), ...patch });
+}
 
 function value(): ReturnType<typeof createPersistedValue<StoredDiagnostics>> {
   return createPersistedValue<StoredDiagnostics>({

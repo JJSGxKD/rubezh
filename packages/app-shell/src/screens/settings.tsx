@@ -65,7 +65,10 @@ export function SettingsScreen(): ReactNode {
           </ListGroup>
         </div>
 
-        <SectionTitle>{t("settings.graphics")}</SectionTitle>
+        {/* Как читать бой — за аккаунтом (Р56): выбранное здесь придёт и на
+            другие устройства. Эффекты оружия — у устройства: их снимают,
+            когда телефон не тянет. */}
+        <SectionTitle>{t("settings.combat")}</SectionTitle>
         <ListGroup>
           <ListItem
             title={t("settings.graphics.telegraphs")}
@@ -73,18 +76,25 @@ export function SettingsScreen(): ReactNode {
             toggle={{ checked: graphics.telegraphs, onChange: () => graphics.toggle("telegraphs") }}
           />
           <ListItem
-            title={t("settings.graphics.weaponEffects")}
-            hint={t("settings.graphics.weaponEffects.hint")}
-            toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
-          />
-          <ListItem
             title={t("settings.graphics.damageNumbers")}
             toggle={{ checked: graphics.damageNumbers, onChange: () => graphics.toggle("damageNumbers") }}
           />
         </ListGroup>
         {/* Предупреждение обязательно: снятый телеграф — не «чуть проще
-            картинка», а другой бой. */}
+            картинка», а другой бой. Совет про слабое устройство — у графики:
+            выбранное здесь уходит на все устройства. */}
         <p className="mt-2 text-xs text-text-muted">{t("settings.graphics.warning")}</p>
+        <p className="mt-1 text-xs text-text-muted">{t("settings.scope.account")}</p>
+
+        <SectionTitle>{t("settings.graphics")}</SectionTitle>
+        <ListGroup>
+          <ListItem
+            title={t("settings.graphics.weaponEffects")}
+            hint={t("settings.graphics.weaponEffects.hint")}
+            toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
+          />
+        </ListGroup>
+        <p className="mt-2 text-xs text-text-muted">{t("settings.scope.device")}</p>
 
         <SectionTitle>{t("settings.language")}</SectionTitle>
         <ListGroup>

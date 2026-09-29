@@ -28,7 +28,18 @@ export const DEFAULT_GRAPHICS: GraphicsSettings = { telegraphs: true, weaponEffe
 export interface GraphicsStore extends GraphicsSettings {
   hydrate(): void;
   toggle(key: GraphicsKey): void;
+  /** выбранное на другом устройстве аккаунта (`account-settings.ts`) */
+  applyAccount(values: Partial<Pick<GraphicsSettings, "telegraphs" | "damageNumbers">>): void;
 }
+
+/**
+ * Как читать бой — за аккаунтом: телеграфы и цифры урона игрок выбирает для
+ * себя. Эффекты оружия — у устройства: их выключают, когда телефон не тянет.
+ */
+const ACCOUNT_KEYS: Partial<Record<GraphicsKey, "combat.telegraphs" | "combat.damageNumbers">> = {
+  telegraphs: "combat.telegraphs",
+  damageNumbers: "combat.damageNumbers",
+};
 
 export const useGraphics = create<GraphicsStore>((set, get) => ({
   ...DEFAULT_GRAPHICS,
@@ -40,11 +51,21 @@ export const useGraphics = create<GraphicsStore>((set, get) => ({
   toggle(key): void {
     const next = !get()[key];
     set({ [key]: next } as Pick<GraphicsSettings, GraphicsKey>);
-    const state = get();
-    value().write({ telegraphs: state.telegraphs, weaponEffects: state.weaponEffects, damageNumbers: state.damageNumbers });
-    track("settings_changed", { setting: `graphics.${key}`, value: next });
+    persist(get());
+    const accountKey = ACCOUNT_KEYS[key];
+    track("settings_changed", { setting: `graphics.${key}`, value: next, scope: accountKey === undefined ? "device" : "account" });
+    if (accountKey !== undefined) void import("./account-settings").then(({ noteAccountSetting }) => noteAccountSetting(accountKey, next));
+  },
+
+  applyAccount(values): void {
+    set(values);
+    persist(get());
   },
 }));
+
+function persist(state: GraphicsSettings): void {
+  value().write({ telegraphs: state.telegraphs, weaponEffects: state.weaponEffects, damageNumbers: state.damageNumbers });
+}
 
 /** Что передать движку на старте забега. */
 export function runGraphics(): RunGraphicsOptions {
