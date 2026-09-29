@@ -105,8 +105,8 @@ function refundText(data: Record<string, unknown>): string {
   const coins = typeof data.coins === "number" ? data.coins : 0;
   const gems = typeof data.gems === "number" ? data.gems : 0;
   const returned = [
-    coins > 0 ? t("notification.boosts_refunded.coins", { amount: formatNumber(coins) }) : null,
-    gems > 0 ? t("notification.boosts_refunded.gems", { amount: formatNumber(gems) }) : null,
+    coins > 0 ? t("notification.boosts_refunded.coins", { amount: formatNumber(coins), n: coins }) : null,
+    gems > 0 ? t("notification.boosts_refunded.gems", { amount: formatNumber(gems), n: gems }) : null,
   ].filter((part): part is string => part !== null);
   return returned.length === 0 ? t("notification.boosts_refunded") : t("notification.boosts_refunded.with", { returned: returned.join(t("notification.and")) });
 }

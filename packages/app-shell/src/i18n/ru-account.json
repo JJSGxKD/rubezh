@@ -52,13 +52,13 @@
   "notifications.when.minutes": "{count} {count, plural, one {минуту} few {минуты} many {минут} other {минуты}} назад",
   "notifications.when.hours": "{count} {count, plural, one {час} few {часа} many {часов} other {часа}} назад",
   "notification.friend_request": "{name} зовёт вас в друзья",
-  "notification.friend_gift": "{name} прислал подарок — заберите его у друзей",
+  "notification.friend_gift": "{name} дарит вам подарок — заберите его у друзей",
   "notification.rare_loot": "Редкая добыча с забега — загляните в арсенал",
   "notification.rare_loot.salvaged": "Редкая добыча с забега, но инвентарь был полон — предмет разобран на осколки",
   "notification.boosts_refunded": "Бусты вернулись: забег так и не начался",
   "notification.boosts_refunded.with": "Бусты вернулись: забег так и не начался. Возвращено {returned}",
-  "notification.boosts_refunded.coins": "{amount} монет",
-  "notification.boosts_refunded.gems": "{amount} самоцветов",
+  "notification.boosts_refunded.coins": "{amount} {n, plural, one {монета} few {монеты} many {монет} other {монеты}}",
+  "notification.boosts_refunded.gems": "{amount} {n, plural, one {самоцвет} few {самоцвета} many {самоцветов} other {самоцвета}}",
   "notification.and": " и ",
   "notification.team_message": "Сообщение команды"
 }
