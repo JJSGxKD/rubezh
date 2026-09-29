@@ -7,6 +7,7 @@ import { AuthService } from "../auth/auth.service.js";
 import { FUNNEL_REPOSITORY, type FunnelMilestones, type FunnelRepository } from "../funnel/funnel.repository.js";
 import type { MessagingState } from "../messaging/messaging.repository.js";
 import { MessagingService } from "../messaging/messaging.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import type { StoredPurchase } from "../payments/purchase-types.js";
 import { PURCHASES_REPOSITORY, type PurchasesRepository } from "../payments/purchases.repository.js";
 import { ProgressService, type ProgressView } from "../progress/progress.service.js";
@@ -21,7 +22,7 @@ import { AdminSessionService } from "./admin-session.service.js";
 
 /**
  * Игроки в панели (docs/29-admin-panel.md §2, §3.3): поиск, карточка,
- * блокировка. Сервис собирает карточку из чужих модулей и ничего не знает о
+ * блокировка, сообщение команды. Сервис собирает карточку из чужих модулей и ничего не знает о
  * базе: у каждого раздела карточки свой владелец, и запрос к его таблицам —
  * его метод (docs/36-parallel-work.md §2).
  *
@@ -63,6 +64,11 @@ export interface BanResult {
   revokedSessions: number;
 }
 
+export interface MessageResult {
+  /** это сообщение уже отправлено той же кнопкой — второй строки в ленте нет */
+  duplicate: boolean;
+}
+
 @Injectable()
 export class AdminPlayersService {
   constructor(
@@ -77,6 +83,7 @@ export class AdminPlayersService {
     private readonly wallet: WalletService,
     private readonly auth: AuthService,
     private readonly adminSessions: AdminSessionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async search(actor: AccountRef, query: string, limit: number): Promise<PlayerRow[]> {
@@ -162,6 +169,21 @@ export class AdminPlayersService {
       await this.roles.audit({ actorAccountId: actor.accountId, action: "players.unban", target: accountId, before: banState(before), after: banState(account) });
     }
     return { account: rowOf(account, true), revokedSessions: 0 };
+  }
+
+  /**
+   * Сообщение команды в ленту игрока (docs/35-stage4-plan.md Р51). Ключ
+   * задаёт кнопка панели: повтор после обрыва сети ни второй строки в ленте,
+   * ни второй записи в журнале не заводит. Текст уходит в журнал целиком —
+   * это слова команды, а не данные игрока.
+   */
+  async message(actor: AccountRef, accountId: string, text: string, idempotencyKey: string, now = new Date()): Promise<MessageResult> {
+    await this.roles.require(actor, "players.message");
+    if ((await this.accounts.byId(accountId)) === null) throw new AccountNotFoundError();
+
+    const created = await this.notifications.deliver({ accountId, kind: "team_message", payload: { text }, dedupeKey: `team:${idempotencyKey}`, at: now });
+    if (created) await this.roles.audit({ actorAccountId: actor.accountId, action: "players.message", target: accountId, after: { text } });
+    return { duplicate: !created };
   }
 }
 

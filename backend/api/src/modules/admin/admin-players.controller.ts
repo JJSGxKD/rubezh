@@ -7,9 +7,9 @@ import { PermissionGuard } from "../roles/permission.guard.js";
 import { WalletService, type AdjustResult } from "../wallet/wallet.service.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
-import { AdminPlayersService, type BanResult, type PlayerCard, type PlayerRow } from "./admin-players.service.js";
+import { AdminPlayersService, type BanResult, type MessageResult, type PlayerCard, type PlayerRow } from "./admin-players.service.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
-import { accountIdSchema, adminWalletAdjustSchema, banSchema, playerSearchSchema } from "./dto/admin.dto.js";
+import { accountIdSchema, adminWalletAdjustSchema, banSchema, playerMessageSchema, playerSearchSchema } from "./dto/admin.dto.js";
 
 /**
  * Игроки в панели (docs/29-admin-panel.md §2). Логики нет — разбор границы,
@@ -52,6 +52,15 @@ export class AdminPlayersController {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
     return { data: await this.players.unban(actor, parseAccountId(accountId)) };
+  }
+
+  @Post(":accountId/message")
+  @RequirePermission("players.message")
+  async message(@Req() request: unknown, @Param("accountId") accountId: string, @Body() body: unknown): Promise<{ data: MessageResult }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId);
+    const { text, idempotencyKey } = parse(() => playerMessageSchema.parse(body), "Сообщение — от 3 до 500 символов");
+    return { data: await this.players.message(actor, parseAccountId(accountId), text, idempotencyKey) };
   }
 
   /** Ручное начисление и списание — право, причина, ключ кнопки и аудит проверяет сам кошелёк. */

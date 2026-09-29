@@ -13,6 +13,9 @@ import { z } from "zod";
 const name = z.string().min(1).max(64);
 const id = z.string().min(1).max(64);
 
+/** Потолок сообщения команды: строка ленты, а не письмо. */
+export const TEAM_MESSAGE_MAX = 500;
+
 export const NOTIFICATION_KINDS = {
   /** заявка в друзья */
   friend_request: z.object({ fromAccountId: z.string().uuid(), fromName: name }),
@@ -22,6 +25,8 @@ export const NOTIFICATION_KINDS = {
   rare_loot: z.object({ itemId: z.string().uuid(), slot: id, rarity: id, salvaged: z.boolean() }),
   /** бусты вернулись: забег так и не начался */
   boosts_refunded: z.object({ runId: id, boosts: z.array(id).max(8), coins: z.number().int().nonnegative(), gems: z.number().int().nonnegative() }),
+  /** сообщение команды из панели — простой текст: разметка из панели ломает строку ленты */
+  team_message: z.object({ text: z.string().min(1).max(TEAM_MESSAGE_MAX) }),
 } as const;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;
