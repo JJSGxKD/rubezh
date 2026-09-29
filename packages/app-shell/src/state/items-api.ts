@@ -1,6 +1,7 @@
 import type { SignedLoadout } from "@bh/shared-types";
 import { z } from "zod/mini";
 import { apiRequest, type ApiFailure, type ApiRequest, type ApiResult } from "./api-request";
+import { useBadges } from "./badges";
 import { useItems } from "./items";
 import { saveEquippedLoadout, signedLoadoutSchema } from "./run-loadouts";
 import { useShell } from "./shell";
@@ -31,6 +32,8 @@ const itemSchema = z.object({
   upgrade: z.nullable(costSchema),
   reroll: z.nullable(costSchema),
   salvage: z.number(),
+  // Необязательное: сервер старше знаков меню его не пришлёт — тогда нового нет.
+  isNew: z.optional(z.boolean()),
 });
 
 const inventorySchema = z.object({
@@ -45,6 +48,7 @@ const inventorySchema = z.object({
 });
 
 const salvageSchema = z.object({ shards: z.number(), resource: z.string() });
+const seenSchema = z.object({ marked: z.number() });
 
 export type ItemCost = z.infer<typeof costSchema>;
 export type ItemView = z.infer<typeof itemSchema>;
@@ -59,6 +63,7 @@ export interface ItemsApi {
   reroll(itemId: string, index: number, idempotencyKey: string): Promise<ApiResult<ItemView>>;
   salvage(itemId: string, idempotencyKey: string): Promise<ApiResult<z.infer<typeof salvageSchema>>>;
   merge(itemIds: readonly string[], idempotencyKey: string): Promise<ApiResult<ItemView>>;
+  seen(itemIds: readonly string[]): Promise<ApiResult<{ marked: number }>>;
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
@@ -74,6 +79,7 @@ export function createItemsApi(request: ApiRequest = apiRequest): ItemsApi {
     reroll: (itemId, index, idempotencyKey) => post(`${item(itemId)}/reroll`, itemSchema, { idempotencyKey, index }),
     salvage: (itemId, idempotencyKey) => post(`${item(itemId)}/salvage`, salvageSchema, { idempotencyKey }),
     merge: (itemIds, idempotencyKey) => post("/merge", itemSchema, { idempotencyKey, itemIds }),
+    seen: (itemIds) => post("/seen", seenSchema, { itemIds }),
   };
 }
 
@@ -99,6 +105,23 @@ export async function refreshLoadout(api?: ItemsApi): Promise<ApiFailure | null>
   if (!response.ok) return response.failure;
   saveEquippedLoadout(response.data);
   return null;
+}
+
+/**
+ * Лист предмета открыт — он больше не новый (Р50). Отметка — сразу у себя:
+ * знак на арсенале гаснет без ожидания сети, а сервер узнаёт следом. Не
+ * дошло — предмет останется новым до следующего открытия, беды в этом нет.
+ */
+export async function markItemsSeen(itemIds: readonly string[], api?: ItemsApi): Promise<void> {
+  if (disabled(api) || itemIds.length === 0) return;
+  const ids = new Set(itemIds);
+  const inventory = useItems.getState().inventory;
+  if (inventory !== null) {
+    const fresh = inventory.items.filter((item) => ids.has(item.itemId) && item.isNew === true).length;
+    useItems.setState({ inventory: { ...inventory, items: inventory.items.map((item) => (ids.has(item.itemId) ? { ...item, isNew: false } : item)) } });
+    if (fresh > 0) useBadges.setState((state) => ({ arsenal: Math.max(0, state.arsenal - fresh) }));
+  }
+  await (api ?? createItemsApi()).seen([...ids]);
 }
 
 export type ItemAction =

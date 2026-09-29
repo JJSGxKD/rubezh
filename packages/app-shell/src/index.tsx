@@ -139,14 +139,14 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
           import("./state/account-settings")
             .then(({ syncAccountSettings }) => syncAccountSettings(accountId))
             .catch((error: unknown) => console.warn("Настройки аккаунта не загрузились:", error));
-          // Непрочитанные уведомления — тогда же и на каждом возврате в
+          // Знаки меню и колокольчик — тогда же и на каждом возврате в
           // приложение (docs/35-stage4-plan.md §3.17).
-          import("./state/notifications-api")
-            .then(({ loadUnread, watchReturns }) => {
+          import("./state/badges-api")
+            .then(({ loadBadges, watchReturns }) => {
               watchReturns();
-              return loadUnread();
+              return loadBadges();
             })
-            .catch((error: unknown) => console.warn("Уведомления не загрузились:", error));
+            .catch((error: unknown) => console.warn("Знаки меню не загрузились:", error));
         });
         return useSession.getState().signIn();
       })

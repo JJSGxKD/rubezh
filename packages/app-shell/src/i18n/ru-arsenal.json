@@ -73,5 +73,6 @@
   "item.stat.damageLightning": "Урон молнией",
   "item.stat.damagePoison": "Урон ядом",
   "item.stat.statusChance": "Шанс состояния",
-  "arsenal.totals": "Итог надетого"
+  "arsenal.totals": "Итог надетого",
+  "arsenal.item.new": "{item}, новый"
 }
