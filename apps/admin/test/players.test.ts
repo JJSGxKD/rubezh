@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { adjustWallet, fetchPlayerCard, fetchSocial, playerCardSchema, rejectReferral, resourceName, searchPlayers, walletAdjustProblem, WALLET_MAX_OPERATION } from "../src/api/players";
+import {
+  adjustWallet,
+  fetchPlayerCard,
+  fetchSocial,
+  messagePlayer,
+  playerCardSchema,
+  rejectReferral,
+  resourceName,
+  searchPlayers,
+  TEAM_MESSAGE_MAX,
+  teamMessageProblem,
+  walletAdjustProblem,
+  WALLET_MAX_OPERATION,
+} from "../src/api/players";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -119,6 +132,23 @@ describe("раздел «Игроки»", () => {
     expect(walletAdjustProblem(Number.NaN, "компенсация")).not.toBeNull();
     expect(walletAdjustProblem(WALLET_MAX_OPERATION + 1, "компенсация")).not.toBeNull();
     expect(walletAdjustProblem(10, "ок")).not.toBeNull();
+  });
+
+  it("сообщение игроку уходит на его адрес с ключом панели; повтор сервер называет повтором", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: { duplicate: true } }));
+    const result = await messagePlayer(new AdminApi(fetch), ACCOUNT_ID, { text: "Жалобу рассмотрели", idempotencyKey: "panel-msg12345" });
+
+    expect(result).toEqual({ ok: true, data: { duplicate: true } });
+    expect(calls[0]?.url).toContain(`/players/${ACCOUNT_ID}/message`);
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ text: "Жалобу рассмотрели", idempotencyKey: "panel-msg12345" });
+  });
+
+  it("форма сообщения не отправляет пустое и слишком длинное", () => {
+    expect(teamMessageProblem("Привет")).toBeNull();
+    expect(teamMessageProblem("  ок  ")).not.toBeNull();
+    expect(teamMessageProblem("я".repeat(TEAM_MESSAGE_MAX))).toBeNull();
+    expect(teamMessageProblem("я".repeat(TEAM_MESSAGE_MAX + 1))).not.toBeNull();
   });
 
   it("друзья и рефералка: разбор ответа и отклонение привязки с причиной", async () => {

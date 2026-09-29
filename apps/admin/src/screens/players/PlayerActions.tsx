@@ -1,13 +1,25 @@
 import { useMemo, useState } from "react";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
-import { adjustWallet, banPlayer, resourceName, unbanPlayer, WALLET_RESOURCES, walletAdjustProblem, type PlayerCard } from "../../api/players";
+import {
+  adjustWallet,
+  banPlayer,
+  messagePlayer,
+  resourceName,
+  TEAM_MESSAGE_MAX,
+  teamMessageProblem,
+  unbanPlayer,
+  WALLET_RESOURCES,
+  walletAdjustProblem,
+  type PlayerCard,
+} from "../../api/players";
 import { formatDelta, formatNumber } from "../../format";
-import { Button, Field, Input, Notice, Panel, Select } from "../../ui/kit";
+import { Button, Field, Input, Notice, Panel, Select, TextArea } from "../../ui/kit";
 
 /**
- * Действия с игроком — с подтверждением вторым нажатием: блокировка и
- * начисление видны игроку и попадают в аудит, случайный клик тут дорог.
+ * Действия с игроком — с подтверждением вторым нажатием: блокировка,
+ * начисление и сообщение видны игроку и попадают в аудит, случайный клик тут
+ * дорог.
  */
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -137,6 +149,63 @@ export function WalletAdjustPanel({ card, onChanged }: { card: PlayerCard; onCha
             </Button>
           )}
           {problem !== null && delta !== "" ? <span className="text-xs text-text-muted">{problem}</span> : null}
+        </div>
+        <OutcomeLine outcome={outcome} />
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * Сообщение команды в ленту уведомлений игрока (docs/35-stage4-plan.md Р51):
+ * ответ на жалобу, объяснение блокировки или поправки. Игрок увидит его в
+ * игре подписью «Команда»; текст уходит в журнал действий.
+ */
+export function MessagePanel({ card }: { card: PlayerCard }) {
+  const [text, setText] = useState("");
+  const [round, setRound] = useState(0);
+  const [confirming, setConfirming] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome>(null);
+
+  const problem = teamMessageProblem(text);
+  // Ключ живёт, пока текст тот же: повтор после обрыва сети второй строки в
+  // ленте не заведёт, а исправленный текст — уже другое сообщение.
+  const idempotencyKey = useMemo(() => newKey(), [text, round]);
+
+  const act = async () => {
+    setPending(true);
+    const result = await messagePlayer(api, card.account.accountId, { text: text.trim(), idempotencyKey });
+    setPending(false);
+    setConfirming(false);
+    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
+    setOutcome({ tone: "success", text: result.data.duplicate ? "Это сообщение уже отправлено" : "Отправлено в ленту игрока" });
+    setText("");
+    setRound((value) => value + 1);
+  };
+
+  return (
+    <Panel title="Сообщение игроку">
+      <div className="flex flex-col gap-3">
+        <Field label="Текст" hint={`До ${String(TEAM_MESSAGE_MAX)} символов, простым текстом. Игрок увидит его в ленте уведомлений; в журнал действий попадёт вместе с тем, кто отправил.`}>
+          <TextArea value={text} onChange={(event) => setText(event.target.value)} maxLength={TEAM_MESSAGE_MAX} rows={4} />
+        </Field>
+        <div className="flex items-center gap-2">
+          {confirming && problem === null ? (
+            <>
+              <Button tone="primary" disabled={pending} onClick={() => void act()}>
+                Да, отправить
+              </Button>
+              <Button onClick={() => setConfirming(false)}>Отмена</Button>
+            </>
+          ) : (
+            <Button tone="primary" disabled={problem !== null} onClick={() => setConfirming(true)}>
+              Отправить
+            </Button>
+          )}
+          <span className="text-xs text-text-muted">
+            {text.trim().length} / {TEAM_MESSAGE_MAX}
+          </span>
         </div>
         <OutcomeLine outcome={outcome} />
       </div>
