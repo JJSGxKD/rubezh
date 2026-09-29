@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { NotifyTargets } from "../../modules/settings/notify-targets.js";
 import type { ChatTarget } from "../ports/chat-target.js";
 import type { TelegramBotApi, TelegramUpdate } from "./telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
@@ -32,12 +33,20 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly targets: NotifyTargets,
     private readonly router: BotRouter,
     @Inject(TELEGRAM_BOT_API) private readonly api: CommandsBotApi,
   ) {}
 
   onModuleInit(): void {
-    if (this.config.telegram.updates !== "off") this.router.register(this);
+    if (this.config.telegram.updates === "off") return;
+    this.router.register(this);
+    // Чат администраторов поменяли в панели — меню команд администратора
+    // переезжает туда без перезапуска. Старый чат своё меню сохранит: снять
+    // его можно, только зная прежний адрес, а команды там всё равно не ответят.
+    this.targets.onChatsChange(() => {
+      void this.publish().catch((error: unknown) => this.log("warn", "commands_not_set", { reason: reasonOf(error) }));
+    });
   }
 
   /**
@@ -95,7 +104,7 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
 
   /** Чаты, где команды администратора видны всем участникам. */
   private adminChats(): ChatTarget[] {
-    const { chats } = this.config.telegram;
+    const chats = this.targets.chats();
     const targets = [chats.general, chats.stats, chats.stressReports, chats.runReports].filter(
       (chat): chat is ChatTarget => chat !== null,
     );

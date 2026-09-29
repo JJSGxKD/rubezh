@@ -34,6 +34,7 @@ import { ReferralsModule } from "./modules/referrals/referrals.module.js";
 import { LinksModule } from "./modules/links/links.module.js";
 import { FlagsModule } from "./modules/flags/flags.module.js";
 import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module.js";
+import { SettingsModule } from "./modules/settings/settings.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -54,13 +55,15 @@ import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module.js";
  * fx — курсы валют вокруг ядра packages/fx (там же, WP9); progress — уровень
  * аккаунта и награды за забег (там же, WP4); items — снаряжение и добыча
  * (там же, WP7); boosts — бусты на забег (там же, WP8); admin — серверная часть панели
- * под своей cookie-сессией (там же, WP17), выключена по умолчанию.
+ * под своей cookie-сессией (там же, WP17), выключена по умолчанию; settings —
+ * настройки без релиза: база поверх окружения (там же, WP24).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
 export const APP_MODULES = [
   RedisModule,
   DatabaseModule,
+  SettingsModule,
   PlatformsModule,
   IngestModule,
   TelegramModule,

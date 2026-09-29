@@ -21,6 +21,7 @@ import { QueuedEventsSink } from "../src/modules/events/events.sink.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { targetsOf } from "./helpers/notify-targets.js";
 
 // Приёмники на настоящих Postgres и Redis (docs/17-testing-strategy.md §4.2).
 // Адреса — TEST_DATABASE_URL и PLAYTEST_TEST_REDIS_URL; без них тесты пропускаются.
@@ -126,6 +127,7 @@ describe.skipIf(!live)("приёмники на живых Postgres и Redis", (
     });
     const notifier = new ReportNotifier(
       notifyConfig,
+      targetsOf(notifyConfig),
       new DiagnosticsHooks(),
       repository,
       {

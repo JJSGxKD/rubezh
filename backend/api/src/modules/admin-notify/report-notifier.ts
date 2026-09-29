@@ -9,6 +9,7 @@ import { benchSummaryOf, runSummaryOf } from "../diagnostics/diagnostics-summary
 import { DIAGNOSTICS_REPOSITORY, type DiagnosticsRepository } from "../diagnostics/diagnostics.repository.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
+import { NotifyTargets } from "../settings/notify-targets.js";
 import type { ChatTarget } from "../../platforms/ports/chat-target.js";
 import { TelegramApiError, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
@@ -73,6 +74,7 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly targets: NotifyTargets,
     private readonly hooks: DiagnosticsHooks,
     @Inject(DIAGNOSTICS_REPOSITORY) private readonly reports: DiagnosticsRepository,
     @Inject(TELEGRAM_BOT_API) private readonly api: NotifierBotApi,
@@ -81,29 +83,41 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
     @Inject(REVIEW_THROTTLE) private readonly throttle: ReviewThrottle,
   ) {}
 
-  /** Карточки отчётов диагностики. */
+  /** Карточки отчётов диагностики уходят сейчас: включены и есть куда. */
   get enabled(): boolean {
-    const { telegram, notifyReports, ingest } = this.config;
-    const anyChat = telegram.chats.stressReports !== null || telegram.chats.runReports !== null;
-    return notifyReports && ingest.reportsEnabled && anyChat && telegram.botToken !== "";
+    const chats = this.targets.chats();
+    return this.reportsPossible && this.targets.reportsEnabled() && (chats.stressReports !== null || chats.runReports !== null);
   }
 
   /**
-   * Карточки забегов на разбор. Не зависят от `ADMIN_NOTIFY_REPORTS`: это не
-   * отчёты диагностики, а очередь антифрода, и выключается она своим адресом.
+   * Карточки забегов на разбор уходят сейчас. Не зависят от переключателя
+   * карточек отчётов: это не отчёты диагностики, а очередь антифрода, и
+   * выключается она своим адресом.
    */
   get reviewEnabled(): boolean {
-    const { telegram, auth } = this.config;
-    return auth.enabled && telegram.chats.runReview !== null && telegram.botToken !== "";
+    return this.reviewPossible && this.targets.chats().runReview !== null;
+  }
+
+  /**
+   * Без приёмника, входа или токена бота карточек не будет до перезапуска, а
+   * чат и переключатель меняются на ходу из панели: подписка и очередь
+   * заводятся по первому, а отправка проверяет второе.
+   */
+  private get reportsPossible(): boolean {
+    return this.config.ingest.reportsEnabled && this.config.telegram.botToken !== "";
+  }
+
+  private get reviewPossible(): boolean {
+    return this.config.auth.enabled && this.config.telegram.botToken !== "";
   }
 
   onModuleInit(): void {
-    if (this.enabled) this.hooks.onReport("admin-notify", (report) => this.enqueue(report));
-    if (this.reviewEnabled) this.runsHooks.onRecorded("admin-notify", (run) => this.enqueueReview(run));
+    if (this.reportsPossible) this.hooks.onReport("admin-notify", (report) => this.enqueue(report));
+    if (this.reviewPossible) this.runsHooks.onRecorded("admin-notify", (run) => this.enqueueReview(run));
   }
 
   onApplicationBootstrap(): void {
-    if (!this.enabled && !this.reviewEnabled) return;
+    if (!this.reportsPossible && !this.reviewPossible) return;
     const producer = createQueueConnection(this.config, "producer");
     const consumer = createQueueConnection(this.config, "worker");
     this.connections = [producer, consumer];
@@ -126,7 +140,7 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
   }
 
   async enqueue(report: ReceivedReport): Promise<void> {
-    if (this.queue === null || this.chatFor(report.kind) === null) return;
+    if (this.queue === null || !this.targets.reportsEnabled() || this.chatFor(report.kind) === null) return;
     if (report.kind === "run" && report.summary.problems.length === 0) return;
     // jobId от reportId: повтор отчёта не породит второе уведомление. Двоеточие
     // BullMQ в своих идентификаторах не пускает — это разделитель его ключей.
@@ -147,7 +161,7 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
    * получает вовсе, как и забег с читами: его пометил сам разработчик.
    */
   async enqueueReview(run: RecordedRun): Promise<void> {
-    if (this.queue === null || run.verdict === "ok" || run.cheats) return;
+    if (this.queue === null || run.verdict === "ok" || run.cheats || this.targets.chats().runReview === null) return;
     if (!(await this.throttle.claim(run.accountId, REVIEW_WINDOW_SEC))) {
       this.log("log", "review_throttled", { runId: run.runId, accountId: run.accountId });
       return;
@@ -175,7 +189,7 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
   async process(job: Pick<Job<NotifyJob>, "data">): Promise<void> {
     const { data } = job;
     if (data.kind === "review") {
-      const chat = this.config.telegram.chats.runReview;
+      const chat = this.targets.chats().runReview;
       if (chat === null) throw new UnrecoverableError(`некуда слать забег ${data.run.runId}`);
       // Имя — на момент отправки: игрок мог сменить его, пока карточка ждала.
       // Аккаунт удалён — карточка всё равно нужна, с одним идентификатором.
@@ -217,7 +231,7 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
 
   /** У каждого вида отчёта свой поток: стресс-тесты и забеги не мешаются. */
   private chatFor(kind: "bench" | "run"): ChatTarget | null {
-    const { chats } = this.config.telegram;
+    const chats = this.targets.chats();
     return kind === "run" ? chats.runReports : chats.stressReports;
   }
 

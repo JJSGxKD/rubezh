@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { NotifyTargets } from "../settings/notify-targets.js";
 import { REDIS } from "../../infra/redis.js";
 import { BotRouter, type BotUpdateHandler } from "../../platforms/telegram/bot-router.js";
 import { sameChat, type ChatTarget } from "../../platforms/ports/chat-target.js";
@@ -37,7 +38,7 @@ export type StatsDecision = { kind: "stats"; target: ChatTarget; place: "admin_c
  * чат. В личке — только тот, кто в `ADMIN_TELEGRAM_IDS`. Остальным бот молчит,
  * а не отказывает: существование команды не раскрывается.
  */
-export function decideUpdate(update: TelegramUpdate, config: AppConfig, nowMs: number): StatsDecision {
+export function decideUpdate(update: TelegramUpdate, config: AppConfig, nowMs: number, stats: ChatTarget | null): StatsDecision {
   const message = update.message;
   if (message?.text === undefined || message.from === undefined || message.from.is_bot) return { kind: "ignore" };
   if (!/^\/stats(@\w+)?(\s|$)/.test(message.text)) return { kind: "ignore" };
@@ -47,7 +48,6 @@ export function decideUpdate(update: TelegramUpdate, config: AppConfig, nowMs: n
   // Отвечаем туда же, откуда спросили: в супергруппе с темами — в ту же тему,
   // а не в общую ленту.
   const target: ChatTarget = { chatId, threadId: message.message_thread_id ?? null };
-  const stats = config.telegram.chats.stats;
   if (stats !== null && sameChat(stats, chatId)) return { kind: "stats", target, place: "admin_chat" };
   const fromId = String(message.from.id);
   if (message.chat.type === "private" && chatId === fromId && config.adminTelegramIds.has(fromId)) {
@@ -103,6 +103,7 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly targets: NotifyTargets,
     private readonly stats: PlaytestStatsService,
     private readonly router: BotRouter,
     @Inject(STATS_REPORTER_LOCKS) private readonly locks: StatsReporterLocks,
@@ -125,7 +126,7 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
   }
 
   async handle(update: TelegramUpdate): Promise<boolean> {
-    const decision = decideUpdate(update, this.config, Date.now());
+    const decision = decideUpdate(update, this.config, Date.now(), this.targets.chats().stats);
     if (decision.kind === "ignore") return false;
     if (!(await this.locks.claimCommand(decision.target.chatId, COMMAND_WINDOW_SEC))) return true;
     await this.sendReport(decision.target, decision.place === "admin_chat" ? "command" : "command_private");
@@ -141,7 +142,7 @@ export class PlaytestStatsReporter implements BotUpdateHandler, OnModuleInit, On
       this.log("warn", "daily_lock_failed", { reason: reasonOf(error) });
       return;
     }
-    const sent = await this.sendReport(this.config.telegram.chats.stats ?? { chatId: "", threadId: null }, "daily");
+    const sent = await this.sendReport(this.targets.chats().stats ?? { chatId: "", threadId: null }, "daily");
     // Сеть или Redis — повторим через минуту. Отказ Telegram (чат не найден,
     // бота выгнали) повтором не лечится: до завтра отчёт не пытается уйти.
     if (sent === "retry") {

@@ -7,6 +7,7 @@ import { describeDbError } from "../../infra/database.js";
 import type { IngestIdentity } from "../ingest/ingest.guard.js";
 import { INGEST_LIMITS } from "../ingest/ingest-limits.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
+import { NotifyTargets } from "../settings/notify-targets.js";
 import type { ChatTarget } from "../../platforms/ports/chat-target.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 import { submitFeedbackSchema } from "./dto/feedback.dto.js";
@@ -32,6 +33,7 @@ export class FeedbackService {
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly targets: NotifyTargets,
     @Inject(FEEDBACK_REPOSITORY) private readonly repository: FeedbackRepository,
     @Inject(TELEGRAM_BOT_API) private readonly api: FeedbackBotApi,
     private readonly limiter: RateLimiter,
@@ -83,7 +85,7 @@ export class FeedbackService {
     platformUserId: string | null,
     signal?: AbortSignal,
   ): Promise<void> {
-    const chat: ChatTarget | null = this.config.telegram.chats.feedback;
+    const chat: ChatTarget | null = this.targets.chats().feedback;
     if (chat === null || this.config.telegram.botToken === "") return;
 
     try {

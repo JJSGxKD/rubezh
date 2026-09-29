@@ -316,6 +316,23 @@ erDiagram
         datetime created_at
     }
 
+    FEATURE_FLAG {
+        string key PK "shop.v2"
+        boolean enabled
+        enum platforms "пусто — все площадки"
+        int percent "доля игроков, 0–100"
+        string note "nullable"
+        uuid updated_by "nullable, без внешнего ключа"
+        datetime updated_at
+    }
+
+    APP_SETTING {
+        string key PK "notify.chat.general — ключ из каталога в коде"
+        json value "по схеме ключа, разбирается при чтении"
+        uuid updated_by "nullable, без внешнего ключа"
+        datetime updated_at
+    }
+
     ANALYTICS_EVENT {
         uuid event_id PK
         string event_type
@@ -577,6 +594,15 @@ erDiagram
   ключами `friend_return:<вернувшийся>:<друг>:<период>:returned|friend`.
   `FRIEND_BONUS` — забранные ступени бонуса за число друзей; монеты —
   причиной `friend_bonus` и ключом `friend_bonus:<аккаунт>:<порог>`.
+- **`FEATURE_FLAG` и `APP_SETTING` — две разные вещи.** Флаг — раскатка
+  на игроков: площадка и доля, у каждого игрока своё «да» или «нет» (WP17).
+  Настройка — одно значение на весь сервер: адрес чата команды,
+  переключатель (WP24, Р53). Строка настройки есть, только пока её
+  поменяли в панели: она сильнее окружения, а сброс удаляет строку и
+  возвращает `.env`. Ключ и схема значения — в каталоге в коде
+  (`modules/settings/setting-catalog.ts`); неизвестный ключ и значение не по
+  схеме при чтении пропускаются. Обе таблицы без внешних ключей на аккаунт:
+  «кто менял» переживает человека, как журнал аудита.
 - **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
   после — запись истории: текст неизменен, кто создал, одобрил и запустил —
   без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
@@ -1075,9 +1101,10 @@ flowchart LR
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
         ITEMS["items<br/>снаряжение: инвентарь, операции,<br/>добыча, подписанный снимок, реализовано"]
         BOOSTS["boosts<br/>бусты: покупка до старта,<br/>возврат, сверка в итоге, реализовано"]
-        ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, реализовано"]
+        ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, настройки, реализовано"]
         LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, реализовано"]
         FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
+        SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
         BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
     end
@@ -1189,6 +1216,10 @@ flowchart LR
     ADMINAPI -. курсы, заданные курсы .-> FXM
     ADMINAPI -. отчёты, архив .-> EXPORT
     ADMINAPI -. флаги и выкат .-> FLAGS
+    ADMINAPI -. настройки, право settings.edit .-> SETTINGS
+    SETTINGS --> PG
+    SETTINGS -- "канал settings:changed" --> REDIS
+    NOTIFY -. адреса чатов команды .-> SETTINGS
     ADMINAPI -. рассылки .-> BCAST
     BCAST --> PG
     BCAST -- "очередь broadcasts, лимитер" --> REDIS
