@@ -66,16 +66,19 @@ jobs:
       # Секреты сервера (.env, api.env) не трогаются: их нет в репозитории.
       - name: Конфигурация стека
         run: |
+          ssh -i ~/.ssh/deploy -o BatchMode=yes "deploy@${DEPLOY_HOST}" "mkdir -p /srv/rubezh/app/caddy /srv/rubezh/app/backup /srv/rubezh/app/postgres"
           scp -i ~/.ssh/deploy -o BatchMode=yes \
             infra/prod/compose.yml infra/prod/Caddyfile infra/prod/frps.toml \
-            infra/prod/deploy.sh infra/prod/backup.sh \
+            infra/prod/deploy.sh infra/prod/backup.sh infra/prod/backup-watch.sh infra/prod/restore-drill.sh \
             "deploy@${DEPLOY_HOST}:/srv/rubezh/app/"
           scp -i ~/.ssh/deploy -o BatchMode=yes infra/prod/caddy/Dockerfile "deploy@${DEPLOY_HOST}:/srv/rubezh/app/caddy/"
+          scp -i ~/.ssh/deploy -o BatchMode=yes infra/prod/backup/Dockerfile infra/prod/backup/backupctl.sh "deploy@${DEPLOY_HOST}:/srv/rubezh/app/backup/"
+          scp -i ~/.ssh/deploy -o BatchMode=yes infra/prod/postgres/pg_hba.conf "deploy@${DEPLOY_HOST}:/srv/rubezh/app/postgres/"
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
 
       - name: Выкат
-        run: ssh -i ~/.ssh/deploy -o BatchMode=yes "deploy@${DEPLOY_HOST}" "cd /srv/rubezh/app && chmod 755 deploy.sh backup.sh && ./deploy.sh '${VERSION}'"
+        run: ssh -i ~/.ssh/deploy -o BatchMode=yes "deploy@${DEPLOY_HOST}" "cd /srv/rubezh/app && chmod 755 deploy.sh backup.sh backup-watch.sh restore-drill.sh && ./deploy.sh '${VERSION}'"
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           VERSION: ${{ inputs.version }}

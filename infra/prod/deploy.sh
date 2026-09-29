@@ -81,6 +81,31 @@ for pair in "web-telegram:rubezh-web-telegram-${VERSION}.tar.gz" "admin:rubezh-a
   fi
 done
 
+# Бэкап на момент (Р54) — если задано хранилище: ключ задан — включено (Р53).
+# Тогда Postgres архивирует журнал, а профиль backup поднимает контейнер,
+# который его увозит. Оба переключателя пишутся в .env, а не только в
+# окружение выката: иначе ручной `docker compose up` пересоздал бы Postgres
+# без архива. Пароль роли backup и ключ пробного восстановления заводятся
+# один раз и дальше не меняются.
+if [ -n "$(env_value BACKUP_S3_ZONE)" ] && [ -n "$(env_value BACKUP_S3_PASSWORD)" ]; then
+  set_env_value PG_ARCHIVE_MODE on
+  set_env_value COMPOSE_PROFILES backup
+  [ -n "$(env_value BACKUP_PG_PASSWORD)" ] || set_env_value BACKUP_PG_PASSWORD "$(openssl rand -hex 24)"
+  # Каталог на месте ключа оставляет Docker, если контейнер запускали раньше,
+  # чем ключ завели, — ключом он не считается.
+  if [ -d backup-drill.key ]; then rmdir backup-drill.key; fi
+  if [ ! -s backup-drill.key ]; then
+    (umask 077 && age-keygen -o backup-drill.key 2> /dev/null)
+    log "заведён ключ пробного восстановления backup-drill.key"
+  fi
+  backups=on
+else
+  set_env_value PG_ARCHIVE_MODE off
+  set_env_value COMPOSE_PROFILES ""
+  backups=off
+  log "хранилище бэкапов не задано — бэкап на момент выключен, остаётся ежедневный дамп"
+fi
+
 previous="$(env_value API_TAG)"
 log "API ${previous:-—} → ${VERSION}"
 set_env_value API_TAG "$VERSION"
@@ -114,11 +139,25 @@ for app in "${apps[@]}"; do switch_web "$app"; done
 docker compose up -d --build --remove-orphans
 docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile < /dev/null
 
+# Роль для базовой копии — с правом репликации и только им; пароль — из
+# .env. Повторный выкат лишь подтверждает пароль. Пароль идёт окружением,
+# а не аргументом: аргументы видны в списке процессов.
+if [ "$backups" = on ]; then
+  BACKUP_PG_PASSWORD="$(env_value BACKUP_PG_PASSWORD)" docker compose exec -T -e BACKUP_PG_PASSWORD postgres \
+    psql -q -v ON_ERROR_STOP=1 -U "$(env_value POSTGRES_USER)" -d "$(env_value POSTGRES_DB)" <<'SQL' > /dev/null
+\getenv password BACKUP_PG_PASSWORD
+SELECT format('%s ROLE backup WITH LOGIN REPLICATION PASSWORD %L',
+              CASE WHEN EXISTS (SELECT FROM pg_roles WHERE rolname = 'backup') THEN 'ALTER' ELSE 'CREATE' END,
+              :'password') \gexec
+SQL
+fi
+
 # Ежедневный бэкап — у пользователя деплоя, без sudo; строка ставится один раз.
 cron_line="17 3 * * * ${APP}/backup.sh >> /srv/rubezh/backups/backup.log 2>&1"
 # Пустой crontab у нового пользователя — не ошибка: без `|| true` pipefail
 # остановил бы выкат на этой строке.
-{ crontab -l 2>/dev/null | grep -vF "${APP}/backup.sh" || true; echo "$cron_line"; } | crontab -
+watch_line="*/10 * * * * ${APP}/backup-watch.sh >> /srv/rubezh/backups/backup-watch.log 2>&1"
+{ crontab -l 2>/dev/null | grep -vF -e "${APP}/backup.sh" -e "${APP}/backup-watch.sh" || true; echo "$cron_line"; echo "$watch_line"; } | crontab -
 
 echo "$VERSION" > .deployed
 log "выкачено: ${VERSION}"

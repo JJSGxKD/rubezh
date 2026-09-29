@@ -38,9 +38,19 @@ telegram() {
     curl -fsS --max-time 120 -K - "$@" > /dev/null
 }
 
+# Бэкап на момент (docs/35-stage4-plan.md, Р54) — строкой в каждом отчёте:
+# раз в сутки в чате видно, что журнал уезжает, а не только что сторож молчит.
+pitr_line() {
+  [ -n "$(value .env BACKUP_S3_ZONE)" ] || { echo "На момент: выключен — хранилище не задано"; return 0; }
+  local status
+  status="$(docker compose exec -T backup backupctl status < /dev/null 2> /dev/null)" ||
+    { echo "На момент: контейнер бэкапа не отвечает"; return 0; }
+  echo "На момент: ${status//$'\n'/; }"
+}
+
 report() {
   [ -n "$ADMIN_CHAT" ] || return 0
-  telegram sendMessage --data-urlencode "chat_id=${ADMIN_CHAT}" --data-urlencode "text=$1" || true
+  telegram sendMessage --data-urlencode "chat_id=${ADMIN_CHAT}" --data-urlencode "text=$1"$'\n'"$(pitr_line)" || true
 }
 
 on_error() { report "❌ Бэкап базы не сделан: ${BASH_COMMAND}"; }

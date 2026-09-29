@@ -1969,6 +1969,9 @@ flowchart TB
         PR[("Redis")]
         FRPS["frps<br/>туннели разработчиков"]
         BAK["backup.sh раз в сутки<br/>дамп → age ключом владельца"]
+        SPOOL[("очередь журнала<br/>том wal-spool")]
+        PITR["контейнер backup<br/>журнал раз в минуту, база и зеркало<br/>раз в сутки → age двумя ключами"]
+        WATCH["backup-watch.sh<br/>раз в 10 минут"]
 
         CAD --> STAT
         CAD --> PAPI
@@ -1976,7 +1979,14 @@ flowchart TB
         PAPI --> PPG
         PAPI --> PR
         BAK -.дамп.-> PPG
+        PPG -.archive_command.-> SPOOL
+        SPOOL --> PITR
+        PITR -.базовая копия.-> PPG
+        WATCH -.здоровье.-> PITR
     end
+
+    S3[("Bunny Storage, S3<br/>база, журнал, зеркало репозитория<br/>14 дней")]
+    GH["GitHub<br/>репозиторий"]
 
     TGP["tgrasp.ru<br/>прокси Bot API"]
     TG["Telegram Bot API"]
@@ -1990,6 +2000,10 @@ flowchart TB
     TGP --> TG
     BAK -.документ в личку бота.-> TGP
     TG -.бэкап.-> OWNER
+    PITR --> S3
+    GH -.git clone --mirror.-> PITR
+    WATCH -.тревога в чат админов.-> TGP
+    OWNER -.восстановление своим ключом.-> S3
 ```
 
 Порты, смещения staging и правила публикации — `20-env-and-ports.md` §2.
@@ -2000,7 +2014,9 @@ Staging появится, когда сервер вырастет (`20-env-and-
 встанет перед статикой к публичному лончу. Из российской сети Bot API
 недоступен в обе стороны, поэтому бот ходит через прокси `tgrasp.ru` и
 забирает обновления long polling'ом, а не вебхуком (`20-env-and-ports.md`
-§5.2). Grafana и Prometheus — техническая часть, появляется на этапе 5;
+§5.2). Бэкапов два, независимых: дамп владельцу в бота и бэкап на момент
+времени в Bunny Storage вне сервера — включается, когда задана зона
+(`20-env-and-ports.md` §5.4). Grafana и Prometheus — техническая часть, появляется на этапе 5;
 продуктовая аналитика — в админ-панели (`29-admin-panel.md`).
 Этапы, на которых эта топология меняется при росте нагрузки, — 
 `14-scalability.md` §3.

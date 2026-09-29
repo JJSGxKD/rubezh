@@ -74,9 +74,24 @@ services:
       - maintenance_work_mem=128MB
       - -c
       - max_connections=60
+      # Архив журнала для восстановления на момент (Р54): сегмент — в
+      # локальную очередь, оттуда его увозит контейнер backup. Включается
+      # только с заданным хранилищем — deploy.sh ставит PG_ARCHIVE_MODE:
+      # очередь без отправки заполнила бы диск. Сегмент закрывается не реже
+      # раза в пять минут — столько и теряется при потере сервера.
+      - -c
+      - archive_mode=${PG_ARCHIVE_MODE:-off}
+      - -c
+      - archive_command=test ! -f /wal-spool/%f && cp %p /wal-spool/%f.tmp && mv /wal-spool/%f.tmp /wal-spool/%f
+      - -c
+      - archive_timeout=300
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
     shm_size: 256mb
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - wal-spool:/wal-spool
+      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -99,6 +114,35 @@ services:
       timeout: 5s
       retries: 5
 
+  # Бэкапы с восстановлением на момент (docs/35-stage4-plan.md, Р54): журнал
+  # Postgres — в S3-хранилище раз в минуту, базовая копия и зеркало
+  # репозитория — раз в сутки. Профиль backup включает deploy.sh, когда
+  # хранилище задано (Р53: ключ задан — включено).
+  backup:
+    build: ./backup
+    profiles: [backup]
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      BACKUP_S3_ZONE: ${BACKUP_S3_ZONE:-}
+      BACKUP_S3_PASSWORD: ${BACKUP_S3_PASSWORD:-}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:-de}
+      BACKUP_PG_PASSWORD: ${BACKUP_PG_PASSWORD:-}
+      BACKUP_REPO_URL: ${BACKUP_REPO_URL:-https://github.com/JJSGxKD/rubezh.git}
+    volumes:
+      - wal-spool:/wal-spool
+      - backup-state:/state
+      # Ключи — только готовыми файлами: короткая запись на месте
+      # отсутствующего файла создала бы каталог, и deploy.sh принял бы его
+      # за уже заведённый ключ.
+      - { type: bind, source: ./backup-recipient.pub, target: /keys/owner.pub, read_only: true, bind: { create_host_path: false } }
+      - { type: bind, source: ./backup-drill.key, target: /keys/drill.key, read_only: true, bind: { create_host_path: false } }
+    # База — во внутренней сети, хранилище и GitHub — через свою сеть с
+    # выходом: не через edge, где живёт Caddy.
+    networks: [data, backup-egress]
+    mem_limit: 256m
+
   # Туннели разработчиков (docs/20-env-and-ports.md §4): Caddy принимает
   # frpc по WebSocket на frp.<домен> и отдаёт dev-адреса в vhost frps.
   frps:
@@ -116,9 +160,12 @@ networks:
   # Базе и Redis в интернет не нужно ничего: internal-сеть без выхода наружу.
   data:
     internal: true
+  backup-egress: {}
 
 volumes:
   postgres-data: {}
+  wal-spool: {}
+  backup-state: {}
   redis-data: {}
   caddy-data: {}
   caddy-config: {}
