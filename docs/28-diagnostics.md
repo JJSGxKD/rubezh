@@ -678,7 +678,7 @@ Telegram ──вебхук──► модуль bot
 **Как реализовано** (`backend/api/src/platforms/telegram`): обновления приходят
 вебхуком `POST /api/v1/bot/webhook` (`TELEGRAM_BOT_UPDATES=webhook`) или long
 polling'ом на машине разработчика (`polling`) и уходят в `BotRouter`, где их
-разбирают обработчики модулей — `/start`, вход в панель, выгрузка. Вебхук
+разбирают обработчики модулей — `/start`, вход в панель, статистика, выгрузка. Вебхук
 сверяет секретный токен за постоянное время, отвечает сразу, а повтор
 `update_id` отсекает ключ `bot:update:{id}` на час. Регистрация —
 `pnpm --filter backend-api bot:webhook`, снятие — с `--delete`.

@@ -145,6 +145,7 @@
 | Порядок вкладок, их значки и точки | `app-shell/src/app/App.tsx` → `TABS`; нагрудник арсенала — `design-system/components/icons.tsx` | участник 1 |
 | Шапка разделов и её меню: что показывается, куда ведёт | `app-shell/src/app/AppHeader.tsx`, `app/MainMenu.tsx` | участник 1 |
 | Как часто забег сохраняется сам | `app-shell/src/state/run.ts` → `AUTOSAVE_SEC` | участник 1 |
+| Ежедневная статистика в чат команды: пояс и время отчёта, что входит, частота `/stats` | `backend/api/src/modules/admin-notify/daily-stats.ts` → `TEAM_UTC_OFFSET_MIN`, `REPORT_AT_MIN`, тексты — `statsText`; запросы — `daily-stats.repository.ts`; `daily-stats.reporter.ts` → `COMMAND_WINDOW_SEC`, `STALE_COMMAND_SEC`; куда — панель → «Настройки» (`notify.chat.stats`) | участник 1 |
 | Карточки бота: цвета, подписи устройств и исходов | `backend/api/src/common/card/svg.ts` → `PALETTE`, `SERIES` (повторяют `tokens.css`); `common/card/labels.ts` | участник 1 |
 | Бот: long polling, лок читателя, паузы при конфликте и сбое | `backend/api/src/platforms/telegram/bot-poller.ts` → `POLL_TIMEOUT_SEC`, `POLLER_LOCK_TTL_MS`, `STANDBY_MS`, `RETRY_MS` | участник 1 |
 | Кошелёк: суточные потолки начислений по источнику и ресурсу — рабочие значения до чисел экономики; ресурса нет в потолке — источник его не начисляет | `backend/api/src/modules/wallet/wallet-limits.ts` → `WALLET_DAILY_CAPS` | участник 1 |

@@ -84,7 +84,7 @@ export const SETTINGS = {
     "Меню команд администратора и всё, у чего нет своего потока. Пусто — бот команде не пишет",
     (config) => config.telegram.chatEnv.general,
   ),
-  chatStats: chat("notify.chat.stats", "Статистика", "Сводка и ответы на /stats. Пусто — общий чат", (config) => config.telegram.chatEnv.stats),
+  chatStats: chat("notify.chat.stats", "Статистика", "Ежедневная статистика в 00:10 по Москве и ответы на /stats. Пусто — общий чат", (config) => config.telegram.chatEnv.stats),
   chatStress: chat("notify.chat.stress", "Стресс-тесты", "Карточки стресс-тестов. Пусто — общий чат", (config) => config.telegram.chatEnv.stressReports),
   chatRuns: chat("notify.chat.runs", "Проблемные забеги", "Карточки записей забегов с просадками. Пусто — общий чат", (config) => config.telegram.chatEnv.runReports),
   chatFeedback: chat("notify.chat.feedback", "Отзывы игроков", "Отзывы с формы обратной связи. Пусто — общий чат", (config) => config.telegram.chatEnv.feedback),
