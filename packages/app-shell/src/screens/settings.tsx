@@ -160,7 +160,12 @@ export function VolumeSliders(): ReactNode {
   );
 }
 
-/** «Для тестировщиков» — включатели режима диагностики (docs/28-diagnostics.md §2). */
+/**
+ * «Помощь в тестировании» (docs/35-stage4-plan.md Р56; docs/28-diagnostics.md
+ * §2): для игрока, которого позвали помочь собрать игровые метрики, — что это
+ * и что уходит команде. Участие и запись забегов — за аккаунтом, счётчик
+ * кадров — у устройства. Сведения об устройстве открыты всем.
+ */
 export function TestersScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics();
@@ -169,6 +174,7 @@ export function TestersScreen(): ReactNode {
   return (
     <Screen title={t("testers.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
+        <p className="mb-3 text-sm text-text-muted">{t("testers.intro")}</p>
         <ListGroup>
           <ListItem
             title={t("testers.diagnostics")}
@@ -205,9 +211,9 @@ export function TestersScreen(): ReactNode {
                 onClick={() => navigation.push("soundLab")}
               />
             ) : null}
-            {diagnostics.enabled ? (
-              <ListItem title={t("testers.open")} onClick={() => navigation.push("diagnostics")} />
-            ) : null}
+            {/* Сведения об устройстве — всем (Р56): поделиться ими с командой
+                может любой игрок, а не только включивший диагностику. */}
+            <ListItem title={t("testers.device")} hint={t("testers.device.hint")} onClick={() => navigation.push("diagnostics")} />
           </ListGroup>
         </div>
       </ContentColumn>
