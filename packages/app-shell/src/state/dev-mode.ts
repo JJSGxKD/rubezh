@@ -1,7 +1,7 @@
 import { PASSIVES, WEAPONS, type RunDevCommand, type RunDevOptions } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
-import { effectiveAccess, usePlaytest } from "./playtest";
+import { effectiveAccess, useTools } from "./tools";
 import { createPersistedValue } from "./persisted";
 import { reportError, useShell } from "./shell";
 
@@ -116,7 +116,7 @@ export const useDevMode = create<DevModeStore>((set, get) => ({
 /** Открыт ли режим разработчика этому игроку в этой сборке. */
 export function devModeAllowed(): boolean {
   const { capabilities } = useShell.getState();
-  return effectiveAccess(usePlaytest.getState().access, capabilities.devTools === true).devMode;
+  return effectiveAccess(useTools.getState().access, capabilities.devTools === true).devMode;
 }
 
 export function toRunDev(settings: DevSettings): RunDevOptions {

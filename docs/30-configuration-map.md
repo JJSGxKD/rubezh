@@ -145,8 +145,7 @@
 | Порядок вкладок, их значки и точки | `app-shell/src/app/App.tsx` → `TABS`; нагрудник арсенала — `design-system/components/icons.tsx` | участник 1 |
 | Шапка разделов и её меню: что показывается, куда ведёт | `app-shell/src/app/AppHeader.tsx`, `app/MainMenu.tsx` | участник 1 |
 | Как часто забег сохраняется сам | `app-shell/src/state/run.ts` → `AUTOSAVE_SEC` | участник 1 |
-| Плейтест на клиенте: таймаут запроса, сколько неотправленных забегов хранить | `app-shell/src/state/playtest-api.ts` → `PLAYTEST_TIMEOUT_MS`; `state/playtest.ts` → `QUEUE_LIMIT` | участник 1 |
-| Сводка плейтеста: корзины длины забега, сколько строк в топах, цвета и раскладка картинки | `backend/api/src/modules/playtest/playtest-stats.store.ts` → `DURATION_BUCKETS_MIN`; `playtest-stats.summary.ts` → `TOP_LIMIT`; `playtest-stats.image.ts`; цвета карточек бота — `backend/api/src/common/card/svg.ts` → `PALETTE`, `SERIES` (повторяют `tokens.css`), подписи устройств и исходов — `common/card/labels.ts` | участник 1 |
+| Карточки бота: цвета, подписи устройств и исходов | `backend/api/src/common/card/svg.ts` → `PALETTE`, `SERIES` (повторяют `tokens.css`); `common/card/labels.ts` | участник 1 |
 | Бот: long polling, лок читателя, паузы при конфликте и сбое | `backend/api/src/platforms/telegram/bot-poller.ts` → `POLL_TIMEOUT_SEC`, `POLLER_LOCK_TTL_MS`, `STANDBY_MS`, `RETRY_MS` | участник 1 |
 | Кошелёк: суточные потолки начислений по источнику и ресурсу — рабочие значения до чисел экономики; ресурса нет в потолке — источник его не начисляет | `backend/api/src/modules/wallet/wallet-limits.ts` → `WALLET_DAILY_CAPS` | участник 1 |
 | Кошелёк: что дают обмены — покупка только самоцветы, разбор только осколки | `backend/api/src/modules/wallet/wallet-limits.ts` → `EXCHANGE_RESOURCES` | участник 1 |
@@ -204,8 +203,6 @@
 | Очистка старых данных: как часто и какими пачками | `backend/api/src/modules/export/retention.job.ts` → `EVERY_MS`, `BATCH`, `BATCH_PAUSE_MS` | участник 1 |
 | Уведомления об отчётах: темп отправки в чат, повторы, карточка стресс-теста — раскладка, порог плавности на графике | `backend/api/src/modules/admin-notify/report-notifier.ts` → `MESSAGES_PER_MINUTE`, параметры `queue.add`; `stress-card.ts` → `SMOOTH_FPS` | участник 1 |
 | Бот: сколько помнить обработанные обновления вебхука, какие обновления читать | `backend/api/src/platforms/telegram/bot-webhook.controller.ts` → `DEDUPE_TTL_SEC`; `platforms/telegram/telegram-bot-api.ts` → `ALLOWED_UPDATES` | участник 1 |
-| Сводка плейтеста в Telegram: частота команды, возраст команды из очереди | `backend/api/src/modules/playtest/playtest-stats.reporter.ts` → `COMMAND_WINDOW_SEC`, `STALE_COMMAND_SEC` | участник 1 |
-| Плейтест на сервере: строк в лидерборде, последних забегов в профиле, сколько забегов хранится | `backend/api/src/modules/playtest/playtest.service.ts` → `LEADERBOARD_LIMIT`, `RECENT_RUNS_SHOWN`; `redis-playtest.store.ts` → `RECENT_RUNS_KEPT`; границы правдоподобия итога — `dto/run-submission.dto.ts` | участник 1 |
 | С какой высоты экрана модалки забега уплотняются | `tokens.css` → `@custom-variant short` (`27-design-system-and-app-shell.md` §5.3) | напарник |
 | Задержка от случайного тапа на оверлеях забега | `app-shell/src/screens/run/overlays.tsx` → `GUARD_MS` | участник 1 |
 | Порог «мало здоровья» в HUD | `app-shell/src/screens/run/RunHud.tsx` → `LOW_HP_RATIO` | участник 1 |
@@ -339,8 +336,6 @@
 | `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_MAX_SESSIONS` | сколько живут токены и сколько устройств помнит аккаунт |
 | `AUTH_INIT_DATA_MAX_AGE_SEC` | окно свежести подписи запуска при входе; потолок в час зашит в схему |
 | `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER` | вход разработчика без Telegram по имени `dev-<id>:Имя`: обычный аккаунт с ролью владельца. Требует входа (`JWT_ACCESS_SECRET`), только `NODE_ENV=development`; имя передаёт только dev-сервер. Прежний `PLAYTEST_DEV_AUTH="true"` останавливает запуск и называет новое имя |
-| `PLAYTEST_ENABLED` | сводка плейтеста, отчёты о запуске и стресс-тест для всех. Забеги и рейтинг — модуль `runs` под авторизацией, поэтому без входа (`JWT_ACCESS_SECRET`) бэкенд с включённым плейтестом не стартует |
-| `PLAYTEST_DATA_TTL_DAYS` | сколько живут счётчики сводки плейтеста в Redis |
 | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED` | запасные значения выключателей приёма `ingest.events` и `ingest.reports` (панель сильнее); `true` без `DATABASE_URL` бэкенд не запускает |
 | `TRUST_PROXY_HOPS` | сколько прокси перед API; за Caddy — `1`, иначе лимит по IP посчитает всех тестеров одним адресом |
 | `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам, `webhook` — Telegram шлёт их на `PUBLIC_API_URL`; регистрация — `pnpm --filter backend-api bot:webhook` |
@@ -350,13 +345,12 @@
 | `DATA_EXPORT_BOT_ENABLED` | запасное значение выключателя выгрузки через бота `export.bot` (панель сильнее); `true` без ключа, базы и чтения обновлений бэкенд не запускает |
 | `DIAGNOSTICS_RETENTION_DAYS` | сколько дней хранить сырые события и отчёты |
 | `ADMIN_NOTIFY_REPORTS` | карточка в чат администраторов на каждый новый стресс-тест; нужны `ADMIN_CHAT_ID` и включённый приёмник отчётов |
-| `ADMIN_CHAT_ID` | групповой чат администраторов: сводка и уведомления. Прежнее имя `PLAYTEST_STATS_CHAT_ID` — бэкенд не стартует и называет новое |
-| `PLAYTEST_STATS_ENABLED` | сводка статистики плейтеста в чат администраторов по `/stats`; без чата или чтения обновлений бота бэкенд не стартует |
-| `PLAYTEST_STATS_DAILY_AT`, `PLAYTEST_STATS_UTC_OFFSET_MIN` | когда бот присылает сводку сам и в каком поясе считаются «сутки»; пусто в `DAILY_AT` — только по команде |
-| `ADMIN_TELEGRAM_IDS` | администраторы: режим разработчика в клиенте и забеги с читами в рейтинге. Стресс-тест открыт всем, пока `PLAYTEST_ENABLED=true`; в dev-сервере инструменты открыты без сервера (`capabilities.devTools`). Правила — `backend/api/src/modules/playtest/playtest-access.ts` |
+| `ADMIN_CHAT_ID` | групповой чат администраторов: уведомления и меню команд; панель сильнее (`notify.chat.general`) |
+| `ADMIN_TELEGRAM_IDS` | аварийный путь к роли владельца, пока владельца нет в базе. Режим разработчика и стресс-тест — у права `tools.dev`, стресс-тест всем — настройка «Стресс-тест для всех игроков»; в dev-сервере инструменты открыты без сервера (`capabilities.devTools`). Правила — `backend/api/src/modules/roles/tools-access.ts` |
 
-Прокси dev-сервера на бэкенд плейтеста — `apps/web-telegram/vite.config.ts` →
-`apiProxy`: проксируется только `/api/v1/playtest` (`20-env-and-ports.md` §4).
+Прокси dev-сервера на бэкенд — `apps/web-telegram/vite.config.ts` → `apiProxy`:
+только префиксы, которые защищены сами (`20-env-and-ports.md` §4); сверку с
+клиентом делает `scripts/test/dev-proxy.test.ts`.
 
 ---
 
@@ -423,10 +417,8 @@ pnpm budget
 | Приёмник отчётов диагностики: конверт, схемы стресс-теста и записи забега, итог для выборок, кому открыт стресс-тест | `backend/api/src/modules/diagnostics/dto/report-envelope.dto.ts`, `dto/bench-report.dto.ts`, `dto/run-report.dto.ts`; `diagnostics-summary.ts` → `benchSummaryOf`, `runSummaryOf`; `diagnostics.service.ts` → `stressTestOpen` |
 | Какой забег проблемный: минимум кадров, доля рывков, p95 кадра, доля догоняния, потолок шагов | `backend/api/src/modules/diagnostics/diagnostics-summary.ts` → `RUN_PROBLEM_THRESHOLDS` |
 | Карточка проблемного забега в чате администраторов: вид, подпись, названия причин | `backend/api/src/modules/admin-notify/run-card.ts`; `common/card/labels.ts` → `runProblemLabel` |
-| Записи забегов в ежедневной сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts`; `redis-playtest-stats.store.ts` → ключи `pt:st:rec*` |
-| Итог стресс-теста в сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts` |
-| Кому открыты инструменты команды: режим разработчика, стресс-тест, витрина компонентов, звуковая лаборатория | сервер — `backend/api/src/modules/playtest/playtest-access.ts` по `ADMIN_TELEGRAM_IDS`; на dev-сервере — `VITE_DEV_TOOLS=1` |
-| Команды бота: что видно всем и что администраторам, текст `/help` | `backend/api/src/platforms/telegram/bot-commands.ts`; сами команды — рядом с обработчиками (`welcome.command.ts`, `playtest-stats.reporter.ts`, `export-bot.command.ts`) |
+| Кому открыты инструменты команды: режим разработчика, стресс-тест, витрина компонентов, звуковая лаборатория | сервер — `backend/api/src/modules/roles/tools-access.ts`: право `tools.dev`, стресс-тест всем — панель → «Настройки» (`diagnostics.stress-for-all`); на dev-сервере — `VITE_DEV_TOOLS=1` |
+| Команды бота: что видно всем и что администраторам, текст `/help` | `backend/api/src/platforms/telegram/bot-commands.ts`; сами команды — рядом с обработчиками (`welcome.command.ts`, `panel-login.command.ts`, `export-bot.command.ts`) |
 | Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | панель → раздел «Настройки» (`notify.chat.*`), она сильнее окружения; запасные значения — `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`; разбор — `backend/api/src/platforms/ports/chat-target.ts` |
 | Слать ли в чат карточки отчётов диагностики | панель → «Настройки» (`notify.reports`); запасное — `.env` → `ADMIN_NOTIFY_REPORTS` |
 | Настройки без релиза: какие есть, их схемы и умолчания, как часто реплика перечитывает базу | `backend/api/src/modules/settings/setting-catalog.ts` → `SETTINGS`; `settings.service.ts` → `REFRESH_MS`, канал `SETTINGS_CHANNEL`; порядок — база → окружение → умолчание (`20-env-and-ports.md` §7) |

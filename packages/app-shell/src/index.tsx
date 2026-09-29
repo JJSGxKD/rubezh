@@ -14,7 +14,7 @@ import { useSavedRun } from "./state/run-save";
 import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
-import { usePlaytest } from "./state/playtest";
+import { useTools } from "./state/tools";
 import { useRuns } from "./state/runs";
 import { recoverDownedRun } from "./state/run";
 import { useSettings } from "./state/settings";
@@ -120,7 +120,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
         import("./state/progress-api").then(({ loadAccountState }) => loadAccountState()),
       ]),
     );
-  void usePlaytest.getState().loadAccess();
+  void useTools.getState().loadAccess();
   // Сессия игрока — отдельным чанком после главной: деньгам и рейтингу она
   // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический
   // импорт утащил бы её и клиента авторизации в первую загрузку.
@@ -129,7 +129,6 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
       .then(({ useSession }) => useSession.getState().signIn())
       .catch((error: unknown) => console.warn("Вход не загрузился:", error));
   }
-  void usePlaytest.getState().reportSession();
   const stopTelemetry = startTelemetry(options, telemetrySink.attach);
   // Записи забегов, не ушедшие в прошлый раз, досылаются после главной. Чанк
   // очереди грузится, только если в ней что-то лежит: у обычного игрока пусто.

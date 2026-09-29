@@ -1,11 +1,10 @@
 import { Inject, Injectable, type OnModuleInit } from "@nestjs/common";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
-import { LEADERBOARD_STORE, type LeaderboardStore } from "../runs/leaderboard.store.js";
-import type { Difficulty } from "../runs/run-rules.js";
-import { RunsViewService } from "../runs/runs-view.service.js";
-import type { WelcomeProgress } from "../../platforms/telegram/welcome-card.js";
-import { WelcomeProgressRegistry, type WelcomeProgressSource } from "../../platforms/telegram/welcome.command.js";
+import { ACCOUNT_REPOSITORY, type AccountRepository } from "../../modules/auth/account.repository.js";
+import { LEADERBOARD_STORE, type LeaderboardStore } from "../../modules/runs/leaderboard.store.js";
+import type { Difficulty } from "../../modules/runs/run-rules.js";
+import { RunsViewService } from "../../modules/runs/runs-view.service.js";
+import type { WelcomeProgress } from "./welcome-card.js";
+import { WelcomeProgressRegistry, type WelcomeProgressSource } from "./welcome.command.js";
 
 /** Сложнее — выше: рекорд на «Сложной» говорит об игроке больше, чем на «Лёгкой». */
 const HARDEST_FIRST: readonly Difficulty[] = ["hard", "normal", "easy"];
@@ -17,9 +16,8 @@ const HARDEST_FIRST: readonly Difficulty[] = ["hard", "normal", "easy"];
  * зовёт сыграть первый раз.
  */
 @Injectable()
-export class PlaytestWelcomeProgress implements WelcomeProgressSource, OnModuleInit {
+export class RunsWelcomeProgress implements WelcomeProgressSource, OnModuleInit {
   constructor(
-    @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly registry: WelcomeProgressRegistry,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     private readonly view: RunsViewService,
@@ -27,7 +25,7 @@ export class PlaytestWelcomeProgress implements WelcomeProgressSource, OnModuleI
   ) {}
 
   onModuleInit(): void {
-    if (this.config.playtest.enabled) this.registry.source = this;
+    this.registry.source = this;
   }
 
   async progress(telegramId: string): Promise<WelcomeProgress | null> {

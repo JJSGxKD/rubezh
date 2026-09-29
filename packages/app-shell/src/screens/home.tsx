@@ -34,7 +34,7 @@ import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
 import { hasCheats, useDevMode } from "../state/dev-mode";
 import { useNavigation } from "../state/navigation";
-import { usePlaytestAccess } from "../state/playtest";
+import { useToolsAccess } from "../state/tools";
 import { DevSheetLazy } from "./run/dev-sheet-lazy";
 import { useShell } from "../state/shell";
 import { preloadScreens } from "../app/lazy-screens";
@@ -316,7 +316,7 @@ export function ModeScreen(): ReactNode {
   const navigation = useNavigation();
   // Стресс-тест открыт всем на плейтесте и команде вне его: правило решает
   // сервер (docs/28-diagnostics.md §2.3), здесь только не показываем лишнего.
-  const access = usePlaytestAccess();
+  const access = useToolsAccess();
 
   return (
     <Screen title={t("mode.title")} onBack={() => navigation.pop()}>
@@ -413,7 +413,7 @@ export function WeaponScreen(): ReactNode {
   const selected = starting.some((weapon) => weapon.id === meta.lastWeaponId)
     ? meta.lastWeaponId
     : (starting[0]?.id ?? "");
-  const access = usePlaytestAccess();
+  const access = useToolsAccess();
   const devArmed = useDevMode((state) => state.armed) && access.devMode;
   const devSettings = useDevMode((state) => state.settings);
   const [devOpen, setDevOpen] = useState(false);

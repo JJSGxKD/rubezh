@@ -367,7 +367,7 @@ $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create
 notepad .env
 ```
 
-и поменяйте пять строк (искать — `Ctrl+F`). Вход включается самим
+и поменяйте четыре строки (искать — `Ctrl+F`). Вход включается самим
 секретом — отдельного флага у него нет:
 
 ```dotenv
@@ -375,15 +375,14 @@ JWT_ACCESS_SECRET="сюда — 64 знака из команды выше"
 TELEGRAM_BOT_TOKEN="local-dev-no-bot"
 AUTH_DEV_LOGIN="true"
 VITE_AUTH_DEV_USER="dev-1:Tester"
-PLAYTEST_ENABLED="true"
 ```
 
 - `TELEGRAM_BOT_TOKEN` — здесь подойдёт любой непустой текст. Настоящий токен
   бота нужен только для запуска внутри Telegram и никуда не выкладывается.
 - `dev-1:Tester` — ваш id и имя в лидерборде, латиницей надёжнее. Начало
   `dev-` обязательно: так сервер отличает вас от игроков Telegram.
-- Если в `.env` осталась строка `PLAYTEST_DEV_AUTH="true"` из старой
-  инструкции — удалите её: сервер с ней не запустится и подскажет новое имя.
+- Строки `PLAYTEST_*` из старой инструкции больше ничего не делают — их
+  можно удалить.
 
 Сохранить (`Ctrl+S`) и закрыть Блокнот.
 
@@ -432,9 +431,7 @@ pnpm dev                                  # второй способ; для п
 | Docker Desktop: «Virtualization support not detected» | В BIOS выключена виртуализация. Включить Intel VT-x или AMD SVM — у каждой материнской платы по-своему, искать по её модели |
 | `docker compose up` — `port is already allocated` на 5432 или 6379 | На компьютере уже стоит свой Postgres или Redis. Остановить его в «Службах» Windows или поменять `POSTGRES_PORT` / `REDIS_PORT` в `.env` вместе с портом в `DATABASE_URL` / `REDIS_URL` |
 | Сервер падает с `JWT_ACCESS_SECRET задан — вход включён, и ему нужны TELEGRAM_BOT_TOKEN и DATABASE_URL` | Не заполнен токен бота или адрес базы, см. шаг 11 |
-| Сервер падает с `PLAYTEST_ENABLED=true требует входа — JWT_ACCESS_SECRET` | Не задан секрет входа, см. шаг 11 |
 | Сервер падает с `AUTH_ENABLED убрана` или `ADMIN_PANEL_ENABLED убрана` | В `.env` старая строка, которая спорит с ключом: вход и панель включаются секретом `JWT_ACCESS_SECRET`. Строку удалить |
-| Сервер падает с `PLAYTEST_DEV_AUTH переименована в AUTH_DEV_LOGIN` | В `.env` старая строка — удалить её и включить `AUTH_DEV_LOGIN`, см. шаг 11 |
 | В рейтинге «Рейтинг работает, когда игра открыта в Telegram» | Не задан `VITE_AUTH_DEV_USER` (шаг 11) или страница не обновлена после правки `.env` — `F5` |
 | Белый экран, игра не грузится | `F12` → вкладка «Console». Скриншот красного текста вместе со скриншотом терминала — владельцу репозитория |
 | После `git pull` что-то странное | `Remove-Item -Recurse -Force node_modules`, затем `pnpm install` |

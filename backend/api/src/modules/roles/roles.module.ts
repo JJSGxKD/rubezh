@@ -4,6 +4,8 @@ import { RolesController } from "./roles.controller.js";
 import { PermissionGuard } from "./permission.guard.js";
 import { PrismaRolesRepository, ROLES_REPOSITORY } from "./roles.repository.js";
 import { RolesService } from "./roles.service.js";
+import { ToolsAccessService } from "./tools-access.js";
+import { ToolsController } from "./tools.controller.js";
 
 /**
  * Роли, права и журнал аудита (docs/34-stage3-plan.md, WP2).
@@ -15,8 +17,8 @@ import { RolesService } from "./roles.service.js";
 @Global()
 @Module({
   imports: [AuthModule],
-  controllers: [RolesController],
-  providers: [RolesService, PermissionGuard, { provide: ROLES_REPOSITORY, useClass: PrismaRolesRepository }],
-  exports: [RolesService, PermissionGuard],
+  controllers: [RolesController, ToolsController],
+  providers: [RolesService, PermissionGuard, ToolsAccessService, { provide: ROLES_REPOSITORY, useClass: PrismaRolesRepository }],
+  exports: [RolesService, PermissionGuard, ToolsAccessService],
 })
 export class RolesModule {}
