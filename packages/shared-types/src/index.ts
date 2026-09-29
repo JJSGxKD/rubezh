@@ -1059,22 +1059,14 @@ export interface RunFinishSubmission {
   boosts?: string[];
 }
 
-/**
- * Запуск приложения — для статистики плейтеста: сколько людей открыли игру
- * и на чём. Технические сведения об устройстве без идентификаторов, кроме
- * `installId`, который уже есть у каждой установки (docs/28-diagnostics.md §5.2).
- */
-export interface PlaytestSessionReport {
-  installId: string;
-  build: string;
-  contentHash: string;
-  device: PlaytestDevice;
-}
-
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
 export type DeviceFormFactor = "phone" | "tablet" | "desktop";
 
-export interface PlaytestDevice {
+/**
+ * Устройство в отчёте диагностики: технические сведения без идентификаторов
+ * (docs/28-diagnostics.md §5.2).
+ */
+export interface DeviceDescription {
   clientPlatform: string | null;
   clientVersion: string | null;
   os: DeviceOs;
@@ -1135,7 +1127,7 @@ export interface RecentRun {
  * Что игроку открыто в клиенте. Решает сервер по праву аккаунта; скрытая
  * кнопка — не защита, и то, что трогает чужие данные, сервер проверяет сам.
  */
-export interface PlaytestAccess {
+export interface ToolsAccess {
   admin: boolean;
   stressTest: boolean;
   devMode: boolean;

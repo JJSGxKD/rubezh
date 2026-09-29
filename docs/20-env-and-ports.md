@@ -132,10 +132,9 @@ Telegram, MAX, VK, веб, гостевая. Какие кнопки видны 
 | 2. Postgres и Redis | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `REDIS_URL` | dev — из `docker-compose.yml`; прод — секреты окружения. Миграции применяются отдельно: `pnpm --filter backend-api prisma:deploy` |
 | 3. Адреса, CORS и туннель | `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml`. За Caddy `TRUST_PROXY_HOPS=1` |
 | 4. Бот закрытого теста | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_API_ROOT`, `TELEGRAM_BOT_UPDATES`, `TELEGRAM_WEBHOOK_SECRET`, `VITE_TELEGRAM_BOT_USERNAME` | из BotFather; для staging — **отдельный** бот, иначе два процесса дерутся за обновления. Секрет вебхука генерируется: `openssl rand -hex 32` |
-| 5. Администраторы и их чаты | `ADMIN_TELEGRAM_IDS`, `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`, `ADMIN_NOTIFY_REPORTS`, `ADMIN_PANEL_ENABLED`, `ADMIN_SESSION_TTL_MIN` | Telegram ID администраторов цифрами через запятую, мусор — бэкенд не стартует. Адреса чатов — ниже. `PLAYTEST_STATS_CHAT_ID` переименована в `ADMIN_CHAT_ID`: со старым именем бэкенд не стартует и называет новое. `ADMIN_PANEL_ENABLED` включает серверную часть панели под `/api/v1/admin/*` (`35-stage4-plan.md`, WP17) и требует `AUTH_ENABLED`; выключенная отвечает 404. `ADMIN_SESSION_TTL_MIN` — срок cookie-сессии панели, 5–1440 минут, без продления |
+| 5. Администраторы и их чаты | `ADMIN_TELEGRAM_IDS`, `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`, `ADMIN_NOTIFY_REPORTS`, `ADMIN_PANEL_ENABLED`, `ADMIN_SESSION_TTL_MIN` | Telegram ID администраторов цифрами через запятую, мусор — бэкенд не стартует. Адреса чатов — ниже. Панель под `/api/v1/admin/*` (`35-stage4-plan.md`, WP17) работает вместе со входом; без него отвечает 404. `ADMIN_SESSION_TTL_MIN` — срок cookie-сессии панели, 5–1440 минут, без продления |
 | 6. Приём данных закрытого теста | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC`, `DIAGNOSTICS_RETENTION_DAYS` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует. Переменные — запасные значения настроек `ingest.events` и `ingest.reports`: панель сильнее и выключает приём на ходу (§7) |
 | 7. Выгрузка данных | `EXPORT_PSEUDONYM_KEY`, `DATA_EXPORT_BOT_ENABLED` | ключ псевдонимов генерируется `openssl rand -hex 32` и **не меняется просто так**: выгрузки до и после смены не сопоставляются (`28-diagnostics.md` §7). `DATA_EXPORT_BOT_ENABLED` — запасное значение настройки `export.bot`: при утечке токена бота выгрузку выключают в панели |
-| 8. Плейтест | `PLAYTEST_ENABLED`, `PLAYTEST_DATA_TTL_DAYS`, `PLAYTEST_STATS_*` | временная группа закрытого теста (`26-stage2-plan.md`, WP13 и WP14). Вход без подписи — только при `NODE_ENV=development`, иначе бэкенд не стартует; сводка без адреса чата или чтения обновлений бота не стартует |
 | 9. Авторизация игроков, приём забегов и оплата | `JWT_ACCESS_SECRET`, `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_INIT_DATA_MAX_AGE_SEC`, `AUTH_MAX_SESSIONS`, `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER`, `RUNS_*`, `PAYMENTS_ENABLED`, `PAYMENTS_TEST_MODE`, `CONTINUE_*` | секрет подписи генерируется `openssl rand -hex 32`, свой на окружение. **Вход включается секретом** (Р53): задан — вход и панель работают, и тогда без токена бота и базы бэкенд не стартует; флагов `AUTH_ENABLED` и `ADMIN_PANEL_ENABLED` больше нет — совпадающая с ключом старая строка принимается, спорящая роняет старт. Окно данных запуска для входа — не больше часа, потолок в схеме. `AUTH_DEV_LOGIN` — вход разработчика без подписи, только в development. Пороги `RUNS_*` в `.env.example` нарочно мягкие: боевые задаются только в окружении прода (`34-stage3-plan.md`, Р7). Оплата возможна при входе и чтении обновлений бота — подтверждение оплаты приходит обновлением от Telegram — и тогда включена, пока её не выключили стоп-краном в панели (`payments.stars`); `PAYMENTS_ENABLED` — его запасное значение, `true` без входа или обновлений бэкенд не запускает. `PAYMENTS_TEST_MODE` — одна звезда с немедленным возвратом, только в development. Цены `CONTINUE_*` — рабочие до решения О1 |
 | 9.1 Курсы валют | `FX_ENABLED`, `FX_COINGECKO_DEMO_KEY`, `FX_COINGECKO_PRO_KEY` | опрос выключен по умолчанию, `FX_ENABLED` — запасное значение настройки `fx.polling`: включённый раз в минуту решает, кому из источников пора, и ходит наружу — к `www.cbr.ru`, `www.ecb.europa.eu`, `open.er-api.com`, `api.coingecko.com` (с платным ключом — `pro-api.coingecko.com`), `tonapi.io`, `api.binance.com`; исходящий доступ к ним нужен серверу. Ключи CoinGecko — необязательные секреты: пусто — запросы без ключа, демо-ключ бесплатный, оба заданы — берётся платный. Тариф и частота меняются сами (`35-stage4-plan.md`, §3.12). Заданные курсы звёзд при подъёме окружения — `pnpm --filter backend-api fx:manual XTR price 1.72 RUB 90 "прайс-лист клиента Telegram"` и `… fx:manual XTR payout 0.013 USD 90 "вывод звёзд"` (Р37), без аргументов — что стоит сейчас; в контейнере — `node dist/cli/fx-manual.js` |
 | 10. Клиентская сборка | `VITE_API_URL`, `VITE_APP_VERSION`, `VITE_DIAGNOSTICS_DEFAULT`, `VITE_DEV_TOOLS` | только не-секреты: всё это попадает в бандл. `VITE_DEV_TOOLS=1` открывает инструменты команды без ответа сервера и работает только на dev-сервере |
@@ -161,7 +160,7 @@ Telegram (`https://api.telegram.org`). Если поднят локальный 
 | Переменная | Что уходит по этому адресу |
 |---|---|
 | `ADMIN_CHAT_ID` | общий адрес и меню команд администратора |
-| `ADMIN_CHAT_STATS` | сводка плейтеста и ответы на `/stats` |
+| `ADMIN_CHAT_STATS` | статистика для команды |
 | `ADMIN_CHAT_STRESS` | карточки стресс-тестов |
 | `ADMIN_CHAT_RUNS` | карточки записей забегов с проблемами производительности |
 | `ADMIN_CHAT_FEEDBACK` | отзывы игроков с формы обратной связи |
@@ -170,7 +169,7 @@ Telegram (`https://api.telegram.org`). Если поднят локальный 
 `VITE_API_URL` пустой по умолчанию: собранный клиент ходит в API на свой же
 домен, маршрут `/api` держит Caddy. Отдельный адрес задаётся, только если API
 живёт на другом домене, — тогда этот домен добавляется и в `ALLOWED_ORIGINS`.
-Dev-сервер переменную не читает вовсе: запросы `/api/v1/playtest` он всегда
+Dev-сервер переменную не читает вовсе: запросы `/api/v1/…` он всегда
 проксирует на локальный бэкенд (§4). Иначе старое значение
 `http://localhost:4000` из `.env` отправляло бы телефон через туннель в его
 собственный localhost.
@@ -413,11 +412,11 @@ Telegram или простоя туннеля. Плагин `scripts/vite/stable
 
 **Вход, забеги, рейтинг, оплата и кошелёк в dev** идут через dev-сервер Vite: он
 проксирует `/api/v1/auth`, `/api/v1/runs`, `/api/v1/payments`,
-`/api/v1/wallet`, `/api/v1/progress`, `/api/v1/playtest`, приёмники, отзывы и вебхук бота на
+`/api/v1/wallet`, `/api/v1/progress`, `/api/v1/tools`, приёмники, отзывы и вебхук бота на
 `http://127.0.0.1:${API_PORT}`, поэтому телефон через туннель `tg.dev.gonet.fun`
 достаёт до бэкенда без отдельного прокси и без CORS. Проксируются только
 префиксы, которые защищены сами: вход — подписью запуска и лимитом, забеги,
-оплата, кошелёк, уровень и плейтест — токеном сессии. Роли, журнал и остальные эндпоинты dev-бэкенда
+оплата, кошелёк, уровень и инструменты команды — токеном сессии. Роли, журнал и остальные эндпоинты dev-бэкенда
 наружу так не выходят (`apps/web-telegram/vite.config.ts`). Префикс, к
 которому ходит клиент, но которого нет в прокси, ловит
 `scripts/test/dev-proxy.test.ts`.
@@ -425,8 +424,7 @@ Telegram или простоя туннеля. Плагин `scripts/vite/stable
 
 ```powershell
 docker compose up -d redis
-# в .env: AUTH_ENABLED="true", JWT_ACCESS_SECRET, PLAYTEST_ENABLED="true",
-# TELEGRAM_BOT_TOKEN — токен тестового бота
+# в .env: JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN — токен тестового бота
 pnpm dev
 pnpm tunnel
 ```
@@ -436,8 +434,8 @@ pnpm tunnel
 вместо подписи запуска, и дальше всё идёт под обычной сессией: забеги,
 рейтинг, профиль. Обе переменные только для dev: бэкенд с `AUTH_DEV_LOGIN`
 вне `NODE_ENV=development` не стартует, а сборка клиента имени не знает.
-Прежние `PLAYTEST_DEV_AUTH` и `VITE_PLAYTEST_DEV_USER` больше не действуют;
-с `PLAYTEST_DEV_AUTH="true"` бэкенд не стартует и называет новое имя.
+Переменные `PLAYTEST_*` ушли вместе с плейтест-маршрутом
+(`35-stage4-plan.md`, Р55): оставшиеся в `.env` строки ничего не делают.
 
 Оплата второго шанса в разработке — настоящими звёздами тестового бота, но
 по одной и с возвратом: `PAYMENTS_ENABLED="true"`, `PAYMENTS_TEST_MODE="true"`
@@ -448,11 +446,11 @@ pnpm tunnel
 Telegram: вход разработчика по имени звёзд не имеет. Бэкенд с
 `PAYMENTS_TEST_MODE="true"` вне `NODE_ENV=development` не стартует.
 
-Сводка статистики в чат администраторов (`21-diagrams.md` §4.12) включается
-на **одной** машине: `PLAYTEST_STATS_ENABLED="true"`, `ADMIN_CHAT_ID` — id
-группы, куда добавлен бот, и `TELEGRAM_BOT_UPDATES="polling"` (или `webhook`
-с `TELEGRAM_WEBHOOK_SECRET` и `PUBLIC_API_URL` — адресом туннеля: dev-сервер
-проксирует `/api/v1/bot`, регистрация — `pnpm --filter backend-api bot:webhook`). Список
+Бот на машине разработчика читает обновления сам — `TELEGRAM_BOT_UPDATES="polling"`
+— или вебхуком (`webhook` с `TELEGRAM_WEBHOOK_SECRET` и `PUBLIC_API_URL` —
+адресом туннеля: dev-сервер проксирует `/api/v1/bot`, регистрация —
+`pnpm --filter backend-api bot:webhook`). **Не с токеном продового бота:** два
+читателя обновлений одного бота вытесняют друг друга. Список
 обновлений, которые читает бот, задаётся при регистрации вебхука: когда он
 меняется — как на этапе 4, где добавился `my_chat_member` для «можно писать»
 (`35-stage4-plan.md`, WP2), — вебхук регистрируется заново той же командой,

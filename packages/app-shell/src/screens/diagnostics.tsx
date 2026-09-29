@@ -11,7 +11,7 @@ import { useNavigation } from "../state/navigation";
 import { reportQueue } from "../state/run-report";
 import type { ReportQueueState } from "../state/report-queue";
 import { usePlatform } from "../state/platform";
-import { usePlaytestAccess } from "../state/playtest";
+import { useToolsAccess } from "../state/tools";
 import { useShell } from "../state/shell";
 import { uiFeedback } from "../state/ui-feedback";
 
@@ -23,7 +23,7 @@ type CopyState = "idle" | "copied" | "manual";
  */
 export function DiagnosticsScreen(): ReactNode {
   const navigation = useNavigation();
-  const access = usePlaytestAccess();
+  const access = useToolsAccess();
   const platform = usePlatform();
   const build = useShell((state) => state.build);
   const adapter = useShell((state) => state.adapter);

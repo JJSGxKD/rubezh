@@ -132,6 +132,13 @@ export const SETTINGS = {
     (config) => config.export.botEnv,
     false,
   ),
+  stressForAll: feature(
+    "diagnostics.stress-for-all",
+    "Стресс-тест для всех игроков",
+    "Кнопка стресс-теста у каждого игрока, а не только у команды с правом tools.dev: для открытых проверок производительности устройств",
+    () => null,
+    false,
+  ),
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",

@@ -1,4 +1,4 @@
-import type { DeviceFormFactor, DeviceOs, PlatformClientInfo, PlaytestDevice } from "@bh/shared-types";
+import type { DeviceFormFactor, DeviceOs, PlatformClientInfo, DeviceDescription } from "@bh/shared-types";
 
 /**
  * Сведения об устройстве для статистики плейтеста: на чём играют тестеры.
@@ -17,7 +17,7 @@ export interface DeviceEnvironment {
   memoryGb: number | null;
 }
 
-export function describeDevice(client: PlatformClientInfo, env: DeviceEnvironment = readEnvironment()): PlaytestDevice {
+export function describeDevice(client: PlatformClientInfo, env: DeviceEnvironment = readEnvironment()): DeviceDescription {
   const os = osOf(env.userAgent, env.maxTouchPoints);
   return {
     clientPlatform: client.platform,

@@ -152,7 +152,7 @@ const BACKEND_MODULES = "backend/api/src/modules";
  * Инструменты команды, а не игра: карточки отчётов, сводка, выгрузка и
  * отзывы живут в чате администраторов в Telegram, и порт им не нужен.
  */
-const TEAM_TOOLS = new Set(["admin-notify", "export", "feedback", "playtest"]);
+const TEAM_TOOLS = new Set(["admin-notify", "export", "feedback"]);
 
 /** Импорт адаптера площадки — `../../platforms/telegram/…` и старый `../telegram/…` — или библиотеки Bot API. */
 const PLATFORM_ADAPTER = /from ["'][./]*(?:platforms\/)?(?:telegram|max|vk)\/|["']grammy["']/;

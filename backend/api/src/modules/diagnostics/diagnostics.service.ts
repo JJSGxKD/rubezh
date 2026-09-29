@@ -4,6 +4,7 @@ import { ForbiddenError, RateLimitedError, UnavailableError, ValidationError } f
 import { describeDbError } from "../../infra/database.js";
 import type { IngestIdentity } from "../ingest/ingest.guard.js";
 import { INGEST_LIMITS } from "../ingest/ingest-limits.js";
+import { ToolsAccessService } from "../roles/tools-access.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { DIAGNOSTICS_REPOSITORY, type DiagnosticsRepository } from "./diagnostics.repository.js";
 import { DiagnosticsHooks, type ReceivedReport } from "./diagnostics-hooks.js";
@@ -18,16 +19,6 @@ export interface ReceiveResult {
   duplicate: boolean;
 }
 
-/**
- * Кому открыт стресс-тест (docs/28-diagnostics.md §2.3): всем, пока идёт
- * плейтест; администраторам — всегда; на машине разработчика — всем. Скрытая
- * кнопка в клиенте — не защита, поэтому правило проверяет и приёмник.
- */
-export function stressTestOpen(config: AppConfig, platformUserId: string | null): boolean {
-  if (config.playtest.enabled || config.nodeEnv === "development") return true;
-  return platformUserId !== null && config.adminTelegramIds.has(platformUserId);
-}
-
 @Injectable()
 export class DiagnosticsService {
   private readonly logger = new Logger("diagnostics");
@@ -37,12 +28,18 @@ export class DiagnosticsService {
     @Inject(DIAGNOSTICS_REPOSITORY) private readonly repository: DiagnosticsRepository,
     private readonly limiter: RateLimiter,
     private readonly hooks: DiagnosticsHooks,
+    private readonly tools: ToolsAccessService,
   ) {}
 
   async receive(body: unknown, identity: IngestIdentity, now: Date): Promise<ReceiveResult> {
     const envelope = reportEnvelopeSchema.safeParse(body);
     if (!envelope.success) throw new ValidationError("Некорректный отчёт диагностики");
     const report = this.parse(envelope.data, identity, now);
+    // Кому открыт стресс-тест, решает то же правило, что прячет кнопку в
+    // клиенте (roles/tools-access.ts): скрытая кнопка — не защита.
+    if (report.kind === "bench" && !(await this.tools.stressTestOpen(identity.platformUserId))) {
+      throw new ForbiddenError("Стресс-тест сейчас недоступен");
+    }
     await this.enforceLimits(envelope.data.installId, identity.platformUserId);
 
     let inserted: boolean;
@@ -99,9 +96,6 @@ export class DiagnosticsService {
     const parsed = submitBenchReportSchema.safeParse(envelope.payload);
     if (!parsed.success || parsed.data.reportId !== envelope.reportId) {
       throw new ValidationError("Некорректный отчёт стресс-теста");
-    }
-    if (!stressTestOpen(this.config, identity.platformUserId)) {
-      throw new ForbiddenError("Стресс-тест сейчас недоступен");
     }
     const payload = withoutPersonalData(parsed.data);
     return { ...base, kind: "bench", summary: benchSummaryOf(payload), payload };

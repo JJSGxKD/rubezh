@@ -27,7 +27,6 @@ import { ItemsModule } from "./modules/items/items.module.js";
 import { BoostsModule } from "./modules/boosts/boosts.module.js";
 import { TelegramMessagingModule } from "./platforms/telegram/telegram-messaging.module.js";
 import { HealthController } from "./health/health.controller.js";
-import { PlaytestModule } from "./modules/playtest/playtest.module.js";
 import { AdminModule } from "./modules/admin/admin.module.js";
 import { FriendsModule } from "./modules/friends/friends.module.js";
 import { ReferralsModule } from "./modules/referrals/referrals.module.js";
@@ -41,10 +40,6 @@ import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-lo
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
  * payments, economy. Добавляются по мере реализации в роадмапе
  * (docs/02-roadmap.md).
- *
- * playtest — сводка закрытого теста, отчёты о запуске и доступ к
- * инструментам, выключен по умолчанию (docs/26-stage2-plan.md, WP14). Забеги
- * и рейтинг из него переехали в runs.
  *
  * auth — аккаунты и сессии игроков (docs/34-stage3-plan.md, WP1);
  * roles — права, роли и журнал аудита (там же, WP2);
@@ -89,7 +84,6 @@ export const APP_MODULES = [
   AdminNotifyModule,
   ExportModule,
   WelcomeModule,
-  PlaytestModule,
   AdminModule,
   TelegramPanelLoginModule,
   FriendsModule,

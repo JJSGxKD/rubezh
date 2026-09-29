@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter, type RunResult } from "@bh/shared-types";
 import { failureOf, sessionFailure } from "../src/state/api-request";
 import { useMeta } from "../src/state/meta";
-import { effectiveAccess, usePlaytest } from "../src/state/playtest";
+import { effectiveAccess, useTools } from "../src/state/tools";
 import { rememberRunLoadout } from "../src/state/run-loadouts";
 import { toStart, toSubmission, useRuns } from "../src/state/runs";
 import { resetSessionForTests } from "../src/state/session";
@@ -282,12 +282,12 @@ describe("очередь забегов", () => {
   it("инструменты команды открывает сервер, а на dev-сервере — явный VITE_DEV_TOOLS", async () => {
     reply = async () => json(200, { data: { admin: false, stressTest: true, devMode: false } });
     mount();
-    usePlaytest.setState({ access: null });
-    expect(effectiveAccess(usePlaytest.getState().access, false).stressTest).toBe(false);
+    useTools.setState({ access: null });
+    expect(effectiveAccess(useTools.getState().access, false).stressTest).toBe(false);
 
-    expect(await usePlaytest.getState().loadAccess()).toBeNull();
-    expect(requests.at(-1)?.url).toBe("/api/v1/playtest/access");
-    expect(effectiveAccess(usePlaytest.getState().access, false)).toEqual({ admin: false, stressTest: true, devMode: false });
+    expect(await useTools.getState().loadAccess()).toBeNull();
+    expect(requests.at(-1)?.url).toBe("/api/v1/tools/access");
+    expect(effectiveAccess(useTools.getState().access, false)).toEqual({ admin: false, stressTest: true, devMode: false });
     expect(effectiveAccess(null, true)).toEqual({ admin: true, stressTest: true, devMode: true });
     // Без ответа сервера и без явного разрешения не открыто ничего: через
     // туннель к dev-серверу играют тестеры.

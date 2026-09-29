@@ -15,7 +15,7 @@ import { useGraphics } from "../state/graphics";
 import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
-import { usePlaytestAccess } from "../state/playtest";
+import { useToolsAccess } from "../state/tools";
 import { useSettings, type VolumeKey } from "../state/settings";
 import { useShell } from "../state/shell";
 
@@ -154,7 +154,7 @@ export function VolumeSliders(): ReactNode {
 export function TestersScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics();
-  const access = usePlaytestAccess();
+  const access = useToolsAccess();
 
   return (
     <Screen title={t("testers.title")} onBack={() => navigation.pop()}>

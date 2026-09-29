@@ -72,19 +72,9 @@ const schema = z.object({
   // настройки `export.bot`: выключают её в панели.
   DATA_EXPORT_BOT_ENABLED: envSwitch(),
 
-  // Плейтест: сводка, отчёты о запуске, стресс-тест для всех
-  // (docs/26-stage2-plan.md, WP14). Забеги и рейтинг — модуль runs под
-  // авторизацией, поэтому плейтест без неё не включается.
-  PLAYTEST_ENABLED: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
+  // Токен бота: подпись запуска Mini App, сам бот и оплата. Секрет, без
+  // значения по умолчанию.
   TELEGRAM_BOT_TOKEN: z.string().default(""),
-  // Через сколько дней без записей данные сводки плейтеста исчезают сами.
-  PLAYTEST_DATA_TTL_DAYS: z.coerce.number().int().positive().default(45),
-  // Переименована в AUTH_DEV_LOGIN: вход разработчика теперь заводит аккаунт,
-  // а не подписывает запросы плейтеста.
-  PLAYTEST_DEV_AUTH: z.string().default(""),
 
   // Адрес Bot API. Пусто — облако Telegram; свой адрес нужен тем, кто держит
   // локальный сервер Bot API (docs/20-env-and-ports.md §3.1): у него другой
@@ -129,22 +119,6 @@ const schema = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((value) => (value === undefined ? null : value === "true")),
-  // Переименована в ADMIN_CHAT_ID: чат теперь получает не только сводку.
-  PLAYTEST_STATS_CHAT_ID: z.string().default(""),
-
-  // Сводка статистики плейтеста в чат администраторов (docs/26-stage2-plan.md, WP14).
-  // Включённая сводка без чата, токена или чтения обновлений не стартует.
-  PLAYTEST_STATS_ENABLED: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
-  // Когда присылать сводку сама, «ЧЧ:ММ» в поясе команды; пусто — только по команде.
-  PLAYTEST_STATS_DAILY_AT: z
-    .string()
-    .default("21:00")
-    .refine((value) => value === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(value), { message: "PLAYTEST_STATS_DAILY_AT — время ЧЧ:ММ" }),
-  // Пояс команды для «сегодня» и времени отчёта: сервер живёт в UTC.
-  PLAYTEST_STATS_UTC_OFFSET_MIN: z.coerce.number().int().min(-720).max(840).default(180),
 
   // Авторизация игроков (docs/34-stage3-plan.md, WP1) включается ключом
   // (Р53): задан секрет подписи — вход работает, пуст — эндпоинты отвечают
@@ -350,16 +324,6 @@ export interface AppConfig {
     wallClockToleranceSec: number;
     startMaxDelaySec: number;
   };
-  playtest: {
-    enabled: boolean;
-    dataTtlSec: number;
-    stats: {
-      enabled: boolean;
-      /** минута суток в поясе команды; `null` — сводка только по команде */
-      dailyAtMin: number | null;
-    };
-    statsUtcOffsetMin: number;
-  };
 }
 
 /** Адреса чатов команды строками из окружения; пусто — не задан. */
@@ -398,11 +362,6 @@ function repoRoot(...segments: string[]): string {
   return resolve(import.meta.dirname, "../../../../", ...segments);
 }
 
-function minuteOfDay(time: string): number {
-  const [hours, minutes] = time.split(":").map(Number);
-  return (hours ?? 0) * 60 + (minutes ?? 0);
-}
-
 export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   const parsed = schema.parse(env);
   // Вход включается ключом (Р53); всё, что зависит от входа, смотрит сюда.
@@ -412,20 +371,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   // У секретов не бывает значений по умолчанию: включённая функция без
   // токена не стартует, а не «пока сойдёт» (docs/20-env-and-ports.md §1,
   // правило 4).
-  if (parsed.PLAYTEST_ENABLED && !authEnabled) {
-    throw new Error("PLAYTEST_ENABLED=true требует входа — JWT_ACCESS_SECRET: забеги и отчёты о запуске приходят под аккаунтом");
-  }
-  if (parsed.PLAYTEST_STATS_CHAT_ID !== "") {
-    throw new Error("PLAYTEST_STATS_CHAT_ID переименована в ADMIN_CHAT_ID: чат администраторов получает не только сводку");
-  }
   if (parsed.TELEGRAM_BOT_UPDATES === "webhook" && parsed.TELEGRAM_WEBHOOK_SECRET === "") {
     throw new Error("TELEGRAM_BOT_UPDATES=webhook требует TELEGRAM_WEBHOOK_SECRET: без него вебхук принимал бы обновления от кого угодно");
   }
   if (parsed.TELEGRAM_BOT_UPDATES !== "off" && parsed.TELEGRAM_BOT_TOKEN === "") {
     throw new Error(`TELEGRAM_BOT_UPDATES=${parsed.TELEGRAM_BOT_UPDATES} требует TELEGRAM_BOT_TOKEN`);
-  }
-  if (parsed.PLAYTEST_STATS_ENABLED && ((parsed.ADMIN_CHAT_STATS === "" && parsed.ADMIN_CHAT_ID === "") || parsed.TELEGRAM_BOT_UPDATES === "off")) {
-    throw new Error("PLAYTEST_STATS_ENABLED=true требует ADMIN_CHAT_ID (или ADMIN_CHAT_STATS) и чтения обновлений бота (TELEGRAM_BOT_UPDATES)");
   }
   const exportPossible = parsed.EXPORT_PSEUDONYM_KEY !== "" && parsed.DATABASE_URL !== "" && botUpdates;
   if (parsed.DATA_EXPORT_BOT_ENABLED === true && !exportPossible) {
@@ -433,11 +383,6 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   }
   if ((parsed.EVENTS_INGEST_ENABLED === true || parsed.DIAGNOSTICS_INGEST_ENABLED === true) && parsed.DATABASE_URL === "") {
     throw new Error("Приёмники событий и отчётов пишут в Postgres: включённый приёмник требует DATABASE_URL");
-  }
-  // Молча игнорировать нельзя только включённую: у всей команды в `.env`
-  // осталась строка "false" из прошлого `.env.example`.
-  if (parsed.PLAYTEST_DEV_AUTH === "true") {
-    throw new Error("PLAYTEST_DEV_AUTH переименована в AUTH_DEV_LOGIN: вход разработчика теперь заводит аккаунт");
   }
   // Вход без подписи — дыра, если попадёт куда-то кроме машины разработчика.
   // Процесс не поднимается, а не «предупреждает».
@@ -549,15 +494,6 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       knownContentHashes: new Set(parsed.RUNS_KNOWN_CONTENT_HASHES),
       wallClockToleranceSec: parsed.RUNS_WALL_CLOCK_TOLERANCE_SEC,
       startMaxDelaySec: parsed.RUNS_START_MAX_DELAY_SEC,
-    },
-    playtest: {
-      enabled: parsed.PLAYTEST_ENABLED,
-      dataTtlSec: parsed.PLAYTEST_DATA_TTL_DAYS * 24 * 60 * 60,
-      stats: {
-        enabled: parsed.PLAYTEST_STATS_ENABLED,
-        dailyAtMin: parsed.PLAYTEST_STATS_DAILY_AT === "" ? null : minuteOfDay(parsed.PLAYTEST_STATS_DAILY_AT),
-      },
-      statsUtcOffsetMin: parsed.PLAYTEST_STATS_UTC_OFFSET_MIN,
     },
   };
 }

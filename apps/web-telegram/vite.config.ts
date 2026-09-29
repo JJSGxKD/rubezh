@@ -41,7 +41,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/items",
       "/api/v1/boosts",
       "/api/v1/progress",
-      "/api/v1/playtest",
+      "/api/v1/tools",
       "/api/v1/events",
       "/api/v1/diagnostics",
       "/api/v1/feedback",

@@ -1,5 +1,5 @@
 import type { BenchSubmission, RunRecording } from "@bh/core-game";
-import type { PlaytestDevice } from "@bh/shared-types";
+import type { DeviceDescription } from "@bh/shared-types";
 import { z } from "zod/mini";
 import { useShell } from "./shell";
 
@@ -24,7 +24,7 @@ interface EnvelopeBase {
   installId: string;
   platform: string;
   occurredAt: string;
-  device: PlaytestDevice;
+  device: DeviceDescription;
 }
 
 export interface BenchReportEnvelope extends EnvelopeBase {
