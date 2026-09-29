@@ -134,14 +134,10 @@ esac
 
 for app in "${apps[@]}"; do switch_web "$app"; done
 
-# Остальные сервисы — по конфигурации из этого выката; Caddy перечитывает
-# сниппеты политики без разрыва соединений.
-docker compose up -d --build --remove-orphans
-docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile < /dev/null
-
 # Роль для базовой копии — с правом репликации и только им; пароль — из
-# .env. Повторный выкат лишь подтверждает пароль. Пароль идёт окружением,
-# а не аргументом: аргументы видны в списке процессов.
+# .env. Повторный выкат лишь подтверждает пароль. Заводится до подъёма
+# контейнера бэкапа: иначе его первая база получает отказ и ждёт повтора.
+# Пароль идёт окружением, а не аргументом: аргументы видны в списке процессов.
 if [ "$backups" = on ]; then
   BACKUP_PG_PASSWORD="$(env_value BACKUP_PG_PASSWORD)" docker compose exec -T -e BACKUP_PG_PASSWORD postgres \
     psql -q -v ON_ERROR_STOP=1 -U "$(env_value POSTGRES_USER)" -d "$(env_value POSTGRES_DB)" <<'SQL' > /dev/null
@@ -151,6 +147,11 @@ SELECT format('%s ROLE backup WITH LOGIN REPLICATION PASSWORD %L',
               :'password') \gexec
 SQL
 fi
+
+# Остальные сервисы — по конфигурации из этого выката; Caddy перечитывает
+# сниппеты политики без разрыва соединений.
+docker compose up -d --build --remove-orphans
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile < /dev/null
 
 # Ежедневный бэкап — у пользователя деплоя, без sudo; строка ставится один раз.
 cron_line="17 3 * * * ${APP}/backup.sh >> /srv/rubezh/backups/backup.log 2>&1"

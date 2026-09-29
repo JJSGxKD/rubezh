@@ -32,6 +32,11 @@ SELF="$(readlink -f "$0")"
 # Неудачный суточный проход повторяется не чаще раза в десять минут: иначе
 # сломанная выгрузка гнала бы базу целиком каждую минуту.
 DAILY_RETRY_SEC=600
+# Базе, от которой доигрывается журнал, — не больше суток с запасом: иначе
+# восстановление доигрывает всё дольше, а пропущенная ночь означает поломку.
+BASE_MAX_AGE_SEC=$((26 * 3600))
+# Сколько после старта контейнера ждать первую базу, прежде чем бить тревогу.
+FIRST_BASE_GRACE_SEC=1800
 
 log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 stamp() { date -u +%Y%m%dT%H%M%SZ; }
@@ -164,13 +169,18 @@ daily() {
   "$SELF" repo || log "зеркало репозитория не снято"
 }
 
+age_of() { echo $(($(date +%s) - $(stat -c %Y "$1"))); }
+
 # Пора ли суточному проходу: без базовой копии журнал ничего не
 # восстанавливает — первая снимается сразу, дальше раз в сутки в свой час.
+# База старше суток — тоже сразу, не дожидаясь часа: контейнер мог стоять
+# ночью, когда была её очередь.
 daily_due() {
-  if [ -f "$STATE/daily-attempt" ] && [ $(($(date +%s) - $(stat -c %Y "$STATE/daily-attempt"))) -lt "$DAILY_RETRY_SEC" ]; then
+  if [ -f "$STATE/daily-attempt" ] && [ "$(age_of "$STATE/daily-attempt")" -lt "$DAILY_RETRY_SEC" ]; then
     return 1
   fi
   [ ! -s "$STATE/last-base" ] && return 0
+  [ "$(age_of "$STATE/last-base")" -ge $((25 * 3600)) ] && return 0
   [ "$(date -u +%H)" = "$DAILY_HOUR_UTC" ] && [ "$(cat "$STATE/last-daily" 2> /dev/null)" != "$(date -u +%F)" ]
 }
 
@@ -179,6 +189,7 @@ loop() {
   # свежий том принадлежит root: без этого архив журнала не пишется.
   chown 70:70 "$SPOOL"
   chmod 700 "$SPOOL"
+  touch "$STATE/started"
   while true; do
     "$SELF" ship || log "отправка журнала не прошла — повтор через минуту"
     if daily_due; then
@@ -188,20 +199,25 @@ loop() {
   done
 }
 
-# Здоров — отправка журнала шла последние 15 минут и очередь не копится.
+# Здоров — отправка журнала шла последние 15 минут, очередь не копится и
+# есть свежая база: журнал без базы восстановить не от чего.
 health() {
   [ -f "$STATE/last-ship" ] || exit 1
-  local age pending
-  age=$(($(date +%s) - $(stat -c %Y "$STATE/last-ship")))
+  local pending
   pending="$(find "$SPOOL" -maxdepth 1 -type f ! -name '*.tmp' | wc -l)"
-  [ "$age" -lt 900 ] && [ "$pending" -lt 60 ]
+  [ "$(age_of "$STATE/last-ship")" -lt 900 ] && [ "$pending" -lt 60 ] || exit 1
+  if [ -s "$STATE/last-base" ]; then
+    [ "$(age_of "$STATE/last-base")" -lt "$BASE_MAX_AGE_SEC" ]
+  else
+    [ -f "$STATE/started" ] && [ "$(age_of "$STATE/started")" -lt "$FIRST_BASE_GRACE_SEC" ]
+  fi
 }
 
 status() {
-  local last_ship="—"
-  [ -f "$STATE/last-ship" ] && last_ship="$(($(date +%s) - $(stat -c %Y "$STATE/last-ship"))) с назад"
-  printf 'база: %s\nжурнал отправлен: %s\nв очереди: %s\n' \
-    "$(cat "$STATE/last-base" 2>/dev/null || echo —)" "$last_ship" \
+  local last_ship="—" base="—"
+  [ -f "$STATE/last-ship" ] && last_ship="$(age_of "$STATE/last-ship") с назад"
+  [ -s "$STATE/last-base" ] && base="$(cat "$STATE/last-base"), $(($(age_of "$STATE/last-base") / 3600)) ч назад"
+  printf 'база: %s\nжурнал отправлен: %s\nв очереди: %s\n' "$base" "$last_ship" \
     "$(find "$SPOOL" -maxdepth 1 -type f ! -name '*.tmp' | wc -l)"
 }
 
