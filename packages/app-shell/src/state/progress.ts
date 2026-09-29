@@ -15,6 +15,13 @@ interface ProgressState {
   progress: ProgressView | null;
   /** награда по забегу; нет ключа — не спрашивали, `pending` — ещё считается */
   rewards: Record<string, RunRewardView>;
+  /**
+   * С каким уровнем аккаунта пойдёт следующий забег — из подписанного снимка
+   * на устройстве (WP25): тот же уровень получит движок, поэтому экран выбора
+   * оружия открывает ровно то, что откроет забег. `null` — снимок ещё не
+   * читали.
+   */
+  runLevel: number | null;
 }
 
-export const useProgress = create<ProgressState>()(() => ({ progress: null, rewards: {} }));
+export const useProgress = create<ProgressState>()(() => ({ progress: null, rewards: {}, runLevel: null }));

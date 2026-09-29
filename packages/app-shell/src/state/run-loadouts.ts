@@ -1,6 +1,7 @@
 import { LOADOUT_STATS, type LoadoutStat, type SignedLoadout } from "@bh/shared-types";
 import { z } from "zod/mini";
 import { createPersistedValue } from "./persisted";
+import { useProgress } from "./progress";
 import { reportError, useShell } from "./shell";
 
 /**
@@ -27,19 +28,31 @@ const RUNS_LIMIT = 20;
 export const signedLoadoutSchema = z.object({
   accountId: z.string(),
   modifiers: z.record(z.string(), z.number()),
+  // Нет поля — снимок прошлой сборки: подпись у него своя, без уровня.
+  accountLevel: z.optional(z.number()),
   issuedAtMs: z.number(),
   signature: z.string(),
 });
 
 const runsSchema = z.array(z.object({ runId: z.string(), loadout: signedLoadoutSchema }));
 
-/** Снимок для следующего забега; `null` — снаряжения нет или сервер его не выдавал. */
+/** Снимок для следующего забега; `null` — сервер его не выдавал. */
 export function equippedLoadout(): SignedLoadout | null {
   return persisted(SNAPSHOT_KEY, z.nullable(signedLoadoutSchema), null).read();
 }
 
 export function saveEquippedLoadout(loadout: SignedLoadout | null): void {
   persisted(SNAPSHOT_KEY, z.nullable(signedLoadoutSchema), null).write(loadout);
+  useProgress.setState({ runLevel: runLevelOf(loadout) });
+}
+
+/**
+ * Уровень, который получит движок (WP25). Нет снимка — игра без входа или
+ * вход ещё не удался — первый уровень; снимок прошлой сборки уровня не несёт —
+ * тоже первый, до первого обновления снимка.
+ */
+export function runLevelOf(loadout: SignedLoadout | null): number {
+  return loadout?.accountLevel ?? 1;
 }
 
 /**

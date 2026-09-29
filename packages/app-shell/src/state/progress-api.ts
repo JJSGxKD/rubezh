@@ -84,10 +84,14 @@ export async function loadProgress(api?: ProgressApi): Promise<ApiFailure | null
   return null;
 }
 
-export async function awaitReward(runId: string, options: { api?: ProgressApi; sleep?: (ms: number) => Promise<void> } = {}): Promise<RunRewardView | null> {
+export async function awaitReward(
+  runId: string,
+  options: { api?: ProgressApi; sleep?: (ms: number) => Promise<void>; refresh?: () => Promise<unknown> } = {},
+): Promise<RunRewardView | null> {
   if (options.api === undefined && useShell.getState().capabilities.auth === undefined) return null;
   const api = options.api ?? createProgressApi();
   const sleep = options.sleep ?? wait;
+  const refresh = options.refresh ?? refreshLoadout;
   const setReward = (reward: RunRewardView) => useProgress.setState((state) => ({ rewards: { ...state.rewards, [runId]: reward } }));
   setReward({ status: "pending" });
 
@@ -106,6 +110,9 @@ export async function awaitReward(runId: string, options: { api?: ProgressApi; s
       // Монеты уже в кошельке — шапка должна показать их сразу, а не при
       // следующем запуске.
       void loadWallet();
+      // Новый уровень открывает оружие и навыки (WP25): следующий забег
+      // должен начаться уже с ним, даже если сеть пропадёт до старта.
+      if (response.data.levelAfter > response.data.levelBefore) void refresh();
     }
     return response.data;
   }

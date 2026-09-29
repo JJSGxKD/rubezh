@@ -117,14 +117,15 @@ describe("купленные бусты на старте забега", () => {
     expect(useRun.getState().intent).toEqual({ kind: "new" });
   });
 
-  it("забег без бустов id не навязывает, а набор не заводит", async () => {
+  it("забег без бустов id не навязывает, а набор несёт только уровень аккаунта", async () => {
     const started: RunOptions[] = [];
     mocks.load.mockResolvedValue(engineCapturing(started));
 
     await useRun.getState().start(base);
 
     expect(started[0]).not.toHaveProperty("runId");
-    expect(started[0]).not.toHaveProperty("loadout");
+    // Снимка нет — первый уровень: движок откроет стартовый набор (WP25).
+    expect(started[0]?.loadout).toEqual({ modifiers: {}, boosts: [], accountLevel: 1 });
   });
 });
 

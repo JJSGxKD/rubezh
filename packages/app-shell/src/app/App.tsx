@@ -18,7 +18,7 @@ import { useRun } from "../state/run";
 import { isVersionAtLeast } from "../state/platform-version";
 import { useShell } from "../state/shell";
 import { CompactOverlay, FirstRunScreen, OutdatedScreen, OutsideScreen } from "../screens/gates";
-import { LobbyScreen, ModeScreen, WeaponScreen } from "../screens/home";
+import { LobbyScreen, ModeScreen } from "../screens/home";
 import { playedBefore, skipFirstRunHints } from "../state/first-run";
 import {
   AboutScreen,
@@ -41,6 +41,7 @@ import {
   StressScreen,
   TasksScreen,
   TestersScreen,
+  WeaponScreen,
   WheelScreen,
 } from "./lazy-screens";
 

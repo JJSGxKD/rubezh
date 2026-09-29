@@ -3,7 +3,8 @@ import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter } from
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { useItems } from "../src/state/items";
 import { createItemsApi, loadInventory, refreshLoadout, runItemAction } from "../src/state/items-api";
-import { equippedLoadout, knownModifiers, rememberRunLoadout, runLoadoutOf } from "../src/state/run-loadouts";
+import { useProgress } from "../src/state/progress";
+import { equippedLoadout, knownModifiers, rememberRunLoadout, runLevelOf, runLoadoutOf } from "../src/state/run-loadouts";
 import { initShell } from "../src/state/shell";
 
 /**
@@ -71,13 +72,22 @@ beforeEach(() => {
 });
 
 describe("снимок надетого на устройстве", () => {
-  it("сохраняется для следующего забега, а пустой набор не хранится", async () => {
+  it("сохраняется для следующего забега — и без снаряжения: в снимке уровень аккаунта", async () => {
     const calls: Call[] = [];
     expect(await refreshLoadout(createItemsApi(server(calls, { "/api/v1/items/loadout": LOADOUT })))).toBeNull();
     expect(equippedLoadout()).toEqual(LOADOUT);
 
-    await refreshLoadout(createItemsApi(server(calls, { "/api/v1/items/loadout": { ...LOADOUT, modifiers: {} } })));
-    expect(equippedLoadout()).toBeNull();
+    const bare = { ...LOADOUT, modifiers: {}, accountLevel: 4 };
+    await refreshLoadout(createItemsApi(server(calls, { "/api/v1/items/loadout": bare })));
+    expect(equippedLoadout()).toEqual(bare);
+    // Экран выбора оружия открывает ровно то, что откроет движок.
+    expect(useProgress.getState().runLevel).toBe(4);
+  });
+
+  it("снимок прошлой сборки без уровня — первый уровень, до первого обновления", async () => {
+    await refreshLoadout(createItemsApi(server([], { "/api/v1/items/loadout": LOADOUT })));
+    expect(runLevelOf(equippedLoadout())).toBe(1);
+    expect(runLevelOf(null)).toBe(1);
   });
 
   it("неудача запроса оставляет прежний снимок: забег без сети не должен стать голым", async () => {

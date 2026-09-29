@@ -73,6 +73,18 @@ describe("награда за забег на экране итогов", () => 
     expect(api.calls).toBe(1);
   });
 
+  it("новый уровень — снимок перезапрашивается сразу: следующий забег идёт с открытым", async () => {
+    let refreshed = 0;
+    const refresh = async (): Promise<void> => {
+      refreshed++;
+    };
+    await awaitReward("run-7", { api: scripted([{ ok: true, data: GRANTED }]), sleep: noSleep, refresh });
+    expect(refreshed).toBe(1);
+
+    await awaitReward("run-8", { api: scripted([{ ok: true, data: { ...GRANTED, levelBefore: 2, levelAfter: 2 } }]), sleep: noSleep, refresh });
+    expect(refreshed).toBe(1);
+  });
+
   it("награды нет — причина доходит до экрана", async () => {
     const none: RunRewardView = { status: "none", reason: "too_short" };
     expect(await awaitReward("run-6", { api: scripted([{ ok: true, data: none }]), sleep: noSleep })).toEqual(none);
