@@ -64,6 +64,7 @@ export function App(): ReactNode {
   const install = useInstall();
   const [menuOpen, setMenuOpen] = useState(false);
   const arsenalCount = useBadges((state) => state.arsenal);
+  const friendsCount = useBadges((state) => state.friends);
 
   usePlatformButtons(stack, screen);
 
@@ -74,10 +75,13 @@ export function App(): ReactNode {
   if (!install.accepted) return <FirstRunScreen onAccept={() => void acceptAndPlay()} />;
 
   const tab = activeTab(stack);
-  const arsenalBadge = badgeText(arsenalCount);
-  // Знак — только с полезной нагрузкой (Р50). У друзей его пока нет: экран
-  // друзей ещё заглушка (О5), и число звало бы туда, где с ним ничего не сделать.
-  const tabs = TABS.map((item) => (item.id === "arsenal" && arsenalBadge !== undefined ? { ...item, badge: arsenalBadge } : item));
+  // Знак — только с полезной нагрузкой (Р50): новые предметы, подарки к
+  // выдаче и заявки друзей.
+  const badges: Partial<Record<string, string | undefined>> = { arsenal: badgeText(arsenalCount), friends: badgeText(friendsCount) };
+  const tabs = TABS.map((item) => {
+    const badge = badges[item.id];
+    return badge === undefined ? item : { ...item, badge };
+  });
   // Забег занимает весь экран: панель разделов поверх канвы отнимала бы
   // высоту у мира и попадала под палец.
   const showTabs = tab !== null && screen !== "run" && stack.length === 1;
