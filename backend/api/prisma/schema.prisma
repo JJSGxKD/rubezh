@@ -173,6 +173,7 @@ model Account {
   walletDaily WalletDaily[]
   progress    AccountProgress?
   runRewards  RunReward[]
+  settings    AccountSettings?
 
   // Друзья (WP14)
   friendLink       FriendLink?
@@ -195,6 +196,24 @@ model Account {
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
   @@map("account")
+}
+
+// Настройки аккаунта (WP29, docs/35-stage4-plan.md Р56): то, что не зависит
+// от устройства и выбирается один раз — участие в помощи в тестировании,
+// усвоенные подсказки, отображение боя. Графика, громкость и вибрация — у
+// устройства и сюда не попадают. Значение каждого ключа — вместе с моментом
+// выбора: при слиянии побеждает выбранное позже, ключ за ключом.
+model AccountSettings {
+  accountId String   @id @map("account_id") @db.Uuid
+  /// версия схемы настроек у последнего писавшего клиента
+  version   Int
+  /// `{ ключ: { value, at } }` — значение и когда его выбрал игрок, мс UTC
+  values    Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("account_settings")
 }
 
 // Событие аналитики закрытого теста (docs/22-analytics-and-metrics.md §3.1).
