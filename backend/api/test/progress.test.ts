@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { levelCap } from "../src/modules/items/item-rules.js";
 import {
   MAX_COINS_PER_RUN,
   MAX_LEVEL,
@@ -81,7 +82,15 @@ describe("уровень аккаунта", () => {
   });
 
   it("вид прогресса: сколько внутри уровня и до следующего", () => {
-    expect(progressView({ xp: 200, level: 2 })).toEqual({ level: 2, xp: 200, xpIntoLevel: 50, xpForNext: xpForLevel(3) - 150, nextReward: { coins: 150, gems: 0 } });
-    expect(progressView({ xp: xpForLevel(MAX_LEVEL), level: MAX_LEVEL })).toMatchObject({ xpForNext: null, nextReward: null });
+    expect(progressView({ xp: 200, level: 2 })).toMatchObject({ level: 2, xp: 200, xpIntoLevel: 50, xpForNext: xpForLevel(3) - 150, nextReward: { coins: 150, gems: 0 } });
+    expect(progressView({ xp: xpForLevel(MAX_LEVEL), level: MAX_LEVEL })).toMatchObject({ xpForNext: null, nextReward: null, upcoming: [] });
+  });
+
+  it("экран уровня получает ближайшие уровни с наградой и потолком предметов, и не дальше потолка уровня", () => {
+    const upcoming = progressView({ xp: 200, level: 2 }).upcoming;
+    expect(upcoming.map((row) => row.level)).toEqual([3, 4, 5, 6, 7]);
+    expect(upcoming[2]).toEqual({ level: 5, ...levelReward(5), itemLevelCap: levelCap(5) });
+    expect(upcoming[2]?.gems).toBeGreaterThan(0);
+    expect(progressView({ xp: xpForLevel(MAX_LEVEL - 2), level: MAX_LEVEL - 2 }).upcoming.map((row) => row.level)).toEqual([MAX_LEVEL - 1, MAX_LEVEL]);
   });
 });

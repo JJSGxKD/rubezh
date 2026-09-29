@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { levelCap } from "../items/item-rules.js";
 import { MAX_LEVEL, levelReward, xpForLevel, type LevelReward } from "./progress-rules.js";
 import { PROGRESS_REPOSITORY, type ProgressRepository } from "./progress.repository.js";
 
@@ -7,6 +8,22 @@ import { PROGRESS_REPOSITORY, type ProgressRepository } from "./progress.reposit
  * сколько до следующего и что получено за забег.
  */
 
+/**
+ * Сколько ближайших уровней показывает экран уровня (Р42): цель на пару
+ * вечеров, а не таблица до сотого.
+ */
+export const UPCOMING_LEVELS = 5;
+
+/**
+ * Что даст уровень: награда и потолок уровня предметов. Считает сервер — у
+ * него правила наград и снаряжения; что уровень открывает в забеге, клиент
+ * берёт из таблицы разблокировок движка.
+ */
+export interface UpcomingLevel extends LevelReward {
+  level: number;
+  itemLevelCap: number;
+}
+
 export interface ProgressView {
   level: number;
   xp: number;
@@ -14,6 +31,8 @@ export interface ProgressView {
   xpIntoLevel: number;
   xpForNext: number | null;
   nextReward: LevelReward | null;
+  /** ближайшие уровни по порядку; на потолке — пусто */
+  upcoming: UpcomingLevel[];
 }
 
 export type RunRewardView =
@@ -55,5 +74,14 @@ export function progressView(progress: { xp: number; level: number }): ProgressV
     xpIntoLevel: progress.xp - floor,
     xpForNext: top ? null : xpForLevel(progress.level + 1) - floor,
     nextReward: top ? null : levelReward(progress.level + 1),
+    upcoming: upcomingLevels(progress.level),
   };
+}
+
+function upcomingLevels(level: number): UpcomingLevel[] {
+  const upcoming: UpcomingLevel[] = [];
+  for (let next = level + 1; next <= Math.min(MAX_LEVEL, level + UPCOMING_LEVELS); next++) {
+    upcoming.push({ level: next, ...levelReward(next), itemLevelCap: levelCap(next) });
+  }
+  return upcoming;
 }

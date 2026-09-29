@@ -57,6 +57,9 @@ export const ShopScreen = screen(loaders.stubs, "ShopScreen");
 export const RatingScreen = screen(loaders.rating, "RatingScreen");
 export const FriendsScreen = screen(loaders.friends, "FriendsScreen");
 export const ProfileScreen = screen(loaders.profile, "ProfileScreen");
+// Экран уровня открывается только из профиля — и лежит в его чанке: свой
+// чанк и общая с профилем карточка уровня стоили бы отдельной обвязки.
+export const LevelScreen = screen(loaders.profile, "LevelScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");

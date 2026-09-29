@@ -25,6 +25,8 @@ const progressSchema = z.object({
   xpIntoLevel: z.number(),
   xpForNext: z.nullable(z.number()),
   nextReward: z.nullable(z.object({ coins: z.number(), gems: z.number() })),
+  // Ближайшие уровни для экрана уровня (Р42); сервер старше их не пришлёт.
+  upcoming: z.optional(z.array(z.object({ level: z.number(), coins: z.number(), gems: z.number(), itemLevelCap: z.number() }))),
 });
 
 const rewardSchema = z.union([
