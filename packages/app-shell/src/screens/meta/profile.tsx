@@ -22,6 +22,7 @@ import { useShell } from "../../state/shell";
 import { ItemIcon } from "../item-icons";
 import { AccountLevel } from "./account-level";
 
+export { HistoryScreen } from "./history";
 export { LevelScreen } from "./level";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { SurvivalTime, SyncProblem } from "./sync-ui";
@@ -94,6 +95,9 @@ export function ProfileScreen(): ReactNode {
               <div className="mt-3">
                 <Button variant="secondary" block onClick={() => navigation.push("level")}>
                   {t("profile.level.more")}
+                </Button>
+                <Button variant="ghost" block onClick={() => navigation.push("history")}>
+                  {t("profile.history")}
                 </Button>
               </div>
             </>
