@@ -192,6 +192,7 @@ model Account {
   items            Item[]
   itemEvents       ItemEvent[]
   runBoosts        RunBoost[]
+  notifications    Notification[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1179,4 +1180,32 @@ model RunBoost {
 
   @@index([accountId, createdAt])
   @@map("run_boost")
+}
+
+/// Лента уведомлений игрока (docs/35-stage4-plan.md Р51, §3.17): что с ним
+/// случилось — заявка и подарок друга, редкая добыча, возврат бустов,
+/// сообщение команды. Хранится 90 дней: чистка — `notifications-cleaner.ts`.
+/// Повтор записи по тому же событию упирается в уникальный ключ события, а
+/// не в проверку кода.
+model Notification {
+  notificationId String    @id @map("notification_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  /// вид — каталог в `notification-kinds.ts`
+  kind           String    @db.VarChar(32)
+  /// данные вида; разбирает схема вида, неизвестное пропускается
+  payload        Json
+  /// ключ события: одно событие — одно уведомление
+  dedupeKey      String    @map("dedupe_key") @db.VarChar(160)
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  /// `null` — не прочитано
+  readAt         DateTime? @map("read_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@unique([accountId, dedupeKey])
+  // Лента игрока — новые сверху; счёт непрочитанного — по той же строке аккаунта.
+  @@index([accountId, createdAt(sort: Desc)])
+  // Чистка старше срока хранения.
+  @@index([createdAt])
+  @@map("notification")
 }

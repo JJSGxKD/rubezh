@@ -63,6 +63,7 @@ erDiagram
     ACCOUNT ||--o{ RUN_BOOST : "бусты на забег"
     ACCOUNT ||--o| ACCOUNT_PROGRESS : "уровень и опыт"
     ACCOUNT ||--o| ACCOUNT_SETTINGS : "настройки для всех устройств"
+    ACCOUNT ||--o{ NOTIFICATION : "лента уведомлений"
     ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
     ACCOUNT ||--o| FRIEND_LINK : "ссылка дружбы"
     ACCOUNT ||--o{ FRIENDSHIP : "дружит (обе стороны пары)"
@@ -266,6 +267,16 @@ erDiagram
         int version "версия набора ключей у последнего писавшего"
         json values "ключ: значение и когда выбрано, мс UTC"
         datetime updated_at
+    }
+
+    NOTIFICATION {
+        uuid notification_id PK
+        uuid account_id FK
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded"
+        json payload "данные вида, по его схеме"
+        string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
+        datetime created_at
+        datetime read_at "nullable: не прочитано"
     }
 
     RUN_REWARD {
@@ -527,6 +538,12 @@ erDiagram
   что кошелёк: строка награды с первичным ключом `run_id` вставляется в одной
   транзакции с прибавкой опыта. Монеты начисляет кошелёк по своему ключу;
   `coins_credited` показывает, сколько легло после суточного потолка.
+- **`NOTIFICATION` — лента уведомлений игрока** (`35-stage4-plan.md`, Р51,
+  §3.17, WP28): заявка и подарок друга, редкая добыча, возврат бустов. Пишут
+  доменные модули после своего действия и не ждут записи; ключ события
+  уникален у аккаунта, поэтому повтор задания или запроса второй строки не
+  заводит. Имя другого игрока — копией на момент события. Хранится 90 дней:
+  чистка — пачками под распределённым локом.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1127,6 +1144,7 @@ flowchart LR
         BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
+        NOTIF["notifications<br/>лента уведомлений: пишут модули,<br/>чистка старше 90 дней, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1246,6 +1264,12 @@ flowchart LR
     FRIENDS -. "порт Messengers: сообщение о заявке" .-> TGADP
     CADDY -- "/api/v1/account/settings" --> ACCSET
     ACCSET --> PG
+    CADDY -- "/api/v1/me/notifications" --> NOTIF
+    NOTIF --> PG
+    NOTIF -- "лок чистки" --> REDIS
+    FRIENDS -. "заявка, подарок" .-> NOTIF
+    ITEMS -. "редкая добыча" .-> NOTIF
+    BOOSTS -. "возврат бустов" .-> NOTIF
     CADDY -- "/api/v1/flags" --> FLAGS
     FLAGS --> PG
 

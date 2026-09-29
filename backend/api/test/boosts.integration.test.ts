@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
@@ -15,6 +15,8 @@ import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import type { WalletResource } from "../src/modules/wallet/wallet-types.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
+import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 
 /**
  * Бусты на живом Postgres с настоящим кошельком (docs/17-testing-strategy.md
@@ -59,7 +61,7 @@ describe.skipIf(DATABASE_URL === "")("бусты на живом Postgres", () =
     wallet = new WalletService(new PrismaWalletRepository(prisma), config, roles);
     repository = new PrismaBoostsRepository(prisma);
     runs = new PrismaRunsRepository(prisma);
-    boosts = new BoostsService(repository, wallet);
+    boosts = new BoostsService(repository, wallet, new NotificationsService(new PrismaNotificationsRepository(prisma)));
   });
 
   afterAll(async () => {
@@ -125,6 +127,12 @@ describe.skipIf(DATABASE_URL === "")("бусты на живом Postgres", () =
     expect(await balance(id, "gems")).toBe(10);
     expect(await boosts.refund(id, played)).toEqual({ refunded: false });
     expect(await boosts.refund(randomUUID(), failed)).toEqual({ refunded: false });
+
+    // Возврат — в ленту игрока, один раз при пяти запросах (Р51).
+    await vi.waitFor(async () => {
+      const rows = await prisma.notification.findMany({ where: { accountId: id }, select: { kind: true, payload: true } });
+      expect(rows).toEqual([{ kind: "boosts_refunded", payload: { runId: failed, boosts: ["aegis", "insight"], coins: 120, gems: 6 } }]);
+    });
   }, RACE_TIMEOUT_MS);
 
   it("итог: оплаченные бусты — оплачены; не купленные, чужие и возвращённые — нет", async () => {
@@ -160,7 +168,7 @@ describe.skipIf(DATABASE_URL === "")("бусты на живом Postgres", () =
       set: async (key: string, value: string) => (locks.has(key) ? null : (locks.set(key, value), "OK")),
       eval: async (_script: string, _keys: number, key: string) => (locks.delete(key) ? 1 : 0),
     };
-    const refunder = new BoostsRefunder(config, repository, redis as unknown as ConstructorParameters<typeof BoostsRefunder>[2]);
+    const refunder = new BoostsRefunder(config, repository, redis as unknown as ConstructorParameters<typeof BoostsRefunder>[2], boosts);
 
     // Чужие брошенные покупки на общей базе тоже вернутся — считаем только свои.
     await refunder.tick();
@@ -168,5 +176,9 @@ describe.skipIf(DATABASE_URL === "")("бусты на живом Postgres", () =
     expect((await repository.byRun(fresh))?.refundedAt).toBeNull();
     expect((await repository.byRun(played))?.refundedAt).toBeNull();
     expect(await balance(id, "coins")).toBe(1_000 - 200);
+    // Проход по брошенным тоже пишет в ленту: иначе игрок не узнал бы, откуда монеты.
+    await vi.waitFor(async () => {
+      expect(await prisma.notification.count({ where: { accountId: id, kind: "boosts_refunded" } })).toBe(1);
+    });
   }, RACE_TIMEOUT_MS);
 });

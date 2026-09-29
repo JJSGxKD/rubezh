@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { InsufficientFundsError } from "../wallet/wallet-errors.js";
 import { InsufficientBalance } from "../wallet/wallet-ledger.js";
 import { WalletService } from "../wallet/wallet.service.js";
@@ -31,6 +32,7 @@ export class BoostsService {
   constructor(
     @Inject(BOOSTS_REPOSITORY) private readonly repository: BoostsRepository,
     private readonly wallet: WalletService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   catalog(): BoostCatalogView {
@@ -71,8 +73,33 @@ export class BoostsService {
    */
   async refund(accountId: string, runId: string, at = new Date()): Promise<{ refunded: boolean }> {
     const outcome = await this.repository.refund(accountId, runId, at);
-    if (outcome === "refunded") this.logger.log(JSON.stringify({ module: "boosts", event: "refunded", accountId, runId }));
+    if (outcome === "refunded") {
+      this.logger.log(JSON.stringify({ module: "boosts", event: "refunded", accountId, runId }));
+      this.announceRefund(accountId, runId, at);
+    }
     return { refunded: outcome === "refunded" };
+  }
+
+  /**
+   * Возврат — в ленту (Р51): чаще его делает проход по брошенным забегам, и
+   * иначе игрок не узнал бы, откуда вернулись монеты.
+   */
+  announceRefund(accountId: string, runId: string, at: Date): void {
+    void this.repository
+      .byRun(runId)
+      .then((row) => {
+        if (row === null) return;
+        this.notifications.post({
+          accountId,
+          kind: "boosts_refunded",
+          payload: { runId, boosts: row.boosts, coins: row.cost.coins ?? 0, gems: row.cost.gems ?? 0 },
+          dedupeKey: `boosts_refunded:${runId}`,
+          at,
+        });
+      })
+      .catch((error: unknown) => {
+        this.logger.warn(JSON.stringify({ module: "boosts", event: "refund_notice_failed", runId, reason: error instanceof Error ? error.message : "unknown" }));
+      });
   }
 
   /** Заявленные в итоге бусты — все куплены на этот забег и не возвращены. */

@@ -28,6 +28,7 @@ const loaders = {
   friends: () => import("../screens/meta/friends"),
   rating: () => import("../screens/meta/rating"),
   profile: () => import("../screens/meta/profile"),
+  notifications: () => import("../screens/meta/notifications"),
   guide: () => import("../screens/guide/GuideScreen"),
   feedback: () => import("../screens/feedback"),
   daily: () => import("../screens/meta/daily"),
@@ -60,6 +61,7 @@ export const ProfileScreen = screen(loaders.profile, "ProfileScreen");
 // Экран уровня открывается только из профиля — и лежит в его чанке: свой
 // чанк и общая с профилем карточка уровня стоили бы отдельной обвязки.
 export const LevelScreen = screen(loaders.profile, "LevelScreen");
+export const NotificationsScreen = screen(loaders.notifications, "NotificationsScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");
