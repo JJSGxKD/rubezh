@@ -274,7 +274,7 @@ describe("сообщение о заявке", () => {
       state: async () => (canMessage === null ? null : { canMessage, reason: "entered", changedAt: new Date() }),
       platformChanged: async (_platform: string, platformUserId: string) => void blocked.push(platformUserId),
     } as unknown as MessagingService;
-    const links = new AppLinks([{ platform: "telegram", launch: (param: string) => `https://t.me/rubezh_bot?startapp=${param}` }]);
+    const links = new AppLinks([{ platform: "telegram", launch: (param: string) => `https://t.me/rubezh_bot?startapp=${param}`, chat: (param: string) => `https://t.me/rubezh_bot?start=${param}` }]);
     return { messenger, blocked, notifier: new FriendNotifier(repository, accounts, messaging, new Messengers([messenger]), links) };
   }
 

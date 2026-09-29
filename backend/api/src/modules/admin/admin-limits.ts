@@ -7,6 +7,8 @@ import type { RateLimit } from "../ingest/rate-limiter.js";
  */
 export const ADMIN_LIMITS = {
   login: { scope: "admin:login", limit: 10, windowSec: 60 },
+  /** опрос входа через бота — раз в две секунды пять минут, с запасом на две вкладки */
+  loginPoll: { scope: "admin:login-poll", limit: 90, windowSec: 60 },
   mutate: { scope: "admin:mutate", limit: 60, windowSec: 60 },
   /** сборка архива читает всю базу выгрузки — не чаще нескольких раз за десять минут */
   export: { scope: "admin:export", limit: 3, windowSec: 600 },

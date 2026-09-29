@@ -192,6 +192,14 @@ describe("/start — вход в канал", () => {
     expect(bot.calls).toHaveLength(1);
   });
 
+  it("вход в панель — не приход игрока: ни карточки, ни касания", async () => {
+    const bot = setup(AUTH);
+    await bot.router.dispatch(start(7, { text: "/start panel-AbCdEfGhIjKlMnOpQrStUv" }));
+    await bot.router.dispatch(start(8, { text: "/start@rubezh_test_bot panel-AbCdEfGhIjKlMnOpQrStUv" }));
+    expect(bot.entries).toEqual([]);
+    expect(bot.calls).toHaveLength(0);
+  });
+
   it("упавшая запись аккаунта не отменяет карточку", async () => {
     const bot = setup(AUTH);
     bot.failEntries();

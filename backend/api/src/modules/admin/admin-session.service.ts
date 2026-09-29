@@ -11,10 +11,8 @@ import { ADMIN_SESSION_STORE, hashSessionToken, type AdminSession, type AdminSes
 
 /**
  * Сессии панели (docs/29-admin-panel.md §4, §8): вход, проверка на каждом
- * запросе, выход. Вход пока один — разработчика на своей машине; вход через
- * виджет Telegram придёт вместе с доменом отдельной задачей
- * (docs/36-parallel-work.md §1.2): проверка подписи виджета — дело адаптера
- * площадки, а не домена.
+ * запросе, выход. Входов два: подтверждением в боте — на проде
+ * (`panel-login.service.ts`) — и разработчика на своей машине.
  *
  * Роли в сессию не кладутся и перечитываются на каждом запросе — так же, как
  * у игры: отзыв роли или блокировка закрывают панель следующим же запросом, а
@@ -108,6 +106,14 @@ export class AdminSessionService {
       throw new PanelAccessError("Доступа в панель больше нет");
     }
     return { tokenHash, session, account: ref };
+  }
+
+  /** Сессия по входу, подтверждённому в боте: аккаунт уже проверен, но роль и блокировка — ещё раз, на момент выдачи. */
+  async loginConfirmed(accountId: string, nowMs = Date.now()): Promise<AdminLogin> {
+    this.ensureEnabled();
+    const account = await this.accounts.byId(accountId);
+    if (account === null) throw new UnauthorizedError("Аккаунт не найден");
+    return await this.open(account, nowMs);
   }
 
   async identity(account: AccountRef): Promise<AdminIdentity> {

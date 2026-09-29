@@ -14,6 +14,9 @@ const limit = (max: number, fallback: number) => z.coerce.number().int().min(1).
 
 export const adminDevLoginSchema = z.object({ devUser: z.string().min(1).max(128) });
 
+/** Опрос входа через бота: номер запроса и секрет открывшей его вкладки. */
+export const panelLoginPollSchema = z.object({ requestId: z.string().min(1).max(64), secret: z.string().min(1).max(128) });
+
 export const accountIdSchema = z.string().uuid();
 
 export const playerSearchSchema = z.object({

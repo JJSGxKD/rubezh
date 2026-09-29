@@ -65,7 +65,7 @@ function visitor(patch: Partial<VisitorInfo> = {}): VisitorInfo {
 beforeEach(() => {
   repository = new MemoryLinks();
   miniApp = "https://t.me/rubezh_bot?startapp";
-  const appLinks = new AppLinks([new TelegramAppLinks({ get miniAppLink() { return miniApp; } })]);
+  const appLinks = new AppLinks([new TelegramAppLinks({ get miniAppLink() { return miniApp; }, username: null })]);
   service = new LinksService(config(), repository, appLinks, allow);
 });
 
