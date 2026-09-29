@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { Menu, Plus } from "lucide-react";
+import { Bell, Menu, Plus } from "lucide-react";
 import { Avatar } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { t } from "../i18n";
 import { useNavigation } from "../state/navigation";
+import { useNotifications } from "../state/notifications";
 import { uiFeedback } from "../state/ui-feedback";
 import { useShell } from "../state/shell";
 import { useWallet } from "../state/wallet";
@@ -22,6 +23,8 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
   const user = useShell((state) => state.adapter.displayUser);
   const name = user?.displayName ?? t("profile.guest");
   const balances = useWallet((state) => state.balances);
+  const unread = useNotifications((state) => state.unread);
+  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
 
   return (
     <header className="shrink-0 px-3 pt-[calc(0.5rem+var(--app-inset-top))] pr-[calc(0.75rem+var(--app-inset-right))] pb-2 pl-[calc(0.75rem+var(--app-inset-left))]">
@@ -39,6 +42,27 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
 
         <CurrencyButton icon={<CoinIcon size={22} />} label={t("currency.coins")} value={balances?.coins ?? 0} />
         <CurrencyButton icon={<GemIcon size={22} />} label={t("currency.premium")} value={balances?.gems ?? 0} />
+
+        {/* Лента — только с входом: без аккаунта уведомлениям неоткуда взяться.
+            Число — только когда есть новое (Р50): знаков «для внимания» нет. */}
+        {withAccount ? (
+          <button
+            type="button"
+            aria-label={unread > 0 ? t("notifications.bell.unread", { count: unread }) : t("notifications.bell")}
+            onClick={() => {
+              uiFeedback("tap");
+              useNavigation.getState().push("notifications");
+            }}
+            className="btn-secondary relative inline-flex size-11 shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90"
+          >
+            <Bell size={22} />
+            {unread > 0 ? (
+              <span className="absolute -top-1 -right-1 inline-flex min-w-5 items-center justify-center rounded-pill bg-accent px-1 font-display text-xs font-bold tabular-nums text-on-accent">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            ) : null}
+          </button>
+        ) : null}
 
         <button
           type="button"

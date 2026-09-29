@@ -139,6 +139,14 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
           import("./state/account-settings")
             .then(({ syncAccountSettings }) => syncAccountSettings(accountId))
             .catch((error: unknown) => console.warn("Настройки аккаунта не загрузились:", error));
+          // Непрочитанные уведомления — тогда же и на каждом возврате в
+          // приложение (docs/35-stage4-plan.md §3.17).
+          import("./state/notifications-api")
+            .then(({ loadUnread, watchReturns }) => {
+              watchReturns();
+              return loadUnread();
+            })
+            .catch((error: unknown) => console.warn("Уведомления не загрузились:", error));
         });
         return useSession.getState().signIn();
       })

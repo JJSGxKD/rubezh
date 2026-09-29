@@ -102,6 +102,8 @@
   "difficulty.hard.description": "Каждый враг опасен, толпа не даёт передышки. Рекорд здесь — отдельная гордость.",
   "weapon.select.hint": "Дальше оружие добавляется прокачкой в забеге. Новое открывает уровень аккаунта.",
   "weapon.select.locked": "Откроется на {level} уровне",
+  "notifications.bell": "Уведомления",
+  "notifications.bell.unread": "Уведомления: {count} {count, plural, one {новое} few {новых} many {новых} other {новых}}",
   "weapon.select.start": "В бой",
   "weapon.select.next": "Дальше",
   "weapon.spark.name": "Искра",
