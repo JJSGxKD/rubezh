@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { MessagingModule } from "../messaging/messaging.module.js";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { FriendNotifier } from "./friend-notifier.js";
 import { FriendsController } from "./friends.controller.js";
@@ -13,7 +14,7 @@ import { FriendsService } from "./friends.service.js";
  * Ссылку исполняет слушатель входа — модуль входа о друзьях не знает.
  */
 @Module({
-  imports: [AuthModule, WalletModule, MessagingModule],
+  imports: [AuthModule, WalletModule, MessagingModule, NotificationsModule],
   controllers: [FriendsController],
   providers: [FriendsService, FriendNotifier, { provide: FRIENDS_REPOSITORY, useClass: PrismaFriendsRepository }],
   exports: [FriendsService, FRIENDS_REPOSITORY],

@@ -27,6 +27,7 @@ import type { GrantInput, GrantResult, WalletService } from "../src/modules/wall
 import { FRIEND_BONUS_RULES, GIFT_RULES } from "../src/modules/friends/friends-rules.js";
 import { bonusView, readySteps } from "../src/modules/friends/friend-bonus.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
+import { memoryNotifications } from "./helpers/memory-notifications.js";
 
 /**
  * Друзья (docs/35-stage4-plan.md, WP14): ссылка дружбы делает друзьями без
@@ -43,6 +44,7 @@ let repository: MemoryFriendsRepository;
 let service: FriendsService;
 let wallet: FakeWallet;
 let notified: [string, string][];
+let notices: ReturnType<typeof memoryNotifications>;
 
 /** Кошелёк с ключом идемпотентности — ровно то, на что опираются подарки. */
 class FakeWallet {
@@ -81,7 +83,8 @@ beforeEach(() => {
   wallet = new FakeWallet();
   notified = [];
   const notifier = { requestSent: async (from: string, to: string) => (notified.push([from, to]), "sent" as const) } as unknown as FriendNotifier;
-  service = new FriendsService(config(), repository, accounts, new AuthHooks(), wallet as unknown as WalletService, notifier);
+  notices = memoryNotifications();
+  service = new FriendsService(config(), repository, accounts, new AuthHooks(), wallet as unknown as WalletService, notifier, notices.service);
 });
 
 describe("ссылка дружбы", () => {
@@ -242,6 +245,27 @@ describe("подарки", () => {
 
     expect(await service.claimGifts(claims(bob))).toEqual({ claimed: 1, coins: 0 });
     expect(wallet.grants.size).toBe(1);
+  });
+});
+
+describe("лента уведомлений", () => {
+  // Запись в ленту не ждёт ответа игроку: дать ей отработать.
+  const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+  it("заявка и подарок — в ленту получателя с именем отправителя, повтор — без второй строки", async () => {
+    const ann = await player("1");
+    const bob = await player("2");
+    await service.request(claims(ann), bob.accountId);
+    await service.request(claims(ann), bob.accountId);
+    await settle();
+    expect(notices.repository.of(bob.accountId)).toEqual([{ kind: "friend_request", payload: { fromAccountId: ann.accountId, fromName: ann.displayName } }]);
+
+    await service.accept(claims(bob), ann.accountId);
+    await service.sendGift(claims(ann), bob.accountId);
+    await service.sendGift(claims(ann), bob.accountId);
+    await settle();
+    expect(notices.repository.of(bob.accountId).map((notice) => notice.kind)).toEqual(["friend_request", "friend_gift"]);
+    expect(notices.repository.of(ann.accountId)).toEqual([]);
   });
 });
 

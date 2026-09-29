@@ -16,6 +16,8 @@ import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.
 import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
+import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 
 /**
  * Награды за забег на живом Postgres с настоящим кошельком
@@ -72,7 +74,7 @@ describe.skipIf(DATABASE_URL === "")("награды за забег на жив
     const roles = new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());
     wallet = new WalletService(new PrismaWalletRepository(prisma), config, roles);
     progress = new PrismaProgressRepository(prisma);
-    rewards = new RunRewards(config, new RunsHooks(), progress, wallet, new ItemsService(new PrismaItemsRepository(prisma), wallet, config, cryptoSeeds));
+    rewards = new RunRewards(config, new RunsHooks(), progress, wallet, new ItemsService(new PrismaItemsRepository(prisma), wallet, config, cryptoSeeds, new NotificationsService(new PrismaNotificationsRepository(prisma))));
     view = new ProgressService(progress);
   });
 

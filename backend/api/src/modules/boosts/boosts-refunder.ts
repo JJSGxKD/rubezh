@@ -5,6 +5,7 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
 import { BOOST_REFUND } from "./boosts-limits.js";
 import { BOOSTS_REPOSITORY, type BoostsRepository } from "./boosts.repository.js";
+import { BoostsService } from "./boosts.service.js";
 
 /**
  * Возврат бустов забегам, которые так и не начались (Р39): клиент не успел
@@ -33,6 +34,7 @@ export class BoostsRefunder implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(BOOSTS_REPOSITORY) private readonly repository: BoostsRepository,
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
+    private readonly boosts: BoostsService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -57,7 +59,10 @@ export class BoostsRefunder implements OnApplicationBootstrap, OnModuleDestroy {
         let refunded = 0;
         // По одной: каждая — своя короткая транзакция, и сбой одной не держит остальные.
         for (const run of abandoned) {
-          if ((await this.repository.refund(run.accountId, run.runId, now)) === "refunded") refunded++;
+          if ((await this.repository.refund(run.accountId, run.runId, now)) === "refunded") {
+            refunded++;
+            this.boosts.announceRefund(run.accountId, run.runId, now);
+          }
         }
         if (refunded > 0) this.logger.log(JSON.stringify({ module: "boosts", event: "refunded_abandoned", count: refunded }));
         return refunded;

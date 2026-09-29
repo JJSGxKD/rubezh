@@ -151,6 +151,9 @@ export const EVENT_DICTIONARY = {
     payload: payload({ mode: id, stopReason: id, peakObjects: count, verdict: id, reportId: z.uuid() }),
   },
   feedback_sent: { version: 1, payload: payload({ answers: count, hasText: z.boolean(), runs: count, kind: z.enum(["device_info"]).optional() }) },
+  // Игрок открыл уведомление из ленты — перешёл туда, куда оно звало
+  // (docs/35-stage4-plan.md WP28). Вид — низкой кардинальности, без данных.
+  notification_opened: { version: 1, payload: payload({ kind: id }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 

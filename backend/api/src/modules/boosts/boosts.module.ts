@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
@@ -14,7 +15,7 @@ import { BoostsService } from "./boosts.service.js";
  * подключает к забегам сам (`boosts-check.ts`).
  */
 @Module({
-  imports: [AuthModule, WalletModule, RunsModule],
+  imports: [AuthModule, WalletModule, RunsModule, NotificationsModule],
   controllers: [BoostsController],
   providers: [BoostsService, BoostsCheck, BoostsRefunder, { provide: BOOSTS_REPOSITORY, useClass: PrismaBoostsRepository }],
 })

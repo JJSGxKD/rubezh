@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
@@ -14,7 +15,7 @@ import { ITEM_SEEDS, ItemsService, cryptoSeeds } from "./items.service.js";
  * подключает к забегам сам (`items-loadout-check.ts`).
  */
 @Module({
-  imports: [AuthModule, WalletModule, RunsModule],
+  imports: [AuthModule, WalletModule, RunsModule, NotificationsModule],
   controllers: [ItemsController],
   providers: [ItemsService, ItemsLoadoutCheck, { provide: ITEMS_REPOSITORY, useClass: PrismaItemsRepository }, { provide: ITEM_SEEDS, useValue: cryptoSeeds }],
   exports: [ItemsService],

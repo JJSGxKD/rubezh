@@ -36,6 +36,7 @@ import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module.js";
 import { SettingsModule } from "./modules/settings/settings.module.js";
 import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-login.module.js";
 import { AccountSettingsModule } from "./modules/account-settings/account-settings.module.js";
+import { NotificationsModule } from "./modules/notifications/notifications.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -54,7 +55,8 @@ import { AccountSettingsModule } from "./modules/account-settings/account-settin
  * (там же, WP7); boosts — бусты на забег (там же, WP8); admin — серверная часть панели
  * под своей cookie-сессией (там же, WP17), выключена по умолчанию; settings —
  * настройки без релиза: база поверх окружения (там же, WP24); account-settings
- * — настройки игрока, общие для его устройств (там же, WP29).
+ * — настройки игрока, общие для его устройств (там же, WP29); notifications —
+ * лента уведомлений игрока, в которую пишут доменные модули (там же, WP28).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -68,6 +70,7 @@ export const APP_MODULES = [
   RolesModule,
   AuthModule,
   AccountSettingsModule,
+  NotificationsModule,
   AttributionModule,
   FunnelModule,
   MessagingModule,

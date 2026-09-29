@@ -15,6 +15,8 @@ import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import type { WalletResource } from "../src/modules/wallet/wallet-types.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
+import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 
 /**
  * Снаряжение на живом Postgres с настоящим кошельком (docs/17-testing-strategy.md
@@ -92,7 +94,7 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
     const roles = new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());
     wallet = new WalletService(new PrismaWalletRepository(prisma), config, roles);
     repository = new PrismaItemsRepository(prisma);
-    items = new ItemsService(repository, wallet, config, () => seed);
+    items = new ItemsService(repository, wallet, config, () => seed, new NotificationsService(new PrismaNotificationsRepository(prisma)));
   });
 
   afterAll(async () => {

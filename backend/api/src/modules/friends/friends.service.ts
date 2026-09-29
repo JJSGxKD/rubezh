@@ -7,6 +7,7 @@ import { AuthHooks, type LoginEvent } from "../auth/auth-hooks.js";
 import { friendStartParam } from "./friend-code.js";
 import { FriendNotifier } from "./friend-notifier.js";
 import { FriendLimitError, FriendNotFoundError, FriendRequestNotFoundError } from "./friends-errors.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { bonusView, readySteps, type BonusView } from "./friend-bonus.js";
 import { FRIEND_BONUS_RULES, FRIENDS_RULES, GIFT_RULES } from "./friends-rules.js";
@@ -61,7 +62,25 @@ export class FriendsService implements OnModuleInit {
     private readonly hooks: AuthHooks,
     private readonly wallet: WalletService,
     private readonly notifier: FriendNotifier,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * Уведомление в ленту получателя (Р51): имя — копией на момент события.
+   * Ключ — отправитель и игровые сутки: подарок и так один в сутки, а заявка,
+   * отменённая и посланная снова в тот же день, второй строки не заведёт.
+   */
+  private notice(kind: "friend_request" | "friend_gift", toId: string, fromId: string): void {
+    void this.accounts
+      .byId(fromId)
+      .then((from) => {
+        if (from === null) return;
+        this.notifications.post({ accountId: toId, kind, payload: { fromAccountId: fromId, fromName: from.displayName.slice(0, 64) }, dedupeKey: `${kind}:${fromId}:${moscowDay(Date.now())}` });
+      })
+      .catch((error: unknown) => {
+        this.logger.warn(JSON.stringify({ module: "friends", event: "notice_failed", kind, reason: error instanceof Error ? error.message : "unknown" }));
+      });
+  }
 
   onModuleInit(): void {
     if (this.config.auth.enabled) this.hooks.onLogin("friends", (login) => this.onLogin(login));
@@ -120,7 +139,10 @@ export class FriendsService implements OnModuleInit {
   async sendGift(actor: AccessTokenClaims, friendId: string): Promise<{ sent: boolean }> {
     if (!(await this.friends.areFriends(actor.accountId, friendId))) throw new FriendNotFoundError("Подарок можно сделать только другу");
     const sent = await this.friends.sendGift(actor.accountId, friendId);
-    if (sent) this.log("friend_gift_sent", { accountId: actor.accountId, friendId });
+    if (sent) {
+      this.log("friend_gift_sent", { accountId: actor.accountId, friendId });
+      this.notice("friend_gift", friendId, actor.accountId);
+    }
     return { sent };
   }
 
@@ -171,6 +193,7 @@ export class FriendsService implements OnModuleInit {
     // Сообщение — только о новой заявке и мимо ответа: повтор той же заявки
     // не пишет второй раз, а медленный Telegram не держит игрока.
     if (outcome === "sent") {
+      this.notice("friend_request", targetId, actor.accountId);
       void this.notifier.requestSent(actor.accountId, targetId).catch((error: unknown) => {
         this.logger.warn(JSON.stringify({ module: "friends", event: "friend_request_notify_failed", toId: targetId, reason: error instanceof Error ? error.message : "unknown" }));
       });
@@ -230,4 +253,9 @@ export class FriendsService implements OnModuleInit {
   private log(event: string, fields: Record<string, unknown>): void {
     this.logger.log(JSON.stringify({ module: "friends", event, ...fields }));
   }
+}
+
+/** Игровые сутки по Москве — как у подарков: день сменяется в полночь по МСК. */
+function moscowDay(nowMs: number): string {
+  return new Date(nowMs + 3 * 3_600_000).toISOString().slice(0, 10);
 }

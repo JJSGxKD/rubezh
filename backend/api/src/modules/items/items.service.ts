@@ -1,5 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { RARE_LOOT_RARITIES } from "../notifications/notification-kinds.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, ValidationError } from "../../common/domain-error.js";
 import { InsufficientFundsError } from "../wallet/wallet-errors.js";
@@ -55,6 +57,7 @@ export class ItemsService {
     private readonly wallet: WalletService,
     @Inject(APP_CONFIG) config: AppConfig,
     @Inject(ITEM_SEEDS) private readonly seeds: SeedSource,
+    private readonly notifications: NotificationsService,
   ) {
     this.signingKey = config.auth.accessSecret === "" ? null : loadoutKey(config.auth.accessSecret);
   }
@@ -181,12 +184,14 @@ export class ItemsService {
    */
   async dropForRun(input: RunLoot): Promise<ItemRow | null> {
     const seed = this.seeds();
+    let salvaged = false;
     const outcome = await this.items.create(input.accountId, `loot:${input.runId}`, input.at, (account) => {
       const random = seededRandom(seed);
       const loot = rollLoot(random, { ...input, accountLevel: account.level, replayVerified: false });
       if (loot === null) return null;
       const rolls = rollItem(random, loot.slot, loot.rarity);
       const full = account.alive >= INVENTORY_CAP;
+      salvaged = full;
       const shape = { ...loot, rolls };
       return {
         ...shape,
@@ -197,6 +202,11 @@ export class ItemsService {
     });
     if (outcome !== null && !outcome.duplicate) {
       this.logger.log(JSON.stringify({ module: "items", event: "loot", accountId: input.accountId, runId: input.runId, rarity: outcome.item.rarity }));
+      // Редкое — в ленту (Р51): игрок мог не дождаться экрана итогов.
+      if (RARE_LOOT_RARITIES.has(outcome.item.rarity)) {
+        const { itemId, slot, rarity } = outcome.item;
+        this.notifications.post({ accountId: input.accountId, kind: "rare_loot", payload: { itemId, slot, rarity, salvaged }, dedupeKey: `rare_loot:${input.runId}`, at: input.at });
+      }
     }
     return outcome?.item ?? null;
   }
