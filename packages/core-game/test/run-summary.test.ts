@@ -219,7 +219,6 @@ describe("итог забега", () => {
     behavior: "projectile_nearest",
     nameKey: "weapon.spark.name",
     descriptionKey: "weapon.spark.description",
-    starting: true,
     levels: [{ damage: 10, cooldownSec: 0.2, projectiles: 1, projectileSpeed: 600, ttlSec: 2 }],
   };
 

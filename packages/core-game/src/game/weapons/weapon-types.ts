@@ -24,7 +24,6 @@ export interface WeaponType {
   behavior: WeaponBehavior;
   nameKey: string;
   descriptionKey: string;
-  starting: boolean;
   weight: number;
   levels: ResolvedWeaponLevel[];
 }
@@ -88,13 +87,6 @@ export function findWeaponContentProblems(defs: readonly WeaponDef[]): string[] 
     }
     problems.push(...findLevelProblems(def));
   }
-
-  // Пустой список — законный случай: так гоняются тесты паттернов врагов,
-  // где атака игрока только мешает. А вот набор оружия без единого
-  // стартового означает забег, который начинается без атаки вовсе.
-  if (defs.length > 0 && !defs.some((def) => def.starting === true)) {
-    problems.push("нет ни одного стартового оружия");
-  }
   return problems;
 }
 
@@ -143,7 +135,6 @@ export function resolveWeaponTypes(defs: readonly WeaponDef[], unitScale: number
     behavior: def.behavior,
     nameKey: def.nameKey,
     descriptionKey: def.descriptionKey,
-    starting: def.starting === true,
     weight: def.weight ?? 1,
     levels: def.levels.map((level) => ({ ...resolveLevel(def.behavior, level, unitScale), element: ELEMENTS.indexOf(def.element ?? "physical") })),
   }));

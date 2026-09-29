@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import { it } from "vitest";
 import { BALANCE_TARGETS } from "../../packages/core-game/src/content/balance-targets";
 import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
+import { ACCOUNT_UNLOCKS } from "../../packages/core-game/src/content/unlocks";
 import { WEAPONS } from "../../packages/core-game/src/content/weapons";
+import { unlocksAt } from "../../packages/core-game/src/game/progression/unlocks";
 import {
   simulateBalanceRun,
   summarizeRuns,
@@ -88,7 +90,10 @@ it("свод калибровки баланса", () => {
 });
 
 function buildScenarios(): Scenario[] {
-  const starting = WEAPONS.filter((weapon) => weapon.starting === true).map((weapon) => weapon.id);
+  // Оружие первого уровня аккаунта: с ним приходит новичок, и эталоны
+  // сценариев набраны на нём (docs/35-stage4-plan.md §3.13).
+  const firstLevel = unlocksAt(ACCOUNT_UNLOCKS, 1).weapons;
+  const starting = WEAPONS.filter((weapon) => firstLevel.has(weapon.id)).map((weapon) => weapon.id);
   const scenarios: Scenario[] = [];
 
   // Пассивный прогоняется на одном оружии: он всё равно не стреляет осмысленно,

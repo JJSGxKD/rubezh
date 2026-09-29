@@ -15,7 +15,7 @@ import {
   Trophy,
 } from "lucide-react";
 import type { DifficultyId } from "@bh/shared-types";
-import { DIFFICULTIES, WEAPONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, DIFFICULTIES, unlocksAt, WEAPONS } from "@bh/core-game";
 import {
   Badge,
   Button,
@@ -409,7 +409,9 @@ export function ModeScreen(): ReactNode {
 export function WeaponScreen(): ReactNode {
   const navigation = useNavigation();
   const meta = useMeta();
-  const starting = WEAPONS.filter((weapon) => weapon.starting === true);
+  // Стартовым берётся открытое на первом уровне аккаунта (Р41).
+  const firstLevel = unlocksAt(ACCOUNT_UNLOCKS, 1).weapons;
+  const starting = WEAPONS.filter((weapon) => firstLevel.has(weapon.id));
   const selected = starting.some((weapon) => weapon.id === meta.lastWeaponId)
     ? meta.lastWeaponId
     : (starting[0]?.id ?? "");

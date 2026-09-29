@@ -256,7 +256,7 @@ describe("перескок молнии", () => {
 });
 
 describe("стихия в контенте оружия", () => {
-  const base: WeaponDef = { id: "flame", behavior: "aura", nameKey: "n", descriptionKey: "d", starting: true, element: "fire", levels: [{ damage: 5, cooldownSec: 1, statusChance: 0.2 }] };
+  const base: WeaponDef = { id: "flame", behavior: "aura", nameKey: "n", descriptionKey: "d", element: "fire", levels: [{ damage: 5, cooldownSec: 1, statusChance: 0.2 }] };
 
   it("стихия и шанс проходят проверку, индекс стихии — по её месту в перечне", () => {
     expect(findWeaponContentProblems([base])).toEqual([]);

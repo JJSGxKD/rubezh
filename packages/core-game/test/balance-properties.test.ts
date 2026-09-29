@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { BALANCE_TARGETS } from "../src/content/balance-targets";
+import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
+import { unlocksAt } from "../src/game/progression/unlocks";
 import {
   simulateBalanceRun,
   summarizeRuns,
@@ -27,7 +29,7 @@ const SEEDS = [1, 2, 3, 4, 5];
  * бы не баланс, а удачный seed. Сумма по трём оружиям даёт то же, что
  * показывает `pnpm balance:sim` на двадцати seed, и стоит шесть секунд.
  */
-const STARTING_WEAPONS = WEAPONS.filter((weapon) => weapon.starting === true).map(
+const STARTING_WEAPONS = WEAPONS.filter((weapon) => unlocksAt(ACCOUNT_UNLOCKS, 1).weapons.has(weapon.id)).map(
   (weapon) => weapon.id,
 );
 
