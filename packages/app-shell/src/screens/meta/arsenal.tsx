@@ -20,6 +20,8 @@ import {
   type ItemView,
 } from "../../state/items-api";
 import { useSession } from "../../state/session";
+import { useWallet } from "../../state/wallet";
+import { loadWallet } from "../../state/wallet-api";
 import { ItemSheet } from "./arsenal-item";
 import {
   CostLabel,
@@ -30,6 +32,8 @@ import {
   RIGHT_SLOTS,
   rarityName,
   rarityRank,
+  statName,
+  statValue,
   toneOf,
 } from "./arsenal-parts";
 
@@ -64,7 +68,9 @@ export function ArsenalScreen(): ReactNode {
   const [error, setError] = useState<string | null>(null);
 
   const load = async (): Promise<void> => {
-    const failure = await loadInventory();
+    // Осколки в шапке — из кошелька: он тоже перечитывается, иначе после
+    // неудачного первого входа арсенал показал бы нули.
+    const [failure] = await Promise.all([loadInventory(), loadWallet()]);
     setStatus(
       failure === null
         ? "ready"
@@ -216,6 +222,8 @@ export function ArsenalScreen(): ReactNode {
               {t("arsenal.levelCap", { level: inventory.levelCap })}
             </p>
           )}
+          <EquippedTotals totals={inventory?.totals ?? []} />
+          <ShardsRow />
 
           <SectionTitle>{t("arsenal.inventory")}</SectionTitle>
           <div className="mb-3 grid grid-cols-2 gap-2">
@@ -440,5 +448,47 @@ function HeroFigure(): ReactNode {
         className="stroke-current text-weapon"
       />
     </svg>
+  );
+}
+
+/**
+ * Итог надетого — всё, что даёт снаряжение, одной сводкой: не нужно открывать
+ * каждый предмет и складывать свойства в уме (`35-stage4-plan.md`, Р57).
+ */
+function EquippedTotals(props: { totals: readonly { stat: string; value: number }[] }): ReactNode {
+  if (props.totals.length === 0) return null;
+  return (
+    <section className="surface-sunken mt-3 rounded-lg p-3" aria-label={t("arsenal.totals")}>
+      <h2 className="mb-1 text-xs font-semibold text-text-muted">{t("arsenal.totals")}</h2>
+      <ul className="grid grid-cols-1 gap-x-4 gap-y-0.5 text-sm landscape:grid-cols-2">
+        {props.totals.map((total) => (
+          <li key={total.stat} className="flex items-center justify-between">
+            <span className="text-text">{statName(total.stat)}</span>
+            <span className="font-semibold tabular-nums text-success">{statValue(total.stat, total.value)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Осколки по редкостям — сколько есть на улучшение и объединение прямо сейчас. */
+function ShardsRow(): ReactNode {
+  const shards = useWallet((state) => state.balances?.shards);
+  if (shards === undefined) return null;
+  return (
+    <ul className="mt-3 flex flex-wrap justify-center gap-2" aria-label={t("arsenal.shards")}>
+      {RARITIES.filter((rarity) => rarity !== "mythic" || (shards[rarity] ?? 0) > 0).map((rarity) => (
+        <li
+          key={rarity}
+          title={`${t("arsenal.shards")} · ${rarityName(rarity)}`}
+          className={`surface-sunken inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-xs font-semibold ${toneOf(rarity).text}`}
+        >
+          <span aria-hidden="true" className="size-2 rotate-45 bg-current" />
+          <span className="tabular-nums text-text">{formatNumber(shards[rarity] ?? 0)}</span>
+          <span className="sr-only">{rarityName(rarity)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

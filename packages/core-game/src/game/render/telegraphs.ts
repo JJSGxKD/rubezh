@@ -35,7 +35,7 @@ export class Telegraphs {
     const scale = world.config.unitScale;
     ensureShapeTexture(scene, RING_KEY, RING_TEXTURE_UNITS * scale, WORLD_COLORS.threat, "ring");
     ensureShapeTexture(scene, FILL_KEY, RING_TEXTURE_UNITS * scale, WORLD_COLORS.threat, "circle");
-    this.ensureBarTexture(LANE_KEY, LANE_WIDTH_UNITS * scale, WORLD_COLORS.dashLane);
+    this.ensureBarTexture(LANE_KEY, LANE_WIDTH_UNITS * scale, WORLD_COLORS.threat);
     this.ensureBarTexture(AIM_KEY, AIM_WIDTH_UNITS * scale, WORLD_COLORS.enemyProjectile);
   }
 

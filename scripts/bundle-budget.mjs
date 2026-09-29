@@ -101,7 +101,9 @@ function measure() {
       matches: (name) =>
         isJs(name) && !firstLoad.has(name) && !ENGINE.test(name) && !AUDIO.test(name) && !TEAM.test(name) && !RUN_UI.test(name),
     },
-    { name: "Интерфейс забега", limitKb: 12, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
+    // 12,5, а не 12: управление с клавиатуры на ПК — пауза, выбор улучшения,
+    // подсказки клавиш (WP23, +0,6 КБ) — и значок щита бустов (WP8).
+    { name: "Интерфейс забега", limitKb: 12.5, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
     { name: "Инструменты команды", limitKb: 14, matches: (name) => TEAM.test(name) && !firstLoad.has(name) },
     { name: "Движок и стенд", limitKb: 380, matches: (name) => ENGINE.test(name) },
     { name: "Звук", limitKb: 15, matches: (name) => AUDIO.test(name) && !firstLoad.has(name) },

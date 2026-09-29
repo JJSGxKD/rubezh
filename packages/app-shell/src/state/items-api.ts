@@ -37,6 +37,8 @@ const inventorySchema = z.object({
   items: z.array(itemSchema),
   equipped: z.record(z.string(), z.string()),
   power: z.number(),
+  // Необязательное: сервер старше сводки её не пришлёт.
+  totals: z.optional(z.array(statSchema)),
   capacity: z.number(),
   levelCap: z.number(),
   merge: z.record(z.string(), costSchema),

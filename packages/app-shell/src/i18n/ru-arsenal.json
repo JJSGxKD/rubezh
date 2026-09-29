@@ -49,7 +49,7 @@
   "arsenal.error.offline": "Нет связи — попробуйте ещё раз.",
   "arsenal.error.generic": "Не получилось — попробуйте ещё раз.",
   "rarity.common": "Обычное",
-  "rarity.uncommon": "Необычное",
+  "rarity.uncommon": "Добротное",
   "rarity.rare": "Редкое",
   "rarity.epic": "Эпическое",
   "rarity.legendary": "Легендарное",
@@ -72,5 +72,6 @@
   "item.stat.damageCold": "Урон холодом",
   "item.stat.damageLightning": "Урон молнией",
   "item.stat.damagePoison": "Урон ядом",
-  "item.stat.statusChance": "Шанс состояния"
+  "item.stat.statusChance": "Шанс состояния",
+  "arsenal.totals": "Итог надетого"
 }

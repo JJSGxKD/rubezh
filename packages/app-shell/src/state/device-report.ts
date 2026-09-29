@@ -47,8 +47,12 @@ export function buildDeviceReport(input: DeviceReportInput): DeviceReportRow[] {
     // устройство и рисует каждый кадр.
     { key: "canvas", value: `${Math.round(input.viewport.width * dpr)}×${Math.round(input.viewport.height * dpr)}` },
     { key: "displayHz", value: input.displayHz === null ? "—" : `≈${input.displayHz}` },
+    // Браузер отдаёт логические процессоры — потоки, а не физические ядра:
+    // сколько ядер на самом деле, странице не узнать.
     { key: "cores", value: device.cores === null ? "—" : String(device.cores) },
-    { key: "memory", value: device.memoryGb === null ? "—" : String(device.memoryGb) },
+    // Память браузер округляет вниз до степени двойки и обрезает сверху: на
+    // машине с 64 ГБ он отдаёт 32. Поэтому это нижняя граница, а не число.
+    { key: "memory", value: device.memoryGb === null ? "—" : `≥ ${String(device.memoryGb)}` },
     { key: "screenMode", value: input.screenMode },
     {
       key: "insets",

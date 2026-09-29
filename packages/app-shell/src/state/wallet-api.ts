@@ -1,7 +1,7 @@
 import { z } from "zod/mini";
 import { apiRequest, type ApiFailure, type ApiRequest, type ApiResult } from "./api-request";
 import { useShell } from "./shell";
-import { useWallet, type WalletBalances } from "./wallet";
+import { useWallet } from "./wallet";
 
 /**
  * Кошелёк игрока с сервера (docs/35-stage4-plan.md, WP3): монеты и
@@ -19,10 +19,19 @@ import { useWallet, type WalletBalances } from "./wallet";
 
 // Осколки и новые ресурсы сервер добавит в тот же ответ — схема их
 // пропускает, а не падает: клиент мог не обновиться.
-const walletSchema = z.object({ balances: z.object({ coins: z.number(), gems: z.number() }) });
+const walletSchema = z.object({ balances: z.catchall(z.object({ coins: z.number(), gems: z.number() }), z.unknown()) });
+
+/** Осколки — ключи `shard_<редкость>`; незнакомые ресурсы пропускаются. */
+function shardsOf(balances: Record<string, unknown>): Partial<Record<string, number>> {
+  const shards: Partial<Record<string, number>> = {};
+  for (const [key, value] of Object.entries(balances)) {
+    if (key.startsWith("shard_") && typeof value === "number") shards[key.slice("shard_".length)] = value;
+  }
+  return shards;
+}
 
 export interface WalletApi {
-  balances(): Promise<ApiResult<{ balances: WalletBalances }>>;
+  balances(): Promise<ApiResult<z.infer<typeof walletSchema>>>;
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
@@ -34,6 +43,7 @@ export async function loadWallet(api?: WalletApi): Promise<ApiFailure | null> {
   if (api === undefined && useShell.getState().capabilities.auth === undefined) return "disabled";
   const response = await (api ?? createWalletApi()).balances();
   if (!response.ok) return response.failure;
-  useWallet.setState({ balances: { coins: response.data.balances.coins, gems: response.data.balances.gems } });
+  const balances = response.data.balances;
+  useWallet.setState({ balances: { coins: balances.coins, gems: balances.gems, shards: shardsOf(balances) } });
   return null;
 }

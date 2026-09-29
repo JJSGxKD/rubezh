@@ -17,6 +17,7 @@ import { reportError } from "../state/shell";
  */
 const loaders = {
   run: () => import("../screens/run/RunScreen"),
+  boosts: () => import("../screens/boosts"),
   settings: () => import("../screens/settings"),
   stubs: () => import("../screens/stubs"),
   gallery: () => import("../screens/gallery"),
@@ -42,6 +43,7 @@ function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): Componen
 }
 
 export const RunScreen = screen(loaders.run, "RunScreen");
+export const BoostsScreen = screen(loaders.boosts, "BoostsScreen");
 export const SettingsScreen = screen(loaders.settings, "SettingsScreen");
 export const TestersScreen = screen(loaders.settings, "TestersScreen");
 export const AboutScreen = screen(loaders.settings, "AboutScreen");

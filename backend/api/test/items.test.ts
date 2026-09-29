@@ -176,3 +176,31 @@ describe("снаряжение по HTTP", () => {
     expect(capped.json()).toMatchObject({ error: { code: "item_max_level" } });
   });
 });
+
+describe("итог надетого в инвентаре", () => {
+  it("складывает только надетое и идёт в порядке каталога параметров", async () => {
+    const { inventoryView } = await import("../src/modules/items/item-views.js");
+    const { rollItem, seededRandom, loadoutOf } = await import("../src/modules/items/item-rules.js");
+    const { ITEM_STATS } = await import("../src/modules/items/item-catalog.js");
+    const row = (itemId: string, slot: "weapon" | "armor", equipped: boolean) => ({
+      itemId,
+      accountId: "acc",
+      slot,
+      rarity: "rare" as const,
+      level: 3,
+      seed: 1,
+      rolls: rollItem(seededRandom(itemId.length * 7), slot, "rare"),
+      equipped,
+      source: "test",
+      createdAt: new Date(0),
+    });
+    const rows = [row("a", "weapon", true), row("bb", "armor", true), row("ccc", "armor", false)];
+
+    const view = inventoryView(rows, 5);
+    const expected = loadoutOf(rows.filter((item) => item.equipped));
+
+    expect(Object.fromEntries(view.totals.map((total) => [total.stat, total.value]))).toEqual(expected);
+    const order = view.totals.map((total) => ITEM_STATS.indexOf(total.stat));
+    expect(order).toEqual([...order].sort((x, y) => x - y));
+  });
+});

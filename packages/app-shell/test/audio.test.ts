@@ -5,7 +5,7 @@ import { volumeCurve } from "../src/audio/audio-engine";
 import { DEFAULT_VOLUMES } from "../src/audio";
 import { LAB_OVERRIDES_KEY, readLabOverrides, recipeSchema } from "../src/audio/lab-overrides";
 import { BUSES, SOUND_RECIPES, UI_SOUNDS } from "../src/audio/recipes";
-import { planCueSounds } from "../src/audio/sound-director";
+import { gemNotes, planCueSounds } from "../src/audio/sound-director";
 import { sceneFor } from "../src/state/audio-sync";
 import { useSettings } from "../src/state/settings";
 import { initShell } from "../src/state/shell";
@@ -79,19 +79,36 @@ describe("план звуков забега", () => {
     expect(pops.map((request) => request.options.delay)).toEqual([0, 0.035, 0.07]);
   });
 
-  it("взрыв вдали тише взрыва рядом, «Гроза» звучит ударом, а не срабатыванием", () => {
-    expect(planCueSounds(cues({ explosions: 2, explosionsNear: 1 }), 0)).toContainEqual({ id: "blast", options: {} });
-    expect(planCueSounds(cues({ explosions: 2 }), 0)).toContainEqual({ id: "blast", options: { gain: 0.35 } });
+  it("атаки врагов не звучат — только попадание по игроку; «Гроза» звучит ударом, а не срабатыванием", () => {
+    const attacks = planCueSounds(cues({ explosions: 2, explosionsNear: 1, fuses: 1, dashWarns: 1, dashes: 1, enemyShots: 1 }), 0);
+    expect(attacks).toEqual([]);
+    expect(planCueSounds(cues({ playerHit: 1, explosionsNear: 1 }), 0).map((request) => request.id)).toEqual(["hurt"]);
     const storm = planCueSounds(cues({ weapons: { storm: 1, spark: 1 } }), 0).map((request) => request.id);
     expect(storm).toEqual(["spark"]);
     expect(planCueSounds(cues({ strikes: 1 }), 0).map((request) => request.id)).toEqual(["storm"]);
   });
 
-  it("угрозы — впереди толпы: при потолке голосов режутся последние", () => {
-    const ids = planCueSounds(cues({ kills: 5, playerHit: 1, fuses: 1, xp: 3, weapons: { knife: 2 } }), 4).map((request) => request.id);
+  it("важное — впереди толпы: при потолке голосов режутся последние", () => {
+    const ids = planCueSounds(cues({ kills: 5, playerHit: 1, eliteSpawns: 1, xp: 3, weapons: { knife: 2 } }), 4).map((request) => request.id);
     expect(ids.indexOf("hurt")).toBeLessThan(ids.indexOf("knife"));
-    expect(ids.indexOf("fuseTick")).toBeLessThan(ids.indexOf("popSmall"));
+    expect(ids.indexOf("eliteHorn")).toBeLessThan(ids.indexOf("popSmall"));
     expect(ids.at(-1)).toBe("gem");
+  });
+
+  it("опыт — лесенкой: серия поднимается, наверху не залипает на одной ноте", () => {
+    const rates = Array.from({ length: 9 }, (_, step) => gemNotes(1, step)[0]?.rate ?? 0);
+    for (let i = 1; i < 6; i++) expect(rates[i]).toBeGreaterThan(rates[i - 1] ?? 0);
+    expect(rates[5]).toBeCloseTo(2, 9);
+    // После вершины — чередование двух верхних ступеней, а не одна нота.
+    expect(new Set(rates.slice(5).map((rate) => rate.toFixed(4))).size).toBe(2);
+  });
+
+  it("крупный сбор — арпеджио с потолком нот, одиночный кристалл — одна нота", () => {
+    expect(gemNotes(1, 0)).toHaveLength(1);
+    const burst = gemNotes(500, 0);
+    expect(burst).toHaveLength(6);
+    expect(burst.map((note) => note.delay)).toEqual([0, 0.04, 0.08, 0.12, 0.16, 0.2]);
+    expect(gemNotes(0, 3)).toEqual([]);
   });
 });
 

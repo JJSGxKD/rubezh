@@ -11,6 +11,7 @@ export type ScreenId =
   | "lobby"
   | "mode"
   | "weapon"
+  | "boosts"
   | "run"
   | "stress"
   | "arsenal"
@@ -36,7 +37,6 @@ export type TabId = (typeof TAB_ROOTS)[number];
 
 /** Экраны-заглушки: их заходы считаются отдельно — это замер интереса (§6). */
 const STUB_SCREENS: ReadonlySet<ScreenId> = new Set<ScreenId>([
-  "arsenal",
   "shop",
   "friends",
   "tasks",

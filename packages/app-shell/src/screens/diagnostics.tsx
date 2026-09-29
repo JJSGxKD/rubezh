@@ -4,7 +4,7 @@ import { Button, ContentColumn, ListGroup, ListItem, Screen, SectionTitle } from
 import { t } from "../i18n";
 import "../i18n/team";
 import { copyText } from "../state/clipboard";
-import { readEnvironment } from "../state/device";
+import { readEnvironment, watchEnvironment } from "../state/device";
 import { buildDeviceReport, formatDeviceReport, measureDisplayHz } from "../state/device-report";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
@@ -30,6 +30,9 @@ export function DiagnosticsScreen(): ReactNode {
   const installId = useInstall((state) => state.installId);
   const [displayHz, setDisplayHz] = useState<number | null>(null);
   const [copy, setCopy] = useState<CopyState>("idle");
+  // Сведения пересчитываются, когда меняется окно, плотность или экран.
+  const [envVersion, setEnvVersion] = useState(0);
+  useEffect(() => watchEnvironment(() => setEnvVersion((version) => version + 1)), []);
 
   useEffect(() => {
     let alive = true;
@@ -54,7 +57,7 @@ export function DiagnosticsScreen(): ReactNode {
         screenMode: platform.screenMode,
         displayHz,
       }),
-    [adapter, build.version, displayHz, installId, platform.insets, platform.screenMode, platform.viewport],
+    [adapter, build.version, displayHz, installId, platform.insets, platform.screenMode, platform.viewport, envVersion],
   );
   const text = formatDeviceReport(rows, (key) => t(`diagnostics.report.${key}`));
 
