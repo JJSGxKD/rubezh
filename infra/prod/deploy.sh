@@ -25,7 +25,7 @@ log() { printf '[deploy %s] %s\n' "$(date -u +%H:%M:%S)" "$1"; }
 
 # Переменная из .env compose — без source: в файле секреты, и исполнять его
 # как скрипт незачем.
-env_value() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- | sed -E "s/^\"(.*)\"\$/\1/; s/^'(.*)'\$/\1/"; }
+env_value() { { grep -E "^$1=" .env || true; } | tail -1 | cut -d= -f2- | sed -E "s/^\"(.*)\"\$/\1/; s/^'(.*)'\$/\1/"; }
 set_env_value() {
   if grep -qE "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else printf '%s=%s\n' "$1" "$2" >> .env; fi
 }

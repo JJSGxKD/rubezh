@@ -18,7 +18,7 @@ TELEGRAM_MAX_BYTES=$((49 * 1024 * 1024))
 
 cd "$APP"
 # Значение без кавычек: compose снимает их сам, а здесь строка идёт в URL.
-value() { grep -E "^$2=" "$1" | tail -1 | cut -d= -f2- | sed -E "s/^\"(.*)\"\$/\1/; s/^'(.*)'\$/\1/"; }
+value() { { grep -E "^$2=" "$1" || true; } | tail -1 | cut -d= -f2- | sed -E "s/^\"(.*)\"\$/\1/; s/^'(.*)'\$/\1/"; }
 POSTGRES_USER="$(value .env POSTGRES_USER)"
 POSTGRES_DB="$(value .env POSTGRES_DB)"
 TOKEN="$(value api.env TELEGRAM_BOT_TOKEN)"
