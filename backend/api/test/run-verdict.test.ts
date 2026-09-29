@@ -146,6 +146,10 @@ describe("снаряжение в вердикте", () => {
     expect(judgeRun(run({ loadout: "none" }), limits)).toEqual({ verdict: "ok", reasons: [] });
   });
 
+  it("снимок с уровнем выше уровня аккаунта — отказ: открытое по нему игроку не положено", () => {
+    expect(judgeRun(run({ loadout: "level_ahead" }), limits)).toEqual({ verdict: "rejected", reasons: ["loadout_level_ahead"] });
+  });
+
   it("буст, не купленный на забег, — отказ: без оплаты честный клиент его не применит", () => {
     expect(judgeRun(run({ boosts: "unpaid" }), limits)).toEqual({ verdict: "rejected", reasons: ["boost_unpaid"] });
     expect(judgeRun(run({ boosts: "paid" }), limits)).toEqual({ verdict: "ok", reasons: [] });

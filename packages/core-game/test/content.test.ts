@@ -14,12 +14,14 @@ import { ENEMY_STAGES } from "../src/content/stages";
 import { MAPS } from "../src/content/maps";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS } from "../src/game/patterns";
 import { findMapContentProblems } from "../src/game/sim/map-types";
 import { findTimelineProblems } from "../src/game/sim/timeline-content";
 import { findPassiveContentProblems } from "../src/game/progression/passives";
 import { xpForLevel } from "../src/game/progression/levels";
+import { findUnlockProblems, unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
 import { findWeaponContentProblems, IMPLEMENTED_WEAPON_BEHAVIORS } from "../src/game/weapons";
 import { createWorld } from "../src/game/sim/world";
 
@@ -208,9 +210,10 @@ describe("контент оружия", () => {
     }
   });
 
-  it("даёт игроку выбор из трёх стартовых оружий", () => {
-    // Решение Р12 (docs/26-stage2-plan.md §2): выбор перед забегом из трёх.
-    expect(WEAPONS.filter((weapon) => weapon.starting === true)).toHaveLength(3);
+  it("даёт новичку выбор из трёх оружий на первом уровне", () => {
+    // Решение Р12 (docs/26-stage2-plan.md §2) — выбор перед забегом из трёх;
+    // Р41 — стартовым берётся любое открытое, и первый уровень открывает три.
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 1).weapons.size).toBe(3);
   });
 
   it("содержит оружие на каждое реализованное поведение", () => {
@@ -248,20 +251,56 @@ describe("контент пассивок и прокачки", () => {
   });
 });
 
+describe("таблица разблокировок уровня аккаунта", () => {
+  const content = { weapons: WEAPONS.map((weapon) => weapon.id), passives: new Map(PASSIVES.map((passive) => [passive.id, passive.category])) };
+
+  it("проходит проверку целиком: каждое оружие и навык открываются ровно на одном уровне, слоты не убывают", () => {
+    expect(findUnlockProblems(ACCOUNT_UNLOCKS, content, LOADOUT_LIMITS)).toEqual([]);
+  });
+
+  it("на последнем уровне открыто всё, и слоты — потолок контента: golden-тесты идут на этом наборе", () => {
+    const last = Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level));
+    const open = unlocksAt(ACCOUNT_UNLOCKS, last);
+    expect(open.weapons.size).toBe(WEAPONS.length);
+    expect(open.passives.size).toBe(PASSIVES.length);
+    expect(open.limits).toEqual(LOADOUT_LIMITS);
+    expect(unlocksAt(ACCOUNT_UNLOCKS, last + 50)).toEqual(open);
+  });
+
+  it("новичок начинает с урезанными слотами — ощущение роста (Р41)", () => {
+    const first = unlocksAt(ACCOUNT_UNLOCKS, 1).limits;
+    expect(first.weapons).toBeLessThan(LOADOUT_LIMITS.weapons);
+  });
+
+  it("уровень открытия знает каждое оружие и навык", () => {
+    for (const weapon of WEAPONS) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", weapon.id), weapon.id).not.toBeNull();
+    for (const passive of PASSIVES) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "passive", passive.id), passive.id).not.toBeNull();
+  });
+
+  it("ловит оружие без уровня, дубль, убывающие слоты и категорию, где выбирать нечего", () => {
+    const problems = findUnlockProblems(
+      [
+        { level: 1, weapons: ["spark"], passives: ["might"], slots: { weapons: 2, passives: { attack: 1, defense: 0, mobility: 0 } } },
+        { level: 2, weapons: ["spark"], slots: { weapons: 1 } },
+      ],
+      { weapons: ["spark", "knife"], passives: new Map([["might", "attack"]]) },
+      { weapons: 2, passives: { attack: 1, defense: 0, mobility: 0 } },
+    ).join("\n");
+    expect(problems).toMatch(/оружие knife не открывается ни на одном уровне/);
+    expect(problems).toMatch(/оружие spark открывается на уровнях 1, 2/);
+    expect(problems).toMatch(/уровень 2: слотов оружия меньше, чем уровнем ниже/);
+    expect(problems).toMatch(/навыков «attack» открыто 1, слотов 1 — выбирать нечего/);
+  });
+});
+
 describe("проверка контента оружия", () => {
   const base = { nameKey: "n", descriptionKey: "d" };
   const ok: WeaponDef = {
     id: "spark",
     behavior: "projectile_nearest",
     ...base,
-    starting: true,
     levels: [{ damage: 5, cooldownSec: 0.3 }],
   };
-
-  it("требует хотя бы одно стартовое оружие", () => {
-    const problems = findWeaponContentProblems([{ ...ok, starting: false }]);
-    expect(problems.join("\n")).toMatch(/нет ни одного стартового оружия/);
-  });
 
   it("ловит нулевой урон и нулевую перезарядку", () => {
     const problems = findWeaponContentProblems([

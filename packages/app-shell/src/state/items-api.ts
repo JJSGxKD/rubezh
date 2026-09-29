@@ -90,14 +90,14 @@ export async function loadInventory(api?: ItemsApi): Promise<ApiFailure | null> 
 }
 
 /**
- * Снимок надетого — на устройство, для следующего забега. Пустой набор не
- * хранится: забег без снаряжения ничего не должен доказывать серверу.
+ * Снимок надетого — на устройство, для следующего забега. Хранится и без
+ * снаряжения: в нём уровень аккаунта, который открывает оружие и навыки (WP25).
  */
 export async function refreshLoadout(api?: ItemsApi): Promise<ApiFailure | null> {
   if (disabled(api)) return "disabled";
   const response = await (api ?? createItemsApi()).loadout();
   if (!response.ok) return response.failure;
-  saveEquippedLoadout(Object.keys(response.data.modifiers).length === 0 ? null : response.data);
+  saveEquippedLoadout(response.data);
   return null;
 }
 

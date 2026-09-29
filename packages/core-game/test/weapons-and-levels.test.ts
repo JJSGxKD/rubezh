@@ -39,7 +39,6 @@ const SPARK: WeaponDef = {
   id: "spark",
   behavior: "projectile_nearest",
   ...text,
-  starting: true,
   levels: [
     { damage: 10, cooldownSec: 0.5, projectiles: 1, projectileSpeed: 600, ttlSec: 2 },
     { damage: 20, cooldownSec: 0.5, projectiles: 1, projectileSpeed: 600, ttlSec: 2 },
@@ -154,7 +153,7 @@ describe("оружие", () => {
   });
 
   it("бьёт по направлению движения и сохраняет его на остановке", () => {
-    const world = setup({ weapons: [{ ...KNIFE, starting: true }] });
+    const world = setup({ weapons: [KNIFE] });
     const behind = place(world, "dummy", -150, 0);
 
     for (let i = 0; i < 30; i++) stepWorld(world, { moveX: -1, moveY: 0 });
@@ -163,7 +162,7 @@ describe("оружие", () => {
   });
 
   it("пробивающий снаряд задевает нескольких врагов, но каждого один раз", () => {
-    const world = setup({ weapons: [{ ...KNIFE, starting: true }] });
+    const world = setup({ weapons: [KNIFE] });
     const first = place(world, "dummy", -80, 0);
     const second = place(world, "dummy", -140, 0);
     const third = place(world, "dummy", -200, 0);
@@ -177,7 +176,7 @@ describe("оружие", () => {
   });
 
   it("обереги кружат вокруг игрока и бьют то, чего касаются", () => {
-    const world = setup({ weapons: [{ ...WARD, starting: true }] });
+    const world = setup({ weapons: [WARD] });
     const onRing = place(world, "dummy", 100, 0);
     const outside = place(world, "dummy", 400, 0);
 
@@ -190,7 +189,7 @@ describe("оружие", () => {
   });
 
   it("кольцо оберегов держится на игроке и на бегу не отстаёт", () => {
-    const world = setup({ weapons: [{ ...WARD, starting: true }] });
+    const world = setup({ weapons: [WARD] });
     const level = world.weaponTypes[world.loadout.weapons[0].typeIndex].levels[0];
 
     for (let i = 0; i < 30; i++) stepWorld(world, { moveX: 1, moveY: 0 });
@@ -203,7 +202,7 @@ describe("оружие", () => {
   });
 
   it("аура бьёт всех в радиусе и никого снаружи", () => {
-    const world = setup({ weapons: [{ ...AURA, starting: true }] });
+    const world = setup({ weapons: [AURA] });
     const inside = place(world, "dummy", 60, 0);
     const alsoInside = place(world, "dummy", -60, 60);
     const outside = place(world, "dummy", 300, 0);
@@ -216,7 +215,7 @@ describe("оружие", () => {
   });
 
   it("удар по площади дотягивается до дальнего врага и сообщает рендеру", () => {
-    const world = setup({ weapons: [{ ...STORM, starting: true }] });
+    const world = setup({ weapons: [STORM] });
     const far = place(world, "dummy", 500, 0);
 
     run(world, 120);

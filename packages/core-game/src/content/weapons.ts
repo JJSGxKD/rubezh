@@ -16,7 +16,9 @@ import type { WeaponDef } from "@bh/shared-types";
 //  * оружие, которое бьёт по площади или пробивает, на бумаге слабее в уроне:
 //    оно попадает по нескольким целям сразу.
 //
-// Тексты — ключи i18n (docs/01-tech-stack.md §7).
+// Тексты — ключи i18n (docs/01-tech-stack.md §7). На каком уровне аккаунта
+// оружие открывается и можно ли взять его стартовым — `content/unlocks.ts`:
+// стартовым берётся любое открытое (Р41).
 export const WEAPONS: WeaponDef[] = [
   {
     // Ровное оружие без условий: бьёт в ближайшего, промахов не бывает. По
@@ -25,7 +27,6 @@ export const WEAPONS: WeaponDef[] = [
     behavior: "projectile_nearest",
     nameKey: "weapon.spark.name",
     descriptionKey: "weapon.spark.description",
-    starting: true,
     levels: [
       { damage: 6, cooldownSec: 0.28, projectiles: 1, projectileSpeed: 520, ttlSec: 1.6 },
       { damage: 7, cooldownSec: 0.26, projectiles: 1, projectileSpeed: 540, ttlSec: 1.6 },
@@ -44,7 +45,6 @@ export const WEAPONS: WeaponDef[] = [
     behavior: "projectile_facing",
     nameKey: "weapon.knife.name",
     descriptionKey: "weapon.knife.description",
-    starting: true,
     levels: [
       { damage: 6, cooldownSec: 0.4, projectiles: 2, pierce: 1, projectileSpeed: 640, ttlSec: 1.2 },
       { damage: 7, cooldownSec: 0.38, projectiles: 2, pierce: 1, projectileSpeed: 660, ttlSec: 1.2 },
@@ -71,7 +71,6 @@ export const WEAPONS: WeaponDef[] = [
     descriptionKey: "weapon.wardstone.description",
     // Холод: камни замедляют тех, кто подошёл вплотную, — оберег и держит толпу.
     element: "cold",
-    starting: true,
     levels: [
       { damage: 11, cooldownSec: 0.4, projectiles: 1, areaRadius: 60, projectileSpeed: 380, statusChance: 0.2 },
       { damage: 12, cooldownSec: 0.38, projectiles: 2, areaRadius: 64, projectileSpeed: 395, statusChance: 0.22 },

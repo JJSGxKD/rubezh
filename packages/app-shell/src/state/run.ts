@@ -273,6 +273,11 @@ export const useRun = create<RunStore>((set, get) => ({
       // не куплено ничего. Продолженный забег несёт свои из снимка.
       const devBoosts = devRun && resume === undefined ? (useDevMode.getState().settings.start.boosts ?? []) : [];
       const boostIds = bought?.ids ?? devBoosts;
+      // Уровень аккаунта — из того же снимка: он открывает оружие, навыки и
+      // слоты (docs/35-stage4-plan.md §3.13). Без снимка — первый уровень.
+      // Забегу разработчика открыто всё: он проверяет контент, а не путь
+      // новичка.
+      const accountLevel = devRun ? undefined : (loadouts?.runLevelOf(signed) ?? 1);
       const created = engine.start({
         container: options.container,
         seed,
@@ -292,9 +297,15 @@ export const useRun = create<RunStore>((set, get) => ({
         // можно купить: иначе смерть ждала бы решения, которого не принять
         // (docs/34-stage3-plan.md, WP5).
         continues: devRun || canOfferPaidContinue(),
-        ...(signed === null && boostIds.length === 0
+        ...(resume !== undefined || (signed === null && boostIds.length === 0 && accountLevel === undefined)
           ? {}
-          : { loadout: { modifiers: signed === null || loadouts === null ? {} : loadouts.knownModifiers(signed), boosts: [...boostIds] } }),
+          : {
+              loadout: {
+                modifiers: signed === null || loadouts === null ? {} : loadouts.knownModifiers(signed),
+                boosts: [...boostIds],
+                ...(accountLevel === undefined ? {} : { accountLevel }),
+              },
+            }),
         ...(bought === undefined ? {} : { runId: bought.runId }),
       });
 

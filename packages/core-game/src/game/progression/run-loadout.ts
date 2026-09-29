@@ -43,6 +43,8 @@ export const LOADOUT_BOUNDS: Readonly<Record<LoadoutStat, number>> = {
 /** Бустов на забег не больше — и id буста не длиннее. */
 export const MAX_LOADOUT_BOOSTS = 8;
 const MAX_BOOST_ID = 64;
+/** Потолок уровня аккаунта — от битых данных; настоящий потолок у сервера. */
+const MAX_ACCOUNT_LEVEL = 1_000;
 
 export const EMPTY_LOADOUT: RunLoadout = { modifiers: {}, boosts: [] };
 
@@ -63,7 +65,11 @@ export function sanitizeLoadout(input: unknown): RunLoadout {
         .filter((boost): boost is string => typeof boost === "string" && boost.length > 0 && boost.length <= MAX_BOOST_ID)
         .slice(0, MAX_LOADOUT_BOOSTS)
     : [];
-  return { modifiers, boosts };
+  // Битый уровень — не повод открыть всё: забег идёт с первого уровня.
+  const level = record.accountLevel;
+  if (level === undefined) return { modifiers, boosts };
+  const accountLevel = typeof level === "number" && Number.isInteger(level) && level >= 1 ? Math.min(level, MAX_ACCOUNT_LEVEL) : 1;
+  return { modifiers, boosts, accountLevel };
 }
 
 /** Прибавка параметра; не задана — ноль. */
@@ -71,7 +77,10 @@ export function loadoutValue(modifiers: Readonly<Partial<Record<LoadoutStat, num
   return modifiers[stat] ?? 0;
 }
 
-/** Набор без модификаторов и бустов: в запись и снимок такой не пишется. */
+/**
+ * Набор без модификаторов, бустов и уровня: в запись и снимок такой не
+ * пишется. Уровень — не пустота: без него повтор открыл бы всё.
+ */
 export function isEmptyLoadout(loadout: RunLoadout): boolean {
-  return Object.keys(loadout.modifiers).length === 0 && loadout.boosts.length === 0;
+  return Object.keys(loadout.modifiers).length === 0 && loadout.boosts.length === 0 && loadout.accountLevel === undefined;
 }

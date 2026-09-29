@@ -23,8 +23,9 @@ import {
   passiveRange,
   regularEnemies,
   speedClass,
-  startingWeapons,
-  unlockableWeapons,
+  firstLevelWeapons,
+  levelWeapons,
+  unlockLevel,
   weaponElement,
   weaponGrowth,
   type GuideEnemy,
@@ -289,11 +290,11 @@ function Weapons(): ReactNode {
     <>
       <p className="text-sm text-text-muted">{t("guide.weapons.intro")}</p>
       <SectionTitle>{t("guide.weapons.starting")}</SectionTitle>
-      {startingWeapons().map((weapon, index) => (
+      {firstLevelWeapons().map((weapon, index) => (
         <WeaponCard key={weapon.id} weapon={weapon} index={index} />
       ))}
       <SectionTitle>{t("guide.weapons.unlockable")}</SectionTitle>
-      {unlockableWeapons().map((weapon, index) => (
+      {levelWeapons().map((weapon, index) => (
         <WeaponCard key={weapon.id} weapon={weapon} index={index} />
       ))}
     </>
@@ -315,7 +316,7 @@ function WeaponCard(props: { weapon: WeaponDef; index: number }): ReactNode {
               <ItemIcon kind="weapon" id={weapon.id} size={16} />
             </span>
             <h3 className="font-display text-base font-bold text-text">{name}</h3>
-            {weapon.starting === true ? <Badge tone="weapon">{t("guide.weapon.starting")}</Badge> : null}
+            <UnlockBadge level={unlockLevel("weapon", weapon.id)} />
             {element === null ? null : <ElementTag element={element} />}
           </div>
           <p className="mt-1 text-sm text-text-muted">{t(`guide.behavior.${weapon.behavior}`)}</p>
@@ -343,6 +344,11 @@ function WeaponCard(props: { weapon: WeaponDef; index: number }): ReactNode {
   );
 }
 
+/** С какого уровня аккаунта открыто; открытое с первого — без значка, его видит каждый. */
+function UnlockBadge(props: { level: number }): ReactNode {
+  return props.level > 1 ? <Badge tone="muted">{t("guide.unlock.level", { level: props.level })}</Badge> : null;
+}
+
 function Upgrades(): ReactNode {
   return (
     <>
@@ -361,7 +367,10 @@ function Upgrades(): ReactNode {
                   <ItemTile kind="passive" id={passive.id} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                      <h3 className="font-display text-base font-bold text-text">{t(passive.nameKey)}</h3>
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <h3 className="font-display text-base font-bold text-text">{t(passive.nameKey)}</h3>
+                        <UnlockBadge level={unlockLevel("passive", passive.id)} />
+                      </span>
                       <span className="text-xs text-text-muted">
                         {t("guide.upgrades.levels", { count: passive.levels.length })}
                       </span>

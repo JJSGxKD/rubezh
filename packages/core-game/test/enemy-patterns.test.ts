@@ -103,7 +103,6 @@ const TEST_WEAPON: WeaponDef = {
   behavior: "projectile_nearest",
   nameKey: "weapon.t_spark.name",
   descriptionKey: "weapon.t_spark.description",
-  starting: true,
   levels: [{ damage: 6, cooldownSec: 0.28, projectiles: 1, projectileSpeed: 520, ttlSec: 1.6 }],
 };
 

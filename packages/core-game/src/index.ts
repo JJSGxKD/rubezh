@@ -22,6 +22,7 @@ export * from "./content/difficulty";
 export * from "./content/drops";
 export * from "./content/stages";
 export * from "./content/boosts";
+export * from "./content/unlocks";
 export * from "./game/bench";
 
 // Как выглядит мир забега — без Phaser: гайдбук оболочки рисует врагов и
@@ -86,6 +87,7 @@ export { RADAR_BLIP, RUN_RECORDING_SCHEMA, RUN_SNAPSHOT_FORMAT } from "./run-api
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).
 export { xpForLevel, OFFERS_PER_LEVEL } from "./game/progression/levels";
+export { unlocksAt, unlockLevelOf, unlocksOfLevel, type AccountUnlocks } from "./game/progression/unlocks";
 
 // Итог забега: движок считает, оболочка показывает, хранит рекорд и отправляет
 // (docs/26-stage2-plan.md, WP3).

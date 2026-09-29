@@ -5,8 +5,9 @@ import { reportError } from "../state/shell";
 
 /**
  * Экраны, которые грузятся по требованию (docs/27-design-system-and-app-shell.md
- * §3.4). В первую загрузку идёт только путь до «Играть»: заставки, лобби,
- * выбор режима и оружия. Сам забег — HUD, пауза, выбор улучшения — чанком,
+ * §3.4). В первую загрузку идёт только путь до «Играть»: заставки, лобби и
+ * выбор режима; выбор оружия — чанком, который лобби подтягивает в простое.
+ * Сам забег — HUD, пауза, выбор улучшения — чанком,
  * который лобби подтягивает в простое вместе с движком: без движка он всё
  * равно не начнётся, а первая загрузка за него не платит. Настройки,
  * диагностика, витрина, разделы-заглушки и мета игроку в первую минуту не
@@ -17,6 +18,7 @@ import { reportError } from "../state/shell";
  */
 const loaders = {
   run: () => import("../screens/run/RunScreen"),
+  weapon: () => import("../screens/weapon-select"),
   boosts: () => import("../screens/boosts"),
   settings: () => import("../screens/settings"),
   stubs: () => import("../screens/stubs"),
@@ -43,6 +45,7 @@ function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): Componen
 }
 
 export const RunScreen = screen(loaders.run, "RunScreen");
+export const WeaponScreen = screen(loaders.weapon, "WeaponScreen");
 export const BoostsScreen = screen(loaders.boosts, "BoostsScreen");
 export const SettingsScreen = screen(loaders.settings, "SettingsScreen");
 export const TestersScreen = screen(loaders.settings, "TestersScreen");

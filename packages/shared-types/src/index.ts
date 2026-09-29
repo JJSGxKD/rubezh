@@ -620,8 +620,6 @@ export interface WeaponDef {
   behavior: WeaponBehavior;
   nameKey: string;
   descriptionKey: string;
-  /** можно выбрать на старте забега */
-  starting?: boolean;
   /** вес в выборе улучшений; по умолчанию 1 */
   weight?: number;
   /** стихия урона; не задана — физический */
@@ -676,6 +674,13 @@ export interface RunLoadout {
   modifiers: Partial<Record<LoadoutStat, number>>;
   /** id активных бустов; движок их пока только записывает (WP8) */
   boosts: string[];
+  /**
+   * Уровень аккаунта из подписанного снимка (docs/35-stage4-plan.md §3.13,
+   * WP25): от него — открытое оружие, навыки и слоты под них. Нет поля —
+   * открыто всё: так идут запись и снимок прошлой сборки, стенд и тесты
+   * баланса. Оболочка на новом забеге ставит его всегда.
+   */
+  accountLevel?: number;
 }
 
 /**
@@ -690,6 +695,11 @@ export interface SignedLoadout {
    * прислать параметр, которого движок не знает, а подпись считается по всем.
    */
   modifiers: Record<string, number>;
+  /**
+   * Уровень аккаунта на момент выдачи (WP25): от него движок открывает
+   * оружие, навыки и слоты. Необязательное: снимок прошлой сборки его не несёт.
+   */
+  accountLevel?: number;
   /** UTC, миллисекунды */
   issuedAtMs: number;
   signature: string;
@@ -853,6 +863,22 @@ export interface DifficultyDef {
 export interface LoadoutLimits {
   weapons: number;
   passives: Record<PassiveCategory, number>;
+}
+
+/**
+ * Что открывает уровень аккаунта (docs/35-stage4-plan.md Р41, §3.13): строка
+ * таблицы `content/unlocks.ts`. Открытое остаётся открытым на всех уровнях
+ * выше; слоты задаются числом на уровне, с которого действуют. Первая строка —
+ * стартовый набор и слоты всех категорий.
+ */
+export interface AccountUnlockDef {
+  level: number;
+  /** оружие, которое открывается на этом уровне */
+  weapons?: string[];
+  /** навыки — пассивки забега, — которые открываются на этом уровне */
+  passives?: string[];
+  /** слоты с этого уровня; не заданное — как на уровне ниже */
+  slots?: { weapons?: number; passives?: Partial<Record<PassiveCategory, number>> };
 }
 
 /**

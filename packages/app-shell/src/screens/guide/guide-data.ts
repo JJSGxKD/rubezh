@@ -10,7 +10,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, WEAPONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, WEAPONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -66,12 +66,22 @@ export function enemyStages(): EnemyStageDef[] {
   return [...ENEMY_STAGES];
 }
 
-export function startingWeapons(): WeaponDef[] {
-  return WEAPONS.filter((weapon) => weapon.starting === true);
+/**
+ * На каком уровне аккаунта открывается оружие или навык (Р41): гайдбук
+ * показывает и закрытое — с уровнем, на котором оно откроется.
+ */
+export function unlockLevel(kind: "weapon" | "passive", id: string): number {
+  return unlockLevelOf(ACCOUNT_UNLOCKS, kind, id) ?? 1;
 }
 
-export function unlockableWeapons(): WeaponDef[] {
-  return WEAPONS.filter((weapon) => weapon.starting !== true);
+/** Оружие первого уровня: с ним приходит новичок, стартовым берётся любое. */
+export function firstLevelWeapons(): WeaponDef[] {
+  return WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) === 1);
+}
+
+/** Оружие, которое открывает уровень аккаунта, — по порядку открытия. */
+export function levelWeapons(): WeaponDef[] {
+  return WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) > 1).sort((a, b) => unlockLevel("weapon", a.id) - unlockLevel("weapon", b.id));
 }
 
 /**

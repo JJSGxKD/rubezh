@@ -50,6 +50,14 @@ describe("схема записи забега", () => {
     expect(parsed.data?.recording).toEqual(recording);
   });
 
+  it("и уровень аккаунта: без него повтор открыл бы всё закрытое", () => {
+    const recording = recordHeadlessRun({ seed: 42, maxTicks: 3_000, steer: circling(200), loadout: { modifiers: {}, boosts: [], accountLevel: 2 } });
+    const parsed = submitRunReportSchema.safeParse({ recording, client: CLIENT });
+
+    expect(recording.loadout?.accountLevel).toBe(2);
+    expect(parsed.data?.recording).toEqual(recording);
+  });
+
   it("параметры набора движка и приёмника совпадают", () => {
     expect([...SERVER_LOADOUT_STATS].sort()).toEqual([...LOADOUT_STATS].sort());
   });

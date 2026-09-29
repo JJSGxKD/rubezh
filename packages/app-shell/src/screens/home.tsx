@@ -14,8 +14,6 @@ import {
   Play,
   Trophy,
 } from "lucide-react";
-import type { DifficultyId } from "@bh/shared-types";
-import { DIFFICULTIES, WEAPONS } from "@bh/core-game";
 import {
   Badge,
   Button,
@@ -24,19 +22,15 @@ import {
   Emblem,
   Modal,
   Screen,
-  SectionTitle,
-  SegmentedControl,
   Stat,
   Wordmark,
 } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
-import { hasCheats, useDevMode } from "../state/dev-mode";
+import { useDevMode } from "../state/dev-mode";
 import { useNavigation } from "../state/navigation";
 import { useToolsAccess } from "../state/tools";
-import { DevSheetLazy } from "./run/dev-sheet-lazy";
-import { useShell } from "../state/shell";
 import { preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine, useRun } from "../state/run";
 import { useSavedRun, type SavedRun } from "../state/run-save";
@@ -399,107 +393,5 @@ export function ModeScreen(): ReactNode {
         </div>
       </ContentColumn>
     </Screen>
-  );
-}
-
-/**
- * Выбор перед забегом: сложность и стартовое оружие, последний выбор того и
- * другого запомнен (решение Р12 `docs/26-stage2-plan.md` §2).
- */
-export function WeaponScreen(): ReactNode {
-  const navigation = useNavigation();
-  const meta = useMeta();
-  const starting = WEAPONS.filter((weapon) => weapon.starting === true);
-  const selected = starting.some((weapon) => weapon.id === meta.lastWeaponId)
-    ? meta.lastWeaponId
-    : (starting[0]?.id ?? "");
-  const access = useToolsAccess();
-  const devArmed = useDevMode((state) => state.armed) && access.devMode;
-  const devSettings = useDevMode((state) => state.settings);
-  const [devOpen, setDevOpen] = useState(false);
-  // С входом следующий шаг — бусты на забег (Р57): покупка идёт на сервер.
-  // Без входа покупать нечем, и «В бой» остаётся здесь.
-  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
-
-  const next = (): void => {
-    // Запоминаем даже выбор по умолчанию: забег должен стартовать с
-    // тем оружием, которое подсвечено на экране.
-    meta.rememberWeapon(selected);
-    if (withAccount) {
-      navigation.push("boosts");
-      return;
-    }
-    useRun.getState().intend({ kind: "new" });
-    navigation.replace("run");
-  };
-
-  return (
-    <>
-    <Screen
-      title={devArmed ? t("mode.dev") : t("weapon.select.screen")}
-      onBack={() => navigation.pop()}
-      footer={
-        <Button size="l" block glow onClick={next}>
-          {withAccount ? t("weapon.select.next") : t("weapon.select.start")}
-        </Button>
-      }
-    >
-      <ContentColumn>
-        {devArmed ? (
-          <div className="mt-2">
-            <Card stripe="passive" onClick={() => setDevOpen(true)}>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-passive/15 text-passive">
-                  <Wrench size={20} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <span className="font-display text-base font-bold text-text">{t("dev.setup")}</span>
-                  <p className="mt-0.5 text-xs text-text-muted">
-                    {hasCheats(devSettings)
-                      ? devSettings.countInRating
-                        ? t("dev.cheats.counted")
-                        : t("dev.cheats.notCounted")
-                      : t("dev.setup.clean")}
-                  </p>
-                </div>
-                <ChevronRight size={18} className="shrink-0 text-text-disabled" />
-              </div>
-            </Card>
-          </div>
-        ) : null}
-        <SectionTitle>{t("difficulty.title")}</SectionTitle>
-        <SegmentedControl
-          label={t("difficulty.title")}
-          activeId={meta.lastDifficultyId}
-          onSelect={(id) => meta.rememberDifficulty(id as DifficultyId)}
-          items={DIFFICULTIES.map((difficulty) => ({ id: difficulty.id, label: t(difficulty.nameKey) }))}
-        />
-        <p className="mt-2 text-xs text-text-muted">{t(`difficulty.${meta.lastDifficultyId}.description`)}</p>
-
-        <SectionTitle>{t("weapon.select.title")}</SectionTitle>
-        <p className="mb-3 text-xs text-text-muted">{t("weapon.select.hint")}</p>
-        <div className="grid gap-3 landscape:grid-cols-3">
-          {starting.map((weapon, index) => (
-            <Card
-              key={weapon.id}
-              appearIndex={index}
-              stripe="weapon"
-              selected={weapon.id === selected}
-              onClick={() => meta.rememberWeapon(weapon.id)}
-            >
-              <div className="flex items-start gap-3 pr-7">
-                <ItemTile kind="weapon" id={weapon.id} />
-                <div className="min-w-0 flex-1">
-                  <span className="font-display text-lg font-bold text-text">{t(weapon.nameKey)}</span>
-                  <p className="mt-1 text-xs text-text-muted">{t(weapon.descriptionKey)}</p>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </ContentColumn>
-    </Screen>
-    {devOpen ? <DevSheetLazy inRun={false} onClose={() => setDevOpen(false)} /> : null}
-    </>
   );
 }

@@ -14,6 +14,7 @@ import { Injectable } from "@nestjs/common";
 export interface SignedLoadout {
   accountId: string;
   modifiers: Record<string, number>;
+  accountLevel?: number | undefined;
   issuedAtMs: number;
   signature: string;
 }
@@ -25,9 +26,12 @@ export interface SignedLoadout {
  * - `forged` — подпись не сходится или снимок чужой: честный клиент такого не
  *   пришлёт;
  * - `stale` — снимок настоящий, но надетое с тех пор изменилось. Бывает и у
- *   честного: сменил снаряжение, пока итог ждал сети.
+ *   честного: сменил снаряжение, пока итог ждал сети;
+ * - `level_ahead` — уровень снимка выше уровня аккаунта: уровень только
+ *   растёт, так что это снимок, переживший вайп, и открытое по нему игроку
+ *   не положено (docs/35-stage4-plan.md §3.13).
  */
-export type LoadoutStatus = "none" | "valid" | "forged" | "stale";
+export type LoadoutStatus = "none" | "valid" | "forged" | "stale" | "level_ahead";
 
 /**
  * - `none` — забег без бустов;

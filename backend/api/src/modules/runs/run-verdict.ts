@@ -17,7 +17,8 @@ import { MAX_WEAPONS } from "./run-rules.js";
  *   сервера (пауза в игровое время не идёт, поэтому честный забег всегда
  *   короче прошедшего); второй шанс, за который не заплачено, — честный
  *   клиент продолжает только после подтверждения оплаты сервером; снимок
- *   снаряжения, которого сервер не подписывал; буст, не купленный на забег;
+ *   снаряжения, которого сервер не подписывал, или с уровнем выше уровня
+ *   аккаунта; буст, не купленный на забег;
  * - **подозрение (`suspicious`)** — статистика: слишком быстро убивал, слишком
  *   быстро качался, незнакомая сборка, продолжение оплачено по меньшему
  *   числу минут, чем прошло, снимок снаряжения устарел. Здесь бывают и
@@ -47,6 +48,8 @@ export type VerdictReason =
   | "loadout_forged"
   /** снимок настоящий, но надетое с тех пор изменилось */
   | "loadout_stale"
+  /** уровень снимка выше уровня аккаунта: открыто то, что игроку не положено */
+  | "loadout_level_ahead"
   /** буст не куплен на этот забег или возвращён */
   | "boost_unpaid";
 
@@ -81,7 +84,7 @@ export interface Verdict {
   reasons: VerdictReason[];
 }
 
-const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue", "loadout_forged", "boost_unpaid"]);
+const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue", "loadout_forged", "loadout_level_ahead", "boost_unpaid"]);
 const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale"]);
 
 export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdict {
@@ -116,6 +119,7 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
 
   if (input.loadout === "forged") reasons.push("loadout_forged");
   if (input.loadout === "stale") reasons.push("loadout_stale");
+  if (input.loadout === "level_ahead") reasons.push("loadout_level_ahead");
   if (input.boosts === "unpaid") reasons.push("boost_unpaid");
 
   return { verdict: verdictOf(reasons), reasons };

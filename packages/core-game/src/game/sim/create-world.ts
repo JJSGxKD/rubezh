@@ -136,7 +136,7 @@ export interface CreateWorldOptions {
   stages?: readonly EnemyStageDef[];
   /** карта: границы мира и параметры, от которых считается кольцо спавна */
   map?: MapDef;
-  /** чем игрок начинает забег; по умолчанию — первое стартовое оружие */
+  /** чем игрок начинает забег; по умолчанию — первое оружие контента */
   startingWeaponId?: string;
   /** снаряжение и бусты на забег; по умолчанию — пустой набор */
   loadout?: RunLoadout;
@@ -346,11 +346,15 @@ function scalePlayerConfig(player: PlayerConfig, scale: number): PlayerConfig {
   };
 }
 
-/** Первое стартовое оружие или запрошенное по id; -1 — оружия нет вовсе. */
+/**
+ * Запрошенное оружие или первое из контента; -1 — оружия нет вовсе. Любое
+ * оружие мира можно взять стартовым (Р41): закрытое уровнем в мир не
+ * попадает, поэтому и запросить его нельзя.
+ */
 function findStartingWeapon(types: readonly WeaponType[], requestedId?: string): number {
   if (requestedId !== undefined) {
     const requested = types.findIndex((type) => type.id === requestedId);
     if (requested >= 0) return requested;
   }
-  return types.findIndex((type) => type.starting);
+  return types.length > 0 ? 0 : -1;
 }
