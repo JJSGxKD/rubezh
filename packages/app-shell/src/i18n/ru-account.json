@@ -45,7 +45,7 @@
   "notifications.title": "Уведомления",
   "notifications.loading": "Загружаем…",
   "notifications.failed": "Не удалось загрузить уведомления — проверьте связь",
-  "notifications.empty": "Пока тихо. Здесь появятся заявки и подарки друзей, редкая добыча и возвраты бустов.",
+  "notifications.empty": "Пока тихо. Здесь появятся заявки и подарки друзей, редкая добыча, возвраты бустов и сообщения команды.",
   "notifications.more": "Показать ещё",
   "notifications.someone": "Игрок",
   "notifications.when.now": "только что",
@@ -59,5 +59,6 @@
   "notification.boosts_refunded.with": "Бусты вернулись: забег так и не начался. Возвращено {returned}",
   "notification.boosts_refunded.coins": "{amount} монет",
   "notification.boosts_refunded.gems": "{amount} самоцветов",
-  "notification.and": " и "
+  "notification.and": " и ",
+  "notification.team_message": "Сообщение команды"
 }
