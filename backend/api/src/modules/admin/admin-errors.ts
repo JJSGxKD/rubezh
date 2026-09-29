@@ -26,3 +26,10 @@ export class PanelAccessError extends DomainError {
     super("panel_forbidden", message, 403);
   }
 }
+
+/** Такого ключа нет в каталоге настроек — поменять из панели можно только то, что знает код. */
+export class SettingNotFoundError extends DomainError {
+  constructor() {
+    super("setting_not_found", "Настройки с таким ключом нет", 404);
+  }
+}

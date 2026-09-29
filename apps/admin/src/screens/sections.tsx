@@ -10,6 +10,7 @@ import { PlayersScreen } from "./players/PlayersScreen";
 import { ReviewScreen } from "./review/ReviewScreen";
 import { AuditScreen } from "./roles/AuditScreen";
 import { RolesScreen } from "./roles/RolesScreen";
+import { SettingsScreen } from "./settings/SettingsScreen";
 
 /**
  * Экраны разделов по идентификатору из `SECTIONS` (routes.ts). `id` —
@@ -26,5 +27,6 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   exports: () => <ExportsScreen />,
   links: () => <LinksScreen />,
   flags: () => <FlagsScreen />,
+  settings: () => <SettingsScreen />,
   broadcasts: (id) => <BroadcastsScreen id={id} />,
 };

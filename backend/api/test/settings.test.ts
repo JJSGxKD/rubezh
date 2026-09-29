@@ -1,17 +1,21 @@
 import { describe, expect, it } from "vitest";
 import type { Redis } from "ioredis";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import { AdminSettingsService } from "../src/modules/admin/admin-settings.service.js";
+import { RolesService } from "../src/modules/roles/roles.service.js";
 import { NotifyTargets } from "../src/modules/settings/notify-targets.js";
 import { SETTINGS, SETTING_KEY, SETTING_LIST } from "../src/modules/settings/setting-catalog.js";
 import type { SettingValue } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsRepository, StoredSetting } from "../src/modules/settings/settings.repository.js";
 import { SETTINGS_CHANNEL, SettingsService } from "../src/modules/settings/settings.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 /**
  * Настройки без релиза (docs/35-stage4-plan.md §3.18, Р53): база сильнее
  * окружения, окружение сильнее умолчания; битое значение из базы не ломает
- * чтение; запись оповещает соседние реплики.
+ * чтение; запись оповещает соседние реплики; в панели — с правом и в аудит.
  */
 
 const ACTOR_ID = "00000000-0000-4000-8000-000000000001";
@@ -217,5 +221,53 @@ describe("соседние реплики", () => {
     expect(calls).toBe(0);
     await service.write(SETTINGS.chatStress, "-700", ACTOR_ID);
     expect(calls).toBe(1);
+  });
+});
+
+describe("настройки в панели", () => {
+  const OWNER_ID = "777000111";
+
+  async function panel(env: Record<string, string> = {}) {
+    const cfg = config({ ADMIN_TELEGRAM_IDS: OWNER_ID, ...env });
+    const accounts = new MemoryAccountRepository();
+    const rolesRepository = new MemoryRolesRepository();
+    const settings = new SettingsService(cfg, new MemorySettings(), new FakeRedis() as unknown as Redis);
+    const admin = new AdminSettingsService(settings, new RolesService(cfg, rolesRepository, accounts));
+    const ownerAccount = await accounts.upsert({ platform: "telegram", platformUserId: OWNER_ID, displayName: "Владелец", username: null, photoUrl: null }, Date.now());
+    const strangerAccount = await accounts.upsert({ platform: "telegram", platformUserId: "5", displayName: "Гость", username: null, photoUrl: null }, Date.now());
+    const ref = (account: typeof ownerAccount) => ({ accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId });
+    return { admin, settings, rolesRepository, owner: ref(ownerAccount), stranger: ref(strangerAccount) };
+  }
+
+  it("запись — с правом и в аудит: было из окружения, стало из панели", async () => {
+    const { admin, rolesRepository, owner } = await panel({ ADMIN_CHAT_ID: "-100" });
+    const saved = await admin.save(owner, "notify.chat.general", "-200:4");
+    expect(saved).toMatchObject({ value: "-200:4", source: "base", envValue: "-100", kind: "chat" });
+    const [entry] = await rolesRepository.recentAudit(10);
+    expect(entry).toMatchObject({ action: "settings.save", target: "notify.chat.general", before: { value: "-100", source: "env" }, after: { value: "-200:4", source: "base" } });
+  });
+
+  it("сброс без записи в базе — не событие для журнала", async () => {
+    const { admin, rolesRepository, owner } = await panel();
+    await admin.reset(owner, "notify.reports");
+    expect(await rolesRepository.recentAudit(10)).toEqual([]);
+    await admin.save(owner, "notify.reports", false);
+    const view = await admin.reset(owner, "notify.reports");
+    expect(view).toMatchObject({ value: true, source: "default" });
+    expect((await rolesRepository.recentAudit(10)).map((entry) => entry.action).sort()).toEqual(["settings.reset", "settings.save"]);
+  });
+
+  it("чужой ключ — 404, значение не по схеме — 400 с названием настройки", async () => {
+    const { admin, owner } = await panel();
+    await expect(admin.save(owner, "notify.unknown", "x")).rejects.toMatchObject({ code: "setting_not_found", status: 404 });
+    await expect(admin.save(owner, "notify.chat.general", "@team")).rejects.toMatchObject({ code: "validation_failed", message: expect.stringContaining("Общий чат") });
+    await expect(admin.save(owner, "notify.reports", "yes")).rejects.toMatchObject({ code: "validation_failed" });
+  });
+
+  it("без права settings.edit — отказ во всём", async () => {
+    const { admin, stranger } = await panel();
+    await expect(admin.list(stranger)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(admin.save(stranger, "notify.reports", false)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(admin.reset(stranger, "notify.reports")).rejects.toMatchObject({ code: "forbidden" });
   });
 });
