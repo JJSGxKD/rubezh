@@ -4,10 +4,12 @@ import { ENEMY_STAGES } from "../../content/stages";
 import { MAPS } from "../../content/maps";
 import { findDifficulty } from "../../content/difficulty";
 import { DROPS } from "../../content/drops";
+import { ACCOUNT_UNLOCKS } from "../../content/unlocks";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../../content/waves";
 import { WEAPONS } from "../../content/weapons";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
+import { unlocksAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
 import { stepWorld } from "../sim/step";
 import { createWorld, TICK_SEC } from "../sim/world";
@@ -30,8 +32,14 @@ export interface BalanceRunOptions {
   skill: BotSkill;
   /** уровень сложности; по умолчанию — «Лёгкая»: коридоры калибровки заданы для неё */
   difficultyId?: DifficultyId;
-  /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
+  /** чем начинать забег; по умолчанию — первое открытое оружие контента */
   startingWeaponId?: string;
+  /**
+   * Уровень аккаунта: открытое оружие, навыки и слоты — как в забеге
+   * (docs/35-stage4-plan.md §3.13). Не задан — открыто всё: на этом наборе
+   * заданы коридоры калибровки.
+   */
+  accountLevel?: number;
   maxSec?: number;
 }
 
@@ -54,14 +62,15 @@ export interface BalanceRunResult {
 
 export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult {
   const difficulty = findDifficulty(options.difficultyId ?? "easy");
+  const open = options.accountLevel === undefined ? null : unlocksAt(ACCOUNT_UNLOCKS, options.accountLevel);
   const world = createWorld({
     seed: options.seed,
     enemies: ENEMIES,
     stages: ENEMY_STAGES,
-    weapons: WEAPONS,
-    passives: PASSIVES,
+    weapons: open === null ? WEAPONS : WEAPONS.filter((weapon) => open.weapons.has(weapon.id)),
+    passives: open === null ? PASSIVES : PASSIVES.filter((passive) => open.passives.has(passive.id)),
     levelCurve: LEVEL_CURVE,
-    loadoutLimits: LOADOUT_LIMITS,
+    loadoutLimits: open?.limits ?? LOADOUT_LIMITS,
     drops: DROPS,
     map: MAPS[0],
     ...(difficulty === undefined ? {} : { difficulty }),

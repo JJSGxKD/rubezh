@@ -82,6 +82,8 @@ it("свод калибровки баланса", () => {
 
   rows.push("");
   rows.push(...corridorLines(byScenario));
+  rows.push("");
+  rows.push(...levelLines());
 
   mkdirSync(dirname(REPORT_PATH), { recursive: true });
   writeFileSync(REPORT_PATH, `${rows.join("\n")}\n`, "utf8");
@@ -175,6 +177,37 @@ function corridorLines(byScenario: ReadonlyMap<string, BalanceRunResult[]>): str
         ? "первый уровень не берётся вовсе"
         : `первый уровень на ${fixed(summary.medianFirstLevelUpSec)} с`;
     lines.push(`- ${name}: ${when}, медианный уровень ${summary.medianLevel}`);
+  }
+  return lines;
+}
+
+/**
+ * Кривая, которую проходит игрок уровнями (docs/35-stage4-plan.md §3.13, Р40):
+ * первый уровень, середина таблицы разблокировок и всё открытое — на каждой
+ * сложности. Баланс забега одинаков для всех, растёт только то, из чего
+ * выбирать: разница строк — это и есть сила, которую даёт уровень. Бот
+ * уклоняющийся, оружие — первое открытое.
+ */
+function levelLines(): string[] {
+  const last = Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level));
+  const stages: { label: string; accountLevel: number | undefined }[] = [
+    { label: "1-й уровень", accountLevel: 1 },
+    { label: `${Math.ceil(last / 2)}-й уровень`, accountLevel: Math.ceil(last / 2) },
+    { label: "всё открыто", accountLevel: undefined },
+  ];
+  const lines = ["## По уровню аккаунта", "", "| Уровень / сложность | медиана, с | p10 | p90 | до минуты | уровень забега |", "|---|---|---|---|---|---|"];
+  for (const difficulty of DIFFICULTIES) {
+    for (const stage of stages) {
+      const runs: BalanceRunResult[] = [];
+      for (let seed = 1; seed <= SEEDS; seed++) {
+        runs.push(simulateBalanceRun({ skill: "dodging", difficultyId: difficulty.id, seed, ...(stage.accountLevel === undefined ? {} : { accountLevel: stage.accountLevel }) }));
+      }
+      const summary = summarizeRuns(runs);
+      lines.push(
+        `| ${stage.label} / ${difficulty.id} | ${fixed(summary.medianSurvivalSec)} | ${fixed(summary.p10SurvivalSec)} | ` +
+          `${fixed(summary.p90SurvivalSec)} | ${percent(summary.deathsBeforeMinuteRatio)} | ${summary.medianLevel} |`,
+      );
+    }
   }
   return lines;
 }
