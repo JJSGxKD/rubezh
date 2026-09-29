@@ -95,7 +95,10 @@ export const EVENT_DICTIONARY = {
   // этим запуском. Сама сессия с подробностями — в таблице `account_session`.
   session_started: { version: 1, payload: payload({ startKind: id, first: z.boolean() }) },
   screen_viewed: { version: 1, payload: payload({ screen: id, stub: z.boolean() }) },
-  settings_changed: { version: 1, payload: payload({ setting: id, value: flatValue }) },
+  // `scope` — чья настройка (docs/35-stage4-plan.md WP29): аккаунта идёт на
+  // все его устройства, устройства остаётся здесь. Необязательное: сборки до
+  // настроек аккаунта его не шлют.
+  settings_changed: { version: 1, payload: payload({ setting: id, value: flatValue, scope: z.enum(["account", "device"]).optional() }) },
   share_offered: { version: 1, payload: payload({ context: id }) },
   share_completed: { version: 1, payload: payload({ context: id, result: id }) },
   run_started: {
@@ -147,7 +150,7 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ mode: id, stopReason: id, peakObjects: count, verdict: id, reportId: z.uuid() }),
   },
-  feedback_sent: { version: 1, payload: payload({ answers: count, hasText: z.boolean(), runs: count }) },
+  feedback_sent: { version: 1, payload: payload({ answers: count, hasText: z.boolean(), runs: count, kind: z.enum(["device_info"]).optional() }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 

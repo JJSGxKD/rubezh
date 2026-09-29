@@ -65,7 +65,10 @@ export function SettingsScreen(): ReactNode {
           </ListGroup>
         </div>
 
-        <SectionTitle>{t("settings.graphics")}</SectionTitle>
+        {/* Как читать бой — за аккаунтом (Р56): выбранное здесь придёт и на
+            другие устройства. Эффекты оружия — у устройства: их снимают,
+            когда телефон не тянет. */}
+        <SectionTitle>{t("settings.combat")}</SectionTitle>
         <ListGroup>
           <ListItem
             title={t("settings.graphics.telegraphs")}
@@ -73,18 +76,25 @@ export function SettingsScreen(): ReactNode {
             toggle={{ checked: graphics.telegraphs, onChange: () => graphics.toggle("telegraphs") }}
           />
           <ListItem
-            title={t("settings.graphics.weaponEffects")}
-            hint={t("settings.graphics.weaponEffects.hint")}
-            toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
-          />
-          <ListItem
             title={t("settings.graphics.damageNumbers")}
             toggle={{ checked: graphics.damageNumbers, onChange: () => graphics.toggle("damageNumbers") }}
           />
         </ListGroup>
         {/* Предупреждение обязательно: снятый телеграф — не «чуть проще
-            картинка», а другой бой. */}
+            картинка», а другой бой. Совет про слабое устройство — у графики:
+            выбранное здесь уходит на все устройства. */}
         <p className="mt-2 text-xs text-text-muted">{t("settings.graphics.warning")}</p>
+        <p className="mt-1 text-xs text-text-muted">{t("settings.scope.account")}</p>
+
+        <SectionTitle>{t("settings.graphics")}</SectionTitle>
+        <ListGroup>
+          <ListItem
+            title={t("settings.graphics.weaponEffects")}
+            hint={t("settings.graphics.weaponEffects.hint")}
+            toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
+          />
+        </ListGroup>
+        <p className="mt-2 text-xs text-text-muted">{t("settings.scope.device")}</p>
 
         <SectionTitle>{t("settings.language")}</SectionTitle>
         <ListGroup>
@@ -150,7 +160,12 @@ export function VolumeSliders(): ReactNode {
   );
 }
 
-/** «Для тестировщиков» — включатели режима диагностики (docs/28-diagnostics.md §2). */
+/**
+ * «Помощь в тестировании» (docs/35-stage4-plan.md Р56; docs/28-diagnostics.md
+ * §2): для игрока, которого позвали помочь собрать игровые метрики, — что это
+ * и что уходит команде. Участие и запись забегов — за аккаунтом, счётчик
+ * кадров — у устройства. Сведения об устройстве открыты всем.
+ */
 export function TestersScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics();
@@ -159,6 +174,7 @@ export function TestersScreen(): ReactNode {
   return (
     <Screen title={t("testers.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
+        <p className="mb-3 text-sm text-text-muted">{t("testers.intro")}</p>
         <ListGroup>
           <ListItem
             title={t("testers.diagnostics")}
@@ -195,9 +211,9 @@ export function TestersScreen(): ReactNode {
                 onClick={() => navigation.push("soundLab")}
               />
             ) : null}
-            {diagnostics.enabled ? (
-              <ListItem title={t("testers.open")} onClick={() => navigation.push("diagnostics")} />
-            ) : null}
+            {/* Сведения об устройстве — всем (Р56): поделиться ими с командой
+                может любой игрок, а не только включивший диагностику. */}
+            <ListItem title={t("testers.device")} hint={t("testers.device.hint")} onClick={() => navigation.push("diagnostics")} />
           </ListGroup>
         </div>
       </ContentColumn>

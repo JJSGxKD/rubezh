@@ -124,9 +124,24 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // Сессия игрока — отдельным чанком после главной: деньгам и рейтингу она
   // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический
   // импорт утащил бы её и клиента авторизации в первую загрузку.
+  let stopAccountSync = (): void => undefined;
+  let unmounted = false;
   if (options.capabilities.auth !== undefined) {
     import("./state/session")
-      .then(({ useSession }) => useSession.getState().signIn())
+      .then(({ useSession }) => {
+        // Настройки аккаунта — при каждом появлении сессии, а не только на
+        // запуске: вход мог наладиться по «Повторить» или смениться аккаунт
+        // (docs/35-stage4-plan.md, WP29). Продление токена сессию не меняет.
+        if (unmounted) return;
+        stopAccountSync = useSession.subscribe((state, previous) => {
+          const accountId = state.status === "ready" ? state.account?.accountId : undefined;
+          if (accountId === undefined || (previous.status === "ready" && previous.account?.accountId === accountId)) return;
+          import("./state/account-settings")
+            .then(({ syncAccountSettings }) => syncAccountSettings(accountId))
+            .catch((error: unknown) => console.warn("Настройки аккаунта не загрузились:", error));
+        });
+        return useSession.getState().signIn();
+      })
       .catch((error: unknown) => console.warn("Вход не загрузился:", error));
   }
   const stopTelemetry = startTelemetry(options, telemetrySink.attach);
@@ -152,6 +167,8 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
       stopAudio();
       stopErrorReporting();
       stopTelemetry();
+      unmounted = true;
+      stopAccountSync();
       root.unmount();
     },
   };

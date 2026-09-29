@@ -138,6 +138,7 @@
 | Граница суток и недели для заданий и награды дня | `screens/meta/schedule.ts` → `MOSCOW_OFFSET_MS`, `MONDAY` | участник 1 |
 | Колесо удачи: сколько оборотов за крутку; длительность и кривая вращения | `screens/meta/wheel.tsx` → `SPIN_TURNS`; `tokens.css` → `--duration-spin`, `--ease-spin` | участник 1, напарник |
 | Цена «Второго шанса» в заглушке экрана смерти | `screens/run/SecondChance.tsx` → `PREMIUM_PRICE` | геймдизайнер |
+| Какие настройки идут за аккаунтом, а какие остаются у устройства; как быстро изменение уходит на сервер | ключи — `app-shell/src/state/account-settings.ts` → `ACCOUNT_SETTING_KEYS`, `PUSH_DELAY_MS` и `backend/api/src/modules/account-settings/account-settings.catalog.ts` → `ACCOUNT_SETTINGS` — схема и правило слияния каждого ключа, `SEED_AT` (ключи, версию и подсказки против схемы сверяет `scripts/test/account-settings-keys.test.ts`); отметки выбора на устройстве — `bh.account-settings.v1`; лимит запросов — `account-settings.controller.ts` → `LIMIT` | участник 1 |
 | Подсказки первого забега: порядок, когда гаснут | `app-shell/src/state/hints.ts` → `HINT_ORDER`, `MOVE_DONE_UNITS`, `DODGE_SHOW_SEC`; тексты — `ru.json` → `run.hint.*`, значки — `screens/run/HintBanner.tsx` | участник 1 |
 | Сколько запуск ждёт свои шрифты | `app-shell/src/index.tsx` → `FONT_WAIT_MS` | участник 1 |
 | Через сколько лобби предзагружает движок | `app-shell/src/screens/home.tsx` → `PRELOAD_DELAY_MS` | участник 1 |

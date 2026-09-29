@@ -81,7 +81,7 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     });
 
     if (applied !== get().screenMode) {
-      track("settings_changed", { setting: "screenMode", value: applied });
+      track("settings_changed", { setting: "screenMode", value: applied, scope: "device" });
     }
     set({ screenMode: applied });
     persist(get());
@@ -91,7 +91,7 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     if (mode === get().screenMode) return;
     set({ screenMode: mode });
     persist(get());
-    track("settings_changed", { setting: "screenMode", value: mode, source: "platform" });
+    track("settings_changed", { setting: "screenMode", value: mode, source: "platform", scope: "device" });
   },
 
   setVolume(key, next): void {
@@ -102,14 +102,14 @@ export const useSettings = create<SettingsStore>((set, get) => ({
   },
 
   commitVolume(key): void {
-    track("settings_changed", { setting: `volume.${key}`, value: get().volumes[key] });
+    track("settings_changed", { setting: `volume.${key}`, value: get().volumes[key], scope: "device" });
   },
 
   toggle(key): void {
     const next = !get()[key];
     set({ haptics: next });
     persist(get());
-    track("settings_changed", { setting: key, value: next });
+    track("settings_changed", { setting: key, value: next, scope: "device" });
   },
 }));
 

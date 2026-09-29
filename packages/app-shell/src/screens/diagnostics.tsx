@@ -30,6 +30,7 @@ export function DiagnosticsScreen(): ReactNode {
   const installId = useInstall((state) => state.installId);
   const [displayHz, setDisplayHz] = useState<number | null>(null);
   const [copy, setCopy] = useState<CopyState>("idle");
+  const [share, setShare] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   // Сведения пересчитываются, когда меняется окно, плотность или экран.
   const [envVersion, setEnvVersion] = useState(0);
   useEffect(() => watchEnvironment(() => setEnvVersion((version) => version + 1)), []);
@@ -67,6 +68,15 @@ export function DiagnosticsScreen(): ReactNode {
     uiFeedback(copied ? "reward" : "error");
   };
 
+  // Поделиться — одной кнопкой прямо команде (Р56): тем же путём, что отзыв.
+  const onShare = async (): Promise<void> => {
+    setShare("sending");
+    const { shareDeviceInfo } = await import("../state/feedback");
+    const failure = await shareDeviceInfo(text);
+    setShare(failure === null ? "sent" : "failed");
+    uiFeedback(failure === null ? "reward" : "error");
+  };
+
   return (
     <Screen title={t("diagnostics.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
@@ -80,6 +90,10 @@ export function DiagnosticsScreen(): ReactNode {
           ))}
         </dl>
         <div className="mt-3 grid gap-2">
+          <Button block disabled={share === "sending" || share === "sent"} onClick={() => void onShare()}>
+            {share === "sending" ? t("diagnostics.share.sending") : share === "sent" ? t("diagnostics.share.sent") : t("diagnostics.share")}
+          </Button>
+          {share === "failed" ? <p className="text-xs text-danger">{t("diagnostics.share.failed")}</p> : null}
           <Button variant="secondary" block onClick={() => void onCopy()}>
             {copy === "copied" ? t("diagnostics.copied") : t("diagnostics.copy")}
           </Button>

@@ -109,6 +109,13 @@ describe("сообщение в чат", () => {
     expect(text).toContain("Пусть будет карта в лесу");
     expect(text).toContain("без Telegram ID");
   });
+
+  it("сведения об устройстве подписаны темой, а не сырым ключом", () => {
+    const text = feedbackMessage({ answers: { topic: "device_info" }, text: "Android 14, WebGL 2", runs: 5, platformUserId: "42" });
+
+    expect(text).toContain("Тема: сведения об устройстве");
+    expect(text).toContain("Android 14, WebGL 2");
+  });
 });
 
 describe("выгрузка отзывов файлом", () => {
