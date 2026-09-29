@@ -10,6 +10,11 @@ export interface AppLinkBuilder {
   readonly platform: PlatformId;
   /** `null` — ссылку сейчас не собрать: бот ещё не представился или площадка без приложения */
   launch(startParam: string): string | null;
+  /**
+   * Ссылка на чат с ботом площадки со стартовым параметром — не приложение,
+   * а сам бот: так подтверждают вход в панель. `null` — не собрать.
+   */
+  chat(startParam: string): string | null;
 }
 
 export class AppLinks {
@@ -21,5 +26,9 @@ export class AppLinks {
 
   launch(platform: PlatformId, startParam: string): string | null {
     return this.builders.get(platform)?.launch(startParam) ?? null;
+  }
+
+  chat(platform: PlatformId, startParam: string): string | null {
+    return this.builders.get(platform)?.chat(startParam) ?? null;
   }
 }

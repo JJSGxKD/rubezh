@@ -15,6 +15,10 @@ import { AdminSessionController } from "../src/modules/admin/admin-session.contr
 import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
 import { ADMIN_SESSION_STORE, hashSessionToken } from "../src/modules/admin/admin-session.store.js";
+import { PanelLoginService } from "../src/modules/admin/panel-login.service.js";
+import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
+import { AppLinks } from "../src/platforms/ports/app-links.js";
+import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import type { FunnelMilestones, FunnelRepository } from "../src/modules/funnel/funnel.repository.js";
 import { FUNNEL_REPOSITORY } from "../src/modules/funnel/funnel.repository.js";
@@ -30,6 +34,7 @@ import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 
 /**
  * Панель по HTTP (docs/29-admin-panel.md §4, §8): cookie ставится и снимается
@@ -80,6 +85,9 @@ describe("панель по HTTP", () => {
         { provide: FUNNEL_REPOSITORY, useValue: funnel },
         { provide: RUNS_REPOSITORY, useValue: new MemoryRunsRepository() },
         { provide: LEADERBOARD_STORE, useValue: new MemoryLeaderboardStore() },
+        { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
+        { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
+        PanelLoginService,
         RateLimiter,
         RolesService,
         PermissionGuard,
@@ -119,6 +127,29 @@ describe("панель по HTTP", () => {
     const server = await start({ JWT_ACCESS_SECRET: "", AUTH_DEV_LOGIN: "false" });
     expect((await server.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser: "dev-1:Ира" } })).statusCode).toBe(404);
     expect((await server.inject({ method: "GET", url: "/api/v1/admin/session" })).statusCode).toBe(404);
+  });
+
+  it("вход через бота: запрос с ссылкой, до подтверждения — ждём, после — cookie один раз", async () => {
+    const server = await start();
+    const opened = await server.inject({ method: "POST", url: "/api/v1/admin/session/bot", headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0) Chrome/140.0 Safari/537.36" } });
+    expect(opened.statusCode).toBe(201);
+    const { requestId, secret, link, code } = opened.json().data;
+    expect(link).toBe(`https://t.me/rubezh_bot?start=panel-${requestId}`);
+    expect(code).toMatch(/^\d{4}$/);
+
+    const poll = () => server.inject({ method: "POST", url: "/api/v1/admin/session/bot/poll", payload: { requestId, secret } });
+    const waiting = await poll();
+    expect(waiting.json().data).toEqual({ status: "pending" });
+    expect(waiting.headers["set-cookie"]).toBeUndefined();
+
+    // Подтверждение приходит из бота — здесь его место занимает сервис.
+    const verdict = await server.get(PanelLoginService).confirm(requestId, { platform: "telegram", platformUserId: "dev-1", displayName: "Ира", username: null });
+    expect(verdict).toBe("confirmed");
+    const confirmed = await poll();
+    expect(confirmed.json().data).toMatchObject({ status: "confirmed", identity: { roles: ["owner"] } });
+    expect(String(confirmed.headers["set-cookie"])).toContain(`${ADMIN_SESSION_COOKIE}=`);
+    expect((await poll()).json().data).toEqual({ status: "expired" });
+    expect((await server.inject({ method: "POST", url: "/api/v1/admin/session/bot/poll", payload: { requestId: 1 } })).statusCode).toBe(400);
   });
 
   it("вход ставит cookie, сессия отвечает ролями и правами, выход снимает cookie", async () => {

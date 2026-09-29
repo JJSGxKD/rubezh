@@ -275,6 +275,7 @@
 | Конфигурация бэкенда и её проверка | `backend/api/src/config/app-config.ts` — единственное место, где читается `process.env` |
 | HTTP-приложение бэкенда: лимит тела запроса, префикс API, CORS, фильтр ошибок | `backend/api/src/http-app.ts` → `BODY_LIMIT_BYTES`, `createHttpApp` |
 | Панель: срок cookie-сессии; работает она вместе со входом, своего выключателя нет | `.env` → `ADMIN_SESSION_TTL_MIN` (`20-env-and-ports.md` §3, группа 5) |
+| Вход в панель через бота: сколько живёт запрос, как часто панель спрашивает, лимиты открытия и опроса, тексты бота | `backend/api/src/modules/admin/panel-login.service.ts` → `LOGIN_TTL_SEC`; `apps/admin/src/state/session.ts` → `TIMING.pollMs`; `backend/api/src/modules/admin/admin-limits.ts` → `login`, `loginPoll`; `backend/api/src/platforms/telegram/panel-login.command.ts` → `VERDICT_TEXTS`, `promptText` |
 | Панель: имя и путь cookie, заголовок против подделки запроса | `backend/api/src/modules/admin/admin-cookie.ts` → `ADMIN_SESSION_COOKIE`, `ADMIN_COOKIE_PATH`, `ADMIN_CSRF_HEADER`, `ADMIN_CSRF_VALUE` |
 | Панель: лимиты частоты входа, действий, выгрузок и теста рассылки себе | `backend/api/src/modules/admin/admin-limits.ts` → `ADMIN_LIMITS` |
 | Рассылки: порог аудитории для второго ключа, «не писать получавшим за N дней» по умолчанию, отсрочек до отказа, длина пачки, срок захвата | `backend/api/src/modules/broadcasts/broadcast-rules.ts` → `BROADCAST_RULES` |

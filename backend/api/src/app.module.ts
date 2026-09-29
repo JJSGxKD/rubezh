@@ -35,6 +35,7 @@ import { LinksModule } from "./modules/links/links.module.js";
 import { FlagsModule } from "./modules/flags/flags.module.js";
 import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module.js";
 import { SettingsModule } from "./modules/settings/settings.module.js";
+import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-login.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -90,6 +91,7 @@ export const APP_MODULES = [
   WelcomeModule,
   PlaytestModule,
   AdminModule,
+  TelegramPanelLoginModule,
   FriendsModule,
   ReferralsModule,
   LinksModule,

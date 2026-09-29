@@ -1927,6 +1927,36 @@ sequenceDiagram
 запросе, а сессии панели отзываются в тот же момент. Без входа — не
 задан `JWT_ACCESS_SECRET` — панель отвечает 404 на всё, включая вход.
 
+**Вход через бота** — на проде единственный (`29-admin-panel.md` §8). Выше
+показан вход разработчика; через бота до выдачи cookie путь другой:
+
+```mermaid
+sequenceDiagram
+    participant B as Браузер панели
+    participant AD as admin
+    participant R as Redis
+    participant BOT as бот Telegram
+    participant A as Администратор
+
+    B->>AD: POST /api/v1/admin/session/bot
+    AD->>R: HSET admin:panel-login:<запрос><br/>хэш секрета, код, браузер, сеть; EX 300
+    AD-->>B: запрос, секрет, код, t.me/<бот>?start=panel-<запрос>
+    B->>A: код на экране и «Открыть бота»
+    A->>BOT: /start panel-<запрос> (личка)
+    BOT->>AD: запрос ещё ждёт?
+    BOT->>A: код, браузер, сеть — «Войти» / «Это не я»
+    A->>BOT: «Войти»
+    BOT->>AD: подтвердить — от Telegram ID нажавшего
+    AD->>AD: аккаунт, роли, блокировка
+    AD->>R: ждущий → подтверждён (Lua, один раз)
+    loop раз в 2 секунды, до 5 минут
+        B->>AD: POST .../bot/poll { запрос, секрет }
+        AD->>R: подтверждён? — забрать и удалить (Lua)
+    end
+    AD->>R: SET admin:session:<sha256>
+    AD-->>B: Set-Cookie сессии; роли и права
+```
+
 ### 4.18 Рассылка из панели (этап 4, реализовано)
 
 Базовые рассылки (`35-stage4-plan.md`, WP17; `29-admin-panel.md` §7). Одна
