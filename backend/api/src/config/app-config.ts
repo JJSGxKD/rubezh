@@ -1,7 +1,7 @@
 import { config as loadDotenv } from "dotenv";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { isChatTarget, parseChatTarget, type ChatTarget } from "../platforms/telegram/chat-target.js";
+import { isChatTarget } from "../platforms/ports/chat-target.js";
 
 /**
  * Единая Zod-схема конфигурации: невалидное окружение = процесс не
@@ -107,11 +107,10 @@ const schema = z.object({
   // Адрес Mini App для кнопки «Играть» под приветствием. Telegram принимает
   // только HTTPS: без него карточка уходит без кнопки.
   PUBLIC_WEB_URL: z.string().default(""),
-  // Групповой чат администраторов: сводка плейтеста и уведомления. Числовой
-  // id, у супергруппы — с минусом.
-  // Куда пишет бот. Значение — id чата или `id:тема` для супергруппы с темами
-  // (docs/20-env-and-ports.md §3). ADMIN_CHAT_ID — общий адрес; остальные
-  // переопределяют его для своего потока, пустые берут общий.
+  // Куда пишет бот команде. Значение — id чата или `id:тема` для супергруппы
+  // с темами (docs/20-env-and-ports.md §3). ADMIN_CHAT_ID — общий адрес;
+  // остальные переопределяют его для своего потока, пустые берут общий.
+  // Настройка из панели сильнее окружения (modules/settings/setting-catalog.ts).
   ADMIN_CHAT_ID: chatTarget("ADMIN_CHAT_ID"),
   ADMIN_CHAT_STATS: chatTarget("ADMIN_CHAT_STATS"),
   ADMIN_CHAT_STRESS: chatTarget("ADMIN_CHAT_STRESS"),
@@ -120,10 +119,11 @@ const schema = z.object({
   ADMIN_CHAT_RUN_REVIEW: chatTarget("ADMIN_CHAT_RUN_REVIEW"),
   // Уведомлять чат администраторов о новых отчётах диагностики: стресс-тест —
   // карточкой с графиком. Работает, когда задан ADMIN_CHAT_ID и включён приёмник.
+  // Не задана — умолчание из каталога настроек (включено); панель сильнее.
   ADMIN_NOTIFY_REPORTS: z
     .enum(["true", "false"])
-    .default("true")
-    .transform((value) => value === "true"),
+    .optional()
+    .transform((value) => (value === undefined ? null : value === "true")),
   // Переименована в ADMIN_CHAT_ID: чат теперь получает не только сводку.
   PLAYTEST_STATS_CHAT_ID: z.string().default(""),
 
@@ -280,8 +280,8 @@ export interface AppConfig {
     pseudonymKey: string;
     botEnabled: boolean;
   };
-  /** уведомлять чат администраторов о новых отчётах диагностики */
-  notifyReports: boolean;
+  /** уведомлять чат администраторов о новых отчётах диагностики; `null` — в окружении не задано */
+  notifyReports: boolean | null;
   /** Telegram ID администраторов строками — так же, как id игрока из initData */
   adminTelegramIds: ReadonlySet<string>;
   admin: {
@@ -302,8 +302,11 @@ export interface AppConfig {
     publicApiUrl: string;
     /** адрес Mini App для кнопки «Играть» */
     webAppUrl: string;
-    /** чаты администраторов; `null` — писать некуда */
-    chats: AdminChats;
+    /**
+     * Адреса чатов команды, как они записаны в окружении. Действующий адрес —
+     * у `NotifyTargets` (modules/settings): настройка из панели сильнее.
+     */
+    chatEnv: AdminChatValues;
   };
   auth: {
     enabled: boolean;
@@ -353,44 +356,14 @@ export interface AppConfig {
   };
 }
 
-/**
- * Адреса чатов администраторов. Общий адрес — `ADMIN_CHAT_ID`, у каждого
- * потока свой может отличаться темой или чатом: сводка, стресс-тесты и
- * проблемные забеги не должны мешаться в одной ленте.
- */
-export interface AdminChats {
-  /** общий адрес: меню команд администратора и всё, у чего нет своего потока */
-  general: ChatTarget | null;
-  /** сводка плейтеста и ответы на `/stats` */
-  stats: ChatTarget | null;
-  /** карточки стресс-тестов */
-  stressReports: ChatTarget | null;
-  /** карточки проблемных забегов */
-  runReports: ChatTarget | null;
-  /** отзывы игроков с формы обратной связи */
-  feedback: ChatTarget | null;
-  /** подозрительные и отклонённые забеги — очередь разбора антифрода */
-  runReview: ChatTarget | null;
-}
-
-function adminChats(parsed: {
-  ADMIN_CHAT_ID: string;
-  ADMIN_CHAT_STATS: string;
-  ADMIN_CHAT_STRESS: string;
-  ADMIN_CHAT_RUNS: string;
-  ADMIN_CHAT_FEEDBACK: string;
-  ADMIN_CHAT_RUN_REVIEW: string;
-}): AdminChats {
-  const general = parseChatTarget(parsed.ADMIN_CHAT_ID);
-  const orGeneral = (value: string): ChatTarget | null => parseChatTarget(value) ?? general;
-  return {
-    general,
-    stats: orGeneral(parsed.ADMIN_CHAT_STATS),
-    stressReports: orGeneral(parsed.ADMIN_CHAT_STRESS),
-    runReports: orGeneral(parsed.ADMIN_CHAT_RUNS),
-    feedback: orGeneral(parsed.ADMIN_CHAT_FEEDBACK),
-    runReview: orGeneral(parsed.ADMIN_CHAT_RUN_REVIEW),
-  };
+/** Адреса чатов команды строками из окружения; пусто — не задан. */
+export interface AdminChatValues {
+  general: string;
+  stats: string;
+  stressReports: string;
+  runReports: string;
+  feedback: string;
+  runReview: string;
 }
 
 function chatTarget(name: string) {
@@ -516,7 +489,14 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       webhookSecret: parsed.TELEGRAM_WEBHOOK_SECRET,
       publicApiUrl: parsed.PUBLIC_API_URL.replace(/\/+$/, ""),
       webAppUrl: parsed.PUBLIC_WEB_URL,
-      chats: adminChats(parsed),
+      chatEnv: {
+        general: parsed.ADMIN_CHAT_ID.trim(),
+        stats: parsed.ADMIN_CHAT_STATS.trim(),
+        stressReports: parsed.ADMIN_CHAT_STRESS.trim(),
+        runReports: parsed.ADMIN_CHAT_RUNS.trim(),
+        feedback: parsed.ADMIN_CHAT_FEEDBACK.trim(),
+        runReview: parsed.ADMIN_CHAT_RUN_REVIEW.trim(),
+      },
     },
     auth: {
       enabled: parsed.AUTH_ENABLED,

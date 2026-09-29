@@ -427,7 +427,9 @@ pnpm budget
 | Итог стресс-теста в сводке плейтеста | `backend/api/src/modules/playtest/playtest-stress.listener.ts` |
 | Кому открыты инструменты команды: режим разработчика, стресс-тест, витрина компонентов, звуковая лаборатория | сервер — `backend/api/src/modules/playtest/playtest-access.ts` по `ADMIN_TELEGRAM_IDS`; на dev-сервере — `VITE_DEV_TOOLS=1` |
 | Команды бота: что видно всем и что администраторам, текст `/help` | `backend/api/src/platforms/telegram/bot-commands.ts`; сами команды — рядом с обработчиками (`welcome.command.ts`, `playtest-stats.reporter.ts`, `export-bot.command.ts`) |
-| Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`; разбор — `backend/api/src/platforms/telegram/chat-target.ts` |
+| Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | панель → раздел «Настройки» (`notify.chat.*`), она сильнее окружения; запасные значения — `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`; разбор — `backend/api/src/platforms/ports/chat-target.ts` |
+| Слать ли в чат карточки отчётов диагностики | панель → «Настройки» (`notify.reports`); запасное — `.env` → `ADMIN_NOTIFY_REPORTS` |
+| Настройки без релиза: какие есть, их схемы и умолчания, как часто реплика перечитывает базу | `backend/api/src/modules/settings/setting-catalog.ts` → `SETTINGS`; `settings.service.ts` → `REFRESH_MS`, канал `SETTINGS_CHANNEL`; порядок — база → окружение → умолчание (`20-env-and-ports.md` §7) |
 
 Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.
 

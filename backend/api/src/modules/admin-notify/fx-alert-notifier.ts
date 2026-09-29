@@ -3,6 +3,7 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
 import { FxHooks, type FxAlert } from "../fx/fx-hooks.js";
+import { NotifyTargets } from "../settings/notify-targets.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 
 /**
@@ -26,21 +27,28 @@ export class FxAlertNotifier implements OnModuleInit {
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly targets: NotifyTargets,
     private readonly hooks: FxHooks,
     @Inject(REDIS) private readonly redis: Pick<Redis, "set">,
     @Inject(TELEGRAM_BOT_API) private readonly api: FxAlertApi,
   ) {}
 
+  /** Алерт уйдёт сейчас: опрос курсов включён и общий чат задан. */
   get enabled(): boolean {
-    return this.config.fx.enabled && this.config.telegram.chats.general !== null && this.config.telegram.botToken !== "";
+    return this.possible && this.targets.chats().general !== null;
+  }
+
+  /** Опрос и токен — до перезапуска, чат — на ходу из панели: он проверяется при отправке. */
+  private get possible(): boolean {
+    return this.config.fx.enabled && this.config.telegram.botToken !== "";
   }
 
   onModuleInit(): void {
-    if (this.enabled) this.hooks.onAlert("admin-notify", (alert) => this.deliver(alert));
+    if (this.possible) this.hooks.onAlert("admin-notify", (alert) => this.deliver(alert));
   }
 
   async deliver(alert: FxAlert): Promise<void> {
-    const chat = this.config.telegram.chats.general;
+    const chat = this.targets.chats().general;
     if (chat === null) return;
     if ((await this.redis.set(`notify:fx:${keyOf(alert)}`, "1", "EX", QUIET_SEC, "NX")) === null) return;
     await this.api.sendMessage(chat, fxAlertText(alert), AbortSignal.timeout(SEND_TIMEOUT_MS));

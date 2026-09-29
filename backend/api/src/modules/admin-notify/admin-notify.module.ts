@@ -8,10 +8,11 @@ import { ReportNotifier } from "./report-notifier.js";
 import { RedisReviewThrottle, REVIEW_THROTTLE } from "./review-throttle.js";
 
 /**
- * Уведомления в чат администраторов (`ADMIN_CHAT_ID`): карточки отчётов
- * диагностики — выключаются `ADMIN_NOTIFY_REPORTS=false` — и забегов на
- * разбор антифрода — выключаются пустым адресом (`ADMIN_CHAT_RUN_REVIEW`
- * вместе с общим) — и алерты курсов валют в общий чат, пока включён их опрос.
+ * Уведомления в чат администраторов: карточки отчётов диагностики —
+ * выключаются переключателем `notify.reports` — и забегов на разбор
+ * антифрода — выключаются пустым адресом разбора вместе с общим — и алерты
+ * курсов валют в общий чат, пока включён их опрос. Адреса и переключатель —
+ * настройки (`modules/settings`): панель сильнее окружения.
  */
 @Module({
   imports: [DiagnosticsModule, RunsModule, AuthModule, FxModule],

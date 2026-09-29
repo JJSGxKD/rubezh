@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { loadAppConfig } from "../src/config/app-config.js";
+import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import { NotifyTargets } from "../src/modules/settings/notify-targets.js";
+import { environmentSettings } from "../src/modules/settings/settings.service.js";
 import { BotCommands, helpText, type CommandsBotApi } from "../src/platforms/telegram/bot-commands.js";
 import { BotRouter, type BotCommandSpec, type BotUpdateHandler } from "../src/platforms/telegram/bot-router.js";
-import { chatTargetOf, type ChatRef } from "../src/platforms/telegram/chat-target.js";
+import { chatTargetOf, type ChatRef } from "../src/platforms/ports/chat-target.js";
 import type { TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
+import { targetsOf } from "./helpers/notify-targets.js";
 
 // /help и меню команд (docs/28-diagnostics.md §6.1.2): в чате администраторов
 // бот отвечает всем участникам, и половина команд — не для всех.
@@ -15,7 +18,7 @@ function handler(name: string, commands: BotCommandSpec[]): BotUpdateHandler {
   return { name, commands, handle: async () => false };
 }
 
-function setup(env: Record<string, string> = {}) {
+function setup(env: Record<string, string> = {}, targets: (config: AppConfig) => NotifyTargets = targetsOf) {
   const config = loadAppConfig({
     NODE_ENV: "test",
     TELEGRAM_BOT_TOKEN: "1:TEST",
@@ -41,7 +44,7 @@ function setup(env: Record<string, string> = {}) {
     },
   };
   const router = new BotRouter();
-  const help = new BotCommands(config, router, api);
+  const help = new BotCommands(config, targets(config), router, api);
   help.onModuleInit();
   router.register(handler("start", [{ command: "start", description: "Открыть игру", descriptionEn: "Open the game", audience: "everyone" }]));
   router.register(handler("stats", [{ command: "stats", description: "Сводка плейтеста", audience: "admin" }]));
@@ -101,6 +104,25 @@ describe("/help", () => {
       { chat: ADMIN_CHAT, commands: ["help", "start", "stats", "export"] },
       { chat: ADMIN, commands: ["help", "start", "stats", "export"] },
     ]);
+  });
+
+  it("чат администраторов поменяли в панели — меню команд администратора переезжает без перезапуска", async () => {
+    let chat = `${ADMIN_CHAT}:57`;
+    const listeners: ((changed: readonly string[]) => void)[] = [];
+    const bot = setup({}, (config) => {
+      const env = environmentSettings(config);
+      return new NotifyTargets({
+        get: (setting) => (setting.key === "notify.chat.general" ? setting.schema.parse(chat) : env.get(setting)),
+        onChange: (listener) => void listeners.push(listener),
+      });
+    });
+    chat = "-1009999999999";
+    for (const listener of listeners) listener(["notify.chat.general"]);
+    await expect.poll(() => bot.menus.some((menu) => menu.chat === "-1009999999999")).toBe(true);
+    // Переключатель отчётов меню не трогает.
+    const before = bot.menus.length;
+    for (const listener of listeners) listener(["notify.reports"]);
+    expect(bot.menus).toHaveLength(before);
   });
 
   it("список команд — из зарегистрированных обработчиков, без них /help пуст", () => {

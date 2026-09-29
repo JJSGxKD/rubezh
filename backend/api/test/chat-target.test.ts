@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import { chatFields, isChatTarget, parseChatTarget, sameChat } from "../src/platforms/telegram/chat-target.js";
+import { isChatTarget, parseChatTarget, sameChat } from "../src/platforms/ports/chat-target.js";
+import { chatFields } from "../src/platforms/telegram/telegram-bot-api.js";
+import { targetsOf } from "./helpers/notify-targets.js";
 
 // Адрес чата: id или id:тема (docs/20-env-and-ports.md §3). У каждого потока
 // уведомлений свой адрес, пустой — берётся общий.
@@ -32,7 +34,7 @@ describe("адрес чата", () => {
 
   it("свой адрес у потока перебивает общий, пустой — берёт общий", () => {
     const config = loadAppConfig({ ...base, ADMIN_CHAT_ID: "-100:1", ADMIN_CHAT_RUNS: "-200:5" });
-    expect(config.telegram.chats).toEqual({
+    expect(targetsOf(config).chats()).toEqual({
       general: { chatId: "-100", threadId: 1 },
       stats: { chatId: "-100", threadId: 1 },
       stressReports: { chatId: "-100", threadId: 1 },
@@ -43,9 +45,9 @@ describe("адрес чата", () => {
   });
 
   it("без общего адреса поток живёт своим, остальные молчат", () => {
-    const config = loadAppConfig({ ...base, ADMIN_CHAT_STRESS: "-300" });
-    expect(config.telegram.chats.stressReports).toEqual({ chatId: "-300", threadId: null });
-    expect(config.telegram.chats.stats).toBeNull();
-    expect(config.telegram.chats.general).toBeNull();
+    const chats = targetsOf(loadAppConfig({ ...base, ADMIN_CHAT_STRESS: "-300" })).chats();
+    expect(chats.stressReports).toEqual({ chatId: "-300", threadId: null });
+    expect(chats.stats).toBeNull();
+    expect(chats.general).toBeNull();
   });
 });

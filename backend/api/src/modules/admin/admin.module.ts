@@ -8,6 +8,8 @@ import { FriendsModule } from "../friends/friends.module.js";
 import { ReferralsModule } from "../referrals/referrals.module.js";
 import { AdminSocialController } from "./admin-social.controller.js";
 import { AdminSocialService } from "./admin-social.service.js";
+import { AdminSettingsController } from "./admin-settings.controller.js";
+import { AdminSettingsService } from "./admin-settings.service.js";
 import { Module } from "@nestjs/common";
 import { AttributionModule } from "../attribution/attribution.module.js";
 import { AuthModule } from "../auth/auth.module.js";
@@ -55,6 +57,7 @@ import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.sto
     AdminSocialController,
     AdminLinksController,
     AdminFlagsController,
+    AdminSettingsController,
     AdminBroadcastsController,
   ],
   providers: [
@@ -64,6 +67,7 @@ import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.sto
     AdminRolesService,
     AdminExportsService,
     AdminSocialService,
+    AdminSettingsService,
     { provide: ADMIN_SESSION_STORE, useClass: RedisAdminSessionStore },
   ],
 })

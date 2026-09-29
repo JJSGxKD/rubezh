@@ -60,8 +60,10 @@ export const PERMISSIONS = [
   "partners.payout.approve",
   // Редирект-ссылки кампаний (WP16, docs/24-attribution-and-sharing.md §3)
   "links.manage",
-  // Эксплуатация
+  // Эксплуатация. Настройки без релиза — адреса чатов команды и переключатели
+  // (docs/35-stage4-plan.md §3.18)
   "flags.edit",
+  "settings.edit",
   "diagnostics.view",
   "data.export",
   // Инструменты команды в клиенте: режим разработчика, витрина, лаборатория
@@ -118,6 +120,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "partners.edit",
     "links.manage",
     "flags.edit",
+    "settings.edit",
     "diagnostics.view",
     "data.export",
     "tools.dev",

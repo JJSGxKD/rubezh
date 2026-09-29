@@ -9,10 +9,11 @@ import {
   type StatsReporterLocks,
 } from "../src/modules/playtest/playtest-stats.reporter.js";
 import { PlaytestStatsService } from "../src/modules/playtest/playtest-stats.service.js";
-import { chatTargetOf, type ChatRef } from "../src/platforms/telegram/chat-target.js";
+import { chatTargetOf, type ChatRef } from "../src/platforms/ports/chat-target.js";
 import { TelegramApiError, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
 import { MemoryLeaderboardStore } from "./helpers/memory-runs.js";
+import { targetsOf } from "./helpers/notify-targets.js";
 
 // Сводка плейтеста в Telegram: кому отвечать, когда слать отчёт.
 
@@ -50,38 +51,38 @@ describe("кому сводка отвечает", () => {
   const cfg = config();
 
   it("отвечает любому участнику чата администраторов и адресной команде", () => {
-    expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999), cfg, NOW)).toEqual({
+    expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999), cfg, NOW, targetsOf(cfg).chats().stats)).toEqual({
       kind: "stats",
       target: { chatId: CHAT, threadId: null },
       place: "admin_chat",
     });
-    expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999, "/stats@rubezh_bot"), cfg, NOW).kind).toBe("stats");
+    expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999, "/stats@rubezh_bot"), cfg, NOW, targetsOf(cfg).chats().stats).kind).toBe("stats");
   });
 
   it("в супергруппе с темами отвечает в ту же тему, а тема в настройке чат не меняет", () => {
     const inThread = command({ id: Number(CHAT), type: "supergroup" }, 999);
     if (inThread.message !== undefined) inThread.message.message_thread_id = 57;
-    expect(decideUpdate(inThread, cfg, NOW)).toMatchObject({ target: { chatId: CHAT, threadId: 57 } });
+    expect(decideUpdate(inThread, cfg, NOW, targetsOf(cfg).chats().stats)).toMatchObject({ target: { chatId: CHAT, threadId: 57 } });
     // Настройка с темой — тот же чат: команда из общей ленты тоже своя.
     const threaded = config({ ADMIN_CHAT_ID: `${CHAT}:12` });
-    expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999), threaded, NOW).kind).toBe("stats");
+    expect(decideUpdate(command({ id: Number(CHAT), type: "supergroup" }, 999), threaded, NOW, targetsOf(threaded).chats().stats).kind).toBe("stats");
   });
 
   it("в личке отвечает только администратору из списка", () => {
-    expect(decideUpdate(command({ id: 111, type: "private" }, 111), cfg, NOW)).toMatchObject({ kind: "stats", place: "private" });
-    expect(decideUpdate(command({ id: 222, type: "private" }, 222), cfg, NOW).kind).toBe("ignore");
+    expect(decideUpdate(command({ id: 111, type: "private" }, 111), cfg, NOW, targetsOf(cfg).chats().stats)).toMatchObject({ kind: "stats", place: "private" });
+    expect(decideUpdate(command({ id: 222, type: "private" }, 222), cfg, NOW, targetsOf(cfg).chats().stats).kind).toBe("ignore");
   });
 
   it("молчит в чужой группе, даже если команду набрал администратор", () => {
-    expect(decideUpdate(command({ id: -100999, type: "group" }, 111), cfg, NOW).kind).toBe("ignore");
+    expect(decideUpdate(command({ id: -100999, type: "group" }, 111), cfg, NOW, targetsOf(cfg).chats().stats).kind).toBe("ignore");
   });
 
   it("не отвечает на старые команды из очереди, похожие команды и ботов", () => {
-    expect(decideUpdate(command({ id: Number(CHAT), type: "group" }, 1, "/stats", NOW / 1000 - 3600), cfg, NOW).kind).toBe("ignore");
-    expect(decideUpdate(command({ id: Number(CHAT), type: "group" }, 1, "/statsall"), cfg, NOW).kind).toBe("ignore");
+    expect(decideUpdate(command({ id: Number(CHAT), type: "group" }, 1, "/stats", NOW / 1000 - 3600), cfg, NOW, targetsOf(cfg).chats().stats).kind).toBe("ignore");
+    expect(decideUpdate(command({ id: Number(CHAT), type: "group" }, 1, "/statsall"), cfg, NOW, targetsOf(cfg).chats().stats).kind).toBe("ignore");
     const fromBot = command({ id: Number(CHAT), type: "group" }, 1);
     if (fromBot.message?.from !== undefined) fromBot.message.from.is_bot = true;
-    expect(decideUpdate(fromBot, cfg, NOW).kind).toBe("ignore");
+    expect(decideUpdate(fromBot, cfg, NOW, targetsOf(cfg).chats().stats).kind).toBe("ignore");
   });
 });
 
@@ -147,7 +148,7 @@ describe("сводка в Telegram", () => {
     api = fakeApi();
     router = new BotRouter();
     const stats = new PlaytestStatsService(new MemoryPlaytestStatsStore(), new MemoryLeaderboardStore(), cfg);
-    reporter = new PlaytestStatsReporter(cfg, stats, router, locks, api);
+    reporter = new PlaytestStatsReporter(cfg, targetsOf(cfg), stats, router, locks, api);
     reporter.onModuleInit();
   });
 

@@ -1,6 +1,6 @@
 import { Api, GrammyError, HttpError, InputFile } from "grammy";
 import { z } from "zod";
-import { chatFields, chatTargetOf, type ChatRef } from "./chat-target.js";
+import { chatTargetOf, type ChatRef } from "../ports/chat-target.js";
 
 /**
  * Методы Bot API, которые нужны боту, — поверх клиента grammY
@@ -26,6 +26,12 @@ import { chatFields, chatTargetOf, type ChatRef } from "./chat-target.js";
  * («Cannot access before initialization»).
  */
 export const TELEGRAM_BOT_API = Symbol("TELEGRAM_BOT_API");
+
+/** Поля запроса Bot API: тема добавляется, только когда она есть. */
+export function chatFields(ref: ChatRef): { chat_id: string; message_thread_id?: number } {
+  const target = chatTargetOf(ref);
+  return target.threadId === null ? { chat_id: target.chatId } : { chat_id: target.chatId, message_thread_id: target.threadId };
+}
 
 /** Запас сверх long polling: Telegram держит запрос до `timeout` секунд и отвечает чуть позже. */
 const POLL_GRACE_MS = 10_000;

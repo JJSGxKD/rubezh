@@ -3,13 +3,14 @@ import { Decimal, MemoryRateStore, quoteInUsd, rateOf, type RateSource } from "@
 import { describe, expect, it } from "vitest";
 import { ForbiddenError, ValidationError } from "../src/common/domain-error.js";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { FxAlertNotifier, fxAlertText } from "../src/modules/admin-notify/fx-alert-notifier.js";
+import { FxAlertNotifier, fxAlertText, type FxAlertApi } from "../src/modules/admin-notify/fx-alert-notifier.js";
 import { FxHooks, type FxAlert } from "../src/modules/fx/fx-hooks.js";
 import { FxRefresher, fxSources } from "../src/modules/fx/fx.refresher.js";
 import { FxService } from "../src/modules/fx/fx.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { targetsOf } from "./helpers/notify-targets.js";
 
 /**
  * Модуль курсов бэкенда (docs/35-stage4-plan.md, WP9): проход под локом,
@@ -151,10 +152,11 @@ describe("заданные курсы", () => {
 
 describe("алерты курсов в чат команды", () => {
   const chatConfig = () => config({ FX_ENABLED: "true", ADMIN_CHAT_ID: "-1001234567890", TELEGRAM_BOT_TOKEN: "123:TEST" });
+  const notifierOf = (cfg: AppConfig, api: FxAlertApi) => new FxAlertNotifier(cfg, targetsOf(cfg), new FxHooks(), new FakeRedis() as never, api);
 
   it("одна причина — один алерт за окно тишины", async () => {
     const sent: string[] = [];
-    const notifier = new FxAlertNotifier(chatConfig(), new FxHooks(), new FakeRedis() as never, { sendMessage: async (_chat, text) => (sent.push(text), 1) });
+    const notifier = notifierOf(chatConfig(), { sendMessage: async (_chat, text) => (sent.push(text), 1) });
     const stale: FxAlert = { kind: "rate_stale", currency: "GRAM", state: "stale", purpose: null };
 
     await notifier.deliver(stale);
@@ -166,10 +168,10 @@ describe("алерты курсов в чат команды", () => {
   });
 
   it("выключен без опроса курсов, без чата или без бота", () => {
-    const off = (patch: Record<string, string>) => new FxAlertNotifier(config(patch), new FxHooks(), new FakeRedis() as never, { sendMessage: async () => 1 }).enabled;
+    const off = (patch: Record<string, string>) => notifierOf(config(patch), { sendMessage: async () => 1 }).enabled;
     expect(off({ ADMIN_CHAT_ID: "-100123", TELEGRAM_BOT_TOKEN: "123:TEST" })).toBe(false);
     expect(off({ FX_ENABLED: "true", TELEGRAM_BOT_TOKEN: "123:TEST" })).toBe(false);
-    expect(new FxAlertNotifier(chatConfig(), new FxHooks(), new FakeRedis() as never, { sendMessage: async () => 1 }).enabled).toBe(true);
+    expect(notifierOf(chatConfig(), { sendMessage: async () => 1 }).enabled).toBe(true);
   });
 
   it("текст говорит, что случилось и что делать", () => {
