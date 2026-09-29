@@ -14,6 +14,7 @@ import { TelegramPaymentsHandler } from "../src/platforms/telegram/telegram-paym
 import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 /**
  * Подтверждение оплаты Stars (docs/34-stage3-plan.md, WP5, п. 6–8).
@@ -93,7 +94,7 @@ describe("подтверждение оплаты", () => {
   beforeEach(() => {
     purchases = new MemoryPurchasesRepository();
     api = new FakeStarsApi();
-    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(api));
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(api), switchesOf(config()));
     purchase = pending();
     purchases.rows.set(purchase.purchaseId, purchase);
     purchases.owners.set(purchase.accountId, String(PLAYER_ID));
@@ -253,7 +254,7 @@ describe("возвраты звёзд", () => {
     purchases = new MemoryPurchasesRepository();
     refundApi = new FakeStarsApi();
     refunds = new PaymentRefunds(purchases, starsProviders(refundApi));
-    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(refundApi));
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(refundApi), switchesOf(config()));
     hooks = new RunsHooks();
     // Очередь без Redis выполняет задания сразу — так видно всю цепочку.
     queue = new PaymentsQueue(config(), confirmation, refunds, hooks, starsProviders(refundApi));

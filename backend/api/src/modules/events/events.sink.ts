@@ -44,8 +44,12 @@ export class QueuedEventsSink implements EventsSink, OnApplicationBootstrap, OnM
     @Inject(EVENTS_REPOSITORY) private readonly repository: EventsRepository,
   ) {}
 
+  /**
+   * Очередь — когда есть база: приём включают и выключают на ходу из панели,
+   * а пускает ли он события, решает приёмник на входе.
+   */
   onApplicationBootstrap(): void {
-    if (!this.config.ingest.eventsEnabled) return;
+    if (this.config.databaseUrl === "") return;
     const producer = createQueueConnection(this.config, "producer");
     const consumer = createQueueConnection(this.config, "worker");
     this.connections = [producer, consumer];

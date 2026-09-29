@@ -14,6 +14,7 @@ import type { TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 // Выгрузка через бота (docs/28-diagnostics.md §6.1.5).
 
@@ -100,7 +101,7 @@ function setup(env: Record<string, string> = {}, parts = 1) {
   } as unknown as ExportService;
   const locks = new MemoryLocks();
   const router = new BotRouter();
-  const command = new ExportBotCommand(config, router, locks, api, exports, rolesService(config));
+  const command = new ExportBotCommand(config, switchesOf(config), router, locks, api, exports, rolesService(config));
   const jobs: ExportJob[] = [];
   command.jobs = { add: async (job) => void jobs.push(job) };
   command.onModuleInit();

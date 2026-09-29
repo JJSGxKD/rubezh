@@ -20,6 +20,7 @@ import {
   type WelcomeCardCache,
 } from "../src/platforms/telegram/welcome.command.js";
 import type { AuthService, ChannelEntry } from "../src/modules/auth/auth.service.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 // Приветствие по /start (docs/28-diagnostics.md §6.1.2).
 
@@ -142,6 +143,7 @@ function setup(
   } as unknown as AuthService;
   const command = new StartCommand(
     config,
+    switchesOf(config),
     router,
     registry,
     cache,

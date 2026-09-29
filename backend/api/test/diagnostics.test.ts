@@ -24,6 +24,8 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { launchFor } from "./helpers/init-data.js";
 import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
 import { LaunchVerifiers } from "../src/platforms/ports/launch-verifier.js";
+import { FeatureSwitches } from "../src/modules/settings/feature-switches.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 // Приёмник отчётов диагностики (docs/28-diagnostics.md §5).
 
@@ -85,6 +87,7 @@ describe("приёмник отчётов диагностики", () => {
         { provide: DiagnosticsHooks, useValue: hooks },
         RateLimiter,
         { provide: LaunchVerifiers, useValue: launchVerifiersFor(config) },
+        { provide: FeatureSwitches, useValue: switchesOf(config) },
         IngestGuard,
         DiagnosticsService,
       ],

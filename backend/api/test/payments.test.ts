@@ -13,6 +13,7 @@ import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 /**
  * Цена и счёт второго шанса (docs/34-stage3-plan.md, WP5). Проверяется то,
@@ -87,7 +88,7 @@ describe("счёт второго шанса", () => {
   }
 
   function build(settings: AppConfig = config()): void {
-    service = new PaymentsService(settings, purchases, runs, starsProviders(invoices));
+    service = new PaymentsService(settings, purchases, runs, starsProviders(invoices), switchesOf(settings));
   }
 
   beforeEach(async () => {
@@ -256,9 +257,16 @@ describe("сверка итога забега с покупками", () => {
 });
 
 describe("конфигурация оплаты", () => {
-  it("без авторизации и чтения обновлений бота оплата не стартует", () => {
-    expect(() => loadAppConfig({ NODE_ENV: "test", PAYMENTS_ENABLED: "true" } as NodeJS.ProcessEnv)).toThrow(/AUTH_ENABLED/);
+  it("без входа и чтения обновлений бота оплата невозможна, а явное включение без них не стартует", () => {
+    expect(() => loadAppConfig({ NODE_ENV: "test", PAYMENTS_ENABLED: "true" } as NodeJS.ProcessEnv)).toThrow(/JWT_ACCESS_SECRET/);
     expect(() => config({ TELEGRAM_BOT_UPDATES: "off" })).toThrow(/TELEGRAM_BOT_UPDATES/);
-    expect(config().payments).toEqual({ enabled: true, testMode: false, starsPerMinute: 1, maxStars: 30 });
+    expect(config().payments).toEqual({ possible: true, starsEnv: true, testMode: false, starsPerMinute: 1, maxStars: 30 });
+    expect(config({ PAYMENTS_ENABLED: "", TELEGRAM_BOT_UPDATES: "off" }).payments.possible).toBe(false);
+  });
+
+  it("ключи есть — оплата включена, пока её не выключили стоп-краном", () => {
+    expect(switchesOf(config({ PAYMENTS_ENABLED: "" })).payments()).toBe(true);
+    expect(switchesOf(config({ PAYMENTS_ENABLED: "false" })).payments()).toBe(false);
+    expect(switchesOf(config({ PAYMENTS_ENABLED: "", TELEGRAM_BOT_UPDATES: "off" })).payments()).toBe(false);
   });
 });

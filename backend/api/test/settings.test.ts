@@ -3,9 +3,13 @@ import type { Redis } from "ioredis";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { AdminSettingsService } from "../src/modules/admin/admin-settings.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
+import { MemoryRateStore } from "@bh/fx";
+import { FxHooks } from "../src/modules/fx/fx-hooks.js";
+import { FxRefresher } from "../src/modules/fx/fx.refresher.js";
+import { FeatureSwitches } from "../src/modules/settings/feature-switches.js";
 import { NotifyTargets } from "../src/modules/settings/notify-targets.js";
 import { SETTINGS, SETTING_KEY, SETTING_LIST } from "../src/modules/settings/setting-catalog.js";
-import type { SettingValue } from "../src/modules/settings/setting-catalog.js";
+import type { SettingDefinition, SettingValue } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsRepository, StoredSetting } from "../src/modules/settings/settings.repository.js";
 import { SETTINGS_CHANNEL, SettingsService } from "../src/modules/settings/settings.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -221,6 +225,47 @@ describe("соседние реплики", () => {
     expect(calls).toBe(0);
     await service.write(SETTINGS.chatStress, "-700", ACTOR_ID);
     expect(calls).toBe(1);
+  });
+});
+
+describe("выключатели функций", () => {
+  /** Настройки, поменянные в панели посреди теста. */
+  function switches(env: Record<string, string>, panel: Record<string, boolean> = {}) {
+    const cfg = config(env);
+    const values = new Map(Object.entries(panel));
+    const reader = {
+      get: <T extends SettingValue>(setting: SettingDefinition<T>): T =>
+        values.has(setting.key) ? setting.schema.parse(values.get(setting.key)) : (setting.fromEnv(cfg) ?? setting.fallback),
+      onChange: () => undefined,
+    };
+    return { switches: new FeatureSwitches(reader, cfg), values };
+  }
+
+  it("панель сильнее окружения в обе стороны", () => {
+    expect(switches({ EVENTS_INGEST_ENABLED: "true" }, { "ingest.events": false }).switches.eventsIngest()).toBe(false);
+    expect(switches({}, { "ingest.events": true }).switches.eventsIngest()).toBe(true);
+    expect(switches({ FX_ENABLED: "true" }, { "fx.polling": false }).switches.fxPolling()).toBe(false);
+  });
+
+  it("без ключей функция не включается и из панели", () => {
+    // Приёмнику нужна база, выгрузке — ключ псевдонимов и чтение обновлений, оплате — вход и обновления.
+    expect(switches({ DATABASE_URL: "", JWT_ACCESS_SECRET: "" }, { "ingest.reports": true }).switches.reportsIngest()).toBe(false);
+    expect(switches({}, { "export.bot": true }).switches.exportBot()).toBe(false);
+    expect(switches({}, { "payments.stars": true }).switches.payments()).toBe(false);
+  });
+
+  it("ключ задан — включено; стоп-кран оплаты выключает её на ходу", () => {
+    const { switches: live, values } = switches({ TELEGRAM_BOT_UPDATES: "polling" });
+    expect(live.payments()).toBe(true);
+    values.set("payments.stars", false);
+    expect(live.payments()).toBe(false);
+  });
+
+  it("опрос курсов, выключенный в панели, не трогает ни лок, ни источники", async () => {
+    const { switches: off } = switches({ FX_ENABLED: "true" }, { "fx.polling": false });
+    const redis = { set: async () => Promise.reject(new Error("лок трогать нельзя")), eval: async () => 0 };
+    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), new MemoryRateStore(), redis as never, new FxHooks(), off);
+    expect(await refresher.tick([])).toBeNull();
   });
 });
 

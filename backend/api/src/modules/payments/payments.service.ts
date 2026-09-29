@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import { DisabledError, ValidationError } from "../../common/domain-error.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { CONTINUES_PER_RUN } from "../runs/run-rules.js";
@@ -74,6 +75,7 @@ export class PaymentsService {
     @Inject(PURCHASES_REPOSITORY) private readonly purchases: PurchasesRepository,
     @Inject(RUNS_REPOSITORY) private readonly runs: Pick<RunsRepository, "find">,
     private readonly providers: PaymentProviders,
+    private readonly switches: FeatureSwitches,
   ) {}
 
   /** Сколько стоит продолжить — без записи и без обращения к Telegram: спрашивают на каждой смерти. */
@@ -175,7 +177,9 @@ export class PaymentsService {
 
   private assertEnabled(): void {
     // 404, а не 403: выключенная оплата не подтверждает, что она есть.
-    if (!this.config.payments.enabled) throw new DisabledError("Оплата выключена");
+    // Выключают её на ходу из панели — стоп-кран на случай, если с продажей
+    // что-то не так; уже оплаченное засчитывается и без неё.
+    if (!this.switches.payments()) throw new DisabledError("Оплата выключена");
   }
 
   private log(level: "log" | "warn" | "error", event: string, fields: Record<string, unknown>): void {

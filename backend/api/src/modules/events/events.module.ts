@@ -6,8 +6,8 @@ import { EVENTS_SINK, QueuedEventsSink } from "./events.sink.js";
 
 /**
  * События закрытого теста (docs/26-stage2-plan.md, WP8): приём пачкой,
- * очередь, батч-вставка в Postgres. Выключен по умолчанию —
- * `EVENTS_INGEST_ENABLED`.
+ * очередь, батч-вставка в Postgres. Выключен по умолчанию; выключатель —
+ * настройка `ingest.events` (запасное значение — `EVENTS_INGEST_ENABLED`).
  */
 @Module({
   controllers: [EventsController],

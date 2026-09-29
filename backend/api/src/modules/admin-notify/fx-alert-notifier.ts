@@ -4,6 +4,7 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
 import { FxHooks, type FxAlert } from "../fx/fx-hooks.js";
 import { NotifyTargets } from "../settings/notify-targets.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 
 /**
@@ -28,6 +29,7 @@ export class FxAlertNotifier implements OnModuleInit {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly targets: NotifyTargets,
+    private readonly switches: FeatureSwitches,
     private readonly hooks: FxHooks,
     @Inject(REDIS) private readonly redis: Pick<Redis, "set">,
     @Inject(TELEGRAM_BOT_API) private readonly api: FxAlertApi,
@@ -35,12 +37,12 @@ export class FxAlertNotifier implements OnModuleInit {
 
   /** Алерт уйдёт сейчас: опрос курсов включён и общий чат задан. */
   get enabled(): boolean {
-    return this.possible && this.targets.chats().general !== null;
+    return this.possible && this.switches.fxPolling() && this.targets.chats().general !== null;
   }
 
-  /** Опрос и токен — до перезапуска, чат — на ходу из панели: он проверяется при отправке. */
+  /** Токен — до перезапуска, опрос и чат — на ходу из панели: они проверяются при отправке. */
   private get possible(): boolean {
-    return this.config.fx.enabled && this.config.telegram.botToken !== "";
+    return this.config.telegram.botToken !== "";
   }
 
   onModuleInit(): void {

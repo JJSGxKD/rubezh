@@ -25,7 +25,6 @@ const SECRET = randomBytes(32).toString("hex");
 function config(patch: Record<string, string> = {}): AppConfig {
   return loadAppConfig({
     NODE_ENV: "test",
-    AUTH_ENABLED: "true",
     JWT_ACCESS_SECRET: SECRET,
     TELEGRAM_BOT_TOKEN: BOT_TOKEN,
     DATABASE_URL: "postgresql://localhost:5432/test",
@@ -174,12 +173,22 @@ describe("вход и продление сессии", () => {
 });
 
 describe("конфигурация авторизации", () => {
-  it("включённая авторизация без секрета не стартует", () => {
-    expect(() => config({ JWT_ACCESS_SECRET: "" })).toThrow(/JWT_ACCESS_SECRET/);
+  it("вход включается ключом: секрет задан — включён, пуст — выключен", () => {
+    expect(config().auth.enabled).toBe(true);
+    expect(config({ JWT_ACCESS_SECRET: "" }).auth.enabled).toBe(false);
+    expect(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv).auth.enabled).toBe(false);
   });
 
-  it("включённая авторизация без токена бота не стартует", () => {
+  it("со секретом, но без токена бота или базы не стартует", () => {
     expect(() => config({ TELEGRAM_BOT_TOKEN: "" })).toThrow(/TELEGRAM_BOT_TOKEN/);
+    expect(() => config({ DATABASE_URL: "" })).toThrow(/DATABASE_URL/);
+  });
+
+  it("старый флаг, согласный с ключом, принимается, а противоречащий роняет старт", () => {
+    expect(config({ AUTH_ENABLED: "true" }).auth.enabled).toBe(true);
+    // «Выключено» в окружении при заданном секрете не должно молча значить «включено».
+    expect(() => config({ AUTH_ENABLED: "false" })).toThrow(/убрать ключ/);
+    expect(() => config({ AUTH_ENABLED: "true", JWT_ACCESS_SECRET: "" })).toThrow(/задайте JWT_ACCESS_SECRET/);
   });
 
   it("короткий секрет не принимается", () => {
@@ -277,7 +286,7 @@ describe("доступ по токену", () => {
     const token = await signAccessToken(claims, key, 900, Date.now());
 
     await expect(
-      new AuthGuard(config({ AUTH_ENABLED: "false" })).canActivate(contextWith(`Bearer ${token}`).context),
+      new AuthGuard(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv)).canActivate(contextWith(`Bearer ${token}`).context),
     ).rejects.toMatchObject({ status: 404 });
   });
 
