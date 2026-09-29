@@ -61,6 +61,8 @@ export const ProfileScreen = screen(loaders.profile, "ProfileScreen");
 // Экран уровня открывается только из профиля — и лежит в его чанке: свой
 // чанк и общая с профилем карточка уровня стоили бы отдельной обвязки.
 export const LevelScreen = screen(loaders.profile, "LevelScreen");
+// История имущества — тоже из профиля и в его чанке.
+export const HistoryScreen = screen(loaders.profile, "HistoryScreen");
 export const NotificationsScreen = screen(loaders.notifications, "NotificationsScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");

@@ -38,6 +38,7 @@ import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-lo
 import { AccountSettingsModule } from "./modules/account-settings/account-settings.module.js";
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
 import { BadgesModule } from "./modules/badges/badges.module.js";
+import { HistoryModule } from "./modules/history/history.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -96,6 +97,7 @@ export const APP_MODULES = [
   TelegramPanelLoginModule,
   FriendsModule,
   BadgesModule,
+  HistoryModule,
   ReferralsModule,
   LinksModule,
   FlagsModule,

@@ -1147,6 +1147,7 @@ flowchart LR
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
         NOTIF["notifications<br/>лента уведомлений: пишут модули,<br/>чистка старше 90 дней, реализовано"]
         BADGES["badges<br/>знаки меню одним ответом:<br/>счётчики соседей, реализовано"]
+        HISTORY["history<br/>история имущества: чтение<br/>журналов кошелька, предметов<br/>и покупок, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1276,6 +1277,8 @@ flowchart LR
     BADGES -. "новые предметы" .-> ITEMS
     BADGES -. "подарки и заявки" .-> FRIENDS
     BADGES -. непрочитанное .-> NOTIF
+    CADDY -- "/api/v1/me/history" --> HISTORY
+    HISTORY -- "wallet_entry, item_event, purchase" --> PG
     CADDY -- "/api/v1/flags" --> FLAGS
     FLAGS --> PG
 
