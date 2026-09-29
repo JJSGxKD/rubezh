@@ -115,9 +115,9 @@ export async function awaitReward(
       // Новый уровень открывает оружие и навыки (WP25): следующий забег
       // должен начаться уже с ним, даже если сеть пропадёт до старта.
       if (response.data.levelAfter > response.data.levelBefore) void refresh();
-      // Редкая добыча пишется в ленту тем же заданием наград: колокольчик —
-      // сразу, а не на следующем возврате в приложение.
-      void import("./notifications-api").then(({ loadUnread }) => loadUnread());
+      // Добыча ложится в арсенал, а редкая — ещё и в ленту тем же заданием
+      // наград: знаки — сразу, а не на следующем возврате в приложение.
+      void import("./badges-api").then(({ loadBadges }) => loadBadges());
     }
     return response.data;
   }

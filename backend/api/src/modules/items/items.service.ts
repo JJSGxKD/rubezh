@@ -92,6 +92,16 @@ export class ItemsService {
     return sameModifiers(loadoutOf(rows.filter((item) => item.equipped)), snapshot.modifiers) ? "valid" : "stale";
   }
 
+  /** Открытые листы — больше не новые; чужие и убранные пропускаются. */
+  async markSeen(accountId: string, itemIds: readonly string[], at = new Date()): Promise<number> {
+    return await this.items.markSeen(accountId, [...new Set(itemIds)], at);
+  }
+
+  /** Сколько новых предметов у игрока — число на вкладке арсенала. */
+  async unseenCount(accountId: string): Promise<number> {
+    return await this.items.unseenCount(accountId);
+  }
+
   async equip(accountId: string, itemId: string, at = new Date()): Promise<ItemView> {
     const outcome = await this.items.change(accountId, itemId, `equip:${randomUUID()}`, at, (item) => ({ equipped: true, kind: "equipped", payload: { slot: item.slot } }));
     return await this.viewOf(accountId, outcome);
@@ -170,7 +180,8 @@ export class ItemsService {
         const level = Math.min(Math.max(...items.map((item) => item.level)), levelCap(account.level));
         return {
           debit: { lines: lines(cost.coins, shardOf(rarity), cost.shards), reason: "item_merge" },
-          result: { slot, rarity: target, level, seed, rolls: rollItem(random, slot, target), source: `merge:${key}`.slice(0, 96) },
+          // Собранное игрок получает своим действием и видит сразу — не «новое».
+          result: { slot, rarity: target, level, seed, rolls: rollItem(random, slot, target), source: `merge:${key}`.slice(0, 96), seen: true },
         };
       }),
     );

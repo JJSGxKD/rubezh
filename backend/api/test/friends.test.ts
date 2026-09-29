@@ -269,6 +269,26 @@ describe("лента уведомлений", () => {
   });
 });
 
+describe("знак на вкладке друзей", () => {
+  it("заявки и подарки, которые можно забрать сегодня; забранное и принятое гаснет", async () => {
+    const ann = await player("1");
+    const bob = await player("2");
+    const cid = await player("3");
+    expect(await service.badge(bob.accountId)).toBe(0);
+
+    await service.request(claims(ann), bob.accountId);
+    expect(await service.badge(bob.accountId)).toBe(1);
+    await service.accept(claims(bob), ann.accountId);
+    expect(await service.badge(bob.accountId)).toBe(0);
+
+    await service.sendGift(claims(ann), bob.accountId);
+    await service.request(claims(cid), bob.accountId);
+    expect(await service.badge(bob.accountId)).toBe(2);
+    await service.claimGifts(claims(bob));
+    expect(await service.badge(bob.accountId)).toBe(1);
+  });
+});
+
 describe("сообщение о заявке", () => {
   it("о новой заявке пишет получателю, о повторной и встречной — нет", async () => {
     const ann = await player("1");

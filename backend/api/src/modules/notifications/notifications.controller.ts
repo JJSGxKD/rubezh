@@ -7,8 +7,9 @@ import { FEED_PAGE_MAX, NotificationsService, type FeedView } from "./notificati
 
 /**
  * Лента уведомлений игрока (`/api/v1/me/notifications`, docs/35-stage4-plan.md
- * §3.17). Клиент спрашивает при входе, на возврате в приложение и после
- * забега — без постоянного соединения. Только своё: аккаунт из токена.
+ * §3.17). Число непрочитанного для колокольчика приходит со знаками меню
+ * (`badges/`), здесь — лента и отметка прочитанного. Только своё: аккаунт
+ * из токена.
  */
 const LIMIT: RateLimit = { scope: "notifications", limit: 600, windowSec: 3600 };
 
@@ -34,14 +35,6 @@ export class NotificationsController {
     const parsed = feedQuerySchema.safeParse(query);
     if (!parsed.success) throw new ValidationError("Некорректный запрос ленты");
     return { data: await this.notifications.feed(account.accountId, parsed.data.cursor, parsed.data.limit) };
-  }
-
-  /** Число для колокольчика — без самой ленты: его спрашивают чаще всего. */
-  @Get("unread")
-  async unread(@Req() request: unknown): Promise<{ data: { unread: number } }> {
-    const account = accountOf(request);
-    await this.limit(account.accountId);
-    return { data: { unread: await this.notifications.unread(account.accountId) } };
   }
 
   @Post("read")

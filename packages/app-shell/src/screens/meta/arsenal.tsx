@@ -15,6 +15,7 @@ import type { ApiFailure } from "../../state/api-request";
 import { useItems } from "../../state/items";
 import {
   loadInventory,
+  markItemsSeen,
   runItemAction,
   type ItemAction,
   type ItemView,
@@ -130,6 +131,7 @@ export function ArsenalScreen(): ReactNode {
     if (!merging) {
       setError(null);
       setOpenId(item.itemId);
+      if (item.isNew === true) void markItemsSeen([item.itemId]);
       return;
     }
     setPicked((current) => {

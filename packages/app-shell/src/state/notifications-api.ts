@@ -2,14 +2,15 @@ import { z } from "zod/mini";
 import { t } from "../i18n";
 import "../i18n/account";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
-import { useNotifications } from "./notifications";
+import { useBadges } from "./badges";
 import { useShell } from "./shell";
 
 /**
- * Лента уведомлений с сервера (docs/35-stage4-plan.md Р51, §3.17): число
- * непрочитанного при входе, на возврате в приложение и после забега — без
- * постоянного соединения. Виды и данные — строками: сервер новее клиента
- * пришлёт вид, которого экран не знает, и лента не должна от этого падать.
+ * Лента уведомлений с сервера (docs/35-stage4-plan.md Р51, §3.17). Число для
+ * колокольчика приходит со знаками меню (`badges-api.ts`), а лента и отметка
+ * прочитанного обновляют его сами. Виды и данные — строками: сервер новее
+ * клиента пришлёт вид, которого экран не знает, и лента не должна от этого
+ * падать.
  */
 
 const itemSchema = z.object({
@@ -28,7 +29,6 @@ export type NotificationFeed = z.infer<typeof feedSchema>;
 
 export interface NotificationsApi {
   feed(cursor: string | null): Promise<ApiResult<NotificationFeed>>;
-  unread(): Promise<ApiResult<{ unread: number }>>;
   read(upTo: string | null): Promise<ApiResult<{ unread: number }>>;
 }
 
@@ -36,7 +36,6 @@ export interface NotificationsApi {
 export function createNotificationsApi(request: ApiRequest = apiRequest): NotificationsApi {
   return {
     feed: (cursor) => request(`/api/v1/me/notifications${cursor === null ? "" : `?cursor=${encodeURIComponent(cursor)}`}`, feedSchema, { method: "GET" }),
-    unread: () => request("/api/v1/me/notifications/unread", unreadSchema, { method: "GET" }),
     read: (upTo) => request("/api/v1/me/notifications/read", unreadSchema, { method: "POST", body: upTo === null ? {} : { upTo } }),
   };
 }
@@ -45,16 +44,10 @@ function disabled(api: NotificationsApi | undefined): boolean {
   return api === undefined && useShell.getState().capabilities.auth === undefined;
 }
 
-export async function loadUnread(api?: NotificationsApi): Promise<void> {
-  if (disabled(api)) return;
-  const response = await (api ?? createNotificationsApi()).unread();
-  if (response.ok) useNotifications.setState({ unread: response.data.unread });
-}
-
 export async function loadFeed(cursor: string | null, api?: NotificationsApi): Promise<ApiResult<NotificationFeed>> {
   if (disabled(api)) return { ok: false, failure: "disabled" };
   const response = await (api ?? createNotificationsApi()).feed(cursor);
-  if (response.ok) useNotifications.setState({ unread: response.data.unread });
+  if (response.ok) useBadges.setState({ notifications: response.data.unread });
   return response;
 }
 
@@ -62,21 +55,7 @@ export async function loadFeed(cursor: string | null, api?: NotificationsApi): P
 export async function markRead(upTo: string | null, api?: NotificationsApi): Promise<void> {
   if (disabled(api)) return;
   const response = await (api ?? createNotificationsApi()).read(upTo);
-  if (response.ok) useNotifications.setState({ unread: response.data.unread });
-}
-
-let watching = false;
-
-/**
- * Число — и на возврате в приложение: подарок друга, пришедший, пока игра была
- * свёрнута, виден без перезапуска.
- */
-export function watchReturns(): void {
-  if (watching || typeof document === "undefined") return;
-  watching = true;
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void loadUnread();
-  });
+  if (response.ok) useBadges.setState({ notifications: response.data.unread });
 }
 
 /** Когда: свежее — «минут назад», давнее — датой. */

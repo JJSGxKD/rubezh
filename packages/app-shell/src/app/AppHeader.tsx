@@ -4,7 +4,7 @@ import { Avatar } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { t } from "../i18n";
 import { useNavigation } from "../state/navigation";
-import { useNotifications } from "../state/notifications";
+import { badgeText, useBadges } from "../state/badges";
 import { uiFeedback } from "../state/ui-feedback";
 import { useShell } from "../state/shell";
 import { useWallet } from "../state/wallet";
@@ -23,7 +23,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
   const user = useShell((state) => state.adapter.displayUser);
   const name = user?.displayName ?? t("profile.guest");
   const balances = useWallet((state) => state.balances);
-  const unread = useNotifications((state) => state.unread);
+  const unread = useBadges((state) => state.notifications);
   const withAccount = useShell((state) => state.capabilities.auth !== undefined);
 
   return (
@@ -58,7 +58,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
             <Bell size={22} />
             {unread > 0 ? (
               <span className="absolute -top-1 -right-1 inline-flex min-w-5 items-center justify-center rounded-pill bg-accent px-1 font-display text-xs font-bold tabular-nums text-on-accent">
-                {unread > 9 ? "9+" : unread}
+                {badgeText(unread)}
               </span>
             ) : null}
           </button>

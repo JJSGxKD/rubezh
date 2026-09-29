@@ -45,6 +45,7 @@
 | Оружие: поведение, числа по уровням, что даётся на старте | `content/weapons.ts` → `WEAPONS` | golden-прогон |
 | Ступени врагов: когда открываются, вес в потоке, множители | `content/stages.ts` → `ENEMY_STAGES` | golden-прогон |
 | Пассивки и их категории, слоты оружия и каждой категории пассивок, кривая опыта | `content/upgrades.ts` → `PASSIVES` (`category`), `LOADOUT_LIMITS`, `LEVEL_CURVE` | golden-прогон |
+| Знаки меню: что считается новым предметом, подарками и заявками; лимит запросов | `backend/api/src/modules/badges/badges.service.ts`, `badges.controller.ts` → `LIMIT`; какие вкладки показывают знак — `app-shell/src/app/App.tsx` | тест модуля |
 | Уведомления: виды и их данные, что считать редкой добычей, срок хранения, темп чистки | `backend/api/src/modules/notifications/notification-kinds.ts` → `NOTIFICATION_KINDS`, `RARE_LOOT_RARITIES`, `NOTIFICATION_RETENTION_DAYS`; `notifications-cleaner.ts` → `TICK_MS`, `BATCH`, `MAX_BATCHES`; лимит запросов — `notifications.controller.ts` → `LIMIT` | тест модуля |
 | Что открывает уровень аккаунта: оружие, навыки, слоты по уровням | `content/unlocks.ts` → `ACCOUNT_UNLOCKS`; потолок слотов — `LOADOUT_LIMITS` | тест контента; golden идёт на «всё открыто» |
 | Уровни сложности: множители здоровья и урона врагов, темпа спавна и потолка живых; какой открыт по умолчанию | `content/difficulty.ts` → `DIFFICULTIES`, `DEFAULT_DIFFICULTY_ID` | отпечаток контента; эталоны — нет: они идут на «Лёгкой» |

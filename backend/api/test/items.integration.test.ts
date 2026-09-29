@@ -332,6 +332,26 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
       expect((await items.inventory(id)).items).toHaveLength(5);
     });
 
+    it("новое — выпавшее, пока игрок не открыл лист; собранное своими руками — не новое", async () => {
+      const id = await account();
+      const other = await account();
+      const ids = [await give(id, "weapon", "common"), await give(id, "belt", "common"), await give(id, "boots", "common")];
+      expect(await items.unseenCount(id)).toBe(3);
+      expect((await items.inventory(id)).items.every((item) => item.isNew)).toBe(true);
+
+      // Чужой предмет и повтор отметки ничего не меняют.
+      expect(await items.markSeen(other, [ids[0] ?? ""])).toBe(0);
+      expect(await items.markSeen(id, [ids[0] ?? "", ids[0] ?? ""])).toBe(1);
+      expect(await items.markSeen(id, [ids[0] ?? ""])).toBe(0);
+      expect(await items.unseenCount(id)).toBe(2);
+
+      await fund(id, "coins", 1_000);
+      await fund(id, "shard_common", 100);
+      const merged = await items.merge(id, ids, randomUUID());
+      expect(merged.isNew).toBe(false);
+      expect(await items.unseenCount(id)).toBe(0);
+    });
+
     it("легендарные не собираются — выше некуда", async () => {
       const id = await account();
       const ids = [await give(id, "weapon", "legendary"), await give(id, "belt", "legendary"), await give(id, "boots", "legendary")];

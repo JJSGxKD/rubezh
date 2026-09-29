@@ -56,6 +56,8 @@ export interface ItemRow {
   equipped: boolean;
   source: string;
   createdAt: Date;
+  /** `null` — игрок ещё не открывал лист предмета: он новый */
+  seenAt: Date | null;
 }
 
 /** Что сделать с предметом — решает сервис по заблокированной строке. */
@@ -77,6 +79,8 @@ export interface NewItem {
   seed: number;
   rolls: ItemRolls;
   source: string;
+  /** сразу просмотрен: результат действия самого игрока, а не добыча */
+  seen?: boolean;
   /** сразу разобрать: инвентарь полон, а выпавшее не должно пропасть */
   salvageTo?: { resource: WalletResource; amount: number };
 }
@@ -114,6 +118,10 @@ export interface ItemsRepository {
     at: Date,
     decide: (account: AccountView) => NewItem | null,
   ): Promise<Outcome | null>;
+  /** отметить свои живые предметы просмотренными; сколько отмечено впервые */
+  markSeen(accountId: string, itemIds: readonly string[], at: Date): Promise<number>;
+  /** сколько живых предметов игрок ещё не открывал */
+  unseenCount(accountId: string): Promise<number>;
   /** `null` — какого-то из предметов нет */
   merge(
     accountId: string,
@@ -140,6 +148,7 @@ interface RawItem {
   equipped: boolean;
   source: string;
   created_at: Date;
+  seen_at: Date | null;
 }
 
 /** Строка из базы — через схему: броски — JSON, а JSON из базы разбирается, а не приводится. */
@@ -155,6 +164,7 @@ function toRow(raw: RawItem): ItemRow {
     equipped: raw.equipped,
     source: raw.source,
     createdAt: raw.created_at,
+    seenAt: raw.seen_at,
   };
 }
 
@@ -171,11 +181,21 @@ export class PrismaItemsRepository implements ItemsRepository {
 
   async alive(accountId: string): Promise<ItemRow[]> {
     const rows = await this.prisma.$queryRaw<RawItem[]>`
-      SELECT item_id, account_id, slot, rarity, level, seed, rolls, equipped, source, created_at
+      SELECT item_id, account_id, slot, rarity, level, seed, rolls, equipped, source, created_at, seen_at
       FROM item WHERE account_id = ${accountId}::uuid AND removed_at IS NULL
       ORDER BY created_at DESC
     `;
     return rows.map(toRow);
+  }
+
+  async markSeen(accountId: string, itemIds: readonly string[], at: Date): Promise<number> {
+    if (itemIds.length === 0) return 0;
+    const { count } = await this.prisma.item.updateMany({ where: { accountId, itemId: { in: [...itemIds] }, removedAt: null, seenAt: null }, data: { seenAt: at } });
+    return count;
+  }
+
+  async unseenCount(accountId: string): Promise<number> {
+    return await this.prisma.item.count({ where: { accountId, removedAt: null, seenAt: null } });
   }
 
   async accountLevel(accountId: string): Promise<number> {
@@ -194,7 +214,7 @@ export class PrismaItemsRepository implements ItemsRepository {
   ): Promise<Outcome | null> {
     return await this.transaction(accountId, key, async (tx, account) => {
       const [raw] = await tx.$queryRaw<RawItem[]>`
-        SELECT item_id, account_id, slot, rarity, level, seed, rolls, equipped, source, created_at
+        SELECT item_id, account_id, slot, rarity, level, seed, rolls, equipped, source, created_at, seen_at
         FROM item WHERE item_id = ${itemId}::uuid AND account_id = ${accountId}::uuid AND removed_at IS NULL
       `;
       if (raw === undefined) return null;
@@ -308,7 +328,7 @@ export class PrismaItemsRepository implements ItemsRepository {
   ): Promise<Outcome | null> {
     return await this.transaction(accountId, key, async (tx, account) => {
       const raws = await tx.$queryRaw<RawItem[]>`
-        SELECT item_id, account_id, slot, rarity, level, seed, rolls, equipped, source, created_at
+        SELECT item_id, account_id, slot, rarity, level, seed, rolls, equipped, source, created_at, seen_at
         FROM item WHERE account_id = ${accountId}::uuid AND removed_at IS NULL AND item_id = ANY(${[...itemIds]}::uuid[])
       `;
       if (raws.length !== new Set(itemIds).size) return null;
@@ -403,10 +423,11 @@ export class PrismaItemsRepository implements ItemsRepository {
     at: Date,
   ): Promise<ItemRow> {
     const itemId = randomUUID();
+    const seenAt = next.seen === true ? at : null;
     await tx.$executeRaw`
-      INSERT INTO item (item_id, account_id, slot, rarity, level, seed, rolls, equipped, source, created_at, updated_at)
+      INSERT INTO item (item_id, account_id, slot, rarity, level, seed, rolls, equipped, source, created_at, updated_at, seen_at)
       VALUES (${itemId}::uuid, ${accountId}::uuid, ${next.slot}::"ItemSlot", ${next.rarity}::"ItemRarity", ${next.level},
-              ${BigInt(next.seed)}, ${JSON.stringify(next.rolls)}::jsonb, false, ${next.source}, ${at}, ${at})
+              ${BigInt(next.seed)}, ${JSON.stringify(next.rolls)}::jsonb, false, ${next.source}, ${at}, ${at}, ${seenAt})
     `;
     return {
       itemId,
@@ -419,6 +440,7 @@ export class PrismaItemsRepository implements ItemsRepository {
       equipped: false,
       source: next.source,
       createdAt: at,
+      seenAt,
     };
   }
 

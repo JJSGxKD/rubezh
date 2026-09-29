@@ -12,6 +12,7 @@ import {
   useNavigation,
   type ScreenId,
 } from "../state/navigation";
+import { badgeText, useBadges } from "../state/badges";
 import { useMeta } from "../state/meta";
 import { usePlatform } from "../state/platform";
 import { useRun } from "../state/run";
@@ -62,6 +63,7 @@ export function App(): ReactNode {
   const expanded = usePlatform((state) => state.viewport.expanded);
   const install = useInstall();
   const [menuOpen, setMenuOpen] = useState(false);
+  const arsenalCount = useBadges((state) => state.arsenal);
 
   usePlatformButtons(stack, screen);
 
@@ -72,6 +74,10 @@ export function App(): ReactNode {
   if (!install.accepted) return <FirstRunScreen onAccept={() => void acceptAndPlay()} />;
 
   const tab = activeTab(stack);
+  const arsenalBadge = badgeText(arsenalCount);
+  // Знак — только с полезной нагрузкой (Р50). У друзей его пока нет: экран
+  // друзей ещё заглушка (О5), и число звало бы туда, где с ним ничего не сделать.
+  const tabs = TABS.map((item) => (item.id === "arsenal" && arsenalBadge !== undefined ? { ...item, badge: arsenalBadge } : item));
   // Забег занимает весь экран: панель разделов поверх канвы отнимала бы
   // высоту у мира и попадала под палец.
   const showTabs = tab !== null && screen !== "run" && stack.length === 1;
@@ -115,7 +121,7 @@ export function App(): ReactNode {
       {expanded ? null : <CompactOverlay onExpand={() => useShell.getState().adapter.ui.expand()} />}
       {showTabs ? (
         <TabBar
-          items={TABS}
+          items={tabs}
           activeId={tab}
           onSelect={(id) => useNavigation.getState().resetTo(id as ScreenId)}
         />

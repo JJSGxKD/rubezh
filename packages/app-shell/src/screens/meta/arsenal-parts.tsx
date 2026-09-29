@@ -141,7 +141,7 @@ export function ItemTile(props: { item: ItemView; selected: boolean; dimmed: boo
   return (
     <button
       type="button"
-      aria-label={itemLabel(item)}
+      aria-label={item.isNew === true ? t("arsenal.item.new", { item: itemLabel(item) }) : itemLabel(item)}
       aria-pressed={props.selected}
       onClick={() => props.onPress(item)}
       className={[
@@ -154,6 +154,8 @@ export function ItemTile(props: { item: ItemView; selected: boolean; dimmed: boo
       {slotIcon(item.slot, 22)}
       <span className="absolute right-1 bottom-0.5 font-display text-xs font-bold tabular-nums text-text">{item.level}</span>
       {props.selected ? <span aria-hidden="true" className="absolute top-1 left-1 size-2 rounded-full bg-accent" /> : null}
+      {/* Новый — лист ещё не открывали: так видно, откуда число на вкладке (Р50). */}
+      {item.isNew === true ? <span aria-hidden="true" className="absolute top-1 right-1 size-2 rounded-full bg-danger" /> : null}
     </button>
   );
 }

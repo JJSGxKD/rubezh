@@ -37,6 +37,7 @@ import { SettingsModule } from "./modules/settings/settings.module.js";
 import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-login.module.js";
 import { AccountSettingsModule } from "./modules/account-settings/account-settings.module.js";
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
+import { BadgesModule } from "./modules/badges/badges.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -56,7 +57,8 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
  * под своей cookie-сессией (там же, WP17), выключена по умолчанию; settings —
  * настройки без релиза: база поверх окружения (там же, WP24); account-settings
  * — настройки игрока, общие для его устройств (там же, WP29); notifications —
- * лента уведомлений игрока, в которую пишут доменные модули (там же, WP28).
+ * лента уведомлений игрока, в которую пишут доменные модули, badges — знаки
+ * меню одним ответом (там же, WP28).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -93,6 +95,7 @@ export const APP_MODULES = [
   AdminModule,
   TelegramPanelLoginModule,
   FriendsModule,
+  BadgesModule,
   ReferralsModule,
   LinksModule,
   FlagsModule,

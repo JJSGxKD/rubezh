@@ -4,7 +4,7 @@ import { RateLimitedError, ValidationError } from "../../common/domain-error.js"
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
-import { itemIdSchema, itemMergeSchema, itemOperationSchema, itemRerollSchema } from "./dto/items.dto.js";
+import { itemIdSchema, itemMergeSchema, itemOperationSchema, itemRerollSchema, itemSeenSchema } from "./dto/items.dto.js";
 import type { LoadoutSnapshot } from "./item-loadout.js";
 import type { InventoryView, ItemView } from "./item-views.js";
 import { ITEM_LIMITS } from "./items-limits.js";
@@ -41,6 +41,14 @@ export class ItemsController {
     const accountId = await this.writer(request);
     const merge = parse(itemMergeSchema, body, "Некорректное объединение");
     return { data: await this.items.merge(accountId, merge.itemIds, merge.idempotencyKey) };
+  }
+
+  /** Лист предмета открыт — он больше не новый (Р50). */
+  @Post("seen")
+  async seen(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { marked: number } }> {
+    const accountId = await this.reader(request);
+    const seen = parse(itemSeenSchema, body, "Некорректные предметы");
+    return { data: { marked: await this.items.markSeen(accountId, seen.itemIds) } };
   }
 
   @Post(":itemId/equip")
