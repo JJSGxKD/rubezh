@@ -32,7 +32,7 @@ export const DEFAULT_TIMEOUT_MS = 15_000;
  * - `offline` — сеть или таймаут: API не запущен или не ответил;
  * - `unauthorized` — сессии нет или она истекла: нужен вход;
  * - `forbidden` — нет права или вход в панель закрыт;
- * - `disabled` — панель выключена на сервере (`ADMIN_PANEL_ENABLED`);
+ * - `disabled` — на сервере нет входа (`JWT_ACCESS_SECRET`), а с ним и панели;
  * - `not_found` — нет такого игрока или отчёта;
  * - `rate_limited` — слишком часто;
  * - `rejected` — сервер отверг данные формы;
@@ -68,7 +68,7 @@ const FALLBACK_MESSAGES: Record<ApiFailure, string> = {
   offline: "Нет связи с API — запущен ли бэкенд?",
   unauthorized: "Сессия истекла — войдите снова",
   forbidden: "Нет права на это действие",
-  disabled: "Панель выключена на сервере (ADMIN_PANEL_ENABLED)",
+  disabled: "Панель выключена на сервере: не задан вход (JWT_ACCESS_SECRET)",
   not_found: "Не найдено",
   rate_limited: "Слишком часто — подождите минуту",
   rejected: "Сервер отклонил данные",

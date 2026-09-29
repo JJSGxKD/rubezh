@@ -1,4 +1,5 @@
 import { Global, Module } from "@nestjs/common";
+import { FeatureSwitches } from "./feature-switches.js";
 import { NotifyTargets } from "./notify-targets.js";
 import { PrismaSettingsRepository, SETTINGS_REPOSITORY } from "./settings.repository.js";
 import { SETTINGS_READER, SettingsService } from "./settings.service.js";
@@ -18,7 +19,8 @@ import { SETTINGS_READER, SettingsService } from "./settings.service.js";
     { provide: SETTINGS_READER, useExisting: SettingsService },
     { provide: SETTINGS_REPOSITORY, useClass: PrismaSettingsRepository },
     NotifyTargets,
+    FeatureSwitches,
   ],
-  exports: [SettingsService, SETTINGS_READER, NotifyTargets],
+  exports: [SettingsService, SETTINGS_READER, NotifyTargets, FeatureSwitches],
 })
 export class SettingsModule {}

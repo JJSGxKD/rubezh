@@ -10,7 +10,7 @@ import { FxService } from "../src/modules/fx/fx.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { targetsOf } from "./helpers/notify-targets.js";
+import { switchesOf, targetsOf } from "./helpers/notify-targets.js";
 
 /**
  * Модуль курсов бэкенда (docs/35-stage4-plan.md, WP9): проход под локом,
@@ -60,7 +60,7 @@ describe("проход курсов по расписанию", () => {
   it("идёт под локом и снимает только свой лок", async () => {
     const redis = new FakeRedis();
     const store = new MemoryRateStore();
-    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), store, redis as never, new FxHooks());
+    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), store, redis as never, new FxHooks(), switchesOf(config({ FX_ENABLED: "true" })));
 
     const report = await refresher.tick([gramSource("1.43")], NOW);
     expect(report?.accepted).toEqual(["GRAM"]);
@@ -76,7 +76,7 @@ describe("проход курсов по расписанию", () => {
 
   it("недоступный Redis — пропуск прохода, а не падение", async () => {
     const broken = { set: async () => Promise.reject(new Error("ECONNREFUSED")), eval: async () => 0 };
-    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), new MemoryRateStore(), broken as never, new FxHooks());
+    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), new MemoryRateStore(), broken as never, new FxHooks(), switchesOf(config({ FX_ENABLED: "true" })));
     await expect(refresher.tick([gramSource("1.43")], NOW)).resolves.toBeNull();
   });
 
@@ -85,7 +85,7 @@ describe("проход курсов по расписанию", () => {
     const alerts: FxAlert[] = [];
     hooks.onAlert("test", async (alert) => void alerts.push(alert));
     const store = new MemoryRateStore();
-    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), store, new FakeRedis() as never, hooks);
+    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), store, new FakeRedis() as never, hooks, switchesOf(config({ FX_ENABLED: "true" })));
 
     await refresher.tick([gramSource("1.43")], NOW);
     await refresher.tick([gramSource("0.50")], new Date(NOW.getTime() + 120_000));
@@ -105,7 +105,8 @@ describe("источники из окружения", () => {
   });
 
   it("опрос выключен по умолчанию: включённый ходит в интернет", () => {
-    expect(config().fx.enabled).toBe(false);
+    expect(switchesOf(config()).fxPolling()).toBe(false);
+    expect(switchesOf(config({ FX_ENABLED: "true" })).fxPolling()).toBe(true);
     expect(fxSources(config()).map((source) => source.id)).toEqual(["cbr", "ecb", "erapi", "coingecko", "tonapi", "binance"]);
   });
 });
@@ -113,7 +114,7 @@ describe("источники из окружения", () => {
 describe("заданные курсы", () => {
   function setup() {
     const roles = new MemoryRolesRepository();
-    const service = new FxService(new MemoryRateStore(), config(), new RolesService(config(), roles, new MemoryAccountRepository()));
+    const service = new FxService(new MemoryRateStore(), config(), new RolesService(config(), roles, new MemoryAccountRepository()), switchesOf(config()));
     return { service, roles };
   }
   const owner: AccountRef = { accountId: randomUUID(), platform: "telegram", platformUserId: OWNER_ID };
@@ -139,7 +140,7 @@ describe("заданные курсы", () => {
 
   it("цена звезды в рублях показывается и в долларах по курсу рубля, без курса — честное «нет»", async () => {
     const store = new MemoryRateStore();
-    const service = new FxService(store, config(), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()));
+    const service = new FxService(store, config(), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()));
     const rub = { ...input, purpose: "price" as const, price: "1.72", quote: "RUB" as const };
     expect((await service.setManual(owner, rub, NOW)).usdPerUnit).toBeNull();
 
@@ -152,7 +153,7 @@ describe("заданные курсы", () => {
 
 describe("алерты курсов в чат команды", () => {
   const chatConfig = () => config({ FX_ENABLED: "true", ADMIN_CHAT_ID: "-1001234567890", TELEGRAM_BOT_TOKEN: "123:TEST" });
-  const notifierOf = (cfg: AppConfig, api: FxAlertApi) => new FxAlertNotifier(cfg, targetsOf(cfg), new FxHooks(), new FakeRedis() as never, api);
+  const notifierOf = (cfg: AppConfig, api: FxAlertApi) => new FxAlertNotifier(cfg, targetsOf(cfg), switchesOf(cfg), new FxHooks(), new FakeRedis() as never, api);
 
   it("одна причина — один алерт за окно тишины", async () => {
     const sent: string[] = [];

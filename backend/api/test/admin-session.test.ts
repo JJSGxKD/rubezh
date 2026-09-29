@@ -23,7 +23,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
  */
 
 const NOW = Date.UTC(2026, 8, 26, 10);
-const DEV_ENV = { ...AUTH_ENV, NODE_ENV: "development", AUTH_DEV_LOGIN: "true", ADMIN_PANEL_ENABLED: "true", ADMIN_SESSION_TTL_MIN: "60" } as const;
+const DEV_ENV = { ...AUTH_ENV, NODE_ENV: "development", AUTH_DEV_LOGIN: "true", ADMIN_SESSION_TTL_MIN: "60" } as const;
 
 function config(patch: Record<string, string> = {}): AppConfig {
   return loadAppConfig({ ...DEV_ENV, ...patch } as NodeJS.ProcessEnv);
@@ -67,8 +67,10 @@ describe("cookie", () => {
 });
 
 describe("конфигурация панели", () => {
-  it("включённая панель требует авторизации, срок сессии — в пределах", () => {
-    expect(() => loadAppConfig({ NODE_ENV: "test", ADMIN_PANEL_ENABLED: "true" } as NodeJS.ProcessEnv)).toThrow(/AUTH_ENABLED/);
+  it("панель работает вместе со входом, старый флаг против входа роняет старт, срок сессии — в пределах", () => {
+    expect(() => loadAppConfig({ NODE_ENV: "test", ADMIN_PANEL_ENABLED: "true" } as NodeJS.ProcessEnv)).toThrow(/ADMIN_PANEL_ENABLED убрана/);
+    expect(() => config({ ADMIN_PANEL_ENABLED: "false" })).toThrow(/ADMIN_PANEL_ENABLED убрана/);
+    expect(config({ ADMIN_PANEL_ENABLED: "true" }).admin.enabled).toBe(true);
     expect(() => config({ ADMIN_SESSION_TTL_MIN: "1" })).toThrow();
     expect(config().admin).toEqual({ enabled: true, sessionTtlSec: 3600 });
     expect(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv).admin).toEqual({ enabled: false, sessionTtlSec: 480 * 60 });
@@ -76,8 +78,8 @@ describe("конфигурация панели", () => {
 });
 
 describe("вход разработчика", () => {
-  it("выключенная панель отвечает 404 — и на вход, и на проверку сессии", async () => {
-    const { service } = setup({ ADMIN_PANEL_ENABLED: "false" });
+  it("без входа панель отвечает 404 — и на вход, и на проверку сессии", async () => {
+    const { service } = setup({ JWT_ACCESS_SECRET: "", AUTH_DEV_LOGIN: "false" });
     await expect(service.loginAsDeveloper("dev-1:Ира", NOW)).rejects.toBeInstanceOf(DisabledError);
     await expect(service.authenticate("что-то", NOW)).rejects.toBeInstanceOf(DisabledError);
   });

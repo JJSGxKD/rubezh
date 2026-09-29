@@ -41,8 +41,8 @@ import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.sto
  * docs/29-admin-panel.md §4): `/api/v1/admin/*` под своей cookie-сессией и
  * гвардом прав. Модуль ничего не хранит сам, кроме сессий: карточка игрока,
  * курсы, роли, отчёты и выгрузки — экспортированные сервисы и репозитории
- * соседних модулей (docs/36-parallel-work.md §2). Выключен по умолчанию —
- * `ADMIN_PANEL_ENABLED`; выключенный отвечает 404.
+ * соседних модулей (docs/36-parallel-work.md §2). Работает вместе со входом
+ * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
   imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule],

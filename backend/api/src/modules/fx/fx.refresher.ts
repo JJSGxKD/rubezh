@@ -15,6 +15,7 @@ import {
 } from "@bh/fx";
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import { REDIS } from "../../infra/redis.js";
 import { FxHooks } from "./fx-hooks.js";
 import { FX_STORE } from "./fx.store.js";
@@ -65,11 +66,16 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(FX_STORE) private readonly store: RateStore,
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
     private readonly hooks: FxHooks,
+    private readonly switches: FeatureSwitches,
   ) {}
 
+  /**
+   * Таймер идёт всегда, а опрос включают и выключают на ходу из панели:
+   * выключенный проход заканчивается, не тронув ни лок, ни источники.
+   */
   onApplicationBootstrap(): void {
-    if (!this.config.fx.enabled) return;
     this.timer = setInterval(() => void this.tick(), TICK_MS);
+    this.timer.unref();
     void this.tick();
   }
 
@@ -79,7 +85,7 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
 
   /** Один проход; `null` — не запускался: идёт предыдущий, лок у другой реплики или Redis недоступен. */
   async tick(sources: readonly RateSource[] = fxSources(this.config), now = new Date()): Promise<RefreshReport | null> {
-    if (this.running) return null;
+    if (this.running || !this.switches.fxPolling()) return null;
     this.running = true;
     try {
       const token = randomUUID();

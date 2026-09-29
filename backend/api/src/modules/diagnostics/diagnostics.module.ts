@@ -6,7 +6,8 @@ import { DiagnosticsService } from "./diagnostics.service.js";
 
 /**
  * Отчёты диагностики в Postgres (docs/28-diagnostics.md §5): стресс-тест, а
- * позже и запись забега. Выключен по умолчанию — `DIAGNOSTICS_INGEST_ENABLED`.
+ * позже и запись забега. Выключен по умолчанию; выключатель — настройка
+ * `ingest.reports` (запасное значение — `DIAGNOSTICS_INGEST_ENABLED`).
  * Кто хочет знать о новых отчётах, подписывается через `DiagnosticsHooks`.
  */
 @Module({

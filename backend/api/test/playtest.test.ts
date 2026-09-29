@@ -32,7 +32,7 @@ function account(platformUserId = "555"): AccountRef {
 
 describe("конфигурация плейтеста", () => {
   it("без авторизации не поднимается: забеги и запуски приходят под аккаунтом", () => {
-    expect(() => loadAppConfig({ NODE_ENV: "test", PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: "1:T" })).toThrow(/AUTH_ENABLED/);
+    expect(() => loadAppConfig({ NODE_ENV: "test", PLAYTEST_ENABLED: "true", TELEGRAM_BOT_TOKEN: "1:T" })).toThrow(/JWT_ACCESS_SECRET/);
   });
 
   it("старое имя входа разработчика называет новое, а строка false из старого .env не мешает", () => {

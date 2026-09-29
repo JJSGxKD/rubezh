@@ -67,7 +67,7 @@ describe("панель по HTTP", () => {
     roles = new MemoryRolesRepository();
     store = new MemoryAdminSessionStore();
     funnel = new FakeFunnel();
-    const config = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ADMIN_PANEL_ENABLED: "true", ...env } as NodeJS.ProcessEnv);
+    const config = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ...env } as NodeJS.ProcessEnv);
 
     @Module({
       controllers: [AdminSessionController, AdminRolesController, AdminReviewController],
@@ -115,8 +115,8 @@ describe("панель по HTTP", () => {
     return `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(line ?? "")?.[1] ?? ""}`;
   }
 
-  it("выключенная панель отвечает 404 на вход и на сессию", async () => {
-    const server = await start({ ADMIN_PANEL_ENABLED: "false" });
+  it("без входа панель отвечает 404 на вход и на сессию", async () => {
+    const server = await start({ JWT_ACCESS_SECRET: "", AUTH_DEV_LOGIN: "false" });
     expect((await server.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser: "dev-1:Ира" } })).statusCode).toBe(404);
     expect((await server.inject({ method: "GET", url: "/api/v1/admin/session" })).statusCode).toBe(404);
   });

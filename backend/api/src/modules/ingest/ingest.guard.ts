@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Inject, Injectable, SetMetadata } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import {
   DisabledError,
   ForbiddenError,
@@ -43,6 +44,7 @@ interface IngestRequest {
 export class IngestGuard implements CanActivate {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly switches: FeatureSwitches,
     private readonly reflector: Reflector,
     private readonly limiter: RateLimiter,
     private readonly launches: LaunchVerifiers,
@@ -70,11 +72,11 @@ export class IngestGuard implements CanActivate {
   }
 
   private enabled(kind: IngestKind): boolean {
-    if (kind === "events") return this.config.ingest.eventsEnabled;
+    if (kind === "events") return this.switches.eventsIngest();
     // Отзывы принимаются, пока есть куда их писать: своего выключателя у формы
     // нет — она и появилась, чтобы игроку было куда сказать.
     if (kind === "feedback") return this.config.databaseUrl !== "";
-    return this.config.ingest.reportsEnabled;
+    return this.switches.reportsIngest();
   }
 
   /**

@@ -173,7 +173,7 @@
 | Курсы: источники фиата — ЦБ, ЕЦБ, ExchangeRate-API: адреса, метки валют, интервал опроса | `packages/fx/src/sources/fiat.ts` → `create*Source`, `*_CURRENCIES` | участник 1 |
 | Курсы: источники крипты — CoinGecko, TON API, Binance: метки (Gram — `the-open-network`, `ton`, `GRAMUSDT`), тарифы CoinGecko по ключу | `packages/fx/src/sources/crypto.ts` → `COINGECKO_TARIFFS`, `*_CURRENCIES` | участник 1 |
 | Курсы: срок запроса к источнику и как часто неизменный курс пишется в историю | `packages/fx/src/policy.ts` → `SOURCE_TIMEOUT_MS`, `HISTORY_REPEAT_MS` | участник 1 |
-| Курсы: опрос источников включён — `FX_ENABLED`; ключи CoinGecko — `FX_COINGECKO_DEMO_KEY`, `FX_COINGECKO_PRO_KEY`, необязательные секреты | `.env`, схема — `backend/api/src/config/app-config.ts` | участник 1 |
+| Курсы: опрос источников включён — панель → «Настройки» (`fx.polling`), запасное — `FX_ENABLED`; ключи CoinGecko — `FX_COINGECKO_DEMO_KEY`, `FX_COINGECKO_PRO_KEY`, необязательные секреты | `.env`, схема — `backend/api/src/config/app-config.ts` | участник 1 |
 | Курсы: тик прохода, срок распределённого лока | `backend/api/src/modules/fx/fx.refresher.ts` → `TICK_MS`, `LOCK_TTL_MS` | участник 1 |
 | Курсы: окно тишины алертов в чат команды | `backend/api/src/modules/admin-notify/fx-alert-notifier.ts` → `QUIET_SEC` | участник 1 |
 | Цены: правило округления цены по валюте — звёзды целые, рубли на «…9» и «…99», доллары и евро на .99, Gram и USDT до сотых; всегда вверх | `packages/fx/src/pricing/rounding.ts` → `PRICE_ROUNDING` | участник 1 |
@@ -274,7 +274,7 @@
 | Порт сервиса | **только** карта портов `20-env-and-ports.md` §2, дальше переменная |
 | Конфигурация бэкенда и её проверка | `backend/api/src/config/app-config.ts` — единственное место, где читается `process.env` |
 | HTTP-приложение бэкенда: лимит тела запроса, префикс API, CORS, фильтр ошибок | `backend/api/src/http-app.ts` → `BODY_LIMIT_BYTES`, `createHttpApp` |
-| Панель: включена ли серверная часть, срок cookie-сессии | `.env` → `ADMIN_PANEL_ENABLED`, `ADMIN_SESSION_TTL_MIN` (`20-env-and-ports.md` §3, группа 5) |
+| Панель: срок cookie-сессии; работает она вместе со входом, своего выключателя нет | `.env` → `ADMIN_SESSION_TTL_MIN` (`20-env-and-ports.md` §3, группа 5) |
 | Панель: имя и путь cookie, заголовок против подделки запроса | `backend/api/src/modules/admin/admin-cookie.ts` → `ADMIN_SESSION_COOKIE`, `ADMIN_COOKIE_PATH`, `ADMIN_CSRF_HEADER`, `ADMIN_CSRF_VALUE` |
 | Панель: лимиты частоты входа, действий, выгрузок и теста рассылки себе | `backend/api/src/modules/admin/admin-limits.ts` → `ADMIN_LIMITS` |
 | Рассылки: порог аудитории для второго ключа, «не писать получавшим за N дней» по умолчанию, отсрочек до отказа, длина пачки, срок захвата | `backend/api/src/modules/broadcasts/broadcast-rules.ts` → `BROADCAST_RULES` |
@@ -331,23 +331,22 @@
 | `RUNS_MAX_KILLS_PER_SEC`, `RUNS_MAX_LEVELS_PER_MIN` | пороги антифрода забегов фазы 1: выше — вердикт `suspicious`, забег не в рейтинге. Умолчания мягкие, боевые — только в окружении прода (`34-stage3-plan.md`, Р7) |
 | `RUNS_KNOWN_CONTENT_HASHES` | отпечатки контента выпущенных сборок; незнакомый — `suspicious`. Пусто — проверка выключена |
 | `RUNS_WALL_CLOCK_TOLERANCE_SEC`, `RUNS_START_MAX_DELAY_SEC` | запас на время забега сверх прошедшего по часам сервера и предел опоздания старта, которому ещё верят |
-| `PAYMENTS_ENABLED` | оплата второго шанса за Stars; без `AUTH_ENABLED` и чтения обновлений бота бэкенд не стартует — оплату подтверждает обновление от Telegram |
+| `PAYMENTS_ENABLED` | запасное значение стоп-крана оплаты `payments.stars` (панель сильнее). Оплата возможна при входе и чтении обновлений бота и тогда включена, пока её не выключили; `true` без них бэкенд не запускает |
 | `PAYMENTS_TEST_MODE` | тестовая оплата: настоящая цена в окне оплаты, списывается одна звезда и тут же возвращается, продолжение засчитано. Только `NODE_ENV=development`, иначе бэкенд не стартует (`34-stage3-plan.md`, Р14) |
 | `CONTINUE_STARS_PER_MINUTE`, `CONTINUE_MAX_STARS` | цена второго шанса: звёзд за каждую начатую минуту забега и потолок цены. Рабочие значения до решения геймдизайнера (`34-stage3-plan.md`, О1) |
-| `AUTH_ENABLED` | вход игроков по аккаунтам; без `JWT_ACCESS_SECRET`, токена бота и `DATABASE_URL` бэкенд не стартует, выключённые эндпоинты отвечают 404 |
-| `JWT_ACCESS_SECRET` | секрет подписи токена доступа; смена разлогинивает всех |
+| `JWT_ACCESS_SECRET` | секрет подписи токена доступа — он же включает вход и панель (Р53): задан — работают, и тогда без токена бота и `DATABASE_URL` бэкенд не стартует; пуст — эндпоинты отвечают 404. Смена разлогинивает всех. Старые `AUTH_ENABLED` и `ADMIN_PANEL_ENABLED`: согласные с ключом принимаются, спорящие роняют старт |
 | `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_MAX_SESSIONS` | сколько живут токены и сколько устройств помнит аккаунт |
 | `AUTH_INIT_DATA_MAX_AGE_SEC` | окно свежести подписи запуска при входе; потолок в час зашит в схему |
-| `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER` | вход разработчика без Telegram по имени `dev-<id>:Имя`: обычный аккаунт с ролью владельца. Требует `AUTH_ENABLED`, только `NODE_ENV=development`; имя передаёт только dev-сервер. Прежний `PLAYTEST_DEV_AUTH="true"` останавливает запуск и называет новое имя |
-| `PLAYTEST_ENABLED` | сводка плейтеста, отчёты о запуске и стресс-тест для всех. Забеги и рейтинг — модуль `runs` под авторизацией, поэтому без `AUTH_ENABLED` бэкенд с включённым плейтестом не стартует |
+| `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER` | вход разработчика без Telegram по имени `dev-<id>:Имя`: обычный аккаунт с ролью владельца. Требует входа (`JWT_ACCESS_SECRET`), только `NODE_ENV=development`; имя передаёт только dev-сервер. Прежний `PLAYTEST_DEV_AUTH="true"` останавливает запуск и называет новое имя |
+| `PLAYTEST_ENABLED` | сводка плейтеста, отчёты о запуске и стресс-тест для всех. Забеги и рейтинг — модуль `runs` под авторизацией, поэтому без входа (`JWT_ACCESS_SECRET`) бэкенд с включённым плейтестом не стартует |
 | `PLAYTEST_DATA_TTL_DAYS` | сколько живут счётчики сводки плейтеста в Redis |
-| `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED` | приёмники событий и отчётов; без `DATABASE_URL` бэкенд не стартует |
+| `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED` | запасные значения выключателей приёма `ingest.events` и `ingest.reports` (панель сильнее); `true` без `DATABASE_URL` бэкенд не запускает |
 | `TRUST_PROXY_HOPS` | сколько прокси перед API; за Caddy — `1`, иначе лимит по IP посчитает всех тестеров одним адресом |
 | `TELEGRAM_BOT_UPDATES` | откуда бот берёт обновления: `off` — молчит, `polling` — читает сам, `webhook` — Telegram шлёт их на `PUBLIC_API_URL`; регистрация — `pnpm --filter backend-api bot:webhook` |
 | `TELEGRAM_WEBHOOK_SECRET` | секретный токен вебхука; без него режим `webhook` не стартует |
 | `PUBLIC_WEB_URL` | адрес Mini App; HTTPS — кнопка «Играть» под приветствием бота |
 | `EXPORT_PSEUDONYM_KEY` | ключ псевдонимов Telegram ID в выгрузках; без него выгрузка невозможна, смена меняет все псевдонимы |
-| `DATA_EXPORT_BOT_ENABLED` | выгрузка через бота; без ключа, базы и чтения обновлений бэкенд не стартует |
+| `DATA_EXPORT_BOT_ENABLED` | запасное значение выключателя выгрузки через бота `export.bot` (панель сильнее); `true` без ключа, базы и чтения обновлений бэкенд не запускает |
 | `DIAGNOSTICS_RETENTION_DAYS` | сколько дней хранить сырые события и отчёты |
 | `ADMIN_NOTIFY_REPORTS` | карточка в чат администраторов на каждый новый стресс-тест; нужны `ADMIN_CHAT_ID` и включённый приёмник отчётов |
 | `ADMIN_CHAT_ID` | групповой чат администраторов: сводка и уведомления. Прежнее имя `PLAYTEST_STATS_CHAT_ID` — бэкенд не стартует и называет новое |

@@ -50,9 +50,9 @@ pnpm stop           # освободить порты, если процесс �
 Порты закреплены, карта — `docs/20-env-and-ports.md` §2. Туннель для
 проверки в Telegram с телефона, бот и секреты — там же, §4.
 
-Панели нужен бэкенд с `ADMIN_PANEL_ENABLED="true"` и, пока нет домена и
-входа через Telegram, `AUTH_DEV_LOGIN="true"`: вход разработчика `dev-1:Имя`
-даёт владельца. Dev-сервер панели слушает только `127.0.0.1` и без туннеля —
+Панели нужен бэкенд со входом — заданным `JWT_ACCESS_SECRET`, панель
+работает вместе с ним — и, пока нет домена и входа через Telegram,
+`AUTH_DEV_LOGIN="true"`: вход разработчика `dev-1:Имя` даёт владельца. Dev-сервер панели слушает только `127.0.0.1` и без туннеля —
 это блокировки и начисления, телефону тестера там делать нечего.
 
 Секреты (`TELEGRAM_WEBHOOK_SECRET`, `EXPORT_PSEUDONYM_KEY` и те, что появятся
@@ -365,10 +365,10 @@ $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create
 notepad .env
 ```
 
-и поменяйте шесть строк (искать — `Ctrl+F`):
+и поменяйте пять строк (искать — `Ctrl+F`). Вход включается самим
+секретом — отдельного флага у него нет:
 
 ```dotenv
-AUTH_ENABLED="true"
 JWT_ACCESS_SECRET="сюда — 64 знака из команды выше"
 TELEGRAM_BOT_TOKEN="local-dev-no-bot"
 AUTH_DEV_LOGIN="true"
@@ -429,8 +429,9 @@ pnpm dev                                  # второй способ; для п
 | Docker Desktop: «WSL needs updating» / «WSL 2 installation is incomplete» | В терминале от администратора `wsl --update`, затем перезагрузка |
 | Docker Desktop: «Virtualization support not detected» | В BIOS выключена виртуализация. Включить Intel VT-x или AMD SVM — у каждой материнской платы по-своему, искать по её модели |
 | `docker compose up` — `port is already allocated` на 5432 или 6379 | На компьютере уже стоит свой Postgres или Redis. Остановить его в «Службах» Windows или поменять `POSTGRES_PORT` / `REDIS_PORT` в `.env` вместе с портом в `DATABASE_URL` / `REDIS_URL` |
-| Сервер падает с `AUTH_ENABLED=true требует JWT_ACCESS_SECRET, TELEGRAM_BOT_TOKEN и DATABASE_URL` | Не заполнены секрет или токен бота, см. шаг 11 |
-| Сервер падает с `PLAYTEST_ENABLED=true требует AUTH_ENABLED=true` | Не включена авторизация, см. шаг 11 |
+| Сервер падает с `JWT_ACCESS_SECRET задан — вход включён, и ему нужны TELEGRAM_BOT_TOKEN и DATABASE_URL` | Не заполнен токен бота или адрес базы, см. шаг 11 |
+| Сервер падает с `PLAYTEST_ENABLED=true требует входа — JWT_ACCESS_SECRET` | Не задан секрет входа, см. шаг 11 |
+| Сервер падает с `AUTH_ENABLED убрана` или `ADMIN_PANEL_ENABLED убрана` | В `.env` старая строка, которая спорит с ключом: вход и панель включаются секретом `JWT_ACCESS_SECRET`. Строку удалить |
 | Сервер падает с `PLAYTEST_DEV_AUTH переименована в AUTH_DEV_LOGIN` | В `.env` старая строка — удалить её и включить `AUTH_DEV_LOGIN`, см. шаг 11 |
 | В рейтинге «Рейтинг работает, когда игра открыта в Telegram» | Не задан `VITE_AUTH_DEV_USER` (шаг 11) или страница не обновлена после правки `.env` — `F5` |
 | Белый экран, игра не грузится | `F12` → вкладка «Console». Скриншот красного текста вместе со скриншотом терминала — владельцу репозитория |

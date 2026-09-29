@@ -17,6 +17,7 @@ import {
 } from "@bh/fx";
 import { ValidationError } from "../../common/domain-error.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { fxSources } from "./fx.refresher.js";
 import { FX_STORE } from "./fx.store.js";
@@ -83,6 +84,7 @@ export class FxService {
     @Inject(FX_STORE) private readonly store: RateStore,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly roles: RolesService,
+    private readonly switches: FeatureSwitches,
   ) {}
 
   async overview(now = new Date()): Promise<FxOverview> {
@@ -117,7 +119,7 @@ export class FxService {
         nextPollAt: state?.nextPollAt.toISOString() ?? null,
       });
     }
-    return { enabled: this.config.fx.enabled, rates, missing, manual, sources };
+    return { enabled: this.switches.fxPolling(), rates, missing, manual, sources };
   }
 
   /**

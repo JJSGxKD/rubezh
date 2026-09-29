@@ -45,9 +45,9 @@ export class NotifyTargets {
     };
   }
 
-  /** Слать ли карточки отчётов диагностики. */
+  /** Слать ли карточки отчётов диагностики: переключатель включён, и отчёты вообще принимаются. */
   reportsEnabled(): boolean {
-    return this.settings.get(SETTINGS.notifyReports);
+    return this.settings.get(SETTINGS.notifyReports) && this.settings.get(SETTINGS.ingestReports);
   }
 
   /** Поменялся какой-нибудь из адресов — меню команд в чатах пора переставить. */

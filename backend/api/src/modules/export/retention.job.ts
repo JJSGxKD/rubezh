@@ -39,8 +39,12 @@ export class RetentionJob implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(PRISMA) private readonly prisma: PrismaClient,
   ) {}
 
+  /**
+   * Чистка — всегда, когда есть база: приём включают на ходу из панели, а
+   * пустые таблицы чистятся за один дешёвый запрос.
+   */
   get enabled(): boolean {
-    return this.config.databaseUrl !== "" && (this.config.ingest.eventsEnabled || this.config.ingest.reportsEnabled);
+    return this.config.databaseUrl !== "";
   }
 
   async onApplicationBootstrap(): Promise<void> {

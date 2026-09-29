@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../../modules/settings/feature-switches.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { REDIS } from "../../infra/redis.js";
 import { BotRouter, type BotUpdateHandler } from "./bot-router.js";
@@ -95,6 +96,7 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly switches: FeatureSwitches,
     private readonly router: BotRouter,
     private readonly registry: WelcomeProgressRegistry,
     @Inject(WELCOME_CARD_CACHE) private readonly cache: WelcomeCardCache,
@@ -238,7 +240,7 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
     if (play !== null) rows.push([play]);
     // Администратору — вход в выгрузку. Кнопка лишь удобство: право проверяет
     // обработчик нажатия (docs/28-diagnostics.md §6.1.4).
-    if (this.config.export.botEnabled && this.config.adminTelegramIds.has(userId)) {
+    if (this.switches.exportBot() && this.config.adminTelegramIds.has(userId)) {
       rows.push([{ text: "📦 Выгрузка данных", callback_data: "export:menu" }]);
     }
     return rows;

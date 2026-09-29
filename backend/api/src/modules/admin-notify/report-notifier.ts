@@ -99,12 +99,12 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
   }
 
   /**
-   * Без приёмника, входа или токена бота карточек не будет до перезапуска, а
-   * чат и переключатель меняются на ходу из панели: подписка и очередь
-   * заводятся по первому, а отправка проверяет второе.
+   * Без базы, входа или токена бота карточек не будет до перезапуска, а
+   * приём отчётов, чат и переключатель меняются на ходу из панели: подписка
+   * и очередь заводятся по первому, а отправка проверяет второе.
    */
   private get reportsPossible(): boolean {
-    return this.config.ingest.reportsEnabled && this.config.telegram.botToken !== "";
+    return this.config.databaseUrl !== "" && this.config.telegram.botToken !== "";
   }
 
   private get reviewPossible(): boolean {

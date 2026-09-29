@@ -86,7 +86,7 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
   });
 
   beforeAll(() => {
-    config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL, JWT_ACCESS_SECRET: SECRET } as NodeJS.ProcessEnv);
+    config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL, JWT_ACCESS_SECRET: SECRET, TELEGRAM_BOT_TOKEN: "1:TEST" } as NodeJS.ProcessEnv);
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 20, connectionTimeoutMillis: 30_000 }) });
     accounts = new PrismaAccountRepository(prisma);
     const roles = new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());

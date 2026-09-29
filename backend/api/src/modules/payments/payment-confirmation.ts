@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
@@ -47,6 +48,7 @@ export class PaymentConfirmation {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(PURCHASES_REPOSITORY) private readonly purchases: PurchasesRepository,
     private readonly providers: PaymentProviders,
+    private readonly switches: FeatureSwitches,
     // Слушатели нужны модулю, а не каждому тесту подтверждения: без них — пустой список.
     private readonly hooks: PaymentsHooks = new PaymentsHooks(),
   ) {}
@@ -125,10 +127,10 @@ export class PaymentConfirmation {
 
   private async decide(query: PreCheckout, nowMs: number): Promise<CheckoutDecision> {
     const id = purchaseId.safeParse(query.payload);
-    if (!id.success) return decideCheckout(null, query, nowMs, this.config.payments.enabled);
+    if (!id.success) return decideCheckout(null, query, nowMs, this.switches.payments());
     try {
       const view = await withTimeout(this.purchases.checkout(id.data), CHECKOUT_READ_TIMEOUT_MS, "покупка для проверки оплаты");
-      return decideCheckout(view, query, nowMs, this.config.payments.enabled);
+      return decideCheckout(view, query, nowMs, this.switches.payments());
     } catch (error: unknown) {
       // База не ответила — отказываемся от денег, а не берём их вслепую.
       this.log("error", "pre_checkout_failed", { purchaseId: id.data, reason: error instanceof Error ? error.message : "unknown" });

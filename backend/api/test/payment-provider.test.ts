@@ -10,6 +10,7 @@ import { TelegramStarsProvider } from "../src/platforms/telegram/telegram-stars-
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 // Порт оплаты (docs/35-stage4-plan.md, §3.11): домен получает ошибки порта,
 // а что значит ответ Bot API, знает адаптер Telegram.
@@ -56,7 +57,7 @@ describe("когда продажа имеет смысл", () => {
 
   function queue(providers: PaymentProviders): PaymentsQueue {
     const purchases = new MemoryPurchasesRepository();
-    return new PaymentsQueue(config(), new PaymentConfirmation(config(), purchases, providers), new PaymentRefunds(purchases, providers), new RunsHooks(), providers);
+    return new PaymentsQueue(config(), new PaymentConfirmation(config(), purchases, providers, switchesOf(config())), new PaymentRefunds(purchases, providers), new RunsHooks(), providers);
   }
 
   it("есть площадка, которая сообщит об оплате, — очередь включена", () => {
