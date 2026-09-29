@@ -76,6 +76,6 @@
   "run.status.lightning": "Шок: урон по тебе больше",
   "run.status.poison": "Отравлен, слоёв: {stacks}",
   "run.shield": "Щит: погасит попаданий — {count}",
-  "run.keys.pause": "Esc или P — продолжить",
-  "run.keys.choose": "Клавиши 1–4 — выбрать карточку"
+  "run.keys.pause": "Esc — продолжить",
+  "run.keys.choose": "1–4 — выбор"
 }

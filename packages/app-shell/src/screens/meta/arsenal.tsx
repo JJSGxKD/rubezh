@@ -21,6 +21,7 @@ import {
 } from "../../state/items-api";
 import { useSession } from "../../state/session";
 import { useWallet } from "../../state/wallet";
+import { loadWallet } from "../../state/wallet-api";
 import { ItemSheet } from "./arsenal-item";
 import {
   CostLabel,
@@ -67,7 +68,9 @@ export function ArsenalScreen(): ReactNode {
   const [error, setError] = useState<string | null>(null);
 
   const load = async (): Promise<void> => {
-    const failure = await loadInventory();
+    // Осколки в шапке — из кошелька: он тоже перечитывается, иначе после
+    // неудачного первого входа арсенал показал бы нули.
+    const [failure] = await Promise.all([loadInventory(), loadWallet()]);
     setStatus(
       failure === null
         ? "ready"

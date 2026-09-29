@@ -15,28 +15,18 @@ import { useRun, type RunPhase } from "../../state/run";
 
 export type RunKeyAction = { kind: "pause" } | { kind: "resume" } | { kind: "choose"; index: number } | { kind: "restart" };
 
-const DIGITS: Readonly<Record<string, number>> = {
-  Digit1: 0,
-  Digit2: 1,
-  Digit3: 2,
-  Digit4: 3,
-  Numpad1: 0,
-  Numpad2: 1,
-  Numpad3: 2,
-  Numpad4: 3,
-};
-
-const PAUSE_KEYS = new Set(["Escape", "KeyP"]);
-const CONFIRM_KEYS = new Set(["Enter", "NumpadEnter", "Space"]);
+// Бюджет интерфейса забега тесный (`27-design-system-and-app-shell.md`
+// §3.4): клавиши — выражениями, а не таблицами.
+const PAUSE = /^(Escape|KeyP)$/;
+const CONFIRM = /^(Enter|NumpadEnter|Space)$/;
+const DIGIT = /^(?:Digit|Numpad)([1-4])$/;
 
 export function runKeyAction(code: string, phase: RunPhase, offers: number): RunKeyAction | null {
-  if (phase === "running" && PAUSE_KEYS.has(code)) return { kind: "pause" };
-  if (phase === "paused" && (PAUSE_KEYS.has(code) || CONFIRM_KEYS.has(code))) return { kind: "resume" };
-  if (phase === "levelUp") {
-    const index = DIGITS[code];
-    if (index !== undefined && index < offers) return { kind: "choose", index };
-  }
-  if (phase === "finished" && CONFIRM_KEYS.has(code)) return { kind: "restart" };
+  if (phase === "running" && PAUSE.test(code)) return { kind: "pause" };
+  if (phase === "paused" && (PAUSE.test(code) || CONFIRM.test(code))) return { kind: "resume" };
+  const index = Number(DIGIT.exec(code)?.[1] ?? 0) - 1;
+  if (phase === "levelUp" && index >= 0 && index < offers) return { kind: "choose", index };
+  if (phase === "finished" && CONFIRM.test(code)) return { kind: "restart" };
   return null;
 }
 
