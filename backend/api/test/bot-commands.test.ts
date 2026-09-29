@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { BotCommands, helpText, type CommandsBotApi } from "../src/platforms/telegram/bot-commands.js";
 import { BotRouter, type BotCommandSpec, type BotUpdateHandler } from "../src/platforms/telegram/bot-router.js";
-import { chatTargetOf, type ChatRef } from "../src/platforms/telegram/chat-target.js";
+import { chatTargetOf, type ChatRef } from "../src/platforms/ports/chat-target.js";
 import type { TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 
 // /help и меню команд (docs/28-diagnostics.md §6.1.2): в чате администраторов

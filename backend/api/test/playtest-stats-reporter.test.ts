@@ -9,7 +9,7 @@ import {
   type StatsReporterLocks,
 } from "../src/modules/playtest/playtest-stats.reporter.js";
 import { PlaytestStatsService } from "../src/modules/playtest/playtest-stats.service.js";
-import { chatTargetOf, type ChatRef } from "../src/platforms/telegram/chat-target.js";
+import { chatTargetOf, type ChatRef } from "../src/platforms/ports/chat-target.js";
 import { TelegramApiError, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { MemoryPlaytestStatsStore } from "./helpers/memory-playtest-stats.store.js";
 import { MemoryLeaderboardStore } from "./helpers/memory-runs.js";

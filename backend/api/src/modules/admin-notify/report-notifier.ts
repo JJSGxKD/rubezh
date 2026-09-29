@@ -9,7 +9,7 @@ import { benchSummaryOf, runSummaryOf } from "../diagnostics/diagnostics-summary
 import { DIAGNOSTICS_REPOSITORY, type DiagnosticsRepository } from "../diagnostics/diagnostics.repository.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
-import type { ChatTarget } from "../../platforms/telegram/chat-target.js";
+import type { ChatTarget } from "../../platforms/ports/chat-target.js";
 import { TelegramApiError, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
 import { renderRunCardPng, runCaption, type RunCardInput } from "./run-card.js";

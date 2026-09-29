@@ -9,7 +9,7 @@ import {
   type ExportJob,
 } from "../src/modules/export/export-bot.command.js";
 import type { ExportArtifact, ExportRequest, ExportService } from "../src/modules/export/export.service.js";
-import { chatTargetOf } from "../src/platforms/telegram/chat-target.js";
+import { chatTargetOf } from "../src/platforms/ports/chat-target.js";
 import type { TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";

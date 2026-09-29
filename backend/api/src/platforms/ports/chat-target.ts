@@ -1,10 +1,12 @@
 /**
  * Куда слать сообщение: чат и, если это супергруппа с темами, — тема
- * (docs/20-env-and-ports.md §3). В окружении пишется одной строкой:
- * `-1001234567890` или `-1001234567890:57`.
+ * (docs/20-env-and-ports.md §3). В окружении и в настройках пишется одной
+ * строкой: `-1001234567890` или `-1001234567890:57`.
  *
- * Тема нужна там, где чат администраторов один, а поток разный: сводка
- * плейтеста, стресс-тесты и проблемные забеги не должны мешаться.
+ * Тема нужна там, где чат администраторов один, а поток разный: сводка,
+ * стресс-тесты и проблемные забеги не должны мешаться. Адрес от площадки не
+ * зависит — поэтому он в портах, а поля запроса к API площадки собирает её
+ * адаптер.
  */
 export interface ChatTarget {
   chatId: string;
@@ -31,12 +33,6 @@ export function parseChatTarget(value: string): ChatTarget | null {
 
 export function chatTargetOf(ref: ChatRef): ChatTarget {
   return typeof ref === "string" ? { chatId: ref, threadId: null } : ref;
-}
-
-/** Поля запроса Bot API: тема добавляется, только когда она есть. */
-export function chatFields(ref: ChatRef): { chat_id: string; message_thread_id?: number } {
-  const target = chatTargetOf(ref);
-  return target.threadId === null ? { chat_id: target.chatId } : { chat_id: target.chatId, message_thread_id: target.threadId };
 }
 
 /** Один ли это чат — тема адрес чата не меняет. */
