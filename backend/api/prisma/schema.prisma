@@ -1133,6 +1133,8 @@ model Item {
   createdAt DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime   @map("updated_at") @db.Timestamptz(3)
   removedAt DateTime?  @map("removed_at") @db.Timestamptz(3)
+  /// когда игрок открыл лист предмета; `null` — новый: знак на вкладке арсенала (Р50)
+  seenAt    DateTime?  @map("seen_at") @db.Timestamptz(3)
 
   account Account     @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   events  ItemEvent[]

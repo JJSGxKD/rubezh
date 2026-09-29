@@ -182,6 +182,7 @@ erDiagram
         boolean equipped "в слоте один — частичный уникальный индекс"
         string source "loot:<runId>, merge:<ключ>"
         datetime removed_at "nullable: разобран или объединён"
+        datetime seen_at "nullable: лист не открывали — новый, знак арсенала"
     }
 
     RUN_BOOST {
@@ -1145,6 +1146,7 @@ flowchart LR
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
         NOTIF["notifications<br/>лента уведомлений: пишут модули,<br/>чистка старше 90 дней, реализовано"]
+        BADGES["badges<br/>знаки меню одним ответом:<br/>счётчики соседей, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1270,6 +1272,10 @@ flowchart LR
     FRIENDS -. "заявка, подарок" .-> NOTIF
     ITEMS -. "редкая добыча" .-> NOTIF
     BOOSTS -. "возврат бустов" .-> NOTIF
+    CADDY -- "/api/v1/me/badges" --> BADGES
+    BADGES -. "новые предметы" .-> ITEMS
+    BADGES -. "подарки и заявки" .-> FRIENDS
+    BADGES -. непрочитанное .-> NOTIF
     CADDY -- "/api/v1/flags" --> FLAGS
     FLAGS --> PG
 

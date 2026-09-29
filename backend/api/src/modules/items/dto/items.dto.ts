@@ -22,3 +22,6 @@ const MAX_EXTRAS = Math.max(...Object.values(RARITY_RULES).map((rules) => rules.
 export const itemRerollSchema = z.object({ idempotencyKey, index: z.number().int().min(0).max(MAX_EXTRAS - 1) });
 
 export const itemMergeSchema = z.object({ idempotencyKey, itemIds: z.array(z.string().uuid()).length(MERGE_COUNT) });
+
+/** Какие листы игрок открыл: пачкой, не больше, чем влезает в инвентарь. Повтор безвреден. */
+export const itemSeenSchema = z.object({ itemIds: z.array(z.string().uuid()).min(1).max(100) });

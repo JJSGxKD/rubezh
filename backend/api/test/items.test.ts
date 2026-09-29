@@ -213,6 +213,7 @@ describe("итог надетого в инвентаре", () => {
       equipped,
       source: "test",
       createdAt: new Date(0),
+      seenAt: itemId === "ccc" ? null : new Date(0),
     });
     const rows = [row("a", "weapon", true), row("bb", "armor", true), row("ccc", "armor", false)];
 
@@ -222,5 +223,7 @@ describe("итог надетого в инвентаре", () => {
     expect(Object.fromEntries(view.totals.map((total) => [total.stat, total.value]))).toEqual(expected);
     const order = view.totals.map((total) => ITEM_STATS.indexOf(total.stat));
     expect(order).toEqual([...order].sort((x, y) => x - y));
+    // Новый — тот, чей лист игрок ещё не открывал.
+    expect(view.items.map((item) => item.isNew)).toEqual([false, false, true]);
   });
 });

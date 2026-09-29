@@ -109,6 +109,19 @@ export class FriendsService implements OnModuleInit {
   }
 
   /**
+   * Знак на вкладке друзей (Р50): подарки, которые можно забрать сегодня, и
+   * заявки, ждущие ответа, — ровно то, что экран друзей предложит сделать.
+   */
+  async badge(accountId: string): Promise<number> {
+    const [incoming, pending, claimed] = await Promise.all([
+      this.friends.incoming(accountId, FRIENDS_RULES.maxIncomingRequests),
+      this.friends.pendingGiftCount(accountId, GIFT_RULES.maxAgeDays),
+      this.friends.claimedToday(accountId),
+    ]);
+    return incoming.length + Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
+  }
+
+  /**
    * Забрать бонус за число друзей — все достигнутые и не забранные ступени.
    * Ключ кошелька — аккаунт и ступень, поэтому ступень даёт монеты один раз
    * навсегда: удалить друзей и набрать заново ничего не принесёт. Начислено,

@@ -21,6 +21,8 @@ export interface ItemView {
   reroll: ItemCost | null;
   /** осколков его редкости за разбор */
   salvage: number;
+  /** игрок ещё не открывал его лист — знак на вкладке арсенала (Р50) */
+  isNew: boolean;
 }
 
 export interface InventoryView {
@@ -55,6 +57,7 @@ export function itemView(row: ItemRow, accountLevel: number): ItemView {
     upgrade: upgradeCost(shape, accountLevel),
     reroll: row.rolls.extras.length === 0 ? null : rerollCost(shape),
     salvage: salvageYield(shape),
+    isNew: row.seenAt === null,
   };
 }
 
