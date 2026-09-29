@@ -5,7 +5,7 @@ import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { INVENTORY_CAP, type ItemRarity, type ItemSlot } from "../src/modules/items/item-catalog.js";
-import { loadoutKey, verifyLoadout } from "../src/modules/items/item-loadout.js";
+import { loadoutKey, signLoadout, verifyLoadout } from "../src/modules/items/item-loadout.js";
 import { itemModifiers, rollItem, rollLoot, salvageYield, seededRandom } from "../src/modules/items/item-rules.js";
 import { PrismaItemsRepository } from "../src/modules/items/items.repository.js";
 import { ItemsService } from "../src/modules/items/items.service.js";
@@ -175,6 +175,19 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
       expect(await items.checkLoadout(id, snapshot)).toBe("stale");
       await items.equip(id, weapon);
       expect(await items.checkLoadout(id, snapshot)).toBe("valid");
+    });
+
+    it("снимок несёт уровень аккаунта и выдаётся без снаряжения; уровень выше аккаунта — отказ, а не устаревший", async () => {
+      const id = await account();
+      const bare = await items.loadout(id);
+      expect(bare.modifiers).toEqual({});
+      expect(bare.accountLevel).toBe(1);
+      expect(await items.checkLoadout(id, bare)).toBe("valid");
+
+      // Подписан этим сервером, но уровень выше, чем у аккаунта: так выглядит
+      // снимок, переживший вайп.
+      const ahead = signLoadout(loadoutKey(SECRET), id, {}, 7, Date.now());
+      expect(await items.checkLoadout(id, ahead)).toBe("level_ahead");
     });
 
     it("чужой предмет неотличим от несуществующего", async () => {

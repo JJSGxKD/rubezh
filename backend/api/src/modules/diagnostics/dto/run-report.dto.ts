@@ -92,6 +92,9 @@ const MAX_LOADOUT_BOOSTS = 8;
 const loadoutSchema = z.object({
   modifiers: z.partialRecord(z.enum(LOADOUT_STATS), z.number().finite().nonnegative().max(1000)),
   boosts: z.array(id).max(MAX_LOADOUT_BOOSTS),
+  // Уровень аккаунта решает, что было открыто (docs/35-stage4-plan.md WP25):
+  // без него повтор у команды открыл бы всё и разошёлся с забегом тестера.
+  accountLevel: z.number().int().min(1).max(1000).optional(),
 });
 
 const resultSchema = z.object({

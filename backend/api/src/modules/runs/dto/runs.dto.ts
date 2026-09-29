@@ -39,6 +39,8 @@ const signedLoadoutSchema = z.object({
   modifiers: z
     .record(z.string().max(32), z.number().finite())
     .refine((value) => Object.keys(value).length <= 32, { message: "слишком много параметров" }),
+  // Нет поля — снимок прошлой сборки: подпись у него своя, без уровня.
+  accountLevel: z.number().int().min(1).max(1000).optional(),
   issuedAtMs: z.number().int().min(0),
   signature: z.string().min(1).max(128),
 });

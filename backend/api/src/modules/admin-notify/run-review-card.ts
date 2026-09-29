@@ -49,6 +49,7 @@ const REASON_LABELS: Record<VerdictReason, string> = {
   unverified_time: "старт не дошёл — время забега не проверено",
   loadout_forged: "снимок снаряжения не подписан сервером",
   loadout_stale: "снаряжение сменилось после выдачи снимка",
+  loadout_level_ahead: "уровень снимка выше уровня аккаунта",
   boost_unpaid: "буст не куплен на этот забег",
 };
 

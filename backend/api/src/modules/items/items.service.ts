@@ -64,22 +64,29 @@ export class ItemsService {
     return inventoryView(rows, level);
   }
 
-  /** Подписанный снимок надетого — клиент подаёт его на старте забега (Р17). */
+  /**
+   * Подписанный снимок надетого и уровня аккаунта — клиент подаёт его на
+   * старте забега (Р17). Выдаётся и без снаряжения: уровень открывает оружие
+   * и навыки (WP25).
+   */
   async loadout(accountId: string, nowMs = Date.now()): Promise<LoadoutSnapshot> {
     if (this.signingKey === null) throw new DisabledError("Вход выключен — снимок снаряжения не подписать");
-    const equipped = (await this.items.alive(accountId)).filter((item) => item.equipped);
-    return signLoadout(this.signingKey, accountId, loadoutOf(equipped), nowMs);
+    const [rows, level] = await Promise.all([this.items.alive(accountId), this.items.accountLevel(accountId)]);
+    return signLoadout(this.signingKey, accountId, loadoutOf(rows.filter((item) => item.equipped)), level, nowMs);
   }
 
   /**
    * Снимок, с которым пришёл итог забега: подписан ли он этим сервером для
    * этого игрока и совпадает ли с надетым сейчас. Устаревший — не подделка:
-   * честный игрок мог сменить снаряжение, пока итог ждал сети.
+   * честный игрок мог сменить снаряжение, пока итог ждал сети. Уровень снимка
+   * выше уровня аккаунта — не устаревший: уровень только растёт, и так бывает
+   * лишь со снимком, пережившим вайп, — открытое по нему игроку не положено.
    */
-  async checkLoadout(accountId: string, snapshot: ClaimedLoadout): Promise<"valid" | "forged" | "stale"> {
+  async checkLoadout(accountId: string, snapshot: ClaimedLoadout): Promise<"valid" | "forged" | "stale" | "level_ahead"> {
     if (this.signingKey === null || snapshot.accountId !== accountId || !verifyLoadout(this.signingKey, snapshot)) return "forged";
-    const equipped = (await this.items.alive(accountId)).filter((item) => item.equipped);
-    return sameModifiers(loadoutOf(equipped), snapshot.modifiers) ? "valid" : "stale";
+    const [rows, level] = await Promise.all([this.items.alive(accountId), this.items.accountLevel(accountId)]);
+    if (snapshot.accountLevel !== undefined && snapshot.accountLevel > level) return "level_ahead";
+    return sameModifiers(loadoutOf(rows.filter((item) => item.equipped)), snapshot.modifiers) ? "valid" : "stale";
   }
 
   async equip(accountId: string, itemId: string, at = new Date()): Promise<ItemView> {

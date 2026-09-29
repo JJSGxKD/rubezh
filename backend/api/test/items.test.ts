@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Module, type Type } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
@@ -31,8 +31,8 @@ describe("подписанный снимок надетого", () => {
 
   it("порядок ключей не меняет подпись, а любая правка её ломает", () => {
     const account = randomUUID();
-    const one = signLoadout(key, account, { damage: 0.12, maxHp: 30 }, 1_000);
-    const two = signLoadout(key, account, { maxHp: 30, damage: 0.12 }, 1_000);
+    const one = signLoadout(key, account, { damage: 0.12, maxHp: 30 }, 3, 1_000);
+    const two = signLoadout(key, account, { maxHp: 30, damage: 0.12 }, 3, 1_000);
     expect(two.signature).toBe(one.signature);
     expect(verifyLoadout(key, one)).toBe(true);
 
@@ -42,10 +42,30 @@ describe("подписанный снимок надетого", () => {
     expect(verifyLoadout(key, { ...one, signature: "" })).toBe(false);
   });
 
+  it("уровень аккаунта — в подписи: ни поднять его, ни снять не выйдет", () => {
+    const account = randomUUID();
+    const snapshot = signLoadout(key, account, {}, 2, 1_000);
+    expect(snapshot.accountLevel).toBe(2);
+    expect(verifyLoadout(key, snapshot)).toBe(true);
+    expect(verifyLoadout(key, { ...snapshot, accountLevel: 9 })).toBe(false);
+    const { accountLevel, ...withoutLevel } = snapshot;
+    expect(accountLevel).toBe(2);
+    expect(verifyLoadout(key, withoutLevel)).toBe(false);
+  });
+
+  it("снимок прошлой сборки без уровня проверяется прежней подписью, а дописанный уровень её ломает", () => {
+    // Так подписывал сервер до WP25: снимки на устройствах живут днями.
+    const account = randomUUID();
+    const signature = createHmac("sha256", key).update(JSON.stringify([account, [["damage", 0.12]], 1_000])).digest("base64url");
+    const legacy = { accountId: account, modifiers: { damage: 0.12 }, issuedAtMs: 1_000, signature };
+    expect(verifyLoadout(key, legacy)).toBe(true);
+    expect(verifyLoadout(key, { ...legacy, accountLevel: 50 })).toBe(false);
+  });
+
   it("ключ подписи — свой, а не секрет сессий как есть", () => {
     const secret = "cd".repeat(32);
     expect(loadoutKey(secret).equals(Buffer.from(secret, "hex"))).toBe(false);
-    const snapshot = signLoadout(loadoutKey(secret), randomUUID(), {}, 1);
+    const snapshot = signLoadout(loadoutKey(secret), randomUUID(), {}, 1, 1);
     expect(verifyLoadout(loadoutKey("ef".repeat(32)), snapshot)).toBe(false);
   });
 });
