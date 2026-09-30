@@ -10,7 +10,7 @@ import { reportError } from "../state/shell";
  * Сам забег — HUD, пауза, выбор улучшения — чанком,
  * который лобби подтягивает в простое вместе с движком: без движка он всё
  * равно не начнётся, а первая загрузка за него не платит. Настройки,
- * диагностика, витрина, разделы-заглушки и мета игроку в первую минуту не
+ * диагностика, витрина, магазин и мета игроку в первую минуту не
  * нужны.
  *
  * Каждый файл экранов — отдельный чанк; загрузчики вынесены, чтобы лобби
@@ -21,7 +21,7 @@ const loaders = {
   weapon: () => import("../screens/weapon-select"),
   boosts: () => import("../screens/boosts"),
   settings: () => import("../screens/settings"),
-  stubs: () => import("../screens/stubs"),
+  shop: () => import("../screens/meta/shop"),
   gallery: () => import("../screens/gallery"),
   tasks: () => import("../screens/meta/tasks"),
   arsenal: () => import("../screens/meta/arsenal"),
@@ -57,7 +57,7 @@ export const AboutScreen = screen(loaders.settings, "AboutScreen");
 export const DiagnosticsScreen = screen(loaders.diagnostics, "DiagnosticsScreen");
 export const GalleryScreen = screen(loaders.gallery, "GalleryScreen");
 export const ArsenalScreen = screen(loaders.arsenal, "ArsenalScreen");
-export const ShopScreen = screen(loaders.stubs, "ShopScreen");
+export const ShopScreen = screen(loaders.shop, "ShopScreen");
 export const RatingScreen = screen(loaders.rating, "RatingScreen");
 export const FriendsScreen = screen(loaders.friends, "FriendsScreen");
 export const ProfileScreen = screen(loaders.profile, "ProfileScreen");

@@ -174,7 +174,7 @@ export function GalleryScreen(): ReactNode {
         </div>
 
         <SectionTitle>{t("gallery.stub")}</SectionTitle>
-        <StubScreen icon={<Star size={36} />} title="Заглушка раздела" text={t("shop.soon")} />
+        <StubScreen icon={<Star size={36} />} title="Заглушка раздела" text={t("stub.soon")} />
         <StubNotice text={t("reward.stub")} />
       </ContentColumn>
     </Screen>
