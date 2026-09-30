@@ -40,6 +40,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
 import { NotificationsBotModule } from "./modules/notifications-bot/notifications-bot.module.js";
 import { BadgesModule } from "./modules/badges/badges.module.js";
 import { HistoryModule } from "./modules/history/history.module.js";
+import { DailyModule } from "./modules/daily/daily.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -100,6 +101,7 @@ export const APP_MODULES = [
   FriendsModule,
   BadgesModule,
   HistoryModule,
+  DailyModule,
   ReferralsModule,
   LinksModule,
   FlagsModule,

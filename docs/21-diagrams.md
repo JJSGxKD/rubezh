@@ -64,6 +64,7 @@ erDiagram
     ACCOUNT ||--o| ACCOUNT_PROGRESS : "уровень и опыт"
     ACCOUNT ||--o| ACCOUNT_SETTINGS : "настройки для всех устройств"
     ACCOUNT ||--o{ NOTIFICATION : "лента уведомлений"
+    ACCOUNT ||--o| DAILY_REWARD : "награда дня"
     ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
     ACCOUNT ||--o| FRIEND_LINK : "ссылка дружбы"
     ACCOUNT ||--o{ FRIENDSHIP : "дружит (обе стороны пары)"
@@ -280,6 +281,13 @@ erDiagram
         datetime read_at "nullable: не прочитано"
         enum bot_outcome "nullable: sent|blocked|failed — дубль в бота"
         datetime bot_at "nullable"
+    }
+
+    DAILY_REWARD {
+        uuid account_id PK
+        int claimed_days "сколько дней забрано всего: день недели и ступень — отсюда"
+        date last_claim_day "игровые сутки по Москве последнего забора"
+        datetime updated_at
     }
 
     RUN_REWARD {
@@ -551,6 +559,12 @@ erDiagram
   дубль в бота: доставлено, игрок заблокировал бота, площадка отказала;
   пишется один раз, повтор задания его не перепишет. Пусто — в бота не
   уходило: вид не дублируется, игрок выключил его или писать нельзя.
+- **`DAILY_REWARD` — награда дня** (`35-stage4-plan.md`, Р45, WP13): одна
+  строка на аккаунт, появляется с первым забранным днём. Прогресс не
+  сбрасывается: пропуск дня его останавливает. День недели и ступень
+  выводятся из `claimed_days`, а не хранятся рядом, — им нечем разойтись.
+  Отметка дня — условным `UPDATE` по числу дней и суткам, монеты и осколки
+  кладёт кошелёк ключом дня, поэтому под гонкой день даёт награду однажды.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1155,6 +1169,7 @@ flowchart LR
         NOTIFBOT["notifications-bot<br/>дубль в бота по выбору игрока:<br/>очередь, потолок вида, реализовано"]
         BADGES["badges<br/>знаки меню одним ответом:<br/>счётчики соседей, реализовано"]
         HISTORY["history<br/>история имущества: чтение<br/>журналов кошелька, предметов<br/>и покупок, реализовано"]
+        DAILY["daily<br/>награда дня: неделя без сброса,<br/>ступени, множитель уровня, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1291,6 +1306,11 @@ flowchart LR
     BADGES -. "подарки и заявки" .-> FRIENDS
     BADGES -. непрочитанное .-> NOTIF
     CADDY -- "/api/v1/me/history" --> HISTORY
+    CADDY -- "/api/v1/daily" --> DAILY
+    DAILY -- "daily_reward, сутки по Москве" --> PG
+    DAILY -. "монеты и осколки ключом дня" .-> WALLET
+    DAILY -. "уровень аккаунта" .-> PROG
+    BADGES -. "награда ждёт" .-> DAILY
     HISTORY -- "wallet_entry, item_event, purchase" --> PG
     CADDY -- "/api/v1/flags" --> FLAGS
     FLAGS --> PG
