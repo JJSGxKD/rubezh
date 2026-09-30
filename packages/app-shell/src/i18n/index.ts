@@ -86,6 +86,29 @@ export function formatNumber(value: number): string {
   return new Intl.NumberFormat(LOCALE).format(Math.round(value));
 }
 
+const COMPACT_UNITS = [
+  { at: 1e9, key: "number.billions" },
+  { at: 1e6, key: "number.millions" },
+  { at: 1e3, key: "number.thousands" },
+] as const;
+
+/**
+ * Короткая запись для тесных мест — шапки: до 9 999 целиком, дальше три
+ * значащие цифры с единицей: 12,3К, 999К, 1,23М. Округление вниз: шапка не
+ * должна показывать больше, чем у игрока есть. Полное число — в истории.
+ */
+export function formatCompact(value: number): string {
+  const whole = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  if (whole < 10_000) return formatNumber(whole);
+  const unit = COMPACT_UNITS.find((candidate) => whole >= candidate.at) ?? COMPACT_UNITS[2];
+  const scaled = whole / unit.at;
+  const decimals = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+  const factor = 10 ** decimals;
+  // Целое делится на степень десяти — без дроби по пути: 4,56 × 100 в
+  // двоичной дроби — 455,999…, и округление вниз показало бы 4,55.
+  return t(unit.key, { value: formatDecimal(Math.floor(whole / (unit.at / factor)) / factor, decimals) });
+}
+
 /** Дробное число без хвоста нулей: 0,28 и 7, а не 0,280 и 7,00. */
 export function formatDecimal(value: number, maxFractionDigits = 2): string {
   return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: maxFractionDigits }).format(value);
