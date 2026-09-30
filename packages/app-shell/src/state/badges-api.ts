@@ -10,10 +10,13 @@ import { useShell } from "./shell";
  * действий, которые гасят знак, — без постоянного соединения.
  */
 
-const badgesSchema = z.object({ arsenal: z.number(), friends: z.number(), notifications: z.number() });
+// `daily` — с наградой дня (WP13): сервер старее клиента его не пришлёт, и знак просто не горит.
+const badgesSchema = z.object({ arsenal: z.number(), friends: z.number(), notifications: z.number(), daily: z.optional(z.number()) });
+
+type BadgesResponse = z.infer<typeof badgesSchema>;
 
 export interface BadgesApi {
-  badges(): Promise<ApiResult<Badges>>;
+  badges(): Promise<ApiResult<BadgesResponse>>;
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
@@ -25,7 +28,7 @@ export function createBadgesApi(request: ApiRequest = apiRequest): BadgesApi {
 export async function loadBadges(api?: BadgesApi): Promise<void> {
   if (api === undefined && useShell.getState().capabilities.auth === undefined) return;
   const response = await (api ?? createBadgesApi()).badges();
-  if (response.ok) useBadges.setState(response.data);
+  if (response.ok) useBadges.setState({ ...response.data, daily: response.data.daily ?? 0 } satisfies Badges);
 }
 
 let watching = false;

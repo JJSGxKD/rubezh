@@ -37,17 +37,6 @@ function skin(amount: number): Reward {
   return { kind: "skin", amount };
 }
 
-/** Награда дня: семь дней, последний — крупный. */
-export const DAILY_REWARDS: readonly Reward[] = [
-  shards(100),
-  boost(1),
-  shards(200),
-  premium(5),
-  shards(300),
-  boost(2),
-  skin(1),
-];
-
 /**
  * Сектора колеса по часовой стрелке от верха. `weight` — шанс в процентах:
  * шансы показываются игроку на том же экране. Донатной валюты в колесе нет —

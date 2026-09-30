@@ -18,7 +18,9 @@ import type { EarnReason, ExchangeReason, WalletResource } from "./wallet-types.
 export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource, number>>> = {
   run_reward: { coins: 20_000 },
   level_reward: { coins: 10_000, gems: 100 },
-  daily_reward: { coins: 5_000, gems: 20 },
+  // Самоцветов в награде дня нет (О14); седьмой день даёт обычные осколки —
+  // потолок в разы выше самого щедрого дня (~1 430 монет и 16 осколков).
+  daily_reward: { coins: 5_000, shard_common: 100 },
   task_reward: { coins: 10_000, gems: 50 },
   achievement_reward: { coins: 20_000, gems: 200 },
   wheel_reward: { coins: 5_000, gems: 20 },

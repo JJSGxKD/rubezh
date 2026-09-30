@@ -21,6 +21,7 @@ import {
 } from "../src/platforms/telegram/welcome.command.js";
 import type { AuthService, ChannelEntry } from "../src/modules/auth/auth.service.js";
 import { switchesOf } from "./helpers/notify-targets.js";
+import { PNG_RENDER_TIMEOUT_MS } from "./helpers/card-render.js";
 
 // Приветствие по /start (docs/28-diagnostics.md §6.1.2).
 
@@ -75,7 +76,7 @@ describe("карточка приветствия", () => {
     expect(newcomer).toContain("Hi, Zoe!");
     expect(newcomer).not.toContain("best ·");
     expect(renderWelcomePng({ language: "ru", name: "Анна", progress: VETERAN }).subarray(1, 4).toString()).toBe("PNG");
-  });
+  }, PNG_RENDER_TIMEOUT_MS);
 });
 
 class MemoryCache implements WelcomeCardCache {

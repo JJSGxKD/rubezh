@@ -195,6 +195,7 @@ model Account {
   itemEvents       ItemEvent[]
   runBoosts        RunBoost[]
   notifications    Notification[]
+  dailyReward      DailyReward?
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1191,6 +1192,23 @@ model RunBoost {
 /// сообщение команды. Хранится 90 дней: чистка — `notifications-cleaner.ts`.
 /// Повтор записи по тому же событию упирается в уникальный ключ события, а
 /// не в проверку кода.
+/// Награда дня (docs/35-stage4-plan.md Р45, §3.14, WP13). Прогресс не
+/// сбрасывается: пропуск дня его останавливает. День недели и ступень —
+/// из числа забранных дней, а не своими полями, чтобы им нечем было
+/// разойтись.
+model DailyReward {
+  accountId    String   @id @map("account_id") @db.Uuid
+  /// сколько дней забрано за всё время
+  claimedDays  Int      @map("claimed_days")
+  /// игровые сутки (по Москве) последнего забора
+  lastClaimDay DateTime @map("last_claim_day") @db.Date
+  updatedAt    DateTime @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("daily_reward")
+}
+
 /// Дубль уведомления в бота (docs/35-stage4-plan.md WP28): доставлено,
 /// игрок заблокировал бота, площадка отказала.
 enum NotificationBotOutcome {
