@@ -49,6 +49,21 @@ describe.skipIf(DATABASE_URL === "")("уведомления на живом Pos
     expect(await prisma.notification.count({ where: { accountId: me } })).toBe(1);
   });
 
+  it("исход дубля в бота пишется один раз, чужую строку не трогает", async () => {
+    const me = await account();
+    let created = "";
+    service.onCreated("integration", async (row) => {
+      created = row.notificationId;
+    });
+    await gift(me, "bot:1", new Date());
+
+    await service.markBot(created, "blocked", new Date(Date.UTC(2026, 8, 30, 9)));
+    await service.markBot(created, "sent", new Date(Date.UTC(2026, 8, 30, 10)));
+    const row = await prisma.notification.findUniqueOrThrow({ where: { notificationId: created } });
+    expect(row.botOutcome).toBe("blocked");
+    expect(row.botAt?.toISOString()).toBe("2026-09-30T09:00:00.000Z");
+  });
+
   it("строки одного мгновения на границе страницы не теряются и не повторяются", async () => {
     const me = await account();
     const same = new Date(Date.UTC(2026, 8, 29, 12));

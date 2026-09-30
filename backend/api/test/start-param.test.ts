@@ -23,6 +23,12 @@ describe("разбор параметра запуска", () => {
     expect(parseStartParam("f-abc-defgh")).toMatchObject({ kind: "unknown", raw: "f-abc-defgh" });
   });
 
+  it("узнаёт кнопку уведомления в боте: вид — в ref", () => {
+    expect(parseStartParam("n-friend_request")).toEqual({ kind: "notification", raw: "n-friend_request", ref: "friend_request" });
+    // Заглавные и цифры в виде не бывают — это чужой формат.
+    expect(parseStartParam("n-Friend1")).toMatchObject({ kind: "unknown", raw: "n-Friend1" });
+  });
+
   it("чужой формат не теряется: сырая строка остаётся для разбора потом", () => {
     expect(parseStartParam("r-123_source-channel")).toEqual({ kind: "unknown", raw: "r-123_source-channel", ref: null });
     // Похоже на клик, но код не той длины — не клик.

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { FeedCursor, NewNotification, NotificationsRepository, StoredNotification } from "../../src/modules/notifications/notifications.repository.js";
+import type { BotOutcome, FeedCursor, NewNotification, NotificationsRepository, StoredNotification } from "../../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../../src/modules/notifications/notifications.service.js";
 
 /**
@@ -7,12 +7,18 @@ import { NotificationsService } from "../../src/modules/notifications/notificati
  * уникальный ключ события, что в базе: повтор не заводит второй строки.
  */
 export class MemoryNotificationsRepository implements NotificationsRepository {
-  readonly rows: (StoredNotification & { accountId: string; dedupeKey: string })[] = [];
+  readonly rows: (StoredNotification & { accountId: string; dedupeKey: string; bot?: { outcome: BotOutcome; at: Date } })[] = [];
 
-  async insert(notification: NewNotification): Promise<boolean> {
-    if (this.rows.some((row) => row.accountId === notification.accountId && row.dedupeKey === notification.dedupeKey)) return false;
-    this.rows.push({ ...notification, notificationId: randomUUID(), createdAt: notification.at, readAt: null });
-    return true;
+  async insert(notification: NewNotification): Promise<string | null> {
+    if (this.rows.some((row) => row.accountId === notification.accountId && row.dedupeKey === notification.dedupeKey)) return null;
+    const notificationId = randomUUID();
+    this.rows.push({ ...notification, notificationId, createdAt: notification.at, readAt: null });
+    return notificationId;
+  }
+
+  async markBot(notificationId: string, outcome: BotOutcome, at: Date): Promise<void> {
+    const row = this.rows.find((candidate) => candidate.notificationId === notificationId);
+    if (row !== undefined && row.bot === undefined) row.bot = { outcome, at };
   }
 
   async feed(accountId: string, cursor: FeedCursor | null, limit: number): Promise<StoredNotification[]> {

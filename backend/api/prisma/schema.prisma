@@ -108,6 +108,8 @@ enum StartKind {
   unknown
   /// ссылка дружбы `f-<код>` (WP14)
   friend
+  /// кнопка под уведомлением в боте `n-<вид>` (WP28)
+  notification
 }
 
 // Где началась сессия: в Mini App площадки, в браузере (вход разработчика,
@@ -1189,6 +1191,14 @@ model RunBoost {
 /// сообщение команды. Хранится 90 дней: чистка — `notifications-cleaner.ts`.
 /// Повтор записи по тому же событию упирается в уникальный ключ события, а
 /// не в проверку кода.
+/// Дубль уведомления в бота (docs/35-stage4-plan.md WP28): доставлено,
+/// игрок заблокировал бота, площадка отказала.
+enum NotificationBotOutcome {
+  sent
+  blocked
+  failed
+}
+
 model Notification {
   notificationId String    @id @map("notification_id") @db.Uuid
   accountId      String    @map("account_id") @db.Uuid
@@ -1201,6 +1211,9 @@ model Notification {
   createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
   /// `null` — не прочитано
   readAt         DateTime? @map("read_at") @db.Timestamptz(3)
+  /// чем кончился дубль в бота; `null` — в бота не уходило: вид не дублируется, игрок выключил или писать нельзя
+  botOutcome     NotificationBotOutcome? @map("bot_outcome")
+  botAt          DateTime? @map("bot_at") @db.Timestamptz(3)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
