@@ -67,6 +67,9 @@ export const PERMISSIONS = [
   // публикация раздаёт уведомление всем игрокам площадки и пишет им в бота
   "changelog.edit",
   "changelog.publish",
+  // Каталог заданий и достижений (WP13, Р52): цели и награды без релиза —
+  // награды ложатся в кошелёк, поэтому отдельное право, а не «контент»
+  "tasks.edit",
   // Эксплуатация. Настройки без релиза — адреса чатов команды и переключатели
   // (docs/35-stage4-plan.md §3.18)
   "flags.edit",
@@ -129,6 +132,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "links.manage",
     "changelog.edit",
     "changelog.publish",
+    "tasks.edit",
     "flags.edit",
     "settings.edit",
     "diagnostics.view",
@@ -149,6 +153,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "players.view",
     "ads.view",
     "changelog.edit",
+    "tasks.edit",
     "diagnostics.view",
     "tools.dev",
   ],

@@ -39,6 +39,10 @@ export interface TasksRepository {
   applyRun(input: { runId: string; accountId: string; at: Date; deltas: readonly TaskDelta[] }): Promise<boolean>;
   /** отметить забор; `false` — уже забрано параллельным запросом */
   markClaimed(accountId: string, taskId: string, periodStart: string, at: Date): Promise<boolean>;
+  /** завести строку каталога; `false` — такой id уже есть */
+  insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean>;
+  /** поправить строку каталога — всё, кроме срока и вида; `false` — строки нет */
+  update(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean>;
 }
 
 /**
@@ -147,6 +151,27 @@ export class PrismaTasksRepository implements TasksRepository {
       }
       return true;
     });
+  }
+
+  async insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean> {
+    return (
+      (await this.prisma.$executeRaw`
+        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, created_at, updated_at, updated_by)
+        VALUES (${task.taskId}, ${task.period}::"TaskPeriod", ${task.kind}, ${task.target}, ${task.title}, ${task.coins}, ${task.gems}, ${task.shards},
+                ${task.passPoints}, ${task.sort}, ${task.active}, ${at}, ${at}, ${actorAccountId}::uuid)
+        ON CONFLICT (task_id) DO NOTHING`) > 0
+    );
+  }
+
+  async update(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean> {
+    // Срок и вид не меняются: прогресс игроков записан по сроку и засчитан
+    // по виду, и смена любого из них сделала бы его чужим.
+    return (
+      (await this.prisma.$executeRaw`
+        UPDATE task_def SET target = ${task.target}, title = ${task.title}, coins = ${task.coins}, gems = ${task.gems}, shards = ${task.shards},
+          pass_points = ${task.passPoints}, sort = ${task.sort}, active = ${task.active}, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
+        WHERE task_id = ${task.taskId}`) > 0
+    );
   }
 
   async markClaimed(accountId: string, taskId: string, periodStart: string, at: Date): Promise<boolean> {

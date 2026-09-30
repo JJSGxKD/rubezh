@@ -9,14 +9,17 @@ import { REDIS } from "../src/infra/redis.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
-import { TaskNotDoneError, TaskNotFoundError } from "../src/modules/tasks/tasks-errors.js";
+import { TaskNotDoneError, TaskNotFoundError, TaskShapeLockedError } from "../src/modules/tasks/tasks-errors.js";
 import { TASK_KINDS, countsForTasks, rewardReason, taskDefSchema, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { TasksController } from "../src/modules/tasks/tasks.controller.js";
 import { ACHIEVEMENT_PERIOD_START, type TaskDelta, type TaskProgressRow, type TasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): прогресс — от
@@ -90,6 +93,20 @@ class MemoryTasks implements TasksRepository {
     return true;
   }
 
+  async insert(task: TaskDef): Promise<boolean> {
+    if (this.defs.some((candidate) => candidate.taskId === task.taskId)) return false;
+    this.defs.push({ ...task });
+    return true;
+  }
+
+  async update(task: TaskDef): Promise<boolean> {
+    const index = this.defs.findIndex((candidate) => candidate.taskId === task.taskId);
+    if (index < 0) return false;
+    const before = this.defs[index];
+    if (before !== undefined) this.defs[index] = { ...task, period: before.period, kind: before.kind };
+    return true;
+  }
+
   async markClaimed(accountId: string, taskId: string, start: string): Promise<boolean> {
     const row = this.rows.get(`${accountId}|${taskId}|${start}`);
     if (row === undefined || !row.done || row.claimed) return false;
@@ -133,13 +150,24 @@ function run(patch: Partial<RecordedRun> = {}): RecordedRun {
   };
 }
 
+const OWNER_ID = "777000222";
+
 function setup() {
   const repository = new MemoryTasks();
   const wallet = new FakeWallet();
   const hooks = new RunsHooks();
-  const service = new TasksService(repository, wallet as unknown as WalletService, hooks);
+  const accounts = new MemoryAccountRepository();
+  const roles = new MemoryRolesRepository();
+  const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
+  const service = new TasksService(repository, wallet as unknown as WalletService, hooks, new RolesService(config, roles, accounts));
   service.onModuleInit();
-  return { repository, wallet, hooks, service };
+  return { repository, wallet, hooks, service, accounts, roles };
+}
+
+async function person(ctx: ReturnType<typeof setup>, id: string, role?: "game_designer" | "moderator"): Promise<AccountRef> {
+  const account = await ctx.accounts.upsert({ platform: "telegram", platformUserId: id, displayName: `Игрок ${id}`, username: null, photoUrl: null }, Date.now());
+  if (role !== undefined) await ctx.roles.grant(account.accountId, role, null);
+  return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 }
 
 const byId = (tasks: { id: string }[], id: string) => tasks.find((task) => task.id === id);
@@ -295,6 +323,48 @@ describe("забор награды", () => {
     ctx.service.forgetCatalog();
     await ctx.service.view(ME, NOON);
     expect(ctx.repository.catalogReads).toBe(2);
+  });
+});
+
+describe("каталог из панели", () => {
+  it("геймдизайнер заводит задание и правит награду — игрок видит сразу, каждое изменение в аудите", async () => {
+    const ctx = setup();
+    const designer = await person(ctx, "501", "game_designer");
+    const fresh = def("daily_boss", { kind: "run_level", target: 30, coins: 200, sort: 50, title: "Дойди до босса" });
+    await ctx.service.view(ME, NOON);
+    await ctx.service.save(designer, fresh);
+    expect(byId(await ctx.service.view(ME, NOON), "daily_boss")).toMatchObject({ title: "Дойди до босса", target: 30, reward: { coins: 200 } });
+
+    await ctx.service.save(designer, { ...fresh, coins: 250, active: false });
+    expect(byId(await ctx.service.view(ME, NOON), "daily_boss")).toBeUndefined();
+    expect((await ctx.service.catalog(designer)).tasks.find((task) => task.taskId === "daily_boss")).toMatchObject({ coins: 250, active: false });
+
+    const audit = (await ctx.roles.recentAudit(10)).filter((entry) => entry.target === "daily_boss").map((entry) => entry.action);
+    expect(audit.sort()).toEqual(["tasks.create", "tasks.update"]);
+  });
+
+  it("срок и вид после создания не меняются: прогресс игроков записан по ним", async () => {
+    const ctx = setup();
+    const designer = await person(ctx, "502", "game_designer");
+    await expect(ctx.service.save(designer, def("daily_runs", { period: "weekly" }))).rejects.toBeInstanceOf(TaskShapeLockedError);
+    await expect(ctx.service.save(designer, def("daily_runs", { kind: "kills" }))).rejects.toBeInstanceOf(TaskShapeLockedError);
+  });
+
+  it("без права — отказ, и каталог не отдаётся", async () => {
+    const ctx = setup();
+    const moderator = await person(ctx, "503", "moderator");
+    await expect(ctx.service.save(moderator, def("daily_x"))).rejects.toThrow();
+    await expect(ctx.service.catalog(moderator)).rejects.toThrow();
+    expect(ctx.repository.defs.some((task) => task.taskId === "daily_x")).toBe(false);
+  });
+
+  it("форма знает виды целей и сроки", async () => {
+    const ctx = setup();
+    const owner = await person(ctx, OWNER_ID);
+    const view = await ctx.service.catalog(owner);
+    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level"]);
+    expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
+    expect(view.tasks).toHaveLength(CATALOG.length);
   });
 });
 

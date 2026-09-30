@@ -127,6 +127,21 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       VALUES (${me}::uuid, 'daily_level', '2026-09-30', 1, 20, now(), now())`).rejects.toThrow();
   });
 
+  it("каталог из панели: новое заводится однажды, правка не трогает срок и вид и помнит автора", async () => {
+    const actor = await account();
+    const taskId = `it_panel_${String(Date.now())}`;
+    const task: TaskDef = { taskId, period: "weekly", kind: "kills", target: 500, title: "Проверка", coins: 50, gems: 0, shards: 0, passPoints: 5, sort: 99, active: true };
+    expect(await repository.insert(task, actor, NOON)).toBe(true);
+    expect(await repository.insert({ ...task, coins: 999 }, actor, NOON)).toBe(false);
+
+    expect(await repository.update({ ...task, period: "daily", kind: "runs", coins: 75, active: false }, actor, NOON)).toBe(true);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === taskId)).toEqual({ ...task, coins: 75, active: false });
+    const [row] = await prisma.$queryRaw<{ updated_by: string }[]>`SELECT updated_by::text FROM task_def WHERE task_id = ${taskId}`;
+    expect(row?.updated_by).toBe(actor);
+
+    expect(await repository.update({ ...task, taskId: "it_missing_task" }, actor, NOON)).toBe(false);
+  });
+
   it("удалённый аккаунт уносит прогресс и засчитанные забеги", async () => {
     const me = await account();
     await repository.applyRun({ runId: runId(), accountId: me, at: NOON, deltas: deltas({ daily_runs: 1 }) });
