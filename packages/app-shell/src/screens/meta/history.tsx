@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Package, Zap } from "lucide-react";
-import { Button, Card, ContentColumn, ErrorState, Screen, StubNotice } from "../../design-system/components";
+import { Button, Card, ContentColumn, ErrorState, InfoNotice, Screen } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
 import { formatNumber, hasTranslation, t } from "../../i18n";
@@ -49,7 +49,7 @@ export function HistoryScreen(): ReactNode {
     <Screen title={t("history.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
         {!historyAvailable() ? (
-          <StubNotice text={t("history.guest")} />
+          <InfoNotice text={t("history.guest")} />
         ) : (
           <>
             <p className="text-sm text-text-muted">{t("history.intro")}</p>
@@ -73,7 +73,7 @@ export function HistoryScreen(): ReactNode {
             <div className="mt-3">
               {state.status === "loading" ? <p className="text-sm text-text-muted">{t("history.loading")}</p> : null}
               {state.status === "failed" ? <ErrorState text={t("history.failed")} onRetry={() => void load(filter)} /> : null}
-              {state.status === "ready" && state.entries.length === 0 ? <StubNotice text={t("history.empty")} /> : null}
+              {state.status === "ready" && state.entries.length === 0 ? <InfoNotice text={t("history.empty")} /> : null}
               {state.status === "ready" ? (
                 <div className="grid gap-2">
                   {state.entries.map((entry) => (
