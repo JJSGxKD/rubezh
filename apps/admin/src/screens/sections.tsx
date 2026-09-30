@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
+import { ChangelogScreen } from "./changelog/ChangelogScreen";
 import { DiagnosticsScreen } from "./diagnostics/DiagnosticsScreen";
 import { ExportsScreen } from "./exports/ExportsScreen";
 import { FunnelScreen } from "./funnel/FunnelScreen";
@@ -29,4 +30,5 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   flags: () => <FlagsScreen />,
   settings: () => <SettingsScreen />,
   broadcasts: (id) => <BroadcastsScreen id={id} />,
+  changelog: () => <ChangelogScreen />,
 };
