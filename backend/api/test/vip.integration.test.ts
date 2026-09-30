@@ -89,6 +89,15 @@ describe.skipIf(DATABASE_URL === "")("VIP на живом Postgres", () => {
     expect(state.subscriptions).toEqual([{ subscriptionId: first, renewal: "on", cancelledBy: null, createdAt: NOW, until: state.until }]);
   });
 
+  it("конец VIP для надбавки — самый поздний конец периода одним запросом; без VIP — пусто", async () => {
+    const me = await account();
+    expect(await vip.until(me)).toBeNull();
+    const first = await paidVip(me);
+    await vip.addPeriod({ purchaseId: first, subscriptionId: first, accountId: me, paidAt: NOW, periodSec: PERIOD_SEC, at: NOW });
+    await vip.addPeriod({ purchaseId: await paidVip(me, first), subscriptionId: first, accountId: me, paidAt: NOW, periodSec: PERIOD_SEC, at: NOW });
+    expect(await vip.until(me)).toEqual(new Date(NOW.getTime() + 60 * DAY_MS));
+  });
+
   it("кончившийся VIP начинается заново с оплаты, а не с прошлого конца", async () => {
     const me = await account();
     const first = await paidVip(me);

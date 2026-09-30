@@ -59,6 +59,10 @@ export class MemoryVipRepository implements VipRepository {
     return { until: latest(periods), subscriptions, today, dailyClaimedToday: this.dailyDays.get(accountId) === today };
   }
 
+  async until(accountId: string): Promise<Date | null> {
+    return latest([...this.periods.values()].filter((period) => period.accountId === accountId));
+  }
+
   async addPeriod(record: PeriodRecord): Promise<StoredPeriod> {
     const known = this.periods.get(record.purchaseId);
     if (known !== undefined) return { startsAt: known.startsAt, endsAt: known.endsAt, created: false };

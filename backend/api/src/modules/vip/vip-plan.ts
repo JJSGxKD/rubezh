@@ -1,4 +1,5 @@
 import type { Product } from "@bh/fx";
+import { isEarnReason, type EarnReason, type GrantReason } from "../wallet/wallet-types.js";
 
 /**
  * VIP в числах (docs/35-stage4-plan.md Р20, Р26, Р44). Меняется здесь, в
@@ -25,6 +26,24 @@ export const VIP_PLAN = {
 
 /** Самоцветы, которые VIP забирает раз в игровые сутки (Р26). */
 export const VIP_DAILY_GEMS = 10;
+
+/**
+ * Увеличенные награды VIP (Р44, §3.14): множитель начисления по причине
+ * кошелька. Опыт не умножается — только то, что ложится на счёт, как у
+ * удвоения за рекламу. Суточный потолок причины растёт на тот же множитель.
+ * Рабочие числа (О27).
+ */
+export const VIP_REWARD_MUL: Partial<Record<EarnReason, number>> = {
+  daily_reward: 1.5,
+  wheel_reward: 1.5,
+  run_reward: 1.5,
+  task_reward: 1.5,
+};
+
+/** Множитель VIP для причины начисления; `undefined` — у причины надбавки нет. */
+export function vipRewardMul(reason: GrantReason): number | undefined {
+  return isEarnReason(reason) ? VIP_REWARD_MUL[reason] : undefined;
+}
 
 /** VIP для слоя цен WP9: базовая цена и ручная — в звёздах. */
 export function vipProduct(): Product {
