@@ -83,6 +83,9 @@ erDiagram
     ACCOUNT ||--o{ BROADCAST_DELIVERY : "получал рассылки"
     BROADCAST }o..o| LINK : "кнопка — ссылка кампании, без внешнего ключа"
     ACCOUNT ||--o{ WHEEL_SPIN : "крутки колеса"
+    ACCOUNT ||--o{ TASK_PROGRESS : "прогресс заданий по срокам"
+    TASK_DEF ||--o{ TASK_PROGRESS : "цель каталога"
+    ACCOUNT ||--o{ TASK_RUN : "забеги, засчитанные заданиям"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -562,6 +565,40 @@ erDiagram
         datetime created_at
         datetime granted_at "nullable: выпало, но кошелёк ещё не начислил"
     }
+
+    TASK_DEF {
+        string task_id PK "правится из панели; не удаляется, а выключается"
+        enum period "daily|weekly|achievement"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level"
+        int target "больше нуля"
+        string title "nullable: текст по виду цели у клиента"
+        int coins
+        int gems
+        int shards "обычные осколки; награда не пустая"
+        int pass_points "очки батл-пасса (WP26)"
+        int sort
+        boolean active
+        datetime created_at
+        datetime updated_at
+        uuid updated_by "nullable, без FK: null — строка из миграции"
+    }
+
+    TASK_PROGRESS {
+        uuid account_id PK,FK
+        string task_id PK,FK
+        date period_start PK "сутки или понедельник по Москве; у достижений — общий день"
+        int value "не больше цели"
+        int target "цель на момент последнего движения"
+        datetime completed_at "nullable"
+        datetime claimed_at "nullable: только у выполненного"
+        datetime updated_at
+    }
+
+    TASK_RUN {
+        string run_id PK "забег засчитан заданиям однажды"
+        uuid account_id FK
+        datetime applied_at
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -632,6 +669,14 @@ erDiagram
   одна в игровые сутки: её держит частичный уникальный индекс по аккаунту и
   суткам, крутки за рекламу (WP12) под него не попадают. `granted_at` —
   кошелёк начислил ключом крутки; пусто — следующая крутка дожмёт.
+- **`TASK_DEF`, `TASK_PROGRESS`, `TASK_RUN` — задания и достижения**
+  (`35-stage4-plan.md`, Р52, WP13): каталог в базе правится из панели без
+  релиза, вид цели — строкой, новый вид приходит кодом. Прогресс — строка на
+  срок: сутки и неделя по Москве, у достижений — один общий день, поэтому
+  сбрасывать ничего не нужно, новый срок — новая строка. Прогресс двигает
+  записанный забег; `TASK_RUN` занимается в той же транзакции, и повтор
+  события не удваивает прогресс. Забор — начисление кошельком ключом
+  задания и срока, потом условная отметка `claimed_at`.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1240,6 +1285,7 @@ flowchart LR
         CHANGELOG["changelog<br/>журнал обновлений по площадкам,<br/>раздача app_update пачками, реализовано"]
         PLAYERLIST["player-list<br/>список игроков для панели:<br/>фильтры, страница по индексу, реализовано"]
         WHEEL["wheel<br/>колесо: сектора от уровня,<br/>бесплатная крутка в сутки, реализовано"]
+        TASKS["tasks<br/>задания и достижения: каталог в базе,<br/>прогресс от забегов, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1380,6 +1426,10 @@ flowchart LR
     WHEEL -. "награда ключом крутки" .-> WALLET
     WHEEL -. "уровень аккаунта" .-> PROG
     BADGES -. "крутка ждёт" .-> WHEEL
+    CADDY -- "/api/v1/tasks" --> TASKS
+    TASKS -- "task_def, task_progress, task_run" --> PG
+    RUNS -. "записанный забег, RunsHooks" .-> TASKS
+    TASKS -. "награда ключом задания и срока" .-> WALLET
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET

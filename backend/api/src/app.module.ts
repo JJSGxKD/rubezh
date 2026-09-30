@@ -43,6 +43,7 @@ import { HistoryModule } from "./modules/history/history.module.js";
 import { DailyModule } from "./modules/daily/daily.module.js";
 import { ChangelogModule } from "./modules/changelog/changelog.module.js";
 import { WheelModule } from "./modules/wheel/wheel.module.js";
+import { TasksModule } from "./modules/tasks/tasks.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -111,6 +112,7 @@ export const APP_MODULES = [
   BroadcastsModule,
   ChangelogModule,
   WheelModule,
+  TasksModule,
 ];
 
 /**
