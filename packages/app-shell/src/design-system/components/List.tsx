@@ -26,8 +26,10 @@ export function ListItem(props: ListItemProps): ReactNode {
           {props.icon}
         </span>
       )}
+      {/* Заголовок переносится, а не обрезается: на 320 px «Помощь в
+          тестировании» с многоточием теряла смысл. */}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-text">{props.title}</span>
+        <span className="block text-sm font-medium break-words text-text">{props.title}</span>
         {props.hint === undefined ? null : (
           <span className="mt-0.5 block text-xs text-text-muted">{props.hint}</span>
         )}
@@ -109,8 +111,11 @@ export function Toggle(props: ToggleProps): ReactNode {
 
 /** Группа строк с общим фоном: список настроек читается как один блок. */
 export function ListGroup(props: { children: ReactNode }): ReactNode {
+  // Колонка — `minmax(0, 1fr)`, а не `auto`: иначе она растёт до ширины
+  // заголовка без переноса, и на 320 px «Помощь в тестировании» выталкивала
+  // стрелку за край вместо того, чтобы обрезаться многоточием.
   return (
-    <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border shadow-card">
+    <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border shadow-card">
       {props.children}
     </div>
   );
