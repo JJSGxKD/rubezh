@@ -179,6 +179,17 @@ jobs:
           tar -czf "rubezh-web-telegram-${{ steps.version.outputs.version }}.tar.gz" -C apps/web-telegram/dist .
           tar -czf "rubezh-admin-${{ steps.version.outputs.version }}.tar.gz" -C apps/admin/dist .
 
+      # Строки журнала обновлений — из разделов «Для игроков» PR выпуска
+      # (docs/35-stage4-plan.md WP31): файл уходит в релиз рядом со статикой,
+      # выкат заводит строки черновиками, публикует человек в панели. Шаг — до
+      # тега: база сборки — прежний стабильный тег, а не этот выпуск.
+      - if: steps.tip.outputs.current == 'true'
+        name: Строки журнала обновлений
+        run: node scripts/release/player-notes.mjs "changelog-${VERSION}.json"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+
       # Имя пакета в GHCR должно быть в нижнем регистре, а владелец
       # репозитория пишется как есть — отсюда приведение регистра.
       - if: steps.tip.outputs.current == 'true'
@@ -218,7 +229,7 @@ jobs:
       - if: steps.tag.outputs.created == 'true'
         name: Черновик релиза
         run: >-
-          gh release create "$VERSION" "rubezh-web-telegram-${VERSION}.tar.gz" "rubezh-admin-${VERSION}.tar.gz"
+          gh release create "$VERSION" "rubezh-web-telegram-${VERSION}.tar.gz" "rubezh-admin-${VERSION}.tar.gz" "changelog-${VERSION}.json"
           --draft --verify-tag --generate-notes
           ${{ steps.version.outputs.prerelease == 'true' && '--prerelease' || '' }}
           ${{ steps.version.outputs.previous_tag != '' && format('--notes-start-tag {0}', steps.version.outputs.previous_tag) || '' }}

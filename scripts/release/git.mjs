@@ -59,6 +59,34 @@ export function pullRequestsForCommit(sha) {
   return JSON.parse(json);
 }
 
+/**
+ * Влитые PR в ветку — одним запросом, с описаниями: строки журнала
+ * обновлений собираются из разделов «Для игроков» (scripts/release/player-notes.mjs).
+ * Поля — в форме REST API, как у `pullRequestsForCommit`: разбор общий.
+ */
+export function mergedPullRequests(baseBranch, limit = 300) {
+  const json = gh([
+    "pr",
+    "list",
+    "--state",
+    "merged",
+    "--base",
+    baseBranch,
+    "--limit",
+    String(limit),
+    "--json",
+    "number,body,mergedAt,mergeCommit,headRefName,baseRefName",
+  ]);
+  return JSON.parse(json).map((pr) => ({
+    number: pr.number,
+    body: pr.body ?? "",
+    merged_at: pr.mergedAt ?? null,
+    merge_commit_sha: pr.mergeCommit?.oid ?? null,
+    head: { ref: pr.headRefName },
+    base: { ref: pr.baseRefName },
+  }));
+}
+
 export function viewPr(number) {
   const json = gh(["pr", "view", String(number), "--json", "number,title,body,labels,headRefName,baseRefName"]);
   return JSON.parse(json);
