@@ -1868,6 +1868,31 @@ Redis и расписанием под локом; заданные курсы �
   начисление и после окна; другой сессией — «уже удвоено».
 - **Клиент** — с обёртками SDK, как и крутка колеса.
 
+**Стык с клиентом — предложение облачного агента** (О13 → Л10, до
+договорённости не реализован). Порт адаптера в `packages/shared-types`:
+
+```ts
+interface AdShowRequest {
+  network: string;                    // из выдачи сервера: adsgram, adsonar, richads, taddy
+  blockId: string;                    // идентификатор блока в кабинете сети
+  format: "rewarded" | "interstitial";
+}
+type AdShowOutcome =
+  | { kind: "completed" }                            // SDK подтвердил досмотр
+  | { kind: "closed" }                               // закрыт раньше — без награды
+  | { kind: "failed"; reason: string };              // no_fill, sdk_error, timeout, busy
+showAd?(request: AdShowRequest): Promise<AdShowOutcome>;
+```
+
+Адаптер знает сети и их SDK, а не места и награды: грузит скрипт сети при
+первом показе, создаёт контроллер блока однажды, ждёт с таймаутом, не даёт
+двух показов разом (`busy`) и переводит события SDK в исход — у AdsGram
+`onBannerNotFound` это `no_fill`, а не поломка. Оболочка ведёт поток:
+`POST /ads/sessions` → `showAd` → шаги `shown`, `completed` или `failed`
+в `/ads/sessions/{id}/result` → забор у хозяина места; отказ сети — одна
+повторная выдача, и сервер уже предложит следующую сеть. На время показа —
+пауза забега и приглушённый звук.
+
 ### WP13. Задания, достижения, награда дня, колесо
 
 **Цель.** Причина открыть игру завтра (`05-game-design.md` §3).
