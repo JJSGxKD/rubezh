@@ -69,6 +69,19 @@ export function cooldownMinutes(rules: PlaceRules["cooldown"], ordinal: number):
 }
 
 /**
+ * Больше всего наград места за игровые сутки: первая в полночь, каждая
+ * следующая — сразу по кулдауну. По этому числу хозяин места сверяет свой
+ * суточный потолок кошелька; `null` — кулдауна нет, считает хозяин.
+ */
+export function maxRewardsPerDay(place: AdPlace): number | null {
+  const rules = PLACE_RULES[place].cooldown;
+  if (rules === null) return null;
+  let rewards = 1;
+  for (let minute = cooldownMinutes(rules, 1); minute < 24 * 60; minute += cooldownMinutes(rules, rewards)) rewards++;
+  return rewards;
+}
+
+/**
  * Сколько ждёт выполненная сессия, пока хозяин места её заберёт. Показ
  * забирают сразу — окно лишь переживает обрыв сети; целевое действие
  * подтверждается днями, а игрок может открыть игру ещё позже. Окно не даёт
