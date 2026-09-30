@@ -87,6 +87,9 @@ erDiagram
     TASK_DEF ||--o{ TASK_PROGRESS : "цель каталога"
     ACCOUNT ||--o{ TASK_RUN : "забеги, засчитанные заданиям"
     ACCOUNT ||--o| TEST_NOTICE : "принял предупреждение о тесте"
+    AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
+    AD_BLOCK ||--o{ AD_SESSION : "выдан в показ"
+    ACCOUNT ||--o{ AD_SESSION : "показы рекламы"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -607,6 +610,46 @@ erDiagram
         datetime accepted_at "когда принята эта версия"
         datetime first_accepted_at "первое принятие — не переписывается"
     }
+
+    AD_NETWORK {
+        string network_key PK "adsgram, adsonar, richads, taddy"
+        string name
+        boolean active "из миграции — выключены"
+        int priority "меньше — раньше в круге"
+        datetime updated_at
+    }
+
+    AD_BLOCK {
+        uuid block_id PK
+        string network_key FK
+        enum place "second_chance|wheel_spin|run_double|task|interstitial"
+        string external_id "идентификатор блока в кабинете сети"
+        enum success "view|click|cpa — условие успеха"
+        boolean active
+        enum_array platforms "пусто — все площадки"
+        string_array devices "android, ios, desktop, web; пусто — все"
+        datetime created_at
+        datetime updated_at
+        uuid updated_by "nullable, без FK"
+    }
+
+    AD_SESSION {
+        string session_id PK "12 случайных байт, не токен"
+        uuid account_id FK
+        enum place
+        uuid block_id FK
+        string network_key "копией: круг сетей без соединения"
+        enum success
+        enum status "pending|shown|completed|claimed|failed|expired"
+        datetime created_at
+        datetime shown_at "nullable"
+        datetime clicked_at "nullable"
+        datetime completed_at "nullable: условие успеха выполнено"
+        datetime claimed_at "nullable: только у выполненной"
+        datetime failed_at "nullable"
+        string fail_reason "nullable: код отказа SDK"
+        datetime expires_at "позже created_at"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -690,6 +733,16 @@ erDiagram
   растёт — новый текст показывается заново тем, кто принимал прежний; первое
   принятие не переписывается: по нему проверяется, что игрок видел
   предупреждение до первой покупки. Видно в карточке игрока в панели.
+- **`AD_NETWORK`, `AD_BLOCK`, `AD_SESSION` — реклама** (`35-stage4-plan.md`,
+  §3.7, WP12). Сеть и её блоки мест — данными: площадки и устройства блока
+  списками, без ветвлений в коде. Сессия показа — воронка с меткой каждого
+  шага; выполненной её делает досмотр от клиента только там, где успех —
+  показ, клик и целевое действие подтверждает сервер. Выбор сети и кулдаун
+  места считаются по сессиям игрока в месте с начала вчерашних суток —
+  одним запросом по индексу, без счётчиков рядом. Награду выдаёт хозяин
+  места, забирая сессию: забор мест игрока идёт под транзакционной
+  блокировкой на аккаунт и место, поэтому ни одна сессия, ни две разом не
+  дают второй награды в кулдаун. Забор без выполнения база не примет.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -796,16 +849,14 @@ erDiagram
 Модель, к которой идём при переносе рекламы и рефералки
 (`13-reuse-from-vpnsibcom.md` §3, §7). Приведена, чтобы решения принимались с
 оглядкой на целевую картину, а не только на сегодняшнюю. Аккаунт, сессии,
-касания, роли и покупки отсюда ушли: на этапе 3 они легли в базу — §1.1.
+касания, роли и покупки отсюда ушли: на этапе 3 они легли в базу — §1.1;
+реклама — на этапе 4, там же.
 
 ```mermaid
 erDiagram
     ACCOUNT ||--o{ EVENT : "порождает"
-    ACCOUNT ||--o{ ADS_VIEW : "смотрит"
     ACCOUNT ||--o{ REFERRAL : "приглашает"
     ACCOUNT ||--o| BALANCE : "владеет"
-    ADS_BLOCK ||--o{ ADS_VIEW : "показан в"
-    ADS_NETWORK ||--o{ ADS_BLOCK : "обслуживает"
 
     EVENT {
         uuid id PK
@@ -813,31 +864,6 @@ erDiagram
         enum eventType "FIRST_RUN|RUN_COMPLETED|FIRST_PURCHASE|AD_REWARD_CLAIMED|D1_RETURN"
         json payload
         datetime createdAt
-    }
-
-    ADS_VIEW {
-        uuid id PK
-        uuid account_id FK
-        uuid blockId FK
-        string sessionKey UK "одноразовый ключ показа"
-        decimal reward
-        datetime claimedAt "nullable до получения награды"
-        datetime createdAt
-    }
-
-    ADS_BLOCK {
-        uuid id PK
-        enum place "TASK|REWARD|BANNER|FULLSCREEN"
-        bool showAndroid
-        bool showIos
-        bool showDesktop
-        bool isActive
-    }
-
-    ADS_NETWORK {
-        string key PK
-        bool isActive
-        int priority "порядок в fallback-цепочке"
     }
 
     REFERRAL {
@@ -1266,7 +1292,7 @@ flowchart LR
         ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
         PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение, возвраты, реализовано"]
-        ADS["ads<br/>сессии показа, награды"]
+        ADS["ads<br/>реклама: выбор сети, воронка показа,<br/>кулдаун места, реализовано ядро"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
         INGEST["ingest<br/>выключатели, Origin, лимиты,<br/>подпись запуска, реализовано"]
@@ -1322,7 +1348,7 @@ flowchart LR
     CADDY --> AUTH
     CADDY --> RUNS
     CADDY --> PAY
-    CADDY --> ADS
+    CADDY -- "/api/v1/ads" --> ADS
     CADDY --> REF
     CADDY --> CONTENT
     CADDY --> EVENTS
@@ -1385,7 +1411,7 @@ flowchart LR
     PAY -. забег, который продолжают .-> RUNS
     RUNS -. сверка продолжений с покупками .-> PAY
     RUNS -. слушатели записанного забега .-> PAY
-    ADS --> REDIS
+    ADS -- "ad_network, ad_block, ad_session" --> PG
     REF --> PG
     CONTENT --> PG
     CONTENT --> CDN
@@ -1596,35 +1622,50 @@ sequenceDiagram
   только на первую запись: повтор из очереди не посчитает забег дважды и не
   пришлёт вторую карточку.
 
-### 4.3 Награда за просмотр рекламы
+### 4.3 Награда за просмотр рекламы (этап 4, реализовано ядро)
 
 ```mermaid
 sequenceDiagram
     participant C as Клиент
     participant AD as ads
-    participant R as Redis
     participant N as Рекламная сеть
+    participant O as Хозяин места<br/>(колесо, забег, задания)
     participant DB as PostgreSQL
+    participant W as wallet
 
-    C->>AD: GET /api/v1/ads/{place}
-    AD->>DB: выбрать блок по платформе и месту
-    AD->>R: создать сессию показа (meta, TTL)
-    AD-->>C: подписанный одноразовый ключ + параметры блока
-    C->>N: показ рекламы
-    N-->>C: просмотр завершён
-    C->>AD: POST /api/v1/ads/confirm { ключ }
-    AD->>R: SET NX used:{sid} — атомарно
-    alt ключ уже использован или чужой
-        AD-->>C: отказ
+    C->>AD: POST /api/v1/ads/sessions { place, device }
+    AD->>DB: сессии игрока в месте с начала вчерашних суток
+    alt место на кулдауне
+        AD-->>C: { available: false, reason: cooldown, retryAt }
+    else ни одного подходящего блока
+        AD-->>C: { available: false, reason: no_fill }
     else
-        AD->>DB: начислить награду в транзакции
-        AD-->>C: награда
+        Note over AD: сеть — без выданных за час,<br/>круг от сети последней награды,<br/>внутри сети — случайный блок
+        AD->>DB: INSERT ad_session (pending, срок по условию успеха)
+        AD-->>C: { sessionId, network, blockId, success }
+    end
+    C->>N: показ блока через SDK
+    N-->>C: досмотр, клик или отказ
+    C->>AD: POST /api/v1/ads/sessions/{id}/result { outcome }
+    AD->>DB: UPDATE шаг воронки — только открытой своей сессии
+    Note over AD,DB: completed от клиента — только где успех показ
+    C->>O: забрать награду места { sessionId }
+    O->>AD: claim(sessionId, место)
+    AD->>DB: блокировка аккаунта и места, история, кулдаун, UPDATE claimed
+    alt не выполнена, окно прошло или кулдаун
+        AD-->>O: отказ
+    else забрана сейчас или раньше
+        AD-->>O: сессия
+        O->>W: награда ключом, содержащим sessionId
     end
 ```
 
-Проверка «использована ли сессия» и начисление — **одна атомарная операция**.
-Иначе два параллельных `confirm` оба проходят проверку и награда начисляется
-дважды (`13-reuse-from-vpnsibcom.md` §5).
+Одна сессия — одна награда: забор и проверка кулдауна идут под одной
+транзакционной блокировкой, а повтор после обрыва отдаёт ту же сессию, и
+хозяин места дожимает награду тем же ключом кошелька. Клик и целевое
+действие выполненной сессию сделает сервер — своим редиректом и постбэком
+сети, следующей частью WP12, а не ответом SDK (`35-stage4-plan.md` §3.7,
+«Доверие»).
 
 ### 4.4 Публикация конфигурации из админки
 
