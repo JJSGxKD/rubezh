@@ -67,6 +67,7 @@ export function App(): ReactNode {
   const [menuOpen, setMenuOpen] = useState(false);
   const arsenalCount = useBadges((state) => state.arsenal);
   const friendsCount = useBadges((state) => state.friends);
+  const tasksCount = useBadges((state) => state.tasks);
 
   usePlatformButtons(stack, screen);
 
@@ -78,8 +79,8 @@ export function App(): ReactNode {
 
   const tab = activeTab(stack);
   // Знак — только с полезной нагрузкой (Р50): новые предметы, подарки к
-  // выдаче и заявки друзей.
-  const badges: Partial<Record<string, string | undefined>> = { arsenal: badgeText(arsenalCount), friends: badgeText(friendsCount) };
+  // выдаче и заявки друзей, награды заданий к забору.
+  const badges: Partial<Record<string, string | undefined>> = { arsenal: badgeText(arsenalCount), friends: badgeText(friendsCount), tasks: badgeText(tasksCount) };
   const tabs = TABS.map((item) => {
     const badge = badges[item.id];
     return badge === undefined ? item : { ...item, badge };
