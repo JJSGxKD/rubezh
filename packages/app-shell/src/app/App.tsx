@@ -2,7 +2,6 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { ListChecks, Store, Swords, Trophy, Users } from "lucide-react";
 import { ArmorIcon, ScreenTransition, TabBar, type TabItem } from "../design-system/components";
 import { AppHeader } from "./AppHeader";
-import { MainMenu } from "./MainMenu";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
 import {
@@ -33,6 +32,7 @@ import {
   GuideScreen,
   HistoryScreen,
   LevelScreen,
+  MainMenu,
   NotificationsScreen,
   ProfileScreen,
   RatingScreen,
@@ -92,9 +92,10 @@ export function App(): ReactNode {
   const runUnderneath = screen !== "run" && stack.includes("run");
 
   return (
-    <div className="bg-app relative flex h-full flex-col">
+    <div className="bg-app relative flex h-full flex-col" data-app-header={showTabs ? "" : undefined}>
       {/* Шапка — у разделов нижней панели: внутри раздела верх экрана занят
-          заголовком и кнопкой «назад». */}
+          заголовком и кнопкой «назад». Лежит поверх прокрутки, а не над ней:
+          содержимое уходит под её стекло (WP30). */}
       {showTabs ? <AppHeader onMenu={() => setMenuOpen(true)} /> : null}
       <main className="relative min-h-0 flex-1">
         {screen === "run" || runUnderneath ? (
@@ -131,7 +132,11 @@ export function App(): ReactNode {
           onSelect={(id) => useNavigation.getState().resetTo(id as ScreenId)}
         />
       ) : null}
-      {menuOpen && showTabs ? <MainMenu onClose={() => setMenuOpen(false)} /> : null}
+      {menuOpen && showTabs ? (
+        <Suspense fallback={null}>
+          <MainMenu onClose={() => setMenuOpen(false)} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

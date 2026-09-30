@@ -36,6 +36,7 @@ const loaders = {
   stress: () => import("../screens/stress/StressScreen"),
   soundLab: () => import("../screens/sound-lab"),
   diagnostics: () => import("../screens/diagnostics"),
+  menu: () => import("./MainMenu"),
 };
 
 function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): ComponentType {
@@ -70,6 +71,12 @@ export const WheelScreen = screen(loaders.wheel, "WheelScreen");
 export const GuideScreen = screen(loaders.guide, "GuideScreen");
 export const FeedbackScreen = screen(loaders.feedback, "FeedbackScreen");
 export const StressScreen = screen(loaders.stress, "StressScreen");
+
+/**
+ * Меню из шапки — чанком: первому кадру оно не нужно, а лобби подтягивает
+ * его в простое вместе с экранами, и к первому нажатию оно уже загружено.
+ */
+export const MainMenu = lazy(async () => ({ default: (await loaders.menu()).MainMenu }));
 export const SoundLabScreen = screen(loaders.soundLab, "SoundLabScreen");
 
 /**
