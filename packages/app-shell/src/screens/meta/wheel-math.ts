@@ -3,35 +3,9 @@
  * стрелка останавливается ровно на выпавшем секторе: колесо, показывающее
  * одно, а выдающее другое, для игрока выглядит как обман.
  *
- * Результат крутки в настоящем колесе выбирает сервер, клиент только
- * докручивает до него (docs/07-monetization-and-ads.md §7). Поэтому выбор
- * сектора и поворот — две разные функции.
+ * Результат крутки и шансы присылает сервер, клиент только докручивает
+ * колесо до выпавшего сектора (docs/07-monetization-and-ads.md §7).
  */
-
-/** Сектор по броску `roll` из [0, 1): вероятность пропорциональна весу. */
-export function pickSector(weights: readonly number[], roll: number): number {
-  const total = weights.reduce((sum, weight) => sum + Math.max(0, weight), 0);
-  if (total <= 0) return 0;
-
-  let threshold = Math.min(Math.max(roll, 0), 1) * total;
-  // roll = 1 или накопленная ошибка округления проходят цикл насквозь —
-  // тогда выпадает последний сектор с весом.
-  let lastWeighted = 0;
-  for (let index = 0; index < weights.length; index += 1) {
-    const weight = Math.max(0, weights[index] ?? 0);
-    if (weight <= 0) continue;
-    if (threshold < weight) return index;
-    threshold -= weight;
-    lastWeighted = index;
-  }
-  return lastWeighted;
-}
-
-/** Шансы в процентах для таблицы на экране. */
-export function sectorOdds(weights: readonly number[]): number[] {
-  const total = weights.reduce((sum, weight) => sum + Math.max(0, weight), 0);
-  return weights.map((weight) => (total <= 0 ? 0 : (Math.max(0, weight) / total) * 100));
-}
 
 /** Угол середины сектора от верха по часовой стрелке, в градусах. */
 export function sectorCenterDeg(index: number, count: number): number {

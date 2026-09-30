@@ -1,0 +1,19 @@
+{
+  "wheel.title": "Колесо удачи",
+  "wheel.text": "Одна бесплатная крутка в день. За валюту колесо не крутится.",
+  "wheel.spin.free": "Крутить бесплатно",
+  "wheel.spin.next": "Через {time}",
+  "wheel.spin.ad": "Крутка за рекламу — скоро",
+  "wheel.result": "Выпало: {reward}",
+  "wheel.capped": "На сегодня лимит колеса исчерпан — начислено {amount}",
+  "wheel.odds": "Шансы",
+  "wheel.percent": "{value} %",
+  "wheel.reward.coins": "{amount} {n, plural, one {монета} few {монеты} many {монет} other {монеты}}",
+  "wheel.reward.shard_common": "{amount} {n, plural, one {обычный осколок} few {обычных осколка} many {обычных осколков} other {обычного осколка}}",
+  "wheel.reward.shard_uncommon": "{amount} {n, plural, one {добротный осколок} few {добротных осколка} many {добротных осколков} other {добротного осколка}}",
+  "wheel.loading": "Загружаем колесо…",
+  "wheel.failed": "Не удалось загрузить колесо — проверьте связь",
+  "wheel.spinFailed": "Крутка не прошла — проверьте связь и попробуйте ещё раз",
+  "wheel.spent": "Бесплатная крутка на сегодня уже была",
+  "wheel.guest": "Колесо — с входом через Telegram: крутки считаются по аккаунту."
+}

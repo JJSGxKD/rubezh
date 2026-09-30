@@ -1,20 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { hasTranslation } from "../src/i18n";
 import { formatCountdown, msUntilReset } from "../src/screens/meta/schedule";
-import {
-  ACHIEVEMENTS,
-  WHEEL_SECTORS,
-  achievementProgress,
-} from "../src/screens/meta/stub-content";
-import {
-  pickSector,
-  sectorCenterDeg,
-  sectorOdds,
-  spinRotationDeg,
-} from "../src/screens/meta/wheel-math";
+import { ACHIEVEMENTS, achievementProgress } from "../src/screens/meta/stub-content";
+import { sectorCenterDeg, spinRotationDeg } from "../src/screens/meta/wheel-math";
 
-// Заглушки меты: сброс заданий, колесо, достижения
+// Мета: сброс заданий, поворот колеса, достижения
 // (docs/07-monetization-and-ads.md §7, docs/27-design-system-and-app-shell.md §6).
+// Сектора, шансы и выбор сектора колеса — на сервере, их проверяет
+// backend/api/test/wheel.test.ts.
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -64,49 +57,19 @@ describe("обратный отсчёт", () => {
 });
 
 describe("колесо удачи", () => {
-  it("выбирает сектор пропорционально весу", () => {
-    const weights = [1, 0, 3];
-    expect(pickSector(weights, 0)).toBe(0);
-    expect(pickSector(weights, 0.24)).toBe(0);
-    expect(pickSector(weights, 0.26)).toBe(2);
-  });
-
-  it("никогда не выдаёт сектор с нулевым весом, даже на краях броска", () => {
-    expect(pickSector([2, 0], 1)).toBe(0);
-    expect(pickSector([0, 5, 0], 0)).toBe(1);
-    expect(pickSector([0, 5, 0], 0.9999)).toBe(1);
-    expect(pickSector([3, -2, 0], 0.99)).toBe(0);
-  });
-
-  it("без единого веса не падает", () => {
-    expect(pickSector([], 0.5)).toBe(0);
-    expect(pickSector([0, 0], 0.5)).toBe(0);
-  });
-
   it("останавливает стрелку ровно на середине выпавшего сектора", () => {
-    const count = WHEEL_SECTORS.length;
-    for (let index = 0; index < count; index += 1) {
-      for (const current of [0, 137.5, 2000]) {
-        const rotation = spinRotationDeg(current, index, count, 5);
-        const underPointer = (((rotation + sectorCenterDeg(index, count)) % 360) + 360) % 360;
-        expect(Math.min(underPointer, 360 - underPointer)).toBeCloseTo(0, 6);
-        // Только вперёд и не меньше пяти полных оборотов, но и не лишний шестой.
-        expect(rotation - current).toBeGreaterThanOrEqual(5 * 360);
-        expect(rotation - current).toBeLessThan(6 * 360);
+    for (const count of [6, 8, 12]) {
+      for (let index = 0; index < count; index += 1) {
+        for (const current of [0, 137.5, 2000]) {
+          const rotation = spinRotationDeg(current, index, count, 5);
+          const underPointer = (((rotation + sectorCenterDeg(index, count)) % 360) + 360) % 360;
+          expect(Math.min(underPointer, 360 - underPointer)).toBeCloseTo(0, 6);
+          // Только вперёд и не меньше пяти полных оборотов, но и не лишний шестой.
+          expect(rotation - current).toBeGreaterThanOrEqual(5 * 360);
+          expect(rotation - current).toBeLessThan(6 * 360);
+        }
       }
     }
-  });
-
-  it("показывает шансы, в сумме дающие сто процентов", () => {
-    const odds = sectorOdds(WHEEL_SECTORS.map((sector) => sector.weight));
-    expect(odds.reduce((sum, value) => sum + value, 0)).toBeCloseTo(100, 6);
-    expect(odds.every((value) => value > 0)).toBe(true);
-  });
-
-  it("не даёт донатную валюту: к случайной награде не должно быть денежного пути", () => {
-    // docs/07-monetization-and-ads.md §7: крутка бесплатная или за рекламу, а
-    // антирекламный пакет выдаёт рекламные награды без ролика.
-    expect(WHEEL_SECTORS.some((sector) => sector.reward.kind === "premium")).toBe(false);
   });
 });
 

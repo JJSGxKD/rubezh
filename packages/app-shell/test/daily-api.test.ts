@@ -5,8 +5,8 @@ import { useBadges } from "../src/state/badges";
 import { createDailyApi, dayOfWeek } from "../src/state/daily-api";
 
 // Клиент награды дня (docs/35-stage4-plan.md WP13): неделя и забор — с
-// сервера, схемой; знак награды на главной — из знаков меню, и сервер старее
-// клиента без этого поля знак просто не зажигает.
+// сервера, схемой; знаки награды дня и колеса на главной — из знаков меню, и
+// сервер старее клиента без этих полей знак просто не зажигает.
 
 function server(paths: string[], answer: unknown): ApiRequest {
   return async <T,>(path: string, schema: object, init?: { method?: string }): Promise<ApiResult<T>> => {
@@ -43,11 +43,11 @@ describe("клиент награды дня", () => {
     expect(dayOfWeek(today, VIEW.days)).toBe(3);
   });
 
-  it("знаки меню от сервера без награды дня и журнала — знаки не горят, остальное принято", async () => {
+  it("знаки меню от сервера без награды дня, колеса и журнала — знаки не горят, остальное принято", async () => {
     await loadBadges(createBadgesApi(server([], { arsenal: 1, friends: 2, notifications: 3 })));
-    expect(useBadges.getState()).toEqual({ arsenal: 1, friends: 2, notifications: 3, daily: 0, changelog: 0 });
+    expect(useBadges.getState()).toEqual({ arsenal: 1, friends: 2, notifications: 3, daily: 0, changelog: 0, wheel: 0 });
 
-    await loadBadges(createBadgesApi(server([], { arsenal: 0, friends: 0, notifications: 0, daily: 1, changelog: 2 })));
-    expect(useBadges.getState()).toMatchObject({ daily: 1, changelog: 2 });
+    await loadBadges(createBadgesApi(server([], { arsenal: 0, friends: 0, notifications: 0, daily: 1, changelog: 2, wheel: 1 })));
+    expect(useBadges.getState()).toMatchObject({ daily: 1, changelog: 2, wheel: 1 });
   });
 });

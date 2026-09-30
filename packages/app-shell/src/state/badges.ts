@@ -3,8 +3,8 @@ import { create } from "zustand";
 /**
  * Знаки меню (docs/35-stage4-plan.md Р50, §3.17) — только числа: новые
  * предметы на вкладке арсенала, подарки и заявки друзей, непрочитанное на
- * колокольчике, незабранная награда дня на плитке главной, новые версии в
- * «Что нового» в меню. Приходят одним запросом (`badges-api.ts`, отдельным чанком):
+ * колокольчике, незабранная награда дня и некрученое колесо на плитках
+ * главной, новые версии в «Что нового» в меню. Приходят одним запросом (`badges-api.ts`, отдельным чанком):
  * первой загрузке нужны только числа, и то после входа.
  */
 export interface Badges {
@@ -13,9 +13,11 @@ export interface Badges {
   friends: number;
   daily: number;
   changelog: number;
+  /** бесплатная крутка суток ждёт */
+  wheel: number;
 }
 
-export const useBadges = create<Badges>()(() => ({ notifications: 0, arsenal: 0, friends: 0, daily: 0, changelog: 0 }));
+export const useBadges = create<Badges>()(() => ({ notifications: 0, arsenal: 0, friends: 0, daily: 0, changelog: 0, wheel: 0 }));
 
 /** Текст знака: ноль — знака нет, больше девяти — «9+». */
 export function badgeText(count: number): string | undefined {

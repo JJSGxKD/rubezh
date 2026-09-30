@@ -40,7 +40,7 @@ export const TAB_ROOTS = ["shop", "arsenal", "lobby", "tasks", "rating", "friend
 export type TabId = (typeof TAB_ROOTS)[number];
 
 /** Экраны-заглушки: их заходы считаются отдельно — это замер интереса (§6). */
-const STUB_SCREENS: ReadonlySet<ScreenId> = new Set<ScreenId>(["shop", "tasks", "wheel"]);
+const STUB_SCREENS: ReadonlySet<ScreenId> = new Set<ScreenId>(["shop", "tasks"]);
 
 export interface NavigationStore {
   stack: ScreenId[];

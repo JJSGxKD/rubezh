@@ -1,5 +1,5 @@
 /**
- * Примеры для заглушек меты: награда дня, колесо, задания, достижения.
+ * Примеры для заглушек меты: задания и достижения.
  *
  * Это не баланс. Настоящие награды, задания и шансы появятся вместе с
  * экономикой (этапы 4–5) и будут жить на сервере — клиенту нельзя доверять
@@ -36,28 +36,6 @@ function boost(amount: number): Reward {
 function skin(amount: number): Reward {
   return { kind: "skin", amount };
 }
-
-/**
- * Сектора колеса по часовой стрелке от верха. `weight` — шанс в процентах:
- * шансы показываются игроку на том же экране. Донатной валюты в колесе нет —
- * крутка бесплатная или за рекламу, и денежный путь к случайной награде
- * закрыт с обеих сторон (docs/07-monetization-and-ads.md §7).
- */
-export interface WheelSector {
-  reward: Reward;
-  weight: number;
-}
-
-export const WHEEL_SECTORS: readonly WheelSector[] = [
-  { reward: shards(50), weight: 26 },
-  { reward: boost(1), weight: 16 },
-  { reward: shards(100), weight: 18 },
-  { reward: shards(500), weight: 3 },
-  { reward: shards(25), weight: 24 },
-  { reward: boost(2), weight: 7 },
-  { reward: shards(250), weight: 5 },
-  { reward: skin(1), weight: 1 },
-];
 
 export type TaskIcon = "runs" | "kills" | "survive" | "upgrades" | "elites" | "record";
 
