@@ -159,7 +159,7 @@ export class PaymentsService {
     const provider = this.providers.for(account.platform);
     if (provider === null || !provider.accepts(account.platformUserId)) throw new PaymentsUnsupportedError();
     if (order.subscriptionPeriodSec !== undefined && provider.subscriptionPeriodSec !== order.subscriptionPeriodSec) throw new PaymentsUnsupportedError();
-    const mode: PaymentMode = this.config.payments.testMode ? "test" : "live";
+    const { mode, chargedStars } = this.charge(order.priceStars);
     const outcome = await this.purchases.openShopInvoice({
       purchaseId: randomUUID(),
       accountId: account.accountId,
@@ -167,7 +167,7 @@ export class PaymentsService {
       sku: order.sku,
       onceKey: order.once ? onceKeyOf(order.sku, account.accountId) : null,
       priceStars: order.priceStars,
-      chargedStars: mode === "test" ? 1 : order.priceStars,
+      chargedStars,
       mode,
       invoicedAt: new Date(nowMs),
     });
@@ -237,10 +237,22 @@ export class PaymentsService {
     }
 
     const priceStars = continuePrice(request.elapsedSec, this.config.payments);
-    // Тестовая оплата (Р14): цена настоящая — её игрок и видит, — а
-    // списывается одна звезда, и та вернётся сразу после подтверждения.
-    const mode: PaymentMode = this.config.payments.testMode ? "test" : "live";
-    return { continueNo: request.continueNo, priceStars, chargedStars: mode === "test" ? 1 : priceStars, mode };
+    return { continueNo: request.continueNo, priceStars, ...this.charge(priceStars) };
+  }
+
+  /**
+   * Сколько спишется за цену и в каком режиме. Тестовая оплата (Р14): цена
+   * настоящая — её игрок и видит, — а списывается одна звезда, и та вернётся
+   * сразу после подтверждения. Витрина показывает то же, что окажется в счёте.
+   */
+  charge(priceStars: number): { mode: PaymentMode; chargedStars: number } {
+    const { mode } = this;
+    return { mode, chargedStars: mode === "test" ? 1 : priceStars };
+  }
+
+  /** Режим оплаты: тестовый — только в разработке (Р14). */
+  get mode(): PaymentMode {
+    return this.config.payments.testMode ? "test" : "live";
   }
 
   private async invoiceLink(account: AccountRef, purchase: StoredPurchase, invoice: ProviderInvoice): Promise<string> {

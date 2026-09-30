@@ -144,11 +144,20 @@ describe("витрина и счёт", () => {
     const view = await ctx.shop.view(player());
     expect(view.payable).toBe(true);
     expect(view.items.map((item) => item.sku)).toEqual([...SHOP_SKUS].sort((a, b) => a.sort - b.sort).map((sku) => sku.id));
-    expect(view.items.find((item) => item.sku === "gems_60")).toMatchObject({ stars: 50, owned: false, contents: [{ resource: "gems", amount: 60 }] });
+    expect(view.items.find((item) => item.sku === "gems_60")).toMatchObject({ stars: 50, chargedStars: 50, owned: false, contents: [{ resource: "gems", amount: 60 }] });
+    expect(view.mode).toBe("live");
 
     const vk = await ctx.shop.view(player("vk", "12345"));
     expect(vk).toMatchObject({ payable: false });
-    expect(vk.items.every((item) => item.stars === null)).toBe(true);
+    expect(vk.items.every((item) => item.stars === null && item.chargedStars === null)).toBe(true);
+  });
+
+  it("в тестовом режиме витрина говорит об этом и показывает, что спишется звезда, — как потом в счёте", async () => {
+    const test = setup(config({ PAYMENTS_TEST_MODE: "true", NODE_ENV: "development" }));
+    const view = await test.shop.view(player());
+    expect(view.mode).toBe("test");
+    expect(view.items.find((item) => item.sku === "gems_330")).toMatchObject({ stars: 250, chargedStars: 1 });
+    expect(await test.shop.order(player(), "gems_330")).toMatchObject({ priceStars: 250, chargedStars: 1, mode: "test" });
   });
 
   it("счёт — по цене каталога; неизвестный товар — 404, площадка без оплаты и вход разработчика — отказ", async () => {

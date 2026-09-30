@@ -3,7 +3,7 @@ import { methodFor, priceIn } from "../payments/payment-methods.js";
 import { PaymentsUnsupportedError } from "../payments/payments-errors.js";
 import { PaymentsService, type ShopInvoice } from "../payments/payments.service.js";
 import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
-import type { StoredPurchase } from "../payments/purchase-types.js";
+import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { ShopSkuNotFoundError, ShopSkuUnavailableError } from "./shop-errors.js";
@@ -25,6 +25,8 @@ export interface ShopItemView {
   contents: { resource: ShopResource; amount: number }[];
   /** цена в звёздах; `null` — на этой площадке способа оплаты нет */
   stars: number | null;
+  /** сколько спишется на самом деле: в тестовом режиме — звезда (Р14) */
+  chargedStars: number | null;
   once: boolean;
   /** разовый товар уже куплен */
   owned: boolean;
@@ -34,6 +36,8 @@ export interface ShopView {
   items: ShopItemView[];
   /** на площадке игрока есть способ оплаты */
   payable: boolean;
+  /** тестовая оплата — витрина предупреждает, что звезда вернётся */
+  mode: PaymentMode;
 }
 
 @Injectable()
@@ -59,14 +63,19 @@ export class ShopService implements OnModuleInit {
     const method = methodFor(account.platform);
     return {
       payable: method !== undefined,
-      items: skus.map((sku) => ({
-        sku: sku.id,
-        kind: sku.kind,
-        contents: contentsOf(sku),
-        stars: method === undefined ? null : priceIn(priceProduct(sku), method),
-        once: sku.once,
-        owned: owned.has(sku.id),
-      })),
+      mode: this.payments.mode,
+      items: skus.map((sku) => {
+        const stars = method === undefined ? null : priceIn(priceProduct(sku), method);
+        return {
+          sku: sku.id,
+          kind: sku.kind,
+          contents: contentsOf(sku),
+          stars,
+          chargedStars: stars === null ? null : this.payments.charge(stars).chargedStars,
+          once: sku.once,
+          owned: owned.has(sku.id),
+        };
+      }),
     };
   }
 
