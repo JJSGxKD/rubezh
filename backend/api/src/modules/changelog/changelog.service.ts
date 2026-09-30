@@ -8,7 +8,13 @@ import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { ChangelogEntryNotFoundError } from "./changelog-errors.js";
 import { ChangelogFanout } from "./changelog-fanout.js";
 import { CHANGELOG_PAGE_DEFAULT, freshVersions, pageOf, releasePlatforms, visibleOn, type ChangelogPage, type PublishedEntry } from "./changelog-rules.js";
-import { CHANGELOG_REPOSITORY, type ChangelogEntryInput, type ChangelogEntryRecord, type ChangelogReleaseRecord, type ChangelogRepository } from "./changelog.repository.js";
+import {
+  CHANGELOG_REPOSITORY,
+  type ChangelogEntryInput,
+  type ChangelogEntryRecord,
+  type ChangelogReleaseRecord,
+  type ChangelogRepository,
+} from "./changelog.repository.js";
 
 /**
  * Журнал обновлений (docs/35-stage4-plan.md Р61, WP31): игроку — строки его
@@ -44,6 +50,7 @@ export interface PublishResult {
 }
 
 type Player = Pick<AccountRef, "accountId" | "platform">;
+
 
 @Injectable()
 export class ChangelogService {

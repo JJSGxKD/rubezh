@@ -19,6 +19,7 @@ import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js"
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { ChangelogFanout } from "../src/modules/changelog/changelog-fanout.js";
+import { importDrafts, parseImportFile } from "../src/modules/changelog/changelog-import.js";
 import {
   FANOUT_BATCH,
   FANOUT_MAX_BATCHES,
@@ -362,6 +363,58 @@ describe("раздача уведомления о версии", () => {
     s.repository.pendingReleases = async () => Promise.reject(new Error("база недоступна"));
     expect(await s.fanout.tick(new Date(T0))).toBeNull();
     expect(s.locks.size).toBe(0);
+  });
+});
+
+describe("черновики из PR при выкате", () => {
+  const LINE = { sourceKey: "pr-141-1", version: "0.6.0", kind: "added", platforms: [], text: "Журнал обновлений" } as const;
+
+  it("строка заводится черновиком один раз; новый текст PR правит черновик, а версия едет вместе с ним", async () => {
+    const s = setup();
+    const audit: string[] = [];
+    const record = async (entry: { action: string }) => void audit.push(entry.action);
+
+    expect(await importDrafts(s.repository, record, [LINE], new Date(T0))).toEqual({ created: 1, updated: 0, kept: 0, removed: 0 });
+    expect(await importDrafts(s.repository, record, [LINE], new Date(T0 + 1))).toEqual({ created: 0, updated: 0, kept: 1, removed: 0 });
+    expect(await importDrafts(s.repository, record, [{ ...LINE, version: "0.7.0", text: "Журнал обновлений в меню" }], new Date(T0 + 2))).toEqual({ created: 0, updated: 1, kept: 0, removed: 0 });
+
+    const [entry] = await s.repository.all();
+    expect(entry).toMatchObject({ version: "0.7.0", text: "Журнал обновлений в меню", publishedAt: null, updatedBy: null, sourceKey: "pr-141-1" });
+    expect(audit).toEqual(["changelog.import", "changelog.import"]);
+  });
+
+  it("правленное человеком, опубликованное и удалённое в панели выкат не трогает", async () => {
+    const s = setup();
+    const owner = await player(s, "telegram", OWNER_ID);
+    const noop = async () => undefined;
+    await importDrafts(s.repository, noop, [LINE, { ...LINE, sourceKey: "pr-141-2", text: "Колесо" }, { ...LINE, sourceKey: "pr-141-3", text: "Удалим" }]);
+    const [edited, published, removed] = await s.repository.all();
+    if (edited === undefined || published === undefined || removed === undefined) throw new Error("нет строк");
+
+    await s.service.save(owner, { entryId: edited.entryId, version: "0.6.0", kind: "added", platforms: [], text: "Правка команды" });
+    await s.repository.publish("0.6.0", new Date(T0));
+    await s.service.remove(owner, removed.entryId);
+
+    const again = [
+      { ...LINE, text: "Текст из PR" },
+      { ...LINE, sourceKey: "pr-141-2", text: "Колесо удачи" },
+      { ...LINE, sourceKey: "pr-141-3", text: "Удалим" },
+    ];
+    expect(await importDrafts(s.repository, noop, again)).toEqual({ created: 0, updated: 0, kept: 2, removed: 1 });
+    expect((await s.repository.all()).map((entry) => entry.text).sort()).toEqual(["Колесо", "Правка команды"]);
+  });
+
+  it("файл релиза — граница: мусор не проходит, площадки без повторов", () => {
+    const file = (patch: Record<string, unknown> = {}, entry: Record<string, unknown> = {}) =>
+      JSON.stringify({ version: "0.6.0", entries: [{ key: "pr-141-1", kind: "fixed", platforms: ["vk", "vk"], text: " Звук ", ...entry }], ...patch });
+    expect(parseImportFile(file())).toEqual([{ sourceKey: "pr-141-1", version: "0.6.0", kind: "fixed", platforms: ["vk"], text: "Звук" }]);
+    expect(() => parseImportFile(file({ version: "0.6.0-rc.3" }))).toThrow();
+    expect(() => parseImportFile(file({}, { key: "141" }))).toThrow();
+    expect(() => parseImportFile(file({}, { kind: "новое" }))).toThrow();
+    expect(() => parseImportFile(file({}, { platforms: ["ok"] }))).toThrow();
+    expect(() => parseImportFile(file({}, { text: "x".repeat(501) }))).toThrow();
+    expect(() => parseImportFile("не json")).toThrow();
+    expect(parseImportFile(JSON.stringify({ version: "0.6.0", entries: [] }))).toEqual([]);
   });
 });
 

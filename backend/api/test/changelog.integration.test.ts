@@ -93,6 +93,27 @@ describe.skipIf(DATABASE_URL === "")("журнал обновлений на ж�
     expect(await repository.advanceRelease(release, second, null, null)).toBe(false);
   });
 
+  it("черновик из PR: один на ключ даже под гонкой, правленное человеком и удалённое не трогается", async () => {
+    const release = version();
+    const key = `pr-${String(Math.floor(Math.random() * 9_000_000) + 1_000_000)}-1`;
+    const line = { sourceKey: key, version: release, kind: "added" as const, platforms: ["telegram" as const], text: "Журнал обновлений" };
+    const at = new Date();
+
+    const outcomes = await Promise.all(Array.from({ length: 4 }, () => repository.importDraft(line, at)));
+    expect(outcomes.filter((outcome) => outcome === "created")).toHaveLength(1);
+    const created = (await repository.all()).find((entry) => entry.sourceKey === key);
+    expect(created).toMatchObject({ version: release, platforms: ["telegram"], publishedAt: null, updatedBy: null });
+
+    expect(await repository.importDraft({ ...line, text: "Журнал обновлений в меню" }, at)).toBe("updated");
+    await repository.update(created?.entryId ?? "", { ...line, text: "Правка команды" }, crypto.randomUUID(), at);
+    expect(await repository.importDraft({ ...line, text: "Снова из PR" }, at)).toBe("kept");
+    expect((await repository.byId(created?.entryId ?? ""))?.text).toBe("Правка команды");
+
+    await repository.remove(created?.entryId ?? "");
+    expect(await repository.importDraft(line, at)).toBe("removed");
+    expect((await repository.all()).some((entry) => entry.sourceKey === key)).toBe(false);
+  });
+
   it("отметка «открывал» только растёт, даже под гонкой", async () => {
     const me = await account("telegram");
     const times = [5, 1, 9, 3].map((minutes) => new Date(Date.UTC(2026, 8, 30, 12, minutes)));
