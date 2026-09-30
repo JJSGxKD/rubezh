@@ -24,3 +24,20 @@ export class AdCooldownError extends DomainError {
     super("ad_cooldown", "Награда за рекламу здесь уже была — загляните позже", 409);
   }
 }
+
+/** Сети или блока с таким идентификатором нет — панель перечитывает каталог. */
+export class AdCatalogNotFoundError extends DomainError {
+  constructor(what: "network" | "block") {
+    super(what === "network" ? "ad_network_not_found" : "ad_block_not_found", what === "network" ? "Такой рекламной сети нет" : "Такого рекламного блока нет", 404);
+  }
+}
+
+/**
+ * Сеть и место у заведённого блока не меняются: по ним посчитана воронка
+ * прошлых показов. Нужен другой — заводится новый блок, а этот выключается.
+ */
+export class AdBlockShapeLockedError extends DomainError {
+  constructor() {
+    super("ad_block_shape_locked", "Сеть и место блока не меняются — заведите новый блок, а этот выключите", 409);
+  }
+}

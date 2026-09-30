@@ -6,9 +6,11 @@ import { BroadcastsModule } from "../broadcasts/broadcasts.module.js";
 import { ChangelogModule } from "../changelog/changelog.module.js";
 import { PlayerListModule } from "../player-list/player-list.module.js";
 import { TasksModule } from "../tasks/tasks.module.js";
+import { AdsModule } from "../ads/ads.module.js";
 import { TestNoticeModule } from "../test-notice/test-notice.module.js";
 import { AdminChangelogController } from "./admin-changelog.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
+import { AdminAdsController } from "./admin-ads.controller.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { FriendsModule } from "../friends/friends.module.js";
 import { ReferralsModule } from "../referrals/referrals.module.js";
@@ -54,7 +56,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, TestNoticeModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, TestNoticeModule, AdsModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -70,6 +72,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
     AdminBroadcastsController,
     AdminChangelogController,
     AdminTasksController,
+    AdminAdsController,
   ],
   providers: [
     AdminSessionService,

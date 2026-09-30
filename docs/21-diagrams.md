@@ -1412,6 +1412,7 @@ flowchart LR
     RUNS -. сверка продолжений с покупками .-> PAY
     RUNS -. слушатели записанного забега .-> PAY
     ADS -- "ad_network, ad_block, ad_session" --> PG
+    ADMINAPI -. "сети, блоки, воронка показов" .-> ADS
     REF --> PG
     CONTENT --> PG
     CONTENT --> CDN
