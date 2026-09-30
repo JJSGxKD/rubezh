@@ -8,9 +8,11 @@ import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
 import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import { SubscriptionRenewal } from "../payments/subscription-renewal.js";
 import type { AccountRef } from "../roles/roles.service.js";
+import { WalletBonuses } from "../wallet/wallet-bonus.js";
+import type { GrantReason } from "../wallet/wallet-types.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { VipActiveError, VipInactiveError, VipResumeUnavailableError } from "./vip-errors.js";
-import { VIP_DAILY_GEMS, VIP_PERIOD_SEC, VIP_PLAN, vipProduct } from "./vip-plan.js";
+import { VIP_DAILY_GEMS, VIP_PERIOD_SEC, VIP_PLAN, VIP_REWARD_MUL, vipProduct, vipRewardMul } from "./vip-plan.js";
 import { VIP_REPOSITORY, type VipCanceller, type VipRenewal, type VipRepository, type VipState, type VipSubscriptionRow } from "./vip.repository.js";
 
 /**
@@ -20,9 +22,9 @@ import { VIP_REPOSITORY, type VipCanceller, type VipRenewal, type VipRepository,
  * отнимает оплаченного: VIP работает до конца периода.
  *
  * Оплату ведёт модуль оплаты — счёт с периодом, продления, отмена
- * продления через порт площадки; VIP решает, почём он и что даёт. Сейчас —
- * самоцветы раз в игровые сутки; без рекламы и увеличенные награды — там,
- * где их выдают (Р44).
+ * продления через порт площадки; VIP решает, почём он и что даёт: самоцветы
+ * раз в игровые сутки и увеличенные награды — надбавкой в начислении
+ * кошелька (Р44). Без рекламы — там, где её показывают.
  */
 
 const DB_TIMEOUT_MS = 3_000;
@@ -46,6 +48,8 @@ export interface VipView {
   sku: string;
   periodDays: number;
   daily: { gems: number; claimed: boolean };
+  /** во сколько раз больше награды дня, колеса, забега и заданий, пока VIP идёт */
+  rewardMul: number;
 }
 
 export interface VipDailyResult {
@@ -66,11 +70,25 @@ export class VipService implements OnModuleInit {
     private readonly hooks: PaymentsHooks,
     private readonly renewal: SubscriptionRenewal,
     private readonly wallet: WalletService,
+    private readonly bonuses: WalletBonuses,
   ) {}
 
   onModuleInit(): void {
     this.fulfillment.register("vip", (purchase) => this.fulfill(purchase));
     this.hooks.onSubscriptionChanged("vip", (change) => this.changed(change));
+    this.bonuses.register("vip", (accountId, reason, at) => this.rewardMul(accountId, reason, at));
+  }
+
+  /**
+   * Надбавка к начислению (Р44): только причинам из `VIP_REWARD_MUL` и только
+   * пока VIP идёт. Причине без надбавки база не нужна — её начисление не
+   * платит за VIP лишним запросом.
+   */
+  async rewardMul(accountId: string, reason: GrantReason, at: Date): Promise<number> {
+    const mul = vipRewardMul(reason);
+    if (mul === undefined) return 1;
+    const until = await withTimeout(this.repository.until(accountId), DB_TIMEOUT_MS, "VIP");
+    return until !== null && until.getTime() > at.getTime() ? mul : 1;
   }
 
   async view(account: AccountRef, at = new Date()): Promise<VipView> {
@@ -234,5 +252,6 @@ export function viewOf(state: VipState, account: AccountRef, at: Date, pricing: 
     sku: VIP_PLAN.sku,
     periodDays: VIP_PLAN.periodDays,
     daily: { gems: VIP_DAILY_GEMS, claimed: state.dailyClaimedToday },
+    rewardMul: VIP_REWARD_MUL.run_reward ?? 1,
   };
 }

@@ -5,7 +5,8 @@ import { ForbiddenError, ValidationError } from "../src/common/domain-error.js";
 import { $Enums } from "../src/generated/prisma/client.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { EXCHANGE_RESOURCES, WALLET_DAILY_CAPS, WALLET_MAX_OPERATION } from "../src/modules/wallet/wallet-limits.js";
-import type { WalletRepository } from "../src/modules/wallet/wallet.repository.js";
+import { WalletBonuses } from "../src/modules/wallet/wallet-bonus.js";
+import type { CreditInput, CreditOutcome, WalletRepository } from "../src/modules/wallet/wallet.repository.js";
 import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { EARN_REASONS, WALLET_RESOURCES, emptyBalances } from "../src/modules/wallet/wallet-types.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -136,3 +137,56 @@ describe("кошелёк: настройки", () => {
     expect(EXCHANGE_RESOURCES.salvage.every((resource) => resource.startsWith("shard_"))).toBe(true);
   });
 });
+
+/** Репозиторий, который запоминает, что ему дали начислить. */
+class RecordingWallet implements WalletRepository {
+  readonly credits: CreditInput[] = [];
+  async credit(input: CreditInput): Promise<CreditOutcome> {
+    this.credits.push(input);
+    const credited = input.dailyCap === null ? input.amount : Math.min(input.amount, input.dailyCap);
+    return { status: "credited", credited, balance: credited };
+  }
+  async debit(): Promise<never> {
+    throw new Error("надбавки списаний не касаются");
+  }
+  async balances() {
+    return emptyBalances();
+  }
+  async recentEntries() {
+    return [];
+  }
+}
+
+describe("кошелёк: надбавки (Р44)", () => {
+  function bonused(provider: (reason: string) => number) {
+    const repository = new RecordingWallet();
+    const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
+    const bonuses = new WalletBonuses();
+    bonuses.register("test", async (_accountId, reason) => provider(reason));
+    return { wallet: new WalletService(repository, config(), roles, bonuses), repository };
+  }
+
+  it("надбавка умножает начисление и суточный потолок причины — вместе, а не снимая потолок", async () => {
+    const { wallet, repository } = bonused((reason) => (reason === "run_reward" ? 1.5 : 1));
+    expect(await wallet.grant(grant({ amount: 101 }))).toMatchObject({ credited: 152, duplicate: false });
+    expect(repository.credits[0]).toMatchObject({ amount: 152, dailyCap: Math.round((WALLET_DAILY_CAPS.run_reward.coins ?? 0) * 1.5) });
+
+    await wallet.grant(grant({ reason: "friend_gift", amount: 100 }));
+    expect(repository.credits[1]).toMatchObject({ amount: 100, dailyCap: WALLET_DAILY_CAPS.friend_gift.coins });
+  });
+
+  it("надбавка не выводит операцию за предел одной операции", async () => {
+    const { wallet, repository } = bonused(() => 3);
+    await wallet.grant(grant({ amount: WALLET_MAX_OPERATION }));
+    expect(repository.credits[0]?.amount).toBe(WALLET_MAX_OPERATION);
+  });
+
+  it("надбавка меньше единицы или не число — ошибка, а не урезанная награда", async () => {
+    for (const bad of [0.5, Number.NaN]) {
+      const { wallet, repository } = bonused(() => bad);
+      await expect(wallet.grant(grant())).rejects.toThrow(/надбавка test/);
+      expect(repository.credits).toEqual([]);
+    }
+  });
+});
+

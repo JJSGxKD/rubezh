@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Crown, Diamond, Sparkles } from "lucide-react";
+import { Check, Crown, Diamond, Sparkles, TrendingUp } from "lucide-react";
 import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, Modal, PageTitle, Screen, SectionTitle } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
-import { formatNumber, hasTranslation, t } from "../../i18n";
+import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import { createShopApi, shopAvailable, type ShopItem, type ShopView, type VipView } from "../../state/shop-api";
 import { buy, type BuyRequest } from "../../state/shop-purchase";
 import { useShell } from "../../state/shell";
@@ -234,6 +234,12 @@ function VipCard(props: {
           <GemIcon size={16} />
           {t("vip.perk.daily", { gems: formatNumber(vip.daily.gems), n: vip.daily.gems })}
         </li>
+        {vip.rewardMul !== undefined && vip.rewardMul > 1 ? (
+          <li className="flex items-center gap-2">
+            <TrendingUp size={16} aria-hidden="true" className="text-accent" />
+            {t("vip.perk.rewards", { mul: formatDecimal(vip.rewardMul) })}
+          </li>
+        ) : null}
         <li className="flex items-center gap-2 text-text-muted">
           <Sparkles size={16} aria-hidden="true" />
           {t("vip.perk.soon")}

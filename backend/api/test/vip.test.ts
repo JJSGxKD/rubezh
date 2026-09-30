@@ -21,10 +21,12 @@ import { SubscriptionRenewal } from "../src/modules/payments/subscription-renewa
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { TITLE_MAX } from "../src/modules/shop/shop-catalog.js";
-import { VIP_DAILY_GEMS, VIP_PERIOD_SEC, VIP_PLAN } from "../src/modules/vip/vip-plan.js";
+import { VIP_DAILY_GEMS, VIP_PERIOD_SEC, VIP_PLAN, VIP_REWARD_MUL } from "../src/modules/vip/vip-plan.js";
 import { VipController } from "../src/modules/vip/vip.controller.js";
 import { VipService } from "../src/modules/vip/vip.service.js";
+import { WalletBonuses } from "../src/modules/wallet/wallet-bonus.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
+import { ADMIN_REASON } from "../src/modules/wallet/wallet-types.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { TelegramApiError } from "../src/platforms/telegram/telegram-bot-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -91,9 +93,10 @@ function setup(settings = config()) {
   const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
   const repository = new MemoryVipRepository();
   const wallet = new FakeWallet();
-  const vip = new VipService(repository, payments, fulfillment, hooks, new SubscriptionRenewal(purchases, providers), wallet as unknown as WalletService);
+  const bonuses = new WalletBonuses();
+  const vip = new VipService(repository, payments, fulfillment, hooks, new SubscriptionRenewal(purchases, providers), wallet as unknown as WalletService, bonuses);
   vip.onModuleInit();
-  return { purchases, api, confirmation, queue, repository, wallet, vip };
+  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses };
 }
 
 type Ctx = ReturnType<typeof setup>;
@@ -233,6 +236,36 @@ describe("оформление и продление VIP", () => {
     const later = new Date(Date.now() + 31 * DAY_MS);
     expect(await ctx.vip.view(account, later)).toMatchObject({ active: false, renewal: "cancelled", canResume: false, canOrder: true });
     expect(await codeOf(ctx.vip.resume(account, later))).toBe("vip_resume_unavailable");
+  });
+});
+
+describe("увеличенные награды VIP (Р44)", () => {
+  it("пока VIP идёт — надбавка награде дня, колеса, забега и заданий; другим причинам, без VIP и после конца — единица", async () => {
+    const ctx = setup();
+    const account = player();
+    const now = new Date();
+    expect(await ctx.bonuses.multiplier(account.accountId, "run_reward", now)).toBe(1);
+
+    await subscribe(ctx, account);
+    for (const reason of ["daily_reward", "wheel_reward", "run_reward", "task_reward"] as const) {
+      expect(await ctx.bonuses.multiplier(account.accountId, reason, now), reason).toBe(VIP_REWARD_MUL[reason]);
+    }
+    for (const reason of ["friend_gift", "ad_reward", "subscription_daily", "purchase", ADMIN_REASON] as const) {
+      expect(await ctx.bonuses.multiplier(account.accountId, reason, now), reason).toBe(1);
+    }
+    expect(await ctx.bonuses.multiplier(account.accountId, "run_reward", new Date(now.getTime() + 31 * DAY_MS))).toBe(1);
+    expect(await ctx.bonuses.multiplier(player().accountId, "run_reward", now)).toBe(1);
+  });
+
+  it("состояние VIP говорит, во сколько раз больше награды, — экран пишет это в карточке", async () => {
+    expect((await setup().vip.view(player())).rewardMul).toBe(VIP_REWARD_MUL.run_reward);
+  });
+
+  it("множители — не меньше единицы и только у причин «из ничего» с суточным потолком", () => {
+    for (const [reason, mul] of Object.entries(VIP_REWARD_MUL)) {
+      expect(mul, reason).toBeGreaterThanOrEqual(1);
+      expect(Object.keys(WALLET_DAILY_CAPS), reason).toContain(reason);
+    }
   });
 });
 

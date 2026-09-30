@@ -3,6 +3,7 @@ import { ForbiddenError, ValidationError } from "../../common/domain-error.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { RolesService } from "../roles/roles.service.js";
+import { WalletBonuses } from "./wallet-bonus.js";
 import { EXCHANGE_RESOURCES, WALLET_DAILY_CAPS, WALLET_MAX_OPERATION } from "./wallet-limits.js";
 import { IdempotencyConflictError, InsufficientFundsError } from "./wallet-errors.js";
 import { WALLET_REPOSITORY, type ExistingEntry, type WalletEntryRow, type WalletRepository } from "./wallet.repository.js";
@@ -88,6 +89,8 @@ export class WalletService {
     @Inject(WALLET_REPOSITORY) private readonly repository: WalletRepository,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly roles: RolesService,
+    // Надбавки нужны модулю, а не каждому тесту кошелька: без них — множитель единица.
+    private readonly bonuses: WalletBonuses = new WalletBonuses(),
   ) {}
 
   async balances(accountId: string): Promise<Balances> {
@@ -101,15 +104,20 @@ export class WalletService {
   async grant(input: GrantInput): Promise<GrantResult> {
     checkAmount(input.amount);
     checkKey(input.idempotencyKey);
+    const at = input.at ?? new Date();
+    const cap = dailyCapOf(input.reason, input.resource);
+    // Надбавка — до записи: ключ операции один, и начисленное с ним уже не поправить.
+    const bonus = await this.bonuses.multiplier(input.accountId, input.reason, at);
+    const amount = bonus === 1 ? input.amount : Math.min(WALLET_MAX_OPERATION, Math.round(input.amount * bonus));
     const outcome = await this.repository.credit({
       accountId: input.accountId,
       resource: input.resource,
-      amount: input.amount,
+      amount,
       reason: input.reason,
       source: input.source ?? null,
       idempotencyKey: input.idempotencyKey,
-      dailyCap: dailyCapOf(input.reason, input.resource),
-      at: input.at ?? new Date(),
+      dailyCap: cap === null || bonus === 1 ? cap : Math.round(cap * bonus),
+      at,
     });
 
     if (outcome.status === "duplicate") {
@@ -118,7 +126,7 @@ export class WalletService {
     }
     // Пишется только тот раз, когда начисление обрезалось: дальше в сутках
     // источник даёт нули молча, и лог не растёт вместе с накруткой.
-    if (outcome.credited > 0 && outcome.credited < input.amount) {
+    if (outcome.credited > 0 && outcome.credited < amount) {
       this.logger.warn(JSON.stringify({ module: "wallet", event: "daily_cap_reached", accountId: input.accountId, reason: input.reason, resource: input.resource }));
     }
     return { credited: outcome.credited, balance: outcome.balance, duplicate: false };

@@ -51,6 +51,8 @@ const vipSchema = z.object({
   sku: z.optional(z.string()),
   periodDays: z.number(),
   daily: z.object({ gems: z.number(), claimed: z.boolean() }),
+  /** во сколько раз больше награды дня, колеса, забега и заданий; сервер до надбавки поля не отдавал */
+  rewardMul: z.optional(z.number()),
 });
 
 const dailySchema = z.object({ claimed: z.boolean(), gems: z.number(), view: vipSchema });

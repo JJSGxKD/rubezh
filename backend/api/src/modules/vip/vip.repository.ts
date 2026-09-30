@@ -55,6 +55,8 @@ export const VIP_REPOSITORY = Symbol("VIP_REPOSITORY");
 
 export interface VipRepository {
   state(accountId: string, at: Date): Promise<VipState>;
+  /** Конец VIP — самый поздний конец периода; `null` — VIP не было. Один запрос по индексу: его спрашивает каждое начисление с надбавкой */
+  until(accountId: string): Promise<Date | null>;
   /**
    * Период за оплату: с конца прежнего, если тот ещё не кончился к оплате,
    * иначе с оплаты. Подписки нет — заводится с продлением `on`; оплата
@@ -114,6 +116,11 @@ export class PrismaVipRepository implements VipRepository {
         return { subscriptionId: parsed.subscription_id, renewal: parsed.renewal, cancelledBy: parsed.cancelled_by, createdAt: parsed.created_at, until: parsed.until };
       }),
     };
+  }
+
+  async until(accountId: string): Promise<Date | null> {
+    const found = await this.prisma.vipPeriod.findFirst({ where: { accountId }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
+    return found?.endsAt ?? null;
   }
 
   async addPeriod(record: PeriodRecord): Promise<StoredPeriod> {
