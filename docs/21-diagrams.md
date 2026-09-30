@@ -1379,6 +1379,7 @@ flowchart LR
     WHEEL -- "wheel_spin, сутки по Москве" --> PG
     WHEEL -. "награда ключом крутки" .-> WALLET
     WHEEL -. "уровень аккаунта" .-> PROG
+    BADGES -. "крутка ждёт" .-> WHEEL
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
