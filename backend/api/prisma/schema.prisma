@@ -201,6 +201,7 @@ model Account {
   taskProgress     TaskProgress[]
   taskRuns         TaskRun[]
   testNotice       TestNotice?
+  adSessions       AdSession[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1457,4 +1458,106 @@ model TestNotice {
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
   @@map("test_notice")
+}
+
+// Реклама (WP12)
+
+/// Место показа рекламы (docs/35-stage4-plan.md §3.7): награду за место выдаёт
+/// его хозяин, забирая сессию показа.
+enum AdPlace {
+  second_chance
+  wheel_spin
+  run_double
+  task
+  interstitial
+}
+
+/// Условие успеха предложения (Р6): показ, клик или целевое действие.
+enum AdSuccess {
+  view
+  click
+  cpa
+}
+
+/// Шаг воронки показа. `completed` — условие успеха выполнено, награда ждёт
+/// хозяина места; `claimed` — хозяин её забрал.
+enum AdSessionStatus {
+  pending
+  shown
+  completed
+  claimed
+  failed
+  expired
+}
+
+/// Рекламная сеть: включена ли и её место в круге показа.
+model AdNetwork {
+  networkKey String   @id @map("network_key") @db.VarChar(32)
+  name       String   @db.VarChar(64)
+  /// выключенная сеть не показывается ни в одном месте
+  active     Boolean  @default(false)
+  /// меньше — раньше в круге
+  priority   Int      @default(100)
+  updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
+
+  blocks AdBlock[]
+
+  @@map("ad_network")
+}
+
+/// Рекламный блок сети в месте показа — данными, без ветвлений по площадке в
+/// коде: площадки и устройства, где блок показывается, пустые — везде.
+model AdBlock {
+  blockId    String      @id @map("block_id") @db.Uuid
+  networkKey String      @map("network_key") @db.VarChar(32)
+  place      AdPlace
+  /// идентификатор блока в кабинете сети
+  externalId String      @map("external_id") @db.VarChar(128)
+  success    AdSuccess   @default(view)
+  active     Boolean     @default(true)
+  platforms  Platform[]  @default([])
+  /// android, ios, desktop, web
+  devices    String[]    @default([]) @db.VarChar(16)
+  createdAt  DateTime    @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime    @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт
+  updatedBy  String?     @map("updated_by") @db.Uuid
+
+  network  AdNetwork   @relation(fields: [networkKey], references: [networkKey])
+  sessions AdSession[]
+
+  // Блоки места — на каждый запрос показа.
+  @@index([place, active])
+  @@map("ad_block")
+}
+
+/// Сессия показа (docs/35-stage4-plan.md §3.7): воронка от выдачи до награды
+/// с метками времени каждого шага. Идентификатор — короткий случайный, а не
+/// токен в колонке (docs/13-reuse-from-vpnsibcom.md §5). Награду забирает
+/// хозяин места одной условной строкой — дважды одну сессию не забрать.
+model AdSession {
+  sessionId   String          @id @map("session_id") @db.VarChar(32)
+  accountId   String          @map("account_id") @db.Uuid
+  place       AdPlace
+  blockId     String          @map("block_id") @db.Uuid
+  networkKey  String          @map("network_key") @db.VarChar(32)
+  success     AdSuccess
+  status      AdSessionStatus @default(pending)
+  createdAt   DateTime        @map("created_at") @db.Timestamptz(3)
+  shownAt     DateTime?       @map("shown_at") @db.Timestamptz(3)
+  clickedAt   DateTime?       @map("clicked_at") @db.Timestamptz(3)
+  completedAt DateTime?       @map("completed_at") @db.Timestamptz(3)
+  claimedAt   DateTime?       @map("claimed_at") @db.Timestamptz(3)
+  failedAt    DateTime?       @map("failed_at") @db.Timestamptz(3)
+  /// код отказа сети или SDK — для разреза, без текста ошибки
+  failReason  String?         @map("fail_reason") @db.VarChar(64)
+  /// после этого сессию не выполнить и не забрать
+  expiresAt   DateTime        @map("expires_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  block   AdBlock @relation(fields: [blockId], references: [blockId])
+
+  // Выбор сети и кулдаун — по сессиям игрока в месте за последние сутки.
+  @@index([accountId, place, createdAt])
+  @@map("ad_session")
 }
