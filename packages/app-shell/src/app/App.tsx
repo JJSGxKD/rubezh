@@ -2,7 +2,6 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { ListChecks, Store, Swords, Trophy, Users } from "lucide-react";
 import { ArmorIcon, ScreenTransition, TabBar, type TabItem } from "../design-system/components";
 import { AppHeader } from "./AppHeader";
-import { MainMenu } from "./MainMenu";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
 import {
@@ -33,6 +32,7 @@ import {
   GuideScreen,
   HistoryScreen,
   LevelScreen,
+  MainMenu,
   NotificationsScreen,
   ProfileScreen,
   RatingScreen,
@@ -132,7 +132,11 @@ export function App(): ReactNode {
           onSelect={(id) => useNavigation.getState().resetTo(id as ScreenId)}
         />
       ) : null}
-      {menuOpen && showTabs ? <MainMenu onClose={() => setMenuOpen(false)} /> : null}
+      {menuOpen && showTabs ? (
+        <Suspense fallback={null}>
+          <MainMenu onClose={() => setMenuOpen(false)} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }
