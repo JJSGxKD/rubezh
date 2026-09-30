@@ -132,6 +132,23 @@ case "$(grep -E '^TELEGRAM_BOT_UPDATES=' api.env | tail -1 | cut -d= -f2-)" in
   polling) docker compose exec -T api node dist/cli/bot-webhook.js --delete < /dev/null || log "вебхук бота не снят — Bot API недоступен" ;;
 esac
 
+# Строки журнала обновлений из PR выпуска — черновиками (docs/35-stage4-plan.md
+# WP31): игрок их не видит, публикует человек в панели. Файл — из того же
+# релиза, что статика; у старых релизов его нет. Импорт идемпотентен: повтор
+# выката ничего не задваивает, а сбой журнала выкат не останавливает — строки
+# заведёт следующий выкат или их напишут в панели.
+import_changelog() {
+  local tmp
+  tmp="$(mktemp)"
+  if ! curl -fsSL --retry 3 --max-time 60 "https://github.com/${REPO}/releases/download/${VERSION}/changelog-${VERSION}.json" -o "$tmp"; then
+    log "в релизе ${VERSION} нет changelog-${VERSION}.json — журнал не пополняется"
+  elif ! docker compose exec -T api node dist/cli/changelog-import.js < "$tmp"; then
+    log "черновики журнала не заведены — выкат продолжается"
+  fi
+  rm -f "$tmp"
+}
+import_changelog
+
 for app in "${apps[@]}"; do switch_web "$app"; done
 
 # Роль для базовой копии — с правом репликации и только им; пароль — из
