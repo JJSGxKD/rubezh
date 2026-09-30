@@ -158,6 +158,10 @@ export const EVENT_DICTIONARY = {
   // какая по счёту неделя — удерживает ли награда. Сколько легло монет —
   // журнал кошелька, причина daily_reward.
   daily_reward_claimed: { version: 1, payload: payload({ day: count, week: count }) },
+  // Открыл журнал обновлений (docs/35-stage4-plan.md WP31): доходят ли игроки
+  // до него после выхода версии и откуда — из меню или из уведомления. Сколько
+  // версий было новыми — чтобы отличить «пришёл за новостью» от «просто листал».
+  changelog_opened: { version: 1, payload: payload({ fresh: count, source: z.enum(["menu", "notification"]) }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 
