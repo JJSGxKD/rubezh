@@ -9,7 +9,8 @@ import type { WheelReward } from "./wheel-rules.js";
 /**
  * Крутки колеса в базе (`wheel_spin`). Игровые сутки считает база — одна
  * граница у всех реплик (`common/game-day.ts`). Бесплатная крутка суток одна:
- * её держит частичный уникальный индекс, а не проверка перед вставкой.
+ * её держит частичный уникальный индекс, а не проверка перед вставкой; крутка
+ * за рекламу одна на сессию показа — уникальный индекс по сессии.
  */
 
 export interface WheelSpinRow {
@@ -32,6 +33,10 @@ export interface WheelRepository {
   freeToday(accountId: string, at: Date): Promise<WheelSpinRow | null>;
   /** записать бесплатную крутку суток; `null` — в эти сутки её уже записали */
   insertFree(accountId: string, spin: NewWheelSpin, at: Date): Promise<WheelSpinRow | null>;
+  /** записать крутку за рекламу; `null` — по этой сессии показа уже крутили */
+  insertAd(accountId: string, adSessionId: string, spin: NewWheelSpin, at: Date): Promise<WheelSpinRow | null>;
+  /** крутка по сессии показа, если была */
+  byAdSession(accountId: string, adSessionId: string): Promise<WheelSpinRow | null>;
   markGranted(spinId: string, at: Date): Promise<void>;
 }
 
@@ -68,6 +73,25 @@ export class PrismaWheelRepository implements WheelRepository {
               ${spin.sector}::smallint, ${spin.resource}::"WalletResource", ${spin.amount}::int, ${at})
       ON CONFLICT (account_id, game_day) WHERE source = 'free' DO NOTHING`;
     return inserted > 0 ? { spinId, sector: spin.sector, resource: spin.resource, amount: spin.amount, granted: false } : null;
+  }
+
+  async insertAd(accountId: string, adSessionId: string, spin: NewWheelSpin, at: Date): Promise<WheelSpinRow | null> {
+    const spinId = randomUUID();
+    const inserted = await this.prisma.$executeRaw`
+      INSERT INTO wheel_spin (spin_id, account_id, source, game_day, sector, resource, amount, created_at, ad_session_id)
+      VALUES (${spinId}::uuid, ${accountId}::uuid, 'ad', (${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date,
+              ${spin.sector}::smallint, ${spin.resource}::"WalletResource", ${spin.amount}::int, ${at}, ${adSessionId})
+      ON CONFLICT (ad_session_id) DO NOTHING`;
+    return inserted > 0 ? { spinId, sector: spin.sector, resource: spin.resource, amount: spin.amount, granted: false } : null;
+  }
+
+  async byAdSession(accountId: string, adSessionId: string): Promise<WheelSpinRow | null> {
+    const rows = await this.prisma.$queryRaw<unknown[]>`
+      SELECT spin_id::text, sector, resource::text, amount, granted_at IS NOT NULL AS granted
+      FROM wheel_spin WHERE ad_session_id = ${adSessionId} AND account_id = ${accountId}::uuid`;
+    if (rows.length === 0) return null;
+    const row = rowSchema.parse(rows[0]);
+    return { spinId: row.spin_id, sector: row.sector, resource: row.resource, amount: row.amount, granted: row.granted };
   }
 
   async markGranted(spinId: string, at: Date): Promise<void> {

@@ -111,6 +111,17 @@ export class AdsService {
     return { session: outcome.session, repeat: outcome.repeat };
   }
 
+  /**
+   * Готово ли место к рекламе — для экрана хозяина места: есть ли блоки для
+   * площадки и когда пройдёт кулдаун. Устройство экрану не известно —
+   * окончательно решает выдача показа.
+   */
+  async readiness(viewer: Pick<AdViewer, "accountId" | "platform">, place: AdPlace, at = new Date()): Promise<{ available: boolean; readyAt: Date | null }> {
+    const [blocks, history] = await Promise.all([this.blocks(), this.db(this.repository.history(viewer.accountId, place, at))]);
+    const available = blocks.some((block) => block.place === place && (block.platforms.length === 0 || block.platforms.includes(viewer.platform)));
+    return { available, readyAt: nextAllowedAt(place, placeState(history.sessions, history.dayStart, at), at) };
+  }
+
   /** Сеть или блок поменяли в панели — следующий показ берёт свежие. */
   forgetBlocks(): void {
     this.cache = null;

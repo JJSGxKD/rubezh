@@ -28,9 +28,10 @@ export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource
   achievement_reward: { coins: 20_000, gems: 200 },
   // Самоцветов на колесе нет (Р11, п. 5) — и кошелёк их по этой причине не
   // начислит. Самая щедрая крутка — 2 980 монет на сотом уровне
-  // (`wheel/wheel-rules.ts`): потолок держит полдюжины таких с крутками за
-  // рекламу (WP12), и честный игрок в него не упрётся.
-  wheel_reward: { coins: 20_000, shard_common: 100, shard_uncommon: 20 },
+  // (`wheel/wheel-rules.ts`), а круток в сутки не больше семи: бесплатная и
+  // шесть за рекламу при растущем кулдауне (`ads/ads-rules.ts`). Потолок
+  // держит семь самых щедрых, и честный игрок в него не упрётся.
+  wheel_reward: { coins: 21_000, shard_common: 100, shard_uncommon: 20 },
   friend_gift: { coins: 2_000 },
   // все ступени бонуса за друзей — 950 монет: даже забранные разом, они проходят
   friend_bonus: { coins: 1_000 },

@@ -17,17 +17,26 @@ import { WheelSpentError } from "../src/modules/wheel/wheel-errors.js";
 import { WHEEL_COIN_BASE, WHEEL_SECTORS, pickSector, sectorOdds, sectorReward, totalWeight } from "../src/modules/wheel/wheel-rules.js";
 import type { NewWheelSpin, WheelRepository, WheelSpinRow } from "../src/modules/wheel/wheel.repository.js";
 import { WheelController } from "../src/modules/wheel/wheel.controller.js";
-import { WheelService, cryptoRoll, viewOf, type WheelRoll } from "../src/modules/wheel/wheel.service.js";
+import { WheelService, cryptoRoll, viewOf, type WheelPlayer, type WheelRoll, type WheelSource } from "../src/modules/wheel/wheel.service.js";
+import { AdCooldownError, AdNotCompletedError } from "../src/modules/ads/ads-errors.js";
+import { maxRewardsPerDay } from "../src/modules/ads/ads-rules.js";
+import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
+import { AdsService } from "../src/modules/ads/ads.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
+import { MemoryAds, adBlock } from "./helpers/memory-ads.js";
 
 /**
  * Колесо (docs/35-stage4-plan.md Р45, WP13; docs/07-monetization-and-ads.md
  * §7): сектор выбирает сервер, шансы на экране совпадают с выпадением,
  * бесплатная крутка — одна в московские сутки, обрыв посреди крутки не даёт
- * второй попытки.
+ * второй попытки. Крутка за рекламу (WP12) — только по досмотренной сессии
+ * показа, одна на сессию и в растущий кулдаун места.
  */
 
 const ME = "00000000-0000-4000-8000-00000000e001";
+const PLAYER: WheelPlayer = { accountId: ME, platform: "telegram" };
+const FREE: WheelSource = { kind: "free" };
+const MINUTE = 60_000;
 const HOUR = 3_600_000;
 /** 30.09.2026, 12:00 по Москве */
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
@@ -38,27 +47,45 @@ function moscowDay(at: Date): number {
 }
 
 class MemoryWheel implements WheelRepository {
-  readonly rows: (WheelSpinRow & { accountId: string; day: number })[] = [];
+  readonly rows: (WheelSpinRow & { accountId: string; day: number; adSessionId: string | null })[] = [];
   /** сколько раз сервис пытался записать крутку — видно, бросал ли он заново */
   inserts = 0;
 
   async freeToday(accountId: string, at: Date): Promise<WheelSpinRow | null> {
-    const row = this.rows.find((candidate) => candidate.accountId === accountId && candidate.day === moscowDay(at));
-    return row === undefined ? null : { spinId: row.spinId, sector: row.sector, resource: row.resource, amount: row.amount, granted: row.granted };
+    const row = this.rows.find((candidate) => candidate.accountId === accountId && candidate.adSessionId === null && candidate.day === moscowDay(at));
+    return row === undefined ? null : spinOf(row);
   }
 
   async insertFree(accountId: string, spin: NewWheelSpin, at: Date): Promise<WheelSpinRow | null> {
     this.inserts++;
-    if (this.rows.some((row) => row.accountId === accountId && row.day === moscowDay(at))) return null;
-    const row = { ...spin, spinId: `spin-${String(this.rows.length + 1)}`, granted: false, accountId, day: moscowDay(at) };
-    this.rows.push(row);
-    return { spinId: row.spinId, sector: row.sector, resource: row.resource, amount: row.amount, granted: false };
+    if (this.rows.some((row) => row.accountId === accountId && row.adSessionId === null && row.day === moscowDay(at))) return null;
+    return this.push({ ...spin, spinId: `spin-${String(this.rows.length + 1)}`, granted: false, accountId, day: moscowDay(at), adSessionId: null });
+  }
+
+  async insertAd(accountId: string, adSessionId: string, spin: NewWheelSpin, at: Date): Promise<WheelSpinRow | null> {
+    this.inserts++;
+    if (this.rows.some((row) => row.adSessionId === adSessionId)) return null;
+    return this.push({ ...spin, spinId: `spin-${String(this.rows.length + 1)}`, granted: false, accountId, day: moscowDay(at), adSessionId });
+  }
+
+  async byAdSession(accountId: string, adSessionId: string): Promise<WheelSpinRow | null> {
+    const row = this.rows.find((candidate) => candidate.adSessionId === adSessionId && candidate.accountId === accountId);
+    return row === undefined ? null : spinOf(row);
   }
 
   async markGranted(spinId: string): Promise<void> {
     const row = this.rows.find((candidate) => candidate.spinId === spinId);
     if (row !== undefined) row.granted = true;
   }
+
+  private push(row: MemoryWheel["rows"][number]): WheelSpinRow {
+    this.rows.push(row);
+    return spinOf(row);
+  }
+}
+
+function spinOf(row: WheelSpinRow): WheelSpinRow {
+  return { spinId: row.spinId, sector: row.sector, resource: row.resource, amount: row.amount, granted: row.granted };
 }
 
 class FakeWallet {
@@ -92,12 +119,23 @@ function rollFor(sector: number): number {
   return WHEEL_SECTORS.slice(0, sector).reduce((sum, candidate) => sum + candidate.weight, 0);
 }
 
-function setup(roll: WheelRoll = rolls(0), level = 1) {
+function setup(roll: WheelRoll = rolls(0), level = 1, blocks: AdBlockRow[] = [adBlock("adsgram", 10)]) {
   const repository = new MemoryWheel();
   const wallet = new FakeWallet();
   const progress = { view: async () => ({ level }) } as unknown as ProgressService;
-  const service = new WheelService(repository, progress, wallet as unknown as WalletService, roll);
-  return { repository, wallet, service };
+  const adsRepository = new MemoryAds();
+  adsRepository.blocks = blocks;
+  const ads = new AdsService(adsRepository, () => 0);
+  const service = new WheelService(repository, progress, wallet as unknown as WalletService, ads, roll);
+  return { repository, wallet, service, ads, adsRepository };
+}
+
+/** Реклама досмотрена: выдача показа в месте колеса и досмотр от SDK. */
+async function watched(ads: AdsService, at: Date): Promise<string> {
+  const offer = await ads.offer({ ...PLAYER, device: "android" }, "wheel_spin", at);
+  if (!offer.available) throw new Error(`показа нет: ${offer.reason}`);
+  await ads.report(ME, offer.sessionId, { kind: "completed" }, at);
+  return offer.sessionId;
 }
 
 /** Детерминированный генератор для распределения: тест должен падать одинаково на любом запуске. */
@@ -140,10 +178,13 @@ describe("числа колеса", () => {
     expect(mean).toBeLessThan(120);
   });
 
-  it("честный игрок не упирается в суточный потолок и с полудюжиной самых щедрых круток", () => {
+  it("честный игрок не упирается в суточный потолок и со всеми крутками суток, выпавшими самыми щедрыми", () => {
+    // Бесплатная и все за рекламу, которые пропустит растущий кулдаун.
+    const spins = 1 + (maxRewardsPerDay("wheel_spin") ?? 0);
+    expect(spins).toBe(7);
     for (const resource of ["coins", "shard_common", "shard_uncommon"] as const) {
       const best = Math.max(...WHEEL_SECTORS.filter((sector) => sector.resource === resource).map((sector) => sectorReward(sector, MAX_LEVEL).amount));
-      expect(6 * best, resource).toBeLessThanOrEqual(WALLET_DAILY_CAPS.wheel_reward[resource] ?? 0);
+      expect(spins * best, resource).toBeLessThanOrEqual(WALLET_DAILY_CAPS.wheel_reward[resource] ?? 0);
     }
   });
 
@@ -190,7 +231,7 @@ describe("крутка", () => {
   it("сектор выбирает сервер, награда ложится в кошелёк ключом крутки", async () => {
     const jackpot = WHEEL_SECTORS.findIndex((sector) => sector.resource === "coins" && sector.share === 10);
     const { service, wallet } = setup(rolls(rollFor(jackpot)));
-    const result = await service.spin(ME, NOON);
+    const result = await service.spin(PLAYER, FREE, NOON);
 
     expect(result).toMatchObject({ sector: jackpot, resource: "coins", amount: 1000, credited: 1000 });
     expect(result.view.free).toBe(false);
@@ -202,32 +243,32 @@ describe("крутка", () => {
   it("бесплатная крутка — одна в московские сутки: 23:58 и 23:59 — одни, 00:01 — уже другие", async () => {
     const { service } = setup();
     const lateEvening = new Date(Date.UTC(2026, 8, 30, 20, 58));
-    await service.spin(ME, lateEvening);
-    await expect(service.spin(ME, new Date(lateEvening.getTime() + 60_000))).rejects.toBeInstanceOf(WheelSpentError);
-    expect((await service.view(ME, new Date(lateEvening.getTime() + 60_000))).free).toBe(false);
+    await service.spin(PLAYER, FREE, lateEvening);
+    await expect(service.spin(PLAYER, FREE, new Date(lateEvening.getTime() + 60_000))).rejects.toBeInstanceOf(WheelSpentError);
+    expect((await service.view(PLAYER, new Date(lateEvening.getTime() + 60_000))).free).toBe(false);
 
     const afterMidnight = new Date(Date.UTC(2026, 8, 30, 21, 1));
-    expect((await service.view(ME, afterMidnight)).free).toBe(true);
-    await expect(service.spin(ME, afterMidnight)).resolves.toMatchObject({ credited: expect.any(Number) });
+    expect((await service.view(PLAYER, afterMidnight)).free).toBe(true);
+    await expect(service.spin(PLAYER, FREE, afterMidnight)).resolves.toMatchObject({ credited: expect.any(Number) });
   });
 
   it("обрыв посреди крутки: повтор дожимает тот же сектор, а не бросает заново", async () => {
     const { service, wallet, repository } = setup(rolls(rollFor(2), rollFor(3)));
     wallet.failNext = true;
-    await expect(service.spin(ME, NOON)).rejects.toThrow(/кошелёк недоступен/);
+    await expect(service.spin(PLAYER, FREE, NOON)).rejects.toThrow(/кошелёк недоступен/);
     expect(await service.badge(ME, NOON)).toBe(1);
-    expect((await service.view(ME, NOON)).free).toBe(true);
+    expect((await service.view(PLAYER, NOON)).free).toBe(true);
 
-    const retry = await service.spin(ME, new Date(NOON.getTime() + 60_000));
+    const retry = await service.spin(PLAYER, FREE, new Date(NOON.getTime() + 60_000));
     expect(retry.sector).toBe(2);
     expect(wallet.grants).toHaveLength(1);
     expect(repository.rows).toHaveLength(1);
-    await expect(service.spin(ME, new Date(NOON.getTime() + 120_000))).rejects.toBeInstanceOf(WheelSpentError);
+    await expect(service.spin(PLAYER, FREE, new Date(NOON.getTime() + 120_000))).rejects.toBeInstanceOf(WheelSpentError);
   });
 
   it("две крутки разом начисляют сутки однажды", async () => {
     const { service, wallet } = setup(rolls(rollFor(0), rollFor(7)));
-    const results = await Promise.allSettled([service.spin(ME, NOON), service.spin(ME, NOON)]);
+    const results = await Promise.allSettled([service.spin(PLAYER, FREE, NOON), service.spin(PLAYER, FREE, NOON)]);
     const credited = results.filter((result) => result.status === "fulfilled").map((result) => result.value.credited);
     expect(credited.reduce((sum, value) => sum + value, 0)).toBe(wallet.grants[0]?.amount);
     expect(wallet.grants).toHaveLength(1);
@@ -236,15 +277,70 @@ describe("крутка", () => {
   it("знак меню горит, пока бесплатная крутка суток ждёт", async () => {
     const { service } = setup();
     expect(await service.badge(ME, NOON)).toBe(1);
-    await service.spin(ME, NOON);
+    await service.spin(PLAYER, FREE, NOON);
     expect(await service.badge(ME, NOON)).toBe(0);
     expect(await service.badge(ME, new Date(NOON.getTime() + 24 * HOUR))).toBe(1);
   });
 });
 
+describe("крутка за рекламу", () => {
+  it("только по досмотренной сессии места; награда — тем же путём, бесплатная крутка суток остаётся", async () => {
+    const { service, ads, wallet } = setup(rolls(rollFor(1)));
+    const offer = await ads.offer({ ...PLAYER, device: "android" }, "wheel_spin", NOON);
+    if (!offer.available) throw new Error("показа нет");
+    await expect(service.spin(PLAYER, { kind: "ad", sessionId: offer.sessionId }, NOON)).rejects.toBeInstanceOf(AdNotCompletedError);
+
+    await ads.report(ME, offer.sessionId, { kind: "completed" }, NOON);
+    const result = await service.spin(PLAYER, { kind: "ad", sessionId: offer.sessionId }, NOON);
+    expect(result).toMatchObject({ sector: 1, view: { free: true, ad: { available: true, readyAt: new Date(NOON.getTime() + 120 * MINUTE).toISOString() } } });
+    expect(wallet.grants).toEqual([expect.objectContaining({ reason: "wheel_reward", idempotencyKey: "wheel_reward:spin-1" })]);
+    expect((await service.view(PLAYER, NOON)).free).toBe(true);
+  });
+
+  it("одна сессия — одна крутка: повтор дожимает тот же сектор и не начисляет второй раз", async () => {
+    const { service, ads, wallet, repository } = setup(rolls(rollFor(2), rollFor(5)));
+    const sessionId = await watched(ads, NOON);
+    wallet.failNext = true;
+    await expect(service.spin(PLAYER, { kind: "ad", sessionId }, NOON)).rejects.toThrow(/кошелёк недоступен/);
+
+    const retry = await service.spin(PLAYER, { kind: "ad", sessionId }, new Date(NOON.getTime() + MINUTE));
+    expect(retry.sector).toBe(2);
+    const again = await service.spin(PLAYER, { kind: "ad", sessionId }, new Date(NOON.getTime() + 2 * MINUTE));
+    expect(again.sector).toBe(2);
+    expect(repository.rows).toHaveLength(1);
+    expect(wallet.grants).toHaveLength(1);
+  });
+
+  it("вторая реклама — только после кулдауна места, и каждый следующий длиннее", async () => {
+    const { service, ads } = setup();
+    await service.spin(PLAYER, { kind: "ad", sessionId: await watched(ads, NOON) }, NOON);
+    // Выдача в кулдаун закрыта; сессию, выданную до забора, не пропустит забор.
+    expect(await ads.offer({ ...PLAYER, device: "android" }, "wheel_spin", new Date(NOON.getTime() + 60 * MINUTE))).toMatchObject({ available: false, reason: "cooldown" });
+
+    const second = await watched(ads, new Date(NOON.getTime() + 120 * MINUTE));
+    const view = (await service.spin(PLAYER, { kind: "ad", sessionId: second }, new Date(NOON.getTime() + 120 * MINUTE))).view;
+    expect(view.ad.readyAt).toBe(new Date(NOON.getTime() + 300 * MINUTE).toISOString());
+  });
+
+  it("две сессии, выданные до кулдауна, дают одну крутку", async () => {
+    const { service, ads, wallet } = setup(rolls(0), 1, [adBlock("adsgram", 10), adBlock("adsonar", 20)]);
+    const first = await watched(ads, NOON);
+    const second = await watched(ads, NOON);
+    await service.spin(PLAYER, { kind: "ad", sessionId: first }, NOON);
+    await expect(service.spin(PLAYER, { kind: "ad", sessionId: second }, NOON)).rejects.toBeInstanceOf(AdCooldownError);
+    expect(wallet.grants).toHaveLength(1);
+  });
+
+  it("экран знает, есть ли реклама для площадки игрока", async () => {
+    const { service } = setup(rolls(0), 1, [adBlock("adsgram", 10, { platforms: ["vk"] })]);
+    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: false, readyAt: null });
+    expect((await service.view({ accountId: ME, platform: "vk" }, NOON)).ad).toEqual({ available: true, readyAt: null });
+  });
+});
+
 describe("колесо на экране", () => {
   it("сектора — в порядке колеса, с наградой уровня и шансом", () => {
-    const view = viewOf(21, true);
+    const view = viewOf(21, true, { available: false, readyAt: null });
     expect(view.free).toBe(true);
     expect(view.sectors).toHaveLength(WHEEL_SECTORS.length);
     expect(view.sectors[0]).toEqual({ resource: "coins", amount: 70, odds: 0.24 });
@@ -279,7 +375,7 @@ describe("колесо по HTTP", () => {
     return app;
   }
 
-  it("без токена — 401; крутка — только бесплатная, чужое тело — 400; вторая за сутки — 409 с кодом", async () => {
+  it("без токена — 401; чужое тело — 400; реклама без досмотра и вторая бесплатная за сутки — 409 с кодом", async () => {
     const { service } = setup();
     const server = await start(service);
     const token = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
@@ -292,9 +388,12 @@ describe("колесо по HTTP", () => {
     expect(view.statusCode).toBe(200);
     expect(view.json<{ data: { free: boolean; sectors: unknown[] } }>().data).toMatchObject({ free: true, sectors: expect.any(Array) });
 
-    for (const payload of [{ source: "ad" }, { source: "free", sector: 3 }, {}]) {
+    for (const payload of [{ source: "ad" }, { source: "ad", sessionId: "short" }, { source: "free", sessionId: "AAAAAAAAAAAAAAAA" }, { source: "free", sector: 3 }, {}]) {
       expect((await server.inject({ method: "POST", url: "/api/v1/wheel/spin", headers, payload })).statusCode, JSON.stringify(payload)).toBe(400);
     }
+    const unwatched = await server.inject({ method: "POST", url: "/api/v1/wheel/spin", headers, payload: { source: "ad", sessionId: "AAAAAAAAAAAAAAAA" } });
+    expect(unwatched.statusCode).toBe(409);
+    expect(unwatched.json<{ error: { code: string } }>().error.code).toBe("ad_not_completed");
 
     const spin = await server.inject({ method: "POST", url: "/api/v1/wheel/spin", headers, payload: { source: "free" } });
     expect(spin.statusCode).toBe(200);

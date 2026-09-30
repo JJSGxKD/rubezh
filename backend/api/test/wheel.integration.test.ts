@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
@@ -13,6 +14,8 @@ import { PrismaWheelRepository } from "../src/modules/wheel/wheel.repository.js"
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const SPIN = { sector: 2, resource: "coins", amount: 100 } as const;
+/** Сессия показа — как её выдаёт модуль рекламы: 12 случайных байт. */
+const sessionId = () => randomBytes(12).toString("base64url");
 
 describe.skipIf(DATABASE_URL === "")("колесо на живом Postgres", () => {
   let prisma: PrismaClient;
@@ -71,13 +74,34 @@ describe.skipIf(DATABASE_URL === "")("колесо на живом Postgres", ()
     const me = await account();
     const at = new Date(Date.UTC(2026, 8, 30, 9));
     await repository.insertFree(me, SPIN, at);
-    for (let spin = 0; spin < 2; spin++) {
-      await prisma.$executeRaw`
-        INSERT INTO wheel_spin (spin_id, account_id, source, game_day, sector, resource, amount, created_at)
-        VALUES (gen_random_uuid(), ${me}::uuid, 'ad', '2026-09-30', 1, 'coins', 50, ${at})`;
-    }
+    for (let spin = 0; spin < 2; spin++) expect(await repository.insertAd(me, sessionId(), { ...SPIN, amount: 50 }, at)).not.toBeNull();
     const [count] = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM wheel_spin WHERE account_id = ${me}::uuid`;
     expect(count?.n).toBe(3);
+    expect(await repository.freeToday(me, at)).toMatchObject({ amount: SPIN.amount });
+  });
+
+  it("крутка за рекламу — одна на сессию показа, и шестью разом; находится по сессии только своим аккаунтом", async () => {
+    const me = await account();
+    const stranger = await account();
+    const at = new Date(Date.UTC(2026, 8, 30, 9));
+    const session = sessionId();
+    const results = await Promise.all(Array.from({ length: 6 }, (_, index) => repository.insertAd(me, session, { ...SPIN, sector: index }, at)));
+    const written = results.filter((result) => result !== null);
+    expect(written).toHaveLength(1);
+    expect(await repository.byAdSession(me, session)).toEqual(written[0]);
+    expect(await repository.byAdSession(stranger, session)).toBeNull();
+    expect(await repository.insertAd(stranger, session, SPIN, at)).toBeNull();
+  });
+
+  it("сессия показа — ровно у крутки за рекламу: база не примет рекламную без неё и бесплатную с ней", async () => {
+    const me = await account();
+    const at = new Date(Date.UTC(2026, 8, 30, 9));
+    await expect(prisma.$executeRaw`
+      INSERT INTO wheel_spin (spin_id, account_id, source, game_day, sector, resource, amount, created_at)
+      VALUES (gen_random_uuid(), ${me}::uuid, 'ad', '2026-09-30', 1, 'coins', 50, ${at})`).rejects.toThrow();
+    await expect(prisma.$executeRaw`
+      INSERT INTO wheel_spin (spin_id, account_id, source, game_day, sector, resource, amount, created_at, ad_session_id)
+      VALUES (gen_random_uuid(), ${me}::uuid, 'free', '2026-09-30', 1, 'coins', 50, ${at}, ${sessionId()})`).rejects.toThrow();
   });
 
   it("пустой сектор база не примет: ноль монет — ошибка в числах, а не выигрыш", async () => {

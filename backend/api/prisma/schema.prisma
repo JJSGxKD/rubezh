@@ -1360,10 +1360,13 @@ model WheelSpin {
   createdAt DateTime        @map("created_at") @db.Timestamptz(3)
   /// `null` — сектор выпал, но кошелёк ещё не начислил: следующая крутка дожмёт
   grantedAt DateTime?       @map("granted_at") @db.Timestamptz(3)
+  /// сессия показа крутки за рекламу: одна сессия — одна крутка; без внешнего
+  /// ключа — сессию проверяет забор модуля рекламы
+  adSessionId String?     @unique @map("ad_session_id") @db.VarChar(32)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
-  // Крутки игрока — удаление аккаунта и кулдаун крутки за рекламу (WP12).
+  // Крутки игрока — удаление аккаунта.
   @@index([accountId, createdAt])
   @@map("wheel_spin")
 }
