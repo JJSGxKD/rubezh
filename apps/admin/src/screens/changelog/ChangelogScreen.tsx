@@ -14,6 +14,7 @@ import {
   releaseState,
   removeEntry,
   saveEntry,
+  sourcePr,
   type ChangelogEntry,
   type ChangelogPlatform,
   type EntryInput,
@@ -36,7 +37,8 @@ function toInput(entry: ChangelogEntry): EntryInput {
 /**
  * Журнал обновлений (docs/35-stage4-plan.md WP31): что игроки увидят в
  * «Что нового». Строка — одно изменение с видом и площадками; черновик игроку
- * не виден. Публикация версии — отдельной кнопкой и вторым нажатием: она
+ * не виден. Строки из разделов «Для игроков» PR выкат заводит черновиками —
+ * они помечены номером PR; правленную здесь строку выкат больше не трогает. Публикация версии — отдельной кнопкой и вторым нажатием: она
  * раздаёт уведомление в ленту всем игрокам площадок версии и пишет в бота
  * тем, кто не выключил.
  */
@@ -185,6 +187,7 @@ export function ChangelogScreen() {
                       <Badge tone={entry.kind === "added" ? "accent" : entry.kind === "fixed" ? "success" : "info"}>{KIND_TITLES[entry.kind]}</Badge>
                       <Badge>{platformsLabel(entry.platforms)}</Badge>
                       {entry.publishedAt === null ? <Badge tone="warning">черновик</Badge> : null}
+                      {sourcePr(entry) === null ? null : <Badge tone="info">из PR #{sourcePr(entry)}</Badge>}
                     </div>
                     <p className="min-w-0 flex-1 whitespace-pre-line break-words text-sm">{entry.text}</p>
                     <div className="flex shrink-0 gap-2">

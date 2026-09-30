@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { entryProblem, fetchChangelog, groupByVersion, publishAudience, publishVersion, releaseState, removeEntry, saveEntry, type ChangelogEntry, type EntryInput } from "../src/api/changelog";
+import { entryProblem, fetchChangelog, groupByVersion, publishAudience, publishVersion, releaseState, removeEntry, saveEntry, sourcePr, type ChangelogEntry, type EntryInput } from "../src/api/changelog";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -79,5 +79,11 @@ describe("журнал обновлений в панели", () => {
 
     expect(publishAudience([{ platforms: ["vk"] }, { platforms: ["telegram"] }])).toBe("telegram, vk");
     expect(publishAudience([{ platforms: ["vk"] }, { platforms: [] }])).toBe("все площадки");
+  });
+
+  it("строка из PR — с номером PR; заведённая в панели и сервер без поля — без него", () => {
+    expect(sourcePr({ sourceKey: "pr-141-2" })).toBe(141);
+    expect(sourcePr({ sourceKey: null })).toBeNull();
+    expect(sourcePr({})).toBeNull();
   });
 });
