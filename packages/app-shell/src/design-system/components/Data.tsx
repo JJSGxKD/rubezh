@@ -123,6 +123,10 @@ export function Avatar(props: { name: string; url?: string | null; size?: number
     .join("");
 
   const url = props.url;
+  // Размер — стилем, а не только атрибутами, и без сжатия: базовые стили
+  // дают картинке `max-width: 100%`, и в тесной строке фото сжималось вместе
+  // с родителем вплоть до точки, а инициалы — нет.
+  const box = { width: size, height: size };
   if (url !== null && url !== undefined && url !== "" && url !== failedUrl) {
     return (
       <img
@@ -131,7 +135,8 @@ export function Avatar(props: { name: string; url?: string | null; size?: number
         alt=""
         width={size}
         height={size}
-        className="rounded-full border-2 border-border-strong object-cover"
+        style={box}
+        className="max-w-none shrink-0 rounded-full border-2 border-border-strong object-cover"
       />
     );
   }
@@ -139,8 +144,8 @@ export function Avatar(props: { name: string; url?: string | null; size?: number
   return (
     <span
       aria-hidden="true"
-      style={{ width: size, height: size }}
-      className="surface-card inline-flex items-center justify-center rounded-full font-display text-sm font-bold text-text-muted"
+      style={box}
+      className="surface-card inline-flex shrink-0 items-center justify-center rounded-full font-display text-sm font-bold text-text-muted"
     >
       {initials === "" ? "?" : initials}
     </span>
