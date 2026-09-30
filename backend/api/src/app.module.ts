@@ -42,6 +42,7 @@ import { BadgesModule } from "./modules/badges/badges.module.js";
 import { HistoryModule } from "./modules/history/history.module.js";
 import { DailyModule } from "./modules/daily/daily.module.js";
 import { ChangelogModule } from "./modules/changelog/changelog.module.js";
+import { WheelModule } from "./modules/wheel/wheel.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -109,6 +110,7 @@ export const APP_MODULES = [
   FlagsModule,
   BroadcastsModule,
   ChangelogModule,
+  WheelModule,
 ];
 
 /**

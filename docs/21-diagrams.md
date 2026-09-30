@@ -82,6 +82,7 @@ erDiagram
     BROADCAST ||--o{ BROADCAST_DELIVERY : "доставка каждому получателю"
     ACCOUNT ||--o{ BROADCAST_DELIVERY : "получал рассылки"
     BROADCAST }o..o| LINK : "кнопка — ссылка кампании, без внешнего ключа"
+    ACCOUNT ||--o{ WHEEL_SPIN : "крутки колеса"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -549,6 +550,18 @@ erDiagram
         datetime sent_at "nullable"
         datetime claimed_until "nullable: срок захвата заданием очереди"
     }
+
+    WHEEL_SPIN {
+        uuid spin_id PK "ключ начисления в кошельке"
+        uuid account_id FK
+        enum source "free|ad; бесплатная — одна в сутки: частичный уникальный индекс"
+        date game_day "игровые сутки по Москве"
+        int sector "номер на экране, по часовой от стрелки"
+        enum resource "coins|shard_common|shard_uncommon"
+        int amount "сколько выпало, больше нуля"
+        datetime created_at
+        datetime granted_at "nullable: выпало, но кошелёк ещё не начислил"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -613,6 +626,12 @@ erDiagram
   строки, поэтому повтор выката не задваивает строки и не возвращает
   удалённое; черновик, который правил человек (`updated_by` задан), выкат не
   трогает.
+- **`WHEEL_SPIN` — крутки колеса** (`35-stage4-plan.md`, Р45, WP13): сектор
+  выбирает сервер и записывает строкой до начисления, поэтому повтор после
+  обрыва дожимает тот же сектор, а не бросает заново. Бесплатная крутка —
+  одна в игровые сутки: её держит частичный уникальный индекс по аккаунту и
+  суткам, крутки за рекламу (WP12) под него не попадают. `granted_at` —
+  кошелёк начислил ключом крутки; пусто — следующая крутка дожмёт.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1220,6 +1239,7 @@ flowchart LR
         DAILY["daily<br/>награда дня: неделя без сброса,<br/>ступени, множитель уровня, реализовано"]
         CHANGELOG["changelog<br/>журнал обновлений по площадкам,<br/>раздача app_update пачками, реализовано"]
         PLAYERLIST["player-list<br/>список игроков для панели:<br/>фильтры, страница по индексу, реализовано"]
+        WHEEL["wheel<br/>колесо: сектора от уровня,<br/>бесплатная крутка в сутки, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1355,6 +1375,11 @@ flowchart LR
     BADGES -. "версии после «открывал»" .-> CHANGELOG
     ADMINAPI -. "список игроков" .-> PLAYERLIST
     PLAYERLIST --> PG
+    CADDY -- "/api/v1/wheel" --> WHEEL
+    WHEEL -- "wheel_spin, сутки по Москве" --> PG
+    WHEEL -. "награда ключом крутки" .-> WALLET
+    WHEEL -. "уровень аккаунта" .-> PROG
+    BADGES -. "крутка ждёт" .-> WHEEL
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET

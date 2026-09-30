@@ -197,6 +197,7 @@ model Account {
   notifications    Notification[]
   dailyReward      DailyReward?
   changelogSeen    ChangelogSeen?
+  wheelSpins       WheelSpin[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1328,4 +1329,37 @@ model ChangelogSeen {
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
   @@map("changelog_seen")
+}
+
+// Колесо (WP13)
+
+/// Чем крутили: бесплатная крутка суток или за рекламу (с WP12).
+enum WheelSpinSource {
+  free
+  ad
+}
+
+/// Крутка колеса (docs/35-stage4-plan.md WP13, 07-monetization-and-ads.md §7).
+/// Сектор выбирает сервер и записывает до начисления: повтор после сбоя
+/// дожимает тот же сектор, а не бросает заново. Бесплатная крутка — одна в
+/// игровые сутки: частичный уникальный индекс в миграции.
+model WheelSpin {
+  spinId    String          @id @map("spin_id") @db.Uuid
+  accountId String          @map("account_id") @db.Uuid
+  source    WheelSpinSource
+  /// игровые сутки (по Москве) крутки
+  gameDay   DateTime        @map("game_day") @db.Date
+  /// номер сектора с нуля — как на экране, по часовой стрелке от стрелки
+  sector    Int             @db.SmallInt
+  resource  WalletResource
+  amount    Int
+  createdAt DateTime        @map("created_at") @db.Timestamptz(3)
+  /// `null` — сектор выпал, но кошелёк ещё не начислил: следующая крутка дожмёт
+  grantedAt DateTime?       @map("granted_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Крутки игрока — удаление аккаунта и кулдаун крутки за рекламу (WP12).
+  @@index([accountId, createdAt])
+  @@map("wheel_spin")
 }

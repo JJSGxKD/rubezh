@@ -165,7 +165,7 @@ Zod-схемы `payload` — в словаре сервера
 | Партнёры | `partner_click`, `partner_registration`, `partner_ftd`, `partner_revenue_accrued`, `partner_payout` |
 | Шеринг | `share_offered`, `share_completed`, `shared_link_opened` |
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
-| Удержание | `daily_reward_claimed` (награда дня, WP13); `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
+| Удержание | `daily_reward_claimed` (награда дня, WP13); `wheel_spun` (колесо, WP13); `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
 | Обратная связь | `feedback_sent` — отзыв с формы обратной связи (`29-admin-panel.md` §6) |
 | Уведомления | `notification_opened` — игрок перешёл из ленты туда, куда звало уведомление (`35-stage4-plan.md` WP28) |
@@ -207,6 +207,7 @@ Zod-схемы `payload` — в словаре сервера
 | Событие | Зачем | Ключевые поля `payload` |
 |---|---|---|
 | `boost_used` | Какие бусты берут и чем за них платят (WP8, Р39): вход для пересмотра их силы и цен. Шлёт клиент, когда сервер подтвердил покупку на забег, — по событию на буст. Списание само лежит в журнале кошелька, а событие связывает покупку с устройством и забегом | `boost` — id буста, `source`: `coins` / `gems` — чем оплачен, позже `wheel` и `task` — буст за игру (WP13), `amount` — цена, `count` — сколько бустов взято на этот забег |
+| `wheel_spun` | Крутят ли колесо и что выпадает (`35-stage4-plan.md` WP13, `07-monetization-and-ads.md` §7): доля игроков, забирающих бесплатную крутку, — вход для решения о её награде, распределение секторов — проверка, что шансы на экране совпадают с выпадением. Сектор выбирает сервер, крутка лежит в таблице `wheel_spin`, начисленное — в журнале кошелька с причиной `wheel_reward`; событие шлёт клиент после ответа сервера | `source`: `free` — бесплатная крутка суток, `ad` — за рекламу (с WP12); `sector` — номер выпавшего сектора с нуля, `reward` — что в нём (`coins`, `shard_common`, `shard_uncommon`), `amount` — сколько |
 
 **Воронка аккаунта — таблица, а не события** (`35-stage4-plan.md`, Р30,
 WP2). Вехи — вошёл в бота, открыл игру, первый забег начат и закончен,
