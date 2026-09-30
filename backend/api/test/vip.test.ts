@@ -123,10 +123,15 @@ describe("план VIP", () => {
     expect((await setup().vip.view(player())).stars).toBe(VIP_PLAN.stars);
   });
 
+  it("состояние VIP называет товар, режим оплаты и сколько спишется: в тестовом режиме — звезда", async () => {
+    expect(await setup().vip.view(player())).toMatchObject({ sku: VIP_PLAN.sku, mode: "live", stars: VIP_PLAN.stars, chargedStars: VIP_PLAN.stars });
+    expect(await setup(config({ PAYMENTS_TEST_MODE: "true", NODE_ENV: "development" })).vip.view(player())).toMatchObject({ mode: "test", stars: VIP_PLAN.stars, chargedStars: 1 });
+  });
+
   it("на площадке без способа оплаты VIP виден без цены, а счёт не выставляется", async () => {
     const ctx = setup();
     const account = player("max");
-    expect(await ctx.vip.view(account)).toMatchObject({ stars: null, active: false, canOrder: true });
+    expect(await ctx.vip.view(account)).toMatchObject({ stars: null, chargedStars: null, active: false, canOrder: true });
     expect(await codeOf(ctx.vip.order(account))).toBe("payments_unsupported");
   });
 });

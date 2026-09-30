@@ -5,7 +5,7 @@ import { PaymentsUnsupportedError } from "../payments/payments-errors.js";
 import { PaymentsHooks, type SubscriptionChange } from "../payments/payments-hooks.js";
 import { PaymentsService, type ShopInvoice } from "../payments/payments.service.js";
 import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
-import type { StoredPurchase } from "../payments/purchase-types.js";
+import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import { SubscriptionRenewal } from "../payments/subscription-renewal.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
@@ -39,6 +39,11 @@ export interface VipView {
   canOrder: boolean;
   /** цена периода в звёздах; `null` — на этой площадке способа оплаты нет */
   stars: number | null;
+  /** сколько спишется на самом деле: в тестовом режиме — звезда (Р14) */
+  chargedStars: number | null;
+  mode: PaymentMode;
+  /** товар в покупке и событиях */
+  sku: string;
   periodDays: number;
   daily: { gems: number; claimed: boolean };
 }
@@ -69,7 +74,7 @@ export class VipService implements OnModuleInit {
   }
 
   async view(account: AccountRef, at = new Date()): Promise<VipView> {
-    return viewOf(await this.state(account.accountId, at), account, at);
+    return viewOf(await this.state(account.accountId, at), account, at, this.payments);
   }
 
   async order(account: AccountRef, at = new Date()): Promise<ShopInvoice> {
@@ -134,7 +139,7 @@ export class VipService implements OnModuleInit {
   async claimDaily(account: AccountRef, at = new Date()): Promise<VipDailyResult> {
     const state = await this.state(account.accountId, at);
     if (!isActive(state, at)) throw new VipInactiveError();
-    if (state.dailyClaimedToday) return { claimed: false, gems: 0, view: viewOf(state, account, at) };
+    if (state.dailyClaimedToday) return { claimed: false, gems: 0, view: viewOf(state, account, at, this.payments) };
 
     const grant = await this.wallet.grant({
       accountId: account.accountId,
@@ -147,7 +152,7 @@ export class VipService implements OnModuleInit {
     });
     const claimed = await withTimeout(this.repository.claimDaily(account.accountId, state.today, at), DB_TIMEOUT_MS, "самоцветы VIP");
     if (claimed) this.log("vip_daily_claimed", { accountId: account.accountId, day: state.today, gems: grant.credited });
-    return { claimed, gems: claimed ? grant.credited : 0, view: viewOf({ ...state, dailyClaimedToday: true }, account, at) };
+    return { claimed, gems: claimed ? grant.credited : 0, view: viewOf({ ...state, dailyClaimedToday: true }, account, at, this.payments) };
   }
 
   /** Оплаченный период — в журнал. Повтор выдачи ничего не продлевает: период один на оплату. */
@@ -209,17 +214,24 @@ function isResumable(subscription: VipSubscriptionRow, at: Date): boolean {
   return subscription.renewal === "cancelled" && subscription.cancelledBy === "game" && subscription.until !== null && subscription.until.getTime() > at.getTime();
 }
 
-export function viewOf(state: VipState, account: AccountRef, at: Date): VipView {
+/** Режим оплаты и сколько спишется за цену — правило модуля оплаты. */
+type Pricing = Pick<PaymentsService, "mode" | "charge">;
+
+export function viewOf(state: VipState, account: AccountRef, at: Date, pricing: Pricing): VipView {
   const active = isActive(state, at);
   const renewing = state.subscriptions.some((item) => item.renewal === "on");
   const method = methodFor(account.platform);
+  const stars = method === undefined ? null : priceIn(vipProduct(), method);
   return {
     active,
     until: state.until,
     renewal: renewing ? "on" : (state.subscriptions[0]?.renewal ?? null),
     canResume: active && !renewing && state.subscriptions.some((item) => isResumable(item, at)),
     canOrder: !(active && renewing),
-    stars: method === undefined ? null : priceIn(vipProduct(), method),
+    stars,
+    chargedStars: stars === null ? null : pricing.charge(stars).chargedStars,
+    mode: pricing.mode,
+    sku: VIP_PLAN.sku,
     periodDays: VIP_PLAN.periodDays,
     daily: { gems: VIP_DAILY_GEMS, claimed: state.dailyClaimedToday },
   };
