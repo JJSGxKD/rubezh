@@ -196,6 +196,7 @@ model Account {
   runBoosts        RunBoost[]
   notifications    Notification[]
   dailyReward      DailyReward?
+  changelogSeen    ChangelogSeen?
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1241,4 +1242,66 @@ model Notification {
   // Чистка старше срока хранения.
   @@index([createdAt])
   @@map("notification")
+}
+
+// Журнал обновлений (WP31, docs/35-stage4-plan.md Р61)
+
+/// Что за изменение: новое, изменено, исправлено.
+enum ChangelogKind {
+  added
+  changed
+  fixed
+}
+
+/// Строка журнала — одно изменение с версией и площадками. Версия — строкой
+/// для показа и тремя числами для порядка: `0.10.0` новее `0.9.0`.
+model ChangelogEntry {
+  entryId      String        @id @map("entry_id") @db.Uuid
+  /// `X.Y.Z` без предрелиза
+  version      String        @db.VarChar(16)
+  versionMajor Int           @map("version_major")
+  versionMinor Int           @map("version_minor")
+  versionPatch Int           @map("version_patch")
+  /// пусто — все площадки
+  platforms    Platform[]
+  kind         ChangelogKind
+  /// простой текст: разметка из панели ломает строку журнала
+  text         String        @db.VarChar(500)
+  /// `null` — черновик: игрок его не видит
+  publishedAt  DateTime?     @map("published_at") @db.Timestamptz(3)
+  createdAt    DateTime      @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime      @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт
+  updatedBy    String?       @map("updated_by") @db.Uuid
+
+  @@index([version])
+  @@map("changelog_entry")
+}
+
+/// Раздача уведомления о выходе версии: кому и докуда дошла. Публикация новых
+/// строк версии начинает раздачу заново — ключ события в ленте не даст
+/// второго уведомления тем, кто его уже получил.
+model ChangelogRelease {
+  version     String     @id @db.VarChar(16)
+  /// площадки опубликованных строк версии; раздача — их игрокам
+  platforms   Platform[]
+  /// последняя публикация: поколение раздачи, раздающий сверяет его, прежде чем сдвинуть курсор
+  publishedAt DateTime   @map("published_at") @db.Timestamptz(3)
+  /// последний аккаунт, которому раздали; `null` — с начала
+  cursor      String?    @db.Uuid
+  /// `null` — раздача не закончена
+  doneAt      DateTime?  @map("done_at") @db.Timestamptz(3)
+
+  @@map("changelog_release")
+}
+
+/// Когда игрок последний раз открывал журнал — по этому времени знак меню
+/// считает версии, вышедшие после.
+model ChangelogSeen {
+  accountId String   @id @map("account_id") @db.Uuid
+  seenAt    DateTime @map("seen_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("changelog_seen")
 }

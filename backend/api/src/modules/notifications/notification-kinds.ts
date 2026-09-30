@@ -27,6 +27,8 @@ export const NOTIFICATION_KINDS = {
   boosts_refunded: z.object({ runId: id, boosts: z.array(id).max(8), coins: z.number().int().nonnegative(), gems: z.number().int().nonnegative() }),
   /** сообщение команды из панели — простой текст: разметка из панели ломает строку ленты */
   team_message: z.object({ text: z.string().min(1).max(TEAM_MESSAGE_MAX) }),
+  /** вышла версия — что нового, в журнале обновлений (WP31) */
+  app_update: z.object({ version: z.string().regex(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/) }),
 } as const;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;

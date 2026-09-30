@@ -1,4 +1,4 @@
-import type { Account, AccountArrival, AccountBan, AccountRepository } from "../../src/modules/auth/account.repository.js";
+import type { Account, AccountArrival, AccountBan, AccountRepository, RecipientsPage } from "../../src/modules/auth/account.repository.js";
 import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/modules/auth/refresh.store.js";
 
 /**
@@ -70,6 +70,15 @@ export class MemoryAccountRepository implements AccountRepository {
       return updated;
     }
     return null;
+  }
+
+  /** Давность захода в памяти не ведётся: получатели — все незаблокированные аккаунты площадок. */
+  async recipientsPage(page: RecipientsPage): Promise<string[]> {
+    return [...this.byKey.values()]
+      .filter((account) => page.platforms.includes(account.platform) && account.bannedAt === null && (page.after === null || account.accountId > page.after))
+      .map((account) => account.accountId)
+      .sort()
+      .slice(0, page.limit);
   }
 
   /** Заблокировать аккаунт — так же, как это сделает администратор из панели. */

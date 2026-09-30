@@ -41,6 +41,7 @@ import { NotificationsBotModule } from "./modules/notifications-bot/notification
 import { BadgesModule } from "./modules/badges/badges.module.js";
 import { HistoryModule } from "./modules/history/history.module.js";
 import { DailyModule } from "./modules/daily/daily.module.js";
+import { ChangelogModule } from "./modules/changelog/changelog.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -61,7 +62,8 @@ import { DailyModule } from "./modules/daily/daily.module.js";
  * настройки без релиза: база поверх окружения (там же, WP24); account-settings
  * — настройки игрока, общие для его устройств (там же, WP29); notifications —
  * лента уведомлений игрока, в которую пишут доменные модули, badges — знаки
- * меню одним ответом (там же, WP28).
+ * меню одним ответом (там же, WP28); changelog — журнал обновлений по
+ * площадкам и уведомление о выходе версии (там же, WP31).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -106,6 +108,7 @@ export const APP_MODULES = [
   LinksModule,
   FlagsModule,
   BroadcastsModule,
+  ChangelogModule,
 ];
 
 /**
