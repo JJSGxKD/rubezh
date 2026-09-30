@@ -1,0 +1,16 @@
+{
+  "daily.week": "Неделя {week}",
+  "daily.step": "Награды ×{step}",
+  "daily.step.next": "С новой недели — ×{step}",
+  "daily.step.hint": "Пропуск дня не сбрасывает прогресс — он просто ждёт вас. Каждая закрытая неделя поднимает награды.",
+  "daily.claimed": "Забрано",
+  "daily.next": "Следующая — через {time}",
+  "daily.got": "Получено: {what}",
+  "daily.coins": "{amount} {n, plural, one {монета} few {монеты} many {монет} other {монеты}}",
+  "daily.shards": "{amount} {n, plural, one {осколок} few {осколка} many {осколков} other {осколка}}",
+  "daily.and": " и ",
+  "daily.loading": "Загружаем награду…",
+  "daily.failed": "Не удалось загрузить награду — проверьте связь",
+  "daily.claimFailed": "Не удалось забрать — попробуйте ещё раз",
+  "daily.guest": "Награда дня — с входом через Telegram: прогресс хранится в аккаунте."
+}

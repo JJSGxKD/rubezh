@@ -29,6 +29,7 @@ import { formatDuration, t } from "../i18n";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
 import { useDevMode } from "../state/dev-mode";
+import { useBadges } from "../state/badges";
 import { useNavigation } from "../state/navigation";
 import { useToolsAccess } from "../state/tools";
 import { preloadScreens } from "../app/lazy-screens";
@@ -51,6 +52,7 @@ const PRELOAD_DELAY_MS = 1500;
 export function LobbyScreen(): ReactNode {
   const navigation = useNavigation();
   const meta = useMeta();
+  const dailyReady = useBadges((state) => state.daily > 0);
   const saved = useSavedRun((state) => state.saved);
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   const best = meta.best[meta.lastDifficultyId];
@@ -131,6 +133,7 @@ export function LobbyScreen(): ReactNode {
             icon={<CalendarCheck size={22} />}
             title={t("lobby.daily")}
             hint={t("lobby.daily.hint")}
+            ready={dailyReady}
             onClick={() => navigation.push("daily")}
           />
           <LobbyTile
@@ -253,10 +256,13 @@ function LobbyTile(props: {
   icon: ReactNode;
   title: string;
   hint: string;
+  /** награда ждёт: точка в углу — без числа, одна награда в сутки */
+  ready?: boolean;
   onClick(): void;
 }): ReactNode {
   return (
     <Card appearIndex={props.appearIndex} onClick={props.onClick}>
+      {props.ready === true ? <span aria-label={t("lobby.daily.ready")} className="absolute top-2.5 right-2.5 size-2.5 rounded-full bg-accent" /> : null}
       {/* Значок над подписью, а не сбоку: в половине ширины телефона рядом со
           значком «Колесо удачи» переносилось на две строки. В ландшафте места
           хватает — значок возвращается в строку. */}

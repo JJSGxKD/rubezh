@@ -165,7 +165,7 @@ Zod-схемы `payload` — в словаре сервера
 | Партнёры | `partner_click`, `partner_registration`, `partner_ftd`, `partner_revenue_accrued`, `partner_payout` |
 | Шеринг | `share_offered`, `share_completed`, `shared_link_opened` |
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
-| Удержание | `daily_reward_claimed`, `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
+| Удержание | `daily_reward_claimed` (награда дня, WP13); `wheel_spun`, `task_completed`, `achievement_unlocked` — вместе с механиками этапа 4 (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
 | Обратная связь | `feedback_sent` — отзыв с формы обратной связи (`29-admin-panel.md` §6) |
 | Уведомления | `notification_opened` — игрок перешёл из ленты туда, куда звало уведомление (`35-stage4-plan.md` WP28) |
@@ -187,6 +187,7 @@ Zod-схемы `payload` — в словаре сервера
 | `bench_finished` | Сводка теста производительности — стресс-теста из «Играть» (`28-diagnostics.md` §2.3); полный отчёт уходит в приёмник диагностики (`28-diagnostics.md` §5), не в события | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
 | `feedback_sent` | Сколько игроков доходит до формы обратной связи и отвечают ли они текстом или только опросом. Сам отзыв в события не попадает: он уходит в чат администраторов и в свою таблицу, а здесь — только факт и разрез | `answers` — сколько вопросов отвечено, `hasText` — был ли свободный текст, `runs` — сколько забегов сыграно к этому моменту; `kind: device_info` — игрок поделился сведениями об устройстве из «Помощи в тестировании» (`28-diagnostics.md` §2.2), без поля — отзыв |
 | `notification_opened` | Ведут ли уведомления обратно в игру: какие виды открывают, а какие только прочитывают. Сама лента — таблица `notification`, прочитанное — её поле, поэтому событие — только о переходе | `kind` — вид уведомления: `friend_request`, `friend_gift`, `rare_loot` |
+| `daily_reward_claimed` | Удерживает ли награда дня: до какого дня недели и какой недели доходят (`35-stage4-plan.md` WP13). Что легло на баланс — журнал кошелька с причиной `daily_reward`, прогресс — таблица `daily_reward`; событие шлёт клиент после ответа сервера | `day` — день недели награды, 1…7, `week` — какая по счёту неделя |
 
 Добавлено на этапе 3 (`34-stage3-plan.md`):
 

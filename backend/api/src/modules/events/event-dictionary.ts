@@ -154,6 +154,10 @@ export const EVENT_DICTIONARY = {
   // Игрок открыл уведомление из ленты — перешёл туда, куда оно звало
   // (docs/35-stage4-plan.md WP28). Вид — низкой кардинальности, без данных.
   notification_opened: { version: 1, payload: payload({ kind: id }) },
+  // Забрал награду дня (docs/35-stage4-plan.md WP13): какой день недели и
+  // какая по счёту неделя — удерживает ли награда. Сколько легло монет —
+  // журнал кошелька, причина daily_reward.
+  daily_reward_claimed: { version: 1, payload: payload({ day: count, week: count }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 

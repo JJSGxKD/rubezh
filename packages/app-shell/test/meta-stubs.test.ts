@@ -3,7 +3,6 @@ import { hasTranslation } from "../src/i18n";
 import { formatCountdown, msUntilReset } from "../src/screens/meta/schedule";
 import {
   ACHIEVEMENTS,
-  DAILY_REWARDS,
   WHEEL_SECTORS,
   achievementProgress,
 } from "../src/screens/meta/stub-content";
@@ -111,11 +110,7 @@ describe("колесо удачи", () => {
   });
 });
 
-describe("награда дня и достижения", () => {
-  it("неделя из семи дней", () => {
-    expect(DAILY_REWARDS).toHaveLength(7);
-  });
-
+describe("достижения", () => {
   it("прогресс достижения не уходит за цель и не показывает NaN из битого хранилища", () => {
     const survive = ACHIEVEMENTS.find((achievement) => achievement.id === "survive_1");
     if (survive === undefined) throw new Error("нет достижения survive_1");
