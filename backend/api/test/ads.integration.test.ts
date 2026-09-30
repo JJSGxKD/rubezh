@@ -87,16 +87,17 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     expect((await repository.history(me, "wheel_spin", lateNight)).dayStart).toEqual(new Date(Date.UTC(2026, 8, 29, 21)));
     expect((await repository.history(me, "wheel_spin", earlyMorning)).dayStart).toEqual(new Date(Date.UTC(2026, 8, 30, 21)));
 
-    const old = await session(me, "view", new Date(Date.UTC(2026, 8, 28, 20, 59)));
+    // До начала вчерашних суток — за окном истории.
+    await session(me, "view", new Date(Date.UTC(2026, 8, 28, 20, 59)));
     const claimed = await session(me, "view", at(NOON, -10));
     const fresh = await session(me, "view", NOON);
     await repository.report(claimed, me, { kind: "completed" }, at(NOON, -9));
     await repository.claim(claimed, me, "wheel_spin", at(NOON, -9), () => ({ kind: "allow" }));
 
     const history = await repository.history(me, "wheel_spin", NOON);
-    expect(history.sessions.map((row) => row.sessionId)).toEqual([claimed, fresh]);
-    expect(history.sessions.map((row) => row.sessionId)).not.toContain(old);
-    expect((await repository.history(me, "task", NOON)).sessions).toEqual([]);
+    expect(history.sessions.map((row) => row.sessionId).sort()).toEqual([claimed, fresh].sort());
+    expect(history.sessions.find((row) => row.sessionId === claimed)).toMatchObject({ status: "claimed", networkKey: network, claimedAt: at(NOON, -9) });
+    expect(await repository.history(me, "task", NOON)).toEqual({ dayStart: new Date(Date.UTC(2026, 8, 29, 21)), sessions: [] });
   });
 
   it("воронка: показ и досмотр — метками, клик не выполняет, отказ закрывает; чужая и истёкшая шагов не принимают", async () => {

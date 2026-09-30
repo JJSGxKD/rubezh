@@ -241,16 +241,19 @@ export class PrismaAdsRepository implements AdsRepository {
  * окна награду и не обнулят этим кулдаун.
  */
 async function historyWithin(db: Db, accountId: string, place: AdPlace, at: Date): Promise<PlaceHistory> {
-  const [day] = await db.$queryRaw<{ day_start: Date }[]>`
-    SELECT (date_trunc('day', ${at}::timestamptz AT TIME ZONE ${GAME_DAY_TIME_ZONE}) AT TIME ZONE ${GAME_DAY_TIME_ZONE}) AS day_start`;
-  const dayStart = z.date().parse(day?.day_start);
-  const rows = await db.$queryRawUnsafe<unknown[]>(
-    `SELECT ${SESSION_COLUMNS} FROM ad_session
-     WHERE account_id = $1::uuid AND place = $2::"AdPlace" AND created_at >= $3::timestamptz - interval '1 day'
-     ORDER BY claimed_at IS NOT NULL DESC, created_at DESC LIMIT 500`,
+  const rows = await db.$queryRawUnsafe<{ day_start: unknown; session_id: unknown }[]>(
+    `WITH day AS (SELECT (date_trunc('day', $3::timestamptz AT TIME ZONE $4) AT TIME ZONE $4) AS day_start)
+     SELECT day.day_start, s.* FROM day LEFT JOIN LATERAL (
+       SELECT ${SESSION_COLUMNS} FROM ad_session
+       WHERE account_id = $1::uuid AND place = $2::"AdPlace" AND created_at >= day.day_start - interval '1 day'
+       ORDER BY claimed_at IS NOT NULL DESC, created_at DESC LIMIT 500
+     ) s ON true`,
     accountId,
     place,
-    dayStart,
+    at,
+    GAME_DAY_TIME_ZONE,
   );
-  return { dayStart, sessions: rows.map(toSession) };
+  // Без сессий LEFT JOIN отдаёт одну строку с началом суток и пустыми полями сессии.
+  const dayStart = z.date().parse(rows[0]?.day_start);
+  return { dayStart, sessions: rows.filter((row) => row.session_id !== null).map(toSession) };
 }
