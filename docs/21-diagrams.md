@@ -1430,6 +1430,7 @@ flowchart LR
     TASKS -- "task_def, task_progress, task_run" --> PG
     RUNS -. "записанный забег, RunsHooks" .-> TASKS
     TASKS -. "награда ключом задания и срока" .-> WALLET
+    BADGES -. "награды к выдаче" .-> TASKS
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
