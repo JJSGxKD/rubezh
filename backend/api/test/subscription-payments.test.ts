@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DomainError } from "../src/common/domain-error.js";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import { decideCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
 import { PaymentsHooks, type SubscriptionChange } from "../src/modules/payments/payments-hooks.js";
@@ -152,6 +153,18 @@ describe("продление подписки", () => {
 
     expect([...ctx.purchases.rows.values()].filter((row) => row.renewalOf === first)).toHaveLength(1);
     expect(ctx.fulfilled).toHaveLength(2);
+  });
+
+  it("спросит площадка перед продлением — счёт оплаченной подписки не «уже оплачен» и не «устарел»; чужой и не та сумма — отказ", async () => {
+    const view = await ctx.purchases.checkout(first);
+    if (view === null) throw new Error("нет покупки");
+    const query = { platform: "telegram", queryId: "q-1", payerId: PLAYER_ID, currency: "XTR", totalAmount: 200, payload: first } as const;
+    const monthLater = NOW + 30 * 86_400_000;
+
+    expect(decideCheckout(view, query, monthLater, true)).toEqual({ ok: true });
+    expect(decideCheckout(view, { ...query, payerId: "42" }, monthLater, true)).toEqual({ ok: false, reason: "foreign_user" });
+    expect(decideCheckout(view, { ...query, totalAmount: 1 }, monthLater, true)).toEqual({ ok: false, reason: "price_mismatch" });
+    expect(decideCheckout(view, query, monthLater, false)).toEqual({ ok: false, reason: "disabled" });
   });
 
   it("вторая оплата не подписки по-прежнему лишняя — её возвращают", async () => {
