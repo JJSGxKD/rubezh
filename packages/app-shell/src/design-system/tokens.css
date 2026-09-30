@@ -466,8 +466,8 @@
    * `data-app-header` на корне.
    */
   --app-header-h: 0px;
-  /* Размытие того, что прокручивается под стеклом шапки. */
-  --glass-blur: 18px;
+  /* Размытие того, что прокручивается под стеклом шапки: при 18 px стекло читалось слабо. */
+  --glass-blur: 28px;
 
   /* Стабильная высота вьюпорта от площадки, а не 100vh (§5.1). */
   --app-viewport-height: 100dvh;
@@ -481,22 +481,22 @@
  * а смена стиля остаётся правкой этого файла.
  */
 
-/* Шапка: поля 0,5rem сверху и снизу, строка в 44 px и кромка стекла — плюс вырез камеры. */
+/* Шапка: поля 0,5rem сверху и снизу и строка в 44 px — плюс вырез камеры. */
 [data-app-header] {
-  --app-header-h: calc(var(--app-inset-top) + 3.75rem + 1px);
+  --app-header-h: calc(var(--app-inset-top) + 3.75rem);
 }
 
 /*
  * Стекло шапки (WP30): полупрозрачная подложка и размытие того, что под ней.
- * Где размытия нет или игрок попросил меньше прозрачности, — плотная
- * подложка: цифры валют не должны тонуть в карточках под шапкой.
+ * Кромки снизу нет: край стекла и так виден по размытию, а линия резала
+ * экран и спорила с фоном. Где размытия нет или игрок попросил меньше
+ * прозрачности, — плотная подложка: цифры валют не должны тонуть в карточках
+ * под шапкой.
  */
 @utility surface-glass {
   background: color-mix(in oklab, var(--color-bg) 40%, transparent);
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
-  border-bottom: 1px solid color-mix(in oklab, var(--color-border-strong) 55%, transparent);
-  box-shadow: 0 8px 24px -16px rgb(0 0 0 / 0.8);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.7);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.7);
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     background: var(--color-bg);
