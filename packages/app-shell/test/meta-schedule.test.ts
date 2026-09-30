@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { hasTranslation } from "../src/i18n";
 import { formatCountdown, msUntilReset } from "../src/screens/meta/schedule";
-import { ACHIEVEMENTS, achievementProgress } from "../src/screens/meta/stub-content";
 import { sectorCenterDeg, spinRotationDeg } from "../src/screens/meta/wheel-math";
 
-// Мета: сброс заданий, поворот колеса, достижения
+// Мета: сброс заданий и поворот колеса
 // (docs/07-monetization-and-ads.md §7, docs/27-design-system-and-app-shell.md §6).
-// Сектора, шансы и выбор сектора колеса — на сервере, их проверяет
-// backend/api/test/wheel.test.ts.
+// Сектора и шансы колеса, прогресс заданий и достижений — на сервере, их
+// проверяют backend/api/test/wheel.test.ts и tasks.test.ts.
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -69,33 +67,6 @@ describe("колесо удачи", () => {
           expect(rotation - current).toBeLessThan(6 * 360);
         }
       }
-    }
-  });
-});
-
-describe("достижения", () => {
-  it("прогресс достижения не уходит за цель и не показывает NaN из битого хранилища", () => {
-    const survive = ACHIEVEMENTS.find((achievement) => achievement.id === "survive_1");
-    if (survive === undefined) throw new Error("нет достижения survive_1");
-
-    expect(achievementProgress(survive, { bestSurvivalSec: 30, runs: 0 })).toEqual({
-      value: 30,
-      target: 60,
-      done: false,
-    });
-    expect(achievementProgress(survive, { bestSurvivalSec: 610, runs: 0 })).toEqual({
-      value: 60,
-      target: 60,
-      done: true,
-    });
-    expect(achievementProgress(survive, { bestSurvivalSec: Number.NaN, runs: 0 }).value).toBe(0);
-    expect(achievementProgress(survive, { bestSurvivalSec: -4, runs: 0 }).value).toBe(0);
-  });
-
-  it("у каждого достижения есть название и описание", () => {
-    for (const achievement of ACHIEVEMENTS) {
-      expect(hasTranslation(`achievement.${achievement.id}.name`), achievement.id).toBe(true);
-      expect(hasTranslation(`achievement.${achievement.id}.description`), achievement.id).toBe(true);
     }
   });
 });

@@ -1,50 +1,84 @@
-import { useState, type ReactNode } from "react";
-import { Check, Clock, Crown, Crosshair, Flame, Hourglass, Play, Sparkles } from "lucide-react";
-import {
-  Badge,
-  Card,
-  ContentColumn,
-  PageTitle,
-  ProgressBar,
-  Screen,
-  SegmentedControl,
-  StubNotice,
-} from "../../design-system/components";
-import { formatDuration, formatNumber, t } from "../../i18n";
-import { bestOverall, useMeta } from "../../state/meta";
-import { RewardChip } from "./reward";
+import { useEffect, useState, type ReactNode } from "react";
+import { Check, Clock, Crown, Crosshair, Diamond, Hourglass, Play, Sparkles, Target } from "lucide-react";
+import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, PageTitle, ProgressBar, Screen, SegmentedControl } from "../../design-system/components";
+import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
+import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
+import "../../i18n/tasks";
+import { loadBadges } from "../../state/badges-api";
+import { track } from "../../state/shell";
+import { TASK_NOT_DONE, createTasksApi, tasksAvailable, type TaskItem, type TaskReward } from "../../state/tasks-api";
+import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
-import {
-  ACHIEVEMENTS,
-  DAILY_TASKS,
-  WEEKLY_TASKS,
-  achievementProgress,
-  type TaskDef,
-  type TaskIcon,
-} from "./stub-content";
 
 /**
  * «Задания»: ежедневные, недельные и достижения
- * (docs/27-design-system-and-app-shell.md §6).
+ * (docs/27-design-system-and-app-shell.md §6, docs/35-stage4-plan.md WP13).
  *
- * Заглушка, но не пустая: задания нарисованы как настоящие, а прогресс
- * достижений, который уже можно посчитать по сохранённому на устройстве, —
- * настоящий. Награды не выдаются: их выдачу будет решать сервер
- * (docs/07-monetization-and-ads.md §7).
+ * Прогресс и награды — с сервера: он засчитывает записанные забеги, а не то,
+ * что прислал клиент. Каталог правится из панели без релиза, поэтому экран
+ * рисует то, что пришло, — и незнакомый вид цели тоже, с заголовком из
+ * каталога.
  */
 type View = "daily" | "weekly" | "achievements";
+type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; tasks: TaskItem[] };
 
-const ICONS: Record<TaskIcon, ReactNode> = {
+const PERIOD_OF: Record<View, TaskItem["period"]> = { daily: "daily", weekly: "weekly", achievements: "achievement" };
+
+const ICONS: Partial<Record<string, ReactNode>> = {
   runs: <Play size={20} aria-hidden="true" />,
   kills: <Crosshair size={20} aria-hidden="true" />,
-  survive: <Hourglass size={20} aria-hidden="true" />,
-  upgrades: <Sparkles size={20} aria-hidden="true" />,
-  elites: <Flame size={20} aria-hidden="true" />,
-  record: <Crown size={20} aria-hidden="true" />,
+  survive_sec: <Hourglass size={20} aria-hidden="true" />,
+  best_survival_sec: <Crown size={20} aria-hidden="true" />,
+  run_level: <Sparkles size={20} aria-hidden="true" />,
 };
+
+/** Цели во времени считаются в секундах, а читаются минутами. */
+const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_survival_sec"]);
+
+const api = createTasksApi();
 
 export function TasksScreen(): ReactNode {
   const [view, setView] = useState<View>("daily");
+  const [state, setState] = useState<Loaded>({ status: "loading" });
+  const [claiming, setClaiming] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ taskId: string; text: string } | null>(null);
+
+  const load = async (): Promise<void> => {
+    setState({ status: "loading" });
+    const response = await api.view();
+    setState(response.ok ? { status: "ready", tasks: response.data.tasks } : { status: "failed" });
+  };
+
+  useEffect(() => {
+    if (tasksAvailable()) void load();
+  }, []);
+
+  const claim = async (task: TaskItem): Promise<void> => {
+    if (claiming !== null) return;
+    setClaiming(task.id);
+    setNotice(null);
+    const response = await api.claim(task.id);
+    setClaiming(null);
+    if (!response.ok) {
+      if (response.code === TASK_NOT_DONE) {
+        setNotice({ taskId: task.id, text: t("tasks.stale") });
+        void load();
+      } else {
+        setNotice({ taskId: task.id, text: t("tasks.claimFailed") });
+      }
+      return;
+    }
+    setState({ status: "ready", tasks: response.data.tasks });
+    if (response.data.claimed) {
+      if (task.period === "achievement") track("achievement_unlocked", { achievement: task.id, kind: task.kind });
+      else track("task_completed", { task: task.id, period: task.period, kind: task.kind });
+      setNotice({ taskId: task.id, text: t("tasks.got", { what: rewardText(response.data.credited) }) });
+      void loadWallet();
+    }
+    void loadBadges();
+  };
+
+  const tasks = state.status === "ready" ? state.tasks.filter((task) => task.period === PERIOD_OF[view]) : [];
 
   return (
     <Screen>
@@ -61,149 +95,159 @@ export function TasksScreen(): ReactNode {
               { id: "achievements", label: t("tasks.achievements") },
             ]}
           />
-          <StubNotice text={t("tasks.stub")} />
+          {!tasksAvailable() ? <InfoNotice text={t("tasks.guest")} /> : null}
         </div>
 
-        {/* Ключ — вид: список монтируется заново, и лесенка появления
-            проигрывается при каждом переключении. */}
-        <div key={view} className="mt-4">
-          {view === "achievements" ? (
-            <AchievementList />
-          ) : (
-            <TaskList period={view} tasks={view === "daily" ? DAILY_TASKS : WEEKLY_TASKS} />
-          )}
-        </div>
+        {state.status === "loading" && tasksAvailable() ? <p className="mt-4 text-sm text-text-muted">{t("tasks.loading")}</p> : null}
+        {state.status === "failed" ? <ErrorState text={t("tasks.failed")} onRetry={() => void load()} /> : null}
+
+        {state.status !== "ready" ? null : (
+          // Ключ — вид: список монтируется заново, и лесенка появления
+          // проигрывается при каждом переключении.
+          <div key={view} className="mt-4">
+            {view === "achievements" ? null : <ResetLine period={view} />}
+            {tasks.length === 0 ? <p className="text-sm text-text-muted">{t("tasks.empty")}</p> : null}
+            <div className="grid gap-2">
+              {tasks.map((task, index) => (
+                <TaskRow
+                  key={task.id}
+                  index={index}
+                  task={task}
+                  claiming={claiming === task.id}
+                  notice={notice?.taskId === task.id ? notice.text : null}
+                  onClaim={() => void claim(task)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </ContentColumn>
     </Screen>
   );
 }
 
-function TaskList(props: { period: ResetPeriod; tasks: readonly TaskDef[] }): ReactNode {
+function ResetLine(props: { period: ResetPeriod }): ReactNode {
   // Время считается при открытии вида, без тикающего таймера: минутная
   // точность не стоит перерисовки экрана раз в секунду.
   const [resetIn] = useState(() => msUntilReset(Date.now(), props.period));
-
   return (
-    <>
-      <p className="mb-3 flex items-center gap-1.5 text-xs text-text-muted">
-        <Clock size={14} aria-hidden="true" />
-        {t("tasks.resetIn", { time: formatCountdown(resetIn) })}
-      </p>
-      <div className="grid gap-2">
-        {props.tasks.map((task, index) => (
-          <TaskRow
-            key={task.id}
-            index={index}
-            icon={ICONS[task.icon]}
-            title={t(task.titleKey, { target: task.target })}
-            progress={
-              <ProgressLine
-                value={0}
-                target={task.target}
-                valueLabel="0"
-                targetLabel={formatNumber(task.target)}
-              />
-            }
-            reward={<RewardChip reward={task.reward} />}
-          />
-        ))}
-      </div>
-    </>
+    <p className="mb-3 flex items-center gap-1.5 text-xs text-text-muted">
+      <Clock size={14} aria-hidden="true" />
+      {t("tasks.resetIn", { time: formatCountdown(resetIn) })}
+    </p>
   );
 }
 
-function AchievementList(): ReactNode {
-  const runs = useMeta((state) => state.runs);
-  const bestSurvivalSec = useMeta((state) => bestOverall(state.best));
+function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; notice: string | null; onClaim: () => void }): ReactNode {
+  const { task } = props;
+  const claimable = task.done && !task.claimed;
+  const name = achievementName(task);
+  const title = task.title ?? name ?? goalText(task);
+  const hint = task.title === null && name !== null ? goalText(task) : null;
 
   return (
-    <div className="grid gap-2">
-      {ACHIEVEMENTS.map((achievement, index) => {
-        const progress = achievementProgress(achievement, { runs, bestSurvivalSec });
-        const time = achievement.metric === "bestSurvivalSec";
-        const format = (value: number): string => (time ? formatDuration(value) : String(value));
-
-        return (
-          <TaskRow
-            key={achievement.id}
-            index={index}
-            icon={ICONS[achievement.icon]}
-            done={progress.done}
-            title={t(`achievement.${achievement.id}.name`)}
-            hint={t(`achievement.${achievement.id}.description`)}
-            progress={
-              <ProgressLine
-                value={progress.value}
-                target={progress.target}
-                valueLabel={format(progress.value)}
-                targetLabel={format(progress.target)}
-              />
-            }
-            reward={<RewardChip reward={achievement.reward} />}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function TaskRow(props: {
-  index: number;
-  icon: ReactNode;
-  title: string;
-  hint?: string;
-  done?: boolean;
-  progress: ReactNode;
-  reward: ReactNode;
-}): ReactNode {
-  const done = props.done === true;
-
-  return (
-    <Card appearIndex={props.index} stripe={done ? "accent" : undefined}>
+    <Card appearIndex={props.index} stripe={claimable ? "accent" : undefined}>
       <div className="flex items-center gap-3">
         <span
           className={[
             "inline-flex size-11 shrink-0 items-center justify-center rounded-md",
-            done ? "bg-accent/15 text-accent" : "bg-surface-raised text-text-muted",
+            task.done ? "bg-accent/15 text-accent" : "bg-surface-raised text-text-muted",
           ].join(" ")}
         >
-          {props.icon}
+          {ICONS[task.kind] ?? <Target size={20} aria-hidden="true" />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-display text-sm font-bold text-text">{props.title}</span>
-            {done ? (
+            <span className="font-display text-sm font-bold text-text">{title}</span>
+            {task.claimed ? (
+              <Badge tone="muted">
+                <Check size={12} aria-hidden="true" />
+                {t("tasks.claimed")}
+              </Badge>
+            ) : task.done ? (
               <Badge tone="accent">
                 <Check size={12} aria-hidden="true" />
                 {t("tasks.done")}
               </Badge>
             ) : null}
           </div>
-          {props.hint === undefined ? null : (
-            <p className="mt-0.5 text-xs text-text-muted">{props.hint}</p>
-          )}
-          <div className="mt-2">{props.progress}</div>
+          {hint === null ? null : <p className="mt-0.5 text-xs text-text-muted">{hint}</p>}
+          <div className="mt-2">
+            <ProgressLine task={task} />
+          </div>
         </div>
-        {props.reward}
+        <RewardChips reward={task.reward} />
       </div>
+      {/* Под строкой и во всю ширину: в правой колонке кнопка сжимала полосу
+          прогресса до точки на узком телефоне. */}
+      {claimable ? (
+        <div className="mt-3">
+          <Button block loading={props.claiming} onClick={props.onClaim}>
+            {t("tasks.claim")}
+          </Button>
+        </div>
+      ) : null}
+      {props.notice === null ? null : <p className="mt-2 text-xs font-semibold text-text-muted">{props.notice}</p>}
     </Card>
   );
 }
 
-function ProgressLine(props: {
-  value: number;
-  target: number;
-  valueLabel: string;
-  targetLabel?: string;
-}): ReactNode {
-  const text = `${props.valueLabel} / ${props.targetLabel ?? String(props.target)}`;
+function ProgressLine(props: { task: TaskItem }): ReactNode {
+  const { task } = props;
+  const format = (value: number): string => (TIME_KINDS.has(task.kind) ? formatDuration(value) : formatNumber(value));
+  const text = `${format(task.value)} / ${format(task.target)}`;
 
   return (
     <div className="flex items-center gap-2">
-      <ProgressBar value={props.value} max={props.target} height="thin" label={text} />
+      <ProgressBar value={task.value} max={task.target} height="thin" label={text} />
       <span aria-hidden="true" className="shrink-0 font-display text-xs tabular-nums text-text-muted">
         {text}
       </span>
     </div>
   );
+}
+
+/** Награда значками: монеты, самоцветы и осколки различаются и формой, и цветом (§4.4). */
+function RewardChips(props: { reward: TaskReward }): ReactNode {
+  const { coins, gems, shards } = props.reward;
+  return (
+    <span role="img" aria-label={rewardText(props.reward)} className="flex flex-col items-end gap-1">
+      {coins > 0 ? <Chip icon={<CoinIcon size={16} />} amount={coins} /> : null}
+      {gems > 0 ? <Chip icon={<GemIcon size={16} />} amount={gems} /> : null}
+      {shards > 0 ? <Chip icon={<Diamond size={16} className="text-info" aria-hidden="true" />} amount={shards} /> : null}
+    </span>
+  );
+}
+
+function Chip(props: { icon: ReactNode; amount: number }): ReactNode {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {props.icon}
+      <span className="font-display text-sm font-bold tabular-nums text-text">{formatNumber(props.amount)}</span>
+    </span>
+  );
+}
+
+/** Имя достижения из словаря — у достижений по умолчанию; у своих из панели — заголовок каталога. */
+function achievementName(task: TaskItem): string | null {
+  const key = `achievement.${task.id}.name`;
+  return task.period === "achievement" && hasTranslation(key) ? t(key) : null;
+}
+
+/**
+ * Цель по виду — со склонением числа: `target` склоняет, `count` — то же число
+ * с разрядами, как в полосе прогресса. Незнакомый вид без заголовка — просто
+ * число цели.
+ */
+function goalText(task: TaskItem): string {
+  const key = `task.kind.${task.kind}`;
+  if (!hasTranslation(key)) return formatNumber(task.target);
+  return t(key, { target: task.target, count: formatNumber(task.target), time: formatCountdown(task.target * 1000) });
+}
+
+function rewardText(reward: TaskReward): string {
+  const parts = (["coins", "gems", "shards"] as const)
+    .filter((resource) => reward[resource] > 0)
+    .map((resource) => t(`task.reward.${resource}`, { amount: formatNumber(reward[resource]), n: reward[resource] }));
+  return parts.join(t("tasks.and"));
 }
