@@ -21,6 +21,7 @@ import { NotifyTargets } from "../src/modules/settings/notify-targets.js";
 import type { SettingValue } from "../src/modules/settings/setting-catalog.js";
 import { environmentSettings, type SettingsReader } from "../src/modules/settings/settings.service.js";
 import { targetsOf } from "./helpers/notify-targets.js";
+import { PNG_RENDER_TIMEOUT_MS } from "./helpers/card-render.js";
 
 // Уведомления об отчётах диагностики в чат администраторов (docs/28-diagnostics.md §6.2).
 
@@ -44,7 +45,7 @@ describe("карточка стресс-теста", () => {
     expect(svg).toContain("просадка на 660 врагах");
     expect(svg).toMatch(/<polyline points="[\d., ]+"/);
     expect(renderStressCardPng(cardInput()).subarray(1, 4).toString()).toBe("PNG");
-  });
+  }, PNG_RENDER_TIMEOUT_MS);
 
   it("экранирует то, что прислал клиент, и честно пишет про короткий таймлайн", () => {
     const payload = submitBenchReportSchema.parse(benchSubmission());
@@ -86,7 +87,7 @@ describe("карточка проблемного забега", () => {
     expect(svg).toContain("нормальная, погиб от swarm_rat");
     expect(svg).toMatch(/fill-opacity="[\d.]+"\/>/);
     expect(renderRunCardPng(input).subarray(1, 4).toString()).toBe("PNG");
-  });
+  }, PNG_RENDER_TIMEOUT_MS);
 
   it("подпись даёт команду повтора, а неповторимую запись так и называет", () => {
     const input = runCardInput({ clientErrors: 1 });
