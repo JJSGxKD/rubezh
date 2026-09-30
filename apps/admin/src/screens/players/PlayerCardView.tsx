@@ -66,6 +66,7 @@ function Header({ card }: { card: PlayerCard }) {
             items={[
               ["Уровень", `${progress.level}, опыт ${formatNumber(progress.xp)}`],
               ["Писать в бота", card.messaging === null ? "не знаем" : card.messaging.canMessage ? `можно (${card.messaging.reason})` : `нельзя (${card.messaging.reason})`],
+              ["Предупреждение о тесте", testNoticeLabel(card.testNotice)],
             ]}
           />
           <div className="h-1.5 overflow-hidden rounded-pill bg-surface-sunken" title="Опыт внутри уровня">
@@ -192,4 +193,12 @@ function Purchases({ card }: { card: PlayerCard }) {
       )}
     </Panel>
   );
+}
+
+/** Видел ли игрок предупреждение об открытом тесте и когда впервые — к спору о вайпе и покупках (WP33). */
+function testNoticeLabel(notice: PlayerCard["testNotice"]): string {
+  if (notice === undefined) return "не знаем";
+  if (notice === null) return "не принимал";
+  const first = formatDateTime(notice.firstAcceptedAt);
+  return notice.version > 1 ? `принял ${first}, текст версии ${String(notice.version)} — ${formatDateTime(notice.acceptedAt)}` : `принял ${first}`;
 }

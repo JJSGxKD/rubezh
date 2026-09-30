@@ -44,6 +44,7 @@ import { DailyModule } from "./modules/daily/daily.module.js";
 import { ChangelogModule } from "./modules/changelog/changelog.module.js";
 import { WheelModule } from "./modules/wheel/wheel.module.js";
 import { TasksModule } from "./modules/tasks/tasks.module.js";
+import { TestNoticeModule } from "./modules/test-notice/test-notice.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -113,6 +114,7 @@ export const APP_MODULES = [
   ChangelogModule,
   WheelModule,
   TasksModule,
+  TestNoticeModule,
 ];
 
 /**

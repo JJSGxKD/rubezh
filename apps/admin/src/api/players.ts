@@ -99,6 +99,8 @@ export const playerCardSchema = z.object({
   wallet: z.object({ balances: z.record(z.string(), z.number()), entries: z.array(walletEntrySchema) }),
   /** `null` — у вошедшего нет права на платежи: модератор видит карточку без них */
   purchases: z.array(purchaseSchema).nullable(),
+  /** предупреждение об открытом тесте (WP33); сервер старее панели поля не пришлёт */
+  testNotice: z.object({ version: z.number(), acceptedAt: iso, firstAcceptedAt: iso }).nullable().optional(),
 });
 
 export const banResultSchema = z.object({ account: playerRowSchema, revokedSessions: z.number() });

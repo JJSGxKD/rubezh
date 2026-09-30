@@ -13,6 +13,7 @@ import type { MessagingService } from "../src/modules/messaging/messaging.servic
 import type { ProgressService } from "../src/modules/progress/progress.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import type { RunsViewService } from "../src/modules/runs/runs-view.service.js";
+import type { TestNoticeService } from "../src/modules/test-notice/test-notice.service.js";
 import type { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { emptyBalances } from "../src/modules/wallet/wallet-types.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -86,7 +87,8 @@ function setup() {
   } as unknown as AuthService;
 
   const notifications = memoryNotifications();
-  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service);
+  const testNotice = { acceptance: async () => ({ version: 1, acceptedAt: NOW, firstAcceptedAt: NOW }) } as unknown as TestNoticeService;
+  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice);
   return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository };
 }
 
@@ -113,6 +115,7 @@ describe("карточка игрока", () => {
     expect(card.progress).toMatchObject({ level: 2 });
     expect(card.wallet.balances.coins).toBe(15);
     expect(card.messaging?.canMessage).toBe(true);
+    expect(card.testNotice).toEqual({ version: 1, acceptedAt: NOW, firstAcceptedAt: NOW });
     expect(s.rolesRepository.entries.map((entry) => [entry.action, entry.target])).toEqual([["players.pii.view", target.accountId]]);
   });
 
