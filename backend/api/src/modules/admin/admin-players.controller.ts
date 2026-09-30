@@ -4,6 +4,8 @@ import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
+import { playerListQuerySchema } from "../player-list/player-list-query.js";
+import { PlayerListService, type PlayerListView } from "../player-list/player-list.service.js";
 import { WalletService, type AdjustResult } from "../wallet/wallet.service.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
@@ -20,6 +22,7 @@ import { accountIdSchema, adminWalletAdjustSchema, banSchema, playerMessageSchem
 export class AdminPlayersController {
   constructor(
     private readonly players: AdminPlayersService,
+    private readonly list: PlayerListService,
     private readonly wallet: WalletService,
     private readonly limiter: RateLimiter,
   ) {}
@@ -29,6 +32,14 @@ export class AdminPlayersController {
   async search(@Req() request: unknown, @Query() query: unknown): Promise<{ data: { players: PlayerRow[] } }> {
     const search = parse(() => playerSearchSchema.parse(query), "Некорректный запрос поиска");
     return { data: { players: await this.players.search(accountOf(request), search.query, search.limit) } };
+  }
+
+  /** Список с фильтрами и сортировкой (WP32); статичный путь роутер находит раньше `:accountId`. */
+  @Get("list")
+  @RequirePermission("players.view")
+  async page(@Req() request: unknown, @Query() query: unknown): Promise<{ data: PlayerListView }> {
+    const parsed = parse(() => playerListQuerySchema.parse(query), "Некорректные фильтры списка игроков");
+    return { data: await this.list.list(accountOf(request), parsed) };
   }
 
   @Get(":accountId")

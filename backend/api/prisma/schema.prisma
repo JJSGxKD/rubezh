@@ -200,6 +200,10 @@ model Account {
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
+  // Список игроков в панели (WP32): страница — отрезок индекса по ключу
+  // сортировки и id, а не сортировка всей таблицы.
+  @@index([createdAt, accountId])
+  @@index([lastSeenAt, accountId])
   @@map("account")
 }
 
@@ -769,6 +773,8 @@ model AccountProgress {
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
+  // Список игроков в панели по уровню (WP32).
+  @@index([level, accountId])
   @@map("account_progress")
 }
 

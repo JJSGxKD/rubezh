@@ -4,6 +4,7 @@ import { FlagsModule } from "../flags/flags.module.js";
 import { AdminFlagsController } from "./admin-flags.controller.js";
 import { BroadcastsModule } from "../broadcasts/broadcasts.module.js";
 import { ChangelogModule } from "../changelog/changelog.module.js";
+import { PlayerListModule } from "../player-list/player-list.module.js";
 import { AdminChangelogController } from "./admin-changelog.controller.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { FriendsModule } from "../friends/friends.module.js";
@@ -50,7 +51,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,

@@ -1219,6 +1219,7 @@ flowchart LR
         HISTORY["history<br/>история имущества: чтение<br/>журналов кошелька, предметов<br/>и покупок, реализовано"]
         DAILY["daily<br/>награда дня: неделя без сброса,<br/>ступени, множитель уровня, реализовано"]
         CHANGELOG["changelog<br/>журнал обновлений по площадкам,<br/>раздача app_update пачками, реализовано"]
+        PLAYERLIST["player-list<br/>список игроков для панели:<br/>фильтры, страница по индексу, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1352,6 +1353,8 @@ flowchart LR
     CHANGELOG -- "лок раздачи" --> REDIS
     CHANGELOG -. "app_update пачкой, deliverMany" .-> NOTIF
     BADGES -. "версии после «открывал»" .-> CHANGELOG
+    ADMINAPI -. "список игроков" .-> PLAYERLIST
+    PLAYERLIST --> PG
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
