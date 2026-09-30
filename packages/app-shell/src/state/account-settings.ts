@@ -1,5 +1,6 @@
 import { z } from "zod/mini";
 import { apiRequest } from "./api-request";
+import { BOT_NOTIFY_DEFAULTS, botNotifyKeyOf, useBotNotifications } from "./bot-notifications";
 import { useDiagnostics } from "./diagnostics";
 import { DEFAULT_GRAPHICS, useGraphics } from "./graphics";
 import { HINT_ORDER, useHints, type HintId } from "./hints";
@@ -9,8 +10,9 @@ import { reportError, useShell } from "./shell";
 /**
  * Настройки аккаунта (docs/35-stage4-plan.md Р56, WP29): выбранное на ПК
  * приходит на телефон при следующем входе. Идут за аккаунтом участие в
- * помощи в тестировании, запись забегов, усвоенные подсказки и отображение
- * боя; графика, громкость, вибрация и режим экрана — у устройства.
+ * помощи в тестировании, запись забегов, усвоенные подсказки, отображение
+ * боя и что дублировать в бота; графика, громкость, вибрация и режим экрана —
+ * у устройства.
  *
  * Сами значения по-прежнему живут в своих сторах и на устройстве. Здесь —
  * что из них выбрано на этом устройстве и ещё не дошло до сервера. Сливает
@@ -29,7 +31,16 @@ import { reportError, useShell } from "./shell";
 
 export const ACCOUNT_SETTINGS_VERSION = 1;
 
-export const ACCOUNT_SETTING_KEYS = ["testing.enabled", "testing.recordRuns", "hints.seen", "combat.telegraphs", "combat.damageNumbers"] as const;
+export const ACCOUNT_SETTING_KEYS = [
+  "testing.enabled",
+  "testing.recordRuns",
+  "hints.seen",
+  "combat.telegraphs",
+  "combat.damageNumbers",
+  "bot.friendRequest",
+  "bot.friendGift",
+  "bot.teamMessage",
+] as const;
 
 export type AccountSettingKey = (typeof ACCOUNT_SETTING_KEYS)[number];
 export type AccountSettingValue = boolean | string[];
@@ -188,6 +199,12 @@ function currentValue(key: AccountSettingKey): AccountSettingValue {
       return graphics.telegraphs;
     case "combat.damageNumbers":
       return graphics.damageNumbers;
+    case "bot.friendRequest":
+      return useBotNotifications.getState().friendRequest;
+    case "bot.friendGift":
+      return useBotNotifications.getState().friendGift;
+    case "bot.teamMessage":
+      return useBotNotifications.getState().teamMessage;
   }
 }
 
@@ -208,6 +225,12 @@ function isOwnChoice(key: AccountSettingKey): boolean {
       return currentValue(key) !== DEFAULT_GRAPHICS.telegraphs;
     case "combat.damageNumbers":
       return currentValue(key) !== DEFAULT_GRAPHICS.damageNumbers;
+    case "bot.friendRequest":
+      return currentValue(key) !== BOT_NOTIFY_DEFAULTS.friendRequest;
+    case "bot.friendGift":
+      return currentValue(key) !== BOT_NOTIFY_DEFAULTS.friendGift;
+    case "bot.teamMessage":
+      return currentValue(key) !== BOT_NOTIFY_DEFAULTS.teamMessage;
   }
 }
 
@@ -223,7 +246,9 @@ function applyValue(key: AccountSettingKey, value: AccountSettingValue): void {
     return;
   }
   if (typeof value !== "boolean") return;
-  if (key === "testing.enabled") useDiagnostics.getState().applyAccount({ enabled: value });
+  const botKey = botNotifyKeyOf(key);
+  if (botKey !== undefined) useBotNotifications.getState().applyAccount({ [botKey]: value });
+  else if (key === "testing.enabled") useDiagnostics.getState().applyAccount({ enabled: value });
   else if (key === "testing.recordRuns") useDiagnostics.getState().applyAccount({ recordRuns: value });
   else if (key === "combat.telegraphs") useGraphics.getState().applyAccount({ telegraphs: value });
   else useGraphics.getState().applyAccount({ damageNumbers: value });

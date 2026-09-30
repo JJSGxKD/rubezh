@@ -37,6 +37,7 @@ import { SettingsModule } from "./modules/settings/settings.module.js";
 import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-login.module.js";
 import { AccountSettingsModule } from "./modules/account-settings/account-settings.module.js";
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
+import { NotificationsBotModule } from "./modules/notifications-bot/notifications-bot.module.js";
 import { BadgesModule } from "./modules/badges/badges.module.js";
 import { HistoryModule } from "./modules/history/history.module.js";
 
@@ -74,6 +75,7 @@ export const APP_MODULES = [
   AuthModule,
   AccountSettingsModule,
   NotificationsModule,
+  NotificationsBotModule,
   AttributionModule,
   FunnelModule,
   MessagingModule,
