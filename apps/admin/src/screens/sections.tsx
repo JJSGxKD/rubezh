@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AdsScreen } from "./ads/AdsScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
 import { ChangelogScreen } from "./changelog/ChangelogScreen";
 import { TasksScreen } from "./tasks/TasksScreen";
@@ -33,4 +34,5 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   broadcasts: (id) => <BroadcastsScreen id={id} />,
   changelog: () => <ChangelogScreen />,
   tasks: () => <TasksScreen />,
+  ads: () => <AdsScreen />,
 };
