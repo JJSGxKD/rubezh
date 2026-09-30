@@ -58,6 +58,7 @@
   "lobby.daily": "Награда дня",
   "lobby.daily.hint": "Заходи каждый день",
   "lobby.daily.ready": "Награда ждёт",
+  "lobby.wheel.ready": "Крутка ждёт",
   "lobby.wheel": "Колесо удачи",
   "lobby.wheel.hint": "Крутка раз в день",
   "reward.shards": "{amount} {amount, plural, one {осколок} few {осколка} many {осколков} other {осколка}}",

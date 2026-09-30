@@ -45,14 +45,15 @@ import { ItemTile } from "./item-icons";
 const PRELOAD_DELAY_MS = 1500;
 
 /**
- * Лобби. Кнопка «Играть» — единственное настоящее действие этапа 2; валюта,
- * награда дня и колесо нарисованы, но ведут в заглушки
+ * Лобби: «Играть», рекорд и плитки награды дня и колеса — обе на данных
+ * сервера и с точкой, пока награда суток ждёт
  * (docs/27-design-system-and-app-shell.md §6).
  */
 export function LobbyScreen(): ReactNode {
   const navigation = useNavigation();
   const meta = useMeta();
   const dailyReady = useBadges((state) => state.daily > 0);
+  const wheelReady = useBadges((state) => state.wheel > 0);
   const saved = useSavedRun((state) => state.saved);
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   const best = meta.best[meta.lastDifficultyId];
@@ -133,7 +134,7 @@ export function LobbyScreen(): ReactNode {
             icon={<CalendarCheck size={22} />}
             title={t("lobby.daily")}
             hint={t("lobby.daily.hint")}
-            ready={dailyReady}
+            ready={dailyReady ? t("lobby.daily.ready") : undefined}
             onClick={() => navigation.push("daily")}
           />
           <LobbyTile
@@ -142,6 +143,7 @@ export function LobbyScreen(): ReactNode {
             icon={<LoaderPinwheel size={22} />}
             title={t("lobby.wheel")}
             hint={t("lobby.wheel.hint")}
+            ready={wheelReady ? t("lobby.wheel.ready") : undefined}
             onClick={() => navigation.push("wheel")}
           />
         </div>
@@ -247,8 +249,8 @@ function SavedRunCard(props: { saved: SavedRun }): ReactNode {
 }
 
 /**
- * Плитка быстрого раздела лобби: награда дня, колесо. Без мигающей точки:
- * знак появится, когда награду можно будет забрать (`35-stage4-plan.md`, Р50).
+ * Плитка быстрого раздела лобби: награда дня, колесо. Точка — только когда
+ * награду суток можно забрать, и не мигает (`35-stage4-plan.md`, Р50).
  */
 function LobbyTile(props: {
   appearIndex: number;
@@ -256,13 +258,13 @@ function LobbyTile(props: {
   icon: ReactNode;
   title: string;
   hint: string;
-  /** награда ждёт: точка в углу — без числа, одна награда в сутки */
-  ready?: boolean;
+  /** награда ждёт — подпись точки в углу; точка без числа: награда одна в сутки */
+  ready?: string;
   onClick(): void;
 }): ReactNode {
   return (
     <Card appearIndex={props.appearIndex} onClick={props.onClick}>
-      {props.ready === true ? <span aria-label={t("lobby.daily.ready")} className="absolute top-2.5 right-2.5 size-2.5 rounded-full bg-accent" /> : null}
+      {props.ready === undefined ? null : <span aria-label={props.ready} className="absolute top-2.5 right-2.5 size-2.5 rounded-full bg-accent" />}
       {/* Значок над подписью, а не сбоку: в половине ширины телефона рядом со
           значком «Колесо удачи» переносилось на две строки. В ландшафте места
           хватает — значок возвращается в строку. */}

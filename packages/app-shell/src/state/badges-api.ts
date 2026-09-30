@@ -10,9 +10,16 @@ import { useShell } from "./shell";
  * действий, которые гасят знак, — без постоянного соединения.
  */
 
-// `daily` — с наградой дня (WP13), `changelog` — с журналом обновлений (WP31):
-// сервер старее клиента их не пришлёт, и знак просто не горит.
-const badgesSchema = z.object({ arsenal: z.number(), friends: z.number(), notifications: z.number(), daily: z.optional(z.number()), changelog: z.optional(z.number()) });
+// `daily` и `wheel` — с наградой дня и колесом (WP13), `changelog` — с журналом
+// обновлений (WP31): сервер старее клиента их не пришлёт, и знак просто не горит.
+const badgesSchema = z.object({
+  arsenal: z.number(),
+  friends: z.number(),
+  notifications: z.number(),
+  daily: z.optional(z.number()),
+  changelog: z.optional(z.number()),
+  wheel: z.optional(z.number()),
+});
 
 type BadgesResponse = z.infer<typeof badgesSchema>;
 
@@ -29,7 +36,7 @@ export function createBadgesApi(request: ApiRequest = apiRequest): BadgesApi {
 export async function loadBadges(api?: BadgesApi): Promise<void> {
   if (api === undefined && useShell.getState().capabilities.auth === undefined) return;
   const response = await (api ?? createBadgesApi()).badges();
-  if (response.ok) useBadges.setState({ ...response.data, daily: response.data.daily ?? 0, changelog: response.data.changelog ?? 0 } satisfies Badges);
+  if (response.ok) useBadges.setState({ ...response.data, daily: response.data.daily ?? 0, changelog: response.data.changelog ?? 0, wheel: response.data.wheel ?? 0 } satisfies Badges);
 }
 
 let watching = false;
