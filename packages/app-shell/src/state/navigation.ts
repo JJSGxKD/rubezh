@@ -22,6 +22,7 @@ export type ScreenId =
   | "level"
   | "history"
   | "notifications"
+  | "changelog"
   | "tasks"
   | "daily"
   | "wheel"

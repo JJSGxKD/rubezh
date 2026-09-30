@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Gift, Megaphone, PackageOpen, Sparkles, UserPlus } from "lucide-react";
+import { Gift, Megaphone, Newspaper, PackageOpen, Sparkles, UserPlus } from "lucide-react";
 import { Button, Card, ContentColumn, ErrorState, InfoNotice, Screen } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
@@ -11,7 +11,7 @@ import { track } from "../../state/shell";
 /**
  * Лента уведомлений (docs/35-stage4-plan.md Р51, §3.17): всё, что случилось с
  * игроком, — заявка и подарок друга, редкая добыча, возврат бустов,
- * сообщение команды. Открыл
+ * сообщение команды, выход версии. Открыл
  * ленту — увиденное прочитано; пришедшее, пока лента открыта, останется
  * новым. Вид, которого экран не знает, не показывается: сервер новее клиента.
  */
@@ -77,6 +77,8 @@ interface Described {
   text: string;
   /** куда ведёт касание; `null` — это просто новость */
   target: ScreenId | null;
+  /** экран поверх ленты, а не вкладка: «назад» возвращает в ленту */
+  over?: boolean;
 }
 
 function describe(item: NotificationItem): Described | null {
@@ -96,6 +98,8 @@ function describe(item: NotificationItem): Described | null {
       return { icon: <PackageOpen size={20} />, text: refundText(item.data), target: null };
     case "team_message":
       return typeof item.data.text === "string" ? { icon: <Megaphone size={20} />, title: t("notification.team_message"), text: item.data.text, target: null } : null;
+    case "app_update":
+      return typeof item.data.version === "string" ? { icon: <Newspaper size={20} />, text: t("notification.app_update", { version: item.data.version }), target: "changelog", over: true } : null;
     default:
       return null;
   }
@@ -114,13 +118,14 @@ function refundText(data: Record<string, unknown>): string {
 function NotificationRow(props: { item: NotificationItem; index: number }): ReactNode {
   const described = describe(props.item);
   if (described === null) return null;
-  const { target } = described;
+  const { target, over } = described;
   const open =
     target === null
       ? undefined
       : () => {
           track("notification_opened", { kind: props.item.kind });
-          useNavigation.getState().resetTo(target);
+          if (over === true) useNavigation.getState().push(target);
+          else useNavigation.getState().resetTo(target);
         };
   return (
     <Card appearIndex={Math.min(props.index, 6)} {...(open === undefined ? {} : { onClick: open })}>

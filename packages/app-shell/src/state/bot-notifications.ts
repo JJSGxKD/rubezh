@@ -5,7 +5,7 @@ import { reportError, track, useShell } from "./shell";
 
 /**
  * Что дублировать в бота (docs/35-stage4-plan.md Р51, WP28): заявку в
- * друзья, подарок друга, сообщение команды. Выбор — за аккаунтом, решает по
+ * друзья, подарок друга, сообщение команды, выход версии (WP31). Выбор — за аккаунтом, решает по
  * нему сервер, когда пишет в бота; здесь его копия для переключателей и то,
  * что выбрано и ещё не дошло.
  *
@@ -20,7 +20,7 @@ import { reportError, track, useShell } from "./shell";
  * импорт замкнул бы их друг на друга.
  */
 
-export const BOT_NOTIFY_DEFAULTS = { friendRequest: true, friendGift: false, teamMessage: true } as const;
+export const BOT_NOTIFY_DEFAULTS = { friendRequest: true, friendGift: false, teamMessage: true, updates: true } as const;
 
 export type BotNotifyKey = keyof typeof BOT_NOTIFY_DEFAULTS;
 export type BotNotifySettings = Record<BotNotifyKey, boolean>;
@@ -30,14 +30,20 @@ export const BOT_NOTIFY_ACCOUNT_KEYS = {
   friendRequest: "bot.friendRequest",
   friendGift: "bot.friendGift",
   teamMessage: "bot.teamMessage",
+  updates: "bot.updates",
 } as const satisfies Record<BotNotifyKey, string>;
 
 export type BotNotifyAccountKey = (typeof BOT_NOTIFY_ACCOUNT_KEYS)[BotNotifyKey];
 
-export const BOT_NOTIFY_KEYS: readonly BotNotifyKey[] = ["friendRequest", "friendGift", "teamMessage"];
+export const BOT_NOTIFY_KEYS: readonly BotNotifyKey[] = ["friendRequest", "friendGift", "teamMessage", "updates"];
 
 const STORAGE_KEY = "bh.bot-notifications.v1";
-const schema = z.object({ friendRequest: z.boolean(), friendGift: z.boolean(), teamMessage: z.boolean() });
+/**
+ * Ключ, появившийся позже, у сохранённого раньше выбора отсутствует — он
+ * берёт умолчание, а не сбрасывает весь выбор к умолчаниям как битый.
+ */
+const schema = z.object({ friendRequest: z.boolean(), friendGift: z.boolean(), teamMessage: z.boolean(), updates: z.optional(z.boolean()) });
+type Stored = z.infer<typeof schema>;
 
 export interface BotNotifyStore extends BotNotifySettings {
   /** переключить и запомнить на устройстве; новое значение — для синхронизации */
@@ -47,7 +53,7 @@ export interface BotNotifyStore extends BotNotifySettings {
 }
 
 export const useBotNotifications = create<BotNotifyStore>((set, get) => ({
-  ...value().read(),
+  ...readStored(),
 
   toggle(key): boolean {
     const next = !get()[key];
@@ -68,12 +74,17 @@ export function botNotifyKeyOf(accountKey: string): BotNotifyKey | undefined {
   return BOT_NOTIFY_KEYS.find((key) => BOT_NOTIFY_ACCOUNT_KEYS[key] === accountKey);
 }
 
-function persist(state: BotNotifySettings): void {
-  value().write({ friendRequest: state.friendRequest, friendGift: state.friendGift, teamMessage: state.teamMessage });
+function readStored(): BotNotifySettings {
+  const stored = value().read();
+  return { friendRequest: stored.friendRequest, friendGift: stored.friendGift, teamMessage: stored.teamMessage, updates: stored.updates ?? BOT_NOTIFY_DEFAULTS.updates };
 }
 
-function value(): ReturnType<typeof createPersistedValue<BotNotifySettings>> {
-  return createPersistedValue<BotNotifySettings>({
+function persist(state: BotNotifySettings): void {
+  value().write({ friendRequest: state.friendRequest, friendGift: state.friendGift, teamMessage: state.teamMessage, updates: state.updates });
+}
+
+function value(): ReturnType<typeof createPersistedValue<Stored>> {
+  return createPersistedValue<Stored>({
     storage: useShell.getState().storage,
     key: STORAGE_KEY,
     schema,

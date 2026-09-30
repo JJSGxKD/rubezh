@@ -171,6 +171,22 @@ describe("дубль уведомлений в бота", () => {
     expect(s.marks).toEqual([{ notificationId: job.notificationId, outcome: "failed" }]);
   });
 
+  it("выход версии: текст с версией, кнопка в игру; выключил «новые версии» — не пишем; второй выпуск за три дня ждёт в ленте", async () => {
+    const target = await player(s);
+    const update = (version: string): BotNotifyJob => ({ notificationId: randomUUID(), accountId: target.accountId, kind: "app_update", payload: { version } });
+
+    expect(await s.sender.deliver(update("0.6.0"), NOW)).toEqual({ status: "sent" });
+    expect(s.messenger.sent[0]?.message).toEqual({
+      text: "Вышло обновление «Рубежа» — версия 0.6.0. Что изменилось — в игре, в меню «Что нового».",
+      button: { text: "▶ Открыть игру", url: "https://t.me/rubezh_bot/play?startapp=n-app_update" },
+    });
+    expect(await s.sender.deliver(update("0.6.1"), NOW)).toEqual({ status: "skipped", reason: "throttled" });
+
+    const other = await player(s);
+    s.settings.set("bot.updates", false);
+    expect(await s.sender.deliver({ ...update("0.6.0"), accountId: other.accountId }, NOW)).toEqual({ status: "skipped", reason: "opted_out" });
+  });
+
   it("не пишем: вид не дублируется, аккаунта нет, он заблокирован, данные не по схеме", async () => {
     const target = await player(s);
     const loot: BotNotifyJob = { notificationId: randomUUID(), accountId: target.accountId, kind: "rare_loot", payload: {} };

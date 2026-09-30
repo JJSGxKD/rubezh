@@ -43,11 +43,11 @@ describe("клиент награды дня", () => {
     expect(dayOfWeek(today, VIEW.days)).toBe(3);
   });
 
-  it("знаки меню от сервера без награды дня — знак не горит, остальное принято", async () => {
+  it("знаки меню от сервера без награды дня и журнала — знаки не горят, остальное принято", async () => {
     await loadBadges(createBadgesApi(server([], { arsenal: 1, friends: 2, notifications: 3 })));
-    expect(useBadges.getState()).toEqual({ arsenal: 1, friends: 2, notifications: 3, daily: 0 });
+    expect(useBadges.getState()).toEqual({ arsenal: 1, friends: 2, notifications: 3, daily: 0, changelog: 0 });
 
-    await loadBadges(createBadgesApi(server([], { arsenal: 0, friends: 0, notifications: 0, daily: 1 })));
-    expect(useBadges.getState().daily).toBe(1);
+    await loadBadges(createBadgesApi(server([], { arsenal: 0, friends: 0, notifications: 0, daily: 1, changelog: 2 })));
+    expect(useBadges.getState()).toMatchObject({ daily: 1, changelog: 2 });
   });
 });

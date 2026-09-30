@@ -1,0 +1,13 @@
+{
+  "changelog.title": "Что нового",
+  "changelog.version": "Версия {version}",
+  "changelog.fresh": "новая",
+  "changelog.kind.added": "Новое",
+  "changelog.kind.changed": "Изменено",
+  "changelog.kind.fixed": "Исправлено",
+  "changelog.loading": "Загружаем журнал…",
+  "changelog.failed": "Не удалось загрузить журнал — проверьте связь",
+  "changelog.empty": "Здесь появится, что изменилось в игре с каждой новой версией.",
+  "changelog.more": "Показать раньше",
+  "changelog.guest": "Журнал обновлений — с входом через Telegram: он знает, на какой вы площадке."
+}

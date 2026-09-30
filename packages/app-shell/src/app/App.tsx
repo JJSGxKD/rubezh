@@ -34,6 +34,7 @@ import {
   LevelScreen,
   MainMenu,
   NotificationsScreen,
+  ChangelogScreen,
   ProfileScreen,
   RatingScreen,
   RunScreen,
@@ -191,6 +192,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <HistoryScreen />;
     case "notifications":
       return <NotificationsScreen />;
+    case "changelog":
+      return <ChangelogScreen />;
     case "tasks":
       return <TasksScreen />;
     case "daily":
