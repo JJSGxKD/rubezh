@@ -64,6 +64,22 @@ describe.skipIf(DATABASE_URL === "")("уведомления на живом Pos
     expect(row.botAt?.toISOString()).toBe("2026-09-30T09:00:00.000Z");
   });
 
+  it("пачка: один запрос, без дублей под гонкой, пропускает несуществующий аккаунт", async () => {
+    const ids = [await account(), await account(), await account()];
+    const ghost = "00000000-0000-4000-8000-00000000dead";
+    const heard: string[] = [];
+    service.onCreated("integration", async (row) => {
+      heard.push(row.accountId);
+    });
+    const batch = (accountIds: string[]) => service.deliverMany({ accountIds, kind: "team_message", payload: { text: "Вышла 0.6.0" }, dedupeKey: "release:0.6.0" });
+
+    const written = await Promise.all([batch([...ids, ghost]), batch([ids[0] ?? "", ids[2] ?? ""]), batch(ids)]);
+    expect(written.reduce((sum, count) => sum + count, 0)).toBe(3);
+    expect(heard.sort()).toEqual([...ids].sort());
+    for (const id of ids) expect(await prisma.notification.count({ where: { accountId: id, dedupeKey: "release:0.6.0" } })).toBe(1);
+    expect(await prisma.notification.count({ where: { accountId: ghost } })).toBe(0);
+  });
+
   it("строки одного мгновения на границе страницы не теряются и не повторяются", async () => {
     const me = await account();
     const same = new Date(Date.UTC(2026, 8, 29, 12));

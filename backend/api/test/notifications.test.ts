@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { NotificationsCleaner } from "../src/modules/notifications/notifications-cleaner.js";
-import { FEED_PAGE_MAX, decodeCursor, encodeCursor } from "../src/modules/notifications/notifications.service.js";
+import { BATCH_MAX, FEED_PAGE_MAX, decodeCursor, encodeCursor } from "../src/modules/notifications/notifications.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { memoryNotifications } from "./helpers/memory-notifications.js";
 
@@ -35,6 +35,42 @@ describe("запись уведомления", () => {
     };
     await expect(service.notify({ accountId: ME, kind: "friend_gift", payload: FRIEND, dedupeKey: "k" })).resolves.toBe(false);
     expect(() => service.post({ accountId: ME, kind: "friend_gift", payload: FRIEND, dedupeKey: "k" })).not.toThrow();
+  });
+});
+
+describe("запись пачкой", () => {
+  const THIRD = "00000000-0000-4000-8000-000000000003";
+
+  it("одно событие многим: повтор пачки и пересечение пачек строк не удваивают, слушатели слышат только новые", async () => {
+    const { service, repository } = memoryNotifications();
+    const heard: string[] = [];
+    service.onCreated("test", async (created) => {
+      heard.push(created.accountId);
+    });
+
+    expect(await service.deliverMany({ accountIds: [ME, OTHER], kind: "team_message", payload: { text: "Вышла 0.6.0" }, dedupeKey: "release:0.6.0" })).toBe(2);
+    expect(await service.deliverMany({ accountIds: [OTHER, THIRD], kind: "team_message", payload: { text: "Вышла 0.6.0" }, dedupeKey: "release:0.6.0" })).toBe(1);
+    expect(await service.deliverMany({ accountIds: [ME, OTHER, THIRD], kind: "team_message", payload: { text: "Вышла 0.6.0" }, dedupeKey: "release:0.6.0" })).toBe(0);
+
+    expect(heard).toEqual([ME, OTHER, THIRD]);
+    expect(repository.rows).toHaveLength(3);
+  });
+
+  it("данные не по схеме, пустая пачка и слишком большая пачка", async () => {
+    const { service, repository } = memoryNotifications();
+    await expect(service.deliverMany({ accountIds: [ME], kind: "team_message", payload: { text: "" }, dedupeKey: "k" })).rejects.toThrow("не по схеме");
+    expect(await service.deliverMany({ accountIds: [], kind: "team_message", payload: { text: "Привет" }, dedupeKey: "k" })).toBe(0);
+    const tooMany = Array.from({ length: BATCH_MAX + 1 }, () => ME);
+    await expect(service.deliverMany({ accountIds: tooMany, kind: "team_message", payload: { text: "Привет" }, dedupeKey: "k" })).rejects.toThrow("Пачка");
+    expect(repository.rows).toEqual([]);
+  });
+
+  it("сбой базы бросает: раздающий не должен сдвинуть курсор мимо незаписанной пачки", async () => {
+    const { service, repository } = memoryNotifications();
+    repository.insertMany = async () => {
+      throw new Error("база недоступна");
+    };
+    await expect(service.deliverMany({ accountIds: [ME], kind: "team_message", payload: { text: "Привет" }, dedupeKey: "k" })).rejects.toThrow("база недоступна");
   });
 });
 

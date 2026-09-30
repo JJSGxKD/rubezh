@@ -19,6 +19,9 @@ import { NOTIFICATIONS_REPOSITORY, type BotOutcome, type FeedCursor, type Notifi
  */
 
 const DB_TIMEOUT_MS = 3_000;
+/** Пачка — один запрос: тысяча строк пишется за доли секунды и не держит блокировки. */
+const BATCH_TIMEOUT_MS = 10_000;
+export const BATCH_MAX = 1_000;
 export const FEED_PAGE_DEFAULT = 20;
 export const FEED_PAGE_MAX = 50;
 
@@ -85,6 +88,27 @@ export class NotificationsService {
     if (notificationId === null) return false;
     this.announce({ notificationId, accountId: input.accountId, kind: input.kind, payload: payload.data, at });
     return true;
+  }
+
+  /**
+   * Одно событие многим аккаунтам — пачкой одним запросом: выход версии
+   * (WP31). Ключ события общий, поэтому повтор пачки и пересечение пачек
+   * строк не удваивают, а слушатели слышат только новые. Бросает, как
+   * `deliver`: раздающий ведёт курсор и должен знать, что пачка не записалась.
+   * Сколько строк записано.
+   */
+  async deliverMany<K extends NotificationKind>(input: Omit<NotificationInput<K>, "accountId"> & { accountIds: readonly string[] }): Promise<number> {
+    if (input.accountIds.length > BATCH_MAX) throw new ValidationError(`Пачка уведомлений больше ${String(BATCH_MAX)}`);
+    const payload = NOTIFICATION_KINDS[input.kind].safeParse(input.payload);
+    if (!payload.success) throw new ValidationError("Данные уведомления не по схеме вида");
+    const at = input.at ?? new Date();
+    const inserted = await withTimeout(
+      this.repository.insertMany({ accountIds: input.accountIds, kind: input.kind, payload: payload.data, dedupeKey: input.dedupeKey.slice(0, 160), at }),
+      BATCH_TIMEOUT_MS,
+      "запись уведомлений пачкой",
+    );
+    for (const row of inserted) this.announce({ notificationId: row.notificationId, accountId: row.accountId, kind: input.kind, payload: payload.data, at });
+    return inserted.length;
   }
 
   /** Исход дубля в бота — в строку ленты: по нему считают, доходят ли сообщения. */
