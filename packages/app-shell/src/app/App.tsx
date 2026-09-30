@@ -92,9 +92,10 @@ export function App(): ReactNode {
   const runUnderneath = screen !== "run" && stack.includes("run");
 
   return (
-    <div className="bg-app relative flex h-full flex-col">
+    <div className="bg-app relative flex h-full flex-col" data-app-header={showTabs ? "" : undefined}>
       {/* Шапка — у разделов нижней панели: внутри раздела верх экрана занят
-          заголовком и кнопкой «назад». */}
+          заголовком и кнопкой «назад». Лежит поверх прокрутки, а не над ней:
+          содержимое уходит под её стекло (WP30). */}
       {showTabs ? <AppHeader onMenu={() => setMenuOpen(true)} /> : null}
       <main className="relative min-h-0 flex-1">
         {screen === "run" || runUnderneath ? (

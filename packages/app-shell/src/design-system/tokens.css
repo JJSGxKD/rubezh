@@ -437,6 +437,8 @@
    */
   --z-canvas: 0;
   --z-hud: 10;
+  /* Шапка разделов лежит поверх прокрутки: выше содержимого, ниже листов и модалок. */
+  --z-header: 15;
   --z-overlay: 20;
   --z-modal: 30;
   --z-toast: 40;
@@ -457,6 +459,16 @@
   --app-inset-bottom: 0px;
   --app-inset-left: 0px;
 
+  /*
+   * Шапка разделов (WP30) лежит поверх прокрутки, и содержимое уходит под её
+   * стекло. Высота — чтобы первая строка экрана начиналась под шапкой; ноль —
+   * шапки нет (внутри раздела, в забеге). Выставляет оболочка — атрибутом
+   * `data-app-header` на корне.
+   */
+  --app-header-h: 0px;
+  /* Размытие того, что прокручивается под стеклом шапки. */
+  --glass-blur: 18px;
+
   /* Стабильная высота вьюпорта от площадки, а не 100vh (§5.1). */
   --app-viewport-height: 100dvh;
 
@@ -468,6 +480,34 @@
  * кромка, блик и тень одной утилитой. Компонент выбирает поверхность по имени,
  * а смена стиля остаётся правкой этого файла.
  */
+
+/* Шапка: поля 0,5rem сверху и снизу, строка в 44 px и кромка стекла — плюс вырез камеры. */
+[data-app-header] {
+  --app-header-h: calc(var(--app-inset-top) + 3.75rem + 1px);
+}
+
+/*
+ * Стекло шапки (WP30): полупрозрачная подложка и размытие того, что под ней.
+ * Где размытия нет или игрок попросил меньше прозрачности, — плотная
+ * подложка: цифры валют не должны тонуть в карточках под шапкой.
+ */
+@utility surface-glass {
+  background: color-mix(in oklab, var(--color-bg) 40%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border-strong) 55%, transparent);
+  box-shadow: 0 8px 24px -16px rgb(0 0 0 / 0.8);
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background: var(--color-bg);
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    background: var(--color-bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
 
 /* Фон приложения: два мягких пятна света, тёплое сверху и холодное снизу. */
 @utility bg-app {

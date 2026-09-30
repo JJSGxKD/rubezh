@@ -27,7 +27,9 @@ export function Screen(props: ScreenProps): ReactNode {
       {props.title === undefined && props.onBack === undefined && props.actions === undefined ? null : (
         <TopBar title={props.title} onBack={props.onBack} actions={props.actions} />
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+      {/* Под шапкой разделов — отступ её высоты: содержимое начинается под ней,
+          а при прокрутке уходит под стекло. Внутри раздела отступ нулевой. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-[var(--app-header-h)] pb-4">
         {props.children}
       </div>
       {props.footer === undefined ? null : (
