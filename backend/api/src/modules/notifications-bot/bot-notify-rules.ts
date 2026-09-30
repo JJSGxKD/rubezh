@@ -3,7 +3,8 @@ import { isNotificationKind, type NotificationKind } from "../notifications/noti
 /**
  * Какие уведомления дублируются в бота (docs/35-stage4-plan.md Р51, WP28) —
  * по выбору игрока и только тем, кому можно писать (§3.10). В бота идёт то,
- * что зовёт вернуться в игру: заявка и подарок друга, сообщение команды.
+ * что зовёт вернуться в игру: заявка и подарок друга, сообщение команды,
+ * выход версии.
  * Редкая добыча и возврат бустов случаются, пока игрок в игре, — писать о них
  * в бота незачем.
  *
@@ -29,6 +30,10 @@ export const BOT_NOTIFY: Partial<Record<NotificationKind, BotNotifyRule>> = {
   friend_gift: { setting: "bot.friendGift", byDefault: false, throttleSec: 86_400 },
   // Сообщение команды редкое и адресное: потолка нет.
   team_message: { setting: "bot.teamMessage", byDefault: true, throttleSec: 0 },
+  // Выход версии зовёт вернуться тех, кто давно не заходил (WP31). Публикует
+  // команда, но выпуск и исправление за ним подряд — два сообщения за день:
+  // не чаще раза в три дня, следующее ждёт в ленте.
+  app_update: { setting: "bot.updates", byDefault: true, throttleSec: 3 * 86_400 },
 };
 
 export function botRuleOf(kind: string): BotNotifyRule | undefined {

@@ -36,6 +36,10 @@ function textOf(kind: string, payload: unknown): string | null {
       const data = NOTIFICATION_KINDS.team_message.safeParse(payload);
       return data.success ? `Сообщение команды «Рубежа»:\n\n${data.data.text}` : null;
     }
+    case "app_update": {
+      const data = NOTIFICATION_KINDS.app_update.safeParse(payload);
+      return data.success ? `Вышло обновление «Рубежа» — версия ${data.data.version}. Что изменилось — в игре, в меню «Что нового».` : null;
+    }
     default:
       return null;
   }
