@@ -1271,11 +1271,29 @@ model ChangelogEntry {
   publishedAt  DateTime?     @map("published_at") @db.Timestamptz(3)
   createdAt    DateTime      @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime      @map("updated_at") @db.Timestamptz(3)
-  /// кто менял последним; без внешнего ключа — запись переживает аккаунт
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
+  /// `null` — строку завёл выкат из PR и человек её ещё не правил
   updatedBy    String?       @map("updated_by") @db.Uuid
+
+  source ChangelogSource?
 
   @@index([version])
   @@map("changelog_entry")
+}
+
+/// Откуда строка пришла при выкате: раздел «Для игроков» влитого PR. Ключ
+/// остаётся и после удаления строки — удалённое в панели следующий выкат не
+/// вернёт.
+model ChangelogSource {
+  /// `pr-<номер>-<строка>`
+  sourceKey  String    @id @map("source_key") @db.VarChar(64)
+  /// `null` — строку удалили в панели
+  entryId    String?   @unique @map("entry_id") @db.Uuid
+  importedAt DateTime  @map("imported_at") @db.Timestamptz(3)
+
+  entry ChangelogEntry? @relation(fields: [entryId], references: [entryId], onDelete: SetNull)
+
+  @@map("changelog_source")
 }
 
 /// Раздача уведомления о выходе версии: кому и докуда дошла. Публикация новых

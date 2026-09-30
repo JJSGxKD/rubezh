@@ -31,6 +31,8 @@ const entrySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   updatedBy: z.string().nullable(),
+  /** `pr-<номер>-<строка>` — строку завёл выкат из раздела «Для игроков» PR; сервер старее панели поля не пришлёт */
+  sourceKey: z.string().nullable().optional(),
 });
 
 const releaseSchema = z.object({
@@ -89,6 +91,12 @@ export function entryProblem(input: EntryInput, original: ChangelogEntry | null 
     return "У опубликованной строки меняются только текст и вид — для другой версии или площадок заведите новую";
   }
   return null;
+}
+
+/** Номер PR, из которого строка пришла при выкате; `null` — заведена в панели. */
+export function sourcePr(entry: Pick<ChangelogEntry, "sourceKey">): number | null {
+  const match = /^pr-(\d+)-\d+$/.exec(entry.sourceKey ?? "");
+  return match === null ? null : Number(match[1]);
 }
 
 export function platformsLabel(platforms: readonly ChangelogPlatform[]): string {
