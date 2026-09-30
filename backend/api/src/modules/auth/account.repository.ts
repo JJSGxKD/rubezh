@@ -54,6 +54,21 @@ export interface AccountRepository {
   search(query: string, limit: number): Promise<Account[]>;
   /** Заблокировать или снять блокировку; `null` — аккаунта нет. */
   setBan(accountId: string, ban: AccountBan | null): Promise<Account | null>;
+  /**
+   * Страница получателей раздачи всем (выход версии, WP31): незаблокированные
+   * аккаунты площадок, заходившие не раньше `seenSince`, по возрастанию id
+   * после `after`. Курсор — id, а не номер страницы: аккаунты, заведённые
+   * посреди раздачи, не сдвигают страницы.
+   */
+  recipientsPage(page: RecipientsPage): Promise<string[]>;
+}
+
+export interface RecipientsPage {
+  platforms: readonly AccountPlatform[];
+  seenSince: Date;
+  /** `null` — с начала */
+  after: string | null;
+  limit: number;
 }
 
 export interface AccountBan {
@@ -124,6 +139,23 @@ export class PrismaAccountRepository implements AccountRepository {
       data: { bannedAt: ban?.at ?? null, banReason: ban?.reason ?? null },
     });
     return updated.count === 0 ? null : await this.byId(accountId);
+  }
+
+  async recipientsPage(page: RecipientsPage): Promise<string[]> {
+    if (page.platforms.length === 0 || page.limit <= 0) return [];
+    // По первичному ключу: страница — отрезок индекса, а не сортировка всей выборки.
+    const rows = await this.prisma.account.findMany({
+      where: {
+        platform: { in: [...page.platforms] },
+        bannedAt: null,
+        lastSeenAt: { gte: page.seenSince },
+        ...(page.after === null ? {} : { accountId: { gt: page.after } }),
+      },
+      orderBy: { accountId: "asc" },
+      take: page.limit,
+      select: { accountId: true },
+    });
+    return rows.map((row) => row.accountId);
   }
 }
 

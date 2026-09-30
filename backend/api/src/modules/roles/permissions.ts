@@ -63,6 +63,10 @@ export const PERMISSIONS = [
   "partners.payout.approve",
   // Редирект-ссылки кампаний (WP16, docs/24-attribution-and-sharing.md §3)
   "links.manage",
+  // Журнал обновлений (WP31): писать строки — одно, публиковать — другое:
+  // публикация раздаёт уведомление всем игрокам площадки и пишет им в бота
+  "changelog.edit",
+  "changelog.publish",
   // Эксплуатация. Настройки без релиза — адреса чатов команды и переключатели
   // (docs/35-stage4-plan.md §3.18)
   "flags.edit",
@@ -123,6 +127,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "partners.view",
     "partners.edit",
     "links.manage",
+    "changelog.edit",
+    "changelog.publish",
     "flags.edit",
     "settings.edit",
     "diagnostics.view",
@@ -142,6 +148,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "analytics.revenue.view",
     "players.view",
     "ads.view",
+    "changelog.edit",
     "diagnostics.view",
     "tools.dev",
   ],
@@ -159,6 +166,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "partners.view",
     "partners.edit",
     "links.manage",
+    "changelog.edit",
   ],
 
   // Операции и подготовка выплат; период закрывает только владелец.

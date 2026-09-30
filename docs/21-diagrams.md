@@ -65,6 +65,7 @@ erDiagram
     ACCOUNT ||--o| ACCOUNT_SETTINGS : "настройки для всех устройств"
     ACCOUNT ||--o{ NOTIFICATION : "лента уведомлений"
     ACCOUNT ||--o| DAILY_REWARD : "награда дня"
+    ACCOUNT ||--o| CHANGELOG_SEEN : "открывал журнал обновлений"
     ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
     ACCOUNT ||--o| FRIEND_LINK : "ссылка дружбы"
     ACCOUNT ||--o{ FRIENDSHIP : "дружит (обе стороны пары)"
@@ -274,7 +275,7 @@ erDiagram
     NOTIFICATION {
         uuid notification_id PK
         uuid account_id FK
-        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message"
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, app_update"
         json payload "данные вида, по его схеме"
         string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
         datetime created_at
@@ -288,6 +289,31 @@ erDiagram
         int claimed_days "сколько дней забрано всего: день недели и ступень — отсюда"
         date last_claim_day "игровые сутки по Москве последнего забора"
         datetime updated_at
+    }
+
+    CHANGELOG_ENTRY {
+        uuid entry_id PK
+        string version "X.Y.Z; рядом три числа для порядка — проверка базы не даёт им разойтись"
+        enum platforms "массив Platform; пусто — все площадки"
+        enum kind "added|changed|fixed"
+        string text "одно изменение, до 500 символов"
+        datetime published_at "nullable: черновик"
+        datetime created_at
+        datetime updated_at
+        uuid updated_by "nullable, без FK"
+    }
+
+    CHANGELOG_RELEASE {
+        string version PK
+        enum platforms "кому раздавать: площадки опубликованных строк версии"
+        datetime published_at "последняя публикация — поколение раздачи"
+        uuid cursor "nullable: последний аккаунт, которому раздали"
+        datetime done_at "nullable: раздача не закончена"
+    }
+
+    CHANGELOG_SEEN {
+        uuid account_id PK
+        datetime seen_at "когда открывал журнал; только растёт"
     }
 
     RUN_REWARD {
@@ -565,6 +591,16 @@ erDiagram
   выводятся из `claimed_days`, а не хранятся рядом, — им нечем разойтись.
   Отметка дня — условным `UPDATE` по числу дней и суткам, монеты и осколки
   кладёт кошелёк ключом дня, поэтому под гонкой день даёт награду однажды.
+- **`CHANGELOG_ENTRY`, `CHANGELOG_RELEASE`, `CHANGELOG_SEEN` — журнал
+  обновлений** (`35-stage4-plan.md`, Р61, WP31): строка — одно изменение с
+  версией, видом и площадками; черновик игрок не видит. Опубликованные строки
+  сервер держит в памяти и собирает по версиям площадки игрока. Публикация
+  версии заводит строку раздачи: уведомление `app_update` в ленту каждому
+  игроку площадок версии, пачками по курсору — перезапуск продолжает с
+  места. Публикация новых строк раздаёт заново с новым поколением, а ключ
+  события в ленте не даёт второго уведомления. `CHANGELOG_SEEN` — когда игрок
+  открывал журнал: знак меню считает версии, вышедшие после; нет строки —
+  считается от регистрации, новичку история игры не новость.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1170,6 +1206,7 @@ flowchart LR
         BADGES["badges<br/>знаки меню одним ответом:<br/>счётчики соседей, реализовано"]
         HISTORY["history<br/>история имущества: чтение<br/>журналов кошелька, предметов<br/>и покупок, реализовано"]
         DAILY["daily<br/>награда дня: неделя без сброса,<br/>ступени, множитель уровня, реализовано"]
+        CHANGELOG["changelog<br/>журнал обновлений по площадкам,<br/>раздача app_update пачками, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1297,6 +1334,12 @@ flowchart LR
     BOOSTS -. "возврат бустов" .-> NOTIF
     ADMINAPI -. "сообщение команды" .-> NOTIF
     NOTIF -. "новая строка, onCreated" .-> NOTIFBOT
+    CADDY -- "/api/v1/changelog" --> CHANGELOG
+    ADMINAPI -. "журнал: правка, публикация" .-> CHANGELOG
+    CHANGELOG --> PG
+    CHANGELOG -- "лок раздачи" --> REDIS
+    CHANGELOG -. "app_update пачкой, deliverMany" .-> NOTIF
+    BADGES -. "версии после «открывал»" .-> CHANGELOG
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
@@ -2075,6 +2118,44 @@ sequenceDiagram
 Пауза и отмена видны со следующей пачки — через несколько секунд. После
 перезапуска идущие рассылки поднимаются сами; лишнее задание безопасно:
 одну строку два задания не возьмут.
+
+### 4.19 Выход версии: журнал обновлений и уведомление (этап 4, реализовано)
+
+Журнал обновлений (`35-stage4-plan.md`, Р61, WP31). Публикация отвечает
+панели сразу; раздачу ведёт проход под распределённым локом — таймером раз в
+минуту и толчком от публикации. Курсор и поколение раздачи — в строке
+`changelog_release`, поэтому перезапуск продолжает с места, а публикация
+посреди прохода начинает раздачу заново, и старый проход её курсор не
+перепишет.
+
+```mermaid
+sequenceDiagram
+    participant P as Панель
+    participant CL as changelog
+    participant DB as PostgreSQL
+    participant F as Раздача (под локом)
+    participant N as notifications
+    participant B as notifications-bot
+
+    P->>CL: POST /admin/changelog/publish { version }
+    CL->>DB: черновики версии → published_at
+    CL->>DB: раздача версии: площадки строк, поколение, курсор с начала
+    CL->>DB: аудит changelog.publish
+    CL-->>P: { published, release }
+    CL-)F: толчок
+
+    loop пачка по 500, не больше 40 за проход
+        F->>DB: аккаунты площадок после курсора: не заблокирован, заходил за 90 дней
+        F->>N: deliverMany(app_update, ключ app_update:<версия>)
+        N->>DB: INSERT … ON CONFLICT DO NOTHING RETURNING
+        N-)B: новые строки: дубль в бота по выбору игрока
+        F->>DB: курсор — только своего поколения; пачка неполная — done
+    end
+```
+
+Игрок спрашивает `GET /api/v1/changelog` — строки своей площадки по версиям
+из памяти реплики, открыл журнал — `POST /api/v1/changelog/seen` с самой
+поздней публикацией из ответа; знак меню — версии, вышедшие после.
 
 ---
 

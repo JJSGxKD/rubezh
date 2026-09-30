@@ -23,6 +23,21 @@ export interface NewNotification {
   at: Date;
 }
 
+/** Одно событие многим аккаунтам — например, выход версии (WP31). */
+export interface NewNotificationBatch {
+  accountIds: readonly string[];
+  kind: string;
+  payload: unknown;
+  dedupeKey: string;
+  at: Date;
+}
+
+/** Записанная строка пачки: у кого и под каким id. */
+export interface InsertedNotification {
+  notificationId: string;
+  accountId: string;
+}
+
 /** Где остановилась лента: время и id последней отданной строки — строки одного мгновения не теряются. */
 export interface FeedCursor {
   createdAt: Date;
@@ -37,6 +52,12 @@ export type BotOutcome = "sent" | "blocked" | "failed";
 export interface NotificationsRepository {
   /** id записанного; `null` — событие уже записано: повтор ничего не добавляет */
   insert(notification: NewNotification): Promise<string | null>;
+  /**
+   * Та же запись пачкой одним запросом: только новые строки. Аккаунт, у
+   * которого событие уже записано, или удалённый между выборкой и записью —
+   * пропускается, а не роняет пачку.
+   */
+  insertMany(batch: NewNotificationBatch): Promise<InsertedNotification[]>;
   /** исход дубля в бота — один раз: повтор задания очереди прежний исход не перепишет */
   markBot(notificationId: string, outcome: BotOutcome, at: Date): Promise<void>;
   feed(accountId: string, cursor: FeedCursor | null, limit: number): Promise<StoredNotification[]>;
@@ -68,6 +89,21 @@ export class PrismaNotificationsRepository implements NotificationsRepository {
       VALUES (${notificationId}::uuid, ${notification.accountId}::uuid, ${notification.kind}, ${payload}::jsonb, ${notification.dedupeKey}, ${notification.at})
       ON CONFLICT (account_id, dedupe_key) DO NOTHING`;
     return inserted > 0 ? notificationId : null;
+  }
+
+  async insertMany(batch: NewNotificationBatch): Promise<InsertedNotification[]> {
+    if (batch.accountIds.length === 0) return [];
+    const payload = JSON.stringify(batch.payload);
+    const rows = await this.prisma.$queryRaw`
+      INSERT INTO notification (notification_id, account_id, kind, payload, dedupe_key, created_at)
+      SELECT gen_random_uuid(), a.account_id, ${batch.kind}, ${payload}::jsonb, ${batch.dedupeKey}, ${batch.at}
+      FROM account a WHERE a.account_id = ANY(${[...batch.accountIds]}::uuid[])
+      ON CONFLICT (account_id, dedupe_key) DO NOTHING
+      RETURNING notification_id, account_id`;
+    return z
+      .array(z.object({ notification_id: z.string(), account_id: z.string() }))
+      .parse(rows)
+      .map((row) => ({ notificationId: row.notification_id, accountId: row.account_id }));
   }
 
   async markBot(notificationId: string, outcome: BotOutcome, at: Date): Promise<void> {

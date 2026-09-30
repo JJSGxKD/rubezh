@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BotOutcome, FeedCursor, NewNotification, NotificationsRepository, StoredNotification } from "../../src/modules/notifications/notifications.repository.js";
+import type { BotOutcome, FeedCursor, InsertedNotification, NewNotification, NewNotificationBatch, NotificationsRepository, StoredNotification } from "../../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../../src/modules/notifications/notifications.service.js";
 
 /**
@@ -14,6 +14,15 @@ export class MemoryNotificationsRepository implements NotificationsRepository {
     const notificationId = randomUUID();
     this.rows.push({ ...notification, notificationId, createdAt: notification.at, readAt: null });
     return notificationId;
+  }
+
+  async insertMany(batch: NewNotificationBatch): Promise<InsertedNotification[]> {
+    const inserted: InsertedNotification[] = [];
+    for (const accountId of batch.accountIds) {
+      const notificationId = await this.insert({ accountId, kind: batch.kind, payload: batch.payload, dedupeKey: batch.dedupeKey, at: batch.at });
+      if (notificationId !== null) inserted.push({ notificationId, accountId });
+    }
+    return inserted;
   }
 
   async markBot(notificationId: string, outcome: BotOutcome, at: Date): Promise<void> {
