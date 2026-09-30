@@ -90,6 +90,13 @@ describe("раздел «Игроки»", () => {
     expect(card.progress).not.toHaveProperty("nextReward");
   });
 
+  it("принятие предупреждения о тесте: есть, не принимал, сервер старее панели", () => {
+    const accepted = { version: 1, acceptedAt: AT, firstAcceptedAt: AT };
+    expect(playerCardSchema.parse({ ...FULL_CARD, testNotice: accepted }).testNotice).toEqual(accepted);
+    expect(playerCardSchema.parse({ ...FULL_CARD, testNotice: null }).testNotice).toBeNull();
+    expect(playerCardSchema.parse(FULL_CARD).testNotice).toBeUndefined();
+  });
+
   it("карточка модератора: без персональных данных, платежей и вех — тоже карточка", () => {
     const card = playerCardSchema.parse({
       ...FULL_CARD,

@@ -200,6 +200,7 @@ model Account {
   wheelSpins       WheelSpin[]
   taskProgress     TaskProgress[]
   taskRuns         TaskRun[]
+  testNotice       TestNotice?
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1437,4 +1438,23 @@ model TaskRun {
   // Удаление аккаунта уносит его забеги.
   @@index([accountId])
   @@map("task_run")
+}
+
+// Открытый тест (WP33)
+
+/// Принятие предупреждения об открытом тесте (docs/35-stage4-plan.md Р59,
+/// WP33): строка на аккаунт, а не на устройство. Первое принятие не
+/// переписывается — по нему проверяется, что игрок видел предупреждение до
+/// первой покупки; версия растёт вместе с текстом.
+model TestNotice {
+  accountId       String   @id @map("account_id") @db.Uuid
+  /// последняя принятая версия текста
+  version         Int
+  /// когда принята эта версия
+  acceptedAt      DateTime @map("accepted_at") @db.Timestamptz(3)
+  firstAcceptedAt DateTime @map("first_accepted_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("test_notice")
 }

@@ -168,6 +168,11 @@ export const EVENT_DICTIONARY = {
   // achievement_reward); событие шлёт клиент после ответа сервера.
   task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id }) },
   achievement_unlocked: { version: 1, payload: payload({ achievement: id, kind: id }) },
+  // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
+  // доходят ли новички до игры после него и с какой версии текста. Само
+  // принятие — таблица test_notice, по ней проверяется, что игрок видел
+  // предупреждение до первой покупки.
+  test_notice_accepted: { version: 1, payload: payload({ version: count }) },
   // Открыл журнал обновлений (docs/35-stage4-plan.md WP31): доходят ли игроки
   // до него после выхода версии и откуда — из меню или из уведомления. Сколько
   // версий было новыми — чтобы отличить «пришёл за новостью» от «просто листал».

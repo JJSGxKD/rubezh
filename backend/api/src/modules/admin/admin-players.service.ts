@@ -7,6 +7,8 @@ import { AuthService } from "../auth/auth.service.js";
 import { FUNNEL_REPOSITORY, type FunnelMilestones, type FunnelRepository } from "../funnel/funnel.repository.js";
 import type { MessagingState } from "../messaging/messaging.repository.js";
 import { MessagingService } from "../messaging/messaging.service.js";
+import type { TestNoticeAcceptance } from "../test-notice/test-notice.repository.js";
+import { TestNoticeService } from "../test-notice/test-notice.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import type { StoredPurchase } from "../payments/purchase-types.js";
 import { PURCHASES_REPOSITORY, type PurchasesRepository } from "../payments/purchases.repository.js";
@@ -56,6 +58,8 @@ export interface PlayerCard {
   wallet: { balances: Balances; entries: WalletEntryRow[] };
   /** `null` — права на платежи нет */
   purchases: StoredPurchase[] | null;
+  /** предупреждение об открытом тесте (WP33); `null` — не принимал */
+  testNotice: TestNoticeAcceptance | null;
 }
 
 export interface BanResult {
@@ -84,6 +88,7 @@ export class AdminPlayersService {
     private readonly auth: AuthService,
     private readonly adminSessions: AdminSessionService,
     private readonly notifications: NotificationsService,
+    private readonly testNotice: TestNoticeService,
   ) {}
 
   async search(actor: AccountRef, query: string, limit: number): Promise<PlayerRow[]> {
@@ -104,7 +109,7 @@ export class AdminPlayersService {
     const [withPii, withPayments] = await Promise.all([this.roles.can(actor, "players.pii.view"), this.roles.can(actor, "analytics.revenue.view")]);
     const target: AccountRef = { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 
-    const [roles, funnel, acquisition, messaging, progress, runs, balances, entries, purchases] = await Promise.all([
+    const [roles, funnel, acquisition, messaging, progress, runs, balances, entries, purchases, testNotice] = await Promise.all([
       this.roles.rolesFor(target),
       this.funnel.milestones(accountId),
       this.sessions.acquisition(accountId),
@@ -114,6 +119,7 @@ export class AdminPlayersService {
       this.wallet.balances(accountId),
       this.wallet.recentEntries(accountId, WALLET_ENTRIES_SHOWN),
       withPayments ? this.purchases.byAccount(accountId, PURCHASES_SHOWN) : Promise.resolve(null),
+      this.testNotice.acceptance(accountId),
     ]);
 
     if (withPii) await this.roles.audit({ actorAccountId: actor.accountId, action: "players.pii.view", target: accountId });
@@ -128,6 +134,7 @@ export class AdminPlayersService {
       runs,
       wallet: { balances, entries },
       purchases,
+      testNotice,
     };
   }
 

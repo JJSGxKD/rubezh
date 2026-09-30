@@ -139,6 +139,11 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
           import("./state/account-settings")
             .then(({ syncAccountSettings }) => syncAccountSettings(accountId))
             .catch((error: unknown) => console.warn("Настройки аккаунта не загрузились:", error));
+          // Предупреждение о тесте — до первой покупки, на аккаунт
+          // (docs/35-stage4-plan.md WP33).
+          import("./state/test-notice")
+            .then(({ syncTestNotice }) => syncTestNotice())
+            .catch((error: unknown) => console.warn("Предупреждение о тесте не загрузилось:", error));
           // Знаки меню и колокольчик — тогда же и на каждом возврате в
           // приложение (docs/35-stage4-plan.md §3.17).
           import("./state/badges-api")
