@@ -11,7 +11,11 @@ export interface ListItemProps {
   title: string;
   hint?: string;
   icon?: ReactNode;
+  /** значок без подложки — аватару она не нужна: круг внутри квадрата выглядит чужим */
+  bareIcon?: boolean;
   value?: string;
+  /** счётчик нового — тем же знаком, что на вкладках; только с полезной нагрузкой (Р50) */
+  badge?: string;
   onClick?: () => void;
   toggle?: { checked: boolean; onChange: () => void; disabled?: boolean };
   disabled?: boolean;
@@ -22,7 +26,9 @@ export function ListItem(props: ListItemProps): ReactNode {
   const body = (
     <>
       {props.icon === undefined ? null : (
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-raised text-text-muted">
+        <span
+          className={`inline-flex size-9 shrink-0 items-center justify-center ${props.bareIcon === true ? "" : "rounded-md bg-surface-raised text-text-muted"}`}
+        >
           {props.icon}
         </span>
       )}
@@ -34,6 +40,11 @@ export function ListItem(props: ListItemProps): ReactNode {
           <span className="mt-0.5 block text-xs text-text-muted">{props.hint}</span>
         )}
       </span>
+      {props.badge === undefined ? null : (
+        <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-pill bg-accent px-1.5 font-display text-xs font-bold tabular-nums text-on-accent">
+          {props.badge}
+        </span>
+      )}
       {props.value === undefined ? null : (
         <span className="shrink-0 font-display text-sm text-text-muted tabular-nums">
           {props.value}
