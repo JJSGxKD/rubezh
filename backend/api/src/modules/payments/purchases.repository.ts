@@ -29,9 +29,24 @@ export interface InvoiceRecord {
 }
 
 /**
+ * Счёт на товар магазина (WP10). У разового товара — `onceKey`: второй счёт
+ * ложится на ту же строку, и купить его второй раз нельзя.
+ */
+export interface ShopInvoiceRecord {
+  purchaseId: string;
+  accountId: string;
+  sku: string;
+  onceKey: string | null;
+  priceStars: number;
+  chargedStars: number;
+  mode: PaymentMode;
+  invoicedAt: Date;
+}
+
+/**
  * `opened` — счёт можно выставлять: строка новая или ещё ждёт оплаты, и её
- * цена обновлена. `paid` — это продолжение уже оплачено: второй счёт на него
- * не выставляется. `foreign` — продолжение чужого забега.
+ * цена обновлена. `paid` — это продолжение или разовый товар уже оплачены:
+ * второй счёт не выставляется. `foreign` — продолжение чужого забега.
  */
 export type InvoiceOutcome =
   | { kind: "opened"; purchase: StoredPurchase }
@@ -43,7 +58,7 @@ export interface CheckoutView {
   purchase: StoredPurchase;
   /** Telegram ID владельца покупки */
   platformUserId: string;
-  /** забег уже закончен — продолжать нечего */
+  /** забег второго шанса уже закончен — продолжать нечего; у товара магазина забега нет */
   runFinished: boolean;
 }
 
@@ -92,7 +107,12 @@ export const PURCHASES_REPOSITORY = Symbol("PURCHASES_REPOSITORY");
 
 export interface PurchasesRepository {
   openInvoice(record: InvoiceRecord): Promise<InvoiceOutcome>;
+  openShopInvoice(record: ShopInvoiceRecord): Promise<InvoiceOutcome>;
   byId(purchaseId: string): Promise<StoredPurchase | null>;
+  /** Товар выдан. Повтор ничего не меняет: время первой выдачи остаётся */
+  markFulfilled(purchaseId: string, at: Date): Promise<void>;
+  /** Оплаченные разовые товары аккаунта — магазин их больше не предлагает */
+  ownedOnce(accountId: string, onceKeys: readonly string[]): Promise<string[]>;
   /** Сколько продолжений забега оплачено — возвраты не отзывают выданное */
   grantedContinues(runId: string): Promise<number>;
   /** Оплаченные продолжения забега: какое по счёту и по какой секунде посчитана цена */
@@ -120,9 +140,11 @@ export interface PurchasesRepository {
 const SELECT = {
   purchaseId: true,
   accountId: true,
+  product: true,
   runId: true,
   continueNo: true,
   elapsedSec: true,
+  sku: true,
   priceStars: true,
   chargedStars: true,
   mode: true,
@@ -133,6 +155,7 @@ const SELECT = {
   refundReason: true,
   refundRequestedAt: true,
   refundedAt: true,
+  fulfilledAt: true,
 } as const;
 
 @Injectable()
@@ -182,8 +205,41 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
     return isGranted(existing) ? { kind: "paid", purchase: existing } : { kind: "opened", purchase: existing };
   }
 
+  async openShopInvoice(record: ShopInvoiceRecord): Promise<InvoiceOutcome> {
+    const offer = { priceStars: record.priceStars, chargedStars: record.chargedStars, mode: record.mode, invoicedAt: record.invoicedAt };
+    try {
+      const created = await this.prisma.purchase.create({
+        data: { purchaseId: record.purchaseId, accountId: record.accountId, product: "shop_item", sku: record.sku, onceKey: record.onceKey, status: "pending", ...offer },
+        select: SELECT,
+      });
+      return { kind: "opened", purchase: created };
+    } catch (error: unknown) {
+      if (!isUniqueViolation(error) || record.onceKey === null) throw error;
+    }
+
+    // Разовый товар уже выставляли: как у продолжения, цена обновляется,
+    // только пока оплаты нет, а решает прочитанная строка.
+    await this.prisma.purchase.updateMany({ where: { onceKey: record.onceKey, accountId: record.accountId, status: "pending" }, data: offer });
+    const existing = await this.prisma.purchase.findUnique({ where: { onceKey: record.onceKey }, select: SELECT });
+    if (existing === null || existing.accountId !== record.accountId) return { kind: "foreign" };
+    return isGranted(existing) ? { kind: "paid", purchase: existing } : { kind: "opened", purchase: existing };
+  }
+
   async byId(purchaseId: string): Promise<StoredPurchase | null> {
     return await this.prisma.purchase.findUnique({ where: { purchaseId }, select: SELECT });
+  }
+
+  async markFulfilled(purchaseId: string, at: Date): Promise<void> {
+    await this.prisma.purchase.updateMany({ where: { purchaseId, fulfilledAt: null }, data: { fulfilledAt: at } });
+  }
+
+  async ownedOnce(accountId: string, onceKeys: readonly string[]): Promise<string[]> {
+    if (onceKeys.length === 0) return [];
+    const rows = await this.prisma.purchase.findMany({
+      where: { accountId, onceKey: { in: [...onceKeys] }, paidAt: { not: null } },
+      select: { onceKey: true },
+    });
+    return rows.flatMap((row) => (row.onceKey === null ? [] : [row.onceKey]));
   }
 
   async grantedContinues(runId: string): Promise<number> {
@@ -191,11 +247,13 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
   }
 
   async grantedForRun(runId: string): Promise<{ continueNo: number; elapsedSec: number }[]> {
-    return await this.prisma.purchase.findMany({
+    const rows = await this.prisma.purchase.findMany({
       where: { runId, paidAt: { not: null } },
       orderBy: { continueNo: "asc" },
       select: { continueNo: true, elapsedSec: true },
     });
+    // У покупки с забегом номер и секунда есть всегда — это держит проверка базы.
+    return rows.flatMap((row) => (row.continueNo === null || row.elapsedSec === null ? [] : [{ continueNo: row.continueNo, elapsedSec: row.elapsedSec }]));
   }
 
   async checkout(purchaseId: string): Promise<CheckoutView | null> {
@@ -206,7 +264,7 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
     });
     if (row === null) return null;
     const { account, run, ...purchase } = row;
-    return { purchase, platformUserId: account.platformUserId, runFinished: run.status === "finished" };
+    return { purchase, platformUserId: account.platformUserId, runFinished: run?.status === "finished" };
   }
 
   async markPaid(record: PaymentRecord): Promise<ConfirmOutcome> {

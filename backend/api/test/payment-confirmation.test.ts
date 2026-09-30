@@ -5,6 +5,7 @@ import { urgentFirst } from "../src/platforms/telegram/bot-poller.js";
 import { BotRouter } from "../src/platforms/telegram/bot-router.js";
 import { decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
+import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
@@ -30,13 +31,18 @@ function config(patch: Record<string, string> = {}): AppConfig {
   return loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, TELEGRAM_BOT_UPDATES: "polling", PAYMENTS_ENABLED: "true", ...patch } as NodeJS.ProcessEnv);
 }
 
-function pending(patch: Partial<StoredPurchase> = {}): StoredPurchase {
+/** Второй шанс — покупка с забегом: у неё `runId` есть всегда. */
+type ContinuePurchase = StoredPurchase & { runId: string };
+
+function pending(patch: Partial<ContinuePurchase> = {}): ContinuePurchase {
   return {
     purchaseId: randomUUID(),
     accountId: randomUUID(),
+    product: "continue_run",
     runId: randomUUID(),
     continueNo: 1,
     elapsedSec: 125,
+    sku: null,
     priceStars: 3,
     chargedStars: 3,
     mode: "live",
@@ -47,6 +53,7 @@ function pending(patch: Partial<StoredPurchase> = {}): StoredPurchase {
     refundReason: null,
     refundRequestedAt: null,
     refundedAt: null,
+    fulfilledAt: null,
     ...patch,
   };
 }
@@ -85,7 +92,7 @@ describe("подтверждение оплаты", () => {
   let purchases: MemoryPurchasesRepository;
   let api: FakeStarsApi;
   let confirmation: PaymentConfirmation;
-  let purchase: StoredPurchase;
+  let purchase: ContinuePurchase;
 
   function payment(patch: Partial<ConfirmedPayment> = {}): ConfirmedPayment {
     return { platform: "telegram", chargeId: "charge-1", payload: purchase.purchaseId, payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3, ...patch };
@@ -220,7 +227,7 @@ describe("очередь оплаты", () => {
       },
     } as unknown as PaymentConfirmation;
     // Очередь не поднята — как при недоступном Redis.
-    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(new MemoryPurchasesRepository(), starsProviders()), new RunsHooks(), starsProviders());
+    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(new MemoryPurchasesRepository(), starsProviders()), new RunsHooks(), starsProviders(), new PurchaseFulfillment(), new MemoryPurchasesRepository());
     const payment: ConfirmedPayment = { platform: "telegram", chargeId: "charge-1", payload: randomUUID(), payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3 };
 
     await queue.confirm(payment);
@@ -239,7 +246,7 @@ describe("возвраты звёзд", () => {
   let hooks: RunsHooks;
   let queue: PaymentsQueue;
 
-  function purchaseIn(mode: "live" | "test", patch: Partial<StoredPurchase> = {}): StoredPurchase {
+  function purchaseIn(mode: "live" | "test", patch: Partial<ContinuePurchase> = {}): ContinuePurchase {
     const purchase = pending({ mode, chargedStars: mode === "test" ? 1 : 3, ...patch });
     purchases.rows.set(purchase.purchaseId, purchase);
     purchases.owners.set(purchase.accountId, String(PLAYER_ID));
@@ -257,7 +264,7 @@ describe("возвраты звёзд", () => {
     confirmation = new PaymentConfirmation(config(), purchases, starsProviders(refundApi), switchesOf(config()));
     hooks = new RunsHooks();
     // Очередь без Redis выполняет задания сразу — так видно всю цепочку.
-    queue = new PaymentsQueue(config(), confirmation, refunds, hooks, starsProviders(refundApi));
+    queue = new PaymentsQueue(config(), confirmation, refunds, hooks, starsProviders(refundApi), new PurchaseFulfillment(), purchases);
     queue.onModuleInit();
   });
 

@@ -8,15 +8,18 @@ import type {
   PurchasesRepository,
   RefundedRecord,
   RefundOrder,
+  ShopInvoiceRecord,
 } from "../../src/modules/payments/purchases.repository.js";
 
 /**
  * Покупки в памяти — для тестов сервиса. Смысл тот же, что у реализации на
- * Postgres: одна строка на продолжение забега, цена меняется только у
- * неоплаченной. Сама реализация проверяется на живой базе.
+ * Postgres: одна строка на продолжение забега и на разовый товар, цена
+ * меняется только у неоплаченной. Сама реализация проверяется на живой базе.
  */
 export class MemoryPurchasesRepository implements PurchasesRepository {
   readonly rows = new Map<string, StoredPurchase>();
+  /** ключ разового товара → покупка */
+  readonly onceKeys = new Map<string, string>();
   /** Telegram ID владельцев — то, что в базе лежит в `account` */
   readonly owners = new Map<string, string>();
   /** законченные забеги — то, что в базе лежит в `run` */
@@ -39,9 +42,11 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     const created: StoredPurchase = {
       purchaseId: record.purchaseId,
       accountId: record.accountId,
+      product: "continue_run",
       runId: record.runId,
       continueNo: record.continueNo,
       elapsedSec: record.elapsedSec,
+      sku: null,
       priceStars: record.priceStars,
       chargedStars: record.chargedStars,
       mode: record.mode,
@@ -52,9 +57,55 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
       refundReason: null,
       refundRequestedAt: null,
       refundedAt: null,
+      fulfilledAt: null,
     };
     this.rows.set(created.purchaseId, created);
     return { kind: "opened", purchase: { ...created } };
+  }
+
+  async openShopInvoice(record: ShopInvoiceRecord): Promise<InvoiceOutcome> {
+    const known = record.onceKey === null ? undefined : this.rows.get(this.onceKeys.get(record.onceKey) ?? "");
+    if (known !== undefined) {
+      if (known.accountId !== record.accountId) return { kind: "foreign" };
+      if (isGranted(known)) return { kind: "paid", purchase: { ...known } };
+      Object.assign(known, { priceStars: record.priceStars, chargedStars: record.chargedStars, mode: record.mode, invoicedAt: record.invoicedAt });
+      return { kind: "opened", purchase: { ...known } };
+    }
+    const created: StoredPurchase = {
+      purchaseId: record.purchaseId,
+      accountId: record.accountId,
+      product: "shop_item",
+      runId: null,
+      continueNo: null,
+      elapsedSec: null,
+      sku: record.sku,
+      priceStars: record.priceStars,
+      chargedStars: record.chargedStars,
+      mode: record.mode,
+      status: "pending",
+      telegramChargeId: null,
+      invoicedAt: record.invoicedAt,
+      paidAt: null,
+      refundReason: null,
+      refundRequestedAt: null,
+      refundedAt: null,
+      fulfilledAt: null,
+    };
+    this.rows.set(created.purchaseId, created);
+    if (record.onceKey !== null) this.onceKeys.set(record.onceKey, created.purchaseId);
+    return { kind: "opened", purchase: { ...created } };
+  }
+
+  async markFulfilled(purchaseId: string, at: Date): Promise<void> {
+    const row = this.rows.get(purchaseId);
+    if (row !== undefined) row.fulfilledAt ??= at;
+  }
+
+  async ownedOnce(accountId: string, onceKeys: readonly string[]): Promise<string[]> {
+    return onceKeys.filter((key) => {
+      const row = this.rows.get(this.onceKeys.get(key) ?? "");
+      return row !== undefined && row.accountId === accountId && isGranted(row);
+    });
   }
 
   async byAccount(accountId: string, limit: number): Promise<StoredPurchase[]> {
@@ -77,14 +128,14 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
   async grantedForRun(runId: string): Promise<{ continueNo: number; elapsedSec: number }[]> {
     return [...this.rows.values()]
       .filter((row) => row.runId === runId && isGranted(row))
-      .sort((a, b) => a.continueNo - b.continueNo)
-      .map(({ continueNo, elapsedSec }) => ({ continueNo, elapsedSec }));
+      .flatMap(({ continueNo, elapsedSec }) => (continueNo === null || elapsedSec === null ? [] : [{ continueNo, elapsedSec }]))
+      .sort((a, b) => a.continueNo - b.continueNo);
   }
 
   async checkout(purchaseId: string): Promise<CheckoutView | null> {
     const row = this.rows.get(purchaseId);
     if (row === undefined) return null;
-    return { purchase: { ...row }, platformUserId: this.owners.get(row.accountId) ?? "", runFinished: this.finishedRuns.has(row.runId) };
+    return { purchase: { ...row }, platformUserId: this.owners.get(row.accountId) ?? "", runFinished: row.runId !== null && this.finishedRuns.has(row.runId) };
   }
 
   async markPaid(record: PaymentRecord): Promise<ConfirmOutcome> {
@@ -94,7 +145,7 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     if (row === undefined) return { kind: "unknown" };
     if (row.status !== "pending") return { kind: "already_paid", purchase: { ...row } };
     Object.assign(row, { status: "paid", paidAt: record.paidAt, telegramChargeId: record.chargeId, chargedStars: record.chargedStars });
-    return { kind: "paid", purchase: { ...row }, runFinished: this.finishedRuns.has(row.runId) };
+    return { kind: "paid", purchase: { ...row }, runFinished: row.runId !== null && this.finishedRuns.has(row.runId) };
   }
 
   async markRefunded(chargeId: string, refundedAt: Date): Promise<RefundedRecord | null> {
@@ -127,7 +178,7 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
 
   async unusedGrants(runId: string, usedContinues: number): Promise<string[]> {
     return [...this.rows.values()]
-      .filter((row) => row.runId === runId && isGranted(row) && row.continueNo > usedContinues && row.refundRequestedAt === null)
+      .filter((row) => row.runId === runId && isGranted(row) && (row.continueNo ?? 0) > usedContinues && row.refundRequestedAt === null)
       .map((row) => row.purchaseId);
   }
 

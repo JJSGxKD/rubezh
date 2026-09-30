@@ -8,11 +8,13 @@ import { PaymentRefunds } from "./payment-refunds.js";
 import { PaymentsController } from "./payments.controller.js";
 import { PaymentsQueue } from "./payments-queue.js";
 import { PaymentsService } from "./payments.service.js";
+import { PurchaseFulfillment } from "./purchase-fulfillment.js";
 import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.repository.js";
 
 /**
- * Второй шанс за Telegram Stars (docs/34-stage3-plan.md, WP5): цена, счёт,
- * подтверждение оплаты ботом, возвраты и состояние покупки. Продажа
+ * Оплата через площадку: второй шанс за Telegram Stars (docs/34-stage3-plan.md,
+ * WP5) и товары магазина (docs/35-stage4-plan.md, WP10) — цена, счёт,
+ * подтверждение оплаты ботом, возвраты, выдача и состояние покупки. Продажа
  * возможна при входе и чтении обновлений бота; стоп-кран — настройка
  * `payments.stars` (запасное значение — `PAYMENTS_ENABLED`), тестовая оплата
  * — только в разработке (`PAYMENTS_TEST_MODE`).
@@ -34,9 +36,11 @@ import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.rep
     PaymentsQueue,
     PaymentsContinueLedger,
     PaymentsHooks,
+    PurchaseFulfillment,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
   ],
   // Репозиторий — карточке игрока в панели: покупки аккаунта читаются, не меняются.
-  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PURCHASES_REPOSITORY],
+  // Сервис и выдача — магазину: он выставляет счета на товары и выдаёт их.
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PURCHASES_REPOSITORY],
 })
 export class PaymentsModule {}
