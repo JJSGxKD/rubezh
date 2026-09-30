@@ -34,16 +34,19 @@ function payload<Shape extends z.ZodRawShape>(shape: Shape) {
 const amount = z.number().nonnegative();
 const ratio = z.number().min(0).max(1);
 
-// Покупка глазами клиента (docs/34-stage3-plan.md, WP5): воронка от нажатия до
-// продолжения. Суммы здесь — разрез, а не выручка: выручку и возвраты
-// считают по таблице `purchase` (docs/22-analytics-and-metrics.md §5.4).
-// Режим обязателен: тестовые оплаты не должны смешиваться с настоящими.
+// Покупка глазами клиента (docs/34-stage3-plan.md, WP5; магазин и VIP —
+// docs/35-stage4-plan.md, WP10): воронка от нажатия до выдачи. Суммы здесь —
+// разрез, а не выручка: выручку и возвраты считают по таблице `purchase`
+// (docs/22-analytics-and-metrics.md §5.4). Режим обязателен: тестовые оплаты
+// не должны смешиваться с настоящими. Номер продолжения — только у второго
+// шанса, товар — только у магазина; поля необязательные, версия прежняя.
 const purchaseFields = {
   product: id,
   priceStars: count,
   chargedStars: count,
   mode: z.enum(["live", "test"]),
-  continueNo: count,
+  continueNo: count.optional(),
+  sku: id.optional(),
 };
 
 const runOutcome = payload({
@@ -126,9 +129,9 @@ export const EVENT_DICTIONARY = {
   continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
   // Сервер подтвердил покупку буста на забег (WP8): по событию на буст.
   boost_used: { version: 1, payload: payload({ boost: id, source: id, amount, count }) },
-  // Нажал «продолжить за звёзды» — счёт запрошен.
+  // Нажал «продолжить за звёзды» — счёт запрошен; в магазине — счёт выставлен.
   purchase_initiated: { version: 1, payload: payload(purchaseFields) },
-  // Сервер подтвердил оплату, продолжение выдано.
+  // Сервер подтвердил оплату: продолжение выдано, товар лёг на счёт.
   purchase_completed: { version: 1, payload: payload(purchaseFields) },
   // Не дошло до продолжения: `reason` — `cancelled` (закрыл окно), `failed`,
   // `unsupported`, `timeout` (подтверждение не дождались) или код отказа сервера.
