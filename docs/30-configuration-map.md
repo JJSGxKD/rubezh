@@ -140,7 +140,6 @@
 | Значки оружия и пассивок | `app-shell/src/screens/item-icons.tsx` → `WEAPON_ICONS`, `PASSIVE_ICONS`; нет значка — общий | участник 1 |
 | Любой текст интерфейса, включая имена оружия и пассивок | `app-shell/src/i18n/ru.json` | участник 1 |
 | Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | участник 1 |
-| Примеры в заглушках меты: награды семи дней, сектора и шансы колеса, задания, достижения | `app-shell/src/screens/meta/stub-content.ts`. Это не баланс: настоящие числа будут на сервере (`07-monetization-and-ads.md` §7) | геймдизайнер |
 | Приглашение друга: текст и параметр запуска в ссылке | `ru.json` → `friends.invite.text`; `screens/meta/friends.tsx` → `INVITE_START_PARAM`; адрес бота — `VITE_TELEGRAM_BOT_USERNAME` | участник 1 |
 | Гайдбук: тексты поведения и советы, имена врагов; пороги «медленный / быстрый»; мини-сцены | `ru.json` → `guide.*`, `enemy.<id>.name`; `screens/guide/guide-data.ts` → `speedClass`; `screens/guide/scenes.tsx`, анимации — `tokens.css` → `guide-*`. Числа врагов, оружия и пассивок — из контента, в гайдбуке их не правят | участник 1 |
 | Пример снаряжения в заглушке арсенала: слоты, редкости, предметы | `app-shell/src/screens/meta/arsenal.tsx` → `EQUIPPED`, `INVENTORY`, `RARITY_TONE` | геймдизайнер, напарник |
