@@ -7,8 +7,14 @@
 export type PaymentMode = "live" | "test";
 export type PurchaseStatus = "pending" | "paid" | "refunded";
 export type RefundReason = "test_mode" | "unused" | "external";
-/** Что продаётся: второй шанс в забеге или товар каталога магазина (WP10). */
-export type PurchaseProduct = "continue_run" | "shop_item";
+/** Что продаётся: второй шанс в забеге, товар каталога магазина или VIP (WP10). */
+export type PurchaseProduct = "continue_run" | "shop_item" | "vip";
+
+/**
+ * Подписка площадки (Р20): площадка списывает каждый период сама, по тому же
+ * счёту. Каждое списание — своя строка покупки со ссылкой на первую.
+ */
+export const SUBSCRIPTION_PRODUCTS: readonly PurchaseProduct[] = ["vip"];
 
 export interface StoredPurchase {
   purchaseId: string;
@@ -32,6 +38,8 @@ export interface StoredPurchase {
   refundedAt: Date | null;
   /** товар выдан хозяином товара; у второго шанса выдача — сама оплата */
   fulfilledAt: Date | null;
+  /** продление подписки: первая покупка подписки; у первой и у разовых — пусто */
+  renewalOf: string | null;
 }
 
 /**

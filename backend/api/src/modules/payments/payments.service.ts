@@ -74,10 +74,17 @@ export interface PurchaseView {
 
 /** Что магазин продаёт этим счётом: цену и текст решает магазин, оплату — этот модуль. */
 export interface ShopOrder {
+  /** товар каталога или VIP */
+  product: Exclude<PurchaseProduct, "continue_run">;
   sku: string;
   priceStars: number;
   /** разовый товар — один на аккаунт */
   once: boolean;
+  /**
+   * Подписка: площадка списывает цену каждый такой период сама. Площадка без
+   * подписок или с другим периодом такой товар не продаёт.
+   */
+  subscriptionPeriodSec?: number;
   text: ShopInvoiceText;
 }
 
@@ -141,18 +148,22 @@ export class PaymentsService {
   }
 
   /**
-   * Счёт на товар магазина (WP10): та же цепочка, что у второго шанса, —
-   * проверка перед оплатой, подтверждение через очередь, возвраты. Выдачу
-   * делает магазин, зарегистрировав её в `PurchaseFulfillment`.
+   * Счёт на товар магазина или VIP (WP10): та же цепочка, что у второго
+   * шанса, — проверка перед оплатой, подтверждение через очередь, возвраты.
+   * Выдачу делает хозяин товара, зарегистрировав её в `PurchaseFulfillment`.
+   * У подписки площадка потом списывает каждый период по этому же счёту —
+   * продления записывает подтверждение оплаты.
    */
   async shopInvoice(account: AccountRef, order: ShopOrder, nowMs = Date.now()): Promise<ShopInvoice> {
     this.assertEnabled();
     const provider = this.providers.for(account.platform);
     if (provider === null || !provider.accepts(account.platformUserId)) throw new PaymentsUnsupportedError();
+    if (order.subscriptionPeriodSec !== undefined && provider.subscriptionPeriodSec !== order.subscriptionPeriodSec) throw new PaymentsUnsupportedError();
     const mode: PaymentMode = this.config.payments.testMode ? "test" : "live";
     const outcome = await this.purchases.openShopInvoice({
       purchaseId: randomUUID(),
       accountId: account.accountId,
+      product: order.product,
       sku: order.sku,
       onceKey: order.once ? onceKeyOf(order.sku, account.accountId) : null,
       priceStars: order.priceStars,
@@ -165,7 +176,8 @@ export class PaymentsService {
     const base = { purchaseId: purchase.purchaseId, sku: order.sku, priceStars: purchase.priceStars, chargedStars: purchase.chargedStars, mode: purchase.mode };
     if (outcome.kind === "paid") return { ...base, status: "paid", invoiceUrl: null };
 
-    const invoiceUrl = await this.invoiceLink(account, purchase, shopInvoice({ purchaseId: purchase.purchaseId, priceStars: purchase.priceStars, chargedStars: purchase.chargedStars, mode: purchase.mode, text: order.text }));
+    const text = shopInvoice({ purchaseId: purchase.purchaseId, priceStars: purchase.priceStars, chargedStars: purchase.chargedStars, mode: purchase.mode, text: order.text });
+    const invoiceUrl = await this.invoiceLink(account, purchase, order.subscriptionPeriodSec === undefined ? text : { ...text, subscriptionPeriodSec: order.subscriptionPeriodSec });
     this.log("log", "invoice_created", { accountId: account.accountId, sku: order.sku, purchaseId: purchase.purchaseId, priceStars: purchase.priceStars, chargedStars: purchase.chargedStars, mode: purchase.mode });
     return { ...base, status: "pending", invoiceUrl };
   }

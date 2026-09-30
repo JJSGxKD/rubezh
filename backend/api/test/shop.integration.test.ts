@@ -27,7 +27,7 @@ describe.skipIf(DATABASE_URL === "")("покупки магазина на жи�
   }
 
   function record(accountId: string, patch: Partial<ShopInvoiceRecord> = {}): ShopInvoiceRecord {
-    return { purchaseId: randomUUID(), accountId, sku: "gems_60", onceKey: null, priceStars: 50, chargedStars: 50, mode: "live", invoicedAt: NOW, ...patch };
+    return { purchaseId: randomUUID(), accountId, product: "shop_item", sku: "gems_60", onceKey: null, priceStars: 50, chargedStars: 50, mode: "live", invoicedAt: NOW, ...patch };
   }
 
   beforeAll(() => {
@@ -79,6 +79,31 @@ describe.skipIf(DATABASE_URL === "")("покупки магазина на жи�
     await purchases.markFulfilled(id, new Date(NOW.getTime() + 60_000));
     expect((await purchases.byId(id))?.fulfilledAt).toEqual(NOW);
     expect((await purchases.byAccount(me.accountId, 10)).map((row) => row.purchaseId)).toContain(id);
+  });
+
+  it("продление подписки — своя строка со ссылкой на первую; повтор оплаты — та же строка; не подписку не продлить", async () => {
+    const me = await account();
+    const opened = await purchases.openShopInvoice(record(me.accountId, { product: "vip", sku: "vip_month", priceStars: 200, chargedStars: 200 }));
+    if (opened.kind !== "opened") throw new Error("счёт не открыт");
+    const first = opened.purchase.purchaseId;
+    const renewal = { firstId: first, purchaseId: randomUUID(), chargeId: `renew-${first}`, chargedStars: 200, paidAt: new Date(NOW.getTime() + 30 * 86_400_000) };
+
+    expect(await purchases.markRenewal(renewal)).toEqual({ kind: "unknown" });
+    await purchases.markPaid({ purchaseId: first, chargeId: `charge-${first}`, chargedStars: 200, paidAt: NOW });
+    // Две доставки одного продления разом: строку заводит одна, какая — решает гонка.
+    const results = await Promise.all([purchases.markRenewal(renewal), purchases.markRenewal({ ...renewal, purchaseId: randomUUID() })]);
+    expect(results.map((result) => result.kind).sort()).toEqual(["duplicate", "paid"]);
+    const recorded = results.find((result) => result.kind === "paid");
+    if (recorded?.kind !== "paid") throw new Error("продление не записано");
+    const renewalId = recorded.purchase.purchaseId;
+    expect(results.every((result) => result.kind !== "unknown" && result.purchase.purchaseId === renewalId)).toBe(true);
+    expect(await purchases.byId(renewalId)).toMatchObject({ product: "vip", sku: "vip_month", status: "paid", renewalOf: first, priceStars: 200, mode: "live" });
+    expect(await purchases.markRenewal({ ...renewal, firstId: renewalId, chargeId: `x-${first}`, purchaseId: randomUUID() })).toEqual({ kind: "unknown" });
+
+    const shop = await purchases.openShopInvoice(record(me.accountId));
+    if (shop.kind !== "opened") throw new Error("счёт не открыт");
+    await purchases.markPaid({ purchaseId: shop.purchase.purchaseId, chargeId: `charge-${shop.purchase.purchaseId}`, chargedStars: 50, paidAt: NOW });
+    expect(await purchases.markRenewal({ ...renewal, firstId: shop.purchase.purchaseId, chargeId: `y-${first}`, purchaseId: randomUUID() })).toEqual({ kind: "unknown" });
   });
 
   it("база не примет товар магазина без sku и второй шанс без забега", async () => {

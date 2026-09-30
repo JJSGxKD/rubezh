@@ -1,5 +1,5 @@
-import { priceFor, type RatesSnapshot } from "@bh/fx";
 import { Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { methodFor, priceIn } from "../payments/payment-methods.js";
 import { PaymentsUnsupportedError } from "../payments/payments-errors.js";
 import { PaymentsService, type ShopInvoice } from "../payments/payments.service.js";
 import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
@@ -7,7 +7,7 @@ import type { StoredPurchase } from "../payments/purchase-types.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { ShopSkuNotFoundError, ShopSkuUnavailableError } from "./shop-errors.js";
-import { PAYMENT_METHODS, SHOP_SKUS, contentsOf, priceProduct, skuById, type ShopKind, type ShopResource, type ShopSku } from "./shop-catalog.js";
+import { SHOP_SKUS, contentsOf, priceProduct, skuById, type ShopKind, type ShopResource } from "./shop-catalog.js";
 
 /**
  * Магазин (docs/35-stage4-plan.md §3.6, WP10): витрина с ценой способа оплаты
@@ -36,12 +36,6 @@ export interface ShopView {
   payable: boolean;
 }
 
-/**
- * Ручная цена курсов не требует — снимок для неё пустой. Товар без ручной
- * цены у способа при пустом снимке честно недоступен, а не стоит ноль.
- */
-const NO_RATES: RatesSnapshot = { id: "manual-only", takenAt: new Date(0), rates: new Map(), payout: new Map() };
-
 @Injectable()
 export class ShopService implements OnModuleInit {
   private readonly logger = new Logger("shop");
@@ -62,14 +56,14 @@ export class ShopService implements OnModuleInit {
       account,
       skus.filter((sku) => sku.once).map((sku) => sku.id),
     );
-    const method = methodFor(account);
+    const method = methodFor(account.platform);
     return {
       payable: method !== undefined,
       items: skus.map((sku) => ({
         sku: sku.id,
         kind: sku.kind,
         contents: contentsOf(sku),
-        stars: method === undefined ? null : starsOf(sku, method.id),
+        stars: method === undefined ? null : priceIn(priceProduct(sku), method),
         once: sku.once,
         owned: owned.has(sku.id),
       })),
@@ -79,11 +73,11 @@ export class ShopService implements OnModuleInit {
   async order(account: AccountRef, skuId: string): Promise<ShopInvoice> {
     const sku = skuById(skuId);
     if (sku === undefined) throw new ShopSkuNotFoundError();
-    const method = methodFor(account);
+    const method = methodFor(account.platform);
     if (method === undefined) throw new PaymentsUnsupportedError();
-    const stars = starsOf(sku, method.id);
+    const stars = priceIn(priceProduct(sku), method);
     if (stars === null) throw new ShopSkuUnavailableError();
-    const invoice = await this.payments.shopInvoice(account, { sku: sku.id, priceStars: stars, once: sku.once, text: { title: sku.title, description: sku.description } });
+    const invoice = await this.payments.shopInvoice(account, { product: "shop_item", sku: sku.id, priceStars: stars, once: sku.once, text: { title: sku.title, description: sku.description } });
     this.log("shop_order", { accountId: account.accountId, sku: sku.id, purchaseId: invoice.purchaseId, status: invoice.status });
     return invoice;
   }
@@ -113,16 +107,4 @@ export class ShopService implements OnModuleInit {
   private log(event: string, fields: Record<string, unknown>): void {
     this.logger.log(JSON.stringify({ module: "shop", event, ...fields }));
   }
-}
-
-function methodFor(account: AccountRef): (typeof PAYMENT_METHODS)[number] | undefined {
-  return [...PAYMENT_METHODS].sort((a, b) => a.order - b.order).find((method) => method.platform === account.platform);
-}
-
-/** Цена товара способом оплаты в звёздах; `null` — способ этот товар не продаёт. */
-function starsOf(sku: ShopSku, methodId: string): number | null {
-  const method = PAYMENT_METHODS.find((candidate) => candidate.id === methodId);
-  if (method === undefined) return null;
-  const price = priceFor(priceProduct(sku), method, NO_RATES);
-  return price.status === "available" ? price.amount.toNumber() : null;
 }

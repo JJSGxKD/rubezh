@@ -10,11 +10,13 @@ import { PaymentsQueue } from "./payments-queue.js";
 import { PaymentsService } from "./payments.service.js";
 import { PurchaseFulfillment } from "./purchase-fulfillment.js";
 import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.repository.js";
+import { SubscriptionRenewal } from "./subscription-renewal.js";
 
 /**
  * Оплата через площадку: второй шанс за Telegram Stars (docs/34-stage3-plan.md,
- * WP5) и товары магазина (docs/35-stage4-plan.md, WP10) — цена, счёт,
- * подтверждение оплаты ботом, возвраты, выдача и состояние покупки. Продажа
+ * WP5), товары магазина и подписка VIP (docs/35-stage4-plan.md, WP10) — цена,
+ * счёт, подтверждение оплаты ботом, продления подписки, возвраты, выдача и
+ * состояние покупки. Продажа
  * возможна при входе и чтении обновлений бота; стоп-кран — настройка
  * `payments.stars` (запасное значение — `PAYMENTS_ENABLED`), тестовая оплата
  * — только в разработке (`PAYMENTS_TEST_MODE`).
@@ -37,10 +39,12 @@ import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.rep
     PaymentsContinueLedger,
     PaymentsHooks,
     PurchaseFulfillment,
+    SubscriptionRenewal,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
   ],
   // Репозиторий — карточке игрока в панели: покупки аккаунта читаются, не меняются.
-  // Сервис и выдача — магазину: он выставляет счета на товары и выдаёт их.
-  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PURCHASES_REPOSITORY],
+  // Сервис и выдача — магазину и VIP: они выставляют счета на товары и выдают их;
+  // продление подписки — VIP.
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, SubscriptionRenewal, PURCHASES_REPOSITORY],
 })
 export class PaymentsModule {}

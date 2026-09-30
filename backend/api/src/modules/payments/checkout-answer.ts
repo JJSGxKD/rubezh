@@ -1,6 +1,7 @@
 import type { CheckoutAnswer } from "../../platforms/ports/payment-provider.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { INVOICE_TTL_SEC } from "./payments-limits.js";
+import { isGranted, SUBSCRIPTION_PRODUCTS, type StoredPurchase } from "./purchase-types.js";
 import type { CheckoutView } from "./purchases.repository.js";
 
 /**
@@ -53,6 +54,7 @@ export function decideCheckout(view: CheckoutView | null, query: PreCheckout, no
   // Счёт по пересланной ссылке оплачивает не тот, кому он выставлен: забег,
   // а значит и продолжение, — чужие.
   if (query.payerId !== view.platformUserId) return refuse("foreign_user");
+  if (isRenewal(purchase)) return query.currency === "XTR" && query.totalAmount === purchase.chargedStars ? { ok: true } : refuse("price_mismatch");
   if (purchase.status !== "pending") return refuse("already_paid");
   // Сумма — та, на которую выставлен последний счёт. Старая ссылка после
   // повторного счёта с другой ценой сюда не пройдёт.
@@ -60,6 +62,15 @@ export function decideCheckout(view: CheckoutView | null, query: PreCheckout, no
   if (nowMs - purchase.invoicedAt.getTime() > INVOICE_TTL_SEC * 1000) return refuse("stale_invoice");
   if (view.runFinished) return refuse("run_finished");
   return { ok: true };
+}
+
+/**
+ * Продление подписки площадка списывает по счёту первой покупки — уже
+ * оплаченной и давно не свежей. Спросит она перед этим или нет, отказать
+ * нельзя: подтверждение запишет оплату продлением (`payment-confirmation.ts`).
+ */
+function isRenewal(purchase: StoredPurchase): boolean {
+  return SUBSCRIPTION_PRODUCTS.includes(purchase.product) && purchase.renewalOf === null && isGranted(purchase);
 }
 
 export function answerOf(decision: CheckoutDecision): CheckoutAnswer {

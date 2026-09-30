@@ -72,6 +72,8 @@ enum PurchaseProduct {
   continue_run
   /// товар магазина из каталога (WP10): что именно — `sku`
   shop_item
+  /// VIP — подписка площадки (WP10, Р20, Р44): период за каждую оплату
+  vip
 }
 
 // Режим оплаты (docs/34-stage3-plan.md, Р14). `test` — разработка: игрок
@@ -204,6 +206,9 @@ model Account {
   taskRuns         TaskRun[]
   testNotice       TestNotice?
   adSessions       AdSession[]
+  vipSubscriptions VipSubscription[]
+  vipPeriods       VipPeriod[]
+  vipDaily         VipDaily?
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -480,10 +485,16 @@ model Purchase {
   refundedAt        DateTime?       @map("refunded_at") @db.Timestamptz(3)
   /// товар выдан хозяином товара; у второго шанса выдача — сама оплата
   fulfilledAt       DateTime?       @map("fulfilled_at") @db.Timestamptz(3)
+  /// продление подписки: первая покупка подписки — её id стоит в счёте, по которому площадка списывает каждый период
+  renewalOf         String?         @map("renewal_of") @db.Uuid
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
   run     Run?    @relation(fields: [runId], references: [runId], onDelete: Restrict)
+  renewalFirst Purchase?  @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
+  renewals     Purchase[] @relation("PurchaseRenewal")
+  vipSubscription VipSubscription?
+  vipPeriod       VipPeriod?
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -1578,4 +1589,72 @@ model AdSession {
   // Воронка в панели — все показы за сутки, неделю или месяц.
   @@index([createdAt])
   @@map("ad_session")
+}
+
+// VIP (docs/35-stage4-plan.md §3.6, Р20, Р26, Р44; WP10): подписка площадки.
+// Срок VIP — не поле, а журнал периодов: каждая оплата — период ровно одной
+// строкой, и конец VIP — самый поздний конец периода. Так повтор выдачи
+// ничего не продлевает дважды, а по журналу видно, за что игрок платил.
+
+/// Продление подписки на площадке.
+enum VipRenewal {
+  /// площадка спишет следующий период
+  on
+  /// продление отменено — оплаченное работает до конца
+  cancelled
+  /// площадка не смогла списать очередной период
+  failed
+}
+
+/// Кто отменил продление: вернуть отменённое нами можем мы, отменённое игроком — только он на площадке.
+enum VipCanceller {
+  player
+  game
+}
+
+/// Подписка — одна на счёт площадки: её id — первая покупка, по счёту которой площадка списывает периоды.
+model VipSubscription {
+  subscriptionId String        @id @map("subscription_id") @db.Uuid
+  accountId      String        @map("account_id") @db.Uuid
+  renewal        VipRenewal    @default(on)
+  cancelledBy    VipCanceller? @map("cancelled_by")
+  createdAt      DateTime      @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @map("updated_at") @db.Timestamptz(3)
+
+  account  Account     @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase Purchase    @relation(fields: [subscriptionId], references: [purchaseId], onDelete: Restrict)
+  periods  VipPeriod[]
+
+  @@index([accountId, createdAt])
+  @@map("vip_subscription")
+}
+
+/// Оплаченный период VIP: одна оплата — один период, начало — конец прежнего, если он ещё не кончился.
+model VipPeriod {
+  purchaseId     String   @id @map("purchase_id") @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  startsAt       DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt         DateTime @map("ends_at") @db.Timestamptz(3)
+  createdAt      DateTime @map("created_at") @db.Timestamptz(3)
+
+  account      Account         @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase     Purchase        @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+  subscription VipSubscription @relation(fields: [subscriptionId], references: [subscriptionId], onDelete: Restrict)
+
+  // Конец VIP игрока — самый поздний конец периода.
+  @@index([accountId, endsAt])
+  @@index([subscriptionId])
+  @@map("vip_period")
+}
+
+/// Самоцветы VIP раз в игровые сутки (Р26): день последнего забора по Москве.
+model VipDaily {
+  accountId String   @id @map("account_id") @db.Uuid
+  lastDay   DateTime @map("last_day") @db.Date
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("vip_daily")
 }

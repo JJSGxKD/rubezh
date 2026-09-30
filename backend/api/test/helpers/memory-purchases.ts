@@ -1,4 +1,4 @@
-import { isGranted, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
+import { isGranted, SUBSCRIPTION_PRODUCTS, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
 import type {
   CheckoutView,
   ConfirmOutcome,
@@ -8,6 +8,7 @@ import type {
   PurchasesRepository,
   RefundedRecord,
   RefundOrder,
+  RenewalRecord,
   ShopInvoiceRecord,
 } from "../../src/modules/payments/purchases.repository.js";
 
@@ -58,6 +59,7 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
       refundRequestedAt: null,
       refundedAt: null,
       fulfilledAt: null,
+      renewalOf: null,
     };
     this.rows.set(created.purchaseId, created);
     return { kind: "opened", purchase: { ...created } };
@@ -74,7 +76,7 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     const created: StoredPurchase = {
       purchaseId: record.purchaseId,
       accountId: record.accountId,
-      product: "shop_item",
+      product: record.product,
       runId: null,
       continueNo: null,
       elapsedSec: null,
@@ -90,6 +92,7 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
       refundRequestedAt: null,
       refundedAt: null,
       fulfilledAt: null,
+      renewalOf: null,
     };
     this.rows.set(created.purchaseId, created);
     if (record.onceKey !== null) this.onceKeys.set(record.onceKey, created.purchaseId);
@@ -146,6 +149,29 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     if (row.status !== "pending") return { kind: "already_paid", purchase: { ...row } };
     Object.assign(row, { status: "paid", paidAt: record.paidAt, telegramChargeId: record.chargeId, chargedStars: record.chargedStars });
     return { kind: "paid", purchase: { ...row }, runFinished: row.runId !== null && this.finishedRuns.has(row.runId) };
+  }
+
+  async markRenewal(record: RenewalRecord): Promise<ConfirmOutcome> {
+    const known = [...this.rows.values()].find((row) => row.telegramChargeId === record.chargeId);
+    if (known !== undefined) return { kind: "duplicate", purchase: { ...known } };
+    const first = this.rows.get(record.firstId);
+    if (first === undefined || !SUBSCRIPTION_PRODUCTS.includes(first.product) || !isGranted(first) || first.renewalOf !== null) return { kind: "unknown" };
+    const created: StoredPurchase = {
+      ...first,
+      purchaseId: record.purchaseId,
+      chargedStars: record.chargedStars,
+      status: "paid",
+      telegramChargeId: record.chargeId,
+      invoicedAt: record.paidAt,
+      paidAt: record.paidAt,
+      refundReason: null,
+      refundRequestedAt: null,
+      refundedAt: null,
+      fulfilledAt: null,
+      renewalOf: first.purchaseId,
+    };
+    this.rows.set(created.purchaseId, created);
+    return { kind: "paid", purchase: { ...created }, runFinished: false };
   }
 
   async markRefunded(chargeId: string, refundedAt: Date): Promise<RefundedRecord | null> {

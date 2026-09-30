@@ -1,4 +1,4 @@
-import type { PaymentMethod, Product } from "@bh/fx";
+import type { Product } from "@bh/fx";
 import { z } from "zod";
 import type { WalletResource } from "../wallet/wallet-types.js";
 
@@ -24,11 +24,6 @@ export type ShopResource = (typeof SHOP_RESOURCES)[number];
 
 export const SHOP_KINDS = ["gems", "bundle", "starter"] as const;
 export type ShopKind = (typeof SHOP_KINDS)[number];
-
-/** Способы оплаты игры (WP9 → WP10). Пока один: в Mini App цифровое продаётся только за звёзды. */
-export const PAYMENT_METHODS: readonly PaymentMethod[] = [
-  { id: "telegram_stars", platform: "telegram", provider: "telegram_stars", currency: "XTR", minAmount: "1", maxAmount: "10000", fee: { percent: "0", placement: "inside" }, order: 1 },
-];
 
 /** Название в окне оплаты Telegram — до 32 знаков, с запасом на пометку тестовой оплаты. */
 export const TITLE_MAX = 25;

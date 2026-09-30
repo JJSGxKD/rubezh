@@ -51,6 +51,7 @@ erDiagram
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN ||--o{ PURCHASE : "продолжен за"
+    PURCHASE ||--o{ PURCHASE : "продлена"
     ACCOUNT ||--o{ ACCOUNT_SESSION : "запускает игру"
     ACCOUNT ||--o| ACQUISITION : "пришёл через"
     ACCOUNT ||--o| ACCOUNT_FUNNEL : "прошёл вехи"
@@ -90,6 +91,11 @@ erDiagram
     AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
     AD_BLOCK ||--o{ AD_SESSION : "выдан в показ"
     ACCOUNT ||--o{ AD_SESSION : "показы рекламы"
+    ACCOUNT ||--o{ VIP_SUBSCRIPTION : "подписки VIP"
+    PURCHASE ||--o| VIP_SUBSCRIPTION : "первая покупка — id подписки"
+    VIP_SUBSCRIPTION ||--o{ VIP_PERIOD : "оплаченные периоды"
+    PURCHASE ||--o| VIP_PERIOD : "период за оплату"
+    ACCOUNT ||--o| VIP_DAILY : "самоцветы VIP дня"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -356,11 +362,11 @@ erDiagram
     PURCHASE {
         uuid purchase_id PK "он же payload счёта"
         uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
-        enum product "continue_run|shop_item"
+        enum product "continue_run|shop_item|vip"
         string run_id FK "nullable: только у второго шанса; UK вместе с continue_no"
         int continue_no "nullable: какое продолжение забега, с единицы"
         float elapsed_sec "nullable: секунда забега, по которой посчитана цена"
-        string sku "nullable: товар каталога магазина — только у shop_item"
+        string sku "nullable: товар каталога магазина или план VIP — пусто только у continue_run"
         string once_key UK "nullable: разовый товар — одна строка на товар и аккаунт"
         int price_stars "цена по правилу Р5.1 — её видит игрок"
         int charged_stars "сколько списано: в тестовом режиме — одна звезда"
@@ -372,7 +378,8 @@ erDiagram
         enum refund_reason "nullable: test_mode|unused|external"
         datetime refund_requested_at "nullable"
         datetime refunded_at "nullable"
-        datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька"
+        datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька, период VIP — записан"
+        uuid renewal_of FK "nullable: продление подписки — первая её покупка, по счёту которой площадка списывает периоды"
     }
 
     ACCOUNT_ROLE {
@@ -656,6 +663,30 @@ erDiagram
         string fail_reason "nullable: код отказа SDK"
         datetime expires_at "позже created_at"
     }
+
+    VIP_SUBSCRIPTION {
+        uuid subscription_id PK,FK "первая покупка: по её счёту площадка списывает периоды"
+        uuid account_id FK
+        enum renewal "on|cancelled|failed"
+        enum cancelled_by "nullable: player|game — ровно у cancelled"
+        datetime created_at
+        datetime updated_at "оплата продления старше отмены её не перебивает"
+    }
+
+    VIP_PERIOD {
+        uuid purchase_id PK,FK "одна оплата — один период"
+        uuid subscription_id FK
+        uuid account_id FK
+        datetime starts_at "конец прежнего периода, если он не кончился к оплате, иначе оплата"
+        datetime ends_at "позже starts_at; конец VIP — самый поздний"
+        datetime created_at
+    }
+
+    VIP_DAILY {
+        uuid account_id PK,FK
+        date last_day "московские сутки последнего забора"
+        datetime updated_at
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -754,6 +785,16 @@ erDiagram
   места, забирая сессию: забор мест игрока идёт под транзакционной
   блокировкой на аккаунт и место, поэтому ни одна сессия, ни две разом не
   дают второй награды в кулдаун. Забор без выполнения база не примет.
+- **`VIP_SUBSCRIPTION`, `VIP_PERIOD`, `VIP_DAILY` — VIP** (`35-stage4-plan.md`,
+  §3.6, Р20, Р44, WP10). Срок VIP — не поле, а журнал периодов: каждая
+  оплата — ровно один период, начатый с конца прежнего, и конец VIP — самый
+  поздний конец. Повтор выдачи ничего не продлевает дважды, выдачи разом
+  идут под транзакционной блокировкой на аккаунт и не начинаются от одного
+  конца. Подписка — одна на счёт площадки: её id — первая покупка, по
+  которой площадка списывает периоды и отменяет продление. Отменённое
+  продление — за тем, кто отменил первым: вернуть отменённое нами можем мы,
+  отменённое игроком — только он на площадке. Самоцветы дня — строка на
+  аккаунт с последними сутками забора, сутки сдвигаются только вперёд.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -822,7 +863,10 @@ erDiagram
   строка — и товар каталога: `sku` вместо забега, это держит проверка базы.
   Разовый товар — `once_key` с уникальным индексом: второй счёт ложится на
   ту же строку, и дважды его не купить. Товар выдаёт магазин журналом
-  кошелька ключом покупки, `fulfilled_at` — выдано.
+  кошелька ключом покупки, `fulfilled_at` — выдано. Подписку (VIP) площадка
+  продлевает сама — очередной оплатой по счёту первой покупки; каждое
+  продление — своя строка со своей оплатой и `renewal_of` на первую, так
+  выручка и возвраты видят каждый период.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -1306,8 +1350,9 @@ flowchart LR
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
         ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
-        PAY["payments<br/>второй шанс и товары за Stars: цена, счёт,<br/>подтверждение, возвраты, выдача, реализовано"]
+        PAY["payments<br/>второй шанс, товары и подписка за Stars: цена,<br/>счёт, подтверждение, продления, возвраты, выдача, реализовано"]
         SHOP["shop<br/>магазин: каталог с фиксированным<br/>составом, цены способа оплаты, реализовано"]
+        VIP["vip<br/>подписка площадки: журнал периодов,<br/>продление, самоцветы дня, реализовано"]
         ADS["ads<br/>реклама: выбор сети, воронка показа,<br/>кулдаун места, реализовано ядро"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
@@ -1430,6 +1475,11 @@ flowchart LR
     SHOP -- "счёт на товар" --> PAY
     PAY -. "выдача оплаченного: регистр выдачи" .-> SHOP
     SHOP -- "состав товара ключом покупки" --> WALLET
+    CADDY -- "/api/v1/vip" --> VIP
+    VIP -- "счёт с периодом, отмена продления" --> PAY
+    PAY -. "период за оплату, продление на площадке" .-> VIP
+    VIP -- "самоцветы дня ключом суток" --> WALLET
+    VIP -- "vip_subscription, vip_period, vip_daily" --> PG
     RUNS -. сверка продолжений с покупками .-> PAY
     RUNS -. слушатели записанного забега .-> PAY
     ADS -- "ad_network, ad_block, ad_session" --> PG

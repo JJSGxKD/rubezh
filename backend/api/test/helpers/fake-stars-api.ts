@@ -12,8 +12,10 @@ export class FakeStarsApi implements StarsBotApi {
   readonly sent: StarsInvoice[] = [];
   readonly answers: { queryId: string; answer: PreCheckoutAnswer }[] = [];
   readonly refunded: { userId: number; chargeId: string }[] = [];
+  readonly renewals: { userId: number; chargeId: string; canceled: boolean }[] = [];
   invoiceFailWith: Error | null = null;
   refundFailWith: Error | null = null;
+  renewalFailWith: Error | null = null;
 
   async createInvoiceLink(invoice: StarsInvoice): Promise<string> {
     if (this.invoiceFailWith !== null) throw this.invoiceFailWith;
@@ -28,6 +30,11 @@ export class FakeStarsApi implements StarsBotApi {
   async refundStarPayment(userId: number, chargeId: string): Promise<void> {
     if (this.refundFailWith !== null) throw this.refundFailWith;
     this.refunded.push({ userId, chargeId });
+  }
+
+  async editUserStarSubscription(userId: number, chargeId: string, canceled: boolean): Promise<void> {
+    if (this.renewalFailWith !== null) throw this.renewalFailWith;
+    this.renewals.push({ userId, chargeId, canceled });
   }
 }
 

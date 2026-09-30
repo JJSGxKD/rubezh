@@ -81,6 +81,8 @@ const purchaseSchema = z.object({
   runId: z.string().nullable(),
   continueNo: z.number().nullable(),
   sku: z.string().nullable().optional(),
+  /** продление подписки — первая её покупка; до VIP (WP10) сервер поля не отдавал */
+  renewalOf: z.string().nullable().optional(),
   priceStars: z.number(),
   chargedStars: z.number(),
   mode: z.string(),
@@ -222,7 +224,8 @@ export function rejectReferral(api: AdminApi, accountId: string, reason: string)
 }
 
 /** Что куплено — словами: второй шанс с номером продолжения или товар магазина. */
-export function purchaseLabel(purchase: Pick<PlayerPurchase, "sku" | "continueNo">): string {
+export function purchaseLabel(purchase: Pick<PlayerPurchase, "product" | "sku" | "continueNo" | "renewalOf">): string {
+  if (purchase.product === "vip") return purchase.renewalOf === null || purchase.renewalOf === undefined ? "VIP" : "VIP, продление";
   if (purchase.sku !== null && purchase.sku !== undefined) return `магазин: ${purchase.sku}`;
   return purchase.continueNo === null ? "—" : `второй шанс №${String(purchase.continueNo)}`;
 }
