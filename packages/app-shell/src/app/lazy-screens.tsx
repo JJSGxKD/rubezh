@@ -29,6 +29,7 @@ const loaders = {
   rating: () => import("../screens/meta/rating"),
   profile: () => import("../screens/meta/profile"),
   notifications: () => import("../screens/meta/notifications"),
+  changelog: () => import("../screens/meta/changelog"),
   guide: () => import("../screens/guide/GuideScreen"),
   feedback: () => import("../screens/feedback"),
   daily: () => import("../screens/meta/daily"),
@@ -65,6 +66,7 @@ export const LevelScreen = screen(loaders.profile, "LevelScreen");
 // История имущества — тоже из профиля и в его чанке.
 export const HistoryScreen = screen(loaders.profile, "HistoryScreen");
 export const NotificationsScreen = screen(loaders.notifications, "NotificationsScreen");
+export const ChangelogScreen = screen(loaders.changelog, "ChangelogScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");

@@ -33,6 +33,7 @@
   "header.level": "Профиль · уровень {level}",
   "menu.notifications": "Уведомления",
   "menu.history": "История имущества",
+  "menu.changelog": "Что нового",
   "menu.title.unread": "Меню, {count} {count, plural, one {новое уведомление} few {новых уведомления} many {новых уведомлений} other {нового уведомления}}",
   "tab.arsenal": "Арсенал",
   "tab.shop": "Магазин",

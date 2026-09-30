@@ -60,5 +60,6 @@
   "notification.boosts_refunded.coins": "{amount} {n, plural, one {монета} few {монеты} many {монет} other {монеты}}",
   "notification.boosts_refunded.gems": "{amount} {n, plural, one {самоцвет} few {самоцвета} many {самоцветов} other {самоцвета}}",
   "notification.and": " и ",
-  "notification.team_message": "Сообщение команды"
+  "notification.team_message": "Сообщение команды",
+  "notification.app_update": "Вышло обновление {version} — посмотрите, что нового"
 }

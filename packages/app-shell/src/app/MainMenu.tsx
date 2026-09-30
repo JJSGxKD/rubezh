@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Bell, BookOpen, History, Info, MessageSquareWarning, Settings } from "lucide-react";
+import { Bell, BookOpen, History, Info, MessageSquareWarning, Newspaper, Settings } from "lucide-react";
 import { Avatar, Button, ListGroup, ListItem, Modal } from "../design-system/components";
 import { t } from "../i18n";
 import { badgeText, useBadges } from "../state/badges";
@@ -22,6 +22,7 @@ export function MainMenu(props: { onClose(): void }): ReactNode {
   const name = user?.displayName ?? t("profile.guest");
   const level = useProgress((state) => state.progress?.level ?? state.runLevel);
   const unread = useBadges((state) => state.notifications);
+  const freshVersions = useBadges((state) => state.changelog);
   const withAccount = useShell((state) => state.capabilities.auth !== undefined);
 
   const open = (screen: ScreenId): void => {
@@ -63,6 +64,14 @@ export function MainMenu(props: { onClose(): void }): ReactNode {
 
       <div className="mt-3">
         <ListGroup>
+          {withAccount ? (
+            <ListItem
+              icon={<Newspaper size={18} />}
+              title={t("menu.changelog")}
+              {...(badgeText(freshVersions) === undefined ? {} : { badge: badgeText(freshVersions) })}
+              onClick={() => open("changelog")}
+            />
+          ) : null}
           <ListItem icon={<BookOpen size={18} />} title={t("guide.title")} hint={t("guide.menu.hint")} onClick={() => open("guide")} />
           <ListItem icon={<Settings size={18} />} title={t("settings.title")} onClick={() => open("settings")} />
         </ListGroup>
