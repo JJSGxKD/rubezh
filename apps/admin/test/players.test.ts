@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import {
+import { purchaseLabel,
   adjustWallet,
   fetchPlayerCard,
   fetchSocial,
@@ -176,5 +176,13 @@ describe("раздел «Игроки»", () => {
 
   it("раздел виден только с правом на просмотр игроков", () => {
     expect(SECTIONS.find((section) => section.id === "players")?.permission).toBe("players.view");
+  });
+});
+
+describe("покупки в карточке игрока", () => {
+  it("второй шанс — с номером продолжения, товар магазина — своим id; старый сервер без товара — вторым шансом", () => {
+    expect(purchaseLabel({ sku: "gems_60", continueNo: null })).toBe("магазин: gems_60");
+    expect(purchaseLabel({ sku: null, continueNo: 2 })).toBe("второй шанс №2");
+    expect(purchaseLabel({ sku: undefined, continueNo: 1 })).toBe("второй шанс №1");
   });
 });

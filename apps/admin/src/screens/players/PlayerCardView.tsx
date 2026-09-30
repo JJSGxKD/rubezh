@@ -1,5 +1,5 @@
 import { api } from "../../services";
-import { fetchPlayerCard, FUNNEL_MILESTONES, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
+import { fetchPlayerCard, FUNNEL_MILESTONES, purchaseLabel, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
@@ -183,7 +183,7 @@ function Purchases({ card }: { card: PlayerCard }) {
             { title: "Счёт", render: (purchase) => formatDateTime(purchase.invoicedAt) },
             { title: "Статус", render: (purchase) => purchase.status },
             { title: "Режим", render: (purchase) => purchase.mode },
-            { title: "Продолжение", render: (purchase) => purchase.continueNo, align: "right" },
+            { title: "Что", render: (purchase) => purchaseLabel(purchase) },
             { title: "Цена, ⭐", render: (purchase) => formatNumber(purchase.priceStars), align: "right" },
             { title: "Списано, ⭐", render: (purchase) => formatNumber(purchase.chargedStars), align: "right" },
             { title: "Оплачен", render: (purchase) => formatDateTime(purchase.paidAt) },

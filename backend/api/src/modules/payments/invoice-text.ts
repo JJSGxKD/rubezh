@@ -38,3 +38,30 @@ export function continueInvoice(input: ContinueInvoiceInput): ProviderInvoice {
     amount: input.chargedStars,
   };
 }
+
+/** Название и описание товара магазина — их пишет магазин по каталогу. */
+export interface ShopInvoiceText {
+  title: string;
+  description: string;
+}
+
+export interface ShopInvoiceInput {
+  purchaseId: string;
+  priceStars: number;
+  chargedStars: number;
+  mode: PaymentMode;
+  text: ShopInvoiceText;
+}
+
+export function shopInvoice(input: ShopInvoiceInput): ProviderInvoice {
+  if (input.mode === "test") {
+    return {
+      title: `${input.text.title} — тест`,
+      description: `Тестовая оплата: списывается ${input.chargedStars} ⭐ и сразу возвращается. Настоящая цена — ${input.priceStars} ⭐. ${input.text.description}`,
+      payload: input.purchaseId,
+      label: input.text.title,
+      amount: input.chargedStars,
+    };
+  }
+  return { title: input.text.title, description: input.text.description, payload: input.purchaseId, label: input.text.title, amount: input.chargedStars };
+}

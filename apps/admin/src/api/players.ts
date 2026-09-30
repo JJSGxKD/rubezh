@@ -76,8 +76,11 @@ const walletEntrySchema = z.object({
 
 const purchaseSchema = z.object({
   purchaseId: z.string(),
-  runId: z.string(),
-  continueNo: z.number(),
+  /** до магазина (WP10) сервер поля не отдавал — всё было вторым шансом */
+  product: z.string().optional(),
+  runId: z.string().nullable(),
+  continueNo: z.number().nullable(),
+  sku: z.string().nullable().optional(),
   priceStars: z.number(),
   chargedStars: z.number(),
   mode: z.string(),
@@ -108,6 +111,7 @@ export const adjustResultSchema = z.object({ applied: z.number(), balance: z.num
 
 export type PlayerRow = z.infer<typeof playerRowSchema>;
 export type PlayerCard = z.infer<typeof playerCardSchema>;
+export type PlayerPurchase = z.infer<typeof purchaseSchema>;
 export type BanResult = z.infer<typeof banResultSchema>;
 export type AdjustResult = z.infer<typeof adjustResultSchema>;
 
@@ -215,4 +219,10 @@ export function fetchSocial(api: AdminApi, accountId: string): Promise<ApiResult
 
 export function rejectReferral(api: AdminApi, accountId: string, reason: string): Promise<ApiResult<{ rejected: boolean }>> {
   return api.request(`/players/${encodeURIComponent(accountId)}/referral/reject`, { method: "POST", body: { reason }, schema: z.object({ rejected: z.boolean() }) });
+}
+
+/** Что куплено — словами: второй шанс с номером продолжения или товар магазина. */
+export function purchaseLabel(purchase: Pick<PlayerPurchase, "sku" | "continueNo">): string {
+  if (purchase.sku !== null && purchase.sku !== undefined) return `магазин: ${purchase.sku}`;
+  return purchase.continueNo === null ? "—" : `второй шанс №${String(purchase.continueNo)}`;
 }

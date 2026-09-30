@@ -37,11 +37,11 @@ export type CheckoutDecision = { ok: true } | { ok: false; reason: CheckoutRefus
 
 const MESSAGES: Record<CheckoutRefusal, string> = {
   disabled: "Оплата сейчас недоступна.",
-  unknown_invoice: "Счёт не найден — откройте продолжение в игре заново.",
+  unknown_invoice: "Счёт не найден — откройте покупку в игре заново.",
   foreign_user: "Этот счёт выставлен другому игроку.",
-  already_paid: "Это продолжение уже оплачено — вернитесь в игру.",
-  price_mismatch: "Цена изменилась — откройте продолжение в игре заново.",
-  stale_invoice: "Счёт устарел — откройте продолжение в игре заново.",
+  already_paid: "Это уже оплачено — вернитесь в игру.",
+  price_mismatch: "Цена изменилась — откройте покупку в игре заново.",
+  stale_invoice: "Счёт устарел — откройте покупку в игре заново.",
   run_finished: "Забег уже закончен — продолжать нечего.",
   unavailable: "Оплата временно недоступна — попробуйте ещё раз.",
 };

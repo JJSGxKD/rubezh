@@ -70,6 +70,8 @@ enum RunVerdict {
 // второй шанс, прямой покупкой, без донатной валюты.
 enum PurchaseProduct {
   continue_run
+  /// товар магазина из каталога (WP10): что именно — `sku`
+  shop_item
 }
 
 // Режим оплаты (docs/34-stage3-plan.md, Р14). `test` — разработка: игрок
@@ -451,11 +453,16 @@ model Purchase {
   purchaseId        String          @id @map("purchase_id") @db.Uuid
   accountId         String          @map("account_id") @db.Uuid
   product           PurchaseProduct
-  runId             String          @map("run_id") @db.VarChar(64)
+  /// забег второго шанса; у товара магазина — пусто
+  runId             String?         @map("run_id") @db.VarChar(64)
   /// какое по счёту продолжение забега оплачивается, с единицы
-  continueNo        Int             @map("continue_no") @db.SmallInt
+  continueNo        Int?            @map("continue_no") @db.SmallInt
   /// секунда забега, по которой посчитана цена
-  elapsedSec        Float           @map("elapsed_sec")
+  elapsedSec        Float?          @map("elapsed_sec")
+  /// товар каталога магазина; у второго шанса — пусто
+  sku               String?         @db.VarChar(48)
+  /// разовый товар — один на аккаунт: второй счёт ложится на ту же строку
+  onceKey           String?         @unique @map("once_key") @db.VarChar(96)
   /// цена по правилу Р5.1 — её видит игрок
   priceStars        Int             @map("price_stars")
   /// сколько списано на самом деле: в тестовом режиме — одна звезда
@@ -471,10 +478,12 @@ model Purchase {
   /// возврат заказан, но Telegram его ещё не подтвердил — очередь повторяет
   refundRequestedAt DateTime?       @map("refund_requested_at") @db.Timestamptz(3)
   refundedAt        DateTime?       @map("refunded_at") @db.Timestamptz(3)
+  /// товар выдан хозяином товара; у второго шанса выдача — сама оплата
+  fulfilledAt       DateTime?       @map("fulfilled_at") @db.Timestamptz(3)
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
-  run     Run     @relation(fields: [runId], references: [runId], onDelete: Restrict)
+  run     Run?    @relation(fields: [runId], references: [runId], onDelete: Restrict)
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).

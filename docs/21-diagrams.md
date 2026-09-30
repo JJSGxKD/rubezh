@@ -356,10 +356,12 @@ erDiagram
     PURCHASE {
         uuid purchase_id PK "он же payload счёта"
         uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
-        enum product "continue_run"
-        string run_id FK "UK вместе с continue_no"
-        int continue_no "какое продолжение забега, с единицы"
-        float elapsed_sec "секунда забега, по которой посчитана цена"
+        enum product "continue_run|shop_item"
+        string run_id FK "nullable: только у второго шанса; UK вместе с continue_no"
+        int continue_no "nullable: какое продолжение забега, с единицы"
+        float elapsed_sec "nullable: секунда забега, по которой посчитана цена"
+        string sku "nullable: товар каталога магазина — только у shop_item"
+        string once_key UK "nullable: разовый товар — одна строка на товар и аккаунт"
         int price_stars "цена по правилу Р5.1 — её видит игрок"
         int charged_stars "сколько списано: в тестовом режиме — одна звезда"
         enum mode "live|test"
@@ -370,6 +372,7 @@ erDiagram
         enum refund_reason "nullable: test_mode|unused|external"
         datetime refund_requested_at "nullable"
         datetime refunded_at "nullable"
+        datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька"
     }
 
     ACCOUNT_ROLE {
@@ -815,7 +818,11 @@ erDiagram
   подтверждения оплаты ничего не удваивает. Цены две, показанная и
   списанная, и режим оплаты: тестовые звёзды не попадают в отчёт о выручке
   (`34-stage3-plan.md`, Р14). Звёзды — `int`, а не `decimal`: по протоколу
-  Telegram они целые, и точность здесь не теряется.
+  Telegram они целые, и точность здесь не теряется. С магазина (WP10) та же
+  строка — и товар каталога: `sku` вместо забега, это держит проверка базы.
+  Разовый товар — `once_key` с уникальным индексом: второй счёт ложится на
+  ту же строку, и дважды его не купить. Товар выдаёт магазин журналом
+  кошелька ключом покупки, `fulfilled_at` — выдано.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -1299,7 +1306,8 @@ flowchart LR
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
         ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
-        PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение, возвраты, реализовано"]
+        PAY["payments<br/>второй шанс и товары за Stars: цена, счёт,<br/>подтверждение, возвраты, выдача, реализовано"]
+        SHOP["shop<br/>магазин: каталог с фиксированным<br/>составом, цены способа оплаты, реализовано"]
         ADS["ads<br/>реклама: выбор сети, воронка показа,<br/>кулдаун места, реализовано ядро"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
@@ -1418,6 +1426,10 @@ flowchart LR
     RUNS --> REDIS
     PAY --> PG
     PAY -. забег, который продолжают .-> RUNS
+    CADDY -- "/api/v1/shop" --> SHOP
+    SHOP -- "счёт на товар" --> PAY
+    PAY -. "выдача оплаченного: регистр выдачи" .-> SHOP
+    SHOP -- "состав товара ключом покупки" --> WALLET
     RUNS -. сверка продолжений с покупками .-> PAY
     RUNS -. слушатели записанного забега .-> PAY
     ADS -- "ad_network, ad_block, ad_session" --> PG

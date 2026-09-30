@@ -7,13 +7,19 @@
 export type PaymentMode = "live" | "test";
 export type PurchaseStatus = "pending" | "paid" | "refunded";
 export type RefundReason = "test_mode" | "unused" | "external";
+/** Что продаётся: второй шанс в забеге или товар каталога магазина (WP10). */
+export type PurchaseProduct = "continue_run" | "shop_item";
 
 export interface StoredPurchase {
   purchaseId: string;
   accountId: string;
-  runId: string;
-  continueNo: number;
-  elapsedSec: number;
+  product: PurchaseProduct;
+  /** у второго шанса — всегда; у товара магазина — пусто */
+  runId: string | null;
+  continueNo: number | null;
+  elapsedSec: number | null;
+  /** у товара магазина — всегда; у второго шанса — пусто */
+  sku: string | null;
   priceStars: number;
   chargedStars: number;
   mode: PaymentMode;
@@ -24,12 +30,14 @@ export interface StoredPurchase {
   refundReason: RefundReason | null;
   refundRequestedAt: Date | null;
   refundedAt: Date | null;
+  /** товар выдан хозяином товара; у второго шанса выдача — сама оплата */
+  fulfilledAt: Date | null;
 }
 
 /**
- * Продолжение выдано — если оплата была. Возврат его не отзывает: к моменту
+ * Право выдано — если оплата была. Возврат его не отзывает: к моменту
  * возврата продолжение обычно давно потрачено (docs/34-stage3-plan.md, WP5,
- * п. 8).
+ * п. 8), а товар магазина — лёг в кошелёк.
  */
 export function isGranted(purchase: Pick<StoredPurchase, "paidAt">): boolean {
   return purchase.paidAt !== null;
