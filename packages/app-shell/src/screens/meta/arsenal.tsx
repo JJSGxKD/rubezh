@@ -7,7 +7,7 @@ import {
   PageTitle,
   Screen,
   SectionTitle,
-  StubNotice,
+  InfoNotice,
 } from "../../design-system/components";
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/arsenal";
@@ -151,7 +151,7 @@ export function ArsenalScreen(): ReactNode {
       <Screen>
         <ContentColumn>
           <PageTitle>{t("arsenal.title")}</PageTitle>
-          <StubNotice text={t("arsenal.disabled")} />
+          <InfoNotice text={t("arsenal.disabled")} />
         </ContentColumn>
       </Screen>
     );

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CalendarCheck, Check, Diamond } from "lucide-react";
-import { Button, ContentColumn, ErrorState, IconEmblem, Screen, StubNotice, staggerStyle } from "../../design-system/components";
+import { Button, ContentColumn, ErrorState, IconEmblem, InfoNotice, Screen, staggerStyle } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { formatDecimal, formatNumber, t } from "../../i18n";
 import "../../i18n/daily";
@@ -81,7 +81,7 @@ export function DailyScreen(): ReactNode {
           <p className="max-w-[300px] text-sm text-text-muted">{t("daily.text")}</p>
         </div>
 
-        {!dailyAvailable() ? <StubNotice text={t("daily.guest")} /> : null}
+        {!dailyAvailable() ? <InfoNotice text={t("daily.guest")} /> : null}
         {state.status === "loading" && dailyAvailable() ? <p className="text-sm text-text-muted">{t("daily.loading")}</p> : null}
         {state.status === "failed" ? <ErrorState text={t("daily.failed")} onRetry={() => void load()} /> : null}
 

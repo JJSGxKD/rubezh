@@ -1,5 +1,5 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
-import { Check, Lock } from "lucide-react";
+import { Check, Info, Lock } from "lucide-react";
 import { t } from "../../i18n";
 import { uiFeedback } from "../../state/ui-feedback";
 import { Button } from "./Button";
@@ -265,6 +265,20 @@ export function StubNotice(props: { text: string }): ReactNode {
         {t("app.inDevelopment")}
       </Badge>
       <p className="min-w-0 flex-1 basis-48 text-xs text-text-muted">{props.text}</p>
+    </div>
+  );
+}
+
+/**
+ * Пояснение без пометки «в разработке»: пустой список, нужен вход, версия без
+ * связи с сервером. Раздел работает — ему просто нечего показать, и бейдж
+ * «в разработке» здесь врал бы.
+ */
+export function InfoNotice(props: { text: string }): ReactNode {
+  return (
+    <div className="surface-sunken flex items-start gap-2.5 rounded-lg px-3 py-2.5">
+      <Info size={16} aria-hidden="true" className="mt-px shrink-0 text-info" />
+      <p className="min-w-0 flex-1 text-xs text-text-muted">{props.text}</p>
     </div>
   );
 }

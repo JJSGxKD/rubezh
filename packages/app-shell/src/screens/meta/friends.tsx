@@ -11,7 +11,7 @@ import {
   PageTitle,
   Screen,
   SectionTitle,
-  StubNotice,
+  InfoNotice,
 } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/friends";
@@ -77,7 +77,7 @@ export function FriendsScreen(): ReactNode {
         <PageTitle>{t("friends.title")}</PageTitle>
         <Invite withAccount={withAccount} />
 
-        {!withAccount ? <StubNotice text={t("friends.guest")} /> : null}
+        {!withAccount ? <InfoNotice text={t("friends.guest")} /> : null}
         {withAccount && state.status === "loading" ? <p className="mt-4 text-sm text-text-muted">{t("friends.loading")}</p> : null}
         {withAccount && state.status === "failed" ? <ErrorState text={t("friends.failed")} onRetry={() => void load()} /> : null}
         {notice === null ? null : (
@@ -121,7 +121,7 @@ export function FriendsScreen(): ReactNode {
 
             <SectionTitle>{t("friends.list", { count: state.view.friends.length, max: state.view.limits.maxFriends })}</SectionTitle>
             {state.view.friends.length === 0 ? (
-              <StubNotice text={t("friends.empty")} />
+              <InfoNotice text={t("friends.empty")} />
             ) : (
               <div className="grid gap-2">
                 {state.view.friends.map((friend) => {

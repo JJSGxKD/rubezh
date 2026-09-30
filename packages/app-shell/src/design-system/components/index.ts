@@ -19,6 +19,7 @@ export {
   ErrorState,
   IconEmblem,
   Modal,
+  InfoNotice,
   StubNotice,
   StubScreen,
   staggerStyle,
