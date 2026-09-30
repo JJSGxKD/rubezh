@@ -47,21 +47,28 @@ export class NotificationsService {
 
   constructor(@Inject(NOTIFICATIONS_REPOSITORY) private readonly repository: NotificationsRepository) {}
 
-  /** Записать и не ждать; `true` — записано, `false` — повтор события или сбой. */
-  async notify<K extends NotificationKind>(input: NotificationInput<K>): Promise<boolean> {
+  /**
+   * Записать и дождаться исхода — для того, кому он важен: панель показывает
+   * команде, дошло ли сообщение. Бросает на данных не по схеме и сбое базы;
+   * `false` — событие уже записано.
+   */
+  async deliver<K extends NotificationKind>(input: NotificationInput<K>): Promise<boolean> {
     const payload = NOTIFICATION_KINDS[input.kind].safeParse(input.payload);
-    if (!payload.success) {
-      this.logger.warn(JSON.stringify({ module: "notifications", event: "payload_rejected", kind: input.kind }));
-      return false;
-    }
+    if (!payload.success) throw new ValidationError("Данные уведомления не по схеме вида");
+    return await withTimeout(
+      this.repository.insert({ accountId: input.accountId, kind: input.kind, payload: payload.data, dedupeKey: input.dedupeKey.slice(0, 160), at: input.at ?? new Date() }),
+      DB_TIMEOUT_MS,
+      "запись уведомления",
+    );
+  }
+
+  /** Записать, не бросая; `true` — записано, `false` — повтор события или сбой. */
+  async notify<K extends NotificationKind>(input: NotificationInput<K>): Promise<boolean> {
     try {
-      return await withTimeout(
-        this.repository.insert({ accountId: input.accountId, kind: input.kind, payload: payload.data, dedupeKey: input.dedupeKey.slice(0, 160), at: input.at ?? new Date() }),
-        DB_TIMEOUT_MS,
-        "запись уведомления",
-      );
+      return await this.deliver(input);
     } catch (error: unknown) {
-      this.logger.warn(JSON.stringify({ module: "notifications", event: "notify_failed", kind: input.kind, reason: error instanceof Error ? error.message : "unknown" }));
+      const event = error instanceof ValidationError ? "payload_rejected" : "notify_failed";
+      this.logger.warn(JSON.stringify({ module: "notifications", event, kind: input.kind, reason: error instanceof Error ? error.message : "unknown" }));
       return false;
     }
   }

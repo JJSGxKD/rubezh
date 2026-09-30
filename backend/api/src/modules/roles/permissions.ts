@@ -34,6 +34,9 @@ export const PERMISSIONS = [
   "players.view",
   "players.pii.view",
   "players.ban",
+  // Сообщение команды в ленту игрока: ответ на жалобу, объяснение блокировки
+  // или поправки (docs/35-stage4-plan.md Р51)
+  "players.message",
   // Ручное начисление и списание в кошельке игрока — только владельцу: право
   // начислять валюту дороже любого другого права над игроками
   "players.wallet.adjust",
@@ -109,6 +112,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "players.view",
     "players.pii.view",
     "players.ban",
+    "players.message",
     "broadcast.edit",
     "broadcast.send",
     "broadcast.approve",
@@ -143,7 +147,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ],
 
   // Игроки без платёжных данных, жалобы, блокировки, очередь антифрода.
-  moderator: ["players.view", "players.ban"],
+  moderator: ["players.view", "players.ban", "players.message"],
 
   // Привлечение и рассылки; партнёры без выплат.
   marketer: [

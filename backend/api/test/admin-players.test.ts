@@ -18,6 +18,7 @@ import { emptyBalances } from "../src/modules/wallet/wallet-types.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { memoryNotifications } from "./helpers/memory-notifications.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
@@ -84,8 +85,9 @@ function setup() {
     },
   } as unknown as AuthService;
 
-  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions);
-  return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked };
+  const notifications = memoryNotifications();
+  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service);
+  return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository };
 }
 
 async function player(accounts: MemoryAccountRepository, platformUserId = String(500_000 + Math.floor(Math.random() * 1000))) {
@@ -191,5 +193,48 @@ describe("блокировка", () => {
     expect(again.account.banned).toBeNull();
 
     expect(s.rolesRepository.entries.map((entry) => entry.action)).toEqual(["players.ban", "players.unban"]);
+  });
+});
+
+describe("сообщение команды", () => {
+  let s: ReturnType<typeof setup>;
+
+  beforeEach(() => {
+    s = setup();
+  });
+
+  it("ложится в ленту игрока видом team_message и пишется в журнал с текстом", async () => {
+    const target = await player(s.accounts);
+    const result = await s.service.message(owner, target.accountId, "Поправили начисление за вчерашний забег", "panel-key-0001", NOW);
+
+    expect(result).toEqual({ duplicate: false });
+    expect(s.feed.of(target.accountId)).toEqual([{ kind: "team_message", payload: { text: "Поправили начисление за вчерашний забег" } }]);
+    expect(s.rolesRepository.entries.at(-1)).toMatchObject({ action: "players.message", target: target.accountId, after: { text: "Поправили начисление за вчерашний забег" } });
+  });
+
+  it("повтор той же кнопки — ни второй строки в ленте, ни второй записи в журнале", async () => {
+    const target = await player(s.accounts);
+    await s.service.message(owner, target.accountId, "Привет", "panel-key-0002", NOW);
+    const again = await s.service.message(owner, target.accountId, "Привет", "panel-key-0002", NOW);
+    const other = await s.service.message(owner, target.accountId, "Привет", "panel-key-0003", NOW);
+
+    expect(again).toEqual({ duplicate: true });
+    expect(other).toEqual({ duplicate: false });
+    expect(s.feed.of(target.accountId)).toHaveLength(2);
+    expect(s.rolesRepository.entries.filter((entry) => entry.action === "players.message")).toHaveLength(2);
+  });
+
+  it("модератор может, без права — 403, несуществующему — 404, и в ленту ничего не попадает", async () => {
+    const target = await player(s.accounts);
+    const moderator = await player(s.accounts, "600003");
+    await s.rolesRepository.grant(moderator.accountId, "moderator", null);
+    const asModerator: AccountRef = { accountId: moderator.accountId, platform: "telegram", platformUserId: "600003" };
+    const nobody: AccountRef = { accountId: randomUUID(), platform: "telegram", platformUserId: "1" };
+
+    await expect(s.service.message(nobody, target.accountId, "Нельзя", "panel-key-0004", NOW)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(s.service.message(owner, randomUUID(), "Некому", "panel-key-0005", NOW)).rejects.toBeInstanceOf(AccountNotFoundError);
+    expect(s.feed.of(target.accountId)).toEqual([]);
+
+    expect(await s.service.message(asModerator, target.accountId, "Жалобу рассмотрели", "panel-key-0006", NOW)).toEqual({ duplicate: false });
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Gift, PackageOpen, Sparkles, UserPlus } from "lucide-react";
+import { Gift, Megaphone, PackageOpen, Sparkles, UserPlus } from "lucide-react";
 import { Button, Card, ContentColumn, ErrorState, Screen, StubNotice } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
@@ -10,7 +10,8 @@ import { track } from "../../state/shell";
 
 /**
  * Лента уведомлений (docs/35-stage4-plan.md Р51, §3.17): всё, что случилось с
- * игроком, — заявка и подарок друга, редкая добыча, возврат бустов. Открыл
+ * игроком, — заявка и подарок друга, редкая добыча, возврат бустов,
+ * сообщение команды. Открыл
  * ленту — увиденное прочитано; пришедшее, пока лента открыта, останется
  * новым. Вид, которого экран не знает, не показывается: сервер новее клиента.
  */
@@ -71,6 +72,8 @@ export function NotificationsScreen(): ReactNode {
 
 interface Described {
   icon: ReactNode;
+  /** заголовок над текстом — у сообщения команды, чтобы было видно, от кого оно */
+  title?: string;
   text: string;
   /** куда ведёт касание; `null` — это просто новость */
   target: ScreenId | null;
@@ -91,6 +94,8 @@ function describe(item: NotificationItem): Described | null {
       };
     case "boosts_refunded":
       return { icon: <PackageOpen size={20} />, text: refundText(item.data), target: null };
+    case "team_message":
+      return typeof item.data.text === "string" ? { icon: <Megaphone size={20} />, title: t("notification.team_message"), text: item.data.text, target: null } : null;
     default:
       return null;
   }
@@ -100,8 +105,8 @@ function refundText(data: Record<string, unknown>): string {
   const coins = typeof data.coins === "number" ? data.coins : 0;
   const gems = typeof data.gems === "number" ? data.gems : 0;
   const returned = [
-    coins > 0 ? t("notification.boosts_refunded.coins", { amount: formatNumber(coins) }) : null,
-    gems > 0 ? t("notification.boosts_refunded.gems", { amount: formatNumber(gems) }) : null,
+    coins > 0 ? t("notification.boosts_refunded.coins", { amount: formatNumber(coins), n: coins }) : null,
+    gems > 0 ? t("notification.boosts_refunded.gems", { amount: formatNumber(gems), n: gems }) : null,
   ].filter((part): part is string => part !== null);
   return returned.length === 0 ? t("notification.boosts_refunded") : t("notification.boosts_refunded.with", { returned: returned.join(t("notification.and")) });
 }
@@ -124,7 +129,9 @@ function NotificationRow(props: { item: NotificationItem; index: number }): Reac
           {described.icon}
         </span>
         <div className="min-w-0 flex-1">
-          <p className={`text-sm ${props.item.read ? "text-text-muted" : "text-text"}`}>{described.text}</p>
+          {described.title === undefined ? null : <p className="text-xs font-semibold text-accent">{described.title}</p>}
+          {/* Переносы строк сообщения команды — как их набрали в панели. */}
+          <p className={`whitespace-pre-line break-words text-sm ${props.item.read ? "text-text-muted" : "text-text"}`}>{described.text}</p>
           <p className="mt-0.5 text-xs text-text-muted">{formatWhen(props.item.createdAt, Date.now())}</p>
         </div>
       </div>

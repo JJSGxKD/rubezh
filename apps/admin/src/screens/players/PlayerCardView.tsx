@@ -6,7 +6,7 @@ import { useSession } from "../../state/use-session";
 import { Badge, Button, DataTable, ErrorNotice, KeyValue, Loading, Panel } from "../../ui/kit";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
-import { BanPanel, WalletAdjustPanel } from "./PlayerActions";
+import { BanPanel, MessagePanel, WalletAdjustPanel } from "./PlayerActions";
 import { SocialPanel } from "./SocialPanel";
 
 /**
@@ -35,6 +35,7 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
             <Wallet card={state.data} />
             <SocialPanel accountId={accountId} />
             {can(view, "players.ban") ? <BanPanel card={state.data} onChanged={reload} /> : null}
+            {can(view, "players.message") ? <MessagePanel card={state.data} /> : null}
             {can(view, "players.wallet.adjust") ? <WalletAdjustPanel card={state.data} onChanged={reload} /> : null}
           </div>
           <Purchases card={state.data} />

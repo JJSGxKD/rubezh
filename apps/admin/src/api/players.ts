@@ -152,6 +152,22 @@ export function adjustWallet(api: AdminApi, accountId: string, adjust: WalletAdj
   return api.request(`/players/${encodeURIComponent(accountId)}/wallet/adjust`, { method: "POST", body: adjust, schema: adjustResultSchema });
 }
 
+/** Потолок сообщения команды — тот же, что `TEAM_MESSAGE_MAX` на сервере. */
+export const TEAM_MESSAGE_MAX = 500;
+
+export const messageResultSchema = z.object({ duplicate: z.boolean() });
+
+/** Сообщение команды в ленту игрока; ключ задаёт панель — повтор кнопки второй строки не заведёт. */
+export function messagePlayer(api: AdminApi, accountId: string, message: { text: string; idempotencyKey: string }): Promise<ApiResult<z.infer<typeof messageResultSchema>>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/message`, { method: "POST", body: message, schema: messageResultSchema });
+}
+
+/** Проверка сообщения до отправки — те же границы, что у сервера; `null` — годно. */
+export function teamMessageProblem(text: string, max = TEAM_MESSAGE_MAX): string | null {
+  const length = text.trim().length;
+  return length < 3 || length > max ? `Сообщение — от 3 до ${String(max)} символов` : null;
+}
+
 /**
  * Потолок одной операции — тот же, что `WALLET_MAX_OPERATION` на сервере.
  * Разойдутся — сервер отклонит, и панель покажет его текст: решает он.

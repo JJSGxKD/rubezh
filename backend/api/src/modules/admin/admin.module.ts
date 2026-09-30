@@ -18,6 +18,7 @@ import { ExportModule } from "../export/export.module.js";
 import { FunnelModule } from "../funnel/funnel.module.js";
 import { FxModule } from "../fx/fx.module.js";
 import { MessagingModule } from "../messaging/messaging.module.js";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
 import { ProgressModule } from "../progress/progress.module.js";
 import { RunsModule } from "../runs/runs.module.js";
@@ -47,7 +48,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,

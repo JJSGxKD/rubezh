@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PLATFORM_IDS } from "../../../platforms/ports/platform.js";
+import { TEAM_MESSAGE_MAX } from "../../notifications/notification-kinds.js";
 import { isRole, ROLES } from "../../roles/permissions.js";
 import { WALLET_MAX_OPERATION } from "../../wallet/wallet-limits.js";
 import { WALLET_RESOURCES } from "../../wallet/wallet-types.js";
@@ -37,6 +38,12 @@ export const adminWalletAdjustSchema = z.object({
     .refine((value) => value !== 0, { message: "изменение не может быть нулевым" }),
   note: z.string().trim().min(3).max(200),
   // Ключ задаёт панель — повторное нажатие той же кнопки не начислит дважды.
+  idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+});
+
+/** Сообщение команды в ленту игрока: ключ кнопки — повтор после обрыва сети второй строки не заведёт. */
+export const playerMessageSchema = z.object({
+  text: z.string().trim().min(3).max(TEAM_MESSAGE_MAX),
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
 });
 
