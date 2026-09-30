@@ -1559,5 +1559,7 @@ model AdSession {
 
   // Выбор сети и кулдаун — по сессиям игрока в месте за последние сутки.
   @@index([accountId, place, createdAt])
+  // Воронка в панели — все показы за сутки, неделю или месяц.
+  @@index([createdAt])
   @@map("ad_session")
 }

@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import type { AdSuccess } from "../src/modules/ads/ads-rules.js";
+import { PrismaAdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { PrismaAdsRepository, type AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { claimVerdict } from "../src/modules/ads/ads.service.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
@@ -161,6 +162,38 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     await expect(prisma.$executeRaw`
       INSERT INTO ad_block (block_id, network_key, place, external_id, devices, created_at, updated_at)
       VALUES (${randomUUID()}::uuid, ${network}, 'task', 'ext-tv', ARRAY['tv']::varchar(16)[], now(), now())`).rejects.toThrow();
+  });
+
+  it("каталог панели: блок с площадками и устройствами заводится и правится, блок чужой сети — нет, воронка — за окно", async () => {
+    const catalog = new PrismaAdsCatalogRepository(prisma);
+    const actor = await account();
+    expect((await catalog.networks()).find((row) => row.networkKey === network)).toEqual({ networkKey: network, name: "Проверка", active: true, priority: 5 });
+    expect(await catalog.updateNetwork({ networkKey: network, active: true, priority: 6 }, NOON)).toBe(true);
+    expect(await catalog.updateNetwork({ networkKey: "it_missing", active: true, priority: 6 }, NOON)).toBe(false);
+
+    const created = await catalog.insertBlock(
+      { networkKey: network, place: "run_double", externalId: "ext-panel", success: "click", active: true, platforms: ["telegram", "vk"], devices: ["android", "ios"] },
+      actor,
+      NOON,
+    );
+    expect(created).not.toBeNull();
+    expect(await catalog.insertBlock({ networkKey: "it_missing", place: "task", externalId: "x", success: "view", active: true, platforms: [], devices: [] }, actor, NOON)).toBeNull();
+    if (created === null) throw new Error("блок не заведён");
+    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual(created);
+
+    const edited = { ...created, externalId: "ext-panel-2", active: false, platforms: [], devices: ["desktop" as const] };
+    expect(await catalog.updateBlock(edited, actor, NOON)).toBe(true);
+    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual(edited);
+    expect(await catalog.updateBlock({ ...edited, blockId: randomUUID() }, actor, NOON)).toBe(false);
+
+    // Окно воронки — в будущем, куда не пишет ни один другой тест.
+    const window = new Date(Date.UTC(2031, 0, 1, 9));
+    const shown = await session(actor, "view", window);
+    await session(actor, "click", at(window, 1));
+    await repository.report(shown, actor, { kind: "completed" }, at(window, 2));
+    const rows = (await catalog.funnel(window, at(window, 60))).filter((row) => row.networkKey === network);
+    expect(rows).toEqual([{ networkKey: network, place: "wheel_spin", offered: 2, shown: 1, clicked: 0, completed: 1, claimed: 0, failed: 0 }]);
+    expect((await catalog.funnel(at(window, 60), at(window, 120))).filter((row) => row.networkKey === network)).toEqual([]);
   });
 
   it("удалённый аккаунт уносит свои сессии показа", async () => {
