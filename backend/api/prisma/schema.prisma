@@ -795,6 +795,10 @@ model RunReward {
   levelAfter    Int      @map("level_after")
   skipped       String?  @db.VarChar(32)
   createdAt     DateTime @map("created_at") @db.Timestamptz(3)
+  /// сессия показа, за которую удвоили монеты (WP12): одна на забег
+  doubleSessionId String?   @unique @map("double_session_id") @db.VarChar(32)
+  /// `null` — удвоение не начислено: повтор той же сессией дожмёт
+  doubledAt       DateTime? @map("doubled_at") @db.Timestamptz(3)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
