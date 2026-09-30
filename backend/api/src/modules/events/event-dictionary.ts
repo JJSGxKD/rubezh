@@ -162,6 +162,12 @@ export const EVENT_DICTIONARY = {
   // §7): бесплатная крутка или за рекламу, какой сектор выпал и что в нём.
   // Что легло на баланс — журнал кошелька, причина wheel_reward.
   wheel_spun: { version: 1, payload: payload({ source: z.enum(["free", "ad"]), sector: count, reward: id, amount: count }) },
+  // Забрал награду задания или достижения (docs/35-stage4-plan.md WP13): какие
+  // цели доходят до награды и за какой срок. Прогресс и забор — таблица
+  // task_progress, начисленное — журнал кошелька (task_reward,
+  // achievement_reward); событие шлёт клиент после ответа сервера.
+  task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id }) },
+  achievement_unlocked: { version: 1, payload: payload({ achievement: id, kind: id }) },
   // Открыл журнал обновлений (docs/35-stage4-plan.md WP31): доходят ли игроки
   // до него после выхода версии и откуда — из меню или из уведомления. Сколько
   // версий было новыми — чтобы отличить «пришёл за новостью» от «просто листал».

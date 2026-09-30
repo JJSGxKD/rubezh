@@ -198,6 +198,8 @@ model Account {
   dailyReward      DailyReward?
   changelogSeen    ChangelogSeen?
   wheelSpins       WheelSpin[]
+  taskProgress     TaskProgress[]
+  taskRuns         TaskRun[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1362,4 +1364,77 @@ model WheelSpin {
   // Крутки игрока — удаление аккаунта и кулдаун крутки за рекламу (WP12).
   @@index([accountId, createdAt])
   @@map("wheel_spin")
+}
+
+// Задания и достижения (WP13)
+
+/// Срок цели: сутки и неделя по Москве, достижения — навсегда.
+enum TaskPeriod {
+  daily
+  weekly
+  achievement
+}
+
+/// Каталог заданий и достижений (docs/35-stage4-plan.md Р52, WP13): правится
+/// из панели без релиза. Вид цели — строкой, а не перечислением базы: новый
+/// вид приходит кодом (`tasks/task-rules.ts`), без миграции. Строку не
+/// удаляют, а выключают — на неё ссылается прогресс.
+model TaskDef {
+  taskId     String     @id @map("task_id") @db.VarChar(48)
+  period     TaskPeriod
+  kind       String     @db.VarChar(32)
+  target     Int
+  /// `null` — текст по виду цели у клиента, со склонением числа
+  title      String?    @db.VarChar(120)
+  coins      Int        @default(0)
+  gems       Int        @default(0)
+  /// обычные осколки
+  shards     Int        @default(0)
+  /// очки батл-пасса (WP26)
+  passPoints Int        @default(0) @map("pass_points")
+  sort       Int        @default(0)
+  active     Boolean    @default(true)
+  createdAt  DateTime   @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
+  /// `null` — строка из миграции, человек её не правил
+  updatedBy  String?    @map("updated_by") @db.Uuid
+
+  progress TaskProgress[]
+
+  @@map("task_def")
+}
+
+/// Прогресс цели за срок. Начало срока — игровые сутки, понедельник недели
+/// или общий день достижений: новый срок — новая строка, сбрасывать нечего.
+model TaskProgress {
+  accountId   String    @map("account_id") @db.Uuid
+  taskId      String    @map("task_id") @db.VarChar(48)
+  periodStart DateTime  @map("period_start") @db.Date
+  /// не больше цели
+  value       Int
+  /// цель на момент последнего движения
+  target      Int
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  task    TaskDef @relation(fields: [taskId], references: [taskId])
+
+  @@id([accountId, taskId, periodStart])
+  @@map("task_progress")
+}
+
+/// Забег, засчитанный заданиям: повтор события прогресс не удвоит.
+model TaskRun {
+  runId     String   @id @map("run_id") @db.VarChar(64)
+  accountId String   @map("account_id") @db.Uuid
+  appliedAt DateTime @map("applied_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Удаление аккаунта уносит его забеги.
+  @@index([accountId])
+  @@map("task_run")
 }

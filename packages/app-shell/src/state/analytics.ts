@@ -37,6 +37,8 @@ export const ANALYTICS_EVENTS = [
   "notification_opened",
   "daily_reward_claimed",
   "wheel_spun",
+  "task_completed",
+  "achievement_unlocked",
   "changelog_opened",
   "client_error",
 ] as const;
