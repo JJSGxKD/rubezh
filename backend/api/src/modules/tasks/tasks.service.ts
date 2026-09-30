@@ -1,10 +1,11 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
+import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
-import { TaskNotDoneError, TaskNotFoundError } from "./tasks-errors.js";
-import { TASK_KINDS, countsForTasks, rewardReason, type TaskDef, type TaskKind, type TaskPeriod } from "./task-rules.js";
+import { TaskNotDoneError, TaskNotFoundError, TaskShapeLockedError } from "./tasks-errors.js";
+import { TASK_KINDS, TASK_KIND_IDS, TASK_PERIODS, countsForTasks, rewardReason, type TaskDef, type TaskKind, type TaskPeriod } from "./task-rules.js";
 import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepository } from "./tasks.repository.js";
 
 /**
@@ -36,6 +37,12 @@ export interface TaskView {
   passPoints: number;
 }
 
+export interface TaskCatalogView {
+  tasks: TaskDef[];
+  kinds: readonly TaskKind[];
+  periods: readonly TaskPeriod[];
+}
+
 export interface TaskClaimResult {
   claimed: boolean;
   /** сколько легло на баланс; меньше награды — упёрлось в суточный потолок */
@@ -59,6 +66,7 @@ export class TasksService implements OnModuleInit {
     @Inject(TASKS_REPOSITORY) private readonly repository: TasksRepository,
     private readonly wallet: WalletService,
     private readonly runs: RunsHooks,
+    private readonly roles: RolesService,
   ) {}
 
   onModuleInit(): void {
@@ -105,9 +113,31 @@ export class TasksService implements OnModuleInit {
     return progress.filter((row) => row.done && !row.claimed).length;
   }
 
-  /** Весь каталог, и выключенное: для панели. */
-  async catalog(): Promise<TaskDef[]> {
-    return await this.db(this.repository.catalog());
+  /** Весь каталог, и выключенное, с видами и сроками для формы — панели. */
+  async catalog(actor: AccountRef): Promise<TaskCatalogView> {
+    await this.roles.require(actor, "tasks.edit");
+    return { tasks: await this.db(this.repository.catalog()), kinds: TASK_KIND_IDS, periods: TASK_PERIODS };
+  }
+
+  /**
+   * Строка каталога из панели: новый id — новое задание, известный — правка
+   * цели, награды, текста, места и включённости. Срок и вид после создания
+   * не меняются. Каждое изменение — в аудит.
+   */
+  async save(actor: AccountRef, task: TaskDef, at = new Date()): Promise<TaskDef> {
+    await this.roles.require(actor, "tasks.edit");
+    const before = (await this.db(this.repository.catalog())).find((candidate) => candidate.taskId === task.taskId) ?? null;
+    if (before === null) {
+      if (!(await this.db(this.repository.insert(task, actor.accountId, at)))) throw new TaskShapeLockedError();
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "tasks.create", target: task.taskId, after: task });
+    } else {
+      if (before.period !== task.period || before.kind !== task.kind) throw new TaskShapeLockedError();
+      if (!(await this.db(this.repository.update(task, actor.accountId, at)))) throw new TaskNotFoundError();
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "tasks.update", target: task.taskId, before, after: task });
+    }
+    this.forgetCatalog();
+    this.logger.log(JSON.stringify({ module: "tasks", event: before === null ? "task_created" : "task_updated", taskId: task.taskId, actor: actor.accountId }));
+    return task;
   }
 
   /**

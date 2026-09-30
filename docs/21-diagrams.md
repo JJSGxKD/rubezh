@@ -1431,6 +1431,7 @@ flowchart LR
     RUNS -. "записанный забег, RunsHooks" .-> TASKS
     TASKS -. "награда ключом задания и срока" .-> WALLET
     BADGES -. "награды к выдаче" .-> TASKS
+    ADMINAPI -. "каталог заданий" .-> TASKS
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET

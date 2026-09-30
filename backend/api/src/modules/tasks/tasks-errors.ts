@@ -13,3 +13,10 @@ export class TaskNotDoneError extends DomainError {
     super("task_not_done", "Задание ещё не выполнено", 409);
   }
 }
+
+/** Срок и вид задания после создания не меняются: прогресс игроков записан по ним. */
+export class TaskShapeLockedError extends DomainError {
+  constructor() {
+    super("task_shape_locked", "Срок и вид задания не меняются — заведите новое задание и выключите это", 409);
+  }
+}
