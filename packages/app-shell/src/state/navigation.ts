@@ -33,7 +33,8 @@ export type ScreenId =
   | "guide"
   | "feedback"
   | "soundLab"
-  | "about";
+  | "about"
+  | "testNotice";
 
 /** Корни разделов нижней панели: переключение вкладки сбрасывает стек. */
 export const TAB_ROOTS = ["shop", "arsenal", "lobby", "tasks", "rating", "friends"] as const;

@@ -21,6 +21,7 @@ import { useNavigation } from "../state/navigation";
 import { useToolsAccess } from "../state/tools";
 import { useSettings, type VolumeKey } from "../state/settings";
 import { useShell } from "../state/shell";
+import { TestNoticeText } from "./meta/test-notice-text";
 
 /**
  * Настройки (docs/27-design-system-and-app-shell.md §6).
@@ -247,7 +248,11 @@ export function TestersScreen(): ReactNode {
   );
 }
 
-/** «Об игре»: версия, сборка и лицензии — атрибуция ассетов обязательна. */
+/**
+ * «Об игре»: версия, сборка, предупреждение о тесте — его перечитывают, когда
+ * вспоминают про вайп (docs/35-stage4-plan.md WP33), — и лицензии: атрибуция
+ * ассетов обязательна.
+ */
 export function AboutScreen(): ReactNode {
   const navigation = useNavigation();
   const build = useShell((state) => state.build);
@@ -261,6 +266,9 @@ export function AboutScreen(): ReactNode {
           <ListItem title={t("about.content")} value={CONTENT_HASH} />
           <ListItem title={t("diagnostics.install")} value={installId.slice(0, 8)} />
         </ListGroup>
+
+        <SectionTitle>{t("testNotice.title")}</SectionTitle>
+        <TestNoticeText />
 
         <SectionTitle>{t("about.licenses")}</SectionTitle>
         <p className="text-xs text-text-muted">{t("about.licenses.text")}</p>

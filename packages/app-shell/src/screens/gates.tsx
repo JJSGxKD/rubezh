@@ -129,7 +129,10 @@ export function FirstRunScreen(props: { onAccept(): void }): ReactNode {
           <ShieldCheck size={24} />
         </IconEmblem>
         <h1 className="font-display text-xl font-bold text-text">{t("gate.firstRun.title")}</h1>
-        <p className="max-w-[340px] text-sm text-text-muted">{t("gate.firstRun.text")}</p>
+        {/* Предупреждение о тесте — первым: новичок видит его раньше первого
+            забега, где уже можно купить второй шанс (docs/35-stage4-plan.md WP33). */}
+        <p className="max-w-[340px] text-sm font-semibold text-text">{t("gate.firstRun.text")}</p>
+        <p className="max-w-[340px] text-sm text-text-muted">{t("gate.firstRun.data")}</p>
         <Button size="l" block glow onClick={props.onAccept}>
           {t("gate.firstRun.action")}
         </Button>
