@@ -158,6 +158,10 @@ export const EVENT_DICTIONARY = {
   // какая по счёту неделя — удерживает ли награда. Сколько легло монет —
   // журнал кошелька, причина daily_reward.
   daily_reward_claimed: { version: 1, payload: payload({ day: count, week: count }) },
+  // Крутанул колесо (docs/35-stage4-plan.md WP13, 07-monetization-and-ads.md
+  // §7): бесплатная крутка или за рекламу, какой сектор выпал и что в нём.
+  // Что легло на баланс — журнал кошелька, причина wheel_reward.
+  wheel_spun: { version: 1, payload: payload({ source: z.enum(["free", "ad"]), sector: count, reward: id, amount: count }) },
   // Открыл журнал обновлений (docs/35-stage4-plan.md WP31): доходят ли игроки
   // до него после выхода версии и откуда — из меню или из уведомления. Сколько
   // версий было новыми — чтобы отличить «пришёл за новостью» от «просто листал».
