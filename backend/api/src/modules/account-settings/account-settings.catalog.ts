@@ -41,6 +41,10 @@ export const ACCOUNT_SETTINGS: Record<string, AccountSettingSpec> = {
   "combat.telegraphs": { schema: z.boolean(), merge: "latest" },
   /** цифры урона */
   "combat.damageNumbers": { schema: z.boolean(), merge: "latest" },
+  /** дублировать в бота заявку в друзья, подарок друга, сообщение команды (WP28); умолчания — `notifications-bot/bot-notify-rules.ts` */
+  "bot.friendRequest": { schema: z.boolean(), merge: "latest" },
+  "bot.friendGift": { schema: z.boolean(), merge: "latest" },
+  "bot.teamMessage": { schema: z.boolean(), merge: "latest" },
 };
 
 export const ACCOUNT_SETTING_KEYS = Object.keys(ACCOUNT_SETTINGS);

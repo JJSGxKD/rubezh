@@ -26,7 +26,7 @@ export const MILESTONES = [
 export type Milestone = (typeof MILESTONES)[number];
 
 /** Откуда пришёл — вид первого касания (`acquisition.first_start_kind`). */
-export const START_KINDS = ["organic", "click", "invite", "telegram_affiliate", "friend", "unknown"] as const;
+export const START_KINDS = ["organic", "click", "invite", "telegram_affiliate", "friend", "notification", "unknown"] as const;
 
 const DAYS = z.number().int().min(1).max(3650);
 

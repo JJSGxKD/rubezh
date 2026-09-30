@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import type { AccountRef } from "../roles/roles.service.js";
-import { ACCOUNT_SETTINGS_VERSION, mergeSettings, readStored, type AccountSettingValues, type IncomingSetting } from "./account-settings.catalog.js";
+import { ACCOUNT_SETTINGS_VERSION, mergeSettings, readStored, type AccountSettingValue, type AccountSettingValues, type IncomingSetting } from "./account-settings.catalog.js";
 import { ACCOUNT_SETTINGS_REPOSITORY, type AccountSettingsRepository } from "./account-settings.repository.js";
 
 /**
@@ -28,6 +28,12 @@ export class AccountSettingsService {
   async get(account: AccountRef): Promise<AccountSettingsView> {
     const stored = await withTimeout(this.repository.get(account.accountId), DB_TIMEOUT_MS, "настройки аккаунта");
     return { version: stored?.version ?? ACCOUNT_SETTINGS_VERSION, values: readStored(stored?.values) };
+  }
+
+  /** Значение ключа для решения на сервере; `undefined` — игрок не выбирал, решает умолчание вызывающего. */
+  async valueOf(accountId: string, key: string): Promise<AccountSettingValue | undefined> {
+    const stored = await withTimeout(this.repository.get(accountId), DB_TIMEOUT_MS, "настройки аккаунта");
+    return readStored(stored?.values)[key]?.value;
   }
 
   async merge(account: AccountRef, input: { version: number; values: Record<string, IncomingSetting> }, nowMs = Date.now()): Promise<AccountSettingsView & { ignored: string[] }> {

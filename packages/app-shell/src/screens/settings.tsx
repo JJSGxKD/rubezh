@@ -10,6 +10,9 @@ import {
 import { audio } from "../audio";
 import { Slider } from "../design-system/components/Slider";
 import { t } from "../i18n";
+import "../i18n/bot";
+import { noteAccountSetting } from "../state/account-settings";
+import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
 import { useDiagnostics } from "../state/diagnostics";
 import { useGraphics } from "../state/graphics";
 import { useHints } from "../state/hints";
@@ -32,6 +35,9 @@ export function SettingsScreen(): ReactNode {
   const diagnostics = useDiagnostics((state) => state.enabled);
   const graphics = useGraphics();
   const supportsFullscreen = useShell((state) => state.adapter.ui.supportsFullscreen);
+  // Бот пишет только аккаунту и только там, где у площадки он есть.
+  const botAvailable = useShell((state) => state.capabilities.auth !== undefined && state.capabilities.botUrl !== "");
+  const bot = useBotNotifications();
   const [hintsReset, setHintsReset] = useState(false);
 
   return (
@@ -117,6 +123,26 @@ export function SettingsScreen(): ReactNode {
             }}
           />
         </ListGroup>
+
+        {botAvailable ? (
+          <>
+            {/* Что дублировать в бота — за аккаунтом (Р51): решает сервер, когда
+                пишет. Лента в игре получает всё независимо от этого выбора. */}
+            <SectionTitle>{t("settings.bot")}</SectionTitle>
+            <ListGroup>
+              {BOT_NOTIFY_KEYS.map((key) => (
+                <ListItem
+                  key={key}
+                  title={t(`settings.bot.${key}`)}
+                  {...(key === "friendGift" ? { hint: t("settings.bot.friendGift.hint") } : {})}
+                  toggle={{ checked: bot[key], onChange: () => noteAccountSetting(BOT_NOTIFY_ACCOUNT_KEYS[key], bot.toggle(key)) }}
+                />
+              ))}
+            </ListGroup>
+            <p className="mt-2 text-xs text-text-muted">{t("settings.bot.note")}</p>
+            <p className="mt-1 text-xs text-text-muted">{t("settings.scope.account")}</p>
+          </>
+        ) : null}
 
         <SectionTitle>{t("settings.testers")}</SectionTitle>
         <ListGroup>

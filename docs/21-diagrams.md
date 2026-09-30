@@ -106,7 +106,7 @@ erDiagram
         uuid account_id FK
         enum platform
         enum place "miniapp|web|channel: channel — /start бота"
-        enum start_kind "organic|click|invite|telegram_affiliate|friend|unknown"
+        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|unknown"
         string start_param "nullable: из подписанного initData"
         string start_ref "nullable: код клика, id партнёра Telegram"
         string client_platform "nullable: подсказка клиента"
@@ -273,11 +273,13 @@ erDiagram
     NOTIFICATION {
         uuid notification_id PK
         uuid account_id FK
-        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded"
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message"
         json payload "данные вида, по его схеме"
         string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
         datetime created_at
         datetime read_at "nullable: не прочитано"
+        enum bot_outcome "nullable: sent|blocked|failed — дубль в бота"
+        datetime bot_at "nullable"
     }
 
     RUN_REWARD {
@@ -545,7 +547,10 @@ erDiagram
   не ждут записи, панель — ждёт, чтобы показать команде исход; ключ события
   уникален у аккаунта, поэтому повтор задания или запроса второй строки не
   заводит. Имя другого игрока — копией на момент события. Хранится 90 дней:
-  чистка — пачками под распределённым локом.
+  чистка — пачками под распределённым локом. `bot_outcome` — чем кончился
+  дубль в бота: доставлено, игрок заблокировал бота, площадка отказала;
+  пишется один раз, повтор задания его не перепишет. Пусто — в бота не
+  уходило: вид не дублируется, игрок выключил его или писать нельзя.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1147,6 +1152,7 @@ flowchart LR
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
         NOTIF["notifications<br/>лента уведомлений: пишут модули,<br/>чистка старше 90 дней, реализовано"]
+        NOTIFBOT["notifications-bot<br/>дубль в бота по выбору игрока:<br/>очередь, потолок вида, реализовано"]
         BADGES["badges<br/>знаки меню одним ответом:<br/>счётчики соседей, реализовано"]
         HISTORY["history<br/>история имущества: чтение<br/>журналов кошелька, предметов<br/>и покупок, реализовано"]
     end
@@ -1275,6 +1281,11 @@ flowchart LR
     ITEMS -. "редкая добыча" .-> NOTIF
     BOOSTS -. "возврат бустов" .-> NOTIF
     ADMINAPI -. "сообщение команды" .-> NOTIF
+    NOTIF -. "новая строка, onCreated" .-> NOTIFBOT
+    NOTIFBOT -- "задания, окно вида" --> REDIS
+    NOTIFBOT -- "можно ли писать: account_messaging" --> PG
+    NOTIFBOT -. "выбор игрока" .-> ACCSET
+    NOTIFBOT -. "порт Messengers: sendMessage" .-> TGADP
     CADDY -- "/api/v1/me/badges" --> BADGES
     BADGES -. "новые предметы" .-> ITEMS
     BADGES -. "подарки и заявки" .-> FRIENDS

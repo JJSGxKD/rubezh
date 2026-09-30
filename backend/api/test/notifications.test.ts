@@ -38,6 +38,42 @@ describe("запись уведомления", () => {
   });
 });
 
+describe("слушатели новой строки", () => {
+  it("зовутся один раз на новую строку и молчат на повтор события", async () => {
+    const { service } = memoryNotifications();
+    const heard: string[] = [];
+    service.onCreated("test", async (created) => {
+      heard.push(`${created.kind}:${created.accountId}`);
+    });
+
+    await service.deliver({ accountId: ME, kind: "team_message", payload: { text: "Привет" }, dedupeKey: "team:1" });
+    await service.deliver({ accountId: ME, kind: "team_message", payload: { text: "Привет" }, dedupeKey: "team:1" });
+
+    expect(heard).toEqual([`team_message:${ME}`]);
+  });
+
+  it("сбой слушателя не отменяет запись", async () => {
+    const { service, repository } = memoryNotifications();
+    service.onCreated("broken", async () => Promise.reject(new Error("очередь недоступна")));
+
+    expect(await service.notify({ accountId: ME, kind: "friend_request", payload: FRIEND, dedupeKey: "req:1" })).toBe(true);
+    expect(repository.of(ME)).toHaveLength(1);
+  });
+
+  it("исход дубля в бота пишется один раз: повтор задания прежний исход не перепишет", async () => {
+    const { service, repository } = memoryNotifications();
+    let id = "";
+    service.onCreated("id", async (created) => {
+      id = created.notificationId;
+    });
+    await service.deliver({ accountId: ME, kind: "friend_request", payload: FRIEND, dedupeKey: "req:2" });
+
+    await service.markBot(id, "sent", new Date(1_000));
+    await service.markBot(id, "failed", new Date(2_000));
+    expect(repository.rows.find((row) => row.notificationId === id)?.bot).toEqual({ outcome: "sent", at: new Date(1_000) });
+  });
+});
+
 describe("лента", () => {
   async function seeded(count: number) {
     const notices = memoryNotifications();

@@ -31,9 +31,14 @@ export interface FeedCursor {
 
 export const NOTIFICATIONS_REPOSITORY = Symbol("NOTIFICATIONS_REPOSITORY");
 
+/** Чем кончился дубль уведомления в бота — перечисление `NotificationBotOutcome` в схеме. */
+export type BotOutcome = "sent" | "blocked" | "failed";
+
 export interface NotificationsRepository {
-  /** `false` — событие уже записано: повтор ничего не добавляет */
-  insert(notification: NewNotification): Promise<boolean>;
+  /** id записанного; `null` — событие уже записано: повтор ничего не добавляет */
+  insert(notification: NewNotification): Promise<string | null>;
+  /** исход дубля в бота — один раз: повтор задания очереди прежний исход не перепишет */
+  markBot(notificationId: string, outcome: BotOutcome, at: Date): Promise<void>;
   feed(accountId: string, cursor: FeedCursor | null, limit: number): Promise<StoredNotification[]>;
   unread(accountId: string): Promise<number>;
   /** прочитать всё не новее `upTo`; `null` — всё */
@@ -55,13 +60,20 @@ const rowSchema = z.object({
 export class PrismaNotificationsRepository implements NotificationsRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
-  async insert(notification: NewNotification): Promise<boolean> {
+  async insert(notification: NewNotification): Promise<string | null> {
     const payload = JSON.stringify(notification.payload);
+    const notificationId = randomUUID();
     const inserted = await this.prisma.$executeRaw`
       INSERT INTO notification (notification_id, account_id, kind, payload, dedupe_key, created_at)
-      VALUES (${randomUUID()}::uuid, ${notification.accountId}::uuid, ${notification.kind}, ${payload}::jsonb, ${notification.dedupeKey}, ${notification.at})
+      VALUES (${notificationId}::uuid, ${notification.accountId}::uuid, ${notification.kind}, ${payload}::jsonb, ${notification.dedupeKey}, ${notification.at})
       ON CONFLICT (account_id, dedupe_key) DO NOTHING`;
-    return inserted > 0;
+    return inserted > 0 ? notificationId : null;
+  }
+
+  async markBot(notificationId: string, outcome: BotOutcome, at: Date): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE notification SET bot_outcome = ${outcome}::"NotificationBotOutcome", bot_at = ${at}
+      WHERE notification_id = ${notificationId}::uuid AND bot_outcome IS NULL`;
   }
 
   async feed(accountId: string, cursor: FeedCursor | null, limit: number): Promise<StoredNotification[]> {

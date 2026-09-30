@@ -27,6 +27,7 @@ export const START_KINDS = [
   ["invite", "приглашение"],
   ["telegram_affiliate", "партнёрка Telegram"],
   ["friend", "ссылка друга"],
+  ["notification", "уведомление в боте"],
   ["unknown", "неизвестно"],
 ] as const;
 
