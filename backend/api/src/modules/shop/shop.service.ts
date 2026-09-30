@@ -77,7 +77,7 @@ export class ShopService implements OnModuleInit {
     if (method === undefined) throw new PaymentsUnsupportedError();
     const stars = priceIn(priceProduct(sku), method);
     if (stars === null) throw new ShopSkuUnavailableError();
-    const invoice = await this.payments.shopInvoice(account, { sku: sku.id, priceStars: stars, once: sku.once, text: { title: sku.title, description: sku.description } });
+    const invoice = await this.payments.shopInvoice(account, { product: "shop_item", sku: sku.id, priceStars: stars, once: sku.once, text: { title: sku.title, description: sku.description } });
     this.log("shop_order", { accountId: account.accountId, sku: sku.id, purchaseId: invoice.purchaseId, status: invoice.status });
     return invoice;
   }

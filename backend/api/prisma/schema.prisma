@@ -72,6 +72,8 @@ enum PurchaseProduct {
   continue_run
   /// товар магазина из каталога (WP10): что именно — `sku`
   shop_item
+  /// VIP — подписка площадки (WP10, Р20, Р44): период за каждую оплату
+  vip
 }
 
 // Режим оплаты (docs/34-stage3-plan.md, Р14). `test` — разработка: игрок
@@ -480,10 +482,14 @@ model Purchase {
   refundedAt        DateTime?       @map("refunded_at") @db.Timestamptz(3)
   /// товар выдан хозяином товара; у второго шанса выдача — сама оплата
   fulfilledAt       DateTime?       @map("fulfilled_at") @db.Timestamptz(3)
+  /// продление подписки: первая покупка подписки — её id стоит в счёте, по которому площадка списывает каждый период
+  renewalOf         String?         @map("renewal_of") @db.Uuid
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
   run     Run?    @relation(fields: [runId], references: [runId], onDelete: Restrict)
+  renewalFirst Purchase?  @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
+  renewals     Purchase[] @relation("PurchaseRenewal")
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).

@@ -181,8 +181,13 @@ describe("раздел «Игроки»", () => {
 
 describe("покупки в карточке игрока", () => {
   it("второй шанс — с номером продолжения, товар магазина — своим id; старый сервер без товара — вторым шансом", () => {
-    expect(purchaseLabel({ sku: "gems_60", continueNo: null })).toBe("магазин: gems_60");
-    expect(purchaseLabel({ sku: null, continueNo: 2 })).toBe("второй шанс №2");
+    expect(purchaseLabel({ product: "shop_item", sku: "gems_60", continueNo: null, renewalOf: null })).toBe("магазин: gems_60");
+    expect(purchaseLabel({ product: "continue_run", sku: null, continueNo: 2, renewalOf: null })).toBe("второй шанс №2");
     expect(purchaseLabel({ sku: undefined, continueNo: 1 })).toBe("второй шанс №1");
+  });
+
+  it("VIP — отдельно первая оплата подписки и её продления", () => {
+    expect(purchaseLabel({ product: "vip", sku: "vip_month", continueNo: null, renewalOf: null })).toBe("VIP");
+    expect(purchaseLabel({ product: "vip", sku: "vip_month", continueNo: null, renewalOf: "p-1" })).toBe("VIP, продление");
   });
 });

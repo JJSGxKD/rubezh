@@ -17,7 +17,10 @@ import { TelegramApiError, type TelegramBotApi } from "./telegram-bot-api.js";
  * ошибки порта, а не `TelegramApiError`.
  */
 
-export type StarsBotApi = Pick<TelegramBotApi, "createInvoiceLink" | "answerPreCheckoutQuery" | "refundStarPayment">;
+export type StarsBotApi = Pick<TelegramBotApi, "createInvoiceLink" | "answerPreCheckoutQuery" | "refundStarPayment" | "editUserStarSubscription">;
+
+/** Подписка Stars — только на 30 суток: другой период Bot API не принимает. */
+export const STARS_SUBSCRIPTION_PERIOD_SEC = 30 * 24 * 60 * 60;
 
 /** Telegram уже вернул эти звёзды: повтор возврата — не ошибка. */
 const ALREADY_REFUNDED = /CHARGE_ALREADY_REFUNDED/i;
@@ -28,6 +31,7 @@ const TELEGRAM_USER_ID = /^\d{1,20}$/;
 export class TelegramStarsProvider implements PaymentProvider {
   readonly platform = "telegram" as const;
   readonly currency = "XTR";
+  readonly subscriptionPeriodSec = STARS_SUBSCRIPTION_PERIOD_SEC;
 
   /** @param confirms бот читает обновления — иначе подтверждение оплаты не придёт */
   constructor(
@@ -47,6 +51,7 @@ export class TelegramStarsProvider implements PaymentProvider {
         payload: invoice.payload,
         label: invoice.label,
         stars: invoice.amount,
+        ...(invoice.subscriptionPeriodSec === undefined ? {} : { subscriptionPeriodSec: invoice.subscriptionPeriodSec }),
       });
     } catch (error: unknown) {
       if (error instanceof TelegramApiError) throw new PaymentProviderUnavailableError(error.message);
@@ -69,6 +74,18 @@ export class TelegramStarsProvider implements PaymentProvider {
       // `400` не пройдут никогда: это разбор для человека, а не для очереди.
       if (error.errorCode === 400) throw new PaymentProviderRejectedError(error.message);
       throw error;
+    }
+  }
+
+  async setSubscriptionRenewal(payerId: string, chargeId: string, renew: boolean): Promise<void> {
+    try {
+      await this.api.editUserStarSubscription(Number(payerId), chargeId, !renew);
+    } catch (error: unknown) {
+      if (!(error instanceof TelegramApiError)) throw error;
+      // `400` — подписки нет, она уже кончилась или продление отменил сам
+      // игрок: вернуть его может только он. Повтор тут не поможет.
+      if (error.errorCode === 400) throw new PaymentProviderRejectedError(error.message);
+      throw new PaymentProviderUnavailableError(error.message);
     }
   }
 }

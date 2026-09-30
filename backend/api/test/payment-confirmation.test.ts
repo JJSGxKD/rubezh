@@ -54,6 +54,7 @@ function pending(patch: Partial<ContinuePurchase> = {}): ContinuePurchase {
     refundRequestedAt: null,
     refundedAt: null,
     fulfilledAt: null,
+    renewalOf: null,
     ...patch,
   };
 }

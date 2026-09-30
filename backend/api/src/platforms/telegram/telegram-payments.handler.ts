@@ -1,5 +1,6 @@
 import { Injectable, type OnModuleInit } from "@nestjs/common";
 import { PaymentConfirmation } from "../../modules/payments/payment-confirmation.js";
+import type { SubscriptionState } from "../../modules/payments/payments-hooks.js";
 import { PaymentsQueue } from "../../modules/payments/payments-queue.js";
 import { BotRouter, type BotUpdateHandler } from "./bot-router.js";
 import type { TelegramUpdate } from "./telegram-bot-api.js";
@@ -61,6 +62,23 @@ export class TelegramPaymentsHandler implements BotUpdateHandler, OnModuleInit {
       await this.confirmation.refunded(message.refunded_payment.telegram_payment_charge_id);
       return true;
     }
+
+    const subscription = update.subscription;
+    if (subscription !== undefined) {
+      const state = SUBSCRIPTION_STATES.get(subscription.state);
+      // Новое состояние, о котором мы ещё не знаем, — не повод падать: обновление прочитано.
+      if (state !== undefined) {
+        await this.confirmation.subscriptionChanged({ platform: "telegram", payload: subscription.invoice_payload, payerId: String(subscription.user.id), state });
+      }
+      return true;
+    }
     return false;
   }
 }
+
+/** Состояния продления в Bot API — в наши: у Telegram «canceled» через одну «l». */
+const SUBSCRIPTION_STATES = new Map<string, SubscriptionState>([
+  ["canceled", "cancelled"],
+  ["active", "active"],
+  ["failed", "failed"],
+]);

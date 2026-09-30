@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
@@ -6,7 +7,8 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { answerOf, decideCheckout, refuse, type CheckoutDecision, type PreCheckout } from "./checkout-answer.js";
-import { PaymentsHooks } from "./payments-hooks.js";
+import { PaymentsHooks, type SubscriptionState } from "./payments-hooks.js";
+import { SUBSCRIPTION_PRODUCTS } from "./purchase-types.js";
 import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository } from "./purchases.repository.js";
 
 /**
@@ -17,6 +19,10 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository } f
  * **Право на продолжение появляется здесь**, при подтверждении от площадки, —
  * не раньше (Р13). Подтверждение идемпотентно по идентификатору оплаты:
  * повтор обновления ничего не удваивает.
+ *
+ * **Подписку** (Р20) площадка продлевает сама — очередной оплатой по счёту
+ * первой покупки. Вторая оплата одного счёта у подписки — продление, а не
+ * лишняя: она записывается своей строкой и не возвращается.
  */
 
 /** Оплата, которую подтвердила площадка. */
@@ -29,6 +35,16 @@ export interface ConfirmedPayment {
   payerId: string;
   currency: string;
   totalAmount: number;
+}
+
+/** Что площадка сообщила о продлении подписки. */
+export interface SubscriptionUpdate {
+  platform: PlatformId;
+  /** то, что стояло в счёте, — id первой покупки подписки */
+  payload: string;
+  /** чья подписка — идентификатор на площадке */
+  payerId: string;
+  state: SubscriptionState;
 }
 
 /**
@@ -74,14 +90,23 @@ export class PaymentConfirmation {
 
   async confirm(payment: ConfirmedPayment, nowMs = Date.now()): Promise<ConfirmOutcome> {
     const id = purchaseId.safeParse(payment.payload);
-    const outcome = id.success
+    let outcome: ConfirmOutcome = id.success
       ? await this.purchases.markPaid({ purchaseId: id.data, chargeId: payment.chargeId, chargedStars: payment.totalAmount, paidAt: new Date(nowMs) })
-      : ({ kind: "unknown" } as const);
+      : { kind: "unknown" };
+    if (outcome.kind === "already_paid" && SUBSCRIPTION_PRODUCTS.includes(outcome.purchase.product)) {
+      outcome = await this.purchases.markRenewal({
+        firstId: outcome.purchase.purchaseId,
+        purchaseId: randomUUID(),
+        chargeId: payment.chargeId,
+        chargedStars: payment.totalAmount,
+        paidAt: new Date(nowMs),
+      });
+    }
 
     const fields = { platform: payment.platform, chargeId: payment.chargeId, purchaseId: payment.payload, payerId: payment.payerId, amount: payment.totalAmount };
     switch (outcome.kind) {
       case "paid":
-        this.log("log", "payment_confirmed", { ...fields, runId: outcome.purchase.runId, mode: outcome.purchase.mode });
+        this.log("log", "payment_confirmed", { ...fields, product: outcome.purchase.product, runId: outcome.purchase.runId, renewalOf: outcome.purchase.renewalOf, mode: outcome.purchase.mode });
         void this.hooks.emitPaid({ purchaseId: outcome.purchase.purchaseId, accountId: outcome.purchase.accountId, mode: outcome.purchase.mode, at: new Date(nowMs) });
         break;
       case "duplicate":
@@ -123,6 +148,23 @@ export class PaymentConfirmation {
       mode: purchase.mode,
       ...(stats === null ? {} : { accountPaid: stats.paid, accountRefunded: stats.refunded }),
     });
+  }
+
+  /**
+   * Площадка сообщила о продлении подписки: игрок отменил его или вернул у
+   * себя, или очередное списание не прошло. Чужая или неизвестная подписка —
+   * в лог: сообщение пришло от нашего бота, но сверить его не с чем.
+   */
+  async subscriptionChanged(update: SubscriptionUpdate, nowMs = Date.now()): Promise<void> {
+    const id = purchaseId.safeParse(update.payload);
+    const view = id.success ? await this.purchases.checkout(id.data) : null;
+    const fields = { platform: update.platform, purchaseId: update.payload, payerId: update.payerId, state: update.state };
+    if (view === null || !SUBSCRIPTION_PRODUCTS.includes(view.purchase.product) || view.platformUserId !== update.payerId) {
+      this.log("warn", "subscription_unmatched", fields);
+      return;
+    }
+    this.log("log", "subscription_changed", { ...fields, accountId: view.purchase.accountId });
+    await this.hooks.emitSubscriptionChanged({ subscription: view.purchase, state: update.state, at: new Date(nowMs) });
   }
 
   private async decide(query: PreCheckout, nowMs: number): Promise<CheckoutDecision> {

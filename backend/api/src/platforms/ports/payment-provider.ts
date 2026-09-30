@@ -22,6 +22,12 @@ export interface ProviderInvoice {
   label: string;
   /** сумма в единицах валюты площадки: у звёзд — звёзды */
   amount: number;
+  /**
+   * Подписка: площадка списывает `amount` каждый такой период сама, пока
+   * игрок или мы не отменим продление. Только период, который площадка
+   * умеет (`PaymentProvider.subscriptionPeriodSec`).
+   */
+  subscriptionPeriodSec?: number;
 }
 
 /** Ответ на проверку перед оплатой: отказ показывается игроку этим текстом. */
@@ -47,6 +53,11 @@ export interface PaymentProvider {
    * (docs/34-stage3-plan.md, Р13).
    */
   readonly confirms: boolean;
+  /**
+   * Период подписки площадки в секундах; `null` — подписок площадка не
+   * умеет. У Telegram он один — 30 суток.
+   */
+  readonly subscriptionPeriodSec: number | null;
   /** может ли этот игрок платить на площадке: аккаунт разработчика, например, не может */
   accepts(platformUserId: string): boolean;
   /** ссылка на счёт; не выставился — `PaymentProviderUnavailableError` */
@@ -57,6 +68,12 @@ export interface PaymentProvider {
    * `PaymentProviderRejectedError`; прочие ошибки — временные, их повторяют.
    */
   refund(payerId: string, chargeId: string): Promise<"refunded" | "already_refunded">;
+  /**
+   * Отменить или вернуть продление подписки; `chargeId` — первая оплата
+   * подписки. Оплаченный период отмена не трогает. Площадка не может это
+   * сделать — `PaymentProviderRejectedError`; прочие ошибки — временные.
+   */
+  setSubscriptionRenewal(payerId: string, chargeId: string, renew: boolean): Promise<void>;
 }
 
 /** Способы оплаты всех площадок: домен выбирает по площадке аккаунта. */

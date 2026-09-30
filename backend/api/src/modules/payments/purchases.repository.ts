@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { isGranted, type PaymentMode, type RefundReason, type StoredPurchase } from "./purchase-types.js";
+import { isGranted, SUBSCRIPTION_PRODUCTS, type PaymentMode, type PurchaseProduct, type RefundReason, type StoredPurchase } from "./purchase-types.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 
 /**
@@ -29,12 +29,13 @@ export interface InvoiceRecord {
 }
 
 /**
- * Счёт на товар магазина (WP10). У разового товара — `onceKey`: второй счёт
- * ложится на ту же строку, и купить его второй раз нельзя.
+ * Счёт на товар магазина или VIP (WP10). У разового товара — `onceKey`:
+ * второй счёт ложится на ту же строку, и купить его второй раз нельзя.
  */
 export interface ShopInvoiceRecord {
   purchaseId: string;
   accountId: string;
+  product: Exclude<PurchaseProduct, "continue_run">;
   sku: string;
   onceKey: string | null;
   priceStars: number;
@@ -66,6 +67,20 @@ export interface PaymentRecord {
   purchaseId: string;
   chargeId: string;
   /** сколько списал Telegram — на случай, если это не то, что стояло в счёте */
+  chargedStars: number;
+  paidAt: Date;
+}
+
+/**
+ * Площадка списала очередной период подписки по счёту её первой покупки:
+ * у продления своя строка — со своей оплатой и ссылкой на первую.
+ */
+export interface RenewalRecord {
+  /** первая покупка подписки — её id стоит в счёте */
+  firstId: string;
+  /** id строки продления — если её ещё нет */
+  purchaseId: string;
+  chargeId: string;
   chargedStars: number;
   paidAt: Date;
 }
@@ -119,6 +134,12 @@ export interface PurchasesRepository {
   grantedForRun(runId: string): Promise<{ continueNo: number; elapsedSec: number }[]>;
   checkout(purchaseId: string): Promise<CheckoutView | null>;
   markPaid(record: PaymentRecord): Promise<ConfirmOutcome>;
+  /**
+   * Продление подписки — новая строка, оплаченная сразу. Повтор той же
+   * оплаты — `duplicate`; первой покупки нет, она не подписка или не
+   * оплачена — `unknown`.
+   */
+  markRenewal(record: RenewalRecord): Promise<ConfirmOutcome>;
   /** Звёзды вернулись. Причину, если её не заказывали мы, записывает как `external` */
   markRefunded(chargeId: string, refundedAt: Date): Promise<RefundedRecord | null>;
   /** Настоящие оплаты аккаунта и возвраты по ним не по нашей воле — доля возвратов (О4) */
@@ -156,6 +177,7 @@ const SELECT = {
   refundRequestedAt: true,
   refundedAt: true,
   fulfilledAt: true,
+  renewalOf: true,
 } as const;
 
 @Injectable()
@@ -209,7 +231,7 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
     const offer = { priceStars: record.priceStars, chargedStars: record.chargedStars, mode: record.mode, invoicedAt: record.invoicedAt };
     try {
       const created = await this.prisma.purchase.create({
-        data: { purchaseId: record.purchaseId, accountId: record.accountId, product: "shop_item", sku: record.sku, onceKey: record.onceKey, status: "pending", ...offer },
+        data: { purchaseId: record.purchaseId, accountId: record.accountId, product: record.product, sku: record.sku, onceKey: record.onceKey, status: "pending", ...offer },
         select: SELECT,
       });
       return { kind: "opened", purchase: created };
@@ -291,6 +313,40 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
     return view.purchase.telegramChargeId === record.chargeId
       ? { kind: "duplicate", purchase: view.purchase }
       : { kind: "already_paid", purchase: view.purchase };
+  }
+
+  async markRenewal(record: RenewalRecord): Promise<ConfirmOutcome> {
+    const known = await this.prisma.purchase.findUnique({ where: { telegramChargeId: record.chargeId }, select: SELECT });
+    if (known !== null) return { kind: "duplicate", purchase: known };
+    const first = await this.prisma.purchase.findUnique({ where: { purchaseId: record.firstId }, select: SELECT });
+    if (first === null || !SUBSCRIPTION_PRODUCTS.includes(first.product) || !isGranted(first) || first.renewalOf !== null) return { kind: "unknown" };
+    try {
+      const created = await this.prisma.purchase.create({
+        data: {
+          purchaseId: record.purchaseId,
+          accountId: first.accountId,
+          product: first.product,
+          sku: first.sku,
+          // Цена и режим — первой покупки: продлевается то, на что игрок подписался.
+          priceStars: first.priceStars,
+          chargedStars: record.chargedStars,
+          mode: first.mode,
+          status: "paid",
+          telegramChargeId: record.chargeId,
+          invoicedAt: record.paidAt,
+          paidAt: record.paidAt,
+          renewalOf: first.purchaseId,
+        },
+        select: SELECT,
+      });
+      return { kind: "paid", purchase: created, runFinished: false };
+    } catch (error: unknown) {
+      // То же продление записали параллельно — уникальный индекс оплаты не пустил второе.
+      if (!isUniqueViolation(error)) throw error;
+      const recorded = await this.prisma.purchase.findUnique({ where: { telegramChargeId: record.chargeId }, select: SELECT });
+      if (recorded === null) throw error;
+      return { kind: "duplicate", purchase: recorded };
+    }
   }
 
   async markRefunded(chargeId: string, refundedAt: Date): Promise<RefundedRecord | null> {

@@ -54,7 +54,7 @@ const PRE_CHECKOUT_TIMEOUT_MS = 5_000;
  * `my_chat_member` — игрок заблокировал или разблокировал бота: без него
  * рассылка шла бы тем, кто нас уже не слушает (docs/35-stage4-plan.md, §3.10).
  */
-export const ALLOWED_UPDATES = ["message", "callback_query", "pre_checkout_query", "my_chat_member"] as const;
+export const ALLOWED_UPDATES = ["message", "callback_query", "pre_checkout_query", "my_chat_member", "subscription"] as const;
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -122,6 +122,14 @@ export const updateSchema = z.object({
       refunded_payment: paymentSchema.optional(),
       /** служебное: игрок разрешил боту писать ему — из Mini App (`requestWriteAccess`) или при входе */
       write_access_allowed: z.object({}).optional(),
+    })
+    .optional(),
+  /** игрок отменил или вернул продление подписки в Telegram, или очередное списание не прошло */
+  subscription: z
+    .object({
+      user: userSchema,
+      invoice_payload: z.string().max(256),
+      state: z.string().max(16),
     })
     .optional(),
   callback_query: z
@@ -192,6 +200,8 @@ export interface StarsInvoice {
   /** подпись позиции в счёте */
   label: string;
   stars: number;
+  /** подписка: Telegram списывает `stars` раз в этот период сам; сейчас он всегда 30 суток */
+  subscriptionPeriodSec?: number;
 }
 
 /** Ответ на предварительную проверку: отказ Telegram покажет игроку этим текстом. */
@@ -363,7 +373,16 @@ export class TelegramBotApi {
 
   async createInvoiceLink(invoice: StarsInvoice, signal?: AbortSignal): Promise<string> {
     const result = await this.call("createInvoiceLink", REQUEST_TIMEOUT_MS, signal, (abort) =>
-      this.api.createInvoiceLink(invoice.title, invoice.description, invoice.payload, "", "XTR", [{ label: invoice.label, amount: invoice.stars }], undefined, abort),
+      this.api.createInvoiceLink(
+        invoice.title,
+        invoice.description,
+        invoice.payload,
+        "",
+        "XTR",
+        [{ label: invoice.label, amount: invoice.stars }],
+        invoice.subscriptionPeriodSec === undefined ? undefined : { subscription_period: invoice.subscriptionPeriodSec },
+        abort,
+      ),
     );
     return z.url().parse(result);
   }
@@ -377,6 +396,15 @@ export class TelegramBotApi {
   /** Вернуть звёзды игроку. Отказ `CHARGE_ALREADY_REFUNDED` — повтор уже сделанного возврата. */
   async refundStarPayment(userId: number, chargeId: string, signal?: AbortSignal): Promise<void> {
     await this.call("refundStarPayment", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.refundStarPayment(userId, chargeId, abort));
+  }
+
+  /**
+   * Отменить продление подписки игрока (`canceled: true`) или вернуть то,
+   * что отменил бот. Отменённое игроком бот вернуть не может — только сам
+   * игрок в Telegram.
+   */
+  async editUserStarSubscription(userId: number, chargeId: string, canceled: boolean, signal?: AbortSignal): Promise<void> {
+    await this.call("editUserStarSubscription", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.editUserStarSubscription(userId, chargeId, canceled, abort));
   }
 
   async setWebhook(url: string, secretToken: string, signal?: AbortSignal): Promise<void> {

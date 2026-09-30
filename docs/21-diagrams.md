@@ -51,6 +51,7 @@ erDiagram
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN ||--o{ PURCHASE : "продолжен за"
+    PURCHASE ||--o{ PURCHASE : "продлена"
     ACCOUNT ||--o{ ACCOUNT_SESSION : "запускает игру"
     ACCOUNT ||--o| ACQUISITION : "пришёл через"
     ACCOUNT ||--o| ACCOUNT_FUNNEL : "прошёл вехи"
@@ -356,11 +357,11 @@ erDiagram
     PURCHASE {
         uuid purchase_id PK "он же payload счёта"
         uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
-        enum product "continue_run|shop_item"
+        enum product "continue_run|shop_item|vip"
         string run_id FK "nullable: только у второго шанса; UK вместе с continue_no"
         int continue_no "nullable: какое продолжение забега, с единицы"
         float elapsed_sec "nullable: секунда забега, по которой посчитана цена"
-        string sku "nullable: товар каталога магазина — только у shop_item"
+        string sku "nullable: товар каталога магазина или план VIP — пусто только у continue_run"
         string once_key UK "nullable: разовый товар — одна строка на товар и аккаунт"
         int price_stars "цена по правилу Р5.1 — её видит игрок"
         int charged_stars "сколько списано: в тестовом режиме — одна звезда"
@@ -372,7 +373,8 @@ erDiagram
         enum refund_reason "nullable: test_mode|unused|external"
         datetime refund_requested_at "nullable"
         datetime refunded_at "nullable"
-        datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька"
+        datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька, период VIP — записан"
+        uuid renewal_of FK "nullable: продление подписки — первая её покупка, по счёту которой площадка списывает периоды"
     }
 
     ACCOUNT_ROLE {
@@ -822,7 +824,10 @@ erDiagram
   строка — и товар каталога: `sku` вместо забега, это держит проверка базы.
   Разовый товар — `once_key` с уникальным индексом: второй счёт ложится на
   ту же строку, и дважды его не купить. Товар выдаёт магазин журналом
-  кошелька ключом покупки, `fulfilled_at` — выдано.
+  кошелька ключом покупки, `fulfilled_at` — выдано. Подписку (VIP) площадка
+  продлевает сама — очередной оплатой по счёту первой покупки; каждое
+  продление — своя строка со своей оплатой и `renewal_of` на первую, так
+  выручка и возвраты видят каждый период.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
