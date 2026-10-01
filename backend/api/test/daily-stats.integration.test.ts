@@ -90,6 +90,16 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
     expect(stats.funnel).toEqual({ entered: 2, appOpened: 1, firstRun: 1, runs5: 0, returnedD1: 1, returnedD7: 0, firstPurchase: 1 });
   });
 
+  it("ряд по суткам: те же границы и фильтры, пустые сутки — нулями", async () => {
+    const points = await new PrismaDailyStatsRepository(prisma).series(dayWindow("2031-03-13").from, dayWindow("2031-03-15").to);
+    expect(points).toEqual([
+      { day: "2031-03-13", newAccounts: 0, active: 0, finishedRuns: 0, stars: 0 },
+      // Как у суток целиком: без читов, тестовая оплата не в счёт, возвращённая оплата — в сутках оплаты.
+      { day: "2031-03-14", newAccounts: 3, active: 2, finishedRuns: 3, stars: 8 },
+      { day: "2031-03-15", newAccounts: 1, active: 1, finishedRuns: 0, stars: 0 },
+    ]);
+  });
+
   it("пустые сутки — нули, а не ошибка", async () => {
     const stats = await new PrismaDailyStatsRepository(prisma).day(dayWindow("2031-03-20"));
     expect(stats).toMatchObject({ accounts: {}, active: 0, runs: { finished: 0, medianSurvivalSec: null }, revenue: { stars: 0 } });

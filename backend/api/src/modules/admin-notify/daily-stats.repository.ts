@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import type { DayStats, DayWindow, SourceKind } from "./daily-stats.js";
+import { teamDay, type DayStats, type DayWindow, type SourceKind } from "./daily-stats.js";
 
 /**
  * Цифры суток для ежедневной статистики (docs/35-stage4-plan.md §3.18) —
@@ -13,8 +13,25 @@ import type { DayStats, DayWindow, SourceKind } from "./daily-stats.js";
 
 export const DAILY_STATS_REPOSITORY = Symbol("DAILY_STATS_REPOSITORY");
 
+/** Сутки ряда для графика: главные числа без разрезов. */
+export interface DayPoint {
+  /** `2026-09-28` — сутки по Москве */
+  day: string;
+  newAccounts: number;
+  active: number;
+  finishedRuns: number;
+  /** только настоящие звёзды, оплаченные в эти сутки */
+  stars: number;
+}
+
 export interface DailyStatsRepository {
   day(window: DayWindow): Promise<DayStats>;
+  /**
+   * Главные числа по московским суткам за `[from, to)` — для графика в
+   * панели: четыре запроса на весь период, а не пять на каждые сутки.
+   * Сутки без событий — нулями: провал на графике должен быть виден.
+   */
+  series(from: Date, to: Date): Promise<DayPoint[]>;
 }
 
 const SOURCES: readonly SourceKind[] = ["organic", "click", "invite", "telegram_affiliate", "friend", "unknown"];
@@ -24,6 +41,7 @@ const accountsSchema = z.array(z.object({ kind: z.string().nullable(), n: count 
 const activeSchema = z.array(z.object({ active: count, sessions: count }));
 const runsSchema = z.array(z.object({ finished: count, players: count, median: z.coerce.number().nullable() }));
 const revenueSchema = z.array(z.object({ stars: count, purchases: count, refunds: count }));
+const pointSchema = z.array(z.object({ day: z.string(), n: count }));
 const funnelSchema = z.array(
   z.object({ entered: count, app_opened: count, first_run: count, runs5: count, returned_d1: count, returned_d7: count, first_purchase: count }),
 );
@@ -92,4 +110,33 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
       },
     };
   }
+
+  async series(from: Date, to: Date): Promise<DayPoint[]> {
+    // Сутки — по Москве, как у отчёта в чат: `AT TIME ZONE` не зависит от пояса соединения.
+    const [accounts, active, runs, stars] = await Promise.all([
+      this.prisma.$queryRaw`
+        SELECT to_char(created_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
+        FROM account WHERE created_at >= ${from} AND created_at < ${to} GROUP BY 1`,
+      this.prisma.$queryRaw`
+        SELECT to_char(started_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(DISTINCT account_id) AS n
+        FROM account_session WHERE started_at >= ${from} AND started_at < ${to} GROUP BY 1`,
+      this.prisma.$queryRaw`
+        SELECT to_char(finished_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
+        FROM run WHERE status = 'finished' AND NOT cheats AND finished_at >= ${from} AND finished_at < ${to} GROUP BY 1`,
+      this.prisma.$queryRaw`
+        SELECT to_char(paid_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, coalesce(sum(charged_stars), 0) AS n
+        FROM purchase WHERE mode = 'live' AND paid_at >= ${from} AND paid_at < ${to} GROUP BY 1`,
+    ]);
+    const byDay = (rows: unknown) => new Map(pointSchema.parse(rows).map((row) => [row.day, row.n]));
+    const [newAccounts, activeByDay, runsByDay, starsByDay] = [byDay(accounts), byDay(active), byDay(runs), byDay(stars)];
+    const points: DayPoint[] = [];
+    for (let day = teamDay(from.getTime()), last = teamDay(to.getTime() - 1); day <= last; day = nextDay(day)) {
+      points.push({ day, newAccounts: newAccounts.get(day) ?? 0, active: activeByDay.get(day) ?? 0, finishedRuns: runsByDay.get(day) ?? 0, stars: starsByDay.get(day) ?? 0 });
+    }
+    return points;
+  }
+}
+
+function nextDay(day: string): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 }

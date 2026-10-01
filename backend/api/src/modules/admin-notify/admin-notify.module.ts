@@ -28,5 +28,7 @@ import { RedisReviewThrottle, REVIEW_THROTTLE } from "./review-throttle.js";
     { provide: DAILY_STATS_REPOSITORY, useClass: PrismaDailyStatsRepository },
     { provide: DAILY_STATS_LOCKS, useClass: RedisDailyStatsLocks },
   ],
+  // Цифры суток читает и сводка панели — тем же запросом, что отчёт в чат.
+  exports: [DAILY_STATS_REPOSITORY],
 })
 export class AdminNotifyModule {}
