@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Crown, Diamond, Sparkles, TrendingUp } from "lucide-react";
+import { Check, Crown, Sparkles, TrendingUp } from "lucide-react";
 import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, Modal, PageTitle, Screen, SectionTitle } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
+import { ShardIcon, shardRarity } from "../../design-system/components/ShardIcon";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import { createShopApi, shopAvailable, type ShopItem, type ShopView, type VipView } from "../../state/shop-api";
@@ -345,22 +346,14 @@ function ItemCard(props: { item: ShopItem; index: number; busy: string | null; o
 
 /**
  * Вид ресурса различается и цветом, и формой значка — одним цветом он не
- * передаётся (docs/27-design-system-and-app-shell.md §4.4). Осколки — тоном
- * своей редкости, как в арсенале и на колесе; незнакомое — нейтрально.
+ * передаётся (docs/27-design-system-and-app-shell.md §4.4). Осколки — общим
+ * значком цвета своей редкости, как в арсенале и на колесе; незнакомое —
+ * нейтральным осколком.
  */
 function ResourceIcon(props: { resource: string }): ReactNode {
-  switch (props.resource) {
-    case "coins":
-      return <CoinIcon size={16} />;
-    case "gems":
-      return <GemIcon size={16} />;
-    case "shard_common":
-      return <Diamond size={16} aria-hidden="true" className="text-info" />;
-    case "shard_uncommon":
-      return <Diamond size={16} aria-hidden="true" className="text-success" />;
-    default:
-      return <Diamond size={16} aria-hidden="true" className="text-text-muted" />;
-  }
+  if (props.resource === "coins") return <CoinIcon size={16} />;
+  if (props.resource === "gems") return <GemIcon size={16} />;
+  return <ShardIcon rarity={shardRarity(props.resource) ?? ""} size={16} />;
 }
 
 function statusLine(vip: VipView): string | null {

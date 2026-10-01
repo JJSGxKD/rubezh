@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Clock, Crown, Crosshair, Diamond, Hourglass, Megaphone, Play, Sparkles, Target } from "lucide-react";
+import { Check, Clock, Crown, Crosshair, Hourglass, Megaphone, Play, Sparkles, Target } from "lucide-react";
 import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, PageTitle, ProgressBar, Screen, SegmentedControl } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
+import { ShardIcon } from "../../design-system/components/ShardIcon";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
@@ -235,7 +236,7 @@ function RewardChips(props: { reward: TaskReward }): ReactNode {
     <span role="img" aria-label={rewardText(props.reward)} className="flex flex-col items-end gap-1">
       {coins > 0 ? <Chip icon={<CoinIcon size={16} />} amount={coins} /> : null}
       {gems > 0 ? <Chip icon={<GemIcon size={16} />} amount={gems} /> : null}
-      {shards > 0 ? <Chip icon={<Diamond size={16} className="text-info" aria-hidden="true" />} amount={shards} /> : null}
+      {shards > 0 ? <Chip icon={<ShardIcon rarity="common" size={16} />} amount={shards} /> : null}
     </span>
   );
 }

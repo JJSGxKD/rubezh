@@ -9,6 +9,7 @@ import {
   SectionTitle,
   InfoNotice,
 } from "../../design-system/components";
+import { ShardIcon } from "../../design-system/components/ShardIcon";
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/arsenal";
 import type { ApiFailure } from "../../state/api-request";
@@ -484,9 +485,9 @@ function ShardsRow(): ReactNode {
         <li
           key={rarity}
           title={`${t("arsenal.shards")} · ${rarityName(rarity)}`}
-          className={`surface-sunken inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-xs font-semibold ${toneOf(rarity).text}`}
+          className="surface-sunken inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-xs font-semibold"
         >
-          <span aria-hidden="true" className="size-2 rotate-45 bg-current" />
+          <ShardIcon rarity={rarity} size={14} />
           <span className="tabular-nums text-text">{formatNumber(shards[rarity] ?? 0)}</span>
           <span className="sr-only">{rarityName(rarity)}</span>
         </li>

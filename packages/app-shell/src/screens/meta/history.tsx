@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Package, Zap } from "lucide-react";
 import { Button, Card, ContentColumn, ErrorState, InfoNotice, Screen } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
+import { ShardIcon, shardRarity } from "../../design-system/components/ShardIcon";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/arsenal";
@@ -112,7 +113,7 @@ function describe(entry: HistoryEntry): Described {
       const sign = entry.amount > 0 ? "+" : "−";
       const amount = Math.abs(entry.amount);
       return {
-        icon: entry.resource === "coins" ? <CoinIcon size={20} /> : entry.resource === "gems" ? <GemIcon size={20} /> : entry.category === "boosts" ? <Zap size={20} /> : <Package size={20} />,
+        icon: walletIcon(entry),
         title: hasTranslation(reason) ? t(reason) : t("history.reason.other"),
         value: `${sign}${formatNumber(amount)} ${hasTranslation(resource) ? t(resource, { n: amount }) : entry.resource}`,
         tone: entry.amount > 0 ? "plus" : "minus",
@@ -164,4 +165,13 @@ function EntryRow(props: { entry: HistoryEntry }): ReactNode {
       </div>
     </Card>
   );
+}
+
+/** Значок строки кошелька: валюта — своим значком, осколок — общим цвета редкости, буст — молнией. */
+function walletIcon(entry: Extract<HistoryEntry, { kind: "wallet" }>): ReactNode {
+  if (entry.resource === "coins") return <CoinIcon size={20} />;
+  if (entry.resource === "gems") return <GemIcon size={20} />;
+  const rarity = shardRarity(entry.resource);
+  if (rarity !== null) return <ShardIcon rarity={rarity} size={20} />;
+  return entry.category === "boosts" ? <Zap size={20} /> : <Package size={20} />;
 }
