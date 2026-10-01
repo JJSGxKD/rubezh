@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { fetchTasks, groupByPeriod, rewardLabel, saveTask, targetLabel, taskProblem, withKind, withPlatform, type TaskDef } from "../src/api/tasks";
+import { fetchTasks, groupByPeriod, rewardLabel, saveTask, targetLabel, taskProblem, withKind, withPlatform, type TaskDef, partnerPlatforms, togglePlatform } from "../src/api/tasks";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -92,7 +92,8 @@ describe("задания в панели", () => {
     it("вид «ссылка» и «бот» — достижение с целью 1, без канала; площадка необязательна", () => {
       const picked = withKind(task({ taskId: "x_1", params: null }), "bot");
       expect(picked).toEqual(expect.objectContaining({ kind: "bot", period: "achievement", target: 1, params: { url: "" } }));
-      expect(withKind(withKind(task({ taskId: "x_1" }), "channel"), "link").params).toEqual({ platform: "telegram", url: "" });
+      // площадка подписки переходит в список площадок ссылки
+      expect(withKind(withKind(task({ taskId: "x_1" }), "channel"), "link").params).toEqual({ platforms: ["telegram"], url: "" });
       expect(withPlatform({ platform: "vk", url: "https://vk.com/x" }, undefined)).toEqual({ url: "https://vk.com/x" });
       expect(taskProblem(link(), true, [])).toBeNull();
       expect(taskProblem(link({ params: { url: "http://example.com" } }), true, [])).toMatch(/Ссылка/);
@@ -106,6 +107,28 @@ describe("задания в панели", () => {
       expect(JSON.parse(String(calls[0]?.init.body)).params).toEqual({ url: "https://example.com/p" });
       expect(targetLabel(link())).toBe("example.com (все площадки)");
       expect(groupByPeriod([link(), task()]).find((group) => group.group === "partner")?.tasks.map((item) => item.taskId)).toEqual(["ach_site"]);
+    });
+  });
+
+  describe("где видна ссылка или бот", () => {
+    const link = (params: TaskDef["params"]) => task({ taskId: "ach_site", period: "achievement", kind: "link", target: 1, coins: 50, params });
+
+    it("галочки площадок: список в порядке площадок, сняли последнюю — снова все", () => {
+      let params = togglePlatform({ url: "https://example.com/p" }, "max");
+      params = togglePlatform(params, "telegram");
+      expect(params).toEqual({ platforms: ["telegram", "max"], url: "https://example.com/p" });
+      expect(togglePlatform(togglePlatform(params, "max"), "telegram")).toEqual({ url: "https://example.com/p" });
+      // запись прошлой панели с одной площадкой — список из неё
+      expect(partnerPlatforms({ platform: "vk", url: "https://vk.com/x" })).toEqual(["vk"]);
+      expect(togglePlatform({ platform: "vk", url: "https://vk.com/x" }, "web")).toEqual({ platforms: ["vk", "web"], url: "https://vk.com/x" });
+    });
+
+    it("уходит списком без старого поля, в списке каталога — площадками", async () => {
+      const { fetch, calls } = fakeFetch(json(200, { data: link({ platforms: ["telegram", "max"], url: "https://example.com/p" }) }));
+      await saveTask(new AdminApi(fetch), link({ platform: "vk", url: "https://example.com/p" }));
+      expect(JSON.parse(String(calls[0]?.init.body)).params).toEqual({ platforms: ["vk"], url: "https://example.com/p" });
+      expect(targetLabel(link({ platforms: ["telegram", "max"], url: "https://example.com/p" }))).toBe("example.com (Telegram, MAX)");
+      expect(targetLabel(link({ platforms: ["web"], url: "https://example.com/p" }))).toBe("example.com (Браузер)");
     });
   });
 

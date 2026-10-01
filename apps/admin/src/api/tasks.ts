@@ -41,6 +41,11 @@ export const CHANNEL_PLATFORMS = ["telegram", "max", "vk"] as const;
 export type ChannelPlatform = (typeof CHANNEL_PLATFORMS)[number];
 export const CHANNEL_PLATFORM_TITLES: Record<ChannelPlatform, string> = { telegram: "Telegram", max: "MAX", vk: "VK" };
 
+/** Где видна ссылка или бот партнёра: любые площадки игры, браузерная тоже. */
+export const PARTNER_PLATFORMS = ["telegram", "max", "vk", "web"] as const;
+export type PartnerPlatform = (typeof PARTNER_PLATFORMS)[number];
+export const PARTNER_PLATFORM_TITLES: Record<PartnerPlatform, string> = { ...CHANNEL_PLATFORM_TITLES, web: "Браузер" };
+
 const CHAT_MIN = 2;
 const CHAT_MAX = 64;
 const URL_MAX = 256;
@@ -52,8 +57,18 @@ export const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_sur
 export const TASK_ID_PATTERN = /^[a-z][a-z0-9_]{1,47}$/;
 export const TITLE_MAX = 120;
 
-/** У ссылки и бота площадка необязательна — без неё цель видна на любой; канал — только у подписки. */
-const paramsSchema = z.object({ platform: z.enum(CHANNEL_PLATFORMS).optional(), chat: z.string().optional(), url: z.string() });
+/**
+ * У подписки на канал площадка одна (`platform`): бот спрашивает своих
+ * подписчиков. У ссылки и бота — список (`platforms`), без списка — все
+ * площадки; `platform` у ссылки — запись прошлой панели, форма читает её
+ * как список из одной.
+ */
+const paramsSchema = z.object({
+  platform: z.enum(CHANNEL_PLATFORMS).optional(),
+  platforms: z.array(z.enum(PARTNER_PLATFORMS)).optional(),
+  chat: z.string().optional(),
+  url: z.string(),
+});
 export type TaskParams = z.infer<typeof paramsSchema>;
 
 const taskSchema = z.object({
@@ -86,15 +101,34 @@ export function saveTask(api: AdminApi, task: TaskDef): Promise<ApiResult<TaskDe
   return api.request("/tasks", { method: "POST", body: { ...task, taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task) }, schema: taskSchema });
 }
 
-/** Параметры в том виде, что принимает сервер: обрезанные, без пустой площадки и без канала не у подписки. */
+/**
+ * Параметры в том виде, что принимает сервер: обрезанные, у подписки — одна
+ * площадка и канал, у ссылки и бота — список площадок, пустой — без него.
+ */
 function cleanParams(task: Pick<TaskDef, "kind" | "params">): TaskParams | null {
   if (task.params === null) return null;
-  const chat = task.params.chat?.trim();
-  return {
-    ...(task.params.platform === undefined ? {} : { platform: task.params.platform }),
-    ...(task.kind === CHANNEL_KIND && chat !== undefined ? { chat } : {}),
-    url: task.params.url.trim(),
-  };
+  const url = task.params.url.trim();
+  if (task.kind === CHANNEL_KIND) {
+    const chat = task.params.chat?.trim();
+    return { ...(task.params.platform === undefined ? {} : { platform: task.params.platform }), ...(chat === undefined ? {} : { chat }), url };
+  }
+  const platforms = partnerPlatforms(task.params);
+  return platforms.length === 0 ? { url } : { platforms: PARTNER_PLATFORMS.filter((platform) => platforms.includes(platform)), url };
+}
+
+/** Площадки ссылки или бота; пусто — все. Запись прошлой панели с одной площадкой — список из неё. */
+export function partnerPlatforms(params: TaskParams | null): PartnerPlatform[] {
+  if (params === null) return [];
+  if (params.platforms !== undefined) return params.platforms;
+  return params.platform === undefined ? [] : [params.platform];
+}
+
+/** Галочка площадки у ссылки или бота: список без неё или с ней. */
+export function togglePlatform(params: TaskParams | null, platform: PartnerPlatform): TaskParams {
+  const current = partnerPlatforms(params);
+  const next = current.includes(platform) ? current.filter((item) => item !== platform) : [...current, platform];
+  const url = params?.url ?? "";
+  return next.length === 0 ? { url } : { platforms: PARTNER_PLATFORMS.filter((item) => next.includes(item)), url };
 }
 
 /**
@@ -105,8 +139,10 @@ function cleanParams(task: Pick<TaskDef, "kind" | "params">): TaskParams | null 
 export function withKind(task: TaskDef, kind: string): TaskDef {
   if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null };
   const url = task.params?.url ?? "";
+  const kept = partnerPlatforms(task.params);
+  const channelPlatform = task.params?.platform ?? CHANNEL_PLATFORMS.find((platform) => kept.includes(platform)) ?? "telegram";
   const params: TaskParams =
-    kind === CHANNEL_KIND ? { platform: task.params?.platform ?? "telegram", chat: task.params?.chat ?? "", url } : { ...(task.params?.platform === undefined ? {} : { platform: task.params.platform }), url };
+    kind === CHANNEL_KIND ? { platform: channelPlatform, chat: task.params?.chat ?? "", url } : kept.length === 0 ? { url } : { platforms: kept, url };
   return { ...task, kind, period: "achievement", target: 1, params };
 }
 
@@ -164,7 +200,8 @@ export function rewardLabel(task: Pick<TaskDef, "coins" | "gems" | "shards">): s
 export function targetLabel(task: Pick<TaskDef, "kind" | "target"> & Partial<Pick<TaskDef, "params">>): string {
   const params = task.params ?? null;
   if (params !== null) {
-    const where = params.platform === undefined ? "все площадки" : CHANNEL_PLATFORM_TITLES[params.platform];
+    const listed = task.kind === CHANNEL_KIND ? (params.platform === undefined ? [] : [params.platform]) : partnerPlatforms(params);
+    const where = listed.length === 0 ? "все площадки" : listed.map((platform) => PARTNER_PLATFORM_TITLES[platform]).join(", ");
     const what = task.kind === CHANNEL_KIND ? (params.chat ?? "") : URL.canParse(params.url) ? new URL(params.url).host : params.url;
     return `${what} (${where})`;
   }

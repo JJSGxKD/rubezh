@@ -308,6 +308,23 @@ describe("партнёрские цели: ссылка и бот", () => {
     expect(byId(onVk, "ach_partner_bot")).toBeUndefined();
   });
 
+  it("ссылка — на нескольких площадках списком: видна там, где есть в списке; у канала — одна площадка", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(linkTask({ params: { platforms: ["telegram", "max"], url: LINK.url } }));
+    const on = (platform: AccountRef["platform"]): AccountRef => ({ accountId: ME, platform, platformUserId: "555000111" });
+    expect(byId(await ctx.service.view(on("telegram"), NOON), "ach_partner_site")).toBeDefined();
+    expect(byId(await ctx.service.view(on("max"), NOON), "ach_partner_site")).toBeDefined();
+    expect(byId(await ctx.service.view(on("vk"), NOON), "ach_partner_site")).toBeUndefined();
+
+    expect(taskDefSchema.safeParse(linkTask({ params: { platforms: ["web"], url: LINK.url } })).success).toBe(true);
+    // пустой список, повтор, незнакомая площадка и оба поля сразу — битые данные
+    expect(taskDefSchema.safeParse(linkTask({ params: { platforms: [], url: LINK.url } })).success).toBe(false);
+    expect(taskDefSchema.safeParse(linkTask({ params: { platforms: ["vk", "vk"], url: LINK.url } })).success).toBe(false);
+    expect(taskDefSchema.safeParse({ ...linkTask(), params: { platforms: ["icq"], url: LINK.url } }).success).toBe(false);
+    expect(taskDefSchema.safeParse(linkTask({ params: { platform: "vk", platforms: ["vk"], url: LINK.url } })).success).toBe(false);
+    expect(taskDefSchema.safeParse(channelTask({ params: { ...CHANNEL, platforms: ["telegram"] } })).success).toBe(false);
+  });
+
   it("без перехода не забрать; переход выполняет цель, повтор ничего не меняет, награда — однажды", async () => {
     const ctx = withPartners();
     await expect(ctx.service.claim(PLAYER, "ach_partner_bot", NOON)).rejects.toBeInstanceOf(TaskNotOpenedError);
