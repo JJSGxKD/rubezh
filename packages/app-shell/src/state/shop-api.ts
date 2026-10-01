@@ -30,6 +30,10 @@ const itemSchema = z.object({
   badge: z.optional(z.nullable(z.string())),
   /** на сколько процентов больше самоцветов за звезду, чем в самом дорогом за самоцвет наборе */
   valuePct: z.optional(z.nullable(z.number())),
+  /** цена каталога до скидки акции — её зачёркивают; `null` — акции нет */
+  fullStars: z.optional(z.nullable(z.number())),
+  /** идущая акция: фактическая скидка, конец и подпись баннера от команды; сервер до акций поля не отдавал */
+  promo: z.optional(z.nullable(z.object({ percent: z.number(), endsAt: z.string(), title: z.nullable(z.string()) }))),
 });
 
 const shopSchema = z.object({

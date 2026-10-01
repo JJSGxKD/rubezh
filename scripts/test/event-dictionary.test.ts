@@ -24,6 +24,9 @@ describe("словарь событий", () => {
     expect(payload.safeParse({ product: "shop_item", sku: "gems_60", priceStars: 50, chargedStars: 1, mode: "test" }).success).toBe(true);
     expect(payload.safeParse({ product: "vip", sku: "vip_month", priceStars: 200, chargedStars: 200, mode: "live" }).success).toBe(true);
     expect(payload.safeParse({ product: "continue_run", priceStars: 3, chargedStars: 3, mode: "live", continueNo: 1 }).success).toBe(true);
+    // Товар по акции — со скидкой в процентах; дробная скидка — мусор.
+    expect(payload.safeParse({ product: "shop_item", sku: "gems_330", priceStars: 175, chargedStars: 175, mode: "live", promoPct: 30 }).success).toBe(true);
+    expect(payload.safeParse({ product: "shop_item", sku: "gems_330", priceStars: 175, chargedStars: 175, mode: "live", promoPct: 30.5 }).success).toBe(false);
     expect(payload.safeParse({ product: "shop_item", sku: "gems_60", priceStars: 50, chargedStars: 50 }).success).toBe(false);
   });
 });

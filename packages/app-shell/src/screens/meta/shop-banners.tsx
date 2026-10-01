@@ -1,10 +1,10 @@
 import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode, type UIEvent } from "react";
-import { Crown, Rocket, Shield, Sparkles } from "lucide-react";
+import { BadgePercent, Crown, Rocket, Shield, Sparkles } from "lucide-react";
 import { Button } from "../../design-system/components";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
 import { formatNumber, t } from "../../i18n";
-import { ResourceIcon } from "./shop-parts";
-import { itemName, resourceLabel, type ShopBanner } from "./shop-texts";
+import { ResourceIcon, StarsButton } from "./shop-parts";
+import { bannerKey, buyLabel, itemName, promoLeft, resourceLabel, shownPrice, type ShopBanner } from "./shop-texts";
 
 /**
  * Полоса баннеров наверху магазина: листается пальцем, по одному баннеру на
@@ -13,10 +13,12 @@ import { itemName, resourceLabel, type ShopBanner } from "./shop-texts";
  * надоедает к третьему визиту (docs/27-design-system-and-app-shell.md §7.1).
  *
  * Тон баннера — цвет того, что он продаёт: VIP — золото элиты, снаряжение —
- * цвет пассивок, звёзды — фирменный цвет Stars. Все цвета — токены палитры.
+ * цвет пассивок, звёзды — фирменный цвет Stars, акция — цвет опасности: она
+ * кончается. Все цвета — токены палитры.
  */
 
 const TONE: Record<ShopBanner["kind"], { surface: string; icon: string }> = {
+  promo: { surface: "from-danger/30 via-surface-raised to-surface border-danger/40", icon: "text-danger" },
   vip: { surface: "from-elite/35 via-accent/10 to-surface border-elite/50", icon: "text-elite" },
   starter: { surface: "from-success/30 via-surface-raised to-surface border-success/40", icon: "text-success" },
   recommended: { surface: "from-accent/30 via-surface-raised to-surface border-accent/50", icon: "text-accent" },
@@ -27,6 +29,8 @@ const TONE: Record<ShopBanner["kind"], { surface: string; icon: string }> = {
 function BannerArt(props: { kind: ShopBanner["kind"] }): ReactNode {
   const size = 88;
   switch (props.kind) {
+    case "promo":
+      return <BadgePercent size={size} strokeWidth={1.5} />;
     case "vip":
       return <Crown size={size} strokeWidth={1.5} />;
     case "starter":
@@ -42,13 +46,24 @@ function BannerArt(props: { kind: ShopBanner["kind"] }): ReactNode {
 
 function bannerTitle(banner: ShopBanner): string {
   if (banner.kind === "recommended") return itemName(banner.item);
+  if (banner.kind === "promo") return banner.item.promo?.title ?? itemName(banner.item);
   return t(`shop.banner.${banner.kind}.title`);
+}
+
+/**
+ * Над заголовком — что это; у акции — скидка и сколько ей осталось: заголовок
+ * может быть подписью команды, и скидка не должна от неё зависеть.
+ */
+function bannerEyebrow(banner: ShopBanner, now: number): string {
+  if (banner.kind !== "promo") return t(`shop.banner.${banner.kind}.eyebrow`);
+  const promo = shownPrice(banner.item, now).promo;
+  return promo === null ? t("shop.banner.promo.over") : t("shop.banner.promo.eyebrow", { pct: promo.percent, time: promoLeft(promo, now) });
 }
 
 /** Набор в баннере — составом, как в карточке: что именно за звёзды, видно сразу (Р11). */
 function BannerText(props: { banner: ShopBanner }): ReactNode {
   const { banner } = props;
-  if (banner.kind === "starter" || banner.kind === "recommended") {
+  if ("item" in banner) {
     return (
       <ul className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-text">
         {banner.item.contents.map((part) => (
@@ -63,23 +78,21 @@ function BannerText(props: { banner: ShopBanner }): ReactNode {
   return <p className="text-sm text-text-muted">{t(`shop.banner.${banner.kind}.text`)}</p>;
 }
 
-function BannerAction(props: { banner: ShopBanner; busy: string | null; onAction: () => void }): ReactNode {
+function BannerAction(props: { banner: ShopBanner; busy: string | null; now: number; onAction: () => void }): ReactNode {
   const { banner, busy } = props;
-  if (banner.kind === "starter" || banner.kind === "recommended") {
-    const stars = banner.item.stars ?? 0;
-    const name = itemName(banner.item);
+  if ("item" in banner) {
+    const price = shownPrice(banner.item, props.now);
     return (
-      <Button
-        variant="stars"
+      <StarsButton
+        block={false}
         glow
+        stars={price.stars ?? 0}
+        full={price.full}
+        label={buyLabel(banner.item, price)}
+        busy={busy === banner.item.sku}
         disabled={busy !== null}
-        loading={busy === banner.item.sku}
-        ariaLabel={t("shop.buy", { name, stars, n: stars })}
         onClick={props.onAction}
-      >
-        <StarsIcon size={18} />
-        <span className="tabular-nums">{formatNumber(stars)}</span>
-      </Button>
+      />
     );
   }
   if (banner.kind === "vip") {
@@ -114,6 +127,7 @@ function prefersReducedMotion(): boolean {
 export function ShopBanners(props: {
   banners: readonly ShopBanner[];
   busy: string | null;
+  now: number;
   onAction: (banner: ShopBanner, position: number) => void;
 }): ReactNode {
   const [current, setCurrent] = useState(0);
@@ -206,7 +220,7 @@ export function ShopBanners(props: {
           const tone = TONE[banner.kind];
           return (
             <article
-              key={banner.kind}
+              key={bannerKey(banner)}
               role="group"
               aria-roledescription={t("shop.banner.slide")}
               aria-label={t("shop.banner.position", { n: index + 1, total })}
@@ -220,13 +234,13 @@ export function ShopBanners(props: {
               <span aria-hidden="true" className={`pointer-events-none absolute -right-3 -bottom-3 opacity-25 ${tone.icon}`}>
                 <BannerArt kind={banner.kind} />
               </span>
-              <p className={`font-display text-xs font-semibold tracking-widest uppercase ${tone.icon}`}>{t(`shop.banner.${banner.kind}.eyebrow`)}</p>
+              <p className={`font-display text-xs font-semibold tracking-widest uppercase ${tone.icon}`}>{bannerEyebrow(banner, props.now)}</p>
               <h2 className="mt-1 font-display text-xl leading-tight font-bold text-text">{bannerTitle(banner)}</h2>
               <div className="mt-1 flex-1 pr-14">
                 <BannerText banner={banner} />
               </div>
               <div className="mt-3 self-start">
-                <BannerAction banner={banner} busy={props.busy} onAction={() => props.onAction(banner, index)} />
+                <BannerAction banner={banner} busy={props.busy} now={props.now} onAction={() => props.onAction(banner, index)} />
               </div>
             </article>
           );
@@ -238,7 +252,7 @@ export function ShopBanners(props: {
         <div className="mt-1 flex justify-center">
           {props.banners.map((banner, index) => (
             <button
-              key={banner.kind}
+              key={bannerKey(banner)}
               type="button"
               aria-label={t("shop.banner.position", { n: index + 1, total })}
               aria-current={index === current}

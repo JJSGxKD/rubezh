@@ -28,6 +28,8 @@ export interface BuyRequest {
   priceStars: number;
   chargedStars: number;
   mode: "live" | "test";
+  /** скидка акции на витрине — разрез «продаёт ли акция» */
+  promoPct?: number;
   order(): Promise<ApiResult<ShopInvoice>>;
 }
 
@@ -58,7 +60,9 @@ export async function buy(request: BuyRequest, deps: BuyDeps): Promise<BuyOutcom
     track("purchase_failed", { ...fieldsOf(request), reason });
     return retryable(invoice) ? { kind: "retry", reason: "offline" } : { kind: "refused", code: reason };
   }
-  const fields = { ...fieldsOf(request), priceStars: invoice.data.priceStars, chargedStars: invoice.data.chargedStars, mode: invoice.data.mode };
+  // Счёт — по цене сервера; разошлась с витриной — акция кончилась, пока окно было открыто, и скидки в счёте нет.
+  const promo = invoice.data.priceStars === request.priceStars ? request.promoPct : undefined;
+  const fields = { ...fieldsOf({ ...request, promoPct: promo }), priceStars: invoice.data.priceStars, chargedStars: invoice.data.chargedStars, mode: invoice.data.mode };
   track("purchase_initiated", fields);
   // Разовый товар уже оплачен: ответ на прошлую покупку потерялся — ждём выдачи, а не платим снова.
   if (invoice.data.status === "paid" || invoice.data.invoiceUrl === null) return await confirm(invoice.data.purchaseId, fields, deps);
@@ -102,5 +106,6 @@ function retryable(answer: Extract<ApiResult<unknown>, { ok: false }>): boolean 
 
 /** Разрез событий покупки (docs/22-analytics-and-metrics.md §3.3): тестовые оплаты отделяются режимом. */
 function fieldsOf(request: BuyRequest): Record<string, string | number> {
-  return { product: request.product, sku: request.sku, priceStars: request.priceStars, chargedStars: request.chargedStars, mode: request.mode };
+  const fields = { product: request.product, sku: request.sku, priceStars: request.priceStars, chargedStars: request.chargedStars, mode: request.mode };
+  return request.promoPct === undefined ? fields : { ...fields, promoPct: request.promoPct };
 }

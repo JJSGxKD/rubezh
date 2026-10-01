@@ -4,7 +4,7 @@ import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { useShell } from "../src/state/shell";
 import { createShopApi, isDelivered, type ShopInvoice, type ShopPurchaseState, type ShopView, type VipView } from "../src/state/shop-api";
 import { buy, CONFIRM_POLL_MS, CONFIRM_TIMEOUT_MS, type BuyDeps, type BuyRequest } from "../src/state/shop-purchase";
-import { badgeLabel, itemName, noticeOf, shopBanners, showcaseRefusal, tributeOf, vipWaiting } from "../src/screens/meta/shop-texts";
+import { badgeLabel, bannerKey, buyLabel, itemName, noticeOf, promoLeft, shopBanners, showcaseRefusal, shownPrice, tributeOf, vipWaiting } from "../src/screens/meta/shop-texts";
 
 // Магазин и VIP на клиенте (docs/35-stage4-plan.md WP10): витрина и VIP — с
 // сервера, схемой, цены в запросе нет; купленным товар считается, когда
@@ -47,6 +47,9 @@ const VIP = {
   periodDays: 30,
   daily: { gems: 10, claimed: false },
 };
+
+const NOW = Date.UTC(2026, 9, 1, 9);
+const HOUR = 3_600_000;
 
 const INVOICE: ShopInvoice = { purchaseId: "p-1", sku: "gems_60", status: "pending", invoiceUrl: "https://t.me/$invoice", priceStars: 50, chargedStars: 50, mode: "live" };
 
@@ -117,16 +120,51 @@ describe("подача магазина", () => {
   const active: VipView = { ...VIP, renewal: "on", mode: "live" };
 
   it("баннеры по ценности: VIP, стартовый, подобранный, снаряжение, Tribute", () => {
-    expect(shopBanners(view(), offer).map((banner) => banner.kind)).toEqual(["vip", "starter", "recommended", "gear", "tribute"]);
+    expect(shopBanners(view(), offer, NOW).map((banner) => banner.kind)).toEqual(["vip", "starter", "recommended", "gear", "tribute"]);
   });
 
   it("предлагается только то, что можно купить: идущий VIP, купленный стартовый, подобранный им же — без баннера", () => {
     const owned = view({ items: view().items.map((item) => (item.sku === "starter" ? { ...item, owned: true } : item)), recommended: "starter", tribute: null });
-    expect(shopBanners(owned, active).map((banner) => banner.kind)).toEqual(["gear"]);
+    expect(shopBanners(owned, active, NOW).map((banner) => banner.kind)).toEqual(["gear"]);
     // Подобранный стартовый — уже баннер «Стартовый набор», второй с тем же товаром не нужен.
-    expect(shopBanners(view({ recommended: "starter" }), null).map((banner) => banner.kind)).toEqual(["starter", "gear", "tribute"]);
+    expect(shopBanners(view({ recommended: "starter" }), null, NOW).map((banner) => banner.kind)).toEqual(["starter", "gear", "tribute"]);
     // Без цены у способа оплаты продать нельзя — и предлагать тоже.
-    expect(shopBanners(view(), { ...offer, stars: null }).map((banner) => banner.kind)).not.toContain("vip");
+    expect(shopBanners(view(), { ...offer, stars: null }, NOW).map((banner) => banner.kind)).not.toContain("vip");
+  });
+
+  it("акции — первыми в полосе, глубокие раньше, не больше двух; товар по акции второй раз не предлагается", () => {
+    const promo = (percent: number) => ({ percent, endsAt: new Date(NOW + HOUR).toISOString(), title: null });
+    const items = [
+      { sku: "starter", kind: "starter", contents: [{ resource: "gems", amount: 60 }], stars: 25, fullStars: 50, promo: promo(50), once: true, owned: false },
+      { sku: "gems_60", kind: "gems", contents: [{ resource: "gems", amount: 60 }], stars: 45, fullStars: 50, promo: promo(10), once: false, owned: false },
+      { sku: "gems_330", kind: "gems", contents: [{ resource: "gems", amount: 330 }], stars: 175, fullStars: 250, promo: promo(30), once: false, owned: false },
+    ];
+    const banners = shopBanners(view({ items }), offer, NOW);
+    expect(banners.map(bannerKey)).toEqual(["promo:starter", "promo:gems_330", "vip", "gear", "tribute"]);
+    // Кончившаяся на глазах акция из полосы уходит, товар возвращается на своё место.
+    expect(shopBanners(view({ items }), offer, NOW + 2 * HOUR).map((banner) => banner.kind)).toEqual(["vip", "starter", "recommended", "gear", "tribute"]);
+    // Купленный стартовый по акции не предлагается.
+    expect(shopBanners(view({ items: items.map((item) => (item.sku === "starter" ? { ...item, owned: true } : item)) }), null, NOW).map(bannerKey)).toEqual(["promo:gems_330", "promo:gems_60", "gear", "tribute"]);
+  });
+
+  it("показанная цена: по акции — со скидкой и зачёркнутой ценой каталога; кончившаяся — цена каталога; без акции — как пришла", () => {
+    const item = { sku: "gems_330", kind: "gems", contents: [{ resource: "gems", amount: 330 }], stars: 175, fullStars: 250, promo: { percent: 30, endsAt: new Date(NOW + HOUR).toISOString(), title: null }, once: false, owned: false };
+    expect(shownPrice(item, NOW)).toEqual({ stars: 175, full: 250, promo: item.promo });
+    expect(shownPrice(item, NOW + HOUR)).toEqual({ stars: 250, full: null, promo: null });
+    expect(shownPrice({ ...item, fullStars: null, promo: null, stars: 250 }, NOW)).toEqual({ stars: 250, full: null, promo: null });
+    // Сервер до акций полей не присылал.
+    expect(shownPrice({ sku: "gems_60", kind: "gems", contents: [], stars: 50, once: false, owned: false }, NOW)).toEqual({ stars: 50, full: null, promo: null });
+
+    expect(promoLeft(item.promo, NOW)).toBe("1 ч");
+    expect(buyLabel(item, shownPrice(item, NOW))).toBe("Купить «Мешочек самоцветов» за 175 звёзд вместо 250");
+    expect(buyLabel(item, shownPrice(item, NOW + HOUR))).toBe("Купить «Мешочек самоцветов» за 250 звёзд");
+  });
+
+  it("витрина с акцией проходит схему; сервер до акций — тоже", async () => {
+    const promoted = { ...SHOP, items: [{ ...SHOP.items[1], stars: 35, fullStars: 50, promo: { percent: 30, endsAt: "2026-10-02T09:00:00.000Z", title: "Неделя самоцветов" } }] };
+    const view = await createShopApi(server([], promoted)).view();
+    expect(view.ok && view.data.items[0]?.promo?.title).toBe("Неделя самоцветов");
+    expect((await createShopApi(server([], { ...promoted, items: [{ ...promoted.items[0], promo: { percent: "30" } }] })).view()).ok).toBe(false);
   });
 
   it("Tribute — только по https: пустая, чужая схема и мусор — без плашки", () => {
@@ -252,6 +290,15 @@ describe("покупка в магазине", () => {
     expect(polled).toEqual(["p-1", "p-1", "p-1"]);
     expect(named("purchase_initiated")).toEqual([{ product: "shop_item", sku: "gems_60", priceStars: 50, chargedStars: 50, mode: "live" }]);
     expect(named("purchase_completed")).toHaveLength(1);
+  });
+
+  it("покупка по акции несёт скидку в событиях; счёт уже без скидки — акция кончилась — и скидки в событии нет", async () => {
+    await buy({ ...request({ ok: true, data: { ...INVOICE, priceStars: 35, chargedStars: 35 } }), priceStars: 35, chargedStars: 35, promoPct: 30 }, deps("paid"));
+    expect(named("purchase_completed")).toEqual([{ product: "shop_item", sku: "gems_60", priceStars: 35, chargedStars: 35, mode: "live", promoPct: 30 }]);
+
+    events = [];
+    await buy({ ...request(), priceStars: 35, chargedStars: 35, promoPct: 30 }, deps("paid"));
+    expect(named("purchase_initiated")).toEqual([{ product: "shop_item", sku: "gems_60", priceStars: 50, chargedStars: 50, mode: "live" }]);
   });
 
   it("событие несёт цену и режим из счёта, а не из витрины: тестовая оплата не смешается с настоящей", async () => {

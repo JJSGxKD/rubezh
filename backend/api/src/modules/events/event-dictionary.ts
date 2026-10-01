@@ -47,6 +47,8 @@ const purchaseFields = {
   mode: z.enum(["live", "test"]),
   continueNo: count.optional(),
   sku: id.optional(),
+  // Скидка акции магазина в процентах — только у товара по акции (WP10, часть 8).
+  promoPct: count.optional(),
 };
 
 const runOutcome = payload({
