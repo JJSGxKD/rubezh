@@ -194,6 +194,7 @@ model Account {
   returns          FriendReturn[]  @relation("friend_return_returned")
   returnsHelped    FriendReturn[]  @relation("friend_return_friend")
   friendBonuses    FriendBonus[]
+  promoRedemptions PromoRedemption[]
   broadcasts       BroadcastDelivery[]
   items            Item[]
   itemEvents       ItemEvent[]
@@ -1729,4 +1730,80 @@ model ShopPromo {
   @@index([sku, startsAt])
   @@index([endsAt])
   @@map("shop_promo")
+}
+
+/// Кампания промокодов (docs/35-stage4-plan.md WP41, Р74): общий код на всех
+/// или пачка одноразовых, награда, срок, лимит и кому. Правила —
+/// `promo-codes/promo-code-rules.ts`; кампания с погашениями не удаляется —
+/// по ней выданы награды.
+model PromoCampaign {
+  campaignId     String    @id @map("campaign_id") @db.Uuid
+  /// название для команды: «Стрим 12 октября»; игрок его не видит
+  title          String    @db.VarChar(80)
+  /// `shared` — один код на всех, `batch` — пачка одноразовых
+  kind           String    @db.VarChar(8)
+  /// что получит игрок: `{ coins, gems, shard_common, shard_uncommon }`
+  reward         Json
+  /// текст игроку после активации; `null` — общий текст клиента
+  message        String?   @db.VarChar(160)
+  /// сколько раз можно активировать; у пачки — число кодов, у общего `null` — без лимита
+  maxRedemptions Int?      @map("max_redemptions")
+  redeemed       Int       @default(0)
+  startsAt       DateTime  @map("starts_at") @db.Timestamptz(3)
+  /// `null` — бессрочно
+  endsAt         DateTime? @map("ends_at") @db.Timestamptz(3)
+  /// только аккаунтам не старше стольких дней; `null` — всем
+  newPlayersDays Int?      @map("new_players_days") @db.SmallInt
+  /// площадки; пусто — все
+  platforms      String[]  @default([]) @db.VarChar(16)
+  pausedAt       DateTime? @map("paused_at") @db.Timestamptz(3)
+  note           String?   @db.VarChar(200)
+  /// кто завёл; без внешнего ключа — запись переживает аккаунт
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  codes       PromoCode[]
+  redemptions PromoRedemption[]
+
+  @@index([createdAt])
+  @@map("promo_campaign")
+}
+
+/// Код, который вводит игрок. Ключ — без регистра, пробелов и дефисов, а
+/// кириллица, похожая на латиницу, сведена к латинице: «рубеж 2026» и
+/// «РУБЕЖ-2026» — один код.
+model PromoCode {
+  code       String    @id @db.VarChar(32)
+  /// как код показывать: «ZIMA-K7MP-3XTE»
+  display    String    @db.VarChar(48)
+  campaignId String    @map("campaign_id") @db.Uuid
+  /// у кода пачки — кто его погасил; у общего кода всегда `null`
+  redeemedBy String?   @map("redeemed_by") @db.Uuid
+  redeemedAt DateTime? @map("redeemed_at") @db.Timestamptz(3)
+
+  campaign PromoCampaign @relation(fields: [campaignId], references: [campaignId], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("promo_code")
+}
+
+/// Погашение: один игрок — одна кампания. Награда ложится после записи
+/// погашения; `rewardedAt = null` — начисление не дошло, и повторный ввод
+/// кода его доначислит теми же ключами кошелька.
+model PromoRedemption {
+  campaignId String    @map("campaign_id") @db.Uuid
+  accountId  String    @map("account_id") @db.Uuid
+  code       String    @db.VarChar(32)
+  redeemedAt DateTime  @map("redeemed_at") @db.Timestamptz(3)
+  rewardedAt DateTime? @map("rewarded_at") @db.Timestamptz(3)
+  /// сколько легло на самом деле — суточный потолок кошелька мог срезать
+  credited   Json?
+
+  campaign PromoCampaign @relation(fields: [campaignId], references: [campaignId], onDelete: Restrict)
+  account  Account       @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([campaignId, accountId])
+  @@index([accountId, redeemedAt])
+  @@map("promo_redemption")
 }
