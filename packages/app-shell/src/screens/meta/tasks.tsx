@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Clock, Crown, Crosshair, Diamond, Hourglass, Megaphone, Play, Sparkles, Target } from "lucide-react";
+import { Bot, Check, Clock, Crown, Crosshair, Diamond, ExternalLink, Hourglass, Megaphone, Play, Sparkles, Target } from "lucide-react";
 import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, PageTitle, ProgressBar, Screen, SegmentedControl } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
@@ -11,12 +11,15 @@ import {
   claimFailureKey,
   createTasksApi,
   isClaimable,
+  isOpenKind,
   openTaskLink,
   sortTasks,
+  tabOf,
   taskLink,
   tasksAvailable,
   type TaskItem,
   type TaskReward,
+  type TaskTab,
 } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
@@ -30,14 +33,16 @@ import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
  * рисует то, что пришло, — и незнакомый вид цели тоже, с заголовком из
  * каталога.
  *
- * Цель со ссылкой — подписка на канал (Р52): «Подписаться» открывает канал
- * через площадку, «Проверить» просит сервер спросить бота и сразу забирает
- * награду. Полосы прогресса у неё нет — подписка либо есть, либо нет.
+ * Партнёрские цели (Р52) — своей вкладкой. Подписка на канал: «Подписаться»
+ * открывает канал через площадку, «Проверить» просит сервер спросить бота и
+ * сразу забирает награду. Ссылка и бот: «Перейти» открывает ссылку и
+ * засчитывает переход, дальше — «Забрать». Полосы прогресса у них нет —
+ * действие либо сделано, либо нет.
  */
-type View = "daily" | "weekly" | "achievements";
+type View = "daily" | "weekly" | "achievements" | "partner";
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; tasks: TaskItem[] };
 
-const PERIOD_OF: Record<View, TaskItem["period"]> = { daily: "daily", weekly: "weekly", achievements: "achievement" };
+const TAB_OF: Record<View, TaskTab> = { daily: "daily", weekly: "weekly", achievements: "achievement", partner: "partner" };
 
 const ICONS: Partial<Record<string, ReactNode>> = {
   runs: <Play size={20} aria-hidden="true" />,
@@ -46,6 +51,8 @@ const ICONS: Partial<Record<string, ReactNode>> = {
   best_survival_sec: <Crown size={20} aria-hidden="true" />,
   run_level: <Sparkles size={20} aria-hidden="true" />,
   channel: <Megaphone size={20} aria-hidden="true" />,
+  link: <ExternalLink size={20} aria-hidden="true" />,
+  bot: <Bot size={20} aria-hidden="true" />,
 };
 
 /** Цели во времени считаются в секундах, а читаются минутами. */
@@ -91,9 +98,21 @@ export function TasksScreen(): ReactNode {
   };
 
   const all = state.status === "ready" ? state.tasks : [];
-  const tasks = sortTasks(all.filter((task) => task.period === PERIOD_OF[view]));
+  const tasks = sortTasks(all.filter((task) => tabOf(task) === TAB_OF[view]));
   // Знак на вкладке — сколько наград там ждёт: игрок видит их, не перебирая вкладки.
-  const waiting = (period: TaskItem["period"]) => all.filter((task) => task.period === period && isClaimable(task)).length;
+  const waiting = (tab: TaskTab) => all.filter((task) => tabOf(task) === tab && isClaimable(task)).length;
+
+  /**
+   * Ссылка открывается сразу, в том же нажатии: площадка открывает ссылки
+   * только в ответ на касание. Переход засчитывает сервер — уже после.
+   */
+  const open = (task: TaskItem, link: string): void => {
+    track("task_link_opened", { task: task.id, kind: task.kind });
+    openTaskLink(link);
+    void api.open(task.id).then((response) => {
+      if (response.ok) setState({ status: "ready", tasks: response.data.tasks });
+    });
+  };
 
   return (
     <Screen>
@@ -108,6 +127,7 @@ export function TasksScreen(): ReactNode {
               { id: "daily", label: t("tasks.daily"), badge: waiting("daily") },
               { id: "weekly", label: t("tasks.weekly"), badge: waiting("weekly") },
               { id: "achievements", label: t("tasks.achievements"), badge: waiting("achievement") },
+              { id: "partner", label: t("tasks.partner"), badge: waiting("partner") },
             ]}
           />
           {!tasksAvailable() ? <InfoNotice text={t("tasks.guest")} /> : null}
@@ -120,7 +140,7 @@ export function TasksScreen(): ReactNode {
           // Ключ — вид: список монтируется заново, и лесенка появления
           // проигрывается при каждом переключении.
           <div key={view} className="mt-4">
-            {view === "achievements" ? null : <ResetLine period={view} />}
+            {view === "daily" || view === "weekly" ? <ResetLine period={view} /> : null}
             {tasks.length === 0 ? <p className="text-sm text-text-muted">{t("tasks.empty")}</p> : null}
             <div className="grid gap-2">
               {tasks.map((task, index) => (
@@ -131,10 +151,7 @@ export function TasksScreen(): ReactNode {
                   claiming={claiming === task.id}
                   notice={notice?.taskId === task.id ? notice.text : null}
                   onClaim={() => void claim(task)}
-                  onOpen={(link) => {
-                    track("task_link_opened", { task: task.id, kind: task.kind });
-                    openTaskLink(link);
-                  }}
+                  onOpen={(link) => open(task, link)}
                 />
               ))}
             </div>
@@ -162,8 +179,9 @@ function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; noti
   const claimable = isClaimable(task);
   const link = taskLink(task);
   // Подписку выполняет не забег: её проверяет сервер по нажатию, поэтому
-  // «Проверить» есть и у невыполненной цели.
-  const checkable = link !== null && !task.done;
+  // «Проверить» есть и у невыполненной цели. Ссылку и бота выполняет переход.
+  const waitsAction = link !== null && !task.done;
+  const opens = waitsAction && isOpenKind(task.kind);
   const name = achievementName(task);
   const title = task.title ?? name ?? goalText(task);
   const hint = task.title === null && name !== null ? goalText(task) : null;
@@ -212,7 +230,15 @@ function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; noti
           </Button>
         </div>
       ) : null}
-      {checkable ? (
+      {opens ? (
+        <div className="mt-3">
+          <Button block onClick={() => props.onOpen(link)}>
+            <ExternalLink size={18} aria-hidden="true" />
+            {t(task.kind === "bot" ? "tasks.startBot" : "tasks.go")}
+          </Button>
+        </div>
+      ) : null}
+      {waitsAction && !opens ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button variant="secondary" onClick={() => props.onOpen(link)}>
             {t("tasks.subscribe")}
