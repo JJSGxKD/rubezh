@@ -32,6 +32,17 @@ export const SUCCESS_TITLES: Record<AdSuccess, string> = { view: "показ", c
 export const DEVICE_TITLES: Record<AdDevice, string> = { android: "Android", ios: "iOS", desktop: "десктоп", web: "браузер" };
 export const DAYS_TITLES: Record<FunnelDays, string> = { 1: "сутки", 7: "неделя", 30: "месяц" };
 
+/**
+ * Строки воронки без сети — пропуски рекламы: VIP получает награду места без
+ * ролика (§3.6), и сессия пишется под именем пропуска, а не сети.
+ */
+export const PASS_TITLES: Partial<Record<string, string>> = { vip: "VIP без ролика" };
+
+/** Имя сети строки воронки: сеть из каталога, пропуск — своим названием, незнакомое — ключом. */
+export function funnelNetworkTitle(key: string, networks: readonly Pick<AdNetwork, "networkKey" | "name">[]): string {
+  return networks.find((network) => network.networkKey === key)?.name ?? PASS_TITLES[key] ?? key;
+}
+
 /** Меньше двух сетей в месте — отказ единственной оставляет место пустым (критерий приёмки WP12). */
 export const MIN_NETWORKS_PER_PLACE = 2;
 export const EXTERNAL_ID_MAX = 128;
