@@ -1,7 +1,8 @@
 import { api } from "../../services";
-import { fetchReviewQueue } from "../../api/review";
+import { fetchReviewQueue, reasonTitle } from "../../api/review";
 import { formatDateTime, formatDuration, formatNumber } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Loading, Panel } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 
@@ -13,7 +14,7 @@ import { useApi } from "../../ui/use-api";
 export function ReviewScreen() {
   const { state, reload } = useApi(() => fetchReviewQueue(api), []);
   return (
-    <Panel title="Разбор забегов" actions={<Button onClick={reload}>Обновить</Button>}>
+    <Panel title="Разбор забегов" help={HELP.review.queue} actions={<Button onClick={reload}>Обновить</Button>}>
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok" ? (
@@ -25,7 +26,7 @@ export function ReviewScreen() {
           columns={[
             { title: "Закончен", render: (run) => formatDateTime(run.finishedAt) },
             { title: "Вердикт", render: (run) => <Badge tone={run.verdict === "rejected" ? "danger" : "warning"}>{run.verdict === "rejected" ? "отклонён" : "подозрительный"}</Badge> },
-            { title: "Причины", render: (run) => run.verdictReasons.join(", ") || "—" },
+            { title: "Причины", help: HELP.review.reasons, render: (run) => run.verdictReasons.map(reasonTitle).join("; ") || "—" },
             { title: "Сложность", render: (run) => run.difficulty },
             { title: "Время", render: (run) => (run.survivalSec === null ? "—" : formatDuration(run.survivalSec)), align: "right" },
             { title: "Уровень", render: (run) => run.level ?? "—", align: "right" },

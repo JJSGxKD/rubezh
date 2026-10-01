@@ -23,6 +23,7 @@ import { formatDateTime, formatNumber } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
 import { Badge, Button, DataTable, ErrorNotice, KeyValue, Loading, Notice, Panel } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { BroadcastForm } from "./BroadcastForm";
@@ -57,7 +58,7 @@ function BroadcastList() {
   return (
     <div className="flex flex-col gap-4">
       {creating ? (
-        <Panel title="Новая рассылка">
+        <Panel title="Новая рассылка" help={HELP.broadcasts.segment}>
           <BroadcastForm initial={NEW_BROADCAST} submitLabel="Сохранить черновик" buttonLocked={false} onSubmit={create} onCancel={() => setCreating(false)} />
         </Panel>
       ) : null}

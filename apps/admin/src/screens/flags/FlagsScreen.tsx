@@ -4,6 +4,7 @@ import type { ApiError } from "../../api/client";
 import { FLAG_PLATFORMS, fetchFlags, flagProblem, flagReach, removeFlag, saveFlag, type FlagInput, type FlagRow } from "../../api/flags";
 import { formatDateTime } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -74,7 +75,7 @@ export function FlagsScreen() {
             <Field label="Ключ" hint="его читает игра; латиница, точка, дефис">
               <Input value={input.key} disabled={editing} onChange={(event) => setInput({ ...input, key: event.target.value.trim().toLowerCase() })} placeholder="shop.v2" maxLength={64} />
             </Field>
-            <Field label="Доля игроков, %">
+            <Field label="Доля игроков, %" help={HELP.flags.percent}>
               <Input type="number" min={0} max={100} step={1} value={input.percent} onChange={(event) => setInput({ ...input, percent: Number(event.target.value) })} className="w-24" />
             </Field>
             <Field label="Заметка">
@@ -114,7 +115,7 @@ export function FlagsScreen() {
         </form>
         {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
       </Panel>
-      <Panel title="Флаги" actions={<Button onClick={reload}>Обновить</Button>}>
+      <Panel title="Флаги" help={HELP.flags.flags} actions={<Button onClick={reload}>Обновить</Button>}>
         {state.status === "loading" ? <Loading /> : null}
         {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
         {state.status === "ok" ? (
@@ -125,7 +126,7 @@ export function FlagsScreen() {
             columns={[
               { title: "Ключ", render: (row) => <code className="text-xs">{row.key}</code> },
               { title: "Состояние", render: (row) => (row.enabled ? <Badge tone="success">включён</Badge> : <Badge>выключен</Badge>) },
-              { title: "Получают", render: (row) => flagReach(row) },
+              { title: "Получают", help: HELP.flags.reach, render: (row) => flagReach(row) },
               { title: "Заметка", render: (row) => row.note ?? "—" },
               { title: "Изменён", render: (row) => formatDateTime(row.updatedAt) },
               {

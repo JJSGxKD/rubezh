@@ -17,6 +17,7 @@ import { formatDateTime } from "../../format";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 
 /**
@@ -174,8 +175,8 @@ export function PlayerList() {
               { title: "Регистрация", render: (player) => formatDateTime(player.createdAt) },
               { title: "Заходил", render: (player) => formatDateTime(player.lastSeenAt) },
               { title: "Откуда", render: (player) => (player.campaign === null ? sourceLabel(player.source) : `${sourceLabel(player.source)}: ${player.campaign}`) },
-              ...(withPayments ? [{ title: "Платящий", render: (player: PlayerListItem) => (player.payer === true ? <Badge tone="success">да</Badge> : "—") }] : []),
-              { title: "Писать", render: (player) => (player.canMessage === true ? "можно" : "нельзя") },
+              ...(withPayments ? [{ title: "Платящий", help: HELP.players.payer, render: (player: PlayerListItem) => (player.payer === true ? <Badge tone="success">да</Badge> : "—") }] : []),
+              { title: "Писать", help: HELP.players.canMessage, render: (player) => (player.canMessage === true ? "можно" : "нельзя") },
               { title: "Статус", render: (player) => (player.banned === null ? null : <Badge tone="danger">заблокирован</Badge>) },
             ]}
           />

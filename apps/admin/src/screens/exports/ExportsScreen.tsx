@@ -6,6 +6,7 @@ import { buildExport, EXPORT_SOURCES, EXPORT_STATUSES, fetchExports } from "../.
 import { periodFromDates } from "../../api/funnel";
 import { formatDateTime, formatNumber } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { saveFile } from "../../ui/save-file";
 import { useApi } from "../../ui/use-api";
 
@@ -34,7 +35,7 @@ export function ExportsScreen() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title="Собрать архив">
+      <Panel title="Собрать архив" help={HELP.exports.exports}>
         <div className="flex flex-col gap-3">
           <div className="flex items-end gap-2">
             <Field label="С">

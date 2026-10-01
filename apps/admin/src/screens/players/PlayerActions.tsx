@@ -15,6 +15,7 @@ import {
 } from "../../api/players";
 import { formatDelta, formatNumber } from "../../format";
 import { Button, Field, Input, Notice, Panel, Select, TextArea } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 
 /**
  * Действия с игроком — с подтверждением вторым нажатием: блокировка,
@@ -116,7 +117,7 @@ export function WalletAdjustPanel({ card, onChanged }: { card: PlayerCard; onCha
   };
 
   return (
-    <Panel title="Ручная операция с кошельком">
+    <Panel title="Ручная операция с кошельком" help={HELP.players.walletOp}>
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-[1fr_140px] gap-2">
           <Field label="Ресурс">

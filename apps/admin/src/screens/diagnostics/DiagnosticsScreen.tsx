@@ -5,6 +5,7 @@ import { compactJson } from "../../api/roles";
 import { fetchReport, fetchReports, formatBytes, prettyJson, REPORTS_PAGE, type ReportFilter, type ReportRow } from "../../api/diagnostics";
 import { formatDateTime } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, KeyValue, Loading, Panel, Select } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { saveFile } from "../../ui/save-file";
 import { useApi } from "../../ui/use-api";
@@ -48,7 +49,7 @@ function ReportList() {
   const lastPageFull = pages.length === 0 ? first.status === "ok" && first.more : pages.length % REPORTS_PAGE === 0;
 
   return (
-    <Panel title="Отчёты диагностики" actions={<Button onClick={() => { setPages([]); reload(); }}>Обновить</Button>}>
+    <Panel title="Отчёты диагностики" help={HELP.diagnostics.reports} actions={<Button onClick={() => { setPages([]); reload(); }}>Обновить</Button>}>
       <div className="mb-4 flex items-end gap-2">
         <Field label="Вид">
           <Select value={draft.kind ?? ""} onChange={(event) => setDraft({ ...draft, kind: event.target.value === "" ? undefined : (event.target.value as "bench" | "run") })}>

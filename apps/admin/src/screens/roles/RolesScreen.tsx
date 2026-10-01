@@ -4,6 +4,7 @@ import type { ApiError } from "../../api/client";
 import { fetchAssignments, grantRole, revokeRole, roleName, roleTargetOf, ROLE_NAMES, type Assignment } from "../../api/roles";
 import { formatDateTime } from "../../format";
 import { Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 
@@ -52,7 +53,7 @@ export function RolesScreen() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title="Выдать роль">
+      <Panel title="Выдать роль" help={HELP.roles.roles}>
         <form onSubmit={(event) => void grant(event)} className="flex items-end gap-2">
           <Field label="Кому" hint="Telegram ID цифрами или идентификатор аккаунта из карточки игрока">
             <Input value={target} onChange={(event) => setTarget(event.target.value)} className="w-96" maxLength={64} />

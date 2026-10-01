@@ -4,6 +4,7 @@ import type { ApiError } from "../../api/client";
 import { SETTING_PLACEHOLDER, SOURCE_TITLES, URL_MAX, fetchSettings, groupSettings, resetSetting, saveSetting, settingProblem, settingText, type SettingRow, type SettingValue } from "../../api/settings";
 import { formatDateTime } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Input, Loading, Notice, Panel } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -89,7 +90,7 @@ export function SettingsScreen() {
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok"
         ? groupSettings(state.data.settings).map(({ group, rows }) => (
-            <Panel key={group} title={group} actions={<Button onClick={reload}>Обновить</Button>}>
+            <Panel key={group} title={group} help={HELP.settings.settings} actions={<Button onClick={reload}>Обновить</Button>}>
               <DataTable
                 rows={rows}
                 rowKey={(row) => row.key}

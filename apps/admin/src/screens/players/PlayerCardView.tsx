@@ -4,6 +4,7 @@ import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../..
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
 import { Badge, Button, DataTable, ErrorNotice, KeyValue, Loading, Panel } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { BanPanel, MessagePanel, WalletAdjustPanel } from "./PlayerActions";
@@ -81,7 +82,7 @@ function Header({ card }: { card: PlayerCard }) {
 function Funnel({ card }: { card: PlayerCard }) {
   const { funnel } = card;
   return (
-    <Panel title="Вехи воронки">
+    <Panel title="Вехи воронки" help={HELP.players.funnel}>
       {funnel === null ? (
         <p className="text-sm text-text-muted">Вех нет: игрок ни разу не входил.</p>
       ) : (
@@ -95,7 +96,7 @@ function Acquisition({ card }: { card: PlayerCard }) {
   const { acquisition } = card;
   const touch = (kind: string | null, ref: string | null) => (kind === null ? "—" : ref === null ? kind : `${kind}: ${ref}`);
   return (
-    <Panel title="Откуда пришёл">
+    <Panel title="Откуда пришёл" help={HELP.players.origin}>
       {acquisition === null ? (
         <p className="text-sm text-text-muted">Касаний нет.</p>
       ) : (

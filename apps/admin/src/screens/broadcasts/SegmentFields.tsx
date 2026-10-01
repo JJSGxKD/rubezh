@@ -1,5 +1,6 @@
 import { MILESTONES, START_KINDS, type Milestone, type Segment } from "../../api/broadcasts";
 import { Field, Input, Select } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 
 /**
  * Конструктор аудитории: вехи — «неважно / прошёл / не прошёл», источник
@@ -73,10 +74,10 @@ export function SegmentFields({ value, onChange, disabled = false }: { value: Se
         <Field label="Заходили за, дн.">
           <Input type="number" min={1} className="w-28" disabled={disabled} value={value.activeWithinDays ?? ""} onChange={(event) => onChange({ ...value, activeWithinDays: daysOf(event.target.value) })} />
         </Field>
-        <Field label="Не заходят, дн.">
+        <Field label="Не заходят, дн." help={HELP.broadcasts.inactive}>
           <Input type="number" min={1} className="w-28" disabled={disabled} value={value.inactiveForDays ?? ""} onChange={(event) => onChange({ ...value, inactiveForDays: daysOf(event.target.value) })} />
         </Field>
-        <Field label="Не писать получавшим за, дн. (0 — всем)">
+        <Field label="Не писать получавшим за, дн. (0 — всем)" help={HELP.broadcasts.skipRecent}>
           <Input type="number" min={0} max={90} className="w-28" disabled={disabled} value={value.skipRecentDays} onChange={(event) => onChange({ ...value, skipRecentDays: Number(event.target.value) })} />
         </Field>
       </div>

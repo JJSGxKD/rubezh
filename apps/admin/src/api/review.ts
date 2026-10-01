@@ -25,3 +25,27 @@ export const REVIEW_LIMIT = 200;
 export function fetchReviewQueue(api: AdminApi): Promise<ApiResult<{ runs: ReviewRow[] }>> {
   return api.request("/runs/review", { query: { limit: REVIEW_LIMIT }, schema: z.object({ runs: z.array(reviewRowSchema) }) });
 }
+
+/**
+ * Причины вердикта словами — те же, что в карточке разбора в чате
+ * (`backend/api/src/modules/admin-notify/run-review-card.ts`). Код новее
+ * панели показывается как есть: лучше код, чем пустое место.
+ */
+const REASON_TITLES: Readonly<Record<string, string>> = {
+  weapons_over_slots: "оружий больше, чем слотов",
+  longer_than_wall_clock: "забег дольше, чем прошло по часам сервера",
+  kill_rate: "убийств в секунду больше порога",
+  level_rate: "уровни растут быстрее порога",
+  unknown_content: "незнакомый отпечаток контента — сборка не из выпущенных",
+  unpaid_continue: "второй шанс без оплаты",
+  underpaid_continue: "второй шанс оплачен за меньшее время, чем прошло",
+  unverified_time: "старт не дошёл — время забега не проверено",
+  loadout_forged: "снимок снаряжения не подписан сервером",
+  loadout_stale: "снаряжение сменилось после выдачи снимка",
+  loadout_level_ahead: "уровень снимка выше уровня аккаунта",
+  boost_unpaid: "буст не куплен на этот забег",
+};
+
+export function reasonTitle(code: string): string {
+  return REASON_TITLES[code] ?? code;
+}
