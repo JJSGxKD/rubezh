@@ -6,6 +6,7 @@ import { formatDateTime, formatNumber } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
 /**
@@ -35,39 +36,39 @@ export function FxScreen() {
         <>
           {state.data.enabled ? null : <Notice tone="info">Сбор курсов на сервере выключен — ниже последние сохранённые.</Notice>}
           {state.data.missing.length === 0 ? null : <Notice>Нет курса: {state.data.missing.join(", ")}</Notice>}
-          <Panel title="Курсы" actions={<Button onClick={reload}>Обновить</Button>}>
+          <Panel title="Курсы" help={HELP.fx.rates} actions={<Button onClick={reload}>Обновить</Button>}>
             <DataTable
               rows={state.data.rates}
               rowKey={(rate) => rate.currency}
               empty="Курсов нет"
               columns={[
                 { title: "Валюта", render: (rate) => rate.currency },
-                { title: "Цена в $", render: (rate) => <code>{rate.usdPerUnit}</code>, align: "right" },
-                { title: "Единиц за $", render: (rate) => <code>{rate.unitsPerUsd}</code>, align: "right" },
-                { title: "Источники", render: (rate) => rate.sources.join(", ") },
+                { title: "Цена в $", help: HELP.fx.usdPerUnit, render: (rate) => <code>{rate.usdPerUnit}</code>, align: "right" },
+                { title: "Единиц за $", help: HELP.fx.unitsPerUsd, render: (rate) => <code>{rate.unitsPerUsd}</code>, align: "right" },
+                { title: "Источники", help: HELP.fx.sources, render: (rate) => rate.sources.join(", ") },
                 { title: "Снят", render: (rate) => formatDateTime(rate.observedAt) },
-                { title: "Свежесть", render: (rate) => <FreshnessBadge value={rate.freshness} /> },
+                { title: "Свежесть", help: HELP.fx.freshness, render: (rate) => <FreshnessBadge value={rate.freshness} /> },
               ]}
             />
           </Panel>
-          <Panel title="Заданные курсы">
+          <Panel title="Заданные курсы" help={HELP.fx.manual}>
             <DataTable
               rows={state.data.manual}
               rowKey={(rate) => `${rate.currency}|${rate.purpose}`}
               empty="Заданных курсов нет"
               columns={[
                 { title: "Валюта", render: (rate) => rate.currency },
-                { title: "Назначение", render: (rate) => MANUAL_PURPOSES.find(([id]) => id === rate.purpose)?.[1] ?? rate.purpose },
+                { title: "Назначение", help: HELP.fx.purpose, render: (rate) => MANUAL_PURPOSES.find(([id]) => id === rate.purpose)?.[1] ?? rate.purpose },
                 { title: "Цена", render: (rate) => <code>{`${rate.price} ${rate.quote}`}</code>, align: "right" },
                 { title: "В $", render: (rate) => <code>{rate.usdPerUnit ?? "—"}</code>, align: "right" },
                 { title: "Действует до", render: (rate) => formatDateTime(rate.expiresAt) },
-                { title: "Свежесть", render: (rate) => <FreshnessBadge value={rate.freshness} /> },
+                { title: "Свежесть", help: HELP.fx.freshness, render: (rate) => <FreshnessBadge value={rate.freshness} /> },
                 { title: "Причина", render: (rate) => rate.note },
               ]}
             />
           </Panel>
           {can(view, "fx.rates.edit") ? <ManualRateForm onSaved={reload} /> : null}
-          <Panel title="Источники">
+          <Panel title="Источники" help={HELP.fx.sourcesPanel}>
             <DataTable
               rows={state.data.sources}
               rowKey={(source) => source.source}
@@ -119,7 +120,7 @@ function ManualRateForm({ onSaved }: { onSaved: () => void }) {
               ))}
             </Select>
           </Field>
-          <Field label="Назначение">
+          <Field label="Назначение" help={HELP.fx.purpose}>
             <Select value={input.purpose} onChange={(event) => patch({ purpose: event.target.value })}>
               {MANUAL_PURPOSES.map(([id, name]) => (
                 <option key={id} value={id}>

@@ -24,6 +24,7 @@ import {
 } from "../../api/tasks";
 import { api } from "../../services";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -90,7 +91,7 @@ export function TasksScreen() {
             <Field label="id" hint="латиница, навсегда">
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
             </Field>
-            <Field label="Срок">
+            <Field label="Срок" help={HELP.tasks.period}>
               <Select value={input.period} disabled={original !== null || partner} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
                 {TASK_PERIODS.map((period) => (
                   <option key={period} value={period}>
@@ -99,7 +100,7 @@ export function TasksScreen() {
                 ))}
               </Select>
             </Field>
-            <Field label="Вид цели">
+            <Field label="Вид цели" help={HELP.tasks.kind}>
               <Select value={input.kind} disabled={original !== null} onChange={(event) => setInput(withKind(input, event.target.value))}>
                 {kinds.map((kind) => (
                   <option key={kind} value={kind}>
@@ -159,10 +160,10 @@ export function TasksScreen() {
             <Field label="Осколки">
               <Input {...number("shards")} />
             </Field>
-            <Field label="Очки пасса">
+            <Field label="Очки пасса" help={HELP.tasks.passPoints}>
               <Input {...number("passPoints")} />
             </Field>
-            <Field label="Порядок">
+            <Field label="Порядок" help={HELP.tasks.order}>
               <Input {...number("sort")} />
             </Field>
             <label className="flex items-center gap-1.5 pb-1.5 text-sm">

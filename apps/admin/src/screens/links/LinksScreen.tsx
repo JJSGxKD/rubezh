@@ -4,6 +4,7 @@ import type { ApiError } from "../../api/client";
 import { conversion, createLink, fetchLinks, SLUG } from "../../api/links";
 import { formatDateTime, formatNumber } from "../../format";
 import { Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
 /**
@@ -35,10 +36,10 @@ export function LinksScreen() {
     <div className="flex flex-col gap-4">
       <Panel title="Новая ссылка">
         <form onSubmit={(event) => void submit(event)} className="flex flex-wrap items-end gap-2">
-          <Field label="Кампания" hint="латиница, цифры, дефис">
+          <Field label="Кампания" hint="латиница, цифры, дефис" help={HELP.links.campaign}>
             <Input value={campaign} onChange={(event) => setCampaign(event.target.value.trim().toLowerCase())} placeholder="launch-post" maxLength={64} />
           </Field>
-          <Field label="Источник">
+          <Field label="Источник" help={HELP.links.source}>
             <Input value={source} onChange={(event) => setSource(event.target.value.trim().toLowerCase())} placeholder="tg-channel" maxLength={64} />
           </Field>
           <Field label="Заметка">
@@ -50,7 +51,7 @@ export function LinksScreen() {
         </form>
         {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
       </Panel>
-      <Panel title="Ссылки" actions={<Button onClick={reload}>Обновить</Button>}>
+      <Panel title="Ссылки" help={HELP.links.links} actions={<Button onClick={reload}>Обновить</Button>}>
         {state.status === "loading" ? <Loading /> : null}
         {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
         {state.status === "ok" ? (
@@ -64,8 +65,8 @@ export function LinksScreen() {
               { title: "Адрес", render: (row) => <code className="text-xs">{row.url}</code> },
               { title: "Кликов", render: (row) => formatNumber(row.clicks), align: "right" },
               { title: "За 30 дней", render: (row) => formatNumber(row.clicks30d), align: "right" },
-              { title: "Запусков", render: (row) => formatNumber(row.launches), align: "right" },
-              { title: "Конверсия", render: (row) => (conversion(row) === null ? "—" : `${conversion(row)}%`), align: "right" },
+              { title: "Запусков", help: HELP.links.launches, render: (row) => formatNumber(row.launches), align: "right" },
+              { title: "Конверсия", help: HELP.links.conversion, render: (row) => (conversion(row) === null ? "—" : `${conversion(row)}%`), align: "right" },
               { title: "Заведена", render: (row) => formatDateTime(row.createdAt) },
               { title: "Заметка", render: (row) => row.note ?? "—" },
             ]}

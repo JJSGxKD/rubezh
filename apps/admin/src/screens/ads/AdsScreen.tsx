@@ -30,6 +30,7 @@ import type { ApiError } from "../../api/client";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -66,13 +67,13 @@ export function AdsScreen() {
 
 function CoveragePanel({ view }: { view: AdsView }) {
   return (
-    <Panel title="Покрытие мест">
+    <Panel title="Покрытие мест" help={HELP.ads.coverage}>
       <DataTable
         rows={coverage(view)}
         rowKey={(row) => row.place}
         columns={[
           { title: "Место", render: (row) => PLACE_TITLES[row.place] },
-          { title: "Сети по кругу", render: (row) => (row.networks.length === 0 ? <span className="text-text-muted">нет — игрок увидит «реклама недоступна»</span> : row.networks.join(" → ")) },
+          { title: "Сети по кругу", help: HELP.ads.circle, render: (row) => (row.networks.length === 0 ? <span className="text-text-muted">нет — игрок увидит «реклама недоступна»</span> : row.networks.join(" → ")) },
           {
             title: "",
             render: (row) =>
@@ -103,13 +104,13 @@ function NetworksPanel({ networks, canEdit, onSaved }: { networks: AdNetwork[]; 
   };
 
   return (
-    <Panel title="Сети">
+    <Panel title="Сети" help={HELP.ads.networks}>
       {editing === null ? null : (
         <form onSubmit={(event) => void submit(event)} className="mb-3 flex flex-wrap items-end gap-2">
           <Field label="Сеть">
             <span className="block py-1.5 text-sm font-medium">{editing.name}</span>
           </Field>
-          <Field label="Место в круге" hint="меньше — раньше">
+          <Field label="Место в круге" hint="меньше — раньше" help={HELP.ads.priority}>
             <Input type="number" min={0} step={1} value={String(editing.priority)} onChange={(event) => setEditing({ ...editing, priority: event.target.value === "" ? 0 : Number(event.target.value) })} className="w-24" />
           </Field>
           <label className="flex items-center gap-1.5 pb-1.5 text-sm">
@@ -174,7 +175,7 @@ function BlocksPanel({ view, canEdit, onSaved }: { view: AdsView; canEdit: boole
   };
 
   return (
-    <Panel title="Блоки мест">
+    <Panel title="Блоки мест" help={HELP.ads.blocks}>
       {canEdit ? (
         <form onSubmit={(event) => void submit(event)} className="mb-4 flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
@@ -196,10 +197,10 @@ function BlocksPanel({ view, canEdit, onSaved }: { view: AdsView; canEdit: boole
                 ))}
               </Select>
             </Field>
-            <Field label="Блок в кабинете сети">
+            <Field label="Блок в кабинете сети" help={HELP.ads.externalId}>
               <Input value={input.externalId} onChange={(event) => setInput({ ...input, externalId: event.target.value })} maxLength={EXTERNAL_ID_MAX + 10} placeholder="int-12345" className="w-64 font-mono" />
             </Field>
-            <Field label="Успех">
+            <Field label="Успех" help={HELP.ads.success}>
               <Select value={input.success} onChange={(event) => setInput({ ...input, success: AD_SUCCESS.find((success) => success === event.target.value) ?? "view" })}>
                 {AD_SUCCESS.map((success) => (
                   <option key={success} value={success}>
@@ -263,7 +264,7 @@ function BlocksPanel({ view, canEdit, onSaved }: { view: AdsView; canEdit: boole
           { title: "Сеть", render: (block) => networkName(block.networkKey) },
           { title: "Блок", render: (block) => <span className="font-mono text-xs">{block.externalId}</span> },
           { title: "Успех", render: (block) => SUCCESS_TITLES[block.success] },
-          { title: "Где", render: (block) => reachLabel(block) },
+          { title: "Где", help: HELP.ads.reach, render: (block) => reachLabel(block) },
           { title: "", render: (block) => (block.active ? null : <Badge tone="warning">выключен</Badge>) },
         ]}
       />
@@ -276,6 +277,7 @@ function FunnelPanel({ view, days, onDays }: { view: AdsView; days: FunnelDays; 
   return (
     <Panel
       title="Воронка показов"
+      help={HELP.ads.funnel}
       actions={
         <Select value={String(days)} onChange={(event) => onDays(FUNNEL_DAYS.find((option) => String(option) === event.target.value) ?? 7)}>
           {FUNNEL_DAYS.map((option) => (
@@ -293,12 +295,12 @@ function FunnelPanel({ view, days, onDays }: { view: AdsView; days: FunnelDays; 
         columns={[
           { title: "Место", render: (row) => PLACE_TITLES[row.place] },
           { title: "Сеть", render: (row) => networkName(row.networkKey) },
-          { title: "Выдано", align: "right", render: (row) => String(row.offered) },
-          { title: "Показано", align: "right", render: (row) => <Ratio part={row.shown} whole={row.offered} /> },
+          { title: "Выдано", help: HELP.ads.offered, align: "right", render: (row) => String(row.offered) },
+          { title: "Показано", help: HELP.ads.shown, align: "right", render: (row) => <Ratio part={row.shown} whole={row.offered} /> },
           { title: "Клики", align: "right", render: (row) => String(row.clicked) },
-          { title: "Выполнено", align: "right", render: (row) => <Ratio part={row.completed} whole={row.offered} /> },
-          { title: "Награды", align: "right", render: (row) => String(row.claimed) },
-          { title: "Отказы", align: "right", render: (row) => <Ratio part={row.failed} whole={row.offered} /> },
+          { title: "Выполнено", help: HELP.ads.completed, align: "right", render: (row) => <Ratio part={row.completed} whole={row.offered} /> },
+          { title: "Награды", help: HELP.ads.claimed, align: "right", render: (row) => String(row.claimed) },
+          { title: "Отказы", help: HELP.ads.failed, align: "right", render: (row) => <Ratio part={row.failed} whole={row.offered} /> },
         ]}
       />
     </Panel>

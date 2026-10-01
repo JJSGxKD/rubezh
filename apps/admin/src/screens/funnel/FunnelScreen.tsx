@@ -3,6 +3,7 @@ import { api } from "../../services";
 import { fetchFunnel, FUNNEL_STEPS, funnelTotal, periodFromDates, shareOfEntered, type FunnelRow, type Period } from "../../api/funnel";
 import { formatDateTime, formatNumber } from "../../format";
 import { Button, DataTable, ErrorNotice, Field, Input, Loading, Panel, type Column } from "../../ui/kit";
+import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
 /**
@@ -33,13 +34,20 @@ export function FunnelScreen() {
 
   const columns: Column<FunnelRow>[] = [
     { title: "Площадка", render: (row) => row.platform },
-    { title: "Касание", render: (row) => (row.startRef === null ? row.startKind : `${row.startKind}: ${row.startRef}`) },
+    { title: "Касание", help: HELP.funnel.touch, render: (row) => (row.startRef === null ? row.startKind : `${row.startKind}: ${row.startRef}`) },
     { title: "Аккаунтов", render: (row) => formatNumber(row.accounts), align: "right" },
-    ...FUNNEL_STEPS.map(([step, title]): Column<FunnelRow> => ({ title, render: (row) => cell(row, step), align: "right" })),
+    ...FUNNEL_STEPS.map(
+      ([step, title]): Column<FunnelRow> => ({
+        title,
+        render: (row) => cell(row, step),
+        align: "right",
+        ...(step === "returnedD1" || step === "returnedD7" ? { help: HELP.funnel.returned } : {}),
+      }),
+    ),
   ];
 
   return (
-    <Panel title="Воронка по источникам" actions={<Button onClick={reload}>Обновить</Button>}>
+    <Panel title="Воронка по источникам" help={HELP.funnel.funnel} actions={<Button onClick={reload}>Обновить</Button>}>
       <form onSubmit={submit} className="mb-4 flex items-end gap-2">
         <Field label="С">
           <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
