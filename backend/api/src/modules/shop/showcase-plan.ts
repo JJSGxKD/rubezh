@@ -1,4 +1,4 @@
-import type { ItemRarity } from "../items/item-catalog.js";
+import { ITEM_SLOTS, type ItemRarity, type ItemSlot } from "../items/item-catalog.js";
 import { levelCap } from "../items/item-rules.js";
 
 /**
@@ -46,4 +46,23 @@ export function showcaseLevel(accountLevel: number): number {
 export function offerFor(offer: ShowcaseOffer, accountLevel: number): { rarity: ItemRarity; gems: number } | null {
   if (accountLevel >= offer.minAccountLevel) return { rarity: offer.rarity, gems: offer.gems };
   return offer.fallback;
+}
+
+/** Сколько первых мест витрины занимают слоты, где игроку нужнее всего; остальные — случайные. */
+export const NEEDED_PLACES = 3;
+
+/**
+ * Слоты витрины под игрока: сначала пустые, потом со слабейшим надетым
+ * предметом — там покупка заметнее всего; последние места — случайные из
+ * остальных, чтобы витрина не застывала на одних и тех же слотах, пока игрок
+ * не поменяет снаряжение. Равные — в случайном порядке.
+ *
+ * @param equippedPower мощь надетого по слотам; нет слота — пусто
+ */
+export function slotsByNeed(equippedPower: Partial<Record<ItemSlot, number>>, random: () => number): ItemSlot[] {
+  const keyed = ITEM_SLOTS.map((slot) => ({ slot, power: equippedPower[slot] ?? -1, tie: random() }));
+  keyed.sort((a, b) => a.power - b.power || a.tie - b.tie);
+  const needed = keyed.slice(0, NEEDED_PLACES);
+  const rest = keyed.slice(NEEDED_PLACES).sort((a, b) => a.tie - b.tie);
+  return [...needed, ...rest].map((entry) => entry.slot);
 }

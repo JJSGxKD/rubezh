@@ -9,14 +9,14 @@ import { REDIS } from "../src/infra/redis.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
-import { ITEM_SLOTS, MAX_ITEM_LEVEL, RARITY_RULES } from "../src/modules/items/item-catalog.js";
+import { ITEM_SLOTS, MAX_ITEM_LEVEL, RARITY_RULES, type ItemSlot } from "../src/modules/items/item-catalog.js";
 import { levelCap, rollItem, seededRandom } from "../src/modules/items/item-rules.js";
 import { ItemRuleError } from "../src/modules/items/items-errors.js";
 import type { ItemsService, PurchasedItem } from "../src/modules/items/items.service.js";
 import { ShopController } from "../src/modules/shop/shop.controller.js";
 import { ShowcaseExpiredError, ShowcaseOfferNotFoundError, ShowcaseSoldError } from "../src/modules/shop/shop-errors.js";
 import { ShopService } from "../src/modules/shop/shop.service.js";
-import { SHOWCASE_OFFERS, offerFor, showcaseLevel } from "../src/modules/shop/showcase-plan.js";
+import { NEEDED_PLACES, SHOWCASE_OFFERS, offerFor, showcaseLevel, slotsByNeed } from "../src/modules/shop/showcase-plan.js";
 import type { NewShowcaseOffer, ShowcaseRepository, ShowcaseRow } from "../src/modules/shop/showcase.repository.js";
 import { ShowcaseService, offerView } from "../src/modules/shop/showcase.service.js";
 import { InsufficientFundsError } from "../src/modules/wallet/wallet-errors.js";
@@ -79,6 +79,12 @@ class MemoryShowcase implements ShowcaseRepository {
 class FakeItems {
   readonly bought = new Map<string, PurchasedItem>();
   failWith: Error | null = null;
+  /** надетое игрока: слот → мощь */
+  equipped: Partial<Record<ItemSlot, number>> = {};
+
+  async inventory(): Promise<{ items: { slot: ItemSlot; power: number; equipped: boolean }[] }> {
+    return { items: Object.entries(this.equipped).map(([slot, power]) => ({ slot: slot as ItemSlot, power: power ?? 0, equipped: true })) };
+  }
 
   async buy(_accountId: string, key: string, purchase: PurchasedItem): Promise<{ item: { itemId: string }; duplicate: boolean }> {
     if (this.failWith !== null) throw this.failWith;
@@ -124,6 +130,27 @@ describe("витрина в числах", () => {
       expect(showcaseLevel(level)).toBeLessThanOrEqual(Math.min(levelCap(level), MAX_ITEM_LEVEL));
       expect(showcaseLevel(level)).toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+describe("витрина под игрока", () => {
+  it("первые места — где нужнее всего: пустые слоты, потом слабейшее надетое; последние — случайные из остальных", () => {
+    let calls = 0;
+    const random = () => (calls++ % 7) / 7;
+    const slots = slotsByNeed({ weapon: 50, amulet: 10, gloves: 30, armor: 40 }, random);
+    expect(new Set(slots).size).toBe(ITEM_SLOTS.length);
+    // belt и boots пусты — они первыми, затем самое слабое надетое — амулет
+    expect(new Set(slots.slice(0, 2))).toEqual(new Set(["belt", "boots"]));
+    expect(slots[2]).toBe("amulet");
+    expect(NEEDED_PLACES).toBeLessThan(SHOWCASE_OFFERS.length + 1);
+  });
+
+  it("витрина ставит на первые места пустые слоты игрока", async () => {
+    const { service, items } = setup(10);
+    items.equipped = { weapon: 80, amulet: 70, gloves: 60, armor: 50 };
+    const view = await service.view(ME, NOON);
+    expect(new Set(view.offers.slice(0, 2).map((offer) => offer.slot))).toEqual(new Set(["belt", "boots"]));
+    expect(view.offers[2]?.slot).toBe("armor");
   });
 });
 

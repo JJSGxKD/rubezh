@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
-import { ITEM_SLOTS, type ItemRarity, type ItemSlot, type ItemStat } from "../items/item-catalog.js";
+import type { ItemRarity, ItemSlot, ItemStat } from "../items/item-catalog.js";
 import { itemPower, rollItem, seededRandom, statValue, type ItemShape } from "../items/item-rules.js";
 import type { ItemView } from "../items/item-views.js";
 import { ItemsService, type SeedSource } from "../items/items.service.js";
 import { ShowcaseExpiredError, ShowcaseOfferNotFoundError, ShowcaseSoldError } from "./shop-errors.js";
-import { SHOWCASE_OFFERS, offerFor, showcaseLevel } from "./showcase-plan.js";
+import { SHOWCASE_OFFERS, offerFor, showcaseLevel, slotsByNeed } from "./showcase-plan.js";
 import { SHOWCASE_REPOSITORY, type NewShowcaseOffer, type ShowcaseRepository, type ShowcaseRow } from "./showcase.repository.js";
 
 /**
@@ -87,14 +87,19 @@ export class ShowcaseService {
   private async offers(accountId: string, at: Date): Promise<ShowcaseRow[]> {
     const today = await this.db(this.repository.today(accountId, at));
     if (today.offers.length > 0) return today.offers;
-    const level = await this.db(this.repository.accountLevel(accountId));
-    await this.db(this.repository.fill(accountId, today.gameDay, this.roll(level), at));
+    const [level, inventory] = await Promise.all([this.db(this.repository.accountLevel(accountId)), this.db(this.items.inventory(accountId))]);
+    const power: Partial<Record<ItemSlot, number>> = {};
+    for (const item of inventory.items) if (item.equipped) power[item.slot] = item.power;
+    await this.db(this.repository.fill(accountId, today.gameDay, this.roll(level, power), at));
     return (await this.db(this.repository.today(accountId, at))).offers;
   }
 
-  /** Предложения суток: слоты не повторяются, свойства брошены зерном предмета — как у добычи. */
-  private roll(accountLevel: number): NewShowcaseOffer[] {
-    const slots = shuffled(seededRandom(this.seeds()), ITEM_SLOTS);
+  /**
+   * Предложения суток: слоты — под игрока (`slotsByNeed`) и не повторяются,
+   * свойства брошены зерном предмета — как у добычи.
+   */
+  private roll(accountLevel: number, equippedPower: Partial<Record<ItemSlot, number>>): NewShowcaseOffer[] {
+    const slots = slotsByNeed(equippedPower, seededRandom(this.seeds()));
     const level = showcaseLevel(accountLevel);
     const offers: NewShowcaseOffer[] = [];
     SHOWCASE_OFFERS.forEach((plan, position) => {
@@ -126,18 +131,4 @@ export function offerView(row: ShowcaseRow): ShowcaseOfferView {
     gems: row.priceGems,
     sold: row.soldAt !== null,
   };
-}
-
-/** Перемешать по броскам генератора — Фишер — Йейтс. */
-function shuffled<T>(random: () => number, values: readonly T[]): T[] {
-  const result = [...values];
-  for (let index = result.length - 1; index > 0; index--) {
-    const other = Math.floor(random() * (index + 1));
-    const current = result[index];
-    const swap = result[other];
-    if (current === undefined || swap === undefined) continue;
-    result[index] = swap;
-    result[other] = current;
-  }
-  return result;
 }
