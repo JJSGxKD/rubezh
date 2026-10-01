@@ -47,7 +47,7 @@ function shown(row: FunnelRow): Record<string, string | number> {
   const share = (count: number): string => `${count} (${Math.round((count / row.accounts) * 100)}%)`;
   return {
     площадка: row.platform,
-    источник: row.startRef === null ? row.startKind : `${row.startKind}:${row.startRef}`,
+    источник: [row.startKind, row.startRef, row.startSource].filter((part) => part !== null).join(":"),
     аккаунтов: row.accounts,
     "вошёл в бота": share(row.entered),
     "открыл игру": share(row.appOpened),
