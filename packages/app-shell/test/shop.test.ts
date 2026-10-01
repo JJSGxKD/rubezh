@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { InvoiceStatus } from "@bh/shared-types";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { useShell } from "../src/state/shell";
-import { createShopApi, isDelivered, type ShopInvoice, type ShopPurchaseState } from "../src/state/shop-api";
+import { createShopApi, isDelivered, type ShopInvoice, type ShopPurchaseState, type ShopView, type VipView } from "../src/state/shop-api";
 import { buy, CONFIRM_POLL_MS, CONFIRM_TIMEOUT_MS, type BuyDeps, type BuyRequest } from "../src/state/shop-purchase";
-import { itemName, noticeOf, showcaseRefusal } from "../src/screens/meta/shop-texts";
+import { badgeLabel, itemName, noticeOf, shopBanners, showcaseRefusal, tributeOf, vipWaiting } from "../src/screens/meta/shop-texts";
 
 // Магазин и VIP на клиенте (docs/35-stage4-plan.md WP10): витрина и VIP — с
 // сервера, схемой, цены в запросе нет; купленным товар считается, когда
@@ -100,6 +100,66 @@ describe("клиент магазина", () => {
   });
 });
 
+describe("подача магазина", () => {
+  const view = (patch: Partial<ShopView> = {}): ShopView => ({
+    items: [
+      { sku: "starter", kind: "starter", contents: [{ resource: "gems", amount: 60 }], stars: 50, once: true, owned: false },
+      { sku: "gems_60", kind: "gems", contents: [{ resource: "gems", amount: 60 }], stars: 50, once: false, owned: false, badge: "hit" },
+      { sku: "gems_330", kind: "gems", contents: [{ resource: "gems", amount: 330 }], stars: 250, once: false, owned: false, badge: "best", valuePct: 10 },
+    ],
+    payable: true,
+    mode: "live",
+    recommended: "gems_330",
+    tribute: "https://t.me/tribute/app",
+    ...patch,
+  });
+  const offer: VipView = { ...VIP, renewal: "off", mode: "live", active: false, until: null, canOrder: true, stars: 700 };
+  const active: VipView = { ...VIP, renewal: "on", mode: "live" };
+
+  it("баннеры по ценности: VIP, стартовый, подобранный, снаряжение, Tribute", () => {
+    expect(shopBanners(view(), offer).map((banner) => banner.kind)).toEqual(["vip", "starter", "recommended", "gear", "tribute"]);
+  });
+
+  it("предлагается только то, что можно купить: идущий VIP, купленный стартовый, подобранный им же — без баннера", () => {
+    const owned = view({ items: view().items.map((item) => (item.sku === "starter" ? { ...item, owned: true } : item)), recommended: "starter", tribute: null });
+    expect(shopBanners(owned, active).map((banner) => banner.kind)).toEqual(["gear"]);
+    // Подобранный стартовый — уже баннер «Стартовый набор», второй с тем же товаром не нужен.
+    expect(shopBanners(view({ recommended: "starter" }), null).map((banner) => banner.kind)).toEqual(["starter", "gear", "tribute"]);
+    // Без цены у способа оплаты продать нельзя — и предлагать тоже.
+    expect(shopBanners(view(), { ...offer, stars: null }).map((banner) => banner.kind)).not.toContain("vip");
+  });
+
+  it("Tribute — только по https: пустая, чужая схема и мусор — без плашки", () => {
+    expect(tributeOf({ tribute: "https://t.me/tribute/app" })).toBe("https://t.me/tribute/app");
+    expect(tributeOf({ tribute: "http://t.me/tribute" })).toBeNull();
+    expect(tributeOf({ tribute: "javascript:alert(1)" })).toBeNull();
+    expect(tributeOf({ tribute: "не ссылка" })).toBeNull();
+    expect(tributeOf({ tribute: "" })).toBeNull();
+    expect(tributeOf({})).toBeNull();
+  });
+
+  it("знак на вкладке — самоцветы дня VIP ждут забора", () => {
+    expect(vipWaiting(active)).toBe(1);
+    expect(vipWaiting({ ...active, daily: { gems: 10, claimed: true } })).toBe(0);
+    expect(vipWaiting(offer)).toBe(0);
+    expect(vipWaiting(null)).toBe(0);
+  });
+
+  it("бейдж словами; незнакомый от сервера новее клиента — без бейджа", () => {
+    expect(badgeLabel("hit")).toBe("Хит");
+    expect(badgeLabel("best")).toBe("Лучшая цена");
+    expect(badgeLabel("sale")).toBeNull();
+    expect(badgeLabel(null)).toBeNull();
+  });
+
+  it("бейдж и выгода доходят с сервера, а сервер до подачи их не присылал", async () => {
+    const shown = await createShopApi(server([], view())).view();
+    expect(shown.ok && shown.data.items.map((item) => [item.badge, item.valuePct])).toEqual([[undefined, undefined], ["hit", undefined], ["best", 10]]);
+    expect(shown.ok && [shown.data.recommended, shown.data.tribute]).toEqual(["gems_330", "https://t.me/tribute/app"]);
+    expect((await createShopApi(server([], SHOP)).view()).ok).toBe(true);
+  });
+});
+
 describe("витрина снаряжения", () => {
   const OFFER = {
     offerId: "0b6c4b1e-1d8e-4c4f-9a6a-2a0d7b7c9f01",
@@ -133,7 +193,7 @@ describe("витрина снаряжения", () => {
   });
 
   it("отказ в покупке: мало самоцветов и полный инвентарь — своим текстом; устаревшая витрина — перечитать", () => {
-    expect(showcaseRefusal("insufficient_funds")).toEqual({ text: "Не хватает самоцветов — их можно купить ниже", reload: false });
+    expect(showcaseRefusal("insufficient_funds")).toEqual({ text: "Не хватает самоцветов", reload: false });
     expect(showcaseRefusal("inventory_full")).toMatchObject({ reload: false, text: expect.stringMatching(/Инвентарь полон/) });
     for (const code of ["showcase_sold", "showcase_expired", "showcase_offer_not_found"]) expect(showcaseRefusal(code)).toMatchObject({ reload: true });
     expect(showcaseRefusal(undefined)).toMatchObject({ reload: false, text: expect.stringMatching(/Не удалось купить/) });

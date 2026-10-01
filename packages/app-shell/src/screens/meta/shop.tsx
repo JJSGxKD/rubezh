@@ -1,21 +1,24 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Crown, Sparkles, TrendingUp } from "lucide-react";
-import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, Modal, PageTitle, Screen, SectionTitle } from "../../design-system/components";
-import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
-import { ShardIcon, shardRarity } from "../../design-system/components/ShardIcon";
-import { StarsIcon } from "../../design-system/components/StarsIcon";
-import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
+import { ChevronRight } from "lucide-react";
+import { Button, ContentColumn, ErrorState, InfoNotice, Modal, PageTitle, Screen, SectionTitle, SegmentedControl } from "../../design-system/components";
+import { GemIcon } from "../../design-system/components/CurrencyIcons";
+import { formatNumber, t } from "../../i18n";
+import { openExternalLink } from "../../state/external-link";
 import { createShopApi, shopAvailable, type ShopItem, type ShopView, type VipView } from "../../state/shop-api";
 import { buy, type BuyRequest } from "../../state/shop-purchase";
-import { useShell } from "../../state/shell";
+import { track, useShell } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
-import { formatCountdown, msUntilReset } from "./schedule";
+import { ShopBanners } from "./shop-banners";
+import { dateOf, GemPackTile, ItemCard, TributePlaque, VipCard } from "./shop-parts";
 import { ShowcaseSection } from "./shop-showcase";
-import { itemName, noticeOf, resourceLabel, type Notice } from "./shop-texts";
+import { itemName, noticeOf, shopBanners, tributeOf, vipWaiting, type Notice, type ShopBanner, type ShopTab } from "./shop-texts";
 
 /**
  * Магазин: VIP, витрина снаряжения за самоцветы и наборы за звёзды
  * (docs/35-stage4-plan.md §3.6, WP10; docs/27-design-system-and-app-shell.md §6).
+ * Наверху — полоса баннеров с главным для этого игрока, под ней три вкладки:
+ * «Для вас» (подобранное сервером, VIP и наборы), «Самоцветы» плиткой с
+ * выгодой и «Снаряжение» — витрина суток.
  *
  * Что продаётся и почём, решает сервер: экран рисует витрину как пришла, и
  * товар, которого клиент ещё не знает, — тоже, по составу. У каждого набора
@@ -28,13 +31,12 @@ type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; 
 
 const api = createShopApi();
 
-const DATE = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
-
 export function ShopScreen(): ReactNode {
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [tab, setTab] = useState<ShopTab>("featured");
 
   const load = async (quiet = false): Promise<void> => {
     if (!quiet) setState({ status: "loading" });
@@ -127,8 +129,42 @@ export function ShopScreen(): ReactNode {
     }
   };
 
-  const offers = ready === null ? [] : ready.shop.items.filter((item) => item.kind !== "gems");
-  const gems = ready === null ? [] : ready.shop.items.filter((item) => item.kind === "gems");
+  const onBanner = (banner: ShopBanner, position: number): void => {
+    if (ready === null) return;
+    track("shop_banner_clicked", { banner: banner.kind, place: "carousel", position });
+    switch (banner.kind) {
+      case "vip":
+        if (ready.vip !== null) buyVip(ready.vip);
+        return;
+      case "starter":
+      case "recommended":
+        buyItem(banner.item, ready.shop);
+        return;
+      case "gear":
+        setTab("gear");
+        return;
+      case "tribute":
+        openExternalLink(banner.url);
+        return;
+    }
+  };
+
+  const openTribute = (url: string): void => {
+    track("shop_banner_clicked", { banner: "tribute", place: "gems", position: 0 });
+    openExternalLink(url);
+  };
+
+  const vipCard =
+    ready?.vip === null || ready?.vip === undefined ? null : (
+      <VipCard
+        vip={ready.vip}
+        busy={busy}
+        onOrder={buyVip}
+        onCancel={() => setConfirmCancel(true)}
+        onResume={() => void vipAction("vip:resume", () => api.resumeVip(), t("vip.resume.failed"))}
+        onClaim={() => void claimDaily()}
+      />
+    );
 
   return (
     <Screen>
@@ -142,42 +178,50 @@ export function ShopScreen(): ReactNode {
           <div className="mt-2 grid gap-4 pb-4">
             {!ready.shop.payable ? <InfoNotice text={t("shop.unpayable")} /> : null}
             {ready.shop.mode === "test" ? <InfoNotice text={t("shop.test", { charged: testCharge(ready.shop) })} /> : null}
+
+            <ShopBanners banners={shopBanners(ready.shop, ready.vip)} busy={busy} onAction={onBanner} />
+
+            <SegmentedControl
+              label={t("shop.tabs")}
+              activeId={tab}
+              onSelect={(id) => setTab(id as ShopTab)}
+              items={[
+                { id: "featured", label: t("shop.tab.featured"), badge: vipWaiting(ready.vip) },
+                { id: "gems", label: t("shop.tab.gems") },
+                { id: "gear", label: t("shop.tab.gear") },
+              ]}
+            />
+
             {notice === null ? null : (
               <p role="status" className={`text-center text-sm font-semibold ${notice.tone === "success" ? "text-success" : "text-danger"}`}>
                 {notice.text}
               </p>
             )}
 
-            {ready.vip === null ? null : (
-              <VipCard
+            {tab === "featured" ? (
+              <Featured
+                shop={ready.shop}
                 vip={ready.vip}
+                vipCard={vipCard}
                 busy={busy}
-                onOrder={buyVip}
-                onCancel={() => setConfirmCancel(true)}
-                onResume={() => void vipAction("vip:resume", () => api.resumeVip(), t("vip.resume.failed"))}
-                onClaim={() => void claimDaily()}
+                onBuy={(item) => buyItem(item, ready.shop)}
+                onAllGems={() => setTab("gems")}
               />
-            )}
+            ) : null}
 
-            <ShowcaseSection api={api} appearFrom={1} />
+            {tab === "gems" ? (
+              <div className="grid gap-3">
+                {tributeOf(ready.shop) === null ? null : <TributePlaque onOpen={() => openTribute(tributeOf(ready.shop) ?? "")} />}
+                <div className="grid grid-cols-2 gap-2">
+                  {gemPacks(ready.shop).map((item, index) => (
+                    <GemPackTile key={item.sku} item={item} index={index + 1} busy={busy} onBuy={() => buyItem(item, ready.shop)} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
-            {offers.length === 0 ? null : (
-              <section className="grid gap-2">
-                <SectionTitle>{t("shop.section.offers")}</SectionTitle>
-                {offers.map((item, index) => (
-                  <ItemCard key={item.sku} item={item} index={index} busy={busy} onBuy={() => buyItem(item, ready.shop)} />
-                ))}
-              </section>
-            )}
-
-            {gems.length === 0 ? null : (
-              <section className="grid gap-2">
-                <SectionTitle>{t("shop.section.gems")}</SectionTitle>
-                {gems.map((item, index) => (
-                  <ItemCard key={item.sku} item={item} index={offers.length + index} busy={busy} onBuy={() => buyItem(item, ready.shop)} />
-                ))}
-              </section>
-            )}
+            {/* Витрина живёт своей загрузкой: вкладку открыли — сервер отдаёт предметы суток. */}
+            {tab === "gear" ? <ShowcaseSection api={api} appearFrom={0} onNeedGems={() => setTab("gems")} /> : null}
           </div>
         )}
       </ContentColumn>
@@ -211,161 +255,51 @@ export function ShopScreen(): ReactNode {
   );
 }
 
-function VipCard(props: {
-  vip: VipView;
-  busy: string | null;
-  onOrder: (vip: VipView) => void;
-  onCancel: () => void;
-  onResume: () => void;
-  onClaim: () => void;
-}): ReactNode {
-  const { vip, busy } = props;
-  const stars = vip.stars;
-  return (
-    <Card selected={vip.active} stripe="accent" appearIndex={0}>
-      <div className="flex items-start gap-3">
-        <span aria-hidden="true" className="inline-flex size-11 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
-          <Crown size={24} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-bold text-text">{t("vip.title")}</p>
-          <p className="text-sm text-text-muted">{statusLine(vip) ?? t("vip.pitch", { days: vip.periodDays })}</p>
-        </div>
-      </div>
-
-      <ul className="mt-3 grid gap-1.5 text-sm text-text">
-        <li className="flex items-center gap-2">
-          <GemIcon size={16} />
-          {t("vip.perk.daily", { gems: formatNumber(vip.daily.gems), n: vip.daily.gems })}
-        </li>
-        {vip.rewardMul !== undefined && vip.rewardMul > 1 ? (
-          <li className="flex items-center gap-2">
-            <TrendingUp size={16} aria-hidden="true" className="text-accent" />
-            {t("vip.perk.rewards", { mul: formatDecimal(vip.rewardMul) })}
-          </li>
-        ) : null}
-        <li className="flex items-center gap-2">
-          <Sparkles size={16} aria-hidden="true" className="text-accent" />
-          {t("vip.perk.noAds")}
-        </li>
-      </ul>
-
-      <div className="mt-4 grid gap-2">
-        {vip.active ? (
-          <Button
-            block
-            variant={vip.daily.claimed ? "secondary" : "primary"}
-            disabled={vip.daily.claimed || busy !== null}
-            loading={busy === "vip:daily"}
-            onClick={props.onClaim}
-          >
-            {vip.daily.claimed
-              ? t("vip.daily.next", { time: formatCountdown(msUntilReset(Date.now(), "daily")) })
-              : t("vip.daily.claim", { gems: formatNumber(vip.daily.gems), n: vip.daily.gems })}
-          </Button>
-        ) : null}
-
-        {/* Отменённое нами продление возвращается бесплатно — вторая подписка тут лишняя. */}
-        {vip.canOrder && !vip.canResume && stars !== null ? (
-          <Button
-            block
-            variant="stars"
-            disabled={busy !== null}
-            loading={busy === "vip"}
-            ariaLabel={t(vip.active ? "vip.renew" : "vip.order", { stars, n: stars })}
-            onClick={() => props.onOrder(vip)}
-          >
-            <StarsIcon size={18} />
-            <span className="tabular-nums">{t("vip.price", { stars, days: vip.periodDays })}</span>
-          </Button>
-        ) : null}
-
-        {vip.active && vip.renewal === "on" ? (
-          <Button variant="ghost" disabled={busy !== null} loading={busy === "vip:cancel"} onClick={props.onCancel}>
-            {t("vip.cancel")}
-          </Button>
-        ) : null}
-        {vip.canResume ? (
-          <Button variant="secondary" disabled={busy !== null} loading={busy === "vip:resume"} onClick={props.onResume}>
-            {t("vip.resume")}
-          </Button>
-        ) : null}
-      </div>
-    </Card>
-  );
-}
-
-function ItemCard(props: { item: ShopItem; index: number; busy: string | null; onBuy: () => void }): ReactNode {
-  const { item } = props;
-  const name = itemName(item);
-  const textKey = `shop.sku.${item.sku}.text`;
-  const stars = item.stars;
-  return (
-    <Card appearIndex={props.index + 1} stripe={item.kind === "starter" ? "accent" : undefined} disabled={item.owned}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-display text-base font-bold text-text">{name}</p>
-          {hasTranslation(textKey) ? <p className="text-xs text-text-muted">{t(textKey)}</p> : null}
-        </div>
-        {item.once && !item.owned ? <Badge tone="accent">{t("shop.once")}</Badge> : null}
-      </div>
-
-      {/* Состав — целиком и до оплаты: случайного за деньги в игре нет (Р11). */}
-      <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-text">
-        {item.contents.map((part) => (
-          <li key={part.resource} className="flex items-center gap-1.5">
-            <ResourceIcon resource={part.resource} />
-            {resourceLabel(part.resource, part.amount)}
-          </li>
-        ))}
-      </ul>
-
-      {item.owned ? (
-        <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-success">
-          <Check size={16} aria-hidden="true" />
-          {t("shop.owned")}
-        </p>
-      ) : stars === null ? null : (
-        <div className="mt-3">
-          <Button
-            block
-            variant="stars"
-            disabled={props.busy !== null}
-            loading={props.busy === item.sku}
-            ariaLabel={t("shop.buy", { name, stars, n: stars })}
-            onClick={props.onBuy}
-          >
-            <StarsIcon size={18} />
-            <span className="tabular-nums">{formatNumber(stars)}</span>
-          </Button>
-        </div>
-      )}
-    </Card>
-  );
-}
-
 /**
- * Вид ресурса различается и цветом, и формой значка — одним цветом он не
- * передаётся (docs/27-design-system-and-app-shell.md §4.4). Осколки — общим
- * значком цвета своей редкости, как в арсенале и на колесе; незнакомое —
- * нейтральным осколком.
+ * «Для вас»: подобранное сервером — первым, VIP — сразу за ним, а если его
+ * самоцветы дня ждут забора, то первым: забрать важнее, чем купить. Дальше
+ * остальные наборы и дорога к самоцветам.
  */
-function ResourceIcon(props: { resource: string }): ReactNode {
-  if (props.resource === "coins") return <CoinIcon size={16} />;
-  if (props.resource === "gems") return <GemIcon size={16} />;
-  return <ShardIcon rarity={shardRarity(props.resource) ?? ""} size={16} />;
+function Featured(props: {
+  shop: ShopView;
+  vip: VipView | null;
+  vipCard: ReactNode;
+  busy: string | null;
+  onBuy: (item: ShopItem) => void;
+  onAllGems: () => void;
+}): ReactNode {
+  const { shop } = props;
+  const recommended = shop.items.find((item) => item.sku === shop.recommended && !item.owned);
+  const offers = shop.items.filter((item) => item.kind !== "gems" && item.sku !== recommended?.sku);
+  const vipFirst = vipWaiting(props.vip) > 0;
+  return (
+    <div className="grid gap-3">
+      {vipFirst ? props.vipCard : null}
+      {recommended === undefined ? null : (
+        <ItemCard item={recommended} index={1} busy={props.busy} forYou onBuy={() => props.onBuy(recommended)} />
+      )}
+      {vipFirst ? null : props.vipCard}
+      {offers.length === 0 ? null : (
+        <section className="grid gap-2">
+          <SectionTitle>{t("shop.section.offers")}</SectionTitle>
+          {offers.map((item, index) => (
+            <ItemCard key={item.sku} item={item} index={index + 2} busy={props.busy} onBuy={() => props.onBuy(item)} />
+          ))}
+        </section>
+      )}
+      {gemPacks(shop).length === 0 ? null : (
+        <Button variant="secondary" onClick={props.onAllGems}>
+          <GemIcon size={18} />
+          {t("shop.allGems")}
+          <ChevronRight size={18} aria-hidden="true" />
+        </Button>
+      )}
+    </div>
+  );
 }
 
-function statusLine(vip: VipView): string | null {
-  if (vip.until === null) return null;
-  const date = dateOf(vip.until);
-  if (!vip.active) return t("vip.ended", { date });
-  if (vip.renewal === "on") return t("vip.until.on", { date });
-  return t(vip.renewal === "failed" ? "vip.until.failed" : "vip.until.cancelled", { date });
-}
-
-function dateOf(iso: string | null): string {
-  return iso === null ? "—" : DATE.format(new Date(iso));
+function gemPacks(shop: ShopView): ShopItem[] {
+  return shop.items.filter((item) => item.kind === "gems");
 }
 
 /** Сколько спишет тестовая оплата — по первому товару с ценой: она одна на всё. */

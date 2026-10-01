@@ -22,6 +22,10 @@ import { SHOP_SKUS, TITLE_MAX, contentsOf, shopSkuSchema, skuById } from "../src
 import { ShopController } from "../src/modules/shop/shop.controller.js";
 import { ShopService } from "../src/modules/shop/shop.service.js";
 import { ShowcaseService } from "../src/modules/shop/showcase.service.js";
+import { badgesOf, gemValuePct, recommendedSku } from "../src/modules/shop/shop-marketing.js";
+import type { ItemsService } from "../src/modules/items/items.service.js";
+import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
+import type { SettingsReader } from "../src/modules/settings/settings.service.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
@@ -75,6 +79,12 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
   throw new Error("ожидался отказ");
 }
 
+/** Надетое игрока и ссылка Tribute из панели — то, от чего магазин подбирает подачу. */
+class Context {
+  equipped = 0;
+  tribute = "";
+}
+
 function setup(settings = config()) {
   const purchases = new MemoryPurchasesRepository();
   const api = new FakeStarsApi();
@@ -82,11 +92,14 @@ function setup(settings = config()) {
   const payments = new PaymentsService(settings, purchases, new MemoryRunsRepository(), providers, switchesOf(settings));
   const fulfillment = new PurchaseFulfillment();
   const wallet = new FakeWallet();
-  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService);
+  const context = new Context();
+  const items = { inventory: async () => ({ equipped: Object.fromEntries(Array.from({ length: context.equipped }, (_, index) => [`slot${String(index)}`, "item"])) }) };
+  const reader: SettingsReader = { get: (setting) => (setting.key === SETTINGS.shopTributeUrl.key ? setting.schema.parse(context.tribute) : setting.fallback), onChange: () => undefined };
+  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, reader);
   shop.onModuleInit();
   const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings));
   const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
-  return { purchases, api, shop, wallet, queue };
+  return { purchases, api, shop, wallet, queue, context };
 }
 
 /** Площадка подтвердила оплату — задание очереди, как его выполнил бы воркер. */
@@ -188,6 +201,46 @@ describe("витрина и счёт", () => {
   it("выключенная оплата не выставляет счёт", async () => {
     const off = setup(config({ PAYMENTS_ENABLED: "false" }));
     expect(await codeOf(off.shop.order(player(), "gems_60"))).toBe("endpoint_disabled");
+  });
+});
+
+describe("подача товара — только правда", () => {
+  const price = (sku: { stars: number }) => sku.stars;
+
+  it("выгода набора самоцветов — против самого дорогого за самоцвет, вниз до целого; лучшая цена — у самого выгодного", () => {
+    const value = gemValuePct(SHOP_SKUS, price);
+    // 60 за 50, 330 за 250, 700 за 500: 1,2 / 1,32 / 1,4 самоцвета за звезду
+    expect(Object.fromEntries(value)).toEqual({ gems_330: 10, gems_700: 16 });
+    const badges = badgesOf(SHOP_SKUS, price);
+    expect(badges.get("gems_700")).toBe("best");
+    expect(badges.get("gems_330")).toBe("hit");
+    expect(badges.has("gems_60")).toBe(false);
+  });
+
+  it("площадка без цены — ни выгоды, ни лучшей цены: обещать нечего", () => {
+    expect(gemValuePct(SHOP_SKUS, () => null).size).toBe(0);
+    expect([...badgesOf(SHOP_SKUS, () => null).values()]).toEqual(["hit"]);
+  });
+
+  it("первым — под игрока: новичку стартовый, носящему снаряжение — набор кузнеца, остальным — самоцветы по лучшей цене", () => {
+    expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(), equipped: 0 })).toBe("starter");
+    expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 2 })).toBe("upgrade_kit");
+    expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 0 })).toBe("gems_700");
+    expect(recommendedSku(SHOP_SKUS, () => null, { owned: new Set(), equipped: 0 })).toBeNull();
+  });
+
+  it("витрина несёт бейджи, выгоду, рекомендацию и ссылку Tribute — только в Telegram и только заданную", async () => {
+    const ctx = setup();
+    let view = await ctx.shop.view(player());
+    expect(view.items.find((item) => item.sku === "gems_700")).toMatchObject({ badge: "best", valuePct: 16 });
+    expect(view.items.find((item) => item.sku === "gems_60")).toMatchObject({ badge: null, valuePct: null });
+    expect(view).toMatchObject({ recommended: "starter", tribute: null });
+
+    ctx.context.tribute = "https://t.me/tribute/app?startapp=stars";
+    ctx.context.equipped = 3;
+    view = await ctx.shop.view(player());
+    expect(view.tribute).toBe("https://t.me/tribute/app?startapp=stars");
+    expect((await ctx.shop.view(player("vk", "12345"))).tribute).toBeNull();
   });
 });
 

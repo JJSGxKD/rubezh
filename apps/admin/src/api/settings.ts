@@ -12,7 +12,7 @@ export const settingSchema = z.object({
   group: z.string(),
   title: z.string(),
   hint: z.string(),
-  kind: z.enum(["chat", "boolean"]),
+  kind: z.enum(["chat", "boolean", "url"]),
   value: valueSchema,
   source: z.enum(["base", "env", "default"]),
   envValue: valueSchema.nullable(),
@@ -39,12 +39,22 @@ export function resetSetting(api: AdminApi, key: string): Promise<ApiResult<Sett
 /** Тот же формат, что проверяет сервер: `-1001234567890` или `-1001234567890:57`. */
 const CHAT_TARGET = /^-?\d{1,20}(?::\d{1,10})?$/;
 
+/** Ссылка — только https, до 256 знаков; пусто — «не задана». */
+export const URL_MAX = 256;
+
 /** Что не так со значением; `null` — можно сохранять. Сервер проверит то же самое. */
 export function settingProblem(kind: SettingRow["kind"], value: SettingValue): string | null {
-  if (kind !== "chat") return null;
   const text = String(value).trim();
+  if (kind === "url") {
+    const valid = text === "" || (text.length <= URL_MAX && URL.canParse(text) && new URL(text).protocol === "https:");
+    return valid ? null : `Ссылка — https://…, до ${String(URL_MAX)} знаков, или пусто`;
+  }
+  if (kind !== "chat") return null;
   return text === "" || CHAT_TARGET.test(text) ? null : "Адрес — id чата или id:тема, например -1001234567890:57";
 }
+
+/** Подсказка в поле ввода по виду настройки. */
+export const SETTING_PLACEHOLDER: Record<Exclude<SettingRow["kind"], "boolean">, string> = { chat: "-1001234567890:57", url: "https://t.me/…" };
 
 export const SOURCE_TITLES: Record<SettingRow["source"], string> = { base: "панель", env: "окружение", default: "умолчание" };
 
