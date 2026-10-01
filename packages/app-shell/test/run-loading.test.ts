@@ -57,6 +57,7 @@ const HUD: HudSnapshot = {
   boss: null,
   statuses: [],
   shield: 0,
+  boosts: [],
 };
 
 const events: { event: string; payload: Record<string, unknown> }[] = [];
