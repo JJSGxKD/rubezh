@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import { fetchFunnel, funnelReportSchema, funnelTotal, periodFromDates, platformTitle, shareOfAccounts, touchOf, type FunnelRow } from "../src/api/funnel";
-import { fetchReviewQueue } from "../src/api/review";
+import { difficultyTitle, fetchReviewQueue, runsPerPlayer } from "../src/api/review";
 import { fakeFetch, json } from "./helpers";
 
 const ROW: FunnelRow = {
@@ -63,10 +63,21 @@ describe("воронка", () => {
 
 describe("разбор забегов", () => {
   it("просит всю очередь, которую отдаёт сервер", async () => {
-    const run = { runId: "r1", accountId: "a1", verdict: "suspicious", verdictReasons: ["kills_rate"], difficulty: "easy", survivalSec: 600, level: 20, enemiesKilled: 900, finishedAt: "2026-09-25T10:00:00.000Z" };
+    const run = { runId: "r1", accountId: "a1", displayName: "Вера", verdict: "suspicious", verdictReasons: ["kills_rate"], difficulty: "easy", survivalSec: 600, level: 20, enemiesKilled: 900, finishedAt: "2026-09-25T10:00:00.000Z" };
     const { fetch, calls } = fakeFetch(json(200, { data: { runs: [run] } }));
     const result = await fetchReviewQueue(new AdminApi(fetch));
     expect(result.ok && result.data.runs[0]?.verdictReasons).toEqual(["kills_rate"]);
     expect(calls[0]?.url).toBe("/api/v1/admin/runs/review?limit=200");
+  });
+
+  it("сложность словами, повторы игрока считаются", () => {
+    expect(difficultyTitle("hard")).toBe("сложная");
+    expect(difficultyTitle("nightmare")).toBe("nightmare");
+    const row = { runId: "r", accountId: "a1", displayName: null, verdict: "rejected", verdictReasons: [], difficulty: "easy", survivalSec: null, level: null, enemiesKilled: null, finishedAt: null };
+    const counts = runsPerPlayer([row, { ...row, runId: "r2" }, { ...row, runId: "r3", accountId: "a2" }]);
+    expect([...counts]).toEqual([
+      ["a1", 2],
+      ["a2", 1],
+    ]);
   });
 });

@@ -67,12 +67,14 @@ describe("панель по HTTP", () => {
   let roles: MemoryRolesRepository;
   let store: MemoryAdminSessionStore;
   let funnel: FakeFunnel;
+  let runs: MemoryRunsRepository;
 
   async function start(env: Record<string, string> = {}): Promise<NestFastifyApplication> {
     accounts = new MemoryAccountRepository();
     roles = new MemoryRolesRepository();
     store = new MemoryAdminSessionStore();
     funnel = new FakeFunnel();
+    runs = new MemoryRunsRepository();
     const config = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ...env } as NodeJS.ProcessEnv);
 
     @Module({
@@ -84,7 +86,7 @@ describe("панель по HTTP", () => {
         { provide: ROLES_REPOSITORY, useValue: roles },
         { provide: ADMIN_SESSION_STORE, useValue: store },
         { provide: FUNNEL_REPOSITORY, useValue: funnel },
-        { provide: RUNS_REPOSITORY, useValue: new MemoryRunsRepository() },
+        { provide: RUNS_REPOSITORY, useValue: runs },
         { provide: LEADERBOARD_STORE, useValue: new MemoryLeaderboardStore() },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
@@ -263,6 +265,19 @@ describe("панель по HTTP", () => {
       const response = await server.inject({ method: "GET", url: `/api/v1/admin/audit?${bad}`, headers: { cookie } });
       expect(response.statusCode, bad).toBe(400);
     }
+  });
+
+  it("очередь разбора — с именем игрока: разбирают человека, а не uuid", async () => {
+    const server = await start();
+    const cookie = await login(server);
+    const player = await accounts.upsert({ platform: "telegram", platformUserId: "600004", displayName: "Вера", username: null, photoUrl: null }, Date.now());
+    const flagged = { verdict: "suspicious" as const, verdictReasons: ["kill_rate"], difficulty: "easy" as const, survivalSec: 600, level: 20, enemiesKilled: 900, finishedAt: new Date() };
+    runs.review = async () => [
+      { runId: "r1", accountId: player.accountId, ...flagged },
+      { runId: "r2", accountId: randomUUID(), ...flagged },
+    ];
+    const response = await server.inject({ method: "GET", url: "/api/v1/admin/runs/review", headers: { cookie } });
+    expect(response.json().data.runs.map((run: { displayName: string | null }) => run.displayName)).toEqual(["Вера", null]);
   });
 
   it("воронка: период по умолчанию — тридцать дней, обратный период — 400", async () => {
