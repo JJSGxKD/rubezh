@@ -2,8 +2,8 @@ import { z } from "zod";
 import type { AdminApi, ApiResult } from "./client";
 
 /**
- * Роли и журнал аудита (`/admin/roles`, `/admin/audit`, docs/29-admin-panel.md §3).
- * Состав ролей — код на сервере; здесь только имена для человека.
+ * Роли (`/admin/roles`, docs/29-admin-panel.md §3). Состав ролей — код на
+ * сервере; здесь только имена для человека. Журнал аудита — `audit.ts`.
  */
 export const ROLE_NAMES: readonly (readonly [string, string])[] = [
   ["owner", "Владелец"],
@@ -28,18 +28,7 @@ export const assignmentSchema = z.object({
   grantedAt: z.string(),
 });
 
-export const auditEntrySchema = z.object({
-  entryId: z.string(),
-  actorAccountId: z.string().nullable(),
-  action: z.string(),
-  target: z.string().nullable().optional(),
-  before: z.unknown().optional(),
-  after: z.unknown().optional(),
-  createdAt: z.string(),
-});
-
 export type Assignment = z.infer<typeof assignmentSchema>;
-export type AuditEntry = z.infer<typeof auditEntrySchema>;
 
 /**
  * Кому выдать или у кого снять: по Telegram ID удобнее, чем по uuid, — а
@@ -67,12 +56,6 @@ export function grantRole(api: AdminApi, target: RoleTarget, role: string): Prom
 
 export function revokeRole(api: AdminApi, target: RoleTarget, role: string): Promise<ApiResult<{ revoked: boolean; sessionsRevoked: number }>> {
   return api.request("/roles/revoke", { method: "POST", body: { ...target, role }, schema: z.object({ revoked: z.boolean(), sessionsRevoked: z.number() }) });
-}
-
-export const AUDIT_LIMIT = 200;
-
-export function fetchAudit(api: AdminApi): Promise<ApiResult<{ entries: AuditEntry[] }>> {
-  return api.request("/audit", { query: { limit: AUDIT_LIMIT }, schema: z.object({ entries: z.array(auditEntrySchema) }) });
 }
 
 /** «Было → стало» одной строкой для таблицы; длинное обрезается — целиком оно в базе. */
