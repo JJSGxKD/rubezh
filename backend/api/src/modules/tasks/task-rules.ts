@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { runReward } from "../progress/progress-rules.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 import type { RecordedRun } from "../runs/runs-hooks.js";
 import type { EarnReason } from "../wallet/wallet-types.js";
 
@@ -20,11 +21,11 @@ export const TASK_PERIODS = ["daily", "weekly", "achievement"] as const;
 export type TaskPeriod = (typeof TASK_PERIODS)[number];
 
 /**
- * Виды целей. У каждого — как забег двигает прогресс: `sum` копит за срок,
- * `max` помнит лучший забег. Новый вид — код здесь (и строка текста у
- * клиента), новое задание на готовом виде — строка каталога в панели.
+ * Виды целей, которые двигает забег: `sum` копит за срок, `max` помнит лучший
+ * забег. Новый вид — код здесь (и строка текста у клиента), новое задание на
+ * готовом виде — строка каталога в панели.
  */
-export const TASK_KINDS = {
+export const RUN_KINDS = {
   /** сыграть забегов */
   runs: { op: "sum", measure: () => 1 },
   /** убить врагов */
@@ -37,8 +38,40 @@ export const TASK_KINDS = {
   run_level: { op: "max", measure: (run: TaskRun) => run.level },
 } as const satisfies Record<string, { op: "sum" | "max"; measure: (run: TaskRun) => number }>;
 
-export type TaskKind = keyof typeof TASK_KINDS;
-export const TASK_KIND_IDS = Object.keys(TASK_KINDS) as TaskKind[];
+export type RunKind = keyof typeof RUN_KINDS;
+
+/**
+ * Виды целей, выполнение которых проверяет площадка по нажатию игрока, а не
+ * забег (Р52): `channel` — подписаться на канал или вступить в чат, проверяет
+ * бот площадки. Такая цель — одна на аккаунт: только достижение с целью 1.
+ */
+export const CHECKED_KINDS = ["channel"] as const;
+export type CheckedKind = (typeof CHECKED_KINDS)[number];
+
+export type TaskKind = RunKind | CheckedKind;
+export const TASK_KIND_IDS: readonly TaskKind[] = [...(Object.keys(RUN_KINDS) as RunKind[]), ...CHECKED_KINDS];
+
+export function isRunKind(kind: TaskKind): kind is RunKind {
+  return Object.hasOwn(RUN_KINDS, kind);
+}
+
+/** Площадки, где есть каналы: у веб-версии их нет. */
+export const CHANNEL_PLATFORMS = ["telegram", "max", "vk"] as const satisfies readonly PlatformId[];
+
+/**
+ * Что нужно цели «канал»: площадка, где он есть, сам канал в записи
+ * площадки (у Telegram — `@имя` или id) и ссылка, которую откроет игрок.
+ * Канал другой площадки игроку не показывается — проверить его нечем.
+ */
+export const channelParamsSchema = z
+  .object({
+    platform: z.enum(CHANNEL_PLATFORMS),
+    chat: z.string().trim().min(2).max(64),
+    url: z.url({ protocol: /^https$/ }).max(256),
+  })
+  .strict();
+
+export type ChannelParams = z.infer<typeof channelParamsSchema>;
 
 export type TaskRun = Pick<RecordedRun, "difficulty" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict">;
 
@@ -62,6 +95,8 @@ export const taskDefSchema = z
     taskId: z.string().regex(/^[a-z][a-z0-9_]{1,47}$/, "id — латиница, цифры и подчёркивание, до 48 знаков"),
     period: z.enum(TASK_PERIODS),
     kind: z.enum(TASK_KIND_IDS as [TaskKind, ...TaskKind[]]),
+    /** цель «канал» — что проверять и куда вести; у целей забега — пусто, и панель до канала поля не слала */
+    params: channelParamsSchema.nullable().default(null),
     target: z.number().int().positive().max(10_000_000),
     /** `null` — текст по виду цели у клиента, с правильным склонением числа */
     title: z.string().trim().min(1).max(120).nullable(),
@@ -74,6 +109,13 @@ export const taskDefSchema = z
     active: z.boolean(),
   })
   .strict()
-  .refine((task) => task.coins + task.gems + task.shards > 0, { message: "задание без награды" });
+  .refine((task) => task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
+  .refine((task) => (task.kind === "channel") === (task.params !== null), { message: "канал и ссылка — у цели «канал», и только у неё", path: ["params"] })
+  // Подписка проверяется в момент нажатия и не копится: за срок её не
+  // «наберёшь», а повторная награда за ту же подписку каждый день — фарм.
+  .refine((task) => task.kind !== "channel" || (task.period === "achievement" && task.target === 1), {
+    message: "цель «канал» — только достижение с целью 1",
+    path: ["period"],
+  });
 
 export type TaskDef = z.infer<typeof taskDefSchema>;
