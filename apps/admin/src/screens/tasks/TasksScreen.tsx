@@ -7,16 +7,20 @@ import {
   GROUP_TITLES,
   KIND_TITLES,
   PARTNER_KINDS,
+  PARTNER_PLATFORMS,
+  PARTNER_PLATFORM_TITLES,
   PERIOD_TITLES,
   TASK_PERIODS,
   TIME_KINDS,
   TITLE_MAX,
   fetchTasks,
   groupByPeriod,
+  partnerPlatforms,
   rewardLabel,
   saveTask,
   targetLabel,
   taskProblem,
+  togglePlatform,
   withKind,
   withPlatform,
   type TaskParams,
@@ -117,19 +121,37 @@ export function TasksScreen() {
           </div>
           {partner ? (
             <div className="flex flex-wrap items-end gap-2">
-              <Field label="Площадка" hint={channel ? "игроки других площадок задания не увидят" : "пусто — цель видна на всех площадках"}>
-                <Select
-                  value={input.params?.platform ?? ""}
-                  onChange={(event) => setInput({ ...input, params: withPlatform(input.params, CHANNEL_PLATFORMS.find((candidate) => candidate === event.target.value)) })}
-                >
-                  {channel ? null : <option value="">Все площадки</option>}
-                  {CHANNEL_PLATFORMS.map((platform) => (
-                    <option key={platform} value={platform}>
-                      {CHANNEL_PLATFORM_TITLES[platform]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              {channel ? (
+                <Field label="Площадка" hint="игроки других площадок задания не увидят">
+                  <Select
+                    value={input.params?.platform ?? ""}
+                    onChange={(event) => setInput({ ...input, params: withPlatform(input.params, CHANNEL_PLATFORMS.find((candidate) => candidate === event.target.value)) })}
+                  >
+                    {CHANNEL_PLATFORMS.map((platform) => (
+                      <option key={platform} value={platform}>
+                        {CHANNEL_PLATFORM_TITLES[platform]}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : (
+                <fieldset className="flex flex-col gap-1">
+                  <legend className="text-xs text-text-muted">Где показывать</legend>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 py-1.5 text-sm">
+                    {PARTNER_PLATFORMS.map((platform) => (
+                      <label key={platform} className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={partnerPlatforms(input.params).includes(platform)}
+                          onChange={() => setInput({ ...input, params: togglePlatform(input.params, platform) })}
+                        />
+                        {PARTNER_PLATFORM_TITLES[platform]}
+                      </label>
+                    ))}
+                  </div>
+                  <span className="text-xs text-text-disabled">ничего не отмечено — на всех площадках</span>
+                </fieldset>
+              )}
               {channel ? (
                 <Field label="Канал" hint="@имя или id — по нему спрашивает бот">
                   <Input value={input.params?.chat ?? ""} onChange={(event) => setParams({ chat: event.target.value })} placeholder="@rubezh_game" maxLength={64} className="w-44" />

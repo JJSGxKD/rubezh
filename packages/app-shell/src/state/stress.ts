@@ -186,13 +186,12 @@ function rememberSentBench(reportId: string, submission: BenchSubmission): void 
 }
 
 /**
- * На прогоне свайп вниз не сворачивает приложение, а закрытие переспрашивает:
- * пятиминутный замер не должен теряться от случайного жеста.
+ * На прогоне закрытие переспрашивает: пятиминутный замер не должен теряться
+ * от случайного жеста. Свайп вниз не сворачивает приложение нигде — его
+ * выключает запуск оболочки (`index.tsx`).
  */
 function setTestUiMode(inTest: boolean): void {
-  const ui = useShell.getState().adapter.ui;
-  ui.setVerticalSwipesEnabled(!inTest);
-  ui.setClosingConfirmation(inTest);
+  useShell.getState().adapter.ui.setClosingConfirmation(inTest);
 }
 
 /** Seed прогона: не симуляция, а параметр, который уходит в отчёт. */

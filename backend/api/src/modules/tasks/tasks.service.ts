@@ -14,6 +14,7 @@ import {
   countsForTasks,
   isRunKind,
   rewardReason,
+  visibleOn,
   type TaskCategory,
   type TaskDef,
   type TaskKind,
@@ -236,7 +237,7 @@ export class TasksService implements OnModuleInit {
 
   /** Включённые цели, которые игрок может выполнить: цель другой площадки ему не показывается, цель без площадки — всем. */
   private async visible(account: AccountRef): Promise<TaskDef[]> {
-    return (await this.active()).filter((def) => def.params?.platform === undefined || def.params.platform === account.platform);
+    return (await this.active()).filter((def) => visibleOn(def.params, account.platform));
   }
 
   private async active(): Promise<TaskDef[]> {

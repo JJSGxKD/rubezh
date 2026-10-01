@@ -175,7 +175,16 @@ describe.skipIf(DATABASE_URL === "")("журнал обновлений на ж�
       const rows = await prisma.notification.findMany({ where: { accountId: id, kind: "app_update" }, select: { payload: true, dedupeKey: true } });
       expect(rows).toEqual([{ payload: { version: release }, dedupeKey: `app_update:${release}` }]);
     }
-    const page = await service.page({ accountId: players[0] ?? "", platform: "web" }, null, 20);
-    expect(page.versions.find((candidate) => candidate.version === release)?.entries.map((line) => line.text)).toEqual(["Для браузера", "Ещё строка"]);
+    // Листаем до своей версии: на общей базе версии копятся от прогона к
+    // прогону, и случайная версия теста не обязана попасть на первую страницу.
+    const player = { accountId: players[0] ?? "", platform: "web" as const };
+    let cursor: string | null = null;
+    let found: { entries: { text: string }[] } | undefined;
+    do {
+      const page = await service.page(player, cursor, 20);
+      found = page.versions.find((candidate) => candidate.version === release);
+      cursor = page.nextCursor;
+    } while (found === undefined && cursor !== null);
+    expect(found?.entries.map((line) => line.text)).toEqual(["Для браузера", "Ещё строка"]);
   });
 });
