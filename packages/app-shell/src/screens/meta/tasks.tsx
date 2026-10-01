@@ -6,7 +6,18 @@ import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
 import { track } from "../../state/shell";
-import { TASK_NOT_DONE, claimFailureKey, createTasksApi, openTaskLink, taskLink, tasksAvailable, type TaskItem, type TaskReward } from "../../state/tasks-api";
+import {
+  TASK_NOT_DONE,
+  claimFailureKey,
+  createTasksApi,
+  isClaimable,
+  openTaskLink,
+  sortTasks,
+  taskLink,
+  tasksAvailable,
+  type TaskItem,
+  type TaskReward,
+} from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 
@@ -79,7 +90,10 @@ export function TasksScreen(): ReactNode {
     void loadBadges();
   };
 
-  const tasks = state.status === "ready" ? state.tasks.filter((task) => task.period === PERIOD_OF[view]) : [];
+  const all = state.status === "ready" ? state.tasks : [];
+  const tasks = sortTasks(all.filter((task) => task.period === PERIOD_OF[view]));
+  // Знак на вкладке — сколько наград там ждёт: игрок видит их, не перебирая вкладки.
+  const waiting = (period: TaskItem["period"]) => all.filter((task) => task.period === period && isClaimable(task)).length;
 
   return (
     <Screen>
@@ -91,9 +105,9 @@ export function TasksScreen(): ReactNode {
             activeId={view}
             onSelect={(id) => setView(id as View)}
             items={[
-              { id: "daily", label: t("tasks.daily") },
-              { id: "weekly", label: t("tasks.weekly") },
-              { id: "achievements", label: t("tasks.achievements") },
+              { id: "daily", label: t("tasks.daily"), badge: waiting("daily") },
+              { id: "weekly", label: t("tasks.weekly"), badge: waiting("weekly") },
+              { id: "achievements", label: t("tasks.achievements"), badge: waiting("achievement") },
             ]}
           />
           {!tasksAvailable() ? <InfoNotice text={t("tasks.guest")} /> : null}
@@ -145,7 +159,7 @@ function ResetLine(props: { period: ResetPeriod }): ReactNode {
 
 function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; notice: string | null; onClaim: () => void; onOpen: (link: string) => void }): ReactNode {
   const { task } = props;
-  const claimable = task.done && !task.claimed;
+  const claimable = isClaimable(task);
   const link = taskLink(task);
   // Подписку выполняет не забег: её проверяет сервер по нажатию, поэтому
   // «Проверить» есть и у невыполненной цели.
