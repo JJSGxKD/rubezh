@@ -5,6 +5,7 @@ import type {
   FinishOutcome,
   RecentRun,
   ReviewRow,
+  RunDetailRow,
   RunFinishRecord,
   RunsRepository,
   RunStartRecord,
@@ -88,12 +89,35 @@ export class MemoryRunsRepository implements RunsRepository {
       .sort((left, right) => right.finishedAt.getTime() - left.finishedAt.getTime())
       .slice(0, limit)
       .map((row) => ({
+        runId: row.runId,
         difficulty: row.difficulty,
         survivalSec: row.survivalSec,
         level: row.level,
         startingWeaponId: row.startingWeaponId,
         finishedAt: row.finishedAt,
       }));
+  }
+
+  async detail(accountId: string, runId: string): Promise<RunDetailRow | null> {
+    const record = this.rows.get(runId)?.record;
+    if (record === undefined || record.accountId !== accountId) return null;
+    return {
+      runId: record.runId,
+      difficulty: record.difficulty,
+      startingWeaponId: record.startingWeaponId,
+      finishedAt: record.finishedAt,
+      outcome: record.outcome,
+      survivalSec: record.survivalSec,
+      level: record.level,
+      enemiesKilled: record.enemiesKilled,
+      weapons: record.weapons.map((weapon) => ({ id: weapon.id, level: weapon.level, damage: weapon.damage ?? null })),
+      details: record.details,
+      deathCause: record.deathCause,
+      cheats: record.cheats,
+      continues: record.continues.length,
+      ranked: record.ranked,
+      verdict: record.verdict,
+    };
   }
 
   async bestRuns(accountIds: readonly string[], difficulty: Difficulty): Promise<BestRunRow[]> {

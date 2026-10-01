@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { DIFFICULTY_IDS, type RecentRun } from "@bh/shared-types";
 import {
   Avatar,
@@ -21,6 +22,7 @@ import { useSession } from "../../state/session";
 import { useShell } from "../../state/shell";
 import { ItemIcon } from "../item-icons";
 import { AccountLevel } from "./account-level";
+import { RunDetailSheet } from "./run-detail";
 
 export { HistoryScreen } from "./history";
 export { LevelScreen } from "./level";
@@ -47,6 +49,7 @@ export function ProfileScreen(): ReactNode {
   const status = useSession((state) => state.status);
   const notice = useSessionNotice();
   const [failure, setFailure] = useState<ApiFailure | null>(null);
+  const [openRun, setOpenRun] = useState<string | null>(null);
 
   const load = async (): Promise<void> => {
     setFailure(null);
@@ -152,7 +155,12 @@ export function ProfileScreen(): ReactNode {
         ) : (
           <ul className="grid grid-cols-1 gap-2">
             {profile.recent.map((run) => (
-              <RecentRunRow key={`${run.at}-${run.survivalSec}`} run={run} />
+              <RecentRunRow
+                key={`${run.at}-${run.survivalSec}`}
+                run={run}
+                // Сервер до листа забега id не отдавал — такая строка просто не открывается.
+                onOpen={run.runId === undefined ? undefined : () => setOpenRun(run.runId ?? null)}
+              />
             ))}
           </ul>
         )}
@@ -160,14 +168,15 @@ export function ProfileScreen(): ReactNode {
         <SectionTitle>{t("profile.later")}</SectionTitle>
         <StubNotice text={t("profile.soon")} />
       </ContentColumn>
+      {openRun === null ? null : <RunDetailSheet runId={openRun} onClose={() => setOpenRun(null)} />}
     </Screen>
   );
 }
 
-function RecentRunRow(props: { run: RecentRun }): ReactNode {
+function RecentRunRow(props: { run: RecentRun; onOpen?: (() => void) | undefined }): ReactNode {
   const { run } = props;
-  return (
-    <li className="surface-card flex items-center gap-3 rounded-lg px-3 py-2.5">
+  const body = (
+    <>
       <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-weapon/15 text-weapon">
         <ItemIcon kind="weapon" id={run.startingWeaponId} size={18} />
       </span>
@@ -181,6 +190,20 @@ function RecentRunRow(props: { run: RecentRun }): ReactNode {
         </span>
       </span>
       <span className="font-display text-sm font-bold tabular-nums text-text">{formatDuration(run.survivalSec)}</span>
+      {props.onOpen === undefined ? null : <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-text-muted" />}
+    </>
+  );
+  if (props.onOpen === undefined) return <li className="surface-card flex items-center gap-3 rounded-lg px-3 py-2.5">{body}</li>;
+  return (
+    <li>
+      <button
+        type="button"
+        aria-label={t("profile.recent.open", { date: formatWhen(run.at) })}
+        onClick={props.onOpen}
+        className="surface-card flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-transform duration-(--duration-fast) ease-base active:scale-[0.98]"
+      >
+        {body}
+      </button>
     </li>
   );
 }

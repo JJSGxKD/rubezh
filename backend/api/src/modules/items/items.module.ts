@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { ItemsController } from "./items.controller.js";
+import { ItemsRunExtras } from "./items-run-extras.js";
 import { ItemsLoadoutCheck } from "./items-loadout-check.js";
 import { ITEMS_REPOSITORY, PrismaItemsRepository } from "./items.repository.js";
 import { ITEM_SEEDS, ItemsService, cryptoSeeds } from "./items.service.js";
@@ -17,7 +18,7 @@ import { ITEM_SEEDS, ItemsService, cryptoSeeds } from "./items.service.js";
 @Module({
   imports: [AuthModule, WalletModule, RunsModule, NotificationsModule],
   controllers: [ItemsController],
-  providers: [ItemsService, ItemsLoadoutCheck, { provide: ITEMS_REPOSITORY, useClass: PrismaItemsRepository }, { provide: ITEM_SEEDS, useValue: cryptoSeeds }],
+  providers: [ItemsService, ItemsLoadoutCheck, ItemsRunExtras, { provide: ITEMS_REPOSITORY, useClass: PrismaItemsRepository }, { provide: ITEM_SEEDS, useValue: cryptoSeeds }],
   exports: [ItemsService],
 })
 export class ItemsModule {}

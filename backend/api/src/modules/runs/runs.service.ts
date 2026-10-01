@@ -11,6 +11,7 @@ import { judgeRun, trustedStartMs, type RunVerdict, type VerdictReason } from ".
 import { RUNS_REPOSITORY, type RunsRepository } from "./runs.repository.js";
 import { RunContinues } from "./run-continues.js";
 import { RunLoadouts } from "./run-loadouts.js";
+import { detailsOf } from "./run-details.js";
 import { RunsHooks } from "./runs-hooks.js";
 
 /**
@@ -105,6 +106,7 @@ export class RunsService {
       level: run.level,
       enemiesKilled: run.enemiesKilled,
       weapons: run.weapons,
+      details: detailsOf({ passives: run.passives, stats: run.stats }),
       deathCause: run.deathCause,
       cheats: run.cheats,
       continues: run.continues,

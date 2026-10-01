@@ -1,14 +1,14 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
-import { difficultyQuerySchema, reviewLimitSchema, runFinishSchema, runStartSchema } from "./dto/runs.dto.js";
+import { difficultyQuerySchema, reviewLimitSchema, runFinishSchema, runIdParamSchema, runStartSchema } from "./dto/runs.dto.js";
 import { RUNS_LIMITS } from "./runs-limits.js";
 import { RunsService, type FinishResult } from "./runs.service.js";
-import { RunsViewService, type LeaderboardView, type ProfileView } from "./runs-view.service.js";
+import { RunsViewService, type LeaderboardView, type ProfileView, type RunDetailView } from "./runs-view.service.js";
 import type { ReviewRow } from "./runs.repository.js";
 
 /**
@@ -60,6 +60,18 @@ export class RunsController {
   async review(@Query("limit") limit?: string): Promise<{ data: { runs: ReviewRow[] } }> {
     const parsed = parse(() => reviewLimitSchema.parse(limit ?? undefined), "Некорректный предел");
     return { data: { runs: await this.view.review(parsed) } };
+  }
+
+  /**
+   * Лист своего забега в профиле. Последним среди GET: иначе `:runId`
+   * перехватил бы `leaderboard`, `me` и `review`.
+   */
+  @Get(":runId")
+  async detail(@Req() request: unknown, @Param("runId") runId: string): Promise<{ data: RunDetailView }> {
+    const account = accountOf(request);
+    await this.limit(RUNS_LIMITS.detail, account.accountId);
+    const parsed = parse(() => runIdParamSchema.parse(runId), "Некорректный забег");
+    return { data: await this.view.detail(account.accountId, parsed) };
   }
 
   /** Лимит — по аккаунту: за адресом мобильного оператора стоят сотни игроков. */

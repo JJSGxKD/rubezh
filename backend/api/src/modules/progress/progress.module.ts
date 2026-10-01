@@ -10,6 +10,7 @@ import { ProgressService } from "./progress.service.js";
 import { RunDoubleController } from "./run-double.controller.js";
 import { PrismaRunDoubleRepository, RUN_DOUBLE_REPOSITORY } from "./run-double.repository.js";
 import { RunDoubleService } from "./run-double.service.js";
+import { RunRewardExtras } from "./run-reward-extras.js";
 import { RunRewards } from "./run-rewards.js";
 
 /**
@@ -24,6 +25,7 @@ import { RunRewards } from "./run-rewards.js";
   providers: [
     ProgressService,
     RunRewards,
+    RunRewardExtras,
     RunDoubleService,
     { provide: PROGRESS_REPOSITORY, useClass: PrismaProgressRepository },
     { provide: RUN_DOUBLE_REPOSITORY, useClass: PrismaRunDoubleRepository },

@@ -309,7 +309,7 @@
 | Версии образов Postgres и Redis | `docker-compose.yml` и сервисы джоба `gate` в `.github/workflows/ci.yml`, одни и те же; база бэкенда — `FROM` в `backend/api/Dockerfile`. Точная версия и digest, как обновить — `16-tech-stack-decisions.md` §9.4 |
 | Минимальная версия клиента площадки | `apps/web-telegram/src/main.tsx`, `minPlatformVersion` (обоснование — `27-design-system-and-app-shell.md` §5.2) |
 | Туннель для открытия Mini App с телефона | `infra/frpc/frpc.local.toml` (не коммитится: в нём токен) |
-| Лимиты приёма забегов (по аккаунту) | `backend/api/src/modules/runs/runs-limits.ts` |
+| Лимиты приёма забегов и листа забега в профиле (по аккаунту) | `backend/api/src/modules/runs/runs-limits.ts`; сколько врагов в «кого больше всего» — `runs/run-details.ts` → `TOP_KILLS_SHOWN` |
 | Правила игры для проверки забега (слоты, сложности, вторые шансы за забег) | `backend/api/src/modules/runs/run-rules.ts` — копия контента, сверяется тестом `scripts/test/run-rules.test.ts` |
 | Лимиты оплаты: цена, счёт, опрос состояния покупки (по аккаунту) | `backend/api/src/modules/payments/payments-limits.ts` |
 | Правило цены второго шанса: начатые минуты, минимум в звезду, потолок | `backend/api/src/modules/payments/continue-price.ts`; сами числа — `CONTINUE_*` в окружении |

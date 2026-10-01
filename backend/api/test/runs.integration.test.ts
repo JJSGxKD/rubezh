@@ -56,6 +56,7 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
       level: 6,
       enemiesKilled: 300,
       weapons: [{ id: "knife", level: 2 }],
+      details: null,
       deathCause: null,
       cheats: false,
       continues: [],
@@ -157,5 +158,24 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
     expect(queue.some((row) => row.runId === flagged && row.verdictReasons.includes("weapons_over_slots"))).toBe(true);
     expect(queue.every((row) => row.verdict !== "ok")).toBe(true);
+  });
+
+  it("лист забега: подробности и урон оружия — из базы, чужой — `null`, битый JSON — без этой части", async () => {
+    const [owner, stranger] = [await account(), await account()];
+    const runId = randomUUID();
+    const details = { passives: [{ id: "might", level: 2 }], damageTaken: 310, xpCollected: 95, waveReached: 4, topKills: [{ enemy: "swarm_rat", count: 200 }] };
+    await runs.finish(finished(runId, owner, { weapons: [{ id: "knife", level: 3, damage: 4200 }], details }));
+
+    expect(await runs.detail(owner, runId)).toMatchObject({ weapons: [{ id: "knife", level: 3, damage: 4200 }], details, continues: 0 });
+    expect(await runs.detail(stranger, runId)).toBeNull();
+    expect((await runs.recent(owner, 5)).map((run) => run.runId)).toEqual([runId]);
+
+    // Строка прошлой сборки без урона и подробностей.
+    const old = randomUUID();
+    await runs.finish(finished(old, owner));
+    expect(await runs.detail(owner, old)).toMatchObject({ weapons: [{ id: "knife", level: 2, damage: null }], details: null });
+
+    await prisma.run.update({ where: { runId }, data: { details: { passives: "битые" }, weapons: { не: "массив" } } });
+    expect(await runs.detail(owner, runId)).toMatchObject({ weapons: [], details: null });
   });
 });

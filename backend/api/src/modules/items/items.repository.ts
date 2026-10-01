@@ -132,6 +132,8 @@ export interface ItemsRepository {
     at: Date,
     decide: (items: ItemRow[], account: AccountView) => MergeDecision,
   ): Promise<Outcome | null>;
+  /** предметы, выпавшие в забеге, — и разобранные потом тоже: добыча была */
+  loot(accountId: string, runId: string): Promise<{ slot: string; rarity: string; level: number }[]>;
 }
 
 const rollsSchema = z.object({
@@ -194,6 +196,14 @@ export class PrismaItemsRepository implements ItemsRepository {
     if (itemIds.length === 0) return 0;
     const { count } = await this.prisma.item.updateMany({ where: { accountId, itemId: { in: [...itemIds] }, removedAt: null, seenAt: null }, data: { seenAt: at } });
     return count;
+  }
+
+  async loot(accountId: string, runId: string): Promise<{ slot: string; rarity: string; level: number }[]> {
+    return await this.prisma.item.findMany({
+      where: { accountId, source: `loot:${runId}`.slice(0, 96) },
+      select: { slot: true, rarity: true, level: true },
+      orderBy: { createdAt: "asc" },
+    });
   }
 
   async unseenCount(accountId: string): Promise<number> {

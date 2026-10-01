@@ -1065,7 +1065,8 @@ export interface RunFinishSubmission {
   level: number;
   enemiesKilled: number;
   startingWeaponId: string;
-  weapons: { id: string; level: number }[];
+  /** урон оружия — для листа забега в профиле; забег из очереди прошлой сборки его не знает */
+  weapons: { id: string; level: number; damage?: number }[];
   contentHash: string;
   /**
    * id врага, нанёсшего смертельный урон; `null` — сдача. Для сводки «кто чаще
@@ -1089,6 +1090,20 @@ export interface RunFinishSubmission {
   loadout?: SignedLoadout;
   /** бусты, применённые движком; нет поля — забег без бустов */
   boosts?: string[];
+  /**
+   * Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4): на
+   * вердикт не влияют. Нет полей — забег из очереди прошлой сборки.
+   */
+  passives?: { id: string; level: number }[];
+  stats?: RunFinishStats;
+}
+
+export interface RunFinishStats {
+  damageTaken: number;
+  xpCollected: number;
+  waveReached: number;
+  /** кого больше всего убил — пятёрка по убыванию */
+  topKills: { enemy: string; count: number }[];
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
@@ -1147,6 +1162,8 @@ export interface Leaderboard {
 }
 
 export interface RecentRun {
+  /** по нему открывается лист забега; сервер до листа его не отдавал */
+  runId?: string;
   difficultyId: DifficultyId;
   survivalSec: number;
   level: number;
