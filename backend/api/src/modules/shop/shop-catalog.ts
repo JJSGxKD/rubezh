@@ -54,6 +54,11 @@ export const shopSkuSchema = z
     once: z.boolean(),
     /** порядок на витрине */
     sort: z.number().int(),
+    /**
+     * «Хит» — товар, который команда выделяет сама. «Лучшая цена» и выгода
+     * считаются, а не ставятся руками: они обязаны быть правдой.
+     */
+    badge: z.enum(["hit"]).optional(),
   })
   .strict();
 
@@ -92,6 +97,7 @@ export const SHOP_SKUS: readonly ShopSku[] = [
     stars: 250,
     once: false,
     sort: 30,
+    badge: "hit",
   },
   {
     id: "gems_700",
