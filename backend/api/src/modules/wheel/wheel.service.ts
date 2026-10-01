@@ -45,10 +45,11 @@ export interface WheelView {
   /** бесплатная крутка этих суток ещё ждёт */
   free: boolean;
   /**
-   * Крутка за рекламу: есть ли для площадки рекламные блоки места и когда
-   * пройдёт кулдаун (`null` — уже можно).
+   * Крутка за рекламу: есть ли для площадки рекламные блоки места, когда
+   * пройдёт кулдаун (`null` — уже можно) и нужен ли ролик: у VIP `pass` —
+   * крутка без него (§3.6).
    */
-  ad: { available: boolean; readyAt: string | null };
+  ad: { available: boolean; readyAt: string | null; pass: string | null };
 }
 
 /** Чем крутят: бесплатная крутка суток или досмотренная реклама. */
@@ -135,7 +136,7 @@ export class WheelService {
 
   private async adReadiness(player: WheelPlayer, at: Date): Promise<WheelView["ad"]> {
     const ready = await this.ads.readiness(player, "wheel_spin", at);
-    return { available: ready.available, readyAt: ready.readyAt?.toISOString() ?? null };
+    return { available: ready.available, readyAt: ready.readyAt?.toISOString() ?? null, pass: ready.pass };
   }
 
   /** Знак меню: 1 — бесплатная крутка этих суток ждёт. */

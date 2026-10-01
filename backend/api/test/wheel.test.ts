@@ -21,6 +21,7 @@ import { WheelService, cryptoRoll, viewOf, type WheelPlayer, type WheelRoll, typ
 import { AdCooldownError, AdNotCompletedError } from "../src/modules/ads/ads-errors.js";
 import { maxRewardsPerDay } from "../src/modules/ads/ads-rules.js";
 import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
+import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { AdsService } from "../src/modules/ads/ads.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAds, adBlock } from "./helpers/memory-ads.js";
@@ -125,9 +126,10 @@ function setup(roll: WheelRoll = rolls(0), level = 1, blocks: AdBlockRow[] = [ad
   const progress = { view: async () => ({ level }) } as unknown as ProgressService;
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
-  const ads = new AdsService(adsRepository, () => 0);
+  const passes = new AdPasses();
+  const ads = new AdsService(adsRepository, () => 0, passes);
   const service = new WheelService(repository, progress, wallet as unknown as WalletService, ads, roll);
-  return { repository, wallet, service, ads, adsRepository };
+  return { repository, wallet, service, ads, adsRepository, passes };
 }
 
 /** Реклама досмотрена: выдача показа в месте колеса и досмотр от SDK. */
@@ -322,6 +324,19 @@ describe("крутка за рекламу", () => {
     expect(view.ad.readyAt).toBe(new Date(NOON.getTime() + 300 * MINUTE).toISOString());
   });
 
+  it("VIP крутит без ролика и без сетей: сессия выдаётся выполненной, кулдаун места тот же", async () => {
+    const { service, ads, passes, wallet } = setup(rolls(rollFor(3)), 1, []);
+    passes.register("vip", async () => true);
+    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: true, readyAt: null, pass: "vip" });
+
+    const offer = await ads.offer({ ...PLAYER, device: null }, "wheel_spin", NOON);
+    if (!offer.available) throw new Error("показа нет");
+    expect(offer.pass).toBe("vip");
+    const result = await service.spin(PLAYER, { kind: "ad", sessionId: offer.sessionId }, NOON);
+    expect(result).toMatchObject({ sector: 3, view: { ad: { pass: "vip", readyAt: new Date(NOON.getTime() + 120 * MINUTE).toISOString() } } });
+    expect(wallet.grants).toEqual([expect.objectContaining({ reason: "wheel_reward" })]);
+  });
+
   it("две сессии, выданные до кулдауна, дают одну крутку", async () => {
     const { service, ads, wallet } = setup(rolls(0), 1, [adBlock("adsgram", 10), adBlock("adsonar", 20)]);
     const first = await watched(ads, NOON);
@@ -333,14 +348,14 @@ describe("крутка за рекламу", () => {
 
   it("экран знает, есть ли реклама для площадки игрока", async () => {
     const { service } = setup(rolls(0), 1, [adBlock("adsgram", 10, { platforms: ["vk"] })]);
-    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: false, readyAt: null });
-    expect((await service.view({ accountId: ME, platform: "vk" }, NOON)).ad).toEqual({ available: true, readyAt: null });
+    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: false, readyAt: null, pass: null });
+    expect((await service.view({ accountId: ME, platform: "vk" }, NOON)).ad).toEqual({ available: true, readyAt: null, pass: null });
   });
 });
 
 describe("колесо на экране", () => {
   it("сектора — в порядке колеса, с наградой уровня и шансом", () => {
-    const view = viewOf(21, true, { available: false, readyAt: null });
+    const view = viewOf(21, true, { available: false, readyAt: null, pass: null });
     expect(view.free).toBe(true);
     expect(view.sectors).toHaveLength(WHEEL_SECTORS.length);
     expect(view.sectors[0]).toEqual({ resource: "coins", amount: 70, odds: 0.24 });

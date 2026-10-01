@@ -7,6 +7,7 @@ import { PaymentsService, type ShopInvoice } from "../payments/payments.service.
 import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
 import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import { SubscriptionRenewal } from "../payments/subscription-renewal.js";
+import { AdPasses } from "../ads/ads-passes.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { WalletBonuses } from "../wallet/wallet-bonus.js";
 import type { GrantReason } from "../wallet/wallet-types.js";
@@ -23,8 +24,9 @@ import { VIP_REPOSITORY, type VipCanceller, type VipRenewal, type VipRepository,
  *
  * Оплату ведёт модуль оплаты — счёт с периодом, продления, отмена
  * продления через порт площадки; VIP решает, почём он и что даёт: самоцветы
- * раз в игровые сутки и увеличенные награды — надбавкой в начислении
- * кошелька (Р44). Без рекламы — там, где её показывают.
+ * раз в игровые сутки, увеличенные награды — надбавкой в начислении
+ * кошелька (Р44) — и рекламу без ролика: пропуском в модуле рекламы, который
+ * выдаёт награду места сразу и не показывает межстраничную (§3.6).
  */
 
 const DB_TIMEOUT_MS = 3_000;
@@ -71,12 +73,14 @@ export class VipService implements OnModuleInit {
     private readonly renewal: SubscriptionRenewal,
     private readonly wallet: WalletService,
     private readonly bonuses: WalletBonuses,
+    private readonly adPasses: AdPasses,
   ) {}
 
   onModuleInit(): void {
     this.fulfillment.register("vip", (purchase) => this.fulfill(purchase));
     this.hooks.onSubscriptionChanged("vip", (change) => this.changed(change));
     this.bonuses.register("vip", (accountId, reason, at) => this.rewardMul(accountId, reason, at));
+    this.adPasses.register("vip", (accountId, at) => this.activeAt(accountId, at));
   }
 
   /**
@@ -87,8 +91,13 @@ export class VipService implements OnModuleInit {
   async rewardMul(accountId: string, reason: GrantReason, at: Date): Promise<number> {
     const mul = vipRewardMul(reason);
     if (mul === undefined) return 1;
+    return (await this.activeAt(accountId, at)) ? mul : 1;
+  }
+
+  /** Идёт ли VIP в момент `at` — один запрос по индексу журнала периодов. */
+  async activeAt(accountId: string, at: Date): Promise<boolean> {
     const until = await withTimeout(this.repository.until(accountId), DB_TIMEOUT_MS, "VIP");
-    return until !== null && until.getTime() > at.getTime() ? mul : 1;
+    return until !== null && until.getTime() > at.getTime();
   }
 
   async view(account: AccountRef, at = new Date()): Promise<VipView> {
