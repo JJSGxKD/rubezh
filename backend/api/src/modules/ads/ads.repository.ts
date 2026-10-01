@@ -17,10 +17,13 @@ export interface AdBlockRow {
   blockId: string;
   networkKey: string;
   place: AdPlace;
-  externalId: string;
+  /** `null` — формат без блока в кабинете: показ по ключам сети */
+  externalId: string | null;
   success: AdSuccess;
   /** приоритет сети блока — место в круге */
   priority: number;
+  /** публичные ключи сети — их ждёт SDK вместе с блоком */
+  networkKeys: Record<string, string>;
   platforms: PlatformId[];
   devices: AdDevice[];
 }
@@ -97,9 +100,10 @@ const blockSchema = z.object({
   block_id: z.string(),
   network_key: z.string(),
   place: z.enum(AD_PLACES),
-  external_id: z.string(),
+  external_id: z.string().nullable(),
   success: z.enum(AD_SUCCESS),
   priority: z.number().int(),
+  network_keys: z.record(z.string(), z.string()),
   platforms: z.array(z.enum(PLATFORM_IDS)),
   devices: z.array(z.enum(AD_DEVICES)),
 });
@@ -145,7 +149,7 @@ export class PrismaAdsRepository implements AdsRepository {
 
   async activeBlocks(): Promise<AdBlockRow[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT b.block_id::text, b.network_key, b.place::text, b.external_id, b.success::text, n.priority,
+      SELECT b.block_id::text, b.network_key, b.place::text, b.external_id, b.success::text, n.priority, n.keys AS network_keys,
              b.platforms::text[] AS platforms, b.devices::text[] AS devices
       FROM ad_block b JOIN ad_network n ON n.network_key = b.network_key
       WHERE b.active AND n.active`;
@@ -158,6 +162,7 @@ export class PrismaAdsRepository implements AdsRepository {
         externalId: row.external_id,
         success: row.success,
         priority: row.priority,
+        networkKeys: row.network_keys,
         platforms: row.platforms,
         devices: row.devices,
       };

@@ -2,6 +2,7 @@ import type { AdminIdentity } from "../api/session";
 import { hrefOf, resolveRoute, visibleSections } from "../routes";
 import { useSession } from "../state/use-session";
 import { Badge, Button, Notice } from "../ui/kit";
+import { Toaster } from "../ui/toast";
 import { useHashRoute } from "../ui/router";
 import { SECTION_SCREENS } from "./sections";
 
@@ -46,6 +47,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
           )}
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

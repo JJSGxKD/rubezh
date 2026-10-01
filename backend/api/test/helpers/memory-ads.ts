@@ -1,4 +1,5 @@
 import type { AdPlace } from "../../src/modules/ads/ads-rules.js";
+import { formatFor, profileOf } from "../../src/modules/ads/ad-networks.js";
 import type {
   AdBlockRow,
   AdOutcome,
@@ -140,9 +141,41 @@ export class MemoryAds implements AdsRepository {
   }
 }
 
+/** Рабочие ключи сетей — того вида, что ждёт профиль (`ad-networks.ts`). */
+export const NETWORK_KEYS: Readonly<Record<string, Record<string, string>>> = {
+  adsgram: {},
+  adsonar: { appId: "app_133d2148" },
+  richads: { pubId: "1001262", appId: "6023" },
+  taddy: { pubId: "14cbeb980853dd416003462ca4db7c12" },
+};
+
+/** Идентификатор блока по примеру профиля, свой у каждого блока: `int-12345` → `int-7`; выбор из списка — сам пример. */
+export function unitOf(networkKey: string, place: AdPlace, no: number): string | null {
+  const profile = profileOf(networkKey);
+  const unit = profile === undefined ? undefined : formatFor(profile, place)?.unit;
+  if (unit === undefined || unit === null) return null;
+  if (unit.options !== undefined) return unit.example;
+  return /[0-9]+$/.test(unit.example) ? unit.example.replace(/[0-9]+$/, String(no)) : `${unit.example}_${String(no)}`;
+}
+
 let blockNo = 0;
+/** Блок по профилю сети: идентификатор нужного вида, ключи сети, условие успеха формата места. */
 export function adBlock(networkKey: string, priority: number, overrides: Partial<AdBlockRow> = {}): AdBlockRow {
   blockNo++;
-  return { blockId: `block-${String(blockNo)}`, networkKey, place: "wheel_spin", externalId: `${networkKey}-${String(blockNo)}`, success: "view", priority, platforms: [], devices: [], ...overrides };
+  const place = overrides.place ?? "wheel_spin";
+  const profile = profileOf(networkKey);
+  const success = (profile === undefined ? undefined : formatFor(profile, place)?.success[0]) ?? "view";
+  return {
+    blockId: `block-${String(blockNo)}`,
+    networkKey,
+    place,
+    externalId: unitOf(networkKey, place, blockNo),
+    success,
+    priority,
+    networkKeys: NETWORK_KEYS[networkKey] ?? {},
+    platforms: [],
+    devices: [],
+    ...overrides,
+  };
 }
 

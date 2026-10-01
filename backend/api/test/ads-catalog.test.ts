@@ -23,7 +23,15 @@ import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
 import type { AdBlockDef, AdFunnelRow, AdNetworkEdit, AdNetworkRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { AdsCatalogService, blockEditSchema, networkEditSchema, type AdBlockEdit } from "../src/modules/ads/ads-catalog.service.js";
-import { AdBlockShapeLockedError, AdCatalogNotFoundError } from "../src/modules/ads/ads-errors.js";
+import { AD_NETWORK_PROFILES } from "../src/modules/ads/ad-networks.js";
+import {
+  AdBlockInvalidError,
+  AdBlockLimitError,
+  AdBlockShapeLockedError,
+  AdCatalogNotFoundError,
+  AdNetworkIncompleteError,
+  AdNetworkKeysError,
+} from "../src/modules/ads/ads-errors.js";
 import type { AdsService } from "../src/modules/ads/ads.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -43,8 +51,9 @@ const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 
 class MemoryCatalog implements AdsCatalogRepository {
   networksRows: AdNetworkRow[] = [
-    { networkKey: "adsgram", name: "AdsGram", active: false, priority: 10 },
-    { networkKey: "taddy", name: "Taddy", active: false, priority: 40 },
+    { networkKey: "adsgram", name: "AdsGram", active: false, priority: 10, keys: {} },
+    { networkKey: "richads", name: "RichAds", active: false, priority: 30, keys: {} },
+    { networkKey: "taddy", name: "Taddy", active: false, priority: 40, keys: {} },
   ];
   blockRows: AdBlockDef[] = [];
   funnelFrom: Date | null = null;
@@ -61,7 +70,7 @@ class MemoryCatalog implements AdsCatalogRepository {
   async updateNetwork(edit: AdNetworkEdit): Promise<boolean> {
     const row = this.networksRows.find((network) => network.networkKey === edit.networkKey);
     if (row === undefined) return false;
-    Object.assign(row, { active: edit.active, priority: edit.priority });
+    Object.assign(row, { active: edit.active, priority: edit.priority, keys: { ...edit.keys } });
     return true;
   }
 
@@ -105,7 +114,7 @@ const block = (overrides: Partial<AdBlockEdit> = {}): AdBlockEdit => ({
   blockId: null,
   networkKey: "adsgram",
   place: "wheel_spin",
-  externalId: "int-1234",
+  externalId: "1234",
   success: "view",
   active: true,
   platforms: ["telegram"],
@@ -113,32 +122,118 @@ const block = (overrides: Partial<AdBlockEdit> = {}): AdBlockEdit => ({
   ...overrides,
 });
 
+const RICHADS_KEYS = { pubId: "792361", appId: "1396" };
+
 describe("реклама в панели", () => {
   it("администратор включает сеть и заводит блок — в аудите, и выдача показа сбрасывает запас блоков", async () => {
     const ctx = setup();
     const admin = await person(ctx, "701", "admin");
 
-    expect(await ctx.service.saveNetwork(admin, { networkKey: "adsgram", active: true, priority: 5 })).toEqual({ networkKey: "adsgram", name: "AdsGram", active: true, priority: 5 });
+    expect(await ctx.service.saveNetwork(admin, { networkKey: "adsgram", active: true, priority: 5 })).toEqual({
+      networkKey: "adsgram",
+      name: "AdsGram",
+      active: true,
+      priority: 5,
+      keys: {},
+      missing: [],
+      problem: null,
+    });
     const created = await ctx.service.saveBlock(admin, block());
-    expect(created).toMatchObject({ networkKey: "adsgram", place: "wheel_spin", externalId: "int-1234", platforms: ["telegram"] });
-    const updated = await ctx.service.saveBlock(admin, { ...block({ externalId: "int-5678", active: false, devices: ["android", "ios"] }), blockId: created.blockId });
-    expect(updated).toMatchObject({ blockId: created.blockId, externalId: "int-5678", active: false, devices: ["android", "ios"] });
+    expect(created).toMatchObject({ networkKey: "adsgram", place: "wheel_spin", externalId: "1234", platforms: ["telegram"] });
+    const updated = await ctx.service.saveBlock(admin, { ...block({ externalId: "5678", active: false, devices: ["android", "ios"] }), blockId: created.blockId });
+    expect(updated).toMatchObject({ blockId: created.blockId, externalId: "5678", active: false, devices: ["android", "ios"] });
 
     const audit = (await ctx.roles.recentAudit(10)).map((entry) => entry.action).sort();
     expect(audit).toEqual(["ads.block.create", "ads.block.update", "ads.network.update"]);
     expect(ctx.forgotten()).toBe(3);
   });
 
-  it("сеть и место у заведённого блока не меняются; чужой сети и несуществующего блока нет", async () => {
+  it("ключи сети — по виду из кабинета; без обязательных сеть не включить; пустое значение снимает ключ", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "706", "admin");
+    await expect(ctx.service.saveNetwork(admin, { networkKey: "richads", active: true, priority: 30 })).rejects.toBeInstanceOf(AdNetworkIncompleteError);
+    await expect(ctx.service.saveNetwork(admin, { networkKey: "richads", active: true, priority: 30, keys: { pubId: "792361" } })).rejects.toThrow(/App ID/);
+    await expect(ctx.service.saveNetwork(admin, { networkKey: "richads", active: false, priority: 30, keys: { pubId: "pub-1", appId: "1396" } })).rejects.toBeInstanceOf(AdNetworkKeysError);
+    await expect(ctx.service.saveNetwork(admin, { networkKey: "richads", active: false, priority: 30, keys: { token: "1" } })).rejects.toBeInstanceOf(AdNetworkKeysError);
+    await expect(ctx.service.saveNetwork(admin, { networkKey: "taddy", active: false, priority: 40, keys: { pubId: "14cbeb98" } })).rejects.toBeInstanceOf(AdNetworkKeysError);
+    expect(ctx.repository.networksRows.find((row) => row.networkKey === "richads")).toMatchObject({ active: false, keys: {} });
+
+    // Выключенной сети ключи можно задавать по одному — она ещё готовится.
+    expect(await ctx.service.saveNetwork(admin, { networkKey: "richads", active: false, priority: 30, keys: { pubId: "792361", appId: "" } })).toMatchObject({
+      keys: { pubId: "792361" },
+      missing: ["App ID (appId)"],
+    });
+    expect(await ctx.service.saveNetwork(admin, { networkKey: "richads", active: true, priority: 30, keys: RICHADS_KEYS })).toMatchObject({ active: true, keys: RICHADS_KEYS, missing: [] });
+    // Без ключей в запросе — ключи прежние: место в круге меняют, не трогая их.
+    expect(await ctx.service.saveNetwork(admin, { networkKey: "richads", active: true, priority: 3 })).toMatchObject({ priority: 3, keys: RICHADS_KEYS });
+    await expect(ctx.service.saveNetwork(admin, { networkKey: "taddy", active: true, priority: 40, keys: { pubId: "14cbeb980853dd416003462ca4db7c12" } })).resolves.toMatchObject({ active: true });
+  });
+
+  it("блок — только по профилю сети: место её формата, идентификатор того вида, допустимое условие успеха", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "707", "admin");
+    const invalid = async (edit: AdBlockEdit) => {
+      await expect(ctx.service.saveBlock(admin, edit), JSON.stringify(edit)).rejects.toBeInstanceOf(AdBlockInvalidError);
+    };
+    // Задание AdsGram на крутку колеса не встаёт: у колеса формат видео за награду.
+    await invalid(block({ externalId: "task-123" }));
+    await invalid(block({ externalId: "int-123" }));
+    await invalid(block({ place: "interstitial", externalId: "123" }));
+    await invalid(block({ place: "task", externalId: "123" }));
+    await invalid(block({ externalId: null }));
+    await invalid(block({ success: "click" }));
+    // RichAds показывает по ключам сети — блока в кабинете у него нет, и заданий нет вовсе.
+    await invalid(block({ networkKey: "richads", externalId: "123" }));
+    await invalid(block({ networkKey: "richads", place: "task", externalId: null }));
+    await invalid(block({ networkKey: "taddy", place: "task", externalId: "feed" }));
+    expect(ctx.repository.blockRows).toHaveLength(0);
+
+    await ctx.service.saveBlock(admin, block({ place: "interstitial", externalId: "int-123" }));
+    await ctx.service.saveBlock(admin, block({ place: "task", externalId: "task-123", success: undefined }));
+    await ctx.service.saveBlock(admin, block({ networkKey: "richads", place: "run_double", externalId: null }));
+    await ctx.service.saveBlock(admin, block({ networkKey: "taddy", place: "task", externalId: "app-task", success: undefined }));
+    expect(ctx.repository.blockRows.map((row) => [row.networkKey, row.place, row.externalId, row.success])).toEqual([
+      ["adsgram", "interstitial", "int-123", "view"],
+      ["adsgram", "task", "task-123", "cpa"],
+      ["richads", "run_double", null, "view"],
+      ["taddy", "task", "app-task", "cpa"],
+    ]);
+  });
+
+  it("Task-блок AdsGram — один включённый: кабинет держит один на аккаунт", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "708", "admin");
+    const first = await ctx.service.saveBlock(admin, block({ success: "cpa", place: "task", externalId: "task-1" }));
+    await expect(ctx.service.saveBlock(admin, block({ success: "cpa", place: "task", externalId: "task-2" }))).rejects.toBeInstanceOf(AdBlockLimitError);
+    const second = await ctx.service.saveBlock(admin, block({ success: "cpa", place: "task", externalId: "task-2", active: false }));
+    await ctx.service.saveBlock(admin, { ...block({ success: "cpa", place: "task", externalId: "task-1", active: false }), blockId: first.blockId });
+    await expect(ctx.service.saveBlock(admin, { ...block({ success: "cpa", place: "task", externalId: "task-2" }), blockId: second.blockId })).resolves.toMatchObject({ active: true });
+    // Правка единственного включённого лимит не трогает.
+    await expect(ctx.service.saveBlock(admin, { ...block({ success: "cpa", place: "task", externalId: "task-2", devices: ["android"] }), blockId: second.blockId })).resolves.toMatchObject({ devices: ["android"] });
+  });
+
+  it("сеть и место у заведённого блока не меняются; сети без кода и несуществующего блока нет", async () => {
     const ctx = setup();
     const admin = await person(ctx, "702", "admin");
     const created = await ctx.service.saveBlock(admin, block());
-    await expect(ctx.service.saveBlock(admin, { ...block({ networkKey: "taddy" }), blockId: created.blockId })).rejects.toBeInstanceOf(AdBlockShapeLockedError);
+    await expect(ctx.service.saveBlock(admin, { ...block({ networkKey: "taddy", externalId: null }), blockId: created.blockId })).rejects.toBeInstanceOf(AdBlockShapeLockedError);
     await expect(ctx.service.saveBlock(admin, { ...block({ place: "run_double" }), blockId: created.blockId })).rejects.toBeInstanceOf(AdBlockShapeLockedError);
     await expect(ctx.service.saveBlock(admin, block({ networkKey: "monetag" }))).rejects.toBeInstanceOf(AdCatalogNotFoundError);
     await expect(ctx.service.saveBlock(admin, { ...block(), blockId: "00000000-0000-4000-8000-999999999999" })).rejects.toBeInstanceOf(AdCatalogNotFoundError);
     await expect(ctx.service.saveNetwork(admin, { networkKey: "monetag", active: true, priority: 1 })).rejects.toBeInstanceOf(AdCatalogNotFoundError);
     expect(ctx.repository.blockRows).toHaveLength(1);
+  });
+
+  it("панель получает профили и форматы мест; блок, заведённый до профилей, — с объяснением, что не так", async () => {
+    const ctx = setup();
+    const designer = await person(ctx, "709", "game_designer");
+    ctx.repository.networksRows[1] = { networkKey: "richads", name: "RichAds", active: true, priority: 30, keys: { pubId: "792361" } };
+    ctx.repository.blockRows.push({ blockId: "legacy", networkKey: "adsgram", place: "wheel_spin", externalId: "task-9", success: "view", active: true, platforms: [], devices: [] });
+    const view = await ctx.service.view(designer, 7, NOON);
+    expect(view.profiles).toBe(AD_NETWORK_PROFILES);
+    expect(view.formats).toMatchObject({ wheel_spin: "rewarded", interstitial: "interstitial", task: "task" });
+    expect(view.networks.find((network) => network.networkKey === "richads")).toMatchObject({ missing: ["App ID (appId)"], problem: null });
+    expect(view.blocks[0]?.problem).toMatch(/AdsGram: Block ID для этого места выглядит как «12345»/);
   });
 
   it("геймдизайнер видит, но не правит; модератор не видит", async () => {
@@ -147,7 +242,7 @@ describe("реклама в панели", () => {
     const moderator = await person(ctx, "704", "moderator");
     const view = await ctx.service.view(designer, 7, NOON);
     expect(view).toMatchObject({ days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] });
-    expect(view.networks.map((network) => network.networkKey)).toEqual(["adsgram", "taddy"]);
+    expect(view.networks.map((network) => network.networkKey)).toEqual(["adsgram", "richads", "taddy"]);
     expect(ctx.repository.funnelFrom).toEqual(new Date(NOON.getTime() - 7 * 86_400_000));
 
     await expect(ctx.service.saveNetwork(designer, { networkKey: "adsgram", active: true, priority: 1 })).rejects.toThrow();
@@ -157,12 +252,13 @@ describe("реклама в панели", () => {
     expect(ctx.repository.blockRows).toHaveLength(0);
   });
 
-  it("схемы панели: блок — без пробелов в идентификаторе, списки — из известных и без повторов, лишнее поле — отказ", () => {
+  it("схемы панели: идентификатор обрезается, пустой — «блока нет»; списки — из известных и без повторов, лишнее поле — отказ", () => {
     expect(blockEditSchema.safeParse(block()).success).toBe(true);
     expect(blockEditSchema.parse(block({ externalId: "  int-1  " })).externalId).toBe("int-1");
+    expect(blockEditSchema.parse(block({ externalId: "  " })).externalId).toBeNull();
+    expect(blockEditSchema.parse({ ...block(), success: undefined }).success).toBeUndefined();
     for (const bad of [
-      block({ externalId: "int 1" }),
-      block({ externalId: "" }),
+      block({ externalId: "x".repeat(129) }),
       block({ platforms: ["telegram", "telegram"] }),
       { ...block(), devices: ["tv"] },
       { ...block(), place: "banner" },
@@ -173,6 +269,8 @@ describe("реклама в панели", () => {
     }
     expect(networkEditSchema.safeParse({ networkKey: "adsgram", active: true, priority: -1 }).success).toBe(false);
     expect(networkEditSchema.safeParse({ networkKey: "adsgram", active: true, priority: 1, name: "X" }).success).toBe(false);
+    expect(networkEditSchema.safeParse({ networkKey: "richads", active: true, priority: 1, keys: { pubId: 792361 } }).success).toBe(false);
+    expect(networkEditSchema.parse({ networkKey: "richads", active: true, priority: 1, keys: { pubId: " 792361 " } }).keys).toEqual({ pubId: "792361" });
   });
 });
 
@@ -231,7 +329,12 @@ describe("реклама в панели по HTTP", () => {
     expect(network.statusCode).toBe(201);
     expect(network.json<{ data: { active: boolean } }>().data.active).toBe(true);
 
-    expect((await app.inject({ method: "POST", url: "/api/v1/admin/ads/blocks", headers, payload: { ...block(), externalId: "a b" } })).statusCode).toBe(400);
+    const invalid = await app.inject({ method: "POST", url: "/api/v1/admin/ads/blocks", headers, payload: { ...block(), externalId: "task-1" } });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json<{ error: { code: string } }>().error.code).toBe("ad_block_invalid");
+    const incomplete = await app.inject({ method: "POST", url: "/api/v1/admin/ads/networks", headers, payload: { networkKey: "richads", active: true, priority: 3 } });
+    expect(incomplete.statusCode).toBe(409);
+    expect(incomplete.json<{ error: { code: string } }>().error.code).toBe("ad_network_incomplete");
     const created = await app.inject({ method: "POST", url: "/api/v1/admin/ads/blocks", headers, payload: block() });
     expect(created.statusCode).toBe(201);
     const blockId = created.json<{ data: { blockId: string } }>().data.blockId;

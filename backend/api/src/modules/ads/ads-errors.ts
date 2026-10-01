@@ -41,3 +41,31 @@ export class AdBlockShapeLockedError extends DomainError {
     super("ad_block_shape_locked", "Сеть и место блока не меняются — заведите новый блок, а этот выключите", 409);
   }
 }
+
+/** Ключ сети не похож на значение из кабинета или такого ключа у сети нет. */
+export class AdNetworkKeysError extends DomainError {
+  constructor(message: string) {
+    super("ad_network_keys", message, 400);
+  }
+}
+
+/** Сеть без обязательных ключей не включается: SDK без них ничего не покажет. */
+export class AdNetworkIncompleteError extends DomainError {
+  constructor(message: string) {
+    super("ad_network_incomplete", message, 409);
+  }
+}
+
+/** Блок не по профилю сети: место не её формата, идентификатор не того вида, не то условие успеха. */
+export class AdBlockInvalidError extends DomainError {
+  constructor(message: string) {
+    super("ad_block_invalid", message, 400);
+  }
+}
+
+/** Кабинет сети держит ограниченное число блоков формата — лишний включённый не заработает. */
+export class AdBlockLimitError extends DomainError {
+  constructor(message: string) {
+    super("ad_block_limit", message, 409);
+  }
+}

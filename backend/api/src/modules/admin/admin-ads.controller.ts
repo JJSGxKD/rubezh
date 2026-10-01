@@ -2,8 +2,8 @@ import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/comm
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
-import { FUNNEL_DAYS, AdsCatalogService, blockEditSchema, networkEditSchema, type AdsCatalogView } from "../ads/ads-catalog.service.js";
-import type { AdBlockDef, AdNetworkRow } from "../ads/ads-catalog.repository.js";
+import { FUNNEL_DAYS, AdsCatalogService, blockEditSchema, networkEditSchema, type AdNetworkView, type AdsCatalogView } from "../ads/ads-catalog.service.js";
+import type { AdBlockDef } from "../ads/ads-catalog.repository.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
@@ -35,7 +35,7 @@ export class AdminAdsController {
 
   @Post("networks")
   @RequirePermission("ads.edit")
-  async saveNetwork(@Req() request: unknown, @Body() body: unknown): Promise<{ data: AdNetworkRow }> {
+  async saveNetwork(@Req() request: unknown, @Body() body: unknown): Promise<{ data: AdNetworkView }> {
     const actor = await this.mutating(request);
     return { data: await this.catalog.saveNetwork(actor, parse(() => networkEditSchema.parse(body), "Некорректная сеть")) };
   }

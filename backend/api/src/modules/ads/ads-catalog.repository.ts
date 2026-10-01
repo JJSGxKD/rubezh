@@ -17,20 +17,24 @@ export interface AdNetworkRow {
   name: string;
   active: boolean;
   priority: number;
+  /** публичные ключи по профилю сети (`ad-networks.ts`) */
+  keys: Record<string, string>;
 }
 
-/** Правка сети: сети приходят кодом (у каждой свой SDK), панель их включает и ставит в круг. */
+/** Правка сети: сети приходят кодом (у каждой свой SDK), панель их включает, ставит в круг и задаёт ключи. */
 export interface AdNetworkEdit {
   networkKey: string;
   active: boolean;
   priority: number;
+  keys: Record<string, string>;
 }
 
 export interface AdBlockDef {
   blockId: string;
   networkKey: string;
   place: AdPlace;
-  externalId: string;
+  /** `null` — формат без блока в кабинете: показ по ключам сети */
+  externalId: string | null;
   success: AdSuccess;
   active: boolean;
   platforms: PlatformId[];
@@ -63,13 +67,15 @@ export interface AdsCatalogRepository {
   funnel(from: Date, to: Date): Promise<AdFunnelRow[]>;
 }
 
-const networkSchema = z.object({ network_key: z.string(), name: z.string(), active: z.boolean(), priority: z.number().int() });
+export const networkKeysSchema = z.record(z.string(), z.string());
+
+const networkSchema = z.object({ network_key: z.string(), name: z.string(), active: z.boolean(), priority: z.number().int(), keys: networkKeysSchema });
 
 const blockSchema = z.object({
   block_id: z.string(),
   network_key: z.string(),
   place: z.enum(AD_PLACES),
-  external_id: z.string(),
+  external_id: z.string().nullable(),
   success: z.enum(AD_SUCCESS),
   active: z.boolean(),
   platforms: z.array(z.enum(PLATFORM_IDS)),
@@ -93,10 +99,10 @@ export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   async networks(): Promise<AdNetworkRow[]> {
-    const rows = await this.prisma.$queryRaw<unknown[]>`SELECT network_key, name, active, priority FROM ad_network ORDER BY priority, network_key`;
+    const rows = await this.prisma.$queryRaw<unknown[]>`SELECT network_key, name, active, priority, keys FROM ad_network ORDER BY priority, network_key`;
     return rows.map((raw) => {
       const row = networkSchema.parse(raw);
-      return { networkKey: row.network_key, name: row.name, active: row.active, priority: row.priority };
+      return { networkKey: row.network_key, name: row.name, active: row.active, priority: row.priority, keys: row.keys };
     });
   }
 
@@ -122,7 +128,8 @@ export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
   async updateNetwork(edit: AdNetworkEdit, at: Date): Promise<boolean> {
     return (
       (await this.prisma.$executeRaw`
-        UPDATE ad_network SET active = ${edit.active}, priority = ${edit.priority}, updated_at = ${at} WHERE network_key = ${edit.networkKey}`) > 0
+        UPDATE ad_network SET active = ${edit.active}, priority = ${edit.priority}, keys = ${JSON.stringify(edit.keys)}::jsonb, updated_at = ${at}
+        WHERE network_key = ${edit.networkKey}`) > 0
     );
   }
 

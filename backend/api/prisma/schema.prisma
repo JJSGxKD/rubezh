@@ -1531,6 +1531,9 @@ model AdNetwork {
   active     Boolean  @default(false)
   /// меньше — раньше в круге
   priority   Int      @default(100)
+  /// публичные ключи сети по её профилю (`ads/ad-networks.ts`): pubId, appId;
+  /// секреты подтверждений — только в окружении (Р53)
+  keys       Json     @default("{}")
   updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
 
   blocks AdBlock[]
@@ -1544,8 +1547,8 @@ model AdBlock {
   blockId    String      @id @map("block_id") @db.Uuid
   networkKey String      @map("network_key") @db.VarChar(32)
   place      AdPlace
-  /// идентификатор блока в кабинете сети
-  externalId String      @map("external_id") @db.VarChar(128)
+  /// идентификатор блока в кабинете сети; `null` — формат без блока, показ по ключам сети
+  externalId String?     @map("external_id") @db.VarChar(128)
   success    AdSuccess   @default(view)
   active     Boolean     @default(true)
   platforms  Platform[]  @default([])
