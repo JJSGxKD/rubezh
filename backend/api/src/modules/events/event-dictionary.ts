@@ -167,6 +167,14 @@ export const EVENT_DICTIONARY = {
   // §7): бесплатная крутка или за рекламу, какой сектор выпал и что в нём.
   // Что легло на баланс — журнал кошелька, причина wheel_reward.
   wheel_spun: { version: 1, payload: payload({ source: z.enum(["free", "ad"]), sector: count, reward: id, amount: count }) },
+  // Активировал промокод (docs/35-stage4-plan.md WP41): какая кампания и
+  // откуда игрок пришёл к полю — из меню или из магазина. Сколько легло —
+  // уже с учётом суточного потолка (`capped`); само погашение — таблица
+  // promo_redemption, начисленное — журнал кошелька, причина promo_reward.
+  promo_code_applied: {
+    version: 1,
+    payload: payload({ campaign: id, kind: z.enum(["shared", "batch"]), source: z.enum(["menu", "shop"]), coins: count, gems: count, shards: count, capped: z.boolean() }),
+  },
   // Забрал награду задания или достижения (docs/35-stage4-plan.md WP13): какие
   // цели доходят до награды и за какой срок. Прогресс и забор — таблица
   // task_progress, начисленное — журнал кошелька (task_reward,

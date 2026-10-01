@@ -37,6 +37,7 @@ export const ANALYTICS_EVENTS = [
   "notification_opened",
   "daily_reward_claimed",
   "wheel_spun",
+  "promo_code_applied",
   "task_completed",
   "achievement_unlocked",
   "task_link_opened",

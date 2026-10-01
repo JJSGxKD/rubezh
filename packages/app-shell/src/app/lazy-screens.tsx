@@ -71,6 +71,10 @@ export const ChangelogScreen = screen(loaders.changelog, "ChangelogScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");
+// Промокод — подарок, его ищут в магазине: экран лежит в чанке магазина.
+// Свой чанк стоил бы первой загрузке строки загрузчика, а качаются оба
+// всё равно заранее, в простое лобби.
+export const PromoCodeScreen = screen(loaders.shop, "PromoCodeScreen");
 export const TestNoticeScreen = screen(loaders.testNotice, "TestNoticeScreen");
 export const GuideScreen = screen(loaders.guide, "GuideScreen");
 export const FeedbackScreen = screen(loaders.feedback, "FeedbackScreen");
