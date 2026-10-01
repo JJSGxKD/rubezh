@@ -13,6 +13,7 @@ import {
 } from "../../api/promo-codes";
 import { formatDateTime, formatNumber } from "../../format";
 import { api } from "../../services";
+import { DailyBars } from "../../ui/daily-bars";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, ErrorNotice, Help, KeyValue, Loading } from "../../ui/kit";
@@ -159,7 +160,7 @@ function CardBody({ detail, campaign }: { detail: PromoCampaignDetail; campaign:
           Активации по дням
           <Help text={HELP.promoCodes.daily} />
         </h3>
-        <DailyBars daily={detail.daily} />
+        <DailyBars daily={detail.daily} what="активаций" />
       </section>
 
       {campaign.kind === "batch" ? (
@@ -179,42 +180,6 @@ function CardBody({ detail, campaign }: { detail: PromoCampaignDetail; campaign:
           </div>
         </section>
       ) : null}
-    </div>
-  );
-}
-
-const DAY_MS = 86_400_000;
-const DAYS = 30;
-
-/** Столбики за 30 дней: пустые дни — тоже, иначе всплеск после поста не отличить от ровного потока. */
-function DailyBars({ daily }: { daily: PromoCampaignDetail["daily"] }) {
-  const counts = new Map(daily.map((row) => [row.day, row.count]));
-  const today = Date.now();
-  const days = Array.from({ length: DAYS }, (_, index) => {
-    // Сутки — московские, как на сервере: сдвиг на три часа от UTC.
-    const day = new Date(today - (DAYS - 1 - index) * DAY_MS + 3 * 3_600_000).toISOString().slice(0, 10);
-    return { day, count: counts.get(day) ?? 0 };
-  });
-  const max = Math.max(1, ...days.map((row) => row.count));
-  const total = days.reduce((sum, row) => sum + row.count, 0);
-  if (total === 0) return <p className="text-sm text-text-muted">За 30 дней активаций не было</p>;
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex h-20 items-end gap-0.5" role="img" aria-label={`Активаций за 30 дней: ${String(total)}`}>
-        {days.map((row) => (
-          <span
-            key={row.day}
-            title={`${row.day.split("-").reverse().join(".")}: ${String(row.count)}`}
-            className={`flex-1 rounded-t-sm ${row.count === 0 ? "bg-surface-raised" : "bg-accent"}`}
-            style={{ height: `${String(Math.max(4, Math.round((row.count / max) * 100)))}%` }}
-          />
-        ))}
-      </div>
-      <p className="flex justify-between text-xs text-text-muted">
-        <span>30 дней назад</span>
-        <span>всего {formatNumber(total)}, максимум за день {formatNumber(max)}</span>
-        <span>сегодня</span>
-      </p>
     </div>
   );
 }
