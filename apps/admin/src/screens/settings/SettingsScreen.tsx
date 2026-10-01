@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
-import { SOURCE_TITLES, fetchSettings, groupSettings, resetSetting, saveSetting, settingProblem, settingText, type SettingRow, type SettingValue } from "../../api/settings";
+import { SETTING_PLACEHOLDER, SOURCE_TITLES, URL_MAX, fetchSettings, groupSettings, resetSetting, saveSetting, settingProblem, settingText, type SettingRow, type SettingValue } from "../../api/settings";
 import { formatDateTime } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Input, Loading, Notice, Panel } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
@@ -65,7 +65,14 @@ export function SettingsScreen() {
           if (problem === null) void save(row, editing.value);
         }}
       >
-        <Input value={String(editing.value)} onChange={(event) => setEditing({ key: row.key, value: event.target.value })} placeholder="-1001234567890:57" maxLength={32} className="w-56" autoFocus />
+        <Input
+          value={String(editing.value)}
+          onChange={(event) => setEditing({ key: row.key, value: event.target.value })}
+          placeholder={SETTING_PLACEHOLDER[row.kind]}
+          maxLength={row.kind === "url" ? URL_MAX : 32}
+          className={row.kind === "url" ? "w-96" : "w-56"}
+          autoFocus
+        />
         <Button tone="primary" type="submit" disabled={problem !== null || pending}>
           Сохранить
         </Button>

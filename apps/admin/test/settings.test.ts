@@ -39,6 +39,11 @@ describe("настройки в панели", () => {
   it("форма проверяет адрес чата так же, как сервер", () => {
     expect(settingProblem("chat", "-1001234567890:57")).toBeNull();
     expect(settingProblem("chat", "")).toBeNull();
+    // ссылка — только https; пусто — «не задана»
+    expect(settingProblem("url", "https://t.me/tribute/app?startapp=stars")).toBeNull();
+    expect(settingProblem("url", "")).toBeNull();
+    expect(settingProblem("url", "http://t.me/tribute")).toMatch(/https/);
+    expect(settingProblem("url", "t.me/tribute")).toMatch(/https/);
     expect(settingProblem("chat", "@team")).not.toBeNull();
     expect(settingProblem("chat", "-100:")).not.toBeNull();
     expect(settingProblem("boolean", true)).toBeNull();
