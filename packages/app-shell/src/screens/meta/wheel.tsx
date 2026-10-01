@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type TransitionEvent } from "react";
-import { Crown, Diamond, LoaderPinwheel, Tv } from "lucide-react";
+import { Crown, LoaderPinwheel, Tv } from "lucide-react";
 import { Button, ContentColumn, ErrorState, InfoNotice, ListGroup, ListItem, Screen, SectionTitle } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
+import { ShardIcon, shardRarity, shardTone } from "../../design-system/components/ShardIcon";
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/wheel";
 import { loadBadges } from "../../state/badges-api";
@@ -187,7 +188,7 @@ export function WheelScreen(): ReactNode {
                 .map((sector) => (
                   <ListItem
                     key={`${sector.resource}-${String(sector.amount)}`}
-                    icon={<span className={sectorTone(sector.resource)}><SectorIcon resource={sector.resource} size={18} /></span>}
+                    icon={<SectorIcon resource={sector.resource} size={18} />}
                     title={sectorLabel(sector)}
                     value={t("wheel.percent", { value: formatDecimal(sector.odds * 100, 1) })}
                   />
@@ -202,22 +203,17 @@ export function WheelScreen(): ReactNode {
 
 /**
  * Вид награды различается и цветом, и формой значка — одним цветом он не
- * передаётся (docs/27-design-system-and-app-shell.md §4.4). Осколки — тоном
- * своей редкости, как в арсенале; незнакомое от сервера новее клиента —
- * нейтрально.
+ * передаётся (docs/27-design-system-and-app-shell.md §4.4): монета — своим
+ * значком, осколок — общим значком цвета своей редкости, как в арсенале;
+ * незнакомое от сервера новее клиента — нейтральным осколком.
  */
-const SECTOR_TONE: Record<string, string> = {
-  coins: "text-accent",
-  shard_common: "text-info",
-  shard_uncommon: "text-success",
-};
-
+/** Дуга сектора у обода — тоном награды: монета — акцентом, осколок — своей редкостью. */
 function sectorTone(resource: string): string {
-  return SECTOR_TONE[resource] ?? "text-text-muted";
+  return resource === "coins" ? "text-accent" : shardTone(shardRarity(resource) ?? "");
 }
 
 function SectorIcon(props: { resource: string; size: number }): ReactNode {
-  return props.resource === "coins" ? <CoinIcon size={props.size} /> : <Diamond size={props.size} aria-hidden="true" />;
+  return props.resource === "coins" ? <CoinIcon size={props.size} /> : <ShardIcon rarity={shardRarity(props.resource) ?? ""} size={props.size} />;
 }
 
 function sectorLabel(sector: Pick<WheelSector, "resource" | "amount">): string {
@@ -256,7 +252,7 @@ function WheelFace(props: { sectors: readonly WheelSector[] }): ReactNode {
       })}
       {props.sectors.map((sector, index) => (
         <g key={index} transform={`rotate(${sectorCenterDeg(index, count)})`}>
-          <svg x={-12} y={-R + 16} width={24} height={24} overflow="visible" className={sectorTone(sector.resource)}>
+          <svg x={-12} y={-R + 16} width={24} height={24} overflow="visible">
             <SectorIcon resource={sector.resource} size={24} />
           </svg>
           <text y={-R + 58} textAnchor="middle" className="fill-current font-display text-sm font-bold text-text">

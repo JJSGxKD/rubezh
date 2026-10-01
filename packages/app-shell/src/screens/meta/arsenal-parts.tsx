@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Footprints, Gem, Hand, Ribbon, Sword } from "lucide-react";
 import { ArmorIcon } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
+import { ShardIcon } from "../../design-system/components/ShardIcon";
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import type { ItemCost, ItemView } from "../../state/items-api";
 
@@ -85,7 +86,7 @@ export function itemLabel(item: Pick<ItemView, "slot" | "rarity" | "level">): st
   return `${slotName(item.slot)} · ${rarityName(item.rarity)} · ${t("arsenal.level", { level: item.level })}`;
 }
 
-/** Цена: монеты значком, осколки — точкой цвета их редкости. */
+/** Цена: монеты значком, осколки — общим значком осколка цвета их редкости. */
 export function CostLabel(props: { cost: ItemCost; rarity: string }): ReactNode {
   return (
     <span className="inline-flex items-center gap-2 tabular-nums">
@@ -96,8 +97,8 @@ export function CostLabel(props: { cost: ItemCost; rarity: string }): ReactNode 
         </span>
       ) : null}
       {props.cost.shards > 0 ? (
-        <span className={`inline-flex items-center gap-1 ${toneOf(props.rarity).text}`} title={t("arsenal.shards")}>
-          <span aria-hidden="true" className="size-2 rotate-45 bg-current" />
+        <span className="inline-flex items-center gap-1" title={t("arsenal.shards")}>
+          <ShardIcon rarity={props.rarity} size={14} />
           <span className="text-text">{formatNumber(props.cost.shards)}</span>
           <span className="sr-only">{t("arsenal.shards")}</span>
         </span>

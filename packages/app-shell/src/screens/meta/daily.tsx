@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CalendarCheck, Check, Diamond } from "lucide-react";
+import { CalendarCheck, Check } from "lucide-react";
 import { Button, ContentColumn, ErrorState, IconEmblem, InfoNotice, Screen, staggerStyle } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
+import { ShardIcon } from "../../design-system/components/ShardIcon";
 import { formatDecimal, formatNumber, t } from "../../i18n";
 import "../../i18n/daily";
 import { loadBadges } from "../../state/badges-api";
@@ -124,11 +125,11 @@ function DayCell(props: { day: DailyDay; index: number; last: boolean }): ReactN
       <span className={["font-display text-xs font-semibold tracking-wide uppercase", day.today ? "text-accent" : "text-text-muted"].join(" ")}>{label}</span>
       <span aria-hidden="true" className={`inline-flex items-center justify-center gap-1 rounded-md bg-accent/15 ${props.last ? "h-14 px-3" : "size-11"}`}>
         {day.claimed ? <Check size={props.last ? 28 : 20} className="text-success" /> : <CoinIcon size={props.last ? 28 : 20} />}
-        {day.shards > 0 && !day.claimed ? <Diamond size={22} className="text-info" /> : null}
+        {day.shards > 0 && !day.claimed ? <ShardIcon rarity="common" size={22} /> : null}
       </span>
       <span aria-hidden="true" className="min-h-5 font-display text-sm font-bold tabular-nums text-text">
         {formatNumber(day.coins)}
-        {day.shards > 0 ? <span className="text-info"> +{day.shards}</span> : null}
+        {day.shards > 0 ? <span className="text-text-muted"> +{day.shards}</span> : null}
       </span>
     </li>
   );
