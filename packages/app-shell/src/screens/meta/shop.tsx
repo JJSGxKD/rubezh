@@ -11,7 +11,7 @@ import { loadWallet } from "../../state/wallet-api";
 import { ShopBanners } from "./shop-banners";
 import { dateOf, GemPackTile, ItemCard, TributePlaque, VipCard } from "./shop-parts";
 import { ShowcaseSection } from "./shop-showcase";
-import { itemName, noticeOf, shopBanners, tributeOf, vipWaiting, type Notice, type ShopBanner, type ShopTab } from "./shop-texts";
+import { itemName, noticeOf, shopBanners, shownPrice, tributeOf, vipWaiting, type Notice, type ShopBanner, type ShopTab } from "./shop-texts";
 
 /**
  * Магазин: VIP, витрина снаряжения за самоцветы и наборы за звёзды
@@ -30,6 +30,24 @@ import { itemName, noticeOf, shopBanners, tributeOf, vipWaiting, type Notice, ty
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; shop: ShopView; vip: VipView | null };
 
 const api = createShopApi();
+
+/** Шаг часов экрана: отсчёт акции — без секунд, чаще перерисовывать незачем. */
+const CLOCK_STEP_MS = 60_000;
+
+/**
+ * Часы экрана — только пока на витрине акция: её отсчёт идёт, а кончившаяся
+ * на глазах показывает цену каталога, по которой сервер и выставит счёт.
+ */
+function useClock(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), CLOCK_STEP_MS);
+    return () => clearInterval(timer);
+  }, [active]);
+  return now;
+}
 
 export function ShopScreen(): ReactNode {
   const [state, setState] = useState<Loaded>({ status: "loading" });
@@ -53,6 +71,7 @@ export function ShopScreen(): ReactNode {
   }, []);
 
   const ready = state.status === "ready" ? state : null;
+  const now = useClock(ready?.shop.items.some((item) => item.promo !== undefined && item.promo !== null) === true);
 
   /** Покупка набора или VIP: одна за раз — второе окно оплаты поверх первого только запутает. */
   const purchase = async (key: string, name: string, request: BuyRequest): Promise<void> => {
@@ -74,14 +93,16 @@ export function ShopScreen(): ReactNode {
   };
 
   const buyItem = (item: ShopItem, view: ShopView): void => {
-    if (item.stars === null) return;
+    const price = shownPrice(item, Date.now());
+    if (price.stars === null) return;
     const name = itemName(item);
     void purchase(item.sku, name, {
       product: "shop_item",
       sku: item.sku,
-      priceStars: item.stars,
-      chargedStars: item.chargedStars ?? item.stars,
+      priceStars: price.stars,
+      chargedStars: item.chargedStars ?? price.stars,
       mode: view.mode ?? "live",
+      ...(price.promo === null ? {} : { promoPct: price.promo.percent }),
       order: () => api.order(item.sku),
     });
   };
@@ -133,6 +154,9 @@ export function ShopScreen(): ReactNode {
     if (ready === null) return;
     track("shop_banner_clicked", { banner: banner.kind, place: "carousel", position });
     switch (banner.kind) {
+      case "promo":
+        buyItem(banner.item, ready.shop);
+        return;
       case "vip":
         if (ready.vip !== null) buyVip(ready.vip);
         return;
@@ -179,7 +203,7 @@ export function ShopScreen(): ReactNode {
             {!ready.shop.payable ? <InfoNotice text={t("shop.unpayable")} /> : null}
             {ready.shop.mode === "test" ? <InfoNotice text={t("shop.test", { charged: testCharge(ready.shop) })} /> : null}
 
-            <ShopBanners banners={shopBanners(ready.shop, ready.vip)} busy={busy} onAction={onBanner} />
+            <ShopBanners banners={shopBanners(ready.shop, ready.vip, now)} busy={busy} now={now} onAction={onBanner} />
 
             <SegmentedControl
               label={t("shop.tabs")}
@@ -204,6 +228,7 @@ export function ShopScreen(): ReactNode {
                 vip={ready.vip}
                 vipCard={vipCard}
                 busy={busy}
+                now={now}
                 onBuy={(item) => buyItem(item, ready.shop)}
                 onAllGems={() => setTab("gems")}
               />
@@ -214,7 +239,7 @@ export function ShopScreen(): ReactNode {
                 {tributeOf(ready.shop) === null ? null : <TributePlaque onOpen={() => openTribute(tributeOf(ready.shop) ?? "")} />}
                 <div className="grid grid-cols-2 gap-2">
                   {gemPacks(ready.shop).map((item, index) => (
-                    <GemPackTile key={item.sku} item={item} index={index + 1} busy={busy} onBuy={() => buyItem(item, ready.shop)} />
+                    <GemPackTile key={item.sku} item={item} index={index + 1} busy={busy} now={now} onBuy={() => buyItem(item, ready.shop)} />
                   ))}
                 </div>
               </div>
@@ -265,6 +290,7 @@ function Featured(props: {
   vip: VipView | null;
   vipCard: ReactNode;
   busy: string | null;
+  now: number;
   onBuy: (item: ShopItem) => void;
   onAllGems: () => void;
 }): ReactNode {
@@ -276,14 +302,14 @@ function Featured(props: {
     <div className="grid gap-3">
       {vipFirst ? props.vipCard : null}
       {recommended === undefined ? null : (
-        <ItemCard item={recommended} index={1} busy={props.busy} forYou onBuy={() => props.onBuy(recommended)} />
+        <ItemCard item={recommended} index={1} busy={props.busy} now={props.now} forYou onBuy={() => props.onBuy(recommended)} />
       )}
       {vipFirst ? null : props.vipCard}
       {offers.length === 0 ? null : (
         <section className="grid gap-2">
           <SectionTitle>{t("shop.section.offers")}</SectionTitle>
           {offers.map((item, index) => (
-            <ItemCard key={item.sku} item={item} index={index + 2} busy={props.busy} onBuy={() => props.onBuy(item)} />
+            <ItemCard key={item.sku} item={item} index={index + 2} busy={props.busy} now={props.now} onBuy={() => props.onBuy(item)} />
           ))}
         </section>
       )}

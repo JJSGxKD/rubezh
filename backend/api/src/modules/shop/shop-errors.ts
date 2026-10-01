@@ -34,3 +34,24 @@ export class ShowcaseSoldError extends DomainError {
     super("showcase_sold", "Этот предмет уже куплен", 409);
   }
 }
+
+/** Срок акции вне пределов честной скидки (`shop-promo-rules.ts`). */
+export class PromoPeriodError extends DomainError {
+  constructor(message: string) {
+    super("promo_period", message, 400);
+  }
+}
+
+/** Рядом по времени у товара другая акция: полная цена между ними не простоит положенного. */
+export class PromoOverlapError extends DomainError {
+  constructor(message: string) {
+    super("promo_overlap", message, 409);
+  }
+}
+
+/** Акции нет, или она уже кончилась или снята — панель перечитывает список. */
+export class PromoNotFoundError extends DomainError {
+  constructor() {
+    super("promo_not_found", "Акции нет, или она уже кончилась", 404);
+  }
+}

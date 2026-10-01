@@ -166,6 +166,7 @@ export function GalleryScreen(): ReactNode {
           <Badge>обычный</Badge>
           <Badge tone="accent">акцент</Badge>
           <Badge tone="warning">скоро</Badge>
+          <Badge tone="danger">−30%</Badge>
           <Badge tone="info">инфо</Badge>
           <Badge tone="weapon">оружие</Badge>
           <Badge tone="passive">пассивка</Badge>

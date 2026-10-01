@@ -28,6 +28,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "changelog", title: "Журнал обновлений", permission: "changelog.edit" },
   { id: "tasks", title: "Задания", permission: "tasks.edit" },
   { id: "ads", title: "Реклама", permission: "ads.view" },
+  { id: "promos", title: "Акции", permission: "shop.promo.edit" },
 ];
 
 export interface Route {
