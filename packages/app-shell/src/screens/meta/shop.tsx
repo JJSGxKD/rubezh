@@ -9,11 +9,12 @@ import { buy, type BuyRequest } from "../../state/shop-purchase";
 import { useShell } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset } from "./schedule";
+import { ShowcaseSection } from "./shop-showcase";
 import { itemName, noticeOf, resourceLabel, type Notice } from "./shop-texts";
 
 /**
- * Магазин: VIP и наборы за звёзды (docs/35-stage4-plan.md §3.6, WP10;
- * docs/27-design-system-and-app-shell.md §6).
+ * Магазин: VIP, витрина снаряжения за самоцветы и наборы за звёзды
+ * (docs/35-stage4-plan.md §3.6, WP10; docs/27-design-system-and-app-shell.md §6).
  *
  * Что продаётся и почём, решает сервер: экран рисует витрину как пришла, и
  * товар, которого клиент ещё не знает, — тоже, по составу. У каждого набора
@@ -156,6 +157,8 @@ export function ShopScreen(): ReactNode {
                 onClaim={() => void claimDaily()}
               />
             )}
+
+            <ShowcaseSection api={api} appearFrom={1} />
 
             {offers.length === 0 ? null : (
               <section className="grid gap-2">
