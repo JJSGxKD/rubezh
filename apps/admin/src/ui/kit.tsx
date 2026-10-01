@@ -2,9 +2,11 @@ import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAt
 import type { ApiError } from "../api/client";
 
 /**
- * Компоненты панели — свои, а не из игры (docs/29-admin-panel.md §4):
- * десктоп, плотные таблицы, формы с клавиатуры. Цвета, шрифты и радиусы — из
- * общего пакета токенов через утилиты Tailwind.
+ * Базовые компоненты панели (docs/29-admin-panel.md §4): десктоп, плотные
+ * таблицы, формы с клавиатуры. Цвета, шрифты и радиусы — из общего пакета
+ * токенов через утилиты Tailwind. Сложное поведение — диалоги, выбор
+ * карточками, уведомления — берётся из библиотек (`dialog.tsx`,
+ * `choice.tsx`, `toast.tsx`) под теми же токенами.
  */
 
 type Tone = "neutral" | "accent" | "danger" | "success" | "warning" | "info";
@@ -124,7 +126,8 @@ export function Help({ text }: { text: string }) {
   );
 }
 
-export function Field({ label, hint, help, children }: { label: string; hint?: string; help?: string; children: ReactNode }) {
+/** Поле формы: подпись, пояснение, подсказка и ошибка проверки — у самого поля, а не общим списком. */
+export function Field({ label, hint, help, error, children }: { label: string; hint?: string; help?: string; error?: string | undefined; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="flex items-center gap-1.5 text-xs text-text-muted">
@@ -132,6 +135,11 @@ export function Field({ label, hint, help, children }: { label: string; hint?: s
         {help === undefined ? null : <Help text={help} />}
       </span>
       {children}
+      {error === undefined ? null : (
+        <span role="alert" className="text-xs text-danger">
+          {error}
+        </span>
+      )}
       {hint === undefined ? null : <span className="text-xs text-text-disabled">{hint}</span>}
     </label>
   );

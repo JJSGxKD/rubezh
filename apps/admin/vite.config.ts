@@ -40,6 +40,9 @@ export default defineConfig(({ mode, command }) => {
     envDir: repoRoot,
     server: { ...common, ...policy("dev") },
     preview: { ...common, ...policy("build") },
-    build: { outDir: "dist" },
+    // Вес панели вторичен (решение участника 1, 01.10.2026: в панели берём
+    // библиотеки форм и интерфейса ради скорости и удобства) — предупреждение
+    // о крупном чанке для неё шум. Бюджет бандла — у игры (`pnpm budget`).
+    build: { outDir: "dist", chunkSizeWarningLimit: 1500 },
   };
 });
