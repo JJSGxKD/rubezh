@@ -1,10 +1,17 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { hrefOf, parseRoute, resolveRoute, visibleSections, type Section } from "../src/routes";
+import { SECTION_GROUPS, SECTIONS as MENU, hrefOf, locateSection, parseRoute, resolveRoute, visibleGroups, visibleSections, type Section, type SectionGroup } from "../src/routes";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../src/format";
 
 const SECTIONS: Section[] = [
-  { id: "players", title: "Игроки", permission: "players.view" },
-  { id: "roles", title: "Роли", permission: "roles.assign" },
+  { id: "players", title: "Игроки", hint: "карточка игрока", permission: "players.view" },
+  { id: "roles", title: "Роли", hint: "кто что может", permission: "roles.assign" },
+];
+
+const GROUPS: SectionGroup[] = [
+  { title: "Поддержка", sections: [SECTIONS[0] as Section] },
+  { title: "Команда", sections: [SECTIONS[1] as Section, { id: "audit", title: "Аудит", hint: "кто что менял", permission: "audit.view" }] },
 ];
 
 describe("маршруты панели", () => {
@@ -26,6 +33,40 @@ describe("маршруты панели", () => {
     expect(resolveRoute({ section: "players", id: "x" }, ["players.view"], SECTIONS)).toEqual({ section: "players", id: "x" });
     expect(resolveRoute(null, ["roles.assign"], SECTIONS)).toEqual({ section: "roles", id: null });
     expect(resolveRoute(null, [], SECTIONS)).toBeNull();
+  });
+});
+
+describe("меню панели", () => {
+  it("группа без открытых разделов не показывается, в остальных — только открытые", () => {
+    expect(visibleGroups(["players.view", "audit.view"], GROUPS)).toEqual([
+      { title: "Поддержка", sections: [SECTIONS[0]] },
+      { title: "Команда", sections: [{ id: "audit", title: "Аудит", hint: "кто что менял", permission: "audit.view" }] },
+    ]);
+    expect(visibleGroups(["players.view"], GROUPS).map((group) => group.title)).toEqual(["Поддержка"]);
+    expect(visibleGroups([], GROUPS)).toEqual([]);
+  });
+
+  it("находит раздел и его группу для шапки, чужой — нет", () => {
+    expect(locateSection("audit", GROUPS)?.group.title).toBe("Команда");
+    expect(locateSection("roles", GROUPS)?.section.title).toBe("Роли");
+    expect(locateSection("nope", GROUPS)).toBeNull();
+  });
+
+  it("разделы не повторяются, у каждого есть подсказка, группы не пустые", () => {
+    const ids = MENU.map((section) => section.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const group of SECTION_GROUPS) expect(group.sections.length, group.title).toBeGreaterThan(0);
+    for (const section of MENU) {
+      expect(section.hint.trim(), section.id).not.toBe("");
+      // подсказка — строка в шапке рядом с названием, а не абзац
+      expect(section.hint.length, section.id).toBeLessThanOrEqual(80);
+    }
+  });
+
+  it("у каждого раздела меню есть экран, и каждый экран стоит в меню", () => {
+    const source = readFileSync(fileURLToPath(new URL("../src/screens/sections.tsx", import.meta.url)), "utf8");
+    const screens = [...source.matchAll(/^\s+"?([a-z-]+)"?: \(/gm)].map((match) => match[1]);
+    expect([...screens].sort()).toEqual(MENU.map((section) => section.id).sort());
   });
 });
 
