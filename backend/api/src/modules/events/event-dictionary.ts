@@ -171,6 +171,10 @@ export const EVENT_DICTIONARY = {
   // achievement_reward); событие шлёт клиент после ответа сервера.
   task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id }) },
   achievement_unlocked: { version: 1, payload: payload({ achievement: id, kind: id }) },
+  // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
+  // открывших доходят до награды. Подписку проверяет бот, и она видна только
+  // по achievement_unlocked; открытие без награды — «не подписался».
+  task_link_opened: { version: 1, payload: payload({ task: id, kind: id }) },
   // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
   // доходят ли новички до игры после него и с какой версии текста. Само
   // принятие — таблица test_notice, по ней проверяется, что игрок видел

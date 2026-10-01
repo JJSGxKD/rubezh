@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
-import { createTasksApi } from "../src/state/tasks-api";
+import { claimFailureKey, createTasksApi, openTaskLink, taskLink } from "../src/state/tasks-api";
 
 // Клиент заданий (docs/35-stage4-plan.md WP13): цели с прогрессом — GET,
 // забор — POST без тела с id в адресе; ответ разбирается схемой, незнакомый
-// вид цели от сервера новее клиента принимается.
+// вид цели от сервера новее клиента принимается. Цель «канал» (Р52) несёт
+// ссылку, а отказ в заборе говорит, подписан ли игрок.
 
 interface Sent {
   method: string;
@@ -46,6 +47,36 @@ describe("клиент заданий", () => {
       { method: "GET", path: "/api/v1/tasks", body: undefined },
       { method: "POST", path: "/api/v1/tasks/daily_runs/claim", body: undefined },
     ]);
+  });
+
+  it("ссылка цели — с сервера; старый сервер без поля — цель без ссылки", async () => {
+    const view = await createTasksApi(server([], { tasks: [TASK, { ...TASK, id: "ach_channel", kind: "channel", link: "https://t.me/rubezh_game" }] })).view();
+    expect(view.ok && view.data.tasks.map((task) => taskLink(task))).toEqual([null, "https://t.me/rubezh_game"]);
+  });
+
+  it("открывается только https: javascript:, data: и мусор — не ссылка", () => {
+    expect(taskLink({ link: "https://t.me/rubezh_game" })).toBe("https://t.me/rubezh_game");
+    expect(taskLink({ link: "javascript:alert(1)" })).toBeNull();
+    expect(taskLink({ link: "data:text/html,<b>x</b>" })).toBeNull();
+    expect(taskLink({ link: "http://t.me/rubezh_game" })).toBeNull();
+    expect(taskLink({ link: "t.me/rubezh_game" })).toBeNull();
+    expect(taskLink({ link: null })).toBeNull();
+    expect(taskLink({})).toBeNull();
+  });
+
+  it("ссылку открывает площадка, а без её метода — браузер", () => {
+    const opened: string[] = [];
+    openTaskLink("https://t.me/rubezh_game", { openLink: (url) => void opened.push(`площадка ${url}`) }, (url) => void opened.push(`браузер ${url}`));
+    openTaskLink("https://t.me/rubezh_game", {}, (url) => void opened.push(`браузер ${url}`));
+    expect(opened).toEqual(["площадка https://t.me/rubezh_game", "браузер https://t.me/rubezh_game"]);
+  });
+
+  it("отказ в заборе говорит, что делать: не выполнено, не подписан, проверка недоступна", () => {
+    expect(claimFailureKey("task_not_done")).toBe("tasks.stale");
+    expect(claimFailureKey("task_not_joined")).toBe("tasks.notJoined");
+    expect(claimFailureKey("task_check_unavailable")).toBe("tasks.checkUnavailable");
+    expect(claimFailureKey(undefined)).toBe("tasks.claimFailed");
+    expect(claimFailureKey("rate_limited")).toBe("tasks.claimFailed");
   });
 
   it("id в адресе экранируется, а срок вне известных — отказ схемы, а не молча пустой раздел", async () => {
