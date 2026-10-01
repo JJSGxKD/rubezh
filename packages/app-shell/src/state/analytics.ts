@@ -41,6 +41,7 @@ export const ANALYTICS_EVENTS = [
   "achievement_unlocked",
   "task_link_opened",
   "showcase_bought",
+  "shop_banner_clicked",
   "test_notice_accepted",
   "changelog_opened",
   "client_error",

@@ -179,6 +179,15 @@ export const EVENT_DICTIONARY = {
   // какие редкости и слоты берут и за сколько — вход для цен витрины (О1, О9).
   // Списание — журнал кошелька (причина shop), предмет — журнал предметов.
   showcase_bought: { version: 1, payload: payload({ slot: id, rarity: id, level: count, gems: count }) },
+  // Нажал баннер или плашку магазина (docs/35-stage4-plan.md §3.6, WP10):
+  // какой баннер и на каком месте полосы ведёт к покупке — вход для порядка
+  // баннеров. Сама покупка — purchase_initiated / purchase_completed с тем же
+  // товаром; у Tribute и снаряжения покупка не наша или за самоцветы, и клик
+  // — всё, что видно.
+  shop_banner_clicked: {
+    version: 1,
+    payload: payload({ banner: id, place: z.enum(["carousel", "gems"]), position: count }),
+  },
   // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
   // доходят ли новички до игры после него и с какой версии текста. Само
   // принятие — таблица test_notice, по ней проверяется, что игрок видел

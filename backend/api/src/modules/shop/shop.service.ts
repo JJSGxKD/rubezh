@@ -1,13 +1,18 @@
-import { Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { withTimeout } from "../../common/with-timeout.js";
+import { ItemsService } from "../items/items.service.js";
 import { methodFor, priceIn } from "../payments/payment-methods.js";
 import { PaymentsUnsupportedError } from "../payments/payments-errors.js";
 import { PaymentsService, type ShopInvoice } from "../payments/payments.service.js";
 import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
 import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import type { AccountRef } from "../roles/roles.service.js";
+import { SETTINGS } from "../settings/setting-catalog.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
+import { badgesOf, gemValuePct, recommendedSku, type ShopBadge } from "./shop-marketing.js";
 import { ShopSkuNotFoundError, ShopSkuUnavailableError } from "./shop-errors.js";
-import { SHOP_SKUS, contentsOf, priceProduct, skuById, type ShopKind, type ShopResource } from "./shop-catalog.js";
+import { SHOP_SKUS, contentsOf, priceProduct, skuById, type ShopKind, type ShopResource, type ShopSku } from "./shop-catalog.js";
 
 /**
  * Магазин (docs/35-stage4-plan.md §3.6, WP10): витрина с ценой способа оплаты
@@ -30,6 +35,10 @@ export interface ShopItemView {
   once: boolean;
   /** разовый товар уже куплен */
   owned: boolean;
+  /** «Хит» — от команды, «Лучшая цена» — у самого выгодного набора самоцветов */
+  badge: ShopBadge | null;
+  /** на сколько процентов самоцвет здесь дешевле, чем в самом дорогом наборе; `null` — не набор самоцветов или это он и есть */
+  valuePct: number | null;
 }
 
 export interface ShopView {
@@ -38,7 +47,13 @@ export interface ShopView {
   payable: boolean;
   /** тестовая оплата — витрина предупреждает, что звезда вернётся */
   mode: PaymentMode;
+  /** товар, который предложить игроку первым, — под него (`shop-marketing.ts`); `null` — нечего */
+  recommended: string | null;
+  /** ссылка на покупку звёзд через Tribute — плашка у самоцветов; `null` — не задана или не Telegram */
+  tribute: string | null;
 }
+
+const DB_TIMEOUT_MS = 3_000;
 
 @Injectable()
 export class ShopService implements OnModuleInit {
@@ -48,6 +63,8 @@ export class ShopService implements OnModuleInit {
     private readonly payments: PaymentsService,
     private readonly fulfillment: PurchaseFulfillment,
     private readonly wallet: WalletService,
+    private readonly items: ItemsService,
+    @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
   onModuleInit(): void {
@@ -61,11 +78,18 @@ export class ShopService implements OnModuleInit {
       skus.filter((sku) => sku.once).map((sku) => sku.id),
     );
     const method = methodFor(account.platform);
+    const price = (sku: ShopSku) => (method === undefined ? null : priceIn(priceProduct(sku), method));
+    const badges = badgesOf(skus, price);
+    const value = gemValuePct(skus, price);
+    const inventory = await withTimeout(this.items.inventory(account.accountId), DB_TIMEOUT_MS, "магазин");
+    const tribute = this.settings.get(SETTINGS.shopTributeUrl);
     return {
       payable: method !== undefined,
       mode: this.payments.mode,
+      recommended: recommendedSku(skus, price, { owned, equipped: Object.keys(inventory.equipped).length }),
+      tribute: account.platform === "telegram" && tribute !== "" ? tribute : null,
       items: skus.map((sku) => {
-        const stars = method === undefined ? null : priceIn(priceProduct(sku), method);
+        const stars = price(sku);
         return {
           sku: sku.id,
           kind: sku.kind,
@@ -74,6 +98,8 @@ export class ShopService implements OnModuleInit {
           chargedStars: stars === null ? null : this.payments.charge(stars).chargedStars,
           once: sku.once,
           owned: owned.has(sku.id),
+          badge: badges.get(sku.id) ?? null,
+          valuePct: value.get(sku.id) ?? null,
         };
       }),
     };

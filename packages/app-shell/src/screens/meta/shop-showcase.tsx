@@ -23,12 +23,13 @@ import { showcaseRefusal, type Notice } from "./shop-texts";
 
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: ShowcaseView };
 
-export function ShowcaseSection(props: { api: ShopApi; appearFrom: number }): ReactNode {
+export function ShowcaseSection(props: { api: ShopApi; appearFrom: number; onNeedGems?: () => void }): ReactNode {
   const { api } = props;
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [asking, setAsking] = useState<ShowcaseOffer | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
+  const [noGems, setNoGems] = useState(false);
 
   const load = async (): Promise<void> => {
     const response = await api.showcase();
@@ -44,11 +45,13 @@ export function ShowcaseSection(props: { api: ShopApi; appearFrom: number }): Re
     if (busy !== null) return;
     setBusy(offer.offerId);
     setNotice(null);
+    setNoGems(false);
     const response = await api.buyShowcase(offer.offerId);
     setBusy(null);
     if (!response.ok) {
       const refusal = showcaseRefusal(response.code);
       setNotice({ tone: "error", text: refusal.text });
+      setNoGems(response.code === "insufficient_funds");
       if (refusal.reload) void load();
       return;
     }
@@ -73,6 +76,13 @@ export function ShowcaseSection(props: { api: ShopApi; appearFrom: number }): Re
               {notice.text}
             </p>
           )}
+          {/* Не хватило самоцветов — дорога к ним в одно касание, а не «ищите сами». */}
+          {noGems && props.onNeedGems !== undefined ? (
+            <Button variant="secondary" onClick={props.onNeedGems}>
+              <GemIcon size={18} />
+              {t("showcase.toGems")}
+            </Button>
+          ) : null}
           {state.view.offers.map((offer, index) => (
             <OfferCard key={offer.offerId} offer={offer} index={props.appearFrom + index} busy={busy} onBuy={() => setAsking(offer)} />
           ))}

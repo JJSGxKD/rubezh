@@ -18,7 +18,7 @@ import { isChatTarget } from "../../platforms/ports/chat-target.js";
 
 export type SettingValue = string | boolean;
 
-export type SettingKind = "chat" | "boolean";
+export type SettingKind = "chat" | "boolean" | "url";
 
 export interface SettingDefinition<T extends SettingValue = SettingValue> {
   /** `notify.chat.general` — латиница, точки, дефисы */
@@ -61,6 +61,15 @@ function chat(key: string, title: string, hint: string, env: (config: AppConfig)
     fallback: "",
   };
 }
+
+const SHOP_GROUP = "Магазин";
+
+/** Ссылка из панели — только https, до 256 знаков; пусто — «не задана». */
+const urlSchema = z
+  .string()
+  .trim()
+  .max(256)
+  .refine((value) => value === "" || (URL.canParse(value) && new URL(value).protocol === "https:"), { message: "ссылка https://… или пусто" });
 
 const FEATURES_GROUP = "Функции сервера";
 
@@ -139,6 +148,16 @@ export const SETTINGS = {
     () => null,
     false,
   ),
+  shopTributeUrl: {
+    key: "shop.tribute-url",
+    group: SHOP_GROUP,
+    title: "Ссылка на Tribute",
+    hint: "Плашка «Звёзды дешевле через Tribute» во вкладке самоцветов магазина, только в Telegram. Пусто — плашки нет",
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",
