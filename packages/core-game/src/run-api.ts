@@ -73,6 +73,11 @@ export interface HudSnapshot {
   statuses: PlayerStatusSnapshot[];
   /** сколько попаданий ещё погасит щит буста; 0 — щита нет */
   shield: number;
+  /**
+   * id бустов забега — применённые движком, в порядке набора. За забег не
+   * меняются, и снимок отдаёт тот же массив, а не копию каждые 100 мс.
+   */
+  boosts: readonly string[];
 }
 
 /**
@@ -135,6 +140,8 @@ export interface RunInspection {
   };
   weapons: RunWeaponInspection[];
   passives: RunPassiveInspection[];
+  /** id бустов забега, в порядке набора; пусто — забег без бустов */
+  boosts: string[];
 }
 
 export interface RunWeaponInspection {

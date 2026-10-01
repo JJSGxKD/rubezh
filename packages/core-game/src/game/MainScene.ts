@@ -683,6 +683,7 @@ export class MainScene extends Phaser.Scene {
       boss: buildBossSnapshot(world),
       statuses: buildPlayerStatuses(world),
       shield: world.player.shieldHits,
+      boosts: world.boosts.ids,
     };
     this.sceneData.bus.emit("hud", snapshot);
   }

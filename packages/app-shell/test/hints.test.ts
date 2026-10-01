@@ -21,6 +21,7 @@ const hud = (patch: Partial<HudSnapshot> = {}): HudSnapshot => ({
   boss: null,
   statuses: [],
   shield: 0,
+  boosts: [],
   ...patch,
 });
 

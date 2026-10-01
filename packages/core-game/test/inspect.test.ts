@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BOOSTS } from "../src/content/boosts";
 import { ENEMIES } from "../src/content/enemies";
 import { PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
@@ -47,5 +48,18 @@ describe("характеристики забега", () => {
     expect(high.player.pickupRadius).toBeCloseTo(low.player.pickupRadius, 5);
     expect(high.weapons[1]?.areaRadius).toBeCloseTo(low.weapons[1]?.areaRadius ?? 0, 5);
     expect(low.weapons[1]?.areaRadius).toBe(80);
+  });
+
+  it("называет бусты, которые движок применил: незнакомый и повтор отброшены, порядок — как в наборе", () => {
+    const world = createWorld({
+      seed: 3,
+      enemies: ENEMIES,
+      weapons: WEAPONS,
+      passives: PASSIVES,
+      boosts: BOOSTS,
+      loadout: { modifiers: {}, boosts: ["aegis", "nonexistent", "fury", "aegis"] },
+    });
+    expect(inspectWorld(world).boosts).toEqual(["aegis", "fury"]);
+    expect(inspectWorld(worldAt(1)).boosts).toEqual([]);
   });
 });

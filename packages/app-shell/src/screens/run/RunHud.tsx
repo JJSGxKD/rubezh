@@ -9,6 +9,7 @@ import { BossBar } from "./BossBar";
 import { HintBanner } from "./HintBanner";
 import { PlayerStatuses } from "./PlayerStatuses";
 import { Radar } from "./Radar";
+import { RunBoostSlots } from "./run-boosts-lazy";
 
 /**
  * HUD забега. Единственная часть оболочки, которая живёт во время забега, —
@@ -131,6 +132,7 @@ export function RunHud(props: RunHudProps): ReactNode {
           {hud.passives.map((slot) => (
             <Slot key={`p-${slot.id}`} id={slot.id} level={slot.level} kind="passive" />
           ))}
+          <RunBoostSlots ids={hud.boosts} survivalSec={hud.survivalSec} />
         </div>
         {/* Радар в нижнем правом углу: там его не закрывает палец, ведущий
             джойстик, и он не спорит с таймером за верх экрана. */}
