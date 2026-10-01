@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { fetchTasks, groupByPeriod, rewardLabel, saveTask, targetLabel, taskProblem, type TaskDef } from "../src/api/tasks";
+import { fetchTasks, groupByPeriod, rewardLabel, saveTask, targetLabel, taskProblem, withKind, type TaskDef } from "../src/api/tasks";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -9,7 +9,7 @@ import { fakeFetch, json } from "./helpers";
 // каталог — по срокам в порядке показа игроку.
 
 function task(patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId: "daily_runs", period: "daily", kind: "runs", target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, ...patch };
+  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, ...patch };
 }
 
 describe("задания в панели", () => {
@@ -50,6 +50,39 @@ describe("задания в панели", () => {
       ["weekly", ["w"]],
       ["achievement", []],
     ]);
+  });
+
+  describe("подписка на канал", () => {
+    const channel = (patch: Partial<TaskDef> = {}) =>
+      task({ taskId: "ach_channel", period: "achievement", kind: "channel", target: 1, coins: 0, gems: 15, params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" }, ...patch });
+
+    it("выбор вида «канал» ставит достижение с целью 1 и пустой канал; другой вид канал убирает", () => {
+      const picked = withKind(task({ taskId: "x_1", target: 5 }), "channel");
+      expect(picked).toMatchObject({ kind: "channel", period: "achievement", target: 1, params: { platform: "telegram", chat: "", url: "" } });
+      expect(withKind(picked, "kills")).toMatchObject({ kind: "kills", params: null });
+    });
+
+    it("форма требует канал и https-ссылку и не даёт копить подписку", () => {
+      expect(taskProblem(channel(), true, [])).toBeNull();
+      expect(taskProblem(channel({ params: null }), true, [])).toMatch(/площадка, канал и ссылка/);
+      expect(taskProblem(channel({ period: "daily" }), true, [])).toMatch(/только достижение/);
+      expect(taskProblem(channel({ target: 3 }), true, [])).toMatch(/только достижение/);
+      expect(taskProblem(channel({ params: { platform: "telegram", chat: " ", url: "https://t.me/x" } }), true, [])).toMatch(/Канал/);
+      expect(taskProblem(channel({ params: { platform: "telegram", chat: "@x_game", url: "http://t.me/x" } }), true, [])).toMatch(/Ссылка/);
+      expect(taskProblem(channel({ params: { platform: "telegram", chat: "@x_game", url: "t.me/x" } }), true, [])).toMatch(/Ссылка/);
+      expect(taskProblem(task({ taskId: "x_1", params: { platform: "telegram", chat: "@x", url: "https://t.me/x" } }), true, [])).toMatch(/только у подписки/);
+    });
+
+    it("канал уходит обрезанным, в списке цель — именем канала; старый сервер без параметров читается", async () => {
+      const { fetch, calls } = fakeFetch(json(200, { data: channel() }), json(200, { data: { tasks: [{ ...task(), params: undefined }], kinds: ["runs"], periods: ["daily"] } }));
+      const api = new AdminApi(fetch);
+      await saveTask(api, channel({ params: { platform: "telegram", chat: " @rubezh_game ", url: " https://t.me/rubezh_game " } }));
+      expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ params: { chat: "@rubezh_game", url: "https://t.me/rubezh_game" } });
+      expect(targetLabel(channel())).toBe("@rubezh_game (Telegram)");
+
+      const old = await fetchTasks(api);
+      expect(old.ok && old.data.tasks[0]?.params).toBeNull();
+    });
   });
 
   it("раздел — под правом tasks.edit", () => {

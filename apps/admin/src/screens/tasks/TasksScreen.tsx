@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from "react";
 import type { ApiError } from "../../api/client";
 import {
+  CHANNEL_KIND,
+  CHANNEL_PLATFORMS,
+  CHANNEL_PLATFORM_TITLES,
   KIND_TITLES,
   PERIOD_TITLES,
   TASK_PERIODS,
@@ -12,6 +15,8 @@ import {
   saveTask,
   targetLabel,
   taskProblem,
+  withKind,
+  type ChannelParams,
   type TaskDef,
 } from "../../api/tasks";
 import { api } from "../../services";
@@ -20,7 +25,7 @@ import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
-const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true };
+const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true };
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): что игроку делать
@@ -28,6 +33,10 @@ const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", target: 1, t
  * полуминуты. Срок и вид у заведённого задания не меняются: прогресс игроков
  * записан по ним, — нужно другое — заводится новое, а старое выключается.
  * Удаления нет по той же причине.
+ *
+ * Подписку на канал проверяет бот площадки, когда игрок нажимает «Забрать»:
+ * бот должен быть администратором канала, иначе площадка подписчиков не
+ * покажет, и игрок увидит «проверка недоступна», а в логе — ошибку настройки.
  */
 export function TasksScreen() {
   const { state, reload } = useApi(() => fetchTasks(api), []);
@@ -57,6 +66,9 @@ export function TasksScreen() {
     reload();
   };
 
+  const channel = input.kind === CHANNEL_KIND;
+  const setChannel = (patch: Partial<ChannelParams>) => setInput({ ...input, params: { ...(input.params ?? { platform: "telegram", chat: "", url: "" }), ...patch } });
+
   const number = (field: "target" | "coins" | "gems" | "shards" | "passPoints" | "sort") => ({
     value: String(input[field]),
     onChange: (event: { target: { value: string } }) => setInput({ ...input, [field]: event.target.value === "" ? 0 : Number(event.target.value) }),
@@ -75,7 +87,7 @@ export function TasksScreen() {
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
             </Field>
             <Field label="Срок">
-              <Select value={input.period} disabled={original !== null} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
+              <Select value={input.period} disabled={original !== null || channel} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
                 {TASK_PERIODS.map((period) => (
                   <option key={period} value={period}>
                     {PERIOD_TITLES[period]}
@@ -84,7 +96,7 @@ export function TasksScreen() {
               </Select>
             </Field>
             <Field label="Вид цели">
-              <Select value={input.kind} disabled={original !== null} onChange={(event) => setInput({ ...input, kind: event.target.value })}>
+              <Select value={input.kind} disabled={original !== null} onChange={(event) => setInput(withKind(input, event.target.value))}>
                 {kinds.map((kind) => (
                   <option key={kind} value={kind}>
                     {KIND_TITLES[kind] ?? kind}
@@ -92,10 +104,32 @@ export function TasksScreen() {
                 ))}
               </Select>
             </Field>
-            <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
-              <Input {...number("target")} min={1} />
-            </Field>
+            {channel ? null : (
+              <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
+                <Input {...number("target")} min={1} />
+              </Field>
+            )}
           </div>
+          {channel ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="Площадка" hint="игроки других площадок задания не увидят">
+                <Select value={input.params?.platform ?? "telegram"} onChange={(event) => setChannel({ platform: CHANNEL_PLATFORMS.find((platform) => platform === event.target.value) ?? "telegram" })}>
+                  {CHANNEL_PLATFORMS.map((platform) => (
+                    <option key={platform} value={platform}>
+                      {CHANNEL_PLATFORM_TITLES[platform]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Канал" hint="@имя или id — по нему спрашивает бот">
+                <Input value={input.params?.chat ?? ""} onChange={(event) => setChannel({ chat: event.target.value })} placeholder="@rubezh_game" maxLength={64} className="w-44" />
+              </Field>
+              <Field label="Ссылка" hint="её откроет игрок">
+                <Input value={input.params?.url ?? ""} onChange={(event) => setChannel({ url: event.target.value })} placeholder="https://t.me/rubezh_game" maxLength={256} className="w-72" />
+              </Field>
+            </div>
+          ) : null}
+          {channel ? <Notice tone="info">Бот проверяет подписку, когда игрок нажимает «Забрать», — сделайте его администратором канала: без этого площадка подписчиков не покажет.</Notice> : null}
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Монеты">
               <Input {...number("coins")} />
