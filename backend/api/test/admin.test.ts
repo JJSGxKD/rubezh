@@ -227,6 +227,25 @@ describe("панель по HTTP", () => {
     expect(audit.json().data.entries.map((entry: { action: string }) => entry.action)).toEqual(["roles.revoke", "roles.assign", "admin.login"]);
   });
 
+  it("роли: кто это — до выдачи, кем выдана — по имени, что даёт роль — её права", async () => {
+    const server = await start();
+    const cookie = await login(server);
+    const headers = { cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    const target = await accounts.upsert({ platform: "telegram", platformUserId: "600005", displayName: "Лена", username: null, photoUrl: null }, Date.now());
+    const candidate = async (query: string) => server.inject({ method: "GET", url: `/api/v1/admin/roles/candidate?${query}`, headers: { cookie } });
+
+    expect((await candidate("platformUserId=600005")).json().data.candidate).toEqual({ accountId: target.accountId, displayName: "Лена", platformUserId: "600005", roles: [] });
+    expect((await candidate("platformUserId=600999")).json().data.candidate).toBeNull();
+    for (const bad of ["", "platformUserId=@lena", `platformUserId=1&accountId=${target.accountId}`]) expect((await candidate(bad)).statusCode, bad).toBe(400);
+
+    await server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { platformUserId: "600005", role: "marketer" } });
+    expect((await candidate(`accountId=${target.accountId}`)).json().data.candidate.roles).toEqual(["marketer"]);
+    const list = (await server.inject({ method: "GET", url: "/api/v1/admin/roles", headers: { cookie } })).json().data;
+    expect(list.assignments).toEqual([expect.objectContaining({ displayName: "Лена", role: "marketer", grantedByName: "Ира" })]);
+    expect(list.roles.find((entry: { role: string }) => entry.role === "marketer").permissions).toContain("promo.edit");
+    expect(list.roles.map((entry: { role: string }) => entry.role)).toContain("owner");
+  });
+
   it("журнал: имена людей, отбор по действиям, человеку и объекту, страницы курсором", async () => {
     const server = await start();
     const cookie = await login(server);

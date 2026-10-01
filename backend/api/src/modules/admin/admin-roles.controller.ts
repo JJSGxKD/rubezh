@@ -6,9 +6,9 @@ import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
-import { AdminRolesService, type AuditPage, type RoleAssignmentView } from "./admin-roles.service.js";
+import { AdminRolesService, type AuditPage, type RoleAssignments, type RoleCandidate } from "./admin-roles.service.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
-import { auditQuerySchema, roleTargetSchema } from "./dto/admin.dto.js";
+import { auditQuerySchema, roleCandidateQuerySchema, roleTargetSchema } from "./dto/admin.dto.js";
 
 /** Роли и журнал аудита в панели (docs/29-admin-panel.md §3). */
 @Controller("admin")
@@ -21,8 +21,16 @@ export class AdminRolesController {
 
   @Get("roles")
   @RequirePermission("roles.assign")
-  async assignments(@Req() request: unknown): Promise<{ data: { assignments: RoleAssignmentView[] } }> {
-    return { data: { assignments: await this.roles.assignments(accountOf(request)) } };
+  async assignments(@Req() request: unknown): Promise<{ data: RoleAssignments }> {
+    return { data: await this.roles.assignments(accountOf(request)) };
+  }
+
+  /** Кто это — пока вводят Telegram ID в форме выдачи. */
+  @Get("roles/candidate")
+  @RequirePermission("roles.assign")
+  async candidate(@Req() request: unknown, @Query() query: unknown): Promise<{ data: { candidate: RoleCandidate | null } }> {
+    const parsed = parse(() => roleCandidateQuerySchema.parse(query), "Некорректный адрес: Telegram ID цифрами или id аккаунта");
+    return { data: { candidate: await this.roles.candidate(accountOf(request), parsed) } };
   }
 
   @Post("roles/grant")

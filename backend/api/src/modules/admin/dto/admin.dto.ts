@@ -47,6 +47,18 @@ export const playerMessageSchema = z.object({
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
 });
 
+/** Кому собираются выдать роль — тот же адрес, что у выдачи, без самой роли. */
+export const roleCandidateQuerySchema = z
+  .object({
+    accountId: z.string().uuid().optional(),
+    platformUserId: z.string().regex(/^\d{1,32}$/).optional(),
+    platform: z.enum(PLATFORM_IDS).default("telegram"),
+  })
+  .refine((value) => (value.accountId === undefined) !== (value.platformUserId === undefined), {
+    message: "нужен ровно один: accountId или platformUserId",
+  });
+export type RoleCandidateQuery = z.infer<typeof roleCandidateQuerySchema>;
+
 /**
  * Цель выдачи роли — идентификатором аккаунта или на площадке: человека из
  * команды проще найти по его Telegram ID, чем по uuid.
