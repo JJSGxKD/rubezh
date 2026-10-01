@@ -62,7 +62,32 @@ export const roleTargetSchema = z
     message: "нужен accountId или platformUserId",
   });
 
-export const auditLimitSchema = limit(200, 50);
+/**
+ * Страница журнала аудита: курсор — время и id последней показанной записи
+ * (`2026-10-01T20:56:00.123Z_<uuid>`), виды действий — началами имён через
+ * запятую (`roles.,admin.login`), человек — id аккаунта, объект — как его
+ * пишет действие. Пустое — без отбора.
+ */
+export const auditQuerySchema = z.object({
+  limit: limit(200, 50),
+  before: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z_[0-9a-f-]{36}$/i)
+    .transform((value) => {
+      const [createdAt = "", entryId = ""] = value.split("_");
+      return { createdAt: new Date(createdAt), entryId: entryId.toLowerCase() };
+    })
+    .refine((cursor) => !Number.isNaN(cursor.createdAt.getTime()), { message: "курсор — время и id записи" })
+    .optional(),
+  actions: z
+    .string()
+    .max(200)
+    .transform((value) => value.split(",").filter((prefix) => prefix !== ""))
+    .pipe(z.array(z.string().regex(/^[a-z][a-z_.]{0,63}$/)).max(12))
+    .optional(),
+  actor: z.string().uuid().optional(),
+  target: z.string().min(1).max(128).optional(),
+});
 export const reviewLimitSchema = limit(200, 50);
 export const exportsLimitSchema = limit(100, 20);
 

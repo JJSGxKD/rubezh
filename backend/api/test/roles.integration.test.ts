@@ -83,6 +83,37 @@ describe.skipIf(DATABASE_URL === "")("роли и журнал на живом P
     expect(entry?.before).toBeNull();
   });
 
+  it("страница журнала: записи одной миллисекунды курсор не теряет и не повторяет", async () => {
+    const actor = await account();
+    const other = await account();
+    // Своё начало имени действия — чужие записи общей базы в отбор не попадут.
+    const prefix = `page${randomUUID().slice(0, 8)}.`;
+    const at = new Date();
+    await prisma.auditEntry.createMany({
+      data: [1, 2, 3].map((n) => ({ entryId: randomUUID(), actorAccountId: actor, action: `${prefix}save`, target: `key${String(n)}`, createdAt: at })),
+    });
+    await roles.append({ actorAccountId: other, action: `${prefix}remove`, target: "key1" });
+
+    const query = { actions: [prefix], actorAccountId: actor, target: null };
+    const first = await roles.auditPage({ ...query, limit: 2, before: null });
+    const last = first.at(-1);
+    expect(first).toHaveLength(2);
+    const second = await roles.auditPage({ ...query, limit: 2, before: last === undefined ? null : { createdAt: last.createdAt, entryId: last.entryId } });
+    expect(second).toHaveLength(1);
+    expect(new Set([...first, ...second].map((row) => row.target))).toEqual(new Set(["key1", "key2", "key3"]));
+
+    // Отбор по объекту — и по чужому человеку; два начала имени — оба вида действий.
+    expect((await roles.auditPage({ actions: [prefix], actorAccountId: null, target: "key1", limit: 10, before: null })).map((row) => row.action).sort()).toEqual([`${prefix}remove`, `${prefix}save`]);
+    expect((await roles.auditPage({ actions: [`${prefix}remove`], actorAccountId: null, target: null, limit: 10, before: null })).map((row) => row.actorAccountId)).toEqual([other]);
+  });
+
+  it("имена аккаунтов — одним запросом, ненайденных в ответе нет", async () => {
+    const id = await account();
+    const names = await accounts.displayNames([id, randomUUID()]);
+    expect([...names]).toEqual([[id, "Дым"]]);
+    expect(await accounts.displayNames([])).toEqual(new Map());
+  });
+
   it("удаление аккаунта уносит его роли, а журнал остаётся", async () => {
     // Журнал переживает игрока: иначе «кто это сделал» пропадает вместе с ним.
     const id = await account();
