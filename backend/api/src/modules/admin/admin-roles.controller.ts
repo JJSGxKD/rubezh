@@ -4,12 +4,11 @@ import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
-import type { AuditRecord } from "../roles/roles.repository.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
-import { AdminRolesService, type RoleAssignmentView } from "./admin-roles.service.js";
+import { AdminRolesService, type AuditPage, type RoleAssignmentView } from "./admin-roles.service.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
-import { auditLimitSchema, roleTargetSchema } from "./dto/admin.dto.js";
+import { auditQuerySchema, roleTargetSchema } from "./dto/admin.dto.js";
 
 /** Роли и журнал аудита в панели (docs/29-admin-panel.md §3). */
 @Controller("admin")
@@ -44,9 +43,17 @@ export class AdminRolesController {
 
   @Get("audit")
   @RequirePermission("audit.view")
-  async audit(@Req() request: unknown, @Query("limit") limit?: string): Promise<{ data: { entries: AuditRecord[] } }> {
-    const parsed = parse(() => auditLimitSchema.parse(limit ?? undefined), "Некорректный предел");
-    return { data: { entries: await this.roles.audit(accountOf(request), parsed) } };
+  async audit(@Req() request: unknown, @Query() query: unknown): Promise<{ data: AuditPage }> {
+    const parsed = parse(() => auditQuerySchema.parse(query), "Некорректный отбор журнала");
+    return {
+      data: await this.roles.audit(accountOf(request), {
+        limit: parsed.limit,
+        before: parsed.before ?? null,
+        actions: parsed.actions ?? [],
+        actorAccountId: parsed.actor ?? null,
+        target: parsed.target ?? null,
+      }),
+    };
   }
 
   private async limit(actorId: string): Promise<void> {

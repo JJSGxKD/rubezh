@@ -24,18 +24,21 @@ import { PromoCodeDialog } from "./PromoCodeDialog";
 /**
  * Промокоды (docs/35-stage4-plan.md WP41): список с фильтром по состоянию,
  * мастер нового кода и карточка с активациями, паузой и правкой. Действующие
- * — первым фильтром: за ними приходят чаще всего.
+ * — первым фильтром: за ними приходят чаще всего. Карточка открывается и по
+ * адресу `#/promo-codes/<id>`.
  */
 export function PromoCodesScreen({ id }: { id: string | null }) {
   const { state, reload } = useApi(() => fetchPromoCodes(api), []);
   const [filter, setFilter] = useState<FilterId | null>(null);
   const [creating, setCreating] = useState<{ partnerId: string } | null>(null);
-  // Пришли из карточки партнёра («Завести код партнёра») — мастер сразу открыт с ним.
+  const [openId, setOpenId] = useState<string | null>(null);
+  // Из карточки партнёра «Завести код партнёра» — мастер сразу открыт с ним;
+  // по адресу кода (`#/promo-codes/<id>`: коды партнёра, журнал аудита) — его карточка.
   useEffect(() => {
     const partnerId = partnerOfRoute(id);
     if (partnerId !== null) setCreating({ partnerId });
+    else setOpenId(id);
   }, [id]);
-  const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<PromoCampaign | null>(null);
 
   if (state.status === "loading") return <Loading />;
@@ -132,7 +135,10 @@ export function PromoCodesScreen({ id }: { id: string | null }) {
       {openId === null || editing !== null || creating !== null ? null : (
         <PromoCodeCard
           campaignId={openId}
-          onClose={() => setOpenId(null)}
+          onClose={() => {
+            setOpenId(null);
+            if (id !== null) navigate({ section: "promo-codes", id: null });
+          }}
           onChanged={reload}
           onEdit={(campaign) => setEditing(campaign)}
         />

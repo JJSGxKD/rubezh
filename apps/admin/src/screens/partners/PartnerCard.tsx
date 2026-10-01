@@ -91,7 +91,7 @@ function CardBody({ detail }: { detail: PartnerDetail }) {
         <DataTable
           rows={detail.codes}
           rowKey={(code) => code.campaignId}
-          onRowClick={() => navigate({ section: "promo-codes", id: null })}
+          onRowClick={(code) => navigate({ section: "promo-codes", id: code.campaignId })}
           empty="Кодов ещё нет — заведите кнопкой внизу"
           columns={[
             {

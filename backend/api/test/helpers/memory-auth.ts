@@ -48,6 +48,11 @@ export class MemoryAccountRepository implements AccountRepository {
     return null;
   }
 
+  async displayNames(accountIds: readonly string[]): Promise<Map<string, string>> {
+    const wanted = new Set(accountIds);
+    return new Map([...this.byKey.values()].filter((account) => wanted.has(account.accountId)).map((account) => [account.accountId, account.displayName]));
+  }
+
   async search(query: string, limit: number): Promise<Account[]> {
     const text = query.trim().replace(/^@/, "").toLowerCase();
     if (text === "") return [];

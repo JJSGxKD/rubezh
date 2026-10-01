@@ -44,6 +44,8 @@ export interface AccountRepository {
    */
   upsert(identity: AccountArrival, nowMs: number): Promise<Account>;
   byId(accountId: string): Promise<Account | null>;
+  /** Имена аккаунтов одним запросом — для списков панели; ненайденных в ответе нет. */
+  displayNames(accountIds: readonly string[]): Promise<Map<string, string>>;
   /** Найти по площадке и её идентификатору — так аккаунт ищут по Telegram ID */
   byPlatformUser(platform: AccountPlatform, platformUserId: string): Promise<Account | null>;
   /**
@@ -103,6 +105,12 @@ export class PrismaAccountRepository implements AccountRepository {
   async byId(accountId: string): Promise<Account | null> {
     const row = await this.prisma.account.findUnique({ where: { accountId } });
     return row === null ? null : toAccount(row, false);
+  }
+
+  async displayNames(accountIds: readonly string[]): Promise<Map<string, string>> {
+    if (accountIds.length === 0) return new Map();
+    const rows = await this.prisma.account.findMany({ where: { accountId: { in: [...accountIds] } }, select: { accountId: true, displayName: true } });
+    return new Map(rows.map((row) => [row.accountId, row.displayName]));
   }
 
   async byPlatformUser(platform: AccountPlatform, platformUserId: string): Promise<Account | null> {

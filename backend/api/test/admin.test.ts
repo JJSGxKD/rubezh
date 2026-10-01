@@ -225,6 +225,46 @@ describe("панель по HTTP", () => {
     expect(audit.json().data.entries.map((entry: { action: string }) => entry.action)).toEqual(["roles.revoke", "roles.assign", "admin.login"]);
   });
 
+  it("журнал: имена людей, отбор по действиям, человеку и объекту, страницы курсором", async () => {
+    const server = await start();
+    const cookie = await login(server);
+    const owner = (await server.inject({ method: "GET", url: "/api/v1/admin/session", headers: { cookie } })).json().data.account.accountId as string;
+    const player = await accounts.upsert({ platform: "telegram", platformUserId: "600003", displayName: "Оля", username: null, photoUrl: null }, Date.now());
+    await roles.append({ actorAccountId: owner, action: "players.ban", target: player.accountId, before: { banned: false }, after: { banned: true } });
+    await roles.append({ actorAccountId: owner, action: "settings.save", target: "team.chat", after: { value: "x" } });
+    await roles.append({ actorAccountId: null, action: "changelog.import", target: "0.6.0", after: { added: 2 } });
+    const get = async (query: string) => {
+      const response = await server.inject({ method: "GET", url: `/api/v1/admin/audit?${query}`, headers: { cookie } });
+      expect(response.statusCode, query).toBe(200);
+      return response.json().data as { entries: { action: string; actorName: string | null; target: string | null; targetName: string | null }[]; next: string | null };
+    };
+
+    const all = await get("limit=10");
+    expect(all.entries.map((entry) => entry.action)).toEqual(["changelog.import", "settings.save", "players.ban", "admin.login"]);
+    expect(all.next).toBeNull();
+    // Имя человека — у действия и у объекта-аккаунта; система — без имени, ключ настройки — не аккаунт.
+    expect(all.entries[2]).toMatchObject({ actorName: "Ира", targetName: "Оля" });
+    expect(all.entries[0]).toMatchObject({ actorName: null, targetName: null });
+    expect(all.entries[1]).toMatchObject({ target: "team.chat", targetName: null });
+
+    expect((await get("actions=players.,settings.")).entries.map((entry) => entry.action)).toEqual(["settings.save", "players.ban"]);
+    expect((await get(`actor=${owner}`)).entries.map((entry) => entry.action)).toEqual(["settings.save", "players.ban", "admin.login"]);
+    expect((await get(`target=${player.accountId}`)).entries.map((entry) => entry.action)).toEqual(["players.ban"]);
+
+    // Страницы по две: вторая продолжает первую без повторов и пропусков, на последней курсора нет.
+    const first = await get("limit=2");
+    expect(first.entries.map((entry) => entry.action)).toEqual(["changelog.import", "settings.save"]);
+    expect(first.next).not.toBeNull();
+    const second = await get(`limit=2&before=${encodeURIComponent(first.next ?? "")}`);
+    expect(second.entries.map((entry) => entry.action)).toEqual(["players.ban", "admin.login"]);
+    expect(second.next).toBeNull();
+
+    for (const bad of ["limit=0", "before=вчера", "actions=DROP%20TABLE", "actor=не-uuid", `actions=${Array.from({ length: 13 }, () => "a.").join(",")}`]) {
+      const response = await server.inject({ method: "GET", url: `/api/v1/admin/audit?${bad}`, headers: { cookie } });
+      expect(response.statusCode, bad).toBe(400);
+    }
+  });
+
   it("воронка: период по умолчанию — тридцать дней, обратный период — 400", async () => {
     const server = await start();
     const cookie = await login(server);

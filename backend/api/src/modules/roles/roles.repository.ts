@@ -27,6 +27,25 @@ export interface AuditRecord extends AuditEntry {
   createdAt: Date;
 }
 
+/** Где остановилась прошлая страница журнала: время и id последней записи. */
+export interface AuditCursor {
+  createdAt: Date;
+  entryId: string;
+}
+
+/** Страница журнала для панели — свежие первыми, с отбором. */
+export interface AuditQuery {
+  limit: number;
+  /** `null` — с самых свежих; иначе — записи старше курсора */
+  before: AuditCursor | null;
+  /** начала имён действий: `roles.`, `admin.login`; пусто — все действия */
+  actions: readonly string[];
+  /** `null` — кто угодно */
+  actorAccountId: string | null;
+  /** `null` — над чем угодно */
+  target: string | null;
+}
+
 export const ROLES_REPOSITORY = Symbol("ROLES_REPOSITORY");
 
 /** Кому какая роль выдана и кем — раздел ролей в панели. */
@@ -50,6 +69,8 @@ export interface RolesRepository {
   append(entry: AuditEntry): Promise<void>;
   /** Последние записи журнала, новые первыми */
   recentAudit(limit: number): Promise<AuditRecord[]>;
+  /** Страница журнала с отбором; при равном времени порядок держит id — курсор не теряет и не повторяет записи */
+  auditPage(query: AuditQuery): Promise<AuditRecord[]>;
 }
 
 @Injectable()
@@ -101,16 +122,37 @@ export class PrismaRolesRepository implements RolesRepository {
 
   async recentAudit(limit: number): Promise<AuditRecord[]> {
     const rows = await this.prisma.auditEntry.findMany({ orderBy: { createdAt: "desc" }, take: limit });
-    return rows.map((row) => ({
-      entryId: row.entryId,
-      actorAccountId: row.actorAccountId,
-      action: row.action,
-      target: row.target,
-      before: row.before,
-      after: row.after,
-      createdAt: row.createdAt,
-    }));
+    return rows.map(recordOf);
   }
+
+  async auditPage(query: AuditQuery): Promise<AuditRecord[]> {
+    const { before } = query;
+    const rows = await this.prisma.auditEntry.findMany({
+      where: {
+        AND: [
+          query.actions.length === 0 ? {} : { OR: query.actions.map((prefix) => ({ action: { startsWith: prefix } })) },
+          query.actorAccountId === null ? {} : { actorAccountId: query.actorAccountId },
+          query.target === null ? {} : { target: query.target },
+          before === null ? {} : { OR: [{ createdAt: { lt: before.createdAt } }, { createdAt: before.createdAt, entryId: { lt: before.entryId } }] },
+        ],
+      },
+      orderBy: [{ createdAt: "desc" }, { entryId: "desc" }],
+      take: query.limit,
+    });
+    return rows.map(recordOf);
+  }
+}
+
+function recordOf(row: { entryId: string; actorAccountId: string | null; action: string; target: string | null; before: unknown; after: unknown; createdAt: Date }): AuditRecord {
+  return {
+    entryId: row.entryId,
+    actorAccountId: row.actorAccountId,
+    action: row.action,
+    target: row.target,
+    before: row.before,
+    after: row.after,
+    createdAt: row.createdAt,
+  };
 }
 
 /**
