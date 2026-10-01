@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { t } from "../../i18n";
 import { uiFeedback } from "../../state/ui-feedback";
@@ -176,10 +176,20 @@ export interface SegmentedItem {
   badge?: number;
 }
 
+/** Сколько сегментов помещается строкой; больше — сетка в два столбца. */
+const SEGMENTS_IN_ROW = 3;
+
 /**
  * Переключатель видов внутри раздела: «ежедневные / недельные / достижения».
  * Выбранный сегмент поднимается объёмной плашкой — как кнопка, а не просто
  * цветом текста (§4.4).
+ *
+ * Подписи не обрезаются: обрезанное «Партнё…» не говорит, что внутри.
+ * До трёх сегментов — одной строкой, сегмент не уже своего текста, а
+ * свободное место делится поровну; не поместились (экран уже 360) — строка
+ * прокручивается вбок, и выбранный всегда в кадре. Четыре и больше — сеткой
+ * в два столбца: четыре русские подписи со знаками в 328 px не помещаются
+ * ни при каком читаемом шрифте, а лента на два экрана прячет половину видов.
  */
 export function SegmentedControl(props: {
   items: readonly SegmentedItem[];
@@ -187,11 +197,26 @@ export function SegmentedControl(props: {
   label: string;
   onSelect(id: string): void;
 }): ReactNode {
+  const list = useRef<HTMLDivElement>(null);
+  // Только вбок и только внутри ленты: `scrollIntoView` двигал бы и страницу.
+  useEffect(() => {
+    const element = list.current;
+    const active = element?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (element === null || element === undefined || active === null || active === undefined) return;
+    const right = active.offsetLeft + active.offsetWidth;
+    if (active.offsetLeft < element.scrollLeft) element.scrollLeft = active.offsetLeft;
+    else if (right > element.scrollLeft + element.clientWidth) element.scrollLeft = right - element.clientWidth;
+  }, [props.activeId]);
+
   return (
     <div
+      ref={list}
       role="tablist"
       aria-label={props.label}
-      className="surface-sunken grid auto-cols-fr grid-flow-col gap-1 rounded-lg p-1"
+      className={[
+        "surface-sunken relative gap-1 rounded-lg p-1",
+        props.items.length > SEGMENTS_IN_ROW ? "grid grid-cols-2" : "flex overflow-x-auto [scrollbar-width:none]",
+      ].join(" ")}
     >
       {props.items.map((item) => {
         const active = item.id === props.activeId;
@@ -207,7 +232,7 @@ export function SegmentedControl(props: {
               props.onSelect(item.id);
             }}
             className={[
-              "relative min-h-11 truncate rounded-md px-2 font-display text-sm font-semibold",
+              "relative inline-flex min-h-11 flex-1 shrink-0 items-center justify-center rounded-md px-2 font-display text-sm font-semibold whitespace-nowrap",
               "transition-transform duration-(--duration-fast) ease-base active:scale-[0.97]",
               active ? "btn-secondary" : "text-text-muted",
             ].join(" ")}
