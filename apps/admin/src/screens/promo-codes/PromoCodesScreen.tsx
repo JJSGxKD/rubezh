@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import {
   FILTERS,
   STATE_TITLES,
@@ -10,10 +10,12 @@ import {
   type FilterId,
   type PromoCampaign,
 } from "../../api/promo-codes";
+import { partnerOfRoute } from "../../api/partners";
 import { formatDateTime, formatNumber } from "../../format";
 import { api } from "../../services";
 import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, ErrorNotice, Loading, Panel } from "../../ui/kit";
+import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { PromoCodeCard } from "./PromoCodeCard";
@@ -24,16 +26,21 @@ import { PromoCodeDialog } from "./PromoCodeDialog";
  * мастер нового кода и карточка с активациями, паузой и правкой. Действующие
  * — первым фильтром: за ними приходят чаще всего.
  */
-export function PromoCodesScreen() {
+export function PromoCodesScreen({ id }: { id: string | null }) {
   const { state, reload } = useApi(() => fetchPromoCodes(api), []);
   const [filter, setFilter] = useState<FilterId | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<{ partnerId: string } | null>(null);
+  // Пришли из карточки партнёра («Завести код партнёра») — мастер сразу открыт с ним.
+  useEffect(() => {
+    const partnerId = partnerOfRoute(id);
+    if (partnerId !== null) setCreating({ partnerId });
+  }, [id]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<PromoCampaign | null>(null);
 
   if (state.status === "loading") return <Loading />;
   if (state.status === "error") return <ErrorNotice error={state.error} onRetry={reload} />;
-  const { campaigns, limits, platforms } = state.data;
+  const { campaigns, limits, platforms, partners, partnerRules } = state.data;
 
   const counts = new Map(FILTERS.map((item) => [item.id, item.states === null ? campaigns.length : campaigns.filter((campaign) => (item.states as readonly string[]).includes(campaign.state)).length]));
   // Пока ничего не выбрано — действующие, если они есть; иначе все.
@@ -47,7 +54,7 @@ export function PromoCodesScreen() {
         title="Промокоды"
         help={HELP.promoCodes.section}
         actions={
-          <Button tone="primary" onClick={() => setCreating(true)}>
+          <Button tone="primary" onClick={() => setCreating({ partnerId: "" })}>
             Новый промокод
           </Button>
         }
@@ -76,8 +83,9 @@ export function PromoCodesScreen() {
             {
               title: "Название",
               render: (campaign) => (
-                <span className="flex flex-col">
+                <span className="flex flex-col items-start gap-0.5">
                   <span className="font-medium">{campaign.title}</span>
+                  {campaign.partnerName === null ? null : <Badge tone="accent">партнёр: {campaign.partnerName}</Badge>}
                   {campaign.note === null ? null : <span className="line-clamp-1 text-xs text-text-muted">{campaign.note}</span>}
                 </span>
               ),
@@ -91,20 +99,37 @@ export function PromoCodesScreen() {
         />
       </Panel>
 
-      {creating ? (
+      {creating === null ? null : (
         <PromoCodeDialog
           limits={limits}
           platforms={platforms}
+          partners={partners}
+          bindWindowDays={partnerRules.bindWindowDays}
           editing={null}
-          onClose={() => setCreating(false)}
+          partnerId={creating.partnerId}
+          onClose={() => {
+            setCreating(null);
+            // Адрес с партнёром — разовый: «назад» и обновление не должны открывать мастер снова.
+            if (id !== null) navigate({ section: "promo-codes", id: null });
+          }}
           onSaved={(campaign) => {
             reload();
             setOpenId(campaign.campaignId);
           }}
         />
-      ) : null}
-      {editing === null ? null : <PromoCodeDialog limits={limits} platforms={platforms} editing={editing} onClose={() => setEditing(null)} onSaved={() => reload()} />}
-      {openId === null || editing !== null || creating ? null : (
+      )}
+      {editing === null ? null : (
+        <PromoCodeDialog
+          limits={limits}
+          platforms={platforms}
+          partners={partners}
+          bindWindowDays={partnerRules.bindWindowDays}
+          editing={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => reload()}
+        />
+      )}
+      {openId === null || editing !== null || creating !== null ? null : (
         <PromoCodeCard
           campaignId={openId}
           onClose={() => setOpenId(null)}

@@ -18,6 +18,7 @@ import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, ErrorNotice, Help, KeyValue, Loading } from "../../ui/kit";
 import { saveFile } from "../../ui/save-file";
+import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { PeriodCell, Usage } from "./PromoCodesScreen";
@@ -144,6 +145,17 @@ function CardBody({ detail, campaign }: { detail: PromoCampaignDetail; campaign:
 
       <KeyValue
         items={[
+          [
+            "Чей код",
+            campaign.partnerId === null ? (
+              "команды — подарок"
+            ) : (
+              <button key="partner" type="button" className="text-accent hover:underline" onClick={() => navigate({ section: "partners", id: campaign.partnerId })}>
+                партнёра: {campaign.partnerName ?? campaign.partnerId}
+              </button>
+            ),
+            HELP.promoCodes.partner,
+          ],
           ["Награда", rewardText(campaign.reward), HELP.promoCodes.reward],
           ["Активации", <Usage key="usage" campaign={campaign} />, HELP.promoCodes.redeemed],
           ["Срок", <PeriodCell key="period" campaign={campaign} />, HELP.promoCodes.period],

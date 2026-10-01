@@ -27,7 +27,7 @@ import { api } from "../../services";
 import { ChoiceCards } from "../../ui/choice";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
-import { Button, Field, Help, Input, Notice, TextArea } from "../../ui/kit";
+import { Button, Field, Help, Input, Notice, Select, TextArea } from "../../ui/kit";
 import { toast } from "../../ui/toast";
 
 const DAY_MS = 86_400_000;
@@ -51,19 +51,27 @@ const QUICK_ENDS = [
 export function PromoCodeDialog({
   limits,
   platforms,
+  partners,
+  bindWindowDays,
   editing,
+  partnerId = "",
   onClose,
   onSaved,
 }: {
   limits: PromoCodeLimits;
   platforms: readonly string[];
+  partners: readonly { partnerId: string; name: string }[];
+  /** окно привязки новичка к партнёру, суток */
+  bindWindowDays: number;
   editing: PromoCampaign | null;
+  /** партнёр, выбранный заранее: мастер открыт из карточки партнёра */
+  partnerId?: string;
   onClose: () => void;
   onSaved: (campaign: PromoCampaign) => void;
 }) {
   const form = useForm<PromoCodeForm>({
     resolver: zodResolver(formSchema(limits, () => new Date(), editing)),
-    defaultValues: editing === null ? emptyForm(new Date()) : formOf(editing),
+    defaultValues: editing === null ? { ...emptyForm(new Date()), partnerId } : formOf(editing),
     mode: "onChange",
   });
   const { errors, isSubmitting, isDirty } = form.formState;
@@ -104,7 +112,7 @@ export function PromoCodeDialog({
       description={editing === null ? "Пять шагов: какой код, что он даёт, когда действует, кому и как назвать. Внизу — итог." : "Вид и код не меняются после заведения — их уже могли напечатать. Нужен другой код — заведите новый."}
       footer={
         <>
-          <Summary values={values} editing={editing} />
+          <Summary values={values} editing={editing} partner={partners.find((partner) => partner.partnerId === values.partnerId)?.name ?? null} />
           <Button onClick={onClose}>Отмена</Button>
           <Button tone="primary" type="submit" form="promo-code-form" disabled={isSubmitting || codeBlocked || Object.keys(errors).length > 0 || (editing !== null && !isDirty)}>
             {isSubmitting ? "Сохраняем…" : editing === null ? "Завести" : "Сохранить"}
@@ -114,6 +122,22 @@ export function PromoCodeDialog({
     >
       <form id="promo-code-form" onSubmit={(event) => void submit(event)} className="flex flex-col gap-6">
         <Step no={1} title="Какой код" help={HELP.promoCodes.kind}>
+          <Field label="Чей код" help={HELP.promoCodes.partner}>
+            <Select {...form.register("partnerId")} disabled={editing !== null} className="w-full max-w-md">
+              <option value="">Команды — подарок</option>
+              {partners.map((partner) => (
+                <option key={partner.partnerId} value={partner.partnerId}>
+                  Партнёра: {partner.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {values.partnerId === "" ? null : (
+            <Notice tone="info">
+              Новичок — аккаунт не старше {bindWindowDays} дней, — которого ещё никто не пригласил, будет записан за партнёром: его игры и оплаты видны в разделе «Партнёры». Остальные получат подарок, но приведёнными не считаются.
+            </Notice>
+          )}
+          {partners.length === 0 && editing === null ? <p className="text-xs text-text-muted">Партнёров ещё нет — их заводят в разделе «Партнёры».</p> : null}
           <Controller
             control={form.control}
             name="kind"
@@ -359,7 +383,7 @@ function CodeStatus({ check }: { check: CheckState }) {
   );
 }
 
-function Summary({ values, editing }: { values: PromoCodeForm; editing: PromoCampaign | null }) {
+function Summary({ values, editing, partner }: { values: PromoCodeForm; editing: PromoCampaign | null; partner: string | null }) {
   const now = new Date();
   const { startsAt, endsAt } = periodOf(values, now);
   const code = values.kind === "shared" ? (values.code.trim() === "" ? "код ?" : values.code.trim().toUpperCase()) : `пачка ${formatNumber(editing?.maxRedemptions ?? values.count)}`;
@@ -368,7 +392,7 @@ function Summary({ values, editing }: { values: PromoCodeForm; editing: PromoCam
   const end = endsAt === null ? "бессрочно" : Number.isNaN(endsAt.getTime()) ? "?" : `до ${formatDateTime(endsAt.getTime())}`;
   return (
     <span className="mr-auto max-w-[60%] text-xs text-text-muted">
-      {[code, rewardText(values.reward), limit, `${start} ${end}`].filter((part) => part !== null).join(" · ")}
+      {[code, partner === null ? null : `партнёр ${partner}`, rewardText(values.reward), limit, `${start} ${end}`].filter((part) => part !== null).join(" · ")}
     </span>
   );
 }
