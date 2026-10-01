@@ -1,6 +1,6 @@
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/shop";
-import type { ShopItem } from "../../state/shop-api";
+import type { ShopItem, ShopView, VipView } from "../../state/shop-api";
 import type { BuyOutcome } from "../../state/shop-purchase";
 
 /**
@@ -51,4 +51,63 @@ export function showcaseRefusal(code: string | undefined): { text: string; reloa
     default:
       return { text: t("showcase.failed"), reload: false };
   }
+}
+
+/**
+ * Баннер главной полосы магазина — что предложить игроку на первом экране
+ * (решение участника 1: магазин с баннерами и маркетингом). Порядок — по
+ * ценности для игрока и игры: VIP, пока его нет; стартовый набор, пока не
+ * куплен; подобранный сервером товар; снаряжение дня; звёзды через Tribute.
+ */
+export type ShopBanner =
+  | { kind: "vip"; stars: number }
+  | { kind: "starter"; item: ShopItem }
+  | { kind: "recommended"; item: ShopItem }
+  | { kind: "gear" }
+  | { kind: "tribute"; url: string };
+
+function sellable(item: ShopItem | undefined): item is ShopItem {
+  return item !== undefined && item.stars !== null && !(item.once && item.owned);
+}
+
+export function shopBanners(shop: ShopView, vip: VipView | null): ShopBanner[] {
+  const banners: ShopBanner[] = [];
+  if (vip !== null && !vip.active && vip.canOrder && vip.stars !== null) banners.push({ kind: "vip", stars: vip.stars });
+  const starter = shop.items.find((item) => item.kind === "starter");
+  if (sellable(starter)) banners.push({ kind: "starter", item: starter });
+  const recommended = shop.items.find((item) => item.sku === shop.recommended);
+  if (sellable(recommended) && recommended.sku !== starter?.sku) banners.push({ kind: "recommended", item: recommended });
+  banners.push({ kind: "gear" });
+  const tribute = tributeOf(shop);
+  if (tribute !== null) banners.push({ kind: "tribute", url: tribute });
+  return banners;
+}
+
+/** Ссылка на звёзды через Tribute: только https — иначе плашки нет, как и без ссылки. */
+export function tributeOf(shop: Pick<ShopView, "tribute">): string | null {
+  const url = shop.tribute;
+  if (typeof url !== "string" || url === "") return null;
+  try {
+    return new URL(url).protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Вкладки магазина. Три, а не четыре: «Самоцветы» и «Снаряжение» вчетвером
+ * не помещаются на узкий телефон. VIP живёт на «Для вас» и в баннере, а знак
+ * на вкладке — самоцветы дня VIP ждут забора.
+ */
+export type ShopTab = "featured" | "gems" | "gear";
+
+export function vipWaiting(vip: VipView | null): number {
+  return vip !== null && vip.active && !vip.daily.claimed ? 1 : 0;
+}
+
+/** Бейдж товара словами; незнакомый от сервера новее клиента — без бейджа. */
+export function badgeLabel(badge: string | null | undefined): string | null {
+  if (badge === "hit") return t("shop.badge.hit");
+  if (badge === "best") return t("shop.badge.best");
+  return null;
 }

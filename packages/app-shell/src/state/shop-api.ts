@@ -26,9 +26,21 @@ const itemSchema = z.object({
   chargedStars: z.optional(z.nullable(z.number())),
   once: z.boolean(),
   owned: z.boolean(),
+  /** «hit» — от команды, «best» — самый выгодный набор самоцветов; сервер до подачи поля не отдавал */
+  badge: z.optional(z.nullable(z.string())),
+  /** на сколько процентов больше самоцветов за звезду, чем в самом дорогом за самоцвет наборе */
+  valuePct: z.optional(z.nullable(z.number())),
 });
 
-const shopSchema = z.object({ items: z.array(itemSchema), payable: z.boolean(), mode: z.optional(modeSchema) });
+const shopSchema = z.object({
+  items: z.array(itemSchema),
+  payable: z.boolean(),
+  mode: z.optional(modeSchema),
+  /** что предложить игроку первым — подобрано под него сервером */
+  recommended: z.optional(z.nullable(z.string())),
+  /** ссылка на покупку звёзд через Tribute; `null` — плашки нет */
+  tribute: z.optional(z.nullable(z.string())),
+});
 
 const invoiceSchema = z.object({
   purchaseId: z.string(),
