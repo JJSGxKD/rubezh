@@ -175,7 +175,7 @@ export function ShopScreen(): ReactNode {
         {state.status === "failed" ? <ErrorState text={t("shop.failed")} onRetry={() => void load()} /> : null}
 
         {ready === null ? null : (
-          <div className="mt-2 grid gap-4 pb-4">
+          <div className="mt-2 grid grid-cols-1 gap-4 pb-4">
             {!ready.shop.payable ? <InfoNotice text={t("shop.unpayable")} /> : null}
             {ready.shop.mode === "test" ? <InfoNotice text={t("shop.test", { charged: testCharge(ready.shop) })} /> : null}
 
