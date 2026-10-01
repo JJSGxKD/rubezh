@@ -56,6 +56,8 @@ export function PromoCodeScreen(): ReactNode {
       gems: credited.gems,
       shards: credited.shard_common + credited.shard_uncommon,
       capped: response.data.capped,
+      partner: response.data.partner ?? false,
+      bound: response.data.bound ?? false,
     });
     void loadWallet();
   };

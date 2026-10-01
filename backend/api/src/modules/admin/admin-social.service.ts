@@ -1,13 +1,16 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { FRIENDS_REPOSITORY, type FriendsRepository } from "../friends/friends.repository.js";
+import type { PartnerBindingView } from "../partners/partners.repository.js";
+import { PartnersService } from "../partners/partners.service.js";
 import { REFERRALS_REPOSITORY, type ReferralBinding, type ReferralsRepository, type ReferralStatus } from "../referrals/referrals.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { AccountNotFoundError } from "./admin-errors.js";
 
 /**
- * Друзья и рефералка в карточке игрока (docs/29-admin-panel.md §2, «Игроки»):
- * сколько друзей, кем приглашён и скольких привёл. Отдельно от карточки —
+ * Друзья, рефералка и партнёр в карточке игрока (docs/29-admin-panel.md §2,
+ * «Игроки»): сколько друзей, кем приглашён или каким партнёром приведён и
+ * скольких привёл сам. Отдельно от карточки —
  * её собирает `AdminPlayersService`, а этот раздел нужен модератору, который
  * разбирает накрутку (docs/23-referral-and-partner-program.md §2.4).
  */
@@ -16,6 +19,8 @@ export interface SocialView {
   friends: number;
   /** кем приглашён; `null` — пришёл сам */
   referredBy: (ReferralBinding & { referrerName: string | null }) | null;
+  /** привёл партнёр своим кодом; слот источника один — либо это, либо `referredBy` */
+  partner: PartnerBindingView | null;
   referrals: Record<ReferralStatus, number>;
 }
 
@@ -26,13 +31,19 @@ export class AdminSocialService {
     @Inject(FRIENDS_REPOSITORY) private readonly friends: FriendsRepository,
     @Inject(REFERRALS_REPOSITORY) private readonly referrals: ReferralsRepository,
     private readonly roles: RolesService,
+    private readonly partners: PartnersService,
   ) {}
 
   async social(accountId: string): Promise<SocialView> {
     if ((await this.accounts.byId(accountId)) === null) throw new AccountNotFoundError();
-    const [friends, binding, referrals] = await Promise.all([this.friends.count(accountId), this.referrals.binding(accountId), this.referrals.counts(accountId)]);
+    const [friends, binding, referrals, partner] = await Promise.all([
+      this.friends.count(accountId),
+      this.referrals.binding(accountId),
+      this.referrals.counts(accountId),
+      this.partners.bindingOf(accountId),
+    ]);
     const referrer = binding === null ? null : await this.accounts.byId(binding.referrerId);
-    return { friends, referredBy: binding === null ? null : { ...binding, referrerName: referrer?.displayName ?? null }, referrals };
+    return { friends, referredBy: binding === null ? null : { ...binding, referrerName: referrer?.displayName ?? null }, partner, referrals };
   }
 
   /**

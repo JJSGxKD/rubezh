@@ -49,6 +49,7 @@ import { AdsModule } from "./modules/ads/ads.module.js";
 import { ShopModule } from "./modules/shop/shop.module.js";
 import { VipModule } from "./modules/vip/vip.module.js";
 import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
+import { PartnersModule } from "./modules/partners/partners.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -71,7 +72,8 @@ import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
  * лента уведомлений игрока, в которую пишут доменные модули, badges — знаки
  * меню одним ответом (там же, WP28); changelog — журнал обновлений по
  * площадкам и уведомление о выходе версии (там же, WP31); promo-codes —
- * промокоды: ввод игроком и кампании в панели (там же, WP41).
+ * промокоды: ввод игроком и кампании в панели, partners — партнёры и
+ * приведённые ими игроки (там же, WP41).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -124,6 +126,7 @@ export const APP_MODULES = [
   ShopModule,
   VipModule,
   PromoCodesModule,
+  PartnersModule,
 ];
 
 /**

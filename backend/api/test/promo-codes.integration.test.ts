@@ -41,6 +41,7 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
     newPlayersDays: null,
     platforms: [],
     note: null,
+    partnerId: null,
     createdBy: randomUUID(),
     createdAt: NOW,
     ...patch,
@@ -98,9 +99,9 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
     const display = uniqueCode();
     const row = await created(campaign({ maxRedemptions: 3 }), shared(display));
     const players = await Promise.all(Array.from({ length: 10 }, player));
-    const outcomes = await Promise.all(players.map((accountId) => repository.redeem({ campaignId: row.campaignId, accountId, code: codeKey(display), batch: false, at: NOW })));
-    expect(outcomes.filter((outcome) => outcome === "redeemed")).toHaveLength(3);
-    expect(outcomes.filter((outcome) => outcome === "exhausted")).toHaveLength(7);
+    const outcomes = await Promise.all(players.map((accountId) => repository.redeem({ campaignId: row.campaignId, accountId, code: codeKey(display), batch: false, partnerId: null, at: NOW })));
+    expect(outcomes.filter((outcome) => outcome.status === "redeemed")).toHaveLength(3);
+    expect(outcomes.filter((outcome) => outcome.status === "exhausted")).toHaveLength(7);
     expect((await repository.byId(row.campaignId))?.redeemed).toBe(3);
   });
 
@@ -108,9 +109,9 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
     const display = uniqueCode();
     const row = await created(campaign(), shared(display));
     const accountId = await player();
-    const outcomes = await Promise.all(Array.from({ length: 5 }, () => repository.redeem({ campaignId: row.campaignId, accountId, code: codeKey(display), batch: false, at: NOW })));
-    expect(outcomes.filter((outcome) => outcome === "redeemed")).toHaveLength(1);
-    expect(outcomes.filter((outcome) => outcome === "already")).toHaveLength(4);
+    const outcomes = await Promise.all(Array.from({ length: 5 }, () => repository.redeem({ campaignId: row.campaignId, accountId, code: codeKey(display), batch: false, partnerId: null, at: NOW })));
+    expect(outcomes.filter((outcome) => outcome.status === "redeemed")).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.status === "already")).toHaveLength(4);
     expect(await repository.redemption(row.campaignId, accountId)).toEqual({ rewardedAt: null });
     await repository.markRewarded(row.campaignId, accountId, { coins: 500, gems: 0, shard_common: 0, shard_uncommon: 0 }, at(1_000));
     expect(await repository.redemption(row.campaignId, accountId)).toEqual({ rewardedAt: at(1_000) });
@@ -121,13 +122,13 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
     const row = await created(campaign({ kind: "batch", maxRedemptions: 2 }), codes);
     const players = await Promise.all(Array.from({ length: 5 }, player));
     const first = codes[0]?.code ?? "";
-    const outcomes = await Promise.all(players.map((accountId) => repository.redeem({ campaignId: row.campaignId, accountId, code: first, batch: true, at: NOW })));
-    expect(outcomes.filter((outcome) => outcome === "redeemed")).toHaveLength(1);
-    expect(outcomes.filter((outcome) => outcome === "used")).toHaveLength(4);
+    const outcomes = await Promise.all(players.map((accountId) => repository.redeem({ campaignId: row.campaignId, accountId, code: first, batch: true, partnerId: null, at: NOW })));
+    expect(outcomes.filter((outcome) => outcome.status === "redeemed")).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.status === "used")).toHaveLength(4);
     // Проигравшие гонку не записаны погашением и могут взять второй код.
-    const loser = players[outcomes.indexOf("used")] ?? "";
+    const loser = players[outcomes.findIndex((outcome) => outcome.status === "used")] ?? "";
     expect(await repository.redemption(row.campaignId, loser)).toBeNull();
-    expect(await repository.redeem({ campaignId: row.campaignId, accountId: loser, code: codes[1]?.code ?? "", batch: true, at: NOW })).toBe("redeemed");
+    expect(await repository.redeem({ campaignId: row.campaignId, accountId: loser, code: codes[1]?.code ?? "", batch: true, partnerId: null, at: NOW })).toEqual({ status: "redeemed", bound: false });
     expect((await repository.byId(row.campaignId))?.redeemed).toBe(2);
     expect((await repository.codes(row.campaignId, 10)).every((code) => code.redeemedAt !== null)).toBe(true);
   });
@@ -144,7 +145,7 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
     expect((await repository.setPaused(row.campaignId, at(HOUR), at(HOUR)))?.pausedAt).toEqual(at(HOUR));
     expect((await repository.setPaused(row.campaignId, null, at(2 * HOUR)))?.pausedAt).toBeNull();
 
-    await repository.redeem({ campaignId: row.campaignId, accountId: await player(), code: codeKey(display), batch: false, at: NOW });
+    await repository.redeem({ campaignId: row.campaignId, accountId: await player(), code: codeKey(display), batch: false, partnerId: null, at: NOW });
     expect(await repository.remove(row.campaignId)).toEqual({ status: "used", redeemed: 1 });
     await expect(prisma.$executeRaw`DELETE FROM promo_campaign WHERE campaign_id = ${row.campaignId}::uuid`).rejects.toThrow();
 
@@ -160,8 +161,8 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
     // 20:30 UTC = 23:30 МСК 2 октября; 21:30 UTC = 00:30 МСК 3 октября.
     const late = new Date(Date.UTC(2026, 9, 2, 20, 30));
     const early = new Date(Date.UTC(2026, 9, 2, 21, 30));
-    await repository.redeem({ campaignId: row.campaignId, accountId: await player(), code: codeKey(display), batch: false, at: late });
-    await repository.redeem({ campaignId: row.campaignId, accountId: await player(), code: codeKey(display), batch: false, at: early });
+    await repository.redeem({ campaignId: row.campaignId, accountId: await player(), code: codeKey(display), batch: false, partnerId: null, at: late });
+    await repository.redeem({ campaignId: row.campaignId, accountId: await player(), code: codeKey(display), batch: false, partnerId: null, at: early });
     expect(await repository.daily(row.campaignId, at(-DAY))).toEqual([
       { day: "2026-10-02", count: 1 },
       { day: "2026-10-03", count: 1 },

@@ -4,6 +4,7 @@ import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { PLATFORM_IDS } from "../../platforms/ports/platform.js";
+import { lockSourceSlot } from "../attribution/source-slot.js";
 import { PROMO_KINDS, promoRewardSchema, type PromoCampaignRow, type PromoCampaignUpdate, type PromoReward } from "./promo-code-rules.js";
 
 /**
@@ -24,7 +25,7 @@ export interface PromoCodeDraft {
   display: string;
 }
 
-export type NewPromoCampaign = Omit<PromoCampaignRow, "redeemed" | "pausedAt" | "updatedAt" | "codeSample">;
+export type NewPromoCampaign = Omit<PromoCampaignRow, "redeemed" | "pausedAt" | "updatedAt" | "codeSample" | "partnerName">;
 
 export interface CodeLookup {
   code: string;
@@ -36,8 +37,12 @@ export interface CodeLookup {
 export type CreateOutcome = { status: "created"; row: PromoCampaignRow } | { status: "taken"; display: string; title: string };
 export type UpdateOutcome = { status: "updated"; before: PromoCampaignRow; after: PromoCampaignRow } | { status: "missing" } | { status: "invalid"; message: string };
 export type RemoveOutcome = { status: "removed"; row: PromoCampaignRow } | { status: "missing" } | { status: "used"; redeemed: number };
-/** `already` — игрок уже активировал эту кампанию; `used` — одноразовый код занят; `exhausted` — лимит кампании исчерпан */
-export type RedeemOutcome = "redeemed" | "already" | "used" | "exhausted";
+/**
+ * `redeemed` — активировано, `bound` — игрок заодно привязан к партнёру кода;
+ * `already` — игрок уже активировал эту кампанию; `used` — одноразовый код
+ * занят; `exhausted` — лимит кампании исчерпан.
+ */
+export type RedeemOutcome = { status: "redeemed"; bound: boolean } | { status: "already" | "used" | "exhausted" };
 
 export interface PromoCodesRepository {
   /** кампании для панели, новые первыми */
@@ -62,7 +67,12 @@ export interface PromoCodesRepository {
   daily(campaignId: string, since: Date): Promise<{ day: string; count: number }[]>;
   lookup(key: string): Promise<CodeLookup | null>;
   redemption(campaignId: string, accountId: string): Promise<{ rewardedAt: Date | null } | null>;
-  redeem(input: { campaignId: string; accountId: string; code: string; batch: boolean; at: Date }): Promise<RedeemOutcome>;
+  /**
+   * Активировать. `partnerId` — к кому привязать игрока, если слот
+   * источника свободен (docs/23-referral-and-partner-program.md §5);
+   * `null` — не привязывать: код не партнёрский или игрок не новичок.
+   */
+  redeem(input: { campaignId: string; accountId: string; code: string; batch: boolean; partnerId: string | null; at: Date }): Promise<RedeemOutcome>;
   markRewarded(campaignId: string, accountId: string, credited: PromoReward, at: Date): Promise<void>;
 }
 
@@ -84,11 +94,14 @@ const rowSchema = z.object({
   created_at: z.date(),
   updated_at: z.date(),
   code_sample: z.string().nullable(),
+  partner_id: z.string().nullable(),
+  partner_name: z.string().nullable(),
 });
 
 const COLUMNS = Prisma.sql`c.campaign_id::text, c.title, c.kind, c.reward, c.message, c.max_redemptions, c.redeemed, c.starts_at, c.ends_at,
   c.new_players_days, c.platforms::text[] AS platforms, c.paused_at, c.note, c.created_by::text, c.created_at, c.updated_at,
-  (SELECT p.display FROM promo_code p WHERE p.campaign_id = c.campaign_id ORDER BY p.code LIMIT 1) AS code_sample`;
+  (SELECT p.display FROM promo_code p WHERE p.campaign_id = c.campaign_id ORDER BY p.code LIMIT 1) AS code_sample,
+  c.partner_id::text, (SELECT pt.name FROM partner pt WHERE pt.partner_id = c.partner_id) AS partner_name`;
 
 const TX_OPTIONS = { maxWait: 5_000, timeout: 15_000 } as const;
 /** сколько раз выпускать замену кодам пачки, совпавшим с уже занятыми */
@@ -110,6 +123,8 @@ function toRow(raw: unknown): PromoCampaignRow {
     platforms: row.platforms,
     pausedAt: row.paused_at,
     note: row.note,
+    partnerId: row.partner_id,
+    partnerName: row.partner_name,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -119,7 +134,7 @@ function toRow(raw: unknown): PromoCampaignRow {
 
 /** Откат транзакции погашения с причиной: Prisma откатывает её по любому исключению. */
 class RedeemRollback extends Error {
-  constructor(readonly outcome: Exclude<RedeemOutcome, "redeemed" | "already">) {
+  constructor(readonly outcome: "used" | "exhausted") {
     super(outcome);
   }
 }
@@ -162,10 +177,10 @@ export class PrismaPromoCodesRepository implements PromoCodesRepository {
     return await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`
         INSERT INTO promo_campaign (campaign_id, title, kind, reward, message, max_redemptions, starts_at, ends_at, new_players_days, platforms, note,
-                                    created_by, created_at, updated_at)
+                                    partner_id, created_by, created_at, updated_at)
         VALUES (${campaign.campaignId}::uuid, ${campaign.title}, ${campaign.kind}, ${JSON.stringify(campaign.reward)}::jsonb, ${campaign.message},
                 ${campaign.maxRedemptions}, ${campaign.startsAt}, ${campaign.endsAt}, ${campaign.newPlayersDays}, ${campaign.platforms}::varchar(16)[],
-                ${campaign.note}, ${campaign.createdBy}::uuid, ${campaign.createdAt}, ${campaign.createdAt})`;
+                ${campaign.note}, ${campaign.partnerId}::uuid, ${campaign.createdBy}::uuid, ${campaign.createdAt}, ${campaign.createdAt})`;
 
       let pending = [...codes];
       for (let round = 0; pending.length > 0; round += 1) {
@@ -265,14 +280,14 @@ export class PrismaPromoCodesRepository implements PromoCodesRepository {
     return raw === undefined ? null : { rewardedAt: z.object({ rewarded_at: z.date().nullable() }).parse(raw).rewarded_at };
   }
 
-  async redeem(input: { campaignId: string; accountId: string; code: string; batch: boolean; at: Date }): Promise<RedeemOutcome> {
+  async redeem(input: { campaignId: string; accountId: string; code: string; batch: boolean; partnerId: string | null; at: Date }): Promise<RedeemOutcome> {
     return await this.prisma
       .$transaction(async (tx): Promise<RedeemOutcome> => {
         const fresh = await tx.$executeRaw`
           INSERT INTO promo_redemption (campaign_id, account_id, code, redeemed_at)
           VALUES (${input.campaignId}::uuid, ${input.accountId}::uuid, ${input.code}, ${input.at})
           ON CONFLICT (campaign_id, account_id) DO NOTHING`;
-        if (fresh === 0) return "already";
+        if (fresh === 0) return { status: "already" };
         if (input.batch) {
           const taken = await tx.$executeRaw`
             UPDATE promo_code SET redeemed_by = ${input.accountId}::uuid, redeemed_at = ${input.at}
@@ -283,10 +298,20 @@ export class PrismaPromoCodesRepository implements PromoCodesRepository {
           UPDATE promo_campaign SET redeemed = redeemed + 1
           WHERE campaign_id = ${input.campaignId}::uuid AND (max_redemptions IS NULL OR redeemed < max_redemptions)`;
         if (counted === 0) throw new RedeemRollback("exhausted");
-        return "redeemed";
+        // Привязка — в той же транзакции: активированный код партнёра без
+        // привязки или привязка без активации считались бы по-разному.
+        let bound = false;
+        if (input.partnerId !== null && (await lockSourceSlot(tx, input.accountId)) === "free") {
+          bound =
+            (await tx.$executeRaw`
+              INSERT INTO partner_binding (account_id, partner_id, campaign_id, bound_at)
+              VALUES (${input.accountId}::uuid, ${input.partnerId}::uuid, ${input.campaignId}::uuid, ${input.at})
+              ON CONFLICT (account_id) DO NOTHING`) > 0;
+        }
+        return { status: "redeemed", bound };
       }, TX_OPTIONS)
       .catch((error: unknown) => {
-        if (error instanceof RedeemRollback) return error.outcome;
+        if (error instanceof RedeemRollback) return { status: error.outcome };
         throw error;
       });
   }

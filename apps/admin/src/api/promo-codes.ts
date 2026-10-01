@@ -55,6 +55,9 @@ const campaignSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   codeSample: z.string(),
+  /** чей код; `null` — подарок команды */
+  partnerId: z.string().nullable(),
+  partnerName: z.string().nullable(),
   state: z.string(),
   remaining: z.number().nullable(),
 });
@@ -76,7 +79,14 @@ const limitsSchema = z.object({
 });
 export type PromoCodeLimits = z.infer<typeof limitsSchema>;
 
-const catalogSchema = z.object({ campaigns: z.array(campaignSchema), limits: limitsSchema, platforms: z.array(z.string()) });
+const catalogSchema = z.object({
+  campaigns: z.array(campaignSchema),
+  limits: limitsSchema,
+  platforms: z.array(z.string()),
+  /** партнёры для шага «Чей код» */
+  partners: z.array(z.object({ partnerId: z.string(), name: z.string() })),
+  partnerRules: z.object({ bindWindowDays: z.number() }),
+});
 export type PromoCodeCatalog = z.infer<typeof catalogSchema>;
 
 const detailSchema = z.object({
@@ -166,6 +176,22 @@ export function audienceText(campaign: Pick<PromoCampaign, "platforms" | "newPla
   return parts.length === 0 ? "все игроки" : parts.join(" · ");
 }
 
+/**
+ * На какой раскладке игрок наберёт код. Сервер сводит к латинице только
+ * кириллицу, которую на глаз не отличить от латиницы (А, В, Е, К, М, Н, О,
+ * Р, С, Т, Х, У): «РУБЕЖ» и «RUBEZH» для него разные коды. Это стоит
+ * сказать команде до заведения — на стриме код называют голосом.
+ */
+export function layoutHint(display: string): { tone: "info" | "warning"; text: string } {
+  const upper = display.toUpperCase();
+  const russianOnly = /[БГДЖЗИЙЛПФЦЧШЩЪЫЬЭЮЯ]/.test(upper);
+  const latinOnly = /[DFGIJLNQRSUVWZ]/.test(upper);
+  if (russianOnly && latinOnly) return { tone: "warning", text: "Русские и латинские буквы вперемешку — набрать такой код можно, только переключая раскладку. Лучше на одном языке" };
+  if (russianOnly) return { tone: "info", text: "Русские буквы: игрок наберёт код на русской раскладке; латиницей он не найдётся" };
+  if (latinOnly) return { tone: "info", text: "Латинские буквы: игрок наберёт код на английской раскладке; кириллицей он не найдётся" };
+  return { tone: "info", text: "Буквы есть на обеих раскладках — код набирается с любой" };
+}
+
 /** Буквы кодов, которые предлагает кнопка «Придумать», — те же, что у пачки на сервере: их набирают с любой раскладки. */
 export const CODE_ALPHABET = "ACEHKMPTXY2345679";
 
@@ -190,6 +216,8 @@ export function codesCsv(codes: PromoCampaignDetail["codes"]): string {
 // --- Форма мастера ---
 
 export interface PromoCodeForm {
+  /** чей код: id партнёра; пусто — подарок команды */
+  partnerId: string;
   kind: "shared" | "batch";
   code: string;
   unlimited: boolean;
@@ -221,9 +249,10 @@ export interface CreateBody {
   newPlayersDays: number | null;
   platforms: string[];
   issue: { kind: "shared"; code: string; maxRedemptions: number | null } | { kind: "batch"; count: number; prefix: string };
+  partnerId: string | null;
 }
 
-export type UpdateBody = Omit<CreateBody, "issue"> & { maxRedemptions: number | null };
+export type UpdateBody = Omit<CreateBody, "issue" | "partnerId"> & { maxRedemptions: number | null };
 
 /** Значение для `datetime-local` в часах браузера: «2026-10-12T18:00». */
 export function localInput(date: Date): string {
@@ -235,6 +264,7 @@ const DAY_MS = 86_400_000;
 
 export function emptyForm(now: Date): PromoCodeForm {
   return {
+    partnerId: "",
     kind: "shared",
     code: "",
     unlimited: true,
@@ -257,6 +287,7 @@ export function emptyForm(now: Date): PromoCodeForm {
 
 export function formOf(campaign: PromoCampaign): PromoCodeForm {
   return {
+    partnerId: campaign.partnerId ?? "",
     kind: campaign.kind,
     code: campaign.codeSample,
     unlimited: campaign.maxRedemptions === null,
@@ -285,7 +316,7 @@ export function periodOf(form: PromoCodeForm, now: Date): { startsAt: Date; ends
 
 const optional = (value: string): string | null => (value.trim() === "" ? null : value.trim());
 
-function commonBodyOf(form: PromoCodeForm, now: Date): Omit<CreateBody, "issue"> {
+function commonBodyOf(form: PromoCodeForm, now: Date): Omit<CreateBody, "issue" | "partnerId"> {
   const { startsAt, endsAt } = periodOf(form, now);
   return {
     title: form.title.trim(),
@@ -303,6 +334,7 @@ export function createBodyOf(form: PromoCodeForm, now: Date): CreateBody {
   return {
     ...commonBodyOf(form, now),
     issue: form.kind === "shared" ? { kind: "shared", code: form.code.trim(), maxRedemptions: form.unlimited ? null : form.maxRedemptions } : { kind: "batch", count: form.count, prefix: form.prefix.trim() },
+    partnerId: form.partnerId === "" ? null : form.partnerId,
   };
 }
 
@@ -326,6 +358,7 @@ const intIn = (value: number, min: number, max: number) => Number.isInteger(valu
 export function formSchema(limits: PromoCodeLimits, now: () => Date, editing: PromoCampaign | null) {
   return z
     .object({
+      partnerId: z.string(),
       kind: z.enum(["shared", "batch"]),
       code: z.string(),
       unlimited: z.boolean(),

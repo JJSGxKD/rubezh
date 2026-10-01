@@ -195,6 +195,7 @@ model Account {
   returnsHelped    FriendReturn[]  @relation("friend_return_friend")
   friendBonuses    FriendBonus[]
   promoRedemptions PromoRedemption[]
+  partnerBinding   PartnerBinding?
   broadcasts       BroadcastDelivery[]
   items            Item[]
   itemEvents       ItemEvent[]
@@ -1758,15 +1759,20 @@ model PromoCampaign {
   platforms      String[]  @default([]) @db.VarChar(16)
   pausedAt       DateTime? @map("paused_at") @db.Timestamptz(3)
   note           String?   @db.VarChar(200)
+  /// чей код: у кода партнёра активация ещё и привязывает новичка к партнёру; `null` — подарок команды
+  partnerId      String?   @map("partner_id") @db.Uuid
   /// кто завёл; без внешнего ключа — запись переживает аккаунт
   createdBy      String    @map("created_by") @db.Uuid
   createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime  @map("updated_at") @db.Timestamptz(3)
 
+  partner     Partner?          @relation(fields: [partnerId], references: [partnerId], onDelete: Restrict)
   codes       PromoCode[]
   redemptions PromoRedemption[]
+  bindings    PartnerBinding[]
 
   @@index([createdAt])
+  @@index([partnerId])
   @@map("promo_campaign")
 }
 
@@ -1806,4 +1812,46 @@ model PromoRedemption {
   @@id([campaignId, accountId])
   @@index([accountId, redeemedAt])
   @@map("promo_redemption")
+}
+
+/// Партнёр (docs/35-stage4-plan.md WP41, часть 2): блогер, канал, сообщество,
+/// которое приводит игроков своими промокодами. Выплат пока нет — они после
+/// лонча (docs/23-referral-and-partner-program.md §4); сейчас — сколько
+/// игроков он привёл и чего они стоят.
+model Partner {
+  partnerId String   @id @map("partner_id") @db.Uuid
+  /// как его зовёт команда: «Канал „Игровой угол“»
+  name      String   @db.VarChar(80)
+  /// как связаться: @имя, ссылка, почта
+  contact   String?  @db.VarChar(120)
+  /// договорённости, для команды
+  note      String?  @db.VarChar(500)
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  campaigns PromoCampaign[]
+  bindings  PartnerBinding[]
+
+  @@index([createdAt])
+  @@map("partner")
+}
+
+/// Игрок, которого привёл партнёр. Слот источника один на игрока: реферер
+/// (`referral_binding`) или партнёр — кто первый, и навсегда
+/// (docs/23-referral-and-partner-program.md §5).
+model PartnerBinding {
+  accountId  String   @id @map("account_id") @db.Uuid
+  partnerId  String   @map("partner_id") @db.Uuid
+  /// по какому коду; `null` — кампанию удалили (удаляют только неактивированные, так что на практике не бывает)
+  campaignId String?  @map("campaign_id") @db.Uuid
+  boundAt    DateTime @map("bound_at") @db.Timestamptz(3)
+
+  account  Account        @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  partner  Partner        @relation(fields: [partnerId], references: [partnerId], onDelete: Restrict)
+  campaign PromoCampaign? @relation(fields: [campaignId], references: [campaignId], onDelete: SetNull)
+
+  @@index([partnerId, boundAt])
+  @@index([campaignId])
+  @@map("partner_binding")
 }

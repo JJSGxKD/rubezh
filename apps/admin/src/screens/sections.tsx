@@ -9,6 +9,7 @@ import { FunnelScreen } from "./funnel/FunnelScreen";
 import { FlagsScreen } from "./flags/FlagsScreen";
 import { FxScreen } from "./fx/FxScreen";
 import { LinksScreen } from "./links/LinksScreen";
+import { PartnersScreen } from "./partners/PartnersScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
 import { PromoCodesScreen } from "./promo-codes/PromoCodesScreen";
 import { PromosScreen } from "./promos/PromosScreen";
@@ -38,5 +39,6 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   tasks: () => <TasksScreen />,
   ads: () => <AdsScreen />,
   promos: () => <PromosScreen />,
-  "promo-codes": () => <PromoCodesScreen />,
+  "promo-codes": (id) => <PromoCodesScreen id={id} />,
+  partners: (id) => <PartnersScreen id={id} />,
 };

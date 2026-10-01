@@ -171,9 +171,21 @@ export const EVENT_DICTIONARY = {
   // откуда игрок пришёл к полю — из меню или из магазина. Сколько легло —
   // уже с учётом суточного потолка (`capped`); само погашение — таблица
   // promo_redemption, начисленное — журнал кошелька, причина promo_reward.
+  // `partner` — код партнёра, `bound` — игрок этим кодом записан за ним
+  // (часть 2); необязательные: сборки до партнёров их не шлют.
   promo_code_applied: {
     version: 1,
-    payload: payload({ campaign: id, kind: z.enum(["shared", "batch"]), source: z.enum(["menu", "shop"]), coins: count, gems: count, shards: count, capped: z.boolean() }),
+    payload: payload({
+      campaign: id,
+      kind: z.enum(["shared", "batch"]),
+      source: z.enum(["menu", "shop"]),
+      coins: count,
+      gems: count,
+      shards: count,
+      capped: z.boolean(),
+      partner: z.boolean().optional(),
+      bound: z.boolean().optional(),
+    }),
   },
   // Забрал награду задания или достижения (docs/35-stage4-plan.md WP13): какие
   // цели доходят до награды и за какой срок. Прогресс и забор — таблица

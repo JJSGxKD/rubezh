@@ -12,6 +12,7 @@ import {
   fetchPromoCodes,
   formOf,
   formSchema,
+  layoutHint,
   localInput,
   plural,
   randomCode,
@@ -67,6 +68,8 @@ function campaign(patch: Partial<PromoCampaign> = {}): PromoCampaign {
     createdAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),
     codeSample: "РУБЕЖ 2026",
+    partnerId: null,
+    partnerName: null,
     state: "active",
     remaining: null,
     ...patch,
@@ -90,7 +93,7 @@ describe("промокоды в панели", () => {
 
   it("список, проверка кода, заведение, пауза и удаление — по своим адресам", async () => {
     const { fetch, calls } = fakeFetch(
-      json(200, { data: { campaigns: [campaign()], limits: LIMITS, platforms: ["telegram", "max", "vk", "web"] } }),
+      json(200, { data: { campaigns: [campaign()], limits: LIMITS, platforms: ["telegram", "max", "vk", "web"], partners: [], partnerRules: { bindWindowDays: 7 } } }),
       json(200, { data: { display: "РУБЕЖ 2026", key: "PYБEЖ2026", problem: null, taken: null } }),
       json(201, { data: campaign() }),
       json(201, { data: campaign({ state: "paused" }) }),
@@ -107,7 +110,8 @@ describe("промокоды в панели", () => {
     await createPromoCode(api, createBodyOf(form(), NOW));
     expect(calls[2]?.init.method).toBe("POST");
     const body = JSON.parse(String(calls[2]?.init.body)) as Record<string, unknown>;
-    expect(body).toMatchObject({ title: "Стрим 12 октября", note: null, message: null, startsAt: NOW.toISOString(), issue: { kind: "shared", code: "РУБЕЖ2026", maxRedemptions: null } });
+    expect(body).toMatchObject({ title: "Стрим 12 октября", note: null, message: null, startsAt: NOW.toISOString(), issue: { kind: "shared", code: "РУБЕЖ2026", maxRedemptions: null }, partnerId: null });
+    expect(createBodyOf(form({ partnerId: "p-1" }), NOW).partnerId).toBe("p-1");
 
     const paused = await setPaused(api, "x-1", true);
     expect(paused.ok && paused.data.state).toBe("paused");
@@ -144,7 +148,10 @@ describe("промокоды в панели", () => {
 
     const body = updateBodyOf({ ...draft, startsAt: localInput(new Date(NOW.getTime() + DAY)), title: "Новое" }, used, NOW);
     expect(body).toMatchObject({ title: "Новое", startsAt: used.startsAt, maxRedemptions: 10 });
+    // Вид, код и партнёр после заведения не меняются — правка их не шлёт.
     expect("issue" in body).toBe(false);
+    expect("partnerId" in body).toBe(false);
+    expect(formOf(campaign({ partnerId: "p-1", partnerName: "Канал" })).partnerId).toBe("p-1");
 
     const batch = campaign({ kind: "batch", maxRedemptions: 50, codeSample: "ZIMA-K7MP-3XTE" });
     expect(updateBodyOf({ ...formOf(batch), unlimited: true }, batch, NOW).maxRedemptions).toBe(50);
@@ -165,6 +172,13 @@ describe("промокоды в панели", () => {
     expect(batchMask("ZIMA-K7MP-3XTE")).toBe("ZIMA-····-····");
     expect(batchMask("K7MP-3XTE")).toBe("····-····");
     expect(batchMask("ЗИМА-K7MP-3XTE")).toBe("ЗИМА-····-····");
+  });
+
+  it("подсказка раскладки: русское слово — только по-русски, английское — по-английски, двойники — с любой", () => {
+    expect(layoutHint("РУБЕЖ 2026")).toMatchObject({ tone: "info", text: expect.stringContaining("русской раскладке") as unknown });
+    expect(layoutHint("RUBEZH2026")).toMatchObject({ tone: "info", text: expect.stringContaining("английской раскладке") as unknown });
+    expect(layoutHint("PEKA-2026")).toMatchObject({ tone: "info", text: expect.stringContaining("с любой") as unknown });
+    expect(layoutHint("ЗИМА-WIN")).toMatchObject({ tone: "warning" });
   });
 
   it("придуманный код — из букв обеих раскладок; выгрузка пачки — таблицей для Excel", () => {

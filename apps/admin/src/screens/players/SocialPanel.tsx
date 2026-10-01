@@ -11,8 +11,10 @@ import { useApi } from "../../ui/use-api";
 
 /**
  * Друзья и рефералка игрока. Модератор, разбирая накрутку, видит, кем игрок
- * приглашён и скольких привёл, и отклоняет ожидающую привязку — награда
- * пригласившему тогда не начислится (docs/23-referral-and-partner-program.md §2.4).
+ * приглашён или каким партнёром приведён и скольких привёл сам, и отклоняет
+ * ожидающую привязку — награда пригласившему тогда не начислится
+ * (docs/23-referral-and-partner-program.md §2.4). Слот источника один: либо
+ * друг, либо партнёр (там же, §5).
  */
 export function SocialPanel({ accountId }: { accountId: string }) {
   const { state, reload } = useApi(() => fetchSocial(api, accountId), [accountId]);
@@ -41,7 +43,23 @@ export function SocialPanel({ accountId }: { accountId: string }) {
               [
                 "Приглашён",
                 state.data.referredBy === null ? (
-                  "пришёл сам"
+                  state.data.partner === null ? (
+                    "пришёл сам"
+                  ) : (
+                    <span>
+                      партнёром{" "}
+                      <button type="button" className="hover:text-accent" onClick={() => navigate({ section: "partners", id: state.data.partner?.partnerId ?? null })}>
+                        {state.data.partner.name}
+                      </button>
+                      {state.data.partner.code === null ? null : (
+                        <>
+                          {" "}
+                          по коду <span className="font-mono">{state.data.partner.code}</span>
+                        </>
+                      )}
+                      , {formatDateTime(state.data.partner.boundAt)}
+                    </span>
+                  )
                 ) : (
                   <span>
                     <button type="button" className="hover:text-accent" onClick={() => navigate({ section: "players", id: state.data.referredBy?.referrerId ?? null })}>

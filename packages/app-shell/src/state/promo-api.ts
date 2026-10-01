@@ -11,7 +11,16 @@ import { useShell } from "./shell";
  */
 
 const rewardSchema = z.object({ coins: z.number(), gems: z.number(), shard_common: z.number(), shard_uncommon: z.number() });
-const resultSchema = z.object({ credited: rewardSchema, capped: z.boolean(), message: z.nullable(z.string()), campaignId: z.string(), kind: z.string() });
+const resultSchema = z.object({
+  credited: rewardSchema,
+  capped: z.boolean(),
+  message: z.nullable(z.string()),
+  campaignId: z.string(),
+  kind: z.string(),
+  // Код партнёра и привязан ли им игрок — только для аналитики; сервер до партнёров их не шлёт.
+  partner: z.optional(z.boolean()),
+  bound: z.optional(z.boolean()),
+});
 
 export type PromoReward = z.infer<typeof rewardSchema>;
 export type PromoResult = z.infer<typeof resultSchema>;

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
+import { PartnersModule } from "../partners/partners.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { PromoCodesController } from "./promo-codes.controller.js";
 import { PrismaPromoCodesRepository, PROMO_CODES_REPOSITORY } from "./promo-codes.repository.js";
@@ -10,7 +11,7 @@ import { PROMO_RANDOM, PromoCodesService, cryptoPick } from "./promo-codes.servi
  * в панели, награда — журналом кошелька причиной `promo_reward`.
  */
 @Module({
-  imports: [AuthModule, WalletModule],
+  imports: [AuthModule, WalletModule, PartnersModule],
   controllers: [PromoCodesController],
   providers: [PromoCodesService, { provide: PROMO_CODES_REPOSITORY, useClass: PrismaPromoCodesRepository }, { provide: PROMO_RANDOM, useValue: cryptoPick }],
   exports: [PromoCodesService],

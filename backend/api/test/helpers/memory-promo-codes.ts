@@ -29,9 +29,15 @@ interface RedemptionRow {
 
 /** Промокоды в памяти — с теми же отказами, что у транзакции базы. */
 export class MemoryPromoCodesRepository implements PromoCodesRepository {
-  readonly campaigns = new Map<string, Omit<PromoCampaignRow, "codeSample">>();
+  readonly campaigns = new Map<string, Omit<PromoCampaignRow, "codeSample" | "partnerName">>();
   readonly codeRows = new Map<string, CodeRow>();
   readonly redemptions: RedemptionRow[] = [];
+  /** привязки к партнёрам: игрок → партнёр и кампания */
+  readonly partnerBindings = new Map<string, { partnerId: string; campaignId: string; boundAt: Date }>();
+  /** игроки, чей слот источника занят рефералкой */
+  readonly referralSlots = new Set<string>();
+  /** имена партнёров — как их отдала бы таблица `partner` */
+  readonly partnerNames = new Map<string, string>();
   /** следующая запись погашения «упадёт» после занятия кода — так проверяется доначисление */
   failMarkRewarded = false;
 
@@ -68,7 +74,9 @@ export class MemoryPromoCodesRepository implements PromoCodesRepository {
     }
     this.campaigns.set(campaign.campaignId, { ...campaign, redeemed: 0, pausedAt: null, updatedAt: campaign.createdAt });
     for (const draft of accepted) this.codeRows.set(draft.code, { ...draft, campaignId: campaign.campaignId, redeemedBy: null, redeemedAt: null });
-    return { status: "created", row: this.withSample(this.campaigns.get(campaign.campaignId) as Omit<PromoCampaignRow, "codeSample">) };
+    const created = this.campaigns.get(campaign.campaignId);
+    if (created === undefined) throw new Error("кампания не записалась");
+    return { status: "created", row: this.withSample(created) };
   }
 
   async update(campaignId: string, update: PromoCampaignUpdate, at: Date, check: (current: PromoCampaignRow) => string | null): Promise<UpdateOutcome> {
@@ -130,19 +138,22 @@ export class MemoryPromoCodesRepository implements PromoCodesRepository {
     return row === undefined ? null : { rewardedAt: row.rewardedAt };
   }
 
-  async redeem(input: { campaignId: string; accountId: string; code: string; batch: boolean; at: Date }): Promise<RedeemOutcome> {
-    if (this.redemptions.some((row) => row.campaignId === input.campaignId && row.accountId === input.accountId)) return "already";
+  async redeem(input: { campaignId: string; accountId: string; code: string; batch: boolean; partnerId: string | null; at: Date }): Promise<RedeemOutcome> {
+    if (this.redemptions.some((row) => row.campaignId === input.campaignId && row.accountId === input.accountId)) return { status: "already" };
     const code = this.codeRows.get(input.code);
-    if (input.batch && (code === undefined || code.redeemedBy !== null)) return "used";
+    if (input.batch && (code === undefined || code.redeemedBy !== null)) return { status: "used" };
     const campaign = this.campaigns.get(input.campaignId);
-    if (campaign === undefined || (campaign.maxRedemptions !== null && campaign.redeemed >= campaign.maxRedemptions)) return "exhausted";
+    if (campaign === undefined || (campaign.maxRedemptions !== null && campaign.redeemed >= campaign.maxRedemptions)) return { status: "exhausted" };
     if (input.batch && code !== undefined) {
       code.redeemedBy = input.accountId;
       code.redeemedAt = input.at;
     }
     campaign.redeemed += 1;
     this.redemptions.push({ campaignId: input.campaignId, accountId: input.accountId, code: input.code, redeemedAt: input.at, rewardedAt: null, credited: null });
-    return "redeemed";
+    const slotFree = !this.referralSlots.has(input.accountId) && !this.partnerBindings.has(input.accountId);
+    if (input.partnerId === null || !slotFree) return { status: "redeemed", bound: false };
+    this.partnerBindings.set(input.accountId, { partnerId: input.partnerId, campaignId: input.campaignId, boundAt: input.at });
+    return { status: "redeemed", bound: true };
   }
 
   async markRewarded(campaignId: string, accountId: string, credited: PromoReward, at: Date): Promise<void> {
@@ -157,8 +168,8 @@ export class MemoryPromoCodesRepository implements PromoCodesRepository {
     }
   }
 
-  private withSample(row: Omit<PromoCampaignRow, "codeSample">): PromoCampaignRow {
+  private withSample(row: Omit<PromoCampaignRow, "codeSample" | "partnerName">): PromoCampaignRow {
     const first = [...this.codeRows.values()].filter((code) => code.campaignId === row.campaignId).sort((a, b) => a.code.localeCompare(b.code))[0];
-    return { ...row, codeSample: first?.display ?? "" };
+    return { ...row, codeSample: first?.display ?? "", partnerName: row.partnerId === null ? null : (this.partnerNames.get(row.partnerId) ?? null) };
   }
 }

@@ -30,6 +30,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "ads", title: "Реклама", permission: "ads.view" },
   { id: "promos", title: "Акции", permission: "shop.promo.edit" },
   { id: "promo-codes", title: "Промокоды", permission: "promo.edit" },
+  { id: "partners", title: "Партнёры", permission: "partners.view" },
 ];
 
 export interface Route {

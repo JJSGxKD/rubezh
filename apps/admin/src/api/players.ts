@@ -208,6 +208,12 @@ export const socialSchema = z.object({
       rejectReason: z.string().nullable(),
     })
     .nullable(),
+  /** привёл партнёр своим кодом; сервер старше партнёров поля не шлёт */
+  partner: z
+    .object({ partnerId: z.string(), name: z.string(), boundAt: iso, campaignTitle: z.string().nullable(), code: z.string().nullable() })
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
   referrals: z.object({ bound: z.number(), activated: z.number(), rejected: z.number() }),
 });
 

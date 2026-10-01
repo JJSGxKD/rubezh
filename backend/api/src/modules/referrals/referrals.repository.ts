@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { PRISMA } from "../../infra/database.js";
+import { lockSourceSlot } from "../attribution/source-slot.js";
 
 /** Привязки рефералов (docs/23-referral-and-partner-program.md §2): одна на приглашённого и навсегда. */
 
@@ -25,7 +26,7 @@ export const REFERRALS_REPOSITORY = Symbol("REFERRALS_REPOSITORY");
 
 export interface ReferralsRepository {
   binding(referredId: string): Promise<ReferralBinding | null>;
-  /** Привязать; `false` — привязка уже была: одна и навсегда. */
+  /** Привязать; `false` — привязка уже была или слот источника занят партнёром: одна и навсегда. */
   bind(referredId: string, referrerId: string, status: "bound" | "rejected", rejectReason: string | null): Promise<boolean>;
   /** Активировать; `false` — уже активирована или не в статусе ожидания: награда не удвоится. */
   activate(referredId: string, at: Date): Promise<boolean>;
@@ -51,11 +52,16 @@ export class PrismaReferralsRepository implements ReferralsRepository {
   }
 
   async bind(referredId: string, referrerId: string, status: "bound" | "rejected", rejectReason: string | null): Promise<boolean> {
-    const inserted = await this.prisma.$executeRaw`
-      INSERT INTO referral_binding (referred_account_id, referrer_account_id, status, reject_reason)
-      VALUES (${referredId}::uuid, ${referrerId}::uuid, ${status}::"ReferralStatus", ${rejectReason})
-      ON CONFLICT DO NOTHING`;
-    return inserted > 0;
+    // Слот источника один на двоих с партнёрами: игрок, пришедший по коду
+    // партнёра, рефералом уже не станет (docs/23-referral-and-partner-program.md §5).
+    return await this.prisma.$transaction(async (tx) => {
+      if ((await lockSourceSlot(tx, referredId)) !== "free") return false;
+      const inserted = await tx.$executeRaw`
+        INSERT INTO referral_binding (referred_account_id, referrer_account_id, status, reject_reason)
+        VALUES (${referredId}::uuid, ${referrerId}::uuid, ${status}::"ReferralStatus", ${rejectReason})
+        ON CONFLICT DO NOTHING`;
+      return inserted > 0;
+    });
   }
 
   async activate(referredId: string, at: Date): Promise<boolean> {
