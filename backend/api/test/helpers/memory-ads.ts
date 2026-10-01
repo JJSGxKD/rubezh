@@ -1,5 +1,15 @@
 import type { AdPlace } from "../../src/modules/ads/ads-rules.js";
-import type { AdBlockRow, AdOutcome, AdSessionRow, AdsRepository, ClaimOutcome, ClaimVerdict, NewAdSession, PlaceHistory } from "../../src/modules/ads/ads.repository.js";
+import type {
+  AdBlockRow,
+  AdOutcome,
+  AdSessionRow,
+  AdsRepository,
+  ClaimOutcome,
+  ClaimVerdict,
+  NewAdSession,
+  NewPassSession,
+  PlaceHistory,
+} from "../../src/modules/ads/ads.repository.js";
 
 /**
  * Реклама в памяти для юнит-тестов (docs/17-testing-strategy.md §4.1): те же
@@ -51,6 +61,25 @@ export class MemoryAds implements AdsRepository {
       createdAt: session.createdAt,
       shownAt: null,
       completedAt: null,
+      claimedAt: null,
+      expiresAt: session.expiresAt,
+      clickedAt: null,
+      failedAt: null,
+      failReason: null,
+    });
+  }
+
+  async createPassSession(session: NewPassSession): Promise<void> {
+    this.sessions.push({
+      sessionId: session.sessionId,
+      accountId: session.accountId,
+      place: session.place,
+      networkKey: session.pass,
+      success: "view",
+      status: "completed",
+      createdAt: session.createdAt,
+      shownAt: null,
+      completedAt: session.createdAt,
       claimedAt: null,
       expiresAt: session.expiresAt,
       clickedAt: null,

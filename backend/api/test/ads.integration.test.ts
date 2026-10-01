@@ -12,7 +12,8 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
  * Реклама на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
  * TEST_DATABASE_URL, без него пропуск): начало суток считает база по Москве,
  * клиент засчитывает только показ, одну сессию забирают однажды, две
- * сессии разом не проскакивают кулдаун, база не примет забор без выполнения.
+ * сессии разом не проскакивают кулдаун, база не примет забор без выполнения,
+ * а сессию без блока — иначе как выполненный пропуск рекламы.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -162,6 +163,28 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     await expect(prisma.$executeRaw`
       INSERT INTO ad_block (block_id, network_key, place, external_id, devices, created_at, updated_at)
       VALUES (${randomUUID()}::uuid, ${network}, 'task', 'ext-tv', ARRAY['tv']::varchar(16)[], now(), now())`).rejects.toThrow();
+  });
+
+  it("сессия пропуска (VIP) — без блока и сразу выполнена: забирается однажды, в истории — под именем пропуска", async () => {
+    const me = await account();
+    const sessionId = randomBytes(12).toString("base64url");
+    await repository.createPassSession({ sessionId, accountId: me, place: "wheel_spin", pass: "vip", createdAt: NOON, expiresAt: at(NOON, 30) });
+    // шагов воронки у неё нет: ролика не было
+    expect(await repository.report(sessionId, me, { kind: "shown" }, at(NOON, 1))).toBe(false);
+
+    const verdict = (row: Parameters<typeof claimVerdict>[0], history: Parameters<typeof claimVerdict>[1]) => claimVerdict(row, history, at(NOON, 1));
+    const results = await Promise.all([1, 2, 3].map(() => repository.claim(sessionId, me, "wheel_spin", at(NOON, 1), verdict)));
+    expect(results.filter((result) => result.status === "claimed" && !result.repeat)).toHaveLength(1);
+    const history = await repository.history(me, "wheel_spin", at(NOON, 2));
+    expect(history.sessions).toEqual([expect.objectContaining({ sessionId, networkKey: "vip", shownAt: null, claimedAt: at(NOON, 1) })]);
+
+    // без блока — только выполненный досмотр: база не примет «пропуск» клика или невыполненный
+    await expect(prisma.$executeRaw`
+      INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, completed_at, expires_at)
+      VALUES ('it-pass-click', ${me}::uuid, 'wheel_spin', NULL, 'vip', 'click', 'completed', now(), now(), now() + interval '1 minute')`).rejects.toThrow();
+    await expect(prisma.$executeRaw`
+      INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, created_at, expires_at)
+      VALUES ('it-pass-open', ${me}::uuid, 'wheel_spin', NULL, 'vip', 'view', now(), now() + interval '1 minute')`).rejects.toThrow();
   });
 
   it("каталог панели: блок с площадками и устройствами заводится и правится, блок чужой сети — нет, воронка — за окно", async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type TransitionEvent } from "react";
-import { Diamond, LoaderPinwheel, Tv } from "lucide-react";
+import { Crown, Diamond, LoaderPinwheel, Tv } from "lucide-react";
 import { Button, ContentColumn, ErrorState, InfoNotice, ListGroup, ListItem, Screen, SectionTitle } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
@@ -9,7 +9,19 @@ import { useNavigation } from "../../state/navigation";
 import { track } from "../../state/shell";
 import { uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
-import { WHEEL_SPENT, createWheelApi, wheelAvailable, type WheelSector, type WheelSpin, type WheelView } from "../../state/wheel-api";
+import { createAdsApi } from "../../state/ads-api";
+import {
+  WHEEL_AD_COOLDOWN,
+  WHEEL_AD_NEEDS_VIDEO,
+  WHEEL_SPENT,
+  adSpinState,
+  createWheelApi,
+  spinWithPass,
+  wheelAvailable,
+  type WheelSector,
+  type WheelSpin,
+  type WheelView,
+} from "../../state/wheel-api";
 import { formatCountdown, msUntilReset } from "./schedule";
 import { sectorCenterDeg, spinRotationDeg } from "./wheel-math";
 
@@ -20,18 +32,27 @@ import { sectorCenterDeg, spinRotationDeg } from "./wheel-math";
  * Сектор выбирает сервер: клиент сначала получает ответ и только потом
  * докручивает колесо до выпавшего сектора, поэтому крутка без сети не
  * проходит. Шансы — с сервера и на том же экране: игрок видит, на что крутит.
- * Крутка за рекламу придёт с рекламой (WP12) — до неё кнопка честно говорит
- * «скоро».
+ * Крутка за рекламу придёт с роликами (WP12) — до них кнопка честно говорит
+ * «скоро». У VIP ролика нет (§3.6): его крутка за рекламу идёт уже сейчас,
+ * после кулдауна места.
  */
 
 /** Полных оборотов за крутку, помимо докрутки до сектора. */
 const SPIN_TURNS = 5;
+
+/** Отказы, после которых экран перечитывается: он устарел, а не сломался. */
+const STALE_NOTICES: Partial<Record<string, string>> = {
+  [WHEEL_SPENT]: "wheel.spent",
+  [WHEEL_AD_COOLDOWN]: "wheel.adCooldown",
+  [WHEEL_AD_NEEDS_VIDEO]: "wheel.vipEnded",
+};
 
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: WheelView };
 /** `asking` — ждём сервер, колесо стоит; `spinning` — сектор известен, колесо крутится. */
 type Phase = "idle" | "asking" | "spinning";
 
 const api = createWheelApi();
+const ads = createAdsApi();
 
 export function WheelScreen(): ReactNode {
   const navigation = useNavigation();
@@ -41,6 +62,7 @@ export function WheelScreen(): ReactNode {
   const [won, setWon] = useState<WheelSpin | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pending = useRef<WheelSpin | null>(null);
+  const [source, setSource] = useState<"free" | "ad">("free");
 
   const load = async (): Promise<void> => {
     setState({ status: "loading" });
@@ -52,21 +74,25 @@ export function WheelScreen(): ReactNode {
     if (wheelAvailable()) void load();
   }, []);
 
-  const spin = async (): Promise<void> => {
-    if (state.status !== "ready" || !state.view.free || phase !== "idle") return;
+  const spin = async (kind: "free" | "ad"): Promise<void> => {
+    if (state.status !== "ready" || phase !== "idle") return;
+    if (kind === "free" ? !state.view.free : adSpinState(state.view, Date.now()).kind !== "ready") return;
     setPhase("asking");
     setWon(null);
     setNotice(null);
-    const response = await api.spin();
+    setSource(kind);
+    const response = kind === "free" ? await api.spin() : await spinWithPass(ads, api);
     if (!response.ok) {
       setPhase("idle");
-      if (response.code === WHEEL_SPENT) {
-        setNotice(t("wheel.spent"));
-        void load();
-        void loadBadges();
-      } else {
+      const stale = STALE_NOTICES[response.code ?? ""];
+      if (stale === undefined) {
         setNotice(t("wheel.spinFailed"));
+        return;
       }
+      // Экран устарел: крутку уже крутили, место на кулдауне или VIP кончился.
+      setNotice(t(stale));
+      void load();
+      void loadBadges();
       return;
     }
     pending.current = response.data;
@@ -82,12 +108,13 @@ export function WheelScreen(): ReactNode {
     if (result === null) return;
     setWon(result);
     uiFeedback("reward");
-    track("wheel_spun", { source: "free", sector: result.sector, reward: result.resource, amount: result.amount });
+    track("wheel_spun", { source, sector: result.sector, reward: result.resource, amount: result.amount });
     void loadWallet();
     void loadBadges();
   };
 
   const ready = state.status === "ready" ? state.view : null;
+  const adSpin = ready === null ? ({ kind: "soon" } as const) : adSpinState(ready, Date.now());
 
   return (
     <Screen
@@ -96,12 +123,12 @@ export function WheelScreen(): ReactNode {
       footer={
         wheelAvailable() ? (
           <div className="grid gap-2">
-            <Button size="l" block glow={ready?.free === true && phase === "idle"} disabled={ready === null || (!ready.free && phase === "idle")} loading={phase !== "idle"} onClick={() => void spin()}>
+            <Button size="l" block glow={ready?.free === true && phase === "idle"} disabled={ready === null || (!ready.free && phase === "idle")} loading={phase !== "idle" && source === "free"} onClick={() => void spin("free")}>
               {ready !== null && !ready.free && phase === "idle" ? t("wheel.spin.next", { time: formatCountdown(msUntilReset(Date.now(), "daily")) }) : t("wheel.spin.free")}
             </Button>
-            <Button variant="secondary" block disabled>
-              <Tv size={18} aria-hidden="true" />
-              {t("wheel.spin.ad")}
+            <Button variant="secondary" block disabled={adSpin.kind !== "ready" || (phase !== "idle" && source !== "ad")} loading={phase !== "idle" && source === "ad"} onClick={() => void spin("ad")}>
+              {adSpin.kind === "soon" ? <Tv size={18} aria-hidden="true" /> : <Crown size={18} aria-hidden="true" />}
+              {adSpin.kind === "soon" ? t("wheel.spin.ad") : adSpin.kind === "ready" ? t("wheel.spin.vip") : t("wheel.spin.vipNext", { time: formatCountdown(adSpin.untilMs - Date.now()) })}
             </Button>
           </div>
         ) : undefined

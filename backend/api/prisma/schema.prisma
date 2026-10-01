@@ -1569,7 +1569,9 @@ model AdSession {
   sessionId   String          @id @map("session_id") @db.VarChar(32)
   accountId   String          @map("account_id") @db.Uuid
   place       AdPlace
-  blockId     String          @map("block_id") @db.Uuid
+  /// пусто — сессия пропуска (VIP): без сети и ролика, выполнена при выдаче
+  blockId     String?         @map("block_id") @db.Uuid
+  /// сеть показа; у сессии пропуска — имя пропуска
   networkKey  String          @map("network_key") @db.VarChar(32)
   success     AdSuccess
   status      AdSessionStatus @default(pending)
@@ -1584,8 +1586,9 @@ model AdSession {
   /// после этого сессию не выполнить и не забрать
   expiresAt   DateTime        @map("expires_at") @db.Timestamptz(3)
 
-  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
-  block   AdBlock @relation(fields: [blockId], references: [blockId])
+  account Account  @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  // Блок с показами не удаляется — его выключают; иначе сессии стали бы пропусками.
+  block   AdBlock? @relation(fields: [blockId], references: [blockId], onDelete: Restrict)
 
   // Выбор сети и кулдаун — по сессиям игрока в месте за последние сутки.
   @@index([accountId, place, createdAt])

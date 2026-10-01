@@ -37,8 +37,8 @@ export type RunDoubleView =
       coins: number;
       /** до какого времени держится кнопка */
       until: string;
-      /** есть ли реклама для площадки и когда пройдёт кулдаун места */
-      ad: { available: boolean; readyAt: string | null };
+      /** есть ли реклама для площадки, когда пройдёт кулдаун места и нужен ли ролик (`pass` — VIP без него) */
+      ad: { available: boolean; readyAt: string | null; pass: string | null };
     }
   | { status: "doubled"; coins: number }
   | { status: "unavailable"; reason: RunDoubleUnavailableError["reason"] };
@@ -69,7 +69,7 @@ export class RunDoubleService {
       status: "available",
       coins: candidate.coinsCredited ?? 0,
       until: new Date(candidate.createdAt.getTime() + RUN_DOUBLE_WINDOW_MIN * MINUTE_MS).toISOString(),
-      ad: { available: ready.available, readyAt: ready.readyAt?.toISOString() ?? null },
+      ad: { available: ready.available, readyAt: ready.readyAt?.toISOString() ?? null, pass: ready.pass },
     };
   }
 

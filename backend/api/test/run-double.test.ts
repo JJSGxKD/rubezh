@@ -8,6 +8,7 @@ import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { AdCooldownError, AdNotCompletedError } from "../src/modules/ads/ads-errors.js";
 import { maxRewardsPerDay } from "../src/modules/ads/ads-rules.js";
+import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { AdsService } from "../src/modules/ads/ads.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
@@ -84,10 +85,11 @@ function setup(blocks = [adBlock("adsgram", 10, { place: "run_double" }), adBloc
   const repository = new MemoryRunDouble();
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
-  const ads = new AdsService(adsRepository, () => 0);
+  const passes = new AdPasses();
+  const ads = new AdsService(adsRepository, () => 0, passes);
   const wallet = new FakeWallet();
   const service = new RunDoubleService(repository, ads, wallet as unknown as WalletService);
-  return { repository, adsRepository, ads, wallet, service };
+  return { repository, adsRepository, ads, wallet, service, passes };
 }
 
 async function watched(ads: AdsService, time: Date): Promise<string> {
@@ -118,7 +120,7 @@ describe("можно ли удвоить", () => {
       status: "available",
       coins: 90,
       until: at(RUN_DOUBLE_WINDOW_MIN).toISOString(),
-      ad: { available: true, readyAt: null },
+      ad: { available: true, readyAt: null, pass: null },
     });
     expect(await service.view({ accountId: ME, platform: "vk" }, "run-1", at(5))).toMatchObject({ status: "available", ad: { available: false } });
   });
@@ -132,6 +134,17 @@ describe("удвоение", () => {
     expect(await service.double(PLAYER, "run-1", sessionId, at(2))).toEqual({ credited: 90, coins: 90 });
     expect(wallet.grants).toEqual([{ accountId: ME, resource: "coins", amount: 90, reason: "ad_reward", source: "run:run-1", idempotencyKey: "run_double:run-1", at: at(2) }]);
     expect(await service.view(PLAYER, "run-1", at(3))).toEqual({ status: "doubled", coins: 90 });
+  });
+
+  it("VIP удваивает без ролика: экран знает, что ролик не нужен, награда — та же рекламная", async () => {
+    const { service, repository, ads, passes, wallet } = setup([]);
+    passes.register("vip", async () => true);
+    repository.add("run-1");
+    expect(await service.view(PLAYER, "run-1", at(2))).toMatchObject({ status: "available", ad: { available: true, pass: "vip" } });
+    const offer = await ads.offer({ ...PLAYER, device: null }, "run_double", at(2));
+    if (!offer.available) throw new Error("показа нет");
+    expect(await service.double(PLAYER, "run-1", offer.sessionId, at(2))).toEqual({ credited: 90, coins: 90 });
+    expect(wallet.grants).toEqual([expect.objectContaining({ reason: "ad_reward", idempotencyKey: "run_double:run-1" })]);
   });
 
   it("недосмотренная сессия — отказ рекламы; забег, который удвоить нельзя, сессию не тратит", async () => {

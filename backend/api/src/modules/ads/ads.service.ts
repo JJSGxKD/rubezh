@@ -2,9 +2,11 @@ import { randomBytes, randomInt } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
+import { AdPasses } from "./ads-passes.js";
 import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
 import {
   CLAIM_WINDOW_MIN,
+  PLACE_RULES,
   SESSION_TTL_MIN,
   networkOrder,
   nextAllowedAt,
@@ -25,6 +27,10 @@ import { ADS_REPOSITORY, type AdBlockRow, type AdOutcome, type AdSessionRow, typ
  * забег, задания, — забирая выполненную сессию через `claim`: один забор на
  * сессию и кулдаун места проверяются здесь, а что дать — у хозяина, ключом
  * сессии в журнале кошелька.
+ *
+ * У кого есть пропуск (VIP, §3.6), тому сессия места выдаётся сразу
+ * выполненной — без сети и ролика, но после кулдауна места: хозяин забирает
+ * её как обычную и ничего о VIP не знает. Межстраничной у него нет вовсе.
  */
 
 const DB_TIMEOUT_MS = 3_000;
@@ -49,14 +55,28 @@ export type AdOffer =
   | {
       available: true;
       sessionId: string;
+      /** сеть показа; у пропуска — его имя */
       network: string;
-      /** идентификатор блока в кабинете сети — его ждёт SDK */
-      blockId: string;
+      /** идентификатор блока в кабинете сети — его ждёт SDK; у пропуска блока нет */
+      blockId: string | null;
       success: AdSuccess;
       expiresAt: string;
+      /** ролик не нужен — сессия уже выполнена, её сразу забирают у хозяина места (VIP) */
+      pass: string | null;
     }
-  /** `no_fill` — ни одного подходящего блока; `cooldown` — место отдыхает до `retryAt` */
-  | { available: false; reason: "no_fill" | "cooldown"; retryAt: string | null };
+  /**
+   * `no_fill` — ни одного подходящего блока; `cooldown` — место отдыхает до
+   * `retryAt`; `pass` — рекламы без награды игроку с пропуском не показывают.
+   */
+  | { available: false; reason: "no_fill" | "cooldown" | "pass"; retryAt: string | null };
+
+export interface AdReadiness {
+  available: boolean;
+  /** когда пройдёт кулдаун места; `null` — уже можно */
+  readyAt: Date | null;
+  /** награда будет без ролика (VIP); `null` — нужен показ */
+  pass: string | null;
+}
 
 @Injectable()
 export class AdsService {
@@ -66,13 +86,16 @@ export class AdsService {
   constructor(
     @Inject(ADS_REPOSITORY) private readonly repository: AdsRepository,
     @Inject(ADS_ROLL) private readonly roll: AdsRoll,
+    private readonly passes: AdPasses,
   ) {}
 
   async offer(viewer: AdViewer, place: AdPlace, at = new Date()): Promise<AdOffer> {
-    const history = await this.db(this.repository.history(viewer.accountId, place, at));
+    const [history, pass] = await Promise.all([this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
+    if (pass !== null && !PLACE_RULES[place].rewarded) return this.unavailable(viewer, place, "pass", null);
     const state = placeState(history.sessions, history.dayStart, at);
     const retryAt = nextAllowedAt(place, state, at);
     if (retryAt !== null) return this.unavailable(viewer, place, "cooldown", retryAt);
+    if (pass !== null) return await this.passOffer(viewer, place, pass, at);
 
     const blocks = eligibleBlocks(await this.blocks(), place, viewer);
     const [network] = networkOrder(networksOf(blocks), state.seenAt, state.lastRewardedToday);
@@ -88,7 +111,16 @@ export class AdsService {
     const expiresAt = new Date(at.getTime() + SESSION_TTL_MIN[block.success] * MINUTE_MS);
     await this.db(this.repository.createSession({ sessionId, accountId: viewer.accountId, place, block, createdAt: at, expiresAt }));
     this.log({ event: "ad_offered", accountId: viewer.accountId, place, network: block.networkKey, success: block.success });
-    return { available: true, sessionId, network: block.networkKey, blockId: block.externalId, success: block.success, expiresAt: expiresAt.toISOString() };
+    return { available: true, sessionId, network: block.networkKey, blockId: block.externalId, success: block.success, expiresAt: expiresAt.toISOString(), pass: null };
+  }
+
+  /** Сессия без ролика: выполнена сразу, окно забора — как у досмотренного показа. */
+  private async passOffer(viewer: AdViewer, place: AdPlace, pass: string, at: Date): Promise<AdOffer> {
+    const sessionId = randomBytes(12).toString("base64url");
+    const expiresAt = new Date(at.getTime() + SESSION_TTL_MIN.view * MINUTE_MS);
+    await this.db(this.repository.createPassSession({ sessionId, accountId: viewer.accountId, place, pass, createdAt: at, expiresAt }));
+    this.log({ event: "ad_passed", accountId: viewer.accountId, place, pass });
+    return { available: true, sessionId, network: pass, blockId: null, success: "view", expiresAt: expiresAt.toISOString(), pass };
   }
 
   /** Шаг воронки от клиента. Засчитать выполнение он может только показу — клик и целевое действие подтверждает сервер. */
@@ -113,13 +145,15 @@ export class AdsService {
 
   /**
    * Готово ли место к рекламе — для экрана хозяина места: есть ли блоки для
-   * площадки и когда пройдёт кулдаун. Устройство экрану не известно —
-   * окончательно решает выдача показа.
+   * площадки, когда пройдёт кулдаун и нужен ли ролик. Устройство экрану не
+   * известно — окончательно решает выдача показа. С пропуском место с
+   * наградой доступно и без единой сети.
    */
-  async readiness(viewer: Pick<AdViewer, "accountId" | "platform">, place: AdPlace, at = new Date()): Promise<{ available: boolean; readyAt: Date | null }> {
-    const [blocks, history] = await Promise.all([this.blocks(), this.db(this.repository.history(viewer.accountId, place, at))]);
-    const available = blocks.some((block) => block.place === place && (block.platforms.length === 0 || block.platforms.includes(viewer.platform)));
-    return { available, readyAt: nextAllowedAt(place, placeState(history.sessions, history.dayStart, at), at) };
+  async readiness(viewer: Pick<AdViewer, "accountId" | "platform">, place: AdPlace, at = new Date()): Promise<AdReadiness> {
+    const [blocks, history, held] = await Promise.all([this.blocks(), this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
+    const pass = PLACE_RULES[place].rewarded ? held : null;
+    const available = pass !== null || blocks.some((block) => block.place === place && (block.platforms.length === 0 || block.platforms.includes(viewer.platform)));
+    return { available, readyAt: nextAllowedAt(place, placeState(history.sessions, history.dayStart, at), at), pass };
   }
 
   /** Сеть или блок поменяли в панели — следующий показ берёт свежие. */
@@ -135,7 +169,7 @@ export class AdsService {
     return this.cache.blocks;
   }
 
-  private unavailable(viewer: AdViewer, place: AdPlace, reason: "no_fill" | "cooldown", retryAt: Date | null): AdOffer {
+  private unavailable(viewer: AdViewer, place: AdPlace, reason: "no_fill" | "cooldown" | "pass", retryAt: Date | null): AdOffer {
     this.log({ event: "ad_unavailable", accountId: viewer.accountId, place, reason });
     return { available: false, reason, retryAt: retryAt?.toISOString() ?? null };
   }

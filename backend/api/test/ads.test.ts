@@ -21,6 +21,7 @@ import {
 } from "../src/modules/ads/ads-rules.js";
 import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdsController } from "../src/modules/ads/ads.controller.js";
+import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { AdsService, eligibleBlocks, type AdOffer, type AdViewer, type AdsRoll } from "../src/modules/ads/ads.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
@@ -52,7 +53,8 @@ function rolls(...values: number[]): AdsRoll {
 function setup(blocks: AdBlockRow[], roll: AdsRoll = rolls(0)) {
   const repository = new MemoryAds();
   repository.blocks = blocks;
-  return { repository, service: new AdsService(repository, roll) };
+  const passes = new AdPasses();
+  return { repository, passes, service: new AdsService(repository, roll, passes) };
 }
 
 function offered(offer: AdOffer): Extract<AdOffer, { available: true }> {
@@ -300,6 +302,79 @@ describe("забор награды хозяином места", () => {
     const rejected = results.find((result) => result.status === "rejected");
     expect(rejected?.status === "rejected" ? rejected.reason : null).toBeInstanceOf(AdCooldownError);
     expect(rejected?.status === "rejected" && rejected.reason instanceof AdCooldownError ? rejected.reason.retryAt : null).toEqual(at(NOON, 121));
+  });
+});
+
+describe("реклама без ролика (VIP)", () => {
+  /** Пропуск у игрока `ME`: VIP идёт, пока часы не дошли до `until`. */
+  function withPass(blocks: AdBlockRow[], until = at(NOON, 24 * 60)) {
+    const ctx = setup(blocks);
+    const asked: [string, Date][] = [];
+    ctx.passes.register("vip", async (accountId, time) => {
+      asked.push([accountId, time]);
+      return accountId === ME && time < until;
+    });
+    return { ...ctx, asked };
+  }
+
+  it("награда места — сразу: сессия выполнена без сети и ролика, хозяин забирает её как обычную", async () => {
+    const { service, repository, asked } = withPass([block("adsgram", 10)]);
+    const offer = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
+    expect(offer).toMatchObject({ pass: "vip", network: "vip", blockId: null, success: "view" });
+    expect(asked).toEqual([[ME, NOON]]);
+    expect(repository.sessions[0]).toMatchObject({ networkKey: "vip", status: "completed", shownAt: null, completedAt: NOON });
+
+    const claimed = await service.claim(ME, offer.sessionId, "wheel_spin", at(NOON, 1));
+    expect(claimed).toMatchObject({ repeat: false, session: { networkKey: "vip" } });
+    // шагов воронки у сессии без ролика нет
+    await expect(service.report(ME, offer.sessionId, { kind: "completed" }, at(NOON, 1))).rejects.toBeInstanceOf(AdSessionClosedError);
+  });
+
+  it("сетей в месте нет — VIP всё равно получает награду", async () => {
+    const { service } = withPass([]);
+    expect(await service.offer(TELEGRAM, "run_double", NOON)).toMatchObject({ available: true, pass: "vip" });
+  });
+
+  it("кулдаун места у VIP тот же: пропускается ролик, а не пауза", async () => {
+    const { service } = withPass([block("adsgram", 10)]);
+    const first = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
+    await service.claim(ME, first.sessionId, "wheel_spin", NOON);
+    const cooldown = cooldownMinutes(PLACE_RULES.wheel_spin.cooldown, 1);
+    expect(await service.offer(TELEGRAM, "wheel_spin", at(NOON, 1))).toEqual({ available: false, reason: "cooldown", retryAt: at(NOON, cooldown).toISOString() });
+    expect(await service.offer(TELEGRAM, "wheel_spin", at(NOON, cooldown))).toMatchObject({ available: true, pass: "vip" });
+  });
+
+  it("межстраничной у VIP нет вовсе, у остальных — как раньше", async () => {
+    const { service } = withPass([block("adsgram", 10, { place: "interstitial" })]);
+    expect(await service.offer(TELEGRAM, "interstitial", NOON)).toEqual({ available: false, reason: "pass", retryAt: null });
+    const other: AdViewer = { ...TELEGRAM, accountId: "00000000-0000-4000-8000-00000000ad02" };
+    expect(await service.offer(other, "interstitial", NOON)).toMatchObject({ available: true, network: "adsgram", pass: null });
+  });
+
+  it("экран хозяина места знает, что ролик не нужен; у межстраничной пропуска нет", async () => {
+    const { service } = withPass([]);
+    expect(await service.readiness(TELEGRAM, "wheel_spin", NOON)).toEqual({ available: true, readyAt: null, pass: "vip" });
+    expect(await service.readiness(TELEGRAM, "interstitial", NOON)).toEqual({ available: false, readyAt: null, pass: null });
+  });
+
+  it("VIP кончился — снова сети по кругу, а награда без ролика в истории круг не ломает", async () => {
+    const until = at(NOON, 10);
+    const { service } = withPass([block("adsgram", 10, { place: "run_double" }), block("adsonar", 20, { place: "run_double" })], until);
+    const vip = offered(await service.offer(TELEGRAM, "run_double", NOON));
+    await service.claim(ME, vip.sessionId, "run_double", NOON);
+    const after = offered(await service.offer(TELEGRAM, "run_double", at(NOON, 60)));
+    expect(after).toMatchObject({ network: "adsgram", pass: null });
+    await expect(service.claim(ME, after.sessionId, "run_double", at(NOON, 61))).rejects.toBeInstanceOf(AdNotCompletedError);
+  });
+
+  it("пропуск — по имени из реестра: кривое имя не регистрируется, первым срабатывает первый зарегистрированный", async () => {
+    const passes = new AdPasses();
+    expect(() => passes.register("VIP!", async () => true)).toThrow(/имя пропуска/);
+    passes.register("vip", async () => false);
+    passes.register("promo", async () => true);
+    passes.register("later", async () => true);
+    expect(await passes.of(ME, NOON)).toBe("promo");
+    expect(await new AdPasses().of(ME, NOON)).toBeNull();
   });
 });
 

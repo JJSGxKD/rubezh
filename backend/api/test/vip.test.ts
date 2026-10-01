@@ -8,6 +8,7 @@ import { DomainError } from "../src/common/domain-error.js";
 import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
+import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
@@ -94,9 +95,10 @@ function setup(settings = config()) {
   const repository = new MemoryVipRepository();
   const wallet = new FakeWallet();
   const bonuses = new WalletBonuses();
-  const vip = new VipService(repository, payments, fulfillment, hooks, new SubscriptionRenewal(purchases, providers), wallet as unknown as WalletService, bonuses);
+  const adPasses = new AdPasses();
+  const vip = new VipService(repository, payments, fulfillment, hooks, new SubscriptionRenewal(purchases, providers), wallet as unknown as WalletService, bonuses, adPasses);
   vip.onModuleInit();
-  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses };
+  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses, adPasses };
 }
 
 type Ctx = ReturnType<typeof setup>;
@@ -239,7 +241,7 @@ describe("оформление и продление VIP", () => {
   });
 });
 
-describe("увеличенные награды VIP (Р44)", () => {
+describe("увеличенные награды и реклама без ролика (Р44, §3.6)", () => {
   it("пока VIP идёт — надбавка награде дня, колеса, забега и заданий; другим причинам, без VIP и после конца — единица", async () => {
     const ctx = setup();
     const account = player();
@@ -255,6 +257,17 @@ describe("увеличенные награды VIP (Р44)", () => {
     }
     expect(await ctx.bonuses.multiplier(account.accountId, "run_reward", new Date(now.getTime() + 31 * DAY_MS))).toBe(1);
     expect(await ctx.bonuses.multiplier(player().accountId, "run_reward", now)).toBe(1);
+  });
+
+  it("реклама без ролика: пропуск модуля рекламы — пока VIP идёт, без VIP и после конца — нет", async () => {
+    const ctx = setup();
+    const account = player();
+    const now = new Date();
+    expect(await ctx.adPasses.of(account.accountId, now)).toBeNull();
+    await subscribe(ctx, account);
+    expect(await ctx.adPasses.of(account.accountId, now)).toBe("vip");
+    expect(await ctx.adPasses.of(account.accountId, new Date(now.getTime() + 31 * DAY_MS))).toBeNull();
+    expect(await ctx.adPasses.of(player().accountId, now)).toBeNull();
   });
 
   it("состояние VIP говорит, во сколько раз больше награды, — экран пишет это в карточке", async () => {

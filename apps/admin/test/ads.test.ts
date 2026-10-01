@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockProblem, coverage, fetchAds, percent, priorityProblem, reachLabel, saveBlock, saveNetwork, type AdBlock, type AdBlockInput, type AdNetwork } from "../src/api/ads";
+import { blockProblem, coverage, fetchAds, funnelNetworkTitle, percent, priorityProblem, reachLabel, saveBlock, saveNetwork, type AdBlock, type AdBlockInput, type AdNetwork } from "../src/api/ads";
 import { AdminApi } from "../src/api/client";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
@@ -74,6 +74,13 @@ describe("реклама в панели", () => {
     expect(percent(0, 0)).toBe("—");
     expect(reachLabel(block())).toBe("все площадки; все устройства");
     expect(reachLabel(block({ platforms: ["telegram"], devices: ["android", "ios"] }))).toBe("telegram; Android, iOS");
+  });
+
+  it("в воронке сеть — именем из каталога, награда VIP без ролика — своим названием, незнакомое — ключом", () => {
+    const networks = [{ networkKey: "adsgram", name: "AdsGram" }];
+    expect(funnelNetworkTitle("adsgram", networks)).toBe("AdsGram");
+    expect(funnelNetworkTitle("vip", networks)).toBe("VIP без ролика");
+    expect(funnelNetworkTitle("taddy", networks)).toBe("taddy");
   });
 
   it("раздел — под правом ads.view", () => {

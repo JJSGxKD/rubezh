@@ -14,6 +14,7 @@ import {
   blockProblem,
   coverage,
   fetchAds,
+  funnelNetworkTitle,
   percent,
   priorityProblem,
   reachLabel,
@@ -271,7 +272,7 @@ function BlocksPanel({ view, canEdit, onSaved }: { view: AdsView; canEdit: boole
 }
 
 function FunnelPanel({ view, days, onDays }: { view: AdsView; days: FunnelDays; onDays: (days: FunnelDays) => void }) {
-  const networkName = (key: string) => view.networks.find((network) => network.networkKey === key)?.name ?? key;
+  const networkName = (key: string) => funnelNetworkTitle(key, view.networks);
   return (
     <Panel
       title="Воронка показов"

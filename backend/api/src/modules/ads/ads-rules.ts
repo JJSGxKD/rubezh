@@ -27,6 +27,8 @@ export const AD_DEVICES = ["android", "ios", "desktop", "web"] as const;
 export type AdDevice = (typeof AD_DEVICES)[number];
 
 export interface PlaceRules {
+  /** за показ в месте игрок получает награду; межстраничная — без награды, и VIP её не видит (§3.6) */
+  rewarded: boolean;
   /**
    * Пауза после награды: база × множитель в степени (наград за сутки − 1),
    * не больше потолка. Частые награды становятся реже, не исчезая (§3.7).
@@ -44,11 +46,11 @@ export interface PlaceRules {
  * ролик). Удвоение за забег — после каждого забега, но всё реже к вечеру.
  */
 export const PLACE_RULES: Record<AdPlace, PlaceRules> = {
-  second_chance: { cooldown: null, minGapMin: 0 },
-  wheel_spin: { cooldown: { baseMin: 120, factor: 1.5, capMin: 360 }, minGapMin: 0 },
-  run_double: { cooldown: { baseMin: 5, factor: 1.5, capMin: 60 }, minGapMin: 0 },
-  task: { cooldown: null, minGapMin: 0 },
-  interstitial: { cooldown: null, minGapMin: 3 },
+  second_chance: { rewarded: true, cooldown: null, minGapMin: 0 },
+  wheel_spin: { rewarded: true, cooldown: { baseMin: 120, factor: 1.5, capMin: 360 }, minGapMin: 0 },
+  run_double: { rewarded: true, cooldown: { baseMin: 5, factor: 1.5, capMin: 60 }, minGapMin: 0 },
+  task: { rewarded: true, cooldown: null, minGapMin: 0 },
+  interstitial: { rewarded: false, cooldown: null, minGapMin: 3 },
 };
 
 /**

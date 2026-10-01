@@ -53,6 +53,16 @@ export interface NewAdSession {
   expiresAt: Date;
 }
 
+/** Сессия без ролика: выполнена в момент выдачи, блока и сети нет — вместо сети имя пропуска. */
+export interface NewPassSession {
+  sessionId: string;
+  accountId: string;
+  place: AdPlace;
+  pass: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
 /** Что клиент сообщил о показе. `completed` — SDK подтвердил досмотр. */
 export type AdOutcome = { kind: "shown" } | { kind: "completed" } | { kind: "clicked" } | { kind: "failed"; reason: string };
 
@@ -72,6 +82,8 @@ export interface AdsRepository {
   activeBlocks(): Promise<AdBlockRow[]>;
   history(accountId: string, place: AdPlace, at: Date): Promise<PlaceHistory>;
   createSession(session: NewAdSession): Promise<void>;
+  /** сессия пропуска — сразу выполненная, забирается хозяином места как обычная */
+  createPassSession(session: NewPassSession): Promise<void>;
   /** отметить шаг воронки; `false` — сессии нет, чужая, истекла или шаг уже невозможен */
   report(sessionId: string, accountId: string, outcome: AdOutcome, at: Date): Promise<boolean>;
   /**
@@ -161,6 +173,13 @@ export class PrismaAdsRepository implements AdsRepository {
       INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, expires_at)
       VALUES (${session.sessionId}, ${session.accountId}::uuid, ${session.place}::"AdPlace", ${session.block.blockId}::uuid,
               ${session.block.networkKey}, ${session.block.success}::"AdSuccess", 'pending', ${session.createdAt}, ${session.expiresAt})`;
+  }
+
+  async createPassSession(session: NewPassSession): Promise<void> {
+    await this.prisma.$executeRaw`
+      INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, completed_at, expires_at)
+      VALUES (${session.sessionId}, ${session.accountId}::uuid, ${session.place}::"AdPlace", NULL, ${session.pass}, 'view', 'completed',
+              ${session.createdAt}, ${session.createdAt}, ${session.expiresAt})`;
   }
 
   async report(sessionId: string, accountId: string, outcome: AdOutcome, at: Date): Promise<boolean> {
