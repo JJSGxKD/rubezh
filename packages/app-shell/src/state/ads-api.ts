@@ -21,6 +21,10 @@ const offerSchema = z.union([
     sessionId: z.string(),
     network: z.string(),
     blockId: z.nullable(z.string()),
+    /** что показать — видео за награду, межстраничную или задание; сервер до профилей сетей поля не отдавал */
+    format: z.optional(z.string()),
+    /** публичные ключи сети (pubId, appId) — их ждёт SDK вместе с блоком */
+    keys: z.optional(z.record(z.string(), z.string())),
     success: z.string(),
     expiresAt: z.string(),
     /** ролик не нужен — у VIP; сервер до пропуска поля не отдавал */

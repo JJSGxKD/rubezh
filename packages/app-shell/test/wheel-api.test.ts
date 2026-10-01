@@ -113,4 +113,11 @@ describe("крутка VIP без ролика", () => {
     expect(passSession(PASS)).toBe("AAAAAAAAAAAAAAAA");
     expect(passSession({ available: false, reason: "pass", retryAt: null })).toBeNull();
   });
+
+  it("показ несёт формат места и ключи сети — их ждёт SDK; ключ не строкой — ответ не по схеме", async () => {
+    const richads = { ...PASS, pass: null, network: "richads", blockId: null, format: "rewarded", keys: { pubId: "792361", appId: "1396" } };
+    const offer = await createAdsApi(server([], richads)).offer("wheel_spin");
+    expect(offer.ok && offer.data.available && offer.data.keys).toEqual({ pubId: "792361", appId: "1396" });
+    expect((await createAdsApi(server([], { ...richads, keys: { pubId: 792361 } })).offer("wheel_spin")).ok).toBe(false);
+  });
 });
