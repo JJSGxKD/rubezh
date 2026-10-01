@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Eye, Heart, Magnet, Plus, Shield, Swords, type LucideIcon } from "lucide-react";
 import { BOOSTS } from "@bh/core-game";
 import { SectionTitle } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
@@ -7,6 +6,7 @@ import { formatNumber, t } from "../i18n";
 import "../i18n/boosts";
 import { loadBoostCatalog, type BoostCatalog } from "../state/boosts-api";
 import { useWallet } from "../state/wallet";
+import { boostIcon } from "./boost-icons";
 
 /**
  * Бусты на забег перед «В бой» (docs/35-stage4-plan.md §3.5, Р39). Цены — с
@@ -16,15 +16,6 @@ import { useWallet } from "../state/wallet";
  *
  * Отдельным чанком: каталог, тексты и значки не нужны первой загрузке.
  */
-
-const ICONS: Record<string, LucideIcon> = {
-  fury: Swords,
-  bulwark: Heart,
-  lure: Magnet,
-  aegis: Shield,
-  head_start: Plus,
-  insight: Eye,
-};
 
 export interface BoostPickerProps {
   selected: readonly string[];
@@ -82,7 +73,7 @@ export function BoostPicker(props: BoostPickerProps): ReactNode {
           const wallet = price.resource === "gems" ? (balances?.gems ?? 0) : (balances?.coins ?? 0);
           const affordable = chosen || wallet - (price.resource === "gems" ? spent.gems : spent.coins) >= price.amount;
           const full = !chosen && props.selected.length >= catalog.maxPerRun;
-          const Icon = ICONS[boost.id] ?? Swords;
+          const Icon = boostIcon(boost.id);
           return (
             <li key={boost.id}>
               <button
