@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { runReward } from "../progress/progress-rules.js";
-import type { PlatformId } from "../../platforms/ports/platform.js";
+import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import type { RecordedRun } from "../runs/runs-hooks.js";
 import type { EarnReason } from "../wallet/wallet-types.js";
 
@@ -68,21 +68,39 @@ export type TaskCategory = TaskPeriod | "partner";
 export const CHANNEL_PLATFORMS = ["telegram", "max", "vk"] as const satisfies readonly PlatformId[];
 
 /**
- * Что нужно партнёрской цели: ссылка, которую откроет игрок, площадка, где
- * цель есть, и у канала — сам канал в записи площадки (у Telegram — `@имя`
- * или id). Цель другой площадки игроку не показывается; ссылка и бот без
- * площадки видны всем. Что обязательно у какого вида — проверяет
- * `taskDefSchema`.
+ * Что нужно партнёрской цели: ссылка, которую откроет игрок, где цель видна,
+ * и у канала — сам канал в записи площадки (у Telegram — `@имя` или id).
+ *
+ * Где видна: у канала — одна площадка (`platform`), бот спрашивает
+ * подписчиков своей; у ссылки и бота — список площадок (`platforms`), без
+ * списка — все. Ссылка партнёра бывает нужна в Telegram и MAX, но не в VK
+ * (решение участника 1, 01.10.2026). `platform` у ссылки — запись прошлой
+ * панели, читается как список из одной. Что обязательно у какого вида —
+ * проверяет `taskDefSchema`.
  */
 export const taskParamsSchema = z
   .object({
     platform: z.enum(CHANNEL_PLATFORMS).optional(),
+    platforms: z
+      .array(z.enum(PLATFORM_IDS))
+      .min(1)
+      .max(PLATFORM_IDS.length)
+      .refine((list) => new Set(list).size === list.length, { message: "площадка повторяется" })
+      .optional(),
     chat: z.string().trim().min(2).max(64).optional(),
     url: z.url({ protocol: /^https$/ }).max(256),
   })
-  .strict();
+  .strict()
+  .refine((params) => params.platform === undefined || params.platforms === undefined, { message: "площадка — одна или списком, не обоими" });
 
 export type TaskParams = z.infer<typeof taskParamsSchema>;
+
+/** Видна ли цель игроку этой площадки: цель без площадок — всем. */
+export function visibleOn(params: TaskParams | null, platform: PlatformId): boolean {
+  if (params === null) return true;
+  if (params.platforms !== undefined) return params.platforms.includes(platform);
+  return params.platform === undefined || params.platform === platform;
+}
 
 export type TaskRun = Pick<RecordedRun, "difficulty" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict">;
 
@@ -127,6 +145,10 @@ export const taskDefSchema = z
     path: ["params"],
   })
   .refine((task) => task.kind === "channel" || task.params?.chat === undefined, { message: "канал — только у подписки на канал", path: ["params"] })
+  .refine((task) => task.kind !== "channel" || task.params?.platforms === undefined, {
+    message: "у подписки на канал площадка одна — бот спрашивает подписчиков своей",
+    path: ["params"],
+  })
   // Партнёрское действие делается однажды и не копится: за срок его не
   // «наберёшь», а повторная награда за ту же подписку каждый день — фарм.
   .refine((task) => !isCheckedKind(task.kind) || (task.period === "achievement" && task.target === 1), {

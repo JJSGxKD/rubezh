@@ -82,6 +82,11 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // Заставке отступы не нужны — она по центру.
   await options.adapter.ui.ready();
   options.adapter.ui.applyThemeColors(PLATFORM_COLORS);
+  // Свайп вниз сворачивает Mini App не только в забеге: в меню карусель,
+  // списки и листы снизу тоже тянут пальцем, и тестеры ловили сворачивание
+  // посреди жеста. Закрыть игру можно кнопкой площадки
+  // (docs/33-telegram-mini-app-pitfalls.md §2.3).
+  options.adapter.ui.setVerticalSwipesEnabled(false);
 
   renderBoot("fonts");
   const fontsLoaded = await waitForFonts(FONT_WAIT_MS);

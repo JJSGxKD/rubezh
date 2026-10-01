@@ -758,14 +758,12 @@ export function preloadRunEngine(): void {
 }
 
 /**
- * Режим забега на стороне площадки: вертикальные свайпы выключаются, иначе
- * движение пальцем вниз по джойстику сворачивает приложение; подтверждение
- * закрытия включается, чтобы случайный жест не оборвал забег (§5.2).
+ * Режим забега на стороне площадки: подтверждение закрытия включается, чтобы
+ * случайный жест не оборвал забег (§5.2). Вертикальные свайпы выключены на
+ * всё время работы игры — их выключает запуск оболочки (`index.tsx`).
  */
 function setRunUiMode(inRun: boolean): void {
-  const ui = useShell.getState().adapter.ui;
-  ui.setVerticalSwipesEnabled(!inRun);
-  ui.setClosingConfirmation(inRun);
+  useShell.getState().adapter.ui.setClosingConfirmation(inRun);
 }
 
 /**

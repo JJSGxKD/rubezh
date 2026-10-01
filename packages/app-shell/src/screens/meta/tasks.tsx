@@ -62,7 +62,9 @@ const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_survival_s
 const api = createTasksApi();
 
 export function TasksScreen(): ReactNode {
-  const [view, setView] = useState<View>("daily");
+  // Пока игрок не выбрал сам — партнёрские, если они есть: они первые в очереди
+  // (решение участника 1, 01.10.2026). Нет партнёрских — ежедневные.
+  const [chosen, setView] = useState<View | null>(null);
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [claiming, setClaiming] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ taskId: string; text: string } | null>(null);
@@ -99,6 +101,7 @@ export function TasksScreen(): ReactNode {
   };
 
   const all = state.status === "ready" ? state.tasks : [];
+  const view: View = chosen ?? (all.some((task) => tabOf(task) === "partner") ? "partner" : "daily");
   const tasks = sortTasks(all.filter((task) => tabOf(task) === TAB_OF[view]));
   // Знак на вкладке — сколько наград там ждёт: игрок видит их, не перебирая вкладки.
   const waiting = (tab: TaskTab) => all.filter((task) => tabOf(task) === tab && isClaimable(task)).length;
@@ -125,10 +128,10 @@ export function TasksScreen(): ReactNode {
             activeId={view}
             onSelect={(id) => setView(id as View)}
             items={[
+              { id: "partner", label: t("tasks.partner"), badge: waiting("partner") },
               { id: "daily", label: t("tasks.daily"), badge: waiting("daily") },
               { id: "weekly", label: t("tasks.weekly"), badge: waiting("weekly") },
               { id: "achievements", label: t("tasks.achievements"), badge: waiting("achievement") },
-              { id: "partner", label: t("tasks.partner"), badge: waiting("partner") },
             ]}
           />
           {!tasksAvailable() ? <InfoNotice text={t("tasks.guest")} /> : null}

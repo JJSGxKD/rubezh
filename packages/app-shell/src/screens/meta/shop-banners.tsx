@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type UIEvent } from "react";
+import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode, type UIEvent } from "react";
 import { Crown, Rocket, Shield, Sparkles } from "lucide-react";
 import { Button } from "../../design-system/components";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
@@ -104,30 +104,104 @@ function BannerAction(props: { banner: ShopBanner; busy: string | null; onAction
   );
 }
 
+/** Сдвиг мыши, после которого нажатие считается перетаскиванием, а не кликом, px. */
+const DRAG_THRESHOLD = 6;
+
+function prefersReducedMotion(): boolean {
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export function ShopBanners(props: {
   banners: readonly ShopBanner[];
   busy: string | null;
   onAction: (banner: ShopBanner, position: number) => void;
 }): ReactNode {
   const [current, setCurrent] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const strip = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; scroll: number; moved: boolean } | null>(null);
+  // Клик приходит после отпускания, когда состояние уже сброшено, — помним жест отдельно.
+  const justDragged = useRef(false);
   const total = props.banners.length;
   if (total === 0) return null;
 
-  /** Какой баннер в кадре — по шагу между первыми двумя: ширину и зазор задаёт вёрстка, а не число здесь. */
+  /** Шаг между баннерами — по вёрстке, а не числом здесь: ширину и зазор задают классы. */
+  const stepOf = (element: HTMLDivElement): number => {
+    const first = element.children.item(0);
+    const second = element.children.item(1);
+    if (!(first instanceof HTMLElement) || !(second instanceof HTMLElement)) return 0;
+    return second.offsetLeft - first.offsetLeft;
+  };
+
   const onScroll = (event: UIEvent<HTMLDivElement>): void => {
-    const strip = event.currentTarget;
-    const first = strip.children.item(0);
-    const second = strip.children.item(1);
-    if (!(first instanceof HTMLElement) || !(second instanceof HTMLElement)) return;
-    const step = second.offsetLeft - first.offsetLeft;
+    const step = stepOf(event.currentTarget);
     if (step <= 0) return;
-    const next = Math.min(total - 1, Math.max(0, Math.round(strip.scrollLeft / step)));
+    const next = Math.min(total - 1, Math.max(0, Math.round(event.currentTarget.scrollLeft / step)));
     if (next !== current) setCurrent(next);
   };
 
+  const scrollToIndex = (index: number): void => {
+    const element = strip.current;
+    if (element === null) return;
+    element.scrollTo({ left: index * stepOf(element), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  };
+
+  /**
+   * Мышью ленту тянут так же, как пальцем: на ПК и в Telegram Desktop
+   * горизонтальной прокрутки колесом у многих нет. Палец и перо прокручивают
+   * ленту сами — их не трогаем. Пока тянут, привязка к баннеру выключена,
+   * иначе лента дёргается под курсором; отпустили — доезжает до ближайшего.
+   */
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
+    justDragged.current = false;
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    drag.current = { x: event.clientX, scroll: event.currentTarget.scrollLeft, moved: false };
+  };
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>): void => {
+    const state = drag.current;
+    if (state === null) return;
+    const dx = event.clientX - state.x;
+    if (!state.moved && Math.abs(dx) < DRAG_THRESHOLD) return;
+    if (!state.moved) {
+      state.moved = true;
+      setDragging(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    event.currentTarget.scrollLeft = state.scroll - dx;
+  };
+  const endDrag = (): void => {
+    const state = drag.current;
+    drag.current = null;
+    if (state === null || !state.moved) return;
+    justDragged.current = true;
+    setDragging(false);
+    const element = strip.current;
+    const step = element === null ? 0 : stepOf(element);
+    if (element !== null && step > 0) scrollToIndex(Math.min(total - 1, Math.max(0, Math.round(element.scrollLeft / step))));
+  };
+  /** Отпущенная после перетаскивания кнопка не должна покупать: это был жест, а не нажатие. */
+  const onClickCapture = (event: MouseEvent<HTMLDivElement>): void => {
+    if (!justDragged.current) return;
+    justDragged.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   return (
-    <section aria-roledescription={t("shop.banner.carousel")} aria-label={t("shop.banner.label")}>
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-1 [scrollbar-width:none]" onScroll={onScroll}>
+    <section className="min-w-0" aria-roledescription={t("shop.banner.carousel")} aria-label={t("shop.banner.label")}>
+      <div
+        ref={strip}
+        className={[
+          "-mx-4 flex gap-3 overflow-x-auto scroll-px-4 px-4 pb-1 [scrollbar-width:none]",
+          dragging ? "cursor-grabbing select-none" : "cursor-grab snap-x snap-mandatory",
+        ].join(" ")}
+        onScroll={onScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onClickCapture={onClickCapture}
+      >
         {props.banners.map((banner, index) => {
           const tone = TONE[banner.kind];
           return (
@@ -158,13 +232,24 @@ export function ShopBanners(props: {
           );
         })}
       </div>
+      {/* Точки — кнопки: на ПК листать ленту пальцем нечем. Цель нажатия — 24 px
+          при точке в 6: попасть в точку пальцем иначе нельзя. */}
       {total === 1 ? null : (
-        <div aria-hidden="true" className="mt-2 flex justify-center gap-1.5">
+        <div className="mt-1 flex justify-center">
           {props.banners.map((banner, index) => (
-            <span
+            <button
               key={banner.kind}
-              className={`size-1.5 rounded-pill transition-transform duration-(--duration-fast) ease-base ${index === current ? "scale-150 bg-accent" : "bg-border-strong"}`}
-            />
+              type="button"
+              aria-label={t("shop.banner.position", { n: index + 1, total })}
+              aria-current={index === current}
+              onClick={() => scrollToIndex(index)}
+              className="inline-flex size-6 items-center justify-center"
+            >
+              <span
+                aria-hidden="true"
+                className={`size-1.5 rounded-pill transition-transform duration-(--duration-fast) ease-base ${index === current ? "scale-150 bg-accent" : "bg-border-strong"}`}
+              />
+            </button>
           ))}
         </div>
       )}
