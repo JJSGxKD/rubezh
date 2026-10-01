@@ -1,4 +1,3 @@
-import type { PlatformAdapter } from "@bh/shared-types";
 import { z } from "zod/mini";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
 import { useShell } from "./shell";
@@ -110,15 +109,8 @@ export function taskLink(task: Pick<TaskItem, "link">): string | null {
   return new URL(link).protocol === "https:" ? link : null;
 }
 
-/** Открыть ссылку адаптером площадки, а без него — окном браузера. */
-export function openTaskLink(
-  url: string,
-  adapter: Pick<PlatformAdapter, "openLink"> = useShell.getState().adapter,
-  browser: (url: string) => void = (link) => void globalThis.open(link, "_blank", "noopener"),
-): void {
-  if (adapter.openLink === undefined) browser(url);
-  else adapter.openLink(url);
-}
+/** Ссылка цели открывается как любая внешняя — адаптером площадки. */
+export { openExternalLink as openTaskLink } from "./external-link";
 
 export interface TasksApi {
   view(): Promise<ApiResult<{ tasks: TaskItem[] }>>;
