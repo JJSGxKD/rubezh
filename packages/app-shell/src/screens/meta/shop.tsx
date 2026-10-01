@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
-import { Button, ContentColumn, ErrorState, InfoNotice, Modal, PageTitle, Screen, SectionTitle, SegmentedControl } from "../../design-system/components";
+import { ChevronRight, Gift } from "lucide-react";
+import { Button, ContentColumn, ErrorState, InfoNotice, ListGroup, ListItem, Modal, PageTitle, Screen, SectionTitle, SegmentedControl } from "../../design-system/components";
 import { GemIcon } from "../../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../../i18n";
 import { openExternalLink } from "../../state/external-link";
+import { useNavigation } from "../../state/navigation";
 import { createShopApi, shopAvailable, type ShopItem, type ShopView, type VipView } from "../../state/shop-api";
 import { buy, type BuyRequest } from "../../state/shop-purchase";
 import { track, useShell } from "../../state/shell";
@@ -26,6 +27,9 @@ import { itemName, noticeOf, shopBanners, shownPrice, tributeOf, vipWaiting, typ
  * (Р11). Купленным товар считается, когда сервер сказал, что он на счету, —
  * не окно оплаты.
  */
+
+// Экран промокода — в чанке магазина (`app/lazy-screens.tsx`).
+export { PromoCodeScreen } from "./promo-code";
 
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; shop: ShopView; vip: VipView | null };
 
@@ -247,6 +251,11 @@ export function ShopScreen(): ReactNode {
 
             {/* Витрина живёт своей загрузкой: вкладку открыли — сервер отдаёт предметы суток. */}
             {tab === "gear" ? <ShowcaseSection api={api} appearFrom={0} onNeedGems={() => setTab("gems")} /> : null}
+
+            {/* Промокод ищут там, где подарки, — в магазине; под вкладками, чтобы не спорить с покупками. */}
+            <ListGroup>
+              <ListItem icon={<Gift size={18} />} title={t("shop.promoCode.title")} hint={t("shop.promoCode.hint")} onClick={() => useNavigation.getState().push("promoCode")} />
+            </ListGroup>
           </div>
         )}
       </ContentColumn>

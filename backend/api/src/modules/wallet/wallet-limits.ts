@@ -39,6 +39,10 @@ export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource
   ad_reward: { coins: 10_000 },
   subscription_daily: { gems: 30 },
   season_reward: { coins: 50_000, gems: 500 },
+  // Два самых щедрых промокода в сутки (`promo-codes/promo-code-rules.ts`):
+  // честный игрок столько кодов за день не встретит, а собранные пачкой
+  // упрутся сюда.
+  promo_reward: { coins: 100_000, gems: 600, shard_common: 400, shard_uncommon: 100 },
 };
 
 /**

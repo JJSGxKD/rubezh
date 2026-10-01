@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Bell, BookOpen, History, Info, MessageSquareWarning, Newspaper, Settings } from "lucide-react";
+import { Bell, BookOpen, Gift, History, Info, MessageSquareWarning, Newspaper, Settings } from "lucide-react";
 import { Avatar, Button, ListGroup, ListItem, Modal } from "../design-system/components";
 import { t } from "../i18n";
 import { badgeText, useBadges } from "../state/badges";
@@ -58,6 +58,7 @@ export function MainMenu(props: { onClose(): void }): ReactNode {
               onClick={() => open("notifications")}
             />
             <ListItem icon={<History size={18} />} title={t("menu.history")} onClick={() => open("history")} />
+            <ListItem icon={<Gift size={18} />} title={t("menu.promoCode")} hint={t("menu.promoCode.hint")} onClick={() => open("promoCode")} />
           </>
         ) : null}
       </ListGroup>

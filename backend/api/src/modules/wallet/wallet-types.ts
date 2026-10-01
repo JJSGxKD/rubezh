@@ -37,6 +37,7 @@ export const EARN_REASONS = [
   "ad_reward",
   "subscription_daily",
   "season_reward",
+  "promo_reward",
 ] as const;
 
 /**

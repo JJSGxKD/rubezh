@@ -97,6 +97,9 @@ erDiagram
     PURCHASE ||--o| VIP_PERIOD : "период за оплату"
     ACCOUNT ||--o| VIP_DAILY : "самоцветы VIP дня"
     ACCOUNT ||--o{ SHOWCASE_OFFER : "витрина снаряжения на сутки"
+    PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
+    PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
+    ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -720,6 +723,42 @@ erDiagram
         datetime cancelled_at "nullable: снята раньше срока"
         uuid cancelled_by "nullable, есть ровно у снятой"
     }
+
+    PROMO_CAMPAIGN {
+        uuid campaign_id PK
+        string title "для команды, игрок не видит"
+        string kind "shared|batch"
+        json reward "coins, gems, shard_common, shard_uncommon"
+        string message "nullable: текст игроку после активации"
+        int max_redemptions "nullable у shared; у batch — число кодов"
+        int redeemed "не больше max_redemptions"
+        datetime starts_at
+        datetime ends_at "nullable: бессрочно; позже начала"
+        int new_players_days "nullable: 1..90 — только аккаунтам не старше"
+        string_array platforms "пусто — все площадки"
+        datetime paused_at "nullable"
+        string note "nullable: для команды"
+        uuid created_by "без FK: кто завёл"
+        datetime created_at
+        datetime updated_at
+    }
+
+    PROMO_CODE {
+        string code PK "ключ: без регистра и разделителей, кириллица-двойник — латиницей"
+        string display "как показывать: ZIMA-K7MP-3XTE"
+        uuid campaign_id FK
+        uuid redeemed_by "nullable, без FK: кто погасил код пачки"
+        datetime redeemed_at "nullable, есть ровно у погашенного"
+    }
+
+    PROMO_REDEMPTION {
+        uuid campaign_id PK,FK "кампанию с активациями не удалить"
+        uuid account_id PK,FK
+        string code "какой код ввёл"
+        datetime redeemed_at
+        datetime rewarded_at "nullable: награда ещё не легла"
+        json credited "nullable: сколько легло — потолок кошелька мог срезать"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -853,6 +892,16 @@ erDiagram
   удаляются: по ним видно, когда и по какой цене продавали. Пределы скидки
   и порядок срока держит и база; пересечение и отдых между акциями товара —
   сервис, проверкой и вставкой под блокировкой товара.
+- **`PROMO_*` — промокоды** (`35-stage4-plan.md`, WP41, Р74): кампания —
+  то, что заводит команда; код — то, что вводит игрок; активация — один
+  игрок в одной кампании, первичным ключом, поэтому второй код той же пачки
+  тому же игроку ничего не даст. Ключ кода не зависит от регистра,
+  разделителей и раскладки — его считает сервер, а показывается `display`.
+  Активация — одна транзакция: запись, занятие кода пачки и счётчик под
+  лимитом. Награда ложится после и отмечается `rewarded_at`: упавшая
+  доначисляется повторным вводом теми же ключами кошелька. Кампания с
+  активациями не удаляется — по ней выданы награды, это держит и внешний
+  ключ; код занятой кампании не переиспользуется.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда

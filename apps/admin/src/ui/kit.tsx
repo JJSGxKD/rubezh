@@ -27,7 +27,7 @@ export function Button({ tone = "secondary", className = "", ...props }: ButtonH
   );
 }
 
-const FIELD = "rounded-sm border border-border bg-surface-sunken px-2.5 py-1.5 text-sm text-text placeholder:text-text-disabled focus:border-accent focus:outline-none";
+const FIELD = "rounded-sm border border-border bg-surface-sunken px-2.5 py-1.5 text-sm text-text placeholder:text-text-disabled focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50";
 
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${FIELD} ${className}`} />;
