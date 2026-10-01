@@ -5,14 +5,16 @@ import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
-import { TaskCheckUnavailableError, TaskNotDoneError, TaskNotFoundError, TaskNotJoinedError, TaskShapeLockedError } from "./tasks-errors.js";
+import { TaskCheckUnavailableError, TaskNotDoneError, TaskNotFoundError, TaskNotJoinedError, TaskNotOpenedError, TaskShapeLockedError } from "./tasks-errors.js";
 import {
+  OPEN_KINDS,
   RUN_KINDS,
   TASK_KIND_IDS,
   TASK_PERIODS,
   countsForTasks,
   isRunKind,
   rewardReason,
+  type TaskCategory,
   type TaskDef,
   type TaskKind,
   type TaskPeriod,
@@ -30,8 +32,9 @@ import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepos
  * каждый записанный забег, а меняется он раз в неделю. Правка из панели
  * видна через полминуты.
  *
- * Цель «канал» (Р52) забег не двигает: её выполняет подписка, а проверяет
- * бот площадки в момент забора — через порт, без знания о Telegram.
+ * Партнёрские цели (Р52) забег не двигает. Подписку на канал проверяет бот
+ * площадки в момент забора — через порт, без знания о Telegram; переход по
+ * ссылке и запуск бота засчитывает сам переход через сервер (`open`).
  */
 
 const DB_TIMEOUT_MS = 3_000;
@@ -40,6 +43,8 @@ const CATALOG_TTL_MS = 30_000;
 export interface TaskView {
   id: string;
   period: TaskPeriod;
+  /** вкладка у игрока: партнёрские цели — своей категорией */
+  category: TaskCategory;
   kind: TaskKind;
   /** `null` — текст по виду цели у клиента */
   title: string | null;
@@ -103,6 +108,7 @@ export class TasksService implements OnModuleInit {
     let row = progress.find((candidate) => candidate.taskId === taskId);
     if (row === undefined || !row.done) {
       if (isRunKind(def.kind)) throw new TaskNotDoneError();
+      if (OPEN_KINDS.has(def.kind)) throw new TaskNotOpenedError();
       await this.checkJoined(account, def);
       row = await this.db(this.repository.complete(accountId, def, at));
       this.logger.log(JSON.stringify({ module: "tasks", event: "task_checked", accountId, taskId, kind: def.kind }));
@@ -133,6 +139,23 @@ export class TasksService implements OnModuleInit {
   }
 
   /**
+   * Игрок переходит по ссылке партнёрской цели: переход по ссылке и запуск
+   * бота этим и выполнены, подписку на канал проверит забор. Повтор ничего
+   * не меняет — время выполнения остаётся первым.
+   */
+  async open(account: AccountRef, taskId: string, at = new Date()): Promise<{ url: string; tasks: TaskView[] }> {
+    const { accountId } = account;
+    const [defs, progress] = await Promise.all([this.visible(account), this.db(this.repository.progress(accountId, at))]);
+    const def = defs.find((candidate) => candidate.taskId === taskId);
+    if (def === undefined || def.params === null) throw new TaskNotFoundError();
+    this.logger.log(JSON.stringify({ module: "tasks", event: "task_opened", accountId, taskId, kind: def.kind }));
+    if (!OPEN_KINDS.has(def.kind)) return { url: def.params.url, tasks: viewOf(defs, progress) };
+    const done = await this.db(this.repository.complete(accountId, def, at));
+    const others = progress.filter((candidate) => candidate.taskId !== taskId);
+    return { url: def.params.url, tasks: viewOf(defs, [...others, done]) };
+  }
+
+  /**
    * Подписка — у площадки игрока, ботом. Не подписан — отказ, который
    * клиент показывает как «подпишитесь и нажмите ещё раз». Площадка
    * проверить не может — это настройка задания: игроку «позже», команде —
@@ -140,14 +163,15 @@ export class TasksService implements OnModuleInit {
    */
   private async checkJoined(account: AccountRef, def: TaskDef): Promise<void> {
     const params = def.params;
-    const membership = params === null ? null : this.memberships.for(params.platform);
-    if (params === null || membership === null) throw new TaskCheckUnavailableError();
+    const chat = params?.chat;
+    const membership = params?.platform === undefined ? null : this.memberships.for(params.platform);
+    if (params === null || chat === undefined || membership === null) throw new TaskCheckUnavailableError();
     let joined: boolean;
     try {
-      joined = await membership.isMember(params.chat, account.platformUserId);
+      joined = await membership.isMember(chat, account.platformUserId);
     } catch (error: unknown) {
       if (error instanceof MembershipRejectedError) {
-        this.logger.error(JSON.stringify({ module: "tasks", event: "task_check_misconfigured", taskId: def.taskId, chat: params.chat, reason: error.message }));
+        this.logger.error(JSON.stringify({ module: "tasks", event: "task_check_misconfigured", taskId: def.taskId, chat, reason: error.message }));
         throw new TaskCheckUnavailableError();
       }
       if (error instanceof MembershipUnavailableError) throw new TaskCheckUnavailableError();
@@ -210,9 +234,9 @@ export class TasksService implements OnModuleInit {
     this.cache = null;
   }
 
-  /** Включённые цели, которые игрок может выполнить: канал другой площадки ему не показывается. */
+  /** Включённые цели, которые игрок может выполнить: цель другой площадки ему не показывается, цель без площадки — всем. */
   private async visible(account: AccountRef): Promise<TaskDef[]> {
-    return (await this.active()).filter((def) => def.params === null || def.params.platform === account.platform);
+    return (await this.active()).filter((def) => def.params?.platform === undefined || def.params.platform === account.platform);
   }
 
   private async active(): Promise<TaskDef[]> {
@@ -237,6 +261,7 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
     return {
       id: def.taskId,
       period: def.period,
+      category: def.params === null ? def.period : "partner",
       kind: def.kind,
       title: def.title,
       target: def.target,

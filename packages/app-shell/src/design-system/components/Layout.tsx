@@ -172,6 +172,8 @@ function TabBadge(props: { badge: string }): ReactNode {
 export interface SegmentedItem {
   id: string;
   label: string;
+  /** сколько ждёт в этом виде — например, наград к забору; ноль и пусто — без знака */
+  badge?: number;
 }
 
 /**
@@ -205,12 +207,15 @@ export function SegmentedControl(props: {
               props.onSelect(item.id);
             }}
             className={[
-              "min-h-11 truncate rounded-md px-2 font-display text-sm font-semibold",
+              "relative min-h-11 truncate rounded-md px-2 font-display text-sm font-semibold",
               "transition-transform duration-(--duration-fast) ease-base active:scale-[0.97]",
               active ? "btn-secondary" : "text-text-muted",
             ].join(" ")}
           >
             {item.label}
+            {item.badge === undefined || item.badge <= 0 ? null : (
+              <span className="ml-1.5 inline-block min-w-5 rounded-pill bg-danger px-1 text-center text-xs font-bold text-text">{item.badge}</span>
+            )}
           </button>
         );
       })}

@@ -7,7 +7,8 @@ import { TasksService, type TaskClaimResult, type TaskView } from "./tasks.servi
 /**
  * Задания и достижения (`/api/v1/tasks`, docs/35-stage4-plan.md WP13): цели
  * с прогрессом и забор награды. Только своё — аккаунт из токена; что
- * выполнено, решает сервер по записанным забегам.
+ * выполнено, решает сервер по записанным забегам, а у партнёрских целей —
+ * по переходу через сервер и проверке площадкой.
  */
 const LIMIT: RateLimit = { scope: "tasks", limit: 300, windowSec: 3600 };
 const TASK_ID = /^[a-z][a-z0-9_]{1,47}$/;
@@ -34,6 +35,16 @@ export class TasksController {
     if (!TASK_ID.test(taskId)) throw new ValidationError("Неверный id задания");
     await this.limit(account.accountId);
     return { data: await this.tasks.claim(account, taskId) };
+  }
+
+  /** Переход по ссылке партнёрской цели: ссылка и бот этим и выполнены. */
+  @Post(":taskId/open")
+  @HttpCode(200)
+  async open(@Req() request: unknown, @Param("taskId") taskId: string): Promise<{ data: { url: string; tasks: TaskView[] } }> {
+    const account = accountOf(request);
+    if (!TASK_ID.test(taskId)) throw new ValidationError("Неверный id задания");
+    await this.limit(account.accountId);
+    return { data: await this.tasks.open(account, taskId) };
   }
 
   private async limit(accountId: string): Promise<void> {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { fetchTasks, groupByPeriod, rewardLabel, saveTask, targetLabel, taskProblem, withKind, type TaskDef } from "../src/api/tasks";
+import { fetchTasks, groupByPeriod, rewardLabel, saveTask, targetLabel, taskProblem, withKind, withPlatform, type TaskDef } from "../src/api/tasks";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -45,10 +45,11 @@ describe("задания в панели", () => {
     expect(rewardLabel(task({ coins: 150, shards: 3 }))).toBe("150 мон. + 3 оск.");
 
     const groups = groupByPeriod([task({ taskId: "b", sort: 20 }), task({ taskId: "a", sort: 20 }), task({ taskId: "w", period: "weekly" }), task({ taskId: "c", sort: 5 })]);
-    expect(groups.map((group) => [group.period, group.tasks.map((item) => item.taskId)])).toEqual([
+    expect(groups.map((group) => [group.group, group.tasks.map((item) => item.taskId)])).toEqual([
       ["daily", ["c", "a", "b"]],
       ["weekly", ["w"]],
       ["achievement", []],
+      ["partner", []],
     ]);
   });
 
@@ -64,13 +65,13 @@ describe("задания в панели", () => {
 
     it("форма требует канал и https-ссылку и не даёт копить подписку", () => {
       expect(taskProblem(channel(), true, [])).toBeNull();
-      expect(taskProblem(channel({ params: null }), true, [])).toMatch(/площадка, канал и ссылка/);
+      expect(taskProblem(channel({ params: null }), true, [])).toMatch(/нужна ссылка/);
       expect(taskProblem(channel({ period: "daily" }), true, [])).toMatch(/только достижение/);
       expect(taskProblem(channel({ target: 3 }), true, [])).toMatch(/только достижение/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: " ", url: "https://t.me/x" } }), true, [])).toMatch(/Канал/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: "@x_game", url: "http://t.me/x" } }), true, [])).toMatch(/Ссылка/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: "@x_game", url: "t.me/x" } }), true, [])).toMatch(/Ссылка/);
-      expect(taskProblem(task({ taskId: "x_1", params: { platform: "telegram", chat: "@x", url: "https://t.me/x" } }), true, [])).toMatch(/только у подписки/);
+      expect(taskProblem(task({ taskId: "x_1", params: { platform: "telegram", chat: "@x", url: "https://t.me/x" } }), true, [])).toMatch(/только у партнёрских/);
     });
 
     it("канал уходит обрезанным, в списке цель — именем канала; старый сервер без параметров читается", async () => {
@@ -82,6 +83,29 @@ describe("задания в панели", () => {
 
       const old = await fetchTasks(api);
       expect(old.ok && old.data.tasks[0]?.params).toBeNull();
+    });
+  });
+
+  describe("переход по ссылке и запуск бота", () => {
+    const link = (patch: Partial<TaskDef> = {}) => task({ taskId: "ach_site", period: "achievement", kind: "link", target: 1, coins: 50, params: { url: "https://example.com/p" }, ...patch });
+
+    it("вид «ссылка» и «бот» — достижение с целью 1, без канала; площадка необязательна", () => {
+      const picked = withKind(task({ taskId: "x_1", params: null }), "bot");
+      expect(picked).toEqual(expect.objectContaining({ kind: "bot", period: "achievement", target: 1, params: { url: "" } }));
+      expect(withKind(withKind(task({ taskId: "x_1" }), "channel"), "link").params).toEqual({ platform: "telegram", url: "" });
+      expect(withPlatform({ platform: "vk", url: "https://vk.com/x" }, undefined)).toEqual({ url: "https://vk.com/x" });
+      expect(taskProblem(link(), true, [])).toBeNull();
+      expect(taskProblem(link({ params: { url: "http://example.com" } }), true, [])).toMatch(/Ссылка/);
+      expect(taskProblem(link({ period: "daily" }), true, [])).toMatch(/только достижение/);
+      expect(taskProblem(link({ kind: "channel", params: { url: "https://t.me/x", chat: "@x_game" } }), true, [])).toMatch(/площадка/);
+    });
+
+    it("канал уходит только у подписки, пустая площадка не уходит; в списке — адресом; группа — партнёрские", async () => {
+      const { fetch, calls } = fakeFetch(json(200, { data: link() }));
+      await saveTask(new AdminApi(fetch), link({ params: { url: " https://example.com/p ", chat: "@stale" } }));
+      expect(JSON.parse(String(calls[0]?.init.body)).params).toEqual({ url: "https://example.com/p" });
+      expect(targetLabel(link())).toBe("example.com (все площадки)");
+      expect(groupByPeriod([link(), task()]).find((group) => group.group === "partner")?.tasks.map((item) => item.taskId)).toEqual(["ach_site"]);
     });
   });
 

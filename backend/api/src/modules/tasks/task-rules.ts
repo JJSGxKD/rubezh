@@ -41,12 +41,18 @@ export const RUN_KINDS = {
 export type RunKind = keyof typeof RUN_KINDS;
 
 /**
- * Виды целей, выполнение которых проверяет площадка по нажатию игрока, а не
- * забег (Р52): `channel` — подписаться на канал или вступить в чат, проверяет
- * бот площадки. Такая цель — одна на аккаунт: только достижение с целью 1.
+ * Партнёрские цели (Р52): их выполняет не забег, а действие игрока вне игры,
+ * и у игрока они — своей категорией. `channel` — подписаться на канал или
+ * вступить в чат, проверяет бот площадки по нажатию «Проверить»; `link` —
+ * перейти по ссылке, `bot` — запустить бота: засчитывается переход через
+ * сервер — проверить, что игрок открыл чужого бота, без постбэка партнёра
+ * нечем. Такая цель — одна на аккаунт: только достижение с целью 1.
  */
-export const CHECKED_KINDS = ["channel"] as const;
+export const CHECKED_KINDS = ["channel", "link", "bot"] as const;
 export type CheckedKind = (typeof CHECKED_KINDS)[number];
+
+/** Цели, которые засчитывает сам переход: проверить их у площадки нечем. */
+export const OPEN_KINDS: ReadonlySet<TaskKind> = new Set<TaskKind>(["link", "bot"]);
 
 export type TaskKind = RunKind | CheckedKind;
 export const TASK_KIND_IDS: readonly TaskKind[] = [...(Object.keys(RUN_KINDS) as RunKind[]), ...CHECKED_KINDS];
@@ -55,23 +61,28 @@ export function isRunKind(kind: TaskKind): kind is RunKind {
   return Object.hasOwn(RUN_KINDS, kind);
 }
 
+/** Категория цели у игрока: партнёрские — своей вкладкой, остальные — по сроку. */
+export type TaskCategory = TaskPeriod | "partner";
+
 /** Площадки, где есть каналы: у веб-версии их нет. */
 export const CHANNEL_PLATFORMS = ["telegram", "max", "vk"] as const satisfies readonly PlatformId[];
 
 /**
- * Что нужно цели «канал»: площадка, где он есть, сам канал в записи
- * площадки (у Telegram — `@имя` или id) и ссылка, которую откроет игрок.
- * Канал другой площадки игроку не показывается — проверить его нечем.
+ * Что нужно партнёрской цели: ссылка, которую откроет игрок, площадка, где
+ * цель есть, и у канала — сам канал в записи площадки (у Telegram — `@имя`
+ * или id). Цель другой площадки игроку не показывается; ссылка и бот без
+ * площадки видны всем. Что обязательно у какого вида — проверяет
+ * `taskDefSchema`.
  */
-export const channelParamsSchema = z
+export const taskParamsSchema = z
   .object({
-    platform: z.enum(CHANNEL_PLATFORMS),
-    chat: z.string().trim().min(2).max(64),
+    platform: z.enum(CHANNEL_PLATFORMS).optional(),
+    chat: z.string().trim().min(2).max(64).optional(),
     url: z.url({ protocol: /^https$/ }).max(256),
   })
   .strict();
 
-export type ChannelParams = z.infer<typeof channelParamsSchema>;
+export type TaskParams = z.infer<typeof taskParamsSchema>;
 
 export type TaskRun = Pick<RecordedRun, "difficulty" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict">;
 
@@ -95,8 +106,8 @@ export const taskDefSchema = z
     taskId: z.string().regex(/^[a-z][a-z0-9_]{1,47}$/, "id — латиница, цифры и подчёркивание, до 48 знаков"),
     period: z.enum(TASK_PERIODS),
     kind: z.enum(TASK_KIND_IDS as [TaskKind, ...TaskKind[]]),
-    /** цель «канал» — что проверять и куда вести; у целей забега — пусто, и панель до канала поля не слала */
-    params: channelParamsSchema.nullable().default(null),
+    /** партнёрская цель — куда вести и что проверять; у целей забега — пусто, и панель до партнёрских целей поля не слала */
+    params: taskParamsSchema.nullable().default(null),
     target: z.number().int().positive().max(10_000_000),
     /** `null` — текст по виду цели у клиента, с правильным склонением числа */
     title: z.string().trim().min(1).max(120).nullable(),
@@ -110,12 +121,21 @@ export const taskDefSchema = z
   })
   .strict()
   .refine((task) => task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
-  .refine((task) => (task.kind === "channel") === (task.params !== null), { message: "канал и ссылка — у цели «канал», и только у неё", path: ["params"] })
-  // Подписка проверяется в момент нажатия и не копится: за срок её не
+  .refine((task) => isCheckedKind(task.kind) === (task.params !== null), { message: "ссылка — у партнёрской цели, и только у неё", path: ["params"] })
+  .refine((task) => task.kind !== "channel" || (task.params?.platform !== undefined && task.params.chat !== undefined), {
+    message: "у подписки на канал нужны площадка и канал — по ним спрашивает бот",
+    path: ["params"],
+  })
+  .refine((task) => task.kind === "channel" || task.params?.chat === undefined, { message: "канал — только у подписки на канал", path: ["params"] })
+  // Партнёрское действие делается однажды и не копится: за срок его не
   // «наберёшь», а повторная награда за ту же подписку каждый день — фарм.
-  .refine((task) => task.kind !== "channel" || (task.period === "achievement" && task.target === 1), {
-    message: "цель «канал» — только достижение с целью 1",
+  .refine((task) => !isCheckedKind(task.kind) || (task.period === "achievement" && task.target === 1), {
+    message: "партнёрская цель — только достижение с целью 1",
     path: ["period"],
   });
+
+function isCheckedKind(kind: TaskKind): boolean {
+  return (CHECKED_KINDS as readonly string[]).includes(kind);
+}
 
 export type TaskDef = z.infer<typeof taskDefSchema>;
