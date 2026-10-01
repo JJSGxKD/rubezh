@@ -4,7 +4,7 @@ import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { useShell } from "../src/state/shell";
 import { createShopApi, isDelivered, type ShopInvoice, type ShopPurchaseState } from "../src/state/shop-api";
 import { buy, CONFIRM_POLL_MS, CONFIRM_TIMEOUT_MS, type BuyDeps, type BuyRequest } from "../src/state/shop-purchase";
-import { itemName, noticeOf } from "../src/screens/meta/shop-texts";
+import { itemName, noticeOf, showcaseRefusal } from "../src/screens/meta/shop-texts";
 
 // Магазин и VIP на клиенте (docs/35-stage4-plan.md WP10): витрина и VIP — с
 // сервера, схемой, цены в запросе нет; купленным товар считается, когда
@@ -97,6 +97,46 @@ describe("клиент магазина", () => {
   it("имя товара — из словаря, незнакомый называется составом", () => {
     expect(itemName({ sku: "starter", contents: [] })).toBe("Стартовый набор");
     expect(itemName({ sku: "crystal_box", contents: [{ resource: "gems", amount: 5 }, { resource: "crystals", amount: 2 }] })).toBe("5 самоцветов, 2");
+  });
+});
+
+describe("витрина снаряжения", () => {
+  const OFFER = {
+    offerId: "0b6c4b1e-1d8e-4c4f-9a6a-2a0d7b7c9f01",
+    slot: "weapon",
+    rarity: "legendary",
+    level: 6,
+    power: 41,
+    main: { stat: "damage", value: 0.2 },
+    extras: [{ stat: "maxHp", value: 12 }],
+    gems: 300,
+    sold: false,
+  };
+
+  it("витрина — GET, покупка — POST с предложением в адресе и без тела: цену берёт сервер", async () => {
+    const sent: Sent[] = [];
+    const view = await createShopApi(server(sent, { offers: [OFFER, { ...OFFER, slot: "cape", rarity: "astral", sold: true }] })).showcase();
+    expect(view.ok && view.data.offers.map((offer) => [offer.slot, offer.rarity, offer.sold])).toEqual([
+      ["weapon", "legendary", false],
+      ["cape", "astral", true],
+    ]);
+    await createShopApi(server(sent, { item: { itemId: "i-1", slot: "weapon", rarity: "legendary", level: 6, power: 41 }, view: { offers: [{ ...OFFER, sold: true }] } })).buyShowcase(OFFER.offerId);
+    expect(sent).toEqual([
+      { method: "GET", path: "/api/v1/shop/showcase", body: undefined },
+      { method: "POST", path: `/api/v1/shop/showcase/${OFFER.offerId}/buy`, body: undefined },
+    ]);
+  });
+
+  it("предложение без значений свойств — отказ схемы, а не пустая карточка", async () => {
+    const broken = await createShopApi(server([], { offers: [{ ...OFFER, main: { stat: "damage" } }] })).showcase();
+    expect(broken.ok).toBe(false);
+  });
+
+  it("отказ в покупке: мало самоцветов и полный инвентарь — своим текстом; устаревшая витрина — перечитать", () => {
+    expect(showcaseRefusal("insufficient_funds")).toEqual({ text: "Не хватает самоцветов — их можно купить ниже", reload: false });
+    expect(showcaseRefusal("inventory_full")).toMatchObject({ reload: false, text: expect.stringMatching(/Инвентарь полон/) });
+    for (const code of ["showcase_sold", "showcase_expired", "showcase_offer_not_found"]) expect(showcaseRefusal(code)).toMatchObject({ reload: true });
+    expect(showcaseRefusal(undefined)).toMatchObject({ reload: false, text: expect.stringMatching(/Не удалось купить/) });
   });
 });
 

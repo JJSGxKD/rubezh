@@ -5,7 +5,7 @@ import { NotificationsService } from "../notifications/notifications.service.js"
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, ValidationError } from "../../common/domain-error.js";
 import { InsufficientFundsError } from "../wallet/wallet-errors.js";
-import { InsufficientBalance } from "../wallet/wallet-ledger.js";
+import { InsufficientBalance, type LedgerLine } from "../wallet/wallet-ledger.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
 import { INVENTORY_CAP, ITEM_SLOTS, MERGE_COUNT, type ItemRarity, type ItemSlot } from "./item-catalog.js";
@@ -13,7 +13,7 @@ import { loadoutKey, sameModifiers, signLoadout, verifyLoadout, type ClaimedLoad
 import { levelCap, loadoutOf, mergeCost, nextRarity, rerollCost, rerollExtra, rollItem, rollLoot, salvageYield, seededRandom, upgradeCost, type RunVerdict } from "./item-rules.js";
 import { inventoryView, itemView, type InventoryView, type ItemView } from "./item-views.js";
 import { ItemNotFoundError, ItemRuleError } from "./items-errors.js";
-import { ITEMS_REPOSITORY, type ItemRow, type ItemsRepository, type Outcome } from "./items.repository.js";
+import { ITEMS_REPOSITORY, type ItemRow, type ItemsRepository, type NewItem, type Outcome } from "./items.repository.js";
 
 /**
  * Снаряжение (docs/35-stage4-plan.md §3.4, WP7): инвентарь, надеть и снять,
@@ -36,6 +36,12 @@ import { ITEMS_REPOSITORY, type ItemRow, type ItemsRepository, type Outcome } fr
 export const ITEM_SEEDS = Symbol("ITEM_SEEDS");
 export type SeedSource = () => number;
 export const cryptoSeeds: SeedSource = () => randomInt(2 ** 31);
+
+/** Предмет, который игрок покупает целиком — с уже брошенными свойствами и ценой (витрина, §3.6). */
+export interface PurchasedItem {
+  shape: Pick<NewItem, "slot" | "rarity" | "level" | "seed" | "rolls" | "source">;
+  price: readonly LedgerLine[];
+}
 
 export interface RunLoot {
   accountId: string;
@@ -186,6 +192,25 @@ export class ItemsService {
       }),
     );
     return await this.viewOf(accountId, outcome);
+  }
+
+  /**
+   * Покупка конкретного предмета (витрина магазина, §3.6, Р11): предмет и
+   * списание цены — одна транзакция. Ключ — предложение: повтор после обрыва
+   * находит купленное, а не покупает второй раз. Полный инвентарь — отказ
+   * до списания: купленное не должно сразу уходить в осколки.
+   */
+  async buy(accountId: string, key: string, purchase: PurchasedItem, at = new Date()): Promise<{ item: ItemView; duplicate: boolean }> {
+    const outcome = await this.paid(accountId, () =>
+      this.items.create(accountId, key, at, (account) => {
+        if (account.alive >= INVENTORY_CAP) throw new ItemRuleError("inventory_full", "Инвентарь полон — разберите или объедините предметы");
+        // Купленное игрок видит сразу — не «новое» на вкладке арсенала.
+        return { ...purchase.shape, seen: true, debit: { lines: purchase.price, reason: "shop" } };
+      }),
+    );
+    if (outcome === null) throw new ItemNotFoundError();
+    if (!outcome.duplicate) this.logger.log(JSON.stringify({ module: "items", event: "item_bought", accountId, source: purchase.shape.source, rarity: outcome.item.rarity }));
+    return { item: await this.viewOf(accountId, outcome), duplicate: outcome.duplicate };
   }
 
   /**

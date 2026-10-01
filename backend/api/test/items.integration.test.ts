@@ -137,6 +137,36 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
     }, RACE_TIMEOUT_MS);
   });
 
+  describe("покупка конкретного предмета", () => {
+    const purchase = (gems: number) => ({
+      shape: { slot: "amulet" as const, rarity: "rare" as const, level: 2, seed: 11, rolls: rollItem(seededRandom(11), "amulet", "rare"), source: "showcase:test" },
+      price: [{ resource: "gems" as const, amount: gems }],
+    });
+
+    it("предмет и списание — одна транзакция; повтор ключом находит купленное и не списывает второй раз", async () => {
+      const id = await account();
+      await wallet.grant({ accountId: id, resource: "gems", amount: 50, reason: "purchase", idempotencyKey: `test:${randomUUID()}` });
+      const key = `showcase:${randomUUID()}`;
+      const first = await items.buy(id, key, purchase(40));
+      expect(first).toMatchObject({ duplicate: false, item: { slot: "amulet", rarity: "rare", level: 2, isNew: false } });
+      const again = await items.buy(id, key, purchase(40));
+      expect(again).toMatchObject({ duplicate: true, item: { itemId: first.item.itemId } });
+      expect(await balance(id, "gems")).toBe(10);
+      expect(await events(first.item.itemId)).toBe(1);
+    });
+
+    it("не хватило — ни предмета, ни списания; полный инвентарь — отказ до списания", async () => {
+      const id = await account();
+      await wallet.grant({ accountId: id, resource: "gems", amount: 30, reason: "purchase", idempotencyKey: `test:${randomUUID()}` });
+      await expect(items.buy(id, `showcase:${randomUUID()}`, purchase(40))).rejects.toMatchObject({ code: "insufficient_funds", resource: "gems", balance: 30 });
+      expect(await repository.alive(id)).toHaveLength(0);
+
+      for (let index = 0; index < INVENTORY_CAP; index++) await give(id, "boots", "common");
+      await expect(items.buy(id, `showcase:${randomUUID()}`, purchase(10))).rejects.toMatchObject({ code: "inventory_full" });
+      expect(await balance(id, "gems")).toBe(30);
+    });
+  });
+
   describe("надеть и снять", () => {
     it("в слоте один надетый, снимок подписан и повторяет надетое", async () => {
       const id = await account();

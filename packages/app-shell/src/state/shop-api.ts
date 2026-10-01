@@ -4,7 +4,8 @@ import { useShell } from "./shell";
 
 /**
  * Магазин и VIP с сервера (docs/35-stage4-plan.md §3.6, WP10): витрина,
- * счёт на набор или подписку, продление VIP и его самоцветы дня. **Цены в
+ * счёт на набор или подписку, продление VIP и его самоцветы дня, витрина
+ * снаряжения за самоцветы. **Цены в
  * запросе нет** — только что покупают: сколько это стоит, решает сервер.
  *
  * Модуль грузится вместе с экраном магазина — первой загрузке он не нужен.
@@ -65,7 +66,26 @@ const purchaseSchema = z.object({
   fulfilled: z.optional(z.boolean()),
 });
 
+/** Витрина снаряжения: конкретные предметы суток, значения посчитаны сервером (Р11). */
+const statSchema = z.object({ stat: z.string(), value: z.number() });
+const showcaseOfferSchema = z.object({
+  offerId: z.string(),
+  slot: z.string(),
+  rarity: z.string(),
+  level: z.number(),
+  power: z.number(),
+  main: statSchema,
+  extras: z.array(statSchema),
+  gems: z.number(),
+  sold: z.boolean(),
+});
+const showcaseSchema = z.object({ offers: z.array(showcaseOfferSchema) });
+const showcaseBuySchema = z.object({ item: z.object({ itemId: z.string(), slot: z.string(), rarity: z.string(), level: z.number() }), view: showcaseSchema });
+
 export type ShopView = z.infer<typeof shopSchema>;
+export type ShowcaseView = z.infer<typeof showcaseSchema>;
+export type ShowcaseOffer = z.infer<typeof showcaseOfferSchema>;
+export type ShowcaseBuy = z.infer<typeof showcaseBuySchema>;
 export type ShopItem = z.infer<typeof itemSchema>;
 export type ShopInvoice = z.infer<typeof invoiceSchema>;
 export type VipView = z.infer<typeof vipSchema>;
@@ -81,6 +101,8 @@ export interface ShopApi {
   resumeVip(): Promise<ApiResult<VipView>>;
   claimVipDaily(): Promise<ApiResult<VipDaily>>;
   purchase(purchaseId: string): Promise<ApiResult<ShopPurchaseState>>;
+  showcase(): Promise<ApiResult<ShowcaseView>>;
+  buyShowcase(offerId: string): Promise<ApiResult<ShowcaseBuy>>;
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
@@ -94,6 +116,8 @@ export function createShopApi(request: ApiRequest = apiRequest): ShopApi {
     resumeVip: () => request("/api/v1/vip/resume", vipSchema, { method: "POST" }),
     claimVipDaily: () => request("/api/v1/vip/daily", dailySchema, { method: "POST" }),
     purchase: (purchaseId) => request(`/api/v1/payments/${encodeURIComponent(purchaseId)}`, purchaseSchema, { method: "GET" }),
+    showcase: () => request("/api/v1/shop/showcase", showcaseSchema, { method: "GET" }),
+    buyShowcase: (offerId) => request(`/api/v1/shop/showcase/${encodeURIComponent(offerId)}/buy`, showcaseBuySchema, { method: "POST" }),
   };
 }
 

@@ -83,6 +83,8 @@ export interface NewItem {
   seen?: boolean;
   /** сразу разобрать: инвентарь полон, а выпавшее не должно пропасть */
   salvageTo?: { resource: WalletResource; amount: number };
+  /** цена — списывается в той же транзакции: покупка с витрины магазина */
+  debit?: { lines: readonly LedgerLine[]; reason: SpendReason };
 }
 
 export interface MergeDecision {
@@ -294,6 +296,16 @@ export class PrismaItemsRepository implements ItemsRepository {
         key,
         at,
       );
+      if (next.debit !== undefined && next.debit.lines.length > 0) {
+        await debitWithin(tx, {
+          accountId,
+          lines: next.debit.lines,
+          reason: next.debit.reason,
+          source: `item:${item.itemId}`,
+          idempotencyKey: `item:${key}`,
+          at,
+        });
+      }
       if (next.salvageTo !== undefined) {
         await creditWithin(tx, {
           accountId,

@@ -36,3 +36,19 @@ export function noticeOf(outcome: BuyOutcome, name: string): Notice {
     }
   }
 }
+
+/** Отказ в покупке с витрины — что сказать и перечитать ли витрину: она могла устареть. */
+export function showcaseRefusal(code: string | undefined): { text: string; reload: boolean } {
+  switch (code) {
+    case "insufficient_funds":
+      return { text: t("showcase.noGems"), reload: false };
+    case "inventory_full":
+      return { text: t("showcase.full"), reload: false };
+    case "showcase_sold":
+    case "showcase_expired":
+    case "showcase_offer_not_found":
+      return { text: t("showcase.stale"), reload: true };
+    default:
+      return { text: t("showcase.failed"), reload: false };
+  }
+}
