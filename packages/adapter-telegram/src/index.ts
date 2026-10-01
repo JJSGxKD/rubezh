@@ -1,4 +1,4 @@
-import { hapticFeedback, invoice, isTMA, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
+import { hapticFeedback, invoice, isTMA, openLink, openTelegramLink, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
 import type {
   PlatformAdapter,
   PlatformClientInfo,
@@ -15,6 +15,7 @@ import type {
 } from "@bh/shared-types";
 import { inviteFromBrowser } from "./invite";
 import { openInvoiceWith } from "./invoice";
+import { openLinkWith } from "./links";
 import { createDeviceStorage } from "./storage";
 import { createTelegramUi } from "./ui-telegram";
 
@@ -79,6 +80,20 @@ export class TelegramAdapter implements PlatformAdapter {
   /** Счёт Stars от сервера — в окне оплаты Telegram (`invoice.ts`). */
   async openInvoice(url: string): Promise<InvoiceStatus> {
     return await openInvoiceWith({ isAvailable: () => isTMA() && invoice.openUrl.isAvailable(), open: (link) => invoice.openUrl(link) }, url);
+  }
+
+  /** Канал Telegram — внутри клиента, остальное — во встроенном браузере (`links.ts`). */
+  openLink(url: string): void {
+    openLinkWith(
+      {
+        telegramAvailable: () => isTMA() && openTelegramLink.isAvailable(),
+        openTelegram: (link) => openTelegramLink(link),
+        linkAvailable: () => isTMA() && openLink.isAvailable(),
+        open: (link) => openLink(link),
+        browser: (link) => void globalThis.open(link, "_blank", "noopener"),
+      },
+      url,
+    );
   }
 
   share(_payload: SharePayload): void {

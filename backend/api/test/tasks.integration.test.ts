@@ -2,8 +2,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
-import { rewardReason, type TaskDef } from "../src/modules/tasks/task-rules.js";
-import { PrismaTasksRepository, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
+import { rewardReason, type ChannelParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { ACHIEVEMENT_PERIOD_START, PrismaTasksRepository, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 
 /**
@@ -130,7 +130,20 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
   it("каталог из панели: новое заводится однажды, правка не трогает срок и вид и помнит автора", async () => {
     const actor = await account();
     const taskId = `it_panel_${String(Date.now())}`;
-    const task: TaskDef = { taskId, period: "weekly", kind: "kills", target: 500, title: "Проверка", coins: 50, gems: 0, shards: 0, passPoints: 5, sort: 99, active: true };
+    const task: TaskDef = {
+      taskId,
+      period: "weekly",
+      kind: "kills",
+      params: null,
+      target: 500,
+      title: "Проверка",
+      coins: 50,
+      gems: 0,
+      shards: 0,
+      passPoints: 5,
+      sort: 99,
+      active: true,
+    };
     expect(await repository.insert(task, actor, NOON)).toBe(true);
     expect(await repository.insert({ ...task, coins: 999 }, actor, NOON)).toBe(false);
 
@@ -140,6 +153,62 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     expect(row?.updated_by).toBe(actor);
 
     expect(await repository.update({ ...task, taskId: "it_missing_task" }, actor, NOON)).toBe(false);
+  });
+
+  it("цель «канал»: параметры хранятся и читаются, выполнение пишется однажды и сразу целью", async () => {
+    const actor = await account();
+    const me = await account();
+    const taskId = `it_channel_${String(Date.now())}`;
+    const params: ChannelParams = { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" };
+    const task: TaskDef = {
+      taskId,
+      period: "achievement",
+      kind: "channel",
+      params,
+      target: 1,
+      title: null,
+      coins: 0,
+      gems: 15,
+      shards: 0,
+      passPoints: 0,
+      sort: 99,
+      active: true,
+    };
+    expect(await repository.insert(task, actor, NOON)).toBe(true);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === taskId)).toEqual(task);
+    expect(await repository.update({ ...task, params: { ...params, url: "https://t.me/rubezh_news" } }, actor, NOON)).toBe(true);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === taskId)?.params).toMatchObject({ url: "https://t.me/rubezh_news" });
+
+    const first = await repository.complete(me, task, NOON);
+    expect(first).toMatchObject({ taskId, periodStart: ACHIEVEMENT_PERIOD_START, value: 1, done: true, claimed: false });
+    const [stamp] = await prisma.$queryRaw<{ completed_at: Date }[]>`
+      SELECT completed_at FROM task_progress WHERE account_id = ${me}::uuid AND task_id = ${taskId}`;
+    expect(await repository.markClaimed(me, taskId, first.periodStart, NOON)).toBe(true);
+    // повтор — то же выполнение: время первое, забранное остаётся забранным
+    expect(await repository.complete(me, task, new Date(NOON.getTime() + 60_000))).toMatchObject({ value: 1, done: true, claimed: true });
+    const [again] = await prisma.$queryRaw<{ completed_at: Date }[]>`
+      SELECT completed_at FROM task_progress WHERE account_id = ${me}::uuid AND task_id = ${taskId}`;
+    expect(again?.completed_at).toEqual(stamp?.completed_at);
+    expect((await repository.progress(me, NOON)).find((row) => row.taskId === taskId)).toMatchObject({ done: true, claimed: true });
+    // выключается, чтобы следующий прогон не видел чужую награду в каталоге
+    expect(await repository.update({ ...task, active: false }, actor, NOON)).toBe(true);
+
+    // параметры — ровно у цели «канал»: база это держит и без кода
+    await expect(prisma.$executeRaw`
+      INSERT INTO task_def (task_id, period, kind, target, gems, created_at, updated_at) VALUES ('it_channel_bare', 'achievement', 'channel', 1, 5, now(), now())`).rejects.toThrow();
+    await expect(prisma.$executeRaw`
+      INSERT INTO task_def (task_id, period, kind, target, gems, params, created_at, updated_at)
+      VALUES ('it_runs_params', 'daily', 'runs', 1, 5, '{"chat":"@x"}'::jsonb, now(), now())`).rejects.toThrow();
+  });
+
+  it("строка с битыми параметрами пропускается, а не роняет каталог", async () => {
+    const taskId = `it_broken_${String(Date.now())}`;
+    await prisma.$executeRaw`
+      INSERT INTO task_def (task_id, period, kind, target, gems, params, active, created_at, updated_at)
+      VALUES (${taskId}, 'achievement', 'channel', 1, 5, '{"platform":"telegram","chat":"@x","url":"http://insecure"}'::jsonb, false, now(), now())`;
+    const after = await repository.catalog();
+    expect(after.some((candidate) => candidate.taskId === taskId)).toBe(false);
+    expect(after.some((candidate) => candidate.taskId === "daily_runs")).toBe(true);
   });
 
   it("удалённый аккаунт уносит прогресс и засчитанные забеги", async () => {

@@ -393,6 +393,17 @@ export class TelegramBotApi {
     );
   }
 
+  /**
+   * Состояние игрока в канале или чате: `member`, `administrator`, `creator`,
+   * `restricted` (с признаком `is_member`), `left`, `kicked`. Канал отвечает,
+   * только если бот в нём администратор.
+   */
+  async getChatMember(chat: string, userId: number, signal?: AbortSignal): Promise<{ status: string; isMember: boolean | null }> {
+    const result = await this.call("getChatMember", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.getChatMember(chat, userId, abort));
+    const member = z.object({ status: z.string().max(32), is_member: z.boolean().optional() }).parse(result);
+    return { status: member.status, isMember: member.is_member ?? null };
+  }
+
   /** Вернуть звёзды игроку. Отказ `CHARGE_ALREADY_REFUNDED` — повтор уже сделанного возврата. */
   async refundStarPayment(userId: number, chargeId: string, signal?: AbortSignal): Promise<void> {
     await this.call("refundStarPayment", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.refundStarPayment(userId, chargeId, abort));

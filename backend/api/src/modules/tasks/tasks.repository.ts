@@ -1,9 +1,9 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { TASK_KIND_IDS, TASK_PERIODS, type TaskDef, type TaskKind, type TaskPeriod } from "./task-rules.js";
+import { TASK_KIND_IDS, TASK_PERIODS, channelParamsSchema, type TaskDef, type TaskKind, type TaskPeriod } from "./task-rules.js";
 
 /**
  * Задания в базе: каталог (`task_def`), прогресс по срокам (`task_progress`)
@@ -39,6 +39,11 @@ export interface TasksRepository {
   applyRun(input: { runId: string; accountId: string; at: Date; deltas: readonly TaskDelta[] }): Promise<boolean>;
   /** отметить забор; `false` — уже забрано параллельным запросом */
   markClaimed(accountId: string, taskId: string, periodStart: string, at: Date): Promise<boolean>;
+  /**
+   * Цель выполнена проверкой площадки, а не забегом (Р52): прогресс срока —
+   * сразу цель. Повтор ничего не меняет: время выполнения остаётся первым.
+   */
+  complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date): Promise<TaskProgressRow>;
   /** завести строку каталога; `false` — такой id уже есть */
   insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean>;
   /** поправить строку каталога — всё, кроме срока и вида; `false` — строки нет */
@@ -71,6 +76,7 @@ const defSchema = z.object({
   pass_points: z.number().int(),
   sort: z.number().int(),
   active: z.boolean(),
+  params: z.unknown(),
 });
 
 const progressSchema = z.object({ task_id: z.string(), period_start: z.string(), value: z.number().int(), done: z.boolean(), claimed: z.boolean() });
@@ -81,11 +87,13 @@ function isKind(kind: string): kind is TaskKind {
 
 @Injectable()
 export class PrismaTasksRepository implements TasksRepository {
+  private readonly logger = new Logger("tasks");
+
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   async catalog(): Promise<TaskDef[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active
+      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params
       FROM task_def ORDER BY period, sort, task_id`;
     const defs: TaskDef[] = [];
     for (const raw of rows) {
@@ -93,10 +101,16 @@ export class PrismaTasksRepository implements TasksRepository {
       // Вид, которого этот сервер не знает, — строка из панели новее кода: её
       // нечем засчитывать, и она пропускается, а не роняет весь раздел.
       if (!isKind(row.kind)) continue;
+      const params = row.params === null ? null : channelParamsSchema.safeParse(row.params);
+      if (params !== null && !params.success) {
+        this.logger.error(JSON.stringify({ module: "tasks", event: "task_params_invalid", taskId: row.task_id }));
+        continue;
+      }
       defs.push({
         taskId: row.task_id,
         period: row.period,
         kind: row.kind,
+        params: params === null ? null : params.data,
         target: row.target,
         title: row.title,
         coins: row.coins,
@@ -156,9 +170,9 @@ export class PrismaTasksRepository implements TasksRepository {
   async insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean> {
     return (
       (await this.prisma.$executeRaw`
-        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, created_at, updated_at, updated_by)
+        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, created_at, updated_at, updated_by)
         VALUES (${task.taskId}, ${task.period}::"TaskPeriod", ${task.kind}, ${task.target}, ${task.title}, ${task.coins}, ${task.gems}, ${task.shards},
-                ${task.passPoints}, ${task.sort}, ${task.active}, ${at}, ${at}, ${actorAccountId}::uuid)
+                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${at}, ${at}, ${actorAccountId}::uuid)
         ON CONFLICT (task_id) DO NOTHING`) > 0
     );
   }
@@ -169,9 +183,23 @@ export class PrismaTasksRepository implements TasksRepository {
     return (
       (await this.prisma.$executeRaw`
         UPDATE task_def SET target = ${task.target}, title = ${task.title}, coins = ${task.coins}, gems = ${task.gems}, shards = ${task.shards},
-          pass_points = ${task.passPoints}, sort = ${task.sort}, active = ${task.active}, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
+          pass_points = ${task.passPoints}, sort = ${task.sort}, active = ${task.active}, params = ${paramsJson(task)}::jsonb,
+          updated_at = ${at}, updated_by = ${actorAccountId}::uuid
         WHERE task_id = ${task.taskId}`) > 0
     );
+  }
+
+  async complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date): Promise<TaskProgressRow> {
+    const rows = await this.prisma.$queryRaw<unknown[]>`
+      INSERT INTO task_progress (account_id, task_id, period_start, value, target, completed_at, updated_at)
+      VALUES (${accountId}::uuid, ${task.taskId}, ${periodStartSql(Prisma.sql`${task.period}::text`, at)}, ${task.target}, ${task.target}, ${at}, ${at})
+      ON CONFLICT (account_id, task_id, period_start) DO UPDATE SET
+        value = GREATEST(task_progress.value, EXCLUDED.value),
+        completed_at = COALESCE(task_progress.completed_at, EXCLUDED.completed_at),
+        updated_at = EXCLUDED.updated_at
+      RETURNING task_id, period_start::text, value, completed_at IS NOT NULL AS done, claimed_at IS NOT NULL AS claimed`;
+    const row = progressSchema.parse(rows[0]);
+    return { taskId: row.task_id, periodStart: row.period_start, value: row.value, done: row.done, claimed: row.claimed };
   }
 
   async markClaimed(accountId: string, taskId: string, periodStart: string, at: Date): Promise<boolean> {
@@ -182,4 +210,9 @@ export class PrismaTasksRepository implements TasksRepository {
           AND completed_at IS NOT NULL AND claimed_at IS NULL`) > 0
     );
   }
+}
+
+/** Параметры цели в колонку `jsonb`: у целей забега — пусто. */
+function paramsJson(task: Pick<TaskDef, "params">): string | null {
+  return task.params === null ? null : JSON.stringify(task.params);
 }

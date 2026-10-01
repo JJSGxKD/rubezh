@@ -1421,6 +1421,9 @@ model TaskDef {
   shards     Int        @default(0)
   /// очки батл-пасса (WP26)
   passPoints Int        @default(0) @map("pass_points")
+  /// параметры вида со своей схемой (`tasks/task-rules.ts`): у цели «канал» —
+  /// площадка, канал и ссылка; у целей забега — пусто
+  params     Json?
   sort       Int        @default(0)
   active     Boolean    @default(true)
   createdAt  DateTime   @map("created_at") @db.Timestamptz(3)

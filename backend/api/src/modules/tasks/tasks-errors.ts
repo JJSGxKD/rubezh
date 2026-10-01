@@ -20,3 +20,17 @@ export class TaskShapeLockedError extends DomainError {
     super("task_shape_locked", "Срок и вид задания не меняются — заведите новое задание и выключите это", 409);
   }
 }
+
+/** Площадка не видит игрока в канале — подписки нет или она ещё не дошла. */
+export class TaskNotJoinedError extends DomainError {
+  constructor() {
+    super("task_not_joined", "Подписка не найдена — подпишитесь и нажмите ещё раз", 409);
+  }
+}
+
+/** Площадка не ответила или задание настроено так, что проверить подписку нечем. */
+export class TaskCheckUnavailableError extends DomainError {
+  constructor() {
+    super("task_check_unavailable", "Проверка подписки сейчас недоступна — попробуйте позже", 503);
+  }
+}

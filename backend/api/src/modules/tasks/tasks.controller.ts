@@ -22,18 +22,18 @@ export class TasksController {
 
   @Get()
   async view(@Req() request: unknown): Promise<{ data: { tasks: TaskView[] } }> {
-    const { accountId } = accountOf(request);
-    await this.limit(accountId);
-    return { data: { tasks: await this.tasks.view(accountId) } };
+    const account = accountOf(request);
+    await this.limit(account.accountId);
+    return { data: { tasks: await this.tasks.view(account) } };
   }
 
   @Post(":taskId/claim")
   @HttpCode(200)
   async claim(@Req() request: unknown, @Param("taskId") taskId: string): Promise<{ data: TaskClaimResult }> {
-    const { accountId } = accountOf(request);
+    const account = accountOf(request);
     if (!TASK_ID.test(taskId)) throw new ValidationError("Неверный id задания");
-    await this.limit(accountId);
-    return { data: await this.tasks.claim(accountId, taskId) };
+    await this.limit(account.accountId);
+    return { data: await this.tasks.claim(account, taskId) };
   }
 
   private async limit(accountId: string): Promise<void> {

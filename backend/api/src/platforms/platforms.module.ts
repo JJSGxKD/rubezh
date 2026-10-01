@@ -1,12 +1,14 @@
 import { Global, Module } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../config/app-config.js";
 import { AppLinks } from "./ports/app-links.js";
+import { ChannelMemberships } from "./ports/channel-membership.js";
 import { LaunchVerifiers } from "./ports/launch-verifier.js";
 import { Messengers } from "./ports/messenger.js";
 import { PaymentProviders } from "./ports/payment-provider.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "./telegram/telegram-bot-api.js";
 import { BotIdentity } from "./telegram/bot-identity.js";
 import { TelegramAppLinks } from "./telegram/telegram-app-links.js";
+import { TelegramChannelMembership, type MembershipBotApi } from "./telegram/telegram-channel-membership.js";
 import { TelegramStarsProvider } from "./telegram/telegram-stars-provider.js";
 import { TelegramLaunchVerifier } from "./telegram/telegram-launch-verifier.js";
 import { TelegramMessenger } from "./telegram/telegram-messenger.js";
@@ -31,6 +33,11 @@ export function paymentProvidersFor(config: AppConfig, telegramApi: TelegramBotA
   return new PaymentProviders([new TelegramStarsProvider(telegramApi, config.telegram.updates !== "off")]);
 }
 
+/** Подписка на канал для заданий (Р52): пока только Telegram — у MAX и VK ботов ещё нет. */
+export function channelMembershipsFor(config: AppConfig, telegramApi: MembershipBotApi): ChannelMemberships {
+  return new ChannelMemberships([new TelegramChannelMembership(telegramApi, config.telegram.botToken !== "")]);
+}
+
 /** Ссылка запуска приложения: пока только Telegram — у MAX и VK приложений ещё нет. */
 export function appLinksFor(identity: BotIdentity): AppLinks {
   return new AppLinks([new TelegramAppLinks(identity)]);
@@ -48,7 +55,8 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
     { provide: PaymentProviders, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: paymentProvidersFor },
     { provide: AppLinks, inject: [BotIdentity], useFactory: appLinksFor },
     { provide: Messengers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messengersFor },
+    { provide: ChannelMemberships, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: channelMembershipsFor },
   ],
-  exports: [LaunchVerifiers, PaymentProviders, AppLinks, Messengers],
+  exports: [LaunchVerifiers, PaymentProviders, AppLinks, Messengers, ChannelMemberships],
 })
 export class PlatformsModule {}

@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Clock, Crown, Crosshair, Diamond, Hourglass, Play, Sparkles, Target } from "lucide-react";
+import { Check, Clock, Crown, Crosshair, Diamond, Hourglass, Megaphone, Play, Sparkles, Target } from "lucide-react";
 import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, PageTitle, ProgressBar, Screen, SegmentedControl } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
 import { track } from "../../state/shell";
-import { TASK_NOT_DONE, createTasksApi, tasksAvailable, type TaskItem, type TaskReward } from "../../state/tasks-api";
+import { TASK_NOT_DONE, claimFailureKey, createTasksApi, openTaskLink, taskLink, tasksAvailable, type TaskItem, type TaskReward } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 
@@ -18,6 +18,10 @@ import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
  * что прислал клиент. Каталог правится из панели без релиза, поэтому экран
  * рисует то, что пришло, — и незнакомый вид цели тоже, с заголовком из
  * каталога.
+ *
+ * Цель со ссылкой — подписка на канал (Р52): «Подписаться» открывает канал
+ * через площадку, «Проверить» просит сервер спросить бота и сразу забирает
+ * награду. Полосы прогресса у неё нет — подписка либо есть, либо нет.
  */
 type View = "daily" | "weekly" | "achievements";
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; tasks: TaskItem[] };
@@ -30,6 +34,7 @@ const ICONS: Partial<Record<string, ReactNode>> = {
   survive_sec: <Hourglass size={20} aria-hidden="true" />,
   best_survival_sec: <Crown size={20} aria-hidden="true" />,
   run_level: <Sparkles size={20} aria-hidden="true" />,
+  channel: <Megaphone size={20} aria-hidden="true" />,
 };
 
 /** Цели во времени считаются в секундах, а читаются минутами. */
@@ -60,12 +65,8 @@ export function TasksScreen(): ReactNode {
     const response = await api.claim(task.id);
     setClaiming(null);
     if (!response.ok) {
-      if (response.code === TASK_NOT_DONE) {
-        setNotice({ taskId: task.id, text: t("tasks.stale") });
-        void load();
-      } else {
-        setNotice({ taskId: task.id, text: t("tasks.claimFailed") });
-      }
+      setNotice({ taskId: task.id, text: t(claimFailureKey(response.code)) });
+      if (response.code === TASK_NOT_DONE) void load();
       return;
     }
     setState({ status: "ready", tasks: response.data.tasks });
@@ -116,6 +117,10 @@ export function TasksScreen(): ReactNode {
                   claiming={claiming === task.id}
                   notice={notice?.taskId === task.id ? notice.text : null}
                   onClaim={() => void claim(task)}
+                  onOpen={(link) => {
+                    track("task_link_opened", { task: task.id, kind: task.kind });
+                    openTaskLink(link);
+                  }}
                 />
               ))}
             </div>
@@ -138,9 +143,13 @@ function ResetLine(props: { period: ResetPeriod }): ReactNode {
   );
 }
 
-function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; notice: string | null; onClaim: () => void }): ReactNode {
+function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; notice: string | null; onClaim: () => void; onOpen: (link: string) => void }): ReactNode {
   const { task } = props;
   const claimable = task.done && !task.claimed;
+  const link = taskLink(task);
+  // Подписку выполняет не забег: её проверяет сервер по нажатию, поэтому
+  // «Проверить» есть и у невыполненной цели.
+  const checkable = link !== null && !task.done;
   const name = achievementName(task);
   const title = task.title ?? name ?? goalText(task);
   const hint = task.title === null && name !== null ? goalText(task) : null;
@@ -172,9 +181,11 @@ function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; noti
             ) : null}
           </div>
           {hint === null ? null : <p className="mt-0.5 text-xs text-text-muted">{hint}</p>}
-          <div className="mt-2">
-            <ProgressLine task={task} />
-          </div>
+          {link === null ? (
+            <div className="mt-2">
+              <ProgressLine task={task} />
+            </div>
+          ) : null}
         </div>
         <RewardChips reward={task.reward} />
       </div>
@@ -184,6 +195,16 @@ function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; noti
         <div className="mt-3">
           <Button block loading={props.claiming} onClick={props.onClaim}>
             {t("tasks.claim")}
+          </Button>
+        </div>
+      ) : null}
+      {checkable ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button variant="secondary" onClick={() => props.onOpen(link)}>
+            {t("tasks.subscribe")}
+          </Button>
+          <Button loading={props.claiming} onClick={props.onClaim}>
+            {t("tasks.check")}
           </Button>
         </div>
       ) : null}
