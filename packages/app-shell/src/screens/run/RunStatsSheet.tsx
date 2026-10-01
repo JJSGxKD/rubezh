@@ -4,6 +4,7 @@ import { Button, Modal, SegmentedControl } from "../../design-system/components"
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/run";
 import { ItemIcon, ItemTile } from "../item-icons";
+import { RunBoostList } from "./run-boosts-lazy";
 import { CategoryLabel } from "./SlotSummary";
 
 /**
@@ -88,6 +89,8 @@ function PlayerStats(props: { inspection: RunInspection }): ReactNode {
           [t("run.stats.damageTaken"), formatNumber(props.inspection.damageTaken)],
         ]}
       />
+      {/* Прибавки бустов уже в числах выше — здесь откуда они взялись. */}
+      <RunBoostList ids={props.inspection.boosts} />
     </div>
   );
 }
