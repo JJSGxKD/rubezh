@@ -38,6 +38,7 @@ import {
 } from "../src/modules/promo-codes/promo-code-rules.js";
 import { PromoCodesController } from "../src/modules/promo-codes/promo-codes.controller.js";
 import { PromoCodesService, type PromoRandom } from "../src/modules/promo-codes/promo-codes.service.js";
+import { PartnersService } from "../src/modules/partners/partners.service.js";
 import { ROLE_PERMISSIONS } from "../src/modules/roles/permissions.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -50,6 +51,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
+import { MemoryPartnersRepository } from "./helpers/memory-partners.js";
 import { MemoryPromoCodesRepository } from "./helpers/memory-promo-codes.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
@@ -123,8 +125,11 @@ function setup(options: { pick?: PromoRandom; config?: ReturnType<typeof loadApp
   const accounts = new MemoryAccountRepository();
   const roles = new MemoryRolesRepository();
   const wallet = new FakeWallet();
-  const service = new PromoCodesService(repository, accounts, options.pick ?? counting, wallet as unknown as WalletService, new RolesService(config, roles, accounts));
-  return { repository, accounts, roles, wallet, service, config };
+  const rolesService = new RolesService(config, roles, accounts);
+  const partnerRows = new MemoryPartnersRepository(repository);
+  const partners = new PartnersService(partnerRows, rolesService);
+  const service = new PromoCodesService(repository, accounts, options.pick ?? counting, wallet as unknown as WalletService, rolesService, partners);
+  return { repository, accounts, roles, wallet, service, config, partners, partnerRows };
 }
 
 type Ctx = ReturnType<typeof setup>;
@@ -147,6 +152,7 @@ function input(patch: Partial<PromoCampaignInput> = {}): PromoCampaignInput {
     newPlayersDays: null,
     platforms: [],
     issue: { kind: "shared", code: "Рубеж 2026", maxRedemptions: null },
+    partnerId: null,
     ...patch,
   };
 }
@@ -166,6 +172,8 @@ function row(patch: Partial<PromoCampaignRow> = {}): PromoCampaignRow {
     platforms: [],
     pausedAt: null,
     note: null,
+    partnerId: null,
+    partnerName: null,
     createdBy: randomUUID(),
     createdAt: at(-DAY),
     updatedAt: at(-DAY),
@@ -416,6 +424,8 @@ describe("ввод кода игроком", () => {
       message: "Спасибо, что смотрели стрим!",
       campaignId: campaign.campaignId,
       kind: "shared",
+      partner: false,
+      bound: false,
     });
     expect(ctx.wallet.grants.map((grant) => [grant.resource, grant.amount, grant.reason, grant.idempotencyKey])).toEqual([
       ["coins", 1_000, "promo_reward", `promo:${campaign.campaignId}:${player.accountId}:coins`],
@@ -513,6 +523,61 @@ describe("ввод кода игроком", () => {
   it("потолок кошелька за сутки — два самых щедрых кода", () => {
     const cap = WALLET_DAILY_CAPS.promo_reward;
     for (const [resource, max] of Object.entries(PROMO_CODE_LIMITS.reward)) expect(cap[resource as keyof typeof cap], resource).toBe(2 * max);
+  });
+});
+
+describe("коды партнёров", () => {
+  async function withPartner(ctx: Ctx) {
+    const admin = await person(ctx, "2000", { role: "admin" });
+    const partner = await ctx.partners.create(admin, { name: "Канал «Игровой угол»", contact: "@corner", note: null }, NOW);
+    const campaign = await ctx.service.create(admin, input({ title: "Код канала", issue: { kind: "shared", code: "UGOL2026", maxRedemptions: null }, partnerId: partner.partnerId }), NOW);
+    return { admin, partner, campaign };
+  }
+
+  it("новичок по коду партнёра — награда и привязка; в ответе видно, что код партнёрский", async () => {
+    const ctx = setup();
+    const { partner, campaign } = await withPartner(ctx);
+    expect(campaign).toMatchObject({ partnerId: partner.partnerId, partnerName: "Канал «Игровой угол»" });
+    const newbie = await person(ctx, "2001", { createdAt: at(-2 * DAY) });
+    const result = await ctx.service.redeem(newbie, "ugol-2026", NOW);
+    expect(result).toMatchObject({ partner: true, bound: true, credited: { coins: 1_000 } });
+    expect(ctx.repository.partnerBindings.get(newbie.accountId)).toMatchObject({ partnerId: partner.partnerId, campaignId: campaign.campaignId });
+    expect(await ctx.partners.bindingOf(newbie.accountId)).toMatchObject({ partnerId: partner.partnerId, name: "Канал «Игровой угол»", campaignTitle: "Код канала" });
+  });
+
+  it("старше недели — награду получает, но приведённым партнёра не считается", async () => {
+    const ctx = setup();
+    await withPartner(ctx);
+    const veteran = await person(ctx, "2002", { createdAt: at(-8 * DAY) });
+    expect(await ctx.service.redeem(veteran, "UGOL2026", NOW)).toMatchObject({ partner: true, bound: false, credited: { coins: 1_000 } });
+    expect(ctx.repository.partnerBindings.has(veteran.accountId)).toBe(false);
+    // Ровно семь суток — ещё новичок.
+    const edge = await person(ctx, "2003", { createdAt: at(-7 * DAY) });
+    expect((await ctx.service.redeem(edge, "UGOL2026", NOW)).bound).toBe(true);
+  });
+
+  it("слот источника занят другом или другим партнёром — код не перебивает, награда остаётся", async () => {
+    const ctx = setup();
+    const { admin } = await withPartner(ctx);
+    const referred = await person(ctx, "2004", { createdAt: at(-DAY) });
+    ctx.repository.referralSlots.add(referred.accountId);
+    expect(await ctx.service.redeem(referred, "UGOL2026", NOW)).toMatchObject({ bound: false, credited: { coins: 1_000 } });
+
+    const other = await ctx.partners.create(admin, { name: "Блогер", contact: null, note: null }, NOW);
+    await ctx.service.create(admin, input({ title: "Код блогера", issue: { kind: "shared", code: "BLOGER1", maxRedemptions: null }, partnerId: other.partnerId }), NOW);
+    const newbie = await person(ctx, "2005", { createdAt: at(-DAY) });
+    expect((await ctx.service.redeem(newbie, "UGOL2026", NOW)).bound).toBe(true);
+    expect((await ctx.service.redeem(newbie, "BLOGER1", NOW)).bound).toBe(false);
+    expect(ctx.repository.partnerBindings.get(newbie.accountId)?.partnerId).not.toBe(other.partnerId);
+  });
+
+  it("код несуществующему партнёру не заводится; в каталоге — партнёры для шага «Чей код» и окно привязки", async () => {
+    const ctx = setup();
+    const { admin, partner } = await withPartner(ctx);
+    expect(await codeOf(ctx.service.create(admin, input({ issue: { kind: "shared", code: "NOBODY1", maxRedemptions: null }, partnerId: randomUUID() }), NOW))).toBe("promo_campaign_invalid");
+    const catalog = await ctx.service.catalog(admin, NOW);
+    expect(catalog.partners).toEqual([{ partnerId: partner.partnerId, name: "Канал «Игровой угол»" }]);
+    expect(catalog.partnerRules.bindWindowDays).toBe(7);
   });
 });
 

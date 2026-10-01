@@ -100,6 +100,10 @@ erDiagram
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
+    PARTNER ||--o{ PROMO_CAMPAIGN : "коды партнёра"
+    PARTNER ||--o{ PARTNER_BINDING : "привёл игроков"
+    ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
+    PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -738,9 +742,27 @@ erDiagram
         string_array platforms "пусто — все площадки"
         datetime paused_at "nullable"
         string note "nullable: для команды"
+        uuid partner_id FK "nullable: код партнёра; null — подарок команды"
         uuid created_by "без FK: кто завёл"
         datetime created_at
         datetime updated_at
+    }
+
+    PARTNER {
+        uuid partner_id PK
+        string name "как зовёт команда"
+        string contact "nullable: @имя, ссылка"
+        string note "nullable: договорённости"
+        uuid created_by "без FK"
+        datetime created_at
+        datetime updated_at
+    }
+
+    PARTNER_BINDING {
+        uuid account_id PK,FK "слот источника один: либо это, либо REFERRAL_BINDING"
+        uuid partner_id FK "партнёра с игроками не удалить"
+        uuid campaign_id FK "nullable: каким кодом"
+        datetime bound_at
     }
 
     PROMO_CODE {
@@ -902,6 +924,15 @@ erDiagram
   доначисляется повторным вводом теми же ключами кошелька. Кампания с
   активациями не удаляется — по ней выданы награды, это держит и внешний
   ключ; код занятой кампании не переиспользуется.
+- **`PARTNER`, `PARTNER_BINDING` — партнёры и приведённые ими игроки**
+  (`35-stage4-plan.md`, WP41, часть 2): код партнёра (`PROMO_CAMPAIGN.partner_id`)
+  при активации привязывает новичка к партнёру — в той же транзакции, что
+  и активация. Слот источника у игрока один на две таблицы двух модулей:
+  `REFERRAL_BINDING` или `PARTNER_BINDING`, кто первый
+  (`23-referral-and-partner-program.md` §5). Внешним ключом это не
+  выразить, поэтому обе записи идут под одной блокировкой аккаунта
+  (`attribution/source-slot.ts`). Выплат партнёрам нет — они после лонча
+  (§1.3).
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1075,9 +1106,7 @@ erDiagram
 erDiagram
     CLICK ||--o| ACCOUNT : "атрибутирует"
     PARTNER ||--o{ PARTNER_LINK : "владеет"
-    PARTNER ||--o{ PROMO_CODE : "владеет"
     PARTNER_LINK ||--o{ CLICK : "порождает"
-    PROMO_CODE ||--o{ ACCOUNT : "привязывает"
     PARTNER ||--o{ PARTNER_ACCRUAL : "получает"
     PURCHASE ||--o| PARTNER_ACCRUAL : "порождает"
     ACCOUNT ||--o{ SHARE : "создаёт"
@@ -1100,13 +1129,12 @@ erDiagram
     }
 
     PARTNER {
-        uuid id PK
-        string telegramId UK
+        uuid partner_id PK "заведён (§1.1, WP41); здесь — поля выплат"
+        string telegramId UK "вход в кабинет"
         enum payoutModel "REVSHARE|CPA_FTD|HYBRID"
         decimal revsharePercent
         int holdDays
         bool isBlocked
-        datetime createdAt
     }
 
     PARTNER_LINK {
@@ -1115,14 +1143,6 @@ erDiagram
         string code UK
         string campaign
         datetime createdAt
-    }
-
-    PROMO_CODE {
-        uuid id PK
-        uuid partnerId FK
-        string code UK
-        int activationLimit
-        datetime expiresAt
     }
 
     PARTNER_ACCRUAL {

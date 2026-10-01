@@ -182,10 +182,17 @@ const campaignShape = {
     .refine((list) => new Set(list).size === list.length, { message: "площадка повторяется" }),
 };
 
-export const promoCampaignInputSchema = z.object({ ...campaignShape, issue: issueSchema }).strict();
+export const promoCampaignInputSchema = z
+  .object({
+    ...campaignShape,
+    issue: issueSchema,
+    /** чей код: партнёра — активация ещё и привязывает новичка к нему; `null` — подарок команды. После заведения не меняется */
+    partnerId: z.uuid().nullable().default(null),
+  })
+  .strict();
 export type PromoCampaignInput = z.infer<typeof promoCampaignInputSchema>;
 
-/** Правка: код и вид не меняются; лимит — только у общего кода, у пачки он равен числу кодов. */
+/** Правка: код, вид и партнёр не меняются; лимит — только у общего кода, у пачки он равен числу кодов. */
 export const promoCampaignUpdateSchema = z
   .object({ ...campaignShape, maxRedemptions: z.number().int().min(1).max(PROMO_CODE_LIMITS.maxRedemptions).nullable() })
   .strict();
@@ -206,6 +213,9 @@ export interface PromoCampaignRow {
   platforms: PlatformId[];
   pausedAt: Date | null;
   note: string | null;
+  /** чей код; `null` — подарок команды */
+  partnerId: string | null;
+  partnerName: string | null;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;

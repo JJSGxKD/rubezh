@@ -4,6 +4,8 @@ import { ForbiddenError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
+import { PARTNER_RULES, withinBindWindow } from "../partners/partner-rules.js";
+import { PartnersService } from "../partners/partners.service.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import {
@@ -45,6 +47,10 @@ import { PROMO_CODES_REPOSITORY, type PromoCodeDraft, type PromoCodesRepository 
  * награды: упади кошелёк между ними, повторный ввод того же кода доначислит
  * награду теми же ключами, а не скажет «уже получили».
  *
+ * **Код партнёра** ещё и привязывает новичка к партнёру, если слот источника
+ * свободен (docs/23-referral-and-partner-program.md §5) — в той же
+ * транзакции, что и активация.
+ *
  * **Команда** заводит кампании в панели под `promo.edit`; каждое действие — в
  * аудит. Награда и начало меняются, пока код никто не активировал (правила —
  * `promo-code-rules.ts`).
@@ -65,6 +71,10 @@ export interface RedeemResult {
   /** для события `promo_code_applied` */
   campaignId: string;
   kind: PromoCampaignRow["kind"];
+  /** код партнёра */
+  partner: boolean;
+  /** игрок этим кодом привязан к партнёру */
+  bound: boolean;
 }
 
 export interface PromoCampaignView extends PromoCampaignRow {
@@ -76,6 +86,9 @@ export interface PromoCatalogView {
   campaigns: PromoCampaignView[];
   limits: typeof PROMO_CODE_LIMITS;
   platforms: readonly PlatformId[];
+  /** партнёры для шага «Чей код» */
+  partners: { partnerId: string; name: string }[];
+  partnerRules: typeof PARTNER_RULES;
 }
 
 export interface PromoCampaignDetail {
@@ -113,6 +126,7 @@ export class PromoCodesService {
     @Inject(PROMO_RANDOM) private readonly pick: PromoRandom,
     private readonly wallet: WalletService,
     private readonly roles: RolesService,
+    private readonly partners: PartnersService,
   ) {}
 
   async redeem(account: AccountRef, raw: string, at = new Date()): Promise<RedeemResult> {
@@ -132,7 +146,7 @@ export class PromoCodesService {
     const previous = await this.db(this.repository.redemption(campaign.campaignId, account.accountId));
     if (previous !== null) {
       // Погашение записано, а награда не легла: доначисляем теми же ключами.
-      if (previous.rewardedAt === null) return await this.reward(account.accountId, campaign, at);
+      if (previous.rewardedAt === null) return await this.reward(account.accountId, campaign, false, at);
       throw this.refuse(account, campaign, "already");
     }
 
@@ -142,15 +156,20 @@ export class PromoCodesService {
     const refusal = redeemRefusal(campaign, found, { platform: account.platform, createdAt: player.createdAt }, at);
     if (refusal !== null) throw this.refuse(account, campaign, refusal);
 
-    const outcome = await this.db(this.repository.redeem({ campaignId: campaign.campaignId, accountId: account.accountId, code: found.code, batch: campaign.kind === "batch", at }));
-    if (outcome !== "redeemed") throw this.refuse(account, campaign, outcome);
-    return await this.reward(account.accountId, campaign, at);
+    // Приведённым считается только новичок: старый игрок, узнавший код из поста, пришёл не по нему.
+    const partnerId = campaign.partnerId !== null && withinBindWindow(player.createdAt, at) ? campaign.partnerId : null;
+    const outcome = await this.db(
+      this.repository.redeem({ campaignId: campaign.campaignId, accountId: account.accountId, code: found.code, batch: campaign.kind === "batch", partnerId, at }),
+    );
+    if (outcome.status !== "redeemed") throw this.refuse(account, campaign, outcome.status);
+    if (outcome.bound) this.log("partner_bound", { accountId: account.accountId, partnerId, campaignId: campaign.campaignId });
+    return await this.reward(account.accountId, campaign, outcome.bound, at);
   }
 
   async catalog(actor: AccountRef, at = new Date()): Promise<PromoCatalogView> {
     await this.roles.require(actor, "promo.edit");
-    const rows = await this.db(this.repository.list(LIST_LIMIT));
-    return { campaigns: rows.map((row) => view(row, at)), limits: PROMO_CODE_LIMITS, platforms: PLATFORM_IDS };
+    const [rows, partners] = await Promise.all([this.db(this.repository.list(LIST_LIMIT)), this.partners.names()]);
+    return { campaigns: rows.map((row) => view(row, at)), limits: PROMO_CODE_LIMITS, platforms: PLATFORM_IDS, partners, partnerRules: PARTNER_RULES };
   }
 
   async detail(actor: AccountRef, campaignId: string, at = new Date()): Promise<PromoCampaignDetail> {
@@ -179,6 +198,10 @@ export class PromoCodesService {
     const period = periodProblem(input, at, { startChanged: true, endChanged: true });
     if (period !== null) throw new PromoCampaignInvalidError(period);
 
+    if (input.partnerId !== null && !(await this.partners.names()).some((partner) => partner.partnerId === input.partnerId)) {
+      throw new PromoCampaignInvalidError("Такого партнёра нет — обновите страницу");
+    }
+
     const { issue } = input;
     let codes: PromoCodeDraft[];
     let refill: ((count: number) => PromoCodeDraft[]) | null = null;
@@ -205,6 +228,7 @@ export class PromoCodesService {
       newPlayersDays: input.newPlayersDays,
       platforms: input.platforms,
       note: input.note,
+      partnerId: input.partnerId,
       createdBy: actor.accountId,
       createdAt: at,
     };
@@ -212,7 +236,14 @@ export class PromoCodesService {
     if (outcome.status === "taken") throw new PromoCodeTakenError(outcome.display, outcome.title);
 
     await this.roles.audit({ actorAccountId: actor.accountId, action: "promo.create", target: campaign.campaignId, after: { ...outcome.row, codes: codes.length } });
-    this.log("promo_campaign_created", { campaignId: campaign.campaignId, kind: campaign.kind, codes: codes.length, reward: rewardLines(campaign.reward), actor: actor.accountId });
+    this.log("promo_campaign_created", {
+      campaignId: campaign.campaignId,
+      kind: campaign.kind,
+      codes: codes.length,
+      reward: rewardLines(campaign.reward),
+      partnerId: campaign.partnerId,
+      actor: actor.accountId,
+    });
     return view(outcome.row, at);
   }
 
@@ -242,7 +273,7 @@ export class PromoCodesService {
     await this.roles.audit({ actorAccountId: actor.accountId, action: "promo.remove", target: campaignId, before: outcome.row });
   }
 
-  private async reward(accountId: string, campaign: PromoCampaignRow, at: Date): Promise<RedeemResult> {
+  private async reward(accountId: string, campaign: PromoCampaignRow, bound: boolean, at: Date): Promise<RedeemResult> {
     const credited: PromoReward = { coins: 0, gems: 0, shard_common: 0, shard_uncommon: 0 };
     for (const { resource, amount } of rewardLines(campaign.reward)) {
       const granted = await this.wallet.grant({
@@ -259,7 +290,7 @@ export class PromoCodesService {
     await this.db(this.repository.markRewarded(campaign.campaignId, accountId, credited, at));
     const capped = PROMO_REWARD_RESOURCES.some((resource) => credited[resource] < campaign.reward[resource]);
     this.log("promo_code_redeemed", { accountId, campaignId: campaign.campaignId, kind: campaign.kind, capped });
-    return { credited, capped, message: campaign.message, campaignId: campaign.campaignId, kind: campaign.kind };
+    return { credited, capped, message: campaign.message, campaignId: campaign.campaignId, kind: campaign.kind, partner: campaign.partnerId !== null, bound };
   }
 
   private refuse(account: AccountRef, campaign: PromoCampaignRow, reason: PromoCodeRefusedError["reason"]): PromoCodeRefusedError {

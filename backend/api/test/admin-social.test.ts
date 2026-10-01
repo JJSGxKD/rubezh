@@ -3,10 +3,13 @@ import { loadAppConfig } from "../src/config/app-config.js";
 import type { Account } from "../src/modules/auth/account.repository.js";
 import { AdminSocialService } from "../src/modules/admin/admin-social.service.js";
 import type { ReferralBinding, ReferralsRepository, ReferralStatus } from "../src/modules/referrals/referrals.repository.js";
+import { PartnersService } from "../src/modules/partners/partners.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryFriendsRepository } from "./helpers/memory-friends.js";
+import { MemoryPartnersRepository } from "./helpers/memory-partners.js";
+import { MemoryPromoCodesRepository } from "./helpers/memory-promo-codes.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 /**
@@ -38,6 +41,8 @@ let accounts: MemoryAccountRepository;
 let rolesRepository: MemoryRolesRepository;
 let referrals: Referrals;
 let service: AdminSocialService;
+let promo: MemoryPromoCodesRepository;
+let partners: MemoryPartnersRepository;
 
 async function player(id: string): Promise<Account> {
   return await accounts.upsert({ platform: "telegram", platformUserId: id, displayName: `Игрок ${id}`, username: null, photoUrl: null }, Date.now());
@@ -51,7 +56,9 @@ beforeEach(() => {
   referrals = new Referrals();
   const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
   const roles = new RolesService(config, rolesRepository, accounts);
-  service = new AdminSocialService(accounts, new MemoryFriendsRepository(accounts), referrals as unknown as ReferralsRepository, roles);
+  promo = new MemoryPromoCodesRepository();
+  partners = new MemoryPartnersRepository(promo);
+  service = new AdminSocialService(accounts, new MemoryFriendsRepository(accounts), referrals as unknown as ReferralsRepository, roles, new PartnersService(partners, roles));
 });
 
 describe("друзья и рефералка в панели", () => {
@@ -60,9 +67,17 @@ describe("друзья и рефералка в панели", () => {
     const referred = await player("2");
     referrals.bindings.set(referred.accountId, { referredId: referred.accountId, referrerId: referrer.accountId, status: "bound", boundAt: new Date(), activatedAt: null, rejectReason: null });
 
-    expect(await service.social(referred.accountId)).toMatchObject({ friends: 0, referredBy: { referrerId: referrer.accountId, referrerName: "Игрок 1", status: "bound" } });
+    expect(await service.social(referred.accountId)).toMatchObject({ friends: 0, referredBy: { referrerId: referrer.accountId, referrerName: "Игрок 1", status: "bound" }, partner: null });
     expect((await service.social(referrer.accountId)).referrals).toEqual({ bound: 1, activated: 0, rejected: 0 });
     await expect(service.social("3c8f3a52-2d4e-4c55-9d0e-6f3b2a1c0d9e")).rejects.toMatchObject({ code: "account_not_found" });
+  });
+
+  it("приведённый партнёром — кем и когда, а реферера у него нет", async () => {
+    const newbie = await player("7");
+    const at = new Date(Date.UTC(2026, 9, 2, 9));
+    await partners.create({ partnerId: "2f0c1d4e-1111-4a2b-9c3d-000000000001", name: "Канал", contact: null, note: null, createdBy: newbie.accountId, createdAt: at, updatedAt: at });
+    promo.partnerBindings.set(newbie.accountId, { partnerId: "2f0c1d4e-1111-4a2b-9c3d-000000000001", campaignId: "x", boundAt: at });
+    expect(await service.social(newbie.accountId)).toMatchObject({ referredBy: null, partner: { partnerId: "2f0c1d4e-1111-4a2b-9c3d-000000000001", name: "Канал", boundAt: at } });
   });
 
   it("отклонение — только с правом на блокировку, ожидающей привязки и с записью в журнал", async () => {
