@@ -209,6 +209,7 @@ model Account {
   vipSubscriptions VipSubscription[]
   vipPeriods       VipPeriod[]
   vipDaily         VipDaily?
+  showcaseOffers   ShowcaseOffer[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1663,4 +1664,38 @@ model VipDaily {
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
   @@map("vip_daily")
+}
+
+// Витрина снаряжения (docs/35-stage4-plan.md §3.6, Р11; WP10): каждые
+// игровые сутки у игрока свои конкретные предметы с уже брошенными
+// свойствами, за самоцветы. Предложение хранится, а не выводится из зерна:
+// купленное обязано совпасть с показанным, даже если правила бросков
+// поменяются посреди суток.
+
+/// Предложение витрины на игровые сутки.
+model ShowcaseOffer {
+  offerId   String     @id @map("offer_id") @db.Uuid
+  accountId String     @map("account_id") @db.Uuid
+  /// игровые сутки по Москве: новые сутки — новые предложения
+  gameDay   DateTime   @map("game_day") @db.Date
+  /// место на витрине, с нуля
+  position  Int        @db.SmallInt
+  slot      ItemSlot
+  rarity    ItemRarity
+  level     Int
+  seed      BigInt
+  /// броски, как у предмета: { main: { stat, roll }, extras: [{ stat, roll }] }
+  rolls     Json
+  /// цена на момент выставления — её и спишут
+  priceGems Int        @map("price_gems")
+  createdAt DateTime   @map("created_at") @db.Timestamptz(3)
+  soldAt    DateTime?  @map("sold_at") @db.Timestamptz(3)
+  /// купленный предмет; без внешнего ключа — предмет живёт в журнале предметов
+  itemId    String?    @map("item_id") @db.Uuid
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Витрина игрока на сутки — одна на место: два первых открытия разом не выставят вторую.
+  @@unique([accountId, gameDay, position])
+  @@map("showcase_offer")
 }

@@ -21,6 +21,7 @@ import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { SHOP_SKUS, TITLE_MAX, contentsOf, shopSkuSchema, skuById } from "../src/modules/shop/shop-catalog.js";
 import { ShopController } from "../src/modules/shop/shop.controller.js";
 import { ShopService } from "../src/modules/shop/shop.service.js";
+import { ShowcaseService } from "../src/modules/shop/showcase.service.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
@@ -268,6 +269,8 @@ describe("магазин по HTTP", () => {
         { provide: APP_CONFIG, useValue: config() },
         { provide: REDIS, useValue: unavailableRedis },
         { provide: ShopService, useValue: ctx.shop },
+        // витрина снаряжения — свой тест (showcase.test.ts)
+        { provide: ShowcaseService, useValue: {} },
         RateLimiter,
         AuthGuard,
       ],
