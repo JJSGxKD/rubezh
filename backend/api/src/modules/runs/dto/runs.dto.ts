@@ -58,7 +58,8 @@ export const runFinishSchema = z
     // Потолок формы, а не правило игры: сколько слотов под оружие, решает
     // вердикт, и забег с лишним оружием должен дойти до него, а не упасть
     // здесь безымянной ошибкой разбора.
-    weapons: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99) })).max(16),
+    // Урон оружия — для листа забега в профиле; сборки до листа его не шлют.
+    weapons: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99), damage: z.number().min(0).max(1e12).optional() })).max(16),
     contentHash: z.string().max(32),
     deathCause: z.string().min(1).max(64).nullable().default(null),
     cheats: z.boolean().default(false),
@@ -71,6 +72,17 @@ export const runFinishSchema = z
     // Бусты, которые применил движок. Потолок — формы, а не правило: сколько
     // бустов оплачено, решает сверка с покупками.
     boosts: z.array(z.string().min(1).max(64)).max(8).default([]),
+    // Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4):
+    // на вердикт не влияют. Сборки до листа их не шлют.
+    passives: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99) })).max(16).default([]),
+    stats: z
+      .object({
+        damageTaken: z.number().min(0).max(1e12),
+        xpCollected: z.number().int().min(0).max(1e9),
+        waveReached: z.number().int().min(0).max(10_000),
+        topKills: z.array(z.object({ enemy: weaponId, count: z.number().int().min(0).max(1_000_000) })).max(8),
+      })
+      .optional(),
   })
   // Продолжение позже конца забега или раньше предыдущего — не забег, а
   // битые данные: честный клиент берёт секунды из одного мира.
@@ -80,6 +92,7 @@ export const runFinishSchema = z
   });
 
 export const difficultyQuerySchema = z.enum(DIFFICULTIES);
+export const runIdParamSchema = runId;
 export const reviewLimitSchema = z.coerce.number().int().min(1).max(200).default(50);
 
 export type RunStart = z.infer<typeof runStartSchema>;

@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { storedDetailsSchema, storedWeaponsSchema, type StoredDetails } from "./run-details.js";
 import type { Difficulty } from "./run-rules.js";
 import type { RunVerdict, VerdictReason } from "./run-verdict.js";
 
@@ -34,7 +35,9 @@ export interface RunFinishRecord {
   survivalSec: number;
   level: number;
   enemiesKilled: number;
-  weapons: { id: string; level: number }[];
+  weapons: { id: string; level: number; damage?: number | undefined }[];
+  /** подробности для листа забега; `null` — сборка их не прислала */
+  details: StoredDetails | null;
   deathCause: string | null;
   cheats: boolean;
   /** секунда каждого второго шанса */
@@ -61,6 +64,7 @@ export type StartOutcome = "created" | "exists" | "foreign";
 export type FinishOutcome = "finished" | "duplicate" | "foreign";
 
 export interface RecentRun {
+  runId: string;
   difficulty: Difficulty;
   survivalSec: number;
   level: number;
@@ -90,6 +94,25 @@ export interface ReviewRow {
   finishedAt: Date | null;
 }
 
+/** Свой законченный забег целиком — для листа в профиле. */
+export interface RunDetailRow {
+  runId: string;
+  difficulty: Difficulty;
+  startingWeaponId: string;
+  finishedAt: Date;
+  outcome: "died" | "abandoned";
+  survivalSec: number;
+  level: number;
+  enemiesKilled: number;
+  weapons: { id: string; level: number; damage: number | null }[];
+  details: StoredDetails | null;
+  deathCause: string | null;
+  cheats: boolean;
+  continues: number;
+  ranked: boolean;
+  verdict: RunVerdict | null;
+}
+
 export const RUNS_REPOSITORY = Symbol("RUNS_REPOSITORY");
 
 export interface RunsRepository {
@@ -98,6 +121,8 @@ export interface RunsRepository {
   finish(record: RunFinishRecord): Promise<FinishOutcome>;
   stats(accountId: string): Promise<{ runs: number; totalKills: number; totalSurvivalSec: number }>;
   recent(accountId: string, limit: number): Promise<RecentRun[]>;
+  /** свой законченный забег; чужой, незаконченный и незнакомый — `null` */
+  detail(accountId: string, runId: string): Promise<RunDetailRow | null>;
   /** Лучший рейтинговый забег каждого из аккаунтов — для строк лидерборда */
   bestRuns(accountIds: readonly string[], difficulty: Difficulty): Promise<BestRunRow[]>;
   /** Лучшее рейтинговое время каждого аккаунта — источник пересборки проекции */
@@ -151,6 +176,7 @@ export class PrismaRunsRepository implements RunsRepository {
       level: record.level,
       enemiesKilled: record.enemiesKilled,
       weapons: record.weapons,
+      details: record.details ?? Prisma.DbNull,
       deathCause: record.deathCause,
       cheats: record.cheats,
       continues: record.continues,
@@ -208,15 +234,61 @@ export class PrismaRunsRepository implements RunsRepository {
       where: { accountId, status: "finished" },
       orderBy: { finishedAt: "desc" },
       take: limit,
-      select: { difficulty: true, survivalSec: true, level: true, startingWeaponId: true, finishedAt: true },
+      select: { runId: true, difficulty: true, survivalSec: true, level: true, startingWeaponId: true, finishedAt: true },
     });
     return rows.map((row) => ({
+      runId: row.runId,
       difficulty: row.difficulty,
       survivalSec: row.survivalSec ?? 0,
       level: row.level ?? 1,
       startingWeaponId: row.startingWeaponId,
       finishedAt: row.finishedAt ?? new Date(0),
     }));
+  }
+
+  async detail(accountId: string, runId: string): Promise<RunDetailRow | null> {
+    // Чужой забег не отдаём: идентификатор забега — не пропуск к чужим числам.
+    const row = await this.prisma.run.findFirst({
+      where: { runId, accountId, status: "finished" },
+      select: {
+        runId: true,
+        difficulty: true,
+        startingWeaponId: true,
+        finishedAt: true,
+        outcome: true,
+        survivalSec: true,
+        level: true,
+        enemiesKilled: true,
+        weapons: true,
+        details: true,
+        deathCause: true,
+        cheats: true,
+        continues: true,
+        ranked: true,
+        verdict: true,
+      },
+    });
+    if (row === null) return null;
+    const weapons = storedWeaponsSchema.safeParse(row.weapons);
+    const details = storedDetailsSchema.safeParse(row.details);
+    return {
+      runId: row.runId,
+      difficulty: row.difficulty,
+      startingWeaponId: row.startingWeaponId,
+      finishedAt: row.finishedAt ?? new Date(0),
+      outcome: row.outcome ?? "died",
+      survivalSec: row.survivalSec ?? 0,
+      level: row.level ?? 1,
+      enemiesKilled: row.enemiesKilled ?? 0,
+      // Битый JSON — без этой части, а не без листа целиком.
+      weapons: weapons.success ? weapons.data.map((weapon) => ({ id: weapon.id, level: weapon.level, damage: weapon.damage ?? null })) : [],
+      details: details.success ? details.data : null,
+      deathCause: row.deathCause,
+      cheats: row.cheats,
+      continues: row.continues.length,
+      ranked: row.ranked,
+      verdict: row.verdict,
+    };
   }
 
   async bestRuns(accountIds: readonly string[], difficulty: Difficulty): Promise<BestRunRow[]> {

@@ -111,7 +111,8 @@ erDiagram
         float survival_sec "nullable"
         int level "nullable"
         int enemies_killed "nullable"
-        json weapons "nullable"
+        json weapons "nullable: id, уровень и урон к концу"
+        json details "nullable: навыки, получено урона, опыт, отрезок, пятёрка врагов — лист забега"
         boolean cheats
         float[] continues "секунда каждого второго шанса"
         boolean ranked "в рейтинге: вердикт ok и без читов"

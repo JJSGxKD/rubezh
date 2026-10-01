@@ -218,6 +218,11 @@ export class ItemsService {
    * ключу забега: повтор задания второй предмет не выдаст. Полный инвентарь
    * выпавшее не теряет — оно сразу разбирается в осколки.
    */
+  /** Что выпало в забеге — для листа забега в профиле. */
+  async lootOf(accountId: string, runId: string): Promise<{ slot: string; rarity: string; level: number }[]> {
+    return await this.items.loot(accountId, runId);
+  }
+
   async dropForRun(input: RunLoot): Promise<ItemRow | null> {
     const seed = this.seeds();
     let salvaged = false;

@@ -114,6 +114,9 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
       expect(inventory.items).toHaveLength(1);
       expect(inventory.items[0]).toMatchObject({ slot: expected?.slot, rarity: expected?.rarity, level: expected?.level });
       expect(new Set(results.map((item) => item?.itemId)).size).toBe(1);
+      // Лист забега видит ту же добычу — и только своему аккаунту.
+      expect(await items.lootOf(id, run.runId)).toEqual([{ slot: expected?.slot, rarity: expected?.rarity, level: expected?.level }]);
+      expect(await items.lootOf(await account(), run.runId)).toEqual([]);
     }, RACE_TIMEOUT_MS);
 
     it("отклонённый забег ничего не даёт", async () => {

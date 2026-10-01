@@ -135,6 +135,7 @@ describe("счёт второго шанса", () => {
       level: 5,
       enemiesKilled: 100,
       weapons: [],
+      details: null,
       deathCause: null,
       cheats: false,
       continues: [],

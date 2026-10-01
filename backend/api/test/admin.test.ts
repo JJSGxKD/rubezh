@@ -27,6 +27,7 @@ import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { LEADERBOARD_STORE } from "../src/modules/runs/leaderboard.store.js";
+import { RunExtras } from "../src/modules/runs/run-details.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { RUNS_REPOSITORY } from "../src/modules/runs/runs.repository.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -92,6 +93,7 @@ describe("панель по HTTP", () => {
         RolesService,
         PermissionGuard,
         RunsViewService,
+        RunExtras,
         AdminSessionService,
         AdminSessionGuard,
         AdminRolesService,

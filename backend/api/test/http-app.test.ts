@@ -18,6 +18,7 @@ import { RUNS_REPOSITORY } from "../src/modules/runs/runs.repository.js";
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { RunContinues } from "../src/modules/runs/run-continues.js";
+import { RunExtras } from "../src/modules/runs/run-details.js";
 import { RunLoadouts } from "../src/modules/runs/run-loadouts.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -51,6 +52,7 @@ function moduleFor(env: Record<string, string>): Type<unknown> {
       RunsHooks,
       RunContinues,
       RunLoadouts,
+      RunExtras,
       RunsService,
       RunsViewService,
     ],
@@ -84,6 +86,15 @@ describe("HTTP-приложение на Fastify", () => {
     const profile = await app.inject({ method: "GET", url: "/api/v1/runs/me", headers: auth });
     expect(profile.statusCode).toBe(200);
     expect(profile.json()).toMatchObject({ data: { recent: [] } });
+  });
+
+  it("лист забега не перехватывает «me» и рейтинг, а незнакомый забег — 404 с кодом", async () => {
+    const board = await app.inject({ method: "GET", url: "/api/v1/runs/leaderboard?difficulty=easy", headers: auth });
+    expect(board.statusCode).toBe(200);
+    const missing = await app.inject({ method: "GET", url: `/api/v1/runs/${randomUUID()}`, headers: auth });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json()).toMatchObject({ error: { code: "run_not_found" } });
+    expect((await app.inject({ method: "GET", url: "/api/v1/runs/x", headers: auth })).statusCode).toBe(400);
   });
 
   it("отвечает на неизвестный путь общей формой ошибки", async () => {

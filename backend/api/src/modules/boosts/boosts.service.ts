@@ -108,4 +108,11 @@ export class BoostsService {
     if (row === null || row.accountId !== accountId || row.refundedAt !== null) return "unpaid";
     return claimed.every((id) => row.boosts.includes(id)) ? "paid" : "unpaid";
   }
+
+  /** Бусты, купленные на свой забег; возвращённые за незапущенный забег не в счёт. */
+  async ofRun(accountId: string, runId: string): Promise<string[]> {
+    const row = await this.repository.byRun(runId);
+    if (row === null || row.accountId !== accountId || row.refundedAt !== null) return [];
+    return row.boosts;
+  }
 }

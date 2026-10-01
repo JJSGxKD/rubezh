@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { BoostsCheck } from "./boosts-check.js";
+import { BoostsRunExtras } from "./boosts-run-extras.js";
 import { BoostsController } from "./boosts.controller.js";
 import { BoostsRefunder } from "./boosts-refunder.js";
 import { BOOSTS_REPOSITORY, PrismaBoostsRepository } from "./boosts.repository.js";
@@ -17,6 +18,6 @@ import { BoostsService } from "./boosts.service.js";
 @Module({
   imports: [AuthModule, WalletModule, RunsModule, NotificationsModule],
   controllers: [BoostsController],
-  providers: [BoostsService, BoostsCheck, BoostsRefunder, { provide: BOOSTS_REPOSITORY, useClass: PrismaBoostsRepository }],
+  providers: [BoostsService, BoostsCheck, BoostsRunExtras, BoostsRefunder, { provide: BOOSTS_REPOSITORY, useClass: PrismaBoostsRepository }],
 })
 export class BoostsModule {}
