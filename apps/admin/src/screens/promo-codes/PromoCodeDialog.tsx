@@ -11,6 +11,7 @@ import {
   emptyForm,
   formOf,
   formSchema,
+  layoutHint,
   localInput,
   periodOf,
   randomCode,
@@ -376,9 +377,13 @@ function CodeStatus({ check }: { check: CheckState }) {
   const lower = result.display.toLowerCase();
   const joined = result.display.replace(/[\s-]/g, "");
   const variants = [...new Set([lower, joined, result.display])].slice(0, 3);
+  const layout = layoutHint(result.display);
   return (
-    <span className="max-w-80 text-xs text-success">
-      Свободен. Игрок может ввести: <span className="font-mono">{variants.join(", ")}</span> — регистр, пробелы и дефисы не важны
+    <span className="flex max-w-80 flex-col gap-0.5 text-xs">
+      <span className="text-success">
+        Свободен. Игрок может ввести: <span className="font-mono">{variants.join(", ")}</span> — регистр, пробелы и дефисы не важны
+      </span>
+      <span className={layout.tone === "warning" ? "text-warning" : "text-text-muted"}>{layout.text}</span>
     </span>
   );
 }

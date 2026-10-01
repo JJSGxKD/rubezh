@@ -12,6 +12,7 @@ import {
   fetchPromoCodes,
   formOf,
   formSchema,
+  layoutHint,
   localInput,
   plural,
   randomCode,
@@ -171,6 +172,13 @@ describe("промокоды в панели", () => {
     expect(batchMask("ZIMA-K7MP-3XTE")).toBe("ZIMA-····-····");
     expect(batchMask("K7MP-3XTE")).toBe("····-····");
     expect(batchMask("ЗИМА-K7MP-3XTE")).toBe("ЗИМА-····-····");
+  });
+
+  it("подсказка раскладки: русское слово — только по-русски, английское — по-английски, двойники — с любой", () => {
+    expect(layoutHint("РУБЕЖ 2026")).toMatchObject({ tone: "info", text: expect.stringContaining("русской раскладке") as unknown });
+    expect(layoutHint("RUBEZH2026")).toMatchObject({ tone: "info", text: expect.stringContaining("английской раскладке") as unknown });
+    expect(layoutHint("PEKA-2026")).toMatchObject({ tone: "info", text: expect.stringContaining("с любой") as unknown });
+    expect(layoutHint("ЗИМА-WIN")).toMatchObject({ tone: "warning" });
   });
 
   it("придуманный код — из букв обеих раскладок; выгрузка пачки — таблицей для Excel", () => {

@@ -176,6 +176,22 @@ export function audienceText(campaign: Pick<PromoCampaign, "platforms" | "newPla
   return parts.length === 0 ? "все игроки" : parts.join(" · ");
 }
 
+/**
+ * На какой раскладке игрок наберёт код. Сервер сводит к латинице только
+ * кириллицу, которую на глаз не отличить от латиницы (А, В, Е, К, М, Н, О,
+ * Р, С, Т, Х, У): «РУБЕЖ» и «RUBEZH» для него разные коды. Это стоит
+ * сказать команде до заведения — на стриме код называют голосом.
+ */
+export function layoutHint(display: string): { tone: "info" | "warning"; text: string } {
+  const upper = display.toUpperCase();
+  const russianOnly = /[БГДЖЗИЙЛПФЦЧШЩЪЫЬЭЮЯ]/.test(upper);
+  const latinOnly = /[DFGIJLNQRSUVWZ]/.test(upper);
+  if (russianOnly && latinOnly) return { tone: "warning", text: "Русские и латинские буквы вперемешку — набрать такой код можно, только переключая раскладку. Лучше на одном языке" };
+  if (russianOnly) return { tone: "info", text: "Русские буквы: игрок наберёт код на русской раскладке; латиницей он не найдётся" };
+  if (latinOnly) return { tone: "info", text: "Латинские буквы: игрок наберёт код на английской раскладке; кириллицей он не найдётся" };
+  return { tone: "info", text: "Буквы есть на обеих раскладках — код набирается с любой" };
+}
+
 /** Буквы кодов, которые предлагает кнопка «Придумать», — те же, что у пачки на сервере: их набирают с любой раскладки. */
 export const CODE_ALPHABET = "ACEHKMPTXY2345679";
 
