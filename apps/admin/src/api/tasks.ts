@@ -7,8 +7,10 @@ import type { AdminApi, ApiResult } from "./client";
  * Удаления нет: задание выключают, на него ссылается прогресс игроков. Срок
  * и вид после создания не меняются.
  *
- * Цель «канал» выполняет подписка, а не забег: у неё площадка, канал и
- * ссылка, и она — только достижение с целью 1 (подписку не копят).
+ * Партнёрские цели — подписка на канал, переход по ссылке, запуск бота —
+ * выполняет действие игрока вне игры, а не забег: у них ссылка, площадка и у
+ * канала — сам канал, и они — только достижение с целью 1. У игрока и в
+ * панели они — своей группой.
  */
 
 export const TASK_PERIODS = ["daily", "weekly", "achievement"] as const;
@@ -24,10 +26,15 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   best_survival_sec: "Рекорд времени, с",
   run_level: "Уровень в забеге",
   channel: "Подписка на канал",
+  link: "Переход по ссылке",
+  bot: "Запуск бота",
 };
 
-/** Вид, который выполняет подписка: у него канал вместо числа. */
+/** Подписка — её проверяет бот площадки по каналу. */
 export const CHANNEL_KIND = "channel";
+
+/** Партнёрские виды: ссылка вместо числа, своя группа в каталоге. */
+export const PARTNER_KINDS: ReadonlySet<string> = new Set([CHANNEL_KIND, "link", "bot"]);
 
 /** Площадки, где есть каналы, — те же, что принимает сервер. */
 export const CHANNEL_PLATFORMS = ["telegram", "max", "vk"] as const;
@@ -45,15 +52,16 @@ export const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_sur
 export const TASK_ID_PATTERN = /^[a-z][a-z0-9_]{1,47}$/;
 export const TITLE_MAX = 120;
 
-const channelSchema = z.object({ platform: z.enum(CHANNEL_PLATFORMS), chat: z.string(), url: z.string() });
-export type ChannelParams = z.infer<typeof channelSchema>;
+/** У ссылки и бота площадка необязательна — без неё цель видна на любой; канал — только у подписки. */
+const paramsSchema = z.object({ platform: z.enum(CHANNEL_PLATFORMS).optional(), chat: z.string().optional(), url: z.string() });
+export type TaskParams = z.infer<typeof paramsSchema>;
 
 const taskSchema = z.object({
   taskId: z.string(),
   period: z.enum(TASK_PERIODS),
   kind: z.string(),
-  /** сервер до цели «канал» поля не отдавал */
-  params: channelSchema.nullable().default(null),
+  /** сервер до партнёрских целей поля не отдавал */
+  params: paramsSchema.nullable().default(null),
   target: z.number(),
   title: z.string().nullable(),
   coins: z.number(),
@@ -75,28 +83,52 @@ export function fetchTasks(api: AdminApi): Promise<ApiResult<TaskCatalog>> {
 
 export function saveTask(api: AdminApi, task: TaskDef): Promise<ApiResult<TaskDef>> {
   const title = task.title?.trim() ?? "";
-  const params = task.params === null ? null : { ...task.params, chat: task.params.chat.trim(), url: task.params.url.trim() };
-  return api.request("/tasks", { method: "POST", body: { ...task, taskId: task.taskId.trim(), title: title === "" ? null : title, params }, schema: taskSchema });
+  return api.request("/tasks", { method: "POST", body: { ...task, taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task) }, schema: taskSchema });
+}
+
+/** Параметры в том виде, что принимает сервер: обрезанные, без пустой площадки и без канала не у подписки. */
+function cleanParams(task: Pick<TaskDef, "kind" | "params">): TaskParams | null {
+  if (task.params === null) return null;
+  const chat = task.params.chat?.trim();
+  return {
+    ...(task.params.platform === undefined ? {} : { platform: task.params.platform }),
+    ...(task.kind === CHANNEL_KIND && chat !== undefined ? { chat } : {}),
+    url: task.params.url.trim(),
+  };
 }
 
 /**
- * Смена вида в форме: у канала — пустые параметры, срок «достижение» и цель
- * 1; у вида забега параметров нет. Остальное поле формы сохраняет.
+ * Смена вида в форме: у партнёрской цели — ссылка, срок «достижение» и цель
+ * 1, у подписки ещё площадка и канал; у вида забега параметров нет. Остальное
+ * поле формы сохраняет.
  */
 export function withKind(task: TaskDef, kind: string): TaskDef {
-  if (kind === CHANNEL_KIND) return { ...task, kind, period: "achievement", target: 1, params: task.params ?? { platform: "telegram", chat: "", url: "" } };
-  return { ...task, kind, params: null };
+  if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null };
+  const url = task.params?.url ?? "";
+  const params: TaskParams =
+    kind === CHANNEL_KIND ? { platform: task.params?.platform ?? "telegram", chat: task.params?.chat ?? "", url } : { ...(task.params?.platform === undefined ? {} : { platform: task.params.platform }), url };
+  return { ...task, kind, period: "achievement", target: 1, params };
+}
+
+/** Площадка партнёрской цели; `undefined` — цель видна на всех площадках. */
+export function withPlatform(params: TaskParams | null, platform: ChannelPlatform | undefined): TaskParams {
+  const url = params?.url ?? "";
+  const chat = params?.chat === undefined ? {} : { chat: params.chat };
+  return platform === undefined ? { ...chat, url } : { ...chat, platform, url };
 }
 
 function isHttpsUrl(value: string): boolean {
   return URL.canParse(value) && new URL(value).protocol === "https:";
 }
 
-function channelProblem(task: TaskDef): string | null {
-  if (task.params === null) return "У подписки на канал нужны площадка, канал и ссылка";
-  if (task.period !== "achievement" || task.target !== 1) return "Подписка — только достижение с целью 1: её не копят, а каждый день за неё не платят";
-  const chat = task.params.chat.trim();
-  if (chat.length < CHAT_MIN || chat.length > CHAT_MAX) return `Канал — @имя или id, от ${String(CHAT_MIN)} до ${String(CHAT_MAX)} знаков`;
+function partnerProblem(task: TaskDef): string | null {
+  if (task.params === null) return "У партнёрской цели нужна ссылка, у подписки на канал — ещё площадка и канал";
+  if (task.period !== "achievement" || task.target !== 1) return "Партнёрская цель — только достижение с целью 1: её не копят, а каждый день за неё не платят";
+  if (task.kind === CHANNEL_KIND) {
+    if (task.params.platform === undefined) return "У подписки на канал нужна площадка — бот спрашивает свою";
+    const chat = task.params.chat?.trim() ?? "";
+    if (chat.length < CHAT_MIN || chat.length > CHAT_MAX) return `Канал — @имя или id, от ${String(CHAT_MIN)} до ${String(CHAT_MAX)} знаков`;
+  }
   const url = task.params.url.trim();
   if (url.length > URL_MAX || !isHttpsUrl(url)) return `Ссылка — https://…, до ${String(URL_MAX)} знаков`;
   return null;
@@ -118,8 +150,8 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if (![task.coins, task.gems, task.shards, task.passPoints, task.sort].every(nonNegativeInt)) return "Награда, очки пасса и порядок — целые неотрицательные";
   if (task.coins + task.gems + task.shards === 0) return "Без награды задание некому выполнять — дайте монеты, самоцветы или осколки";
   if ((task.title?.trim().length ?? 0) > TITLE_MAX) return `Заголовок — до ${String(TITLE_MAX)} знаков`;
-  if (task.kind === CHANNEL_KIND) return channelProblem(task);
-  if (task.params !== null) return "Канал и ссылка — только у подписки на канал";
+  if (PARTNER_KINDS.has(task.kind)) return partnerProblem(task);
+  if (task.params !== null) return "Ссылка — только у партнёрских целей";
   return null;
 }
 
@@ -128,19 +160,28 @@ export function rewardLabel(task: Pick<TaskDef, "coins" | "gems" | "shards">): s
   return parts.filter((part): part is string => part !== null).join(" + ");
 }
 
-/** Цель подписью: время — минутами, канал — именем, остальное — числом. */
+/** Цель подписью: время — минутами, канал — именем, ссылка — адресом, остальное — числом. */
 export function targetLabel(task: Pick<TaskDef, "kind" | "target"> & Partial<Pick<TaskDef, "params">>): string {
   const params = task.params ?? null;
-  if (task.kind === CHANNEL_KIND && params !== null) return `${params.chat} (${CHANNEL_PLATFORM_TITLES[params.platform]})`;
+  if (params !== null) {
+    const where = params.platform === undefined ? "все площадки" : CHANNEL_PLATFORM_TITLES[params.platform];
+    const what = task.kind === CHANNEL_KIND ? (params.chat ?? "") : URL.canParse(params.url) ? new URL(params.url).host : params.url;
+    return `${what} (${where})`;
+  }
   if (!TIME_KINDS.has(task.kind)) return String(task.target);
   const minutes = task.target / 60;
   return Number.isInteger(minutes) ? `${String(minutes)} мин` : `${String(task.target)} с`;
 }
 
-/** Каталог по срокам в порядке показа игроку: место, потом id. */
-export function groupByPeriod(tasks: readonly TaskDef[]): { period: TaskPeriod; tasks: TaskDef[] }[] {
-  return TASK_PERIODS.map((period) => ({
-    period,
-    tasks: tasks.filter((task) => task.period === period).sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId)),
+/** Группа каталога: срок, а партнёрские — своей, как у игрока. */
+export type TaskGroup = TaskPeriod | "partner";
+export const GROUP_TITLES: Record<TaskGroup, string> = { ...PERIOD_TITLES, partner: "Партнёрские" };
+
+/** Каталог по группам в порядке показа игроку: место, потом id. */
+export function groupByPeriod(tasks: readonly TaskDef[]): { group: TaskGroup; tasks: TaskDef[] }[] {
+  const groupOf = (task: TaskDef): TaskGroup => (PARTNER_KINDS.has(task.kind) ? "partner" : task.period);
+  return [...TASK_PERIODS, "partner" as const].map((group) => ({
+    group,
+    tasks: tasks.filter((task) => groupOf(task) === group).sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId)),
   }));
 }

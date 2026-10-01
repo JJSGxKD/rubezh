@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
-import { claimFailureKey, createTasksApi, openTaskLink, taskLink } from "../src/state/tasks-api";
+import { claimFailureKey, createTasksApi, isClaimable, isOpenKind, openTaskLink, sortTasks, tabOf, taskLink } from "../src/state/tasks-api";
 
 // Клиент заданий (docs/35-stage4-plan.md WP13): цели с прогрессом — GET,
 // забор — POST без тела с id в адресе; ответ разбирается схемой, незнакомый
@@ -86,5 +86,37 @@ describe("клиент заданий", () => {
 
     const broken = await createTasksApi(server([], { tasks: [{ ...TASK, period: "monthly" }] })).view();
     expect(broken.ok).toBe(false);
+  });
+
+  it("порядок: можно забрать — сверху, в работе — посередине, полученное — внизу; похожие цели рядом и по величине", () => {
+    const task = (id: string, kind: string, target: number, done: boolean, claimed: boolean) => ({ ...TASK, id, kind, target, done, claimed });
+    const sorted = sortTasks([
+      task("claimed_runs", "runs", 3, true, true),
+      task("kills_big", "kills", 5000, false, false),
+      task("runs_10", "runs", 10, false, false),
+      task("ready_kills", "kills", 100, true, false),
+      task("kills_small", "kills", 1000, false, false),
+      task("mystery", "elites", 1, false, false),
+      task("runs_3", "runs", 3, false, false),
+      task("ready_runs", "runs", 5, true, false),
+    ]);
+    expect(sorted.map((item) => item.id)).toEqual(["ready_runs", "ready_kills", "runs_3", "runs_10", "kills_small", "kills_big", "mystery", "claimed_runs"]);
+    expect(isClaimable({ done: true, claimed: false })).toBe(true);
+    expect(isClaimable({ done: true, claimed: true })).toBe(false);
+    expect(isClaimable({ done: false, claimed: false })).toBe(false);
+  });
+
+  it("партнёрские цели — своей вкладкой; старый сервер без категории — по сроку; переход — POST с id в адресе", async () => {
+    expect(tabOf({ category: "partner", period: "achievement" })).toBe("partner");
+    expect(tabOf({ category: "achievement", period: "achievement" })).toBe("achievement");
+    expect(tabOf({ period: "daily" })).toBe("daily");
+    expect(isOpenKind("link") && isOpenKind("bot")).toBe(true);
+    expect(isOpenKind("channel")).toBe(false);
+    expect(claimFailureKey("task_not_opened")).toBe("tasks.notOpened");
+
+    const sent: Sent[] = [];
+    const opened = await createTasksApi(server(sent, { url: "https://t.me/partner_bot", tasks: [{ ...TASK, kind: "bot", category: "partner", link: "https://t.me/partner_bot" }] })).open("ach_bot");
+    expect(opened.ok && opened.data.url).toBe("https://t.me/partner_bot");
+    expect(sent).toEqual([{ method: "POST", path: "/api/v1/tasks/ach_bot/open", body: undefined }]);
   });
 });

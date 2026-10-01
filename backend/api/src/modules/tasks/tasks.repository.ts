@@ -3,7 +3,7 @@ import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { TASK_KIND_IDS, TASK_PERIODS, channelParamsSchema, type TaskDef, type TaskKind, type TaskPeriod } from "./task-rules.js";
+import { TASK_KIND_IDS, TASK_PERIODS, taskParamsSchema, type TaskDef, type TaskKind, type TaskPeriod } from "./task-rules.js";
 
 /**
  * Задания в базе: каталог (`task_def`), прогресс по срокам (`task_progress`)
@@ -101,7 +101,7 @@ export class PrismaTasksRepository implements TasksRepository {
       // Вид, которого этот сервер не знает, — строка из панели новее кода: её
       // нечем засчитывать, и она пропускается, а не роняет весь раздел.
       if (!isKind(row.kind)) continue;
-      const params = row.params === null ? null : channelParamsSchema.safeParse(row.params);
+      const params = row.params === null ? null : taskParamsSchema.safeParse(row.params);
       if (params !== null && !params.success) {
         this.logger.error(JSON.stringify({ module: "tasks", event: "task_params_invalid", taskId: row.task_id }));
         continue;

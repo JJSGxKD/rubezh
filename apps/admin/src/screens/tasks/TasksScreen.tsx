@@ -4,7 +4,9 @@ import {
   CHANNEL_KIND,
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
+  GROUP_TITLES,
   KIND_TITLES,
+  PARTNER_KINDS,
   PERIOD_TITLES,
   TASK_PERIODS,
   TIME_KINDS,
@@ -16,7 +18,8 @@ import {
   targetLabel,
   taskProblem,
   withKind,
-  type ChannelParams,
+  withPlatform,
+  type TaskParams,
   type TaskDef,
 } from "../../api/tasks";
 import { api } from "../../services";
@@ -66,8 +69,9 @@ export function TasksScreen() {
     reload();
   };
 
+  const partner = PARTNER_KINDS.has(input.kind);
   const channel = input.kind === CHANNEL_KIND;
-  const setChannel = (patch: Partial<ChannelParams>) => setInput({ ...input, params: { ...(input.params ?? { platform: "telegram", chat: "", url: "" }), ...patch } });
+  const setParams = (patch: Partial<TaskParams>) => setInput({ ...input, params: { ...(input.params ?? { url: "" }), ...patch } });
 
   const number = (field: "target" | "coins" | "gems" | "shards" | "passPoints" | "sort") => ({
     value: String(input[field]),
@@ -87,7 +91,7 @@ export function TasksScreen() {
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
             </Field>
             <Field label="Срок">
-              <Select value={input.period} disabled={original !== null || channel} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
+              <Select value={input.period} disabled={original !== null || partner} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
                 {TASK_PERIODS.map((period) => (
                   <option key={period} value={period}>
                     {PERIOD_TITLES[period]}
@@ -104,16 +108,20 @@ export function TasksScreen() {
                 ))}
               </Select>
             </Field>
-            {channel ? null : (
+            {partner ? null : (
               <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
                 <Input {...number("target")} min={1} />
               </Field>
             )}
           </div>
-          {channel ? (
+          {partner ? (
             <div className="flex flex-wrap items-end gap-2">
-              <Field label="Площадка" hint="игроки других площадок задания не увидят">
-                <Select value={input.params?.platform ?? "telegram"} onChange={(event) => setChannel({ platform: CHANNEL_PLATFORMS.find((platform) => platform === event.target.value) ?? "telegram" })}>
+              <Field label="Площадка" hint={channel ? "игроки других площадок задания не увидят" : "пусто — цель видна на всех площадках"}>
+                <Select
+                  value={input.params?.platform ?? ""}
+                  onChange={(event) => setInput({ ...input, params: withPlatform(input.params, CHANNEL_PLATFORMS.find((candidate) => candidate === event.target.value)) })}
+                >
+                  {channel ? null : <option value="">Все площадки</option>}
                   {CHANNEL_PLATFORMS.map((platform) => (
                     <option key={platform} value={platform}>
                       {CHANNEL_PLATFORM_TITLES[platform]}
@@ -121,15 +129,26 @@ export function TasksScreen() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Канал" hint="@имя или id — по нему спрашивает бот">
-                <Input value={input.params?.chat ?? ""} onChange={(event) => setChannel({ chat: event.target.value })} placeholder="@rubezh_game" maxLength={64} className="w-44" />
-              </Field>
+              {channel ? (
+                <Field label="Канал" hint="@имя или id — по нему спрашивает бот">
+                  <Input value={input.params?.chat ?? ""} onChange={(event) => setParams({ chat: event.target.value })} placeholder="@rubezh_game" maxLength={64} className="w-44" />
+                </Field>
+              ) : null}
               <Field label="Ссылка" hint="её откроет игрок">
-                <Input value={input.params?.url ?? ""} onChange={(event) => setChannel({ url: event.target.value })} placeholder="https://t.me/rubezh_game" maxLength={256} className="w-72" />
+                <Input
+                  value={input.params?.url ?? ""}
+                  onChange={(event) => setParams({ url: event.target.value })}
+                  placeholder={input.kind === "bot" ? "https://t.me/partner_bot?start=rubezh" : "https://t.me/rubezh_game"}
+                  maxLength={256}
+                  className="w-72"
+                />
               </Field>
             </div>
           ) : null}
           {channel ? <Notice tone="info">Бот проверяет подписку, когда игрок нажимает «Забрать», — сделайте его администратором канала: без этого площадка подписчиков не покажет.</Notice> : null}
+          {partner && !channel ? (
+            <Notice tone="info">Засчитывается переход по ссылке из игры: проверить, что игрок открыл сайт или запустил бота, без постбэка партнёра нечем.</Notice>
+          ) : null}
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Монеты">
               <Input {...number("coins")} />
@@ -170,7 +189,7 @@ export function TasksScreen() {
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok"
         ? groupByPeriod(state.data.tasks).map((group) => (
-            <Panel key={group.period} title={PERIOD_TITLES[group.period]}>
+            <Panel key={group.group} title={GROUP_TITLES[group.group]}>
               <DataTable
                 rows={group.tasks}
                 rowKey={(task) => task.taskId}

@@ -2,7 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
-import { rewardReason, type ChannelParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { rewardReason, type TaskParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { ACHIEVEMENT_PERIOD_START, PrismaTasksRepository, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 
@@ -159,7 +159,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     const actor = await account();
     const me = await account();
     const taskId = `it_channel_${String(Date.now())}`;
-    const params: ChannelParams = { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" };
+    const params: TaskParams = { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" };
     const task: TaskDef = {
       taskId,
       period: "achievement",
@@ -199,6 +199,14 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     await expect(prisma.$executeRaw`
       INSERT INTO task_def (task_id, period, kind, target, gems, params, created_at, updated_at)
       VALUES ('it_runs_params', 'daily', 'runs', 1, 5, '{"chat":"@x"}'::jsonb, now(), now())`).rejects.toThrow();
+    // переход по ссылке и запуск бота — тоже партнёрские: без ссылки база их не примет
+    await expect(prisma.$executeRaw`
+      INSERT INTO task_def (task_id, period, kind, target, gems, created_at, updated_at) VALUES ('it_link_bare', 'achievement', 'link', 1, 5, now(), now())`).rejects.toThrow();
+    const linkId = `it_link_${String(Date.now())}`;
+    expect(
+      await repository.insert({ ...task, taskId: linkId, kind: "link", params: { url: "https://example.com/partner" }, active: false }, actor, NOON),
+    ).toBe(true);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === linkId)?.params).toEqual({ url: "https://example.com/partner" });
   });
 
   it("строка с битыми параметрами пропускается, а не роняет каталог", async () => {
