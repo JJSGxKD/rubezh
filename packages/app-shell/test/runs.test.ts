@@ -167,7 +167,8 @@ describe("очередь забегов", () => {
 
     expect(requests.map((request) => request.url)).toEqual(["/api/v1/runs/start", "/api/v1/runs"]);
     expect(requests[0]?.body).toMatchObject({ runId: "run-00000001", difficultyId: "hard", startingWeaponId: "spark", contentHash: "abcd1234" });
-    // На сервер уходит только нужное рейтингу и антифроду: без урона и убийств по врагам.
+    // На сервер уходит нужное рейтингу, антифроду и листу забега — без полного
+    // разреза по врагам и стихиям: он для аналитики.
     expect(requests[1]?.body).toEqual({
       runId: "run-00000001",
       difficultyId: "hard",
@@ -176,10 +177,12 @@ describe("очередь забегов", () => {
       level: 9,
       enemiesKilled: 212,
       startingWeaponId: "spark",
-      weapons: [{ id: "spark", level: 4 }],
+      weapons: [{ id: "spark", level: 4, damage: 4000 }],
       contentHash: "abcd1234",
       deathCause: "swarm_rat",
       continues: [],
+      passives: [{ id: "might", level: 2 }],
+      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }] },
     });
     expect(useRuns.getState().pending).toBe(0);
   });
@@ -334,3 +337,24 @@ describe("второй шанс в итоге забега", () => {
   });
 });
 
+describe("подробности забега для листа в профиле", () => {
+  it("уходят с итогом: урон оружия, навыки, полученный урон, опыт, отрезок и пятёрка врагов по убыванию", () => {
+    const kills = { swarm_rat: 200, dasher_wolf: 40, elite_ghoul: 2, orbiter_bat: 90, splitter_slime: 15, kite_archer: 60 };
+    const submission = toSubmission(result("run-00000001", { killsByEnemy: kills, damageTaken: 120.6, weapons: [{ id: "spark", level: 4, damage: 3999.7 }] }));
+
+    expect(submission.weapons).toEqual([{ id: "spark", level: 4, damage: 4000 }]);
+    expect(submission.passives).toEqual([{ id: "might", level: 2 }]);
+    expect(submission.stats).toEqual({
+      damageTaken: 121,
+      xpCollected: 300,
+      waveReached: 3,
+      topKills: [
+        { enemy: "swarm_rat", count: 200 },
+        { enemy: "orbiter_bat", count: 90 },
+        { enemy: "kite_archer", count: 60 },
+        { enemy: "dasher_wolf", count: 40 },
+        { enemy: "splitter_slime", count: 15 },
+      ],
+    });
+  });
+});

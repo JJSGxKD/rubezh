@@ -62,6 +62,7 @@ const profileSchema = z.object({
   best: z.object({ easy: bestSchema, normal: bestSchema, hard: bestSchema }),
   recent: z.array(
     z.object({
+      runId: z.optional(z.string()),
       difficultyId: difficultySchema,
       survivalSec: z.number(),
       level: z.number(),
