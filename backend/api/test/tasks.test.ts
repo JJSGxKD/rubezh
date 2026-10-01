@@ -17,6 +17,7 @@ import {
   TaskNotDoneError,
   TaskNotFoundError,
   TaskNotJoinedError,
+  TaskNotOpenedError,
   TaskShapeLockedError,
 } from "../src/modules/tasks/tasks-errors.js";
 import { RUN_KINDS, countsForTasks, rewardReason, taskDefSchema, type TaskDef } from "../src/modules/tasks/task-rules.js";
@@ -275,6 +276,63 @@ describe("цель «канал»: схема", () => {
   });
 });
 
+describe("партнёрские цели: ссылка и бот", () => {
+  const LINK = { url: "https://example.com/partner" } as const;
+  const linkTask = (patch: Partial<TaskDef> = {}) =>
+    def("ach_partner_site", { period: "achievement", kind: "link", params: { ...LINK }, target: 1, coins: 50, gems: 0, sort: 95, ...patch });
+
+  function withPartners() {
+    const ctx = setup();
+    ctx.repository.defs.push(linkTask(), linkTask({ taskId: "ach_partner_bot", kind: "bot", params: { platform: "telegram", url: "https://t.me/partner_bot?start=rubezh" } }));
+    return ctx;
+  }
+
+  it("схема: ссылка — только https; площадка у ссылки и бота необязательна, канал — только у подписки", () => {
+    expect(taskDefSchema.safeParse(linkTask()).success).toBe(true);
+    expect(taskDefSchema.safeParse(linkTask({ kind: "bot", params: { platform: "vk", url: "https://vk.com/partner" } })).success).toBe(true);
+    expect(taskDefSchema.safeParse(linkTask({ params: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(linkTask({ params: { url: "https://example.com", chat: "@x_game" } })).success).toBe(false);
+    expect(taskDefSchema.safeParse(linkTask({ period: "weekly" })).success).toBe(false);
+    // подписке на канал без площадки и канала спросить бота не о чем
+    expect(taskDefSchema.safeParse(channelTask({ params: { url: "https://t.me/rubezh_game" } })).success).toBe(false);
+  });
+
+  it("партнёрские цели — своей категорией; цель без площадки видна на любой, с площадкой — только там", async () => {
+    const ctx = withPartners();
+    const tasks = await ctx.service.view(PLAYER, NOON);
+    expect(byId(tasks, "ach_partner_site")).toMatchObject({ category: "partner", period: "achievement", link: LINK.url });
+    expect(byId(tasks, "daily_runs")).toMatchObject({ category: "daily" });
+    const vk: AccountRef = { accountId: ME, platform: "vk", platformUserId: "555000111" };
+    const onVk = await ctx.service.view(vk, NOON);
+    expect(byId(onVk, "ach_partner_site")).toBeDefined();
+    expect(byId(onVk, "ach_partner_bot")).toBeUndefined();
+  });
+
+  it("без перехода не забрать; переход выполняет цель, повтор ничего не меняет, награда — однажды", async () => {
+    const ctx = withPartners();
+    await expect(ctx.service.claim(PLAYER, "ach_partner_bot", NOON)).rejects.toBeInstanceOf(TaskNotOpenedError);
+
+    const opened = await ctx.service.open(PLAYER, "ach_partner_bot", NOON);
+    expect(opened.url).toBe("https://t.me/partner_bot?start=rubezh");
+    expect(byId(opened.tasks, "ach_partner_bot")).toMatchObject({ done: true, claimed: false, value: 1 });
+    await ctx.service.open(PLAYER, "ach_partner_bot", new Date(NOON.getTime() + HOUR));
+
+    expect(await ctx.service.claim(PLAYER, "ach_partner_bot", NOON)).toMatchObject({ claimed: true, credited: { coins: 50 } });
+    expect(await ctx.service.claim(PLAYER, "ach_partner_bot", NOON)).toMatchObject({ claimed: false });
+    expect(ctx.wallet.grants).toEqual([expect.objectContaining({ reason: "achievement_reward", idempotencyKey: `task:${ME}:ach_partner_bot:${ACHIEVEMENT_PERIOD_START}:coins` })]);
+    // бот площадки здесь не нужен — спрашивать некого
+    expect(ctx.membership.asked).toHaveLength(0);
+  });
+
+  it("переход к подписке на канал сам её не выполняет — её проверит забор; у цели забега ссылки нет", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(channelTask());
+    expect(await ctx.service.open(PLAYER, "ach_channel", NOON)).toMatchObject({ url: CHANNEL.url });
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_channel")).toMatchObject({ done: false });
+    await expect(ctx.service.open(PLAYER, "daily_runs", NOON)).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+});
+
 describe("цель «канал»: проверка площадкой", () => {
   function withChannel() {
     const ctx = setup();
@@ -518,7 +576,7 @@ describe("каталог из панели", () => {
     const ctx = setup();
     const owner = await person(ctx, OWNER_ID);
     const view = await ctx.service.catalog(owner);
-    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "channel"]);
+    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "channel", "link", "bot"]);
     expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
     expect(view.tasks).toHaveLength(CATALOG.length);
   });
@@ -577,5 +635,14 @@ describe("задания по HTTP", () => {
     const later = await app.inject({ method: "POST", url: "/api/v1/tasks/ach_channel/claim", headers });
     expect(later.statusCode).toBe(503);
     expect(later.json<{ error: { code: string } }>().error.code).toBe("task_check_unavailable");
+
+    ctx.repository.defs.push(def("ach_partner_site", { period: "achievement", kind: "link", params: { url: "https://example.com/p" }, target: 1 }));
+    ctx.service.forgetCatalog();
+    const notOpened = await app.inject({ method: "POST", url: "/api/v1/tasks/ach_partner_site/claim", headers });
+    expect(notOpened.json<{ error: { code: string } }>().error.code).toBe("task_not_opened");
+    const open = await app.inject({ method: "POST", url: "/api/v1/tasks/ach_partner_site/open", headers });
+    expect(open.statusCode).toBe(200);
+    expect(open.json<{ data: { url: string } }>().data.url).toBe("https://example.com/p");
+    expect((await app.inject({ method: "POST", url: "/api/v1/tasks/Bad%20Id/open", headers })).statusCode).toBe(400);
   });
 });
