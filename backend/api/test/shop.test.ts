@@ -16,10 +16,11 @@ import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { PaymentsService } from "../src/modules/payments/payments.service.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
-import type { AccountRef } from "../src/modules/roles/roles.service.js";
+import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { SHOP_SKUS, TITLE_MAX, contentsOf, shopSkuSchema, skuById } from "../src/modules/shop/shop-catalog.js";
 import { ShopController } from "../src/modules/shop/shop.controller.js";
+import { ShopPromoService } from "../src/modules/shop/shop-promo.service.js";
 import { ShopService } from "../src/modules/shop/shop.service.js";
 import { ShowcaseService } from "../src/modules/shop/showcase.service.js";
 import { badgesOf, gemValuePct, recommendedSku } from "../src/modules/shop/shop-marketing.js";
@@ -30,7 +31,10 @@ import type { GrantInput, GrantResult, WalletService } from "../src/modules/wall
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { MemoryShopPromoRepository } from "./helpers/memory-shop-promos.js";
 import { switchesOf } from "./helpers/notify-targets.js";
 
 /**
@@ -95,11 +99,13 @@ function setup(settings = config()) {
   const context = new Context();
   const items = { inventory: async () => ({ equipped: Object.fromEntries(Array.from({ length: context.equipped }, (_, index) => [`slot${String(index)}`, "item"])) }) };
   const reader: SettingsReader = { get: (setting) => (setting.key === SETTINGS.shopTributeUrl.key ? setting.schema.parse(context.tribute) : setting.fallback), onChange: () => undefined };
-  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, reader);
+  const promoRows = new MemoryShopPromoRepository();
+  const promos = new ShopPromoService(promoRows, new RolesService(settings, new MemoryRolesRepository(), new MemoryAccountRepository()));
+  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, promos, reader);
   shop.onModuleInit();
   const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings));
   const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
-  return { purchases, api, shop, wallet, queue, context };
+  return { purchases, api, shop, wallet, queue, context, promoRows };
 }
 
 /** Площадка подтвердила оплату — задание очереди, как его выполнил бы воркер. */
@@ -201,6 +207,69 @@ describe("витрина и счёт", () => {
   it("выключенная оплата не выставляет счёт", async () => {
     const off = setup(config({ PAYMENTS_ENABLED: "false" }));
     expect(await codeOf(off.shop.order(player(), "gems_60"))).toBe("endpoint_disabled");
+  });
+});
+
+describe("акции — скидка от настоящей цены", () => {
+  const HOUR = 3_600_000;
+  const at = new Date(NOW);
+
+  it("идущая акция: цена со скидкой, зачёркнутая — цена каталога, ярлык — фактическая скидка; до и после срока — полная цена", async () => {
+    const ctx = setup();
+    ctx.promoRows.seed({ sku: "gems_330", percent: 30, startsAt: new Date(NOW - HOUR), endsAt: new Date(NOW + 2 * HOUR), title: "Неделя самоцветов" });
+    const item = (await ctx.shop.view(player(), at)).items.find((candidate) => candidate.sku === "gems_330");
+    expect(item).toMatchObject({ stars: 175, fullStars: 250, chargedStars: 175, promo: { percent: 30, endsAt: new Date(NOW + 2 * HOUR), title: "Неделя самоцветов" } });
+    // Товары без акции — как были.
+    expect((await ctx.shop.view(player(), at)).items.find((candidate) => candidate.sku === "gems_60")).toMatchObject({ stars: 50, fullStars: null, promo: null });
+
+    for (const moment of [new Date(NOW - 2 * HOUR), new Date(NOW + 2 * HOUR)]) {
+      const fresh = setup();
+      fresh.promoRows.seed({ sku: "gems_330", percent: 30, startsAt: new Date(NOW - HOUR), endsAt: new Date(NOW + 2 * HOUR) });
+      expect((await fresh.shop.view(player(), moment)).items.find((candidate) => candidate.sku === "gems_330"), moment.toISOString()).toMatchObject({ stars: 250, fullStars: null, promo: null });
+    }
+  });
+
+  it("цена вниз до целой звезды, ярлык не обещает больше, чем списали; снятая акция цену не трогает", async () => {
+    const ctx = setup();
+    // 50 × 0,67 = 33,5 → 33 звезды: фактическая скидка 34%, ярлык — 34, а не 33.
+    ctx.promoRows.seed({ sku: "gems_60", percent: 33, startsAt: new Date(NOW - HOUR), endsAt: new Date(NOW + HOUR) });
+    ctx.promoRows.seed({ sku: "gems_700", percent: 40, startsAt: new Date(NOW - HOUR), endsAt: new Date(NOW + HOUR), cancelledAt: new Date(NOW - 1), cancelledBy: randomUUID() });
+    const view = await ctx.shop.view(player(), at);
+    expect(view.items.find((item) => item.sku === "gems_60")).toMatchObject({ stars: 33, fullStars: 50, promo: { percent: 34 } });
+    expect(view.items.find((item) => item.sku === "gems_700")).toMatchObject({ fullStars: null, promo: null });
+  });
+
+  it("счёт — по цене акции в момент заказа, и тестовый режим по-прежнему списывает звезду", async () => {
+    const ctx = setup();
+    ctx.promoRows.seed({ sku: "gems_330", percent: 20, startsAt: new Date(NOW - HOUR), endsAt: new Date(NOW + HOUR) });
+    expect(await ctx.shop.order(player(), "gems_330", at)).toMatchObject({ priceStars: 200, chargedStars: 200 });
+    expect(ctx.api.sent.at(-1)).toMatchObject({ stars: 200 });
+
+    const test = setup(config({ PAYMENTS_TEST_MODE: "true", NODE_ENV: "development" }));
+    test.promoRows.seed({ sku: "gems_330", percent: 20, startsAt: new Date(NOW - HOUR), endsAt: new Date(NOW + HOUR) });
+    expect(await test.shop.order(player(), "gems_330", at)).toMatchObject({ priceStars: 200, chargedStars: 1, mode: "test" });
+  });
+
+  it("разовый товар: неоплаченный счёт, выставленный до акции, при повторе берёт цену акции", async () => {
+    const ctx = setup();
+    const me = player();
+    const before = await ctx.shop.order(me, "starter", new Date(NOW - 2 * HOUR));
+    expect(before.priceStars).toBe(50);
+    ctx.promoRows.seed({ sku: "starter", percent: 50, startsAt: new Date(NOW - HOUR), endsAt: new Date(NOW + HOUR) });
+    expect(await ctx.shop.order(me, "starter", at)).toMatchObject({ purchaseId: before.purchaseId, priceStars: 25 });
+  });
+
+  it("«лучшая цена» и подбор считаются от цены, которую игрок заплатит сейчас", async () => {
+    const ctx = setup();
+    const base = await ctx.shop.view(player(), at);
+    const best = base.items.find((item) => item.badge === "best")?.sku;
+    const cheapest = base.items.filter((item) => item.kind === "gems" && item.sku !== best).at(0)?.sku;
+    if (best === undefined || cheapest === undefined) throw new Error("в каталоге нет наборов самоцветов");
+    // Новая витрина: идущие акции у сервиса в памяти полминуты.
+    const later = setup();
+    later.promoRows.seed({ sku: cheapest, percent: 80, startsAt: new Date(NOW - HOUR), endsAt: new Date(NOW + HOUR) });
+    const promoted = await later.shop.view(player(), at);
+    expect(promoted.items.find((item) => item.badge === "best")?.sku).toBe(cheapest);
   });
 });
 

@@ -1701,3 +1701,29 @@ model ShowcaseOffer {
   @@unique([accountId, gameDay, position])
   @@map("showcase_offer")
 }
+
+/// Акция магазина (docs/35-stage4-plan.md WP10, часть 8): настоящая скидка от
+/// цены каталога на срок. Пределы и отдых между акциями товара —
+/// `shop/shop-promo-rules.ts`; строки не удаляются — по ним видно, по какой
+/// цене продавали.
+model ShopPromo {
+  promoId     String    @id @map("promo_id") @db.Uuid
+  /// товар каталога (`shop/shop-catalog.ts`); без внешнего ключа — каталог в коде
+  sku         String    @db.VarChar(32)
+  /// скидка в процентах от цены каталога
+  percent     Int       @db.SmallInt
+  startsAt    DateTime  @map("starts_at") @db.Timestamptz(3)
+  endsAt      DateTime  @map("ends_at") @db.Timestamptz(3)
+  /// подпись баннера; `null` — текст по товару и скидке у клиента
+  title       String?   @db.VarChar(48)
+  createdAt   DateTime  @map("created_at") @db.Timestamptz(3)
+  /// кто завёл; без внешнего ключа — запись переживает аккаунт
+  createdBy   String    @map("created_by") @db.Uuid
+  /// снята раньше срока; до начала — будто её и не было
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  cancelledBy String?   @map("cancelled_by") @db.Uuid
+
+  @@index([sku, startsAt])
+  @@index([endsAt])
+  @@map("shop_promo")
+}

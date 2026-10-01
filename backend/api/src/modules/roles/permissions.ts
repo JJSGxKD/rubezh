@@ -70,6 +70,9 @@ export const PERMISSIONS = [
   // Каталог заданий и достижений (WP13, Р52): цели и награды без релиза —
   // награды ложатся в кошелёк, поэтому отдельное право, а не «контент»
   "tasks.edit",
+  // Акции магазина (WP10, часть 8): скидка от цены каталога на срок в
+  // пределах честной скидки — сама цена каталога остаётся за «sku.price.*»
+  "shop.promo.edit",
   // Эксплуатация. Настройки без релиза — адреса чатов команды и переключатели
   // (docs/35-stage4-plan.md §3.18)
   "flags.edit",
@@ -133,6 +136,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "changelog.edit",
     "changelog.publish",
     "tasks.edit",
+    "shop.promo.edit",
     "flags.edit",
     "settings.edit",
     "diagnostics.view",
@@ -161,7 +165,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   // Игроки без платёжных данных, жалобы, блокировки, очередь антифрода.
   moderator: ["players.view", "players.ban", "players.message"],
 
-  // Привлечение и рассылки; партнёры без выплат.
+  // Привлечение, рассылки и акции магазина; партнёры без выплат.
   marketer: [
     "analytics.gameplay.view",
     "analytics.revenue.view",
@@ -172,6 +176,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "partners.edit",
     "links.manage",
     "changelog.edit",
+    "shop.promo.edit",
   ],
 
   // Операции и подготовка выплат; период закрывает только владелец.

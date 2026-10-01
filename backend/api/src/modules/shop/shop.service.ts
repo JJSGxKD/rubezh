@@ -12,6 +12,8 @@ import { SETTINGS_READER, type SettingsReader } from "../settings/settings.servi
 import { WalletService } from "../wallet/wallet.service.js";
 import { badgesOf, gemValuePct, recommendedSku, type ShopBadge } from "./shop-marketing.js";
 import { ShopSkuNotFoundError, ShopSkuUnavailableError } from "./shop-errors.js";
+import { promoOffer, type PromoRow } from "./shop-promo-rules.js";
+import { ShopPromoService } from "./shop-promo.service.js";
 import { SHOP_SKUS, contentsOf, priceProduct, skuById, type ShopKind, type ShopResource, type ShopSku } from "./shop-catalog.js";
 
 /**
@@ -28,8 +30,12 @@ export interface ShopItemView {
   sku: string;
   kind: ShopKind;
   contents: { resource: ShopResource; amount: number }[];
-  /** цена в звёздах; `null` — на этой площадке способа оплаты нет */
+  /** цена в звёздах, по акции — со скидкой; `null` — на этой площадке способа оплаты нет */
   stars: number | null;
+  /** цена каталога до скидки — её зачёркивают; `null` — акции на товар нет */
+  fullStars: number | null;
+  /** идущая акция: скидка фактическая, с округлением вниз (`shop-promo-rules.ts`) */
+  promo: ShopPromoView | null;
   /** сколько спишется на самом деле: в тестовом режиме — звезда (Р14) */
   chargedStars: number | null;
   once: boolean;
@@ -39,6 +45,13 @@ export interface ShopItemView {
   badge: ShopBadge | null;
   /** на сколько процентов самоцвет здесь дешевле, чем в самом дорогом наборе; `null` — не набор самоцветов или это он и есть */
   valuePct: number | null;
+}
+
+export interface ShopPromoView {
+  percent: number;
+  endsAt: Date;
+  /** подпись баннера от команды; `null` — текст по товару и скидке */
+  title: string | null;
 }
 
 export interface ShopView {
@@ -64,6 +77,7 @@ export class ShopService implements OnModuleInit {
     private readonly fulfillment: PurchaseFulfillment,
     private readonly wallet: WalletService,
     private readonly items: ItemsService,
+    private readonly promos: ShopPromoService,
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
@@ -71,14 +85,17 @@ export class ShopService implements OnModuleInit {
     this.fulfillment.register("shop_item", (purchase) => this.fulfill(purchase));
   }
 
-  async view(account: AccountRef): Promise<ShopView> {
+  async view(account: AccountRef, at = new Date()): Promise<ShopView> {
     const skus = [...SHOP_SKUS].sort((a, b) => a.sort - b.sort);
     const owned = await this.payments.ownedOnce(
       account,
       skus.filter((sku) => sku.once).map((sku) => sku.id),
     );
     const method = methodFor(account.platform);
-    const price = (sku: ShopSku) => (method === undefined ? null : priceIn(priceProduct(sku), method));
+    const promos = await this.promos.active(at);
+    const full = (sku: ShopSku) => (method === undefined ? null : priceIn(priceProduct(sku), method));
+    // «Лучшая цена», выгода и подбор считаются от того, что игрок заплатит сейчас, — со скидкой.
+    const price = (sku: ShopSku) => promoOffer(full(sku), promos.get(sku.id))?.price ?? full(sku);
     const badges = badgesOf(skus, price);
     const value = gemValuePct(skus, price);
     const inventory = await withTimeout(this.items.inventory(account.accountId), DB_TIMEOUT_MS, "магазин");
@@ -89,12 +106,16 @@ export class ShopService implements OnModuleInit {
       recommended: recommendedSku(skus, price, { owned, equipped: Object.keys(inventory.equipped).length }),
       tribute: account.platform === "telegram" && tribute !== "" ? tribute : null,
       items: skus.map((sku) => {
-        const stars = price(sku);
+        const promo = promos.get(sku.id);
+        const offer = promoOffer(full(sku), promo);
+        const stars = offer?.price ?? full(sku);
         return {
           sku: sku.id,
           kind: sku.kind,
           contents: contentsOf(sku),
           stars,
+          fullStars: offer === null ? null : full(sku),
+          promo: offer === null || promo === undefined ? null : promoView(promo, offer.percent),
           chargedStars: stars === null ? null : this.payments.charge(stars).chargedStars,
           once: sku.once,
           owned: owned.has(sku.id),
@@ -105,15 +126,27 @@ export class ShopService implements OnModuleInit {
     };
   }
 
-  async order(account: AccountRef, skuId: string): Promise<ShopInvoice> {
+  async order(account: AccountRef, skuId: string, at = new Date()): Promise<ShopInvoice> {
     const sku = skuById(skuId);
     if (sku === undefined) throw new ShopSkuNotFoundError();
     const method = methodFor(account.platform);
     if (method === undefined) throw new PaymentsUnsupportedError();
-    const stars = priceIn(priceProduct(sku), method);
-    if (stars === null) throw new ShopSkuUnavailableError();
+    const full = priceIn(priceProduct(sku), method);
+    if (full === null) throw new ShopSkuUnavailableError();
+    // Счёт — по акции, идущей в момент заказа: оплату площадка спишет по сумме счёта, даже если акция кончится, пока окно открыто.
+    const promo = (await this.promos.active(at)).get(sku.id);
+    const offer = promoOffer(full, promo);
+    const stars = offer?.price ?? full;
     const invoice = await this.payments.shopInvoice(account, { product: "shop_item", sku: sku.id, priceStars: stars, once: sku.once, text: { title: sku.title, description: sku.description } });
-    this.log("shop_order", { accountId: account.accountId, sku: sku.id, purchaseId: invoice.purchaseId, status: invoice.status });
+    this.log("shop_order", {
+      accountId: account.accountId,
+      sku: sku.id,
+      purchaseId: invoice.purchaseId,
+      status: invoice.status,
+      stars,
+      promoId: offer === null ? null : (promo?.promoId ?? null),
+      promoPct: offer?.percent ?? null,
+    });
     return invoice;
   }
 
@@ -142,4 +175,8 @@ export class ShopService implements OnModuleInit {
   private log(event: string, fields: Record<string, unknown>): void {
     this.logger.log(JSON.stringify({ module: "shop", event, ...fields }));
   }
+}
+
+function promoView(promo: PromoRow, percent: number): ShopPromoView {
+  return { percent, endsAt: promo.endsAt, title: promo.title };
 }
