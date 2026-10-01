@@ -60,7 +60,7 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
       await prisma.$executeRaw`
         INSERT INTO ad_block (block_id, network_key, place, external_id, success, platforms, devices, created_at, updated_at)
         VALUES (${blockId}::uuid, ${network}, 'wheel_spin', ${`ext-${success}`}, ${success}::"AdSuccess", ARRAY['telegram']::"Platform"[], ARRAY['android']::varchar(16)[], now(), now())`;
-      blocks[success] = { blockId, networkKey: network, place: "wheel_spin", externalId: `ext-${success}`, success, priority: 5, platforms: ["telegram"], devices: ["android"] };
+      blocks[success] = { blockId, networkKey: network, place: "wheel_spin", externalId: `ext-${success}`, success, priority: 5, networkKeys: {}, platforms: ["telegram"], devices: ["android"] };
     }
   });
 
@@ -187,12 +187,21 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
       VALUES ('it-pass-open', ${me}::uuid, 'wheel_spin', NULL, 'vip', 'view', now(), now() + interval '1 minute')`).rejects.toThrow();
   });
 
-  it("каталог панели: блок с площадками и устройствами заводится и правится, блок чужой сети — нет, воронка — за окно", async () => {
+  it("каталог панели: ключи сети и блок с площадками и устройствами заводятся и правятся, блок чужой сети — нет, воронка — за окно", async () => {
     const catalog = new PrismaAdsCatalogRepository(prisma);
     const actor = await account();
-    expect((await catalog.networks()).find((row) => row.networkKey === network)).toEqual({ networkKey: network, name: "Проверка", active: true, priority: 5 });
-    expect(await catalog.updateNetwork({ networkKey: network, active: true, priority: 6 }, NOON)).toBe(true);
-    expect(await catalog.updateNetwork({ networkKey: "it_missing", active: true, priority: 6 }, NOON)).toBe(false);
+    expect((await catalog.networks()).find((row) => row.networkKey === network)).toEqual({ networkKey: network, name: "Проверка", active: true, priority: 5, keys: {} });
+    expect(await catalog.updateNetwork({ networkKey: network, active: true, priority: 6, keys: { pubId: "792361", appId: "1396" } }, NOON)).toBe(true);
+    expect((await catalog.networks()).find((row) => row.networkKey === network)?.keys).toEqual({ pubId: "792361", appId: "1396" });
+    expect(await catalog.updateNetwork({ networkKey: "it_missing", active: true, priority: 6, keys: {} }, NOON)).toBe(false);
+    // Ключи доходят до выдачи показа вместе с блоком — их ждёт SDK.
+    expect((await repository.activeBlocks()).find((row) => row.blockId === blockOf("view").blockId)?.networkKeys).toEqual({ pubId: "792361", appId: "1396" });
+    await catalog.updateNetwork({ networkKey: network, active: true, priority: 5, keys: {} }, NOON);
+    // Формат без блока в кабинете — `null`, пустая строка вместо него база не примет.
+    const unitless = await catalog.insertBlock({ networkKey: network, place: "interstitial", externalId: null, success: "view", active: false, platforms: [], devices: [] }, actor, NOON);
+    expect((await catalog.blocks()).find((row) => row.blockId === unitless?.blockId)?.externalId).toBeNull();
+    await expect(prisma.$executeRaw`UPDATE ad_block SET external_id = '' WHERE block_id = ${unitless?.blockId ?? ""}::uuid`).rejects.toThrow();
+    await expect(prisma.$executeRaw`UPDATE ad_network SET keys = '[]'::jsonb WHERE network_key = ${network}`).rejects.toThrow();
 
     const created = await catalog.insertBlock(
       { networkKey: network, place: "run_double", externalId: "ext-panel", success: "click", active: true, platforms: ["telegram", "vk"], devices: ["android", "ios"] },

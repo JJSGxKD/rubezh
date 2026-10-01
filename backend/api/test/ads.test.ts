@@ -175,11 +175,19 @@ describe("выдача показа", () => {
     expect(repository.sessions).toHaveLength(0);
   });
 
-  it("первой — сеть с высшим приоритетом; сессия живёт по условию успеха, SDK получает идентификатор блока в кабинете", async () => {
-    const adsgram = block("adsgram", 10, { success: "click" });
+  it("первой — сеть с высшим приоритетом; сессия живёт по условию успеха, SDK получает блок, формат места и ключи сети", async () => {
+    const adsgram = block("adsgram", 10);
     const { service, repository } = setup([block("adsonar", 20), adsgram]);
     const offer = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
-    expect(offer).toMatchObject({ network: "adsgram", blockId: adsgram.externalId, success: "click", expiresAt: at(NOON, SESSION_TTL_MIN.click).toISOString() });
+    expect(offer).toMatchObject({ network: "adsgram", blockId: adsgram.externalId, format: "rewarded", keys: {}, success: "view", expiresAt: at(NOON, SESSION_TTL_MIN.view).toISOString() });
+    // Сеть без блока в кабинете показывает по своим ключам — их SDK и получает.
+    const richads = setup([block("richads", 10, { place: "interstitial" })]);
+    expect(offered(await richads.service.offer(TELEGRAM, "interstitial", NOON))).toMatchObject({
+      network: "richads",
+      blockId: null,
+      format: "interstitial",
+      keys: { pubId: "1001262", appId: "6023" },
+    });
     expect(offer.sessionId).toMatch(/^[A-Za-z0-9_-]{16}$/);
     expect(repository.sessions[0]).toMatchObject({ sessionId: offer.sessionId, accountId: ME, place: "wheel_spin", status: "pending" });
   });
@@ -243,13 +251,14 @@ describe("выдача показа", () => {
 
 describe("воронка показа", () => {
   it("досмотр засчитывается только там, где успех — показ; клик и целевое действие подтверждает сервер", async () => {
-    const { service, repository } = setup([block("adsgram", 10, { success: "click" })]);
-    const offer = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
+    const { service, repository } = setup([block("adsgram", 10, { place: "task" })]);
+    const offer = offered(await service.offer(TELEGRAM, "task", NOON));
+    expect(offer.success).toBe("cpa");
     await service.report(ME, offer.sessionId, { kind: "shown" }, NOON);
     await service.report(ME, offer.sessionId, { kind: "clicked" }, at(NOON, 1));
     await expect(service.report(ME, offer.sessionId, { kind: "completed" }, at(NOON, 1))).rejects.toBeInstanceOf(AdSessionClosedError);
     expect(repository.sessions[0]).toMatchObject({ status: "shown", shownAt: NOON, clickedAt: at(NOON, 1), completedAt: null });
-    await expect(service.claim(ME, offer.sessionId, "wheel_spin", at(NOON, 2))).rejects.toBeInstanceOf(AdNotCompletedError);
+    await expect(service.claim(ME, offer.sessionId, "task", at(NOON, 2))).rejects.toBeInstanceOf(AdNotCompletedError);
   });
 
   it("чужая, истёкшая и отказавшая сессия шагов не принимает", async () => {
@@ -285,7 +294,7 @@ describe("забор награды хозяином места", () => {
   });
 
   it("целевое действие, подтверждённое сетью через дни, забирается в своём окне", async () => {
-    const { service, repository } = setup([block("taddy", 40, { place: "task", success: "cpa" })]);
+    const { service, repository } = setup([block("taddy", 40, { place: "task" })]);
     const offer = offered(await service.offer(TELEGRAM, "task", NOON));
     repository.confirm(offer.sessionId, at(NOON, 3 * 24 * 60));
     expect(await service.claim(ME, offer.sessionId, "task", at(NOON, 4 * 24 * 60))).toMatchObject({ repeat: false });

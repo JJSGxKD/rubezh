@@ -2,6 +2,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
+import { PLACE_FORMAT, blockShapeProblem, keysProblem, missingKeys, profileOf, type AdFormat } from "./ad-networks.js";
 import { AdPasses } from "./ads-passes.js";
 import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
 import {
@@ -57,8 +58,12 @@ export type AdOffer =
       sessionId: string;
       /** сеть показа; у пропуска — его имя */
       network: string;
-      /** идентификатор блока в кабинете сети — его ждёт SDK; у пропуска блока нет */
+      /** идентификатор блока в кабинете сети — его ждёт SDK; `null` — у пропуска и у формата без блока */
       blockId: string | null;
+      /** что показать: видео за награду, межстраничную или задание — по месту */
+      format: AdFormat;
+      /** публичные ключи сети (pubId, appId) — SDK ждёт их вместе с блоком; у пропуска пусто */
+      keys: Record<string, string>;
       success: AdSuccess;
       expiresAt: string;
       /** ролик не нужен — сессия уже выполнена, её сразу забирают у хозяина места (VIP) */
@@ -111,7 +116,17 @@ export class AdsService {
     const expiresAt = new Date(at.getTime() + SESSION_TTL_MIN[block.success] * MINUTE_MS);
     await this.db(this.repository.createSession({ sessionId, accountId: viewer.accountId, place, block, createdAt: at, expiresAt }));
     this.log({ event: "ad_offered", accountId: viewer.accountId, place, network: block.networkKey, success: block.success });
-    return { available: true, sessionId, network: block.networkKey, blockId: block.externalId, success: block.success, expiresAt: expiresAt.toISOString(), pass: null };
+    return {
+      available: true,
+      sessionId,
+      network: block.networkKey,
+      blockId: block.externalId,
+      format: PLACE_FORMAT[place],
+      keys: block.networkKeys,
+      success: block.success,
+      expiresAt: expiresAt.toISOString(),
+      pass: null,
+    };
   }
 
   /** Сессия без ролика: выполнена сразу, окно забора — как у досмотренного показа. */
@@ -120,7 +135,7 @@ export class AdsService {
     const expiresAt = new Date(at.getTime() + SESSION_TTL_MIN.view * MINUTE_MS);
     await this.db(this.repository.createPassSession({ sessionId, accountId: viewer.accountId, place, pass, createdAt: at, expiresAt }));
     this.log({ event: "ad_passed", accountId: viewer.accountId, place, pass });
-    return { available: true, sessionId, network: pass, blockId: null, success: "view", expiresAt: expiresAt.toISOString(), pass };
+    return { available: true, sessionId, network: pass, blockId: null, format: PLACE_FORMAT[place], keys: {}, success: "view", expiresAt: expiresAt.toISOString(), pass };
   }
 
   /** Шаг воронки от клиента. Засчитать выполнение он может только показу — клик и целевое действие подтверждает сервер. */
@@ -188,9 +203,21 @@ export function eligibleBlocks(blocks: readonly AdBlockRow[], place: AdPlace, vi
   return blocks.filter(
     (block) =>
       block.place === place &&
+      servable(block) &&
       (block.platforms.length === 0 || block.platforms.includes(viewer.platform)) &&
       (block.devices.length === 0 || (viewer.device !== null && block.devices.includes(viewer.device))),
   );
+}
+
+/**
+ * Блок, который SDK сможет показать: он по профилю своей сети, и у сети
+ * заданы ключи. Панель такого не сохранит, но блок, заведённый до профилей, —
+ * мог: выдача его пропускает, а панель показывает, что с ним не так.
+ */
+export function servable(block: Pick<AdBlockRow, "networkKey" | "place" | "externalId" | "success" | "networkKeys">): boolean {
+  const profile = profileOf(block.networkKey);
+  if (profile === undefined || blockShapeProblem(block) !== null) return false;
+  return missingKeys(profile, block.networkKeys).length === 0 && keysProblem(profile, block.networkKeys) === null;
 }
 
 function networksOf(blocks: readonly AdBlockRow[]): NetworkCandidate[] {
