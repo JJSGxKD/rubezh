@@ -240,9 +240,9 @@ function VipCard(props: {
             {t("vip.perk.rewards", { mul: formatDecimal(vip.rewardMul) })}
           </li>
         ) : null}
-        <li className="flex items-center gap-2 text-text-muted">
-          <Sparkles size={16} aria-hidden="true" />
-          {t("vip.perk.soon")}
+        <li className="flex items-center gap-2">
+          <Sparkles size={16} aria-hidden="true" className="text-accent" />
+          {t("vip.perk.noAds")}
         </li>
       </ul>
 
