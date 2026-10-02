@@ -67,7 +67,7 @@ export function PaidContinueView(props: { stage: ContinueStage; locked?: boolean
         <span className="tabular-nums">{offer === null ? "—" : offer.priceStars}</span>
       </Button>
       {line === null ? null : (
-        <div className="col-span-full flex items-center justify-between gap-2 text-xs text-text-muted" role="status">
+        <div className="order-last col-span-full flex items-center justify-between gap-2 text-xs text-text-muted" role="status">
           <span>{line}</span>
           {stage.kind === "retry" ? (
             <Button variant="ghost" onClick={props.onRetry}>

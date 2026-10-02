@@ -50,11 +50,12 @@ export function AdContinueView(props: { stage: AdContinueStage; locked: boolean;
           {pass ? <Crown size={18} aria-hidden="true" /> : <Tv size={18} aria-hidden="true" />}
           {/* Рядом с кнопкой звёзд — коротко: колонка экрана смерти узкая, и
               «За рекламу» переносилась на две строки. Одна — целиком. */}
-          {t(pass ? (props.wide ? "run.continue.vip" : "run.continue.vip.short") : props.wide ? "run.continue.ad" : "run.continue.ad.short")}
+          {t(pass ? (props.wide ? "run.continue.vip.wide" : "run.continue.vip.short") : props.wide ? "run.continue.ad" : "run.continue.ad.short")}
         </Button>
       )}
       {line === null ? null : (
-        <p className="col-span-full text-xs text-text-muted" role="status">
+        // Строка — под обеими кнопками: в середине ряда она увела бы кнопку звёзд на новую строку.
+        <p className="order-last col-span-full text-xs text-text-muted" role="status">
           {line}
         </p>
       )}
