@@ -181,12 +181,16 @@ export function RunScreen(): ReactNode {
 
 /**
  * Что можно на экране смерти: купить продолжение звёздами — где площадка
- * умеет оплату, — а в забеге разработчика ещё и взять его бесплатно.
+ * умеет оплату, — взять за рекламу или с VIP — где она показывает ролики и
+ * есть вход (WP11), — а в забеге разработчика ещё и бесплатно.
  */
 function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps {
+  const { adapter, capabilities } = useShell.getState();
+  const ads = adapter.showAd !== undefined && capabilities.platformAvailable && capabilities.auth !== undefined;
   return {
     ...(devRun ? { onDevContinue: () => useRun.getState().continueRun("dev") } : {}),
     ...(canOfferPaidContinue() ? { paidFor: result } : {}),
+    ...(ads ? { adFor: result } : {}),
   };
 }
 

@@ -20,7 +20,7 @@ import { useMeta } from "./meta";
 import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
 import { clearDownedRun, saveDownedRun, takeDownedRun } from "./downed-run";
-import { canOfferPaidContinue } from "./payments-availability";
+import { canOfferContinue } from "./payments-availability";
 import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
@@ -45,7 +45,8 @@ export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "
 export type RunLoadingStage = "engine" | "world";
 
 /** Откуда второй шанс: бесплатно в забеге разработчика или оплачен звёздами. */
-export type ContinueSource = "dev" | "premium";
+/** Чем продолжен забег: звёзды, ролик, VIP без ролика или чит разработчика. */
+export type ContinueSource = "dev" | "premium" | "ad" | "pass";
 
 /**
  * С чем игрок пришёл на экран забега: начать новый или продолжить
@@ -294,9 +295,9 @@ export const useRun = create<RunStore>((set, get) => ({
         ...(resume === undefined ? {} : { resume }),
         ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),
         // Второй шанс — в забеге разработчика бесплатно, а игроку — если его
-        // можно купить: иначе смерть ждала бы решения, которого не принять
-        // (docs/34-stage3-plan.md, WP5).
-        continues: devRun || canOfferPaidContinue(),
+        // можно купить или взять за рекламу: иначе смерть ждала бы решения,
+        // которого не принять (docs/34-stage3-plan.md, WP5; WP11).
+        continues: devRun || canOfferContinue(),
         ...(resume !== undefined || (signed === null && boostIds.length === 0 && accountLevel === undefined)
           ? {}
           : {

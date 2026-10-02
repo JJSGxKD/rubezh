@@ -47,7 +47,7 @@ export interface DeathOverlayProps {
   cheatsCounted?: boolean;
   /**
    * Забег ждёт решения о втором шансе: итог предварительный. Без поля —
-   * забег закрыт, и блок второго шанса — только витрина.
+   * забег закрыт, и блока второго шанса нет: продолжать уже нечего.
    */
   secondChance?: SecondChanceProps;
   /**
@@ -142,8 +142,9 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
             </p>
           )}
 
-          {/* Второй шанс — только после смерти: сданный забег игрок закончил сам. */}
-          {result.outcome === "died" ? (
+          {/* Второй шанс — только пока забег ждёт решения: сданный забег игрок
+              закончил сам, а закрытый смертью продолжить уже нечем. */}
+          {result.outcome === "died" && props.secondChance !== undefined ? (
             <div className="mt-3">
               <SecondChance {...props.secondChance} />
             </div>

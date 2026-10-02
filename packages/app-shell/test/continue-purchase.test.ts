@@ -21,6 +21,7 @@ const { useMeta } = await import("../src/state/meta");
 const { initShell } = await import("../src/state/shell");
 const { CONFIRM_TIMEOUT_MS, setPaymentsApiForTests, useContinuePurchase } = await import("../src/state/continue-purchase");
 const { canOfferPaidContinue, resetPaymentsAvailabilityForTests } = await import("../src/state/payments-availability");
+const { expectOffers } = await import("../src/state/second-chance-offers");
 
 const OFFER: ContinueOffer = { continueNo: 1, priceStars: 7, chargedStars: 7, mode: "live" };
 
@@ -149,6 +150,8 @@ async function downed(): Promise<ReturnType<typeof fakeEngine>> {
   engine.load.mockResolvedValue(fake.engine);
   await useRun.getState().start({ container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "normal" });
   fake.emit("downed", { result: result(), continuesLeft: 1 });
+  // Экран смерти предлагает одни звёзды: отпали они — ждать нечего.
+  expectOffers(["stars"]);
   return fake;
 }
 
@@ -182,6 +185,12 @@ describe("покупка второго шанса", () => {
     mount({ openInvoice: undefined });
     const without = await downed();
     expect(without.started[0]?.continues).toBe(false);
+    useRun.getState().stop();
+
+    // Окна оплаты нет, а ролики площадка показывает — второй шанс за рекламу (WP11).
+    mount({ openInvoice: undefined, showAd: async () => ({ kind: "completed" }) });
+    const adsOnly = await downed();
+    expect(adsOnly.started[0]?.continues).toBe(true);
   });
 
   it("цену называет сервер — по секунде смерти и номеру продолжения", async () => {
