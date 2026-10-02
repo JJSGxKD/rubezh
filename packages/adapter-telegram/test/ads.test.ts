@@ -1,6 +1,7 @@
 import type { AdShowRequest } from "@bh/shared-types";
 import { describe, expect, it, vi } from "vitest";
 import { createAdShower } from "../src/ads/ad-shower";
+import { createAudience } from "../src/ads/audience";
 import { ADSGRAM_SCRIPT, ADSONAR_SCRIPT, RICHADS_NO_FILL_MS, RICHADS_SCRIPT, TADDY_SCRIPT, type AdGlobals, type AdsgramController, type AdsgramResult, type SonarShowParams } from "../src/ads/networks";
 import { createScriptLoader, type ScriptHost } from "../src/ads/script-loader";
 
@@ -11,6 +12,7 @@ import { createScriptLoader, type ScriptHost } from "../src/ads/script-loader";
  */
 
 const request = (patch: Partial<AdShowRequest>): AdShowRequest => ({ network: "adsgram", blockId: "123", format: "rewarded", keys: {}, ...patch });
+const PUB_ID = "14cbeb980853dd416003462ca4db7c12";
 
 /** Загрузчик, который «загружает» скрипт, кладя объект SDK в поддельное окно. */
 function fakeLoader(globals: AdGlobals, install: Record<string, (globals: AdGlobals) => void>) {
@@ -133,28 +135,11 @@ describe("показ рекламы сетей", () => {
     expect(await show({ ...rich, keys: { pubId: "792361" } })).toEqual({ kind: "failed", reason: "misconfigured" });
   });
 
-  it("Taddy: pubId — атрибутом тега; нет рекламы — false, досмотр и закрытие — событиями", async () => {
-    const globals: AdGlobals = {};
-    let react: (options: { onClosed?: () => void; onViewThrough?: (id: string) => void }) => Promise<boolean> = async (options) => {
-      options.onViewThrough?.("ad-1");
-      options.onClosed?.();
-      return true;
-    };
-    const { loader, loaded } = fakeLoader(globals, { [TADDY_SCRIPT]: (g) => void (g.Taddy = { ads: () => ({ interstitial: (options) => react(options) }) }) });
-    const show = createAdShower({ globals: () => globals, loader });
-    const taddy = request({ network: "taddy", blockId: null, keys: { pubId: "14cbeb980853dd416003462ca4db7c12" } });
-
-    expect(await show(taddy)).toEqual({ kind: "completed" });
-    expect(loaded[0]?.attributes).toEqual({ "data-pub-id": "14cbeb980853dd416003462ca4db7c12" });
-    react = async (options) => {
-      options.onClosed?.();
-      return true;
-    };
-    expect(await show(taddy)).toEqual({ kind: "closed" });
-    // У межстраничной закрыть — и есть показ.
-    expect(await show({ ...taddy, format: "interstitial" })).toEqual({ kind: "completed" });
-    react = async () => false;
-    expect(await show(taddy)).toEqual({ kind: "failed", reason: "no_fill" });
+  it("Taddy SDK не показывает: её креатив рисует оболочка — показ через адаптер не поддержан", async () => {
+    const loaded: string[] = [];
+    const show = createAdShower({ globals: () => ({}), loader: { load: async (src) => void loaded.push(src) } });
+    expect(await show(request({ network: "taddy", blockId: null, keys: { pubId: PUB_ID } }))).toEqual({ kind: "failed", reason: "unsupported" });
+    expect(loaded).toEqual([]);
   });
 
   it("два показа разом невозможны, замолчавший SDK — таймаут, незнакомая сеть и незагруженный скрипт — свои отказы", async () => {
@@ -185,5 +170,70 @@ describe("показ рекламы сетей", () => {
     await Promise.all([loader.load("https://a/sdk.js"), loader.load("https://a/sdk.js")]);
     await loader.load("https://a/sdk.js");
     expect(appended).toEqual(["https://a/sdk.js", "https://a/sdk.js"]);
+  });
+});
+
+describe("SDK сетей для учёта аудитории (Р78)", () => {
+  const TADDY = [{ network: "taddy", keys: { pubId: PUB_ID } }];
+
+  it("Taddy: скрипт с pubId в атрибуте, поднялся сам — только ready; повторный вызов SDK не трогает", async () => {
+    const globals: AdGlobals = {};
+    const calls: string[] = [];
+    const { loader, loaded } = fakeLoader(globals, {
+      [TADDY_SCRIPT]: (g) =>
+        void (g.Taddy = {
+          isInit: true,
+          isReady: false,
+          init: async () => void calls.push("init"),
+          ready: async () => {
+            calls.push("ready");
+            if (g.Taddy !== undefined) g.Taddy.isReady = true;
+          },
+        }),
+    });
+    const prepare = createAudience({ globals: () => globals, loader });
+    expect(await prepare(TADDY)).toEqual([{ network: "taddy", ok: true }]);
+    expect(loaded).toEqual([{ src: TADDY_SCRIPT, attributes: { "data-pub-id": PUB_ID } }]);
+    expect(calls).toEqual(["ready"]);
+    expect(await prepare(TADDY)).toEqual([{ network: "taddy", ok: true }]);
+    expect(calls).toEqual(["ready"]);
+  });
+
+  it("Taddy не поднялся сам — init с pubId, затем ready; SDK без этих методов — тоже не беда", async () => {
+    const calls: string[] = [];
+    const globals: AdGlobals = {};
+    const { loader } = fakeLoader(globals, {
+      [TADDY_SCRIPT]: (g) => void (g.Taddy = { isInit: false, init: async (pubId) => void calls.push(`init:${pubId}`), ready: async () => void calls.push("ready") }),
+    });
+    expect(await createAudience({ globals: () => globals, loader })(TADDY)).toEqual([{ network: "taddy", ok: true }]);
+    expect(calls).toEqual([`init:${PUB_ID}`, "ready"]);
+
+    const bare: AdGlobals = {};
+    const plain = fakeLoader(bare, { [TADDY_SCRIPT]: (g) => void (g.Taddy = {}) });
+    expect(await createAudience({ globals: () => bare, loader: plain.loader })(TADDY)).toEqual([{ network: "taddy", ok: true }]);
+  });
+
+  it("отказы — причиной, без исключения: нет скрипта, SDK бросил, SDK замолчал, нет ключа, незнакомая сеть", async () => {
+    const offline = createAudience({ globals: () => ({}), loader: { load: async () => Promise.reject(new Error("offline")) } });
+    expect(await offline(TADDY)).toEqual([{ network: "taddy", ok: false, reason: "load_failed" }]);
+
+    const throwing: AdGlobals = { Taddy: { ready: async () => Promise.reject(new Error("Taddy: Telegram WebApp script is not loaded")) } };
+    expect(await createAudience({ globals: () => throwing, loader: { load: async () => undefined } })(TADDY)).toEqual([{ network: "taddy", ok: false, reason: "sdk_error" }]);
+
+    vi.useFakeTimers();
+    try {
+      const silent: AdGlobals = { Taddy: { ready: () => new Promise<void>(() => undefined) } };
+      const pending = createAudience({ globals: () => silent, loader: { load: async () => undefined }, timeoutMs: 1_000 })(TADDY);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(await pending).toEqual([{ network: "taddy", ok: false, reason: "timeout" }]);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const prepare = createAudience({ globals: () => ({}), loader: { load: async () => undefined } });
+    expect(await prepare([{ network: "taddy", keys: {} }, { network: "monetag", keys: {} }])).toEqual([
+      { network: "taddy", ok: false, reason: "misconfigured" },
+      { network: "monetag", ok: false, reason: "unsupported" },
+    ]);
   });
 });

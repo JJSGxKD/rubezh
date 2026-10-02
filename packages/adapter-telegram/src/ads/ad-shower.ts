@@ -1,6 +1,11 @@
 import type { AdShowOutcome, AdShowRequest } from "@bh/shared-types";
-import { createAdsgram, createAdsonar, createRichads, createTaddy, type AdGlobals, type NetworkEnv, type NetworkShow } from "./networks";
-import { createScriptLoader, documentScriptHost, type ScriptLoader } from "./script-loader";
+import { createAdsgram, createAdsonar, createRichads, type AdGlobals, type NetworkEnv, type NetworkShow } from "./networks";
+import { browserScriptLoader, type ScriptLoader } from "./script-loader";
+
+// Учёт аудитории сетями — в том же чанке, что показ: загрузчик скриптов у них
+// общий, и отдельный чанк стоил бы первой загрузке ещё одного имени в списке
+// предзагрузки.
+export { prepareInBrowser } from "./audience";
 
 /**
  * Сколько ждём исхода показа. Ролик за награду длится до минуты, и игрок
@@ -20,14 +25,14 @@ export interface AdShowerOptions {
  * Показ рекламы сети по запросу сервера: сеть — по имени, два показа
  * разом невозможны (`busy`), исход — всегда, даже если SDK замолчал.
  * Сеть, которую адаптер не знает, — `unsupported`: сервер новее клиента
- * может завести сеть раньше, чем её обёртка доедет до игрока.
+ * может завести сеть раньше, чем её обёртка доедет до игрока. Taddy среди них:
+ * её креатив рисует оболочка, а не SDK (Р78).
  */
 export function createAdShower(options: AdShowerOptions): (request: AdShowRequest) => Promise<AdShowOutcome> {
   const networks: Readonly<Record<string, NetworkShow>> = {
     adsgram: createAdsgram(),
     adsonar: createAdsonar(),
     richads: createRichads(),
-    taddy: createTaddy(),
   };
   const now = options.now ?? Date.now;
   const timeoutMs = options.timeoutMs ?? SHOW_TIMEOUT_MS;
@@ -64,7 +69,7 @@ export function showInBrowser(request: AdShowRequest): Promise<AdShowOutcome> {
   browserShower ??= createAdShower({
     // Объекты SDK — свойства `window`, которых нет в его типах: окно читается как набор необязательных полей.
     globals: () => globalThis as unknown as AdGlobals,
-    loader: createScriptLoader(documentScriptHost(() => document)),
+    loader: browserScriptLoader(),
   });
   return browserShower(request);
 }

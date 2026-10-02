@@ -12,6 +12,10 @@ import type { ScriptLoader } from "./script-loader";
  * всех сетей грузились при запуске, а отказ и закрытие у RichAds не
  * различались. Здесь — функции без интерфейса, скрипт при первом показе,
  * контроллер блока — однажды, исход — одним из трёх.
+ *
+ * Taddy здесь не показывает (Р78): её креатив сервер берёт по API, а рисует
+ * наш блок в оболочке. SDK Taddy поднимается только для учёта аудитории —
+ * `ads/audience.ts`.
  */
 
 export interface AdsgramResult {
@@ -43,8 +47,18 @@ export interface RichAdsController {
   triggerInterstitialBanner(): Promise<unknown>;
 }
 
-export interface TaddyAds {
-  interstitial(options: { onClosed?: () => void; onViewThrough?: (id: string) => void }): Promise<boolean>;
+/**
+ * SDK Taddy — только учёт аудитории (Р78): рекламу Taddy рисует наш блок по
+ * креативу с сервера. Поля — по типам `taddy-sdk-web` 1.3.17; все
+ * необязательны, потому что скрипт приходит с чужого сервера и его версия не
+ * наша.
+ */
+export interface TaddySdk {
+  isInit?: boolean;
+  isReady?: boolean;
+  init?(pubId: string): Promise<void>;
+  /** игрок открыл приложение — SDK шлёт Taddy `events/start` */
+  ready?(): Promise<void>;
 }
 
 /** Что SDK сетей кладут в `window` — в тестах подменяется целиком. */
@@ -52,7 +66,7 @@ export interface AdGlobals {
   Adsgram?: { init(params: { blockId: string; debug?: boolean }): AdsgramController };
   Sonar?: { show(params: SonarShowParams): Promise<{ status: string; message?: string } | undefined> };
   TelegramAdsController?: new () => RichAdsController;
-  Taddy?: { ads(): TaddyAds };
+  Taddy?: TaddySdk;
 }
 
 export interface NetworkEnv {
@@ -83,7 +97,7 @@ const COMPLETED: AdShowOutcome = { kind: "completed" };
 const CLOSED: AdShowOutcome = { kind: "closed" };
 
 /** Скрипт сети — если его объекта ещё нет; не загрузился — `false`. */
-async function ensureScript(env: NetworkEnv, present: () => boolean, src: string, attributes?: Readonly<Record<string, string>>): Promise<boolean> {
+export async function ensureScript(env: NetworkEnv, present: () => boolean, src: string, attributes?: Readonly<Record<string, string>>): Promise<boolean> {
   if (present()) return true;
   try {
     await env.loader.load(src, attributes);
@@ -219,35 +233,5 @@ export function createRichads(): NetworkShow {
     } catch {
       return env.now() - startedAt < RICHADS_NO_FILL_MS ? failed("no_fill") : CLOSED;
     }
-  };
-}
-
-/**
- * Taddy: `pubId` скрипт берёт из атрибута `data-pub-id` своего тега.
- * `interstitial` разрешается `false`, если рекламы нет; иначе исход —
- * событиями: `onViewThrough` — досмотрено, `onClosed` — закрыто. У
- * межстраничной закрыть — и есть показ.
- */
-export function createTaddy(): NetworkShow {
-  return async (request, env) => {
-    if (request.format === "task") return failed("unsupported");
-    const pubId = request.keys["pubId"] ?? "";
-    if (pubId === "") return failed("misconfigured");
-    if (!(await ensureScript(env, () => env.globals().Taddy !== undefined, TADDY_SCRIPT, { "data-pub-id": pubId }))) return failed("load_failed");
-    const sdk = env.globals().Taddy;
-    if (sdk === undefined) return failed("load_failed");
-
-    const rewarded = request.format === "rewarded";
-    const { promise, settle } = settleOnce();
-    try {
-      const shown = await sdk.ads().interstitial({
-        onViewThrough: () => settle(COMPLETED),
-        onClosed: () => settle(rewarded ? CLOSED : COMPLETED),
-      });
-      if (!shown) settle(failed("no_fill"));
-    } catch {
-      settle(failed("sdk_error"));
-    }
-    return await promise;
   };
 }

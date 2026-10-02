@@ -82,6 +82,36 @@ export type AdFailureReason = "no_fill" | "sdk_error" | "load_failed" | "timeout
 export type AdShowOutcome = { kind: "completed" } | { kind: "closed" } | { kind: "failed"; reason: AdFailureReason };
 
 /**
+ * Сеть, чей SDK поднимается у игрока при запуске для учёта аудитории
+ * (docs/35-stage4-plan.md Р78): какая и с какими публичными ключами —
+ * решает сервер (`GET /api/v1/ads/networks`).
+ */
+export interface AdNetworkSetup {
+  network: string;
+  keys: Readonly<Record<string, string>>;
+}
+
+/**
+ * Объявление, которое рисует наш рекламный блок (Р78): его отдаёт сеть с API
+ * через сервер, а позже — и своя прямая реклама. Адреса — только https,
+ * их проверил сервер.
+ */
+export interface AdCreative {
+  /** идентификатор у сети — по нему сервер сообщает ей показ */
+  id: string;
+  title: string | null;
+  description: string | null;
+  text: string | null;
+  image: string | null;
+  icon: string | null;
+  /** надпись на кнопке; `null` — своя у оболочки */
+  button: string | null;
+  link: string;
+  /** чья реклама — для пометки «Реклама»: рекламодатель или сама сеть */
+  advertiser: string;
+}
+
+/**
  * Единый интерфейс платформенного адаптера.
  * core-game и оболочка работают только через него и ничего не знают о
  * конкретной платформе. См. docs/01-tech-stack.md §1.
@@ -142,6 +172,12 @@ export interface PlatformAdapter {
    * ролика с сервера и без адаптера (docs/01-tech-stack.md §6).
    */
   showAd?(request: AdShowRequest): Promise<AdShowOutcome>;
+  /**
+   * Поднять SDK сетей для учёта аудитории (Р78). Зовётся в простое после
+   * первого кадра главной; отказ чужого SDK игре не мешает и наружу не
+   * бросается. Нет метода — площадка таких сетей не знает.
+   */
+  prepareAds?(networks: readonly AdNetworkSetup[]): Promise<void>;
   /** опционально — площадка может не дать хранилища, см. KeyValueStorage */
   storage?: KeyValueStorage;
 }
