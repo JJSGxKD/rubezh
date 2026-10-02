@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { fetchFunnel, funnelReportSchema, funnelTotal, periodFromDates, shareOfEntered, type FunnelRow } from "../src/api/funnel";
-import { fetchReviewQueue } from "../src/api/review";
+import { fetchFunnel, funnelReportSchema, funnelTotal, periodFromDates, platformTitle, shareOfAccounts, touchOf, type FunnelRow } from "../src/api/funnel";
+import { difficultyTitle, fetchReviewQueue, runsPerPlayer } from "../src/api/review";
 import { fakeFetch, json } from "./helpers";
 
 const ROW: FunnelRow = {
   platform: "telegram",
   startKind: "click",
-  startRef: "ch-launch",
+  startRef: "launch",
+  startSource: "tg_ads",
   accounts: 40,
-  entered: 40,
+  entered: 32,
   appOpened: 38,
   firstRunStarted: 30,
   firstRunFinished: 25,
@@ -31,11 +32,24 @@ describe("воронка", () => {
     expect(periodFromDates("25.09.2026", "")).toEqual({ from: undefined, to: undefined });
   });
 
-  it("итог складывает строки, доля считается от вошедших и не делит на ноль", () => {
-    const total = funnelTotal([ROW, { ...ROW, startKind: "organic", startRef: null, accounts: 10, entered: 10, firstPurchase: 0 }]);
-    expect(total).toMatchObject({ platform: "все", accounts: 50, entered: 50, firstPurchase: 1 });
-    expect(shareOfEntered(ROW, "runs2")).toBe(50);
-    expect(shareOfEntered({ ...ROW, entered: 0 }, "runs2")).toBeNull();
+  it("итог складывает строки, доля — от аккаунтов строки, даже если в бота не входили", () => {
+    const total = funnelTotal([ROW, { ...ROW, startKind: "organic", startRef: null, startSource: null, accounts: 10, entered: 10, firstPurchase: 0 }]);
+    expect(total).toMatchObject({ platform: "все", accounts: 50, entered: 42, firstPurchase: 1 });
+    expect(shareOfAccounts(ROW, "runs2")).toBe(50);
+    // По ссылке кампании игра открывается мимо бота — доля всё равно есть.
+    expect(shareOfAccounts({ ...ROW, entered: 0 }, "appOpened")).toBe(95);
+    expect(shareOfAccounts({ ...ROW, accounts: 0 }, "runs2")).toBeNull();
+  });
+
+  it("откуда пришли — словами: кампания с источником, удалённая ссылка, итог, незнакомое", () => {
+    expect(touchOf(ROW)).toEqual({ title: "Кампания «launch»", detail: "источник: tg_ads" });
+    expect(touchOf({ ...ROW, startRef: null }).title).toBe("Ссылка кампании");
+    expect(touchOf({ ...ROW, startKind: "invite", startRef: null }).title).toBe("Приглашение друга");
+    expect(touchOf({ ...ROW, startKind: "notification", startRef: "friend_request" })).toEqual({ title: "Кнопка уведомления в боте", detail: "friend_request" });
+    expect(touchOf(funnelTotal([ROW])).title).toBe("Все источники");
+    expect(touchOf({ ...ROW, startKind: "new_kind", startRef: "x" })).toEqual({ title: "new_kind", detail: "x" });
+    expect(platformTitle("telegram")).toBe("Telegram");
+    expect(platformTitle("все")).toBe("все");
   });
 
   it("период уходит в запросе, отчёт разбирается схемой", async () => {
@@ -49,10 +63,21 @@ describe("воронка", () => {
 
 describe("разбор забегов", () => {
   it("просит всю очередь, которую отдаёт сервер", async () => {
-    const run = { runId: "r1", accountId: "a1", verdict: "suspicious", verdictReasons: ["kills_rate"], difficulty: "easy", survivalSec: 600, level: 20, enemiesKilled: 900, finishedAt: "2026-09-25T10:00:00.000Z" };
+    const run = { runId: "r1", accountId: "a1", displayName: "Вера", verdict: "suspicious", verdictReasons: ["kills_rate"], difficulty: "easy", survivalSec: 600, level: 20, enemiesKilled: 900, finishedAt: "2026-09-25T10:00:00.000Z" };
     const { fetch, calls } = fakeFetch(json(200, { data: { runs: [run] } }));
     const result = await fetchReviewQueue(new AdminApi(fetch));
     expect(result.ok && result.data.runs[0]?.verdictReasons).toEqual(["kills_rate"]);
     expect(calls[0]?.url).toBe("/api/v1/admin/runs/review?limit=200");
+  });
+
+  it("сложность словами, повторы игрока считаются", () => {
+    expect(difficultyTitle("hard")).toBe("сложная");
+    expect(difficultyTitle("nightmare")).toBe("nightmare");
+    const row = { runId: "r", accountId: "a1", displayName: null, verdict: "rejected", verdictReasons: [], difficulty: "easy", survivalSec: null, level: null, enemiesKilled: null, finishedAt: null };
+    const counts = runsPerPlayer([row, { ...row, runId: "r2" }, { ...row, runId: "r3", accountId: "a2" }]);
+    expect([...counts]).toEqual([
+      ["a1", 2],
+      ["a2", 1],
+    ]);
   });
 });

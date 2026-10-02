@@ -67,12 +67,14 @@ describe("панель по HTTP", () => {
   let roles: MemoryRolesRepository;
   let store: MemoryAdminSessionStore;
   let funnel: FakeFunnel;
+  let runs: MemoryRunsRepository;
 
   async function start(env: Record<string, string> = {}): Promise<NestFastifyApplication> {
     accounts = new MemoryAccountRepository();
     roles = new MemoryRolesRepository();
     store = new MemoryAdminSessionStore();
     funnel = new FakeFunnel();
+    runs = new MemoryRunsRepository();
     const config = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ...env } as NodeJS.ProcessEnv);
 
     @Module({
@@ -84,7 +86,7 @@ describe("панель по HTTP", () => {
         { provide: ROLES_REPOSITORY, useValue: roles },
         { provide: ADMIN_SESSION_STORE, useValue: store },
         { provide: FUNNEL_REPOSITORY, useValue: funnel },
-        { provide: RUNS_REPOSITORY, useValue: new MemoryRunsRepository() },
+        { provide: RUNS_REPOSITORY, useValue: runs },
         { provide: LEADERBOARD_STORE, useValue: new MemoryLeaderboardStore() },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
@@ -225,6 +227,25 @@ describe("панель по HTTP", () => {
     expect(audit.json().data.entries.map((entry: { action: string }) => entry.action)).toEqual(["roles.revoke", "roles.assign", "admin.login"]);
   });
 
+  it("роли: кто это — до выдачи, кем выдана — по имени, что даёт роль — её права", async () => {
+    const server = await start();
+    const cookie = await login(server);
+    const headers = { cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    const target = await accounts.upsert({ platform: "telegram", platformUserId: "600005", displayName: "Лена", username: null, photoUrl: null }, Date.now());
+    const candidate = async (query: string) => server.inject({ method: "GET", url: `/api/v1/admin/roles/candidate?${query}`, headers: { cookie } });
+
+    expect((await candidate("platformUserId=600005")).json().data.candidate).toEqual({ accountId: target.accountId, displayName: "Лена", platformUserId: "600005", roles: [] });
+    expect((await candidate("platformUserId=600999")).json().data.candidate).toBeNull();
+    for (const bad of ["", "platformUserId=@lena", `platformUserId=1&accountId=${target.accountId}`]) expect((await candidate(bad)).statusCode, bad).toBe(400);
+
+    await server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { platformUserId: "600005", role: "marketer" } });
+    expect((await candidate(`accountId=${target.accountId}`)).json().data.candidate.roles).toEqual(["marketer"]);
+    const list = (await server.inject({ method: "GET", url: "/api/v1/admin/roles", headers: { cookie } })).json().data;
+    expect(list.assignments).toEqual([expect.objectContaining({ displayName: "Лена", role: "marketer", grantedByName: "Ира" })]);
+    expect(list.roles.find((entry: { role: string }) => entry.role === "marketer").permissions).toContain("promo.edit");
+    expect(list.roles.map((entry: { role: string }) => entry.role)).toContain("owner");
+  });
+
   it("журнал: имена людей, отбор по действиям, человеку и объекту, страницы курсором", async () => {
     const server = await start();
     const cookie = await login(server);
@@ -263,6 +284,19 @@ describe("панель по HTTP", () => {
       const response = await server.inject({ method: "GET", url: `/api/v1/admin/audit?${bad}`, headers: { cookie } });
       expect(response.statusCode, bad).toBe(400);
     }
+  });
+
+  it("очередь разбора — с именем игрока: разбирают человека, а не uuid", async () => {
+    const server = await start();
+    const cookie = await login(server);
+    const player = await accounts.upsert({ platform: "telegram", platformUserId: "600004", displayName: "Вера", username: null, photoUrl: null }, Date.now());
+    const flagged = { verdict: "suspicious" as const, verdictReasons: ["kill_rate"], difficulty: "easy" as const, survivalSec: 600, level: 20, enemiesKilled: 900, finishedAt: new Date() };
+    runs.review = async () => [
+      { runId: "r1", accountId: player.accountId, ...flagged },
+      { runId: "r2", accountId: randomUUID(), ...flagged },
+    ];
+    const response = await server.inject({ method: "GET", url: "/api/v1/admin/runs/review", headers: { cookie } });
+    expect(response.json().data.runs.map((run: { displayName: string | null }) => run.displayName)).toEqual(["Вера", null]);
   });
 
   it("воронка: период по умолчанию — тридцать дней, обратный период — 400", async () => {

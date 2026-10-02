@@ -7,6 +7,7 @@ import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.re
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { funnelReport } from "../src/modules/funnel/funnel-report.js";
 import { PrismaFunnelRepository } from "../src/modules/funnel/funnel.repository.js";
+import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
 
 /**
  * Вехи воронки на живом Postgres (docs/17-testing-strategy.md
@@ -101,19 +102,20 @@ describe.skipIf(DATABASE_URL === "")("вехи воронки на живом Po
     expect(d7.returnedD1At).toEqual(new Date(late + HOUR));
   });
 
-  it("отчёт считает вехи по источнику первого касания", async () => {
+  it("отчёт считает вехи по кампании ссылки, а не по клику; приглашения — одной строкой", async () => {
     const sessions = new PrismaSessionsRepository(prisma);
-    const campaign = `C${randomUUID().replace(/-/g, "").slice(0, 10)}`;
-    const ids = [await account(), await account(), await account()];
-    for (const id of ids) {
+    const campaign = `camp-${randomUUID().slice(0, 8)}`;
+    const linkCode = newLinkCode();
+    await prisma.link.create({ data: { code: linkCode, campaign, source: "tg_ads" } });
+    const record = async (accountId: string, startKind: "click" | "invite", startRef: string) => {
       await sessions.record({
         sessionId: randomUUID(),
-        accountId: id,
+        accountId,
         platform: "telegram",
         place: "channel",
-        startKind: "click",
-        startParam: `c-${campaign}`,
-        startRef: campaign,
+        startKind,
+        startParam: `${startKind === "click" ? "c" : "r"}-${startRef}`,
+        startRef,
         clientPlatform: null,
         clientVersion: null,
         deviceClass: "unknown",
@@ -121,20 +123,29 @@ describe.skipIf(DATABASE_URL === "")("вехи воронки на живом Po
         ipPrefix: null,
         startedAt: new Date(T0).toISOString(),
       });
-      await funnel.entered(id, new Date(T0));
+      await funnel.entered(accountId, new Date(T0));
+    };
+    // Каждый переход по ссылке — свой код клика, но кампания у них одна.
+    const ids = [await account(), await account(), await account()];
+    for (const id of ids) {
+      const clickId = newClickId();
+      await prisma.linkClick.create({ data: { clickId, linkCode } });
+      await record(id, "click", clickId);
     }
     await funnel.appOpened(ids[0]!, new Date(T0 + HOUR));
     await funnel.appOpened(ids[1]!, new Date(T0 + HOUR));
     await funnel.runRecorded(ids[0]!, new Date(T0 + 2 * HOUR));
+    // Двое пришли по приглашениям разных людей.
+    await record(await account(), "invite", `inv${randomUUID().slice(0, 6)}`);
+    await record(await account(), "invite", `inv${randomUUID().slice(0, 6)}`);
 
     const report = await funnelReport(prisma, new Date(T0 - HOUR), new Date(T0 + 24 * HOUR));
-    expect(report.find((line) => line.startRef === campaign)).toMatchObject({
-      platform: "telegram",
-      startKind: "click",
-      accounts: 3,
-      entered: 3,
-      appOpened: 2,
-      firstRunFinished: 1,
-    });
+    expect(report.filter((line) => line.startRef === campaign)).toEqual([
+      expect.objectContaining({ platform: "telegram", startKind: "click", startSource: "tg_ads", accounts: 3, entered: 3, appOpened: 2, firstRunFinished: 1 }),
+    ]);
+    const invites = report.filter((line) => line.startKind === "invite");
+    expect(invites).toHaveLength(1);
+    expect(invites[0]).toMatchObject({ startRef: null, startSource: null });
+    expect(invites[0]?.accounts).toBeGreaterThanOrEqual(2);
   });
 });

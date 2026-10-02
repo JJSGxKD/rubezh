@@ -1,11 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
-import type { Role } from "../roles/permissions.js";
+import { ROLE_PERMISSIONS, ROLES, type Permission, type Role } from "../roles/permissions.js";
 import type { AuditQuery, AuditRecord } from "../roles/roles.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { AdminSessionService } from "./admin-session.service.js";
-import type { RoleTarget } from "./dto/admin.dto.js";
+import type { RoleCandidateQuery, RoleTarget } from "./dto/admin.dto.js";
 
 /**
  * Роли и журнал в панели (docs/29-admin-panel.md §3, §8). Выдача и отзыв —
@@ -42,7 +42,32 @@ export interface RoleAssignmentView {
   displayName: string | null;
   role: Role;
   grantedBy: string | null;
+  /** кто выдал — по имени; `null` — система или аккаунта уже нет */
+  grantedByName: string | null;
   grantedAt: string;
+}
+
+/**
+ * Что даёт роль — её права, как в коде. Панель по ним показывает, какие
+ * разделы откроет роль: описание, собранное из прав, не разойдётся с тем,
+ * что человек увидит на деле.
+ */
+export interface RoleCatalogEntry {
+  role: Role;
+  permissions: readonly Permission[];
+}
+
+export interface RoleAssignments {
+  assignments: RoleAssignmentView[];
+  roles: RoleCatalogEntry[];
+}
+
+/** Кому собираются выдать роль: имя и роли, что уже есть, — до нажатия «Выдать». */
+export interface RoleCandidate {
+  accountId: string;
+  displayName: string;
+  platformUserId: string;
+  roles: Role[];
 }
 
 @Injectable()
@@ -53,11 +78,39 @@ export class AdminRolesService {
     private readonly sessions: AdminSessionService,
   ) {}
 
-  async assignments(actor: AccountRef): Promise<RoleAssignmentView[]> {
+  async assignments(actor: AccountRef): Promise<RoleAssignments> {
     const rows = await this.roles.assignments(actor);
-    // Имя в списке избавляет от второго похода в карточку.
-    const names = await this.accounts.displayNames([...new Set(rows.map((row) => row.accountId))]);
-    return rows.map((row) => ({ accountId: row.accountId, displayName: names.get(row.accountId) ?? null, role: row.role, grantedBy: row.grantedBy, grantedAt: row.grantedAt.toISOString() }));
+    // Имя в списке избавляет от второго похода в карточку — и у того, кому выдали, и у того, кто выдал.
+    const ids = new Set(rows.flatMap((row) => (row.grantedBy === null ? [row.accountId] : [row.accountId, row.grantedBy])));
+    const names = await this.accounts.displayNames([...ids]);
+    return {
+      assignments: rows.map((row) => ({
+        accountId: row.accountId,
+        displayName: names.get(row.accountId) ?? null,
+        role: row.role,
+        grantedBy: row.grantedBy,
+        grantedByName: row.grantedBy === null ? null : (names.get(row.grantedBy) ?? null),
+        grantedAt: row.grantedAt.toISOString(),
+      })),
+      roles: ROLES.map((role) => ({ role, permissions: ROLE_PERMISSIONS[role] })),
+    };
+  }
+
+  /**
+   * Кто это — по Telegram ID или id аккаунта, пока вводят: роль, выданная не
+   * тому, кому хотели, — дыра в доступе, и узнать о ней лучше до нажатия.
+   * `null` — такого аккаунта нет: человек ещё не открывал игру или бота.
+   */
+  async candidate(actor: AccountRef, query: RoleCandidateQuery): Promise<RoleCandidate | null> {
+    await this.roles.require(actor, "roles.assign");
+    const account = query.accountId !== undefined ? await this.accounts.byId(query.accountId) : await this.accounts.byPlatformUser(query.platform, query.platformUserId ?? "");
+    if (account === null) return null;
+    return {
+      accountId: account.accountId,
+      displayName: account.displayName,
+      platformUserId: account.platformUserId,
+      roles: await this.roles.rolesFor({ accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId }),
+    };
   }
 
   async grant(actor: AccountRef, target: RoleTarget): Promise<{ granted: boolean }> {

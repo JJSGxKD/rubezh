@@ -1,15 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../../services";
-import { fetchFunnel, FUNNEL_STEPS, funnelTotal, periodFromDates, shareOfEntered, type FunnelRow, type Period } from "../../api/funnel";
+import { fetchFunnel, FUNNEL_STEPS, funnelTotal, periodFromDates, platformTitle, shareOfAccounts, touchOf, type FunnelRow, type Period } from "../../api/funnel";
 import { formatDateTime, formatNumber } from "../../format";
 import { Button, DataTable, ErrorNotice, Field, Input, Loading, Panel, type Column } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
 /**
- * Воронка по источникам. Число и доля от вошедших в одной ячейке: абсолют
- * без доли не сравнить между источниками, доля без абсолюта врёт на малых
- * числах (docs/29-admin-panel.md §5.2).
+ * Воронка по источникам. Число и доля от аккаунтов строки в одной ячейке:
+ * абсолют без доли не сравнить между источниками, доля без абсолюта врёт на
+ * малых числах (docs/29-admin-panel.md §5.2).
  */
 export function FunnelScreen() {
   const [fromDate, setFromDate] = useState("");
@@ -23,18 +23,18 @@ export function FunnelScreen() {
   };
 
   const cell = (row: FunnelRow, step: (typeof FUNNEL_STEPS)[number][0]) => {
-    const share = shareOfEntered(row, step);
+    const share = shareOfAccounts(row, step);
     return (
-      <span>
+      <span className="whitespace-nowrap">
         {formatNumber(row[step])}
-        {share === null || step === "entered" ? null : <span className="ml-1 text-xs text-text-muted">{share}%</span>}
+        {share === null ? null : <span className="ml-1 text-xs text-text-muted">{share}%</span>}
       </span>
     );
   };
 
   const columns: Column<FunnelRow>[] = [
-    { title: "Площадка", render: (row) => row.platform },
-    { title: "Касание", help: HELP.funnel.touch, render: (row) => (row.startRef === null ? row.startKind : `${row.startKind}: ${row.startRef}`) },
+    { title: "Площадка", render: (row) => platformTitle(row.platform) },
+    { title: "Откуда пришли", help: HELP.funnel.touch, render: (row) => <TouchCell row={row} /> },
     { title: "Аккаунтов", render: (row) => formatNumber(row.accounts), align: "right" },
     ...FUNNEL_STEPS.map(
       ([step, title]): Column<FunnelRow> => ({
@@ -65,16 +65,26 @@ export function FunnelScreen() {
       {state.status === "ok" ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-text-muted">
-            Период: {formatDateTime(state.data.from)} — {formatDateTime(state.data.to)}. Доля — от вошедших в той же строке.
+            Период: {formatDateTime(state.data.from)} — {formatDateTime(state.data.to)}. Доля — от аккаунтов той же строки.
           </p>
           <DataTable
             rows={state.data.rows.length === 0 ? [] : [funnelTotal(state.data.rows), ...state.data.rows]}
-            rowKey={(row) => `${row.platform}|${row.startKind}|${row.startRef ?? ""}`}
+            rowKey={(row) => `${row.platform}|${row.startKind}|${row.startRef ?? ""}|${row.startSource ?? ""}`}
             empty="За период никто не пришёл"
             columns={columns}
           />
         </div>
       ) : null}
     </Panel>
+  );
+}
+
+function TouchCell({ row }: { row: FunnelRow }) {
+  const touch = touchOf(row);
+  return (
+    <span className="flex max-w-72 flex-col">
+      <span className={row.startKind === "все" ? "font-medium" : ""}>{touch.title}</span>
+      {touch.detail === null ? null : <span className="text-xs text-text-muted">{touch.detail}</span>}
+    </span>
   );
 }

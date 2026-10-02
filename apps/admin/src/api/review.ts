@@ -8,6 +8,7 @@ import type { AdminApi, ApiResult } from "./client";
 export const reviewRowSchema = z.object({
   runId: z.string(),
   accountId: z.string(),
+  displayName: z.string().nullable(),
   verdict: z.string(),
   verdictReasons: z.array(z.string()),
   difficulty: z.string(),
@@ -48,4 +49,25 @@ const REASON_TITLES: Readonly<Record<string, string>> = {
 
 export function reasonTitle(code: string): string {
   return REASON_TITLES[code] ?? code;
+}
+
+/** Сложность — как её называет игра (`difficulty.<id>.name` в словаре оболочки). */
+const DIFFICULTY_TITLES: Readonly<Record<string, string>> = { easy: "лёгкая", normal: "нормальная", hard: "сложная" };
+
+export function difficultyTitle(id: string): string {
+  return DIFFICULTY_TITLES[id] ?? id;
+}
+
+export const VERDICT_FILTERS = [
+  { id: "all", title: "Все" },
+  { id: "rejected", title: "Отклонённые" },
+  { id: "suspicious", title: "Подозрительные" },
+] as const;
+export type VerdictFilter = (typeof VERDICT_FILTERS)[number]["id"];
+
+/** Сколько забегов каждого игрока в очереди: повтор — сильнее повод разобраться, чем один забег. */
+export function runsPerPlayer(rows: readonly ReviewRow[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.accountId, (counts.get(row.accountId) ?? 0) + 1);
+  return counts;
 }
