@@ -14,7 +14,7 @@ import {
 } from "../src/modules/ads/ad-networks.js";
 import { AD_PLACES, AD_SUCCESS } from "../src/modules/ads/ads-rules.js";
 import { PLATFORM_IDS } from "../src/platforms/ports/platform.js";
-import { servable } from "../src/modules/ads/ads.service.js";
+import { servable } from "../src/modules/ads/ad-blocks.js";
 import { NETWORK_KEYS } from "./helpers/memory-ads.js";
 
 // Профили рекламных сетей (docs/35-stage4-plan.md WP12, часть 5): по ним

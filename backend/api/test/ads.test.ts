@@ -22,7 +22,8 @@ import {
 import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdsController } from "../src/modules/ads/ads.controller.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
-import { AdsService, eligibleBlocks, type AdOffer, type AdViewer, type AdsRoll } from "../src/modules/ads/ads.service.js";
+import { eligibleBlocks } from "../src/modules/ads/ad-blocks.js";
+import { AdsService, type AdOffer, type AdViewer, type AdsRoll } from "../src/modules/ads/ads.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";

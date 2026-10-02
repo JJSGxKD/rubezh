@@ -4,7 +4,8 @@ import { withTimeout } from "../../common/with-timeout.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
-import { PLACE_FORMAT, blockReaches, blockShapeProblem, keysProblem, missingKeys, profileOf, type AdFormat } from "./ad-networks.js";
+import { PLACE_FORMAT, blockReaches, type AdFormat } from "./ad-networks.js";
+import { eligibleBlocks, networksOf, servable } from "./ad-blocks.js";
 import { AdPasses } from "./ads-passes.js";
 import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
 import {
@@ -18,7 +19,6 @@ import {
   type AdDevice,
   type AdPlace,
   type AdSuccess,
-  type NetworkCandidate,
 } from "./ads-rules.js";
 import { ADS_REPOSITORY, type AdBlockRow, type AdOutcome, type AdSessionRow, type AdsRepository, type ClaimVerdict, type PlaceHistory } from "./ads.repository.js";
 
@@ -202,34 +202,6 @@ export class AdsService {
   private async db<T>(promise: Promise<T>): Promise<T> {
     return await withTimeout(promise, DB_TIMEOUT_MS, "реклама");
   }
-}
-
-/** Блоки места для площадки и устройства зрителя: пустой список площадок — везде, где работает сеть, устройств — везде. */
-export function eligibleBlocks(blocks: readonly AdBlockRow[], place: AdPlace, viewer: Pick<AdViewer, "platform" | "device">): AdBlockRow[] {
-  return blocks.filter(
-    (block) =>
-      block.place === place &&
-      servable(block) &&
-      blockReaches(block, viewer.platform) &&
-      (block.devices.length === 0 || (viewer.device !== null && block.devices.includes(viewer.device))),
-  );
-}
-
-/**
- * Блок, который SDK сможет показать: он по профилю своей сети, и у сети
- * заданы ключи. Панель такого не сохранит, но блок, заведённый до профилей, —
- * мог: выдача его пропускает, а панель показывает, что с ним не так.
- */
-export function servable(block: Pick<AdBlockRow, "networkKey" | "place" | "externalId" | "success" | "platforms" | "networkKeys">): boolean {
-  const profile = profileOf(block.networkKey);
-  if (profile === undefined || blockShapeProblem(block) !== null) return false;
-  return missingKeys(profile, block.networkKeys).length === 0 && keysProblem(profile, block.networkKeys) === null;
-}
-
-function networksOf(blocks: readonly AdBlockRow[]): NetworkCandidate[] {
-  const networks = new Map<string, NetworkCandidate>();
-  for (const block of blocks) networks.set(block.networkKey, { networkKey: block.networkKey, priority: block.priority });
-  return [...networks.values()];
 }
 
 /** Можно ли забрать: условие успеха выполнено, окно забора не прошло, место не на кулдауне. */
