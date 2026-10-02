@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Crown, Skull, Trophy, Wrench } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
 import { Badge, Button, Modal, Stat, staggerStyle } from "../../design-system/components";
@@ -15,6 +15,12 @@ import { useRuns } from "../../state/runs";
 import { ItemIcon } from "../item-icons";
 import { guarded, useTapGuard } from "./overlay-guard";
 import { SecondChance, type SecondChanceProps } from "./SecondChance";
+
+/**
+ * Удвоение за рекламу — своим чанком: оно нужно, только когда награда
+ * посчитана и в ней есть монеты, а поток рекламы весит больше самой кнопки.
+ */
+const RunDouble = lazy(async () => ({ default: (await import("./RunDouble")).RunDouble }));
 
 /**
  * Экран смерти. Отдельный чанк (`death-overlay-lazy.tsx`): до первой смерти
@@ -127,7 +133,8 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
             <Stat label={t("run.death.wave")} value={String(result.waveReached)} />
           </div>
 
-          {reward === undefined ? null : <RewardRow reward={reward} />}
+          {/* Удвоение — только у настоящего итога: у витрины компонентов сети нет. */}
+          {reward === undefined ? null : <RewardRow reward={reward} {...(props.showReward === true ? { doubleRunId: result.runId } : {})} />}
 
           {result.deathCause === null ? null : (
             <p className="mt-3 text-xs text-text-muted">
@@ -217,8 +224,10 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
  * потом числа — без перезапуска экрана. Причина отказа видна прямо: игрок,
  * сдавшийся на десятой секунде, должен понять, почему монет нет.
  */
-function RewardRow(props: { reward: RunRewardView }): ReactNode {
+function RewardRow(props: { reward: RunRewardView; doubleRunId?: string }): ReactNode {
   const { reward } = props;
+  // Сколько добавило удвоение за рекламу: строка показывает монеты уже с ним.
+  const [bonus, setBonus] = useState(0);
   if (reward.status === "pending") return <p className="mt-3 text-xs text-text-muted">{t("run.reward.pending")}</p>;
   if (reward.status === "none") {
     const key = `run.reward.none.${reward.reason}`;
@@ -230,9 +239,14 @@ function RewardRow(props: { reward: RunRewardView }): ReactNode {
   return (
     <div className="mt-3 animate-rise-in">
       <div className="surface-sunken flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg px-4 py-3">
-        <span className="inline-flex items-center gap-1.5 font-display text-lg font-bold tabular-nums text-text" aria-label={t("run.reward.coinsLabel", { amount: reward.coins })}>
+        <span className="inline-flex items-center gap-1.5 font-display text-lg font-bold tabular-nums text-text" aria-label={t("run.reward.coinsLabel", { amount: reward.coins + bonus })}>
           <CoinIcon size={20} />
-          {t("run.reward.coins", { amount: formatNumber(reward.coins) })}
+          {t("run.reward.coins", { amount: formatNumber(reward.coins + bonus) })}
+          {bonus > 0 ? (
+            <span className="animate-pop-in">
+              <Badge tone="accent">×2</Badge>
+            </span>
+          ) : null}
         </span>
         <span className="font-display text-sm font-semibold tabular-nums text-xp">{t("run.reward.xp", { amount: formatNumber(reward.xp) })}</span>
         {levelUp ? (
@@ -245,6 +259,11 @@ function RewardRow(props: { reward: RunRewardView }): ReactNode {
         <p className="mt-1.5 animate-rise-in text-sm text-text">{t("run.reward.unlocked", { list: unlocked.map(unlockLabel).join(", ") })}</p>
       )}
       {reward.coinsCapped ? <p className="mt-1 text-xs text-text-muted">{t("run.reward.capped")}</p> : null}
+      {props.doubleRunId === undefined || reward.coins <= 0 ? null : (
+        <Suspense fallback={null}>
+          <RunDouble runId={props.doubleRunId} onDoubled={setBonus} />
+        </Suspense>
+      )}
     </div>
   );
 }
