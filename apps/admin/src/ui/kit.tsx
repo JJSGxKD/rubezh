@@ -173,8 +173,8 @@ export function Badge({ tone = "neutral", children }: { tone?: Tone; children: R
   return <span className={`inline-flex items-center rounded-pill px-2 py-0.5 text-xs ${BADGE_TONES[tone]}`}>{children}</span>;
 }
 
-export function Notice({ tone = "danger", children }: { tone?: "danger" | "info" | "success"; children: ReactNode }) {
-  const tones = { danger: "border-danger/40 text-danger", info: "border-info/40 text-info", success: "border-success/40 text-success" };
+export function Notice({ tone = "danger", children }: { tone?: "danger" | "warning" | "info" | "success"; children: ReactNode }) {
+  const tones = { danger: "border-danger/40 text-danger", warning: "border-warning/40 text-warning", info: "border-info/40 text-info", success: "border-success/40 text-success" };
   return <p className={`rounded-sm border bg-surface-sunken px-3 py-2 text-sm ${tones[tone]}`}>{children}</p>;
 }
 

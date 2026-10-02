@@ -35,6 +35,7 @@ import { FlagsModule } from "./modules/flags/flags.module.js";
 import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module.js";
 import { SettingsModule } from "./modules/settings/settings.module.js";
 import { SecretsModule } from "./modules/secrets/secrets.module.js";
+import { AdConversionsModule } from "./modules/ad-conversions/ad-conversions.module.js";
 import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-login.module.js";
 import { AccountSettingsModule } from "./modules/account-settings/account-settings.module.js";
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
@@ -83,6 +84,7 @@ export const APP_MODULES = [
   DatabaseModule,
   SettingsModule,
   SecretsModule,
+  AdConversionsModule,
   PlatformsModule,
   IngestModule,
   TelegramModule,

@@ -5,6 +5,7 @@ import { DEVICE_TITLES, PLACE_TITLES, PLATFORM_TITLES, SUCCESS_TITLES } from "./
 import { STATUS_LOOK } from "./broadcasts";
 import { KIND_TITLES } from "./changelog";
 import type { AdminApi, ApiResult } from "./client";
+import { GOAL_TITLES, NETWORK_TITLES } from "./links";
 import { WALLET_RESOURCES, resourceName } from "./players";
 import { roleName } from "./roles";
 
@@ -101,6 +102,7 @@ const ACTION_TITLES: Record<string, string> = {
   "shop.promo.create": "Новая акция",
   "shop.promo.cancel": "Снятие акции",
   "links.create": "Новая ссылка",
+  "links.conversion.send": "Повторная отправка конверсии в сеть",
   "broadcast.create": "Новая рассылка",
   "broadcast.update": "Правка рассылки",
   "broadcast.approve": "Одобрение рассылки",
@@ -191,7 +193,7 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
     case "tasks":
       return { kind: "задание", label: target, route: { section: "tasks", id: null } };
     case "links":
-      return { kind: "ссылка", label: target, route: { section: "links", id: null } };
+      return { kind: "ссылка", label: target, route: { section: "links", id: target } };
     case "changelog":
       return action === "changelog.publish" || action === "changelog.import"
         ? { kind: "версия", label: target, route: { section: "changelog", id: null } }
@@ -258,6 +260,9 @@ const FIELD_TITLES: Record<string, string> = {
   keys: "ключи",
   source: "источник",
   campaign: "кампания",
+  network: "сеть",
+  registrationOn: "регистрация для сети",
+  goal: "цель",
   platform: "площадка",
   approvedBy: "одобрил",
   audience: "получателей",
@@ -278,7 +283,7 @@ export function fieldTitle(key: string): string {
 }
 
 /** Служебное, что меняется при каждой правке и ничего не говорит человеку. */
-const NOISE = new Set(["updatedAt", "createdAt", "createdBy", "campaignId", "partnerId", "promoId", "blockId", "entryId", "taskId", "redeemed", "codeSample", "networkKey"]);
+const NOISE = new Set(["updatedAt", "createdAt", "createdBy", "campaignId", "partnerId", "promoId", "blockId", "entryId", "taskId", "redeemed", "codeSample", "networkKey", "conversionId"]);
 
 export interface AuditChange {
   field: string;
@@ -347,6 +352,9 @@ const VALUE_TITLES: Record<string, Partial<Record<string, string>>> = {
   platform: PLATFORM_TITLES,
   platforms: PLATFORM_TITLES,
   devices: DEVICE_TITLES,
+  network: NETWORK_TITLES,
+  registrationOn: { first_run: "после первого забега", launch: "при первом запуске" },
+  goal: GOAL_TITLES,
 };
 
 const word = (key: string, value: string): string => VALUE_TITLES[key]?.[value] ?? value;
@@ -355,7 +363,7 @@ const word = (key: string, value: string): string => VALUE_TITLES[key]?.[value] 
 export function auditValue(value: unknown, key = "", max = 80): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? "да" : "нет";
-  if (typeof value === "number") return formatNumber(value);
+  if (typeof value === "number") return VALUE_TITLES[key]?.[String(value)] ?? formatNumber(value);
   const amounts = resourceAmounts(value);
   if (amounts !== null) return amounts;
   if (typeof value === "string") {

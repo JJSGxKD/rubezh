@@ -59,7 +59,15 @@ let miniApp: string | null;
 let service: LinksService;
 
 function visitor(patch: Partial<VisitorInfo> = {}): VisitorInfo {
-  return { userAgent: HUMAN, referer: "https://t.me/s/rubezh_channel?before=1", acceptLanguage: "ru-RU,ru;q=0.9", ip: "198.51.100.7", utm: { source: "tg", medium: null, campaign: "launch", content: null, term: null }, ...patch };
+  return {
+    userAgent: HUMAN,
+    referer: "https://t.me/s/rubezh_channel?before=1",
+    acceptLanguage: "ru-RU,ru;q=0.9",
+    ip: "198.51.100.7",
+    utm: { source: "tg", medium: null, campaign: "launch", content: null, term: null },
+    query: {},
+    ...patch,
+  };
 }
 
 beforeEach(() => {
@@ -105,6 +113,28 @@ describe("переход по ссылке", () => {
     miniApp = null;
     expect((await service.visit(link.code, visitor())).kind).toBe("unavailable");
     expect(repository.clicks).toEqual([]);
+  });
+
+  it("ссылка AdsGram: адрес с макросами для кабинета, подставленные сетью значения — на клике", async () => {
+    const link = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "ag-oct", source: "adsgram", medium: null, note: null, platform: "telegram", network: "adsgram" });
+    // Макросы — буквально: сеть ищет `{campaign_id}`, а не `%7Bcampaign_id%7D`.
+    expect(link.networkUrl).toBe(`https://rubezh.example/r/${link.code}?campaign={campaign_id}&banner={banner_id}&pub={publisher_id}&clickid={click_id}&record={record_data}`);
+    expect(link.registrationOn).toBe("first_run");
+
+    await service.visit(link.code, visitor({ query: { campaign: "1234", banner: "77", record: "7f3a1b6c5d2e4f8a", clickid: "{click_id}", other: "x" } }));
+    await new Promise((resolve) => setImmediate(resolve));
+    // Неподставленный макрос — превью кабинета, а не клик сети: он отбрасывается, как и чужие параметры.
+    expect(repository.clicks[0]?.networkParams).toEqual({ campaign: "1234", banner: "77", record: "7f3a1b6c5d2e4f8a" });
+  });
+
+  it("обычная ссылка параметров сети не хранит, а макросов без подстановки — нет и на ссылке сети", async () => {
+    const plain = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "c", source: null, medium: null, note: null, platform: "telegram" });
+    expect(plain.networkUrl).toBeNull();
+    await service.visit(plain.code, visitor({ query: { record: "abc" } }));
+    const network = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "c", source: null, medium: null, note: null, platform: "telegram", network: "adsgram" });
+    await service.visit(network.code, visitor({ query: { campaign: "{campaign_id}", record: "{record_data}" } }));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(repository.clicks.map((click) => click.networkParams)).toEqual([null, null]);
   });
 
   it("заводить и смотреть ссылки — только с правом", async () => {
@@ -164,6 +194,13 @@ describe("HTTP /r/:code", () => {
     const human = await target.inject({ method: "GET", url: `/r/${link.code}?utm_source=tg`, headers: { "user-agent": HUMAN } });
     expect(human.statusCode).toBe(302);
     expect(human.headers.location).toMatch(/startapp=c-/);
+
+    // Ссылка сети: переходник передаёт макросы как пришли — профиль сети разберёт их сам.
+    const network = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "ag", source: null, medium: null, note: null, platform: "telegram", network: "adsgram" });
+    const fromAd = await target.inject({ method: "GET", url: `/r/${network.code}?campaign=55&record=ab12cd34&pub=9`, headers: { "user-agent": HUMAN } });
+    expect(fromAd.statusCode).toBe(302);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(repository.clicks.at(-1)?.networkParams).toEqual({ campaign: "55", pub: "9", record: "ab12cd34" });
 
     const bot = await target.inject({ method: "GET", url: `/r/${link.code}`, headers: { "user-agent": "TelegramBot (like TwitterBot)" } });
     expect(bot.statusCode).toBe(200);

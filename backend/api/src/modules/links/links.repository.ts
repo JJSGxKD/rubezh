@@ -2,8 +2,12 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
+import { isLinkNetwork, type LinkNetwork } from "./link-networks.js";
 
 /** Ссылки кампаний и клики по ним (docs/24-attribution-and-sharing.md §3). */
+
+/** Когда регистрация уходит в сеть: после первого засчитанного забега или при первом запуске (О39). */
+export type RegistrationOn = "first_run" | "launch";
 
 export interface LinkInput {
   code: string;
@@ -13,6 +17,9 @@ export interface LinkInput {
   medium: string | null;
   note: string | null;
   createdBy: string | null;
+  /** сеть, где куплена реклама; `null` — обычная ссылка */
+  network: LinkNetwork | null;
+  registrationOn: RegistrationOn;
 }
 
 export interface LinkRecord extends LinkInput {
@@ -28,6 +35,8 @@ export interface ClickInput {
   deviceClass: string | null;
   ipPrefix: string | null;
   language: string | null;
+  /** макросы сети ссылки, подставленные сетью; `null` — обычная ссылка или сеть ничего не подставила */
+  networkParams: Record<string, string> | null;
 }
 
 export interface LinkStats extends LinkRecord {
@@ -51,11 +60,12 @@ export class PrismaLinksRepository implements LinksRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   async create(link: LinkInput): Promise<LinkRecord> {
-    return await this.prisma.link.create({ data: link });
+    return recordOf(await this.prisma.link.create({ data: link }));
   }
 
   async byCode(code: string): Promise<LinkRecord | null> {
-    return await this.prisma.link.findUnique({ where: { code } });
+    const row = await this.prisma.link.findUnique({ where: { code } });
+    return row === null ? null : recordOf(row);
   }
 
   async recordClick(click: ClickInput): Promise<void> {
@@ -73,6 +83,7 @@ export class PrismaLinksRepository implements LinksRepository {
         deviceClass: click.deviceClass,
         ipPrefix: click.ipPrefix,
         language: click.language,
+        networkParams: click.networkParams ?? Prisma.DbNull,
       },
     });
   }
@@ -96,7 +107,12 @@ export class PrismaLinksRepository implements LinksRepository {
     const byCode = new Map(stats.map((row) => [row.link_code, row]));
     return links.map((link) => {
       const row = byCode.get(link.code);
-      return { ...link, clicks: row?.clicks ?? 0, clicks30d: row?.clicks_30d ?? 0, launches: row?.launches ?? 0 };
+      return { ...recordOf(link), clicks: row?.clicks ?? 0, clicks30d: row?.clicks_30d ?? 0, launches: row?.launches ?? 0 };
     });
   }
+}
+
+/** Строка базы — в запись: сеть и момент регистрации держит `CHECK`, здесь только сужение типа. */
+function recordOf(row: Omit<LinkRecord, "network" | "registrationOn"> & { network: string | null; registrationOn: string }): LinkRecord {
+  return { ...row, network: row.network === null || !isLinkNetwork(row.network) ? null : row.network, registrationOn: row.registrationOn === "launch" ? "launch" : "first_run" };
 }

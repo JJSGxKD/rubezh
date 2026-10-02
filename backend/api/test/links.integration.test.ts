@@ -30,12 +30,12 @@ describe.skipIf(DATABASE_URL === "")("ссылки на живом Postgres", ()
 
   it("клики и запуски по ним — в статистике ссылки", async () => {
     const code = newLinkCode();
-    await links.create({ code, platform: "telegram", campaign: "launch", source: "tg", medium: null, note: null, createdBy: null });
+    await links.create({ code, platform: "telegram", campaign: "launch", source: "tg", medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run" });
     expect(await links.byCode(code)).toMatchObject({ code, campaign: "launch", platform: "telegram" });
 
     const clickIds = [newClickId(), newClickId()];
     for (const clickId of clickIds) {
-      await links.recordClick({ clickId, linkCode: code, at: new Date(), utm: { source: "tg", medium: null, campaign: null, content: null, term: null }, refererHost: "t.me", deviceClass: "mobile", ipPrefix: "198.51.100.0/24", language: "ru-RU" });
+      await links.recordClick({ clickId, linkCode: code, at: new Date(), utm: { source: "tg", medium: null, campaign: null, content: null, term: null }, refererHost: "t.me", deviceClass: "mobile", ipPrefix: "198.51.100.0/24", language: "ru-RU", networkParams: null });
     }
 
     const accounts = new PrismaAccountRepository(prisma);
