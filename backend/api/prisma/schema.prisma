@@ -1630,6 +1630,10 @@ model AdSession {
   failReason  String?         @map("fail_reason") @db.VarChar(64)
   /// после этого сессию не выполнить и не забрать
   expiresAt   DateTime        @map("expires_at") @db.Timestamptz(3)
+  /// креатив сети с API, который рисует наш блок (Р78): по нему сервер сообщает сети показ и досмотр
+  creativeId  String?         @map("creative_id") @db.VarChar(128)
+  /// через сколько секунд после выдачи креатив можно засчитать досмотренным; пусто — досмотр подтверждает SDK сети
+  viewSec     Int?            @map("view_sec") @db.SmallInt
 
   account Account  @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   // Блок с показами не удаляется — его выключают; иначе сессии стали бы пропусками.

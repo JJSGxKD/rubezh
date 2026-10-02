@@ -4,8 +4,10 @@ import { withTimeout } from "../../common/with-timeout.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
-import { PLACE_FORMAT, blockReaches, type AdFormat } from "./ad-networks.js";
-import { eligibleBlocks, networksOf, servable } from "./ad-blocks.js";
+import { CREATIVE_VIEW_SEC, PLACE_FORMAT, blockReaches, type AdFormat } from "./ad-networks.js";
+import { eligibleBlocks, networksOf, servable, viaApi } from "./ad-blocks.js";
+import { AD_CREATIVES, type AdCreative, type AdCreativeSource, type AdRequester } from "./ad-creatives.js";
+import { AdNetworkKeys } from "./ad-network-keys.js";
 import { AdPasses } from "./ads-passes.js";
 import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
 import {
@@ -20,7 +22,17 @@ import {
   type AdPlace,
   type AdSuccess,
 } from "./ads-rules.js";
-import { ADS_REPOSITORY, type AdBlockRow, type AdOutcome, type AdSessionRow, type AdsRepository, type ClaimVerdict, type PlaceHistory } from "./ads.repository.js";
+import {
+  ADS_REPOSITORY,
+  type AdBlockRow,
+  type AdOutcome,
+  type AdReport,
+  type AdSessionRow,
+  type AdsRepository,
+  type ClaimVerdict,
+  type NewAdSession,
+  type PlaceHistory,
+} from "./ads.repository.js";
 
 /**
  * Реклама (docs/35-stage4-plan.md §3.7, WP12): какую сеть и какой блок
@@ -34,6 +46,10 @@ import { ADS_REPOSITORY, type AdBlockRow, type AdOutcome, type AdSessionRow, typ
  * У кого есть пропуск (VIP, §3.6), тому сессия места выдаётся сразу
  * выполненной — без сети и ролика, но после кулдауна места: хозяин забирает
  * её как обычную и ничего о VIP не знает. Межстраничной у него нет вовсе.
+ *
+ * Сеть с API (Taddy, Р78) отдаёт креатив серверу ещё при выдаче: нет
+ * креатива — выдача тут же идёт к следующей сети, а игрок не ждёт отказа
+ * клиента. Показ и досмотр такого креатива сервер сообщает сети сам.
  */
 
 const DB_TIMEOUT_MS = 3_000;
@@ -52,6 +68,14 @@ export interface AdViewer {
   platform: PlatformId;
   /** не знаем устройства — блоки с ограничением по устройству не предлагаются */
   device: AdDevice | null;
+  /** что нужно сети с API для гео и антифрода; нет — такая сеть креатива не даст */
+  requester?: AdRequester;
+}
+
+/** Креатив для нашего рекламного блока и через сколько секунд на экране он досмотрен. */
+export interface AdCreativeShow {
+  ad: AdCreative;
+  viewSec: number;
 }
 
 export type AdOffer =
@@ -72,6 +96,8 @@ export type AdOffer =
       pass: string | null;
       /** тестовые показы сети — по настройке из панели; такой показ сеть не засчитывает */
       debug: boolean;
+      /** креатив сети с API — его рисует наш рекламный блок, а не SDK; `null` — показывает SDK */
+      creative: AdCreativeShow | null;
     }
   /**
    * `no_fill` — ни одного подходящего блока; `cooldown` — место отдыхает до
@@ -97,6 +123,8 @@ export class AdsService {
     @Inject(ADS_ROLL) private readonly roll: AdsRoll,
     private readonly passes: AdPasses,
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
+    @Inject(AD_CREATIVES) private readonly creatives: AdCreativeSource,
+    private readonly keys: AdNetworkKeys,
   ) {}
 
   async offer(viewer: AdViewer, place: AdPlace, at = new Date()): Promise<AdOffer> {
@@ -108,30 +136,49 @@ export class AdsService {
     if (pass !== null) return await this.passOffer(viewer, place, pass, at);
 
     const blocks = eligibleBlocks(await this.blocks(), place, viewer);
-    const [network] = networkOrder(networksOf(blocks), state.seenAt, state.lastRewardedToday);
-    if (network === undefined) return this.unavailable(viewer, place, "no_fill", null);
+    for (const network of networkOrder(networksOf(blocks), state.seenAt, state.lastRewardedToday)) {
+      // Внутри сети — случайный блок: у сети может быть несколько блоков места,
+      // и ни один не должен выгорать по частоте раньше других.
+      const own = blocks.filter((block) => block.networkKey === network.networkKey);
+      const block = own[this.roll(own.length)] ?? own[0];
+      if (block === undefined) continue;
+      const session = this.newSession(viewer, place, block, at);
+      if (!viaApi(block, place)) return await this.open(session, null);
 
-    // Внутри сети — случайный блок: у сети может быть несколько блоков места,
-    // и ни один не должен выгорать по частоте раньше других.
-    const own = blocks.filter((block) => block.networkKey === network.networkKey);
-    const block = own[this.roll(own.length)] ?? own[0];
-    if (block === undefined) return this.unavailable(viewer, place, "no_fill", null);
+      const fetched = await this.creatives.fetch(block.networkKey, block.networkKeys, viewer.requester ?? null);
+      if (fetched.kind === "creative") {
+        const viewSec = CREATIVE_VIEW_SEC[PLACE_FORMAT[place] === "interstitial" ? "interstitial" : "rewarded"];
+        return await this.open({ ...session, creative: { id: fetched.creative.id, viewSec } }, { ad: fetched.creative, viewSec });
+      }
+      // Отказ — сессией: сеть уходит на паузу места, как отказавшая на клиенте.
+      await this.db(this.repository.createFailedSession(session, fetched.reason));
+      this.log({ event: "ad_failed", accountId: viewer.accountId, place, network: block.networkKey, reason: fetched.reason });
+    }
+    return this.unavailable(viewer, place, "no_fill", null);
+  }
 
-    const sessionId = randomBytes(12).toString("base64url");
+  private newSession(viewer: AdViewer, place: AdPlace, block: AdBlockRow, at: Date): NewAdSession {
     const expiresAt = new Date(at.getTime() + SESSION_TTL_MIN[block.success] * MINUTE_MS);
-    await this.db(this.repository.createSession({ sessionId, accountId: viewer.accountId, place, block, createdAt: at, expiresAt }));
-    this.log({ event: "ad_offered", accountId: viewer.accountId, place, network: block.networkKey, success: block.success });
+    return { sessionId: randomBytes(12).toString("base64url"), accountId: viewer.accountId, place, block, creative: null, createdAt: at, expiresAt };
+  }
+
+  private async open(session: NewAdSession, creative: AdCreativeShow | null): Promise<AdOffer> {
+    const { block } = session;
+    await this.db(this.repository.createSession(session));
+    this.log({ event: "ad_offered", accountId: session.accountId, place: session.place, network: block.networkKey, success: block.success });
     return {
       available: true,
-      sessionId,
+      sessionId: session.sessionId,
       network: block.networkKey,
       blockId: block.externalId,
-      format: PLACE_FORMAT[place],
-      keys: block.networkKeys,
+      format: PLACE_FORMAT[session.place],
+      // Ключи нужны SDK; креатив рисуем сами, и сети его показ сообщает сервер.
+      keys: creative === null ? block.networkKeys : {},
       success: block.success,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
       pass: null,
       debug: this.settings.get(SETTINGS.adsTestMode),
+      creative,
     };
   }
 
@@ -141,13 +188,41 @@ export class AdsService {
     const expiresAt = new Date(at.getTime() + SESSION_TTL_MIN.view * MINUTE_MS);
     await this.db(this.repository.createPassSession({ sessionId, accountId: viewer.accountId, place, pass, createdAt: at, expiresAt }));
     this.log({ event: "ad_passed", accountId: viewer.accountId, place, pass });
-    return { available: true, sessionId, network: pass, blockId: null, format: PLACE_FORMAT[place], keys: {}, success: "view", expiresAt: expiresAt.toISOString(), pass, debug: false };
+    return {
+      available: true,
+      sessionId,
+      network: pass,
+      blockId: null,
+      format: PLACE_FORMAT[place],
+      keys: {},
+      success: "view",
+      expiresAt: expiresAt.toISOString(),
+      pass,
+      debug: false,
+      creative: null,
+    };
   }
 
-  /** Шаг воронки от клиента. Засчитать выполнение он может только показу — клик и целевое действие подтверждает сервер. */
-  async report(accountId: string, sessionId: string, outcome: AdOutcome, at = new Date()): Promise<void> {
-    if (!(await this.db(this.repository.report(sessionId, accountId, outcome, at)))) throw new AdSessionClosedError();
+  /**
+   * Шаг воронки от клиента. Засчитать выполнение он может только показу —
+   * клик и целевое действие подтверждает сервер. Креатив, который рисуем
+   * сами, досмотрен не раньше своего срока, а показ и досмотр узнаёт сеть.
+   */
+  async report(accountId: string, sessionId: string, outcome: AdOutcome, at = new Date(), requester: AdRequester | null = null): Promise<void> {
+    const report = await this.db(this.repository.report(sessionId, accountId, outcome, at));
+    if (report === null) throw new AdSessionClosedError();
     this.log({ event: `ad_${outcome.kind}`, accountId, ...(outcome.kind === "failed" ? { reason: outcome.reason } : {}) });
+    if (report.creativeId !== null) this.notifyNetwork(report, report.creativeId, outcome, requester);
+  }
+
+  /** Сети — мимо ответа игроку: ему её отметки ждать незачем, а их сбой ничего у него не отнимает. */
+  private notifyNetwork(report: AdReport, creativeId: string, outcome: AdOutcome, requester: AdRequester | null): void {
+    const tasks: Promise<void>[] = [];
+    if (report.firstShown) tasks.push(this.creatives.shown(report.networkKey, creativeId, requester));
+    if (outcome.kind === "completed") tasks.push(this.creatives.viewed(report.networkKey, creativeId, requester));
+    for (const task of tasks) {
+      task.catch((error: unknown) => this.log({ event: "network_notify_failed", network: report.networkKey, reason: error instanceof Error ? error.message : "unknown" }));
+    }
   }
 
   /**
@@ -180,6 +255,7 @@ export class AdsService {
   /** Сеть или блок поменяли в панели — следующий показ берёт свежие. */
   forgetBlocks(): void {
     this.cache = null;
+    this.keys.forget();
   }
 
   private async blocks(): Promise<AdBlockRow[]> {

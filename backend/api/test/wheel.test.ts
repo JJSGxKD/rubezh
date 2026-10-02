@@ -22,10 +22,11 @@ import { AdCooldownError, AdNotCompletedError } from "../src/modules/ads/ads-err
 import { maxRewardsPerDay } from "../src/modules/ads/ads-rules.js";
 import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
+import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
 import { AdsService } from "../src/modules/ads/ads.service.js";
 import { panelSettings } from "./helpers/settings.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
-import { MemoryAds, adBlock } from "./helpers/memory-ads.js";
+import { FakeCreatives, MemoryAds, adBlock } from "./helpers/memory-ads.js";
 
 /**
  * Колесо (docs/35-stage4-plan.md Р45, WP13; docs/07-monetization-and-ads.md
@@ -128,7 +129,7 @@ function setup(roll: WheelRoll = rolls(0), level = 1, blocks: AdBlockRow[] = [ad
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
   const passes = new AdPasses();
-  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings());
+  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository));
   const service = new WheelService(repository, progress, wallet as unknown as WalletService, ads, roll);
   return { repository, wallet, service, ads, adsRepository, passes };
 }

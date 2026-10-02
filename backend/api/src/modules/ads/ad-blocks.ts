@@ -1,4 +1,4 @@
-import { blockReaches, blockShapeProblem, keysProblem, missingKeys, profileOf } from "./ad-networks.js";
+import { blockReaches, blockShapeProblem, deliveryOf, formatFor, keysProblem, missingKeys, profileOf } from "./ad-networks.js";
 import type { AdPlace, NetworkCandidate } from "./ads-rules.js";
 import type { AdBlockRow } from "./ads.repository.js";
 import type { AdViewer } from "./ads.service.js";
@@ -35,4 +35,11 @@ export function networksOf(blocks: readonly AdBlockRow[]): NetworkCandidate[] {
   const networks = new Map<string, NetworkCandidate>();
   for (const block of blocks) networks.set(block.networkKey, { networkKey: block.networkKey, priority: block.priority });
   return [...networks.values()];
+}
+
+/** Креатив блока берёт сервер по API сети, а рисует наш блок (Р78). */
+export function viaApi(block: Pick<AdBlockRow, "networkKey">, place: AdPlace): boolean {
+  const profile = profileOf(block.networkKey);
+  const support = profile === undefined ? undefined : formatFor(profile, place);
+  return support !== undefined && deliveryOf(support) === "api";
 }

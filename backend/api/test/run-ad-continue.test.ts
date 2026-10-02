@@ -8,6 +8,7 @@ import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { AdNotCompletedError } from "../src/modules/ads/ads-errors.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
+import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
 import { AdsService } from "../src/modules/ads/ads.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
@@ -18,7 +19,7 @@ import type { AdContinueGrant, GrantOutcome, RunAdContinuesRepository } from "..
 import { AdContinueDailyCapError, AdContinueUnavailableError, ContinueRunUnverifiedError, ContinueTakenError } from "../src/modules/runs/run-continue-errors.js";
 import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-continues.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
-import { MemoryAds, adBlock } from "./helpers/memory-ads.js";
+import { FakeCreatives, MemoryAds, adBlock } from "./helpers/memory-ads.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
 
@@ -85,7 +86,7 @@ function setup(blocks = [adBlock("adsgram", 10, { place: "second_chance" }), adB
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
   const passes = new AdPasses();
-  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings());
+  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository));
   const continues = new RunContinues();
   const stars = new StarsLedger();
   continues.provide(stars);

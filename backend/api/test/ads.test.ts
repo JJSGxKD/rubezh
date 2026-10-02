@@ -23,12 +23,16 @@ import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdsController } from "../src/modules/ads/ads.controller.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { eligibleBlocks } from "../src/modules/ads/ad-blocks.js";
+import { NetworkCreatives, taddyUser, type AdRequester } from "../src/modules/ads/ad-creatives.js";
+import { CREATIVE_VIEW_SEC } from "../src/modules/ads/ad-networks.js";
+import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
+import type { TaddyApi, TaddyUser } from "../src/modules/ads/taddy-api.js";
 import { AdsService, type AdOffer, type AdViewer, type AdsRoll } from "../src/modules/ads/ads.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
-import { MemoryAds, adBlock as block, moscowDayStart } from "./helpers/memory-ads.js";
+import { CREATIVE, FakeCreatives, MemoryAds, adBlock as block, moscowDayStart } from "./helpers/memory-ads.js";
 import { panelSettings } from "./helpers/settings.js";
 
 /**
@@ -43,6 +47,10 @@ const MINUTE = 60_000;
 /** 30.09.2026, 12:00 по Москве */
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 const TELEGRAM: AdViewer = { accountId: ME, platform: "telegram", device: "android" };
+const REQUESTER: AdRequester = { platformUserId: "777000111", ip: "203.0.113.7", userAgent: "Telegram-Android/11", language: "ru", premium: false };
+/** Игрок, которому сеть с API может дать креатив: Telegram ID, адрес и браузер. */
+const PLAYER: AdViewer = { ...TELEGRAM, requester: REQUESTER };
+const SECOND = 1_000;
 
 const at = (base: Date, minutes: number) => new Date(base.getTime() + minutes * MINUTE);
 
@@ -57,7 +65,8 @@ function setup(blocks: AdBlockRow[], roll: AdsRoll = rolls(0)) {
   repository.blocks = blocks;
   const passes = new AdPasses();
   const settings = panelSettings();
-  return { repository, passes, settings, service: new AdsService(repository, roll, passes, settings) };
+  const creatives = new FakeCreatives();
+  return { repository, passes, settings, creatives, service: new AdsService(repository, roll, passes, settings, creatives, new AdNetworkKeys(repository)) };
 }
 
 function offered(offer: AdOffer): Extract<AdOffer, { available: true }> {
@@ -285,6 +294,137 @@ describe("воронка показа", () => {
   });
 });
 
+describe("креатив сети с API (Taddy, Р78)", () => {
+  it("креатив берёт сервер: выдача несёт объявление и срок досмотра, ключей SDK клиенту не нужно", async () => {
+    const { service, repository, creatives } = setup([block("taddy", 10), block("taddy", 10, { place: "interstitial" })]);
+    const offer = offered(await service.offer(PLAYER, "wheel_spin", NOON));
+    expect(offer).toMatchObject({ network: "taddy", blockId: null, format: "rewarded", keys: {}, creative: { ad: CREATIVE, viewSec: CREATIVE_VIEW_SEC.rewarded } });
+    expect(creatives.requests).toEqual([{ networkKey: "taddy", keys: { pubId: "14cbeb980853dd416003462ca4db7c12" }, requester: REQUESTER }]);
+    expect(repository.sessions[0]).toMatchObject({ status: "pending", creativeId: CREATIVE.id, viewSec: CREATIVE_VIEW_SEC.rewarded });
+
+    const interstitial = offered(await service.offer(PLAYER, "interstitial", NOON));
+    expect(interstitial.creative?.viewSec).toBe(CREATIVE_VIEW_SEC.interstitial);
+  });
+
+  it("у сети нет креатива — выдача сразу идёт к следующей, а отказ записан сессией и ставит сеть на паузу", async () => {
+    const { service, repository, creatives } = setup([block("taddy", 10), block("adsgram", 20)]);
+    creatives.answer = () => ({ kind: "none", reason: "no_fill" });
+    const offer = offered(await service.offer(PLAYER, "wheel_spin", NOON));
+    expect(offer).toMatchObject({ network: "adsgram", creative: null });
+    expect(repository.sessions.map((session) => [session.networkKey, session.status, session.failReason])).toEqual([
+      ["taddy", "failed", "no_fill"],
+      ["adsgram", "pending", null],
+    ]);
+    const history = await repository.history(ME, "wheel_spin", NOON);
+    expect([...placeState(history.sessions, history.dayStart, NOON).seenAt.keys()].sort()).toEqual(["adsgram", "taddy"]);
+  });
+
+  it("единственная сеть без креатива — честное «нет рекламы»", async () => {
+    const { service, repository, creatives } = setup([block("taddy", 10)]);
+    creatives.answer = () => ({ kind: "none", reason: "timeout" });
+    expect(await service.offer(PLAYER, "wheel_spin", NOON)).toEqual({ available: false, reason: "no_fill", retryAt: null });
+    expect(repository.sessions).toMatchObject([{ status: "failed", failReason: "timeout" }]);
+  });
+
+  it("показ сеть узнаёт один раз; досмотр — не раньше срока от выдачи, и тогда же его узнаёт сеть", async () => {
+    const { service, creatives } = setup([block("taddy", 10)]);
+    const offer = offered(await service.offer(PLAYER, "wheel_spin", NOON));
+    const time = (ms: number) => new Date(NOON.getTime() + ms);
+    await service.report(ME, offer.sessionId, { kind: "shown" }, time(SECOND), REQUESTER);
+    await service.report(ME, offer.sessionId, { kind: "shown" }, time(2 * SECOND), REQUESTER);
+    expect(creatives.notes).toEqual([{ kind: "shown", networkKey: "taddy", creativeId: CREATIVE.id, requester: REQUESTER }]);
+
+    // Клиент поторопился: отсчёт блока ещё идёт — досмотра нет, награды нет.
+    await expect(service.report(ME, offer.sessionId, { kind: "completed" }, time(CREATIVE_VIEW_SEC.rewarded * SECOND - 1))).rejects.toBeInstanceOf(AdSessionClosedError);
+    await service.report(ME, offer.sessionId, { kind: "completed" }, time(CREATIVE_VIEW_SEC.rewarded * SECOND), REQUESTER);
+    expect(creatives.notes.map((note) => note.kind)).toEqual(["shown", "viewed"]);
+    expect(await service.claim(ME, offer.sessionId, "wheel_spin", time(11 * SECOND))).toMatchObject({ repeat: false });
+  });
+
+  it("шаг показа потерялся по дороге — досмотр отмечает и показ; клик — шаг воронки без отметки сети", async () => {
+    const { service, repository, creatives } = setup([block("taddy", 10)]);
+    const offer = offered(await service.offer(PLAYER, "wheel_spin", NOON));
+    await service.report(ME, offer.sessionId, { kind: "clicked" }, at(NOON, 0.1));
+    expect(creatives.notes).toEqual([]);
+    await service.report(ME, offer.sessionId, { kind: "completed" }, at(NOON, 1));
+    expect(creatives.notes.map((note) => note.kind)).toEqual(["shown", "viewed"]);
+    expect(repository.sessions[0]).toMatchObject({ clickedAt: at(NOON, 0.1), shownAt: at(NOON, 1), status: "completed" });
+  });
+
+  it("показ SDK сети сервер ей не отмечает — это делает сам SDK", async () => {
+    const { service, creatives } = setup([block("adsgram", 10)]);
+    const offer = offered(await service.offer(PLAYER, "wheel_spin", NOON));
+    await service.report(ME, offer.sessionId, { kind: "shown" }, NOON, REQUESTER);
+    await service.report(ME, offer.sessionId, { kind: "completed" }, at(NOON, 1), REQUESTER);
+    expect(creatives.requests).toEqual([]);
+    expect(creatives.notes).toEqual([]);
+  });
+});
+
+describe("Taddy: игрок и отметки", () => {
+  class FakeTaddy implements TaddyApi {
+    readonly calls: { method: string; pubId: string; user: TaddyUser; extra: string | null }[] = [];
+    failing = false;
+    async getAd(pubId: string, user: TaddyUser) {
+      this.calls.push({ method: "getAd", pubId, user, extra: null });
+      return { kind: "ad" as const, ad: { ...CREATIVE } };
+    }
+    async impression(pubId: string, user: TaddyUser, adId: string) {
+      if (this.failing) throw new Error("сеть недоступна");
+      this.calls.push({ method: "impression", pubId, user, extra: adId });
+    }
+    async viewThrough(pubId: string, user: TaddyUser, adId: string) {
+      this.calls.push({ method: "viewThrough", pubId, user, extra: adId });
+    }
+    async start(pubId: string, user: TaddyUser, startParam: string | null) {
+      this.calls.push({ method: "start", pubId, user, extra: startParam });
+    }
+  }
+
+  function creativesWith(networks?: { networkKey: string; keys: Record<string, string> }[]) {
+    const repository = new MemoryAds();
+    if (networks !== undefined) repository.networks = networks;
+    const taddy = new FakeTaddy();
+    return { taddy, creatives: new NetworkCreatives(taddy, new AdNetworkKeys(repository)) };
+  }
+
+  it("игрок для Taddy — Telegram ID числом, основной подтег языка, без пустых полей; входу разработчика креатива нет", () => {
+    expect(taddyUser({ ...REQUESTER, language: "pt-BR", premium: true })).toEqual({ id: 777000111, language: "pt", premium: true, ip: "203.0.113.7", userAgent: "Telegram-Android/11" });
+    expect(taddyUser({ platformUserId: "42", ip: null, userAgent: null, language: "x1", premium: null })).toEqual({ id: 42 });
+    expect(taddyUser({ ...REQUESTER, platformUserId: "dev-1" })).toBeNull();
+    expect(taddyUser({ ...REQUESTER, platformUserId: "99999999999999999" })).toBeNull();
+    expect(taddyUser(null)).toBeNull();
+  });
+
+  it("креатив — по pubId сети; чья реклама — сама сеть; без pubId и без игрока — отказ без запроса", async () => {
+    const { taddy, creatives } = creativesWith();
+    const pubId = "14cbeb980853dd416003462ca4db7c12";
+    expect(await creatives.fetch("taddy", { pubId }, REQUESTER)).toEqual({ kind: "creative", creative: { ...CREATIVE, advertiser: "Taddy" } });
+    expect(taddy.calls[0]).toMatchObject({ method: "getAd", pubId, user: { id: 777000111, language: "ru" } });
+    expect(await creatives.fetch("taddy", {}, REQUESTER)).toEqual({ kind: "none", reason: "misconfigured" });
+    expect(await creatives.fetch("taddy", { pubId }, { ...REQUESTER, platformUserId: "dev-7" })).toEqual({ kind: "none", reason: "no_user" });
+    expect(await creatives.fetch("adsgram", {}, REQUESTER)).toEqual({ kind: "none", reason: "unsupported" });
+    expect(taddy.calls).toHaveLength(1);
+  });
+
+  it("отметки — по ключам из базы, даже если сеть уже выключили; без pubId их нет, сбой сети не бросает", async () => {
+    const { taddy, creatives } = creativesWith();
+    await creatives.shown("taddy", "ad-1", REQUESTER);
+    await creatives.viewed("taddy", "ad-1", REQUESTER);
+    expect(taddy.calls.map((call) => [call.method, call.extra])).toEqual([
+      ["impression", "ad-1"],
+      ["viewThrough", "ad-1"],
+    ]);
+
+    const empty = creativesWith([{ networkKey: "taddy", keys: {} }]);
+    await empty.creatives.shown("taddy", "ad-1", REQUESTER);
+    expect(empty.taddy.calls).toEqual([]);
+
+    taddy.failing = true;
+    await expect(creatives.shown("taddy", "ad-2", REQUESTER)).resolves.toBeUndefined();
+  });
+});
+
 describe("забор награды хозяином места", () => {
   it("недосмотренное не забирается; досмотренное — однажды, повтор отдаёт ту же сессию для дожима", async () => {
     const { service } = setup([block("adsgram", 10)]);
@@ -446,6 +586,19 @@ describe("реклама по HTTP", () => {
     expect(offer.statusCode).toBe(200);
     expect(offer.json<{ data: AdOffer }>().data).toMatchObject({ available: true, network: "adsgram" });
     expect(repository.sessions).toHaveLength(1);
+  });
+
+  it("сеть с API получает язык и премиум со слов клиента, адрес и браузер — из запроса; кривой язык — 400", async () => {
+    const { service, creatives } = setup([block("taddy", 10)]);
+    const server = await start(service);
+    const token = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "777000111" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    const headers = { authorization: `Bearer ${token}`, "user-agent": "Telegram-Android/11" };
+    const bad = await server.inject({ method: "POST", url: "/api/v1/ads/sessions", headers, payload: { place: "wheel_spin", language: "русский" } });
+    expect(bad.statusCode).toBe(400);
+
+    const offer = await server.inject({ method: "POST", url: "/api/v1/ads/sessions", headers, payload: { place: "wheel_spin", language: "ru", premium: true } });
+    expect(offer.json<{ data: AdOffer }>().data).toMatchObject({ available: true, network: "taddy", creative: { ad: { link: CREATIVE.link } } });
+    expect(creatives.requests[0]?.requester).toEqual({ platformUserId: "777000111", ip: "127.0.0.1", userAgent: "Telegram-Android/11", language: "ru", premium: true });
   });
 
   it("исход показа: идентификатор и исход — по схеме, отказ — с кодом, закрытая сессия — 409 с кодом", async () => {
