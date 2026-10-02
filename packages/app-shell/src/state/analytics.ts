@@ -45,6 +45,9 @@ export const ANALYTICS_EVENTS = [
   "shop_banner_clicked",
   "test_notice_accepted",
   "changelog_opened",
+  "ad_shown",
+  "ad_failed",
+  "ad_reward_claimed",
   "client_error",
 ] as const;
 

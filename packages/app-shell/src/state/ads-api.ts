@@ -29,6 +29,8 @@ const offerSchema = z.union([
     expiresAt: z.string(),
     /** ролик не нужен — у VIP; сервер до пропуска поля не отдавал */
     pass: z.optional(z.nullable(z.string())),
+    /** тестовые показы сети — по настройке из панели; сервер до неё поля не отдавал */
+    debug: z.optional(z.boolean()),
   }),
   z.object({ available: z.literal(false), reason: z.string(), retryAt: z.nullable(z.string()) }),
 ]);
@@ -38,15 +40,47 @@ export type AdOffer = z.infer<typeof offerSchema>;
 /** Место отдыхает после награды — кулдаун места (`retryAt`). */
 export const AD_COOLDOWN = "cooldown";
 
+/**
+ * Устройство для выдачи: у блока сети может стоять «только телефоны» —
+ * сеть не работает на десктопе. `null` — не знаем, и сервер не предложит
+ * блоков с ограничением по устройству.
+ */
+export const AD_DEVICES = ["android", "ios", "desktop", "web"] as const;
+export type AdDevice = (typeof AD_DEVICES)[number];
+
+/**
+ * Шаг показа для воронки сервера. Засчитать выполнение клиент может только
+ * досмотру (`completed`); `shown` — ролик был, но награды нет.
+ */
+export type AdStep = { outcome: "shown" } | { outcome: "completed" } | { outcome: "failed"; reason: string };
+
+const reportSchema = z.object({ ok: z.literal(true) });
+
 export interface AdsApi {
-  offer(place: AdPlace): Promise<ApiResult<AdOffer>>;
+  offer(place: AdPlace, device?: AdDevice | null): Promise<ApiResult<AdOffer>>;
+  report(sessionId: string, step: AdStep): Promise<ApiResult<unknown>>;
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
 export function createAdsApi(request: ApiRequest = apiRequest): AdsApi {
   return {
-    offer: (place) => request("/api/v1/ads/sessions", offerSchema, { method: "POST", body: { place } }),
+    offer: (place, device = null) => request("/api/v1/ads/sessions", offerSchema, { method: "POST", body: device === null ? { place } : { place, device } }),
+    report: (sessionId, step) => request(`/api/v1/ads/sessions/${encodeURIComponent(sessionId)}/result`, reportSchema, { method: "POST", body: step }),
   };
+}
+
+/**
+ * Устройство по клиенту площадки: ролики сетей показывает только Telegram,
+ * а его клиент называет себя сам и точнее user-agent — веб-версия на
+ * телефоне всё равно `web`. Незнакомый клиент — `null`.
+ */
+export function adDeviceOf(clientPlatform: string | null): AdDevice | null {
+  const client = clientPlatform?.toLowerCase() ?? "";
+  if (client.startsWith("android")) return "android";
+  if (client === "ios") return "ios";
+  if (client === "tdesktop" || client === "macos" || client === "unigram") return "desktop";
+  if (client.startsWith("web")) return "web";
+  return null;
 }
 
 /** Сессия без ролика — её сразу забирают у хозяина места; `null` — нужен показ. */
