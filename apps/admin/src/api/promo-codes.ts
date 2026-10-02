@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatNumber } from "../format";
+import { formatNumber, plural } from "../format";
 import type { AdminApi, ApiResult } from "./client";
 
 /**
@@ -132,14 +132,6 @@ export function removePromoCode(api: AdminApi, campaignId: string): Promise<ApiR
   return api.request(`/promo-codes/${encodeURIComponent(campaignId)}/remove`, { method: "POST", schema: z.object({ removed: z.literal(true) }) });
 }
 
-/** Склонение числа: 1 монета, 2 монеты, 5 монет. */
-export function plural(count: number, forms: readonly [string, string, string]): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return forms[0];
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
-  return forms[2];
-}
 
 const REWARD_FORMS: Record<RewardResource, readonly [string, string, string]> = {
   coins: ["монета", "монеты", "монет"],

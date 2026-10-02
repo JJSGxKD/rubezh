@@ -116,7 +116,7 @@ function reporter(locks: DailyStatsLocks, options: { cfg?: AppConfig; fail?: () 
       return sent.length;
     },
   };
-  const repository: DailyStatsRepository = { day: async () => BUSY };
+  const repository: DailyStatsRepository = { day: async () => BUSY, series: async () => [] };
   const router = new BotRouter();
   const roles = new RolesService(cfg, new MemoryRolesRepository(), new MemoryAccountRepository());
   const instance = new DailyStatsReporter(cfg, targetsOf(cfg), router, repository, locks, api, roles);

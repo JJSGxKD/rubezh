@@ -9,6 +9,7 @@ import { FunnelScreen } from "./funnel/FunnelScreen";
 import { FlagsScreen } from "./flags/FlagsScreen";
 import { FxScreen } from "./fx/FxScreen";
 import { LinksScreen } from "./links/LinksScreen";
+import { OverviewScreen } from "./overview/OverviewScreen";
 import { PartnersScreen } from "./partners/PartnersScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
 import { PromoCodesScreen } from "./promo-codes/PromoCodesScreen";
@@ -23,6 +24,7 @@ import { SettingsScreen } from "./settings/SettingsScreen";
  * объект раздела из адреса: игрок, отчёт; `null` — список.
  */
 export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> = {
+  overview: () => <OverviewScreen />,
   players: (id) => <PlayersScreen id={id} />,
   review: () => <ReviewScreen />,
   funnel: () => <FunnelScreen />,
