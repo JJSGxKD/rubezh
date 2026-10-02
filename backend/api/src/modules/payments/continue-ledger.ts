@@ -36,4 +36,8 @@ export class PaymentsContinueLedger implements ContinueLedger, OnModuleInit {
     });
     return { paid: granted.length, underpaid };
   }
+
+  async granted(runId: string): Promise<number[]> {
+    return (await this.purchases.grantedForRun(runId)).map((purchase) => purchase.continueNo);
+  }
 }

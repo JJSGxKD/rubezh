@@ -91,6 +91,8 @@ erDiagram
     AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
     AD_BLOCK ||--o{ AD_SESSION : "выдан в показ"
     ACCOUNT ||--o{ AD_SESSION : "показы рекламы"
+    RUN ||--o{ RUN_AD_CONTINUE : "продолжен за рекламу"
+    ACCOUNT ||--o{ RUN_AD_CONTINUE : "рекламные продолжения за сутки"
     ACCOUNT ||--o{ VIP_SUBSCRIPTION : "подписки VIP"
     PURCHASE ||--o| VIP_SUBSCRIPTION : "первая покупка — id подписки"
     VIP_SUBSCRIPTION ||--o{ VIP_PERIOD : "оплаченные периоды"
@@ -675,6 +677,15 @@ erDiagram
         datetime expires_at "позже created_at"
     }
 
+    RUN_AD_CONTINUE {
+        string run_id PK "FK на run; вместе с continue_no"
+        int continue_no PK "какое по счёту продолжение забега, от 1"
+        uuid account_id FK "суточный потолок рекламных продолжений (Р4)"
+        string session_id UK "сессия показа места second_chance; без FK — модуль рекламы"
+        string network_key "сеть показа; у пропуска VIP — его имя"
+        datetime granted_at
+    }
+
     VIP_SUBSCRIPTION {
         uuid subscription_id PK,FK "первая покупка: по её счёту площадка списывает периоды"
         uuid account_id FK
@@ -890,6 +901,15 @@ erDiagram
   Сессия без блока — пропуск рекламы (VIP, §3.6): выдана сразу выполненной,
   с именем пропуска вместо сети, и забирается хозяином места как обычная, в
   тот же кулдаун; иначе как выполненный досмотр база её не примет.
+- **`RUN_AD_CONTINUE` — второй шанс за рекламу** (`35-stage4-plan.md` WP11,
+  Р4): вторая книга продолжений забега рядом с `PURCHASE`. Хозяин места
+  `second_chance` — модуль забегов: забирает сессию показа и записывает
+  продолжение. Ключ `(run_id, continue_no)` и уникальная `session_id` не
+  дают выдать одно продолжение дважды и потратить одну сессию на два.
+  Итог забега сверяется с обеими книгами, а счёт за продолжение, уже взятое
+  за рекламу, предварительная проверка оплаты не пропускает. Суточный
+  потолок — счёт строк игрока с полуночи по Москве по индексу
+  `(account_id, granted_at)`.
 - **`VIP_SUBSCRIPTION`, `VIP_PERIOD`, `VIP_DAILY` — VIP** (`35-stage4-plan.md`,
   §3.6, Р20, Р44, WP10). Срок VIP — не поле, а журнал периодов: каждая
   оплата — ровно один период, начатый с конца прежнего, и конец VIP — самый
@@ -1609,6 +1629,7 @@ flowchart LR
     WALLET -. "надбавка к наградам: регистр надбавок" .-> VIP
     VIP -- "vip_subscription, vip_period, vip_daily" --> PG
     RUNS -. сверка продолжений с покупками .-> PAY
+    RUNS -. "второй шанс: забор сессии места second_chance" .-> ADS
     RUNS -. слушатели записанного забега .-> PAY
     ADS -- "ad_network, ad_block, ad_session" --> PG
     ADMINAPI -. "сети, блоки, воронка показов" .-> ADS
