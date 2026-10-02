@@ -394,23 +394,7 @@ export const useRun = create<RunStore>((set, get) => ({
     // «Ещё раз» с экрана смерти — отказ от второго шанса: забег закрывается
     // смертью раньше, чем начнётся следующий.
     if (get().phase === "downed") session.declineContinue();
-    const seed = nextSeed();
-    const devRun = get().devRun;
-    set({ ...IDLE, phase: "running", seed, devRun });
-    lastSavedSec = 0;
-    errorsAtRunStart = clientErrorCount();
-    session.restart(seed);
-    setRunUiMode(true);
-
-    track("run_started", {
-      seed,
-      weapon: startOptions?.startingWeaponId ?? "",
-      map: startOptions?.mapId ?? "",
-      difficulty: startOptions?.difficultyId ?? "",
-      screenMode: screenModeNow(),
-      orientation: orientationNow(),
-      devMode: devRun,
-    });
+    restartSession(set, get);
   },
 
   inspect(): RunInspection | null {
@@ -441,6 +425,28 @@ export const useRun = create<RunStore>((set, get) => ({
     set({ ...IDLE, phase: "idle" });
   },
 }));
+
+/** Тот же экран — новый забег: сцена жива, экран загрузки только мигнул бы. */
+function restartSession(set: SetState, get: GetState): void {
+  if (session === null) return;
+  const seed = nextSeed();
+  const devRun = get().devRun;
+  set({ ...IDLE, phase: "running", seed, devRun });
+  lastSavedSec = 0;
+  errorsAtRunStart = clientErrorCount();
+  session.restart(seed);
+  setRunUiMode(true);
+
+  track("run_started", {
+    seed,
+    weapon: startOptions?.startingWeaponId ?? "",
+    map: startOptions?.mapId ?? "",
+    difficulty: startOptions?.difficultyId ?? "",
+    screenMode: screenModeNow(),
+    orientation: orientationNow(),
+    devMode: devRun,
+  });
+}
 
 /**
  * Вернуть бусты забегу, который не начался. Не дошло — сервер вернёт сам
