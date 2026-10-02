@@ -39,6 +39,13 @@ const requestSchema = z.object({
     .catch({}),
 });
 
+/**
+ * Параметры, которые могут быть макросами сети: какие из них брать, решает
+ * профиль сети ссылки (`link-networks.ts`). Здесь — только форма: строка
+ * разумной длины, остальное отбрасывается.
+ */
+const networkQuerySchema = z.record(z.string(), z.unknown()).catch({});
+
 @Controller("r")
 export class RedirectController {
   constructor(
@@ -69,7 +76,13 @@ function visitorOf(request: unknown): VisitorInfo {
   const parsed = requestSchema.safeParse(request);
   const value = parsed.success ? parsed.data : { ip: undefined, headers: {}, query: {} };
   const { headers, query } = value;
+  const raw = networkQuerySchema.parse(typeof request === "object" && request !== null && "query" in request ? request.query : {});
+  const networkQuery: Record<string, string> = {};
+  for (const [key, item] of Object.entries(raw)) {
+    if (typeof item === "string" && key.length <= 32 && item.length <= 512) networkQuery[key] = item;
+  }
   return {
+    query: networkQuery,
     userAgent: headers["user-agent"] ?? null,
     referer: headers.referer ?? null,
     acceptLanguage: headers["accept-language"] ?? null,

@@ -54,3 +54,10 @@ export class SecretUncheckableError extends DomainError {
     super("secret_uncheckable", "Этот сервис не даёт проверить ключ заранее", 409);
   }
 }
+
+/** Ссылки или её конверсии нет — 404 со словами, что именно не нашлось. */
+export class LinkNotFoundError extends DomainError {
+  constructor(message: string) {
+    super("link_not_found", message, 404);
+  }
+}

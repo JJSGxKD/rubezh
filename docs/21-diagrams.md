@@ -79,6 +79,10 @@ erDiagram
     ACCOUNT ||--o{ FRIEND_BONUS : "забранные ступени бонуса за друзей"
     LINK ||--o{ LINK_CLICK : "клики; краулеры превью не пишутся"
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
+    LINK ||--o{ AD_CONVERSION : "конверсии в сеть ссылки"
+    LINK_CLICK ||--o{ AD_CONVERSION : "клик, который привёл новичка"
+    ACCOUNT ||--o{ AD_CONVERSION : "новичок из рекламы"
+    PURCHASE |o--o| AD_CONVERSION : "оплата — первая или повторная покупка"
     FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
     BROADCAST ||--o{ BROADCAST_DELIVERY : "доставка каждому получателю"
     ACCOUNT ||--o{ BROADCAST_DELIVERY : "получал рассылки"
@@ -530,6 +534,8 @@ erDiagram
         string campaign
         string source "nullable"
         string medium "nullable"
+        string network "nullable: adsgram — сеть, куда уходят конверсии; CHECK"
+        string registration_on "first_run|launch: что сеть считает регистрацией"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }
@@ -543,6 +549,25 @@ erDiagram
         string device_class "nullable"
         string ip_prefix "nullable: подсеть, не адрес"
         string language "nullable"
+        json network_params "nullable: подставленные сетью макросы; обнуляются через 31 сутки"
+    }
+
+    AD_CONVERSION {
+        uuid conversion_id PK
+        string network "adsgram"
+        string link_code FK
+        string click_id FK "уникален с целью 1 и 2: одна регистрация и первая покупка на клик"
+        uuid account_id FK
+        int goal "1 регистрация, 2 первая покупка, 3 повторная; CHECK"
+        uuid purchase_id FK "nullable, уникален: у покупки — всегда, у регистрации — никогда"
+        enum status "pending|sent|failed|skipped"
+        string reason "nullable: no_token, team, no_macros"
+        int attempts
+        datetime next_attempt_at "очередь отправки"
+        int http_status "nullable: последний ответ сети"
+        string last_error "nullable: ответ сети, без токена"
+        datetime created_at
+        datetime sent_at "nullable: есть ровно у отправленной, CHECK"
     }
 
     FEATURE_FLAG {
@@ -1071,6 +1096,14 @@ erDiagram
   имя ключа подписано вместе со шифртекстом, и строку не переложить под
   другой ключ. `key_id` — отпечаток ключа шифрования: при его смене прежний
   читает старые строки. Длины IV и подписи держит база.
+- **`AD_CONVERSION` — конверсии закупленной рекламы** (WP43, Р86, поток —
+  §4.20). Журнал и очередь отправки одной таблицей. Строки не пишет ни
+  забег, ни оплата: проход раз в минуту выводит их из фактов — первого
+  касания `acquisition`, забегов и оплат, — поэтому упавший слушатель
+  конверсию не теряет, а повтор прохода не задваивает её уникальными
+  ключами. Новичок — аккаунт, созданный после клика: старый игрок,
+  открывший игру по рекламе, сети не отдаётся. Оплата уходит с
+  `RESTRICT`: удалить её, пока о ней знает сеть, нельзя.
 - **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
   после — запись истории: текст неизменен, кто создал, одобрил и запустил —
   без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
@@ -1534,7 +1567,8 @@ flowchart LR
         ITEMS["items<br/>снаряжение: инвентарь, операции,<br/>добыча, подписанный снимок, реализовано"]
         BOOSTS["boosts<br/>бусты: покупка до старта,<br/>возврат, сверка в итоге, реализовано"]
         ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, настройки, реализовано"]
-        LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, реализовано"]
+        LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, макросы сети<br/>на клике, реализовано"]
+        ADCONV["ad-conversions<br/>конверсии закупок: проход<br/>раз в минуту под локом, постбэк<br/>в сеть с повтором, реализовано"]
         FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
         SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
         SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
@@ -1554,6 +1588,8 @@ flowchart LR
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
+
+    ADSGRAMAPI["AdsGram<br/>api.adsgram.ai/confirm_conversion"]
 
     TGAPI["Telegram Bot API"]
 
@@ -1678,6 +1714,11 @@ flowchart LR
     SECRETS --> PG
     SECRETS -- "канал secrets:changed" --> REDIS
     FXM -. ключ CoinGecko на каждом проходе .-> SECRETS
+    ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG
+    ADCONV -- "лок ad-conversions:lock" --> REDIS
+    ADCONV -. токен конверсий на каждой отправке .-> SECRETS
+    ADCONV -- "confirm_conversion, таймаут 5 с" --> ADSGRAMAPI
+    ADMINAPI -. "журнал и повтор конверсий ссылки" .-> ADCONV
     ADMINAPI -. рассылки .-> BCAST
     BCAST --> PG
     BCAST -- "очередь broadcasts, лимитер" --> REDIS
@@ -2550,6 +2591,56 @@ sequenceDiagram
 Игрок спрашивает `GET /api/v1/changelog` — строки своей площадки по версиям
 из памяти реплики, открыл журнал — `POST /api/v1/changelog/seen` с самой
 поздней публикацией из ответа; знак меню — версии, вышедшие после.
+
+### 4.20 Конверсии закупленной рекламы (этап 4, реализовано)
+
+Трекинг закупок (`35-stage4-plan.md`, Р86, WP43). Ссылка сети отдаёт адрес
+с макросами, переходник сохраняет подставленное сетью на клике, а
+регистрация и покупки новичка уходят в кабинет сети. Конверсии выводятся из
+фактов проходом раз в минуту — ни забег, ни оплата о сети не знают.
+
+```mermaid
+sequenceDiagram
+    participant AG as AdsGram
+    participant U as Пользователь
+    participant L as links (/r/:код)
+    participant DB as PostgreSQL
+    participant C as ad-conversions (под локом)
+    participant S as secrets
+
+    AG-->>U: реклама: /r/<код>?campaign=…&record=…
+    U->>L: клик
+    L--)DB: link_click + network_params (белый список профиля сети)
+    L-->>U: запуск игры с c-<клик>
+    Note over U,DB: вход: acquisition.first_start_ref = клик, аккаунт создан после клика
+
+    loop раз в минуту
+        C->>DB: дописать регистрации: первый забег от 30 с за 7 суток или первый запуск
+        C->>DB: дописать покупки: live, оплачена, без возврата, отлежалась 10 минут, за 30 суток
+        Note right of DB: ON CONFLICT DO NOTHING — повтор не задваивает
+        C->>DB: созревшие pending, до 100
+        C->>S: токен конверсий
+        alt токена нет
+            C->>DB: ждёт, причина no_token, проверка через 5 минут
+        else нет record и campaign
+            C->>DB: skipped, причина no_macros
+        else
+            C->>AG: confirm_conversion?token&record&goaltype (или tgid и campaignid)
+            alt 2xx
+                C->>DB: sent
+            else 408, 429, 5xx, таймаут
+                C->>DB: повтор через 1, 5, 15, 60 минут … до суток
+            else отказ по сути
+                C->>DB: failed — повторить можно из панели
+            end
+        end
+        C->>DB: макросы кликов старше 31 суток → NULL
+    end
+```
+
+Токен в логи не попадает: адрес постбэка пишется с `token=***`. Аккаунты
+команды пишутся пропущенными (`team`) — их отправляют руками, чтобы
+проверить связку с кабинетом.
 
 ---
 

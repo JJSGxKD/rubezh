@@ -73,6 +73,7 @@ function coingeckoCheck(plan: "demo" | "pro") {
 }
 
 const FX_SERVICE = "Курсы валют · CoinGecko";
+const ADSGRAM_SERVICE = "Трекинг закупок · AdsGram";
 
 export const SECRETS = {
   coingeckoPro: {
@@ -96,6 +97,19 @@ export const SECRETS = {
     example: "CG-AbCdEfGh1234567890",
     fromEnv: (config) => nonEmpty(config.fx.coingeckoDemoKey),
     check: coingeckoCheck("demo"),
+  },
+  adsgramConversionToken: {
+    key: "adsgram.conversion-token",
+    service: ADSGRAM_SERVICE,
+    title: "Токен конверсий AdsGram",
+    hint: "Регистрации и покупки игроков, пришедших по ссылкам AdsGram из раздела «Ссылки», уходят в наш кабинет этим токеном — по ним AdsGram учится приводить тех, кто играет и платит. Нет токена — конверсии копятся и уйдут, когда его зададут.",
+    cabinetUrl: "https://adsgram.ai",
+    // Токен уходит в адрес запроса — только знаки, которые не нужно кодировать.
+    pattern: /^[A-Za-z0-9._~-]{8,256}$/,
+    example: "a1b2c3d4e5f6a7b8c9d0",
+    // Только из панели: токен перевыпускают в кабинете, и заменять его
+    // должен человек, а не выкат с новым `.env`.
+    fromEnv: () => null,
   },
 } as const satisfies Record<string, SecretDefinition>;
 
