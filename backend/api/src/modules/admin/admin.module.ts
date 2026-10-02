@@ -18,6 +18,9 @@ import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
 import { AdminAdsController } from "./admin-ads.controller.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
+import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
+import { AdminOverviewController } from "./admin-overview.controller.js";
+import { AdminOverviewService } from "./admin-overview.service.js";
 import { FriendsModule } from "../friends/friends.module.js";
 import { ReferralsModule } from "../referrals/referrals.module.js";
 import { AdminSocialController } from "./admin-social.controller.js";
@@ -62,11 +65,12 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
     AdminReviewController,
+    AdminOverviewController,
     AdminFxController,
     AdminRolesController,
     AdminDiagnosticsController,
@@ -88,6 +92,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
     AdminSessionGuard,
     AdminPlayersService,
     AdminRolesService,
+    AdminOverviewService,
     AdminExportsService,
     AdminSocialService,
     AdminSettingsService,

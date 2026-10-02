@@ -4,6 +4,7 @@
  */
 
 const DATE_TIME = new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" });
+const TIME = new Intl.DateTimeFormat("ru-RU", { timeStyle: "short" });
 const NUMBER = new Intl.NumberFormat("ru-RU");
 
 /** Дата ISO или миллисекунды → «25.09.2026, 21:04»; пусто и мусор — прочерк. */
@@ -11,6 +12,12 @@ export function formatDateTime(value: string | number | null | undefined): strin
   if (value === null || value === undefined || value === "") return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : DATE_TIME.format(date);
+}
+
+/** Только время местное — «21:04»: для «обновлено в», где дата и так сегодняшняя. */
+export function formatTime(value: string | number): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : TIME.format(date);
 }
 
 export function formatNumber(value: number): string {
