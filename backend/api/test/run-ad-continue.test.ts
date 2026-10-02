@@ -19,7 +19,7 @@ import type { AdContinueGrant, GrantOutcome, RunAdContinuesRepository } from "..
 import { AdContinueDailyCapError, AdContinueUnavailableError, ContinueRunUnverifiedError, ContinueTakenError } from "../src/modules/runs/run-continue-errors.js";
 import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-continues.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
-import { FakeCreatives, MemoryAds, adBlock } from "./helpers/memory-ads.js";
+import { FakeCreatives, MemoryAds, adBlock, interstitialGate } from "./helpers/memory-ads.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
 
@@ -86,7 +86,7 @@ function setup(blocks = [adBlock("adsgram", 10, { place: "second_chance" }), adB
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
   const passes = new AdPasses();
-  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository));
+  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, panelSettings()));
   const continues = new RunContinues();
   const stars = new StarsLedger();
   continues.provide(stars);

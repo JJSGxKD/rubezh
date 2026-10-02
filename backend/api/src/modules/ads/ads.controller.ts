@@ -8,6 +8,7 @@ import type { AdRequester } from "./ad-creatives.js";
 import { AD_DEVICES, AD_PLACES } from "./ads-rules.js";
 import type { AdOutcome } from "./ads.repository.js";
 import { AdsService, type AdOffer } from "./ads.service.js";
+import { INTERSTITIAL_MOMENTS } from "./interstitial-policy.js";
 
 /**
  * Реклама (`/api/v1/ads`, docs/35-stage4-plan.md §3.7, WP12): выдать показ
@@ -24,6 +25,10 @@ const REPORT_LIMIT: RateLimit = { scope: "ads_report", limit: 600, windowSec: 36
  * Язык и премиум — со слов клиента площадки: их ждёт сеть с API для
  * таргетинга (Р78). Солгать о них — значит лишь получить чужую рекламу:
  * на выдачу и награду они не влияют.
+ *
+ * `moment` — когда клиент просит межстраничную (WP12 ч.10): без него её не
+ * выдать, у других мест его нет. Солгать о моменте нельзя с выгодой —
+ * политика площадки решает по нему лишь «показывать или нет».
  */
 const offerSchema = z
   .object({
@@ -34,8 +39,10 @@ const offerSchema = z
       .regex(/^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{1,8})?$/)
       .optional(),
     premium: z.boolean().optional(),
+    moment: z.enum(INTERSTITIAL_MOMENTS).optional(),
   })
-  .strict();
+  .strict()
+  .refine((body) => (body.place === "interstitial") === (body.moment !== undefined), { message: "момент — только у межстраничной и обязательно" });
 
 /** Идентификатор сессии — 12 случайных байт в base64url. */
 const sessionIdSchema = z.string().regex(/^[A-Za-z0-9_-]{16}$/);
@@ -73,10 +80,11 @@ export class AdsController {
   async offer(@Req() request: unknown, @Body() body: unknown): Promise<{ data: AdOffer }> {
     const { accountId, platform, platformUserId } = accountOf(request);
     const parsed = offerSchema.safeParse(body);
-    if (!parsed.success) throw new ValidationError("Неизвестное место показа");
+    if (!parsed.success) throw new ValidationError("Неизвестное место или момент показа");
     await this.limit(OFFER_LIMIT, accountId);
     const requester = requesterOf(request, platformUserId, parsed.data.language ?? null, parsed.data.premium ?? null);
-    return { data: await this.ads.offer({ accountId, platform, device: parsed.data.device ?? null, requester }, parsed.data.place) };
+    const viewer = { accountId, platform, device: parsed.data.device ?? null, requester };
+    return { data: await this.ads.offer(viewer, parsed.data.place, new Date(), parsed.data.moment) };
   }
 
   @Post("sessions/:sessionId/result")

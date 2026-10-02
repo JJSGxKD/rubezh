@@ -1,6 +1,9 @@
 import type { AdCreative, AdCreativeSource, AdRequester, CreativeFetch } from "../../src/modules/ads/ad-creatives.js";
 import type { AdPlace } from "../../src/modules/ads/ads-rules.js";
 import { formatFor, profileOf } from "../../src/modules/ads/ad-networks.js";
+import { InterstitialGate, type FlagReader } from "../../src/modules/ads/interstitial-gate.js";
+import type { InterstitialFacts } from "../../src/modules/ads/interstitial-policy.js";
+import type { SettingsReader } from "../../src/modules/settings/settings.service.js";
 import type {
   AdBlockRow,
   AdOutcome,
@@ -9,6 +12,7 @@ import type {
   AdsRepository,
   ClaimOutcome,
   ClaimVerdict,
+  InterstitialQuery,
   NewAdSession,
   NewPassSession,
   PlaceHistory,
@@ -44,6 +48,12 @@ export class MemoryAds implements AdsRepository {
   /** ключи всех сетей, включённых и нет — как `ad_network.keys` */
   networks: { networkKey: string; keys: Record<string, string> }[] = Object.entries(NETWORK_KEYS).map(([networkKey, keys]) => ({ networkKey, keys: { ...keys } }));
   readonly sessions: StoredSession[] = [];
+  /** аккаунт → первый вход; нет записи — аккаунт заведён давно, новичком не считается */
+  readonly signups = new Map<string, Date>();
+  /** законченные забеги — для счёта межстраничной */
+  readonly runs: { accountId: string; finishedAt: Date; survivalSec: number }[] = [];
+  /** оплаты звёздами */
+  readonly purchases: { accountId: string; paidAt: Date }[] = [];
   blockReads = 0;
   /** забор мест игрока — по одному, как под блокировкой в базе */
   private queue: Promise<unknown> = Promise.resolve();
@@ -72,6 +82,29 @@ export class MemoryAds implements AdsRepository {
 
   async networkKeys(): Promise<{ networkKey: string; keys: Record<string, string> }[]> {
     return this.networks.map((network) => ({ networkKey: network.networkKey, keys: { ...network.keys } }));
+  }
+
+  /** Те же счёты, что SQL: потолки, забеги не короче порога, сутки — по Москве. */
+  async interstitialFacts(accountId: string, time: Date, query: InterstitialQuery): Promise<InterstitialFacts | null> {
+    const signedUp = this.signups.get(accountId) ?? new Date(Date.UTC(2026, 0, 1));
+    const lastShown = this.sessions
+      .filter((session) => session.accountId === accountId && session.place === "interstitial" && session.shownAt !== null)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+    const lastShownAt = lastShown?.shownAt ?? null;
+    const counted = this.runs.filter((run) => run.accountId === accountId && run.survivalSec >= query.countedRunSec);
+    const latest = (dates: (Date | null)[]): Date | null => dates.reduce<Date | null>((best, date) => (date !== null && (best === null || date > best) ? date : best), null);
+    return {
+      daysSinceSignup: Math.round((moscowDayStart(time).getTime() - moscowDayStart(signedUp).getTime()) / DAY),
+      countedRuns: Math.min(counted.length, query.newbieRuns),
+      runsSinceShown: Math.min(counted.filter((run) => lastShownAt === null || run.finishedAt > lastShownAt).length, query.everyRuns),
+      lastShownAt,
+      lastPurchaseAt: latest(this.purchases.filter((purchase) => purchase.accountId === accountId).map((purchase) => purchase.paidAt)),
+      lastRewardedAt: latest(
+        this.sessions
+          .filter((session) => session.accountId === accountId && query.rewardedPlaces.includes(session.place) && session.createdAt >= query.rewardedSince)
+          .map((session) => session.shownAt),
+      ),
+    };
   }
 
   private push(session: NewAdSession, status: "pending" | "failed", failReason: string | null): void {
@@ -175,6 +208,17 @@ export class MemoryAds implements AdsRepository {
   }
 }
 
+/** Флаги для политики межстраничной: включённые ключи — у всех. */
+export function flagsOn(...keys: string[]): FlagReader & { keys: Set<string> } {
+  const on = new Set(keys);
+  return { keys: on, isOn: async (key: string) => on.has(key) };
+}
+
+/** Привратник межстраничной над репозиторием в памяти; по умолчанию флаг выката включён у всех. */
+export function interstitialGate(repository: MemoryAds, settings: SettingsReader, flags: FlagReader = flagsOn("ads.interstitial")): InterstitialGate {
+  return new InterstitialGate(repository, flags, settings);
+}
+
 /** Рабочие ключи сетей — того вида, что ждёт профиль (`ad-networks.ts`). */
 export const NETWORK_KEYS: Readonly<Record<string, Record<string, string>>> = {
   adsgram: {},
@@ -230,11 +274,11 @@ export const CREATIVE: AdCreative = {
 export class FakeCreatives implements AdCreativeSource {
   /** ответ на запрос креатива; по умолчанию — креатив есть */
   answer: (networkKey: string) => CreativeFetch = () => ({ kind: "creative", creative: CREATIVE });
-  readonly requests: { networkKey: string; keys: Readonly<Record<string, string>>; requester: AdRequester | null }[] = [];
+  readonly requests: { networkKey: string; keys: Readonly<Record<string, string>>; requester: AdRequester | null; timeoutMs?: number }[] = [];
   readonly notes: { kind: "shown" | "viewed"; networkKey: string; creativeId: string; requester: AdRequester | null }[] = [];
 
-  async fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null): Promise<CreativeFetch> {
-    this.requests.push({ networkKey, keys, requester });
+  async fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null, timeoutMs?: number): Promise<CreativeFetch> {
+    this.requests.push({ networkKey, keys, requester, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
     return this.answer(networkKey);
   }
 

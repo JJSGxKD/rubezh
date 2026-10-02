@@ -47,7 +47,8 @@ export interface AdRequester {
 export type CreativeFetch = { kind: "creative"; creative: AdCreative } | { kind: "none"; reason: string };
 
 export interface AdCreativeSource {
-  fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null): Promise<CreativeFetch>;
+  /** `timeoutMs` — сколько ждать сеть; не задан — её обычный срок */
+  fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null, timeoutMs?: number): Promise<CreativeFetch>;
   /** креатив впервые на экране игрока — сеть считает показ */
   shown(networkKey: string, creativeId: string, requester: AdRequester | null): Promise<void>;
   /** креатив досмотрен — сеть считает досмотр */
@@ -90,13 +91,13 @@ export class NetworkCreatives implements AdCreativeSource {
     private readonly keys: AdNetworkKeys,
   ) {}
 
-  async fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null): Promise<CreativeFetch> {
+  async fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null, timeoutMs?: number): Promise<CreativeFetch> {
     if (networkKey !== "taddy") return { kind: "none", reason: "unsupported" };
     const pubId = keys["pubId"] ?? "";
     if (pubId === "") return { kind: "none", reason: "misconfigured" };
     const user = taddyUser(requester);
     if (user === null) return { kind: "none", reason: "no_user" };
-    const result = await this.taddy.getAd(pubId, user);
+    const result = await this.taddy.getAd(pubId, user, timeoutMs);
     if (result.kind === "none") return result;
     return { kind: "creative", creative: { ...result.ad, advertiser: profileOf(networkKey)?.title ?? networkKey } };
   }
