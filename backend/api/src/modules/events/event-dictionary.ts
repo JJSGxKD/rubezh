@@ -219,6 +219,19 @@ export const EVENT_DICTIONARY = {
   // до него после выхода версии и откуда — из меню или из уведомления. Сколько
   // версий было новыми — чтобы отличить «пришёл за новостью» от «просто листал».
   changelog_opened: { version: 1, payload: payload({ fresh: count, source: z.enum(["menu", "notification"]) }) },
+  // Реклама глазами клиента (docs/35-stage4-plan.md WP12, §3.7). Шаги показа
+  // лежат в ad_session — там исход и код отказа; события добавляют то, чего
+  // таблица не знает: устройство из конверта и сколько игрок ждал.
+  // ad_shown — ролик дошёл до игрока: досмотрел (`completed`) или закрыл
+  // раньше; `ms` — от нажатия до исхода.
+  ad_shown: { version: 1, payload: payload({ place: id, network: id, completed: z.boolean(), ms: seconds }) },
+  // Сеть не показала: нет рекламы, скрипт не загрузился, SDK сломался или
+  // замолчал. `attempt` — какая по счёту сеть в этом нажатии: доля вторых —
+  // как часто основная сеть подводит (docs/22 §5.5).
+  ad_failed: { version: 1, payload: payload({ place: id, network: id, reason: id, attempt: count, ms: seconds }) },
+  // Хозяин места выдал награду за рекламу: `ad` — за досмотр, `pass` — VIP
+  // без ролика. Досмотр без этого события — награда, потерянная по дороге.
+  ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]) }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 

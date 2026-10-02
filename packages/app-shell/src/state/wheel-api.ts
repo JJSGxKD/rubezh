@@ -1,5 +1,5 @@
 import { z } from "zod/mini";
-import { AD_COOLDOWN, passSession, type AdsApi } from "./ads-api";
+import type { AdWatchResult } from "./ad-watch";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
 import { useShell } from "./shell";
 
@@ -15,9 +15,8 @@ import { useShell } from "./shell";
  * положить на колесо то, чего клиент ещё не знает, и сектор нарисуется
  * нейтрально, а не уронит экран.
  *
- * Крутка за рекламу ждёт показа роликов в клиенте (WP12); у VIP ролика нет
- * (§3.6) — его крутка идёт уже сейчас: выдача показа отдаёт выполненную
- * сессию, и колесо крутится по ней, после кулдауна места.
+ * Крутка за рекламу (WP12) — после досмотренного ролика, по сессии показа;
+ * у VIP ролика нет (§3.6), и сессия приходит сразу. Кулдаун места общий.
  */
 
 const sectorSchema = z.object({ resource: z.string(), amount: z.number(), odds: z.number() });
@@ -34,8 +33,12 @@ export type WheelSpin = z.infer<typeof spinSchema>;
 export const WHEEL_SPENT = "wheel_spent";
 /** Крутка за рекламу на кулдауне места — экран устарел. */
 export const WHEEL_AD_COOLDOWN = "ad_cooldown";
-/** Ролик нужен, а показывать его клиент ещё не умеет: VIP кончился, пока экран был открыт. */
-export const WHEEL_AD_NEEDS_VIDEO = "ad_needs_video";
+/** Ролик закрыт раньше конца — крутки нет. */
+export const WHEEL_AD_CLOSED = "ad_closed";
+/** Ни у одной сети сейчас нет рекламы. */
+export const WHEEL_NO_ADS = "no_ads";
+/** Ролик не загрузился или шаг не дошёл до сервера — можно попробовать ещё раз. */
+export const WHEEL_AD_FAILED = "ad_failed";
 
 export interface WheelApi {
   view(): Promise<ApiResult<WheelView>>;
@@ -52,29 +55,47 @@ export function createWheelApi(request: ApiRequest = apiRequest): WheelApi {
   };
 }
 
-/** Кнопка крутки за рекламу: без пропуска — «скоро», у VIP — крутка или отсчёт до конца кулдауна. */
-export type AdSpinState = { kind: "soon" } | { kind: "ready" } | { kind: "wait"; untilMs: number };
+/**
+ * Кнопка крутки за рекламу: `hidden` — рекламы для площадки нет (и нет
+ * VIP), `ready` — можно, `wait` — место отдыхает. `pass` — VIP, без ролика.
+ */
+export type AdSpinState = { kind: "hidden" } | { kind: "ready"; pass: boolean } | { kind: "wait"; untilMs: number; pass: boolean };
 
-export function adSpinState(view: Pick<WheelView, "ad">, nowMs: number): AdSpinState {
+/** `playable` — площадка умеет показывать ролики сетей; без этого крутка за рекламу есть только у VIP. */
+export function adSpinState(view: Pick<WheelView, "ad">, nowMs: number, playable: boolean): AdSpinState {
   const ad = view.ad;
-  if (ad === undefined || (ad.pass ?? null) === null) return { kind: "soon" };
-  if (ad.readyAt === null) return { kind: "ready" };
-  const untilMs = Date.parse(ad.readyAt);
-  return untilMs > nowMs ? { kind: "wait", untilMs } : { kind: "ready" };
+  const pass = (ad?.pass ?? null) !== null;
+  if (ad === undefined || !ad.available || (!pass && !playable)) return { kind: "hidden" };
+  const untilMs = ad.readyAt === null ? 0 : Date.parse(ad.readyAt);
+  return untilMs > nowMs ? { kind: "wait", untilMs, pass } : { kind: "ready", pass };
 }
 
 /**
- * Крутка VIP без ролика: сессия места от модуля рекламы — сразу в крутку.
- * Без пропуска нужен ролик — отказ с кодом, а не показ, которого клиент
- * ещё не умеет.
+ * Крутка за рекламу: ролик (или VIP) — и сессия показа сразу в крутку.
+ * Исход без крутки — отказом с кодом, по которому экран скажет игроку, что
+ * случилось. `rewarded` — награда выдана: для `ad_reward_claimed`.
  */
-export async function spinWithPass(ads: Pick<AdsApi, "offer">, wheel: Pick<WheelApi, "spinAd">): Promise<ApiResult<WheelSpin>> {
-  const offer = await ads.offer("wheel_spin");
-  if (!offer.ok) return offer;
-  if (!offer.data.available) return { ok: false, failure: "rejected", code: offer.data.reason === AD_COOLDOWN ? WHEEL_AD_COOLDOWN : WHEEL_AD_NEEDS_VIDEO };
-  const sessionId = passSession(offer.data);
-  if (sessionId === null) return { ok: false, failure: "rejected", code: WHEEL_AD_NEEDS_VIDEO };
-  return await wheel.spinAd(sessionId);
+export async function spinForAd(
+  watch: () => Promise<AdWatchResult>,
+  wheel: Pick<WheelApi, "spinAd">,
+  rewarded: (source: "ad" | "pass") => void,
+): Promise<ApiResult<WheelSpin>> {
+  const watched = await watch();
+  switch (watched.kind) {
+    case "watched": {
+      const spin = await wheel.spinAd(watched.sessionId);
+      if (spin.ok) rewarded(watched.source);
+      return spin;
+    }
+    case "cooldown":
+      return { ok: false, failure: "rejected", code: WHEEL_AD_COOLDOWN };
+    case "closed":
+      return { ok: false, failure: "rejected", code: WHEEL_AD_CLOSED };
+    case "no_ads":
+      return { ok: false, failure: "rejected", code: WHEEL_NO_ADS };
+    case "failed":
+      return { ok: false, failure: "unavailable", code: WHEEL_AD_FAILED };
+  }
 }
 
 /** Колесо — только с входом: крутки считает сервер по аккаунту. */

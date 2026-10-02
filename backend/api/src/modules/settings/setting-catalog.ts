@@ -73,6 +73,8 @@ const urlSchema = z
 
 const FEATURES_GROUP = "Функции сервера";
 
+const ADS_GROUP = "Реклама";
+
 /**
  * Выключатель функции без своего ключа (§3.18): у входа ключ есть, и он
  * включается ключом, а приёмникам, курсам и выгрузке ключ не нужен — их
@@ -158,6 +160,21 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: "",
   } satisfies SettingDefinition<string>,
+  /**
+   * Тестовые показы сетей (docs/35-stage4-plan.md WP12): SDK получает
+   * `debug` и крутит пробные ролики. Без окружения: на тестовом сервере её
+   * включают из панели, а боевой сервер не может унаследовать её из `.env`.
+   */
+  adsTestMode: {
+    key: "ads.test-mode",
+    group: ADS_GROUP,
+    title: "Тестовые показы рекламы",
+    hint: "Сети крутят пробные ролики вместо настоящих: их не засчитывают и за них не платят. Для проверки блоков на тестовом сервере — в бою держать выключенным",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: false,
+  } satisfies SettingDefinition<boolean>,
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",

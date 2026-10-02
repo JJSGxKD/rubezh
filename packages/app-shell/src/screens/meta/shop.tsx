@@ -12,6 +12,7 @@ import { loadWallet } from "../../state/wallet-api";
 import { ShopBanners } from "./shop-banners";
 import { dateOf, GemPackTile, ItemCard, TributePlaque, VipCard } from "./shop-parts";
 import { ShowcaseSection } from "./shop-showcase";
+import { useClock } from "./schedule";
 import { itemName, noticeOf, shopBanners, shownPrice, tributeOf, vipWaiting, type Notice, type ShopBanner, type ShopTab } from "./shop-texts";
 
 /**
@@ -35,23 +36,12 @@ type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; 
 
 const api = createShopApi();
 
-/** Шаг часов экрана: отсчёт акции — без секунд, чаще перерисовывать незачем. */
-const CLOCK_STEP_MS = 60_000;
-
 /**
  * Часы экрана — только пока на витрине акция: её отсчёт идёт, а кончившаяся
  * на глазах показывает цену каталога, по которой сервер и выставит счёт.
+ * Отсчёт акции — без секунд, чаще минуты перерисовывать незачем.
  */
-function useClock(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), CLOCK_STEP_MS);
-    return () => clearInterval(timer);
-  }, [active]);
-  return now;
-}
+const CLOCK_STEP_MS = 60_000;
 
 export function ShopScreen(): ReactNode {
   const [state, setState] = useState<Loaded>({ status: "loading" });
@@ -75,7 +65,7 @@ export function ShopScreen(): ReactNode {
   }, []);
 
   const ready = state.status === "ready" ? state : null;
-  const now = useClock(ready?.shop.items.some((item) => item.promo !== undefined && item.promo !== null) === true);
+  const now = useClock(ready?.shop.items.some((item) => item.promo !== undefined && item.promo !== null) === true, CLOCK_STEP_MS);
 
   /** Покупка набора или VIP: одна за раз — второе окно оплаты поверх первого только запутает. */
   const purchase = async (key: string, name: string, request: BuyRequest): Promise<void> => {

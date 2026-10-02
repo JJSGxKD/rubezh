@@ -39,6 +39,7 @@ import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { panelSettings } from "./helpers/settings.js";
 
 /**
  * Реклама в панели (docs/29-admin-panel.md, WP12): сети включают и ставят в
@@ -100,8 +101,9 @@ function setup(config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TEL
   const roles = new MemoryRolesRepository();
   let forgotten = 0;
   const ads = { forgetBlocks: () => forgotten++ } as unknown as AdsService;
-  const service = new AdsCatalogService(repository, new RolesService(config, roles, accounts), ads);
-  return { repository, roles, accounts, service, forgotten: () => forgotten };
+  const settings = panelSettings();
+  const service = new AdsCatalogService(repository, new RolesService(config, roles, accounts), ads, settings);
+  return { repository, roles, accounts, settings, service, forgotten: () => forgotten };
 }
 
 async function person(ctx: ReturnType<typeof setup>, id: string, role?: "admin" | "game_designer" | "moderator"): Promise<AccountRef> {
@@ -234,6 +236,10 @@ describe("реклама в панели", () => {
     expect(view.formats).toMatchObject({ wheel_spin: "rewarded", interstitial: "interstitial", task: "task" });
     expect(view.networks.find((network) => network.networkKey === "richads")).toMatchObject({ missing: ["App ID (appId)"], problem: null });
     expect(view.blocks[0]?.problem).toMatch(/AdsGram: Block ID для этого места выглядит как «12345»/);
+    // Тестовые показы панель видит, чтобы предупредить: сети за них не платят.
+    expect(view.testMode).toBe(false);
+    ctx.settings.set("ads.test-mode", true);
+    expect((await ctx.service.view(designer, 7, NOON)).testMode).toBe(true);
   });
 
   it("геймдизайнер видит, но не правит; модератор не видит", async () => {

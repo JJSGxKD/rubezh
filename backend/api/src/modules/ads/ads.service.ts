@@ -2,6 +2,8 @@ import { randomBytes, randomInt } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
+import { SETTINGS } from "../settings/setting-catalog.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { PLACE_FORMAT, blockShapeProblem, keysProblem, missingKeys, profileOf, type AdFormat } from "./ad-networks.js";
 import { AdPasses } from "./ads-passes.js";
 import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
@@ -68,6 +70,8 @@ export type AdOffer =
       expiresAt: string;
       /** ролик не нужен — сессия уже выполнена, её сразу забирают у хозяина места (VIP) */
       pass: string | null;
+      /** тестовые показы сети — по настройке из панели; такой показ сеть не засчитывает */
+      debug: boolean;
     }
   /**
    * `no_fill` — ни одного подходящего блока; `cooldown` — место отдыхает до
@@ -92,6 +96,7 @@ export class AdsService {
     @Inject(ADS_REPOSITORY) private readonly repository: AdsRepository,
     @Inject(ADS_ROLL) private readonly roll: AdsRoll,
     private readonly passes: AdPasses,
+    @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
   async offer(viewer: AdViewer, place: AdPlace, at = new Date()): Promise<AdOffer> {
@@ -126,6 +131,7 @@ export class AdsService {
       success: block.success,
       expiresAt: expiresAt.toISOString(),
       pass: null,
+      debug: this.settings.get(SETTINGS.adsTestMode),
     };
   }
 
@@ -135,7 +141,7 @@ export class AdsService {
     const expiresAt = new Date(at.getTime() + SESSION_TTL_MIN.view * MINUTE_MS);
     await this.db(this.repository.createPassSession({ sessionId, accountId: viewer.accountId, place, pass, createdAt: at, expiresAt }));
     this.log({ event: "ad_passed", accountId: viewer.accountId, place, pass });
-    return { available: true, sessionId, network: pass, blockId: null, format: PLACE_FORMAT[place], keys: {}, success: "view", expiresAt: expiresAt.toISOString(), pass };
+    return { available: true, sessionId, network: pass, blockId: null, format: PLACE_FORMAT[place], keys: {}, success: "view", expiresAt: expiresAt.toISOString(), pass, debug: false };
   }
 
   /** Шаг воронки от клиента. Засчитать выполнение он может только показу — клик и целевое действие подтверждает сервер. */

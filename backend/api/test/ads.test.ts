@@ -28,6 +28,7 @@ import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAds, adBlock as block, moscowDayStart } from "./helpers/memory-ads.js";
+import { panelSettings } from "./helpers/settings.js";
 
 /**
  * Реклама (docs/35-stage4-plan.md §3.7, WP12): выбор сети — пауза, круг,
@@ -54,7 +55,8 @@ function setup(blocks: AdBlockRow[], roll: AdsRoll = rolls(0)) {
   const repository = new MemoryAds();
   repository.blocks = blocks;
   const passes = new AdPasses();
-  return { repository, passes, service: new AdsService(repository, roll, passes) };
+  const settings = panelSettings();
+  return { repository, passes, settings, service: new AdsService(repository, roll, passes, settings) };
 }
 
 function offered(offer: AdOffer): Extract<AdOffer, { available: true }> {
@@ -190,6 +192,13 @@ describe("выдача показа", () => {
     });
     expect(offer.sessionId).toMatch(/^[A-Za-z0-9_-]{16}$/);
     expect(repository.sessions[0]).toMatchObject({ sessionId: offer.sessionId, accountId: ME, place: "wheel_spin", status: "pending" });
+  });
+
+  it("тестовые показы — по настройке панели, сразу на следующей выдаче; по умолчанию — боевые", async () => {
+    const { service, settings } = setup([block("adsgram", 10), block("adsonar", 20)]);
+    expect(offered(await service.offer(TELEGRAM, "wheel_spin", NOON)).debug).toBe(false);
+    settings.set("ads.test-mode", true);
+    expect(offered(await service.offer(TELEGRAM, "wheel_spin", at(NOON, 1))).debug).toBe(true);
   });
 
   it("отказ первой сети уводит к следующей, все на паузе — к давнее всех выданной", async () => {
@@ -329,7 +338,8 @@ describe("реклама без ролика (VIP)", () => {
   it("награда места — сразу: сессия выполнена без сети и ролика, хозяин забирает её как обычную", async () => {
     const { service, repository, asked } = withPass([block("adsgram", 10)]);
     const offer = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
-    expect(offer).toMatchObject({ pass: "vip", network: "vip", blockId: null, success: "view" });
+    // Пропуск ничего не показывает — тестовым ему быть не в чем.
+    expect(offer).toMatchObject({ pass: "vip", network: "vip", blockId: null, success: "view", debug: false });
     expect(asked).toEqual([[ME, NOON]]);
     expect(repository.sessions[0]).toMatchObject({ networkKey: "vip", status: "completed", shownAt: null, completedAt: NOON });
 

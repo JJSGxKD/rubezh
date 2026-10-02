@@ -94,7 +94,7 @@ function block(patch: Partial<AdBlock> = {}): AdBlock {
 }
 
 function view(patch: Partial<AdsView> = {}): AdsView {
-  return { networks: NETWORKS, blocks: [], funnel: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, ...patch };
+  return { networks: NETWORKS, blocks: [], funnel: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
 }
 
 function form(patch: Partial<BlockForm> = {}): BlockForm {

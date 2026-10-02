@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
-import { createAdsApi, passSession, type AdOffer, type AdsApi } from "../src/state/ads-api";
-import { WHEEL_AD_COOLDOWN, WHEEL_AD_NEEDS_VIDEO, adSpinState, createWheelApi, spinWithPass, type WheelApi } from "../src/state/wheel-api";
+import type { AdWatchResult } from "../src/state/ad-watch";
+import { createAdsApi, passSession, type AdOffer } from "../src/state/ads-api";
+import { WHEEL_AD_CLOSED, WHEEL_AD_COOLDOWN, WHEEL_AD_FAILED, WHEEL_NO_ADS, adSpinState, createWheelApi, spinForAd, type WheelApi } from "../src/state/wheel-api";
 
 // Клиент колеса (docs/35-stage4-plan.md WP13): сектора и крутка — с сервера,
-// схемой; в теле крутки — только чем крутят, что выпало, решает сервер. У VIP
-// крутка за рекламу — без ролика (§3.6): сессия места сразу идёт в крутку.
+// схемой; в теле крутки — только чем крутят, что выпало, решает сервер.
+// Крутка за рекламу — по досмотренной сессии показа, у VIP — без ролика
+// (§3.6): сессия места сразу идёт в крутку.
 
 interface Sent {
   method: string;
@@ -52,7 +54,7 @@ describe("клиент колеса", () => {
   });
 
 
-  it("крутка за рекламу — тем же POST с сессией показа; готовность места — в виде колеса, старый сервер без неё — «скоро»", async () => {
+  it("крутка за рекламу — тем же POST с сессией показа; готовность места — в виде колеса, старый сервер без неё — кнопки нет", async () => {
     const sent: Sent[] = [];
     const spin = { sector: 0, resource: "coins", amount: 50, credited: 50, view: VIEW };
     await createWheelApi(server(sent, spin)).spinAd("AAAAAAAAAAAAAAAA");
@@ -60,50 +62,59 @@ describe("клиент колеса", () => {
 
     const view = await createWheelApi(server([], { ...VIEW, ad: { available: true, readyAt: null, pass: "vip" } })).view();
     expect(view.ok && view.data.ad).toEqual({ available: true, readyAt: null, pass: "vip" });
-    expect(adSpinState({}, 0)).toEqual({ kind: "soon" });
+    expect(adSpinState({}, 0, true)).toEqual({ kind: "hidden" });
   });
 });
 
-describe("крутка VIP без ролика", () => {
+describe("крутка за рекламу", () => {
   const NOW = Date.UTC(2026, 9, 1, 9);
   const later = new Date(NOW + 60_000).toISOString();
 
-  it("кнопка: без пропуска — «скоро», у VIP — крутка или отсчёт до конца кулдауна", () => {
-    expect(adSpinState({ ad: { available: true, readyAt: null, pass: null } }, NOW)).toEqual({ kind: "soon" });
-    expect(adSpinState({ ad: { available: true, readyAt: null } }, NOW)).toEqual({ kind: "soon" });
-    expect(adSpinState({ ad: { available: true, readyAt: null, pass: "vip" } }, NOW)).toEqual({ kind: "ready" });
-    expect(adSpinState({ ad: { available: true, readyAt: later, pass: "vip" } }, NOW)).toEqual({ kind: "wait", untilMs: NOW + 60_000 });
-    expect(adSpinState({ ad: { available: true, readyAt: later, pass: "vip" } }, NOW + 60_000)).toEqual({ kind: "ready" });
+  it("кнопка: ролик — где площадка его покажет, VIP — везде; кулдаун — отсчётом; рекламы для площадки нет — кнопки нет", () => {
+    expect(adSpinState({ ad: { available: true, readyAt: null, pass: null } }, NOW, true)).toEqual({ kind: "ready", pass: false });
+    expect(adSpinState({ ad: { available: true, readyAt: null } }, NOW, true)).toEqual({ kind: "ready", pass: false });
+    expect(adSpinState({ ad: { available: true, readyAt: null, pass: null } }, NOW, false)).toEqual({ kind: "hidden" });
+    expect(adSpinState({ ad: { available: true, readyAt: null, pass: "vip" } }, NOW, false)).toEqual({ kind: "ready", pass: true });
+    expect(adSpinState({ ad: { available: true, readyAt: later, pass: null } }, NOW, true)).toEqual({ kind: "wait", untilMs: NOW + 60_000, pass: false });
+    expect(adSpinState({ ad: { available: true, readyAt: later, pass: "vip" } }, NOW + 60_000, true)).toEqual({ kind: "ready", pass: true });
+    expect(adSpinState({ ad: { available: false, readyAt: null, pass: null } }, NOW, true)).toEqual({ kind: "hidden" });
   });
 
-  function fakeAds(answer: Awaited<ReturnType<AdsApi["offer"]>>): AdsApi & { places: string[] } {
-    const places: string[] = [];
-    return { places, offer: async (place) => (places.push(place), answer) };
-  }
-
-  function fakeWheel(): Pick<WheelApi, "spinAd"> & { sessions: string[] } {
+  function fakeWheel(answer: Awaited<ReturnType<WheelApi["spinAd"]>> = { ok: true, data: { sector: 1, resource: "coins", amount: 70, credited: 70, view: VIEW } }): Pick<WheelApi, "spinAd"> & { sessions: string[] } {
     const sessions: string[] = [];
-    return { sessions, spinAd: async (sessionId) => (sessions.push(sessionId), { ok: true, data: { sector: 1, resource: "coins", amount: 70, credited: 70, view: VIEW } }) };
+    return { sessions, spinAd: async (sessionId) => (sessions.push(sessionId), answer) };
   }
 
-  const PASS: AdOffer = { available: true, sessionId: "AAAAAAAAAAAAAAAA", network: "vip", blockId: null, success: "view", expiresAt: later, pass: "vip" };
+  const watched = (result: AdWatchResult) => async () => result;
 
-  it("пропуск — сессия места сразу идёт в крутку колеса", async () => {
-    const ads = fakeAds({ ok: true, data: PASS });
-    const wheel = fakeWheel();
-    expect(await spinWithPass(ads, wheel)).toMatchObject({ ok: true, data: { sector: 1 } });
-    expect(ads.places).toEqual(["wheel_spin"]);
-    expect(wheel.sessions).toEqual(["AAAAAAAAAAAAAAAA"]);
+  it("досмотр или VIP — сессия сразу в крутку, и награда отмечается источником", async () => {
+    for (const source of ["ad", "pass"] as const) {
+      const wheel = fakeWheel();
+      const rewarded: string[] = [];
+      expect(await spinForAd(watched({ kind: "watched", sessionId: "AAAAAAAAAAAAAAAA", source }), wheel, (via) => rewarded.push(via))).toMatchObject({ ok: true, data: { sector: 1 } });
+      expect(wheel.sessions).toEqual(["AAAAAAAAAAAAAAAA"]);
+      expect(rewarded).toEqual([source]);
+    }
   });
 
-  it("кулдаун, нужен ролик или отказ сети — без крутки и с кодом, по которому экран перечитывается", async () => {
+  it("без досмотра — без крутки, с кодом, по которому экран скажет, что случилось", async () => {
     const wheel = fakeWheel();
-    expect(await spinWithPass(fakeAds({ ok: true, data: { available: false, reason: "cooldown", retryAt: later } }), wheel)).toEqual({ ok: false, failure: "rejected", code: WHEEL_AD_COOLDOWN });
-    expect(await spinWithPass(fakeAds({ ok: true, data: { available: false, reason: "no_fill", retryAt: null } }), wheel)).toMatchObject({ code: WHEEL_AD_NEEDS_VIDEO });
-    expect(await spinWithPass(fakeAds({ ok: true, data: { ...PASS, network: "adsgram", blockId: "123", pass: null } }), wheel)).toMatchObject({ code: WHEEL_AD_NEEDS_VIDEO });
-    expect(await spinWithPass(fakeAds({ ok: false, failure: "offline" }), wheel)).toEqual({ ok: false, failure: "offline" });
+    const never = () => expect.unreachable("награды без крутки не бывает");
+    expect(await spinForAd(watched({ kind: "cooldown", retryAt: later }), wheel, never)).toEqual({ ok: false, failure: "rejected", code: WHEEL_AD_COOLDOWN });
+    expect(await spinForAd(watched({ kind: "closed" }), wheel, never)).toMatchObject({ code: WHEEL_AD_CLOSED });
+    expect(await spinForAd(watched({ kind: "no_ads" }), wheel, never)).toMatchObject({ code: WHEEL_NO_ADS });
+    expect(await spinForAd(watched({ kind: "failed" }), wheel, never)).toMatchObject({ code: WHEEL_AD_FAILED });
     expect(wheel.sessions).toHaveLength(0);
   });
+
+  it("крутка по сессии не прошла — отказ сервера как есть, награда не отмечается", async () => {
+    const wheel = fakeWheel({ ok: false, failure: "rejected", code: WHEEL_AD_COOLDOWN });
+    const rewarded: string[] = [];
+    expect(await spinForAd(watched({ kind: "watched", sessionId: "AAAAAAAAAAAAAAAA", source: "ad" }), wheel, (via) => rewarded.push(via))).toMatchObject({ code: WHEEL_AD_COOLDOWN });
+    expect(rewarded).toHaveLength(0);
+  });
+
+  const PASS: AdOffer = { available: true, sessionId: "AAAAAAAAAAAAAAAA", network: "vip", blockId: null, success: "view", expiresAt: later, pass: "vip" };
 
   it("выдача показа — POST с местом; ответ без пропуска от старого сервера — показ, а не пропуск", async () => {
     const sent: Sent[] = [];
