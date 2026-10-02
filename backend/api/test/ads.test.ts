@@ -781,6 +781,19 @@ describe("реклама по HTTP", () => {
     expect(offer.json<{ data: AdOffer }>().data).toMatchObject({ available: true, format: "interstitial" });
   });
 
+  it("межстраничная — своим лимитом: частые старты забега не отнимают колесо и удвоение", async () => {
+    const { service, flags } = setup([block("adsgram", 10)]);
+    flags.keys.clear();
+    const server = await start(service);
+    const token = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    const headers = { authorization: `Bearer ${token}` };
+    const interstitial = async () => (await server.inject({ method: "POST", url: "/api/v1/ads/sessions", headers, payload: { place: "interstitial", moment: "run_start" } })).statusCode;
+    for (let start = 0; start < 60; start++) expect(await interstitial()).toBe(200);
+    expect(await interstitial()).toBe(429);
+    const wheel = await server.inject({ method: "POST", url: "/api/v1/ads/sessions", headers, payload: { place: "wheel_spin", device: "android" } });
+    expect(wheel.json<{ data: AdOffer }>().data).toMatchObject({ available: true, network: "adsgram" });
+  });
+
   it("сети для SDK на старте — по токену и площадке из него; без токена — 401", async () => {
     const { service } = setup([]);
     const server = await start(service);

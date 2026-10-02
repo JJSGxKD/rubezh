@@ -19,6 +19,12 @@ import { INTERSTITIAL_MOMENTS } from "./interstitial-policy.js";
  * набрать (`ads.repository.ts`, окно истории).
  */
 const OFFER_LIMIT: RateLimit = { scope: "ads_offer", limit: 120, windowSec: 3600 };
+/**
+ * Межстраничную спрашивает каждый старт забега — своим лимитом: игрок,
+ * который часто перезапускает забег, не должен остаться без колеса и
+ * удвоения. Шестьдесят стартов в час — забег короче минуты подряд.
+ */
+const INTERSTITIAL_LIMIT: RateLimit = { scope: "ads_interstitial", limit: 60, windowSec: 3600 };
 const REPORT_LIMIT: RateLimit = { scope: "ads_report", limit: 600, windowSec: 3600 };
 
 /**
@@ -81,7 +87,7 @@ export class AdsController {
     const { accountId, platform, platformUserId } = accountOf(request);
     const parsed = offerSchema.safeParse(body);
     if (!parsed.success) throw new ValidationError("Неизвестное место или момент показа");
-    await this.limit(OFFER_LIMIT, accountId);
+    await this.limit(parsed.data.place === "interstitial" ? INTERSTITIAL_LIMIT : OFFER_LIMIT, accountId);
     const requester = requesterOf(request, platformUserId, parsed.data.language ?? null, parsed.data.premium ?? null);
     const viewer = { accountId, platform, device: parsed.data.device ?? null, requester };
     return { data: await this.ads.offer(viewer, parsed.data.place, new Date(), parsed.data.moment) };
