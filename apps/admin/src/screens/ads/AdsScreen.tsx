@@ -1,11 +1,14 @@
 import { useState } from "react";
 import {
+  AD_PLATFORMS,
   DAYS_TITLES,
   FORMAT_TITLES,
   FUNNEL_DAYS,
   MIN_NETWORKS_PER_PLACE,
   PLACE_TITLES,
+  PLATFORM_TITLES,
   SUCCESS_TITLES,
+  adPlatforms,
   blockServable,
   coverage,
   fetchAds,
@@ -15,12 +18,14 @@ import {
   type AdBlock,
   type AdsView,
   type FunnelDays,
+  type PlaceCoverage,
+  type PlatformCoverage,
 } from "../../api/ads";
 import { hrefOf } from "../../routes";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { HELP } from "../../ui/help";
-import { Badge, Button, DataTable, ErrorNotice, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Help, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
 import { BlockDialog } from "./BlockDialog";
 import { NetworkCards } from "./NetworkCards";
@@ -74,7 +79,15 @@ function TestModeNotice({ canSettings }: { canSettings: boolean }) {
   );
 }
 
+/**
+ * Покрытие — по каждой площадке отдельно (Р77): блок AdsGram «везде» не
+ * делает VK покрытой — её SDK там нет. Площадки, где не работает ни одна
+ * подключённая сеть, — одной строкой под таблицей: настроить там нечего, и
+ * предупреждение на каждом месте только приучало бы их не читать.
+ */
 function CoveragePanel({ view }: { view: AdsView }) {
+  const platforms = adPlatforms(view);
+  const without = AD_PLATFORMS.filter((platform) => !platforms.includes(platform));
   return (
     <Panel title="Покрытие мест" help={HELP.ads.coverage}>
       <DataTable
@@ -83,15 +96,38 @@ function CoveragePanel({ view }: { view: AdsView }) {
         columns={[
           { title: "Место", render: (row) => PLACE_TITLES[row.place] },
           { title: "Формат", render: (row) => FORMAT_TITLES[view.formats[row.place] ?? ""] ?? view.formats[row.place] ?? "—" },
-          { title: "Сети по кругу", help: HELP.ads.circle, render: (row) => (row.networks.length === 0 ? <span className="text-text-muted">нет — кнопки «за рекламу» у игрока нет, VIP получает награду без ролика</span> : row.networks.join(" → ")) },
-          {
-            title: "",
-            render: (row) =>
-              row.networks.length >= MIN_NETWORKS_PER_PLACE ? null : <Badge tone="warning">{row.networks.length === 0 ? "пусто" : "одна сеть — отказ оставит место пустым"}</Badge>,
-          },
+          ...platforms.map((platform) => ({
+            title: platforms.length === 1 ? `Сети по кругу · ${PLATFORM_TITLES[platform]}` : PLATFORM_TITLES[platform],
+            help: HELP.ads.circle,
+            render: (row: PlaceCoverage) => <CoverageCell cell={row.platforms.find((cell) => cell.platform === platform)} />,
+          })),
         ]}
       />
+      {without.length === 0 ? null : (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
+          {without.map((platform) => PLATFORM_TITLES[platform]).join(", ")}: рекламы нет — ни одна подключённая сеть там не работает.
+          <Help text={HELP.ads.platforms} />
+        </p>
+      )}
     </Panel>
+  );
+}
+
+function CoverageCell({ cell }: { cell: PlatformCoverage | undefined }) {
+  if (cell === undefined || !cell.possible) return <span className="text-text-muted">у сетей нет формата для места</span>;
+  if (cell.networks.length === 0) {
+    return (
+      <span className="flex flex-col items-start gap-0.5">
+        <Badge tone="warning">пусто</Badge>
+        <span className="text-xs text-text-muted">кнопки «за рекламу» у игрока нет, VIP получает награду без ролика</span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {cell.networks.join(" → ")}
+      {cell.networks.length >= MIN_NETWORKS_PER_PLACE ? null : <Badge tone="warning">одна сеть — отказ оставит место пустым</Badge>}
+    </span>
   );
 }
 
@@ -121,7 +157,7 @@ function BlocksPanel({ view, canEdit, onSaved }: { view: AdsView; canEdit: boole
           { title: "Сеть", render: (block) => networkName(block.networkKey) },
           { title: "Блок", help: HELP.ads.externalId, render: (block) => (block.externalId === null ? <span className="text-text-muted">по ключам сети</span> : <span className="font-mono text-xs">{block.externalId}</span>) },
           { title: "Успех", render: (block) => SUCCESS_TITLES[block.success] },
-          { title: "Где", help: HELP.ads.reach, render: (block) => reachLabel(block) },
+          { title: "Где", help: HELP.ads.reach, render: (block) => reachLabel(view, block) },
           {
             title: "Состояние",
             render: (block) =>

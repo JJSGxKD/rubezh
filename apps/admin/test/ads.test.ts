@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  adPlatforms,
+  blockFormOf,
   blockFormSchema,
   blockInputOf,
+  blockReaches,
   coverage,
   emptyBlockForm,
   fetchAds,
   funnelNetworkTitle,
   networkFormOf,
   networkFormSchema,
+  networkPlatforms,
   percent,
   placeOptions,
   reachLabel,
@@ -33,6 +37,7 @@ const PROFILES: AdNetworkProfile[] = [
     key: "adsgram",
     title: "AdsGram",
     cabinet: "https://partner.adsgram.ai",
+    platforms: ["telegram"],
     keys: [],
     formats: [
       { format: "rewarded", title: "Reward", unit: { title: "Block ID", hint: "число", example: "12345", pattern: "^[0-9]{1,12}$" }, success: ["view"] },
@@ -45,6 +50,7 @@ const PROFILES: AdNetworkProfile[] = [
     key: "richads",
     title: "RichAds",
     cabinet: null,
+    platforms: ["telegram"],
     keys: [
       { key: "pubId", title: "Publisher ID (pubId)", hint: "число", example: "792361", pattern: "^[0-9]{1,12}$" },
       { key: "appId", title: "App ID (appId)", hint: "число", example: "1396", pattern: "^[0-9]{1,12}$" },
@@ -59,6 +65,7 @@ const PROFILES: AdNetworkProfile[] = [
     key: "taddy",
     title: "Taddy",
     cabinet: null,
+    platforms: ["telegram"],
     keys: [{ key: "pubId", title: "pubId", hint: "32 hex", example: "14cbeb980853dd416003462ca4db7c12", pattern: "^[0-9a-f]{32}$" }],
     formats: [
       {
@@ -205,8 +212,46 @@ describe("реклама в панели: сети", () => {
       }),
     );
     // RichAds без appId не показывает — в покрытие не попадает.
-    expect(rows.find((row) => row.place === "wheel_spin")?.networks).toEqual(["AdsGram"]);
-    expect(rows.find((row) => row.place === "run_double")?.networks).toEqual([]);
+    expect(rows.find((row) => row.place === "wheel_spin")?.platforms).toEqual([{ platform: "telegram", networks: ["AdsGram"], possible: true }]);
+    expect(rows.find((row) => row.place === "run_double")?.platforms).toEqual([{ platform: "telegram", networks: [], possible: true }]);
+  });
+
+  it("покрытие — по площадкам: блок «везде» сети Telegram не покрывает VK, площадок без сетей в таблице нет", () => {
+    const adsgram = PROFILES[0] as AdNetworkProfile;
+    const withVk: AdNetworkProfile = { ...adsgram, key: "vknet", title: "VK Ads", platforms: ["vk"], formats: adsgram.formats.filter((support) => support.format === "rewarded") };
+    const shown = view({
+      profiles: [...PROFILES, withVk],
+      networks: [...NETWORKS, { networkKey: "vknet", name: "VK Ads", active: true, priority: 50, keys: {}, missing: [], problem: null }],
+      blocks: [block({ blockId: "1" }), block({ blockId: "2", networkKey: "vknet" })],
+    });
+    expect(adPlatforms(shown)).toEqual(["telegram", "vk"]);
+    expect(coverage(shown).find((row) => row.place === "wheel_spin")?.platforms).toEqual([
+      { platform: "telegram", networks: ["AdsGram"], possible: true },
+      { platform: "vk", networks: ["VK Ads"], possible: true },
+    ]);
+    // Заданий у сетей VK нет — пустота там не ошибка настройки, предупреждать не о чем.
+    expect(coverage(shown).find((row) => row.place === "task")?.platforms.find((cell) => cell.platform === "vk")).toEqual({ platform: "vk", networks: [], possible: false });
+    expect(adPlatforms(view())).toEqual(["telegram"]);
+    expect(blockReaches(shown, block(), "vk")).toBe(false);
+    expect(blockReaches(shown, block({ platforms: ["telegram"] }), "telegram")).toBe(true);
+  });
+
+  it("форма блока: чужие площадки не уходят на сервер, все площадки сети — то же, что «везде»", () => {
+    const form = { ...blockFormOf(block({ platforms: ["telegram", "vk"] })) };
+    expect(blockInputOf(view(), form, "1")?.platforms).toEqual([]);
+    expect(networkPlatforms(view(), "adsgram")).toEqual(["telegram"]);
+    expect(networkPlatforms(view(), "monetag")).toEqual([]);
+  });
+
+  it("сервер без площадок в профиле — сеть везде, как было; незнакомая площадка отбрасывается", async () => {
+    // Профиль сервера до площадок — без поля вовсе.
+    const legacy: Partial<AdNetworkProfile> = { ...PROFILES[0] };
+    delete legacy.platforms;
+    const { fetch } = fakeFetch(
+      json(200, { data: { ...view({ profiles: [] }), profiles: [legacy, { ...PROFILES[1], platforms: ["telegram", "ok"] }] } }),
+    );
+    const result = await fetchAds(new AdminApi(fetch), 7);
+    expect(result.ok && result.data.profiles.map((profile) => profile.platforms)).toEqual([["telegram", "max", "vk", "web"], ["telegram"]]);
   });
 });
 
@@ -215,8 +260,9 @@ describe("реклама в панели: мелочи", () => {
     expect(SECTIONS.find((section) => section.id === "ads")?.permission).toBe("ads.view");
     expect(percent(1, 3)).toBe("33%");
     expect(percent(0, 0)).toBe("—");
-    expect(reachLabel(block({ platforms: ["telegram"], devices: ["android", "ios"] }))).toBe("Telegram; Android, iOS");
-    expect(reachLabel(block())).toBe("все площадки; все устройства");
+    expect(reachLabel(view(), block({ platforms: ["telegram"], devices: ["android", "ios"] }))).toBe("Telegram; Android, iOS");
+    // Пустой список площадок — там, где работает сеть, а не «все площадки».
+    expect(reachLabel(view(), block())).toBe("Telegram; все устройства");
     expect(funnelNetworkTitle("vip", NETWORKS)).toBe("VIP без ролика");
     expect(funnelNetworkTitle("adsgram", NETWORKS)).toBe("AdsGram");
     expect(funnelNetworkTitle("monetag", NETWORKS)).toBe("monetag");
