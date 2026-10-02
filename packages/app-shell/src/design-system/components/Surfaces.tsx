@@ -1,6 +1,7 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { Check, Info, Lock } from "lucide-react";
 import { t } from "../../i18n";
+import { useBackLayer } from "../../state/back-stack";
 import { uiFeedback } from "../../state/ui-feedback";
 import { Button } from "./Button";
 import { Badge } from "./Data";
@@ -131,22 +132,15 @@ export function Modal(props: ModalProps): ReactNode {
     return () => uiFeedback("sheetClose");
   }, [bottom]);
 
-  useEffect(() => {
-    if (onDismiss === undefined) return;
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onDismiss();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onDismiss]);
+  // «Назад» площадки и Esc закрывают верхнюю модалку, а не уводят экран из-под
+  // неё (WP45): слой стека живёт, пока модалка открыта.
+  useBackLayer(onDismiss);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
-      // Закрываемый лист сам отвечает на Esc — клавиши экрана ему уступают.
-      data-dismissable={onDismiss === undefined ? undefined : "true"}
       className={[
         "absolute inset-0 flex px-4",
         "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { hasBackLayers } from "../../state/back-stack";
 import { useRun, type RunPhase } from "../../state/run";
 
 /**
@@ -45,7 +46,7 @@ export function useRunKeyboard(enabled: boolean): void {
       if (ignored(event)) return;
       // Esc закрывает открытый лист — «Сдаться?», характеристики, — а не
       // снимает игру с паузы вместе с ним.
-      if (event.code === "Escape" && document.querySelector('[role="dialog"][data-dismissable="true"]') !== null) return;
+      if (event.code === "Escape" && hasBackLayers()) return;
       const run = useRun.getState();
       const action = runKeyAction(event.code, run.phase, run.offers.length);
       if (action === null) return;

@@ -17,6 +17,7 @@ import { usePlatform } from "../state/platform";
 import { useRun } from "../state/run";
 import { isVersionAtLeast } from "../state/platform-version";
 import { useShell } from "../state/shell";
+import { backAction, backKeyAction, useBackStack, type BackStack } from "../state/back-stack";
 import { CompactOverlay, FirstRunScreen, OutdatedScreen, OutsideScreen } from "../screens/gates";
 import { LobbyScreen, ModeScreen } from "../screens/home";
 import { playedBefore, skipFirstRunHints } from "../state/first-run";
@@ -225,20 +226,53 @@ function renderScreen(screen: ScreenId): ReactNode {
 }
 
 /**
- * Кнопки площадки. «Назад» видна, когда в стеке больше одного экрана, и
- * вызывает `pop`; во время забега она ставит паузу, а не выходит из забега —
- * иначе один случайный жест обнуляет десять минут игры (§7).
+ * Кнопки площадки. «Назад» и Esc — по стеку (`state/back-stack.ts`): открытая
+ * модалка закрывается; иначе на экране раздела — `pop`, если есть куда
+ * вернуться, а во время забега — пауза, а не выход из забега: иначе один
+ * случайный жест обнуляет десять минут игры (§7).
  */
 function usePlatformButtons(stack: readonly ScreenId[], screen: ScreenId): void {
   useEffect(() => {
-    const ui = useShell.getState().adapter.ui;
-
-    if (screen === "run") {
-      ui.setBackButton(() => useRun.getState().pause("manual"));
-      return;
-    }
-    ui.setBackButton(canGoBack(stack) ? () => useNavigation.getState().pop() : null);
+    useBackStack.getState().setBase(
+      screen === "run"
+        ? { action: () => useRun.getState().pause("manual"), keyboard: false }
+        : { action: canGoBack(stack) ? () => useNavigation.getState().pop() : null, keyboard: true },
+    );
   }, [stack, screen]);
+
+  // Кнопка площадки — за верхним слоем стека: открытая модалка закрывается
+  // ею, а не уводит экран из-под себя.
+  useEffect(() => {
+    const ui = useShell.getState().adapter.ui;
+    let shown: (() => void) | null | undefined;
+    const apply = (state: BackStack): void => {
+      const action = backAction(state);
+      if (action === shown) return;
+      shown = action;
+      ui.setBackButton(action);
+    };
+    apply(useBackStack.getState());
+    const unsubscribe = useBackStack.subscribe(apply);
+    return () => {
+      unsubscribe();
+      ui.setBackButton(null);
+    };
+  }, []);
+
+  // Esc на ПК — тот же стек. Внутри Telegram Desktop он не должен уйти
+  // клиенту и закрыть приложение, когда у приложения есть что закрыть.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      const target = event.target;
+      const typing = target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      const action = backKeyAction(event, useBackStack.getState(), typing);
+      if (action === null) return;
+      event.preventDefault();
+      action();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const ui = useShell.getState().adapter.ui;
