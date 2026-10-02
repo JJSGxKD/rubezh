@@ -219,6 +219,9 @@ watch_line="*/10 * * * * ${APP}/backup-watch.sh >> /srv/rubezh/backups/backup-wa
 
 # Старые образы — после успешного выката: прежний остаётся для отката.
 prune_api_images "$VERSION" "$previous"
+# Кеш сборки Caddy и бэкапа (`--build` выше) растёт с каждым выкатом; недели
+# хватает, чтобы пересборка без изменений не скачивала слои заново.
+docker builder prune -f --filter until=168h > /dev/null 2>&1 || true
 
 echo "$VERSION" > .deployed
 log "выкачено: ${VERSION}"
