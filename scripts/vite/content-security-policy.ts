@@ -51,6 +51,12 @@ export interface PolicyInput {
    * ключ: без него политика не пускает ни одного чужого скрипта.
    */
   graspil?: boolean;
+  /**
+   * Реклама сетей — в Telegram-сборке: их SDK показывает её на нашей
+   * странице. Другие площадки рекламы сетей не показывают, и политика их
+   * сборок чужого не пускает.
+   */
+  ads?: boolean;
 }
 
 /**
@@ -61,6 +67,31 @@ export interface PolicyInput {
  */
 export const GRASPIL_SCRIPT_ORIGINS = ["https://w.graspil.com"] as const;
 export const GRASPIL_CONNECT_ORIGINS = ["https://wb.graspil.com"] as const;
+
+/**
+ * Скрипты рекламных сетей (docs/35-stage4-plan.md WP12) — их SDK, и только
+ * они: адреса — `adapter-telegram/src/ads/networks.ts`, поддомены — потому
+ * что SDK догружает свои части с них.
+ */
+export const AD_SCRIPT_ORIGINS = [
+  "https://sad.adsgram.ai",
+  "https://*.adsgram.ai",
+  "https://static.sonartech.io",
+  "https://*.sonartech.io",
+  "https://richinfo.co",
+  "https://*.richinfo.co",
+  "https://sdk.taddy.pro",
+  "https://*.taddy.pro",
+] as const;
+
+/**
+ * Креативы рекламы — с любых адресов. Ролик, картинку и фрейм объявления
+ * сеть берёт у рекламодателя или его площадки, и списка их нет ни у нас, ни
+ * у сети; пиксели показа уходят туда же. Граница безопасности остаётся на
+ * `script-src`: исполнять на странице можно только SDK сетей, а картинка,
+ * ролик, чужой фрейм и запрос скрипт не внедряют.
+ */
+export const AD_CREATIVE_SOURCES = ["https:"] as const;
 
 /** Кто вправе встраивать приложение во фрейм: Telegram Web, и больше никто. */
 export const FRAME_ANCESTORS = ["'self'", "https://web.telegram.org"] as const;
@@ -75,11 +106,12 @@ export const FRAME_ANCESTORS = ["'self'", "https://web.telegram.org"] as const;
  */
 export const AVATAR_ORIGINS = ["https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"] as const;
 
-export function contentSecurityPolicy({ mode, apiOrigin, graspil = false }: PolicyInput): string {
+export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = false }: PolicyInput): string {
   const dev = mode === "dev";
   const api = originOf(apiOrigin);
-  const scripts = graspil ? [...GRASPIL_SCRIPT_ORIGINS] : [];
-  const connects = graspil ? [...GRASPIL_CONNECT_ORIGINS] : [];
+  const scripts = [...(graspil ? GRASPIL_SCRIPT_ORIGINS : []), ...(ads ? AD_SCRIPT_ORIGINS : [])];
+  const connects = [...(graspil ? GRASPIL_CONNECT_ORIGINS : []), ...(ads ? AD_CREATIVE_SOURCES : [])];
+  const creatives = ads ? [...AD_CREATIVE_SOURCES] : [];
 
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
@@ -87,7 +119,9 @@ export function contentSecurityPolicy({ mode, apiOrigin, graspil = false }: Poli
     // Vite — стили через <style>. В сборке ни того ни другого нет.
     "script-src": dev ? ["'self'", "'unsafe-inline'", ...scripts] : ["'self'", ...scripts],
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:", ...AVATAR_ORIGINS],
+    "img-src": ["'self'", "data:", "blob:", ...AVATAR_ORIGINS, ...creatives],
+    // Ролики и фреймы объявлений — только с рекламой; без неё — как всё прочее, свои.
+    ...(ads ? { "media-src": ["'self'", "blob:", ...creatives], "frame-src": ["'self'", ...creatives] } : {}),
     // Клиент Vite ждёт сервер после обрыва HMR в воркере из blob: — без
     // него страница не узнает, что сервер вернулся.
     "worker-src": dev ? ["'self'", "blob:"] : ["'self'"],

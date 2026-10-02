@@ -48,6 +48,14 @@ const RUN_UI = /^(RunScreen|overlays|run)-[\w-]{8}\.js$/;
  * тестировщики закрытого теста.
  */
 const TEAM = /^(gallery|sound-lab|DevSheet|DevTechPanel)-.*\.js$/;
+/**
+ * Реклама сетей — обёртки SDK AdsGram, AdSonar, RichAds и Taddy
+ * (`adapter-telegram/src/ads/`). Своя дверь, как звук: грузится при первом
+ * показе рекламы, а не с экраном меню, и своей строкой — чтобы рост обёрток
+ * был виден сам по себе. Сами SDK сетей сюда не входят: их скрипты сеть
+ * отдаёт со своих адресов.
+ */
+const ADS = /^ad-shower-.*\.js$/;
 
 /**
  * Первая загрузка — то, что браузер качает до интерактивной главной: скрипт
@@ -88,7 +96,12 @@ function measure() {
     // на этапе 4 вернулся, когда интерфейс забега ушёл своим чанком
     // (docs/27-design-system-and-app-shell.md §3.4). Запас почти нулевой —
     // следующая правка первой загрузки упрётся сюда же, и это по замыслу.
-    { name: "Оболочка, первая загрузка", limitKb: 150, matches: (name) => firstLoad.has(name) },
+    // 150,1 — показ рекламы сетей (WP12, Л10): в первой загрузке от него
+    // только `showAd` с ленивым `import()` чанка обёрток — 60 байт, меньше
+    // не бывает, адаптер площадки едет в первой загрузке целиком. Режим
+    // отладки ушёл из конструктора адаптера в запрос показа (ещё 31 байт
+    // сэкономлен), обёртки SDK — своим чанком со своей строкой ниже.
+    { name: "Оболочка, первая загрузка", limitKb: 150.1, matches: (name) => firstLoad.has(name) },
     { name: "CSS", limitKb: 30, matches: (name) => name.endsWith(".css") },
     {
       // 55: из прежних 60 вынесены инструменты команды (9 КБ), запас игровых
@@ -156,7 +169,7 @@ function measure() {
       name: "Экраны по требованию",
       limitKb: 113.5,
       matches: (name) =>
-        isJs(name) && !firstLoad.has(name) && !ENGINE.test(name) && !AUDIO.test(name) && !TEAM.test(name) && !RUN_UI.test(name),
+        isJs(name) && !firstLoad.has(name) && !ENGINE.test(name) && !AUDIO.test(name) && !TEAM.test(name) && !RUN_UI.test(name) && !ADS.test(name),
     },
     // 12,5, а не 12: управление с клавиатуры на ПК — пауза, выбор улучшения,
     // подсказки клавиш (WP23, +0,6 КБ) — и значок щита бустов (WP8).
@@ -164,6 +177,8 @@ function measure() {
     { name: "Инструменты команды", limitKb: 14, matches: (name) => TEAM.test(name) && !firstLoad.has(name) },
     { name: "Движок и стенд", limitKb: 380, matches: (name) => ENGINE.test(name) },
     { name: "Звук", limitKb: 15, matches: (name) => AUDIO.test(name) && !firstLoad.has(name) },
+    // 2: обёртки четырёх сетей — 1,7 КБ; запас на пятую сеть или задания сетей.
+    { name: "Реклама сетей", limitKb: 2, matches: (name) => ADS.test(name) && !firstLoad.has(name) },
     {
       // woff2 уже сжат, gzip его не уменьшает. Браузер качает подмножество,
       // только встретив его символы, но русскому интерфейсу нужны оба:

@@ -1,5 +1,7 @@
 import { hapticFeedback, invoice, isTMA, openLink, openTelegramLink, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
 import type {
+  AdShowOutcome,
+  AdShowRequest,
   PlatformAdapter,
   PlatformClientInfo,
   UserContext,
@@ -8,7 +10,6 @@ import type {
   InvitePayload,
   InviteResult,
   HapticType,
-  AdResult,
   DisplayUser,
   KeyValueStorage,
   PlatformUi,
@@ -26,10 +27,12 @@ import { createTelegramUi } from "./ui-telegram";
  * Оплата — обязательно Telegram Stars для цифровых товаров, см.
  * docs/01-tech-stack.md §5 и docs/08-web-and-identity.md §6 (важное
  * ограничение — TON/Gram/USDT НЕ заменяют Stars внутри Mini App).
- * Реклама — несколько провайдеров с fallback-цепочкой + SocialLead
- * (пассивные баннеры/промо-посты/квесты), см. docs/07-monetization-and-ads.md.
+ * Реклама — SDK сетей AdsGram, AdSonar, RichAds и Taddy по выдаче сервера
+ * (`ads/`), цепочку сетей ведёт сервер; пассивные баннеры и промо-посты
+ * SocialLead — отдельно, см. docs/07-monetization-and-ads.md.
  */
 export class TelegramAdapter implements PlatformAdapter {
+
   /** локальный рекорд, настройки и installId — docs/27-design-system-and-app-shell.md §7 */
   readonly storage: KeyValueStorage = createDeviceStorage();
 
@@ -149,9 +152,15 @@ export class TelegramAdapter implements PlatformAdapter {
     if (!call.ok) vibrateFallback(type);
   }
 
-  async showAd(): Promise<AdResult> {
-    // TODO: fallback-цепочка нескольких провайдеров, см. docs/07-monetization-and-ads.md §2
-    return { shown: false, rewarded: false };
+  /**
+   * Показ рекламы сети, которую выбрал сервер (`ads/ad-shower.ts`): скрипт
+   * сети — при первом показе, два показа разом невозможны, исход — всегда.
+   * Цепочку сетей ведёт сервер: на отказ он выдаёт следующую.
+   */
+  async showAd(request: AdShowRequest): Promise<AdShowOutcome> {
+    // Обёртки SDK — отдельным чанком при первом показе: первой загрузке
+    // реклама не нужна, а её бюджет на счету (docs/27-design-system-and-app-shell.md §3.4).
+    return (await import("./ads/ad-shower")).showInBrowser(request);
   }
 }
 

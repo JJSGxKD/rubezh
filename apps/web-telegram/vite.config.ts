@@ -76,6 +76,8 @@ export default defineConfig(({ mode, command }) => {
     tunnelHostVar: "DEV_TUNNEL_TELEGRAM_HOST",
     proxy: apiProxy,
     graspil,
+    // Реклама сетей показывается только в Telegram (packages/adapter-telegram/src/ads).
+    ads: true,
   });
 
   return {
@@ -89,7 +91,7 @@ export default defineConfig(({ mode, command }) => {
       react(),
       tailwindcss(),
       stableDevSession(),
-      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim(), graspil })),
+      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim(), graspil, ads: true })),
     ],
     base: "./",
     envDir: repoRoot,

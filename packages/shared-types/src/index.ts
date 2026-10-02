@@ -42,10 +42,44 @@ export type HapticType =
   | "warning"
   | "error";
 
-export interface AdResult {
-  shown: boolean;
-  rewarded: boolean;
+/**
+ * Что показать — ровно то, что выдал сервер (docs/35-stage4-plan.md WP12,
+ * «Стык с клиентом»). Адаптер знает сети и их SDK, но не места и не
+ * награды: какую сеть и блок показать, решил сервер, награду выдаёт хозяин
+ * места по сессии показа.
+ */
+export interface AdShowRequest {
+  /** сеть из выдачи сервера: `adsgram`, `adsonar`, `richads`, `taddy` */
+  network: string;
+  /** блок в кабинете сети; `null` — показ по ключам сети */
+  blockId: string | null;
+  format: "rewarded" | "interstitial" | "task";
+  /** публичные ключи сети — `pubId`, `appId`: их ждёт SDK */
+  keys: Readonly<Record<string, string>>;
+  /**
+   * Тестовые показы сети. Решает сервер, а не сборка: в боевом режиме
+   * показы в отладке не засчитываются и выплат нет
+   * (docs/33-telegram-mini-app-pitfalls.md §6), а включить их на время
+   * проверки команда должна без релиза.
+   */
+  debug?: boolean;
 }
+
+/**
+ * Почему показа не было — кодом для воронки (`/ads/sessions/{id}/result`):
+ * `no_fill` — у сети нет рекламы для игрока, это не поломка; `busy` — уже
+ * идёт другой показ; `unsupported` — сеть или формат адаптеру незнакомы;
+ * `misconfigured` — у сети нет нужного ключа; `load_failed` — скрипт сети
+ * не загрузился; `timeout` — SDK не ответил.
+ */
+export type AdFailureReason = "no_fill" | "sdk_error" | "load_failed" | "timeout" | "busy" | "unsupported" | "misconfigured";
+
+/**
+ * Чем кончился показ: `completed` — SDK подтвердил досмотр (у межстраничной
+ * — показ), `closed` — игрок закрыл раньше, без награды и без повтора,
+ * `failed` — показа не было, и сервер может предложить следующую сеть.
+ */
+export type AdShowOutcome = { kind: "completed" } | { kind: "closed" } | { kind: "failed"; reason: AdFailureReason };
 
 /**
  * Единый интерфейс платформенного адаптера.
@@ -102,8 +136,12 @@ export interface PlatformAdapter {
    * этапа 3 этого не происходит вовсе (docs/08-web-and-identity.md §4).
    */
   displayUser: DisplayUser | null;
-  /** опционально — не везде доступно, см. docs/01-tech-stack.md §6 */
-  showAd?(): Promise<AdResult>;
+  /**
+   * Показ рекламы сети. Нет метода — площадка рекламу сетей не показывает:
+   * оболочка не рисует кнопку «за рекламу», а VIP получает награду без
+   * ролика с сервера и без адаптера (docs/01-tech-stack.md §6).
+   */
+  showAd?(request: AdShowRequest): Promise<AdShowOutcome>;
   /** опционально — площадка может не дать хранилища, см. KeyValueStorage */
   storage?: KeyValueStorage;
 }

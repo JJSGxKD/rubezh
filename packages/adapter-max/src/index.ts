@@ -6,7 +6,6 @@ import type {
   InvitePayload,
   InviteResult,
   HapticType,
-  AdResult,
   DisplayUser,
   PlatformUi,
 } from "@bh/shared-types";
@@ -18,10 +17,10 @@ import type {
  * Оплата — СБП/VK Pay через нативный платёжный API MAX, прямые рубли:
  * появится как `openInvoice`, а до тех пор метода нет, и оболочка покупку
  * здесь не предлагает.
- * Реклама — нет нативного rewarded-SDK; showAd() значим только при
- * активном антирекламном пакете (мгновенная выдача без ролика) — см.
- * docs/07-monetization-and-ads.md §3. Пассивный доход с баннеров/промо-постов
- * через SocialLead — отдельно, не через этот метод.
+ * Реклама — нет нативного rewarded-SDK, поэтому и `showAd` нет: оболочка не
+ * рисует кнопок «за рекламу», а VIP получает награду места без ролика прямо
+ * с сервера (docs/07-monetization-and-ads.md §3). Пассивный доход с
+ * баннеров и промо-постов через SocialLead — отдельно, не через адаптер.
  */
 export class MaxAdapter implements PlatformAdapter {
   /**
@@ -61,10 +60,4 @@ export class MaxAdapter implements PlatformAdapter {
     // TODO: MAX Bridge haptics, если доступно
   }
 
-  async showAd(): Promise<AdResult> {
-    // Кнопка видна ТОЛЬКО если куплен антирекламный пакет — см.
-    // docs/07-monetization-and-ads.md §3 за полным обоснованием.
-    // Без пакета кнопка вообще не рендерится в UI, сюда не доходит.
-    return { shown: true, rewarded: true };
-  }
 }
