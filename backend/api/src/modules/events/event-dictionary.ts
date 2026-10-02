@@ -223,15 +223,17 @@ export const EVENT_DICTIONARY = {
   // лежат в ad_session — там исход и код отказа; события добавляют то, чего
   // таблица не знает: устройство из конверта и сколько игрок ждал.
   // ad_shown — ролик дошёл до игрока: досмотрел (`completed`) или закрыл
-  // раньше; `ms` — от нажатия до исхода.
-  ad_shown: { version: 1, payload: payload({ place: id, network: id, completed: z.boolean(), ms: seconds }) },
+  // раньше; `ms` — от нажатия до исхода. `moment` — когда показана
+  // межстраничная (WP12 ч.10): `run_start` — при старте забега.
+  ad_shown: { version: 1, payload: payload({ place: id, network: id, completed: z.boolean(), ms: seconds, moment: id.optional() }) },
   // Сеть не показала: нет рекламы, скрипт не загрузился, SDK сломался или
-  // замолчал. `attempt` — какая по счёту сеть в этом нажатии: доля вторых —
-  // как часто основная сеть подводит (docs/22 §5.5).
-  ad_failed: { version: 1, payload: payload({ place: id, network: id, reason: id, attempt: count, ms: seconds }) },
+  // замолчал, а межстраничная — не успела к старту забега (`late`).
+  // `attempt` — какая по счёту сеть в этом нажатии: доля вторых — как часто
+  // основная сеть подводит (docs/22 §5.5).
+  ad_failed: { version: 1, payload: payload({ place: id, network: id, reason: id, attempt: count, ms: seconds, moment: id.optional() }) },
   // Игрок открыл объявление нашего рекламного блока (Р78): у креатива сети с
   // API клик впервые виден нам самим, а не только в кабинете сети.
-  ad_clicked: { version: 1, payload: payload({ place: id, network: id }) },
+  ad_clicked: { version: 1, payload: payload({ place: id, network: id, moment: id.optional() }) },
   // Хозяин места выдал награду за рекламу: `ad` — за досмотр, `pass` — VIP
   // без ролика. Досмотр без этого события — награда, потерянная по дороге.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]) }) },

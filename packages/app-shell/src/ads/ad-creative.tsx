@@ -31,10 +31,19 @@ export interface CreativeShow {
   viewSec: number;
   /** за награду: закрыть раньше — значит уйти без неё */
   rewarded: boolean;
+  /**
+   * Сколько блок может готовиться — грузить картинки, мс. Задан, когда
+   * показа ждёт старт забега: не успела картинка — блок без неё, если есть
+   * заголовок; срок вышел ещё до картинок — отказ `late`.
+   */
+  readyWithinMs?: number;
 }
 
-/** Чем кончился показ: досмотрен, закрыт раньше, не показан — картинка не загрузилась. */
-export type CreativeResult = { kind: "completed" } | { kind: "closed" } | { kind: "failed"; reason: "load_failed" };
+/**
+ * Чем кончился показ: досмотрен, закрыт раньше, не показан — картинка или
+ * чанк блока не загрузились (`load_failed`) или не успели к сроку (`late`).
+ */
+export type CreativeResult = { kind: "completed" } | { kind: "closed" } | { kind: "failed"; reason: "load_failed" | "late" };
 
 export interface CreativeHooks {
   /** блок на экране — сервер сообщает сети показ */
@@ -84,7 +93,10 @@ export async function readyCreative(ad: AdCreative, preload: (url: string) => Pr
  * экраном и забегом; стили и токены — общие, стек «Назад» — тоже.
  */
 export async function showCreative(show: CreativeShow, hooks: CreativeHooks): Promise<CreativeResult> {
-  const ad = await readyCreative(show.ad);
+  const within = show.readyWithinMs;
+  if (within !== undefined && within <= 0) return { kind: "failed", reason: "late" };
+  const imageTimeoutMs = within === undefined ? IMAGE_TIMEOUT_MS : Math.min(IMAGE_TIMEOUT_MS, within);
+  const ad = await readyCreative(show.ad, async (url) => await preloadImage(url, imageTimeoutMs));
   if (ad === null) return { kind: "failed", reason: "load_failed" };
   return await new Promise<CreativeResult>((resolve) => {
     const host = document.createElement("div");

@@ -67,6 +67,14 @@ export interface BoughtBoosts {
 /** Что знает о забеге сам экран; продолжать или начинать — решает стор. */
 export type RunEntryOptions = Omit<RunStartOptions, "resume">;
 
+/**
+ * Что показать перед новым забегом игрока — межстраничную рекламу
+ * (docs/35-stage4-plan.md WP12, часть 10). Её отдаёт экран забега: так
+ * первая загрузка, где живёт стор, не платит за дорогу к рекламе. `null` —
+ * ждать нечего, забег стартует сразу; `alive` — забег ещё ждут.
+ */
+export type BeforeNewRun = (alive: () => boolean) => Promise<"shown" | "skipped"> | null;
+
 export interface RunStartOptions {
   container: HTMLElement;
   startingWeaponId: string;
@@ -78,6 +86,8 @@ export interface RunStartOptions {
   resume?: RunSnapshot;
   /** бусты, купленные на этот забег; у продолженного — свои из снимка */
   boosts?: BoughtBoosts;
+  /** межстраничная перед «Играть» и «Ещё раз»; нет — забег без неё */
+  beforeNewRun?: BeforeNewRun;
 }
 
 /**
@@ -107,6 +117,8 @@ export interface RunStore {
   devInfo: RunDevInfo | null;
   /** сколько продолжений ещё можно взять — на экране смерти */
   continuesLeft: number;
+  /** «Ещё раз» нажато: новый забег ждёт межстраничную — не дольше двух секунд до её показа */
+  restarting: boolean;
 
   start(options: RunStartOptions): Promise<void>;
   pause(reason: RunPauseReason): void;
@@ -193,6 +205,7 @@ const IDLE = {
   devRun: false,
   devInfo: null as RunDevInfo | null,
   continuesLeft: 0,
+  restarting: false,
 };
 
 export const useRun = create<RunStore>((set, get) => ({
@@ -245,7 +258,14 @@ export const useRun = create<RunStore>((set, get) => ({
       // (docs/27-design-system-and-app-shell.md §3.4).
       // Снимок снаряжения — своим чанком, параллельно с движком. Не
       // загрузился — забег идёт без снаряжения, а не падает целиком.
-      const [engine, loadouts] = await Promise.all([loadRunEngine(), import("./run-loadouts").catch(() => null)]);
+      // Межстраничная — новому забегу игрока и тоже параллельно с движком
+      // (docs/35-stage4-plan.md WP12, часть 10): продолженный забег и забег
+      // разработчика её не ждут.
+      const playerRun = resume === undefined && !(devModeAllowed() && useDevMode.getState().armed);
+      const ad = (playerRun ? options.beforeNewRun?.(() => token === startToken) : null) ?? "skipped";
+      const [engine, loadouts, adResult] = await Promise.all([loadRunEngine(), import("./run-loadouts").catch(() => null), ad]);
+      // Время до первого кадра с рекламой посередине — уже не время загрузки: такой замер не пишем.
+      if (adResult === "shown") firstFrameStartedAt = null;
       // Пока грузился чанк, нас могли остановить или запустить заново. Игру
       // в этом случае не создаём вовсе: лишний контекст WebGL дороже всего.
       if (token !== startToken) {
@@ -390,11 +410,25 @@ export const useRun = create<RunStore>((set, get) => ({
   },
 
   restart(): void {
-    if (session === null) return;
+    if (session === null || get().restarting) return;
     // «Ещё раз» с экрана смерти — отказ от второго шанса: забег закрывается
     // смертью раньше, чем начнётся следующий.
     if (get().phase === "downed") session.declineContinue();
-    restartSession(set, get);
+    // Межстраничная — до нового забега, пока на экране итог прошлого
+    // (docs/35-stage4-plan.md WP12, часть 10). Ушли в меню, пока её ждали, —
+    // нового забега нет: экран забега уже разобран.
+    const token = startToken;
+    const ad = get().devRun ? null : (startOptions?.beforeNewRun?.(() => token === startToken) ?? null);
+    if (ad === null) {
+      restartSession(set, get);
+      return;
+    }
+    set({ restarting: true });
+    void ad.then(() => {
+      if (token !== startToken || session === null) return;
+      set({ restarting: false });
+      restartSession(set, get);
+    });
   },
 
   inspect(): RunInspection | null {
