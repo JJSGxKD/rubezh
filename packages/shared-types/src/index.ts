@@ -63,6 +63,13 @@ export interface AdShowRequest {
    * проверки команда должна без релиза.
    */
   debug?: boolean;
+  /**
+   * Сколько показ может готовиться — грузить скрипт сети, — мс. Задан, когда
+   * показа ждёт старт забега (межстраничная, docs/35-stage4-plan.md WP12,
+   * часть 10): не успел — отказ `late`, а скрипт догружается для следующего
+   * показа. Не задан — ждём, сколько нужно.
+   */
+  readyWithinMs?: number;
 }
 
 /**
@@ -70,9 +77,10 @@ export interface AdShowRequest {
  * `no_fill` — у сети нет рекламы для игрока, это не поломка; `busy` — уже
  * идёт другой показ; `unsupported` — сеть или формат адаптеру незнакомы;
  * `misconfigured` — у сети нет нужного ключа; `load_failed` — скрипт сети
- * не загрузился; `timeout` — SDK не ответил.
+ * не загрузился; `timeout` — SDK не ответил; `late` — показ не успел к своему
+ * сроку (`readyWithinMs`), и забег начался без него.
  */
-export type AdFailureReason = "no_fill" | "sdk_error" | "load_failed" | "timeout" | "busy" | "unsupported" | "misconfigured";
+export type AdFailureReason = "no_fill" | "sdk_error" | "load_failed" | "timeout" | "busy" | "unsupported" | "misconfigured" | "late";
 
 /**
  * Чем кончился показ: `completed` — SDK подтвердил досмотр (у межстраничной
