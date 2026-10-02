@@ -16,9 +16,20 @@ import { isChatTarget } from "../../platforms/ports/chat-target.js";
  * значение видно всем, у кого есть право `settings.edit`.
  */
 
-export type SettingValue = string | boolean;
+export type SettingValue = string | boolean | number;
 
-export type SettingKind = "chat" | "boolean" | "url";
+export type SettingKind = "chat" | "boolean" | "url" | "number";
+
+/**
+ * Пределы числа и в чём оно — для редактора панели: поле не даст ввести
+ * лишнего, а значение читается словами — «3 минуты», «5 забегов». Формы —
+ * для одного, двух и пяти.
+ */
+export interface SettingRange {
+  readonly min: number;
+  readonly max: number;
+  readonly unit: readonly [string, string, string];
+}
 
 export interface SettingDefinition<T extends SettingValue = SettingValue> {
   /** `notify.chat.general` — латиница, точки, дефисы */
@@ -31,6 +42,8 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
   /** какой редактор показать в панели */
   readonly kind: SettingKind;
   readonly schema: z.ZodType<T>;
+  /** пределы и единица числа; у остальных видов нет */
+  readonly range?: SettingRange;
   /** значение из окружения; `null` — в окружении не задано */
   readonly fromEnv: (config: AppConfig) => T | null;
   readonly fallback: T;
@@ -74,6 +87,20 @@ const urlSchema = z
 const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
+
+/**
+ * Целое число в пределах — схема и пределы из одного места: панель
+ * проверит то же самое, что сервер. Без окружения: такие числа — продуктовые
+ * решения, их правят в панели, а не в `.env` сервера.
+ */
+function integer(key: string, group: string, title: string, hint: string, range: SettingRange, fallback: number): SettingDefinition<number> {
+  const schema = z
+    .number()
+    .int({ message: "целое число" })
+    .min(range.min, { message: `не меньше ${String(range.min)}` })
+    .max(range.max, { message: `не больше ${String(range.max)}` });
+  return { key, group, title, hint, kind: "number", schema, range, fromEnv: () => null, fallback };
+}
 
 /**
  * Выключатель функции без своего ключа (§3.18): у входа ключ есть, и он
@@ -175,6 +202,60 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: false,
   } satisfies SettingDefinition<boolean>,
+  /**
+   * Частота межстраничной (docs/35-stage4-plan.md WP12, часть 10, О18):
+   * когда её показывать, решает политика площадки
+   * (`ads/interstitial-policy.ts`), а как часто — эти числа. Рабочие числа:
+   * их уточнит выкат на долю игроков.
+   */
+  interstitialEveryRuns: integer(
+    "ads.interstitial.every-runs",
+    ADS_GROUP,
+    "Межстраничная: каждые N забегов",
+    "При старте забега, перед каждым N-м. Считаются забеги не короче минуты. Показ — только у доли игроков флага ads.interstitial в разделе «Флаги» и никогда у VIP",
+    { min: 1, max: 20, unit: ["забег", "забега", "забегов"] },
+    3,
+  ),
+  interstitialGapMin: integer(
+    "ads.interstitial.gap-min",
+    ADS_GROUP,
+    "Межстраничная: пауза между показами",
+    "Не чаще этого, даже если забеги короткие",
+    { min: 1, max: 240, unit: ["минута", "минуты", "минут"] },
+    3,
+  ),
+  interstitialNewbieRuns: integer(
+    "ads.interstitial.newbie-runs",
+    ADS_GROUP,
+    "Межстраничная: новичок без неё — забегов",
+    "Сколько первых забегов не короче минуты игрок играет без неё. Новичок — пока не прошли и забеги, и дни. 0 — без ограничения по забегам",
+    { min: 0, max: 100, unit: ["забег", "забега", "забегов"] },
+    5,
+  ),
+  interstitialNewbieDays: integer(
+    "ads.interstitial.newbie-days",
+    ADS_GROUP,
+    "Межстраничная: новичок без неё — дней",
+    "Сколько игровых суток с первого входа игрок её не видит: 1 — не в день первого входа. Сутки — по Москве, как у заданий. 0 — без ограничения по дням",
+    { min: 0, max: 30, unit: ["день", "дня", "дней"] },
+    1,
+  ),
+  interstitialAfterPurchaseHours: integer(
+    "ads.interstitial.after-purchase-hours",
+    ADS_GROUP,
+    "Межстраничная: пауза после покупки",
+    "Заплативший звёздами столько её не видит. 0 — без паузы",
+    { min: 0, max: 720, unit: ["час", "часа", "часов"] },
+    24,
+  ),
+  interstitialAfterRewardMin: integer(
+    "ads.interstitial.after-reward-min",
+    ADS_GROUP,
+    "Межстраничная: пауза после ролика за награду",
+    "Игрок только что сам смотрел рекламу — колесо, удвоение, второй шанс. 0 — без паузы",
+    { min: 0, max: 240, unit: ["минута", "минуты", "минут"] },
+    10,
+  ),
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",

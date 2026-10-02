@@ -11,6 +11,7 @@ import { useNavigation } from "../../state/navigation";
 import { canOfferPaidContinue } from "../../state/payments-availability";
 import { usePlatform } from "../../state/platform";
 import { useRuns } from "../../state/runs";
+import { interstitialBeforeNewRun } from "../../state/interstitial-gate";
 import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
@@ -73,6 +74,7 @@ export function RunScreen(): ReactNode {
       startingWeaponId: resume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
       mapId: resume?.mapId ?? DEFAULT_MAP_ID,
       difficultyId: resume?.difficultyId ?? useMeta.getState().lastDifficultyId,
+      beforeNewRun: interstitialBeforeNewRun,
     });
 
     // Уход с экрана уносит с собой и движок: чанк остаётся загруженным, а
@@ -160,6 +162,7 @@ export function RunScreen(): ReactNode {
           cheatsCounted={run.devRun && countInRating}
           {...(run.phase === "downed" ? { secondChance: secondChanceFor(run.result, run.devRun) } : {})}
           showReward={run.phase === "finished"}
+          restarting={run.restarting}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
           onShare={() => shareRun()}

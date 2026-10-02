@@ -10,12 +10,13 @@ import { AD_CREATIVES, type AdCreative, type AdCreativeSource, type AdRequester 
 import { AdNetworkKeys } from "./ad-network-keys.js";
 import { AdPasses } from "./ads-passes.js";
 import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
+import { InterstitialGate, type InterstitialRefusal } from "./interstitial-gate.js";
+import type { InterstitialMoment } from "./interstitial-policy.js";
 import {
   CLAIM_WINDOW_MIN,
   PLACE_RULES,
   SESSION_TTL_MIN,
   networkOrder,
-  nextAllowedAt,
   nextRewardAt,
   placeState,
   type AdDevice,
@@ -50,12 +51,21 @@ import {
  * Сеть с API (Taddy, Р78) отдаёт креатив серверу ещё при выдаче: нет
  * креатива — выдача тут же идёт к следующей сети, а игрок не ждёт отказа
  * клиента. Показ и досмотр такого креатива сервер сообщает сети сам.
+ *
+ * Межстраничную выдача даёт только по её политике — площадка, флаг выката,
+ * частота (`interstitial-gate.ts`, WP12 ч.10).
  */
 
 const DB_TIMEOUT_MS = 3_000;
 /** Блоки меняются из панели редко, а спрашиваются на каждый показ. */
 const BLOCKS_TTL_MS = 30_000;
 const MINUTE_MS = 60_000;
+/**
+ * Межстраничную ждёт старт забега — клиент даёт на всё две секунды
+ * (WP12 ч.10). Креатив сети с API ждём меньше, чтобы ответ успел и с
+ * переходом к следующей сети.
+ */
+export const INTERSTITIAL_CREATIVE_TIMEOUT_MS = 1_200;
 
 /** Бросок: целое от нуля до `bound`, не включая. В тестах — предсказуемый. */
 export type AdsRoll = (bound: number) => number;
@@ -101,9 +111,10 @@ export type AdOffer =
     }
   /**
    * `no_fill` — ни одного подходящего блока; `cooldown` — место отдыхает до
-   * `retryAt`; `pass` — рекламы без награды игроку с пропуском не показывают.
+   * `retryAt`; `pass` — рекламы без награды игроку с пропуском не показывают;
+   * `policy` — межстраничной сейчас не время: новичок, пауза, не N-й забег.
    */
-  | { available: false; reason: "no_fill" | "cooldown" | "pass"; retryAt: string | null };
+  | { available: false; reason: "no_fill" | "cooldown" | "pass" | "policy"; retryAt: string | null };
 
 export interface AdReadiness {
   available: boolean;
@@ -125,15 +136,21 @@ export class AdsService {
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
     @Inject(AD_CREATIVES) private readonly creatives: AdCreativeSource,
     private readonly keys: AdNetworkKeys,
+    private readonly interstitials: InterstitialGate,
   ) {}
 
-  async offer(viewer: AdViewer, place: AdPlace, at = new Date()): Promise<AdOffer> {
+  /** `moment` — когда клиент просит межстраничную; у других мест не нужен. */
+  async offer(viewer: AdViewer, place: AdPlace, at = new Date(), moment: InterstitialMoment = "run_start"): Promise<AdOffer> {
     const [history, pass] = await Promise.all([this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
     if (pass !== null && !PLACE_RULES[place].rewarded) return this.unavailable(viewer, place, "pass", null);
     const state = placeState(history.sessions, history.dayStart, at);
-    const retryAt = nextAllowedAt(place, state, at);
+    const retryAt = nextRewardAt(place, state, at);
     if (retryAt !== null) return this.unavailable(viewer, place, "cooldown", retryAt);
     if (pass !== null) return await this.passOffer(viewer, place, pass, at);
+    if (place === "interstitial") {
+      const refusal = await this.interstitials.refusal(viewer, moment, at);
+      if (refusal !== null) return this.refused(viewer, moment, refusal);
+    }
 
     const blocks = eligibleBlocks(await this.blocks(), place, viewer);
     for (const network of networkOrder(networksOf(blocks), state.seenAt, state.lastRewardedToday)) {
@@ -145,7 +162,8 @@ export class AdsService {
       const session = this.newSession(viewer, place, block, at);
       if (!viaApi(block, place)) return await this.open(session, null);
 
-      const fetched = await this.creatives.fetch(block.networkKey, block.networkKeys, viewer.requester ?? null);
+      const timeoutMs = place === "interstitial" ? INTERSTITIAL_CREATIVE_TIMEOUT_MS : undefined;
+      const fetched = await this.creatives.fetch(block.networkKey, block.networkKeys, viewer.requester ?? null, timeoutMs);
       if (fetched.kind === "creative") {
         const viewSec = CREATIVE_VIEW_SEC[PLACE_FORMAT[place] === "interstitial" ? "interstitial" : "rewarded"];
         return await this.open({ ...session, creative: { id: fetched.creative.id, viewSec } }, { ad: fetched.creative, viewSec });
@@ -249,7 +267,7 @@ export class AdsService {
     const [blocks, history, held] = await Promise.all([this.blocks(), this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
     const pass = PLACE_RULES[place].rewarded ? held : null;
     const available = pass !== null || blocks.some((block) => block.place === place && servable(block) && blockReaches(block, viewer.platform));
-    return { available, readyAt: nextAllowedAt(place, placeState(history.sessions, history.dayStart, at), at), pass };
+    return { available, readyAt: nextRewardAt(place, placeState(history.sessions, history.dayStart, at), at), pass };
   }
 
   /** Сеть или блок поменяли в панели — следующий показ берёт свежие. */
@@ -269,6 +287,12 @@ export class AdsService {
   private unavailable(viewer: AdViewer, place: AdPlace, reason: "no_fill" | "cooldown" | "pass", retryAt: Date | null): AdOffer {
     this.log({ event: "ad_unavailable", accountId: viewer.accountId, place, reason });
     return { available: false, reason, retryAt: retryAt?.toISOString() ?? null };
+  }
+
+  /** Межстраничной не время. Правило — только в лог: клиенту довольно «нет», а новичку незачем знать, что он новичок. */
+  private refused(viewer: AdViewer, moment: InterstitialMoment, rule: InterstitialRefusal): AdOffer {
+    this.log({ event: "ad_unavailable", accountId: viewer.accountId, place: "interstitial", reason: "policy", rule, moment });
+    return { available: false, reason: "policy", retryAt: null };
   }
 
   private log(fields: Record<string, unknown>): void {

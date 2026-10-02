@@ -36,21 +36,21 @@ export interface PlaceRules {
    * ограничен числом продолжений в забеге).
    */
   cooldown: { baseMin: number; factor: number; capMin: number } | null;
-  /** Межстраничная: не чаще раза в столько минут — полноэкранная подряд раздражает. */
-  minGapMin: number;
 }
 
 /**
  * **Рабочие числа (Р31)**, О27 решит окончательно. Колесо за рекламу — раз в
  * два часа, дальше реже, до шести (Р44: кулдаун у всех, VIP пропускает только
  * ролик). Удвоение за забег — после каждого забега, но всё реже к вечеру.
+ * Как часто показывать межстраничную, решает её политика
+ * (`interstitial-policy.ts`) числами из панели.
  */
 export const PLACE_RULES: Record<AdPlace, PlaceRules> = {
-  second_chance: { rewarded: true, cooldown: null, minGapMin: 0 },
-  wheel_spin: { rewarded: true, cooldown: { baseMin: 120, factor: 1.5, capMin: 360 }, minGapMin: 0 },
-  run_double: { rewarded: true, cooldown: { baseMin: 5, factor: 1.5, capMin: 60 }, minGapMin: 0 },
-  task: { rewarded: true, cooldown: null, minGapMin: 0 },
-  interstitial: { rewarded: false, cooldown: null, minGapMin: 3 },
+  second_chance: { rewarded: true, cooldown: null },
+  wheel_spin: { rewarded: true, cooldown: { baseMin: 120, factor: 1.5, capMin: 360 } },
+  run_double: { rewarded: true, cooldown: { baseMin: 5, factor: 1.5, capMin: 60 } },
+  task: { rewarded: true, cooldown: null },
+  interstitial: { rewarded: false, cooldown: null },
 };
 
 /**
@@ -107,7 +107,6 @@ export interface PlaceState {
   lastReward: { at: Date; ordinal: number } | null;
   /** сеть последней награды этих суток — от неё идёт круг */
   lastRewardedToday: string | null;
-  lastShownAt: Date | null;
   /** сеть → когда её в последний раз выдавали в этом месте за паузу, мс */
   seenAt: Map<string, number>;
 }
@@ -126,14 +125,12 @@ export function placeState(sessions: readonly PlaceHistoryEntry[], dayStart: Dat
   const yesterday = today - DAY_MS;
   const pauseFrom = now.getTime() - NETWORK_PAUSE_MIN * MINUTE_MS;
   let last: { at: Date; networkKey: string } | null = null;
-  let lastShownAt: Date | null = null;
   let rewardsToday = 0;
   let rewardsYesterday = 0;
   const seenAt = new Map<string, number>();
   for (const session of sessions) {
     const created = session.createdAt.getTime();
     if (created > pauseFrom) seenAt.set(session.networkKey, Math.max(created, seenAt.get(session.networkKey) ?? 0));
-    if (session.shownAt !== null && (lastShownAt === null || session.shownAt > lastShownAt)) lastShownAt = session.shownAt;
     if (session.claimedAt === null) continue;
     const claimed = session.claimedAt.getTime();
     if (claimed >= today) rewardsToday++;
@@ -144,7 +141,6 @@ export function placeState(sessions: readonly PlaceHistoryEntry[], dayStart: Dat
   return {
     lastReward: last === null ? null : { at: last.at, ordinal: lastToday ? rewardsToday : rewardsYesterday },
     lastRewardedToday: lastToday && last !== null ? last.networkKey : null,
-    lastShownAt,
     seenAt,
   };
 }
@@ -153,15 +149,6 @@ export function placeState(sessions: readonly PlaceHistoryEntry[], dayStart: Dat
 export function nextRewardAt(place: AdPlace, state: PlaceState, now: Date): Date | null {
   if (state.lastReward === null) return null;
   const at = state.lastReward.at.getTime() + cooldownMinutes(PLACE_RULES[place].cooldown, state.lastReward.ordinal) * MINUTE_MS;
-  return at > now.getTime() ? new Date(at) : null;
-}
-
-/** Когда в месте снова можно предложить рекламу: после кулдауна награды и промежутка показов; `null` — уже можно. */
-export function nextAllowedAt(place: AdPlace, state: PlaceState, now: Date): Date | null {
-  const gap = PLACE_RULES[place].minGapMin;
-  const candidates = [nextRewardAt(place, state, now)?.getTime() ?? 0];
-  if (state.lastShownAt !== null && gap > 0) candidates.push(state.lastShownAt.getTime() + gap * MINUTE_MS);
-  const at = Math.max(...candidates);
   return at > now.getTime() ? new Date(at) : null;
 }
 

@@ -1,7 +1,18 @@
 import type { AdFailureReason, AdShowOutcome, AdShowRequest } from "@bh/shared-types";
 import type { CreativeHooks, CreativeResult, CreativeShow } from "../ads/ad-creative";
 import { audio } from "../audio";
-import { AD_COOLDOWN, adDeviceOf, createAdsApi, passSession, type AdCreativeOffer, type AdOffer, type AdPlace, type AdViewerHints, type AdsApi } from "./ads-api";
+import {
+  AD_COOLDOWN,
+  adDeviceOf,
+  createAdsApi,
+  passSession,
+  type AdCreativeOffer,
+  type AdOffer,
+  type AdPlace,
+  type AdViewerHints,
+  type AdsApi,
+  type InterstitialMoment,
+} from "./ads-api";
 import type { AnalyticsEvent, AnalyticsPayload } from "./analytics";
 import { usePlatform } from "./platform";
 import { track, useShell } from "./shell";
@@ -100,7 +111,7 @@ export async function watchAd(place: AdPlace, deps: AdWatchDeps = browserDeps())
     const request = requestOf(offer);
     const outcome: AdShowOutcome =
       creative !== null
-        ? await showCreativeOffer(offer, creative, place, deps)
+        ? await showCreativeOffer(offer, creative, { place, network: offer.network }, deps)
         : request === null || show === undefined
           ? { kind: "failed", reason: "unsupported" }
           : await deps.mute(() => show(request));
@@ -124,20 +135,35 @@ export async function watchAd(place: AdPlace, deps: AdWatchDeps = browserDeps())
   return NO_ADS.has(lastReason) ? { kind: "no_ads" } : { kind: "failed" };
 }
 
+/** Чем помечены события показа: место и сеть, а у межстраничной — ещё и момент. */
+export interface AdTrackFields {
+  place: AdPlace;
+  network: string;
+  moment?: InterstitialMoment;
+}
+
 /**
  * Объявление нашим блоком. Показ и клик — шагами сервера по ходу: сети о
  * них сообщает сервер. За награду — всё, кроме межстраничной.
+ * `readyWithinMs` — срок на подготовку, когда показа ждёт старт забега.
  */
-async function showCreativeOffer(offer: Extract<AdOffer, { available: true }>, creative: AdCreativeOffer, place: AdPlace, deps: AdWatchDeps): Promise<AdShowOutcome> {
+export async function showCreativeOffer(
+  offer: Extract<AdOffer, { available: true }>,
+  creative: AdCreativeOffer,
+  fields: AdTrackFields,
+  deps: AdWatchDeps,
+  readyWithinMs?: number,
+): Promise<AdShowOutcome> {
   const hooks: CreativeHooks = {
     onShown: () => void deps.ads.report(offer.sessionId, { outcome: "shown" }),
     onClick: () => {
-      deps.track("ad_clicked", { place, network: offer.network });
+      deps.track("ad_clicked", { ...fields });
       void deps.ads.report(offer.sessionId, { outcome: "clicked" });
     },
     ...(deps.openLink === undefined ? {} : { openLink: deps.openLink }),
   };
-  const result = await deps.mute(() => deps.showCreative({ ad: creative.ad, viewSec: creative.viewSec, rewarded: offer.format !== "interstitial" }, hooks));
+  const show: CreativeShow = { ad: creative.ad, viewSec: creative.viewSec, rewarded: offer.format !== "interstitial", ...(readyWithinMs === undefined ? {} : { readyWithinMs }) };
+  const result = await deps.mute(() => deps.showCreative(show, hooks));
   return result.kind === "failed" ? { kind: "failed", reason: result.reason } : result;
 }
 
@@ -198,15 +224,24 @@ async function muted<T>(task: () => Promise<T>): Promise<T> {
 /**
  * Блок — своим чанком при первом показе креатива. Чанк не пришёл — показа не
  * было: исход `load_failed` уходит серверу и в `ad_failed`, а выдача — к
- * следующей сети.
+ * следующей сети. Со сроком чанк ждём не дольше него (`late`): загрузка
+ * при этом идёт дальше, и следующий показ получит блок сразу.
  */
-const showCreativeLazily: CreativeShower = async (show, hooks) =>
-  await import("../ads/ad-creative").then(
-    async (module) => await module.showCreative(show, hooks),
-    (): CreativeResult => ({ kind: "failed", reason: "load_failed" }),
+const showCreativeLazily: CreativeShower = async (show, hooks) => {
+  const startedAt = Date.now();
+  const chunk = import("../ads/ad-creative").then(
+    ({ showCreative }) => showCreative,
+    () => null,
   );
+  const within = show.readyWithinMs;
+  const shower = within === undefined ? await chunk : await Promise.race([chunk, new Promise<"late">((resolve) => setTimeout(() => resolve("late"), Math.max(0, within)))]);
+  if (shower === "late") return { kind: "failed", reason: "late" };
+  if (shower === null) return { kind: "failed", reason: "load_failed" };
+  return await shower(within === undefined ? show : { ...show, readyWithinMs: within - (Date.now() - startedAt) }, hooks);
+};
 
-function browserDeps(): AdWatchDeps {
+/** Зависимости показа в настоящем окне — общие у роликов за награду и межстраничной. */
+export function browserDeps(): AdWatchDeps {
   const adapter = useShell.getState().adapter;
   const client = adapter.clientInfo();
   return {

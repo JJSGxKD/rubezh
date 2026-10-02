@@ -13,12 +13,13 @@ import {
   SESSION_TTL_MIN,
   cooldownMinutes,
   networkOrder,
-  nextAllowedAt,
   nextRewardAt,
   placeState,
   type AdPlace,
   type PlaceHistoryEntry,
 } from "../src/modules/ads/ads-rules.js";
+import { InterstitialGate, REWARDED_VIDEO_PLACES } from "../src/modules/ads/interstitial-gate.js";
+import { COUNTED_RUN_SEC, INTERSTITIAL_FLAG, interstitialRule, type InterstitialFacts, type InterstitialNumbers } from "../src/modules/ads/interstitial-policy.js";
 import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdsController } from "../src/modules/ads/ads.controller.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
@@ -28,12 +29,12 @@ import { NetworkCreatives, taddyUser, type AdRequester } from "../src/modules/ad
 import { CREATIVE_VIEW_SEC } from "../src/modules/ads/ad-networks.js";
 import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
 import type { TaddyApi, TaddyUser } from "../src/modules/ads/taddy-api.js";
-import { AdsService, type AdOffer, type AdViewer, type AdsRoll } from "../src/modules/ads/ads.service.js";
+import { AdsService, INTERSTITIAL_CREATIVE_TIMEOUT_MS, type AdOffer, type AdViewer, type AdsRoll } from "../src/modules/ads/ads.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
-import { CREATIVE, FakeCreatives, MemoryAds, adBlock as block, moscowDayStart } from "./helpers/memory-ads.js";
+import { CREATIVE, FakeCreatives, MemoryAds, adBlock as block, flagsOn, interstitialGate, moscowDayStart } from "./helpers/memory-ads.js";
 import { panelSettings } from "./helpers/settings.js";
 
 /**
@@ -61,13 +62,22 @@ function rolls(...values: number[]): AdsRoll {
   return () => values[index++ % values.length] ?? 0;
 }
 
+/** Десяток долгих забегов два дня назад: игрок бывалый, межстраничная ему положена. */
+function veteran(repository: MemoryAds, accountId: string): void {
+  for (let index = 0; index < 10; index++) repository.runs.push({ accountId, finishedAt: at(NOON, -2 * 24 * 60 + index * 10), survivalSec: 300 });
+}
+
 function setup(blocks: AdBlockRow[], roll: AdsRoll = rolls(0)) {
   const repository = new MemoryAds();
   repository.blocks = blocks;
+  // Игроки бывалые и в доле выката: межстраничная им положена, пока тест не скажет иначе.
+  for (const accountId of [ME, OTHER]) veteran(repository, accountId);
   const passes = new AdPasses();
   const settings = panelSettings();
   const creatives = new FakeCreatives();
-  return { repository, passes, settings, creatives, service: new AdsService(repository, roll, passes, settings, creatives, new AdNetworkKeys(repository)) };
+  const flags = flagsOn(INTERSTITIAL_FLAG);
+  const gate = interstitialGate(repository, settings, flags);
+  return { repository, passes, settings, creatives, flags, gate, service: new AdsService(repository, roll, passes, settings, creatives, new AdNetworkKeys(repository), gate) };
 }
 
 function offered(offer: AdOffer): Extract<AdOffer, { available: true }> {
@@ -123,7 +133,6 @@ describe("числа рекламы", () => {
     );
     expect(state.lastReward).toEqual({ at: at(NOON, -198), ordinal: 2 });
     expect(state.lastRewardedToday).toBe("richads");
-    expect(state.lastShownAt).toEqual(at(NOON, -199));
     expect([...state.seenAt.keys()]).toEqual(["taddy"]);
   });
 
@@ -137,15 +146,7 @@ describe("числа рекламы", () => {
     );
     expect(state.lastReward?.ordinal).toBe(3);
     expect(state.lastRewardedToday).toBeNull();
-    expect(nextAllowedAt("wheel_spin", state, at(midnight, 10))).toEqual(at(lateNight, 270));
-  });
-
-  it("межстраничная — не чаще промежутка, но забору награды промежуток не мешает", () => {
-    const state = placeState([entry("adsgram", at(NOON, -2), { shownAt: at(NOON, -2) })], moscowDayStart(NOON), NOON);
-    expect(nextAllowedAt("interstitial", state, NOON)).toEqual(at(NOON, 1));
-    expect(nextAllowedAt("interstitial", state, at(NOON, 1))).toBeNull();
-    expect(nextRewardAt("interstitial", state, NOON)).toBeNull();
-    expect(nextAllowedAt("wheel_spin", state, NOON)).toBeNull();
+    expect(nextRewardAt("wheel_spin", state, at(midnight, 10))).toEqual(at(lateNight, 270));
   });
 
   it("порядок сетей: без истории — по приоритету, круг — от сети последней награды, выданная за час — в конце очереди", () => {
@@ -473,6 +474,127 @@ describe("учёт аудитории сетью (Р78)", () => {
   });
 });
 
+describe("межстраничная по площадкам (WP12, часть 10)", () => {
+  const NUMBERS: InterstitialNumbers = { everyRuns: 3, gapMin: 3, newbieRuns: 5, newbieDays: 1, afterPurchaseHours: 24, afterRewardMin: 10 };
+  /** Бывалый игрок, которому межстраничная положена: каждое правило ниже ломает ровно одно поле. */
+  const READY: InterstitialFacts = { daysSinceSignup: 30, countedRuns: 5, runsSinceShown: 3, lastShownAt: at(NOON, -60), lastPurchaseAt: null, lastRewardedAt: null };
+  const rule = (facts: Partial<InterstitialFacts>, numbers: Partial<InterstitialNumbers> = {}, now = NOON) => interstitialRule({ ...NUMBERS, ...numbers }, { ...READY, ...facts }, now);
+
+  it("каждое правило отдельно — и ровно на своей границе", () => {
+    expect(rule({})).toBeNull();
+    expect(rule({ daysSinceSignup: 0 })).toBe("newbie_days");
+    expect(rule({ daysSinceSignup: 1 })).toBeNull();
+    expect(rule({ countedRuns: 4 })).toBe("newbie_runs");
+    expect(rule({ lastPurchaseAt: at(NOON, -24 * 60 + 1) })).toBe("after_purchase");
+    expect(rule({ lastPurchaseAt: at(NOON, -24 * 60) })).toBeNull();
+    expect(rule({ lastRewardedAt: at(NOON, -9) })).toBe("after_reward");
+    expect(rule({ lastRewardedAt: at(NOON, -10) })).toBeNull();
+    expect(rule({ lastShownAt: at(NOON, -2) })).toBe("gap");
+    expect(rule({ lastShownAt: at(NOON, -3) })).toBeNull();
+    expect(rule({ runsSinceShown: 2 })).toBe("every_runs");
+    // Ни одной межстраничной ещё не было — счёт забегов идёт с первого.
+    expect(rule({ lastShownAt: null, runsSinceShown: 3 })).toBeNull();
+  });
+
+  it("ноль в панели выключает правило, а не держит игрока вечно", () => {
+    expect(rule({ daysSinceSignup: 0, countedRuns: 0, runsSinceShown: 3 }, { newbieDays: 0, newbieRuns: 0 })).toBeNull();
+    expect(rule({ lastPurchaseAt: at(NOON, -1) }, { afterPurchaseHours: 0 })).toBeNull();
+    expect(rule({ lastRewardedAt: at(NOON, -1) }, { afterRewardMin: 0 })).toBeNull();
+  });
+
+  it("новичок — пока не прошли и забеги, и дни; отказ называет то, что держит дольше", () => {
+    expect(rule({ daysSinceSignup: 0, countedRuns: 0 })).toBe("newbie_days");
+    expect(rule({ daysSinceSignup: 3, countedRuns: 0 })).toBe("newbie_runs");
+    expect(rule({ lastPurchaseAt: at(NOON, -1), lastShownAt: at(NOON, -1) })).toBe("after_purchase");
+  });
+
+  function gated(platform: AdViewer["platform"] = "telegram") {
+    const ctx = setup([block("adsgram", 10, { place: "interstitial" })]);
+    return { ...ctx, viewer: { ...TELEGRAM, platform } satisfies AdViewer };
+  }
+
+  it("граница суток — московская: зарегистрировался в 23:50 — в 23:59 ещё новичок, в 00:00 уже нет", async () => {
+    const { service, repository, viewer } = gated();
+    const midnight = moscowDayStart(at(NOON, 24 * 60));
+    repository.signups.set(ME, at(midnight, -10));
+    expect(await service.offer(viewer, "interstitial", at(midnight, -1))).toEqual({ available: false, reason: "policy", retryAt: null });
+    expect(await service.offer(viewer, "interstitial", midnight)).toMatchObject({ available: true, format: "interstitial" });
+  });
+
+  it("забег короче минуты не считается ни новичку, ни в «каждый N-й»", async () => {
+    const { service, repository, viewer } = gated();
+    repository.runs.splice(0);
+    for (let index = 0; index < 10; index++) repository.runs.push({ accountId: ME, finishedAt: at(NOON, -100 + index), survivalSec: COUNTED_RUN_SEC - 1 });
+    expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(false);
+    for (let index = 0; index < 5; index++) repository.runs.push({ accountId: ME, finishedAt: at(NOON, -50 + index), survivalSec: COUNTED_RUN_SEC });
+    expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(true);
+  });
+
+  it("две подряд не бывает: следующая — после N забегов и паузы между показами", async () => {
+    const { service, repository, viewer } = gated();
+    const first = offered(await service.offer(viewer, "interstitial", NOON));
+    await service.report(ME, first.sessionId, { kind: "completed" }, at(NOON, 1));
+    // Полчаса спустя, но ни одного забега с показа — не N-й забег.
+    expect(await service.offer(viewer, "interstitial", at(NOON, 30))).toMatchObject({ available: false, reason: "policy" });
+    // Три минутных забега сразу после показа — но трёх минут с показа ещё нет: держит пауза.
+    for (const minute of [1.5, 2, 2.5]) repository.runs.push({ accountId: ME, finishedAt: at(NOON, minute), survivalSec: COUNTED_RUN_SEC });
+    expect((await service.offer(viewer, "interstitial", at(NOON, 3.5))).available).toBe(false);
+    expect((await service.offer(viewer, "interstitial", at(NOON, 4))).available).toBe(true);
+  });
+
+  it("после покупки и ролика за награду — пауза; ролик — только видео за награду, не задание", async () => {
+    const { service, repository, viewer } = gated();
+    repository.purchases.push({ accountId: ME, paidAt: at(NOON, -60) });
+    expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(false);
+    expect((await service.offer(viewer, "interstitial", at(NOON, 23 * 60))).available).toBe(true);
+    expect(REWARDED_VIDEO_PLACES).toEqual(["second_chance", "wheel_spin", "run_double"]);
+  });
+
+  it("ролик за награду на экране держит паузу, а невыданный — нет", async () => {
+    const { service, repository, viewer } = gated();
+    repository.blocks.push(block("adsonar", 20, { place: "wheel_spin" }));
+    const wheel = offered(await service.offer(viewer, "wheel_spin", at(NOON, -5)));
+    expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(true);
+    await service.report(ME, wheel.sessionId, { kind: "shown" }, at(NOON, -4));
+    repository.sessions.splice(repository.sessions.findIndex((session) => session.place === "interstitial"), 1);
+    expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(false);
+    expect((await service.offer(viewer, "interstitial", at(NOON, 6))).available).toBe(true);
+  });
+
+  it("момент — по площадке: Telegram и VK — при старте забега, MAX и веб — никогда", async () => {
+    // VK политика пропускает, но AdsGram на VK не работает — рекламы нет, а не «не время».
+    for (const [platform, outcome] of [["telegram", "offered"], ["vk", "no_fill"], ["max", "policy"], ["web", "policy"]] as const) {
+      const { service, viewer } = gated(platform);
+      const offer = await service.offer(viewer, "interstitial", NOON, "run_start");
+      expect(offer.available ? "offered" : offer.reason, platform).toBe(outcome);
+    }
+  });
+
+  it("вне доли флага выката межстраничной нет — ни сессии, ни запроса к сети", async () => {
+    const { service, repository, flags, creatives } = setup([block("taddy", 10, { place: "interstitial" })]);
+    flags.keys.clear();
+    expect(await service.offer(PLAYER, "interstitial", NOON)).toEqual({ available: false, reason: "policy", retryAt: null });
+    expect(repository.sessions).toHaveLength(0);
+    expect(creatives.requests).toHaveLength(0);
+  });
+
+  it("числа — из панели: правка видна на следующей выдаче", async () => {
+    const { service, settings, viewer } = gated();
+    settings.set("ads.interstitial.newbie-runs", 20);
+    expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(false);
+    settings.set("ads.interstitial.newbie-runs", 10);
+    expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(true);
+  });
+
+  it("креатив сети с API для межстраничной ждём меньше: старт забега не ждёт дольше двух секунд", async () => {
+    const { service, creatives } = setup([block("taddy", 10), block("taddy", 10, { place: "interstitial" })]);
+    offered(await service.offer(PLAYER, "wheel_spin", NOON));
+    offered(await service.offer(PLAYER, "interstitial", NOON));
+    expect(creatives.requests.map((request) => request.timeoutMs)).toEqual([undefined, INTERSTITIAL_CREATIVE_TIMEOUT_MS]);
+    expect(INTERSTITIAL_CREATIVE_TIMEOUT_MS).toBeLessThan(2_000);
+  });
+});
+
 describe("забор награды хозяином места", () => {
   it("недосмотренное не забирается; досмотренное — однажды, повтор отдаёт ту же сессию для дожима", async () => {
     const { service } = setup([block("adsgram", 10)]);
@@ -608,7 +730,11 @@ describe("реклама по HTTP", () => {
     app = null;
   });
 
-  async function start(service: AdsService, audience = new AdAudience(new AdNetworkKeys(new MemoryAds()), new FakeTaddyApi())): Promise<NestFastifyApplication> {
+  async function start(
+    service: AdsService,
+    audience = new AdAudience(new AdNetworkKeys(new MemoryAds()), new FakeTaddyApi()),
+    gate = interstitialGate(new MemoryAds(), panelSettings()),
+  ): Promise<NestFastifyApplication> {
     @Module({
       controllers: [AdsController],
       providers: [
@@ -616,6 +742,7 @@ describe("реклама по HTTP", () => {
         { provide: REDIS, useValue: unavailableRedis },
         { provide: AdsService, useValue: service },
         { provide: AdAudience, useValue: audience },
+        { provide: InterstitialGate, useValue: gate },
         RateLimiter,
         AuthGuard,
       ],
@@ -647,15 +774,53 @@ describe("реклама по HTTP", () => {
     expect(repository.sessions).toHaveLength(1);
   });
 
-  it("сети для SDK на старте — по токену и площадке из него; без токена — 401", async () => {
-    const { service } = setup([]);
+  it("момент — только у межстраничной и у неё обязателен", async () => {
+    const { service } = setup([block("adsgram", 10, { place: "interstitial" })]);
     const server = await start(service);
+    const token = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    const headers = { authorization: `Bearer ${token}` };
+    for (const payload of [{ place: "interstitial" }, { place: "wheel_spin", moment: "run_start" }, { place: "interstitial", moment: "boss_fight" }]) {
+      expect((await server.inject({ method: "POST", url: "/api/v1/ads/sessions", headers, payload })).statusCode, JSON.stringify(payload)).toBe(400);
+    }
+    const offer = await server.inject({ method: "POST", url: "/api/v1/ads/sessions", headers, payload: { place: "interstitial", moment: "run_start" } });
+    expect(offer.json<{ data: AdOffer }>().data).toMatchObject({ available: true, format: "interstitial" });
+  });
+
+  it("межстраничная — своим лимитом: частые старты забега не отнимают колесо и удвоение", async () => {
+    const { service, flags } = setup([block("adsgram", 10)]);
+    flags.keys.clear();
+    const server = await start(service);
+    const token = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    const headers = { authorization: `Bearer ${token}` };
+    const interstitial = async () => (await server.inject({ method: "POST", url: "/api/v1/ads/sessions", headers, payload: { place: "interstitial", moment: "run_start" } })).statusCode;
+    for (let start = 0; start < 60; start++) expect(await interstitial()).toBe(200);
+    expect(await interstitial()).toBe(429);
+    const wheel = await server.inject({ method: "POST", url: "/api/v1/ads/sessions", headers, payload: { place: "wheel_spin", device: "android" } });
+    expect(wheel.json<{ data: AdOffer }>().data).toMatchObject({ available: true, network: "adsgram" });
+  });
+
+  it("сети для SDK на старте — по токену и площадке из него; без токена — 401", async () => {
+    const { service, gate } = setup([]);
+    const server = await start(service, undefined, gate);
     expect((await server.inject({ method: "GET", url: "/api/v1/ads/networks" })).statusCode).toBe(401);
     const telegram = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
     const response = await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${telegram}` } });
-    expect(response.json<{ data: unknown }>().data).toEqual({ networks: [{ network: "taddy", keys: { pubId: "14cbeb980853dd416003462ca4db7c12" } }] });
+    expect(response.json<{ data: unknown }>().data).toEqual({ networks: [{ network: "taddy", keys: { pubId: "14cbeb980853dd416003462ca4db7c12" } }], interstitial: true });
     const vk = await signAccessToken({ accountId: ME, platform: "vk", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
-    expect((await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${vk}` } })).json<{ data: unknown }>().data).toEqual({ networks: [] });
+    expect((await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${vk}` } })).json<{ data: unknown }>().data).toEqual({ networks: [], interstitial: true });
+  });
+
+  it("ждать ли межстраничную, клиент узнаёт на запуске: площадка с моментом старта и доля флага", async () => {
+    const { service, gate, flags } = setup([]);
+    const server = await start(service, undefined, gate);
+    const as = async (platform: "telegram" | "web") => {
+      const token = await signAccessToken({ accountId: ME, platform, platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+      return (await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${token}` } })).json<{ data: { interstitial: boolean } }>().data.interstitial;
+    };
+    expect(await as("telegram")).toBe(true);
+    expect(await as("web")).toBe(false);
+    flags.keys.clear();
+    expect(await as("telegram")).toBe(false);
   });
 
   it("сеть с API получает язык и премиум со слов клиента, адрес и браузер — из запроса; кривой язык — 400", async () => {

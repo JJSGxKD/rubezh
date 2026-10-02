@@ -6,6 +6,7 @@ import type { AdSuccess } from "../src/modules/ads/ads-rules.js";
 import { PrismaAdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { PrismaAdsRepository, type AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { claimVerdict } from "../src/modules/ads/ads.service.js";
+import { REWARDED_VIDEO_PLACES } from "../src/modules/ads/interstitial-gate.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 
 /**
@@ -13,7 +14,8 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
  * TEST_DATABASE_URL, без него пропуск): начало суток считает база по Москве,
  * клиент засчитывает только показ, одну сессию забирают однажды, две
  * сессии разом не проскакивают кулдаун, база не примет забор без выполнения,
- * а сессию без блока — иначе как выполненный пропуск рекламы.
+ * а сессию без блока — иначе как выполненный пропуск рекламы. Факты для
+ * межстраничной — сутки по Москве и счёт забегов с потолком.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -21,6 +23,8 @@ const MINUTE = 60_000;
 /** среда, 30.09.2026, 12:00 по Москве */
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 const at = (base: Date, minutes: number) => new Date(base.getTime() + minutes * MINUTE);
+/** полночь на четверг, 01.10.2026, по Москве */
+const MIDNIGHT = new Date(Date.UTC(2026, 8, 30, 21));
 
 describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", () => {
   let prisma: PrismaClient;
@@ -269,5 +273,55 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     await prisma.$executeRaw`DELETE FROM account WHERE account_id = ${me}::uuid`;
     const [left] = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM ad_session WHERE account_id = ${me}::uuid`;
     expect(Number(left?.n)).toBe(0);
+  });
+
+  it("факты межстраничной: сутки — по Москве, забеги — не короче порога и с потолком, ролик — по показу, покупка — по оплате", async () => {
+    const me = await account();
+    // Первый вход — в 23:50 по Москве: в 23:59 это ещё день первого входа, в полночь — уже следующий.
+    await prisma.$executeRaw`UPDATE account SET created_at = ${at(MIDNIGHT, -10)} WHERE account_id = ${me}::uuid`;
+    const query = { countedRunSec: 60, newbieRuns: 5, everyRuns: 3, rewardedPlaces: REWARDED_VIDEO_PLACES, rewardedSince: at(MIDNIGHT, -120) };
+    expect(await repository.interstitialFacts(me, at(MIDNIGHT, -1), query)).toEqual({
+      daysSinceSignup: 0,
+      countedRuns: 0,
+      runsSinceShown: 0,
+      lastShownAt: null,
+      lastPurchaseAt: null,
+      lastRewardedAt: null,
+    });
+    expect((await repository.interstitialFacts(me, MIDNIGHT, query))?.daysSinceSignup).toBe(1);
+
+    const run = (finishedAt: Date | null, survivalSec: number) => prisma.$executeRaw`
+      INSERT INTO run (run_id, account_id, status, difficulty, starting_weapon_id, content_hash, finished_at, survival_sec)
+      VALUES (${`it-${randomBytes(6).toString("hex")}`}, ${me}::uuid, ${finishedAt === null ? "started" : "finished"}::"RunStatus", 'easy', 'spark', 'hash',
+              ${finishedAt}, ${survivalSec})`;
+    // До показа — четыре долгих, короткий и неоконченный: в счёт идут только долгие.
+    for (const minute of [1, 2, 3, 4]) await run(at(MIDNIGHT, minute), 120);
+    await run(at(MIDNIGHT, 5), 59);
+    await run(null, 0);
+    const shownId = randomBytes(12).toString("base64url");
+    await repository.createSession({ sessionId: shownId, accountId: me, place: "interstitial", block: blockOf("view"), creative: null, createdAt: at(MIDNIGHT, 10), expiresAt: at(MIDNIGHT, 40) });
+    await repository.report(shownId, me, { kind: "shown" }, at(MIDNIGHT, 11));
+    // Невыданная позже сессия межстраничной последним показом не считается.
+    await repository.createFailedSession({ sessionId: randomBytes(12).toString("base64url"), accountId: me, place: "interstitial", block: blockOf("view"), creative: null, createdAt: at(MIDNIGHT, 20), expiresAt: at(MIDNIGHT, 50) }, "no_fill");
+    // После показа — четыре долгих: потолок счёта — N.
+    for (const minute of [12, 13, 14, 15]) await run(at(MIDNIGHT, minute), 600);
+
+    const wheel = await session(me, "view", at(MIDNIGHT, 30));
+    await repository.report(wheel, me, { kind: "shown" }, at(MIDNIGHT, 31));
+    await prisma.$executeRaw`
+      INSERT INTO purchase (purchase_id, account_id, product, sku, price_stars, charged_stars, mode, status, invoiced_at, paid_at)
+      VALUES (${randomUUID()}::uuid, ${me}::uuid, 'shop_item', 'gems_60', 50, 50, 'live'::"PaymentMode", 'paid'::"PurchaseStatus", ${at(MIDNIGHT, 32)}, ${at(MIDNIGHT, 33)})`;
+
+    expect(await repository.interstitialFacts(me, at(MIDNIGHT, 40), query)).toEqual({
+      daysSinceSignup: 1,
+      countedRuns: 5,
+      runsSinceShown: 3,
+      lastShownAt: at(MIDNIGHT, 11),
+      lastPurchaseAt: at(MIDNIGHT, 33),
+      lastRewardedAt: at(MIDNIGHT, 31),
+    });
+    // Ролик, выданный раньше окна поиска, не виден: окно — по выдаче, чтобы идти индексом.
+    expect((await repository.interstitialFacts(me, at(MIDNIGHT, 40), { ...query, rewardedSince: at(MIDNIGHT, 35) }))?.lastRewardedAt).toBeNull();
+    expect(await repository.interstitialFacts(randomUUID(), MIDNIGHT, query)).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import type { AdNetworkSetup, PlatformAdapter } from "@bh/shared-types";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ZodMiniType } from "zod/mini";
-import { fetchAdNetworks, prepareAdNetworks, resetAdNetworks } from "../src/state/ad-networks";
+import { fetchAdNetworks, interstitialExpected, prepareAdNetworks, resetAdNetworks, type AdNetworksResponse } from "../src/state/ad-networks";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { initShell, type ShellCapabilities } from "../src/state/shell";
 
@@ -24,7 +24,7 @@ function shellWith(prepared: AdNetworkSetup[][] | null, capabilities: Partial<Sh
   });
 }
 
-function api(...answers: ApiResult<{ networks: AdNetworkSetup[] }>[]): { asked: number; networks: () => Promise<ApiResult<{ networks: AdNetworkSetup[] }>> } {
+function api(...answers: ApiResult<AdNetworksResponse>[]): { asked: number; networks: () => Promise<ApiResult<AdNetworksResponse>> } {
   const queue = [...answers];
   const fake = {
     asked: 0,
@@ -47,6 +47,20 @@ describe("SDK сетей для учёта аудитории", () => {
     await prepareAdNetworks(server.networks);
     expect(prepared).toEqual([[TADDY]]);
     expect(server.asked).toBe(1);
+  });
+
+  it("тот же ответ говорит, ждать ли межстраничную; не знаем — `null`, и старт спросит сам", async () => {
+    shellWith([]);
+    expect(interstitialExpected()).toBeNull();
+    await prepareAdNetworks(api({ ok: true, data: { networks: [], interstitial: false } }).networks);
+    expect(interstitialExpected()).toBe(false);
+    resetAdNetworks();
+    await prepareAdNetworks(api({ ok: true, data: { networks: [], interstitial: true } }).networks);
+    expect(interstitialExpected()).toBe(true);
+    resetAdNetworks();
+    // Сервер до межстраничной поля не отдавал.
+    await prepareAdNetworks(api({ ok: true, data: { networks: [] } }).networks);
+    expect(interstitialExpected()).toBeNull();
   });
 
   it("сервер не ответил — следующий заход на главную спросит снова; пустой список — адаптер не зовётся", async () => {

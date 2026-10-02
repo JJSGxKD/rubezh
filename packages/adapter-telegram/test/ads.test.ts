@@ -160,6 +160,37 @@ describe("показ рекламы сетей", () => {
     expect(await broken(request({}))).toEqual({ kind: "failed", reason: "load_failed" });
   });
 
+  it("показ со сроком: скрипт не успел — `late`, а догруженный скрипт достаётся следующему показу", async () => {
+    vi.useFakeTimers();
+    try {
+      const globals: AdGlobals = {};
+      let arrive: () => void = () => undefined;
+      const loads: string[] = [];
+      const pending = new Promise<void>((resolve) => (arrive = resolve));
+      const loader = {
+        load: async (src: string) => {
+          loads.push(src);
+          await pending;
+          globals.Adsgram = { init: () => adsgramController(async () => ({ done: true, description: "", state: "", error: false })) };
+        },
+      };
+      const show = createAdShower({ globals: () => globals, loader });
+      const late = show(request({ format: "interstitial", readyWithinMs: 800 }));
+      await vi.advanceTimersByTimeAsync(800);
+      expect(await late).toEqual({ kind: "failed", reason: "late" });
+      // Скрипт пришёл после срока — следующий показ его уже не ждёт.
+      arrive();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await show(request({ format: "interstitial", readyWithinMs: 0 }))).toEqual({ kind: "completed" });
+      expect(loads).toEqual([ADSGRAM_SCRIPT]);
+    } finally {
+      vi.useRealTimers();
+    }
+    // Без срока сломанный скрипт — по-прежнему «не загрузился», а не «опоздал».
+    const broken = createAdShower({ globals: () => ({}), loader: { load: async () => Promise.reject(new Error("offline")) } });
+    expect(await broken(request({ readyWithinMs: 5_000 }))).toEqual({ kind: "failed", reason: "load_failed" });
+  });
+
   it("загрузчик: один адрес — одна вставка, неудача забывается и пробуется снова", async () => {
     const appended: string[] = [];
     let ok = false;

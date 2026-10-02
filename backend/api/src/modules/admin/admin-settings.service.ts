@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
-import { settingByKey, type SettingDefinition, type SettingKind, type SettingValue } from "../settings/setting-catalog.js";
+import { settingByKey, type SettingDefinition, type SettingKind, type SettingRange, type SettingValue } from "../settings/setting-catalog.js";
 import { SettingsService, type SettingSource, type SettingState } from "../settings/settings.service.js";
 import { SettingNotFoundError } from "./admin-errors.js";
 
@@ -18,6 +18,8 @@ export interface SettingView {
   title: string;
   hint: string;
   kind: SettingKind;
+  /** пределы и единица числа — редактор панели проверяет то же, что сервер; у остальных видов `null` */
+  range: SettingRange | null;
   value: SettingValue;
   source: SettingSource;
   /** что лежит в окружении — вернётся после сброса; `null` — там не задано */
@@ -83,6 +85,7 @@ function viewOf(state: SettingState): SettingView {
     title: setting.title,
     hint: setting.hint,
     kind: setting.kind,
+    range: setting.range ?? null,
     value: state.value,
     source: state.source,
     envValue: state.envValue,

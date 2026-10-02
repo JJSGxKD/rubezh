@@ -58,6 +58,8 @@ export interface DeathOverlayProps {
   showReward?: boolean;
   /** награда напрямую — для витрины компонентов */
   reward?: RunRewardView;
+  /** «Ещё раз» нажато, и новый забег ждёт межстраничную: кнопка крутится, второе нажатие не нужно */
+  restarting?: boolean;
   onRestart(): void;
   onMenu(): void;
   onShare(): void;
@@ -202,7 +204,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
           ) : null}
 
           <div className="mt-5 grid gap-2">
-            <Button size="l" block glow onClick={guarded(ready, props.onRestart)}>
+            <Button size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
               {t("run.death.again")}
             </Button>
             <div className="grid grid-cols-2 gap-2">

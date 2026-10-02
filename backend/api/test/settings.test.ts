@@ -105,6 +105,21 @@ describe("каталог настроек", () => {
     }
   });
 
+  it("число — целое в своих пределах, с единицей для панели; пределы есть только у чисел", () => {
+    for (const setting of SETTING_LIST) {
+      expect(setting.range !== undefined, setting.key).toBe(setting.kind === "number");
+      if (setting.range === undefined) continue;
+      const { min, max, unit } = setting.range;
+      expect(min, setting.key).toBeLessThan(max);
+      expect(unit.every((form) => form.length > 0), setting.key).toBe(true);
+      expect(setting.schema.safeParse(min).success && setting.schema.safeParse(max).success, setting.key).toBe(true);
+      expect(setting.schema.safeParse(min - 1).success || setting.schema.safeParse(max + 1).success, setting.key).toBe(false);
+      expect(setting.schema.safeParse(min + 0.5).success, setting.key).toBe(false);
+      expect(setting.schema.safeParse(String(min)).success, setting.key).toBe(false);
+    }
+    expect(SETTINGS.interstitialGapMin.schema.safeParse(0).error?.issues[0]?.message).toBe("не меньше 1");
+  });
+
   it("адрес чата — id или id:тема, пусто допустимо, мусор — нет", () => {
     expect(SETTINGS.chatGeneral.schema.safeParse("-1001234567890:57").success).toBe(true);
     expect(SETTINGS.chatGeneral.schema.safeParse("").success).toBe(true);
@@ -308,6 +323,15 @@ describe("настройки в панели", () => {
     await expect(admin.save(owner, "notify.unknown", "x")).rejects.toMatchObject({ code: "setting_not_found", status: 404 });
     await expect(admin.save(owner, "notify.chat.general", "@team")).rejects.toMatchObject({ code: "validation_failed", message: expect.stringContaining("Общий чат") });
     await expect(admin.save(owner, "notify.reports", "yes")).rejects.toMatchObject({ code: "validation_failed" });
+  });
+
+  it("число — с пределами и единицей для редактора; за пределами — 400 с названием и границей", async () => {
+    const { admin, owner } = await panel();
+    const saved = await admin.save(owner, "ads.interstitial.every-runs", 4);
+    expect(saved).toMatchObject({ kind: "number", value: 4, source: "base", fallback: 3, range: { min: 1, max: 20, unit: ["забег", "забега", "забегов"] } });
+    await expect(admin.save(owner, "ads.interstitial.every-runs", 0)).rejects.toMatchObject({ code: "validation_failed", message: "Межстраничная: каждые N забегов: не меньше 1" });
+    await expect(admin.save(owner, "ads.interstitial.every-runs", "4")).rejects.toMatchObject({ code: "validation_failed" });
+    expect((await admin.list(owner)).find((view) => view.key === "notify.reports")?.range).toBeNull();
   });
 
   it("без права settings.edit — отказ во всём", async () => {

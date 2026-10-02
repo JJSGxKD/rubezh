@@ -6,6 +6,7 @@ import { PRISMA } from "../../infra/database.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import { type Tx } from "../wallet/wallet-ledger.js";
 import { AD_DEVICES, AD_PLACES, AD_SUCCESS, type AdDevice, type AdPlace, type AdSuccess, type PlaceHistoryEntry } from "./ads-rules.js";
+import type { InterstitialFacts } from "./interstitial-policy.js";
 
 /**
  * Реклама в базе (docs/35-stage4-plan.md §3.7, WP12): сети, блоки мест и
@@ -93,6 +94,20 @@ export type ClaimOutcome =
   | { status: "not_completed" }
   | { status: "cooldown"; retryAt: Date };
 
+/** Что считать, собирая факты для межстраничной: какие забеги и места и докуда остановить счёт. */
+export interface InterstitialQuery {
+  /** забег короче — не в счёт */
+  countedRunSec: number;
+  /** до скольких считать забеги всего — порог новичка */
+  newbieRuns: number;
+  /** до скольких считать забеги после последней межстраничной — N */
+  everyRuns: number;
+  /** места роликов за награду */
+  rewardedPlaces: readonly AdPlace[];
+  /** с какого времени искать ролик за награду — по выдаче, чтобы идти индексом */
+  rewardedSince: Date;
+}
+
 export const ADS_REPOSITORY = Symbol("ADS_REPOSITORY");
 
 export interface AdsRepository {
@@ -111,6 +126,8 @@ export interface AdsRepository {
   report(sessionId: string, accountId: string, outcome: AdOutcome, at: Date): Promise<AdReport | null>;
   /** публичные ключи всех сетей — включённых и выключенных */
   networkKeys(): Promise<{ networkKey: string; keys: Record<string, string> }[]>;
+  /** факты для политики межстраничной; `null` — аккаунта нет */
+  interstitialFacts(accountId: string, at: Date, query: InterstitialQuery): Promise<InterstitialFacts | null>;
   /**
    * Забрать сессию места. Забор мест игрока идёт по одному: история и решение
    * читаются под блокировкой, и две сессии разом не проскочат кулдаун.
@@ -133,6 +150,15 @@ const blockSchema = z.object({
 const reportSchema = z.object({ network_key: z.string(), creative_id: z.string().nullable(), first_shown: z.boolean().nullable() });
 
 const networkKeysSchema = z.object({ network_key: z.string(), keys: z.record(z.string(), z.string()) });
+
+const interstitialFactsSchema = z.object({
+  days_since_signup: z.number().int(),
+  counted_runs: z.number().int(),
+  runs_since_shown: z.number().int(),
+  last_shown_at: z.date().nullable(),
+  last_purchase_at: z.date().nullable(),
+  last_rewarded_at: z.date().nullable(),
+});
 
 const sessionSchema = z.object({
   session_id: z.string(),
@@ -221,6 +247,55 @@ export class PrismaAdsRepository implements AdsRepository {
       const row = networkKeysSchema.parse(raw);
       return { networkKey: row.network_key, keys: row.keys };
     });
+  }
+
+  /**
+   * Каждый счёт — индексом и с потолком: забеги игрока — по
+   * `(account_id, finished_at)` до порога, сессии — по
+   * `(account_id, place, created_at)` с конца до первой показанной. Покупки
+   * игрока — все его строки: их единицы, и оплата бывает позже выставления
+   * счёта. Игровые сутки считает база — та же граница, что у заданий.
+   */
+  async interstitialFacts(accountId: string, at: Date, query: InterstitialQuery): Promise<InterstitialFacts | null> {
+    const [raw] = await this.prisma.$queryRawUnsafe<unknown[]>(
+      `WITH last_shown AS (
+         SELECT shown_at FROM ad_session
+         WHERE account_id = $1::uuid AND place = 'interstitial' AND shown_at IS NOT NULL
+         ORDER BY created_at DESC LIMIT 1
+       )
+       SELECT
+         (($2::timestamptz AT TIME ZONE $3)::date - (a.created_at AT TIME ZONE $3)::date) AS days_since_signup,
+         (SELECT count(*)::int FROM (
+            SELECT 1 FROM run r WHERE r.account_id = a.account_id AND r.finished_at IS NOT NULL AND r.survival_sec >= $4 LIMIT $5
+          ) counted) AS counted_runs,
+         (SELECT count(*)::int FROM (
+            SELECT 1 FROM run r
+            WHERE r.account_id = a.account_id AND r.finished_at > COALESCE((SELECT shown_at FROM last_shown), '-infinity'::timestamptz) AND r.survival_sec >= $4
+            LIMIT $6
+          ) since) AS runs_since_shown,
+         (SELECT shown_at FROM last_shown) AS last_shown_at,
+         (SELECT max(p.paid_at) FROM purchase p WHERE p.account_id = a.account_id) AS last_purchase_at,
+         (SELECT max(s.shown_at) FROM ad_session s WHERE s.account_id = a.account_id AND s.place = ANY($7::text[]::"AdPlace"[]) AND s.created_at >= $8) AS last_rewarded_at
+       FROM account a WHERE a.account_id = $1::uuid`,
+      accountId,
+      at,
+      GAME_DAY_TIME_ZONE,
+      query.countedRunSec,
+      query.newbieRuns,
+      query.everyRuns,
+      query.rewardedPlaces,
+      query.rewardedSince,
+    );
+    if (raw === undefined) return null;
+    const row = interstitialFactsSchema.parse(raw);
+    return {
+      daysSinceSignup: row.days_since_signup,
+      countedRuns: row.counted_runs,
+      runsSinceShown: row.runs_since_shown,
+      lastShownAt: row.last_shown_at,
+      lastPurchaseAt: row.last_purchase_at,
+      lastRewardedAt: row.last_rewarded_at,
+    };
   }
 
   async createPassSession(session: NewPassSession): Promise<void> {

@@ -1,6 +1,6 @@
 import type { AdCreative } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
-import { readyCreative, secondsLeft } from "../src/ads/ad-creative";
+import { readyCreative, secondsLeft, showCreative } from "../src/ads/ad-creative";
 import { hasTranslation, t } from "../src/i18n";
 
 /**
@@ -40,6 +40,12 @@ describe("рекламный блок", () => {
   it("без заголовка и без картинки показывать нечего — отказ, а не пустая рамка", async () => {
     expect(await readyCreative({ ...AD, title: null }, async () => false)).toBeNull();
     expect(await readyCreative({ ...AD, title: null, image: null, icon: null }, async () => true)).toBeNull();
+  });
+
+  it("срок подготовки вышел ещё до картинок — отказ «не успел», блок не появляется", async () => {
+    const hooks = { onShown: () => undefined, onClick: () => undefined };
+    expect(await showCreative({ ad: AD, viewSec: 5, rewarded: false, readyWithinMs: 0 }, hooks)).toEqual({ kind: "failed", reason: "late" });
+    expect(await showCreative({ ad: AD, viewSec: 5, rewarded: false, readyWithinMs: -40 }, hooks)).toEqual({ kind: "failed", reason: "late" });
   });
 
   it("подписи блока — в его чанке, первая загрузка за них не платит", async () => {

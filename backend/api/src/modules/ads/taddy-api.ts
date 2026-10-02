@@ -57,8 +57,8 @@ export interface TaddyAd {
 export type TaddyAdResult = { kind: "ad"; ad: TaddyAd } | { kind: "none"; reason: "no_fill" | "invalid" | "timeout" | "api_error" };
 
 export interface TaddyApi {
-  /** Креатив межстраничного формата — его рисует наш рекламный блок. */
-  getAd(pubId: string, user: TaddyUser): Promise<TaddyAdResult>;
+  /** Креатив межстраничного формата — его рисует наш рекламный блок. `timeoutMs` — короче обычного, когда ждёт старт забега. */
+  getAd(pubId: string, user: TaddyUser, timeoutMs?: number): Promise<TaddyAdResult>;
   /** Креатив показан игроку — Taddy считает показ. */
   impression(pubId: string, user: TaddyUser, adId: string): Promise<void>;
   /** Креатив досмотрен — то же, что SDK Taddy шлёт после отсчёта своего блока. */
@@ -135,9 +135,9 @@ export class HttpTaddyApi implements TaddyApi {
     private readonly baseUrl: string = TADDY_API_URL,
   ) {}
 
-  async getAd(pubId: string, user: TaddyUser): Promise<TaddyAdResult> {
+  async getAd(pubId: string, user: TaddyUser, timeoutMs = TADDY_AD_TIMEOUT_MS): Promise<TaddyAdResult> {
     try {
-      const response = await this.post("/ads/get", { pubId, user, origin: "server", format: "app-interstitial" }, TADDY_AD_TIMEOUT_MS);
+      const response = await this.post("/ads/get", { pubId, user, origin: "server", format: "app-interstitial" }, timeoutMs);
       if (!response.ok) {
         this.warn("taddy_get_failed", { status: response.status });
         return { kind: "none", reason: "api_error" };

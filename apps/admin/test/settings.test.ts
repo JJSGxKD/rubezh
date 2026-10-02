@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { fetchSettings, groupSettings, resetSetting, saveSetting, settingProblem, settingText, type SettingRow } from "../src/api/settings";
+import { fetchSettings, groupSettings, parseInteger, resetSetting, saveSetting, settingProblem, settingText, type SettingRow } from "../src/api/settings";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -37,22 +37,40 @@ describe("настройки в панели", () => {
   });
 
   it("форма проверяет адрес чата так же, как сервер", () => {
-    expect(settingProblem("chat", "-1001234567890:57")).toBeNull();
-    expect(settingProblem("chat", "")).toBeNull();
+    expect(settingProblem({ kind: "chat" }, "-1001234567890:57")).toBeNull();
+    expect(settingProblem({ kind: "chat" }, "")).toBeNull();
     // ссылка — только https; пусто — «не задана»
-    expect(settingProblem("url", "https://t.me/tribute/app?startapp=stars")).toBeNull();
-    expect(settingProblem("url", "")).toBeNull();
-    expect(settingProblem("url", "http://t.me/tribute")).toMatch(/https/);
-    expect(settingProblem("url", "t.me/tribute")).toMatch(/https/);
-    expect(settingProblem("chat", "@team")).not.toBeNull();
-    expect(settingProblem("chat", "-100:")).not.toBeNull();
-    expect(settingProblem("boolean", true)).toBeNull();
+    expect(settingProblem({ kind: "url" }, "https://t.me/tribute/app?startapp=stars")).toBeNull();
+    expect(settingProblem({ kind: "url" }, "")).toBeNull();
+    expect(settingProblem({ kind: "url" }, "http://t.me/tribute")).toMatch(/https/);
+    expect(settingProblem({ kind: "url" }, "t.me/tribute")).toMatch(/https/);
+    expect(settingProblem({ kind: "chat" }, "@team")).not.toBeNull();
+    expect(settingProblem({ kind: "chat" }, "-100:")).not.toBeNull();
+    expect(settingProblem({ kind: "boolean" }, true)).toBeNull();
+  });
+
+  it("число — целое в пределах, с единицей словами; пустое поле — не ноль", () => {
+    const every = { kind: "number" as const, range: { min: 1, max: 20, unit: ["забег", "забега", "забегов"] as [string, string, string] } };
+    expect(settingProblem(every, "3")).toBeNull();
+    expect(settingProblem(every, 20)).toBeNull();
+    expect(settingProblem(every, "0")).toBe("От 1 до 20");
+    expect(settingProblem(every, "21")).toBe("От 1 до 20");
+    expect(settingProblem(every, "")).toBe("Целое число");
+    expect(settingProblem(every, "2.5")).toBe("Целое число");
+    expect(settingProblem(every, "3 шт")).toBe("Целое число");
+    expect(parseInteger(" 12 ")).toBe(12);
+    expect(parseInteger("")).toBeNull();
+    expect(settingText(every, 1)).toBe("1 забег");
+    expect(settingText(every, 3)).toBe("3 забега");
+    expect(settingText(every, 11)).toBe("11 забегов");
+    // Сервер до числовых настроек пределов не отдавал — число без единицы.
+    expect(settingText({ kind: "number" }, 7)).toBe("7");
   });
 
   it("значение для человека и разделы в порядке каталога", () => {
-    expect(settingText("chat", "")).toBe("не задан");
-    expect(settingText("boolean", false)).toBe("выключено");
-    expect(settingText("chat", null)).toBe("—");
+    expect(settingText({ kind: "chat" }, "")).toBe("не задан");
+    expect(settingText({ kind: "boolean" }, false)).toBe("выключено");
+    expect(settingText({ kind: "chat" }, null)).toBe("—");
     expect(groupSettings([CHAT, REPORTS, { ...CHAT, key: "x", group: "Другое" }]).map((item) => [item.group, item.rows.length])).toEqual([
       ["Уведомления команде", 2],
       ["Другое", 1],

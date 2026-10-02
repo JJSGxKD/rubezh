@@ -15,6 +15,12 @@ import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
 export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] as const;
 export type AdPlace = (typeof AD_PLACES)[number];
 
+/**
+ * Когда просим межстраничную (docs/35-stage4-plan.md WP12, часть 10):
+ * показывать ли её в этот момент, решает сервер по политике площадки.
+ */
+export type InterstitialMoment = "run_start";
+
 const nullableText = z.nullable(z.string());
 
 /** Объявление для нашего блока — `AdCreative` из shared-types; адреса проверил сервер. */
@@ -90,18 +96,20 @@ export interface AdViewerHints {
 const reportSchema = z.object({ ok: z.literal(true) });
 
 export interface AdsApi {
-  offer(place: AdPlace, viewer?: AdViewerHints | null): Promise<ApiResult<AdOffer>>;
+  /** `moment` — у межстраничной обязателен, у остальных мест его нет */
+  offer(place: AdPlace, viewer?: AdViewerHints | null, moment?: InterstitialMoment): Promise<ApiResult<AdOffer>>;
   report(sessionId: string, step: AdStep): Promise<ApiResult<unknown>>;
 }
 
 /** Язык — как его ждёт сервер: `ru`, `pt-br`; что-то иное — не передаём. */
 const LANGUAGE = /^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{1,8})?$/;
 
-/** Тело запроса выдачи: место и только те подсказки, что известны. */
-export function offerBody(place: AdPlace, viewer: AdViewerHints | null): Record<string, string | boolean> {
-  if (viewer === null) return { place };
+/** Тело запроса выдачи: место, момент межстраничной и только те подсказки, что известны. */
+export function offerBody(place: AdPlace, viewer: AdViewerHints | null, moment?: InterstitialMoment): Record<string, string | boolean> {
+  const where: Record<string, string> = moment === undefined ? { place } : { place, moment };
+  if (viewer === null) return where;
   return {
-    place,
+    ...where,
     ...(viewer.device === null ? {} : { device: viewer.device }),
     ...(viewer.language !== null && LANGUAGE.test(viewer.language) ? { language: viewer.language } : {}),
     ...(viewer.premium === null ? {} : { premium: viewer.premium }),
@@ -111,7 +119,7 @@ export function offerBody(place: AdPlace, viewer: AdViewerHints | null): Record<
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
 export function createAdsApi(request: ApiRequest = apiRequest): AdsApi {
   return {
-    offer: (place, viewer = null) => request("/api/v1/ads/sessions", offerSchema, { method: "POST", body: offerBody(place, viewer) }),
+    offer: (place, viewer = null, moment) => request("/api/v1/ads/sessions", offerSchema, { method: "POST", body: offerBody(place, viewer, moment) }),
     report: (sessionId, step) => request(`/api/v1/ads/sessions/${encodeURIComponent(sessionId)}/result`, reportSchema, { method: "POST", body: step }),
   };
 }

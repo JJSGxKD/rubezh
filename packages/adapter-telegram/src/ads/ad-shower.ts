@@ -48,13 +48,44 @@ export function createAdShower(options: AdShowerOptions): (request: AdShowReques
       const timeout = new Promise<AdShowOutcome>((resolve) => {
         timer = setTimeout(() => resolve({ kind: "failed", reason: "timeout" }), timeoutMs);
       });
+      let late = false;
+      const loader = request.readyWithinMs === undefined ? options.loader : loaderWithin(options.loader, request.readyWithinMs, () => (late = true));
       // Тестовые показы — по слову сервера: решает команда в настройках, а не сборка.
-      const env: NetworkEnv = { globals: options.globals, loader: options.loader, debug: request.debug === true, now };
-      return await Promise.race([show(request, env).catch((): AdShowOutcome => ({ kind: "failed", reason: "sdk_error" })), timeout]);
+      const env: NetworkEnv = { globals: options.globals, loader, debug: request.debug === true, now };
+      const outcome = await Promise.race([show(request, env).catch((): AdShowOutcome => ({ kind: "failed", reason: "sdk_error" })), timeout]);
+      return late && outcome.kind === "failed" ? { kind: "failed", reason: "late" } : outcome;
     } finally {
       clearTimeout(timer);
       busy = false;
     }
+  };
+}
+
+/**
+ * Загрузчик со сроком — для показа, которого ждёт старт забега: скрипт не
+ * успел — отказ, сеть говорит «не загрузился», а показ — `late`. Сама
+ * загрузка не прерывается и остаётся в памяти загрузчика: следующий показ
+ * получит скрипт сразу.
+ */
+function loaderWithin(loader: ScriptLoader, withinMs: number, onLate: () => void): ScriptLoader {
+  return {
+    load: (src, attributes) =>
+      new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          onLate();
+          reject(new Error(`скрипт ${src} не успел за ${String(withinMs)} мс`));
+        }, Math.max(0, withinMs));
+        loader.load(src, attributes).then(
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          (error: unknown) => {
+            clearTimeout(timer);
+            reject(error instanceof Error ? error : new Error(String(error)));
+          },
+        );
+      }),
   };
 }
 
