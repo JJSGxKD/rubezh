@@ -50,6 +50,17 @@ export class InterstitialGate {
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
+  /**
+   * Ждать ли игроку межстраничную вообще: площадка её показывает, и игрок в
+   * доле выката. Клиент узнаёт это на запуске и вне доли старт забега не
+   * задерживает даже запросом — контрольная доля живёт как раньше. Частоту
+   * всё равно проверяет выдача, и выключенный флаг гасит показы сразу.
+   */
+  async expected(viewer: { accountId: string; platform: PlatformId }, at: Date): Promise<boolean> {
+    if (!INTERSTITIAL_MOMENTS_OF[viewer.platform].includes("run_start")) return false;
+    return await withTimeout(this.flags.isOn(INTERSTITIAL_FLAG, viewer, at.getTime()), DB_TIMEOUT_MS, "флаг межстраничной");
+  }
+
   /** `null` — показывать можно. Дешёвые проверки — первыми: до базы доходит только доля флага. */
   async refusal(viewer: { accountId: string; platform: PlatformId }, moment: InterstitialMoment, at: Date): Promise<InterstitialRefusal | null> {
     if (!INTERSTITIAL_MOMENTS_OF[viewer.platform].includes(moment)) return "moment";

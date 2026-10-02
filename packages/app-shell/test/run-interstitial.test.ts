@@ -21,6 +21,7 @@ vi.mock("../src/state/interstitial", () => ({ interstitialBeforeRun: gate.before
 const { useRun } = await import("../src/state/run");
 const { initShell } = await import("../src/state/shell");
 const { interstitialBeforeNewRun } = await import("../src/state/interstitial-gate");
+const { prepareAdNetworks, resetAdNetworks } = await import("../src/state/ad-networks");
 
 type Handlers = { [E in keyof RunEvents]?: (payload: RunEvents[E]) => void };
 
@@ -46,7 +47,11 @@ function fakeEngine(): { engine: RunEngine; restarts: number[] } {
 
 function shell(options: { ads: boolean; auth?: boolean }): void {
   initShell({
-    adapter: { ui: createNoopPlatformUi(), haptic: () => undefined, ...(options.ads ? { showAd: async () => ({ kind: "completed" }) } : {}) } as unknown as PlatformAdapter,
+    adapter: {
+      ui: createNoopPlatformUi(),
+      haptic: () => undefined,
+      ...(options.ads ? { showAd: async () => ({ kind: "completed" }), prepareAds: async () => undefined } : {}),
+    } as unknown as PlatformAdapter,
     capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false, ...(options.auth === false ? {} : { auth: { baseUrl: "" } }) },
     storage: undefined,
     analytics: () => undefined,
@@ -148,6 +153,7 @@ describe("межстраничная в старте забега", () => {
 describe("привратник межстраничной", () => {
   beforeEach(() => {
     gate.before.mockReset();
+    resetAdNetworks();
   });
 
   it("площадка без рекламы или игрок без входа — ни запроса, ни ожидания", () => {
@@ -156,6 +162,17 @@ describe("привратник межстраничной", () => {
     shell({ ads: true, auth: false });
     expect(interstitialBeforeNewRun(() => true)).toBeNull();
     expect(gate.before).not.toHaveBeenCalled();
+  });
+
+  it("вне доли выката, по словам сервера на запуске, — ни запроса, ни ожидания: контрольная доля живёт как раньше", async () => {
+    shell({ ads: true });
+    await prepareAdNetworks(async () => ({ ok: true, data: { networks: [], interstitial: false } }));
+    expect(interstitialBeforeNewRun(() => true)).toBeNull();
+    resetAdNetworks();
+    await prepareAdNetworks(async () => ({ ok: true, data: { networks: [], interstitial: true } }));
+    gate.before.mockResolvedValue("skipped");
+    expect(await interstitialBeforeNewRun(() => true)).toBe("skipped");
+    expect(gate.before).toHaveBeenCalledTimes(1);
   });
 
   it("реклама есть — спрашивает межстраничную при старте забега; сбой — забег без неё", async () => {

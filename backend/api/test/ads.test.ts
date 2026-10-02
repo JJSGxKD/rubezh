@@ -18,7 +18,7 @@ import {
   type AdPlace,
   type PlaceHistoryEntry,
 } from "../src/modules/ads/ads-rules.js";
-import { REWARDED_VIDEO_PLACES } from "../src/modules/ads/interstitial-gate.js";
+import { InterstitialGate, REWARDED_VIDEO_PLACES } from "../src/modules/ads/interstitial-gate.js";
 import { COUNTED_RUN_SEC, INTERSTITIAL_FLAG, interstitialRule, type InterstitialFacts, type InterstitialNumbers } from "../src/modules/ads/interstitial-policy.js";
 import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdsController } from "../src/modules/ads/ads.controller.js";
@@ -77,7 +77,7 @@ function setup(blocks: AdBlockRow[], roll: AdsRoll = rolls(0)) {
   const creatives = new FakeCreatives();
   const flags = flagsOn(INTERSTITIAL_FLAG);
   const gate = interstitialGate(repository, settings, flags);
-  return { repository, passes, settings, creatives, flags, service: new AdsService(repository, roll, passes, settings, creatives, new AdNetworkKeys(repository), gate) };
+  return { repository, passes, settings, creatives, flags, gate, service: new AdsService(repository, roll, passes, settings, creatives, new AdNetworkKeys(repository), gate) };
 }
 
 function offered(offer: AdOffer): Extract<AdOffer, { available: true }> {
@@ -730,7 +730,11 @@ describe("реклама по HTTP", () => {
     app = null;
   });
 
-  async function start(service: AdsService, audience = new AdAudience(new AdNetworkKeys(new MemoryAds()), new FakeTaddyApi())): Promise<NestFastifyApplication> {
+  async function start(
+    service: AdsService,
+    audience = new AdAudience(new AdNetworkKeys(new MemoryAds()), new FakeTaddyApi()),
+    gate = interstitialGate(new MemoryAds(), panelSettings()),
+  ): Promise<NestFastifyApplication> {
     @Module({
       controllers: [AdsController],
       providers: [
@@ -738,6 +742,7 @@ describe("реклама по HTTP", () => {
         { provide: REDIS, useValue: unavailableRedis },
         { provide: AdsService, useValue: service },
         { provide: AdAudience, useValue: audience },
+        { provide: InterstitialGate, useValue: gate },
         RateLimiter,
         AuthGuard,
       ],
@@ -795,14 +800,27 @@ describe("реклама по HTTP", () => {
   });
 
   it("сети для SDK на старте — по токену и площадке из него; без токена — 401", async () => {
-    const { service } = setup([]);
-    const server = await start(service);
+    const { service, gate } = setup([]);
+    const server = await start(service, undefined, gate);
     expect((await server.inject({ method: "GET", url: "/api/v1/ads/networks" })).statusCode).toBe(401);
     const telegram = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
     const response = await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${telegram}` } });
-    expect(response.json<{ data: unknown }>().data).toEqual({ networks: [{ network: "taddy", keys: { pubId: "14cbeb980853dd416003462ca4db7c12" } }] });
+    expect(response.json<{ data: unknown }>().data).toEqual({ networks: [{ network: "taddy", keys: { pubId: "14cbeb980853dd416003462ca4db7c12" } }], interstitial: true });
     const vk = await signAccessToken({ accountId: ME, platform: "vk", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
-    expect((await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${vk}` } })).json<{ data: unknown }>().data).toEqual({ networks: [] });
+    expect((await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${vk}` } })).json<{ data: unknown }>().data).toEqual({ networks: [], interstitial: true });
+  });
+
+  it("ждать ли межстраничную, клиент узнаёт на запуске: площадка с моментом старта и доля флага", async () => {
+    const { service, gate, flags } = setup([]);
+    const server = await start(service, undefined, gate);
+    const as = async (platform: "telegram" | "web") => {
+      const token = await signAccessToken({ accountId: ME, platform, platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+      return (await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${token}` } })).json<{ data: { interstitial: boolean } }>().data.interstitial;
+    };
+    expect(await as("telegram")).toBe(true);
+    expect(await as("web")).toBe(false);
+    flags.keys.clear();
+    expect(await as("telegram")).toBe(false);
   });
 
   it("сеть с API получает язык и премиум со слов клиента, адрес и браузер — из запроса; кривой язык — 400", async () => {

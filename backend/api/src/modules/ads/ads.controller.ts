@@ -8,6 +8,7 @@ import type { AdRequester } from "./ad-creatives.js";
 import { AD_DEVICES, AD_PLACES } from "./ads-rules.js";
 import type { AdOutcome } from "./ads.repository.js";
 import { AdsService, type AdOffer } from "./ads.service.js";
+import { InterstitialGate } from "./interstitial-gate.js";
 import { INTERSTITIAL_MOMENTS } from "./interstitial-policy.js";
 
 /**
@@ -68,17 +69,21 @@ export class AdsController {
     private readonly ads: AdsService,
     private readonly limiter: RateLimiter,
     private readonly audience: AdAudience,
+    private readonly interstitials: InterstitialGate,
   ) {}
 
   /**
-   * Сети, чей SDK клиент поднимает при запуске, — для учёта аудитории (Р78):
-   * у каждого игрока их площадки, включена сеть или нет. Ключи публичные —
-   * их всё равно видно в коде клиента; ответ — из запаса в памяти.
+   * Реклама на запуске. Сети, чей SDK клиент поднимает для учёта аудитории
+   * (Р78), — у каждого игрока их площадки, включена сеть или нет; ключи
+   * публичные — их всё равно видно в коде клиента; ответ — из запаса в
+   * памяти. `interstitial` — ждать ли межстраничную при старте забега
+   * (WP12 ч.10): вне доли выката клиент её не спрашивает вовсе.
    */
   @Get("networks")
-  async networks(@Req() request: unknown): Promise<{ data: { networks: AdNetworkSetup[] } }> {
-    const { platform } = accountOf(request);
-    return { data: { networks: await this.audience.launchSetup(platform) } };
+  async networks(@Req() request: unknown): Promise<{ data: { networks: AdNetworkSetup[]; interstitial: boolean } }> {
+    const { accountId, platform } = accountOf(request);
+    const [networks, interstitial] = await Promise.all([this.audience.launchSetup(platform), this.interstitials.expected({ accountId, platform }, new Date())]);
+    return { data: { networks, interstitial } };
   }
 
   @Post("sessions")

@@ -2007,6 +2007,10 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant N as Сеть: SDK или наш блок
 
+    C->>AD: на запуске: GET /api/v1/ads/networks
+    AD->>F: ads.interstitial для игрока
+    AD-->>C: { networks, interstitial }
+    Note over C: interstitial: false — старт забега не спрашивает вовсе
     Note over C: «Играть» — параллельно с движком,<br/>«Ещё раз» — до перезапуска
     C->>AD: POST /api/v1/ads/sessions { place: interstitial, moment: run_start }
     AD->>DB: VIP? сессии места с начала вчерашних суток
