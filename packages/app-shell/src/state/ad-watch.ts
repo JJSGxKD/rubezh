@@ -1,6 +1,7 @@
 import type { AdFailureReason, AdShowOutcome, AdShowRequest } from "@bh/shared-types";
+import type { CreativeHooks, CreativeResult, CreativeShow } from "../ads/ad-creative";
 import { audio } from "../audio";
-import { AD_COOLDOWN, adDeviceOf, createAdsApi, passSession, type AdDevice, type AdOffer, type AdPlace, type AdsApi } from "./ads-api";
+import { AD_COOLDOWN, adDeviceOf, createAdsApi, passSession, type AdCreativeOffer, type AdOffer, type AdPlace, type AdViewerHints, type AdsApi } from "./ads-api";
 import type { AnalyticsEvent, AnalyticsPayload } from "./analytics";
 import { usePlatform } from "./platform";
 import { track, useShell } from "./shell";
@@ -12,6 +13,10 @@ import { track, useShell } from "./shell";
  * готовую сессию сами, потому что знают, что дать.
  *
  * У VIP ролика нет (§3.6): выдача сразу отдаёт выполненную сессию.
+ *
+ * Объявление сети с API (Taddy, Р78) показывает не SDK, а наш рекламный
+ * блок — своим чанком при первом показе: досмотр — его отсчёт, показ и клик
+ * — шаги сервера, а сети о них сообщает уже сервер.
  *
  * Модуль грузится с экраном места — первой загрузке он не нужен.
  */
@@ -42,12 +47,18 @@ export type AdWatchResult =
   | { kind: "failed" };
 
 export type AdShow = (request: AdShowRequest) => Promise<AdShowOutcome>;
+export type CreativeShower = (show: CreativeShow, hooks: CreativeHooks) => Promise<CreativeResult>;
 
 export interface AdWatchDeps {
   ads: Pick<AdsApi, "offer" | "report">;
   /** показ площадки; нет — площадка рекламу сетей не показывает */
   show: AdShow | undefined;
-  device: AdDevice | null;
+  /** наш рекламный блок для объявления сети с API */
+  showCreative: CreativeShower;
+  /** открыть ссылку объявления; нет — блок откроет её адаптером площадки сам */
+  openLink?(url: string): void;
+  /** устройство, язык и премиум — подсказки выдаче */
+  viewer: AdViewerHints;
   /** звук игры молчит, пока идёт ролик: у роликов свой звук */
   mute<T>(task: () => Promise<T>): Promise<T>;
   track(event: AnalyticsEvent, payload: AnalyticsPayload): void;
@@ -67,7 +78,7 @@ const NO_ADS: ReadonlySet<AdFailureReason> = new Set(["no_fill", "misconfigured"
 export async function watchAd(place: AdPlace, deps: AdWatchDeps = browserDeps()): Promise<AdWatchResult> {
   let lastReason: AdFailureReason = "no_fill";
   for (let attempt = 1; attempt <= AD_NETWORK_ATTEMPTS; attempt++) {
-    const response = await deps.ads.offer(place, deps.device);
+    const response = await deps.ads.offer(place, deps.viewer);
     if (!response.ok) return { kind: "failed" };
     const offer = response.data;
     if (!offer.available) {
@@ -78,15 +89,21 @@ export async function watchAd(place: AdPlace, deps: AdWatchDeps = browserDeps())
     const pass = passSession(offer);
     if (pass !== null) return { kind: "watched", sessionId: pass, source: "pass" };
 
+    const creative = offer.creative ?? null;
     const show = deps.show;
-    if (show === undefined) {
+    if (creative === null && show === undefined) {
       // Площадка без рекламы сетей: другая сеть тоже не покажется.
       void deps.ads.report(offer.sessionId, { outcome: "failed", reason: "unsupported" });
       return { kind: "no_ads" };
     }
     const startedAt = deps.now();
     const request = requestOf(offer);
-    const outcome: AdShowOutcome = request === null ? { kind: "failed", reason: "unsupported" } : await deps.mute(() => show(request));
+    const outcome: AdShowOutcome =
+      creative !== null
+        ? await showCreativeOffer(offer, creative, place, deps)
+        : request === null || show === undefined
+          ? { kind: "failed", reason: "unsupported" }
+          : await deps.mute(() => show(request));
     const fields = { place, network: offer.network, ms: Math.max(0, deps.now() - startedAt) };
 
     if (outcome.kind === "completed") {
@@ -105,6 +122,23 @@ export async function watchAd(place: AdPlace, deps: AdWatchDeps = browserDeps())
     if (!NEXT_NETWORK.has(outcome.reason)) break;
   }
   return NO_ADS.has(lastReason) ? { kind: "no_ads" } : { kind: "failed" };
+}
+
+/**
+ * Объявление нашим блоком. Показ и клик — шагами сервера по ходу: сети о
+ * них сообщает сервер. За награду — всё, кроме межстраничной.
+ */
+async function showCreativeOffer(offer: Extract<AdOffer, { available: true }>, creative: AdCreativeOffer, place: AdPlace, deps: AdWatchDeps): Promise<AdShowOutcome> {
+  const hooks: CreativeHooks = {
+    onShown: () => void deps.ads.report(offer.sessionId, { outcome: "shown" }),
+    onClick: () => {
+      deps.track("ad_clicked", { place, network: offer.network });
+      void deps.ads.report(offer.sessionId, { outcome: "clicked" });
+    },
+    ...(deps.openLink === undefined ? {} : { openLink: deps.openLink }),
+  };
+  const result = await deps.mute(() => deps.showCreative({ ad: creative.ad, viewSec: creative.viewSec, rewarded: offer.format !== "interstitial" }, hooks));
+  return result.kind === "failed" ? { kind: "failed", reason: result.reason } : result;
 }
 
 const AD_FORMATS: readonly AdShowRequest["format"][] = ["rewarded", "interstitial", "task"];
@@ -161,12 +195,25 @@ async function muted<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Блок — своим чанком при первом показе креатива. Чанк не пришёл — показа не
+ * было: исход `load_failed` уходит серверу и в `ad_failed`, а выдача — к
+ * следующей сети.
+ */
+const showCreativeLazily: CreativeShower = async (show, hooks) =>
+  await import("../ads/ad-creative").then(
+    async (module) => await module.showCreative(show, hooks),
+    (): CreativeResult => ({ kind: "failed", reason: "load_failed" }),
+  );
+
 function browserDeps(): AdWatchDeps {
   const adapter = useShell.getState().adapter;
+  const client = adapter.clientInfo();
   return {
     ads: createAdsApi(),
     show: adapter.showAd?.bind(adapter),
-    device: adDeviceOf(adapter.clientInfo().platform),
+    showCreative: showCreativeLazily,
+    viewer: { device: adDeviceOf(client.platform), language: client.language ?? null, premium: client.premium ?? null },
     mute: muted,
     track,
     now: () => Date.now(),

@@ -52,6 +52,12 @@ describe("переводы", () => {
     expect(t("gallery.modals")).toBe("Модалки");
   });
 
+  it("подписи рекламного блока — только в его чанке", async () => {
+    expect(hasTranslation("ads.label")).toBe(false);
+    await import("../src/i18n/ads");
+    expect(t("ads.open")).toBe("Открыть");
+  });
+
   it("знает ключи контента: имена оружия и пассивок приходят из core-game", () => {
     for (const key of ["weapon.spark.name", "passive.might.name", "upgrade.heal.name"]) {
       expect(hasTranslation(key), key).toBe(true);

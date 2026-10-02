@@ -133,7 +133,7 @@ export class TelegramAdapter implements PlatformAdapter {
 
   clientInfo(): PlatformClientInfo {
     const client = describeTelegramClient();
-    return { platform: client.platform, version: client.version };
+    return { platform: client.platform, version: client.version, language: client.languageCode, premium: client.isPremium };
   }
 
   /**

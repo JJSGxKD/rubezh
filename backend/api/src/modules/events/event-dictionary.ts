@@ -229,6 +229,9 @@ export const EVENT_DICTIONARY = {
   // замолчал. `attempt` — какая по счёту сеть в этом нажатии: доля вторых —
   // как часто основная сеть подводит (docs/22 §5.5).
   ad_failed: { version: 1, payload: payload({ place: id, network: id, reason: id, attempt: count, ms: seconds }) },
+  // Игрок открыл объявление нашего рекламного блока (Р78): у креатива сети с
+  // API клик впервые виден нам самим, а не только в кабинете сети.
+  ad_clicked: { version: 1, payload: payload({ place: id, network: id }) },
   // Хозяин места выдал награду за рекламу: `ad` — за досмотр, `pass` — VIP
   // без ролика. Досмотр без этого события — награда, потерянная по дороге.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]) }) },

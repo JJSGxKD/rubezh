@@ -289,6 +289,13 @@ export interface PlatformClientInfo {
   platform: string | null;
   /** версия API клиента площадки */
   version: string | null;
+  /**
+   * Язык и премиум игрока со слов клиента — подсказка сети с API для подбора
+   * рекламы (docs/35-stage4-plan.md Р78). Площадка, которая их не знает, —
+   * без полей.
+   */
+  language?: string | null;
+  premium?: boolean | null;
 }
 
 export interface InvitePayload {
