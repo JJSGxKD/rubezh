@@ -106,13 +106,53 @@ else
   log "хранилище бэкапов не задано — бэкап на момент выключен, остаётся ежедневный дамп"
 fi
 
+# Место на диске — до всего, что пишет в базу. Миграция, упавшая на полном
+# диске, остаётся в журнале Prisma неудачной, и API не поднимается ни новой,
+# ни прежней версии, пока её не снимут руками (docs/20-env-and-ports.md §5.5).
+# Поэтому сначала уходят старые образы API — их по одному на каждый выкат, — а
+# если места всё равно мало, выкат останавливается до миграций: работающий API
+# продолжает работать.
+API_IMAGE="ghcr.io/jjsgxkd/rubezh-api"   # тот же, что у сервиса api в compose.yml
+MIN_FREE_MB=2048
+free_mb() { df -Pm "$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo /)" | awk 'NR == 2 { print $4 }'; }
+# Образы API, кроме названных: текущий и тот, на который откатываемся.
+prune_api_images() {
+  docker images "$API_IMAGE" --format '{{.Tag}}' | { grep -vxF -e "$1" -e "${2:-$1}" || true; } |
+    while read -r tag; do docker rmi "${API_IMAGE}:${tag}" > /dev/null 2>&1 || true; done
+  docker image prune -f > /dev/null 2>&1 || true
+}
+ensure_space() {
+  local free
+  free="$(free_mb)"
+  if [ "$free" -lt "$MIN_FREE_MB" ]; then
+    log "свободно ${free} МБ, нужно не меньше ${MIN_FREE_MB} — выкат остановлен до миграций, API остаётся на ${previous:-прежней версии}. Что занято: docker system df; du -xh --max-depth=1 /var/lib/docker /srv/rubezh"
+    exit 1
+  fi
+}
+
 previous="$(env_value API_TAG)"
+prune_api_images "$VERSION" "$previous"
+ensure_space
 log "API ${previous:-—} → ${VERSION}"
-set_env_value API_TAG "$VERSION"
 docker compose pull --quiet api
-if ! docker compose up -d --wait --wait-timeout 180 api; then
+# Новый образ занял место — проверка ещё раз, пока миграции не начались.
+ensure_space
+set_env_value API_TAG "$VERSION"
+# Повтор выката той же версии после ручной починки: тег не сменился, и
+# compose не пересоздаёт контейнер, а застаёт упавший API в паузе между
+# перезапусками и считает выкат неудачным — с логами прошлых падений.
+# Нездоровый API поэтому пересоздаётся; здоровый той же версии не трогается.
+api_health() { docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$(docker compose ps -q api)" 2> /dev/null || echo none; }
+recreate=()
+[ "$(api_health)" = healthy ] || recreate=(--force-recreate)
+if ! docker compose up -d --wait --wait-timeout 180 "${recreate[@]}" api; then
   log "API ${VERSION} не прошёл healthcheck — возврат на ${previous}"
   docker compose logs --tail 80 api || true
+  # Миграция, отмеченная в базе неудачной, не даст подняться и прежней
+  # версии: её entrypoint тоже начинает с `migrate deploy`.
+  if docker compose logs --tail 80 api 2>/dev/null | grep -qE 'P3018|P3009'; then
+    log "миграция отмечена в базе неудачной — API не поднимется ни одной версией, пока её не снимут: docs/20-env-and-ports.md §5.5"
+  fi
   if [ -n "$previous" ]; then
     set_env_value API_TAG "$previous"
     docker compose up -d --wait --wait-timeout 180 api || true
@@ -176,6 +216,12 @@ cron_line="17 3 * * * ${APP}/backup.sh >> /srv/rubezh/backups/backup.log 2>&1"
 # остановил бы выкат на этой строке.
 watch_line="*/10 * * * * ${APP}/backup-watch.sh >> /srv/rubezh/backups/backup-watch.log 2>&1"
 { crontab -l 2>/dev/null | grep -vF -e "${APP}/backup.sh" -e "${APP}/backup-watch.sh" || true; echo "$cron_line"; echo "$watch_line"; } | crontab -
+
+# Старые образы — после успешного выката: прежний остаётся для отката.
+prune_api_images "$VERSION" "$previous"
+# Кеш сборки Caddy и бэкапа (`--build` выше) растёт с каждым выкатом; недели
+# хватает, чтобы пересборка без изменений не скачивала слои заново.
+docker builder prune -f --filter until=168h > /dev/null 2>&1 || true
 
 echo "$VERSION" > .deployed
 log "выкачено: ${VERSION}"

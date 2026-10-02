@@ -11,8 +11,18 @@
 
 name: rubezh
 
+# Логи контейнеров — с пределом: по умолчанию Docker пишет их без конца, и
+# болтливый API однажды съедает диск, а с ним — базу (docs/20-env-and-ports.md
+# §5.5). Пять файлов по 20 МБ на контейнер — сутки-двое разбора.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   caddy:
+    logging: *logging
     build: ./caddy
     restart: unless-stopped
     ports:
@@ -36,6 +46,7 @@ services:
       retries: 3
 
   api:
+    logging: *logging
     # Свой образ по номеру релиза: тег переписывает deploy.sh.
     image: ghcr.io/jjsgxkd/rubezh-api:${API_TAG}
     restart: unless-stopped
@@ -55,6 +66,7 @@ services:
     mem_limit: 1g
 
   postgres:
+    logging: *logging
     image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     restart: unless-stopped
     environment:
@@ -100,6 +112,7 @@ services:
       retries: 5
 
   redis:
+    logging: *logging
     image: redis:7.4.11-alpine3.21@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     restart: unless-stopped
     # appendonly — лидерборды и очереди переживают перезапуск; источник истины
@@ -119,6 +132,7 @@ services:
   # репозитория — раз в сутки. Профиль backup включает deploy.sh, когда
   # хранилище задано (Р53: ключ задан — включено).
   backup:
+    logging: *logging
     build: ./backup
     profiles: [backup]
     restart: unless-stopped
@@ -146,6 +160,7 @@ services:
   # Туннели разработчиков (docs/20-env-and-ports.md §4): Caddy принимает
   # frpc по WebSocket на frp.<домен> и отдаёт dev-адреса в vhost frps.
   frps:
+    logging: *logging
     image: fatedier/frps:v0.71.0@sha256:cd8b947ba61678b200baa4f71ccc33f3c52e4e2cc0059700ba3b8354e36af7c3
     restart: unless-stopped
     command: ["-c", "/etc/frp/frps.toml"]
