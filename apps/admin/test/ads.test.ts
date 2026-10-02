@@ -253,6 +253,23 @@ describe("реклама в панели: сети", () => {
     const result = await fetchAds(new AdminApi(fetch), 7);
     expect(result.ok && result.data.profiles.map((profile) => profile.platforms)).toEqual([["telegram", "max", "vk", "web"], ["telegram"]]);
   });
+
+  it("сеть учёта аудитории и формат нашего блока — из профиля; сервер без полей — SDK и без учёта", async () => {
+    const taddy = {
+      ...PROFILES[0],
+      key: "taddy",
+      trackAudience: true,
+      formats: [{ format: "rewarded", title: "Креатив по API", unit: null, success: ["view"], delivery: "api" }],
+    };
+    const legacy: Partial<AdNetworkProfile> = { ...PROFILES[1] };
+    delete legacy.trackAudience;
+    const future = { ...PROFILES[1], formats: [{ format: "rewarded", title: "Push", unit: null, success: ["view"], delivery: "push" }] };
+    const { fetch } = fakeFetch(json(200, { data: { ...view({ profiles: [] }), profiles: [taddy, legacy, future] } }));
+    const result = await fetchAds(new AdminApi(fetch), 7);
+    const profiles = result.ok ? result.data.profiles : [];
+    expect(profiles.map((profile) => profile.trackAudience === true)).toEqual([true, false, false]);
+    expect(profiles.map((profile) => profile.formats[0]?.delivery ?? "sdk")).toEqual(["api", "sdk", "sdk"]);
+  });
 });
 
 describe("реклама в панели: мелочи", () => {

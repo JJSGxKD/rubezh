@@ -84,6 +84,17 @@ export class RedisWelcomeCardCache implements WelcomeCardCache {
   }
 }
 
+/**
+ * Кому ещё нужен запуск бота: рекламной сети, которая так учитывает
+ * аудиторию бота (docs/35-stage4-plan.md Р78). Какой — команда не знает:
+ * слушателя подключает модуль рекламы.
+ */
+export interface BotStartListener {
+  botStarted(starter: { id: number; language: string | null; premium: boolean | null }, startParam: string | null): Promise<void>;
+}
+
+export const BOT_START_LISTENER = Symbol("BOT_START_LISTENER");
+
 export type WelcomeBotApi = Pick<TelegramBotApi, "sendPhoto" | "sendMessage" | "setMenuWebApp">;
 export type WelcomeRenderer = (card: WelcomeCard) => Buffer;
 export const WELCOME_RENDERER = Symbol("WELCOME_RENDERER");
@@ -107,6 +118,7 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
     @Inject(WELCOME_RENDERER) private readonly render: WelcomeRenderer,
     private readonly identity: BotIdentity,
     private readonly auth: AuthService,
+    @Inject(BOT_START_LISTENER) private readonly startListener: BotStartListener,
   ) {}
 
   onModuleInit(): void {
@@ -140,8 +152,10 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
 
     // Вход в канал — раньше окна повтора: второй `/start` по новой ссылке —
     // это новое касание, а повтор в том же окне отсекает атрибуция сама.
-    await this.enter(message.from, message.text);
+    const startParam = startParamOf(message.text);
+    await this.enter(message.from, startParam);
     if (!(await this.claim(chatId))) return true;
+    this.notifyStart(message.from, startParam);
 
     const language = languageOf(message.from.language_code);
     const card: WelcomeCard = {
@@ -175,7 +189,7 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
    * касанием. Не вышло — карточка всё равно уходит: ответ игроку важнее
    * записи, а следующий вход её догонит.
    */
-  private async enter(from: TelegramUser, text: string): Promise<void> {
+  private async enter(from: TelegramUser, startParam: string | null): Promise<void> {
     if (!this.config.auth.enabled) return;
     try {
       await this.auth.enterChannel({
@@ -183,11 +197,22 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
         platformUserId: String(from.id),
         displayName: telegramName(from),
         username: from.username ?? null,
-        startParam: text.trim().split(/\s+/)[1] ?? null,
+        startParam,
       });
     } catch (error: unknown) {
       this.log("warn", "entry_lost", { reason: reasonOf(error) });
     }
+  }
+
+  /**
+   * Запуск — слушателю мимо ответа игроку: карточка не ждёт чужого сервера,
+   * а у вызова сети свой таймаут. Двойное нажатие в окне повтора сюда не
+   * доходит — сеть считает один запуск.
+   */
+  private notifyStart(from: TelegramUser, startParam: string | null): void {
+    this.startListener
+      .botStarted({ id: from.id, language: from.language_code ?? null, premium: from.is_premium ?? null }, startParam)
+      .catch((error: unknown) => this.log("warn", "start_listener_failed", { reason: reasonOf(error) }));
   }
 
   private async send(chatId: string, card: WelcomeCard, userId: string): Promise<void> {
@@ -294,6 +319,11 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
   private log(level: "log" | "warn", event: string, fields: Record<string, unknown>): void {
     this.logger[level](JSON.stringify({ module: "welcome", event, ...fields }));
   }
+}
+
+/** Параметр ссылки `t.me/<бот>?start=…` — второе слово команды. */
+function startParamOf(text: string): string | null {
+  return text.trim().split(/\s+/)[1] ?? null;
 }
 
 function reasonOf(error: unknown): string {

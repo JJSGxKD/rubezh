@@ -1,8 +1,9 @@
-import { Body, Controller, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
+import { AdAudience, type AdNetworkSetup } from "./ad-audience.js";
 import type { AdRequester } from "./ad-creatives.js";
 import { AD_DEVICES, AD_PLACES } from "./ads-rules.js";
 import type { AdOutcome } from "./ads.repository.js";
@@ -53,7 +54,19 @@ export class AdsController {
   constructor(
     private readonly ads: AdsService,
     private readonly limiter: RateLimiter,
+    private readonly audience: AdAudience,
   ) {}
+
+  /**
+   * Сети, чей SDK клиент поднимает при запуске, — для учёта аудитории (Р78):
+   * у каждого игрока их площадки, включена сеть или нет. Ключи публичные —
+   * их всё равно видно в коде клиента; ответ — из запаса в памяти.
+   */
+  @Get("networks")
+  async networks(@Req() request: unknown): Promise<{ data: { networks: AdNetworkSetup[] } }> {
+    const { platform } = accountOf(request);
+    return { data: { networks: await this.audience.launchSetup(platform) } };
+  }
 
   @Post("sessions")
   @HttpCode(200)

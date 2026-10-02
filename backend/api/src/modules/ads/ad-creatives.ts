@@ -58,7 +58,7 @@ export const AD_CREATIVES = Symbol("AD_CREATIVES");
 export const TADDY_API = Symbol("TADDY_API");
 
 /** Язык — основной подтег: Taddy ждёт `ru`, а Telegram отдаёт и `pt-br`. */
-function languageOf(language: string | null): string | null {
+export function primaryLanguage(language: string | null): string | null {
   const primary = language?.split("-")[0]?.toLowerCase() ?? "";
   return /^[a-z]{2,3}$/.test(primary) ? primary : null;
 }
@@ -71,7 +71,7 @@ export function taddyUser(requester: AdRequester | null): TaddyUser | null {
   if (requester === null || !/^[1-9][0-9]{0,15}$/.test(requester.platformUserId)) return null;
   const id = Number(requester.platformUserId);
   if (!Number.isSafeInteger(id)) return null;
-  const language = languageOf(requester.language);
+  const language = primaryLanguage(requester.language);
   return {
     id,
     ...(language === null ? {} : { language }),

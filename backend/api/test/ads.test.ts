@@ -22,6 +22,7 @@ import {
 import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdsController } from "../src/modules/ads/ads.controller.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
+import { AdAudience } from "../src/modules/ads/ad-audience.js";
 import { eligibleBlocks } from "../src/modules/ads/ad-blocks.js";
 import { NetworkCreatives, taddyUser, type AdRequester } from "../src/modules/ads/ad-creatives.js";
 import { CREATIVE_VIEW_SEC } from "../src/modules/ads/ad-networks.js";
@@ -425,6 +426,53 @@ describe("Taddy: игрок и отметки", () => {
   });
 });
 
+describe("учёт аудитории сетью (Р78)", () => {
+  const PUB_ID = "14cbeb980853dd416003462ca4db7c12";
+
+  function audienceWith(networks: { networkKey: string; keys: Record<string, string> }[]) {
+    const repository = new MemoryAds();
+    repository.networks = networks;
+    const starts: { pubId: string; user: TaddyUser; startParam: string | null }[] = [];
+    const taddy: TaddyApi = {
+      getAd: async () => ({ kind: "none", reason: "no_fill" }),
+      impression: async () => undefined,
+      viewThrough: async () => undefined,
+      start: async (pubId, user, startParam) => void starts.push({ pubId, user, startParam }),
+    };
+    return { starts, audience: new AdAudience(new AdNetworkKeys(repository), taddy) };
+  }
+
+  it("SDK на старте — у сети учёта с ключами, включена она или нет; только на её площадке", async () => {
+    const { audience } = audienceWith([
+      { networkKey: "taddy", keys: { pubId: PUB_ID } },
+      { networkKey: "adsgram", keys: {} },
+      { networkKey: "richads", keys: { pubId: "1001262", appId: "6023" } },
+    ]);
+    expect(await audience.launchSetup("telegram")).toEqual([{ network: "taddy", keys: { pubId: PUB_ID } }]);
+    expect(await audience.launchSetup("vk")).toEqual([]);
+  });
+
+  it("стёртый или кривой ключ — SDK не поднимается", async () => {
+    expect(await audienceWith([{ networkKey: "taddy", keys: {} }]).audience.launchSetup("telegram")).toEqual([]);
+    expect(await audienceWith([{ networkKey: "taddy", keys: { pubId: "не-ключ" } }]).audience.launchSetup("telegram")).toEqual([]);
+    expect(await audienceWith([]).audience.launchSetup("telegram")).toEqual([]);
+  });
+
+  it("запуск бота — Taddy с основным подтегом языка; кривой параметр ссылки не уходит; без pubId — ничего", async () => {
+    const { audience, starts } = audienceWith([{ networkKey: "taddy", keys: { pubId: PUB_ID } }]);
+    await audience.botStarted({ id: 7, language: "pt-BR", premium: true }, "c-promo2026");
+    await audience.botStarted({ id: 8, language: null, premium: null }, "ссылка");
+    expect(starts).toEqual([
+      { pubId: PUB_ID, user: { id: 7, language: "pt", premium: true }, startParam: "c-promo2026" },
+      { pubId: PUB_ID, user: { id: 8 }, startParam: null },
+    ]);
+
+    const silent = audienceWith([{ networkKey: "taddy", keys: {} }]);
+    await silent.audience.botStarted({ id: 7, language: "ru", premium: false }, null);
+    expect(silent.starts).toEqual([]);
+  });
+});
+
 describe("забор награды хозяином места", () => {
   it("недосмотренное не забирается; досмотренное — однажды, повтор отдаёт ту же сессию для дожима", async () => {
     const { service } = setup([block("adsgram", 10)]);
@@ -541,6 +589,16 @@ describe("реклама без ролика (VIP)", () => {
   });
 });
 
+/** Taddy, который ни на что не отвечает: HTTP-тестам сеть не нужна. */
+class FakeTaddyApi implements TaddyApi {
+  async getAd() {
+    return { kind: "none" as const, reason: "no_fill" as const };
+  }
+  async impression() {}
+  async viewThrough() {}
+  async start() {}
+}
+
 describe("реклама по HTTP", () => {
   let app: NestFastifyApplication | null = null;
   const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
@@ -550,13 +608,14 @@ describe("реклама по HTTP", () => {
     app = null;
   });
 
-  async function start(service: AdsService): Promise<NestFastifyApplication> {
+  async function start(service: AdsService, audience = new AdAudience(new AdNetworkKeys(new MemoryAds()), new FakeTaddyApi())): Promise<NestFastifyApplication> {
     @Module({
       controllers: [AdsController],
       providers: [
         { provide: APP_CONFIG, useValue: loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv) },
         { provide: REDIS, useValue: unavailableRedis },
         { provide: AdsService, useValue: service },
+        { provide: AdAudience, useValue: audience },
         RateLimiter,
         AuthGuard,
       ],
@@ -586,6 +645,17 @@ describe("реклама по HTTP", () => {
     expect(offer.statusCode).toBe(200);
     expect(offer.json<{ data: AdOffer }>().data).toMatchObject({ available: true, network: "adsgram" });
     expect(repository.sessions).toHaveLength(1);
+  });
+
+  it("сети для SDK на старте — по токену и площадке из него; без токена — 401", async () => {
+    const { service } = setup([]);
+    const server = await start(service);
+    expect((await server.inject({ method: "GET", url: "/api/v1/ads/networks" })).statusCode).toBe(401);
+    const telegram = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    const response = await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${telegram}` } });
+    expect(response.json<{ data: unknown }>().data).toEqual({ networks: [{ network: "taddy", keys: { pubId: "14cbeb980853dd416003462ca4db7c12" } }] });
+    const vk = await signAccessToken({ accountId: ME, platform: "vk", platformUserId: "1" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    expect((await server.inject({ method: "GET", url: "/api/v1/ads/networks", headers: { authorization: `Bearer ${vk}` } })).json<{ data: unknown }>().data).toEqual({ networks: [] });
   });
 
   it("сеть с API получает язык и премиум со слов клиента, адрес и браузер — из запроса; кривой язык — 400", async () => {

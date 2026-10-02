@@ -16,6 +16,7 @@ import { languageOf } from "../src/platforms/telegram/welcome-texts.js";
 import {
   StartCommand,
   WelcomeProgressRegistry,
+  type BotStartListener,
   type WelcomeBotApi,
   type WelcomeCardCache,
 } from "../src/platforms/telegram/welcome.command.js";
@@ -28,7 +29,7 @@ import { PNG_RENDER_TIMEOUT_MS } from "./helpers/card-render.js";
 const TOKEN = "123456:TEST-welcome";
 const VETERAN: WelcomeProgress = { best: { difficulty: "normal", survivalSec: 462.7, rank: 3, total: 41 }, runs: 12 };
 
-function start(fromId: number, patch: { language?: string; name?: string; chat?: string; text?: string } = {}): TelegramUpdate {
+function start(fromId: number, patch: { language?: string; name?: string; chat?: string; text?: string; premium?: boolean } = {}): TelegramUpdate {
   return {
     update_id: fromId,
     message: {
@@ -36,7 +37,13 @@ function start(fromId: number, patch: { language?: string; name?: string; chat?:
       date: 1,
       text: patch.text ?? "/start",
       chat: { id: fromId, type: patch.chat ?? "private" },
-      from: { id: fromId, is_bot: false, first_name: patch.name ?? "Анна", ...(patch.language === undefined ? {} : { language_code: patch.language }) },
+      from: {
+        id: fromId,
+        is_bot: false,
+        first_name: patch.name ?? "Анна",
+        ...(patch.language === undefined ? {} : { language_code: patch.language }),
+        ...(patch.premium === undefined ? {} : { is_premium: patch.premium }),
+      },
     },
   };
 }
@@ -142,6 +149,14 @@ function setup(
       entries.push(entry);
     },
   } as unknown as AuthService;
+  const starts: { starter: Parameters<BotStartListener["botStarted"]>[0]; startParam: string | null }[] = [];
+  let startFails = false;
+  const startListener: BotStartListener = {
+    async botStarted(starter, startParam) {
+      starts.push({ starter, startParam });
+      if (startFails) throw new Error("сеть недоступна");
+    },
+  };
   const command = new StartCommand(
     config,
     switchesOf(config),
@@ -155,6 +170,7 @@ function setup(
     },
     identity,
     auth,
+    startListener,
   );
   const ready = identity.refresh();
   command.onModuleInit();
@@ -171,6 +187,10 @@ function setup(
     entries,
     failEntries: () => {
       entryFails = true;
+    },
+    starts,
+    failStarts: () => {
+      startFails = true;
     },
   };
 }
@@ -216,6 +236,31 @@ describe("/start — вход в канал", () => {
     const group = setup(AUTH);
     await group.router.dispatch(start(9, { chat: "supergroup" }));
     expect(group.entries).toEqual([]);
+  });
+});
+
+describe("/start — рекламной сети (Р78)", () => {
+  it("запуск с параметром ссылки уходит слушателю однажды: двойное нажатие — один запуск", async () => {
+    const bot = setup();
+    await bot.router.dispatch(start(7, { text: "/start c-promo2026", language: "en-US", premium: true }));
+    await bot.router.dispatch(start(7, { text: "/start c-promo2026" }));
+    expect(bot.starts).toEqual([{ starter: { id: 7, language: "en-US", premium: true }, startParam: "c-promo2026" }]);
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  it("без параметра, о чём клиент молчит, — пусто; группа и вход в панель — не запуск", async () => {
+    const bot = setup();
+    await bot.router.dispatch(start(8));
+    await bot.router.dispatch(start(9, { chat: "supergroup" }));
+    await bot.router.dispatch(start(10, { text: "/start panel-AbCdEfGhIjKlMnOpQrStUv" }));
+    expect(bot.starts).toEqual([{ starter: { id: 8, language: null, premium: null }, startParam: null }]);
+  });
+
+  it("сеть не ответила — карточка уходит всё равно", async () => {
+    const bot = setup();
+    bot.failStarts();
+    await bot.router.dispatch(start(7));
+    expect(bot.calls).toHaveLength(1);
   });
 });
 

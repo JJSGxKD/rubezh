@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
+import { AdAudience } from "./ad-audience.js";
 import { AD_CREATIVES, NetworkCreatives, TADDY_API } from "./ad-creatives.js";
 import { AdNetworkKeys } from "./ad-network-keys.js";
 import { ADS_CATALOG_REPOSITORY, PrismaAdsCatalogRepository } from "./ads-catalog.repository.js";
@@ -18,7 +19,8 @@ import { HttpTaddyApi } from "./taddy-api.js";
  * `AdsCatalogService`; VIP регистрирует пропуск рекламы в `AdPasses`.
  *
  * Сети с API (Taddy, Р78) отдают креатив серверу — `AD_CREATIVES`; ключи
- * всех сетей, включённых и нет, держит `AdNetworkKeys`.
+ * всех сетей, включённых и нет, держит `AdNetworkKeys`; учёт аудитории
+ * сетью — SDK на старте и запуск бота — `AdAudience`.
  */
 @Module({
   imports: [AuthModule],
@@ -28,12 +30,13 @@ import { HttpTaddyApi } from "./taddy-api.js";
     AdsCatalogService,
     AdPasses,
     AdNetworkKeys,
+    AdAudience,
     { provide: AD_CREATIVES, useClass: NetworkCreatives },
     { provide: TADDY_API, useFactory: () => new HttpTaddyApi() },
     { provide: ADS_REPOSITORY, useClass: PrismaAdsRepository },
     { provide: ADS_CATALOG_REPOSITORY, useClass: PrismaAdsCatalogRepository },
     { provide: ADS_ROLL, useValue: cryptoRoll },
   ],
-  exports: [AdsService, AdsCatalogService, AdPasses],
+  exports: [AdsService, AdsCatalogService, AdPasses, AdAudience],
 })
 export class AdsModule {}

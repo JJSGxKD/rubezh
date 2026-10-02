@@ -84,6 +84,8 @@ const formatSupportSchema = z.object({
   success: z.array(z.enum(AD_SUCCESS)).min(1),
   maxActive: z.number().optional(),
   note: z.string().optional(),
+  /** `api` — объявление сервер берёт у сети, а рисует наш рекламный блок; нет поля или незнакомое — SDK */
+  delivery: z.enum(["sdk", "api"]).optional().catch(undefined),
 });
 export type AdFormatSupport = z.infer<typeof formatSupportSchema>;
 
@@ -101,6 +103,8 @@ const profileSchema = z.object({
   keys: z.array(keyFieldSchema),
   formats: z.array(formatSupportSchema),
   verified: z.boolean(),
+  /** SDK сети поднимается у всех игроков её площадок, пока заданы ключи, — включена она или нет; нет поля — нет */
+  trackAudience: z.boolean().optional(),
 });
 export type AdNetworkProfile = z.infer<typeof profileSchema>;
 
