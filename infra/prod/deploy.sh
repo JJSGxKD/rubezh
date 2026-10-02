@@ -138,7 +138,14 @@ docker compose pull --quiet api
 # Новый образ занял место — проверка ещё раз, пока миграции не начались.
 ensure_space
 set_env_value API_TAG "$VERSION"
-if ! docker compose up -d --wait --wait-timeout 180 api; then
+# Повтор выката той же версии после ручной починки: тег не сменился, и
+# compose не пересоздаёт контейнер, а застаёт упавший API в паузе между
+# перезапусками и считает выкат неудачным — с логами прошлых падений.
+# Нездоровый API поэтому пересоздаётся; здоровый той же версии не трогается.
+api_health() { docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$(docker compose ps -q api)" 2> /dev/null || echo none; }
+recreate=()
+[ "$(api_health)" = healthy ] || recreate=(--force-recreate)
+if ! docker compose up -d --wait --wait-timeout 180 "${recreate[@]}" api; then
   log "API ${VERSION} не прошёл healthcheck — возврат на ${previous}"
   docker compose logs --tail 80 api || true
   # Миграция, отмеченная в базе неудачной, не даст подняться и прежней
