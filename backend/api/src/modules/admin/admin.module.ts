@@ -25,6 +25,8 @@ import { FriendsModule } from "../friends/friends.module.js";
 import { ReferralsModule } from "../referrals/referrals.module.js";
 import { AdminSocialController } from "./admin-social.controller.js";
 import { AdminSocialService } from "./admin-social.service.js";
+import { AdminSecretsController } from "./admin-secrets.controller.js";
+import { AdminSecretsService } from "./admin-secrets.service.js";
 import { AdminSettingsController } from "./admin-settings.controller.js";
 import { AdminSettingsService } from "./admin-settings.service.js";
 import { Module } from "@nestjs/common";
@@ -79,6 +81,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
     AdminLinksController,
     AdminFlagsController,
     AdminSettingsController,
+    AdminSecretsController,
     AdminBroadcastsController,
     AdminChangelogController,
     AdminTasksController,
@@ -96,6 +99,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
     AdminExportsService,
     AdminSocialService,
     AdminSettingsService,
+    AdminSecretsService,
     { provide: ADMIN_SESSION_STORE, useClass: RedisAdminSessionStore },
     PanelLoginService,
     { provide: PANEL_LOGIN_STORE, useClass: RedisPanelLoginStore },

@@ -202,6 +202,15 @@ const schema = z.object({
   // опроса (packages/fx/src/sources/crypto.ts).
   FX_COINGECKO_DEMO_KEY: z.string().trim().default(""),
   FX_COINGECKO_PRO_KEY: z.string().trim().default(""),
+
+  // Ключ шифрования ключей интеграций (docs/35-stage4-plan.md Р84, WP46):
+  // токены внешних сервисов, заданные в панели, лежат в базе только
+  // шифртекстом. 32 случайных байта в base64 — `openssl rand -base64 32`.
+  // Пусто — хранилище выключено, и ключи сервисов берутся только из
+  // окружения. Прежний ключ задаётся на время смены: им читаются строки,
+  // ещё не записанные заново.
+  SECRETS_ENCRYPTION_KEY: encryptionKey("SECRETS_ENCRYPTION_KEY"),
+  SECRETS_ENCRYPTION_KEY_PREVIOUS: encryptionKey("SECRETS_ENCRYPTION_KEY_PREVIOUS"),
   // Цена второго шанса (Р5.1): звёзд за каждую начатую минуту забега и
   // потолок цены. Считает сервер, клиент цену только показывает. Рабочие
   // значения до решения геймдизайнера (О1). Потолок схемы — с запасом под
@@ -301,8 +310,13 @@ export interface AppConfig {
   fx: {
     /** запасное значение настройки `fx.polling` */
     pollingEnv: boolean | null;
-    /** ключ CoinGecko: платный важнее демо, нет обоих — без ключа */
-    coingeckoKey: { plan: "demo" | "pro"; value: string } | null;
+    /** ключи CoinGecko из окружения — запасные для хранилища ключей; пусто — не задан */
+    coingeckoDemoKey: string;
+    coingeckoProKey: string;
+  };
+  secrets: {
+    /** ключи шифрования в base64: первый — текущий, им шифруется запись; пусто — хранилище выключено */
+    encryptionKeys: readonly string[];
   };
   payments: {
     /** оплата возможна: вход и чтение обновлений бота; включена ли — настройка `payments.stars` */
@@ -334,6 +348,17 @@ export interface AdminChatValues {
   runReports: string;
   feedback: string;
   runReview: string;
+}
+
+/** Ключ AES-256 в base64: 32 байта — ровно 44 знака с `=` в конце. */
+function encryptionKey(name: string) {
+  return z
+    .string()
+    .trim()
+    .default("")
+    .refine((value) => value === "" || (/^[A-Za-z0-9+/]{43}=$/.test(value) && Buffer.from(value, "base64").length === 32), {
+      message: `${name} — 32 случайных байта в base64: openssl rand -base64 32`,
+    });
 }
 
 function chatTarget(name: string) {
@@ -413,6 +438,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.PAYMENTS_TEST_MODE && parsed.NODE_ENV !== "development") {
     throw new Error("PAYMENTS_TEST_MODE=true допустим только при NODE_ENV=development: вне разработки оплата настоящая");
   }
+  // Прежний ключ без текущего — недописанная смена: чем шифровать новые
+  // записи, неясно, а молча выключенное хранилище вернуло бы ключи окружения.
+  if (parsed.SECRETS_ENCRYPTION_KEY_PREVIOUS !== "" && parsed.SECRETS_ENCRYPTION_KEY === "") {
+    throw new Error("SECRETS_ENCRYPTION_KEY_PREVIOUS задан без SECRETS_ENCRYPTION_KEY: прежний ключ нужен только на время смены, текущий обязателен");
+  }
   const paymentsPossible = authEnabled && botUpdates;
   if (parsed.PAYMENTS_ENABLED === true && !paymentsPossible) {
     throw new Error(
@@ -474,12 +504,11 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     },
     fx: {
       pollingEnv: parsed.FX_ENABLED,
-      coingeckoKey:
-        parsed.FX_COINGECKO_PRO_KEY !== ""
-          ? { plan: "pro", value: parsed.FX_COINGECKO_PRO_KEY }
-          : parsed.FX_COINGECKO_DEMO_KEY !== ""
-            ? { plan: "demo", value: parsed.FX_COINGECKO_DEMO_KEY }
-            : null,
+      coingeckoDemoKey: parsed.FX_COINGECKO_DEMO_KEY,
+      coingeckoProKey: parsed.FX_COINGECKO_PRO_KEY,
+    },
+    secrets: {
+      encryptionKeys: [parsed.SECRETS_ENCRYPTION_KEY, parsed.SECRETS_ENCRYPTION_KEY_PREVIOUS].filter((key) => key !== ""),
     },
     payments: {
       possible: paymentsPossible,

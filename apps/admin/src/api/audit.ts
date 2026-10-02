@@ -43,7 +43,7 @@ export const AUDIT_AREAS = [
   { id: "growth", title: "Привлечение", prefixes: ["links.", "partner.", "promo."] },
   { id: "revenue", title: "Доход", prefixes: ["shop.", "ads.", "fx."] },
   { id: "engagement", title: "Вовлечение", prefixes: ["tasks.", "broadcast.", "changelog."] },
-  { id: "operations", title: "Эксплуатация", prefixes: ["flags.", "settings.", "data."] },
+  { id: "operations", title: "Эксплуатация", prefixes: ["flags.", "settings.", "secrets.", "data."] },
   { id: "team", title: "Команда", prefixes: ["admin.", "roles."] },
 ] as const;
 export type AuditAreaId = (typeof AUDIT_AREAS)[number]["id"];
@@ -90,6 +90,8 @@ const ACTION_TITLES: Record<string, string> = {
   "fx.manual_rate": "Заданный курс",
   "settings.save": "Изменение настройки",
   "settings.reset": "Сброс настройки к окружению",
+  "secrets.save": "Замена ключа интеграции",
+  "secrets.reset": "Сброс ключа интеграции к окружению",
   "flags.save": "Изменение флага",
   "flags.remove": "Удаление флага",
   "tasks.create": "Новое задание",
@@ -182,6 +184,8 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
       return { kind: "акция", label: short(target), route: { section: "promos", id: null } };
     case "settings":
       return { kind: "настройка", label: target, route: { section: "settings", id: null } };
+    case "secrets":
+      return { kind: "ключ", label: named(entry, "title") ?? target, route: { section: "secrets", id: null } };
     case "flags":
       return { kind: "флаг", label: target, route: { section: "flags", id: null } };
     case "tasks":
@@ -217,6 +221,7 @@ const FIELD_TITLES: Record<string, string> = {
   title: "название",
   text: "текст",
   value: "значение",
+  fingerprint: "ключ",
   enabled: "включено",
   active: "включено",
   status: "состояние",
@@ -336,7 +341,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 const VALUE_TITLES: Record<string, Partial<Record<string, string>>> = {
   kind: { shared: "общий код", batch: "пачка кодов", ...KIND_TITLES },
   status: Object.fromEntries(Object.entries(STATUS_LOOK).map(([status, look]) => [status, look.text])),
-  source: { base: "панель", env: "окружение сервера", default: "умолчание" },
+  source: { base: "панель", env: "окружение сервера", default: "умолчание", none: "не задан" },
   place: PLACE_TITLES,
   success: SUCCESS_TITLES,
   platform: PLATFORM_TITLES,

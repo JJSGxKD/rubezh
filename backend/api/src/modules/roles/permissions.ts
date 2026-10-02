@@ -80,6 +80,10 @@ export const PERMISSIONS = [
   // (docs/35-stage4-plan.md §3.18)
   "flags.edit",
   "settings.edit",
+  // Ключи интеграций (WP46, Р84): состояние — без значения, а заменить ключ
+  // сервиса может только владелец — чужой токен уводит конверсии и курсы
+  "secrets.view",
+  "secrets.edit",
   "diagnostics.view",
   "data.export",
   // Инструменты команды в клиенте: режим разработчика, витрина, лаборатория
@@ -143,6 +147,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "promo.edit",
     "flags.edit",
     "settings.edit",
+    "secrets.view",
     "diagnostics.view",
     "data.export",
     "tools.dev",

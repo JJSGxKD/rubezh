@@ -17,6 +17,7 @@ import { PromosScreen } from "./promos/PromosScreen";
 import { ReviewScreen } from "./review/ReviewScreen";
 import { AuditScreen } from "./roles/AuditScreen";
 import { RolesScreen } from "./roles/RolesScreen";
+import { SecretsScreen } from "./secrets/SecretsScreen";
 import { SettingsScreen } from "./settings/SettingsScreen";
 
 /**
@@ -36,6 +37,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   links: () => <LinksScreen />,
   flags: () => <FlagsScreen />,
   settings: (id) => <SettingsScreen focus={id} />,
+  secrets: () => <SecretsScreen />,
   broadcasts: (id) => <BroadcastsScreen id={id} />,
   changelog: () => <ChangelogScreen />,
   tasks: () => <TasksScreen />,
