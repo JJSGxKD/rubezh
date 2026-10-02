@@ -240,6 +240,9 @@ describe("второй шанс в итоге забега", () => {
       this.asked.push(runId);
       return { paid: this.paid, underpaid: this.underpaid };
     }
+    async granted(): Promise<number[]> {
+      return Array.from({ length: this.paid }, (_, index) => index + 1);
+    }
   }
 
   function setup() {

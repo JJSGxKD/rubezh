@@ -29,6 +29,7 @@ import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 import { SecondChance } from "./run/SecondChance";
+import type { AdContinueStage } from "../state/ad-continue";
 import type { ContinueStage } from "../state/continue-purchase";
 
 /**
@@ -151,7 +152,10 @@ export function GalleryScreen(): ReactNode {
         <div className="grid gap-3">
           <SecondChance />
           {CONTINUE_STAGES.map((stage, index) => (
-            <SecondChance key={index} paidPreview={stage} />
+            <SecondChance key={index} paidPreview={stage} adPreview={AD_READY} />
+          ))}
+          {AD_STAGES.map(([ad, paid], index) => (
+            <SecondChance key={`ad-${String(index)}`} adPreview={ad} {...(paid === null ? {} : { paidPreview: paid })} />
           ))}
         </div>
 
@@ -284,6 +288,20 @@ const CONTINUE_STAGES: readonly ContinueStage[] = [
   { kind: "retry", reason: "slow_confirmation", offer: LIVE_OFFER, purchaseId: "preview" },
   { kind: "retry", reason: "offline", offer: null, purchaseId: null },
   { kind: "unavailable", reason: "unverified" },
+];
+
+const AD_READY: AdContinueStage = { kind: "ready", pass: false, notice: null };
+
+/**
+ * Второй шанс за рекламу рядом со звёздами и без них: VIP — одна кнопка,
+ * исходы ролика — строкой, лимит на сегодня — только звёзды.
+ */
+const AD_STAGES: readonly (readonly [AdContinueStage, ContinueStage | null])[] = [
+  [{ kind: "ready", pass: true, notice: null }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "watching", pass: false }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", pass: false, notice: "closed" }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", pass: false, notice: "claim_failed" }, null],
+  [{ kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
 ];
 
 function change(

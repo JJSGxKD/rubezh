@@ -14,7 +14,7 @@ import { useContinuePurchase, type ContinueStage } from "../../state/continue-pu
  * `continue-purchase.ts` и своими текстами: в первую загрузку оплата не
  * попадает.
  */
-export function PaidContinue(props: { result: RunResult }): ReactNode {
+export function PaidContinue(props: { result: RunResult; locked?: boolean }): ReactNode {
   const stage = useContinuePurchase((state) => state.stage);
 
   useEffect(() => {
@@ -28,6 +28,7 @@ export function PaidContinue(props: { result: RunResult }): ReactNode {
   return (
     <PaidContinueView
       stage={stage}
+      locked={props.locked === true}
       onBuy={() => void useContinuePurchase.getState().buy()}
       onRetry={() => void useContinuePurchase.getState().retry()}
     />
@@ -38,10 +39,11 @@ export function PaidContinue(props: { result: RunResult }): ReactNode {
  * Само отображение — без сети и стора: его же показывает витрина компонентов
  * во всех состояниях покупки.
  *
- * Рендерит две ячейки сетки блока «Второй шанс»: кнопку рядом с рекламой и
- * строку состояния на всю ширину под ними.
+ * Рендерит ячейки сетки блока «Второй шанс»: кнопку рядом с рекламой и
+ * строку состояния на всю ширину под ними. `locked` — идёт ролик рекламы:
+ * два способа разом не берутся.
  */
-export function PaidContinueView(props: { stage: ContinueStage; onBuy(): void; onRetry(): void }): ReactNode {
+export function PaidContinueView(props: { stage: ContinueStage; locked?: boolean; onBuy(): void; onRetry(): void }): ReactNode {
   const { stage } = props;
   const offer = offerOf(stage);
   const busy = stage.kind === "loading" || stage.kind === "buying" || stage.kind === "confirming";
@@ -57,7 +59,7 @@ export function PaidContinueView(props: { stage: ContinueStage; onBuy(): void; o
         block
         variant={busy || stage.kind === "ready" ? "stars" : "secondary"}
         loading={busy}
-        disabled={stage.kind !== "ready"}
+        disabled={stage.kind !== "ready" || props.locked === true}
         ariaLabel={offer === null ? t("run.continue.stars.unknown") : t("run.continue.stars", { amount: offer.priceStars })}
         onClick={props.onBuy}
       >
@@ -65,7 +67,7 @@ export function PaidContinueView(props: { stage: ContinueStage; onBuy(): void; o
         <span className="tabular-nums">{offer === null ? "—" : offer.priceStars}</span>
       </Button>
       {line === null ? null : (
-        <div className="col-span-2 flex items-center justify-between gap-2 text-xs text-text-muted" role="status">
+        <div className="order-last col-span-full flex items-center justify-between gap-2 text-xs text-text-muted" role="status">
           <span>{line}</span>
           {stage.kind === "retry" ? (
             <Button variant="ghost" onClick={props.onRetry}>

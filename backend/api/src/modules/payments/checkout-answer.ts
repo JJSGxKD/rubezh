@@ -32,6 +32,7 @@ export type CheckoutRefusal =
   | "price_mismatch"
   | "stale_invoice"
   | "run_finished"
+  | "continue_taken"
   | "unavailable";
 
 export type CheckoutDecision = { ok: true } | { ok: false; reason: CheckoutRefusal };
@@ -44,6 +45,7 @@ const MESSAGES: Record<CheckoutRefusal, string> = {
   price_mismatch: "Цена изменилась — откройте покупку в игре заново.",
   stale_invoice: "Счёт устарел — откройте покупку в игре заново.",
   run_finished: "Забег уже закончен — продолжать нечего.",
+  continue_taken: "Забег уже продолжен за рекламу — звёзды не нужны.",
   unavailable: "Оплата временно недоступна — попробуйте ещё раз.",
 };
 
@@ -61,6 +63,8 @@ export function decideCheckout(view: CheckoutView | null, query: PreCheckout, no
   if (query.currency !== "XTR" || query.totalAmount !== purchase.chargedStars) return refuse("price_mismatch");
   if (nowMs - purchase.invoicedAt.getTime() > INVOICE_TTL_SEC * 1000) return refuse("stale_invoice");
   if (view.runFinished) return refuse("run_finished");
+  // Продолжение взято за рекламу, пока счёт был открыт: брать звёзды не за что.
+  if (view.continueTaken) return refuse("continue_taken");
   return { ok: true };
 }
 
