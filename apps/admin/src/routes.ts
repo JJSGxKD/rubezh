@@ -68,7 +68,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
     title: "Эксплуатация",
     sections: [
       { id: "flags", title: "Флаги", hint: "Включить функцию на площадке или доле игроков — без релиза", permission: "flags.edit" },
-      { id: "settings", title: "Настройки", hint: "Адреса чатов команды и переключатели без релиза", permission: "settings.edit" },
+      { id: "settings", title: "Настройки", hint: "Чаты команды, переключатели и числа — без релиза", permission: "settings.edit" },
       { id: "secrets", title: "Ключи интеграций", hint: "Токены внешних сервисов: заменить без релиза, значение не показывается", permission: "secrets.view" },
       { id: "diagnostics", title: "Диагностика", hint: "Записи забегов и замеры производительности с устройств", permission: "diagnostics.view" },
       { id: "exports", title: "Выгрузки", hint: "Архив событий и отчётов диагностики за период", permission: "data.export" },

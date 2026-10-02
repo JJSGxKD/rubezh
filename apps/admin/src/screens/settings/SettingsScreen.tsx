@@ -1,8 +1,21 @@
 import { useEffect, useState } from "react";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
-import { SETTING_PLACEHOLDER, SOURCE_TITLES, URL_MAX, fetchSettings, groupSettings, resetSetting, saveSetting, settingProblem, settingText, type SettingRow, type SettingValue } from "../../api/settings";
-import { formatDateTime } from "../../format";
+import {
+  SETTING_PLACEHOLDER,
+  SOURCE_TITLES,
+  URL_MAX,
+  fetchSettings,
+  groupSettings,
+  parseInteger,
+  resetSetting,
+  saveSetting,
+  settingProblem,
+  settingText,
+  type SettingRow,
+  type SettingValue,
+} from "../../api/settings";
+import { formatDateTime, plural } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Input, Loading, Notice, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
@@ -15,7 +28,7 @@ export function settingAnchor(key: string): string {
 }
 
 /**
- * Настройки без релиза: адреса чатов команды и переключатели. Значение
+ * Настройки без релиза: адреса чатов команды, переключатели и числа. Значение
  * отсюда сильнее окружения сервера и доходит до всех реплик за секунды;
  * «Сбросить» возвращает то, что записано в `.env` сервера.
  *
@@ -44,13 +57,13 @@ export function SettingsScreen({ focus = null }: { focus?: string | null }) {
   const save = (row: SettingRow, value: SettingValue) =>
     run(
       () => saveSetting(api, row.key, value),
-      (saved) => `«${saved.title}»: ${settingText(saved.kind, saved.value)}`,
+      (saved) => `«${saved.title}»: ${settingText(saved, saved.value)}`,
     );
 
   const reset = (row: SettingRow) =>
     run(
       () => resetSetting(api, row.key),
-      (saved) => `«${saved.title}» снова из ${saved.source === "env" ? "окружения" : "умолчания"}: ${settingText(saved.kind, saved.value)}`,
+      (saved) => `«${saved.title}» снова из ${saved.source === "env" ? "окружения" : "умолчания"}: ${settingText(saved, saved.value)}`,
     );
 
   const editor = (row: SettingRow) => {
@@ -68,28 +81,39 @@ export function SettingsScreen({ focus = null }: { focus?: string | null }) {
         </Button>
       );
     }
-    const problem = settingProblem(row.kind, editing.value);
+    const problem = settingProblem(row, editing.value);
+    // Число уходит числом: в поле — текст, и пустое поле не должно стать нулём.
+    const number = row.kind === "number" ? parseInteger(String(editing.value)) : null;
+    const value = row.kind === "number" ? number : editing.value;
+    const range = row.kind === "number" ? (row.range ?? null) : null;
     return (
       <form
         className="flex flex-wrap items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          if (problem === null) void save(row, editing.value);
+          if (problem === null && value !== null) void save(row, value);
         }}
       >
         <Input
           value={String(editing.value)}
           onChange={(event) => setEditing({ key: row.key, value: event.target.value })}
           placeholder={SETTING_PLACEHOLDER[row.kind]}
-          maxLength={row.kind === "url" ? URL_MAX : 32}
-          className={row.kind === "url" ? "w-96" : "w-56"}
+          maxLength={row.kind === "url" ? URL_MAX : row.kind === "number" ? 9 : 32}
+          inputMode={row.kind === "number" ? "numeric" : undefined}
+          className={row.kind === "url" ? "w-96" : row.kind === "number" ? "w-20 text-right tabular-nums" : "w-56"}
           autoFocus
         />
+        {/* Единица и пределы рядом с полем; вышли за пределы — они же краснеют, без второй строки. */}
+        {range === null ? null : (
+          <span className={`text-xs ${number !== null && problem !== null ? "text-danger" : "text-text-muted"}`}>
+            {plural(number ?? range.max, range.unit)} · от {range.min} до {range.max}
+          </span>
+        )}
         <Button tone="primary" type="submit" disabled={problem !== null || pending}>
           Сохранить
         </Button>
         <Button onClick={() => setEditing(null)}>Отмена</Button>
-        {problem === null ? null : <span className="text-xs text-danger">{problem}</span>}
+        {problem === null || (range !== null && number !== null) ? null : <span className="text-xs text-danger">{problem}</span>}
       </form>
     );
   };
@@ -115,13 +139,18 @@ export function SettingsScreen({ focus = null }: { focus?: string | null }) {
                       </div>
                     ),
                   },
-                  { title: "Значение", render: (row) => <code className="text-xs">{settingText(row.kind, row.value)}</code> },
+                  { title: "Значение", render: (row) => <code className="text-xs">{settingText(row, row.value)}</code> },
                   {
                     title: "Откуда",
                     render: (row) => (
                       <div className="flex flex-col gap-0.5">
                         <Badge tone={row.source === "base" ? "info" : "neutral"}>{SOURCE_TITLES[row.source]}</Badge>
-                        {row.source === "base" ? <span className="text-xs text-text-muted">в окружении: {settingText(row.kind, row.envValue)}</span> : null}
+                        {/* Что вернёт «Сбросить»: окружение, а если там пусто — умолчание из кода. */}
+                        {row.source !== "base" ? null : row.envValue !== null ? (
+                          <span className="text-xs text-text-muted">в окружении: {settingText(row, row.envValue)}</span>
+                        ) : (
+                          <span className="text-xs text-text-muted">по умолчанию: {settingText(row, row.fallback)}</span>
+                        )}
                       </div>
                     ),
                   },
