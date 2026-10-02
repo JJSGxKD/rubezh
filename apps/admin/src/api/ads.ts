@@ -87,10 +87,17 @@ const formatSupportSchema = z.object({
 });
 export type AdFormatSupport = z.infer<typeof formatSupportSchema>;
 
+const isAdPlatform = (value: string): value is AdPlatform => (AD_PLATFORMS as readonly string[]).includes(value);
+
 const profileSchema = z.object({
   key: z.string(),
   title: z.string(),
   cabinet: z.string().nullable(),
+  /** где работает SDK сети; сервер без площадок в профиле — везде, как было; незнакомая площадка отбрасывается */
+  platforms: z
+    .array(z.string())
+    .default([...AD_PLATFORMS])
+    .transform((list) => list.filter(isAdPlatform)),
   keys: z.array(keyFieldSchema),
   formats: z.array(formatSupportSchema),
   verified: z.boolean(),
@@ -215,20 +222,53 @@ export function blockServable(view: Pick<AdsView, "networks">, block: Pick<AdBlo
   return block.active && block.problem === null && network !== undefined && network.active && networkReady(network);
 }
 
-export interface PlaceCoverage {
-  place: AdPlace;
-  /** сети, которые реально показываются в месте, по кругу */
-  networks: string[];
+/** Площадки, где работает SDK сети; сети без профиля — нигде. */
+export function networkPlatforms(view: Pick<AdsView, "profiles">, networkKey: string): AdPlatform[] {
+  return [...(profileOf(view, networkKey)?.platforms ?? [])];
 }
 
-/** Какие сети реально показываются в каждом месте: включённая сеть с ключами и включённый блок по профилю. */
-export function coverage(view: Pick<AdsView, "networks" | "blocks" | "places">): PlaceCoverage[] {
+/** Показывается ли блок на площадке: сеть там работает, а блок не ограничен другими. Пустой список — везде, где работает сеть. */
+export function blockReaches(view: Pick<AdsView, "profiles">, block: Pick<AdBlock, "networkKey" | "platforms">, platform: AdPlatform): boolean {
+  if (!networkPlatforms(view, block.networkKey).includes(platform)) return false;
+  return block.platforms.length === 0 || block.platforms.includes(platform);
+}
+
+/** Площадки, где работает хоть одна сеть с профилем, — по ним считается покрытие. */
+export function adPlatforms(view: Pick<AdsView, "profiles">): AdPlatform[] {
+  return AD_PLATFORMS.filter((platform) => view.profiles.some((profile) => profile.platforms.includes(platform)));
+}
+
+export interface PlatformCoverage {
+  platform: AdPlatform;
+  /** сети, которые реально показываются в месте на площадке, по кругу */
+  networks: string[];
+  /** есть ли вообще сеть с форматом места на этой площадке — иначе пустота не ошибка настройки */
+  possible: boolean;
+}
+
+export interface PlaceCoverage {
+  place: AdPlace;
+  platforms: PlatformCoverage[];
+}
+
+/**
+ * Какие сети реально показываются в каждом месте — по каждой площадке
+ * отдельно (Р77): включённая сеть с ключами, включённый блок по профилю, и
+ * сеть работает на площадке. Блок AdsGram «везде» не делает VK покрытой.
+ */
+export function coverage(view: Pick<AdsView, "networks" | "blocks" | "places" | "profiles" | "formats">): PlaceCoverage[] {
   const active = view.networks.filter((network) => network.active).sort((a, b) => a.priority - b.priority || a.networkKey.localeCompare(b.networkKey));
   return view.places.map((place) => ({
     place,
-    networks: active
-      .filter((network) => view.blocks.some((block) => block.place === place && block.networkKey === network.networkKey && blockServable(view, block)))
-      .map((network) => network.name),
+    platforms: adPlatforms(view).map((platform) => ({
+      platform,
+      networks: active
+        .filter((network) =>
+          view.blocks.some((block) => block.place === place && block.networkKey === network.networkKey && blockServable(view, block) && blockReaches(view, block, platform)),
+        )
+        .map((network) => network.name),
+      possible: view.profiles.some((profile) => profile.platforms.includes(platform) && supportFor(view, profile.key, place) !== undefined),
+    })),
   }));
 }
 
@@ -237,9 +277,10 @@ export function percent(part: number, whole: number): string {
   return whole === 0 ? "—" : `${String(Math.round((part / whole) * 100))}%`;
 }
 
-/** Где блок показывается: пустой список — везде. */
-export function reachLabel(block: Pick<AdBlock, "platforms" | "devices">): string {
-  const platforms = block.platforms.length === 0 ? "все площадки" : block.platforms.map((platform) => PLATFORM_TITLES[platform]).join(", ");
+/** Где блок показывается: пустой список площадок — где работает сеть, устройств — все. */
+export function reachLabel(view: Pick<AdsView, "profiles">, block: Pick<AdBlock, "networkKey" | "platforms" | "devices">): string {
+  const reach = block.platforms.length === 0 ? networkPlatforms(view, block.networkKey) : block.platforms;
+  const platforms = reach.length === AD_PLATFORMS.length ? "все площадки" : reach.map((platform) => PLATFORM_TITLES[platform]).join(", ");
   const devices = block.devices.length === 0 ? "все устройства" : block.devices.map((device) => DEVICE_TITLES[device]).join(", ");
   return `${platforms}; ${devices}`;
 }
@@ -366,6 +407,9 @@ export function blockInputOf(view: Pick<AdsView, "profiles" | "formats">, form: 
   const support = supportFor(view, form.networkKey, form.place);
   if (support === undefined) return null;
   const externalId = form.externalId.trim();
+  // Площадки, где сеть не работает, не уходят: так чинится блок, заведённый до площадок в профиле.
+  const reach = networkPlatforms(view, form.networkKey);
+  const platforms = form.platforms.filter((platform) => reach.includes(platform));
   return {
     blockId,
     networkKey: form.networkKey,
@@ -373,7 +417,8 @@ export function blockInputOf(view: Pick<AdsView, "profiles" | "formats">, form: 
     externalId: externalId === "" ? null : externalId,
     success: form.success === "" ? (support.success[0] ?? "view") : form.success,
     active: form.active,
-    platforms: form.platforms,
+    // Все площадки сети — то же, что «везде, где работает сеть»: блок не устареет, когда сеть добавит площадку.
+    platforms: platforms.length === reach.length ? [] : platforms,
     devices: form.devices,
   };
 }

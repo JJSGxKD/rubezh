@@ -1,8 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
+  AD_PLATFORMS,
   FORMAT_TITLES,
   PLACE_TITLES,
+  PLATFORM_TITLES,
   networkFormOf,
   networkFormSchema,
   networkReady,
@@ -11,6 +13,7 @@ import {
   saveNetwork,
   type AdNetwork,
   type AdNetworkProfile,
+  type AdPlatform,
   type AdsView,
   type NetworkForm,
 } from "../../api/ads";
@@ -36,6 +39,12 @@ export function NetworkCards({ view, canEdit, onSaved }: { view: AdsView; canEdi
       </div>
     </Panel>
   );
+}
+
+/** Где работает SDK сети — словами для значка карточки. */
+function platformsLabel(platforms: readonly AdPlatform[]): string {
+  if (platforms.length === AD_PLATFORMS.length) return "все площадки";
+  return platforms.length === 1 ? `только ${PLATFORM_TITLES[platforms[0] ?? "telegram"]}` : platforms.map((platform) => PLATFORM_TITLES[platform]).join(", ");
 }
 
 function stateBadge(network: AdNetwork) {
@@ -69,6 +78,12 @@ function NetworkCard({ view, network, profile, canEdit, onSaved }: { view: AdsVi
       <header className="flex flex-wrap items-center gap-2">
         <h3 className="text-base font-semibold">{network.name}</h3>
         {stateBadge(network)}
+        {profile === undefined ? null : (
+          <span className="inline-flex items-center gap-1">
+            <Badge>{platformsLabel(profile.platforms)}</Badge>
+            <Help text={HELP.ads.platforms} />
+          </span>
+        )}
         {profile === undefined ? null : profile.verified ? (
           <span className="inline-flex items-center gap-1">
             <Badge tone="info">сверено с документацией</Badge>

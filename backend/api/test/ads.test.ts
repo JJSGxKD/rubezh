@@ -158,15 +158,18 @@ describe("числа рекламы", () => {
     expect(keys(networkOrder(networks, allSeen, "adsgram"))).toEqual(["adsonar", "taddy", "richads", "adsgram"]);
   });
 
-  it("блоки места — по площадке и устройству; пустой список — везде, неизвестное устройство — только туда, где не ограничено", () => {
+  it("блоки места — по площадке сети и устройству; пустой список площадок — везде, где работает сеть, неизвестное устройство — только туда, где не ограничено", () => {
     const everywhere = block("adsgram", 10);
-    const vkOnly = block("adsonar", 20, { platforms: ["vk"] });
+    const telegramOnly = block("adsonar", 20, { platforms: ["telegram"] });
+    // Заведён до площадок в профиле: VK сети чужая — блок не выдаётся нигде.
+    const withVk = block("richads", 25, { platforms: ["telegram", "vk"] });
     const mobile = block("richads", 30, { devices: ["android", "ios"] });
     const otherPlace = block("taddy", 40, { place: "run_double" });
-    const all = [everywhere, vkOnly, mobile, otherPlace];
-    expect(eligibleBlocks(all, "wheel_spin", { platform: "telegram", device: "android" })).toEqual([everywhere, mobile]);
-    expect(eligibleBlocks(all, "wheel_spin", { platform: "vk", device: "desktop" })).toEqual([everywhere, vkOnly]);
-    expect(eligibleBlocks(all, "wheel_spin", { platform: "telegram", device: null })).toEqual([everywhere]);
+    const all = [everywhere, telegramOnly, withVk, mobile, otherPlace];
+    expect(eligibleBlocks(all, "wheel_spin", { platform: "telegram", device: "android" })).toEqual([everywhere, telegramOnly, mobile]);
+    // Блок «на всех площадках» сети Telegram в VK не показывается — её SDK там нет.
+    expect(eligibleBlocks(all, "wheel_spin", { platform: "vk", device: "desktop" })).toEqual([]);
+    expect(eligibleBlocks(all, "wheel_spin", { platform: "telegram", device: null })).toEqual([everywhere, telegramOnly]);
   });
 });
 

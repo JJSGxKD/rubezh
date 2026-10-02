@@ -4,7 +4,7 @@ import { withTimeout } from "../../common/with-timeout.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
-import { PLACE_FORMAT, blockShapeProblem, keysProblem, missingKeys, profileOf, type AdFormat } from "./ad-networks.js";
+import { PLACE_FORMAT, blockReaches, blockShapeProblem, keysProblem, missingKeys, profileOf, type AdFormat } from "./ad-networks.js";
 import { AdPasses } from "./ads-passes.js";
 import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
 import {
@@ -173,7 +173,7 @@ export class AdsService {
   async readiness(viewer: Pick<AdViewer, "accountId" | "platform">, place: AdPlace, at = new Date()): Promise<AdReadiness> {
     const [blocks, history, held] = await Promise.all([this.blocks(), this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
     const pass = PLACE_RULES[place].rewarded ? held : null;
-    const available = pass !== null || blocks.some((block) => block.place === place && (block.platforms.length === 0 || block.platforms.includes(viewer.platform)));
+    const available = pass !== null || blocks.some((block) => block.place === place && servable(block) && blockReaches(block, viewer.platform));
     return { available, readyAt: nextAllowedAt(place, placeState(history.sessions, history.dayStart, at), at), pass };
   }
 
@@ -204,13 +204,13 @@ export class AdsService {
   }
 }
 
-/** Блоки места для площадки и устройства зрителя: пустой список площадок или устройств — везде. */
+/** Блоки места для площадки и устройства зрителя: пустой список площадок — везде, где работает сеть, устройств — везде. */
 export function eligibleBlocks(blocks: readonly AdBlockRow[], place: AdPlace, viewer: Pick<AdViewer, "platform" | "device">): AdBlockRow[] {
   return blocks.filter(
     (block) =>
       block.place === place &&
       servable(block) &&
-      (block.platforms.length === 0 || block.platforms.includes(viewer.platform)) &&
+      blockReaches(block, viewer.platform) &&
       (block.devices.length === 0 || (viewer.device !== null && block.devices.includes(viewer.device))),
   );
 }
@@ -220,7 +220,7 @@ export function eligibleBlocks(blocks: readonly AdBlockRow[], place: AdPlace, vi
  * заданы ключи. Панель такого не сохранит, но блок, заведённый до профилей, —
  * мог: выдача его пропускает, а панель показывает, что с ним не так.
  */
-export function servable(block: Pick<AdBlockRow, "networkKey" | "place" | "externalId" | "success" | "networkKeys">): boolean {
+export function servable(block: Pick<AdBlockRow, "networkKey" | "place" | "externalId" | "success" | "platforms" | "networkKeys">): boolean {
   const profile = profileOf(block.networkKey);
   if (profile === undefined || blockShapeProblem(block) !== null) return false;
   return missingKeys(profile, block.networkKeys).length === 0 && keysProblem(profile, block.networkKeys) === null;

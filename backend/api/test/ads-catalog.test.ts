@@ -188,6 +188,9 @@ describe("реклама в панели", () => {
     await invalid(block({ networkKey: "richads", externalId: "123" }));
     await invalid(block({ networkKey: "richads", place: "task", externalId: null }));
     await invalid(block({ networkKey: "taddy", place: "task", externalId: "feed" }));
+    // SDK AdsGram живёт только в Telegram: блок для VK не сохранится.
+    await invalid(block({ platforms: ["telegram", "vk"] }));
+    await expect(ctx.service.saveBlock(admin, block({ platforms: ["vk"] }))).rejects.toThrow("AdsGram работает только в Telegram — в VK её SDK не поднимется");
     expect(ctx.repository.blockRows).toHaveLength(0);
 
     await ctx.service.saveBlock(admin, block({ place: "interstitial", externalId: "int-123" }));

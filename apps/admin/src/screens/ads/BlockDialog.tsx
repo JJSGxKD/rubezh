@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, type UseFormRegisterReturn } from "react-hook-form";
 import {
   AD_DEVICES,
   AD_PLATFORMS,
@@ -12,6 +12,7 @@ import {
   SUCCESS_TITLES,
   blockFormSchema,
   blockInputOf,
+  networkPlatforms,
   networkReady,
   placeOptions,
   profileOf,
@@ -19,6 +20,7 @@ import {
   supportFor,
   type AdBlock,
   type AdPlace,
+  type AdPlatform,
   type AdsView,
   type BlockForm,
 } from "../../api/ads";
@@ -200,15 +202,7 @@ export function BlockDialog({ view, block, onClose, onSaved }: { view: AdsView; 
         {support === undefined ? null : (
           <Step no={4} title="Где показывать" help={HELP.ads.reach}>
             <div className="flex flex-wrap gap-8 text-sm">
-              <fieldset className="flex flex-col gap-1.5">
-                <legend className="mb-1 text-xs text-text-muted">Площадки — ни одной: все</legend>
-                {AD_PLATFORMS.map((platform) => (
-                  <label key={platform} className="flex items-center gap-1.5">
-                    <input type="checkbox" value={platform} {...form.register("platforms")} />
-                    {PLATFORM_TITLES[platform]}
-                  </label>
-                ))}
-              </fieldset>
+              <PlatformsField view={view} networkKey={networkKey} chosen={form.watch("platforms")} register={form.register("platforms")} />
               <fieldset className="flex flex-col gap-1.5">
                 <legend className="mb-1 text-xs text-text-muted">Устройства — ни одного: все</legend>
                 {AD_DEVICES.map((device) => (
@@ -234,6 +228,55 @@ export function BlockDialog({ view, block, onClose, onSaved }: { view: AdsView; 
         )}
       </form>
     </Dialog>
+  );
+}
+
+/**
+ * Площадки — только те, где работает сеть (Р77). Одна — строкой без выбора:
+ * выбирать не из чего. Несколько — флажки, чужие недоступны с причиной.
+ * Блок, заведённый до площадок в профиле, с чужой площадкой — предупреждение:
+ * выдача его пропускает, а сохранение оставит только площадки сети.
+ */
+function PlatformsField({ view, networkKey, chosen, register }: { view: AdsView; networkKey: string; chosen: readonly AdPlatform[]; register: UseFormRegisterReturn<"platforms"> }) {
+  const profile = profileOf(view, networkKey);
+  const reach = networkPlatforms(view, networkKey);
+  const foreign = chosen.filter((platform) => !reach.includes(platform));
+  const only = reach.length === 1 ? reach[0] : undefined;
+  return (
+    <fieldset className="flex max-w-64 flex-col gap-1.5">
+      <legend className="mb-1 flex items-center gap-1.5 text-xs text-text-muted">
+        Площадки
+        <Help text={HELP.ads.platforms} />
+      </legend>
+      {only !== undefined ? (
+        <p>
+          Только {PLATFORM_TITLES[only]}
+          <span className="block text-xs text-text-muted">
+            {profile?.title} работает только в {PLATFORM_TITLES[only]} — выбирать не из чего
+          </span>
+        </p>
+      ) : (
+        <>
+          <span className="text-xs text-text-muted">ни одной — везде, где работает сеть</span>
+          {AD_PLATFORMS.map((platform) => {
+            const works = reach.includes(platform);
+            return (
+              <label key={platform} className={`flex items-center gap-1.5 ${works ? "" : "text-text-muted"}`} title={works ? undefined : `${profile?.title ?? "Сеть"} здесь не работает`}>
+                <input type="checkbox" value={platform} disabled={!works && !chosen.includes(platform)} {...register} />
+                {PLATFORM_TITLES[platform]}
+                {works ? null : <span className="text-xs">— сеть не работает</span>}
+              </label>
+            );
+          })}
+        </>
+      )}
+      {foreign.length === 0 ? null : (
+        <span role="alert" className="text-xs text-warning">
+          Блок заведён и для {foreign.map((platform) => PLATFORM_TITLES[platform]).join(", ")}, где {profile?.title} не работает, — выдача его пропускает. После сохранения он будет показываться только там,
+          где работает сеть.
+        </span>
+      )}
+    </fieldset>
   );
 }
 
