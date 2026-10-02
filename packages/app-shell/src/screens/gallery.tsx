@@ -24,6 +24,8 @@ import {
   Wordmark,
 } from "../design-system/components";
 import { t } from "../i18n";
+import "../i18n/gallery";
+import "../i18n/team";
 import { useBackLayer } from "../state/back-stack";
 import { useNavigation } from "../state/navigation";
 import { BootScreen } from "./gates";
