@@ -34,7 +34,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   fx: () => <FxScreen />,
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
   exports: () => <ExportsScreen />,
-  links: () => <LinksScreen />,
+  links: (id) => <LinksScreen id={id} />,
   flags: () => <FlagsScreen />,
   settings: (id) => <SettingsScreen focus={id} />,
   secrets: () => <SecretsScreen />,
