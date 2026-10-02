@@ -46,7 +46,7 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
 
   async function session(accountId: string, success: AdSuccess = "view", createdAt = NOON, place: "wheel_spin" | "task" = "wheel_spin"): Promise<string> {
     const sessionId = randomBytes(12).toString("base64url");
-    await repository.createSession({ sessionId, accountId, place, block: { ...blockOf(success), place }, createdAt, expiresAt: at(createdAt, 30) });
+    await repository.createSession({ sessionId, accountId, place, block: { ...blockOf(success), place }, creative: null, createdAt, expiresAt: at(createdAt, 30) });
     return sessionId;
   }
 
@@ -106,19 +106,19 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     const me = await account();
     const stranger = await account();
     const view = await session(me);
-    expect(await repository.report(view, me, { kind: "shown" }, at(NOON, 1))).toBe(true);
-    expect(await repository.report(view, stranger, { kind: "completed" }, at(NOON, 2))).toBe(false);
-    expect(await repository.report(view, me, { kind: "completed" }, at(NOON, 2))).toBe(true);
-    expect(await repository.report(view, me, { kind: "failed", reason: "late" }, at(NOON, 3))).toBe(false);
+    expect(await repository.report(view, me, { kind: "shown" }, at(NOON, 1))).not.toBeNull();
+    expect(await repository.report(view, stranger, { kind: "completed" }, at(NOON, 2))).toBeNull();
+    expect(await repository.report(view, me, { kind: "completed" }, at(NOON, 2))).not.toBeNull();
+    expect(await repository.report(view, me, { kind: "failed", reason: "late" }, at(NOON, 3))).toBeNull();
 
     const click = await session(me, "click");
-    expect(await repository.report(click, me, { kind: "clicked" }, at(NOON, 1))).toBe(true);
-    expect(await repository.report(click, me, { kind: "completed" }, at(NOON, 1))).toBe(false);
-    expect(await repository.report(click, me, { kind: "failed", reason: "sdk_error" }, at(NOON, 2))).toBe(true);
-    expect(await repository.report(click, me, { kind: "shown" }, at(NOON, 3))).toBe(false);
+    expect(await repository.report(click, me, { kind: "clicked" }, at(NOON, 1))).not.toBeNull();
+    expect(await repository.report(click, me, { kind: "completed" }, at(NOON, 1))).toBeNull();
+    expect(await repository.report(click, me, { kind: "failed", reason: "sdk_error" }, at(NOON, 2))).not.toBeNull();
+    expect(await repository.report(click, me, { kind: "shown" }, at(NOON, 3))).toBeNull();
 
     const expired = await session(me);
-    expect(await repository.report(expired, me, { kind: "completed" }, at(NOON, 30))).toBe(false);
+    expect(await repository.report(expired, me, { kind: "completed" }, at(NOON, 30))).toBeNull();
 
     const [row] = await prisma.$queryRaw<{ status: string; shown_at: Date; completed_at: Date }[]>`
       SELECT status::text, shown_at, completed_at FROM ad_session WHERE session_id = ${view}`;
@@ -126,6 +126,41 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     const [failed] = await prisma.$queryRaw<{ status: string; clicked_at: Date; fail_reason: string }[]>`
       SELECT status::text, clicked_at, fail_reason FROM ad_session WHERE session_id = ${click}`;
     expect(failed).toEqual({ status: "failed", clicked_at: at(NOON, 1), fail_reason: "sdk_error" });
+  });
+
+  it("креатив сети с API: показ отмечен впервые однажды, досмотр — не раньше срока от выдачи; отказ сети — сессией", async () => {
+    const me = await account();
+    const sessionId = randomBytes(12).toString("base64url");
+    await repository.createSession({ sessionId, accountId: me, place: "wheel_spin", block: blockOf("view"), creative: { id: "taddy-1", viewSec: 10 }, createdAt: NOON, expiresAt: at(NOON, 30) });
+    const seconds = (value: number) => new Date(NOON.getTime() + value * 1000);
+    expect(await repository.report(sessionId, me, { kind: "shown" }, seconds(1))).toEqual({ networkKey: network, creativeId: "taddy-1", firstShown: true });
+    expect(await repository.report(sessionId, me, { kind: "shown" }, seconds(2))).toEqual({ networkKey: network, creativeId: "taddy-1", firstShown: false });
+    expect(await repository.report(sessionId, me, { kind: "clicked" }, seconds(3))).toMatchObject({ firstShown: false });
+    expect(await repository.report(sessionId, me, { kind: "completed" }, seconds(9.999))).toBeNull();
+    expect(await repository.report(sessionId, me, { kind: "completed" }, seconds(10))).toEqual({ networkKey: network, creativeId: "taddy-1", firstShown: false });
+
+    // Шаг показа потерялся — досмотр отмечает показ впервые.
+    const lost = randomBytes(12).toString("base64url");
+    await repository.createSession({ sessionId: lost, accountId: me, place: "wheel_spin", block: blockOf("view"), creative: { id: "taddy-2", viewSec: 5 }, createdAt: NOON, expiresAt: at(NOON, 30) });
+    expect(await repository.report(lost, me, { kind: "completed" }, seconds(6))).toMatchObject({ creativeId: "taddy-2", firstShown: true });
+
+    const failed = randomBytes(12).toString("base64url");
+    await repository.createFailedSession({ sessionId: failed, accountId: me, place: "wheel_spin", block: blockOf("view"), creative: null, createdAt: NOON, expiresAt: at(NOON, 30) }, "no_fill");
+    const [row] = await prisma.$queryRaw<{ status: string; failed_at: Date; fail_reason: string; creative_id: string | null }[]>`
+      SELECT status::text, failed_at, fail_reason, creative_id FROM ad_session WHERE session_id = ${failed}`;
+    expect(row).toEqual({ status: "failed", failed_at: NOON, fail_reason: "no_fill", creative_id: null });
+    expect(await repository.report(failed, me, { kind: "shown" }, seconds(1))).toBeNull();
+    const history = await repository.history(me, "wheel_spin", seconds(1));
+    expect(history.sessions.map((entry) => entry.sessionId)).toContain(failed);
+  });
+
+  it("ключи сетей — всех, и выключенных тоже", async () => {
+    await prisma.$executeRaw`UPDATE ad_network SET keys = ${JSON.stringify({ pubId: "abc" })}::jsonb WHERE network_key = ${network}`;
+    const keys = await repository.networkKeys();
+    expect(keys.find((row) => row.networkKey === network)?.keys).toEqual({ pubId: "abc" });
+    // Сети из миграции выключены, но в списке есть: SDK учёта живёт и у выключенной сети.
+    expect(keys.map((row) => row.networkKey)).toEqual(expect.arrayContaining(["adsgram", "taddy"]));
+    await prisma.$executeRaw`UPDATE ad_network SET keys = '{}'::jsonb WHERE network_key = ${network}`;
   });
 
   it("одну сессию шесть раз разом забирают однажды — остальным она отдаётся повтором", async () => {
@@ -170,7 +205,7 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     const sessionId = randomBytes(12).toString("base64url");
     await repository.createPassSession({ sessionId, accountId: me, place: "wheel_spin", pass: "vip", createdAt: NOON, expiresAt: at(NOON, 30) });
     // шагов воронки у неё нет: ролика не было
-    expect(await repository.report(sessionId, me, { kind: "shown" }, at(NOON, 1))).toBe(false);
+    expect(await repository.report(sessionId, me, { kind: "shown" }, at(NOON, 1))).toBeNull();
 
     const verdict = (row: Parameters<typeof claimVerdict>[0], history: Parameters<typeof claimVerdict>[1]) => claimVerdict(row, history, at(NOON, 1));
     const results = await Promise.all([1, 2, 3].map(() => repository.claim(sessionId, me, "wheel_spin", at(NOON, 1), verdict)));

@@ -21,6 +21,10 @@ import type { AdPlace, AdSuccess } from "./ads-rules.js";
  * выдаётся, а пустой список площадок у блока значит «везде, где работает
  * сеть», — иначе блок AdsGram «на всех площадках» считался бы рекламой в VK.
  *
+ * **Taddy рисуем сами** (Р78, часть 9): креатив сервер берёт по API сети, а
+ * показывает его наш рекламный блок — `delivery: "api"` у формата. SDK
+ * Taddy остаётся только для учёта аудитории — `trackAudience` у профиля.
+ *
  * `verified` — профиль сверен с документацией сети (все четыре — 01.10.2026)
  * и рабочей интеграцией источника (`vpnsibcom_web`: вид ключей в продакшене).
  * Новая сеть без сверки заводится с `false` — панель так и пишет: «сверить с
@@ -38,6 +42,19 @@ export const PLACE_FORMAT: Record<AdPlace, AdFormat> = {
   task: "task",
   interstitial: "interstitial",
 };
+
+/**
+ * Сколько секунд креатив сети с API стоит на экране, прежде чем засчитан
+ * досмотр (Р78). За награду — как у блока самого SDK Taddy: досмотр на
+ * десятой секунде; межстраничную без награды держим коротко. Раньше срока
+ * сервер досмотр не примет — время отсчитывается от выдачи.
+ */
+export const CREATIVE_VIEW_SEC: Record<Exclude<AdFormat, "task">, number> = { rewarded: 10, interstitial: 5 };
+
+/** Как приходит реклама формата сети: не задано — SDK на клиенте. */
+export function deliveryOf(support: Pick<AdFormatSupport, "delivery">): AdDelivery {
+  return support.delivery ?? "sdk";
+}
 
 /** Место словами — в сообщениях панели, как в разделе «Реклама». */
 export const PLACE_TITLES: Record<AdPlace, string> = {
@@ -95,7 +112,15 @@ export interface AdFormatSupport {
   maxActive?: number;
   /** что важно знать о формате — показывается в панели */
   note?: string;
+  /**
+   * Как приходит реклама: `sdk` — показывает SDK сети на клиенте; `api` —
+   * креатив берёт сервер по API сети, а рисует наш рекламный блок (Р78).
+   * Не задано — SDK.
+   */
+  delivery?: AdDelivery;
 }
+
+export type AdDelivery = "sdk" | "api";
 
 export interface AdNetworkProfile {
   key: string;
@@ -107,6 +132,12 @@ export interface AdNetworkProfile {
   keys: readonly AdKeyField[];
   formats: readonly AdFormatSupport[];
   verified: boolean;
+  /**
+   * SDK сети поднимается у каждого игрока её площадок при запуске, пока у
+   * сети заданы ключи, — включена она или нет (Р78): так сеть учитывает нашу
+   * аудиторию, а от этого зависит, сколько рекламы она даст.
+   */
+  trackAudience?: boolean;
 }
 
 export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
@@ -208,7 +239,7 @@ export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
       {
         key: "pubId",
         title: "pubId (ID ресурса)",
-        hint: "Выдаёт команда Taddy при подключении — самостоятельной регистрации нет. У Mini App — 32 знака 0–9 и a–f, у бота — с приставкой bot-",
+        hint: "Выдаёт команда Taddy при подключении — самостоятельной регистрации нет. У Mini App — 32 знака 0–9 и a–f, у бота — с приставкой bot-. Пока pubId задан, SDK Taddy поднимается у всех игроков Telegram, даже у выключенной сети: так Taddy видит аудиторию. Сотрите — SDK пропадёт",
         example: "14cbeb980853dd416003462ca4db7c12",
         pattern: "^(?:[0-9a-f]{32}|bot-[A-Za-z0-9_-]{4,60})$",
       },
@@ -216,17 +247,19 @@ export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
     formats: [
       {
         format: "rewarded",
-        title: "Interstitial до конца (`taddy.ads().interstitial`, событие `onViewThrough`)",
+        title: "Креатив по API (`ads/get`, формат app-interstitial) — рисует наш рекламный блок",
         unit: null,
         success: ["view"],
-        note: "Блока нет: показ по pubId. Досмотр до конца подтверждает и сервер Taddy — вебхуком ads.view_through.",
+        delivery: "api",
+        note: `Блока нет: креатив по pubId. Досмотр — ${String(CREATIVE_VIEW_SEC.rewarded)} секунд на экране; показ и досмотр сервер сообщает Taddy сам, клик идёт по ссылке Taddy.`,
       },
       {
         format: "interstitial",
-        title: "Interstitial (`taddy.ads().interstitial`)",
+        title: "Креатив по API (`ads/get`, формат app-interstitial) — рисует наш рекламный блок",
         unit: null,
         success: ["view"],
-        note: "Блока нет: показ идёт по pubId.",
+        delivery: "api",
+        note: `Блока нет: креатив по pubId. Закрыть можно через ${String(CREATIVE_VIEW_SEC.interstitial)} секунд.`,
       },
       {
         format: "task",
@@ -254,6 +287,7 @@ export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
       },
     ],
     verified: true,
+    trackAudience: true,
   },
 ];
 

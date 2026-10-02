@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { AdCreative, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
   Badge,
@@ -54,6 +55,13 @@ export function GalleryScreen(): ReactNode {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [segment, setSegment] = useState("daily");
   const [sheet, setSheet] = useState(false);
+  const [adResult, setAdResult] = useState<CreativeResult["kind"] | null>(null);
+
+  // Блок — тем же путём, что в игре: свой корень поверх приложения, «Назад» и Esc — через стек.
+  const showAd = (viewSec: number, rewarded: boolean, ad: AdCreative = demoAd()): void => {
+    setAdResult(null);
+    void showCreative({ ad, viewSec, rewarded }, { onShown: () => undefined, onClick: () => undefined, openLink: () => undefined }).then((result) => setAdResult(result.kind));
+  };
 
   if (preview !== null) {
     return <PreviewFrame preview={preview} onClose={() => setPreview(null)} />;
@@ -80,6 +88,16 @@ export function GalleryScreen(): ReactNode {
         <ListGroup>
           <ListItem title={t("gallery.modal.long")} hint={t("gallery.modal.longHint")} onClick={() => setSheet(true)} />
         </ListGroup>
+
+        <SectionTitle>{t("gallery.ads")}</SectionTitle>
+        <ListGroup>
+          <ListItem title={t("gallery.ad.rewarded")} hint={t("gallery.ad.rewardedHint")} onClick={() => showAd(10, true)} />
+          <ListItem title={t("gallery.ad.interstitial")} hint={t("gallery.ad.interstitialHint")} onClick={() => showAd(5, false)} />
+          <ListItem title={t("gallery.ad.noImage")} hint={t("gallery.ad.noImageHint")} onClick={() => showAd(10, true, { ...demoAd(), image: null })} />
+        </ListGroup>
+        {adResult === null ? null : <p className="px-1 pt-2 text-sm text-text-muted">{t("gallery.ad.result", { result: t(`gallery.ad.${adResult}`) })}</p>}
+        <p className="px-1 pt-3 pb-2 text-xs text-text-muted">{t("gallery.ad.cardHint")}</p>
+        <AdCreativeCard ad={demoAd()} onOpen={() => undefined} />
 
         <SectionTitle>{t("gallery.brand")}</SectionTitle>
         <div className="flex items-center justify-around gap-4 py-2">
@@ -195,6 +213,32 @@ export function GalleryScreen(): ReactNode {
       {sheet ? <ModalsPreview onClose={() => setSheet(false)} /> : null}
     </Screen>
   );
+}
+
+/**
+ * Объявление для витрины: картинка и значок — встроенными SVG, а не с чужого
+ * адреса: витрина работает и без сети, и без рекламы в политике источников.
+ */
+function demoAd(): AdCreative {
+  const svg = (body: string, size: number): string =>
+    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${String(size)} ${String(size)}">${body}</svg>`)}`;
+  return {
+    id: "gallery-demo",
+    title: t("gallery.ad.demoTitle"),
+    description: null,
+    text: t("gallery.ad.demoText"),
+    image: svg(
+      '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2a4a"/><stop offset="1" stop-color="#0b1020"/></linearGradient></defs>' +
+        '<rect width="400" height="400" fill="url(#g)"/><circle cx="300" cy="90" r="38" fill="#f6c453"/>' +
+        '<path d="M0 300 L80 220 L140 260 L220 170 L300 250 L400 190 L400 400 L0 400 Z" fill="#24365e"/>' +
+        '<path d="M150 400 V250 h30 v-20 h20 v20 h20 v-20 h20 v20 h20 v-20 h20 v20 h30 V400 Z" fill="#3a5a99"/>',
+      400,
+    ),
+    icon: svg('<rect width="96" height="96" rx="20" fill="#f6c453"/><path d="M28 70 V40 h10 v-8 h8 v8 h4 v-8 h8 v8 h10 v30 Z" fill="#1b2a4a"/>', 96),
+    button: t("gallery.ad.demoButton"),
+    link: "https://example.com",
+    advertiser: t("gallery.ad.demoAdvertiser"),
+  };
 }
 
 /**

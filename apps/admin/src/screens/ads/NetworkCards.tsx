@@ -84,6 +84,12 @@ function NetworkCard({ view, network, profile, canEdit, onSaved }: { view: AdsVi
             <Help text={HELP.ads.platforms} />
           </span>
         )}
+        {profile?.trackAudience === true ? (
+          <span className="inline-flex items-center gap-1">
+            <Badge tone="info">SDK у всех игроков</Badge>
+            <Help text={HELP.ads.audience} />
+          </span>
+        ) : null}
         {profile === undefined ? null : profile.verified ? (
           <span className="inline-flex items-center gap-1">
             <Badge tone="info">сверено с документацией</Badge>
@@ -112,6 +118,12 @@ function NetworkCard({ view, network, profile, canEdit, onSaved }: { view: AdsVi
               {profile.formats.map((support) => (
                 <li key={support.format} className="leading-snug">
                   <span className="font-medium">{FORMAT_TITLES[support.format] ?? support.format}</span>
+                  {support.delivery === "api" ? (
+                    <span className="ml-1.5 inline-flex items-center gap-1 align-middle">
+                      <Badge>наш блок</Badge>
+                      <Help text={HELP.ads.delivery} />
+                    </span>
+                  ) : null}
                   <span className="text-text-muted">
                     {" — "}
                     <InlineCode text={support.title} />

@@ -57,3 +57,14 @@ export function createScriptLoader(host: ScriptHost, timeoutMs = SCRIPT_TIMEOUT_
     },
   };
 }
+
+let browserLoader: ScriptLoader | null = null;
+
+/**
+ * Загрузчик настоящего окна — один на приложение: SDK, поднятый для учёта
+ * аудитории на старте, не вставляется второй раз при показе.
+ */
+export function browserScriptLoader(): ScriptLoader {
+  browserLoader ??= createScriptLoader(documentScriptHost(() => document));
+  return browserLoader;
+}

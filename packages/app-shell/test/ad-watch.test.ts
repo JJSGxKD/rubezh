@@ -1,5 +1,6 @@
 import type { AdShowOutcome, AdShowRequest } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
+import type { CreativeHooks, CreativeResult, CreativeShow } from "../src/ads/ad-creative";
 import { COMPLETED_REPORT_RETRIES_MS, requestOf, watchAd, type AdWatchDeps } from "../src/state/ad-watch";
 import { adDeviceOf, createAdsApi, type AdOffer, type AdStep } from "../src/state/ads-api";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
@@ -20,10 +21,27 @@ function offer(network: string, patch: Partial<Extract<AdOffer, { available: tru
   };
 }
 
+const CREATIVE = {
+  ad: {
+    id: "taddy-ad-1",
+    title: "Рубеж держит",
+    description: null,
+    text: "Текст",
+    image: "https://cdn.example/ad.png",
+    icon: null,
+    button: "Открыть",
+    link: "https://t.me/example_bot?start=taddy",
+    advertiser: "Taddy",
+  },
+  viewSec: 10,
+};
+
 interface Harness {
   deps: AdWatchDeps;
   offers: string[];
   shown: AdShowRequest[];
+  creatives: CreativeShow[];
+  opened: string[];
   reports: { sessionId: string; step: AdStep }[];
   events: { event: string; payload: Record<string, unknown> }[];
   sleeps: number[];
@@ -36,6 +54,8 @@ function harness(options: {
   outcomes?: AdShowOutcome[];
   reports?: ApiResult<unknown>[];
   show?: false;
+  /** что делает игрок в нашем блоке: жмёт на объявление и досматривает, закрывает раньше или блок не грузится */
+  creative?: (hooks: CreativeHooks) => CreativeResult;
 }): Harness {
   const offers = [...options.offers];
   const outcomes = [...(options.outcomes ?? [])];
@@ -44,13 +64,15 @@ function harness(options: {
   const h: Harness = {
     offers: [],
     shown: [],
+    creatives: [],
+    opened: [],
     reports: [],
     events: [],
     sleeps: [],
     muted: 0,
     deps: {
       ads: {
-        offer: async (place, device) => (h.offers.push(`${place}:${String(device)}`), offers.shift() ?? { ok: false, failure: "unavailable" }),
+        offer: async (place, viewer) => (h.offers.push(`${place}:${String(viewer?.device)}`), offers.shift() ?? { ok: false, failure: "unavailable" }),
         report: async (sessionId, step) => (h.reports.push({ sessionId, step }), reportAnswers.shift() ?? { ok: true, data: { ok: true } }),
       },
       show:
@@ -61,7 +83,13 @@ function harness(options: {
               clock += 1_500;
               return outcomes.shift() ?? { kind: "failed", reason: "sdk_error" };
             },
-      device: "android",
+      showCreative: async (show, hooks) => {
+        h.creatives.push(show);
+        clock += 10_000;
+        return (options.creative ?? (() => ({ kind: "completed" as const })))(hooks);
+      },
+      openLink: (url) => void h.opened.push(url),
+      viewer: { device: "android", language: "ru", premium: null },
       mute: async (task) => {
         h.muted++;
         return await task();
@@ -173,6 +201,52 @@ describe("реклама за награду", () => {
   });
 });
 
+describe("объявление нашим блоком (Р78)", () => {
+  it("креатив — нашим блоком, а не SDK: показ и клик — шагами серверу, клик — событием; досмотр — сессия к забору", async () => {
+    const h = harness({
+      offers: [offer("taddy", { blockId: null, creative: CREATIVE })],
+      creative: (hooks) => {
+        hooks.onShown();
+        hooks.openLink?.(CREATIVE.ad.link);
+        hooks.onClick();
+        return { kind: "completed" };
+      },
+    });
+    expect(await watchAd("wheel_spin", h.deps)).toEqual({ kind: "watched", sessionId: "session-taddy", source: "ad" });
+    expect(h.shown).toEqual([]);
+    expect(h.creatives).toEqual([{ ad: CREATIVE.ad, viewSec: 10, rewarded: true }]);
+    expect(h.opened).toEqual([CREATIVE.ad.link]);
+    expect(h.reports.map((report) => report.step)).toEqual([{ outcome: "shown" }, { outcome: "clicked" }, { outcome: "completed" }]);
+    expect(h.events.map((entry) => entry.event)).toEqual(["ad_clicked", "ad_shown"]);
+    expect(h.events[0]?.payload).toEqual({ place: "wheel_spin", network: "taddy" });
+    expect(h.muted).toBe(1);
+  });
+
+  it("закрыл блок раньше — без награды; межстраничная — не за награду", async () => {
+    const closed = harness({ offers: [offer("taddy", { blockId: null, creative: CREATIVE })], creative: () => ({ kind: "closed" }) });
+    expect(await watchAd("wheel_spin", closed.deps)).toEqual({ kind: "closed" });
+
+    const between = harness({ offers: [offer("taddy", { blockId: null, format: "interstitial", creative: CREATIVE })] });
+    await watchAd("interstitial", between.deps);
+    expect(between.creatives[0]?.rewarded).toBe(false);
+  });
+
+  it("картинка объявления не пришла — отказ, и выдача уходит к следующей сети", async () => {
+    const h = harness({
+      offers: [offer("taddy", { blockId: null, creative: CREATIVE }), offer("adsgram")],
+      outcomes: [{ kind: "completed" }],
+      creative: () => ({ kind: "failed", reason: "load_failed" }),
+    });
+    expect(await watchAd("wheel_spin", h.deps)).toEqual({ kind: "watched", sessionId: "session-adsgram", source: "ad" });
+    expect(h.reports[0]).toEqual({ sessionId: "session-taddy", step: { outcome: "failed", reason: "load_failed" } });
+  });
+
+  it("площадка без SDK сетей креатив всё равно показывает — блок наш", async () => {
+    const h = harness({ offers: [offer("taddy", { blockId: null, creative: CREATIVE })], show: false });
+    expect(await watchAd("wheel_spin", h.deps)).toMatchObject({ kind: "watched" });
+  });
+});
+
 describe("клиент рекламы", () => {
   function server(sent: { path: string; body: unknown }[], answer: unknown): ApiRequest {
     return async <T,>(path: string, schema: object, init?: { body?: unknown }): Promise<ApiResult<T>> => {
@@ -183,17 +257,30 @@ describe("клиент рекламы", () => {
     };
   }
 
-  it("выдача несёт устройство, если оно известно; шаг показа — POST на сессию", async () => {
+  it("выдача несёт только известные подсказки — устройство, язык, премиум; шаг показа — POST на сессию", async () => {
     const sent: { path: string; body: unknown }[] = [];
     const api = createAdsApi(server(sent, { ok: true }));
-    await api.offer("wheel_spin", "ios");
+    await api.offer("wheel_spin", { device: "ios", language: "pt-br", premium: true });
+    await api.offer("wheel_spin", { device: null, language: "русский", premium: null });
     await api.offer("wheel_spin");
     await api.report("AAAAAAAAAAAAAAAA", { outcome: "failed", reason: "no_fill" });
     expect(sent).toEqual([
-      { path: "/api/v1/ads/sessions", body: { place: "wheel_spin", device: "ios" } },
+      { path: "/api/v1/ads/sessions", body: { place: "wheel_spin", device: "ios", language: "pt-br", premium: true } },
+      { path: "/api/v1/ads/sessions", body: { place: "wheel_spin" } },
       { path: "/api/v1/ads/sessions", body: { place: "wheel_spin" } },
       { path: "/api/v1/ads/sessions/AAAAAAAAAAAAAAAA/result", body: { outcome: "failed", reason: "no_fill" } },
     ]);
+  });
+
+  it("креатив в выдаче разбирается схемой; сервер без поля — показ SDK", async () => {
+    const sent: { path: string; body: unknown }[] = [];
+    const base = { available: true, sessionId: "s", network: "taddy", blockId: null, format: "rewarded", keys: {}, success: "view", expiresAt: LATER, pass: null };
+    const withCreative = await createAdsApi(server(sent, { ...base, creative: CREATIVE })).offer("wheel_spin");
+    expect(withCreative.ok && withCreative.data.available ? withCreative.data.creative : undefined).toEqual(CREATIVE);
+    expect((await createAdsApi(server(sent, base)).offer("wheel_spin")).ok).toBe(true);
+    // Срок досмотра вне разумного — ответ не принимается, а не блок на час.
+    expect((await createAdsApi(server(sent, { ...base, creative: { ...CREATIVE, viewSec: 3600 } })).offer("wheel_spin")).ok).toBe(false);
+
   });
 
   it("устройство — по клиенту Telegram: веб-версия на телефоне — web; незнакомый клиент — не знаем", () => {

@@ -65,11 +65,22 @@
   --animate-guide-fill: guide-fill 2.4s linear infinite;
   --animate-guide-aim: guide-aim 2.4s linear infinite;
   --animate-guide-shot-late: guide-shot-late 2.4s linear infinite;
+  /* Отсчёт рекламного блока: длительность — срок досмотра, ставит сам блок (ads/ad-creative.tsx). */
+  --animate-ad-countdown: ad-countdown 1s linear both;
 
   @keyframes screen-in {
     from {
       opacity: 0;
       transform: translateY(8px);
+    }
+  }
+
+  @keyframes ad-countdown {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
     }
   }
 

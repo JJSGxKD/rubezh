@@ -1,8 +1,10 @@
+import type { AdCreative, AdCreativeSource, AdRequester, CreativeFetch } from "../../src/modules/ads/ad-creatives.js";
 import type { AdPlace } from "../../src/modules/ads/ads-rules.js";
 import { formatFor, profileOf } from "../../src/modules/ads/ad-networks.js";
 import type {
   AdBlockRow,
   AdOutcome,
+  AdReport,
   AdSessionRow,
   AdsRepository,
   ClaimOutcome,
@@ -27,11 +29,20 @@ export function moscowDayStart(time: Date): Date {
   return new Date(Math.floor((time.getTime() + 3 * HOUR) / DAY) * DAY - 3 * HOUR);
 }
 
-type StoredSession = AdSessionRow & { expiresAt: Date; clickedAt: Date | null; failedAt: Date | null; failReason: string | null };
+type StoredSession = AdSessionRow & {
+  expiresAt: Date;
+  clickedAt: Date | null;
+  failedAt: Date | null;
+  failReason: string | null;
+  creativeId: string | null;
+  viewSec: number | null;
+};
 
 /** Репозиторий в памяти с теми же условиями, что SQL: открытая сессия, своя, не истёкшая. */
 export class MemoryAds implements AdsRepository {
   blocks: AdBlockRow[] = [];
+  /** ключи всех сетей, включённых и нет — как `ad_network.keys` */
+  networks: { networkKey: string; keys: Record<string, string> }[] = Object.entries(NETWORK_KEYS).map(([networkKey, keys]) => ({ networkKey, keys: { ...keys } }));
   readonly sessions: StoredSession[] = [];
   blockReads = 0;
   /** забор мест игрока — по одному, как под блокировкой в базе */
@@ -52,21 +63,35 @@ export class MemoryAds implements AdsRepository {
   }
 
   async createSession(session: NewAdSession): Promise<void> {
+    this.push(session, "pending", null);
+  }
+
+  async createFailedSession(session: NewAdSession, reason: string): Promise<void> {
+    this.push(session, "failed", reason);
+  }
+
+  async networkKeys(): Promise<{ networkKey: string; keys: Record<string, string> }[]> {
+    return this.networks.map((network) => ({ networkKey: network.networkKey, keys: { ...network.keys } }));
+  }
+
+  private push(session: NewAdSession, status: "pending" | "failed", failReason: string | null): void {
     this.sessions.push({
       sessionId: session.sessionId,
       accountId: session.accountId,
       place: session.place,
       networkKey: session.block.networkKey,
       success: session.block.success,
-      status: "pending",
+      status,
       createdAt: session.createdAt,
       shownAt: null,
       completedAt: null,
       claimedAt: null,
       expiresAt: session.expiresAt,
       clickedAt: null,
-      failedAt: null,
-      failReason: null,
+      failedAt: status === "failed" ? session.createdAt : null,
+      failReason,
+      creativeId: session.creative?.id ?? null,
+      viewSec: session.creative?.viewSec ?? null,
     });
   }
 
@@ -86,31 +111,40 @@ export class MemoryAds implements AdsRepository {
       clickedAt: null,
       failedAt: null,
       failReason: null,
+      creativeId: null,
+      viewSec: null,
     });
   }
 
-  async report(sessionId: string, accountId: string, outcome: AdOutcome, time: Date): Promise<boolean> {
+  async report(sessionId: string, accountId: string, outcome: AdOutcome, time: Date): Promise<AdReport | null> {
     const session = this.sessions.find((candidate) => candidate.sessionId === sessionId && candidate.accountId === accountId);
-    if (session === undefined || session.expiresAt <= time || (session.status !== "pending" && session.status !== "shown")) return false;
+    if (session === undefined || session.expiresAt <= time || (session.status !== "pending" && session.status !== "shown")) return null;
+    const report = (firstShown: boolean): AdReport => ({ networkKey: session.networkKey, creativeId: session.creativeId, firstShown });
     switch (outcome.kind) {
-      case "shown":
+      case "shown": {
+        const first = session.shownAt === null;
         session.shownAt ??= time;
         session.status = "shown";
-        return true;
-      case "completed":
-        if (session.success !== "view") return false;
+        return report(first);
+      }
+      case "completed": {
+        if (session.success !== "view") return null;
+        // Креатив, который рисуем сами, досмотрен не раньше своего срока от выдачи.
+        if (session.viewSec !== null && session.createdAt.getTime() + session.viewSec * 1000 > time.getTime()) return null;
+        const first = session.shownAt === null;
         session.shownAt ??= time;
         session.completedAt = time;
         session.status = "completed";
-        return true;
+        return report(first);
+      }
       case "clicked":
         session.clickedAt ??= time;
-        return true;
+        return report(false);
       case "failed":
         session.failedAt = time;
         session.failReason = outcome.reason;
         session.status = "failed";
-        return true;
+        return report(false);
     }
   }
 
@@ -179,3 +213,38 @@ export function adBlock(networkKey: string, priority: number, overrides: Partial
   };
 }
 
+/** Объявление сети с API — как его отдал бы Taddy. */
+export const CREATIVE: AdCreative = {
+  id: "taddy-ad-1",
+  title: "Рубеж держит",
+  description: null,
+  text: "Текст объявления",
+  image: "https://cdn.example/ad.png",
+  icon: null,
+  button: "Открыть",
+  link: "https://t.me/example_bot?start=taddy",
+  advertiser: "Taddy",
+};
+
+/** Сеть с API в памяти: что отдаёт на запрос креатива и какие отметки ей пришли. */
+export class FakeCreatives implements AdCreativeSource {
+  /** ответ на запрос креатива; по умолчанию — креатив есть */
+  answer: (networkKey: string) => CreativeFetch = () => ({ kind: "creative", creative: CREATIVE });
+  readonly requests: { networkKey: string; keys: Readonly<Record<string, string>>; requester: AdRequester | null }[] = [];
+  readonly notes: { kind: "shown" | "viewed"; networkKey: string; creativeId: string; requester: AdRequester | null }[] = [];
+
+  async fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null): Promise<CreativeFetch> {
+    this.requests.push({ networkKey, keys, requester });
+    return this.answer(networkKey);
+  }
+
+  shown(networkKey: string, creativeId: string, requester: AdRequester | null): Promise<void> {
+    this.notes.push({ kind: "shown", networkKey, creativeId, requester });
+    return Promise.resolve();
+  }
+
+  viewed(networkKey: string, creativeId: string, requester: AdRequester | null): Promise<void> {
+    this.notes.push({ kind: "viewed", networkKey, creativeId, requester });
+    return Promise.resolve();
+  }
+}

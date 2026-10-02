@@ -9,6 +9,7 @@ import { REDIS } from "../src/infra/redis.js";
 import { AdCooldownError, AdNotCompletedError } from "../src/modules/ads/ads-errors.js";
 import { maxRewardsPerDay } from "../src/modules/ads/ads-rules.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
+import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
 import { AdsService } from "../src/modules/ads/ads.service.js";
 import { panelSettings } from "./helpers/settings.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
@@ -22,7 +23,7 @@ import { RUN_DOUBLE_WINDOW_MIN, RunDoubleService, type RunDoublePlayer } from ".
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
-import { MemoryAds, adBlock } from "./helpers/memory-ads.js";
+import { FakeCreatives, MemoryAds, adBlock } from "./helpers/memory-ads.js";
 
 /**
  * Удвоение награды за забег за рекламу (docs/35-stage4-plan.md WP4, WP12):
@@ -87,7 +88,7 @@ function setup(blocks = [adBlock("adsgram", 10, { place: "run_double" }), adBloc
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
   const passes = new AdPasses();
-  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings());
+  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository));
   const wallet = new FakeWallet();
   const service = new RunDoubleService(repository, ads, wallet as unknown as WalletService);
   return { repository, adsRepository, ads, wallet, service, passes };

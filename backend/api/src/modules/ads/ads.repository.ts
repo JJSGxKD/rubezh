@@ -52,6 +52,12 @@ export interface NewAdSession {
   accountId: string;
   place: AdPlace;
   block: AdBlockRow;
+  /**
+   * Креатив сети с API, который рисует наш блок: по `id` сервер сообщает сети
+   * показ, а досмотр примет не раньше `viewSec` секунд после выдачи. `null` —
+   * показывает SDK сети, досмотр подтверждает он.
+   */
+  creative: { id: string; viewSec: number } | null;
   createdAt: Date;
   expiresAt: Date;
 }
@@ -68,6 +74,15 @@ export interface NewPassSession {
 
 /** Что клиент сообщил о показе. `completed` — SDK подтвердил досмотр. */
 export type AdOutcome = { kind: "shown" } | { kind: "completed" } | { kind: "clicked" } | { kind: "failed"; reason: string };
+
+/** Принятый шаг: чья сессия и что сообщить сети, у которой креатив рисуем сами. */
+export interface AdReport {
+  networkKey: string;
+  /** креатив сети с API; `null` — показывал SDK */
+  creativeId: string | null;
+  /** показ отмечен этим шагом впервые — сеть считает его один раз */
+  firstShown: boolean;
+}
 
 /** Решение хозяина правил о заборе — принимается под блокировкой места. */
 export type ClaimVerdict = { kind: "allow" } | { kind: "not_completed" } | { kind: "cooldown"; retryAt: Date };
@@ -87,8 +102,15 @@ export interface AdsRepository {
   createSession(session: NewAdSession): Promise<void>;
   /** сессия пропуска — сразу выполненная, забирается хозяином места как обычная */
   createPassSession(session: NewPassSession): Promise<void>;
-  /** отметить шаг воронки; `false` — сессии нет, чужая, истекла или шаг уже невозможен */
-  report(sessionId: string, accountId: string, outcome: AdOutcome, at: Date): Promise<boolean>;
+  /**
+   * Сеть с API не дала креатива — сессия сразу неудачная: сеть уходит на
+   * паузу места, как отказавшая на клиенте, а воронка видит отказ.
+   */
+  createFailedSession(session: NewAdSession, reason: string): Promise<void>;
+  /** отметить шаг воронки; `null` — сессии нет, чужая, истекла или шаг уже невозможен */
+  report(sessionId: string, accountId: string, outcome: AdOutcome, at: Date): Promise<AdReport | null>;
+  /** публичные ключи всех сетей — включённых и выключенных */
+  networkKeys(): Promise<{ networkKey: string; keys: Record<string, string> }[]>;
   /**
    * Забрать сессию места. Забор мест игрока идёт по одному: история и решение
    * читаются под блокировкой, и две сессии разом не проскочат кулдаун.
@@ -107,6 +129,10 @@ const blockSchema = z.object({
   platforms: z.array(z.enum(PLATFORM_IDS)),
   devices: z.array(z.enum(AD_DEVICES)),
 });
+
+const reportSchema = z.object({ network_key: z.string(), creative_id: z.string().nullable(), first_shown: z.boolean().nullable() });
+
+const networkKeysSchema = z.object({ network_key: z.string(), keys: z.record(z.string(), z.string()) });
 
 const sessionSchema = z.object({
   session_id: z.string(),
@@ -175,9 +201,26 @@ export class PrismaAdsRepository implements AdsRepository {
 
   async createSession(session: NewAdSession): Promise<void> {
     await this.prisma.$executeRaw`
-      INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, expires_at)
+      INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, expires_at, creative_id, view_sec)
       VALUES (${session.sessionId}, ${session.accountId}::uuid, ${session.place}::"AdPlace", ${session.block.blockId}::uuid,
-              ${session.block.networkKey}, ${session.block.success}::"AdSuccess", 'pending', ${session.createdAt}, ${session.expiresAt})`;
+              ${session.block.networkKey}, ${session.block.success}::"AdSuccess", 'pending', ${session.createdAt}, ${session.expiresAt},
+              ${session.creative?.id ?? null}, ${session.creative?.viewSec ?? null}::smallint)`;
+  }
+
+  async createFailedSession(session: NewAdSession, reason: string): Promise<void> {
+    await this.prisma.$executeRaw`
+      INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, failed_at, fail_reason, expires_at)
+      VALUES (${session.sessionId}, ${session.accountId}::uuid, ${session.place}::"AdPlace", ${session.block.blockId}::uuid,
+              ${session.block.networkKey}, ${session.block.success}::"AdSuccess", 'failed', ${session.createdAt}, ${session.createdAt},
+              ${reason}, ${session.expiresAt})`;
+  }
+
+  async networkKeys(): Promise<{ networkKey: string; keys: Record<string, string> }[]> {
+    const rows = await this.prisma.$queryRaw<unknown[]>`SELECT network_key, keys FROM ad_network`;
+    return rows.map((raw) => {
+      const row = networkKeysSchema.parse(raw);
+      return { networkKey: row.network_key, keys: row.keys };
+    });
   }
 
   async createPassSession(session: NewPassSession): Promise<void> {
@@ -187,42 +230,34 @@ export class PrismaAdsRepository implements AdsRepository {
               ${session.createdAt}, ${session.createdAt}, ${session.expiresAt})`;
   }
 
-  async report(sessionId: string, accountId: string, outcome: AdOutcome, at: Date): Promise<boolean> {
+  async report(sessionId: string, accountId: string, outcome: AdOutcome, at: Date): Promise<AdReport | null> {
     const open = `session_id = $1 AND account_id = $2::uuid AND expires_at > $3 AND status IN ('pending', 'shown')`;
+    // Показ отмечен впервые, если после шага он равен его времени: прежний
+    // COALESCE оставил бы более раннее. Так сеть узнаёт о показе один раз.
+    const returning = `RETURNING network_key, creative_id, shown_at = $3 AS first_shown`;
+    const step = async (sql: string, ...extra: unknown[]): Promise<AdReport | null> => {
+      const [raw] = await this.prisma.$queryRawUnsafe<unknown[]>(sql, sessionId, accountId, at, ...extra);
+      if (raw === undefined) return null;
+      const row = reportSchema.parse(raw);
+      return { networkKey: row.network_key, creativeId: row.creative_id, firstShown: row.first_shown === true };
+    };
     switch (outcome.kind) {
       case "shown":
-        return (
-          (await this.prisma.$executeRawUnsafe(
-            `UPDATE ad_session SET shown_at = COALESCE(shown_at, $3), status = 'shown' WHERE ${open}`,
-            sessionId,
-            accountId,
-            at,
-          )) > 0
-        );
+        return await step(`UPDATE ad_session SET shown_at = COALESCE(shown_at, $3), status = 'shown' WHERE ${open} ${returning}`);
       case "completed":
         // По ответу SDK засчитывается только показ: клик — своим редиректом,
-        // целевое действие — постбэком сети (§3.7, «Доверие»).
-        return (
-          (await this.prisma.$executeRawUnsafe(
-            `UPDATE ad_session SET shown_at = COALESCE(shown_at, $3), completed_at = $3, status = 'completed' WHERE ${open} AND success = 'view'`,
-            sessionId,
-            accountId,
-            at,
-          )) > 0
+        // целевое действие — постбэком сети (§3.7, «Доверие»). Креатив,
+        // который рисуем сами, досмотрен не раньше своего срока от выдачи.
+        return await step(
+          `UPDATE ad_session SET shown_at = COALESCE(shown_at, $3), completed_at = $3, status = 'completed'
+           WHERE ${open} AND success = 'view' AND (view_sec IS NULL OR created_at + make_interval(secs => view_sec) <= $3) ${returning}`,
         );
       case "clicked":
-        return (
-          (await this.prisma.$executeRawUnsafe(`UPDATE ad_session SET clicked_at = COALESCE(clicked_at, $3) WHERE ${open}`, sessionId, accountId, at)) > 0
-        );
+        return await step(`UPDATE ad_session SET clicked_at = COALESCE(clicked_at, $3) WHERE ${open} RETURNING network_key, creative_id, false AS first_shown`);
       case "failed":
-        return (
-          (await this.prisma.$executeRawUnsafe(
-            `UPDATE ad_session SET failed_at = $3, fail_reason = $4, status = 'failed' WHERE ${open}`,
-            sessionId,
-            accountId,
-            at,
-            outcome.reason,
-          )) > 0
+        return await step(
+          `UPDATE ad_session SET failed_at = $3, fail_reason = $4, status = 'failed' WHERE ${open} RETURNING network_key, creative_id, false AS first_shown`,
+          outcome.reason,
         );
     }
   }

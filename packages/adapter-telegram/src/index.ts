@@ -1,5 +1,6 @@
 import { hapticFeedback, invoice, isTMA, openLink, openTelegramLink, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
 import type {
+  AdNetworkSetup,
   AdShowOutcome,
   AdShowRequest,
   PlatformAdapter,
@@ -132,7 +133,7 @@ export class TelegramAdapter implements PlatformAdapter {
 
   clientInfo(): PlatformClientInfo {
     const client = describeTelegramClient();
-    return { platform: client.platform, version: client.version };
+    return { platform: client.platform, version: client.version, language: client.languageCode, premium: client.isPremium };
   }
 
   /**
@@ -161,6 +162,11 @@ export class TelegramAdapter implements PlatformAdapter {
     // Обёртки SDK — отдельным чанком при первом показе: первой загрузке
     // реклама не нужна, а её бюджет на счету (docs/27-design-system-and-app-shell.md §3.4).
     return (await import("./ads/ad-shower")).showInBrowser(request);
+  }
+
+  /** SDK сетей учёта аудитории (`ads/audience.ts`) — чанком показа, в простое: первую загрузку чужой скрипт не задерживает. */
+  async prepareAds(networks: readonly AdNetworkSetup[]): Promise<void> {
+    await (await import("./ads/ad-shower")).prepareInBrowser(networks);
   }
 }
 

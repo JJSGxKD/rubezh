@@ -33,6 +33,7 @@ interface PlatformAdapter {
   share(payload: SharePayload): void;    // шеринг результата забега
   haptic(type: HapticType): void;
   showAd?(request: AdShowRequest): Promise<AdShowOutcome>; // реклама сети по выдаче сервера; нет — площадка не показывает
+  prepareAds?(networks: readonly AdNetworkSetup[]): Promise<void>; // SDK сетей учёта аудитории — в простое после главной
 }
 ```
 
@@ -122,8 +123,11 @@ interface PlatformAdapter {
 
 Метод `showAd(request)` в адаптере — опциональный: показывает рекламу той
 сети и того блока, что выдал сервер, и возвращает исход — досмотрено,
-закрыто или отказ с кодом. На Telegram — SDK AdsGram, AdSonar, RichAds и
-Taddy (`adapter-telegram/src/ads/`); у MAX и VK метода нет, пока нет SDK, —
+закрыто или отказ с кодом. На Telegram — SDK AdsGram, AdSonar и RichAds
+(`adapter-telegram/src/ads/`). Taddy показывает не SDK, а наш рекламный блок
+в оболочке: креатив сервер берёт по API сети (`35-stage4-plan.md` WP12,
+часть 9). SDK Taddy адаптер поднимает методом `prepareAds` только для учёта
+аудитории — у каждого игрока, пока у сети задан ключ. У MAX и VK методов нет, пока нет SDK, —
 оболочка не рисует кнопок «за рекламу», VIP получает награду без ролика с
 сервера. Дальше — нативный VK Ads SDK на VK, Яндекс/международная сеть на
 вебе. Полная логика антирекламного пакета,

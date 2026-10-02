@@ -47,6 +47,7 @@ export const ANALYTICS_EVENTS = [
   "changelog_opened",
   "ad_shown",
   "ad_failed",
+  "ad_clicked",
   "ad_reward_claimed",
   "client_error",
 ] as const;

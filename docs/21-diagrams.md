@@ -698,8 +698,10 @@ erDiagram
         datetime completed_at "nullable: условие успеха выполнено"
         datetime claimed_at "nullable: только у выполненной"
         datetime failed_at "nullable"
-        string fail_reason "nullable: код отказа SDK"
+        string fail_reason "nullable: код отказа SDK или сети с API"
         datetime expires_at "позже created_at"
+        string creative_id "nullable: креатив сети с API — по нему сервер отмечает сети показ и досмотр"
+        int view_sec "nullable: досмотр креатива — не раньше стольких секунд от выдачи"
     }
 
     RUN_AD_CONTINUE {
@@ -933,6 +935,11 @@ erDiagram
   места, забирая сессию: забор мест игрока идёт под транзакционной
   блокировкой на аккаунт и место, поэтому ни одна сессия, ни две разом не
   дают второй награды в кулдаун. Забор без выполнения база не примет.
+  Креатив сети с API (Taddy, Р78) рисует наш блок: сессия помнит его
+  `creative_id` и срок досмотра `view_sec` — раньше срока от выдачи
+  досмотр не засчитывается, а показ сеть узнаёт однажды. Сеть с API, не
+  давшая креатива, остаётся в истории сессией `failed` — и уходит на паузу
+  места, как отказавшая на клиенте.
   Сессия без блока — пропуск рекламы (VIP, §3.6): выдана сразу выполненной,
   с именем пропуска вместо сети, и забирается хозяином места как обычная, в
   тот же кулдаун; иначе как выполненный досмотр база её не примет.
@@ -1951,6 +1958,44 @@ sequenceDiagram
 действие выполненной сессию сделает сервер — своим редиректом и постбэком
 сети, следующей частью WP12, а не ответом SDK (`35-stage4-plan.md` §3.7,
 «Доверие»).
+
+### 4.3.1 Креатив сети с API — Taddy (этап 4, WP12, часть 9)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant AD as ads
+    participant T as Taddy API
+    participant DB as PostgreSQL
+
+    C->>AD: POST /api/v1/ads/sessions { place, device, language, premium }
+    Note over AD: сеть по кругу — Taddy,<br/>у формата места доставка api
+    AD->>T: ads/get { pubId, user, origin server }
+    alt креатива нет, таймаут или ошибка
+        AD->>DB: INSERT ad_session (failed, fail_reason)
+        Note over AD: сеть на паузе места —<br/>выдача идёт к следующей сети
+    else креатив есть
+        AD->>DB: INSERT ad_session (pending, creative_id, view_sec)
+        AD-->>C: { sessionId, network taddy, creative { ad, viewSec } }
+        C->>C: наш рекламный блок, отсчёт viewSec
+        C->>AD: result { shown }
+        AD->>DB: UPDATE shown_at — впервые?
+        AD-)T: ads/impressions { id } мимо ответа игроку
+        opt игрок нажал на объявление
+            C->>C: ссылка Taddy в том же касании
+            C->>AD: result { clicked }
+        end
+        C->>AD: result { completed }
+        AD->>DB: UPDATE completed — не раньше created_at + view_sec
+        AD-)T: ads/view-through { id } мимо ответа игроку
+    end
+```
+
+Клик Taddy считает сама — по своей ссылке в объявлении; нам он виден шагом
+`clicked` в воронке. Награда — как у любой рекламы (§4.3): хозяин места
+забирает выполненную сессию. Учёт аудитории — отдельно: SDK Taddy
+поднимается у каждого игрока Telegram, пока у сети задан `pubId`, а `/start`
+бота сервер сообщает Taddy сам (`events/start`).
 
 ### 4.4 Публикация конфигурации из админки
 

@@ -91,6 +91,7 @@ const userSchema = z.object({
   last_name: z.string().max(256).optional(),
   username: z.string().max(64).optional(),
   language_code: z.string().max(16).optional(),
+  is_premium: z.boolean().optional(),
 });
 
 const chatSchema = z.object({ id: z.number().int(), type: z.string() });

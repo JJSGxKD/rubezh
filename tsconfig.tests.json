@@ -11,7 +11,10 @@
     // Nest. Без этих двух флагов проверка типов падает на конструкторах с
     // @Inject, хотя сама сборка бэкенда проходит.
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    // Тесты оболочки доходят до её `.tsx`: поток показа рекламы лениво грузит
+    // рекламный блок, и его типы проверяются так же, как в сборке пакета.
+    "jsx": "react-jsx"
   },
   "include": [
     "packages/*/test/**/*.ts",
