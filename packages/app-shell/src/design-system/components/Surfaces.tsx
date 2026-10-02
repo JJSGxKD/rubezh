@@ -1,8 +1,9 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
-import { Check, Info, Lock } from "lucide-react";
+import { Check, Info, Lock, X } from "lucide-react";
 import { t } from "../../i18n";
+import { useBackLayer } from "../../state/back-stack";
 import { uiFeedback } from "../../state/ui-feedback";
-import { Button } from "./Button";
+import { Button, IconButton } from "./Button";
 import { Badge } from "./Data";
 
 /**
@@ -131,22 +132,21 @@ export function Modal(props: ModalProps): ReactNode {
     return () => uiFeedback("sheetClose");
   }, [bottom]);
 
-  useEffect(() => {
-    if (onDismiss === undefined) return;
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onDismiss();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onDismiss]);
+  // «Назад» площадки и Esc закрывают верхнюю модалку, а не уводят экран из-под
+  // неё (WP45): слой стека живёт, пока модалка открыта.
+  useBackLayer(onDismiss);
+
+  const closable = onDismiss !== undefined;
+  // Заголовок со значком — по центру над содержимым, как у модалок забега:
+  // значок у них — сам предмет, и разносить его с названием нельзя. Тогда в
+  // шапке только крестик.
+  const headerTitle = closable && props.icon === undefined;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
-      // Закрываемый лист сам отвечает на Esc — клавиши экрана ему уступают.
-      data-dismissable={onDismiss === undefined ? undefined : "true"}
       className={[
         "absolute inset-0 flex px-4",
         "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
@@ -158,31 +158,48 @@ export function Modal(props: ModalProps): ReactNode {
       <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" onClick={onDismiss} />
       <div
         className={[
-          "surface-panel relative max-h-full w-full overflow-y-auto overscroll-contain rounded-xl p-5 short:p-4 landscape:p-4",
+          "surface-panel relative flex max-h-full w-full flex-col overflow-hidden rounded-xl",
           wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
           bottom ? "animate-sheet-in" : "animate-pop-in",
         ].join(" ")}
       >
-        {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
-            счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
-            прокрутку (§5.3). */}
-        {props.icon === undefined ? null : (
-          <div className="mb-2 flex justify-center short:hidden landscape:hidden">
-            <IconEmblem>{props.icon}</IconEmblem>
-          </div>
-        )}
-        {props.title === undefined ? null : (
-          <h2
-            className={[
-              "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
-              props.icon === undefined ? "" : "text-center",
-            ].join(" ")}
-          >
-            {props.title}
-          </h2>
-        )}
-        {props.children}
-        {props.footer === undefined ? null : <div className="mt-5 grid gap-2">{props.footer}</div>}
+        {/* Закрываемую модалку закрывают там, где палец, — сверху (Р81).
+            Шапка не прокручивается: крестик виден и в конце длинного листа. */}
+        {closable ? (
+          <header className="flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 short:pl-4 landscape:pl-4">
+            {headerTitle ? <h2 className="min-w-0 flex-1 pt-2 font-display text-xl font-bold text-text">{props.title}</h2> : <span className="flex-1" />}
+            <IconButton label={t("app.close")} feedback={bottom ? null : "back"} onClick={onDismiss}>
+              <X size={22} />
+            </IconButton>
+          </header>
+        ) : null}
+        <div
+          className={[
+            "min-h-0 overflow-y-auto overscroll-contain px-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4",
+            closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
+          ].join(" ")}
+        >
+          {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
+              счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
+              прокрутку (§5.3). */}
+          {props.icon === undefined ? null : (
+            <div className="mb-2 flex justify-center short:hidden landscape:hidden">
+              <IconEmblem>{props.icon}</IconEmblem>
+            </div>
+          )}
+          {props.title === undefined || headerTitle ? null : (
+            <h2
+              className={[
+                "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
+                props.icon === undefined ? "" : "text-center",
+              ].join(" ")}
+            >
+              {props.title}
+            </h2>
+          )}
+          {props.children}
+          {props.footer === undefined ? null : <div className="mt-5 grid gap-2">{props.footer}</div>}
+        </div>
       </div>
     </div>
   );

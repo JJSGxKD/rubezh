@@ -85,14 +85,18 @@ export interface IconButtonProps {
   label: string;
   onClick?: () => void;
   disabled?: boolean;
-  /** «назад» звучит иначе, чем нажатие: шаг вглубь и шаг обратно различаются на слух */
-  feedback?: "tap" | "back";
+  /**
+   * «назад» звучит иначе, чем нажатие: шаг вглубь и шаг обратно различаются
+   * на слух. `null` — кнопка молчит: звук даёт то, что она закрывает, —
+   * лист шуршит на закрытии сам.
+   */
+  feedback?: "tap" | "back" | null;
 }
 
 export function IconButton(props: IconButtonProps): ReactNode {
   const handleClick = (): void => {
     if (props.disabled === true) return;
-    uiFeedback(props.feedback ?? "tap");
+    if (props.feedback !== null) uiFeedback(props.feedback ?? "tap");
     props.onClick?.();
   };
 

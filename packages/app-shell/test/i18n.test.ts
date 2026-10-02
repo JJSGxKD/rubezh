@@ -44,6 +44,14 @@ describe("переводы", () => {
     expect(hasTranslation("dev.cheats.notCounted")).toBe(true);
   });
 
+  it("подписи витрины — только в её чанке: ни первая загрузка, ни словарь команды за них не платят", async () => {
+    await import("../src/i18n/team");
+    expect(t("gallery.title")).toBe("Витрина компонентов");
+    expect(hasTranslation("gallery.modals")).toBe(false);
+    await import("../src/i18n/gallery");
+    expect(t("gallery.modals")).toBe("Модалки");
+  });
+
   it("знает ключи контента: имена оружия и пассивок приходят из core-game", () => {
     for (const key of ["weapon.spark.name", "passive.might.name", "upgrade.heal.name"]) {
       expect(hasTranslation(key), key).toBe(true);

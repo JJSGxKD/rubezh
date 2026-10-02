@@ -13,6 +13,7 @@ import {
   IconEmblem,
   ListGroup,
   ListItem,
+  Modal,
   ProgressBar,
   Screen,
   SectionTitle,
@@ -23,6 +24,9 @@ import {
   Wordmark,
 } from "../design-system/components";
 import { t } from "../i18n";
+import "../i18n/gallery";
+import "../i18n/team";
+import { useBackLayer } from "../state/back-stack";
 import { useNavigation } from "../state/navigation";
 import { BootScreen } from "./gates";
 import { RunLoading } from "./run/RunLoading";
@@ -49,6 +53,7 @@ export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [segment, setSegment] = useState("daily");
+  const [sheet, setSheet] = useState(false);
 
   if (preview !== null) {
     return <PreviewFrame preview={preview} onClose={() => setPreview(null)} />;
@@ -69,6 +74,11 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.pause")} onClick={() => setPreview("pause")} />
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
           <ListItem title={t("gallery.preview.record")} onClick={() => setPreview("record")} />
+        </ListGroup>
+
+        <SectionTitle>{t("gallery.modals")}</SectionTitle>
+        <ListGroup>
+          <ListItem title={t("gallery.modal.long")} hint={t("gallery.modal.longHint")} onClick={() => setSheet(true)} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.brand")}</SectionTitle>
@@ -182,11 +192,51 @@ export function GalleryScreen(): ReactNode {
         <StubScreen icon={<Star size={36} />} title="Заглушка раздела" text={t("stub.soon")} />
         <StubNotice text={t("reward.stub")} />
       </ContentColumn>
+      {sheet ? <ModalsPreview onClose={() => setSheet(false)} /> : null}
     </Screen>
   );
 }
 
+/**
+ * Модалка в модалке (WP45): длинный лист, у которого крестик закреплён
+ * сверху, и вторая модалка поверх него. «Назад» и Esc закрывают верхнюю,
+ * лист под ней остаётся.
+ */
+function ModalsPreview(props: { onClose(): void }): ReactNode {
+  const [nested, setNested] = useState(false);
+  return (
+    <>
+      <Modal
+        title={t("gallery.modal.long")}
+        placement="bottom"
+        onDismiss={props.onClose}
+        footer={
+          <Button block onClick={() => setNested(true)}>
+            {t("gallery.modal.nested")}
+          </Button>
+        }
+      >
+        <p className="mb-3 text-sm text-text-muted">{t("gallery.modal.longHint")}</p>
+        <ul className="grid gap-2 text-sm text-text">
+          {Array.from({ length: 30 }, (_, index) => (
+            <li key={index} className="surface-card rounded-md px-3 py-2">
+              {t("gallery.modal.line", { n: index + 1 })}
+            </li>
+          ))}
+        </ul>
+      </Modal>
+      {nested ? (
+        <Modal title={t("gallery.modal.nestedTitle")} onDismiss={() => setNested(false)}>
+          <p className="text-sm text-text-muted">{t("gallery.modal.nestedHint")}</p>
+        </Modal>
+      ) : null}
+    </>
+  );
+}
+
 function PreviewFrame(props: { preview: Preview; onClose(): void }): ReactNode {
+  // Превью закрывается «Назад» площадки и Esc, а не уводит с витрины.
+  useBackLayer(props.onClose);
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg">
       {renderPreview(props.preview)}

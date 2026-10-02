@@ -226,5 +226,6 @@
   "diagnostics.report.cores": "Потоки процессора",
   "diagnostics.report.memory": "Память, ГБ (браузер округляет вниз)",
   "diagnostics.report.screenMode": "Режим экрана",
-  "diagnostics.report.insets": "Отступы"
+  "diagnostics.report.insets": "Отступы",
+  "gallery.title": "Витрина компонентов"
 }
