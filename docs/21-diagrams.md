@@ -1997,6 +1997,50 @@ sequenceDiagram
 поднимается у каждого игрока Telegram, пока у сети задан `pubId`, а `/start`
 бота сервер сообщает Taddy сам (`events/start`).
 
+### 4.3.2 Межстраничная при старте забега (этап 4, WP12, часть 10)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant AD as ads
+    participant F as flags
+    participant DB as PostgreSQL
+    participant N as Сеть: SDK или наш блок
+
+    Note over C: «Играть» — параллельно с движком,<br/>«Ещё раз» — до перезапуска
+    C->>AD: POST /api/v1/ads/sessions { place: interstitial, moment: run_start }
+    AD->>DB: VIP? сессии места с начала вчерашних суток
+    alt VIP
+        AD-->>C: { available: false, reason: pass }
+    else момент не площадки, игрок вне доли или правило политики
+        AD->>F: ads.interstitial для игрока
+        AD->>DB: один запрос: сутки с первого входа, забеги не короче минуты,<br/>последняя показанная, оплата, ролик за награду
+        AD-->>C: { available: false, reason: policy }
+        Note over AD: правило и момент — в лог
+    else можно
+        AD->>DB: INSERT ad_session (pending)
+        AD-->>C: { sessionId, network, format: interstitial }
+    end
+    alt выдача дольше 2 с
+        Note over C: забег стартует без рекламы
+        C->>AD: result { failed: late } — когда выдача всё же придёт
+    else выдача успела
+        C->>N: показ, срок — остаток двух секунд на скрипт и картинки
+        alt не успел или отказ сети
+            C->>AD: result { failed, reason }
+        else показан
+            C->>AD: result { completed } без ожидания
+        end
+    end
+    Note over C: новый забег
+```
+
+Показывать ли — решает только сервер: клиент не знает ни покупок, ни
+роликов за награду на других экранах. Две подряд не бывает: перед
+следующей должен закончиться забег не короче минуты, а пауза между
+показами — не меньше минуты. Числа политики — настройки панели, доля
+игроков — флаг `ads.interstitial` (`35-stage4-plan.md` WP12, часть 10).
+
 ### 4.4 Публикация конфигурации из админки
 
 ```mermaid
