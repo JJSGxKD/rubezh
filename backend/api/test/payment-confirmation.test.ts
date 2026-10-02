@@ -64,7 +64,7 @@ function query(purchase: StoredPurchase, patch: Partial<PreCheckout> = {}): PreC
 }
 
 describe("предварительная проверка оплаты", () => {
-  const view = (purchase: StoredPurchase, runFinished = false) => ({ purchase, platformUserId: String(PLAYER_ID), runFinished });
+  const view = (purchase: StoredPurchase, runFinished = false, continueTaken = false) => ({ purchase, platformUserId: String(PLAYER_ID), runFinished, continueTaken });
 
   it("пропускает оплату своего свежего счёта на ту же сумму", () => {
     const purchase = pending();
@@ -79,6 +79,7 @@ describe("предварительная проверка оплаты", () => {
     ["валюта не звёзды", (p: StoredPurchase) => decideCheckout(view(p), query(p, { currency: "USD" }), NOW, true), "price_mismatch"],
     ["счёт старше получаса", (p: StoredPurchase) => decideCheckout(view(p), query(p), NOW + 30 * 60_000, true), "stale_invoice"],
     ["забег уже закончен", (p: StoredPurchase) => decideCheckout(view(p, true), query(p), NOW, true), "run_finished"],
+    ["продолжение уже взято за рекламу", (p: StoredPurchase) => decideCheckout(view(p, false, true), query(p), NOW, true), "continue_taken"],
   ])("отказывает: %s", (_name, decide, reason) => {
     expect(decide(pending())).toEqual({ ok: false, reason });
   });
@@ -224,7 +225,7 @@ describe("очередь оплаты", () => {
       confirm: async (payment: ConfirmedPayment) => {
         if (failing) throw new Error("база недоступна");
         confirmed.push(payment.chargeId);
-        return { kind: "paid", purchase: pending({ status: "paid", telegramChargeId: payment.chargeId }), runFinished: false };
+        return { kind: "paid", purchase: pending({ status: "paid", telegramChargeId: payment.chargeId }), runFinished: false, continueTaken: false };
       },
     } as unknown as PaymentConfirmation;
     // Очередь не поднята — как при недоступном Redis.
@@ -291,6 +292,15 @@ describe("возвраты звёзд", () => {
   it("оплата пришла, когда забег уже закончен: товар не выдан — звёзды назад", async () => {
     const purchase = purchaseIn("live");
     purchases.finishedRuns.add(purchase.runId);
+
+    await queue.confirm(payment(purchase));
+
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "refunded", refundReason: "unused" });
+  });
+
+  it("оплата пришла, когда это продолжение уже взяли за рекламу, — звёзды назад", async () => {
+    const purchase = purchaseIn("live");
+    purchases.adContinues.add(`${String(purchase.runId)}:1`);
 
     await queue.confirm(payment(purchase));
 

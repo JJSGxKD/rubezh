@@ -11,7 +11,8 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
  * - **тестовая оплата** (Р14) — звезда возвращается сразу после
  *   подтверждения, продолжение засчитано;
  * - **продолжением не воспользовались** — забег закончился раньше, чем
- *   пришла оплата, или приложение закрыли, не продолжив: товар не выдан;
+ *   пришла оплата, приложение закрыли, не продолжив, или то же продолжение
+ *   взяли за рекламу: товар не выдан;
  * - **вторая оплата того же продолжения** — одно продолжение, одна оплата;
  * - **оплата без покупки** — продать было нечего.
  *
@@ -36,7 +37,8 @@ export class PaymentRefunds {
       case "paid": {
         const { purchase } = outcome;
         if (purchase.mode === "test") return await this.request(purchase.purchaseId, "test_mode", nowMs);
-        if (outcome.runFinished) return await this.request(purchase.purchaseId, "unused", nowMs);
+        // Забег закончился или продолжен за рекламу раньше, чем пришла оплата: товар не выдан.
+        if (outcome.runFinished || outcome.continueTaken) return await this.request(purchase.purchaseId, "unused", nowMs);
         return [];
       }
       case "already_paid":

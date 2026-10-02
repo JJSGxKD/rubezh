@@ -25,6 +25,8 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
   readonly owners = new Map<string, string>();
   /** законченные забеги — то, что в базе лежит в `run` */
   readonly finishedRuns = new Set<string>();
+  /** продолжения, взятые за рекламу: `runId:continueNo` */
+  readonly adContinues = new Set<string>();
 
   async openInvoice(record: InvoiceRecord): Promise<InvoiceOutcome> {
     const existing = [...this.rows.values()].find((row) => row.runId === record.runId && row.continueNo === record.continueNo);
@@ -138,7 +140,7 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
   async checkout(purchaseId: string): Promise<CheckoutView | null> {
     const row = this.rows.get(purchaseId);
     if (row === undefined) return null;
-    return { purchase: { ...row }, platformUserId: this.owners.get(row.accountId) ?? "", runFinished: row.runId !== null && this.finishedRuns.has(row.runId) };
+    return { purchase: { ...row }, platformUserId: this.owners.get(row.accountId) ?? "", runFinished: row.runId !== null && this.finishedRuns.has(row.runId), continueTaken: this.adContinues.has(`${String(row.runId)}:${String(row.continueNo)}`) };
   }
 
   async markPaid(record: PaymentRecord): Promise<ConfirmOutcome> {
@@ -148,7 +150,7 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     if (row === undefined) return { kind: "unknown" };
     if (row.status !== "pending") return { kind: "already_paid", purchase: { ...row } };
     Object.assign(row, { status: "paid", paidAt: record.paidAt, telegramChargeId: record.chargeId, chargedStars: record.chargedStars });
-    return { kind: "paid", purchase: { ...row }, runFinished: row.runId !== null && this.finishedRuns.has(row.runId) };
+    return { kind: "paid", purchase: { ...row }, runFinished: row.runId !== null && this.finishedRuns.has(row.runId), continueTaken: this.adContinues.has(`${String(row.runId)}:${String(row.continueNo)}`) };
   }
 
   async markRenewal(record: RenewalRecord): Promise<ConfirmOutcome> {
@@ -171,7 +173,7 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
       renewalOf: first.purchaseId,
     };
     this.rows.set(created.purchaseId, created);
-    return { kind: "paid", purchase: { ...created }, runFinished: false };
+    return { kind: "paid", purchase: { ...created }, runFinished: false, continueTaken: false };
   }
 
   async markRefunded(chargeId: string, refundedAt: Date): Promise<RefundedRecord | null> {

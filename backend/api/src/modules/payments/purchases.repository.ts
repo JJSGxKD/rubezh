@@ -61,6 +61,8 @@ export interface CheckoutView {
   platformUserId: string;
   /** забег второго шанса уже закончен — продолжать нечего; у товара магазина забега нет */
   runFinished: boolean;
+  /** это продолжение забега уже взято за рекламу (WP11) — звёзды за него не нужны */
+  continueTaken: boolean;
 }
 
 export interface PaymentRecord {
@@ -92,7 +94,7 @@ export interface RenewalRecord {
  * покупки нет.
  */
 export type ConfirmOutcome =
-  | { kind: "paid"; purchase: StoredPurchase; runFinished: boolean }
+  | { kind: "paid"; purchase: StoredPurchase; runFinished: boolean; continueTaken: boolean }
   | { kind: "duplicate"; purchase: StoredPurchase }
   | { kind: "already_paid"; purchase: StoredPurchase }
   | { kind: "unknown" };
@@ -282,11 +284,16 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
     // Одним запросом: на всю проверку у Telegram десять секунд.
     const row = await this.prisma.purchase.findUnique({
       where: { purchaseId },
-      select: { ...SELECT, account: { select: { platformUserId: true } }, run: { select: { status: true } } },
+      select: { ...SELECT, account: { select: { platformUserId: true } }, run: { select: { status: true, adContinues: { select: { continueNo: true } } } } },
     });
     if (row === null) return null;
     const { account, run, ...purchase } = row;
-    return { purchase, platformUserId: account.platformUserId, runFinished: run?.status === "finished" };
+    return {
+      purchase,
+      platformUserId: account.platformUserId,
+      runFinished: run?.status === "finished",
+      continueTaken: run?.adContinues.some((taken) => taken.continueNo === purchase.continueNo) === true,
+    };
   }
 
   async markPaid(record: PaymentRecord): Promise<ConfirmOutcome> {
@@ -309,7 +316,7 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
 
     const view = await this.checkout(record.purchaseId);
     if (view === null) return { kind: "unknown" };
-    if (updated === 1) return { kind: "paid", purchase: view.purchase, runFinished: view.runFinished };
+    if (updated === 1) return { kind: "paid", purchase: view.purchase, runFinished: view.runFinished, continueTaken: view.continueTaken };
     return view.purchase.telegramChargeId === record.chargeId
       ? { kind: "duplicate", purchase: view.purchase }
       : { kind: "already_paid", purchase: view.purchase };
@@ -339,7 +346,7 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
         },
         select: SELECT,
       });
-      return { kind: "paid", purchase: created, runFinished: false };
+      return { kind: "paid", purchase: created, runFinished: false, continueTaken: false };
     } catch (error: unknown) {
       // То же продление записали параллельно — уникальный индекс оплаты не пустил второе.
       if (!isUniqueViolation(error)) throw error;

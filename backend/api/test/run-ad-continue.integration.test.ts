@@ -4,6 +4,7 @@ import { loadAppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { PrismaPurchasesRepository } from "../src/modules/payments/purchases.repository.js";
 import { PrismaRunAdContinuesRepository } from "../src/modules/runs/run-ad-continues.repository.js";
 import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
 
@@ -20,6 +21,7 @@ const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 describe.skipIf(DATABASE_URL === "")("второй шанс за рекламу на живом Postgres", () => {
   let prisma: PrismaClient;
   let continues: PrismaRunAdContinuesRepository;
+  let purchases: PrismaPurchasesRepository;
   let runs: PrismaRunsRepository;
   let accounts: PrismaAccountRepository;
 
@@ -39,6 +41,7 @@ describe.skipIf(DATABASE_URL === "")("второй шанс за рекламу 
     const config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv);
     prisma = createPrisma(config);
     continues = new PrismaRunAdContinuesRepository(prisma);
+    purchases = new PrismaPurchasesRepository(prisma);
     runs = new PrismaRunsRepository(prisma);
     accounts = new PrismaAccountRepository(prisma);
   });
@@ -76,5 +79,24 @@ describe.skipIf(DATABASE_URL === "")("второй шанс за рекламу 
     expect(await continues.todayCount(accountId, lateEvening)).toBe(1);
     expect(await continues.todayCount(accountId, afterMidnight)).toBe(1);
     expect(await continues.todayCount(accountId, new Date(afterMidnight.getTime() + 60_000))).toBe(1);
+  });
+
+  it("счёт за продолжение, уже взятое за рекламу, проверка оплаты видит взятым", async () => {
+    const { accountId, runId } = await startedRun();
+    const opened = await purchases.openInvoice({
+      purchaseId: randomUUID(),
+      accountId,
+      runId,
+      continueNo: 1,
+      elapsedSec: 125,
+      priceStars: 3,
+      chargedStars: 3,
+      mode: "live",
+      invoicedAt: new Date(),
+    });
+    if (opened.kind !== "opened") throw new Error("счёт не открылся");
+    await expect(purchases.checkout(opened.purchase.purchaseId)).resolves.toMatchObject({ runFinished: false, continueTaken: false });
+    await continues.grant({ runId, continueNo: 1, accountId, sessionId: session(), networkKey: "adsgram", grantedAt: new Date() });
+    await expect(purchases.checkout(opened.purchase.purchaseId)).resolves.toMatchObject({ continueTaken: true });
   });
 });
