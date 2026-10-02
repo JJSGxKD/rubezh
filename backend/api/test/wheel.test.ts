@@ -347,10 +347,10 @@ describe("крутка за рекламу", () => {
     expect(wallet.grants).toHaveLength(1);
   });
 
-  it("экран знает, есть ли реклама для площадки игрока", async () => {
-    const { service } = setup(rolls(0), 1, [adBlock("adsgram", 10, { platforms: ["vk"] })]);
-    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: false, readyAt: null, pass: null });
-    expect((await service.view({ accountId: ME, platform: "vk" }, NOON)).ad).toEqual({ available: true, readyAt: null, pass: null });
+  it("экран знает, есть ли реклама для площадки игрока: блок «везде» сети Telegram в VK кнопки не даёт", async () => {
+    const { service } = setup(rolls(0), 1, [adBlock("adsgram", 10)]);
+    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: true, readyAt: null, pass: null });
+    expect((await service.view({ accountId: ME, platform: "vk" }, NOON)).ad).toEqual({ available: false, readyAt: null, pass: null });
   });
 });
 

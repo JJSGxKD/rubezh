@@ -4,6 +4,7 @@ import {
   AD_FORMATS,
   AD_NETWORK_PROFILES,
   PLACE_FORMAT,
+  blockReaches,
   blockShapeProblem,
   keysProblem,
   missingKeys,
@@ -12,6 +13,7 @@ import {
   type AdField,
 } from "../src/modules/ads/ad-networks.js";
 import { AD_PLACES, AD_SUCCESS } from "../src/modules/ads/ads-rules.js";
+import { PLATFORM_IDS } from "../src/platforms/ports/platform.js";
 import { servable } from "../src/modules/ads/ads.service.js";
 import { NETWORK_KEYS } from "./helpers/memory-ads.js";
 
@@ -99,21 +101,36 @@ describe("профили рекламных сетей", () => {
   });
 
   it("блок по профилю: задание AdsGram на крутку колеса не встаёт и объясняет почему", () => {
-    expect(blockShapeProblem({ networkKey: "adsgram", place: "wheel_spin", externalId: "task-1", success: "view" })).toBe("AdsGram: Block ID для этого места выглядит как «12345»");
-    expect(blockShapeProblem({ networkKey: "richads", place: "task", externalId: null, success: "cpa" })).toBe(
+    expect(blockShapeProblem({ networkKey: "adsgram", place: "wheel_spin", externalId: "task-1", success: "view", platforms: [] })).toBe("AdsGram: Block ID для этого места выглядит как «12345»");
+    expect(blockShapeProblem({ networkKey: "richads", place: "task", externalId: null, success: "cpa", platforms: [] })).toBe(
       "RichAds не показывает в месте «Задания»: месту нужен формат «задание сети», а у сети его нет",
     );
-    expect(blockShapeProblem({ networkKey: "adsgram", place: "task", externalId: "task-1", success: "view" })).toBe("AdsGram: в этом месте успех — целевое действие");
-    expect(blockShapeProblem({ networkKey: "monetag", place: "task", externalId: null, success: "cpa" })).toMatch(/нет в коде/);
-    expect(blockShapeProblem({ networkKey: "taddy", place: "wheel_spin", externalId: "x", success: "view" })).toMatch(/нет блока в кабинете/);
+    expect(blockShapeProblem({ networkKey: "adsgram", place: "task", externalId: "task-1", success: "view", platforms: [] })).toBe("AdsGram: в этом месте успех — целевое действие");
+    expect(blockShapeProblem({ networkKey: "monetag", place: "task", externalId: null, success: "cpa", platforms: [] })).toMatch(/нет в коде/);
+    expect(blockShapeProblem({ networkKey: "taddy", place: "wheel_spin", externalId: "x", success: "view", platforms: [] })).toMatch(/нет блока в кабинете/);
+  });
+
+  it("сеть знает свои площадки: блок AdsGram для VK не встаёт, пустой список — только там, где работает сеть", () => {
+    for (const profile of AD_NETWORK_PROFILES) {
+      expect(profile.platforms.length, profile.key).toBeGreaterThan(0);
+      expect(profile.platforms.every((platform) => (PLATFORM_IDS as readonly string[]).includes(platform)), profile.key).toBe(true);
+    }
+    expect(blockShapeProblem({ networkKey: "adsgram", place: "wheel_spin", externalId: "123", success: "view", platforms: ["telegram", "vk"] })).toBe(
+      "AdsGram работает только в Telegram — в VK её SDK не поднимется",
+    );
+    expect(blockShapeProblem({ networkKey: "adsgram", place: "wheel_spin", externalId: "123", success: "view", platforms: ["telegram"] })).toBeNull();
+    expect(blockReaches({ networkKey: "adsgram", platforms: [] }, "telegram")).toBe(true);
+    expect(blockReaches({ networkKey: "adsgram", platforms: [] }, "vk")).toBe(false);
+    expect(blockReaches({ networkKey: "adsgram", platforms: ["telegram"] }, "telegram")).toBe(true);
+    expect(blockReaches({ networkKey: "monetag", platforms: [] }, "telegram")).toBe(false);
   });
 
   it("выдача показывает только то, что SDK сможет показать: блок по профилю и сеть с ключами", () => {
-    const block = { networkKey: "richads", place: "interstitial" as const, externalId: null, success: "view" as const };
+    const block = { networkKey: "richads", place: "interstitial" as const, externalId: null, success: "view" as const, platforms: [] };
     expect(servable({ ...block, networkKeys: NETWORK_KEYS.richads ?? {} })).toBe(true);
     expect(servable({ ...block, networkKeys: { pubId: "792361" } })).toBe(false);
     expect(servable({ ...block, networkKeys: { pubId: "792361", appId: "app" } })).toBe(false);
     expect(servable({ ...block, externalId: "123", networkKeys: NETWORK_KEYS.richads ?? {} })).toBe(false);
-    expect(servable({ networkKey: "adsgram", place: "wheel_spin", externalId: "123", success: "view", networkKeys: {} })).toBe(true);
+    expect(servable({ networkKey: "adsgram", place: "wheel_spin", externalId: "123", success: "view", platforms: [], networkKeys: {} })).toBe(true);
   });
 });

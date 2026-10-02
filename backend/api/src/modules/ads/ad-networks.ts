@@ -1,3 +1,4 @@
+import type { PlatformId } from "../../platforms/ports/platform.js";
 import type { AdPlace, AdSuccess } from "./ads-rules.js";
 
 /**
@@ -14,6 +15,11 @@ import type { AdPlace, AdSuccess } from "./ads-rules.js";
  * **Ключи сети публичные** — их всё равно видно в коде клиента: `pubId`,
  * `appId`. Секреты подтверждений (вебхуки, адрес награды) — только в
  * окружении (Р53) и сюда не попадают.
+ *
+ * **Сеть знает свои площадки** (Р77, часть 8): SDK AdsGram, AdSonar, RichAds
+ * и Taddy живёт только в Telegram. Блок с чужой площадкой не сохраняется и не
+ * выдаётся, а пустой список площадок у блока значит «везде, где работает
+ * сеть», — иначе блок AdsGram «на всех площадках» считался бы рекламой в VK.
  *
  * `verified` — профиль сверен с документацией сети (все четыре — 01.10.2026)
  * и рабочей интеграцией источника (`vpnsibcom_web`: вид ключей в продакшене).
@@ -43,6 +49,9 @@ export const PLACE_TITLES: Record<AdPlace, string> = {
 };
 
 export const SUCCESS_TITLES: Record<AdSuccess, string> = { view: "показ", click: "клик", cpa: "целевое действие" };
+
+/** Площадка словами — в сообщениях панели: «работает только в Telegram». */
+export const PLATFORM_TITLES: Record<PlatformId, string> = { telegram: "Telegram", max: "MAX", vk: "VK", web: "браузере" };
 
 export const FORMAT_TITLES: Record<AdFormat, string> = {
   rewarded: "видео за награду",
@@ -93,6 +102,8 @@ export interface AdNetworkProfile {
   title: string;
   /** кабинет сети — ссылка в панели; `null` — адрес не сверен */
   cabinet: string | null;
+  /** площадки, где работает SDK сети, — блок показывается только на них */
+  platforms: readonly PlatformId[];
   keys: readonly AdKeyField[];
   formats: readonly AdFormatSupport[];
   verified: boolean;
@@ -103,6 +114,7 @@ export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
     key: "adsgram",
     title: "AdsGram",
     cabinet: "https://partner.adsgram.ai",
+    platforms: ["telegram"],
     keys: [],
     formats: [
       {
@@ -132,6 +144,7 @@ export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
     key: "adsonar",
     title: "AdSonar",
     cabinet: "https://partner.adsonar.co",
+    platforms: ["telegram"],
     keys: [
       {
         key: "appId",
@@ -163,6 +176,7 @@ export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
     key: "richads",
     title: "RichAds",
     cabinet: "https://my.richads.com",
+    platforms: ["telegram"],
     keys: [
       { key: "pubId", title: "Publisher ID (pubId)", hint: "Код подключения Mini App от RichAds: число pubId в initialize", example: "792361", pattern: "^[0-9]{1,12}$" },
       { key: "appId", title: "App ID (appId)", hint: "Код подключения Mini App от RichAds: число appId в initialize — у каждого приложения своё", example: "1396", pattern: "^[0-9]{1,12}$" },
@@ -189,6 +203,7 @@ export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
     key: "taddy",
     title: "Taddy",
     cabinet: null,
+    platforms: ["telegram"],
     keys: [
       {
         key: "pubId",
@@ -281,12 +296,18 @@ export interface BlockShape {
   place: AdPlace;
   externalId: string | null;
   success: AdSuccess;
+  /** пусто — везде, где работает сеть */
+  platforms: readonly PlatformId[];
 }
+
+const listOf = (platforms: readonly PlatformId[]): string => platforms.map((platform) => PLATFORM_TITLES[platform]).join(", ");
 
 /** Что не так с блоком по профилю его сети; `null` — блок по правилам. */
 export function blockShapeProblem(block: BlockShape): string | null {
   const profile = profileOf(block.networkKey);
   if (profile === undefined) return `Сети «${block.networkKey}» нет в коде — её SDK не подключён`;
+  const foreign = block.platforms.filter((platform) => !profile.platforms.includes(platform));
+  if (foreign.length > 0) return `${profile.title} работает только в ${listOf(profile.platforms)} — в ${listOf(foreign)} её SDK не поднимется`;
   const support = formatFor(profile, block.place);
   if (support === undefined) {
     return `${profile.title} не показывает в месте «${PLACE_TITLES[block.place]}»: месту нужен формат «${FORMAT_TITLES[PLACE_FORMAT[block.place]]}», а у сети его нет`;
@@ -299,4 +320,11 @@ export function blockShapeProblem(block: BlockShape): string | null {
   }
   if (!support.success.includes(block.success)) return `${profile.title}: в этом месте успех — ${support.success.map((success) => SUCCESS_TITLES[success]).join(" или ")}`;
   return null;
+}
+
+/** Показывается ли блок на площадке: сеть там работает, а блок не ограничен другими. */
+export function blockReaches(block: Pick<BlockShape, "networkKey" | "platforms">, platform: PlatformId): boolean {
+  const profile = profileOf(block.networkKey);
+  if (profile === undefined || !profile.platforms.includes(platform)) return false;
+  return block.platforms.length === 0 || block.platforms.includes(platform);
 }
