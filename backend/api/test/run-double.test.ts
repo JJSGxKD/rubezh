@@ -10,6 +10,7 @@ import { AdCooldownError, AdNotCompletedError } from "../src/modules/ads/ads-err
 import { maxRewardsPerDay } from "../src/modules/ads/ads-rules.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { AdsService } from "../src/modules/ads/ads.service.js";
+import { panelSettings } from "./helpers/settings.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
@@ -86,7 +87,7 @@ function setup(blocks = [adBlock("adsgram", 10, { place: "run_double" }), adBloc
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
   const passes = new AdPasses();
-  const ads = new AdsService(adsRepository, () => 0, passes);
+  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings());
   const wallet = new FakeWallet();
   const service = new RunDoubleService(repository, ads, wallet as unknown as WalletService);
   return { repository, adsRepository, ads, wallet, service, passes };

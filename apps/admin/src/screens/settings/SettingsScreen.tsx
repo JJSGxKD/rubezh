@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { SETTING_PLACEHOLDER, SOURCE_TITLES, URL_MAX, fetchSettings, groupSettings, resetSetting, saveSetting, settingProblem, settingText, type SettingRow, type SettingValue } from "../../api/settings";
@@ -9,13 +9,24 @@ import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
+/** Якорь строки настройки: другие разделы ведут прямо к ней — `#/settings/ads.test-mode`. */
+export function settingAnchor(key: string): string {
+  return `setting-${key}`;
+}
+
 /**
  * Настройки без релиза: адреса чатов команды и переключатели. Значение
  * отсюда сильнее окружения сервера и доходит до всех реплик за секунды;
  * «Сбросить» возвращает то, что записано в `.env` сервера.
+ *
+ * `focus` — ключ из адреса: раздел, который предупреждает о настройке,
+ * ведёт к её строке, и её не нужно искать на длинной странице.
  */
-export function SettingsScreen() {
+export function SettingsScreen({ focus = null }: { focus?: string | null }) {
   const { state, reload } = useApi(() => fetchSettings(api), []);
+  useEffect(() => {
+    if (focus !== null && state.status === "ok") document.getElementById(settingAnchor(focus))?.scrollIntoView({ block: "center" });
+  }, [focus, state.status]);
   const [editing, setEditing] = useState<{ key: string; value: SettingValue } | null>(null);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
@@ -98,7 +109,7 @@ export function SettingsScreen() {
                   {
                     title: "Настройка",
                     render: (row) => (
-                      <div className="flex max-w-md flex-col gap-0.5">
+                      <div id={settingAnchor(row.key)} className={`flex max-w-md flex-col gap-0.5 ${row.key === focus ? "-mx-2 rounded-sm bg-accent/10 px-2 py-1 ring-1 ring-accent/50" : ""}`}>
                         <span>{row.title}</span>
                         <span className="text-xs text-text-muted">{row.hint}</span>
                       </div>

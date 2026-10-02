@@ -16,10 +16,11 @@ import {
   type AdsView,
   type FunnelDays,
 } from "../../api/ads";
+import { hrefOf } from "../../routes";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { HELP } from "../../ui/help";
-import { Badge, Button, DataTable, ErrorNotice, Loading, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
 import { BlockDialog } from "./BlockDialog";
 import { NetworkCards } from "./NetworkCards";
@@ -35,6 +36,7 @@ export function AdsScreen() {
   const [days, setDays] = useState<FunnelDays>(7);
   const { state, reload } = useApi(() => fetchAds(api, days), [days]);
   const canEdit = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("ads.edit"));
+  const canSettings = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("settings.edit"));
 
   return (
     <div className="flex flex-col gap-4">
@@ -42,6 +44,7 @@ export function AdsScreen() {
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok" ? (
         <>
+          {state.data.testMode ? <TestModeNotice canSettings={canSettings} /> : null}
           <CoveragePanel view={state.data} />
           <NetworkCards view={state.data} canEdit={canEdit} onSaved={reload} />
           <BlocksPanel view={state.data} canEdit={canEdit} onSaved={reload} />
@@ -49,6 +52,25 @@ export function AdsScreen() {
         </>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Тестовые показы — первым на экране: включённые в бою, они тихо съедают
+ * доход, а на графиках выглядят как обычные показы.
+ */
+function TestModeNotice({ canSettings }: { canSettings: boolean }) {
+  return (
+    <Notice>
+      Включены тестовые показы: сети крутят пробные ролики, не засчитывают их и не платят. На тестовом сервере так и задумано, в бою — выключите.{" "}
+      {canSettings ? (
+        <a className="font-semibold underline" href={hrefOf({ section: "settings", id: "ads.test-mode" })}>
+          Выключить в настройках
+        </a>
+      ) : (
+        "Выключает тот, у кого есть доступ к настройкам."
+      )}
+    </Notice>
   );
 }
 
@@ -61,7 +83,7 @@ function CoveragePanel({ view }: { view: AdsView }) {
         columns={[
           { title: "Место", render: (row) => PLACE_TITLES[row.place] },
           { title: "Формат", render: (row) => FORMAT_TITLES[view.formats[row.place] ?? ""] ?? view.formats[row.place] ?? "—" },
-          { title: "Сети по кругу", help: HELP.ads.circle, render: (row) => (row.networks.length === 0 ? <span className="text-text-muted">нет — игрок увидит «реклама недоступна»</span> : row.networks.join(" → ")) },
+          { title: "Сети по кругу", help: HELP.ads.circle, render: (row) => (row.networks.length === 0 ? <span className="text-text-muted">нет — кнопки «за рекламу» у игрока нет, VIP получает награду без ролика</span> : row.networks.join(" → ")) },
           {
             title: "",
             render: (row) =>

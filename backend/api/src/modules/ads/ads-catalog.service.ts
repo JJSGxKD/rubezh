@@ -3,6 +3,8 @@ import { z } from "zod";
 import { withTimeout } from "../../common/with-timeout.js";
 import { PLATFORM_IDS } from "../../platforms/ports/platform.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
+import { SETTINGS } from "../settings/setting-catalog.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import {
   AD_NETWORK_PROFILES,
   PLACE_FORMAT,
@@ -107,6 +109,8 @@ export interface AdsCatalogView {
   profiles: readonly AdNetworkProfile[];
   /** какой формат ждёт место */
   formats: Record<AdPlace, AdFormat>;
+  /** включены тестовые показы: сети крутят пробные ролики и не платят — панель предупреждает */
+  testMode: boolean;
 }
 
 @Injectable()
@@ -117,6 +121,7 @@ export class AdsCatalogService {
     @Inject(ADS_CATALOG_REPOSITORY) private readonly repository: AdsCatalogRepository,
     private readonly roles: RolesService,
     private readonly ads: AdsService,
+    @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
   async view(actor: AccountRef, days: FunnelDays, at = new Date()): Promise<AdsCatalogView> {
@@ -134,6 +139,7 @@ export class AdsCatalogService {
       places: AD_PLACES,
       profiles: AD_NETWORK_PROFILES,
       formats: PLACE_FORMAT,
+      testMode: this.settings.get(SETTINGS.adsTestMode),
     };
   }
 

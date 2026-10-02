@@ -145,6 +145,8 @@ const viewSchema = z.object({
   profiles: z.array(profileSchema).default([]),
   /** какой формат ждёт место */
   formats: z.record(z.string(), z.string()).default({}),
+  /** включены тестовые показы — сети крутят пробные ролики и не платят */
+  testMode: z.boolean().default(false),
 });
 export type AdsView = z.infer<typeof viewSchema>;
 

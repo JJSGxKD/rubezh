@@ -35,7 +35,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   exports: () => <ExportsScreen />,
   links: () => <LinksScreen />,
   flags: () => <FlagsScreen />,
-  settings: () => <SettingsScreen />,
+  settings: (id) => <SettingsScreen focus={id} />,
   broadcasts: (id) => <BroadcastsScreen id={id} />,
   changelog: () => <ChangelogScreen />,
   tasks: () => <TasksScreen />,
