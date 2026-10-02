@@ -1670,11 +1670,11 @@ flowchart LR
     ADMINAPI -. курсы, заданные курсы .-> FXM
     ADMINAPI -. отчёты, архив .-> EXPORT
     ADMINAPI -. флаги и выкат .-> FLAGS
-    ADMINAPI -. настройки, право settings.edit .-> SETTINGS
+    ADMINAPI -. "настройки, право settings.edit" .-> SETTINGS
     SETTINGS --> PG
     SETTINGS -- "канал settings:changed" --> REDIS
     NOTIFY -. адреса чатов команды .-> SETTINGS
-    ADMINAPI -. ключи, права secrets.view и secrets.edit .-> SECRETS
+    ADMINAPI -. "ключи, права secrets.view и secrets.edit" .-> SECRETS
     SECRETS --> PG
     SECRETS -- "канал secrets:changed" --> REDIS
     FXM -. ключ CoinGecko на каждом проходе .-> SECRETS
@@ -2208,7 +2208,7 @@ sequenceDiagram
         end
         TG-->>A: отчёт
     end
-    Note over A,T: /stats в чате статистики или в личке с правом аналитики —<br/>за сегодня с полуночи, без разницы; не чаще раза в 20 с на чат
+    Note over A,T: /stats в чате статистики или в личке с правом аналитики —<br/>за сегодня с полуночи, без разницы, не чаще раза в 20 с на чат
 ```
 
 ### 4.13 Приём событий закрытого теста (этап 2, реализовано)
@@ -2291,7 +2291,7 @@ sequenceDiagram
     R->>DB: забег одной строкой, вердикт
     R-->>C: место и рекорд
     R--)Q: слушатель записанного забега — задание с ключом run_id
-    Q->>P: формула награды: монеты, опыт; с читами, отклонённый, короче 30 с — без
+    Q->>P: формула награды: монеты и опыт, а забегу с читами, отклонённому или короче 30 с — ничего
     P->>DB: строка награды ON CONFLICT и прибавка опыта — одна транзакция
     P->>W: монеты run:<runId>:coins, награды за уровень level:<аккаунт>:<уровень>
     W->>DB: журнал и баланс, суточный потолок
@@ -2413,10 +2413,10 @@ sequenceDiagram
     else
         AD->>R: SET admin:session:<sha256> EX ttl,<br/>SADD admin:sessions:<аккаунт>
         AD->>DB: аудит admin.login
-        AD-->>B: Set-Cookie HttpOnly SameSite=Strict<br/>Path=/api/v1/admin; роли и права
+        AD-->>B: Set-Cookie HttpOnly SameSite=Strict<br/>Path=/api/v1/admin, роли и права
     end
 
-    Note over B,AD: любой запрос панели — cookie; изменяющий — ещё и X-Requested-With: rubezh-admin
+    Note over B,AD: любой запрос панели — cookie, изменяющий — ещё и X-Requested-With: rubezh-admin
     B->>AD: POST /api/v1/admin/players/:id/ban { reason }
     AD->>R: GET admin:session:<sha256>
     alt сессии нет или истекла
@@ -2446,7 +2446,7 @@ sequenceDiagram
     participant A as Администратор
 
     B->>AD: POST /api/v1/admin/session/bot
-    AD->>R: HSET admin:panel-login:<запрос><br/>хэш секрета, код, браузер, сеть; EX 300
+    AD->>R: HSET admin:panel-login:<запрос><br/>хэш секрета, код, браузер, сеть, EX 300
     AD-->>B: запрос, секрет, код, t.me/<бот>?start=panel-<запрос>
     B->>A: код на экране и «Открыть бота»
     A->>BOT: /start panel-<запрос> (личка)
@@ -2461,7 +2461,7 @@ sequenceDiagram
         AD->>R: подтверждён? — забрать и удалить (Lua)
     end
     AD->>R: SET admin:session:<sha256>
-    AD-->>B: Set-Cookie сессии; роли и права
+    AD-->>B: Set-Cookie сессии, роли и права
 ```
 
 ### 4.18 Рассылка из панели (этап 4, реализовано)
@@ -2500,7 +2500,7 @@ sequenceDiagram
         alt доставлено
             BC->>DB: sent, sent_at
         else 403 или нет чата
-            BC->>DB: blocked; «можно писать» — нет
+            BC->>DB: blocked, «можно писать» — нет
         else 429 или сбой сети
             BC->>DB: отсрочка, остаток пачки отпущен
             BC->>Q: следующая пачка через retry_after
@@ -2543,7 +2543,7 @@ sequenceDiagram
         F->>N: deliverMany(app_update, ключ app_update:<версия>)
         N->>DB: INSERT … ON CONFLICT DO NOTHING RETURNING
         N-)B: новые строки: дубль в бота по выбору игрока
-        F->>DB: курсор — только своего поколения; пачка неполная — done
+        F->>DB: курсор — только своего поколения, пачка неполная — done
     end
 ```
 
