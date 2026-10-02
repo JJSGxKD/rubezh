@@ -54,6 +54,20 @@ describe("политика источников клиента", () => {
     expect(build.get("connect-src")).not.toContain("https://wb.graspil.com");
   });
 
+  it("реклама сетей — только в Telegram-сборке: скрипты лишь их SDK, креативы — с любого https", () => {
+    const withAds = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", ads: true }));
+    expect(withAds.get("script-src")).toEqual(expect.arrayContaining(["'self'", "https://sad.adsgram.ai", "https://static.sonartech.io", "https://richinfo.co", "https://sdk.taddy.pro"]));
+    // Чужой скрипт по-прежнему не исполняется: ни встроенных, ни eval, ни «любой https».
+    for (const loose of ["'unsafe-inline'", "'unsafe-eval'", "https:", "*"]) expect(withAds.get("script-src"), loose).not.toContain(loose);
+    expect(withAds.get("media-src")).toEqual(["'self'", "blob:", "https:"]);
+    expect(withAds.get("frame-src")).toEqual(["'self'", "https:"]);
+    expect(withAds.get("img-src")).toContain("https:");
+    // Без рекламы — ни скриптов сетей, ни чужих фреймов: MAX и VK их не показывают.
+    expect(build.get("frame-src")).toBeUndefined();
+    expect(build.get("img-src")).not.toContain("https:");
+    expect(build.get("connect-src")).not.toContain("https:");
+  });
+
   it("пускает во фрейм Telegram Web — иначе игра там не откроется", () => {
     expect(build.get("frame-ancestors")).toContain("https://web.telegram.org");
   });
