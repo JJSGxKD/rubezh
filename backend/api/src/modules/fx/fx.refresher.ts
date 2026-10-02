@@ -14,7 +14,8 @@ import {
   type RefreshReport,
 } from "@bh/fx";
 import type { Redis } from "ioredis";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { SECRETS } from "../secrets/secret-catalog.js";
+import { SECRETS_READER, type SecretsReader } from "../secrets/secrets.service.js";
 import { FeatureSwitches } from "../settings/feature-switches.js";
 import { REDIS } from "../../infra/redis.js";
 import { FxHooks } from "./fx-hooks.js";
@@ -43,8 +44,15 @@ end
 return 0
 `;
 
-export function fxSources(config: AppConfig, fetchImpl: typeof fetch = fetch): RateSource[] {
-  const key = config.fx.coingeckoKey;
+/**
+ * Источники одного прохода. Ключ CoinGecko читается здесь, на каждом
+ * проходе: заменённый в панели работает со следующей минуты без
+ * перезапуска (docs/35-stage4-plan.md Р84). Платный важнее демо.
+ */
+export function fxSources(secrets: SecretsReader, fetchImpl: typeof fetch = fetch): RateSource[] {
+  const pro = secrets.get(SECRETS.coingeckoPro);
+  const demo = secrets.get(SECRETS.coingeckoDemo);
+  const key = pro !== null ? { plan: "pro" as const, value: pro } : demo !== null ? { plan: "demo" as const, value: demo } : null;
   return [
     createCbrSource({ fetch: fetchImpl }),
     createEcbSource({ fetch: fetchImpl }),
@@ -62,7 +70,7 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
   private running = false;
 
   constructor(
-    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(SECRETS_READER) private readonly secrets: SecretsReader,
     @Inject(FX_STORE) private readonly store: RateStore,
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
     private readonly hooks: FxHooks,
@@ -84,7 +92,7 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /** Один проход; `null` — не запускался: идёт предыдущий, лок у другой реплики или Redis недоступен. */
-  async tick(sources: readonly RateSource[] = fxSources(this.config), now = new Date()): Promise<RefreshReport | null> {
+  async tick(sources: readonly RateSource[] = fxSources(this.secrets), now = new Date()): Promise<RefreshReport | null> {
     if (this.running || !this.switches.fxPolling()) return null;
     this.running = true;
     try {

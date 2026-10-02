@@ -11,6 +11,7 @@ import { RolesService, type AccountRef } from "../src/modules/roles/roles.servic
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { switchesOf, targetsOf } from "./helpers/notify-targets.js";
+import { environmentSecrets } from "../src/modules/secrets/secrets.service.js";
 
 /**
  * Модуль курсов бэкенда (docs/35-stage4-plan.md, WP9): проход под локом,
@@ -60,7 +61,7 @@ describe("проход курсов по расписанию", () => {
   it("идёт под локом и снимает только свой лок", async () => {
     const redis = new FakeRedis();
     const store = new MemoryRateStore();
-    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), store, redis as never, new FxHooks(), switchesOf(config({ FX_ENABLED: "true" })));
+    const refresher = new FxRefresher(environmentSecrets(config({ FX_ENABLED: "true" })), store, redis as never, new FxHooks(), switchesOf(config({ FX_ENABLED: "true" })));
 
     const report = await refresher.tick([gramSource("1.43")], NOW);
     expect(report?.accepted).toEqual(["GRAM"]);
@@ -76,7 +77,7 @@ describe("проход курсов по расписанию", () => {
 
   it("недоступный Redis — пропуск прохода, а не падение", async () => {
     const broken = { set: async () => Promise.reject(new Error("ECONNREFUSED")), eval: async () => 0 };
-    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), new MemoryRateStore(), broken as never, new FxHooks(), switchesOf(config({ FX_ENABLED: "true" })));
+    const refresher = new FxRefresher(environmentSecrets(config({ FX_ENABLED: "true" })), new MemoryRateStore(), broken as never, new FxHooks(), switchesOf(config({ FX_ENABLED: "true" })));
     await expect(refresher.tick([gramSource("1.43")], NOW)).resolves.toBeNull();
   });
 
@@ -85,7 +86,7 @@ describe("проход курсов по расписанию", () => {
     const alerts: FxAlert[] = [];
     hooks.onAlert("test", async (alert) => void alerts.push(alert));
     const store = new MemoryRateStore();
-    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), store, new FakeRedis() as never, hooks, switchesOf(config({ FX_ENABLED: "true" })));
+    const refresher = new FxRefresher(environmentSecrets(config({ FX_ENABLED: "true" })), store, new FakeRedis() as never, hooks, switchesOf(config({ FX_ENABLED: "true" })));
 
     await refresher.tick([gramSource("1.43")], NOW);
     await refresher.tick([gramSource("0.50")], new Date(NOW.getTime() + 120_000));
@@ -98,7 +99,7 @@ describe("проход курсов по расписанию", () => {
 
 describe("источники из окружения", () => {
   it("ключ CoinGecko выбирает тариф, платный важнее демо", () => {
-    const tariff = (patch: Record<string, string>) => fxSources(config(patch)).find((source) => source.id === "coingecko")?.tariff.name;
+    const tariff = (patch: Record<string, string>) => fxSources(environmentSecrets(config(patch))).find((source) => source.id === "coingecko")?.tariff.name;
     expect(tariff({})).toBe("keyless");
     expect(tariff({ FX_COINGECKO_DEMO_KEY: "CG-demo" })).toBe("demo");
     expect(tariff({ FX_COINGECKO_DEMO_KEY: "CG-demo", FX_COINGECKO_PRO_KEY: "CG-pro" })).toBe("pro");
@@ -107,14 +108,14 @@ describe("источники из окружения", () => {
   it("опрос выключен по умолчанию: включённый ходит в интернет", () => {
     expect(switchesOf(config()).fxPolling()).toBe(false);
     expect(switchesOf(config({ FX_ENABLED: "true" })).fxPolling()).toBe(true);
-    expect(fxSources(config()).map((source) => source.id)).toEqual(["cbr", "ecb", "erapi", "coingecko", "tonapi", "binance"]);
+    expect(fxSources(environmentSecrets(config())).map((source) => source.id)).toEqual(["cbr", "ecb", "erapi", "coingecko", "tonapi", "binance"]);
   });
 });
 
 describe("заданные курсы", () => {
   function setup() {
     const roles = new MemoryRolesRepository();
-    const service = new FxService(new MemoryRateStore(), config(), new RolesService(config(), roles, new MemoryAccountRepository()), switchesOf(config()));
+    const service = new FxService(new MemoryRateStore(), environmentSecrets(config()), new RolesService(config(), roles, new MemoryAccountRepository()), switchesOf(config()));
     return { service, roles };
   }
   const owner: AccountRef = { accountId: randomUUID(), platform: "telegram", platformUserId: OWNER_ID };
@@ -140,7 +141,7 @@ describe("заданные курсы", () => {
 
   it("цена звезды в рублях показывается и в долларах по курсу рубля, без курса — честное «нет»", async () => {
     const store = new MemoryRateStore();
-    const service = new FxService(store, config(), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()));
+    const service = new FxService(store, environmentSecrets(config()), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()));
     const rub = { ...input, purpose: "price" as const, price: "1.72", quote: "RUB" as const };
     expect((await service.setManual(owner, rub, NOW)).usdPerUnit).toBeNull();
 

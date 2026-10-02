@@ -16,7 +16,7 @@ import {
   type RatesSnapshot,
 } from "@bh/fx";
 import { ValidationError } from "../../common/domain-error.js";
-import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { SECRETS_READER, type SecretsReader } from "../secrets/secrets.service.js";
 import { FeatureSwitches } from "../settings/feature-switches.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { fxSources } from "./fx.refresher.js";
@@ -82,7 +82,7 @@ export interface ManualInput {
 export class FxService {
   constructor(
     @Inject(FX_STORE) private readonly store: RateStore,
-    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(SECRETS_READER) private readonly secrets: SecretsReader,
     private readonly roles: RolesService,
     private readonly switches: FeatureSwitches,
   ) {}
@@ -108,7 +108,7 @@ export class FxService {
     }
 
     const sources: SourceView[] = [];
-    for (const source of fxSources(this.config)) {
+    for (const source of fxSources(this.secrets)) {
       const state = await this.store.sourceState(source.id);
       sources.push({
         source: source.id,

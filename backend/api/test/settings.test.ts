@@ -15,6 +15,7 @@ import { SETTINGS_CHANNEL, SettingsService } from "../src/modules/settings/setti
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { environmentSecrets } from "../src/modules/secrets/secrets.service.js";
 
 /**
  * Настройки без релиза (docs/35-stage4-plan.md §3.18, Р53): база сильнее
@@ -264,7 +265,7 @@ describe("выключатели функций", () => {
   it("опрос курсов, выключенный в панели, не трогает ни лок, ни источники", async () => {
     const { switches: off } = switches({ FX_ENABLED: "true" }, { "fx.polling": false });
     const redis = { set: async () => Promise.reject(new Error("лок трогать нельзя")), eval: async () => 0 };
-    const refresher = new FxRefresher(config({ FX_ENABLED: "true" }), new MemoryRateStore(), redis as never, new FxHooks(), off);
+    const refresher = new FxRefresher(environmentSecrets(config({ FX_ENABLED: "true" })), new MemoryRateStore(), redis as never, new FxHooks(), off);
     expect(await refresher.tick([])).toBeNull();
   });
 });

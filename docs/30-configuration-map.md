@@ -186,7 +186,7 @@
 | Курсы: источники фиата — ЦБ, ЕЦБ, ExchangeRate-API: адреса, метки валют, интервал опроса | `packages/fx/src/sources/fiat.ts` → `create*Source`, `*_CURRENCIES` | участник 1 |
 | Курсы: источники крипты — CoinGecko, TON API, Binance: метки (Gram — `the-open-network`, `ton`, `GRAMUSDT`), тарифы CoinGecko по ключу | `packages/fx/src/sources/crypto.ts` → `COINGECKO_TARIFFS`, `*_CURRENCIES` | участник 1 |
 | Курсы: срок запроса к источнику и как часто неизменный курс пишется в историю | `packages/fx/src/policy.ts` → `SOURCE_TIMEOUT_MS`, `HISTORY_REPEAT_MS` | участник 1 |
-| Курсы: опрос источников включён — панель → «Настройки» (`fx.polling`), запасное — `FX_ENABLED`; ключи CoinGecko — `FX_COINGECKO_DEMO_KEY`, `FX_COINGECKO_PRO_KEY`, необязательные секреты | `.env`, схема — `backend/api/src/config/app-config.ts` | участник 1 |
+| Курсы: опрос источников включён — панель → «Настройки» (`fx.polling`), запасное — `FX_ENABLED`; ключи CoinGecko — панель → «Ключи интеграций» (`fx.coingecko-pro`, `fx.coingecko-demo`), запасные — `FX_COINGECKO_DEMO_KEY`, `FX_COINGECKO_PRO_KEY`, необязательные секреты | панель, `.env`; каталог ключей — `backend/api/src/modules/secrets/secret-catalog.ts` | участник 1 |
 | Курсы: тик прохода, срок распределённого лока | `backend/api/src/modules/fx/fx.refresher.ts` → `TICK_MS`, `LOCK_TTL_MS` | участник 1 |
 | Курсы: окно тишины алертов в чат команды | `backend/api/src/modules/admin-notify/fx-alert-notifier.ts` → `QUIET_SEC` | участник 1 |
 | Цены: правило округления цены по валюте — звёзды целые, рубли на «…9» и «…99», доллары и евро на .99, Gram и USDT до сотых; всегда вверх | `packages/fx/src/pricing/rounding.ts` → `PRICE_ROUNDING` | участник 1 |
@@ -366,6 +366,7 @@
 | `TELEGRAM_WEBHOOK_SECRET` | секретный токен вебхука; без него режим `webhook` не стартует |
 | `PUBLIC_WEB_URL` | адрес Mini App; HTTPS — кнопка «Играть» под приветствием бота |
 | `EXPORT_PSEUDONYM_KEY` | ключ псевдонимов Telegram ID в выгрузках; без него выгрузка невозможна, смена меняет все псевдонимы |
+| `SECRETS_ENCRYPTION_KEY`, `SECRETS_ENCRYPTION_KEY_PREVIOUS` | ключ шифрования ключей интеграций из панели (Р84); пусто — хранилище выключено, ключи сервисов только из окружения; прежний — на время смены |
 | `DATA_EXPORT_BOT_ENABLED` | запасное значение выключателя выгрузки через бота `export.bot` (панель сильнее); `true` без ключа, базы и чтения обновлений бэкенд не запускает |
 | `DIAGNOSTICS_RETENTION_DAYS` | сколько дней хранить сырые события и отчёты |
 | `ADMIN_NOTIFY_REPORTS` | карточка в чат администраторов на каждый новый стресс-тест; нужны `ADMIN_CHAT_ID` и включённый приёмник отчётов |
@@ -446,6 +447,7 @@ pnpm budget
 | Куда бот пишет: общий чат и адреса потоков, разбор `чат:тема` | панель → раздел «Настройки» (`notify.chat.*`), она сильнее окружения; запасные значения — `.env` → `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`; разбор — `backend/api/src/platforms/ports/chat-target.ts` |
 | Слать ли в чат карточки отчётов диагностики | панель → «Настройки» (`notify.reports`); запасное — `.env` → `ADMIN_NOTIFY_REPORTS` |
 | Настройки без релиза: какие есть, их схемы и умолчания, как часто реплика перечитывает базу | `backend/api/src/modules/settings/setting-catalog.ts` → `SETTINGS`; `settings.service.ts` → `REFRESH_MS`, канал `SETTINGS_CHANNEL`; порядок — база → окружение → умолчание (`20-env-and-ports.md` §7) |
+| Ключи интеграций: какие есть, вид каждого, где взять, проверка связи; шифр и перечитывание | `backend/api/src/modules/secrets/secret-catalog.ts` → `SECRETS`; `secret-cipher.ts` — AES-256-GCM; `secrets.service.ts` → `REFRESH_MS`, канал `SECRETS_CHANNEL`; порядок — панель → окружение (`35-stage4-plan.md` Р84); частота проверки из панели — `admin-limits.ts` → `secretCheck` |
 
 Протокол замера выверен на FPS-испытаниях этапа 1 — `25-week1-fps-trials.md`.
 

@@ -1881,3 +1881,22 @@ model PartnerBinding {
   @@index([campaignId])
   @@map("partner_binding")
 }
+
+// Ключи интеграций (WP46, docs/35-stage4-plan.md Р84): токены внешних
+// сервисов, которые команда меняет из панели. Значение — только шифртекстом
+// AES-256-GCM, ключ шифрования — в окружении сервера; имя ключа подписано
+// вместе со шифртекстом, и строку не переложить под другой ключ.
+model IntegrationSecret {
+  /// `fx.coingecko-pro` — ключ из каталога
+  key        String   @id @db.VarChar(64)
+  /// отпечаток ключа шифрования — хэш, а не часть ключа
+  keyId      String   @map("key_id") @db.VarChar(16)
+  iv         Bytes
+  authTag    Bytes    @map("auth_tag")
+  ciphertext Bytes
+  /// кто менял последним; без внешнего ключа — ключ переживает аккаунт
+  updatedBy  String?  @map("updated_by") @db.Uuid
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("integration_secret")
+}
