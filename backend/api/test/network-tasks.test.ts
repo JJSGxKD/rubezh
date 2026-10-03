@@ -24,8 +24,8 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { FakeCreatives, MemoryAds, adBlock, interstitialGate, moscowDayStart } from "./helpers/memory-ads.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { panelSettings } from "./helpers/settings.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 
 /**
  * Задания рекламных сетей во вкладке «Партнёры» (docs/35-stage4-plan.md
@@ -127,7 +127,9 @@ async function setup(options: { secret?: string | null; blocks?: ReturnType<type
   const settings = panelSettings();
   const passes = new AdPasses();
   const creatives = new FakeCreatives();
-  const ads = new AdsService(adsRepository, () => 0, passes, settings, creatives, new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, settings), restrictionsGate());
+  const restrictions = new MemoryRestrictionsRepository();
+  const restricted = restrictionsGate(restrictions);
+  const ads = new AdsService(adsRepository, () => 0, passes, settings, creatives, new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, settings), restricted);
   const secrets = secretsOf(options.secret === undefined ? SECRET : options.secret);
   const accounts = new MemoryAccountRepository();
   const hooks = new AdTaskHooks();
@@ -138,14 +140,14 @@ async function setup(options: { secret?: string | null; blocks?: ReturnType<type
   const wallet = new FakeWallet();
   const rolesRepository = new MemoryRolesRepository();
   const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
-  const service = new NetworkTasksService(rows, adTasks, feeds, hooks, ads, wallet as unknown as WalletService, new RolesService(config, rolesRepository, accounts));
+  const service = new NetworkTasksService(rows, adTasks, feeds, hooks, ads, wallet as unknown as WalletService, new RolesService(config, rolesRepository, accounts), restricted);
   service.onModuleInit();
   const ref = async (id: string, platform: "telegram" | "vk" = "telegram"): Promise<AccountRef> => {
     const account = await accounts.upsert({ platform, platformUserId: id, displayName: `Игрок ${id}`, username: null, photoUrl: null }, NOON.getTime());
     return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
   };
   const player = await ref(TG_ID);
-  return { adsRepository, ads, creatives, passes, adTasks, exchange, secrets, rows, wallet, rolesRepository, service, player, ref };
+  return { adsRepository, ads, creatives, passes, adTasks, exchange, secrets, rows, wallet, rolesRepository, service, player, ref, restrictions, restricted };
 }
 
 /** История места `task` из выполненных в эти минуты от полудня. */
@@ -475,6 +477,30 @@ describe("задания ленты Taddy", () => {
       confirmWith: "Проверка выполнения — по API Taddy",
       confirmSecret: false,
     });
+  });
+});
+
+describe("ограничение партнёрских заданий (WP44)", () => {
+  it("строк сетей нет, лента молчит, «Проверить» отказывает — и сеть об этом игроке не спрашиваем", async () => {
+    const ctx = await setup({ rows: [ROW, TADDY_ROW], blocks: [adBlock("adsgram", 10, { place: "task" }), adBlock("taddy", 40, { place: "task" })] });
+    ctx.restrictions.restrict(ctx.player.accountId, "partner_tasks");
+    expect(await ctx.service.view(ctx.player, NOON)).toEqual([]);
+    expect(await ctx.service.item(ctx.player, "taddy", REQUESTER, NOON)).toEqual({ kind: "none" });
+    await expect(ctx.service.check(ctx.player, "taddy", "s".repeat(16), REQUESTER, NOON)).rejects.toMatchObject({ code: "account_restricted" });
+    expect(ctx.exchange.calls).toEqual([]);
+    expect(ctx.adsRepository.sessions).toEqual([]);
+  });
+
+  it("сеть подтвердила выданное до ограничения — награды нет, а сессия забрана: повтора подтверждения не будет", async () => {
+    const { service, adTasks, player, wallet, adsRepository, restrictions, restricted } = await setup();
+    await service.view(player, NOON);
+    restrictions.restrict(player.accountId, "partner_tasks", { notify: false });
+    await restricted.forget(player.accountId);
+
+    expect(await adTasks.confirm("adsgram", "telegram", TG_ID, at(3))).toBe("confirmed");
+    expect(wallet.grants).toEqual([]);
+    expect(adsRepository.sessions[0]).toMatchObject({ status: "claimed", claimedAt: at(3) });
+    expect(await adTasks.confirm("adsgram", "telegram", TG_ID, at(4))).toBe("unmatched");
   });
 });
 

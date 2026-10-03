@@ -1,4 +1,7 @@
 import "reflect-metadata";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
@@ -377,5 +380,38 @@ describe("ограничения в панели по HTTP", () => {
     const again = await app.inject({ method: "POST", url: lift, headers, payload: { comment: "ещё раз" } });
     expect(again.statusCode).toBe(404);
     expect(again.json().error.code).toBe("restriction_not_found");
+  });
+});
+
+/**
+ * Контракт каталога: каждый вид отказывает в своём модуле. Новый вид без
+ * проверки там, где его обещает каталог, роняет этот тест, — иначе панель
+ * накладывала бы ограничение, которое ничего не закрывает. Как отказывает
+ * модуль, проверяют тесты самих модулей.
+ */
+describe("контракт каталога", () => {
+  const MODULES = fileURLToPath(new URL("../src/modules", import.meta.url));
+
+  function sources(dir: string): string[] {
+    return readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      return statSync(path).isDirectory() ? sources(path) : name.endsWith(".ts") ? [readFileSync(path, "utf8")] : [];
+    });
+  }
+
+  it.each(RESTRICTION_KINDS.filter((kind) => kind !== "all"))("«%s» проверяется в модулях каталога", (kind) => {
+    const modules = RESTRICTION_CATALOG[kind].checkedIn.split(",").map((name) => name.trim());
+    expect(modules.length).toBeGreaterThan(0);
+    for (const module of modules) {
+      const code = sources(join(MODULES, module)).join("\n");
+      expect(code, `${module} не спрашивает AccountRestrictions`).toContain("AccountRestrictions");
+      expect(code, `${module} не проверяет «${kind}»`).toMatch(new RegExp(`"${kind}"`));
+    }
+  });
+
+  it("блокировка целиком отказывает при входе — по отметке аккаунта", () => {
+    const auth = sources(join(MODULES, "auth")).join("\n");
+    expect(RESTRICTION_CATALOG.all.checkedIn).toBe("auth");
+    expect(auth).toContain("bannedAt !== null");
   });
 });

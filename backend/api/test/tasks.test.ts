@@ -34,6 +34,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryMedia } from "./helpers/memory-media.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { webp } from "./helpers/webp-samples.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): прогресс — от
@@ -243,9 +244,11 @@ function setup() {
   const rolesService = new RolesService(config, roles, accounts);
   const images = new MemoryMedia();
   const media = new MediaService(images, rolesService);
-  const service = new TasksService(repository, wallet as unknown as WalletService, hooks, rolesService, memberships, media);
+  const restrictions = new MemoryRestrictionsRepository();
+  const restricted = restrictionsGate(restrictions);
+  const service = new TasksService(repository, wallet as unknown as WalletService, hooks, rolesService, memberships, media, restricted);
   service.onModuleInit();
-  return { repository, wallet, hooks, service, accounts, roles, membership, media, images };
+  return { repository, wallet, hooks, service, accounts, roles, membership, media, images, restrictions, restricted };
 }
 
 async function person(ctx: ReturnType<typeof setup>, id: string, role?: "game_designer" | "moderator"): Promise<AccountRef> {
@@ -389,6 +392,30 @@ describe("партнёрские цели: ссылка и бот", () => {
     expect(ctx.wallet.grants).toEqual([expect.objectContaining({ reason: "achievement_reward", idempotencyKey: `task:${ME}:ach_partner_bot:${ACHIEVEMENT_PERIOD_START}:coins` })]);
     // бот площадки здесь не нужен — спрашивать некого
     expect(ctx.membership.asked).toHaveLength(0);
+  });
+
+  it("ограничение партнёрских заданий (WP44): ни перейти, ни забрать выполненное; цели забега забираются как обычно", async () => {
+    const ctx = withPartners();
+    await ctx.service.open(PLAYER, "ach_partner_bot", NOON);
+    ctx.restrictions.restrict(ME, "partner_tasks");
+    await ctx.restricted.forget(ME);
+
+    await expect(ctx.service.open(PLAYER, "ach_partner_site", NOON)).rejects.toMatchObject({ code: "account_restricted" });
+    // Выполненное до ограничения — тоже: ограниченное не копится.
+    await expect(ctx.service.claim(PLAYER, "ach_partner_bot", NOON)).rejects.toMatchObject({ code: "account_restricted" });
+    for (let index = 0; index < 3; index++) await ctx.hooks.emit(run());
+    expect(await ctx.service.claim(PLAYER, "daily_runs", NOON)).toMatchObject({ claimed: true });
+    expect(ctx.wallet.grants.map((grant) => grant.reason)).toEqual(["task_reward"]);
+  });
+
+  it("молчаливое ограничение партнёрских заданий — нейтральный отказ; блокировка целиком закрывает так же", async () => {
+    const ctx = withPartners();
+    ctx.restrictions.restrict(ME, "partner_tasks", { notify: false });
+    await expect(ctx.service.open(PLAYER, "ach_partner_site", NOON)).rejects.toMatchObject({ code: "temporarily_unavailable" });
+
+    const other = await person(ctx, "555000999");
+    ctx.restrictions.restrict(other.accountId, "all");
+    await expect(ctx.service.open(other, "ach_partner_site", NOON)).rejects.toMatchObject({ code: "account_restricted" });
   });
 
   it("переход к подписке на канал сам её не выполняет — её проверит забор; у цели забега ссылки нет", async () => {
