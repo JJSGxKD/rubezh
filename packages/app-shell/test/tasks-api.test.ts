@@ -11,6 +11,7 @@ import {
   isOpenKind,
   networkTaskConfirmed,
   slotsText,
+  taskImageUrl,
   openTaskLink,
   sortTasks,
   tabOf,
@@ -219,5 +220,23 @@ describe("клиент заданий", () => {
 
     const view = await createTasksApi(server([], { tasks: [{ ...TASK, slots: { left: 3, total: 10, holdUntil: null } }, TASK] })).view();
     expect(view.ok && view.data.tasks.map((task) => task.slots)).toEqual([{ left: 3, total: 10, holdUntil: null }, undefined]);
+  });
+});
+
+describe("картинка задания", () => {
+  const path = `/api/v1/media/${"a".repeat(64)}.webp`;
+
+  it("путь от сервера — к адресу API; без картинки и без входа — значок вида", () => {
+    expect(taskImageUrl(path, "https://tg.rubezh.gonet.fun/")).toBe(`https://tg.rubezh.gonet.fun${path}`);
+    expect(taskImageUrl(path, "")).toBe(path);
+    expect(taskImageUrl(null, "https://tg.rubezh.gonet.fun")).toBeNull();
+    expect(taskImageUrl(undefined, "https://tg.rubezh.gonet.fun")).toBeNull();
+    expect(taskImageUrl(path, undefined)).toBeNull();
+  });
+
+  it("чужой адрес из ответа не грузим: только путь картинок панели", () => {
+    for (const foreign of ["https://evil.example/pixel.gif", "//evil.example/x.webp", "/api/v1/media/../../etc/passwd", `/api/v1/media/${"a".repeat(64)}.svg`, "javascript:alert(1)"]) {
+      expect(taskImageUrl(foreign, "https://tg.rubezh.gonet.fun")).toBeNull();
+    }
   });
 });

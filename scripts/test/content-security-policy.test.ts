@@ -120,6 +120,14 @@ describe("политика источников клиента", () => {
     expect(withApi.get("connect-src")).toEqual(["'self'", "https://api.rubezh.gonet.fun"]);
   });
 
+  it("картинки заданий из панели — с API: с его источника, а не со всего https", () => {
+    const withApi = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "https://api.rubezh.gonet.fun/api/v1" }));
+
+    expect(withApi.get("img-src")).toContain("https://api.rubezh.gonet.fun");
+    expect(withApi.get("img-src")).not.toContain("https:");
+    expect(build.get("img-src")).not.toContain("https:");
+  });
+
   it("битый адрес API не роняет сборку: строгая политика лучше несобранного клиента", () => {
     const broken = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "не адрес" }));
 

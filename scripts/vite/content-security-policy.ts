@@ -119,7 +119,9 @@ export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = 
     // Vite — стили через <style>. В сборке ни того ни другого нет.
     "script-src": dev ? ["'self'", "'unsafe-inline'", ...scripts] : ["'self'", ...scripts],
     "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:", ...AVATAR_ORIGINS, ...creatives],
+    // Картинки заданий из панели отдаёт API (`/api/v1/media`): в проде он на
+    // своём же домене, а в разработке — на своём порту.
+    "img-src": ["'self'", "data:", "blob:", ...(api === null ? [] : [api]), ...AVATAR_ORIGINS, ...creatives],
     // Ролики и фреймы объявлений — только с рекламой; без неё — как всё прочее, свои.
     ...(ads ? { "media-src": ["'self'", "blob:", ...creatives], "frame-src": ["'self'", ...creatives] } : {}),
     // Клиент Vite ждёт сервер после обрыва HMR в воркере из blob: — без

@@ -4,7 +4,7 @@ import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, PageTitle, 
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
-import { track } from "../../state/shell";
+import { track, useShell } from "../../state/shell";
 import {
   TASK_LIMIT_REACHED,
   TASK_NOT_DONE,
@@ -16,6 +16,7 @@ import {
   openTaskLink,
   slotsText,
   sortTasks,
+  taskImageUrl,
   tabOf,
   taskLink,
   tasksAvailable,
@@ -26,6 +27,7 @@ import {
 import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 import { NetworkTasks } from "./network-tasks";
+import { TaskImage } from "./task-image";
 import { RewardChips, rewardText } from "./task-reward";
 
 /**
@@ -245,19 +247,25 @@ function TaskRow(props: {
   // перечитывается при каждом открытии и после каждого действия.
   const place = props.closed ? null : slotsText(task.slots, Date.now());
   const title = task.title ?? name ?? goalText(task);
+  const image = taskImageUrl(task.image, useShell.getState().capabilities.auth?.baseUrl);
   const hint = task.title === null && name !== null ? goalText(task) : (repeatHint(task) ?? null);
 
   return (
     <Card appearIndex={props.index} stripe={claimable ? "accent" : undefined}>
       <div className="flex items-center gap-3">
-        <span
-          className={[
-            "inline-flex size-11 shrink-0 items-center justify-center rounded-md",
-            task.done ? "bg-accent/15 text-accent" : "bg-surface-raised text-text-muted",
-          ].join(" ")}
-        >
-          {ICONS[task.kind] ?? <Target size={20} aria-hidden="true" />}
-        </span>
+        <TaskImage
+          src={image}
+          fallback={
+            <span
+              className={[
+                "inline-flex size-11 shrink-0 items-center justify-center rounded-md",
+                task.done ? "bg-accent/15 text-accent" : "bg-surface-raised text-text-muted",
+              ].join(" ")}
+            >
+              {ICONS[task.kind] ?? <Target size={20} aria-hidden="true" />}
+            </span>
+          }
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-display text-sm font-bold text-text">{title}</span>
