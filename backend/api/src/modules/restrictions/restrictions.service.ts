@@ -7,16 +7,20 @@ import { AccountRestrictions } from "./account-restrictions.js";
 import { RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_REASONS, isRestrictionKind, type RestrictionKind, type RestrictionKindInfo } from "./restriction-catalog.js";
 import { banMessage, imposeProblem, isActive, restrictionView, termProblem, type ImposeInput, type RestrictionView } from "./restriction-rules.js";
 import { RestrictionAccountNotFoundError, RestrictionNotFoundError } from "./restrictions-errors.js";
+import { RestrictionsHooks } from "./restrictions-hooks.js";
 import { RESTRICTIONS_REPOSITORY, type RestrictionRow, type RestrictionsRepository } from "./restrictions.repository.js";
 
 /**
  * Наложение и снятие ограничений (docs/35-stage4-plan.md Р75, WP44). Каждое
  * действие — в журнал аудита: кто, кому, что, на сколько и почему.
  *
- * Последствия вне таблицы — у блокировки целиком: `account.banned_at`, по
- * которому вход отказывает. Наложение ставит его сразу, снятие — сразу, а
- * истечение срока убирает задача раз в минуту (`restrictions-settler.ts`):
- * блокировка на сутки длится сутки и не больше минуты сверх.
+ * Последствия вне таблицы — у блокировки целиком `account.banned_at`, по
+ * которому вход отказывает, у рейтинга — место в досках (слушатель
+ * `RestrictionsHooks` в модуле забегов). Наложение ставит их сразу, снятие —
+ * сразу, а истечение срока снимает задача раз в минуту
+ * (`restrictions-settler.ts`): ограничение на сутки длится сутки и не больше
+ * минуты сверх. Не снялось — строка не отмечается сведённой, и задача
+ * повторит её на следующем проходе.
  *
  * Сессии заблокированного отзывает панель: они живут в модулях входа и
  * панели, а модуль ограничений от них не зависит.
@@ -40,6 +44,7 @@ export class RestrictionsService {
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     private readonly roles: RolesService,
     private readonly gate: AccountRestrictions,
+    private readonly hooks: RestrictionsHooks,
   ) {}
 
   catalog(): RestrictionCatalogView {
@@ -65,6 +70,7 @@ export class RestrictionsService {
     // вида их и так держит.
     await this.db(this.repository.markSettled(replaced.map((row) => row.restrictionId), at));
     await this.gate.forget(accountId);
+    await this.hooks.emitImposed({ accountId, kinds: created.map((row) => row.kind), at });
 
     await this.roles.audit({
       actorAccountId: actor.accountId,
@@ -120,17 +126,29 @@ export class RestrictionsService {
   private async settle(rows: readonly RestrictionRow[], at: Date): Promise<void> {
     for (const accountId of new Set(rows.map((row) => row.accountId))) {
       const mine = rows.filter((row) => row.accountId === accountId);
-      if (mine.some((row) => row.kind === "all")) {
-        const stillBanned = (await this.db(this.repository.active(accountId, at))).some((row) => row.kind === "all");
-        if (!stillBanned) {
-          await this.db(this.accounts.setBan(accountId, null));
-          this.log("account_unbanned", { accountId, early: mine.some((row) => row.liftedAt !== null) });
-        }
+      try {
+        await this.settleAccount(accountId, mine, at);
+      } catch (error: unknown) {
+        // Снятие уже записано; последствия догонит задача по сроку — строки не отмечены.
+        this.logger.warn(JSON.stringify({ module: "restrictions", event: "restriction_settle_failed", accountId, reason: error instanceof Error ? error.message : "unknown" }));
       }
-      await this.db(this.repository.markSettled(mine.map((row) => row.restrictionId), at));
-      for (const row of mine.filter((candidate) => candidate.liftedAt === null)) this.log("account_restriction_lifted", { accountId, kind: row.kind, early: false });
-      await this.gate.forget(accountId);
     }
+  }
+
+  private async settleAccount(accountId: string, mine: readonly RestrictionRow[], at: Date): Promise<void> {
+    if (mine.some((row) => row.kind === "all")) {
+      const stillBanned = (await this.db(this.repository.active(accountId, at))).some((row) => row.kind === "all");
+      if (!stillBanned) {
+        await this.db(this.accounts.setBan(accountId, null));
+        this.log("account_unbanned", { accountId, early: mine.some((row) => row.liftedAt !== null) });
+      }
+    }
+    // Сначала забыть ответ «можно ли»: слушатели спросят его заново и
+    // должны увидеть, что ограничения больше нет.
+    await this.gate.forget(accountId);
+    await this.hooks.emitSettled({ accountId, kinds: mine.map((row) => row.kind), at });
+    await this.db(this.repository.markSettled(mine.map((row) => row.restrictionId), at));
+    for (const row of mine.filter((candidate) => candidate.liftedAt === null)) this.log("account_restriction_lifted", { accountId, kind: row.kind, early: false });
   }
 
   /** Строки для панели с именами тех, кто наложил и снял. */

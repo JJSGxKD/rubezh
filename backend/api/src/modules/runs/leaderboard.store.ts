@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { REDIS } from "../../infra/redis.js";
-import type { Difficulty } from "./run-rules.js";
+import { DIFFICULTIES, type Difficulty } from "./run-rules.js";
 
 /**
  * Лидерборд — проекция забегов в Redis ZSET (docs/34-stage3-plan.md, Р4).
@@ -31,6 +31,10 @@ export interface LeaderboardStore {
   best(difficulty: Difficulty, accountId: string): Promise<number | null>;
   top(difficulty: Difficulty, limit: number): Promise<LeaderboardEntry[]>;
   count(difficulty: Difficulty): Promise<number>;
+  /** Сколько игроков в доске с временем строго больше — место того, кого в доске нет. */
+  countAbove(difficulty: Difficulty, survivalSec: number): Promise<number>;
+  /** Убрать аккаунты из досок всех сложностей — ограничение рейтинга; возвращает, сколько мест снято. */
+  remove(accountIds: readonly string[]): Promise<number>;
   /** Заменить проекцию целиком — пересборка из базы. */
   replace(difficulty: Difficulty, entries: readonly LeaderboardEntry[]): Promise<void>;
 }
@@ -69,6 +73,17 @@ export class RedisLeaderboardStore implements LeaderboardStore {
 
   async count(difficulty: Difficulty): Promise<number> {
     return await this.redis.zcard(key(difficulty));
+  }
+
+  async countAbove(difficulty: Difficulty, survivalSec: number): Promise<number> {
+    return await this.redis.zcount(key(difficulty), `(${String(survivalSec)}`, "+inf");
+  }
+
+  async remove(accountIds: readonly string[]): Promise<number> {
+    if (accountIds.length === 0) return 0;
+    let removed = 0;
+    for (const difficulty of DIFFICULTIES) removed += await this.redis.zrem(key(difficulty), ...accountIds);
+    return removed;
   }
 
   async replace(difficulty: Difficulty, entries: readonly LeaderboardEntry[]): Promise<void> {

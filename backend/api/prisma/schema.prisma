@@ -431,8 +431,10 @@ model Run {
   cheats           Boolean     @default(false)
   /// секунда каждого второго шанса; сверяется с оплаченными покупками
   continues        Float[]     @default([])
-  /// попал ли в рейтинг: вердикт `ok` и без читов (или администратор просил учесть)
+  /// попал ли в рейтинг: вердикт `ok` и без читов (или администратор просил учесть), а рейтинг игроку не закрыт
   ranked           Boolean     @default(false)
+  /// сдан под ограничением рейтинга: `notified` — игроку сообщили, `silent` — молча; в рейтинг не идёт и потом
+  ratingRestricted String?     @map("rating_restricted") @db.VarChar(8)
   verdict          RunVerdict?
   /// коды причин вердикта, в том числе сведения, не меняющие его
   verdictReasons   String[]    @map("verdict_reasons")

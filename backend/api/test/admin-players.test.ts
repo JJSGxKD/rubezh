@@ -13,6 +13,7 @@ import type { FlagSplit } from "../src/modules/funnel/flag-split-report.js";
 import { EMPTY_SPLIT_GROUP } from "./helpers/flag-split.js";
 import type { MessagingService } from "../src/modules/messaging/messaging.service.js";
 import type { ProgressService } from "../src/modules/progress/progress.service.js";
+import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
 import { RestrictionsService } from "../src/modules/restrictions/restrictions.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import type { RunsViewService } from "../src/modules/runs/runs-view.service.js";
@@ -96,7 +97,7 @@ function setup() {
   const notifications = memoryNotifications();
   const testNotice = { acceptance: async () => ({ version: 1, acceptedAt: NOW, firstAcceptedAt: NOW }) } as unknown as TestNoticeService;
   const restrictionsRepository = new MemoryRestrictionsRepository();
-  const restrictions = new RestrictionsService(restrictionsRepository, accounts, roles, restrictionsGate(restrictionsRepository));
+  const restrictions = new RestrictionsService(restrictionsRepository, accounts, roles, restrictionsGate(restrictionsRepository), new RestrictionsHooks());
   const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice, restrictions);
   return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository, restrictionsRepository };
 }

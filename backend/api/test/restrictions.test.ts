@@ -25,6 +25,7 @@ import { RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_REASONS, type Restr
 import { banMessage, imposeProblem, imposeSchema, playerMessage, termProblem, untilText } from "../src/modules/restrictions/restriction-rules.js";
 import { RestrictionsController } from "../src/modules/restrictions/restrictions.controller.js";
 import { AccountRestrictedError, RestrictionNotFoundError, RestrictionSilentError } from "../src/modules/restrictions/restrictions-errors.js";
+import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
 import { RestrictionsService } from "../src/modules/restrictions/restrictions.service.js";
 import { RestrictionsSettler } from "../src/modules/restrictions/restrictions-settler.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
@@ -56,8 +57,9 @@ function setup() {
   const repository = new MemoryRestrictionsRepository();
   const gate = restrictionsGate(repository);
   const rolesService = new RolesService(config(), roles, accounts);
-  const service = new RestrictionsService(repository, accounts, rolesService, gate);
-  return { accounts, roles, repository, gate, service };
+  const hooks = new RestrictionsHooks();
+  const service = new RestrictionsService(repository, accounts, rolesService, gate, hooks);
+  return { accounts, roles, repository, gate, service, hooks };
 }
 
 async function person(s: ReturnType<typeof setup>, id: string, role?: "moderator" | "game_designer"): Promise<AccountRef> {
@@ -263,6 +265,38 @@ describe("последствия по сроку", () => {
     expect((await s.accounts.byId(short.accountId))?.bannedAt).toBeNull();
     expect((await s.accounts.byId(twice.accountId))?.bannedAt).not.toBeNull();
     expect(await s.service.settleDue(later)).toBe(0);
+  });
+
+  it("последствия в чужом модуле: наложение зовёт слушателя и не отменяется его сбоем; не снялось — не сведено, задача повторит", async () => {
+    const s = setup();
+    const moderator = await person(s, "522", "moderator");
+    const target = await person(s, "523");
+    const imposed: string[][] = [];
+    s.hooks.onImposed("сломанный", async () => {
+      throw new Error("Redis недоступен");
+    });
+    s.hooks.onImposed("рейтинг", async (change) => {
+      imposed.push([...change.kinds]);
+    });
+    let down = true;
+    const settled: string[] = [];
+    s.hooks.onSettled("рейтинг", async (change) => {
+      if (down) throw new Error("Redis недоступен");
+      settled.push(change.accountId);
+    });
+
+    const [row] = await s.service.impose(moderator, target.accountId, input({ kinds: ["ad_rewards", "promo_codes"] }), NOW);
+    expect(imposed).toEqual([["ad_rewards", "promo_codes"]]);
+
+    // Снятие записано, даже если последствия не снялись.
+    const lifted = await s.service.lift(moderator, row?.restrictionId ?? "", "ошиблись", new Date(NOW.getTime() + HOUR));
+    expect(lifted.state).toBe("lifted");
+    expect(s.repository.rows.find((item) => item.restrictionId === row?.restrictionId)?.settledAt).toBeNull();
+
+    down = false;
+    expect(await s.service.settleDue(new Date(NOW.getTime() + 2 * HOUR))).toBe(1);
+    expect(settled).toEqual([target.accountId]);
+    expect(await s.service.settleDue(new Date(NOW.getTime() + 3 * HOUR))).toBe(0);
   });
 
   it("задача — под локом: занят у соседа — проход пропускается", async () => {

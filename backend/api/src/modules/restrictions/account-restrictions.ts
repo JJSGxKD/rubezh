@@ -27,6 +27,8 @@ const CACHE_TTL_MS = 30_000;
 /** Больше — сбрасываем целиком: игроков с вопросами за полминуты столько не бывает, а память не резиновая. */
 const CACHE_MAX = 50_000;
 const DB_TIMEOUT_MS = 3_000;
+/** Ограничения накладывают руками — столько действующих разом не бывает; потолок — от ошибки, а не от нормы. */
+const ACCOUNTS_LIMIT = 100_000;
 const REDIS_TIMEOUT_MS = 1_000;
 
 @Injectable()
@@ -70,6 +72,15 @@ export class AccountRestrictions implements OnModuleInit, OnModuleDestroy {
   /** Что игрок видит в профиле: действующие, о которых решили сообщить. */
   async visibleFor(accountId: string, at = new Date()): Promise<PlayerRestrictionView[]> {
     return (await this.rows(accountId, at)).filter((row) => row.notify && isActive(row, at)).map(playerView);
+  }
+
+  /**
+   * Все, кому вид закрыт сейчас, — своим ограничением или блокировкой. Без
+   * кеша: его зовут обход последствий и пересборка рейтинга, а не каждый
+   * запрос игрока.
+   */
+  async restrictedAccounts(kind: RestrictionKind, at = new Date()): Promise<string[]> {
+    return await withTimeout(this.repository.activeAccounts([kind, "all"], at, ACCOUNTS_LIMIT), DB_TIMEOUT_MS, "restrictions: база");
   }
 
   /** Сбросить кеш аккаунта здесь и на соседних репликах. */

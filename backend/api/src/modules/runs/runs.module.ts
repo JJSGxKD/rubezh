@@ -1,7 +1,9 @@
 import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { LEADERBOARD_STORE, RedisLeaderboardStore } from "./leaderboard.store.js";
+import { RatingRestrictions } from "./rating-restrictions.js";
 import { RunsController } from "./runs.controller.js";
 import { PrismaRunsRepository, RUNS_REPOSITORY } from "./runs.repository.js";
 import { RunsService } from "./runs.service.js";
@@ -23,7 +25,7 @@ import { RunsViewService } from "./runs-view.service.js";
  * из `RunsHooks` и читают рейтинг — отсюда экспорт.
  */
 @Module({
-  imports: [AuthModule, AdsModule],
+  imports: [AuthModule, AdsModule, RestrictionsModule],
   controllers: [RunsController, RunAdContinueController],
   providers: [
     RunsService,
@@ -33,6 +35,7 @@ import { RunsViewService } from "./runs-view.service.js";
     RunAdContinueService,
     RunLoadouts,
     RunExtras,
+    RatingRestrictions,
     { provide: RUNS_REPOSITORY, useClass: PrismaRunsRepository },
     { provide: RUN_AD_CONTINUES_REPOSITORY, useClass: PrismaRunAdContinuesRepository },
     { provide: LEADERBOARD_STORE, useClass: RedisLeaderboardStore },

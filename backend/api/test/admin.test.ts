@@ -34,12 +34,13 @@ import { RolesService } from "../src/modules/roles/roles.service.js";
 import { LEADERBOARD_STORE } from "../src/modules/runs/leaderboard.store.js";
 import { RunExtras } from "../src/modules/runs/run-details.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
+import { RatingRestrictions } from "../src/modules/runs/rating-restrictions.js";
 import { RUNS_REPOSITORY } from "../src/modules/runs/runs.repository.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
 import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 
 /**
@@ -106,6 +107,7 @@ describe("панель по HTTP", () => {
     funnel = new FakeFunnel();
     flags = new MemoryFlags();
     runs = new MemoryRunsRepository();
+    const board = new MemoryLeaderboardStore();
     const config = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ...env } as NodeJS.ProcessEnv);
 
     @Module({
@@ -120,7 +122,8 @@ describe("панель по HTTP", () => {
         { provide: FLAGS_REPOSITORY, useValue: flags },
         FlagsService,
         { provide: RUNS_REPOSITORY, useValue: runs },
-        { provide: LEADERBOARD_STORE, useValue: new MemoryLeaderboardStore() },
+        { provide: LEADERBOARD_STORE, useValue: board },
+        { provide: RatingRestrictions, useValue: ratingRestrictions(runs, board).rating },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         PanelLoginService,

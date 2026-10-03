@@ -13,7 +13,7 @@ import type { Permission } from "../roles/permissions.js";
  * не приходит — иначе ограничение было бы отсрочкой.
  */
 
-export const RESTRICTION_KINDS = ["referral_rewards", "friend_gifts", "ad_rewards", "promo_codes", "partner_tasks", "all"] as const;
+export const RESTRICTION_KINDS = ["leaderboard", "referral_rewards", "friend_gifts", "ad_rewards", "promo_codes", "partner_tasks", "all"] as const;
 
 export type RestrictionKind = (typeof RESTRICTION_KINDS)[number];
 
@@ -30,6 +30,14 @@ export interface RestrictionKindInfo {
 }
 
 export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> = {
+  leaderboard: {
+    title: "Рейтинг",
+    effect:
+      "Игрок сразу пропадает из досок, забеги за это время в рейтинг не попадают — и потом не засчитаются. Когда срок выйдет, вернётся с лучшим забегом до ограничения. Молча — тень: игрок видит себя в досках на своём месте, другие его не видят.",
+    checkedIn: "runs",
+    permission: "players.restrict",
+    silentAllowed: true,
+  },
   referral_rewards: {
     title: "Награды за друзей",
     effect:
@@ -68,7 +76,8 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
   },
   all: {
     title: "Всё — блокировка",
-    effect: "Вход в игру закрыт, сессии игры и панели отзываются сразу. Молча не накладывается: игрок всё равно увидит отказ при входе.",
+    effect:
+      "Вход в игру закрыт, сессии игры и панели отзываются сразу; игрок пропадает из досок рейтинга, как при ограничении рейтинга. Молча не накладывается: игрок всё равно увидит отказ при входе.",
     checkedIn: "auth",
     permission: "players.ban",
     silentAllowed: false,

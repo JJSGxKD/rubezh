@@ -61,6 +61,7 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
       cheats: false,
       continues: [],
       ranked: true,
+      ratingRestricted: null,
       verdict: "ok",
       verdictReasons: [],
       ...patch,
@@ -141,11 +142,43 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     // Мусор в проекции, которого в базе нет, — пересборка его уберёт.
     await redis.zadd("runs:leaderboard:easy", 99_999, "призрак");
 
-    await rebuildLeaderboard(runs, board);
+    await rebuildLeaderboard(runs, board, new Set());
 
     expect(await board.rank("easy", "призрак")).toBeNull();
     expect((await board.rank("easy", fast)) ?? 0).toBeLessThan((await board.rank("easy", slow)) ?? 0);
     expect(await redis.exists("runs:leaderboard:easy:rebuild")).toBe(0);
+  });
+
+  it("ограничение рейтинга: лучший для возврата — только рейтинговые, для тени — и сданные молча; база держит пометку только у нерейтингового", async () => {
+    const accountId = await account("Тень");
+    await runs.finish(finished(randomUUID(), accountId, { difficulty: "easy", survivalSec: 200 }));
+    await runs.finish(finished(randomUUID(), accountId, { difficulty: "easy", survivalSec: 400, ranked: false, ratingRestricted: "silent" }));
+    const told = randomUUID();
+    await runs.finish(finished(told, accountId, { difficulty: "easy", survivalSec: 900, ranked: false, ratingRestricted: "notified" }));
+
+    expect(await runs.bestRunOf(accountId, "easy", false)).toMatchObject({ displayName: "Тень", survivalSec: 200 });
+    expect(await runs.bestRunOf(accountId, "easy", true)).toMatchObject({ survivalSec: 400 });
+    expect(await runs.bestRunOf(accountId, "normal", true)).toBeNull();
+    expect(await runs.find(told)).toMatchObject({ ranked: false, ratingRestricted: "notified" });
+    expect(await runs.detail(accountId, told)).toMatchObject({ ratingRestricted: "notified" });
+
+    await expect(runs.finish(finished(randomUUID(), accountId, { ranked: true, ratingRestricted: "silent" }))).rejects.toThrow();
+    await expect(prisma.$executeRaw`UPDATE run SET rating_restricted = 'shadow' WHERE run_id = ${told}`).rejects.toThrow();
+  });
+
+  it("доска: место того, кого в ней нет, — по строго лучшим; убрать — из всех сложностей разом", async () => {
+    const [fast, slow, gone] = [await account(), await account(), await account()];
+    await board.submit("normal", fast, 500);
+    await board.submit("normal", slow, 300);
+    await board.submit("normal", gone, 400);
+    await board.submit("hard", gone, 100);
+
+    expect(await board.countAbove("normal", 400)).toBe(1);
+    expect(await board.countAbove("normal", 300)).toBe(2);
+    expect(await board.remove([gone, "никого-нет"])).toBe(2);
+    expect(await board.best("normal", gone)).toBeNull();
+    expect(await board.best("hard", gone)).toBeNull();
+    expect(await board.remove([])).toBe(0);
   });
 
   it("очередь разбора видит отклонённые и подозрительные, а честные — нет", async () => {
