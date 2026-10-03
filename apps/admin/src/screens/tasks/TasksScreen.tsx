@@ -30,6 +30,7 @@ import { api } from "../../services";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
+import { NetworkTasksPanel } from "./NetworkTasksPanel";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
@@ -45,6 +46,8 @@ const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null
  * Подписку на канал проверяет бот площадки, когда игрок нажимает «Забрать»:
  * бот должен быть администратором канала, иначе площадка подписчиков не
  * покажет, и игрок увидит «проверка недоступна», а в логе — ошибку настройки.
+ *
+ * Задания рекламных сетей — строкой на сеть внизу (`NetworkTasksPanel`).
  */
 export function TasksScreen() {
   const { state, reload } = useApi(() => fetchTasks(api), []);
@@ -236,6 +239,7 @@ export function TasksScreen() {
             </Panel>
           ))
         : null}
+      {state.status === "ok" ? <NetworkTasksPanel rows={state.data.networks} onSaved={reload} /> : null}
     </div>
   );
 }

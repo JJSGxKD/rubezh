@@ -98,6 +98,7 @@ const ACTION_TITLES: Record<string, string> = {
   "flags.remove": "Удаление флага",
   "tasks.create": "Новое задание",
   "tasks.update": "Правка задания",
+  "tasks.network.update": "Правка заданий рекламной сети",
   "partner.create": "Новый партнёр",
   "partner.update": "Правка партнёра",
   "shop.promo.create": "Новая акция",

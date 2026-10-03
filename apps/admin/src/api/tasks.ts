@@ -89,7 +89,34 @@ const taskSchema = z.object({
 
 export type TaskDef = z.infer<typeof taskSchema>;
 
-const catalogSchema = z.object({ tasks: z.array(taskSchema), kinds: z.array(z.string()), periods: z.array(z.enum(TASK_PERIODS)) });
+/**
+ * Задания рекламной сети (docs/35-stage4-plan.md WP13, часть 6): строка на
+ * сеть — сколько её заданий игрок получит за игровые сутки, пауза после
+ * выполненного и награда. Сами задания приходят от сети; `ready` — что ещё
+ * нужно, чтобы игроки их увидели.
+ */
+const networkTaskSchema = z.object({
+  networkKey: z.string(),
+  title: z.string(),
+  active: z.boolean(),
+  dailyCap: z.number(),
+  pauseMin: z.number(),
+  coins: z.number(),
+  gems: z.number(),
+  shards: z.number(),
+  updatedAt: z.string(),
+  updatedBy: z.string().nullable(),
+  ready: z.object({ block: z.boolean(), confirm: z.boolean(), confirmWith: z.string().nullable() }),
+});
+export type NetworkTaskRow = z.infer<typeof networkTaskSchema>;
+
+const catalogSchema = z.object({
+  tasks: z.array(taskSchema),
+  kinds: z.array(z.string()),
+  periods: z.array(z.enum(TASK_PERIODS)),
+  /** сервер до заданий сетей поля не отдавал */
+  networks: z.array(networkTaskSchema).default([]),
+});
 export type TaskCatalog = z.infer<typeof catalogSchema>;
 
 export function fetchTasks(api: AdminApi): Promise<ApiResult<TaskCatalog>> {
@@ -221,4 +248,49 @@ export function groupByPeriod(tasks: readonly TaskDef[]): { group: TaskGroup; ta
     group,
     tasks: tasks.filter((task) => groupOf(task) === group).sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId)),
   }));
+}
+
+/** Те же пределы, что держат сервер и база (`tasks/network-task-rules.ts`). */
+export const NETWORK_TASK_LIMITS = {
+  dailyCap: { min: 1, max: 50 },
+  pauseMin: { min: 5, max: 24 * 60 },
+} as const;
+
+/** Что правит панель в строке сети. */
+export type NetworkTaskInput = Pick<NetworkTaskRow, "networkKey" | "active" | "dailyCap" | "pauseMin" | "coins" | "gems" | "shards">;
+
+export function saveNetworkTask(api: AdminApi, input: NetworkTaskInput): Promise<ApiResult<NetworkTaskRow>> {
+  const { networkKey, ...body } = input;
+  return api.request(`/tasks/networks/${encodeURIComponent(networkKey)}`, { method: "POST", body, schema: networkTaskSchema });
+}
+
+function within(value: number, range: { min: number; max: number }): boolean {
+  return Number.isInteger(value) && value >= range.min && value <= range.max;
+}
+
+/** Что не так со строкой сети; `null` — можно сохранять. */
+export function networkTaskProblem(input: NetworkTaskInput): string | null {
+  const { dailyCap, pauseMin } = NETWORK_TASK_LIMITS;
+  if (!within(input.dailyCap, dailyCap)) return `Заданий в сутки — от ${String(dailyCap.min)} до ${String(dailyCap.max)}`;
+  if (!within(input.pauseMin, pauseMin)) return `Пауза — от ${String(pauseMin.min)} минут до суток (${String(pauseMin.max)} мин)`;
+  if (![input.coins, input.gems, input.shards].every(nonNegativeInt)) return "Награда — целые неотрицательные";
+  if (input.coins + input.gems + input.shards === 0) return "Без награды задание сети некому выполнять — дайте монеты, самоцветы или осколки";
+  return null;
+}
+
+/** Как часто — словами: «до 5 в сутки, пауза 30 мин». */
+export function cadenceLabel(row: Pick<NetworkTaskRow, "dailyCap" | "pauseMin">): string {
+  const pause = row.pauseMin % 60 === 0 ? `${String(row.pauseMin / 60)} ч` : `${String(row.pauseMin)} мин`;
+  return `до ${String(row.dailyCap)} в сутки, пауза ${pause}`;
+}
+
+/**
+ * Работает ли строка сети у игроков и если нет — почему. Порядок — от
+ * решения команды к настройке: выключено здесь, нет блока в «Рекламе», нет
+ * подтверждения в «Ключах интеграций».
+ */
+export function networkTaskState(row: Pick<NetworkTaskRow, "active" | "ready">): { tone: "success" | "warning" | "neutral"; label: string } {
+  if (!row.active) return { tone: "neutral", label: "Выключено" };
+  if (!row.ready.block || !row.ready.confirm) return { tone: "warning", label: "Игроки не видят" };
+  return { tone: "success", label: "Работает" };
 }
