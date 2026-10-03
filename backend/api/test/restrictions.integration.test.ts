@@ -91,6 +91,20 @@ describe.skipIf(DATABASE_URL === "")("ограничения на живом Pos
     expect((await repository.unsettled(later, 10_000)).filter((item) => ids.includes(item.restrictionId))).toEqual([]);
   });
 
+  it("кому закрыт вид сейчас: действующие этих видов, без снятых, истёкших и чужих видов — по аккаунту один раз", async () => {
+    const [both, expired, lifted, other, moderator] = [await account(), await account(), await account(), await account(), await account()];
+    const at = new Date(Date.UTC(2032, 0, 1));
+    await repository.impose([row(both, moderator, { kind: "leaderboard", startsAt: at, endsAt: null }), row(both, moderator, { kind: "all", startsAt: at, endsAt: null })], at);
+    await repository.impose([row(expired, moderator, { kind: "leaderboard", startsAt: at, endsAt: new Date(at.getTime() + 1_000) })], at);
+    const { created } = await repository.impose([row(lifted, moderator, { kind: "leaderboard", startsAt: at, endsAt: null })], at);
+    await repository.lift(created[0]?.restrictionId ?? "", moderator, "снято", at);
+    await repository.impose([row(other, moderator, { kind: "promo_codes", startsAt: at, endsAt: null })], at);
+
+    const later = new Date(at.getTime() + 60_000);
+    const found = (await repository.activeAccounts(["leaderboard", "all"], later, 100_000)).filter((id) => [both, expired, lifted, other].includes(id));
+    expect(found).toEqual([both]);
+  });
+
   it("база держит форму: блокировка — не молча, срок после начала, снятие — с причиной; удалённый аккаунт уносит свои строки", async () => {
     const [target, moderator] = [await account(), await account()];
     await expect(repository.impose([row(target, moderator, { kind: "all", notify: false })], NOW)).rejects.toThrow();

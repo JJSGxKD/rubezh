@@ -61,6 +61,10 @@ export class MemoryRestrictionsRepository implements RestrictionsRepository {
     for (const row of this.rows) if (restrictionIds.includes(row.restrictionId) && row.settledAt === null) row.settledAt = at;
   }
 
+  async activeAccounts(kinds: readonly string[], at: Date, limit: number): Promise<string[]> {
+    return [...new Set(this.rows.filter((row) => kinds.includes(row.kind) && active(row, at)).map((row) => row.accountId))].slice(0, limit);
+  }
+
   /** Наложить в обход сервиса — для тестов модулей, которым важно только «закрыто». */
   restrict(accountId: string, kind: string, options: { notify?: boolean; endsAt?: Date | null; at?: Date; reason?: string } = {}): RestrictionRow {
     const row: RestrictionRow = {

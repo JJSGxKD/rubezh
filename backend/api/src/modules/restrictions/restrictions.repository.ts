@@ -59,6 +59,8 @@ export interface RestrictionsRepository {
   /** Снятые или истёкшие, чьи последствия ещё не сняты. */
   unsettled(at: Date, limit: number): Promise<RestrictionRow[]>;
   markSettled(restrictionIds: readonly string[], at: Date): Promise<void>;
+  /** Аккаунты с действующими ограничениями этих видов — обходу последствий и пересборке рейтинга. */
+  activeAccounts(kinds: readonly string[], at: Date, limit: number): Promise<string[]>;
 }
 
 const activeAt = (at: Date) => ({ liftedAt: null, OR: [{ endsAt: null }, { endsAt: { gt: at } }] });
@@ -120,5 +122,17 @@ export class PrismaRestrictionsRepository implements RestrictionsRepository {
   async markSettled(restrictionIds: readonly string[], at: Date): Promise<void> {
     if (restrictionIds.length === 0) return;
     await this.prisma.accountRestriction.updateMany({ where: { restrictionId: { in: [...restrictionIds] }, settledAt: null }, data: { settledAt: at } });
+  }
+
+  async activeAccounts(kinds: readonly string[], at: Date, limit: number): Promise<string[]> {
+    // Действующее ещё не сведено — `settled_at IS NULL` ведёт запрос по
+    // частичному индексу несведённых, а не по всей истории.
+    const rows = await this.prisma.accountRestriction.findMany({
+      where: { kind: { in: [...kinds] }, settledAt: null, ...activeAt(at) },
+      select: { accountId: true },
+      distinct: ["accountId"],
+      take: limit,
+    });
+    return rows.map((row) => row.accountId);
   }
 }
