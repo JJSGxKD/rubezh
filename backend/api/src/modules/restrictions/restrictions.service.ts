@@ -5,7 +5,7 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repo
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { AccountRestrictions } from "./account-restrictions.js";
 import { RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_REASONS, isRestrictionKind, type RestrictionKind, type RestrictionKindInfo } from "./restriction-catalog.js";
-import { banMessage, imposeProblem, isActive, restrictionView, termProblem, type ImposeInput, type RestrictionView } from "./restriction-rules.js";
+import { banMessage, imposeProblem, isActive, restrictionView, shownText, termProblem, type ImposeInput, type PreviewInput, type RestrictionView } from "./restriction-rules.js";
 import { RestrictionAccountNotFoundError, RestrictionNotFoundError } from "./restrictions-errors.js";
 import { RestrictionsHooks } from "./restrictions-hooks.js";
 import { RESTRICTIONS_REPOSITORY, type RestrictionRow, type RestrictionsRepository } from "./restrictions.repository.js";
@@ -30,6 +30,12 @@ const DB_TIMEOUT_MS = 3_000;
 const HISTORY_SHOWN = 100;
 const SETTLE_BATCH = 200;
 
+/** Что увидит игрок по каждому виду и что не так с черновиком — до наложения. */
+export interface RestrictionPreview {
+  problem: string | null;
+  shown: { kind: RestrictionKind; title: string; text: string }[];
+}
+
 export interface RestrictionCatalogView {
   kinds: (RestrictionKindInfo & { kind: RestrictionKind })[];
   reasons: { reason: string; title: string; player: string }[];
@@ -51,6 +57,18 @@ export class RestrictionsService {
     return {
       kinds: RESTRICTION_KINDS.map((kind) => ({ kind, ...RESTRICTION_CATALOG[kind] })),
       reasons: Object.entries(RESTRICTION_REASONS).map(([reason, text]) => ({ reason, ...text })),
+    };
+  }
+
+  /**
+   * Черновик глазами игрока: тексты — тем же кодом, что отказ, а проблема —
+   * та же, на которой упадёт наложение. Ничего не пишет.
+   */
+  preview(input: PreviewInput, at = new Date()): RestrictionPreview {
+    const endsAt = input.endsAt === null ? null : new Date(input.endsAt);
+    return {
+      problem: termProblem(endsAt, at) ?? imposeProblem(input.kinds, input.notify),
+      shown: input.kinds.map((kind) => ({ kind, title: RESTRICTION_CATALOG[kind].title, text: shownText(kind, endsAt, input.reason, input.notify) })),
     };
   }
 

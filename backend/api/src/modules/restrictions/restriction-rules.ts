@@ -9,6 +9,7 @@ import {
   isRestrictionKind,
   type RestrictionKind,
 } from "./restriction-catalog.js";
+import { SILENT_MESSAGE } from "./restrictions-errors.js";
 import { REPLACED_COMMENT, type RestrictionRow } from "./restrictions.repository.js";
 
 /** Наложение из панели — как его разбирает сервер. */
@@ -28,6 +29,11 @@ export const imposeSchema = z
   .strict();
 
 export type ImposeInput = z.infer<typeof imposeSchema>;
+
+/** Предпросмотр в панели — то же, что наложение, без комментария: его игрок не видит. */
+export const previewSchema = imposeSchema.pick({ kinds: true, endsAt: true, reason: true, notify: true });
+
+export type PreviewInput = z.infer<typeof previewSchema>;
 
 export const liftSchema = z.object({ comment: z.string().trim().min(1).max(RESTRICTION_LIMITS.commentMax) }).strict();
 
@@ -88,6 +94,19 @@ export function playerMessage(row: Pick<RestrictionRow, "kind" | "endsAt" | "rea
 /** Текст отказа при входе — его хранит `account.ban_reason`. */
 export function banMessage(row: Pick<RestrictionRow, "endsAt" | "reason">): string {
   return `Аккаунт заблокирован ${untilText(row.endsAt)}. Причина: ${reasonText(row.reason)}`;
+}
+
+/** Тень рейтинга: игрок не видит ничего — себя в доске он видит на своём месте. */
+export const SHADOW_TEXT = "Ничего: в рейтинге игрок видит себя на своём месте, другие его не видят";
+
+/**
+ * Что увидит игрок, упёршись в ограничение, — тем же кодом, что отказ
+ * (docs/35-stage4-plan.md Р83): панель показывает текст, а не макет.
+ */
+export function shownText(kind: RestrictionKind, endsAt: Date | null, reason: string, notify: boolean): string {
+  if (kind === "all") return banMessage({ endsAt, reason });
+  if (notify) return playerMessage({ kind, endsAt, reason });
+  return kind === "leaderboard" ? SHADOW_TEXT : SILENT_MESSAGE;
 }
 
 /** Что игрок видит о своих ограничениях — только те, о которых решили сообщить. */

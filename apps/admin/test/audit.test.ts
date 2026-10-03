@@ -48,6 +48,35 @@ describe("журнал аудита", () => {
     expect(actionTitle("content.publish")).toBe("content.publish");
   });
 
+  it("ограничение игрока — словами: что, до когда, почему и молча ли; снятие — с прежним и причиной", () => {
+    const imposed = entry({
+      action: "players.restrict",
+      target: ACCOUNT,
+      targetName: "Оля",
+      before: { replaced: [{ restrictionId: "r0", kind: "promo_codes", endsAt: null, reason: "other", comment: null, notify: true }] },
+      after: {
+        restrictions: [
+          { restrictionId: "r1", kind: "promo_codes", endsAt: "2026-10-06T12:00:00.000Z", reason: "promo_abuse", comment: "20 кодов за час", notify: true },
+          { restrictionId: "r2", kind: "leaderboard", endsAt: null, reason: "leaderboard_cheat", comment: null, notify: false },
+        ],
+      },
+    });
+    const [restrictions, replaced] = auditChanges(imposed);
+    expect(restrictions?.field).toBe("restrictions");
+    expect(fieldTitle("restrictions")).toBe("ограничения");
+    expect(auditValue(restrictions?.after, "restrictions", 400)).toBe(
+      `промокоды до ${formatDateTime("2026-10-06T12:00:00.000Z")} — злоупотребление промокодами; рейтинг бессрочно — накрутка рейтинга, молча`,
+    );
+    expect(auditValue(replaced?.before, "replaced", 400)).toBe("промокоды бессрочно — другое");
+    expect(auditObject(imposed)).toMatchObject({ kind: "игрок", label: "Оля" });
+
+    const lifted = entry({ action: "players.unrestrict", target: ACCOUNT, before: { restrictionId: "r1", kind: "all", endsAt: null, reason: "abuse", comment: null, notify: true }, after: { comment: "разобрались" } });
+    const shown = Object.fromEntries(auditChanges(lifted).map((change) => [change.field, auditValue(change.before ?? change.after, change.field)]));
+    expect(shown).toMatchObject({ kind: "блокировка целиком", reason: "оскорбления или спам", comment: "разобрались" });
+    // Свободная причина других действий — как записана.
+    expect(auditValue("компенсация за сбой", "reason")).toBe("компенсация за сбой");
+  });
+
   it("объект: имя и ссылка на его экран, а где экрана нет — без ссылки", () => {
     expect(auditObject(entry({ action: "players.ban", target: ACCOUNT, targetName: "Оля" }))).toEqual({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
     // Аккаунт удалён — имени нет, остаётся начало id.

@@ -221,6 +221,8 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
  * обновления. Незнакомое поле показывается как записано.
  */
 const FIELD_TITLES: Record<string, string> = {
+  restrictions: "ограничения",
+  replaced: "заменили действовавшие",
   role: "роль",
   roles: "роли",
   name: "имя",
@@ -234,6 +236,8 @@ const FIELD_TITLES: Record<string, string> = {
   bannedAt: "блокировка с",
   banReason: "причина блокировки",
   reason: "причина",
+  comment: "комментарий",
+  notify: "сообщено игроку",
   resource: "ресурс",
   delta: "изменение",
   balance: "баланс",
@@ -347,8 +351,38 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
  * Значения-перечисления словами — тем же словарём, что в разделах: «пачка
  * кодов», а не `batch`. Незнакомое значение остаётся как записано.
  */
+/**
+ * Виды и причины ограничений игрока — словами каталога сервера
+ * (`restrictions/restriction-catalog.ts`): журнал хранит ключи.
+ */
+const RESTRICTION_KINDS: Record<string, string> = {
+  leaderboard: "рейтинг",
+  referral_rewards: "награды за друзей",
+  friend_gifts: "подарки друзьям",
+  ad_rewards: "награды за рекламу",
+  promo_codes: "промокоды",
+  partner_tasks: "партнёрские задания",
+  all: "блокировка целиком",
+};
+const RESTRICTION_REASONS: Record<string, string> = {
+  leaderboard_cheat: "накрутка рейтинга",
+  multiaccount: "мультиаккаунты ради наград",
+  ad_abuse: "злоупотребление рекламой",
+  promo_abuse: "злоупотребление промокодами",
+  abuse: "оскорбления или спам",
+  other: "другое",
+};
+
+/** Ограничение одной строкой: «промокоды до 06.10.2026, 15:00 — злоупотребление промокодами, молча». */
+function restrictionLine(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.kind !== "string") return null;
+  const until = typeof value.endsAt === "string" ? `до ${formatDateTime(value.endsAt)}` : "бессрочно";
+  const reason = typeof value.reason === "string" ? ` — ${RESTRICTION_REASONS[value.reason] ?? value.reason}` : "";
+  return `${RESTRICTION_KINDS[value.kind] ?? value.kind} ${until}${reason}${value.notify === false ? ", молча" : ""}`;
+}
+
 const VALUE_TITLES: Record<string, Partial<Record<string, string>>> = {
-  kind: { shared: "общий код", batch: "пачка кодов", ...KIND_TITLES },
+  kind: { shared: "общий код", batch: "пачка кодов", ...KIND_TITLES, ...RESTRICTION_KINDS },
   status: Object.fromEntries(Object.entries(STATUS_LOOK).map(([status, look]) => [status, look.text])),
   source: { base: "панель", env: "окружение сервера", default: "умолчание", none: "не задан" },
   place: PLACE_TITLES,
@@ -370,9 +404,15 @@ export function auditValue(value: unknown, key = "", max = 80): string {
   if (typeof value === "number") return VALUE_TITLES[key]?.[String(value)] ?? formatNumber(value);
   const amounts = resourceAmounts(value);
   if (amounts !== null) return amounts;
+  if ((key === "restrictions" || key === "replaced") && Array.isArray(value)) {
+    const lines = value.map(restrictionLine);
+    if (lines.every((line) => line !== null)) return lines.join("; ");
+  }
   if (typeof value === "string") {
     if (key === "role") return roleName(value);
     if (key === "resource") return resourceName(value);
+    // Причина ограничения — ключом шаблона; прочие причины — свободный текст и идут как записаны.
+    if (key === "reason" && value in RESTRICTION_REASONS) return RESTRICTION_REASONS[value] ?? value;
     if (key in VALUE_TITLES) return word(key, value);
     if (ISO.test(value)) return formatDateTime(value);
     return value.length > max ? `${value.slice(0, max - 1)}…` : value;

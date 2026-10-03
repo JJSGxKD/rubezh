@@ -48,3 +48,9 @@ export function plural(count: number, forms: readonly [string, string, string]):
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
   return forms[2];
 }
+
+/** Значение для `datetime-local` в часах браузера: «2026-10-12T18:00». */
+export function localInput(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}

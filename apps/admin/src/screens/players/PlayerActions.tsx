@@ -3,12 +3,10 @@ import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import {
   adjustWallet,
-  banPlayer,
   messagePlayer,
   resourceName,
   TEAM_MESSAGE_MAX,
   teamMessageProblem,
-  unbanPlayer,
   WALLET_RESOURCES,
   walletAdjustProblem,
   type PlayerCard,
@@ -18,9 +16,9 @@ import { Button, Field, Input, Notice, Panel, Select, TextArea } from "../../ui/
 import { HELP } from "../../ui/help";
 
 /**
- * Действия с игроком — с подтверждением вторым нажатием: блокировка,
- * начисление и сообщение видны игроку и попадают в аудит, случайный клик тут
- * дорог.
+ * Действия с игроком — с подтверждением вторым нажатием: начисление и
+ * сообщение видны игроку и попадают в аудит, случайный клик тут дорог.
+ * Блокировка — ограничение «всё» в `RestrictionsPanel`.
  */
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -28,56 +26,6 @@ type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiE
 function OutcomeLine({ outcome }: { outcome: Outcome }) {
   if (outcome === null) return null;
   return outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>;
-}
-
-export function BanPanel({ card, onChanged }: { card: PlayerCard; onChanged: () => void }) {
-  const [reason, setReason] = useState("");
-  const [confirming, setConfirming] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [outcome, setOutcome] = useState<Outcome>(null);
-  const banned = card.account.banned !== null;
-  const accountId = card.account.accountId;
-
-  const act = async () => {
-    setPending(true);
-    const result = banned ? await unbanPlayer(api, accountId) : await banPlayer(api, accountId, reason.trim());
-    setPending(false);
-    setConfirming(false);
-    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
-    setOutcome({ tone: "success", text: banned ? "Блокировка снята" : `Заблокирован, отозвано сессий: ${result.data.revokedSessions}` });
-    setReason("");
-    onChanged();
-  };
-
-  const reasonOk = banned || reason.trim().length >= 3;
-  return (
-    <Panel title={banned ? "Снять блокировку" : "Заблокировать"}>
-      <div className="flex flex-col gap-3">
-        {banned ? (
-          <p className="text-sm text-text-muted">Причина блокировки: {card.account.banned?.reason ?? "не указана"}</p>
-        ) : (
-          <Field label="Причина" hint="От 3 до 256 символов. Игрок увидит её при входе; в аудит попадёт вместе с тем, кто блокировал.">
-            <Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={256} />
-          </Field>
-        )}
-        <div className="flex gap-2">
-          {confirming ? (
-            <>
-              <Button tone="danger" disabled={pending} onClick={() => void act()}>
-                {banned ? "Да, снять" : "Да, заблокировать"}
-              </Button>
-              <Button onClick={() => setConfirming(false)}>Отмена</Button>
-            </>
-          ) : (
-            <Button tone={banned ? "secondary" : "danger"} disabled={!reasonOk} onClick={() => setConfirming(true)}>
-              {banned ? "Снять блокировку" : "Заблокировать"}
-            </Button>
-          )}
-        </div>
-        <OutcomeLine outcome={outcome} />
-      </div>
-    </Panel>
-  );
 }
 
 /** Ключ операции: латиница, цифры и дефис — как ждёт сервер. */

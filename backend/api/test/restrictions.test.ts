@@ -107,6 +107,21 @@ describe("правила ограничений", () => {
     for (const reason of Object.keys(RESTRICTION_REASONS)) expect(banMessage({ endsAt: longest, reason }).length, reason).toBeLessThanOrEqual(256);
   });
 
+  it("предпросмотр: игрок увидит тот же текст, что в отказе; молча — нейтральное «недоступно», рейтинг — ничего; проблема черновика — словами", () => {
+    const s = setup();
+    const endsAt = new Date(NOW.getTime() + 3 * DAY).toISOString();
+    const told = s.service.preview({ kinds: ["promo_codes", "all"], endsAt, reason: "promo_abuse", notify: true }, NOW);
+    expect(told.problem).toBeNull();
+    expect(told.shown).toEqual([
+      { kind: "promo_codes", title: "Промокоды", text: "Промокоды — закрыто до 4 октября, 15:00 МСК. Причина: Промокоды использовались не по правилам" },
+      { kind: "all", title: "Всё — блокировка", text: "Аккаунт заблокирован до 4 октября, 15:00 МСК. Причина: Промокоды использовались не по правилам" },
+    ]);
+    const silent = s.service.preview({ kinds: ["ad_rewards", "leaderboard"], endsAt: null, reason: "ad_abuse", notify: false }, NOW);
+    expect(silent.shown.map((item) => item.text)).toEqual(["Сейчас недоступно — попробуйте позже", expect.stringMatching(/^Ничего: в рейтинге игрок видит себя/)]);
+    expect(s.service.preview({ kinds: ["all"], endsAt: null, reason: "abuse", notify: false }, NOW).problem).toMatch(/молча не накладывается/);
+    expect(s.service.preview({ kinds: ["promo_codes"], endsAt: new Date(NOW.getTime() - DAY).toISOString(), reason: "abuse", notify: true }, NOW).problem).toMatch(/Срок уже прошёл/);
+  });
+
   it("вход панели: виды без повторов, причина из шаблонов, комментарий ограничен, лишнее поле — отказ", () => {
     expect(imposeSchema.safeParse(input()).success).toBe(true);
     expect(imposeSchema.safeParse(input({ kinds: [] })).success).toBe(false);
@@ -393,6 +408,12 @@ describe("ограничения в панели по HTTP", () => {
     const catalog = await app.inject({ method: "GET", url: "/api/v1/admin/restrictions/catalog", headers });
     expect(catalog.statusCode).toBe(200);
     expect(catalog.json().data.kinds.map((item: { kind: string }) => item.kind)).toEqual([...RESTRICTION_KINDS]);
+
+    const preview = await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers, payload: { kinds: ["ad_rewards"], endsAt: null, reason: "ad_abuse", notify: true } });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json().data.shown[0].text).toBe("Награды за рекламу — закрыто бессрочно. Причина: Неестественные просмотры рекламы");
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers, payload: { kinds: [], endsAt: null, reason: "ad_abuse", notify: true } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers: { ...headers, cookie: `${ADMIN_SESSION_COOKIE}=gd` }, payload: { kinds: ["ad_rewards"], endsAt: null, reason: "ad_abuse", notify: true } })).statusCode).toBe(403);
 
     expect((await app.inject({ method: "POST", url: base, headers: { ...headers, cookie: `${ADMIN_SESSION_COOKIE}=gd` }, payload: body })).statusCode).toBe(403);
     expect((await app.inject({ method: "POST", url: base, headers, payload: { ...body, kinds: ["ad_rewards", "ad_rewards"] } })).statusCode).toBe(400);

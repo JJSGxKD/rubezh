@@ -12,7 +12,6 @@ import {
   formOf,
   formSchema,
   layoutHint,
-  localInput,
   periodOf,
   randomCode,
   rewardText,
@@ -23,7 +22,7 @@ import {
   type PromoCodeForm,
   type PromoCodeLimits,
 } from "../../api/promo-codes";
-import { formatDateTime, formatNumber } from "../../format";
+import { formatDateTime, formatNumber, localInput } from "../../format";
 import { api } from "../../services";
 import { ChoiceCards } from "../../ui/choice";
 import { Dialog } from "../../ui/dialog";

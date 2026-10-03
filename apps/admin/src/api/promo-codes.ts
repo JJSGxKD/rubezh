@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatNumber, plural } from "../format";
+import { formatNumber, localInput, plural } from "../format";
 import type { AdminApi, ApiResult } from "./client";
 
 /**
@@ -245,12 +245,6 @@ export interface CreateBody {
 }
 
 export type UpdateBody = Omit<CreateBody, "issue" | "partnerId"> & { maxRedemptions: number | null };
-
-/** Значение для `datetime-local` в часах браузера: «2026-10-12T18:00». */
-export function localInput(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 const DAY_MS = 86_400_000;
 
