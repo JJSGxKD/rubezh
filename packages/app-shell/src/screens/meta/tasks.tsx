@@ -1,8 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Bot, Check, Clock, Crown, Crosshair, ExternalLink, Hourglass, Megaphone, Play, Sparkles, Target } from "lucide-react";
 import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, PageTitle, ProgressBar, Screen, SegmentedControl } from "../../design-system/components";
-import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
-import { ShardIcon } from "../../design-system/components/ShardIcon";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
@@ -19,11 +17,11 @@ import {
   taskLink,
   tasksAvailable,
   type TaskItem,
-  type TaskReward,
   type TaskTab,
 } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
+import { RewardChips, rewardText } from "./task-reward";
 
 /**
  * «Задания»: ежедневные, недельные и достижения
@@ -272,27 +270,6 @@ function ProgressLine(props: { task: TaskItem }): ReactNode {
   );
 }
 
-/** Награда значками: монеты, самоцветы и осколки различаются и формой, и цветом (§4.4). */
-function RewardChips(props: { reward: TaskReward }): ReactNode {
-  const { coins, gems, shards } = props.reward;
-  return (
-    <span role="img" aria-label={rewardText(props.reward)} className="flex flex-col items-end gap-1">
-      {coins > 0 ? <Chip icon={<CoinIcon size={16} />} amount={coins} /> : null}
-      {gems > 0 ? <Chip icon={<GemIcon size={16} />} amount={gems} /> : null}
-      {shards > 0 ? <Chip icon={<ShardIcon rarity="common" size={16} />} amount={shards} /> : null}
-    </span>
-  );
-}
-
-function Chip(props: { icon: ReactNode; amount: number }): ReactNode {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {props.icon}
-      <span className="font-display text-sm font-bold tabular-nums text-text">{formatNumber(props.amount)}</span>
-    </span>
-  );
-}
-
 /** Имя достижения из словаря — у достижений по умолчанию; у своих из панели — заголовок каталога. */
 function achievementName(task: TaskItem): string | null {
   const key = `achievement.${task.id}.name`;
@@ -308,11 +285,4 @@ function goalText(task: TaskItem): string {
   const key = `task.kind.${task.kind}`;
   if (!hasTranslation(key)) return formatNumber(task.target);
   return t(key, { target: task.target, count: formatNumber(task.target), time: formatCountdown(task.target * 1000) });
-}
-
-function rewardText(reward: TaskReward): string {
-  const parts = (["coins", "gems", "shards"] as const)
-    .filter((resource) => reward[resource] > 0)
-    .map((resource) => t(`task.reward.${resource}`, { amount: formatNumber(reward[resource]), n: reward[resource] }));
-  return parts.join(t("tasks.and"));
 }
