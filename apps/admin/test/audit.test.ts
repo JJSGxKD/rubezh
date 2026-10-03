@@ -41,6 +41,9 @@ describe("журнал аудита", () => {
 
   it("действие — словами, незнакомое — как записано", () => {
     expect(actionTitle("players.ban")).toBe("Блокировка игрока");
+    // Блокировка целиком теперь — тоже ограничение (WP44); прежние записи остаются под старым именем.
+    expect(actionTitle("players.restrict")).toBe("Ограничение игрока");
+    expect(actionTitle("players.unrestrict")).toBe("Снятие ограничения");
     expect(actionTitle("broadcast.cancelled")).toBe("Отмена рассылки");
     expect(actionTitle("content.publish")).toBe("content.publish");
   });

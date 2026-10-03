@@ -8,6 +8,7 @@ import { friendStartParam } from "./friend-code.js";
 import { FriendNotifier } from "./friend-notifier.js";
 import { FriendLimitError, FriendNotFoundError, FriendRequestNotFoundError } from "./friends-errors.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { bonusView, readySteps, type BonusView } from "./friend-bonus.js";
 import { FRIEND_BONUS_RULES, FRIENDS_RULES, GIFT_RULES } from "./friends-rules.js";
@@ -63,6 +64,7 @@ export class FriendsService implements OnModuleInit {
     private readonly wallet: WalletService,
     private readonly notifier: FriendNotifier,
     private readonly notifications: NotificationsService,
+    private readonly restrictions: AccountRestrictions,
   ) {}
 
   /**
@@ -128,6 +130,8 @@ export class FriendsService implements OnModuleInit {
    * но не отмечено после сбоя — следующий забор кошелёк узнает по ключу.
    */
   async claimBonus(actor: AccessTokenClaims): Promise<ClaimResult> {
+    // Бонус за друзей — награда за друзей: с ограничением не забирается.
+    await this.restrictions.ensure(actor.accountId, "referral_rewards");
     const [qualified, claimed] = await Promise.all([this.friends.qualifiedCount(actor.accountId), this.friends.bonusClaimed(actor.accountId)]);
     const steps = readySteps(qualified, claimed, FRIEND_BONUS_RULES.steps);
 
@@ -150,6 +154,7 @@ export class FriendsService implements OnModuleInit {
 
   /** Подарок другу — раз в игровые сутки; повтор в те же сутки — не ошибка, а «уже». */
   async sendGift(actor: AccessTokenClaims, friendId: string): Promise<{ sent: boolean }> {
+    await this.restrictions.ensure(actor.accountId, "friend_gifts");
     if (!(await this.friends.areFriends(actor.accountId, friendId))) throw new FriendNotFoundError("Подарок можно сделать только другу");
     const sent = await this.friends.sendGift(actor.accountId, friendId);
     if (sent) {
@@ -166,6 +171,10 @@ export class FriendsService implements OnModuleInit {
    * узнает и только пометит.
    */
   async claimGifts(actor: AccessTokenClaims): Promise<ClaimResult> {
+    // Пришедшие за время ограничения подарки ждут обычный срок
+    // (`GIFT_RULES.maxAgeDays`) и сгорают по нему: копиться дольше им не
+    // даёт сам срок, а суточный потолок забора — разом забрать накопленное.
+    await this.restrictions.ensure(actor.accountId, "friend_gifts");
     const room = GIFT_RULES.maxClaimsPerDay - (await this.friends.claimedToday(actor.accountId));
     if (room <= 0) return { claimed: 0, coins: 0 };
     const gifts = await this.friends.pendingGifts(actor.accountId, GIFT_RULES.maxAgeDays, room);

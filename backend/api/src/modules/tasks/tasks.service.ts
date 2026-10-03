@@ -3,6 +3,7 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { ChannelMemberships, MembershipRejectedError, MembershipUnavailableError } from "../../platforms/ports/channel-membership.js";
 import { imagePath } from "../media/image-rules.js";
 import { MediaService } from "../media/media.service.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
@@ -115,6 +116,7 @@ export class TasksService implements OnModuleInit {
     private readonly roles: RolesService,
     private readonly memberships: ChannelMemberships,
     private readonly media: MediaService,
+    private readonly restrictions: AccountRestrictions,
   ) {}
 
   onModuleInit(): void {
@@ -131,6 +133,8 @@ export class TasksService implements OnModuleInit {
     const { defs, progress, participation } = await this.state(account, at);
     const def = defs.find((candidate) => candidate.taskId === taskId);
     if (def === undefined) throw new TaskNotFoundError();
+    // Партнёрские задания закрыты ограничением (WP44); цели забега — нет.
+    if (!isRunKind(def.kind)) await this.restrictions.ensure(accountId, "partner_tasks", at);
     // Мест нет, а игрок к цели не переходил — бота спрашивать незачем.
     if (!slotsFor(def.limit, participation.get(taskId) ?? null, at).visible) throw this.limitReached(accountId, taskId);
     let row = progress.find((candidate) => candidate.taskId === taskId);
@@ -180,6 +184,7 @@ export class TasksService implements OnModuleInit {
     const { defs, progress, participation } = await this.state(account, at);
     const def = defs.find((candidate) => candidate.taskId === taskId);
     if (def === undefined || def.params === null) throw new TaskNotFoundError();
+    await this.restrictions.ensure(accountId, "partner_tasks", at);
     const mine = participation.get(taskId) ?? null;
     const place = slotsFor(def.limit, mine, at);
     if (!place.visible) throw this.limitReached(accountId, taskId);

@@ -7,6 +7,7 @@ import { FriendNotifier } from "./friend-notifier.js";
 import { FriendsController } from "./friends.controller.js";
 import { FRIENDS_REPOSITORY, PrismaFriendsRepository } from "./friends.repository.js";
 import { FriendsService } from "./friends.service.js";
+import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 
 /**
  * Друзья (docs/35-stage4-plan.md, WP14): граф дружбы, заявки, ссылка дружбы,
@@ -14,7 +15,7 @@ import { FriendsService } from "./friends.service.js";
  * Ссылку исполняет слушатель входа — модуль входа о друзьях не знает.
  */
 @Module({
-  imports: [AuthModule, WalletModule, MessagingModule, NotificationsModule],
+  imports: [AuthModule, WalletModule, MessagingModule, NotificationsModule, RestrictionsModule],
   controllers: [FriendsController],
   providers: [FriendsService, FriendNotifier, { provide: FRIENDS_REPOSITORY, useClass: PrismaFriendsRepository }],
   exports: [FriendsService, FRIENDS_REPOSITORY],

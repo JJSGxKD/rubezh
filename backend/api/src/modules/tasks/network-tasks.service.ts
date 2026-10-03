@@ -12,6 +12,7 @@ import type { WalletResource } from "../wallet/wallet-types.js";
 import { admitsTask, networkTaskState, nextTaskAt, type NetworkTaskDef } from "./network-task-rules.js";
 import { NETWORK_TASKS_REPOSITORY, type NetworkTaskRow, type NetworkTasksRepository } from "./network-tasks.repository.js";
 import { TaskNotFoundError } from "./tasks-errors.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 
 /**
  * Задания рекламных сетей во вкладке «Партнёры» (docs/35-stage4-plan.md
@@ -95,6 +96,7 @@ export class NetworkTasksService implements OnModuleInit {
     private readonly ads: AdsService,
     private readonly wallet: WalletService,
     private readonly roles: RolesService,
+    private readonly restrictions: AccountRestrictions,
   ) {}
 
   onModuleInit(): void {
@@ -115,6 +117,8 @@ export class NetworkTasksService implements OnModuleInit {
   }
 
   private async build(account: AccountRef, at: Date): Promise<NetworkTaskView[]> {
+    // Партнёрские задания закрыты ограничением — заданий сетей у игрока нет.
+    if ((await this.restrictions.status(account.accountId, "partner_tasks", at)) !== null) return [];
     const defs = (await this.rows()).filter((row) => row.active);
     const ready: { def: NetworkTaskRow; block: NonNullable<Awaited<ReturnType<AdTasks["block"]>>> }[] = [];
     for (const def of defs) {
@@ -153,6 +157,7 @@ export class NetworkTasksService implements OnModuleInit {
    * заданий нет: строка просто не появится, это не ошибка экрана.
    */
   async item(account: AccountRef, networkKey: string, requester: AdRequester, at = new Date()): Promise<NetworkFeedItem> {
+    if ((await this.restrictions.status(account.accountId, "partner_tasks", at)) !== null) return { kind: "none" };
     const found = await this.feedNetwork(account, networkKey);
     if (found === null) return { kind: "none" };
     const { def, block } = found;
@@ -165,6 +170,7 @@ export class NetworkTasksService implements OnModuleInit {
 
   /** «Проверить» у задания ленты: выполнено — награда уже выдана, ответ говорит, когда следующее. */
   async check(account: AccountRef, networkKey: string, sessionId: string, requester: AdRequester, at = new Date()): Promise<NetworkFeedCheck> {
+    await this.restrictions.ensure(account.accountId, "partner_tasks", at);
     const found = await this.feedNetwork(account, networkKey);
     if (found === null) throw new TaskNotFoundError();
     const result = await this.feeds.check(account.accountId, found.block, sessionId, requester, at);
@@ -208,8 +214,12 @@ export class NetworkTasksService implements OnModuleInit {
     const def = (await this.rows()).find((row) => row.networkKey === task.networkKey);
     if (def === undefined) throw new Error(`у сети ${task.networkKey} нет строки заданий — награду не из чего выдать`);
     const credited: NetworkTaskReward = { coins: 0, gems: 0, shards: 0 };
+    // Сеть подтвердила задание игроку с ограничением: награды нет и не будет,
+    // а сессия забирается — иначе сеть повторяла бы подтверждение.
+    const withheld = (await this.restrictions.status(task.accountId, "partner_tasks", task.at)) !== null;
+    if (withheld) this.log("log", { event: "network_task_reward_withheld", accountId: task.accountId, network: task.networkKey, sessionId: task.sessionId });
     for (const [field, resource] of REWARD_RESOURCES) {
-      if (def[field] <= 0) continue;
+      if (withheld || def[field] <= 0) continue;
       const result = await this.wallet.grant({
         accountId: task.accountId,
         resource,
@@ -222,7 +232,7 @@ export class NetworkTasksService implements OnModuleInit {
       credited[field] = result.credited;
     }
     const claimed = await this.ads.claim(task.accountId, task.sessionId, "task", task.at);
-    if (!claimed.repeat) this.log("log", { event: "network_task_rewarded", accountId: task.accountId, network: task.networkKey, sessionId: task.sessionId, ...credited });
+    if (!claimed.repeat && !withheld) this.log("log", { event: "network_task_rewarded", accountId: task.accountId, network: task.networkKey, sessionId: task.sessionId, ...credited });
   }
 
   /** Строки сетей с готовностью — панели. */

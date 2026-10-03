@@ -9,6 +9,9 @@ import { eligibleBlocks, networksOf, servable, viaApi } from "./ad-blocks.js";
 import { AD_CREATIVES, type AdCreative, type AdCreativeSource, type AdRequester } from "./ad-creatives.js";
 import { AdNetworkKeys } from "./ad-network-keys.js";
 import { AdPasses } from "./ads-passes.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
+import type { RestrictionKind } from "../restrictions/restriction-catalog.js";
+import type { RestrictionRow } from "../restrictions/restrictions.repository.js";
 import { AdCooldownError, AdNotCompletedError, AdSessionClosedError } from "./ads-errors.js";
 import { InterstitialGate, type InterstitialRefusal } from "./interstitial-gate.js";
 import type { InterstitialMoment } from "./interstitial-policy.js";
@@ -112,9 +115,12 @@ export type AdOffer =
   /**
    * `no_fill` — ни одного подходящего блока; `cooldown` — место отдыхает до
    * `retryAt`; `pass` — рекламы без награды игроку с пропуском не показывают;
-   * `policy` — межстраничной сейчас не время: новичок, пауза, не N-й забег.
+   * `policy` — межстраничной сейчас не время: новичок, пауза, не N-й забег;
+   * `restricted` — награды за рекламу игроку закрыты ограничением, о котором
+   * ему сообщили (WP44): что, до когда и почему — `GET /me/restrictions`.
+   * Молчаливое ограничение отвечает `no_fill` — как будто рекламы нет.
    */
-  | { available: false; reason: "no_fill" | "cooldown" | "pass" | "policy"; retryAt: string | null };
+  | { available: false; reason: "no_fill" | "cooldown" | "pass" | "policy" | "restricted"; retryAt: string | null };
 
 export interface AdReadiness {
   available: boolean;
@@ -123,6 +129,18 @@ export interface AdReadiness {
   /** награда будет без ролика (VIP); `null` — нужен показ */
   pass: string | null;
 }
+
+/**
+ * Какое ограничение закрывает награду места (docs/35-stage4-plan.md WP44).
+ * Место `task` ведёт модуль заданий: задание сети — партнёрское задание, и
+ * удержанную награду он закрывает сессией сам, иначе сеть повторяла бы
+ * подтверждение. У межстраничной награды нет — ей ограничение не нужно.
+ */
+const RESTRICTED_BY: Partial<Record<AdPlace, RestrictionKind>> = {
+  second_chance: "ad_rewards",
+  wheel_spin: "ad_rewards",
+  run_double: "ad_rewards",
+};
 
 @Injectable()
 export class AdsService {
@@ -137,10 +155,13 @@ export class AdsService {
     @Inject(AD_CREATIVES) private readonly creatives: AdCreativeSource,
     private readonly keys: AdNetworkKeys,
     private readonly interstitials: InterstitialGate,
+    private readonly restrictions: AccountRestrictions,
   ) {}
 
   /** `moment` — когда клиент просит межстраничную; у других мест не нужен. */
   async offer(viewer: AdViewer, place: AdPlace, at = new Date(), moment: InterstitialMoment = "run_start"): Promise<AdOffer> {
+    const restricted = await this.restricted(viewer.accountId, place, at);
+    if (restricted !== null) return this.unavailable(viewer, place, restricted.notify ? "restricted" : "no_fill", null);
     const [history, pass] = await Promise.all([this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
     if (pass !== null && !PLACE_RULES[place].rewarded) return this.unavailable(viewer, place, "pass", null);
     const state = placeState(history.sessions, history.dayStart, at);
@@ -250,6 +271,9 @@ export class AdsService {
    * награды у хозяина обязан включать `sessionId`.
    */
   async claim(accountId: string, sessionId: string, place: AdPlace, at = new Date()): Promise<{ session: AdSessionRow; repeat: boolean }> {
+    // Начатый до ограничения просмотр награду тоже не принесёт.
+    const kind = RESTRICTED_BY[place];
+    if (kind !== undefined) await this.restrictions.ensure(accountId, kind, at);
     const outcome = await this.db(this.repository.claim(sessionId, accountId, place, at, (session, history) => claimVerdict(session, history, at)));
     if (outcome.status === "not_completed") throw new AdNotCompletedError();
     if (outcome.status === "cooldown") throw new AdCooldownError(outcome.retryAt);
@@ -266,8 +290,17 @@ export class AdsService {
   async readiness(viewer: Pick<AdViewer, "accountId" | "platform">, place: AdPlace, at = new Date()): Promise<AdReadiness> {
     const [blocks, history, held] = await Promise.all([this.blocks(), this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
     const pass = PLACE_RULES[place].pass ? held : null;
-    const available = pass !== null || blocks.some((block) => block.place === place && servable(block) && blockReaches(block, viewer.platform));
+    // Молчаливое ограничение прячет кнопку, как будто рекламы нет; о
+    // котором сообщили — оставляет: выдача скажет игроку, что закрыто.
+    const silenced = (await this.restricted(viewer.accountId, place, at))?.notify === false;
+    const available = !silenced && (pass !== null || blocks.some((block) => block.place === place && servable(block) && blockReaches(block, viewer.platform)));
     return { available, readyAt: nextRewardAt(place, placeState(history.sessions, history.dayStart, at), at), pass };
+  }
+
+  /** Ограничение, которое закрывает награду места; у межстраничной награды нет. */
+  private async restricted(accountId: string, place: AdPlace, at: Date): Promise<RestrictionRow | null> {
+    const kind = RESTRICTED_BY[place];
+    return kind === undefined ? null : await this.restrictions.status(accountId, kind, at);
   }
 
   /** Блоки места, которые сеть может показать игроку площадки и устройства, — из запаса в памяти. */
@@ -289,7 +322,7 @@ export class AdsService {
     return this.cache.blocks;
   }
 
-  private unavailable(viewer: AdViewer, place: AdPlace, reason: "no_fill" | "cooldown" | "pass", retryAt: Date | null): AdOffer {
+  private unavailable(viewer: AdViewer, place: AdPlace, reason: "no_fill" | "cooldown" | "pass" | "restricted", retryAt: Date | null): AdOffer {
     this.log({ event: "ad_unavailable", accountId: viewer.accountId, place, reason });
     return { available: false, reason, retryAt: retryAt?.toISOString() ?? null };
   }

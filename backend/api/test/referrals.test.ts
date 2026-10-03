@@ -14,6 +14,7 @@ import type { GrantInput, GrantResult, WalletService } from "../src/modules/wall
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryFriendsRepository } from "./helpers/memory-friends.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 
 /**
  * Рефералка (docs/23-referral-and-partner-program.md §2): засчитывается
@@ -97,6 +98,7 @@ let accounts: MemoryAccountRepository;
 let friends: MemoryFriendsRepository;
 let referrals: MemoryReferrals;
 let wallet: FakeWallet;
+let restrictions: MemoryRestrictionsRepository;
 let networks: Map<string, string[]>;
 let runCounts: Map<string, number>;
 let lastSessions: Map<string, Date>;
@@ -148,6 +150,7 @@ beforeEach(() => {
   runCounts = new Map();
   lastSessions = new Map();
   returns = new MemoryReturns();
+  restrictions = new MemoryRestrictionsRepository();
   const sessions = {
     record: async () => "recorded" as const,
     acquisition: async () => null,
@@ -166,6 +169,7 @@ beforeEach(() => {
     wallet as unknown as WalletService,
     new AuthHooks(),
     new RunsHooks(),
+    restrictionsGate(restrictions),
   );
 });
 
@@ -315,5 +319,39 @@ describe("возвращение", () => {
     await service.onLogin(login(gone, link, { created: false }));
     await service.onRun(run(gone));
     expect([...wallet.grants.keys()].filter((key) => key.startsWith("friend_return:"))).toHaveLength(2);
+  });
+});
+
+describe("ограничение наград за друзей (WP44)", () => {
+  const DAY = 86_400_000;
+
+  it("активация засчитана, а пригласившему с ограничением награда не приходит — ни сейчас, ни после снятия", async () => {
+    const owner = await player("1");
+    const newcomer = await player("2");
+    await service.onLogin(login(newcomer, await inviteLink(owner)));
+    const restriction = restrictions.restrict(owner.accountId, "referral_rewards", { notify: false });
+
+    await playRuns(newcomer, REFERRAL_RULES.activationRuns);
+    expect(referrals.bindings.get(newcomer.accountId)?.status).toBe("activated");
+    expect(wallet.grants.has(`referral:${newcomer.accountId}`)).toBe(false);
+
+    // Ограничение сняли — пропущенное не догоняет: иначе это была бы отсрочка.
+    restriction.liftedAt = new Date();
+    restriction.liftComment = "срок вышел";
+    await service.onRun(run(newcomer));
+    expect(wallet.grants.has(`referral:${newcomer.accountId}`)).toBe(false);
+  });
+
+  it("возвращение: ограниченная сторона без монет, вторая — с монетами; блокировка целиком закрывает так же", async () => {
+    const friend = await player("friend");
+    const gone = await player("gone", Date.now() - 400 * DAY);
+    lastSessions.set(gone.accountId, new Date(Date.now() - (RETURN_RULES.absenceDays + 1) * DAY));
+    await service.onLogin(login(gone, await inviteLink(friend), { created: false }));
+    restrictions.restrict(friend.accountId, "all");
+
+    await service.onRun(run(gone));
+    expect([...wallet.grants.values()].map((grant) => grant.accountId)).toEqual([gone.accountId]);
+    await service.onRun(run(gone));
+    expect(wallet.grants.size).toBe(1);
   });
 });

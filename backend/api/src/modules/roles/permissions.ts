@@ -34,6 +34,10 @@ export const PERMISSIONS = [
   "players.view",
   "players.pii.view",
   "players.ban",
+  // Ограничить часть функций на срок (docs/35-stage4-plan.md Р75): рейтинг,
+  // награды за друзей, подарки, реклама, промокоды, партнёрские задания.
+  // Блокировка целиком — по-прежнему `players.ban`
+  "players.restrict",
   // Сообщение команды в ленту игрока: ответ на жалобу, объяснение блокировки
   // или поправки (docs/35-stage4-plan.md Р51)
   "players.message",
@@ -129,6 +133,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "players.view",
     "players.pii.view",
     "players.ban",
+    "players.restrict",
     "players.message",
     "broadcast.edit",
     "broadcast.send",
@@ -172,7 +177,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ],
 
   // Игроки без платёжных данных, жалобы, блокировки, очередь антифрода.
-  moderator: ["players.view", "players.ban", "players.message"],
+  moderator: ["players.view", "players.ban", "players.restrict", "players.message"],
 
   // Привлечение, рассылки, акции магазина и промокоды; партнёры без выплат.
   marketer: [

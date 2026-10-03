@@ -54,6 +54,7 @@ import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 import { MemoryPartnersRepository } from "./helpers/memory-partners.js";
 import { MemoryPromoCodesRepository } from "./helpers/memory-promo-codes.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 
 /**
  * Промокоды (docs/35-stage4-plan.md WP41, Р74): код набирают с любой
@@ -128,8 +129,9 @@ function setup(options: { pick?: PromoRandom; config?: ReturnType<typeof loadApp
   const rolesService = new RolesService(config, roles, accounts);
   const partnerRows = new MemoryPartnersRepository(repository);
   const partners = new PartnersService(partnerRows, rolesService);
-  const service = new PromoCodesService(repository, accounts, options.pick ?? counting, wallet as unknown as WalletService, rolesService, partners);
-  return { repository, accounts, roles, wallet, service, config, partners, partnerRows };
+  const restrictions = new MemoryRestrictionsRepository();
+  const service = new PromoCodesService(repository, accounts, options.pick ?? counting, wallet as unknown as WalletService, rolesService, partners, restrictionsGate(restrictions));
+  return { repository, accounts, roles, wallet, service, config, partners, partnerRows, restrictions };
 }
 
 type Ctx = ReturnType<typeof setup>;
@@ -493,6 +495,26 @@ describe("ввод кода игроком", () => {
     ctx.accounts.ban(banned.accountId, "фрод");
     expect(await codeOf(ctx.service.redeem(banned, "once01", NOW))).toBe("forbidden");
     expect((await ctx.service.redeem(await person(ctx, "1202"), "once01", NOW)).kind).toBe("shared");
+  });
+
+  it("ограничение промокодов (WP44): о котором сообщили — что и до когда, молчаливое — «сейчас недоступно»; код не тратится", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "1250", { role: "admin" });
+    await ctx.service.create(admin, input({ issue: { kind: "shared", code: "ONCE02", maxRedemptions: 1 } }), NOW);
+    const told = await person(ctx, "1251");
+    const silent = await person(ctx, "1252");
+    ctx.restrictions.restrict(told.accountId, "promo_codes", { endsAt: at(DAY), reason: "promo_abuse" });
+    ctx.restrictions.restrict(silent.accountId, "promo_codes", { notify: false });
+
+    await expect(ctx.service.redeem(told, "once02", NOW)).rejects.toMatchObject({ code: "account_restricted", message: expect.stringMatching(/^Промокоды — закрыто до .+ МСК\. Причина: /) });
+    // Ограниченный не узнаёт даже, есть ли такой код: отказ одинаковый.
+    expect(await codeOf(ctx.service.redeem(silent, "once02", NOW))).toBe("temporarily_unavailable");
+    expect(await codeOf(ctx.service.redeem(silent, "NOPE2026", NOW))).toBe("temporarily_unavailable");
+    expect(ctx.repository.redemptions).toHaveLength(0);
+    expect(ctx.wallet.grants).toHaveLength(0);
+
+    // Срок вышел — снова можно, без чьих-либо действий.
+    expect((await ctx.service.redeem(told, "once02", at(DAY))).kind).toBe("shared");
   });
 
   it("упала запись награды — повторный ввод доначисляет теми же ключами, а не говорит «уже получили»", async () => {

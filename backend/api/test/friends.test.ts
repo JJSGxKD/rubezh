@@ -28,6 +28,7 @@ import { FRIEND_BONUS_RULES, GIFT_RULES } from "../src/modules/friends/friends-r
 import { bonusView, readySteps } from "../src/modules/friends/friend-bonus.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import { memoryNotifications } from "./helpers/memory-notifications.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 
 /**
  * Друзья (docs/35-stage4-plan.md, WP14): ссылка дружбы делает друзьями без
@@ -45,6 +46,8 @@ let service: FriendsService;
 let wallet: FakeWallet;
 let notified: [string, string][];
 let notices: ReturnType<typeof memoryNotifications>;
+let restrictions: MemoryRestrictionsRepository;
+let gate: ReturnType<typeof restrictionsGate>;
 
 /** Кошелёк с ключом идемпотентности — ровно то, на что опираются подарки. */
 class FakeWallet {
@@ -84,7 +87,9 @@ beforeEach(() => {
   notified = [];
   const notifier = { requestSent: async (from: string, to: string) => (notified.push([from, to]), "sent" as const) } as unknown as FriendNotifier;
   notices = memoryNotifications();
-  service = new FriendsService(config(), repository, accounts, new AuthHooks(), wallet as unknown as WalletService, notifier, notices.service);
+  restrictions = new MemoryRestrictionsRepository();
+  gate = restrictionsGate(restrictions);
+  service = new FriendsService(config(), repository, accounts, new AuthHooks(), wallet as unknown as WalletService, notifier, notices.service, gate);
 });
 
 describe("ссылка дружбы", () => {
@@ -413,6 +418,49 @@ describe("бонус за число друзей", () => {
 
     expect(bonusView(100, [], steps).readyCoins).toBe(total);
     expect(readySteps(4, [3], [{ friends: 3, coins: 1 }, { friends: 1, coins: 1 }, { friends: 5, coins: 1 }])).toEqual([{ friends: 1, coins: 1 }]);
+  });
+});
+
+describe("ограничения (WP44)", () => {
+  async function friendsPair(): Promise<[Account, Account]> {
+    const ann = await player("1");
+    const bob = await player("2");
+    await service.request(claims(ann), bob.accountId);
+    await service.accept(claims(bob), ann.accountId);
+    return [ann, bob];
+  }
+
+  it("подарки закрыты в обе стороны: ни отправить, ни забрать; пришедшее ждёт снятия в пределах срока", async () => {
+    const [ann, bob] = await friendsPair();
+    await service.sendGift(claims(ann), bob.accountId);
+    const gifts = restrictions.restrict(bob.accountId, "friend_gifts");
+
+    await expect(service.sendGift(claims(bob), ann.accountId)).rejects.toMatchObject({ code: "account_restricted", status: 403 });
+    await expect(service.claimGifts(claims(bob))).rejects.toMatchObject({ code: "account_restricted" });
+    expect(wallet.grants.size).toBe(0);
+    // Подарить ограниченному можно: закрыто ему, а не его друзьям.
+    expect((await service.view(bob.accountId)).gifts.pending).toBe(1);
+
+    gifts.liftedAt = new Date();
+    await gate.forget(bob.accountId);
+    expect(await service.claimGifts(claims(bob))).toEqual({ claimed: 1, coins: GIFT_RULES.coins });
+  });
+
+  it("молчаливое — нейтральный отказ без причины; бонус за друзей закрыт наградами за друзей", async () => {
+    const [ann, bob] = await friendsPair();
+    restrictions.restrict(ann.accountId, "friend_gifts", { notify: false });
+    await expect(service.sendGift(claims(ann), bob.accountId)).rejects.toMatchObject({ code: "temporarily_unavailable", status: 503 });
+
+    const owner = await player("owner");
+    const friend = await player("friend");
+    await service.request(claims(friend), owner.accountId);
+    await service.accept(claims(owner), friend.accountId);
+    repository.played.add(friend.accountId);
+    restrictions.restrict(owner.accountId, "referral_rewards");
+    await expect(service.claimBonus(claims(owner))).rejects.toMatchObject({ code: "account_restricted" });
+    expect(wallet.grants.size).toBe(0);
+    // Подаркам награды за друзей не мешают.
+    expect(await service.sendGift(claims(owner), friend.accountId)).toEqual({ sent: true });
   });
 });
 

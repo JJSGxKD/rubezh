@@ -37,6 +37,7 @@ import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { CREATIVE, FakeCreatives, MemoryAds, adBlock as block, flagsOn, interstitialGate, moscowDayStart } from "./helpers/memory-ads.js";
 import { panelSettings } from "./helpers/settings.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 
 /**
  * Реклама (docs/35-stage4-plan.md §3.7, WP12): выбор сети — пауза, круг,
@@ -78,7 +79,9 @@ function setup(blocks: AdBlockRow[], roll: AdsRoll = rolls(0)) {
   const creatives = new FakeCreatives();
   const flags = flagsOn(INTERSTITIAL_FLAG);
   const gate = interstitialGate(repository, settings, flags);
-  return { repository, passes, settings, creatives, flags, gate, service: new AdsService(repository, roll, passes, settings, creatives, new AdNetworkKeys(repository), gate) };
+  const restrictions = new MemoryRestrictionsRepository();
+  const restricted = restrictionsGate(restrictions);
+  return { repository, passes, settings, creatives, flags, gate, restrictions, restricted, service: new AdsService(repository, roll, passes, settings, creatives, new AdNetworkKeys(repository), gate, restricted) };
 }
 
 function offered(offer: AdOffer): Extract<AdOffer, { available: true }> {
@@ -878,5 +881,37 @@ describe("реклама по HTTP", () => {
     const closed = await server.inject({ method: "POST", url, headers, payload: { outcome: "completed" } });
     expect(closed.statusCode).toBe(409);
     expect(closed.json<{ error: { code: string } }>().error.code).toBe("ad_session_closed");
+  });
+});
+
+describe("ограничение наград за рекламу (WP44)", () => {
+  it("о котором сообщили — выдача честно говорит «закрыто», кнопка остаётся; молчаливое — «рекламы нет», кнопки нет", async () => {
+    const { service, restrictions, repository } = setup([block("adsgram", 10), block("adsgram", 10, { place: "run_double" })]);
+    restrictions.restrict(ME, "ad_rewards");
+    expect(await service.offer(TELEGRAM, "wheel_spin", NOON)).toEqual({ available: false, reason: "restricted", retryAt: null });
+    expect((await service.readiness(TELEGRAM, "wheel_spin", NOON)).available).toBe(true);
+
+    restrictions.restrict(OTHER, "ad_rewards", { notify: false });
+    const other: AdViewer = { ...TELEGRAM, accountId: OTHER };
+    expect(await service.offer(other, "run_double", NOON)).toEqual({ available: false, reason: "no_fill", retryAt: null });
+    expect((await service.readiness(other, "run_double", NOON)).available).toBe(false);
+    // Отказ — до сети: сессий не заведено, сеть показ не засчитает.
+    expect(repository.sessions).toHaveLength(0);
+  });
+
+  it("досмотренный до ограничения ролик награды не приносит; блокировка целиком закрывает так же", async () => {
+    const { service, restrictions, restricted } = setup([block("adsgram", 10)]);
+    const offer = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
+    await service.report(ME, offer.sessionId, { kind: "completed" }, at(NOON, 1));
+    restrictions.restrict(ME, "all", { at: NOON });
+    // Наложение из панели сбрасывает запас ответов — как здесь.
+    await restricted.forget(ME);
+    await expect(service.claim(ME, offer.sessionId, "wheel_spin", at(NOON, 1))).rejects.toMatchObject({ code: "account_restricted" });
+  });
+
+  it("межстраничной ограничение не мешает: награды у неё нет", async () => {
+    const { service, restrictions } = setup([block("adsgram", 10, { place: "interstitial" })]);
+    restrictions.restrict(ME, "ad_rewards");
+    expect(await service.offer(TELEGRAM, "interstitial", NOON)).toMatchObject({ available: true, network: "adsgram" });
   });
 });

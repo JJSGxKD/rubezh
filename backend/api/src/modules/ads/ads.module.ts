@@ -17,6 +17,7 @@ import { ADS_ROLL, AdsService, cryptoRoll } from "./ads.service.js";
 import { INTERSTITIAL_FLAGS, InterstitialGate } from "./interstitial-gate.js";
 import { HttpTaddyApi } from "./taddy-api.js";
 import { HttpTaddyExchange, TADDY_EXCHANGE } from "./taddy-exchange.js";
+import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 
 /**
  * Реклама (docs/35-stage4-plan.md §3.7, WP12): сети и блоки мест, выбор
@@ -38,7 +39,7 @@ import { HttpTaddyExchange, TADDY_EXCHANGE } from "./taddy-exchange.js";
  * хозяин места `task`, подписавшись на `AdTaskHooks`.
  */
 @Module({
-  imports: [AuthModule, FlagsModule],
+  imports: [AuthModule, FlagsModule, RestrictionsModule],
   controllers: [AdsController, AdsgramRewardController],
   providers: [
     AdsService,

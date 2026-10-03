@@ -13,6 +13,8 @@ import { NotificationsService } from "../notifications/notifications.service.js"
 import type { StoredPurchase } from "../payments/purchase-types.js";
 import { PURCHASES_REPOSITORY, type PurchasesRepository } from "../payments/purchases.repository.js";
 import { ProgressService, type ProgressView } from "../progress/progress.service.js";
+import type { ImposeInput, RestrictionView } from "../restrictions/restriction-rules.js";
+import { RestrictionsService } from "../restrictions/restrictions.service.js";
 import type { Role } from "../roles/permissions.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { RunsViewService, type ProfileView } from "../runs/runs-view.service.js";
@@ -68,6 +70,12 @@ export interface BanResult {
   revokedSessions: number;
 }
 
+export interface RestrictResult {
+  restrictions: RestrictionView[];
+  /** сколько сессий игры и панели отозвано — только у блокировки целиком */
+  revokedSessions: number;
+}
+
 export interface MessageResult {
   /** это сообщение уже отправлено той же кнопкой — второй строки в ленте нет */
   duplicate: boolean;
@@ -89,6 +97,7 @@ export class AdminPlayersService {
     private readonly adminSessions: AdminSessionService,
     private readonly notifications: NotificationsService,
     private readonly testNotice: TestNoticeService,
+    private readonly restrictions: RestrictionsService,
   ) {}
 
   async search(actor: AccountRef, query: string, limit: number): Promise<PlayerRow[]> {
@@ -139,43 +148,41 @@ export class AdminPlayersService {
   }
 
   /**
-   * Блокировка: аккаунт помечается, все его сессии — игры и панели —
-   * отзываются сразу, действие уходит в журнал с прежним состоянием. Себя
-   * заблокировать нельзя — иначе единственный владелец закроет панель себе.
+   * Ограничить игрока (docs/35-stage4-plan.md Р75, WP44): виды, срок,
+   * причина. Блокировка целиком вдобавок сразу отзывает все сессии игры и
+   * панели: отметка в аккаунте закрывает только новый вход.
    */
-  async ban(actor: AccountRef, accountId: string, reason: string, now = new Date()): Promise<BanResult> {
-    await this.roles.require(actor, "players.ban");
-    if (actor.accountId === accountId) throw new ValidationError("Заблокировать себя нельзя");
-
-    const before = await this.accounts.byId(accountId);
-    if (before === null) throw new AccountNotFoundError();
-    const account = await this.accounts.setBan(accountId, { at: now, reason });
-    if (account === null) throw new AccountNotFoundError();
-
+  async restrict(actor: AccountRef, accountId: string, input: ImposeInput, now = new Date()): Promise<RestrictResult> {
+    if (actor.accountId === accountId) throw new ValidationError("Ограничить себя нельзя");
+    if ((await this.accounts.byId(accountId)) === null) throw new AccountNotFoundError();
+    const restrictions = await this.restrictions.impose(actor, accountId, input, now);
+    if (!input.kinds.includes("all")) return { restrictions, revokedSessions: 0 };
     const [game, panel] = await Promise.all([this.auth.logoutEverywhere(accountId), this.adminSessions.revokeAll(accountId)]);
-    await this.roles.audit({
-      actorAccountId: actor.accountId,
-      action: "players.ban",
-      target: accountId,
-      before: banState(before),
-      after: banState(account),
-    });
-    return { account: rowOf(account, true), revokedSessions: game + panel };
+    return { restrictions, revokedSessions: game + panel };
   }
 
-  async unban(actor: AccountRef, accountId: string): Promise<BanResult> {
+  /**
+   * Прежняя кнопка «Заблокировать» — бессрочная блокировка целиком: текст
+   * модератора уходит комментарием, игрок видит причину шаблона «другое».
+   * Себя заблокировать нельзя — иначе единственный владелец закроет панель себе.
+   */
+  async ban(actor: AccountRef, accountId: string, reason: string, now = new Date()): Promise<BanResult> {
+    const { revokedSessions } = await this.restrict(actor, accountId, { kinds: ["all"], endsAt: null, reason: "other", comment: reason, notify: true }, now);
+    return { account: await this.row(accountId), revokedSessions };
+  }
+
+  /** Снять блокировку — все действующие блокировки целиком; повтор — тихо, журнал не растёт. */
+  async unban(actor: AccountRef, accountId: string, now = new Date()): Promise<BanResult> {
     await this.roles.require(actor, "players.ban");
+    if ((await this.accounts.byId(accountId)) === null) throw new AccountNotFoundError();
+    await this.restrictions.liftKind(actor, accountId, "all", "Блокировка снята в карточке игрока", now);
+    return { account: await this.row(accountId), revokedSessions: 0 };
+  }
 
-    const before = await this.accounts.byId(accountId);
-    if (before === null) throw new AccountNotFoundError();
-    const account = await this.accounts.setBan(accountId, null);
+  private async row(accountId: string): Promise<PlayerRow> {
+    const account = await this.accounts.byId(accountId);
     if (account === null) throw new AccountNotFoundError();
-
-    // Повтор разблокировки — не событие: журнал не растёт от двойного нажатия.
-    if (before.bannedAt !== null) {
-      await this.roles.audit({ actorAccountId: actor.accountId, action: "players.unban", target: accountId, before: banState(before), after: banState(account) });
-    }
-    return { account: rowOf(account, true), revokedSessions: 0 };
+    return rowOf(account, true);
   }
 
   /**
@@ -206,6 +213,3 @@ function rowOf(account: Account, withPii: boolean): PlayerRow {
   };
 }
 
-function banState(account: Account): { bannedAt: string | null; banReason: string | null } {
-  return { bannedAt: account.bannedAt?.toISOString() ?? null, banReason: account.banReason };
-}
