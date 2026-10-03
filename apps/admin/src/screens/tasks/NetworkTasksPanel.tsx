@@ -29,7 +29,7 @@ export function NetworkTasksPanel({ rows, onSaved }: { rows: readonly NetworkTas
   return (
     <Panel title="Задания рекламных сетей" help={HELP.tasks.networks}>
       <p className="mb-3 text-sm text-text-muted">
-        Игрок видит их во вкладке «Партнёры» с пометкой «Реклама» и именем сети. Задание рисует сама сеть, награду даёт сервер, когда сеть подтвердила
+        Игрок видит их во вкладке «Партнёры» с пометкой «Реклама» и именем сети. Задание выбирает сеть, награду даёт сервер, когда сеть подтвердила
         выполнение. Сверх потолка и во время паузы строки сети у игрока просто нет.
       </p>
       <DataTable
@@ -82,13 +82,17 @@ export function NetworkTasksPanel({ rows, onSaved }: { rows: readonly NetworkTas
   );
 }
 
-/** Чек-лист готовности: что уже есть и куда идти за остальным. */
+/**
+ * Чек-лист готовности: что уже есть и куда идти за остальным. Подтверждение
+ * ключом ведёт в «Ключи интеграций»; проверка по API сети — без ключа, её
+ * строка просто говорит, как сеть подтверждает.
+ */
 function Readiness({ row }: { row: NetworkTaskRow }) {
-  const { block, confirm, confirmWith } = row.ready;
+  const { block, blockTitle, confirm, confirmWith, confirmSecret } = row.ready;
   return (
     <ul className="flex flex-col gap-0.5 text-xs">
       <li className={block ? "text-success" : "text-warning"}>
-        {block ? "✓ Task-блок включён" : "✕ Нет включённого Task-блока — "}
+        {block ? `✓ Включён: ${blockTitle}` : `✕ Не включён: ${blockTitle} — `}
         {block ? null : (
           <a className="text-accent hover:underline" href={hrefOf({ section: "ads", id: null })} onClick={(event) => event.stopPropagation()}>
             «Реклама» → {row.title} → место «Задания»
@@ -100,7 +104,7 @@ function Readiness({ row }: { row: NetworkTaskRow }) {
       ) : (
         <li className={confirm ? "text-success" : "text-warning"}>
           {confirm ? `✓ ${confirmWith}` : `✕ ${confirmWith}: не создан — `}
-          {confirm ? null : (
+          {confirm || !confirmSecret ? null : (
             <a className="text-accent hover:underline" href={hrefOf({ section: "secrets", id: null })} onClick={(event) => event.stopPropagation()}>
               «Ключи интеграций»
             </a>

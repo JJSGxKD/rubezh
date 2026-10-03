@@ -161,7 +161,7 @@ describe("задания в панели", () => {
       shards: 0,
       updatedAt: "2026-10-03T04:00:00.000Z",
       updatedBy: null,
-      ready: { block: true, confirm: true, confirmWith: "Адрес награды за задание AdsGram" },
+      ready: { block: true, blockTitle: "Task-блок", confirm: true, confirmWith: "Адрес награды за задание AdsGram", confirmSecret: true },
     };
 
     it("строки сетей приходят с каталогом; старый сервер без них — пустой список; правка — по ключу сети в адресе", async () => {
@@ -175,6 +175,10 @@ describe("задания в панели", () => {
       expect(list.ok && list.data.networks).toEqual([row]);
       const old = await fetchTasks(api);
       expect(old.ok && old.data.networks).toEqual([]);
+      // Сервер до ленты Taddy готовность отдавал без вида блока и подтверждения — это был Task-блок AdsGram с ключом.
+      const before = { block: row.ready.block, confirm: row.ready.confirm, confirmWith: row.ready.confirmWith };
+      const parsed = await fetchTasks(new AdminApi(fakeFetch(json(200, { data: { tasks: [], kinds: [], periods: ["daily"], networks: [{ ...row, ready: before }] } })).fetch));
+      expect(parsed.ok && parsed.data.networks[0]?.ready).toEqual(row.ready);
       await saveNetworkTask(api, { networkKey: "adsgram", active: true, dailyCap: 3, pauseMin: 30, coins: 100, gems: 0, shards: 0 });
       expect(calls[2]?.url).toBe("/api/v1/admin/tasks/networks/adsgram");
       expect(JSON.parse(String(calls[2]?.init.body))).toEqual({ active: true, dailyCap: 3, pauseMin: 30, coins: 100, gems: 0, shards: 0 });

@@ -5,6 +5,7 @@ import { FlagsService } from "../flags/flags.service.js";
 import { AdAudience } from "./ad-audience.js";
 import { AD_CREATIVES, NetworkCreatives, TADDY_API } from "./ad-creatives.js";
 import { AdNetworkKeys } from "./ad-network-keys.js";
+import { AdTaskFeeds } from "./ad-task-feeds.js";
 import { AdTaskHooks, AdTasks } from "./ad-tasks.js";
 import { AdsgramRewardController } from "./adsgram-reward.controller.js";
 import { ADS_CATALOG_REPOSITORY, PrismaAdsCatalogRepository } from "./ads-catalog.repository.js";
@@ -15,6 +16,7 @@ import { ADS_REPOSITORY, PrismaAdsRepository } from "./ads.repository.js";
 import { ADS_ROLL, AdsService, cryptoRoll } from "./ads.service.js";
 import { INTERSTITIAL_FLAGS, InterstitialGate } from "./interstitial-gate.js";
 import { HttpTaddyApi } from "./taddy-api.js";
+import { HttpTaddyExchange, TADDY_EXCHANGE } from "./taddy-exchange.js";
 
 /**
  * Реклама (docs/35-stage4-plan.md §3.7, WP12): сети и блоки мест, выбор
@@ -31,8 +33,9 @@ import { HttpTaddyApi } from "./taddy-api.js";
  * выката и частота из панели.
  *
  * Задания сетей (WP13, часть 6) — `AdTasks`: сессия задания сети и её
- * подтверждение сетью, адрес награды AdsGram — `AdsgramRewardController`;
- * награду выдаёт хозяин места `task`, подписавшись на `AdTaskHooks`.
+ * подтверждение сетью, адрес награды AdsGram — `AdsgramRewardController`,
+ * лента обмена Taddy с проверкой выполнения — `AdTaskFeeds`; награду выдаёт
+ * хозяин места `task`, подписавшись на `AdTaskHooks`.
  */
 @Module({
   imports: [AuthModule, FlagsModule],
@@ -40,6 +43,7 @@ import { HttpTaddyApi } from "./taddy-api.js";
   providers: [
     AdsService,
     AdTasks,
+    AdTaskFeeds,
     AdTaskHooks,
     AdsCatalogService,
     AdPasses,
@@ -49,10 +53,11 @@ import { HttpTaddyApi } from "./taddy-api.js";
     { provide: INTERSTITIAL_FLAGS, useExisting: FlagsService },
     { provide: AD_CREATIVES, useClass: NetworkCreatives },
     { provide: TADDY_API, useFactory: () => new HttpTaddyApi() },
+    { provide: TADDY_EXCHANGE, useFactory: () => new HttpTaddyExchange() },
     { provide: ADS_REPOSITORY, useClass: PrismaAdsRepository },
     { provide: ADS_CATALOG_REPOSITORY, useClass: PrismaAdsCatalogRepository },
     { provide: ADS_ROLL, useValue: cryptoRoll },
   ],
-  exports: [AdsService, AdsCatalogService, AdPasses, AdAudience, AdTasks, AdTaskHooks],
+  exports: [AdsService, AdsCatalogService, AdPasses, AdAudience, AdTasks, AdTaskFeeds, AdTaskHooks],
 })
 export class AdsModule {}

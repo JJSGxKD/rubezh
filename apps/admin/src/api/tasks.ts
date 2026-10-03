@@ -106,7 +106,15 @@ const networkTaskSchema = z.object({
   shards: z.number(),
   updatedAt: z.string(),
   updatedBy: z.string().nullable(),
-  ready: z.object({ block: z.boolean(), confirm: z.boolean(), confirmWith: z.string().nullable() }),
+  ready: z.object({
+    block: z.boolean(),
+    /** какой блок нужен — словами; сервер до ленты Taddy знал только Task-блок AdsGram */
+    blockTitle: z.string().default("Task-блок"),
+    confirm: z.boolean(),
+    confirmWith: z.string().nullable(),
+    /** подтверждение — ключ в «Ключах интеграций»; иначе сеть проверяет выполнение по своему API */
+    confirmSecret: z.boolean().default(true),
+  }),
 });
 export type NetworkTaskRow = z.infer<typeof networkTaskSchema>;
 

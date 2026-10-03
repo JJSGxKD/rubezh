@@ -137,11 +137,11 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     const sessionId = randomBytes(12).toString("base64url");
     await repository.createSession({ sessionId, accountId: me, place: "wheel_spin", block: blockOf("view"), creative: { id: "taddy-1", viewSec: 10 }, createdAt: NOON, expiresAt: at(NOON, 30) });
     const seconds = (value: number) => new Date(NOON.getTime() + value * 1000);
-    expect(await repository.report(sessionId, me, { kind: "shown" }, seconds(1))).toEqual({ networkKey: network, creativeId: "taddy-1", firstShown: true });
-    expect(await repository.report(sessionId, me, { kind: "shown" }, seconds(2))).toEqual({ networkKey: network, creativeId: "taddy-1", firstShown: false });
+    expect(await repository.report(sessionId, me, { kind: "shown" }, seconds(1))).toEqual({ networkKey: network, place: "wheel_spin", creativeId: "taddy-1", firstShown: true });
+    expect(await repository.report(sessionId, me, { kind: "shown" }, seconds(2))).toEqual({ networkKey: network, place: "wheel_spin", creativeId: "taddy-1", firstShown: false });
     expect(await repository.report(sessionId, me, { kind: "clicked" }, seconds(3))).toMatchObject({ firstShown: false });
     expect(await repository.report(sessionId, me, { kind: "completed" }, seconds(9.999))).toBeNull();
-    expect(await repository.report(sessionId, me, { kind: "completed" }, seconds(10))).toEqual({ networkKey: network, creativeId: "taddy-1", firstShown: false });
+    expect(await repository.report(sessionId, me, { kind: "completed" }, seconds(10))).toEqual({ networkKey: network, place: "wheel_spin", creativeId: "taddy-1", firstShown: false });
 
     // Шаг показа потерялся — досмотр отмечает показ впервые.
     const lost = randomBytes(12).toString("base64url");

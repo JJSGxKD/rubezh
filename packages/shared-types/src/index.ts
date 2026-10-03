@@ -175,6 +175,22 @@ export interface NetworkTaskHandle {
 }
 
 /**
+ * Задание ленты сети (WP13, часть 6): строку рисует оболочка по данным
+ * сервера, а переход у сети свой — адрес сети отдаёт адрес перехода, и
+ * просить его должен клиент игрока, а не наш сервер: переход сеть считает
+ * по адресу и браузеру игрока.
+ */
+export interface NetworkTaskLink {
+  /** сеть из ответа сервера: `taddy` */
+  network: string;
+  /** адрес сети из ленты — только https */
+  link: string;
+}
+
+/** Чем кончилось открытие: `opened` — площадка открыла переход; `failed` — сеть не отдала адрес или сеть незнакома. */
+export type NetworkTaskOpen = "opened" | "failed";
+
+/**
  * Единый интерфейс платформенного адаптера.
  * core-game и оболочка работают только через него и ничего не знают о
  * конкретной платформе. См. docs/01-tech-stack.md §1.
@@ -248,6 +264,12 @@ export interface PlatformAdapter {
    * заданий сетей не показывает, и строки сети у игрока нет.
    */
   mountNetworkTask?(mount: NetworkTaskMount): Promise<NetworkTaskHandle>;
+  /**
+   * Открыть задание ленты сети: спросить у сети адрес перехода и открыть
+   * его так же, как любую внешнюю ссылку площадки. Не бросает: отказ —
+   * `failed`. Нет метода — площадка заданий ленты не показывает.
+   */
+  openNetworkTask?(task: NetworkTaskLink): Promise<NetworkTaskOpen>;
   /** опционально — площадка может не дать хранилища, см. KeyValueStorage */
   storage?: KeyValueStorage;
 }

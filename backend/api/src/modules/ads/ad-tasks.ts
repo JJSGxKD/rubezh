@@ -16,9 +16,14 @@ import { AdsService } from "./ads.service.js";
  * WP13, часть 6, Р80). Место `task` выдаёт не круг сетей, а хозяин места —
  * задания: у каждой сети своя строка, свой потолок и своя награда.
  *
+ * Задание доходит до игрока одним из двух путей (`TASK_NETWORKS`):
+ * элементом SDK сети на клиенте — AdsGram, — или лентой по API сети, которую
+ * рисует наша строка, — обмен трафиком Taddy (`ad-task-feeds.ts`).
+ *
  * Модуль рекламы ручается за три вещи:
- * - строка сети есть, пока у сети включён Task-блок для площадки игрока и
- *   есть чем подтвердить выполнение — у AdsGram это адрес награды;
+ * - строка сети есть, пока у сети включён блок заданий для площадки игрока
+ *   и есть чем подтвердить выполнение — у AdsGram это адрес награды, у
+ *   Taddy — проверка по её API;
  * - открытая сессия сети у игрока одна: экран заданий открывают десятки
  *   раз, а задание выполняют однажды;
  * - выполнение подтверждает только сеть, а не клиент: сессия задания —
@@ -40,13 +45,39 @@ const MINUTE_MS = 60_000;
  */
 export const TASK_SESSION_TTL_MIN = 24 * 60;
 
+/** Как задание сети доходит до игрока: элементом SDK сети на клиенте или лентой по API сети. */
+export type TaskDelivery = "element" | "feed";
+
+/** Чем сеть подтверждает выполнение: адресом награды с секретом из «Ключей интеграций» или проверкой по своему API. */
+export type TaskConfirmation = { kind: "secret"; secret: SecretDefinition } | { kind: "api"; title: string };
+
+export interface TaskNetwork {
+  delivery: TaskDelivery;
+  /** какие блоки места «Задания» выдаются — по идентификатору блока; `null` — любой блок сети */
+  units: readonly string[] | null;
+  /** блок словами — для панели */
+  blockTitle: string;
+  confirmation: TaskConfirmation;
+}
+
 /**
- * Чем сеть подтверждает задание и что для этого должно быть задано. Сеть
- * без записи заданий игрокам не даёт: награду за них выдать было бы нечем.
+ * Сети с заданиями и что для них должно быть задано. Сеть без записи
+ * заданий игрокам не даёт: награду за них выдать было бы нечем. Рекламные
+ * задания Taddy (`app-task`) ждут вебхука статуса лида — их блок пока не
+ * выдаётся.
  */
-export const TASK_CONFIRMATIONS: Readonly<Record<string, { secret: SecretDefinition }>> = {
-  adsgram: { secret: SECRETS.adsgramRewardSecret },
+export const TASK_NETWORKS: Readonly<Record<string, TaskNetwork>> = {
+  adsgram: { delivery: "element", units: null, blockTitle: "Task-блок", confirmation: { kind: "secret", secret: SECRETS.adsgramRewardSecret } },
+  taddy: { delivery: "feed", units: ["exchange"], blockTitle: "блок «Обмен трафиком»", confirmation: { kind: "api", title: "Проверка выполнения — по API Taddy" } },
 };
+
+/** Открыта ли у игрока сессия задания сети — по истории места: её задание игрок ещё может выполнить. */
+export function openTaskIn(history: PlaceHistory, networkKey: string, at: Date): boolean {
+  const since = at.getTime() - TASK_SESSION_TTL_MIN * MINUTE_MS;
+  return history.sessions.some(
+    (session) => session.networkKey === networkKey && (session.status === "pending" || session.status === "shown") && session.createdAt.getTime() > since,
+  );
+}
 
 /** Что клиент передаёт SDK сети, чтобы она нарисовала своё задание. */
 export interface AdTaskOffer {
@@ -65,10 +96,14 @@ export interface AdTaskOffer {
 export interface TaskReadiness {
   /** включённый блок в месте «Задания» хоть на одной площадке сети */
   block: boolean;
+  /** какой блок нужен — словами */
+  blockTitle: string;
   /** есть чем подтвердить выполнение */
   confirm: boolean;
-  /** ключ подтверждения в «Ключах интеграций» — его название; `null` — сеть задания подтверждать не умеет */
+  /** чем подтверждается — название ключа или проверки; `null` — сеть задания подтверждать не умеет */
   confirmWith: string | null;
+  /** подтверждение — ключ в «Ключах интеграций»: не задан — панель ведёт туда */
+  confirmSecret: boolean;
 }
 
 /** Сеть подтвердила задание игрока — хозяину места пора выдать награду. */
@@ -118,10 +153,11 @@ export class AdTasks {
     private readonly hooks: AdTaskHooks,
   ) {}
 
-  /** Есть ли чем подтвердить задания сети: у AdsGram — создан ли адрес награды. */
+  /** Есть ли чем подтвердить задания сети: у AdsGram — создан ли адрес награды; проверка по API сети есть всегда. */
   confirmable(networkKey: string): boolean {
-    const confirmation = TASK_CONFIRMATIONS[networkKey];
-    return confirmation !== undefined && this.secrets.get(confirmation.secret) !== null;
+    const confirmation = TASK_NETWORKS[networkKey]?.confirmation;
+    if (confirmation === undefined) return false;
+    return confirmation.kind === "api" || this.secrets.get(confirmation.secret) !== null;
   }
 
   /**
@@ -133,8 +169,9 @@ export class AdTasks {
   async block(networkKey: string, platform: PlatformId): Promise<AdBlockRow | null> {
     if (!this.confirmable(networkKey)) return null;
     const blocks = await this.ads.servableBlocks("task", { platform, device: null });
-    // Task-блок у AdsGram один на кабинет (`maxActive`), и выбирать не из чего.
-    return blocks.find((block) => block.networkKey === networkKey) ?? null;
+    // Task-блок у AdsGram один на кабинет (`maxActive`), а у Taddy выдаётся
+    // только обмен трафиком, — выбирать не из чего.
+    return blocks.find((block) => block.networkKey === networkKey && servesTasks(block)) ?? null;
   }
 
   /**
@@ -145,10 +182,14 @@ export class AdTasks {
   async readiness(networkKey: string): Promise<TaskReadiness> {
     const platforms = profileOf(networkKey)?.platforms ?? [];
     const lists = await Promise.all(platforms.map(async (platform) => await this.ads.servableBlocks("task", { platform, device: null })));
+    const network = TASK_NETWORKS[networkKey];
+    const confirmation = network?.confirmation;
     return {
-      block: lists.some((blocks) => blocks.some((block) => block.networkKey === networkKey)),
+      block: lists.some((blocks) => blocks.some((block) => block.networkKey === networkKey && servesTasks(block))),
+      blockTitle: network?.blockTitle ?? "блок заданий",
       confirm: this.confirmable(networkKey),
-      confirmWith: TASK_CONFIRMATIONS[networkKey]?.secret.title ?? null,
+      confirmWith: confirmation === undefined ? null : confirmation.kind === "secret" ? confirmation.secret.title : confirmation.title,
+      confirmSecret: confirmation?.kind === "secret",
     };
   }
 
@@ -223,6 +264,13 @@ export class AdTasks {
   private async db<T>(promise: Promise<T>): Promise<T> {
     return await withTimeout(promise, DB_TIMEOUT_MS, "задания сетей");
   }
+}
+
+/** Выдаётся ли блок места «Задания» игрокам: сеть с заданиями и блок того вида, что сеть умеет. */
+export function servesTasks(block: AdBlockRow): boolean {
+  const network = TASK_NETWORKS[block.networkKey];
+  if (network === undefined) return false;
+  return network.units === null || (block.externalId !== null && network.units.includes(block.externalId));
 }
 
 /**

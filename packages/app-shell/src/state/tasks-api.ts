@@ -35,13 +35,16 @@ const taskSchema = z.object({
   link: z.optional(z.nullable(z.string())),
 });
 /**
- * Задание рекламной сети (docs/35-stage4-plan.md WP13, часть 6): само
- * задание рисует SDK сети, наши — награда, пометка и кнопки. `offer` —
- * что передать SDK; `null` — сеть упёрлась в потолок суток или паузу, и
- * строки сейчас нет.
+ * Задание рекламной сети (docs/35-stage4-plan.md WP13, часть 6). У AdsGram
+ * задание рисует SDK сети, наши — награда, пометка и кнопки: `offer` — что
+ * передать SDK; `null` — сеть упёрлась в потолок суток или паузу, и строки
+ * сейчас нет. У ленты сети (`delivery: "feed"`, обмен Taddy) строка наша
+ * целиком и спрашивает своё задание сама, пока `nextAt` пуст.
  */
 const networkTaskSchema = z.object({
   network: z.string(),
+  /** сервер до ленты Taddy поля не отдавал — все задания были элементом сети */
+  delivery: z.optional(z.string()),
   title: z.string(),
   reward: rewardSchema,
   doneToday: z.number(),
@@ -64,8 +67,50 @@ const claimSchema = z.object({ claimed: z.boolean(), credited: rewardSchema, tas
 const openSchema = z.object({ url: z.string(), tasks: z.array(taskSchema) });
 const stepSchema = z.object({ ok: z.literal(true) });
 
+/**
+ * Задание ленты сети — то, что рисует наша строка. `action` — строкой: сеть
+ * может завести вид, которого клиент не знает, и кнопка скажет «Перейти».
+ */
+const feedTaskSchema = z.object({
+  sessionId: z.string(),
+  network: z.string(),
+  title: z.string(),
+  description: z.nullable(z.string()),
+  image: z.nullable(z.string()),
+  action: z.string(),
+  link: z.string(),
+  opened: z.boolean(),
+});
+const progressFields = { doneToday: z.number(), nextAt: z.nullable(z.string()) };
+const feedItemSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("task"), task: feedTaskSchema }),
+  z.object({ kind: z.literal("done"), ...progressFields }),
+  z.object({ kind: z.literal("none") }),
+]);
+/** Исход проверки — строкой: незнакомый клиент читает как «сеть не ответила». */
+const feedCheckSchema = z.object({ result: z.string(), ...progressFields });
+
+/** Язык — как его ждёт сервер (`ru`, `pt-br`), как у выдачи рекламы; что-то иное — не передаём. */
+const LANGUAGE = /^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{1,8})?$/;
+
+/** Кто спрашивает ленту — для подбора заданий сетью; со слов клиента площадки, на награду не влияет. */
+export interface FeedHints {
+  language: string | null;
+  premium: boolean | null;
+}
+
+function hintsBody(hints: FeedHints): Record<string, string | boolean> {
+  return {
+    ...(hints.language !== null && LANGUAGE.test(hints.language) ? { language: hints.language } : {}),
+    ...(hints.premium === null ? {} : { premium: hints.premium }),
+  };
+}
+
 export type TaskItem = z.infer<typeof taskSchema>;
 export type NetworkTaskItem = z.infer<typeof networkTaskSchema>;
+export type FeedTask = z.infer<typeof feedTaskSchema>;
+export type FeedItem = z.infer<typeof feedItemSchema>;
+export type FeedCheck = z.infer<typeof feedCheckSchema>;
 export type TaskReward = z.infer<typeof rewardSchema>;
 export type TaskClaim = z.infer<typeof claimSchema>;
 
@@ -150,6 +195,10 @@ export interface TasksApi {
    * (`clicked`). Выполнение отсюда не сообщается — его подтверждает сеть.
    */
   networkStep(sessionId: string, outcome: "shown" | "clicked"): Promise<ApiResult<unknown>>;
+  /** Задание ленты сети для её строки: сервер спрашивает сеть, экран заданий её не ждёт. */
+  networkItem(network: string, hints: FeedHints): Promise<ApiResult<FeedItem>>;
+  /** «Проверить» у задания ленты: выполнение подтверждает сеть, награду выдаёт сервер. */
+  networkCheck(network: string, sessionId: string, hints: FeedHints): Promise<ApiResult<FeedCheck>>;
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
@@ -159,6 +208,9 @@ export function createTasksApi(request: ApiRequest = apiRequest): TasksApi {
     claim: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/claim`, claimSchema, { method: "POST" }),
     open: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/open`, openSchema, { method: "POST" }),
     networkStep: (sessionId, outcome) => request(`/api/v1/ads/sessions/${encodeURIComponent(sessionId)}/result`, stepSchema, { method: "POST", body: { outcome } }),
+    networkItem: (network, hints) => request(`/api/v1/tasks/networks/${encodeURIComponent(network)}/item`, feedItemSchema, { method: "POST", body: hintsBody(hints) }),
+    networkCheck: (network, sessionId, hints) =>
+      request(`/api/v1/tasks/networks/${encodeURIComponent(network)}/check`, feedCheckSchema, { method: "POST", body: { sessionId, ...hintsBody(hints) } }),
   };
 }
 
@@ -178,3 +230,26 @@ export function networkTaskConfirmed(before: Pick<NetworkTaskItem, "doneToday">,
 
 /** Когда спрашивать сервер после события сети, мс от него: подтверждение AdsGram идёт секунды, реже — десятки секунд. */
 export const NETWORK_TASK_CHECKS_MS = [1_500, 4_000, 8_000, 15_000, 30_000] as const;
+
+/** Строка сети — лента: сервер так сказал. Старый сервер поля не отдавал, и всё было элементом сети. */
+export function isFeedTask(item: Pick<NetworkTaskItem, "delivery">): boolean {
+  return item.delivery === "feed";
+}
+
+/** Надпись кнопки задания ленты по виду: бот — «Запустить бота», приложение — «Открыть», остальное — «Перейти». */
+export function feedActionKey(action: string): string {
+  if (action === "bot") return "tasks.startBot";
+  if (action === "app") return "tasks.network.openApp";
+  return "tasks.go";
+}
+
+/**
+ * Что сказать после «Проверить»: `confirmed` — награда выдана, строка
+ * уходит в «готово»; `closed` — задания больше нет, строка спросит новое;
+ * остальное — подсказка под кнопкой. Незнакомый исход — как «не ответила»:
+ * нажать ещё раз безопасно.
+ */
+export function feedCheckNotice(result: string): string | null {
+  if (result === "confirmed" || result === "closed") return null;
+  return result === "not_done" ? "tasks.network.notDone" : "tasks.network.unavailable";
+}

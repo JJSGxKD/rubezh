@@ -4,7 +4,7 @@ import { RateLimitedError, ValidationError } from "../../common/domain-error.js"
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { AdAudience, type AdNetworkSetup } from "./ad-audience.js";
-import type { AdRequester } from "./ad-creatives.js";
+import { clientLanguageSchema, requesterOf } from "./ad-creatives.js";
 import { AD_DEVICES, OFFERED_PLACES } from "./ads-rules.js";
 import type { AdOutcome } from "./ads.repository.js";
 import { AdsService, type AdOffer } from "./ads.service.js";
@@ -41,10 +41,7 @@ const offerSchema = z
   .object({
     place: z.enum(OFFERED_PLACES),
     device: z.enum(AD_DEVICES).optional(),
-    language: z
-      .string()
-      .regex(/^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{1,8})?$/)
-      .optional(),
+    language: clientLanguageSchema.optional(),
     premium: z.boolean().optional(),
     moment: z.enum(INTERSTITIAL_MOMENTS).optional(),
   })
@@ -112,22 +109,6 @@ export class AdsController {
   private async limit(limit: RateLimit, accountId: string): Promise<void> {
     if (!(await this.limiter.consume(limit, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
   }
-}
-
-/**
- * Игрок для сети с API: адрес — из `req.ip` Fastify с учётом доверенных
- * прокси, а не из сырого заголовка, который подделывается одной строкой.
- */
-function requesterOf(request: unknown, platformUserId: string, language: string | null, premium: boolean | null): AdRequester {
-  const { ip, headers } = request as { ip?: unknown; headers?: Record<string, unknown> };
-  const agent = headers?.["user-agent"];
-  return {
-    platformUserId,
-    ip: typeof ip === "string" && ip !== "" ? ip : null,
-    userAgent: typeof agent === "string" && agent !== "" ? agent.slice(0, 512) : null,
-    language,
-    premium,
-  };
 }
 
 function outcomeOf(report: z.infer<typeof reportSchema>): AdOutcome {

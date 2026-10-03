@@ -236,7 +236,7 @@ export class AdsService {
   /** Сети — мимо ответа игроку: ему её отметки ждать незачем, а их сбой ничего у него не отнимает. */
   private notifyNetwork(report: AdReport, creativeId: string, outcome: AdOutcome, requester: AdRequester | null): void {
     const tasks: Promise<void>[] = [];
-    if (report.firstShown) tasks.push(this.creatives.shown(report.networkKey, creativeId, requester));
+    if (report.firstShown) tasks.push(this.creatives.shown(report.networkKey, creativeId, requester, report.place));
     if (outcome.kind === "completed") tasks.push(this.creatives.viewed(report.networkKey, creativeId, requester));
     for (const task of tasks) {
       task.catch((error: unknown) => this.log({ event: "network_notify_failed", network: report.networkKey, reason: error instanceof Error ? error.message : "unknown" }));

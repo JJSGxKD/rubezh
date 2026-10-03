@@ -10,6 +10,7 @@ import {
   claimFailureKey,
   createTasksApi,
   isClaimable,
+  isFeedTask,
   isOpenKind,
   openTaskLink,
   sortTasks,
@@ -83,7 +84,7 @@ export function TasksScreen(): ReactNode {
     // Вкладка по умолчанию решается однажды, по первому ответу: задание сети
     // уходит на паузу посреди проверки, и экран не должен сам перескочить
     // с «Партнёров» на «День», пока игрок ждёт награду.
-    const partner = networks.some((item) => item.offer !== null) || response.data.tasks.some((task) => tabOf(task) === "partner");
+    const partner = networks.some((item) => item.offer !== null || (isFeedTask(item) && item.nextAt === null)) || response.data.tasks.some((task) => tabOf(task) === "partner");
     setView((current) => current ?? (partner ? "partner" : "daily"));
   };
 

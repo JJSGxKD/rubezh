@@ -4,7 +4,9 @@ import type {
   AdShowOutcome,
   AdShowRequest,
   NetworkTaskHandle,
+  NetworkTaskLink,
   NetworkTaskMount,
+  NetworkTaskOpen,
   PlatformAdapter,
   PlatformClientInfo,
   UserContext,
@@ -174,6 +176,11 @@ export class TelegramAdapter implements PlatformAdapter {
   /** Задание сети в строке оболочки (`ads/tasks.ts`) — чанком показа, как ролики: первой загрузке оно не нужно. */
   async mountNetworkTask(mount: NetworkTaskMount): Promise<NetworkTaskHandle> {
     return (await adsChunk()).mountTaskInBrowser(mount);
+  }
+
+  /** Задание ленты сети (`ads/task-links.ts`) — чанком показа: адрес перехода у сети, открывается он как любая ссылка. */
+  async openNetworkTask(task: NetworkTaskLink): Promise<NetworkTaskOpen> {
+    return (await adsChunk()).openTaskInBrowser(task, this);
   }
 }
 

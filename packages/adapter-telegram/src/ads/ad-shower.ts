@@ -6,8 +6,10 @@ import { browserScriptLoader, type ScriptLoader } from "./script-loader";
 // общий, и отдельный чанк стоил бы первой загрузке ещё одного имени в списке
 // предзагрузки.
 export { prepareInBrowser } from "./audience";
-// Задания сетей — тот же скрипт AdsGram, что ролики, и тот же загрузчик.
+// Задания сетей — тот же скрипт AdsGram, что ролики, и тот же загрузчик;
+// переход по заданию ленты Taddy — рядом: строка ленты стоит на том же экране.
 export { mountTaskInBrowser } from "./tasks";
+export { openTaskInBrowser } from "./task-links";
 
 /**
  * Сколько ждём исхода показа. Ролик за награду длится до минуты, и игрок

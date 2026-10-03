@@ -2,11 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, Hourglass } from "lucide-react";
 import type { NetworkTaskHandle, NetworkTaskLook, NetworkTaskPart } from "@bh/shared-types";
-import { Badge, Card } from "../../design-system/components";
+import { Card } from "../../design-system/components";
 import { t } from "../../i18n";
 import { track, useShell } from "../../state/shell";
-import { NETWORK_TASK_CHECKS_MS, createTasksApi, networkTaskConfirmed, type NetworkTaskItem } from "../../state/tasks-api";
+import { NETWORK_TASK_CHECKS_MS, createTasksApi, isFeedTask, networkTaskConfirmed, type NetworkTaskItem } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
+import { AdLabel } from "./ad-label";
+import { FeedRow, type FeedProgress } from "./network-feed-row";
 import { formatCountdown } from "./schedule";
 import { RewardChips } from "./task-reward";
 
@@ -21,6 +23,10 @@ import { RewardChips } from "./task-reward";
  * и на его месте наша строка: награду даёт сервер по подтверждению сети,
  * экран спрашивает его несколько раз и говорит честно — получено или сеть
  * ещё проверяет.
+ *
+ * Лента сети — обмен Taddy — рисуется нашей строкой целиком
+ * (`network-feed-row.tsx`): задание она спрашивает сама, а выполнение сервер
+ * проверяет у сети по «Проверить» — награда к ответу уже выдана.
  */
 
 const api = createTasksApi();
@@ -55,9 +61,11 @@ export function NetworkTasks(props: NetworkTasksProps): ReactNode {
     };
   }, []);
 
-  const live = props.items.filter((item) => item.offer !== null && !gone.has(item.offer.sessionId) && !finished.has(item.network));
+  const live = props.items.filter((item) => !isFeedTask(item) && item.offer !== null && !gone.has(item.offer.sessionId) && !finished.has(item.network));
+  // Строка ленты есть, пока сервер не назвал время следующего задания: само задание она спросит сама.
+  const feeds = props.items.filter((item) => isFeedTask(item) && item.nextAt === null && !gone.has(feedKey(item)) && !finished.has(item.network));
   const done = [...finished.values()];
-  const count = live.length + done.length;
+  const count = live.length + feeds.length + done.length;
   useEffect(() => props.onCount(count), [count]);
 
   const settle = (network: string, status: Finished["status"], item?: NetworkTaskItem) =>
@@ -90,6 +98,13 @@ export function NetworkTasks(props: NetworkTasksProps): ReactNode {
     void verify(item);
   };
 
+  /** Лента: сервер проверил у сети и уже выдал награду — сразу «получено», спрашивать нечего. */
+  const onFeedDone = (item: NetworkTaskItem, progress: FeedProgress): void => {
+    setFinished((current) => new Map(current).set(item.network, { item: { ...item, ...progress }, status: "rewarded" }));
+    track("ad_reward_claimed", { place: "task", source: "ad", network: item.network });
+    void loadWallet();
+  };
+
   return (
     <>
       {done.map((entry, index) => (
@@ -104,8 +119,22 @@ export function NetworkTasks(props: NetworkTasksProps): ReactNode {
           onGone={(sessionId) => setGone((current) => new Set(current).add(sessionId))}
         />
       ))}
+      {feeds.map((item, index) => (
+        <FeedRow
+          key={feedKey(item)}
+          item={item}
+          index={props.firstIndex + done.length + live.length + index}
+          onDone={(progress) => onFeedDone(item, progress)}
+          onGone={() => setGone((current) => new Set(current).add(feedKey(item)))}
+        />
+      ))}
     </>
   );
+}
+
+/** Строку ленты снимают по сети, а не по сессии: сессию она узнаёт сама. */
+function feedKey(item: Pick<NetworkTaskItem, "network">): string {
+  return `feed:${item.network}`;
 }
 
 /** Узлы наших слотов — свои у каждой строки: сеть переносит их внутрь своего элемента. */
@@ -204,15 +233,6 @@ function LiveRow(props: { item: NetworkTaskItem; index: number; onDone: () => vo
 /** Кнопка в слоте сети: нажатие ловит SDK, вид — наш. */
 function SlotButton(props: { children: ReactNode }): ReactNode {
   return <span className="btn-primary inline-flex min-h-11 w-full items-center justify-center rounded-md px-3 font-display text-sm font-semibold">{props.children}</span>;
-}
-
-function AdLabel(props: { network: string }): ReactNode {
-  return (
-    <p className="mb-2 flex items-center gap-2 text-xs text-text-muted">
-      <Badge tone="muted">{t("tasks.network.ad")}</Badge>
-      {props.network}
-    </p>
-  );
 }
 
 function DoneRow(props: { entry: Finished; index: number }): ReactNode {
