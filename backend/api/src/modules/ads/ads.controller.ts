@@ -5,7 +5,7 @@ import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { AdAudience, type AdNetworkSetup } from "./ad-audience.js";
 import type { AdRequester } from "./ad-creatives.js";
-import { AD_DEVICES, AD_PLACES } from "./ads-rules.js";
+import { AD_DEVICES, OFFERED_PLACES } from "./ads-rules.js";
 import type { AdOutcome } from "./ads.repository.js";
 import { AdsService, type AdOffer } from "./ads.service.js";
 import { InterstitialGate } from "./interstitial-gate.js";
@@ -39,7 +39,7 @@ const REPORT_LIMIT: RateLimit = { scope: "ads_report", limit: 600, windowSec: 36
  */
 const offerSchema = z
   .object({
-    place: z.enum(AD_PLACES),
+    place: z.enum(OFFERED_PLACES),
     device: z.enum(AD_DEVICES).optional(),
     language: z
       .string()

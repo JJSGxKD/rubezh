@@ -195,8 +195,9 @@ export const EVENT_DICTIONARY = {
   achievement_unlocked: { version: 1, payload: payload({ achievement: id, kind: id }) },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только
-  // по achievement_unlocked; открытие без награды — «не подписался».
-  task_link_opened: { version: 1, payload: payload({ task: id, kind: id }) },
+  // по achievement_unlocked; открытие без награды — «не подписался». У
+  // задания рекламной сети (WP13, часть 6) — `kind: network` и `network`.
+  task_link_opened: { version: 1, payload: payload({ task: id, kind: id, network: id.optional() }) },
   // Купил предмет с витрины снаряжения (docs/35-stage4-plan.md §3.6, WP10):
   // какие редкости и слоты берут и за сколько — вход для цен витрины (О1, О9).
   // Списание — журнал кошелька (причина shop), предмет — журнал предметов.
@@ -236,7 +237,9 @@ export const EVENT_DICTIONARY = {
   ad_clicked: { version: 1, payload: payload({ place: id, network: id, moment: id.optional() }) },
   // Хозяин места выдал награду за рекламу: `ad` — за досмотр, `pass` — VIP
   // без ролика. Досмотр без этого события — награда, потерянная по дороге.
-  ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]) }) },
+  // `network` — у задания рекламной сети (WP13, часть 6): награду за него
+  // выдал сервер по подтверждению сети, и клиент её дождался.
+  ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 

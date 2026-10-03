@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { actionTitle, auditChanges, auditObject, auditValue, type AuditEntry } from "../src/api/audit";
 import { AdminApi } from "../src/api/client";
-import { checkSecret, fetchSecrets, groupSecrets, resetSecret, saveSecret, secretProblem, secretState, type SecretRow } from "../src/api/secrets";
+import { checkSecret, fetchSecrets, generateSecret, groupSecrets, resetSecret, saveSecret, secretProblem, secretState, type SecretRow } from "../src/api/secrets";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -18,6 +18,7 @@ const PRO: SecretRow = {
   example: "CG-AbCdEfGh1234567890",
   pattern: "^CG-[A-Za-z0-9]{8,64}$",
   checkable: true,
+  generated: null,
   source: "base",
   fingerprint: "••••2345",
   envSet: true,
@@ -56,6 +57,20 @@ describe("ключи интеграций в панели", () => {
     const reset = await resetSecret(api, "fx.coingecko-pro");
     expect(reset.ok && reset.data.source).toBe("env");
     expect(calls[4]?.url).toBe("/api/v1/admin/secrets/fx.coingecko-pro/reset");
+  });
+
+  it("адрес награды создаёт сервер: панель просит его и получает один раз, что вставить в кабинет", async () => {
+    const where = "кабинет AdsGram → блок формата Task → поле Reward URL";
+    const reward: SecretRow = { ...DEMO, key: "adsgram.reward-secret", title: "Адрес награды за задание AdsGram", checkable: false, generated: where };
+    const reveal = "https://api.example.test/api/v1/ads/adsgram/reward/aBcD3fGh1jKlMn0pQrStUvWxYz_-aBcD3fGh1jKlMnO/[userId]";
+    const { fetch, calls } = fakeFetch(json(200, { data: { secret: { ...reward, source: "base", fingerprint: "••••lMnO" }, reveal, absolute: true } }));
+    const created = await generateSecret(new AdminApi(fetch), "adsgram.reward-secret");
+    expect(calls[0]?.url).toBe("/api/v1/admin/secrets/adsgram.reward-secret/generate");
+    expect(calls[0]?.init.body).toBeUndefined();
+    expect(created.ok && created.data.reveal).toBe(reveal);
+    expect(secretState(reward)).toEqual({ tone: "neutral", label: "Не создан", detail: `Создайте адрес и вставьте его: ${where}.` });
+    expect(secretState({ ...reward, source: "base" })).toMatchObject({ label: "Создан", detail: expect.stringContaining("заменит этот сразу") });
+    expect(actionTitle("secrets.generate")).toBe("Новый адрес для сети");
   });
 
   it("форма проверяет ключ так же, как сервер", () => {

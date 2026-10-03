@@ -62,6 +62,13 @@ export class SecretUncheckableError extends DomainError {
   }
 }
 
+/** Ключ берут в кабинете сервиса — создать его может только сервис, а не панель. */
+export class SecretNotGeneratedError extends DomainError {
+  constructor() {
+    super("secret_not_generated", "Этот ключ выдаёт сервис — возьмите его в кабинете и задайте в панели", 409);
+  }
+}
+
 /** Ссылки или её конверсии нет — 404 со словами, что именно не нашлось. */
 export class LinkNotFoundError extends DomainError {
   constructor(message: string) {

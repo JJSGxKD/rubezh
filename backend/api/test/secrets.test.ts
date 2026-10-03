@@ -222,7 +222,7 @@ describe("ключи в панели", () => {
     const rolesRepository = new MemoryRolesRepository();
     const roles = new RolesService(cfg, rolesRepository, accounts);
     const secrets = new SecretsService(cfg, new MemorySecrets(), new FakeRedis() as unknown as Redis);
-    const admin = new AdminSecretsService(secrets, roles, accounts);
+    const admin = new AdminSecretsService(secrets, roles, accounts, cfg);
     const ownerAccount = await accounts.upsert({ platform: "telegram", platformUserId: OWNER_ID, displayName: "Владелец", username: null, photoUrl: null }, Date.now());
     const adminAccount = await accounts.upsert({ platform: "telegram", platformUserId: "6", displayName: "Админ", username: null, photoUrl: null }, Date.now());
     const strangerAccount = await accounts.upsert({ platform: "telegram", platformUserId: "5", displayName: "Гость", username: null, photoUrl: null }, Date.now());
@@ -283,6 +283,28 @@ describe("ключи в панели", () => {
     const { admin, owner } = await panel({ SECRETS_ENCRYPTION_KEY: "" });
     await expect(admin.list(owner)).resolves.toMatchObject({ enabled: false });
     await expect(admin.save(owner, "fx.coingecko-demo", DEMO)).rejects.toMatchObject({ code: "secrets_disabled", message: expect.stringContaining("SECRETS_ENCRYPTION_KEY") });
+  });
+
+  it("адрес награды создаёт сервер: показывает его один раз, в списке и аудите — только знаки", async () => {
+    const { admin, secrets, rolesRepository, owner, administrator } = await panel({ PUBLIC_API_URL: "https://api.example.test/" });
+    await expect(admin.generate(administrator, "adsgram.reward-secret")).rejects.toMatchObject({ code: "forbidden" });
+    const first = await admin.generate(owner, "adsgram.reward-secret");
+    const value = secrets.get(SECRETS.adsgramRewardSecret) ?? "";
+    expect(value).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(first).toMatchObject({ reveal: `https://api.example.test/api/v1/ads/adsgram/reward/${value}/[userId]`, absolute: true, secret: { source: "base", generated: expect.stringContaining("Reward URL") } });
+    expect(JSON.stringify(await admin.list(owner))).not.toContain(value);
+    const [entry] = await rolesRepository.recentAudit(10);
+    expect(entry).toMatchObject({ action: "secrets.generate", target: "adsgram.reward-secret", before: { source: "none" }, after: { source: "base" } });
+    expect(JSON.stringify(entry)).not.toContain(value);
+    // Новый адрес сразу заменяет прежний: старый секрет больше не действует.
+    await admin.generate(owner, "adsgram.reward-secret");
+    expect(secrets.get(SECRETS.adsgramRewardSecret)).not.toBe(value);
+  });
+
+  it("без PUBLIC_API_URL адрес — путь, начало дописывает человек; ключ сервиса создать нельзя", async () => {
+    const { admin, owner } = await panel();
+    await expect(admin.generate(owner, "adsgram.reward-secret")).resolves.toMatchObject({ reveal: expect.stringMatching(/^\/api\/v1\/ads\/adsgram\/reward\/[A-Za-z0-9_-]{43}\/\[userId\]$/), absolute: false });
+    await expect(admin.generate(owner, "fx.coingecko-pro")).rejects.toMatchObject({ code: "secret_not_generated" });
   });
 
   it("сброс без строки в базе — не событие для журнала", async () => {

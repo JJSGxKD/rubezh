@@ -167,19 +167,19 @@ model Account {
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(3)
   banReason      String?   @map("ban_reason") @db.VarChar(256)
 
-  roles       AccountRole[]
-  runs        Run[]
-  purchases   Purchase[]
-  sessions    AccountSession[]
-  acquisition Acquisition?
-  funnel      AccountFunnel?
-  messaging   AccountMessaging?
-  wallet      WalletEntry[]
-  balances    WalletBalance[]
-  walletDaily WalletDaily[]
-  progress    AccountProgress?
-  runRewards  RunReward[]
-  settings    AccountSettings?
+  roles         AccountRole[]
+  runs          Run[]
+  purchases     Purchase[]
+  sessions      AccountSession[]
+  acquisition   Acquisition?
+  funnel        AccountFunnel?
+  messaging     AccountMessaging?
+  wallet        WalletEntry[]
+  balances      WalletBalance[]
+  walletDaily   WalletDaily[]
+  progress      AccountProgress?
+  runRewards    RunReward[]
+  settings      AccountSettings?
   // Конверсии закупленной рекламы (WP43)
   adConversions AdConversion[]
 
@@ -1575,9 +1575,34 @@ model AdNetwork {
   keys       Json     @default("{}")
   updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
 
-  blocks AdBlock[]
+  blocks      AdBlock[]
+  networkTask NetworkTask?
 
   @@map("ad_network")
+}
+
+/// Задания сети во вкладке «Партнёры» (docs/35-stage4-plan.md WP13, часть 6,
+/// Р80): сколько их у игрока за игровые сутки, пауза после выполненного и
+/// награда. Задания приходят от сети; выполнение — сессией места `task`.
+model NetworkTask {
+  networkKey String   @id @map("network_key") @db.VarChar(32)
+  /// выключено — строки сети у игроков нет, блок в «Рекламе» остаётся
+  active     Boolean  @default(true)
+  /// от 1 до 50 за игровые сутки
+  dailyCap   Int      @map("daily_cap") @db.SmallInt
+  /// от 5 минут до суток после выполненного
+  pauseMin   Int      @map("pause_min")
+  coins      Int      @default(0)
+  gems       Int      @default(0)
+  /// обычные осколки
+  shards     Int      @default(0)
+  updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт
+  updatedBy  String?  @map("updated_by") @db.Uuid
+
+  network AdNetwork @relation(fields: [networkKey], references: [networkKey])
+
+  @@map("network_task")
 }
 
 /// Рекламный блок сети в месте показа — данными, без ветвлений по площадке в

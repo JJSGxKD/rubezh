@@ -1,6 +1,18 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../../services";
-import { checkSecret, fetchSecrets, groupSecrets, resetSecret, saveSecret, secretProblem, secretState, type SecretCheck, type SecretRow } from "../../api/secrets";
+import {
+  checkSecret,
+  fetchSecrets,
+  generateSecret,
+  groupSecrets,
+  resetSecret,
+  saveSecret,
+  secretProblem,
+  secretState,
+  type GeneratedSecret,
+  type SecretCheck,
+  type SecretRow,
+} from "../../api/secrets";
 import { formatDateTime, formatTime } from "../../format";
 import { useSession } from "../../state/use-session";
 import { Dialog } from "../../ui/dialog";
@@ -24,6 +36,7 @@ export function SecretsScreen() {
   const canEdit = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("secrets.edit"));
   const [editing, setEditing] = useState<SecretRow | null>(null);
   const [resetting, setResetting] = useState<SecretRow | null>(null);
+  const [generating, setGenerating] = useState<SecretRow | null>(null);
   const [checks, setChecks] = useState<Record<string, CheckState>>({});
 
   const check = async (row: SecretRow) => {
@@ -56,7 +69,7 @@ export function SecretsScreen() {
                 editable={editable}
                 check={checks[row.key] ?? null}
                 onCheck={() => void check(row)}
-                onEdit={() => setEditing(row)}
+                onEdit={() => (row.generated === null ? setEditing(row) : setGenerating(row))}
                 onReset={() => setResetting(row)}
               />
             ))}
@@ -76,6 +89,15 @@ export function SecretsScreen() {
               return next;
             });
             toast.success(`«${saved.title}» сохранён`, { description: `Работает ключ ${saved.fingerprint ?? ""} — со следующего обращения к сервису, без перезапуска` });
+            reload();
+          }}
+        />
+      )}
+      {generating === null ? null : (
+        <GenerateDialog
+          row={generating}
+          onClose={() => {
+            setGenerating(null);
             reload();
           }}
         />
@@ -135,13 +157,18 @@ function SecretCard({ row, editable, check, onCheck, onEdit, onReset }: { row: S
         ) : null}
         {editable ? (
           <Button tone="primary" onClick={onEdit}>
-            {row.source === "base" ? "Заменить" : "Задать в панели"}
+            {editLabel(row)}
           </Button>
         ) : null}
         {editable && inBase ? <Button onClick={onReset}>Сбросить</Button> : null}
       </div>
     </article>
   );
+}
+
+function editLabel(row: SecretRow): string {
+  if (row.generated !== null) return row.source === "base" ? "Создать новый адрес" : "Создать адрес";
+  return row.source === "base" ? "Заменить" : "Задать в панели";
 }
 
 function CheckLine({ result, at }: { result: SecretCheck; at: number }) {
@@ -242,6 +269,87 @@ function ReplaceDialog({ row, onClose, onSaved }: { row: SecretRow; onClose: () 
           {row.source === "base" && row.fingerprint !== null ? ` Сейчас работает ${row.fingerprint}.` : ""}
         </p>
       </form>
+    </Dialog>
+  );
+}
+
+/**
+ * Адрес с секретом, который создаёт сервер (адрес награды сети). Сначала —
+ * что произойдёт: прежний адрес умрёт сразу. Потом — сам адрес, один раз:
+ * закрыли диалог — его больше никто не увидит, только последние знаки.
+ */
+function GenerateDialog({ row, onClose }: { row: SecretRow; onClose: () => void }) {
+  const [pending, setPending] = useState(false);
+  const [created, setCreated] = useState<GeneratedSecret | null>(null);
+  const where = row.generated ?? "";
+
+  const create = async () => {
+    setPending(true);
+    const result = await generateSecret(api, row.key);
+    setPending(false);
+    if (!result.ok) return void toast.error(result.error.message);
+    setCreated(result.data);
+  };
+
+  const copy = (text: string) => {
+    void navigator.clipboard.writeText(text).then(
+      () => toast.success("Адрес скопирован"),
+      () => toast.error("Браузер не дал скопировать — выделите адрес вручную"),
+    );
+  };
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      title={created === null ? `${row.source === "base" ? "Новый адрес" : "Создать адрес"}: ${row.title}` : "Адрес создан — вставьте его сейчас"}
+      description={created === null ? row.hint : undefined}
+      footer={
+        created === null ? (
+          <>
+            <Button onClick={onClose}>Отмена</Button>
+            <Button tone="primary" onClick={() => void create()} disabled={pending}>
+              {pending ? "Создаю…" : row.source === "base" ? "Создать новый адрес" : "Создать адрес"}
+            </Button>
+          </>
+        ) : (
+          <Button tone="primary" onClick={onClose}>
+            Готово
+          </Button>
+        )
+      }
+    >
+      {created === null ? (
+        <div className="flex flex-col gap-3 text-sm">
+          <p>Сервер создаст секрет и покажет адрес с ним один раз. Вставьте его: {where}.</p>
+          {row.source === "base" ? (
+            <Notice tone="warning">Прежний адрес перестанет работать сразу. Пока новый не стоит в кабинете, награды за выполненные задания не придут.</Notice>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {/* Адрес целиком, переносом: в однострочном поле секрет уезжал бы за край, и сверить его глазами было бы нельзя. */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs text-text-muted">Адрес для кабинета</span>
+            <code className="block select-all break-all rounded-sm border border-border bg-surface-sunken px-3 py-2 font-mono text-xs">{created.reveal}</code>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button tone="primary" onClick={() => copy(created.reveal)}>
+                Скопировать адрес
+              </Button>
+              <span className="text-xs text-text-muted">Вставьте его: {where}. [userId] сеть заменит на id игрока сама — его не трогайте.</span>
+            </div>
+          </div>
+          {created.absolute ? null : (
+            <Notice tone="warning">
+              На сервере не задан <code className="font-mono">PUBLIC_API_URL</code>, и адрес начинается с пути. Допишите перед ним адрес API — например,{" "}
+              <code className="font-mono">https://api.ваш-домен</code>.
+            </Notice>
+          )}
+          <Notice tone="info">Адрес больше не покажем: панель хранит только последние знаки {created.secret.fingerprint ?? ""}. Потеряли — создайте новый и замените в кабинете.</Notice>
+        </div>
+      )}
     </Dialog>
   );
 }

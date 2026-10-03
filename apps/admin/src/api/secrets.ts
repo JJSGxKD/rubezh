@@ -16,6 +16,8 @@ export const secretSchema = z.object({
   example: z.string(),
   pattern: z.string(),
   checkable: z.boolean(),
+  /** куда вставить ключ, который создаёт сервер; `null` — ключ берут в кабинете сервиса */
+  generated: z.string().nullable(),
   source: z.enum(["base", "env", "none"]),
   fingerprint: z.string().nullable(),
   envSet: z.boolean(),
@@ -31,6 +33,10 @@ const overviewSchema = z.object({ enabled: z.boolean(), secrets: z.array(secretS
 export type SecretsOverview = z.infer<typeof overviewSchema>;
 
 const checkSchema = z.object({ ok: z.boolean(), message: z.string() });
+
+/** Созданный ключ: что вставить в кабинет — один раз; `absolute: false` — начало адреса дописать самому. */
+const generatedSchema = z.object({ secret: secretSchema, reveal: z.string(), absolute: z.boolean() });
+export type GeneratedSecret = z.infer<typeof generatedSchema>;
 export type SecretCheck = z.infer<typeof checkSchema>;
 
 export function fetchSecrets(api: AdminApi): Promise<ApiResult<SecretsOverview>> {
@@ -39,6 +45,11 @@ export function fetchSecrets(api: AdminApi): Promise<ApiResult<SecretsOverview>>
 
 export function saveSecret(api: AdminApi, key: string, value: string): Promise<ApiResult<SecretRow>> {
   return api.request(`/secrets/${encodeURIComponent(key)}`, { method: "POST", body: { value: value.trim() }, schema: secretSchema });
+}
+
+/** Новый ключ, который создаёт сервер, — прежний перестаёт работать сразу. */
+export function generateSecret(api: AdminApi, key: string): Promise<ApiResult<GeneratedSecret>> {
+  return api.request(`/secrets/${encodeURIComponent(key)}/generate`, { method: "POST", schema: generatedSchema });
 }
 
 export function resetSecret(api: AdminApi, key: string): Promise<ApiResult<SecretRow>> {
@@ -82,6 +93,11 @@ export function secretState(row: SecretRow): { tone: "info" | "neutral" | "dange
         ? "Ключ из панели зашифрован другим ключом шифрования — сейчас работает ключ из окружения. Задайте ключ заново."
         : "Ключ из панели зашифрован другим ключом шифрования, а в окружении ключа нет — сервис работает без ключа. Задайте ключ заново.",
     };
+  }
+  if (row.generated !== null) {
+    return row.source === "base"
+      ? { tone: "info", label: "Создан", detail: `Новый адрес заменит этот сразу — вставьте его: ${row.generated}.` }
+      : { tone: "neutral", label: "Не создан", detail: `Создайте адрес и вставьте его: ${row.generated}.` };
   }
   if (row.source === "base") {
     return { tone: "info", label: "Из панели", detail: row.envSet ? "В окружении сервера тоже есть ключ — «Сбросить» вернёт его." : "В окружении сервера ключа нет — после сброса сервис останется без ключа." };

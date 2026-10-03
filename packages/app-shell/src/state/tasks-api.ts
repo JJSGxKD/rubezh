@@ -34,11 +34,38 @@ const taskSchema = z.object({
   /** куда вести игрока — у цели «канал»; сервер до канала поля не отдавал */
   link: z.optional(z.nullable(z.string())),
 });
-const viewSchema = z.object({ tasks: z.array(taskSchema) });
+/**
+ * Задание рекламной сети (docs/35-stage4-plan.md WP13, часть 6): само
+ * задание рисует SDK сети, наши — награда, пометка и кнопки. `offer` —
+ * что передать SDK; `null` — сеть упёрлась в потолок суток или паузу, и
+ * строки сейчас нет.
+ */
+const networkTaskSchema = z.object({
+  network: z.string(),
+  title: z.string(),
+  reward: rewardSchema,
+  doneToday: z.number(),
+  dailyCap: z.number(),
+  offer: z.nullable(
+    z.object({
+      sessionId: z.string(),
+      network: z.string(),
+      blockId: z.nullable(z.string()),
+      keys: z.record(z.string(), z.string()),
+      debug: z.boolean(),
+      expiresAt: z.string(),
+    }),
+  ),
+  nextAt: z.nullable(z.string()),
+});
+/** сервер до заданий сетей поля не отдавал */
+const viewSchema = z.object({ tasks: z.array(taskSchema), networks: z.optional(z.array(networkTaskSchema)) });
 const claimSchema = z.object({ claimed: z.boolean(), credited: rewardSchema, tasks: z.array(taskSchema) });
 const openSchema = z.object({ url: z.string(), tasks: z.array(taskSchema) });
+const stepSchema = z.object({ ok: z.literal(true) });
 
 export type TaskItem = z.infer<typeof taskSchema>;
+export type NetworkTaskItem = z.infer<typeof networkTaskSchema>;
 export type TaskReward = z.infer<typeof rewardSchema>;
 export type TaskClaim = z.infer<typeof claimSchema>;
 
@@ -113,10 +140,16 @@ export function taskLink(task: Pick<TaskItem, "link">): string | null {
 export { openExternalLink as openTaskLink } from "./external-link";
 
 export interface TasksApi {
-  view(): Promise<ApiResult<{ tasks: TaskItem[] }>>;
+  view(): Promise<ApiResult<{ tasks: TaskItem[]; networks?: NetworkTaskItem[] | undefined }>>;
   claim(taskId: string): Promise<ApiResult<TaskClaim>>;
   /** переход по ссылке партнёрской цели: ссылку и бота он и выполняет */
   open(taskId: string): Promise<ApiResult<{ url: string; tasks: TaskItem[] }>>;
+  /**
+   * Шаг задания сети для воронки места «Задания» — та же ручка, что у
+   * показов рекламы: задание нарисовано (`shown`) или игрок нажал «Перейти»
+   * (`clicked`). Выполнение отсюда не сообщается — его подтверждает сеть.
+   */
+  networkStep(sessionId: string, outcome: "shown" | "clicked"): Promise<ApiResult<unknown>>;
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
@@ -125,6 +158,7 @@ export function createTasksApi(request: ApiRequest = apiRequest): TasksApi {
     view: () => request("/api/v1/tasks", viewSchema, { method: "GET" }),
     claim: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/claim`, claimSchema, { method: "POST" }),
     open: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/open`, openSchema, { method: "POST" }),
+    networkStep: (sessionId, outcome) => request(`/api/v1/ads/sessions/${encodeURIComponent(sessionId)}/result`, stepSchema, { method: "POST", body: { outcome } }),
   };
 }
 
@@ -132,3 +166,15 @@ export function createTasksApi(request: ApiRequest = apiRequest): TasksApi {
 export function tasksAvailable(): boolean {
   return useShell.getState().capabilities.auth !== undefined;
 }
+
+/**
+ * Подтвердила ли сеть задание: за игровые сутки выполненных стало больше,
+ * чем было до события `reward`. Сеть подтверждает сама, и ответ приходит
+ * не сразу — экран спрашивает несколько раз.
+ */
+export function networkTaskConfirmed(before: Pick<NetworkTaskItem, "doneToday">, now: Pick<NetworkTaskItem, "doneToday"> | undefined): boolean {
+  return now !== undefined && now.doneToday > before.doneToday;
+}
+
+/** Когда спрашивать сервер после события сети, мс от него: подтверждение AdsGram идёт секунды, реже — десятки секунд. */
+export const NETWORK_TASK_CHECKS_MS = [1_500, 4_000, 8_000, 15_000, 30_000] as const;

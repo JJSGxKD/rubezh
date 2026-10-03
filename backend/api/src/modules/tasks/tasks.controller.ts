@@ -2,13 +2,16 @@ import { Controller, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
+import { NetworkTasksService, type NetworkTaskView } from "./network-tasks.service.js";
 import { TasksService, type TaskClaimResult, type TaskView } from "./tasks.service.js";
 
 /**
  * Задания и достижения (`/api/v1/tasks`, docs/35-stage4-plan.md WP13): цели
  * с прогрессом и забор награды. Только своё — аккаунт из токена; что
  * выполнено, решает сервер по записанным забегам, а у партнёрских целей —
- * по переходу через сервер и проверке площадкой.
+ * по переходу через сервер и проверке площадкой. Задания рекламных сетей —
+ * отдельным списком `networks`: их рисует SDK сети, а выполнение
+ * подтверждает сама сеть.
  */
 const LIMIT: RateLimit = { scope: "tasks", limit: 300, windowSec: 3600 };
 const TASK_ID = /^[a-z][a-z0-9_]{1,47}$/;
@@ -18,14 +21,16 @@ const TASK_ID = /^[a-z][a-z0-9_]{1,47}$/;
 export class TasksController {
   constructor(
     private readonly tasks: TasksService,
+    private readonly networks: NetworkTasksService,
     private readonly limiter: RateLimiter,
   ) {}
 
   @Get()
-  async view(@Req() request: unknown): Promise<{ data: { tasks: TaskView[] } }> {
+  async view(@Req() request: unknown): Promise<{ data: { tasks: TaskView[]; networks: NetworkTaskView[] } }> {
     const account = accountOf(request);
     await this.limit(account.accountId);
-    return { data: { tasks: await this.tasks.view(account) } };
+    const [tasks, networks] = await Promise.all([this.tasks.view(account), this.networks.view(account)]);
+    return { data: { tasks, networks } };
   }
 
   @Post(":taskId/claim")

@@ -9,7 +9,7 @@ import type { SecretCheckResult } from "../secrets/secret-catalog.js";
 import { SECRET_KEY } from "../secrets/secret-catalog.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
-import { AdminSecretsService, type SecretView, type SecretsOverview } from "./admin-secrets.service.js";
+import { AdminSecretsService, type GeneratedSecretView, type SecretView, type SecretsOverview } from "./admin-secrets.service.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 
 /**
@@ -40,6 +40,14 @@ export class AdminSecretsController {
     await this.limit(actor.accountId, "mutate");
     const { value } = parse(() => saveSchema.parse(body), "Ключ — строка");
     return { data: await this.secrets.save(actor, keyOf(key), value) };
+  }
+
+  @Post(":key/generate")
+  @RequirePermission("secrets.edit")
+  async generate(@Req() request: unknown, @Param("key") key: string): Promise<{ data: GeneratedSecretView }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId, "mutate");
+    return { data: await this.secrets.generate(actor, keyOf(key)) };
   }
 
   @Post(":key/reset")

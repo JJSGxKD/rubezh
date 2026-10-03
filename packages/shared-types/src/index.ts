@@ -120,6 +120,61 @@ export interface AdCreative {
 }
 
 /**
+ * Задание рекламной сети во вкладке «Партнёры» (docs/35-stage4-plan.md
+ * WP13, часть 6). Само задание — иконку, заголовок, переход и проверку —
+ * рисует SDK сети, а награду и кнопки даёт оболочка своими узлами: адаптер
+ * вставляет элемент сети в `host` и раскладывает узлы по её слотам. Какую
+ * сеть и блок показать, решил сервер; награду он же даёт по подтверждению
+ * сети, и `done` лишь говорит оболочке обновить экран.
+ */
+export interface NetworkTaskMount {
+  /** сеть из ответа сервера: `adsgram` */
+  network: string;
+  /** блок в кабинете сети: `task-123` */
+  blockId: string | null;
+  /** тестовые задания сети — решает сервер, как у показа */
+  debug?: boolean;
+  /** куда вставить элемент сети */
+  host: HTMLElement;
+  /** узлы оболочки: награда, «Перейти», «Забрать», «Готово» */
+  parts: Readonly<Record<NetworkTaskPart, HTMLElement>>;
+  /** как строка выглядит — значениями CSS из токенов оболочки; адаптер переводит их в настройки сети */
+  look: NetworkTaskLook;
+  onState(state: NetworkTaskState): void;
+}
+
+export type NetworkTaskPart = "reward" | "open" | "claim" | "done";
+
+/** Размеры строки задания — те же, что у строк своих заданий. */
+export interface NetworkTaskLook {
+  fontSize: string;
+  iconSize: string;
+  iconRadius: string;
+  /** между иконкой и заголовком */
+  gap: string;
+  /** под кнопку «Перейти» и «Забрать» */
+  buttonWidth: string;
+}
+
+/**
+ * `ready` — задание на экране; `empty` — у сети нет задания для игрока, это
+ * не поломка; `failed` — скрипт или SDK отказали; `done` — сеть засчитала
+ * выполнение; `stale` — приложение открыто слишком долго, и сеть новых
+ * заданий не даёт до перезапуска.
+ */
+export type NetworkTaskState =
+  | { kind: "ready" }
+  | { kind: "empty" }
+  | { kind: "failed"; reason: AdFailureReason }
+  | { kind: "done" }
+  | { kind: "stale" };
+
+export interface NetworkTaskHandle {
+  /** убрать элемент сети и её слушатели; узлы оболочки остаются оболочке */
+  unmount(): void;
+}
+
+/**
  * Единый интерфейс платформенного адаптера.
  * core-game и оболочка работают только через него и ничего не знают о
  * конкретной платформе. См. docs/01-tech-stack.md §1.
@@ -186,6 +241,13 @@ export interface PlatformAdapter {
    * бросается. Нет метода — площадка таких сетей не знает.
    */
   prepareAds?(networks: readonly AdNetworkSetup[]): Promise<void>;
+  /**
+   * Поставить задание рекламной сети в строку оболочки (WP13, часть 6).
+   * Ручка приходит, когда код заданий загружен; исход — через `onState`,
+   * всегда: незнакомая сеть — `failed` `unsupported`. Нет метода — площадка
+   * заданий сетей не показывает, и строки сети у игрока нет.
+   */
+  mountNetworkTask?(mount: NetworkTaskMount): Promise<NetworkTaskHandle>;
   /** опционально — площадка может не дать хранилища, см. KeyValueStorage */
   storage?: KeyValueStorage;
 }

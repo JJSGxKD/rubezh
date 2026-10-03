@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { fetchTasks, groupByPeriod, rewardLabel, saveTask, targetLabel, taskProblem, withKind, withPlatform, type TaskDef, partnerPlatforms, togglePlatform } from "../src/api/tasks";
+import {
+  cadenceLabel,
+  fetchTasks,
+  groupByPeriod,
+  networkTaskProblem,
+  networkTaskState,
+  rewardLabel,
+  saveNetworkTask,
+  saveTask,
+  targetLabel,
+  taskProblem,
+  withKind,
+  withPlatform,
+  type NetworkTaskRow,
+  type TaskDef,
+  partnerPlatforms,
+  togglePlatform,
+} from "../src/api/tasks";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -129,6 +146,56 @@ describe("задания в панели", () => {
       expect(JSON.parse(String(calls[0]?.init.body)).params).toEqual({ platforms: ["vk"], url: "https://example.com/p" });
       expect(targetLabel(link({ platforms: ["telegram", "max"], url: "https://example.com/p" }))).toBe("example.com (Telegram, MAX)");
       expect(targetLabel(link({ platforms: ["web"], url: "https://example.com/p" }))).toBe("example.com (Браузер)");
+    });
+  });
+
+  describe("задания рекламных сетей", () => {
+    const row: NetworkTaskRow = {
+      networkKey: "adsgram",
+      title: "AdsGram",
+      active: true,
+      dailyCap: 5,
+      pauseMin: 30,
+      coins: 100,
+      gems: 0,
+      shards: 0,
+      updatedAt: "2026-10-03T04:00:00.000Z",
+      updatedBy: null,
+      ready: { block: true, confirm: true, confirmWith: "Адрес награды за задание AdsGram" },
+    };
+
+    it("строки сетей приходят с каталогом; старый сервер без них — пустой список; правка — по ключу сети в адресе", async () => {
+      const { fetch, calls } = fakeFetch(
+        json(200, { data: { tasks: [], kinds: [], periods: ["daily", "weekly", "achievement"], networks: [row] } }),
+        json(200, { data: { tasks: [], kinds: [], periods: ["daily", "weekly", "achievement"] } }),
+        json(200, { data: { ...row, dailyCap: 3 } }),
+      );
+      const api = new AdminApi(fetch);
+      const list = await fetchTasks(api);
+      expect(list.ok && list.data.networks).toEqual([row]);
+      const old = await fetchTasks(api);
+      expect(old.ok && old.data.networks).toEqual([]);
+      await saveNetworkTask(api, { networkKey: "adsgram", active: true, dailyCap: 3, pauseMin: 30, coins: 100, gems: 0, shards: 0 });
+      expect(calls[2]?.url).toBe("/api/v1/admin/tasks/networks/adsgram");
+      expect(JSON.parse(String(calls[2]?.init.body))).toEqual({ active: true, dailyCap: 3, pauseMin: 30, coins: 100, gems: 0, shards: 0 });
+    });
+
+    it("форма держит те же пределы, что сервер: потолок, пауза, награда", () => {
+      const input = { networkKey: "adsgram", active: true, dailyCap: 5, pauseMin: 30, coins: 100, gems: 0, shards: 0 };
+      expect(networkTaskProblem(input)).toBeNull();
+      expect(networkTaskProblem({ ...input, dailyCap: 0 })).toMatch(/от 1 до 50/);
+      expect(networkTaskProblem({ ...input, dailyCap: 2.5 })).toMatch(/от 1 до 50/);
+      expect(networkTaskProblem({ ...input, pauseMin: 4 })).toMatch(/от 5 минут/);
+      expect(networkTaskProblem({ ...input, coins: 0 })).toMatch(/Без награды/);
+    });
+
+    it("состояние словами: выключено, игроки не видят — чего не хватает, работает; частота — по-человечески", () => {
+      expect(networkTaskState(row)).toEqual({ tone: "success", label: "Работает" });
+      expect(networkTaskState({ ...row, active: false })).toEqual({ tone: "neutral", label: "Выключено" });
+      expect(networkTaskState({ ...row, ready: { ...row.ready, confirm: false } })).toEqual({ tone: "warning", label: "Игроки не видят" });
+      expect(networkTaskState({ ...row, ready: { ...row.ready, block: false } }).label).toBe("Игроки не видят");
+      expect(cadenceLabel(row)).toBe("до 5 в сутки, пауза 30 мин");
+      expect(cadenceLabel({ dailyCap: 1, pauseMin: 120 })).toBe("до 1 в сутки, пауза 2 ч");
     });
   });
 

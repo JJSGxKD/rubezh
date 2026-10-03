@@ -30,6 +30,11 @@ export interface PlaceRules {
   /** за показ в месте игрок получает награду; межстраничная — без награды, и VIP её не видит (§3.6) */
   rewarded: boolean;
   /**
+   * VIP получает награду места без ролика (§3.6). Задание сети — не ролик:
+   * его выполняют руками, и пропуск его не заменяет.
+   */
+  pass: boolean;
+  /**
    * Пауза после награды: база × множитель в степени (наград за сутки − 1),
    * не больше потолка. Частые награды становятся реже, не исчезая (§3.7).
    * `null` — места без награды или с ограничением у хозяина (второй шанс
@@ -46,12 +51,21 @@ export interface PlaceRules {
  * (`interstitial-policy.ts`) числами из панели.
  */
 export const PLACE_RULES: Record<AdPlace, PlaceRules> = {
-  second_chance: { rewarded: true, cooldown: null },
-  wheel_spin: { rewarded: true, cooldown: { baseMin: 120, factor: 1.5, capMin: 360 } },
-  run_double: { rewarded: true, cooldown: { baseMin: 5, factor: 1.5, capMin: 60 } },
-  task: { rewarded: true, cooldown: null },
-  interstitial: { rewarded: false, cooldown: null },
+  second_chance: { rewarded: true, pass: true, cooldown: null },
+  wheel_spin: { rewarded: true, pass: true, cooldown: { baseMin: 120, factor: 1.5, capMin: 360 } },
+  run_double: { rewarded: true, pass: true, cooldown: { baseMin: 5, factor: 1.5, capMin: 60 } },
+  // Сколько заданий сети и как часто, решает хозяин места — задания — по
+  // строке сети из панели (`tasks/network-task-rules.ts`).
+  task: { rewarded: true, pass: false, cooldown: null },
+  interstitial: { rewarded: false, pass: false, cooldown: null },
 };
+
+/**
+ * Места, которые клиент просит сам (`POST /ads/sessions`). Задание сети
+ * выдаёт хозяин места по своему потолку — иначе прямой запрос обходил бы
+ * его, а подтверждение сети выполнило бы чужую сессию.
+ */
+export const OFFERED_PLACES = AD_PLACES.filter((place): place is Exclude<AdPlace, "task"> => place !== "task");
 
 /**
  * Сколько живёт сессия показа. Показ и клик решаются за минуты; целевое

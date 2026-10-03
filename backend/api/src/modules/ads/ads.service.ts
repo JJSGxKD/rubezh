@@ -146,7 +146,7 @@ export class AdsService {
     const state = placeState(history.sessions, history.dayStart, at);
     const retryAt = nextRewardAt(place, state, at);
     if (retryAt !== null) return this.unavailable(viewer, place, "cooldown", retryAt);
-    if (pass !== null) return await this.passOffer(viewer, place, pass, at);
+    if (pass !== null && PLACE_RULES[place].pass) return await this.passOffer(viewer, place, pass, at);
     if (place === "interstitial") {
       const refusal = await this.interstitials.refusal(viewer, moment, at);
       if (refusal !== null) return this.refused(viewer, moment, refusal);
@@ -265,9 +265,14 @@ export class AdsService {
    */
   async readiness(viewer: Pick<AdViewer, "accountId" | "platform">, place: AdPlace, at = new Date()): Promise<AdReadiness> {
     const [blocks, history, held] = await Promise.all([this.blocks(), this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
-    const pass = PLACE_RULES[place].rewarded ? held : null;
+    const pass = PLACE_RULES[place].pass ? held : null;
     const available = pass !== null || blocks.some((block) => block.place === place && servable(block) && blockReaches(block, viewer.platform));
     return { available, readyAt: nextRewardAt(place, placeState(history.sessions, history.dayStart, at), at), pass };
+  }
+
+  /** Блоки места, которые сеть может показать игроку площадки и устройства, — из запаса в памяти. */
+  async servableBlocks(place: AdPlace, viewer: Pick<AdViewer, "platform" | "device">): Promise<AdBlockRow[]> {
+    return eligibleBlocks(await this.blocks(), place, viewer);
   }
 
   /** Сеть или блок поменяли в панели — следующий показ берёт свежие. */

@@ -59,7 +59,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
   {
     title: "Вовлечение",
     sections: [
-      { id: "tasks", title: "Задания", hint: "Ежедневные и недельные задания и достижения: цели и награды", permission: "tasks.edit" },
+      { id: "tasks", title: "Задания", hint: "Задания, достижения и задания рекламных сетей: цели, частота и награды", permission: "tasks.edit" },
       { id: "broadcasts", title: "Рассылки", hint: "Сообщения игрокам в бота с выбором аудитории", permission: "broadcast.edit" },
       { id: "changelog", title: "Журнал обновлений", hint: "«Что нового» по версиям — игроки видят его в игре и в боте", permission: "changelog.edit" },
     ],
