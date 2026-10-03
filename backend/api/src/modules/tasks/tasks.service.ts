@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import { ChannelMemberships, MembershipRejectedError, MembershipUnavailableError } from "../../platforms/ports/channel-membership.js";
+import { imagePath } from "../media/image-rules.js";
+import { MediaService } from "../media/media.service.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
@@ -75,6 +77,8 @@ export interface TaskView {
   link: string | null;
   /** места в цели с лимитом; без лимита и у выполнившего — пусто */
   slots: { left: number; total: number; holdUntil: string | null } | null;
+  /** картинка 1:1 партнёрской цели — путь от адреса API; нет — значок вида */
+  image: string | null;
 }
 
 export interface TaskCatalogView {
@@ -110,6 +114,7 @@ export class TasksService implements OnModuleInit {
     private readonly runs: RunsHooks,
     private readonly roles: RolesService,
     private readonly memberships: ChannelMemberships,
+    private readonly media: MediaService,
   ) {}
 
   onModuleInit(): void {
@@ -252,6 +257,9 @@ export class TasksService implements OnModuleInit {
   async save(actor: AccountRef, task: TaskDef, at = new Date()): Promise<TaskDef> {
     await this.roles.require(actor, "tasks.edit");
     const before = (await this.db(this.repository.catalog())).find((candidate) => candidate.taskId === task.taskId) ?? null;
+    // Картинка — загруженная и того вида, что нужен строке задания: квадрат, а
+    // не слайд. Прежнюю не перепроверяем — она уже у игроков.
+    if (task.image !== null && task.image !== before?.image) await this.media.require(task.image, "task");
     if (before === null) {
       if (!(await this.db(this.repository.insert(task, actor.accountId, at)))) throw new TaskShapeLockedError();
       await this.roles.audit({ actorAccountId: actor.accountId, action: "tasks.create", target: task.taskId, after: task });
@@ -341,6 +349,7 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
       passPoints: def.passPoints,
       link: def.params?.url ?? null,
       slots,
+      image: def.image === null ? null : imagePath(def.image),
     };
   });
 }

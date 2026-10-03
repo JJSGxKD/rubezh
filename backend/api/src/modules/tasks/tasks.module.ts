@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { MediaModule } from "../media/media.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { TasksController } from "./tasks.controller.js";
@@ -19,7 +20,7 @@ import { TasksService } from "./tasks.service.js";
  * них, решает он.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, AdsModule],
+  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule],
   controllers: [TasksController],
   providers: [
     TasksService,

@@ -1475,12 +1475,16 @@ model TaskDef {
   /// сколько игроков выполнили; растёт под блокировкой строки — лимит не
   /// перешагнуть двумя заборами разом, кроме мягкого часа начавших
   completions     Int        @default(0)
+  /// картинка 1:1 партнёрского задания (Р82); `null` — значок вида у клиента.
+  /// Только у партнёрской цели — `CHECK` в миграции
+  imageId         String?    @map("image_id") @db.VarChar(64)
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
   /// `null` — строка из миграции, человек её не правил
   updatedBy       String?    @map("updated_by") @db.Uuid
 
+  image        MediaImage?       @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
   progress     TaskProgress[]
   participants TaskParticipant[]
 
@@ -1984,6 +1988,8 @@ model MediaImage {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   /// кто загрузил; без внешнего ключа — картинка переживает аккаунт
   createdBy   String?  @map("created_by") @db.Uuid
+
+  tasks TaskDef[]
 
   @@map("media_image")
 }

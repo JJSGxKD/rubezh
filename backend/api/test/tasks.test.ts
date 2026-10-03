@@ -9,6 +9,8 @@ import { REDIS } from "../src/infra/redis.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { ImageNotFoundError, ImageRejectedError } from "../src/modules/media/media-errors.js";
+import { MediaService } from "../src/modules/media/media.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { ChannelMemberships, MembershipRejectedError, MembershipUnavailableError, type ChannelMembership } from "../src/platforms/ports/channel-membership.js";
@@ -29,7 +31,9 @@ import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryMedia } from "./helpers/memory-media.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { webp } from "./helpers/webp-samples.js";
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): прогресс — от
@@ -47,7 +51,7 @@ const DAY = 24 * HOUR;
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 
 function def(taskId: string, patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId, period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, ...patch };
+  return { taskId, period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...patch };
 }
 
 const CATALOG: TaskDef[] = [
@@ -236,9 +240,12 @@ function setup() {
   const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
   const membership = new FakeMembership();
   const memberships = new ChannelMemberships([membership]);
-  const service = new TasksService(repository, wallet as unknown as WalletService, hooks, new RolesService(config, roles, accounts), memberships);
+  const rolesService = new RolesService(config, roles, accounts);
+  const images = new MemoryMedia();
+  const media = new MediaService(images, rolesService);
+  const service = new TasksService(repository, wallet as unknown as WalletService, hooks, rolesService, memberships, media);
   service.onModuleInit();
-  return { repository, wallet, hooks, service, accounts, roles, membership };
+  return { repository, wallet, hooks, service, accounts, roles, membership, media, images };
 }
 
 async function person(ctx: ReturnType<typeof setup>, id: string, role?: "game_designer" | "moderator"): Promise<AccountRef> {
@@ -510,6 +517,38 @@ describe("цель «канал»: проверка площадкой", () => {
     expect(byId(await ctx.service.view(PLAYER, NOON), "ach_channel")).toMatchObject({ value: 0, done: false });
     // три ежедневные и рекорд в пять минут — без канала
     expect(await ctx.service.badge(ME, NOON)).toBe(4);
+  });
+});
+
+describe("картинка партнёрского задания", () => {
+  it("схема: картинка — id из хэша и только у партнёрской цели; без поля — значок вида", () => {
+    const id = "a".repeat(64);
+    expect(taskDefSchema.safeParse(channelTask({ image: id })).success).toBe(true);
+    expect(taskDefSchema.safeParse(channelTask({ image: "../../etc/passwd" })).success).toBe(false);
+    expect(taskDefSchema.safeParse(channelTask({ image: "A".repeat(64) })).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_runs", { image: id })).success).toBe(false);
+    const bare = Object.fromEntries(Object.entries(channelTask()).filter(([key]) => key !== "image"));
+    expect(taskDefSchema.parse(bare)).toMatchObject({ image: null });
+  });
+
+  it("сохраняется загруженный квадрат, игрок получает путь картинки; чужой id и не квадрат — отказ", async () => {
+    const ctx = setup();
+    const designer = await person(ctx, "504", "game_designer");
+    const { imageId } = await ctx.media.upload(designer, "task", webp("square96"));
+    await ctx.service.save(designer, channelTask({ image: imageId }));
+    const me = await person(ctx, "1");
+    expect(byId(await ctx.service.view(me, NOON), "ach_channel")).toMatchObject({ image: `/api/v1/media/${imageId}.webp` });
+    expect(byId(await ctx.service.view(me, NOON), "daily_runs")).toMatchObject({ image: null });
+
+    await expect(ctx.service.save(designer, channelTask({ image: "b".repeat(64) }))).rejects.toBeInstanceOf(ImageNotFoundError);
+    const wide = webp("wide120x80");
+    await ctx.images.insert({ imageId: "c".repeat(64), contentType: "image/webp", width: 120, height: 80, sizeBytes: wide.length, data: wide, createdBy: designer.accountId });
+    await expect(ctx.service.save(designer, channelTask({ image: "c".repeat(64) }))).rejects.toBeInstanceOf(ImageRejectedError);
+    expect(ctx.repository.defs.find((task) => task.taskId === "ach_channel")?.image).toBe(imageId);
+
+    // Убрать картинку можно всегда: вернётся значок вида.
+    await ctx.service.save(designer, channelTask({ image: null }));
+    expect(byId(await ctx.service.view(me, NOON), "ach_channel")).toMatchObject({ image: null });
   });
 });
 
