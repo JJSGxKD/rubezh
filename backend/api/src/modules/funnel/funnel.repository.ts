@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { PRISMA } from "../../infra/database.js";
+import type { FlagRule } from "../flags/flag-rollout.js";
+import { flagSplitReport, type FlagSplit } from "./flag-split-report.js";
 import { funnelReport, type FunnelRow } from "./funnel-report.js";
 
 /**
@@ -33,6 +35,8 @@ export interface FunnelRepository {
   milestones(accountId: string): Promise<FunnelMilestones | null>;
   /** воронка по источникам за период — тот же отчёт, что у команды `funnel:report` */
   report(from: Date, to: Date): Promise<FunnelRow[]>;
+  /** доля флага против остальных среди впервые открывших приложение за период; `rewardedPlaces` — места роликов за награду */
+  flagSplit(rule: FlagRule, from: Date, to: Date, at: Date, rewardedPlaces: readonly string[]): Promise<FlagSplit>;
   /** вошёл в канал площадки: бот, сообщество, страница */
   entered(accountId: string, at: Date): Promise<void>;
   /** запуск приложения: первый — полная регистрация, следующие — возвраты на D1 и D7 */
@@ -120,5 +124,9 @@ export class PrismaFunnelRepository implements FunnelRepository {
 
   async report(from: Date, to: Date): Promise<FunnelRow[]> {
     return await funnelReport(this.prisma, from, to);
+  }
+
+  async flagSplit(rule: FlagRule, from: Date, to: Date, at: Date, rewardedPlaces: readonly string[]): Promise<FlagSplit> {
+    return await flagSplitReport(this.prisma, rule, from, to, at, rewardedPlaces);
   }
 }

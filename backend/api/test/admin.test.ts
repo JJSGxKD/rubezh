@@ -20,7 +20,12 @@ import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
+import type { FlagRule } from "../src/modules/flags/flag-rollout.js";
+import { FLAGS_REPOSITORY, type FlagRecord, type FlagsRepository } from "../src/modules/flags/flags.repository.js";
+import { FlagsService } from "../src/modules/flags/flags.service.js";
+import type { FlagSplit } from "../src/modules/funnel/flag-split-report.js";
 import type { FunnelMilestones, FunnelRepository } from "../src/modules/funnel/funnel.repository.js";
+import { EMPTY_SPLIT_GROUP } from "./helpers/flag-split.js";
 import { FUNNEL_REPOSITORY } from "../src/modules/funnel/funnel.repository.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
@@ -59,6 +64,30 @@ class FakeFunnel implements FunnelRepository {
     this.calls.push({ from, to });
     return [];
   }
+  splits: Array<{ rule: FlagRule; from: Date; to: Date; rewardedPlaces: readonly string[] }> = [];
+  async flagSplit(rule: FlagRule, from: Date, to: Date, _at: Date, rewardedPlaces: readonly string[]): Promise<FlagSplit> {
+    this.splits.push({ rule, from, to, rewardedPlaces });
+    return { share: { ...EMPTY_SPLIT_GROUP, players: 10 }, rest: { ...EMPTY_SPLIT_GROUP, players: 90 } };
+  }
+}
+
+/** Флаги в памяти — ровно то, что читает сравнение долей. */
+class MemoryFlags implements FlagsRepository {
+  readonly flags = new Map<string, FlagRecord>();
+  async all(): Promise<FlagRecord[]> {
+    return [...this.flags.values()].sort((a, b) => a.key.localeCompare(b.key));
+  }
+  async byKey(key: string): Promise<FlagRecord | null> {
+    return this.flags.get(key) ?? null;
+  }
+  async save(flag: FlagRule & { note: string | null; updatedBy: string }): Promise<FlagRecord> {
+    const record = { ...flag, platforms: [...flag.platforms], updatedAt: new Date() };
+    this.flags.set(flag.key, record);
+    return record;
+  }
+  async remove(key: string): Promise<boolean> {
+    return this.flags.delete(key);
+  }
 }
 
 describe("панель по HTTP", () => {
@@ -67,6 +96,7 @@ describe("панель по HTTP", () => {
   let roles: MemoryRolesRepository;
   let store: MemoryAdminSessionStore;
   let funnel: FakeFunnel;
+  let flags: MemoryFlags;
   let runs: MemoryRunsRepository;
 
   async function start(env: Record<string, string> = {}): Promise<NestFastifyApplication> {
@@ -74,6 +104,7 @@ describe("панель по HTTP", () => {
     roles = new MemoryRolesRepository();
     store = new MemoryAdminSessionStore();
     funnel = new FakeFunnel();
+    flags = new MemoryFlags();
     runs = new MemoryRunsRepository();
     const config = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ...env } as NodeJS.ProcessEnv);
 
@@ -86,6 +117,8 @@ describe("панель по HTTP", () => {
         { provide: ROLES_REPOSITORY, useValue: roles },
         { provide: ADMIN_SESSION_STORE, useValue: store },
         { provide: FUNNEL_REPOSITORY, useValue: funnel },
+        { provide: FLAGS_REPOSITORY, useValue: flags },
+        FlagsService,
         { provide: RUNS_REPOSITORY, useValue: runs },
         { provide: LEADERBOARD_STORE, useValue: new MemoryLeaderboardStore() },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
@@ -311,6 +344,48 @@ describe("панель по HTTP", () => {
     expect(reversed.statusCode).toBe(400);
     const garbage = await server.inject({ method: "GET", url: "/api/v1/admin/funnel?from=вчера", headers: { cookie } });
     expect(garbage.statusCode).toBe(400);
+  });
+
+  it("доля флага против остальных: без флагов — пусто; по умолчанию — межстраничная с её последнего изменения; чужой ключ — 404", async () => {
+    const server = await start();
+    const cookie = await login(server);
+    const url = "/api/v1/admin/funnel/flag-split";
+    const empty = await server.inject({ method: "GET", url, headers: { cookie } });
+    expect(empty.json().data).toEqual({ flags: [], flag: null, from: null, to: null, split: null });
+
+    const changed = new Date(Date.now() - 5 * 86_400_000);
+    flags.flags.set("ads.interstitial", { key: "ads.interstitial", enabled: true, platforms: ["telegram"], percent: 10, note: "межстраничная", updatedBy: null, updatedAt: changed });
+    flags.flags.set("aa.first", { key: "aa.first", enabled: false, platforms: [], percent: 100, note: null, updatedBy: null, updatedAt: new Date(Date.now() - 2 * 365 * 86_400_000) });
+    const response = await server.inject({ method: "GET", url, headers: { cookie } });
+    expect(response.statusCode).toBe(200);
+    const data = response.json().data;
+    expect(data.flags.map((flag: { key: string }) => flag.key)).toEqual(["aa.first", "ads.interstitial"]);
+    expect(data).toMatchObject({ flag: "ads.interstitial", from: changed.toISOString(), split: { share: { players: 10 }, rest: { players: 90 } } });
+    expect(funnel.splits[0]?.rule).toMatchObject({ key: "ads.interstitial", platforms: ["telegram"], percent: 10 });
+    expect(funnel.splits[0]?.rewardedPlaces).toEqual(["second_chance", "wheel_spin", "run_double"]);
+
+    // Флаг меняли давно — период не длиннее года.
+    const old = await server.inject({ method: "GET", url: `${url}?flag=aa.first`, headers: { cookie } });
+    const call = funnel.splits[1];
+    expect(old.statusCode).toBe(200);
+    expect(call && call.to.getTime() - call.from.getTime()).toBe(365 * 86_400_000);
+
+    expect((await server.inject({ method: "GET", url: `${url}?flag=no.such`, headers: { cookie } })).statusCode).toBe(404);
+    expect((await server.inject({ method: "GET", url: `${url}?flag=Плохой`, headers: { cookie } })).statusCode).toBe(400);
+  });
+
+  it("доля флага: звёзды — доход, аналитику без права на него не видны; число платящих — как в воронке", async () => {
+    const server = await start();
+    await login(server);
+    flags.flags.set("ads.interstitial", { key: "ads.interstitial", enabled: true, platforms: ["telegram"], percent: 10, note: null, updatedBy: null, updatedAt: new Date(Date.now() - 86_400_000) });
+    const analyst = await accounts.upsert({ platform: "telegram", platformUserId: "600009", displayName: "Аналитик", username: null, photoUrl: null }, Date.now());
+    await roles.grant(analyst.accountId, "analyst", null);
+    await store.put(hashSessionToken("analyst"), { accountId: analyst.accountId, platform: "telegram", platformUserId: "600009", issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });
+    const response = await server.inject({ method: "GET", url: "/api/v1/admin/funnel/flag-split", headers: { cookie: `${ADMIN_SESSION_COOKIE}=analyst` } });
+    expect(response.statusCode).toBe(200);
+    const split = response.json().data.split;
+    expect(split.share).toMatchObject({ players: 10, payers: 0, stars: null });
+    expect(split.rest.stars).toBeNull();
   });
 
   it("случайный токен в cookie не открывает панель", async () => {

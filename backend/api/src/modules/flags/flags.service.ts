@@ -45,6 +45,15 @@ export class FlagsService {
     return rule !== undefined && isOn(rule, account);
   }
 
+  /**
+   * Все флаги без проверки права — для отчётов панели, которые читают их под
+   * своим правом (сравнение долей — `analytics.gameplay.view`). Менять флаги
+   * можно только через `save` с правом `flags.edit`.
+   */
+  async catalog(): Promise<FlagRecord[]> {
+    return await this.flags.all();
+  }
+
   async list(actor: AccountRef): Promise<FlagRecord[]> {
     await this.roles.require(actor, "flags.edit");
     return await this.flags.all();

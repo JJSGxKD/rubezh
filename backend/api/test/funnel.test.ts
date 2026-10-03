@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { AuthHooks, type LoginEvent } from "../src/modules/auth/auth-hooks.js";
 import { FunnelTracker } from "../src/modules/funnel/funnel-tracker.js";
 import type { FunnelMilestones, FunnelRepository } from "../src/modules/funnel/funnel.repository.js";
+import type { FlagSplit } from "../src/modules/funnel/flag-split-report.js";
+import { EMPTY_SPLIT_GROUP } from "./helpers/flag-split.js";
 import { PaymentsHooks } from "../src/modules/payments/payments-hooks.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 
@@ -29,6 +31,9 @@ class MemoryFunnel implements FunnelRepository {
   }
   async report(): Promise<[]> {
     return [];
+  }
+  async flagSplit(): Promise<FlagSplit> {
+    return { share: EMPTY_SPLIT_GROUP, rest: EMPTY_SPLIT_GROUP };
   }
   async firstPurchase(accountId: string): Promise<void> {
     this.calls.push(`purchase:${accountId}`);
