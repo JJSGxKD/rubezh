@@ -93,6 +93,7 @@ const ACTION_TITLES: Record<string, string> = {
   "settings.reset": "Сброс настройки к окружению",
   "secrets.save": "Замена ключа интеграции",
   "secrets.reset": "Сброс ключа интеграции к окружению",
+  "secrets.generate": "Новый адрес для сети",
   "flags.save": "Изменение флага",
   "flags.remove": "Удаление флага",
   "tasks.create": "Новое задание",

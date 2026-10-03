@@ -39,6 +39,20 @@ export interface SecretDefinition {
   readonly fromEnv: (config: AppConfig) => string | null;
   /** проверка связи с сервисом этим ключом; нет — сервис проверки не даёт */
   readonly check?: (value: string, fetchImpl: typeof fetch) => Promise<SecretCheckResult>;
+  /**
+   * Ключ создаёт наш сервер, а не сервис: секрет в адресе, который зовёт
+   * сеть. Панель его не вводит, а просит создать — и сервер один раз
+   * показывает, что вставить в кабинет сервиса: адрес с секретом. Дальше —
+   * только последние знаки, как у любого ключа.
+   */
+  readonly generated?: GeneratedSecret;
+}
+
+export interface GeneratedSecret {
+  /** что вставить в кабинет сервиса — с новым секретом внутри */
+  readonly reveal: (value: string, config: AppConfig) => string;
+  /** куда именно вставить — словами для панели */
+  readonly where: string;
 }
 
 export const SECRET_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
@@ -74,6 +88,19 @@ function coingeckoCheck(plan: "demo" | "pro") {
 
 const FX_SERVICE = "Курсы валют · CoinGecko";
 const ADSGRAM_SERVICE = "Трекинг закупок · AdsGram";
+const ADSGRAM_TASKS_SERVICE = "Задания сетей · AdsGram";
+
+/**
+ * Адрес награды за задание AdsGram (docs/35-stage4-plan.md WP13, часть 6):
+ * AdsGram зовёт его, когда игрок выполнил задание, и подставляет вместо
+ * `[userId]` его id в Telegram. Подписи у запроса нет — подделку отличает
+ * только секрет в пути. Путь — тот же, что у ручки
+ * `ads/adsgram-reward.controller.ts`; их совпадение проверяет HTTP-тест.
+ */
+export const ADSGRAM_REWARD_PATH = "/api/v1/ads/adsgram/reward";
+
+/** Секрет адреса — 32 случайных байта в base64url: подобрать его перебором нельзя. */
+export const GENERATED_SECRET_BYTES = 32;
 
 export const SECRETS = {
   coingeckoPro: {
@@ -110,6 +137,22 @@ export const SECRETS = {
     // Только из панели: токен перевыпускают в кабинете, и заменять его
     // должен человек, а не выкат с новым `.env`.
     fromEnv: () => null,
+  },
+  adsgramRewardSecret: {
+    key: "adsgram.reward-secret",
+    service: ADSGRAM_TASKS_SERVICE,
+    title: "Адрес награды за задание AdsGram",
+    hint: "AdsGram зовёт этот адрес, когда игрок выполнил задание сети во вкладке «Партнёры», — и только тогда сервер даёт награду. Секрет в адресе отличает AdsGram от подделки. Пока адреса нет, заданий AdsGram у игроков нет: награду за них дать было бы нечем.",
+    cabinetUrl: "https://partner.adsgram.ai",
+    pattern: /^[A-Za-z0-9_-]{32,128}$/,
+    example: "aBcD3fGh1jKlMn0pQrStUvWxYz_-aBcD3fGh1jKlMnO",
+    // Только из панели: адрес вставляют в кабинет AdsGram, и создаёт его
+    // человек, который тут же его туда и вставит.
+    fromEnv: () => null,
+    generated: {
+      reveal: (value, config) => `${config.telegram.publicApiUrl}${ADSGRAM_REWARD_PATH}/${value}/[userId]`,
+      where: "кабинет AdsGram → блок формата Task → поле Reward URL",
+    },
   },
 } as const satisfies Record<string, SecretDefinition>;
 

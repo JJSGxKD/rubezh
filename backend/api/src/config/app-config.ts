@@ -97,7 +97,8 @@ const schema = z.object({
     .refine((value) => value === "" || /^[A-Za-z0-9_-]{32,256}$/.test(value), {
       message: "TELEGRAM_WEBHOOK_SECRET — от 32 знаков A-Z, a-z, 0-9, _ и -",
     }),
-  // Публичный адрес API — куда регистрировать вебхук (`pnpm bot:webhook`).
+  // Публичный адрес API — куда регистрировать вебхук (`pnpm bot:webhook`) и
+  // с чего начинается адрес награды AdsGram, который панель создаёт для кабинета.
   PUBLIC_API_URL: z.string().default(""),
   // Адрес Mini App для кнопки «Играть» под приветствием. Telegram принимает
   // только HTTPS: без него карточка уходит без кнопки.
@@ -283,7 +284,7 @@ export interface AppConfig {
     apiRoot: string;
     /** секретный токен вебхука; пусто — вебхук не настроен */
     webhookSecret: string;
-    /** публичный адрес API без косой в конце — для регистрации вебхука */
+    /** публичный адрес API без косой в конце — для регистрации вебхука и адреса награды AdsGram */
     publicApiUrl: string;
     /** адрес Mini App для кнопки «Играть» */
     webAppUrl: string;

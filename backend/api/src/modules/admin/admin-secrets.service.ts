@@ -1,10 +1,12 @@
+import { randomBytes } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
-import { secretByKey, secretProblem, type SecretCheckResult, type SecretDefinition } from "../secrets/secret-catalog.js";
+import { GENERATED_SECRET_BYTES, secretByKey, secretProblem, type SecretCheckResult, type SecretDefinition } from "../secrets/secret-catalog.js";
 import { SecretsService, type SecretSource, type SecretState } from "../secrets/secrets.service.js";
-import { SecretMissingError, SecretNotFoundError, SecretUncheckableError } from "./admin-errors.js";
+import { SecretMissingError, SecretNotFoundError, SecretNotGeneratedError, SecretUncheckableError } from "./admin-errors.js";
 
 /**
  * Ключи интеграций в панели (docs/35-stage4-plan.md Р84, WP46). Видеть
@@ -23,6 +25,8 @@ export interface SecretView {
   /** вид ключа — панель проверяет его до отправки тем же правилом */
   pattern: string;
   checkable: boolean;
+  /** куда вставить созданный сервером ключ; `null` — ключ берут в кабинете сервиса */
+  generated: string | null;
   source: SecretSource;
   fingerprint: string | null;
   envSet: boolean;
@@ -30,6 +34,17 @@ export interface SecretView {
   updatedBy: string | null;
   updatedByName: string | null;
   updatedAt: Date | null;
+}
+
+/**
+ * Созданный ключ — один раз: что вставить в кабинет сервиса. `absolute` —
+ * адрес полный; нет — на сервере не задан `PUBLIC_API_URL`, и начало адреса
+ * человек дописывает сам.
+ */
+export interface GeneratedSecretView {
+  secret: SecretView;
+  reveal: string;
+  absolute: boolean;
 }
 
 export interface SecretsOverview {
@@ -44,6 +59,7 @@ export class AdminSecretsService {
     private readonly secrets: SecretsService,
     private readonly roles: RolesService,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async list(actor: AccountRef): Promise<SecretsOverview> {
@@ -64,6 +80,24 @@ export class AdminSecretsService {
     const after = this.state(secret);
     await this.roles.audit({ actorAccountId: actor.accountId, action: "secrets.save", target: key, before: auditOf(before), after: auditOf(after) });
     return await this.view(after);
+  }
+
+  /**
+   * Новый ключ, который создаёт сервер (секрет адреса награды): прежний
+   * перестаёт работать сразу. Что вставить в кабинет сервиса, ответ несёт
+   * один раз — ни список, ни аудит его не покажут.
+   */
+  async generate(actor: AccountRef, key: string): Promise<GeneratedSecretView> {
+    await this.roles.require(actor, "secrets.edit");
+    const secret = this.definition(key);
+    if (secret.generated === undefined) throw new SecretNotGeneratedError();
+    const value = randomBytes(GENERATED_SECRET_BYTES).toString("base64url");
+    const before = this.state(secret);
+    await this.secrets.write(secret, value, actor.accountId);
+    const after = this.state(secret);
+    await this.roles.audit({ actorAccountId: actor.accountId, action: "secrets.generate", target: key, before: auditOf(before), after: auditOf(after) });
+    const reveal = secret.generated.reveal(value, this.config);
+    return { secret: await this.view(after), reveal, absolute: /^https?:\/\//.test(reveal) };
   }
 
   /** Сброс к окружению: строка удаляется, и снова работает `.env` сервера. */
@@ -122,6 +156,7 @@ function viewOf(state: SecretState, names: ReadonlyMap<string, string>): SecretV
     example: secret.example,
     pattern: secret.pattern.source,
     checkable: secret.check !== undefined,
+    generated: secret.generated?.where ?? null,
     source: state.source,
     fingerprint: state.fingerprint,
     envSet: state.envSet,
