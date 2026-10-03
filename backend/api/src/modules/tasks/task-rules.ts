@@ -124,6 +124,16 @@ export function rewardReason(period: TaskPeriod): Extract<EarnReason, "task_rewa
   return period === "achievement" ? "achievement_reward" : "task_reward";
 }
 
+/** Пределы лимита выполнений — те же у формы панели и в `CHECK` базы. */
+export const TASK_LIMIT_RANGE = { min: 1, max: 1_000_000 } as const;
+
+/**
+ * Мягкий час (Р82): кто перешёл к заданию до исчерпания лимита, получает
+ * награду ещё час — иначе игрок подписался бы зря. Час идёт от последнего
+ * перехода, а переход после исчерпания час не продлевает.
+ */
+export const TASK_LIMIT_GRACE_MIN = 60;
+
 /** Строка каталога — как её правит панель и читает сервер. */
 export const taskDefSchema = z
   .object({
@@ -142,9 +152,14 @@ export const taskDefSchema = z
     passPoints: z.number().int().nonnegative().max(10_000),
     sort: z.number().int().min(0).max(10_000),
     active: z.boolean(),
+    /** лимит выполнений партнёрской цели — сколько игроков получат награду; `null` — без лимита, и панель до лимита поля не слала */
+    limit: z.number().int().min(TASK_LIMIT_RANGE.min).max(TASK_LIMIT_RANGE.max).nullable().default(null),
   })
   .strict()
   .refine((task) => task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
+  // Лимит — у того, что выполняют действием вне игры: место в нём занимает
+  // игрок, а у цели забега мест нет.
+  .refine((task) => task.limit === null || isCheckedKind(task.kind), { message: "лимит выполнений — только у партнёрской цели", path: ["limit"] })
   .refine((task) => isCheckedKind(task.kind) === (task.params !== null), { message: "ссылка — у партнёрской цели, и только у неё", path: ["params"] })
   .refine((task) => task.kind !== "channel" || (task.params?.platform !== undefined && task.params.chat !== undefined), {
     message: "у подписки на канал нужны площадка и канал — по ним спрашивает бот",
@@ -169,3 +184,38 @@ function isCheckedKind(kind: TaskKind): boolean {
 }
 
 export type TaskDef = z.infer<typeof taskDefSchema>;
+
+/** Что игрок знает о своём месте в задании с лимитом; без лимита и для выполнивших — ничего. */
+export interface TaskSlots {
+  /** сколько мест осталось; 0 — исчерпано */
+  left: number;
+  total: number;
+  /** исчерпано, но место игрока держится до этого времени — мягкий час */
+  holdUntil: Date | null;
+}
+
+/** Участие игрока в партнёрской цели: последний переход и первое выполнение. */
+export interface TaskParticipation {
+  completions: number;
+  openedAt: Date | null;
+  completedAt: Date | null;
+}
+
+/**
+ * Видна ли цель с лимитом игроку и что сказать ему о местах. Выполнивший
+ * место уже занял — лимит его не касается. Исчерпано — цель видна только
+ * тем, кто перешёл к ней в последний час; остальным её нет.
+ */
+export function slotsFor(limit: number | null, participation: TaskParticipation | null, at: Date): { visible: boolean; slots: TaskSlots | null } {
+  if (limit === null || (participation !== null && participation.completedAt !== null)) return { visible: true, slots: null };
+  const completions = participation?.completions ?? 0;
+  const left = Math.max(0, limit - completions);
+  if (left > 0) return { visible: true, slots: { left, total: limit, holdUntil: null } };
+  const holdUntil = graceEnd(participation?.openedAt ?? null);
+  return holdUntil !== null && holdUntil > at ? { visible: true, slots: { left: 0, total: limit, holdUntil } } : { visible: false, slots: null };
+}
+
+/** Конец мягкого часа от перехода; без перехода часа нет. */
+export function graceEnd(openedAt: Date | null): Date | null {
+  return openedAt === null ? null : new Date(openedAt.getTime() + TASK_LIMIT_GRACE_MIN * 60_000);
+}

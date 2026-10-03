@@ -3,12 +3,16 @@ import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { TASK_KIND_IDS, TASK_PERIODS, taskParamsSchema, type TaskDef, type TaskKind, type TaskPeriod } from "./task-rules.js";
+import { TASK_KIND_IDS, TASK_PERIODS, taskParamsSchema, type TaskDef, type TaskKind, type TaskParticipation, type TaskPeriod } from "./task-rules.js";
 
 /**
  * Задания в базе: каталог (`task_def`), прогресс по срокам (`task_progress`)
  * и засчитанные забеги (`task_run`). Начало срока считает база — одна
  * граница суток и недели у всех реплик (`common/game-day.ts`).
+ *
+ * Партнёрские цели ведут ещё и участников (`task_participant`, Р82): строку
+ * на игрока с последним переходом и первым выполнением — по ней считается
+ * лимит выполнений и мягкий час начавших.
  */
 
 export interface TaskProgressRow {
@@ -40,10 +44,19 @@ export interface TasksRepository {
   /** отметить забор; `false` — уже забрано параллельным запросом */
   markClaimed(accountId: string, taskId: string, periodStart: string, at: Date): Promise<boolean>;
   /**
-   * Цель выполнена проверкой площадки, а не забегом (Р52): прогресс срока —
-   * сразу цель. Повтор ничего не меняет: время выполнения остаётся первым.
+   * Цель выполнена проверкой площадки или переходом, а не забегом (Р52):
+   * прогресс срока — сразу цель. Первое выполнение игрока занимает место в
+   * лимите — под блокировкой строки задания, сверх лимита только в мягкий
+   * час от перехода не раньше `graceSince`. `null` — мест нет. Повтор
+   * ничего не меняет: время выполнения остаётся первым.
    */
-  complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date): Promise<TaskProgressRow>;
+  complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date, graceSince: Date): Promise<TaskProgressRow | null>;
+  /** игрок перешёл к партнёрской цели — от этого идёт мягкий час */
+  markOpened(accountId: string, taskId: string, at: Date): Promise<void>;
+  /** участие игрока во включённых партнёрских целях — с числом выполнивших */
+  participation(accountId: string): Promise<Map<string, TaskParticipation>>;
+  /** сколько игроков выполнили каждую цель — панели */
+  completions(): Promise<Map<string, number>>;
   /** завести строку каталога; `false` — такой id уже есть */
   insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean>;
   /** поправить строку каталога — всё, кроме срока и вида; `false` — строки нет */
@@ -66,6 +79,7 @@ export function periodStartSql(period: Prisma.Sql, at: Date): Prisma.Sql {
 
 const defSchema = z.object({
   task_id: z.string(),
+  completion_limit: z.number().int().nullable(),
   period: z.enum(TASK_PERIODS),
   kind: z.string(),
   target: z.number().int(),
@@ -81,6 +95,10 @@ const defSchema = z.object({
 
 const progressSchema = z.object({ task_id: z.string(), period_start: z.string(), value: z.number().int(), done: z.boolean(), claimed: z.boolean() });
 
+const participationSchema = z.object({ task_id: z.string(), completions: z.number().int(), opened_at: z.date().nullable(), completed_at: z.date().nullable() });
+
+const participantSchema = z.object({ opened_at: z.date().nullable(), completed_at: z.date().nullable() });
+
 function isKind(kind: string): kind is TaskKind {
   return (TASK_KIND_IDS as string[]).includes(kind);
 }
@@ -93,7 +111,7 @@ export class PrismaTasksRepository implements TasksRepository {
 
   async catalog(): Promise<TaskDef[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params
+      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit
       FROM task_def ORDER BY period, sort, task_id`;
     const defs: TaskDef[] = [];
     for (const raw of rows) {
@@ -119,6 +137,7 @@ export class PrismaTasksRepository implements TasksRepository {
         passPoints: row.pass_points,
         sort: row.sort,
         active: row.active,
+        limit: row.completion_limit,
       });
     }
     return defs;
@@ -170,9 +189,9 @@ export class PrismaTasksRepository implements TasksRepository {
   async insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean> {
     return (
       (await this.prisma.$executeRaw`
-        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, created_at, updated_at, updated_by)
+        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, created_at, updated_at, updated_by)
         VALUES (${task.taskId}, ${task.period}::"TaskPeriod", ${task.kind}, ${task.target}, ${task.title}, ${task.coins}, ${task.gems}, ${task.shards},
-                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${at}, ${at}, ${actorAccountId}::uuid)
+                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${task.limit}, ${at}, ${at}, ${actorAccountId}::uuid)
         ON CONFLICT (task_id) DO NOTHING`) > 0
     );
   }
@@ -184,22 +203,72 @@ export class PrismaTasksRepository implements TasksRepository {
       (await this.prisma.$executeRaw`
         UPDATE task_def SET target = ${task.target}, title = ${task.title}, coins = ${task.coins}, gems = ${task.gems}, shards = ${task.shards},
           pass_points = ${task.passPoints}, sort = ${task.sort}, active = ${task.active}, params = ${paramsJson(task)}::jsonb,
-          updated_at = ${at}, updated_by = ${actorAccountId}::uuid
+          completion_limit = ${task.limit}, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
         WHERE task_id = ${task.taskId}`) > 0
     );
   }
 
-  async complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date): Promise<TaskProgressRow> {
+  async complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date, graceSince: Date): Promise<TaskProgressRow | null> {
+    return await this.prisma.$transaction(async (tx) => {
+      // Строка участника — под блокировкой: два забора игрока разом не займут
+      // два места, а второй увидит, что место уже его.
+      await tx.$executeRaw`
+        INSERT INTO task_participant (task_id, account_id) VALUES (${task.taskId}, ${accountId}::uuid) ON CONFLICT (task_id, account_id) DO NOTHING`;
+      const [raw] = await tx.$queryRaw<unknown[]>`
+        SELECT opened_at, completed_at FROM task_participant WHERE task_id = ${task.taskId} AND account_id = ${accountId}::uuid FOR UPDATE`;
+      const participant = participantSchema.parse(raw);
+      if (participant.completed_at === null) {
+        // Место — строкой задания: условие лимита проверяется на её свежей
+        // версии под блокировкой, и сколько бы заборов ни пришло разом, сверх
+        // лимита пройдут только начавшие в мягкий час.
+        const grace = participant.opened_at !== null && participant.opened_at >= graceSince;
+        const taken = await tx.$executeRaw`
+          UPDATE task_def SET completions = completions + 1
+          WHERE task_id = ${task.taskId} AND (completion_limit IS NULL OR completions < completion_limit OR ${grace})`;
+        if (taken === 0) return null;
+        await tx.$executeRaw`
+          UPDATE task_participant SET completed_at = ${at} WHERE task_id = ${task.taskId} AND account_id = ${accountId}::uuid`;
+      }
+      const rows = await tx.$queryRaw<unknown[]>`
+        INSERT INTO task_progress (account_id, task_id, period_start, value, target, completed_at, updated_at)
+        VALUES (${accountId}::uuid, ${task.taskId}, ${periodStartSql(Prisma.sql`${task.period}::text`, at)}, ${task.target}, ${task.target}, ${at}, ${at})
+        ON CONFLICT (account_id, task_id, period_start) DO UPDATE SET
+          value = GREATEST(task_progress.value, EXCLUDED.value),
+          completed_at = COALESCE(task_progress.completed_at, EXCLUDED.completed_at),
+          updated_at = EXCLUDED.updated_at
+        RETURNING task_id, period_start::text, value, completed_at IS NOT NULL AS done, claimed_at IS NOT NULL AS claimed`;
+      const row = progressSchema.parse(rows[0]);
+      return { taskId: row.task_id, periodStart: row.period_start, value: row.value, done: row.done, claimed: row.claimed };
+    });
+  }
+
+  async markOpened(accountId: string, taskId: string, at: Date): Promise<void> {
+    await this.prisma.$executeRaw`
+      INSERT INTO task_participant (task_id, account_id, opened_at) VALUES (${taskId}, ${accountId}::uuid, ${at})
+      ON CONFLICT (task_id, account_id) DO UPDATE SET opened_at = EXCLUDED.opened_at`;
+  }
+
+  async participation(accountId: string): Promise<Map<string, TaskParticipation>> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      INSERT INTO task_progress (account_id, task_id, period_start, value, target, completed_at, updated_at)
-      VALUES (${accountId}::uuid, ${task.taskId}, ${periodStartSql(Prisma.sql`${task.period}::text`, at)}, ${task.target}, ${task.target}, ${at}, ${at})
-      ON CONFLICT (account_id, task_id, period_start) DO UPDATE SET
-        value = GREATEST(task_progress.value, EXCLUDED.value),
-        completed_at = COALESCE(task_progress.completed_at, EXCLUDED.completed_at),
-        updated_at = EXCLUDED.updated_at
-      RETURNING task_id, period_start::text, value, completed_at IS NOT NULL AS done, claimed_at IS NOT NULL AS claimed`;
-    const row = progressSchema.parse(rows[0]);
-    return { taskId: row.task_id, periodStart: row.period_start, value: row.value, done: row.done, claimed: row.claimed };
+      SELECT d.task_id, d.completions, p.opened_at, p.completed_at
+      FROM task_def d LEFT JOIN task_participant p ON p.task_id = d.task_id AND p.account_id = ${accountId}::uuid
+      WHERE d.active AND d.params IS NOT NULL`;
+    return new Map(
+      rows.map((raw) => {
+        const row = participationSchema.parse(raw);
+        return [row.task_id, { completions: row.completions, openedAt: row.opened_at, completedAt: row.completed_at }];
+      }),
+    );
+  }
+
+  async completions(): Promise<Map<string, number>> {
+    const rows = await this.prisma.$queryRaw<unknown[]>`SELECT task_id, completions FROM task_def WHERE completions > 0`;
+    return new Map(
+      rows.map((raw) => {
+        const row = z.object({ task_id: z.string(), completions: z.number().int() }).parse(raw);
+        return [row.task_id, row.completions];
+      }),
+    );
   }
 
   async markClaimed(accountId: string, taskId: string, periodStart: string, at: Date): Promise<boolean> {

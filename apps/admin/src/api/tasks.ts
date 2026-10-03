@@ -93,9 +93,14 @@ const taskSchema = z.object({
   passPoints: z.number(),
   sort: z.number(),
   active: z.boolean(),
+  /** лимит выполнений партнёрской цели; сервер до лимита поля не отдавал */
+  limit: z.number().nullable().default(null),
 });
 
 export type TaskDef = z.infer<typeof taskSchema>;
+
+/** Пределы лимита — те же, что у сервера и в `CHECK` базы (`tasks/task-rules.ts`). */
+export const TASK_LIMIT_RANGE = { min: 1, max: 1_000_000 } as const;
 
 /**
  * Задания рекламной сети (docs/35-stage4-plan.md WP13, часть 6): строка на
@@ -132,6 +137,8 @@ const catalogSchema = z.object({
   periods: z.array(z.enum(TASK_PERIODS)),
   /** сервер до заданий сетей поля не отдавал */
   networks: z.array(networkTaskSchema).default([]),
+  /** сколько игроков выполнили партнёрскую цель; сервер до лимита поля не отдавал */
+  completions: z.record(z.string(), z.number()).default({}),
 });
 export type TaskCatalog = z.infer<typeof catalogSchema>;
 
@@ -180,7 +187,7 @@ export function togglePlatform(params: TaskParams | null, platform: PartnerPlatf
  * поле формы сохраняет.
  */
 export function withKind(task: TaskDef, kind: string): TaskDef {
-  if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null };
+  if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null, limit: null };
   const url = task.params?.url ?? "";
   const kept = partnerPlatforms(task.params);
   const channelPlatform = task.params?.platform ?? CHANNEL_PLATFORMS.find((platform) => kept.includes(platform)) ?? "telegram";
@@ -213,6 +220,9 @@ function partnerProblem(task: TaskDef): string | null {
   }
   const url = task.params.url.trim();
   if (url.length > URL_MAX || !isHttpsUrl(url)) return `Ссылка — https://…, до ${String(URL_MAX)} знаков`;
+  if (task.limit !== null && (!Number.isInteger(task.limit) || task.limit < TASK_LIMIT_RANGE.min || task.limit > TASK_LIMIT_RANGE.max)) {
+    return `Лимит выполнений — целое от ${String(TASK_LIMIT_RANGE.min)} до ${TASK_LIMIT_RANGE.max.toLocaleString("ru-RU")} или пусто — без лимита`;
+  }
   return null;
 }
 
@@ -234,7 +244,17 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if ((task.title?.trim().length ?? 0) > TITLE_MAX) return `Заголовок — до ${String(TITLE_MAX)} знаков`;
   if (PARTNER_KINDS.has(task.kind)) return partnerProblem(task);
   if (task.params !== null) return "Ссылка — только у партнёрских целей";
+  if (task.limit !== null) return "Лимит выполнений — только у партнёрских целей";
   return null;
+}
+
+/**
+ * Сколько выполнили — подписью списка: «37 из 500» у цели с лимитом,
+ * «37» — без него. Исчерпан — отдельно: панель называет это словом.
+ */
+export function completionsLabel(task: Pick<TaskDef, "limit">, completions: number): { text: string; exhausted: boolean } {
+  if (task.limit === null) return { text: String(completions), exhausted: false };
+  return { text: `${String(completions)} из ${String(task.limit)}`, exhausted: completions >= task.limit };
 }
 
 export function rewardLabel(task: Pick<TaskDef, "coins" | "gems" | "shards">): string {

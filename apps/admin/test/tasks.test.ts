@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
+  TASK_LIMIT_RANGE,
   cadenceLabel,
+  completionsLabel,
   fetchTasks,
   groupByPeriod,
   networkTaskProblem,
@@ -26,7 +28,7 @@ import { fakeFetch, json } from "./helpers";
 // каталог — по срокам в порядке показа игроку.
 
 function task(patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, ...patch };
+  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, limit: null, ...patch };
 }
 
 describe("задания в панели", () => {
@@ -107,6 +109,33 @@ describe("задания в панели", () => {
 
       const old = await fetchTasks(api);
       expect(old.ok && old.data.tasks[0]?.params).toBeNull();
+    });
+  });
+
+  describe("лимит выполнений", () => {
+    const channel = (patch: Partial<TaskDef> = {}) =>
+      task({ taskId: "ach_channel", period: "achievement", kind: "channel", target: 1, coins: 0, gems: 15, params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" }, ...patch });
+
+    it("лимит — у партнёрской цели, целым в пределах сервера; у цели забега его нет, смена вида его снимает", () => {
+      expect(taskProblem(channel({ limit: 500 }), true, [])).toBeNull();
+      expect(taskProblem(channel({ limit: 0 }), true, [])).toMatch(/Лимит выполнений — целое/);
+      expect(taskProblem(channel({ limit: 2.5 }), true, [])).toMatch(/Лимит выполнений — целое/);
+      expect(taskProblem(channel({ limit: TASK_LIMIT_RANGE.max + 1 }), true, [])).toMatch(/Лимит выполнений/);
+      expect(taskProblem(task({ taskId: "x_1", limit: 10 }), true, [])).toMatch(/только у партнёрских/);
+      expect(withKind(channel({ limit: 500 }), "runs").limit).toBeNull();
+    });
+
+    it("сколько выполнили — словами; лимит уходит на сервер, старый сервер без лимита и счёта читается", async () => {
+      expect(completionsLabel(channel(), 12)).toEqual({ text: "12", exhausted: false });
+      expect(completionsLabel(channel({ limit: 500 }), 37)).toEqual({ text: "37 из 500", exhausted: false });
+      expect(completionsLabel(channel({ limit: 500 }), 501)).toEqual({ text: "501 из 500", exhausted: true });
+
+      const { fetch, calls } = fakeFetch(json(200, { data: channel({ limit: 500 }) }), json(200, { data: { tasks: [{ ...channel(), limit: undefined }], kinds: ["channel"], periods: ["achievement"] } }));
+      const api = new AdminApi(fetch);
+      await saveTask(api, channel({ limit: 500 }));
+      expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ limit: 500 });
+      const old = await fetchTasks(api);
+      expect(old.ok && [old.data.tasks[0]?.limit, old.data.completions]).toEqual([null, {}]);
     });
   });
 

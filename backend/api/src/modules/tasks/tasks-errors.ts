@@ -41,3 +41,13 @@ export class TaskNotOpenedError extends DomainError {
     super("task_not_opened", "Сначала перейдите по ссылке задания", 409);
   }
 }
+
+/**
+ * Места в задании с лимитом закончились (Р82), а игрок к нему не переходил
+ * в последний час — награды нет, задание у него пропадает.
+ */
+export class TaskLimitReachedError extends DomainError {
+  constructor() {
+    super("task_limit_reached", "Места в задании закончились", 409);
+  }
+}

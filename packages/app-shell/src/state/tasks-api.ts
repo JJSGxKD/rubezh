@@ -33,6 +33,8 @@ const taskSchema = z.object({
   passPoints: z.number(),
   /** куда вести игрока — у цели «канал»; сервер до канала поля не отдавал */
   link: z.optional(z.nullable(z.string())),
+  /** места в партнёрской цели с лимитом (Р82); сервер до лимита поля не отдавал */
+  slots: z.optional(z.nullable(z.object({ left: z.number(), total: z.number(), holdUntil: z.nullable(z.string()) }))),
 });
 /**
  * Задание рекламной сети (docs/35-stage4-plan.md WP13, часть 6). У AdsGram
@@ -161,6 +163,8 @@ export const TASK_NOT_JOINED = "task_not_joined";
 export const TASK_NOT_OPENED = "task_not_opened";
 /** Площадка не ответила или задание настроено так, что проверить нечем. */
 export const TASK_CHECK_UNAVAILABLE = "task_check_unavailable";
+/** Места в цели с лимитом закончились, а игрок к ней не переходил в последний час. */
+export const TASK_LIMIT_REACHED = "task_limit_reached";
 
 /** Текст отказа в заборе по коду сервера — ключом словаря. */
 export function claimFailureKey(code: string | undefined): string {
@@ -168,7 +172,21 @@ export function claimFailureKey(code: string | undefined): string {
   if (code === TASK_NOT_JOINED) return "tasks.notJoined";
   if (code === TASK_CHECK_UNAVAILABLE) return "tasks.checkUnavailable";
   if (code === TASK_NOT_OPENED) return "tasks.notOpened";
+  if (code === TASK_LIMIT_REACHED) return "tasks.limitReached";
   return "tasks.claimFailed";
+}
+
+/**
+ * Что сказать о местах в цели с лимитом: «Осталось 37 из 500» — пока места
+ * есть; кончились, а место игрока держится — до какого времени. Без лимита
+ * и у выполнившего — ничего: место у него уже есть.
+ */
+export function slotsText(slots: TaskItem["slots"], nowMs: number): { key: string; params: Record<string, number> } | null {
+  if (slots === null || slots === undefined) return null;
+  if (slots.left > 0) return { key: "tasks.slotsLeft", params: { left: slots.left, total: slots.total } };
+  const until = slots.holdUntil === null ? Number.NaN : Date.parse(slots.holdUntil);
+  if (Number.isNaN(until) || until <= nowMs) return null;
+  return { key: "tasks.slotsHeld", params: { minutes: Math.max(1, Math.ceil((until - nowMs) / 60_000)) } };
 }
 
 /**

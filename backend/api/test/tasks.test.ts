@@ -14,6 +14,7 @@ import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { ChannelMemberships, MembershipRejectedError, MembershipUnavailableError, type ChannelMembership } from "../src/platforms/ports/channel-membership.js";
 import {
   TaskCheckUnavailableError,
+  TaskLimitReachedError,
   TaskNotDoneError,
   TaskNotFoundError,
   TaskNotJoinedError,
@@ -21,7 +22,7 @@ import {
   TaskShapeLockedError,
 } from "../src/modules/tasks/tasks-errors.js";
 import { NetworkTasksService } from "../src/modules/tasks/network-tasks.service.js";
-import { RUN_KINDS, countsForTasks, rewardReason, taskDefSchema, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { RUN_KINDS, TASK_LIMIT_GRACE_MIN, countsForTasks, rewardReason, slotsFor, taskDefSchema, type TaskDef, type TaskParticipation } from "../src/modules/tasks/task-rules.js";
 import { TasksController } from "../src/modules/tasks/tasks.controller.js";
 import { ACHIEVEMENT_PERIOD_START, type TaskDelta, type TaskProgressRow, type TasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
@@ -46,7 +47,7 @@ const DAY = 24 * HOUR;
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 
 function def(taskId: string, patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId, period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, ...patch };
+  return { taskId, period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, ...patch };
 }
 
 const CATALOG: TaskDef[] = [
@@ -72,7 +73,12 @@ class MemoryTasks implements TasksRepository {
   readonly defs: TaskDef[] = CATALOG.map((task) => ({ ...task }));
   readonly rows = new Map<string, TaskProgressRow & { accountId: string; target: number }>();
   readonly runs = new Set<string>();
+  /** участники партнёрских целей: «задание|аккаунт» → переход и первое выполнение */
+  readonly participants = new Map<string, { openedAt: Date | null; completedAt: Date | null }>();
+  readonly counts = new Map<string, number>();
   catalogReads = 0;
+  /** забор игроков — по одному, как под блокировкой строки задания в базе */
+  private queue: Promise<unknown> = Promise.resolve();
 
   async catalog(): Promise<TaskDef[]> {
     this.catalogReads++;
@@ -118,7 +124,23 @@ class MemoryTasks implements TasksRepository {
     return true;
   }
 
-  async complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date): Promise<TaskProgressRow> {
+  async complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date, graceSince: Date): Promise<TaskProgressRow | null> {
+    const run = this.queue.then(() => this.completeLocked(accountId, task, at, graceSince));
+    this.queue = run.catch(() => undefined);
+    return await run;
+  }
+
+  private completeLocked(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date, graceSince: Date): TaskProgressRow | null {
+    const place = `${task.taskId}|${accountId}`;
+    const participant = this.participants.get(place) ?? { openedAt: null, completedAt: null };
+    if (participant.completedAt === null) {
+      const limit = this.defs.find((candidate) => candidate.taskId === task.taskId)?.limit ?? null;
+      const taken = this.counts.get(task.taskId) ?? 0;
+      const grace = participant.openedAt !== null && participant.openedAt >= graceSince;
+      if (limit !== null && taken >= limit && !grace) return null;
+      this.counts.set(task.taskId, taken + 1);
+      this.participants.set(place, { ...participant, completedAt: at });
+    }
     const start = periodStart(task.period, at);
     const key = `${accountId}|${task.taskId}|${start}`;
     const row = this.rows.get(key) ?? { accountId, taskId: task.taskId, periodStart: start, value: 0, target: task.target, done: false, claimed: false };
@@ -126,6 +148,24 @@ class MemoryTasks implements TasksRepository {
     row.done = true;
     this.rows.set(key, row);
     return { taskId: row.taskId, periodStart: row.periodStart, value: row.value, done: row.done, claimed: row.claimed };
+  }
+
+  async markOpened(accountId: string, taskId: string, at: Date): Promise<void> {
+    const key = `${taskId}|${accountId}`;
+    this.participants.set(key, { completedAt: null, ...this.participants.get(key), openedAt: at });
+  }
+
+  async participation(accountId: string): Promise<Map<string, TaskParticipation>> {
+    const result = new Map<string, TaskParticipation>();
+    for (const task of this.defs.filter((candidate) => candidate.active && candidate.params !== null)) {
+      const participant = this.participants.get(`${task.taskId}|${accountId}`);
+      result.set(task.taskId, { completions: this.counts.get(task.taskId) ?? 0, openedAt: participant?.openedAt ?? null, completedAt: participant?.completedAt ?? null });
+    }
+    return result;
+  }
+
+  async completions(): Promise<Map<string, number>> {
+    return new Map([...this.counts].filter(([, count]) => count > 0));
   }
 
   async markClaimed(accountId: string, taskId: string, start: string): Promise<boolean> {
@@ -470,6 +510,126 @@ describe("цель «канал»: проверка площадкой", () => {
     expect(byId(await ctx.service.view(PLAYER, NOON), "ach_channel")).toMatchObject({ value: 0, done: false });
     // три ежедневные и рекорд в пять минут — без канала
     expect(await ctx.service.badge(ME, NOON)).toBe(4);
+  });
+});
+
+describe("лимит выполнений партнёрской цели", () => {
+  const MINUTE = 60_000;
+  const later = (minutes: number) => new Date(NOON.getTime() + minutes * MINUTE);
+  const player = (id: string): AccountRef => ({ accountId: `00000000-0000-4000-8000-0000000${id}`, platform: "telegram", platformUserId: `5550${id}` });
+  const limited = (limit: number, patch: Partial<TaskDef> = {}) => channelTask({ taskId: "ach_limited", limit, ...patch });
+  const joinAll = (ctx: ReturnType<typeof setup>, ...accounts: AccountRef[]) => {
+    for (const account of accounts) ctx.membership.members.add(`${CHANNEL.chat}|${account.platformUserId}`);
+  };
+
+  it("схема: лимит — только у партнёрской цели и в пределах; без поля — без лимита", () => {
+    expect(taskDefSchema.safeParse(limited(500)).success).toBe(true);
+    expect(taskDefSchema.safeParse(limited(0)).success).toBe(false);
+    expect(taskDefSchema.safeParse(limited(1_000_001)).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_runs", { limit: 10 })).success).toBe(false);
+    const bare = Object.fromEntries(Object.entries(limited(5)).filter(([key]) => key !== "limit"));
+    expect(taskDefSchema.parse(bare)).toMatchObject({ limit: null });
+  });
+
+  it("места: остаток виден до исчерпания; исчерпано — видно только перешедшим в последний час, и до какого времени держится место", () => {
+    expect(slotsFor(null, null, NOON)).toEqual({ visible: true, slots: null });
+    expect(slotsFor(500, { completions: 463, openedAt: null, completedAt: null }, NOON)).toEqual({ visible: true, slots: { left: 37, total: 500, holdUntil: null } });
+    expect(slotsFor(500, { completions: 500, openedAt: null, completedAt: null }, NOON)).toEqual({ visible: false, slots: null });
+    expect(slotsFor(500, { completions: 501, openedAt: later(-20), completedAt: null }, NOON)).toEqual({ visible: true, slots: { left: 0, total: 500, holdUntil: later(40) } });
+    expect(slotsFor(500, { completions: 500, openedAt: later(-TASK_LIMIT_GRACE_MIN), completedAt: null }, NOON).visible).toBe(false);
+    // выполнивший место уже занял — лимит его не касается
+    expect(slotsFor(500, { completions: 900, openedAt: null, completedAt: later(-600) }, NOON)).toEqual({ visible: true, slots: null });
+  });
+
+  it("лимит заполнен — цель пропадает у тех, кто не начинал, а забор и переход отказывают без вопроса боту", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(limited(2));
+    const [first, second, late] = [player("00001"), player("00002"), player("00003")];
+    joinAll(ctx, first, second, late);
+    expect(byId(await ctx.service.view(first, NOON), "ach_limited")).toMatchObject({ slots: { left: 2, total: 2, holdUntil: null } });
+    expect(await ctx.service.claim(first, "ach_limited", NOON)).toMatchObject({ claimed: true });
+    const after = await ctx.service.claim(second, "ach_limited", NOON);
+    expect(byId(after.tasks, "ach_limited")).toMatchObject({ claimed: true, slots: null });
+
+    expect(byId(await ctx.service.view(late, NOON), "ach_limited")).toBeUndefined();
+    const asked = ctx.membership.asked.length;
+    await expect(ctx.service.claim(late, "ach_limited", NOON)).rejects.toBeInstanceOf(TaskLimitReachedError);
+    await expect(ctx.service.open(late, "ach_limited", NOON)).rejects.toBeInstanceOf(TaskLimitReachedError);
+    expect(ctx.membership.asked).toHaveLength(asked);
+    // выполнившие видят своё «Получено»
+    expect(byId(await ctx.service.view(first, NOON), "ach_limited")).toMatchObject({ claimed: true, slots: null });
+  });
+
+  it("мягкий час: нажал «Подписаться» до исчерпания — награда ещё час; переход после исчерпания час не продлевает", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(limited(1));
+    const [early, filler] = [player("00011"), player("00012")];
+    await ctx.service.open(early, "ach_limited", NOON);
+    joinAll(ctx, filler);
+    await ctx.service.claim(filler, "ach_limited", later(5));
+
+    const held = byId(await ctx.service.view(early, later(10)), "ach_limited");
+    expect(held).toMatchObject({ slots: { left: 0, total: 1, holdUntil: later(60).toISOString() } });
+    // повторный переход в мягкий час места не продлевает
+    await ctx.service.open(early, "ach_limited", later(30));
+    joinAll(ctx, early);
+    expect(await ctx.service.claim(early, "ach_limited", later(59))).toMatchObject({ claimed: true });
+    expect(ctx.repository.counts.get("ach_limited")).toBe(2);
+  });
+
+  it("мягкий час истёк — места нет, награды нет", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(limited(1));
+    const [early, filler] = [player("00021"), player("00022")];
+    await ctx.service.open(early, "ach_limited", NOON);
+    joinAll(ctx, filler, early);
+    await ctx.service.claim(filler, "ach_limited", later(5));
+    expect(byId(await ctx.service.view(early, later(61)), "ach_limited")).toBeUndefined();
+    await expect(ctx.service.claim(early, "ach_limited", later(61))).rejects.toBeInstanceOf(TaskLimitReachedError);
+    expect(ctx.wallet.grants.filter((grant) => grant.accountId === early.accountId)).toEqual([]);
+  });
+
+  it("ссылка с лимитом: переход сверх лимита не выполняет и не награждает", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(def("ach_site", { period: "achievement", kind: "link", params: { url: "https://example.com/p" }, target: 1, coins: 50, limit: 1 }));
+    const [first, second] = [player("00031"), player("00032")];
+    expect(byId((await ctx.service.open(first, "ach_site", NOON)).tasks, "ach_site")).toMatchObject({ done: true, slots: null });
+    await expect(ctx.service.open(second, "ach_site", NOON)).rejects.toBeInstanceOf(TaskLimitReachedError);
+    await expect(ctx.service.claim(second, "ach_site", NOON)).rejects.toBeInstanceOf(TaskLimitReachedError);
+  });
+
+  it("повторяемая подписка: место занимается первым выполнением, дальше награда каждый срок и при исчерпанном лимите", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(limited(1, { taskId: "ach_limited", period: "daily", coins: 40, gems: 0 }));
+    const [member, newcomer] = [player("00041"), player("00042")];
+    joinAll(ctx, member, newcomer);
+    await ctx.service.claim(member, "ach_limited", NOON);
+    const tomorrow = new Date(NOON.getTime() + DAY);
+    expect(await ctx.service.claim(member, "ach_limited", tomorrow)).toMatchObject({ claimed: true });
+    await expect(ctx.service.claim(newcomer, "ach_limited", tomorrow)).rejects.toBeInstanceOf(TaskLimitReachedError);
+    expect(ctx.repository.counts.get("ach_limited")).toBe(1);
+  });
+
+  it("десять заборов разом при одном месте — одна награда", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(limited(1));
+    const players = Array.from({ length: 10 }, (_, index) => player(String(50 + index).padStart(5, "0")));
+    joinAll(ctx, ...players);
+    const results = await Promise.allSettled(players.map(async (account) => await ctx.service.claim(account, "ach_limited", NOON)));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected" && result.reason instanceof TaskLimitReachedError)).toHaveLength(9);
+    expect(ctx.wallet.grants).toHaveLength(1);
+  });
+
+  it("в панели — сколько выполнили; лимит сохраняется и правится", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(limited(3));
+    joinAll(ctx, PLAYER);
+    await ctx.service.claim(PLAYER, "ach_limited", NOON);
+    const owner = await person(ctx, OWNER_ID);
+    const catalog = await ctx.service.catalog(owner);
+    expect(catalog.completions).toEqual({ ach_limited: 1 });
+    expect(catalog.tasks.find((task) => task.taskId === "ach_limited")).toMatchObject({ limit: 3 });
   });
 });
 

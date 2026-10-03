@@ -11,9 +11,11 @@ import {
   PARTNER_PLATFORM_TITLES,
   PERIOD_TITLES,
   REPEAT_TITLES,
+  TASK_LIMIT_RANGE,
   TASK_PERIODS,
   TIME_KINDS,
   TITLE_MAX,
+  completionsLabel,
   fetchTasks,
   groupByPeriod,
   partnerPlatforms,
@@ -35,7 +37,7 @@ import { NetworkTasksPanel } from "./NetworkTasksPanel";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
-const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true };
+const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null };
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): что игроку делать
@@ -173,6 +175,18 @@ export function TasksScreen() {
                   <Input value={input.params?.chat ?? ""} onChange={(event) => setParams({ chat: event.target.value })} placeholder="@rubezh_game" maxLength={64} className="w-44" />
                 </Field>
               ) : null}
+              <Field label="Лимит выполнений" help={HELP.tasks.completionLimit} hint="пусто — без лимита">
+                <Input
+                  value={input.limit === null ? "" : String(input.limit)}
+                  onChange={(event) => setInput({ ...input, limit: event.target.value.trim() === "" ? null : Number(event.target.value) })}
+                  type="number"
+                  min={TASK_LIMIT_RANGE.min}
+                  max={TASK_LIMIT_RANGE.max}
+                  step={1}
+                  placeholder="без лимита"
+                  className="w-32"
+                />
+              </Field>
               <Field label="Ссылка" hint="её откроет игрок">
                 <Input
                   value={input.params?.url ?? ""}
@@ -249,6 +263,25 @@ export function TasksScreen() {
                   { title: "Цель", align: "right", render: (task) => targetLabel(task) },
                   { title: "Заголовок", render: (task) => task.title ?? <span className="text-text-muted">по виду цели</span> },
                   { title: "Награда", render: (task) => rewardLabel(task) },
+                  // Счёт выполнивших ведётся у партнёрских целей: у них есть лимит.
+                  ...(group.group === "partner"
+                    ? [
+                        {
+                          title: "Выполнили",
+                          help: HELP.tasks.completionLimit,
+                          align: "right" as const,
+                          render: (task: TaskDef) => {
+                            const done = completionsLabel(task, state.data.completions[task.taskId] ?? 0);
+                            return (
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                                {done.text}
+                                {done.exhausted ? <Badge tone="warning">мест нет</Badge> : null}
+                              </span>
+                            );
+                          },
+                        },
+                      ]
+                    : []),
                   { title: "Пасс", align: "right", render: (task) => String(task.passPoints) },
                   { title: "Порядок", align: "right", render: (task) => String(task.sort) },
                   { title: "", render: (task) => (task.active ? null : <Badge tone="warning">выключено</Badge>) },

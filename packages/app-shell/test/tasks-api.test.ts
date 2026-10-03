@@ -10,6 +10,7 @@ import {
   isFeedTask,
   isOpenKind,
   networkTaskConfirmed,
+  slotsText,
   openTaskLink,
   sortTasks,
   tabOf,
@@ -204,5 +205,19 @@ describe("клиент заданий", () => {
     expect(isFeedTask({ delivery: "feed" })).toBe(true);
     expect(isFeedTask({ delivery: "element" })).toBe(false);
     expect(isFeedTask({ delivery: undefined })).toBe(false);
+  });
+
+  it("места в партнёрской цели: остаток, удержание места до конца мягкого часа, отказ по коду; старый сервер — без мест", async () => {
+    const now = Date.parse("2026-10-03T12:00:00.000Z");
+    expect(slotsText({ left: 37, total: 500, holdUntil: null }, now)).toEqual({ key: "tasks.slotsLeft", params: { left: 37, total: 500 } });
+    expect(slotsText({ left: 0, total: 500, holdUntil: "2026-10-03T12:40:00.000Z" }, now)).toEqual({ key: "tasks.slotsHeld", params: { minutes: 40 } });
+    expect(slotsText({ left: 0, total: 500, holdUntil: "2026-10-03T12:00:20.000Z" }, now)).toEqual({ key: "tasks.slotsHeld", params: { minutes: 1 } });
+    expect(slotsText({ left: 0, total: 500, holdUntil: "2026-10-03T11:59:00.000Z" }, now)).toBeNull();
+    expect(slotsText(null, now)).toBeNull();
+    expect(slotsText(undefined, now)).toBeNull();
+    expect(claimFailureKey("task_limit_reached")).toBe("tasks.limitReached");
+
+    const view = await createTasksApi(server([], { tasks: [{ ...TASK, slots: { left: 3, total: 10, holdUntil: null } }, TASK] })).view();
+    expect(view.ok && view.data.tasks.map((task) => task.slots)).toEqual([{ left: 3, total: 10, holdUntil: null }, undefined]);
   });
 });
