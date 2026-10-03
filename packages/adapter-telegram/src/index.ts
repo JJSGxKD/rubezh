@@ -163,17 +163,17 @@ export class TelegramAdapter implements PlatformAdapter {
   async showAd(request: AdShowRequest): Promise<AdShowOutcome> {
     // Обёртки SDK — отдельным чанком при первом показе: первой загрузке
     // реклама не нужна, а её бюджет на счету (docs/27-design-system-and-app-shell.md §3.4).
-    return (await import("./ads/ad-shower")).showInBrowser(request);
+    return (await adsChunk()).showInBrowser(request);
   }
 
   /** SDK сетей учёта аудитории (`ads/audience.ts`) — чанком показа, в простое: первую загрузку чужой скрипт не задерживает. */
   async prepareAds(networks: readonly AdNetworkSetup[]): Promise<void> {
-    await (await import("./ads/ad-shower")).prepareInBrowser(networks);
+    await (await adsChunk()).prepareInBrowser(networks);
   }
 
   /** Задание сети в строке оболочки (`ads/tasks.ts`) — чанком показа, как ролики: первой загрузке оно не нужно. */
   async mountNetworkTask(mount: NetworkTaskMount): Promise<NetworkTaskHandle> {
-    return (await import("./ads/ad-shower")).mountTaskInBrowser(mount);
+    return (await adsChunk()).mountTaskInBrowser(mount);
   }
 }
 
@@ -195,6 +195,13 @@ export interface TelegramClientInfo {
   isPremium: boolean | null;
   isFullscreen: boolean | null;
 }
+
+/**
+ * Чанк рекламы — показ, учёт аудитории и задания сетей — одним загрузчиком:
+ * сборщик пишет список предзагрузки чанка у каждого вызова `import()`, и
+ * три вызова стоили бы первой загрузке трёх таких списков.
+ */
+const adsChunk = () => import("./ads/ad-shower");
 
 const UNKNOWN_CLIENT: TelegramClientInfo = {
   platform: null,
