@@ -15,6 +15,13 @@ import type { RunVerdict, VerdictReason } from "./run-verdict.js";
  * ровно один (docs/15-engineering-standards.md §4.1).
  */
 
+/**
+ * Забег сдан под ограничением рейтинга (docs/35-stage4-plan.md WP44): в
+ * рейтинг не идёт ни сейчас, ни после снятия. `notified` — игроку сообщили,
+ * `silent` — молча: игрок видит себя в досках, другие его нет.
+ */
+export type RatingRestricted = "notified" | "silent";
+
 export interface RunStartRecord {
   runId: string;
   accountId: string;
@@ -43,6 +50,7 @@ export interface RunFinishRecord {
   /** секунда каждого второго шанса */
   continues: number[];
   ranked: boolean;
+  ratingRestricted: RatingRestricted | null;
   verdict: RunVerdict;
   verdictReasons: VerdictReason[];
 }
@@ -57,6 +65,7 @@ export interface StoredRun {
   survivalSec: number | null;
   verdict: RunVerdict | null;
   ranked: boolean;
+  ratingRestricted: RatingRestricted | null;
 }
 
 /** `foreign` — забег с таким ключом уже принадлежит другому аккаунту. */
@@ -110,6 +119,7 @@ export interface RunDetailRow {
   cheats: boolean;
   continues: number;
   ranked: boolean;
+  ratingRestricted: RatingRestricted | null;
   verdict: RunVerdict | null;
 }
 
@@ -127,6 +137,12 @@ export interface RunsRepository {
   bestRuns(accountIds: readonly string[], difficulty: Difficulty): Promise<BestRunRow[]>;
   /** Лучшее рейтинговое время каждого аккаунта — источник пересборки проекции */
   bestTimes(difficulty: Difficulty): Promise<{ accountId: string; survivalSec: number }[]>;
+  /**
+   * Лучший рейтинговый забег игрока — вернуть его в доску, когда ограничение
+   * рейтинга снято. `shadow` — вместе со сданными под молчаливым
+   * ограничением: так игрок видит себя сам.
+   */
+  bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean): Promise<BestRunRow | null>;
   review(limit: number): Promise<ReviewRow[]>;
 }
 
@@ -146,9 +162,10 @@ export class PrismaRunsRepository implements RunsRepository {
         survivalSec: true,
         verdict: true,
         ranked: true,
+        ratingRestricted: true,
       },
     });
-    return row;
+    return row === null ? null : { ...row, ratingRestricted: ratingRestrictedOf(row.ratingRestricted) };
   }
 
   async start(record: RunStartRecord): Promise<StartOutcome> {
@@ -181,6 +198,7 @@ export class PrismaRunsRepository implements RunsRepository {
       cheats: record.cheats,
       continues: record.continues,
       ranked: record.ranked,
+      ratingRestricted: record.ratingRestricted,
       verdict: record.verdict,
       verdictReasons: record.verdictReasons,
     };
@@ -265,6 +283,7 @@ export class PrismaRunsRepository implements RunsRepository {
         cheats: true,
         continues: true,
         ranked: true,
+        ratingRestricted: true,
         verdict: true,
       },
     });
@@ -287,6 +306,7 @@ export class PrismaRunsRepository implements RunsRepository {
       cheats: row.cheats,
       continues: row.continues.length,
       ranked: row.ranked,
+      ratingRestricted: ratingRestrictedOf(row.ratingRestricted),
       verdict: row.verdict,
     };
   }
@@ -327,6 +347,31 @@ export class PrismaRunsRepository implements RunsRepository {
     });
     return rows.map((row) => ({ accountId: row.accountId, survivalSec: row._max.survivalSec ?? 0 }));
   }
+  async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean): Promise<BestRunRow | null> {
+    const row = await this.prisma.run.findFirst({
+      where: { accountId, difficulty, status: "finished", OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }] },
+      orderBy: { survivalSec: "desc" },
+      select: {
+        accountId: true,
+        survivalSec: true,
+        level: true,
+        startingWeaponId: true,
+        enemiesKilled: true,
+        account: { select: { displayName: true, photoUrl: true } },
+      },
+    });
+    if (row === null) return null;
+    return {
+      accountId: row.accountId,
+      displayName: row.account.displayName,
+      photoUrl: row.account.photoUrl,
+      survivalSec: row.survivalSec ?? 0,
+      level: row.level ?? 1,
+      startingWeaponId: row.startingWeaponId,
+      enemiesKilled: row.enemiesKilled ?? 0,
+    };
+  }
+
 
   async review(limit: number): Promise<ReviewRow[]> {
     const rows = await this.prisma.run.findMany({
@@ -347,6 +392,11 @@ export class PrismaRunsRepository implements RunsRepository {
     });
     return rows.map((row) => ({ ...row, verdict: row.verdict ?? "suspicious" }));
   }
+}
+
+/** Колонка — строкой: незнакомое значение читается как «без ограничения», а не роняет чтение. */
+function ratingRestrictedOf(value: string | null): RatingRestricted | null {
+  return value === "notified" || value === "silent" ? value : null;
 }
 
 function isUniqueViolation(error: unknown): boolean {

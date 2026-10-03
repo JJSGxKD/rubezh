@@ -124,7 +124,7 @@ export class AdminPlayersService {
       this.sessions.acquisition(accountId),
       this.messaging.state(accountId),
       this.progress.view(accountId),
-      this.runs.profile(accountId),
+      this.runs.profile(accountId, "team"),
       this.wallet.balances(accountId),
       this.wallet.recentEntries(accountId, WALLET_ENTRIES_SHOWN),
       withPayments ? this.purchases.byAccount(accountId, PURCHASES_SHOWN) : Promise.resolve(null),

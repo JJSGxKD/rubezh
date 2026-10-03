@@ -13,7 +13,7 @@ import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
 
 /**
  * Приём забегов (docs/34-stage3-plan.md, WP4). Проверяется не «забег
@@ -69,8 +69,8 @@ describe("приём забегов", () => {
     hooks.onRecorded("test", async (run) => {
       recorded.push(run);
     });
-    service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts());
-    view = new RunsViewService(runs, board, new RunExtras());
+    service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    view = new RunsViewService(runs, board, new RunExtras(), ratingRestrictions(runs, board).rating);
   });
 
   it("слушатели узнают о записанном забеге с вердиктом", async () => {
@@ -99,7 +99,7 @@ describe("приём забегов", () => {
       throw new Error("сводка недоступна");
     });
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    const fragile = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts());
+    const fragile = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
 
     await expect(fragile.finish(account(), finish(randomUUID()))).resolves.toMatchObject({ recorded: true });
   });
@@ -255,7 +255,7 @@ describe("второй шанс в итоге забега", () => {
     const ledger = new FakeLedger();
     continues.provide(ledger);
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    return { service: new RunsService(config(), runs, board, roles, hooks, continues, new RunLoadouts()), ledger, recorded, runs, board };
+    return { service: new RunsService(config(), runs, board, roles, hooks, continues, new RunLoadouts(), ratingRestrictions(runs, board).rating), ledger, recorded, runs, board };
   }
 
   it("продолжение без покупки — отказ и мимо рейтинга, но забег записан", async () => {
@@ -313,7 +313,7 @@ describe("снаряжение в итоге забега", () => {
     const loadouts = new RunLoadouts();
     if (checker !== null) loadouts.provide(checker);
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    return { service: new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), loadouts), board };
+    return { service: new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), loadouts, ratingRestrictions(runs, board).rating), board };
   }
 
   it("подделанный снимок — отказ и мимо рейтинга, устаревший — подозрение", async () => {
@@ -347,8 +347,8 @@ describe("чтение забегов", () => {
   it("лидерборд отмечает свою строку и не выдаёт чужих идентификаторов", async () => {
     const runs = new MemoryRunsRepository();
     const board = new MemoryLeaderboardStore();
-    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts());
-    const view = new RunsViewService(runs, board, new RunExtras());
+    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    const view = new RunsViewService(runs, board, new RunExtras(), ratingRestrictions(runs, board).rating);
     const [me, other] = [account("1"), account("2")];
     await service.finish(me, finish(randomUUID(), { survivalSec: 100 }));
     await service.finish(other, finish(randomUUID(), { survivalSec: 200, level: 8, enemiesKilled: 500 }));
@@ -366,8 +366,8 @@ describe("лист забега в профиле", () => {
     const runs = new MemoryRunsRepository();
     const board = new MemoryLeaderboardStore();
     const extras = new RunExtras();
-    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts());
-    return { runs, extras, service, view: new RunsViewService(runs, board, extras) };
+    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    return { runs, extras, service, view: new RunsViewService(runs, board, extras, ratingRestrictions(runs, board).rating) };
   }
 
   it("отдаёт свой забег с подробностями, а награду, бусты и добычу — из их модулей", async () => {

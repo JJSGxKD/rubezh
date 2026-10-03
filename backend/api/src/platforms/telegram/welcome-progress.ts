@@ -1,6 +1,5 @@
 import { Inject, Injectable, type OnModuleInit } from "@nestjs/common";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../../modules/auth/account.repository.js";
-import { LEADERBOARD_STORE, type LeaderboardStore } from "../../modules/runs/leaderboard.store.js";
 import type { Difficulty } from "../../modules/runs/run-rules.js";
 import { RunsViewService } from "../../modules/runs/runs-view.service.js";
 import type { WelcomeProgress } from "./welcome-card.js";
@@ -21,7 +20,6 @@ export class RunsWelcomeProgress implements WelcomeProgressSource, OnModuleInit 
     private readonly registry: WelcomeProgressRegistry,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     private readonly view: RunsViewService,
-    @Inject(LEADERBOARD_STORE) private readonly leaderboard: LeaderboardStore,
   ) {}
 
   onModuleInit(): void {
@@ -36,7 +34,8 @@ export class RunsWelcomeProgress implements WelcomeProgressSource, OnModuleInit 
     const difficulty = HARDEST_FIRST.find((candidate) => profile.best[candidate] !== null);
     const best = difficulty === undefined ? null : profile.best[difficulty];
     if (difficulty === undefined || best === null) return { best: null, runs: profile.runs };
-    const total = await this.leaderboard.count(difficulty);
+    // Глазами игрока: в тени ограничения рейтинга он видит в доске и себя.
+    const total = await this.view.boardSize(account.accountId, difficulty);
     return { best: { difficulty, survivalSec: best.survivalSec, rank: best.rank, total }, runs: profile.runs };
   }
 }

@@ -1,4 +1,8 @@
+import type { Redis } from "ioredis";
+import { loadAppConfig } from "../../src/config/app-config.js";
+import { RestrictionsHooks } from "../../src/modules/restrictions/restrictions-hooks.js";
 import type { LeaderboardEntry, LeaderboardStore } from "../../src/modules/runs/leaderboard.store.js";
+import { RatingRestrictions } from "../../src/modules/runs/rating-restrictions.js";
 import type { Difficulty } from "../../src/modules/runs/run-rules.js";
 import type {
   BestRunRow,
@@ -12,6 +16,8 @@ import type {
   StartOutcome,
   StoredRun,
 } from "../../src/modules/runs/runs.repository.js";
+import { AUTH_ENV } from "./auth-env.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./memory-restrictions.js";
 
 /**
  * Забеги и рейтинг в памяти — для тестов сервиса. Смысл тот же, что у
@@ -38,6 +44,7 @@ export class MemoryRunsRepository implements RunsRepository {
       survivalSec: row.survivalSec,
       verdict: row.verdict,
       ranked: row.ranked,
+      ratingRestricted: row.ratingRestricted,
     };
   }
 
@@ -53,6 +60,7 @@ export class MemoryRunsRepository implements RunsRepository {
       survivalSec: null,
       verdict: null,
       ranked: false,
+      ratingRestricted: null,
     });
     return "created";
   }
@@ -70,6 +78,7 @@ export class MemoryRunsRepository implements RunsRepository {
       survivalSec: record.survivalSec,
       verdict: record.verdict,
       ranked: record.ranked,
+      ratingRestricted: record.ratingRestricted,
       record,
     });
     return "finished";
@@ -116,6 +125,7 @@ export class MemoryRunsRepository implements RunsRepository {
       cheats: record.cheats,
       continues: record.continues.length,
       ranked: record.ranked,
+      ratingRestricted: record.ratingRestricted,
       verdict: record.verdict,
     };
   }
@@ -132,6 +142,15 @@ export class MemoryRunsRepository implements RunsRepository {
     const best = new Map<string, number>();
     for (const row of this.rankedOf(difficulty)) best.set(row.accountId, Math.max(best.get(row.accountId) ?? 0, row.survivalSec));
     return [...best.entries()].map(([accountId, survivalSec]) => ({ accountId, survivalSec }));
+  }
+
+  async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean): Promise<BestRunRow | null> {
+    const counted = [...this.rows.values()].flatMap((row) =>
+      row.record !== undefined && row.accountId === accountId && row.record.difficulty === difficulty && (row.record.ranked || (shadow && row.record.ratingRestricted === "silent")) ? [row.record] : [],
+    );
+    const best = counted.sort((a, b) => b.survivalSec - a.survivalSec)[0];
+    if (best === undefined) return null;
+    return { accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled };
   }
 
   async review(limit: number): Promise<ReviewRow[]> {
@@ -191,6 +210,16 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
     return this.board(difficulty).size;
   }
 
+  async countAbove(difficulty: Difficulty, survivalSec: number): Promise<number> {
+    return [...this.board(difficulty).values()].filter((score) => score > survivalSec).length;
+  }
+
+  async remove(accountIds: readonly string[]): Promise<number> {
+    let removed = 0;
+    for (const board of this.boards.values()) for (const accountId of accountIds) if (board.delete(accountId)) removed += 1;
+    return removed;
+  }
+
   async replace(difficulty: Difficulty, entries: readonly LeaderboardEntry[]): Promise<void> {
     this.boards.set(difficulty, new Map(entries.map((entry) => [entry.accountId, entry.survivalSec])));
   }
@@ -209,4 +238,28 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
       .map(([accountId, survivalSec]) => ({ accountId, survivalSec }))
       .sort((left, right) => right.survivalSec - left.survivalSec);
   }
+}
+
+/** Лок обхода в памяти: занят — как будто проходит соседняя реплика. */
+export class MemoryLock {
+  held = false;
+  async set(): Promise<"OK" | null> {
+    if (this.held) return null;
+    this.held = true;
+    return "OK";
+  }
+  async eval(): Promise<number> {
+    this.held = false;
+    return 1;
+  }
+}
+
+/** Рейтинг под ограничениями поверх памяти: ограничения кладёт тест — в `restrictions`. */
+export function ratingRestrictions(runs: RunsRepository, board: LeaderboardStore, restrictions = new MemoryRestrictionsRepository()) {
+  const gate = restrictionsGate(restrictions);
+  const hooks = new RestrictionsHooks();
+  const lock = new MemoryLock();
+  const rating = new RatingRestrictions(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv), lock as unknown as Redis, runs, board, gate, hooks);
+  rating.onModuleInit();
+  return { rating, gate, hooks, restrictions, lock };
 }

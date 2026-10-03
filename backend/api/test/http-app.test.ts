@@ -14,6 +14,7 @@ import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { LEADERBOARD_STORE } from "../src/modules/runs/leaderboard.store.js";
 import { RunsController } from "../src/modules/runs/runs.controller.js";
+import { RatingRestrictions } from "../src/modules/runs/rating-restrictions.js";
 import { RUNS_REPOSITORY } from "../src/modules/runs/runs.repository.js";
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
@@ -24,7 +25,7 @@ import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
 
 // HTTP-слой на настоящем Fastify (docs/17-testing-strategy.md §4): префикс,
 // форма ошибок, лимит тела, гвард и CORS — так, как их увидит клиент. Проверка
@@ -35,13 +36,16 @@ const unavailableRedis = { eval: async () => Promise.reject(new Error("connectio
 
 function moduleFor(env: Record<string, string>): Type<unknown> {
   const config = loadAppConfig({ NODE_ENV: "development", ...env });
+  const runs = new MemoryRunsRepository();
+  const board = new MemoryLeaderboardStore();
   @Module({
     controllers: [HealthController, RunsController],
     providers: [
       { provide: APP_CONFIG, useValue: config },
       { provide: REDIS, useValue: unavailableRedis },
-      { provide: RUNS_REPOSITORY, useValue: new MemoryRunsRepository() },
-      { provide: LEADERBOARD_STORE, useValue: new MemoryLeaderboardStore() },
+      { provide: RUNS_REPOSITORY, useValue: runs },
+      { provide: LEADERBOARD_STORE, useValue: board },
+      { provide: RatingRestrictions, useValue: ratingRestrictions(runs, board).rating },
       {
         provide: RolesService,
         useFactory: (cfg: AppConfig) => new RolesService(cfg, new MemoryRolesRepository(), new MemoryAccountRepository()),

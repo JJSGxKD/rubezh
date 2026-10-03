@@ -140,6 +140,7 @@ describe("счёт второго шанса", () => {
       cheats: false,
       continues: [],
       ranked: true,
+      ratingRestricted: null,
       verdict: "ok",
       verdictReasons: [],
     });
