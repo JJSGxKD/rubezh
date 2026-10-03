@@ -35,6 +35,8 @@ const taskSchema = z.object({
   link: z.optional(z.nullable(z.string())),
   /** места в партнёрской цели с лимитом (Р82); сервер до лимита поля не отдавал */
   slots: z.optional(z.nullable(z.object({ left: z.number(), total: z.number(), holdUntil: z.nullable(z.string()) }))),
+  /** картинка 1:1 партнёрской цели (Р82) — путь от адреса API; сервер до картинок поля не отдавал */
+  image: z.optional(z.nullable(z.string())),
 });
 /**
  * Задание рекламной сети (docs/35-stage4-plan.md WP13, часть 6). У AdsGram
@@ -187,6 +189,19 @@ export function slotsText(slots: TaskItem["slots"], nowMs: number): { key: strin
   const until = slots.holdUntil === null ? Number.NaN : Date.parse(slots.holdUntil);
   if (Number.isNaN(until) || until <= nowMs) return null;
   return { key: "tasks.slotsHeld", params: { minutes: Math.max(1, Math.ceil((until - nowMs) / 60_000)) } };
+}
+
+/** Путь картинки из панели — ровно такой отдаёт сервер (`media/image-rules.ts`). */
+const TASK_IMAGE_PATH = /^\/api\/v1\/media\/[0-9a-f]{64}\.webp$/;
+
+/**
+ * Адрес картинки задания: сервер отдаёт путь, адрес API знает клиент. Только
+ * наш путь картинок — чужой адрес из ответа не грузим: за ним мог бы быть
+ * пиксель слежки. Без входа адреса API нет, а задания и так не видны.
+ */
+export function taskImageUrl(path: string | null | undefined, baseUrl: string | undefined): string | null {
+  if (path === null || path === undefined || baseUrl === undefined || !TASK_IMAGE_PATH.test(path)) return null;
+  return `${baseUrl.replace(/\/+$/, "")}${path}`;
 }
 
 /**

@@ -2,9 +2,12 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { imageIdOf } from "../src/modules/media/image-rules.js";
+import { PrismaMediaRepository } from "../src/modules/media/media.repository.js";
 import { rewardReason, type TaskParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { ACHIEVEMENT_PERIOD_START, PrismaTasksRepository, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
+import { webp } from "./helpers/webp-samples.js";
 
 /**
  * Задания на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -146,6 +149,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       sort: 99,
       active: true,
       limit: null,
+      image: null,
     };
     expect(await repository.insert(task, actor, NOON)).toBe(true);
     expect(await repository.insert({ ...task, coins: 999 }, actor, NOON)).toBe(false);
@@ -177,6 +181,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       sort: 99,
       active: true,
       limit: null,
+      image: null,
     };
     expect(await repository.insert(task, actor, NOON)).toBe(true);
     expect((await repository.catalog()).find((candidate) => candidate.taskId === taskId)).toEqual(task);
@@ -249,6 +254,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       sort: 99,
       active: false,
       limit,
+      image: null,
     };
     expect(await repository.insert(task, await account(), NOON)).toBe(true);
     return task;
@@ -313,5 +319,21 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     const [left] = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM task_participant WHERE account_id = ${me}::uuid`;
     expect(Number(left?.n)).toBe(0);
     expect((await repository.completions()).get(task.taskId)).toBe(1);
+  });
+  it("картинка задания: читается каталогом и меняется правкой; пока на неё ссылаются, не удаляется; у цели забега её нет", async () => {
+    const bytes = Buffer.concat([webp("square96"), Buffer.from(String(Date.now()))]);
+    const imageId = imageIdOf(bytes);
+    await new PrismaMediaRepository(prisma).insert({ imageId, contentType: "image/webp", width: 96, height: 96, sizeBytes: bytes.length, data: bytes, createdBy: await account() });
+    const task = await limitedTask(null);
+    expect(await repository.update({ ...task, image: imageId }, await account(), NOON)).toBe(true);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === task.taskId)?.image).toBe(imageId);
+
+    await expect(prisma.$executeRaw`DELETE FROM media_image WHERE image_id = ${imageId}`).rejects.toThrow();
+    await expect(prisma.$executeRaw`UPDATE task_def SET image_id = ${"0".repeat(64)} WHERE task_id = ${task.taskId}`).rejects.toThrow();
+    const runTask = catalog.find((candidate) => candidate.params === null);
+    await expect(prisma.$executeRaw`UPDATE task_def SET image_id = ${imageId} WHERE task_id = ${runTask?.taskId ?? ""}`).rejects.toThrow();
+
+    expect(await repository.update({ ...task, image: null }, await account(), NOON)).toBe(true);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === task.taskId)?.image).toBeNull();
   });
 });

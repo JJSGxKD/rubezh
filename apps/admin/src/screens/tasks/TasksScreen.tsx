@@ -29,7 +29,9 @@ import {
   type TaskParams,
   type TaskDef,
 } from "../../api/tasks";
+import { imageUrl } from "../../api/media";
 import { api } from "../../services";
+import { ImageField } from "../../ui/image-field";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
@@ -37,7 +39,7 @@ import { NetworkTasksPanel } from "./NetworkTasksPanel";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
-const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null };
+const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null };
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): что игроку делать
@@ -137,6 +139,9 @@ export function TasksScreen() {
               </Field>
             )}
           </div>
+          {partner ? (
+            <ImageField label="Картинка" help={HELP.tasks.image} profile="task" value={input.image} onChange={(image) => setInput({ ...input, image })} />
+          ) : null}
           {partner ? (
             <div className="flex flex-wrap items-end gap-2">
               {channel ? (
@@ -261,7 +266,16 @@ export function TasksScreen() {
                   { title: "id", render: (task) => <span className="font-mono text-xs">{task.taskId}</span> },
                   { title: "Вид", render: (task) => KIND_TITLES[task.kind] ?? task.kind },
                   { title: "Цель", align: "right", render: (task) => targetLabel(task) },
-                  { title: "Заголовок", render: (task) => task.title ?? <span className="text-text-muted">по виду цели</span> },
+                  {
+                    title: "Заголовок",
+                    render: (task) => (
+                      <span className="inline-flex items-center gap-2">
+                        {/* Картинку видно в списке: задание без неё — у игрока со значком вида. */}
+                        {task.image === null ? null : <img src={imageUrl(task.image)} alt="" width={24} height={24} loading="lazy" className="size-6 shrink-0 rounded-sm bg-surface-sunken object-cover" />}
+                        {task.title ?? <span className="text-text-muted">по виду цели</span>}
+                      </span>
+                    ),
+                  },
                   { title: "Награда", render: (task) => rewardLabel(task) },
                   // Счёт выполнивших ведётся у партнёрских целей: у них есть лимит.
                   ...(group.group === "partner"

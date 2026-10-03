@@ -80,6 +80,7 @@ export function periodStartSql(period: Prisma.Sql, at: Date): Prisma.Sql {
 const defSchema = z.object({
   task_id: z.string(),
   completion_limit: z.number().int().nullable(),
+  image_id: z.string().nullable(),
   period: z.enum(TASK_PERIODS),
   kind: z.string(),
   target: z.number().int(),
@@ -111,7 +112,7 @@ export class PrismaTasksRepository implements TasksRepository {
 
   async catalog(): Promise<TaskDef[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit
+      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id
       FROM task_def ORDER BY period, sort, task_id`;
     const defs: TaskDef[] = [];
     for (const raw of rows) {
@@ -138,6 +139,7 @@ export class PrismaTasksRepository implements TasksRepository {
         sort: row.sort,
         active: row.active,
         limit: row.completion_limit,
+        image: row.image_id,
       });
     }
     return defs;
@@ -189,9 +191,9 @@ export class PrismaTasksRepository implements TasksRepository {
   async insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean> {
     return (
       (await this.prisma.$executeRaw`
-        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, created_at, updated_at, updated_by)
+        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, created_at, updated_at, updated_by)
         VALUES (${task.taskId}, ${task.period}::"TaskPeriod", ${task.kind}, ${task.target}, ${task.title}, ${task.coins}, ${task.gems}, ${task.shards},
-                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${task.limit}, ${at}, ${at}, ${actorAccountId}::uuid)
+                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${task.limit}, ${task.image}, ${at}, ${at}, ${actorAccountId}::uuid)
         ON CONFLICT (task_id) DO NOTHING`) > 0
     );
   }
@@ -203,7 +205,7 @@ export class PrismaTasksRepository implements TasksRepository {
       (await this.prisma.$executeRaw`
         UPDATE task_def SET target = ${task.target}, title = ${task.title}, coins = ${task.coins}, gems = ${task.gems}, shards = ${task.shards},
           pass_points = ${task.passPoints}, sort = ${task.sort}, active = ${task.active}, params = ${paramsJson(task)}::jsonb,
-          completion_limit = ${task.limit}, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
+          completion_limit = ${task.limit}, image_id = ${task.image}, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
         WHERE task_id = ${task.taskId}`) > 0
     );
   }

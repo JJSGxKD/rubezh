@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { IMAGE_ID } from "../media/image-rules.js";
 import { runReward } from "../progress/progress-rules.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import type { RecordedRun } from "../runs/runs-hooks.js";
@@ -154,12 +155,16 @@ export const taskDefSchema = z
     active: z.boolean(),
     /** лимит выполнений партнёрской цели — сколько игроков получат награду; `null` — без лимита, и панель до лимита поля не слала */
     limit: z.number().int().min(TASK_LIMIT_RANGE.min).max(TASK_LIMIT_RANGE.max).nullable().default(null),
+    /** картинка 1:1 партнёрской цели (Р82) — id из `media`; `null` — значок вида, и панель до картинок поля не слала */
+    image: z.string().regex(IMAGE_ID).nullable().default(null),
   })
   .strict()
   .refine((task) => task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
   // Лимит — у того, что выполняют действием вне игры: место в нём занимает
   // игрок, а у цели забега мест нет.
   .refine((task) => task.limit === null || isCheckedKind(task.kind), { message: "лимит выполнений — только у партнёрской цели", path: ["limit"] })
+  // У цели забега рядом с текстом — её прогресс, картинку туда не ставим.
+  .refine((task) => task.image === null || isCheckedKind(task.kind), { message: "картинка — только у партнёрской цели", path: ["image"] })
   .refine((task) => isCheckedKind(task.kind) === (task.params !== null), { message: "ссылка — у партнёрской цели, и только у неё", path: ["params"] })
   .refine((task) => task.kind !== "channel" || (task.params?.platform !== undefined && task.params.chat !== undefined), {
     message: "у подписки на канал нужны площадка и канал — по ним спрашивает бот",
