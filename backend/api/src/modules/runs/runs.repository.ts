@@ -91,6 +91,19 @@ export interface BestRunRow {
   enemiesKilled: number;
 }
 
+/** Забег, который модератор может снять с рейтинга или вернуть (docs/35-stage4-plan.md WP44, часть 3б). */
+export interface ModerationRunRow {
+  runId: string;
+  difficulty: Difficulty;
+  survivalSec: number;
+  level: number;
+  enemiesKilled: number;
+  startingWeaponId: string;
+  finishedAt: Date;
+  /** `false` — снят с рейтинга модератором: вердикт честный, читов нет, ограничения не было */
+  ranked: boolean;
+}
+
 export interface ReviewRow {
   runId: string;
   accountId: string;
@@ -143,6 +156,16 @@ export interface RunsRepository {
    * ограничением: так игрок видит себя сам.
    */
   bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean): Promise<BestRunRow | null>;
+  /**
+   * Забеги игрока, которые модератор может снять с рейтинга или вернуть:
+   * рейтинговые и снятые модератором, лучшие первыми.
+   */
+  moderationRuns(accountId: string, difficulty: Difficulty, limit: number): Promise<ModerationRunRow[]>;
+  /**
+   * Снять с рейтинга или вернуть — условно: снять можно только рейтинговый,
+   * вернуть — только снятый модератором. `null` — менять нечего.
+   */
+  setRanked(runId: string, ranked: boolean): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null>;
   review(limit: number): Promise<ReviewRow[]>;
 }
 
@@ -372,6 +395,34 @@ export class PrismaRunsRepository implements RunsRepository {
     };
   }
 
+  async moderationRuns(accountId: string, difficulty: Difficulty, limit: number): Promise<ModerationRunRow[]> {
+    const rows = await this.prisma.run.findMany({
+      where: { accountId, difficulty, status: "finished", OR: [{ ranked: true }, UNRANKED_BY_MODERATOR] },
+      orderBy: [{ survivalSec: "desc" }, { finishedAt: "desc" }],
+      take: limit,
+      select: { runId: true, difficulty: true, survivalSec: true, level: true, enemiesKilled: true, startingWeaponId: true, finishedAt: true, ranked: true },
+    });
+    return rows.map((row) => ({
+      runId: row.runId,
+      difficulty: row.difficulty,
+      survivalSec: row.survivalSec ?? 0,
+      level: row.level ?? 1,
+      enemiesKilled: row.enemiesKilled ?? 0,
+      startingWeaponId: row.startingWeaponId,
+      finishedAt: row.finishedAt ?? new Date(0),
+      ranked: row.ranked,
+    }));
+  }
+
+  async setRanked(runId: string, ranked: boolean): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
+    // Условие — в самом обновлении: два нажатия разом меняют забег однажды.
+    const where = ranked ? { runId, status: "finished" as const, ...UNRANKED_BY_MODERATOR } : { runId, status: "finished" as const, ranked: true };
+    const { count } = await this.prisma.run.updateMany({ where, data: { ranked } });
+    if (count === 0) return null;
+    const row = await this.prisma.run.findUnique({ where: { runId }, select: { accountId: true, difficulty: true, survivalSec: true } });
+    return row === null ? null : { accountId: row.accountId, difficulty: row.difficulty, survivalSec: row.survivalSec ?? 0 };
+  }
+
 
   async review(limit: number): Promise<ReviewRow[]> {
     const rows = await this.prisma.run.findMany({
@@ -393,6 +444,13 @@ export class PrismaRunsRepository implements RunsRepository {
     return rows.map((row) => ({ ...row, verdict: row.verdict ?? "suspicious" }));
   }
 }
+
+/**
+ * Снят с рейтинга модератором: вердикт честный, читов нет и сдан не под
+ * ограничением — иначе забег и не был бы рейтинговым. Другого пути к такому
+ * сочетанию нет, поэтому отдельная пометка не нужна.
+ */
+const UNRANKED_BY_MODERATOR = { ranked: false, verdict: "ok" as const, cheats: false, ratingRestricted: null };
 
 /** Колонка — строкой: незнакомое значение читается как «без ограничения», а не роняет чтение. */
 function ratingRestrictedOf(value: string | null): RatingRestricted | null {

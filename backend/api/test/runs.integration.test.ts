@@ -181,6 +181,37 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect(await board.remove([])).toBe(0);
   });
 
+  it("снять с рейтинга модератором: только рейтинговый, вернуть — только снятый им; два нажатия разом меняют однажды", async () => {
+    // Пересборка в соседнем тесте читает всю базу, а доска «normal» там считается поштучно — здесь «easy».
+    const accountId = await account("Рекорд");
+    const [record, second, cheats, restricted] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    await runs.finish(finished(record, accountId, { difficulty: "easy", survivalSec: 700 }));
+    await runs.finish(finished(second, accountId, { difficulty: "easy", survivalSec: 300 }));
+    await runs.finish(finished(cheats, accountId, { difficulty: "easy", survivalSec: 900, ranked: false, cheats: true }));
+    await runs.finish(finished(restricted, accountId, { difficulty: "easy", survivalSec: 800, ranked: false, ratingRestricted: "notified" }));
+
+    const [first, repeat] = await Promise.all([runs.setRanked(record, false), runs.setRanked(record, false)]);
+    expect([first, repeat].filter((changed) => changed !== null)).toEqual([{ accountId, difficulty: "easy", survivalSec: 700 }]);
+    expect(await runs.bestRunOf(accountId, "easy", false)).toMatchObject({ survivalSec: 300 });
+    // В списке модератора — рейтинговые и снятые им, без забегов с читами и под ограничением.
+    expect((await runs.moderationRuns(accountId, "easy", 10)).map((row) => [row.runId, row.ranked])).toEqual([
+      [record, false],
+      [second, true],
+    ]);
+
+    expect(await runs.setRanked(cheats, true)).toBeNull();
+    expect(await runs.setRanked(restricted, true)).toBeNull();
+    expect(await runs.setRanked(record, true)).toMatchObject({ survivalSec: 700 });
+    expect(await runs.bestRunOf(accountId, "easy", false)).toMatchObject({ survivalSec: 700 });
+
+    // Точная запись в доску опускает время — после снятия рекорда.
+    await board.submit("easy", accountId, 700);
+    await board.set("easy", accountId, 300);
+    expect(await board.best("easy", accountId)).toBe(300);
+    await board.set("easy", accountId, null);
+    expect(await board.best("easy", accountId)).toBeNull();
+  });
+
   it("очередь разбора видит отклонённые и подозрительные, а честные — нет", async () => {
     const accountId = await account();
     const flagged = randomUUID();
