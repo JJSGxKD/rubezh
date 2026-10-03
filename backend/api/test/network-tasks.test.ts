@@ -24,6 +24,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { FakeCreatives, MemoryAds, adBlock, interstitialGate, moscowDayStart } from "./helpers/memory-ads.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { panelSettings } from "./helpers/settings.js";
 
 /**
@@ -126,7 +127,7 @@ async function setup(options: { secret?: string | null; blocks?: ReturnType<type
   const settings = panelSettings();
   const passes = new AdPasses();
   const creatives = new FakeCreatives();
-  const ads = new AdsService(adsRepository, () => 0, passes, settings, creatives, new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, settings));
+  const ads = new AdsService(adsRepository, () => 0, passes, settings, creatives, new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, settings), restrictionsGate());
   const secrets = secretsOf(options.secret === undefined ? SECRET : options.secret);
   const accounts = new MemoryAccountRepository();
   const hooks = new AdTaskHooks();

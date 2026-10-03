@@ -22,6 +22,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { FakeCreatives, MemoryAds, adBlock, interstitialGate } from "./helpers/memory-ads.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
+import { restrictionsGate } from "./helpers/memory-restrictions.js";
 
 /**
  * Второй шанс за рекламу (docs/35-stage4-plan.md WP11, Р4): только своим
@@ -86,7 +87,7 @@ function setup(blocks = [adBlock("adsgram", 10, { place: "second_chance" }), adB
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
   const passes = new AdPasses();
-  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, panelSettings()));
+  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, panelSettings()), restrictionsGate());
   const continues = new RunContinues();
   const stars = new StarsLedger();
   continues.provide(stars);

@@ -27,6 +27,7 @@ import { AdsService } from "../src/modules/ads/ads.service.js";
 import { panelSettings } from "./helpers/settings.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { FakeCreatives, MemoryAds, adBlock, interstitialGate } from "./helpers/memory-ads.js";
+import { restrictionsGate } from "./helpers/memory-restrictions.js";
 
 /**
  * Колесо (docs/35-stage4-plan.md Р45, WP13; docs/07-monetization-and-ads.md
@@ -129,7 +130,7 @@ function setup(roll: WheelRoll = rolls(0), level = 1, blocks: AdBlockRow[] = [ad
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
   const passes = new AdPasses();
-  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, panelSettings()));
+  const ads = new AdsService(adsRepository, () => 0, passes, panelSettings(), new FakeCreatives(), new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, panelSettings()), restrictionsGate());
   const service = new WheelService(repository, progress, wallet as unknown as WalletService, ads, roll);
   return { repository, wallet, service, ads, adsRepository, passes };
 }
