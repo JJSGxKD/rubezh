@@ -123,8 +123,18 @@ export function adOf(raw: unknown): TaddyAdResult {
   return { kind: "ad", ad };
 }
 
-function isTimeout(error: unknown): boolean {
+export function isTimeout(error: unknown): boolean {
   return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+/** Вызов API Taddy: JSON в теле, срок — у каждого вызова свой. */
+export async function postTaddy(fetchImpl: typeof fetch, url: string, body: Record<string, unknown>, timeoutMs: number): Promise<Response> {
+  return await fetchImpl(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
 }
 
 export class HttpTaddyApi implements TaddyApi {
@@ -175,12 +185,7 @@ export class HttpTaddyApi implements TaddyApi {
   }
 
   private async post(path: string, body: Record<string, unknown>, timeoutMs: number): Promise<Response> {
-    return await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    return await postTaddy(this.fetchImpl, `${this.baseUrl}${path}`, body, timeoutMs);
   }
 
   /** В лог — путь и код, без игрока: адрес и браузер — личные данные (docs/15-engineering-standards.md §7). */
