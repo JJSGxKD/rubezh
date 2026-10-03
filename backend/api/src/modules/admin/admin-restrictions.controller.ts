@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
-import { imposeSchema, liftSchema, type RestrictionView } from "../restrictions/restriction-rules.js";
-import { RestrictionsService, type RestrictionCatalogView } from "../restrictions/restrictions.service.js";
+import { imposeSchema, liftSchema, previewSchema, type RestrictionView } from "../restrictions/restriction-rules.js";
+import { RestrictionsService, type RestrictionCatalogView, type RestrictionPreview } from "../restrictions/restrictions.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
@@ -32,6 +32,14 @@ export class AdminRestrictionsController {
   @RequirePermission("players.view")
   catalog(): { data: RestrictionCatalogView } {
     return { data: this.restrictions.catalog() };
+  }
+
+  /** Что увидит игрок — пока модератор заполняет диалог; ничего не пишет, поэтому без лимита изменений. */
+  @Post("restrictions/preview")
+  @HttpCode(200)
+  @RequirePermission("players.restrict")
+  preview(@Body() body: unknown): { data: RestrictionPreview } {
+    return { data: this.restrictions.preview(parse(() => previewSchema.parse(body), "Некорректный черновик ограничения")) };
   }
 
   @Get("players/:accountId/restrictions")

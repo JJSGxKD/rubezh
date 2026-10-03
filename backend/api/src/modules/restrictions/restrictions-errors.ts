@@ -11,13 +11,16 @@ export class AccountRestrictedError extends DomainError {
   }
 }
 
+/** Что видит игрок при молчаливом ограничении — его же показывает предпросмотр панели. */
+export const SILENT_MESSAGE = "Сейчас недоступно — попробуйте позже";
+
 /**
  * Молчаливое ограничение (О40): игрок видит нейтральный отказ, как от
  * временного сбоя, — без плашки и без причины.
  */
 export class RestrictionSilentError extends DomainError {
   constructor() {
-    super("temporarily_unavailable", "Сейчас недоступно — попробуйте позже", 503);
+    super("temporarily_unavailable", SILENT_MESSAGE, 503);
   }
 }
 
