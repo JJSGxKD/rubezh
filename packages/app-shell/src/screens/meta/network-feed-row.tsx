@@ -6,6 +6,7 @@ import { usePlatform } from "../../state/platform";
 import { track, useShell } from "../../state/shell";
 import { createTasksApi, feedActionKey, feedCheckNotice, type FeedHints, type FeedTask, type NetworkTaskItem } from "../../state/tasks-api";
 import { AdLabel } from "./ad-label";
+import { TaskImage } from "./task-image";
 import { RewardChips } from "./task-reward";
 
 /**
@@ -129,7 +130,7 @@ export function FeedRow(props: FeedRowProps): ReactNode {
     <Card appearIndex={props.index}>
       <AdLabel network={item.title} />
       <div className="flex items-center gap-3">
-        <TaskImage task={state.task} />
+        <TaskImage src={state.task.image} fallback={<FeedIcon action={state.task.action} />} />
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 font-display text-sm font-bold text-text">{state.task.title}</p>
           {state.task.description === null ? null : <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">{state.task.description}</p>}
@@ -163,16 +164,11 @@ export function FeedRow(props: FeedRowProps): ReactNode {
   );
 }
 
-/** Картинка задания из ленты; нет её или не загрузилась — значок вида, как у своих заданий: бот или ссылка. */
-function TaskImage(props: { task: FeedTask }): ReactNode {
-  const [broken, setBroken] = useState(false);
-  const { image, action } = props.task;
-  if (image !== null && !broken) {
-    return <img src={image} alt="" width={44} height={44} loading="lazy" decoding="async" onError={() => setBroken(true)} className="size-11 shrink-0 rounded-md bg-surface-sunken object-cover" />;
-  }
+/** Нет картинки в ленте — значок вида, как у своих заданий: бот или ссылка. */
+function FeedIcon(props: { action: FeedTask["action"] }): ReactNode {
   return (
     <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-md bg-surface-raised text-text-muted">
-      {action === "bot" ? <Bot size={20} aria-hidden="true" /> : <ExternalLink size={20} aria-hidden="true" />}
+      {props.action === "bot" ? <Bot size={20} aria-hidden="true" /> : <ExternalLink size={20} aria-hidden="true" />}
     </span>
   );
 }
