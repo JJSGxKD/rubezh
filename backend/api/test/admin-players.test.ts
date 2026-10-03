@@ -13,6 +13,7 @@ import type { FlagSplit } from "../src/modules/funnel/flag-split-report.js";
 import { EMPTY_SPLIT_GROUP } from "./helpers/flag-split.js";
 import type { MessagingService } from "../src/modules/messaging/messaging.service.js";
 import type { ProgressService } from "../src/modules/progress/progress.service.js";
+import { RestrictionsService } from "../src/modules/restrictions/restrictions.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import type { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import type { TestNoticeService } from "../src/modules/test-notice/test-notice.service.js";
@@ -23,6 +24,7 @@ import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { memoryNotifications } from "./helpers/memory-notifications.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 /**
@@ -93,8 +95,10 @@ function setup() {
 
   const notifications = memoryNotifications();
   const testNotice = { acceptance: async () => ({ version: 1, acceptedAt: NOW, firstAcceptedAt: NOW }) } as unknown as TestNoticeService;
-  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice);
-  return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository };
+  const restrictionsRepository = new MemoryRestrictionsRepository();
+  const restrictions = new RestrictionsService(restrictionsRepository, accounts, roles, restrictionsGate(restrictionsRepository));
+  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice, restrictions);
+  return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository, restrictionsRepository };
 }
 
 async function player(accounts: MemoryAccountRepository, platformUserId = String(500_000 + Math.floor(Math.random() * 1000))) {
@@ -169,16 +173,19 @@ describe("блокировка", () => {
 
     const result = await s.service.ban(owner, target.accountId, "накрутка", NOW);
 
-    expect(result.account.banned).toEqual({ at: NOW.toISOString(), reason: "накрутка" });
+    // Прежняя кнопка — бессрочная блокировка целиком: игрок видит причину
+    // шаблона, текст модератора — комментарий для команды.
+    const shown = "Аккаунт заблокирован бессрочно. Причина: Нарушение правил игры";
+    expect(result.account.banned).toEqual({ at: NOW.toISOString(), reason: shown });
     expect(result.revokedSessions).toBe(3);
     expect(s.gameSessionsRevoked).toEqual([target.accountId]);
     expect(s.store.sessions.size).toBe(0);
-    expect((await s.accounts.byId(target.accountId))?.banReason).toBe("накрутка");
+    expect((await s.accounts.byId(target.accountId))?.banReason).toBe(shown);
+    expect(s.restrictionsRepository.rows).toMatchObject([{ accountId: target.accountId, kind: "all", endsAt: null, reason: "other", comment: "накрутка", notify: true }]);
     expect(s.rolesRepository.entries.at(-1)).toMatchObject({
-      action: "players.ban",
+      action: "players.restrict",
       target: target.accountId,
-      before: { bannedAt: null, banReason: null },
-      after: { bannedAt: NOW.toISOString(), banReason: "накрутка" },
+      after: { restrictions: [{ kind: "all", endsAt: null, reason: "other", comment: "накрутка", notify: true }] },
     });
   });
 
@@ -200,7 +207,8 @@ describe("блокировка", () => {
     const again = await s.service.unban(owner, target.accountId);
     expect(again.account.banned).toBeNull();
 
-    expect(s.rolesRepository.entries.map((entry) => entry.action)).toEqual(["players.ban", "players.unban"]);
+    expect(s.rolesRepository.entries.map((entry) => entry.action)).toEqual(["players.restrict", "players.unrestrict"]);
+    expect(s.restrictionsRepository.rows[0]).toMatchObject({ liftComment: "Блокировка снята в карточке игрока" });
   });
 });
 

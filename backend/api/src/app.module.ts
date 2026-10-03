@@ -47,6 +47,7 @@ import { ChangelogModule } from "./modules/changelog/changelog.module.js";
 import { WheelModule } from "./modules/wheel/wheel.module.js";
 import { TasksModule } from "./modules/tasks/tasks.module.js";
 import { MediaModule } from "./modules/media/media.module.js";
+import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
 import { TestNoticeModule } from "./modules/test-notice/test-notice.module.js";
 import { AdsModule } from "./modules/ads/ads.module.js";
 import { ShopModule } from "./modules/shop/shop.module.js";
@@ -126,6 +127,7 @@ export const APP_MODULES = [
   ChangelogModule,
   WheelModule,
   MediaModule,
+  RestrictionsModule,
   TasksModule,
   TestNoticeModule,
   AdsModule,

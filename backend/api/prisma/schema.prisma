@@ -185,16 +185,16 @@ model Account {
 
   // Друзья (WP14)
   friendLink       FriendLink?
-  friendsAsA       Friendship[]        @relation("friendship_a")
-  friendsAsB       Friendship[]        @relation("friendship_b")
-  requestsSent     FriendRequest[]     @relation("friend_request_from")
-  requestsReceived FriendRequest[]     @relation("friend_request_to")
-  giftsSent        FriendGift[]        @relation("friend_gift_from")
-  giftsReceived    FriendGift[]        @relation("friend_gift_to")
-  referredBy       ReferralBinding?    @relation("referral_referred")
-  referrals        ReferralBinding[]   @relation("referral_referrer")
-  returns          FriendReturn[]      @relation("friend_return_returned")
-  returnsHelped    FriendReturn[]      @relation("friend_return_friend")
+  friendsAsA       Friendship[]         @relation("friendship_a")
+  friendsAsB       Friendship[]         @relation("friendship_b")
+  requestsSent     FriendRequest[]      @relation("friend_request_from")
+  requestsReceived FriendRequest[]      @relation("friend_request_to")
+  giftsSent        FriendGift[]         @relation("friend_gift_from")
+  giftsReceived    FriendGift[]         @relation("friend_gift_to")
+  referredBy       ReferralBinding?     @relation("referral_referred")
+  referrals        ReferralBinding[]    @relation("referral_referrer")
+  returns          FriendReturn[]       @relation("friend_return_returned")
+  returnsHelped    FriendReturn[]       @relation("friend_return_friend")
   friendBonuses    FriendBonus[]
   promoRedemptions PromoRedemption[]
   partnerBinding   PartnerBinding?
@@ -208,6 +208,7 @@ model Account {
   wheelSpins       WheelSpin[]
   taskProgress     TaskProgress[]
   taskParticipants TaskParticipant[]
+  restrictions     AccountRestriction[]
   taskRuns         TaskRun[]
   testNotice       TestNotice?
   adSessions       AdSession[]
@@ -1489,6 +1490,39 @@ model TaskDef {
   participants TaskParticipant[]
 
   @@map("task_def")
+}
+
+/// Ограничение игрока (docs/35-stage4-plan.md Р75, WP44): часть функций
+/// закрыта на срок или бессрочно. Строка на вид; действует — не снято и срок
+/// не вышел, истечение проверяет время. `settled_at` — последствия сняты:
+/// блокировку убрали, рейтинг вернули; ставит снятие или задача по сроку.
+/// Блокировка целиком — вид `all`, `account.banned_at` — её отражение для
+/// проверок входа. Вид и причина — из каталога в коде (`restrictions/`).
+model AccountRestriction {
+  restrictionId String    @id @default(uuid()) @map("restriction_id") @db.Uuid
+  accountId     String    @map("account_id") @db.Uuid
+  kind          String    @db.VarChar(32)
+  startsAt      DateTime  @map("starts_at") @db.Timestamptz(3)
+  /// `null` — бессрочно
+  endsAt        DateTime? @map("ends_at") @db.Timestamptz(3)
+  /// шаблон причины: игрок видит его текст
+  reason        String    @db.VarChar(32)
+  /// комментарий команды — игроку не показывается
+  comment       String?   @db.VarChar(500)
+  /// сообщить игроку: плашка там, где он упёрся; `false` — молча (О40)
+  notify        Boolean
+  /// кто наложил; без внешнего ключа — запись переживает аккаунт модератора.
+  /// `null` — перенесено из прежней блокировки
+  imposedBy     String?   @map("imposed_by") @db.Uuid
+  liftedAt      DateTime? @map("lifted_at") @db.Timestamptz(3)
+  liftedBy      String?   @map("lifted_by") @db.Uuid
+  liftComment   String?   @map("lift_comment") @db.VarChar(500)
+  settledAt     DateTime? @map("settled_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, startsAt(sort: Desc)])
+  @@map("account_restriction")
 }
 
 /// Участник партнёрского задания (Р82, WP13, часть 7): строка на игрока, а
