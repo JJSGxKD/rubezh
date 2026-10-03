@@ -4,7 +4,10 @@ import {
   NETWORK_TASK_CHECKS_MS,
   claimFailureKey,
   createTasksApi,
+  feedActionKey,
+  feedCheckNotice,
   isClaimable,
+  isFeedTask,
   isOpenKind,
   networkTaskConfirmed,
   openTaskLink,
@@ -162,5 +165,44 @@ describe("клиент заданий", () => {
     // Спрашиваем всё реже и не дольше полуминуты: дальше экран честно говорит «сеть ещё проверяет».
     expect([...NETWORK_TASK_CHECKS_MS].every((at, index, all) => index === 0 || at > (all[index - 1] ?? 0))).toBe(true);
     expect(NETWORK_TASK_CHECKS_MS.at(-1)).toBeLessThanOrEqual(30_000);
+  });
+
+  it("лента сети: задание — POST с подсказками клиента, только знакомыми; проверка — с сессией; ответы разбираются схемой", async () => {
+    const sent: Sent[] = [];
+    const task = {
+      sessionId: "Ab12Cd34Ef56Gh78",
+      network: "taddy",
+      title: "Ферма котиков",
+      description: null,
+      image: "https://cdn.taddy.example/1.webp",
+      action: "channel",
+      link: "https://t.tadly.pro/v1/exchange/open/1",
+      opened: false,
+    };
+    const item = await createTasksApi(server(sent, { kind: "task", task })).networkItem("taddy", { language: "pt-BR", premium: true });
+    expect(item.ok && item.data).toEqual({ kind: "task", task });
+    const done = await createTasksApi(server(sent, { kind: "done", doneToday: 2, nextAt: "2026-10-03T10:00:00.000Z" })).networkItem("taddy", { language: "<b>", premium: null });
+    expect(done.ok && done.data).toEqual({ kind: "done", doneToday: 2, nextAt: "2026-10-03T10:00:00.000Z" });
+    const check = await createTasksApi(server(sent, { result: "not_done", doneToday: 0, nextAt: null })).networkCheck("taddy", "Ab12Cd34Ef56Gh78", { language: null, premium: false });
+    expect(check.ok && check.data.result).toBe("not_done");
+    expect(sent).toEqual([
+      { method: "POST", path: "/api/v1/tasks/networks/taddy/item", body: { language: "pt-BR", premium: true } },
+      { method: "POST", path: "/api/v1/tasks/networks/taddy/item", body: {} },
+      { method: "POST", path: "/api/v1/tasks/networks/taddy/check", body: { sessionId: "Ab12Cd34Ef56Gh78", premium: false } },
+    ]);
+    const broken = await createTasksApi(server([], { kind: "task", task: { ...task, link: undefined } })).networkItem("taddy", { language: null, premium: null });
+    expect(broken.ok).toBe(false);
+  });
+
+  it("строка ленты: надпись кнопки по виду задания, подсказка после проверки; старый сервер — всё элемент сети", () => {
+    expect([feedActionKey("bot"), feedActionKey("app"), feedActionKey("link"), feedActionKey("channel")]).toEqual(["tasks.startBot", "tasks.network.openApp", "tasks.go", "tasks.go"]);
+    expect(feedCheckNotice("confirmed")).toBeNull();
+    expect(feedCheckNotice("closed")).toBeNull();
+    expect(feedCheckNotice("not_done")).toBe("tasks.network.notDone");
+    expect(feedCheckNotice("unavailable")).toBe("tasks.network.unavailable");
+    expect(feedCheckNotice("что-то новое")).toBe("tasks.network.unavailable");
+    expect(isFeedTask({ delivery: "feed" })).toBe(true);
+    expect(isFeedTask({ delivery: "element" })).toBe(false);
+    expect(isFeedTask({ delivery: undefined })).toBe(false);
   });
 });
