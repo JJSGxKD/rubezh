@@ -207,6 +207,7 @@ model Account {
   changelogSeen    ChangelogSeen?
   wheelSpins       WheelSpin[]
   taskProgress     TaskProgress[]
+  taskParticipants TaskParticipant[]
   taskRuns         TaskRun[]
   testNotice       TestNotice?
   adSessions       AdSession[]
@@ -1451,32 +1452,59 @@ enum TaskPeriod {
 /// вид приходит кодом (`tasks/task-rules.ts`), без миграции. Строку не
 /// удаляют, а выключают — на неё ссылается прогресс.
 model TaskDef {
-  taskId     String     @id @map("task_id") @db.VarChar(48)
-  period     TaskPeriod
-  kind       String     @db.VarChar(32)
-  target     Int
+  taskId          String     @id @map("task_id") @db.VarChar(48)
+  period          TaskPeriod
+  kind            String     @db.VarChar(32)
+  target          Int
   /// `null` — текст по виду цели у клиента, со склонением числа
-  title      String?    @db.VarChar(120)
-  coins      Int        @default(0)
-  gems       Int        @default(0)
+  title           String?    @db.VarChar(120)
+  coins           Int        @default(0)
+  gems            Int        @default(0)
   /// обычные осколки
-  shards     Int        @default(0)
+  shards          Int        @default(0)
   /// очки батл-пасса (WP26)
-  passPoints Int        @default(0) @map("pass_points")
+  passPoints      Int        @default(0) @map("pass_points")
   /// параметры вида со своей схемой (`tasks/task-rules.ts`): у партнёрских
   /// целей — ссылка, площадка и у канала — сам канал; у целей забега — пусто
-  params     Json?
-  sort       Int        @default(0)
-  active     Boolean    @default(true)
-  createdAt  DateTime   @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime   @map("updated_at") @db.Timestamptz(3)
+  params          Json?
+  sort            Int        @default(0)
+  active          Boolean    @default(true)
+  /// лимит выполнений партнёрского задания (Р82): сколько игроков получат
+  /// награду; `null` — без лимита. Пределы — `CHECK` в миграции
+  completionLimit Int?       @map("completion_limit")
+  /// сколько игроков выполнили; растёт под блокировкой строки — лимит не
+  /// перешагнуть двумя заборами разом, кроме мягкого часа начавших
+  completions     Int        @default(0)
+  createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
   /// `null` — строка из миграции, человек её не правил
-  updatedBy  String?    @map("updated_by") @db.Uuid
+  updatedBy       String?    @map("updated_by") @db.Uuid
 
-  progress TaskProgress[]
+  progress     TaskProgress[]
+  participants TaskParticipant[]
 
   @@map("task_def")
+}
+
+/// Участник партнёрского задания (Р82, WP13, часть 7): строка на игрока, а
+/// не на срок. Место в лимите игрок занимает однажды — первым выполнением,
+/// и у повторяемой подписки дальше получает награду каждый срок.
+model TaskParticipant {
+  taskId      String    @map("task_id") @db.VarChar(48)
+  accountId   String    @map("account_id") @db.Uuid
+  /// последний переход до исчерпания лимита: от него идёт мягкий час
+  openedAt    DateTime? @map("opened_at") @db.Timestamptz(3)
+  /// первое выполнение — с ним игрок занял место в лимите
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+
+  task    TaskDef @relation(fields: [taskId], references: [taskId])
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([taskId, accountId])
+  // Удаление аккаунта находит его строки по индексу.
+  @@index([accountId])
+  @@map("task_participant")
 }
 
 /// Прогресс цели за срок. Начало срока — игровые сутки, понедельник недели

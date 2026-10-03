@@ -10,7 +10,9 @@ import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
  * Задания на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
  * TEST_DATABASE_URL, без него пропуск): начало суток и недели считает база
  * по Москве, забег засчитывается однажды и под гонкой, прогресс не уходит за
- * цель, забирается только выполненное — и однажды.
+ * цель, забирается только выполненное — и однажды. Лимит выполнений
+ * партнёрской цели выдерживает одновременный забор, мягкий час пускает
+ * начавших сверх лимита, а повтор срока места не занимает.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -143,6 +145,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       passPoints: 5,
       sort: 99,
       active: true,
+      limit: null,
     };
     expect(await repository.insert(task, actor, NOON)).toBe(true);
     expect(await repository.insert({ ...task, coins: 999 }, actor, NOON)).toBe(false);
@@ -173,19 +176,21 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       passPoints: 0,
       sort: 99,
       active: true,
+      limit: null,
     };
     expect(await repository.insert(task, actor, NOON)).toBe(true);
     expect((await repository.catalog()).find((candidate) => candidate.taskId === taskId)).toEqual(task);
     expect(await repository.update({ ...task, params: { ...params, url: "https://t.me/rubezh_news" } }, actor, NOON)).toBe(true);
     expect((await repository.catalog()).find((candidate) => candidate.taskId === taskId)?.params).toMatchObject({ url: "https://t.me/rubezh_news" });
 
-    const first = await repository.complete(me, task, NOON);
+    const first = await repository.complete(me, task, NOON, NOON);
     expect(first).toMatchObject({ taskId, periodStart: ACHIEVEMENT_PERIOD_START, value: 1, done: true, claimed: false });
+    if (first === null) throw new Error("место без лимита есть всегда");
     const [stamp] = await prisma.$queryRaw<{ completed_at: Date }[]>`
       SELECT completed_at FROM task_progress WHERE account_id = ${me}::uuid AND task_id = ${taskId}`;
     expect(await repository.markClaimed(me, taskId, first.periodStart, NOON)).toBe(true);
     // повтор — то же выполнение: время первое, забранное остаётся забранным
-    expect(await repository.complete(me, task, new Date(NOON.getTime() + 60_000))).toMatchObject({ value: 1, done: true, claimed: true });
+    expect(await repository.complete(me, task, new Date(NOON.getTime() + 60_000), NOON)).toMatchObject({ value: 1, done: true, claimed: true });
     const [again] = await prisma.$queryRaw<{ completed_at: Date }[]>`
       SELECT completed_at FROM task_progress WHERE account_id = ${me}::uuid AND task_id = ${taskId}`;
     expect(again?.completed_at).toEqual(stamp?.completed_at);
@@ -226,5 +231,87 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     const [left] = await prisma.$queryRaw<{ n: number }[]>`
       SELECT (SELECT count(*) FROM task_progress WHERE account_id = ${me}::uuid) + (SELECT count(*) FROM task_run WHERE account_id = ${me}::uuid) AS n`;
     expect(Number(left?.n)).toBe(0);
+  });
+
+  /** Партнёрская цель с лимитом — своя на каждый прогон, выключенная: каталог других тестов её не видит. */
+  async function limitedTask(limit: number | null, period: TaskDef["period"] = "achievement"): Promise<TaskDef> {
+    const task: TaskDef = {
+      taskId: `it_limit_${String(Date.now())}_${String(runNo++)}`,
+      period,
+      kind: "channel",
+      params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" },
+      target: 1,
+      title: null,
+      coins: 10,
+      gems: 0,
+      shards: 0,
+      passPoints: 0,
+      sort: 99,
+      active: false,
+      limit,
+    };
+    expect(await repository.insert(task, await account(), NOON)).toBe(true);
+    return task;
+  }
+
+  const minutes = (value: number) => new Date(NOON.getTime() + value * 60_000);
+
+  it("лимит выполнений: двадцать заборов разом при пяти местах — ровно пять выполнений", async () => {
+    const task = await limitedTask(5);
+    const players = await Promise.all(Array.from({ length: 20 }, async () => await account()));
+    const results = await Promise.all(players.map(async (me) => await repository.complete(me, task, NOON, minutes(-60))));
+    expect(results.filter((row) => row !== null)).toHaveLength(5);
+    const [row] = await prisma.$queryRaw<{ completions: number; participants: bigint }[]>`
+      SELECT completions, (SELECT count(*) FROM task_participant WHERE task_id = ${task.taskId} AND completed_at IS NOT NULL) AS participants
+      FROM task_def WHERE task_id = ${task.taskId}`;
+    expect([row?.completions, Number(row?.participants)]).toEqual([5, 5]);
+    expect((await repository.completions()).get(task.taskId)).toBe(5);
+  });
+
+  it("один игрок двумя заборами разом занимает одно место", async () => {
+    const task = await limitedTask(3);
+    const me = await account();
+    const results = await Promise.all([repository.complete(me, task, NOON, minutes(-60)), repository.complete(me, task, NOON, minutes(-60))]);
+    expect(results.every((row) => row !== null)).toBe(true);
+    expect((await repository.completions()).get(task.taskId)).toBe(1);
+  });
+
+  it("мягкий час: перешедший до исчерпания выполняет сверх лимита, перешедший раньше часа — нет", async () => {
+    const task = await limitedTask(1);
+    const [filler, early, stale] = await Promise.all([account(), account(), account()]);
+    await repository.markOpened(early, task.taskId, minutes(0));
+    await repository.markOpened(stale, task.taskId, minutes(-120));
+    expect(await repository.complete(filler, task, minutes(5), minutes(-55))).not.toBeNull();
+    expect(await repository.complete(stale, task, minutes(10), minutes(-50))).toBeNull();
+    expect(await repository.complete(early, task, minutes(30), minutes(-30))).toMatchObject({ done: true });
+    expect((await repository.completions()).get(task.taskId)).toBe(2);
+  });
+
+  it("повтор срока места не занимает; участие игрока читается с числом выполнивших", async () => {
+    const task = await limitedTask(1, "daily");
+    const me = await account();
+    expect(await repository.complete(me, task, NOON, minutes(-60))).toMatchObject({ periodStart: "2026-09-30" });
+    expect(await repository.complete(me, task, minutes(24 * 60), minutes(24 * 60 - 60))).toMatchObject({ periodStart: "2026-10-01" });
+    expect((await repository.completions()).get(task.taskId)).toBe(1);
+    await repository.update({ ...task, active: true }, me, NOON);
+    const mine = (await repository.participation(me)).get(task.taskId);
+    expect(mine).toEqual({ completions: 1, openedAt: null, completedAt: NOON });
+    await repository.update({ ...task, active: false }, me, NOON);
+  });
+
+  it("база держит лимит: только у партнёрской цели и в пределах; удалённый аккаунт уносит участие, но не счёт", async () => {
+    await expect(prisma.$executeRaw`
+      INSERT INTO task_def (task_id, period, kind, target, coins, completion_limit, created_at, updated_at)
+      VALUES ('it_runs_limit', 'daily', 'runs', 1, 5, 10, now(), now())`).rejects.toThrow();
+    await expect(prisma.$executeRaw`
+      INSERT INTO task_def (task_id, period, kind, target, coins, params, completion_limit, created_at, updated_at)
+      VALUES ('it_zero_limit', 'achievement', 'link', 1, 5, '{"url":"https://example.com"}'::jsonb, 0, now(), now())`).rejects.toThrow();
+    const task = await limitedTask(2);
+    const me = await account();
+    await repository.complete(me, task, NOON, minutes(-60));
+    await prisma.$executeRaw`DELETE FROM account WHERE account_id = ${me}::uuid`;
+    const [left] = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM task_participant WHERE account_id = ${me}::uuid`;
+    expect(Number(left?.n)).toBe(0);
+    expect((await repository.completions()).get(task.taskId)).toBe(1);
   });
 });

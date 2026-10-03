@@ -5,19 +5,30 @@ import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
-import { TaskCheckUnavailableError, TaskNotDoneError, TaskNotFoundError, TaskNotJoinedError, TaskNotOpenedError, TaskShapeLockedError } from "./tasks-errors.js";
+import {
+  TaskCheckUnavailableError,
+  TaskLimitReachedError,
+  TaskNotDoneError,
+  TaskNotFoundError,
+  TaskNotJoinedError,
+  TaskNotOpenedError,
+  TaskShapeLockedError,
+} from "./tasks-errors.js";
 import {
   OPEN_KINDS,
   RUN_KINDS,
   TASK_KIND_IDS,
+  TASK_LIMIT_GRACE_MIN,
   TASK_PERIODS,
   countsForTasks,
   isRunKind,
   rewardReason,
+  slotsFor,
   visibleOn,
   type TaskCategory,
   type TaskDef,
   type TaskKind,
+  type TaskParticipation,
   type TaskPeriod,
 } from "./task-rules.js";
 import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepository } from "./tasks.repository.js";
@@ -36,6 +47,11 @@ import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepos
  * Партнёрские цели (Р52) забег не двигает. Подписку на канал проверяет бот
  * площадки в момент забора — через порт, без знания о Telegram; переход по
  * ссылке и запуск бота засчитывает сам переход через сервер (`open`).
+ *
+ * Лимит выполнений партнёрской цели (Р82, WP13, часть 7) — сколько игроков
+ * получат награду. Игрок видит остаток; исчерпан — цель пропадает у тех, кто
+ * к ней не переходил, а перешедшим в последний час место держится: иначе
+ * они подписались бы зря.
  */
 
 const DB_TIMEOUT_MS = 3_000;
@@ -57,12 +73,16 @@ export interface TaskView {
   passPoints: number;
   /** куда вести игрока — у цели «канал»; у целей забега — пусто */
   link: string | null;
+  /** места в цели с лимитом; без лимита и у выполнившего — пусто */
+  slots: { left: number; total: number; holdUntil: string | null } | null;
 }
 
 export interface TaskCatalogView {
   tasks: TaskDef[];
   kinds: readonly TaskKind[];
   periods: readonly TaskPeriod[];
+  /** сколько игроков выполнили цель — у выполненных хоть раз */
+  completions: Record<string, number>;
 }
 
 export interface TaskClaimResult {
@@ -97,28 +117,34 @@ export class TasksService implements OnModuleInit {
   }
 
   async view(account: AccountRef, at = new Date()): Promise<TaskView[]> {
-    const [defs, progress] = await Promise.all([this.visible(account), this.db(this.repository.progress(account.accountId, at))]);
-    return viewOf(defs, progress);
+    const { defs, progress, participation } = await this.state(account, at);
+    return viewOf(defs, progress, participation, at);
   }
 
   async claim(account: AccountRef, taskId: string, at = new Date()): Promise<TaskClaimResult> {
     const { accountId } = account;
-    const [defs, progress] = await Promise.all([this.visible(account), this.db(this.repository.progress(accountId, at))]);
+    const { defs, progress, participation } = await this.state(account, at);
     const def = defs.find((candidate) => candidate.taskId === taskId);
     if (def === undefined) throw new TaskNotFoundError();
+    // Мест нет, а игрок к цели не переходил — бота спрашивать незачем.
+    if (!slotsFor(def.limit, participation.get(taskId) ?? null, at).visible) throw this.limitReached(accountId, taskId);
     let row = progress.find((candidate) => candidate.taskId === taskId);
     if (row === undefined || !row.done) {
       if (isRunKind(def.kind)) throw new TaskNotDoneError();
       if (OPEN_KINDS.has(def.kind)) throw new TaskNotOpenedError();
       await this.checkJoined(account, def);
-      row = await this.db(this.repository.complete(accountId, def, at));
+      const completed = await this.db(this.repository.complete(accountId, def, at, graceSince(at)));
+      if (completed === null) throw this.limitReached(accountId, taskId);
+      row = completed;
       this.logger.log(JSON.stringify({ module: "tasks", event: "task_checked", accountId, taskId, kind: def.kind }));
     }
     const done = row;
+    // Выполнивший место уже занял — у него лимита больше нет.
+    const joined = withCompleted(participation, taskId, at);
     // Прогресс остальных целей — как был; этой — после проверки площадки.
     const others = progress.filter((candidate) => candidate.taskId !== taskId);
     const none = { coins: 0, gems: 0, shards: 0 };
-    if (done.claimed) return { claimed: false, credited: none, tasks: viewOf(defs, [...others, done]) };
+    if (done.claimed) return { claimed: false, credited: none, tasks: viewOf(defs, [...others, done], joined, at) };
 
     const credited = { ...none };
     for (const [field, resource] of REWARD_RESOURCES) {
@@ -136,7 +162,7 @@ export class TasksService implements OnModuleInit {
     }
     const claimed = await this.db(this.repository.markClaimed(accountId, taskId, done.periodStart, at));
     if (claimed) this.logger.log(JSON.stringify({ module: "tasks", event: "task_claimed", accountId, taskId, period: def.period, ...credited }));
-    return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }]) };
+    return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }], joined, at) };
   }
 
   /**
@@ -146,14 +172,38 @@ export class TasksService implements OnModuleInit {
    */
   async open(account: AccountRef, taskId: string, at = new Date()): Promise<{ url: string; tasks: TaskView[] }> {
     const { accountId } = account;
-    const [defs, progress] = await Promise.all([this.visible(account), this.db(this.repository.progress(accountId, at))]);
+    const { defs, progress, participation } = await this.state(account, at);
     const def = defs.find((candidate) => candidate.taskId === taskId);
     if (def === undefined || def.params === null) throw new TaskNotFoundError();
+    const mine = participation.get(taskId) ?? null;
+    const place = slotsFor(def.limit, mine, at);
+    if (!place.visible) throw this.limitReached(accountId, taskId);
     this.logger.log(JSON.stringify({ module: "tasks", event: "task_opened", accountId, taskId, kind: def.kind }));
-    if (!OPEN_KINDS.has(def.kind)) return { url: def.params.url, tasks: viewOf(defs, progress) };
-    const done = await this.db(this.repository.complete(accountId, def, at));
+    if (!OPEN_KINDS.has(def.kind)) {
+      // Переход до исчерпания — начало мягкого часа. После исчерпания час не
+      // продлевается: иначе игрок держал бы место переходами бесконечно.
+      if ((mine === null || mine.completedAt === null) && (place.slots === null || place.slots.left > 0)) await this.db(this.repository.markOpened(accountId, taskId, at));
+      return { url: def.params.url, tasks: viewOf(defs, progress, participation, at) };
+    }
+    const done = await this.db(this.repository.complete(accountId, def, at, graceSince(at)));
+    if (done === null) throw this.limitReached(accountId, taskId);
     const others = progress.filter((candidate) => candidate.taskId !== taskId);
-    return { url: def.params.url, tasks: viewOf(defs, [...others, done]) };
+    return { url: def.params.url, tasks: viewOf(defs, [...others, done], withCompleted(participation, taskId, at), at) };
+  }
+
+  /** Каталог, прогресс и участие игрока — разом: экран заданий ждёт самого долгого из трёх. */
+  private async state(account: AccountRef, at: Date): Promise<{ defs: TaskDef[]; progress: TaskProgressRow[]; participation: Map<string, TaskParticipation> }> {
+    const [defs, progress, participation] = await Promise.all([
+      this.visible(account),
+      this.db(this.repository.progress(account.accountId, at)),
+      this.db(this.repository.participation(account.accountId)),
+    ]);
+    return { defs, progress, participation };
+  }
+
+  private limitReached(accountId: string, taskId: string): TaskLimitReachedError {
+    this.logger.log(JSON.stringify({ module: "tasks", event: "task_limit_reached", accountId, taskId }));
+    return new TaskLimitReachedError();
   }
 
   /**
@@ -190,7 +240,8 @@ export class TasksService implements OnModuleInit {
   /** Весь каталог, и выключенное, с видами и сроками для формы — панели. */
   async catalog(actor: AccountRef): Promise<TaskCatalogView> {
     await this.roles.require(actor, "tasks.edit");
-    return { tasks: await this.db(this.repository.catalog()), kinds: TASK_KIND_IDS, periods: TASK_PERIODS };
+    const [tasks, completions] = await Promise.all([this.db(this.repository.catalog()), this.db(this.repository.completions())]);
+    return { tasks, kinds: TASK_KIND_IDS, periods: TASK_PERIODS, completions: Object.fromEntries(completions) };
   }
 
   /**
@@ -254,11 +305,28 @@ export class TasksService implements OnModuleInit {
   }
 }
 
-/** Цели в порядке каталога: срок, место, id. Не двигавшаяся цель — с нулём. */
-export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgressRow[]): TaskView[] {
+/** Начало мягкого часа: переход раньше — место уже не держится. */
+function graceSince(at: Date): Date {
+  return new Date(at.getTime() - TASK_LIMIT_GRACE_MIN * 60_000);
+}
+
+/** Участие после выполнения: игрок занял место, и лимит его больше не касается. */
+function withCompleted(participation: ReadonlyMap<string, TaskParticipation>, taskId: string, at: Date): Map<string, TaskParticipation> {
+  const before = participation.get(taskId) ?? { completions: 0, openedAt: null, completedAt: null };
+  return new Map(participation).set(taskId, { ...before, completedAt: before.completedAt ?? at });
+}
+
+/**
+ * Цели в порядке каталога: срок, место, id. Не двигавшаяся цель — с нулём.
+ * Цель с исчерпанным лимитом, к которой игрок не переходил, не показывается.
+ */
+export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgressRow[], participation: ReadonlyMap<string, TaskParticipation> = new Map(), at = new Date()): TaskView[] {
   const byTask = new Map(progress.map((row) => [row.taskId, row]));
-  return defs.map((def) => {
+  return defs.flatMap((def) => {
+    const place = slotsFor(def.limit, participation.get(def.taskId) ?? null, at);
+    if (!place.visible) return [];
     const row = byTask.get(def.taskId);
+    const slots = place.slots === null ? null : { left: place.slots.left, total: place.slots.total, holdUntil: place.slots.holdUntil?.toISOString() ?? null };
     return {
       id: def.taskId,
       period: def.period,
@@ -272,6 +340,7 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
       reward: { coins: def.coins, gems: def.gems, shards: def.shards },
       passPoints: def.passPoints,
       link: def.params?.url ?? null,
+      slots,
     };
   });
 }

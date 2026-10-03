@@ -10,9 +10,12 @@ import {
   PARTNER_PLATFORMS,
   PARTNER_PLATFORM_TITLES,
   PERIOD_TITLES,
+  REPEAT_TITLES,
+  TASK_LIMIT_RANGE,
   TASK_PERIODS,
   TIME_KINDS,
   TITLE_MAX,
+  completionsLabel,
   fetchTasks,
   groupByPeriod,
   partnerPlatforms,
@@ -34,7 +37,7 @@ import { NetworkTasksPanel } from "./NetworkTasksPanel";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
-const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true };
+const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null };
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): что игроку делать
@@ -43,7 +46,7 @@ const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null
  * записан по ним, — нужно другое — заводится новое, а старое выключается.
  * Удаления нет по той же причине.
  *
- * Подписку на канал проверяет бот площадки, когда игрок нажимает «Забрать»:
+ * Подписку на канал проверяет бот площадки, когда игрок нажимает «Проверить»:
  * бот должен быть администратором канала, иначе площадка подписчиков не
  * покажет, и игрок увидит «проверка недоступна», а в логе — ошибку настройки.
  *
@@ -98,15 +101,27 @@ export function TasksScreen() {
             <Field label="id" hint="латиница, навсегда">
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
             </Field>
-            <Field label="Срок" help={HELP.tasks.period}>
-              <Select value={input.period} disabled={original !== null || partner} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
-                {TASK_PERIODS.map((period) => (
-                  <option key={period} value={period}>
-                    {PERIOD_TITLES[period]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {channel ? (
+              <Field label="Повтор" help={HELP.tasks.repeat}>
+                <Select value={input.period} disabled={original !== null} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "achievement" })}>
+                  {(["achievement", "daily", "weekly"] as const).map((period) => (
+                    <option key={period} value={period}>
+                      {REPEAT_TITLES[period]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : (
+              <Field label="Срок" help={HELP.tasks.period}>
+                <Select value={input.period} disabled={original !== null || partner} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
+                  {TASK_PERIODS.map((period) => (
+                    <option key={period} value={period}>
+                      {PERIOD_TITLES[period]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
             <Field label="Вид цели" help={HELP.tasks.kind}>
               <Select value={input.kind} disabled={original !== null} onChange={(event) => setInput(withKind(input, event.target.value))}>
                 {kinds.map((kind) => (
@@ -160,6 +175,18 @@ export function TasksScreen() {
                   <Input value={input.params?.chat ?? ""} onChange={(event) => setParams({ chat: event.target.value })} placeholder="@rubezh_game" maxLength={64} className="w-44" />
                 </Field>
               ) : null}
+              <Field label="Лимит выполнений" help={HELP.tasks.completionLimit} hint="пусто — без лимита">
+                <Input
+                  value={input.limit === null ? "" : String(input.limit)}
+                  onChange={(event) => setInput({ ...input, limit: event.target.value.trim() === "" ? null : Number(event.target.value) })}
+                  type="number"
+                  min={TASK_LIMIT_RANGE.min}
+                  max={TASK_LIMIT_RANGE.max}
+                  step={1}
+                  placeholder="без лимита"
+                  className="w-32"
+                />
+              </Field>
               <Field label="Ссылка" hint="её откроет игрок">
                 <Input
                   value={input.params?.url ?? ""}
@@ -171,7 +198,12 @@ export function TasksScreen() {
               </Field>
             </div>
           ) : null}
-          {channel ? <Notice tone="info">Бот проверяет подписку, когда игрок нажимает «Забрать», — сделайте его администратором канала: без этого площадка подписчиков не покажет.</Notice> : null}
+          {channel ? (
+            <Notice tone="info">
+              Бот проверяет подписку, когда игрок нажимает «Проверить», — сделайте его администратором канала: без этого площадка подписчиков не покажет.
+              {input.period === "achievement" ? null : ` Награда — ${input.period === "daily" ? "каждые московские сутки" : "каждую неделю с понедельника"}, пока игрок подписан: отписался — до новой подписки наград нет.`}
+            </Notice>
+          ) : null}
           {partner && !channel ? (
             <Notice tone="info">Засчитывается переход по ссылке из игры: проверить, что игрок открыл сайт или запустил бота, без постбэка партнёра нечем.</Notice>
           ) : null}
@@ -199,7 +231,7 @@ export function TasksScreen() {
           <Field label={`Заголовок — ${String(input.title?.trim().length ?? 0)} из ${String(TITLE_MAX)}`} hint="пусто — игрок увидит текст по виду цели со склонением числа («Сыграй 3 забега»)">
             <Input value={input.title ?? ""} onChange={(event) => setInput({ ...input, title: event.target.value === "" ? null : event.target.value })} maxLength={TITLE_MAX + 20} className="w-full max-w-xl" />
           </Field>
-          {original === null ? null : <Notice tone="info">Срок и вид не меняются: прогресс игроков записан по ним. Нужно другое — заведите новое задание и выключите это.</Notice>}
+          {original === null ? null : <Notice tone="info">{channel ? "Повтор" : "Срок"} и вид не меняются: прогресс игроков записан по ним. Нужно другое — заведите новое задание и выключите это.</Notice>}
           <div className="flex gap-2">
             <Button tone="primary" type="submit" disabled={problem !== null || pending}>
               {original === null ? "Завести" : "Сохранить"}
@@ -231,6 +263,25 @@ export function TasksScreen() {
                   { title: "Цель", align: "right", render: (task) => targetLabel(task) },
                   { title: "Заголовок", render: (task) => task.title ?? <span className="text-text-muted">по виду цели</span> },
                   { title: "Награда", render: (task) => rewardLabel(task) },
+                  // Счёт выполнивших ведётся у партнёрских целей: у них есть лимит.
+                  ...(group.group === "partner"
+                    ? [
+                        {
+                          title: "Выполнили",
+                          help: HELP.tasks.completionLimit,
+                          align: "right" as const,
+                          render: (task: TaskDef) => {
+                            const done = completionsLabel(task, state.data.completions[task.taskId] ?? 0);
+                            return (
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                                {done.text}
+                                {done.exhausted ? <Badge tone="warning">мест нет</Badge> : null}
+                              </span>
+                            );
+                          },
+                        },
+                      ]
+                    : []),
                   { title: "Пасс", align: "right", render: (task) => String(task.passPoints) },
                   { title: "Порядок", align: "right", render: (task) => String(task.sort) },
                   { title: "", render: (task) => (task.active ? null : <Badge tone="warning">выключено</Badge>) },

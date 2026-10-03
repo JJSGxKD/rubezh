@@ -6,6 +6,7 @@ import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
 import { track } from "../../state/shell";
 import {
+  TASK_LIMIT_REACHED,
   TASK_NOT_DONE,
   claimFailureKey,
   createTasksApi,
@@ -13,6 +14,7 @@ import {
   isFeedTask,
   isOpenKind,
   openTaskLink,
+  slotsText,
   sortTasks,
   tabOf,
   taskLink,
@@ -72,6 +74,13 @@ export function TasksScreen(): ReactNode {
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [claiming, setClaiming] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ taskId: string; text: string } | null>(null);
+  // Цели, места в которых кончились, пока экран открыт: строка остаётся с
+  // объяснением, но без кнопок и остатка — со следующим открытием её не будет.
+  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  const close = (taskId: string): void => {
+    setClosed((current) => new Set(current).add(taskId));
+    setNotice({ taskId, text: t("tasks.limitReached") });
+  };
 
   const [networkRows, setNetworkRows] = useState(0);
 
@@ -108,6 +117,7 @@ export function TasksScreen(): ReactNode {
     const response = await api.claim(task.id);
     setClaiming(null);
     if (!response.ok) {
+      if (response.code === TASK_LIMIT_REACHED) return close(task.id);
       setNotice({ taskId: task.id, text: t(claimFailureKey(response.code)) });
       if (response.code === TASK_NOT_DONE) void load();
       return;
@@ -143,6 +153,7 @@ export function TasksScreen(): ReactNode {
     openTaskLink(link);
     void api.open(task.id).then((response) => {
       if (response.ok) setState((current) => ({ status: "ready", tasks: response.data.tasks, networks: current.status === "ready" ? current.networks : [] }));
+      else if (response.code === TASK_LIMIT_REACHED) close(task.id);
     });
   };
 
@@ -153,6 +164,7 @@ export function TasksScreen(): ReactNode {
       task={task}
       claiming={claiming === task.id}
       notice={notice?.taskId === task.id ? notice.text : null}
+      closed={closed.has(task.id)}
       onClaim={() => void claim(task)}
       onOpen={(link) => open(task, link)}
     />
@@ -211,17 +223,29 @@ function ResetLine(props: { period: ResetPeriod }): ReactNode {
   );
 }
 
-function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; notice: string | null; onClaim: () => void; onOpen: (link: string) => void }): ReactNode {
+function TaskRow(props: {
+  index: number;
+  task: TaskItem;
+  claiming: boolean;
+  notice: string | null;
+  /** места кончились, пока экран открыт: действовать больше нечем */
+  closed: boolean;
+  onClaim: () => void;
+  onOpen: (link: string) => void;
+}): ReactNode {
   const { task } = props;
-  const claimable = isClaimable(task);
+  const claimable = isClaimable(task) && !props.closed;
   const link = taskLink(task);
   // Подписку выполняет не забег: её проверяет сервер по нажатию, поэтому
   // «Проверить» есть и у невыполненной цели. Ссылку и бота выполняет переход.
-  const waitsAction = link !== null && !task.done;
+  const waitsAction = link !== null && !task.done && !props.closed;
   const opens = waitsAction && isOpenKind(task.kind);
   const name = achievementName(task);
+  // Места считаются при отрисовке, без тикающего таймера: экран заданий
+  // перечитывается при каждом открытии и после каждого действия.
+  const place = props.closed ? null : slotsText(task.slots, Date.now());
   const title = task.title ?? name ?? goalText(task);
-  const hint = task.title === null && name !== null ? goalText(task) : null;
+  const hint = task.title === null && name !== null ? goalText(task) : (repeatHint(task) ?? null);
 
   return (
     <Card appearIndex={props.index} stripe={claimable ? "accent" : undefined}>
@@ -250,6 +274,7 @@ function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; noti
             ) : null}
           </div>
           {hint === null ? null : <p className="mt-0.5 text-xs text-text-muted">{hint}</p>}
+          {place === null ? null : <p className="mt-0.5 font-display text-xs font-semibold text-accent">{t(place.key, place.params)}</p>}
           {link === null ? (
             <div className="mt-2">
               <ProgressLine task={task} />
@@ -303,6 +328,18 @@ function ProgressLine(props: { task: TaskItem }): ReactNode {
       </span>
     </div>
   );
+}
+
+/**
+ * Повтор партнёрской подписки (Р82): награда за каждые сутки или неделю,
+ * пока игрок подписан. Забрал — когда следующая; время считается при
+ * отрисовке, без тикающего таймера, как у строки сброса.
+ */
+function repeatHint(task: TaskItem): string | null {
+  if (tabOf(task) !== "partner" || task.period === "achievement") return null;
+  // Число с единицей — неразрывно: «7 ч» не должно разъехаться по строкам.
+  if (task.claimed) return t("tasks.repeat.next", { time: formatCountdown(msUntilReset(Date.now(), task.period)).replace(/(\d) /g, "$1\u00a0") });
+  return t(task.period === "daily" ? "tasks.repeat.daily" : "tasks.repeat.weekly");
 }
 
 /** Имя достижения из словаря — у достижений по умолчанию; у своих из панели — заголовок каталога. */

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
+  TASK_LIMIT_RANGE,
   cadenceLabel,
+  completionsLabel,
   fetchTasks,
   groupByPeriod,
   networkTaskProblem,
@@ -26,7 +28,7 @@ import { fakeFetch, json } from "./helpers";
 // каталог — по срокам в порядке показа игроку.
 
 function task(patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, ...patch };
+  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, limit: null, ...patch };
 }
 
 describe("задания в панели", () => {
@@ -78,13 +80,18 @@ describe("задания в панели", () => {
       const picked = withKind(task({ taskId: "x_1", target: 5 }), "channel");
       expect(picked).toMatchObject({ kind: "channel", period: "achievement", target: 1, params: { platform: "telegram", chat: "", url: "" } });
       expect(withKind(picked, "kills")).toMatchObject({ kind: "kills", params: null });
+      // повтор подписки переживает повторный выбор вида, а у ссылки его нет
+      const daily = { ...picked, period: "daily" as const };
+      expect(withKind(daily, "channel").period).toBe("daily");
+      expect(withKind(daily, "link").period).toBe("achievement");
     });
 
-    it("форма требует канал и https-ссылку и не даёт копить подписку", () => {
+    it("форма требует канал и https-ссылку и не даёт копить подписку; повтор — каждый день или каждую неделю", () => {
       expect(taskProblem(channel(), true, [])).toBeNull();
       expect(taskProblem(channel({ params: null }), true, [])).toMatch(/нужна ссылка/);
-      expect(taskProblem(channel({ period: "daily" }), true, [])).toMatch(/только достижение/);
-      expect(taskProblem(channel({ target: 3 }), true, [])).toMatch(/только достижение/);
+      expect(taskProblem(channel({ taskId: "channel_daily", period: "daily" }), true, [])).toBeNull();
+      expect(taskProblem(channel({ taskId: "channel_weekly", period: "weekly" }), true, [])).toBeNull();
+      expect(taskProblem(channel({ target: 3 }), true, [])).toMatch(/цель — 1/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: " ", url: "https://t.me/x" } }), true, [])).toMatch(/Канал/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: "@x_game", url: "http://t.me/x" } }), true, [])).toMatch(/Ссылка/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: "@x_game", url: "t.me/x" } }), true, [])).toMatch(/Ссылка/);
@@ -97,9 +104,38 @@ describe("задания в панели", () => {
       await saveTask(api, channel({ params: { platform: "telegram", chat: " @rubezh_game ", url: " https://t.me/rubezh_game " } }));
       expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ params: { chat: "@rubezh_game", url: "https://t.me/rubezh_game" } });
       expect(targetLabel(channel())).toBe("@rubezh_game (Telegram)");
+      expect(targetLabel(channel({ period: "daily" }))).toBe("@rubezh_game (Telegram) · каждый день");
+      expect(targetLabel(channel({ period: "weekly" }))).toBe("@rubezh_game (Telegram) · каждую неделю");
 
       const old = await fetchTasks(api);
       expect(old.ok && old.data.tasks[0]?.params).toBeNull();
+    });
+  });
+
+  describe("лимит выполнений", () => {
+    const channel = (patch: Partial<TaskDef> = {}) =>
+      task({ taskId: "ach_channel", period: "achievement", kind: "channel", target: 1, coins: 0, gems: 15, params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" }, ...patch });
+
+    it("лимит — у партнёрской цели, целым в пределах сервера; у цели забега его нет, смена вида его снимает", () => {
+      expect(taskProblem(channel({ limit: 500 }), true, [])).toBeNull();
+      expect(taskProblem(channel({ limit: 0 }), true, [])).toMatch(/Лимит выполнений — целое/);
+      expect(taskProblem(channel({ limit: 2.5 }), true, [])).toMatch(/Лимит выполнений — целое/);
+      expect(taskProblem(channel({ limit: TASK_LIMIT_RANGE.max + 1 }), true, [])).toMatch(/Лимит выполнений/);
+      expect(taskProblem(task({ taskId: "x_1", limit: 10 }), true, [])).toMatch(/только у партнёрских/);
+      expect(withKind(channel({ limit: 500 }), "runs").limit).toBeNull();
+    });
+
+    it("сколько выполнили — словами; лимит уходит на сервер, старый сервер без лимита и счёта читается", async () => {
+      expect(completionsLabel(channel(), 12)).toEqual({ text: "12", exhausted: false });
+      expect(completionsLabel(channel({ limit: 500 }), 37)).toEqual({ text: "37 из 500", exhausted: false });
+      expect(completionsLabel(channel({ limit: 500 }), 501)).toEqual({ text: "501 из 500", exhausted: true });
+
+      const { fetch, calls } = fakeFetch(json(200, { data: channel({ limit: 500 }) }), json(200, { data: { tasks: [{ ...channel(), limit: undefined }], kinds: ["channel"], periods: ["achievement"] } }));
+      const api = new AdminApi(fetch);
+      await saveTask(api, channel({ limit: 500 }));
+      expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ limit: 500 });
+      const old = await fetchTasks(api);
+      expect(old.ok && [old.data.tasks[0]?.limit, old.data.completions]).toEqual([null, {}]);
     });
   });
 
@@ -114,7 +150,7 @@ describe("задания в панели", () => {
       expect(withPlatform({ platform: "vk", url: "https://vk.com/x" }, undefined)).toEqual({ url: "https://vk.com/x" });
       expect(taskProblem(link(), true, [])).toBeNull();
       expect(taskProblem(link({ params: { url: "http://example.com" } }), true, [])).toMatch(/Ссылка/);
-      expect(taskProblem(link({ period: "daily" }), true, [])).toMatch(/только достижение/);
+      expect(taskProblem(link({ period: "daily" }), true, [])).toMatch(/Повтор — только у подписки/);
       expect(taskProblem(link({ kind: "channel", params: { url: "https://t.me/x", chat: "@x_game" } }), true, [])).toMatch(/площадка/);
     });
 
