@@ -77,6 +77,19 @@ describe("журнал аудита", () => {
     expect(auditValue("компенсация за сбой", "reason")).toBe("компенсация за сбой");
   });
 
+  it("забег снят с рейтинга — какой: сложность, время, начало id; и почему", () => {
+    const unranked = entry({ action: "players.run.unrank", target: ACCOUNT, targetName: "Оля", after: { runId: "9a1b2c3d-0000-4000-8000-000000000001", difficulty: "normal", survivalSec: 500, comment: "без урона 8 минут" } });
+    expect(actionTitle("players.run.unrank")).toBe("Снятие забега с рейтинга");
+    expect(actionTitle("players.run.rerank")).toBe("Возврат забега в рейтинг");
+    expect(auditChanges(unranked).map((change) => [fieldTitle(change.field), auditValue(change.after, change.field)])).toEqual([
+      ["забег", "9a1b2c3d"],
+      ["сложность", "нормальная"],
+      ["время в забеге", "8:20"],
+      ["комментарий", "без урона 8 минут"],
+    ]);
+    expect(auditObject(unranked)).toMatchObject({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
+  });
+
   it("объект: имя и ссылка на его экран, а где экрана нет — без ссылки", () => {
     expect(auditObject(entry({ action: "players.ban", target: ACCOUNT, targetName: "Оля" }))).toEqual({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
     // Аккаунт удалён — имени нет, остаётся начало id.
