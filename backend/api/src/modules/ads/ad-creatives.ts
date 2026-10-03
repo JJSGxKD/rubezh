@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { z } from "zod";
 import { profileOf } from "./ad-networks.js";
 import { AdNetworkKeys } from "./ad-network-keys.js";
 import type { TaddyApi, TaddyUser } from "./taddy-api.js";
@@ -41,6 +42,25 @@ export interface AdRequester {
   userAgent: string | null;
   language: string | null;
   premium: boolean | null;
+}
+
+/** Язык клиента площадки — `ru`, `pt-br`, `zh_CN`: со слов клиента, для таргетинга сети. */
+export const clientLanguageSchema = z.string().regex(/^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{1,8})?$/);
+
+/**
+ * Игрок для сети с API: адрес — из `req.ip` Fastify с учётом доверенных
+ * прокси, а не из сырого заголовка, который подделывается одной строкой.
+ */
+export function requesterOf(request: unknown, platformUserId: string, language: string | null, premium: boolean | null): AdRequester {
+  const { ip, headers } = request as { ip?: unknown; headers?: Record<string, unknown> };
+  const agent = headers?.["user-agent"];
+  return {
+    platformUserId,
+    ip: typeof ip === "string" && ip !== "" ? ip : null,
+    userAgent: typeof agent === "string" && agent !== "" ? agent.slice(0, 512) : null,
+    language,
+    premium,
+  };
 }
 
 /** `none` — у сети нет креатива для игрока, и выдача идёт к следующей сети. */
