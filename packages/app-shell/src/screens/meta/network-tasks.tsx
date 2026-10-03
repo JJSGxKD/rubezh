@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, Hourglass } from "lucide-react";
 import type { NetworkTaskHandle, NetworkTaskLook, NetworkTaskPart } from "@bh/shared-types";
-import { Badge, Card } from "../../design-system/components";
+import { Card } from "../../design-system/components";
 import { t } from "../../i18n";
 import { track, useShell } from "../../state/shell";
 import { NETWORK_TASK_CHECKS_MS, createTasksApi, networkTaskConfirmed, type NetworkTaskItem } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
+import { AdLabel } from "./ad-label";
 import { formatCountdown } from "./schedule";
 import { RewardChips } from "./task-reward";
 
@@ -204,15 +205,6 @@ function LiveRow(props: { item: NetworkTaskItem; index: number; onDone: () => vo
 /** Кнопка в слоте сети: нажатие ловит SDK, вид — наш. */
 function SlotButton(props: { children: ReactNode }): ReactNode {
   return <span className="btn-primary inline-flex min-h-11 w-full items-center justify-center rounded-md px-3 font-display text-sm font-semibold">{props.children}</span>;
-}
-
-function AdLabel(props: { network: string }): ReactNode {
-  return (
-    <p className="mb-2 flex items-center gap-2 text-xs text-text-muted">
-      <Badge tone="muted">{t("tasks.network.ad")}</Badge>
-      {props.network}
-    </p>
-  );
 }
 
 function DoneRow(props: { entry: Finished; index: number }): ReactNode {
