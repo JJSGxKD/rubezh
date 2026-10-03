@@ -323,7 +323,10 @@ WP44). `account_restricted` и `account_restriction_lifted`, которые пл
 `referral_reward_withheld` и `network_task_reward_withheld`. Рейтинг —
 `rating_restricted` и `rating_restored` (из досок и обратно) и
 `rating_restricted_swept`, если обход убрал вернувшегося гонкой; забег,
-сданный под ограничением, помечен в `run.rating_restricted`.
+сданный под ограничением, помечен в `run.rating_restricted`. Забег, снятый
+с рейтинга модератором, — `run.ranked = false` при честном вердикте; кто,
+какой и почему — в аудите (`players.run.unrank`, `players.run.rerank`), в
+логе — `run_unranked` и `run_reranked`.
 
 **Воронка рекламы на сервере — таблица, а не события** (`35-stage4-plan.md`,
 §3.7, WP12). Сервер выдаёт показ и отмечает его шаги в `ad_session`: выдан,
