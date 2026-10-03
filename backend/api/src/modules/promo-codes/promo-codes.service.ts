@@ -37,6 +37,7 @@ import {
   type PromoReward,
 } from "./promo-code-rules.js";
 import { PROMO_CODES_REPOSITORY, type PromoCodeDraft, type PromoCodesRepository } from "./promo-codes.repository.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 
 /**
  * Промокоды (docs/35-stage4-plan.md WP41, Р74).
@@ -127,9 +128,12 @@ export class PromoCodesService {
     private readonly wallet: WalletService,
     private readonly roles: RolesService,
     private readonly partners: PartnersService,
+    private readonly restrictions: AccountRestrictions,
   ) {}
 
   async redeem(account: AccountRef, raw: string, at = new Date()): Promise<RedeemResult> {
+    // До поиска кода: ограниченный не узнаёт и того, есть ли такой код.
+    await this.restrictions.ensure(account.accountId, "promo_codes", at);
     const key = codeKey(raw);
     if (key.length < PROMO_CODE_LIMITS.codeMinLength || key.length > PROMO_CODE_LIMITS.codeMaxLength) {
       this.log("promo_code_refused", { accountId: account.accountId, reason: "not_found" });
