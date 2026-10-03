@@ -962,9 +962,13 @@ erDiagram
   от сети, выполнение — сессией места `task`: открытая сессия сети у игрока
   одна, новую заводит модуль заданий по истории места под той же
   блокировкой, что забор, и выполненной её делает только подтверждение сети
-  (адрес награды AdsGram). Потолок и пауза считаются по `completed_at`
-  сессий места с начала вчерашних суток — счётчиков рядом нет. VIP задания
-  не пропускает: пропуск заменяет ролик, а не подписку.
+  (адрес награды AdsGram, проверка Taddy `exchange/check`). Потолок и пауза
+  считаются по `completed_at` сессий места с начала вчерашних суток —
+  счётчиков рядом нет. VIP задания не пропускает: пропуск заменяет ролик, а
+  не подписку. Задание ленты Taddy — `creative_id` сессии: игрок выполняет
+  его однажды — выбор обходит выполненные, а частичный уникальный индекс
+  `(account_id, network_key, creative_id)` выполненных сессий места не даст
+  записать второе выполнение в обход.
 - **`RUN_AD_CONTINUE` — второй шанс за рекламу** (`35-stage4-plan.md` WP11,
   Р4): вторая книга продолжений забега рядом с `PURCHASE`. Хозяин места
   `second_chance` — модуль забегов: забирает сессию показа и записывает
@@ -1620,6 +1624,8 @@ flowchart LR
 
     ADSGRAMAPI["AdsGram<br/>api.adsgram.ai/confirm_conversion;<br/>зовёт адрес награды задания"]
 
+    TADDYAPI["Taddy<br/>api.taddy.pro: креатив и его показы,<br/>лента обмена и проверка задания"]
+
     TGAPI["Telegram Bot API"]
 
     subgraph infra["Инфраструктура"]
@@ -1715,6 +1721,7 @@ flowchart LR
     RUNS -. слушатели записанного забега .-> PAY
     ADS -- "ad_network, ad_block, ad_session" --> PG
     ADSGRAMAPI -. "адрес награды задания: /api/v1/ads/adsgram/reward, секрет в пути" .-> CADDY
+    ADS -. "ads/get и показы креатива; exchange/feed, exchange/check — задания ленты" .-> TADDYAPI
     ADMINAPI -. "сети, блоки, воронка показов" .-> ADS
     WHEEL -. "забор сессии места wheel_spin" .-> ADS
     REF --> PG
@@ -2116,6 +2123,59 @@ sequenceDiagram
 уже забрана, а следующая заводится не раньше паузы. Сорвалась выдача — сеть
 получает ошибку и повторяет, а не повторит — награду дожмёт следующее
 открытие экрана заданий тем же ключом сессии.
+
+### 4.3.4 Задание ленты сети — обмен трафиком Taddy (этап 4, WP13, часть 6)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant A as Адаптер Telegram
+    participant T as tasks
+    participant AD as ads
+    participant DB as PostgreSQL
+    participant X as Taddy API
+    participant W as wallet
+
+    C->>T: GET /api/v1/tasks
+    T-->>C: networks: [{ network taddy, delivery feed, nextAt }] — сеть не ждём
+    C->>T: POST /tasks/networks/taddy/item { language, premium }
+    T->>AD: задание ленты: открытая сессия или новая по правилу строки
+    AD->>X: exchange/feed — без выполненных и автоматических показов
+    alt задание открытой сессии пропало из ленты, игрок переходил
+        AD->>X: exchange/check
+        X-->>AD: true — дальше как «Проверить» ниже, строка — «Награда получена»
+    else не переходил или сеть не видит выполнения
+        AD->>DB: сессия → failed task_gone
+    end
+    AD->>DB: блокировка места task; выполненные из ленты — мимо; INSERT ad_session (creative_id)
+    T-->>C: { kind: task, task: { sessionId, title, image, action, link } }
+    C->>AD: result shown
+    AD->>X: exchange/impressions — показ задания, однажды
+    C->>A: openNetworkTask { taddy, link }
+    A->>X: POST link { fields: [] } — из клиента игрока, как у SDK Taddy
+    X-->>A: { result: https://t.me/бот?start=… }
+    A->>A: openLink — бот внутри Telegram
+    C->>AD: result clicked
+    Note over C: игрок вернулся в приложение — строка проверяет сама
+    C->>T: POST /tasks/networks/taddy/check { sessionId }
+    T->>AD: проверка у сети
+    AD->>X: exchange/check { taskId }
+    alt выполнено
+        AD->>DB: блокировка места; сессия → completed, если это задание игрок не выполнял
+        AD->>T: AdTaskHooks: подтверждено
+        T->>W: награда строки ключом сессии
+        T->>AD: забор сессии
+        T-->>C: { result: confirmed, doneToday, nextAt }
+    else не выполнено или сеть не ответила
+        T-->>C: { result: not_done | unavailable } — подсказка под кнопкой
+    end
+```
+
+Награду даёт только ответ Taddy на проверку сервера: клиент её не
+выполнит, а запрос с чужой сессией или с заданием, которое игрок уже
+выполнял, закрывается без награды. Адрес перехода клиент спрашивает у
+Taddy сам: переход сеть считает по адресу и браузеру игрока, а запросы с
+одного адреса нашего сервера выглядели бы накруткой.
 
 ### 4.4 Публикация конфигурации из админки
 
