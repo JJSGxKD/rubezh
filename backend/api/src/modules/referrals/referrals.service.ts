@@ -5,6 +5,7 @@ import { SESSIONS_REPOSITORY, type SessionsRepository } from "../attribution/ses
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { AuthHooks, type LoginEvent } from "../auth/auth-hooks.js";
 import { FRIENDS_REPOSITORY, type FriendsRepository } from "../friends/friends.repository.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RUNS_REPOSITORY, type RunsRepository } from "../runs/runs.repository.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
@@ -58,6 +59,7 @@ export class ReferralsService implements OnModuleInit {
     private readonly wallet: WalletService,
     private readonly auth: AuthHooks,
     private readonly runHooks: RunsHooks,
+    private readonly restrictions: AccountRestrictions,
   ) {}
 
   onModuleInit(): void {
@@ -135,6 +137,11 @@ export class ReferralsService implements OnModuleInit {
       if (!(await this.returns.markRewarded(run.accountId, friendId, period, run.finishedAt))) continue;
       const key = `friend_return:${run.accountId}:${friendId}:${period}`;
       for (const [accountId, side] of [[run.accountId, "returned"], [friendId, "friend"]] as const) {
+        // Возвращение отмечено, и ограниченной стороне награда не придёт и потом.
+        if (await this.withheld(accountId, run.finishedAt)) {
+          this.log("referral_reward_withheld", { accountId, source: key });
+          continue;
+        }
         await this.wallet.grant({ accountId, resource: "coins", amount: RETURN_RULES.coins, reason: "referral_reward", source: key, idempotencyKey: `${key}:${side}` });
       }
       this.log("player_return_rewarded", { accountId: run.accountId, friendId });
@@ -151,6 +158,12 @@ export class ReferralsService implements OnModuleInit {
     if (!(await this.referrals.activate(run.accountId, run.finishedAt))) return;
 
     this.log("referral_activated", { referredId: run.accountId, referrerId: binding.referrerId });
+    // Активация засчитана, а награда пригласившему с ограничением не придёт
+    // ни сейчас, ни после: иначе ограничение было бы отсрочкой.
+    if (await this.withheld(binding.referrerId, run.finishedAt)) {
+      this.log("referral_reward_withheld", { accountId: binding.referrerId, source: `referral:${run.accountId}` });
+      return;
+    }
     await this.wallet.grant({
       accountId: binding.referrerId,
       resource: "coins",
@@ -159,6 +172,11 @@ export class ReferralsService implements OnModuleInit {
       source: `referral:${run.accountId}`,
       idempotencyKey: `referral:${run.accountId}`,
     });
+  }
+
+  /** Награды за друзей закрыты ограничением (docs/35-stage4-plan.md WP44). */
+  private async withheld(accountId: string, at: Date): Promise<boolean> {
+    return (await this.restrictions.status(accountId, "referral_rewards", at)) !== null;
   }
 
   private log(event: string, fields: Record<string, unknown>): void {

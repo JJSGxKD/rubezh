@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AttributionModule } from "../attribution/attribution.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { FriendsModule } from "../friends/friends.module.js";
+import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { ReferralsController } from "./referrals.controller.js";
@@ -15,7 +16,7 @@ import { ReferralsService } from "./referrals.service.js";
  * дружбы о ней не знают — она подписывается сама.
  */
 @Module({
-  imports: [AuthModule, AttributionModule, FriendsModule, RunsModule, WalletModule],
+  imports: [AuthModule, AttributionModule, FriendsModule, RunsModule, WalletModule, RestrictionsModule],
   controllers: [ReferralsController],
   providers: [
     ReferralsService,
