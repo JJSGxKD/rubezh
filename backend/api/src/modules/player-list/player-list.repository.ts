@@ -28,6 +28,8 @@ export interface PlayerListRow {
   lastSeenAt: Date;
   bannedAt: Date | null;
   banReason: string | null;
+  /** виды действующих ограничений — по алфавиту */
+  restrictions: string[];
   level: number;
   /** вид первого касания; `null` — касаний нет (вход до атрибуции) */
   source: string | null;
@@ -64,6 +66,7 @@ const rowSchema = z.object({
   last_seen_at: z.date(),
   banned_at: z.date().nullable(),
   ban_reason: z.string().nullable(),
+  restrictions: z.array(z.string()),
   level: z.number().int(),
   source: z.string().nullable(),
   campaign: z.string().nullable(),
@@ -71,9 +74,17 @@ const rowSchema = z.object({
   can_message: z.boolean().nullable(),
 });
 
+/**
+ * Действующее ограничение аккаунта строки: не снято и срок не вышел. Ещё не
+ * сведённое — условие идёт по индексу `(account_id, starts_at)` и не
+ * трогает историю.
+ */
+const ACTIVE_RESTRICTION = Prisma.sql`r.account_id = a.account_id AND r.settled_at IS NULL AND r.lifted_at IS NULL AND (r.ends_at IS NULL OR r.ends_at > now())`;
+
 const SELECT = Prisma.sql`
   SELECT a.account_id, a.platform::text AS platform, a.display_name, a.photo_url, a.platform_user_id, a.username,
     a.created_at, a.last_seen_at, a.banned_at, a.ban_reason,
+    ARRAY(SELECT r.kind::text FROM account_restriction r WHERE ${ACTIVE_RESTRICTION} ORDER BY r.kind) AS restrictions,
     COALESCE(p.level, 1) AS level,
     q.first_start_kind::text AS source,
     (SELECT l.campaign FROM link_click lc JOIN link l ON l.code = lc.link_code
@@ -102,6 +113,9 @@ export function filterConditions(filters: PlayerFilters): Prisma.Sql[] {
   }
   if (filters.payer !== undefined) conditions.push(filters.payer ? Prisma.sql`f.first_purchase_at IS NOT NULL` : Prisma.sql`f.first_purchase_at IS NULL`);
   if (filters.banned !== undefined) conditions.push(filters.banned ? Prisma.sql`a.banned_at IS NOT NULL` : Prisma.sql`a.banned_at IS NULL`);
+  if (filters.restricted === "any") conditions.push(Prisma.sql`EXISTS (SELECT 1 FROM account_restriction r WHERE ${ACTIVE_RESTRICTION})`);
+  else if (filters.restricted === "none") conditions.push(Prisma.sql`NOT EXISTS (SELECT 1 FROM account_restriction r WHERE ${ACTIVE_RESTRICTION})`);
+  else if (filters.restricted !== undefined) conditions.push(Prisma.sql`EXISTS (SELECT 1 FROM account_restriction r WHERE ${ACTIVE_RESTRICTION} AND r.kind = ${filters.restricted})`);
   if (filters.canMessage !== undefined) conditions.push(filters.canMessage ? Prisma.sql`m.can_message` : Prisma.sql`m.can_message IS NOT TRUE`);
   return conditions;
 }
@@ -199,6 +213,7 @@ export class PrismaPlayerListRepository implements PlayerListRepository {
       lastSeenAt: row.last_seen_at,
       bannedAt: row.banned_at,
       banReason: row.ban_reason,
+      restrictions: row.restrictions,
       level: row.level,
       source: row.source,
       campaign: row.campaign,

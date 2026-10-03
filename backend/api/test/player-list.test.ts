@@ -46,6 +46,13 @@ describe("запрос списка", () => {
     });
   });
 
+  it("ограничения: хоть одно, ни одного или вид из каталога", () => {
+    expect(playerListQuerySchema.parse({ restricted: "any" }).restricted).toBe("any");
+    expect(playerListQuerySchema.parse({ restricted: "none" }).restricted).toBe("none");
+    expect(playerListQuerySchema.parse({ restricted: "leaderboard" }).restricted).toBe("leaderboard");
+    expect(playerListQuerySchema.safeParse({ restricted: "everything" }).success).toBe(false);
+  });
+
   it("мусор и противоречия — отказ, а не пустой список", () => {
     for (const bad of [{ levelMin: "5", levelMax: "2" }, { registeredFrom: "2026-09-30", registeredTo: "2026-09-01" }, { payer: "maybe" }, { platform: "icq" }, { limit: "500" }, { sort: "name" }, { unknown: "1" }, { campaign: "Кампания" }, { levelMin: "0" }]) {
       expect(playerListQuerySchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
@@ -72,6 +79,7 @@ function row(index: number): PlayerListRow {
     lastSeenAt: new Date(Date.UTC(2026, 8, 30)),
     bannedAt: null,
     banReason: null,
+    restrictions: index === 1 ? ["leaderboard", "promo_codes"] : [],
     level: 10 - index,
     source: "invite",
     campaign: null,
@@ -109,7 +117,7 @@ describe("список в сервисе", () => {
     const view = await service.list(moderator, playerListQuerySchema.parse({ sort: "level", limit: "2" }));
     expect(repository.calls[0]).toMatchObject({ sort: "level", order: "desc", cursor: null, limit: 3 });
     expect(view.players).toHaveLength(2);
-    expect(view.players[0]).toMatchObject({ pii: null, payer: null, level: 9, canMessage: true });
+    expect(view.players[0]).toMatchObject({ pii: null, payer: null, level: 9, canMessage: true, restrictions: ["leaderboard", "promo_codes"] });
     expect(view.nextCursor).not.toBeNull();
     expect(decodePlayerCursor(view.nextCursor ?? "", "level")).toEqual({ sort: "level", value: 8, accountId: row(2).accountId });
     expect(await roles.recentAudit(5)).toEqual([]);

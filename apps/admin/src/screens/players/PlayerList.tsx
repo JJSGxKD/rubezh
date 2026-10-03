@@ -13,12 +13,14 @@ import {
   type PlayerListItem,
   type YesNo,
 } from "../../api/player-list";
+import { fetchRestrictionCatalog } from "../../api/restrictions";
 import { formatDateTime } from "../../format";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
+import { useApi } from "../../ui/use-api";
 
 /**
  * Список игроков с фильтрами (docs/35-stage4-plan.md WP32). Фильтры и
@@ -76,6 +78,10 @@ export function PlayerList() {
   const { filters, listed } = useList();
   const [draft, setDraft] = useState<PlayerListFilters>(filters);
   const withPayments = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("analytics.revenue.view"));
+  // Названия видов — со слов сервера; не загрузились — фильтр «есть / нет» работает и без них.
+  const catalog = useApi(() => fetchRestrictionCatalog(api), []);
+  const kinds = catalog.state.status === "ok" ? catalog.state.data.kinds : [];
+  const kindTitle = (kind: string) => kinds.find((item) => item.kind === kind)?.title ?? kind;
   const problem = filtersProblem(draft);
   const set = <K extends keyof PlayerListFilters>(key: K, value: PlayerListFilters[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -133,6 +139,20 @@ export function PlayerList() {
           </Field>
           {withPayments ? <YesNoField label="Платящий" value={draft.payer} onChange={(value) => set("payer", value)} /> : null}
           <YesNoField label="Заблокирован" value={draft.banned} onChange={(value) => set("banned", value)} />
+          <Field label="Ограничения">
+            <Select value={draft.restricted} onChange={(event) => set("restricted", event.target.value)}>
+              <option value="">неважно</option>
+              <option value="any">есть</option>
+              <option value="none">нет</option>
+              {kinds
+                .filter((item) => item.kind !== "all")
+                .map((item) => (
+                  <option key={item.kind} value={item.kind}>
+                    {item.title}
+                  </option>
+                ))}
+            </Select>
+          </Field>
           <YesNoField label="Можно писать" value={draft.canMessage} onChange={(value) => set("canMessage", value)} />
           <Field label="Порядок">
             <Select value={draft.sort} onChange={(event) => set("sort", LIST_SORTS.find(([key]) => key === event.target.value)?.[0] ?? "registered")}>
@@ -177,7 +197,18 @@ export function PlayerList() {
               { title: "Откуда", render: (player) => (player.campaign === null ? sourceLabel(player.source) : `${sourceLabel(player.source)}: ${player.campaign}`) },
               ...(withPayments ? [{ title: "Платящий", help: HELP.players.payer, render: (player: PlayerListItem) => (player.payer === true ? <Badge tone="success">да</Badge> : "—") }] : []),
               { title: "Писать", help: HELP.players.canMessage, render: (player) => (player.canMessage === true ? "можно" : "нельзя") },
-              { title: "Статус", render: (player) => (player.banned === null ? null : <Badge tone="danger">заблокирован</Badge>) },
+              {
+                title: "Статус",
+                render: (player) => {
+                  const limited = player.restrictions.filter((kind) => kind !== "all");
+                  return (
+                    <span className="flex flex-wrap gap-1">
+                      {player.banned === null ? null : <Badge tone="danger">заблокирован</Badge>}
+                      {limited.length === 0 ? null : <Badge tone="warning">закрыто: {limited.map(kindTitle).join(", ")}</Badge>}
+                    </span>
+                  );
+                },
+              },
             ]}
           />
           {listed.cursor === null ? (
