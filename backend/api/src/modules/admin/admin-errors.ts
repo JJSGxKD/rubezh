@@ -34,6 +34,13 @@ export class SettingNotFoundError extends DomainError {
   }
 }
 
+/** Флага с таким ключом нет — сравнивать доли нечего. */
+export class FlagNotFoundError extends DomainError {
+  constructor() {
+    super("flag_not_found", "Флага с таким ключом нет", 404);
+  }
+}
+
 /** Такого ключа нет в каталоге ключей интеграций — задать из панели можно только то, что знает код. */
 export class SecretNotFoundError extends DomainError {
   constructor() {

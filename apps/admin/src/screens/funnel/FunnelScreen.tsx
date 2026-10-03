@@ -5,13 +5,15 @@ import { formatDateTime, formatNumber } from "../../format";
 import { Button, DataTable, ErrorNotice, Field, Input, Loading, Panel, type Column } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
+import { FlagSplitPanel } from "./FlagSplitPanel";
 
 /**
  * Воронка по источникам. Число и доля от аккаунтов строки в одной ячейке:
  * абсолют без доли не сравнить между источниками, доля без абсолюта врёт на
- * малых числах (docs/29-admin-panel.md §5.2).
+ * малых числах (docs/29-admin-panel.md §5.2). Ниже — доля флага против
+ * остальных; `focus` — ключ флага из адреса, к нему ведут «Флаги».
  */
-export function FunnelScreen() {
+export function FunnelScreen({ focus = null }: { focus?: string | null }) {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [period, setPeriod] = useState<Period>({});
@@ -47,35 +49,38 @@ export function FunnelScreen() {
   ];
 
   return (
-    <Panel title="Воронка по источникам" help={HELP.funnel.funnel} actions={<Button onClick={reload}>Обновить</Button>}>
-      <form onSubmit={submit} className="mb-4 flex items-end gap-2">
-        <Field label="С">
-          <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
-        </Field>
-        <Field label="По (включительно)">
-          <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
-        </Field>
-        <Button tone="primary" type="submit">
-          Показать
-        </Button>
-        <span className="pb-2 text-xs text-text-muted">Пусто — последние тридцать дней; не длиннее года.</span>
-      </form>
-      {state.status === "loading" ? <Loading /> : null}
-      {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
-      {state.status === "ok" ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-xs text-text-muted">
-            Период: {formatDateTime(state.data.from)} — {formatDateTime(state.data.to)}. Доля — от аккаунтов той же строки.
-          </p>
-          <DataTable
-            rows={state.data.rows.length === 0 ? [] : [funnelTotal(state.data.rows), ...state.data.rows]}
-            rowKey={(row) => `${row.platform}|${row.startKind}|${row.startRef ?? ""}|${row.startSource ?? ""}`}
-            empty="За период никто не пришёл"
-            columns={columns}
-          />
-        </div>
-      ) : null}
-    </Panel>
+    <div className="flex flex-col gap-4">
+      <Panel title="Воронка по источникам" help={HELP.funnel.funnel} actions={<Button onClick={reload}>Обновить</Button>}>
+        <form onSubmit={submit} className="mb-4 flex items-end gap-2">
+          <Field label="С">
+            <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+          </Field>
+          <Field label="По (включительно)">
+            <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          </Field>
+          <Button tone="primary" type="submit">
+            Показать
+          </Button>
+          <span className="pb-2 text-xs text-text-muted">Пусто — последние тридцать дней; не длиннее года.</span>
+        </form>
+        {state.status === "loading" ? <Loading /> : null}
+        {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
+        {state.status === "ok" ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-text-muted">
+              Период: {formatDateTime(state.data.from)} — {formatDateTime(state.data.to)}. Доля — от аккаунтов той же строки.
+            </p>
+            <DataTable
+              rows={state.data.rows.length === 0 ? [] : [funnelTotal(state.data.rows), ...state.data.rows]}
+              rowKey={(row) => `${row.platform}|${row.startKind}|${row.startRef ?? ""}|${row.startSource ?? ""}`}
+              empty="За период никто не пришёл"
+              columns={columns}
+            />
+          </div>
+        ) : null}
+      </Panel>
+      <FlagSplitPanel focus={focus} />
+    </div>
   );
 }
 

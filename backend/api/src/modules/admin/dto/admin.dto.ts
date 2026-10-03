@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FLAG_KEY } from "../../flags/flag-rollout.js";
 import { PLATFORM_IDS } from "../../../platforms/ports/platform.js";
 import { TEAM_MESSAGE_MAX } from "../../notifications/notification-kinds.js";
 import { isRole, ROLES } from "../../roles/permissions.js";
@@ -108,6 +109,9 @@ export const periodQuerySchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
 });
+
+/** Сравнение долей флага: какой флаг и за какой период; без флага — `ads.interstitial` или первый по алфавиту. */
+export const flagSplitQuerySchema = periodQuerySchema.extend({ flag: z.string().regex(FLAG_KEY).optional() });
 
 export const reportsListSchema = z.object({
   kind: z.enum(["bench", "run"]).optional(),

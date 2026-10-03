@@ -9,6 +9,8 @@ import { hashSessionToken } from "../src/modules/admin/admin-session.store.js";
 import type { SessionsRepository } from "../src/modules/attribution/sessions.repository.js";
 import type { AuthService } from "../src/modules/auth/auth.service.js";
 import type { FunnelMilestones, FunnelRepository } from "../src/modules/funnel/funnel.repository.js";
+import type { FlagSplit } from "../src/modules/funnel/flag-split-report.js";
+import { EMPTY_SPLIT_GROUP } from "./helpers/flag-split.js";
 import type { MessagingService } from "../src/modules/messaging/messaging.service.js";
 import type { ProgressService } from "../src/modules/progress/progress.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
@@ -61,6 +63,9 @@ class FakeFunnel implements FunnelRepository {
   }
   async report(): Promise<[]> {
     return [];
+  }
+  async flagSplit(): Promise<FlagSplit> {
+    return { share: EMPTY_SPLIT_GROUP, rest: EMPTY_SPLIT_GROUP };
   }
 }
 
