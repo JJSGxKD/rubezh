@@ -1970,6 +1970,24 @@ model IntegrationSecret {
   @@map("integration_secret")
 }
 
+/// Картинка из панели (docs/35-stage4-plan.md О42): в базе до CDN. id — SHA-256
+/// содержимого: одинаковый файл — одна строка, адрес не меняется, поэтому
+/// кеш навсегда. Строка не меняется никогда. Формат, размер и стороны держат
+/// `CHECK` в миграции и `media/image-rules.ts`.
+model MediaImage {
+  imageId     String   @id @map("image_id") @db.VarChar(64)
+  contentType String   @map("content_type") @db.VarChar(32)
+  width       Int
+  height      Int
+  sizeBytes   Int      @map("size_bytes")
+  data        Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// кто загрузил; без внешнего ключа — картинка переживает аккаунт
+  createdBy   String?  @map("created_by") @db.Uuid
+
+  @@map("media_image")
+}
+
 // Конверсии закупленной рекламы (WP43, docs/35-stage4-plan.md Р86): что и
 // когда ушло постбэком в сеть, где куплена реклама, — журнал для команды и
 // владельца ссылки и очередь отправки в одной таблице. Строки выводятся из

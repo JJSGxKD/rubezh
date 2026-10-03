@@ -16,4 +16,6 @@ export const ADMIN_LIMITS = {
   export: { scope: "admin:export", limit: 3, windowSec: 600 },
   /** тест рассылки себе — сообщение живому человеку, пусть и себе: десяток за десять минут */
   broadcastTest: { scope: "admin:broadcast-test", limit: 10, windowSec: 600 },
+  /** картинка ложится в базу навсегда: обрезали, передумали, загрузили снова — три десятка за десять минут хватит */
+  imageUpload: { scope: "admin:image-upload", limit: 30, windowSec: 600 },
 } satisfies Record<string, RateLimit>;
