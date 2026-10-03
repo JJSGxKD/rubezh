@@ -92,6 +92,7 @@ erDiagram
     TASK_DEF ||--o{ TASK_PROGRESS : "цель каталога"
     TASK_DEF ||--o{ TASK_PARTICIPANT : "игроки партнёрской цели"
     ACCOUNT ||--o{ TASK_PARTICIPANT : "переходы и выполнения партнёрских целей"
+    MEDIA_IMAGE |o--o{ TASK_DEF : "картинка 1:1 партнёрской цели"
     ACCOUNT ||--o{ TASK_RUN : "забеги, засчитанные заданиям"
     ACCOUNT ||--o| TEST_NOTICE : "принял предупреждение о тесте"
     AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
@@ -635,11 +636,23 @@ erDiagram
         int pass_points "очки батл-пасса (WP26)"
         int completion_limit "nullable: сколько игроков получат награду партнёрской цели (Р82), 1–1 000 000"
         int completions "игроков, выполнивших цель; растёт под блокировкой строки"
+        string image_id FK "nullable: картинка 1:1 партнёрской цели (Р82); пока ссылается — картинку не удалить"
         int sort
         boolean active
         datetime created_at
         datetime updated_at
         uuid updated_by "nullable, без FK: null — строка из миграции"
+    }
+
+    MEDIA_IMAGE {
+        string image_id PK "SHA-256 содержимого: одинаковый файл — одна строка и один адрес"
+        string content_type "только image/webp"
+        int width
+        int height
+        int size_bytes "до 200 КБ, равен длине data"
+        bytea data "хранение EXTERNAL: WebP уже сжат"
+        datetime created_at
+        uuid created_by "nullable, без FK: картинка переживает аккаунт"
     }
 
     TASK_PARTICIPANT {
@@ -943,6 +956,13 @@ erDiagram
   Подписка на канал бывает ежедневной и еженедельной (Р82): срок — тот же
   `period`, каждый срок — своя строка прогресса, бот спрашивается при
   каждом заборе. У ссылки и бота повтора нет — переход не проверить.
+- **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
+  в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
+  адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
+  останется тем же. Формат, размер и стороны держат `CHECK` и
+  `media/image-rules.ts`; на картинку ссылается `TASK_DEF.image_id`
+  (`RESTRICT`: пока задание её показывает, удалить нельзя), следом —
+  слайды главной (WP42).
 - **`TASK_PARTICIPANT` — лимит выполнений партнёрской цели**
   (`35-stage4-plan.md`, Р82, WP13, часть 7): строка на игрока и цель, а не
   на срок — место занимает первое выполнение, повтор подписки места не
@@ -1643,6 +1663,7 @@ flowchart LR
         PLAYERLIST["player-list<br/>список игроков для панели:<br/>фильтры, страница по индексу, реализовано"]
         WHEEL["wheel<br/>колесо: сектора от уровня,<br/>бесплатная крутка в сутки, реализовано"]
         TASKS["tasks<br/>задания и достижения: каталог в базе,<br/>прогресс от забегов, реализовано"]
+        MEDIA["media<br/>картинки из панели в базе по хэшу:<br/>проверка WebP, вечный кеш, реализовано"]
         TESTNOTICE["test-notice<br/>предупреждение об открытом тесте:<br/>принятие на аккаунт, реализовано"]
     end
 
@@ -1814,7 +1835,11 @@ flowchart LR
     WHEEL -. "уровень аккаунта" .-> PROG
     BADGES -. "крутка ждёт" .-> WHEEL
     CADDY -- "/api/v1/tasks" --> TASKS
-    TASKS -- "task_def, task_progress, task_run" --> PG
+    TASKS -- "task_def, task_progress, task_run, task_participant" --> PG
+    CADDY -- "/api/v1/media/хэш.webp" --> MEDIA
+    MEDIA -- "media_image" --> PG
+    ADMINAPI -. "загрузка картинки и её показ в панели" .-> MEDIA
+    TASKS -. "картинка годится заданию: квадрат" .-> MEDIA
     RUNS -. "записанный забег, RunsHooks" .-> TASKS
     TASKS -. "награда ключом задания и срока" .-> WALLET
     BADGES -. "награды к выдаче" .-> TASKS
