@@ -2,7 +2,9 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import { profileOf } from "./ad-networks.js";
 import { AdNetworkKeys } from "./ad-network-keys.js";
+import type { AdPlace } from "./ads-rules.js";
 import type { TaddyApi, TaddyUser } from "./taddy-api.js";
+import { TADDY_EXCHANGE, type TaddyExchangeApi } from "./taddy-exchange.js";
 
 /**
  * Креативы сетей с API (docs/35-stage4-plan.md WP12, часть 9, Р78): сеть
@@ -12,6 +14,9 @@ import type { TaddyApi, TaddyUser } from "./taddy-api.js";
  *
  * Пока такая сеть одна — Taddy. Новая сеть с API — ещё одна ветка здесь и
  * `delivery: "api"` у её форматов в профиле.
+ *
+ * Креатив места «Задания» — задание ленты обмена Taddy (WP13, часть 6): его
+ * показ сеть считает своей ручкой, досмотра у задания нет.
  */
 
 /**
@@ -69,8 +74,8 @@ export type CreativeFetch = { kind: "creative"; creative: AdCreative } | { kind:
 export interface AdCreativeSource {
   /** `timeoutMs` — сколько ждать сеть; не задан — её обычный срок */
   fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null, timeoutMs?: number): Promise<CreativeFetch>;
-  /** креатив впервые на экране игрока — сеть считает показ */
-  shown(networkKey: string, creativeId: string, requester: AdRequester | null): Promise<void>;
+  /** креатив впервые на экране игрока — сеть считает показ; в месте «Задания» креатив — задание ленты */
+  shown(networkKey: string, creativeId: string, requester: AdRequester | null, place: AdPlace): Promise<void>;
   /** креатив досмотрен — сеть считает досмотр */
   viewed(networkKey: string, creativeId: string, requester: AdRequester | null): Promise<void>;
 }
@@ -109,6 +114,7 @@ export class NetworkCreatives implements AdCreativeSource {
   constructor(
     @Inject(TADDY_API) private readonly taddy: TaddyApi,
     private readonly keys: AdNetworkKeys,
+    @Inject(TADDY_EXCHANGE) private readonly exchange: TaddyExchangeApi,
   ) {}
 
   async fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null, timeoutMs?: number): Promise<CreativeFetch> {
@@ -122,8 +128,10 @@ export class NetworkCreatives implements AdCreativeSource {
     return { kind: "creative", creative: { ...result.ad, advertiser: profileOf(networkKey)?.title ?? networkKey } };
   }
 
-  async shown(networkKey: string, creativeId: string, requester: AdRequester | null): Promise<void> {
-    await this.notify(networkKey, requester, async (pubId, user) => await this.taddy.impression(pubId, user, creativeId));
+  async shown(networkKey: string, creativeId: string, requester: AdRequester | null, place: AdPlace): Promise<void> {
+    await this.notify(networkKey, requester, async (pubId, user) =>
+      place === "task" ? await this.exchange.impression(pubId, user, creativeId) : await this.taddy.impression(pubId, user, creativeId),
+    );
   }
 
   async viewed(networkKey: string, creativeId: string, requester: AdRequester | null): Promise<void> {

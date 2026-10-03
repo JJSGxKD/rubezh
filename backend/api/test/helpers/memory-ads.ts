@@ -18,6 +18,7 @@ import type {
   NewPassSession,
   PlaceHistory,
   TaskSessionOutcome,
+  TaskSessionRow,
 } from "../../src/modules/ads/ads.repository.js";
 
 /**
@@ -154,7 +155,7 @@ export class MemoryAds implements AdsRepository {
   async report(sessionId: string, accountId: string, outcome: AdOutcome, time: Date): Promise<AdReport | null> {
     const session = this.sessions.find((candidate) => candidate.sessionId === sessionId && candidate.accountId === accountId);
     if (session === undefined || session.expiresAt <= time || (session.status !== "pending" && session.status !== "shown")) return null;
-    const report = (firstShown: boolean): AdReport => ({ networkKey: session.networkKey, creativeId: session.creativeId, firstShown });
+    const report = (firstShown: boolean): AdReport => ({ networkKey: session.networkKey, place: session.place, creativeId: session.creativeId, firstShown });
     switch (outcome.kind) {
       case "shown": {
         const first = session.shownAt === null;
@@ -199,24 +200,43 @@ export class MemoryAds implements AdsRepository {
     return { status: "claimed", session: { ...session }, repeat: false };
   }
 
-  async openTask(accountId: string, networkKey: string, time: Date, create: (history: PlaceHistory) => NewAdSession | null): Promise<TaskSessionOutcome | null> {
+  async openTask(
+    accountId: string,
+    networkKey: string,
+    time: Date,
+    create: (history: PlaceHistory, done: ReadonlySet<string>) => NewAdSession | null,
+    candidates: readonly string[] = [],
+  ): Promise<TaskSessionOutcome | null> {
     return await this.locked(async () => {
-      const open = this.taskSessions(accountId, networkKey).find((session) => (session.status === "pending" || session.status === "shown") && session.expiresAt > time);
-      if (open !== undefined) return { session: { ...open }, created: false };
-      const session = create(await this.history(accountId, "task", time));
+      const open = this.openTaskOf(accountId, networkKey, time);
+      if (open !== null) return { session: open, created: false };
+      const done = new Set(candidates.filter((id) => this.taskSessions(accountId, networkKey).some((session) => session.creativeId === id && session.completedAt !== null)));
+      const session = create(await this.history(accountId, "task", time), done);
       if (session === null) return null;
       this.push(session, "pending", null);
       const stored = this.sessions.at(-1);
       if (stored === undefined) throw new Error("сессия не записалась");
-      return { session: { ...stored }, created: true };
+      return { session: taskRow(stored), created: true };
     });
   }
 
-  async confirmTask(accountId: string, networkKey: string, time: Date): Promise<ConfirmedTask | null> {
+  async openTaskSession(accountId: string, networkKey: string, time: Date): Promise<TaskSessionRow | null> {
+    return this.openTaskOf(accountId, networkKey, time);
+  }
+
+  async taskSession(accountId: string, sessionId: string): Promise<TaskSessionRow | null> {
+    const session = this.sessions.find((candidate) => candidate.sessionId === sessionId && candidate.accountId === accountId && candidate.place === "task");
+    return session === undefined ? null : taskRow(session);
+  }
+
+  async confirmTask(accountId: string, networkKey: string, time: Date, sessionId?: string): Promise<ConfirmedTask | null> {
     return await this.locked(async () => {
-      const sessions = this.taskSessions(accountId, networkKey);
+      const sessions = this.taskSessions(accountId, networkKey).filter((session) => sessionId === undefined || session.sessionId === sessionId);
       const open = sessions.find((session) => (session.status === "pending" || session.status === "shown") && session.expiresAt > time);
       if (open !== undefined) {
+        const repeated =
+          open.creativeId !== null && this.taskSessions(accountId, networkKey).some((session) => session.creativeId === open.creativeId && session.completedAt !== null);
+        if (repeated) return null;
         open.status = "completed";
         open.completedAt = time;
         open.shownAt ??= time;
@@ -225,6 +245,11 @@ export class MemoryAds implements AdsRepository {
       const waiting = sessions.find((session) => session.status === "completed" && session.completedAt !== null && time.getTime() - session.completedAt.getTime() < CLAIM_WINDOW_MIN.cpa * 60_000);
       return waiting === undefined ? null : { session: { ...waiting }, repeat: true };
     });
+  }
+
+  private openTaskOf(accountId: string, networkKey: string, time: Date): TaskSessionRow | null {
+    const open = this.taskSessions(accountId, networkKey).find((session) => (session.status === "pending" || session.status === "shown") && session.expiresAt > time);
+    return open === undefined ? null : taskRow(open);
   }
 
   /** Сессии сети в месте `task`, свежие — первыми. */
@@ -248,6 +273,11 @@ export class MemoryAds implements AdsRepository {
     session.completedAt = time;
     session.status = "completed";
   }
+}
+
+/** Сессия задания — копией, как строка из базы: правка снаружи не меняет хранимое. */
+function taskRow(session: StoredSession): TaskSessionRow {
+  return { ...session };
 }
 
 /** Флаги для политики межстраничной: включённые ключи — у всех. */
@@ -317,15 +347,15 @@ export class FakeCreatives implements AdCreativeSource {
   /** ответ на запрос креатива; по умолчанию — креатив есть */
   answer: (networkKey: string) => CreativeFetch = () => ({ kind: "creative", creative: CREATIVE });
   readonly requests: { networkKey: string; keys: Readonly<Record<string, string>>; requester: AdRequester | null; timeoutMs?: number }[] = [];
-  readonly notes: { kind: "shown" | "viewed"; networkKey: string; creativeId: string; requester: AdRequester | null }[] = [];
+  readonly notes: { kind: "shown" | "viewed"; networkKey: string; creativeId: string; requester: AdRequester | null; place?: AdPlace }[] = [];
 
   async fetch(networkKey: string, keys: Readonly<Record<string, string>>, requester: AdRequester | null, timeoutMs?: number): Promise<CreativeFetch> {
     this.requests.push({ networkKey, keys, requester, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
     return this.answer(networkKey);
   }
 
-  shown(networkKey: string, creativeId: string, requester: AdRequester | null): Promise<void> {
-    this.notes.push({ kind: "shown", networkKey, creativeId, requester });
+  shown(networkKey: string, creativeId: string, requester: AdRequester | null, place: AdPlace): Promise<void> {
+    this.notes.push({ kind: "shown", networkKey, creativeId, requester, place });
     return Promise.resolve();
   }
 

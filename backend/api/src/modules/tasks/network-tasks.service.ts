@@ -1,7 +1,10 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
+import type { AdRequester } from "../ads/ad-creatives.js";
 import { profileOf } from "../ads/ad-networks.js";
-import { AdTaskHooks, AdTasks, type AdTaskOffer, type ConfirmedNetworkTask, type TaskReadiness } from "../ads/ad-tasks.js";
+import { AdTaskFeeds, type FeedCheckOutcome, type FeedTask } from "../ads/ad-task-feeds.js";
+import { AdTaskHooks, AdTasks, TASK_NETWORKS, openTaskIn, type AdTaskOffer, type ConfirmedNetworkTask, type TaskDelivery, type TaskReadiness } from "../ads/ad-tasks.js";
+import type { AdBlockRow } from "../ads/ads.repository.js";
 import { AdsService } from "../ads/ads.service.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
@@ -15,7 +18,11 @@ import { TaskNotFoundError } from "./tasks-errors.js";
  * WP13, часть 6, Р80). Модуль заданий — хозяин места `task`: решает, сколько
  * заданий сети игрок получит и когда, и выдаёт награду, когда сеть
  * подтвердила выполнение. Что показывает сеть и как подтверждает — модуль
- * рекламы (`ads/ad-tasks.ts`).
+ * рекламы (`ads/ad-tasks.ts`, лента — `ads/ad-task-feeds.ts`).
+ *
+ * Задание ленты (обмен трафиком Taddy) экран заданий не ждёт: список
+ * отвечает сразу, а строка сети спрашивает своё задание отдельно (`item`) —
+ * сеть может думать секунды.
  *
  * Награда — кошельком по ключу сессии, потом забор сессии: сорвись выдача,
  * сессия остаётся выполненной, и её дожмёт повтор подтверждения сети или
@@ -33,15 +40,29 @@ export interface NetworkTaskReward {
 
 export interface NetworkTaskView {
   network: string;
+  /** как задание доходит до игрока: элементом SDK сети или лентой — тогда строка спрашивает задание сама */
+  delivery: TaskDelivery;
   /** имя сети — для пометки «Реклама · AdsGram» */
   title: string;
   reward: NetworkTaskReward;
   /** выполнено за игровые сутки и потолок суток */
   doneToday: number;
   dailyCap: number;
-  /** задание сети сейчас — что передать SDK; `null` — потолок суток или пауза */
+  /** задание сети сейчас — что передать SDK; `null` — потолок суток, пауза или задание ленты */
   offer: AdTaskOffer | null;
   /** когда сеть даст следующее задание; `null` — даёт сейчас */
+  nextAt: string | null;
+}
+
+/** Строка ленты получила задание, выполненное задание или ничего — строки нет. */
+export type NetworkFeedItem = { kind: "task"; task: FeedTask } | ({ kind: "done" } & NetworkTaskProgress) | { kind: "none" };
+
+/** Ответ «Проверить» — с тем, что показать в строке после него. */
+export type NetworkFeedCheck = { result: FeedCheckOutcome } & NetworkTaskProgress;
+
+/** Счёт суток сети после выполнения — для «Награда получена · следующее через …». */
+export interface NetworkTaskProgress {
+  doneToday: number;
   nextAt: string | null;
 }
 
@@ -69,6 +90,7 @@ export class NetworkTasksService implements OnModuleInit {
   constructor(
     @Inject(NETWORK_TASKS_REPOSITORY) private readonly repository: NetworkTasksRepository,
     private readonly adTasks: AdTasks,
+    private readonly feeds: AdTaskFeeds,
     private readonly hooks: AdTaskHooks,
     private readonly ads: AdsService,
     private readonly wallet: WalletService,
@@ -105,19 +127,64 @@ export class NetworkTasksService implements OnModuleInit {
     await this.heal(account.accountId, history.sessions, at);
     const views: NetworkTaskView[] = [];
     for (const { def, block } of ready) {
-      const offer = await this.adTasks.session(account.accountId, block, at, (fresh) => admitsTask(def, fresh, def.networkKey, at));
+      const delivery = TASK_NETWORKS[def.networkKey]?.delivery ?? "element";
       const state = networkTaskState(def.networkKey, history);
+      const next = nextTaskAt(def, state, history.dayStart, at)?.toISOString() ?? null;
+      // Ленту экран не ждёт: строка спросит задание сама. Открытая сессия —
+      // задание уже выдано, и его можно выполнить, даже если пауза ещё идёт.
+      const offer = delivery === "element" ? await this.adTasks.session(account.accountId, block, at, (fresh) => admitsTask(def, fresh, def.networkKey, at)) : null;
+      const waiting = delivery === "element" ? offer === null : !openTaskIn(history, def.networkKey, at);
       views.push({
         network: def.networkKey,
+        delivery,
         title: profileOf(def.networkKey)?.title ?? def.networkKey,
         reward: rewardOf(def),
         doneToday: state.doneToday,
         dailyCap: def.dailyCap,
         offer,
-        nextAt: offer === null ? (nextTaskAt(def, state, history.dayStart, at)?.toISOString() ?? null) : null,
+        nextAt: waiting ? next : null,
       });
     }
     return views;
+  }
+
+  /**
+   * Задание ленты для строки сети. Нет строки сети, блока или игрока —
+   * заданий нет: строка просто не появится, это не ошибка экрана.
+   */
+  async item(account: AccountRef, networkKey: string, requester: AdRequester, at = new Date()): Promise<NetworkFeedItem> {
+    const found = await this.feedNetwork(account, networkKey);
+    if (found === null) return { kind: "none" };
+    const { def, block } = found;
+    const outcome = await this.feeds.item(account.accountId, block, requester, at, (history) => admitsTask(def, history, networkKey, at));
+    if (outcome.kind === "task") return outcome;
+    if (outcome.kind === "done") return { kind: "done", ...(await this.progress(account.accountId, def, at)) };
+    if (outcome.reason === "unavailable") this.log("warn", { event: "network_feed_unavailable", accountId: account.accountId, network: networkKey });
+    return { kind: "none" };
+  }
+
+  /** «Проверить» у задания ленты: выполнено — награда уже выдана, ответ говорит, когда следующее. */
+  async check(account: AccountRef, networkKey: string, sessionId: string, requester: AdRequester, at = new Date()): Promise<NetworkFeedCheck> {
+    const found = await this.feedNetwork(account, networkKey);
+    if (found === null) throw new TaskNotFoundError();
+    const result = await this.feeds.check(account.accountId, found.block, sessionId, requester, at);
+    return { result, ...(await this.progress(account.accountId, found.def, at)) };
+  }
+
+  /** Строка сети с лентой и её блок для площадки игрока; `null` — заданий этой сети у игрока нет. */
+  private async feedNetwork(account: AccountRef, networkKey: string): Promise<{ def: NetworkTaskRow; block: AdBlockRow } | null> {
+    if (TASK_NETWORKS[networkKey]?.delivery !== "feed") return null;
+    const def = (await this.rows()).find((row) => row.networkKey === networkKey && row.active);
+    if (def === undefined) return null;
+    const block = await this.adTasks.block(networkKey, account.platform);
+    return block === null ? null : { def, block };
+  }
+
+  private async progress(accountId: string, def: NetworkTaskRow, at: Date): Promise<NetworkTaskProgress> {
+    const history = await this.adTasks.history(accountId, at);
+    const state = networkTaskState(def.networkKey, history);
+    const open = openTaskIn(history, def.networkKey, at);
+    return { doneToday: state.doneToday, nextAt: open ? null : (nextTaskAt(def, state, history.dayStart, at)?.toISOString() ?? null) };
   }
 
   /**

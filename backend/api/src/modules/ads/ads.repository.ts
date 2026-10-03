@@ -56,9 +56,10 @@ export interface NewAdSession {
   /**
    * Креатив сети с API, который рисует наш блок: по `id` сервер сообщает сети
    * показ, а досмотр примет не раньше `viewSec` секунд после выдачи. `null` —
-   * показывает SDK сети, досмотр подтверждает он.
+   * показывает SDK сети, досмотр подтверждает он. У задания ленты сети
+   * досмотра нет — `viewSec` пуст, выполнение подтверждает сеть.
    */
-  creative: { id: string; viewSec: number } | null;
+  creative: { id: string; viewSec: number | null } | null;
   createdAt: Date;
   expiresAt: Date;
 }
@@ -79,6 +80,8 @@ export type AdOutcome = { kind: "shown" } | { kind: "completed" } | { kind: "cli
 /** Принятый шаг: чья сессия и что сообщить сети, у которой креатив рисуем сами. */
 export interface AdReport {
   networkKey: string;
+  /** место сессии: у задания ленты сети показ считается по-своему */
+  place: AdPlace;
   /** креатив сети с API; `null` — показывал SDK */
   creativeId: string | null;
   /** показ отмечен этим шагом впервые — сеть считает его один раз */
@@ -108,9 +111,18 @@ export interface InterstitialQuery {
   rewardedSince: Date;
 }
 
+/** Сессия задания сети — с тем, чего нет у других мест: заданием ленты и переходом. */
+export interface TaskSessionRow extends AdSessionRow {
+  /** задание ленты сети; `null` — задание рисует SDK сети */
+  creativeId: string | null;
+  /** игрок нажал «Перейти» */
+  clickedAt: Date | null;
+  expiresAt: Date;
+}
+
 /** Сессия задания сети: открытая — та же, что раньше; `created` — заведена этим вызовом. */
 export interface TaskSessionOutcome {
-  session: AdSessionRow;
+  session: TaskSessionRow;
   created: boolean;
 }
 
@@ -151,14 +163,26 @@ export interface AdsRepository {
    * Под той же блокировкой места, что забор: два экрана разом не заведут
    * две сессии, и обе не проскочат потолок хозяина.
    */
-  openTask(accountId: string, networkKey: string, at: Date, create: (history: PlaceHistory) => NewAdSession | null): Promise<TaskSessionOutcome | null>;
+  openTask(
+    accountId: string,
+    networkKey: string,
+    at: Date,
+    create: (history: PlaceHistory, done: ReadonlySet<string>) => NewAdSession | null,
+    candidates?: readonly string[],
+  ): Promise<TaskSessionOutcome | null>;
+  /** Открытая сессия задания сети — без блокировки: только посмотреть, что игроку уже выдано. */
+  openTaskSession(accountId: string, networkKey: string, at: Date): Promise<TaskSessionRow | null>;
+  /** Сессия задания игрока в любом состоянии; `null` — нет такой или она не задание. */
+  taskSession(accountId: string, sessionId: string): Promise<TaskSessionRow | null>;
   /**
    * Сеть подтвердила задание игрока: самая свежая открытая сессия сети
-   * становится выполненной. Открытой нет, а выполненная не забрана — она
+   * становится выполненной — или названная, если сеть подтверждает
+   * конкретное задание. Открытой нет, а выполненная не забрана — она
    * отдаётся снова (`repeat`): прошлая выдача награды сорвалась, и сеть
-   * повторила подтверждение. `null` — подтверждать нечего.
+   * повторила подтверждение. `null` — подтверждать нечего, в том числе
+   * задание ленты, уже выполненное игроком в другой сессии.
    */
-  confirmTask(accountId: string, networkKey: string, at: Date): Promise<ConfirmedTask | null>;
+  confirmTask(accountId: string, networkKey: string, at: Date, sessionId?: string): Promise<ConfirmedTask | null>;
 }
 
 const blockSchema = z.object({
@@ -173,7 +197,7 @@ const blockSchema = z.object({
   devices: z.array(z.enum(AD_DEVICES)),
 });
 
-const reportSchema = z.object({ network_key: z.string(), creative_id: z.string().nullable(), first_shown: z.boolean().nullable() });
+const reportSchema = z.object({ network_key: z.string(), place: z.enum(AD_PLACES), creative_id: z.string().nullable(), first_shown: z.boolean().nullable() });
 
 const networkKeysSchema = z.object({ network_key: z.string(), keys: z.record(z.string(), z.string()) });
 
@@ -216,6 +240,18 @@ function toSession(raw: unknown): AdSessionRow {
 }
 
 const SESSION_COLUMNS = "session_id, account_id::text, place::text, network_key, success::text, status::text, created_at, shown_at, completed_at, claimed_at";
+
+const taskSessionSchema = z.object({ creative_id: z.string().nullable(), clicked_at: z.date().nullable(), expires_at: z.date() });
+
+const TASK_COLUMNS = `${SESSION_COLUMNS}, creative_id, clicked_at, expires_at`;
+
+function toTaskSession(raw: unknown): TaskSessionRow {
+  const row = taskSessionSchema.parse(raw);
+  return { ...toSession(raw), creativeId: row.creative_id, clickedAt: row.clicked_at, expiresAt: row.expires_at };
+}
+
+/** Открытая сессия задания: ещё не выполнена, не отказала и не истекла. */
+const OPEN_TASK = `place = 'task' AND status IN ('pending', 'shown') AND expires_at > $3`;
 
 const TX_OPTIONS = { maxWait: 5_000, timeout: 10_000 } as const;
 
@@ -335,12 +371,12 @@ export class PrismaAdsRepository implements AdsRepository {
     const open = `session_id = $1 AND account_id = $2::uuid AND expires_at > $3 AND status IN ('pending', 'shown')`;
     // Показ отмечен впервые, если после шага он равен его времени: прежний
     // COALESCE оставил бы более раннее. Так сеть узнаёт о показе один раз.
-    const returning = `RETURNING network_key, creative_id, shown_at = $3 AS first_shown`;
+    const returning = `RETURNING network_key, place::text, creative_id, shown_at = $3 AS first_shown`;
     const step = async (sql: string, ...extra: unknown[]): Promise<AdReport | null> => {
       const [raw] = await this.prisma.$queryRawUnsafe<unknown[]>(sql, sessionId, accountId, at, ...extra);
       if (raw === undefined) return null;
       const row = reportSchema.parse(raw);
-      return { networkKey: row.network_key, creativeId: row.creative_id, firstShown: row.first_shown === true };
+      return { networkKey: row.network_key, place: row.place, creativeId: row.creative_id, firstShown: row.first_shown === true };
     };
     switch (outcome.kind) {
       case "shown":
@@ -354,10 +390,10 @@ export class PrismaAdsRepository implements AdsRepository {
            WHERE ${open} AND success = 'view' AND (view_sec IS NULL OR created_at + make_interval(secs => view_sec) <= $3) ${returning}`,
         );
       case "clicked":
-        return await step(`UPDATE ad_session SET clicked_at = COALESCE(clicked_at, $3) WHERE ${open} RETURNING network_key, creative_id, false AS first_shown`);
+        return await step(`UPDATE ad_session SET clicked_at = COALESCE(clicked_at, $3) WHERE ${open} RETURNING network_key, place::text, creative_id, false AS first_shown`);
       case "failed":
         return await step(
-          `UPDATE ad_session SET failed_at = $3, fail_reason = $4, status = 'failed' WHERE ${open} RETURNING network_key, creative_id, false AS first_shown`,
+          `UPDATE ad_session SET failed_at = $3, fail_reason = $4, status = 'failed' WHERE ${open} RETURNING network_key, place::text, creative_id, false AS first_shown`,
           outcome.reason,
         );
     }
@@ -389,24 +425,24 @@ export class PrismaAdsRepository implements AdsRepository {
     }, TX_OPTIONS);
   }
 
-  async openTask(accountId: string, networkKey: string, at: Date, create: (history: PlaceHistory) => NewAdSession | null): Promise<TaskSessionOutcome | null> {
+  async openTask(
+    accountId: string,
+    networkKey: string,
+    at: Date,
+    create: (history: PlaceHistory, done: ReadonlySet<string>) => NewAdSession | null,
+    candidates: readonly string[] = [],
+  ): Promise<TaskSessionOutcome | null> {
     return await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ads:${accountId}:task`}))`;
-      const [open] = await tx.$queryRawUnsafe<unknown[]>(
-        `SELECT ${SESSION_COLUMNS} FROM ad_session
-         WHERE account_id = $1::uuid AND place = 'task' AND network_key = $2 AND status IN ('pending', 'shown') AND expires_at > $3
-         ORDER BY created_at DESC LIMIT 1`,
-        accountId,
-        networkKey,
-        at,
-      );
-      if (open !== undefined) return { session: toSession(open), created: false };
-      const session = create(await historyWithin(tx, accountId, "task", at));
+      const open = await openTaskWithin(tx, accountId, networkKey, at);
+      if (open !== null) return { session: open, created: false };
+      const done = candidates.length === 0 ? new Set<string>() : await doneTasksWithin(tx, accountId, networkKey, candidates);
+      const session = create(await historyWithin(tx, accountId, "task", at), done);
       if (session === null) return null;
       const [inserted] = await tx.$queryRawUnsafe<unknown[]>(
-        `INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, expires_at)
-         VALUES ($1, $2::uuid, 'task', $3::uuid, $4, $5::"AdSuccess", 'pending', $6, $7)
-         RETURNING ${SESSION_COLUMNS}`,
+        `INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, expires_at, creative_id)
+         VALUES ($1, $2::uuid, 'task', $3::uuid, $4, $5::"AdSuccess", 'pending', $6, $7, $8)
+         RETURNING ${TASK_COLUMNS}`,
         session.sessionId,
         accountId,
         session.block.blockId,
@@ -414,32 +450,55 @@ export class PrismaAdsRepository implements AdsRepository {
         session.block.success,
         session.createdAt,
         session.expiresAt,
+        session.creative?.id ?? null,
       );
-      return { session: toSession(inserted), created: true };
+      return { session: toTaskSession(inserted), created: true };
     }, TX_OPTIONS);
   }
 
-  async confirmTask(accountId: string, networkKey: string, at: Date): Promise<ConfirmedTask | null> {
+  async openTaskSession(accountId: string, networkKey: string, at: Date): Promise<TaskSessionRow | null> {
+    return await openTaskWithin(this.prisma, accountId, networkKey, at);
+  }
+
+  async taskSession(accountId: string, sessionId: string): Promise<TaskSessionRow | null> {
+    const [raw] = await this.prisma.$queryRawUnsafe<unknown[]>(
+      `SELECT ${TASK_COLUMNS} FROM ad_session WHERE session_id = $1 AND account_id = $2::uuid AND place = 'task'`,
+      sessionId,
+      accountId,
+    );
+    return raw === undefined ? null : toTaskSession(raw);
+  }
+
+  async confirmTask(accountId: string, networkKey: string, at: Date, sessionId?: string): Promise<ConfirmedTask | null> {
     return await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ads:${accountId}:task`}))`;
       // Открытая — первой: она и есть только что выполненное задание.
       // Выполненная без забора — после: её подтверждение сеть повторила.
       const [raw] = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT ${SESSION_COLUMNS} FROM ad_session
-         WHERE account_id = $1::uuid AND place = 'task' AND network_key = $2
+         WHERE account_id = $1::uuid AND place = 'task' AND network_key = $2 AND ($5::text IS NULL OR session_id = $5)
            AND ((status IN ('pending', 'shown') AND expires_at > $3) OR (status = 'completed' AND completed_at > $3::timestamptz - make_interval(mins => $4::int)))
          ORDER BY status = 'completed', created_at DESC LIMIT 1`,
         accountId,
         networkKey,
         at,
         CLAIM_WINDOW_MIN.cpa,
+        sessionId ?? null,
       );
       if (raw === undefined) return null;
       const found = toSession(raw);
       if (found.status === "completed") return { session: found, repeat: true };
+      // Задание ленты, выполненное игроком в другой сессии, второй раз не
+      // выполняется: награда за него уже выдана. Блокировка места та же, что
+      // у выдачи, — проверка и запись не разойдутся.
       const [done] = await tx.$queryRawUnsafe<unknown[]>(
-        `UPDATE ad_session SET status = 'completed', completed_at = $2, shown_at = COALESCE(shown_at, $2)
-         WHERE session_id = $1 AND status IN ('pending', 'shown') RETURNING ${SESSION_COLUMNS}`,
+        `UPDATE ad_session s SET status = 'completed', completed_at = $2, shown_at = COALESCE(shown_at, $2)
+         WHERE s.session_id = $1 AND s.status IN ('pending', 'shown')
+           AND (s.creative_id IS NULL OR NOT EXISTS (
+             SELECT 1 FROM ad_session d
+             WHERE d.account_id = s.account_id AND d.network_key = s.network_key AND d.place = 'task'
+               AND d.creative_id = s.creative_id AND d.completed_at IS NOT NULL))
+         RETURNING ${SESSION_COLUMNS}`,
         found.sessionId,
         at,
       );
@@ -458,6 +517,31 @@ export class PrismaAdsRepository implements AdsRepository {
  * Забранные идут первыми: сотни невостребованных выдач не вытеснят из
  * окна награду и не обнулят этим кулдаун.
  */
+async function openTaskWithin(db: Db, accountId: string, networkKey: string, at: Date): Promise<TaskSessionRow | null> {
+  const [open] = await db.$queryRawUnsafe<unknown[]>(
+    `SELECT ${TASK_COLUMNS} FROM ad_session
+     WHERE account_id = $1::uuid AND network_key = $2 AND ${OPEN_TASK}
+     ORDER BY created_at DESC LIMIT 1`,
+    accountId,
+    networkKey,
+    at,
+  );
+  return open === undefined ? null : toTaskSession(open);
+}
+
+/** Какие из заданий ленты игрок уже выполнил — за них награда выдана, второй раз их не выдать. */
+async function doneTasksWithin(db: Db, accountId: string, networkKey: string, candidates: readonly string[]): Promise<Set<string>> {
+  const rows = await db.$queryRawUnsafe<unknown[]>(
+    `SELECT DISTINCT creative_id FROM ad_session
+     WHERE account_id = $1::uuid AND network_key = $2 AND place = 'task' AND completed_at IS NOT NULL
+       AND creative_id IS NOT NULL AND creative_id = ANY($3::text[])`,
+    accountId,
+    networkKey,
+    [...candidates],
+  );
+  return new Set(rows.map((row) => z.object({ creative_id: z.string() }).parse(row).creative_id));
+}
+
 async function historyWithin(db: Db, accountId: string, place: AdPlace, at: Date): Promise<PlaceHistory> {
   const rows = await db.$queryRawUnsafe<{ day_start: unknown; session_id: unknown }[]>(
     `WITH day AS (SELECT (date_trunc('day', $3::timestamptz AT TIME ZONE $4) AT TIME ZONE $4) AS day_start)

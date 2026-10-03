@@ -13,7 +13,10 @@ import { PrismaNetworkTasksRepository } from "../src/modules/tasks/network-tasks
  * часть 6; адрес — TEST_DATABASE_URL, без него пропуск): открытая сессия
  * сети одна и под гонкой, подтверждение выполняет открытую и отдаёт
  * выполненную без забора снова, а забранную — нет; строка сети из
- * миграции на месте, и база держит пределы панели.
+ * миграции на месте, и база держит пределы панели. Задание ленты игрок
+ * выполняет однажды: выбор обходит выполненные, подтверждение второй
+ * сессии с тем же заданием не проходит, а индекс не даст записать его
+ * в обход.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -38,8 +41,16 @@ describe.skipIf(DATABASE_URL === "")("задания сетей на живом 
     return created.accountId;
   }
 
-  function fresh(accountId: string, createdAt: Date): NewAdSession {
-    return { sessionId: randomBytes(12).toString("base64url"), accountId, place: "task", block, creative: null, createdAt, expiresAt: new Date(createdAt.getTime() + 24 * 60 * MINUTE) };
+  function fresh(accountId: string, createdAt: Date, creativeId: string | null = null): NewAdSession {
+    return {
+      sessionId: randomBytes(12).toString("base64url"),
+      accountId,
+      place: "task",
+      block,
+      creative: creativeId === null ? null : { id: creativeId, viewSec: null },
+      createdAt,
+      expiresAt: new Date(createdAt.getTime() + 24 * 60 * MINUTE),
+    };
   }
 
   beforeAll(async () => {
@@ -59,9 +70,10 @@ describe.skipIf(DATABASE_URL === "")("задания сетей на живом 
     await prisma.$disconnect();
   });
 
-  it("строка AdsGram из миграции — рабочие числа; база не примет потолок и паузу вне пределов и чужую сеть", async () => {
-    const seeded = (await rows.all()).find((row) => row.networkKey === "adsgram");
-    expect(seeded).toMatchObject({ active: true, dailyCap: 5, pauseMin: 30, coins: 100, gems: 0, shards: 0, updatedBy: null });
+  it("строки AdsGram и Taddy из миграций — рабочие числа; база не примет потолок и паузу вне пределов и чужую сеть", async () => {
+    const seeded = await rows.all();
+    expect(seeded.find((row) => row.networkKey === "adsgram")).toMatchObject({ active: true, dailyCap: 5, pauseMin: 30, coins: 100, gems: 0, shards: 0, updatedBy: null });
+    expect(seeded.find((row) => row.networkKey === "taddy")).toMatchObject({ active: true, dailyCap: 5, pauseMin: 30, coins: 100, gems: 0, shards: 0, updatedBy: null });
     await expect(prisma.$executeRaw`INSERT INTO network_task (network_key, daily_cap, pause_min, coins, updated_at) VALUES (${network}, 3, 4, 10, now())`).rejects.toThrow();
     await expect(prisma.$executeRaw`INSERT INTO network_task (network_key, daily_cap, pause_min, coins, updated_at) VALUES (${network}, 0, 30, 10, now())`).rejects.toThrow();
     await expect(prisma.$executeRaw`INSERT INTO network_task (network_key, daily_cap, pause_min, coins, updated_at) VALUES (${network}, 3, 30, 0, now())`).rejects.toThrow();
@@ -130,5 +142,53 @@ describe.skipIf(DATABASE_URL === "")("задания сетей на живом 
     const confirmed = await ads.confirmTask(me, network, at(41));
     expect(confirmed).toMatchObject({ repeat: false, session: { sessionId: next?.session.sessionId } });
     expect(confirmed?.session.sessionId).not.toBe(old?.session.sessionId);
+  });
+
+  it("задание ленты: креатив в сессии; выбор обходит выполненные игроком, у другого игрока — те же задания", async () => {
+    const me = await account();
+    const other = await account();
+    const first = await ads.openTask(me, network, NOON, (_history, done) => (done.size === 0 ? fresh(me, NOON, "feed-1") : null), ["feed-1", "feed-2"]);
+    expect(first).toMatchObject({ created: true, session: { creativeId: "feed-1", clickedAt: null, status: "pending" } });
+    await ads.report(first?.session.sessionId ?? "", me, { kind: "clicked" }, at(1));
+    expect(await ads.openTaskSession(me, network, at(2))).toMatchObject({ sessionId: first?.session.sessionId, creativeId: "feed-1", clickedAt: at(1) });
+    expect(await ads.taskSession(me, first?.session.sessionId ?? "")).toMatchObject({ creativeId: "feed-1", expiresAt: at(24 * 60) });
+    expect(await ads.taskSession(other, first?.session.sessionId ?? "")).toBeNull();
+    expect(await ads.confirmTask(me, network, at(3), first?.session.sessionId)).toMatchObject({ repeat: false, session: { status: "completed" } });
+
+    let seen: ReadonlySet<string> = new Set();
+    const second = await ads.openTask(
+      me,
+      network,
+      at(40),
+      (_history, done) => {
+        seen = done;
+        return fresh(me, at(40), "feed-2");
+      },
+      ["feed-1", "feed-2", "feed-3"],
+    );
+    expect([...seen]).toEqual(["feed-1"]);
+    expect(second?.session.creativeId).toBe("feed-2");
+    let theirs: ReadonlySet<string> = new Set(["x"]);
+    await ads.openTask(other, network, NOON, (_history, done) => ((theirs = done), null), ["feed-1"]);
+    expect(theirs.size).toBe(0);
+  });
+
+  it("подтверждение названной сессии: чужая сессия той же сети не выполняется; то же задание второй раз — нет", async () => {
+    const me = await account();
+    const first = await ads.openTask(me, network, NOON, () => fresh(me, NOON, "feed-9"));
+    expect(await ads.confirmTask(me, network, at(1), "NoSuchSession0000")).toBeNull();
+    expect(await ads.confirmTask(me, network, at(1), first?.session.sessionId)).toMatchObject({ repeat: false });
+    await ads.claim(first?.session.sessionId ?? "", me, "task", at(2), (session, history) => claimVerdict(session, history, at(2)));
+
+    // Сессия с тем же заданием в обход выбора: подтверждение её не выполнит, а запись в обход упрётся в индекс.
+    const again = await ads.openTask(me, network, at(40), () => fresh(me, at(40), "feed-9"));
+    expect(again?.created).toBe(true);
+    expect(await ads.confirmTask(me, network, at(41), again?.session.sessionId)).toBeNull();
+    expect(await ads.taskSession(me, again?.session.sessionId ?? "")).toMatchObject({ status: "pending", completedAt: null });
+    await expect(
+      prisma.$executeRaw`UPDATE ad_session SET status = 'completed', completed_at = now() WHERE session_id = ${again?.session.sessionId ?? ""}`,
+    ).rejects.toThrow(/ad_session_task_creative_key|unique/i);
+    // Закрыть её можно: отказ — не выполнение.
+    expect(await ads.report(again?.session.sessionId ?? "", me, { kind: "failed", reason: "task_repeat" }, at(42))).toMatchObject({ place: "task", creativeId: "feed-9" });
   });
 });

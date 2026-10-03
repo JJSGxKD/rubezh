@@ -29,6 +29,7 @@ import { NetworkCreatives, taddyUser, type AdRequester } from "../src/modules/ad
 import { CREATIVE_VIEW_SEC } from "../src/modules/ads/ad-networks.js";
 import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
 import type { TaddyApi, TaddyUser } from "../src/modules/ads/taddy-api.js";
+import type { TaddyCheckResult, TaddyExchangeApi, TaddyFeedResult } from "../src/modules/ads/taddy-exchange.js";
 import { AdsService, INTERSTITIAL_CREATIVE_TIMEOUT_MS, type AdOffer, type AdViewer, type AdsRoll } from "../src/modules/ads/ads.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
@@ -334,7 +335,7 @@ describe("креатив сети с API (Taddy, Р78)", () => {
     const time = (ms: number) => new Date(NOON.getTime() + ms);
     await service.report(ME, offer.sessionId, { kind: "shown" }, time(SECOND), REQUESTER);
     await service.report(ME, offer.sessionId, { kind: "shown" }, time(2 * SECOND), REQUESTER);
-    expect(creatives.notes).toEqual([{ kind: "shown", networkKey: "taddy", creativeId: CREATIVE.id, requester: REQUESTER }]);
+    expect(creatives.notes).toEqual([{ kind: "shown", networkKey: "taddy", creativeId: CREATIVE.id, requester: REQUESTER, place: "wheel_spin" }]);
 
     // Клиент поторопился: отсчёт блока ещё идёт — досмотра нет, награды нет.
     await expect(service.report(ME, offer.sessionId, { kind: "completed" }, time(CREATIVE_VIEW_SEC.rewarded * SECOND - 1))).rejects.toBeInstanceOf(AdSessionClosedError);
@@ -383,11 +384,26 @@ describe("Taddy: игрок и отметки", () => {
     }
   }
 
+  /** Лента обмена: показ задания ленты — своей ручкой, не показом объявления. */
+  class FakeExchange implements TaddyExchangeApi {
+    readonly impressions: string[] = [];
+    async feed(): Promise<TaddyFeedResult> {
+      return { kind: "feed", tasks: [] };
+    }
+    async impression(_pubId: string, _user: TaddyUser, taskId: string) {
+      this.impressions.push(taskId);
+    }
+    async check(): Promise<TaddyCheckResult> {
+      return { kind: "checked", done: false };
+    }
+  }
+
   function creativesWith(networks?: { networkKey: string; keys: Record<string, string> }[]) {
     const repository = new MemoryAds();
     if (networks !== undefined) repository.networks = networks;
     const taddy = new FakeTaddy();
-    return { taddy, creatives: new NetworkCreatives(taddy, new AdNetworkKeys(repository)) };
+    const exchange = new FakeExchange();
+    return { taddy, exchange, creatives: new NetworkCreatives(taddy, new AdNetworkKeys(repository), exchange) };
   }
 
   it("игрок для Taddy — Telegram ID числом, основной подтег языка, без пустых полей; входу разработчика креатива нет", () => {
@@ -411,7 +427,7 @@ describe("Taddy: игрок и отметки", () => {
 
   it("отметки — по ключам из базы, даже если сеть уже выключили; без pubId их нет, сбой сети не бросает", async () => {
     const { taddy, creatives } = creativesWith();
-    await creatives.shown("taddy", "ad-1", REQUESTER);
+    await creatives.shown("taddy", "ad-1", REQUESTER, "wheel_spin");
     await creatives.viewed("taddy", "ad-1", REQUESTER);
     expect(taddy.calls.map((call) => [call.method, call.extra])).toEqual([
       ["impression", "ad-1"],
@@ -419,11 +435,18 @@ describe("Taddy: игрок и отметки", () => {
     ]);
 
     const empty = creativesWith([{ networkKey: "taddy", keys: {} }]);
-    await empty.creatives.shown("taddy", "ad-1", REQUESTER);
+    await empty.creatives.shown("taddy", "ad-1", REQUESTER, "wheel_spin");
     expect(empty.taddy.calls).toEqual([]);
 
     taddy.failing = true;
-    await expect(creatives.shown("taddy", "ad-2", REQUESTER)).resolves.toBeUndefined();
+    await expect(creatives.shown("taddy", "ad-2", REQUESTER, "wheel_spin")).resolves.toBeUndefined();
+  });
+
+  it("показ задания ленты в месте «Задания» Taddy считает лентой обмена, а не показом объявления", async () => {
+    const { taddy, exchange, creatives } = creativesWith();
+    await creatives.shown("taddy", "9001", REQUESTER, "task");
+    expect(exchange.impressions).toEqual(["9001"]);
+    expect(taddy.calls).toEqual([]);
   });
 });
 

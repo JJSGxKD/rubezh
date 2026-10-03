@@ -4,13 +4,16 @@ import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
+import type { AdRequester } from "../src/modules/ads/ad-creatives.js";
 import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
+import { AdTaskFeeds } from "../src/modules/ads/ad-task-feeds.js";
 import { AdTaskHooks, AdTasks, TASK_SESSION_TTL_MIN, sameSecret } from "../src/modules/ads/ad-tasks.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { AdsgramRewardController } from "../src/modules/ads/adsgram-reward.controller.js";
 import { AdsService } from "../src/modules/ads/ads.service.js";
 import type { PlaceHistory } from "../src/modules/ads/ads.repository.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
+import type { TaddyCheckResult, TaddyExchangeApi, TaddyExchangeTask, TaddyFeedResult } from "../src/modules/ads/taddy-exchange.js";
 import { ADSGRAM_REWARD_PATH, SECRETS, type SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
 import { SECRETS_READER, type SecretsReader } from "../src/modules/secrets/secrets.service.js";
 import { admitsTask, networkTaskSchema, networkTaskState, nextTaskAt, type NetworkTaskDef } from "../src/modules/tasks/network-task-rules.js";
@@ -29,6 +32,7 @@ import { panelSettings } from "./helpers/settings.js";
  * паузы, считая по московским суткам; награду даёт только подтверждение
  * сети с верным секретом и только за выданное задание; повтор
  * подтверждения не награждает дважды, а сорвавшаяся выдача дожимается.
+ * Задание ленты Taddy награждается только по проверке сети и только раз.
  */
 
 const MINUTE = 60_000;
@@ -40,6 +44,37 @@ const TG_ID = "4242";
 const OWNER_ID = "777000333";
 
 const ROW: NetworkTaskRow = { networkKey: "adsgram", active: true, dailyCap: 2, pauseMin: 30, coins: 100, gems: 0, shards: 2, updatedAt: NOON, updatedBy: null };
+const TADDY_ROW: NetworkTaskRow = { ...ROW, networkKey: "taddy", coins: 80, shards: 0 };
+
+/** Игрок для сети с API — как его собрал бы контроллер из запроса. */
+const REQUESTER: AdRequester = { platformUserId: TG_ID, ip: "203.0.113.7", userAgent: "Telegram-Android/11", language: "ru", premium: null };
+
+/** Задание ленты обмена Taddy. */
+function feedTask(id: string, overrides: Partial<TaddyExchangeTask> = {}): TaddyExchangeTask {
+  return { id, title: `Задание ${id}`, description: "Запусти бота", image: `https://cdn.taddy.example/${id}.webp`, type: "bot", link: `https://t.tadly.pro/v1/exchange/open/${id}`, pending: false, ...overrides };
+}
+
+/** Лента обмена Taddy в памяти: что в ленте, что игрок выполнил и что серверу пришлось спросить. */
+class FakeExchange implements TaddyExchangeApi {
+  tasks: TaddyExchangeTask[] = [feedTask("t-1"), feedTask("t-2")];
+  down = false;
+  readonly done = new Set<string>();
+  readonly calls: string[] = [];
+
+  async feed(): Promise<TaddyFeedResult> {
+    this.calls.push("feed");
+    return this.down ? { kind: "none", reason: "timeout" } : { kind: "feed", tasks: this.tasks.map((task) => ({ ...task })) };
+  }
+
+  async impression(): Promise<void> {
+    this.calls.push("impression");
+  }
+
+  async check(_pubId: string, _user: unknown, taskId: string): Promise<TaddyCheckResult> {
+    this.calls.push(`check:${taskId}`);
+    return this.down ? { kind: "none", reason: "timeout" } : { kind: "checked", done: this.done.has(taskId) };
+  }
+}
 
 class MemoryNetworkTasks implements NetworkTasksRepository {
   constructor(readonly rows: NetworkTaskRow[]) {}
@@ -90,23 +125,26 @@ async function setup(options: { secret?: string | null; blocks?: ReturnType<type
   adsRepository.blocks = options.blocks ?? [adBlock("adsgram", 10, { place: "task" })];
   const settings = panelSettings();
   const passes = new AdPasses();
-  const ads = new AdsService(adsRepository, () => 0, passes, settings, new FakeCreatives(), new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, settings));
+  const creatives = new FakeCreatives();
+  const ads = new AdsService(adsRepository, () => 0, passes, settings, creatives, new AdNetworkKeys(adsRepository), interstitialGate(adsRepository, settings));
   const secrets = secretsOf(options.secret === undefined ? SECRET : options.secret);
   const accounts = new MemoryAccountRepository();
   const hooks = new AdTaskHooks();
   const adTasks = new AdTasks(adsRepository, ads, settings, secrets, accounts, hooks);
+  const exchange = new FakeExchange();
+  const feeds = new AdTaskFeeds(adsRepository, exchange, hooks);
   const rows = new MemoryNetworkTasks((options.rows ?? [ROW]).map((row) => ({ ...row })));
   const wallet = new FakeWallet();
   const rolesRepository = new MemoryRolesRepository();
   const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
-  const service = new NetworkTasksService(rows, adTasks, hooks, ads, wallet as unknown as WalletService, new RolesService(config, rolesRepository, accounts));
+  const service = new NetworkTasksService(rows, adTasks, feeds, hooks, ads, wallet as unknown as WalletService, new RolesService(config, rolesRepository, accounts));
   service.onModuleInit();
   const ref = async (id: string, platform: "telegram" | "vk" = "telegram"): Promise<AccountRef> => {
     const account = await accounts.upsert({ platform, platformUserId: id, displayName: `Игрок ${id}`, username: null, photoUrl: null }, NOON.getTime());
     return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
   };
   const player = await ref(TG_ID);
-  return { adsRepository, ads, passes, adTasks, secrets, rows, wallet, rolesRepository, service, player, ref };
+  return { adsRepository, ads, creatives, passes, adTasks, exchange, secrets, rows, wallet, rolesRepository, service, player, ref };
 }
 
 /** История места `task` из выполненных в эти минуты от полудня. */
@@ -166,6 +204,7 @@ describe("строка сети у игрока", () => {
     const [first] = await service.view(player, NOON);
     expect(first).toMatchObject({
       network: "adsgram",
+      delivery: "element",
       title: "AdsGram",
       reward: { coins: 100, gems: 0, shards: 2 },
       doneToday: 0,
@@ -273,13 +312,184 @@ describe("подтверждение сети и награда", () => {
   });
 });
 
+describe("задания ленты Taddy", () => {
+  const taddyBlock = () => adBlock("taddy", 40, { place: "task" });
+  const taddy = async (options: { rows?: NetworkTaskRow[]; blocks?: ReturnType<typeof adBlock>[] } = {}) =>
+    await setup({ rows: options.rows ?? [TADDY_ROW], blocks: options.blocks ?? [taddyBlock()] });
+
+  it("экран заданий сеть не ждёт: строка ленты спрашивает задание сама; сессия одна, задание то же", async () => {
+    const { service, player, exchange, adsRepository } = await taddy();
+    expect(await service.view(player, NOON)).toEqual([
+      expect.objectContaining({ network: "taddy", delivery: "feed", title: "Taddy", offer: null, nextAt: null, reward: { coins: 80, gems: 0, shards: 0 } }),
+    ]);
+    expect(exchange.calls).toEqual([]);
+
+    const first = await service.item(player, "taddy", REQUESTER, NOON);
+    expect(first).toEqual({
+      kind: "task",
+      task: {
+        sessionId: expect.stringMatching(/^[A-Za-z0-9_-]{16}$/),
+        network: "taddy",
+        title: "Задание t-1",
+        description: "Запусти бота",
+        image: "https://cdn.taddy.example/t-1.webp",
+        action: "bot",
+        link: "https://t.tadly.pro/v1/exchange/open/t-1",
+        opened: false,
+      },
+    });
+    exchange.tasks = [feedTask("t-2"), feedTask("t-1")];
+    const again = await service.item(player, "taddy", REQUESTER, at(5));
+    expect(again).toMatchObject({ kind: "task", task: { sessionId: first.kind === "task" ? first.task.sessionId : "", title: "Задание t-1" } });
+    expect(adsRepository.sessions).toMatchObject([{ networkKey: "taddy", creativeId: "t-1", status: "pending", success: "cpa" }]);
+  });
+
+  it("строки нет: блок рекламных заданий вместо обмена, строка выключена, игрок без Telegram ID", async () => {
+    const appTask = await taddy({ blocks: [adBlock("taddy", 40, { place: "task", externalId: "app-task" })] });
+    expect(await appTask.service.view(appTask.player, NOON)).toEqual([]);
+    expect(await appTask.service.item(appTask.player, "taddy", REQUESTER, NOON)).toEqual({ kind: "none" });
+    const off = await taddy({ rows: [{ ...TADDY_ROW, active: false }] });
+    expect(await off.service.item(off.player, "taddy", REQUESTER, NOON)).toEqual({ kind: "none" });
+    const dev = await taddy();
+    expect(await dev.service.item(dev.player, "taddy", { ...REQUESTER, platformUserId: "dev-1" }, NOON)).toEqual({ kind: "none" });
+    expect(await dev.service.item(dev.player, "adsgram", REQUESTER, NOON)).toEqual({ kind: "none" });
+    expect([...appTask.exchange.calls, ...off.exchange.calls, ...dev.exchange.calls]).toEqual([]);
+    await expect(dev.service.check(dev.player, "adsgram", "s".repeat(16), REQUESTER, NOON)).rejects.toMatchObject({ code: "task_not_found" });
+  });
+
+  it("«Проверить»: сеть не видит выполнения — награды нет; видит — награда ключом сессии, следующее — после паузы", async () => {
+    const { service, player, exchange, wallet, adsRepository } = await taddy();
+    const item = await service.item(player, "taddy", REQUESTER, NOON);
+    const sessionId = item.kind === "task" ? item.task.sessionId : "";
+    expect(await service.check(player, "taddy", sessionId, REQUESTER, at(1))).toEqual({ result: "not_done", doneToday: 0, nextAt: null });
+    expect(wallet.grants).toEqual([]);
+
+    exchange.done.add("t-1");
+    expect(await service.check(player, "taddy", sessionId, REQUESTER, at(2))).toEqual({ result: "confirmed", doneToday: 1, nextAt: at(32).toISOString() });
+    expect(wallet.grants).toEqual([
+      { accountId: player.accountId, resource: "coins", amount: 80, reason: "task_reward", source: "adtask:taddy", idempotencyKey: `adtask:${player.accountId}:${sessionId}:coins`, at: at(2) },
+    ]);
+    expect(adsRepository.sessions[0]).toMatchObject({ status: "claimed", completedAt: at(2) });
+    // Двойное нажатие: награда уже выдана — ответ тот же, начисления нет, сеть не спрашиваем.
+    const checks = exchange.calls.length;
+    expect(await service.check(player, "taddy", sessionId, REQUESTER, at(3))).toMatchObject({ result: "confirmed" });
+    expect(exchange.calls).toHaveLength(checks);
+    expect(wallet.grants).toHaveLength(1);
+
+    // Пауза: строки нет, и сеть в паузе не спрашиваем.
+    expect(await service.view(player, at(5))).toEqual([expect.objectContaining({ network: "taddy", doneToday: 1, nextAt: at(32).toISOString() })]);
+    expect(await service.item(player, "taddy", REQUESTER, at(5))).toEqual({ kind: "none" });
+    expect(exchange.calls.filter((call) => call === "feed")).toHaveLength(1);
+  });
+
+  it("задание пропало из ленты: переходил — сервер спрашивает сеть и отдаёт награду; не переходил — следующее задание", async () => {
+    const clicked = await taddy();
+    const first = await clicked.service.item(clicked.player, "taddy", REQUESTER, NOON);
+    await clicked.ads.report(clicked.player.accountId, first.kind === "task" ? first.task.sessionId : "", { kind: "clicked" }, at(1));
+    clicked.exchange.tasks = [feedTask("t-2")];
+    clicked.exchange.done.add("t-1");
+    expect(await clicked.service.item(clicked.player, "taddy", REQUESTER, at(4))).toEqual({ kind: "done", doneToday: 1, nextAt: at(34).toISOString() });
+    expect(clicked.wallet.grants.map((grant) => grant.source)).toEqual(["adtask:taddy"]);
+
+    const ignored = await taddy();
+    await ignored.service.item(ignored.player, "taddy", REQUESTER, NOON);
+    ignored.exchange.tasks = [feedTask("t-2")];
+    expect(await ignored.service.item(ignored.player, "taddy", REQUESTER, at(4))).toMatchObject({ kind: "task", task: { title: "Задание t-2" } });
+    expect(ignored.adsRepository.sessions).toMatchObject([
+      { creativeId: "t-1", status: "failed", failReason: "task_gone" },
+      { creativeId: "t-2", status: "pending" },
+    ]);
+    expect(ignored.exchange.calls).not.toContain("check:t-1");
+  });
+
+  it("выполненное однажды задание второй раз не выдаётся и не награждает, даже если сеть вернула его в ленту", async () => {
+    const { service, player, exchange, wallet, adsRepository } = await taddy();
+    const first = await service.item(player, "taddy", REQUESTER, NOON);
+    exchange.done.add("t-1");
+    await service.check(player, "taddy", first.kind === "task" ? first.task.sessionId : "", REQUESTER, at(1));
+    expect(await service.item(player, "taddy", REQUESTER, at(40))).toMatchObject({ kind: "task", task: { title: "Задание t-2" } });
+
+    // Гонка: сессию с тем же заданием завели в обход выбора — подтверждение её не выполнит.
+    await adsRepository.openTask(player.accountId, "taddy", at(41), () => null);
+    const stale = adsRepository.sessions.find((session) => session.creativeId === "t-2");
+    if (stale !== undefined) stale.creativeId = "t-1";
+    expect(await service.check(player, "taddy", stale?.sessionId ?? "", REQUESTER, at(42))).toMatchObject({ result: "closed" });
+    expect(stale).toMatchObject({ status: "failed", failReason: "task_repeat" });
+    expect(wallet.grants).toHaveLength(1);
+  });
+
+  it("ленты нет — строки нет, сессия не закрывается; проверка без ответа сети — «не ответила», а не «не выполнено»", async () => {
+    const { service, ads, player, exchange, adsRepository } = await taddy();
+    exchange.down = true;
+    expect(await service.item(player, "taddy", REQUESTER, NOON)).toEqual({ kind: "none" });
+    expect(adsRepository.sessions).toEqual([]);
+
+    exchange.down = false;
+    const item = await service.item(player, "taddy", REQUESTER, at(1));
+    const sessionId = item.kind === "task" ? item.task.sessionId : "";
+    await ads.report(player.accountId, sessionId, { kind: "clicked" }, at(1));
+    exchange.down = true;
+    expect(await service.check(player, "taddy", sessionId, REQUESTER, at(2))).toMatchObject({ result: "unavailable" });
+    expect(await service.item(player, "taddy", REQUESTER, at(3))).toEqual({ kind: "none" });
+    expect(adsRepository.sessions).toMatchObject([{ status: "pending" }]);
+  });
+
+  it("истёкшая и чужая сессия — «закрыта»; переходил — строка сразу предлагает проверить", async () => {
+    const { service, ads, player, ref } = await taddy();
+    const item = await service.item(player, "taddy", REQUESTER, NOON);
+    const sessionId = item.kind === "task" ? item.task.sessionId : "";
+    const stranger = await ref("5151");
+    expect(await service.check(stranger, "taddy", sessionId, { ...REQUESTER, platformUserId: "5151" }, at(1))).toMatchObject({ result: "closed" });
+    await ads.report(player.accountId, sessionId, { kind: "clicked" }, at(1));
+    expect(await service.item(player, "taddy", REQUESTER, at(2))).toMatchObject({ kind: "task", task: { opened: true } });
+    expect(await service.check(player, "taddy", sessionId, REQUESTER, at(TASK_SESSION_TTL_MIN + 1))).toMatchObject({ result: "closed" });
+  });
+
+  it("два экрана разом — одна сессия и одно задание", async () => {
+    const { service, player, adsRepository } = await taddy();
+    const items = await Promise.all([service.item(player, "taddy", REQUESTER, NOON), service.item(player, "taddy", REQUESTER, NOON), service.item(player, "taddy", REQUESTER, NOON)]);
+    expect(new Set(items.map((item) => (item.kind === "task" ? item.task.sessionId : item.kind))).size).toBe(1);
+    expect(adsRepository.sessions).toHaveLength(1);
+  });
+
+  it("показ задания ленты сеть узнаёт один раз — как задание ленты, а не объявление", async () => {
+    const { service, ads, creatives, player } = await taddy();
+    const item = await service.item(player, "taddy", REQUESTER, NOON);
+    const sessionId = item.kind === "task" ? item.task.sessionId : "";
+    await ads.report(player.accountId, sessionId, { kind: "shown" }, at(1), REQUESTER);
+    await ads.report(player.accountId, sessionId, { kind: "shown" }, at(2), REQUESTER);
+    // Отметки уходят мимо ответа игроку — дать им дойти.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(creatives.notes).toEqual([{ kind: "shown", networkKey: "taddy", creativeId: "t-1", requester: REQUESTER, place: "task" }]);
+    await expect(ads.report(player.accountId, sessionId, { kind: "completed" }, at(3))).rejects.toMatchObject({ code: "ad_session_closed" });
+  });
+
+  it("в панели — готовность без ключа: блок «Обмен трафиком» и проверка по API", async () => {
+    const ctx = await taddy({ blocks: [] });
+    const owner = await ctx.ref(OWNER_ID);
+    expect((await ctx.service.catalog(owner))[0]?.ready).toEqual({
+      block: false,
+      blockTitle: "блок «Обмен трафиком»",
+      confirm: true,
+      confirmWith: "Проверка выполнения — по API Taddy",
+      confirmSecret: false,
+    });
+  });
+});
+
 describe("строка сети в панели", () => {
   it("готовность: блок в «Рекламе» и адрес награды; правка — в аудит, игроки видят новые числа", async () => {
     const ctx = await setup({ secret: null });
     const owner = await ctx.ref(OWNER_ID);
     const designer = await ctx.ref("31");
     await ctx.rolesRepository.grant(designer.accountId, "game_designer", null);
-    expect(await ctx.service.catalog(owner)).toEqual([expect.objectContaining({ networkKey: "adsgram", title: "AdsGram", ready: { block: true, confirm: false, confirmWith: "Адрес награды за задание AdsGram" } })]);
+    expect(await ctx.service.catalog(owner)).toEqual([
+      expect.objectContaining({
+        networkKey: "adsgram",
+        title: "AdsGram",
+        ready: { block: true, blockTitle: "Task-блок", confirm: false, confirmWith: "Адрес награды за задание AdsGram", confirmSecret: true },
+      }),
+    ]);
     ctx.secrets.value = SECRET;
     expect((await ctx.service.catalog(designer))[0]?.ready).toMatchObject({ block: true, confirm: true });
 

@@ -665,4 +665,59 @@ describe("задания по HTTP", () => {
     expect(open.json<{ data: { url: string } }>().data.url).toBe("https://example.com/p");
     expect((await app.inject({ method: "POST", url: "/api/v1/tasks/Bad%20Id/open", headers })).statusCode).toBe(400);
   });
+
+  it("лента сети: игрок для сети — из токена и запроса, язык со слов клиента; кривая сеть, сессия и лишние поля — 400", async () => {
+    const calls: { method: string; network: string; sessionId?: string; requester: unknown }[] = [];
+    const networks = {
+      view: async () => [],
+      item: async (_account: unknown, network: string, requester: unknown) => {
+        calls.push({ method: "item", network, requester });
+        return { kind: "none" };
+      },
+      check: async (_account: unknown, network: string, sessionId: string, requester: unknown) => {
+        calls.push({ method: "check", network, sessionId, requester });
+        return { result: "not_done", doneToday: 0, nextAt: null };
+      },
+    };
+    @Module({
+      controllers: [TasksController],
+      providers: [
+        { provide: APP_CONFIG, useValue: loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv) },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: TasksService, useValue: setup().service },
+        { provide: NetworkTasksService, useValue: networks },
+        RateLimiter,
+        AuthGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    const token = await signAccessToken({ accountId: ME, platform: "telegram", platformUserId: "4242" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    const headers = { authorization: `Bearer ${token}`, "user-agent": "Telegram-Android/11" };
+    const sessionId = "AbCdEfGhIjKlMn_-";
+
+    expect((await app.inject({ method: "POST", url: "/api/v1/tasks/networks/taddy/item", payload: {} })).statusCode).toBe(401);
+    const item = await app.inject({ method: "POST", url: "/api/v1/tasks/networks/taddy/item", headers, payload: { language: "pt-BR", premium: true } });
+    expect(item.statusCode).toBe(200);
+    expect(item.json()).toEqual({ data: { kind: "none" } });
+    const check = await app.inject({ method: "POST", url: "/api/v1/tasks/networks/taddy/check", headers, payload: { sessionId } });
+    expect(check.json()).toEqual({ data: { result: "not_done", doneToday: 0, nextAt: null } });
+    expect(calls).toEqual([
+      { method: "item", network: "taddy", requester: { platformUserId: "4242", ip: "127.0.0.1", userAgent: "Telegram-Android/11", language: "pt-BR", premium: true } },
+      { method: "check", network: "taddy", sessionId, requester: { platformUserId: "4242", ip: "127.0.0.1", userAgent: "Telegram-Android/11", language: null, premium: null } },
+    ]);
+
+    const bad = [
+      { url: "/api/v1/tasks/networks/Taddy!/item", payload: {} },
+      { url: "/api/v1/tasks/networks/taddy/item", payload: { language: "<script>" } },
+      { url: "/api/v1/tasks/networks/taddy/item", payload: { reward: 1000 } },
+      { url: "/api/v1/tasks/networks/taddy/check", payload: {} },
+      { url: "/api/v1/tasks/networks/taddy/check", payload: { sessionId: "short" } },
+      { url: "/api/v1/tasks/networks/taddy/check", payload: { sessionId, done: true } },
+    ];
+    for (const request of bad) expect((await app.inject({ method: "POST", headers, ...request })).statusCode).toBe(400);
+    expect(calls).toHaveLength(2);
+  });
 });
