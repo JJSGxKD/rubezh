@@ -13,7 +13,6 @@ import {
   formOf,
   formSchema,
   layoutHint,
-  localInput,
   randomCode,
   removePromoCode,
   rewardText,
@@ -23,7 +22,7 @@ import {
   type PromoCodeForm,
   type PromoCodeLimits,
 } from "../src/api/promo-codes";
-import { formatNumber, plural } from "../src/format";
+import { formatNumber, localInput, plural } from "../src/format";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
