@@ -320,7 +320,10 @@ WP44). `account_restricted` и `account_restriction_lifted`, которые пл
 комментарий команды остаётся в них же и в аналитику не идёт. В лог сервера
 пишутся наложение и снятие теми же именами, отказ в момент действия —
 `restriction_refused` (вид и молча ли), удержанная награда —
-`referral_reward_withheld` и `network_task_reward_withheld`.
+`referral_reward_withheld` и `network_task_reward_withheld`. Рейтинг —
+`rating_restricted` и `rating_restored` (из досок и обратно) и
+`rating_restricted_swept`, если обход убрал вернувшегося гонкой; забег,
+сданный под ограничением, помечен в `run.rating_restricted`.
 
 **Воронка рекламы на сервере — таблица, а не события** (`35-stage4-plan.md`,
 §3.7, WP12). Сервер выдаёт показ и отмечает его шаги в `ad_session`: выдан,
