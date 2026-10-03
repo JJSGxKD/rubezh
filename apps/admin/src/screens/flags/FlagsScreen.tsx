@@ -6,6 +6,8 @@ import { formatDateTime } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
+import { hrefOf } from "../../routes";
+import { useSession } from "../../state/use-session";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
@@ -22,6 +24,8 @@ function toInput(flag: FlagRow): FlagInput {
  */
 export function FlagsScreen() {
   const { state, reload } = useApi(() => fetchFlags(api), []);
+  // Сравнение долей живёт в «Воронке» — ссылка только тем, кому она открыта.
+  const canCompare = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("analytics.gameplay.view"));
   const [input, setInput] = useState<FlagInput>(EMPTY);
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -157,6 +161,11 @@ export function FlagsScreen() {
                         Изменить
                       </Button>
                       <Button onClick={() => setRemoving(row.key)}>Снять</Button>
+                      {canCompare ? (
+                        <a className="self-center whitespace-nowrap text-sm text-accent hover:underline" href={hrefOf({ section: "funnel", id: row.key })}>
+                          Сравнить доли
+                        </a>
+                      ) : null}
                     </div>
                   ),
               },

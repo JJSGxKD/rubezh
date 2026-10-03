@@ -28,7 +28,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   overview: () => <OverviewScreen />,
   players: (id) => <PlayersScreen id={id} />,
   review: () => <ReviewScreen />,
-  funnel: () => <FunnelScreen />,
+  funnel: (id) => <FunnelScreen focus={id} />,
   roles: () => <RolesScreen />,
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
