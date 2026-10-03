@@ -108,13 +108,11 @@ export const playerCardSchema = z.object({
   testNotice: z.object({ version: z.number(), acceptedAt: iso, firstAcceptedAt: iso }).nullable().optional(),
 });
 
-export const banResultSchema = z.object({ account: playerRowSchema, revokedSessions: z.number() });
 export const adjustResultSchema = z.object({ applied: z.number(), balance: z.number(), duplicate: z.boolean() });
 
 export type PlayerRow = z.infer<typeof playerRowSchema>;
 export type PlayerCard = z.infer<typeof playerCardSchema>;
 export type PlayerPurchase = z.infer<typeof purchaseSchema>;
-export type BanResult = z.infer<typeof banResultSchema>;
 export type AdjustResult = z.infer<typeof adjustResultSchema>;
 
 /** Ресурсы кошелька — в порядке и с именами, как их видит игрок. Неизвестный показывается своим id. */
@@ -146,14 +144,6 @@ export function searchPlayers(api: AdminApi, query: string): Promise<ApiResult<{
 
 export function fetchPlayerCard(api: AdminApi, accountId: string): Promise<ApiResult<PlayerCard>> {
   return api.request(`/players/${encodeURIComponent(accountId)}`, { schema: playerCardSchema });
-}
-
-export function banPlayer(api: AdminApi, accountId: string, reason: string): Promise<ApiResult<BanResult>> {
-  return api.request(`/players/${encodeURIComponent(accountId)}/ban`, { method: "POST", body: { reason }, schema: banResultSchema });
-}
-
-export function unbanPlayer(api: AdminApi, accountId: string): Promise<ApiResult<BanResult>> {
-  return api.request(`/players/${encodeURIComponent(accountId)}/unban`, { method: "POST", schema: banResultSchema });
 }
 
 export function adjustWallet(api: AdminApi, accountId: string, adjust: WalletAdjust): Promise<ApiResult<AdjustResult>> {

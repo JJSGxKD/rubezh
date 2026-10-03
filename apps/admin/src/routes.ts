@@ -35,7 +35,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
   {
     title: "Поддержка",
     sections: [
-      { id: "players", title: "Игроки", hint: "Найти игрока и открыть карточку: забеги, покупки, кошелёк, блокировка", permission: "players.view" },
+      { id: "players", title: "Игроки", hint: "Найти игрока и открыть карточку: забеги, покупки, кошелёк, ограничения", permission: "players.view" },
       { id: "review", title: "Разбор забегов", hint: "Забеги, которые антифрод счёл подозрительными или отклонил", permission: "players.view" },
     ],
   },

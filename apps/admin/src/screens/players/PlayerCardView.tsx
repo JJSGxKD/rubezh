@@ -1,5 +1,6 @@
 import { api } from "../../services";
 import { fetchPlayerCard, FUNNEL_MILESTONES, purchaseLabel, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
+import { fetchRestrictions, type Restriction } from "../../api/restrictions";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
@@ -7,7 +8,8 @@ import { Badge, Button, DataTable, ErrorNotice, KeyValue, Loading, Panel } from 
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
-import { BanPanel, MessagePanel, WalletAdjustPanel } from "./PlayerActions";
+import { MessagePanel, WalletAdjustPanel } from "./PlayerActions";
+import { RestrictionsPanel } from "./RestrictionsPanel";
 import { SocialPanel } from "./SocialPanel";
 
 /**
@@ -17,7 +19,14 @@ import { SocialPanel } from "./SocialPanel";
  */
 export function PlayerCardView({ accountId }: { accountId: string }) {
   const { state, reload } = useApi(() => fetchPlayerCard(api, accountId), [accountId]);
+  const restrictions = useApi(() => fetchRestrictions(api, accountId), [accountId]);
   const view = useSession((session) => session.view);
+  // Блокировка — тоже ограничение: после наложения и снятия обновляются и шапка, и список.
+  const changed = () => {
+    reload();
+    restrictions.reload();
+  };
+  const active = restrictions.state.status === "ok" ? restrictions.state.data.restrictions.filter((row) => row.state === "active") : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -28,14 +37,14 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok" ? (
         <>
-          <Header card={state.data} />
+          <Header card={state.data} active={active} />
+          <RestrictionsPanel accountId={accountId} playerName={state.data.account.displayName} restrictions={restrictions.state} onChanged={changed} />
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Funnel card={state.data} />
             <Acquisition card={state.data} />
             <Runs card={state.data} />
             <Wallet card={state.data} />
             <SocialPanel accountId={accountId} />
-            {can(view, "players.ban") ? <BanPanel card={state.data} onChanged={reload} /> : null}
             {can(view, "players.message") ? <MessagePanel card={state.data} /> : null}
             {can(view, "players.wallet.adjust") ? <WalletAdjustPanel card={state.data} onChanged={reload} /> : null}
           </div>
@@ -46,11 +55,21 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
   );
 }
 
-function Header({ card }: { card: PlayerCard }) {
+function Header({ card, active }: { card: PlayerCard; active: readonly Restriction[] }) {
   const { account, progress } = card;
   const share = progress.xpForNext === null || progress.xpForNext === 0 ? 1 : Math.min(1, progress.xpIntoLevel / progress.xpForNext);
+  // Блокировку шапка знает из аккаунта, остальное — из списка ограничений: модератор видит их, не листая карточку.
+  const limited = active.filter((row) => row.kind !== "all");
   return (
-    <Panel title={account.displayName} actions={account.banned === null ? null : <Badge tone="danger">заблокирован {formatDateTime(account.banned.at)}</Badge>}>
+    <Panel
+      title={account.displayName}
+      actions={
+        <span className="flex flex-wrap gap-1.5">
+          {limited.length === 0 ? null : <Badge tone="warning">закрыто: {limited.map((row) => (row.notify ? row.title : `${row.title} (молча)`)).join(", ")}</Badge>}
+          {account.banned === null ? null : <Badge tone="danger">заблокирован {formatDateTime(account.banned.at)}</Badge>}
+        </span>
+      }
+    >
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <KeyValue
           items={[
