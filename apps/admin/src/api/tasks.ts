@@ -95,6 +95,8 @@ const taskSchema = z.object({
   active: z.boolean(),
   /** лимит выполнений партнёрской цели; сервер до лимита поля не отдавал */
   limit: z.number().nullable().default(null),
+  /** картинка 1:1 партнёрской цели — id из `media`; сервер до картинок поля не отдавал */
+  image: z.string().nullable().default(null),
 });
 
 export type TaskDef = z.infer<typeof taskSchema>;
@@ -187,7 +189,7 @@ export function togglePlatform(params: TaskParams | null, platform: PartnerPlatf
  * поле формы сохраняет.
  */
 export function withKind(task: TaskDef, kind: string): TaskDef {
-  if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null, limit: null };
+  if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null, limit: null, image: null };
   const url = task.params?.url ?? "";
   const kept = partnerPlatforms(task.params);
   const channelPlatform = task.params?.platform ?? CHANNEL_PLATFORMS.find((platform) => kept.includes(platform)) ?? "telegram";
@@ -245,6 +247,7 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if (PARTNER_KINDS.has(task.kind)) return partnerProblem(task);
   if (task.params !== null) return "Ссылка — только у партнёрских целей";
   if (task.limit !== null) return "Лимит выполнений — только у партнёрских целей";
+  if (task.image !== null) return "Картинка — только у партнёрских целей";
   return null;
 }
 

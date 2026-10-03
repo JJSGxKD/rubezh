@@ -28,7 +28,7 @@ import { fakeFetch, json } from "./helpers";
 // каталог — по срокам в порядке показа игроку.
 
 function task(patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, limit: null, ...patch };
+  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, limit: null, image: null, ...patch };
 }
 
 describe("задания в панели", () => {
@@ -109,6 +109,26 @@ describe("задания в панели", () => {
 
       const old = await fetchTasks(api);
       expect(old.ok && old.data.tasks[0]?.params).toBeNull();
+    });
+  });
+
+  describe("картинка партнёрской цели", () => {
+    const channel = (patch: Partial<TaskDef> = {}) =>
+      task({ taskId: "ach_channel", period: "achievement", kind: "channel", target: 1, coins: 0, gems: 15, params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" }, ...patch });
+
+    it("картинка — у партнёрской цели; у цели забега её нет, смена вида её снимает; уходит на сервер, старый сервер без неё читается", async () => {
+      const image = "a".repeat(64);
+      expect(taskProblem(channel({ image }), true, [])).toBeNull();
+      expect(taskProblem(task({ taskId: "x_1", image }), true, [])).toBe("Картинка — только у партнёрских целей");
+      expect(withKind(channel({ image }), "kills").image).toBeNull();
+      expect(withKind(channel({ image }), "link").image).toBe(image);
+
+      const { fetch, calls } = fakeFetch(json(200, { data: channel({ image }) }), json(200, { data: { tasks: [{ ...channel(), image: undefined }], kinds: ["channel"], periods: ["achievement"] } }));
+      const api = new AdminApi(fetch);
+      await saveTask(api, channel({ image }));
+      expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ image });
+      const old = await fetchTasks(api);
+      expect(old.ok && old.data.tasks[0]?.image).toBeNull();
     });
   });
 
