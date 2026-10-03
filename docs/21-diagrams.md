@@ -93,6 +93,7 @@ erDiagram
     ACCOUNT ||--o{ TASK_RUN : "забеги, засчитанные заданиям"
     ACCOUNT ||--o| TEST_NOTICE : "принял предупреждение о тесте"
     AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
+    AD_NETWORK ||--o| NETWORK_TASK : "строка её заданий во вкладке «Партнёры»"
     AD_BLOCK ||--o{ AD_SESSION : "выдан в показ"
     ACCOUNT ||--o{ AD_SESSION : "показы рекламы"
     RUN ||--o{ RUN_AD_CONTINUE : "продолжен за рекламу"
@@ -670,6 +671,18 @@ erDiagram
         datetime updated_at
     }
 
+    NETWORK_TASK {
+        string network_key PK "FK ad_network; строки заводит миграция"
+        boolean active "выключено — строки сети у игроков нет"
+        int daily_cap "1–50 заданий за игровые сутки"
+        int pause_min "5–1440 минут после выполненного"
+        int coins
+        int gems
+        int shards "обычные осколки; награда не пустая"
+        datetime updated_at
+        uuid updated_by "nullable, без FK: null — строка из миграции"
+    }
+
     AD_BLOCK {
         uuid block_id PK
         string network_key FK
@@ -943,6 +956,15 @@ erDiagram
   Сессия без блока — пропуск рекламы (VIP, §3.6): выдана сразу выполненной,
   с именем пропуска вместо сети, и забирается хозяином места как обычная, в
   тот же кулдаун; иначе как выполненный досмотр база её не примет.
+- **`NETWORK_TASK` — задания рекламных сетей** (`35-stage4-plan.md` WP13,
+  часть 6, Р80): строка на сеть — сколько её заданий игрок получит за
+  игровые сутки, пауза после выполненного и награда. Сами задания приходят
+  от сети, выполнение — сессией места `task`: открытая сессия сети у игрока
+  одна, новую заводит модуль заданий по истории места под той же
+  блокировкой, что забор, и выполненной её делает только подтверждение сети
+  (адрес награды AdsGram). Потолок и пауза считаются по `completed_at`
+  сессий места с начала вчерашних суток — счётчиков рядом нет. VIP задания
+  не пропускает: пропуск заменяет ролик, а не подписку.
 - **`RUN_AD_CONTINUE` — второй шанс за рекламу** (`35-stage4-plan.md` WP11,
   Р4): вторая книга продолжений забега рядом с `PURCHASE`. Хозяин места
   `second_chance` — модуль забегов: забирает сессию показа и записывает
@@ -1596,7 +1618,7 @@ flowchart LR
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
 
-    ADSGRAMAPI["AdsGram<br/>api.adsgram.ai/confirm_conversion"]
+    ADSGRAMAPI["AdsGram<br/>api.adsgram.ai/confirm_conversion;<br/>зовёт адрес награды задания"]
 
     TGAPI["Telegram Bot API"]
 
@@ -1692,6 +1714,7 @@ flowchart LR
     RUNS -. "второй шанс: забор сессии места second_chance" .-> ADS
     RUNS -. слушатели записанного забега .-> PAY
     ADS -- "ad_network, ad_block, ad_session" --> PG
+    ADSGRAMAPI -. "адрес награды задания: /api/v1/ads/adsgram/reward, секрет в пути" .-> CADDY
     ADMINAPI -. "сети, блоки, воронка показов" .-> ADS
     WHEEL -. "забор сессии места wheel_spin" .-> ADS
     REF --> PG
@@ -1762,7 +1785,10 @@ flowchart LR
     RUNS -. "записанный забег, RunsHooks" .-> TASKS
     TASKS -. "награда ключом задания и срока" .-> WALLET
     BADGES -. "награды к выдаче" .-> TASKS
-    ADMINAPI -. "каталог заданий" .-> TASKS
+    ADMINAPI -. "каталог заданий и строки сетей" .-> TASKS
+    TASKS -- "network_task" --> PG
+    TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
+    ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
@@ -2044,6 +2070,52 @@ sequenceDiagram
 следующей должен закончиться забег не короче минуты, а пауза между
 показами — не меньше минуты. Числа политики — настройки панели, доля
 игроков — флаг `ads.interstitial` (`35-stage4-plan.md` WP12, часть 10).
+
+### 4.3.3 Задание рекламной сети — AdsGram (этап 4, WP13, часть 6)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant T as tasks
+    participant AD as ads
+    participant DB as PostgreSQL
+    participant S as SDK AdsGram
+    participant N as Сервер AdsGram
+    participant W as wallet
+
+    C->>T: GET /api/v1/tasks
+    T->>AD: Task-блок сети для площадки, адрес награды создан?
+    T->>AD: сессия задания: открытая или новая
+    AD->>DB: блокировка места task; открытая сессия сети?
+    alt открытой нет
+        AD->>DB: история места с начала вчерашних суток
+        Note over T,AD: потолок суток и пауза — правило строки сети
+        AD->>DB: INSERT ad_session (pending, cpa), если правило пускает
+    end
+    T-->>C: { tasks, networks: [{ network, offer | null, nextAt }] }
+    C->>S: <adsgram-task> с нашими слотами: награда, «Перейти», «Забрать», «Готово»
+    alt у сети нет задания
+        S-->>C: onBannerNotFound — строки нет
+        C->>AD: result { failed: no_fill }
+    else игрок выполнил задание
+        S->>N: проверка выполнения
+        N->>AD: GET /api/v1/ads/adsgram/reward/секрет/id в Telegram
+        AD->>DB: блокировка места; открытая сессия сети → completed
+        AD->>T: AdTaskHooks: подтверждено
+        T->>W: награда строки ключом сессии
+        T->>AD: забор сессии
+        AD-->>N: 200
+        S-->>C: reward — элемент снимается, строка «проверяем»
+        C->>T: GET /api/v1/tasks, пока doneToday не вырастет
+    end
+```
+
+Награду даёт только подтверждение сети: шаг клиента «досмотрено» сессию
+задания не выполнит — её условие успеха целевое действие. Подтверждение
+без открытой сессии не даёт ничего, повтор после выдачи — тоже: сессия
+уже забрана, а следующая заводится не раньше паузы. Сорвалась выдача — сеть
+получает ошибку и повторяет, а не повторит — награду дожмёт следующее
+открытие экрана заданий тем же ключом сессии.
 
 ### 4.4 Публикация конфигурации из админки
 

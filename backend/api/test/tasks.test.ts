@@ -20,6 +20,7 @@ import {
   TaskNotOpenedError,
   TaskShapeLockedError,
 } from "../src/modules/tasks/tasks-errors.js";
+import { NetworkTasksService } from "../src/modules/tasks/network-tasks.service.js";
 import { RUN_KINDS, countsForTasks, rewardReason, taskDefSchema, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { TasksController } from "../src/modules/tasks/tasks.controller.js";
 import { ACHIEVEMENT_PERIOD_START, type TaskDelta, type TaskProgressRow, type TasksRepository } from "../src/modules/tasks/tasks.repository.js";
@@ -616,6 +617,7 @@ describe("задания по HTTP", () => {
         { provide: APP_CONFIG, useValue: loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv) },
         { provide: REDIS, useValue: unavailableRedis },
         { provide: TasksService, useValue: ctx.service },
+        { provide: NetworkTasksService, useValue: { view: async () => [] } },
         RateLimiter,
         AuthGuard,
       ],
@@ -630,6 +632,7 @@ describe("задания по HTTP", () => {
     expect((await app.inject({ method: "GET", url: "/api/v1/tasks" })).statusCode).toBe(401);
     const view = await app.inject({ method: "GET", url: "/api/v1/tasks", headers });
     expect(view.statusCode).toBe(200);
+    expect(view.json<{ data: { tasks: unknown[]; networks: unknown[] } }>().data).toMatchObject({ tasks: expect.any(Array), networks: [] });
     expect(view.json<{ data: { tasks: unknown[] } }>().data.tasks).toHaveLength(6);
 
     expect((await app.inject({ method: "POST", url: "/api/v1/tasks/DROP%20TABLE/claim", headers })).statusCode).toBe(400);

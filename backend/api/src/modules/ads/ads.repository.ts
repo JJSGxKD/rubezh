@@ -5,7 +5,7 @@ import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import { type Tx } from "../wallet/wallet-ledger.js";
-import { AD_DEVICES, AD_PLACES, AD_SUCCESS, type AdDevice, type AdPlace, type AdSuccess, type PlaceHistoryEntry } from "./ads-rules.js";
+import { AD_DEVICES, AD_PLACES, AD_SUCCESS, CLAIM_WINDOW_MIN, type AdDevice, type AdPlace, type AdSuccess, type PlaceHistoryEntry } from "./ads-rules.js";
 import type { InterstitialFacts } from "./interstitial-policy.js";
 
 /**
@@ -108,6 +108,18 @@ export interface InterstitialQuery {
   rewardedSince: Date;
 }
 
+/** Сессия задания сети: открытая — та же, что раньше; `created` — заведена этим вызовом. */
+export interface TaskSessionOutcome {
+  session: AdSessionRow;
+  created: boolean;
+}
+
+/** Подтверждённое сетью задание; `repeat` — сессия выполнена раньше, но награда за неё ещё не выдана. */
+export interface ConfirmedTask {
+  session: AdSessionRow;
+  repeat: boolean;
+}
+
 export const ADS_REPOSITORY = Symbol("ADS_REPOSITORY");
 
 export interface AdsRepository {
@@ -133,6 +145,20 @@ export interface AdsRepository {
    * читаются под блокировкой, и две сессии разом не проскочат кулдаун.
    */
   claim(sessionId: string, accountId: string, place: AdPlace, at: Date, verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict): Promise<ClaimOutcome>;
+  /**
+   * Сессия задания сети в месте `task`: открытая сессия сети отдаётся снова,
+   * новую заводит `create` по истории места — или не заводит (`null`).
+   * Под той же блокировкой места, что забор: два экрана разом не заведут
+   * две сессии, и обе не проскочат потолок хозяина.
+   */
+  openTask(accountId: string, networkKey: string, at: Date, create: (history: PlaceHistory) => NewAdSession | null): Promise<TaskSessionOutcome | null>;
+  /**
+   * Сеть подтвердила задание игрока: самая свежая открытая сессия сети
+   * становится выполненной. Открытой нет, а выполненная не забрана — она
+   * отдаётся снова (`repeat`): прошлая выдача награды сорвалась, и сеть
+   * повторила подтверждение. `null` — подтверждать нечего.
+   */
+  confirmTask(accountId: string, networkKey: string, at: Date): Promise<ConfirmedTask | null>;
 }
 
 const blockSchema = z.object({
@@ -360,6 +386,64 @@ export class PrismaAdsRepository implements AdsRepository {
         at,
       );
       return claimed === undefined ? { status: "not_completed" } : { status: "claimed", session: toSession(claimed), repeat: false };
+    }, TX_OPTIONS);
+  }
+
+  async openTask(accountId: string, networkKey: string, at: Date, create: (history: PlaceHistory) => NewAdSession | null): Promise<TaskSessionOutcome | null> {
+    return await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ads:${accountId}:task`}))`;
+      const [open] = await tx.$queryRawUnsafe<unknown[]>(
+        `SELECT ${SESSION_COLUMNS} FROM ad_session
+         WHERE account_id = $1::uuid AND place = 'task' AND network_key = $2 AND status IN ('pending', 'shown') AND expires_at > $3
+         ORDER BY created_at DESC LIMIT 1`,
+        accountId,
+        networkKey,
+        at,
+      );
+      if (open !== undefined) return { session: toSession(open), created: false };
+      const session = create(await historyWithin(tx, accountId, "task", at));
+      if (session === null) return null;
+      const [inserted] = await tx.$queryRawUnsafe<unknown[]>(
+        `INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, expires_at)
+         VALUES ($1, $2::uuid, 'task', $3::uuid, $4, $5::"AdSuccess", 'pending', $6, $7)
+         RETURNING ${SESSION_COLUMNS}`,
+        session.sessionId,
+        accountId,
+        session.block.blockId,
+        session.block.networkKey,
+        session.block.success,
+        session.createdAt,
+        session.expiresAt,
+      );
+      return { session: toSession(inserted), created: true };
+    }, TX_OPTIONS);
+  }
+
+  async confirmTask(accountId: string, networkKey: string, at: Date): Promise<ConfirmedTask | null> {
+    return await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ads:${accountId}:task`}))`;
+      // Открытая — первой: она и есть только что выполненное задание.
+      // Выполненная без забора — после: её подтверждение сеть повторила.
+      const [raw] = await tx.$queryRawUnsafe<unknown[]>(
+        `SELECT ${SESSION_COLUMNS} FROM ad_session
+         WHERE account_id = $1::uuid AND place = 'task' AND network_key = $2
+           AND ((status IN ('pending', 'shown') AND expires_at > $3) OR (status = 'completed' AND completed_at > $3::timestamptz - make_interval(mins => $4::int)))
+         ORDER BY status = 'completed', created_at DESC LIMIT 1`,
+        accountId,
+        networkKey,
+        at,
+        CLAIM_WINDOW_MIN.cpa,
+      );
+      if (raw === undefined) return null;
+      const found = toSession(raw);
+      if (found.status === "completed") return { session: found, repeat: true };
+      const [done] = await tx.$queryRawUnsafe<unknown[]>(
+        `UPDATE ad_session SET status = 'completed', completed_at = $2, shown_at = COALESCE(shown_at, $2)
+         WHERE session_id = $1 AND status IN ('pending', 'shown') RETURNING ${SESSION_COLUMNS}`,
+        found.sessionId,
+        at,
+      );
+      return done === undefined ? null : { session: toSession(done), repeat: false };
     }, TX_OPTIONS);
   }
 }

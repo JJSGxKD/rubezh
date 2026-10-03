@@ -1,5 +1,5 @@
 import type { AdCreative, AdCreativeSource, AdRequester, CreativeFetch } from "../../src/modules/ads/ad-creatives.js";
-import type { AdPlace } from "../../src/modules/ads/ads-rules.js";
+import { CLAIM_WINDOW_MIN, type AdPlace } from "../../src/modules/ads/ads-rules.js";
 import { formatFor, profileOf } from "../../src/modules/ads/ad-networks.js";
 import { InterstitialGate, type FlagReader } from "../../src/modules/ads/interstitial-gate.js";
 import type { InterstitialFacts } from "../../src/modules/ads/interstitial-policy.js";
@@ -12,10 +12,12 @@ import type {
   AdsRepository,
   ClaimOutcome,
   ClaimVerdict,
+  ConfirmedTask,
   InterstitialQuery,
   NewAdSession,
   NewPassSession,
   PlaceHistory,
+  TaskSessionOutcome,
 } from "../../src/modules/ads/ads.repository.js";
 
 /**
@@ -182,9 +184,7 @@ export class MemoryAds implements AdsRepository {
   }
 
   async claim(sessionId: string, accountId: string, place: AdPlace, time: Date, verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict): Promise<ClaimOutcome> {
-    const run = this.queue.then(async () => await this.claimLocked(sessionId, accountId, place, time, verdict));
-    this.queue = run.catch(() => undefined);
-    return await run;
+    return await this.locked(async () => await this.claimLocked(sessionId, accountId, place, time, verdict));
   }
 
   private async claimLocked(sessionId: string, accountId: string, place: AdPlace, time: Date, verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict): Promise<ClaimOutcome> {
@@ -197,6 +197,48 @@ export class MemoryAds implements AdsRepository {
     session.claimedAt = time;
     session.status = "claimed";
     return { status: "claimed", session: { ...session }, repeat: false };
+  }
+
+  async openTask(accountId: string, networkKey: string, time: Date, create: (history: PlaceHistory) => NewAdSession | null): Promise<TaskSessionOutcome | null> {
+    return await this.locked(async () => {
+      const open = this.taskSessions(accountId, networkKey).find((session) => (session.status === "pending" || session.status === "shown") && session.expiresAt > time);
+      if (open !== undefined) return { session: { ...open }, created: false };
+      const session = create(await this.history(accountId, "task", time));
+      if (session === null) return null;
+      this.push(session, "pending", null);
+      const stored = this.sessions.at(-1);
+      if (stored === undefined) throw new Error("сессия не записалась");
+      return { session: { ...stored }, created: true };
+    });
+  }
+
+  async confirmTask(accountId: string, networkKey: string, time: Date): Promise<ConfirmedTask | null> {
+    return await this.locked(async () => {
+      const sessions = this.taskSessions(accountId, networkKey);
+      const open = sessions.find((session) => (session.status === "pending" || session.status === "shown") && session.expiresAt > time);
+      if (open !== undefined) {
+        open.status = "completed";
+        open.completedAt = time;
+        open.shownAt ??= time;
+        return { session: { ...open }, repeat: false };
+      }
+      const waiting = sessions.find((session) => session.status === "completed" && session.completedAt !== null && time.getTime() - session.completedAt.getTime() < CLAIM_WINDOW_MIN.cpa * 60_000);
+      return waiting === undefined ? null : { session: { ...waiting }, repeat: true };
+    });
+  }
+
+  /** Сессии сети в месте `task`, свежие — первыми. */
+  private taskSessions(accountId: string, networkKey: string): StoredSession[] {
+    return this.sessions
+      .filter((session) => session.accountId === accountId && session.place === "task" && session.networkKey === networkKey)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  /** Как блокировка места в базе: вызовы игрока идут по одному. */
+  private async locked<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(work);
+    this.queue = run.catch(() => undefined);
+    return await run;
   }
 
   /** Как выполнение подтвердил бы сервер: постбэк сети или свой редирект клика. */
