@@ -221,7 +221,7 @@ function TaskRow(props: { index: number; task: TaskItem; claiming: boolean; noti
   const opens = waitsAction && isOpenKind(task.kind);
   const name = achievementName(task);
   const title = task.title ?? name ?? goalText(task);
-  const hint = task.title === null && name !== null ? goalText(task) : null;
+  const hint = task.title === null && name !== null ? goalText(task) : (repeatHint(task) ?? null);
 
   return (
     <Card appearIndex={props.index} stripe={claimable ? "accent" : undefined}>
@@ -303,6 +303,18 @@ function ProgressLine(props: { task: TaskItem }): ReactNode {
       </span>
     </div>
   );
+}
+
+/**
+ * Повтор партнёрской подписки (Р82): награда за каждые сутки или неделю,
+ * пока игрок подписан. Забрал — когда следующая; время считается при
+ * отрисовке, без тикающего таймера, как у строки сброса.
+ */
+function repeatHint(task: TaskItem): string | null {
+  if (tabOf(task) !== "partner" || task.period === "achievement") return null;
+  // Число с единицей — неразрывно: «7 ч» не должно разъехаться по строкам.
+  if (task.claimed) return t("tasks.repeat.next", { time: formatCountdown(msUntilReset(Date.now(), task.period)).replace(/(\d) /g, "$1\u00a0") });
+  return t(task.period === "daily" ? "tasks.repeat.daily" : "tasks.repeat.weekly");
 }
 
 /** Имя достижения из словаря — у достижений по умолчанию; у своих из панели — заголовок каталога. */

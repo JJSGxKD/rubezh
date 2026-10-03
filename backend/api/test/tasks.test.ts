@@ -250,13 +250,15 @@ function channelTask(patch: Partial<TaskDef> = {}): TaskDef {
 }
 
 describe("цель «канал»: схема", () => {
-  it("канал — только у цели «канал» и только достижением с целью 1", () => {
+  it("канал — только у цели «канал», с целью 1; разово, каждый день или каждую неделю", () => {
     expect(taskDefSchema.safeParse(channelTask()).success).toBe(true);
     expect(taskDefSchema.safeParse(channelTask({ params: null })).success).toBe(false);
     expect(taskDefSchema.safeParse(def("daily_runs", { params: { ...CHANNEL } })).success).toBe(false);
-    // ежедневная подписка — одна и та же награда за ту же подписку каждый день
-    expect(taskDefSchema.safeParse(channelTask({ period: "daily" })).success).toBe(false);
+    // повтор подписки — награда за то, что игрок остался: каждый срок спрашивает бот
+    expect(taskDefSchema.safeParse(channelTask({ taskId: "channel_daily", period: "daily" })).success).toBe(true);
+    expect(taskDefSchema.safeParse(channelTask({ taskId: "channel_weekly", period: "weekly" })).success).toBe(true);
     expect(taskDefSchema.safeParse(channelTask({ target: 2 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(channelTask({ period: "daily", target: 3 })).success).toBe(false);
   });
 
   it("строка панели без поля параметров — цель забега, а канал без них не пройдёт", () => {
@@ -426,6 +428,39 @@ describe("цель «канал»: проверка площадкой", () => {
     const max: AccountRef = { accountId: ME, platform: "max", platformUserId: "555000111" };
     expect(byId(await ctx.service.view(max, NOON), "ach_channel")).toMatchObject({ link: CHANNEL.url });
     await expect(ctx.service.claim(max, "ach_channel", NOON)).rejects.toBeInstanceOf(TaskCheckUnavailableError);
+  });
+
+  it("повтор каждый день: каждые сутки — свой забор и свой вопрос боту; отписался — награды нет, вернулся — снова есть", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(channelTask({ taskId: "channel_daily", period: "daily", gems: 0, coins: 40 }));
+    join(ctx);
+    expect(await ctx.service.claim(PLAYER, "channel_daily", NOON)).toMatchObject({ claimed: true, credited: { coins: 40 } });
+    // те же сутки — забрано, бот не нужен
+    expect(await ctx.service.claim(PLAYER, "channel_daily", new Date(NOON.getTime() + HOUR))).toMatchObject({ claimed: false });
+    expect(ctx.membership.asked).toHaveLength(1);
+
+    const tomorrow = new Date(NOON.getTime() + DAY);
+    expect(byId(await ctx.service.view(PLAYER, tomorrow), "channel_daily")).toMatchObject({ category: "partner", period: "daily", done: false, claimed: false });
+    ctx.membership.members.clear();
+    await expect(ctx.service.claim(PLAYER, "channel_daily", tomorrow)).rejects.toBeInstanceOf(TaskNotJoinedError);
+    join(ctx);
+    expect(await ctx.service.claim(PLAYER, "channel_daily", tomorrow)).toMatchObject({ claimed: true });
+    expect(ctx.wallet.grants.map((grant) => [grant.reason, grant.idempotencyKey])).toEqual([
+      ["task_reward", `task:${ME}:channel_daily:2026-09-30:coins`],
+      ["task_reward", `task:${ME}:channel_daily:2026-10-01:coins`],
+    ]);
+  });
+
+  it("повтор каждую неделю: в ту же неделю второй награды нет, с понедельника — снова", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(channelTask({ taskId: "channel_weekly", period: "weekly" }));
+    join(ctx);
+    expect(await ctx.service.claim(PLAYER, "channel_weekly", NOON)).toMatchObject({ claimed: true });
+    // воскресенье той же недели
+    expect(await ctx.service.claim(PLAYER, "channel_weekly", new Date(NOON.getTime() + 4 * DAY))).toMatchObject({ claimed: false });
+    // понедельник следующей
+    expect(await ctx.service.claim(PLAYER, "channel_weekly", new Date(NOON.getTime() + 5 * DAY))).toMatchObject({ claimed: true });
+    expect(ctx.wallet.grants.map((grant) => grant.idempotencyKey)).toEqual([`task:${ME}:channel_weekly:2026-09-28:gems`, `task:${ME}:channel_weekly:2026-10-05:gems`]);
   });
 
   it("забег цель «канал» не двигает, и знак меню её не считает, пока не нажата", async () => {

@@ -78,13 +78,18 @@ describe("задания в панели", () => {
       const picked = withKind(task({ taskId: "x_1", target: 5 }), "channel");
       expect(picked).toMatchObject({ kind: "channel", period: "achievement", target: 1, params: { platform: "telegram", chat: "", url: "" } });
       expect(withKind(picked, "kills")).toMatchObject({ kind: "kills", params: null });
+      // повтор подписки переживает повторный выбор вида, а у ссылки его нет
+      const daily = { ...picked, period: "daily" as const };
+      expect(withKind(daily, "channel").period).toBe("daily");
+      expect(withKind(daily, "link").period).toBe("achievement");
     });
 
-    it("форма требует канал и https-ссылку и не даёт копить подписку", () => {
+    it("форма требует канал и https-ссылку и не даёт копить подписку; повтор — каждый день или каждую неделю", () => {
       expect(taskProblem(channel(), true, [])).toBeNull();
       expect(taskProblem(channel({ params: null }), true, [])).toMatch(/нужна ссылка/);
-      expect(taskProblem(channel({ period: "daily" }), true, [])).toMatch(/только достижение/);
-      expect(taskProblem(channel({ target: 3 }), true, [])).toMatch(/только достижение/);
+      expect(taskProblem(channel({ taskId: "channel_daily", period: "daily" }), true, [])).toBeNull();
+      expect(taskProblem(channel({ taskId: "channel_weekly", period: "weekly" }), true, [])).toBeNull();
+      expect(taskProblem(channel({ target: 3 }), true, [])).toMatch(/цель — 1/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: " ", url: "https://t.me/x" } }), true, [])).toMatch(/Канал/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: "@x_game", url: "http://t.me/x" } }), true, [])).toMatch(/Ссылка/);
       expect(taskProblem(channel({ params: { platform: "telegram", chat: "@x_game", url: "t.me/x" } }), true, [])).toMatch(/Ссылка/);
@@ -97,6 +102,8 @@ describe("задания в панели", () => {
       await saveTask(api, channel({ params: { platform: "telegram", chat: " @rubezh_game ", url: " https://t.me/rubezh_game " } }));
       expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ params: { chat: "@rubezh_game", url: "https://t.me/rubezh_game" } });
       expect(targetLabel(channel())).toBe("@rubezh_game (Telegram)");
+      expect(targetLabel(channel({ period: "daily" }))).toBe("@rubezh_game (Telegram) · каждый день");
+      expect(targetLabel(channel({ period: "weekly" }))).toBe("@rubezh_game (Telegram) · каждую неделю");
 
       const old = await fetchTasks(api);
       expect(old.ok && old.data.tasks[0]?.params).toBeNull();
@@ -114,7 +121,7 @@ describe("задания в панели", () => {
       expect(withPlatform({ platform: "vk", url: "https://vk.com/x" }, undefined)).toEqual({ url: "https://vk.com/x" });
       expect(taskProblem(link(), true, [])).toBeNull();
       expect(taskProblem(link({ params: { url: "http://example.com" } }), true, [])).toMatch(/Ссылка/);
-      expect(taskProblem(link({ period: "daily" }), true, [])).toMatch(/только достижение/);
+      expect(taskProblem(link({ period: "daily" }), true, [])).toMatch(/Повтор — только у подписки/);
       expect(taskProblem(link({ kind: "channel", params: { url: "https://t.me/x", chat: "@x_game" } }), true, [])).toMatch(/площадка/);
     });
 
