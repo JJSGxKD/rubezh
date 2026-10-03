@@ -43,8 +43,8 @@ erDiagram
         string photo_url "nullable"
         datetime created_at
         datetime last_seen_at
-        datetime banned_at "nullable"
-        string ban_reason "nullable"
+        datetime banned_at "nullable: отметка блокировки целиком для входа — из ACCOUNT_RESTRICTION"
+        string ban_reason "nullable: текст игроку — что, до когда и почему"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -114,6 +114,8 @@ erDiagram
     PARTNER ||--o{ PARTNER_BINDING : "привёл игроков"
     ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
     PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
+    ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
+    ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -865,6 +867,22 @@ erDiagram
         bytes ciphertext "значение — только шифртекстом"
         uuid updated_by "nullable, без внешнего ключа"
         datetime updated_at
+    }
+
+    ACCOUNT_RESTRICTION {
+        uuid restriction_id PK
+        uuid account_id FK "удалённый аккаунт уносит свои строки"
+        string kind "вид из каталога в коде: referral_rewards, promo_codes… и all — блокировка целиком"
+        datetime starts_at
+        datetime ends_at "nullable: бессрочно; позже начала"
+        string reason "ключ шаблона причины: его текст видит игрок"
+        string comment "nullable: для команды, игроку не показывается"
+        boolean notify "сообщить игроку; у all — всегда"
+        uuid imposed_by "nullable, без FK: кто наложил"
+        datetime lifted_at "nullable: снято раньше срока или заменено новым того же вида"
+        uuid lifted_by "nullable, без FK"
+        string lift_comment "nullable, есть ровно у снятого"
+        datetime settled_at "nullable: последствия сняты — отметка входа убрана, кеш сброшен"
     }
 ```
 
@@ -1665,6 +1683,8 @@ flowchart LR
         TASKS["tasks<br/>задания и достижения: каталог в базе,<br/>прогресс от забегов, реализовано"]
         MEDIA["media<br/>картинки из панели в базе по хэшу:<br/>проверка WebP, вечный кеш, реализовано"]
         TESTNOTICE["test-notice<br/>предупреждение об открытом тесте:<br/>принятие на аккаунт, реализовано"]
+        PROMOC["promo-codes<br/>промокоды и коды партнёров:<br/>ключ кода, активация, реализовано"]
+        RESTR["restrictions<br/>ограничения игрока по видам и на срок:<br/>«можно ли» с кешем 30 с, снятие по сроку<br/>под локом, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1868,6 +1888,17 @@ flowchart LR
     HISTORY -- "wallet_entry, item_event, purchase" --> PG
     CADDY -- "/api/v1/flags" --> FLAGS
     FLAGS --> PG
+    CADDY -- "/api/v1/me/restrictions" --> RESTR
+    RESTR -- "account_restriction; отметка блокировки в account" --> PG
+    RESTR -- "канал restrictions:changed, лок задачи по сроку" --> REDIS
+    ADMINAPI -. "наложить и снять; отзыв сессий при блокировке" .-> RESTR
+    REF -. "можно ли: награды за друзей" .-> RESTR
+    FRIENDS -. "можно ли: подарки, бонус за друзей" .-> RESTR
+    ADS -. "можно ли: награды за рекламу" .-> RESTR
+    TASKS -. "можно ли: партнёрские задания" .-> RESTR
+    CADDY -- "/api/v1/promo-codes" --> PROMOC
+    PROMOC -. "награда ключом кампании и игрока" .-> WALLET
+    PROMOC -. "можно ли: промокоды" .-> RESTR
 
     TG -.статика и конфиг.-> CDN
 ```
