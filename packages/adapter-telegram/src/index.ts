@@ -3,6 +3,8 @@ import type {
   AdNetworkSetup,
   AdShowOutcome,
   AdShowRequest,
+  NetworkTaskHandle,
+  NetworkTaskMount,
   PlatformAdapter,
   PlatformClientInfo,
   UserContext,
@@ -167,6 +169,11 @@ export class TelegramAdapter implements PlatformAdapter {
   /** SDK сетей учёта аудитории (`ads/audience.ts`) — чанком показа, в простое: первую загрузку чужой скрипт не задерживает. */
   async prepareAds(networks: readonly AdNetworkSetup[]): Promise<void> {
     await (await import("./ads/ad-shower")).prepareInBrowser(networks);
+  }
+
+  /** Задание сети в строке оболочки (`ads/tasks.ts`) — чанком показа, как ролики: первой загрузке оно не нужно. */
+  async mountNetworkTask(mount: NetworkTaskMount): Promise<NetworkTaskHandle> {
+    return (await import("./ads/ad-shower")).mountTaskInBrowser(mount);
   }
 }
 

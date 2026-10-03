@@ -9,11 +9,15 @@ import type { TaskReward } from "../../state/tasks-api";
  * заданий, и задания рекламных сетей (docs/35-stage4-plan.md WP13).
  */
 
-/** Награда значками: монеты, самоцветы и осколки различаются и формой, и цветом (§4.4). */
-export function RewardChips(props: { reward: TaskReward }): ReactNode {
+/**
+ * Награда значками: монеты, самоцветы и осколки различаются и формой, и
+ * цветом (§4.4). Столбиком — справа от строки задания; в строку — под
+ * заголовком задания сети, где её место отвела сеть.
+ */
+export function RewardChips(props: { reward: TaskReward; inline?: boolean }): ReactNode {
   const { coins, gems, shards } = props.reward;
   return (
-    <span role="img" aria-label={rewardText(props.reward)} className="flex flex-col items-end gap-1">
+    <span role="img" aria-label={rewardText(props.reward)} className={props.inline === true ? "flex flex-wrap items-center gap-x-3 gap-y-1" : "flex flex-col items-end gap-1"}>
       {coins > 0 ? <Chip icon={<CoinIcon size={16} />} amount={coins} /> : null}
       {gems > 0 ? <Chip icon={<GemIcon size={16} />} amount={gems} /> : null}
       {shards > 0 ? <Chip icon={<ShardIcon rarity="common" size={16} />} amount={shards} /> : null}
