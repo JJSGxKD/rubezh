@@ -1,6 +1,7 @@
 import { z } from "zod/mini";
 import type { AdWatchResult } from "./ad-watch";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
+import { RESTRICTED_CODE } from "./restrictions";
 
 /**
  * Удвоение монет за забег за рекламу (docs/35-stage4-plan.md WP12): кнопка
@@ -70,13 +71,15 @@ export function doubleButton(view: RunDoubleView, nowMs: number, playable: boole
 
 /**
  * Чем кончилось нажатие: `doubled` — монеты легли; `stale` — экран устарел
- * (уже удвоено, окно прошло, место отдыхает) и перечитывается; остальное —
+ * (уже удвоено, окно прошло, место отдыхает) и перечитывается;
+ * `restricted` — награды за рекламу закрыты ограничением (WP44), при выдаче
+ * или, если его наложили между выдачей и забором, при заборе; остальное —
  * исход рекламы.
  */
 export type DoubleOutcome =
   | { kind: "doubled"; result: RunDoubleResult }
   | { kind: "stale"; code: string }
-  | { kind: "closed" | "no_ads" | "failed" };
+  | { kind: "closed" | "no_ads" | "restricted" | "failed" };
 
 /** Ролик (или VIP) — и сессия показа сразу в удвоение. `rewarded` — награда выдана: для `ad_reward_claimed`. */
 export async function doubleForAd(
@@ -94,5 +97,6 @@ export async function doubleForAd(
     return { kind: "doubled", result: response.data };
   }
   const code = response.code ?? "";
+  if (code === RESTRICTED_CODE) return { kind: "restricted" };
   return code === RUN_ALREADY_DOUBLED || code === RUN_DOUBLE_UNAVAILABLE || code === RUN_DOUBLE_COOLDOWN ? { kind: "stale", code } : { kind: "failed" };
 }

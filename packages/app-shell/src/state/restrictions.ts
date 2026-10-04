@@ -99,6 +99,11 @@ export function useRestricted(kinds: readonly string[]): boolean {
  */
 export async function restrictionRefusal(result: ApiResult<unknown>, kinds: readonly string[], api?: RestrictionsApi): Promise<"restricted" | "lifted" | null> {
   if (result.ok || result.code !== RESTRICTED_CODE) return null;
+  return await recheckRestriction(kinds, api);
+}
+
+/** Сервер сказал «закрыто» не ошибкой, а исходом (выдача рекламы): перечитать список и проверить. */
+export async function recheckRestriction(kinds: readonly string[], api?: RestrictionsApi): Promise<"restricted" | "lifted"> {
   await loadRestrictions(true, api);
   return activeOf(useRestrictions.getState().list, kinds, Date.now()).length > 0 ? "restricted" : "lifted";
 }

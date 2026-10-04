@@ -66,6 +66,6 @@ export function AdContinueView(props: { stage: AdContinueStage; locked: boolean;
 function lineOf(stage: AdContinueStage): string | null {
   if (stage.kind === "ready" && stage.notice !== null) return t(`run.continue.ad.notice.${stage.notice}`);
   // Остальные отказы — молча: рекламы для площадки нет или продолжение уже взято.
-  if (stage.kind === "unavailable" && (stage.reason === "daily_cap" || stage.reason === "no_ads_now")) return t(`run.continue.ad.gone.${stage.reason}`);
+  if (stage.kind === "unavailable" && (stage.reason === "daily_cap" || stage.reason === "no_ads_now" || stage.reason === "restricted")) return t(`run.continue.ad.gone.${stage.reason}`);
   return null;
 }

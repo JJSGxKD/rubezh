@@ -6,8 +6,10 @@ import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
 import { adsPlayable, trackAdReward, watchAd } from "../../state/ad-watch";
 import { RUN_ALREADY_DOUBLED, RUN_DOUBLE_COOLDOWN, createRunDoubleApi, doubleButton, doubleForAd, type RunDoubleResult, type RunDoubleView } from "../../state/run-double-api";
+import { recheckRestriction } from "../../state/restrictions";
 import { uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
+import { RestrictedPlaque } from "../meta/restricted-plaque";
 import { formatCountdown, useClock } from "../meta/schedule";
 
 /**
@@ -20,6 +22,8 @@ import { formatCountdown, useClock } from "../meta/schedule";
  */
 
 const api = createRunDoubleApi();
+/** Удвоение — награда за рекламу: его закрывает то же ограничение (WP44). */
+const AD_RESTRICTION = ["ad_rewards"];
 
 /** Отсчёт кулдауна — без секунд. */
 const CLOCK_STEP_MS = 15_000;
@@ -40,6 +44,7 @@ export function RunDouble(props: RunDoubleProps): ReactNode {
   const [watching, setWatching] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [done, setDone] = useState<RunDoubleResult | null>(null);
+  const [restricted, setRestricted] = useState(false);
 
   const load = async (): Promise<void> => {
     const response = await api.view(props.runId);
@@ -52,7 +57,7 @@ export function RunDouble(props: RunDoubleProps): ReactNode {
   }, [props.runId]);
 
   const now = useClock(view?.status === "available", CLOCK_STEP_MS);
-  const button = view === null || done !== null ? ({ kind: "hidden" } as const) : doubleButton(view, now, adsPlayable());
+  const button = view === null || done !== null || restricted ? ({ kind: "hidden" } as const) : doubleButton(view, now, adsPlayable());
 
   const double = async (): Promise<void> => {
     if (button.kind !== "ready" || watching) return;
@@ -77,6 +82,11 @@ export function RunDouble(props: RunDoubleProps): ReactNode {
         return;
       case "no_ads":
         setNotice(t("run.double.noAds"));
+        return;
+      case "restricted":
+        // Вместо кнопки — что закрыто и почему, коротко: с экрана итогов уходить некуда.
+        if ((await recheckRestriction(AD_RESTRICTION)) === "restricted") setRestricted(true);
+        else setNotice(t("restricted.lifted"));
         return;
       case "failed":
         setNotice(t("run.double.failed"));
@@ -108,6 +118,7 @@ export function RunDouble(props: RunDoubleProps): ReactNode {
           </Button>
         </div>
       ) : null}
+      {restricted ? <RestrictedPlaque kinds={AD_RESTRICTION} compact className="mt-2" /> : null}
       {button.kind === "doubled" ? <p className="mt-2 text-xs text-text-muted">{t("run.double.done", { amount: formatNumber(button.coins) })}</p> : null}
       {notice === null ? null : (
         <p role="status" className="mt-1.5 text-xs text-text-muted">

@@ -67,6 +67,8 @@ export type AdOffer = z.infer<typeof offerSchema>;
 
 /** Место отдыхает после награды — кулдаун места (`retryAt`). */
 export const AD_COOLDOWN = "cooldown";
+/** Награды за рекламу закрыты ограничением, о котором игроку сообщили (WP44); о молчаливом сервер говорит «рекламы нет». */
+export const AD_RESTRICTED = "restricted";
 
 /**
  * Устройство для выдачи: у блока сети может стоять «только телефоны» —

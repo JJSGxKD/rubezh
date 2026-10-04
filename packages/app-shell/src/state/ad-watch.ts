@@ -3,6 +3,7 @@ import type { CreativeHooks, CreativeResult, CreativeShow } from "../ads/ad-crea
 import { audio } from "../audio";
 import {
   AD_COOLDOWN,
+  AD_RESTRICTED,
   adDeviceOf,
   createAdsApi,
   passSession,
@@ -48,6 +49,8 @@ export const COMPLETED_REPORT_RETRIES_MS = [800, 2_000] as const;
  * - `closed` — закрыл раньше конца, награды нет;
  * - `cooldown` — место отдыхает до `retryAt`, экран устарел;
  * - `no_ads` — рекламы сейчас нет ни у одной сети;
+ * - `restricted` — награды за рекламу закрыты ограничением, о котором
+ *   игроку сообщили (WP44): «рекламы нет» было бы неправдой;
  * - `failed` — связь, сервер или SDK: можно попробовать ещё раз.
  */
 export type AdWatchResult =
@@ -55,6 +58,7 @@ export type AdWatchResult =
   | { kind: "closed" }
   | { kind: "cooldown"; retryAt: string | null }
   | { kind: "no_ads" }
+  | { kind: "restricted" }
   | { kind: "failed" };
 
 export type AdShow = (request: AdShowRequest) => Promise<AdShowOutcome>;
@@ -94,6 +98,7 @@ export async function watchAd(place: AdPlace, deps: AdWatchDeps = browserDeps())
     const offer = response.data;
     if (!offer.available) {
       if (offer.reason === AD_COOLDOWN) return { kind: "cooldown", retryAt: offer.retryAt };
+      if (offer.reason === AD_RESTRICTED) return { kind: "restricted" };
       // После отказа первой сети «нет рекламы» от сервера — тот же итог, что и у неё.
       return attempt === 1 || NO_ADS.has(lastReason) ? { kind: "no_ads" } : { kind: "failed" };
     }

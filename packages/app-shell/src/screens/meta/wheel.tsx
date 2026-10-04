@@ -7,6 +7,7 @@ import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/wheel";
 import { loadBadges } from "../../state/badges-api";
 import { useNavigation } from "../../state/navigation";
+import { restrictionRefusal } from "../../state/restrictions";
 import { track, useShell } from "../../state/shell";
 import { uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
@@ -26,6 +27,7 @@ import {
   type WheelSpin,
   type WheelView,
 } from "../../state/wheel-api";
+import { RestrictedPlaque } from "./restricted-plaque";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
 import { sectorCenterDeg, spinRotationDeg } from "./wheel-math";
 
@@ -66,6 +68,12 @@ type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; 
 type Phase = "idle" | "asking" | "spinning";
 
 const api = createWheelApi();
+/**
+ * Крутку за рекламу закрывает ограничение наград за рекламу (WP44). Плашка
+ * встаёт по отказу, а не заранее: колесо открывают каждый день почти все, и
+ * спрашивать ради редкого случая каждого — лишний запрос.
+ */
+const AD_RESTRICTION = ["ad_rewards"];
 
 export function WheelScreen(): ReactNode {
   const navigation = useNavigation();
@@ -76,6 +84,7 @@ export function WheelScreen(): ReactNode {
   const [notice, setNotice] = useState<string | null>(null);
   const pending = useRef<WheelSpin | null>(null);
   const [source, setSource] = useState<"free" | "ad">("free");
+  const [restricted, setRestricted] = useState(false);
   // То же, что `adsPlayable` потока рекламы: сам поток грузится по нажатию, а не с экраном.
   const playable = useShell.getState().adapter.showAd !== undefined;
 
@@ -99,6 +108,9 @@ export function WheelScreen(): ReactNode {
     const response = kind === "free" ? await api.spin() : await spinForAd(watchWheelAd, api, rewardedWheelAd);
     if (!response.ok) {
       setPhase("idle");
+      const refusal = await restrictionRefusal(response, AD_RESTRICTION);
+      if (refusal === "restricted") return setRestricted(true);
+      if (refusal === "lifted") return setNotice(t("restricted.lifted"));
       const known = NOTICES[response.code ?? ""];
       setNotice(t(known?.key ?? "wheel.spinFailed"));
       if (known?.reload === true) {
@@ -157,7 +169,7 @@ export function WheelScreen(): ReactNode {
                 size={adLeads ? "l" : "m"}
                 block
                 glow={adLeads && phase === "idle"}
-                disabled={adSpin.kind !== "ready" || (phase !== "idle" && source !== "ad")}
+                disabled={adSpin.kind !== "ready" || restricted || (phase !== "idle" && source !== "ad")}
                 loading={phase !== "idle" && source === "ad"}
                 onClick={() => void spin("ad")}
               >
@@ -214,6 +226,7 @@ export function WheelScreen(): ReactNode {
               )}
               {notice === null ? null : <p className="text-sm font-semibold text-text-muted">{notice}</p>}
             </div>
+            {restricted ? <RestrictedPlaque kinds={AD_RESTRICTION} /> : null}
 
             <SectionTitle>{t("wheel.odds")}</SectionTitle>
             <ListGroup>
