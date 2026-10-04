@@ -2,5 +2,9 @@
   "preview.waiting": "Ждём черновик из панели…",
   "preview.notConfigured": "Предпросмотр не настроен: адрес панели не задан",
   "preview.slide.title": "Заголовок",
-  "preview.slide.text": "Подпись"
+  "preview.slide.text": "Подпись",
+  "preview.changelog.version": "x.y.z",
+  "preview.changelog.entry": "Строка журнала",
+  "preview.task.before": "Пока не выполнено",
+  "preview.task.after": "Выполнено — можно забрать"
 }
