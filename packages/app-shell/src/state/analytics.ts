@@ -43,6 +43,8 @@ export const ANALYTICS_EVENTS = [
   "task_link_opened",
   "showcase_bought",
   "shop_banner_clicked",
+  "home_slide_viewed",
+  "home_slide_clicked",
   "test_notice_accepted",
   "changelog_opened",
   "ad_shown",

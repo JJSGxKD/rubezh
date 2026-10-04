@@ -211,6 +211,12 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ banner: id, place: z.enum(["carousel", "gems"]), position: count }),
   },
+  // Карусель главной (docs/35-stage4-plan.md WP42): какие слайды видят и по
+  // каким идут — порядок слайдов по данным, а не на глаз. Показ — раз за
+  // заход и только если слайд был виден дольше секунды: пролистанный мимо
+  // не в счёт.
+  home_slide_viewed: { version: 1, payload: payload({ slide: id, position: count }) },
+  home_slide_clicked: { version: 1, payload: payload({ slide: id, position: count }) },
   // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
   // доходят ли новички до игры после него и с какой версии текста. Само
   // принятие — таблица test_notice, по ней проверяется, что игрок видел
