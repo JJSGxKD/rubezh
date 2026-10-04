@@ -8,6 +8,7 @@ import { ExportsScreen } from "./exports/ExportsScreen";
 import { FunnelScreen } from "./funnel/FunnelScreen";
 import { FlagsScreen } from "./flags/FlagsScreen";
 import { FxScreen } from "./fx/FxScreen";
+import { HomeSlidesScreen } from "./home/HomeSlidesScreen";
 import { LinksScreen } from "./links/LinksScreen";
 import { OverviewScreen } from "./overview/OverviewScreen";
 import { PartnersScreen } from "./partners/PartnersScreen";
@@ -40,6 +41,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   secrets: () => <SecretsScreen />,
   broadcasts: (id) => <BroadcastsScreen id={id} />,
   changelog: () => <ChangelogScreen />,
+  home: () => <HomeSlidesScreen />,
   tasks: () => <TasksScreen />,
   ads: () => <AdsScreen />,
   promos: () => <PromosScreen />,

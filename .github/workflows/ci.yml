@@ -171,6 +171,10 @@ jobs:
           VITE_TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
           # Ключ Graspil — тоже переменная: он виден в сборке клиента.
           VITE_GRASPIL_KEY: ${{ vars.GRASPIL_KEY }}
+          # Адреса панели и страницы предпросмотра (docs/35-stage4-plan.md WP32) —
+          # тоже переменные: домены не секрет. Не заданы — предпросмотра в панели нет.
+          VITE_ADMIN_URL: ${{ vars.ADMIN_URL }}
+          VITE_PREVIEW_URL: ${{ vars.PREVIEW_URL }}
 
       # Артефакт клиента: то, что раскатывается на статику, берётся из этого
       # же прогона — пересборка перед деплоем запрещена (docs/09-ci-cd.md §7).

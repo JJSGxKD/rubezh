@@ -32,12 +32,14 @@
 
 # Одностраничное приложение из каталога версий. Файлы сборки с хэшем в имени
 # кэшируются навсегда, index.html — никогда: иначе игрок остался бы на
-# старой версии до очистки кэша.
+# старой версии до очистки кэша. У страницы предпросмотра клиента для панели
+# (`preview/`, своя сборка в той же статике) — то же самое: старая точка
+# входа ссылалась бы на файлы удалённой версии.
 (spa) {
 	root * /srv/web/{args[0]}/current
-	@hashed path /assets/*
+	@hashed path /assets/* /preview/assets/*
 	header @hashed Cache-Control "public, max-age=31536000, immutable"
-	@entry path / /index.html
+	@entry path / /index.html /preview/ /preview/index.html
 	header @entry Cache-Control "no-cache"
 	# csp.txt — служебный: политика и так уходит заголовком.
 	@internal path /csp.txt
@@ -67,6 +69,8 @@ www.{$DOMAIN} {
 tg.{$DOMAIN} {
 	import edge
 	import edge/web-telegram*.caddy
+	# Без слэша try_files отдал бы саму игру — и панель запустила бы её во фрейме.
+	redir /preview /preview/ permanent
 	handle /api/v1/admin/* {
 		respond 404
 	}

@@ -711,7 +711,10 @@ Staging на том же хосте — сознательный компром�
   `scripts/vite/content-security-policy.ts`. Её же отдаёт `vite preview`, и
   под ней проверен забег; своя политика в Caddyfile — это вторая копия,
   которая однажды разойдётся с проверенной. Там же объяснено, почему в ней
-  `frame-ancestors` пускает Telegram Web. Поэтому сборка кладёт политику
+  `frame-ancestors` пускает Telegram Web и панель — её страница
+  предпросмотра (`preview/` в той же статике, своя сборка; адреса —
+  переменные репозитория `ADMIN_URL` и `PREVIEW_URL`, `35-stage4-plan.md`
+  WP32). Поэтому сборка кладёт политику
   файлом `csp.txt` (`scripts/vite/edge-policy.ts`), а `deploy.sh` делает из
   него сниппет Caddy `edge/<приложение>.caddy`;
 - **HSTS** — только на краю: TLS завершается на Caddy, и API не знает, по

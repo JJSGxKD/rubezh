@@ -1,13 +1,16 @@
+import { imagePath } from "../media/image-rules.js";
 import type { ShopView } from "../shop/shop.service.js";
 import type { TaskView } from "../tasks/tasks.service.js";
 import type { VipView } from "../vip/vip.service.js";
+import type { TeamSlideIcon, TeamSlideRow, TeamSlideTarget } from "./team-slide-rules.js";
 
 /**
  * Карусель главной (docs/35-stage4-plan.md WP42, Р76): что показать и в каком
  * порядке, решает сервер — по ценности для игрока, как полосу магазина:
  * идущая акция, новое в версии, пока журнал не открыт, VIP, пока его нет,
  * стартовый набор, пока не куплен, приглашение друзей, канал проекта,
- * партнёрское задание дня. Слайды команды из панели — следующей частью.
+ * партнёрское задание дня. Слайды команды из панели — после акции и нового
+ * в версии, а закреплённые командой — первыми: важность анонса знает она.
  *
  * Правило — чистой функцией: его проверяют без базы, а сервис только
  * собирает источники.
@@ -23,7 +26,8 @@ export type HomeSlide =
   | { id: "starter"; kind: "starter"; stars: number }
   | { id: "invite"; kind: "invite" }
   | { id: "channel"; kind: "channel"; url: string }
-  | { id: string; kind: "task"; taskId: string; taskKind: string; title: string | null; image: string | null; reward: TaskView["reward"] };
+  | { id: string; kind: "task"; taskId: string; taskKind: string; title: string | null; image: string | null; reward: TaskView["reward"] }
+  | { id: string; kind: "team"; slideId: string; title: string; text: string; image: string | null; icon: TeamSlideIcon; target: TeamSlideTarget };
 
 export interface HomeSources {
   /** витрина магазина; `null` — не ответил: слайдов акции и стартового набора нет */
@@ -37,10 +41,12 @@ export interface HomeSources {
   channelUrl: string;
   /** задания игрока; под ограничением партнёрских — пусто */
   tasks: readonly TaskView[];
+  /** слайды команды для этого игрока — уже по площадке и аудитории (`teamSlidesFor`) */
+  team: readonly TeamSlideRow[];
 }
 
 export function pickSlides(sources: HomeSources, now: Date): HomeSlide[] {
-  const slides: HomeSlide[] = [];
+  const slides: HomeSlide[] = sources.team.filter((slide) => slide.pinned).map(teamSlide);
   const items = sources.shop?.items ?? [];
   // Купить можно: на площадке есть способ оплаты, а разовое ещё не куплено.
   const sellable = items.filter((item) => item.stars !== null && !(item.once && item.owned));
@@ -53,6 +59,8 @@ export function pickSlides(sources: HomeSources, now: Date): HomeSlide[] {
   }
 
   if (sources.freshVersions > 0) slides.push({ id: "changelog", kind: "changelog", versions: sources.freshVersions });
+
+  slides.push(...sources.team.filter((slide) => !slide.pinned).map(teamSlide));
 
   const vip = sources.vip;
   if (vip !== null && !vip.active && vip.canOrder && vip.stars !== null) slides.push({ id: "vip", kind: "vip", stars: vip.stars });
@@ -70,6 +78,19 @@ export function pickSlides(sources: HomeSources, now: Date): HomeSlide[] {
   }
 
   return slides.slice(0, HOME_SLIDES_MAX);
+}
+
+function teamSlide(slide: TeamSlideRow): HomeSlide {
+  return {
+    id: `team:${slide.slideId}`,
+    kind: "team",
+    slideId: slide.slideId,
+    title: slide.title,
+    text: slide.text,
+    image: slide.imageId === null ? null : imagePath(slide.imageId),
+    icon: slide.icon,
+    target: slide.target,
+  };
 }
 
 /**

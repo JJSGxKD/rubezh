@@ -65,7 +65,7 @@ export function ImageField({ label, help, profile, value, onChange }: { label: s
           {value !== null && value === uploaded ? (
             <span className="text-xs text-warning">загружена — нажмите «Сохранить», чтобы игроки её увидели</span>
           ) : (
-            <span className="text-xs text-text-disabled">{value === null ? "нет — у игрока значок вида" : shownAs}</span>
+            <span className="text-xs text-text-disabled">{value === null ? "нет — у игрока значок" : shownAs}</span>
           )}
         </div>
       </div>
@@ -98,7 +98,7 @@ function Thumb({ imageId }: { imageId: string | null }) {
   const box = "size-11 shrink-0 rounded-md border border-border bg-surface-sunken";
   if (imageId === null) return <span className={box} aria-hidden="true" />;
   if (broken) return <span className={`${box} flex items-center justify-center text-center text-[10px] leading-tight text-danger`}>не грузится</span>;
-  return <img src={imageUrl(imageId)} alt="Картинка задания" width={44} height={44} onError={() => setBroken(true)} className={`${box} object-cover`} />;
+  return <img src={imageUrl(imageId)} alt="Загруженная картинка" width={44} height={44} onError={() => setBroken(true)} className={`${box} object-cover`} />;
 }
 
 /** Кадр в диалоге — CSS-пиксели; холст вдвое плотнее, чтобы на экране с плотностью 2 не мылило. */

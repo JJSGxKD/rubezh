@@ -14,6 +14,18 @@ import { useShell } from "./shell";
 
 const rewardSchema = z.object({ coins: z.number(), gems: z.number(), shards: z.number() });
 
+/**
+ * Куда ведёт слайд команды — экраны, которые клиент умеет открыть. Экран,
+ * которого клиент не знает (сервер новее), отбрасывает слайд: вести его
+ * некуда.
+ */
+export const TEAM_SLIDE_SCREENS = ["shop", "arsenal", "tasks", "rating", "friends", "wheel", "daily", "changelog", "guide", "profile", "promoCode"] as const;
+
+const teamTargetSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("screen"), screen: z.enum(TEAM_SLIDE_SCREENS) }),
+  z.object({ kind: z.literal("link"), url: z.string() }),
+]);
+
 const slideSchema = z.discriminatedUnion("kind", [
   z.object({ id: z.string(), kind: z.literal("promo"), percent: z.number(), endsAt: z.string(), title: z.nullable(z.string()) }),
   z.object({ id: z.string(), kind: z.literal("changelog"), versions: z.number() }),
@@ -22,6 +34,8 @@ const slideSchema = z.discriminatedUnion("kind", [
   z.object({ id: z.string(), kind: z.literal("invite") }),
   z.object({ id: z.string(), kind: z.literal("channel"), url: z.string() }),
   z.object({ id: z.string(), kind: z.literal("task"), title: z.nullable(z.string()), image: z.nullable(z.string()), reward: rewardSchema }),
+  // Значок — строкой: незнакомый (сервер новее) рисуется значком объявления, а не роняет слайд.
+  z.object({ id: z.string(), kind: z.literal("team"), slideId: z.string(), title: z.string(), text: z.string(), image: z.nullable(z.string()), icon: z.string(), target: teamTargetSchema }),
 ]);
 
 export type HomeSlide = z.infer<typeof slideSchema>;
@@ -48,8 +62,8 @@ export function createHomeApi(request: ApiRequest = apiRequest): HomeApi {
 }
 
 /**
- * Картинка партнёрского задания — путь от адреса API, ровно такой отдаёт
- * сервер (`media/image-rules.ts`); иначе — значок вида. То же правило, что
+ * Картинка партнёрского задания и слайда команды — путь от адреса API, ровно
+ * такой отдаёт сервер (`media/image-rules.ts`); иначе — значок вида. То же правило, что
  * у экрана заданий, но своей строкой: общий модуль стал бы ещё одним чанком
  * в списке предзагрузки первой загрузки.
  */

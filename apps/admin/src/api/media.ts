@@ -9,7 +9,7 @@ import { ADMIN_API, type AdminApi, type ApiResult } from "./client";
 
 export const IMAGE_MAX_BYTES = 200 * 1024;
 
-export type ImageProfileId = "task";
+export type ImageProfileId = "task" | "home_slide";
 
 export interface ImageProfile {
   /** сторона того, что уходит на сервер: запас к плотности экрана, без лишнего веса */
@@ -20,9 +20,13 @@ export interface ImageProfile {
   shownAs: string;
 }
 
-/** Квадрат задания у игрока — 44 px; 256 — запас к плотности 3 и к будущим крупным показам. */
+/**
+ * Квадрат задания у игрока — 44 px, слайда главной — 56 px; 256 — запас к
+ * плотности 3 и к будущим крупным показам.
+ */
 export const IMAGE_PROFILES: Record<ImageProfileId, ImageProfile> = {
   task: { side: 256, minSide: 96, shownAs: "в строке задания — 44 px" },
+  home_slide: { side: 256, minSide: 112, shownAs: "в слайде главной — 56 px" },
 };
 
 const imageSchema = z.object({ imageId: z.string(), width: z.number(), height: z.number(), sizeBytes: z.number() });

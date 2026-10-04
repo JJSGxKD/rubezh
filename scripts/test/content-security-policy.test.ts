@@ -76,6 +76,14 @@ describe("политика источников клиента", () => {
     expect(build.get("frame-ancestors")).toEqual(["'self'", "https://web.telegram.org"]);
   });
 
+  it("панель — только та, чей адрес передан: её страница предпросмотра рисует черновик во фрейме", () => {
+    const withPanel = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", adminOrigins: ["https://admin.gonet.fun"] }));
+    expect(withPanel.get("frame-ancestors")).toEqual(["'self'", "https://web.telegram.org", "https://admin.gonet.fun"]);
+    // Остальное от панели не мягчеет: скрипты и соединения — прежние.
+    expect(withPanel.get("script-src")).toEqual(build.get("script-src"));
+    expect(withPanel.get("connect-src")).toEqual(build.get("connect-src"));
+  });
+
   it("показывает аватары игроков: t.me и CDN, на который он перенаправляет", () => {
     // Политика проверяет и адрес после перенаправления: с одним t.me фото не грузится.
     expect(build.get("img-src")).toEqual(expect.arrayContaining(["https://t.me", "https://*.telesco.pe"]));

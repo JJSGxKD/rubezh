@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { edgePolicyFile } from "../../scripts/vite/edge-policy.ts";
 import { ignoreDotenvNodeEnvForBuild } from "../../scripts/vite/production-node-env.ts";
 import { adminContentSecurityPolicy } from "./src/csp.ts";
+import { originOf, previewUrl } from "../../scripts/vite/preview-origins.ts";
 
 // Корень монорепо — единственный .env на весь проект (docs/20-env-and-ports.md).
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -29,13 +30,17 @@ export default defineConfig(({ mode, command }) => {
     host: "127.0.0.1",
     proxy: { "/api/v1/admin": { target: apiTarget } },
   };
+  // Страница предпросмотра клиента (WP32): на dev-сервере — петля с портом
+  // клиента, в сборке — только явный адрес (scripts/vite/preview-origins.ts).
+  const previewPage = previewUrl(env, command === "serve");
   const policy = (policyMode: "dev" | "build") => ({
-    headers: { "content-security-policy": adminContentSecurityPolicy(policyMode) },
+    headers: { "content-security-policy": adminContentSecurityPolicy(policyMode, originOf(previewPage)) },
   });
 
   return {
     // Политика — ещё и файлом в сборку: в проде её ставит Caddy (scripts/vite/edge-policy.ts).
-    plugins: [react(), tailwindcss(), edgePolicyFile(adminContentSecurityPolicy("build"))],
+    plugins: [react(), tailwindcss(), edgePolicyFile(adminContentSecurityPolicy("build", originOf(previewPage)))],
+    define: { __PREVIEW_URL__: JSON.stringify(previewPage) },
     base: "./",
     envDir: repoRoot,
     server: { ...common, ...policy("dev") },

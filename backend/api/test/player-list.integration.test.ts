@@ -130,8 +130,13 @@ describe.skipIf(DATABASE_URL === "")("список игроков на живо�
     const page = (sort: PlayerSort): PlayerPage => ({ filters: { platform: "max" }, sort, order: "desc", cursor: { sort, value: sort === "level" ? 3 : base, accountId: ids[0] ?? "" }, limit: 51 });
     const plan = async (sql: Prisma.Sql): Promise<string> =>
       await prisma.$transaction(async (tx) => {
-        // На маленькой тестовой таблице планировщику дешевле прочитать её целиком — запрет показывает, есть ли путь по индексу.
+        // На маленькой тестовой таблице планировщику дешевле прочитать её
+        // целиком или взять горстку строк другим индексом и отсортировать —
+        // смотря успел ли автовакуум собрать статистику. Запрет показывает,
+        // есть ли путь по индексу без сортировки, и не зависит от автовакуума:
+        // без такого пути сортировка останется в плане и под запретом.
         await tx.$executeRawUnsafe("SET LOCAL enable_seqscan = off");
+        await tx.$executeRawUnsafe("SET LOCAL enable_sort = off");
         const rows = await tx.$queryRaw<{ "QUERY PLAN": string }[]>(Prisma.sql`EXPLAIN ${sql}`);
         return rows.map((row) => row["QUERY PLAN"]).join("\n");
       });
