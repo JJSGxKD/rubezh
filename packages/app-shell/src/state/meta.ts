@@ -21,11 +21,19 @@ const schema = z.object({
   lastWeaponId: z.string(),
   /** запомненный выбор сложности; до появления сложностей поля не было */
   lastDifficultyId: z.optional(z.enum(DIFFICULTY_IDS)),
+  /** последний засчитанный забег — «до рекорда не хватило 0:42» на главной; до WP42 поля не было */
+  lastRun: z.optional(z.object({ difficultyId: z.enum(DIFFICULTY_IDS), survivalSec: z.number().check(z.nonnegative()) })),
 });
 
 type StoredMeta = z.infer<typeof schema>;
 
 export type BestByDifficulty = Record<DifficultyId, number>;
+
+/** Последний засчитанный забег на этом устройстве. */
+export interface LastRun {
+  difficultyId: DifficultyId;
+  survivalSec: number;
+}
 
 export interface MetaStore {
   runs: number;
@@ -33,6 +41,8 @@ export interface MetaStore {
   lastDifficultyId: DifficultyId;
   /** лучшее время выживания на каждой сложности; 0 — рекорда нет */
   best: BestByDifficulty;
+  /** последний засчитанный забег; `null` — на этом устройстве ещё не играли */
+  lastRun: LastRun | null;
   hydrate(): void;
   rememberWeapon(weaponId: string): void;
   rememberDifficulty(difficultyId: DifficultyId): void;
@@ -50,6 +60,7 @@ export const useMeta = create<MetaStore>((set, get) => ({
   lastWeaponId: "",
   lastDifficultyId: DEFAULT_DIFFICULTY_ID,
   best: emptyBest(),
+  lastRun: null,
 
   hydrate(): void {
     const stored = value().read();
@@ -58,6 +69,7 @@ export const useMeta = create<MetaStore>((set, get) => ({
       runs: stored.runs,
       lastWeaponId: stored.lastWeaponId,
       lastDifficultyId: stored.lastDifficultyId ?? DEFAULT_DIFFICULTY_ID,
+      lastRun: stored.lastRun ?? null,
       best: Object.fromEntries(
         DIFFICULTY_IDS.map((id) => [id, loadBestSurvivalSec(storage, id)]),
       ) as BestByDifficulty,
@@ -83,6 +95,7 @@ export const useMeta = create<MetaStore>((set, get) => ({
     set({
       runs: get().runs + 1,
       best: { ...get().best, [result.difficultyId]: record.bestSurvivalSec },
+      lastRun: { difficultyId: result.difficultyId, survivalSec: result.survivalSec },
     });
     persist(get());
     return record.isNewRecord;
@@ -127,5 +140,6 @@ function persist(state: MetaStore): void {
     runs: state.runs,
     lastWeaponId: state.lastWeaponId,
     lastDifficultyId: state.lastDifficultyId,
+    ...(state.lastRun === null ? {} : { lastRun: state.lastRun }),
   });
 }

@@ -17,9 +17,15 @@ export interface Badges {
   wheel: number;
   /** выполненные задания и достижения, награду которых ещё не забрали */
   tasks: number;
+  /**
+   * Когда знаки пришли с сервера; 0 — ещё не приходили. Главная по этой
+   * метке понимает, что её ответ устарел (`home-api.ts`), и раскладывает
+   * виджеты, только когда знает, что готово к забору.
+   */
+  loadedAt: number;
 }
 
-export const useBadges = create<Badges>()(() => ({ notifications: 0, arsenal: 0, friends: 0, daily: 0, changelog: 0, wheel: 0, tasks: 0 }));
+export const useBadges = create<Badges>()(() => ({ notifications: 0, arsenal: 0, friends: 0, daily: 0, changelog: 0, wheel: 0, tasks: 0, loadedAt: 0 }));
 
 /** Текст знака: ноль — знака нет, больше девяти — «9+». */
 export function badgeText(count: number): string | undefined {

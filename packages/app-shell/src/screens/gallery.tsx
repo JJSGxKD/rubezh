@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
 import type { AdCreative, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
@@ -140,6 +140,9 @@ export function GalleryScreen(): ReactNode {
           <Card stripe="passive">С кромкой пассивки</Card>
           <Card disabled>Недоступная</Card>
         </div>
+
+        <SectionTitle>{t("gallery.widgets")}</SectionTitle>
+        <WidgetsPreview />
 
         <SectionTitle>{t("gallery.lists")}</SectionTitle>
         <ListGroup>
@@ -502,3 +505,27 @@ const SAMPLE_RESULT: RunResult = {
   cheats: false,
   continues: [],
 };
+
+/**
+ * Все состояния виджетов главной (docs/35-stage4-plan.md WP42) — через чанк
+ * главной (`home-live.ts`): прямой импорт унёс бы код виджетов в общий с
+ * витриной чанк, и главная грузила бы на один файл больше.
+ */
+function WidgetsPreview(): ReactNode {
+  const [Showcase, setShowcase] = useState<typeof import("./home-showcase").WidgetShowcase | null>(null);
+  useEffect(() => {
+    let alive = true;
+    import("./home-live")
+      .then(async (live) => await live.loadWidgetShowcase())
+      .then(
+        (module) => {
+          if (alive) setShowcase(() => module.WidgetShowcase);
+        },
+        (error: unknown) => console.warn("Чанк главной не загрузился:", error),
+      );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return Showcase === null ? <p className="text-xs text-text-muted">{t("app.loading")}</p> : <Showcase now={Date.now()} />;
+}

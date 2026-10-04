@@ -44,8 +44,9 @@ describe("клиент награды дня", () => {
   });
 
   it("знаки меню от сервера без награды дня, колеса и журнала — знаки не горят, остальное принято", async () => {
-    await loadBadges(createBadgesApi(server([], { arsenal: 1, friends: 2, notifications: 3 })));
-    expect(useBadges.getState()).toEqual({ arsenal: 1, friends: 2, notifications: 3, daily: 0, changelog: 0, wheel: 0, tasks: 0 });
+    await loadBadges(createBadgesApi(server([], { arsenal: 1, friends: 2, notifications: 3 })), 1_000);
+    // Метка загрузки — по ней главная понимает, что её ответ устарел.
+    expect(useBadges.getState()).toEqual({ arsenal: 1, friends: 2, notifications: 3, daily: 0, changelog: 0, wheel: 0, tasks: 0, loadedAt: 1_000 });
 
     await loadBadges(createBadgesApi(server([], { arsenal: 0, friends: 0, notifications: 0, daily: 1, changelog: 2, wheel: 1, tasks: 3 })));
     expect(useBadges.getState()).toMatchObject({ daily: 1, changelog: 2, wheel: 1, tasks: 3 });

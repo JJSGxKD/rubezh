@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { HOME_SLIDES_MAX, partnerTaskOfDay, pickSlides, type HomeSources } from "../src/modules/home/home-slides.js";
 import { HomeService } from "../src/modules/home/home.service.js";
 import type { ChangelogService } from "../src/modules/changelog/changelog.service.js";
+import { viewOf as dailyViewOf, type DailyService } from "../src/modules/daily/daily.service.js";
+import { dailyWidget, tasksWidget, wheelWidget } from "../src/modules/home/home-widgets.js";
 import type { AccountRestrictions } from "../src/modules/restrictions/account-restrictions.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
@@ -12,6 +14,7 @@ import type { TaskView, TasksService } from "../src/modules/tasks/tasks.service.
 import type { AudienceFacts, TeamSlideRow } from "../src/modules/home/team-slide-rules.js";
 import type { TeamSlidesService } from "../src/modules/home/team-slides.service.js";
 import type { VipService } from "../src/modules/vip/vip.service.js";
+import { viewOf as wheelViewOf, type WheelService, type WheelView } from "../src/modules/wheel/wheel.service.js";
 
 /**
  * Карусель главной (docs/35-stage4-plan.md WP42): порядок — по ценности для
@@ -133,7 +136,18 @@ describe("слайды главной", () => {
 
 const account: AccountRef = { accountId: "8f7c1c1e-7f0a-4b8e-9d7e-1c2b3a4d5e6f", platform: "telegram", platformUserId: "700" };
 
-function service(patch: { shop?: () => Promise<unknown>; tasks?: () => Promise<TaskView[]>; restricted?: readonly string[]; channel?: string; facts?: () => Promise<{ createdAt: Date; payer: boolean } | null>; seen?: AudienceFacts[] } = {}): HomeService {
+function service(
+  patch: {
+    shop?: () => Promise<unknown>;
+    tasks?: () => Promise<TaskView[]>;
+    restricted?: readonly string[];
+    channel?: string;
+    facts?: () => Promise<{ createdAt: Date; payer: boolean } | null>;
+    seen?: AudienceFacts[];
+    daily?: () => Promise<unknown>;
+    wheel?: () => Promise<unknown>;
+  } = {},
+): HomeService {
   const shop = { view: patch.shop ?? (async () => ({ items: [item({ sku: "starter", kind: "starter", once: true })] })) } as unknown as ShopService;
   const vip = { view: async () => ({ active: false, canOrder: true, stars: 700 }) } as unknown as VipService;
   const changelog = { badge: async () => 0 } as unknown as ChangelogService;
@@ -145,8 +159,12 @@ function service(patch: { shop?: () => Promise<unknown>; tasks?: () => Promise<T
     audienceFacts: patch.facts ?? (async () => ({ createdAt: new Date(NOW.getTime() - 2 * 24 * HOUR), payer: true })),
     forPlayer: async (facts: AudienceFacts) => (patch.seen?.push(facts), []),
   } as unknown as TeamSlidesService;
-  return new HomeService(shop, vip, changelog, tasks, restrictions, settings, teamSlides);
+  const daily = { view: patch.daily ?? (async () => dailyViewOf(2, false, 1)) } as unknown as DailyService;
+  const wheel = { view: patch.wheel ?? (async () => wheelViewOf(1, true, AD_NONE)) } as unknown as WheelService;
+  return new HomeService(shop, vip, changelog, tasks, restrictions, settings, teamSlides, daily, wheel);
 }
+
+const AD_NONE: WheelView["ad"] = { available: false, readyAt: null, pass: null };
 
 describe("главная в сервисе", () => {
   it("собирает слайды из соседей; канал — из настроек", async () => {
@@ -170,5 +188,52 @@ describe("главная в сервисе", () => {
   it("под ограничениями — без приглашения друзей и без партнёрского задания", async () => {
     const view = await service({ restricted: ["referral_rewards", "partner_tasks"] }).view(account, NOW);
     expect(view.slides.map((slide) => slide.kind)).toEqual(["vip", "starter"]);
+  });
+
+  it("виджеты — тем же ответом: награда дня, колесо и задания", async () => {
+    const view = await service().view(account, NOW);
+    expect(view.widgets.daily).toMatchObject({ canClaim: true, next: { coins: 120, shards: 0 } });
+    expect(view.widgets.wheel).toMatchObject({ free: true, jackpot: 1_000 });
+    expect(view.widgets.tasks).toEqual({ dailyDone: 0, dailyTotal: 0, claimable: 0 });
+  });
+
+  it("не ответил источник виджета — у виджета нет подробностей, остальное на месте", async () => {
+    const down = async () => Promise.reject(new Error("база недоступна"));
+    const view = await service({ daily: down, wheel: down, tasks: down }).view(account, NOW);
+    expect(view.widgets).toEqual({ daily: null, wheel: null, tasks: null });
+    // Без заданий нет и слайда задания дня, но карусель на месте.
+    expect(view.slides.map((slide) => slide.kind)).toEqual(["vip", "starter", "invite"]);
+  });
+});
+
+describe("виджеты главной", () => {
+  it("награда дня: что забрано, какой сегодня и что завтра; лишнего из ответа экрана нет", () => {
+    const widget = dailyWidget(dailyViewOf(3, true, 1));
+    expect(widget).toEqual({
+      canClaim: false,
+      days: [60, 80, 100, 120, 150, 180, 300].map((coins, index) => ({ coins, shards: index === 6 ? 10 : 0, claimed: index < 3, today: index === 2 })),
+      next: { coins: 120, shards: 0 },
+    });
+  });
+
+  it("колесо: джекпот — самый крупный монетный сектор уровня; VIP — признак, а не имя пропуска", () => {
+    expect(wheelWidget(wheelViewOf(1, false, AD_NONE))).toEqual({ free: false, jackpot: 1_000, ad: { available: false, readyAt: null, vip: false } });
+    expect(wheelWidget(wheelViewOf(11, true, AD_NONE)).jackpot).toBe(1_200);
+    const vip = wheelWidget(wheelViewOf(1, false, { available: true, readyAt: "2026-10-04T12:30:00.000Z", pass: "vip" }));
+    expect(vip.ad).toEqual({ available: true, readyAt: "2026-10-04T12:30:00.000Z", vip: true });
+    const shardsOnly: WheelView = { sectors: [{ resource: "shard_common", amount: 3, odds: 1 }], free: true, ad: AD_NONE };
+    expect(wheelWidget(shardsOnly).jackpot).toBeNull();
+  });
+
+  it("задания: кольцо — выполненные из заданий суток; к забору — выполненные и не забранные на всех вкладках", () => {
+    const tasks = [
+      task({ id: "d1", period: "daily", category: "daily", done: true, claimed: true }),
+      task({ id: "d2", period: "daily", category: "daily", done: true, claimed: false }),
+      task({ id: "d3", period: "daily", category: "daily" }),
+      task({ id: "w1", period: "weekly", category: "weekly", done: true, claimed: false }),
+      task({ id: "p1", done: true, claimed: false }),
+    ];
+    expect(tasksWidget(tasks)).toEqual({ dailyDone: 2, dailyTotal: 3, claimable: 3 });
+    expect(tasksWidget([])).toEqual({ dailyDone: 0, dailyTotal: 0, claimable: 0 });
   });
 });

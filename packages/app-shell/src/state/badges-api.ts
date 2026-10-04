@@ -35,10 +35,13 @@ export function createBadgesApi(request: ApiRequest = apiRequest): BadgesApi {
 }
 
 /** Не ответил сервер — знаки остаются прежними: пустые хуже устаревших. */
-export async function loadBadges(api?: BadgesApi): Promise<void> {
+export async function loadBadges(api?: BadgesApi, now = Date.now()): Promise<void> {
   if (api === undefined && useShell.getState().capabilities.auth === undefined) return;
   const response = await (api ?? createBadgesApi()).badges();
-  if (response.ok) useBadges.setState({ ...response.data, daily: response.data.daily ?? 0, changelog: response.data.changelog ?? 0, wheel: response.data.wheel ?? 0, tasks: response.data.tasks ?? 0 } satisfies Badges);
+  if (response.ok) {
+    const { daily, changelog, wheel, tasks } = response.data;
+    useBadges.setState({ ...response.data, daily: daily ?? 0, changelog: changelog ?? 0, wheel: wheel ?? 0, tasks: tasks ?? 0, loadedAt: now } satisfies Badges);
+  }
 }
 
 let watching = false;

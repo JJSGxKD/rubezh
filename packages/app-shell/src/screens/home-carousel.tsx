@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSwipeStrip } from "../design-system/components/swipe-strip";
 import { t } from "../i18n";
 import "../i18n/home";
-import { cachedSlides, loadSlides, safeLink, slideImageUrl, type HomeSlide } from "../state/home-api";
+import { useBadges } from "../state/badges";
+import { refreshHome, safeLink, slideImageUrl, useHome, type HomeSlide } from "../state/home-api";
 import { openExternalLink } from "../state/external-link";
 import { TAB_ROOTS, useNavigation } from "../state/navigation";
 import { track, useShell } from "../state/shell";
@@ -21,7 +22,8 @@ import { useClock } from "./meta/schedule";
  * касания надоедает к третьему визиту (docs/27-design-system-and-app-shell.md §7.1).
  *
  * Приходит своим чанком после первого кадра; место держит заглушка той же
- * высоты — главная не прыгает.
+ * высоты — главная не прыгает. Ответ общий с виджетами (`home-api.ts`): на
+ * возврате прежние слайды стоят, пока идёт новый.
  */
 
 const AUTO_MS = 6_000;
@@ -47,7 +49,11 @@ function useMedia(query: string): boolean {
 }
 
 export function HomeCarousel(): ReactNode {
-  const [slides, setSlides] = useState<HomeSlide[] | null>(() => cachedSlides());
+  const data = useHome((state) => state.data);
+  const failed = useHome((state) => state.failed);
+  const badgesAt = useBadges((state) => state.loadedAt);
+  // Не ответил сервер, а показать нечего, — карусели нет, главная работает без неё.
+  const slides = data?.slides ?? (failed ? [] : null);
   const total = slides?.length ?? 0;
   const { strip, current, dragClass, scrollToIndex, handlers } = useSwipeStrip(total);
   const touched = useRef(false);
@@ -56,15 +62,10 @@ export function HomeCarousel(): ReactNode {
   const still = useMedia(REDUCED_MOTION);
   const now = useClock(slides?.some((slide) => slide.kind === "promo") === true, CLOCK_STEP_MS);
 
+  // Обновились знаки меню — забег, забор, возврат в приложение — значит, и главная могла измениться.
   useEffect(() => {
-    let alive = true;
-    void loadSlides().then((loaded) => {
-      if (alive) setSlides(loaded ?? []);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+    void refreshHome();
+  }, [badgesAt]);
 
   // Сама листается, пока не тронули; свёрнутое приложение не листает.
   useEffect(() => {
