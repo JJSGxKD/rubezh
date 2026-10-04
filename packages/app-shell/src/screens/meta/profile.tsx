@@ -22,6 +22,7 @@ import { useSession } from "../../state/session";
 import { useShell } from "../../state/shell";
 import { ItemIcon } from "../item-icons";
 import { AccountLevel } from "./account-level";
+import { RestrictionsSection } from "./restricted-plaque";
 import { RunDetailSheet } from "./run-detail";
 
 export { HistoryScreen } from "./history";
@@ -119,6 +120,9 @@ export function ProfileScreen(): ReactNode {
         {pending > 0 ? (
           <p className="mt-2 text-center text-xs text-text-muted">{t("rating.pending", { count: pending })}</p>
         ) : null}
+
+        {/* Закрытое — до рекордов: «нет места» в них объясняет именно оно. */}
+        {account === null ? null : <RestrictionsSection />}
 
         <SectionTitle>{t("profile.best")}</SectionTitle>
         <ul className="grid grid-cols-1 gap-2">

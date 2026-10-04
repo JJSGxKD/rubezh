@@ -20,7 +20,7 @@ type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; 
 
 const DATE = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
-const RATING_TONE: Record<string, BadgeTone> = { ranked: "accent", cheats: "warning" };
+const RATING_TONE: Record<string, BadgeTone> = { ranked: "accent", cheats: "warning", restricted: "warning" };
 
 function nameOf(prefix: string, id: string): string {
   const key = `${prefix}.${id}.name`;

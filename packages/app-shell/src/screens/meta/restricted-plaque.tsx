@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Lock } from "lucide-react";
+import { SectionTitle } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/restrictions";
 import { useNavigation } from "../../state/navigation";
@@ -14,7 +15,7 @@ import { activeOf, loadRestrictions, useRestrictions, type PlayerRestriction } f
  * Экран ставит её заранее, а не после отказа: закрыто — игрок видит это до
  * нажатия. Нечего показать — не рисует ничего.
  */
-export function RestrictedPlaque({ kinds, compact = false }: { kinds: readonly string[]; compact?: boolean }): ReactNode {
+export function RestrictedPlaque({ kinds, compact = false, className = "" }: { kinds: readonly string[] | null; compact?: boolean; className?: string }): ReactNode {
   const list = useRestrictions((state) => state.list);
   useEffect(() => {
     void loadRestrictions();
@@ -22,11 +23,22 @@ export function RestrictedPlaque({ kinds, compact = false }: { kinds: readonly s
   const rows = activeOf(list, kinds, Date.now());
   if (rows.length === 0) return null;
   return (
-    <div className="grid gap-2">
+    <div className={`grid gap-2 ${className}`}>
       {rows.map((row) => (
         <RestrictionCard key={row.kind} row={row} compact={compact} />
       ))}
     </div>
+  );
+}
+
+/** Профиль: все действующие, о которых сообщили, — своим разделом; нет ни одного — нет и раздела. */
+export function RestrictionsSection(): ReactNode {
+  const any = useRestrictions((state) => activeOf(state.list, null, Date.now()).length > 0);
+  return (
+    <>
+      {any ? <SectionTitle>{t("restricted.section")}</SectionTitle> : null}
+      <RestrictedPlaque kinds={null} />
+    </>
   );
 }
 

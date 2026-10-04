@@ -69,6 +69,8 @@ describe("список ограничений", () => {
     expect(activeOf(list, ["friend_gifts", "referral_rewards"], NOW)).toEqual([]);
     expect(activeOf(list, ["leaderboard"], NOW).map((item) => item.until)).toEqual(["бессрочно"]);
     expect(activeOf([row({ kind: "all", title: "Всё — блокировка" })], ["promo_codes"], NOW).map((item) => item.kind)).toEqual(["all"]);
+    // Профиль — все действующие разом.
+    expect(activeOf(list, null, NOW).map((item) => item.kind)).toEqual(["promo_codes", "ad_rewards", "leaderboard"]);
   });
 });
 

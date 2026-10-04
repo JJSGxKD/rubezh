@@ -7,9 +7,11 @@ import { formatNumber, t } from "../../i18n";
 import "../../i18n/promo";
 import { useNavigation } from "../../state/navigation";
 import { createPromoApi, errorKey, promoAvailable, rewardLines, type PromoReward, type PromoResult } from "../../state/promo-api";
+import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { track } from "../../state/shell";
 import { uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
+import { RestrictedPlaque } from "./restricted-plaque";
 
 /**
  * Промокод (docs/35-stage4-plan.md WP41): поле, кнопка и понятный ответ.
@@ -20,6 +22,8 @@ import { loadWallet } from "../../state/wallet-api";
  */
 
 const api = createPromoApi();
+/** Промокоды закрывает своё ограничение (WP44): тогда плашка вместо ошибки у поля. */
+const RESTRICTION = ["promo_codes"];
 /** длиннее кода с приставкой и разделителями не бывает; сервер всё равно проверит */
 const CODE_MAX = 40;
 
@@ -30,6 +34,7 @@ export function PromoCodeScreen(): ReactNode {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PromoResult | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const restricted = useRestricted(RESTRICTION);
   // Откуда пришли — для аналитики: находят ли поле в меню или в магазине.
   const source = navigation.stack.at(-2) === "shop" ? "shop" : "menu";
 
@@ -41,7 +46,9 @@ export function PromoCodeScreen(): ReactNode {
     setSending(false);
     if (!response.ok) {
       uiFeedback("error");
-      setError(t(errorKey(response)));
+      const refusal = await restrictionRefusal(response, RESTRICTION);
+      // Закрыто ограничением — об этом скажет плашка, ошибка у поля была бы вторым голосом.
+      if (refusal !== "restricted") setError(t(refusal === "lifted" ? "restricted.lifted" : errorKey(response)));
       input.current?.focus();
       return;
     }
@@ -107,7 +114,7 @@ export function PromoCodeScreen(): ReactNode {
       onBack={() => navigation.pop()}
       footer={
         promoAvailable() ? (
-          <Button size="l" block glow disabled={code.trim() === ""} loading={sending} onClick={() => void submit()}>
+          <Button size="l" block glow disabled={code.trim() === "" || restricted} loading={sending} onClick={() => void submit()}>
             {sending ? t("promo.sending") : t("promo.apply")}
           </Button>
         ) : undefined
@@ -120,6 +127,7 @@ export function PromoCodeScreen(): ReactNode {
           </IconEmblem>
           <p className="max-w-[320px] text-sm text-text-muted">{t("promo.text")}</p>
         </div>
+        {promoAvailable() ? <RestrictedPlaque kinds={RESTRICTION} className="mb-4" /> : null}
 
         {promoAvailable() ? (
           <>

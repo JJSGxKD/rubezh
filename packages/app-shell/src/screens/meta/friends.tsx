@@ -24,8 +24,10 @@ import {
   type FriendEntry,
   type FriendsView,
 } from "../../state/friends-api";
+import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { track, useShell } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
+import { RestrictedPlaque } from "./restricted-plaque";
 
 /**
  * Раздел «Друзья» (docs/35-stage4-plan.md §3.8, WP14; О5 в
@@ -41,12 +43,23 @@ type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; 
 
 const api = createFriendsApi();
 
+/**
+ * Что здесь закрывают ограничения (WP44): подарки — дарить и забирать,
+ * награды за друзей — за приглашённых и бонус за их число. Дружить и звать
+ * друзей можно и под ними.
+ */
+const GIFTS = ["friend_gifts"];
+const REWARDS = ["referral_rewards"];
+const RESTRICTIONS = [...GIFTS, ...REWARDS];
+
 export function FriendsScreen(): ReactNode {
   const withAccount = friendsAvailable();
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [removing, setRemoving] = useState<FriendEntry | null>(null);
+  const giftsClosed = useRestricted(GIFTS);
+  const rewardsClosed = useRestricted(REWARDS);
 
   const load = async (): Promise<void> => {
     const response = await api.view();
@@ -63,8 +76,12 @@ export function FriendsScreen(): ReactNode {
     setBusy(key);
     setNotice(null);
     const result = await action();
-    if (!result.ok) setNotice(t("friends.action.failed"));
-    else done?.(result.data);
+    if (result.ok) done?.(result.data);
+    else {
+      // Закрыто ограничением — скажет плашка вверху, а не «не получилось».
+      const refusal = await restrictionRefusal(result, RESTRICTIONS);
+      if (refusal !== "restricted") setNotice(t(refusal === "lifted" ? "restricted.lifted" : "friends.action.failed"));
+    }
     await load();
     // Знак на вкладке гаснет вместе с тем, что его зажгло.
     void loadBadges();
@@ -75,6 +92,7 @@ export function FriendsScreen(): ReactNode {
     <Screen>
       <ContentColumn>
         <PageTitle>{t("friends.title")}</PageTitle>
+        {withAccount ? <RestrictedPlaque kinds={RESTRICTIONS} className="mt-4" /> : null}
         <Invite withAccount={withAccount} />
 
         {!withAccount ? <InfoNotice text={t("friends.guest")} /> : null}
@@ -91,6 +109,7 @@ export function FriendsScreen(): ReactNode {
             <Gifts
               view={state.view}
               busy={busy === "gifts"}
+              closed={giftsClosed}
               onClaim={() =>
                 void act("gifts", () => api.claimGifts(), (claim) => {
                   // Монет меньше обещанного — упёрлись в суточный потолок кошелька.
@@ -130,7 +149,7 @@ export function FriendsScreen(): ReactNode {
                     <PeerRow key={friend.accountId} name={friend.displayName} photoUrl={friend.photoUrl} onPress={() => setRemoving(friend)}>
                       <Button
                         variant="secondary"
-                        disabled={gifted}
+                        disabled={gifted || giftsClosed}
                         loading={busy === `gift:${friend.accountId}`}
                         onClick={() => void act(`gift:${friend.accountId}`, () => api.gift(friend.accountId))}
                       >
@@ -161,6 +180,7 @@ export function FriendsScreen(): ReactNode {
             <Bonus
               view={state.view}
               busy={busy === "bonus"}
+              closed={rewardsClosed}
               onClaim={() => void act("bonus", () => api.claimBonus(), () => void loadWallet())}
             />
           </>
@@ -260,7 +280,7 @@ function Invite(props: { withAccount: boolean }): ReactNode {
   );
 }
 
-function Gifts(props: { view: FriendsView; busy: boolean; onClaim: () => void }): ReactNode {
+function Gifts(props: { view: FriendsView; busy: boolean; closed: boolean; onClaim: () => void }): ReactNode {
   const { gifts } = props.view;
   if (gifts.pending === 0) return null;
   return (
@@ -275,7 +295,7 @@ function Gifts(props: { view: FriendsView; busy: boolean; onClaim: () => void })
             {gifts.claimableToday > 0 ? t("friends.gifts.ready", { count: gifts.claimableToday, coins: formatNumber(gifts.coins) }) : t("friends.gifts.pendingOnly")}
           </p>
           {gifts.claimableToday > 0 ? (
-            <Button loading={props.busy} onClick={props.onClaim}>
+            <Button loading={props.busy} disabled={props.closed} onClick={props.onClaim}>
               {t("friends.gifts.claim")}
             </Button>
           ) : null}
@@ -285,7 +305,7 @@ function Gifts(props: { view: FriendsView; busy: boolean; onClaim: () => void })
   );
 }
 
-function Bonus(props: { view: FriendsView; busy: boolean; onClaim: () => void }): ReactNode {
+function Bonus(props: { view: FriendsView; busy: boolean; closed: boolean; onClaim: () => void }): ReactNode {
   const { bonus } = props.view;
   if (bonus.steps.length === 0) return null;
   return (
@@ -303,7 +323,7 @@ function Bonus(props: { view: FriendsView; busy: boolean; onClaim: () => void })
         </ul>
         {bonus.readyCoins > 0 ? (
           <div className="mt-3">
-            <Button block loading={props.busy} onClick={props.onClaim}>
+            <Button block loading={props.busy} disabled={props.closed} onClick={props.onClaim}>
               {t("friends.bonus.claim", { coins: formatNumber(bonus.readyCoins) })}
             </Button>
           </div>

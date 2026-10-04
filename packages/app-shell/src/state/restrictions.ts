@@ -78,9 +78,12 @@ export function loadRestrictions(force = false, api?: RestrictionsApi, now = Dat
 /** Блокировка целиком закрывает и всё остальное — как и на сервере. */
 const BAN_KIND = "all";
 
-/** Действующие из `kinds` и блокировка; вышедший после загрузки срок плашку уже не держит. */
-export function activeOf(list: readonly PlayerRestriction[], kinds: readonly string[], now: number): PlayerRestriction[] {
-  return list.filter((row) => (kinds.includes(row.kind) || row.kind === BAN_KIND) && (row.endsAt === null || Date.parse(row.endsAt) > now));
+/**
+ * Действующие из `kinds` и блокировка; `null` — все (список в профиле).
+ * Вышедший после загрузки срок плашку уже не держит.
+ */
+export function activeOf(list: readonly PlayerRestriction[], kinds: readonly string[] | null, now: number): PlayerRestriction[] {
+  return list.filter((row) => (kinds === null || kinds.includes(row.kind) || row.kind === BAN_KIND) && (row.endsAt === null || Date.parse(row.endsAt) > now));
 }
 
 /** Закрыто ли что-то из `kinds` — экран заранее гасит кнопку, а не ждёт отказа. */
