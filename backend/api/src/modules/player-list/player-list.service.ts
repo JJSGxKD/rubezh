@@ -30,6 +30,8 @@ export interface PlayerListItem {
   payer: boolean | null;
   canMessage: boolean | null;
   banned: { at: string; reason: string | null } | null;
+  /** виды действующих ограничений, в том числе молчаливых: команда видит правду */
+  restrictions: string[];
   pii: { platformUserId: string; username: string | null } | null;
 }
 
@@ -90,6 +92,7 @@ function itemOf(row: PlayerListRow, withPii: boolean, withPayments: boolean): Pl
     payer: withPayments ? row.payer : null,
     canMessage: row.canMessage,
     banned: row.bannedAt === null ? null : { at: row.bannedAt.toISOString(), reason: row.banReason },
+    restrictions: row.restrictions,
     pii: withPii ? { platformUserId: row.platformUserId, username: row.username } : null,
   };
 }

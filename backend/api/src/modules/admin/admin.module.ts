@@ -54,6 +54,7 @@ import { AdminFxController } from "./admin-fx.controller.js";
 import { AdminPlayersController } from "./admin-players.controller.js";
 import { AdminPlayersService } from "./admin-players.service.js";
 import { AdminReviewController } from "./admin-review.controller.js";
+import { AdminRunsController } from "./admin-runs.controller.js";
 import { AdminRolesController } from "./admin-roles.controller.js";
 import { AdminRolesService } from "./admin-roles.service.js";
 import { AdminSessionController } from "./admin-session.controller.js";
@@ -77,6 +78,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
     AdminSessionController,
     AdminPlayersController,
     AdminReviewController,
+    AdminRunsController,
     AdminOverviewController,
     AdminFxController,
     AdminRolesController,

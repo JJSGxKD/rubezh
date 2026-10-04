@@ -1,6 +1,7 @@
 import { api } from "../../services";
 import { fetchPlayerCard, FUNNEL_MILESTONES, purchaseLabel, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
-import { fetchRestrictions, type Restriction } from "../../api/restrictions";
+import { BAN_KIND, fetchRestrictions, type Restriction } from "../../api/restrictions";
+import { difficultyTitle } from "../../api/review";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
@@ -9,6 +10,7 @@ import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { MessagePanel, WalletAdjustPanel } from "./PlayerActions";
+import { RatingRunsPanel } from "./RatingRunsPanel";
 import { RestrictionsPanel } from "./RestrictionsPanel";
 import { SocialPanel } from "./SocialPanel";
 
@@ -27,6 +29,8 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
     restrictions.reload();
   };
   const active = restrictions.state.status === "ok" ? restrictions.state.data.restrictions.filter((row) => row.state === "active") : [];
+  // Блокировка закрывает и рейтинг — так же, как на сервере (`RATING_KINDS`).
+  const ratingClosed = active.some((row) => row.kind === "leaderboard" || row.kind === BAN_KIND);
 
   return (
     <div className="flex flex-col gap-4">
@@ -44,6 +48,10 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
             <Acquisition card={state.data} />
             <Runs card={state.data} />
             <Wallet card={state.data} />
+            {/* Таблица с действием в строке в половину ширины не влезает — рекорды на всю ширину сразу под забегами. */}
+            <div className="xl:col-span-2">
+              <RatingRunsPanel accountId={accountId} ratingClosed={ratingClosed} onChanged={reload} />
+            </div>
             <SocialPanel accountId={accountId} />
             {can(view, "players.message") ? <MessagePanel card={state.data} /> : null}
             {can(view, "players.wallet.adjust") ? <WalletAdjustPanel card={state.data} onChanged={reload} /> : null}
@@ -142,7 +150,7 @@ function Runs({ card }: { card: PlayerCard }) {
             ["Убийств", formatNumber(runs.totalKills)],
             ["Время в забегах", formatDuration(runs.totalSurvivalSec)],
             ...Object.entries(runs.best).map(([difficulty, best]): [string, string] => [
-              `Лучшее, ${difficulty}`,
+              `Лучшее, ${difficultyTitle(difficulty)}`,
               best === null ? "—" : `${formatDuration(best.survivalSec)}, место ${formatNumber(best.rank)}`,
             ]),
           ]}

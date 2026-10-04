@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ValidationError } from "../../common/domain-error.js";
 import { START_KINDS } from "../attribution/start-param.js";
+import { RESTRICTION_KINDS } from "../restrictions/restriction-catalog.js";
 import { PLATFORM_IDS } from "../../platforms/ports/platform.js";
 
 /**
@@ -40,6 +41,8 @@ export const playerListQuerySchema = z
       .optional(),
     payer: yesNo.optional(),
     banned: yesNo.optional(),
+    /** действующие ограничения: `any` — хоть одно, `none` — ни одного, вид — именно он */
+    restricted: z.enum(["any", "none", ...RESTRICTION_KINDS]).optional(),
     canMessage: yesNo.optional(),
     sort: z.enum(PLAYER_SORTS).default("registered"),
     order: z.enum(["desc", "asc"]).default("desc"),

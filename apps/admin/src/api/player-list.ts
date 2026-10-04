@@ -45,6 +45,8 @@ export interface PlayerListFilters {
   campaign: string;
   payer: YesNo;
   banned: YesNo;
+  /** «неважно» — пусто; `any` — хоть одно действующее ограничение, `none` — ни одного, иначе — вид */
+  restricted: string;
   canMessage: YesNo;
   sort: ListSort;
   order: "desc" | "asc";
@@ -62,6 +64,7 @@ export const EMPTY_FILTERS: PlayerListFilters = {
   campaign: "",
   payer: "",
   banned: "",
+  restricted: "",
   canMessage: "",
   sort: "registered",
   order: "desc",
@@ -81,6 +84,11 @@ export const playerListItemSchema = z.object({
   payer: z.boolean().nullable(),
   canMessage: z.boolean().nullable(),
   banned: z.object({ at: z.string(), reason: z.string().nullable() }).nullable(),
+  /** виды действующих ограничений; сервер старше ограничений поля не шлёт */
+  restrictions: z
+    .array(z.string())
+    .optional()
+    .transform((value) => value ?? []),
   pii: z.object({ platformUserId: z.string(), username: z.string().nullable() }).nullable(),
 });
 
@@ -107,6 +115,7 @@ export function listQuery(filters: PlayerListFilters, cursor: string | null): Re
     campaign: text(filters.campaign.toLowerCase()),
     payer: text(filters.payer),
     banned: text(filters.banned),
+    restricted: text(filters.restricted),
     canMessage: text(filters.canMessage),
     sort: filters.sort,
     order: filters.order,

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import { ValidationError } from "../../common/domain-error.js";
+import { DomainError, ValidationError } from "../../common/domain-error.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { RolesService } from "../roles/roles.service.js";
 import type { RunFinish, RunStart } from "./dto/runs.dto.js";
@@ -14,6 +14,7 @@ import { RunContinues } from "./run-continues.js";
 import { RunLoadouts } from "./run-loadouts.js";
 import { detailsOf } from "./run-details.js";
 import { RunsHooks } from "./runs-hooks.js";
+import { RunNotFoundError } from "./runs-view.service.js";
 
 /**
  * Приём забегов (docs/34-stage3-plan.md, WP4): старт, итог и пересборка
@@ -30,6 +31,13 @@ import { RunsHooks } from "./runs-hooks.js";
  * будто забег засчитан, с местом среди настоящих игроков, а в доски он не
  * идёт.
  */
+
+/** Менять нечего: снимают уже снятый или возвращают тот, что не был снят модератором. */
+export class RunRankingConflictError extends DomainError {
+  constructor(ranked: boolean) {
+    super("run_ranking_conflict", ranked ? "Вернуть можно только забег, снятый с рейтинга модератором" : "Этот забег уже не в рейтинге", 409);
+  }
+}
 
 export interface FinishResult {
   /** `false` — забег не в рейтинге: читы или вердикт не `ok` */
@@ -161,6 +169,38 @@ export class RunsService {
    */
   async rebuildLeaderboard(): Promise<Record<string, number>> {
     return await rebuildLeaderboard(this.runs, this.leaderboard, new Set(await this.rating.excluded()));
+  }
+
+  /**
+   * Снять забег с рейтинга или вернуть (docs/35-stage4-plan.md WP44, часть
+   * 3б): ограничение рейтинга закрывает его на срок, а сомнительный рекорд до
+   * ограничения иначе вернулся бы вместе с игроком. Доска сложности
+   * пересчитывается по лучшему оставшемуся рейтинговому забегу; игроку с
+   * закрытым рейтингом её не трогаем — вернётся по сроку уже без снятого.
+   */
+  async setRanked(actor: AccountRef, runId: string, ranked: boolean, comment: string): Promise<{ accountId: string; ranked: boolean }> {
+    await this.roles.require(actor, "players.restrict");
+    const stored = await this.runs.find(runId);
+    if (stored === null || stored.status !== "finished") throw new RunNotFoundError();
+    const changed = await this.runs.setRanked(runId, ranked);
+    if (changed === null) throw new RunRankingConflictError(ranked);
+
+    if ((await this.rating.hold(changed.accountId)) === null) {
+      const best = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false);
+      await this.leaderboard.set(changed.difficulty, changed.accountId, best?.survivalSec ?? null);
+      // Забег, сданный между чтением и записью, затёрт точной записью; итог пишет базу раньше доски — второе чтение его видит.
+      const after = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false);
+      if (after !== null && after.survivalSec !== best?.survivalSec) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.survivalSec);
+    }
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: ranked ? "players.run.rerank" : "players.run.unrank",
+      target: changed.accountId,
+      // Направление — в названии действия; в записи — какой забег и почему, чтобы журнал читался без карточки.
+      after: { runId, difficulty: changed.difficulty, survivalSec: changed.survivalSec, comment },
+    });
+    this.logger.log(JSON.stringify({ module: "runs", event: ranked ? "run_reranked" : "run_unranked", runId, accountId: changed.accountId, actor: actor.accountId }));
+    return { accountId: changed.accountId, ranked };
   }
 
   /**

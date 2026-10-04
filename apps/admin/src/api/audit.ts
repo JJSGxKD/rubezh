@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatDateTime, formatNumber } from "../format";
+import { formatDateTime, formatDuration, formatNumber } from "../format";
 import type { Route } from "../routes";
 import { DEVICE_TITLES, PLACE_TITLES, PLATFORM_TITLES, SUCCESS_TITLES } from "./ads";
 import { STATUS_LOOK } from "./broadcasts";
@@ -86,6 +86,8 @@ const ACTION_TITLES: Record<string, string> = {
   "players.unban": "Снятие блокировки",
   "players.restrict": "Ограничение игрока",
   "players.unrestrict": "Снятие ограничения",
+  "players.run.unrank": "Снятие забега с рейтинга",
+  "players.run.rerank": "Возврат забега в рейтинг",
   "players.message": "Сообщение игроку",
   "wallet.adjust": "Ручная операция с кошельком",
   "referrals.reject": "Отклонение приглашения",
@@ -223,6 +225,9 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
 const FIELD_TITLES: Record<string, string> = {
   restrictions: "ограничения",
   replaced: "заменили действовавшие",
+  runId: "забег",
+  difficulty: "сложность",
+  survivalSec: "время в забеге",
   role: "роль",
   roles: "роли",
   name: "имя",
@@ -393,6 +398,7 @@ const VALUE_TITLES: Record<string, Partial<Record<string, string>>> = {
   network: NETWORK_TITLES,
   registrationOn: { first_run: "после первого забега", launch: "при первом запуске" },
   goal: GOAL_TITLES,
+  difficulty: { easy: "лёгкая", normal: "нормальная", hard: "сложная" },
 };
 
 const word = (key: string, value: string): string => VALUE_TITLES[key]?.[value] ?? value;
@@ -401,7 +407,7 @@ const word = (key: string, value: string): string => VALUE_TITLES[key]?.[value] 
 export function auditValue(value: unknown, key = "", max = 80): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? "да" : "нет";
-  if (typeof value === "number") return VALUE_TITLES[key]?.[String(value)] ?? formatNumber(value);
+  if (typeof value === "number") return key === "survivalSec" ? formatDuration(value) : (VALUE_TITLES[key]?.[String(value)] ?? formatNumber(value));
   const amounts = resourceAmounts(value);
   if (amounts !== null) return amounts;
   if ((key === "restrictions" || key === "replaced") && Array.isArray(value)) {
@@ -411,6 +417,7 @@ export function auditValue(value: unknown, key = "", max = 80): string {
   if (typeof value === "string") {
     if (key === "role") return roleName(value);
     if (key === "resource") return resourceName(value);
+    if (key === "runId") return short(value);
     // Причина ограничения — ключом шаблона; прочие причины — свободный текст и идут как записаны.
     if (key === "reason" && value in RESTRICTION_REASONS) return RESTRICTION_REASONS[value] ?? value;
     if (key in VALUE_TITLES) return word(key, value);

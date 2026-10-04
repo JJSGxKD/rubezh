@@ -65,6 +65,15 @@ describe.skipIf(DATABASE_URL === "")("список игроков на живо�
     await prisma.accountFunnel.create({ data: { accountId: ids[2] ?? "", firstPurchaseAt: at } });
     await prisma.accountMessaging.createMany({ data: [{ accountId: ids[0] ?? "", canMessage: true, reason: "entered", changedAt: at }, { accountId: ids[1] ?? "", canMessage: false, reason: "blocked", changedAt: at }] });
     await accounts.setBan(ids[4] ?? "", { at, reason: "тест" });
+    // Действуют два ограничения у второго; у третьего срок вышел, у пятого снято — не в счёт.
+    await prisma.accountRestriction.createMany({
+      data: [
+        { accountId: ids[2] ?? "", kind: "promo_codes", startsAt: at, endsAt: null, reason: "promo_abuse", notify: true },
+        { accountId: ids[2] ?? "", kind: "ad_rewards", startsAt: at, endsAt: null, reason: "ad_abuse", notify: false },
+        { accountId: ids[3] ?? "", kind: "promo_codes", startsAt: at, endsAt: new Date(base + MINUTE), reason: "other", notify: true },
+        { accountId: ids[5] ?? "", kind: "leaderboard", startsAt: at, endsAt: null, reason: "other", notify: true, liftedAt: at, liftComment: "снято" },
+      ],
+    });
   });
 
   afterAll(async () => {
@@ -105,6 +114,16 @@ describe.skipIf(DATABASE_URL === "")("список игроков на живо�
     expect(await only({ banned: true })).toEqual([4]);
     const [row] = await all("registered", "asc", { ...window, source: "invite" });
     expect(row).toMatchObject({ source: "invite", canMessage: true, payer: false, level: 1, campaign: null });
+  });
+
+  it("ограничения: хоть одно, ни одного, вид; истёкшее и снятое не в счёт, молчаливое — в счёт", async () => {
+    const only = async (filters: Partial<PlayerFilters>) => (await all("registered", "asc", { ...window, ...filters })).map((row) => ids.indexOf(row.accountId)).sort();
+    expect(await only({ restricted: "any" })).toEqual([2]);
+    expect(await only({ restricted: "none" })).toEqual([0, 1, 3, 4, 5]);
+    expect(await only({ restricted: "ad_rewards" })).toEqual([2]);
+    expect(await only({ restricted: "leaderboard" })).toEqual([]);
+    const [row] = await all("registered", "asc", { ...window, restricted: "any" });
+    expect(row?.restrictions).toEqual(["ad_rewards", "promo_codes"]);
   });
 
   it("план: страница — отрезок индекса, без сортировки всей выборки", async () => {

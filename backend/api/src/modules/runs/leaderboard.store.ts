@@ -33,6 +33,11 @@ export interface LeaderboardStore {
   count(difficulty: Difficulty): Promise<number>;
   /** Сколько игроков в доске с временем строго больше — место того, кого в доске нет. */
   countAbove(difficulty: Difficulty, survivalSec: number): Promise<number>;
+  /**
+   * Поставить ровно это время, даже если оно хуже, — после того как
+   * модератор снял забег с рейтинга; `null` — убрать из доски сложности.
+   */
+  set(difficulty: Difficulty, accountId: string, survivalSec: number | null): Promise<void>;
   /** Убрать аккаунты из досок всех сложностей — ограничение рейтинга; возвращает, сколько мест снято. */
   remove(accountIds: readonly string[]): Promise<number>;
   /** Заменить проекцию целиком — пересборка из базы. */
@@ -77,6 +82,11 @@ export class RedisLeaderboardStore implements LeaderboardStore {
 
   async countAbove(difficulty: Difficulty, survivalSec: number): Promise<number> {
     return await this.redis.zcount(key(difficulty), `(${String(survivalSec)}`, "+inf");
+  }
+
+  async set(difficulty: Difficulty, accountId: string, survivalSec: number | null): Promise<void> {
+    if (survivalSec === null) await this.redis.zrem(key(difficulty), accountId);
+    else await this.redis.zadd(key(difficulty), survivalSec, accountId);
   }
 
   async remove(accountIds: readonly string[]): Promise<number> {

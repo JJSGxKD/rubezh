@@ -18,6 +18,19 @@ import { RUNS_REPOSITORY, type ReviewRow, type RunDetailRow, type RunsRepository
 
 export const LEADERBOARD_LIMIT = 50;
 const RECENT_RUNS_SHOWN = 10;
+/** Сколько лучших забегов сложности видит модератор — тех, что держат игрока в доске. */
+const MODERATION_RUNS_SHOWN = 10;
+
+/** Забег в карточке игрока для модератора — рейтинговый или снятый им с рейтинга. */
+export interface ModerationRunView {
+  runId: string;
+  survivalSec: number;
+  level: number;
+  enemiesKilled: number;
+  startingWeaponId: string;
+  finishedAt: string;
+  ranked: boolean;
+}
 
 export interface LeaderboardView {
   difficultyId: Difficulty;
@@ -193,6 +206,14 @@ export class RunsViewService {
     const [total, hold] = await Promise.all([this.leaderboard.count(difficulty), this.rating.hold(accountId)]);
     if (hold !== "silent" || (await this.leaderboard.best(difficulty, accountId)) !== null) return total;
     return (await this.runs.bestRunOf(accountId, difficulty, true)) === null ? total : total + 1;
+  }
+
+  /** Лучшие рейтинговые и снятые модератором забеги по сложностям — для карточки игрока в панели. */
+  async moderationRuns(accountId: string): Promise<Record<Difficulty, ModerationRunView[]>> {
+    const lists = await Promise.all(DIFFICULTIES.map(async (difficulty) => await this.runs.moderationRuns(accountId, difficulty, MODERATION_RUNS_SHOWN)));
+    const view = (rows: Awaited<ReturnType<RunsRepository["moderationRuns"]>>) =>
+      rows.map((row) => ({ runId: row.runId, survivalSec: row.survivalSec, level: row.level, enemiesKilled: row.enemiesKilled, startingWeaponId: row.startingWeaponId, finishedAt: row.finishedAt.toISOString(), ranked: row.ranked }));
+    return { easy: view(lists[0] ?? []), normal: view(lists[1] ?? []), hard: view(lists[2] ?? []) };
   }
 
   private async boardBest(accountId: string, difficulty: Difficulty): Promise<{ survivalSec: number; rank: number } | null> {

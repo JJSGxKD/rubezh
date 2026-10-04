@@ -7,6 +7,7 @@ import type { Difficulty } from "../../src/modules/runs/run-rules.js";
 import type {
   BestRunRow,
   FinishOutcome,
+  ModerationRunRow,
   RecentRun,
   ReviewRow,
   RunDetailRow,
@@ -153,6 +154,26 @@ export class MemoryRunsRepository implements RunsRepository {
     return { accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled };
   }
 
+  async moderationRuns(accountId: string, difficulty: Difficulty, limit: number): Promise<ModerationRunRow[]> {
+    return [...this.rows.values()]
+      .flatMap((row) => (row.record !== undefined && row.accountId === accountId && row.record.difficulty === difficulty && (row.ranked || this.unrankedByModerator(row)) ? [{ ...row.record, ranked: row.ranked }] : []))
+      .sort((a, b) => b.survivalSec - a.survivalSec)
+      .slice(0, limit)
+      .map((record) => ({ runId: record.runId, difficulty: record.difficulty, survivalSec: record.survivalSec, level: record.level, enemiesKilled: record.enemiesKilled, startingWeaponId: record.startingWeaponId, finishedAt: record.finishedAt, ranked: record.ranked }));
+  }
+
+  async setRanked(runId: string, ranked: boolean): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
+    const row = this.rows.get(runId);
+    if (row?.record === undefined || (ranked ? !this.unrankedByModerator(row) : !row.ranked)) return null;
+    row.ranked = ranked;
+    row.record = { ...row.record, ranked };
+    return { accountId: row.accountId, difficulty: row.record.difficulty, survivalSec: row.record.survivalSec };
+  }
+
+  private unrankedByModerator(row: Row): boolean {
+    return row.record !== undefined && !row.ranked && row.record.verdict === "ok" && !row.record.cheats && row.record.ratingRestricted === null;
+  }
+
   async review(limit: number): Promise<ReviewRow[]> {
     return [...this.rows.values()]
       .flatMap((row) => (row.record !== undefined && row.record.verdict !== "ok" ? [row.record] : []))
@@ -212,6 +233,11 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
 
   async countAbove(difficulty: Difficulty, survivalSec: number): Promise<number> {
     return [...this.board(difficulty).values()].filter((score) => score > survivalSec).length;
+  }
+
+  async set(difficulty: Difficulty, accountId: string, survivalSec: number | null): Promise<void> {
+    if (survivalSec === null) this.board(difficulty).delete(accountId);
+    else this.board(difficulty).set(accountId, survivalSec);
   }
 
   async remove(accountIds: readonly string[]): Promise<number> {
