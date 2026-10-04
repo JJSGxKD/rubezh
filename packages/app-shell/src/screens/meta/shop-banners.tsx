@@ -1,7 +1,8 @@
-import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode, type UIEvent } from "react";
+import type { ReactNode } from "react";
 import { BadgePercent, Crown, Rocket, Shield, Sparkles } from "lucide-react";
 import { Button } from "../../design-system/components";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
+import { useSwipeStrip } from "../../design-system/components/swipe-strip";
 import { formatNumber, t } from "../../i18n";
 import { ResourceIcon, StarsButton } from "./shop-parts";
 import { bannerKey, buyLabel, itemName, promoLeft, resourceLabel, shownPrice, type ShopBanner } from "./shop-texts";
@@ -117,104 +118,22 @@ function BannerAction(props: { banner: ShopBanner; busy: string | null; now: num
   );
 }
 
-/** Сдвиг мыши, после которого нажатие считается перетаскиванием, а не кликом, px. */
-const DRAG_THRESHOLD = 6;
-
-function prefersReducedMotion(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 export function ShopBanners(props: {
   banners: readonly ShopBanner[];
   busy: string | null;
   now: number;
   onAction: (banner: ShopBanner, position: number) => void;
 }): ReactNode {
-  const [current, setCurrent] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const strip = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x: number; scroll: number; moved: boolean } | null>(null);
-  // Клик приходит после отпускания, когда состояние уже сброшено, — помним жест отдельно.
-  const justDragged = useRef(false);
   const total = props.banners.length;
+  const { strip, current, dragClass, scrollToIndex, handlers } = useSwipeStrip(total);
   if (total === 0) return null;
-
-  /** Шаг между баннерами — по вёрстке, а не числом здесь: ширину и зазор задают классы. */
-  const stepOf = (element: HTMLDivElement): number => {
-    const first = element.children.item(0);
-    const second = element.children.item(1);
-    if (!(first instanceof HTMLElement) || !(second instanceof HTMLElement)) return 0;
-    return second.offsetLeft - first.offsetLeft;
-  };
-
-  const onScroll = (event: UIEvent<HTMLDivElement>): void => {
-    const step = stepOf(event.currentTarget);
-    if (step <= 0) return;
-    const next = Math.min(total - 1, Math.max(0, Math.round(event.currentTarget.scrollLeft / step)));
-    if (next !== current) setCurrent(next);
-  };
-
-  const scrollToIndex = (index: number): void => {
-    const element = strip.current;
-    if (element === null) return;
-    element.scrollTo({ left: index * stepOf(element), behavior: prefersReducedMotion() ? "auto" : "smooth" });
-  };
-
-  /**
-   * Мышью ленту тянут так же, как пальцем: на ПК и в Telegram Desktop
-   * горизонтальной прокрутки колесом у многих нет. Палец и перо прокручивают
-   * ленту сами — их не трогаем. Пока тянут, привязка к баннеру выключена,
-   * иначе лента дёргается под курсором; отпустили — доезжает до ближайшего.
-   */
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
-    justDragged.current = false;
-    if (event.pointerType !== "mouse" || event.button !== 0) return;
-    drag.current = { x: event.clientX, scroll: event.currentTarget.scrollLeft, moved: false };
-  };
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>): void => {
-    const state = drag.current;
-    if (state === null) return;
-    const dx = event.clientX - state.x;
-    if (!state.moved && Math.abs(dx) < DRAG_THRESHOLD) return;
-    if (!state.moved) {
-      state.moved = true;
-      setDragging(true);
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-    event.currentTarget.scrollLeft = state.scroll - dx;
-  };
-  const endDrag = (): void => {
-    const state = drag.current;
-    drag.current = null;
-    if (state === null || !state.moved) return;
-    justDragged.current = true;
-    setDragging(false);
-    const element = strip.current;
-    const step = element === null ? 0 : stepOf(element);
-    if (element !== null && step > 0) scrollToIndex(Math.min(total - 1, Math.max(0, Math.round(element.scrollLeft / step))));
-  };
-  /** Отпущенная после перетаскивания кнопка не должна покупать: это был жест, а не нажатие. */
-  const onClickCapture = (event: MouseEvent<HTMLDivElement>): void => {
-    if (!justDragged.current) return;
-    justDragged.current = false;
-    event.preventDefault();
-    event.stopPropagation();
-  };
 
   return (
     <section className="min-w-0" aria-roledescription={t("shop.banner.carousel")} aria-label={t("shop.banner.label")}>
       <div
         ref={strip}
-        className={[
-          "-mx-4 flex gap-3 overflow-x-auto scroll-px-4 px-4 pb-1 [scrollbar-width:none]",
-          dragging ? "cursor-grabbing select-none" : "cursor-grab snap-x snap-mandatory",
-        ].join(" ")}
-        onScroll={onScroll}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onClickCapture={onClickCapture}
+        className={`-mx-4 flex gap-3 overflow-x-auto scroll-px-4 px-4 pb-1 [scrollbar-width:none] ${dragClass}`}
+        {...handlers}
       >
         {props.banners.map((banner, index) => {
           const tone = TONE[banner.kind];

@@ -2,10 +2,12 @@ import { useState, type ReactNode } from "react";
 import { CONTENT_HASH } from "@bh/core-game";
 import {
   ContentColumn,
+  Emblem,
   ListGroup,
   ListItem,
   Screen,
   SectionTitle,
+  Wordmark,
 } from "../design-system/components";
 import { audio } from "../audio";
 import { Slider } from "../design-system/components/Slider";
@@ -261,6 +263,12 @@ export function AboutScreen(): ReactNode {
   return (
     <Screen title={t("about.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
+        {/* Бренд — здесь и на заставке, а не на главной (Р76). */}
+        <div className="mt-2 mb-5 flex flex-col items-center gap-2 text-center">
+          <Emblem size={64} />
+          <Wordmark />
+          <p className="max-w-[300px] text-sm text-text-muted">{t("lobby.tagline")}</p>
+        </div>
         <ListGroup>
           <ListItem title={t("about.build")} value={build.version} />
           <ListItem title={t("about.content")} value={CONTENT_HASH} />

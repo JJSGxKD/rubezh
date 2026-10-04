@@ -87,7 +87,7 @@
   "runDetail.died": "Погиб",
   "runDetail.diedBy": "Погиб: {enemy}",
   "runDetail.abandoned": "Сдался",
-  "runDetail.continues": "второй шанс {n, plural, one {# раз} few {# раза} many {# раз} other {# раза}}",
+  "runDetail.continues": "второй шанс {n} {n, plural, one {раз} few {раза} many {раз} other {раза}}",
   "runDetail.rating.ranked": "В рейтинге",
   "runDetail.rating.cheats": "С читами",
   "runDetail.rating.review": "Вне рейтинга",

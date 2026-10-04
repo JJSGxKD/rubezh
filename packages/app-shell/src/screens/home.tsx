@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import {
   BookOpen,
   CalendarCheck,
@@ -19,11 +19,9 @@ import {
   Button,
   Card,
   ContentColumn,
-  Emblem,
   Modal,
   Screen,
   Stat,
-  Wordmark,
 } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
@@ -35,6 +33,7 @@ import { useToolsAccess } from "../state/tools";
 import { preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine, useRun } from "../state/run";
 import { useSavedRun, type SavedRun } from "../state/run-save";
+import { useShell } from "../state/shell";
 import { ItemTile } from "./item-icons";
 
 /**
@@ -93,14 +92,10 @@ export function LobbyScreen(): ReactNode {
       }
     >
       <ContentColumn>
-        {/* В ландшафте телефона под контент остаётся полторы сотни пикселей:
-            знак и слоган уходят, остаются имя и рекорд (§5.3). */}
-        <div className="mt-6 mb-8 flex flex-col items-center gap-3 text-center landscape:mt-1 landscape:mb-3">
-          <span className="landscape:hidden">
-            <Emblem size={104} animated />
-          </span>
-          <Wordmark size="l" />
-          <p className="max-w-[300px] text-sm text-text-muted landscape:hidden">{t("lobby.tagline")}</p>
+        {/* Бренда на главной нет — он на заставке и в «Об игре»: игрок и так
+            знает, что открыл (Р76). На его месте — что можно сделать сейчас. */}
+        <div className="mt-3">
+          <CarouselSlot />
         </div>
 
         {saved === null ? null : <SavedRunCard saved={saved} />}
@@ -214,6 +209,45 @@ export function LobbyScreen(): ReactNode {
         <p className="text-sm text-text-muted">{t("lobby.newRun.text")}</p>
       </Modal>
     ) : null}
+    </div>
+  );
+}
+
+/** Приехавший чанк карусели: на главную возвращаются после каждого забега, и заглушка не должна мигать. */
+let loadedCarousel: ComponentType | null = null;
+
+/**
+ * Карусель главной (WP42) — своим чанком после первого кадра: первой
+ * загрузке она не нужна. Пока чанк едет, место держит заглушка той же
+ * высоты, что у самой карусели (`home-carousel.tsx`). Гостю без входа
+ * карусели нет: слайды собирает сервер по аккаунту. В низком ландшафте
+ * телефона под всё остальное полторы сотни пикселей — там её тоже нет.
+ */
+function CarouselSlot(): ReactNode {
+  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
+  const [Carousel, setCarousel] = useState<ComponentType | null>(() => loadedCarousel);
+  useEffect(() => {
+    if (!withAccount || loadedCarousel !== null) return;
+    let alive = true;
+    void import("./home-carousel").then((module) => {
+      loadedCarousel = module.HomeCarousel;
+      if (alive) setCarousel(() => module.HomeCarousel);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [withAccount]);
+  if (!withAccount) return null;
+  return (
+    <div className="[@media(max-height:480px)]:hidden">
+      {Carousel === null ? (
+        <div aria-hidden="true" className="mb-3">
+          <div className="surface-sunken h-20 rounded-lg" />
+          <div className="h-6" />
+        </div>
+      ) : (
+        <Carousel />
+      )}
     </div>
   );
 }

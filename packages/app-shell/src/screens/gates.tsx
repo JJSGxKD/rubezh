@@ -25,8 +25,9 @@ export type BootStage = (typeof BOOT_STAGES)[number];
 
 /**
  * Заставка запуска. Раскладка повторяет заставку из index.html — знак, имя,
- * полоса, — поэтому смена статичной разметки на React не видна глазом, а
- * полоса продолжает движение с того места, где её оставила разметка.
+ * слоган, полоса, — поэтому смена статичной разметки на React не видна
+ * глазом, а полоса продолжает движение с того места, где её оставила
+ * разметка. Бренд живёт здесь и в «Об игре», а не на главной (Р76).
  */
 export function BootScreen(props: { stage: BootStage; version: string }): ReactNode {
   const done = BOOT_STAGES.indexOf(props.stage) + 1;
@@ -35,6 +36,7 @@ export function BootScreen(props: { stage: BootStage; version: string }): ReactN
     <Centered still>
       <Emblem size={88} animated />
       <Wordmark size="l" />
+      <p className="max-w-[300px] text-sm text-text-muted landscape:hidden">{t("lobby.tagline")}</p>
       <div className="mt-4 w-48">
         <ProgressBar
           value={done}

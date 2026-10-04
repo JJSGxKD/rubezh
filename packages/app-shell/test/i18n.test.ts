@@ -1,4 +1,7 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { z } from "zod/mini";
 import { formatDuration, hasTranslation, t } from "../src/i18n";
 // Ключ примера — из словаря забега: он подгружается с чанком экрана забега.
 import "../src/i18n/run";
@@ -17,6 +20,20 @@ describe("переводы", () => {
     expect(t("lobby.runs", { count: 3 })).toBe("3 забега");
     expect(t("lobby.runs", { count: 11 })).toBe("11 забегов");
     expect(t("lobby.runs", { count: 22 })).toBe("22 забега");
+  });
+
+  it("число в склонении — подстановкой, а не «#»: формат его не знает", async () => {
+    // «#» из ICU здесь не подставляется — игрок увидел бы «второй шанс # раз».
+    // Число пишется рядом: «{n} {n, plural, …}».
+    const dir = fileURLToPath(new URL("../src/i18n", import.meta.url));
+    for (const file of readdirSync(dir).filter((name) => name.endsWith(".json"))) {
+      const dictionary = z.record(z.string(), z.string()).parse(JSON.parse(readFileSync(`${dir}/${file}`, "utf8")));
+      for (const [key, text] of Object.entries(dictionary)) {
+        expect(/plural,.*#/s.test(text), `${file}: ${key}`).toBe(false);
+      }
+    }
+    await import("../src/i18n/account");
+    expect(t("runDetail.continues", { n: 2 })).toBe("второй шанс 2 раза");
   });
 
   it("склоняет число участников в рейтинге", () => {
