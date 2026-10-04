@@ -17,5 +17,5 @@
   "run.continue.ad.notice.claim_failed": "Ролик засчитан, но сервер не ответил — нажмите ещё раз, смотреть заново не придётся",
   "run.continue.ad.gone.daily_cap": "Продолжения за рекламу на сегодня закончились",
   "run.continue.ad.gone.no_ads_now": "Сейчас рекламы нет",
-  "run.continue.ad.gone.restricted": "Награды за рекламу вам сейчас закрыты — срок и причина в профиле"
+  "run.continue.ad.gone.restricted": "Награды за рекламу закрыты — подробности в профиле"
 }

@@ -252,7 +252,7 @@ describe("второй шанс за рекламу", () => {
     expect(useAdContinue.getState().stage).toEqual({ kind: "unavailable", reason: "used_up" });
   });
 
-  it("награды за рекламу закрыты ограничением — строка «срок и причина в профиле», при выдаче и при заборе", async () => {
+  it("награды за рекламу закрыты ограничением — строка «подробности в профиле», при выдаче и при заборе", async () => {
     await downed(["stars", "ad"]);
     outcomes = [{ kind: "restricted" }];
     await useAdContinue.getState().prepare(result());
