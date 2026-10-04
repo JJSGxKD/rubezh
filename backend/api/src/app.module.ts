@@ -41,6 +41,7 @@ import { AccountSettingsModule } from "./modules/account-settings/account-settin
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
 import { NotificationsBotModule } from "./modules/notifications-bot/notifications-bot.module.js";
 import { BadgesModule } from "./modules/badges/badges.module.js";
+import { HomeModule } from "./modules/home/home.module.js";
 import { HistoryModule } from "./modules/history/history.module.js";
 import { DailyModule } from "./modules/daily/daily.module.js";
 import { ChangelogModule } from "./modules/changelog/changelog.module.js";
@@ -118,6 +119,7 @@ export const APP_MODULES = [
   TelegramPanelLoginModule,
   FriendsModule,
   BadgesModule,
+  HomeModule,
   HistoryModule,
   DailyModule,
   ReferralsModule,

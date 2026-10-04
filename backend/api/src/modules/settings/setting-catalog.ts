@@ -88,6 +88,8 @@ const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
 
+const HOME_GROUP = "Главная";
+
 /**
  * Целое число в пределах — схема и пределы из одного места: панель
  * проверит то же самое, что сервер. Без окружения: такие числа — продуктовые
@@ -182,6 +184,21 @@ export const SETTINGS = {
     group: SHOP_GROUP,
     title: "Ссылка на Tribute",
     hint: "Плашка «Звёзды дешевле через Tribute» во вкладке самоцветов магазина, только в Telegram. Пусто — плашки нет",
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  /**
+   * Канал проекта (docs/35-stage4-plan.md WP42): слайд «Наш канал» в
+   * карусели главной. Не секрет и меняется без релиза — канал можно
+   * переименовать или завести новый.
+   */
+  homeChannelUrl: {
+    key: "home.channel-url",
+    group: HOME_GROUP,
+    title: "Канал проекта",
+    hint: "Слайд «Наш канал» в карусели главной ведёт сюда — ссылка https://t.me/… Пусто — слайда нет",
     kind: "url",
     schema: urlSchema,
     fromEnv: () => null,
