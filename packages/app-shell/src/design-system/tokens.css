@@ -67,11 +67,23 @@
   --animate-guide-shot-late: guide-shot-late 2.4s linear infinite;
   /* Отсчёт рекламного блока: длительность — срок досмотра, ставит сам блок (ads/ad-creative.tsx). */
   --animate-ad-countdown: ad-countdown 1s linear both;
+  /* Мини-колесо на главной покачивается, пока ждёт бесплатная крутка: зовёт, но не вертится всерьёз. */
+  --animate-widget-rock: widget-rock 2.8s var(--ease-base) infinite;
 
   @keyframes screen-in {
     from {
       opacity: 0;
       transform: translateY(8px);
+    }
+  }
+
+  @keyframes widget-rock {
+    0%,
+    100% {
+      transform: rotate(-12deg);
+    }
+    50% {
+      transform: rotate(12deg);
     }
   }
 
@@ -518,6 +530,89 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
+}
+
+/*
+ * Виджеты главной (docs/35-stage4-plan.md WP42, Р76): у каждого свой тон,
+ * свой облик и свой крючок. Смена стиля виджета — правка этих строк, а не
+ * разметки: тон окрашивает подложку, кромку, значок и облик виджета.
+ */
+:root {
+  --widget-daily-tone: var(--color-accent);
+  /* Сундук светится, пока награда ждёт. */
+  --widget-daily-glow: var(--color-accent-glow);
+  --widget-wheel-tone: var(--color-info);
+  /* Сектора мини-колеса чередуются: тон и тёмная подложка — колесо читается колесом и в 36 px. */
+  --widget-wheel-sector: color-mix(in oklab, var(--color-info) 70%, var(--color-surface));
+  --widget-wheel-sector-alt: var(--color-surface-sunken);
+  --widget-tasks-tone: var(--color-success);
+  /* Дорожка кольца прогресса — видна и пустой. */
+  --widget-tasks-track: color-mix(in oklab, var(--color-success) 18%, var(--color-surface-sunken));
+  --widget-record-tone: var(--color-passive);
+  --widget-friends-tone: var(--color-gem-light);
+
+  /* Насколько тон окрашивает подложку: ждущий — едва, готовый к забору — заметно. */
+  --widget-tint: 7%;
+  --widget-tint-ready: 18%;
+  /*
+   * Высоты — постоянные: главная не прыгает, когда приходит ответ или меняется
+   * порядок. Посчитаны от экрана 360×640: между каруселью и «Играть» около
+   * 300 px, и в них встают три широких, или два широких и ряд плиток, или
+   * широкий и две пары плиток (Р76, критерий приёмки WP42).
+   */
+  --widget-hero-h: 5.75rem;
+  --widget-tile-h: 5.5rem;
+  --widget-row-h: 4rem;
+}
+
+@utility widget-daily {
+  --widget-tone: var(--widget-daily-tone);
+}
+
+@utility widget-wheel {
+  --widget-tone: var(--widget-wheel-tone);
+}
+
+@utility widget-tasks {
+  --widget-tone: var(--widget-tasks-tone);
+}
+
+@utility widget-record {
+  --widget-tone: var(--widget-record-tone);
+}
+
+@utility widget-friends {
+  --widget-tone: var(--widget-friends-tone);
+}
+
+@utility widget-surface {
+  background: linear-gradient(160deg, color-mix(in oklab, var(--widget-tone) var(--widget-tint), var(--color-surface-raised)), var(--color-surface) 70%);
+  border: 1px solid color-mix(in oklab, var(--widget-tone) 20%, var(--color-border));
+  box-shadow: var(--shadow-card);
+}
+
+/* Готовое к забору: подложка теплее, кромка ярче и мягкий ореол тона — видно до чтения текста. */
+@utility widget-surface-ready {
+  background: linear-gradient(160deg, color-mix(in oklab, var(--widget-tone) var(--widget-tint-ready), var(--color-surface-raised)), var(--color-surface) 75%);
+  border: 1px solid color-mix(in oklab, var(--widget-tone) 55%, transparent);
+  box-shadow:
+    var(--shadow-card),
+    0 0 24px -8px color-mix(in oklab, var(--widget-tone) 70%, transparent);
+}
+
+/* Облик виджета — значок, колесо, кольцо — на подложке его тона. */
+@utility widget-face {
+  color: var(--widget-tone);
+  background: color-mix(in oklab, var(--widget-tone) 15%, transparent);
+}
+
+/*
+ * Движение виджетов стоит вне экрана и в свёрнутом приложении — сетка ставит
+ * метку `data-still` (screens/home-widgets.tsx). «Меньше движения» гасит его
+ * общим правилом ниже, режим слабого телефона (WP39) — этим же классом.
+ */
+[data-still] .widget-motion {
+  animation-play-state: paused;
 }
 
 /* Фон приложения: два мягких пятна света, тёплое сверху и холодное снизу. */

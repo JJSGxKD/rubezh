@@ -219,6 +219,10 @@ export const EVENT_DICTIONARY = {
   // смены версии — необязательное, смысл остальных не меняет.
   home_slide_viewed: { version: 1, payload: payload({ slide: id, position: count, slideId: id.optional() }) },
   home_slide_clicked: { version: 1, payload: payload({ slide: id, position: count, slideId: id.optional() }) },
+  // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): какой крючок
+  // срабатывает — готовое к забору, отсчёт, рекорд — и на каком месте сетки.
+  // Порядок виджетов — правилом, и событие показывает, правильное ли оно.
+  home_widget_clicked: { version: 1, payload: payload({ widget: id, state: id, position: count }) },
   // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
   // доходят ли новички до игры после него и с какой версии текста. Само
   // принятие — таблица test_notice, по ней проверяется, что игрок видел

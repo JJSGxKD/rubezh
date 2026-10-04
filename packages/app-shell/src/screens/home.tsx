@@ -1,18 +1,15 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   BookOpen,
-  CalendarCheck,
   ChevronRight,
   Flame,
   History,
   Wrench,
   Infinity as InfinityIcon,
-  LoaderPinwheel,
   Lock,
   Map as MapIcon,
   MessageSquareHeart,
   Play,
-  Trophy,
 } from "lucide-react";
 import {
   Badge,
@@ -21,13 +18,11 @@ import {
   ContentColumn,
   Modal,
   Screen,
-  Stat,
 } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
 import { useDevMode } from "../state/dev-mode";
-import { useBadges } from "../state/badges";
 import { useNavigation } from "../state/navigation";
 import { useToolsAccess } from "../state/tools";
 import { preloadScreens } from "../app/lazy-screens";
@@ -44,19 +39,17 @@ import { ItemTile } from "./item-icons";
 const PRELOAD_DELAY_MS = 1500;
 
 /**
- * Лобби: «Играть», рекорд и плитки награды дня и колеса — обе на данных
- * сервера и с точкой, пока награда суток ждёт
- * (docs/27-design-system-and-app-shell.md §6).
+ * Лобби: карусель «Сейчас в игре», виджеты — награда дня, колесо, задания,
+ * рекорд и друзья — и «Играть» (docs/27-design-system-and-app-shell.md §6,
+ * docs/35-stage4-plan.md WP42). Карусель и виджеты — одним чанком после
+ * первого кадра (`home-live.ts`): первой загрузке они не нужны.
  */
 export function LobbyScreen(): ReactNode {
   const navigation = useNavigation();
-  const meta = useMeta();
-  const dailyReady = useBadges((state) => state.daily > 0);
-  const wheelReady = useBadges((state) => state.wheel > 0);
+  const runs = useMeta((state) => state.runs);
   const saved = useSavedRun((state) => state.saved);
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
-  const best = meta.best[meta.lastDifficultyId];
-  const askFeedback = shouldAskFeedback(meta.runs, useFeedback((state) => state.sentAtRuns));
+  const askFeedback = shouldAskFeedback(runs, useFeedback((state) => state.sentAtRuns));
   usePreloadEngine();
 
   return (
@@ -100,48 +93,7 @@ export function LobbyScreen(): ReactNode {
 
         {saved === null ? null : <SavedRunCard saved={saved} />}
 
-        <Card appearIndex={1}>
-          <div className="flex items-center gap-4">
-            <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-elite/15 text-elite">
-              <Trophy size={24} />
-            </span>
-            <div className="min-w-0 flex-1">
-              {/* Рекорд — на той сложности, что выбрана сейчас: время на разных
-                  сложностях несравнимо, и общий рекорд обманывал бы. */}
-              <Stat
-                label={t("lobby.record.on", { difficulty: t(`difficulty.${meta.lastDifficultyId}.name`) })}
-                value={best > 0 ? formatDuration(best) : "—"}
-                large
-                tone={best > 0 ? "accent" : undefined}
-              />
-              {best > 0 ? null : (
-                <p className="mt-0.5 text-xs text-text-muted">{t("lobby.noRecord")}</p>
-              )}
-            </div>
-            <Badge>{t("lobby.runs", { count: meta.runs })}</Badge>
-          </div>
-        </Card>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <LobbyTile
-            appearIndex={2}
-            tone="accent"
-            icon={<CalendarCheck size={22} />}
-            title={t("lobby.daily")}
-            hint={t("lobby.daily.hint")}
-            ready={dailyReady ? t("lobby.daily.ready") : undefined}
-            onClick={() => navigation.push("daily")}
-          />
-          <LobbyTile
-            appearIndex={3}
-            tone="info"
-            icon={<LoaderPinwheel size={22} />}
-            title={t("lobby.wheel")}
-            hint={t("lobby.wheel.hint")}
-            ready={wheelReady ? t("lobby.wheel.ready") : undefined}
-            onClick={() => navigation.push("wheel")}
-          />
-        </div>
+        <WidgetsSlot />
 
         {/* Гайдбук на главной, а не только в меню: новичок не пойдёт искать
             его по меню, пока не проиграет пару забегов непонятно кому. */}
@@ -213,41 +165,82 @@ export function LobbyScreen(): ReactNode {
   );
 }
 
-/** Приехавший чанк карусели: на главную возвращаются после каждого забега, и заглушка не должна мигать. */
-let loadedCarousel: ComponentType | null = null;
+type HomeLive = typeof import("./home-live");
 
-/**
- * Карусель главной (WP42) — своим чанком после первого кадра: первой
- * загрузке она не нужна. Пока чанк едет, место держит заглушка той же
- * высоты, что у самой карусели (`home-carousel.tsx`). Гостю без входа
- * карусели нет: слайды собирает сервер по аккаунту. В низком ландшафте
- * телефона под всё остальное полторы сотни пикселей — там её тоже нет.
- */
-function CarouselSlot(): ReactNode {
-  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
-  const [Carousel, setCarousel] = useState<ComponentType | null>(() => loadedCarousel);
+/** Приехавший чанк главной: на главную возвращаются после каждого забега, и заглушки не должны мигать. */
+let loadedLive: HomeLive | null = null;
+let loadingLive: Promise<HomeLive> | null = null;
+
+/** Чанк главной один на оба слота; не приехал — следующий заход попробует снова. */
+function loadHomeLive(): Promise<HomeLive> {
+  loadingLive ??= import("./home-live").then(
+    (module) => (loadedLive = module),
+    (error: unknown) => {
+      loadingLive = null;
+      throw error;
+    },
+  );
+  return loadingLive;
+}
+
+function useHomeLive(): HomeLive | null {
+  const [live, setLive] = useState<HomeLive | null>(() => loadedLive);
   useEffect(() => {
-    if (!withAccount || loadedCarousel !== null) return;
+    if (loadedLive !== null) return;
     let alive = true;
-    void import("./home-carousel").then((module) => {
-      loadedCarousel = module.HomeCarousel;
-      if (alive) setCarousel(() => module.HomeCarousel);
-    });
+    loadHomeLive().then(
+      (module) => {
+        if (alive) setLive(module);
+      },
+      (error: unknown) => console.warn("Чанк главной не загрузился:", error),
+    );
     return () => {
       alive = false;
     };
-  }, [withAccount]);
+  }, []);
+  return live;
+}
+
+/**
+ * Карусель главной (WP42) — с чанком главной после первого кадра. Пока он
+ * едет, место держит заглушка той же высоты, что у самой карусели
+ * (`home-carousel.tsx`). Гостю без входа карусели нет: слайды собирает
+ * сервер по аккаунту. В низком ландшафте телефона под всё остальное
+ * полторы сотни пикселей — там её тоже нет.
+ */
+function CarouselSlot(): ReactNode {
+  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
+  const live = useHomeLive();
   if (!withAccount) return null;
   return (
     <div className="[@media(max-height:480px)]:hidden">
-      {Carousel === null ? (
+      {live === null ? (
         <div aria-hidden="true" className="mb-3">
           <div className="surface-sunken h-20 rounded-lg" />
           <div className="h-6" />
         </div>
       ) : (
-        <Carousel />
+        <live.HomeCarousel />
       )}
+    </div>
+  );
+}
+
+/**
+ * Виджеты главной (WP42, часть 3) — тем же чанком. Заглушка — сетка без
+ * готового к забору: рекорд во всю ширину и две пары плиток, высоты — из
+ * токенов, как у самих виджетов (`home-widgets.tsx`). Гостю виджеты тоже
+ * есть: рекорд — с устройства, остальные ведут на свои экраны.
+ */
+function WidgetsSlot(): ReactNode {
+  const live = useHomeLive();
+  if (live !== null) return <live.HomeWidgets />;
+  return (
+    <div aria-hidden="true" className="mb-3 grid grid-cols-2 gap-3">
+      <div className="surface-sunken col-span-2 h-(--widget-hero-h) rounded-lg" />
+      {[0, 1, 2, 3].map((index) => (
+        <div key={index} className="surface-sunken h-(--widget-tile-h) rounded-lg" />
+      ))}
     </div>
   );
 }
@@ -279,44 +272,6 @@ function SavedRunCard(props: { saved: SavedRun }): ReactNode {
         </div>
       </Card>
     </div>
-  );
-}
-
-/**
- * Плитка быстрого раздела лобби: награда дня, колесо. Точка — только когда
- * награду суток можно забрать, и не мигает (`35-stage4-plan.md`, Р50).
- */
-function LobbyTile(props: {
-  appearIndex: number;
-  tone: "accent" | "info";
-  icon: ReactNode;
-  title: string;
-  hint: string;
-  /** награда ждёт — подпись точки в углу; точка без числа: награда одна в сутки */
-  ready?: string;
-  onClick(): void;
-}): ReactNode {
-  return (
-    <Card appearIndex={props.appearIndex} onClick={props.onClick}>
-      {props.ready === undefined ? null : <span aria-label={props.ready} className="absolute top-2.5 right-2.5 size-2.5 rounded-full bg-accent" />}
-      {/* Значок над подписью, а не сбоку: в половине ширины телефона рядом со
-          значком «Колесо удачи» переносилось на две строки. В ландшафте места
-          хватает — значок возвращается в строку. */}
-      <div className="flex flex-col items-start gap-2 landscape:flex-row landscape:items-center landscape:gap-3">
-        <span
-          className={[
-            "inline-flex size-10 shrink-0 items-center justify-center rounded-md",
-            props.tone === "accent" ? "bg-accent/15 text-accent" : "bg-info/15 text-info",
-          ].join(" ")}
-        >
-          {props.icon}
-        </span>
-        <span className="min-w-0">
-          <span className="block font-display text-sm font-bold text-text">{props.title}</span>
-          <span className="mt-0.5 block text-xs text-text-muted">{props.hint}</span>
-        </span>
-      </div>
-    </Card>
   );
 }
 
