@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { BadgePercent, Crown, Megaphone, Newspaper, Rocket, Target, UserPlus } from "lucide-react";
+import { BadgePercent, CalendarDays, Crown, Gift, Megaphone, Newspaper, Rocket, Sparkles, Target, Trophy, UserPlus } from "lucide-react";
 // Компонент из общего входа дизайн-системы держит ядро значков в общем чанке
 // первой загрузки: без него сборщик выносит ядро в отдельный файл
 // (docs/27-design-system-and-app-shell.md §3.4).
@@ -25,7 +25,38 @@ const TONE: Record<HomeSlide["kind"], string> = {
   invite: "bg-accent/15 text-accent",
   channel: "bg-info/15 text-info",
   task: "bg-passive/15 text-passive",
+  team: "bg-accent/15 text-accent",
 };
+
+/**
+ * Слайд команды — тоном своего значка: турнир золотом элиты, подарок цветом
+ * награды, событие — информации, новинка — пассивок; объявление — фирменным.
+ */
+const TEAM_TONE: Record<string, string> = {
+  trophy: "bg-elite/15 text-elite",
+  gift: "bg-success/15 text-success",
+  calendar: "bg-info/15 text-info",
+  sparkles: "bg-passive/15 text-passive",
+};
+
+function toneOf(slide: HomeSlide): string {
+  return slide.kind === "team" ? (TEAM_TONE[slide.icon] ?? TONE.team) : TONE[slide.kind];
+}
+
+function TeamIcon(props: { icon: string }): ReactNode {
+  switch (props.icon) {
+    case "trophy":
+      return <Trophy size={30} />;
+    case "gift":
+      return <Gift size={30} />;
+    case "calendar":
+      return <CalendarDays size={30} />;
+    case "sparkles":
+      return <Sparkles size={30} />;
+    default:
+      return <Megaphone size={30} />;
+  }
+}
 
 function SlideIcon(props: { slide: HomeSlide }): ReactNode {
   switch (props.slide.kind) {
@@ -43,6 +74,8 @@ function SlideIcon(props: { slide: HomeSlide }): ReactNode {
       return <Megaphone size={30} />;
     case "task":
       return <Target size={30} />;
+    case "team":
+      return <TeamIcon icon={props.slide.icon} />;
   }
 }
 
@@ -67,7 +100,7 @@ export function SlideView(props: { slide: HomeSlide; now: number; image: string 
       ].join(" ")}
     >
       {image === null ? (
-        <span className={`inline-flex size-14 shrink-0 items-center justify-center rounded-md ${TONE[slide.kind]}`}>
+        <span className={`inline-flex size-14 shrink-0 items-center justify-center rounded-md ${toneOf(slide)}`}>
           <SlideIcon slide={slide} />
         </span>
       ) : (
@@ -132,6 +165,7 @@ function chipLabel(slide: HomeSlide, now: number): string | null {
 export function titleOf(slide: HomeSlide): string {
   if (slide.kind === "promo") return slide.title ?? t("home.slide.promo.title");
   if (slide.kind === "task") return slide.title ?? t("home.slide.task.title");
+  if (slide.kind === "team") return slide.title;
   return t(`home.slide.${slide.kind}.title`);
 }
 
@@ -146,6 +180,8 @@ export function textOf(slide: HomeSlide, now = Date.now()): string {
       return t("home.slide.changelog.text", { versions: slide.versions });
     case "task":
       return t(taskPrize(slide) === null ? "home.slide.task.text" : "home.slide.task.prize");
+    case "team":
+      return slide.text;
     default:
       return t(`home.slide.${slide.kind}.text`);
   }

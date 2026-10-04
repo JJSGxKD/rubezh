@@ -4,7 +4,7 @@ import { t } from "../i18n";
 import "../i18n/home";
 import { cachedSlides, loadSlides, safeLink, slideImageUrl, type HomeSlide } from "../state/home-api";
 import { openExternalLink } from "../state/external-link";
-import { useNavigation } from "../state/navigation";
+import { TAB_ROOTS, useNavigation } from "../state/navigation";
 import { track, useShell } from "../state/shell";
 import { SlideView } from "./home-slide";
 import { useClock } from "./meta/schedule";
@@ -88,7 +88,7 @@ export function HomeCarousel(): ReactNode {
     const timer = setTimeout(() => {
       if (document.visibilityState !== "visible") return;
       viewed.current.add(slide.id);
-      track("home_slide_viewed", { slide: slide.kind, position: current });
+      track("home_slide_viewed", slideEvent(slide, current));
     }, VIEWED_MS);
     return () => clearTimeout(timer);
   }, [current, slides, hidden]);
@@ -142,6 +142,11 @@ export function HomeCarousel(): ReactNode {
   );
 }
 
+/** Вид и место слайда; у слайда команды — ещё какой анонс. */
+function slideEvent(slide: HomeSlide, position: number): { slide: string; position: number; slideId?: string } {
+  return slide.kind === "team" ? { slide: slide.kind, position, slideId: slide.slideId } : { slide: slide.kind, position };
+}
+
 /**
  * Заглушка той же высоты, что карусель с точками: пока ответ в пути, главная
  * не прыгает. Та же разметка стоит в `home.tsx`, пока едет сам чанк.
@@ -162,7 +167,7 @@ function SlideCard(props: { slide: HomeSlide; index: number; total: number; now:
 
   // Ссылку открывают в том же нажатии: площадка открывает ссылки только в ответ на касание.
   const open = (): void => {
-    track("home_slide_clicked", { slide: slide.kind, position: props.index });
+    track("home_slide_clicked", slideEvent(slide, props.index));
     switch (slide.kind) {
       case "promo":
       case "vip":
@@ -179,9 +184,19 @@ function SlideCard(props: { slide: HomeSlide; index: number; total: number; now:
         if (link !== null) openExternalLink(link);
         return;
       }
+      case "team": {
+        const { target } = slide;
+        if (target.kind === "screen") {
+          // Раздел нижней панели — сменой вкладки, остальное — поверх главной: «Назад» вернёт сюда.
+          return (TAB_ROOTS as readonly string[]).includes(target.screen) ? navigation.resetTo(target.screen) : navigation.push(target.screen);
+        }
+        const link = safeLink(target.url);
+        if (link !== null) openExternalLink(link);
+        return;
+      }
     }
   };
 
-  const image = slide.kind === "task" ? slideImageUrl(slide.image, baseUrl) : null;
+  const image = slide.kind === "task" || slide.kind === "team" ? slideImageUrl(slide.image, baseUrl) : null;
   return <SlideView slide={slide} now={props.now} image={image} wide={props.total === 1} onOpen={open} />;
 }

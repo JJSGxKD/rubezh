@@ -42,6 +42,13 @@ describe("слайды главной с сервера", () => {
     expect(calls).toEqual(["GET /api/v1/me/home"]);
   });
 
+  it("слайд команды: незнакомый значок — значком объявления; экран, которого клиент не знает, — мимо", async () => {
+    const team = { id: "team:1", kind: "team", slideId: "1", title: "Турнир", text: "Призы — самоцветы", image: null, icon: "rocket-launch", target: { kind: "screen", screen: "rating" } };
+    const answer = { slides: [team, { ...team, id: "team:2", target: { kind: "screen", screen: "clans" } }, { ...team, id: "team:3", target: { kind: "link", url: "https://t.me/rubezh" } }] };
+    const result = await createHomeApi(server(answer)).slides();
+    expect(result.ok && result.data.map((slide) => slide.id)).toEqual(["team:1", "team:3"]);
+  });
+
   it("свежий ответ — без запроса и без заглушки; устаревший — новый запрос; сбой — карусели нет", async () => {
     let asked = 0;
     const api: HomeApi = { slides: async () => ((asked += 1), { ok: true, data: [ALL[4] as HomeSlide] }) };
@@ -76,6 +83,9 @@ describe("тексты слайдов", () => {
       expect(hasTranslation(`home.slide.${slide.kind}.text`), slide.kind).toBe(true);
     }
     expect(textOf(ALL[1] as HomeSlide, NOW)).toBe("2 новые версии");
+    // Слайд команды — её словами, без словаря.
+    const team: HomeSlide = { id: "team:1", kind: "team", slideId: "1", title: "Турнир выходного дня", text: "Призы — самоцветы", image: null, icon: "trophy", target: { kind: "screen", screen: "rating" } };
+    expect([titleOf(team), textOf(team, NOW)]).toEqual(["Турнир выходного дня", "Призы — самоцветы"]);
     expect(titleOf({ ...(ALL[6] as Extract<HomeSlide, { kind: "task" }>), title: "Канал партнёра" })).toBe("Канал партнёра");
   });
 
