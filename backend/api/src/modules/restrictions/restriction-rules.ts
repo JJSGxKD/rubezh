@@ -114,11 +114,16 @@ export interface PlayerRestrictionView {
   kind: string;
   title: string;
   endsAt: string | null;
+  /**
+   * Срок словами — тем же кодом, что текст отказа и предпросмотр в панели
+   * (Р83): плашка клиента показывает его как есть и не форматирует дату сама.
+   */
+  until: string;
   reason: string;
 }
 
 export function playerView(row: RestrictionRow): PlayerRestrictionView {
-  return { kind: row.kind, title: titleOf(row.kind), endsAt: row.endsAt?.toISOString() ?? null, reason: reasonText(row.reason) };
+  return { kind: row.kind, title: titleOf(row.kind), endsAt: row.endsAt?.toISOString() ?? null, until: untilText(row.endsAt), reason: reasonText(row.reason) };
 }
 
 export type RestrictionState = "active" | "expired" | "lifted" | "replaced";
