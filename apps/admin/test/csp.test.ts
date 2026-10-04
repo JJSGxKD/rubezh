@@ -15,6 +15,13 @@ describe("политика источников панели", () => {
     expect(directive(dev, "frame-ancestors")).toEqual(["'none'"]);
   });
 
+  it("встраивает только страницу предпросмотра клиента; без её адреса — никого", () => {
+    expect(directive(build, "frame-src")).toEqual(["'none'"]);
+    expect(directive(adminContentSecurityPolicy("build", "https://tg.gonet.fun"), "frame-src")).toEqual(["https://tg.gonet.fun"]);
+    // Сама панель во фрейм по-прежнему не встраивается.
+    expect(directive(adminContentSecurityPolicy("build", "https://tg.gonet.fun"), "frame-ancestors")).toEqual(["'none'"]);
+  });
+
   it("в сборке скрипты и соединения — только свои", () => {
     expect(directive(build, "script-src")).toEqual(["'self'"]);
     expect(directive(build, "connect-src")).toEqual(["'self'"]);

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Страница предпросмотра для панели (docs/35-stage4-plan.md WP32): рисует
+         черновик из панели тем же компонентом, что игрок. Игроку она не нужна
+         и в его сборку не входит — своя сборка (vite.preview.config.ts). -->
+    <meta name="robots" content="noindex" />
+    <!-- Пустая иконка в разметке: без неё браузер спросит /favicon.ico и получит 404 в консоли. -->
+    <link rel="icon" href="data:," />
+    <title>Предпросмотр</title>
+    <style>
+      html,
+      body,
+      #preview {
+        height: 100%;
+        margin: 0;
+        background: #07090e;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="preview"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

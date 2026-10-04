@@ -22,7 +22,12 @@ export type PolicyMode = "dev" | "build";
  */
 export const AVATAR_ORIGINS = ["https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"] as const;
 
-export function adminContentSecurityPolicy(mode: PolicyMode): string {
+/**
+ * `previewOrigin` — источник страницы предпросмотра клиента (docs/35-stage4-plan.md
+ * WP32, `scripts/vite/preview-origins.ts`): панель встраивает её фреймом, и
+ * больше никого. Пусто — фреймов нет вовсе.
+ */
+export function adminContentSecurityPolicy(mode: PolicyMode, previewOrigin: string | null = null): string {
   const dev = mode === "dev";
 
   const directives: Record<string, string[]> = {
@@ -40,6 +45,7 @@ export function adminContentSecurityPolicy(mode: PolicyMode): string {
     // Клиент Vite ждёт возвращения сервера в воркере из blob: (подробно —
     // scripts/vite/content-security-policy.ts); в сборке клиента Vite нет.
     "worker-src": dev ? ["'self'", "blob:"] : ["'self'"],
+    "frame-src": previewOrigin === null ? ["'none'"] : [previewOrigin],
     "frame-ancestors": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],

@@ -21,6 +21,8 @@
     "backend/*/test/**/*.ts",
     "scripts/test/**/*.ts",
     "apps/admin/test/**/*.ts",
+    // Константы, которые подставляет сборка панели: тесты доходят до её исходников.
+    "apps/admin/src/globals.d.ts",
     "scripts/balance/**/*.ts",
     "vitest.config.ts",
     "vitest.balance.config.ts"

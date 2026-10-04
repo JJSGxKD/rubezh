@@ -37,6 +37,7 @@
  * - **встраивание** — только в Telegram Web. Он открывает Mini App во
  *   фрейме, и `frame-ancestors 'none'` сломал бы игру там, где её никто не
  *   тестирует: мобильные и десктопные клиенты открывают её не во фрейме.
+ *   Ещё — в нашу панель: она показывает черновик страницей предпросмотра.
  *   Запрет встраивания всем остальным закрывает кликджекинг.
  */
 
@@ -57,6 +58,13 @@ export interface PolicyInput {
    * сборок чужого не пускает.
    */
   ads?: boolean;
+  /**
+   * Адреса панели, которой можно встроить клиент во фрейм: страница
+   * предпросмотра `preview/` рисует в ней черновик (docs/35-stage4-plan.md
+   * WP32, `scripts/vite/preview-origins.ts`). Только у Telegram-сборки —
+   * предпросмотр есть только у неё.
+   */
+  adminOrigins?: readonly string[];
 }
 
 /**
@@ -106,7 +114,7 @@ export const FRAME_ANCESTORS = ["'self'", "https://web.telegram.org"] as const;
  */
 export const AVATAR_ORIGINS = ["https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"] as const;
 
-export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = false }: PolicyInput): string {
+export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = false, adminOrigins = [] }: PolicyInput): string {
   const dev = mode === "dev";
   const api = originOf(apiOrigin);
   const scripts = [...(graspil ? GRASPIL_SCRIPT_ORIGINS : []), ...(ads ? AD_SCRIPT_ORIGINS : [])];
@@ -129,7 +137,7 @@ export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = 
     "worker-src": dev ? ["'self'", "blob:"] : ["'self'"],
     "font-src": ["'self'"],
     "connect-src": ["'self'", ...(api === null ? [] : [api]), ...connects, ...(dev ? ["ws:", "wss:"] : [])],
-    "frame-ancestors": [...FRAME_ANCESTORS],
+    "frame-ancestors": [...FRAME_ANCESTORS, ...adminOrigins],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
     "object-src": ["'none'"],

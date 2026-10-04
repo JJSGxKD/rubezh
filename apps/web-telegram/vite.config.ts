@@ -8,6 +8,7 @@ import { stableDevSession } from "../../scripts/vite/stable-dev-session.ts";
 import { devServerConfig } from "../../scripts/vite/dev-server.ts";
 import { contentSecurityPolicy } from "../../scripts/vite/content-security-policy.ts";
 import { edgePolicyFile } from "../../scripts/vite/edge-policy.ts";
+import { adminOrigins } from "../../scripts/vite/preview-origins.ts";
 
 // Корень монорепо — единственный .env на весь проект (см. docs/20-env-and-ports.md).
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -27,7 +28,8 @@ export default defineConfig(({ mode, command }) => {
   // Р19). Проксируются только префиксы, которые сами защищены: вход — подписью
   // запуска и лимитом частоты, настройки аккаунта, уведомления, друзья, забеги, оплата, кошелёк, снаряжение, бусты,
   // уровень, награда дня, промокоды и доступ к инструментам — токеном сессии, приёмники и
-  // отзывы — выключателем, лимитами и Origin (docs/28-diagnostics.md §5.3), вебхук
+  // отзывы — выключателем, лимитами и Origin (docs/28-diagnostics.md §5.3), картинки
+  // заданий и слайдов из панели — их клиент рисует тегом img по хэшу, вебхук
   // бота — секретным токеном: через туннель машина разработчика может
   // принимать обновления и вебхуком. Остальное dev-API — роли, журнал —
   // наружу не выходит (docs/20-env-and-ports.md §4). Префикс, к которому ходит
@@ -58,6 +60,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/diagnostics",
       "/api/v1/feedback",
       "/api/v1/bot",
+      "/api/v1/media",
     ].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },
@@ -78,6 +81,8 @@ export default defineConfig(({ mode, command }) => {
     graspil,
     // Реклама сетей показывается только в Telegram (packages/adapter-telegram/src/ads).
     ads: true,
+    // Страница предпросмотра для панели — у Telegram-сборки (preview/).
+    preview: true,
   });
 
   return {
@@ -91,8 +96,11 @@ export default defineConfig(({ mode, command }) => {
       react(),
       tailwindcss(),
       stableDevSession(),
-      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim(), graspil, ads: true })),
+      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim(), graspil, ads: true, adminOrigins: adminOrigins(env, false) })),
     ],
+    // Страницу предпросмотра на dev-сервере отдаёт этот же сервер (preview/): ей
+    // нужны адреса панели — с петлёй по умолчанию (scripts/vite/preview-origins.ts).
+    define: { __ADMIN_ORIGINS__: JSON.stringify(adminOrigins(env, command === "serve")) },
     base: "./",
     envDir: repoRoot,
     server,

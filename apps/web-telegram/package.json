@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --mode telegram",
-    "build": "vite build --mode telegram",
+    "build": "vite build --mode telegram && vite build --mode telegram --config vite.preview.config.ts",
     "preview": "vite preview --mode telegram",
     "typecheck": "tsc --noEmit"
   },

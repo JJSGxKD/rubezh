@@ -4,6 +4,10 @@
   "private": true,
   "main": "src/index.tsx",
   "types": "src/index.tsx",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./preview": "./src/preview/index.tsx"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },

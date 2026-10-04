@@ -29,6 +29,7 @@ import { api } from "../../services";
 import { ChoiceCards } from "../../ui/choice";
 import { HELP } from "../../ui/help";
 import { ImageField } from "../../ui/image-field";
+import { PhonePreview } from "../../ui/phone-preview";
 import { Badge, Button, DataTable, ErrorNotice, Field, Help, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
 
@@ -103,7 +104,8 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
   return (
     <div className="flex flex-col gap-4">
       <Panel title={editing === null ? "Новый слайд" : `Слайд «${editing.title}»`} help={HELP.home.section}>
-        <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
+        <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={`Заголовок — ${String(titleLength)} из ${String(limits.titleMax)}`} help={HELP.home.title} error={titleLength > limits.titleMax ? "длиннее, чем влезет" : undefined}>
               <Input value={draft.title} onChange={(event) => set({ title: event.target.value })} maxLength={limits.titleMax + 10} placeholder="Турнир выходного дня" className="w-full" />
@@ -196,6 +198,11 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
           </div>
           {problem === null || (draft.title === "" && editing === null) ? null : <Notice tone="info">{problem}</Notice>}
         </form>
+          {/* Слайд так, как его увидит игрок: тот же компонент в странице клиента (Р83). */}
+          <div className="xl:sticky xl:top-4 xl:self-start">
+            <PhonePreview kind="home-slide" draft={{ title: oneLine(draft.title), text: oneLine(draft.text), imageId: draft.imageId, icon: draft.icon }} height={132} caption="Так увидит игрок — верх главной" />
+          </div>
+        </div>
         {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
       </Panel>
 
