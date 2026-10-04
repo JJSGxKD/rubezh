@@ -104,6 +104,16 @@ describe("неделя на экране", () => {
     expect(next.days[0]).toMatchObject({ day: 8, claimed: false, today: true, coins: 69 });
     expect(next.step).toBe(1.15);
   });
+
+  it("награда завтрашнего дня — следующая по порядку; за седьмым — первый день новой недели со своей ступенью", () => {
+    expect(viewOf(0, false, 1).next).toEqual({ coins: 80, shards: 0 });
+    expect(viewOf(1, true, 1).next).toEqual({ coins: 80, shards: 0 });
+    // Сегодня забран шестой — завтра седьмой, крупный и с осколками.
+    expect(viewOf(6, true, 1).next).toEqual({ coins: 300, shards: 10 });
+    expect(viewOf(7, true, 1).next).toEqual({ coins: 69, shards: 0 });
+    // Уровень растит монеты завтрашнего дня так же, как сегодняшнего.
+    expect(viewOf(1, true, 11).next.coins).toBe(Math.round(80 * 1.2));
+  });
 });
 
 describe("забор награды дня", () => {

@@ -35,6 +35,12 @@ export interface DailyView {
   /** множитель ступени этой недели и следующей; следующая не больше — потолок */
   step: number;
   nextStep: number;
+  /**
+   * Награда следующего дня по порядку — та, что ждёт после сегодняшнего
+   * забора: «Завтра: 120 монет» на главной. За седьмым днём — первый день
+   * следующей недели со своей ступенью.
+   */
+  next: { coins: number; shards: number };
 }
 
 export interface DailyClaimResult {
@@ -104,5 +110,5 @@ export function viewOf(claimedDays: number, claimedToday: boolean, level: number
     const day = first + index;
     days.push({ day, ...dailyReward(day, level), claimed: day <= claimedDays, today: day === today });
   }
-  return { week: closedWeeks + 1, days, canClaim: !claimedToday, step: stepMul(closedWeeks), nextStep: stepMul(closedWeeks + 1) };
+  return { week: closedWeeks + 1, days, canClaim: !claimedToday, step: stepMul(closedWeeks), nextStep: stepMul(closedWeeks + 1), next: dailyReward(today + 1, level) };
 }
