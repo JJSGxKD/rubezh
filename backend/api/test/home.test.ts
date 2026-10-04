@@ -9,6 +9,8 @@ import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsReader } from "../src/modules/settings/settings.service.js";
 import type { ShopItemView, ShopService } from "../src/modules/shop/shop.service.js";
 import type { TaskView, TasksService } from "../src/modules/tasks/tasks.service.js";
+import type { AudienceFacts, TeamSlideRow } from "../src/modules/home/team-slide-rules.js";
+import type { TeamSlidesService } from "../src/modules/home/team-slides.service.js";
 import type { VipService } from "../src/modules/vip/vip.service.js";
 
 /**
@@ -45,7 +47,7 @@ function task(patch: Partial<TaskView> = {}): TaskView {
 }
 
 function sources(patch: Partial<HomeSources> = {}): HomeSources {
-  return { shop: { items: [] }, vip: null, freshVersions: 0, invite: false, channelUrl: "", tasks: [], ...patch };
+  return { shop: { items: [] }, vip: null, freshVersions: 0, invite: false, channelUrl: "", tasks: [], team: [], ...patch };
 }
 
 const promo = (percent: number, hours: number) => ({ percent, endsAt: new Date(NOW.getTime() + hours * HOUR), title: null });
@@ -90,6 +92,39 @@ describe("слайды главной", () => {
     expect(vip({ stars: null })).toEqual([]);
   });
 
+  it("слайды команды — после акции и нового в версии, закреплённые — первыми; пять всё равно потолок", () => {
+    const team = (title: string, pinned = false): TeamSlideRow => ({
+      slideId: `00000000-0000-4000-8000-00000000000${title.length}`,
+      title,
+      text: "подпись",
+      imageId: pinned ? "c".repeat(64) : null,
+      icon: "trophy",
+      target: { kind: "screen", screen: "rating" },
+      platforms: ["telegram"],
+      audience: "all",
+      pinned,
+      startsAt: NOW,
+      endsAt: new Date(NOW.getTime() + HOUR),
+      createdAt: NOW,
+      createdBy: "x",
+      updatedAt: NOW,
+      updatedBy: "x",
+      archivedAt: null,
+      archivedBy: null,
+    });
+    const all = sources({
+      shop: { items: [item({ sku: "bundle_m", kind: "bundle", promo: promo(30, 5) })] },
+      vip: { active: false, canOrder: true, stars: 700 },
+      freshVersions: 1,
+      invite: true,
+      team: [team("Турнир", true), team("Конкурс")],
+    });
+    const slides = pickSlides(all, NOW);
+    expect(slides.map((slide) => slide.kind)).toEqual(["team", "promo", "changelog", "team", "vip"]);
+    expect(slides[0]).toMatchObject({ kind: "team", title: "Турнир", image: `/api/v1/media/${"c".repeat(64)}.webp`, target: { kind: "screen", screen: "rating" } });
+    expect(slides[3]).toMatchObject({ kind: "team", title: "Конкурс", image: null, icon: "trophy" });
+  });
+
   it("задание дня — партнёрское, не выполненное и с местами; задания забега и разобранные — нет", () => {
     expect(partnerTaskOfDay([task({ category: "daily", kind: "runs" }), task({ id: "a", done: true }), task({ id: "b", slots: { left: 0, total: 100, holdUntil: null } }), task({ id: "c" })])?.id).toBe("c");
     expect(partnerTaskOfDay([task({ claimed: true, done: true })])).toBeNull();
@@ -98,14 +133,19 @@ describe("слайды главной", () => {
 
 const account: AccountRef = { accountId: "8f7c1c1e-7f0a-4b8e-9d7e-1c2b3a4d5e6f", platform: "telegram", platformUserId: "700" };
 
-function service(patch: { shop?: () => Promise<unknown>; tasks?: () => Promise<TaskView[]>; restricted?: readonly string[]; channel?: string } = {}): HomeService {
+function service(patch: { shop?: () => Promise<unknown>; tasks?: () => Promise<TaskView[]>; restricted?: readonly string[]; channel?: string; facts?: () => Promise<{ createdAt: Date; payer: boolean } | null>; seen?: AudienceFacts[] } = {}): HomeService {
   const shop = { view: patch.shop ?? (async () => ({ items: [item({ sku: "starter", kind: "starter", once: true })] })) } as unknown as ShopService;
   const vip = { view: async () => ({ active: false, canOrder: true, stars: 700 }) } as unknown as VipService;
   const changelog = { badge: async () => 0 } as unknown as ChangelogService;
   const tasks = { view: patch.tasks ?? (async () => [task()]) } as unknown as TasksService;
   const restrictions = { status: async (_id: string, kind: string) => ((patch.restricted ?? []).includes(kind) ? { kind } : null) } as unknown as AccountRestrictions;
   const settings: SettingsReader = { get: (setting) => (setting.key === SETTINGS.homeChannelUrl.key ? (patch.channel ?? "") : setting.fallback) as never, onChange: () => undefined };
-  return new HomeService(shop, vip, changelog, tasks, restrictions, settings);
+  // Слайды команды — заглушкой, которая запоминает, что сервис узнал об игроке.
+  const teamSlides = {
+    audienceFacts: patch.facts ?? (async () => ({ createdAt: new Date(NOW.getTime() - 2 * 24 * HOUR), payer: true })),
+    forPlayer: async (facts: AudienceFacts) => (patch.seen?.push(facts), []),
+  } as unknown as TeamSlidesService;
+  return new HomeService(shop, vip, changelog, tasks, restrictions, settings, teamSlides);
 }
 
 describe("главная в сервисе", () => {
@@ -117,6 +157,14 @@ describe("главная в сервисе", () => {
   it("не ответил магазин — без акции и набора, остальное на месте", async () => {
     const view = await service({ shop: async () => Promise.reject(new Error("база недоступна")) }).view(account, NOW);
     expect(view.slides.map((slide) => slide.kind)).toEqual(["vip", "invite", "task"]);
+  });
+
+  it("аудитория слайдов команды: площадка аккаунта, регистрация и оплата из базы, VIP — из ответа VIP; не узнали — неизвестно", async () => {
+    const seen: AudienceFacts[] = [];
+    await service({ seen }).view(account, NOW);
+    expect(seen[0]).toEqual({ platform: "telegram", createdAt: new Date(NOW.getTime() - 2 * 24 * HOUR), payer: true, vip: false });
+    await service({ seen, facts: async () => Promise.reject(new Error("база недоступна")) }).view(account, NOW);
+    expect(seen[1]).toEqual({ platform: "telegram", createdAt: null, payer: null, vip: false });
   });
 
   it("под ограничениями — без приглашения друзей и без партнёрского задания", async () => {

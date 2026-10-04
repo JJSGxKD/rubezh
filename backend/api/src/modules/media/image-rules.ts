@@ -31,9 +31,11 @@ export interface ImageProfile {
 /**
  * Профили картинок. Квадрат задания показывается в 44 px, на плотности 3 —
  * 132 точки: 96 ещё терпимо, а больше 512 — лишний вес без пользы глазу.
+ * Квадрат слайда главной — 56 px, на плотности 3 — 168 точек.
  */
 export const IMAGE_PROFILES = {
   task: { title: "картинка задания", square: true, minSide: 96, maxSide: 512, permission: "tasks.edit" },
+  home_slide: { title: "картинка слайда главной", square: true, minSide: 112, maxSide: 512, permission: "home.edit" },
 } as const satisfies Record<string, ImageProfile>;
 
 export type ImageProfileId = keyof typeof IMAGE_PROFILES;

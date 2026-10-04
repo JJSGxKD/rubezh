@@ -93,6 +93,7 @@ erDiagram
     TASK_DEF ||--o{ TASK_PARTICIPANT : "игроки партнёрской цели"
     ACCOUNT ||--o{ TASK_PARTICIPANT : "переходы и выполнения партнёрских целей"
     MEDIA_IMAGE |o--o{ TASK_DEF : "картинка 1:1 партнёрской цели"
+    MEDIA_IMAGE |o--o{ HOME_SLIDE : "картинка 1:1 слайда команды"
     ACCOUNT ||--o{ TASK_RUN : "забеги, засчитанные заданиям"
     ACCOUNT ||--o| TEST_NOTICE : "принял предупреждение о тесте"
     AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
@@ -658,6 +659,28 @@ erDiagram
         uuid created_by "nullable, без FK: картинка переживает аккаунт"
     }
 
+    HOME_SLIDE {
+        uuid slide_id PK
+        string title "одна строка, до 32 знаков"
+        string text "одна строка, до 40 знаков"
+        string image_id FK "nullable: картинка 1:1; нет — значок icon"
+        string icon "megaphone, gift, trophy, calendar, sparkles"
+        string target_kind "screen или link — CHECK: ровно одно из target_screen и target_url"
+        string target_screen "nullable: экран игры из списка"
+        string target_url "nullable: только https"
+        enum_array platforms "Platform[], не пусто"
+        string audience "all, newbies, payers, nonpayers, vip"
+        boolean pinned "первым в карусели — раньше акции"
+        datetime starts_at
+        datetime ends_at "позже starts_at; не дольше 60 дней — сервис"
+        datetime created_at
+        uuid created_by "без FK: запись переживает аккаунт"
+        datetime updated_at
+        uuid updated_by "без FK"
+        datetime archived_at "nullable: снят; строка не удаляется"
+        uuid archived_by "nullable, вместе с archived_at"
+    }
+
     TASK_PARTICIPANT {
         string task_id PK,FK "только партнёрские цели"
         uuid account_id PK,FK "одна строка на игрока, а не на срок"
@@ -979,9 +1002,16 @@ erDiagram
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
   останется тем же. Формат, размер и стороны держат `CHECK` и
-  `media/image-rules.ts`; на картинку ссылается `TASK_DEF.image_id`
-  (`RESTRICT`: пока задание её показывает, удалить нельзя), следом —
-  слайды главной (WP42).
+  `media/image-rules.ts`; на картинку ссылаются `TASK_DEF.image_id` и
+  `HOME_SLIDE.image_id` (`RESTRICT`: пока задание или слайд её показывает,
+  удалить нельзя).
+- **`HOME_SLIDE` — слайды команды на главной** (`35-stage4-plan.md` WP42,
+  часть 2): анонс от команды в карусели — кому (`audience` по регистрации
+  аккаунта, первой настоящей оплате из `ACCOUNT_FUNNEL` и VIP), где
+  (`platforms`) и на какой срок. Цель — экран игры или ссылка https, ровно
+  одно из двух держит `CHECK`. Идущих — единицы, главная читает их по
+  индексу `ends_at` и держит в памяти полминуты. Снятый слайд остаётся
+  строкой с `archived_at`: история — в разделе панели и в аудите.
 - **`TASK_PARTICIPANT` — лимит выполнений партнёрской цели**
   (`35-stage4-plan.md`, Р82, WP13, часть 7): строка на игрока и цель, а не
   на срок — место занимает первое выполнение, повтор подписки места не
@@ -1686,7 +1716,7 @@ flowchart LR
         TESTNOTICE["test-notice<br/>предупреждение об открытом тесте:<br/>принятие на аккаунт, реализовано"]
         PROMOC["promo-codes<br/>промокоды и коды партнёров:<br/>ключ кода, активация, реализовано"]
         RESTR["restrictions<br/>ограничения игрока по видам и на срок:<br/>«можно ли» с кешем 30 с, снятие по сроку<br/>под локом, реализовано"]
-        HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей,<br/>у каждого источника таймаут, реализовано"]
+        HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели,<br/>у каждого источника таймаут, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -1909,6 +1939,8 @@ flowchart LR
     HOME -. "партнёрское задание дня" .-> TASKS
     HOME -. "можно ли: друзья, партнёрские задания" .-> RESTR
     HOME -. "канал проекта" .-> SETTINGS
+    HOME -- "home_slide; регистрация и первая оплата для аудитории" --> PG
+    ADMINAPI -. "слайды команды: завести, поправить, снять" .-> HOME
 
     TG -.статика и конфиг.-> CDN
 ```

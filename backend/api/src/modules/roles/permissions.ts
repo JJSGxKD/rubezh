@@ -80,6 +80,9 @@ export const PERMISSIONS = [
   // Промокоды (WP41, Р74): код раздаёт валюту всем, кто его ввёл, — поэтому
   // своё право, а не «акции»; награда одного кода ограничена правилами
   "promo.edit",
+  // Слайды команды на главной (WP42, часть 2): анонс видят все игроки сразу
+  // после сохранения — поэтому своё право, а не «настройки»
+  "home.edit",
   // Эксплуатация. Настройки без релиза — адреса чатов команды и переключатели
   // (docs/35-stage4-plan.md §3.18)
   "flags.edit",
@@ -150,6 +153,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "tasks.edit",
     "shop.promo.edit",
     "promo.edit",
+    "home.edit",
     "flags.edit",
     "settings.edit",
     "secrets.view",
@@ -172,6 +176,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "ads.view",
     "changelog.edit",
     "tasks.edit",
+    "home.edit",
     "diagnostics.view",
     "tools.dev",
   ],
@@ -179,7 +184,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   // Игроки без платёжных данных, жалобы, блокировки, очередь антифрода.
   moderator: ["players.view", "players.ban", "players.restrict", "players.message"],
 
-  // Привлечение, рассылки, акции магазина и промокоды; партнёры без выплат.
+  // Привлечение, рассылки, акции магазина, промокоды и слайды главной;
+  // партнёры без выплат.
   marketer: [
     "analytics.gameplay.view",
     "analytics.revenue.view",
@@ -192,6 +198,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "changelog.edit",
     "shop.promo.edit",
     "promo.edit",
+    "home.edit",
   ],
 
   // Операции и подготовка выплат; период закрывает только владелец.

@@ -12,6 +12,8 @@ import { AdsModule } from "../ads/ads.module.js";
 import { TestNoticeModule } from "../test-notice/test-notice.module.js";
 import { AdminChangelogController } from "./admin-changelog.controller.js";
 import { AdminShopController } from "./admin-shop.controller.js";
+import { AdminHomeController } from "./admin-home.controller.js";
+import { HomeModule } from "../home/home.module.js";
 import { AdminPromoCodesController } from "./admin-promo-codes.controller.js";
 import { PromoCodesModule } from "../promo-codes/promo-codes.module.js";
 import { PartnersModule } from "../partners/partners.module.js";
@@ -73,7 +75,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -91,6 +93,7 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
     AdminSecretsController,
     AdminBroadcastsController,
     AdminChangelogController,
+    AdminHomeController,
     AdminTasksController,
     AdminMediaController,
     AdminRestrictionsController,

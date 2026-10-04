@@ -2025,9 +2025,48 @@ model MediaImage {
   /// кто загрузил; без внешнего ключа — картинка переживает аккаунт
   createdBy   String?  @map("created_by") @db.Uuid
 
-  tasks TaskDef[]
+  tasks      TaskDef[]
+  homeSlides HomeSlide[]
 
   @@map("media_image")
+}
+
+/// Слайд команды в карусели главной (docs/35-stage4-plan.md WP42, часть 2):
+/// анонс турнира, новое оружие, конкурс в канале — то, о чём игрок узнаёт
+/// от команды, а не из правила. Заголовок и подпись — по строке, картинка
+/// 1:1 или значок, куда ведёт, кому и на какой срок. Правка видна игрокам
+/// сразу; снятый слайд не удаляется — его история в разделе и в аудите.
+model HomeSlide {
+  slideId      String     @id @map("slide_id") @db.Uuid
+  title        String     @db.VarChar(32)
+  text         String     @db.VarChar(40)
+  /// картинка 1:1 из панели; `null` — значок `icon`
+  imageId      String?    @map("image_id") @db.VarChar(64)
+  icon         String     @db.VarChar(16)
+  /// `screen` — экран игры `target_screen`, `link` — ссылка `target_url`
+  targetKind   String     @map("target_kind") @db.VarChar(8)
+  targetScreen String?    @map("target_screen") @db.VarChar(16)
+  targetUrl    String?    @map("target_url") @db.VarChar(256)
+  /// где показывать; пустым не бывает
+  platforms    Platform[]
+  /// кому: все, новички, платившие, не платившие, VIP
+  audience     String     @db.VarChar(16)
+  /// первым в карусели — раньше акции; иначе после акции и нового в версии
+  pinned       Boolean
+  startsAt     DateTime   @map("starts_at") @db.Timestamptz(3)
+  endsAt       DateTime   @map("ends_at") @db.Timestamptz(3)
+  createdAt    DateTime   @map("created_at") @db.Timestamptz(3)
+  /// кто завёл, правил и снял; без внешних ключей — запись переживает аккаунт
+  createdBy    String     @map("created_by") @db.Uuid
+  updatedAt    DateTime   @map("updated_at") @db.Timestamptz(3)
+  updatedBy    String     @map("updated_by") @db.Uuid
+  archivedAt   DateTime?  @map("archived_at") @db.Timestamptz(3)
+  archivedBy   String?    @map("archived_by") @db.Uuid
+
+  image MediaImage? @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
+
+  @@index([endsAt])
+  @@map("home_slide")
 }
 
 // Конверсии закупленной рекламы (WP43, docs/35-stage4-plan.md Р86): что и
