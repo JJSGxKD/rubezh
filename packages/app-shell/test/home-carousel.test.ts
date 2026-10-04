@@ -3,7 +3,7 @@ import { hasTranslation } from "../src/i18n";
 import "../src/i18n/home";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { cachedSlides, createHomeApi, forgetSlidesForTests, HOME_FRESH_MS, loadSlides, safeLink, slideImageUrl, type HomeApi, type HomeSlide } from "../src/state/home-api";
-import { textOf, titleOf } from "../src/screens/home-carousel";
+import { textOf, titleOf } from "../src/screens/home-slide";
 
 // Карусель главной (docs/35-stage4-plan.md WP42): слайды решает сервер, клиент
 // рисует; незнакомый вид слайда — сервер новее клиента — отбрасывается по

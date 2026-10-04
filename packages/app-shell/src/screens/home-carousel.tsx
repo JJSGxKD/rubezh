@@ -1,18 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BadgePercent, Crown, Megaphone, Newspaper, Rocket, Target, UserPlus } from "lucide-react";
-// Компонент из общего входа дизайн-системы держит ядро значков в общем чанке
-// первой загрузки: без него сборщик выносит ядро в отдельный файл
-// (docs/27-design-system-and-app-shell.md §3.4).
-import { Badge } from "../design-system/components";
-import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { useSwipeStrip } from "../design-system/components/swipe-strip";
-import { formatNumber, t } from "../i18n";
+import { t } from "../i18n";
 import "../i18n/home";
 import { cachedSlides, loadSlides, safeLink, slideImageUrl, type HomeSlide } from "../state/home-api";
 import { openExternalLink } from "../state/external-link";
 import { useNavigation } from "../state/navigation";
 import { track, useShell } from "../state/shell";
-import { formatCountdown, useClock } from "./meta/schedule";
+import { SlideView } from "./home-slide";
+import { useClock } from "./meta/schedule";
 
 /**
  * Карусель главной (docs/35-stage4-plan.md WP42, Р76): что можно сделать
@@ -160,41 +155,10 @@ export function CarouselPlaceholder(): ReactNode {
   );
 }
 
-const TONE: Record<HomeSlide["kind"], string> = {
-  promo: "bg-danger/15 text-danger",
-  changelog: "bg-info/15 text-info",
-  vip: "bg-elite/15 text-elite",
-  starter: "bg-success/15 text-success",
-  invite: "bg-accent/15 text-accent",
-  channel: "bg-info/15 text-info",
-  task: "bg-passive/15 text-passive",
-};
-
-function SlideIcon(props: { slide: HomeSlide }): ReactNode {
-  switch (props.slide.kind) {
-    case "promo":
-      return <BadgePercent size={30} />;
-    case "changelog":
-      return <Newspaper size={30} />;
-    case "vip":
-      return <Crown size={30} />;
-    case "starter":
-      return <Rocket size={30} />;
-    case "invite":
-      return <UserPlus size={30} />;
-    case "channel":
-      return <Megaphone size={30} />;
-    case "task":
-      return <Target size={30} />;
-  }
-}
-
 function SlideCard(props: { slide: HomeSlide; index: number; total: number; now: number }): ReactNode {
   const { slide } = props;
   const navigation = useNavigation();
   const baseUrl = useShell((state) => state.capabilities.auth?.baseUrl);
-  const [broken, setBroken] = useState(false);
-  const image = slide.kind === "task" && !broken ? slideImageUrl(slide.image, baseUrl) : null;
 
   // Ссылку открывают в том же нажатии: площадка открывает ссылки только в ответ на касание.
   const open = (): void => {
@@ -218,93 +182,6 @@ function SlideCard(props: { slide: HomeSlide; index: number; total: number; now:
     }
   };
 
-  return (
-    <button
-      type="button"
-      aria-label={[titleOf(slide), chipLabel(slide, props.now), textOf(slide, props.now)].filter((part) => part !== null).join(". ")}
-      onClick={open}
-      className={[
-        "surface-card flex h-20 shrink-0 snap-start items-center gap-3 rounded-lg px-3 text-left",
-        "transition-transform duration-(--duration-fast) ease-base active:scale-[0.98]",
-        props.total === 1 ? "w-full" : "w-[88%]",
-      ].join(" ")}
-    >
-      {image === null ? (
-        <span className={`inline-flex size-14 shrink-0 items-center justify-center rounded-md ${TONE[slide.kind]}`}>
-          <SlideIcon slide={slide} />
-        </span>
-      ) : (
-        <img src={image} alt="" width={56} height={56} decoding="async" onError={() => setBroken(true)} className="size-14 shrink-0 rounded-md bg-surface-sunken object-cover" />
-      )}
-      <span aria-hidden="true" className="min-w-0 flex-1">
-        <span className="block truncate font-display text-sm font-bold text-text">{titleOf(slide)}</span>
-        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
-          <SlideChip slide={slide} now={props.now} />
-          <span className="truncate">{textOf(slide, props.now)}</span>
-        </span>
-      </span>
-    </button>
-  );
-}
-
-/**
- * Перед подписью — то, ради чего стоит нажать: скидка акции или награда
- * задания. Цены здесь нет: на главной цепляет выгода, цену игрок увидит в
- * магазине.
- */
-function SlideChip(props: { slide: HomeSlide; now: number }): ReactNode {
-  const { slide } = props;
-  if (slide.kind === "promo" && Date.parse(slide.endsAt) > props.now) {
-    return (
-      <span className="shrink-0 tabular-nums">
-        <Badge tone="danger">{t("home.slide.promo.discount", { percent: slide.percent })}</Badge>
-      </span>
-    );
-  }
-  if (slide.kind === "task" && taskPrize(slide) !== null) {
-    const gems = slide.reward.gems > 0;
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1 font-display font-bold text-text tabular-nums">
-        {gems ? <GemIcon size={14} /> : <CoinIcon size={14} />}+{formatNumber(gems ? slide.reward.gems : slide.reward.coins)}
-      </span>
-    );
-  }
-  return null;
-}
-
-/** Награда задания, которую стоит показать числом: самоцветы важнее монет; одни осколки — словами. */
-function taskPrize(slide: Extract<HomeSlide, { kind: "task" }>): number | null {
-  if (slide.reward.gems > 0) return slide.reward.gems;
-  return slide.reward.coins > 0 ? slide.reward.coins : null;
-}
-
-/** То же, что значок перед подписью, — словами для экранного диктора. */
-function chipLabel(slide: HomeSlide, now: number): string | null {
-  if (slide.kind === "promo") return Date.parse(slide.endsAt) > now ? t("home.slide.promo.discountLabel", { percent: slide.percent }) : null;
-  if (slide.kind !== "task") return null;
-  const prize = taskPrize(slide);
-  if (prize === null) return null;
-  return t(slide.reward.gems > 0 ? "home.slide.gems" : "home.slide.coins", { n: prize });
-}
-
-export function titleOf(slide: HomeSlide): string {
-  if (slide.kind === "promo") return slide.title ?? t("home.slide.promo.title");
-  if (slide.kind === "task") return slide.title ?? t("home.slide.task.title");
-  return t(`home.slide.${slide.kind}.title`);
-}
-
-/** Подпись слайда; у акции — сколько ей осталось: скидка стоит плашкой перед подписью. */
-export function textOf(slide: HomeSlide, now = Date.now()): string {
-  switch (slide.kind) {
-    case "promo": {
-      const left = Date.parse(slide.endsAt) - now;
-      return left > 0 ? t("home.slide.promo.text", { time: formatCountdown(left) }) : t("home.slide.promo.over");
-    }
-    case "changelog":
-      return t("home.slide.changelog.text", { versions: slide.versions });
-    case "task":
-      return t(taskPrize(slide) === null ? "home.slide.task.text" : "home.slide.task.prize");
-    default:
-      return t(`home.slide.${slide.kind}.text`);
-  }
+  const image = slide.kind === "task" ? slideImageUrl(slide.image, baseUrl) : null;
+  return <SlideView slide={slide} now={props.now} image={image} wide={props.total === 1} onOpen={open} />;
 }
