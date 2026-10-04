@@ -22,6 +22,7 @@ import {
   rewardLabel,
   saveTask,
   targetLabel,
+  taskPreview,
   taskProblem,
   togglePlatform,
   withKind,
@@ -32,6 +33,7 @@ import {
 import { imageUrl } from "../../api/media";
 import { api } from "../../services";
 import { ImageField } from "../../ui/image-field";
+import { PhonePreview } from "../../ui/phone-preview";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
@@ -98,7 +100,8 @@ export function TasksScreen() {
   return (
     <div className="flex flex-col gap-4">
       <Panel title={original === null ? "Новое задание" : `Задание ${original.taskId}`}>
-        <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
+        <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
             <Field label="id" hint="латиница, навсегда">
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
@@ -245,6 +248,11 @@ export function TasksScreen() {
           </div>
           {problem !== null && input.taskId !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
+          {/* Строка так, как её увидит игрок в «Заданиях», — до выполнения и готовой к забору (Р83). */}
+          <div className="xl:sticky xl:top-4 xl:self-start">
+            <PhonePreview kind="task" draft={taskPreview(input)} height={320} caption="Так увидит игрок — вкладка заданий" />
+          </div>
+        </div>
         {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
       </Panel>
 
