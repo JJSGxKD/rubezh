@@ -143,16 +143,21 @@ export class TeamSlidesService {
   }
 }
 
-/** В аудит — то, что видит игрок, и кому: служебные поля строки там лишние. */
+/**
+ * В аудит — то, что видит игрок, и кому: служебные поля строки там лишние.
+ * Ключи — те, что журнал панели переводит словами (`apps/admin/src/api/audit.ts`):
+ * экран и ссылка отдельно, а «кому» — не «получателей» рассылки.
+ */
 function auditOf(slide: TeamSlideRow) {
   return {
     title: slide.title,
     text: slide.text,
-    imageId: slide.imageId,
+    image: slide.imageId,
     icon: slide.icon,
-    target: slide.target.kind === "screen" ? `screen:${slide.target.screen}` : slide.target.url,
-    platforms: slide.platforms.join(", "),
-    audience: slide.audience,
+    screen: slide.target.kind === "screen" ? slide.target.screen : null,
+    link: slide.target.kind === "link" ? slide.target.url : null,
+    platforms: slide.platforms,
+    forWhom: slide.audience,
     pinned: slide.pinned,
     startsAt: slide.startsAt.toISOString(),
     endsAt: slide.endsAt.toISOString(),

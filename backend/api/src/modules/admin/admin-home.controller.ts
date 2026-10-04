@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
@@ -39,7 +39,8 @@ export class AdminHomeController {
     return { data: await this.slides.create(actor, input) };
   }
 
-  @Put(":slideId")
+  // Правка — POST, как во всей панели: другие методы её клиент не шлёт.
+  @Post(":slideId")
   @RequirePermission("home.edit")
   async update(@Req() request: unknown, @Param("slideId") slideId: string, @Body() body: unknown): Promise<{ data: TeamSlideAdminRow }> {
     const actor = await this.consume(request);

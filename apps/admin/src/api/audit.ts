@@ -2,6 +2,7 @@ import { z } from "zod";
 import { formatDateTime, formatDuration, formatNumber } from "../format";
 import type { Route } from "../routes";
 import { DEVICE_TITLES, PLACE_TITLES, PLATFORM_TITLES, SUCCESS_TITLES } from "./ads";
+import { AUDIENCE_TITLES, ICON_TITLES, SCREEN_TITLES } from "./home-slides";
 import { STATUS_LOOK } from "./broadcasts";
 import { KIND_TITLES } from "./changelog";
 import type { AdminApi, ApiResult } from "./client";
@@ -107,6 +108,9 @@ const ACTION_TITLES: Record<string, string> = {
   "partner.update": "Правка партнёра",
   "shop.promo.create": "Новая акция",
   "shop.promo.cancel": "Снятие акции",
+  "home.slide.create": "Новый слайд главной",
+  "home.slide.update": "Правка слайда главной",
+  "home.slide.archive": "Снятие слайда главной",
   "links.create": "Новая ссылка",
   "links.conversion.send": "Повторная отправка конверсии в сеть",
   "broadcast.create": "Новая рассылка",
@@ -190,6 +194,8 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
       return { kind: "рассылка", label: named(entry, "title") ?? short(target), route: { section: "broadcasts", id: target } };
     case "shop":
       return { kind: "акция", label: short(target), route: { section: "promos", id: null } };
+    case "home":
+      return { kind: "слайд главной", label: named(entry, "title") ?? short(target), route: { section: "home", id: null } };
     case "settings":
       return { kind: "настройка", label: target, route: { section: "settings", id: null } };
     case "secrets":
@@ -289,6 +295,13 @@ const FIELD_TITLES: Record<string, string> = {
   codes: "кодов",
   sizeBytes: "размер, байт",
   via: "откуда",
+  image: "картинка",
+  icon: "значок",
+  screen: "экран игры",
+  link: "ссылка",
+  forWhom: "кому",
+  pinned: "первым в карусели",
+  archivedAt: "снят",
 };
 
 export function fieldTitle(key: string): string {
@@ -399,6 +412,9 @@ const VALUE_TITLES: Record<string, Partial<Record<string, string>>> = {
   registrationOn: { first_run: "после первого забега", launch: "при первом запуске" },
   goal: GOAL_TITLES,
   difficulty: { easy: "лёгкая", normal: "нормальная", hard: "сложная" },
+  screen: SCREEN_TITLES,
+  icon: ICON_TITLES,
+  forWhom: Object.fromEntries(Object.entries(AUDIENCE_TITLES).map(([audience, look]) => [audience, look?.title ?? audience])),
 };
 
 const word = (key: string, value: string): string => VALUE_TITLES[key]?.[value] ?? value;
@@ -417,7 +433,7 @@ export function auditValue(value: unknown, key = "", max = 80): string {
   if (typeof value === "string") {
     if (key === "role") return roleName(value);
     if (key === "resource") return resourceName(value);
-    if (key === "runId") return short(value);
+    if (key === "runId" || key === "image") return short(value);
     // Причина ограничения — ключом шаблона; прочие причины — свободный текст и идут как записаны.
     if (key === "reason" && value in RESTRICTION_REASONS) return RESTRICTION_REASONS[value] ?? value;
     if (key in VALUE_TITLES) return word(key, value);

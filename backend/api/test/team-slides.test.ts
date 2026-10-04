@@ -200,7 +200,7 @@ describe("слайды команды в панели", () => {
 
     const updated = await ctx.service.update(marketer, created.slideId, input({ text: "Призы — самоцветы" }), at(HOUR));
     expect(updated.text).toBe("Призы — самоцветы");
-    expect(ctx.roles.entries.at(-1)).toMatchObject({ action: "home.slide.update", before: { text: "Лучшее время — в рейтинге" }, after: { text: "Призы — самоцветы", target: "screen:rating" } });
+    expect(ctx.roles.entries.at(-1)).toMatchObject({ action: "home.slide.update", before: { text: "Лучшее время — в рейтинге" }, after: { text: "Призы — самоцветы", screen: "rating", link: null, platforms: ["telegram"], forWhom: "all" } });
 
     const archived = await ctx.service.archive(marketer, created.slideId, at(2 * HOUR));
     expect(archived).toMatchObject({ state: "archived", archivedBy: marketer.accountId });
@@ -314,10 +314,10 @@ describe("слайды команды по HTTP панели", () => {
     expect(created.statusCode).toBe(201);
     const slideId = created.json<{ data: { slideId: string } }>().data.slideId;
 
-    const updated = await app.inject({ method: "PUT", url: `${url}/${slideId}`, headers, payload: { ...payload, title: "Турнир" } });
-    expect(updated.statusCode).toBe(200);
+    const updated = await app.inject({ method: "POST", url: `${url}/${slideId}`, headers, payload: { ...payload, title: "Турнир" } });
+    expect(updated.statusCode).toBe(201);
     expect(updated.json<{ data: { title: string } }>().data.title).toBe("Турнир");
-    expect((await app.inject({ method: "PUT", url: `${url}/не-uuid`, headers, payload })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: `${url}/не-uuid`, headers, payload })).statusCode).toBe(400);
 
     const archived = await app.inject({ method: "POST", url: `${url}/${slideId}/archive`, headers });
     expect(archived.statusCode).toBe(201);
