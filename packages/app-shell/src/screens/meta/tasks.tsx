@@ -209,7 +209,8 @@ export function TasksScreen(): ReactNode {
           <div key={view} className="mt-4">
             {view === "daily" || view === "weekly" ? <ResetLine period={view} /> : null}
             {partner ? <RestrictedPlaque kinds={PARTNER_RESTRICTION} className="mb-3" /> : null}
-            {tasks.length === 0 && (!partner || networkRows === 0) ? <p className="text-sm text-text-muted">{t("tasks.empty")}</p> : null}
+            {/* Под ограничением вкладка пуста не потому, что заданий нет: это говорит плашка. */}
+            {tasks.length === 0 && (!partner || (networkRows === 0 && !partnerClosed)) ? <p className="text-sm text-text-muted">{t("tasks.empty")}</p> : null}
             {/* relative: строка сети, пока её задание не нарисовано, стоит невидимой поверх списка */}
             <div className="relative grid gap-2">
               {claimable.map((task, index) => row(task, index))}
