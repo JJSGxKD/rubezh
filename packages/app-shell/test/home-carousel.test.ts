@@ -2,13 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { hasTranslation } from "../src/i18n";
 import "../src/i18n/home";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
-import { cachedSlides, createHomeApi, forgetSlidesForTests, HOME_FRESH_MS, loadSlides, safeLink, slideImageUrl, type HomeApi, type HomeSlide } from "../src/state/home-api";
+import { createHomeApi, forgetHomeForTests, safeLink, slideImageUrl, type HomeSlide } from "../src/state/home-api";
 import { textOf, titleOf } from "../src/screens/home-slide";
 
 // Карусель главной (docs/35-stage4-plan.md WP42): слайды решает сервер, клиент
 // рисует; незнакомый вид слайда — сервер новее клиента — отбрасывается по
-// одному; на главную возвращаются после каждого забега, и свежий ответ
-// рисуется сразу, без заглушки.
+// одному. Свежесть ответа, общего с виджетами, — в home-widgets.test.ts.
 
 const NOW = Date.parse("2026-10-04T12:00:00.000Z");
 
@@ -31,37 +30,22 @@ const ALL: HomeSlide[] = [
   { id: "task:a", kind: "task", title: null, image: null, reward: { coins: 100, gems: 0, shards: 0 } },
 ];
 
-beforeEach(() => forgetSlidesForTests());
+beforeEach(() => forgetHomeForTests());
 
 describe("слайды главной с сервера", () => {
   it("свои — как есть; незнакомый вид и битый слайд — мимо, остальные на месте", async () => {
     const calls: string[] = [];
     const answer = { slides: [ALL[2], { id: "x", kind: "lottery" }, { id: "vip2", kind: "vip" }, ALL[4]] };
-    const result = await createHomeApi(server(answer, calls)).slides();
-    expect(result.ok && result.data.map((slide) => slide.id)).toEqual(["vip", "invite"]);
+    const result = await createHomeApi(server(answer, calls)).home();
+    expect(result.ok && result.data.slides.map((slide) => slide.id)).toEqual(["vip", "invite"]);
     expect(calls).toEqual(["GET /api/v1/me/home"]);
   });
 
   it("слайд команды: незнакомый значок — значком объявления; экран, которого клиент не знает, — мимо", async () => {
     const team = { id: "team:1", kind: "team", slideId: "1", title: "Турнир", text: "Призы — самоцветы", image: null, icon: "rocket-launch", target: { kind: "screen", screen: "rating" } };
     const answer = { slides: [team, { ...team, id: "team:2", target: { kind: "screen", screen: "clans" } }, { ...team, id: "team:3", target: { kind: "link", url: "https://t.me/rubezh" } }] };
-    const result = await createHomeApi(server(answer)).slides();
-    expect(result.ok && result.data.map((slide) => slide.id)).toEqual(["team:1", "team:3"]);
-  });
-
-  it("свежий ответ — без запроса и без заглушки; устаревший — новый запрос; сбой — карусели нет", async () => {
-    let asked = 0;
-    const api: HomeApi = { slides: async () => ((asked += 1), { ok: true, data: [ALL[4] as HomeSlide] }) };
-    expect(cachedSlides(NOW)).toBeNull();
-    expect(await loadSlides(api, NOW)).toHaveLength(1);
-    expect(cachedSlides(NOW + HOME_FRESH_MS - 1)).toHaveLength(1);
-    await loadSlides(api, NOW + 1_000);
-    expect(asked).toBe(1);
-    await loadSlides(api, NOW + HOME_FRESH_MS);
-    expect(asked).toBe(2);
-
-    forgetSlidesForTests();
-    expect(await loadSlides({ slides: async () => ({ ok: false, failure: "offline" }) }, NOW)).toBeNull();
+    const result = await createHomeApi(server(answer)).home();
+    expect(result.ok && result.data.slides.map((slide) => slide.id)).toEqual(["team:1", "team:3"]);
   });
 
   it("картинка — только путь медиа сервера; ссылка канала — только https", () => {

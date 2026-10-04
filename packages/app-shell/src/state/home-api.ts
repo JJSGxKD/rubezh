@@ -1,15 +1,18 @@
+import { create } from "zustand";
 import { z } from "zod/mini";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
+import { useBadges } from "./badges";
 import { useShell } from "./shell";
 
 /**
- * Карусель главной (docs/35-stage4-plan.md WP42): что показать и в каком
- * порядке, решает сервер (`GET /api/v1/me/home`), клиент только рисует.
- * Незнакомый вид слайда — сервер новее клиента — отбрасывается по одному, а
- * не роняет всю карусель. Разбирается только то, что карусель рисует: слайд
- * ведёт на экран целиком, а не к товару или заданию.
+ * Главная (docs/35-stage4-plan.md WP42): карусель и виджеты одним ответом
+ * (`GET /api/v1/me/home`). Что показать в карусели и в каком порядке, решает
+ * сервер, клиент только рисует. Незнакомый вид слайда — сервер новее
+ * клиента — отбрасывается по одному, а не роняет всю карусель; битый виджет
+ * остаётся без подробностей, а не уносит соседей. Разбирается только то, что
+ * главная рисует: слайд ведёт на экран целиком, а не к товару или заданию.
  *
- * Модуль едет с чанком карусели — первой загрузке он не нужен.
+ * Модуль едет с чанком главной — первой загрузке он не нужен.
  */
 
 const rewardSchema = z.object({ coins: z.number(), gems: z.number(), shards: z.number() });
@@ -40,23 +43,74 @@ const slideSchema = z.discriminatedUnion("kind", [
 
 export type HomeSlide = z.infer<typeof slideSchema>;
 
-/** Слайды разбираются по одному: незнакомый вид не должен стоить всей карусели. */
-const viewSchema = z.object({ slides: z.array(z.unknown()) });
+const amountSchema = z.object({ coins: z.number(), shards: z.number() });
+
+const dailyWidgetSchema = z.object({
+  canClaim: z.boolean(),
+  days: z.array(z.object({ coins: z.number(), shards: z.number(), claimed: z.boolean(), today: z.boolean() })),
+  next: amountSchema,
+});
+
+const wheelWidgetSchema = z.object({
+  free: z.boolean(),
+  jackpot: z.nullable(z.number()),
+  ad: z.object({ available: z.boolean(), readyAt: z.nullable(z.string()), vip: z.boolean() }),
+});
+
+const tasksWidgetSchema = z.object({ dailyDone: z.number(), dailyTotal: z.number(), claimable: z.number() });
+
+export type DailyWidget = z.infer<typeof dailyWidgetSchema>;
+export type WheelWidget = z.infer<typeof wheelWidgetSchema>;
+export type TasksWidget = z.infer<typeof tasksWidgetSchema>;
+
+/** Подробности виджетов; `null` — источник не ответил или сервер старее клиента. */
+export interface HomeWidgets {
+  daily: DailyWidget | null;
+  wheel: WheelWidget | null;
+  tasks: TasksWidget | null;
+}
+
+export interface HomeData {
+  slides: HomeSlide[];
+  widgets: HomeWidgets;
+}
+
+/** Слайды и виджеты разбираются по одному: незнакомое не должно стоить соседей. */
+const viewSchema = z.object({
+  slides: z.array(z.unknown()),
+  widgets: z.optional(z.object({ daily: z.optional(z.unknown()), wheel: z.optional(z.unknown()), tasks: z.optional(z.unknown()) })),
+});
+
+function parsed<T>(schema: z.ZodMiniType<T>, raw: unknown): T | null {
+  const result = schema.safeParse(raw);
+  return result.success ? result.data : null;
+}
 
 export interface HomeApi {
-  slides(): Promise<ApiResult<HomeSlide[]>>;
+  home(): Promise<ApiResult<HomeData>>;
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
 export function createHomeApi(request: ApiRequest = apiRequest): HomeApi {
   return {
-    async slides() {
+    async home() {
       const response = await request("/api/v1/me/home", viewSchema, { method: "GET" });
       if (!response.ok) return response;
-      return { ok: true, data: response.data.slides.flatMap((raw) => {
-        const parsed = slideSchema.safeParse(raw);
-        return parsed.success ? [parsed.data] : [];
-      }) };
+      const { slides, widgets } = response.data;
+      return {
+        ok: true,
+        data: {
+          slides: slides.flatMap((raw) => {
+            const slide = parsed(slideSchema, raw);
+            return slide === null ? [] : [slide];
+          }),
+          widgets: {
+            daily: parsed(dailyWidgetSchema, widgets?.daily),
+            wheel: parsed(wheelWidgetSchema, widgets?.wheel),
+            tasks: parsed(tasksWidgetSchema, widgets?.tasks),
+          },
+        },
+      };
     },
   };
 }
@@ -79,35 +133,61 @@ export function safeLink(url: string): string | null {
   return URL.canParse(url) && new URL(url).protocol === "https:" ? url : null;
 }
 
-/** Карусель — только с входом: слайды собраны по аккаунту. */
+/** Карусель и подробности виджетов — только с входом: всё собрано по аккаунту. */
 export function homeAvailable(): boolean {
   return useShell.getState().capabilities.auth !== undefined;
 }
 
 /**
  * Сколько ответ считается свежим: на главную возвращаются после каждого
- * забега, и карусель не должна мигать заглушкой. Новое в версии и купленный
- * набор подождут минуту.
+ * забега, и спрашивать сервер на каждом возврате незачем — новое в версии и
+ * купленный набор подождут минуту. Раньше ответ устаревает, только если с
+ * тех пор обновились знаки меню (`badges-api.ts`): их перезагружают забег,
+ * забор награды, крутка и возврат в приложение — то, что меняет виджеты.
  */
 export const HOME_FRESH_MS = 60_000;
 
-let cached: { slides: HomeSlide[]; at: number } | null = null;
-
-/** Последний ответ, если свежий, — им карусель рисуется сразу, без заглушки. */
-export function cachedSlides(now = Date.now()): HomeSlide[] | null {
-  return cached !== null && now - cached.at < HOME_FRESH_MS ? cached.slides : null;
+export interface HomeState {
+  /** последний ответ; `null` — ещё не приходил */
+  data: HomeData | null;
+  /** когда за ним пошли — по этому времени и по знакам меню видно, свежий ли он */
+  askedAt: number;
+  /** знаки меню на момент запроса: обновились после — ответ устарел */
+  badgesAt: number;
+  /** сервер не ответил, а показать нечего: карусели нет, виджеты без подробностей */
+  failed: boolean;
 }
 
-/** Не ответил сервер — `null`: карусели нет, главная работает без неё. */
-export async function loadSlides(api: HomeApi = createHomeApi(), now = Date.now()): Promise<HomeSlide[] | null> {
-  const fresh = cachedSlides(now);
-  if (fresh !== null) return fresh;
-  const response = await api.slides();
-  if (!response.ok) return null;
-  cached = { slides: response.data, at: now };
-  return response.data;
+export const useHome = create<HomeState>()(() => ({ data: null, askedAt: 0, badgesAt: 0, failed: false }));
+
+export function homeFresh(state: HomeState, now: number, badgesAt: number): boolean {
+  return state.data !== null && now - state.askedAt < HOME_FRESH_MS && state.badgesAt === badgesAt;
 }
 
-export function forgetSlidesForTests(): void {
-  cached = null;
+let inflight: Promise<void> | null = null;
+
+/**
+ * Освежить главную, если ответ устарел. Прежний ответ остаётся на экране,
+ * пока идёт новый: карусель и виджеты не мигают заглушкой на каждом
+ * возврате. Два слота главной спрашивают разом — запрос один.
+ */
+export function refreshHome(api: HomeApi = createHomeApi(), now = Date.now()): Promise<void> {
+  const badgesAt = useBadges.getState().loadedAt;
+  if (homeFresh(useHome.getState(), now, badgesAt)) return Promise.resolve();
+  if (inflight !== null) return inflight;
+  inflight = api
+    .home()
+    .then((response) => {
+      if (response.ok) useHome.setState({ data: response.data, askedAt: now, badgesAt, failed: false });
+      else if (useHome.getState().data === null) useHome.setState({ failed: true });
+    })
+    .finally(() => {
+      inflight = null;
+    });
+  return inflight;
+}
+
+export function forgetHomeForTests(): void {
+  inflight = null;
+  useHome.setState({ data: null, askedAt: 0, badgesAt: 0, failed: false });
 }
