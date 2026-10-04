@@ -6,7 +6,7 @@ import { cachedSlides, loadSlides, safeLink, slideImageUrl, type HomeSlide } fro
 import { openExternalLink } from "../state/external-link";
 import { TAB_ROOTS, useNavigation } from "../state/navigation";
 import { track, useShell } from "../state/shell";
-import { SlideView } from "./home-slide";
+import { SlideDots, SlideView, STRIP_CLASS } from "./home-slide";
 import { useClock } from "./meta/schedule";
 
 /**
@@ -31,11 +31,6 @@ const CLOCK_STEP_MS = 30_000;
 /** Низкий ландшафт телефона: там карусель спрятана (`home.tsx`) — не листается и показов не считает. */
 const LOW_SCREEN = "(max-height: 480px)";
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
-/**
- * Края ленты гаснут на ширину поля: на широком экране лента кончается не у
- * края экрана, и соседний слайд иначе обрезан ножом посреди фона.
- */
-const EDGE_FADE = "[mask-image:linear-gradient(to_right,transparent,#000_16px,#000_calc(100%-16px),transparent)]";
 
 /** Медиазапрос живьём: телефон поворачивают, «меньше движения» включают на ходу. */
 function useMedia(query: string): boolean {
@@ -105,7 +100,7 @@ export function HomeCarousel(): ReactNode {
     <section className="mb-3 min-w-0" aria-roledescription={t("home.carousel.role")} aria-label={t("home.carousel")}>
       <div
         ref={strip}
-        className={`-mx-4 flex gap-2 overflow-x-auto scroll-px-4 px-4 [scrollbar-width:none] ${EDGE_FADE} ${dragClass}`}
+        className={`${STRIP_CLASS} ${dragClass}`}
         {...handlers}
         onPointerDown={(event) => {
           touch();
@@ -119,24 +114,14 @@ export function HomeCarousel(): ReactNode {
         ))}
       </div>
       {total === 1 ? null : (
-        // Точки — кнопки: на ПК листать пальцем нечем. Цель нажатия — 24 px при точке в 6.
-        <div className="flex justify-center">
-          {slides.map((slide, index) => (
-            <button
-              key={slide.id}
-              type="button"
-              aria-label={t("home.carousel.position", { n: index + 1, total })}
-              aria-current={index === current}
-              onClick={() => {
-                touch();
-                scrollToIndex(index);
-              }}
-              className="inline-flex size-6 items-center justify-center"
-            >
-              <span aria-hidden="true" className={`size-1.5 rounded-pill transition-transform duration-(--duration-fast) ease-base ${index === current ? "scale-150 bg-accent" : "bg-border-strong"}`} />
-            </button>
-          ))}
-        </div>
+        <SlideDots
+          ids={slides.map((slide) => slide.id)}
+          current={current}
+          onSelect={(index) => {
+            touch();
+            scrollToIndex(index);
+          }}
+        />
       )}
     </section>
   );
