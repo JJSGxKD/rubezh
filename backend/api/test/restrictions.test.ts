@@ -185,7 +185,8 @@ describe("порт «можно ли»", () => {
     s.repository.restrict("a", "ad_rewards", { notify: false });
     s.repository.restrict("a", "friend_gifts", { endsAt: new Date(NOW.getTime() - 1) });
     expect(await s.gate.visibleFor("a", NOW)).toEqual([
-      { kind: "promo_codes", title: "Промокоды", endsAt: new Date(NOW.getTime() + DAY).toISOString(), reason: "Промокоды использовались не по правилам" },
+      // Срок словами — тот же, что в тексте отказа: плашка клиента дату не форматирует.
+      { kind: "promo_codes", title: "Промокоды", endsAt: new Date(NOW.getTime() + DAY).toISOString(), until: untilText(new Date(NOW.getTime() + DAY)), reason: "Промокоды использовались не по правилам" },
     ]);
   });
 });
@@ -357,7 +358,7 @@ describe("свои ограничения по HTTP", () => {
     const token = await signAccessToken({ accountId: me.accountId, platform: "telegram", platformUserId: "530" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
     const mine = await app.inject({ method: "GET", url: "/api/v1/me/restrictions", headers: { authorization: `Bearer ${token}` } });
     expect(mine.statusCode).toBe(200);
-    expect(mine.json().data.restrictions).toEqual([expect.objectContaining({ kind: "friend_gifts", title: "Подарки друзьям", reason: "Награды с нескольких аккаунтов одного человека" })]);
+    expect(mine.json().data.restrictions).toEqual([expect.objectContaining({ kind: "friend_gifts", title: "Подарки друзьям", until: expect.stringMatching(/^до \d+ [а-я]+, \d\d:\d\d МСК$/), reason: "Награды с нескольких аккаунтов одного человека" })]);
   });
 });
 

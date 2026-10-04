@@ -1,6 +1,7 @@
 import { z } from "zod/mini";
 import type { AdWatchResult } from "./ad-watch";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
+import { RESTRICTED_CODE } from "./restrictions";
 import { useShell } from "./shell";
 
 /**
@@ -93,6 +94,9 @@ export async function spinForAd(
       return { ok: false, failure: "rejected", code: WHEEL_AD_CLOSED };
     case "no_ads":
       return { ok: false, failure: "rejected", code: WHEEL_NO_ADS };
+    case "restricted":
+      // Тот же отказ, что у сервера: экран покажет плашку, как везде.
+      return { ok: false, failure: "disabled", code: RESTRICTED_CODE };
     case "failed":
       return { ok: false, failure: "unavailable", code: WHEEL_AD_FAILED };
   }

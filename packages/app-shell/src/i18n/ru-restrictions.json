@@ -1,0 +1,8 @@
+{
+  "restricted.section": "Ограничения",
+  "restricted.until": "Закрыто {until}",
+  "restricted.reason": "Причина: {reason}",
+  "restricted.rest": "Остальное в игре работает как обычно. Считаете, что это ошибка, — напишите нам.",
+  "restricted.write": "Написать нам",
+  "restricted.lifted": "Ограничение уже снято — попробуйте ещё раз"
+}

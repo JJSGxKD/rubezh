@@ -252,6 +252,22 @@ describe("второй шанс за рекламу", () => {
     expect(useAdContinue.getState().stage).toEqual({ kind: "unavailable", reason: "used_up" });
   });
 
+  it("награды за рекламу закрыты ограничением — строка «подробности в профиле», при выдаче и при заборе", async () => {
+    await downed(["stars", "ad"]);
+    outcomes = [{ kind: "restricted" }];
+    await useAdContinue.getState().prepare(result());
+    await useAdContinue.getState().watch();
+    expect(useAdContinue.getState().stage).toEqual({ kind: "unavailable", reason: "restricted" });
+
+    useAdContinue.getState().reset();
+    useRun.getState().stop();
+    await downed(["stars", "ad"]);
+    server.claims = [{ ok: false, failure: "disabled", code: "account_restricted" }];
+    await useAdContinue.getState().prepare(result());
+    await useAdContinue.getState().watch();
+    expect(useAdContinue.getState().stage).toEqual({ kind: "unavailable", reason: "restricted" });
+  });
+
   it("сервер не видел старта — спрашивает ещё раз; ответ по ушедшему забегу ничего не меняет", async () => {
     await downed();
     server.views = [{ ok: false, failure: "rejected", code: "run_unverified" }];

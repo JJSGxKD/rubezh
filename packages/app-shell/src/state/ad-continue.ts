@@ -49,8 +49,10 @@ export function createAdContinueApi(request: ApiRequest = apiRequest): AdContinu
 export type AdContinueNotice = "closed" | "failed" | "claim_failed";
 
 /**
- * Почему кнопки нет: `daily_cap` и `no_ads_now` игрок видит строкой — он
- * пробовал или вернётся завтра; остальное — молча, кнопки просто нет.
+ * Почему кнопки нет: `daily_cap`, `no_ads_now` и `restricted` (награды за
+ * рекламу закрыты ограничением, WP44) игрок видит строкой — он пробовал,
+ * вернётся завтра или узнает подробности в профиле; остальное — молча,
+ * кнопки просто нет.
  */
 export type AdContinueStage =
   | { kind: "idle" }
@@ -133,6 +135,9 @@ export const useAdContinue = create<AdContinueStore>((set, get) => {
       return;
     }
     if (answer.code === "ad_continue_daily_cap") return gone("daily_cap");
+    // Ограничение наложили между выдачей и забором. Код строкой, как у
+    // соседних отказов: модуль ограничений экрану забега не нужен.
+    if (answer.code === "account_restricted") return gone("restricted");
     if (GONE.has(answer.code ?? "")) return gone("used_up");
     if (answer.code === "ad_not_completed") {
       set({ stage: { kind: "ready", pass, notice: "failed" }, watched: null });
@@ -169,6 +174,8 @@ export const useAdContinue = create<AdContinueStore>((set, get) => {
           return;
         case "no_ads":
           return gone("no_ads_now");
+        case "restricted":
+          return gone("restricted");
         case "cooldown":
         case "failed":
           set({ stage: { kind: "ready", pass, notice: "failed" } });

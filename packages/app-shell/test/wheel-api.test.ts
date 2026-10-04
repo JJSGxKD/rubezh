@@ -104,6 +104,8 @@ describe("крутка за рекламу", () => {
     expect(await spinForAd(watched({ kind: "closed" }), wheel, never)).toMatchObject({ code: WHEEL_AD_CLOSED });
     expect(await spinForAd(watched({ kind: "no_ads" }), wheel, never)).toMatchObject({ code: WHEEL_NO_ADS });
     expect(await spinForAd(watched({ kind: "failed" }), wheel, never)).toMatchObject({ code: WHEEL_AD_FAILED });
+    // Ограничение — тем же отказом, что у сервера: экран покажет плашку, как везде.
+    expect(await spinForAd(watched({ kind: "restricted" }), wheel, never)).toEqual({ ok: false, failure: "disabled", code: "account_restricted" });
     expect(wheel.sessions).toHaveLength(0);
   });
 

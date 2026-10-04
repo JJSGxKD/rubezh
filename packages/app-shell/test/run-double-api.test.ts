@@ -85,6 +85,13 @@ describe("удвоение за рекламу", () => {
     expect(await doubleForAd("run-1", session, fakeApi({ ok: false, failure: "offline" }), () => undefined)).toEqual({ kind: "failed" });
   });
 
+  it("награды за рекламу закрыты ограничением — при выдаче и, если наложили между выдачей и забором, при заборе", async () => {
+    const api = fakeApi({ ok: false, failure: "disabled", code: "account_restricted" });
+    expect(await doubleForAd("run-1", watched({ kind: "restricted" }), api, () => expect.unreachable("награды нет"))).toEqual({ kind: "restricted" });
+    expect(api.calls).toHaveLength(0);
+    expect(await doubleForAd("run-1", watched({ kind: "watched", sessionId: "AAAAAAAAAAAAAAAA", source: "ad" }), api, () => undefined)).toEqual({ kind: "restricted" });
+  });
+
   it("запросы: вид — GET, удвоение — POST с сессией; ответ не по схеме — отказ", async () => {
     const sent: { method: string; path: string; body: unknown }[] = [];
     const server = (answer: unknown): ApiRequest =>

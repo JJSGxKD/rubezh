@@ -326,7 +326,9 @@ WP44). `account_restricted` и `account_restriction_lifted`, которые пл
 сданный под ограничением, помечен в `run.rating_restricted`. Забег, снятый
 с рейтинга модератором, — `run.ranked = false` при честном вердикте; кто,
 какой и почему — в аудите (`players.run.unrank`, `players.run.rerank`), в
-логе — `run_unranked` и `run_reranked`.
+логе — `run_unranked` и `run_reranked`. Плашка у игрока своего события не
+шлёт: отказ в момент действия сервер уже пишет (`restriction_refused`), а
+показ заранее, до нажатия, о поведении игрока ничего не говорит.
 
 **Воронка рекламы на сервере — таблица, а не события** (`35-stage4-plan.md`,
 §3.7, WP12). Сервер выдаёт показ и отмечает его шаги в `ad_session`: выдан,

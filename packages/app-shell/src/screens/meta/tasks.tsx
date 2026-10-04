@@ -4,6 +4,7 @@ import { Badge, Button, Card, ContentColumn, ErrorState, InfoNotice, PageTitle, 
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
+import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { track, useShell } from "../../state/shell";
 import {
   TASK_LIMIT_REACHED,
@@ -27,6 +28,7 @@ import {
 import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 import { NetworkTasks } from "./network-tasks";
+import { RestrictedPlaque } from "./restricted-plaque";
 import { TaskImage } from "./task-image";
 import { RewardChips, rewardText } from "./task-reward";
 
@@ -68,6 +70,8 @@ const ICONS: Partial<Record<string, ReactNode>> = {
 const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_survival_sec"]);
 
 const api = createTasksApi();
+/** Партнёрские задания — свои и сетей — закрывает своё ограничение (WP44). */
+const PARTNER_RESTRICTION = ["partner_tasks"];
 
 export function TasksScreen(): ReactNode {
   // Пока игрок не выбрал сам — партнёрские, если они есть: они первые в очереди
@@ -120,7 +124,10 @@ export function TasksScreen(): ReactNode {
     setClaiming(null);
     if (!response.ok) {
       if (response.code === TASK_LIMIT_REACHED) return close(task.id);
-      setNotice({ taskId: task.id, text: t(claimFailureKey(response.code)) });
+      // Закрыто ограничением — плашка над вкладкой скажет, что и до какого числа.
+      const refusal = await restrictionRefusal(response, PARTNER_RESTRICTION);
+      if (refusal === "restricted") return;
+      setNotice({ taskId: task.id, text: t(refusal === "lifted" ? "restricted.lifted" : claimFailureKey(response.code)) });
       if (response.code === TASK_NOT_DONE) void load();
       return;
     }
@@ -143,6 +150,7 @@ export function TasksScreen(): ReactNode {
   const claimable = tasks.filter(isClaimable);
   const rest = tasks.filter((task) => !isClaimable(task));
   const partner = view === "partner";
+  const partnerClosed = useRestricted(PARTNER_RESTRICTION);
   // Знак на вкладке — сколько наград там ждёт: игрок видит их, не перебирая вкладки.
   const waiting = (tab: TaskTab) => all.filter((task) => tabOf(task) === tab && isClaimable(task)).length;
 
@@ -166,7 +174,8 @@ export function TasksScreen(): ReactNode {
       task={task}
       claiming={claiming === task.id}
       notice={notice?.taskId === task.id ? notice.text : null}
-      closed={closed.has(task.id)}
+      // Под ограничением строки партнёрской вкладки — без кнопок: причину объясняет плашка.
+      closed={closed.has(task.id) || (partnerClosed && tabOf(task) === "partner")}
       onClaim={() => void claim(task)}
       onOpen={(link) => open(task, link)}
     />
@@ -199,7 +208,9 @@ export function TasksScreen(): ReactNode {
           // проигрывается при каждом переключении.
           <div key={view} className="mt-4">
             {view === "daily" || view === "weekly" ? <ResetLine period={view} /> : null}
-            {tasks.length === 0 && (!partner || networkRows === 0) ? <p className="text-sm text-text-muted">{t("tasks.empty")}</p> : null}
+            {partner ? <RestrictedPlaque kinds={PARTNER_RESTRICTION} className="mb-3" /> : null}
+            {/* Под ограничением вкладка пуста не потому, что заданий нет: это говорит плашка. */}
+            {tasks.length === 0 && (!partner || (networkRows === 0 && !partnerClosed)) ? <p className="text-sm text-text-muted">{t("tasks.empty")}</p> : null}
             {/* relative: строка сети, пока её задание не нарисовано, стоит невидимой поверх списка */}
             <div className="relative grid gap-2">
               {claimable.map((task, index) => row(task, index))}

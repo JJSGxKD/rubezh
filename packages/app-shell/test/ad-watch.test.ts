@@ -166,6 +166,12 @@ describe("реклама за награду", () => {
     expect(await watchAd("wheel_spin", harness({ offers: [{ ok: false, failure: "offline" }] }).deps)).toEqual({ kind: "failed" });
   });
 
+  it("награды за рекламу закрыты ограничением — так и говорим, а не «рекламы нет»; второй сети не ищем", async () => {
+    const h = harness({ offers: [{ ok: true, data: { available: false, reason: "restricted", retryAt: null } }, offer("adsgram")] });
+    expect(await watchAd("run_double", h.deps)).toEqual({ kind: "restricted" });
+    expect(h.offers).toHaveLength(1);
+  });
+
   it("досмотр не дошёл до сервера — повторяем, пока сеть моргает; отказ сервера повтором не лечится", async () => {
     const flaky = harness({ offers: [offer("adsgram")], outcomes: [{ kind: "completed" }], reports: [{ ok: false, failure: "offline" }, { ok: false, failure: "unavailable" }] });
     expect(await watchAd("wheel_spin", flaky.deps)).toMatchObject({ kind: "watched" });

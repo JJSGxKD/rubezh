@@ -91,6 +91,7 @@
   "runDetail.rating.ranked": "В рейтинге",
   "runDetail.rating.cheats": "С читами",
   "runDetail.rating.review": "Вне рейтинга",
+  "runDetail.rating.restricted": "Не в рейтинге: ограничение",
   "runDetail.old": "Подробности есть у забегов новых версий — этот записан до них.",
   "runDetail.reward": "Награда",
   "runDetail.levelUp": "Уровень {from} → {to}",
