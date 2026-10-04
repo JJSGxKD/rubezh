@@ -19,11 +19,9 @@ import {
   Button,
   Card,
   ContentColumn,
-  Emblem,
   Modal,
   Screen,
   Stat,
-  Wordmark,
 } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
@@ -93,15 +91,8 @@ export function LobbyScreen(): ReactNode {
       }
     >
       <ContentColumn>
-        {/* В ландшафте телефона под контент остаётся полторы сотни пикселей:
-            знак и слоган уходят, остаются имя и рекорд (§5.3). */}
-        <div className="mt-6 mb-8 flex flex-col items-center gap-3 text-center landscape:mt-1 landscape:mb-3">
-          <span className="landscape:hidden">
-            <Emblem size={104} animated />
-          </span>
-          <Wordmark size="l" />
-          <p className="max-w-[300px] text-sm text-text-muted landscape:hidden">{t("lobby.tagline")}</p>
-        </div>
+        {/* Бренда на главной нет — он на заставке и в «Об игре»: игрок и так
+            знает, что открыл (Р76). */}
 
         {saved === null ? null : <SavedRunCard saved={saved} />}
 

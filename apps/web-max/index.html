@@ -19,7 +19,7 @@
       первым кадром оболочки не должно быть белого экрана
       (docs/27-design-system-and-app-shell.md §3.4).
 
-      Заставка повторяет BootScreen оболочки — знак, имя, полоса — и тем же
+      Заставка повторяет BootScreen оболочки — знак, имя, слоган, полоса — и тем же
       цветом: оболочка подменяет её своей, и подмена не должна быть видна.
       Цвета здесь числами, а не токенами: CSS оболочки ещё не загружен. При
       смене палитры в tokens.css правятся и они.
@@ -58,6 +58,14 @@
         letter-spacing: 0.1em;
         text-transform: uppercase;
       }
+      #splash p {
+        max-width: 300px;
+        margin: 0;
+        font-size: 14px;
+        line-height: 20px;
+        text-align: center;
+        color: #a8b2c6;
+      }
       #splash i {
         position: relative;
         overflow: hidden;
@@ -88,6 +96,9 @@
         #splash b {
           font-size: 24px;
         }
+        #splash p {
+          display: none;
+        }
       }
       @media (prefers-reduced-motion: reduce) {
         #splash i::after {
@@ -111,6 +122,7 @@
           <path d="M10 32 H54" stroke="#07090e" stroke-width="3" />
         </svg>
         <b>Рубеж</b>
+        <p>Держи рубеж, пока хватает сил. Оружие бьёт само — твоё дело не попасться.</p>
         <i></i>
       </div>
     </div>
