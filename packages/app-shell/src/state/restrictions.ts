@@ -95,15 +95,16 @@ export function useRestricted(kinds: readonly string[]): boolean {
  * Отказ из-за ограничения? Список перечитывается, и вместо «не получилось»
  * игрок видит плашку: что закрыто, до какого числа и почему. `lifted` —
  * пока шёл запрос, ограничение сняли или срок вышел: стоит просто повторить.
- * `null` — отказ не из-за ограничения.
+ * `null` — отказ не из-за ограничения. `now` подменяется в тестах: срок
+ * ограничения сверяется с ним, а не с часами машины, на которой идёт прогон.
  */
-export async function restrictionRefusal(result: ApiResult<unknown>, kinds: readonly string[], api?: RestrictionsApi): Promise<"restricted" | "lifted" | null> {
+export async function restrictionRefusal(result: ApiResult<unknown>, kinds: readonly string[], api?: RestrictionsApi, now = Date.now()): Promise<"restricted" | "lifted" | null> {
   if (result.ok || result.code !== RESTRICTED_CODE) return null;
-  return await recheckRestriction(kinds, api);
+  return await recheckRestriction(kinds, api, now);
 }
 
 /** Сервер сказал «закрыто» не ошибкой, а исходом (выдача рекламы): перечитать список и проверить. */
-export async function recheckRestriction(kinds: readonly string[], api?: RestrictionsApi): Promise<"restricted" | "lifted"> {
-  await loadRestrictions(true, api);
-  return activeOf(useRestrictions.getState().list, kinds, Date.now()).length > 0 ? "restricted" : "lifted";
+export async function recheckRestriction(kinds: readonly string[], api?: RestrictionsApi, now = Date.now()): Promise<"restricted" | "lifted"> {
+  await loadRestrictions(true, api, now);
+  return activeOf(useRestrictions.getState().list, kinds, now).length > 0 ? "restricted" : "lifted";
 }
