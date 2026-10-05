@@ -205,6 +205,23 @@ export interface StarsInvoice {
   subscriptionPeriodSec?: number;
 }
 
+/**
+ * Сообщение, которое игрок отправит из Mini App сам (`shareMessage`): текст и
+ * кнопка-ссылка. Готовит его бот — `savePreparedInlineMessage`.
+ */
+export interface PreparedArticle {
+  /** 1–64 байта, уникален в пределах запроса */
+  id: string;
+  /** заголовок в окне выбора чата */
+  title: string;
+  /** подпись под заголовком в окне выбора чата */
+  description: string;
+  text: string;
+  button: InlineButton;
+}
+
+const preparedSchema = z.object({ id: z.string().min(1), expiration_date: z.number().int().optional() });
+
 /** Ответ на предварительную проверку: отказ Telegram покажет игроку этим текстом. */
 export type PreCheckoutAnswer = { ok: true } | { ok: false; errorMessage: string };
 
@@ -386,6 +403,31 @@ export class TelegramBotApi {
       ),
     );
     return z.url().parse(result);
+  }
+
+  /**
+   * Подготовить сообщение для `shareMessage` в Mini App. Отправить его сможет
+   * только этот игрок — в личку, группу или канал по своему выбору; живёт
+   * сообщение ограниченное время, срок отдаёт Telegram.
+   */
+  async savePreparedInlineMessage(userId: number, article: PreparedArticle, signal?: AbortSignal): Promise<{ id: string; expiresAt: Date | null }> {
+    const result = await this.call("savePreparedInlineMessage", REQUEST_TIMEOUT_MS, signal, (abort) =>
+      this.api.savePreparedInlineMessage(
+        userId,
+        {
+          type: "article",
+          id: article.id,
+          title: article.title,
+          description: article.description,
+          input_message_content: { message_text: article.text },
+          reply_markup: { inline_keyboard: [[article.button]] },
+        },
+        { allow_user_chats: true, allow_group_chats: true, allow_channel_chats: true, allow_bot_chats: false },
+        abort,
+      ),
+    );
+    const prepared = preparedSchema.parse(result);
+    return { id: prepared.id, expiresAt: prepared.expiration_date === undefined ? null : new Date(prepared.expiration_date * 1000) };
   }
 
   async answerPreCheckoutQuery(queryId: string, answer: PreCheckoutAnswer, signal?: AbortSignal): Promise<void> {

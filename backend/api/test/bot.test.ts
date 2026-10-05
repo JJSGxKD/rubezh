@@ -147,6 +147,33 @@ describe("клиент Bot API", () => {
     await expect(limited.api.sendMessage(CHAT, "x")).rejects.toMatchObject({ errorCode: 429, retryAfterSec: 12 });
   });
 
+  it("готовит сообщение для shareMessage: статья с кнопкой, в личку, группы и каналы, не в чаты ботов", async () => {
+    const { calls, api } = recorder({ ok: true, result: { id: "abc", expiration_date: 1_790_000_000 } });
+    const prepared = await api.savePreparedInlineMessage(424242, {
+      id: "invite-1",
+      title: "Играть вместе",
+      description: "Откроешь — и мы друзья",
+      text: "Зову тебя в игру",
+      button: { text: "▶ Играть", url: "https://t.me/bot/play?startapp=f-x" },
+    });
+
+    expect(prepared).toEqual({ id: "abc", expiresAt: new Date(1_790_000_000_000) });
+    expect(calls[0]?.url).toContain("/savePreparedInlineMessage");
+    expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({
+      user_id: 424242,
+      result: {
+        type: "article",
+        id: "invite-1",
+        input_message_content: { message_text: "Зову тебя в игру" },
+        reply_markup: { inline_keyboard: [[{ text: "▶ Играть", url: "https://t.me/bot/play?startapp=f-x" }]] },
+      },
+      allow_user_chats: true,
+      allow_group_chats: true,
+      allow_channel_chats: true,
+      allow_bot_chats: false,
+    });
+  });
+
   it("обрывает зависший запрос по сигналу: срок задаёт вызов, а не транспорт", async () => {
     // Сигнал проходит через grammY до нашего fetch — иначе долгий опрос или
     // остановка процесса ждали бы ответа Telegram без срока.
