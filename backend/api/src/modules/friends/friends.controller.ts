@@ -4,6 +4,7 @@ import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { friendIdSchema, friendRequestSchema } from "./dto/friends.dto.js";
 import { FRIENDS_LIMITS } from "./friends-rules.js";
+import { FriendInviteService, type PreparedInvite } from "./friend-invite.service.js";
 import { FriendsService, type ClaimResult, type FriendsView, type RequestResult } from "./friends.service.js";
 
 /**
@@ -15,6 +16,7 @@ import { FriendsService, type ClaimResult, type FriendsView, type RequestResult 
 export class FriendsController {
   constructor(
     private readonly friends: FriendsService,
+    private readonly invites: FriendInviteService,
     private readonly limiter: RateLimiter,
   ) {}
 
@@ -31,6 +33,14 @@ export class FriendsController {
     const account = accountOf(request);
     await this.limit(FRIENDS_LIMITS.change, account.accountId);
     return { data: await this.friends.link(account.accountId) };
+  }
+
+  /** Приглашение сообщением (Р63): бот готовит, игрок отправляет в чат по своему выбору. */
+  @Post("invite-message")
+  async inviteMessage(@Req() request: unknown): Promise<{ data: PreparedInvite }> {
+    const account = accountOf(request);
+    await this.limit(FRIENDS_LIMITS.invite, account.accountId);
+    return { data: await this.invites.preparedMessage(account) };
   }
 
   @Post("requests")

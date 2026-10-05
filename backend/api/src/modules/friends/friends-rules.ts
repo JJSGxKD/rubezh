@@ -55,4 +55,7 @@ export const FRIENDS_LIMITS = {
   read: { scope: "friends:read", limit: 600, windowSec: 3600 },
   change: { scope: "friends:change", limit: 120, windowSec: 3600 },
   request: { scope: "friends:request", limit: 30, windowSec: 86_400 },
+  // Каждое приглашение сообщением — запрос к Bot API: с запасом на честного
+  // игрока, но не насос для площадки.
+  invite: { scope: "friends:invite", limit: 30, windowSec: 3600 },
 } as const satisfies Record<string, RateLimit>;

@@ -19,3 +19,14 @@ export class FriendLimitError extends DomainError {
     super("friend_limit", message, 409);
   }
 }
+
+/**
+ * Приглашение сообщением не подготовить: площадка так не умеет, ссылка ещё
+ * не собрана или бот не ответил. Клиент на этот код молча зовёт прежним
+ * путём — выбором чата со ссылкой.
+ */
+export class InviteUnavailableError extends DomainError {
+  constructor(message: string) {
+    super("invite_unavailable", message, 503);
+  }
+}

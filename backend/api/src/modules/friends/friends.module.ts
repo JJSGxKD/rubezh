@@ -3,6 +3,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { MessagingModule } from "../messaging/messaging.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
+import { FriendInviteService } from "./friend-invite.service.js";
 import { FriendNotifier } from "./friend-notifier.js";
 import { FriendsController } from "./friends.controller.js";
 import { FRIENDS_REPOSITORY, PrismaFriendsRepository } from "./friends.repository.js";
@@ -17,7 +18,7 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 @Module({
   imports: [AuthModule, WalletModule, MessagingModule, NotificationsModule, RestrictionsModule],
   controllers: [FriendsController],
-  providers: [FriendsService, FriendNotifier, { provide: FRIENDS_REPOSITORY, useClass: PrismaFriendsRepository }],
+  providers: [FriendsService, FriendInviteService, FriendNotifier, { provide: FRIENDS_REPOSITORY, useClass: PrismaFriendsRepository }],
   exports: [FriendsService, FRIENDS_REPOSITORY],
 })
 export class FriendsModule {}

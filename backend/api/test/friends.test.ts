@@ -12,12 +12,14 @@ import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { AuthHooks, PLAIN_LOGIN, type LoginEvent } from "../src/modules/auth/auth-hooks.js";
 import { parseStartParam } from "../src/modules/attribution/start-param.js";
 import { FriendsController } from "../src/modules/friends/friends.controller.js";
+import { FriendInviteService } from "../src/modules/friends/friend-invite.service.js";
 import { FRIENDS_REPOSITORY } from "../src/modules/friends/friends.repository.js";
 import { FRIENDS_RULES } from "../src/modules/friends/friends-rules.js";
 import { FriendsService } from "../src/modules/friends/friends.service.js";
 import { FriendNotifier, requestText } from "../src/modules/friends/friend-notifier.js";
 import type { MessagingService } from "../src/modules/messaging/messaging.service.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
+import { MessagePreparers } from "../src/platforms/ports/prepared-message.js";
 import { Messengers, type Messenger, type OutgoingMessage, type SendOutcome } from "../src/platforms/ports/messenger.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -483,6 +485,8 @@ describe("HTTP раздела друзей", () => {
         { provide: ACCOUNT_REPOSITORY, useValue: accounts },
         { provide: FRIENDS_REPOSITORY, useValue: repository },
         { provide: FriendsService, useValue: service },
+        // Бота у площадки в тесте нет — приглашение сообщением отвечает отказом.
+        { provide: FriendInviteService, useValue: new FriendInviteService(service, new AppLinks([]), new MessagePreparers([])) },
         RateLimiter,
         AuthGuard,
       ],
@@ -534,5 +538,14 @@ describe("HTTP раздела друзей", () => {
     expect((await target.inject({ method: "DELETE", url: "/api/v1/friends/abc", headers: auth })).statusCode).toBe(400);
     const missing = await target.inject({ method: "POST", url: "/api/v1/friends/requests", headers: auth, payload: { accountId: "3c8f3a52-2d4e-4c55-9d0e-6f3b2a1c0d9e" } });
     expect(missing.json()).toMatchObject({ error: { code: "friend_not_found" } });
+  });
+
+  it("приглашение сообщением: без токена — 401, без бота площадки — 503 со своим кодом", async () => {
+    const target = await start();
+    const ann = await player("1");
+    expect((await target.inject({ method: "POST", url: "/api/v1/friends/invite-message" })).statusCode).toBe(401);
+    const refused = await target.inject({ method: "POST", url: "/api/v1/friends/invite-message", headers: { authorization: await bearer(ann) } });
+    expect(refused.statusCode).toBe(503);
+    expect(refused.json()).toMatchObject({ error: { code: "invite_unavailable" } });
   });
 });

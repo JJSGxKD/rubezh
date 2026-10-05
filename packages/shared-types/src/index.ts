@@ -217,6 +217,20 @@ export interface PlatformAdapter {
    */
   invite(invite: InvitePayload): Promise<InviteResult>;
   /**
+   * Какими ещё способами площадка умеет позвать друга — по возможностям
+   * клиента, а не по имени площадки: старый клиент Telegram подготовленных
+   * сообщений не знает (docs/35-stage4-plan.md Р63). Нет метода — никакими.
+   */
+  inviteMethods?(): InviteMethods;
+  /**
+   * Отправить сообщение, которое заранее подготовил бот площадки: площадка
+   * открывает выбор чата, пишет игрок. Id выдаёт сервер
+   * (`POST /api/v1/friends/invite-message`).
+   */
+  sharePreparedMessage?(messageId: string): Promise<InviteResult>;
+  /** Текст в буфер обмена средствами площадки; `false` — не дала. Нет метода — буфер браузера. */
+  copyText?(text: string): Promise<boolean>;
+  /**
    * Подписанные данные запуска для сервера — в Telegram строка `initData`.
    * Сервер проверяет подпись и узнаёт по ней игрока; `null` — площадка их не
    * даёт (обычный браузер, dev), и сервер игрока не узнает.
@@ -397,8 +411,16 @@ export interface InvitePayload {
   text: string;
 }
 
-/** `shared` — открыт выбор чата, `copied` — ссылка в буфере, `unavailable` — не вышло ни то, ни другое. */
-export type InviteResult = "shared" | "copied" | "unavailable";
+/**
+ * `shared` — открыт выбор чата или сообщение отправлено, `copied` — ссылка в
+ * буфере, `cancelled` — игрок сам закрыл окно, `unavailable` — не вышло.
+ */
+export type InviteResult = "shared" | "copied" | "cancelled" | "unavailable";
+
+export interface InviteMethods {
+  /** сообщение, подготовленное ботом, — с кнопкой в игру */
+  preparedMessage: boolean;
+}
 
 export interface SharePayload {
   runScore: number;

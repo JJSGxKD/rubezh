@@ -104,8 +104,10 @@ export const EVENT_DICTIONARY = {
   // все его устройства, устройства остаётся здесь. Необязательное: сборки до
   // настроек аккаунта его не шлют.
   settings_changed: { version: 1, payload: payload({ setting: id, value: flatValue, scope: z.enum(["account", "device"]).optional() }) },
-  share_offered: { version: 1, payload: payload({ context: id }) },
-  share_completed: { version: 1, payload: payload({ context: id, result: id }) },
+  // Способ приглашения (Р63): message — сообщение от бота, link — выбор чата
+  // со ссылкой, copy — копия ссылки; у старых клиентов поля нет.
+  share_offered: { version: 1, payload: payload({ context: id, method: id.optional() }) },
+  share_completed: { version: 1, payload: payload({ context: id, result: id, method: id.optional() }) },
   run_started: {
     version: 1,
     payload: payload({

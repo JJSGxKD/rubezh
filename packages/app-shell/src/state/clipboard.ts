@@ -1,60 +1,43 @@
+import { useShell } from "./shell";
+
 /**
- * Копирование текста в буфер обмена.
+ * Текст в буфер обмена: средствами площадки, если она умеет, иначе буфером
+ * браузера, а где он закрыт (старый WebView, нет разрешения) — выделением
+ * скрытого поля и командой копирования. `false` — не вышло ничего: игрок
+ * должен узнать, что ссылка не скопировалась, а не искать её в буфере.
  *
- * В WebView Telegram на Android `navigator.clipboard` часто недоступен или
- * молча отклоняет запись — на этом срывалось копирование отчётов на прогонах
- * этапа 1. Поэтому путей два, а когда не сработал ни один, экран показывает
- * текст, который человек выделит сам.
+ * Запасной путь — свой, а не `copyTextToClipboard` из SDK Telegram: адаптер
+ * лежит в первой загрузке, и функция SDK стоила бы ей лишних байт ради кнопки
+ * на экране друзей.
  */
-const CLIPBOARD_TIMEOUT_MS = 1500;
-
 export async function copyText(text: string): Promise<boolean> {
+  const adapter = useShell.getState().adapter;
+  if (adapter.copyText !== undefined) return await adapter.copyText(text);
   const clipboard = globalThis.navigator?.clipboard;
-  if (clipboard !== undefined && (await writeWithTimeout(clipboard, text))) return true;
-  return copyViaTextarea(text);
-}
-
-/**
- * Запрос разрешения на запись в некоторых WebView висит без ответа: без
- * таймаута кнопка «Скопировать» просто ничего бы не делала.
- */
-async function writeWithTimeout(clipboard: Clipboard, text: string): Promise<boolean> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<false>((resolve) => {
-    timer = setTimeout(() => resolve(false), CLIPBOARD_TIMEOUT_MS);
-  });
-  const write = clipboard.writeText(text).then(
-    () => true,
-    // Разрешение не дано или контекст не защищённый — идём старым способом.
-    () => false,
-  );
-  try {
-    return await Promise.race([write, timeout]);
-  } finally {
-    clearTimeout(timer);
+  if (clipboard !== undefined) {
+    try {
+      await clipboard.writeText(text);
+      return true;
+    } catch {
+      // Буфер браузера закрыт — пробуем старый путь ниже.
+    }
   }
+  return copyBySelection(text);
 }
 
-/**
- * Способ до Clipboard API: невидимое поле, выделение, `execCommand`. Метод
- * объявлен устаревшим, но в старых WebView он единственный работающий.
- */
-function copyViaTextarea(text: string): boolean {
+function copyBySelection(text: string): boolean {
   if (typeof document === "undefined") return false;
-
   const field = document.createElement("textarea");
   field.value = text;
-  field.setAttribute("readonly", "true");
+  field.setAttribute("readonly", "");
   field.style.position = "fixed";
-  field.style.top = "-1000px";
   field.style.opacity = "0";
   document.body.appendChild(field);
+  field.select();
   try {
-    field.select();
-    field.setSelectionRange(0, text.length);
+    // Устаревшая, но единственная команда там, где асинхронного буфера нет.
     return document.execCommand("copy");
-  } catch (error: unknown) {
-    console.warn("Копирование через execCommand не удалось:", error);
+  } catch {
     return false;
   } finally {
     field.remove();

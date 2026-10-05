@@ -30,6 +30,7 @@ const viewSchema = z.object({
 
 const claimSchema = z.object({ claimed: z.number(), coins: z.number() });
 const linkSchema = z.object({ code: z.string(), startParam: z.string() });
+const inviteMessageSchema = z.object({ messageId: z.string(), expiresAt: z.nullable(z.string()) });
 
 export type FriendsView = z.infer<typeof viewSchema>;
 export type FriendEntry = z.infer<typeof friendSchema>;
@@ -39,6 +40,8 @@ export type ClaimResult = z.infer<typeof claimSchema>;
 export interface FriendsApi {
   view(): Promise<ApiResult<FriendsView>>;
   link(): Promise<ApiResult<{ code: string; startParam: string }>>;
+  /** сообщение с кнопкой в игру, подготовленное ботом площадки (Р63) */
+  inviteMessage(): Promise<ApiResult<{ messageId: string; expiresAt: string | null }>>;
   accept(accountId: string): Promise<ApiResult<unknown>>;
   decline(accountId: string): Promise<ApiResult<unknown>>;
   cancel(accountId: string): Promise<ApiResult<unknown>>;
@@ -58,6 +61,7 @@ export function createFriendsApi(request: ApiRequest = apiRequest): FriendsApi {
   return {
     view: () => request("/api/v1/friends", viewSchema, { method: "GET" }),
     link: () => post("/link", linkSchema),
+    inviteMessage: () => post("/invite-message", inviteMessageSchema),
     accept: (accountId) => post(`/requests/${id(accountId)}/accept`, anything),
     decline: (accountId) => post(`/requests/${id(accountId)}/decline`, anything),
     cancel: (accountId) => remove(`/requests/${id(accountId)}`),

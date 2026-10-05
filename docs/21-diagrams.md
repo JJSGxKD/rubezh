@@ -1863,6 +1863,7 @@ flowchart LR
     FRIENDS --> PG
     FRIENDS -. подарки и бонус .-> WALLET
     FRIENDS -. "порт Messengers: сообщение о заявке" .-> TGADP
+    FRIENDS -. "порт MessagePreparers: приглашение сообщением" .-> TGADP
     CADDY -- "/api/v1/account/settings" --> ACCSET
     ACCSET --> PG
     CADDY -- "/api/v1/me/notifications" --> NOTIF

@@ -61,6 +61,13 @@ describe("клиент раздела «Друзья»", () => {
     ]);
   });
 
+  it("приглашение сообщением — POST на сервер, id сообщения разобран схемой", async () => {
+    const calls: Call[] = [];
+    const prepared = await createFriendsApi(server(calls, { messageId: "msg-1", expiresAt: null })).inviteMessage();
+    expect(prepared.ok && prepared.data.messageId).toBe("msg-1");
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(["POST /api/v1/friends/invite-message"]);
+  });
+
   it("приглашение — ссылка дружбы в параметре запуска; без бота ссылки нет", () => {
     expect(friendInviteUrl("https://t.me/PlayRubezhBot", "f-abc123")).toBe("https://t.me/PlayRubezhBot?startapp=f-abc123");
     expect(friendInviteUrl("", "f-abc123")).toBe("");
