@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Gift, Trophy, UserPlus } from "lucide-react";
+import type { InviteResult } from "@bh/shared-types";
+import { Check, Copy, Gift, Send, Trophy, UserPlus } from "lucide-react";
 import {
   Avatar,
   Button,
@@ -24,6 +25,7 @@ import {
   type FriendEntry,
   type FriendsView,
 } from "../../state/friends-api";
+import { copyText } from "../../state/clipboard";
 import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { track, useShell } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
@@ -38,7 +40,8 @@ import { RestrictedPlaque } from "./restricted-plaque";
  * аккаунтами.
  */
 
-type InviteState = "idle" | "shared" | "copied" | "unavailable";
+/** `sent` — сообщение от бота ушло; `shared` — открыт выбор чата со ссылкой, отправил ли игрок, неизвестно. */
+type InviteState = "idle" | "sent" | "shared" | "copied" | "unavailable";
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: FriendsView };
 
 const api = createFriendsApi();
@@ -221,25 +224,54 @@ export function FriendsScreen(): ReactNode {
 /**
  * Приглашение — ссылка дружбы (WP14): открывший её становится другом
  * позвавшего. Без входа ссылки дружбы нет — зовём просто поиграть.
+ *
+ * Способы (docs/35-stage4-plan.md Р63) — по возможностям площадки, а не по её
+ * имени: сообщение с кнопкой в игру, которое готовит бот, где клиент это
+ * умеет; иначе — выбор чата со ссылкой; и всегда — копия ссылки. Сообщение не
+ * подготовилось — молча зовём прежним путём, а не показываем ошибку.
  */
 function Invite(props: { withAccount: boolean }): ReactNode {
   const botUrl = useShell((state) => state.capabilities.botUrl);
   const [state, setState] = useState<InviteState>("idle");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"send" | "copy" | null>(null);
+  const adapter = useShell.getState().adapter;
+  const withMessage = props.withAccount && adapter.inviteMethods?.().preparedMessage === true;
 
-  const invite = async (): Promise<void> => {
-    if (botUrl === "" || busy) return;
-    setBusy(true);
-    let url = botUrl;
-    if (props.withAccount) {
-      const link = await api.link();
-      if (link.ok) url = friendInviteUrl(botUrl, link.data.startParam);
+  const inviteUrl = async (): Promise<string> => {
+    if (!props.withAccount) return botUrl;
+    const link = await api.link();
+    return link.ok ? friendInviteUrl(botUrl, link.data.startParam) : botUrl;
+  };
+
+  const send = async (): Promise<void> => {
+    if (botUrl === "" || busy !== null) return;
+    setBusy("send");
+    let method = withMessage ? "message" : "link";
+    track("share_offered", { context: "friends_invite", method });
+    let result: InviteResult | "sent" = "unavailable";
+    if (withMessage) {
+      const prepared = await api.inviteMessage();
+      const shared = prepared.ok ? await adapter.sharePreparedMessage?.(prepared.data.messageId) : undefined;
+      if (shared === "shared") result = "sent";
+      else if (shared === "cancelled") result = "cancelled";
     }
-    track("share_offered", { context: "friends_invite" });
-    const result = await useShell.getState().adapter.invite({ url, text: t("friends.invite.text") });
-    track("share_completed", { context: "friends_invite", result });
-    setState(result);
-    setBusy(false);
+    if (result === "unavailable") {
+      method = "link";
+      result = await adapter.invite({ url: await inviteUrl(), text: t("friends.invite.text") });
+    }
+    track("share_completed", { context: "friends_invite", method, result });
+    setState(result === "cancelled" ? "idle" : result);
+    setBusy(null);
+  };
+
+  const copy = async (): Promise<void> => {
+    if (botUrl === "" || busy !== null) return;
+    setBusy("copy");
+    track("share_offered", { context: "friends_invite", method: "copy" });
+    const copied = await copyText(await inviteUrl());
+    track("share_completed", { context: "friends_invite", method: "copy", result: copied ? "copied" : "unavailable" });
+    setState(copied ? "copied" : "unavailable");
+    setBusy(null);
   };
 
   return (
@@ -252,9 +284,13 @@ function Invite(props: { withAccount: boolean }): ReactNode {
         <p className="max-w-[320px] text-sm text-text-muted">{t("friends.invite.body")}</p>
       </div>
       <div className="mt-5 grid gap-2">
-        <Button size="l" block glow disabled={botUrl === ""} loading={busy} onClick={() => void invite()}>
-          <UserPlus size={20} aria-hidden="true" />
+        <Button size="l" block glow disabled={botUrl === "" || busy === "copy"} loading={busy === "send"} onClick={() => void send()}>
+          <Send size={20} aria-hidden="true" />
           {t("friends.invite.action")}
+        </Button>
+        <Button variant="secondary" block disabled={botUrl === "" || busy === "send"} loading={busy === "copy"} onClick={() => void copy()}>
+          <Copy size={18} aria-hidden="true" />
+          {t("friends.invite.copy")}
         </Button>
         <p role="status" className="min-h-5 text-center text-xs text-text-muted">
           {botUrl === "" ? t("friends.invite.noBot") : state === "idle" ? "" : t(`friends.invite.${state}`)}

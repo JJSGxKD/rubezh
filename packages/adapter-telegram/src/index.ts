@@ -1,4 +1,4 @@
-import { hapticFeedback, invoice, isTMA, openLink, openTelegramLink, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
+import { hapticFeedback, invoice, isTMA, openLink, openTelegramLink, retrieveLaunchParams, retrieveRawInitData, shareURL, supports } from "@tma.js/sdk";
 import type {
   AdNetworkSetup,
   AdShowOutcome,
@@ -13,13 +13,13 @@ import type {
   InvoiceStatus,
   SharePayload,
   InvitePayload,
+  InviteMethods,
   InviteResult,
   HapticType,
   DisplayUser,
   KeyValueStorage,
   PlatformUi,
 } from "@bh/shared-types";
-import { inviteFromBrowser } from "./invite";
 import { openInvoiceWith } from "./invoice";
 import { openLinkWith } from "./links";
 import { createDeviceStorage } from "./storage";
@@ -118,7 +118,20 @@ export class TelegramAdapter implements PlatformAdapter {
       shareURL(invite.url, invite.text);
       return "shared";
     }
-    return inviteFromBrowser(invite);
+    // Запасные пути приглашения — чанком по нажатию: первому кадру они не нужны.
+    const { inviteFromBrowser } = await import("./invite");
+    return await inviteFromBrowser(invite);
+  }
+
+  /** Сообщение от бота — с Mini Apps 8.0; в клиенте старше и в браузере его нет. */
+  inviteMethods(): InviteMethods {
+    const version = describeTelegramClient().version;
+    return { preparedMessage: isTMA() && version !== null && supports("web_app_send_prepared_message", version) };
+  }
+
+  async sharePreparedMessage(messageId: string): Promise<InviteResult> {
+    const { sharePrepared } = await import("./invite");
+    return await sharePrepared(messageId);
   }
 
   /**
