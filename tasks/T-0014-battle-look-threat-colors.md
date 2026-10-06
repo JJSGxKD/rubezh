@@ -14,6 +14,11 @@ zones:
   - packages/core-game/src/game/render/shadow-layout.ts
   - packages/core-game/src/game/render/WorldRenderer.ts
   - packages/core-game/src/game/render/combat-feedback.ts
+  - packages/core-game/src/game/render/pickups.ts
+  - packages/core-game/src/game/MainScene.ts
+  - packages/core-game/src/game/BenchScene.ts
+  - packages/core-game/src/engine/phaser-host.ts
+  - packages/app-shell/src/screens/guide/scenes.tsx
   - packages/core-game/test/threat-colors.test.ts
   - packages/core-game/test/looks.test.ts
   - packages/core-game/test/shadow-layout.test.ts
@@ -51,8 +56,9 @@ design: design/directions/directions-2026-10-c.html
 - **Ранги:**
   - элита — тело смешивается с жаром очага `#ff8f3f` на 35 %, плюс золотая
     кайма `#ffd15c` толщиной 2 единицы;
-  - босс — тело смешивается с малиновым `#e0245e` на 40 %, кайма той же
-    золотой, 3 единицы;
+  - босс — тело смешивается с ярко-малиновым `#ff4f8f` на 40 %, кайма той же
+    золотой, 3 единицы. Не `#e0245e`: это цвет рядового `chase`, и его босс
+    не отличался бы от рядового (решение 07.10.2026, вопрос 3 в #224);
   - рядовые — без каймы. Обводка у всех «странновато выглядит» (решение
     пользователя), поэтому она только у опасных.
 - **Ступени** (`content/stages.ts`) — тоном и светлым ядром, как сейчас.
@@ -74,7 +80,10 @@ design: design/directions/directions-2026-10-c.html
   начертание, поэтому `fontStyle: "normal"`: «800» нарисовал бы поддельный
   полужирный.
 - **Гайдбук** берёт формы и цвета из `looks.ts` сам (`ENEMY_LOOKS`,
-  `enemyColor`, `GEM_TIERS`), поэтому дополнительной правки не требует.
+  `enemyColor`, `GEM_TIERS`). Правка — одна: вызовы `enemyColor` в
+  `screens/guide/scenes.tsx` (строки 253 и 542) передают ранг вместо булева
+  `elite`: `props.elite ? "elite" : undefined`. Подпись `enemyColor` чистая,
+  без `boolean` (вопрос 2 в #224).
 
 **Враги по поведениям:**
 
@@ -170,17 +179,24 @@ design: design/directions/directions-2026-10-c.html
    - при `shadow` — размер из `shadowLayout`, сначала эллипс
      `fillStyle(0x000000, 0.35)`, затем тело со сдвигом;
    - без `shadow` — как сейчас;
-   - функция возвращает `scaleFactor = size / (2 * radius)`. Его использует
-     рендер, чтобы видимый размер тела не изменился.
+   - тело рисуется прежним радиусом в центре большей текстуры, поэтому
+     масштаб спрайта остаётся 1 и видимый размер тела не меняется (вопрос 5 в
+     #224). `scaleFactor` остаётся в чистой `shadowLayout` и её тесте; из
+     `ensureShapeTexture` его не возвращать, если его никто не читает.
 6. **`WorldRenderer.ts`:**
    - текстуры врагов — с `shadow: true` и `rim: enemyRim(type.rank)`, цвет —
      `stageColor(enemyColor(type.pattern, type.rank), stage)`;
-   - кристаллы, подборы, герой — с тенью;
+   - герой — с тенью; кристаллы и подборы — с тенью в `pickups.ts`: в двух
+     вызовах `ensureShapeTexture` — `{ shadow: true }` (вопрос 1 в #224);
    - снаряды, обереги, эффекты — без;
-   - там, где спрайту задаётся размер по радиусу, учесть `scaleFactor`
-     текстуры: тело на экране того же размера, что сейчас;
-   - фон: `cameras.main.setBackgroundColor(WORLD_COLORS.ground)`, если цвет
-     фона задаётся отдельно от тайла, — тот же цвет.
+   - базовый масштаб спрайтов врагов и героя — прежний: тело на экране того
+     же размера, что сейчас;
+   - фон камеры здесь не ставить: один источник — сцены и хост (ниже).
+6а. **Цвет фона — `WORLD_COLORS.ground` в трёх местах** вместо `"#0d0f14"`
+    (вопрос 4 в #224): `MainScene.ts:190`, `BenchScene.ts:113` и
+    `engine/phaser-host.ts:44`. Цвет — из `looks.ts`, в нужном Phaser виде:
+    число или строка `#rrggbb`. Установку фона в конструкторе `WorldRenderer`,
+    если она уже есть в ветке, убрать.
 7. **`combat-feedback.ts`:**
    - `fontFamily: '"Russo One", "Segoe UI", system-ui, sans-serif'`,
      `fontStyle: "normal"`, цвет `#ffffff`. Файл шрифта приносит в бандл
@@ -191,16 +207,15 @@ design: design/directions/directions-2026-10-c.html
 8. **`docs/27-design-system-and-app-shell.md`**, раздел о палитре канвы (если
    есть) или §4.1 — абзац: цвета мира в `render/looks.ts` следуют
    `design/README.md`, «Вид боя».
-9. **Гейт.** Проверка в браузере в забеге с режимом разработчика (`dev`):
-   - снимки на 390 px до и после — в PR: толпа рядовых, элита, босс,
-     кристаллы, обереги;
-   - отдельный снимок, на котором видно, что размер тела врага не изменился.
+9. **Гейт.** Снимки на 390 px в забеге снимают тимлиды при приёмке
+   (вопрос 6 в #224): толпа рядовых, элита, босс, кристаллы, обереги, размер
+   тела врага. От исполнителя — тесты и описание в PR.
 
 ## Чего не трогаем
 
 - Симуляцию и хитбоксы: ни одного числа вне `render/`. Контрольные суммы
   `test/determinism.test.ts` и golden-эталоны не меняются.
-- Гайдбук оболочки: он берёт цвета из `looks.ts` сам.
+- Гайдбук оболочки, кроме двух вызовов `enemyColor` в `scenes.tsx`.
 - Телеграфы угроз (`WORLD_COLORS.threat`) — красный остаётся цветом опасности.
 - Цвет героя и снарядов игрока.
 
