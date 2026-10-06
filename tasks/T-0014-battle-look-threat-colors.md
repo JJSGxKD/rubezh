@@ -3,7 +3,7 @@ id: T-0014
 title: Вид боя — красная гамма по угрозе, тени и новые цвета мира
 epic: E12
 priority: P2
-status: in-progress
+status: done
 owner: claude-2 / sonnet-5.5
 size: M
 depends_on: [T-0005, T-0012]
