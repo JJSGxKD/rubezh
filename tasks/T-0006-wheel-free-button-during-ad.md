@@ -13,6 +13,8 @@ zones:
   - packages/app-shell/test/wheel-api.test.ts
 shared: []
 runner: any
+executor: sonnet-5.5
+effort: medium
 release: patch
 design: null
 ---

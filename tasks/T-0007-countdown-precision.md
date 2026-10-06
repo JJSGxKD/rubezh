@@ -15,6 +15,8 @@ zones:
   - packages/app-shell/test/meta-schedule.test.ts
 shared: []
 runner: any
+executor: sonnet-5.5
+effort: medium
 release: patch
 design: null
 ---

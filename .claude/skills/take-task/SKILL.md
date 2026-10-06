@@ -14,7 +14,10 @@ description: Используй, когда исполнителю нужно в
    все `depends_on` — `done`, зоны не пересекаются с задачами в работе (ветки
    `task/*` на `origin`). Если подходят несколько — старший `priority`.
    `runner: human` исполнитель-ИИ не берёт. `runner: local` — только если есть
-   живые Postgres, Redis, Docker или устройство.
+   живые Postgres, Redis, Docker или устройство. **`executor` — только твоя
+   модель:** другая модель задачу не берёт, даже если справилась бы
+   (`tasks/README.md`, «Исполнители и effort»). Если человек поставил тебе
+   задачу с чужим `executor` — скажи ему об этом и не начинай.
 2. **Захват.** Ветка `task/T-NNNN` от `origin/dev` и коммит, который ставит
    `status: in-progress` и `owner`. Затем `git push origin HEAD:refs/heads/task/T-NNNN`
    без `--force`. Отказ — задачу уже взяли, выбирай другую.

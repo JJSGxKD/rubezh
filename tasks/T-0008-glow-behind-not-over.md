@@ -13,6 +13,8 @@ zones:
   - packages/app-shell/test/glow-layer.test.ts
 shared: []
 runner: any
+executor: sonnet-5.5
+effort: medium
 release: patch
 design: null
 ---

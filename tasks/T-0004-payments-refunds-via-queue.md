@@ -20,6 +20,8 @@ zones:
 shared:
   - docs/35-stage4-plan.md
 runner: any
+executor: sonnet-5.5
+effort: high
 release: patch
 design: null
 ---

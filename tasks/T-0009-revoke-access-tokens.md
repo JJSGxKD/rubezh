@@ -18,6 +18,8 @@ zones:
 shared:
   - docs/30-configuration-map.md
 runner: any
+executor: sonnet-5.5
+effort: high
 release: patch
 design: null
 ---

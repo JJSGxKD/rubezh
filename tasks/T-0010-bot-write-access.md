@@ -30,6 +30,8 @@ shared:
   - docs/30-configuration-map.md
   - scripts/bundle-budget.mjs
 runner: any
+executor: sonnet-5.5
+effort: high
 release: minor
 design: null
 ---

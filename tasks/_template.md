@@ -12,6 +12,8 @@ zones:
   - путь/к/каталогу/**
 shared: []
 runner: any
+executor: sonnet-5.5
+effort: medium
 release: patch
 design: null
 ---

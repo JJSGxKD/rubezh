@@ -18,6 +18,8 @@ zones:
   - packages/core-game/test/weapons-and-levels.test.ts
 shared: []
 runner: any
+executor: sonnet-5.5
+effort: high
 release: patch
 design: null
 ---

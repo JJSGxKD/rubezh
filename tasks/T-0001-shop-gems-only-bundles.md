@@ -16,6 +16,8 @@ shared:
   - docs/35-stage4-plan.md
   - docs/30-configuration-map.md
 runner: any
+executor: sonnet-5.5
+effort: medium
 release: patch
 design: null
 ---
