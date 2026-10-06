@@ -13,8 +13,8 @@ export const FILE_NAME_RE = /^(T-\d{4})-[a-z0-9-]+\.md$/;
 const ID_RE = /^T-\d{4}$/;
 
 /** Владелец и репозиторий в адресе значка: его читает shields.io из ветки task-board. */
-const REPOSITORY = "JJSGxKD/rubezh";
-const STATUS_URL = `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${REPOSITORY}/task-board/status`;
+export const REPOSITORY = "JJSGxKD/rubezh";
+export const STATUS_URL = `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${REPOSITORY}/task-board/status`;
 const EPIC_RE = /^E\d+$/;
 
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
@@ -161,6 +161,11 @@ function pathProblem(path) {
   return null;
 }
 
+/** Значок задачи в чужой строке значков (зависимость, ячейка эпика): подпись — её id, ссылка — на файл. */
+export function taskBadge(id, fileName) {
+  return `[![${id}](${STATUS_URL}/${id}.json&label=${id})](${fileName})`;
+}
+
 /**
  * Строка значков под заголовком задачи: статус самой задачи и по значку на
  * каждую зависимость в порядке `depends_on`. Ссылка зависимости ведёт на её
@@ -171,7 +176,7 @@ export function badgeLine(task, fileNames) {
   for (const id of task.depends_on) {
     const dependencyFile = fileNames[id];
     if (dependencyFile === undefined) throw new Error(`badgeLine: для зависимости ${id} не передано имя файла`);
-    badges.push(`[![${id}](${STATUS_URL}/${id}.json&label=${id})](${dependencyFile})`);
+    badges.push(taskBadge(id, dependencyFile));
   }
   return badges.join(" ");
 }

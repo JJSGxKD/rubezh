@@ -117,7 +117,7 @@ export function nextTasks(free, { runner = "any", executor } = {}) {
 const BADGE_IDS_SHOWN = 2;
 
 /** Значок живёт в кэше shields.io и GitHub; пять минут — предел, ниже пересчёт workflow всё равно не успевает. */
-const BADGE_CACHE_SECONDS = 300;
+export const BADGE_CACHE_SECONDS = 300;
 
 function idList(ids) {
   const shown = ids.slice(0, BADGE_IDS_SHOWN).join(", ");
