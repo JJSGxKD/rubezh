@@ -9,6 +9,7 @@ import { stepWorld } from "./sim/step";
 import { createRampSpawner, rampTargetAt, type RampOptions, type Spawner } from "./sim/spawner";
 import { RunCamera } from "./render/run-camera";
 import { WorldRenderer } from "./render/WorldRenderer";
+import { WORLD_COLORS } from "./render/looks";
 import { benchInput } from "./bench/autopilot";
 import { FrameRecorder, type BenchStopReason } from "./bench/metrics";
 import { FrameClock } from "./diagnostics/frame-clock";
@@ -110,7 +111,7 @@ export class BenchScene extends Phaser.Scene {
     this.startedAt = new Date().toISOString();
     this.reportId = createUuid();
 
-    this.cameras.main.setBackgroundColor("#0d0f14");
+    this.cameras.main.setBackgroundColor(WORLD_COLORS.ground);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     const stopWatching = watchVisibility(this.clock);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

@@ -250,7 +250,7 @@ export function EnemyScene(props: {
   child?: EnemyPattern;
 }): ReactNode {
   const look = ENEMY_LOOKS[props.pattern];
-  const color = enemyColor(props.pattern, props.elite);
+  const color = enemyColor(props.pattern, props.elite ? "elite" : undefined);
   const size = props.elite ? 11 : 7;
   const px = 118;
   const py = 48;
@@ -539,7 +539,7 @@ export function EnemyIcon(props: { pattern: EnemyPattern; elite: boolean; size?:
   const look = ENEMY_LOOKS[props.pattern];
   return (
     <svg viewBox="-12 -12 24 24" width={size} height={size} aria-hidden="true" className="shrink-0">
-      <WorldShape shape={look.shape} color={enemyColor(props.pattern, props.elite)} r={9} />
+      <WorldShape shape={look.shape} color={enemyColor(props.pattern, props.elite ? "elite" : undefined)} r={9} />
     </svg>
   );
 }
