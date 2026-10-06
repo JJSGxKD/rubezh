@@ -25,6 +25,8 @@ design: null
 
 # T-0002. Команда pnpm task — доска, захват и проверка зон
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0002.json)](README.md#значки-статуса)
+
 ## Зачем
 
 Реестр задач (`tasks/README.md`) сейчас ведётся руками: занятые задачи ищут по

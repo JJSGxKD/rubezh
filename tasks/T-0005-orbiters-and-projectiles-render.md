@@ -26,6 +26,8 @@ design: null
 
 # T-0005. Обереги и снаряды рисуются так, как бьёт симуляция
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0005.json)](README.md#значки-статуса)
+
 ## Зачем
 
 Игрок жалуется: обереги «сильно режут глаз». Часть причины — ошибки рендера, а

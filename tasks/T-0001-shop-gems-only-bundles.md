@@ -24,6 +24,8 @@ design: null
 
 # T-0001. Наборы магазина только из самоцветов
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0001.json)](README.md#значки-статуса)
+
 ## Зачем
 
 Стартовый набор (50 ⭐) и «Набор кузнеца» (150 ⭐) после оплаты **не
