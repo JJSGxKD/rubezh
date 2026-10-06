@@ -6,7 +6,7 @@ priority: P1
 status: draft
 owner:
 size: S
-depends_on: []
+depends_on: [T-0027]
 zones:
   - backend/api/src/platforms/telegram/pay-support.command.ts
   - backend/api/src/platforms/telegram/pay-texts.ts
@@ -25,7 +25,7 @@ design: null
 
 # T-0026. Команды /paysupport и /terms в боте
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0026.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0026.json)](README.md#значки-статуса) [![T-0027](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0027.json&label=T-0027)](T-0027-bot-updates-via-queue.md)
 
 ## Зачем
 
@@ -57,6 +57,8 @@ design: null
 - **Обе команды отвечают в любом чате,** в том числе в группе. Текст одинаков
   для всех, личных данных в нём нет.
 - **Язык один — русский,** как у `/help`. Игра пока только на русском.
+- **Ждёт T-0027:** обе задачи правят `bot.module.ts`. T-0027 важнее — она
+  про потерю обновлений, в том числе оплат.
 
 ## Как сейчас
 
