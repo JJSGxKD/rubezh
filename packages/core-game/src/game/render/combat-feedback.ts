@@ -204,13 +204,14 @@ export class CombatFeedback {
       const scale = this.world.config.unitScale;
       const text = this.scene.add
         .text(0, 0, "", {
-          fontFamily: '"Rubik Variable", "Segoe UI", system-ui, sans-serif',
-          fontStyle: "800",
+          // Russo One — одно начертание: «800» нарисовал бы поддельный
+          // полужирный, поэтому fontStyle обычный.
+          fontFamily: '"Russo One", "Segoe UI", system-ui, sans-serif',
+          fontStyle: "normal",
           fontSize: `${Math.round(NUMBER_SIZE_UNITS * scale)}px`,
-          color: "#f3f6fc",
-          stroke: "#07090e",
-          strokeThickness: Math.max(2, Math.round(3 * scale)),
+          color: "#ffffff",
         })
+        .setShadow(0, Math.round(1.5 * scale), "#000000", Math.round(2 * scale), false, true)
         .setOrigin(0.5, 1)
         .setDepth(4)
         .setVisible(false);
@@ -221,7 +222,7 @@ export class CombatFeedback {
     const text = this.numbers[n];
     text.setText(String(Math.max(1, Math.round(amount))));
     // Добивание — тёплым цветом и крупнее: игрок видит, какой удар убил.
-    text.setColor(kill ? "#ffd27a" : "#f3f6fc");
+    text.setColor(kill ? "#ffd15c" : "#ffffff");
     text.setVisible(true);
     this.numberBornTick[n] = tick;
     this.numberX[n] = x;
