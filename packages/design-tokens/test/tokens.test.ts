@@ -45,6 +45,17 @@ describe("базовые токены дизайна", () => {
     expect(cssValue("--font-text")).toMatch(new RegExp(`^"${FONT_FAMILY.text}"`));
   });
 
+  it("палитра «Сумеречный рубеж»", () => {
+    expect(COLORS.bg).toBe("#1d1c31");
+    expect(COLORS.accent).toBe("#ff8f3f");
+    expect(COLORS.secondary).toBe("#46d9c6");
+    expect(COLORS.xp).toBe("#b6ff4a");
+  });
+
+  it("гарнитуры направления: Russo One и IBM Plex Sans", () => {
+    expect(FONT_FAMILY).toEqual({ display: "Russo One", text: "IBM Plex Sans Variable" });
+  });
+
   it("не вход Tailwind: его импортирует вход приложения после tailwindcss", () => {
     const code = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
     expect(code).not.toMatch(/@import\s+"tailwindcss"/);
