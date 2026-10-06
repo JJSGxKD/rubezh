@@ -38,6 +38,8 @@ design: null
 
 # T-0010. Разрешение боту писать — после первого забега и в настройках
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0010.json)](README.md#значки-статуса)
+
 ## Зачем
 
 Бот может писать только тем, кто сам начал с ним разговор (`/start`) или дал

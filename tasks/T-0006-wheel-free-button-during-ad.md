@@ -21,6 +21,8 @@ design: null
 
 # T-0006. Кнопка бесплатной крутки не оживает во время крутки за рекламу
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0006.json)](README.md#значки-статуса)
+
 ## Зачем
 
 Бесплатная крутка на сегодня потрачена, игрок крутит колесо за рекламу. Пока

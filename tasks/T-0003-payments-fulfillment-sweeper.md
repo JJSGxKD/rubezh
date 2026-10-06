@@ -41,6 +41,8 @@ design: null
 
 # T-0003. Оплаченное всегда выдаётся или возвращается
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0003.json)](README.md#значки-статуса) [![T-0001](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0001.json&label=T-0001)](T-0001-shop-gems-only-bundles.md)
+
 ## Зачем
 
 Выдачу товара делает задание очереди `payments`. После десяти неудачных попыток

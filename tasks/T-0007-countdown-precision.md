@@ -23,6 +23,8 @@ design: null
 
 # T-0007. Точные и тикающие отсчёты «через сколько» на главной и в награде дня
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0007.json)](README.md#значки-статуса)
+
 ## Зачем
 
 Виджеты главной пишут «через 5 ч», когда до награды 5 ч 50 мин: часы

@@ -28,6 +28,8 @@ design: null
 
 # T-0004. Внешние возвраты через очередь и сигнал о брошенном задании
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0004.json)](README.md#значки-статуса) [![T-0003](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0003.json&label=T-0003)](T-0003-payments-fulfillment-sweeper.md)
+
 ## Зачем
 
 Три дыры рядом с T-0003:

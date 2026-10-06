@@ -21,6 +21,8 @@ design: null
 
 # T-0008. Свечение кнопок и значков — позади, а не поверх
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0008.json)](README.md#значки-статуса) [![T-0007](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0007.json&label=T-0007)](T-0007-countdown-precision.md)
+
 ## Зачем
 
 Пульсирующее свечение должно подсвечивать элемент снаружи. Сейчас оно ложится

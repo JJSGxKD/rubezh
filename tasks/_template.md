@@ -20,6 +20,10 @@ design: null
 
 # T-NNNN. Заголовок
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-NNNN.json)](README.md#значки-статуса) [![T-MMMM](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-MMMM.json&label=T-MMMM)](T-MMMM-slug.md)
+
+Строка значков — сразу под заголовком: значок статуса задачи и по значку на каждую зависимость из `depends_on`, в том же порядке. Без зависимостей — только первый значок. Эту поясняющую строку при копировании удалить.
+
 ## Зачем
 
 Одна-три фразы: какая проблема у игрока или команды и что изменится, когда

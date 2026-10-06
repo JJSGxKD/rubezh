@@ -26,6 +26,8 @@ design: null
 
 # T-0009. Выход везде и блокировка сразу закрывают выданные токены доступа
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0009.json)](README.md#значки-статуса)
+
 ## Зачем
 
 «Выйти везде» и блокировка аккаунта отзывают токены продления, но уже
