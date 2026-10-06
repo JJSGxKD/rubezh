@@ -34,16 +34,16 @@ function listLines(args) {
   return out === "" ? [] : out.split("\n");
 }
 
-/** Файлы каталога tasks/ в origin/dev: `[{ name, text }]`. */
-export function readOriginTasks() {
-  const names = listLines(["ls-tree", "--name-only", BASE, "tasks/"])
+/** Файлы каталога tasks/ в `base` (по умолчанию origin/dev): `[{ name, text }]`. */
+export function readOriginTasks(base = BASE) {
+  const names = listLines(["ls-tree", "--name-only", base, "tasks/"])
     .map((path) => path.replace(/^tasks\//, ""))
     .filter((name) => name.endsWith(".md") && (isTaskFile(name) || name === "epics.md"));
-  return names.map((name) => ({ name, text: git(["show", `${BASE}:tasks/${name}`]) }));
+  return names.map((name) => ({ name, text: git(["show", `${base}:tasks/${name}`]) }));
 }
 
-export function readOriginFileList() {
-  return listLines(["ls-tree", "-r", "--name-only", BASE]);
+export function readOriginFileList(base = BASE) {
+  return listLines(["ls-tree", "-r", "--name-only", base]);
 }
 
 /** id задач, у которых на origin есть ветка task/T-NNNN. */
@@ -69,16 +69,16 @@ export function openPrs() {
   }
 }
 
-/** Всё, что нужно доске, из origin: `{ tasks, errors, epicOrder, repoFiles, taken, prs }`. */
-export function loadRegistryState() {
-  const files = readOriginTasks();
+/** Всё, что нужно доске, из origin: `{ tasks, errors, epicOrder, repoFiles, taken, prs }`; задачи и файлы — из `base`. */
+export function loadRegistryState(base = BASE) {
+  const files = readOriginTasks(base);
   const { tasks, errors } = readTasks(files);
   const epics = files.find((file) => file.name === "epics.md");
   return {
     tasks,
     errors,
     epicOrder: epics === undefined ? [] : parseEpics(epics.text),
-    repoFiles: readOriginFileList(),
+    repoFiles: readOriginFileList(base),
     taken: takenIds(),
     prs: openPrs(),
   };
