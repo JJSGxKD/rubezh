@@ -75,7 +75,7 @@ design: design/screens/home.html
     когда связь вернётся.»;
   - `connection.retry` — «Повторить»;
   - `connection.checking` — «Проверяем…»: подпись кнопки, пока идёт проверка.
-- **Вид** — по макету `design/screens/home.html`, состояние 4 и компонент
+- **Вид** — по макету `design/screens/home.html`, состояние 6 и компонент
   «Плашка связи»:
   - фон `warning` на 10 % прозрачности;
   - рамка `warning` на 45 %;
