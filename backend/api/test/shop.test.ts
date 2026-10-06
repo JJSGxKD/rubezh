@@ -310,7 +310,7 @@ describe("подача товара — только правда", () => {
 
   it("первым — под игрока: новичку стартовый, остальным — самоцветы по лучшей цене", () => {
     expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(), equipped: 0 })).toBe("starter");
-    expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 2 })).toBe("upgrade_kit");
+    expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 2 })).toBe("gems_700");
     expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 0 })).toBe("gems_700");
     expect(recommendedSku(SHOP_SKUS, () => null, { owned: new Set(), equipped: 0 })).toBeNull();
   });
