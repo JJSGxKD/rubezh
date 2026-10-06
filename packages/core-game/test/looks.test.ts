@@ -52,13 +52,13 @@ describe("цвет ранга", () => {
     }
   });
 
-  it("босс отличается от рядового и от элиты", () => {
-    // У «chase» цвет тела совпадает с цветом смешения босса (#e0245e), поэтому у него
-    // босс от рядового цветом не отличается — вопрос тимлидам в PR; ранг читается каймой.
+  it("босс отличается от рядового и от элиты — и у chase тоже", () => {
+    // Цвет смешения босса — #ff4f8f, а не цвет chase (#e0245e): иначе его босс не отличался бы от рядового.
     for (const pattern of PATTERNS) {
-      if (pattern !== "chase") expect(enemyColor(pattern, "boss"), pattern).not.toBe(enemyColor(pattern, undefined));
+      expect(enemyColor(pattern, "boss"), pattern).not.toBe(enemyColor(pattern, undefined));
       expect(enemyColor(pattern, "boss"), pattern).not.toBe(enemyColor(pattern, "elite"));
     }
+    expect(enemyColor("chase", "boss")).toBe(0xec3572);
   });
 
   it("рядовой — это цвет из таблицы без смешения", () => {
@@ -70,15 +70,26 @@ describe("цвет ранга", () => {
     expect(enemyColor("swarm", "elite")).toBe((255 << 16) | (100 << 8) | 81);
   });
 
-  it("босс — смешение с малиновым на 40 %", () => {
-    // 0xff4d5a → 0xe0245e: r = 255 + (224 − 255) · 0,4 = 243, g = 77 + (36 − 77) · 0,4 = 61, b = 90 + (94 − 90) · 0,4 = 92
-    expect(enemyColor("swarm", "boss")).toBe((243 << 16) | (61 << 8) | 92);
+  it("босс — смешение с ярко-малиновым на 40 %", () => {
+    // 0xff4d5a → 0xff4f8f: r = 255, g = 77 + (79 − 77) · 0,4 = 78, b = 90 + (143 − 90) · 0,4 = 111
+    expect(enemyColor("swarm", "boss")).toBe((255 << 16) | (78 << 8) | 111);
   });
 
   it("кайма: у рядового нет, у элиты 2, у босса 3, золотая", () => {
     expect(enemyRim(undefined)).toBeNull();
     expect(enemyRim("elite")).toEqual({ color: 0xffd15c, width: 2 });
     expect(enemyRim("boss")).toEqual({ color: 0xffd15c, width: 3 });
+  });
+});
+
+describe("красная гамма и у рангов", () => {
+  it("тело элиты и босса остаётся в красной гамме: оттенок 330°–20°", () => {
+    for (const pattern of PATTERNS) {
+      for (const rank of ["elite", "boss"] as const) {
+        const { h } = hsv(enemyColor(pattern, rank));
+        expect(h >= 330 || h <= 20, `${pattern}/${rank}: оттенок ${String(Math.round(h))}°`).toBe(true);
+      }
+    }
   });
 });
 
