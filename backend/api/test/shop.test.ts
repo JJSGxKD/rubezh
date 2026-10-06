@@ -18,7 +18,8 @@ import { PaymentsService } from "../src/modules/payments/payments.service.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
-import { SHOP_SKUS, TITLE_MAX, contentsOf, shopSkuSchema, skuById } from "../src/modules/shop/shop-catalog.js";
+import { EXCHANGE_RESOURCES } from "../src/modules/wallet/wallet-limits.js";
+import { SHOP_RESOURCES, SHOP_SKUS, TITLE_MAX, contentsOf, shopSkuSchema, skuById } from "../src/modules/shop/shop-catalog.js";
 import { ShopController } from "../src/modules/shop/shop.controller.js";
 import { ShopPromoService } from "../src/modules/shop/shop-promo.service.js";
 import { ShopService } from "../src/modules/shop/shop.service.js";
@@ -125,6 +126,22 @@ describe("каталог магазина", () => {
       expect(contentsOf(sku).length, sku.id).toBeGreaterThan(0);
     }
     expect(new Set(SHOP_SKUS.map((sku) => sku.id)).size).toBe(SHOP_SKUS.length);
+  });
+
+  it("каждый товар каталога — только то, что кошелёк разрешает покупке (Р2)", () => {
+    const allowed: readonly string[] = EXCHANGE_RESOURCES.purchase;
+    for (const resource of SHOP_RESOURCES) expect(allowed, resource).toContain(resource);
+    for (const sku of SHOP_SKUS) {
+      for (const { resource } of contentsOf(sku)) expect(allowed, `${sku.id}: ${resource}`).toContain(resource);
+    }
+  });
+
+  it("схема не пропустит монеты и осколки в составе", () => {
+    const base = SHOP_SKUS.find((sku) => sku.id === "starter");
+    if (base === undefined) throw new Error("нет стартового набора");
+    expect(shopSkuSchema.safeParse({ ...base, contents: { gems: 10, coins: 100 } }).success).toBe(false);
+    expect(shopSkuSchema.safeParse({ ...base, contents: { shard_common: 5 } }).success).toBe(false);
+    expect(shopSkuSchema.safeParse({ ...base, contents: { gems: 10 } }).success).toBe(true);
   });
 
   it("граница с гачей (Р11): случайное содержимое, лишнее поле и пустой набор схема не пропустит", () => {
@@ -291,7 +308,7 @@ describe("подача товара — только правда", () => {
     expect([...badgesOf(SHOP_SKUS, () => null).values()]).toEqual(["hit"]);
   });
 
-  it("первым — под игрока: новичку стартовый, носящему снаряжение — набор кузнеца, остальным — самоцветы по лучшей цене", () => {
+  it("первым — под игрока: новичку стартовый, остальным — самоцветы по лучшей цене", () => {
     expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(), equipped: 0 })).toBe("starter");
     expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 2 })).toBe("upgrade_kit");
     expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 0 })).toBe("gems_700");
