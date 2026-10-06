@@ -4,14 +4,14 @@ import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE, isElite } from "../patterns";
+import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE } from "../patterns";
 import { ORBITER_RADIUS, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
 import { orbiterRenderPoints } from "./orbiter-points";
 import { PickupRenderer } from "./pickups";
 import { projectileLook, type ProjectileLook } from "./projectile-look";
-import { ENEMY_LOOKS, enemyColor, stageColor, stageCore, WORLD_COLORS } from "./looks";
+import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
 import { playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
@@ -100,27 +100,32 @@ export class WorldRenderer {
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
 
-    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, isElite(type)));
+    const rankOf = (type: { rank: "normal" | "elite" | "boss" }): EnemyRankLook => (type.rank === "normal" ? undefined : type.rank);
+    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, rankOf(type)));
+    const unitScale = world.config.unitScale;
     // Текстура на пару «тип и ступень»: ступень меняет цвет тела и садит в
     // середину ядро, поэтому одной текстуры на тип не хватает.
     this.stageCount = world.stages.length;
     world.enemyTypes.forEach((type, index) => {
+      // Опасное — с золотой каймой; у рядовых её нет. Толщина задана в игровых единицах.
+      const rim = enemyRim(rankOf(type));
       for (let stage = 0; stage < this.stageCount; stage++) {
         const key = `bh-enemy-${type.id}-s${String(stage)}`;
-        // Элита крупнее и светлее: одинаковые на глаз танк и элитный танк
-        // читаются как дефект, а не как контрольная точка сложности.
-        ensureShapeTexture(
-          scene,
-          key,
-          type.radius,
-          stageColor(colorByType[index], stage),
-          ENEMY_LOOKS[type.pattern].shape,
-          stageCore(stage),
-        );
+        // Тень запечена в текстуру: отдельный спрайт на тень удвоил бы число
+        // объектов. Тело рисуется прежним радиусом, поэтому размер врага на
+        // экране и хитбокс не меняются.
+        ensureShapeTexture(scene, key, type.radius, stageColor(colorByType[index], stage), ENEMY_LOOKS[type.pattern].shape, {
+          core: stageCore(stage),
+          shadow: true,
+          rim: rim === null ? null : { color: rim.color, width: rim.width * unitScale },
+        });
         this.textureKeyByType.push(key);
       }
     });
 
+    // Фон камеры — тот же тон, что у земли: пока плитка не покрыла кадр, из-под
+    // неё не должен выглядывать прежний тёмный цвет.
+    scene.cameras.main.setBackgroundColor(WORLD_COLORS.ground);
     const scale = world.config.unitScale;
     this.ensureGroundTexture(scale);
     this.ground = scene.add
@@ -129,7 +134,7 @@ export class WorldRenderer {
       .setDepth(-10);
     this.layer = scene.add.container(0, 0).setDepth(0);
 
-    ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "player");
+    ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "player", { shadow: true });
     ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, WORLD_COLORS.projectile, "circle");
     // Снаряд врага крупнее и другой формы: он должен читаться как летящая
     // угроза, а не как мелкий враг, на которого можно бежать.
