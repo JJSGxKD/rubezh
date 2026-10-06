@@ -1,3 +1,4 @@
+import { checkEpicCells } from "./epics.mjs";
 import { FILE_NAME_RE, parseFrontmatter, validateTask } from "./task-file.mjs";
 
 /**
@@ -43,9 +44,11 @@ export function readTasks(files) {
 
   const tasks = [];
   for (const file of parsedFiles) {
-    const problems = validateTask(file.name, file.data, { body: file.body, fileNames });
-    errors.push(...problems);
-    if (problems.length === 0) tasks.push({ ...file.data, fileName: file.name });
+    // Задача с неверной строкой значков остаётся в реестре: поле у неё в порядке, а ячейка эпика
+    // без неё дала бы вторую, ложную ошибку.
+    const fieldProblems = validateTask(file.name, file.data);
+    errors.push(...(fieldProblems.length === 0 ? validateTask(file.name, file.data, { body: file.body, fileNames }) : fieldProblems));
+    if (fieldProblems.length === 0) tasks.push({ ...file.data, fileName: file.name });
   }
   return { tasks, errors };
 }
@@ -98,5 +101,6 @@ export function checkRegistry(files, epicsMarkdown) {
   }
 
   for (const cycle of findCycles(tasks)) errors.push(`цикл в depends_on: ${cycle}`);
+  errors.push(...checkEpicCells(epicsMarkdown, tasks));
   return errors;
 }

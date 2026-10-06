@@ -181,6 +181,29 @@ export function badgeLine(task, fileNames) {
   return badges.join(" ");
 }
 
+/**
+ * Текст файла задачи с верной строкой значков `expected`: устаревшая строка
+ * (начинается с `[![статус](`) под заголовком «# T-NNNN. …» заменяется на
+ * месте, а если её нет — вставляется под заголовком с пустыми строками
+ * вокруг. Шапка, остальной текст и переводы строк (LF или CRLF) не
+ * меняются; заголовка нет — текст как был, об этом скажет `pnpm task check`.
+ */
+export function withBadgeLine(text, expected) {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text.split(/\r?\n/);
+  const heading = lines.findIndex((line) => /^# T-\d{4}\. /.test(line));
+  if (heading === -1) return text;
+
+  let next = heading + 1;
+  while (next < lines.length && lines[next].trim() === "") next += 1;
+  if (lines[next]?.startsWith("[![статус](") === true) {
+    lines[next] = expected;
+  } else {
+    lines.splice(heading + 1, next - heading - 1, "", expected, "");
+  }
+  return lines.join(eol);
+}
+
 /** Ошибка строки значков или `null`: сразу под заголовком «# T-NNNN. …» должна стоять ровно `badgeLine`. */
 function badgeProblem(data, body, fileNames) {
   // Зависимости нет в реестре — файл для ссылки взять негде; об этом скажет проверка реестра.
@@ -188,10 +211,10 @@ function badgeProblem(data, body, fileNames) {
   const expected = badgeLine(data, fileNames);
   const lines = body.split(/\r?\n/).filter((line) => line.trim() !== "");
   if (!new RegExp(`^# ${data.id}\\. .+`).test(lines[0] ?? "")) {
-    return `ожидается заголовок «# ${data.id}. …» и под ним строка значков: ${expected}`;
+    return `ожидается заголовок «# ${data.id}. …» и под ним строка значков: ${expected}; поправит pnpm task fix`;
   }
   if (lines[1] !== expected) {
-    return `под заголовком нет строки значков или она не совпадает с depends_on; ожидается: ${expected}`;
+    return `под заголовком нет строки значков или она не совпадает с depends_on; ожидается: ${expected}; поправит pnpm task fix`;
   }
   return null;
 }
