@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { classify, nextTasks } from "../tasks/board.mjs";
+import { classify, nextTasks, statusBadge } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -166,5 +166,92 @@ describe("следующая задача", () => {
 
   it("--executor оставляет задачи только этого исполнителя", () => {
     expect(ids(nextTasks(free, { runner: "local", executor: "sonnet-5.5" }))).toEqual(["T-0031", "T-0032"]);
+  });
+});
+
+describe("причины блокировки в структурном виде", () => {
+  it("зависимости и занятые зоны — списками id, чтобы значок не разбирал текст", () => {
+    const tasks = [
+      task("T-0004", { zones: ["a/**"] }),
+      task("T-0005", { zones: ["a/b.ts"], depends_on: ["T-0006", "T-0099"] }),
+      task("T-0006"),
+    ];
+    const result = classify(tasks, ["T-0004"], [], ["a/b.ts"], EPIC_ORDER);
+    const blocked = result.blocked.find((entry: { task: { id: string } }) => entry.task.id === "T-0005");
+    expect(blocked.waitingFor).toEqual(["T-0006", "T-0099"]);
+    expect(blocked.busyWith).toEqual(["T-0004"]);
+  });
+});
+
+describe("значок статуса", () => {
+  const base = { schemaVersion: 1, label: "статус", cacheSeconds: 300 };
+
+  it("свободно — «можно брать», ярко-зелёный", () => {
+    expect(statusBadge({ column: "free", task: task("T-0001") })).toEqual({ ...base, message: "можно брать", color: "brightgreen" });
+  });
+
+  it("в работе — «в работе · аккаунт», оранжевый; модель из owner отрезана", () => {
+    expect(statusBadge({ column: "inProgress", task: task("T-0001"), owner: "claude-2 / sonnet-5.5" })).toEqual({
+      ...base,
+      message: "в работе · claude-2",
+      color: "orange",
+    });
+  });
+
+  it("в работе без известного владельца — просто «в работе»", () => {
+    expect(statusBadge({ column: "inProgress", task: task("T-0001"), owner: "" }).message).toBe("в работе");
+    expect(statusBadge({ column: "inProgress", task: task("T-0001") }).message).toBe("в работе");
+  });
+
+  it("на ревью — номер PR, синий", () => {
+    expect(statusBadge({ column: "review", task: task("T-0001"), pr: 214 })).toEqual({ ...base, message: "на ревью · #214", color: "blue" });
+  });
+
+  it("заблокировано зависимостью — «ждёт T-0003», красный", () => {
+    expect(statusBadge({ column: "blocked", task: task("T-0001"), waitingFor: ["T-0003"], busyWith: [] })).toEqual({
+      ...base,
+      message: "ждёт T-0003",
+      color: "red",
+    });
+  });
+
+  it("две зависимости перечисляются обе, три — две и «+1»", () => {
+    const blocked = (waitingFor: string[]) => statusBadge({ column: "blocked", task: task("T-0001"), waitingFor, busyWith: [] }).message;
+    expect(blocked(["T-0003", "T-0004"])).toBe("ждёт T-0003, T-0004");
+    expect(blocked(["T-0003", "T-0004", "T-0005"])).toBe("ждёт T-0003, T-0004 +1");
+    expect(blocked(["T-0003", "T-0004", "T-0005", "T-0006", "T-0007"])).toBe("ждёт T-0003, T-0004 +3");
+  });
+
+  it("заблокировано зоной — «зона занята T-0005», красный", () => {
+    expect(statusBadge({ column: "blocked", task: task("T-0001"), waitingFor: [], busyWith: ["T-0005"] })).toEqual({
+      ...base,
+      message: "зона занята T-0005",
+      color: "red",
+    });
+  });
+
+  it("и зависимость, и зона — в значке зависимость: без неё зона ничего не решает", () => {
+    expect(statusBadge({ column: "blocked", task: task("T-0001"), waitingFor: ["T-0003"], busyWith: ["T-0005"] }).message).toBe("ждёт T-0003");
+  });
+
+  it("готово — фиолетовый, как влитый PR", () => {
+    expect(statusBadge({ column: "done", task: task("T-0001") })).toEqual({ ...base, message: "готово", color: "6e40c9" });
+  });
+
+  it("черновик — светло-серый", () => {
+    expect(statusBadge({ column: "draft", task: task("T-0001") })).toEqual({ ...base, message: "черновик", color: "lightgrey" });
+  });
+
+  it("отменено — неактивный", () => {
+    expect(statusBadge({ column: "cancelled", task: task("T-0001") })).toEqual({ ...base, message: "отменено", color: "inactive" });
+  });
+
+  it("у каждой колонки доски есть значок", () => {
+    const board = classify(FIXTURE, TAKEN, PRS, [], EPIC_ORDER);
+    for (const [column, entries] of Object.entries(board) as [string, Record<string, unknown>[]][]) {
+      for (const entry of entries) {
+        expect(statusBadge({ ...entry, column }).message).not.toBe("");
+      }
+    }
   });
 });
