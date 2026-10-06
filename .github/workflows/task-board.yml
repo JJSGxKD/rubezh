@@ -41,15 +41,16 @@ permissions:
   contents: write
   pull-requests: read
 
-# Пересчёт идемпотентен: нужен только последний. Параллельные прогоны спорили
-# бы за один force-push.
-concurrency:
-  group: task-board
-  cancel-in-progress: true
-
 jobs:
   board:
     runs-on: ubuntu-latest
+    # Пересчёт идемпотентен: нужен только последний. Параллельные прогоны
+    # спорили бы за один force-push. Группа — у джоба, а не у workflow:
+    # пропущенный по `if` джоб (PR не из ветки задачи) её не занимает и не
+    # отменяет пересчёт после мерджа в dev.
+    concurrency:
+      group: task-board
+      cancel-in-progress: true
     # Фильтр по веткам задач — здесь, а не в `on:`: у create/delete нет своего
     # фильтра веток. Для них смотрим event.ref (имя ветки): у delete github.ref
     # указывает на ветку по умолчанию, а не на удалённую. Fork-PR пропускаем:
