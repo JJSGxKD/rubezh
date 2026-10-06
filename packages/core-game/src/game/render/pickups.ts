@@ -37,10 +37,10 @@ export class PickupRenderer {
 
     const scale = world.config.unitScale;
     GEM_TIERS.forEach((tier, index) => {
-      ensureShapeTexture(scene, gemTextureKey(index), tier.radiusUnits * scale, tier.color, tier.shape);
+      ensureShapeTexture(scene, gemTextureKey(index), tier.radiusUnits * scale, tier.color, tier.shape, { shadow: true });
     });
     for (const look of PICKUP_LOOKS) {
-      ensureShapeTexture(scene, look.key, PICKUP_RADIUS_UNITS * scale * look.size, look.color, look.shape);
+      ensureShapeTexture(scene, look.key, PICKUP_RADIUS_UNITS * scale * look.size, look.color, look.shape, { shadow: true });
     }
   }
 
