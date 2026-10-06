@@ -3,8 +3,8 @@ id: T-0011
 title: Живые значки статуса задач и проверка захвата в CI
 epic: E0
 priority: P0
-status: ready
-owner:
+status: in-progress
+owner: claude-2 / sonnet-5.5
 size: M
 depends_on: [T-0002]
 zones:
