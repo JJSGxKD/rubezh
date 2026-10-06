@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { WORLD_COLORS } from "../game/render/looks";
 
 /**
  * Игра Phaser, подогнанная под контейнер оболочки.
@@ -41,7 +42,7 @@ export function createPhaserHost(options: PhaserHostOptions): PhaserHost {
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: options.container,
-    backgroundColor: "#0d0f14",
+    backgroundColor: WORLD_COLORS.ground,
     // forceSetTimeOut уводит цикл с requestAnimationFrame на таймер — только
     // так Phaser позволяет ограничить частоту сверху. Цена — чуть менее
     // ровный ритм кадров, поэтому режим включается явно и только для замеров.

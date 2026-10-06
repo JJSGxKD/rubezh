@@ -123,9 +123,6 @@ export class WorldRenderer {
       }
     });
 
-    // Фон камеры — тот же тон, что у земли: пока плитка не покрыла кадр, из-под
-    // неё не должен выглядывать прежний тёмный цвет.
-    scene.cameras.main.setBackgroundColor(WORLD_COLORS.ground);
     const scale = world.config.unitScale;
     this.ensureGroundTexture(scale);
     this.ground = scene.add
