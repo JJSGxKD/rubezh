@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "@bh/design-tokens/tokens.css";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/rubik";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource/russo-one/400.css";
 
 /*
  * Панель берёт палитру, гарнитуры и шкалы из общего пакета токенов, а
