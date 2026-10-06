@@ -2,10 +2,12 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { COLUMNS, classify, nextTasks, statusBadge } from "./board.mjs";
+import { contributions, freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
 import { checkClaim } from "./claim.mjs";
-import { BASE, ROOT, fetchOrigin, git, loadRegistryState, readBranchFile, tryGit } from "./git-io.mjs";
-import { checkRegistry } from "./registry.mjs";
-import { parseFrontmatter, validateTask } from "./task-file.mjs";
+import { fixEpicCells } from "./epics.mjs";
+import { BASE, ROOT, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, tryGit } from "./git-io.mjs";
+import { checkRegistry, readTasks } from "./registry.mjs";
+import { badgeLine, parseFrontmatter, validateTask, withBadgeLine } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
 
 /**
@@ -23,6 +25,7 @@ const USAGE = `Команды:
                                            захватить задачу веткой task/T-NNNN
   pnpm task release T-NNNN --yes           отдать задачу: удалить ветку task/T-NNNN
   pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах
+  pnpm task fix                            поставить строки значков и ячейки «Задачи» в эпиках
   pnpm task claim-check [--base <ref>]     задачу можно было взять: статус, зависимости, зоны
   pnpm task status-json --out <каталог>    значки статуса: <каталог>/status/T-NNNN.json на задачу`;
 
@@ -118,6 +121,35 @@ function runCheck() {
     process.exit(1);
   }
   console.log(`Реестр задач в порядке: ${String(files.filter((file) => file.name.startsWith("T-")).length)} задач.`);
+}
+
+function runFix() {
+  const dir = join(ROOT, "tasks");
+  const files = readdirSync(dir)
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => ({ name, text: readFileSync(join(dir, name), "utf8") }));
+  const { tasks } = readTasks(files);
+  const fileNames = Object.fromEntries(tasks.map((task) => [task.id, task.fileName]));
+  const changed = [];
+
+  for (const file of files.filter((candidate) => candidate.name.startsWith("T-"))) {
+    const data = tasks.find((task) => task.fileName === file.name);
+    // Битая шапка или зависимость без файла — править нечего: об этом скажет `pnpm task check`.
+    if (data === undefined || data.depends_on.some((id) => fileNames[id] === undefined)) continue;
+    const text = withBadgeLine(file.text, badgeLine(data, fileNames));
+    if (text !== file.text) changed.push({ name: file.name, text });
+  }
+  const epics = files.find((file) => file.name === "epics.md");
+  if (epics !== undefined) {
+    const text = fixEpicCells(epics.text, tasks);
+    if (text !== epics.text) changed.push({ name: epics.name, text });
+  }
+
+  for (const file of changed) {
+    writeFileSync(join(dir, file.name), file.text);
+    console.log(`поправлено: tasks/${file.name}`);
+  }
+  if (changed.length === 0) console.log("Править нечего.");
 }
 
 /** Строки `status` и `owner` в шапке; остальное в файле не трогаем. */
@@ -249,26 +281,37 @@ function runClaimCheck(flags) {
   console.log(`Проверка захвата ${found.id}: задачу можно было брать.`);
 }
 
-const BOARD_README = `Статусы задач для значков shields.io (tasks/README.md, «Значки статуса»).
-Ветка без истории: её целиком заменяет workflow task-board.yml (pnpm task status-json).
-Руками не править.
-`;
-
 function runStatusJson(flags) {
   if (flags.out === undefined) fail("Укажи каталог: pnpm task status-json --out <каталог>");
   const { board } = loadBoard();
   const dir = join(flags.out, "status");
   mkdirSync(dir, { recursive: true });
+  const owners = new Map();
   let count = 0;
   for (const column of COLUMNS) {
     for (const entry of board[column.key]) {
       const busy = column.key === "inProgress" || column.key === "review";
-      const badge = statusBadge({ ...entry, column: column.key, owner: busy ? ownerOf(entry.task, true) : undefined });
+      const owner = busy ? ownerOf(entry.task, true) : undefined;
+      if (busy) owners.set(entry.task.id, owner);
+      const badge = statusBadge({ ...entry, column: column.key, owner });
       writeFileSync(join(dir, `${entry.task.id}.json`), `${JSON.stringify(badge)}\n`);
       count += 1;
     }
   }
-  writeFileSync(join(flags.out, "README.md"), BOARD_README);
+  writeFileSync(join(dir, "free.json"), `${JSON.stringify(freeBadge(board.free.length))}\n`);
+
+  // Один вызов gh: от него зависят и раздел «Вклад», и его пометка «нет данных».
+  const mergedPrs = mergedTaskPrs();
+  const credits = taskCredits(board.done, mergedPrs);
+  const page = renderBoardPage({
+    board,
+    owners,
+    credits,
+    people: contributions(credits),
+    githubAvailable: mergedPrs !== null,
+    now: new Date(),
+  });
+  writeFileSync(join(flags.out, "README.md"), page);
   console.log(`Значки статуса: ${String(count)} задач → ${dir}`);
 }
 
@@ -288,6 +331,8 @@ function main(argv) {
       return runRelease(positional, flags);
     case "diff-check":
       return runDiffCheck(flags);
+    case "fix":
+      return runFix();
     case "claim-check":
       return runClaimCheck(flags);
     case "status-json":

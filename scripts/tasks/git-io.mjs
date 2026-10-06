@@ -69,6 +69,43 @@ export function openPrs() {
   }
 }
 
+/**
+ * Влитые в dev PR веток задач из ответа `gh`: `[{ number, headRefName, login, mergedAt }]` или `null`, если
+ * ответ не массив. Аккаунт мог быть удалён — тогда `author: null`, и `login` равен `null`, а PR остаётся.
+ */
+export function parseMergedTaskPrs(parsed) {
+  if (!Array.isArray(parsed)) return null;
+  return parsed
+    .filter(
+      (pr) =>
+        typeof pr?.headRefName === "string" &&
+        /^task\/T-\d{4}$/.test(pr.headRefName) &&
+        typeof pr.number === "number" &&
+        typeof pr.mergedAt === "string",
+    )
+    .map((pr) => ({
+      number: pr.number,
+      headRefName: pr.headRefName,
+      login: typeof pr.author?.login === "string" ? pr.author.login : null,
+      mergedAt: pr.mergedAt,
+    }));
+}
+
+/** Влитые в dev PR задач или `null`, если `gh` нет или он не авторизован. */
+export function mergedTaskPrs() {
+  const result = spawnSync(
+    "gh",
+    ["pr", "list", "--state", "merged", "--base", "dev", "--limit", "1000", "--json", "number,headRefName,author,mergedAt"],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER },
+  );
+  if (result.status !== 0) return null;
+  try {
+    return parseMergedTaskPrs(JSON.parse(result.stdout));
+  } catch {
+    return null;
+  }
+}
+
 /** Всё, что нужно доске, из origin: `{ tasks, errors, epicOrder, repoFiles, taken, prs }`; задачи и файлы — из `base`. */
 export function loadRegistryState(base = BASE) {
   const files = readOriginTasks(base);

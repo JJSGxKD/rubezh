@@ -13,8 +13,8 @@ export const FILE_NAME_RE = /^(T-\d{4})-[a-z0-9-]+\.md$/;
 const ID_RE = /^T-\d{4}$/;
 
 /** Владелец и репозиторий в адресе значка: его читает shields.io из ветки task-board. */
-const REPOSITORY = "JJSGxKD/rubezh";
-const STATUS_URL = `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${REPOSITORY}/task-board/status`;
+export const REPOSITORY = "JJSGxKD/rubezh";
+export const STATUS_URL = `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${REPOSITORY}/task-board/status`;
 const EPIC_RE = /^E\d+$/;
 
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
@@ -161,6 +161,11 @@ function pathProblem(path) {
   return null;
 }
 
+/** Значок задачи в чужой строке значков (зависимость, ячейка эпика): подпись — её id, ссылка — на файл. */
+export function taskBadge(id, fileName) {
+  return `[![${id}](${STATUS_URL}/${id}.json&label=${id})](${fileName})`;
+}
+
 /**
  * Строка значков под заголовком задачи: статус самой задачи и по значку на
  * каждую зависимость в порядке `depends_on`. Ссылка зависимости ведёт на её
@@ -171,9 +176,32 @@ export function badgeLine(task, fileNames) {
   for (const id of task.depends_on) {
     const dependencyFile = fileNames[id];
     if (dependencyFile === undefined) throw new Error(`badgeLine: для зависимости ${id} не передано имя файла`);
-    badges.push(`[![${id}](${STATUS_URL}/${id}.json&label=${id})](${dependencyFile})`);
+    badges.push(taskBadge(id, dependencyFile));
   }
   return badges.join(" ");
+}
+
+/**
+ * Текст файла задачи с верной строкой значков `expected`: устаревшая строка
+ * (начинается с `[![статус](`) под заголовком «# T-NNNN. …» заменяется на
+ * месте, а если её нет — вставляется под заголовком с пустыми строками
+ * вокруг. Шапка, остальной текст и переводы строк (LF или CRLF) не
+ * меняются; заголовка нет — текст как был, об этом скажет `pnpm task check`.
+ */
+export function withBadgeLine(text, expected) {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text.split(/\r?\n/);
+  const heading = lines.findIndex((line) => /^# T-\d{4}\. /.test(line));
+  if (heading === -1) return text;
+
+  let next = heading + 1;
+  while (next < lines.length && lines[next].trim() === "") next += 1;
+  if (lines[next]?.startsWith("[![статус](") === true) {
+    lines[next] = expected;
+  } else {
+    lines.splice(heading + 1, next - heading - 1, "", expected, "");
+  }
+  return lines.join(eol);
 }
 
 /** Ошибка строки значков или `null`: сразу под заголовком «# T-NNNN. …» должна стоять ровно `badgeLine`. */
@@ -183,10 +211,10 @@ function badgeProblem(data, body, fileNames) {
   const expected = badgeLine(data, fileNames);
   const lines = body.split(/\r?\n/).filter((line) => line.trim() !== "");
   if (!new RegExp(`^# ${data.id}\\. .+`).test(lines[0] ?? "")) {
-    return `ожидается заголовок «# ${data.id}. …» и под ним строка значков: ${expected}`;
+    return `ожидается заголовок «# ${data.id}. …» и под ним строка значков: ${expected}; поправит pnpm task fix`;
   }
   if (lines[1] !== expected) {
-    return `под заголовком нет строки значков или она не совпадает с depends_on; ожидается: ${expected}`;
+    return `под заголовком нет строки значков или она не совпадает с depends_on; ожидается: ${expected}; поправит pnpm task fix`;
   }
   return null;
 }

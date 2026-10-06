@@ -22,7 +22,7 @@ design: null
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-NNNN.json)](README.md#значки-статуса) [![T-MMMM](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-MMMM.json&label=T-MMMM)](T-MMMM-slug.md)
 
-Строка значков — сразу под заголовком: значок статуса задачи и по значку на каждую зависимость из `depends_on`, в том же порядке. Без зависимостей — только первый значок. Эту поясняющую строку при копировании удалить.
+Строку значков и ячейку эпика ставит `pnpm task fix`. Эту поясняющую строку при копировании удалить.
 
 ## Зачем
 
