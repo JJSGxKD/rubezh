@@ -3,7 +3,7 @@ id: T-0002
 title: Команда pnpm task — доска, захват и проверка зон
 epic: E0
 priority: P0
-status: in-progress
+status: done
 owner: claude-2 / sonnet-5.5
 size: M
 depends_on: []
