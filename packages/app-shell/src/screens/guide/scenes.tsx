@@ -328,14 +328,14 @@ export function EnemyScene(props: {
         <Stage label={props.label}>
           <Player x={px} y={py} />
           {/* Полоса рывка заполняется от волка: дошла до конца — сорвался. */}
-          <rect x={34} y={py - 5} width={70} height={10} rx={5} fill={hex(WORLD_COLORS.dashLane)} fillOpacity={0.14} />
+          <rect x={34} y={py - 5} width={70} height={10} rx={5} fill={hex(WORLD_COLORS.threat)} fillOpacity={0.14} />
           <rect
             x={34}
             y={py - 5}
             width={70}
             height={10}
             rx={5}
-            fill={hex(WORLD_COLORS.dashLane)}
+            fill={hex(WORLD_COLORS.threat)}
             fillOpacity={0.55}
             className={`animate-guide-fill [transform-box:fill-box] origin-left ${MOTION}`}
           />

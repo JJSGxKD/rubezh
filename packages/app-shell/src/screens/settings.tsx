@@ -2,22 +2,28 @@ import { useState, type ReactNode } from "react";
 import { CONTENT_HASH } from "@bh/core-game";
 import {
   ContentColumn,
+  Emblem,
   ListGroup,
   ListItem,
   Screen,
   SectionTitle,
+  Wordmark,
 } from "../design-system/components";
 import { audio } from "../audio";
 import { Slider } from "../design-system/components/Slider";
 import { t } from "../i18n";
+import "../i18n/bot";
+import { noteAccountSetting } from "../state/account-settings";
+import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
 import { useDiagnostics } from "../state/diagnostics";
 import { useGraphics } from "../state/graphics";
 import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
-import { usePlaytestAccess } from "../state/playtest";
+import { useToolsAccess } from "../state/tools";
 import { useSettings, type VolumeKey } from "../state/settings";
 import { useShell } from "../state/shell";
+import { TestNoticeText } from "./meta/test-notice-text";
 
 /**
  * Настройки (docs/27-design-system-and-app-shell.md §6).
@@ -32,6 +38,9 @@ export function SettingsScreen(): ReactNode {
   const diagnostics = useDiagnostics((state) => state.enabled);
   const graphics = useGraphics();
   const supportsFullscreen = useShell((state) => state.adapter.ui.supportsFullscreen);
+  // Бот пишет только аккаунту и только там, где у площадки он есть.
+  const botAvailable = useShell((state) => state.capabilities.auth !== undefined && state.capabilities.botUrl !== "");
+  const bot = useBotNotifications();
   const [hintsReset, setHintsReset] = useState(false);
 
   return (
@@ -65,7 +74,10 @@ export function SettingsScreen(): ReactNode {
           </ListGroup>
         </div>
 
-        <SectionTitle>{t("settings.graphics")}</SectionTitle>
+        {/* Как читать бой — за аккаунтом (Р56): выбранное здесь придёт и на
+            другие устройства. Эффекты оружия — у устройства: их снимают,
+            когда телефон не тянет. */}
+        <SectionTitle>{t("settings.combat")}</SectionTitle>
         <ListGroup>
           <ListItem
             title={t("settings.graphics.telegraphs")}
@@ -73,18 +85,25 @@ export function SettingsScreen(): ReactNode {
             toggle={{ checked: graphics.telegraphs, onChange: () => graphics.toggle("telegraphs") }}
           />
           <ListItem
-            title={t("settings.graphics.weaponEffects")}
-            hint={t("settings.graphics.weaponEffects.hint")}
-            toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
-          />
-          <ListItem
             title={t("settings.graphics.damageNumbers")}
             toggle={{ checked: graphics.damageNumbers, onChange: () => graphics.toggle("damageNumbers") }}
           />
         </ListGroup>
         {/* Предупреждение обязательно: снятый телеграф — не «чуть проще
-            картинка», а другой бой. */}
+            картинка», а другой бой. Совет про слабое устройство — у графики:
+            выбранное здесь уходит на все устройства. */}
         <p className="mt-2 text-xs text-text-muted">{t("settings.graphics.warning")}</p>
+        <p className="mt-1 text-xs text-text-muted">{t("settings.scope.account")}</p>
+
+        <SectionTitle>{t("settings.graphics")}</SectionTitle>
+        <ListGroup>
+          <ListItem
+            title={t("settings.graphics.weaponEffects")}
+            hint={t("settings.graphics.weaponEffects.hint")}
+            toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
+          />
+        </ListGroup>
+        <p className="mt-2 text-xs text-text-muted">{t("settings.scope.device")}</p>
 
         <SectionTitle>{t("settings.language")}</SectionTitle>
         <ListGroup>
@@ -107,6 +126,26 @@ export function SettingsScreen(): ReactNode {
             }}
           />
         </ListGroup>
+
+        {botAvailable ? (
+          <>
+            {/* Что дублировать в бота — за аккаунтом (Р51): решает сервер, когда
+                пишет. Лента в игре получает всё независимо от этого выбора. */}
+            <SectionTitle>{t("settings.bot")}</SectionTitle>
+            <ListGroup>
+              {BOT_NOTIFY_KEYS.map((key) => (
+                <ListItem
+                  key={key}
+                  title={t(`settings.bot.${key}`)}
+                  {...(key === "friendGift" ? { hint: t("settings.bot.friendGift.hint") } : {})}
+                  toggle={{ checked: bot[key], onChange: () => noteAccountSetting(BOT_NOTIFY_ACCOUNT_KEYS[key], bot.toggle(key)) }}
+                />
+              ))}
+            </ListGroup>
+            <p className="mt-2 text-xs text-text-muted">{t("settings.bot.note")}</p>
+            <p className="mt-1 text-xs text-text-muted">{t("settings.scope.account")}</p>
+          </>
+        ) : null}
 
         <SectionTitle>{t("settings.testers")}</SectionTitle>
         <ListGroup>
@@ -150,15 +189,21 @@ export function VolumeSliders(): ReactNode {
   );
 }
 
-/** «Для тестировщиков» — включатели режима диагностики (docs/28-diagnostics.md §2). */
+/**
+ * «Помощь в тестировании» (docs/35-stage4-plan.md Р56; docs/28-diagnostics.md
+ * §2): для игрока, которого позвали помочь собрать игровые метрики, — что это
+ * и что уходит команде. Участие и запись забегов — за аккаунтом, счётчик
+ * кадров — у устройства. Сведения об устройстве открыты всем.
+ */
 export function TestersScreen(): ReactNode {
   const navigation = useNavigation();
   const diagnostics = useDiagnostics();
-  const access = usePlaytestAccess();
+  const access = useToolsAccess();
 
   return (
     <Screen title={t("testers.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
+        <p className="mb-3 text-sm text-text-muted">{t("testers.intro")}</p>
         <ListGroup>
           <ListItem
             title={t("testers.diagnostics")}
@@ -195,9 +240,9 @@ export function TestersScreen(): ReactNode {
                 onClick={() => navigation.push("soundLab")}
               />
             ) : null}
-            {diagnostics.enabled ? (
-              <ListItem title={t("testers.open")} onClick={() => navigation.push("diagnostics")} />
-            ) : null}
+            {/* Сведения об устройстве — всем (Р56): поделиться ими с командой
+                может любой игрок, а не только включивший диагностику. */}
+            <ListItem title={t("testers.device")} hint={t("testers.device.hint")} onClick={() => navigation.push("diagnostics")} />
           </ListGroup>
         </div>
       </ContentColumn>
@@ -205,7 +250,11 @@ export function TestersScreen(): ReactNode {
   );
 }
 
-/** «Об игре»: версия, сборка и лицензии — атрибуция ассетов обязательна. */
+/**
+ * «Об игре»: версия, сборка, предупреждение о тесте — его перечитывают, когда
+ * вспоминают про вайп (docs/35-stage4-plan.md WP33), — и лицензии: атрибуция
+ * ассетов обязательна.
+ */
 export function AboutScreen(): ReactNode {
   const navigation = useNavigation();
   const build = useShell((state) => state.build);
@@ -214,11 +263,20 @@ export function AboutScreen(): ReactNode {
   return (
     <Screen title={t("about.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
+        {/* Бренд — здесь и на заставке, а не на главной (Р76). */}
+        <div className="mt-2 mb-5 flex flex-col items-center gap-2 text-center">
+          <Emblem size={64} />
+          <Wordmark />
+          <p className="max-w-[300px] text-sm text-text-muted">{t("lobby.tagline")}</p>
+        </div>
         <ListGroup>
           <ListItem title={t("about.build")} value={build.version} />
           <ListItem title={t("about.content")} value={CONTENT_HASH} />
           <ListItem title={t("diagnostics.install")} value={installId.slice(0, 8)} />
         </ListGroup>
+
+        <SectionTitle>{t("testNotice.title")}</SectionTitle>
+        <TestNoticeText />
 
         <SectionTitle>{t("about.licenses")}</SectionTitle>
         <p className="text-xs text-text-muted">{t("about.licenses.text")}</p>

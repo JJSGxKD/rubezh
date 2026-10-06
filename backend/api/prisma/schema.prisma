@@ -70,6 +70,10 @@ enum RunVerdict {
 // второй шанс, прямой покупкой, без донатной валюты.
 enum PurchaseProduct {
   continue_run
+  /// товар магазина из каталога (WP10): что именно — `sku`
+  shop_item
+  /// VIP — подписка площадки (WP10, Р20, Р44): период за каждую оплату
+  vip
 }
 
 // Режим оплаты (docs/34-stage3-plan.md, Р14). `test` — разработка: игрок
@@ -106,13 +110,31 @@ enum StartKind {
   invite
   telegram_affiliate
   unknown
+  /// ссылка дружбы `f-<код>` (WP14)
+  friend
+  /// кнопка под уведомлением в боте `n-<вид>` (WP28)
+  notification
 }
 
-// Где началась сессия: в Mini App площадки или в браузере (вход разработчика,
-// позже веб-версия).
+// Где началась сессия: в Mini App площадки, в браузере (вход разработчика,
+// позже веб-версия) или в канале площадки до приложения — `/start` бота,
+// «Начать» в сообщениях сообщества (docs/35-stage4-plan.md, §3.10).
 enum SessionPlace {
   miniapp
   web
+  channel
+}
+
+// Почему игроку можно или нельзя писать (docs/35-stage4-plan.md, §3.10).
+enum MessagingReason {
+  // вошёл в канал площадки сам — боту можно ему отвечать
+  entered
+  // разрешил писать из приложения
+  write_access
+  // заблокировал бота или отписался
+  blocked
+  // снова разрешил после блокировки
+  unblocked
 }
 
 enum DeviceClass {
@@ -145,15 +167,82 @@ model Account {
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(3)
   banReason      String?   @map("ban_reason") @db.VarChar(256)
 
-  roles       AccountRole[]
-  runs        Run[]
-  purchases   Purchase[]
-  sessions    AccountSession[]
-  acquisition Acquisition?
+  roles         AccountRole[]
+  runs          Run[]
+  purchases     Purchase[]
+  sessions      AccountSession[]
+  acquisition   Acquisition?
+  funnel        AccountFunnel?
+  messaging     AccountMessaging?
+  wallet        WalletEntry[]
+  balances      WalletBalance[]
+  walletDaily   WalletDaily[]
+  progress      AccountProgress?
+  runRewards    RunReward[]
+  settings      AccountSettings?
+  // Конверсии закупленной рекламы (WP43)
+  adConversions AdConversion[]
+
+  // Друзья (WP14)
+  friendLink       FriendLink?
+  friendsAsA       Friendship[]         @relation("friendship_a")
+  friendsAsB       Friendship[]         @relation("friendship_b")
+  requestsSent     FriendRequest[]      @relation("friend_request_from")
+  requestsReceived FriendRequest[]      @relation("friend_request_to")
+  giftsSent        FriendGift[]         @relation("friend_gift_from")
+  giftsReceived    FriendGift[]         @relation("friend_gift_to")
+  referredBy       ReferralBinding?     @relation("referral_referred")
+  referrals        ReferralBinding[]    @relation("referral_referrer")
+  returns          FriendReturn[]       @relation("friend_return_returned")
+  returnsHelped    FriendReturn[]       @relation("friend_return_friend")
+  friendBonuses    FriendBonus[]
+  promoRedemptions PromoRedemption[]
+  partnerBinding   PartnerBinding?
+  broadcasts       BroadcastDelivery[]
+  items            Item[]
+  itemEvents       ItemEvent[]
+  runBoosts        RunBoost[]
+  notifications    Notification[]
+  dailyReward      DailyReward?
+  changelogSeen    ChangelogSeen?
+  wheelSpins       WheelSpin[]
+  taskProgress     TaskProgress[]
+  taskParticipants TaskParticipant[]
+  restrictions     AccountRestriction[]
+  taskRuns         TaskRun[]
+  testNotice       TestNotice?
+  adSessions       AdSession[]
+  vipSubscriptions VipSubscription[]
+  vipPeriods       VipPeriod[]
+  vipDaily         VipDaily?
+  showcaseOffers   ShowcaseOffer[]
+  adContinues      RunAdContinue[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
+  // Список игроков в панели (WP32): страница — отрезок индекса по ключу
+  // сортировки и id, а не сортировка всей таблицы.
+  @@index([createdAt, accountId])
+  @@index([lastSeenAt, accountId])
   @@map("account")
+}
+
+// Настройки аккаунта (WP29, docs/35-stage4-plan.md Р56): то, что не зависит
+// от устройства и выбирается один раз — участие в помощи в тестировании,
+// усвоенные подсказки, отображение боя. Графика, громкость и вибрация — у
+// устройства и сюда не попадают. Значение каждого ключа — вместе с моментом
+// выбора: при слиянии побеждает выбранное позже, ключ за ключом.
+model AccountSettings {
+  accountId String   @id @map("account_id") @db.Uuid
+  /// версия схемы настроек у последнего писавшего клиента
+  version   Int
+  /// `{ ключ: { value, at } }` — значение и когда его выбрал игрок, мс UTC
+  values    Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("account_settings")
 }
 
 // Событие аналитики закрытого теста (docs/22-analytics-and-metrics.md §3.1).
@@ -232,6 +321,8 @@ model Feedback {
 enum ExportSource {
   bot
   cli
+  /// кнопка в панели (docs/35-stage4-plan.md, WP17)
+  panel
 }
 
 enum ExportStatus {
@@ -331,22 +422,27 @@ model Run {
   survivalSec      Float?      @map("survival_sec")
   level            Int?
   enemiesKilled    Int?        @map("enemies_killed")
-  /// оружие и уровни к концу забега: `[{ id, level }]`
+  /// оружие, уровни и нанесённый урон к концу забега: `[{ id, level, damage? }]`
   weapons          Json?
+  /// подробности для листа забега: `{ passives, damageTaken, xpCollected, waveReached, topKills }`; `null` — сборка до листа
+  details          Json?
   deathCause       String?     @map("death_cause") @db.VarChar(64)
   /// в забеге включали читы режима разработчика
   cheats           Boolean     @default(false)
   /// секунда каждого второго шанса; сверяется с оплаченными покупками
   continues        Float[]     @default([])
-  /// попал ли в рейтинг: вердикт `ok` и без читов (или администратор просил учесть)
+  /// попал ли в рейтинг: вердикт `ok` и без читов (или администратор просил учесть), а рейтинг игроку не закрыт
   ranked           Boolean     @default(false)
+  /// сдан под ограничением рейтинга: `notified` — игроку сообщили, `silent` — молча; в рейтинг не идёт и потом
+  ratingRestricted String?     @map("rating_restricted") @db.VarChar(8)
   verdict          RunVerdict?
   /// коды причин вердикта, в том числе сведения, не меняющие его
   verdictReasons   String[]    @map("verdict_reasons")
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  account   Account    @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
-  purchases Purchase[]
+  account     Account         @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchases   Purchase[]
+  adContinues RunAdContinue[]
 
   // Профиль игрока: его забеги, свежие первыми.
   @@index([accountId, finishedAt])
@@ -355,6 +451,30 @@ model Run {
   // Очередь разбора: подозрительные и отклонённые, свежие первыми.
   @@index([verdict, finishedAt])
   @@map("run")
+}
+
+/// Второй шанс за рекламу (docs/35-stage4-plan.md WP11, Р4): продолжение
+/// забега, выданное по сессии показа места `second_chance` — досмотренной
+/// или пропуску VIP. Рядом с покупками — вторая книга продолжений: итог
+/// забега сверяется с обеими.
+model RunAdContinue {
+  runId      String   @map("run_id") @db.VarChar(64)
+  /// какое по счёту продолжение забега
+  continueNo Int      @map("continue_no")
+  accountId  String   @map("account_id") @db.Uuid
+  /// сессия показа — одна на продолжение; повтор той же дожимает ответ
+  sessionId  String   @unique @map("session_id") @db.VarChar(32)
+  /// сеть показа; у пропуска VIP — его имя
+  networkKey String   @map("network_key") @db.VarChar(32)
+  grantedAt  DateTime @map("granted_at") @db.Timestamptz(3)
+
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([runId, continueNo])
+  // Суточный потолок рекламных продолжений игрока (Р4).
+  @@index([accountId, grantedAt])
+  @@map("run_ad_continue")
 }
 
 // Покупка за Telegram Stars (docs/34-stage3-plan.md, WP5). Строка заводится,
@@ -375,11 +495,16 @@ model Purchase {
   purchaseId        String          @id @map("purchase_id") @db.Uuid
   accountId         String          @map("account_id") @db.Uuid
   product           PurchaseProduct
-  runId             String          @map("run_id") @db.VarChar(64)
+  /// забег второго шанса; у товара магазина — пусто
+  runId             String?         @map("run_id") @db.VarChar(64)
   /// какое по счёту продолжение забега оплачивается, с единицы
-  continueNo        Int             @map("continue_no") @db.SmallInt
+  continueNo        Int?            @map("continue_no") @db.SmallInt
   /// секунда забега, по которой посчитана цена
-  elapsedSec        Float           @map("elapsed_sec")
+  elapsedSec        Float?          @map("elapsed_sec")
+  /// товар каталога магазина; у второго шанса — пусто
+  sku               String?         @db.VarChar(48)
+  /// разовый товар — один на аккаунт: второй счёт ложится на ту же строку
+  onceKey           String?         @unique @map("once_key") @db.VarChar(96)
   /// цена по правилу Р5.1 — её видит игрок
   priceStars        Int             @map("price_stars")
   /// сколько списано на самом деле: в тестовом режиме — одна звезда
@@ -395,10 +520,19 @@ model Purchase {
   /// возврат заказан, но Telegram его ещё не подтвердил — очередь повторяет
   refundRequestedAt DateTime?       @map("refund_requested_at") @db.Timestamptz(3)
   refundedAt        DateTime?       @map("refunded_at") @db.Timestamptz(3)
+  /// товар выдан хозяином товара; у второго шанса выдача — сама оплата
+  fulfilledAt       DateTime?       @map("fulfilled_at") @db.Timestamptz(3)
+  /// продление подписки: первая покупка подписки — её id стоит в счёте, по которому площадка списывает каждый период
+  renewalOf         String?         @map("renewal_of") @db.Uuid
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  account Account @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
-  run     Run     @relation(fields: [runId], references: [runId], onDelete: Restrict)
+  account         Account          @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  run             Run?             @relation(fields: [runId], references: [runId], onDelete: Restrict)
+  renewalFirst    Purchase?        @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
+  renewals        Purchase[]       @relation("PurchaseRenewal")
+  vipSubscription VipSubscription?
+  vipPeriod       VipPeriod?
+  adConversion    AdConversion?
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -480,4 +614,1502 @@ model Acquisition {
   // Когорты по источнику первого касания.
   @@index([firstStartKind, firstAt])
   @@map("acquisition")
+}
+
+// Воронка аккаунта (docs/35-stage4-plan.md, Р30, §3.10): у каждой вехи —
+// дата первого раза. Вехи ставятся одним UPDATE с COALESCE из слушателей
+// входа, забегов и оплаты, поэтому повторное событие ничего не двигает, а
+// воронка по источнику — это count(веха) рядом с первым касанием.
+//
+// Строка — не история, а отметки: подробности времени и разрезов — в
+// сессиях (`account_session`) и событиях аналитики.
+model AccountFunnel {
+  accountId          String    @id @map("account_id") @db.Uuid
+  /// вошёл в канал площадки: бот, сообщество, страница
+  enteredAt          DateTime? @map("entered_at") @db.Timestamptz(3)
+  /// открыл приложение и вошёл — полная регистрация
+  appOpenedAt        DateTime? @map("app_opened_at") @db.Timestamptz(3)
+  firstRunStartedAt  DateTime? @map("first_run_started_at") @db.Timestamptz(3)
+  firstRunFinishedAt DateTime? @map("first_run_finished_at") @db.Timestamptz(3)
+  /// сколько забегов записано — счётчик для вех «второй» и «пятый»
+  runsRecorded       Int       @default(0) @map("runs_recorded")
+  runs2At            DateTime? @map("runs_2_at") @db.Timestamptz(3)
+  runs5At            DateTime? @map("runs_5_at") @db.Timestamptz(3)
+  /// первый запуск приложения в сутки после первого открытия и позже — по Москве
+  returnedD1At       DateTime? @map("returned_d1_at") @db.Timestamptz(3)
+  /// первый запуск на седьмые сутки после первого открытия и позже
+  returnedD7At       DateTime? @map("returned_d7_at") @db.Timestamptz(3)
+  /// первая настоящая оплата, тестовая не считается
+  firstPurchaseAt    DateTime? @map("first_purchase_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("account_funnel")
+}
+
+// Можно ли писать игроку (docs/35-stage4-plan.md, §3.10). Одна строка на
+// аккаунт: аккаунты площадок не связаны, и канал у аккаунта один — бот его
+// площадки. Состояние меняют обновления площадки, а не слова клиента.
+model AccountMessaging {
+  accountId  String          @id @map("account_id") @db.Uuid
+  canMessage Boolean         @map("can_message")
+  reason     MessagingReason
+  changedAt  DateTime        @map("changed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Сегмент рассылки: кому можно писать.
+  @@index([canMessage])
+  @@map("account_messaging")
+}
+
+// Ресурсы кошелька (docs/35-stage4-plan.md, Р2, Р34): две валюты и осколки
+// по редкостям. Осколки — материал, а не валюта: не продаются и ни на что не
+// меняются, но живут тем же журналом, потому что и начисляются, и тратятся
+// так же — с ключом и без гонок.
+enum WalletResource {
+  coins
+  gems
+  shard_common
+  shard_uncommon
+  shard_rare
+  shard_epic
+  shard_legendary
+  shard_mythic
+}
+
+// Журнал кошелька (docs/35-stage4-plan.md, Р12, §3.2): каждое начисление и
+// списание — строка с причиной, источником и ключом идемпотентности.
+// Повтор с тем же ключом ничего не удваивает: уникальный индекс в базе, а
+// не проверка в коде.
+//
+// Партиций пока нет, хотя план их хотел с первого дня: уникальный индекс
+// партиционированной таблицы обязан включать колонку разбиения, а ключ
+// идемпотентности должен быть уникален глобально. Разбиение — вместе с
+// окном повторов (WP19): повтор начисления приходит в пределах дней, а не
+// месяцев.
+model WalletEntry {
+  entryId        String         @id @map("entry_id") @db.Uuid
+  accountId      String         @map("account_id") @db.Uuid
+  resource       WalletResource
+  /// со знаком: начисление — плюс, списание — минус; ноль — начисление упёрлось в суточный потолок
+  amount         BigInt
+  /// почему: награда за забег, покупка, перековка — список в `wallet-reasons.ts`
+  reason         String         @db.VarChar(32)
+  /// откуда: id забега, покупки, задания; `null` — ручная операция
+  source         String?        @db.VarChar(64)
+  idempotencyKey String         @unique @map("idempotency_key") @db.VarChar(160)
+  createdAt      DateTime       @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // История кошелька игрока — в карточке игрока и разборе.
+  @@index([accountId, createdAt])
+  @@map("wallet_entry")
+}
+
+// Баланс — проекция журнала, обновляется в той же транзакции. Читается одним
+// запросом по ключу: для баланса журнал не нужен. Отрицательным не бывает —
+// проверка в базе, а не только в коде.
+model WalletBalance {
+  accountId String         @map("account_id") @db.Uuid
+  resource  WalletResource
+  balance   BigInt         @default(0)
+  updatedAt DateTime       @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, resource])
+  @@map("wallet_balance")
+}
+
+// Сколько начислено за московские сутки по причине — для суточного потолка
+// (docs/35-stage4-plan.md, §3.2). Отдельной строкой, а не суммой по журналу:
+// строку можно запереть, и параллельные начисления не пройдут мимо потолка.
+model WalletDaily {
+  accountId String         @map("account_id") @db.Uuid
+  resource  WalletResource
+  reason    String         @db.VarChar(32)
+  day       DateTime       @db.Date
+  granted   BigInt         @default(0)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, resource, reason, day])
+  @@map("wallet_daily")
+}
+
+// Курсы валют (docs/35-stage4-plan.md, §3.12, WP9). Курс — цена единицы в
+// долларах, `Decimal` на 50 знаков после запятой: у рубля в долларах сорок
+// значащих цифр начинаются со второго знака. Коды валют — строкой, а не
+// перечислением базы: перечень валют живёт в ядре `packages/fx`, и новая
+// валюта не должна требовать миграции.
+
+/// Последняя котировка источника по валюте — голос медианы.
+model FxQuote {
+  source     String   @db.VarChar(32)
+  currency   String   @db.VarChar(8)
+  usdPerUnit Decimal  @map("usd_per_unit") @db.Decimal(80, 50)
+  observedAt DateTime @map("observed_at") @db.Timestamptz(3)
+  savedAt    DateTime @map("saved_at") @db.Timestamptz(3)
+
+  @@id([source, currency])
+  @@map("fx_quote")
+}
+
+/// Текущий принятый курс — по нему считаются свежесть и снимок.
+model FxRateCurrent {
+  currency   String   @id @db.VarChar(8)
+  usdPerUnit Decimal  @map("usd_per_unit") @db.Decimal(80, 50)
+  sources    String[] @db.VarChar(64)
+  observedAt DateTime @map("observed_at") @db.Timestamptz(3)
+  acceptedAt DateTime @map("accepted_at") @db.Timestamptz(3)
+
+  @@map("fx_rate_current")
+}
+
+/// История принятых курсов — только добавлением.
+model FxRateHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  currency   String   @db.VarChar(8)
+  usdPerUnit Decimal  @map("usd_per_unit") @db.Decimal(80, 50)
+  sources    String[] @db.VarChar(64)
+  observedAt DateTime @map("observed_at") @db.Timestamptz(3)
+  acceptedAt DateTime @map("accepted_at") @db.Timestamptz(3)
+
+  @@index([currency, acceptedAt])
+  @@map("fx_rate_history")
+}
+
+/// Заданный руками курс валюты площадки — с целью и сроком годности.
+model FxManualRate {
+  id        String   @id @default(uuid()) @db.Uuid
+  currency  String   @db.VarChar(8)
+  /// price — цена для игрока, payout — выплата нам
+  purpose   String   @db.VarChar(16)
+  /// цена единицы в валюте котировки: звезда игроку — в рублях, выплата — в долларах (Р37)
+  price     Decimal  @db.Decimal(80, 50)
+  quote     String   @default("USD") @db.VarChar(8)
+  setBy     String   @map("set_by") @db.VarChar(64)
+  setAt     DateTime @map("set_at") @db.Timestamptz(3)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  note      String   @db.VarChar(200)
+
+  @@index([currency, purpose, setAt])
+  @@map("fx_manual_rate")
+}
+
+/// Снимок курсов — на него ссылаются цена и платёж. Неизменяем.
+model FxSnapshot {
+  id      String   @id @default(uuid()) @db.Uuid
+  takenAt DateTime @map("taken_at") @db.Timestamptz(3)
+  /// { КОД: { usdPerUnit, sources, observedAt } } — десятичные строкой
+  rates   Json
+  payout  Json
+
+  @@index([takenAt])
+  @@map("fx_snapshot")
+}
+
+/// Бюджет запросов источника и когда спрашивать его снова.
+model FxSourceState {
+  source      String    @id @db.VarChar(32)
+  month       String    @db.VarChar(7)
+  used        Int
+  pausedUntil DateTime? @map("paused_until") @db.Timestamptz(3)
+  nextPollAt  DateTime  @map("next_poll_at") @db.Timestamptz(3)
+
+  @@map("fx_source_state")
+}
+
+// Уровень аккаунта и награды за забег (docs/35-stage4-plan.md, WP4).
+// Опыт — счётчик аккаунта, а не валюта кошелька: его не тратят, и журнал
+// ему не нужен. Повтор не удваивает опыт по той же причине, что кошелёк —
+// строка награды с первичным ключом `run_id` вставляется в той же
+// транзакции, что прибавка опыта.
+
+model AccountProgress {
+  accountId String   @id @map("account_id") @db.Uuid
+  xp        BigInt   @default(0)
+  level     Int      @default(1)
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Список игроков в панели по уровню (WP32).
+  @@index([level, accountId])
+  @@map("account_progress")
+}
+
+/// Награда за забег — одна на забег. `coinsCredited` пусто, пока монеты не
+/// легли в кошелёк; `skipped` — почему награды нет вовсе.
+model RunReward {
+  runId           String    @id @map("run_id") @db.VarChar(64)
+  accountId       String    @map("account_id") @db.Uuid
+  coins           Int
+  coinsCredited   Int?      @map("coins_credited")
+  xp              Int
+  levelBefore     Int       @map("level_before")
+  levelAfter      Int       @map("level_after")
+  skipped         String?   @db.VarChar(32)
+  createdAt       DateTime  @map("created_at") @db.Timestamptz(3)
+  /// сессия показа, за которую удвоили монеты (WP12): одна на забег
+  doubleSessionId String?   @unique @map("double_session_id") @db.VarChar(32)
+  /// `null` — удвоение не начислено: повтор той же сессией дожмёт
+  doubledAt       DateTime? @map("doubled_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("run_reward")
+}
+
+// Друзья (WP14, docs/35-stage4-plan.md §3.8). Дружбу строим сами: у Telegram
+// нет API друзей, и на любой площадке так же. Дружба — внутри площадки:
+// аккаунты разных площадок не связываются (docs/08-web-and-identity.md §3).
+
+// Ссылка дружбы: код из параметра запуска `f-<код>` — ключ к строке, а не
+// данные (docs/24-attribution-and-sharing.md §3.1). Одна на аккаунт и
+// постоянная: ссылку, разосланную вчера, нельзя сломать новой.
+model FriendLink {
+  /// случайный, не угадывается перебором
+  code      String   @id @db.VarChar(32)
+  accountId String   @unique @map("account_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("friend_link")
+}
+
+// Как стали друзьями: открыли ссылку или приняли заявку.
+enum FriendSource {
+  link
+  request
+}
+
+// Дружба взаимна — одна строка на пару, меньший идентификатор первым: так
+// пара не задвоится, а «друзья ли A и B» — поиск по ключу.
+model Friendship {
+  accountA  String       @map("account_a") @db.Uuid
+  accountB  String       @map("account_b") @db.Uuid
+  source    FriendSource
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  a Account @relation("friendship_a", fields: [accountA], references: [accountId], onDelete: Cascade)
+  b Account @relation("friendship_b", fields: [accountB], references: [accountId], onDelete: Cascade)
+
+  @@id([accountA, accountB])
+  @@index([accountB])
+  @@map("friendship")
+}
+
+// Заявка в друзья: ждёт ответа получателя. Принятая или отклонённая —
+// удаляется: история дружбы — в самой дружбе.
+model FriendRequest {
+  fromAccountId String   @map("from_account_id") @db.Uuid
+  toAccountId   String   @map("to_account_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  from Account @relation("friend_request_from", fields: [fromAccountId], references: [accountId], onDelete: Cascade)
+  to   Account @relation("friend_request_to", fields: [toAccountId], references: [accountId], onDelete: Cascade)
+
+  @@id([fromAccountId, toAccountId])
+  @@index([toAccountId, createdAt])
+  @@map("friend_request")
+}
+
+// Подарок другу: раз в игровые сутки каждому другу (docs/35-stage4-plan.md
+// §3.8). Ключ с сутками — второй подарок того же дня упирается в него, а не
+// в проверку кода. Получатель забирает сам, с потолком в сутки; забранный
+// помечается, монеты кладёт кошелёк своим ключом `friend_gift:…`.
+model FriendGift {
+  fromAccountId String    @map("from_account_id") @db.Uuid
+  toAccountId   String    @map("to_account_id") @db.Uuid
+  /// игровые сутки отправки, по Москве
+  day           DateTime  @db.Date
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// `null` — ещё не забран
+  claimedAt     DateTime? @map("claimed_at") @db.Timestamptz(3)
+
+  from Account @relation("friend_gift_from", fields: [fromAccountId], references: [accountId], onDelete: Cascade)
+  to   Account @relation("friend_gift_to", fields: [toAccountId], references: [accountId], onDelete: Cascade)
+
+  @@id([fromAccountId, toAccountId, day])
+  @@index([toAccountId, claimedAt])
+  @@map("friend_gift")
+}
+
+// Рефералка (WP14, docs/23-referral-and-partner-program.md §2). Засчитывается
+// не регистрация, а активация: награда за регистрацию оплачивала бы пустые
+// аккаунты.
+enum ReferralStatus {
+  /// привязан, ждёт активации
+  bound
+  /// сыграл нужное — награда пригласившему начислена
+  activated
+  /// привязка отклонена антифродом; строка остаётся — привязка одна и навсегда
+  rejected
+}
+
+// Привязка одна и навсегда: ключ — приглашённый. Отклонённая тоже остаётся,
+// иначе её переприсвоили бы следующей ссылкой.
+model ReferralBinding {
+  referredId   String         @id @map("referred_account_id") @db.Uuid
+  referrerId   String         @map("referrer_account_id") @db.Uuid
+  status       ReferralStatus @default(bound)
+  boundAt      DateTime       @default(now()) @map("bound_at") @db.Timestamptz(3)
+  activatedAt  DateTime?      @map("activated_at") @db.Timestamptz(3)
+  /// почему отклонена: `same_network`
+  rejectReason String?        @map("reject_reason") @db.VarChar(32)
+
+  referred Account @relation("referral_referred", fields: [referredId], references: [accountId], onDelete: Cascade)
+  referrer Account @relation("referral_referrer", fields: [referrerId], references: [accountId], onDelete: Cascade)
+
+  @@index([referrerId, activatedAt])
+  @@map("referral_binding")
+}
+
+// Возвращение (WP14, docs/35-stage4-plan.md §3.8): игрок, не заходивший N
+// дней, открыл ссылку друга и сыграл — награда обоим. Пара награждается не
+// чаще раза в период: номер периода — в ключе, второе возвращение того же
+// периода упирается в него.
+model FriendReturn {
+  returnedId String    @map("returned_account_id") @db.Uuid
+  friendId   String    @map("friend_account_id") @db.Uuid
+  /// номер периода: сутки от начала эпохи, делённые на длину периода
+  period     Int
+  returnedAt DateTime  @default(now()) @map("returned_at") @db.Timestamptz(3)
+  /// `null` — вернувшийся ещё не сыграл
+  rewardedAt DateTime? @map("rewarded_at") @db.Timestamptz(3)
+
+  returned Account @relation("friend_return_returned", fields: [returnedId], references: [accountId], onDelete: Cascade)
+  friend   Account @relation("friend_return_friend", fields: [friendId], references: [accountId], onDelete: Cascade)
+
+  @@id([returnedId, friendId, period])
+  @@index([returnedId, rewardedAt])
+  @@map("friend_return")
+}
+
+// Редирект-ссылки (WP16, docs/24-attribution-and-sharing.md §3). Ссылка —
+// кампания команды: `/r/<код>` ведёт в приложение, а каждый клик получает
+// свой код и уходит в параметр запуска `c-<код клика>` — так клик связан с
+// сессией и касанием игрока (`account_session.start_ref`).
+model Link {
+  /// случайный, не угадывается перебором и не несёт данных
+  code           String         @id @db.VarChar(16)
+  /// куда ведёт прямой режим
+  platform       Platform       @default(telegram)
+  campaign       String         @db.VarChar(64)
+  source         String?        @db.VarChar(64)
+  medium         String?        @db.VarChar(64)
+  note           String?        @db.VarChar(200)
+  /// кто завёл; без внешнего ключа — ссылка кампании переживает аккаунт
+  createdBy      String?        @map("created_by") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// сеть, где куплена реклама, — ей уходят конверсии (WP43); `null` — обычная ссылка
+  network        String?        @db.VarChar(16)
+  /// когда регистрация уходит в сеть: `first_run` — после первого засчитанного забега, `launch` — при первом запуске
+  registrationOn String         @default("first_run") @map("registration_on") @db.VarChar(16)
+  clicks         LinkClick[]
+  conversions    AdConversion[]
+
+  @@index([createdAt])
+  @@map("link")
+}
+
+// Клик по ссылке. Краулеры превью кликами не считаются и сюда не пишутся.
+// Сырые данные — минимум для атрибуции и антифрода: подсеть, а не адрес;
+// класс устройства, а не строка браузера; хост `Referer`, а не адрес целиком.
+model LinkClick {
+  /// уходит в параметр запуска `c-<clickId>`
+  clickId       String   @id @map("click_id") @db.VarChar(16)
+  linkCode      String   @map("link_code") @db.VarChar(16)
+  at            DateTime @default(now()) @db.Timestamptz(3)
+  utmSource     String?  @map("utm_source") @db.VarChar(128)
+  utmMedium     String?  @map("utm_medium") @db.VarChar(128)
+  utmCampaign   String?  @map("utm_campaign") @db.VarChar(128)
+  utmContent    String?  @map("utm_content") @db.VarChar(128)
+  utmTerm       String?  @map("utm_term") @db.VarChar(128)
+  refererHost   String?  @map("referer_host") @db.VarChar(255)
+  deviceClass   String?  @map("device_class") @db.VarChar(16)
+  ipPrefix      String?  @map("ip_prefix") @db.VarChar(64)
+  language      String?  @db.VarChar(16)
+  /// макросы сети ссылки, подставленные сетью: `campaign`, `record`…; живут, пока открыто окно конверсии
+  networkParams Json?    @map("network_params")
+
+  link        Link           @relation(fields: [linkCode], references: [code], onDelete: Cascade)
+  conversions AdConversion[]
+
+  @@index([linkCode, at])
+  @@map("link_click")
+}
+
+// Фича-флаги (WP17, docs/09-ci-cd.md §11): рискованное прячется за флагом на
+// бэкенде и выключается мгновенно, не дожидаясь модерации клиента. Выкат —
+// по площадке и доле игроков; доля устойчивая: игрок не прыгает туда-обратно.
+model FeatureFlag {
+  /// `ads.rewarded`, `shop.v2` — латиница, точки, дефисы
+  key       String     @id @db.VarChar(64)
+  enabled   Boolean    @default(false)
+  /// пусто — все площадки
+  platforms Platform[]
+  /// доля игроков в процентах, 0–100
+  percent   Int        @default(100)
+  note      String?    @db.VarChar(200)
+  /// кто менял последним; без внешнего ключа — флаг переживает аккаунт
+  updatedBy String?    @map("updated_by") @db.Uuid
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("feature_flag")
+}
+
+// Настройки без релиза (WP24, docs/35-stage4-plan.md §3.18, Р53): значение
+// отсюда перекрывает окружение, а окружение — умолчание в коде. Строка есть
+// только у того, что поменяли в панели; сброс удаляет её, и работает снова
+// окружение. Ключи и схемы значений — каталог в коде
+// (`modules/settings/setting-catalog.ts`); секретов здесь не бывает.
+model AppSetting {
+  /// `notify.chat.general` — ключ из каталога
+  key       String   @id @db.VarChar(64)
+  /// значение по схеме ключа; разбирается при каждом чтении
+  value     Json
+  /// кто менял последним; без внешнего ключа — настройка переживает аккаунт
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("app_setting")
+}
+
+// Забранные ступени бонуса за число друзей (WP14, docs/35-stage4-plan.md
+// §3.8). Ступень — один раз навсегда: ключ — аккаунт и порог. Монеты кладёт
+// кошелёк своим ключом, эта строка — чтобы показать игроку, что уже забрано.
+model FriendBonus {
+  accountId String   @map("account_id") @db.Uuid
+  /// порог ступени в засчитанных друзьях
+  friends   Int
+  /// сколько монет обещала ступень, когда её забрали: числа рабочие и меняются
+  coins     Int
+  claimedAt DateTime @default(now()) @map("claimed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, friends])
+  @@map("friend_bonus")
+}
+
+// Рассылка в бота (WP17, docs/29-admin-panel.md §7). Черновик правится, пока
+// не запущен; после старта содержимое неизменно — иначе половина аудитории
+// получила бы не тот текст, что виден в отчёте. Кто создал, одобрил и
+// запустил — без внешних ключей: рассылка — запись истории, она переживает
+// аккаунт.
+enum BroadcastStatus {
+  draft
+  sending
+  paused
+  done
+  cancelled
+}
+
+model Broadcast {
+  broadcastId String          @id @map("broadcast_id") @db.Uuid
+  title       String          @db.VarChar(120)
+  /// бот какой площадки пишет — у аккаунта канал один, бот его площадки
+  platform    Platform
+  text        String          @db.VarChar(4096)
+  buttonText  String?         @map("button_text") @db.VarChar(64)
+  /// ссылка кампании рассылки: кнопка ведёт через `/r/<код>`, клики и запуски — по ней
+  linkCode    String?         @map("link_code") @db.VarChar(16)
+  /// адрес кнопки на момент создания: домен клиента мог смениться, а текст — нет
+  buttonUrl   String?         @map("button_url") @db.VarChar(512)
+  /// фильтры аудитории, как их задала панель (`broadcasts/segment.ts`)
+  segment     Json
+  status      BroadcastStatus @default(draft)
+  /// сколько получателей набралось на старте
+  audience    Int?
+  createdBy   String          @map("created_by") @db.Uuid
+  approvedBy  String?         @map("approved_by") @db.Uuid
+  startedBy   String?         @map("started_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  startedAt   DateTime?       @map("started_at") @db.Timestamptz(3)
+  finishedAt  DateTime?       @map("finished_at") @db.Timestamptz(3)
+
+  deliveries BroadcastDelivery[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@map("broadcast")
+}
+
+enum DeliveryStatus {
+  queued
+  sent
+  blocked
+  failed
+}
+
+// Доставка рассылки одному игроку. Ключ — пара (рассылка, игрок): повтор
+// задания очереди или второй старт не напишут игроку дважды
+// (docs/29-admin-panel.md §7.3).
+model BroadcastDelivery {
+  broadcastId  String         @map("broadcast_id") @db.Uuid
+  accountId    String         @map("account_id") @db.Uuid
+  status       DeliveryStatus @default(queued)
+  /// сколько раз площадка просила подождать
+  attempts     Int            @default(0)
+  /// код отказа площадки для итога; текст ответа не храним
+  error        String?        @db.VarChar(32)
+  sentAt       DateTime?      @map("sent_at") @db.Timestamptz(3)
+  /// строку взяло задание очереди до этого момента: второе задание её не возьмёт,
+  /// а упавшее отпустит по сроку
+  claimedUntil DateTime?      @map("claimed_until") @db.Timestamptz(3)
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [broadcastId], onDelete: Cascade)
+  account   Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([broadcastId, accountId])
+  // Очередь отправки: следующие ожидающие рассылки.
+  @@index([broadcastId, status])
+  // Исключение из аудитории: получал рассылку за последние дни.
+  @@index([accountId, sentAt])
+  @@map("broadcast_delivery")
+}
+
+// Снаряжение (WP7, docs/35-stage4-plan.md §3.4, Р38)
+
+enum ItemSlot {
+  weapon
+  amulet
+  gloves
+  armor
+  belt
+  boots
+}
+
+enum ItemRarity {
+  common
+  uncommon
+  rare
+  epic
+  legendary
+  mythic
+}
+
+/// Предмет инвентаря. Хранятся броски свойств, а не значения: значение
+/// считается из редкости, уровня и броска (modules/items/item-rules.ts), и
+/// улучшение уровня поднимает все свойства разом. `seed` — зерно, от которого
+/// брошен предмет (Р14): спорный бросок повторяется при разборе. Разобранный
+/// или объединённый предмет не удаляется, а помечается `removedAt` — журнал
+/// ссылается на него.
+model Item {
+  itemId    String     @id @map("item_id") @db.Uuid
+  accountId String     @map("account_id") @db.Uuid
+  slot      ItemSlot
+  rarity    ItemRarity
+  level     Int
+  seed      BigInt
+  /// броски: { main: { stat, roll }, extras: [{ stat, roll }] }
+  rolls     Json
+  /// надет ли; надетый в слоте один — частичный уникальный индекс в миграции
+  equipped  Boolean    @default(false)
+  /// откуда: loot:<runId>, merge:<ключ>, admin:<актор>
+  source    String     @db.VarChar(96)
+  createdAt DateTime   @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime   @map("updated_at") @db.Timestamptz(3)
+  removedAt DateTime?  @map("removed_at") @db.Timestamptz(3)
+  /// когда игрок открыл лист предмета; `null` — новый: знак на вкладке арсенала (Р50)
+  seenAt    DateTime?  @map("seen_at") @db.Timestamptz(3)
+
+  account Account     @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  events  ItemEvent[]
+
+  // Инвентарь игрока — живые предметы аккаунта.
+  @@index([accountId, removedAt])
+  @@map("item")
+}
+
+/// Журнал предметов — источник истины и аналитики снаряжения (как кошелёк
+/// для валют): получение, надевание, улучшение, перековка, разбор,
+/// объединение. Ключ идемпотентности уникален: повтор запроса не улучшит
+/// предмет дважды и не спишет дважды.
+model ItemEvent {
+  eventId        String   @id @map("event_id") @db.Uuid
+  itemId         String   @map("item_id") @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  /// obtained | equipped | unequipped | upgraded | rerolled | salvaged | merged
+  kind           String   @db.VarChar(16)
+  payload        Json
+  idempotencyKey String   @unique @map("idempotency_key") @db.VarChar(160)
+  createdAt      DateTime @map("created_at") @db.Timestamptz(3)
+
+  item    Item    @relation(fields: [itemId], references: [itemId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("item_event")
+}
+
+/// Бусты, купленные на забег (docs/35-stage4-plan.md §3.5, Р39). Одна строка
+/// на забег: повтор покупки по тому же `runId` ничего не спишет, а итог забега
+/// сверяет с ней заявленные бусты. Покупка — до старта, онлайн (Р17); забег,
+/// который так и не начался, получает бусты назад — `refundedAt`.
+model RunBoost {
+  runId      String    @id @map("run_id") @db.VarChar(64)
+  accountId  String    @map("account_id") @db.Uuid
+  boosts     String[]
+  /// сколько списано по ресурсам: { "coins": 270, "gems": 4 }
+  cost       Json
+  createdAt  DateTime  @map("created_at") @db.Timestamptz(3)
+  refundedAt DateTime? @map("refunded_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("run_boost")
+}
+
+/// Лента уведомлений игрока (docs/35-stage4-plan.md Р51, §3.17): что с ним
+/// случилось — заявка и подарок друга, редкая добыча, возврат бустов,
+/// сообщение команды. Хранится 90 дней: чистка — `notifications-cleaner.ts`.
+/// Повтор записи по тому же событию упирается в уникальный ключ события, а
+/// не в проверку кода.
+/// Награда дня (docs/35-stage4-plan.md Р45, §3.14, WP13). Прогресс не
+/// сбрасывается: пропуск дня его останавливает. День недели и ступень —
+/// из числа забранных дней, а не своими полями, чтобы им нечем было
+/// разойтись.
+model DailyReward {
+  accountId    String   @id @map("account_id") @db.Uuid
+  /// сколько дней забрано за всё время
+  claimedDays  Int      @map("claimed_days")
+  /// игровые сутки (по Москве) последнего забора
+  lastClaimDay DateTime @map("last_claim_day") @db.Date
+  updatedAt    DateTime @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("daily_reward")
+}
+
+/// Дубль уведомления в бота (docs/35-stage4-plan.md WP28): доставлено,
+/// игрок заблокировал бота, площадка отказала.
+enum NotificationBotOutcome {
+  sent
+  blocked
+  failed
+}
+
+model Notification {
+  notificationId String                  @id @map("notification_id") @db.Uuid
+  accountId      String                  @map("account_id") @db.Uuid
+  /// вид — каталог в `notification-kinds.ts`
+  kind           String                  @db.VarChar(32)
+  /// данные вида; разбирает схема вида, неизвестное пропускается
+  payload        Json
+  /// ключ события: одно событие — одно уведомление
+  dedupeKey      String                  @map("dedupe_key") @db.VarChar(160)
+  createdAt      DateTime                @map("created_at") @db.Timestamptz(3)
+  /// `null` — не прочитано
+  readAt         DateTime?               @map("read_at") @db.Timestamptz(3)
+  /// чем кончился дубль в бота; `null` — в бота не уходило: вид не дублируется, игрок выключил или писать нельзя
+  botOutcome     NotificationBotOutcome? @map("bot_outcome")
+  botAt          DateTime?               @map("bot_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@unique([accountId, dedupeKey])
+  // Лента игрока — новые сверху; счёт непрочитанного — по той же строке аккаунта.
+  @@index([accountId, createdAt(sort: Desc)])
+  // Чистка старше срока хранения.
+  @@index([createdAt])
+  @@map("notification")
+}
+
+// Журнал обновлений (WP31, docs/35-stage4-plan.md Р61)
+
+/// Что за изменение: новое, изменено, исправлено.
+enum ChangelogKind {
+  added
+  changed
+  fixed
+}
+
+/// Строка журнала — одно изменение с версией и площадками. Версия — строкой
+/// для показа и тремя числами для порядка: `0.10.0` новее `0.9.0`.
+model ChangelogEntry {
+  entryId      String        @id @map("entry_id") @db.Uuid
+  /// `X.Y.Z` без предрелиза
+  version      String        @db.VarChar(16)
+  versionMajor Int           @map("version_major")
+  versionMinor Int           @map("version_minor")
+  versionPatch Int           @map("version_patch")
+  /// пусто — все площадки
+  platforms    Platform[]
+  kind         ChangelogKind
+  /// простой текст: разметка из панели ломает строку журнала
+  text         String        @db.VarChar(500)
+  /// `null` — черновик: игрок его не видит
+  publishedAt  DateTime?     @map("published_at") @db.Timestamptz(3)
+  createdAt    DateTime      @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime      @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
+  /// `null` — строку завёл выкат из PR и человек её ещё не правил
+  updatedBy    String?       @map("updated_by") @db.Uuid
+
+  source ChangelogSource?
+
+  @@index([version])
+  @@map("changelog_entry")
+}
+
+/// Откуда строка пришла при выкате: раздел «Для игроков» влитого PR. Ключ
+/// остаётся и после удаления строки — удалённое в панели следующий выкат не
+/// вернёт.
+model ChangelogSource {
+  /// `pr-<номер>-<строка>`
+  sourceKey  String   @id @map("source_key") @db.VarChar(64)
+  /// `null` — строку удалили в панели
+  entryId    String?  @unique @map("entry_id") @db.Uuid
+  importedAt DateTime @map("imported_at") @db.Timestamptz(3)
+
+  entry ChangelogEntry? @relation(fields: [entryId], references: [entryId], onDelete: SetNull)
+
+  @@map("changelog_source")
+}
+
+/// Раздача уведомления о выходе версии: кому и докуда дошла. Публикация новых
+/// строк версии начинает раздачу заново — ключ события в ленте не даст
+/// второго уведомления тем, кто его уже получил.
+model ChangelogRelease {
+  version     String     @id @db.VarChar(16)
+  /// площадки опубликованных строк версии; раздача — их игрокам
+  platforms   Platform[]
+  /// последняя публикация: поколение раздачи, раздающий сверяет его, прежде чем сдвинуть курсор
+  publishedAt DateTime   @map("published_at") @db.Timestamptz(3)
+  /// последний аккаунт, которому раздали; `null` — с начала
+  cursor      String?    @db.Uuid
+  /// `null` — раздача не закончена
+  doneAt      DateTime?  @map("done_at") @db.Timestamptz(3)
+
+  @@map("changelog_release")
+}
+
+/// Когда игрок последний раз открывал журнал — по этому времени знак меню
+/// считает версии, вышедшие после.
+model ChangelogSeen {
+  accountId String   @id @map("account_id") @db.Uuid
+  seenAt    DateTime @map("seen_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("changelog_seen")
+}
+
+// Колесо (WP13)
+
+/// Чем крутили: бесплатная крутка суток или за рекламу (с WP12).
+enum WheelSpinSource {
+  free
+  ad
+}
+
+/// Крутка колеса (docs/35-stage4-plan.md WP13, 07-monetization-and-ads.md §7).
+/// Сектор выбирает сервер и записывает до начисления: повтор после сбоя
+/// дожимает тот же сектор, а не бросает заново. Бесплатная крутка — одна в
+/// игровые сутки: частичный уникальный индекс в миграции.
+model WheelSpin {
+  spinId      String          @id @map("spin_id") @db.Uuid
+  accountId   String          @map("account_id") @db.Uuid
+  source      WheelSpinSource
+  /// игровые сутки (по Москве) крутки
+  gameDay     DateTime        @map("game_day") @db.Date
+  /// номер сектора с нуля — как на экране, по часовой стрелке от стрелки
+  sector      Int             @db.SmallInt
+  resource    WalletResource
+  amount      Int
+  createdAt   DateTime        @map("created_at") @db.Timestamptz(3)
+  /// `null` — сектор выпал, но кошелёк ещё не начислил: следующая крутка дожмёт
+  grantedAt   DateTime?       @map("granted_at") @db.Timestamptz(3)
+  /// сессия показа крутки за рекламу: одна сессия — одна крутка; без внешнего
+  /// ключа — сессию проверяет забор модуля рекламы
+  adSessionId String?         @unique @map("ad_session_id") @db.VarChar(32)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Крутки игрока — удаление аккаунта.
+  @@index([accountId, createdAt])
+  @@map("wheel_spin")
+}
+
+// Задания и достижения (WP13)
+
+/// Срок цели: сутки и неделя по Москве, достижения — навсегда.
+enum TaskPeriod {
+  daily
+  weekly
+  achievement
+}
+
+/// Каталог заданий и достижений (docs/35-stage4-plan.md Р52, WP13): правится
+/// из панели без релиза. Вид цели — строкой, а не перечислением базы: новый
+/// вид приходит кодом (`tasks/task-rules.ts`), без миграции. Строку не
+/// удаляют, а выключают — на неё ссылается прогресс.
+model TaskDef {
+  taskId          String     @id @map("task_id") @db.VarChar(48)
+  period          TaskPeriod
+  kind            String     @db.VarChar(32)
+  target          Int
+  /// `null` — текст по виду цели у клиента, со склонением числа
+  title           String?    @db.VarChar(120)
+  coins           Int        @default(0)
+  gems            Int        @default(0)
+  /// обычные осколки
+  shards          Int        @default(0)
+  /// очки батл-пасса (WP26)
+  passPoints      Int        @default(0) @map("pass_points")
+  /// параметры вида со своей схемой (`tasks/task-rules.ts`): у партнёрских
+  /// целей — ссылка, площадка и у канала — сам канал; у целей забега — пусто
+  params          Json?
+  sort            Int        @default(0)
+  active          Boolean    @default(true)
+  /// лимит выполнений партнёрского задания (Р82): сколько игроков получат
+  /// награду; `null` — без лимита. Пределы — `CHECK` в миграции
+  completionLimit Int?       @map("completion_limit")
+  /// сколько игроков выполнили; растёт под блокировкой строки — лимит не
+  /// перешагнуть двумя заборами разом, кроме мягкого часа начавших
+  completions     Int        @default(0)
+  /// картинка 1:1 партнёрского задания (Р82); `null` — значок вида у клиента.
+  /// Только у партнёрской цели — `CHECK` в миграции
+  imageId         String?    @map("image_id") @db.VarChar(64)
+  createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
+  /// `null` — строка из миграции, человек её не правил
+  updatedBy       String?    @map("updated_by") @db.Uuid
+
+  image        MediaImage?       @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
+  progress     TaskProgress[]
+  participants TaskParticipant[]
+
+  @@map("task_def")
+}
+
+/// Ограничение игрока (docs/35-stage4-plan.md Р75, WP44): часть функций
+/// закрыта на срок или бессрочно. Строка на вид; действует — не снято и срок
+/// не вышел, истечение проверяет время. `settled_at` — последствия сняты:
+/// блокировку убрали, рейтинг вернули; ставит снятие или задача по сроку.
+/// Блокировка целиком — вид `all`, `account.banned_at` — её отражение для
+/// проверок входа. Вид и причина — из каталога в коде (`restrictions/`).
+model AccountRestriction {
+  restrictionId String    @id @default(uuid()) @map("restriction_id") @db.Uuid
+  accountId     String    @map("account_id") @db.Uuid
+  kind          String    @db.VarChar(32)
+  startsAt      DateTime  @map("starts_at") @db.Timestamptz(3)
+  /// `null` — бессрочно
+  endsAt        DateTime? @map("ends_at") @db.Timestamptz(3)
+  /// шаблон причины: игрок видит его текст
+  reason        String    @db.VarChar(32)
+  /// комментарий команды — игроку не показывается
+  comment       String?   @db.VarChar(500)
+  /// сообщить игроку: плашка там, где он упёрся; `false` — молча (О40)
+  notify        Boolean
+  /// кто наложил; без внешнего ключа — запись переживает аккаунт модератора.
+  /// `null` — перенесено из прежней блокировки
+  imposedBy     String?   @map("imposed_by") @db.Uuid
+  liftedAt      DateTime? @map("lifted_at") @db.Timestamptz(3)
+  liftedBy      String?   @map("lifted_by") @db.Uuid
+  liftComment   String?   @map("lift_comment") @db.VarChar(500)
+  settledAt     DateTime? @map("settled_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId, startsAt(sort: Desc)])
+  @@map("account_restriction")
+}
+
+/// Участник партнёрского задания (Р82, WP13, часть 7): строка на игрока, а
+/// не на срок. Место в лимите игрок занимает однажды — первым выполнением,
+/// и у повторяемой подписки дальше получает награду каждый срок.
+model TaskParticipant {
+  taskId      String    @map("task_id") @db.VarChar(48)
+  accountId   String    @map("account_id") @db.Uuid
+  /// последний переход до исчерпания лимита: от него идёт мягкий час
+  openedAt    DateTime? @map("opened_at") @db.Timestamptz(3)
+  /// первое выполнение — с ним игрок занял место в лимите
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+
+  task    TaskDef @relation(fields: [taskId], references: [taskId])
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([taskId, accountId])
+  // Удаление аккаунта находит его строки по индексу.
+  @@index([accountId])
+  @@map("task_participant")
+}
+
+/// Прогресс цели за срок. Начало срока — игровые сутки, понедельник недели
+/// или общий день достижений: новый срок — новая строка, сбрасывать нечего.
+model TaskProgress {
+  accountId   String    @map("account_id") @db.Uuid
+  taskId      String    @map("task_id") @db.VarChar(48)
+  periodStart DateTime  @map("period_start") @db.Date
+  /// не больше цели
+  value       Int
+  /// цель на момент последнего движения
+  target      Int
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  task    TaskDef @relation(fields: [taskId], references: [taskId])
+
+  @@id([accountId, taskId, periodStart])
+  @@map("task_progress")
+}
+
+/// Забег, засчитанный заданиям: повтор события прогресс не удвоит.
+model TaskRun {
+  runId     String   @id @map("run_id") @db.VarChar(64)
+  accountId String   @map("account_id") @db.Uuid
+  appliedAt DateTime @map("applied_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Удаление аккаунта уносит его забеги.
+  @@index([accountId])
+  @@map("task_run")
+}
+
+// Открытый тест (WP33)
+
+/// Принятие предупреждения об открытом тесте (docs/35-stage4-plan.md Р59,
+/// WP33): строка на аккаунт, а не на устройство. Первое принятие не
+/// переписывается — по нему проверяется, что игрок видел предупреждение до
+/// первой покупки; версия растёт вместе с текстом.
+model TestNotice {
+  accountId       String   @id @map("account_id") @db.Uuid
+  /// последняя принятая версия текста
+  version         Int
+  /// когда принята эта версия
+  acceptedAt      DateTime @map("accepted_at") @db.Timestamptz(3)
+  firstAcceptedAt DateTime @map("first_accepted_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("test_notice")
+}
+
+// Реклама (WP12)
+
+/// Место показа рекламы (docs/35-stage4-plan.md §3.7): награду за место выдаёт
+/// его хозяин, забирая сессию показа.
+enum AdPlace {
+  second_chance
+  wheel_spin
+  run_double
+  task
+  interstitial
+}
+
+/// Условие успеха предложения (Р6): показ, клик или целевое действие.
+enum AdSuccess {
+  view
+  click
+  cpa
+}
+
+/// Шаг воронки показа. `completed` — условие успеха выполнено, награда ждёт
+/// хозяина места; `claimed` — хозяин её забрал.
+enum AdSessionStatus {
+  pending
+  shown
+  completed
+  claimed
+  failed
+  expired
+}
+
+/// Рекламная сеть: включена ли и её место в круге показа.
+model AdNetwork {
+  networkKey String   @id @map("network_key") @db.VarChar(32)
+  name       String   @db.VarChar(64)
+  /// выключенная сеть не показывается ни в одном месте
+  active     Boolean  @default(false)
+  /// меньше — раньше в круге
+  priority   Int      @default(100)
+  /// публичные ключи сети по её профилю (`ads/ad-networks.ts`): pubId, appId;
+  /// секреты подтверждений — только в окружении (Р53)
+  keys       Json     @default("{}")
+  updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
+
+  blocks      AdBlock[]
+  networkTask NetworkTask?
+
+  @@map("ad_network")
+}
+
+/// Задания сети во вкладке «Партнёры» (docs/35-stage4-plan.md WP13, часть 6,
+/// Р80): сколько их у игрока за игровые сутки, пауза после выполненного и
+/// награда. Задания приходят от сети; выполнение — сессией места `task`.
+model NetworkTask {
+  networkKey String   @id @map("network_key") @db.VarChar(32)
+  /// выключено — строки сети у игроков нет, блок в «Рекламе» остаётся
+  active     Boolean  @default(true)
+  /// от 1 до 50 за игровые сутки
+  dailyCap   Int      @map("daily_cap") @db.SmallInt
+  /// от 5 минут до суток после выполненного
+  pauseMin   Int      @map("pause_min")
+  coins      Int      @default(0)
+  gems       Int      @default(0)
+  /// обычные осколки
+  shards     Int      @default(0)
+  updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт
+  updatedBy  String?  @map("updated_by") @db.Uuid
+
+  network AdNetwork @relation(fields: [networkKey], references: [networkKey])
+
+  @@map("network_task")
+}
+
+/// Рекламный блок сети в месте показа — данными, без ветвлений по площадке в
+/// коде: площадки и устройства, где блок показывается, пустые — везде.
+model AdBlock {
+  blockId    String     @id @map("block_id") @db.Uuid
+  networkKey String     @map("network_key") @db.VarChar(32)
+  place      AdPlace
+  /// идентификатор блока в кабинете сети; `null` — формат без блока, показ по ключам сети
+  externalId String?    @map("external_id") @db.VarChar(128)
+  success    AdSuccess  @default(view)
+  active     Boolean    @default(true)
+  platforms  Platform[] @default([])
+  /// android, ios, desktop, web
+  devices    String[]   @default([]) @db.VarChar(16)
+  createdAt  DateTime   @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт
+  updatedBy  String?    @map("updated_by") @db.Uuid
+
+  network  AdNetwork   @relation(fields: [networkKey], references: [networkKey])
+  sessions AdSession[]
+
+  // Блоки места — на каждый запрос показа.
+  @@index([place, active])
+  @@map("ad_block")
+}
+
+/// Сессия показа (docs/35-stage4-plan.md §3.7): воронка от выдачи до награды
+/// с метками времени каждого шага. Идентификатор — короткий случайный, а не
+/// токен в колонке (docs/13-reuse-from-vpnsibcom.md §5). Награду забирает
+/// хозяин места одной условной строкой — дважды одну сессию не забрать.
+model AdSession {
+  sessionId   String          @id @map("session_id") @db.VarChar(32)
+  accountId   String          @map("account_id") @db.Uuid
+  place       AdPlace
+  /// пусто — сессия пропуска (VIP): без сети и ролика, выполнена при выдаче
+  blockId     String?         @map("block_id") @db.Uuid
+  /// сеть показа; у сессии пропуска — имя пропуска
+  networkKey  String          @map("network_key") @db.VarChar(32)
+  success     AdSuccess
+  status      AdSessionStatus @default(pending)
+  createdAt   DateTime        @map("created_at") @db.Timestamptz(3)
+  shownAt     DateTime?       @map("shown_at") @db.Timestamptz(3)
+  clickedAt   DateTime?       @map("clicked_at") @db.Timestamptz(3)
+  completedAt DateTime?       @map("completed_at") @db.Timestamptz(3)
+  claimedAt   DateTime?       @map("claimed_at") @db.Timestamptz(3)
+  failedAt    DateTime?       @map("failed_at") @db.Timestamptz(3)
+  /// код отказа сети или SDK — для разреза, без текста ошибки
+  failReason  String?         @map("fail_reason") @db.VarChar(64)
+  /// после этого сессию не выполнить и не забрать
+  expiresAt   DateTime        @map("expires_at") @db.Timestamptz(3)
+  /// креатив сети с API, который рисует наш блок (Р78): по нему сервер сообщает сети показ и досмотр;
+  /// у задания ленты сети — само задание, выполненное игроком однажды: частичный уникальный индекс в миграции
+  creativeId  String?         @map("creative_id") @db.VarChar(128)
+  /// через сколько секунд после выдачи креатив можно засчитать досмотренным; пусто — досмотр подтверждает SDK сети
+  viewSec     Int?            @map("view_sec") @db.SmallInt
+
+  account Account  @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  // Блок с показами не удаляется — его выключают; иначе сессии стали бы пропусками.
+  block   AdBlock? @relation(fields: [blockId], references: [blockId], onDelete: Restrict)
+
+  // Выбор сети и кулдаун — по сессиям игрока в месте за последние сутки.
+  @@index([accountId, place, createdAt])
+  // Воронка в панели — все показы за сутки, неделю или месяц.
+  @@index([createdAt])
+  @@map("ad_session")
+}
+
+// VIP (docs/35-stage4-plan.md §3.6, Р20, Р26, Р44; WP10): подписка площадки.
+// Срок VIP — не поле, а журнал периодов: каждая оплата — период ровно одной
+// строкой, и конец VIP — самый поздний конец периода. Так повтор выдачи
+// ничего не продлевает дважды, а по журналу видно, за что игрок платил.
+
+/// Продление подписки на площадке.
+enum VipRenewal {
+  /// площадка спишет следующий период
+  on
+  /// продление отменено — оплаченное работает до конца
+  cancelled
+  /// площадка не смогла списать очередной период
+  failed
+}
+
+/// Кто отменил продление: вернуть отменённое нами можем мы, отменённое игроком — только он на площадке.
+enum VipCanceller {
+  player
+  game
+}
+
+/// Подписка — одна на счёт площадки: её id — первая покупка, по счёту которой площадка списывает периоды.
+model VipSubscription {
+  subscriptionId String        @id @map("subscription_id") @db.Uuid
+  accountId      String        @map("account_id") @db.Uuid
+  renewal        VipRenewal    @default(on)
+  cancelledBy    VipCanceller? @map("cancelled_by")
+  createdAt      DateTime      @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @map("updated_at") @db.Timestamptz(3)
+
+  account  Account     @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase Purchase    @relation(fields: [subscriptionId], references: [purchaseId], onDelete: Restrict)
+  periods  VipPeriod[]
+
+  @@index([accountId, createdAt])
+  @@map("vip_subscription")
+}
+
+/// Оплаченный период VIP: одна оплата — один период, начало — конец прежнего, если он ещё не кончился.
+model VipPeriod {
+  purchaseId     String   @id @map("purchase_id") @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  startsAt       DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt         DateTime @map("ends_at") @db.Timestamptz(3)
+  createdAt      DateTime @map("created_at") @db.Timestamptz(3)
+
+  account      Account         @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase     Purchase        @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+  subscription VipSubscription @relation(fields: [subscriptionId], references: [subscriptionId], onDelete: Restrict)
+
+  // Конец VIP игрока — самый поздний конец периода.
+  @@index([accountId, endsAt])
+  @@index([subscriptionId])
+  @@map("vip_period")
+}
+
+/// Самоцветы VIP раз в игровые сутки (Р26): день последнего забора по Москве.
+model VipDaily {
+  accountId String   @id @map("account_id") @db.Uuid
+  lastDay   DateTime @map("last_day") @db.Date
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("vip_daily")
+}
+
+// Витрина снаряжения (docs/35-stage4-plan.md §3.6, Р11; WP10): каждые
+// игровые сутки у игрока свои конкретные предметы с уже брошенными
+// свойствами, за самоцветы. Предложение хранится, а не выводится из зерна:
+// купленное обязано совпасть с показанным, даже если правила бросков
+// поменяются посреди суток.
+
+/// Предложение витрины на игровые сутки.
+model ShowcaseOffer {
+  offerId   String     @id @map("offer_id") @db.Uuid
+  accountId String     @map("account_id") @db.Uuid
+  /// игровые сутки по Москве: новые сутки — новые предложения
+  gameDay   DateTime   @map("game_day") @db.Date
+  /// место на витрине, с нуля
+  position  Int        @db.SmallInt
+  slot      ItemSlot
+  rarity    ItemRarity
+  level     Int
+  seed      BigInt
+  /// броски, как у предмета: { main: { stat, roll }, extras: [{ stat, roll }] }
+  rolls     Json
+  /// цена на момент выставления — её и спишут
+  priceGems Int        @map("price_gems")
+  createdAt DateTime   @map("created_at") @db.Timestamptz(3)
+  soldAt    DateTime?  @map("sold_at") @db.Timestamptz(3)
+  /// купленный предмет; без внешнего ключа — предмет живёт в журнале предметов
+  itemId    String?    @map("item_id") @db.Uuid
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  // Витрина игрока на сутки — одна на место: два первых открытия разом не выставят вторую.
+  @@unique([accountId, gameDay, position])
+  @@map("showcase_offer")
+}
+
+/// Акция магазина (docs/35-stage4-plan.md WP10, часть 8): настоящая скидка от
+/// цены каталога на срок. Пределы и отдых между акциями товара —
+/// `shop/shop-promo-rules.ts`; строки не удаляются — по ним видно, по какой
+/// цене продавали.
+model ShopPromo {
+  promoId     String    @id @map("promo_id") @db.Uuid
+  /// товар каталога (`shop/shop-catalog.ts`); без внешнего ключа — каталог в коде
+  sku         String    @db.VarChar(32)
+  /// скидка в процентах от цены каталога
+  percent     Int       @db.SmallInt
+  startsAt    DateTime  @map("starts_at") @db.Timestamptz(3)
+  endsAt      DateTime  @map("ends_at") @db.Timestamptz(3)
+  /// подпись баннера; `null` — текст по товару и скидке у клиента
+  title       String?   @db.VarChar(48)
+  createdAt   DateTime  @map("created_at") @db.Timestamptz(3)
+  /// кто завёл; без внешнего ключа — запись переживает аккаунт
+  createdBy   String    @map("created_by") @db.Uuid
+  /// снята раньше срока; до начала — будто её и не было
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  cancelledBy String?   @map("cancelled_by") @db.Uuid
+
+  @@index([sku, startsAt])
+  @@index([endsAt])
+  @@map("shop_promo")
+}
+
+/// Кампания промокодов (docs/35-stage4-plan.md WP41, Р74): общий код на всех
+/// или пачка одноразовых, награда, срок, лимит и кому. Правила —
+/// `promo-codes/promo-code-rules.ts`; кампания с погашениями не удаляется —
+/// по ней выданы награды.
+model PromoCampaign {
+  campaignId     String    @id @map("campaign_id") @db.Uuid
+  /// название для команды: «Стрим 12 октября»; игрок его не видит
+  title          String    @db.VarChar(80)
+  /// `shared` — один код на всех, `batch` — пачка одноразовых
+  kind           String    @db.VarChar(8)
+  /// что получит игрок: `{ coins, gems, shard_common, shard_uncommon }`
+  reward         Json
+  /// текст игроку после активации; `null` — общий текст клиента
+  message        String?   @db.VarChar(160)
+  /// сколько раз можно активировать; у пачки — число кодов, у общего `null` — без лимита
+  maxRedemptions Int?      @map("max_redemptions")
+  redeemed       Int       @default(0)
+  startsAt       DateTime  @map("starts_at") @db.Timestamptz(3)
+  /// `null` — бессрочно
+  endsAt         DateTime? @map("ends_at") @db.Timestamptz(3)
+  /// только аккаунтам не старше стольких дней; `null` — всем
+  newPlayersDays Int?      @map("new_players_days") @db.SmallInt
+  /// площадки; пусто — все
+  platforms      String[]  @default([]) @db.VarChar(16)
+  pausedAt       DateTime? @map("paused_at") @db.Timestamptz(3)
+  note           String?   @db.VarChar(200)
+  /// чей код: у кода партнёра активация ещё и привязывает новичка к партнёру; `null` — подарок команды
+  partnerId      String?   @map("partner_id") @db.Uuid
+  /// кто завёл; без внешнего ключа — запись переживает аккаунт
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  partner     Partner?          @relation(fields: [partnerId], references: [partnerId], onDelete: Restrict)
+  codes       PromoCode[]
+  redemptions PromoRedemption[]
+  bindings    PartnerBinding[]
+
+  @@index([createdAt])
+  @@index([partnerId])
+  @@map("promo_campaign")
+}
+
+/// Код, который вводит игрок. Ключ — без регистра, пробелов и дефисов, а
+/// кириллица, похожая на латиницу, сведена к латинице: «рубеж 2026» и
+/// «РУБЕЖ-2026» — один код.
+model PromoCode {
+  code       String    @id @db.VarChar(32)
+  /// как код показывать: «ZIMA-K7MP-3XTE»
+  display    String    @db.VarChar(48)
+  campaignId String    @map("campaign_id") @db.Uuid
+  /// у кода пачки — кто его погасил; у общего кода всегда `null`
+  redeemedBy String?   @map("redeemed_by") @db.Uuid
+  redeemedAt DateTime? @map("redeemed_at") @db.Timestamptz(3)
+
+  campaign PromoCampaign @relation(fields: [campaignId], references: [campaignId], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("promo_code")
+}
+
+/// Погашение: один игрок — одна кампания. Награда ложится после записи
+/// погашения; `rewardedAt = null` — начисление не дошло, и повторный ввод
+/// кода его доначислит теми же ключами кошелька.
+model PromoRedemption {
+  campaignId String    @map("campaign_id") @db.Uuid
+  accountId  String    @map("account_id") @db.Uuid
+  code       String    @db.VarChar(32)
+  redeemedAt DateTime  @map("redeemed_at") @db.Timestamptz(3)
+  rewardedAt DateTime? @map("rewarded_at") @db.Timestamptz(3)
+  /// сколько легло на самом деле — суточный потолок кошелька мог срезать
+  credited   Json?
+
+  campaign PromoCampaign @relation(fields: [campaignId], references: [campaignId], onDelete: Restrict)
+  account  Account       @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([campaignId, accountId])
+  @@index([accountId, redeemedAt])
+  @@map("promo_redemption")
+}
+
+/// Партнёр (docs/35-stage4-plan.md WP41, часть 2): блогер, канал, сообщество,
+/// которое приводит игроков своими промокодами. Выплат пока нет — они после
+/// лонча (docs/23-referral-and-partner-program.md §4); сейчас — сколько
+/// игроков он привёл и чего они стоят.
+model Partner {
+  partnerId String   @id @map("partner_id") @db.Uuid
+  /// как его зовёт команда: «Канал „Игровой угол“»
+  name      String   @db.VarChar(80)
+  /// как связаться: @имя, ссылка, почта
+  contact   String?  @db.VarChar(120)
+  /// договорённости, для команды
+  note      String?  @db.VarChar(500)
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  campaigns PromoCampaign[]
+  bindings  PartnerBinding[]
+
+  @@index([createdAt])
+  @@map("partner")
+}
+
+/// Игрок, которого привёл партнёр. Слот источника один на игрока: реферер
+/// (`referral_binding`) или партнёр — кто первый, и навсегда
+/// (docs/23-referral-and-partner-program.md §5).
+model PartnerBinding {
+  accountId  String   @id @map("account_id") @db.Uuid
+  partnerId  String   @map("partner_id") @db.Uuid
+  /// по какому коду; `null` — кампанию удалили (удаляют только неактивированные, так что на практике не бывает)
+  campaignId String?  @map("campaign_id") @db.Uuid
+  boundAt    DateTime @map("bound_at") @db.Timestamptz(3)
+
+  account  Account        @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  partner  Partner        @relation(fields: [partnerId], references: [partnerId], onDelete: Restrict)
+  campaign PromoCampaign? @relation(fields: [campaignId], references: [campaignId], onDelete: SetNull)
+
+  @@index([partnerId, boundAt])
+  @@index([campaignId])
+  @@map("partner_binding")
+}
+
+// Ключи интеграций (WP46, docs/35-stage4-plan.md Р84): токены внешних
+// сервисов, которые команда меняет из панели. Значение — только шифртекстом
+// AES-256-GCM, ключ шифрования — в окружении сервера; имя ключа подписано
+// вместе со шифртекстом, и строку не переложить под другой ключ.
+model IntegrationSecret {
+  /// `fx.coingecko-pro` — ключ из каталога
+  key        String   @id @db.VarChar(64)
+  /// отпечаток ключа шифрования — хэш, а не часть ключа
+  keyId      String   @map("key_id") @db.VarChar(16)
+  iv         Bytes
+  authTag    Bytes    @map("auth_tag")
+  ciphertext Bytes
+  /// кто менял последним; без внешнего ключа — ключ переживает аккаунт
+  updatedBy  String?  @map("updated_by") @db.Uuid
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("integration_secret")
+}
+
+/// Картинка из панели (docs/35-stage4-plan.md О42): в базе до CDN. id — SHA-256
+/// содержимого: одинаковый файл — одна строка, адрес не меняется, поэтому
+/// кеш навсегда. Строка не меняется никогда. Формат, размер и стороны держат
+/// `CHECK` в миграции и `media/image-rules.ts`.
+model MediaImage {
+  imageId     String   @id @map("image_id") @db.VarChar(64)
+  contentType String   @map("content_type") @db.VarChar(32)
+  width       Int
+  height      Int
+  sizeBytes   Int      @map("size_bytes")
+  data        Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// кто загрузил; без внешнего ключа — картинка переживает аккаунт
+  createdBy   String?  @map("created_by") @db.Uuid
+
+  tasks      TaskDef[]
+  homeSlides HomeSlide[]
+
+  @@map("media_image")
+}
+
+/// Слайд команды в карусели главной (docs/35-stage4-plan.md WP42, часть 2):
+/// анонс турнира, новое оружие, конкурс в канале — то, о чём игрок узнаёт
+/// от команды, а не из правила. Заголовок и подпись — по строке, картинка
+/// 1:1 или значок, куда ведёт, кому и на какой срок. Правка видна игрокам
+/// сразу; снятый слайд не удаляется — его история в разделе и в аудите.
+model HomeSlide {
+  slideId      String     @id @map("slide_id") @db.Uuid
+  title        String     @db.VarChar(32)
+  text         String     @db.VarChar(40)
+  /// картинка 1:1 из панели; `null` — значок `icon`
+  imageId      String?    @map("image_id") @db.VarChar(64)
+  icon         String     @db.VarChar(16)
+  /// `screen` — экран игры `target_screen`, `link` — ссылка `target_url`
+  targetKind   String     @map("target_kind") @db.VarChar(8)
+  targetScreen String?    @map("target_screen") @db.VarChar(16)
+  targetUrl    String?    @map("target_url") @db.VarChar(256)
+  /// где показывать; пустым не бывает
+  platforms    Platform[]
+  /// кому: все, новички, платившие, не платившие, VIP
+  audience     String     @db.VarChar(16)
+  /// первым в карусели — раньше акции; иначе после акции и нового в версии
+  pinned       Boolean
+  startsAt     DateTime   @map("starts_at") @db.Timestamptz(3)
+  endsAt       DateTime   @map("ends_at") @db.Timestamptz(3)
+  createdAt    DateTime   @map("created_at") @db.Timestamptz(3)
+  /// кто завёл, правил и снял; без внешних ключей — запись переживает аккаунт
+  createdBy    String     @map("created_by") @db.Uuid
+  updatedAt    DateTime   @map("updated_at") @db.Timestamptz(3)
+  updatedBy    String     @map("updated_by") @db.Uuid
+  archivedAt   DateTime?  @map("archived_at") @db.Timestamptz(3)
+  archivedBy   String?    @map("archived_by") @db.Uuid
+
+  image MediaImage? @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
+
+  @@index([endsAt])
+  @@map("home_slide")
+}
+
+// Конверсии закупленной рекламы (WP43, docs/35-stage4-plan.md Р86): что и
+// когда ушло постбэком в сеть, где куплена реклама, — журнал для команды и
+// владельца ссылки и очередь отправки в одной таблице. Строки выводятся из
+// фактов — первого касания, забегов, оплат, — поэтому потерянное событие не
+// теряет конверсию.
+model AdConversion {
+  conversionId  String             @id @default(uuid()) @map("conversion_id") @db.Uuid
+  network       String             @db.VarChar(16)
+  linkCode      String             @map("link_code") @db.VarChar(16)
+  clickId       String             @map("click_id") @db.VarChar(16)
+  accountId     String             @map("account_id") @db.Uuid
+  /// цель сети: 1 — регистрация, 2 — первая покупка, 3 — повторная
+  goal          Int                @db.SmallInt
+  /// оплата цели 2 и 3; у регистрации — `null`
+  purchaseId    String?            @unique @map("purchase_id") @db.Uuid
+  status        AdConversionStatus @default(pending)
+  /// почему не отправлена: `team` — аккаунт команды, `no_macros` — сеть не подставила макросы, `no_token` — нет токена кабинета
+  reason        String?            @db.VarChar(32)
+  attempts      Int                @default(0) @db.SmallInt
+  nextAttemptAt DateTime           @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  /// HTTP-статус последнего ответа сети; `null` — ответа не было
+  httpStatus    Int?               @map("http_status") @db.SmallInt
+  lastError     String?            @map("last_error") @db.VarChar(200)
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  sentAt        DateTime?          @map("sent_at") @db.Timestamptz(3)
+
+  link     Link      @relation(fields: [linkCode], references: [code], onDelete: Cascade)
+  click    LinkClick @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
+  account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+
+  @@index([status, nextAttemptAt])
+  @@index([linkCode, createdAt])
+  @@map("ad_conversion")
+}
+
+enum AdConversionStatus {
+  pending
+  sent
+  failed
+  skipped
+
+  @@map("ad_conversion_status")
 }

@@ -6,6 +6,9 @@ import { clientRolldownOptions } from "../../scripts/vite/chunking.ts";
 import { ignoreDotenvNodeEnvForBuild } from "../../scripts/vite/production-node-env.ts";
 import { stableDevSession } from "../../scripts/vite/stable-dev-session.ts";
 import { devServerConfig } from "../../scripts/vite/dev-server.ts";
+import { contentSecurityPolicy } from "../../scripts/vite/content-security-policy.ts";
+import { edgePolicyFile } from "../../scripts/vite/edge-policy.ts";
+import { adminOrigins } from "../../scripts/vite/preview-origins.ts";
 
 // Корень монорепо — единственный .env на весь проект (см. docs/20-env-and-ports.md).
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -23,8 +26,10 @@ export default defineConfig(({ mode, command }) => {
   // Бэкенд за тем же доменом, что и клиент: телефон через туннель достаёт до
   // локального API без отдельного прокси и без CORS (docs/26-stage2-plan.md,
   // Р19). Проксируются только префиксы, которые сами защищены: вход — подписью
-  // запуска и лимитом частоты, забеги, оплата и плейтест — токеном сессии, приёмники и
-  // отзывы — выключателем, лимитами и Origin (docs/28-diagnostics.md §5.3), вебхук
+  // запуска и лимитом частоты, настройки аккаунта, уведомления, друзья, забеги, оплата, кошелёк, снаряжение, бусты,
+  // уровень, награда дня, промокоды и доступ к инструментам — токеном сессии, приёмники и
+  // отзывы — выключателем, лимитами и Origin (docs/28-diagnostics.md §5.3), картинки
+  // заданий и слайдов из панели — их клиент рисует тегом img по хэшу, вебхук
   // бота — секретным токеном: через туннель машина разработчика может
   // принимать обновления и вебхуком. Остальное dev-API — роли, журнал —
   // наружу не выходит (docs/20-env-and-ports.md §4). Префикс, к которому ходит
@@ -33,13 +38,29 @@ export default defineConfig(({ mode, command }) => {
   const apiProxy = Object.fromEntries(
     [
       "/api/v1/auth",
+      "/api/v1/account",
+      "/api/v1/me",
+      "/api/v1/friends",
       "/api/v1/runs",
       "/api/v1/payments",
-      "/api/v1/playtest",
+      "/api/v1/shop",
+      "/api/v1/vip",
+      "/api/v1/wallet",
+      "/api/v1/items",
+      "/api/v1/boosts",
+      "/api/v1/progress",
+      "/api/v1/daily",
+      "/api/v1/changelog",
+      "/api/v1/wheel",
+      "/api/v1/tasks",
+      "/api/v1/promo-codes",
+      "/api/v1/ads",
+      "/api/v1/tools",
       "/api/v1/events",
       "/api/v1/diagnostics",
       "/api/v1/feedback",
       "/api/v1/bot",
+      "/api/v1/media",
     ].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },
@@ -48,12 +69,20 @@ export default defineConfig(({ mode, command }) => {
 
   // Порт, туннель, HTTPS и доступ с телефона — общие для трёх площадок
   // (scripts/vite/dev-server.ts).
+  // Аналитика Graspil — только со своим ключом: без него в политике нет ни
+  // одного чужого скрипта (src/graspil.ts).
+  const graspil = (env.VITE_GRASPIL_KEY ?? "").trim() !== "";
   const { server, preview } = devServerConfig({
     env,
     repoRoot,
     port,
     tunnelHostVar: "DEV_TUNNEL_TELEGRAM_HOST",
     proxy: apiProxy,
+    graspil,
+    // Реклама сетей показывается только в Telegram (packages/adapter-telegram/src/ads).
+    ads: true,
+    // Страница предпросмотра для панели — у Telegram-сборки (preview/).
+    preview: true,
   });
 
   return {
@@ -61,7 +90,17 @@ export default defineConfig(({ mode, command }) => {
     // (docs/27-design-system-and-app-shell.md §1.4).
     // stableDevSession — без перезагрузки страницы на обрыве связи с dev-сервером
     // (scripts/vite/stable-dev-session.ts).
-    plugins: [react(), tailwindcss(), stableDevSession()],
+    // edgePolicyFile — та же политика файлом в сборку: в проде её ставит Caddy
+    // (scripts/vite/edge-policy.ts).
+    plugins: [
+      react(),
+      tailwindcss(),
+      stableDevSession(),
+      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim(), graspil, ads: true, adminOrigins: adminOrigins(env, false) })),
+    ],
+    // Страницу предпросмотра на dev-сервере отдаёт этот же сервер (preview/): ей
+    // нужны адреса панели — с петлёй по умолчанию (scripts/vite/preview-origins.ts).
+    define: { __ADMIN_ORIGINS__: JSON.stringify(adminOrigins(env, command === "serve")) },
     base: "./",
     envDir: repoRoot,
     server,

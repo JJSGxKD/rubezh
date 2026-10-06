@@ -36,21 +36,21 @@ name = "rubezh-tg"
 type = "http"
 localIP = "127.0.0.1"
 localPort = 5173
-customDomains = ["rubezh-tg.frps.gonet.fun"]
+customDomains = ["tg.dev.gonet.fun"]
 
 [[proxies]]
 name = "rubezh-max"
 type = "http"
 localIP = "127.0.0.1"
 localPort = 5174
-customDomains = ["rubezh-max.frps.gonet.fun"]
+customDomains = ["max.dev.gonet.fun"]
 
 [[proxies]]
 name = "rubezh-vk"
 type = "http"
 localIP = "127.0.0.1"
 localPort = 5175
-customDomains = ["rubezh-vk.frps.gonet.fun"]
+customDomains = ["vk.dev.gonet.fun"]
 
 # API отдельным прокси не публикуется: клиент ходит в него через dev-сервер
 # Vite, который проксирует только префикс плейтеста с проверкой подписи

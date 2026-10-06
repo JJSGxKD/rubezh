@@ -34,6 +34,16 @@ export const PERMISSIONS = [
   "players.view",
   "players.pii.view",
   "players.ban",
+  // Ограничить часть функций на срок (docs/35-stage4-plan.md Р75): рейтинг,
+  // награды за друзей, подарки, реклама, промокоды, партнёрские задания.
+  // Блокировка целиком — по-прежнему `players.ban`
+  "players.restrict",
+  // Сообщение команды в ленту игрока: ответ на жалобу, объяснение блокировки
+  // или поправки (docs/35-stage4-plan.md Р51)
+  "players.message",
+  // Ручное начисление и списание в кошельке игрока — только владельцу: право
+  // начислять валюту дороже любого другого права над игроками
+  "players.wallet.adjust",
   // Рассылки и каналы
   "broadcast.edit",
   "broadcast.send",
@@ -43,6 +53,9 @@ export const PERMISSIONS = [
   // Бухгалтерия и распределение дохода (docs/11-revenue-split.md)
   "finance.entry.create",
   "finance.period.close",
+  // Заданные руками курсы валют площадок — курс выплаты звёзд определяет
+  // выручку, поэтому только владельцу (docs/35-stage4-plan.md, §3.12)
+  "fx.rates.edit",
   "revenue.split.view",
   "revenue.split.own.view",
   // Реклама и партнёры
@@ -52,8 +65,32 @@ export const PERMISSIONS = [
   "partners.edit",
   "partners.payout.create",
   "partners.payout.approve",
-  // Эксплуатация
+  // Редирект-ссылки кампаний (WP16, docs/24-attribution-and-sharing.md §3)
+  "links.manage",
+  // Журнал обновлений (WP31): писать строки — одно, публиковать — другое:
+  // публикация раздаёт уведомление всем игрокам площадки и пишет им в бота
+  "changelog.edit",
+  "changelog.publish",
+  // Каталог заданий и достижений (WP13, Р52): цели и награды без релиза —
+  // награды ложатся в кошелёк, поэтому отдельное право, а не «контент»
+  "tasks.edit",
+  // Акции магазина (WP10, часть 8): скидка от цены каталога на срок в
+  // пределах честной скидки — сама цена каталога остаётся за «sku.price.*»
+  "shop.promo.edit",
+  // Промокоды (WP41, Р74): код раздаёт валюту всем, кто его ввёл, — поэтому
+  // своё право, а не «акции»; награда одного кода ограничена правилами
+  "promo.edit",
+  // Слайды команды на главной (WP42, часть 2): анонс видят все игроки сразу
+  // после сохранения — поэтому своё право, а не «настройки»
+  "home.edit",
+  // Эксплуатация. Настройки без релиза — адреса чатов команды и переключатели
+  // (docs/35-stage4-plan.md §3.18)
   "flags.edit",
+  "settings.edit",
+  // Ключи интеграций (WP46, Р84): состояние — без значения, а заменить ключ
+  // сервиса может только владелец — чужой токен уводит конверсии и курсы
+  "secrets.view",
+  "secrets.edit",
   "diagnostics.view",
   "data.export",
   // Инструменты команды в клиенте: режим разработчика, витрина, лаборатория
@@ -99,6 +136,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "players.view",
     "players.pii.view",
     "players.ban",
+    "players.restrict",
+    "players.message",
     "broadcast.edit",
     "broadcast.send",
     "broadcast.approve",
@@ -108,7 +147,16 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "ads.edit",
     "partners.view",
     "partners.edit",
+    "links.manage",
+    "changelog.edit",
+    "changelog.publish",
+    "tasks.edit",
+    "shop.promo.edit",
+    "promo.edit",
+    "home.edit",
     "flags.edit",
+    "settings.edit",
+    "secrets.view",
     "diagnostics.view",
     "data.export",
     "tools.dev",
@@ -126,14 +174,18 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "analytics.revenue.view",
     "players.view",
     "ads.view",
+    "changelog.edit",
+    "tasks.edit",
+    "home.edit",
     "diagnostics.view",
     "tools.dev",
   ],
 
   // Игроки без платёжных данных, жалобы, блокировки, очередь антифрода.
-  moderator: ["players.view", "players.ban"],
+  moderator: ["players.view", "players.ban", "players.restrict", "players.message"],
 
-  // Привлечение и рассылки; партнёры без выплат.
+  // Привлечение, рассылки, акции магазина, промокоды и слайды главной;
+  // партнёры без выплат.
   marketer: [
     "analytics.gameplay.view",
     "analytics.revenue.view",
@@ -142,6 +194,11 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "ads.view",
     "partners.view",
     "partners.edit",
+    "links.manage",
+    "changelog.edit",
+    "shop.promo.edit",
+    "promo.edit",
+    "home.edit",
   ],
 
   // Операции и подготовка выплат; период закрывает только владелец.

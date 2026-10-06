@@ -1,4 +1,4 @@
-import type { Account, AccountIdentity, AccountRepository } from "../../src/modules/auth/account.repository.js";
+import type { Account, AccountArrival, AccountBan, AccountRepository, RecipientsPage } from "../../src/modules/auth/account.repository.js";
 import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/modules/auth/refresh.store.js";
 
 /**
@@ -12,12 +12,13 @@ import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/module
 export class MemoryAccountRepository implements AccountRepository {
   private readonly byKey = new Map<string, Account>();
 
-  async upsert(identity: AccountIdentity, nowMs: number): Promise<Account> {
+  async upsert(identity: AccountArrival, nowMs: number): Promise<Account> {
     const key = `${identity.platform}:${identity.platformUserId}`;
     const existing = this.byKey.get(key);
 
     if (existing !== undefined) {
-      const updated: Account = { ...existing, ...identity, created: false };
+      const { photoUrl, ...rest } = identity;
+      const updated: Account = { ...existing, ...rest, ...(photoUrl === undefined ? {} : { photoUrl }), created: false };
       this.byKey.set(key, updated);
       return updated;
     }
@@ -25,6 +26,7 @@ export class MemoryAccountRepository implements AccountRepository {
     const account: Account = {
       accountId: crypto.randomUUID(),
       ...identity,
+      photoUrl: identity.photoUrl ?? null,
       createdAt: new Date(nowMs),
       bannedAt: null,
       banReason: null,
@@ -46,7 +48,45 @@ export class MemoryAccountRepository implements AccountRepository {
     return null;
   }
 
-  /** Заблокировать аккаунт — так же, как это сделает администратор в WP2. */
+  async displayNames(accountIds: readonly string[]): Promise<Map<string, string>> {
+    const wanted = new Set(accountIds);
+    return new Map([...this.byKey.values()].filter((account) => wanted.has(account.accountId)).map((account) => [account.accountId, account.displayName]));
+  }
+
+  async search(query: string, limit: number): Promise<Account[]> {
+    const text = query.trim().replace(/^@/, "").toLowerCase();
+    if (text === "") return [];
+    return [...this.byKey.values()]
+      .filter(
+        (account) =>
+          account.platformUserId === text ||
+          (account.username?.toLowerCase().startsWith(text) ?? false) ||
+          account.displayName.toLowerCase().includes(text),
+      )
+      .slice(0, limit)
+      .map((account) => ({ ...account, created: false }));
+  }
+
+  async setBan(accountId: string, ban: AccountBan | null): Promise<Account | null> {
+    for (const [key, account] of this.byKey.entries()) {
+      if (account.accountId !== accountId) continue;
+      const updated: Account = { ...account, bannedAt: ban?.at ?? null, banReason: ban?.reason ?? null, created: false };
+      this.byKey.set(key, updated);
+      return updated;
+    }
+    return null;
+  }
+
+  /** Давность захода в памяти не ведётся: получатели — все незаблокированные аккаунты площадок. */
+  async recipientsPage(page: RecipientsPage): Promise<string[]> {
+    return [...this.byKey.values()]
+      .filter((account) => page.platforms.includes(account.platform) && account.bannedAt === null && (page.after === null || account.accountId > page.after))
+      .map((account) => account.accountId)
+      .sort()
+      .slice(0, page.limit);
+  }
+
+  /** Заблокировать аккаунт — так же, как это сделает администратор из панели. */
   ban(accountId: string, reason: string): void {
     for (const [key, account] of this.byKey.entries()) {
       if (account.accountId === accountId) this.byKey.set(key, { ...account, bannedAt: new Date(), banReason: reason });

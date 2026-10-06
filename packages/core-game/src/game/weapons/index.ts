@@ -35,6 +35,8 @@ const effective: ResolvedWeaponLevel = {
   areaRadius: 0,
   projectileSpeed: 0,
   ttlSec: 0,
+  element: 0,
+  statusChance: 0,
 };
 
 /**
@@ -57,6 +59,8 @@ export function updateWeapons(world: World, dtSec: number): void {
     effective.projectileSpeed = level.projectileSpeed * stats.projectileSpeedMul;
     effective.ttlSec = level.ttlSec * stats.durationMul;
     effective.pierce = level.pierce;
+    effective.element = level.element;
+    effective.statusChance = level.statusChance;
     // Аура бьёт зоной, снарядов у неё нет — прибавка от пассивки на число
     // снарядов ей ничего не даёт и не должна раздувать её зону ударов.
     effective.projectiles =

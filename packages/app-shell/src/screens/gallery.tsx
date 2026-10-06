@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { AdCreative, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
   Badge,
@@ -13,6 +14,7 @@ import {
   IconEmblem,
   ListGroup,
   ListItem,
+  Modal,
   ProgressBar,
   Screen,
   SectionTitle,
@@ -23,12 +25,16 @@ import {
   Wordmark,
 } from "../design-system/components";
 import { t } from "../i18n";
+import "../i18n/gallery";
+import "../i18n/team";
+import { useBackLayer } from "../state/back-stack";
 import { useNavigation } from "../state/navigation";
 import { BootScreen } from "./gates";
 import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 import { SecondChance } from "./run/SecondChance";
+import type { AdContinueStage } from "../state/ad-continue";
 import type { ContinueStage } from "../state/continue-purchase";
 
 /**
@@ -48,6 +54,14 @@ export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [segment, setSegment] = useState("daily");
+  const [sheet, setSheet] = useState(false);
+  const [adResult, setAdResult] = useState<CreativeResult["kind"] | null>(null);
+
+  // Блок — тем же путём, что в игре: свой корень поверх приложения, «Назад» и Esc — через стек.
+  const showAd = (viewSec: number, rewarded: boolean, ad: AdCreative = demoAd()): void => {
+    setAdResult(null);
+    void showCreative({ ad, viewSec, rewarded }, { onShown: () => undefined, onClick: () => undefined, openLink: () => undefined }).then((result) => setAdResult(result.kind));
+  };
 
   if (preview !== null) {
     return <PreviewFrame preview={preview} onClose={() => setPreview(null)} />;
@@ -69,6 +83,21 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
           <ListItem title={t("gallery.preview.record")} onClick={() => setPreview("record")} />
         </ListGroup>
+
+        <SectionTitle>{t("gallery.modals")}</SectionTitle>
+        <ListGroup>
+          <ListItem title={t("gallery.modal.long")} hint={t("gallery.modal.longHint")} onClick={() => setSheet(true)} />
+        </ListGroup>
+
+        <SectionTitle>{t("gallery.ads")}</SectionTitle>
+        <ListGroup>
+          <ListItem title={t("gallery.ad.rewarded")} hint={t("gallery.ad.rewardedHint")} onClick={() => showAd(10, true)} />
+          <ListItem title={t("gallery.ad.interstitial")} hint={t("gallery.ad.interstitialHint")} onClick={() => showAd(5, false)} />
+          <ListItem title={t("gallery.ad.noImage")} hint={t("gallery.ad.noImageHint")} onClick={() => showAd(10, true, { ...demoAd(), image: null })} />
+        </ListGroup>
+        {adResult === null ? null : <p className="px-1 pt-2 text-sm text-text-muted">{t("gallery.ad.result", { result: t(`gallery.ad.${adResult}`) })}</p>}
+        <p className="px-1 pt-3 pb-2 text-xs text-text-muted">{t("gallery.ad.cardHint")}</p>
+        <AdCreativeCard ad={demoAd()} onOpen={() => undefined} />
 
         <SectionTitle>{t("gallery.brand")}</SectionTitle>
         <div className="flex items-center justify-around gap-4 py-2">
@@ -112,6 +141,9 @@ export function GalleryScreen(): ReactNode {
           <Card disabled>Недоступная</Card>
         </div>
 
+        <SectionTitle>{t("gallery.widgets")}</SectionTitle>
+        <WidgetsPreview />
+
         <SectionTitle>{t("gallery.lists")}</SectionTitle>
         <ListGroup>
           <ListItem title="Со значением" value="42" />
@@ -151,7 +183,10 @@ export function GalleryScreen(): ReactNode {
         <div className="grid gap-3">
           <SecondChance />
           {CONTINUE_STAGES.map((stage, index) => (
-            <SecondChance key={index} paidPreview={stage} />
+            <SecondChance key={index} paidPreview={stage} adPreview={AD_READY} />
+          ))}
+          {AD_STAGES.map(([ad, paid], index) => (
+            <SecondChance key={`ad-${String(index)}`} adPreview={ad} {...(paid === null ? {} : { paidPreview: paid })} />
           ))}
         </div>
 
@@ -166,6 +201,7 @@ export function GalleryScreen(): ReactNode {
           <Badge>обычный</Badge>
           <Badge tone="accent">акцент</Badge>
           <Badge tone="warning">скоро</Badge>
+          <Badge tone="danger">−30%</Badge>
           <Badge tone="info">инфо</Badge>
           <Badge tone="weapon">оружие</Badge>
           <Badge tone="passive">пассивка</Badge>
@@ -174,14 +210,80 @@ export function GalleryScreen(): ReactNode {
         </div>
 
         <SectionTitle>{t("gallery.stub")}</SectionTitle>
-        <StubScreen icon={<Star size={36} />} title="Заглушка раздела" text={t("shop.soon")} />
+        <StubScreen icon={<Star size={36} />} title="Заглушка раздела" text={t("stub.soon")} />
         <StubNotice text={t("reward.stub")} />
       </ContentColumn>
+      {sheet ? <ModalsPreview onClose={() => setSheet(false)} /> : null}
     </Screen>
   );
 }
 
+/**
+ * Объявление для витрины: картинка и значок — встроенными SVG, а не с чужого
+ * адреса: витрина работает и без сети, и без рекламы в политике источников.
+ */
+function demoAd(): AdCreative {
+  const svg = (body: string, size: number): string =>
+    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${String(size)} ${String(size)}">${body}</svg>`)}`;
+  return {
+    id: "gallery-demo",
+    title: t("gallery.ad.demoTitle"),
+    description: null,
+    text: t("gallery.ad.demoText"),
+    image: svg(
+      '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2a4a"/><stop offset="1" stop-color="#0b1020"/></linearGradient></defs>' +
+        '<rect width="400" height="400" fill="url(#g)"/><circle cx="300" cy="90" r="38" fill="#f6c453"/>' +
+        '<path d="M0 300 L80 220 L140 260 L220 170 L300 250 L400 190 L400 400 L0 400 Z" fill="#24365e"/>' +
+        '<path d="M150 400 V250 h30 v-20 h20 v20 h20 v-20 h20 v20 h20 v-20 h20 v20 h30 V400 Z" fill="#3a5a99"/>',
+      400,
+    ),
+    icon: svg('<rect width="96" height="96" rx="20" fill="#f6c453"/><path d="M28 70 V40 h10 v-8 h8 v8 h4 v-8 h8 v8 h10 v30 Z" fill="#1b2a4a"/>', 96),
+    button: t("gallery.ad.demoButton"),
+    link: "https://example.com",
+    advertiser: t("gallery.ad.demoAdvertiser"),
+  };
+}
+
+/**
+ * Модалка в модалке (WP45): длинный лист, у которого крестик закреплён
+ * сверху, и вторая модалка поверх него. «Назад» и Esc закрывают верхнюю,
+ * лист под ней остаётся.
+ */
+function ModalsPreview(props: { onClose(): void }): ReactNode {
+  const [nested, setNested] = useState(false);
+  return (
+    <>
+      <Modal
+        title={t("gallery.modal.long")}
+        placement="bottom"
+        onDismiss={props.onClose}
+        footer={
+          <Button block onClick={() => setNested(true)}>
+            {t("gallery.modal.nested")}
+          </Button>
+        }
+      >
+        <p className="mb-3 text-sm text-text-muted">{t("gallery.modal.longHint")}</p>
+        <ul className="grid gap-2 text-sm text-text">
+          {Array.from({ length: 30 }, (_, index) => (
+            <li key={index} className="surface-card rounded-md px-3 py-2">
+              {t("gallery.modal.line", { n: index + 1 })}
+            </li>
+          ))}
+        </ul>
+      </Modal>
+      {nested ? (
+        <Modal title={t("gallery.modal.nestedTitle")} onDismiss={() => setNested(false)}>
+          <p className="text-sm text-text-muted">{t("gallery.modal.nestedHint")}</p>
+        </Modal>
+      ) : null}
+    </>
+  );
+}
+
 function PreviewFrame(props: { preview: Preview; onClose(): void }): ReactNode {
+  // Превью закрывается «Назад» площадки и Esc, а не уводит с витрины.
+  useBackLayer(props.onClose);
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg">
       {renderPreview(props.preview)}
@@ -244,6 +346,7 @@ function renderPreview(preview: Preview): ReactNode {
           result={SAMPLE_RESULT}
           isNewRecord={false}
           diagnostics
+          reward={{ status: "pending" }}
           onRestart={noop}
           onMenu={noop}
           onShare={noop}
@@ -255,6 +358,15 @@ function renderPreview(preview: Preview): ReactNode {
           result={SAMPLE_RESULT}
           isNewRecord
           diagnostics={false}
+          reward={{
+            status: "granted",
+            coins: 88,
+            coinsCapped: false,
+            xp: 165,
+            levelBefore: 4,
+            levelAfter: 5,
+            progress: { level: 5, xp: 1400, xpIntoLevel: 21, xpForNext: 545, nextReward: { coins: 300, gems: 0 } },
+          }}
           onRestart={noop}
           onMenu={noop}
           onShare={noop}
@@ -273,6 +385,20 @@ const CONTINUE_STAGES: readonly ContinueStage[] = [
   { kind: "retry", reason: "slow_confirmation", offer: LIVE_OFFER, purchaseId: "preview" },
   { kind: "retry", reason: "offline", offer: null, purchaseId: null },
   { kind: "unavailable", reason: "unverified" },
+];
+
+const AD_READY: AdContinueStage = { kind: "ready", pass: false, notice: null };
+
+/**
+ * Второй шанс за рекламу рядом со звёздами и без них: VIP — одна кнопка,
+ * исходы ролика — строкой, лимит на сегодня — только звёзды.
+ */
+const AD_STAGES: readonly (readonly [AdContinueStage, ContinueStage | null])[] = [
+  [{ kind: "ready", pass: true, notice: null }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "watching", pass: false }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", pass: false, notice: "closed" }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", pass: false, notice: "claim_failed" }, null],
+  [{ kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
 ];
 
 function change(
@@ -366,6 +492,7 @@ const SAMPLE_RESULT: RunResult = {
   killsByEnemy: {},
   damageDealt: 48210,
   damageTaken: 930,
+  damageByElement: { physical: 9400, fire: 2100, cold: 800, lightning: 1600 },
   weapons: [
     { id: "spark", level: 5, damage: 21840 },
     { id: "wardstone", level: 3, damage: 15320 },
@@ -378,3 +505,27 @@ const SAMPLE_RESULT: RunResult = {
   cheats: false,
   continues: [],
 };
+
+/**
+ * Все состояния виджетов главной (docs/35-stage4-plan.md WP42) — через чанк
+ * главной (`home-live.ts`): прямой импорт унёс бы код виджетов в общий с
+ * витриной чанк, и главная грузила бы на один файл больше.
+ */
+function WidgetsPreview(): ReactNode {
+  const [Showcase, setShowcase] = useState<typeof import("./home-showcase").WidgetShowcase | null>(null);
+  useEffect(() => {
+    let alive = true;
+    import("./home-live")
+      .then(async (live) => await live.loadWidgetShowcase())
+      .then(
+        (module) => {
+          if (alive) setShowcase(() => module.WidgetShowcase);
+        },
+        (error: unknown) => console.warn("Чанк главной не загрузился:", error),
+      );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return Showcase === null ? <p className="text-xs text-text-muted">{t("app.loading")}</p> : <Showcase now={Date.now()} />;
+}

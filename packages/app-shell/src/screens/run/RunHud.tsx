@@ -1,12 +1,15 @@
 import type { ReactNode } from "react";
-import { Heart, Pause, Wrench } from "lucide-react";
+import { Heart, Pause, Shield, Wrench } from "lucide-react";
 import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
+import "../../i18n/run";
 import { ItemIcon } from "../item-icons";
 import { BossBar } from "./BossBar";
 import { HintBanner } from "./HintBanner";
+import { PlayerStatuses } from "./PlayerStatuses";
 import { Radar } from "./Radar";
+import { RunBoostSlots } from "./run-boosts-lazy";
 
 /**
  * HUD забега. Единственная часть оболочки, которая живёт во время забега, —
@@ -71,6 +74,18 @@ export function RunHud(props: RunHudProps): ReactNode {
               {Math.ceil(hud.hp)}
               <span className="text-text-muted">/{Math.ceil(hud.maxHp)}</span>
             </span>
+            {/* Щит буста — рядом со здоровьем: он решает, выдержит ли игрок
+                следующее попадание, и пропадает ровно в момент удара. */}
+            {hud.shield > 0 ? (
+              <span
+                role="img"
+                aria-label={t("run.shield", { count: hud.shield })}
+                className="flex shrink-0 items-center gap-0.5 rounded-pill bg-info/15 px-1.5 font-display text-xs font-bold tabular-nums text-info"
+              >
+                <Shield size={14} aria-hidden="true" fill="currentColor" />
+                {hud.shield > 1 ? hud.shield : null}
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <span className="shrink-0 rounded-sm bg-xp/15 px-1.5 font-display text-xs font-bold tabular-nums text-xp">
@@ -78,6 +93,7 @@ export function RunHud(props: RunHudProps): ReactNode {
             </span>
             <ProgressBar value={hud.xp} max={hud.xpToNext} tone="xp" height="thin" label="XP" />
           </div>
+          <PlayerStatuses statuses={hud.statuses} />
         </div>
 
         <span className="rounded-pill bg-bg/70 px-3 py-0.5 font-display text-xl font-bold tabular-nums text-text">
@@ -116,6 +132,7 @@ export function RunHud(props: RunHudProps): ReactNode {
           {hud.passives.map((slot) => (
             <Slot key={`p-${slot.id}`} id={slot.id} level={slot.level} kind="passive" />
           ))}
+          <RunBoostSlots ids={hud.boosts} survivalSec={hud.survivalSec} />
         </div>
         {/* Радар в нижнем правом углу: там его не закрывает палец, ведущий
             джойстик, и он не спорит с таймером за верх экрана. */}

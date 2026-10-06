@@ -47,6 +47,27 @@ describe("политика источников клиента", () => {
     expect(build.get("script-src")).toEqual(["'self'"]);
   });
 
+  it("Graspil — только с ключом: скрипт со своего домена, отчёты на другой, встроенных скриптов нет", () => {
+    const withGraspil = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", graspil: true }));
+    expect(withGraspil.get("script-src")).toEqual(["'self'", "https://w.graspil.com"]);
+    expect(withGraspil.get("connect-src")).toContain("https://wb.graspil.com");
+    expect(build.get("connect-src")).not.toContain("https://wb.graspil.com");
+  });
+
+  it("реклама сетей — только в Telegram-сборке: скрипты лишь их SDK, креативы — с любого https", () => {
+    const withAds = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", ads: true }));
+    expect(withAds.get("script-src")).toEqual(expect.arrayContaining(["'self'", "https://sad.adsgram.ai", "https://static.sonartech.io", "https://richinfo.co", "https://sdk.taddy.pro"]));
+    // Чужой скрипт по-прежнему не исполняется: ни встроенных, ни eval, ни «любой https».
+    for (const loose of ["'unsafe-inline'", "'unsafe-eval'", "https:", "*"]) expect(withAds.get("script-src"), loose).not.toContain(loose);
+    expect(withAds.get("media-src")).toEqual(["'self'", "blob:", "https:"]);
+    expect(withAds.get("frame-src")).toEqual(["'self'", "https:"]);
+    expect(withAds.get("img-src")).toContain("https:");
+    // Без рекламы — ни скриптов сетей, ни чужих фреймов: MAX и VK их не показывают.
+    expect(build.get("frame-src")).toBeUndefined();
+    expect(build.get("img-src")).not.toContain("https:");
+    expect(build.get("connect-src")).not.toContain("https:");
+  });
+
   it("пускает во фрейм Telegram Web — иначе игра там не откроется", () => {
     expect(build.get("frame-ancestors")).toContain("https://web.telegram.org");
   });
@@ -55,8 +76,17 @@ describe("политика источников клиента", () => {
     expect(build.get("frame-ancestors")).toEqual(["'self'", "https://web.telegram.org"]);
   });
 
-  it("показывает аватары игроков с t.me — их адрес приходит в данных запуска", () => {
-    expect(build.get("img-src")).toContain("https://t.me");
+  it("панель — только та, чей адрес передан: её страница предпросмотра рисует черновик во фрейме", () => {
+    const withPanel = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", adminOrigins: ["https://admin.gonet.fun"] }));
+    expect(withPanel.get("frame-ancestors")).toEqual(["'self'", "https://web.telegram.org", "https://admin.gonet.fun"]);
+    // Остальное от панели не мягчеет: скрипты и соединения — прежние.
+    expect(withPanel.get("script-src")).toEqual(build.get("script-src"));
+    expect(withPanel.get("connect-src")).toEqual(build.get("connect-src"));
+  });
+
+  it("показывает аватары игроков: t.me и CDN, на который он перенаправляет", () => {
+    // Политика проверяет и адрес после перенаправления: с одним t.me фото не грузится.
+    expect(build.get("img-src")).toEqual(expect.arrayContaining(["https://t.me", "https://*.telesco.pe"]));
   });
 
   it("пускает data: для картинок: иконка в разметке и служебные текстуры Phaser", () => {
@@ -96,6 +126,14 @@ describe("политика источников клиента", () => {
     const withApi = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "https://api.rubezh.gonet.fun/api/v1" }));
 
     expect(withApi.get("connect-src")).toEqual(["'self'", "https://api.rubezh.gonet.fun"]);
+  });
+
+  it("картинки заданий из панели — с API: с его источника, а не со всего https", () => {
+    const withApi = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "https://api.rubezh.gonet.fun/api/v1" }));
+
+    expect(withApi.get("img-src")).toContain("https://api.rubezh.gonet.fun");
+    expect(withApi.get("img-src")).not.toContain("https:");
+    expect(build.get("img-src")).not.toContain("https:");
   });
 
   it("битый адрес API не роняет сборку: строгая политика лучше несобранного клиента", () => {

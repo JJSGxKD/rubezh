@@ -9,9 +9,9 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
-import { BotRouter } from "../src/modules/bot/bot-router.js";
-import { BotUpdateDedupe, BotWebhookController } from "../src/modules/bot/bot-webhook.controller.js";
-import { TelegramBotApi, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { BotRouter } from "../src/platforms/telegram/bot-router.js";
+import { BotUpdateDedupe, BotWebhookController } from "../src/platforms/telegram/bot-webhook.controller.js";
+import { TelegramBotApi, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { multipartOf } from "./helpers/multipart.js";
 
 // Вебхук бота (docs/28-diagnostics.md §6.1.3–§6.1.5).

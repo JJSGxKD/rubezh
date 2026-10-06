@@ -63,6 +63,40 @@ export const RECORDING_EVENT_KINDS = ["wave", "level", "offer", "choice", "pause
 /** Потолок продолжений за забег — `MAX_CONTINUES_PER_RUN` движка. */
 const MAX_CONTINUES = 5;
 
+/** Параметры набора на забег — копия `LOADOUT_STATS` из shared-types; сверяет тест. */
+export const LOADOUT_STATS = [
+  "damage",
+  "cooldown",
+  "area",
+  "projectileSpeed",
+  "duration",
+  "moveSpeed",
+  "pickupRadius",
+  "maxHp",
+  "regenPerSec",
+  "armor",
+  "resistFire",
+  "resistCold",
+  "resistLightning",
+  "resistPoison",
+  "damageFire",
+  "damageCold",
+  "damageLightning",
+  "damagePoison",
+  "statusChance",
+] as const;
+
+/** Бустов на забег — `MAX_LOADOUT_BOOSTS` движка. */
+const MAX_LOADOUT_BOOSTS = 8;
+
+const loadoutSchema = z.object({
+  modifiers: z.partialRecord(z.enum(LOADOUT_STATS), z.number().finite().nonnegative().max(1000)),
+  boosts: z.array(id).max(MAX_LOADOUT_BOOSTS),
+  // Уровень аккаунта решает, что было открыто (docs/35-stage4-plan.md WP25):
+  // без него повтор у команды открыл бы всё и разошёлся с забегом тестера.
+  accountLevel: z.number().int().min(1).max(1000).optional(),
+});
+
 const resultSchema = z.object({
   ticks: count,
   survivalSec: amount,
@@ -105,6 +139,10 @@ export const runRecordingSchema = z.object({
   // Тики второго шанса (docs/07-monetization-and-ads.md §8). Запись прошлой
   // сборки поля не несёт — это забег без продолжений.
   continues: z.array(count).max(MAX_CONTINUES).default([]),
+  // Набор на забег (docs/35-stage4-plan.md §3.3, WP7): без него повтор
+  // снаряжённого забега разошёлся бы с первого удара. Забег без снаряжения
+  // поля не несёт.
+  loadout: loadoutSchema.optional(),
   checkpoints: z.array(z.tuple([count, z.number().int()])).max(240),
 });
 

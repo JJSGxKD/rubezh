@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { BotModule } from "../bot/bot.module.js";
+import { BotModule } from "../../platforms/telegram/bot.module.js";
 import { EXPORT_BOT_LOCKS, ExportBotCommand, RedisExportBotLocks } from "./export-bot.command.js";
 import { EXPORT_REPOSITORY, PrismaExportRepository } from "./export.repository.js";
 import { ExportService } from "./export.service.js";
@@ -19,6 +19,7 @@ import { RetentionJob } from "./retention.job.js";
     { provide: EXPORT_REPOSITORY, useClass: PrismaExportRepository },
     { provide: EXPORT_BOT_LOCKS, useClass: RedisExportBotLocks },
   ],
-  exports: [ExportService],
+  // Журнал выгрузок — разделу выгрузок в панели.
+  exports: [ExportService, EXPORT_REPOSITORY],
 })
 export class ExportModule {}

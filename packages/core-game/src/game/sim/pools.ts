@@ -68,6 +68,22 @@ export interface EnemyPool {
   dirX: Float32Array;
   dirY: Float32Array;
   ringRadius: Float32Array;
+  /**
+   * Состояния стихий (`sim/elements.ts`): таймеры в секундах, урон по
+   * времени в секунду, копилка охлаждения до заморозки, слои яда и чьё
+   * оружие наложило горение и яд — урон по времени засчитывается ему.
+   */
+  burnTimer: Float32Array;
+  burnDps: Float32Array;
+  burnSlot: Uint8Array;
+  chillTimer: Float32Array;
+  chillBuild: Uint8Array;
+  frozenTimer: Float32Array;
+  shockTimer: Float32Array;
+  poisonTimer: Float32Array;
+  poisonStacks: Uint8Array;
+  poisonDps: Float32Array;
+  poisonSlot: Uint8Array;
   /** верхняя граница занятых слотов — обходим только её, а не всю ёмкость */
   count: number;
   aliveCount: number;
@@ -96,6 +112,9 @@ export interface ProjectilePool {
    * врага каждый тик, а не пробивал бы дальше.
    */
   lastHit: Int16Array;
+  /** стихия урона снаряда (`sim/elements.ts`) и шанс наложить её состояние */
+  element: Uint8Array;
+  statusChance: Float32Array;
   alive: Uint8Array;
   count: number;
   aliveCount: number;
@@ -123,6 +142,17 @@ export function createEnemyPool(capacity: number): EnemyPool {
     dirX: new Float32Array(capacity),
     dirY: new Float32Array(capacity),
     ringRadius: new Float32Array(capacity),
+    burnTimer: new Float32Array(capacity),
+    burnDps: new Float32Array(capacity),
+    burnSlot: new Uint8Array(capacity),
+    chillTimer: new Float32Array(capacity),
+    chillBuild: new Uint8Array(capacity),
+    frozenTimer: new Float32Array(capacity),
+    shockTimer: new Float32Array(capacity),
+    poisonTimer: new Float32Array(capacity),
+    poisonStacks: new Uint8Array(capacity),
+    poisonDps: new Float32Array(capacity),
+    poisonSlot: new Uint8Array(capacity),
     count: 0,
     aliveCount: 0,
   };
@@ -222,6 +252,8 @@ export function createProjectilePool(capacity: number): ProjectilePool {
     ownerWeapon: new Uint8Array(capacity).fill(NO_OWNER_TYPE),
     pierce: new Uint8Array(capacity),
     lastHit: new Int16Array(capacity).fill(-1),
+    element: new Uint8Array(capacity),
+    statusChance: new Float32Array(capacity),
     alive: new Uint8Array(capacity),
     count: 0,
     aliveCount: 0,

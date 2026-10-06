@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import { isServicePr } from "./branches.mjs";
 import { RELEASE_LEVELS, compareReleaseLevels, parseStableTag } from "./semver.mjs";
 import { addLabel, latestStableTag, listComments, postComment, viewPr } from "./git.mjs";
+import { PLAYER_NOTES_SECTION, parsePlayerNotes } from "./player-notes.mjs";
 
 /**
  * Проверка заголовка и метки релиза на PR (docs/09-ci-cd.md §8.1, «Проверка PR»).
@@ -146,6 +147,12 @@ function main() {
     } else if (requiresBreakingSection(title, evaluation)) {
       addLabel(number, "breaking");
     }
+  }
+
+  // Строки для игроков уходят в журнал обновлений при выкате: ошибку формата
+  // дешевле поймать здесь, чем пропустить строку при сборке релиза.
+  if (!service) {
+    for (const error of parsePlayerNotes(pr.body).errors) errors.push(`раздел «${PLAYER_NOTES_SECTION}»: ${error}`);
   }
 
   for (const error of errors) console.error(`ошибка  ${error}`);

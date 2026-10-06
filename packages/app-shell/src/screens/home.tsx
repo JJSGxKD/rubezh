@@ -1,44 +1,34 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   BookOpen,
-  CalendarCheck,
   ChevronRight,
   Flame,
   History,
   Wrench,
   Infinity as InfinityIcon,
-  LoaderPinwheel,
   Lock,
   Map as MapIcon,
   MessageSquareHeart,
   Play,
-  Trophy,
 } from "lucide-react";
-import type { DifficultyId } from "@bh/shared-types";
-import { DIFFICULTIES, WEAPONS } from "@bh/core-game";
 import {
   Badge,
   Button,
   Card,
   ContentColumn,
-  Emblem,
   Modal,
   Screen,
-  SectionTitle,
-  SegmentedControl,
-  Stat,
-  Wordmark,
 } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
-import { hasCheats, useDevMode } from "../state/dev-mode";
+import { useDevMode } from "../state/dev-mode";
 import { useNavigation } from "../state/navigation";
-import { usePlaytestAccess } from "../state/playtest";
-import { DevSheetLazy } from "./run/dev-sheet-lazy";
+import { useToolsAccess } from "../state/tools";
 import { preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine, useRun } from "../state/run";
 import { useSavedRun, type SavedRun } from "../state/run-save";
+import { useShell } from "../state/shell";
 import { ItemTile } from "./item-icons";
 
 /**
@@ -49,17 +39,17 @@ import { ItemTile } from "./item-icons";
 const PRELOAD_DELAY_MS = 1500;
 
 /**
- * Лобби. Кнопка «Играть» — единственное настоящее действие этапа 2; валюта,
- * награда дня и колесо нарисованы, но ведут в заглушки
- * (docs/27-design-system-and-app-shell.md §6).
+ * Лобби: карусель «Сейчас в игре», виджеты — награда дня, колесо, задания,
+ * рекорд и друзья — и «Играть» (docs/27-design-system-and-app-shell.md §6,
+ * docs/35-stage4-plan.md WP42). Карусель и виджеты — одним чанком после
+ * первого кадра (`home-live.ts`): первой загрузке они не нужны.
  */
 export function LobbyScreen(): ReactNode {
   const navigation = useNavigation();
-  const meta = useMeta();
+  const runs = useMeta((state) => state.runs);
   const saved = useSavedRun((state) => state.saved);
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
-  const best = meta.best[meta.lastDifficultyId];
-  const askFeedback = shouldAskFeedback(meta.runs, useFeedback((state) => state.sentAtRuns));
+  const askFeedback = shouldAskFeedback(runs, useFeedback((state) => state.sentAtRuns));
   usePreloadEngine();
 
   return (
@@ -95,58 +85,15 @@ export function LobbyScreen(): ReactNode {
       }
     >
       <ContentColumn>
-        {/* В ландшафте телефона под контент остаётся полторы сотни пикселей:
-            знак и слоган уходят, остаются имя и рекорд (§5.3). */}
-        <div className="mt-6 mb-8 flex flex-col items-center gap-3 text-center landscape:mt-1 landscape:mb-3">
-          <span className="landscape:hidden">
-            <Emblem size={104} animated />
-          </span>
-          <Wordmark size="l" />
-          <p className="max-w-[300px] text-sm text-text-muted landscape:hidden">{t("lobby.tagline")}</p>
+        {/* Бренда на главной нет — он на заставке и в «Об игре»: игрок и так
+            знает, что открыл (Р76). На его месте — что можно сделать сейчас. */}
+        <div className="mt-3">
+          <CarouselSlot />
         </div>
 
         {saved === null ? null : <SavedRunCard saved={saved} />}
 
-        <Card appearIndex={1}>
-          <div className="flex items-center gap-4">
-            <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-elite/15 text-elite">
-              <Trophy size={24} />
-            </span>
-            <div className="min-w-0 flex-1">
-              {/* Рекорд — на той сложности, что выбрана сейчас: время на разных
-                  сложностях несравнимо, и общий рекорд обманывал бы. */}
-              <Stat
-                label={t("lobby.record.on", { difficulty: t(`difficulty.${meta.lastDifficultyId}.name`) })}
-                value={best > 0 ? formatDuration(best) : "—"}
-                large
-                tone={best > 0 ? "accent" : undefined}
-              />
-              {best > 0 ? null : (
-                <p className="mt-0.5 text-xs text-text-muted">{t("lobby.noRecord")}</p>
-              )}
-            </div>
-            <Badge>{t("lobby.runs", { count: meta.runs })}</Badge>
-          </div>
-        </Card>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <LobbyTile
-            appearIndex={2}
-            tone="accent"
-            icon={<CalendarCheck size={22} />}
-            title={t("lobby.daily")}
-            hint={t("lobby.daily.hint")}
-            onClick={() => navigation.push("daily")}
-          />
-          <LobbyTile
-            appearIndex={3}
-            tone="info"
-            icon={<LoaderPinwheel size={22} />}
-            title={t("lobby.wheel")}
-            hint={t("lobby.wheel.hint")}
-            onClick={() => navigation.push("wheel")}
-          />
-        </div>
+        <WidgetsSlot />
 
         {/* Гайдбук на главной, а не только в меню: новичок не пойдёт искать
             его по меню, пока не проиграет пару забегов непонятно кому. */}
@@ -218,6 +165,86 @@ export function LobbyScreen(): ReactNode {
   );
 }
 
+type HomeLive = typeof import("./home-live");
+
+/** Приехавший чанк главной: на главную возвращаются после каждого забега, и заглушки не должны мигать. */
+let loadedLive: HomeLive | null = null;
+let loadingLive: Promise<HomeLive> | null = null;
+
+/** Чанк главной один на оба слота; не приехал — следующий заход попробует снова. */
+function loadHomeLive(): Promise<HomeLive> {
+  loadingLive ??= import("./home-live").then(
+    (module) => (loadedLive = module),
+    (error: unknown) => {
+      loadingLive = null;
+      throw error;
+    },
+  );
+  return loadingLive;
+}
+
+function useHomeLive(): HomeLive | null {
+  const [live, setLive] = useState<HomeLive | null>(() => loadedLive);
+  useEffect(() => {
+    if (loadedLive !== null) return;
+    let alive = true;
+    loadHomeLive().then(
+      (module) => {
+        if (alive) setLive(module);
+      },
+      (error: unknown) => console.warn("Чанк главной не загрузился:", error),
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return live;
+}
+
+/**
+ * Карусель главной (WP42) — с чанком главной после первого кадра. Пока он
+ * едет, место держит заглушка той же высоты, что у самой карусели
+ * (`home-carousel.tsx`). Гостю без входа карусели нет: слайды собирает
+ * сервер по аккаунту. В низком ландшафте телефона под всё остальное
+ * полторы сотни пикселей — там её тоже нет.
+ */
+function CarouselSlot(): ReactNode {
+  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
+  const live = useHomeLive();
+  if (!withAccount) return null;
+  return (
+    <div className="[@media(max-height:480px)]:hidden">
+      {live === null ? (
+        <div aria-hidden="true" className="mb-3">
+          <div className="surface-sunken h-20 rounded-lg" />
+          <div className="h-6" />
+        </div>
+      ) : (
+        <live.HomeCarousel />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Виджеты главной (WP42, часть 3) — тем же чанком. Заглушка — сетка без
+ * готового к забору: рекорд во всю ширину и две пары плиток, высоты — из
+ * токенов, как у самих виджетов (`home-widgets.tsx`). Гостю виджеты тоже
+ * есть: рекорд — с устройства, остальные ведут на свои экраны.
+ */
+function WidgetsSlot(): ReactNode {
+  const live = useHomeLive();
+  if (live !== null) return <live.HomeWidgets />;
+  return (
+    <div aria-hidden="true" className="mb-3 grid grid-cols-2 gap-3">
+      <div className="surface-sunken col-span-2 h-(--widget-hero-h) rounded-lg" />
+      {[0, 1, 2, 3].map((index) => (
+        <div key={index} className="surface-sunken h-(--widget-tile-h) rounded-lg" />
+      ))}
+    </div>
+  );
+}
+
 /** Прерванный забег: сколько продержался и с чем — чтобы игрок узнал свой забег. */
 function SavedRunCard(props: { saved: SavedRun }): ReactNode {
   const { summary } = props.saved;
@@ -249,45 +276,6 @@ function SavedRunCard(props: { saved: SavedRun }): ReactNode {
 }
 
 /**
- * Плитка быстрого раздела лобби: награда дня, колесо. Точка зовёт зайти — как
- * на вкладках нижней панели.
- */
-function LobbyTile(props: {
-  appearIndex: number;
-  tone: "accent" | "info";
-  icon: ReactNode;
-  title: string;
-  hint: string;
-  onClick(): void;
-}): ReactNode {
-  return (
-    <Card appearIndex={props.appearIndex} onClick={props.onClick}>
-      <span aria-hidden="true" className="absolute top-2.5 right-2.5 inline-flex size-2.5">
-        <span className="absolute inset-0 animate-ping-dot rounded-full bg-accent" />
-        <span className="relative size-full rounded-full bg-accent" />
-      </span>
-      {/* Значок над подписью, а не сбоку: в половине ширины телефона рядом со
-          значком «Колесо удачи» переносилось на две строки. В ландшафте места
-          хватает — значок возвращается в строку. */}
-      <div className="flex flex-col items-start gap-2 landscape:flex-row landscape:items-center landscape:gap-3">
-        <span
-          className={[
-            "inline-flex size-10 shrink-0 items-center justify-center rounded-md",
-            props.tone === "accent" ? "bg-accent/15 text-accent" : "bg-info/15 text-info",
-          ].join(" ")}
-        >
-          {props.icon}
-        </span>
-        <span className="min-w-0">
-          <span className="block font-display text-sm font-bold text-text">{props.title}</span>
-          <span className="mt-0.5 block text-xs text-text-muted">{props.hint}</span>
-        </span>
-      </div>
-    </Card>
-  );
-}
-
-/**
  * Предзагрузка чанка движка из лобби, когда браузер простаивает
  * (docs/27-design-system-and-app-shell.md §3.4).
  */
@@ -307,11 +295,16 @@ function usePreloadEngine(): void {
 
 /**
  * Движок и ленивые экраны — одним заходом: и то и другое игроку понадобится
- * через минуту, а сеть в лобби простаивает.
+ * через минуту, а сеть в лобби простаивает. Там же — SDK рекламных сетей для
+ * учёта аудитории (Р78): своим чанком, первая загрузка за него не платит.
  */
 function preloadEverything(): void {
   preloadRunEngine();
   preloadScreens();
+  // Чанк не пришёл — как с экранами выше: следующий заход на главную попробует снова.
+  import("../state/ad-networks")
+    .then(async (module) => await module.prepareAdNetworks())
+    .catch(() => undefined);
 }
 
 /** Выбор режима. «Бесконечный» рабочий, «Кампания» — заглушка. */
@@ -319,7 +312,7 @@ export function ModeScreen(): ReactNode {
   const navigation = useNavigation();
   // Стресс-тест открыт всем на плейтесте и команде вне его: правило решает
   // сервер (docs/28-diagnostics.md §2.3), здесь только не показываем лишнего.
-  const access = usePlaytestAccess();
+  const access = useToolsAccess();
 
   return (
     <Screen title={t("mode.title")} onBack={() => navigation.pop()}>
@@ -402,103 +395,5 @@ export function ModeScreen(): ReactNode {
         </div>
       </ContentColumn>
     </Screen>
-  );
-}
-
-/**
- * Выбор перед забегом: сложность и стартовое оружие, последний выбор того и
- * другого запомнен (решение Р12 `docs/26-stage2-plan.md` §2).
- */
-export function WeaponScreen(): ReactNode {
-  const navigation = useNavigation();
-  const meta = useMeta();
-  const starting = WEAPONS.filter((weapon) => weapon.starting === true);
-  const selected = starting.some((weapon) => weapon.id === meta.lastWeaponId)
-    ? meta.lastWeaponId
-    : (starting[0]?.id ?? "");
-  const access = usePlaytestAccess();
-  const devArmed = useDevMode((state) => state.armed) && access.devMode;
-  const devSettings = useDevMode((state) => state.settings);
-  const [devOpen, setDevOpen] = useState(false);
-
-  return (
-    <>
-    <Screen
-      title={devArmed ? t("mode.dev") : t("weapon.select.screen")}
-      onBack={() => navigation.pop()}
-      footer={
-        <Button
-          size="l"
-          block
-          glow
-          onClick={() => {
-            // Запоминаем даже выбор по умолчанию: забег должен стартовать с
-            // тем оружием, которое подсвечено на экране.
-            meta.rememberWeapon(selected);
-            useRun.getState().intend({ kind: "new" });
-            navigation.replace("run");
-          }}
-        >
-          {t("weapon.select.start")}
-        </Button>
-      }
-    >
-      <ContentColumn>
-        {devArmed ? (
-          <div className="mt-2">
-            <Card stripe="passive" onClick={() => setDevOpen(true)}>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-passive/15 text-passive">
-                  <Wrench size={20} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <span className="font-display text-base font-bold text-text">{t("dev.setup")}</span>
-                  <p className="mt-0.5 text-xs text-text-muted">
-                    {hasCheats(devSettings)
-                      ? devSettings.countInRating
-                        ? t("dev.cheats.counted")
-                        : t("dev.cheats.notCounted")
-                      : t("dev.setup.clean")}
-                  </p>
-                </div>
-                <ChevronRight size={18} className="shrink-0 text-text-disabled" />
-              </div>
-            </Card>
-          </div>
-        ) : null}
-        <SectionTitle>{t("difficulty.title")}</SectionTitle>
-        <SegmentedControl
-          label={t("difficulty.title")}
-          activeId={meta.lastDifficultyId}
-          onSelect={(id) => meta.rememberDifficulty(id as DifficultyId)}
-          items={DIFFICULTIES.map((difficulty) => ({ id: difficulty.id, label: t(difficulty.nameKey) }))}
-        />
-        <p className="mt-2 text-xs text-text-muted">{t(`difficulty.${meta.lastDifficultyId}.description`)}</p>
-
-        <SectionTitle>{t("weapon.select.title")}</SectionTitle>
-        <p className="mb-3 text-xs text-text-muted">{t("weapon.select.hint")}</p>
-        <div className="grid gap-3 landscape:grid-cols-3">
-          {starting.map((weapon, index) => (
-            <Card
-              key={weapon.id}
-              appearIndex={index}
-              stripe="weapon"
-              selected={weapon.id === selected}
-              onClick={() => meta.rememberWeapon(weapon.id)}
-            >
-              <div className="flex items-start gap-3 pr-7">
-                <ItemTile kind="weapon" id={weapon.id} />
-                <div className="min-w-0 flex-1">
-                  <span className="font-display text-lg font-bold text-text">{t(weapon.nameKey)}</span>
-                  <p className="mt-1 text-xs text-text-muted">{t(weapon.descriptionKey)}</p>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </ContentColumn>
-    </Screen>
-    {devOpen ? <DevSheetLazy inRun={false} onClose={() => setDevOpen(false)} /> : null}
-    </>
   );
 }

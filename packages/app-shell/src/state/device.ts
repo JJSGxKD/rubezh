@@ -1,4 +1,4 @@
-import type { DeviceFormFactor, DeviceOs, PlatformClientInfo, PlaytestDevice } from "@bh/shared-types";
+import type { DeviceFormFactor, DeviceOs, PlatformClientInfo, DeviceDescription } from "@bh/shared-types";
 
 /**
  * Сведения об устройстве для статистики плейтеста: на чём играют тестеры.
@@ -17,7 +17,7 @@ export interface DeviceEnvironment {
   memoryGb: number | null;
 }
 
-export function describeDevice(client: PlatformClientInfo, env: DeviceEnvironment = readEnvironment()): PlaytestDevice {
+export function describeDevice(client: PlatformClientInfo, env: DeviceEnvironment = readEnvironment()): DeviceDescription {
   const os = osOf(env.userAgent, env.maxTouchPoints);
   return {
     clientPlatform: client.platform,
@@ -63,5 +63,34 @@ export function readEnvironment(): DeviceEnvironment {
     pixelRatio: globalThis.devicePixelRatio ?? 1,
     cores: nav.hardwareConcurrency > 0 ? nav.hardwareConcurrency : null,
     memoryGb: typeof nav.deviceMemory === "number" ? nav.deviceMemory : null,
+  };
+}
+
+/**
+ * Подписка на смену того, что входит в сведения об устройстве: размер окна,
+ * плотность пикселей и сам экран — окно перенесли на другой монитор. Сведения
+ * должны пересчитываться на ходу, а не остаться снимком с момента открытия.
+ * Возвращает отписку.
+ */
+export function watchEnvironment(onChange: () => void): () => void {
+  const target = globalThis as typeof globalThis & { screen?: Screen & EventTarget };
+  let density: MediaQueryList | null = null;
+  const onDensity = (): void => {
+    onChange();
+    listenDensity();
+  };
+  // Запрос плотности — на текущую: сменилась — ставим новый на новое значение.
+  const listenDensity = (): void => {
+    density?.removeEventListener("change", onDensity);
+    density = typeof matchMedia === "function" ? matchMedia(`(resolution: ${String(globalThis.devicePixelRatio ?? 1)}dppx)`) : null;
+    density?.addEventListener("change", onDensity);
+  };
+  listenDensity();
+  globalThis.addEventListener?.("resize", onChange);
+  target.screen?.addEventListener?.("change", onChange);
+  return () => {
+    density?.removeEventListener("change", onDensity);
+    globalThis.removeEventListener?.("resize", onChange);
+    target.screen?.removeEventListener?.("change", onChange);
   };
 }

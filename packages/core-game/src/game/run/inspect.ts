@@ -63,5 +63,6 @@ export function inspectWorld(world: World): RunInspection {
         value: type.levels[Math.min(slot.level, type.levels.length) - 1],
       };
     }),
+    boosts: [...world.boosts.ids],
   };
 }

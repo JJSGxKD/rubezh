@@ -1,4 +1,5 @@
-import { PASSIVE_CATEGORIES, type PassiveCategory, type PassiveDef, type PlayerStat } from "@bh/shared-types";
+import { PASSIVE_CATEGORIES, type LoadoutStat, type PassiveCategory, type PassiveDef, type PlayerStat } from "@bh/shared-types";
+import { loadoutValue } from "./run-loadout";
 
 /** Пассивка с проверенными уровнями. */
 export interface PassiveType {
@@ -30,6 +31,25 @@ export interface PlayerStats {
   regenPerSec: number;
   pickupRadius: number;
   armor: number;
+  /**
+   * Сопротивление стихиям — доля урона и длительности состояния, которую
+   * гасит игрок (`sim/player-status.ts`). Отдельными числами, а не массивом:
+   * снимок забега переносит характеристики как набор чисел.
+   */
+  resistFire: number;
+  resistCold: number;
+  resistLightning: number;
+  resistPoison: number;
+  /**
+   * Множители урона по стихиям и шанса состояния — от снаряжения
+   * (`progression/run-loadout.ts`): сборка «под огонь» усиливает именно
+   * огненное оружие.
+   */
+  fireDamageMul: number;
+  coldDamageMul: number;
+  lightningDamageMul: number;
+  poisonDamageMul: number;
+  statusChanceMul: number;
 }
 
 /** База, к которой применяются пассивки: значения игрока без улучшений. */
@@ -51,6 +71,24 @@ const MULTIPLIER_STATS: Partial<Record<PlayerStat, keyof PlayerStats>> = {
 };
 
 const MAX_PASSIVE_LEVELS = 12;
+
+/** Какие сопротивления меняет пассивка: «всем стихиям» — все четыре сразу. */
+const RESIST_STATS: Partial<Record<PlayerStat, readonly ResistKey[]>> = {
+  resist: ["resistFire", "resistCold", "resistLightning", "resistPoison"],
+  resistFire: ["resistFire"],
+  resistCold: ["resistCold"],
+  resistLightning: ["resistLightning"],
+  resistPoison: ["resistPoison"],
+};
+
+type ResistKey = "resistFire" | "resistCold" | "resistLightning" | "resistPoison";
+
+/**
+ * Сопротивление с одной пассивки — не больше этого: потолок игрока
+ * (`MAX_PLAYER_RESIST`) держит сумму, а здесь ловится опечатка «50» вместо
+ * «0.5».
+ */
+const MAX_PASSIVE_RESIST = 0.9;
 
 export function findPassiveContentProblems(defs: readonly PassiveDef[]): string[] {
   const problems: string[] = [];
@@ -76,6 +114,14 @@ export function findPassiveContentProblems(defs: readonly PassiveDef[]): string[
     }
     if (def.stat === "projectiles" && def.op !== "add") {
       problems.push(`пассивка ${def.id}: число снарядов задаётся только слагаемым`);
+    }
+    if (RESIST_STATS[def.stat] !== undefined) {
+      // Сопротивление — доля, и умножать ноль бессмысленно: у игрока без
+      // пассивок его нет.
+      if (def.op !== "add") problems.push(`пассивка ${def.id}: сопротивление задаётся только слагаемым`);
+      if (def.levels.some((value) => !(value > 0 && value <= MAX_PASSIVE_RESIST))) {
+        problems.push(`пассивка ${def.id}: сопротивление — доля от 0 до ${MAX_PASSIVE_RESIST}`);
+      }
     }
     // Контент приходит и из JSON админки: тип не спасает от опечатки в категории.
     if (!PASSIVE_CATEGORIES.includes(def.category)) {
@@ -103,19 +149,36 @@ export function resolvePassiveTypes(defs: readonly PassiveDef[]): PassiveType[] 
   }));
 }
 
-export function createBaseStats(base: PlayerStatsBase): PlayerStats {
+/**
+ * Характеристики до пассивок забега: база игрока и набор на забег. Пассивки
+ * применяются поверх: множитель пассивки умножает уже усиленное снаряжением.
+ */
+export function createBaseStats(
+  base: PlayerStatsBase,
+  modifiers: Readonly<Partial<Record<LoadoutStat, number>>> = {},
+): PlayerStats {
+  const mod = (stat: LoadoutStat): number => loadoutValue(modifiers, stat);
   return {
-    damageMul: 1,
-    cooldownMul: 1,
-    areaMul: 1,
-    projectileSpeedMul: 1,
-    durationMul: 1,
+    damageMul: 1 + mod("damage"),
+    cooldownMul: 1 - mod("cooldown"),
+    areaMul: 1 + mod("area"),
+    projectileSpeedMul: 1 + mod("projectileSpeed"),
+    durationMul: 1 + mod("duration"),
     extraProjectiles: 0,
-    moveSpeedMul: 1,
-    maxHp: base.maxHp,
-    regenPerSec: 0,
-    pickupRadius: base.pickupRadius,
-    armor: 0,
+    moveSpeedMul: 1 + mod("moveSpeed"),
+    maxHp: base.maxHp + mod("maxHp"),
+    regenPerSec: mod("regenPerSec"),
+    pickupRadius: base.pickupRadius * (1 + mod("pickupRadius")),
+    armor: mod("armor"),
+    resistFire: mod("resistFire"),
+    resistCold: mod("resistCold"),
+    resistLightning: mod("resistLightning"),
+    resistPoison: mod("resistPoison"),
+    fireDamageMul: 1 + mod("damageFire"),
+    coldDamageMul: 1 + mod("damageCold"),
+    lightningDamageMul: 1 + mod("damageLightning"),
+    poisonDamageMul: 1 + mod("damagePoison"),
+    statusChanceMul: 1 + mod("statusChance"),
   };
 }
 
@@ -129,25 +192,21 @@ export function computePlayerStats(
   base: PlayerStatsBase,
   types: readonly PassiveType[],
   levelByType: ReadonlyMap<number, number>,
+  modifiers: Readonly<Partial<Record<LoadoutStat, number>>> = {},
 ): PlayerStats {
-  const stats = createBaseStats(base);
+  const stats = createBaseStats(base, modifiers);
 
   types.forEach((type, index) => {
     const level = levelByType.get(index) ?? 0;
     if (level <= 0) return;
 
     const value = type.levels[Math.min(level, type.levels.length) - 1];
-    applyPassive(stats, type, value, base);
+    applyPassive(stats, type, value);
   });
   return stats;
 }
 
-function applyPassive(
-  stats: PlayerStats,
-  type: PassiveType,
-  value: number,
-  base: PlayerStatsBase,
-): void {
+function applyPassive(stats: PlayerStats, type: PassiveType, value: number): void {
   if (type.stat === "projectiles") {
     stats.extraProjectiles += value;
     return;
@@ -156,16 +215,23 @@ function applyPassive(
     stats[type.stat === "armor" ? "armor" : "regenPerSec"] += value;
     return;
   }
+  const resists = RESIST_STATS[type.stat];
+  if (resists !== undefined) {
+    for (const key of resists) stats[key] += value;
+    return;
+  }
 
   const key = MULTIPLIER_STATS[type.stat];
   if (key === undefined) return;
 
+  // От уже посчитанного, а не от базы игрока: иначе пассивка на здоровье
+  // затирала бы здоровье со снаряжения.
   if (key === "maxHp") {
-    stats.maxHp = type.op === "add" ? base.maxHp + value : base.maxHp * value;
+    stats.maxHp = type.op === "add" ? stats.maxHp + value : stats.maxHp * value;
     return;
   }
   if (key === "pickupRadius") {
-    stats.pickupRadius = type.op === "add" ? base.pickupRadius + value : base.pickupRadius * value;
+    stats.pickupRadius = type.op === "add" ? stats.pickupRadius + value : stats.pickupRadius * value;
     return;
   }
   stats[key] = type.op === "add" ? stats[key] + value : stats[key] * value;

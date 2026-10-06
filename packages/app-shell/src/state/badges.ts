@@ -1,0 +1,34 @@
+import { create } from "zustand";
+
+/**
+ * Знаки меню (docs/35-stage4-plan.md Р50, §3.17) — только числа: новые
+ * предметы на вкладке арсенала, подарки и заявки друзей, непрочитанное на
+ * колокольчике, награды заданий на вкладке, незабранная награда дня и
+ * некрученое колесо на плитках главной, новые версии в «Что нового» в меню. Приходят одним запросом (`badges-api.ts`, отдельным чанком):
+ * первой загрузке нужны только числа, и то после входа.
+ */
+export interface Badges {
+  notifications: number;
+  arsenal: number;
+  friends: number;
+  daily: number;
+  changelog: number;
+  /** бесплатная крутка суток ждёт */
+  wheel: number;
+  /** выполненные задания и достижения, награду которых ещё не забрали */
+  tasks: number;
+  /**
+   * Когда знаки пришли с сервера; 0 — ещё не приходили. Главная по этой
+   * метке понимает, что её ответ устарел (`home-api.ts`), и раскладывает
+   * виджеты, только когда знает, что готово к забору.
+   */
+  loadedAt: number;
+}
+
+export const useBadges = create<Badges>()(() => ({ notifications: 0, arsenal: 0, friends: 0, daily: 0, changelog: 0, wheel: 0, tasks: 0, loadedAt: 0 }));
+
+/** Текст знака: ноль — знака нет, больше девяти — «9+». */
+export function badgeText(count: number): string | undefined {
+  if (count <= 0) return undefined;
+  return count > 9 ? "9+" : String(count);
+}

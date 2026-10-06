@@ -1,4 +1,5 @@
 import type {
+  BoostDef,
   ContinueDef,
   DifficultyDef,
   DropsDef,
@@ -8,10 +9,14 @@ import type {
   LoadoutLimits,
   MapDef,
   PassiveDef,
+  RunLoadout,
   WeaponDef,
 } from "@bh/shared-types";
+import { ELEMENTS } from "@bh/shared-types";
 import { resolveEnemyTypes } from "../patterns/enemy-types";
 import { computePlayerStats, resolvePassiveTypes, type PlayerStatsBase } from "../progression/passives";
+import { EMPTY_LOADOUT, sanitizeLoadout } from "../progression/run-loadout";
+import { combineModifiers, findBoostProblems, resolveBoosts } from "../progression/boosts";
 import { addWeapon, createLoadout } from "../progression/loadout";
 import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
@@ -131,8 +136,14 @@ export interface CreateWorldOptions {
   stages?: readonly EnemyStageDef[];
   /** карта: границы мира и параметры, от которых считается кольцо спавна */
   map?: MapDef;
-  /** чем игрок начинает забег; по умолчанию — первое стартовое оружие */
+  /** чем игрок начинает забег; по умолчанию — первое оружие контента */
   startingWeaponId?: string;
+  /** снаряжение и бусты на забег; по умолчанию — пустой набор */
+  loadout?: RunLoadout;
+  /** что умеют бусты; без контента id бустов в наборе ничего не делают */
+  boosts?: readonly BoostDef[];
+  /** сколько бустов действует на забег; по умолчанию — все из набора */
+  maxBoostsPerRun?: number;
   config?: Partial<SimConfig>;
 }
 
@@ -199,6 +210,18 @@ export function createWorld(options: CreateWorldOptions): World {
   const startingWeapon = findStartingWeapon(weaponTypes, options.startingWeaponId);
   if (startingWeapon >= 0) addWeapon(loadout, startingWeapon);
 
+  const boostProblems = findBoostProblems(options.boosts ?? []);
+  if (boostProblems.length > 0) {
+    throw new Error(`Некорректные бусты:\n${boostProblems.join("\n")}`);
+  }
+  const runLoadout = sanitizeLoadout(options.loadout ?? EMPTY_LOADOUT);
+  const boosts = resolveBoosts(options.boosts ?? [], runLoadout.boosts, options.maxBoostsPerRun ?? runLoadout.boosts.length);
+  const loadoutModifiers = combineModifiers(runLoadout.modifiers, boosts.modifiers);
+  const playerStats = computePlayerStats(playerStatsBase, passiveTypes, new Map(), loadoutModifiers);
+  // «Фора»: уровни сразу в очередь выбора — как если бы опыт набрался на
+  // первом тике. Порог следующего — уже от нового уровня.
+  const startLevel = 1 + boosts.startLevels;
+
   const cellSize = gridCellSize(scale);
   return {
     config,
@@ -213,15 +236,18 @@ export function createWorld(options: CreateWorldOptions): World {
     drops,
     continueRules,
     difficultyLevel,
-    playerStats: computePlayerStats(playerStatsBase, passiveTypes, new Map()),
+    playerStats,
+    runLoadout,
+    boosts,
+    loadoutModifiers,
     playerStatsBase,
     loadout,
     progression: {
-      level: 1,
+      level: startLevel,
       xp: 0,
-      xpToNext: xpForLevel(levelCurve, 1),
+      xpToNext: xpForLevel(levelCurve, startLevel),
       totalXp: 0,
-      pendingLevelUps: 0,
+      pendingLevelUps: boosts.startLevels,
       offers: [],
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора
@@ -244,11 +270,22 @@ export function createWorld(options: CreateWorldOptions): World {
       vy: 0,
       faceX: 1,
       faceY: 0,
-      hp: config.player.maxHp,
-      maxHp: config.player.maxHp,
+      // Здоровье со снаряжением — с первого тика: игрок начинает полным.
+      hp: playerStats.maxHp,
+      maxHp: playerStats.maxHp,
       attackCooldown: 0,
       alive: true,
       invulnerableTicks: 0,
+      shieldHits: boosts.shieldHits,
+      burnTimer: 0,
+      burnDps: 0,
+      burnSource: -1,
+      chillTimer: 0,
+      shockTimer: 0,
+      poisonTimer: 0,
+      poisonStacks: 0,
+      poisonDps: 0,
+      poisonSource: -1,
     },
     enemies: createEnemyPool(maxEnemies),
     projectiles: createProjectilePool(maxProjectiles),
@@ -273,6 +310,7 @@ export function createWorld(options: CreateWorldOptions): World {
       shotsFired: 0,
       damageDealt: 0,
       damageByWeapon: new Float64Array(Math.max(1, loadoutLimits.weapons)),
+      damageByElement: new Float64Array(ELEMENTS.length),
       xpCollected: 0,
       medkitsCollected: 0,
       magnetsCollected: 0,
@@ -289,6 +327,7 @@ export function createWorld(options: CreateWorldOptions): World {
     // молча отбрасываются. В игре это промахи снарядов сквозь врагов, в
     // замере — заниженная стоимость коллизий, то есть враньё в отчёте.
     queryBuffer: new Int32Array(maxEnemies),
+    chainBuffer: new Int32Array(maxEnemies),
     cheats: { ...NO_CHEATS },
   };
 }
@@ -307,11 +346,15 @@ function scalePlayerConfig(player: PlayerConfig, scale: number): PlayerConfig {
   };
 }
 
-/** Первое стартовое оружие или запрошенное по id; -1 — оружия нет вовсе. */
+/**
+ * Запрошенное оружие или первое из контента; -1 — оружия нет вовсе. Любое
+ * оружие мира можно взять стартовым (Р41): закрытое уровнем в мир не
+ * попадает, поэтому и запросить его нельзя.
+ */
 function findStartingWeapon(types: readonly WeaponType[], requestedId?: string): number {
   if (requestedId !== undefined) {
     const requested = types.findIndex((type) => type.id === requestedId);
     if (requested >= 0) return requested;
   }
-  return types.findIndex((type) => type.starting);
+  return types.length > 0 ? 0 : -1;
 }

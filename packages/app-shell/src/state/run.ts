@@ -1,4 +1,4 @@
-import type { DifficultyId, RunResult, UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   loadRunEngine,
   type HudSnapshot,
@@ -20,7 +20,7 @@ import { useMeta } from "./meta";
 import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
 import { clearDownedRun, saveDownedRun, takeDownedRun } from "./downed-run";
-import { canOfferPaidContinue } from "./payments-availability";
+import { canOfferContinue } from "./payments-availability";
 import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
@@ -45,17 +45,35 @@ export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "
 export type RunLoadingStage = "engine" | "world";
 
 /** Откуда второй шанс: бесплатно в забеге разработчика или оплачен звёздами. */
-export type ContinueSource = "dev" | "premium";
+/** Чем продолжен забег: звёзды, ролик, VIP без ролика или чит разработчика. */
+export type ContinueSource = "dev" | "premium" | "ad" | "pass";
 
 /**
  * С чем игрок пришёл на экран забега: начать новый или продолжить
  * сохранённый. Намерение нужно именно потому, что экран монтируется и сам —
  * и тогда его нет вовсе (docs/27-design-system-and-app-shell.md §7).
  */
-export type RunIntent = { kind: "new" } | { kind: "resume"; snapshot: RunSnapshot };
+export type RunIntent = { kind: "new"; boosts?: BoughtBoosts } | { kind: "resume"; snapshot: RunSnapshot };
+
+/**
+ * Бусты, купленные на новый забег до «В бой» (docs/35-stage4-plan.md §3.5):
+ * сервер записал покупку на этот id, и забег обязан начаться с ним.
+ */
+export interface BoughtBoosts {
+  runId: string;
+  ids: string[];
+}
 
 /** Что знает о забеге сам экран; продолжать или начинать — решает стор. */
 export type RunEntryOptions = Omit<RunStartOptions, "resume">;
+
+/**
+ * Что показать перед новым забегом игрока — межстраничную рекламу
+ * (docs/35-stage4-plan.md WP12, часть 10). Её отдаёт экран забега: так
+ * первая загрузка, где живёт стор, не платит за дорогу к рекламе. `null` —
+ * ждать нечего, забег стартует сразу; `alive` — забег ещё ждут.
+ */
+export type BeforeNewRun = (alive: () => boolean) => Promise<"shown" | "skipped"> | null;
 
 export interface RunStartOptions {
   container: HTMLElement;
@@ -66,6 +84,10 @@ export interface RunStartOptions {
   pixelRatio?: number;
   /** продолжить сохранённый забег вместо нового */
   resume?: RunSnapshot;
+  /** бусты, купленные на этот забег; у продолженного — свои из снимка */
+  boosts?: BoughtBoosts;
+  /** межстраничная перед «Играть» и «Ещё раз»; нет — забег без неё */
+  beforeNewRun?: BeforeNewRun;
 }
 
 /**
@@ -95,6 +117,8 @@ export interface RunStore {
   devInfo: RunDevInfo | null;
   /** сколько продолжений ещё можно взять — на экране смерти */
   continuesLeft: number;
+  /** «Ещё раз» нажато: новый забег ждёт межстраничную — не дольше двух секунд до её показа */
+  restarting: boolean;
 
   start(options: RunStartOptions): Promise<void>;
   pause(reason: RunPauseReason): void;
@@ -181,6 +205,7 @@ const IDLE = {
   devRun: false,
   devInfo: null as RunDevInfo | null,
   continuesLeft: 0,
+  restarting: false,
 };
 
 export const useRun = create<RunStore>((set, get) => ({
@@ -205,8 +230,9 @@ export const useRun = create<RunStore>((set, get) => ({
     const saved = useSavedRun.getState().saved;
     const resume =
       intent?.kind === "resume" ? intent.snapshot : intent === null ? (saved ?? undefined) : undefined;
+    const boosts = intent?.kind === "new" ? intent.boosts : undefined;
 
-    await get().start({ ...options, ...(resume === undefined ? {} : { resume }) });
+    await get().start({ ...options, ...(resume === undefined ? {} : { resume }), ...(boosts === undefined ? {} : { boosts }) });
   },
 
   async start(options: RunStartOptions): Promise<void> {
@@ -215,6 +241,7 @@ export const useRun = create<RunStore>((set, get) => ({
 
     const token = ++startToken;
     const resume = options.resume;
+    const bought = resume === undefined ? options.boosts : undefined;
     const seed = resume?.seed ?? nextSeed();
     set({ ...IDLE, phase: "loading", loadingStage: "engine", seed });
     startOptions = options;
@@ -229,10 +256,25 @@ export const useRun = create<RunStore>((set, get) => ({
       // Движок приходит отдельным чанком; обычно он уже предзагружен из лобби
       // (`preloadRunEngine`), и ожидание здесь мгновенное
       // (docs/27-design-system-and-app-shell.md §3.4).
-      const engine = await loadRunEngine();
+      // Снимок снаряжения — своим чанком, параллельно с движком. Не
+      // загрузился — забег идёт без снаряжения, а не падает целиком.
+      // Межстраничная — новому забегу игрока и тоже параллельно с движком
+      // (docs/35-stage4-plan.md WP12, часть 10): продолженный забег и забег
+      // разработчика её не ждут.
+      const playerRun = resume === undefined && !(devModeAllowed() && useDevMode.getState().armed);
+      const ad = (playerRun ? options.beforeNewRun?.(() => token === startToken) : null) ?? "skipped";
+      const [engine, loadouts, adResult] = await Promise.all([loadRunEngine(), import("./run-loadouts").catch(() => null), ad]);
+      // Время до первого кадра с рекламой посередине — уже не время загрузки: такой замер не пишем.
+      if (adResult === "shown") firstFrameStartedAt = null;
       // Пока грузился чанк, нас могли остановить или запустить заново. Игру
       // в этом случае не создаём вовсе: лишний контекст WebGL дороже всего.
-      if (token !== startToken) return;
+      if (token !== startToken) {
+        // Новая попытка с той же покупкой — это не отказ от забега: в режиме
+        // разработки React запускает экран дважды, и первый старт прерывает
+        // второй. Возврат — только если с этой покупкой больше никто не стартует.
+        if (startOptions?.boosts?.runId !== bought?.runId) releaseBought(bought, set, get);
+        return;
+      }
       set({ loadingStage: "world" });
 
       const diagnostics = useDiagnostics.getState();
@@ -244,6 +286,19 @@ export const useRun = create<RunStore>((set, get) => ({
       // через сутки — иначе панель разработчика пропадает по дороге.
       const devRun =
         devModeAllowed() && (useDevMode.getState().armed || resume?.dev === true || resume?.cheats === true);
+      // Снаряжение — из подписанного снимка на устройстве: забег без сети
+      // начинается с надетым. Продолженный забег берёт набор из своего
+      // снимка, а надетое с тех пор могло смениться.
+      const signed = resume === undefined && loadouts !== null ? loadouts.equippedLoadout() : null;
+      // Купленные бусты — новому забегу; бесплатные бусты разработчика — если
+      // не куплено ничего. Продолженный забег несёт свои из снимка.
+      const devBoosts = devRun && resume === undefined ? (useDevMode.getState().settings.start.boosts ?? []) : [];
+      const boostIds = bought?.ids ?? devBoosts;
+      // Уровень аккаунта — из того же снимка: он открывает оружие, навыки и
+      // слоты (docs/35-stage4-plan.md §3.13). Без снимка — первый уровень.
+      // Забегу разработчика открыто всё: он проверяет контент, а не путь
+      // новичка.
+      const accountLevel = devRun ? undefined : (loadouts?.runLevelOf(signed) ?? 1);
       const created = engine.start({
         container: options.container,
         seed,
@@ -260,9 +315,19 @@ export const useRun = create<RunStore>((set, get) => ({
         ...(resume === undefined ? {} : { resume }),
         ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),
         // Второй шанс — в забеге разработчика бесплатно, а игроку — если его
-        // можно купить: иначе смерть ждала бы решения, которого не принять
-        // (docs/34-stage3-plan.md, WP5).
-        continues: devRun || canOfferPaidContinue(),
+        // можно купить или взять за рекламу: иначе смерть ждала бы решения,
+        // которого не принять (docs/34-stage3-plan.md, WP5; WP11).
+        continues: devRun || canOfferContinue(),
+        ...(resume !== undefined || (signed === null && boostIds.length === 0 && accountLevel === undefined)
+          ? {}
+          : {
+              loadout: {
+                modifiers: signed === null || loadouts === null ? {} : loadouts.knownModifiers(signed),
+                boosts: [...boostIds],
+                ...(accountLevel === undefined ? {} : { accountLevel }),
+              },
+            }),
+        ...(bought === undefined ? {} : { runId: bought.runId }),
       });
 
       if (token !== startToken) {
@@ -272,7 +337,7 @@ export const useRun = create<RunStore>((set, get) => ({
       }
 
       session = created;
-      unsubscribes = subscribe(created, set, get);
+      unsubscribes = subscribe(created, set, get, signed === null || loadouts === null ? null : (runId) => loadouts.rememberRunLoadout(runId, signed));
       if (devRun) unsubscribes.push(followDevSettings(created));
       set({ intent: null, devRun });
       // Продолженный забег движок сам ставит на паузу или на выбор — фазу
@@ -299,6 +364,8 @@ export const useRun = create<RunStore>((set, get) => ({
       });
     } catch (error: unknown) {
       reportError("run", `движок не загрузился: ${String(error)}`);
+      // Забег не начался — купленные на него бусты возвращаются.
+      releaseBought(bought, set, get);
       firstFrameStartedAt = null;
       set({ phase: "error", loadingStage: null, errorMessage: "error.engine" });
     }
@@ -343,26 +410,24 @@ export const useRun = create<RunStore>((set, get) => ({
   },
 
   restart(): void {
-    if (session === null) return;
+    if (session === null || get().restarting) return;
     // «Ещё раз» с экрана смерти — отказ от второго шанса: забег закрывается
     // смертью раньше, чем начнётся следующий.
     if (get().phase === "downed") session.declineContinue();
-    const seed = nextSeed();
-    const devRun = get().devRun;
-    set({ ...IDLE, phase: "running", seed, devRun });
-    lastSavedSec = 0;
-    errorsAtRunStart = clientErrorCount();
-    session.restart(seed);
-    setRunUiMode(true);
-
-    track("run_started", {
-      seed,
-      weapon: startOptions?.startingWeaponId ?? "",
-      map: startOptions?.mapId ?? "",
-      difficulty: startOptions?.difficultyId ?? "",
-      screenMode: screenModeNow(),
-      orientation: orientationNow(),
-      devMode: devRun,
+    // Межстраничная — до нового забега, пока на экране итог прошлого
+    // (docs/35-stage4-plan.md WP12, часть 10). Ушли в меню, пока её ждали, —
+    // нового забега нет: экран забега уже разобран.
+    const token = startToken;
+    const ad = get().devRun ? null : (startOptions?.beforeNewRun?.(() => token === startToken) ?? null);
+    if (ad === null) {
+      restartSession(set, get);
+      return;
+    }
+    set({ restarting: true });
+    void ad.then(() => {
+      if (token !== startToken || session === null) return;
+      set({ restarting: false });
+      restartSession(set, get);
     });
   },
 
@@ -395,15 +460,56 @@ export const useRun = create<RunStore>((set, get) => ({
   },
 }));
 
+/** Тот же экран — новый забег: сцена жива, экран загрузки только мигнул бы. */
+function restartSession(set: SetState, get: GetState): void {
+  if (session === null) return;
+  const seed = nextSeed();
+  const devRun = get().devRun;
+  set({ ...IDLE, phase: "running", seed, devRun });
+  lastSavedSec = 0;
+  errorsAtRunStart = clientErrorCount();
+  session.restart(seed);
+  setRunUiMode(true);
+
+  track("run_started", {
+    seed,
+    weapon: startOptions?.startingWeaponId ?? "",
+    map: startOptions?.mapId ?? "",
+    difficulty: startOptions?.difficultyId ?? "",
+    screenMode: screenModeNow(),
+    orientation: orientationNow(),
+    devMode: devRun,
+  });
+}
+
+/**
+ * Вернуть бусты забегу, который не начался. Не дошло — сервер вернёт сам
+ * фоновым проходом, поэтому ошибка только пишется. Из намерения бусты
+ * снимаются сразу: повтор «В бой» с экрана ошибки или повторный заход на экран
+ * забега не должны начать забег с бустами, которых уже нет.
+ */
+function releaseBought(bought: BoughtBoosts | undefined, set: SetState, get: GetState): void {
+  if (bought === undefined) return;
+  const intent = get().intent;
+  if (intent?.kind === "new" && intent.boosts?.runId === bought.runId) set({ intent: { kind: "new" } });
+  import("./boosts-api")
+    .then(({ refundBoosts }) => refundBoosts(bought.runId))
+    .catch((error: unknown) => reportError("boosts", `возврат бустов: ${String(error)}`));
+}
+
 type SetState = (partial: Partial<RunStore>) => void;
 type GetState = () => RunStore;
 
-function subscribe(created: RunSession, set: SetState, get: GetState): (() => void)[] {
+function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadout: ((runId: string) => void) | null): (() => void)[] {
   return [
     // Старт — в очередь сразу, раньше итога: по нему сервер сверит длительность
     // забега со своими часами (docs/34-stage3-plan.md, WP4). Продолженный
-    // забег события не присылает — его начало уже было.
-    created.on("started", (started) => useRuns.getState().registerStart(started)),
+    // забег события не присылает — его начало уже было, и снимок снаряжения
+    // к нему привязан тогда же: итог понесёт его серверу.
+    created.on("started", (started) => {
+      bindLoadout?.(started.runId);
+      useRuns.getState().registerStart(started);
+    }),
     created.on("hud", (hud) => {
       // Первый снимок HUD — первый кадр забега: сцена создана и мир живёт.
       if (firstFrameStartedAt !== null) {
@@ -591,7 +697,22 @@ function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, 
     isNewRecord,
     cheats: result.cheats,
     continues: result.continues.length,
+    ...elementDamageFields(result.damageByElement),
   };
+}
+
+/**
+ * Урон по стихиям плоскими полями `damagePhysical` … `damagePoison`
+ * (docs/22-analytics-and-metrics.md §3.3): payload плоский. Нули тоже едут —
+ * у каждого забега одинаковый набор столбцов, и доля стихии считается без
+ * оглядки на пропуски.
+ */
+function elementDamageFields(damage: RunResult["damageByElement"]): Record<string, number> {
+  const fields: Record<string, number> = {};
+  for (const element of ELEMENTS) {
+    fields[`damage${element.charAt(0).toUpperCase()}${element.slice(1)}`] = Math.round(damage[element] ?? 0);
+  }
+  return fields;
 }
 
 /**
@@ -670,6 +791,7 @@ export function preloadRunEngine(): void {
   if (connection?.saveData === true || navigator.onLine === false) return;
 
   preloading = true;
+  void import("./run-loadouts").catch(() => undefined);
   loadRunEngine().catch((error: unknown) => {
     preloading = false;
     reportError("run", `предзагрузка движка не удалась: ${String(error)}`);
@@ -677,14 +799,12 @@ export function preloadRunEngine(): void {
 }
 
 /**
- * Режим забега на стороне площадки: вертикальные свайпы выключаются, иначе
- * движение пальцем вниз по джойстику сворачивает приложение; подтверждение
- * закрытия включается, чтобы случайный жест не оборвал забег (§5.2).
+ * Режим забега на стороне площадки: подтверждение закрытия включается, чтобы
+ * случайный жест не оборвал забег (§5.2). Вертикальные свайпы выключены на
+ * всё время работы игры — их выключает запуск оболочки (`index.tsx`).
  */
 function setRunUiMode(inRun: boolean): void {
-  const ui = useShell.getState().adapter.ui;
-  ui.setVerticalSwipesEnabled(!inRun);
-  ui.setClosingConfirmation(inRun);
+  useShell.getState().adapter.ui.setClosingConfirmation(inRun);
 }
 
 /**

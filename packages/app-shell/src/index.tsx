@@ -14,7 +14,7 @@ import { useSavedRun } from "./state/run-save";
 import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
-import { usePlaytest } from "./state/playtest";
+import { useTools } from "./state/tools";
 import { useRuns } from "./state/runs";
 import { recoverDownedRun } from "./state/run";
 import { useSettings } from "./state/settings";
@@ -82,6 +82,11 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // Заставке отступы не нужны — она по центру.
   await options.adapter.ui.ready();
   options.adapter.ui.applyThemeColors(PLATFORM_COLORS);
+  // Свайп вниз сворачивает Mini App не только в забеге: в меню карусель,
+  // списки и листы снизу тоже тянут пальцем, и тестеры ловили сворачивание
+  // посреди жеста. Закрыть игру можно кнопкой площадки
+  // (docs/33-telegram-mini-app-pitfalls.md §2.3).
+  options.adapter.ui.setVerticalSwipesEnabled(false);
 
   renderBoot("fonts");
   const fontsLoaded = await waitForFonts(FONT_WAIT_MS);
@@ -107,22 +112,56 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
 
   render(<App />);
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
-  // них игрок не должен ждать заставку. Затем профиль: рекорд, поставленный
-  // на другом устройстве, появляется на главной.
+  // них игрок не должен ждать заставку. Затем профиль и кошелёк: рекорд,
+  // поставленный на другом устройстве, появляется на главной, награды за
+  // досланные забеги — в шапке и уровне.
   void useRuns
     .getState()
     .flush("launch")
-    .then(() => useRuns.getState().loadProfile());
-  void usePlaytest.getState().loadAccess();
+    .then(() =>
+      Promise.all([
+        useRuns.getState().loadProfile(),
+        // Кошелёк и уровень — отдельным чанком: запрос к ним не нужен первому кадру.
+        import("./state/progress-api").then(({ loadAccountState }) => loadAccountState()),
+      ]),
+    );
+  void useTools.getState().loadAccess();
   // Сессия игрока — отдельным чанком после главной: деньгам и рейтингу она
   // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический
   // импорт утащил бы её и клиента авторизации в первую загрузку.
+  let stopAccountSync = (): void => undefined;
+  let unmounted = false;
   if (options.capabilities.auth !== undefined) {
     import("./state/session")
-      .then(({ useSession }) => useSession.getState().signIn())
+      .then(({ useSession }) => {
+        // Настройки аккаунта — при каждом появлении сессии, а не только на
+        // запуске: вход мог наладиться по «Повторить» или смениться аккаунт
+        // (docs/35-stage4-plan.md, WP29). Продление токена сессию не меняет.
+        if (unmounted) return;
+        stopAccountSync = useSession.subscribe((state, previous) => {
+          const accountId = state.status === "ready" ? state.account?.accountId : undefined;
+          if (accountId === undefined || (previous.status === "ready" && previous.account?.accountId === accountId)) return;
+          import("./state/account-settings")
+            .then(({ syncAccountSettings }) => syncAccountSettings(accountId))
+            .catch((error: unknown) => console.warn("Настройки аккаунта не загрузились:", error));
+          // Предупреждение о тесте — до первой покупки, на аккаунт
+          // (docs/35-stage4-plan.md WP33).
+          import("./state/test-notice")
+            .then(({ syncTestNotice }) => syncTestNotice())
+            .catch((error: unknown) => console.warn("Предупреждение о тесте не загрузилось:", error));
+          // Знаки меню и колокольчик — тогда же и на каждом возврате в
+          // приложение (docs/35-stage4-plan.md §3.17).
+          import("./state/badges-api")
+            .then(({ loadBadges, watchReturns }) => {
+              watchReturns();
+              return loadBadges();
+            })
+            .catch((error: unknown) => console.warn("Знаки меню не загрузились:", error));
+        });
+        return useSession.getState().signIn();
+      })
       .catch((error: unknown) => console.warn("Вход не загрузился:", error));
   }
-  void usePlaytest.getState().reportSession();
   const stopTelemetry = startTelemetry(options, telemetrySink.attach);
   // Записи забегов, не ушедшие в прошлый раз, досылаются после главной. Чанк
   // очереди грузится, только если в ней что-то лежит: у обычного игрока пусто.
@@ -146,6 +185,8 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
       stopAudio();
       stopErrorReporting();
       stopTelemetry();
+      unmounted = true;
+      stopAccountSync();
       root.unmount();
     },
   };

@@ -1,13 +1,14 @@
 import { CanActivate, ExecutionContext, Inject, Injectable, SetMetadata } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import {
   DisabledError,
   ForbiddenError,
   PayloadTooLargeError,
   RateLimitedError,
 } from "../../common/domain-error.js";
-import { verifyInitData } from "../telegram/telegram-init-data.js";
+import { LaunchVerifiers } from "../../platforms/ports/launch-verifier.js";
 import { INGEST_LIMITS, type IngestKind } from "./ingest-limits.js";
 import { RateLimiter } from "./rate-limiter.js";
 
@@ -43,8 +44,10 @@ interface IngestRequest {
 export class IngestGuard implements CanActivate {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly switches: FeatureSwitches,
     private readonly reflector: Reflector,
     private readonly limiter: RateLimiter,
+    private readonly launches: LaunchVerifiers,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -69,11 +72,11 @@ export class IngestGuard implements CanActivate {
   }
 
   private enabled(kind: IngestKind): boolean {
-    if (kind === "events") return this.config.ingest.eventsEnabled;
+    if (kind === "events") return this.switches.eventsIngest();
     // Отзывы принимаются, пока есть куда их писать: своего выключателя у формы
     // нет — она и появилась, чтобы игроку было куда сказать.
     if (kind === "feedback") return this.config.databaseUrl !== "";
-    return this.config.ingest.reportsEnabled;
+    return this.switches.reportsIngest();
   }
 
   /**
@@ -89,15 +92,14 @@ export class IngestGuard implements CanActivate {
     }
   }
 
+  /** Подпись запуска площадки в `Authorization: <схема> <данные>` — схема называет площадку. */
   private platformUserId(request: IngestRequest): string | null {
     const authorization = headerOf(request, "authorization") ?? "";
-    if (!authorization.startsWith("tma ") || this.config.telegram.botToken === "") return null;
-    const check = verifyInitData(
-      authorization.slice(4),
-      this.config.telegram.botToken,
-      this.config.ingest.initDataMaxAgeSec,
-      Date.now(),
-    );
+    const space = authorization.indexOf(" ");
+    if (space <= 0) return null;
+    const verifier = this.launches.byScheme(authorization.slice(0, space));
+    if (verifier === null || !verifier.configured) return null;
+    const check = verifier.verify(authorization.slice(space + 1), this.config.ingest.initDataMaxAgeSec, Date.now());
     return check.ok ? check.player.id : null;
   }
 }

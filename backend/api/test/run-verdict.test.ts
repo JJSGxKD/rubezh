@@ -31,6 +31,8 @@ function run(patch: Partial<VerdictInput> = {}): VerdictInput {
     paidContinues: 0,
     underpaidContinues: false,
     cheats: false,
+    loadout: "none",
+    boosts: "none",
     ...patch,
   };
 }
@@ -133,5 +135,23 @@ describe("второй шанс в вердикте", () => {
       verdict: "suspicious",
       reasons: ["underpaid_continue"],
     });
+  });
+});
+
+describe("снаряжение в вердикте", () => {
+  it("снимок, которого сервер не подписывал, — отказ; устаревший — подозрение; настоящий — обычный забег", () => {
+    expect(judgeRun(run({ loadout: "forged" }), limits)).toEqual({ verdict: "rejected", reasons: ["loadout_forged"] });
+    expect(judgeRun(run({ loadout: "stale" }), limits)).toEqual({ verdict: "suspicious", reasons: ["loadout_stale"] });
+    expect(judgeRun(run({ loadout: "valid" }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ loadout: "none" }), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("снимок с уровнем выше уровня аккаунта — отказ: открытое по нему игроку не положено", () => {
+    expect(judgeRun(run({ loadout: "level_ahead" }), limits)).toEqual({ verdict: "rejected", reasons: ["loadout_level_ahead"] });
+  });
+
+  it("буст, не купленный на забег, — отказ: без оплаты честный клиент его не применит", () => {
+    expect(judgeRun(run({ boosts: "unpaid" }), limits)).toEqual({ verdict: "rejected", reasons: ["boost_unpaid"] });
+    expect(judgeRun(run({ boosts: "paid" }), limits)).toEqual({ verdict: "ok", reasons: [] });
   });
 });

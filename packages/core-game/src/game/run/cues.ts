@@ -58,7 +58,8 @@ export class CueTracker {
     for (let seq = Math.max(this.eventsRead, events.written - capacity); seq < events.written; seq++) {
       const slot = seq % capacity;
       const kind = events.kind[slot];
-      if (kind === SIM_EVENT.playerHit) cues.playerHit++;
+      // Удар, погашенный щитом, — всё равно удар: игрок должен его почувствовать.
+      if (kind === SIM_EVENT.playerHit || kind === SIM_EVENT.shield) cues.playerHit++;
       else if (kind === SIM_EVENT.heal) cues.heal++;
       else if (kind === SIM_EVENT.magnet) cues.magnet++;
       else if (kind === SIM_EVENT.dynamite) cues.dynamite++;

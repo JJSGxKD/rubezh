@@ -5,10 +5,12 @@ import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { createQueueConnection } from "../../infra/queues.js";
+import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import { RunsHooks } from "../runs/runs-hooks.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "./payment-confirmation.js";
 import { PaymentRefunds } from "./payment-refunds.js";
-import type { RefundOrder } from "./purchases.repository.js";
+import { PurchaseFulfillment } from "./purchase-fulfillment.js";
+import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, type RefundOrder } from "./purchases.repository.js";
 
 /**
  * Очередь оплаты: подтверждения от Telegram и возвраты звёзд идут через неё,
@@ -21,6 +23,10 @@ import type { RefundOrder } from "./purchases.repository.js";
  * ложится в Redis, а запись в базу повторяется с паузой, пока не пройдёт, и
  * переживает перезапуск процесса. Возврат — так же: не прошёл — повтор, а не
  * молча (docs/34-stage3-plan.md, WP5, п. 5.2).
+ *
+ * Товар магазина выдаётся тем же заданием, последним шагом: не вышло —
+ * задание повторяется целиком, запись оплаты отвечает «уже записано», а
+ * выдача идемпотентна ключом покупки.
  *
  * Redis недоступен — задание выполняется сразу: оплата не должна ждать
  * очередь. Не вышло и так — ошибка в лог со всеми полями оплаты: по ним
@@ -53,11 +59,14 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     private readonly confirmation: PaymentConfirmation,
     private readonly refunds: PaymentRefunds,
     private readonly runsHooks: RunsHooks,
+    private readonly providers: PaymentProviders,
+    private readonly fulfillment: PurchaseFulfillment,
+    @Inject(PURCHASES_REPOSITORY) private readonly purchases: Pick<PurchasesRepository, "markFulfilled">,
   ) {}
 
-  /** Оплату есть куда записать и есть кому о ней сообщить: база и бот, читающий обновления. */
+  /** Оплату есть куда записать и есть кому о ней сообщить: база и площадка, которая присылает подтверждения. */
   get enabled(): boolean {
-    return this.config.auth.enabled && this.config.telegram.updates !== "off";
+    return this.config.auth.enabled && this.providers.anyConfirms;
   }
 
   onModuleInit(): void {
@@ -108,6 +117,21 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     // Возврат заказывается после записи оплаты и отдельным заданием: упавший
     // возврат не должен повторять запись оплаты.
     await this.refundAll(this.refunds.afterConfirm(outcome, data.payment));
+    await this.fulfill(outcome);
+  }
+
+  /**
+   * Выдать оплаченное — и после повтора: `duplicate` — это и повтор
+   * обновления, и повтор задания, у которого упала выдача. Выданное второй
+   * раз не выдаётся: у выдачи свой ключ в журнале.
+   */
+  private async fulfill(outcome: ConfirmOutcome): Promise<void> {
+    if (outcome.kind !== "paid" && outcome.kind !== "duplicate") return;
+    const { purchase } = outcome;
+    if (purchase.fulfilledAt !== null) return;
+    if (!(await this.fulfillment.fulfill(purchase))) return;
+    await this.purchases.markFulfilled(purchase.purchaseId, new Date());
+    this.log("log", "purchase_fulfilled", { purchaseId: purchase.purchaseId, accountId: purchase.accountId, sku: purchase.sku });
   }
 
   private async refundAll(orders: Promise<RefundOrder[]>): Promise<void> {
@@ -156,10 +180,10 @@ function fingerprint(chargeId: string): string {
 function describeJob(job: PaymentsJob): Record<string, unknown> {
   if (job.kind === "refund") {
     const { order } = job;
-    return { kind: job.kind, chargeId: order.chargeId, purchaseId: order.purchaseId, userId: order.userId, reason: order.reason };
+    return { kind: job.kind, platform: order.platform, chargeId: order.chargeId, purchaseId: order.purchaseId, payerId: order.payerId, reason: order.reason };
   }
   const { payment } = job;
-  return { kind: job.kind, chargeId: payment.chargeId, purchaseId: payment.payload, userId: payment.userId, stars: payment.totalAmount };
+  return { kind: job.kind, platform: payment.platform, chargeId: payment.chargeId, purchaseId: payment.payload, payerId: payment.payerId, amount: payment.totalAmount };
 }
 
 function reasonOf(error: unknown): string {

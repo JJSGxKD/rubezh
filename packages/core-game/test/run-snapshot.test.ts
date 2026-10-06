@@ -74,7 +74,8 @@ function roundTrip(run: Run): unknown {
 }
 
 describe("снимок забега", () => {
-  it("продолженный забег идёт ровно так же, как непрерванный", () => {
+  // Гоняет мир минутами: в полном прогоне монорепо пяти секунд Vitest не хватает.
+  it("продолженный забег идёт ровно так же, как непрерванный", { timeout: 30_000 }, () => {
     const original = newRun(4242);
     advance(original, 60 * 60);
     const saved = roundTrip(original);

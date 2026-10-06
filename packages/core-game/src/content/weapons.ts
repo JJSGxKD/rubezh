@@ -16,7 +16,9 @@ import type { WeaponDef } from "@bh/shared-types";
 //  * оружие, которое бьёт по площади или пробивает, на бумаге слабее в уроне:
 //    оно попадает по нескольким целям сразу.
 //
-// Тексты — ключи i18n (docs/01-tech-stack.md §7).
+// Тексты — ключи i18n (docs/01-tech-stack.md §7). На каком уровне аккаунта
+// оружие открывается и можно ли взять его стартовым — `content/unlocks.ts`:
+// стартовым берётся любое открытое (Р41).
 export const WEAPONS: WeaponDef[] = [
   {
     // Ровное оружие без условий: бьёт в ближайшего, промахов не бывает. По
@@ -25,7 +27,6 @@ export const WEAPONS: WeaponDef[] = [
     behavior: "projectile_nearest",
     nameKey: "weapon.spark.name",
     descriptionKey: "weapon.spark.description",
-    starting: true,
     levels: [
       { damage: 6, cooldownSec: 0.28, projectiles: 1, projectileSpeed: 520, ttlSec: 1.6 },
       { damage: 7, cooldownSec: 0.26, projectiles: 1, projectileSpeed: 540, ttlSec: 1.6 },
@@ -44,7 +45,6 @@ export const WEAPONS: WeaponDef[] = [
     behavior: "projectile_facing",
     nameKey: "weapon.knife.name",
     descriptionKey: "weapon.knife.description",
-    starting: true,
     levels: [
       { damage: 6, cooldownSec: 0.4, projectiles: 2, pierce: 1, projectileSpeed: 640, ttlSec: 1.2 },
       { damage: 7, cooldownSec: 0.38, projectiles: 2, pierce: 1, projectileSpeed: 660, ttlSec: 1.2 },
@@ -69,16 +69,17 @@ export const WEAPONS: WeaponDef[] = [
     behavior: "orbit",
     nameKey: "weapon.wardstone.name",
     descriptionKey: "weapon.wardstone.description",
-    starting: true,
+    // Холод: камни замедляют тех, кто подошёл вплотную, — оберег и держит толпу.
+    element: "cold",
     levels: [
-      { damage: 11, cooldownSec: 0.4, projectiles: 1, areaRadius: 60, projectileSpeed: 380 },
-      { damage: 12, cooldownSec: 0.38, projectiles: 2, areaRadius: 64, projectileSpeed: 395 },
-      { damage: 14, cooldownSec: 0.36, projectiles: 2, areaRadius: 68, projectileSpeed: 410 },
-      { damage: 16, cooldownSec: 0.34, projectiles: 3, areaRadius: 74, projectileSpeed: 425 },
-      { damage: 18, cooldownSec: 0.32, projectiles: 4, areaRadius: 80, projectileSpeed: 440 },
-      { damage: 20, cooldownSec: 0.31, projectiles: 4, areaRadius: 86, projectileSpeed: 455 },
-      { damage: 22, cooldownSec: 0.3, projectiles: 5, areaRadius: 92, projectileSpeed: 470 },
-      { damage: 24, cooldownSec: 0.28, projectiles: 6, areaRadius: 98, projectileSpeed: 490 },
+      { damage: 11, cooldownSec: 0.4, projectiles: 1, areaRadius: 60, projectileSpeed: 380, statusChance: 0.2 },
+      { damage: 12, cooldownSec: 0.38, projectiles: 2, areaRadius: 64, projectileSpeed: 395, statusChance: 0.22 },
+      { damage: 14, cooldownSec: 0.36, projectiles: 2, areaRadius: 68, projectileSpeed: 410, statusChance: 0.24 },
+      { damage: 16, cooldownSec: 0.34, projectiles: 3, areaRadius: 74, projectileSpeed: 425, statusChance: 0.26 },
+      { damage: 18, cooldownSec: 0.32, projectiles: 4, areaRadius: 80, projectileSpeed: 440, statusChance: 0.28 },
+      { damage: 20, cooldownSec: 0.31, projectiles: 4, areaRadius: 86, projectileSpeed: 455, statusChance: 0.3 },
+      { damage: 22, cooldownSec: 0.3, projectiles: 5, areaRadius: 92, projectileSpeed: 470, statusChance: 0.32 },
+      { damage: 24, cooldownSec: 0.28, projectiles: 6, areaRadius: 98, projectileSpeed: 490, statusChance: 0.35 },
     ],
   },
   {
@@ -88,15 +89,17 @@ export const WEAPONS: WeaponDef[] = [
     behavior: "aura",
     nameKey: "weapon.hearth.name",
     descriptionKey: "weapon.hearth.description",
+    // Огонь: очаг поджигает тех, кто задержался рядом, — горит и после ухода из зоны.
+    element: "fire",
     levels: [
-      { damage: 3, cooldownSec: 0.5, areaRadius: 80 },
-      { damage: 4, cooldownSec: 0.5, areaRadius: 88 },
-      { damage: 5, cooldownSec: 0.45, areaRadius: 96 },
-      { damage: 6, cooldownSec: 0.42, areaRadius: 104 },
-      { damage: 7, cooldownSec: 0.38, areaRadius: 112 },
-      { damage: 9, cooldownSec: 0.35, areaRadius: 120 },
-      { damage: 11, cooldownSec: 0.32, areaRadius: 130 },
-      { damage: 13, cooldownSec: 0.28, areaRadius: 140 },
+      { damage: 3, cooldownSec: 0.5, areaRadius: 80, statusChance: 0.15 },
+      { damage: 4, cooldownSec: 0.5, areaRadius: 88, statusChance: 0.17 },
+      { damage: 5, cooldownSec: 0.45, areaRadius: 96, statusChance: 0.19 },
+      { damage: 6, cooldownSec: 0.42, areaRadius: 104, statusChance: 0.21 },
+      { damage: 7, cooldownSec: 0.38, areaRadius: 112, statusChance: 0.23 },
+      { damage: 9, cooldownSec: 0.35, areaRadius: 120, statusChance: 0.25 },
+      { damage: 11, cooldownSec: 0.32, areaRadius: 130, statusChance: 0.27 },
+      { damage: 13, cooldownSec: 0.28, areaRadius: 140, statusChance: 0.3 },
     ],
   },
   {
@@ -108,15 +111,38 @@ export const WEAPONS: WeaponDef[] = [
     behavior: "area_strike",
     nameKey: "weapon.storm.name",
     descriptionKey: "weapon.storm.description",
+    // Молния: удар шокирует, а следующий удар по шокированному перескакивает на соседей.
+    element: "lightning",
     levels: [
-      { damage: 10, cooldownSec: 2.8, projectiles: 1, areaRadius: 52 },
-      { damage: 12, cooldownSec: 2.6, projectiles: 1, areaRadius: 58 },
-      { damage: 14, cooldownSec: 2.4, projectiles: 1, areaRadius: 66 },
-      { damage: 16, cooldownSec: 2.15, projectiles: 2, areaRadius: 74 },
-      { damage: 19, cooldownSec: 1.9, projectiles: 2, areaRadius: 84 },
-      { damage: 22, cooldownSec: 1.7, projectiles: 3, areaRadius: 94 },
-      { damage: 26, cooldownSec: 1.5, projectiles: 3, areaRadius: 106 },
-      { damage: 30, cooldownSec: 1.3, projectiles: 4, areaRadius: 120 },
+      { damage: 10, cooldownSec: 2.8, projectiles: 1, areaRadius: 52, statusChance: 0.35 },
+      { damage: 12, cooldownSec: 2.6, projectiles: 1, areaRadius: 58, statusChance: 0.38 },
+      { damage: 14, cooldownSec: 2.4, projectiles: 1, areaRadius: 66, statusChance: 0.41 },
+      { damage: 16, cooldownSec: 2.15, projectiles: 2, areaRadius: 74, statusChance: 0.44 },
+      { damage: 19, cooldownSec: 1.9, projectiles: 2, areaRadius: 84, statusChance: 0.48 },
+      { damage: 22, cooldownSec: 1.7, projectiles: 3, areaRadius: 94, statusChance: 0.52 },
+      { damage: 26, cooldownSec: 1.5, projectiles: 3, areaRadius: 106, statusChance: 0.56 },
+      { damage: 30, cooldownSec: 1.3, projectiles: 4, areaRadius: 120, statusChance: 0.6 },
+    ],
+  },
+  {
+    // Яд: медленная пробивающая игла в ближайшего. Урон попадания скромный —
+    // сила в слоях: игла прошивает строй, и каждый задетый травится сильнее
+    // с каждым следующим попаданием. Шанс к восьмому уровню — каждое
+    // попадание, и тогда генератор не нужен вовсе.
+    id: "sting",
+    behavior: "projectile_nearest",
+    nameKey: "weapon.sting.name",
+    descriptionKey: "weapon.sting.description",
+    element: "poison",
+    levels: [
+      { damage: 4, cooldownSec: 0.46, projectiles: 1, pierce: 2, projectileSpeed: 480, ttlSec: 1.6, statusChance: 0.6 },
+      { damage: 5, cooldownSec: 0.43, projectiles: 1, pierce: 2, projectileSpeed: 490, ttlSec: 1.6, statusChance: 0.65 },
+      { damage: 5, cooldownSec: 0.4, projectiles: 2, pierce: 2, projectileSpeed: 500, ttlSec: 1.7, statusChance: 0.7 },
+      { damage: 6, cooldownSec: 0.37, projectiles: 2, pierce: 3, projectileSpeed: 510, ttlSec: 1.7, statusChance: 0.75 },
+      { damage: 7, cooldownSec: 0.34, projectiles: 2, pierce: 3, projectileSpeed: 520, ttlSec: 1.8, statusChance: 0.8 },
+      { damage: 8, cooldownSec: 0.32, projectiles: 3, pierce: 3, projectileSpeed: 530, ttlSec: 1.8, statusChance: 0.85 },
+      { damage: 9, cooldownSec: 0.3, projectiles: 3, pierce: 4, projectileSpeed: 540, ttlSec: 1.9, statusChance: 0.9 },
+      { damage: 11, cooldownSec: 0.27, projectiles: 3, pierce: 4, projectileSpeed: 560, ttlSec: 1.9, statusChance: 1 },
     ],
   },
 ];

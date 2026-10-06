@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { BotModule } from "../bot/bot.module.js";
+import { BotModule } from "../../platforms/telegram/bot.module.js";
 import { FeedbackBotCommand } from "./feedback-bot.command.js";
 import { FeedbackController } from "./feedback.controller.js";
 import { FEEDBACK_REPOSITORY, PrismaFeedbackRepository } from "./feedback.repository.js";

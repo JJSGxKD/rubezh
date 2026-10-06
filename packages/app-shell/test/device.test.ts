@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { describeDevice, osOf, type DeviceEnvironment } from "../src/state/device";
 
 // Сведения об устройстве для статистики плейтеста: семейство ОС и тип
@@ -28,5 +28,37 @@ describe("устройство", () => {
   it("не отправляет строку user-agent — только разбор", () => {
     const device = describeDevice({ platform: "ios", version: "8.0" }, env({ userAgent: "iPhone; secret build 123" }));
     expect(JSON.stringify(device)).not.toContain("secret");
+  });
+});
+
+describe("сведения на ходу", () => {
+  it("смена окна и плотности зовёт пересчёт, отписка снимает слушателей", async () => {
+    const { watchEnvironment } = await import("../src/state/device");
+    const window = new EventTarget();
+    const queries: EventTarget[] = [];
+    vi.stubGlobal("addEventListener", window.addEventListener.bind(window));
+    vi.stubGlobal("removeEventListener", window.removeEventListener.bind(window));
+    vi.stubGlobal("matchMedia", () => {
+      const query = new EventTarget();
+      queries.push(query);
+      return query;
+    });
+    let calls = 0;
+    const stop = watchEnvironment(() => {
+      calls++;
+    });
+
+    window.dispatchEvent(new Event("resize"));
+    expect(calls).toBe(1);
+    // Плотность сменилась — окно на другом мониторе: пересчёт и новый запрос.
+    queries[0]?.dispatchEvent(new Event("change"));
+    expect(calls).toBe(2);
+    expect(queries).toHaveLength(2);
+
+    stop();
+    window.dispatchEvent(new Event("resize"));
+    queries[1]?.dispatchEvent(new Event("change"));
+    expect(calls).toBe(2);
+    vi.unstubAllGlobals();
   });
 });

@@ -1,4 +1,4 @@
-import { DIFFICULTY_IDS, type RunResult } from "@bh/shared-types";
+import { DIFFICULTY_IDS, ELEMENTS, type RunResult } from "@bh/shared-types";
 import { z } from "zod/mini";
 import { createPersistedValue } from "./persisted";
 import { reportError, useShell } from "./shell";
@@ -32,6 +32,9 @@ const resultSchema = z.object({
   killsByEnemy: z.record(z.string(), z.number()),
   damageDealt: z.number(),
   damageTaken: z.number(),
+  // Забег, брошенный на экране смерти до сборки со стихиями, урона по ним не
+  // несёт — и не должен из-за этого пропасть.
+  damageByElement: z._default(z.partialRecord(z.enum(ELEMENTS), z.number()), {}),
   weapons: z.array(z.object({ id: z.string(), level: z.number(), damage: z.number() })),
   passives: z.array(z.object({ id: z.string(), level: z.number() })),
   deathCause: z.nullable(z.string()),

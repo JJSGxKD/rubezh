@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Crosshair, History, Hourglass, Lightbulb, Shuffle, Swords } from "lucide-react";
+import { Crosshair, Flame, History, Hourglass, Lightbulb, Shuffle, Swords } from "lucide-react";
+import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
 import { DIFFICULTIES, DROPS, LOADOUT_LIMITS } from "@bh/core-game";
 import {
@@ -22,11 +23,14 @@ import {
   passiveRange,
   regularEnemies,
   speedClass,
-  startingWeapons,
-  unlockableWeapons,
+  firstLevelWeapons,
+  levelWeapons,
+  unlockLevel,
+  weaponElement,
   weaponGrowth,
   type GuideEnemy,
 } from "./guide-data";
+import { ElementList, ElementTag, ResistLine } from "./elements";
 import { EnemyScene, GemRow, PickupIcon, StageMark, WeaponScene } from "./scenes";
 
 /**
@@ -141,7 +145,11 @@ function Basics(): ReactNode {
         </div>
       </Topic>
 
-      <Topic index={6} icon={<Swords size={20} />} title={t("guide.basics.difficulty.title")} text={t("guide.basics.difficulty.text")}>
+      <Topic index={6} icon={<Flame size={20} />} title={t("guide.basics.elements.title")} text={t("guide.basics.elements.text")}>
+        <ElementList />
+      </Topic>
+
+      <Topic index={7} icon={<Swords size={20} />} title={t("guide.basics.difficulty.title")} text={t("guide.basics.difficulty.text")}>
         <ul className="grid gap-2">
           {DIFFICULTIES.map((difficulty) => (
             <li key={difficulty.id} className="surface-sunken rounded-md px-3 py-2">
@@ -160,7 +168,9 @@ function Basics(): ReactNode {
         </ul>
       </Topic>
 
-      <Topic index={7} icon={<History size={20} />} title={t("guide.basics.save.title")} text={t("guide.basics.save.text")} />
+      <Topic index={8} icon={<History size={20} />} title={t("guide.basics.save.title")} text={t("guide.basics.save.text")} />
+
+      <Topic index={9} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
     </>
   );
 }
@@ -253,6 +263,7 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
             {t("guide.enemy.stats", { hp: def.hp, damage: def.damage, xp: def.xp })} ·{" "}
             {t(`guide.enemy.speed.${speedClass(def.speed)}`).toLowerCase()}
           </p>
+          <ResistLine def={def} />
           {children.length === 0 ? null : (
             <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
               <Shuffle size={12} aria-hidden="true" className="shrink-0" />
@@ -279,11 +290,11 @@ function Weapons(): ReactNode {
     <>
       <p className="text-sm text-text-muted">{t("guide.weapons.intro")}</p>
       <SectionTitle>{t("guide.weapons.starting")}</SectionTitle>
-      {startingWeapons().map((weapon, index) => (
+      {firstLevelWeapons().map((weapon, index) => (
         <WeaponCard key={weapon.id} weapon={weapon} index={index} />
       ))}
       <SectionTitle>{t("guide.weapons.unlockable")}</SectionTitle>
-      {unlockableWeapons().map((weapon, index) => (
+      {levelWeapons().map((weapon, index) => (
         <WeaponCard key={weapon.id} weapon={weapon} index={index} />
       ))}
     </>
@@ -293,6 +304,7 @@ function Weapons(): ReactNode {
 function WeaponCard(props: { weapon: WeaponDef; index: number }): ReactNode {
   const { weapon } = props;
   const name = t(weapon.nameKey);
+  const element = weaponElement(weapon);
 
   return (
     <Card appearIndex={Math.min(props.index, 6)} stripe="weapon">
@@ -304,7 +316,8 @@ function WeaponCard(props: { weapon: WeaponDef; index: number }): ReactNode {
               <ItemIcon kind="weapon" id={weapon.id} size={16} />
             </span>
             <h3 className="font-display text-base font-bold text-text">{name}</h3>
-            {weapon.starting === true ? <Badge tone="weapon">{t("guide.weapon.starting")}</Badge> : null}
+            <UnlockBadge level={unlockLevel("weapon", weapon.id)} />
+            {element === null ? null : <ElementTag element={element} />}
           </div>
           <p className="mt-1 text-sm text-text-muted">{t(`guide.behavior.${weapon.behavior}`)}</p>
         </div>
@@ -331,6 +344,11 @@ function WeaponCard(props: { weapon: WeaponDef; index: number }): ReactNode {
   );
 }
 
+/** С какого уровня аккаунта открыто; открытое с первого — без значка, его видит каждый. */
+function UnlockBadge(props: { level: number }): ReactNode {
+  return props.level > 1 ? <Badge tone="muted">{t("guide.unlock.level", { level: props.level })}</Badge> : null;
+}
+
 function Upgrades(): ReactNode {
   return (
     <>
@@ -349,7 +367,10 @@ function Upgrades(): ReactNode {
                   <ItemTile kind="passive" id={passive.id} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                      <h3 className="font-display text-base font-bold text-text">{t(passive.nameKey)}</h3>
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <h3 className="font-display text-base font-bold text-text">{t(passive.nameKey)}</h3>
+                        <UnlockBadge level={unlockLevel("passive", passive.id)} />
+                      </span>
                       <span className="text-xs text-text-muted">
                         {t("guide.upgrades.levels", { count: passive.levels.length })}
                       </span>

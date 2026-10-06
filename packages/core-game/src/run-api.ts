@@ -1,4 +1,4 @@
-import type { DifficultyId, RunOutcome, RunResult, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -37,6 +37,18 @@ export interface BossSnapshot {
   phases: number;
 }
 
+/**
+ * Состояние на игроке для HUD (docs/35-stage4-plan.md, WP6). Игрок должен
+ * понимать, почему здоровье тает без попаданий и почему он бежит медленнее.
+ */
+export interface PlayerStatusSnapshot {
+  element: StatusElement;
+  /** сколько секунд ещё держится */
+  sec: number;
+  /** слоёв яда; у остальных состояний — 1 */
+  stacks: number;
+}
+
 export interface HudSnapshot {
   survivalSec: number;
   hp: number;
@@ -57,6 +69,15 @@ export interface HudSnapshot {
   radar: RadarSnapshot;
   /** живой босс, если он на поле; у элиты полосы нет */
   boss: BossSnapshot | null;
+  /** состояния на игроке, от важнейшего для боя; пусто — чист */
+  statuses: PlayerStatusSnapshot[];
+  /** сколько попаданий ещё погасит щит буста; 0 — щита нет */
+  shield: number;
+  /**
+   * id бустов забега — применённые движком, в порядке набора. За забег не
+   * меняются, и снимок отдаёт тот же массив, а не копию каждые 100 мс.
+   */
+  boosts: readonly string[];
 }
 
 /**
@@ -119,6 +140,8 @@ export interface RunInspection {
   };
   weapons: RunWeaponInspection[];
   passives: RunPassiveInspection[];
+  /** id бустов забега, в порядке набора; пусто — забег без бустов */
+  boosts: string[];
 }
 
 export interface RunWeaponInspection {
@@ -160,7 +183,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 6;
+export const RUN_SNAPSHOT_FORMAT = 7;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,
@@ -193,6 +216,8 @@ export interface RunSnapshot {
    * остаться забегом разработчика, а не превратиться тихо в обычный.
    */
   dev?: boolean;
+  /** набор на забег; нет поля — забег без снаряжения, в том числе снимок прошлой сборки */
+  loadout?: RunLoadout;
 }
 
 export interface RunSnapshotSummary {
@@ -236,6 +261,18 @@ export interface RunOptions {
    * купить негде.
    */
   continues?: boolean;
+  /**
+   * Снаряжение и бусты на забег (docs/35-stage4-plan.md §3.3, WP7) — из
+   * подписанного снимка надетого. Без поля — забег без снаряжения. Продолженный
+   * забег берёт набор из своего снимка, а не этот: надетое могло смениться.
+   */
+  loadout?: RunLoadout;
+  /**
+   * id забега, если его выдала оболочка: бусты покупаются на забег до старта,
+   * и итог должен прийти с тем же id. Без поля движок заводит id сам.
+   * «Ещё раз» заводит новый и бусты не переносит.
+   */
+  runId?: string;
 }
 
 /**
@@ -363,6 +400,11 @@ export interface RunRecording {
    * прошлой сборки поля не знает, и это забег без второго шанса.
    */
   continues?: number[];
+  /**
+   * Набор на забег — снаряжение и бусты. Нет поля — забег без снаряжения:
+   * без набора повтор снаряжённого забега разошёлся бы с первого удара.
+   */
+  loadout?: RunLoadout;
   /** свёртка мира раз в минуту забега: где повтор разошёлся с оригиналом */
   checkpoints: [tick: number, checksum: number][];
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import { BotPoller, type BotPollerLocks, type PollerBotApi } from "../src/modules/bot/bot-poller.js";
-import { BotRouter, type BotUpdateHandler } from "../src/modules/bot/bot-router.js";
-import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { BotPoller, type BotPollerLocks, type PollerBotApi } from "../src/platforms/telegram/bot-poller.js";
+import { BotRouter, type BotUpdateHandler } from "../src/platforms/telegram/bot-router.js";
+import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { multipartOf } from "./helpers/multipart.js";
 
 // Бот: откуда приходят обновления, куда уходят и как говорить с Bot API
@@ -145,6 +145,33 @@ describe("клиент Bot API", () => {
 
     const limited = recorder({ ok: false, error_code: 429, description: "Too Many Requests", parameters: { retry_after: 12 } }, 429);
     await expect(limited.api.sendMessage(CHAT, "x")).rejects.toMatchObject({ errorCode: 429, retryAfterSec: 12 });
+  });
+
+  it("готовит сообщение для shareMessage: статья с кнопкой, в личку, группы и каналы, не в чаты ботов", async () => {
+    const { calls, api } = recorder({ ok: true, result: { id: "abc", expiration_date: 1_790_000_000 } });
+    const prepared = await api.savePreparedInlineMessage(424242, {
+      id: "invite-1",
+      title: "Играть вместе",
+      description: "Откроешь — и мы друзья",
+      text: "Зову тебя в игру",
+      button: { text: "▶ Играть", url: "https://t.me/bot/play?startapp=f-x" },
+    });
+
+    expect(prepared).toEqual({ id: "abc", expiresAt: new Date(1_790_000_000_000) });
+    expect(calls[0]?.url).toContain("/savePreparedInlineMessage");
+    expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({
+      user_id: 424242,
+      result: {
+        type: "article",
+        id: "invite-1",
+        input_message_content: { message_text: "Зову тебя в игру" },
+        reply_markup: { inline_keyboard: [[{ text: "▶ Играть", url: "https://t.me/bot/play?startapp=f-x" }]] },
+      },
+      allow_user_chats: true,
+      allow_group_chats: true,
+      allow_channel_chats: true,
+      allow_bot_chats: false,
+    });
   });
 
   it("обрывает зависший запрос по сигналу: срок задаёт вызов, а не транспорт", async () => {

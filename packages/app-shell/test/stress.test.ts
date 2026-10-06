@@ -122,8 +122,8 @@ describe("стресс-тест в оболочке", () => {
     expect(useStress.getState().phase).toBe("loading");
     expect(fake.started[0]).toMatchObject({ buildVersion: "0.3.0" });
     expect(fake.started[0]?.device).toMatchObject({ userAgent: "", telegramUserId: null, telegramPlatform: "android" });
-    // На прогоне случайный свайп не сворачивает приложение.
-    expect(uiCalls).toEqual(["swipes:false", "confirm:true"]);
+    // На прогоне закрытие переспрашивает; свайпы выключены ещё на запуске оболочки.
+    expect(uiCalls).toEqual(["confirm:true"]);
 
     fake.emit("progress", PROGRESS);
     expect(useStress.getState()).toMatchObject({ phase: "running", progress: PROGRESS });
@@ -195,6 +195,7 @@ describe("стресс-тест в оболочке", () => {
     expect(fake.stopped()).toBe(1);
     useStress.getState().dispose();
     expect(fake.destroyed()).toBe(1);
-    expect(uiCalls.at(-2)).toBe("swipes:true");
+    expect(uiCalls.at(-1)).toBe("confirm:false");
+    expect(uiCalls).not.toContain("swipes:true");
   });
 });

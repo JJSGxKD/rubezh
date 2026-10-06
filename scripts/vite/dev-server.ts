@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { PreviewOptions, ServerOptions } from "vite";
 import { contentSecurityPolicy } from "./content-security-policy";
+import { adminOrigins } from "./preview-origins";
 
 /**
  * Настройки dev-сервера, общие для трёх площадок (docs/20-env-and-ports.md §4).
@@ -34,6 +35,12 @@ export interface DevServerInput {
   tunnelHostVar: string;
   /** прокси на локальный API — только у Telegram */
   proxy?: ServerOptions["proxy"];
+  /** пускать ли аналитику Graspil в политику — только Telegram с заданным ключом */
+  graspil?: boolean;
+  /** реклама сетей в политике — у Telegram-сборки (content-security-policy.ts) */
+  ads?: boolean;
+  /** страница предпросмотра для панели — у Telegram-сборки (preview-origins.ts) */
+  preview?: boolean;
 }
 
 export interface DevServerConfig {
@@ -41,7 +48,7 @@ export interface DevServerConfig {
   preview: PreviewOptions;
 }
 
-export function devServerConfig({ env, repoRoot, port, tunnelHostVar, proxy }: DevServerInput): DevServerConfig {
+export function devServerConfig({ env, repoRoot, port, tunnelHostVar, proxy, graspil = false, ads = false, preview = false }: DevServerInput): DevServerConfig {
   const tunnelHost = (env[tunnelHostVar] ?? "").trim();
   const lanHost = (env.DEV_LAN_HOST ?? "").trim();
 
@@ -75,7 +82,7 @@ export function devServerConfig({ env, repoRoot, port, tunnelHostVar, proxy }: D
   // видно здесь, а не у тестера.
   const apiOrigin = (env.VITE_API_URL ?? "").trim();
   const policy = (mode: "dev" | "build") => ({
-    headers: { "content-security-policy": contentSecurityPolicy({ mode, apiOrigin }) },
+    headers: { "content-security-policy": contentSecurityPolicy({ mode, apiOrigin, graspil, ads, adminOrigins: preview ? adminOrigins(env, mode === "dev") : [] }) },
   });
 
   return {

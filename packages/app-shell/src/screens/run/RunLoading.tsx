@@ -3,6 +3,7 @@ import { Check, Lightbulb } from "lucide-react";
 import { Emblem, ProgressBar } from "../../design-system/components";
 import { DURATION } from "../../design-system/tokens";
 import { t } from "../../i18n";
+import "../../i18n/run";
 import type { RunLoadingStage } from "../../state/run";
 import { ItemTile } from "../item-icons";
 

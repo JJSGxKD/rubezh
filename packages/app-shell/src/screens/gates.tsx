@@ -25,8 +25,9 @@ export type BootStage = (typeof BOOT_STAGES)[number];
 
 /**
  * Заставка запуска. Раскладка повторяет заставку из index.html — знак, имя,
- * полоса, — поэтому смена статичной разметки на React не видна глазом, а
- * полоса продолжает движение с того места, где её оставила разметка.
+ * слоган, полоса, — поэтому смена статичной разметки на React не видна
+ * глазом, а полоса продолжает движение с того места, где её оставила
+ * разметка. Бренд живёт здесь и в «Об игре», а не на главной (Р76).
  */
 export function BootScreen(props: { stage: BootStage; version: string }): ReactNode {
   const done = BOOT_STAGES.indexOf(props.stage) + 1;
@@ -35,6 +36,7 @@ export function BootScreen(props: { stage: BootStage; version: string }): ReactN
     <Centered still>
       <Emblem size={88} animated />
       <Wordmark size="l" />
+      <p className="max-w-[300px] text-sm text-text-muted landscape:hidden">{t("lobby.tagline")}</p>
       <div className="mt-4 w-48">
         <ProgressBar
           value={done}
@@ -129,7 +131,10 @@ export function FirstRunScreen(props: { onAccept(): void }): ReactNode {
           <ShieldCheck size={24} />
         </IconEmblem>
         <h1 className="font-display text-xl font-bold text-text">{t("gate.firstRun.title")}</h1>
-        <p className="max-w-[340px] text-sm text-text-muted">{t("gate.firstRun.text")}</p>
+        {/* Предупреждение о тесте — первым: новичок видит его раньше первого
+            забега, где уже можно купить второй шанс (docs/35-stage4-plan.md WP33). */}
+        <p className="max-w-[340px] text-sm font-semibold text-text">{t("gate.firstRun.text")}</p>
+        <p className="max-w-[340px] text-sm text-text-muted">{t("gate.firstRun.data")}</p>
         <Button size="l" block glow onClick={props.onAccept}>
           {t("gate.firstRun.action")}
         </Button>

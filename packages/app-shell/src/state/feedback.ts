@@ -68,6 +68,17 @@ export const useFeedback = create<FeedbackStore>((set) => ({
   },
 }));
 
+/**
+ * Сведения об устройстве — команде (docs/35-stage4-plan.md Р56): тем же
+ * путём, что отзыв, в чат команды и в базу. Отзыв это не заменяет: карточка
+ * на главной по-прежнему позовёт его оставить.
+ */
+export async function shareDeviceInfo(text: string): Promise<FeedbackFailure | null> {
+  const failure = await post({ topic: "device_info" }, text.slice(0, FEEDBACK_TEXT_MAX));
+  if (failure === null) track("feedback_sent", { answers: 1, hasText: true, runs: useMeta.getState().runs, kind: "device_info" });
+  return failure;
+}
+
 /** Звать ли игрока оставить отзыв: после первого забега и раз в десять забегов. */
 export function shouldAskFeedback(runs: number, sentAtRuns: number | null): boolean {
   if (runs < 1) return false;
@@ -79,7 +90,10 @@ export function feedbackQuestions(): typeof FEEDBACK_QUESTIONS {
   return FEEDBACK_QUESTIONS;
 }
 
-async function post(answers: FeedbackAnswers, text: string): Promise<FeedbackFailure | null> {
+/** Сведения об устройстве помечены темой: сервер проверяет форму ответов, а не состав опроса. */
+type DeviceInfoTopic = { topic: "device_info" };
+
+async function post(answers: FeedbackAnswers | DeviceInfoTopic, text: string): Promise<FeedbackFailure | null> {
   const { capabilities, adapter, build } = useShell.getState();
   if (capabilities.telemetry === undefined) return "unavailable";
 

@@ -43,16 +43,80 @@ erDiagram
         string photo_url "nullable"
         datetime created_at
         datetime last_seen_at
-        datetime banned_at "nullable"
-        string ban_reason "nullable"
+        datetime banned_at "nullable: отметка блокировки целиком для входа — из ACCOUNT_RESTRICTION"
+        string ban_reason "nullable: текст игроку — что, до когда и почему"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN ||--o{ PURCHASE : "продолжен за"
+    PURCHASE ||--o{ PURCHASE : "продлена"
     ACCOUNT ||--o{ ACCOUNT_SESSION : "запускает игру"
     ACCOUNT ||--o| ACQUISITION : "пришёл через"
+    ACCOUNT ||--o| ACCOUNT_FUNNEL : "прошёл вехи"
+    ACCOUNT ||--o| ACCOUNT_MESSAGING : "можно ли писать"
+    ACCOUNT ||--o{ WALLET_ENTRY : "журнал кошелька"
+    ACCOUNT ||--o{ WALLET_BALANCE : "баланс по ресурсу"
+    ACCOUNT ||--o{ WALLET_DAILY : "начислено за сутки"
+    ACCOUNT ||--o{ ITEM : "инвентарь"
+    ITEM ||--o{ ITEM_EVENT : "журнал предмета"
+    ACCOUNT ||--o{ RUN_BOOST : "бусты на забег"
+    ACCOUNT ||--o| ACCOUNT_PROGRESS : "уровень и опыт"
+    ACCOUNT ||--o| ACCOUNT_SETTINGS : "настройки для всех устройств"
+    ACCOUNT ||--o{ NOTIFICATION : "лента уведомлений"
+    ACCOUNT ||--o| DAILY_REWARD : "награда дня"
+    ACCOUNT ||--o| CHANGELOG_SEEN : "открывал журнал обновлений"
+    CHANGELOG_SOURCE |o--o| CHANGELOG_ENTRY : "строка пришла из PR"
+    ACCOUNT ||--o{ RUN_REWARD : "награды за забеги"
+    ACCOUNT ||--o| FRIEND_LINK : "ссылка дружбы"
+    ACCOUNT ||--o{ FRIENDSHIP : "дружит (обе стороны пары)"
+    ACCOUNT ||--o{ FRIEND_REQUEST : "заявки: от кого и кому"
+    ACCOUNT ||--o{ FRIEND_GIFT : "подарки: от кого и кому"
+    ACCOUNT ||--o| REFERRAL_BINDING : "кем приглашён — один раз"
+    ACCOUNT ||--o{ REFERRAL_BINDING : "кого пригласил"
+    ACCOUNT ||--o{ FRIEND_RETURN : "вернулся по ссылке друга / помог вернуть"
+    ACCOUNT ||--o{ FRIEND_BONUS : "забранные ступени бонуса за друзей"
+    LINK ||--o{ LINK_CLICK : "клики; краулеры превью не пишутся"
+    LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
+    LINK ||--o{ AD_CONVERSION : "конверсии в сеть ссылки"
+    LINK_CLICK ||--o{ AD_CONVERSION : "клик, который привёл новичка"
+    ACCOUNT ||--o{ AD_CONVERSION : "новичок из рекламы"
+    PURCHASE |o--o| AD_CONVERSION : "оплата — первая или повторная покупка"
+    FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
+    BROADCAST ||--o{ BROADCAST_DELIVERY : "доставка каждому получателю"
+    ACCOUNT ||--o{ BROADCAST_DELIVERY : "получал рассылки"
+    BROADCAST }o..o| LINK : "кнопка — ссылка кампании, без внешнего ключа"
+    ACCOUNT ||--o{ WHEEL_SPIN : "крутки колеса"
+    ACCOUNT ||--o{ TASK_PROGRESS : "прогресс заданий по срокам"
+    TASK_DEF ||--o{ TASK_PROGRESS : "цель каталога"
+    TASK_DEF ||--o{ TASK_PARTICIPANT : "игроки партнёрской цели"
+    ACCOUNT ||--o{ TASK_PARTICIPANT : "переходы и выполнения партнёрских целей"
+    MEDIA_IMAGE |o--o{ TASK_DEF : "картинка 1:1 партнёрской цели"
+    MEDIA_IMAGE |o--o{ HOME_SLIDE : "картинка 1:1 слайда команды"
+    ACCOUNT ||--o{ TASK_RUN : "забеги, засчитанные заданиям"
+    ACCOUNT ||--o| TEST_NOTICE : "принял предупреждение о тесте"
+    AD_NETWORK ||--o{ AD_BLOCK : "блоки мест в кабинете сети"
+    AD_NETWORK ||--o| NETWORK_TASK : "строка её заданий во вкладке «Партнёры»"
+    AD_BLOCK ||--o{ AD_SESSION : "выдан в показ"
+    ACCOUNT ||--o{ AD_SESSION : "показы рекламы"
+    RUN ||--o{ RUN_AD_CONTINUE : "продолжен за рекламу"
+    ACCOUNT ||--o{ RUN_AD_CONTINUE : "рекламные продолжения за сутки"
+    ACCOUNT ||--o{ VIP_SUBSCRIPTION : "подписки VIP"
+    PURCHASE ||--o| VIP_SUBSCRIPTION : "первая покупка — id подписки"
+    VIP_SUBSCRIPTION ||--o{ VIP_PERIOD : "оплаченные периоды"
+    PURCHASE ||--o| VIP_PERIOD : "период за оплату"
+    ACCOUNT ||--o| VIP_DAILY : "самоцветы VIP дня"
+    ACCOUNT ||--o{ SHOWCASE_OFFER : "витрина снаряжения на сутки"
+    PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
+    PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
+    ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
+    PARTNER ||--o{ PROMO_CAMPAIGN : "коды партнёра"
+    PARTNER ||--o{ PARTNER_BINDING : "привёл игроков"
+    ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
+    PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
+    ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
+    ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -67,10 +131,12 @@ erDiagram
         float survival_sec "nullable"
         int level "nullable"
         int enemies_killed "nullable"
-        json weapons "nullable"
+        json weapons "nullable: id, уровень и урон к концу"
+        json details "nullable: навыки, получено урона, опыт, отрезок, пятёрка врагов — лист забега"
         boolean cheats
         float[] continues "секунда каждого второго шанса"
-        boolean ranked "в рейтинге: вердикт ok и без читов"
+        boolean ranked "в рейтинге: вердикт ok, без читов, рейтинг игроку не закрыт"
+        string rating_restricted "nullable: notified|silent — сдан под ограничением рейтинга, в рейтинг не идёт и потом"
         enum verdict "nullable: ok|suspicious|rejected"
         string[] verdict_reasons
     }
@@ -79,8 +145,8 @@ erDiagram
         uuid session_id PK
         uuid account_id FK
         enum platform
-        enum place "miniapp|web"
-        enum start_kind "organic|click|invite|telegram_affiliate|unknown"
+        enum place "miniapp|web|channel: channel — /start бота"
+        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|unknown"
         string start_param "nullable: из подписанного initData"
         string start_ref "nullable: код клика, id партнёра Telegram"
         string client_platform "nullable: подсказка клиента"
@@ -106,13 +172,225 @@ erDiagram
         string last_start_ref "nullable"
     }
 
+    ACCOUNT_FUNNEL {
+        uuid account_id PK,FK
+        datetime entered_at "nullable: вошёл в канал площадки"
+        datetime app_opened_at "nullable: полная регистрация"
+        datetime first_run_started_at "nullable"
+        datetime first_run_finished_at "nullable"
+        int runs_recorded "счётчик для вех второго и пятого"
+        datetime runs_2_at "nullable"
+        datetime runs_5_at "nullable"
+        datetime returned_d1_at "nullable: по московским суткам"
+        datetime returned_d7_at "nullable"
+        datetime first_purchase_at "nullable: только настоящая оплата"
+    }
+
+    ACCOUNT_MESSAGING {
+        uuid account_id PK,FK
+        boolean can_message
+        enum reason "entered|write_access|blocked|unblocked"
+        datetime changed_at "побеждает более позднее событие"
+    }
+
+    WALLET_ENTRY {
+        uuid entry_id PK
+        uuid account_id FK
+        enum resource "coins|gems|shard_common…shard_mythic"
+        bigint amount "со знаком, 0 — упёрлось в потолок"
+        string reason "run_reward, purchase, unlock, admin_adjust…"
+        string source "nullable: забег, покупка, admin:<кто>"
+        string idempotency_key UK "повтор упирается в индекс"
+        datetime created_at
+    }
+
+    WALLET_BALANCE {
+        uuid account_id PK,FK
+        enum resource PK
+        bigint balance "не меньше нуля, проекция журнала"
+        datetime updated_at
+    }
+
+    ITEM {
+        uuid item_id PK
+        uuid account_id FK
+        enum slot "weapon|amulet|gloves|armor|belt|boots"
+        enum rarity "common…mythic"
+        int level
+        bigint seed "зерно броска, Р14"
+        json rolls "броски свойств, не значения"
+        boolean equipped "в слоте один — частичный уникальный индекс"
+        string source "loot:<runId>, merge:<ключ>"
+        datetime removed_at "nullable: разобран или объединён"
+        datetime seen_at "nullable: лист не открывали — новый, знак арсенала"
+    }
+
+    RUN_BOOST {
+        string run_id PK "одна покупка на забег"
+        uuid account_id FK
+        string_array boosts "id бустов контента движка"
+        json cost "сколько списано: coins, gems"
+        datetime created_at
+        datetime refunded_at "nullable: забег так и не начался"
+    }
+
+    ITEM_EVENT {
+        uuid event_id PK
+        uuid item_id FK
+        uuid account_id FK
+        string kind "obtained|equipped|upgraded|rerolled|salvaged|merged…"
+        json payload "цена, зерно, было и стало"
+        string idempotency_key UK "повтор упирается в индекс"
+        datetime created_at
+    }
+
+    FX_QUOTE {
+        string source PK
+        string currency PK "код ядра: RUB, GRAM, XTR…"
+        decimal usd_per_unit "numeric(80,50): цена единицы в долларах"
+        datetime observed_at "когда курс видели у источника"
+        datetime saved_at
+    }
+
+    FX_RATE_CURRENT {
+        string currency PK
+        decimal usd_per_unit
+        string_array sources "голоса медианы"
+        datetime observed_at "по нему считается свежесть"
+        datetime accepted_at
+    }
+
+    FX_RATE_HISTORY {
+        uuid id PK
+        string currency
+        decimal usd_per_unit
+        string_array sources
+        datetime observed_at
+        datetime accepted_at "неизменный курс — не чаще раза в час"
+    }
+
+    FX_MANUAL_RATE {
+        uuid id PK
+        string currency "только валюты площадок"
+        string purpose "price — игроку, payout — нам"
+        decimal price "цена единицы в валюте котировки"
+        string quote "USD, EUR, RUB: звезда игроку — в рублях"
+        string set_by "кто поставил — и в аудите"
+        datetime set_at
+        datetime expires_at "просрочен — алерт и вне снимка"
+        string note
+    }
+
+    FX_SNAPSHOT {
+        uuid id PK "на него ссылаются цена и платёж"
+        datetime taken_at
+        json rates "цены для игрока, десятичные строкой"
+        json payout "курсы выплаты валют площадок"
+    }
+
+    FX_SOURCE_STATE {
+        string source PK
+        string month "ГГГГ-ММ по UTC"
+        int used "запросов в этом месяце"
+        datetime paused_until "nullable: после 429"
+        datetime next_poll_at
+    }
+
+    ACCOUNT_PROGRESS {
+        uuid account_id PK,FK
+        bigint xp "только растёт"
+        int level "по кривой из progress-rules.ts"
+        datetime updated_at
+    }
+
+    ACCOUNT_SETTINGS {
+        uuid account_id PK,FK
+        int version "версия набора ключей у последнего писавшего"
+        json values "ключ: значение и когда выбрано, мс UTC"
+        datetime updated_at
+    }
+
+    NOTIFICATION {
+        uuid notification_id PK
+        uuid account_id FK
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, app_update"
+        json payload "данные вида, по его схеме"
+        string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
+        datetime created_at
+        datetime read_at "nullable: не прочитано"
+        enum bot_outcome "nullable: sent|blocked|failed — дубль в бота"
+        datetime bot_at "nullable"
+    }
+
+    DAILY_REWARD {
+        uuid account_id PK
+        int claimed_days "сколько дней забрано всего: день недели и ступень — отсюда"
+        date last_claim_day "игровые сутки по Москве последнего забора"
+        datetime updated_at
+    }
+
+    CHANGELOG_ENTRY {
+        uuid entry_id PK
+        string version "X.Y.Z; рядом три числа для порядка — проверка базы не даёт им разойтись"
+        enum platforms "массив Platform; пусто — все площадки"
+        enum kind "added|changed|fixed"
+        string text "одно изменение, до 500 символов"
+        datetime published_at "nullable: черновик"
+        datetime created_at
+        datetime updated_at
+        uuid updated_by "nullable, без FK"
+    }
+
+    CHANGELOG_RELEASE {
+        string version PK
+        enum platforms "кому раздавать: площадки опубликованных строк версии"
+        datetime published_at "последняя публикация — поколение раздачи"
+        uuid cursor "nullable: последний аккаунт, которому раздали"
+        datetime done_at "nullable: раздача не закончена"
+    }
+
+    CHANGELOG_SEEN {
+        uuid account_id PK
+        datetime seen_at "когда открывал журнал; только растёт"
+    }
+
+    CHANGELOG_SOURCE {
+        string source_key PK "pr-<номер>-<строка>: раздел «Для игроков» влитого PR"
+        uuid entry_id FK "nullable, unique: строку удалили в панели — ключ остаётся"
+        datetime imported_at
+    }
+
+    RUN_REWARD {
+        string run_id PK "повтор задания упирается в ключ"
+        uuid account_id FK
+        int coins "по формуле забега"
+        int coins_credited "nullable: пусто, пока монеты не в кошельке"
+        int xp
+        int level_before
+        int level_after
+        string skipped "nullable: too_short, cheats, rejected"
+        datetime created_at
+        string double_session_id UK "nullable: сессия показа удвоения за рекламу, одна на забег"
+        datetime doubled_at "nullable: удвоение начислено; только с сессией"
+    }
+
+    WALLET_DAILY {
+        uuid account_id PK,FK
+        enum resource PK
+        string reason PK
+        date day PK "игровые сутки, по Москве"
+        bigint granted "блокируется на время начисления"
+    }
+
     PURCHASE {
         uuid purchase_id PK "он же payload счёта"
         uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
-        enum product "continue_run"
-        string run_id FK "UK вместе с continue_no"
-        int continue_no "какое продолжение забега, с единицы"
-        float elapsed_sec "секунда забега, по которой посчитана цена"
+        enum product "continue_run|shop_item|vip"
+        string run_id FK "nullable: только у второго шанса; UK вместе с continue_no"
+        int continue_no "nullable: какое продолжение забега, с единицы"
+        float elapsed_sec "nullable: секунда забега, по которой посчитана цена"
+        string sku "nullable: товар каталога магазина или план VIP — пусто только у continue_run"
+        string once_key UK "nullable: разовый товар — одна строка на товар и аккаунт"
         int price_stars "цена по правилу Р5.1 — её видит игрок"
         int charged_stars "сколько списано: в тестовом режиме — одна звезда"
         enum mode "live|test"
@@ -123,6 +401,8 @@ erDiagram
         enum refund_reason "nullable: test_mode|unused|external"
         datetime refund_requested_at "nullable"
         datetime refunded_at "nullable"
+        datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька, период VIP — записан"
+        uuid renewal_of FK "nullable: продление подписки — первая её покупка, по счёту которой площадка списывает периоды"
     }
 
     ACCOUNT_ROLE {
@@ -140,6 +420,23 @@ erDiagram
         json before "nullable"
         json after "nullable"
         datetime created_at
+    }
+
+    FEATURE_FLAG {
+        string key PK "shop.v2"
+        boolean enabled
+        enum platforms "пусто — все площадки"
+        int percent "доля игроков, 0–100"
+        string note "nullable"
+        uuid updated_by "nullable, без внешнего ключа"
+        datetime updated_at
+    }
+
+    APP_SETTING {
+        string key PK "notify.chat.general — ключ из каталога в коде"
+        json value "по схеме ключа, разбирается при чтении"
+        uuid updated_by "nullable, без внешнего ключа"
+        datetime updated_at
     }
 
     ANALYTICS_EVENT {
@@ -187,6 +484,430 @@ erDiagram
         datetime period_to
         datetime created_at
     }
+
+    FRIEND_LINK {
+        string code PK "случайный, ключ к строке — не данные"
+        uuid account_id FK,UK "одна ссылка на аккаунт, постоянная"
+        datetime created_at
+    }
+
+    FRIENDSHIP {
+        uuid account_a PK,FK "меньший идентификатор пары, CHECK a < b"
+        uuid account_b PK,FK
+        enum source "link|request"
+        datetime created_at
+    }
+
+    FRIEND_REQUEST {
+        uuid from_account_id PK,FK
+        uuid to_account_id PK,FK "CHECK: не самому себе"
+        datetime created_at "принятая или отклонённая — удаляется"
+    }
+
+    FRIEND_GIFT {
+        uuid from_account_id PK,FK
+        uuid to_account_id PK,FK
+        date day PK "игровые сутки по Москве: второй подарок дня — в ключ"
+        datetime created_at
+        datetime claimed_at "nullable: ещё не забран"
+    }
+
+    FRIEND_BONUS {
+        uuid account_id PK,FK
+        int friends PK "порог ступени: каждая один раз навсегда"
+        int coins "сколько обещала ступень в момент забора"
+        datetime claimed_at
+    }
+
+    REFERRAL_BINDING {
+        uuid referred_account_id PK,FK "привязка одна и навсегда"
+        uuid referrer_account_id FK "CHECK: не сам себе"
+        enum status "bound|activated|rejected"
+        datetime bound_at
+        datetime activated_at "nullable"
+        string reject_reason "nullable: same_network, moderator"
+    }
+
+    FRIEND_RETURN {
+        uuid returned_account_id PK,FK "CHECK: не сам себе"
+        uuid friend_account_id PK,FK
+        int period PK "сутки эпохи / длина периода: пара — раз в период"
+        datetime returned_at
+        datetime rewarded_at "nullable: ещё не сыграл"
+    }
+
+    LINK {
+        string code PK "случайный: /r/<код>"
+        enum platform "куда ведёт прямой режим"
+        string campaign
+        string source "nullable"
+        string medium "nullable"
+        string network "nullable: adsgram — сеть, куда уходят конверсии; CHECK"
+        string registration_on "first_run|launch: что сеть считает регистрацией"
+        uuid created_by "nullable, без внешнего ключа"
+        datetime created_at
+    }
+
+    LINK_CLICK {
+        string click_id PK "уходит в параметр запуска c-<код>"
+        string link_code FK
+        datetime at
+        string utm_source "nullable, и прочие utm_*"
+        string referer_host "nullable: только хост"
+        string device_class "nullable"
+        string ip_prefix "nullable: подсеть, не адрес"
+        string language "nullable"
+        json network_params "nullable: подставленные сетью макросы; обнуляются через 31 сутки"
+    }
+
+    AD_CONVERSION {
+        uuid conversion_id PK
+        string network "adsgram"
+        string link_code FK
+        string click_id FK "уникален с целью 1 и 2: одна регистрация и первая покупка на клик"
+        uuid account_id FK
+        int goal "1 регистрация, 2 первая покупка, 3 повторная; CHECK"
+        uuid purchase_id FK "nullable, уникален: у покупки — всегда, у регистрации — никогда"
+        enum status "pending|sent|failed|skipped"
+        string reason "nullable: no_token, team, no_macros"
+        int attempts
+        datetime next_attempt_at "очередь отправки"
+        int http_status "nullable: последний ответ сети"
+        string last_error "nullable: ответ сети, без токена"
+        datetime created_at
+        datetime sent_at "nullable: есть ровно у отправленной, CHECK"
+    }
+
+    FEATURE_FLAG {
+        string key PK "shop.v2: читает игра"
+        bool enabled
+        enum_array platforms "пусто — все площадки"
+        int percent "0–100, CHECK в базе"
+        string note "nullable"
+        uuid updated_by "nullable, без внешнего ключа"
+        datetime updated_at
+    }
+
+    BROADCAST {
+        uuid broadcast_id PK
+        string title
+        enum platform "бот какой площадки пишет"
+        string text "до 4096, неизменен после старта"
+        string button_text "nullable"
+        string button_url "nullable: /r/<код> на домене клиента"
+        string link_code "nullable: ссылка кампании рассылки"
+        json segment "фильтры аудитории, разбираются схемой"
+        enum status "draft|sending|paused|done|cancelled"
+        int audience "nullable: набрано на старте"
+        uuid created_by "без внешнего ключа, как и approved_by, started_by"
+        datetime started_at "nullable"
+        datetime finished_at "nullable"
+    }
+
+    BROADCAST_DELIVERY {
+        uuid broadcast_id PK,FK
+        uuid account_id PK,FK "пара — ключ: дважды не напишет"
+        enum status "queued|sent|blocked|failed"
+        int attempts "сколько раз площадка просила подождать"
+        string error "nullable: код отказа"
+        datetime sent_at "nullable"
+        datetime claimed_until "nullable: срок захвата заданием очереди"
+    }
+
+    WHEEL_SPIN {
+        uuid spin_id PK "ключ начисления в кошельке"
+        uuid account_id FK
+        enum source "free|ad; бесплатная — одна в сутки: частичный уникальный индекс"
+        date game_day "игровые сутки по Москве"
+        int sector "номер на экране, по часовой от стрелки"
+        enum resource "coins|shard_common|shard_uncommon"
+        int amount "сколько выпало, больше нуля"
+        datetime created_at
+        datetime granted_at "nullable: выпало, но кошелёк ещё не начислил"
+        string ad_session_id UK "nullable: сессия показа крутки за рекламу, одна крутка на сессию"
+    }
+
+    TASK_DEF {
+        string task_id PK "правится из панели; не удаляется, а выключается"
+        enum period "daily|weekly|achievement"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level; партнёрские — channel, link, bot"
+        json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
+        int target "больше нуля"
+        string title "nullable: текст по виду цели у клиента"
+        int coins
+        int gems
+        int shards "обычные осколки; награда не пустая"
+        int pass_points "очки батл-пасса (WP26)"
+        int completion_limit "nullable: сколько игроков получат награду партнёрской цели (Р82), 1–1 000 000"
+        int completions "игроков, выполнивших цель; растёт под блокировкой строки"
+        string image_id FK "nullable: картинка 1:1 партнёрской цели (Р82); пока ссылается — картинку не удалить"
+        int sort
+        boolean active
+        datetime created_at
+        datetime updated_at
+        uuid updated_by "nullable, без FK: null — строка из миграции"
+    }
+
+    MEDIA_IMAGE {
+        string image_id PK "SHA-256 содержимого: одинаковый файл — одна строка и один адрес"
+        string content_type "только image/webp"
+        int width
+        int height
+        int size_bytes "до 200 КБ, равен длине data"
+        bytea data "хранение EXTERNAL: WebP уже сжат"
+        datetime created_at
+        uuid created_by "nullable, без FK: картинка переживает аккаунт"
+    }
+
+    HOME_SLIDE {
+        uuid slide_id PK
+        string title "одна строка, до 32 знаков"
+        string text "одна строка, до 40 знаков"
+        string image_id FK "nullable: картинка 1:1; нет — значок icon"
+        string icon "megaphone, gift, trophy, calendar, sparkles"
+        string target_kind "screen или link — CHECK: ровно одно из target_screen и target_url"
+        string target_screen "nullable: экран игры из списка"
+        string target_url "nullable: только https"
+        enum_array platforms "Platform[], не пусто"
+        string audience "all, newbies, payers, nonpayers, vip"
+        boolean pinned "первым в карусели — раньше акции"
+        datetime starts_at
+        datetime ends_at "позже starts_at; не дольше 60 дней — сервис"
+        datetime created_at
+        uuid created_by "без FK: запись переживает аккаунт"
+        datetime updated_at
+        uuid updated_by "без FK"
+        datetime archived_at "nullable: снят; строка не удаляется"
+        uuid archived_by "nullable, вместе с archived_at"
+    }
+
+    TASK_PARTICIPANT {
+        string task_id PK,FK "только партнёрские цели"
+        uuid account_id PK,FK "одна строка на игрока, а не на срок"
+        datetime opened_at "nullable: последний переход до исчерпания — начало мягкого часа"
+        datetime completed_at "nullable: первое выполнение, место занято"
+    }
+
+    TASK_PROGRESS {
+        uuid account_id PK,FK
+        string task_id PK,FK
+        date period_start PK "сутки или понедельник по Москве; у достижений — общий день"
+        int value "не больше цели"
+        int target "цель на момент последнего движения"
+        datetime completed_at "nullable"
+        datetime claimed_at "nullable: только у выполненного"
+        datetime updated_at
+    }
+
+    TASK_RUN {
+        string run_id PK "забег засчитан заданиям однажды"
+        uuid account_id FK
+        datetime applied_at
+    }
+
+    TEST_NOTICE {
+        uuid account_id PK,FK
+        int version "последняя принятая версия текста, с первой"
+        datetime accepted_at "когда принята эта версия"
+        datetime first_accepted_at "первое принятие — не переписывается"
+    }
+
+    AD_NETWORK {
+        string network_key PK "adsgram, adsonar, richads, taddy"
+        string name
+        boolean active "из миграции — выключены"
+        int priority "меньше — раньше в круге"
+        json keys "публичные ключи по профилю сети: pubId, appId; объект"
+        datetime updated_at
+    }
+
+    NETWORK_TASK {
+        string network_key PK "FK ad_network; строки заводит миграция"
+        boolean active "выключено — строки сети у игроков нет"
+        int daily_cap "1–50 заданий за игровые сутки"
+        int pause_min "5–1440 минут после выполненного"
+        int coins
+        int gems
+        int shards "обычные осколки; награда не пустая"
+        datetime updated_at
+        uuid updated_by "nullable, без FK: null — строка из миграции"
+    }
+
+    AD_BLOCK {
+        uuid block_id PK
+        string network_key FK
+        enum place "second_chance|wheel_spin|run_double|task|interstitial"
+        string external_id "nullable: блок в кабинете сети; нет — показ по ключам сети"
+        enum success "view|click|cpa — условие успеха"
+        boolean active
+        enum_array platforms "пусто — все площадки"
+        string_array devices "android, ios, desktop, web; пусто — все"
+        datetime created_at
+        datetime updated_at
+        uuid updated_by "nullable, без FK"
+    }
+
+    AD_SESSION {
+        string session_id PK "12 случайных байт, не токен"
+        uuid account_id FK
+        enum place
+        uuid block_id FK "nullable: сессия пропуска рекламы (VIP) — без блока и ролика"
+        string network_key "копией: круг сетей без соединения; у пропуска — его имя"
+        enum success
+        enum status "pending|shown|completed|claimed|failed|expired"
+        datetime created_at
+        datetime shown_at "nullable"
+        datetime clicked_at "nullable"
+        datetime completed_at "nullable: условие успеха выполнено"
+        datetime claimed_at "nullable: только у выполненной"
+        datetime failed_at "nullable"
+        string fail_reason "nullable: код отказа SDK или сети с API"
+        datetime expires_at "позже created_at"
+        string creative_id "nullable: креатив сети с API — по нему сервер отмечает сети показ и досмотр"
+        int view_sec "nullable: досмотр креатива — не раньше стольких секунд от выдачи"
+    }
+
+    RUN_AD_CONTINUE {
+        string run_id PK "FK на run; вместе с continue_no"
+        int continue_no PK "какое по счёту продолжение забега, от 1"
+        uuid account_id FK "суточный потолок рекламных продолжений (Р4)"
+        string session_id UK "сессия показа места second_chance; без FK — модуль рекламы"
+        string network_key "сеть показа; у пропуска VIP — его имя"
+        datetime granted_at
+    }
+
+    VIP_SUBSCRIPTION {
+        uuid subscription_id PK,FK "первая покупка: по её счёту площадка списывает периоды"
+        uuid account_id FK
+        enum renewal "on|cancelled|failed"
+        enum cancelled_by "nullable: player|game — ровно у cancelled"
+        datetime created_at
+        datetime updated_at "оплата продления старше отмены её не перебивает"
+    }
+
+    VIP_PERIOD {
+        uuid purchase_id PK,FK "одна оплата — один период"
+        uuid subscription_id FK
+        uuid account_id FK
+        datetime starts_at "конец прежнего периода, если он не кончился к оплате, иначе оплата"
+        datetime ends_at "позже starts_at; конец VIP — самый поздний"
+        datetime created_at
+    }
+
+    VIP_DAILY {
+        uuid account_id PK,FK
+        date last_day "московские сутки последнего забора"
+        datetime updated_at
+    }
+
+    SHOWCASE_OFFER {
+        uuid offer_id PK
+        uuid account_id FK
+        date game_day "московские сутки; UK вместе с account_id и position"
+        int position "место на витрине"
+        enum slot
+        enum rarity
+        int level "1..30"
+        bigint seed "зерно бросков, как у предмета"
+        json rolls "броски: купленное совпадает с показанным"
+        int price_gems "больше нуля; цена на момент выставления"
+        datetime created_at
+        datetime sold_at "nullable"
+        uuid item_id "nullable, без FK: купленный предмет; есть ровно у проданного"
+    }
+
+    SHOP_PROMO {
+        uuid promo_id PK
+        string sku "товар каталога в коде, без FK"
+        int percent "5..80 — скидка от цены каталога"
+        datetime starts_at
+        datetime ends_at "позже начала; не дольше 14 дней"
+        string title "nullable: подпись баннера"
+        datetime created_at
+        uuid created_by "без FK: кто завёл"
+        datetime cancelled_at "nullable: снята раньше срока"
+        uuid cancelled_by "nullable, есть ровно у снятой"
+    }
+
+    PROMO_CAMPAIGN {
+        uuid campaign_id PK
+        string title "для команды, игрок не видит"
+        string kind "shared|batch"
+        json reward "coins, gems, shard_common, shard_uncommon"
+        string message "nullable: текст игроку после активации"
+        int max_redemptions "nullable у shared; у batch — число кодов"
+        int redeemed "не больше max_redemptions"
+        datetime starts_at
+        datetime ends_at "nullable: бессрочно; позже начала"
+        int new_players_days "nullable: 1..90 — только аккаунтам не старше"
+        string_array platforms "пусто — все площадки"
+        datetime paused_at "nullable"
+        string note "nullable: для команды"
+        uuid partner_id FK "nullable: код партнёра; null — подарок команды"
+        uuid created_by "без FK: кто завёл"
+        datetime created_at
+        datetime updated_at
+    }
+
+    PARTNER {
+        uuid partner_id PK
+        string name "как зовёт команда"
+        string contact "nullable: @имя, ссылка"
+        string note "nullable: договорённости"
+        uuid created_by "без FK"
+        datetime created_at
+        datetime updated_at
+    }
+
+    PARTNER_BINDING {
+        uuid account_id PK,FK "слот источника один: либо это, либо REFERRAL_BINDING"
+        uuid partner_id FK "партнёра с игроками не удалить"
+        uuid campaign_id FK "nullable: каким кодом"
+        datetime bound_at
+    }
+
+    PROMO_CODE {
+        string code PK "ключ: без регистра и разделителей, кириллица-двойник — латиницей"
+        string display "как показывать: ZIMA-K7MP-3XTE"
+        uuid campaign_id FK
+        uuid redeemed_by "nullable, без FK: кто погасил код пачки"
+        datetime redeemed_at "nullable, есть ровно у погашенного"
+    }
+
+    PROMO_REDEMPTION {
+        uuid campaign_id PK,FK "кампанию с активациями не удалить"
+        uuid account_id PK,FK
+        string code "какой код ввёл"
+        datetime redeemed_at
+        datetime rewarded_at "nullable: награда ещё не легла"
+        json credited "nullable: сколько легло — потолок кошелька мог срезать"
+    }
+
+    INTEGRATION_SECRET {
+        string key PK "fx.coingecko-pro — ключ из каталога в коде"
+        string key_id "отпечаток ключа шифрования, не сам ключ"
+        bytes iv "12 байт, своё на каждую запись"
+        bytes auth_tag "16 байт подписи GCM"
+        bytes ciphertext "значение — только шифртекстом"
+        uuid updated_by "nullable, без внешнего ключа"
+        datetime updated_at
+    }
+
+    ACCOUNT_RESTRICTION {
+        uuid restriction_id PK
+        uuid account_id FK "удалённый аккаунт уносит свои строки"
+        string kind "вид из каталога в коде: referral_rewards, promo_codes… и all — блокировка целиком"
+        datetime starts_at
+        datetime ends_at "nullable: бессрочно; позже начала"
+        string reason "ключ шаблона причины: его текст видит игрок"
+        string comment "nullable: для команды, игроку не показывается"
+        boolean notify "сообщить игроку; у all — всегда"
+        uuid imposed_by "nullable, без FK: кто наложил"
+        datetime lifted_at "nullable: снято раньше срока или заменено новым того же вида"
+        uuid lifted_by "nullable, без FK"
+        string lift_comment "nullable, есть ровно у снятого"
+        datetime settled_at "nullable: последствия сняты — отметка входа убрана, кеш сброшен"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -214,6 +935,234 @@ erDiagram
   выживания вообще могло пройти (`34-stage3-plan.md`, Р5.2). Отклонённые и
   подозрительные забеги не выбрасываются: они лежат здесь с вердиктом и ждут
   разбора.
+- **`ACCOUNT_PROGRESS` — уровень аккаунта, `RUN_REWARD` — награда за забег**
+  (`35-stage4-plan.md`, WP4). Опыт — счётчик аккаунта, а не валюта: его не
+  тратят, и журнал ему не нужен. Повтор не удваивает опыт тем же приёмом,
+  что кошелёк: строка награды с первичным ключом `run_id` вставляется в одной
+  транзакции с прибавкой опыта. Монеты начисляет кошелёк по своему ключу;
+  `coins_credited` показывает, сколько легло после суточного потолка.
+  Удвоение за рекламу (WP12) привязывает к строке сессию показа условным
+  `UPDATE`: забег удваивается одной сессией, одна сессия удваивает один
+  забег, повтор той же дожимает начисление ключом `run_double:<run_id>`.
+- **`NOTIFICATION` — лента уведомлений игрока** (`35-stage4-plan.md`, Р51,
+  §3.17, WP28): заявка и подарок друга, редкая добыча, возврат бустов,
+  сообщение команды из панели. Пишут доменные модули после своего действия и
+  не ждут записи, панель — ждёт, чтобы показать команде исход; ключ события
+  уникален у аккаунта, поэтому повтор задания или запроса второй строки не
+  заводит. Имя другого игрока — копией на момент события. Хранится 90 дней:
+  чистка — пачками под распределённым локом. `bot_outcome` — чем кончился
+  дубль в бота: доставлено, игрок заблокировал бота, площадка отказала;
+  пишется один раз, повтор задания его не перепишет. Пусто — в бота не
+  уходило: вид не дублируется, игрок выключил его или писать нельзя.
+- **`DAILY_REWARD` — награда дня** (`35-stage4-plan.md`, Р45, WP13): одна
+  строка на аккаунт, появляется с первым забранным днём. Прогресс не
+  сбрасывается: пропуск дня его останавливает. День недели и ступень
+  выводятся из `claimed_days`, а не хранятся рядом, — им нечем разойтись.
+  Отметка дня — условным `UPDATE` по числу дней и суткам, монеты и осколки
+  кладёт кошелёк ключом дня, поэтому под гонкой день даёт награду однажды.
+- **`CHANGELOG_ENTRY`, `CHANGELOG_RELEASE`, `CHANGELOG_SEEN` — журнал
+  обновлений** (`35-stage4-plan.md`, Р61, WP31): строка — одно изменение с
+  версией, видом и площадками; черновик игрок не видит. Опубликованные строки
+  сервер держит в памяти и собирает по версиям площадки игрока. Публикация
+  версии заводит строку раздачи: уведомление `app_update` в ленту каждому
+  игроку площадок версии, пачками по курсору — перезапуск продолжает с
+  места. Публикация новых строк раздаёт заново с новым поколением, а ключ
+  события в ленте не даёт второго уведомления. `CHANGELOG_SEEN` — когда игрок
+  открывал журнал: знак меню считает версии, вышедшие после; нет строки —
+  считается от регистрации, новичку история игры не новость.
+  `CHANGELOG_SOURCE` — откуда строка пришла при выкате: из раздела «Для
+  игроков» влитого PR. Ключ занимается первым и остаётся после удаления
+  строки, поэтому повтор выката не задваивает строки и не возвращает
+  удалённое; черновик, который правил человек (`updated_by` задан), выкат не
+  трогает.
+- **`WHEEL_SPIN` — крутки колеса** (`35-stage4-plan.md`, Р45, WP13): сектор
+  выбирает сервер и записывает строкой до начисления, поэтому повтор после
+  обрыва дожимает тот же сектор, а не бросает заново. Бесплатная крутка —
+  одна в игровые сутки: её держит частичный уникальный индекс по аккаунту и
+  суткам, крутки за рекламу (WP12) под него не попадают — у них свой
+  уникальный ключ, сессия показа `ad_session_id`: одна сессия — одна крутка,
+  а кулдаун держит забор сессии в модуле рекламы. `granted_at` — кошелёк
+  начислил ключом крутки; пусто — следующая крутка дожмёт.
+- **`TASK_DEF`, `TASK_PROGRESS`, `TASK_RUN` — задания и достижения**
+  (`35-stage4-plan.md`, Р52, WP13): каталог в базе правится из панели без
+  релиза, вид цели — строкой, новый вид приходит кодом. Прогресс — строка на
+  срок: сутки и неделя по Москве, у достижений — один общий день, поэтому
+  сбрасывать ничего не нужно, новый срок — новая строка. Прогресс двигает
+  записанный забег; `TASK_RUN` занимается в той же транзакции, и повтор
+  события не удваивает прогресс. Забор — начисление кошельком ключом
+  задания и срока, потом условная отметка `claimed_at`. Партнёрские цели
+  забег не двигает: `params` (ссылка, площадка, у канала — канал; схема в
+  коде, у остальных видов пусто, это держит `CHECK`). Подписку на канал
+  читает бот площадки в момент забора, ссылку и бота засчитывает переход
+  через сервер — и строка прогресса появляется сразу выполненной.
+  Подписка на канал бывает ежедневной и еженедельной (Р82): срок — тот же
+  `period`, каждый срок — своя строка прогресса, бот спрашивается при
+  каждом заборе. У ссылки и бота повтора нет — переход не проверить.
+- **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
+  в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
+  адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
+  останется тем же. Формат, размер и стороны держат `CHECK` и
+  `media/image-rules.ts`; на картинку ссылаются `TASK_DEF.image_id` и
+  `HOME_SLIDE.image_id` (`RESTRICT`: пока задание или слайд её показывает,
+  удалить нельзя).
+- **`HOME_SLIDE` — слайды команды на главной** (`35-stage4-plan.md` WP42,
+  часть 2): анонс от команды в карусели — кому (`audience` по регистрации
+  аккаунта, первой настоящей оплате из `ACCOUNT_FUNNEL` и VIP), где
+  (`platforms`) и на какой срок. Цель — экран игры или ссылка https, ровно
+  одно из двух держит `CHECK`. Идущих — единицы, главная читает их по
+  индексу `ends_at` и держит в памяти полминуты. Снятый слайд остаётся
+  строкой с `archived_at`: история — в разделе панели и в аудите.
+- **`TASK_PARTICIPANT` — лимит выполнений партнёрской цели**
+  (`35-stage4-plan.md`, Р82, WP13, часть 7): строка на игрока и цель, а не
+  на срок — место занимает первое выполнение, повтор подписки места не
+  тратит. Счётчик `TASK_DEF.completions` растёт условным `UPDATE` под
+  блокировкой строки цели: мест нет и мягкий час игрока истёк — 0 строк, и
+  выполнение не записывается; поэтому одновременный забор не превышает
+  лимит. Мягкий час идёт от `opened_at` — перехода к каналу, пока места
+  были; переход после исчерпания его не продлевает. Строки — у каждой
+  партнёрской цели, с лимитом и без: счётчик показывает панель
+  («Выполнили»), и лимит, заданный позже, считает от него, а не с нуля.
+  Лимит у цели забега запрещает `CHECK`. Удалённый игрок уносит свою
+  строку, а его выполнение в счётчике остаётся — награда выдана.
+- **`TEST_NOTICE` — предупреждение об открытом тесте** (`35-stage4-plan.md`,
+  Р59, WP33): строка на аккаунт, а не на устройство. Версия текста только
+  растёт — новый текст показывается заново тем, кто принимал прежний; первое
+  принятие не переписывается: по нему проверяется, что игрок видел
+  предупреждение до первой покупки. Видно в карточке игрока в панели.
+- **`AD_NETWORK`, `AD_BLOCK`, `AD_SESSION` — реклама** (`35-stage4-plan.md`,
+  §3.7, WP12). Сеть и её блоки мест — данными: площадки и устройства блока
+  списками, без ветвлений в коде. Что сеть умеет и что ей нужно — профиль в
+  коде (`ads/ad-networks.ts`): публичные ключи сети лежат в `keys`, блок
+  встаёт только в место формата сети и с идентификатором её вида, а у
+  форматов, которые показываются по ключам сети, блока в кабинете нет —
+  `external_id` пуст. Секреты подтверждений сети в базу не пишутся (Р53). Сессия показа — воронка с меткой каждого
+  шага; выполненной её делает досмотр от клиента только там, где успех —
+  показ, клик и целевое действие подтверждает сервер. Выбор сети и кулдаун
+  места считаются по сессиям игрока в месте с начала вчерашних суток —
+  одним запросом по индексу, без счётчиков рядом. Награду выдаёт хозяин
+  места, забирая сессию: забор мест игрока идёт под транзакционной
+  блокировкой на аккаунт и место, поэтому ни одна сессия, ни две разом не
+  дают второй награды в кулдаун. Забор без выполнения база не примет.
+  Креатив сети с API (Taddy, Р78) рисует наш блок: сессия помнит его
+  `creative_id` и срок досмотра `view_sec` — раньше срока от выдачи
+  досмотр не засчитывается, а показ сеть узнаёт однажды. Сеть с API, не
+  давшая креатива, остаётся в истории сессией `failed` — и уходит на паузу
+  места, как отказавшая на клиенте.
+  Сессия без блока — пропуск рекламы (VIP, §3.6): выдана сразу выполненной,
+  с именем пропуска вместо сети, и забирается хозяином места как обычная, в
+  тот же кулдаун; иначе как выполненный досмотр база её не примет.
+- **`NETWORK_TASK` — задания рекламных сетей** (`35-stage4-plan.md` WP13,
+  часть 6, Р80): строка на сеть — сколько её заданий игрок получит за
+  игровые сутки, пауза после выполненного и награда. Сами задания приходят
+  от сети, выполнение — сессией места `task`: открытая сессия сети у игрока
+  одна, новую заводит модуль заданий по истории места под той же
+  блокировкой, что забор, и выполненной её делает только подтверждение сети
+  (адрес награды AdsGram, проверка Taddy `exchange/check`). Потолок и пауза
+  считаются по `completed_at` сессий места с начала вчерашних суток —
+  счётчиков рядом нет. VIP задания не пропускает: пропуск заменяет ролик, а
+  не подписку. Задание ленты Taddy — `creative_id` сессии: игрок выполняет
+  его однажды — выбор обходит выполненные, а частичный уникальный индекс
+  `(account_id, network_key, creative_id)` выполненных сессий места не даст
+  записать второе выполнение в обход.
+- **`RUN_AD_CONTINUE` — второй шанс за рекламу** (`35-stage4-plan.md` WP11,
+  Р4): вторая книга продолжений забега рядом с `PURCHASE`. Хозяин места
+  `second_chance` — модуль забегов: забирает сессию показа и записывает
+  продолжение. Ключ `(run_id, continue_no)` и уникальная `session_id` не
+  дают выдать одно продолжение дважды и потратить одну сессию на два.
+  Итог забега сверяется с обеими книгами, а счёт за продолжение, уже взятое
+  за рекламу, предварительная проверка оплаты не пропускает. Суточный
+  потолок — счёт строк игрока с полуночи по Москве по индексу
+  `(account_id, granted_at)`.
+- **`VIP_SUBSCRIPTION`, `VIP_PERIOD`, `VIP_DAILY` — VIP** (`35-stage4-plan.md`,
+  §3.6, Р20, Р44, WP10). Срок VIP — не поле, а журнал периодов: каждая
+  оплата — ровно один период, начатый с конца прежнего, и конец VIP — самый
+  поздний конец. Повтор выдачи ничего не продлевает дважды, выдачи разом
+  идут под транзакционной блокировкой на аккаунт и не начинаются от одного
+  конца. Подписка — одна на счёт площадки: её id — первая покупка, по
+  которой площадка списывает периоды и отменяет продление. Отменённое
+  продление — за тем, кто отменил первым: вернуть отменённое нами можем мы,
+  отменённое игроком — только он на площадке. Самоцветы дня — строка на
+  аккаунт с последними сутками забора, сутки сдвигаются только вперёд.
+- **`SHOWCASE_OFFER` — витрина снаряжения** (`35-stage4-plan.md`, §3.6, Р11,
+  WP10): предложение на игровые сутки выставляется при первом открытии и
+  хранится с бросками — купленное совпадает с показанным, даже если правила
+  бросков поменяются посреди суток. Выставляется целиком под блокировкой на
+  аккаунт: два первых открытия разом не смешают два броска. Покупка —
+  предмет и списание самоцветов одной транзакцией модуля предметов, ключом
+  предложения, отметка `sold_at` — после: повтор найдёт купленное и не
+  спишет второй раз.
+- **`SHOP_PROMO` — акции магазина** (`35-stage4-plan.md`, WP10, часть 8):
+  скидка от цены каталога на срок. Связей нет: товар — каталог в коде, кто
+  завёл и снял — без внешнего ключа, запись переживает аккаунт. Строки не
+  удаляются: по ним видно, когда и по какой цене продавали. Пределы скидки
+  и порядок срока держит и база; пересечение и отдых между акциями товара —
+  сервис, проверкой и вставкой под блокировкой товара.
+- **`PROMO_*` — промокоды** (`35-stage4-plan.md`, WP41, Р74): кампания —
+  то, что заводит команда; код — то, что вводит игрок; активация — один
+  игрок в одной кампании, первичным ключом, поэтому второй код той же пачки
+  тому же игроку ничего не даст. Ключ кода не зависит от регистра,
+  разделителей и раскладки — его считает сервер, а показывается `display`.
+  Активация — одна транзакция: запись, занятие кода пачки и счётчик под
+  лимитом. Награда ложится после и отмечается `rewarded_at`: упавшая
+  доначисляется повторным вводом теми же ключами кошелька. Кампания с
+  активациями не удаляется — по ней выданы награды, это держит и внешний
+  ключ; код занятой кампании не переиспользуется.
+- **`PARTNER`, `PARTNER_BINDING` — партнёры и приведённые ими игроки**
+  (`35-stage4-plan.md`, WP41, часть 2): код партнёра (`PROMO_CAMPAIGN.partner_id`)
+  при активации привязывает новичка к партнёру — в той же транзакции, что
+  и активация. Слот источника у игрока один на две таблицы двух модулей:
+  `REFERRAL_BINDING` или `PARTNER_BINDING`, кто первый
+  (`23-referral-and-partner-program.md` §5). Внешним ключом это не
+  выразить, поэтому обе записи идут под одной блокировкой аккаунта
+  (`attribution/source-slot.ts`). Выплат партнёрам нет — они после лонча
+  (§1.3).
+- **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
+  (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
+  усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
+  его выбрали, по часам сервера: устройство присылает возраст выбора, а не
+  своё время, поэтому часы телефона, ушедшие вперёд или назад, ничего не
+  решают. Слияние ключ за ключом, побеждает выбранное позже; значение,
+  сохранённое до настроек аккаунта, приходит засевом с отметкой 1 и
+  занимает только пустой ключ; усвоенные подсказки складываются, сбрасывает
+  их только пустой список. Запись — под блокировкой строки: два устройства
+  одновременно не затирают друг друга. Графика, громкость и вибрация сюда
+  не попадают — они у устройства.
+- **`FX_*` — курсы валют** (`35-stage4-plan.md`, §3.12, WP9). Таблицы не
+  связаны с аккаунтами и друг с другом ключами: курс — факт о мире, а не об
+  игроке. Коды валют — строкой, а не перечислением базы: перечень живёт в
+  ядре `packages/fx`, и новая валюта не требует миграции. Котировка — одна
+  на источник и валюту, текущий курс — один на валюту, история и заданные
+  курсы — только добавлением, снимок неизменяем.
+- **`WALLET_ENTRY` — журнал кошелька, `WALLET_BALANCE` — его проекция**
+  (`35-stage4-plan.md`, WP3). Любая ценность игрока — строка журнала с
+  уникальным ключом идемпотентности; баланс меняется в той же транзакции и
+  только если строка вставилась, поэтому повтор ничего не удваивает, а сумма
+  журнала обязана совпасть с балансом — это проверяет
+  `pnpm --filter backend-api wallet:reconcile`. `WALLET_DAILY` — сколько
+  источник уже дал за игровые сутки: строка блокируется на время начисления,
+  и параллельные начисления не пробивают потолок. Журнал пока не
+  партиционирован — почему, в WP3 плана этапа.
+- **`ITEM` — инвентарь, `ITEM_EVENT` — его журнал** (`35-stage4-plan.md`,
+  §3.4, WP7, Р38). У предмета хранятся броски, а не значения: значение
+  считается из редкости, уровня и броска, и улучшение поднимает все свойства
+  разом. Операции аккаунта идут по очереди под транзакционной блокировкой на
+  аккаунт; изменение предмета, списание из `WALLET_ENTRY` и строка журнала —
+  одна транзакция, повтор находит свою строку по ключу. Разобранный и
+  объединённый предмет не удаляется, а помечается `removed_at`: журнал на него
+  ссылается. Добыча забега — ключ `loot:<runId>`, второй предмет за один забег
+  не выпадет.
+- **`RUN_BOOST` — бусты, купленные на забег** (`35-stage4-plan.md` §3.5, WP8,
+  Р39). Строка и списание из `WALLET_ENTRY` — одна транзакция, ключ — забег:
+  повтор покупки ничего не спишет. Внешнего ключа на `RUN` нет сознательно:
+  бусты покупаются **до** старта, когда строки забега ещё нет, а после старта
+  покупка запрещена. Забег, который так и не начался, получает бусты назад —
+  `refunded_at` и строки `boost_refund` в журнале; итог забега сверяет
+  заявленные бусты с этой строкой.
+- **`ACCOUNT_FUNNEL` — вехи игрока, `ACCOUNT_MESSAGING` — можно ли ему писать**
+  (`35-stage4-plan.md`, WP2). Вехи ставят слушатели входа, забегов и оплаты
+  одной вставкой с `COALESCE`, поэтому таблица — отметки первого раза, а не
+  история: подробности времени — в сессиях. «Можно писать» меняют обновления
+  площадки, а не клиент, и более раннее событие не перебивает позднее.
 - **`ACCOUNT_SESSION` — запуск игры, `ACQUISITION` — откуда игрок пришёл**
   (`34-stage3-plan.md`, WP6). Сессия пишется из очереди, мимо ответа на
   вход, а повтор запуска в течение 30 секунд отсекает ключ в Redis — не
@@ -231,26 +1180,77 @@ erDiagram
   подтверждения оплаты ничего не удваивает. Цены две, показанная и
   списанная, и режим оплаты: тестовые звёзды не попадают в отчёт о выручке
   (`34-stage3-plan.md`, Р14). Звёзды — `int`, а не `decimal`: по протоколу
-  Telegram они целые, и точность здесь не теряется.
+  Telegram они целые, и точность здесь не теряется. С магазина (WP10) та же
+  строка — и товар каталога: `sku` вместо забега, это держит проверка базы.
+  Разовый товар — `once_key` с уникальным индексом: второй счёт ложится на
+  ту же строку, и дважды его не купить. Товар выдаёт магазин журналом
+  кошелька ключом покупки, `fulfilled_at` — выдано. Подписку (VIP) площадка
+  продлевает сама — очередной оплатой по счёту первой покупки; каждое
+  продление — своя строка со своей оплатой и `renewal_of` на первую, так
+  выручка и возвраты видят каждый период.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
+- **`FRIENDSHIP` — дружба, одна строка на пару** (`35-stage4-plan.md` §3.8,
+  WP14). Меньший идентификатор первым — это проверка базы, а не соглашение
+  кода: иначе одна дружба могла бы лечь двумя строками. Потолок друзей и
+  заявок проверяется в транзакции под блокировкой строк обоих аккаунтов.
+  Заявка живёт до ответа; история дружбы — в самой дружбе (`source`,
+  `created_at`). Всё уходит вместе с аккаунтом. `FRIEND_GIFT` — подарок за
+  игровые сутки: сутки в ключе, забранный помечается, монеты лежат в журнале
+  кошелька с причиной `friend_gift` и ключом подарка.
+- **`REFERRAL_BINDING` — привязка реферала** (`23-referral-and-partner-program.md`
+  §2). Ключ — приглашённый: привязка одна и навсегда. Отклонённая антифродом
+  остаётся строкой со статусом `rejected`, иначе её переприсвоила бы
+  следующая ссылка. Награды — в журнале кошелька с причиной
+  `referral_reward`: приглашённому ключом `referral_welcome:<id>`,
+  пригласившему — `referral:<id>`. `FRIEND_RETURN` — возвращение ушедшего
+  по ссылке друга: номер периода в ключе, награда обоим после первого забега
+  ключами `friend_return:<вернувшийся>:<друг>:<период>:returned|friend`.
+  `FRIEND_BONUS` — забранные ступени бонуса за число друзей; монеты —
+  причиной `friend_bonus` и ключом `friend_bonus:<аккаунт>:<порог>`.
+- **`FEATURE_FLAG` и `APP_SETTING` — две разные вещи.** Флаг — раскатка
+  на игроков: площадка и доля, у каждого игрока своё «да» или «нет» (WP17).
+  Настройка — одно значение на весь сервер: адрес чата команды,
+  переключатель (WP24, Р53). Строка настройки есть, только пока её
+  поменяли в панели: она сильнее окружения, а сброс удаляет строку и
+  возвращает `.env`. Ключ и схема значения — в каталоге в коде
+  (`modules/settings/setting-catalog.ts`); неизвестный ключ и значение не по
+  схеме при чтении пропускаются. Обе таблицы без внешних ключей на аккаунт:
+  «кто менял» переживает человека, как журнал аудита.
+- **`INTEGRATION_SECRET` — ключи внешних сервисов из панели** (WP46, Р84).
+  Как настройка: строка есть, пока ключ задали в панели, сброс возвращает
+  `.env`. Но значение — только шифртекстом AES-256-GCM ключом из окружения;
+  имя ключа подписано вместе со шифртекстом, и строку не переложить под
+  другой ключ. `key_id` — отпечаток ключа шифрования: при его смене прежний
+  читает старые строки. Длины IV и подписи держит база.
+- **`AD_CONVERSION` — конверсии закупленной рекламы** (WP43, Р86, поток —
+  §4.20). Журнал и очередь отправки одной таблицей. Строки не пишет ни
+  забег, ни оплата: проход раз в минуту выводит их из фактов — первого
+  касания `acquisition`, забегов и оплат, — поэтому упавший слушатель
+  конверсию не теряет, а повтор прохода не задваивает её уникальными
+  ключами. Новичок — аккаунт, созданный после клика: старый игрок,
+  открывший игру по рекламе, сети не отдаётся. Оплата уходит с
+  `RESTRICT`: удалить её, пока о ней знает сеть, нельзя.
+- **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
+  после — запись истории: текст неизменен, кто создал, одобрил и запустил —
+  без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
+  пара — ключ; её же читает сегмент следующей рассылки, чтобы не писать
+  тому, кто получал недавно.
 
 ### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 
 Модель, к которой идём при переносе рекламы и рефералки
 (`13-reuse-from-vpnsibcom.md` §3, §7). Приведена, чтобы решения принимались с
 оглядкой на целевую картину, а не только на сегодняшнюю. Аккаунт, сессии,
-касания, роли и покупки отсюда ушли: на этапе 3 они легли в базу — §1.1.
+касания, роли и покупки отсюда ушли: на этапе 3 они легли в базу — §1.1;
+реклама — на этапе 4, там же.
 
 ```mermaid
 erDiagram
     ACCOUNT ||--o{ EVENT : "порождает"
-    ACCOUNT ||--o{ ADS_VIEW : "смотрит"
     ACCOUNT ||--o{ REFERRAL : "приглашает"
     ACCOUNT ||--o| BALANCE : "владеет"
-    ADS_BLOCK ||--o{ ADS_VIEW : "показан в"
-    ADS_NETWORK ||--o{ ADS_BLOCK : "обслуживает"
 
     EVENT {
         uuid id PK
@@ -258,31 +1258,6 @@ erDiagram
         enum eventType "FIRST_RUN|RUN_COMPLETED|FIRST_PURCHASE|AD_REWARD_CLAIMED|D1_RETURN"
         json payload
         datetime createdAt
-    }
-
-    ADS_VIEW {
-        uuid id PK
-        uuid account_id FK
-        uuid blockId FK
-        string sessionKey UK "одноразовый ключ показа"
-        decimal reward
-        datetime claimedAt "nullable до получения награды"
-        datetime createdAt
-    }
-
-    ADS_BLOCK {
-        uuid id PK
-        enum place "TASK|REWARD|BANNER|FULLSCREEN"
-        bool showAndroid
-        bool showIos
-        bool showDesktop
-        bool isActive
-    }
-
-    ADS_NETWORK {
-        string key PK
-        bool isActive
-        int priority "порядок в fallback-цепочке"
     }
 
     REFERRAL {
@@ -328,9 +1303,7 @@ erDiagram
 erDiagram
     CLICK ||--o| ACCOUNT : "атрибутирует"
     PARTNER ||--o{ PARTNER_LINK : "владеет"
-    PARTNER ||--o{ PROMO_CODE : "владеет"
     PARTNER_LINK ||--o{ CLICK : "порождает"
-    PROMO_CODE ||--o{ ACCOUNT : "привязывает"
     PARTNER ||--o{ PARTNER_ACCRUAL : "получает"
     PURCHASE ||--o| PARTNER_ACCRUAL : "порождает"
     ACCOUNT ||--o{ SHARE : "создаёт"
@@ -353,13 +1326,12 @@ erDiagram
     }
 
     PARTNER {
-        uuid id PK
-        string telegramId UK
+        uuid partner_id PK "заведён (§1.1, WP41); здесь — поля выплат"
+        string telegramId UK "вход в кабинет"
         enum payoutModel "REVSHARE|CPA_FTD|HYBRID"
         decimal revsharePercent
         int holdDays
         bool isBlocked
-        datetime createdAt
     }
 
     PARTNER_LINK {
@@ -368,14 +1340,6 @@ erDiagram
         string code UK
         string campaign
         datetime createdAt
-    }
-
-    PROMO_CODE {
-        uuid id PK
-        uuid partnerId FK
-        string code UK
-        int activationLimit
-        datetime expiresAt
     }
 
     PARTNER_ACCRUAL {
@@ -526,6 +1490,7 @@ flowchart TD
         WT["web-telegram"]
         WM["web-max"]
         WV["web-vk"]
+        ADM["admin<br/>панель команды"]
     end
 
     subgraph adapters["packages/adapter-* — платформенный слой"]
@@ -537,7 +1502,9 @@ flowchart TD
     SH["packages/app-shell<br/>React: дизайн-система, экраны,<br/>состояние, навигация"]
     CG["packages/core-game<br/>забег: симуляция + Phaser, content/*"]
     ST["packages/shared-types<br/>контракты, лист графа"]
+    FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
     API["backend/api<br/>NestJS"]
+    DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
 
     WT --> SH
     WT --> AT
@@ -553,6 +1520,9 @@ flowchart TD
     AV --> ST
     CG --> ST
     API --> ST
+    API --> FX
+    SH --> DT
+    ADM --> DT
 ```
 
 Стрелка из `apps/web-*` в `core-game` осталась одна и узкая: приложение берёт
@@ -574,7 +1544,10 @@ flowchart TD
 - стрелки из `core-game` в `app-shell` — движок не знает, кто рисует меню;
 - стрелки между адаптерами — общее выносится в `shared-types`;
 - стрелки из `core-game` в `backend/api` — игровой цикл работает офлайн;
-- любых стрелок **из** `shared-types` — это лист графа.
+- любых стрелок **из** `shared-types` — это лист графа;
+- любых стрелок **из** `fx` — ядро курсов станет отдельным сервисом и не
+  знает ни об игре, ни о Nest, ни о Prisma. Бэкенд берёт его собранным
+  (`dist`), тесты и dev-запуск — исходником.
 
 ### 2.1 Внутреннее устройство core-game
 
@@ -701,19 +1674,56 @@ flowchart LR
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
         ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
-        PAY["payments<br/>второй шанс за Stars: цена, счёт,<br/>подтверждение, возвраты, реализовано"]
-        ADS["ads<br/>сессии показа, награды"]
+        PAY["payments<br/>второй шанс, товары и подписка за Stars: цена,<br/>счёт, подтверждение, продления, возвраты, выдача, реализовано"]
+        SHOP["shop<br/>магазин: каталог с фиксированным<br/>составом, цены способа оплаты, акции, реализовано"]
+        VIP["vip<br/>подписка площадки: журнал периодов,<br/>продление, самоцветы дня, надбавка к наградам, реализовано"]
+        ADS["ads<br/>реклама: выбор сети, воронка показа,<br/>кулдаун места, реализовано ядро"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
-        INGEST["ingest<br/>выключатели, Origin, лимиты,<br/>подпись initData, реализовано"]
+        INGEST["ingest<br/>выключатели, Origin, лимиты,<br/>подпись запуска, реализовано"]
         EVENTS["events<br/>приём событий, реализовано"]
         DIAG["diagnostics<br/>отчёты стресс-теста, реализовано"]
-        PT["playtest<br/>сводка, запуски, доступ<br/>закрытого теста, реализовано"]
-        BOT["bot<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
+        TOOLS["roles: инструменты команды<br/>режим разработчика, стресс-тест —<br/>по праву и настройке, реализовано"]
+        BOT["platforms/telegram: бот<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
+        TGADP["platforms/telegram: адаптер<br/>проверка запуска, оплата Stars,<br/>обновления оплаты, реализовано"]
         WELCOME["welcome<br/>/start с карточкой, реализовано"]
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
+        FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
+        WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
+        PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
+        ITEMS["items<br/>снаряжение: инвентарь, операции,<br/>добыча, подписанный снимок, реализовано"]
+        BOOSTS["boosts<br/>бусты: покупка до старта,<br/>возврат, сверка в итоге, реализовано"]
+        ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, настройки, реализовано"]
+        LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, макросы сети<br/>на клике, реализовано"]
+        ADCONV["ad-conversions<br/>конверсии закупок: проход<br/>раз в минуту под локом, постбэк<br/>в сеть с повтором, реализовано"]
+        FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
+        SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
+        SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
+        BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
+        FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
+        ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
+        NOTIF["notifications<br/>лента уведомлений: пишут модули,<br/>чистка старше 90 дней, реализовано"]
+        NOTIFBOT["notifications-bot<br/>дубль в бота по выбору игрока:<br/>очередь, потолок вида, реализовано"]
+        BADGES["badges<br/>знаки меню одним ответом:<br/>счётчики соседей, реализовано"]
+        HISTORY["history<br/>история имущества: чтение<br/>журналов кошелька, предметов<br/>и покупок, реализовано"]
+        DAILY["daily<br/>награда дня: неделя без сброса,<br/>ступени, множитель уровня, реализовано"]
+        CHANGELOG["changelog<br/>журнал обновлений по площадкам,<br/>раздача app_update пачками, реализовано"]
+        PLAYERLIST["player-list<br/>список игроков для панели:<br/>фильтры, страница по индексу, реализовано"]
+        WHEEL["wheel<br/>колесо: сектора от уровня,<br/>бесплатная крутка в сутки, реализовано"]
+        TASKS["tasks<br/>задания и достижения: каталог в базе,<br/>прогресс от забегов, реализовано"]
+        MEDIA["media<br/>картинки из панели в базе по хэшу:<br/>проверка WebP, вечный кеш, реализовано"]
+        TESTNOTICE["test-notice<br/>предупреждение об открытом тесте:<br/>принятие на аккаунт, реализовано"]
+        PROMOC["promo-codes<br/>промокоды и коды партнёров:<br/>ключ кода, активация, реализовано"]
+        RESTR["restrictions<br/>ограничения игрока по видам и на срок:<br/>«можно ли» с кешем 30 с, снятие по сроку<br/>под локом, реализовано"]
+        HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
     end
+
+    FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
+
+    ADSGRAMAPI["AdsGram<br/>api.adsgram.ai/confirm_conversion;<br/>зовёт адрес награды задания"]
+
+    TADDYAPI["Taddy<br/>api.taddy.pro: креатив и его показы,<br/>лента обмена и проверка задания"]
 
     TGAPI["Telegram Bot API"]
 
@@ -733,37 +1743,58 @@ flowchart LR
     CADDY --> AUTH
     CADDY --> RUNS
     CADDY --> PAY
-    CADDY --> ADS
+    CADDY -- "/api/v1/ads" --> ADS
     CADDY --> REF
     CADDY --> CONTENT
     CADDY --> EVENTS
     CADDY --> DIAG
-    CADDY --> PT
+    CADDY -- "/api/v1/tools" --> TOOLS
 
-    PT --> REDIS
     EVENTS --> INGEST
     DIAG --> INGEST
     INGEST --> REDIS
     EVENTS --> QUEUE
     DIAG --> PG
-    DIAG -. слушатели нового отчёта .-> PT
+    DIAG -. кому открыт стресс-тест .-> TOOLS
     DIAG -. слушатели нового отчёта .-> NOTIFY
-    RUNS -. слушатели записанного забега .-> PT
     RUNS -. слушатели записанного забега .-> NOTIFY
-    PT -. рейтинг и профиль аккаунта .-> RUNS
     NOTIFY --> QUEUE
-    PAY -- answerPreCheckoutQuery --> TGAPI
     TGAPI -- вебхук --> CADDY
     CADDY --> BOT
     BOT --> WELCOME
-    BOT --> PT
     BOT --> EXPORT
-    BOT -- проверка и подтверждение оплаты --> PAY
+    BOT -- обновления оплаты --> TGADP
+    TGADP -- проверка и подтверждение оплаты --> PAY
+    PAY -- порт оплаты --> TGADP
+    AUTH -- порт проверки запуска --> TGADP
+    INGEST -- порт проверки запуска --> TGADP
+    TGADP -- createInvoiceLink, answerPreCheckoutQuery, refundStarPayment --> TGAPI
     PAY --> QUEUE
-    WELCOME -. рекорд и место .-> PT
+    WELCOME -. рекорд и место .-> RUNS
     EXPORT --> QUEUE
+    FXM -- раз в минуту, под локом --> FXSRC
+    FXM --> PG
+    FXM --> REDIS
+    FXM -. алерты курсов .-> NOTIFY
+    RUNS -. слушатели записанного забега .-> PROG
+    PROG --> QUEUE
+    PROG -- монеты, награды за уровень --> WALLET
+    WALLET --> PG
+    PROG --> PG
+    CADDY --> WALLET
+    CADDY --> PROG
+    CADDY --> ITEMS
+    PROG -- добыча забега --> ITEMS
+    PROG -. "удвоение: забор сессии места run_double" .-> ADS
+    ITEMS -- цена операций, осколки разбора --> WALLET
+    RUNS -- порт проверки снимка снаряжения --> ITEMS
+    CADDY --> BOOSTS
+    BOOSTS -- цена бустов, возврат --> WALLET
+    RUNS -- порт сверки бустов --> BOOSTS
+    BOOSTS --> PG
+    ITEMS --> PG
     EXPORT --> PG
-    QUEUE -- sendPhoto, sendDocument, refundStarPayment --> TGAPI
+    QUEUE -- sendPhoto, sendDocument --> TGAPI
 
     AUTH --> PG
     AUTH --> REDIS
@@ -774,10 +1805,24 @@ flowchart LR
     RUNS --> REDIS
     PAY --> PG
     PAY -. забег, который продолжают .-> RUNS
+    CADDY -- "/api/v1/shop" --> SHOP
+    SHOP -- "счёт на товар" --> PAY
+    PAY -. "выдача оплаченного: регистр выдачи" .-> SHOP
+    SHOP -- "состав товара ключом покупки" --> WALLET
+    CADDY -- "/api/v1/vip" --> VIP
+    VIP -- "счёт с периодом, отмена продления" --> PAY
+    PAY -. "период за оплату, продление на площадке" .-> VIP
+    VIP -- "самоцветы дня ключом суток" --> WALLET
+    WALLET -. "надбавка к наградам: регистр надбавок" .-> VIP
+    VIP -- "vip_subscription, vip_period, vip_daily" --> PG
     RUNS -. сверка продолжений с покупками .-> PAY
+    RUNS -. "второй шанс: забор сессии места second_chance" .-> ADS
     RUNS -. слушатели записанного забега .-> PAY
-    PAY -- createInvoiceLink --> TGAPI
-    ADS --> REDIS
+    ADS -- "ad_network, ad_block, ad_session" --> PG
+    ADSGRAMAPI -. "адрес награды задания: /api/v1/ads/adsgram/reward, секрет в пути" .-> CADDY
+    ADS -. "ads/get и показы креатива; exchange/feed, exchange/check — задания ленты" .-> TADDYAPI
+    ADMINAPI -. "сети, блоки, воронка показов" .-> ADS
+    WHEEL -. "забор сессии места wheel_spin" .-> ADS
     REF --> PG
     CONTENT --> PG
     CONTENT --> CDN
@@ -785,8 +1830,139 @@ flowchart LR
     QUEUE --> PG
     QUEUE --> REDIS
 
+    PANEL["apps/admin<br/>панель команды,<br/>свой поддомен"] -- "/api/v1/admin, cookie" --> CADDY
+    CADDY --> ADMINAPI
+    CADDY -- "/r/*" --> LINKS
+    LINKS --> PG
+    LINKS -. "порт AppLinks: ссылка запуска" .-> TGADP
+    ADMINAPI -- сессии панели --> REDIS
+    ADMINAPI -. сервисы и репозитории соседей .-> AUTH
+    ADMINAPI -. карточка: забеги, кошелёк .-> RUNS
+    ADMINAPI -. карточка: кошелёк .-> WALLET
+    ADMINAPI -. курсы, заданные курсы .-> FXM
+    ADMINAPI -. отчёты, архив .-> EXPORT
+    ADMINAPI -. флаги и выкат .-> FLAGS
+    ADMINAPI -. "настройки, право settings.edit" .-> SETTINGS
+    SETTINGS --> PG
+    SETTINGS -- "канал settings:changed" --> REDIS
+    NOTIFY -. адреса чатов команды .-> SETTINGS
+    ADMINAPI -. "ключи, права secrets.view и secrets.edit" .-> SECRETS
+    SECRETS --> PG
+    SECRETS -- "канал secrets:changed" --> REDIS
+    FXM -. ключ CoinGecko на каждом проходе .-> SECRETS
+    ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG
+    ADCONV -- "лок ad-conversions:lock" --> REDIS
+    ADCONV -. токен конверсий на каждой отправке .-> SECRETS
+    ADCONV -- "confirm_conversion, таймаут 5 с" --> ADSGRAMAPI
+    ADMINAPI -. "журнал и повтор конверсий ссылки" .-> ADCONV
+    ADMINAPI -. рассылки .-> BCAST
+    BCAST --> PG
+    BCAST -- "очередь broadcasts, лимитер" --> REDIS
+    BCAST -. "порт Messengers: sendMessage" .-> TGADP
+    BCAST -. кнопка — ссылка кампании .-> LINKS
+    FRIENDS --> PG
+    FRIENDS -. подарки и бонус .-> WALLET
+    FRIENDS -. "порт Messengers: сообщение о заявке" .-> TGADP
+    FRIENDS -. "порт MessagePreparers: приглашение сообщением" .-> TGADP
+    CADDY -- "/api/v1/account/settings" --> ACCSET
+    ACCSET --> PG
+    CADDY -- "/api/v1/me/notifications" --> NOTIF
+    NOTIF --> PG
+    NOTIF -- "лок чистки" --> REDIS
+    FRIENDS -. "заявка, подарок" .-> NOTIF
+    ITEMS -. "редкая добыча" .-> NOTIF
+    BOOSTS -. "возврат бустов" .-> NOTIF
+    ADMINAPI -. "сообщение команды" .-> NOTIF
+    NOTIF -. "новая строка, onCreated" .-> NOTIFBOT
+    CADDY -- "/api/v1/changelog" --> CHANGELOG
+    ADMINAPI -. "журнал: правка, публикация" .-> CHANGELOG
+    CHANGELOG --> PG
+    CHANGELOG -- "лок раздачи" --> REDIS
+    CHANGELOG -. "app_update пачкой, deliverMany" .-> NOTIF
+    BADGES -. "версии после «открывал»" .-> CHANGELOG
+    ADMINAPI -. "список игроков" .-> PLAYERLIST
+    PLAYERLIST --> PG
+    CADDY -- "/api/v1/wheel" --> WHEEL
+    WHEEL -- "wheel_spin, сутки по Москве" --> PG
+    WHEEL -. "награда ключом крутки" .-> WALLET
+    WHEEL -. "уровень аккаунта" .-> PROG
+    BADGES -. "крутка ждёт" .-> WHEEL
+    CADDY -- "/api/v1/tasks" --> TASKS
+    TASKS -- "task_def, task_progress, task_run, task_participant" --> PG
+    CADDY -- "/api/v1/media/хэш.webp" --> MEDIA
+    MEDIA -- "media_image" --> PG
+    ADMINAPI -. "загрузка картинки и её показ в панели" .-> MEDIA
+    TASKS -. "картинка годится заданию: квадрат" .-> MEDIA
+    RUNS -. "записанный забег, RunsHooks" .-> TASKS
+    TASKS -. "награда ключом задания и срока" .-> WALLET
+    BADGES -. "награды к выдаче" .-> TASKS
+    ADMINAPI -. "каталог заданий и строки сетей" .-> TASKS
+    TASKS -- "network_task" --> PG
+    TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
+    ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
+    TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
+    CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
+    TESTNOTICE -- "test_notice" --> PG
+    ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE
+    NOTIFBOT -- "задания, окно вида" --> REDIS
+    NOTIFBOT -- "можно ли писать: account_messaging" --> PG
+    NOTIFBOT -. "выбор игрока" .-> ACCSET
+    NOTIFBOT -. "порт Messengers: sendMessage" .-> TGADP
+    CADDY -- "/api/v1/me/badges" --> BADGES
+    BADGES -. "новые предметы" .-> ITEMS
+    BADGES -. "подарки и заявки" .-> FRIENDS
+    BADGES -. непрочитанное .-> NOTIF
+    CADDY -- "/api/v1/me/history" --> HISTORY
+    CADDY -- "/api/v1/daily" --> DAILY
+    DAILY -- "daily_reward, сутки по Москве" --> PG
+    DAILY -. "монеты и осколки ключом дня" .-> WALLET
+    DAILY -. "уровень аккаунта" .-> PROG
+    BADGES -. "награда ждёт" .-> DAILY
+    HISTORY -- "wallet_entry, item_event, purchase" --> PG
+    CADDY -- "/api/v1/flags" --> FLAGS
+    FLAGS --> PG
+    CADDY -- "/api/v1/me/restrictions" --> RESTR
+    RESTR -- "account_restriction; отметка блокировки в account" --> PG
+    RESTR -- "канал restrictions:changed, лок задачи по сроку" --> REDIS
+    ADMINAPI -. "наложить и снять; отзыв сессий при блокировке" .-> RESTR
+    REF -. "можно ли: награды за друзей" .-> RESTR
+    FRIENDS -. "можно ли: подарки, бонус за друзей" .-> RESTR
+    ADS -. "можно ли: награды за рекламу" .-> RESTR
+    TASKS -. "можно ли: партнёрские задания" .-> RESTR
+    RUNS -. "можно ли: рейтинг; хуки наложения и снятия — убрать из досок и вернуть" .-> RESTR
+    CADDY -- "/api/v1/promo-codes" --> PROMOC
+    PROMOC -. "награда ключом кампании и игрока" .-> WALLET
+    PROMOC -. "можно ли: промокоды" .-> RESTR
+    CADDY -- "/api/v1/me/home" --> HOME
+    HOME -. "акции и стартовый набор" .-> SHOP
+    HOME -. "VIP, если его нет" .-> VIP
+    HOME -. "новые версии" .-> CHANGELOG
+    HOME -. "партнёрское задание дня; кольцо суток и награды к забору" .-> TASKS
+    HOME -. "виджет: неделя и завтрашняя награда" .-> DAILY
+    HOME -. "виджет: крутка, джекпот, крутка за рекламу" .-> WHEEL
+    HOME -. "можно ли: друзья, партнёрские задания" .-> RESTR
+    HOME -. "канал проекта" .-> SETTINGS
+    HOME -- "home_slide; регистрация и первая оплата для аудитории" --> PG
+    ADMINAPI -. "слайды команды: завести, поправить, снять" .-> HOME
+
     TG -.статика и конфиг.-> CDN
 ```
+
+**Панель — модуль того же монолита** (`35-stage4-plan.md`, WP17): свои
+контроллеры под `/api/v1/admin/*` и своя cookie-сессия в Redis, а данные —
+через экспортированные сервисы и репозитории соседей: модуль панели сам в
+базу не ходит (`36-parallel-work.md` §2). Клиент панели `apps/admin` ходит в
+эти маршруты только на свой домен: Caddy поддомена панели отдаёт её статику и
+проксирует `/api/v1/admin`, поэтому CORS нет, а cookie с `SameSite=Strict`
+уходит сама. С игрой панель роднят только токены дизайна — движка, оболочки
+и адаптеров в её бандле нет, это проверяет тест границ слоёв.
+
+**Площадка — за портами** (`35-stage4-plan.md`, Р22, §3.11): модули домена —
+вход, приёмник, оплата — не знают Telegram, а просят порты
+`platforms/ports/`. Как проверяется подпись запуска, как выставляется счёт,
+состоит ли игрок в канале и что значит ответ Bot API, знает адаптер
+`platforms/telegram/`; у MAX и VK — заглушки. Бот и инструменты команды в чате администраторов порта не
+требуют: это наш инструмент, а не игра.
 
 Читается так: **Postgres — источник истины, Redis — проекция.** Приём забега
 пишет его в базу одной строкой по первичному ключу и только потом — место в
@@ -898,35 +2074,235 @@ sequenceDiagram
   только на первую запись: повтор из очереди не посчитает забег дважды и не
   пришлёт вторую карточку.
 
-### 4.3 Награда за просмотр рекламы
+### 4.3 Награда за просмотр рекламы (этап 4, реализовано ядро)
 
 ```mermaid
 sequenceDiagram
     participant C as Клиент
     participant AD as ads
-    participant R as Redis
     participant N as Рекламная сеть
+    participant O as Хозяин места<br/>(колесо, забег, задания)
     participant DB as PostgreSQL
+    participant W as wallet
 
-    C->>AD: GET /api/v1/ads/{place}
-    AD->>DB: выбрать блок по платформе и месту
-    AD->>R: создать сессию показа (meta, TTL)
-    AD-->>C: подписанный одноразовый ключ + параметры блока
-    C->>N: показ рекламы
-    N-->>C: просмотр завершён
-    C->>AD: POST /api/v1/ads/confirm { ключ }
-    AD->>R: SET NX used:{sid} — атомарно
-    alt ключ уже использован или чужой
-        AD-->>C: отказ
+    C->>AD: POST /api/v1/ads/sessions { place, device }
+    AD->>DB: сессии игрока в месте с начала вчерашних суток
+    alt место на кулдауне
+        AD-->>C: { available: false, reason: cooldown, retryAt }
+    else ни одного подходящего блока: сеть работает на площадке игрока, блок по профилю, устройство
+        AD-->>C: { available: false, reason: no_fill }
     else
-        AD->>DB: начислить награду в транзакции
-        AD-->>C: награда
+        Note over AD: сеть — без выданных за час,<br/>круг от сети последней награды,<br/>внутри сети — случайный блок
+        AD->>DB: INSERT ad_session (pending, срок по условию успеха)
+        AD-->>C: { sessionId, network, blockId, success }
+    end
+    C->>N: показ блока через SDK
+    N-->>C: досмотр, клик или отказ
+    C->>AD: POST /api/v1/ads/sessions/{id}/result { outcome }
+    AD->>DB: UPDATE шаг воронки — только открытой своей сессии
+    Note over AD,DB: completed от клиента — только где успех показ
+    C->>O: забрать награду места { sessionId }
+    O->>AD: claim(sessionId, место)
+    AD->>DB: блокировка аккаунта и места, история, кулдаун, UPDATE claimed
+    alt не выполнена, окно прошло или кулдаун
+        AD-->>O: отказ
+    else забрана сейчас или раньше
+        AD-->>O: сессия
+        O->>W: награда ключом, содержащим sessionId
     end
 ```
 
-Проверка «использована ли сессия» и начисление — **одна атомарная операция**.
-Иначе два параллельных `confirm` оба проходят проверку и награда начисляется
-дважды (`13-reuse-from-vpnsibcom.md` §5).
+Одна сессия — одна награда: забор и проверка кулдауна идут под одной
+транзакционной блокировкой, а повтор после обрыва отдаёт ту же сессию, и
+хозяин места дожимает награду тем же ключом кошелька. Клик и целевое
+действие выполненной сессию сделает сервер — своим редиректом и постбэком
+сети, следующей частью WP12, а не ответом SDK (`35-stage4-plan.md` §3.7,
+«Доверие»).
+
+### 4.3.1 Креатив сети с API — Taddy (этап 4, WP12, часть 9)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant AD as ads
+    participant T as Taddy API
+    participant DB as PostgreSQL
+
+    C->>AD: POST /api/v1/ads/sessions { place, device, language, premium }
+    Note over AD: сеть по кругу — Taddy,<br/>у формата места доставка api
+    AD->>T: ads/get { pubId, user, origin server }
+    alt креатива нет, таймаут или ошибка
+        AD->>DB: INSERT ad_session (failed, fail_reason)
+        Note over AD: сеть на паузе места —<br/>выдача идёт к следующей сети
+    else креатив есть
+        AD->>DB: INSERT ad_session (pending, creative_id, view_sec)
+        AD-->>C: { sessionId, network taddy, creative { ad, viewSec } }
+        C->>C: наш рекламный блок, отсчёт viewSec
+        C->>AD: result { shown }
+        AD->>DB: UPDATE shown_at — впервые?
+        AD-)T: ads/impressions { id } мимо ответа игроку
+        opt игрок нажал на объявление
+            C->>C: ссылка Taddy в том же касании
+            C->>AD: result { clicked }
+        end
+        C->>AD: result { completed }
+        AD->>DB: UPDATE completed — не раньше created_at + view_sec
+        AD-)T: ads/view-through { id } мимо ответа игроку
+    end
+```
+
+Клик Taddy считает сама — по своей ссылке в объявлении; нам он виден шагом
+`clicked` в воронке. Награда — как у любой рекламы (§4.3): хозяин места
+забирает выполненную сессию. Учёт аудитории — отдельно: SDK Taddy
+поднимается у каждого игрока Telegram, пока у сети задан `pubId`, а `/start`
+бота сервер сообщает Taddy сам (`events/start`).
+
+### 4.3.2 Межстраничная при старте забега (этап 4, WP12, часть 10)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant AD as ads
+    participant F as flags
+    participant DB as PostgreSQL
+    participant N as Сеть: SDK или наш блок
+
+    C->>AD: на запуске: GET /api/v1/ads/networks
+    AD->>F: ads.interstitial для игрока
+    AD-->>C: { networks, interstitial }
+    Note over C: interstitial: false — старт забега не спрашивает вовсе
+    Note over C: «Играть» — параллельно с движком,<br/>«Ещё раз» — до перезапуска
+    C->>AD: POST /api/v1/ads/sessions { place: interstitial, moment: run_start }
+    AD->>DB: VIP? сессии места с начала вчерашних суток
+    alt VIP
+        AD-->>C: { available: false, reason: pass }
+    else момент не площадки, игрок вне доли или правило политики
+        AD->>F: ads.interstitial для игрока
+        AD->>DB: один запрос: сутки с первого входа, забеги не короче минуты,<br/>последняя показанная, оплата, ролик за награду
+        AD-->>C: { available: false, reason: policy }
+        Note over AD: правило и момент — в лог
+    else можно
+        AD->>DB: INSERT ad_session (pending)
+        AD-->>C: { sessionId, network, format: interstitial }
+    end
+    alt выдача дольше 2 с
+        Note over C: забег стартует без рекламы
+        C->>AD: result { failed: late } — когда выдача всё же придёт
+    else выдача успела
+        C->>N: показ, срок — остаток двух секунд на скрипт и картинки
+        alt не успел или отказ сети
+            C->>AD: result { failed, reason }
+        else показан
+            C->>AD: result { completed } без ожидания
+        end
+    end
+    Note over C: новый забег
+```
+
+Показывать ли — решает только сервер: клиент не знает ни покупок, ни
+роликов за награду на других экранах. Две подряд не бывает: перед
+следующей должен закончиться забег не короче минуты, а пауза между
+показами — не меньше минуты. Числа политики — настройки панели, доля
+игроков — флаг `ads.interstitial` (`35-stage4-plan.md` WP12, часть 10).
+
+### 4.3.3 Задание рекламной сети — AdsGram (этап 4, WP13, часть 6)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant T as tasks
+    participant AD as ads
+    participant DB as PostgreSQL
+    participant S as SDK AdsGram
+    participant N as Сервер AdsGram
+    participant W as wallet
+
+    C->>T: GET /api/v1/tasks
+    T->>AD: Task-блок сети для площадки, адрес награды создан?
+    T->>AD: сессия задания: открытая или новая
+    AD->>DB: блокировка места task; открытая сессия сети?
+    alt открытой нет
+        AD->>DB: история места с начала вчерашних суток
+        Note over T,AD: потолок суток и пауза — правило строки сети
+        AD->>DB: INSERT ad_session (pending, cpa), если правило пускает
+    end
+    T-->>C: { tasks, networks: [{ network, offer | null, nextAt }] }
+    C->>S: <adsgram-task> с нашими слотами: награда, «Перейти», «Забрать», «Готово»
+    alt у сети нет задания
+        S-->>C: onBannerNotFound — строки нет
+        C->>AD: result { failed: no_fill }
+    else игрок выполнил задание
+        S->>N: проверка выполнения
+        N->>AD: GET /api/v1/ads/adsgram/reward/секрет/id в Telegram
+        AD->>DB: блокировка места; открытая сессия сети → completed
+        AD->>T: AdTaskHooks: подтверждено
+        T->>W: награда строки ключом сессии
+        T->>AD: забор сессии
+        AD-->>N: 200
+        S-->>C: reward — элемент снимается, строка «проверяем»
+        C->>T: GET /api/v1/tasks, пока doneToday не вырастет
+    end
+```
+
+Награду даёт только подтверждение сети: шаг клиента «досмотрено» сессию
+задания не выполнит — её условие успеха целевое действие. Подтверждение
+без открытой сессии не даёт ничего, повтор после выдачи — тоже: сессия
+уже забрана, а следующая заводится не раньше паузы. Сорвалась выдача — сеть
+получает ошибку и повторяет, а не повторит — награду дожмёт следующее
+открытие экрана заданий тем же ключом сессии.
+
+### 4.3.4 Задание ленты сети — обмен трафиком Taddy (этап 4, WP13, часть 6)
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant A as Адаптер Telegram
+    participant T as tasks
+    participant AD as ads
+    participant DB as PostgreSQL
+    participant X as Taddy API
+    participant W as wallet
+
+    C->>T: GET /api/v1/tasks
+    T-->>C: networks: [{ network taddy, delivery feed, nextAt }] — сеть не ждём
+    C->>T: POST /tasks/networks/taddy/item { language, premium }
+    T->>AD: задание ленты: открытая сессия или новая по правилу строки
+    AD->>X: exchange/feed — без выполненных и автоматических показов
+    alt задание открытой сессии пропало из ленты, игрок переходил
+        AD->>X: exchange/check
+        X-->>AD: true — дальше как «Проверить» ниже, строка — «Награда получена»
+    else не переходил или сеть не видит выполнения
+        AD->>DB: сессия → failed task_gone
+    end
+    AD->>DB: блокировка места task; выполненные из ленты — мимо; INSERT ad_session (creative_id)
+    T-->>C: { kind: task, task: { sessionId, title, image, action, link } }
+    C->>AD: result shown
+    AD->>X: exchange/impressions — показ задания, однажды
+    C->>A: openNetworkTask { taddy, link }
+    A->>X: POST link { fields: [] } — из клиента игрока, как у SDK Taddy
+    X-->>A: { result: https://t.me/бот?start=… }
+    A->>A: openLink — бот внутри Telegram
+    C->>AD: result clicked
+    Note over C: игрок вернулся в приложение — строка проверяет сама
+    C->>T: POST /tasks/networks/taddy/check { sessionId }
+    T->>AD: проверка у сети
+    AD->>X: exchange/check { taskId }
+    alt выполнено
+        AD->>DB: блокировка места; сессия → completed, если это задание игрок не выполнял
+        AD->>T: AdTaskHooks: подтверждено
+        T->>W: награда строки ключом сессии
+        T->>AD: забор сессии
+        T-->>C: { result: confirmed, doneToday, nextAt }
+    else не выполнено или сеть не ответила
+        T-->>C: { result: not_done | unavailable } — подсказка под кнопкой
+    end
+```
+
+Награду даёт только ответ Taddy на проверку сервера: клиент её не
+выполнит, а запрос с чужой сессией или с заданием, которое игрок уже
+выполнял, закрывается без награды. Адрес перехода клиент спрашивает у
+Taddy сам: переход сеть считает по адресу и браузеру игрока, а запросы с
+одного адреса нашего сервера выглядели бы накруткой.
 
 ### 4.4 Публикация конфигурации из админки
 
@@ -1189,58 +2565,44 @@ flowchart TD
 Временный путь закрытого теста (`26-stage2-plan.md`, Р19 и WP13) — подпись
 `initData` на каждом запросе и Redis со сроком жизни — снят вместе с
 переездом клиента на аккаунты (`34-stage3-plan.md`, WP4). Забеги, рейтинг и
-профиль — §4.2; от плейтеста остались сводка, отчёты о запуске и доступ к
-инструментам (§4.12), уже под сессией аккаунта. Неотправленные итоги из
+профиль — §4.2; сводка и отчёты о запуске, оставшиеся от плейтеста, удалены
+на этапе 4, а доступ к инструментам — `/api/v1/tools/access` (§4.12). Неотправленные итоги из
 прежней очереди `bh.playtest.v1.pending` клиент переносит в новую при первом
 запуске.
 
-### 4.12 Статистика плейтеста в чат администраторов (этап 2, реализовано)
+### 4.12 Ежедневная статистика в чат администраторов (этап 4, реализовано)
 
-Счётчики пишутся рядом с забегами и запусками, а сводку собирает бот по
-команде или раз в сутки (`26-stage2-plan.md`, WP14). Забеги сводка получает
-слушателем записанного забега из модуля `runs` (§4.2), рекорды — из его
-рейтинга; игроков считает по аккаунту. Обновления читает модуль
-бота (`backend/api/src/modules/bot`) long polling'ом — у машины разработчика
-нет адреса для вебхука из §4.9 — и передаёт их обработчикам команд; `/stats`
-регистрирует сводка плейтеста.
+Сводка плейтеста — счётчики в Redis рядом с забегами и запусками — удалена
+вместе с маршрутом `/api/v1/playtest/*` (`35-stage4-plan.md`, Р55): её данные
+уже лежат в базе. Статистика считается агрегатами по таблицам за московские
+сутки (`admin-notify/daily-stats.*`). Доступ к инструментам команды —
+`GET /api/v1/tools/access` по праву `tools.dev` и настройке «Стресс-тест для
+всех игроков».
 
 ```mermaid
 sequenceDiagram
-    participant S as Оболочка
-    participant P as PlaytestService
+    participant T as Таймер реплики (раз в минуту)
     participant R as Redis
-    participant BP as BotPoller
-    participant B as PlaytestStatsReporter
+    participant DB as PostgreSQL
     participant TG as Telegram Bot API
-    participant A as Чат администраторов
+    participant A as Чат статистики
 
-    S->>P: POST /playtest/sessions под сессией — установка и устройство
-    P->>R: SADD pt:st:seen {аккаунт}, устройство установки
-    S->>P: POST /diagnostics/reports — отчёт в Postgres (§4.8),<br/>итог без кадров приходит слушателем
-    P->>R: SET pt:st:stress:{reportId} NX, сводка по ОС, список последних
-    P->>R: запись забега: SET pt:st:rec:{reportId} NX, записей и проблемных по причинам
-    Note over S,P: забег — POST /runs (§4.2), в сводку его приносит<br/>слушатель: новый, без читов и не отклонённый
-    P->>R: счётчики pt:st:*
-
-    loop пока держим лок bot:poller
-        BP->>TG: getUpdates (25 с, смещение bot:offset)
-        TG-->>BP: /stats из чата или лички администратора
-        BP->>B: BotRouter.dispatch
-        B->>R: SET pt:report:cmd:{чат} NX — не чаще раза в 20 с
-        B->>R: снимок счётчиков и рекорды рейтинга runs
-        B->>B: SVG → PNG, подпись текстом
-        B->>TG: sendPhoto
-        TG-->>A: картинка сводки
+    T->>T: пора? после 00:10 МСК — отчёт за вчера
+    T->>R: SET stats:daily:<сутки> NX EX 3 сут
+    alt другая реплика уже заняла сутки
+        R-->>T: занято — ничего не делаем
+    else
+        T->>DB: сутки и предыдущие: аккаунты по первому касанию,<br/>сессии, забеги без читов, звёзды live, вехи воронки
+        T->>TG: sendMessage — цифры и разница с прошлыми сутками
+        alt сетевой сбой
+            T->>R: DEL stats:daily:<сутки> — повтор в следующую минуту
+        else отказ Telegram
+            Note over T,R: отметка остаётся: повтор не вылечит
+        end
+        TG-->>A: отчёт
     end
-    Note over B,R: раз в минуту: пора ли отчёт — SET pt:report:daily:{сутки} NX
+    Note over A,T: /stats в чате статистики или в личке с правом аналитики —<br/>за сегодня с полуночи, без разницы, не чаще раза в 20 с на чат
 ```
-
-- **в агрегатах нет имён и Telegram ID** — только множества игроков для
-  подсчёта и счётчики; картинка уходит в групповой чат;
-- **один читатель обновлений** на Redis — лок с продлением; второй процесс
-  на том же токене без общего Redis получит от Telegram `409` и ждёт;
-- **ежедневный отчёт один раз за сутки** в поясе команды: сетевой сбой
-  отпускает отметку суток для повтора, отказ Telegram — нет.
 
 ### 4.13 Приём событий закрытого теста (этап 2, реализовано)
 
@@ -1303,6 +2665,72 @@ sequenceDiagram
     TG-->>U: карточка с подписью на языке игрока
 ```
 
+### 4.17 Награда за забег (этап 4, реализовано)
+
+`35-stage4-plan.md`, WP4. Итог забега пишется синхронно, как на этапе 3, а
+награда — заданием очереди: волна итогов после поста в канале не ждёт опыта и
+монет.
+
+```mermaid
+sequenceDiagram
+    participant C as Клиент
+    participant R as runs
+    participant Q as Очередь rewards
+    participant P as progress
+    participant W as wallet
+    participant DB as Postgres
+
+    C->>R: POST /runs — итог забега
+    R->>DB: забег одной строкой, вердикт
+    R-->>C: место и рекорд
+    R--)Q: слушатель записанного забега — задание с ключом run_id
+    Q->>P: формула награды: монеты и опыт, а забегу с читами, отклонённому или короче 30 с — ничего
+    P->>DB: строка награды ON CONFLICT и прибавка опыта — одна транзакция
+    P->>W: монеты run:<runId>:coins, награды за уровень level:<аккаунт>:<уровень>
+    W->>DB: журнал и баланс, суточный потолок
+    P->>DB: сколько легло после потолка
+    C->>P: GET /progress/runs/:runId — с растущей паузой, пока не посчитано
+    P-->>C: монеты, опыт, новый уровень — экран итогов и шапка
+```
+
+Повтор задания безопасен целиком: опыт держит ключ строки награды, монеты —
+ключ кошелька. Упало между опытом и монетами — повтор найдёт строку и
+доначислит по тому же ключу. Redis недоступен — награда считается сразу, мимо
+ответа игроку.
+
+### 4.16 Вход в бота, воронка и «можно писать» (этап 4, реализовано)
+
+`35-stage4-plan.md`, WP2. Кто нажал `/start`, тот уже наш: аккаунт заводится
+в канале площадки, до первого открытия игры.
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant TG as Telegram
+    participant S as platforms/telegram<br/>приветствие /start
+    participant A as auth
+    participant H as Слушатели входа<br/>attribution, funnel, messaging
+    participant DB as Postgres
+    participant M as platforms/telegram<br/>обновления о разрешении
+
+    U->>TG: t.me/<бот>?start=c-<код>
+    TG->>S: /start c-<код>
+    S->>A: enterChannel: имя, юзернейм, параметр
+    A->>DB: аккаунт — одна вставка, аватар не затирается
+    A--)H: вход с местом «канал» — без ожидания
+    H->>DB: сессия и касание (очередь sessions), веха entered, «можно писать»
+    S-->>U: карточка приветствия — даже если запись упала
+    Note over U,DB: позже — вход в игру, забеги, оплата
+    H->>DB: вехи: открыл игру, первый забег, второй, пятый, D1, D7, покупка
+    U->>TG: блокирует бота
+    TG->>M: my_chat_member: kicked
+    M->>DB: «писать нельзя» — если событие не старше записанного
+```
+
+Вехи — дата первого раза: одна вставка с `ON CONFLICT` и `COALESCE`, и
+повтор события ничего не двигает. Воронка — `count(веха)` рядом с первым
+касанием: `pnpm --filter backend-api funnel:report`.
+
 ### 4.15 Покупка второго шанса за Stars (этап 3, реализовано)
 
 ```mermaid
@@ -1354,6 +2782,319 @@ sequenceDiagram
 
 ---
 
+### 4.16 Вход в панель и действие под cookie-сессией (этап 4, реализовано)
+
+Серверная часть панели (`35-stage4-plan.md`, WP17, часть 1). Сессия панели
+— не токен игрока: cookie `HttpOnly; SameSite=Strict` только на маршруты
+панели, в Redis — хэш токена и срок без продления. Права — тем же гвардом,
+что у игры: гвард панели кладёт в запрос тот же `account`.
+
+```mermaid
+sequenceDiagram
+    participant B as Браузер панели
+    participant AD as admin
+    participant RO as roles
+    participant DB as PostgreSQL
+    participant R as Redis
+
+    B->>AD: POST /api/v1/admin/session/dev { devUser }
+    AD->>AD: панель включена? флаг разработчика?<br/>лимит по адресу
+    AD->>DB: найти или завести аккаунт
+    AD->>RO: роли аккаунта — по базе, не из cookie
+    alt ролей нет или аккаунт заблокирован
+        AD-->>B: 403
+    else
+        AD->>R: SET admin:session:<sha256> EX ttl,<br/>SADD admin:sessions:<аккаунт>
+        AD->>DB: аудит admin.login
+        AD-->>B: Set-Cookie HttpOnly SameSite=Strict<br/>Path=/api/v1/admin, роли и права
+    end
+
+    Note over B,AD: любой запрос панели — cookie, изменяющий — ещё и X-Requested-With: rubezh-admin
+    B->>AD: POST /api/v1/admin/players/:id/ban { reason }
+    AD->>R: GET admin:session:<sha256>
+    alt сессии нет или истекла
+        AD-->>B: 401
+    else
+        AD->>DB: аккаунт жив, роли всё ещё есть
+        AD->>RO: право players.ban
+        AD->>DB: блокировка, аудит было → стало
+        AD->>R: отозвать сессии игры и панели игрока
+        AD-->>B: 201 { account, revokedSessions }
+    end
+```
+
+Отзыв роли и блокировка действуют сразу: роли перечитываются на каждом
+запросе, а сессии панели отзываются в тот же момент. Без входа — не
+задан `JWT_ACCESS_SECRET` — панель отвечает 404 на всё, включая вход.
+
+**Вход через бота** — на проде единственный (`29-admin-panel.md` §8). Выше
+показан вход разработчика; через бота до выдачи cookie путь другой:
+
+```mermaid
+sequenceDiagram
+    participant B as Браузер панели
+    participant AD as admin
+    participant R as Redis
+    participant BOT as бот Telegram
+    participant A as Администратор
+
+    B->>AD: POST /api/v1/admin/session/bot
+    AD->>R: HSET admin:panel-login:<запрос><br/>хэш секрета, код, браузер, сеть, EX 300
+    AD-->>B: запрос, секрет, код, t.me/<бот>?start=panel-<запрос>
+    B->>A: код на экране и «Открыть бота»
+    A->>BOT: /start panel-<запрос> (личка)
+    BOT->>AD: запрос ещё ждёт?
+    BOT->>A: код, браузер, сеть — «Войти» / «Это не я»
+    A->>BOT: «Войти»
+    BOT->>AD: подтвердить — от Telegram ID нажавшего
+    AD->>AD: аккаунт, роли, блокировка
+    AD->>R: ждущий → подтверждён (Lua, один раз)
+    loop раз в 2 секунды, до 5 минут
+        B->>AD: POST .../bot/poll { запрос, секрет }
+        AD->>R: подтверждён? — забрать и удалить (Lua)
+    end
+    AD->>R: SET admin:session:<sha256>
+    AD-->>B: Set-Cookie сессии, роли и права
+```
+
+### 4.18 Рассылка из панели (этап 4, реализовано)
+
+Базовые рассылки (`35-stage4-plan.md`, WP17; `29-admin-panel.md` §7). Одна
+и та же функция условия считает аудиторию в панели и набирает получателей
+на старте, поэтому оценка и отправка не расходятся. Темп общий на все
+рассылки и реплики: лимитер очереди живёт в Redis.
+
+```mermaid
+sequenceDiagram
+    participant P as Панель
+    participant BC as broadcasts
+    participant DB as PostgreSQL
+    participant Q as Очередь (Redis)
+    participant M as Порт Messengers
+    participant TG as Telegram Bot API
+
+    P->>BC: POST /admin/broadcasts/:id/start
+    BC->>DB: count(сегмент): можно писать, не заблокирован
+    alt аудитория больше порога и нет чужого одобрения
+        BC-->>P: 403 approval_required
+    else
+        BC->>DB: черновик → sending, INSERT доставок ON CONFLICT DO NOTHING
+        BC->>DB: аудит broadcast.start
+        BC->>Q: задание-пачка
+        BC-->>P: { audience }
+    end
+
+    loop пачка: темп площадки × batchSec, одна за batchSec на всю очередь
+        Q->>BC: задание
+        BC->>DB: рассылка всё ещё sending?
+        BC->>DB: взять получателей: срок захвата, SKIP LOCKED
+        BC->>M: send(игрок, текст, кнопка /r/<код>)
+        M->>TG: sendMessage
+        alt доставлено
+            BC->>DB: sent, sent_at
+        else 403 или нет чата
+            BC->>DB: blocked, «можно писать» — нет
+        else 429 или сбой сети
+            BC->>DB: отсрочка, остаток пачки отпущен
+            BC->>Q: следующая пачка через retry_after
+        end
+    end
+    BC->>DB: очередь пуста — done
+```
+
+Пауза и отмена видны со следующей пачки — через несколько секунд. После
+перезапуска идущие рассылки поднимаются сами; лишнее задание безопасно:
+одну строку два задания не возьмут.
+
+### 4.19 Выход версии: журнал обновлений и уведомление (этап 4, реализовано)
+
+Журнал обновлений (`35-stage4-plan.md`, Р61, WP31). Публикация отвечает
+панели сразу; раздачу ведёт проход под распределённым локом — таймером раз в
+минуту и толчком от публикации. Курсор и поколение раздачи — в строке
+`changelog_release`, поэтому перезапуск продолжает с места, а публикация
+посреди прохода начинает раздачу заново, и старый проход её курсор не
+перепишет.
+
+```mermaid
+sequenceDiagram
+    participant P as Панель
+    participant CL as changelog
+    participant DB as PostgreSQL
+    participant F as Раздача (под локом)
+    participant N as notifications
+    participant B as notifications-bot
+
+    P->>CL: POST /admin/changelog/publish { version }
+    CL->>DB: черновики версии → published_at
+    CL->>DB: раздача версии: площадки строк, поколение, курсор с начала
+    CL->>DB: аудит changelog.publish
+    CL-->>P: { published, release }
+    CL-)F: толчок
+
+    loop пачка по 500, не больше 40 за проход
+        F->>DB: аккаунты площадок после курсора: не заблокирован, заходил за 90 дней
+        F->>N: deliverMany(app_update, ключ app_update:<версия>)
+        N->>DB: INSERT … ON CONFLICT DO NOTHING RETURNING
+        N-)B: новые строки: дубль в бота по выбору игрока
+        F->>DB: курсор — только своего поколения, пачка неполная — done
+    end
+```
+
+Игрок спрашивает `GET /api/v1/changelog` — строки своей площадки по версиям
+из памяти реплики, открыл журнал — `POST /api/v1/changelog/seen` с самой
+поздней публикацией из ответа; знак меню — версии, вышедшие после.
+
+### 4.20 Конверсии закупленной рекламы (этап 4, реализовано)
+
+Трекинг закупок (`35-stage4-plan.md`, Р86, WP43). Ссылка сети отдаёт адрес
+с макросами, переходник сохраняет подставленное сетью на клике, а
+регистрация и покупки новичка уходят в кабинет сети. Конверсии выводятся из
+фактов проходом раз в минуту — ни забег, ни оплата о сети не знают.
+
+```mermaid
+sequenceDiagram
+    participant AG as AdsGram
+    participant U as Пользователь
+    participant L as links (/r/:код)
+    participant DB as PostgreSQL
+    participant C as ad-conversions (под локом)
+    participant S as secrets
+
+    AG-->>U: реклама: /r/<код>?campaign=…&record=…
+    U->>L: клик
+    L--)DB: link_click + network_params (белый список профиля сети)
+    L-->>U: запуск игры с c-<клик>
+    Note over U,DB: вход: acquisition.first_start_ref = клик, аккаунт создан после клика
+
+    loop раз в минуту
+        C->>DB: дописать регистрации: первый забег от 30 с за 7 суток или первый запуск
+        C->>DB: дописать покупки: live, оплачена, без возврата, отлежалась 10 минут, за 30 суток
+        Note right of DB: ON CONFLICT DO NOTHING — повтор не задваивает
+        C->>DB: созревшие pending, до 100
+        C->>S: токен конверсий
+        alt токена нет
+            C->>DB: ждёт, причина no_token, проверка через 5 минут
+        else нет record и campaign
+            C->>DB: skipped, причина no_macros
+        else
+            C->>AG: confirm_conversion?token&record&goaltype (или tgid и campaignid)
+            alt 2xx
+                C->>DB: sent
+            else 408, 429, 5xx, таймаут
+                C->>DB: повтор через 1, 5, 15, 60 минут … до суток
+            else отказ по сути
+                C->>DB: failed — повторить можно из панели
+            end
+        end
+        C->>DB: макросы кликов старше 31 суток → NULL
+    end
+```
+
+Токен в логи не попадает: адрес постбэка пишется с `token=***`. Аккаунты
+команды пишутся пропущенными (`team`) — их отправляют руками, чтобы
+проверить связку с кабинетом.
+
+### 4.21 Ограничение рейтинга (этап 4, реализовано)
+
+`35-stage4-plan.md` WP44, часть 2. Доски — проекция в Redis, поэтому
+модуль забегов сам убирает ограниченного и возвращает его по сроку;
+модуль ограничений зовёт его хуками и о рейтинге не знает.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель
+    participant R as restrictions
+    participant RR as runs: RatingRestrictions
+    participant DB as Postgres
+    participant Z as Redis: доски
+    participant G as Игрок
+
+    P->>R: наложить «рейтинг» (или блокировку)
+    R->>DB: account_restriction
+    R->>RR: хук «наложено»
+    RR->>Z: ZREM из досок всех сложностей
+    G->>RR: итог забега — рейтинг закрыт?
+    RR-->>G: да: забег ranked = false, rating_restricted<br/>сообщили — «не в рейтинге», молча — место из тени
+    loop раз в минуту, под локом runs:rating-restrictions:lock
+        RR->>DB: кому рейтинг закрыт сейчас
+        RR->>Z: ZREM — вдруг вернулся гонкой
+    end
+    Note over R: срок вышел или сняли
+    R->>RR: хук «снято» (задача restrictions раз в минуту)
+    RR->>DB: лучший рейтинговый забег — сданные под ограничением не в счёт
+    RR->>Z: ZADD GT
+    alt не вышло
+        R-->>R: строка не сведена — повтор через минуту
+    end
+```
+
+В тени (молчаливое ограничение) игрок видит доску, профиль, итог забега
+и карточку `/start` с собой на месте, которое занял бы лучшим забегом,
+включая сданные в тени, — среди настоящих игроков. В досках его нет, и
+другие его не видят; карточка игрока в панели показывает правду.
+
+Сомнительный рекорд, поставленный до ограничения, ограничение не чистит —
+модератор снимает конкретный забег с рейтинга (часть 3б):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель: «Рекорды в рейтинге»
+    participant S as runs: RunsService
+    participant DB as Postgres
+    participant Z as Redis: доски
+
+    P->>S: не учитывать забег, причина
+    S->>DB: ranked = false — только если был рейтинговым
+    alt рейтинг игроку открыт
+        S->>DB: лучший оставшийся рейтинговый забег сложности
+        S->>Z: точная запись его времени или ZREM
+        S->>DB: ещё раз — вдруг сдан забег между чтением и записью
+        S->>Z: ZADD GT, если он лучше
+    else рейтинг закрыт ограничением
+        Note over S,Z: доску не трогаем — хук «снято» вернёт игрока<br/>по сроку уже без снятого забега
+    end
+    S->>DB: аудит players.run.unrank с причиной
+```
+
+«Вернуть» — тот же путь в обратную сторону: вернуть можно только забег,
+снятый модератором, — с честным вердиктом, без читов и не под
+ограничением.
+
+### 4.22 Предпросмотр черновика из панели (этап 4, реализовано)
+
+`35-stage4-plan.md` WP32, Р83. Панель показывает черновик тем же
+компонентом, что игрок: страницей клиента `preview/` во фрейме. Сети и
+входа у страницы нет — черновик целиком приходит сообщением.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant F as Панель: форма
+    participant R as Панель: рамка телефона
+    participant P as Клиент: preview/
+    participant API as API: /api/v1/media
+
+    F->>R: черновик на каждое изменение
+    R->>P: iframe src = VITE_PREVIEW_URL<br/>(политика панели: frame-src — только он)
+    P->>R: postMessage «готова» — адресу панели из VITE_ADMIN_URL
+    R->>R: от своего источника и своего фрейма?
+    R->>P: postMessage черновик — источнику страницы
+    P->>P: от адреса панели и от родительского окна?<br/>схема черновика — реестр по виду
+    P->>API: картинка по хэшу, если задана
+    P-->>F: слайд тем же SlideView, что у игрока
+    Note over R: «готова» не пришла за 6 с — объяснение,<br/>какой адрес не настроен
+```
+
+Страница — своя сборка (`apps/web-telegram/vite.preview.config.ts`):
+вторым входом игры общий с игрой модуль ушёл бы в общие чанки, и
+раскладка первой загрузки поехала бы от страницы, которую игрок не
+открывает. Встроить клиент во фрейм политика позволяет Telegram Web и
+панели — и больше никому.
+
+---
+
 ## 5. Топология развёртывания
 
 ```mermaid
@@ -1368,52 +3109,62 @@ flowchart TB
         DA --> DR
     end
 
-    subgraph vps["VPS — production и staging рядом"]
-        CAD["Caddy :80 / :443<br/>единственный вход"]
+    subgraph vps["VPS 2 vCPU / 4 ГБ — только production"]
+        CAD["Caddy :80 / :443<br/>единственный вход, TLS через DNS Bunny"]
+        STAT["статика по версиям<br/>/srv/rubezh/web/*/current"]
+        PAPI["API + воркеры BullMQ<br/>порт не публикуется"]
+        PPG[("Postgres")]
+        PR[("Redis")]
+        FRPS["frps<br/>туннели разработчиков"]
+        BAK["backup.sh раз в сутки<br/>дамп → age ключом владельца"]
+        SPOOL[("очередь журнала<br/>том wal-spool")]
+        PITR["контейнер backup<br/>журнал раз в минуту, база и зеркало<br/>раз в сутки → age двумя ключами"]
+        WATCH["backup-watch.sh<br/>раз в 10 минут"]
 
-        subgraph prod["compose-проект production"]
-            PAPI["API<br/>порт не публикуется"]
-            PPG[("Postgres")]
-            PR[("Redis")]
-            PW["Воркеры BullMQ"]
-        end
-
-        subgraph stg["compose-проект staging"]
-            SAPI["API :4100 (127.0.0.1)"]
-            SPG[("Postgres :5532")]
-            SR[("Redis :6479")]
-        end
-
-        MON["Prometheus + Grafana"]
-        BAK["pg-backup<br/>каждые 6 часов → Telegram"]
-
+        CAD --> STAT
         CAD --> PAPI
-        CAD --> SAPI
+        CAD --> FRPS
         PAPI --> PPG
         PAPI --> PR
-        PW --> PPG
-        PW --> PR
-        SAPI --> SPG
-        SAPI --> SR
-        MON -.метрики.-> PAPI
         BAK -.дамп.-> PPG
+        PPG -.archive_command.-> SPOOL
+        SPOOL --> PITR
+        PITR -.базовая копия.-> PPG
+        WATCH -.здоровье.-> PITR
     end
 
-    CDNP["CDN: статика игры<br/>+ снапшоты конфигурации"]
-    PLAYER(("Игрок"))
+    S3[("Bunny Storage, S3<br/>база, журнал, зеркало репозитория<br/>14 дней")]
+    GH["GitHub<br/>репозиторий"]
 
-    PLAYER --> CDNP
+    TGP["tgrasp.ru<br/>прокси Bot API"]
+    TG["Telegram Bot API"]
+    DEVM["машина разработчика<br/>frpc"]
+    PLAYER(("Игрок"))
+    OWNER(("Владелец"))
+
     PLAYER --> CAD
+    DEVM -.WebSocket.-> CAD
+    PAPI -.long polling и отправка.-> TGP
+    TGP --> TG
+    BAK -.документ в личку бота.-> TGP
+    TG -.бэкап.-> OWNER
+    PITR --> S3
+    GH -.git clone --mirror.-> PITR
+    WATCH -.тревога в чат админов.-> TGP
+    OWNER -.восстановление своим ключом.-> S3
 ```
 
 Порты, смещения staging и правила публикации — `20-env-and-ports.md` §2.
 
-**Закрытый тест этапа 2** разворачивается на VPS, где **уже работает
-инстанс Caddy с другими сайтами**: своего Caddy в compose нет, наш конфиг
-подключается отдельным файлом, наши сервисы — к его внешней Docker-сети без
-публикации портов. Клиент на отдельных поддоменах отдаётся через Bunny.net,
-origin — наш контейнер статики за этим Caddy (`26-stage2-plan.md`, WP10). Grafana и Prometheus на
-схеме — техническая часть, появляется на этапе 5; продуктовая аналитика —
-в админ-панели (`29-admin-panel.md`).
+**Прод с 26.09.2026** — свой VPS целиком наш, стек `infra/prod` (`09-ci-cd.md`
+§10): свой Caddy в compose, статика каталогами версий, наружу — только Caddy.
+Staging появится, когда сервер вырастет (`20-env-and-ports.md` §6); CDN Bunny
+встанет перед статикой к публичному лончу. Из российской сети Bot API
+недоступен в обе стороны, поэтому бот ходит через прокси `tgrasp.ru` и
+забирает обновления long polling'ом, а не вебхуком (`20-env-and-ports.md`
+§5.2). Бэкапов два, независимых: дамп владельцу в бота и бэкап на момент
+времени в Bunny Storage вне сервера — включается, когда задана зона
+(`20-env-and-ports.md` §5.4). Grafana и Prometheus — техническая часть, появляется на этапе 5;
+продуктовая аналитика — в админ-панели (`29-admin-panel.md`).
 Этапы, на которых эта топология меняется при росте нагрузки, — 
 `14-scalability.md` §3.

@@ -11,6 +11,7 @@ export type ScreenId =
   | "lobby"
   | "mode"
   | "weapon"
+  | "boosts"
   | "run"
   | "stress"
   | "arsenal"
@@ -18,6 +19,10 @@ export type ScreenId =
   | "rating"
   | "friends"
   | "profile"
+  | "level"
+  | "history"
+  | "notifications"
+  | "changelog"
   | "tasks"
   | "daily"
   | "wheel"
@@ -28,21 +33,19 @@ export type ScreenId =
   | "guide"
   | "feedback"
   | "soundLab"
-  | "about";
+  | "about"
+  | "testNotice"
+  | "promoCode";
 
 /** Корни разделов нижней панели: переключение вкладки сбрасывает стек. */
 export const TAB_ROOTS = ["shop", "arsenal", "lobby", "tasks", "rating", "friends"] as const;
 export type TabId = (typeof TAB_ROOTS)[number];
 
-/** Экраны-заглушки: их заходы считаются отдельно — это замер интереса (§6). */
-const STUB_SCREENS: ReadonlySet<ScreenId> = new Set<ScreenId>([
-  "arsenal",
-  "shop",
-  "friends",
-  "tasks",
-  "daily",
-  "wheel",
-]);
+/**
+ * Экраны-заглушки: их заходы считаются отдельно — это замер интереса (§6).
+ * Сейчас заглушек нет; признак в `screen_viewed` остаётся для следующих.
+ */
+const STUB_SCREENS: ReadonlySet<ScreenId> = new Set<ScreenId>([]);
 
 export interface NavigationStore {
   stack: ScreenId[];

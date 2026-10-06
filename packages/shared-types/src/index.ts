@@ -42,10 +42,153 @@ export type HapticType =
   | "warning"
   | "error";
 
-export interface AdResult {
-  shown: boolean;
-  rewarded: boolean;
+/**
+ * Что показать — ровно то, что выдал сервер (docs/35-stage4-plan.md WP12,
+ * «Стык с клиентом»). Адаптер знает сети и их SDK, но не места и не
+ * награды: какую сеть и блок показать, решил сервер, награду выдаёт хозяин
+ * места по сессии показа.
+ */
+export interface AdShowRequest {
+  /** сеть из выдачи сервера: `adsgram`, `adsonar`, `richads`, `taddy` */
+  network: string;
+  /** блок в кабинете сети; `null` — показ по ключам сети */
+  blockId: string | null;
+  format: "rewarded" | "interstitial" | "task";
+  /** публичные ключи сети — `pubId`, `appId`: их ждёт SDK */
+  keys: Readonly<Record<string, string>>;
+  /**
+   * Тестовые показы сети. Решает сервер, а не сборка: в боевом режиме
+   * показы в отладке не засчитываются и выплат нет
+   * (docs/33-telegram-mini-app-pitfalls.md §6), а включить их на время
+   * проверки команда должна без релиза.
+   */
+  debug?: boolean;
+  /**
+   * Сколько показ может готовиться — грузить скрипт сети, — мс. Задан, когда
+   * показа ждёт старт забега (межстраничная, docs/35-stage4-plan.md WP12,
+   * часть 10): не успел — отказ `late`, а скрипт догружается для следующего
+   * показа. Не задан — ждём, сколько нужно.
+   */
+  readyWithinMs?: number;
 }
+
+/**
+ * Почему показа не было — кодом для воронки (`/ads/sessions/{id}/result`):
+ * `no_fill` — у сети нет рекламы для игрока, это не поломка; `busy` — уже
+ * идёт другой показ; `unsupported` — сеть или формат адаптеру незнакомы;
+ * `misconfigured` — у сети нет нужного ключа; `load_failed` — скрипт сети
+ * не загрузился; `timeout` — SDK не ответил; `late` — показ не успел к своему
+ * сроку (`readyWithinMs`), и забег начался без него.
+ */
+export type AdFailureReason = "no_fill" | "sdk_error" | "load_failed" | "timeout" | "busy" | "unsupported" | "misconfigured" | "late";
+
+/**
+ * Чем кончился показ: `completed` — SDK подтвердил досмотр (у межстраничной
+ * — показ), `closed` — игрок закрыл раньше, без награды и без повтора,
+ * `failed` — показа не было, и сервер может предложить следующую сеть.
+ */
+export type AdShowOutcome = { kind: "completed" } | { kind: "closed" } | { kind: "failed"; reason: AdFailureReason };
+
+/**
+ * Сеть, чей SDK поднимается у игрока при запуске для учёта аудитории
+ * (docs/35-stage4-plan.md Р78): какая и с какими публичными ключами —
+ * решает сервер (`GET /api/v1/ads/networks`).
+ */
+export interface AdNetworkSetup {
+  network: string;
+  keys: Readonly<Record<string, string>>;
+}
+
+/**
+ * Объявление, которое рисует наш рекламный блок (Р78): его отдаёт сеть с API
+ * через сервер, а позже — и своя прямая реклама. Адреса — только https,
+ * их проверил сервер.
+ */
+export interface AdCreative {
+  /** идентификатор у сети — по нему сервер сообщает ей показ */
+  id: string;
+  title: string | null;
+  description: string | null;
+  text: string | null;
+  image: string | null;
+  icon: string | null;
+  /** надпись на кнопке; `null` — своя у оболочки */
+  button: string | null;
+  link: string;
+  /** чья реклама — для пометки «Реклама»: рекламодатель или сама сеть */
+  advertiser: string;
+}
+
+/**
+ * Задание рекламной сети во вкладке «Партнёры» (docs/35-stage4-plan.md
+ * WP13, часть 6). Само задание — иконку, заголовок, переход и проверку —
+ * рисует SDK сети, а награду и кнопки даёт оболочка своими узлами: адаптер
+ * вставляет элемент сети в `host` и раскладывает узлы по её слотам. Какую
+ * сеть и блок показать, решил сервер; награду он же даёт по подтверждению
+ * сети, и `done` лишь говорит оболочке обновить экран.
+ */
+export interface NetworkTaskMount {
+  /** сеть из ответа сервера: `adsgram` */
+  network: string;
+  /** блок в кабинете сети: `task-123` */
+  blockId: string | null;
+  /** тестовые задания сети — решает сервер, как у показа */
+  debug?: boolean;
+  /** куда вставить элемент сети */
+  host: HTMLElement;
+  /** узлы оболочки: награда, «Перейти», «Забрать», «Готово» */
+  parts: Readonly<Record<NetworkTaskPart, HTMLElement>>;
+  /** как строка выглядит — значениями CSS из токенов оболочки; адаптер переводит их в настройки сети */
+  look: NetworkTaskLook;
+  onState(state: NetworkTaskState): void;
+}
+
+export type NetworkTaskPart = "reward" | "open" | "claim" | "done";
+
+/** Размеры строки задания — те же, что у строк своих заданий. */
+export interface NetworkTaskLook {
+  fontSize: string;
+  iconSize: string;
+  iconRadius: string;
+  /** между иконкой и заголовком */
+  gap: string;
+  /** под кнопку «Перейти» и «Забрать» */
+  buttonWidth: string;
+}
+
+/**
+ * `ready` — задание на экране; `empty` — у сети нет задания для игрока, это
+ * не поломка; `failed` — скрипт или SDK отказали; `done` — сеть засчитала
+ * выполнение; `stale` — приложение открыто слишком долго, и сеть новых
+ * заданий не даёт до перезапуска.
+ */
+export type NetworkTaskState =
+  | { kind: "ready" }
+  | { kind: "empty" }
+  | { kind: "failed"; reason: AdFailureReason }
+  | { kind: "done" }
+  | { kind: "stale" };
+
+export interface NetworkTaskHandle {
+  /** убрать элемент сети и её слушатели; узлы оболочки остаются оболочке */
+  unmount(): void;
+}
+
+/**
+ * Задание ленты сети (WP13, часть 6): строку рисует оболочка по данным
+ * сервера, а переход у сети свой — адрес сети отдаёт адрес перехода, и
+ * просить его должен клиент игрока, а не наш сервер: переход сеть считает
+ * по адресу и браузеру игрока.
+ */
+export interface NetworkTaskLink {
+  /** сеть из ответа сервера: `taddy` */
+  network: string;
+  /** адрес сети из ленты — только https */
+  link: string;
+}
+
+/** Чем кончилось открытие: `opened` — площадка открыла переход; `failed` — сеть не отдала адрес или сеть незнакома. */
+export type NetworkTaskOpen = "opened" | "failed";
 
 /**
  * Единый интерфейс платформенного адаптера.
@@ -60,6 +203,12 @@ export interface PlatformAdapter {
    * Нет метода — площадка оплату не умеет, и оболочка покупку не предлагает.
    */
   openInvoice?(url: string): Promise<InvoiceStatus>;
+  /**
+   * Открыть внешнюю ссылку — канал проекта из задания, страницу партнёра.
+   * Ссылку своей площадки адаптер открывает внутри её клиента, не закрывая
+   * игру. Нет метода — оболочка открывает ссылку браузером.
+   */
+  openLink?(url: string): void;
   share(payload: SharePayload): void;
   /**
    * Пригласить в игру: системный выбор чата площадки, а где его нет — копия
@@ -67,6 +216,20 @@ export interface PlatformAdapter {
    * (docs/23-referral-and-partner-program.md).
    */
   invite(invite: InvitePayload): Promise<InviteResult>;
+  /**
+   * Какими ещё способами площадка умеет позвать друга — по возможностям
+   * клиента, а не по имени площадки: старый клиент Telegram подготовленных
+   * сообщений не знает (docs/35-stage4-plan.md Р63). Нет метода — никакими.
+   */
+  inviteMethods?(): InviteMethods;
+  /**
+   * Отправить сообщение, которое заранее подготовил бот площадки: площадка
+   * открывает выбор чата, пишет игрок. Id выдаёт сервер
+   * (`POST /api/v1/friends/invite-message`).
+   */
+  sharePreparedMessage?(messageId: string): Promise<InviteResult>;
+  /** Текст в буфер обмена средствами площадки; `false` — не дала. Нет метода — буфер браузера. */
+  copyText?(text: string): Promise<boolean>;
   /**
    * Подписанные данные запуска для сервера — в Telegram строка `initData`.
    * Сервер проверяет подпись и узнаёт по ней игрока; `null` — площадка их не
@@ -96,8 +259,31 @@ export interface PlatformAdapter {
    * этапа 3 этого не происходит вовсе (docs/08-web-and-identity.md §4).
    */
   displayUser: DisplayUser | null;
-  /** опционально — не везде доступно, см. docs/01-tech-stack.md §6 */
-  showAd?(): Promise<AdResult>;
+  /**
+   * Показ рекламы сети. Нет метода — площадка рекламу сетей не показывает:
+   * оболочка не рисует кнопку «за рекламу», а VIP получает награду без
+   * ролика с сервера и без адаптера (docs/01-tech-stack.md §6).
+   */
+  showAd?(request: AdShowRequest): Promise<AdShowOutcome>;
+  /**
+   * Поднять SDK сетей для учёта аудитории (Р78). Зовётся в простое после
+   * первого кадра главной; отказ чужого SDK игре не мешает и наружу не
+   * бросается. Нет метода — площадка таких сетей не знает.
+   */
+  prepareAds?(networks: readonly AdNetworkSetup[]): Promise<void>;
+  /**
+   * Поставить задание рекламной сети в строку оболочки (WP13, часть 6).
+   * Ручка приходит, когда код заданий загружен; исход — через `onState`,
+   * всегда: незнакомая сеть — `failed` `unsupported`. Нет метода — площадка
+   * заданий сетей не показывает, и строки сети у игрока нет.
+   */
+  mountNetworkTask?(mount: NetworkTaskMount): Promise<NetworkTaskHandle>;
+  /**
+   * Открыть задание ленты сети: спросить у сети адрес перехода и открыть
+   * его так же, как любую внешнюю ссылку площадки. Не бросает: отказ —
+   * `failed`. Нет метода — площадка заданий ленты не показывает.
+   */
+  openNetworkTask?(task: NetworkTaskLink): Promise<NetworkTaskOpen>;
   /** опционально — площадка может не дать хранилища, см. KeyValueStorage */
   storage?: KeyValueStorage;
 }
@@ -209,6 +395,13 @@ export interface PlatformClientInfo {
   platform: string | null;
   /** версия API клиента площадки */
   version: string | null;
+  /**
+   * Язык и премиум игрока со слов клиента — подсказка сети с API для подбора
+   * рекламы (docs/35-stage4-plan.md Р78). Площадка, которая их не знает, —
+   * без полей.
+   */
+  language?: string | null;
+  premium?: boolean | null;
 }
 
 export interface InvitePayload {
@@ -218,8 +411,16 @@ export interface InvitePayload {
   text: string;
 }
 
-/** `shared` — открыт выбор чата, `copied` — ссылка в буфере, `unavailable` — не вышло ни то, ни другое. */
-export type InviteResult = "shared" | "copied" | "unavailable";
+/**
+ * `shared` — открыт выбор чата или сообщение отправлено, `copied` — ссылка в
+ * буфере, `cancelled` — игрок сам закрыл окно, `unavailable` — не вышло.
+ */
+export type InviteResult = "shared" | "copied" | "cancelled" | "unavailable";
+
+export interface InviteMethods {
+  /** сообщение, подготовленное ботом, — с кнопкой в игру */
+  preparedMessage: boolean;
+}
 
 export interface SharePayload {
   runScore: number;
@@ -353,6 +554,18 @@ export const FEEDBACK_TEXT_MAX = 2000;
 
 export type EnemyRank = "elite" | "boss";
 
+/**
+ * Стихии урона (docs/35-stage4-plan.md, §3.3, Р24): четыре поверх
+ * физического. Новая стихия — строка здесь и одно состояние в
+ * `core-game/src/game/sim/elements.ts`, без правки остального.
+ */
+export const ELEMENTS = ["physical", "fire", "cold", "lightning", "poison"] as const;
+
+export type ElementId = (typeof ELEMENTS)[number];
+
+/** Стихии, у которых есть состояние и сопротивление, — всё, кроме физического. */
+export type StatusElement = Exclude<ElementId, "physical">;
+
 interface EnemyDefBase {
   id: string;
   hp: number;
@@ -384,6 +597,23 @@ interface EnemyDefBase {
    * минуту и в обычный поток не попадают.
    */
   rank?: EnemyRank;
+  /**
+   * Сопротивление стихиям — доля урона, которую враг гасит: 0.5 — вдвое
+   * меньше урона, −0.5 — в полтора раза больше. Не задано — ноль. Стихийное
+   * оружие должно быть ощутимо сильнее против уязвимого врага и слабее
+   * против стойкого: на этом держится сборка против конкретных врагов.
+   * Физическому сопротивления нет — его роль играет здоровье.
+   */
+  resist?: Partial<Record<StatusElement, number>>;
+  /**
+   * Стихия атаки врага — касания, взрыва, снаряда, удара кастера
+   * (docs/35-stage4-plan.md §3.3). Не задана — физическая. Стихийную атаку
+   * гасит сопротивление игрока этой стихии, и она накладывает на игрока
+   * состояние: горение, холод, шок или яд.
+   */
+  element?: StatusElement;
+  /** шанс наложить состояние за попадание, от 0 до 1; не задан — каждое попадание */
+  statusChance?: number;
 }
 
 /**
@@ -582,6 +812,8 @@ export interface WeaponLevel {
   projectileSpeed?: number;
   /** время жизни снаряда или зоны */
   ttlSec?: number;
+  /** шанс наложить состояние своей стихии за попадание, от 0 до 1 */
+  statusChance?: number;
 }
 
 export interface WeaponDef {
@@ -589,12 +821,89 @@ export interface WeaponDef {
   behavior: WeaponBehavior;
   nameKey: string;
   descriptionKey: string;
-  /** можно выбрать на старте забега */
-  starting?: boolean;
   /** вес в выборе улучшений; по умолчанию 1 */
   weight?: number;
+  /** стихия урона; не задана — физический */
+  element?: ElementId;
   /** уровни по порядку: levels[0] — первый уровень */
   levels: WeaponLevel[];
+}
+
+/**
+ * Параметры, которые снаряжение, дерево и бусты меняют на весь забег
+ * (docs/35-stage4-plan.md §3.3, WP7). Движок получает их готовым набором и не
+ * знает про предметы: снаряжение — понятие экономики, а не боя.
+ *
+ * Значение — прибавка, и её смысл зависит от параметра:
+ * - `damage`, `area`, `projectileSpeed`, `duration`, `moveSpeed`,
+ *   `pickupRadius`, урон стихии `damageFire` … `damagePoison` и
+ *   `statusChance` — к множителю: `0.12` — это +12%;
+ * - `cooldown` — ускорение: `0.05` — перезарядка на 5% короче;
+ * - `maxHp`, `regenPerSec`, `armor` — числом: `20` — +20 здоровья;
+ * - `resistFire` … `resistPoison` — доля сопротивления: `0.1` — +10%.
+ */
+export const LOADOUT_STATS = [
+  "damage",
+  "cooldown",
+  "area",
+  "projectileSpeed",
+  "duration",
+  "moveSpeed",
+  "pickupRadius",
+  "maxHp",
+  "regenPerSec",
+  "armor",
+  "resistFire",
+  "resistCold",
+  "resistLightning",
+  "resistPoison",
+  "damageFire",
+  "damageCold",
+  "damageLightning",
+  "damagePoison",
+  "statusChance",
+] as const;
+
+export type LoadoutStat = (typeof LOADOUT_STATS)[number];
+
+/**
+ * Набор на забег: модификаторы параметров и активные бусты. Пишется в запись
+ * и снимок забега — иначе повтор и продолженный забег разошлись бы с
+ * оригиналом. Пустой набор — забег без снаряжения.
+ */
+export interface RunLoadout {
+  modifiers: Partial<Record<LoadoutStat, number>>;
+  /** id активных бустов; движок их пока только записывает (WP8) */
+  boosts: string[];
+  /**
+   * Уровень аккаунта из подписанного снимка (docs/35-stage4-plan.md §3.13,
+   * WP25): от него — открытое оружие, навыки и слоты под них. Нет поля —
+   * открыто всё: так идут запись и снимок прошлой сборки, стенд и тесты
+   * баланса. Оболочка на новом забеге ставит его всегда.
+   */
+  accountLevel?: number;
+}
+
+/**
+ * Подписанный снимок надетого (Р17): сервер выдаёт его, клиент берёт с собой
+ * в забег — в том числе без сети — и возвращает в итоге. Подпись проверяет
+ * только сервер; клиенту снимок — непрозрачный пропуск и числа для движка.
+ */
+export interface SignedLoadout {
+  accountId: string;
+  /**
+   * Параметры — строками, а не `LoadoutStat`: сервер новее клиента может
+   * прислать параметр, которого движок не знает, а подпись считается по всем.
+   */
+  modifiers: Record<string, number>;
+  /**
+   * Уровень аккаунта на момент выдачи (WP25): от него движок открывает
+   * оружие, навыки и слоты. Необязательное: снимок прошлой сборки его не несёт.
+   */
+  accountLevel?: number;
+  /** UTC, миллисекунды */
+  issuedAtMs: number;
+  signature: string;
 }
 
 /** Характеристики игрока, которые меняют пассивки. */
@@ -609,7 +918,13 @@ export type PlayerStat =
   | "maxHp"
   | "regenPerSec"
   | "pickupRadius"
-  | "armor";
+  | "armor"
+  /** сопротивление всем стихиям сразу — доля урона, которую гасит игрок */
+  | "resist"
+  | "resistFire"
+  | "resistCold"
+  | "resistLightning"
+  | "resistPoison";
 
 /**
  * Пассивное улучшение. `levels` — итоговое значение на каждом уровне, а не
@@ -635,6 +950,26 @@ export interface PassiveDef {
   op: "add" | "mul";
   weight?: number;
   levels: number[];
+}
+
+/**
+ * Буст — разовое усиление на один забег (docs/35-stage4-plan.md §3.5, Р39).
+ * Данные геймдизайнера (`core-game/src/content/boosts.ts`); цену и списание
+ * знает сервер, движок — только эффект. Эффекты складываются: буст может
+ * и прибавить параметр, и дать щит.
+ */
+export interface BoostDef {
+  id: string;
+  nameKey: string;
+  descriptionKey: string;
+  /** прибавки к параметрам на весь забег — та же шкала, что у снаряжения */
+  modifiers?: Partial<Record<LoadoutStat, number>>;
+  /** сколько попаданий гасит щит целиком */
+  shieldHits?: number;
+  /** на сколько уровней забег начинается выше первого — столько выборов сразу */
+  startLevels?: number;
+  /** сколько лишних карточек на каждом выборе улучшения */
+  extraOffers?: number;
 }
 
 /**
@@ -729,6 +1064,22 @@ export interface DifficultyDef {
 export interface LoadoutLimits {
   weapons: number;
   passives: Record<PassiveCategory, number>;
+}
+
+/**
+ * Что открывает уровень аккаунта (docs/35-stage4-plan.md Р41, §3.13): строка
+ * таблицы `content/unlocks.ts`. Открытое остаётся открытым на всех уровнях
+ * выше; слоты задаются числом на уровне, с которого действуют. Первая строка —
+ * стартовый набор и слоты всех категорий.
+ */
+export interface AccountUnlockDef {
+  level: number;
+  /** оружие, которое открывается на этом уровне */
+  weapons?: string[];
+  /** навыки — пассивки забега, — которые открываются на этом уровне */
+  passives?: string[];
+  /** слоты с этого уровня; не заданное — как на уровне ниже */
+  slots?: { weapons?: number; passives?: Partial<Record<PassiveCategory, number>> };
 }
 
 /**
@@ -847,6 +1198,12 @@ export interface RunResult {
   killsByEnemy: Record<string, number>;
   damageDealt: number;
   damageTaken: number;
+  /**
+   * Урон по стихиям (docs/35-stage4-plan.md, WP6, «Аналитика»): физическим и
+   * каждой стихией, считая горение, яд и перескок молнии. Стихии без урона
+   * не попадают — как враги без убийств в `killsByEnemy`.
+   */
+  damageByElement: Partial<Record<ElementId, number>>;
   weapons: RunWeaponSummary[];
   passives: RunPassiveSummary[];
   /** id врага, нанёсшего смертельный урон; null — забег кончился не смертью */
@@ -867,6 +1224,12 @@ export interface RunResult {
    * их с покупками: продолжение без оплаты — подозрительный забег.
    */
   continues: number[];
+  /**
+   * Бусты, которые движок применил (docs/35-stage4-plan.md §3.5). Сервер
+   * сверяет их с покупками на забег. Нет поля — забег без бустов, в том числе
+   * итог прошлой сборки.
+   */
+  boosts?: string[];
 }
 
 // --- Забеги под аккаунтом: старт, итог, рейтинг (docs/34-stage3-plan.md, WP4) ---
@@ -897,7 +1260,8 @@ export interface RunFinishSubmission {
   level: number;
   enemiesKilled: number;
   startingWeaponId: string;
-  weapons: { id: string; level: number }[];
+  /** урон оружия — для листа забега в профиле; забег из очереди прошлой сборки его не знает */
+  weapons: { id: string; level: number; damage?: number }[];
   contentHash: string;
   /**
    * id врага, нанёсшего смертельный урон; `null` — сдача. Для сводки «кто чаще
@@ -914,24 +1278,37 @@ export interface RunFinishSubmission {
    * сборки поля не знает.
    */
   continues?: number[];
+  /**
+   * Снимок надетого, с которым забег начался (docs/35-stage4-plan.md §3.4,
+   * WP7). Нет поля — забег без снаряжения.
+   */
+  loadout?: SignedLoadout;
+  /** бусты, применённые движком; нет поля — забег без бустов */
+  boosts?: string[];
+  /**
+   * Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4): на
+   * вердикт не влияют. Нет полей — забег из очереди прошлой сборки.
+   */
+  passives?: { id: string; level: number }[];
+  stats?: RunFinishStats;
 }
 
-/**
- * Запуск приложения — для статистики плейтеста: сколько людей открыли игру
- * и на чём. Технические сведения об устройстве без идентификаторов, кроме
- * `installId`, который уже есть у каждой установки (docs/28-diagnostics.md §5.2).
- */
-export interface PlaytestSessionReport {
-  installId: string;
-  build: string;
-  contentHash: string;
-  device: PlaytestDevice;
+export interface RunFinishStats {
+  damageTaken: number;
+  xpCollected: number;
+  waveReached: number;
+  /** кого больше всего убил — пятёрка по убыванию */
+  topKills: { enemy: string; count: number }[];
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
 export type DeviceFormFactor = "phone" | "tablet" | "desktop";
 
-export interface PlaytestDevice {
+/**
+ * Устройство в отчёте диагностики: технические сведения без идентификаторов
+ * (docs/28-diagnostics.md §5.2).
+ */
+export interface DeviceDescription {
   clientPlatform: string | null;
   clientVersion: string | null;
   os: DeviceOs;
@@ -980,6 +1357,8 @@ export interface Leaderboard {
 }
 
 export interface RecentRun {
+  /** по нему открывается лист забега; сервер до листа его не отдавал */
+  runId?: string;
   difficultyId: DifficultyId;
   survivalSec: number;
   level: number;
@@ -992,7 +1371,7 @@ export interface RecentRun {
  * Что игроку открыто в клиенте. Решает сервер по праву аккаунта; скрытая
  * кнопка — не защита, и то, что трогает чужие данные, сервер проверяет сам.
  */
-export interface PlaytestAccess {
+export interface ToolsAccess {
   admin: boolean;
   stressTest: boolean;
   devMode: boolean;

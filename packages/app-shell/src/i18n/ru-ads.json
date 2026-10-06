@@ -1,0 +1,9 @@
+{
+  "ads.label": "Реклама · {advertiser}",
+  "ads.open": "Открыть",
+  "ads.rewardIn": "Досмотрите — награда через {seconds} с",
+  "ads.rewardReady": "Награда ваша — можно закрывать",
+  "ads.closeIn": "Закрыть можно через {seconds} с",
+  "ads.closeEarly": "Закрыть без награды",
+  "ads.close": "Закрыть рекламу"
+}

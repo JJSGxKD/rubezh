@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { BotRouter } from "../src/modules/bot/bot-router.js";
+import { BotRouter } from "../src/platforms/telegram/bot-router.js";
 import {
   ExportBotCommand,
   periodOf,
@@ -9,11 +9,12 @@ import {
   type ExportJob,
 } from "../src/modules/export/export-bot.command.js";
 import type { ExportArtifact, ExportRequest, ExportService } from "../src/modules/export/export.service.js";
-import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
-import type { TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { chatTargetOf } from "../src/platforms/ports/chat-target.js";
+import type { TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 // Выгрузка через бота (docs/28-diagnostics.md §6.1.5).
 
@@ -80,7 +81,8 @@ function setup(env: Record<string, string> = {}, parts = 1) {
       return {
         exportId: "e1e2e3e4-0000-4000-8000-000000000000",
         period: request.period,
-        fileName: "rubezh-export.zip",
+        zipPath: "",
+      fileName: "rubezh-export.zip",
         parts: Array.from({ length: parts }, (_, index) => `/tmp/part-${index}`),
         sizeBytes: 90 * 1024 * 1024,
         counts: { events: 1200, reports: 3, runs: 40 },
@@ -99,7 +101,7 @@ function setup(env: Record<string, string> = {}, parts = 1) {
   } as unknown as ExportService;
   const locks = new MemoryLocks();
   const router = new BotRouter();
-  const command = new ExportBotCommand(config, router, locks, api, exports, rolesService(config));
+  const command = new ExportBotCommand(config, switchesOf(config), router, locks, api, exports, rolesService(config));
   const jobs: ExportJob[] = [];
   command.jobs = { add: async (job) => void jobs.push(job) };
   command.onModuleInit();

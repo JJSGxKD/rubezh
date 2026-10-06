@@ -1,6 +1,8 @@
 import { configFromEnvironment } from "../config/app-config.js";
 import { createPrisma } from "../infra/database.js";
 import { closeRedis, createRedis } from "../infra/redis.js";
+import { AccountRestrictions } from "../modules/restrictions/account-restrictions.js";
+import { PrismaRestrictionsRepository } from "../modules/restrictions/restrictions.repository.js";
 import { rebuildLeaderboard } from "../modules/runs/leaderboard-rebuild.js";
 import { RedisLeaderboardStore } from "../modules/runs/leaderboard.store.js";
 import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
@@ -13,7 +15,8 @@ import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
  *
  * В контейнере — `node dist/cli/runs-rebuild-leaderboard.js`. Безопасно
  * повторять: рейтинг собирается во временный ключ и подменяет рабочий одной
- * командой, игроки не видят пустого рейтинга ни в какой момент.
+ * командой, игроки не видят пустого рейтинга ни в какой момент. Те, кому
+ * рейтинг сейчас закрыт ограничением, в доски не возвращаются.
  */
 async function main(): Promise<void> {
   const config = configFromEnvironment();
@@ -22,7 +25,8 @@ async function main(): Promise<void> {
   const redis = createRedis(config);
   try {
     await redis.connect();
-    const counts = await rebuildLeaderboard(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis));
+    const excluded = await new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config).restrictedAccounts("leaderboard");
+    const counts = await rebuildLeaderboard(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), new Set(excluded));
     console.log(`рейтинг пересобран: ${Object.entries(counts).map(([difficulty, count]) => `${difficulty} — ${count}`).join(", ")}`);
   } finally {
     await prisma.$disconnect();

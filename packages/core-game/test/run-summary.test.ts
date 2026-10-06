@@ -36,10 +36,11 @@ const GOLDEN_POPULATION = 28;
  * оружиями проверки ниже разносят урон по слотам, а не меряют одно стартовое.
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
- * аптечку, магнитом с динамитом и появлением нетопырей в смеси. Распределение времени по seed при этом остаётся прежним, поэтому
+ * аптечку, магнитом с динамитом, появлением нетопырей в смеси и стихийными
+ * атаками врагов. Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 1;
+const GOLDEN_SEED = 2;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -103,6 +104,15 @@ describe("статистика забега", () => {
     expect(byWeapon).toBeCloseTo(world.stats.damageDealt, 6);
   });
 
+  it("сходится: сумма урона по стихиям равна общему — горение и яд засчитаны своей стихии", () => {
+    const result = resultOf(world, GOLDEN_SEED);
+    const byElement = Object.values(result.damageByElement).reduce((sum, damage) => sum + damage, 0);
+    expect(byElement).toBeCloseTo(result.damageDealt, 6);
+    // В эталоне есть «Жало»: яд обязан попасть в свою стихию, а не в физический.
+    expect(result.damageByElement.poison ?? 0).toBeGreaterThan(0);
+    expect(Object.values(result.damageByElement).every((damage) => damage > 0)).toBe(true);
+  });
+
   it("сходится: сумма убийств по типам равна общему числу убитых", () => {
     let byType = 0;
     for (const kills of world.stats.killsByType) byType += kills;
@@ -162,35 +172,35 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 64.15,
-      level: 14,
-      xpCollected: 394,
-      enemiesKilled: 210,
+      survivalSec: 68.27,
+      level: 13,
+      xpCollected: 291,
+      enemiesKilled: 191,
       killsByEnemy: {
-        swarm_rat: 93,
-        tank_ghoul: 12,
-        shooter_wisp: 19,
-        dasher_wolf: 15,
-        circler_crow: 20,
-        bomber_imp: 11,
-        splitter_slime: 14,
-        rushing_bats: 26,
+        swarm_rat: 78,
+        tank_ghoul: 11,
+        shooter_wisp: 22,
+        dasher_wolf: 14,
+        circler_crow: 18,
+        bomber_imp: 15,
+        splitter_slime: 11,
+        rushing_bats: 22,
       },
-      damageDealt: 2664,
-      damageTaken: 100,
+      damageDealt: 2469,
+      damageTaken: 180,
       weapons: [
-        { id: "spark", level: 1, damage: 1846 },
-        { id: "storm", level: 2, damage: 710 },
-        { id: "hearth", level: 1, damage: 108 },
+        { id: "spark", level: 1, damage: 1371 },
+        { id: "wardstone", level: 2, damage: 272 },
+        { id: "sting", level: 2, damage: 826 },
       ],
       passives: [
-        { id: "volley", level: 2 },
-        { id: "ward", level: 2 },
         { id: "swiftness", level: 3 },
         { id: "haste", level: 3 },
+        { id: "volley", level: 1 },
+        { id: "mending", level: 1 },
       ],
-      deathCause: "tank_ghoul",
-      distance: 11213,
+      deathCause: "shooter_wisp",
+      distance: 11815,
       peakEnemies: 30,
     });
   });
@@ -209,7 +219,6 @@ describe("итог забега", () => {
     behavior: "projectile_nearest",
     nameKey: "weapon.spark.name",
     descriptionKey: "weapon.spark.description",
-    starting: true,
     levels: [{ damage: 10, cooldownSec: 0.2, projectiles: 1, projectileSpeed: 600, ttlSec: 2 }],
   };
 
@@ -322,6 +331,7 @@ describe("локальный рекорд", () => {
       killsByEnemy: {},
       damageDealt: 0,
       damageTaken: 0,
+      damageByElement: {},
       weapons: [],
       passives: [],
       deathCause: null,

@@ -3,11 +3,16 @@ import { describeDevice, type DeviceEnvironment } from "./device";
 
 /**
  * «Сведения об устройстве» для баг-репорта (docs/28-diagnostics.md §2.2).
- * Тестер копирует их одной кнопкой и присылает вместе с описанием бага.
+ * Игрок копирует их одной кнопкой или отправляет команде кнопкой
+ * «Поделиться с командой».
  *
  * В отличие от статистики плейтеста (`device.ts`), здесь есть модель
- * устройства из user-agent: текст уходит команде руками тестера, а не на
- * сервер, и без модели баг «на моём телефоне» не с чем сопоставить.
+ * устройства из user-agent: без неё баг «на моём телефоне» не с чем
+ * сопоставить. Текст уходит только по действию самого игрока — «Скопировать»
+ * или «Поделиться» (`shareDeviceInfo` в `feedback.ts`: база отзывов и чат
+ * команды, docs/28-diagnostics.md §8). Поэтому каждое поле, добавленное
+ * сюда, — данные, которые попадут на сервер; строка user-agent целиком не
+ * уходит.
  */
 export interface DeviceReportInput {
   build: string;
@@ -47,8 +52,12 @@ export function buildDeviceReport(input: DeviceReportInput): DeviceReportRow[] {
     // устройство и рисует каждый кадр.
     { key: "canvas", value: `${Math.round(input.viewport.width * dpr)}×${Math.round(input.viewport.height * dpr)}` },
     { key: "displayHz", value: input.displayHz === null ? "—" : `≈${input.displayHz}` },
+    // Браузер отдаёт логические процессоры — потоки, а не физические ядра:
+    // сколько ядер на самом деле, странице не узнать.
     { key: "cores", value: device.cores === null ? "—" : String(device.cores) },
-    { key: "memory", value: device.memoryGb === null ? "—" : String(device.memoryGb) },
+    // Память браузер округляет вниз до степени двойки и обрезает сверху: на
+    // машине с 64 ГБ он отдаёт 32. Поэтому это нижняя граница, а не число.
+    { key: "memory", value: device.memoryGb === null ? "—" : `≥ ${String(device.memoryGb)}` },
     { key: "screenMode", value: input.screenMode },
     {
       key: "insets",

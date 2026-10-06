@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type { ApiResult } from "./api-request";
 import { createPaymentsApi, type ContinueOffer, type ContinueRequest, type PaymentsApi } from "./payments-api";
 import { markPaymentsOff } from "./payments-availability";
+import { closeOffer } from "./second-chance-offers";
 import { useRun } from "./run";
 import { useRuns } from "./runs";
 import { track, useShell } from "./shell";
@@ -107,10 +108,9 @@ export const useContinuePurchase = create<ContinuePurchaseStore>((set, get) => {
 
   function unavailable(reason: UnavailableReason): void {
     set({ stage: { kind: "unavailable", reason } });
-    // Купить нельзя — ждать решения на экране смерти незачем: забег
-    // закрывается смертью, и рекорд с местом появляются сразу. Забег
-    // разработчика ждёт: у него есть бесплатное продолжение.
-    if (!useRun.getState().devRun) useRun.getState().declineContinue();
+    // Купить нельзя — звёзды больше не ждём. Забег закроется смертью, если
+    // и продолжить за рекламу нельзя (`second-chance-offers.ts`).
+    closeOffer("stars");
   }
 
   async function purchase(request: ContinueRequest, offer: ContinueOffer): Promise<void> {

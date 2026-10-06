@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { BossSnapshot } from "@bh/core-game";
 import { ProgressBar } from "../../design-system/components";
 import { t } from "../../i18n";
+import "../../i18n/run";
 
 /**
  * Полоса здоровья босса: имя, остаток и фаза боя

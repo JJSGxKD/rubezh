@@ -3,10 +3,11 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, ForbiddenError, UnauthorizedError, ValidationError } from "../../common/domain-error.js";
 import { parseStartParam, type StartParam } from "../attribution/start-param.js";
-import { verifyInitData } from "../telegram/telegram-init-data.js";
+import { LaunchVerifiers } from "../../platforms/ports/launch-verifier.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 import { ACCOUNT_REPOSITORY, type Account, type AccountRepository } from "./account.repository.js";
 import { secretKey, signAccessToken } from "./access-token.js";
-import { AuthHooks, PLAIN_LOGIN, type LoginContext } from "./auth-hooks.js";
+import { AuthHooks, PLAIN_LOGIN, type LoginContext, type LoginEvent } from "./auth-hooks.js";
 import { parseDevUser } from "./dev-login.js";
 import { REFRESH_STORE, type RefreshStore } from "./refresh.store.js";
 
@@ -35,6 +36,20 @@ export interface AuthResult extends AuthTokens {
   account: Account;
 }
 
+/**
+ * Вход в канал площадки до приложения (docs/35-stage4-plan.md, Р29): игрок
+ * нажал `/start` в боте. Подписи здесь нет, но и нужна она не для этого:
+ * обновление бота приходит от самой площадки, а не от клиента.
+ */
+export interface ChannelEntry {
+  platform: PlatformId;
+  platformUserId: string;
+  displayName: string;
+  username: string | null;
+  /** параметр ссылки на канал — `t.me/<бот>?start=<параметр>` */
+  startParam: string | null;
+}
+
 /** Вход с данными запуска: откуда открыли игру — клиенту для события сессии. */
 export interface LoginResult extends AuthResult {
   startParam: StartParam;
@@ -49,24 +64,32 @@ export class AuthService {
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     @Inject(REFRESH_STORE) private readonly refresh: RefreshStore,
     private readonly hooks: AuthHooks,
+    private readonly launches: LaunchVerifiers,
   ) {}
 
-  /** Вход по подписанным данным запуска Telegram. */
-  async loginWithTelegram(initData: string, context: LoginContext = PLAIN_LOGIN, nowMs = Date.now()): Promise<LoginResult> {
-    const check = verifyInitData(initData, this.config.telegram.botToken, this.config.auth.initDataMaxAgeSec, nowMs);
+  /**
+   * Вход по подписанным данным запуска площадки. Как проверяется подпись,
+   * решает адаптер площадки (docs/35-stage4-plan.md, §3.11); сервису важно
+   * только, кто играет и откуда пришёл.
+   */
+  async loginWithLaunch(platform: PlatformId, launchData: string, context: LoginContext = PLAIN_LOGIN, nowMs = Date.now()): Promise<LoginResult> {
+    const verifier = this.launches.for(platform);
+    const check = verifier === null
+      ? ({ ok: false, reason: "unsupported" } as const)
+      : verifier.verify(launchData, this.config.auth.initDataMaxAgeSec, nowMs);
     if (!check.ok) {
       // Причины не раскрываем подробнее, чем нужно клиенту: истекло — открыть
       // заново, остальное — не наш игрок.
       throw new UnauthorizedError(
         check.reason === "expired"
           ? "Данные запуска устарели — откройте игру заново"
-          : "Данные запуска Telegram не прошли проверку",
+          : "Данные запуска не прошли проверку",
       );
     }
 
     const account = await this.accounts.upsert(
       {
-        platform: "telegram",
+        platform,
         platformUserId: check.player.id,
         displayName: check.player.name,
         username: check.player.username,
@@ -106,6 +129,25 @@ export class AuthService {
     const startParam = parseStartParam(null);
     this.announce(account, "web", startParam, context, nowMs);
     return { ...tokens, account, startParam };
+  }
+
+  /**
+   * Игрок вошёл в канал площадки — нажал `/start` в боте. Аккаунт заводится
+   * сразу: он уже наш, его можно прогревать, и воронка начинается здесь, а не
+   * с первого открытия игры. Токенов нет — в приложение игрок войдёт сам, по
+   * подписи запуска. Аватара в обновлении бота нет, и сохранённый не
+   * затирается.
+   *
+   * Заблокированного не отмечаем: прогревать его незачем.
+   */
+  async enterChannel(entry: ChannelEntry, nowMs = Date.now()): Promise<Account> {
+    const account = await this.accounts.upsert(
+      { platform: entry.platform, platformUserId: entry.platformUserId, displayName: entry.displayName, username: entry.username },
+      nowMs,
+    );
+    if (account.bannedAt !== null) return account;
+    this.announce(account, "channel", parseStartParam(entry.startParam), PLAIN_LOGIN, nowMs);
+    return account;
   }
 
   /** Продление сессии: старый токен гасится, выдаётся новая пара. */
@@ -150,7 +192,7 @@ export class AuthService {
    * Сообщить слушателям о входе — без ожидания: запись сессии и атрибуции
    * идёт после ответа игроку и не отменяет вход, если упала.
    */
-  private announce(account: Account, place: "miniapp" | "web", startParam: StartParam, context: LoginContext, nowMs: number): void {
+  private announce(account: Account, place: LoginEvent["place"], startParam: StartParam, context: LoginContext, nowMs: number): void {
     void this.hooks.emit({
       ...context,
       accountId: account.accountId,

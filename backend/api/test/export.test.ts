@@ -53,6 +53,9 @@ class MemoryExportRepository implements ExportRepository {
   async reportsPage(period: ExportPeriod, after: PageCursor | null, limit: number): Promise<ReportExportRow[]> {
     return page(this.reports, period, after, limit, (row) => row.reportId);
   }
+  async recent(): Promise<[]> {
+    return [];
+  }
   async lastExportTo(): Promise<Date | null> {
     return this.lastTo;
   }

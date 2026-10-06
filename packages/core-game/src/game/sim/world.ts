@@ -1,9 +1,13 @@
-import type { ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, UpgradeOption } from "@bh/shared-types";
+import type { ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
+import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { Rng } from "./rng";
+import { ELEMENT_PHYSICAL } from "./element-ids";
+import { clearStatuses } from "./elements";
+import { applyPlayerStatus, playerDamageTakenMul, playerResist } from "./player-status";
 import type { SpatialGrid } from "./grid";
 import type { SimEvents } from "./events";
 import type { ViewConfig, WorldBounds } from "./map-types";
@@ -109,8 +113,25 @@ export interface PlayerState {
   maxHp: number;
   attackCooldown: number;
   alive: boolean;
-  /** сколько тиков игрока ещё нельзя ранить — после второго шанса */
+  /** сколько тиков игрока ещё нельзя ранить — после второго шанса и сработавшего щита */
   invulnerableTicks: number;
+  /** сколько попаданий ещё погасит щит буста (`progression/boosts.ts`) */
+  shieldHits: number;
+  /**
+   * Состояния от стихийных атак врагов (`sim/player-status.ts`): таймеры в
+   * секундах, урон по времени в секунду, источник — тип врага, наложившего
+   * состояние, или −1. Числами прямо в игроке: снимок забега переносит их
+   * вместе с остальным.
+   */
+  burnTimer: number;
+  burnDps: number;
+  burnSource: number;
+  chillTimer: number;
+  shockTimer: number;
+  poisonTimer: number;
+  poisonStacks: number;
+  poisonDps: number;
+  poisonSource: number;
 }
 
 export interface RunStats {
@@ -134,6 +155,8 @@ export interface RunStats {
    * тест этой сходимости ловил бы округление, а не ошибку в коде.
    */
   damageByWeapon: Float64Array;
+  /** нанесённый урон по индексу стихии (`sim/element-ids.ts`) */
+  damageByElement: Float64Array;
   xpCollected: number;
   /** подобранные аптечки */
   medkitsCollected: number;
@@ -216,6 +239,15 @@ export interface World {
   playerStats: PlayerStats;
   /** значения без улучшений: от них считается пересчёт */
   playerStatsBase: PlayerStatsBase;
+  /**
+   * Набор на забег — снаряжение, дерево, бусты (`progression/run-loadout.ts`).
+   * Не путать с `loadout` — оружием и пассивками, собранными в самом забеге.
+   */
+  runLoadout: RunLoadout;
+  /** бусты набора — эффекты, которые читает симуляция */
+  boosts: RunBoosts;
+  /** прибавки снаряжения и бустов вместе — от них считаются характеристики */
+  loadoutModifiers: Partial<Record<LoadoutStat, number>>;
   loadout: LoadoutState;
   progression: ProgressionState;
   difficulty: DifficultyState;
@@ -232,6 +264,12 @@ export interface World {
   events: SimEvents;
   /** переиспользуемый буфер под результаты запросов к сетке */
   queryBuffer: Int32Array;
+  /**
+   * Второй буфер — для перескока молнии (`sim/elements.ts`): его ищут
+   * посреди цикла оружия по `queryBuffer`, и общий буфер затёр бы цикл
+   * вызывающего.
+   */
+  chainBuffer: Int32Array;
   /** читы режима разработчика; у обычного забега — нейтральные значения */
   cheats: WorldCheats;
 }
@@ -320,6 +358,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.dirX[slot] = 0;
   pool.dirY[slot] = 0;
   pool.ringRadius[slot] = 0;
+  clearStatuses(world, slot, NO_OWNER_TYPE);
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;
   world.stats.enemiesSpawned++;
@@ -343,18 +382,36 @@ export function despawnProjectile(world: World, index: number): void {
   world.projectiles.aliveCount--;
 }
 
+/** Неуязвимость после сработавшего щита: полсекунды, за которые игрок выходит из толпы. */
+export const SHIELD_GRACE_TICKS = Math.round(0.5 * TICK_HZ);
+
 /**
  * Урон игроку с указанием источника. Источник нужен статистике: какой враг
  * убивает чаще всего — прямой вход геймдизайнера для баланса
- * (docs/26-stage2-plan.md, WP1, «Аналитика»).
+ * (docs/26-stage2-plan.md, WP1, «Аналитика»). И он же знает стихию атаки:
+ * касание, взрыв и снаряд врага несут стихию его типа, поэтому паттернам не
+ * нужно передавать её каждому попаданию.
  */
 export function damagePlayer(world: World, amount: number, sourceType: number): void {
   const player = world.player;
   if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
 
+  // Щит буста гасит попадание целиком — вместе со стихией: игрок должен
+  // понять, что его спасло, а не гадать, почему урон вышел меньше. Короткая
+  // неуязвимость после — иначе толпа вокруг сняла бы его в тот же тик.
+  if (player.shieldHits > 0) {
+    player.shieldHits--;
+    player.invulnerableTicks = Math.max(player.invulnerableTicks, SHIELD_GRACE_TICKS);
+    pushSimEvent(world.events, { kind: SIM_EVENT.shield, x: player.x, y: player.y, radius: amount, tick: world.stats.tick });
+    return;
+  }
+
+  const source = sourceType >= 0 ? world.enemyTypes[sourceType] : undefined;
+  const element = source?.element ?? ELEMENT_PHYSICAL;
+  const incoming = amount * (1 - playerResist(world, element)) * playerDamageTakenMul(player);
   // Броня вычитается, но не обнуляет урон: иначе несколько уровней брони
   // делают рой безобидным, и вся кривая сложности перестаёт работать.
-  const reduced = Math.max(amount * MIN_DAMAGE_RATIO, amount - world.playerStats.armor);
+  const reduced = Math.max(incoming * MIN_DAMAGE_RATIO, incoming - world.playerStats.armor);
   // Бессмертие не глушит само попадание: разработчику нужно видеть, кто и
   // когда бьёт, иначе режим проверки телеграфов бесполезен.
   if (!world.cheats.godMode) {
@@ -374,7 +431,9 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
     player.hp = 0;
     player.alive = false;
     world.stats.deathCauseType = sourceType;
+    return;
   }
+  if (source !== undefined) applyPlayerStatus(world, element, source.statusChance, reduced, sourceType);
 }
 
 export function spawnProjectile(
@@ -406,6 +465,8 @@ export function spawnProjectile(
   pool.ownerWeapon[slot] = NO_OWNER_TYPE;
   pool.pierce[slot] = 0;
   pool.lastHit[slot] = -1;
+  pool.element[slot] = ELEMENT_PHYSICAL;
+  pool.statusChance[slot] = 0;
   pool.alive[slot] = 1;
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;

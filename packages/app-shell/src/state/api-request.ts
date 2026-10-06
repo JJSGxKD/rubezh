@@ -41,7 +41,7 @@ const errorBodySchema = z.object({ error: z.object({ code: z.string() }) });
 export type ApiRequest = <T>(
   path: string,
   schema: z.ZodMiniType<T>,
-  init: { method: "GET" | "POST"; body?: unknown },
+  init: { method: "GET" | "POST" | "DELETE"; body?: unknown },
 ) => Promise<ApiResult<T>>;
 
 export const apiRequest: ApiRequest = async (path, schema, init) => {

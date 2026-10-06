@@ -34,16 +34,21 @@ function payload<Shape extends z.ZodRawShape>(shape: Shape) {
 const amount = z.number().nonnegative();
 const ratio = z.number().min(0).max(1);
 
-// Покупка глазами клиента (docs/34-stage3-plan.md, WP5): воронка от нажатия до
-// продолжения. Суммы здесь — разрез, а не выручка: выручку и возвраты
-// считают по таблице `purchase` (docs/22-analytics-and-metrics.md §5.4).
-// Режим обязателен: тестовые оплаты не должны смешиваться с настоящими.
+// Покупка глазами клиента (docs/34-stage3-plan.md, WP5; магазин и VIP —
+// docs/35-stage4-plan.md, WP10): воронка от нажатия до выдачи. Суммы здесь —
+// разрез, а не выручка: выручку и возвраты считают по таблице `purchase`
+// (docs/22-analytics-and-metrics.md §5.4). Режим обязателен: тестовые оплаты
+// не должны смешиваться с настоящими. Номер продолжения — только у второго
+// шанса, товар — только у магазина; поля необязательные, версия прежняя.
 const purchaseFields = {
   product: id,
   priceStars: count,
   chargedStars: count,
   mode: z.enum(["live", "test"]),
-  continueNo: count,
+  continueNo: count.optional(),
+  sku: id.optional(),
+  // Скидка акции магазина в процентах — только у товара по акции (WP10, часть 8).
+  promoPct: count.optional(),
 };
 
 const runOutcome = payload({
@@ -72,6 +77,13 @@ const runOutcome = payload({
   perfCanvasWidth: count.optional(),
   perfCanvasHeight: count.optional(),
   perfInterruptions: count.optional(),
+  // Урон по стихиям (docs/35-stage4-plan.md, WP6), округлённый до целого.
+  // Необязательный: сборки до стихий его не шлют.
+  damagePhysical: count.optional(),
+  damageFire: count.optional(),
+  damageCold: count.optional(),
+  damageLightning: count.optional(),
+  damagePoison: count.optional(),
 });
 
 export const EVENT_DICTIONARY = {
@@ -88,9 +100,14 @@ export const EVENT_DICTIONARY = {
   // этим запуском. Сама сессия с подробностями — в таблице `account_session`.
   session_started: { version: 1, payload: payload({ startKind: id, first: z.boolean() }) },
   screen_viewed: { version: 1, payload: payload({ screen: id, stub: z.boolean() }) },
-  settings_changed: { version: 1, payload: payload({ setting: id, value: flatValue }) },
-  share_offered: { version: 1, payload: payload({ context: id }) },
-  share_completed: { version: 1, payload: payload({ context: id, result: id }) },
+  // `scope` — чья настройка (docs/35-stage4-plan.md WP29): аккаунта идёт на
+  // все его устройства, устройства остаётся здесь. Необязательное: сборки до
+  // настроек аккаунта его не шлют.
+  settings_changed: { version: 1, payload: payload({ setting: id, value: flatValue, scope: z.enum(["account", "device"]).optional() }) },
+  // Способ приглашения (Р63): message — сообщение от бота, link — выбор чата
+  // со ссылкой, copy — копия ссылки; у старых клиентов поля нет.
+  share_offered: { version: 1, payload: payload({ context: id, method: id.optional() }) },
+  share_completed: { version: 1, payload: payload({ context: id, result: id, method: id.optional() }) },
   run_started: {
     version: 1,
     payload: payload({
@@ -114,9 +131,11 @@ export const EVENT_DICTIONARY = {
   // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
   // на какой секунде и волне забега.
   continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
-  // Нажал «продолжить за звёзды» — счёт запрошен.
+  // Сервер подтвердил покупку буста на забег (WP8): по событию на буст.
+  boost_used: { version: 1, payload: payload({ boost: id, source: id, amount, count }) },
+  // Нажал «продолжить за звёзды» — счёт запрошен; в магазине — счёт выставлен.
   purchase_initiated: { version: 1, payload: payload(purchaseFields) },
-  // Сервер подтвердил оплату, продолжение выдано.
+  // Сервер подтвердил оплату: продолжение выдано, товар лёг на счёт.
   purchase_completed: { version: 1, payload: payload(purchaseFields) },
   // Не дошло до продолжения: `reason` — `cancelled` (закрыл окно), `failed`,
   // `unsupported`, `timeout` (подтверждение не дождались) или код отказа сервера.
@@ -138,7 +157,103 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ mode: id, stopReason: id, peakObjects: count, verdict: id, reportId: z.uuid() }),
   },
-  feedback_sent: { version: 1, payload: payload({ answers: count, hasText: z.boolean(), runs: count }) },
+  feedback_sent: { version: 1, payload: payload({ answers: count, hasText: z.boolean(), runs: count, kind: z.enum(["device_info"]).optional() }) },
+  // Игрок открыл уведомление из ленты — перешёл туда, куда оно звало
+  // (docs/35-stage4-plan.md WP28). Вид — низкой кардинальности, без данных.
+  notification_opened: { version: 1, payload: payload({ kind: id }) },
+  // Забрал награду дня (docs/35-stage4-plan.md WP13): какой день недели и
+  // какая по счёту неделя — удерживает ли награда. Сколько легло монет —
+  // журнал кошелька, причина daily_reward.
+  daily_reward_claimed: { version: 1, payload: payload({ day: count, week: count }) },
+  // Крутанул колесо (docs/35-stage4-plan.md WP13, 07-monetization-and-ads.md
+  // §7): бесплатная крутка или за рекламу, какой сектор выпал и что в нём.
+  // Что легло на баланс — журнал кошелька, причина wheel_reward.
+  wheel_spun: { version: 1, payload: payload({ source: z.enum(["free", "ad"]), sector: count, reward: id, amount: count }) },
+  // Активировал промокод (docs/35-stage4-plan.md WP41): какая кампания и
+  // откуда игрок пришёл к полю — из меню или из магазина. Сколько легло —
+  // уже с учётом суточного потолка (`capped`); само погашение — таблица
+  // promo_redemption, начисленное — журнал кошелька, причина promo_reward.
+  // `partner` — код партнёра, `bound` — игрок этим кодом записан за ним
+  // (часть 2); необязательные: сборки до партнёров их не шлют.
+  promo_code_applied: {
+    version: 1,
+    payload: payload({
+      campaign: id,
+      kind: z.enum(["shared", "batch"]),
+      source: z.enum(["menu", "shop"]),
+      coins: count,
+      gems: count,
+      shards: count,
+      capped: z.boolean(),
+      partner: z.boolean().optional(),
+      bound: z.boolean().optional(),
+    }),
+  },
+  // Забрал награду задания или достижения (docs/35-stage4-plan.md WP13): какие
+  // цели доходят до награды и за какой срок. Прогресс и забор — таблица
+  // task_progress, начисленное — журнал кошелька (task_reward,
+  // achievement_reward); событие шлёт клиент после ответа сервера.
+  task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id }) },
+  achievement_unlocked: { version: 1, payload: payload({ achievement: id, kind: id }) },
+  // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
+  // открывших доходят до награды. Подписку проверяет бот, и она видна только
+  // по achievement_unlocked; открытие без награды — «не подписался». У
+  // задания рекламной сети (WP13, часть 6) — `kind: network` и `network`.
+  task_link_opened: { version: 1, payload: payload({ task: id, kind: id, network: id.optional() }) },
+  // Купил предмет с витрины снаряжения (docs/35-stage4-plan.md §3.6, WP10):
+  // какие редкости и слоты берут и за сколько — вход для цен витрины (О1, О9).
+  // Списание — журнал кошелька (причина shop), предмет — журнал предметов.
+  showcase_bought: { version: 1, payload: payload({ slot: id, rarity: id, level: count, gems: count }) },
+  // Нажал баннер или плашку магазина (docs/35-stage4-plan.md §3.6, WP10):
+  // какой баннер и на каком месте полосы ведёт к покупке — вход для порядка
+  // баннеров. Сама покупка — purchase_initiated / purchase_completed с тем же
+  // товаром; у Tribute и снаряжения покупка не наша или за самоцветы, и клик
+  // — всё, что видно.
+  shop_banner_clicked: {
+    version: 1,
+    payload: payload({ banner: id, place: z.enum(["carousel", "gems"]), position: count }),
+  },
+  // Карусель главной (docs/35-stage4-plan.md WP42): какие слайды видят и по
+  // каким идут — порядок слайдов по данным, а не на глаз. Показ — раз за
+  // заход и только если слайд был виден дольше секунды: пролистанный мимо
+  // не в счёт.
+  // `slideId` — у слайда команды: какой анонс сработал. Поле добавлено без
+  // смены версии — необязательное, смысл остальных не меняет.
+  home_slide_viewed: { version: 1, payload: payload({ slide: id, position: count, slideId: id.optional() }) },
+  home_slide_clicked: { version: 1, payload: payload({ slide: id, position: count, slideId: id.optional() }) },
+  // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): какой крючок
+  // срабатывает — готовое к забору, отсчёт, рекорд — и на каком месте сетки.
+  // Порядок виджетов — правилом, и событие показывает, правильное ли оно.
+  home_widget_clicked: { version: 1, payload: payload({ widget: id, state: id, position: count }) },
+  // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
+  // доходят ли новички до игры после него и с какой версии текста. Само
+  // принятие — таблица test_notice, по ней проверяется, что игрок видел
+  // предупреждение до первой покупки.
+  test_notice_accepted: { version: 1, payload: payload({ version: count }) },
+  // Открыл журнал обновлений (docs/35-stage4-plan.md WP31): доходят ли игроки
+  // до него после выхода версии и откуда — из меню или из уведомления. Сколько
+  // версий было новыми — чтобы отличить «пришёл за новостью» от «просто листал».
+  changelog_opened: { version: 1, payload: payload({ fresh: count, source: z.enum(["menu", "notification"]) }) },
+  // Реклама глазами клиента (docs/35-stage4-plan.md WP12, §3.7). Шаги показа
+  // лежат в ad_session — там исход и код отказа; события добавляют то, чего
+  // таблица не знает: устройство из конверта и сколько игрок ждал.
+  // ad_shown — ролик дошёл до игрока: досмотрел (`completed`) или закрыл
+  // раньше; `ms` — от нажатия до исхода. `moment` — когда показана
+  // межстраничная (WP12 ч.10): `run_start` — при старте забега.
+  ad_shown: { version: 1, payload: payload({ place: id, network: id, completed: z.boolean(), ms: seconds, moment: id.optional() }) },
+  // Сеть не показала: нет рекламы, скрипт не загрузился, SDK сломался или
+  // замолчал, а межстраничная — не успела к старту забега (`late`).
+  // `attempt` — какая по счёту сеть в этом нажатии: доля вторых — как часто
+  // основная сеть подводит (docs/22 §5.5).
+  ad_failed: { version: 1, payload: payload({ place: id, network: id, reason: id, attempt: count, ms: seconds, moment: id.optional() }) },
+  // Игрок открыл объявление нашего рекламного блока (Р78): у креатива сети с
+  // API клик впервые виден нам самим, а не только в кабинете сети.
+  ad_clicked: { version: 1, payload: payload({ place: id, network: id, moment: id.optional() }) },
+  // Хозяин места выдал награду за рекламу: `ad` — за досмотр, `pass` — VIP
+  // без ролика. Досмотр без этого события — награда, потерянная по дороге.
+  // `network` — у задания рекламной сети (WP13, часть 6): награду за него
+  // выдал сервер по подтверждению сети, и клиент её дождался.
+  ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 

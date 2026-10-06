@@ -6,7 +6,6 @@ import type {
   InvitePayload,
   InviteResult,
   HapticType,
-  AdResult,
   DisplayUser,
   PlatformUi,
 } from "@bh/shared-types";
@@ -60,8 +59,4 @@ export class VkAdapter implements PlatformAdapter {
     // TODO: VKWebAppTapticImpactOccurred
   }
 
-  async showAd(): Promise<AdResult> {
-    // TODO: нативный VK Ads SDK, rewarded video
-    return { shown: false, rewarded: false };
-  }
 }

@@ -1,7 +1,9 @@
 import { applyPattern, MAX_PATTERN_RADIUS } from "../patterns";
 import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
-import { damageEnemy } from "./combat";
+import { damageEnemy, inflictDamage } from "./combat";
+import { ELEMENT_FIRE, ELEMENT_POISON, isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
+import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
 import { recycleEnemyForward } from "./spawner";
@@ -33,6 +35,9 @@ const MELEE_INTERVAL_SEC = 0.6;
  * получается детерминированной — в логе ввода выбор приходит на конкретный
  * тик, и повтор забега попадает в тот же момент (docs/26-stage2-plan.md, WP2).
  */
+/** Урон по времени за тик — один объект на модуль: без аллокаций в цикле по врагам. */
+const statusTick: StatusTick = { burn: 0, poison: 0 };
+
 export function stepWorld(world: World, input: SimInput): void {
   const dt = TICK_SEC;
   if (isAwaitingChoice(world)) return;
@@ -43,6 +48,7 @@ export function stepWorld(world: World, input: SimInput): void {
   snapshotPositions(world);
   movePlayer(world, input, dt);
   regeneratePlayer(world, dt);
+  tickPlayerStatuses(world, dt);
   // Отставшие уносятся вперёд до перестроения сетки: сетка строится вокруг
   // игрока, и переехавший враг обязан попасть в неё уже на новом месте.
   recycleLostEnemies(world);
@@ -105,7 +111,8 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   if (!player.alive) return;
 
   const magnitude = vectorLength(input.moveX, input.moveY);
-  const speed = world.config.player.speedPxSec * world.playerStats.moveSpeedMul * world.cheats.moveSpeedMul;
+  const speed =
+    world.config.player.speedPxSec * world.playerStats.moveSpeedMul * world.cheats.moveSpeedMul * playerSlowFactor(player);
   const desiredVx = magnitude < 1e-3 ? 0 : (input.moveX / magnitude) * speed;
   const desiredVy = magnitude < 1e-3 ? 0 : (input.moveY / magnitude) * speed;
 
@@ -184,12 +191,29 @@ function updateEnemies(world: World, dt: number): void {
 
     const typeIndex = enemies.type[i];
     const type = world.enemyTypes[typeIndex];
+
+    // Урон по времени — до хода: сгоревший враг не делает последний шаг.
+    tickStatuses(world, i, dt, statusTick);
+    if (statusTick.burn > 0) inflictDamage(world, i, statusTick.burn, enemies.burnSlot[i], ELEMENT_FIRE);
+    if (statusTick.poison > 0 && enemies.alive[i] === 1) inflictDamage(world, i, statusTick.poison, enemies.poisonSlot[i], ELEMENT_POISON);
+    if (enemies.alive[i] === 0) continue;
+
+    // Замороженный стоит и не бьёт: паттерн не ходит вовсе, иначе рывок и
+    // набег, у которых своя скорость, прошли бы сквозь заморозку.
+    if (isFrozen(world, i)) {
+      enemies.vx[i] = 0;
+      enemies.vy[i] = 0;
+      continue;
+    }
     applyPattern(type.pattern, world, i, dt);
     // Паттерн мог убрать врага сам — например, подрывник взорвался.
     if (enemies.alive[i] === 0) continue;
 
-    enemies.x[i] = clampToBounds(enemies.x[i] + enemies.vx[i] * dt, bounds.halfWidth - type.radius);
-    enemies.y[i] = clampToBounds(enemies.y[i] + enemies.vy[i] * dt, bounds.halfHeight - type.radius);
+    // Охлаждение замедляет любой ход — и шаг, и рывок: множитель после
+    // паттерна, а не внутри каждого.
+    const slow = movementFactor(world, i);
+    enemies.x[i] = clampToBounds(enemies.x[i] + enemies.vx[i] * slow * dt, bounds.halfWidth - type.radius);
+    enemies.y[i] = clampToBounds(enemies.y[i] + enemies.vy[i] * slow * dt, bounds.halfHeight - type.radius);
 
     if (!player.alive) continue;
 
@@ -257,7 +281,7 @@ function hitEnemies(world: World, p: number, projectileRadius: number): void {
   const hit = findHitEnemy(world, projectiles.x[p], projectiles.y[p], projectileRadius, projectiles.lastHit[p]);
   if (hit < 0) return;
 
-  damageEnemy(world, hit, projectiles.damage[p], projectiles.ownerWeapon[p]);
+  damageEnemy(world, hit, projectiles.damage[p], projectiles.ownerWeapon[p], projectiles.element[p], projectiles.statusChance[p]);
   projectiles.lastHit[p] = hit;
 
   if (projectiles.pierce[p] > 0) {

@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { verifyInitData } from "../src/modules/telegram/telegram-init-data.js";
+import { verifyInitData } from "../src/platforms/telegram/telegram-init-data.js";
 
 // Проверка подписи данных запуска Telegram — на ней стоит вход в аккаунт
 // (docs/34-stage3-plan.md, WP1; docs/33-telegram-mini-app-pitfalls.md §1).

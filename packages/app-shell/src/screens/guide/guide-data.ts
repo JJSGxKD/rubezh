@@ -1,14 +1,16 @@
 import {
+  ELEMENTS,
   PASSIVE_CATEGORIES,
   type EnemyDef,
   type EnemyStageDef,
   type PassiveCategory,
   type PassiveDef,
+  type StatusElement,
   type UpgradeChange,
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, WEAPONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, WEAPONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -64,12 +66,22 @@ export function enemyStages(): EnemyStageDef[] {
   return [...ENEMY_STAGES];
 }
 
-export function startingWeapons(): WeaponDef[] {
-  return WEAPONS.filter((weapon) => weapon.starting === true);
+/**
+ * На каком уровне аккаунта открывается оружие или навык (Р41): гайдбук
+ * показывает и закрытое — с уровнем, на котором оно откроется.
+ */
+export function unlockLevel(kind: "weapon" | "passive", id: string): number {
+  return unlockLevelOf(ACCOUNT_UNLOCKS, kind, id) ?? 1;
 }
 
-export function unlockableWeapons(): WeaponDef[] {
-  return WEAPONS.filter((weapon) => weapon.starting !== true);
+/** Оружие первого уровня: с ним приходит новичок, стартовым берётся любое. */
+export function firstLevelWeapons(): WeaponDef[] {
+  return WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) === 1);
+}
+
+/** Оружие, которое открывает уровень аккаунта, — по порядку открытия. */
+export function levelWeapons(): WeaponDef[] {
+  return WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) > 1).sort((a, b) => unlockLevel("weapon", a.id) - unlockLevel("weapon", b.id));
 }
 
 /**
@@ -89,12 +101,59 @@ export function weaponGrowth(weapon: WeaponDef): UpgradeChange[] {
     { key: "areaRadius", lowerIsBetter: false },
   ];
 
-  return fields.flatMap(({ key, lowerIsBetter }) => {
+  const growth = fields.flatMap(({ key, lowerIsBetter }) => {
     const from = first[key];
     const to = last[key];
     if (from === undefined || to === undefined || from === to) return [];
     return [{ labelKey: statLabelKey(weapon, key), from, to, format: "value" as const, lowerIsBetter }];
   });
+
+  // Шанс — в процентах и с глаголом стихии, как на карточке выбора в забеге.
+  const element = weaponElement(weapon);
+  const fromChance = first.statusChance;
+  const toChance = last.statusChance;
+  if (element !== null && fromChance !== undefined && toChance !== undefined && fromChance !== toChance) {
+    growth.push({
+      labelKey: `upgrade.stat.statusChance.${element}`,
+      from: Math.round(fromChance * 100),
+      to: Math.round(toChance * 100),
+      format: "value",
+      lowerIsBetter: false,
+    });
+  }
+  return growth;
+}
+
+/** Стихия оружия; физическое — `null`: ему нечего показывать. */
+export function weaponElement(weapon: WeaponDef): StatusElement | null {
+  return weapon.element === undefined || weapon.element === "physical" ? null : weapon.element;
+}
+
+/**
+ * Стихии, которые есть у оружия в контенте, — в порядке перечня. Состояние
+ * стихии без оружия гайдбук не описывает: игроку его не наложить.
+ */
+export function weaponElements(): StatusElement[] {
+  const used = new Set(WEAPONS.map(weaponElement));
+  return ELEMENTS.filter((element): element is StatusElement => element !== "physical" && used.has(element));
+}
+
+/** Стихия атаки врага; физическая — `null`. */
+export function enemyAttackElement(def: EnemyDef): StatusElement | null {
+  return def.element ?? null;
+}
+
+/** Какие стихии берут врага хуже (`strong`) и какие лучше (`weak`) — в порядке перечня. */
+export function enemyResists(def: EnemyDef): { strong: StatusElement[]; weak: StatusElement[] } {
+  const strong: StatusElement[] = [];
+  const weak: StatusElement[] = [];
+  for (const element of ELEMENTS) {
+    if (element === "physical") continue;
+    const value = def.resist?.[element] ?? 0;
+    if (value > 0) strong.push(element);
+    else if (value < 0) weak.push(element);
+  }
+  return { strong, weak };
 }
 
 /** Подпись поля — с уточнением поведения там, где у поля другой смысл. */
@@ -128,13 +187,15 @@ export function passiveCategories(): GuideCategory[] {
 
 /** Эффект пассивки на первом и последнем уровне — в том же виде, что на карточке выбора. */
 export function passiveRange(passive: PassiveDef): UpgradeChange | null {
-  const from = passive.levels[0];
-  const to = passive.levels[passive.levels.length - 1];
-  if (from === undefined || to === undefined) return null;
+  const first = passive.levels[0];
+  const last = passive.levels[passive.levels.length - 1];
+  if (first === undefined || last === undefined) return null;
+  // Сопротивление — доля, на карточке выбора оно в процентах; здесь так же.
+  const scale = passive.stat.startsWith("resist") ? 100 : 1;
   return {
     labelKey: `upgrade.stat.passive.${passive.stat}`,
-    from,
-    to,
+    from: Math.round(first * scale * 100) / 100,
+    to: Math.round(last * scale * 100) / 100,
     format: passive.op === "mul" ? "percent" : "plus",
     lowerIsBetter: passive.stat === "cooldown",
   };

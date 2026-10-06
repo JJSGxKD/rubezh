@@ -1,7 +1,7 @@
 import { PASSIVES, WEAPONS, type RunDevCommand, type RunDevOptions } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
-import { effectiveAccess, usePlaytest } from "./playtest";
+import { effectiveAccess, useTools } from "./tools";
 import { createPersistedValue } from "./persisted";
 import { reportError, useShell } from "./shell";
 
@@ -10,7 +10,7 @@ import { reportError, useShell } from "./shell";
  * время, читы и учёт в рейтинге. Настройки живут на устройстве и переживают
  * перезапуск — разработчик проверяет одно и то же десятки забегов подряд.
  *
- * Доступ решает сервер по `ADMIN_TELEGRAM_IDS`; «взведён» режим или нет —
+ * Доступ решает сервер по праву `tools.dev` (`GET /api/v1/tools/access`); «взведён» режим или нет —
  * выбор в разделе «Играть» на один заход и на устройстве не хранится.
  */
 const DEV_KEY = "bh.dev.v1";
@@ -54,6 +54,11 @@ const settingsSchema = z.object({
     allWeapons: z.boolean(),
     allPassives: z.boolean(),
     minute: z.int().check(z.minimum(0), z.maximum(60)),
+    /**
+     * Бусты без оплаты — проверить их в бою до магазина. Необязательное:
+     * настройки прошлой сборки поля не знают и не должны сбрасываться целиком.
+     */
+    boosts: z.optional(z.array(z.string())),
   }),
 });
 
@@ -111,7 +116,7 @@ export const useDevMode = create<DevModeStore>((set, get) => ({
 /** Открыт ли режим разработчика этому игроку в этой сборке. */
 export function devModeAllowed(): boolean {
   const { capabilities } = useShell.getState();
-  return effectiveAccess(usePlaytest.getState().access, capabilities.devTools === true).devMode;
+  return effectiveAccess(useTools.getState().access, capabilities.devTools === true).devMode;
 }
 
 export function toRunDev(settings: DevSettings): RunDevOptions {
@@ -136,7 +141,9 @@ export function hasCheats(settings: DevSettings): boolean {
     settings.timeScale !== 1 ||
     start.allWeapons ||
     start.allPassives ||
-    start.minute > 0
+    start.minute > 0 ||
+    // Буст без оплаты — усиление, которого честный игрок так не получит.
+    (start.boosts ?? []).length > 0
   );
 }
 

@@ -9,13 +9,14 @@ import {
 import { Queue, Worker } from "bullmq";
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { createQueueConnection } from "../../infra/queues.js";
 import { describeDbError } from "../../infra/database.js";
 import { REDIS } from "../../infra/redis.js";
-import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
-import type { InlineButton, TelegramBotApi, TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
+import { BotRouter, type BotUpdateHandler } from "../../platforms/telegram/bot-router.js";
+import type { InlineButton, TelegramBotApi, TelegramUpdate } from "../../platforms/telegram/telegram-bot-api.js";
+import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
 import type { ExportPeriod } from "./export.repository.js";
 import { ExportService } from "./export.service.js";
 import { RolesService } from "../roles/roles.service.js";
@@ -122,6 +123,7 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly switches: FeatureSwitches,
     private readonly router: BotRouter,
     @Inject(EXPORT_BOT_LOCKS) private readonly locks: ExportBotLocks,
     @Inject(TELEGRAM_BOT_API) private readonly api: ExportBotApi,
@@ -129,16 +131,18 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
     private readonly roles: RolesService,
   ) {}
 
+  /** Выгрузка работает сейчас; выключают её на ходу из панели — например, при утечке токена бота. */
   get enabled(): boolean {
-    return this.config.export.botEnabled;
+    return this.switches.exportBot();
   }
 
+  /** Обработчик и очередь — когда выгрузка возможна; выключенная молчит на команду, как неизвестная. */
   onModuleInit(): void {
-    if (this.enabled) this.router.register(this);
+    if (this.config.export.botPossible) this.router.register(this);
   }
 
   onApplicationBootstrap(): void {
-    if (!this.enabled) return;
+    if (!this.config.export.botPossible) return;
     const producer = createQueueConnection(this.config, "producer");
     const consumer = createQueueConnection(this.config, "worker");
     this.connections = [producer, consumer];
@@ -154,6 +158,7 @@ export class ExportBotCommand implements BotUpdateHandler, OnModuleInit, OnAppli
   }
 
   async handle(update: TelegramUpdate): Promise<boolean> {
+    if (!this.enabled) return false;
     if (update.message !== undefined) return this.handleCommand(update.message);
     if (update.callback_query !== undefined) return this.handleCallback(update.callback_query);
     return false;

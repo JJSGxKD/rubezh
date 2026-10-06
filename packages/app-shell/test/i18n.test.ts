@@ -1,5 +1,10 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { z } from "zod/mini";
 import { formatDuration, hasTranslation, t } from "../src/i18n";
+// Ключ примера — из словаря забега: он подгружается с чанком экрана забега.
+import "../src/i18n/run";
 import { API_FAILURES } from "../src/state/api-request";
 
 // Тексты интерфейса (docs/27-design-system-and-app-shell.md §8).
@@ -15,6 +20,20 @@ describe("переводы", () => {
     expect(t("lobby.runs", { count: 3 })).toBe("3 забега");
     expect(t("lobby.runs", { count: 11 })).toBe("11 забегов");
     expect(t("lobby.runs", { count: 22 })).toBe("22 забега");
+  });
+
+  it("число в склонении — подстановкой, а не «#»: формат его не знает", async () => {
+    // «#» из ICU здесь не подставляется — игрок увидел бы «второй шанс # раз».
+    // Число пишется рядом: «{n} {n, plural, …}».
+    const dir = fileURLToPath(new URL("../src/i18n", import.meta.url));
+    for (const file of readdirSync(dir).filter((name) => name.endsWith(".json"))) {
+      const dictionary = z.record(z.string(), z.string()).parse(JSON.parse(readFileSync(`${dir}/${file}`, "utf8")));
+      for (const [key, text] of Object.entries(dictionary)) {
+        expect(/plural,.*#/s.test(text), `${file}: ${key}`).toBe(false);
+      }
+    }
+    await import("../src/i18n/account");
+    expect(t("runDetail.continues", { n: 2 })).toBe("второй шанс 2 раза");
   });
 
   it("склоняет число участников в рейтинге", () => {
@@ -40,6 +59,20 @@ describe("переводы", () => {
     expect(t("soundLab.title")).toBe("Звуковая лаборатория");
     // Плашка читов на экране смерти видна и без чанка команды.
     expect(hasTranslation("dev.cheats.notCounted")).toBe(true);
+  });
+
+  it("подписи витрины — только в её чанке: ни первая загрузка, ни словарь команды за них не платят", async () => {
+    await import("../src/i18n/team");
+    expect(t("gallery.title")).toBe("Витрина компонентов");
+    expect(hasTranslation("gallery.modals")).toBe(false);
+    await import("../src/i18n/gallery");
+    expect(t("gallery.modals")).toBe("Модалки");
+  });
+
+  it("подписи рекламного блока — только в его чанке", async () => {
+    expect(hasTranslation("ads.label")).toBe(false);
+    await import("../src/i18n/ads");
+    expect(t("ads.open")).toBe("Открыть");
   });
 
   it("знает ключи контента: имена оружия и пассивок приходят из core-game", () => {

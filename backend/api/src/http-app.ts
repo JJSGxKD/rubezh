@@ -47,7 +47,9 @@ function configureHttpApp(app: NestFastifyApplication, config: AppConfig): void 
   app.useGlobalFilters(new DomainErrorFilter());
 
   // health остаётся на корне: пробы и мониторинг не должны знать о версии API.
-  app.setGlobalPrefix("api/v1", { exclude: ["health"] });
+  // `/r/<код>` — адрес редирект-ссылки в чатах и постах, а не API
+  // (docs/24-attribution-and-sharing.md §3.1).
+  app.setGlobalPrefix("api/v1", { exclude: ["health", "r/:code"] });
 
   app.enableCors({
     origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : false,

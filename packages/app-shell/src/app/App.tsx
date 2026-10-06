@@ -2,7 +2,6 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { ListChecks, Store, Swords, Trophy, Users } from "lucide-react";
 import { ArmorIcon, ScreenTransition, TabBar, type TabItem } from "../design-system/components";
 import { AppHeader } from "./AppHeader";
-import { MainMenu } from "./MainMenu";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
 import {
@@ -12,25 +11,34 @@ import {
   useNavigation,
   type ScreenId,
 } from "../state/navigation";
+import { badgeText, useBadges } from "../state/badges";
 import { useMeta } from "../state/meta";
 import { usePlatform } from "../state/platform";
 import { useRun } from "../state/run";
 import { isVersionAtLeast } from "../state/platform-version";
 import { useShell } from "../state/shell";
+import { backAction, backKeyAction, useBackStack, type BackStack } from "../state/back-stack";
 import { CompactOverlay, FirstRunScreen, OutdatedScreen, OutsideScreen } from "../screens/gates";
-import { LobbyScreen, ModeScreen, WeaponScreen } from "../screens/home";
-import { RunScreen } from "../screens/run/RunScreen";
+import { LobbyScreen, ModeScreen } from "../screens/home";
+import { playedBefore, skipFirstRunHints } from "../state/first-run";
 import {
   AboutScreen,
   ArsenalScreen,
+  BoostsScreen,
   DailyScreen,
   DiagnosticsScreen,
   FriendsScreen,
   GalleryScreen,
   FeedbackScreen,
   GuideScreen,
+  HistoryScreen,
+  LevelScreen,
+  MainMenu,
+  NotificationsScreen,
+  ChangelogScreen,
   ProfileScreen,
   RatingScreen,
+  RunScreen,
   ScreenBoundary,
   ScreenFallback,
   SettingsScreen,
@@ -39,7 +47,10 @@ import {
   StressScreen,
   TasksScreen,
   TestersScreen,
+  WeaponScreen,
   WheelScreen,
+  PromoCodeScreen,
+  TestNoticeScreen,
 } from "./lazy-screens";
 
 /**
@@ -57,6 +68,9 @@ export function App(): ReactNode {
   const expanded = usePlatform((state) => state.viewport.expanded);
   const install = useInstall();
   const [menuOpen, setMenuOpen] = useState(false);
+  const arsenalCount = useBadges((state) => state.arsenal);
+  const friendsCount = useBadges((state) => state.friends);
+  const tasksCount = useBadges((state) => state.tasks);
 
   usePlatformButtons(stack, screen);
 
@@ -64,9 +78,16 @@ export function App(): ReactNode {
   // Версия клиента проверяется после самой площадки: вне её версии нет, и
   // спрашивать не у кого.
   if (outdated(capabilities.minPlatformVersion)) return <OutdatedScreen version={clientVersion()} />;
-  if (!install.accepted) return <FirstRunScreen onAccept={() => acceptAndPlay()} />;
+  if (!install.accepted) return <FirstRunScreen onAccept={() => void acceptAndPlay()} />;
 
   const tab = activeTab(stack);
+  // Знак — только с полезной нагрузкой (Р50): новые предметы, подарки к
+  // выдаче и заявки друзей, награды заданий к забору.
+  const badges: Partial<Record<string, string | undefined>> = { arsenal: badgeText(arsenalCount), friends: badgeText(friendsCount), tasks: badgeText(tasksCount) };
+  const tabs = TABS.map((item) => {
+    const badge = badges[item.id];
+    return badge === undefined ? item : { ...item, badge };
+  });
   // Забег занимает весь экран: панель разделов поверх канвы отнимала бы
   // высоту у мира и попадала под палец.
   const showTabs = tab !== null && screen !== "run" && stack.length === 1;
@@ -76,9 +97,10 @@ export function App(): ReactNode {
   const runUnderneath = screen !== "run" && stack.includes("run");
 
   return (
-    <div className="bg-app relative flex h-full flex-col">
+    <div className="bg-app relative flex h-full flex-col" data-app-header={showTabs ? "" : undefined}>
       {/* Шапка — у разделов нижней панели: внутри раздела верх экрана занят
-          заголовком и кнопкой «назад». */}
+          заголовком и кнопкой «назад». Лежит поверх прокрутки, а не над ней:
+          содержимое уходит под её стекло (WP30). */}
       {showTabs ? <AppHeader onMenu={() => setMenuOpen(true)} /> : null}
       <main className="relative min-h-0 flex-1">
         {screen === "run" || runUnderneath ? (
@@ -87,9 +109,11 @@ export function App(): ReactNode {
             className={runUnderneath ? "invisible absolute inset-0" : "h-full"}
           >
             <ScreenBoundary key="run">
-              <ScreenTransition screenKey="run">
-                <RunScreen />
-              </ScreenTransition>
+              <Suspense fallback={<ScreenFallback />}>
+                <ScreenTransition screenKey="run">
+                  <RunScreen />
+                </ScreenTransition>
+              </Suspense>
             </ScreenBoundary>
           </div>
         ) : null}
@@ -108,30 +132,36 @@ export function App(): ReactNode {
       {expanded ? null : <CompactOverlay onExpand={() => useShell.getState().adapter.ui.expand()} />}
       {showTabs ? (
         <TabBar
-          items={TABS}
+          items={tabs}
           activeId={tab}
           onSelect={(id) => useNavigation.getState().resetTo(id as ScreenId)}
         />
       ) : null}
-      {menuOpen && showTabs ? <MainMenu onClose={() => setMenuOpen(false)} /> : null}
+      {menuOpen && showTabs ? (
+        <Suspense fallback={null}>
+          <MainMenu onClose={() => setMenuOpen(false)} />
+        </Suspense>
+      ) : null}
     </div>
   );
 }
 
 /**
  * Порядок разделов — как в мобильных играх жанра: главная с кнопкой «Играть»
- * ближе к центру, под большим пальцем. Точка на разделе — «здесь скоро
- * появится»: заглушки зовут зайти и посмотреть.
+ * ближе к центру, под большим пальцем. Знак на разделе — только с
+ * полезной нагрузкой, числом: награды к выдаче, новые предметы, подарки
+ * (`35-stage4-plan.md`, Р50). Точек «зайди посмотреть» нет: знак, который
+ * горит всегда, перестают замечать.
  */
 const TABS: readonly TabItem[] = [
   // Значки говорят, что внутри: магазин — витрина, а не подарок; арсенал —
   // снаряжение, а не бой; бой — на главной, откуда в него и уходят.
-  { id: "shop", label: t("tab.shop"), icon: <Store size={22} />, badge: "dot" },
-  { id: "arsenal", label: t("tab.arsenal"), icon: <ArmorIcon size={22} />, badge: "dot" },
+  { id: "shop", label: t("tab.shop"), icon: <Store size={22} /> },
+  { id: "arsenal", label: t("tab.arsenal"), icon: <ArmorIcon size={22} /> },
   { id: "lobby", label: t("tab.home"), icon: <Swords size={22} /> },
-  { id: "tasks", label: t("tab.tasks"), icon: <ListChecks size={22} />, badge: "dot" },
+  { id: "tasks", label: t("tab.tasks"), icon: <ListChecks size={22} /> },
   { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} /> },
-  { id: "friends", label: t("tab.friends"), icon: <Users size={22} />, badge: "dot" },
+  { id: "friends", label: t("tab.friends"), icon: <Users size={22} /> },
 ];
 
 function renderScreen(screen: ScreenId): ReactNode {
@@ -142,6 +172,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <ModeScreen />;
     case "weapon":
       return <WeaponScreen />;
+    case "boosts":
+      return <BoostsScreen />;
     case "run":
       return <RunScreen />;
     case "feedback":
@@ -158,12 +190,24 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <FriendsScreen />;
     case "profile":
       return <ProfileScreen />;
+    case "level":
+      return <LevelScreen />;
+    case "history":
+      return <HistoryScreen />;
+    case "notifications":
+      return <NotificationsScreen />;
+    case "changelog":
+      return <ChangelogScreen />;
     case "tasks":
       return <TasksScreen />;
     case "daily":
       return <DailyScreen />;
     case "wheel":
       return <WheelScreen />;
+    case "promoCode":
+      return <PromoCodeScreen />;
+    case "testNotice":
+      return <TestNoticeScreen />;
     case "settings":
       return <SettingsScreen />;
     case "testers":
@@ -182,20 +226,53 @@ function renderScreen(screen: ScreenId): ReactNode {
 }
 
 /**
- * Кнопки площадки. «Назад» видна, когда в стеке больше одного экрана, и
- * вызывает `pop`; во время забега она ставит паузу, а не выходит из забега —
- * иначе один случайный жест обнуляет десять минут игры (§7).
+ * Кнопки площадки. «Назад» и Esc — по стеку (`state/back-stack.ts`): открытая
+ * модалка закрывается; иначе на экране раздела — `pop`, если есть куда
+ * вернуться, а во время забега — пауза, а не выход из забега: иначе один
+ * случайный жест обнуляет десять минут игры (§7).
  */
 function usePlatformButtons(stack: readonly ScreenId[], screen: ScreenId): void {
   useEffect(() => {
-    const ui = useShell.getState().adapter.ui;
-
-    if (screen === "run") {
-      ui.setBackButton(() => useRun.getState().pause("manual"));
-      return;
-    }
-    ui.setBackButton(canGoBack(stack) ? () => useNavigation.getState().pop() : null);
+    useBackStack.getState().setBase(
+      screen === "run"
+        ? { action: () => useRun.getState().pause("manual"), keyboard: false }
+        : { action: canGoBack(stack) ? () => useNavigation.getState().pop() : null, keyboard: true },
+    );
   }, [stack, screen]);
+
+  // Кнопка площадки — за верхним слоем стека: открытая модалка закрывается
+  // ею, а не уводит экран из-под себя.
+  useEffect(() => {
+    const ui = useShell.getState().adapter.ui;
+    let shown: (() => void) | null | undefined;
+    const apply = (state: BackStack): void => {
+      const action = backAction(state);
+      if (action === shown) return;
+      shown = action;
+      ui.setBackButton(action);
+    };
+    apply(useBackStack.getState());
+    const unsubscribe = useBackStack.subscribe(apply);
+    return () => {
+      unsubscribe();
+      ui.setBackButton(null);
+    };
+  }, []);
+
+  // Esc на ПК — тот же стек. Внутри Telegram Desktop он не должен уйти
+  // клиенту и закрыть приложение, когда у приложения есть что закрыть.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      const target = event.target;
+      const typing = target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      const action = backKeyAction(event, useBackStack.getState(), typing);
+      if (action === null) return;
+      event.preventDefault();
+      action();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const ui = useShell.getState().adapter.ui;
@@ -212,8 +289,14 @@ function usePlatformButtons(stack: readonly ScreenId[], screen: ScreenId): void 
  * забег начинается сам — на «Лёгкой», со стартовым оружием и подсказками
  * первого забега. Выйти из него можно тем же способом, что из любого другого.
  */
-function acceptAndPlay(): void {
+async function acceptAndPlay(): Promise<void> {
   useInstall.getState().accept();
+  // Согласие — на устройстве, а аккаунт мог уже играть на другом: тогда
+  // учебного забега нет, игрок остаётся в лобби (state/first-run.ts).
+  if (await playedBefore()) {
+    skipFirstRunHints();
+    return;
+  }
   // Первый забег — на «Лёгкой»: она и задумана как баланс без поправок.
   useMeta.getState().rememberDifficulty("easy");
   useRun.getState().intend({ kind: "new" });

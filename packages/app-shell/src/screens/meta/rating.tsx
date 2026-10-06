@@ -15,8 +15,10 @@ import {
 import { formatNumber, t } from "../../i18n";
 import { useMeta } from "../../state/meta";
 import type { ApiFailure } from "../../state/api-request";
+import { useRestricted } from "../../state/restrictions";
 import { useRuns } from "../../state/runs";
 import { ItemIcon } from "../item-icons";
+import { RestrictedPlaque } from "./restricted-plaque";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { RankMark, SurvivalTime, SyncProblem } from "./sync-ui";
 
@@ -29,6 +31,9 @@ import { RankMark, SurvivalTime, SyncProblem } from "./sync-ui";
  * антифрода (docs/34-stage3-plan.md, WP4). Подозрительный забег остаётся в
  * профиле, но не здесь.
  */
+/** Рейтинг закрывает своё ограничение (WP44); о молчаливом игрок не узнаёт — у него тень. */
+const RATING_RESTRICTION = ["leaderboard"];
+
 export function RatingScreen(): ReactNode {
   const [difficultyId, setDifficultyId] = useState<DifficultyId>(() => useMeta.getState().lastDifficultyId);
   const board = useRuns((state) => state.leaderboards[difficultyId]);
@@ -36,6 +41,7 @@ export function RatingScreen(): ReactNode {
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const notice = useSessionNotice();
+  const restricted = useRestricted(RATING_RESTRICTION);
 
   // Ответ на переключённую уже сложность не должен затереть состояние текущей.
   const latest = useRef<DifficultyId>(difficultyId);
@@ -83,11 +89,15 @@ export function RatingScreen(): ReactNode {
             loading ? <BoardSkeleton /> : null
           ) : (
             <>
-              <MyPlace
-                me={board.me}
-                totalPlayers={board.totalPlayers}
-                inTable={board.entries.some((entry) => entry.isMe)}
-              />
+              {/* Под ограничением места нет, и «сыграйте забег» соврало бы — вместо него плашка. */}
+              <RestrictedPlaque kinds={RATING_RESTRICTION} />
+              {restricted ? null : (
+                <MyPlace
+                  me={board.me}
+                  totalPlayers={board.totalPlayers}
+                  inTable={board.entries.some((entry) => entry.isMe)}
+                />
+              )}
               {board.entries.length === 0 ? (
                 <p className="surface-sunken rounded-lg p-4 text-center text-sm text-text-muted">
                   {t("rating.empty")}

@@ -1,0 +1,70 @@
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { RequirePermission } from "../../common/access.js";
+import { RateLimitedError } from "../../common/domain-error.js";
+import { accountOf } from "../auth/auth.guard.js";
+import { RateLimiter } from "../ingest/rate-limiter.js";
+import { PermissionGuard } from "../roles/permission.guard.js";
+import { ADMIN_LIMITS } from "./admin-limits.js";
+import { parse } from "./admin-parse.js";
+import { AdminRolesService, type AuditPage, type RoleAssignments, type RoleCandidate } from "./admin-roles.service.js";
+import { AdminSessionGuard } from "./admin-session.guard.js";
+import { auditQuerySchema, roleCandidateQuerySchema, roleTargetSchema } from "./dto/admin.dto.js";
+
+/** Роли и журнал аудита в панели (docs/29-admin-panel.md §3). */
+@Controller("admin")
+@UseGuards(AdminSessionGuard, PermissionGuard)
+export class AdminRolesController {
+  constructor(
+    private readonly roles: AdminRolesService,
+    private readonly limiter: RateLimiter,
+  ) {}
+
+  @Get("roles")
+  @RequirePermission("roles.assign")
+  async assignments(@Req() request: unknown): Promise<{ data: RoleAssignments }> {
+    return { data: await this.roles.assignments(accountOf(request)) };
+  }
+
+  /** Кто это — пока вводят Telegram ID в форме выдачи. */
+  @Get("roles/candidate")
+  @RequirePermission("roles.assign")
+  async candidate(@Req() request: unknown, @Query() query: unknown): Promise<{ data: { candidate: RoleCandidate | null } }> {
+    const parsed = parse(() => roleCandidateQuerySchema.parse(query), "Некорректный адрес: Telegram ID цифрами или id аккаунта");
+    return { data: { candidate: await this.roles.candidate(accountOf(request), parsed) } };
+  }
+
+  @Post("roles/grant")
+  @RequirePermission("roles.assign")
+  async grant(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { granted: boolean } }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId);
+    return { data: await this.roles.grant(actor, parse(() => roleTargetSchema.parse(body), "Некорректная цель")) };
+  }
+
+  @Post("roles/revoke")
+  @RequirePermission("roles.assign")
+  async revoke(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { revoked: boolean; sessionsRevoked: number } }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId);
+    return { data: await this.roles.revoke(actor, parse(() => roleTargetSchema.parse(body), "Некорректная цель")) };
+  }
+
+  @Get("audit")
+  @RequirePermission("audit.view")
+  async audit(@Req() request: unknown, @Query() query: unknown): Promise<{ data: AuditPage }> {
+    const parsed = parse(() => auditQuerySchema.parse(query), "Некорректный отбор журнала");
+    return {
+      data: await this.roles.audit(accountOf(request), {
+        limit: parsed.limit,
+        before: parsed.before ?? null,
+        actions: parsed.actions ?? [],
+        actorAccountId: parsed.actor ?? null,
+        target: parsed.target ?? null,
+      }),
+    };
+  }
+
+  private async limit(actorId: string): Promise<void> {
+    if (!(await this.limiter.consume(ADMIN_LIMITS.mutate, actorId))) throw new RateLimitedError("Слишком много действий — подождите минуту");
+  }
+}

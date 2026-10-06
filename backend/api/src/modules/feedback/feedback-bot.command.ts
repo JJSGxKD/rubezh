@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import { BotRouter, type BotUpdateHandler } from "../bot/bot-router.js";
-import type { TelegramBotApi, TelegramUpdate } from "../telegram/telegram-bot-api.js";
-import { TELEGRAM_BOT_API } from "../telegram/telegram-bot-api.js";
+import { BotRouter, type BotUpdateHandler } from "../../platforms/telegram/bot-router.js";
+import type { TelegramBotApi, TelegramUpdate } from "../../platforms/telegram/telegram-bot-api.js";
+import { TELEGRAM_BOT_API } from "../../platforms/telegram/telegram-bot-api.js";
 import { FEEDBACK_REPOSITORY, type FeedbackRepository, type StoredFeedback } from "./feedback.repository.js";
 
 /**

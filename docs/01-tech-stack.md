@@ -11,6 +11,8 @@
   /adapter-vk          <- тонкий слой под VK Bridge (опционально, фаза 2)
   /adapter-web         <- браузерная версия, несколько auth-провайдеров внутри одного адаптера (см. 08)
   /shared-types        <- общие TS-интерфейсы (PlatformAdapter, User, PurchaseResult)
+  /fx                  <- курсы валют и пересчёт — самодостаточное ядро (35-stage4-plan.md, §3.12)
+  /design-tokens       <- базовые токены дизайна — общие для игры и панели (27-design-system-and-app-shell.md §4.2)
 /apps
   /web-telegram        <- сборка под Telegram (env=telegram)
   /web-max             <- сборка под MAX (env=max)
@@ -30,7 +32,8 @@ interface PlatformAdapter {
   openInvoice?(url: string): Promise<InvoiceStatus>; // счёт выставляет сервер, решает тоже он
   share(payload: SharePayload): void;    // шеринг результата забега
   haptic(type: HapticType): void;
-  showAd?(): Promise<AdResult>;          // опционально, не везде доступно
+  showAd?(request: AdShowRequest): Promise<AdShowOutcome>; // реклама сети по выдаче сервера; нет — площадка не показывает
+  prepareAds?(networks: readonly AdNetworkSetup[]): Promise<void>; // SDK сетей учёта аудитории — в простое после главной
 }
 ```
 
@@ -118,9 +121,16 @@ interface PlatformAdapter {
 | Web (RU) | Яндекс Директ/РСЯ-рекламные SDK для игр | |
 | Web (международный) | отдельная сеть под несовместимый с RU-рынком регион (уточняется при реализации фазы 2) | |
 
-Модуль `showAd()` в адаптере — опциональный, не-op на MAX, реализован через
-рекламных провайдеров на Telegram, через нативный VK Ads SDK на VK, через
-Яндекс/международную сеть на вебе. Полная логика антирекламного пакета,
+Метод `showAd(request)` в адаптере — опциональный: показывает рекламу той
+сети и того блока, что выдал сервер, и возвращает исход — досмотрено,
+закрыто или отказ с кодом. На Telegram — SDK AdsGram, AdSonar и RichAds
+(`adapter-telegram/src/ads/`). Taddy показывает не SDK, а наш рекламный блок
+в оболочке: креатив сервер берёт по API сети (`35-stage4-plan.md` WP12,
+часть 9). SDK Taddy адаптер поднимает методом `prepareAds` только для учёта
+аудитории — у каждого игрока, пока у сети задан ключ. У MAX и VK методов нет, пока нет SDK, —
+оболочка не рисует кнопок «за рекламу», VIP получает награду без ролика с
+сервера. Дальше — нативный VK Ads SDK на VK, Яндекс/международная сеть на
+вебе. Полная логика антирекламного пакета,
 кнопки "награда за рекламу" и различий поведения между платформами — в
 `07-monetization-and-ads.md`.
 

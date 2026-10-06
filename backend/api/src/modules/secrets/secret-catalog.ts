@@ -1,0 +1,175 @@
+import type { AppConfig } from "../../config/app-config.js";
+
+/**
+ * Каталог ключей интеграций (docs/35-stage4-plan.md Р84, WP46): токены
+ * внешних сервисов, которые команда меняет из панели без релиза и без
+ * доступа к серверу.
+ *
+ * Порядок тот же, что у настроек: панель → окружение. Значение из панели
+ * лежит в базе только шифртекстом (`secret-cipher.ts`), и панель его не
+ * показывает никогда — только последние знаки, чтобы сверить с кабинетом.
+ *
+ * **Сюда не попадают** внутренние секреты (JWT, сессии, псевдонимы
+ * выгрузок, сам ключ шифрования), адреса базы и Redis и токен бота: им
+ * подписан вход каждого игрока и вход в панель, и ошибку в нём из панели уже
+ * не исправить.
+ */
+
+export interface SecretCheckResult {
+  ok: boolean;
+  /** что ответил сервис — словами для панели */
+  message: string;
+}
+
+export interface SecretDefinition {
+  /** `fx.coingecko-pro` — латиница, точки, дефисы */
+  readonly key: string;
+  /** сервис — по нему ключи сгруппированы в панели */
+  readonly service: string;
+  readonly title: string;
+  /** что даёт ключ и что будет без него */
+  readonly hint: string;
+  /** где взять: кабинет сервиса; `null` — ссылки нет */
+  readonly cabinetUrl: string | null;
+  /** вид ключа — проверяется до записи: опечатку лучше поймать в форме, чем в отказе сервиса */
+  readonly pattern: RegExp;
+  /** как выглядит ключ — для подсказки в поле */
+  readonly example: string;
+  /** значение из окружения; `null` — там не задано */
+  readonly fromEnv: (config: AppConfig) => string | null;
+  /** проверка связи с сервисом этим ключом; нет — сервис проверки не даёт */
+  readonly check?: (value: string, fetchImpl: typeof fetch) => Promise<SecretCheckResult>;
+  /**
+   * Ключ создаёт наш сервер, а не сервис: секрет в адресе, который зовёт
+   * сеть. Панель его не вводит, а просит создать — и сервер один раз
+   * показывает, что вставить в кабинет сервиса: адрес с секретом. Дальше —
+   * только последние знаки, как у любого ключа.
+   */
+  readonly generated?: GeneratedSecret;
+}
+
+export interface GeneratedSecret {
+  /** что вставить в кабинет сервиса — с новым секретом внутри */
+  readonly reveal: (value: string, config: AppConfig) => string;
+  /** куда именно вставить — словами для панели */
+  readonly where: string;
+}
+
+export const SECRET_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
+
+/** Любой ключ — без пробелов и служебных знаков: перенос строки из буфера обмена — частая опечатка. */
+export const SECRET_TEXT = /^[\x21-\x7e]{1,512}$/;
+
+const CHECK_TIMEOUT_MS = 5_000;
+
+const nonEmpty = (value: string): string | null => (value === "" ? null : value);
+
+/** Пинг CoinGecko: у демо и платного ключа свой адрес и свой заголовок. */
+function coingeckoCheck(plan: "demo" | "pro") {
+  return async (value: string, fetchImpl: typeof fetch): Promise<SecretCheckResult> => {
+    const host = plan === "pro" ? "https://pro-api.coingecko.com" : "https://api.coingecko.com";
+    try {
+      const response = await fetchImpl(`${host}/api/v3/ping`, {
+        headers: { [`x-cg-${plan}-api-key`]: value, accept: "application/json" },
+        signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
+      });
+      if (response.ok) return { ok: true, message: "CoinGecko принял ключ" };
+      if (response.status === 401 || response.status === 403 || response.status === 400) {
+        return { ok: false, message: `CoinGecko не принял ключ (${String(response.status)}): проверьте, что ключ ${plan === "pro" ? "платный" : "демо"} и скопирован целиком` };
+      }
+      if (response.status === 429) return { ok: false, message: "CoinGecko ответил «слишком много запросов» — ключ не проверен, попробуйте через минуту" };
+      return { ok: false, message: `CoinGecko ответил ${String(response.status)} — ключ не проверен` };
+    } catch (error: unknown) {
+      const timeout = error instanceof Error && error.name === "TimeoutError";
+      return { ok: false, message: timeout ? "CoinGecko не ответил за 5 секунд — ключ не проверен" : "CoinGecko недоступен с сервера — ключ не проверен" };
+    }
+  };
+}
+
+const FX_SERVICE = "Курсы валют · CoinGecko";
+const ADSGRAM_SERVICE = "Трекинг закупок · AdsGram";
+const ADSGRAM_TASKS_SERVICE = "Задания сетей · AdsGram";
+
+/**
+ * Адрес награды за задание AdsGram (docs/35-stage4-plan.md WP13, часть 6):
+ * AdsGram зовёт его, когда игрок выполнил задание, и подставляет вместо
+ * `[userId]` его id в Telegram. Подписи у запроса нет — подделку отличает
+ * только секрет в пути. Путь — тот же, что у ручки
+ * `ads/adsgram-reward.controller.ts`; их совпадение проверяет HTTP-тест.
+ */
+export const ADSGRAM_REWARD_PATH = "/api/v1/ads/adsgram/reward";
+
+/** Секрет адреса — 32 случайных байта в base64url: подобрать его перебором нельзя. */
+export const GENERATED_SECRET_BYTES = 32;
+
+export const SECRETS = {
+  coingeckoPro: {
+    key: "fx.coingecko-pro",
+    service: FX_SERVICE,
+    title: "Платный ключ CoinGecko",
+    hint: "Курсы TON и USDT с платного тарифа: свой адрес и большие лимиты. Задан — важнее демо-ключа.",
+    cabinetUrl: "https://www.coingecko.com/en/developers/dashboard",
+    pattern: /^CG-[A-Za-z0-9]{8,64}$/,
+    example: "CG-AbCdEfGh1234567890",
+    fromEnv: (config) => nonEmpty(config.fx.coingeckoProKey),
+    check: coingeckoCheck("pro"),
+  },
+  coingeckoDemo: {
+    key: "fx.coingecko-demo",
+    service: FX_SERVICE,
+    title: "Демо-ключ CoinGecko",
+    hint: "Бесплатный ключ — 10 000 запросов в месяц. Без ключей курсы идут общим лимитом по адресу сервера.",
+    cabinetUrl: "https://www.coingecko.com/en/developers/dashboard",
+    pattern: /^CG-[A-Za-z0-9]{8,64}$/,
+    example: "CG-AbCdEfGh1234567890",
+    fromEnv: (config) => nonEmpty(config.fx.coingeckoDemoKey),
+    check: coingeckoCheck("demo"),
+  },
+  adsgramConversionToken: {
+    key: "adsgram.conversion-token",
+    service: ADSGRAM_SERVICE,
+    title: "Токен конверсий AdsGram",
+    hint: "Регистрации и покупки игроков, пришедших по ссылкам AdsGram из раздела «Ссылки», уходят в наш кабинет этим токеном — по ним AdsGram учится приводить тех, кто играет и платит. Нет токена — конверсии копятся и уйдут, когда его зададут.",
+    cabinetUrl: "https://adsgram.ai",
+    // Токен уходит в адрес запроса — только знаки, которые не нужно кодировать.
+    pattern: /^[A-Za-z0-9._~-]{8,256}$/,
+    example: "a1b2c3d4e5f6a7b8c9d0",
+    // Только из панели: токен перевыпускают в кабинете, и заменять его
+    // должен человек, а не выкат с новым `.env`.
+    fromEnv: () => null,
+  },
+  adsgramRewardSecret: {
+    key: "adsgram.reward-secret",
+    service: ADSGRAM_TASKS_SERVICE,
+    title: "Адрес награды за задание AdsGram",
+    hint: "AdsGram зовёт этот адрес, когда игрок выполнил задание сети во вкладке «Партнёры», — и только тогда сервер даёт награду. Секрет в адресе отличает AdsGram от подделки. Пока адреса нет, заданий AdsGram у игроков нет: награду за них дать было бы нечем.",
+    cabinetUrl: "https://partner.adsgram.ai",
+    pattern: /^[A-Za-z0-9_-]{32,128}$/,
+    example: "aBcD3fGh1jKlMn0pQrStUvWxYz_-aBcD3fGh1jKlMnO",
+    // Только из панели: адрес вставляют в кабинет AdsGram, и создаёт его
+    // человек, который тут же его туда и вставит.
+    fromEnv: () => null,
+    generated: {
+      reveal: (value, config) => `${config.telegram.publicApiUrl}${ADSGRAM_REWARD_PATH}/${value}/[userId]`,
+      where: "кабинет AdsGram → блок формата Task → поле Reward URL",
+    },
+  },
+} as const satisfies Record<string, SecretDefinition>;
+
+export const SECRET_LIST: readonly SecretDefinition[] = Object.values(SECRETS);
+
+export function secretByKey(key: string): SecretDefinition | undefined {
+  return SECRET_LIST.find((secret) => secret.key === key);
+}
+
+/** Что не так с ключом; `null` — можно сохранять. Панель проверяет то же самое. */
+export function secretProblem(secret: SecretDefinition, value: string): string | null {
+  if (!SECRET_TEXT.test(value)) return "Ключ — без пробелов и переносов строки, до 512 знаков";
+  if (!secret.pattern.test(value)) return `${secret.title} выглядит как «${secret.example}»`;
+  return null;
+}
+
+/** Последние знаки — чтобы сверить с кабинетом сервиса, не раскрывая ключ. */
+export function fingerprintOf(value: string): string {
+  return value.length <= 8 ? "••••" : `••••${value.slice(-4)}`;
+}

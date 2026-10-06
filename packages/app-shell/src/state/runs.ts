@@ -54,7 +54,7 @@ const finishFields = {
   level: z.number(),
   enemiesKilled: z.number(),
   startingWeaponId: z.string(),
-  weapons: z.array(z.object({ id: z.string(), level: z.number() })),
+  weapons: z.array(z.object({ id: z.string(), level: z.number(), damage: z.optional(z.number()) })),
   contentHash: z.string(),
   // Необязательные: забеги в очереди от прошлой сборки этих полей не знают,
   // и выбрасывать их из-за этого незачем.
@@ -62,7 +62,20 @@ const finishFields = {
   cheats: z.optional(z.boolean()),
   countInRating: z.optional(z.boolean()),
   continues: z.optional(z.array(z.number())),
+  boosts: z.optional(z.array(z.string())),
+  passives: z.optional(z.array(z.object({ id: z.string(), level: z.number() }))),
+  stats: z.optional(
+    z.object({
+      damageTaken: z.number(),
+      xpCollected: z.number(),
+      waveReached: z.number(),
+      topKills: z.array(z.object({ enemy: z.string(), count: z.number() })),
+    }),
+  ),
 };
+
+/** Сколько врагов в «кого больше всего убил» — столько же хранит сервер. */
+const TOP_KILLS = 5;
 
 const startEntrySchema = z.object({
   kind: z.literal("start"),
@@ -152,7 +165,18 @@ export const useRuns = create<RunsStore>((set, get) => ({
         const head = queue().read()[0];
         if (head === undefined) break;
 
-        const response = head.kind === "start" ? await client.start(toStart(head, Date.now())) : await client.finish(toFinish(head));
+        let response: Awaited<ReturnType<RunsApi["start"]>> | Awaited<ReturnType<RunsApi["finish"]>>;
+        if (head.kind === "start") {
+          response = await client.start(toStart(head, Date.now()));
+        } else {
+          const finish = await withLoadout(toFinish(head));
+          if (finish === null) {
+            // Чанк снимка не загрузился — сети нет: итог подождёт вместе со всеми.
+            track("run_synced", { kind: "finish", result: "queued", failure: "offline", trigger });
+            break;
+          }
+          response = await client.finish(finish);
+        }
         if (!response.ok && response.failure !== "rejected") {
           // Сеть, сервер, сессия — всё это проходит само: запись ждёт
           // следующей попытки, а остальные за ней — тем более.
@@ -218,9 +242,11 @@ export const useRuns = create<RunsStore>((set, get) => ({
 }));
 
 /**
- * Только поля, которые нужны рейтингу, профилю и антифроду: урон и убийства
- * по врагам серверу ни к чему. `countInRating` — просьба администратора учесть
- * забег с читами; сервер выполнит её, только если у аккаунта есть право.
+ * Поля рейтинга и антифрода и подробности для листа забега в профиле: урон
+ * оружия, навыки, полученный урон, опыт, отрезок и пятёрка самых частых
+ * врагов. Полный разрез по врагам и стихиям серверу ни к чему — он уходит в
+ * аналитику. `countInRating` — просьба администратора учесть забег с читами;
+ * сервер выполнит её, только если у аккаунта есть право.
  */
 export function toSubmission(result: RunResult, countInRating = false): RunFinishSubmission {
   return {
@@ -232,12 +258,24 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     level: result.level,
     enemiesKilled: result.enemiesKilled,
     startingWeaponId: result.startingWeaponId,
-    weapons: result.weapons.map(({ id, level }) => ({ id, level })),
+    weapons: result.weapons.map(({ id, level, damage }) => ({ id, level, damage: Math.round(damage) })),
     contentHash: result.contentHash,
     deathCause: result.deathCause,
     // Без секунд продолжений сервер счёл бы купленный второй шанс
     // неоплаченным — и наоборот, не нашёл бы, что сверять с покупкой.
     continues: [...result.continues],
+    // Бусты — те, что применил движок: сервер сверит их с покупкой на забег.
+    ...(result.boosts === undefined || result.boosts.length === 0 ? {} : { boosts: [...result.boosts] }),
+    passives: result.passives.map(({ id, level }) => ({ id, level })),
+    stats: {
+      damageTaken: Math.round(result.damageTaken),
+      xpCollected: Math.round(result.xpCollected),
+      waveReached: result.waveReached,
+      topKills: Object.entries(result.killsByEnemy)
+        .map(([enemy, count]) => ({ enemy, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, TOP_KILLS),
+    },
   };
 }
 
@@ -255,6 +293,19 @@ export function toStart(entry: z.infer<typeof startEntrySchema>, nowMs: number):
     contentHash: entry.contentHash,
     elapsedSec: Math.round(elapsedSec * 10) / 10,
   };
+}
+
+/**
+ * Снимок снаряжения — тот, с которым забег начался: сервер сверит подпись.
+ * Берётся при отправке, а не кладётся в очередь: связка «забег → снимок»
+ * и так лежит на устройстве, а схема снимка — в своём чанке, не в первой
+ * загрузке.
+ */
+async function withLoadout(submission: RunFinishSubmission): Promise<RunFinishSubmission | null> {
+  const loadouts = await import("./run-loadouts").catch(() => null);
+  if (loadouts === null) return null;
+  const loadout = loadouts.runLoadoutOf(submission.runId);
+  return loadout === undefined ? submission : { ...submission, loadout };
 }
 
 /** Запись очереди без её вида — ровно то тело, что ждёт сервер. */

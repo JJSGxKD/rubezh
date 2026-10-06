@@ -170,7 +170,7 @@ describe.skipIf(DATABASE_URL === "")("покупки на живом Postgres", 
     await purchases.requestRefund(purchaseId, "test_mode", new Date());
     const account = await prisma.account.findUniqueOrThrow({ where: { accountId } });
 
-    expect(order).toEqual({ purchaseId, chargeId, userId: Number(account.platformUserId), reason: "unused" });
+    expect(order).toEqual({ purchaseId, platform: account.platform, chargeId, payerId: account.platformUserId, reason: "unused" });
     expect(await purchases.unusedGrants(runId, 0)).toEqual([]);
     expect((await purchases.pendingRefunds(500)).map((pending) => pending.purchaseId)).toContain(purchaseId);
 

@@ -19,6 +19,9 @@ const hud = (patch: Partial<HudSnapshot> = {}): HudSnapshot => ({
   distance: 0,
   radar: { blips: new Float32Array(0), count: 0 },
   boss: null,
+  statuses: [],
+  shield: 0,
+  boosts: [],
   ...patch,
 });
 

@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter, type RunResult } from "@bh/shared-types";
 import { failureOf, sessionFailure } from "../src/state/api-request";
 import { useMeta } from "../src/state/meta";
-import { effectiveAccess, usePlaytest } from "../src/state/playtest";
+import { effectiveAccess, useTools } from "../src/state/tools";
+import { rememberRunLoadout } from "../src/state/run-loadouts";
 import { toStart, toSubmission, useRuns } from "../src/state/runs";
 import { resetSessionForTests } from "../src/state/session";
 import { initShell } from "../src/state/shell";
@@ -31,6 +32,7 @@ function result(runId: string, patch: Partial<RunResult> = {}): RunResult {
     killsByEnemy: { swarm_rat: 200 },
     damageDealt: 5000,
     damageTaken: 120,
+    damageByElement: {},
     weapons: [{ id: "spark", level: 4, damage: 4000 }],
     passives: [{ id: "might", level: 2 }],
     deathCause: "swarm_rat",
@@ -116,6 +118,20 @@ describe("очередь забегов", () => {
     vi.unstubAllGlobals();
   });
 
+  it("итог несёт снимок снаряжения, с которым забег начался, а забег без него — без поля", async () => {
+    reply = async (url) => json(200, url === "/api/v1/runs/start" ? STARTED : FINISHED);
+    mount();
+    const loadout = { accountId: "acc", modifiers: { damage: 0.12, будущее: 1 }, issuedAtMs: 1_000, signature: "подпись" };
+    rememberRunLoadout("run-00000011", loadout);
+
+    useRuns.getState().submitRun(result("run-00000011"));
+    useRuns.getState().submitRun(result("run-00000012"));
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+
+    expect(requests[0]?.body).toMatchObject({ runId: "run-00000011", loadout });
+    expect(requests[1]?.body).not.toHaveProperty("loadout");
+  });
+
   it("старт уходит раньше итога, а место из ответа ждёт экран смерти", async () => {
     reply = async (url) => json(200, url === "/api/v1/runs/start" ? STARTED : FINISHED);
     mount();
@@ -151,7 +167,8 @@ describe("очередь забегов", () => {
 
     expect(requests.map((request) => request.url)).toEqual(["/api/v1/runs/start", "/api/v1/runs"]);
     expect(requests[0]?.body).toMatchObject({ runId: "run-00000001", difficultyId: "hard", startingWeaponId: "spark", contentHash: "abcd1234" });
-    // На сервер уходит только нужное рейтингу и антифроду: без урона и убийств по врагам.
+    // На сервер уходит нужное рейтингу, антифроду и листу забега — без полного
+    // разреза по врагам и стихиям: он для аналитики.
     expect(requests[1]?.body).toEqual({
       runId: "run-00000001",
       difficultyId: "hard",
@@ -160,10 +177,12 @@ describe("очередь забегов", () => {
       level: 9,
       enemiesKilled: 212,
       startingWeaponId: "spark",
-      weapons: [{ id: "spark", level: 4 }],
+      weapons: [{ id: "spark", level: 4, damage: 4000 }],
       contentHash: "abcd1234",
       deathCause: "swarm_rat",
       continues: [],
+      passives: [{ id: "might", level: 2 }],
+      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }] },
     });
     expect(useRuns.getState().pending).toBe(0);
   });
@@ -266,12 +285,12 @@ describe("очередь забегов", () => {
   it("инструменты команды открывает сервер, а на dev-сервере — явный VITE_DEV_TOOLS", async () => {
     reply = async () => json(200, { data: { admin: false, stressTest: true, devMode: false } });
     mount();
-    usePlaytest.setState({ access: null });
-    expect(effectiveAccess(usePlaytest.getState().access, false).stressTest).toBe(false);
+    useTools.setState({ access: null });
+    expect(effectiveAccess(useTools.getState().access, false).stressTest).toBe(false);
 
-    expect(await usePlaytest.getState().loadAccess()).toBeNull();
-    expect(requests.at(-1)?.url).toBe("/api/v1/playtest/access");
-    expect(effectiveAccess(usePlaytest.getState().access, false)).toEqual({ admin: false, stressTest: true, devMode: false });
+    expect(await useTools.getState().loadAccess()).toBeNull();
+    expect(requests.at(-1)?.url).toBe("/api/v1/tools/access");
+    expect(effectiveAccess(useTools.getState().access, false)).toEqual({ admin: false, stressTest: true, devMode: false });
     expect(effectiveAccess(null, true)).toEqual({ admin: true, stressTest: true, devMode: true });
     // Без ответа сервера и без явного разрешения не открыто ничего: через
     // туннель к dev-серверу играют тестеры.
@@ -318,3 +337,24 @@ describe("второй шанс в итоге забега", () => {
   });
 });
 
+describe("подробности забега для листа в профиле", () => {
+  it("уходят с итогом: урон оружия, навыки, полученный урон, опыт, отрезок и пятёрка врагов по убыванию", () => {
+    const kills = { swarm_rat: 200, dasher_wolf: 40, elite_ghoul: 2, orbiter_bat: 90, splitter_slime: 15, kite_archer: 60 };
+    const submission = toSubmission(result("run-00000001", { killsByEnemy: kills, damageTaken: 120.6, weapons: [{ id: "spark", level: 4, damage: 3999.7 }] }));
+
+    expect(submission.weapons).toEqual([{ id: "spark", level: 4, damage: 4000 }]);
+    expect(submission.passives).toEqual([{ id: "might", level: 2 }]);
+    expect(submission.stats).toEqual({
+      damageTaken: 121,
+      xpCollected: 300,
+      waveReached: 3,
+      topKills: [
+        { enemy: "swarm_rat", count: 200 },
+        { enemy: "orbiter_bat", count: 90 },
+        { enemy: "kite_archer", count: 60 },
+        { enemy: "dasher_wolf", count: 40 },
+        { enemy: "splitter_slime", count: 15 },
+      ],
+    });
+  });
+});

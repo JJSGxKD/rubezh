@@ -14,15 +14,18 @@ import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { LEADERBOARD_STORE } from "../src/modules/runs/leaderboard.store.js";
 import { RunsController } from "../src/modules/runs/runs.controller.js";
+import { RatingRestrictions } from "../src/modules/runs/rating-restrictions.js";
 import { RUNS_REPOSITORY } from "../src/modules/runs/runs.repository.js";
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { RunContinues } from "../src/modules/runs/run-continues.js";
+import { RunExtras } from "../src/modules/runs/run-details.js";
+import { RunLoadouts } from "../src/modules/runs/run-loadouts.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
 
 // HTTP-слой на настоящем Fastify (docs/17-testing-strategy.md §4): префикс,
 // форма ошибок, лимит тела, гвард и CORS — так, как их увидит клиент. Проверка
@@ -33,13 +36,16 @@ const unavailableRedis = { eval: async () => Promise.reject(new Error("connectio
 
 function moduleFor(env: Record<string, string>): Type<unknown> {
   const config = loadAppConfig({ NODE_ENV: "development", ...env });
+  const runs = new MemoryRunsRepository();
+  const board = new MemoryLeaderboardStore();
   @Module({
     controllers: [HealthController, RunsController],
     providers: [
       { provide: APP_CONFIG, useValue: config },
       { provide: REDIS, useValue: unavailableRedis },
-      { provide: RUNS_REPOSITORY, useValue: new MemoryRunsRepository() },
-      { provide: LEADERBOARD_STORE, useValue: new MemoryLeaderboardStore() },
+      { provide: RUNS_REPOSITORY, useValue: runs },
+      { provide: LEADERBOARD_STORE, useValue: board },
+      { provide: RatingRestrictions, useValue: ratingRestrictions(runs, board).rating },
       {
         provide: RolesService,
         useFactory: (cfg: AppConfig) => new RolesService(cfg, new MemoryRolesRepository(), new MemoryAccountRepository()),
@@ -49,6 +55,8 @@ function moduleFor(env: Record<string, string>): Type<unknown> {
       RateLimiter,
       RunsHooks,
       RunContinues,
+      RunLoadouts,
+      RunExtras,
       RunsService,
       RunsViewService,
     ],
@@ -82,6 +90,15 @@ describe("HTTP-приложение на Fastify", () => {
     const profile = await app.inject({ method: "GET", url: "/api/v1/runs/me", headers: auth });
     expect(profile.statusCode).toBe(200);
     expect(profile.json()).toMatchObject({ data: { recent: [] } });
+  });
+
+  it("лист забега не перехватывает «me» и рейтинг, а незнакомый забег — 404 с кодом", async () => {
+    const board = await app.inject({ method: "GET", url: "/api/v1/runs/leaderboard?difficulty=easy", headers: auth });
+    expect(board.statusCode).toBe(200);
+    const missing = await app.inject({ method: "GET", url: `/api/v1/runs/${randomUUID()}`, headers: auth });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json()).toMatchObject({ error: { code: "run_not_found" } });
+    expect((await app.inject({ method: "GET", url: "/api/v1/runs/x", headers: auth })).statusCode).toBe(400);
   });
 
   it("отвечает на неизвестный путь общей формой ошибки", async () => {

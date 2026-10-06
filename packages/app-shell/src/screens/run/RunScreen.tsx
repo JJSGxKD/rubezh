@@ -3,6 +3,7 @@ import { DEFAULT_MAP_ID, type RunInspection } from "@bh/core-game";
 import type { RunResult } from "@bh/shared-types";
 import { ErrorState } from "../../design-system/components";
 import { t } from "../../i18n";
+import "../../i18n/run";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
 import { useMeta } from "../../state/meta";
@@ -10,6 +11,7 @@ import { useNavigation } from "../../state/navigation";
 import { canOfferPaidContinue } from "../../state/payments-availability";
 import { usePlatform } from "../../state/platform";
 import { useRuns } from "../../state/runs";
+import { interstitialBeforeNewRun } from "../../state/interstitial-gate";
 import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
@@ -19,6 +21,7 @@ import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
 import { DevSheetLazy } from "./dev-sheet-lazy";
 import { DevTechPanelLazy } from "./dev-tech-panel-lazy";
 import { RunStatsSheet } from "./RunStatsSheet";
+import { useRunKeyboard } from "./run-keys";
 import type { SecondChanceProps } from "./SecondChance";
 
 /**
@@ -44,6 +47,8 @@ export function RunScreen(): ReactNode {
   const devTechInfo = useDevMode((state) => state.settings.visuals.techInfo);
   // Лист разработчика открывается на паузе: команды «Мира» и шаг по тикам
   // рассчитаны на стоящий мир, а бегущий забег под листом убил бы игрока.
+  // Клавиши забега — пока не открыт лист: у листа Esc закрывает его.
+  useRunKeyboard(stats === null && !devOpen);
   const openDev = (): void => {
     useRun.getState().pause("manual");
     setDevOpen(true);
@@ -69,6 +74,7 @@ export function RunScreen(): ReactNode {
       startingWeaponId: resume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
       mapId: resume?.mapId ?? DEFAULT_MAP_ID,
       difficultyId: resume?.difficultyId ?? useMeta.getState().lastDifficultyId,
+      beforeNewRun: interstitialBeforeNewRun,
     });
 
     // Уход с экрана уносит с собой и движок: чанк остаётся загруженным, а
@@ -155,6 +161,8 @@ export function RunScreen(): ReactNode {
           diagnostics={diagnostics}
           cheatsCounted={run.devRun && countInRating}
           {...(run.phase === "downed" ? { secondChance: secondChanceFor(run.result, run.devRun) } : {})}
+          showReward={run.phase === "finished"}
+          restarting={run.restarting}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
           onShare={() => shareRun()}
@@ -176,12 +184,16 @@ export function RunScreen(): ReactNode {
 
 /**
  * Что можно на экране смерти: купить продолжение звёздами — где площадка
- * умеет оплату, — а в забеге разработчика ещё и взять его бесплатно.
+ * умеет оплату, — взять за рекламу или с VIP — где она показывает ролики и
+ * есть вход (WP11), — а в забеге разработчика ещё и бесплатно.
  */
 function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps {
+  const { adapter, capabilities } = useShell.getState();
+  const ads = adapter.showAd !== undefined && capabilities.platformAvailable && capabilities.auth !== undefined;
   return {
     ...(devRun ? { onDevContinue: () => useRun.getState().continueRun("dev") } : {}),
     ...(canOfferPaidContinue() ? { paidFor: result } : {}),
+    ...(ads ? { adFor: result } : {}),
   };
 }
 

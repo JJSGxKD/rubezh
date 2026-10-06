@@ -4,14 +4,14 @@ import { Button, ContentColumn, ListGroup, ListItem, Screen, SectionTitle } from
 import { t } from "../i18n";
 import "../i18n/team";
 import { copyText } from "../state/clipboard";
-import { readEnvironment } from "../state/device";
+import { readEnvironment, watchEnvironment } from "../state/device";
 import { buildDeviceReport, formatDeviceReport, measureDisplayHz } from "../state/device-report";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
 import { reportQueue } from "../state/run-report";
 import type { ReportQueueState } from "../state/report-queue";
 import { usePlatform } from "../state/platform";
-import { usePlaytestAccess } from "../state/playtest";
+import { useToolsAccess } from "../state/tools";
 import { useShell } from "../state/shell";
 import { uiFeedback } from "../state/ui-feedback";
 
@@ -23,13 +23,17 @@ type CopyState = "idle" | "copied" | "manual";
  */
 export function DiagnosticsScreen(): ReactNode {
   const navigation = useNavigation();
-  const access = usePlaytestAccess();
+  const access = useToolsAccess();
   const platform = usePlatform();
   const build = useShell((state) => state.build);
   const adapter = useShell((state) => state.adapter);
   const installId = useInstall((state) => state.installId);
   const [displayHz, setDisplayHz] = useState<number | null>(null);
   const [copy, setCopy] = useState<CopyState>("idle");
+  const [share, setShare] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  // Сведения пересчитываются, когда меняется окно, плотность или экран.
+  const [envVersion, setEnvVersion] = useState(0);
+  useEffect(() => watchEnvironment(() => setEnvVersion((version) => version + 1)), []);
 
   useEffect(() => {
     let alive = true;
@@ -54,7 +58,7 @@ export function DiagnosticsScreen(): ReactNode {
         screenMode: platform.screenMode,
         displayHz,
       }),
-    [adapter, build.version, displayHz, installId, platform.insets, platform.screenMode, platform.viewport],
+    [adapter, build.version, displayHz, installId, platform.insets, platform.screenMode, platform.viewport, envVersion],
   );
   const text = formatDeviceReport(rows, (key) => t(`diagnostics.report.${key}`));
 
@@ -62,6 +66,15 @@ export function DiagnosticsScreen(): ReactNode {
     const copied = await copyText(text);
     setCopy(copied ? "copied" : "manual");
     uiFeedback(copied ? "reward" : "error");
+  };
+
+  // Поделиться — одной кнопкой прямо команде (Р56): тем же путём, что отзыв.
+  const onShare = async (): Promise<void> => {
+    setShare("sending");
+    const { shareDeviceInfo } = await import("../state/feedback");
+    const failure = await shareDeviceInfo(text);
+    setShare(failure === null ? "sent" : "failed");
+    uiFeedback(failure === null ? "reward" : "error");
   };
 
   return (
@@ -77,6 +90,10 @@ export function DiagnosticsScreen(): ReactNode {
           ))}
         </dl>
         <div className="mt-3 grid gap-2">
+          <Button block disabled={share === "sending" || share === "sent"} onClick={() => void onShare()}>
+            {share === "sending" ? t("diagnostics.share.sending") : share === "sent" ? t("diagnostics.share.sent") : t("diagnostics.share")}
+          </Button>
+          {share === "failed" ? <p className="text-xs text-danger">{t("diagnostics.share.failed")}</p> : null}
           <Button variant="secondary" block onClick={() => void onCopy()}>
             {copy === "copied" ? t("diagnostics.copied") : t("diagnostics.copy")}
           </Button>

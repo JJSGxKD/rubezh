@@ -1,0 +1,227 @@
+import { z } from "zod";
+import type { AdminApi, ApiResult } from "./client";
+
+/**
+ * Игроки в панели (`/admin/players`, docs/35-stage4-plan.md, WP17, часть 1).
+ * Схемы описывают то, что панель показывает; лишние поля сервера отбрасываются,
+ * а изменившийся тип поля — ошибка разбора, а не `undefined` в таблице.
+ * Даты приходят строками ISO в UTC.
+ */
+
+const iso = z.string();
+const isoOrNull = z.string().nullable();
+
+export const playerRowSchema = z.object({
+  accountId: z.string(),
+  platform: z.string(),
+  displayName: z.string(),
+  photoUrl: z.string().nullable(),
+  createdAt: iso,
+  banned: z.object({ at: iso, reason: z.string().nullable() }).nullable(),
+  /** идентификатор на площадке и юзернейм — сервер отдаёт их только с правом на персональные данные */
+  pii: z.object({ platformUserId: z.string(), username: z.string().nullable() }).nullable(),
+});
+
+export const FUNNEL_MILESTONES = [
+  ["enteredAt", "Вход"],
+  ["appOpenedAt", "Открыл приложение"],
+  ["firstRunStartedAt", "Начал первый забег"],
+  ["firstRunFinishedAt", "Закончил первый забег"],
+  ["runs2At", "Второй забег"],
+  ["runs5At", "Пятый забег"],
+  ["returnedD1At", "Вернулся на следующий день"],
+  ["returnedD7At", "Вернулся через неделю"],
+  ["firstPurchaseAt", "Первая покупка"],
+] as const;
+
+const funnelSchema = z.object({
+  enteredAt: isoOrNull,
+  appOpenedAt: isoOrNull,
+  firstRunStartedAt: isoOrNull,
+  firstRunFinishedAt: isoOrNull,
+  runsRecorded: z.number(),
+  runs2At: isoOrNull,
+  runs5At: isoOrNull,
+  returnedD1At: isoOrNull,
+  returnedD7At: isoOrNull,
+  firstPurchaseAt: isoOrNull,
+});
+
+const acquisitionSchema = z.object({
+  firstAt: iso,
+  firstStartKind: z.string(),
+  firstStartRef: z.string().nullable(),
+  lastSeenAt: iso,
+  lastTouchAt: isoOrNull,
+  lastStartKind: z.string().nullable(),
+  lastStartRef: z.string().nullable(),
+});
+
+const runsSchema = z.object({
+  runs: z.number(),
+  totalKills: z.number(),
+  totalSurvivalSec: z.number(),
+  best: z.record(z.string(), z.object({ survivalSec: z.number(), rank: z.number() }).nullable()),
+  recent: z.array(z.object({ difficultyId: z.string(), survivalSec: z.number(), level: z.number(), startingWeaponId: z.string(), at: z.number() })),
+});
+
+const walletEntrySchema = z.object({
+  entryId: z.string(),
+  resource: z.string(),
+  amount: z.number(),
+  reason: z.string(),
+  source: z.string().nullable(),
+  createdAt: iso,
+});
+
+const purchaseSchema = z.object({
+  purchaseId: z.string(),
+  /** до магазина (WP10) сервер поля не отдавал — всё было вторым шансом */
+  product: z.string().optional(),
+  runId: z.string().nullable(),
+  continueNo: z.number().nullable(),
+  sku: z.string().nullable().optional(),
+  /** продление подписки — первая её покупка; до VIP (WP10) сервер поля не отдавал */
+  renewalOf: z.string().nullable().optional(),
+  priceStars: z.number(),
+  chargedStars: z.number(),
+  mode: z.string(),
+  status: z.string(),
+  invoicedAt: iso,
+  paidAt: isoOrNull,
+  refundReason: z.string().nullable(),
+  refundedAt: isoOrNull,
+});
+
+export const playerCardSchema = z.object({
+  account: playerRowSchema,
+  roles: z.array(z.string()),
+  funnel: funnelSchema.nullable(),
+  acquisition: acquisitionSchema.nullable(),
+  messaging: z.object({ canMessage: z.boolean(), reason: z.string(), changedAt: iso }).nullable(),
+  progress: z.object({ level: z.number(), xp: z.number(), xpIntoLevel: z.number(), xpForNext: z.number().nullable() }),
+  runs: runsSchema,
+  wallet: z.object({ balances: z.record(z.string(), z.number()), entries: z.array(walletEntrySchema) }),
+  /** `null` — у вошедшего нет права на платежи: модератор видит карточку без них */
+  purchases: z.array(purchaseSchema).nullable(),
+  /** предупреждение об открытом тесте (WP33); сервер старее панели поля не пришлёт */
+  testNotice: z.object({ version: z.number(), acceptedAt: iso, firstAcceptedAt: iso }).nullable().optional(),
+});
+
+export const adjustResultSchema = z.object({ applied: z.number(), balance: z.number(), duplicate: z.boolean() });
+
+export type PlayerRow = z.infer<typeof playerRowSchema>;
+export type PlayerCard = z.infer<typeof playerCardSchema>;
+export type PlayerPurchase = z.infer<typeof purchaseSchema>;
+export type AdjustResult = z.infer<typeof adjustResultSchema>;
+
+/** Ресурсы кошелька — в порядке и с именами, как их видит игрок. Неизвестный показывается своим id. */
+export const WALLET_RESOURCES: readonly (readonly [string, string])[] = [
+  ["coins", "Монеты"],
+  ["gems", "Самоцветы"],
+  ["shard_common", "Осколки: обычные"],
+  ["shard_uncommon", "Осколки: необычные"],
+  ["shard_rare", "Осколки: редкие"],
+  ["shard_epic", "Осколки: эпические"],
+  ["shard_legendary", "Осколки: легендарные"],
+];
+
+export function resourceName(id: string): string {
+  return WALLET_RESOURCES.find(([resource]) => resource === id)?.[1] ?? id;
+}
+
+export interface WalletAdjust {
+  resource: string;
+  delta: number;
+  note: string;
+  /** ключ задаёт панель: повторное нажатие той же кнопки не начислит дважды */
+  idempotencyKey: string;
+}
+
+export function searchPlayers(api: AdminApi, query: string): Promise<ApiResult<{ players: PlayerRow[] }>> {
+  return api.request("/players", { query: { query, limit: 50 }, schema: z.object({ players: z.array(playerRowSchema) }) });
+}
+
+export function fetchPlayerCard(api: AdminApi, accountId: string): Promise<ApiResult<PlayerCard>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}`, { schema: playerCardSchema });
+}
+
+export function adjustWallet(api: AdminApi, accountId: string, adjust: WalletAdjust): Promise<ApiResult<AdjustResult>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/wallet/adjust`, { method: "POST", body: adjust, schema: adjustResultSchema });
+}
+
+/** Потолок сообщения команды — тот же, что `TEAM_MESSAGE_MAX` на сервере. */
+export const TEAM_MESSAGE_MAX = 500;
+
+export const messageResultSchema = z.object({ duplicate: z.boolean() });
+
+/** Сообщение команды в ленту игрока; ключ задаёт панель — повтор кнопки второй строки не заведёт. */
+export function messagePlayer(api: AdminApi, accountId: string, message: { text: string; idempotencyKey: string }): Promise<ApiResult<z.infer<typeof messageResultSchema>>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/message`, { method: "POST", body: message, schema: messageResultSchema });
+}
+
+/** Проверка сообщения до отправки — те же границы, что у сервера; `null` — годно. */
+export function teamMessageProblem(text: string, max = TEAM_MESSAGE_MAX): string | null {
+  const length = text.trim().length;
+  return length < 3 || length > max ? `Сообщение — от 3 до ${String(max)} символов` : null;
+}
+
+/**
+ * Потолок одной операции — тот же, что `WALLET_MAX_OPERATION` на сервере.
+ * Разойдутся — сервер отклонит, и панель покажет его текст: решает он.
+ */
+export const WALLET_MAX_OPERATION = 10_000_000;
+
+/**
+ * Проверка формы ручной операции до отправки — те же границы, что у сервера
+ * (`adminWalletAdjustSchema`): не отправлять заведомо отклонённое. `null` —
+ * форма годна.
+ */
+export function walletAdjustProblem(delta: number, note: string, maxOperation = WALLET_MAX_OPERATION): string | null {
+  if (!Number.isInteger(delta) || delta === 0) return "Изменение — целое число, не ноль";
+  if (Math.abs(delta) > maxOperation) return `Не больше ${maxOperation.toLocaleString("ru-RU")} за одну операцию`;
+  const length = note.trim().length;
+  if (length < 3 || length > 200) return "Причина — от 3 до 200 символов: она попадёт в журнал кошелька и в аудит";
+  return null;
+}
+
+/** Друзья и рефералка игрока (`GET /admin/players/:id/social`). */
+export const socialSchema = z.object({
+  friends: z.number(),
+  referredBy: z
+    .object({
+      referrerId: z.string(),
+      referrerName: z.string().nullable(),
+      status: z.string(),
+      boundAt: iso,
+      activatedAt: isoOrNull,
+      rejectReason: z.string().nullable(),
+    })
+    .nullable(),
+  /** привёл партнёр своим кодом; сервер старше партнёров поля не шлёт */
+  partner: z
+    .object({ partnerId: z.string(), name: z.string(), boundAt: iso, campaignTitle: z.string().nullable(), code: z.string().nullable() })
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  referrals: z.object({ bound: z.number(), activated: z.number(), rejected: z.number() }),
+});
+
+export type Social = z.infer<typeof socialSchema>;
+
+export const REFERRAL_STATUSES: Record<string, string> = { bound: "ждёт активации", activated: "активирован", rejected: "отклонён" };
+
+export function fetchSocial(api: AdminApi, accountId: string): Promise<ApiResult<Social>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/social`, { schema: socialSchema });
+}
+
+export function rejectReferral(api: AdminApi, accountId: string, reason: string): Promise<ApiResult<{ rejected: boolean }>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/referral/reject`, { method: "POST", body: { reason }, schema: z.object({ rejected: z.boolean() }) });
+}
+
+/** Что куплено — словами: второй шанс с номером продолжения или товар магазина. */
+export function purchaseLabel(purchase: Pick<PlayerPurchase, "product" | "sku" | "continueNo" | "renewalOf">): string {
+  if (purchase.product === "vip") return purchase.renewalOf === null || purchase.renewalOf === undefined ? "VIP" : "VIP, продление";
+  if (purchase.sku !== null && purchase.sku !== undefined) return `магазин: ${purchase.sku}`;
+  return purchase.continueNo === null ? "—" : `второй шанс №${String(purchase.continueNo)}`;
+}

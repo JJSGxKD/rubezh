@@ -16,7 +16,13 @@
  *   источником и кампанией появится вместе с ней, а код запоминается уже
  *   сейчас: сессии, не записанные сегодня, задним числом не восстановятся;
  * - `invite` — приглашение друга из раздела «Друзья»;
+ * - `friend` — `f-<код>`, ссылка дружбы: открыл — стал другом владельца
+ *   ссылки (docs/35-stage4-plan.md §3.8). Код — ключ к строке `friend_link`,
+ *   а не данные о человеке;
  * - `telegram_affiliate` — `_tgr_<id>`, партнёрская программа Telegram;
+ * - `notification` — `n-<вид>`, кнопка под уведомлением в боте
+ *   (docs/35-stage4-plan.md WP28): по ней видно, возвращают ли сообщения
+ *   бота в игру. Вид — в `ref`;
  * - `unknown` — всё прочее. Сырая строка сохраняется: её можно разобрать
  *   заново, когда появится новый вид ссылок.
  *
@@ -26,7 +32,7 @@
  * потом чинил отдельный крон.
  */
 
-export const START_KINDS = ["organic", "click", "invite", "telegram_affiliate", "unknown"] as const;
+export const START_KINDS = ["organic", "click", "invite", "telegram_affiliate", "friend", "notification", "unknown"] as const;
 export type StartKind = (typeof START_KINDS)[number];
 
 export interface StartParam {
@@ -41,6 +47,10 @@ export interface StartParam {
 const TELEGRAM_START_PARAM = /^[A-Za-z0-9_-]{1,64}$/;
 const CLICK = /^c-([A-Za-z0-9]{6,32})$/;
 const TELEGRAM_AFFILIATE = /^_tgr_([A-Za-z0-9_-]{1,59})$/;
+/** Ссылка дружбы — код из `modules/friends/friend-code.ts`. */
+const FRIEND = /^f-([A-Za-z0-9]{8,32})$/;
+/** Кнопка уведомления в боте — `modules/notifications-bot/bot-notify-texts.ts`. */
+const NOTIFICATION = /^n-([a-z_]{3,32})$/;
 /** Приглашение друга — `app-shell/src/screens/meta/friends.tsx`, `INVITE_START_PARAM`. */
 const INVITE = "invite";
 
@@ -54,6 +64,10 @@ export function parseStartParam(value: string | null | undefined): StartParam {
   if (click !== null) return { kind: "click", raw: value, ref: click[1] ?? null };
   const affiliate = TELEGRAM_AFFILIATE.exec(value);
   if (affiliate !== null) return { kind: "telegram_affiliate", raw: value, ref: affiliate[1] ?? null };
+  const friend = FRIEND.exec(value);
+  if (friend !== null) return { kind: "friend", raw: value, ref: friend[1] ?? null };
+  const notification = NOTIFICATION.exec(value);
+  if (notification !== null) return { kind: "notification", raw: value, ref: notification[1] ?? null };
   if (value === INVITE) return { kind: "invite", raw: value, ref: null };
   return { kind: "unknown", raw: value, ref: null };
 }

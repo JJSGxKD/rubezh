@@ -20,5 +20,7 @@ import { PrismaSessionsRepository, SESSIONS_REPOSITORY } from "./sessions.reposi
     { provide: SESSIONS_REPOSITORY, useClass: PrismaSessionsRepository },
     { provide: SESSION_DEDUPE, useClass: RedisSessionDedupe },
   ],
+  // Касания аккаунта — карточке игрока в панели.
+  exports: [SESSIONS_REPOSITORY],
 })
 export class AttributionModule {}

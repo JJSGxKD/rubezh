@@ -112,6 +112,25 @@ describe.skipIf(!live)("сессии и касания на живых Postgres 
     await expect(sessions.acquisition(id)).resolves.toMatchObject({ firstStartKind: "click", firstAt: new Date(T0), lastStartKind: "invite" });
   });
 
+  it("подсети последних сессий — свежие первыми, без повторов и пустых", async () => {
+    const id = await account();
+    await sessions.record({ ...session(id, "click", T0), ipPrefix: "10.1.2.0/24" });
+    await sessions.record({ ...session(id, "invite", T0 + 60_000), ipPrefix: "10.9.9.0/24" });
+    await sessions.record({ ...session(id, "invite", T0 + 120_000), ipPrefix: "10.1.2.0/24" });
+    await sessions.record({ ...session(id, "organic", T0 + 180_000), ipPrefix: null });
+
+    expect(await sessions.recentIpPrefixes(id, 10)).toEqual(["10.1.2.0/24", "10.9.9.0/24"]);
+  });
+
+  it("последняя сессия до момента — без сессий этого момента и позже", async () => {
+    const id = await account();
+    expect(await sessions.lastSessionBefore(id, new Date(T0))).toBeNull();
+    await sessions.record(session(id, "click", T0));
+    await sessions.record(session(id, "invite", T0 + 3_600_000));
+    expect(await sessions.lastSessionBefore(id, new Date(T0 + 3_600_000))).toEqual(new Date(T0));
+    expect(await sessions.lastSessionBefore(id, new Date(T0 + 7_200_000))).toEqual(new Date(T0 + 3_600_000));
+  });
+
   it("повтор того же задания — одна сессия, касания не сдвигаются", async () => {
     const id = await account();
     const same = session(id, "click", T0);

@@ -1,0 +1,289 @@
+import { randomInt, randomUUID } from "node:crypto";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { RARE_LOOT_RARITIES } from "../notifications/notification-kinds.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { DisabledError, ValidationError } from "../../common/domain-error.js";
+import { InsufficientFundsError } from "../wallet/wallet-errors.js";
+import { InsufficientBalance, type LedgerLine } from "../wallet/wallet-ledger.js";
+import { WalletService } from "../wallet/wallet.service.js";
+import type { WalletResource } from "../wallet/wallet-types.js";
+import { INVENTORY_CAP, ITEM_SLOTS, MERGE_COUNT, type ItemRarity, type ItemSlot } from "./item-catalog.js";
+import { loadoutKey, sameModifiers, signLoadout, verifyLoadout, type ClaimedLoadout, type LoadoutSnapshot } from "./item-loadout.js";
+import { levelCap, loadoutOf, mergeCost, nextRarity, rerollCost, rerollExtra, rollItem, rollLoot, salvageYield, seededRandom, upgradeCost, type RunVerdict } from "./item-rules.js";
+import { inventoryView, itemView, type InventoryView, type ItemView } from "./item-views.js";
+import { ItemNotFoundError, ItemRuleError } from "./items-errors.js";
+import { ITEMS_REPOSITORY, type ItemRow, type ItemsRepository, type NewItem, type Outcome } from "./items.repository.js";
+
+/**
+ * Снаряжение (docs/35-stage4-plan.md §3.4, WP7): инвентарь, надеть и снять,
+ * улучшение, перековка, разбор, объединение, добыча после забега и
+ * подписанный снимок надетого.
+ *
+ * Правила — в `item-rules.ts`, SQL — в репозитории; здесь — решение по уже
+ * заблокированной строке: цена считается от того уровня, что лежит в базе в
+ * момент операции, а не от того, что видел клиент.
+ *
+ * Ключ операции клиент придумывает сам (uuid на нажатие); сервис
+ * добавляет к нему аккаунт — чужой ключ не займёт твой.
+ */
+
+/**
+ * Откуда берутся зёрна бросков. В бою — криптографический генератор: зерно
+ * пишется в журнал, и угадать следующее по прошлым нельзя. Тесты подают свои
+ * — и получают тот же предмет, что предсказали правила.
+ */
+export const ITEM_SEEDS = Symbol("ITEM_SEEDS");
+export type SeedSource = () => number;
+export const cryptoSeeds: SeedSource = () => randomInt(2 ** 31);
+
+/** Предмет, который игрок покупает целиком — с уже брошенными свойствами и ценой (витрина, §3.6). */
+export interface PurchasedItem {
+  shape: Pick<NewItem, "slot" | "rarity" | "level" | "seed" | "rolls" | "source">;
+  price: readonly LedgerLine[];
+}
+
+export interface RunLoot {
+  accountId: string;
+  runId: string;
+  survivalSec: number;
+  difficultyId: string;
+  verdict: RunVerdict;
+  at: Date;
+}
+
+@Injectable()
+export class ItemsService {
+  private readonly logger = new Logger("items");
+  /** `null` — вход выключен и секрета нет: подписать снимок нечем */
+  private readonly signingKey: Buffer | null;
+
+  constructor(
+    @Inject(ITEMS_REPOSITORY) private readonly items: ItemsRepository,
+    private readonly wallet: WalletService,
+    @Inject(APP_CONFIG) config: AppConfig,
+    @Inject(ITEM_SEEDS) private readonly seeds: SeedSource,
+    private readonly notifications: NotificationsService,
+  ) {
+    this.signingKey = config.auth.accessSecret === "" ? null : loadoutKey(config.auth.accessSecret);
+  }
+
+  async inventory(accountId: string): Promise<InventoryView> {
+    const [rows, level] = await Promise.all([this.items.alive(accountId), this.items.accountLevel(accountId)]);
+    return inventoryView(rows, level);
+  }
+
+  /**
+   * Подписанный снимок надетого и уровня аккаунта — клиент подаёт его на
+   * старте забега (Р17). Выдаётся и без снаряжения: уровень открывает оружие
+   * и навыки (WP25).
+   */
+  async loadout(accountId: string, nowMs = Date.now()): Promise<LoadoutSnapshot> {
+    if (this.signingKey === null) throw new DisabledError("Вход выключен — снимок снаряжения не подписать");
+    const [rows, level] = await Promise.all([this.items.alive(accountId), this.items.accountLevel(accountId)]);
+    return signLoadout(this.signingKey, accountId, loadoutOf(rows.filter((item) => item.equipped)), level, nowMs);
+  }
+
+  /**
+   * Снимок, с которым пришёл итог забега: подписан ли он этим сервером для
+   * этого игрока и совпадает ли с надетым сейчас. Устаревший — не подделка:
+   * честный игрок мог сменить снаряжение, пока итог ждал сети. Уровень снимка
+   * выше уровня аккаунта — не устаревший: уровень только растёт, и так бывает
+   * лишь со снимком, пережившим вайп, — открытое по нему игроку не положено.
+   */
+  async checkLoadout(accountId: string, snapshot: ClaimedLoadout): Promise<"valid" | "forged" | "stale" | "level_ahead"> {
+    if (this.signingKey === null || snapshot.accountId !== accountId || !verifyLoadout(this.signingKey, snapshot)) return "forged";
+    const [rows, level] = await Promise.all([this.items.alive(accountId), this.items.accountLevel(accountId)]);
+    if (snapshot.accountLevel !== undefined && snapshot.accountLevel > level) return "level_ahead";
+    return sameModifiers(loadoutOf(rows.filter((item) => item.equipped)), snapshot.modifiers) ? "valid" : "stale";
+  }
+
+  /** Открытые листы — больше не новые; чужие и убранные пропускаются. */
+  async markSeen(accountId: string, itemIds: readonly string[], at = new Date()): Promise<number> {
+    return await this.items.markSeen(accountId, [...new Set(itemIds)], at);
+  }
+
+  /** Сколько новых предметов у игрока — число на вкладке арсенала. */
+  async unseenCount(accountId: string): Promise<number> {
+    return await this.items.unseenCount(accountId);
+  }
+
+  async equip(accountId: string, itemId: string, at = new Date()): Promise<ItemView> {
+    const outcome = await this.items.change(accountId, itemId, `equip:${randomUUID()}`, at, (item) => ({ equipped: true, kind: "equipped", payload: { slot: item.slot } }));
+    return await this.viewOf(accountId, outcome);
+  }
+
+  async unequip(accountId: string, itemId: string, at = new Date()): Promise<ItemView> {
+    const outcome = await this.items.change(accountId, itemId, `unequip:${randomUUID()}`, at, (item) => ({ equipped: false, kind: "unequipped", payload: { slot: item.slot } }));
+    return await this.viewOf(accountId, outcome);
+  }
+
+  async upgrade(accountId: string, itemId: string, key: string, at = new Date()): Promise<ItemView> {
+    const outcome = await this.paid(accountId, () =>
+      this.items.change(accountId, itemId, scoped(accountId, key), at, (item, account) => {
+        const cost = upgradeCost(item, account.level);
+        if (cost === null) throw new ItemRuleError("item_max_level", "Предмет уже на пределе уровня — поднимите уровень аккаунта");
+        return {
+          debit: { lines: lines(cost.coins, shardOf(item.rarity), cost.shards), reason: "item_upgrade" },
+          level: item.level + 1,
+          kind: "upgraded",
+          payload: { from: item.level, to: item.level + 1, ...cost },
+        };
+      }),
+    );
+    return await this.viewOf(accountId, outcome);
+  }
+
+  /** Перековка: бросок — новым зерном, и оно пишется в журнал для разбора спорных случаев. */
+  async reroll(accountId: string, itemId: string, index: number, key: string, at = new Date()): Promise<ItemView> {
+    const seed = this.seeds();
+    const outcome = await this.paid(accountId, () =>
+      this.items.change(accountId, itemId, scoped(accountId, key), at, (item) => {
+        if (item.rolls.extras[index] === undefined) throw new ItemRuleError("item_no_extra", "У предмета нет такого свойства");
+        const cost = rerollCost(item);
+        const rolls = rerollExtra(seededRandom(seed), item, index);
+        return {
+          debit: { lines: lines(cost.coins, shardOf(item.rarity), cost.shards), reason: "item_reroll" },
+          rolls,
+          kind: "rerolled",
+          payload: { index, seed, from: item.rolls.extras[index], to: rolls.extras[index], ...cost },
+        };
+      }),
+    );
+    return await this.viewOf(accountId, outcome);
+  }
+
+  async salvage(accountId: string, itemId: string, key: string, at = new Date()): Promise<{ shards: number; resource: WalletResource }> {
+    let shards = 0;
+    let resource: WalletResource = "shard_common";
+    const outcome = await this.items.change(accountId, itemId, scoped(accountId, key), at, (item) => {
+      shards = salvageYield(item);
+      resource = shardOf(item.rarity);
+      return { credit: { resource, amount: shards }, remove: true, kind: "salvaged", payload: { shards, resource } };
+    });
+    if (outcome === null) throw new ItemNotFoundError();
+    // Повтор разбора ничего не начисляет — отвечаем тем, что дал первый.
+    if (outcome.duplicate) return { shards: salvageYield(outcome.item), resource: shardOf(outcome.item.rarity) };
+    return { shards, resource };
+  }
+
+  /** Три предмета одной редкости — в один случайный следующей (§3.4). */
+  async merge(accountId: string, itemIds: readonly string[], key: string, at = new Date()): Promise<ItemView> {
+    if (itemIds.length !== MERGE_COUNT || new Set(itemIds).size !== MERGE_COUNT) {
+      throw new ValidationError(`Объединяются ровно ${MERGE_COUNT} разных предмета`);
+    }
+    const seed = this.seeds();
+    const outcome = await this.paid(accountId, () =>
+      this.items.merge(accountId, itemIds, scoped(accountId, key), at, (items, account) => {
+        const rarity = items[0]?.rarity ?? "common";
+        if (items.some((item) => item.rarity !== rarity)) throw new ItemRuleError("merge_mismatch", "Объединяются предметы одной редкости");
+        const target = nextRarity(rarity);
+        const cost = mergeCost(rarity);
+        if (target === null || cost === null) throw new ItemRuleError("merge_max_rarity", "Выше этой редкости объединение не собирает");
+        const random = seededRandom(seed);
+        const slot = pickSlot(random);
+        // Уровень лучшего из трёх: объединение не должно обнулять вложенное в улучшения.
+        const level = Math.min(Math.max(...items.map((item) => item.level)), levelCap(account.level));
+        return {
+          debit: { lines: lines(cost.coins, shardOf(rarity), cost.shards), reason: "item_merge" },
+          // Собранное игрок получает своим действием и видит сразу — не «новое».
+          result: { slot, rarity: target, level, seed, rolls: rollItem(random, slot, target), source: `merge:${key}`.slice(0, 96), seen: true },
+        };
+      }),
+    );
+    return await this.viewOf(accountId, outcome);
+  }
+
+  /**
+   * Покупка конкретного предмета (витрина магазина, §3.6, Р11): предмет и
+   * списание цены — одна транзакция. Ключ — предложение: повтор после обрыва
+   * находит купленное, а не покупает второй раз. Полный инвентарь — отказ
+   * до списания: купленное не должно сразу уходить в осколки.
+   */
+  async buy(accountId: string, key: string, purchase: PurchasedItem, at = new Date()): Promise<{ item: ItemView; duplicate: boolean }> {
+    const outcome = await this.paid(accountId, () =>
+      this.items.create(accountId, key, at, (account) => {
+        if (account.alive >= INVENTORY_CAP) throw new ItemRuleError("inventory_full", "Инвентарь полон — разберите или объедините предметы");
+        // Купленное игрок видит сразу — не «новое» на вкладке арсенала.
+        return { ...purchase.shape, seen: true, debit: { lines: purchase.price, reason: "shop" } };
+      }),
+    );
+    if (outcome === null) throw new ItemNotFoundError();
+    if (!outcome.duplicate) this.logger.log(JSON.stringify({ module: "items", event: "item_bought", accountId, source: purchase.shape.source, rarity: outcome.item.rarity }));
+    return { item: await this.viewOf(accountId, outcome), duplicate: outcome.duplicate };
+  }
+
+  /**
+   * Добыча после забега — из задания наград (progress/run-rewards.ts), по
+   * ключу забега: повтор задания второй предмет не выдаст. Полный инвентарь
+   * выпавшее не теряет — оно сразу разбирается в осколки.
+   */
+  /** Что выпало в забеге — для листа забега в профиле. */
+  async lootOf(accountId: string, runId: string): Promise<{ slot: string; rarity: string; level: number }[]> {
+    return await this.items.loot(accountId, runId);
+  }
+
+  async dropForRun(input: RunLoot): Promise<ItemRow | null> {
+    const seed = this.seeds();
+    let salvaged = false;
+    const outcome = await this.items.create(input.accountId, `loot:${input.runId}`, input.at, (account) => {
+      const random = seededRandom(seed);
+      const loot = rollLoot(random, { ...input, accountLevel: account.level, replayVerified: false });
+      if (loot === null) return null;
+      const rolls = rollItem(random, loot.slot, loot.rarity);
+      const full = account.alive >= INVENTORY_CAP;
+      salvaged = full;
+      const shape = { ...loot, rolls };
+      return {
+        ...shape,
+        seed,
+        source: `loot:${input.runId}`.slice(0, 96),
+        ...(full ? { salvageTo: { resource: shardOf(loot.rarity), amount: salvageYield(shape) } } : {}),
+      };
+    });
+    if (outcome !== null && !outcome.duplicate) {
+      this.logger.log(JSON.stringify({ module: "items", event: "loot", accountId: input.accountId, runId: input.runId, rarity: outcome.item.rarity }));
+      // Редкое — в ленту (Р51): игрок мог не дождаться экрана итогов.
+      if (RARE_LOOT_RARITIES.has(outcome.item.rarity)) {
+        const { itemId, slot, rarity } = outcome.item;
+        this.notifications.post({ accountId: input.accountId, kind: "rare_loot", payload: { itemId, slot, rarity, salvaged }, dedupeKey: `rare_loot:${input.runId}`, at: input.at });
+      }
+    }
+    return outcome?.item ?? null;
+  }
+
+  private async viewOf(accountId: string, outcome: Outcome | null): Promise<ItemView> {
+    if (outcome === null) throw new ItemNotFoundError();
+    return itemView(outcome.item, await this.items.accountLevel(accountId));
+  }
+
+  /** Не хватило — не списано ничего, и игрок узнаёт, чего и сколько. */
+  private async paid(accountId: string, run: () => Promise<Outcome | null>): Promise<Outcome | null> {
+    try {
+      return await run();
+    } catch (error: unknown) {
+      if (!(error instanceof InsufficientBalance)) throw error;
+      const balance = (await this.wallet.balances(accountId))[error.resource];
+      throw new InsufficientFundsError(error.resource, error.needed, balance);
+    }
+  }
+}
+
+function scoped(accountId: string, key: string): string {
+  return `op:${accountId}:${key}`;
+}
+
+function shardOf(rarity: ItemRarity): WalletResource {
+  return `shard_${rarity}`;
+}
+
+function lines(coins: number, shard: WalletResource, shards: number): { resource: WalletResource; amount: number }[] {
+  return [
+    ...(coins > 0 ? [{ resource: "coins" as const, amount: coins }] : []),
+    ...(shards > 0 ? [{ resource: shard, amount: shards }] : []),
+  ];
+}
+
+function pickSlot(random: () => number): ItemSlot {
+  return ITEM_SLOTS[Math.floor(random() * ITEM_SLOTS.length)] ?? "weapon";
+}

@@ -3,6 +3,7 @@ import { Crosshair, Shield, Swords, Wind } from "lucide-react";
 import { PASSIVE_CATEGORIES, type PassiveCategory } from "@bh/shared-types";
 import { LOADOUT_LIMITS, PASSIVES, type RunSlotState } from "@bh/core-game";
 import { t } from "../../i18n";
+import "../../i18n/run";
 
 /**
  * Занятые слоты набора над выбором улучшения: «Оружие 2/3, Атака 1/2…».

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import { BotRouter } from "../src/modules/bot/bot-router.js";
-import { BotIdentity } from "../src/modules/telegram/bot-identity.js";
-import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
-import { TelegramApiError, type SendOptions, type TelegramUpdate } from "../src/modules/telegram/telegram-bot-api.js";
+import { BotRouter } from "../src/platforms/telegram/bot-router.js";
+import { BotIdentity } from "../src/platforms/telegram/bot-identity.js";
+import { chatTargetOf } from "../src/platforms/ports/chat-target.js";
+import { TelegramApiError, type SendOptions, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import {
   displayName,
   renderWelcomePng,
@@ -11,21 +11,25 @@ import {
   welcomeCacheKey,
   type WelcomeCard,
   type WelcomeProgress,
-} from "../src/modules/welcome/welcome-card.js";
-import { languageOf } from "../src/modules/welcome/welcome-texts.js";
+} from "../src/platforms/telegram/welcome-card.js";
+import { languageOf } from "../src/platforms/telegram/welcome-texts.js";
 import {
   StartCommand,
   WelcomeProgressRegistry,
+  type BotStartListener,
   type WelcomeBotApi,
   type WelcomeCardCache,
-} from "../src/modules/welcome/welcome.command.js";
+} from "../src/platforms/telegram/welcome.command.js";
+import type { AuthService, ChannelEntry } from "../src/modules/auth/auth.service.js";
+import { switchesOf } from "./helpers/notify-targets.js";
+import { PNG_RENDER_TIMEOUT_MS } from "./helpers/card-render.js";
 
 // Приветствие по /start (docs/28-diagnostics.md §6.1.2).
 
 const TOKEN = "123456:TEST-welcome";
 const VETERAN: WelcomeProgress = { best: { difficulty: "normal", survivalSec: 462.7, rank: 3, total: 41 }, runs: 12 };
 
-function start(fromId: number, patch: { language?: string; name?: string; chat?: string; text?: string } = {}): TelegramUpdate {
+function start(fromId: number, patch: { language?: string; name?: string; chat?: string; text?: string; premium?: boolean } = {}): TelegramUpdate {
   return {
     update_id: fromId,
     message: {
@@ -33,7 +37,13 @@ function start(fromId: number, patch: { language?: string; name?: string; chat?:
       date: 1,
       text: patch.text ?? "/start",
       chat: { id: fromId, type: patch.chat ?? "private" },
-      from: { id: fromId, is_bot: false, first_name: patch.name ?? "Анна", ...(patch.language === undefined ? {} : { language_code: patch.language }) },
+      from: {
+        id: fromId,
+        is_bot: false,
+        first_name: patch.name ?? "Анна",
+        ...(patch.language === undefined ? {} : { language_code: patch.language }),
+        ...(patch.premium === undefined ? {} : { is_premium: patch.premium }),
+      },
     },
   };
 }
@@ -73,7 +83,7 @@ describe("карточка приветствия", () => {
     expect(newcomer).toContain("Hi, Zoe!");
     expect(newcomer).not.toContain("best ·");
     expect(renderWelcomePng({ language: "ru", name: "Анна", progress: VETERAN }).subarray(1, 4).toString()).toBe("PNG");
-  });
+  }, PNG_RENDER_TIMEOUT_MS);
 });
 
 class MemoryCache implements WelcomeCardCache {
@@ -110,6 +120,7 @@ function setup(
   const config = loadAppConfig({ TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_UPDATES: "polling", PUBLIC_WEB_URL: "https://game.example", ...env });
   const cache = new MemoryCache();
   const calls: SentPhotoCall[] = [];
+  const menus: { text: string; url: string; chatId: string | null }[] = [];
   let renders = 0;
   let rejectFileId = false;
   const api: WelcomeBotApi = {
@@ -122,13 +133,33 @@ function setup(
       calls.push({ chatId: chatTargetOf(chat).chatId, photo: "message", caption: text, options });
       return calls.length;
     },
+    async setMenuWebApp(text, url, chatId) {
+      menus.push({ text, url, chatId });
+    },
   };
   const registry = new WelcomeProgressRegistry();
   registry.source = { progress };
   const router = new BotRouter();
   const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: botUsername }; } });
+  const entries: ChannelEntry[] = [];
+  let entryFails = false;
+  const auth = {
+    async enterChannel(entry: ChannelEntry) {
+      if (entryFails) throw new Error("база недоступна");
+      entries.push(entry);
+    },
+  } as unknown as AuthService;
+  const starts: { starter: Parameters<BotStartListener["botStarted"]>[0]; startParam: string | null }[] = [];
+  let startFails = false;
+  const startListener: BotStartListener = {
+    async botStarted(starter, startParam) {
+      starts.push({ starter, startParam });
+      if (startFails) throw new Error("сеть недоступна");
+    },
+  };
   const command = new StartCommand(
     config,
+    switchesOf(config),
     router,
     registry,
     cache,
@@ -138,6 +169,8 @@ function setup(
       return Buffer.from(`png:${card.name}`);
     },
     identity,
+    auth,
+    startListener,
   );
   const ready = identity.refresh();
   command.onModuleInit();
@@ -146,12 +179,90 @@ function setup(
     router,
     cache,
     calls,
+    menus,
     renders: () => renders,
     rejectCachedFiles: () => {
       rejectFileId = true;
     },
+    entries,
+    failEntries: () => {
+      entryFails = true;
+    },
+    starts,
+    failStarts: () => {
+      startFails = true;
+    },
   };
 }
+
+describe("/start — вход в канал", () => {
+  const AUTH = { AUTH_ENABLED: "true", JWT_ACCESS_SECRET: "a1".repeat(32), DATABASE_URL: "postgresql://unused" };
+
+  it("заводит аккаунт с параметром ссылки ещё до карточки", async () => {
+    const bot = setup(AUTH);
+    await bot.router.dispatch(start(7, { text: "/start c-promo2026" }));
+    expect(bot.entries).toEqual([{ platform: "telegram", platformUserId: "7", displayName: "Анна", username: null, startParam: "c-promo2026" }]);
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  it("без параметра — органика; повтор в окне тоже доходит: окно повтора — забота атрибуции", async () => {
+    const bot = setup(AUTH);
+    await bot.router.dispatch(start(7));
+    await bot.router.dispatch(start(7));
+    expect(bot.entries.map((entry) => entry.startParam)).toEqual([null, null]);
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  it("вход в панель — не приход игрока: ни карточки, ни касания", async () => {
+    const bot = setup(AUTH);
+    await bot.router.dispatch(start(7, { text: "/start panel-AbCdEfGhIjKlMnOpQrStUv" }));
+    await bot.router.dispatch(start(8, { text: "/start@rubezh_test_bot panel-AbCdEfGhIjKlMnOpQrStUv" }));
+    expect(bot.entries).toEqual([]);
+    expect(bot.calls).toHaveLength(0);
+  });
+
+  it("упавшая запись аккаунта не отменяет карточку", async () => {
+    const bot = setup(AUTH);
+    bot.failEntries();
+    await bot.router.dispatch(start(7));
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  it("без авторизации и в группе вход не зовётся", async () => {
+    const off = setup();
+    await off.router.dispatch(start(7));
+    expect(off.entries).toEqual([]);
+
+    const group = setup(AUTH);
+    await group.router.dispatch(start(9, { chat: "supergroup" }));
+    expect(group.entries).toEqual([]);
+  });
+});
+
+describe("/start — рекламной сети (Р78)", () => {
+  it("запуск с параметром ссылки уходит слушателю однажды: двойное нажатие — один запуск", async () => {
+    const bot = setup();
+    await bot.router.dispatch(start(7, { text: "/start c-promo2026", language: "en-US", premium: true }));
+    await bot.router.dispatch(start(7, { text: "/start c-promo2026" }));
+    expect(bot.starts).toEqual([{ starter: { id: 7, language: "en-US", premium: true }, startParam: "c-promo2026" }]);
+    expect(bot.calls).toHaveLength(1);
+  });
+
+  it("без параметра, о чём клиент молчит, — пусто; группа и вход в панель — не запуск", async () => {
+    const bot = setup();
+    await bot.router.dispatch(start(8));
+    await bot.router.dispatch(start(9, { chat: "supergroup" }));
+    await bot.router.dispatch(start(10, { text: "/start panel-AbCdEfGhIjKlMnOpQrStUv" }));
+    expect(bot.starts).toEqual([{ starter: { id: 8, language: null, premium: null }, startParam: null }]);
+  });
+
+  it("сеть не ответила — карточка уходит всё равно", async () => {
+    const bot = setup();
+    bot.failStarts();
+    await bot.router.dispatch(start(7));
+    expect(bot.calls).toHaveLength(1);
+  });
+});
 
 describe("/start в боте", () => {
   it("рисует карточку один раз: повторный /start того же игрока уходит по file_id", async () => {

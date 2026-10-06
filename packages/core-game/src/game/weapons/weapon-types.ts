@@ -1,4 +1,4 @@
-import type { WeaponBehavior, WeaponDef, WeaponLevel } from "@bh/shared-types";
+import { ELEMENTS, type WeaponBehavior, type WeaponDef, type WeaponLevel } from "@bh/shared-types";
 
 /**
  * Числа уровня оружия с заполненными умолчаниями. Один и тот же вид объекта у
@@ -13,6 +13,10 @@ export interface ResolvedWeaponLevel {
   areaRadius: number;
   projectileSpeed: number;
   ttlSec: number;
+  /** стихия урона — индекс из `sim/elements.ts`; у всех уровней оружия одна */
+  element: number;
+  /** шанс наложить состояние стихии за попадание */
+  statusChance: number;
 }
 
 export interface WeaponType {
@@ -20,7 +24,6 @@ export interface WeaponType {
   behavior: WeaponBehavior;
   nameKey: string;
   descriptionKey: string;
-  starting: boolean;
   weight: number;
   levels: ResolvedWeaponLevel[];
 }
@@ -33,6 +36,9 @@ const NEUTRAL_LEVEL: ResolvedWeaponLevel = {
   areaRadius: 0,
   projectileSpeed: 0,
   ttlSec: 0,
+  // физический — нулевой индекс перечня стихий (`sim/element-ids.ts`)
+  element: 0,
+  statusChance: 0,
 };
 
 /**
@@ -81,17 +87,15 @@ export function findWeaponContentProblems(defs: readonly WeaponDef[]): string[] 
     }
     problems.push(...findLevelProblems(def));
   }
-
-  // Пустой список — законный случай: так гоняются тесты паттернов врагов,
-  // где атака игрока только мешает. А вот набор оружия без единого
-  // стартового означает забег, который начинается без атаки вовсе.
-  if (defs.length > 0 && !defs.some((def) => def.starting === true)) {
-    problems.push("нет ни одного стартового оружия");
-  }
   return problems;
 }
 
 function findLevelProblems(def: WeaponDef): string[] {
+  // Шанс без стихии ничего не наложит — это ошибка, а не умолчание.
+  const elemental = def.element !== undefined && def.element !== "physical";
+  const badElement = def.element !== undefined && !(ELEMENTS as readonly string[]).includes(def.element);
+  const badChance = def.levels.some(({ statusChance: chance }) => chance !== undefined && (!(chance >= 0 && chance <= 1) || (chance > 0 && !elemental)));
+  if (badElement || badChance) return [`оружие ${def.id}: element или statusChance (0…1, только со стихией)`];
   const problems: string[] = [];
 
   def.levels.forEach((level: WeaponLevel, index) => {
@@ -131,9 +135,8 @@ export function resolveWeaponTypes(defs: readonly WeaponDef[], unitScale: number
     behavior: def.behavior,
     nameKey: def.nameKey,
     descriptionKey: def.descriptionKey,
-    starting: def.starting === true,
     weight: def.weight ?? 1,
-    levels: def.levels.map((level) => resolveLevel(def.behavior, level, unitScale)),
+    levels: def.levels.map((level) => ({ ...resolveLevel(def.behavior, level, unitScale), element: ELEMENTS.indexOf(def.element ?? "physical") })),
   }));
 }
 

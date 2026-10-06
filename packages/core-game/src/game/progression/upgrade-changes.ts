@@ -1,4 +1,4 @@
-import type { UpgradeChange, WeaponBehavior } from "@bh/shared-types";
+import { ELEMENTS, type UpgradeChange, type WeaponBehavior } from "@bh/shared-types";
 import type { WeaponType, ResolvedWeaponLevel } from "../weapons/weapon-types";
 import type { PassiveType } from "./passives";
 
@@ -71,13 +71,30 @@ export function weaponChanges(
     if (from === to) continue;
     changes.push(change(weaponLabel(type.behavior, field), from, to, "value", field === "cooldownSec"));
   }
+
+  // Шанс состояния — у стихийного оружия главное число наравне с уроном:
+  // «шанс поджечь 15 → 17» и есть то, за что берут уровень «Очага».
+  const chance = round(next.statusChance * 100);
+  const previousChance = previous === null || previous === undefined ? null : round(previous.statusChance * 100);
+  if (chance > 0 && chance !== previousChance) {
+    changes.push(change(statusChanceLabel(next.element), previousChance, chance, "value", false));
+  }
   return changes;
 }
 
+/** Подпись шанса — глаголом стихии: «шанс поджечь», а не «шанс состояния». */
+export function statusChanceLabel(element: number): string {
+  return `upgrade.stat.statusChance.${ELEMENTS[element] ?? "physical"}`;
+}
+
 export function passiveChanges(type: PassiveType, fromLevel: number | null, toLevel: number): UpgradeChange[] {
-  const to = type.levels[toLevel - 1];
-  if (to === undefined) return [];
-  const from = fromLevel === null ? null : (type.levels[fromLevel - 1] ?? null);
+  const rawTo = type.levels[toLevel - 1];
+  if (rawTo === undefined) return [];
+  const rawFrom = fromLevel === null ? null : (type.levels[fromLevel - 1] ?? null);
+  // Сопротивление — доля, а игроку нужны проценты: «+15 → +30», а не «+0,15».
+  const scale = type.stat.startsWith("resist") ? 100 : 1;
+  const to = round(rawTo * scale);
+  const from = rawFrom === null ? null : round(rawFrom * scale);
 
   return [
     change(

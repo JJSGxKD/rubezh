@@ -5,13 +5,15 @@ import { DomainError } from "../src/common/domain-error.js";
 import { PaymentsContinueLedger } from "../src/modules/payments/continue-ledger.js";
 import { continuePrice, startedMinutes } from "../src/modules/payments/continue-price.js";
 import { continueRequestSchema } from "../src/modules/payments/dto/payments.dto.js";
-import { PaymentsService, type InvoiceBotApi } from "../src/modules/payments/payments.service.js";
+import { PaymentsService } from "../src/modules/payments/payments.service.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunContinues } from "../src/modules/runs/run-continues.js";
-import { TelegramApiError, type StarsInvoice } from "../src/modules/telegram/telegram-bot-api.js";
+import { TelegramApiError } from "../src/platforms/telegram/telegram-bot-api.js";
+import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 /**
  * Цена и счёт второго шанса (docs/34-stage3-plan.md, WP5). Проверяется то,
@@ -29,17 +31,6 @@ function config(patch: Record<string, string> = {}): AppConfig {
 
 function player(platformUserId = "555000111"): AccountRef {
   return { accountId: randomUUID(), platform: "telegram", platformUserId };
-}
-
-class FakeInvoices implements InvoiceBotApi {
-  readonly sent: StarsInvoice[] = [];
-  failWith: Error | null = null;
-
-  async createInvoiceLink(invoice: StarsInvoice): Promise<string> {
-    if (this.failWith !== null) throw this.failWith;
-    this.sent.push(invoice);
-    return `https://t.me/$invoice-${this.sent.length}`;
-  }
 }
 
 async function codeOf(promise: Promise<unknown>): Promise<string> {
@@ -78,7 +69,7 @@ describe("цена второго шанса", () => {
 describe("счёт второго шанса", () => {
   let runs: MemoryRunsRepository;
   let purchases: MemoryPurchasesRepository;
-  let invoices: FakeInvoices;
+  let invoices: FakeStarsApi;
   let service: PaymentsService;
   let me: AccountRef;
   let runId: string;
@@ -97,13 +88,13 @@ describe("счёт второго шанса", () => {
   }
 
   function build(settings: AppConfig = config()): void {
-    service = new PaymentsService(settings, purchases, runs, invoices);
+    service = new PaymentsService(settings, purchases, runs, starsProviders(invoices), switchesOf(settings));
   }
 
   beforeEach(async () => {
     runs = new MemoryRunsRepository();
     purchases = new MemoryPurchasesRepository();
-    invoices = new FakeInvoices();
+    invoices = new FakeStarsApi();
     build();
     me = player();
     runId = await startRun(me);
@@ -144,10 +135,12 @@ describe("счёт второго шанса", () => {
       level: 5,
       enemiesKilled: 100,
       weapons: [],
+      details: null,
       deathCause: null,
       cheats: false,
       continues: [],
       ranked: true,
+      ratingRestricted: null,
       verdict: "ok",
       verdictReasons: [],
     });
@@ -217,11 +210,11 @@ describe("счёт второго шанса", () => {
   });
 
   it("Telegram не выставил счёт — повтор безопасен, покупка ждёт того же продолжения", async () => {
-    invoices.failWith = new TelegramApiError("createInvoiceLink", 0, "сеть недоступна", null);
+    invoices.invoiceFailWith = new TelegramApiError("createInvoiceLink", 0, "сеть недоступна", null);
 
     expect(await codeOf(service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW))).toBe("payments_unavailable");
 
-    invoices.failWith = null;
+    invoices.invoiceFailWith = null;
     await service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW);
     expect(purchases.rows.size).toBe(1);
   });
@@ -266,9 +259,16 @@ describe("сверка итога забега с покупками", () => {
 });
 
 describe("конфигурация оплаты", () => {
-  it("без авторизации и чтения обновлений бота оплата не стартует", () => {
-    expect(() => loadAppConfig({ NODE_ENV: "test", PAYMENTS_ENABLED: "true" } as NodeJS.ProcessEnv)).toThrow(/AUTH_ENABLED/);
+  it("без входа и чтения обновлений бота оплата невозможна, а явное включение без них не стартует", () => {
+    expect(() => loadAppConfig({ NODE_ENV: "test", PAYMENTS_ENABLED: "true" } as NodeJS.ProcessEnv)).toThrow(/JWT_ACCESS_SECRET/);
     expect(() => config({ TELEGRAM_BOT_UPDATES: "off" })).toThrow(/TELEGRAM_BOT_UPDATES/);
-    expect(config().payments).toEqual({ enabled: true, testMode: false, starsPerMinute: 1, maxStars: 30 });
+    expect(config().payments).toEqual({ possible: true, starsEnv: true, testMode: false, starsPerMinute: 1, maxStars: 30 });
+    expect(config({ PAYMENTS_ENABLED: "", TELEGRAM_BOT_UPDATES: "off" }).payments.possible).toBe(false);
+  });
+
+  it("ключи есть — оплата включена, пока её не выключили стоп-краном", () => {
+    expect(switchesOf(config({ PAYMENTS_ENABLED: "" })).payments()).toBe(true);
+    expect(switchesOf(config({ PAYMENTS_ENABLED: "false" })).payments()).toBe(false);
+    expect(switchesOf(config({ PAYMENTS_ENABLED: "", TELEGRAM_BOT_UPDATES: "off" })).payments()).toBe(false);
   });
 });

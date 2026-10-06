@@ -50,7 +50,10 @@ describe("настройки графики", () => {
 
   it("выбор игрока переживает перезапуск и попадает в аналитику", () => {
     useGraphics.getState().toggle("telegraphs");
-    expect(events.at(-1)).toEqual({ event: "settings_changed", payload: { setting: "graphics.telegraphs", value: false } });
+    expect(events.at(-1)).toEqual({ event: "settings_changed", payload: { setting: "graphics.telegraphs", value: false, scope: "account" } });
+    useGraphics.getState().toggle("weaponEffects");
+    expect(events.at(-1)).toEqual({ event: "settings_changed", payload: { setting: "graphics.weaponEffects", value: false, scope: "device" } });
+    useGraphics.getState().toggle("weaponEffects");
 
     mount();
     expect(runGraphics().telegraphs).toBe(false);

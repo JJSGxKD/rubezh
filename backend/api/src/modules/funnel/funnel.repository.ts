@@ -1,0 +1,132 @@
+import { Inject, Injectable } from "@nestjs/common";
+import type { PrismaClient } from "../../generated/prisma/client.js";
+import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
+import { PRISMA } from "../../infra/database.js";
+import type { FlagRule } from "../flags/flag-rollout.js";
+import { flagSplitReport, type FlagSplit } from "./flag-split-report.js";
+import { funnelReport, type FunnelRow } from "./funnel-report.js";
+
+/**
+ * Вехи воронки аккаунта (docs/35-stage4-plan.md, Р30, §3.10). Каждая веха —
+ * дата первого раза: одна вставка с `ON CONFLICT` и `COALESCE`, поэтому
+ * повторное событие ничего не двигает, а параллельные сходятся в базе.
+ * Выражения `SET` видят строку до обновления — на этом держатся счётчик
+ * забегов и возвраты по суткам.
+ */
+
+export const FUNNEL_REPOSITORY = Symbol("FUNNEL_REPOSITORY");
+
+/** Вехи одного аккаунта — карточка игрока в панели; `null` у вехи — ещё не случилось. */
+export interface FunnelMilestones {
+  enteredAt: Date | null;
+  appOpenedAt: Date | null;
+  firstRunStartedAt: Date | null;
+  firstRunFinishedAt: Date | null;
+  runsRecorded: number;
+  runs2At: Date | null;
+  runs5At: Date | null;
+  returnedD1At: Date | null;
+  returnedD7At: Date | null;
+  firstPurchaseAt: Date | null;
+}
+
+export interface FunnelRepository {
+  /** вехи аккаунта; `null` — строки нет: игрок ни разу не входил */
+  milestones(accountId: string): Promise<FunnelMilestones | null>;
+  /** воронка по источникам за период — тот же отчёт, что у команды `funnel:report` */
+  report(from: Date, to: Date): Promise<FunnelRow[]>;
+  /** доля флага против остальных среди впервые открывших приложение за период; `rewardedPlaces` — места роликов за награду */
+  flagSplit(rule: FlagRule, from: Date, to: Date, at: Date, rewardedPlaces: readonly string[]): Promise<FlagSplit>;
+  /** вошёл в канал площадки: бот, сообщество, страница */
+  entered(accountId: string, at: Date): Promise<void>;
+  /** запуск приложения: первый — полная регистрация, следующие — возвраты на D1 и D7 */
+  appOpened(accountId: string, at: Date): Promise<void>;
+  firstRunStarted(accountId: string, at: Date): Promise<void>;
+  /** забег записан — первый и счётчик для вех второго и пятого */
+  runRecorded(accountId: string, at: Date): Promise<void>;
+  firstPurchase(accountId: string, at: Date): Promise<void>;
+}
+
+@Injectable()
+export class PrismaFunnelRepository implements FunnelRepository {
+  constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+
+  async entered(accountId: string, at: Date): Promise<void> {
+    await this.prisma.$executeRaw`
+      INSERT INTO account_funnel (account_id, entered_at) VALUES (${accountId}::uuid, ${at})
+      ON CONFLICT (account_id) DO UPDATE SET entered_at = COALESCE(account_funnel.entered_at, EXCLUDED.entered_at)
+    `;
+  }
+
+  async appOpened(accountId: string, at: Date): Promise<void> {
+    // Возврат считается от первого открытия: запуск на следующие сутки и
+    // позже — D1, на седьмые и позже — D7 (удержание «скользящее»; точное по
+    // дням — из сессий). У первого запуска прежнего открытия нет, и возвратов
+    // он не ставит.
+    await this.prisma.$executeRaw`
+      INSERT INTO account_funnel (account_id, app_opened_at) VALUES (${accountId}::uuid, ${at})
+      ON CONFLICT (account_id) DO UPDATE SET
+        app_opened_at = COALESCE(account_funnel.app_opened_at, EXCLUDED.app_opened_at),
+        returned_d1_at = COALESCE(account_funnel.returned_d1_at, CASE
+          WHEN account_funnel.app_opened_at IS NOT NULL
+            AND (EXCLUDED.app_opened_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date >= (account_funnel.app_opened_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date + 1
+          THEN EXCLUDED.app_opened_at END),
+        returned_d7_at = COALESCE(account_funnel.returned_d7_at, CASE
+          WHEN account_funnel.app_opened_at IS NOT NULL
+            AND (EXCLUDED.app_opened_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date >= (account_funnel.app_opened_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date + 7
+          THEN EXCLUDED.app_opened_at END)
+    `;
+  }
+
+  async firstRunStarted(accountId: string, at: Date): Promise<void> {
+    await this.prisma.$executeRaw`
+      INSERT INTO account_funnel (account_id, first_run_started_at) VALUES (${accountId}::uuid, ${at})
+      ON CONFLICT (account_id) DO UPDATE SET first_run_started_at = COALESCE(account_funnel.first_run_started_at, EXCLUDED.first_run_started_at)
+    `;
+  }
+
+  async runRecorded(accountId: string, at: Date): Promise<void> {
+    // Слушатели записанного забега зовутся один раз на забег, поэтому
+    // счётчик — это число забегов, а не повторов итога.
+    await this.prisma.$executeRaw`
+      INSERT INTO account_funnel (account_id, first_run_finished_at, runs_recorded) VALUES (${accountId}::uuid, ${at}, 1)
+      ON CONFLICT (account_id) DO UPDATE SET
+        first_run_finished_at = COALESCE(account_funnel.first_run_finished_at, EXCLUDED.first_run_finished_at),
+        runs_recorded = account_funnel.runs_recorded + 1,
+        runs_2_at = COALESCE(account_funnel.runs_2_at, CASE WHEN account_funnel.runs_recorded + 1 >= 2 THEN EXCLUDED.first_run_finished_at END),
+        runs_5_at = COALESCE(account_funnel.runs_5_at, CASE WHEN account_funnel.runs_recorded + 1 >= 5 THEN EXCLUDED.first_run_finished_at END)
+    `;
+  }
+
+  async firstPurchase(accountId: string, at: Date): Promise<void> {
+    await this.prisma.$executeRaw`
+      INSERT INTO account_funnel (account_id, first_purchase_at) VALUES (${accountId}::uuid, ${at})
+      ON CONFLICT (account_id) DO UPDATE SET first_purchase_at = COALESCE(account_funnel.first_purchase_at, EXCLUDED.first_purchase_at)
+    `;
+  }
+
+  async milestones(accountId: string): Promise<FunnelMilestones | null> {
+    const row = await this.prisma.accountFunnel.findUnique({ where: { accountId } });
+    if (row === null) return null;
+    return {
+      enteredAt: row.enteredAt,
+      appOpenedAt: row.appOpenedAt,
+      firstRunStartedAt: row.firstRunStartedAt,
+      firstRunFinishedAt: row.firstRunFinishedAt,
+      runsRecorded: row.runsRecorded,
+      runs2At: row.runs2At,
+      runs5At: row.runs5At,
+      returnedD1At: row.returnedD1At,
+      returnedD7At: row.returnedD7At,
+      firstPurchaseAt: row.firstPurchaseAt,
+    };
+  }
+
+  async report(from: Date, to: Date): Promise<FunnelRow[]> {
+    return await funnelReport(this.prisma, from, to);
+  }
+
+  async flagSplit(rule: FlagRule, from: Date, to: Date, at: Date, rewardedPlaces: readonly string[]): Promise<FlagSplit> {
+    return await flagSplitReport(this.prisma, rule, from, to, at, rewardedPlaces);
+  }
+}

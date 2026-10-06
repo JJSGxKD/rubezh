@@ -15,6 +15,10 @@ import { UnavailableError } from "../src/common/domain-error.js";
 import { IngestGuard } from "../src/modules/ingest/ingest.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { launchFor } from "./helpers/init-data.js";
+import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
+import { LaunchVerifiers } from "../src/platforms/ports/launch-verifier.js";
+import { FeatureSwitches } from "../src/modules/settings/feature-switches.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 
 // Приёмник событий (docs/22-analytics-and-metrics.md §3.2, docs/28-diagnostics.md §5.3).
 
@@ -69,6 +73,8 @@ describe("приёмник событий", () => {
         { provide: REDIS, useValue: unavailableRedis },
         { provide: EVENTS_SINK, useValue: sink },
         RateLimiter,
+        { provide: LaunchVerifiers, useValue: launchVerifiersFor(config) },
+        { provide: FeatureSwitches, useValue: switchesOf(config) },
         IngestGuard,
         EventsService,
       ],

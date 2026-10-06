@@ -5,6 +5,12 @@
       "path": "packages/shared-types"
     },
     {
+      "path": "packages/fx"
+    },
+    {
+      "path": "packages/design-tokens"
+    },
+    {
       "path": "packages/core-game"
     },
     {

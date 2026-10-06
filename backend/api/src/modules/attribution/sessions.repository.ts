@@ -16,7 +16,7 @@ export interface SessionRecord {
   sessionId: string;
   accountId: string;
   platform: AccountPlatform;
-  place: "miniapp" | "web";
+  place: "miniapp" | "web" | "channel";
   startKind: StartKind;
   startParam: string | null;
   startRef: string | null;
@@ -44,6 +44,18 @@ export interface SessionsRepository {
   /** Записать сессию и пересчитать касания. Повтор той же сессии — не ошибка. */
   record(session: SessionRecord): Promise<"recorded" | "duplicate">;
   acquisition(accountId: string): Promise<AcquisitionView | null>;
+  /**
+   * Подсети последних сессий аккаунта, свежие первыми, без повторов. Нужны
+   * антифроду рефералки: новичок из той же подсети, что пригласивший, — это
+   * скорее тот же человек (docs/23-referral-and-partner-program.md §2.4).
+   */
+  recentIpPrefixes(accountId: string, limit: number): Promise<string[]>;
+  /**
+   * Когда началась последняя сессия аккаунта до момента `before`; `null` —
+   * раньше не заходил. Нужно возвращению (docs/35-stage4-plan.md §3.8): сколько
+   * игрок отсутствовал до этого входа.
+   */
+  lastSessionBefore(accountId: string, before: Date): Promise<Date | null>;
 }
 
 @Injectable()
@@ -126,5 +138,24 @@ export class PrismaSessionsRepository implements SessionsRepository {
         lastStartRef: true,
       },
     });
+  }
+
+  async lastSessionBefore(accountId: string, before: Date): Promise<Date | null> {
+    const last = await this.prisma.accountSession.findFirst({
+      where: { accountId, startedAt: { lt: before } },
+      select: { startedAt: true },
+      orderBy: { startedAt: "desc" },
+    });
+    return last?.startedAt ?? null;
+  }
+
+  async recentIpPrefixes(accountId: string, limit: number): Promise<string[]> {
+    const rows = await this.prisma.accountSession.findMany({
+      where: { accountId, ipPrefix: { not: null } },
+      select: { ipPrefix: true },
+      orderBy: { startedAt: "desc" },
+      take: limit,
+    });
+    return [...new Set(rows.map((row) => row.ipPrefix).filter((prefix): prefix is string => prefix !== null))];
   }
 }

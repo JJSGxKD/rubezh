@@ -186,34 +186,8 @@ export const SOUND_RECIPES = {
   },
 
   // --- угрозы: слышны всегда, приглушают оружие и толпу ---------------------
-  enemyShot: {
-    bus: "threats", level: 0.42, voices: 2, gap: 0.1, send: 0.08, dur: 0.14, variants: 2, pitch: [1, 0.93],
-    layers: [
-      { kind: "tone", wave: "triangle", f0: 540, f1: 250, glide: 0.09, peak: 0.28, decay: 0.1 },
-      { kind: "hiss", dur: 0.05, seed: 151, f0: 900, q: 1.5, peak: 0.14, decay: 0.04 },
-    ],
-  },
-  dashWarn: {
-    bus: "threats", level: 0.5, voices: 2, gap: 0.15, send: 0.1, duck: 0.55, dur: 0.6, variants: 1,
-    layers: [
-      { kind: "swell", wave: "sawtooth", f0: 88, attack: 0.35, release: 0.2, peak: 0.16, filter: { type: "lowpass", f0: 260, f1: 1000, glide: 0.48, q: 4 } },
-    ],
-  },
-  dashGo: {
-    bus: "threats", level: 0.5, voices: 2, gap: 0.1, send: 0.05, dur: 0.3, variants: 2, pitch: [1, 1.08],
-    layers: [{ kind: "hiss", dur: 0.24, seed: 141, f0: 380, f1: 2600, glide: 0.18, q: 1.1, attack: 0.02, peak: 0.5, decay: 0.2 }],
-  },
-  fuseTick: {
-    bus: "threats", level: 0.36, voices: 3, gap: 0.02, send: 0.05, duck: 0.3, dur: 0.06, variants: 1,
-    layers: [{ kind: "tone", wave: "triangle", f0: 980, peak: 0.3, decay: 0.035 }],
-  },
-  blast: {
-    bus: "threats", level: 0.6, voices: 2, gap: 0.08, send: 0.2, duck: 0.5, dur: 0.8, variants: 2, pitch: [1, 0.9],
-    layers: [
-      { kind: "hiss", dur: 0.6, seed: 131, filter: "lowpass", f0: 1300, f1: 260, glide: 0.45, peak: 0.7, decay: 0.55 },
-      { kind: "tone", f0: 96, f1: 40, glide: 0.4, peak: 0.6, decay: 0.45 },
-    ],
-  },
+  // Атак врагов здесь нет сознательно (`35-stage4-plan.md`, Р57): их читают
+  // глазами по телеграфу, а слышат по попаданию.
   eliteHorn: {
     bus: "threats", level: 0.58, voices: 1, gap: 1, send: 0.55, duck: 1.4, dur: 2, variants: 1,
     layers: [
@@ -249,8 +223,10 @@ export const SOUND_RECIPES = {
   },
 
   // --- награды: светлые колокольчики -----------------------------------------
+  // Высоту задаёт лесенка серии (`sound-director.ts`), поэтому вариант один:
+  // случайный сдвиг высоты ломал бы подъём. Голосов — на арпеджио магнита.
   gem: {
-    bus: "rewards", level: 0.4, voices: 4, gap: 0.03, send: 0.18, dur: 0.36, variants: 3, pitch: [1, 1.122, 1.26],
+    bus: "rewards", level: 0.4, voices: 6, gap: 0.03, send: 0.18, dur: 0.36, variants: 1,
     layers: [{ kind: "bell", f: 1046.5, peak: 0.24, decay: 0.3, ratio: 3.5, index: 0.9 }],
   },
   heal: {

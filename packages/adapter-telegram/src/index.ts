@@ -1,22 +1,30 @@
-import { hapticFeedback, invoice, isTMA, retrieveLaunchParams, retrieveRawInitData, shareURL } from "@tma.js/sdk";
+import { hapticFeedback, invoice, isTMA, openLink, openTelegramLink, retrieveLaunchParams, retrieveRawInitData, shareURL, supports } from "@tma.js/sdk";
 import type {
+  AdNetworkSetup,
+  AdShowOutcome,
+  AdShowRequest,
+  NetworkTaskHandle,
+  NetworkTaskLink,
+  NetworkTaskMount,
+  NetworkTaskOpen,
   PlatformAdapter,
   PlatformClientInfo,
   UserContext,
   InvoiceStatus,
   SharePayload,
   InvitePayload,
+  InviteMethods,
   InviteResult,
   HapticType,
-  AdResult,
   DisplayUser,
   KeyValueStorage,
   PlatformUi,
 } from "@bh/shared-types";
-import { inviteFromBrowser } from "./invite";
 import { openInvoiceWith } from "./invoice";
+import { openLinkWith } from "./links";
 import { createDeviceStorage } from "./storage";
 import { createTelegramUi } from "./ui-telegram";
+
 
 /**
  * Telegram WebApp SDK. Валидация initData (HMAC-SHA256 токеном бота) —
@@ -24,10 +32,12 @@ import { createTelegramUi } from "./ui-telegram";
  * Оплата — обязательно Telegram Stars для цифровых товаров, см.
  * docs/01-tech-stack.md §5 и docs/08-web-and-identity.md §6 (важное
  * ограничение — TON/Gram/USDT НЕ заменяют Stars внутри Mini App).
- * Реклама — несколько провайдеров с fallback-цепочкой + SocialLead
- * (пассивные баннеры/промо-посты/квесты), см. docs/07-monetization-and-ads.md.
+ * Реклама — SDK сетей AdsGram, AdSonar, RichAds и Taddy по выдаче сервера
+ * (`ads/`), цепочку сетей ведёт сервер; пассивные баннеры и промо-посты
+ * SocialLead — отдельно, см. docs/07-monetization-and-ads.md.
  */
 export class TelegramAdapter implements PlatformAdapter {
+
   /** локальный рекорд, настройки и installId — docs/27-design-system-and-app-shell.md §7 */
   readonly storage: KeyValueStorage = createDeviceStorage();
 
@@ -80,6 +90,20 @@ export class TelegramAdapter implements PlatformAdapter {
     return await openInvoiceWith({ isAvailable: () => isTMA() && invoice.openUrl.isAvailable(), open: (link) => invoice.openUrl(link) }, url);
   }
 
+  /** Канал Telegram — внутри клиента, остальное — во встроенном браузере (`links.ts`). */
+  openLink(url: string): void {
+    openLinkWith(
+      {
+        telegramAvailable: () => isTMA() && openTelegramLink.isAvailable(),
+        openTelegram: (link) => openTelegramLink(link),
+        linkAvailable: () => isTMA() && openLink.isAvailable(),
+        open: (link) => openLink(link),
+        browser: (link) => void globalThis.open(link, "_blank", "noopener"),
+      },
+      url,
+    );
+  }
+
   share(_payload: SharePayload): void {
     // TODO: Telegram.WebApp.shareMessage / switchInlineQuery
   }
@@ -94,7 +118,20 @@ export class TelegramAdapter implements PlatformAdapter {
       shareURL(invite.url, invite.text);
       return "shared";
     }
-    return inviteFromBrowser(invite);
+    // Запасные пути приглашения — чанком по нажатию: первому кадру они не нужны.
+    const { inviteFromBrowser } = await import("./invite");
+    return await inviteFromBrowser(invite);
+  }
+
+  /** Сообщение от бота — с Mini Apps 8.0; в клиенте старше и в браузере его нет. */
+  inviteMethods(): InviteMethods {
+    const version = describeTelegramClient().version;
+    return { preparedMessage: isTMA() && version !== null && supports("web_app_send_prepared_message", version) };
+  }
+
+  async sharePreparedMessage(messageId: string): Promise<InviteResult> {
+    const { sharePrepared } = await import("./invite");
+    return await sharePrepared(messageId);
   }
 
   /**
@@ -113,7 +150,7 @@ export class TelegramAdapter implements PlatformAdapter {
 
   clientInfo(): PlatformClientInfo {
     const client = describeTelegramClient();
-    return { platform: client.platform, version: client.version };
+    return { platform: client.platform, version: client.version, language: client.languageCode, premium: client.isPremium };
   }
 
   /**
@@ -133,9 +170,30 @@ export class TelegramAdapter implements PlatformAdapter {
     if (!call.ok) vibrateFallback(type);
   }
 
-  async showAd(): Promise<AdResult> {
-    // TODO: fallback-цепочка нескольких провайдеров, см. docs/07-monetization-and-ads.md §2
-    return { shown: false, rewarded: false };
+  /**
+   * Показ рекламы сети, которую выбрал сервер (`ads/ad-shower.ts`): скрипт
+   * сети — при первом показе, два показа разом невозможны, исход — всегда.
+   * Цепочку сетей ведёт сервер: на отказ он выдаёт следующую.
+   */
+  async showAd(request: AdShowRequest): Promise<AdShowOutcome> {
+    // Обёртки SDK — отдельным чанком при первом показе: первой загрузке
+    // реклама не нужна, а её бюджет на счету (docs/27-design-system-and-app-shell.md §3.4).
+    return (await adsChunk()).showInBrowser(request);
+  }
+
+  /** SDK сетей учёта аудитории (`ads/audience.ts`) — чанком показа, в простое: первую загрузку чужой скрипт не задерживает. */
+  async prepareAds(networks: readonly AdNetworkSetup[]): Promise<void> {
+    await (await adsChunk()).prepareInBrowser(networks);
+  }
+
+  /** Задание сети в строке оболочки (`ads/tasks.ts`) — чанком показа, как ролики: первой загрузке оно не нужно. */
+  async mountNetworkTask(mount: NetworkTaskMount): Promise<NetworkTaskHandle> {
+    return (await adsChunk()).mountTaskInBrowser(mount);
+  }
+
+  /** Задание ленты сети (`ads/task-links.ts`) — чанком показа: адрес перехода у сети, открывается он как любая ссылка. */
+  async openNetworkTask(task: NetworkTaskLink): Promise<NetworkTaskOpen> {
+    return (await adsChunk()).openTaskInBrowser(task, this);
   }
 }
 
@@ -157,6 +215,13 @@ export interface TelegramClientInfo {
   isPremium: boolean | null;
   isFullscreen: boolean | null;
 }
+
+/**
+ * Чанк рекламы — показ, учёт аудитории и задания сетей — одним загрузчиком:
+ * сборщик пишет список предзагрузки чанка у каждого вызова `import()`, и
+ * три вызова стоили бы первой загрузке трёх таких списков.
+ */
+const adsChunk = () => import("./ads/ad-shower");
 
 const UNKNOWN_CLIENT: TelegramClientInfo = {
   platform: null,
@@ -253,3 +318,4 @@ export { createDeviceStorage } from "./storage";
 export { createTelegramUi } from "./ui-telegram";
 export { createBrowserUi } from "./ui-browser";
 export { sameInsets, sumInsets } from "./insets";
+export { installTelegramWebAppCompat, type TelegramWebAppCompat } from "./webapp-compat";

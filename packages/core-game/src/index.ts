@@ -21,6 +21,8 @@ export * from "./content/balance-targets";
 export * from "./content/difficulty";
 export * from "./content/drops";
 export * from "./content/stages";
+export * from "./content/boosts";
+export * from "./content/unlocks";
 export * from "./game/bench";
 
 // Как выглядит мир забега — без Phaser: гайдбук оболочки рисует врагов и
@@ -36,6 +38,8 @@ export {
   type ShapeKind,
   type ShapeLook,
 } from "./game/render/looks";
+// Цвета состояний — гайдбук красит стихию так же, как канва красит врага.
+export { ELEMENT_TONE, STATUS_TONE_COLORS } from "./game/render/status-tones";
 // Умолчания паттернов — гайдбук берёт из них то, что враг не задал сам.
 export { PATTERN_DEFAULTS } from "./game/patterns/enemy-types";
 
@@ -43,6 +47,7 @@ export { PATTERN_DEFAULTS } from "./game/patterns/enemy-types";
 export type {
   BossSnapshot,
   HudSnapshot,
+  PlayerStatusSnapshot,
   RadarBlipKind,
   RadarSnapshot,
   RunContinueOptions,
@@ -82,6 +87,7 @@ export { RADAR_BLIP, RUN_RECORDING_SCHEMA, RUN_SNAPSHOT_FORMAT } from "./run-api
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).
 export { xpForLevel, OFFERS_PER_LEVEL } from "./game/progression/levels";
+export { unlocksAt, unlockLevelOf, unlocksOfLevel, type AccountUnlocks } from "./game/progression/unlocks";
 
 // Итог забега: движок считает, оболочка показывает, хранит рекорд и отправляет
 // (docs/26-stage2-plan.md, WP3).

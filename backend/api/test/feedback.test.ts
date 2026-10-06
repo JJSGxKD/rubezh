@@ -5,6 +5,7 @@ import { csvOf } from "../src/modules/feedback/feedback-bot.command.js";
 import { feedbackMessage } from "../src/modules/feedback/feedback-message.js";
 import type { FeedbackRecord, FeedbackRepository, StoredFeedback } from "../src/modules/feedback/feedback.repository.js";
 import type { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { targetsOf } from "./helpers/notify-targets.js";
 
 // Обратная связь (docs/29-admin-panel.md §6): отзыв ложится в базу и уходит в
 // чат администраторов, а `/feedback` выгружает их администратору файлом.
@@ -36,7 +37,7 @@ function setup(options: { allow?: boolean; failInsert?: boolean; failChat?: bool
   };
   const limiter = { consume: vi.fn(async () => options.allow ?? true) } as unknown as RateLimiter;
 
-  return { saved, sent, service: new FeedbackService(config, repository, api, limiter) };
+  return { saved, sent, service: new FeedbackService(config, targetsOf(config), repository, api, limiter) };
 }
 
 const identity = { platformUserId: "645259468", ip: "127.0.0.1" };
@@ -107,6 +108,13 @@ describe("сообщение в чат", () => {
     expect(text).toContain("weather: rain");
     expect(text).toContain("Пусть будет карта в лесу");
     expect(text).toContain("без Telegram ID");
+  });
+
+  it("сведения об устройстве подписаны темой, а не сырым ключом", () => {
+    const text = feedbackMessage({ answers: { topic: "device_info" }, text: "Android 14, WebGL 2", runs: 5, platformUserId: "42" });
+
+    expect(text).toContain("Тема: сведения об устройстве");
+    expect(text).toContain("Android 14, WebGL 2");
   });
 });
 

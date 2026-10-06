@@ -16,6 +16,19 @@ describe("разбор параметра запуска", () => {
     expect(parseStartParam("_tgr_x9Y-z")).toEqual({ kind: "telegram_affiliate", raw: "_tgr_x9Y-z", ref: "x9Y-z" });
   });
 
+  it("узнаёт ссылку дружбы по коду, а не по похожему началу", () => {
+    expect(parseStartParam("f-Qw3rTy12Zx")).toEqual({ kind: "friend", raw: "f-Qw3rTy12Zx", ref: "Qw3rTy12Zx" });
+    // Код короче восьми знаков или с дефисом внутри — не ссылка дружбы.
+    expect(parseStartParam("f-abc")).toMatchObject({ kind: "unknown", raw: "f-abc" });
+    expect(parseStartParam("f-abc-defgh")).toMatchObject({ kind: "unknown", raw: "f-abc-defgh" });
+  });
+
+  it("узнаёт кнопку уведомления в боте: вид — в ref", () => {
+    expect(parseStartParam("n-friend_request")).toEqual({ kind: "notification", raw: "n-friend_request", ref: "friend_request" });
+    // Заглавные и цифры в виде не бывают — это чужой формат.
+    expect(parseStartParam("n-Friend1")).toMatchObject({ kind: "unknown", raw: "n-Friend1" });
+  });
+
   it("чужой формат не теряется: сырая строка остаётся для разбора потом", () => {
     expect(parseStartParam("r-123_source-channel")).toEqual({ kind: "unknown", raw: "r-123_source-channel", ref: null });
     // Похоже на клик, но код не той длины — не клик.

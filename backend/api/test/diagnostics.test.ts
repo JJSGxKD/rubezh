@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Module, type Type } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
-import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
+import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { DiagnosticsController } from "../src/modules/diagnostics/diagnostics.controller.js";
@@ -22,6 +22,15 @@ import { runSummaryOf } from "../src/modules/diagnostics/diagnostics-summary.js"
 import { submitRunReportSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { launchFor } from "./helpers/init-data.js";
+import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
+import { LaunchVerifiers } from "../src/platforms/ports/launch-verifier.js";
+import { FeatureSwitches } from "../src/modules/settings/feature-switches.js";
+import { switchesOf } from "./helpers/notify-targets.js";
+import { RolesService } from "../src/modules/roles/roles.service.js";
+import { ToolsAccessService } from "../src/modules/roles/tools-access.js";
+import { environmentSettings, type SettingsReader } from "../src/modules/settings/settings.service.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 // Приёмник отчётов диагностики (docs/28-diagnostics.md §5).
 
@@ -43,16 +52,30 @@ class MemoryRepository implements DiagnosticsRepository {
   async findRun(): Promise<null> {
     return null;
   }
+  async list(): Promise<[]> {
+    return [];
+  }
+  async find(reportId: string): Promise<ReportRecord | null> {
+    return this.records.get(reportId) ?? null;
+  }
 }
 
 const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
+
+/** Доступ к инструментам команды: право — по списку владельцев в окружении, «для всех» — как в панели. */
+function toolsOf(config: AppConfig, stressForAll: boolean): ToolsAccessService {
+  const env = environmentSettings(config);
+  const settings: SettingsReader = { get: (setting) => (setting.key === "diagnostics.stress-for-all" ? setting.schema.parse(stressForAll) : env.get(setting)), onChange: () => undefined };
+  return new ToolsAccessService(new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository()), settings, config);
+}
 
 describe("приёмник отчётов диагностики", () => {
   let app: NestFastifyApplication | null = null;
   let repository: MemoryRepository;
   let received: ReceivedReport[];
 
-  async function start(env: Record<string, string> = {}): Promise<NestFastifyApplication> {
+  /** `stressForAll` — «Стресс-тест для всех игроков» в панели; выключен — стресс-тест только у команды. */
+  async function start(env: Record<string, string> = {}, stressForAll = true): Promise<NestFastifyApplication> {
     repository = new MemoryRepository();
     received = [];
     const hooks = new DiagnosticsHooks();
@@ -64,7 +87,6 @@ describe("приёмник отчётов диагностики", () => {
       DIAGNOSTICS_INGEST_ENABLED: "true",
       ...AUTH_ENV,
       TELEGRAM_BOT_TOKEN: TOKEN,
-      PLAYTEST_ENABLED: "true",
       ADMIN_TELEGRAM_IDS: String(ADMIN),
       ...env,
     });
@@ -76,6 +98,9 @@ describe("приёмник отчётов диагностики", () => {
         { provide: DIAGNOSTICS_REPOSITORY, useValue: repository },
         { provide: DiagnosticsHooks, useValue: hooks },
         RateLimiter,
+        { provide: LaunchVerifiers, useValue: launchVerifiersFor(config) },
+        { provide: FeatureSwitches, useValue: switchesOf(config) },
+        { provide: ToolsAccessService, useValue: toolsOf(config, stressForAll) },
         IngestGuard,
         DiagnosticsService,
       ],
@@ -130,8 +155,8 @@ describe("приёмник отчётов диагностики", () => {
     expect(JSON.stringify(record?.payload)).not.toContain('"userAgent":"ua"');
   });
 
-  it("вне плейтеста стресс-тест принимает только от администратора", async () => {
-    const target = await start({ PLAYTEST_ENABLED: "false" });
+  it("без «стресс-теста для всех» стресс-тест принимает только от команды", async () => {
+    const target = await start({}, false);
     expect((await post(target, reportEnvelope())).statusCode).toBe(403);
     const admin = await post(target, reportEnvelope(), { authorization: `tma ${launchFor(ADMIN, TOKEN)}` });
     expect(admin.statusCode).toBe(200);
@@ -161,7 +186,7 @@ describe("приёмник отчётов диагностики", () => {
   });
 
   it("принимает запись забега без права на стресс-тест и отдаёт слушателям её итог", async () => {
-    const target = await start({ PLAYTEST_ENABLED: "false" });
+    const target = await start({}, false);
     const response = await post(target, runEnvelope(RUN_REPORT_ID, { clientErrors: 2 }));
     expect(response.statusCode).toBe(200);
     expect((await post(target, runEnvelope())).json()).toEqual({ data: { reportId: RUN_REPORT_ID, duplicate: true } });

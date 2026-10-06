@@ -11,6 +11,7 @@ import { DebugOverlay } from "./debug-overlay";
 import { PickupRenderer } from "./pickups";
 import { ENEMY_LOOKS, enemyColor, stageColor, stageCore, WORLD_COLORS } from "./looks";
 import { PlayerRings } from "./player-rings";
+import { playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
@@ -248,6 +249,15 @@ export class WorldRenderer {
       this.player.setScale(1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS));
       return;
     }
+    // Тон состояния на персонаже — без переключателя: это его собственное
+    // состояние, и без тона непонятно, почему здоровье тает без попаданий
+    // (docs/27-design-system-and-app-shell.md §7.1).
+    const tone = playerStatusTone(this.world.player, tick);
+    if (tone !== STATUS_TONE.none) {
+      this.player.setTintFill(STATUS_TONE_COLORS[tone] ?? WORLD_COLORS.hurt);
+      this.player.setScale(1);
+      return;
+    }
     this.player.clearTint();
     this.player.setScale(1);
   }
@@ -258,6 +268,9 @@ export class WorldRenderer {
     const playerX = lerp(this.world.player.prevX, this.world.player.x, t);
     const playerY = lerp(this.world.player.prevY, this.world.player.y, t);
     const telegraphsOn = this.visuals?.telegraphs ?? this.graphics?.telegraphs ?? true;
+    // Тон состояния — эффект оружия: кто выключил эффекты ради тишины на
+    // экране, не хочет и мерцания толпы (docs/27-design-system-and-app-shell.md §7.1).
+    const statusTones = this.weaponEffects.enabled;
     this.telegraphs.begin();
 
     for (let i = 0; i < enemies.count; i++) {
@@ -276,10 +289,13 @@ export class WorldRenderer {
 
       const type = this.world.enemyTypes[typeIndex];
       // Попадание важнее телеграфа: игрок должен видеть, что снаряд дошёл.
-      const look =
+      // Тон состояния — ниже обоих: телеграф предупреждает об ударе, а
+      // состояние только подсказывает, что с врагом.
+      let look =
         tick - enemies.hitTick[i] < HIT_FLASH_TICKS
           ? LOOK.hit
           : lookFor(type.pattern, enemies.phase[i], tick);
+      if (look === LOOK.normal && statusTones) look = LOOK.status + statusTone(enemies, i, tick);
       this.applyLook(sprite, i, look);
       sprite.setVisible(true);
 
@@ -383,11 +399,14 @@ export class WorldRenderer {
     if (this.enemySpriteLook[index] === look && sprite.visible) return;
     this.enemySpriteLook[index] = look;
     sprite.setAlpha(look === LOOK.dim ? 0.35 : 1);
-    sprite.setScale(look === LOOK.normal ? 1 : look === LOOK.hit ? 1.25 : 1.2);
+    sprite.setScale(look === LOOK.hit ? 1.25 : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1);
     // Заливка, а не умножение: белый множитель цвет не меняет вовсе, и
     // телеграф с попаданием читались бы только по размеру спрайта. Заливка
-    // перекрашивает спрайт целиком и сохраняет его форму по альфе.
+    // перекрашивает спрайт целиком и сохраняет его форму по альфе. Тон
+    // состояния — тоже заливка: умножение на синий сделало бы красного врага
+    // чёрным, а не замёрзшим.
     if (look === LOOK.warning || look === LOOK.hit) sprite.setTintFill(0xffffff);
+    else if (look > LOOK.status) sprite.setTintFill(STATUS_TONE_COLORS[look - LOOK.status] ?? 0xffffff);
     else sprite.clearTint();
   }
 
@@ -419,6 +438,12 @@ export class WorldRenderer {
         // Кольцо лечения расходится от игрока: аптечка сработала.
         this.playerHealTick = events.tick[slot];
         this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
+        continue;
+      }
+      if (kind === SIM_EVENT.shield) {
+        // Щит принял удар: кольцо от игрока вместо вспышки урона — видно, что
+        // спасло, и что щита больше нет.
+        this.startBlast(events.x[slot], events.y[slot], SHIELD_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
       if (kind === SIM_EVENT.magnet) {
@@ -546,7 +571,10 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.heal]: "bh-heal",
   [SIM_EVENT.magnet]: "bh-magnet",
   [SIM_EVENT.dynamite]: "bh-dynamite",
+  [SIM_EVENT.shield]: "bh-magnet",
 };
+/** Радиус кольца сработавшего щита, игровые единицы. */
+const SHIELD_RING_UNITS = 60;
 /** Радиус кольца магнита при подборе, игровые единицы. */
 const MAGNET_RING_UNITS = 120;
 /** Волны магнита и динамита — крупной текстурой и дольше обычного взрыва. */
@@ -570,6 +598,11 @@ const LOOK = {
   dim: 2,
   /** только что получил урон */
   hit: 3,
+  /**
+   * Основа кодов тона состояния: `status + STATUS_TONE.*`. Сам `status` —
+   * тон «нет», тот же обычный вид.
+   */
+  status: 10,
 } as const;
 
 

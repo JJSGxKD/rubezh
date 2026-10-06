@@ -6,12 +6,14 @@ import { runFinishSchema, type RunFinish } from "../src/modules/runs/dto/runs.dt
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-continues.js";
+import { detailsOf, RunExtras, TOP_KILLS_SHOWN } from "../src/modules/runs/run-details.js";
+import { RunLoadouts, type LoadoutCheck, type SignedLoadout } from "../src/modules/runs/run-loadouts.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
 
 /**
  * Приём забегов (docs/34-stage3-plan.md, WP4). Проверяется не «забег
@@ -45,6 +47,8 @@ function finish(runId: string, patch: Partial<RunFinish> = {}): RunFinish {
     cheats: false,
     countInRating: false,
     continues: [],
+    boosts: [],
+    passives: [],
     ...patch,
   };
 }
@@ -65,8 +69,8 @@ describe("приём забегов", () => {
     hooks.onRecorded("test", async (run) => {
       recorded.push(run);
     });
-    service = new RunsService(config(), runs, board, roles, hooks, new RunContinues());
-    view = new RunsViewService(runs, board);
+    service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    view = new RunsViewService(runs, board, new RunExtras(), ratingRestrictions(runs, board).rating);
   });
 
   it("слушатели узнают о записанном забеге с вердиктом", async () => {
@@ -95,7 +99,7 @@ describe("приём забегов", () => {
       throw new Error("сводка недоступна");
     });
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    const fragile = new RunsService(config(), runs, board, roles, hooks, new RunContinues());
+    const fragile = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
 
     await expect(fragile.finish(account(), finish(randomUUID()))).resolves.toMatchObject({ recorded: true });
   });
@@ -236,6 +240,9 @@ describe("второй шанс в итоге забега", () => {
       this.asked.push(runId);
       return { paid: this.paid, underpaid: this.underpaid };
     }
+    async granted(): Promise<number[]> {
+      return Array.from({ length: this.paid }, (_, index) => index + 1);
+    }
   }
 
   function setup() {
@@ -248,7 +255,7 @@ describe("второй шанс в итоге забега", () => {
     const ledger = new FakeLedger();
     continues.provide(ledger);
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
-    return { service: new RunsService(config(), runs, board, roles, hooks, continues), ledger, recorded, runs, board };
+    return { service: new RunsService(config(), runs, board, roles, hooks, continues, new RunLoadouts(), ratingRestrictions(runs, board).rating), ledger, recorded, runs, board };
   }
 
   it("продолжение без покупки — отказ и мимо рейтинга, но забег записан", async () => {
@@ -288,12 +295,60 @@ describe("второй шанс в итоге забега", () => {
   });
 });
 
+describe("снаряжение в итоге забега", () => {
+  const snapshot = (accountId: string): SignedLoadout => ({ accountId, modifiers: { damage: 0.1 }, issuedAtMs: 1, signature: "подпись" });
+
+  class FakeCheck implements LoadoutCheck {
+    answer: "valid" | "forged" | "stale" = "valid";
+    asked: SignedLoadout[] = [];
+    async check(_accountId: string, claimed: SignedLoadout): Promise<"valid" | "forged" | "stale"> {
+      this.asked.push(claimed);
+      return this.answer;
+    }
+  }
+
+  function setup(checker: LoadoutCheck | null) {
+    const runs = new MemoryRunsRepository();
+    const board = new MemoryLeaderboardStore();
+    const loadouts = new RunLoadouts();
+    if (checker !== null) loadouts.provide(checker);
+    const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
+    return { service: new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), loadouts, ratingRestrictions(runs, board).rating), board };
+  }
+
+  it("подделанный снимок — отказ и мимо рейтинга, устаревший — подозрение", async () => {
+    const check = new FakeCheck();
+    const { service, board } = setup(check);
+    const me = account();
+
+    check.answer = "forged";
+    await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "rejected" });
+    check.answer = "stale";
+    await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "suspicious" });
+    expect(await board.best("normal", me.accountId)).toBeNull();
+
+    check.answer = "valid";
+    await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
+  });
+
+  it("забег без снимка проверку не зовёт, а без проверки снимку не верят", async () => {
+    const check = new FakeCheck();
+    const { service } = setup(check);
+    await service.finish(account(), finish(randomUUID()));
+    expect(check.asked).toEqual([]);
+
+    const unchecked = setup(null).service;
+    const me = account();
+    await expect(unchecked.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "rejected" });
+  });
+});
+
 describe("чтение забегов", () => {
   it("лидерборд отмечает свою строку и не выдаёт чужих идентификаторов", async () => {
     const runs = new MemoryRunsRepository();
     const board = new MemoryLeaderboardStore();
-    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues());
-    const view = new RunsViewService(runs, board);
+    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    const view = new RunsViewService(runs, board, new RunExtras(), ratingRestrictions(runs, board).rating);
     const [me, other] = [account("1"), account("2")];
     await service.finish(me, finish(randomUUID(), { survivalSec: 100 }));
     await service.finish(other, finish(randomUUID(), { survivalSec: 200, level: 8, enemiesKilled: 500 }));
@@ -303,5 +358,96 @@ describe("чтение забегов", () => {
     expect(leaderboard.entries.map((entry) => entry.isMe)).toEqual([false, true]);
     expect(leaderboard.me).toEqual({ rank: 2, survivalSec: 100 });
     expect(JSON.stringify(leaderboard)).not.toContain(other.accountId);
+  });
+});
+
+describe("лист забега в профиле", () => {
+  function setup() {
+    const runs = new MemoryRunsRepository();
+    const board = new MemoryLeaderboardStore();
+    const extras = new RunExtras();
+    const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    return { runs, extras, service, view: new RunsViewService(runs, board, extras, ratingRestrictions(runs, board).rating) };
+  }
+
+  it("отдаёт свой забег с подробностями, а награду, бусты и добычу — из их модулей", async () => {
+    const { extras, service, view } = setup();
+    extras.provideReward({ reward: async () => ({ status: "granted", reason: null, coins: 120, xp: 40, levelBefore: 2, levelAfter: 3 }) });
+    extras.provideBoosts({ boosts: async () => ["fury"] });
+    extras.provideLoot({ loot: async () => [{ slot: "chest", rarity: "rare", level: 2 }] });
+    const me = account();
+    const runId = randomUUID();
+    await service.finish(
+      me,
+      finish(runId, {
+        weapons: [{ id: "knife", level: 3, damage: 4200 }],
+        passives: [{ id: "might", level: 2 }],
+        stats: { damageTaken: 310, xpCollected: 95, waveReached: 4, topKills: [{ enemy: "swarm_rat", count: 200 }, { enemy: "dasher_wolf", count: 40 }] },
+      }),
+    );
+
+    const detail = await view.detail(me.accountId, runId);
+
+    expect(detail).toMatchObject({
+      runId,
+      weapons: [{ id: "knife", level: 3, damage: 4200 }],
+      passives: [{ id: "might", level: 2 }],
+      damageTaken: 310,
+      waveReached: 4,
+      deathCause: "swarm_rat",
+      rating: "ranked",
+      boosts: ["fury"],
+      reward: { status: "granted", coins: 120 },
+      loot: [{ slot: "chest", rarity: "rare", level: 2 }],
+    });
+    expect(detail.topKills.map((kill) => kill.enemy)).toEqual(["swarm_rat", "dasher_wolf"]);
+  });
+
+  it("чужой и незнакомый забег — run_not_found, а не чужие числа", async () => {
+    const { service, view } = setup();
+    const [owner, stranger] = [account("1"), account("2")];
+    const runId = randomUUID();
+    await service.finish(owner, finish(runId));
+
+    for (const [accountId, id] of [[stranger.accountId, runId], [owner.accountId, randomUUID()]] as const) {
+      await expect(view.detail(accountId, id)).rejects.toMatchObject({ code: "run_not_found", status: 404 });
+    }
+  });
+
+  it("сборка без подробностей — лист без них, а не нули; источников нет — частей нет", async () => {
+    const { service, view } = setup();
+    const me = account();
+    const runId = randomUUID();
+    await service.finish(me, finish(runId, { outcome: "abandoned", cheats: true }));
+
+    const detail = await view.detail(me.accountId, runId);
+
+    expect(detail).toMatchObject({ passives: [], damageTaken: null, xpCollected: null, waveReached: null, topKills: [], reward: null, boosts: [], loot: [] });
+    expect(detail.weapons).toEqual([{ id: "knife", level: 2, damage: null }]);
+    // Сдался — смертельного удара не было, даже если клиент прислал врага.
+    expect(detail.deathCause).toBeNull();
+    expect(detail.rating).toBe("cheats");
+  });
+
+  it("профиль отдаёт id забега — по нему открывается лист", async () => {
+    const { service, view } = setup();
+    const me = account();
+    const runId = randomUUID();
+    await service.finish(me, finish(runId));
+    expect((await view.profile(me.accountId)).recent.map((run) => run.runId)).toEqual([runId]);
+  });
+
+  it("кого больше всего убил — по убыванию и не больше пятёрки, даже если клиент прислал иначе", () => {
+    const topKills = Array.from({ length: 8 }, (_, index) => ({ enemy: `e${index}`, count: index * 10 }));
+    expect(detailsOf({ passives: [], stats: { damageTaken: 0, xpCollected: 0, waveReached: 0, topKills } })?.topKills.map((kill) => kill.count)).toEqual([70, 60, 50, 40, 30]);
+    expect(TOP_KILLS_SHOWN).toBe(5);
+    expect(detailsOf({ passives: [] })).toBeNull();
+  });
+
+  it("итог с подробностями проходит схему, а лишние убийства — нет", () => {
+    const base = { ...finish(randomUUID()), passives: undefined };
+    expect(runFinishSchema.parse(base).passives).toEqual([]);
+    const tooMany = Array.from({ length: 9 }, (_, index) => ({ enemy: `e${index}`, count: 1 }));
+    expect(runFinishSchema.safeParse({ ...base, stats: { damageTaken: 1, xpCollected: 1, waveReached: 1, topKills: tooMany } }).success).toBe(false);
   });
 });

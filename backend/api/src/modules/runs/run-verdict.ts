@@ -1,4 +1,5 @@
 import type { AppConfig } from "../../config/app-config.js";
+import type { BoostStatus, LoadoutStatus } from "./run-loadouts.js";
 import { MAX_WEAPONS } from "./run-rules.js";
 
 /**
@@ -15,10 +16,13 @@ import { MAX_WEAPONS } from "./run-rules.js";
  *   оружий больше, чем слотов; забег длиннее, чем прошло времени по часам
  *   сервера (пауза в игровое время не идёт, поэтому честный забег всегда
  *   короче прошедшего); второй шанс, за который не заплачено, — честный
- *   клиент продолжает только после подтверждения оплаты сервером;
+ *   клиент продолжает только после подтверждения оплаты сервером; снимок
+ *   снаряжения, которого сервер не подписывал, или с уровнем выше уровня
+ *   аккаунта; буст, не купленный на забег;
  * - **подозрение (`suspicious`)** — статистика: слишком быстро убивал, слишком
  *   быстро качался, незнакомая сборка, продолжение оплачено по меньшему
- *   числу минут, чем прошло. Здесь бывают и честные исключения, поэтому
+ *   числу минут, чем прошло, снимок снаряжения устарел. Здесь бывают и
+ *   честные исключения, поэтому
  *   забег сохраняется, но в рейтинг не идёт и ждёт разбора.
  *
  * Ни то ни другое не выбрасывает забег: он пишется в базу с вердиктом.
@@ -39,7 +43,15 @@ export type VerdictReason =
   /** за продолжение заплачено по меньшему числу минут, чем прошло к нему (Р5.2) */
   | "underpaid_continue"
   /** время забега не проверено: старт не дошёл или пришёл слишком поздно — вердикт не меняет */
-  | "unverified_time";
+  | "unverified_time"
+  /** снимок снаряжения не подписан сервером или чужой */
+  | "loadout_forged"
+  /** снимок настоящий, но надетое с тех пор изменилось */
+  | "loadout_stale"
+  /** уровень снимка выше уровня аккаунта: открыто то, что игроку не положено */
+  | "loadout_level_ahead"
+  /** буст не куплен на этот забег или возвращён */
+  | "boost_unpaid";
 
 export interface VerdictInput {
   survivalSec: number;
@@ -61,6 +73,10 @@ export interface VerdictInput {
    * и отказом оно не считается. В рейтинг такой забег не идёт и так.
    */
   cheats: boolean;
+  /** снаряжение забега против подписанного снимка (`run-loadouts.ts`) */
+  loadout: LoadoutStatus;
+  /** заявленные бусты против покупок на забег */
+  boosts: BoostStatus;
 }
 
 export interface Verdict {
@@ -68,8 +84,8 @@ export interface Verdict {
   reasons: VerdictReason[];
 }
 
-const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue"]);
-const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue"]);
+const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue", "loadout_forged", "loadout_level_ahead", "boost_unpaid"]);
+const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale"]);
 
 export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdict {
   const reasons: VerdictReason[] = [];
@@ -100,6 +116,11 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
 
   if (!input.cheats && input.continues > input.paidContinues) reasons.push("unpaid_continue");
   if (input.underpaidContinues) reasons.push("underpaid_continue");
+
+  if (input.loadout === "forged") reasons.push("loadout_forged");
+  if (input.loadout === "stale") reasons.push("loadout_stale");
+  if (input.loadout === "level_ahead") reasons.push("loadout_level_ahead");
+  if (input.boosts === "unpaid") reasons.push("boost_unpaid");
 
   return { verdict: verdictOf(reasons), reasons };
 }

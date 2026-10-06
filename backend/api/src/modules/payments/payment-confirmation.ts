@@ -1,41 +1,60 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { FeatureSwitches } from "../settings/feature-switches.js";
 import { withTimeout } from "../../common/with-timeout.js";
-import { TELEGRAM_BOT_API, type TelegramBotApi } from "../telegram/telegram-bot-api.js";
+import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 import { answerOf, decideCheckout, refuse, type CheckoutDecision, type PreCheckout } from "./checkout-answer.js";
+import { PaymentsHooks, type SubscriptionState } from "./payments-hooks.js";
+import { SUBSCRIPTION_PRODUCTS } from "./purchase-types.js";
 import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository } from "./purchases.repository.js";
 
 /**
- * Что Telegram сообщает об оплате (docs/34-stage3-plan.md, WP5, п. 6–8):
- * предварительная проверка, подтверждение и возврат.
+ * Что площадка сообщает об оплате (docs/34-stage3-plan.md, WP5, п. 6–8):
+ * предварительная проверка, подтверждение и возврат. Сообщения приносит
+ * адаптер площадки (у Telegram — `platforms/telegram/telegram-payments.handler.ts`).
  *
- * **Право на продолжение появляется здесь**, при подтверждении от Telegram, —
+ * **Право на продолжение появляется здесь**, при подтверждении от площадки, —
  * не раньше (Р13). Подтверждение идемпотентно по идентификатору оплаты:
  * повтор обновления ничего не удваивает.
+ *
+ * **Подписку** (Р20) площадка продлевает сама — очередной оплатой по счёту
+ * первой покупки. Вторая оплата одного счёта у подписки — продление, а не
+ * лишняя: она записывается своей строкой и не возвращается.
  */
 
-/** Оплата, которую подтвердил Telegram. */
+/** Оплата, которую подтвердила площадка. */
 export interface ConfirmedPayment {
+  platform: PlatformId;
   chargeId: string;
   /** то, что стояло в счёте, — id покупки */
   payload: string;
-  /** кто платил — ему же вернутся звёзды, если придётся */
-  userId: number;
+  /** кто платил — ему же вернутся деньги, если придётся */
+  payerId: string;
   currency: string;
   totalAmount: number;
 }
 
+/** Что площадка сообщила о продлении подписки. */
+export interface SubscriptionUpdate {
+  platform: PlatformId;
+  /** то, что стояло в счёте, — id первой покупки подписки */
+  payload: string;
+  /** чья подписка — идентификатор на площадке */
+  payerId: string;
+  state: SubscriptionState;
+}
+
 /**
  * Чтение покупки для предварительной проверки. Весь ответ Telegram ждёт
- * десять секунд, и отказ «попробуйте ещё раз» лучше сорванной оплаты без
- * объяснений.
+ * десять секунд — у других площадок сроки не длиннее, — и отказ «попробуйте
+ * ещё раз» лучше сорванной оплаты без объяснений.
  */
 const CHECKOUT_READ_TIMEOUT_MS = 3_000;
 
 const purchaseId = z.uuid();
-
-export type ConfirmationBotApi = Pick<TelegramBotApi, "answerPreCheckoutQuery">;
 
 @Injectable()
 export class PaymentConfirmation {
@@ -44,15 +63,25 @@ export class PaymentConfirmation {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(PURCHASES_REPOSITORY) private readonly purchases: PurchasesRepository,
-    @Inject(TELEGRAM_BOT_API) private readonly api: ConfirmationBotApi,
+    private readonly providers: PaymentProviders,
+    private readonly switches: FeatureSwitches,
+    // Слушатели нужны модулю, а не каждому тесту подтверждения: без них — пустой список.
+    private readonly hooks: PaymentsHooks = new PaymentsHooks(),
   ) {}
 
   async answerCheckout(query: PreCheckout, nowMs = Date.now()): Promise<CheckoutDecision> {
+    const provider = this.providers.for(query.platform);
+    // Проверка пришла от площадки, у которой нет оплаты: ответить ей нечем.
+    if (provider === null) {
+      this.log("error", "pre_checkout_unsupported", { platform: query.platform, purchaseId: query.payload });
+      return refuse("unavailable");
+    }
     const decision = await this.decide(query, nowMs);
-    await this.api.answerPreCheckoutQuery(query.queryId, answerOf(decision));
+    await provider.answerCheckout(query.queryId, answerOf(decision));
     this.log(decision.ok ? "log" : "warn", "pre_checkout", {
+      platform: query.platform,
       purchaseId: query.payload,
-      userId: query.fromUserId,
+      payerId: query.payerId,
       ok: decision.ok,
       ...(decision.ok ? {} : { reason: decision.reason }),
     });
@@ -61,14 +90,24 @@ export class PaymentConfirmation {
 
   async confirm(payment: ConfirmedPayment, nowMs = Date.now()): Promise<ConfirmOutcome> {
     const id = purchaseId.safeParse(payment.payload);
-    const outcome = id.success
+    let outcome: ConfirmOutcome = id.success
       ? await this.purchases.markPaid({ purchaseId: id.data, chargeId: payment.chargeId, chargedStars: payment.totalAmount, paidAt: new Date(nowMs) })
-      : ({ kind: "unknown" } as const);
+      : { kind: "unknown" };
+    if (outcome.kind === "already_paid" && SUBSCRIPTION_PRODUCTS.includes(outcome.purchase.product)) {
+      outcome = await this.purchases.markRenewal({
+        firstId: outcome.purchase.purchaseId,
+        purchaseId: randomUUID(),
+        chargeId: payment.chargeId,
+        chargedStars: payment.totalAmount,
+        paidAt: new Date(nowMs),
+      });
+    }
 
-    const fields = { chargeId: payment.chargeId, purchaseId: payment.payload, userId: payment.userId, stars: payment.totalAmount };
+    const fields = { platform: payment.platform, chargeId: payment.chargeId, purchaseId: payment.payload, payerId: payment.payerId, amount: payment.totalAmount };
     switch (outcome.kind) {
       case "paid":
-        this.log("log", "payment_confirmed", { ...fields, runId: outcome.purchase.runId, mode: outcome.purchase.mode });
+        this.log("log", "payment_confirmed", { ...fields, product: outcome.purchase.product, runId: outcome.purchase.runId, renewalOf: outcome.purchase.renewalOf, mode: outcome.purchase.mode });
+        void this.hooks.emitPaid({ purchaseId: outcome.purchase.purchaseId, accountId: outcome.purchase.accountId, mode: outcome.purchase.mode, at: new Date(nowMs) });
         break;
       case "duplicate":
         this.log("log", "payment_duplicate_update", fields);
@@ -89,7 +128,7 @@ export class PaymentConfirmation {
     return outcome;
   }
 
-  /** Звёзды вернулись игроку — по нашему заказу или по его спору в Telegram. */
+  /** Деньги вернулись игроку — по нашему заказу или по его спору на площадке. */
   async refunded(chargeId: string, nowMs = Date.now()): Promise<void> {
     const record = await this.purchases.markRefunded(chargeId, new Date(nowMs));
     if (record === null) {
@@ -111,12 +150,29 @@ export class PaymentConfirmation {
     });
   }
 
+  /**
+   * Площадка сообщила о продлении подписки: игрок отменил его или вернул у
+   * себя, или очередное списание не прошло. Чужая или неизвестная подписка —
+   * в лог: сообщение пришло от нашего бота, но сверить его не с чем.
+   */
+  async subscriptionChanged(update: SubscriptionUpdate, nowMs = Date.now()): Promise<void> {
+    const id = purchaseId.safeParse(update.payload);
+    const view = id.success ? await this.purchases.checkout(id.data) : null;
+    const fields = { platform: update.platform, purchaseId: update.payload, payerId: update.payerId, state: update.state };
+    if (view === null || !SUBSCRIPTION_PRODUCTS.includes(view.purchase.product) || view.platformUserId !== update.payerId) {
+      this.log("warn", "subscription_unmatched", fields);
+      return;
+    }
+    this.log("log", "subscription_changed", { ...fields, accountId: view.purchase.accountId });
+    await this.hooks.emitSubscriptionChanged({ subscription: view.purchase, state: update.state, at: new Date(nowMs) });
+  }
+
   private async decide(query: PreCheckout, nowMs: number): Promise<CheckoutDecision> {
     const id = purchaseId.safeParse(query.payload);
-    if (!id.success) return decideCheckout(null, query, nowMs, this.config.payments.enabled);
+    if (!id.success) return decideCheckout(null, query, nowMs, this.switches.payments());
     try {
       const view = await withTimeout(this.purchases.checkout(id.data), CHECKOUT_READ_TIMEOUT_MS, "покупка для проверки оплаты");
-      return decideCheckout(view, query, nowMs, this.config.payments.enabled);
+      return decideCheckout(view, query, nowMs, this.switches.payments());
     } catch (error: unknown) {
       // База не ответила — отказываемся от денег, а не берём их вслепую.
       this.log("error", "pre_checkout_failed", { purchaseId: id.data, reason: error instanceof Error ? error.message : "unknown" });

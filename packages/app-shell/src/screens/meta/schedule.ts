@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { t } from "../../i18n";
 
 /**
@@ -49,4 +50,22 @@ export function formatCountdown(ms: number): string {
     return minutes > 0 ? t("time.hoursMinutes", { hours, minutes }) : t("time.hours", { hours });
   }
   return t("time.minutes", { minutes });
+}
+
+/**
+ * Часы экрана для отсчётов «через 5 мин» — только пока отсчёт на экране:
+ * остальное время экран не перерисовывается зря. Шаг выбирает экран: отсчёт
+ * без секунд не требует тикать каждую секунду. Живут рядом с отсчётом: у
+ * экранов с отсчётом этот модуль уже общий, и отдельный чанк ради хука
+ * добавил бы строку в списки предзагрузки первой загрузки.
+ */
+export function useClock(active: boolean, stepMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), stepMs);
+    return () => clearInterval(timer);
+  }, [active, stepMs]);
+  return now;
 }

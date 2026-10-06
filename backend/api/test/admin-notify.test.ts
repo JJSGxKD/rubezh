@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { UnrecoverableError } from "bullmq";
-import { loadAppConfig } from "../src/config/app-config.js";
+import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { ReportNotifier, type NotifierBotApi } from "../src/modules/admin-notify/report-notifier.js";
 import { renderRunCardPng, renderRunCardSvg, runCaption, type RunCardInput } from "../src/modules/admin-notify/run-card.js";
 import { renderStressCardPng, renderStressCardSvg, stressCaption, type StressCardInput } from "../src/modules/admin-notify/stress-card.js";
@@ -9,14 +9,19 @@ import { benchSummaryOf, runSummaryOf } from "../src/modules/diagnostics/diagnos
 import type { DiagnosticsRepository, StoredBenchReport, StoredRunReport } from "../src/modules/diagnostics/diagnostics.repository.js";
 import { submitBenchReportSchema } from "../src/modules/diagnostics/dto/bench-report.dto.js";
 import { submitRunReportSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
-import { chatTargetOf } from "../src/modules/telegram/chat-target.js";
-import { TelegramApiError } from "../src/modules/telegram/telegram-bot-api.js";
+import { chatTargetOf } from "../src/platforms/ports/chat-target.js";
+import { TelegramApiError } from "../src/platforms/telegram/telegram-bot-api.js";
 import { benchSubmission, DEVICE, REPORT_ID } from "./helpers/bench-report.js";
 import { runBucket, runSubmission, RUN_REPORT_ID, type RunPatch } from "./helpers/run-report.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { reviewCardText, type ReviewCardRun } from "../src/modules/admin-notify/run-review-card.js";
 import type { ReviewThrottle } from "../src/modules/admin-notify/review-throttle.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
+import { NotifyTargets } from "../src/modules/settings/notify-targets.js";
+import type { SettingValue } from "../src/modules/settings/setting-catalog.js";
+import { environmentSettings, type SettingsReader } from "../src/modules/settings/settings.service.js";
+import { targetsOf } from "./helpers/notify-targets.js";
+import { PNG_RENDER_TIMEOUT_MS } from "./helpers/card-render.js";
 
 // Уведомления об отчётах диагностики в чат администраторов (docs/28-diagnostics.md §6.2).
 
@@ -40,7 +45,7 @@ describe("карточка стресс-теста", () => {
     expect(svg).toContain("просадка на 660 врагах");
     expect(svg).toMatch(/<polyline points="[\d., ]+"/);
     expect(renderStressCardPng(cardInput()).subarray(1, 4).toString()).toBe("PNG");
-  });
+  }, PNG_RENDER_TIMEOUT_MS);
 
   it("экранирует то, что прислал клиент, и честно пишет про короткий таймлайн", () => {
     const payload = submitBenchReportSchema.parse(benchSubmission());
@@ -82,7 +87,7 @@ describe("карточка проблемного забега", () => {
     expect(svg).toContain("нормальная, погиб от swarm_rat");
     expect(svg).toMatch(/fill-opacity="[\d.]+"\/>/);
     expect(renderRunCardPng(input).subarray(1, 4).toString()).toBe("PNG");
-  });
+  }, PNG_RENDER_TIMEOUT_MS);
 
   it("подпись даёт команду повтора, а неповторимую запись так и называет", () => {
     const input = runCardInput({ clientErrors: 1 });
@@ -104,12 +109,18 @@ class Reports implements DiagnosticsRepository {
   async findBench(): Promise<StoredBenchReport | null> {
     return this.report;
   }
+  async list(): Promise<[]> {
+    return [];
+  }
+  async find(): Promise<null> {
+    return null;
+  }
   async findRun(): Promise<StoredRunReport | null> {
     return this.run;
   }
 }
 
-function notifier(env: Record<string, string> = {}) {
+function notifier(env: Record<string, string> = {}, targets: (config: AppConfig) => NotifyTargets = targetsOf) {
   const config = loadAppConfig({
     NODE_ENV: "test",
     TELEGRAM_BOT_TOKEN: "123:TEST",
@@ -136,8 +147,17 @@ function notifier(env: Record<string, string> = {}) {
   };
   const accounts = new MemoryAccountRepository();
   const throttle = new MemoryThrottle();
-  const instance = new ReportNotifier(config, hooks, reports, api, new RunsHooks(), accounts, throttle);
+  const instance = new ReportNotifier(config, targets(config), hooks, reports, api, new RunsHooks(), accounts, throttle);
   return { instance, reports, sent, accounts, throttle, fail: (error: Error) => (failure = error) };
+}
+
+/** Настройки, поменянные «в панели» посреди теста: что задано — сильнее окружения. */
+function panelSettings(config: AppConfig, panel: Map<string, SettingValue>): SettingsReader {
+  const env = environmentSettings(config);
+  return {
+    get: (setting) => (panel.has(setting.key) ? setting.schema.parse(panel.get(setting.key)) : env.get(setting)),
+    onChange: () => undefined,
+  };
 }
 
 /** Окно карточек разбора без Redis: занятый аккаунт отвечает «уже было». */
@@ -223,6 +243,33 @@ describe("отправка уведомления", () => {
       { data: { reportId: REPORT_ID, kind: "bench" }, jobId: `report-${REPORT_ID}` },
       { data: { reportId: "troubled-run", kind: "run" }, jobId: "report-troubled-run" },
     ]);
+  });
+
+  it("чат, заданный в панели, получает карточки без перезапуска, а переключатель их гасит", async () => {
+    const panel = new Map<string, SettingValue>();
+    const { instance } = notifier({ ADMIN_CHAT_ID: "" }, (config) => new NotifyTargets(panelSettings(config, panel)));
+    const added = captureQueue(instance);
+    const bench = stored();
+    const report: ReceivedReport = {
+      kind: "bench",
+      reportId: bench.reportId,
+      payload: bench.payload,
+      summary: benchSummaryOf(bench.payload),
+      appVersion: "0.4.0",
+      installId: "install",
+      platformUserId: null,
+      device: DEVICE,
+      receivedAt: new Date(),
+    };
+
+    await instance.enqueue(report);
+    expect(added).toEqual([]);
+    panel.set("notify.chat.general", CHAT);
+    await instance.enqueue(report);
+    expect(added).toHaveLength(1);
+    panel.set("notify.reports", false);
+    await instance.enqueue({ ...report, reportId: "второй" });
+    expect(added).toHaveLength(1);
   });
 
   it("задание прошлой сборки без вида — стресс-тест", async () => {

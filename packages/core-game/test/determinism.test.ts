@@ -82,12 +82,11 @@ describe("симуляция", () => {
       immortalPlayer: true,
     });
 
-    // Эталон обновлён вместе с боссами: в смеси паттернов прогона появился
-    // кастующий, и порядок обращений к генератору сместился с первой же
-    // секунды.
-    expect(run.checksum).toBe(-584561969);
-    expect(run.world.stats.enemiesKilled).toBe(431);
-    expect(run.world.progression.level).toBe(18);
+    // Эталон обновлён вместе со стихийными атаками врагов: состояния на
+    // игроке меняют его здоровье и ход, а новое оружие — пул выбора.
+    expect(run.checksum).toBe(-1667484673);
+    expect(run.world.stats.enemiesKilled).toBe(510);
+    expect(run.world.progression.level).toBe(16);
   });
 
   it("расходится на другом seed — иначе seed ни на что не влияет", () => {

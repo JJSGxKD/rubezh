@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Footprints, Gem, Shield } from "lucide-react";
 import type { HudSnapshot } from "@bh/core-game";
 import { t } from "../../i18n";
+import "../../i18n/run";
 import { currentHint, isHintDone, useHints, type HintId } from "../../state/hints";
 
 /**

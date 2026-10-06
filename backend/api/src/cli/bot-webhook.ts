@@ -1,5 +1,5 @@
 import { configFromEnvironment } from "../config/app-config.js";
-import { TelegramBotApi } from "../modules/telegram/telegram-bot-api.js";
+import { TelegramBotApi } from "../platforms/telegram/telegram-bot-api.js";
 
 /**
  * Регистрация вебхука бота — идемпотентный шаг деплоя (docs/26-stage2-plan.md,

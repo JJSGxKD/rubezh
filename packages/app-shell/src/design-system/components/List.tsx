@@ -11,7 +11,11 @@ export interface ListItemProps {
   title: string;
   hint?: string;
   icon?: ReactNode;
+  /** значок без подложки — аватару она не нужна: круг внутри квадрата выглядит чужим */
+  bareIcon?: boolean;
   value?: string;
+  /** счётчик нового — тем же знаком, что на вкладках; только с полезной нагрузкой (Р50) */
+  badge?: string;
   onClick?: () => void;
   toggle?: { checked: boolean; onChange: () => void; disabled?: boolean };
   disabled?: boolean;
@@ -22,16 +26,25 @@ export function ListItem(props: ListItemProps): ReactNode {
   const body = (
     <>
       {props.icon === undefined ? null : (
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-raised text-text-muted">
+        <span
+          className={`inline-flex size-9 shrink-0 items-center justify-center ${props.bareIcon === true ? "" : "rounded-md bg-surface-raised text-text-muted"}`}
+        >
           {props.icon}
         </span>
       )}
+      {/* Заголовок переносится, а не обрезается: на 320 px «Помощь в
+          тестировании» с многоточием теряла смысл. */}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-text">{props.title}</span>
+        <span className="block text-sm font-medium break-words text-text">{props.title}</span>
         {props.hint === undefined ? null : (
           <span className="mt-0.5 block text-xs text-text-muted">{props.hint}</span>
         )}
       </span>
+      {props.badge === undefined ? null : (
+        <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-pill bg-accent px-1.5 font-display text-xs font-bold tabular-nums text-on-accent">
+          {props.badge}
+        </span>
+      )}
       {props.value === undefined ? null : (
         <span className="shrink-0 font-display text-sm text-text-muted tabular-nums">
           {props.value}
@@ -109,8 +122,11 @@ export function Toggle(props: ToggleProps): ReactNode {
 
 /** Группа строк с общим фоном: список настроек читается как один блок. */
 export function ListGroup(props: { children: ReactNode }): ReactNode {
+  // Колонка — `minmax(0, 1fr)`, а не `auto`: иначе она растёт до ширины
+  // заголовка без переноса, и на 320 px «Помощь в тестировании» выталкивала
+  // стрелку за край вместо того, чтобы обрезаться многоточием.
   return (
-    <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border shadow-card">
+    <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border shadow-card">
       {props.children}
     </div>
   );

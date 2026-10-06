@@ -61,6 +61,8 @@ export function fireFan(
 
     world.projectiles.ownerWeapon[projectile] = slot;
     world.projectiles.pierce[projectile] = Math.min(255, Math.round(level.pierce));
+    world.projectiles.element[projectile] = level.element;
+    world.projectiles.statusChance[projectile] = level.statusChance;
     world.stats.shotsFired++;
   }
 }

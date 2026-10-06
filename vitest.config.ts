@@ -16,6 +16,8 @@ export default defineConfig({
       "packages/**/test/**/*.test.ts",
       "backend/**/test/**/*.test.ts",
       "scripts/test/**/*.test.ts",
+      // Логика панели — клиент API, сессия, маршруты — без DOM и React.
+      "apps/admin/test/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**"],
     // Тесты не зависят друг от друга и от порядка
@@ -25,6 +27,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@bh/shared-types": `${repoRoot}packages/shared-types/src/index.ts`,
+      "@bh/design-tokens": `${repoRoot}packages/design-tokens/src/index.ts`,
+      // Бэкенд берёт ядро курсов собранным (`dist`), а тесты — исходником:
+      // иначе прогон тестов зависел бы от того, собран ли пакет.
+      "@bh/fx": `${repoRoot}packages/fx/src/index.ts`,
     },
   },
 });

@@ -72,7 +72,7 @@ function strikeAt(
     const reach = level.areaRadius + world.enemyTypes[world.enemies.type[enemy]].radius;
     if (dx * dx + dy * dy > reach * reach) continue;
 
-    damageEnemy(world, enemy, level.damage, slot);
+    damageEnemy(world, enemy, level.damage, slot, level.element, level.statusChance);
   }
 
   pushSimEvent(world.events, {

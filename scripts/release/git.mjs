@@ -16,6 +16,51 @@ function gh(args) {
   return run("gh", args);
 }
 
+/**
+ * Временный сбой GitHub, а не ответ по сути: 5xx, «слишком много запросов»,
+ * обрыв соединения. Вычисление версии делает по запросу на каждый коммит после
+ * стабильного тега — их сотни, и без повтора один 504 из них роняет весь
+ * выпуск. Отказ по сути — 404, 403, неверный аргумент — повтором не лечится.
+ */
+const TRANSIENT_GH = /HTTP (?:5\d\d|429)\b|timed? ?out|connection (?:reset|refused)|ECONNRESET|ETIMEDOUT|unexpected EOF|TLS handshake/i;
+
+/** Строка ошибки, по которой видно, что сбой временный; `null` — сбой по сути. */
+export function transientGhReason(error) {
+  if (!(error instanceof Error)) return null;
+  const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
+  const line = `${error.message}\n${stderr}`.split("\n").find((candidate) => TRANSIENT_GH.test(candidate));
+  return line === undefined ? null : line.trim().slice(0, 200);
+}
+
+/** Паузы перед повторами, мс: до минуты в сумме — GitHub обычно оживает за секунды. */
+export const GH_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000];
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Чтение с повтором при временном сбое. Только чтение: запись при 5xx могла
+ * и пройти, и повтор задвоил бы комментарий или PR.
+ */
+export function withGhRetry(read, { delays = GH_RETRY_DELAYS_MS, sleep = sleepSync, log = (line) => console.error(line) } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return read();
+    } catch (error) {
+      const delay = delays[attempt];
+      const reason = transientGhReason(error);
+      if (delay === undefined || reason === null) throw error;
+      log(`GitHub временно недоступен (${reason}) — повтор ${String(attempt + 1)} из ${String(delays.length)} через ${String(delay / 1000)} с`);
+      sleep(delay);
+    }
+  }
+}
+
+function ghRead(args) {
+  return withGhRetry(() => gh(args));
+}
+
 function git(args) {
   return run("git", args);
 }
@@ -55,12 +100,40 @@ export function commitsSince(tag) {
 }
 
 export function pullRequestsForCommit(sha) {
-  const json = gh(["api", `repos/{owner}/{repo}/commits/${sha}/pulls`]);
+  const json = ghRead(["api", `repos/{owner}/{repo}/commits/${sha}/pulls`]);
   return JSON.parse(json);
 }
 
+/**
+ * Влитые PR в ветку — одним запросом, с описаниями: строки журнала
+ * обновлений собираются из разделов «Для игроков» (scripts/release/player-notes.mjs).
+ * Поля — в форме REST API, как у `pullRequestsForCommit`: разбор общий.
+ */
+export function mergedPullRequests(baseBranch, limit = 300) {
+  const json = ghRead([
+    "pr",
+    "list",
+    "--state",
+    "merged",
+    "--base",
+    baseBranch,
+    "--limit",
+    String(limit),
+    "--json",
+    "number,body,mergedAt,mergeCommit,headRefName,baseRefName",
+  ]);
+  return JSON.parse(json).map((pr) => ({
+    number: pr.number,
+    body: pr.body ?? "",
+    merged_at: pr.mergedAt ?? null,
+    merge_commit_sha: pr.mergeCommit?.oid ?? null,
+    head: { ref: pr.headRefName },
+    base: { ref: pr.baseRefName },
+  }));
+}
+
 export function viewPr(number) {
-  const json = gh(["pr", "view", String(number), "--json", "number,title,body,labels,headRefName,baseRefName"]);
+  const json = ghRead(["pr", "view", String(number), "--json", "number,title,body,labels,headRefName,baseRefName"]);
   return JSON.parse(json);
 }
 
@@ -69,7 +142,7 @@ export function addLabel(number, label) {
 }
 
 export function listComments(number) {
-  const json = gh(["pr", "view", String(number), "--json", "comments"]);
+  const json = ghRead(["pr", "view", String(number), "--json", "comments"]);
   return JSON.parse(json).comments ?? [];
 }
 
@@ -138,7 +211,7 @@ export function pushRef(source, targetBranch) {
 }
 
 export function openPullRequestExists(head, base) {
-  const json = gh(["pr", "list", "--head", head, "--base", base, "--state", "open", "--json", "number"]);
+  const json = ghRead(["pr", "list", "--head", head, "--base", base, "--state", "open", "--json", "number"]);
   return JSON.parse(json).length > 0;
 }
 

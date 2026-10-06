@@ -5,29 +5,40 @@ import { reportError } from "../state/shell";
 
 /**
  * Экраны, которые грузятся по требованию (docs/27-design-system-and-app-shell.md
- * §3.4). В первую загрузку идёт только путь до забега: заставки, лобби, выбор
- * режима и оружия, сам забег. Настройки, диагностика, витрина, разделы-заглушки и мета
- * игроку в первую минуту не нужны, а весят как весь путь до забега.
+ * §3.4). В первую загрузку идёт только путь до «Играть»: заставки, лобби и
+ * выбор режима; выбор оружия — чанком, который лобби подтягивает в простое.
+ * Сам забег — HUD, пауза, выбор улучшения — чанком,
+ * который лобби подтягивает в простое вместе с движком: без движка он всё
+ * равно не начнётся, а первая загрузка за него не платит. Настройки,
+ * диагностика, витрина, магазин и мета игроку в первую минуту не
+ * нужны.
  *
  * Каждый файл экранов — отдельный чанк; загрузчики вынесены, чтобы лобби
  * могло подтянуть их заранее в простое браузера.
  */
 const loaders = {
+  run: () => import("../screens/run/RunScreen"),
+  weapon: () => import("../screens/weapon-select"),
+  boosts: () => import("../screens/boosts"),
   settings: () => import("../screens/settings"),
-  stubs: () => import("../screens/stubs"),
+  shop: () => import("../screens/meta/shop"),
   gallery: () => import("../screens/gallery"),
   tasks: () => import("../screens/meta/tasks"),
   arsenal: () => import("../screens/meta/arsenal"),
   friends: () => import("../screens/meta/friends"),
   rating: () => import("../screens/meta/rating"),
   profile: () => import("../screens/meta/profile"),
+  notifications: () => import("../screens/meta/notifications"),
+  changelog: () => import("../screens/meta/changelog"),
   guide: () => import("../screens/guide/GuideScreen"),
   feedback: () => import("../screens/feedback"),
   daily: () => import("../screens/meta/daily"),
   wheel: () => import("../screens/meta/wheel"),
+  testNotice: () => import("../screens/meta/test-notice"),
   stress: () => import("../screens/stress/StressScreen"),
   soundLab: () => import("../screens/sound-lab"),
   diagnostics: () => import("../screens/diagnostics"),
+  menu: () => import("./MainMenu"),
 };
 
 function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): ComponentType {
@@ -37,22 +48,43 @@ function screen<M, K extends keyof M>(load: () => Promise<M>, name: K): Componen
   });
 }
 
+export const RunScreen = screen(loaders.run, "RunScreen");
+export const WeaponScreen = screen(loaders.weapon, "WeaponScreen");
+export const BoostsScreen = screen(loaders.boosts, "BoostsScreen");
 export const SettingsScreen = screen(loaders.settings, "SettingsScreen");
 export const TestersScreen = screen(loaders.settings, "TestersScreen");
 export const AboutScreen = screen(loaders.settings, "AboutScreen");
 export const DiagnosticsScreen = screen(loaders.diagnostics, "DiagnosticsScreen");
 export const GalleryScreen = screen(loaders.gallery, "GalleryScreen");
 export const ArsenalScreen = screen(loaders.arsenal, "ArsenalScreen");
-export const ShopScreen = screen(loaders.stubs, "ShopScreen");
+export const ShopScreen = screen(loaders.shop, "ShopScreen");
 export const RatingScreen = screen(loaders.rating, "RatingScreen");
 export const FriendsScreen = screen(loaders.friends, "FriendsScreen");
 export const ProfileScreen = screen(loaders.profile, "ProfileScreen");
+// Экран уровня открывается только из профиля — и лежит в его чанке: свой
+// чанк и общая с профилем карточка уровня стоили бы отдельной обвязки.
+export const LevelScreen = screen(loaders.profile, "LevelScreen");
+// История имущества — тоже из профиля и в его чанке.
+export const HistoryScreen = screen(loaders.profile, "HistoryScreen");
+export const NotificationsScreen = screen(loaders.notifications, "NotificationsScreen");
+export const ChangelogScreen = screen(loaders.changelog, "ChangelogScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
 export const DailyScreen = screen(loaders.daily, "DailyScreen");
 export const WheelScreen = screen(loaders.wheel, "WheelScreen");
+// Промокод — подарок, его ищут в магазине: экран лежит в чанке магазина.
+// Свой чанк стоил бы первой загрузке строки загрузчика, а качаются оба
+// всё равно заранее, в простое лобби.
+export const PromoCodeScreen = screen(loaders.shop, "PromoCodeScreen");
+export const TestNoticeScreen = screen(loaders.testNotice, "TestNoticeScreen");
 export const GuideScreen = screen(loaders.guide, "GuideScreen");
 export const FeedbackScreen = screen(loaders.feedback, "FeedbackScreen");
 export const StressScreen = screen(loaders.stress, "StressScreen");
+
+/**
+ * Меню из шапки — чанком: первому кадру оно не нужно, а лобби подтягивает
+ * его в простое вместе с экранами, и к первому нажатию оно уже загружено.
+ */
+export const MainMenu = lazy(async () => ({ default: (await loaders.menu()).MainMenu }));
 export const SoundLabScreen = screen(loaders.soundLab, "SoundLabScreen");
 
 /**

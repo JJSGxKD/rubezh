@@ -5,7 +5,8 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repo
 import type { AccountPlatform } from "../auth/access-token.js";
 import { isDeveloperAccount } from "../auth/dev-login.js";
 import { permissionsOf, type Permission, type Role } from "./permissions.js";
-import { ROLES_REPOSITORY, type AuditEntry, type RolesRepository } from "./roles.repository.js";
+import { ROLES_REPOSITORY, type AuditEntry, type AuditQuery, type AuditRecord, type RoleAssignment, type RolesRepository } from "./roles.repository.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
 
 /**
  * Кто что может (docs/34-stage3-plan.md, WP2).
@@ -25,7 +26,7 @@ import { ROLES_REPOSITORY, type AuditEntry, type RolesRepository } from "./roles
 
 export interface AccountRef {
   accountId: string;
-  platform: string;
+  platform: PlatformId;
   platformUserId: string;
 }
 
@@ -65,7 +66,7 @@ export class RolesService {
   async canByPlatformUser(platform: string, platformUserId: string, permission: Permission): Promise<boolean> {
     const account = await this.accounts.byPlatformUser(platform as AccountPlatform, platformUserId);
     if (account !== null) {
-      return await this.can({ accountId: account.accountId, platform, platformUserId }, permission);
+      return await this.can({ accountId: account.accountId, platform: account.platform, platformUserId }, permission);
     }
     if (!(await this.isEnvAdminWithoutOwner(platform, platformUserId))) return false;
     return permissionsOf(["owner"]).has(permission);
@@ -95,6 +96,18 @@ export class RolesService {
     const revoked = await this.repository.revoke(accountId, role);
     if (revoked) await this.audit({ actorAccountId: actor.accountId, action: "roles.revoke", target: accountId, before: { role } });
     return revoked;
+  }
+
+  /** Все выданные роли — раздел ролей в панели; читать их вправе тот, кто их раздаёт. */
+  async assignments(actor: AccountRef): Promise<RoleAssignment[]> {
+    await this.require(actor, "roles.assign");
+    return await this.repository.assignments();
+  }
+
+  /** Страница журнала с отбором — под правом на чтение аудита. */
+  async auditPage(actor: AccountRef, query: AuditQuery): Promise<AuditRecord[]> {
+    await this.require(actor, "audit.view");
+    return await this.repository.auditPage(query);
   }
 
   /**

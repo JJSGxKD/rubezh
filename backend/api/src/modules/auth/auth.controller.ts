@@ -64,7 +64,7 @@ export class AuthController {
     await this.limit(AUTH_LIMITS.login, request);
 
     const { initData, client, reason } = parse(() => telegramLoginSchema.parse(body), "Некорректные данные запуска");
-    const result = await this.service.loginWithTelegram(initData, contextOf(request, client ?? null, reason));
+    const result = await this.service.loginWithLaunch("telegram", initData, contextOf(request, client ?? null, reason));
     return { data: { ...view(result), launch: { startKind: result.startParam.kind } } };
   }
 

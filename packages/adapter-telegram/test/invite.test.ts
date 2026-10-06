@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { inviteFromBrowser } from "../src/invite";
+import { inviteFromBrowser, sharePreparedWith } from "../src/invite";
 
 // Приглашение в игру вне Telegram: системный лист, иначе копия ссылки
 // (docs/27-design-system-and-app-shell.md §6, «Друзья»).
@@ -48,3 +48,27 @@ describe("приглашение вне Telegram", () => {
     await expect(inviteFromBrowser(INVITE)).resolves.toBe("unavailable");
   });
 });
+
+describe("сообщение от бота", () => {
+  const sdk = (available: boolean, share: () => Promise<void>) => ({ isAvailable: () => available, share });
+
+  it("открыт выбор чата и сообщение ушло — «отправлено»", async () => {
+    const shared: string[] = [];
+    expect(await sharePreparedWith(sdk(true, async () => void shared.push("x")), "msg-1")).toBe("shared");
+    expect(shared).toEqual(["x"]);
+  });
+
+  it("клиент старше 8.0 или браузер — «не вышло», и окно не открывается", async () => {
+    let opened = false;
+    expect(await sharePreparedWith(sdk(false, async () => void (opened = true)), "msg-1")).toBe("unavailable");
+    expect(opened).toBe(false);
+  });
+
+  it("игрок сам закрыл окно — «отменено», а не сбой; прочая ошибка — «не вышло»", async () => {
+    const declined = new Error("USER_DECLINED");
+    declined.name = "ShareMessageError";
+    expect(await sharePreparedWith(sdk(true, async () => Promise.reject(declined)), "msg-1")).toBe("cancelled");
+    expect(await sharePreparedWith(sdk(true, async () => Promise.reject(new Error("MESSAGE_EXPIRED"))), "msg-1")).toBe("unavailable");
+  });
+});
+

@@ -1,0 +1,102 @@
+import { Inject, Injectable } from "@nestjs/common";
+import type { PrismaClient } from "../../generated/prisma/client.js";
+import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
+import { PRISMA } from "../../infra/database.js";
+import { lockSourceSlot } from "../attribution/source-slot.js";
+
+/** Привязки рефералов (docs/23-referral-and-partner-program.md §2): одна на приглашённого и навсегда. */
+
+export type ReferralStatus = "bound" | "activated" | "rejected";
+
+export interface ReferralBinding {
+  referredId: string;
+  referrerId: string;
+  status: ReferralStatus;
+  boundAt: Date;
+  activatedAt: Date | null;
+  rejectReason: string | null;
+}
+
+export interface ReferralRow extends ReferralBinding {
+  displayName: string;
+  photoUrl: string | null;
+}
+
+export const REFERRALS_REPOSITORY = Symbol("REFERRALS_REPOSITORY");
+
+export interface ReferralsRepository {
+  binding(referredId: string): Promise<ReferralBinding | null>;
+  /** Привязать; `false` — привязка уже была или слот источника занят партнёром: одна и навсегда. */
+  bind(referredId: string, referrerId: string, status: "bound" | "rejected", rejectReason: string | null): Promise<boolean>;
+  /** Активировать; `false` — уже активирована или не в статусе ожидания: награда не удвоится. */
+  activate(referredId: string, at: Date): Promise<boolean>;
+  /** Сколько приглашённых пригласившего активировано за текущие игровые сутки. */
+  activatedToday(referrerId: string): Promise<number>;
+  byReferrer(referrerId: string, limit: number): Promise<ReferralRow[]>;
+  /** Сколько приведённых по статусам — для карточки игрока в панели. */
+  counts(referrerId: string): Promise<Record<ReferralStatus, number>>;
+  /**
+   * Отклонить привязку, пока награда пригласившему не начислена: модератор
+   * нашёл накрутку (docs/23-referral-and-partner-program.md §2.4).
+   * `false` — привязки нет или она уже активирована либо отклонена.
+   */
+  reject(referredId: string, reason: string): Promise<boolean>;
+}
+
+@Injectable()
+export class PrismaReferralsRepository implements ReferralsRepository {
+  constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+
+  async binding(referredId: string): Promise<ReferralBinding | null> {
+    return await this.prisma.referralBinding.findUnique({ where: { referredId } });
+  }
+
+  async bind(referredId: string, referrerId: string, status: "bound" | "rejected", rejectReason: string | null): Promise<boolean> {
+    // Слот источника один на двоих с партнёрами: игрок, пришедший по коду
+    // партнёра, рефералом уже не станет (docs/23-referral-and-partner-program.md §5).
+    return await this.prisma.$transaction(async (tx) => {
+      if ((await lockSourceSlot(tx, referredId)) !== "free") return false;
+      const inserted = await tx.$executeRaw`
+        INSERT INTO referral_binding (referred_account_id, referrer_account_id, status, reject_reason)
+        VALUES (${referredId}::uuid, ${referrerId}::uuid, ${status}::"ReferralStatus", ${rejectReason})
+        ON CONFLICT DO NOTHING`;
+      return inserted > 0;
+    });
+  }
+
+  async activate(referredId: string, at: Date): Promise<boolean> {
+    const { count } = await this.prisma.referralBinding.updateMany({ where: { referredId, status: "bound" }, data: { status: "activated", activatedAt: at } });
+    return count > 0;
+  }
+
+  async activatedToday(referrerId: string): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM referral_binding
+      WHERE referrer_account_id = ${referrerId}::uuid AND status = 'activated'
+        AND (activated_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date = (now() AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date`;
+    return row?.count ?? 0;
+  }
+
+  async counts(referrerId: string): Promise<Record<ReferralStatus, number>> {
+    const groups = await this.prisma.referralBinding.groupBy({ by: ["status"], where: { referrerId }, _count: { _all: true } });
+    const counts: Record<ReferralStatus, number> = { bound: 0, activated: 0, rejected: 0 };
+    for (const group of groups) counts[group.status] = group._count._all;
+    return counts;
+  }
+
+  async reject(referredId: string, reason: string): Promise<boolean> {
+    const { count } = await this.prisma.referralBinding.updateMany({ where: { referredId, status: "bound" }, data: { status: "rejected", rejectReason: reason } });
+    return count > 0;
+  }
+
+  async byReferrer(referrerId: string, limit: number): Promise<ReferralRow[]> {
+    const rows = await this.prisma.referralBinding.findMany({
+      where: { referrerId, status: { not: "rejected" } },
+      include: { referred: { select: { displayName: true, photoUrl: true } } },
+      orderBy: { boundAt: "desc" },
+      take: limit,
+    });
+    return rows.map(({ referred, ...binding }) => ({ ...binding, ...referred }));
+  }
+}
+

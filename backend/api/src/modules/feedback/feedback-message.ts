@@ -21,6 +21,8 @@ const LABELS: Record<string, string> = {
   "keepPlaying.yes": "да",
   "keepPlaying.maybe": "может быть",
   "keepPlaying.no": "нет",
+  topic: "Тема",
+  "topic.device_info": "сведения об устройстве",
 };
 
 export interface FeedbackMessage {

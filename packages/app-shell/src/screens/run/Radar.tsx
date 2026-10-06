@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useRef, type ReactNode } from "react";
 import { RADAR_BLIP, type RadarSnapshot } from "@bh/core-game";
 import { COLORS } from "../../design-system/tokens";
 import { t } from "../../i18n";
+import "../../i18n/run";
 
 /**
  * Радар забега: враги, элиты и подборы вокруг игрока в пределах кольца спавна

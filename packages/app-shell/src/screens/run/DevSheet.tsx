@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from "react";
-import { ENEMIES, PASSIVES, WEAPONS, type RunDevCommand, type RunDevPickup } from "@bh/core-game";
+import { BOOSTS, ENEMIES, MAX_BOOSTS_PER_RUN, PASSIVES, WEAPONS, type RunDevCommand, type RunDevPickup } from "@bh/core-game";
 import { Badge, Button, ListGroup, ListItem, Modal, SegmentedControl } from "../../design-system/components";
 import { t } from "../../i18n";
+import "../../i18n/run";
+import "../../i18n/boosts";
 import "../../i18n/team";
 import { hasCheats, useDevMode, type DevSettings, type DevVisualKey } from "../../state/dev-mode";
 import { DAMAGE_MULS, DEV_PRESETS, MOVE_SPEED_MULS, TIME_SCALES, type DevPresetId } from "./dev-presets";
@@ -233,7 +235,40 @@ function WorldTab(props: { settings: DevSettings; inRun: boolean }): ReactNode {
     </>
   );
 
-  if (!props.inRun) return start;
+  // Бусты — в наборе забега, а не командой: «Ещё раз» повторяет набор
+  // прежнего забега, поэтому выбор здесь — только до «В бой».
+  const chosen = settings.start.boosts ?? [];
+  const boosts = (
+    <Group title={t("dev.start.boosts")} hint={t("dev.start.boostsHint", { max: MAX_BOOSTS_PER_RUN })}>
+      <ListGroup>
+        {BOOSTS.map((boost) => (
+          <ListItem
+            key={boost.id}
+            title={t(boost.nameKey)}
+            hint={t(boost.descriptionKey)}
+            toggle={{
+              checked: chosen.includes(boost.id),
+              onChange: () =>
+                update((s) => {
+                  const current = s.start.boosts ?? [];
+                  const next = current.includes(boost.id) ? current.filter((id) => id !== boost.id) : [...current, boost.id].slice(-MAX_BOOSTS_PER_RUN);
+                  return { ...s, start: { ...s.start, boosts: next } };
+                }),
+            }}
+          />
+        ))}
+      </ListGroup>
+    </Group>
+  );
+
+  if (!props.inRun) {
+    return (
+      <>
+        {start}
+        {boosts}
+      </>
+    );
+  }
 
   return (
     <>

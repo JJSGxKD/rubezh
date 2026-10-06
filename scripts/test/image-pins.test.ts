@@ -28,6 +28,12 @@ describe("образы в репозитории", () => {
     expect(checkImagePins(ROOT).errors).toEqual([]);
   });
 
+  it("свой образ по номеру релиза — не закрепляется, а чужой по переменной — ошибка", () => {
+    expect(classifyImage("ghcr.io/jjsgxkd/rubezh-api:${API_TAG}")).toEqual({ kind: "own" });
+    expect(classifyImage("ghcr.io/someone/other:${TAG}").kind).toBe("problem");
+    expect(classifyImage("postgres:${PG_VERSION}").kind).toBe("problem");
+  });
+
   it("проверка действительно их видит, а не проходит по пустому списку", () => {
     const places = checkImagePins(ROOT).pins.map((pin: { name: string; where: string }) => `${pin.name} ${pin.where.split(":")[0]}`);
 

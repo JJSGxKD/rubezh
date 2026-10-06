@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "composite": false,
     "declaration": false,
     "noEmit": true,
@@ -12,6 +12,7 @@
     ]
   },
   "include": [
-    "src"
+    "src",
+    "preview"
   ]
 }

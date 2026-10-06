@@ -1,8 +1,9 @@
-import type { DifficultyId, UpgradeOption } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import { CONTENT_HASH } from "../../src/content/hash";
 import { RunPerfTracker } from "../../src/game/diagnostics/run-perf";
 import { RunRecorder } from "../../src/game/diagnostics/run-recorder";
 import { chooseUpgrade, isAwaitingChoice } from "../../src/game/progression/levels";
+import { isEmptyLoadout } from "../../src/game/progression/run-loadout";
 import { buildRunResult } from "../../src/game/run/run-result";
 import { createRunWorld } from "../../src/game/run-world";
 import { IDLE_CODE, inputOfCode, quantizeDirection } from "../../src/game/sim/input-code";
@@ -26,6 +27,8 @@ export interface RecordedRunOptions {
   choose?: (offers: readonly UpgradeOption[]) => string;
   /** брать второй шанс при смерти, пока он есть, — как сцена по команде оболочки */
   continues?: boolean;
+  /** снаряжение на забег — как его подаёт оболочка */
+  loadout?: RunLoadout;
 }
 
 export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
@@ -35,6 +38,7 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     mapId: "",
     difficultyId: options.difficultyId ?? "normal",
     unitScale,
+    ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
   });
   const recorder = new RunRecorder({
     reportId: "00000000-0000-4000-8000-000000000001",
@@ -47,6 +51,7 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     contentHash: CONTENT_HASH,
     unitScale,
     replayBlocker: null,
+    ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
   });
   const choose = options.choose ?? ((offers) => offers[0].id);
   const input: SimInput = { moveX: 0, moveY: 0 };

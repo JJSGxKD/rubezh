@@ -8,5 +8,14 @@
   "run.continue.retry.slow_confirmation": "Оплата ещё подтверждается. Если не подтвердится, звёзды вернутся",
   "run.continue.unavailable.not_offered": "Сейчас второй шанс не купить",
   "run.continue.unavailable.unverified": "Сервер не видел начала забега — второй шанс недоступен",
-  "run.continue.unavailable.used_up": "Второй шанс в этом забеге уже взят"
+  "run.continue.unavailable.used_up": "Второй шанс в этом забеге уже взят",
+  "run.continue.vip": "Продолжить с VIP — без рекламы",
+  "run.continue.vip.short": "С VIP",
+  "run.continue.vip.wide": "Продолжить с VIP",
+  "run.continue.ad.notice.closed": "Ролик закрыт до конца — продолжение не засчитано",
+  "run.continue.ad.notice.failed": "Реклама не загрузилась — попробуйте ещё раз",
+  "run.continue.ad.notice.claim_failed": "Ролик засчитан, но сервер не ответил — нажмите ещё раз, смотреть заново не придётся",
+  "run.continue.ad.gone.daily_cap": "Продолжения за рекламу на сегодня закончились",
+  "run.continue.ad.gone.no_ads_now": "Сейчас рекламы нет",
+  "run.continue.ad.gone.restricted": "Награды за рекламу закрыты — подробности в профиле"
 }

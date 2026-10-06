@@ -10,7 +10,14 @@ import type { RateLimit } from "../ingest/rate-limiter.js";
  * перерыва; живой игрок столько не сыграет, а скрипт, долбящий приём,
  * упрётся сюда.
  */
-export const RUNS_LIMITS: Record<"start" | "finish", RateLimit> = {
+export const RUNS_LIMITS: Record<"start" | "finish" | "detail" | "adContinue", RateLimit> = {
   start: { scope: "runs:start", limit: 120, windowSec: 3600 },
   finish: { scope: "runs:finish", limit: 120, windowSec: 3600 },
+  // Лист забега — четыре чтения из базы на открытие. Игрок листает десяток
+  // последних забегов, а перебор чужих идентификаторов упрётся сюда раньше,
+  // чем во что-то полезное: чужой забег всё равно не отдаётся.
+  detail: { scope: "runs:detail", limit: 240, windowSec: 3600 },
+  // Второй шанс за рекламу: вопрос «можно ли» на каждой смерти и забор по
+  // досмотру. Больше двух сотен смертей в час не бывает и у самых быстрых.
+  adContinue: { scope: "runs:continue-ad", limit: 240, windowSec: 3600 },
 };
