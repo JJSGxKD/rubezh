@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — главная</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Токены «Сумеречного рубежа» — значения T-0012. Тоны виджетов — те же
+     переменные, что в app-shell/src/design-system/tokens.css (--widget-*-tone). */
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --surface-raised:#353452; --surface-sunken:#17162a;
+    --border:#43425f; --border-strong:#5b5980; --text:#f3eee6; --muted:#aeaac4;
+    --accent:#ff8f3f; --accent-pressed:#f0782a; --accent-glow:#ffb67f; --accent-edge:#a0582a; --on-accent:#230f02;
+    --secondary:#46d9c6; --warning:#ffc14d; --danger:#ff5d5d; --success:#8ee86b; --info:#5ccfff; --passive:#c47dff; --gem-light:#ff8891;
+    --coin:#ffd400; --gem:#ff515e; --xp:#b6ff4a;
+    --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:10px; --cut-sm:8px; --cut-md:10px;
+    --display:'Russo One', sans-serif; --text-font:'IBM Plex Sans', sans-serif;
+    --page:#0d0c18; --page-muted:#9a97ab;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:15px/1.5 var(--text-font); }
+  .page { max-width:1600px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:400 28px/1.2 var(--display); margin:0 0 8px; letter-spacing:.02em; }
+  h2 { font:400 20px/1.2 var(--display); margin:40px 0 8px; letter-spacing:.02em; }
+  .lead, .sub { color:var(--page-muted); max-width:960px; }
+  .lead { margin:0 0 8px; } .sub { margin:0 0 16px; font-size:14px; }
+  table.inv { border-collapse:collapse; font-size:13.5px; max-width:1200px; margin:8px 0 0; }
+  table.inv td, table.inv th { border:1px solid #2c2b45; padding:6px 10px; text-align:left; vertical-align:top; }
+  table.inv th { color:var(--page-muted); font-weight:600; }
+  .row { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; }
+  .cap { width:360px; margin-top:10px; font-size:13.5px; color:var(--page-muted); }
+  .cap b { color:var(--text); font-weight:600; } .cap ul { margin:6px 0 0; padding-left:18px; }
+  svg.i { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+  .phone { width:360px; height:780px; border-radius:36px; padding:10px; background:#000; box-shadow:0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .screen { position:relative; width:100%; height:100%; border-radius:28px; overflow:hidden; background:var(--bg); display:flex; flex-direction:column; }
+  .screen::before { content:""; position:absolute; inset:0; pointer-events:none;
+    background: radial-gradient(110% 50% at 50% -10%, rgba(255,143,63,.12), transparent 60%), radial-gradient(80% 45% at 0% 105%, rgba(70,217,198,.10), transparent 60%); }
+  .screen > * { position:relative; }
+  .disp { font-family:var(--display); letter-spacing:.02em; }
+
+  .cut { position:relative; isolation:isolate; clip-path: polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c)); background: var(--cut-border) !important; border:0 !important; box-shadow:none !important; }
+  .cut::before { content:""; position:absolute; inset:1px; z-index:-1; background: var(--cut-fill);
+    clip-path: polygon(calc(var(--c) - .4px) 0,100% 0,100% calc(100% - var(--c) + .4px),calc(100% - var(--c) + .4px) 100%,0 100%,0 calc(var(--c) - .4px)); }
+  .cut-md { --c:var(--cut-md); } .cut-sm { --c:var(--cut-sm); }
+
+  /* Шапка: аватар с кольцом опыта и уровнем, валюты, колокольчик, меню */
+  .header { display:flex; align-items:center; gap:6px; padding:14px 12px 8px; background: rgba(29,28,49,.55); backdrop-filter: blur(14px); }
+  .ava { position:relative; width:44px; height:44px; flex:none; }
+  .ava svg { position:absolute; inset:0; }
+  .ava .ph { position:absolute; inset:5px; border-radius:50%; background: radial-gradient(circle at 40% 35%, #7b6a8f, #3a3150); }
+  .ava small { position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); min-width:18px; height:16px; padding:0 4px; border-radius:var(--r-sm); background:var(--surface-sunken); border:1px solid var(--border-strong); font:600 10px/14px var(--text-font); text-align:center; }
+  .chip { white-space:nowrap; display:flex; align-items:center; gap:6px; height:36px; padding:0 4px 0 10px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--border); font-weight:700; font-size:13.5px; }
+  .chip.nobuy { padding-right:10px; }
+  .coin { width:16px; height:16px; border-radius:50%; background: radial-gradient(circle at 35% 30%, #fff16a, var(--coin) 55%, #ff9f00); flex:none; }
+  .gemi { width:13px; height:15px; background: linear-gradient(160deg,#ffc9cc,var(--gem) 55%,#f0303e); clip-path: polygon(50% 0,100% 35%,80% 100%,20% 100%,0 35%); flex:none; }
+  .buy { width:24px; height:24px; border-radius:var(--r-sm); background:var(--accent); color:var(--on-accent); display:grid; place-items:center; }
+  .buy svg { width:14px; height:14px; stroke-width:3; }
+  .grow { flex:1; }
+  .ibtn { position:relative; width:40px; height:40px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--border); display:grid; place-items:center; flex:none; color:var(--text); }
+  .ibtn svg { width:20px; height:20px; }
+  .count { position:absolute; top:-5px; right:-5px; min-width:17px; height:17px; padding:0 4px; border-radius:var(--r-sm); background:var(--accent); color:var(--on-accent); font:700 10px/17px var(--text-font); text-align:center; }
+
+  .body { flex:1; min-height:0; overflow:hidden; padding:4px 12px 12px; display:flex; flex-direction:column; gap:10px;
+          -webkit-mask-image: linear-gradient(180deg,#000 calc(100% - 28px),transparent); mask-image: linear-gradient(180deg,#000 calc(100% - 28px),transparent); }
+  .body > * { flex:none; }
+
+  /* Карусель: соседний слайд выглядывает слева, точки снизу */
+  .strip { position:relative; height:84px; margin:0 -12px; }
+  .slide { position:absolute; top:0; height:84px; border-radius:var(--r-lg); overflow:hidden; border:1px solid var(--border); background: linear-gradient(110deg,#3a2c4e,#2b2a44 60%); padding:12px 14px; display:flex; align-items:center; gap:12px; }
+  .slide.prev { left:-268px; width:290px; opacity:.6; }
+  .slide.cur { left:34px; width:314px; }
+  .slide .face { width:44px; height:44px; border-radius:var(--r-md); display:grid; place-items:center; background: rgba(255,143,63,.16); color:var(--accent); flex:none; }
+  .dots { display:flex; gap:6px; justify-content:center; }
+  .dots i { width:6px; height:6px; border-radius:2px; background:var(--border-strong); } .dots i.on { background:var(--accent); width:18px; }
+
+  /* Виджеты: у каждого свой тон (--tone), подложка тонируется им */
+  .w { position:relative; display:flex; gap:12px; border-radius:var(--r-lg); padding:12px; color:var(--text);
+       background: linear-gradient(160deg, color-mix(in oklab, var(--tone) 7%, var(--surface-raised)), var(--surface));
+       border:1px solid color-mix(in oklab, var(--tone) 20%, var(--border)); }
+  .w.ready { background: linear-gradient(160deg, color-mix(in oklab, var(--tone) 18%, var(--surface-raised)), var(--surface));
+             border-color: color-mix(in oklab, var(--tone) 55%, transparent); box-shadow: 0 0 24px -8px color-mix(in oklab, var(--tone) 70%, transparent); }
+  .w.ready.cut { --cut-border: color-mix(in oklab, var(--tone) 60%, transparent); --cut-fill: linear-gradient(160deg, color-mix(in oklab, var(--tone) 18%, var(--surface-raised)), var(--surface)); }
+  .w.hero { align-items:center; min-height:92px; }
+  .w.tile { flex-direction:column; justify-content:space-between; min-height:88px; }
+  .w.rowsize { align-items:center; min-height:64px; }
+  .t-daily { --tone:var(--accent); } .t-wheel { --tone:var(--info); } .t-tasks { --tone:var(--success); } .t-record { --tone:var(--passive); } .t-friends { --tone:var(--gem-light); }
+  .face { display:grid; place-items:center; flex:none; border-radius:var(--r-md); color:var(--tone); background: color-mix(in oklab, var(--tone) 15%, transparent); }
+  .f48 { width:48px; height:48px; } .f40 { width:40px; height:40px; } .f28 { width:28px; height:28px; }
+  .f28 svg.i { width:16px; height:16px; } .f40 svg.i { width:22px; height:22px; } .f48 svg.i { width:26px; height:26px; }
+  .lbl { font-size:12px; font-weight:600; color:var(--muted); }
+  .bigline { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; margin-top:2px; }
+  .big { font:400 18px/1.15 var(--display); letter-spacing:.02em; }
+  .big.sm { font-size:16px; }
+  .subl { font-size:12px; color:var(--muted); margin-top:2px; }
+  .chev { color:var(--muted); } .chev svg { width:18px; height:18px; }
+  .action { flex:none; height:28px; padding:0 12px; border-radius:var(--r-sm); background:var(--tone); color:var(--on-accent); font:400 12px/28px var(--display); letter-spacing:.03em; }
+  .tilehead { display:flex; align-items:center; justify-content:space-between; gap:8px; height:28px; }
+  .week { display:flex; gap:4px; margin-top:8px; }
+  .week i { flex:1; height:5px; border-radius:1px; background:var(--surface-sunken); }
+  .week i.on { background:var(--accent); } .week i.today { background:#b5652d; outline:1px solid var(--accent); }
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  .card { position:relative; display:flex; align-items:center; gap:12px; border-radius:var(--r-lg); padding:12px; background: linear-gradient(180deg,var(--surface-raised),var(--surface)); border:1px solid var(--border); overflow:hidden; }
+  .card .face { width:40px; height:40px; }
+  .card .t { font:400 14px/1.2 var(--display); letter-spacing:.02em; } .card .s { font-size:12px; color:var(--muted); margin-top:2px; }
+  .stripe::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent); }
+
+  .btn { border:0; border-radius:var(--r-md); height:36px; padding:0 14px; font:700 13px var(--text-font); color:var(--on-accent); background: linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); box-shadow: inset 0 -3px 0 var(--accent-edge), inset 0 1px 0 rgba(255,255,255,.45); white-space:nowrap; }
+  .btn.ghost { background:transparent; color:var(--text); border:1px solid var(--border-strong); box-shadow:none; }
+  .btn.sec { background:var(--surface-raised); color:var(--text); border:1px solid var(--border-strong); box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); }
+  .play { width:100%; height:60px; display:flex; align-items:center; justify-content:center; gap:10px; font:400 21px var(--display); letter-spacing:.06em; text-transform:uppercase; color:var(--on-accent);
+          --cut-border:#a0582a; --cut-fill: linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); }
+  .play svg { width:20px; height:20px; fill:currentColor; stroke:none; }
+  .foot { padding:10px 12px 8px; display:flex; flex-direction:column; gap:8px; }
+  .foot .sec { width:100%; height:42px; }
+
+  /* Нижняя панель: активная вкладка приподнята и залита акцентом */
+  .tabs { display:grid; grid-template-columns:repeat(6,1fr); padding:4px 4px 10px; border-top:1px solid var(--border); background:var(--surface); }
+  .tab { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:2px; height:56px; font-size:10px; color:var(--muted); }
+  .tab .ic { width:40px; height:40px; display:grid; place-items:center; border-radius:var(--r-md); color:var(--muted); }
+  .tab.on { color:var(--accent); font-weight:600; }
+  .tab.on .ic { transform: translateY(-10px) scale(1.08); color:var(--on-accent); background: linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); box-shadow: inset 0 -3px 0 var(--accent-edge), 0 8px 18px -8px rgba(255,143,63,.8); }
+  .tab .count { right:8px; top:2px; background:var(--accent); }
+  .tab.on span.l { margin-top:-10px; }
+
+  .banner { display:flex; gap:10px; align-items:flex-start; margin:0 12px 2px; padding:10px 12px; border-radius:var(--r-lg); background: rgba(255,193,77,.10); border:1px solid rgba(255,193,77,.45); }
+  .banner svg { width:20px; height:20px; flex:none; stroke:var(--warning); margin-top:1px; }
+  .banner b { display:block; font-size:13.5px; } .banner span { font-size:12px; color:var(--muted); }
+  .sk { border-radius:var(--r-lg); background: linear-gradient(90deg, var(--surface) 0%, var(--surface-raised) 40%, var(--surface) 80%); }
+  .offline .chip { opacity:.6; }
+  .kit { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; padding:20px; border-radius:var(--r-xl); background:var(--bg); max-width:1200px; }
+  .kit .cell { display:flex; flex-direction:column; gap:8px; }
+  .kit .note { font-size:12.5px; color:var(--page-muted); max-width:300px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Главная</h1>
+  <p class="lead">Макет главной в облике «Сумеречный рубеж» (<code>design/README.md</code>), ширина 360 px. Строится на <b>нынешней главной</b> (<code>screens/home.tsx</code>, <code>home-widgets.tsx</code>, <code>home-widget-rules.ts</code>): тот же состав, правила раскладки, облик каждого виджета и иконки — меняются палитра, шрифты, грани и срез у главного. Иконки — те же, что в игре (lucide и свои: монета, самоцвет, арсенал, рисунок колеса).</p>
+
+  <h2>Что сохраняется и что меняется</h2>
+  <table class="inv">
+    <tr><th>Элемент</th><th>Сейчас в игре</th><th>В макете</th></tr>
+    <tr><td>Аватар</td><td>Фото в кольце опыта, уровень снизу (<code>LevelAvatar</code>)</td><td>Так же; кольцо — цвет опыта <code>xp</code>, плашка уровня — строгая</td></tr>
+    <tr><td>Валюты</td><td>Монеты (ведут в историю), самоцветы с кнопкой «+» (ведут в магазин)</td><td>Так же; фишки со скруглением 6 px, «+» — квадрат акцента</td></tr>
+    <tr><td>Колокольчик и меню</td><td>Квадратные кнопки, счётчик непрочитанного</td><td>Так же; счётчик — акцент, как и на вкладках</td></tr>
+    <tr><td>Карусель</td><td>Слайды с сервера, соседний выглядывает, точки</td><td>Так же</td></tr>
+    <tr><td>Виджеты</td><td>Награда дня, колесо, задания, рекорд, друзья. Свой тон у каждого: награда — акцент, колесо — голубой, задания — зелёный, рекорд — сиреневый, друзья — розовый. Свой облик: подарок, рисунок колеса (качается, когда крутка ждёт), кольцо прогресса заданий, кубок, люди. Готовое — первым во всю ширину, остальное плитками по две, нечётная — строкой</td><td>Всё так же: тоны — те же токены <code>--widget-*-tone</code> в палитре B. Срез — у готовой награды дня. Кнопка «Забрать»/«Крутить» — строгая, не капсула</td></tr>
+    <tr><td>Задания</td><td>«0 из 4 · за сутки», кольцо</td><td>«5 из 11 · награды 1 450» по всем категориям (замечание из «Входящих»), кольцо по тому же счёту</td></tr>
+    <tr><td>Гайдбук и отзыв</td><td>Карточки под виджетами; у отзыва — полоса акцента слева</td><td>Так же; отзыв уступает место карточке разрешения боту (T-0010)</td></tr>
+    <tr><td>Сохранённый забег</td><td>Карточка с полосой, «Продолжить» и «Новый забег»</td><td>Так же; «Продолжить» — главная кнопка со срезом</td></tr>
+    <tr><td>«Играть»</td><td>Крупная кнопка со значком ▶, капсом</td><td>Так же, Russo One, срез 8 px</td></tr>
+    <tr><td>Нижняя панель</td><td>Шесть вкладок; активная приподнята и залита акцентом, подпись только у неё</td><td>Так же, но <b>предложение</b>: подписи у всех шести мелким шрифтом (аудит: без подписей непонятно). Решаешь ты</td></tr>
+  </table>
+
+  <h2>Состояния</h2>
+  <div class="row" id="states"></div>
+
+  <h2>Компоненты экрана</h2>
+  <p class="sub">Из чего собрана главная. Срез — только у главного: «Играть» («Продолжить») и награда дня, когда её можно забрать.</p>
+  <div class="kit" id="kit"></div>
+</div>
+
+<template id="phone">
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="header">
+        <div class="ava"><span class="ph"></span><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="none" stroke="var(--surface-sunken)" stroke-width="3"/><circle cx="22" cy="22" r="20" fill="none" stroke="var(--xp)" stroke-width="3" stroke-linecap="round" stroke-dasharray="80 126" transform="rotate(-90 22 22)"/></svg><small>6</small></div>
+        <div class="chip nobuy"><span class="coin"></span>5 762</div>
+        <div class="chip"><span class="gemi"></span>21<span class="buy"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></span></div>
+        <div class="grow"></div>
+        <div class="ibtn"><svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="count">2</span></div>
+        <div class="ibtn"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div>
+      </div>
+      <div class="slot-banner"></div>
+      <div class="body"></div>
+      <div class="foot"></div>
+      <div class="tabs">
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m2 7 4.4-4.4A2 2 0 0 1 7.8 2h8.4a2 2 0 0 1 1.4.6L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20v3a2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0z"/></svg></span><span class="l">Магазин</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M8 3h8l4 3-2 4h-2v11H8V10H6L4 6z"/><path d="M10 3c0 1.5 1 2.5 2 2.5S14 4.5 14 3"/></svg></span><span class="l">Арсенал</span></div>
+        <div class="tab on"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2M14.5 6.5 18 3h3v3l-3.5 3.5M5 14l4 4M7 17l-3 3M3 19l2 2"/></svg></span><span class="l">Главная</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/></svg></span><span class="l">Задания</span><span class="count">3</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V17c0 .6-.5 1-1 1.2C7.9 18.8 7 20.2 7 22M14 14.7V17c0 .6.5 1 1 1.2 1.1.6 2 2 2 3.8M18 2H6v7a6 6 0 0 0 12 0z"/></svg></span><span class="l">Рейтинг</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></span><span class="l">Друзья</span></div>
+      </div>
+    </div></div>
+    <div class="cap"></div>
+  </div>
+</template>
+
+<script>
+  const I = {
+    gift: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>',
+    trophy: '<svg class="i" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V17c0 .6-.5 1-1 1.2C7.9 18.8 7 20.2 7 22M14 14.7V17c0 .6.5 1 1 1.2 1.1.6 2 2 2 3.8M18 2H6v7a6 6 0 0 0 12 0z"/></svg>',
+    users: '<svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>',
+    userPlus: '<svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>',
+    book: '<svg class="i" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',
+    heartMsg: '<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M14.8 7.5a1.8 1.8 0 0 0-2.6 0l-.2.3-.3-.3a1.8 1.8 0 1 0-2.4 2.8L12 13l2.7-2.7c.9-.9.8-2.1.1-2.8"/></svg>',
+    bot: '<svg class="i" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg>',
+    chev: '<span class="chev"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>',
+    play: '<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
+  };
+  // Рисунок колеса: секторы тона и подложки, ось — как WheelView.
+  const wheel = (px) => `<svg viewBox="0 0 40 40" width="${px}" height="${px}"><circle cx="20" cy="20" r="19.5" fill="var(--surface-sunken)" stroke="var(--tone)"/>${[0,1,2,3,4,5,6,7].map(k=>{const a=k*Math.PI/4,b=(k+1)*Math.PI/4;const p=(t)=>`${(20+18*Math.sin(t)).toFixed(2)} ${(20-18*Math.cos(t)).toFixed(2)}`;return k%2?'':`<path d="M20 20 L${p(a)} A18 18 0 0 1 ${p(b)} Z" fill="color-mix(in oklab, var(--tone) 70%, var(--surface))"/>`}).join('')}<circle cx="20" cy="20" r="4" fill="var(--tone)"/></svg>`;
+  // Кольцо прогресса заданий — как Ring в TasksView.
+  const ring = (px, share) => { const r=16, L=2*Math.PI*r; return `<svg viewBox="0 0 40 40" width="${px}" height="${px}" style="transform:rotate(-90deg)"><circle cx="20" cy="20" r="${r}" fill="none" stroke="color-mix(in oklab, var(--tone) 18%, var(--surface-sunken))" stroke-width="5"/>${share>0?`<circle cx="20" cy="20" r="${r}" fill="none" stroke="var(--tone)" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(share*L).toFixed(1)} ${L.toFixed(1)}"/>`:''}</svg>`; };
+  const coinMini = '<span class="coin" style="width:12px;height:12px;display:inline-block;vertical-align:-1px;margin-right:4px"></span>';
+
+  const W = {
+    recordHero: `<div class="w hero t-record"><span class="face f48">${I.trophy}</span><div class="grow"><div class="lbl">Лучший забег · Сложная</div><div class="bigline"><span class="big disp">12:17</span>${I.chev}</div><div class="subl">8 забегов</div></div></div>`,
+    recordTile: `<div class="w tile t-record"><div class="tilehead"><span class="lbl">Рекорд</span><span class="face f28">${I.trophy}</span></div><div><div class="big sm">12:17</div><div class="subl">8 забегов</div></div></div>`,
+    tasksTile: `<div class="w tile t-tasks"><div class="tilehead"><span class="lbl">Задания</span><span style="color:var(--tone)">${ring(28, 5/11)}</span></div><div><div class="big sm">5 из 11</div><div class="subl">награды: ${coinMini}1 450</div></div></div>`,
+    dailyTile: `<div class="w tile t-daily"><div class="tilehead"><span class="lbl">Награда</span><span class="face f28">${I.gift}</span></div><div><div class="big sm">${coinMini}76</div><div class="subl">завтра, через 10 ч 12 мин</div></div></div>`,
+    dailyHeroReady: `<div class="w hero ready cut cut-md t-daily"><span class="face f48">${I.gift}</span><div class="grow"><div class="lbl">Награда дня · день 6</div><div class="bigline"><span class="big disp">${coinMini}198</span><span class="action">Забрать</span></div><div class="week"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="today"></i><i></i></div></div></div>`,
+    wheelTile: `<div class="w tile t-wheel"><div class="tilehead"><span class="lbl">Колесо</span><span>${wheel(28)}</span></div><div><div class="big sm">Ещё крутка</div><div class="subl">за рекламу</div></div></div>`,
+    wheelHeroReady: `<div class="w hero ready t-wheel"><span class="face f48" style="background:transparent">${wheel(48)}</span><div class="grow"><div class="lbl">Колесо удачи</div><div class="bigline"><span class="big disp">Крутка ждёт</span><span class="action">Крутить</span></div><div class="subl">до ${coinMini}1 100</div></div></div>`,
+    friendsTile: `<div class="w tile t-friends"><div class="tilehead"><span class="lbl">Друзья</span><span class="face f28">${I.users}</span></div><div><div class="subl" style="font-size:13px;color:var(--muted)">Подарки друг другу</div></div></div>`,
+    friendsRow: `<div class="w rowsize t-friends"><span class="face f40">${I.users}</span><div class="grow"><div class="lbl">Друзья</div><div class="big sm" style="font-size:14px">2 новых · подарки и заявки</div></div>${I.chev}</div>`,
+  };
+  const slides = `<div class="strip"><div class="slide prev"><span class="face" style="background:rgba(70,217,198,.14);color:var(--secondary)">${I.gift}</span></div><div class="slide cur"><span class="face">${I.userPlus}</span><div><div class="disp" style="font-size:15px">Позови друзей</div><div class="subl">Награда за каждого</div></div></div></div><div class="dots"><i></i><i></i><i class="on"></i></div>`;
+  const guide = `<div class="card"><span class="face" style="--tone:var(--passive)">${I.book}</span><div class="grow"><div class="t">Гайдбук</div><div class="s">Кто есть кто и как не погибнуть в первую минуту</div></div>${I.chev}</div>`;
+  const feedback = `<div class="card stripe"><span class="face" style="--tone:var(--accent)">${I.heartMsg}</span><div class="grow"><div class="t">Что скажешь об игре?</div><div class="s">Три вопроса и поле для пожеланий — мы читаем всё</div></div>${I.chev}</div>`;
+  const bot = `<div class="card stripe" style="align-items:flex-start"><span class="face" style="--tone:var(--accent)">${I.bot}</span><div class="grow"><div class="t">Разрешить сообщения от бота</div><div class="s">Напишем, когда друг пришлёт подарок или заявку, и о важных обновлениях. Без спама.</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn">Разрешить</button><button class="btn ghost">Не сейчас</button></div></div></div>`;
+  const saved = `<div class="card stripe"><span class="face" style="--tone:var(--accent)">${I.play.replace('<svg','<svg style="width:20px;height:20px;fill:currentColor"')}</span><div class="grow"><div class="t">Забег сохранён</div><div class="s">04:12 · уровень 9 — продолжите с того же места</div></div></div>`;
+  const playBtn = `<button class="play cut cut-sm">${I.play}Играть</button>`;
+  const contBtns = `<button class="play cut cut-sm">${I.play}Продолжить</button><button class="btn ghost" style="width:100%;height:42px">Новый забег</button>`;
+  const skeleton = `<div class="sk" style="height:84px;margin:0 -12px 0 22px"></div><div class="sk" style="height:92px"></div><div class="g2"><div class="sk" style="height:88px"></div><div class="sk" style="height:88px"></div></div><div class="g2"><div class="sk" style="height:88px"></div><div class="sk" style="height:88px"></div></div>`;
+  const offlineBanner = `<div class="banner"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><div class="grow"><b>Нет связи с сервером</b><span>Забег работает. Награды, магазин и друзья — когда связь вернётся.</span></div><button class="btn sec" style="height:30px;padding:0 10px;font-size:12px">Повторить</button></div>`;
+
+  const STATES = [
+    { body: slides + W.recordHero + `<div class="g2">${W.tasksTile}${W.dailyTile}</div><div class="g2">${W.wheelTile}${W.friendsTile}</div>` + guide + feedback, foot: playBtn,
+      cap: `<b>1. Ничего не готово к забору</b> — как на твоём снимке. Рекорд первым во всю ширину, остальное плитками. Задания — по всем категориям, с суммой наград.` },
+    { body: slides + W.dailyHeroReady + W.wheelHeroReady + `<div class="g2">${W.recordTile}${W.tasksTile}</div>` + W.friendsRow, foot: playBtn,
+      cap: `<b>2. Награда и крутка ждут.</b> Готовое — первым во всю ширину: награда дня со срезом (главное на экране), колесо — без среза, его рисунок качается. Друзья — строкой: плиток нечётно.` },
+    { body: slides + W.recordHero + `<div class="g2">${W.tasksTile}${W.dailyTile}</div><div class="g2">${W.wheelTile}${W.friendsTile}</div>` + guide + bot, foot: playBtn, scroll: true,
+      cap: `<b>3. После первого забега.</b> Карточка разрешения боту писать (T-0010) встаёт на место карточки отзыва — под гайдбуком, за прокруткой. Две карточки сразу не показываются. Экран прокручен вниз.` },
+    { body: slides + saved + W.recordHero + `<div class="g2">${W.tasksTile}${W.dailyTile}</div>`, foot: contBtns,
+      cap: `<b>4. Есть сохранённый забег.</b> Карточка между каруселью и виджетами; внизу «Продолжить» — главная со срезом и «Новый забег» — вторая, с подтверждением, как сейчас.` },
+    { body: skeleton, foot: playBtn, loading: true,
+      cap: `<b>5. Загрузка.</b> Заглушки той же высоты, что виджеты, — ничего не прыгает. «Играть» доступна сразу.` },
+    { body: W.recordHero + `<div class="g2">${W.tasksTile}${W.dailyTile}</div><div class="g2">${W.wheelTile}${W.friendsTile}</div>`, foot: playBtn, banner: offlineBanner, offline: true,
+      cap: `<b>6. Нет связи</b> (T-0015). Плашка под шапкой, валюты приглушены; виджеты показывают последнее, что знали, — так и в задаче. «Играть» работает.` },
+  ];
+  document.getElementById("kit").innerHTML = [
+    [`<button class="play cut cut-sm" style="width:260px">${I.play}Играть</button>`, 'Главная кнопка: срез 8 px, рамка по срезу, значок ▶'],
+    [`<div style="display:flex;gap:8px"><button class="btn">Разрешить</button><button class="btn sec">Повторить</button><button class="btn ghost">Не сейчас</button></div>`, 'Кнопки 36 px: основная, вторичная, тихая'],
+    [`<div style="display:flex;gap:8px"><span class="action" style="--tone:var(--accent)">Забрать</span><span class="action" style="--tone:var(--info)">Крутить</span></div>`, 'Действие виджета — в тон виджета, скругление 4 px'],
+    [`<div style="display:flex;gap:8px"><div class="chip nobuy"><span class="coin"></span>5 762</div><div class="chip"><span class="gemi"></span>21<span class="buy"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></span></div></div>`, 'Фишки валют: монеты — в историю, самоцветы с «+» — в магазин'],
+    [`<div style="display:flex;gap:10px;color:var(--text)">${['t-daily','t-wheel','t-tasks','t-record','t-friends'].map((t,k)=>`<span class="${t}" style="display:contents"><span class="face f40">${[I.gift, wheel(28), ring(28,5/11), I.trophy, I.users][k]}</span></span>`).join('')}</div>`, 'Облики виджетов: подарок, колесо, кольцо заданий, кубок, люди — каждый в своём тоне'],
+    [`<div style="width:320px">${offlineBanner}</div>`.replace('class="banner"','class="banner" style="margin:0"'), 'Плашка связи — одна на всё приложение (T-0015)'],
+  ].map(([el, note]) => `<div class="cell">${el}<div class="note">${note}</div></div>`).join("");
+  const tpl = document.getElementById("phone");
+  const root = document.getElementById("states");
+  for (const s of STATES) {
+    const n = tpl.content.cloneNode(true);
+    n.querySelector(".body").innerHTML = s.body;
+    n.querySelector(".foot").innerHTML = s.foot;
+    if (s.banner) n.querySelector(".slot-banner").innerHTML = s.banner;
+    if (s.offline) n.querySelector(".screen").classList.add("offline");
+    if (s.loading) n.querySelectorAll(".chip").forEach((c) => { c.innerHTML = '<span class="sk" style="width:56px;height:12px;border-radius:3px"></span>'; });
+    n.querySelector(".cap").innerHTML = s.cap;
+    const body = n.querySelector(".body");
+    root.appendChild(n);
+    if (s.scroll) body.scrollTop = body.scrollHeight;
+  }
+</script>
+</body>
+</html>
