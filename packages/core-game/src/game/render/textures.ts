@@ -21,10 +21,8 @@ export interface ShapeTextureOptions {
 
 /**
  * Сгенерировать текстуру фигуры один раз на ключ: рисовать Graphics в кадре
- * нельзя. Возвращает, во сколько раз текстура шире тела (`size / (2·radius)`):
- * с тенью — больше единицы, без — единица. Тело при этом рисуется тем же
- * радиусом, так что на экране при масштабе 1 оно не меняется; множитель нужен
- * тем, кто размер спрайта выводит из ширины текстуры.
+ * нельзя. С тенью текстура шире тела, но тело рисуется тем же радиусом и стоит
+ * в центре: при масштабе спрайта 1 оно на экране прежнего размера.
  */
 export function ensureShapeTexture(
   scene: Phaser.Scene,
@@ -33,11 +31,11 @@ export function ensureShapeTexture(
   color: number,
   shape: ShapeKind,
   options: ShapeTextureOptions = {},
-): number {
+): void {
+  if (scene.textures.exists(key)) return;
+
   const layout = options.shadow === true ? shadowLayout(radius) : null;
   const size = layout?.size ?? Math.ceil(radius * 2);
-  const scaleFactor = size / (2 * radius);
-  if (scene.textures.exists(key)) return scaleFactor;
 
   const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
   if (layout !== null) {
@@ -54,7 +52,6 @@ export function ensureShapeTexture(
   });
   graphics.generateTexture(key, size, size);
   graphics.destroy();
-  return scaleFactor;
 }
 
 export function lerp(from: number, to: number, t: number): number {
