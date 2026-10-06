@@ -16,6 +16,7 @@ zones:
   - apps/admin/src/styles.css
 shared:
   - packages/app-shell/package.json
+  - packages/app-shell/src/i18n/ru.json
   - apps/admin/package.json
   - pnpm-lock.yaml
   - scripts/bundle-budget.mjs
@@ -161,20 +162,33 @@ design: design/directions/directions-2026-10-c.html
 
    Комментарии над блоками — «акцидентная: заголовки, кнопки, крупные цифры»
    и «текстовая».
-6. **`apps/admin/src/styles.css`.** Вместо двух импортов —
-   `@import "@fontsource/russo-one/400.css";` и
-   `@import "@fontsource-variable/ibm-plex-sans";`.
+6. **`apps/admin/src/styles.css`.** Вместо двух импортов:
+   - `@import "@fontsource-variable/ibm-plex-sans";`;
+   - для Russo One — не `@import "@fontsource/russo-one/400.css"`, а те же два
+     блока `@font-face`, что в `app-shell/src/design-system/fonts.css`:
+     кириллица и латиница, `font-weight: 100 900`, `unicode-range` из пакета,
+     с тем же комментарием про единственное начертание. Иначе заголовки панели
+     с `font-bold` получат поддельный полужирный (решение 06.10.2026, вопрос 3
+     в #218).
 7. **Документы.**
    - `docs/27-design-system-and-app-shell.md`:
      - §4.1 — новое направление одним абзацем и ссылкой на `design/README.md`;
      - §4.3 — гарнитуры;
      - строка шрифтов в таблице бюджета §3.4 — новое фактическое значение.
+   - `packages/app-shell/src/i18n/ru.json`, только строка `about.licenses.text`:
+     «Шрифты Russo One и IBM Plex Sans — SIL Open Font License 1.1. Ассеты — под
+     свободными лицензиями, полный список появится вместе с ними.»;
+   - `docs/27-design-system-and-app-shell.md`, строка экрана «Об игре» в
+     таблице экранов (около строки 1195): «шрифтов (Rubik и Inter…» →
+     «шрифтов (Russo One и IBM Plex Sans…»;
    - `CLAUDE.md`, «Структура и зоны»: фразу «Значения там — направление этапа 2
      (тёмная тема высокой контрастности…) до решения по сеттингу» заменить на
      «Значения там — направление «Сумеречный рубеж» (`design/README.md`)».
-8. **Гейт и снимки.** `pnpm budget`: шрифты должны уменьшиться. Снимки на 390
-   px до и после — в PR: главная, магазин, забег с HUD, экран смерти,
-   настройки. Один снимок панели — сводка.
+8. **Гейт и снимки.** `pnpm budget`: шрифты должны уменьшиться. Снимки на
+   390 px снимают тимлиды при приёмке (решение 06.10.2026, вопрос 4 в #218).
+   От исполнителя — то, что доступно без бэкенда: экран предупреждения о тесте
+   и витрина компонентов (`screens/gallery.tsx`), описанием в PR, если
+   приложить файл нельзя.
 
 ## Чего не трогаем
 
@@ -183,6 +197,9 @@ design: design/directions/directions-2026-10-c.html
   вопрос тимлидам, со снимком.
 - Цвета движка в `packages/core-game/src/game/render/looks.ts` — вид боя
   отдельной задачей.
+- Шрифт чисел урона на канве (`core-game/src/game/render/combat-feedback.ts`,
+  `"Rubik Variable"`) — его переводит на Russo One T-0014, шаг 7. До неё числа
+  на канве рисуются запасным системным шрифтом: это ожидаемо.
 - Экраны и компоненты: ни одного класса в них не меняем.
 
 ## Тесты
