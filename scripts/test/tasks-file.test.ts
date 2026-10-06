@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { badgeLine, parseFrontmatter, validateTask } from "../tasks/task-file.mjs";
+import { badgeLine, parseFrontmatter, taskBadge, validateTask, withBadgeLine } from "../tasks/task-file.mjs";
 
 // Шапка задачи — строгое подмножество YAML (tasks/T-0002-task-cli.md, «Решения»):
 // разбирает свой парсер, любая другая конструкция — ошибка с номером строки.
@@ -242,5 +242,57 @@ describe("строка значков", () => {
     it("без тела файла строка не проверяется — как и раньше", () => {
       expect(validateTask(fileName, data)).toEqual([]);
     });
+  });
+});
+
+describe("значок задачи и строка значков под заголовком (T-0018)", () => {
+  it("taskBadge — значок с подписью и ссылкой на файл задачи", () => {
+    expect(taskBadge("T-0002", "T-0002-task-cli.md")).toBe(`[![T-0002](${STATUS_URL}/T-0002.json&label=T-0002)](T-0002-task-cli.md)`);
+  });
+
+  it("badgeLine после рефакторинга даёт прежнюю строку: задача с двумя зависимостями", () => {
+    expect(badgeLine({ id: "T-0003", depends_on: ["T-0001", "T-0002"] }, FILE_NAMES)).toBe(
+      [
+        `[![статус](${STATUS_URL}/T-0003.json)](README.md#значки-статуса)`,
+        `[![T-0001](${STATUS_URL}/T-0001.json&label=T-0001)](T-0001-first.md)`,
+        `[![T-0002](${STATUS_URL}/T-0002.json&label=T-0002)](T-0002-second.md)`,
+      ].join(" "),
+    );
+  });
+});
+
+describe("withBadgeLine", () => {
+  const expected = `[![статус](${STATUS_URL}/T-0003.json)](README.md#значки-статуса)`;
+  const stale = `[![статус](${STATUS_URL}/T-0003.json)](README.md#значки-статуса) [![T-0009](x)](y.md)`;
+  const text = (...middle: string[]): string => ["---", "id: T-0003", "---", "", "# T-0003. Заголовок", ...middle, "## Зачем", "Текст.", ""].join("\n");
+
+  it("устаревшая строка заменяется, остальное побайтно то же", () => {
+    expect(withBadgeLine(text("", stale, ""), expected)).toBe(text("", expected, ""));
+  });
+
+  it("верная строка — текст не меняется", () => {
+    expect(withBadgeLine(text("", expected, ""), expected)).toBe(text("", expected, ""));
+  });
+
+  it("строки нет — вставлена под заголовком, после неё пустая строка", () => {
+    expect(withBadgeLine(text(""), expected)).toBe(text("", expected, ""));
+  });
+
+  it("файл с CRLF — переводы строк остались CRLF", () => {
+    const crlf = text("", stale, "").replace(/\n/g, "\r\n");
+    const fixed = withBadgeLine(crlf, expected);
+    expect(fixed).toBe(text("", expected, "").replace(/\n/g, "\r\n"));
+    expect(fixed.replace(/\r\n/g, "")).not.toContain("\n");
+  });
+
+  it("вставка в файл с CRLF тоже CRLF", () => {
+    const fixed = withBadgeLine(text("").replace(/\n/g, "\r\n"), expected);
+    expect(fixed.replace(/\r\n/g, "")).not.toContain("\n");
+    expect(fixed).toContain(expected);
+  });
+
+  it("заголовка нет — текст без изменений", () => {
+    const noHeading = "---\nid: T-0003\n---\n\nПросто текст.\n";
+    expect(withBadgeLine(noHeading, expected)).toBe(noHeading);
   });
 });

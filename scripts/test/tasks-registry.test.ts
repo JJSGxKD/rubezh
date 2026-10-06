@@ -13,6 +13,23 @@ const TASKS_DIR = join(ROOT, "tasks");
 
 const EPICS = ["| Эпик | Цель |", "|---|---|", "| **E0. Процесс** | x |", "| **E1. Деньги** | y |"].join("\n");
 
+// Ячейка «Задачи» эпика — значки задач (T-0018); собрана руками, а не через код: независимая сверка формата.
+function epicsOf(files: { name: string; text: string }[]): string {
+  const cell = (epic: string): string => {
+    const badges = files
+      .filter((file) => file.name.startsWith("T-") && new RegExp(`^epic: ${epic}$`, "m").test(file.text))
+      .map((file) => ({ id: file.name.slice(0, 6), name: file.name }))
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map(({ id, name }) => `[![${id}](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/${id}.json&label=${id})](${name})`);
+    return badges.length === 0 ? "—" : badges.join(" ");
+  };
+  return ["| Эпик | Цель | Задачи |", "|---|---|---|", `| **E0. Процесс** | x | ${cell("E0")} |`, `| **E1. Деньги** | y | ${cell("E1")} |`].join("\n");
+}
+
+function check(files: { name: string; text: string }[]): string[] {
+  return checkRegistry(files, epicsOf(files));
+}
+
 const STATUS_URL = "https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status";
 
 // Строка значков под заголовком (T-0011): написана руками, а не через badgeLine, — это независимая сверка формата.
@@ -72,47 +89,41 @@ describe("реестр задач", () => {
   });
 
   it("повтор id", () => {
-    const errors = checkRegistry([fileOf("T-0003", {}, "T-0003-a.md"), fileOf("T-0003", {}, "T-0003-b.md")], EPICS);
+    const errors = check([fileOf("T-0003", {}, "T-0003-a.md"), fileOf("T-0003", {}, "T-0003-b.md")]);
     expect(errors.some((error: string) => error.includes("повтор") && error.includes("T-0003"))).toBe(true);
   });
 
   it("неизвестный эпик", () => {
-    const errors = checkRegistry([fileOf("T-0003", { epic: "E99" })], EPICS);
+    const errors = check([fileOf("T-0003", { epic: "E99" })]);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("T-0003-x.md");
     expect(errors[0]).toContain("E99");
   });
 
   it("несуществующая зависимость", () => {
-    const errors = checkRegistry([fileOf("T-0003", { depends_on: "[T-0099]" })], EPICS);
+    const errors = check([fileOf("T-0003", { depends_on: "[T-0099]" })]);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("T-0099");
   });
 
   it("цикл из двух задач — ошибка называет цикл", () => {
-    const errors = checkRegistry(
-      [fileOf("T-0003", { depends_on: "[T-0004]" }), fileOf("T-0004", { depends_on: "[T-0003]" })],
-      EPICS,
-    );
+    const errors = check([fileOf("T-0003", { depends_on: "[T-0004]" }), fileOf("T-0004", { depends_on: "[T-0003]" })]);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("T-0003 → T-0004 → T-0003");
   });
 
   it("цикл из трёх задач — ошибка называет цикл", () => {
-    const errors = checkRegistry(
-      [
+    const errors = check([
         fileOf("T-0005", { depends_on: "[T-0006]" }),
         fileOf("T-0006", { depends_on: "[T-0007]" }),
         fileOf("T-0007", { depends_on: "[T-0005]" }),
-      ],
-      EPICS,
-    );
+      ]);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("T-0005 → T-0006 → T-0007 → T-0005");
   });
 
   it("файл T-* с плохой шапкой или именем — ошибка, а не молчание", () => {
-    const errors = checkRegistry([{ name: "T-0003-x.md", text: "без шапки" }, fileOf("T-0004", {}, "T-bad.md")], EPICS);
+    const errors = check([{ name: "T-0003-x.md", text: "без шапки" }, fileOf("T-0004", {}, "T-bad.md")]);
     expect(errors.length).toBeGreaterThanOrEqual(2);
   });
 });
@@ -121,7 +132,7 @@ describe("строка значков в реестре", () => {
   it("строка с зависимостью, которой в шапке нет, — ошибка с именем файла", () => {
     const file = fileOf("T-0002", { depends_on: "[T-0001]" });
     const wrong = { ...file, text: file.text.replace(/\[!\[T-0001\].*$/m, "") };
-    const errors = checkRegistry([fileOf("T-0001"), wrong], EPICS);
+    const errors = check([fileOf("T-0001"), wrong]);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("T-0002-x.md");
     expect(errors[0]).toContain("значков");
@@ -130,8 +141,27 @@ describe("строка значков в реестре", () => {
   it("ссылка зависимости ведёт на её настоящий файл: с чужим slug строка не проходит", () => {
     const file = fileOf("T-0002", { depends_on: "[T-0001]" });
     const wrong = { ...file, text: file.text.replace("(T-0001-x.md)", "(T-0001-other.md)") };
-    const errors = checkRegistry([fileOf("T-0001"), wrong], EPICS);
+    const errors = check([fileOf("T-0001"), wrong]);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("T-0002-x.md");
+  });
+});
+
+describe("ячейка «Задачи» эпика в реестре", () => {
+  it("номера через запятую вместо значков — ошибка реестра с подсказкой pnpm task fix", () => {
+    const files = [fileOf("T-0001"), fileOf("T-0002")];
+    const epics = epicsOf(files).replace(/\| \[!\[T-0001\].*? \|$/m, "| T-0001, T-0002 |");
+    const errors = checkRegistry(files, epics);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("E0");
+    expect(errors[0]).toContain("pnpm task fix");
+  });
+
+  it("строка значков с подсказкой pnpm task fix", () => {
+    const file = fileOf("T-0002", { depends_on: "[T-0001]" });
+    const wrong = { ...file, text: file.text.replace(/\[!\[T-0001\].*$/m, "") };
+    const errors = check([fileOf("T-0001"), wrong]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("pnpm task fix");
   });
 });
