@@ -258,6 +258,6 @@ describe("страница доски", () => {
   });
 
   it("на странице нет почт и юзернеймов Telegram", () => {
-    expect(render()).not.toMatch(/@[^\s]+\.[a-z]{2,}|t\.me/i);
+    expect(render()).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.-]+|t\.me/i);
   });
 });

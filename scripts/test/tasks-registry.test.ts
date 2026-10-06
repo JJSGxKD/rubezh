@@ -85,7 +85,7 @@ describe("реестр задач", () => {
       { name: "inbox.md", text: "мусор без шапки" },
       { name: "_template.md", text: "---\nid: T-NNNN\n---" },
     ];
-    expect(checkRegistry(files, EPICS)).toEqual([]);
+    expect(check(files)).toEqual([]);
   });
 
   it("повтор id", () => {
