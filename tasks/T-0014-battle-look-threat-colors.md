@@ -6,7 +6,7 @@ priority: P2
 status: ready
 owner:
 size: M
-depends_on: [T-0005]
+depends_on: [T-0005, T-0012]
 zones:
   - packages/core-game/src/game/render/looks.ts
   - packages/core-game/src/game/render/shapes.ts
@@ -28,7 +28,7 @@ design: design/directions/directions-2026-10-c.html
 
 # T-0014. Вид боя — красная гамма по угрозе, тени и новые цвета мира
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0014.json)](README.md#значки-статуса) [![T-0005](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0005.json&label=T-0005)](T-0005-orbiters-and-projectiles-render.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0014.json)](README.md#значки-статуса) [![T-0005](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0005.json&label=T-0005)](T-0005-orbiters-and-projectiles-render.md) [![T-0012](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0012.json&label=T-0012)](T-0012-twilight-tokens-and-fonts.md)
 
 ## Зачем
 
@@ -183,7 +183,9 @@ design: design/directions/directions-2026-10-c.html
      фона задаётся отдельно от тайла, — тот же цвет.
 7. **`combat-feedback.ts`:**
    - `fontFamily: '"Russo One", "Segoe UI", system-ui, sans-serif'`,
-     `fontStyle: "normal"`, цвет `#ffffff`;
+     `fontStyle: "normal"`, цвет `#ffffff`. Файл шрифта приносит в бандл
+     T-0012, поэтому задача ждёт её. Сейчас здесь `"Rubik Variable"`, которого
+     после T-0012 в бандле нет;
    - вместо `stroke` — `setShadow(0, Math.round(1.5 * scale), "#000000", Math.round(2 * scale), false, true)`;
    - добивание — `#ffd15c`.
 8. **`docs/27-design-system-and-app-shell.md`**, раздел о палитре канвы (если
