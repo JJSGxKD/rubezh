@@ -3,8 +3,8 @@ id: T-0001
 title: Наборы магазина только из самоцветов
 epic: E1
 priority: P0
-status: ready
-owner:
+status: in-progress
+owner: claude-2 / sonnet-5.5
 size: S
 depends_on: []
 zones:
