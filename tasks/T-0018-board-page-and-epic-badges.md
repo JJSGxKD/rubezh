@@ -3,7 +3,7 @@ id: T-0018
 title: Статусы задач в эпиках, страница доски и вклад по аккаунтам GitHub
 epic: E0
 priority: P1
-status: in-progress
+status: done
 owner: claude-2 / sonnet-5.5
 size: M
 depends_on: []
