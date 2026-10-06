@@ -1,0 +1,89 @@
+# Живые значки статуса задач (tasks/README.md, «Значки статуса»; docs/09-ci-cd.md §7).
+#
+# Значки под заголовками задач читают status/T-NNNN.json из ветки task-board.
+# Здесь эта ветка пересчитывается тем же кодом, что `pnpm task board`
+# (scripts/tasks/), — второй копии логики нет. Workflow пишет ТОЛЬКО в ветку
+# task-board: ни в dev, ни в main он не пушит.
+
+name: Task board
+
+on:
+  # Задачу взяли или отдали: появилась или исчезла ветка task/*.
+  create:
+  delete:
+  # PR задачи открыт, закрыт, ушёл в черновик или вышел из него.
+  pull_request:
+    types: [opened, reopened, closed, ready_for_review, converted_to_draft]
+  # Задачу добавили, влили или отменили — меняются файлы tasks/.
+  push:
+    branches: [dev]
+    paths: ["tasks/**"]
+  # Подстраховка: событие могло потеряться, а значок не должен врать часами.
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+# contents: write — только чтобы пушить ветку task-board; pull-requests: read —
+# список открытых PR для колонки «На ревью».
+permissions:
+  contents: write
+  pull-requests: read
+
+# Пересчёт идемпотентен: нужен только последний. Параллельные прогоны спорили
+# бы за один force-push.
+concurrency:
+  group: task-board
+  cancel-in-progress: true
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    # Фильтр по веткам задач — здесь, а не в `on:`: у create/delete нет своего
+    # фильтра веток. Для них смотрим event.ref (имя ветки): у delete github.ref
+    # указывает на ветку по умолчанию, а не на удалённую. Fork-PR пропускаем:
+    # токен у него без записи, пересчёт всё равно упал бы.
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      ((github.event_name == 'create' || github.event_name == 'delete') &&
+        github.event.ref_type == 'branch' &&
+        startsWith(github.event.ref, 'task/')) ||
+      (github.event_name == 'pull_request' &&
+        startsWith(github.event.pull_request.head.ref, 'task/') &&
+        github.event.pull_request.head.repo.full_name == github.repository)
+    steps:
+      # Всегда dev, какое бы событие ни пришло: источник правды о задачах — файлы
+      # в dev (так же, как у `pnpm task board`). Полная история и все ветки —
+      # скрипту нужны origin/dev и список веток task/*.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # Значки — файлами во временный каталог, не в рабочую копию: в dev они
+      # попасть не должны. GH_TOKEN — для списка открытых PR (`gh pr list`).
+      - run: node scripts/tasks/task.mjs status-json --out "$RUNNER_TEMP/board"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      # Ветка без общей истории: каждый прогон заменяет её одним коммитом.
+      # История статусов никому не нужна, а накапливать по коммиту в час — это
+      # растущий репозиторий ради картинок. Поэтому --force и только в
+      # task-board. Токен — через переменную окружения, а не подстановкой в
+      # текст команды.
+      - working-directory: ${{ runner.temp }}/board
+        run: |
+          git init --quiet --initial-branch=task-board
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit --quiet --message "chore(tasks): Статусы задач"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/task-board
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
