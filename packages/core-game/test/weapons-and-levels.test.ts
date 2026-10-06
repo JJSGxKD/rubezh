@@ -6,13 +6,14 @@ import {
   isAwaitingChoice,
   passivesInCategory,
   prepareOffers,
+  refreshPlayerStats,
   xpForLevel,
 } from "../src/game/progression/levels";
 import { SIM_EVENT } from "../src/game/sim/events";
 import { spawnGem } from "../src/game/sim/gems";
 import { IDLE_INPUT, stepWorld } from "../src/game/sim/step";
 import { vectorLength } from "../src/game/sim/vector";
-import { orbiterCount, orbiterPosition, type OrbiterPoint } from "../src/game/weapons";
+import { effectiveWeaponLevel, orbiterCount, orbiterPosition, type OrbiterPoint } from "../src/game/weapons";
 import type { ResolvedWeaponLevel } from "../src/game/weapons/weapon-types";
 import {
   createWorld,
@@ -461,5 +462,53 @@ describe("расстояние и позиция", () => {
 
     const distance = vectorLength(world.gems.x[0] - world.player.x, world.gems.y[0] - world.player.y);
     expect(distance).toBeLessThan(startDistance);
+  });
+});
+
+describe("числа оружия с учётом пассивок", () => {
+  const REACH: PassiveDef = { id: "reach", ...text, category: "attack", stat: "area", op: "mul", levels: [1.6] };
+
+  function boosted(weapon: WeaponDef): World {
+    const world = setup({ weapons: [weapon], passives: [REACH, VOLLEY] });
+    for (const id of ["reach", "volley"]) {
+      addPassive(world.loadout, world.passiveTypes.findIndex((type) => type.id === id));
+    }
+    refreshPlayerStats(world);
+    return world;
+  }
+
+  const blank = (): ResolvedWeaponLevel => ({
+    damage: 0,
+    cooldownSec: 0,
+    projectiles: 0,
+    pierce: 0,
+    areaRadius: 0,
+    projectileSpeed: 0,
+    ttlSec: 0,
+    element: 0,
+    statusChance: 0,
+  });
+
+  it("effectiveWeaponLevel даёт числа, которыми бьёт симуляция", () => {
+    const world = boosted(WARD);
+    const base = world.weaponTypes[0].levels[0];
+    const out = blank();
+
+    expect(effectiveWeaponLevel(world, 0, out)).toBe(out);
+    expect(world.playerStats.areaMul).toBeGreaterThan(1);
+    expect(out.areaRadius).toBe(base.areaRadius * world.playerStats.areaMul);
+    expect(out.projectiles).toBe(base.projectiles + world.playerStats.extraProjectiles);
+    expect(out.damage).toBe(base.damage * world.playerStats.damageMul);
+    expect(out.cooldownSec).toBe(base.cooldownSec * world.playerStats.cooldownMul);
+  });
+
+  it("у ауры прибавка снарядов не действует, площадь — растёт", () => {
+    const world = boosted(AURA);
+    const base = world.weaponTypes[0].levels[0];
+    const out = effectiveWeaponLevel(world, 0, blank());
+
+    expect(world.playerStats.extraProjectiles).toBeGreaterThan(0);
+    expect(out.projectiles).toBe(base.projectiles);
+    expect(out.areaRadius).toBe(base.areaRadius * world.playerStats.areaMul);
   });
 });
