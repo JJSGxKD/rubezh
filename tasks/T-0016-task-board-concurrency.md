@@ -3,8 +3,8 @@ id: T-0016
 title: Пересчёт значков не отменяется пустыми прогонами
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-2 / sonnet-5.5
 size: S
 depends_on: []
 zones:
