@@ -3,7 +3,7 @@ id: T-0005
 title: Обереги и снаряды рисуются так, как бьёт симуляция
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-2 / sonnet-5.5
 size: S
 depends_on: []
