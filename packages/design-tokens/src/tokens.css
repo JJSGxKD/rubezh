@@ -11,41 +11,48 @@
  * анимации гайдбука, слои, отступы площадки, поверхности и кнопки, — живёт в
  * `packages/app-shell/src/design-system/tokens.css`.
  *
- * Направление этапа 2 — тёмная тема высокой контрастности (§4.1); смена
+ * Направление — «Сумеречный рубеж» (`design/README.md`, §4.1): фиолетово-синие
+ * сумерки, оранжевый жар очага, бирюза оберегов, строгие грани. Смена
  * визуального направления — правка этого файла и `src/index.ts`, а не экранов.
  */
 @theme {
-  /* Цвет: основа. Фон почти чёрный с холодным оттенком — на нём сильнее
-     читаются тёплый акцент и цвета забега. */
-  --color-bg: #07090e;
-  --color-surface: #121622;
-  --color-surface-raised: #1b2130;
-  --color-surface-sunken: #0b0e15;
-  --color-border: #262e40;
-  --color-border-strong: #3a4560;
-  --color-text: #f3f6fc;
-  --color-text-muted: #a8b2c6;
-  --color-text-disabled: #69738a;
+  /* Цвет: основа. Фон — глубокие фиолетово-синие сумерки, а не чёрный: на нём
+     тёплый акцент и цвета забега читаются сильнее, а поверхности различаются
+     ступенями светлоты. Текст — тёплый, не белый. */
+  --color-bg: #1d1c31;
+  --color-surface: #28273f;
+  --color-surface-raised: #353452;
+  --color-surface-sunken: #17162a;
+  --color-border: #43425f;
+  --color-border-strong: #5b5980;
+  --color-text: #f3eee6;
+  --color-text-muted: #aeaac4;
+  --color-text-disabled: #6f6c8a;
 
-  /* Цвет: действие. Янтарь — главное действие экрана; кромка и блик дают
-     кнопке объём, а не просто заливку. */
-  --color-accent: #ffb22e;
-  --color-accent-pressed: #f09a12;
-  --color-accent-glow: #ffd27a;
-  --color-accent-edge: #a85a06;
-  --color-on-accent: #1d1102;
+  /* Цвет: действие. Оранжевый жар очага — главное действие экрана; кромка и
+     блик дают кнопке объём, а не просто заливку. */
+  --color-accent: #ff8f3f;
+  --color-accent-pressed: #f0782a;
+  --color-accent-glow: #ffb67f;
+  --color-accent-edge: #a0582a;
+  --color-on-accent: #230f02;
+
+  /* Бирюза оберегов — второй акцент: значки разделов, обереги, выделение без
+     призыва к действию. */
+  --color-secondary: #46d9c6;
+  --color-on-secondary: #062b26;
 
   /* Цвет: состояние */
   --color-danger: #ff5d5d;
-  --color-warning: #ff8c42;
-  --color-success: #5fe3a1;
+  --color-warning: #ffc14d;
+  --color-success: #8ee86b;
   --color-info: #5ccfff;
 
   /* Цвет: игра. Семантика забега; те же значения читает канва через tokens.ts */
-  --color-hp: #5fe3a1;
-  --color-hp-low: #ff5d5d;
-  --color-xp: #5ccfff;
-  --color-elite: #ffd36b;
+  --color-hp: #ff6f90;
+  --color-hp-low: #ff3b5c;
+  --color-xp: #b6ff4a;
+  --color-elite: #ffd15c;
   --color-weapon: #ffe066;
   --color-passive: #c47dff;
 
@@ -69,12 +76,12 @@
   --color-gem-lo: #f0303e;
 
   /*
-   * Типографика. Две гарнитуры (§4.3): Rubik — акцидентная для заголовков,
-   * кнопок и крупных цифр, Inter — текстовая. Обе с кириллицей, файлы — в
-   * бандле (fonts.css). Системные стеки за ними — на время загрузки файла.
+   * Типографика. Две гарнитуры (§4.3): Russo One — акцидентная для заголовков,
+   * кнопок и крупных цифр, IBM Plex Sans — текстовая. Обе с кириллицей, файлы —
+   * в бандле (fonts.css). Системные стеки за ними — на время загрузки файла.
    */
-  --font-display: "Rubik Variable", "Segoe UI", system-ui, sans-serif;
-  --font-text: "Inter Variable", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Russo One", "Segoe UI", system-ui, sans-serif;
+  --font-text: "IBM Plex Sans Variable", system-ui, "Segoe UI", Roboto, sans-serif;
 
   --text-xs: 12px;
   --text-sm: 14px;
@@ -85,12 +92,16 @@
   --text-3xl: 40px;
   --text-4xl: 48px;
 
-  /* Радиусы */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  /* Радиусы: грани строгие, скругления маленькие. pill — для переключателей и полос. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
   --radius-pill: 9999px;
+
+  /* Размер срезанного угла (design/README.md): срез — фирменная черта граней. */
+  --cut-sm: 8px;
+  --cut-md: 10px;
 
   /*
    * Тени. Статичные: анимировать тень запрещено (§3.3, правило 2) — там, где
