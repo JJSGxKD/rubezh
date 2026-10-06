@@ -3,8 +3,8 @@ id: T-0012
 title: Палитра, шрифты и скругления направления «Сумеречный рубеж»
 epic: E12
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-2 / sonnet-5.5
 size: M
 depends_on: []
 zones:
