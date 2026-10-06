@@ -11,6 +11,10 @@
 
 export const FILE_NAME_RE = /^(T-\d{4})-[a-z0-9-]+\.md$/;
 const ID_RE = /^T-\d{4}$/;
+
+/** Владелец и репозиторий в адресе значка: его читает shields.io из ветки task-board. */
+const REPOSITORY = "JJSGxKD/rubezh";
+const STATUS_URL = `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/${REPOSITORY}/task-board/status`;
 const EPIC_RE = /^E\d+$/;
 
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
@@ -158,11 +162,45 @@ function pathProblem(path) {
 }
 
 /**
+ * Строка значков под заголовком задачи: статус самой задачи и по значку на
+ * каждую зависимость в порядке `depends_on`. Ссылка зависимости ведёт на её
+ * файл, поэтому `fileNames` — `{ "T-NNNN": "T-NNNN-slug.md" }` по реестру.
+ */
+export function badgeLine(task, fileNames) {
+  const badges = [`[![статус](${STATUS_URL}/${task.id}.json)](README.md#значки-статуса)`];
+  for (const id of task.depends_on) {
+    const dependencyFile = fileNames[id];
+    if (dependencyFile === undefined) throw new Error(`badgeLine: для зависимости ${id} не передано имя файла`);
+    badges.push(`[![${id}](${STATUS_URL}/${id}.json&label=${id})](${dependencyFile})`);
+  }
+  return badges.join(" ");
+}
+
+/** Ошибка строки значков или `null`: сразу под заголовком «# T-NNNN. …» должна стоять ровно `badgeLine`. */
+function badgeProblem(data, body, fileNames) {
+  // Зависимости нет в реестре — файл для ссылки взять негде; об этом скажет проверка реестра.
+  if (data.depends_on.some((id) => fileNames[id] === undefined)) return null;
+  const expected = badgeLine(data, fileNames);
+  const lines = body.split(/\r?\n/).filter((line) => line.trim() !== "");
+  if (!new RegExp(`^# ${data.id}\\. .+`).test(lines[0] ?? "")) {
+    return `ожидается заголовок «# ${data.id}. …» и под ним строка значков: ${expected}`;
+  }
+  if (lines[1] !== expected) {
+    return `под заголовком нет строки значков или она не совпадает с depends_on; ожидается: ${expected}`;
+  }
+  return null;
+}
+
+/**
  * Проверяет одну задачу: `fileName` — имя файла без каталога, `data` — то, что
  * вернул `parseFrontmatter`. Возвращает список ошибок вида
  * `T-0003-x.md: поле priority — ожидается P0, P1, P2 или P3, а не P5`.
+ *
+ * `context` — `{ body, fileNames }`: текст файла после шапки и имена файлов
+ * реестра (см. `badgeLine`). Без него строка значков не проверяется: так
+ * проверяется шапка отдельно от тела, например при захвате.
  */
-export function validateTask(fileName, data) {
+export function validateTask(fileName, data, context) {
   const errors = [];
   const fail = (field, message) => errors.push(`${fileName}: поле ${field} — ${message}`);
 
@@ -227,6 +265,11 @@ export function validateTask(fileName, data) {
     fail("zones", `у задачи в статусе ${data.status} зоны не могут быть пустыми`);
   }
   if (data.status === "in-progress" && text("owner") === "") fail("owner", "у задачи in-progress должно быть указано, кто её взял");
+
+  if (context !== undefined && errors.length === 0) {
+    const problem = badgeProblem(data, context.body, context.fileNames);
+    if (problem !== null) errors.push(`${fileName}: ${problem}`);
+  }
 
   return errors;
 }
