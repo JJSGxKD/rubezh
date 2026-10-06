@@ -67,25 +67,25 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
 /** Ранг врага на канве: обычный не задан. */
 export type EnemyRankLook = "elite" | "boss" | undefined;
 
-/** Цвет и доля смешения тела с цветом ранга: элита — жар очага, босс — малиновый. */
+/**
+ * Цвет и доля смешения тела с цветом ранга: элита — жар очага, босс —
+ * ярко-малиновый. Не #e0245e: это цвет рядового `chase`, и его босс не
+ * отличался бы от рядового.
+ */
 const RANK_TINT = {
   elite: { color: 0xff8f3f, mix: 0.35 },
-  boss: { color: 0xe0245e, mix: 0.4 },
+  boss: { color: 0xff4f8f, mix: 0.4 },
 } as const;
 
 /**
  * Цвет врага на канве. Ранг смешивает тело с цветом ранга по каналам, а не
  * подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
  * останется без своего цвета элиты.
- *
- * Булев аргумент — для гайдбука оболочки, который знает только «элита или
- * нет»: `true` — элита.
  */
-export function enemyColor(pattern: EnemyPattern, rank: EnemyRankLook | boolean): number {
+export function enemyColor(pattern: EnemyPattern, rank: EnemyRankLook): number {
   const color = ENEMY_LOOKS[pattern].color;
-  const key = rank === true ? "elite" : rank === false ? undefined : rank;
-  if (key === undefined) return color;
-  return mixChannels(color, RANK_TINT[key].color, RANK_TINT[key].mix);
+  if (rank === undefined) return color;
+  return mixChannels(color, RANK_TINT[rank].color, RANK_TINT[rank].mix);
 }
 
 /** Кайма опасного: золотая, толще у босса. Обводка у рядовых «странновато выглядит» — её нет. */
