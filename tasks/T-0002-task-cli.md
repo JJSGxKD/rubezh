@@ -100,7 +100,8 @@ design: null
    - каждый `depends_on` ссылается на существующую задачу;
    - циклов в `depends_on` нет (ошибка называет цикл: `T-0003 → T-0004 → T-0003`).
 
-   Пропускаются `README.md`, `epics.md` и `_template.md`.
+   Задача — это файл `tasks/T-*.md`. Остальные файлы каталога (`README.md`,
+   `epics.md`, `inbox.md`, `_template.md` и любые будущие) не проверяются.
 4. `scripts/tasks/zones.mjs`:
    - `globToRegExp(pattern)` — шаблоны:
      - `*` — любые символы, кроме `/`;
