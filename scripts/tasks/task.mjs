@@ -1,7 +1,8 @@
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { COLUMNS, classify, nextTasks } from "./board.mjs";
+import { COLUMNS, classify, nextTasks, statusBadge } from "./board.mjs";
+import { checkClaim } from "./claim.mjs";
 import { BASE, ROOT, fetchOrigin, git, loadRegistryState, readBranchFile, tryGit } from "./git-io.mjs";
 import { checkRegistry } from "./registry.mjs";
 import { parseFrontmatter, validateTask } from "./task-file.mjs";
@@ -21,7 +22,9 @@ const USAGE = `Команды:
   pnpm task claim T-NNNN --owner "<аккаунт / модель>"
                                            захватить задачу веткой task/T-NNNN
   pnpm task release T-NNNN --yes           отдать задачу: удалить ветку task/T-NNNN
-  pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах`;
+  pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах
+  pnpm task claim-check [--base <ref>]     задачу можно было взять: статус, зависимости, зоны
+  pnpm task status-json --out <каталог>    значки статуса: <каталог>/status/T-NNNN.json на задачу`;
 
 const TASK_ID_RE = /^T-\d{4}$/;
 const BOOLEAN_FLAGS = new Set(["yes", "all"]);
@@ -62,10 +65,10 @@ function taskLine({ task, reason, pr }, owner) {
 }
 
 /** Кто взял задачу: поле owner из её ветки на origin (на dev оно пустое — статус живёт в ветке). */
-function ownerOf(task) {
+function ownerOf(task, emptyIfUnknown = false) {
   const text = readBranchFile(task.id, task.fileName);
   const owner = text === null ? "" : (parseFrontmatter(text).data.owner ?? "");
-  return owner === "" ? "неизвестно" : owner;
+  return owner === "" && !emptyIfUnknown ? "неизвестно" : owner;
 }
 
 function printState(state) {
@@ -222,6 +225,53 @@ function runDiffCheck(flags) {
   console.log(`Проверка зон ${id}: ${String(changed.length)} файлов, все в зонах задачи.`);
 }
 
+/** Ветка PR в виде `task/T-NNNN` → id; иначе `null`: проверки только для веток задач. */
+function taskIdOfHead() {
+  const head = process.env.GITHUB_HEAD_REF || git(["branch", "--show-current"]);
+  const match = /^task\/(T-\d{4})$/.exec(head);
+  if (match === null) console.log(`Ветка «${head}» — не ветка задачи, проверка захвата пропущена.`);
+  return match === null ? null : { id: match[1], head };
+}
+
+function runClaimCheck(flags) {
+  const found = taskIdOfHead();
+  if (found === null) return;
+  const base = flags.base ?? BASE;
+  const state = loadRegistryState(base);
+  for (const error of state.errors) console.error(`предупреждение: в реестре на ${base} ошибка — ${error}`);
+  const problems = checkClaim(found.id, state);
+  if (problems.length > 0) {
+    console.error(`ошибка  PR ветки ${found.head} взят в обход порядка (tasks/README.md, «Как взять задачу»):`);
+    for (const problem of problems) console.error(`  ${problem}`);
+    console.error("Захватывай задачу командой pnpm task claim; если задачу брать нельзя — отдай её (pnpm task release) и выбери другую.");
+    process.exit(1);
+  }
+  console.log(`Проверка захвата ${found.id}: задачу можно было брать.`);
+}
+
+const BOARD_README = `Статусы задач для значков shields.io (tasks/README.md, «Значки статуса»).
+Ветка без истории: её целиком заменяет workflow task-board.yml (pnpm task status-json).
+Руками не править.
+`;
+
+function runStatusJson(flags) {
+  if (flags.out === undefined) fail("Укажи каталог: pnpm task status-json --out <каталог>");
+  const { board } = loadBoard();
+  const dir = join(flags.out, "status");
+  mkdirSync(dir, { recursive: true });
+  let count = 0;
+  for (const column of COLUMNS) {
+    for (const entry of board[column.key]) {
+      const busy = column.key === "inProgress" || column.key === "review";
+      const badge = statusBadge({ ...entry, column: column.key, owner: busy ? ownerOf(entry.task, true) : undefined });
+      writeFileSync(join(dir, `${entry.task.id}.json`), `${JSON.stringify(badge)}\n`);
+      count += 1;
+    }
+  }
+  writeFileSync(join(flags.out, "README.md"), BOARD_README);
+  console.log(`Значки статуса: ${String(count)} задач → ${dir}`);
+}
+
 function main(argv) {
   const [command, ...rest] = argv;
   const { positional, flags } = parseArgs(rest);
@@ -238,6 +288,10 @@ function main(argv) {
       return runRelease(positional, flags);
     case "diff-check":
       return runDiffCheck(flags);
+    case "claim-check":
+      return runClaimCheck(flags);
+    case "status-json":
+      return runStatusJson(flags);
     default:
       console.error(USAGE);
       return process.exit(command === undefined ? 0 : 1);

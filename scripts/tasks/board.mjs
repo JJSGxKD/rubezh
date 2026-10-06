@@ -40,8 +40,9 @@ function compareTasks(epicOrder) {
  * - `repoFiles` — файлы репозитория для пересечения зон;
  * - `epicOrder` — эпики в порядке `epics.md`.
  *
- * Возвращает `{ <колонка>: [{ task, reason?, pr? }] }`, внутри колонки порядок:
- * приоритет, эпик, id.
+ * Возвращает `{ <колонка>: [{ task, reason?, pr?, waitingFor?, busyWith? }] }`,
+ * внутри колонки порядок: приоритет, эпик, id. У заблокированных `waitingFor` —
+ * id недоделанных зависимостей, `busyWith` — id задач, чьи зоны заняты.
  */
 export function classify(tasks, taken, prs, repoFiles, epicOrder) {
   const branches = new Set(taken);
@@ -72,18 +73,27 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
 
   for (const task of waiting) {
     const reasons = [];
+    // Те же причины списками id — из них собирается значок статуса, текст не разбирается обратно.
+    const waitingFor = [];
+    const busyWith = [];
     for (const id of task.depends_on) {
       const dependency = byId.get(id);
-      if (dependency === undefined) reasons.push(`${id} нет в реестре`);
-      else if (dependency.status !== "done") reasons.push(`ждёт ${id}`);
+      if (dependency === undefined) {
+        reasons.push(`${id} нет в реестре`);
+        waitingFor.push(id);
+      } else if (dependency.status !== "done") {
+        reasons.push(`ждёт ${id}`);
+        waitingFor.push(id);
+      }
     }
     for (const other of busy) {
       if (zonesOverlap(task.zones, other.task.zones, repoFiles)) {
         reasons.push(`зоны пересекаются с ${other.task.id} (${other.where})`);
+        busyWith.push(other.task.id);
       }
     }
     if (reasons.length === 0) result.free.push({ task });
-    else result.blocked.push({ task, reason: reasons.join("; ") });
+    else result.blocked.push({ task, reason: reasons.join("; "), waitingFor, busyWith });
   }
 
   const compare = compareTasks(epicOrder);
@@ -101,4 +111,51 @@ export function nextTasks(free, { runner = "any", executor } = {}) {
   return free.filter(
     (entry) => runners.includes(entry.task.runner) && (executor === undefined || entry.task.executor === executor),
   );
+}
+
+/** Сколько номеров показывает значок: длинный список не влезает в картинку, остаток — «+N». */
+const BADGE_IDS_SHOWN = 2;
+
+/** Значок живёт в кэше shields.io и GitHub; пять минут — предел, ниже пересчёт workflow всё равно не успевает. */
+const BADGE_CACHE_SECONDS = 300;
+
+function idList(ids) {
+  const shown = ids.slice(0, BADGE_IDS_SHOWN).join(", ");
+  return ids.length > BADGE_IDS_SHOWN ? `${shown} +${String(ids.length - BADGE_IDS_SHOWN)}` : shown;
+}
+
+/**
+ * Значок статуса задачи (endpoint-формат shields.io): сообщение и цвет по
+ * колонке доски, таблица — в tasks/README.md, «Значки статуса».
+ *
+ * `entry` — запись `classify` с ключом колонки `column` и, если известен,
+ * `owner` из ветки задачи («аккаунт / модель»; модель в значке не нужна).
+ * Заблокированной зависимость важнее зоны: пока зависимость не сделана, зона
+ * ничего не решает.
+ */
+export function statusBadge(entry) {
+  const badge = (message, color) => ({ schemaVersion: 1, label: "статус", message, color, cacheSeconds: BADGE_CACHE_SECONDS });
+  switch (entry.column) {
+    case "free":
+      return badge("можно брать", "brightgreen");
+    case "inProgress": {
+      const account = (entry.owner ?? "").split(" / ")[0].trim();
+      return badge(account === "" ? "в работе" : `в работе · ${account}`, "orange");
+    }
+    case "review":
+      return badge(`на ревью · #${String(entry.pr)}`, "blue");
+    case "blocked": {
+      const waitingFor = entry.waitingFor ?? [];
+      if (waitingFor.length > 0) return badge(`ждёт ${idList(waitingFor)}`, "red");
+      return badge(`зона занята ${idList(entry.busyWith ?? [])}`, "red");
+    }
+    case "done":
+      return badge("готово", "6e40c9");
+    case "draft":
+      return badge("черновик", "lightgrey");
+    case "cancelled":
+      return badge("отменено", "inactive");
+    default:
+      throw new Error(`неизвестная колонка доски: ${String(entry.column)}`);
+  }
 }

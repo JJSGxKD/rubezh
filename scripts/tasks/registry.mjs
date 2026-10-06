@@ -22,7 +22,7 @@ export function parseEpics(markdown) {
  * `tasks` не попадает: её ошибки уже в списке.
  */
 export function readTasks(files) {
-  const tasks = [];
+  const parsedFiles = [];
   const errors = [];
   for (const file of files.filter((candidate) => isTaskFile(candidate.name))) {
     if (!FILE_NAME_RE.test(file.name)) {
@@ -34,9 +34,18 @@ export function readTasks(files) {
       errors.push(...parsed.errors.map((error) => `${file.name}: ${error}`));
       continue;
     }
-    const problems = validateTask(file.name, parsed.data);
+    parsedFiles.push({ name: file.name, ...parsed });
+  }
+
+  // Строке значков нужны имена файлов зависимостей, поэтому проверка тела — вторым проходом, когда реестр уже прочитан.
+  const fileNames = {};
+  for (const file of parsedFiles) if (typeof file.data.id === "string") fileNames[file.data.id] = file.name;
+
+  const tasks = [];
+  for (const file of parsedFiles) {
+    const problems = validateTask(file.name, file.data, { body: file.body, fileNames });
     errors.push(...problems);
-    if (problems.length === 0) tasks.push({ ...parsed.data, fileName: file.name });
+    if (problems.length === 0) tasks.push({ ...file.data, fileName: file.name });
   }
   return { tasks, errors };
 }

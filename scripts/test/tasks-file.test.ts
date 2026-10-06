@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { parseFrontmatter, validateTask } from "../tasks/task-file.mjs";
+import { badgeLine, parseFrontmatter, validateTask } from "../tasks/task-file.mjs";
 
 // Шапка задачи — строгое подмножество YAML (tasks/T-0002-task-cli.md, «Решения»):
 // разбирает свой парсер, любая другая конструкция — ошибка с номером строки.
@@ -173,5 +173,74 @@ describe("проверка одной задачи", () => {
     const errors = validateTask("T-0003-x.md", { ...valid(), status: "in-progress", owner: "" });
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("T-0003-x.md: поле owner");
+  });
+});
+
+// Строка значков под заголовком (T-0011, «Решения»): статус самой задачи и по
+// значку на каждую зависимость. Ссылка зависимости ведёт на её файл, поэтому
+// имена файлов приходят снаружи — из реестра.
+
+const STATUS_URL = "https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status";
+const FILE_NAMES = { "T-0001": "T-0001-first.md", "T-0002": "T-0002-second.md" };
+
+describe("строка значков", () => {
+  it("без зависимостей — один значок статуса, ведущий на раздел README", () => {
+    expect(badgeLine({ id: "T-0003", depends_on: [] }, FILE_NAMES)).toBe(
+      `[![статус](${STATUS_URL}/T-0003.json)](README.md#значки-статуса)`,
+    );
+  });
+
+  it("с двумя зависимостями — три значка, зависимости в порядке depends_on", () => {
+    expect(badgeLine({ id: "T-0003", depends_on: ["T-0002", "T-0001"] }, FILE_NAMES)).toBe(
+      [
+        `[![статус](${STATUS_URL}/T-0003.json)](README.md#значки-статуса)`,
+        `[![T-0002](${STATUS_URL}/T-0002.json&label=T-0002)](T-0002-second.md)`,
+        `[![T-0001](${STATUS_URL}/T-0001.json&label=T-0001)](T-0001-first.md)`,
+      ].join(" "),
+    );
+  });
+
+  describe("проверка строки в validateTask", () => {
+    const fileName = "T-0003-x.md";
+    const data = { ...valid(), depends_on: ["T-0001"] };
+    const right = badgeLine(data, FILE_NAMES);
+    const bodyWith = (...lines: string[]): string => ["", "# T-0003. Заголовок", "", ...lines, "", "## Зачем"].join("\n");
+
+    it("верная строка — без ошибок", () => {
+      expect(validateTask(fileName, data, { body: bodyWith(right), fileNames: FILE_NAMES })).toEqual([]);
+    });
+
+    it("строки нет — ошибка, в ней — какая строка ожидается", () => {
+      const errors = validateTask(fileName, data, { body: bodyWith(), fileNames: FILE_NAMES });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toContain(fileName);
+      expect(errors[0]).toContain(right);
+    });
+
+    it("строка с другим набором зависимостей — ошибка", () => {
+      const other = badgeLine({ ...data, depends_on: ["T-0001", "T-0002"] }, FILE_NAMES);
+      const errors = validateTask(fileName, data, { body: bodyWith(other), fileNames: FILE_NAMES });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toContain("значков");
+    });
+
+    it("строка не сразу под заголовком — ошибка", () => {
+      const errors = validateTask(fileName, data, { body: bodyWith("Текст.", "", right), fileNames: FILE_NAMES });
+      expect(errors).toHaveLength(1);
+    });
+
+    it("нет заголовка «# T-NNNN. …» — ошибка", () => {
+      const errors = validateTask(fileName, data, { body: ["", "# Другое", "", right].join("\n"), fileNames: FILE_NAMES });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toContain("заголовок");
+    });
+
+    it("зависимости нет в реестре — строка не проверяется: об этом скажет проверка реестра", () => {
+      expect(validateTask(fileName, { ...data, depends_on: ["T-0099"] }, { body: bodyWith("что-то"), fileNames: FILE_NAMES })).toEqual([]);
+    });
+
+    it("без тела файла строка не проверяется — как и раньше", () => {
+      expect(validateTask(fileName, data)).toEqual([]);
+    });
   });
 });

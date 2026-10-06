@@ -13,6 +13,17 @@ const TASKS_DIR = join(ROOT, "tasks");
 
 const EPICS = ["| Эпик | Цель |", "|---|---|", "| **E0. Процесс** | x |", "| **E1. Деньги** | y |"].join("\n");
 
+const STATUS_URL = "https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status";
+
+// Строка значков под заголовком (T-0011): написана руками, а не через badgeLine, — это независимая сверка формата.
+function badgesOf(id: string, dependsOn: string): string {
+  const deps = dependsOn.replace(/[[\]]/g, "").split(",").map((dep) => dep.trim()).filter((dep) => dep !== "");
+  return [
+    `[![статус](${STATUS_URL}/${id}.json)](README.md#значки-статуса)`,
+    ...deps.map((dep) => `[![${dep}](${STATUS_URL}/${dep}.json&label=${dep})](${dep}-x.md)`),
+  ].join(" ");
+}
+
 function fileOf(id: string, patch: Record<string, string> = {}, name = `${id}-x.md`): { name: string; text: string } {
   const fields: Record<string, string> = {
     id,
@@ -33,7 +44,7 @@ function fileOf(id: string, patch: Record<string, string> = {}, name = `${id}-x.
     ...patch,
   };
   const lines = Object.entries(fields).map(([key, value]) => `${key}:${value === "" ? "" : ` ${value}`}`);
-  return { name, text: ["---", ...lines, "---", "", `# ${id}`].join("\n") };
+  return { name, text: ["---", ...lines, "---", "", `# ${id}. Задача`, "", badgesOf(id, fields.depends_on), ""].join("\n") };
 }
 
 describe("реестр задач", () => {
@@ -103,5 +114,24 @@ describe("реестр задач", () => {
   it("файл T-* с плохой шапкой или именем — ошибка, а не молчание", () => {
     const errors = checkRegistry([{ name: "T-0003-x.md", text: "без шапки" }, fileOf("T-0004", {}, "T-bad.md")], EPICS);
     expect(errors.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("строка значков в реестре", () => {
+  it("строка с зависимостью, которой в шапке нет, — ошибка с именем файла", () => {
+    const file = fileOf("T-0002", { depends_on: "[T-0001]" });
+    const wrong = { ...file, text: file.text.replace(/\[!\[T-0001\].*$/m, "") };
+    const errors = checkRegistry([fileOf("T-0001"), wrong], EPICS);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("T-0002-x.md");
+    expect(errors[0]).toContain("значков");
+  });
+
+  it("ссылка зависимости ведёт на её настоящий файл: с чужим slug строка не проходит", () => {
+    const file = fileOf("T-0002", { depends_on: "[T-0001]" });
+    const wrong = { ...file, text: file.text.replace("(T-0001-x.md)", "(T-0001-other.md)") };
+    const errors = checkRegistry([fileOf("T-0001"), wrong], EPICS);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("T-0002-x.md");
   });
 });
