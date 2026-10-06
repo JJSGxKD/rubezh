@@ -20,6 +20,8 @@ zones:
 shared:
   - docs/35-stage4-plan.md
 runner: any
+executor: sonnet-5.5
+effort: high
 release: patch
 design: null
 ---
@@ -47,7 +49,7 @@ design: null
   отпечаток `telegram_payment_charge_id`: повтор обновления не заводит второе
   задание.
 - О брошенном задании (`payment_job_abandoned`) команда узнаёт сообщением в
-  общий чат администраторов. Это тот же уведомитель, что в T-0003
+  поток «Покупки» (`notify.chat.payments`, пусто — общий чат). Это тот же уведомитель, что в T-0003
   (`admin-notify/payments-alert-notifier.ts`), новое событие хуков. Одно
   сообщение на задание (ключ — `jobId`, 7 суток).
 - Стоп-кран `payments.stars` закрывает только **новые** счета и цены. Чтение

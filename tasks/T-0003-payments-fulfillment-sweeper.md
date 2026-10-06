@@ -20,16 +20,21 @@ zones:
   - backend/api/src/modules/shop/shop.service.ts
   - backend/api/src/modules/admin-notify/payments-alert-notifier.ts
   - backend/api/src/modules/admin-notify/admin-notify.module.ts
+  - backend/api/src/modules/settings/notify-targets.ts
+  - backend/api/test/settings.test.ts
   - backend/api/test/fulfillment-sweeper.test.ts
   - backend/api/test/payments-alert-notifier.test.ts
   - backend/api/test/payments.integration.test.ts
 shared:
+  - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
 runner: any
+executor: sonnet-5.5
+effort: xhigh
 release: patch
 design: null
 ---
@@ -62,9 +67,13 @@ design: null
   автоматического возврата нет. Ошибка может быть временной, решает человек.
   Проход пробует снова на каждом тике. Команда получает одно сообщение на
   покупку.
-- **Сообщение команде** уходит в общий чат администраторов
-  (`NotifyTargets.chats().general`) через `admin-notify`, по образцу
-  `fx-alert-notifier.ts`. Модуль оплаты о Telegram не знает и только
+- **Сообщение команде уходит в свой поток «Покупки».** Это новый адрес
+  `notify.chat.payments` в каталоге настроек: он правится в панели сразу, в
+  разделе настроек уведомлений, и переменной окружения у него нет. Пока адрес
+  пуст, сообщение идёт в общий чат администраторов — так `NotifyTargets` уже
+  ведёт себя для всех потоков (решение пользователя 06.10.2026: новый поток
+  можно заводить, тему в чате создаёт и вписывает в панели участник 1).
+  Отправка — через `admin-notify`, по образцу `fx-alert-notifier.ts`. Модуль оплаты о Telegram не знает и только
   объявляет событие через `PaymentsHooks`. Одна покупка — одно сообщение за 7
   суток (ключ Redis `SET NX`).
 
@@ -173,11 +182,34 @@ design: null
     возвраты отправляются заданиями очереди. Больше в файле ничего не менять —
     остальное здесь делает T-0004.
 11. **`payments.module.ts`.** Зарегистрировать `FulfillmentSweeper`.
+
+11а. **Поток «Покупки».**
+    - В `settings/setting-catalog.ts`, в `SETTINGS`, после `chatRunReview`:
+
+      ```ts
+      chatPayments: chat(
+        "notify.chat.payments",
+        "Покупки",
+        "Невыданные покупки, возвраты за снятые товары и брошенные задания оплаты. Пусто — общий чат",
+        () => "",
+      ),
+      ```
+
+      Переменной окружения нет, адрес задаётся только в панели. Если тест
+      каталога требует у каждого адреса переменную окружения — это вопрос
+      тимлидам, а не новая переменная.
+    - В `settings/notify-targets.ts`: поле `payments: ChatTarget | null` в
+      `AdminChats` с комментарием и `payments: orGeneral(SETTINGS.chatPayments)`
+      в `chats()`.
+    - Панель показывает каталог сама. Если раздел настроек в `apps/admin`
+      перечисляет адреса чатов списком, а не берёт их из ответа сервера, — это
+      вопрос тимлидам.
 12. **Новый `admin-notify/payments-alert-notifier.ts`** — по образцу
     `fx-alert-notifier.ts`:
     - подписка на `PaymentsHooks.onStuck`;
     - дедупликация `SET payments:stuck-alert:<purchaseId> 1 EX 604800 NX`;
-    - отправка в `general` с таймаутом;
+    - отправка в `targets.chats().payments` с таймаутом: пустой адрес уже
+      заменён общим чатом внутри `NotifyTargets`;
     - нет чата или Redis — в лог и молча дальше.
 
     Текст сообщения:
@@ -223,7 +255,10 @@ design: null
    - повтор того же `purchaseId` → сообщения нет (ключ уже есть);
    - `undeliverable` — строка «Звёзды возвращаются автоматически.»;
    - нет чата → не отправляет и не бросает.
-3. `backend/api/test/payments.integration.test.ts` — новый кейс на живом
+3. `backend/api/test/settings.test.ts`, рядом с кейсом про `runReview` (около
+   строки 151): адрес `notify.chat.payments` пуст → `chats().payments` равен
+   общему чату; задан `-100:57` → `{ chatId: "-100", threadId: 57 }`.
+4. `backend/api/test/payments.integration.test.ts` — новый кейс на живом
    Postgres. `undelivered` отдаёт только оплаченную, старую, не выданную и не
    возвращаемую покупку нужного товара. Выданную, свежую, с заказанным
    возвратом и товар не из списка — не отдаёт.
@@ -244,8 +279,11 @@ design: null
     если перечисление там есть;
   - в схеме модулей — связь `PAYMENTS → ADMIN_NOTIFY` через хук, по образцу
     связи курсов.
-- `docs/30-configuration-map.md` — строка «Довыдача оплаченных покупок:
-  интервал, срок, размер пачки — `FULFILLMENT_SWEEP` в `payments/payments-limits.ts`».
+- `docs/30-configuration-map.md` — две строки:
+  - «Довыдача оплаченных покупок: интервал, срок, размер пачки —
+    `FULFILLMENT_SWEEP` в `payments/payments-limits.ts`»;
+  - «Поток «Покупки» в чате команды — `notify.chat.payments` в панели, пусто —
+    общий чат» — рядом со строками остальных адресов `notify.chat.*`.
 - `docs/35-stage4-plan.md`, раздел «Как сделано» WP10 — абзац о проходе
   довыдачи и причине `undeliverable`.
 
@@ -270,4 +308,8 @@ design: null
   📋 **СВОДКА: В DEV ВЛИТ PR #<номер> — ОПЛАЧЕННОЕ ВСЕГДА ВЫДАЁТСЯ ИЛИ ВОЗВРАЩАЕТСЯ**
 
   Раньше покупка, у которой не прошла выдача, зависала навсегда. Теперь раз в 5 минут проход довыдаёт такие покупки, а за снятые товары возвращает звёзды. О каждой зависшей покупке приходит сообщение в чат команды.
+
+  ❓ **Нужно от команды**
+
+  • @участник1 — создать в чате команды тему «Покупки» и вписать её адрес в панели (настройка `notify.chat.payments`, формат `id чата:тема`); до этого сообщения идут в общий чат
   ```

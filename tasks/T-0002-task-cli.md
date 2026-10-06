@@ -17,6 +17,8 @@ shared:
   - package.json
   - docs/09-ci-cd.md
 runner: any
+executor: sonnet-5.5
+effort: high
 release: patch
 design: null
 ---
@@ -90,6 +92,9 @@ design: null
    - все поля из `tasks/README.md` («Поля задачи») на месте, лишних нет;
    - перечисления: `priority` P0–P3; `status` draft | ready | in-progress | done | cancelled;
      `size` S | M; `runner` any | local | human; `release` none | patch | minor;
+     `executor` — значения из таблицы исполнителей в `tasks/README.md`, сейчас
+     только `sonnet-5.5` (список — константа в `task-file.mjs` с комментарием,
+     что она повторяет таблицу); `effort` low | medium | high | xhigh;
    - `zones` не пустой у `ready` и `in-progress`;
    - путь в `zones` и `shared` относительный, без `..`, без `\` и без ведущего `/`;
    - у `in-progress` `owner` не пустой.
@@ -131,13 +136,17 @@ design: null
    Внутри колонки — по `priority`, затем по порядку эпика в `epics.md`, затем по `id`.
 6. `scripts/tasks/task.mjs` — CLI, вывод на русском:
    - `check` — `checkRegistry` по рабочей копии `tasks/`; ошибки → код выхода 1;
-   - `board` — колонки с задачами: `id`, `title`, `priority`, `size`, `runner`, у
-     занятых — `owner`, у заблокированных — причина;
-   - `next [--runner any|local]` — «Свободно» с подходящим `runner`
-     (по умолчанию `any`; `local` включает `any`; `human` не показывается
-     никогда). Первая строка — лучшая задача;
+   - `board` — колонки с задачами: `id`, `title`, `priority`, `size`, `runner`,
+     `executor` и `effort`, у занятых — `owner`, у заблокированных — причина;
+   - `next [--runner any|local] [--executor <модель>]` — «Свободно» с
+     подходящим `runner` (по умолчанию `any`; `local` включает `any`; `human` не
+     показывается никогда) и, если задан `--executor`, только с этим
+     исполнителем. У каждой строки — `executor` и `effort`: человек ставит их в
+     сессии. Первая строка — лучшая задача;
    - `claim T-NNNN --owner "<аккаунт / модель>"`:
      - отказ, если рабочая копия грязная или задача не «Свободно» (с причиной);
+     - отказ, если модель из `--owner` (часть после ` / `) не совпадает с
+       `executor` задачи: «задача для sonnet-5.5, а не для …»;
      - иначе `git fetch origin --prune` → `git switch -c task/T-NNNN origin/dev`
        → правка `status` и `owner` в файле задачи → коммит
        `chore(tasks): Взять T-NNNN в работу` → `git push origin HEAD:refs/heads/task/T-NNNN`;
@@ -191,8 +200,9 @@ design: null
    - разбирает шапку со строчным списком, списком строками, пустым значением и
      `null`;
    - отступ табуляцией, кавычки и строка без `:` → ошибка с номером строки;
-   - нет поля, лишнее поле, неверное перечисление, `id` не совпадает с именем
-     файла, `..` в зоне, `in-progress` без `owner` → по ошибке на каждый случай,
+   - нет поля, лишнее поле, неверное перечисление (в том числе неизвестный
+     `executor` и `effort: max`), `id` не совпадает с именем файла, `..` в
+     зоне, `in-progress` без `owner` → по ошибке на каждый случай,
      текст называет файл и поле.
 2. `scripts/test/tasks-registry.test.ts`:
    - **на настоящем репозитории** `checkRegistry` по `tasks/` и `tasks/epics.md`
@@ -235,6 +245,7 @@ design: null
 
 - [ ] `pnpm task check` на текущем реестре — без ошибок; `pnpm test` включает проверку реестра.
 - [ ] `pnpm task board` и `pnpm task next` работают из любой ветки и показывают реестр из `origin/dev`.
+- [ ] `pnpm task claim` отказывает, если модель в `--owner` не совпадает с `executor`.
 - [ ] `pnpm task claim` захватывает свободную задачу. Второй захват той же задачи из другого клона получает отказ «задачу уже взяли». Проверено руками на тестовом репозитории (`git init --bare` + два клона); как именно — в описании PR.
 - [ ] Шаг `diff-check` в `pr-checks.yml` падает, если PR ветки `task/T-NNNN` меняет файл вне зон, и не мешает остальным PR.
 - [ ] Новых зависимостей и новых actions нет.
