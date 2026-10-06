@@ -24,3 +24,9 @@ infra/certs/
 
 # Снимок Redis, запущенного из каталога пакета: данные тестов, не исходники
 *.rdb
+
+# Локальные настройки Claude Code: запуск dev-серверов с тестовыми ключами,
+# личные разрешения и рабочие копии исполнителей
+.claude/launch.json
+.claude/settings.local.json
+.claude/worktrees/
