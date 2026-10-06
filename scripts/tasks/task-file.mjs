@@ -1,0 +1,232 @@
+/**
+ * Файл задачи реестра (tasks/README.md, «Поля задачи»): разбор шапки и
+ * проверка полей. Чистые функции без обращения к диску и git — их покрывают
+ * тесты (scripts/test/tasks-file.test.ts).
+ *
+ * Шапка — строгое подмножество YAML, а не YAML: пары «ключ: значение», пустое
+ * значение, `null`, строчный список `[a, b]` и список строками `  - элемент`.
+ * Своего разбора достаточно, а библиотека разбора и права на новую
+ * зависимость в этот инструмент не нужны.
+ */
+
+export const FILE_NAME_RE = /^(T-\d{4})-[a-z0-9-]+\.md$/;
+const ID_RE = /^T-\d{4}$/;
+const EPIC_RE = /^E\d+$/;
+
+export const PRIORITIES = ["P0", "P1", "P2", "P3"];
+export const STATUSES = ["draft", "ready", "in-progress", "done", "cancelled"];
+export const SIZES = ["S", "M"];
+export const RUNNERS = ["any", "local", "human"];
+export const RELEASES = ["none", "patch", "minor"];
+export const EFFORTS = ["low", "medium", "high", "xhigh"];
+/** Повторяет таблицу исполнителей в tasks/README.md («Исполнители и effort»): новый исполнитель — правка и там, и здесь. */
+export const EXECUTORS = ["sonnet-5.5"];
+
+/** Все поля шапки в порядке из tasks/README.md; других полей у задачи нет. */
+export const FIELDS = [
+  "id",
+  "title",
+  "epic",
+  "priority",
+  "status",
+  "owner",
+  "size",
+  "depends_on",
+  "zones",
+  "shared",
+  "runner",
+  "executor",
+  "effort",
+  "release",
+  "design",
+];
+
+const KEY_VALUE_RE = /^([A-Za-z_][A-Za-z0-9_]*):(?:[ ](.*))?$/;
+const LIST_ITEM_RE = /^ {2}- (.*)$/;
+
+function startsWithQuote(value) {
+  return value.startsWith('"') || value.startsWith("'");
+}
+
+function parseInlineList(value, lineNo, errors) {
+  if (!value.endsWith("]")) {
+    errors.push(`строка ${lineNo}: строчный список не закрыт «]»`);
+    return [];
+  }
+  const inner = value.slice(1, -1).trim();
+  if (inner === "") return [];
+  const items = inner.split(",").map((item) => item.trim());
+  for (const item of items) {
+    if (item === "" || startsWithQuote(item)) {
+      errors.push(`строка ${lineNo}: в строчном списке нужны элементы без кавычек, разделённые запятой`);
+      return [];
+    }
+  }
+  return items;
+}
+
+/**
+ * Разбирает текст файла задачи: `{ data, body, errors }`. Ошибки называют
+ * номер строки файла (с единицы); при ошибках `data` может быть неполным.
+ */
+export function parseFrontmatter(text) {
+  const lines = text.split(/\r?\n/);
+  const errors = [];
+  const data = {};
+
+  if (lines[0] !== "---") {
+    return { data, body: text, errors: ["строка 1: файл должен начинаться с шапки — строки «---»"] };
+  }
+  const end = lines.indexOf("---", 1);
+  if (end === -1) {
+    return { data, body: "", errors: ["строка 1: шапка не закрыта строкой «---»"] };
+  }
+
+  let openKey = null;
+  for (let index = 1; index < end; index += 1) {
+    const lineNo = index + 1;
+    const line = lines[index];
+    if (line.trim() === "") continue;
+    if (/^\s*\t/.test(line)) {
+      errors.push(`строка ${lineNo}: отступ табуляцией не допускается, нужны пробелы`);
+      continue;
+    }
+
+    const item = LIST_ITEM_RE.exec(line);
+    if (item !== null) {
+      const value = item[1].trim();
+      if (openKey === null) {
+        errors.push(`строка ${lineNo}: элемент списка без ключа над ним`);
+      } else if (startsWithQuote(value) || value === "") {
+        errors.push(`строка ${lineNo}: элемент списка должен быть без кавычек и не пустым`);
+      } else {
+        if (data[openKey] === "") data[openKey] = [];
+        data[openKey].push(value);
+      }
+      continue;
+    }
+
+    if (/^\s/.test(line)) {
+      errors.push(`строка ${lineNo}: вложенные значения не поддерживаются — только «  - элемент» под ключом`);
+      continue;
+    }
+
+    const pair = KEY_VALUE_RE.exec(line);
+    if (pair === null) {
+      errors.push(`строка ${lineNo}: ожидается «ключ: значение», а не «${line.trim()}»`);
+      openKey = null;
+      continue;
+    }
+
+    const key = pair[1];
+    const value = (pair[2] ?? "").trim();
+    openKey = null;
+    if (Object.hasOwn(data, key)) {
+      errors.push(`строка ${lineNo}: ключ ${key} повторяется`);
+    } else if (value === "") {
+      data[key] = "";
+      openKey = key;
+    } else if (value === "null") {
+      data[key] = null;
+    } else if (value.startsWith("[")) {
+      data[key] = parseInlineList(value, lineNo, errors);
+    } else if (startsWithQuote(value)) {
+      errors.push(`строка ${lineNo}: кавычки в значении не допускаются`);
+    } else if (value === "|" || value === ">") {
+      errors.push(`строка ${lineNo}: многострочные значения не поддерживаются`);
+    } else {
+      data[key] = value;
+    }
+  }
+
+  return { data, body: lines.slice(end + 1).join("\n"), errors };
+}
+
+function joinOr(values) {
+  return values.length < 2 ? values.join("") : `${values.slice(0, -1).join(", ")} или ${values.at(-1)}`;
+}
+
+function show(value) {
+  return Array.isArray(value) ? `[${value.join(", ")}]` : String(value);
+}
+
+function pathProblem(path) {
+  if (path.startsWith("/")) return "путь должен быть относительным, без ведущего «/»";
+  if (path.includes("\\")) return "в пути нужен «/», а не «\\»";
+  if (path.split("/").includes("..")) return "«..» в пути не допускается";
+  return null;
+}
+
+/**
+ * Проверяет одну задачу: `fileName` — имя файла без каталога, `data` — то, что
+ * вернул `parseFrontmatter`. Возвращает список ошибок вида
+ * `T-0003-x.md: поле priority — ожидается P0, P1, P2 или P3, а не P5`.
+ */
+export function validateTask(fileName, data) {
+  const errors = [];
+  const fail = (field, message) => errors.push(`${fileName}: поле ${field} — ${message}`);
+
+  const nameMatch = FILE_NAME_RE.exec(fileName);
+  if (nameMatch === null) {
+    errors.push(`${fileName}: имя файла должно быть T-NNNN-slug.md (slug — строчная латиница, цифры, дефис)`);
+  }
+
+  for (const field of FIELDS) {
+    if (!Object.hasOwn(data, field)) fail(field, "отсутствует");
+  }
+  for (const field of Object.keys(data)) {
+    if (!FIELDS.includes(field)) fail(field, "лишнее, такого поля у задачи нет");
+  }
+
+  const text = (field) => (typeof data[field] === "string" ? data[field] : null);
+  const expectEnum = (field, allowed) => {
+    if (!Object.hasOwn(data, field)) return;
+    if (!allowed.includes(data[field])) fail(field, `ожидается ${joinOr(allowed)}, а не ${show(data[field])}`);
+  };
+
+  if (Object.hasOwn(data, "id")) {
+    if (text("id") === null || !ID_RE.test(data.id)) fail("id", `ожидается T-NNNN, а не ${show(data.id)}`);
+    else if (nameMatch !== null && nameMatch[1] !== data.id) fail("id", `${data.id} не совпадает с началом имени файла (${nameMatch[1]})`);
+  }
+  if (Object.hasOwn(data, "title") && (text("title") === null || data.title === "")) fail("title", "ожидается непустая строка");
+  if (Object.hasOwn(data, "epic") && (text("epic") === null || !EPIC_RE.test(data.epic))) {
+    fail("epic", `ожидается номер эпика вида E1, а не ${show(data.epic)}`);
+  }
+  expectEnum("priority", PRIORITIES);
+  expectEnum("status", STATUSES);
+  expectEnum("size", SIZES);
+  expectEnum("runner", RUNNERS);
+  expectEnum("executor", EXECUTORS);
+  expectEnum("effort", EFFORTS);
+  expectEnum("release", RELEASES);
+
+  if (Object.hasOwn(data, "owner") && text("owner") === null) fail("owner", `ожидается строка или пусто, а не ${show(data.owner)}`);
+  if (Object.hasOwn(data, "design") && data.design !== null && (text("design") === null || data.design === "")) {
+    fail("design", `ожидается путь к макету или null, а не ${show(data.design)}`);
+  }
+
+  if (Object.hasOwn(data, "depends_on")) {
+    if (!Array.isArray(data.depends_on)) fail("depends_on", "ожидается список");
+    else for (const id of data.depends_on) if (!ID_RE.test(id)) fail("depends_on", `ожидается T-NNNN, а не ${id}`);
+  }
+
+  for (const field of ["zones", "shared"]) {
+    if (!Object.hasOwn(data, field)) continue;
+    if (!Array.isArray(data[field])) {
+      fail(field, "ожидается список путей");
+      continue;
+    }
+    for (const path of data[field]) {
+      const problem = pathProblem(path);
+      if (problem !== null) fail(field, `${problem}: ${path}`);
+    }
+  }
+
+  const working = data.status === "ready" || data.status === "in-progress";
+  if (working && Array.isArray(data.zones) && data.zones.length === 0) {
+    fail("zones", `у задачи в статусе ${data.status} зоны не могут быть пустыми`);
+  }
+  if (data.status === "in-progress" && text("owner") === "") fail("owner", "у задачи in-progress должно быть указано, кто её взял");
+
+  return errors;
+}

@@ -44,3 +44,15 @@ jobs:
       # упавшей проверке заголовка — одна ошибка не должна прятать другую.
       - if: ${{ !cancelled() }}
         run: node scripts/action-pins.mjs --verify
+
+      # Зоны задачи — тем же джобом, по той же причине: новый джоб не был бы
+      # обязательным. Только для веток task/T-NNNN; у остальных PR шаг не
+      # запускается. Дифф за зоны (zones, shared и файл задачи) без вопроса
+      # тимлидам — повод вернуть PR, и ловить его лучше машиной, чем глазами
+      # на приёмке.
+      - if: ${{ !cancelled() && startsWith(github.head_ref, 'task/T-') }}
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          node scripts/tasks/task.mjs diff-check --base "origin/${{ github.base_ref }}"
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
