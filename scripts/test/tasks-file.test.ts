@@ -131,6 +131,7 @@ describe("проверка одной задачи", () => {
       ["release", "major"],
       ["executor", "gpt-9"],
       ["effort", "max"],
+      ["effort", "xhigh"],
     ] as const) {
       const errors = validateTask("T-0003-x.md", { ...valid(), [field]: value });
       expect(errors, field).toHaveLength(1);
