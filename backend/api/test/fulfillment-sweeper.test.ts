@@ -76,22 +76,22 @@ function setup(rows: StoredPurchase[], behaviour: (purchase: StoredPurchase) => 
     redis as never,
     {
       products: () => ["shop_item", "vip"],
-      fulfill: async (row) => {
+      fulfill: async (row: StoredPurchase) => {
         calls.fulfilled.push(row.purchaseId);
         return await behaviour(row);
       },
-    },
+    } as never,
     {
-      undeliverable: async (purchaseId) => {
+      undeliverable: async (purchaseId: string) => {
         calls.undeliverable.push(purchaseId);
         return [{ purchaseId, platform: "telegram", chargeId: `charge-${purchaseId}`, payerId: "777", reason: "undeliverable" }];
       },
-    },
+    } as never,
     {
       enabled: true,
-      dispatchRefunds: async (orders) => void dispatched.push(...(await orders)),
-    },
-    { emitStuck: async (event) => void stuck.push(event) },
+      dispatchRefunds: async (orders: Promise<RefundOrder[]>) => void dispatched.push(...(await orders)),
+    } as never,
+    { emitStuck: async (event: StuckPurchase) => void stuck.push(event) } as never,
   );
   return { sweeper, redis, calls, dispatched, stuck };
 }
@@ -212,10 +212,10 @@ describe("довыдача оплаченных покупок", () => {
         markFulfilled: async () => undefined,
       },
       redis as never,
-      { products: () => ["shop_item"], fulfill: async () => true },
-      { undeliverable: async () => [] },
-      { enabled: true, dispatchRefunds: async () => undefined },
-      { emitStuck: async () => undefined },
+      { products: () => ["shop_item"], fulfill: async () => true } as never,
+      { undeliverable: async () => [] } as never,
+      { enabled: true, dispatchRefunds: async () => undefined } as never,
+      { emitStuck: async () => undefined } as never,
     );
 
     expect(await sweeper.tick(NOW)).toBeNull();

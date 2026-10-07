@@ -55,10 +55,11 @@ export class FulfillmentSweeper implements OnApplicationBootstrap, OnModuleDestr
   constructor(
     @Inject(PURCHASES_REPOSITORY) private readonly repository: Pick<PurchasesRepository, "undelivered" | "markFulfilled">,
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
-    private readonly fulfillment: Pick<PurchaseFulfillment, "products" | "fulfill">,
-    private readonly refunds: Pick<PaymentRefunds, "undeliverable">,
-    private readonly queue: Pick<PaymentsQueue, "enabled" | "dispatchRefunds">,
-    private readonly hooks: Pick<PaymentsHooks, "emitStuck">,
+    // Классы, а не `Pick<…>`: метаданные декоратора превращают `Pick` в `Object`, и Nest не знает, что подставить.
+    private readonly fulfillment: PurchaseFulfillment,
+    private readonly refunds: PaymentRefunds,
+    private readonly queue: PaymentsQueue,
+    private readonly hooks: PaymentsHooks,
   ) {}
 
   onApplicationBootstrap(): void {
