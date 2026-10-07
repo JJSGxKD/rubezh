@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — перед забегом</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Токены «Сумеречного рубежа» — те же, что в home.html и T-0012. Тон оружия —
+     --color-weapon, тон бустов — info, как в weapon-select.tsx и boost-picker.tsx. */
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --surface-raised:#353452; --surface-sunken:#17162a;
+    --border:#43425f; --border-strong:#5b5980; --text:#f3eee6; --muted:#aeaac4; --disabled:#6f6c8a;
+    --accent:#ff8f3f; --accent-pressed:#f0782a; --accent-glow:#ffb67f; --accent-edge:#a0582a; --on-accent:#230f02;
+    --danger:#ff5d5d; --info:#5ccfff; --passive:#c47dff; --weapon:#ffe066;
+    --coin:#ffd400; --gem:#ff515e; --xp:#b6ff4a;
+    --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:10px; --cut-sm:8px;
+    --display:'Russo One', sans-serif; --text-font:'IBM Plex Sans', sans-serif;
+    --page:#0d0c18; --page-muted:#9a97ab;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:15px/1.5 var(--text-font); }
+  .page { max-width:1600px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:400 28px/1.2 var(--display); margin:0 0 8px; letter-spacing:.02em; }
+  h2 { font:400 20px/1.2 var(--display); margin:40px 0 8px; letter-spacing:.02em; }
+  .lead, .sub { color:var(--page-muted); max-width:960px; }
+  .lead { margin:0 0 8px; } .sub { margin:0 0 16px; font-size:14px; }
+  code { font-size:.92em; }
+  table.inv { border-collapse:collapse; font-size:13.5px; max-width:1200px; margin:8px 0 0; }
+  table.inv td, table.inv th { border:1px solid #2c2b45; padding:6px 10px; text-align:left; vertical-align:top; }
+  table.inv th { color:var(--page-muted); font-weight:600; }
+  .row { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; }
+  .cap { width:380px; margin-top:10px; font-size:13.5px; color:var(--page-muted); }
+  .cap b { color:var(--text); font-weight:600; }
+  svg.i { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .disp { font-family:var(--display); letter-spacing:.02em; }
+  .grow { flex:1; min-width:0; }
+
+  .phone { width:380px; height:800px; border-radius:36px; padding:10px; background:#000; box-shadow:0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .phone.narrow { width:340px; }
+  .screen { position:relative; width:100%; height:100%; border-radius:28px; overflow:hidden; background:var(--bg); }
+
+  /* Главная за листом: схема, а не макет — её облик в home.html */
+  .lobby { position:absolute; inset:0; padding:14px 12px; display:flex; flex-direction:column; gap:10px; }
+  .lobby .bar { height:44px; border-radius:var(--r-md); background:var(--surface); }
+  .lobby .blk { border-radius:var(--r-lg); background:var(--surface); }
+  .dim { position:absolute; inset:0; background:rgba(8,7,16,.62); }
+
+  /* Лист снизу: Modal placement="bottom", крестик в шапке, которая не уезжает (Р81) */
+  .sheet { position:absolute; left:0; right:0; bottom:0; max-height:calc(100% - 48px); display:flex; flex-direction:column;
+           background:var(--bg); border-top:1px solid var(--border-strong); border-radius:var(--r-xl) var(--r-xl) 0 0; box-shadow:0 -18px 40px rgba(0,0,0,.45); }
+  .grip { width:36px; height:4px; border-radius:2px; background:var(--border-strong); margin:8px auto 0; }
+  .shead { display:flex; align-items:center; gap:8px; padding:6px 12px 6px 16px; }
+  .shead .t { font:400 18px/1.2 var(--display); letter-spacing:.02em; }
+  .x { width:36px; height:36px; border-radius:var(--r-md); display:grid; place-items:center; color:var(--muted); background:var(--surface); border:1px solid var(--border); }
+  .sbody { padding:2px 16px 8px; overflow:auto; display:flex; flex-direction:column; gap:6px; }
+  .sbody > * { flex:none; }
+  .sfoot { padding:8px 16px 12px; display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--border); background:var(--bg); }
+
+  .stitle { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:4px; font:600 12px/16px var(--text-font); color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .stitle small { text-transform:none; letter-spacing:0; font-weight:500; }
+  .note { font-size:12px; line-height:1.4; color:var(--muted); }
+
+  /* Режимы — только у команды: вкладки поверх выбора */
+  .modes { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:3px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); }
+  .modes span { height:30px; display:grid; place-items:center; border-radius:var(--r-sm); font:500 12px var(--text-font); color:var(--muted); white-space:nowrap; }
+  .modes span.on { background:var(--surface-raised); color:var(--text); box-shadow:inset 0 0 0 1px var(--border-strong); }
+
+  /* Сложность — SegmentedControl */
+  .seg { margin-top:6px; display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:3px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); }
+  .seg span { height:34px; display:grid; place-items:center; border-radius:var(--r-sm); font:600 13px var(--text-font); color:var(--muted); }
+  .seg span.on { background:linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); color:var(--on-accent); box-shadow:inset 0 -2px 0 var(--accent-edge); }
+
+  /* Плитки выбора: оружие — тон weapon, бусты — info */
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .pick { position:relative; display:flex; align-items:center; gap:8px; min-width:0; height:48px; padding:0 8px; border-radius:var(--r-lg);
+          background:linear-gradient(180deg,var(--surface-raised),var(--surface)); border:1px solid var(--border); }
+  .pick .face { width:32px; height:32px; border-radius:var(--r-md); display:grid; place-items:center; flex:none; color:var(--tone); background:color-mix(in oklab, var(--tone) 15%, transparent); }
+  .pick .face svg.i { width:18px; height:18px; }
+  .pick .nm { min-width:0; font:400 12.5px/1.15 var(--display); letter-spacing:.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pick .pr { display:flex; align-items:center; gap:3px; font:600 11.5px/1 var(--text-font); color:var(--muted); margin-top:3px; font-variant-numeric:tabular-nums; }
+  .pick.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 0 18px -8px var(--accent); }
+  .pick.on::after { content:""; position:absolute; top:-5px; right:-5px; width:16px; height:16px; border-radius:var(--r-sm); background:var(--accent)
+          url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23230f02" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>') center/11px no-repeat; }
+  .pick.locked { opacity:.55; }
+  .pick.locked .face { color:var(--disabled); background:var(--surface-sunken); }
+  .pick.off { opacity:.4; }
+  /* Плитка в две строки: значок и цена или уровень сверху, имя во всю ширину — так
+     имя не обрезается и на 320 px */
+  .pick { flex-direction:column; align-items:stretch; gap:4px; height:auto; padding:7px 8px 8px; }
+  .pick .top { display:flex; align-items:center; justify-content:space-between; gap:6px; min-height:28px; }
+  .pick .face { width:28px; height:28px; }
+  .pick .face svg.i { width:16px; height:16px; }
+  .pick .pr, .pick .lv { margin-top:0; }
+  .lv { display:flex; align-items:center; gap:3px; font:500 11px/1 var(--text-font); color:var(--muted); margin-top:3px; }
+  .lv svg.i { width:11px; height:11px; }
+  .weapon { --tone:var(--weapon); } .boost { --tone:var(--info); }
+
+  .desc { display:flex; gap:8px; align-items:flex-start; padding:8px 10px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); }
+  .desc b { font:400 13px/1.3 var(--display); letter-spacing:.02em; color:var(--text); white-space:nowrap; }
+  .desc span { font-size:12px; line-height:1.4; color:var(--muted); }
+
+  .coin { width:12px; height:12px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #fff16a, var(--coin) 55%, #ff9f00); flex:none; display:inline-block; }
+  .gemi { width:10px; height:12px; background:linear-gradient(160deg,#ffc9cc,var(--gem) 55%,#f0303e); clip-path:polygon(50% 0,100% 35%,80% 100%,20% 100%,0 35%); flex:none; display:inline-block; }
+
+  .cost { display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; color:var(--muted); }
+  .cost b { color:var(--text); font-weight:600; display:inline-flex; align-items:center; gap:3px; font-variant-numeric:tabular-nums; }
+  .err { text-align:center; font-size:13px; color:var(--danger); }
+  .devcard { position:relative; display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-lg); background:linear-gradient(180deg,var(--surface-raised),var(--surface)); border:1px solid var(--border); overflow:hidden; }
+  .devcard::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--passive); }
+  .devcard .face { width:36px; height:36px; border-radius:var(--r-md); display:grid; place-items:center; color:var(--passive); background:color-mix(in oklab, var(--passive) 15%, transparent); }
+
+  .cut { position:relative; isolation:isolate; clip-path:polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c)); background:var(--cut-border) !important; border:0 !important; }
+  .cut::before { content:""; position:absolute; inset:1px; z-index:-1; background:var(--cut-fill);
+    clip-path:polygon(calc(var(--c) - .4px) 0,100% 0,100% calc(100% - var(--c) + .4px),calc(100% - var(--c) + .4px) 100%,0 100%,0 calc(var(--c) - .4px)); }
+  .cut-sm { --c:var(--cut-sm); }
+  .play { width:100%; height:56px; display:flex; align-items:center; justify-content:center; gap:10px; font:400 20px var(--display); letter-spacing:.06em; text-transform:uppercase; color:var(--on-accent);
+          --cut-border:#a0582a; --cut-fill:linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); }
+  .play svg { width:18px; height:18px; fill:currentColor; stroke:none; }
+  .play .pl { display:flex; align-items:center; gap:10px; }
+  /* Выбраны бусты — сумма к списанию второй строкой в самой кнопке */
+  .play.two { flex-direction:column; gap:3px; }
+  .play.two .pl { font-size:18px; line-height:1; }
+  .play .cost { font:600 11.5px/1 var(--text-font); letter-spacing:0; text-transform:none; color:var(--on-accent); }
+  .play .cost b { color:var(--on-accent); }
+
+  .kit { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; padding:20px; border-radius:var(--r-xl); background:var(--bg); max-width:1200px; }
+  .kit .cell { display:flex; flex-direction:column; gap:8px; }
+  .kit .knote { font-size:12.5px; color:var(--page-muted); max-width:300px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Перед забегом</h1>
+  <p class="lead">Одно окно вместо трёх шагов: «Играть» открывает лист поверх главной, в нём сложность, стартовое оружие и бусты, внизу — «В бой». Было четыре касания до боя — «Играть», «Бесконечный», «Дальше», «В бой»; стало два. Строится на нынешних экранах (<code>screens/home.tsx</code> → <code>ModeScreen</code>, <code>weapon-select.tsx</code>, <code>boosts.tsx</code>, <code>boost-picker.tsx</code>): те же данные, тексты, значки и правила, меняется раскладка. Решения пользователя от 07.10.2026: лист поверх главной, оружие — плитками с описанием выбранного, бусты — в том же окне, экрана режимов нет.</p>
+
+  <h2>Что сохраняется и что меняется</h2>
+  <table class="inv">
+    <tr><th>Элемент</th><th>Сейчас в игре</th><th>В макете</th></tr>
+    <tr><td>Вход</td><td>«Играть» → экран «Режим» → «Бесконечный» → экран «Перед забегом»</td><td>«Играть» → лист «Перед забегом» поверх главной. Закрыть — крестик в шапке, тап по затемнению, «Назад» (Р81)</td></tr>
+    <tr><td>Режимы</td><td>Экран: Бесконечный, Забег разработчика (право <code>tools.dev</code>), Стресс-тест (кому открыт), Кампания — заглушка</td><td>Экрана нет, «Играть» — бесконечный. Команде вверху листа вкладки «Бесконечный · Разработчика · Стресс»: у кого из двух последних нет доступа — вкладки нет, у кого нет ни одной — нет ряда. «Кампания» не показывается до самой кампании</td></tr>
+    <tr><td>Сложность</td><td><code>SegmentedControl</code> и строка описания</td><td>Так же. Уйдёт с одной сложностью (Р65, WP34) — лист без неё не меняется</td></tr>
+    <tr><td>Оружие</td><td>Крупные карточки списком: значок, имя, описание; закрытое — с замком и уровнем</td><td>Плитки 3 в ряд: значок в тоне оружия и имя; закрытое — замок и «ур. N». Под плитками — описание <b>выбранного</b>. Последний выбор запомнен, как сейчас</td></tr>
+    <tr><td>Бусты</td><td>Отдельный экран после «Дальше»: карточки с описанием и ценой, не больше трёх, недоступные приглушены</td><td>В том же листе плитками 3 в ряд: значок, имя, цена. Под плитками — описание последнего тронутого. Правила те же: не больше <code>maxPerRun</code>, не хватает денег — приглушено, без сети — строка вместо плиток, без входа — раздела нет</td></tr>
+    <tr><td>«В бой»</td><td>На экране бустов; «Без бустов» — второй кнопкой</td><td>Одна кнопка, срез 8 px. Выбраны бусты — в ней второй строкой «спишется …». «Без бустов» не нужна: не выбрал — забег без покупки</td></tr>
+    <tr><td>Заголовок «Сложность»</td><td>Над переключателем</td><td>Нет: подписи «Лёгкая · Нормальная · Сложная» говорят сами, а место нужно бустам. У переключателя остаётся <code>aria-label</code></td></tr>
+    <tr><td>Ширина</td><td>Карточки оружия в ландшафте — тремя колонками</td><td>Лист не шире 560 px, по центру снизу; на 768 и 1440 px — то же окно, главная видна по бокам. Плитки — 3 в ряд везде</td></tr>
+  </table>
+
+  <h2>Состояния</h2>
+  <div class="row" id="states"></div>
+
+  <h2>Компоненты</h2>
+  <p class="sub">Плитка выбора — общая у оружия и бустов: тон значка свой, выбранная — рамка акцента и галочка в углу, как выбор в бустах сейчас (<code>ring-accent</code>).</p>
+  <div class="kit" id="kit"></div>
+</div>
+
+<script>
+  const svg = (d) => `<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
+  const I = {
+    spark: svg('<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>'),
+    knife: svg('<path d="m8 14-6 6h9v-3"/><path d="M18.37 3.63 8 14l3 3L21.37 6.63a2.12 2.12 0 1 0-3-3Z"/>'),
+    wardstone: svg('<circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M10.4 21.9a10 10 0 0 0 9.94-15.42"/><path d="M13.5 2.1a10 10 0 0 0-9.84 15.42"/>'),
+    hearth: svg('<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>'),
+    storm: svg('<path d="M6 16.33A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.97"/><path d="m13 12-3 5h4l-3 5"/>'),
+    sting: svg('<path d="m8 2 1.88 1.88M14.12 3.88 16 2M9 7.13v-1a3 3 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6M12 20v-9M6 13H2M22 13h-4"/>'),
+    fury: svg('<path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2M14.5 6.5 18 3h3v3l-3.5 3.5M5 14l4 4M7 17l-3 3M3 19l2 2"/>'),
+    bulwark: svg('<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>'),
+    lure: svg('<path d="m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15M5 8l4 4M12 15l4 4"/>'),
+    aegis: svg('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'),
+    head_start: svg('<path d="M5 12h14M12 5v14"/>'),
+    insight: svg('<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>'),
+    lock: svg('<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+    x: svg('<path d="M18 6 6 18M6 6l12 12"/>'),
+    wrench: svg('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'),
+    chev: svg('<path d="m9 18 6-6-6-6"/>'),
+    play: '<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
+  };
+  // Данные — из контента и словаря: content/unlocks.ts, ru.json, ru-boosts.json, boosts/boost-catalog.ts.
+  const WEAPONS = [
+    { id: "spark", name: "Искра", level: 1, text: "Бьёт снарядом в ближайшего врага. Ровный урон без условий." },
+    { id: "knife", name: "Нож", level: 1, text: "Веер снарядов по направлению движения. Награда за то, что бежишь в толпу." },
+    { id: "wardstone", name: "Оберег", level: 1, text: "Камень кружит вокруг, бьёт и холодит всё, чего касается. Дальше камней больше, и кольцо разгоняется." },
+    { id: "hearth", name: "Очаг", level: 2, text: "Зона огня вокруг игрока: поджигает тех, кто рядом, и они горят, даже выйдя из неё." },
+    { id: "storm", name: "Гроза", level: 4, text: "Молния по площади в случайного врага — достаёт стрелков. Шокированного бьёт с перескоком на соседей." },
+    { id: "sting", name: "Жало", level: 6, text: "Игла в ближайшего врага прошивает строй и травит всех на пути — яд копится слоями." },
+  ];
+  const BOOSTS = [
+    { id: "fury", name: "Ярость", res: "coins", price: 150, text: "Урон всего оружия выше на 15% весь забег." },
+    { id: "bulwark", name: "Крепость", res: "coins", price: 150, text: "На 30 здоровья больше с первой секунды." },
+    { id: "lure", name: "Приманка", res: "coins", price: 100, text: "Кристаллы и подборы тянутся к вам издалека: радиус подбора больше на 60%." },
+    { id: "aegis", name: "Щит", res: "coins", price: 120, text: "Первое попадание не наносит урона, а за ним полсекунды неуязвимости." },
+    { id: "head_start", name: "Фора", res: "gems", price: 4, text: "Забег с третьего уровня: два улучшения на выбор сразу." },
+    { id: "insight", name: "Чутьё", res: "gems", price: 6, text: "Четыре карточки на каждом выборе улучшения вместо трёх." },
+  ];
+  const DIFF = { easy: ["Лёгкая", "Враги слабее, приходят реже. Чтобы освоиться и попробовать оружие."], normal: ["Нормальная", "Враги крепче и бьют больнее, толпа плотнее. Задуманный темп игры."], hard: ["Сложная", "Каждый враг опасен, толпа не даёт передышки. Рекорд здесь — отдельная гордость."] };
+  const money = (res, n) => `${res === "gems" ? '<span class="gemi"></span>' : '<span class="coin"></span>'}${n.toLocaleString("ru-RU")}`;
+
+  const weaponTile = (w, s) => {
+    const locked = w.level > s.level;
+    const on = !locked && w.id === s.weapon;
+    return `<div class="pick weapon${on ? " on" : ""}${locked ? " locked" : ""}"><div class="top"><span class="face">${I[w.id]}</span>${locked ? `<span class="lv">${I.lock}ур. ${w.level}</span>` : ""}</div><div class="nm">${w.name}</div></div>`;
+  };
+  const boostTile = (b, s) => {
+    const on = s.boosts.includes(b.id);
+    const spent = s.boosts.reduce((acc, id) => { const x = BOOSTS.find((y) => y.id === id); if (x.res === b.res) acc += x.price; return acc; }, 0);
+    const wallet = b.res === "gems" ? s.gems : s.coins;
+    const off = !on && (s.boosts.length >= 3 || wallet - spent < b.price);
+    return `<div class="pick boost${on ? " on" : ""}${off ? " off" : ""}"><div class="top"><span class="face">${I[b.id]}</span><span class="pr">${money(b.res, b.price)}</span></div><div class="nm">${b.name}</div></div>`;
+  };
+
+  function sheet(s) {
+    const w = WEAPONS.find((x) => x.id === s.weapon);
+    const focus = BOOSTS.find((x) => x.id === (s.focus ?? s.boosts[s.boosts.length - 1]));
+    const modes = s.team ? `<div class="modes">${["Бесконечный", "Разработчика", "Стресс"].map((m, k) => `<span class="${k === (s.mode ?? 0) ? "on" : ""}">${m}</span>`).join("")}</div>` : "";
+    const dev = s.mode === 1 ? `<div class="devcard"><span class="face">${I.wrench}</span><div class="grow"><div class="disp" style="font-size:14px">Настроить режим разработчика</div><div class="note">Без читов — забег пойдёт в рейтинг</div></div><span style="color:var(--disabled)">${I.chev}</span></div>` : "";
+    let boosts = "";
+    if (s.boostsMode === "offline") boosts = `<div class="stitle">Бусты на забег</div><div class="note">Бусты покупаются только с сетью — сейчас сервер недоступен.</div>`;
+    else if (s.boostsMode !== "guest") boosts = `<div class="stitle">Бусты на забег <small>${s.boosts.length} из 3</small></div><div class="grid3">${BOOSTS.map((b) => boostTile(b, s)).join("")}</div>${focus ? `<div class="desc"><b>${focus.name}</b><span>${focus.text}</span></div>` : `<div class="note">Действуют один забег и списываются на «В бой». Выберите буст — здесь появится, что он даёт.</div>`}`;
+    const picked = s.boosts.map((id) => BOOSTS.find((b) => b.id === id));
+    const coins = picked.filter((b) => b.res === "coins").reduce((a, b) => a + b.price, 0);
+    const gems = picked.filter((b) => b.res === "gems").reduce((a, b) => a + b.price, 0);
+    const cost = picked.length ? `<span class="cost">спишется ${coins ? `<b>${money("coins", coins)}</b>` : ""}${gems ? `<b>${money("gems", gems)}</b>` : ""}</span>` : "";
+    const err = s.error ? `<div class="err" role="alert">${s.error}</div>` : "";
+    return `<div class="sheet"><div class="grip"></div><div class="shead"><span class="t grow">Перед забегом</span><span class="x">${I.x}</span></div>
+      <div class="sbody">${modes}${dev}
+        <div class="seg">${Object.entries(DIFF).map(([id, [nm]]) => `<span class="${id === s.diff ? "on" : ""}">${nm}</span>`).join("")}</div>
+        <div class="note">${DIFF[s.diff][1]}</div>
+        <div class="stitle">Стартовое оружие</div>
+        <div class="grid3">${WEAPONS.map((x) => weaponTile(x, s)).join("")}</div>
+        <div class="desc"><b>${w.name}</b><span>${w.text}</span></div>
+        ${boosts}
+      </div>
+      <div class="sfoot">${err}<button class="play cut cut-sm${cost ? " two" : ""}"><span class="pl">${I.play}В бой</span>${cost}</button></div></div>`;
+  }
+
+  const lobby = `<div class="lobby"><div class="bar"></div><div class="blk" style="height:84px"></div><div class="blk" style="height:92px"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="blk" style="height:88px"></div><div class="blk" style="height:88px"></div></div><div class="blk" style="height:60px;margin-top:auto"></div></div><div class="dim"></div>`;
+
+  const STATES = [
+    { s: { level: 6, coins: 5762, gems: 21, diff: "normal", weapon: "wardstone", boosts: [] },
+      cap: `<b>1. Обычный забег.</b> Уровень 6 — открыто всё. Последний выбор сложности и оружия запомнен, как сейчас. Бусты не выбраны: «В бой» — забег без покупки, второй кнопки «Без бустов» нет.` },
+    { s: { level: 1, coins: 40, gems: 0, diff: "easy", weapon: "spark", boosts: [] },
+      cap: `<b>2. Новичок.</b> Очаг, Гроза и Жало закрыты — замок и уровень открытия (Р41). Монет и самоцветов на бусты нет — плитки приглушены, но видны: игрок знает, на что копить.` },
+    { s: { level: 6, coins: 5762, gems: 21, diff: "hard", weapon: "storm", boosts: ["fury", "aegis", "head_start"] },
+      cap: `<b>3. Выбраны три буста.</b> Остальные приглушены — больше трёх нельзя (<code>maxPerRun</code>). Под плитками — что даёт последний тронутый. В кнопке второй строкой — что спишется, сразу в двух валютах.` },
+    { s: { level: 6, coins: 200, gems: 2, diff: "normal", weapon: "knife", boosts: ["fury"], error: "Не хватает монет или самоцветов — бусты не куплены." },
+      cap: `<b>4. Покупка не прошла.</b> Сервер отказал — лист остаётся открытым, причина над кнопкой (тексты <code>boosts.error.*</code> — как сейчас). Снять буст или нажать «В бой» ещё раз.` },
+    { s: { level: 6, coins: 5762, gems: 21, diff: "normal", weapon: "wardstone", boosts: [], boostsMode: "offline" },
+      cap: `<b>5. Нет сети</b> (или без входа — тогда раздела нет вовсе). Вместо плиток бустов — строка, как сейчас. Забег начинается: он работает и без сервера.` },
+    { s: { level: 6, coins: 5762, gems: 21, diff: "normal", weapon: "spark", boosts: [], team: true, mode: 1 }, narrow: true,
+      cap: `<b>6. Команда, 320 px.</b> Вкладки режимов — только тем, кому открыт забег разработчика или стресс-тест. На вкладке разработчика сверху — карточка настройки, как сейчас; на «Стресс» лист показывает памятку теста вместо выбора. Плитки на 320 px помещаются по три, имена не обрезаются: у буста имя — второй строкой во всю ширину. Лист у команды выше — на 320 px его тело прокручивается под закреплённой шапкой и кнопкой.` },
+  ];
+
+  const root = document.getElementById("states");
+  for (const st of STATES) {
+    const d = document.createElement("div");
+    d.innerHTML = `<div class="phone${st.narrow ? " narrow" : ""}"><div class="screen">${lobby}${sheet(st.s)}</div></div><div class="cap">${st.cap}</div>`;
+    root.appendChild(d);
+  }
+  const demo = { level: 3, coins: 500, gems: 5, diff: "normal", weapon: "knife", boosts: ["lure"] };
+  document.getElementById("kit").innerHTML = [
+    [`<div style="width:116px">${weaponTile(WEAPONS[1], demo)}</div>`, "Оружие выбрано: рамка акцента, галочка в углу"],
+    [`<div style="width:116px">${weaponTile(WEAPONS[4], demo)}</div>`, "Оружие закрыто: замок и уровень открытия, приглушено, нажатие ничего не делает"],
+    [`<div style="width:116px">${boostTile(BOOSTS[2], demo)}</div>`, "Буст выбран; цена — монеты или самоцветы"],
+    [`<div style="width:116px">${boostTile(BOOSTS[5], { ...demo, gems: 2 })}</div>`, "Буст не по карману — приглушён до 40%, как сейчас"],
+    [`<div style="width:328px" class="desc"><b>Оберег</b><span>${WEAPONS[2].text}</span></div>`, "Описание выбранного — подложка ниже уровня поверхности"],
+    [`<button class="play cut cut-sm" style="width:328px">${I.play}В бой</button>`, "Главная кнопка: срез 8 px, как «Играть»"],
+  ].map(([el, note]) => `<div class="cell">${el}<div class="knote">${note}</div></div>`).join("");
+</script>
+</body>
+</html>
