@@ -71,7 +71,7 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
 
   onModuleInit(): void {
     // Забег с оплаченным, но не взятым продолжением — звёзды возвращаются.
-    if (this.enabled) this.runsHooks.onRecorded("payments", (run) => this.refundAll(this.refunds.afterRun(run.runId, run.continues)));
+    if (this.enabled) this.runsHooks.onRecorded("payments", (run) => this.dispatchRefunds(this.refunds.afterRun(run.runId, run.continues)));
   }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -93,7 +93,7 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     this.worker.on("error", (error) => this.log("warn", "worker_error", { reason: error.message }));
     // Не блокирует старт: база или Redis могут быть ещё не готовы, а возвраты
     // подождут следующего перезапуска.
-    void this.refundAll(this.refunds.pending(PENDING_REFUNDS_ON_START));
+    void this.dispatchRefunds(this.refunds.pending(PENDING_REFUNDS_ON_START));
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -116,7 +116,7 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     const outcome = await this.confirmation.confirm(data.payment);
     // Возврат заказывается после записи оплаты и отдельным заданием: упавший
     // возврат не должен повторять запись оплаты.
-    await this.refundAll(this.refunds.afterConfirm(outcome, data.payment));
+    await this.dispatchRefunds(this.refunds.afterConfirm(outcome, data.payment));
     await this.fulfill(outcome);
   }
 
@@ -134,7 +134,8 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     this.log("log", "purchase_fulfilled", { purchaseId: purchase.purchaseId, accountId: purchase.accountId, sku: purchase.sku });
   }
 
-  private async refundAll(orders: Promise<RefundOrder[]>): Promise<void> {
+  /** Заказанные возвраты — заданиями очереди. Ошибка заказа в лог, наружу не пробивается. */
+  async dispatchRefunds(orders: Promise<RefundOrder[]>): Promise<void> {
     try {
       for (const order of await orders) await this.run({ kind: "refund", order }, `refund-${fingerprint(order.chargeId)}`);
     } catch (error: unknown) {
