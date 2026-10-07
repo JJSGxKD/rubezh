@@ -12,12 +12,26 @@ import type { PurchaseProduct, StoredPurchase } from "./purchase-types.js";
  */
 export type Fulfiller = (purchase: StoredPurchase) => Promise<void>;
 
+/**
+ * Выдача невозможна по сути: товара больше нет в каталоге. Повторять бесполезно
+ * — проход довыдачи возвращает за такую покупку звёзды, а не пробует снова.
+ * Любая другая ошибка выдачи — временная или в коде: решает человек.
+ */
+export class UndeliverableError extends Error {
+  override readonly name = "UndeliverableError";
+}
+
 @Injectable()
 export class PurchaseFulfillment {
   private readonly fulfillers = new Map<PurchaseProduct, Fulfiller>();
 
   register(product: PurchaseProduct, fulfiller: Fulfiller): void {
     this.fulfillers.set(product, fulfiller);
+  }
+
+  /** Товары, у которых есть выдача: только их покупки проход довыдачи подбирает. */
+  products(): PurchaseProduct[] {
+    return [...this.fulfillers.keys()];
   }
 
   /** `false` — выдавать нечего: у товара нет выдачи сверх оплаты. */

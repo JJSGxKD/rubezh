@@ -156,6 +156,8 @@ export interface PurchasesRepository {
   pendingRefunds(limit: number): Promise<RefundOrder[]>;
   /** Оплаченные продолжения забега сверх взятых — их не использовали */
   unusedGrants(runId: string, usedContinues: number): Promise<string[]>;
+  /** Оплаченные и не выданные покупки этих товаров старше срока, без заказанного возврата — их подбирает проход довыдачи. */
+  undelivered(products: readonly PurchaseProduct[], paidBefore: Date, limit: number): Promise<StoredPurchase[]>;
   /** Покупки аккаунта, свежие первыми — карточка игрока в панели */
   byAccount(accountId: string, limit: number): Promise<StoredPurchase[]>;
 }
@@ -401,6 +403,22 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
       select: { purchaseId: true },
     });
     return rows.map((row) => row.purchaseId);
+  }
+
+  async undelivered(products: readonly PurchaseProduct[], paidBefore: Date, limit: number): Promise<StoredPurchase[]> {
+    if (products.length === 0) return [];
+    return await this.prisma.purchase.findMany({
+      where: {
+        paidAt: { not: null, lt: paidBefore },
+        fulfilledAt: null,
+        refundRequestedAt: null,
+        refundedAt: null,
+        product: { in: [...products] },
+      },
+      orderBy: { paidAt: "asc" },
+      take: limit,
+      select: SELECT,
+    });
   }
 
   async byAccount(accountId: string, limit: number): Promise<StoredPurchase[]> {

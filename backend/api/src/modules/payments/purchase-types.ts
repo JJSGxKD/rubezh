@@ -6,7 +6,7 @@
 
 export type PaymentMode = "live" | "test";
 export type PurchaseStatus = "pending" | "paid" | "refunded";
-export type RefundReason = "test_mode" | "unused" | "external";
+export type RefundReason = "test_mode" | "unused" | "external" | "undeliverable";
 /** Что продаётся: второй шанс в забеге, товар каталога магазина или VIP (WP10). */
 export type PurchaseProduct = "continue_run" | "shop_item" | "vip";
 
