@@ -156,7 +156,7 @@ describe("влитые PR задач из gh", () => {
 describe("страница доски", () => {
   const entry = (item: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ task: item, ...extra });
   const board = {
-    free: [entry(task("T-0003", { title: "Деньги | оплата", status: "ready", priority: "P0", size: "M", effort: "xhigh", epic: "E1", fileName: "T-0003-pay.md" }))],
+    free: [entry(task("T-0003", { title: "Деньги | оплата", status: "ready", priority: "P0", size: "M", effort: "extra", epic: "E1", fileName: "T-0003-pay.md" }))],
     inProgress: [entry(task("T-0012", { title: "Палитра", status: "ready", fileName: "T-0012-pal.md" }))],
     review: [entry(task("T-0016", { title: "Пересчёт", status: "ready", fileName: "T-0016-rec.md" }), { pr: 215 })],
     blocked: [entry(task("T-0004", { title: "Возвраты", status: "ready", fileName: "T-0004-ref.md" }), { reason: "ждёт T-0003" })],
@@ -192,7 +192,7 @@ describe("страница доски", () => {
         "",
         "| Задача | Приоритет | Размер | Исполнитель | Эпик |",
         "|---|---|---|---|---|",
-        `| [T-0003. Деньги \\| оплата](${BLOB}/T-0003-pay.md) | P0 | M | sonnet-5.5 · xhigh | E1 |`,
+        `| [T-0003. Деньги \\| оплата](${BLOB}/T-0003-pay.md) | P0 | M | sonnet-5.5 · extra | E1 |`,
         "",
         "## В работе — 1",
         "",
