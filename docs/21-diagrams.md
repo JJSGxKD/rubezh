@@ -398,7 +398,7 @@ erDiagram
         string telegram_charge_id UK "nullable: id оплаты в Telegram"
         datetime invoiced_at "когда выставлен последний счёт"
         datetime paid_at "nullable: продолжение выдано"
-        enum refund_reason "nullable: test_mode|unused|external"
+        enum refund_reason "nullable: test_mode|unused|external|undeliverable"
         datetime refund_requested_at "nullable"
         datetime refunded_at "nullable"
         datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька, период VIP — записан"
@@ -1674,7 +1674,7 @@ flowchart LR
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
         ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
-        PAY["payments<br/>второй шанс, товары и подписка за Stars: цена,<br/>счёт, подтверждение, продления, возвраты, выдача, реализовано"]
+        PAY["payments<br/>второй шанс, товары и подписка за Stars: цена,<br/>счёт, подтверждение, продления, возвраты, выдача, довыдача, реализовано"]
         SHOP["shop<br/>магазин: каталог с фиксированным<br/>составом, цены способа оплаты, акции, реализовано"]
         VIP["vip<br/>подписка площадки: журнал периодов,<br/>продление, самоцветы дня, надбавка к наградам, реализовано"]
         ADS["ads<br/>реклама: выбор сети, воронка показа,<br/>кулдаун места, реализовано ядро"]
@@ -1812,6 +1812,7 @@ flowchart LR
     CADDY -- "/api/v1/vip" --> VIP
     VIP -- "счёт с периодом, отмена продления" --> PAY
     PAY -. "период за оплату, продление на площадке" .-> VIP
+    PAY -. "хук: покупка не выдана — сообщение в поток «Покупки»" .-> NOTIFY
     VIP -- "самоцветы дня ключом суток" --> WALLET
     WALLET -. "надбавка к наградам: регистр надбавок" .-> VIP
     VIP -- "vip_subscription, vip_period, vip_daily" --> PG
