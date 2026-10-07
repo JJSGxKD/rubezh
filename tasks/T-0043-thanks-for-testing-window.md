@@ -6,7 +6,7 @@ priority: P1
 status: draft
 owner:
 size: M
-depends_on: [T-0042]
+depends_on: [T-0042, T-0048]
 zones:
   - packages/app-shell/src/screens/meta/tester-thanks.tsx
   - packages/app-shell/src/state/compensation.ts
@@ -20,20 +20,16 @@ runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
-design: null
+design: design/screens/tester-thanks.html
 ---
 
 # T-0043. Окно «Спасибо за тест» и знак «Тестер» в профиле, у друзей и в рейтинге
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0043.json)](README.md#значки-статуса) [![T-0042](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0042.json&label=T-0042)](T-0042-compensation-claim-and-tester-flag.md)
 
-**Черновик.** Не хватает трёх вещей:
-
-- макета `design/screens/tester-thanks.html` — его рисуют тимлиды в E9;
-- текстов для игрока, согласованных с пользователем;
-- точных путей экранов профиля, друзей и рейтинга, где встаёт знак.
-
-После них задача переходит в `ready`, а зоны дополняются.
+**Черновик.** Макет готов — `design/screens/tester-thanks.html`. Не хватает утверждения
+текстов пользователем: они в макете, таблицей «Тексты для утверждения». После него
+задача переходит в `ready`, а зоны дополняются путями ниже.
 
 ## Зачем
 
@@ -71,13 +67,21 @@ design: null
   - у `LeaderboardEntry` — `tester?: true`;
   - у строк друзей и вида сессии — то же.
 
-## Что осталось решить
+## Что уже нарисовано и найдено
 
-- Тексты окна и подпись знака — тимлиды предлагают, пользователь утверждает.
-- Вид знака рядом с именем — макет E9: чип в цвет акцента, место в строке
-  рейтинга на 320 px.
-- Пути компонентов профиля, списка друзей и строки рейтинга — разведка при
-  переводе в `ready`.
+- **Окно** — `Modal` по центру, четыре состояния макета: тестер с покупками, тестер
+  без покупок, только покупки (заголовок «Купленное вернулось»), не забралось.
+  Строки — только те, где есть что выдать; внизу «Всего»; закрыть окно до
+  забора нельзя — оно обещает то, что уже на сервере.
+- **Знак** — тон элиты и значок колбы (`FlaskConical`): метка «Вы» в рейтинге уже
+  акцентом, знак не должен с ней спорить. После имени; длинное имя обрезается,
+  знак — нет.
+- **Где встаёт знак:**
+  - профиль — `screens/meta/profile.tsx:80-86`, после имени в шапке карточки;
+  - рейтинг — `screens/meta/rating.tsx`, `LeaderboardRow` (строки ~170–180):
+    после имени, перед `Badge` «Вы»;
+  - друзья — проп `badge` у `PeerRow` (`screens/meta/friends-parts.tsx`, T-0048).
+- **Осталось:** утверждение текстов пользователем.
 
 ## Аналитика
 
