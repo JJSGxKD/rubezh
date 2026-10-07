@@ -6,7 +6,7 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
 
 /**
  * Возвраты звёзд (docs/34-stage3-plan.md, WP5, п. 5.2 и 8): что вернуть и
- * как. Возвращаем сами в четырёх случаях:
+ * как. Возвращаем сами в пяти случаях:
  *
  * - **тестовая оплата** (Р14) — звезда возвращается сразу после
  *   подтверждения, продолжение засчитано;
@@ -14,7 +14,9 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
  *   пришла оплата, приложение закрыли, не продолжив, или то же продолжение
  *   взяли за рекламу: товар не выдан;
  * - **вторая оплата того же продолжения** — одно продолжение, одна оплата;
- * - **оплата без покупки** — продать было нечего.
+ * - **оплата без покупки** — продать было нечего;
+ * - **товар не выдать по сути** — его сняли с витрины, а оплата уже пришла
+ *   (проход довыдачи, `fulfillment-sweeper.ts`).
  *
  * Сам возврат идёт через очередь (`payments-queue.ts`): упавший повторяется,
  * а не пропадает молча. Заказ возврата пишется в базу раньше обращения к
@@ -61,6 +63,14 @@ export class PaymentRefunds {
     return orders.flat();
   }
 
+  /**
+   * Товар не выдать по сути (снят с витрины) — вернуть звёзды: игрок не должен
+   * остаться без денег и без товара.
+   */
+  async undeliverable(purchaseId: string, nowMs = Date.now()): Promise<RefundOrder[]> {
+    return await this.request(purchaseId, "undeliverable", nowMs);
+  }
+
   /** Возвраты, заказанные до перезапуска и ещё не подтверждённые. */
   async pending(limit: number): Promise<RefundOrder[]> {
     return await this.purchases.pendingRefunds(limit);
@@ -86,7 +96,7 @@ export class PaymentRefunds {
     this.log("log", "refund_done", describe(order));
   }
 
-  private async request(purchaseId: string, reason: "test_mode" | "unused", nowMs: number): Promise<RefundOrder[]> {
+  private async request(purchaseId: string, reason: "test_mode" | "unused" | "undeliverable", nowMs: number): Promise<RefundOrder[]> {
     const order = await this.purchases.requestRefund(purchaseId, reason, new Date(nowMs));
     return order === null ? [] : [order];
   }

@@ -1,4 +1,4 @@
-import { isGranted, SUBSCRIPTION_PRODUCTS, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
+import { isGranted, SUBSCRIPTION_PRODUCTS, type PurchaseProduct, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
 import type {
   CheckoutView,
   ConfirmOutcome,
@@ -208,6 +208,22 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     return [...this.rows.values()]
       .filter((row) => row.runId === runId && isGranted(row) && (row.continueNo ?? 0) > usedContinues && row.refundRequestedAt === null)
       .map((row) => row.purchaseId);
+  }
+
+  async undelivered(products: readonly PurchaseProduct[], paidBefore: Date, limit: number): Promise<StoredPurchase[]> {
+    return [...this.rows.values()]
+      .filter(
+        (row) =>
+          products.includes(row.product) &&
+          row.paidAt !== null &&
+          row.paidAt.getTime() < paidBefore.getTime() &&
+          row.fulfilledAt === null &&
+          row.refundRequestedAt === null &&
+          row.refundedAt === null,
+      )
+      .sort((a, b) => (a.paidAt?.getTime() ?? 0) - (b.paidAt?.getTime() ?? 0))
+      .slice(0, limit)
+      .map((row) => ({ ...row }));
   }
 
   private orderOf(row: StoredPurchase): RefundOrder | null {

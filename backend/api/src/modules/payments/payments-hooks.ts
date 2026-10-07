@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { PaymentMode, StoredPurchase } from "./purchase-types.js";
+import type { PaymentMode, PurchaseProduct, StoredPurchase } from "./purchase-types.js";
 
 /**
  * Что случилось с оплатой — кому это интересно: воронке (первая покупка),
@@ -29,6 +29,23 @@ export interface SubscriptionChange {
   at: Date;
 }
 
+/**
+ * Оплаченная покупка, которую проход довыдачи не смог закрыть выдачей: товара
+ * нет в каталоге (`reason: "undeliverable"`, звёзды возвращаются сами) или
+ * выдача падает по другой причине (`reason` — её текст, нужен человек).
+ */
+export interface StuckPurchase {
+  purchaseId: string;
+  accountId: string;
+  product: PurchaseProduct;
+  sku: string | null;
+  chargedStars: number;
+  paidAt: Date;
+  reason: string;
+}
+
+export type StuckListener = (purchase: StuckPurchase) => Promise<void>;
+
 export type PaidListener = (purchase: PaidPurchase) => Promise<void>;
 export type SubscriptionListener = (change: SubscriptionChange) => Promise<void>;
 
@@ -37,6 +54,7 @@ export class PaymentsHooks {
   private readonly logger = new Logger("payments");
   private readonly paid: { name: string; listener: PaidListener }[] = [];
   private readonly subscriptions: { name: string; listener: SubscriptionListener }[] = [];
+  private readonly stuck: { name: string; listener: StuckListener }[] = [];
 
   onPaid(name: string, listener: PaidListener): void {
     this.paid.push({ name, listener });
@@ -46,9 +64,18 @@ export class PaymentsHooks {
     this.subscriptions.push({ name, listener });
   }
 
+  onStuck(name: string, listener: StuckListener): void {
+    this.stuck.push({ name, listener });
+  }
+
   /** После записи оплаты; упавший слушатель не отменяет ни её, ни остальных. */
   emitPaid(purchase: PaidPurchase): Promise<void> {
     return this.emit(this.paid, purchase, purchase.purchaseId);
+  }
+
+  /** Покупка зависла: проход довыдачи не смог её закрыть. Упавший слушатель не мешает остальным. */
+  emitStuck(purchase: StuckPurchase): Promise<void> {
+    return this.emit(this.stuck, purchase, purchase.purchaseId);
   }
 
   emitSubscriptionChanged(change: SubscriptionChange): Promise<void> {

@@ -3,8 +3,8 @@ id: T-0003
 title: Оплаченное всегда выдаётся или возвращается
 epic: E1
 priority: P0
-status: ready
-owner:
+status: done
+owner: claude-2 / sonnet-5.5
 size: M
 depends_on: [T-0001]
 zones:
@@ -25,6 +25,8 @@ zones:
   - backend/api/test/fulfillment-sweeper.test.ts
   - backend/api/test/payments-alert-notifier.test.ts
   - backend/api/test/payments.integration.test.ts
+  - backend/api/test/helpers/memory-purchases.ts
+  - backend/api/test/chat-target.test.ts
 shared:
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/prisma/schema.prisma

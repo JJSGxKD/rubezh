@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
+import { FulfillmentSweeper } from "./fulfillment-sweeper.js";
 import { PaymentsHooks } from "./payments-hooks.js";
 import { PaymentConfirmation } from "./payment-confirmation.js";
 import { PaymentRefunds } from "./payment-refunds.js";
@@ -21,6 +22,10 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
  * `payments.stars` (запасное значение — `PAYMENTS_ENABLED`), тестовая оплата
  * — только в разработке (`PAYMENTS_TEST_MODE`).
  *
+ * Оплаченное не остаётся без выдачи: проход довыдачи подбирает покупки, у
+ * которых задание очереди сдалось, и выдаёт их или возвращает звёзды
+ * (`fulfillment-sweeper.ts`).
+ *
  * Забеги модуль читает, но не принимает: продолжение продаётся к забегу,
  * который начался на сервере, — отсюда зависимость от `RunsModule`, а не
  * наоборот; сверку продолжений в итоге забега модуль подключает к приёму
@@ -36,6 +41,7 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
     PaymentConfirmation,
     PaymentRefunds,
     PaymentsQueue,
+    FulfillmentSweeper,
     PaymentsContinueLedger,
     PaymentsHooks,
     PurchaseFulfillment,

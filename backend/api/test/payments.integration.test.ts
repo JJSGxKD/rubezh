@@ -179,6 +179,49 @@ describe.skipIf(DATABASE_URL === "")("покупки на живом Postgres", 
     await expect(purchases.requestRefund(purchaseId, "unused", new Date())).resolves.toBeNull();
   });
 
+  it("довыдача: undelivered отдаёт только оплаченную, старую, не выданную и не возвращаемую покупку нужного товара", async () => {
+    const account = await accounts.upsert(
+      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Покупатель", username: null, photoUrl: null },
+      Date.now(),
+    );
+    const now = Date.now();
+    const minutesAgo = (minutes: number): Date => new Date(now - minutes * 60_000);
+    const row = (patch: Record<string, unknown> = {}) =>
+      prisma.purchase.create({
+        data: {
+          purchaseId: randomUUID(),
+          accountId: account.accountId,
+          product: "shop_item",
+          sku: "starter_pack",
+          priceStars: 50,
+          chargedStars: 50,
+          mode: "live",
+          status: "paid",
+          telegramChargeId: `charge-${randomUUID()}`,
+          invoicedAt: minutesAgo(200),
+          paidAt: minutesAgo(120),
+          ...patch,
+        },
+      });
+
+    const eligible = await row();
+    const olderEligible = await row({ paidAt: minutesAgo(180) });
+    await row({ fulfilledAt: minutesAgo(100) });
+    await row({ paidAt: minutesAgo(10) });
+    await row({ refundReason: "unused", refundRequestedAt: minutesAgo(60) });
+    await row({ status: "refunded", refundReason: "external", refundedAt: minutesAgo(60) });
+    await row({ product: "vip", sku: "vip_month" });
+    await row({ status: "pending", paidAt: null, telegramChargeId: null });
+
+    const found = await purchases.undelivered(["shop_item"], minutesAgo(45), 500);
+    const ours = found.filter((purchase) => purchase.accountId === account.accountId).map((purchase) => purchase.purchaseId);
+
+    // Старые первыми; выданная, свежая, возвращаемая, чужого товара и неоплаченная — не отданы.
+    expect(ours).toEqual([olderEligible.purchaseId, eligible.purchaseId]);
+    expect((await purchases.undelivered(["shop_item", "vip"], minutesAgo(45), 500)).filter((purchase) => purchase.accountId === account.accountId)).toHaveLength(3);
+    expect(await purchases.undelivered([], minutesAgo(45), 500)).toEqual([]);
+  });
+
   it("аккаунт с покупками не удаляется вместе с деньгами", async () => {
     const { accountId, runId } = await startedRun();
     await purchases.openInvoice(invoice(accountId, runId));

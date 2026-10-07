@@ -4,7 +4,7 @@ import { ItemsService } from "../items/items.service.js";
 import { methodFor, priceIn } from "../payments/payment-methods.js";
 import { PaymentsUnsupportedError } from "../payments/payments-errors.js";
 import { PaymentsService, type ShopInvoice } from "../payments/payments.service.js";
-import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
+import { PurchaseFulfillment, UndeliverableError } from "../payments/purchase-fulfillment.js";
 import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
@@ -153,12 +153,13 @@ export class ShopService implements OnModuleInit {
   /**
    * Выдача оплаченного — состав товара, каждым ресурсом отдельно, ключом
    * покупки. Товара нет в каталоге — не выдаём наугад: задание повторится,
-   * а потом уйдёт в лог человеку. Поэтому товар с витрины не удаляют, пока по
-   * нему могут прийти оплаты открытых счетов (`INVOICE_TTL_SEC`).
+   * а после него проход довыдачи вернёт звёзды (`payments/fulfillment-sweeper.ts`).
+   * Поэтому товар с витрины не удаляют, пока по нему могут прийти оплаты
+   * открытых счетов (`INVOICE_TTL_SEC`).
    */
   async fulfill(purchase: StoredPurchase): Promise<void> {
     const sku = purchase.sku === null ? undefined : skuById(purchase.sku);
-    if (sku === undefined) throw new Error(`товара ${purchase.sku ?? "—"} нет в каталоге — выдавать нечего`);
+    if (sku === undefined) throw new UndeliverableError(`товара ${purchase.sku ?? "—"} нет в каталоге — выдавать нечего`);
     for (const { resource, amount } of contentsOf(sku)) {
       await this.wallet.grant({
         accountId: purchase.accountId,
