@@ -134,6 +134,13 @@ export const SETTINGS = {
     "Подозрительные и отклонённые забеги — очередь антифрода. Пусто — общий чат",
     (config) => config.telegram.chatEnv.runReview,
   ),
+  // Переменной окружения нет: адрес задаётся только в панели (пусто — общий чат).
+  chatPayments: chat(
+    "notify.chat.payments",
+    "Покупки",
+    "Невыданные покупки, возвраты за снятые товары и брошенные задания оплаты. Пусто — общий чат",
+    () => "",
+  ),
   notifyReports: {
     key: "notify.reports",
     group: NOTIFY_GROUP,
