@@ -153,8 +153,9 @@ export class ShopService implements OnModuleInit {
   /**
    * Выдача оплаченного — состав товара, каждым ресурсом отдельно, ключом
    * покупки. Товара нет в каталоге — не выдаём наугад: задание повторится,
-   * а потом уйдёт в лог человеку. Поэтому товар с витрины не удаляют, пока по
-   * нему могут прийти оплаты открытых счетов (`INVOICE_TTL_SEC`).
+   * а после него проход довыдачи вернёт звёзды (`payments/fulfillment-sweeper.ts`).
+   * Поэтому товар с витрины не удаляют, пока по нему могут прийти оплаты
+   * открытых счетов (`INVOICE_TTL_SEC`).
    */
   async fulfill(purchase: StoredPurchase): Promise<void> {
     const sku = purchase.sku === null ? undefined : skuById(purchase.sku);
