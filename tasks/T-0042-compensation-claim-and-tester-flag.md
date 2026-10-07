@@ -9,6 +9,8 @@ size: M
 depends_on: [T-0040]
 zones:
   - backend/api/src/modules/wipe/compensation.service.ts
+  - backend/api/src/modules/wipe/compensation-rules.ts
+  - backend/api/test/compensation-rules.test.ts
   - backend/api/src/modules/wipe/compensation.repository.ts
   - backend/api/src/modules/wipe/compensation.controller.ts
   - backend/api/src/modules/wipe/wipe.module.ts
@@ -58,6 +60,11 @@ design: null
 
 - **Выдача — окном «Спасибо за тест», по кнопке «Забрать», один раз.**
 - **Знак виден в профиле, у друзей и в рейтинге.**
+- **Второй шанс, купленный за звёзды, компенсируется самоцветами** — дополнение
+  к Р87 от 07.10.2026. Курс — открытый вопрос О43. До решения стоит рабочее
+  значение: константа с пометкой, по набору «60 самоцветов за 50 ⭐», то есть
+  1,2 самоцвета за звезду с округлением вверх. Снимок хранит звёзды
+  (`continueStars`, T-0040), поэтому решение О43 меняет только константу.
 
 Решения тимлидов:
 
@@ -66,9 +73,10 @@ design: null
   строк в журнале нет, ключ свободен. Если потом за эту покупку вернут звёзды,
   отзыв остатка (T-0023) найдёт начисление по тому же ключу и заберёт его
   как обычно.
-- **Бонус — новая причина `wipe_compensation`**, ключ `wipe:<accountId>:bonus`.
-  Причина — в `EXCHANGE_REASONS`: ценность уже была у игрока до вайпа, и
-  суточный потолок начислений её не касается.
+- **Бонус и самоцветы за второй шанс — новая причина `wipe_compensation`.**
+  Ключи — `wipe:<accountId>:bonus` и `wipe:<accountId>:continue`. Причина — в
+  `EXCHANGE_REASONS`: ценность уже была у игрока до вайпа, и суточный потолок
+  начислений её не касается.
 - **Выдача идемпотентна.** Сначала начисления, потом отметка «забрано». Сбой
   между ними безопасен: повтор найдёт строки по ключам и не начислит дважды.
   Повтор после отметки отвечает тем же результатом, а не ошибкой.
@@ -123,11 +131,24 @@ design: null
    В комментарии над списком: «…и компенсация после вайпа (Р87): ценность
    была у игрока до него».
 3. **`ru-history.json`** — `"history.reason.wipe_compensation": "Спасибо за тест"`.
+3а. **`modules/wipe/compensation-rules.ts`** (T-0040) — курс и перевод:
+
+    ```ts
+    /**
+     * Курс компенсации второго шанса (Р87): самоцветов за звёзды. РАБОЧЕЕ ЗНАЧЕНИЕ
+     * до решения О43 — по набору «60 самоцветов за 50 ⭐». Парой целых, а не 1.2:
+     * дробный множитель даёт шум плавающей точки в округлении вверх.
+     */
+    export const CONTINUE_RATE = { gems: 6, stars: 5 } as const;
+
+    /** Звёзды второго шанса → самоцветы, вверх до целого: 10 ⭐ → 12, 3 ⭐ → 4. */
+    export function continueGems(stars: number): number; // Math.ceil((stars * CONTINUE_RATE.gems) / CONTINUE_RATE.stars)
+    ```
 4. **`modules/wipe/compensation.repository.ts`** — по образцу соседних
    репозиториев, токен `COMPENSATION_REPOSITORY`:
 
    ```ts
-   export interface CompensationRow { accountId: string; tester: boolean; level: number; bonusGems: number; grants: unknown; claimedAt: Date | null }
+   export interface CompensationRow { accountId: string; tester: boolean; level: number; bonusGems: number; grants: unknown; continueStars: number; claimedAt: Date | null }
    export interface CompensationRepository {
      find(accountId: string): Promise<CompensationRow | null>;
      /** `false` — уже отмечено раньше */
@@ -143,6 +164,8 @@ design: null
      bonusGems: number;
      /** что вернулось из купленного — суммой по ресурсу, в порядке WALLET_RESOURCES */
      restored: { resource: WalletResource; amount: number }[];
+     /** самоцветы за второй шанс, купленный за звёзды: `continueGems(continueStars)` */
+     continueGems: number;
    }
 
    export interface ClaimResult {
@@ -167,10 +190,12 @@ design: null
       `wallet.grant({ accountId, resource, amount, reason: "purchase", source: "wipe:restore", idempotencyKey: \`purchase:${purchaseId}:${resource}\` })`;
    5. `bonusGems > 0` —
       `wallet.grant({ resource: "gems", amount: bonusGems, reason: "wipe_compensation", source: "wipe:tester_bonus", idempotencyKey: \`wipe:${accountId}:bonus\` })`;
-   6. `markClaimed(accountId, now)`;
-   7. `balances = wallet.balances(accountId)`;
-   8. лог `log` `compensation_claimed` с полями `accountId`, `tester`,
-      `bonusGems`, `restoredGems` (сумма `gems` из `restored`).
+   6. `continueGems > 0` —
+      `wallet.grant({ resource: "gems", amount: continueGems, reason: "wipe_compensation", source: "wipe:continue", idempotencyKey: \`wipe:${accountId}:continue\` })`;
+   7. `markClaimed(accountId, now)`;
+   8. `balances = wallet.balances(accountId)`;
+   9. лог `log` `compensation_claimed` с полями `accountId`, `tester`,
+      `bonusGems`, `restoredGems` (сумма `gems` из `restored`), `continueGems`.
 
    Комментарий метода — почему начисления до отметки и почему ключ покупки
    прежний (раздел «Решения»).
@@ -246,6 +271,8 @@ design: null
 
 Первым коммитом.
 
+0. **`backend/api/test/compensation-rules.test.ts`** (файл из T-0040) —
+   `continueGems`: 0 → 0, 3 → 4, 5 → 6, 10 → 12.
 1. **`backend/api/test/compensation.test.ts`** — юнит, подмены репозитория и
    кошелька:
    - `pending`:
@@ -258,6 +285,9 @@ design: null
      - причины `purchase`, `purchase`, `wipe_compensation`;
      - потом `markClaimed`, `alreadyClaimed: false`;
    - не тестер с выдачей → бонус не начисляется (`bonusGems: 0`);
+   - `continueStars: 10` → `continueGems: 12`, начисление с ключом
+     `wipe:<accountId>:continue` и причиной `wipe_compensation`; `continueStars: 0` →
+     начисления нет;
    - повторный `claim` после отметки → `alreadyClaimed: true`, `grant` не
      вызывался;
    - `grant` бросил на второй выдаче → `claim` бросает, `markClaimed` не
@@ -296,6 +326,8 @@ design: null
 - `docs/30-configuration-map.md` — строка «Бонус тестеру после вайпа: самоцветы
   за уровень и потолок» → `backend/api/src/modules/wipe/compensation-rules.ts`,
   `TESTER_BONUS`; владелец — участник 1.
+- там же — строка «Курс компенсации второго шанса после вайпа (рабочий до О43)»
+  → `compensation-rules.ts`, `CONTINUE_RATE`.
 - `docs/35-stage4-plan.md`, WP33 — «Как сделано, часть 4 — выдача компенсации»:
   - маршруты;
   - ключи;
@@ -307,7 +339,8 @@ design: null
 - [ ] `GET /api/v1/me/compensation` отдаёт положенное, пока не забрано, иначе
   `null`.
 - [ ] `POST /api/v1/me/compensation/claim` начисляет купленное ключами покупок
-  и бонус один раз. Повтор ничего не начисляет и отвечает тем же.
+  и бонус один раз, второй шанс — самоцветами по курсу `CONTINUE_RATE`.
+  Повтор ничего не начисляет и отвечает тем же.
 - [ ] У тестера `tester: true` в сессии, в строках рейтинга и у друзей. У
   остальных поля нет, даты знака наружу нет.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
@@ -328,6 +361,7 @@ design: null
   🎁 **Как устроено**
 
   • купленное возвращается тем же ключом, что при покупке: возврат звёзд потом заберёт остаток как обычно
+  • второй шанс за звёзды возвращается самоцветами — пока по курсу набора «60 за 50 ⭐»
   • бонус — по уровню, один раз; повторное нажатие ничего не начислит
   • знак «Тестер» приходит в профиле, у друзей и в рейтинге — только у тестеров
   ```

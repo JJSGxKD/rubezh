@@ -50,6 +50,10 @@ design: null
 - **Бонус — 5 самоцветов за уровень аккаунта, не больше 250.**
 - **Знак «Тестер» — навсегда.** Ставится снимком, а не при выдаче: знак виден,
   даже если игрок окно «Спасибо за тест» ещё не открыл.
+- **Второй шанс, купленный за звёзды, компенсируется самоцветами.** Решение
+  пользователя от 07.10.2026, дополнение к Р87. Курс — открытый вопрос О43.
+  Поэтому снимок хранит **списанные звёзды**, а не самоцветы: курс применяет
+  выдача (T-0042), и решение О43 до вайпа не потребует переделывать снимок.
 
 Решения тимлидов:
 
@@ -72,7 +76,9 @@ design: null
   - выдача товара магазина пишет строки `reason = "purchase"`, ключ
     `purchase:<purchaseId>:<resource>` (`shop/shop.service.ts`, `fulfill`).
 - **Покупки — модель `Purchase`:** `mode`, `paidAt`, `refundRequestedAt`,
-  `refundedAt`, `product`.
+  `refundedAt`, `product`, `chargedStars`. У второго шанса
+  `product = "continue_run"`, начислений в кошельке нет: продолжение
+  засчитывается в забеге.
 - **Уровень — модель `AccountProgress`:** `level`, умолчание 1; строки может
   не быть, тогда уровень 1.
 - **Забеги — модель `Run`:** `status` (`started` | `finished`), `cheats`.
@@ -108,6 +114,8 @@ design: null
        bonusGems  Int       @map("bonus_gems")
        /// что начислили покупки: [{ purchaseId, resource, amount }]
        grants     Json
+       /// звёзды, списанные за второй шанс: выдача переводит их в самоцветы по курсу О43
+       continueStars Int    @map("continue_stars")
        snapshotAt DateTime  @map("snapshot_at") @db.Timestamptz(3)
        claimedAt  DateTime? @map("claimed_at") @db.Timestamptz(3)
 
@@ -155,6 +163,8 @@ design: null
      bonusGems: number;
      /** сколько вернётся из купленного, по ресурсам */
      restored: Partial<Record<WalletResource, number>>;
+     /** звёзды за второй шанс — к переводу в самоцветы при выдаче */
+     continueStars: number;
    }
 
    /**
@@ -174,14 +184,17 @@ design: null
       - каждую строку разобрать `grantOfKey`;
       - оставить только покупки, которые находит
         `purchase.findMany({ where: { purchaseId: { in }, mode: "live", refundedAt: null, refundRequestedAt: null } })`;
-   5. **строки** — по аккаунтам, у которых `tester` или есть выдачи:
+   5. **второй шанс** — `purchase.groupBy({ by: ["accountId"], where: { product: "continue_run", mode: "live", paidAt: { not: null }, refundedAt: null, refundRequestedAt: null }, _sum: { chargedStars: true } })`;
+   6. **строки** — по аккаунтам, у которых `tester`, есть выдачи или
+      `continueStars > 0`:
       - `bonusGems = tester ? bonusGems(level) : 0`;
       - `grants` — выдачи аккаунта, по `purchaseId`, затем по `resource`;
+      - `continueStars` — сумма шага 5 или 0;
       - `level` — уровень или 1;
-   6. при `write: true`:
+   7. при `write: true`:
       - `testerCompensation.createMany({ data })`;
       - `account.updateMany({ where: { accountId: { in: testers }, testerAt: null }, data: { testerAt: now } })`;
-   7. вернуть итоги.
+   8. вернуть итоги.
 
    Функция ничего не стирает и не открывает своих транзакций: её зовёт
    команда вайпа внутри своей (T-0041). Комментарий файла — почему снимок
@@ -217,6 +230,10 @@ design: null
      `testerAt` пуст;
    - покупка с `refundedAt`, с `refundRequestedAt` или `mode: "test"` — не в
      `grants`;
+   - два вторых шанса за 3 и 7 ⭐ → `continueStars: 10`. Возвращённый второй
+     шанс (`refundReason: "unused"`, `refundedAt`) не в счёт. Аккаунт, у
+     которого есть только второй шанс, получает строку с `tester: false`,
+     если сам не тестер;
    - аккаунт без забегов и покупок → строки нет;
    - `write: false` → строк нет, `testerAt` не тронут, итоги те же, что
      потом у `write: true`;
@@ -254,6 +271,8 @@ design: null
 
 - [ ] Снимок записывает компенсацию тем, кто играл или покупал. В ней
   уровень, бонус по Р87 и всё, что начислили живые невозвращённые покупки.
+- [ ] Звёзды, списанные за невозвращённый второй шанс, записаны в
+  `continueStars`.
 - [ ] Тестерам ставится знак, остальным нет.
 - [ ] Режим без записи считает те же итоги и ничего не пишет. Повторный
   снимок отказывается.
@@ -276,6 +295,7 @@ design: null
   🎁 **Что в снимке**
 
   • купленное за звёзды — ровно столько, сколько начислила покупка; возвращённые оплаты не в счёт
+  • второй шанс за звёзды — запоминаются звёзды, при выдаче они станут самоцветами
   • бонус тестеру — 5 самоцветов за уровень, не больше 250; тестер — тот, кто сыграл хотя бы один забег
   • знак «Тестер» ставится сразу и навсегда
   ```
