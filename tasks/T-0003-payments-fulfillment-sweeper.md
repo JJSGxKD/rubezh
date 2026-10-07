@@ -3,7 +3,7 @@ id: T-0003
 title: Оплаченное всегда выдаётся или возвращается
 epic: E1
 priority: P0
-status: in-progress
+status: done
 owner: claude-2 / sonnet-5.5
 size: M
 depends_on: [T-0001]
