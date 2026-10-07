@@ -20,7 +20,7 @@ shared:
   - docs/35-stage4-plan.md
 runner: any
 executor: sonnet-5.5
-effort: xhigh
+effort: extra
 release: patch
 design: null
 ---

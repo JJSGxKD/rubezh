@@ -31,7 +31,7 @@ shared:
   - docs/21-diagrams.md
 runner: any
 executor: sonnet-5.5
-effort: xhigh
+effort: extra
 release: patch
 design: null
 ---

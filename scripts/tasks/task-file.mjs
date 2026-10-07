@@ -22,7 +22,7 @@ export const STATUSES = ["draft", "ready", "in-progress", "done", "cancelled"];
 export const SIZES = ["S", "M"];
 export const RUNNERS = ["any", "local", "human"];
 export const RELEASES = ["none", "patch", "minor"];
-export const EFFORTS = ["low", "medium", "high", "xhigh"];
+export const EFFORTS = ["low", "medium", "high", "extra"];
 /** Повторяет таблицу исполнителей в tasks/README.md («Исполнители и effort»): новый исполнитель — правка и там, и здесь. */
 export const EXECUTORS = ["sonnet-5.5"];
 
