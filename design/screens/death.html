@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — экран смерти</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Токены «Сумеречного рубежа» — те же, что в home.html и pre-run.html. */
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --surface-raised:#353452; --surface-sunken:#17162a;
+    --border:#43425f; --border-strong:#5b5980; --text:#f3eee6; --muted:#aeaac4; --disabled:#6f6c8a;
+    --accent:#ff8f3f; --accent-pressed:#f0782a; --accent-glow:#ffb67f; --accent-edge:#a0582a; --on-accent:#230f02;
+    --danger:#ff5d5d; --info:#5ccfff; --passive:#c47dff; --weapon:#ffe066; --hp:#ff5d7a; --warning:#ffc14d;
+    --coin:#ffd400; --gem:#ff515e; --xp:#b6ff4a; --stars:#ffc83d;
+    --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:10px; --cut-sm:8px;
+    --display:'Russo One', sans-serif; --text-font:'IBM Plex Sans', sans-serif;
+    --page:#0d0c18; --page-muted:#9a97ab;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:15px/1.5 var(--text-font); }
+  .page { max-width:1600px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:400 28px/1.2 var(--display); margin:0 0 8px; letter-spacing:.02em; }
+  h2 { font:400 20px/1.2 var(--display); margin:40px 0 8px; letter-spacing:.02em; }
+  .lead, .sub { color:var(--page-muted); max-width:960px; }
+  .lead { margin:0 0 8px; } .sub { margin:0 0 16px; font-size:14px; }
+  code { font-size:.92em; }
+  table.inv { border-collapse:collapse; font-size:13.5px; max-width:1200px; margin:8px 0 0; }
+  table.inv td, table.inv th { border:1px solid #2c2b45; padding:6px 10px; text-align:left; vertical-align:top; }
+  table.inv th { color:var(--page-muted); font-weight:600; }
+  .row { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; }
+  .cap { width:380px; margin-top:10px; font-size:13.5px; color:var(--page-muted); }
+  .cap b { color:var(--text); font-weight:600; }
+  svg.i { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .disp { font-family:var(--display); letter-spacing:.02em; }
+  .grow { flex:1; min-width:0; }
+
+  .phone { width:380px; height:800px; border-radius:36px; padding:10px; background:#000; box-shadow:0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .screen { position:relative; width:100%; height:100%; border-radius:28px; overflow:hidden; background:#151425; }
+  /* Остановленная канва за окном: схема, не макет боя */
+  .world { position:absolute; inset:0; background:radial-gradient(60% 40% at 50% 55%, #2c2a44, #16152a); }
+  .world i { position:absolute; width:14px; height:14px; border-radius:3px; background:#c8424e; opacity:.55; }
+  .dim { position:absolute; inset:0; background:rgba(8,7,16,.66); }
+
+  /* Модалка забега — Modal placement="center", затемнение без размытия (§3.3) */
+  .modal { position:absolute; left:14px; right:14px; top:50%; transform:translateY(-50%); max-height:calc(100% - 28px); display:flex; flex-direction:column;
+           background:var(--bg); border:1px solid var(--border-strong); border-radius:var(--r-xl); box-shadow:0 24px 60px rgba(0,0,0,.55); overflow:hidden; }
+  .mbody { padding:18px 16px 8px; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+  .mbody > * { flex:none; }
+  .mfoot { padding:8px 16px 14px; display:flex; flex-direction:column; gap:8px; }
+  .icon { width:52px; height:52px; margin:0 auto; border-radius:50%; display:grid; place-items:center; color:var(--tone); background:color-mix(in oklab, var(--tone) 15%, transparent); box-shadow:0 0 0 1px color-mix(in oklab, var(--tone) 35%, transparent); }
+  .icon svg.i { width:26px; height:26px; }
+  .mtitle { text-align:center; font:400 22px/1.15 var(--display); letter-spacing:.02em; }
+  .msub { text-align:center; font-size:13px; color:var(--muted); margin-top:-6px; }
+  .badges { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
+  .badge { display:inline-flex; align-items:center; gap:4px; height:22px; padding:0 8px; border-radius:var(--r-sm); font:600 11.5px/1 var(--text-font); background:var(--surface-raised); color:var(--muted); }
+  .badge svg.i { width:12px; height:12px; }
+  .badge.accent { background:color-mix(in oklab, var(--accent) 18%, transparent); color:var(--accent); }
+  .badge.info { background:color-mix(in oklab, var(--info) 16%, transparent); color:var(--info); }
+  .badge.warning { background:color-mix(in oklab, var(--warning) 16%, transparent); color:var(--warning); }
+
+  /* Шаг 1: второй шанс — главное на экране */
+  .chance { position:relative; padding:14px; border-radius:var(--r-lg); background:linear-gradient(160deg, color-mix(in oklab, var(--hp) 12%, var(--surface-raised)), var(--surface));
+            border:1px solid color-mix(in oklab, var(--hp) 45%, transparent); box-shadow:0 0 28px -10px color-mix(in oklab, var(--hp) 70%, transparent); }
+  .chance .head { display:flex; align-items:center; gap:10px; }
+  .chance .face { width:40px; height:40px; border-radius:var(--r-md); display:grid; place-items:center; color:var(--hp); background:color-mix(in oklab, var(--hp) 16%, transparent); }
+  .chance .t { font:400 17px/1.2 var(--display); letter-spacing:.02em; }
+  .chance .s { font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .chance .btns { display:grid; gap:8px; margin-top:12px; }
+  .chance .btns.two { grid-template-columns:1fr 1fr; }
+  .cbtn { height:48px; border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; gap:8px; font:700 14px var(--text-font); }
+  .cbtn.ad { color:var(--on-accent); background:linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); box-shadow:inset 0 -3px 0 var(--accent-edge); }
+  .cbtn.stars { color:var(--text); background:var(--surface-raised); border:1px solid color-mix(in oklab, var(--stars) 55%, var(--border)); }
+  .cbtn.stars .st { color:var(--stars); }
+  .cbtn.vip { color:var(--on-accent); background:linear-gradient(180deg,#ffe08a,var(--stars) 50%,#e6a51c); box-shadow:inset 0 -3px 0 #a06e10; }
+  .cbtn small { font-weight:500; opacity:.8; }
+  .cbtn.busy { opacity:.6; }
+  .quiet { height:40px; border-radius:var(--r-md); display:grid; place-items:center; font:600 13.5px var(--text-font); color:var(--muted); border:1px solid var(--border); background:transparent; }
+  .hint { text-align:center; font-size:12px; color:var(--muted); }
+
+  /* Шаг 2: итоги — время героем, награда под ним */
+  .hero { text-align:center; }
+  .hero .time { font:400 46px/1 var(--display); letter-spacing:.02em; font-variant-numeric:tabular-nums; }
+  .hero .time.rec { color:var(--accent); text-shadow:0 0 24px color-mix(in oklab, var(--accent) 45%, transparent); }
+  .hero .lbl { font-size:12px; color:var(--muted); margin-top:4px; }
+  .reward { padding:12px; border-radius:var(--r-lg); background:var(--surface-sunken); border:1px solid var(--border); }
+  .reward .line { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .reward .coins { display:inline-flex; align-items:center; gap:6px; font:400 20px/1 var(--display); font-variant-numeric:tabular-nums; }
+  .reward .xp { font:400 14px/1 var(--display); color:var(--xp); }
+  .bar { position:relative; height:6px; border-radius:3px; background:color-mix(in oklab, var(--xp) 14%, var(--surface)); margin-top:10px; overflow:hidden; }
+  .bar i { position:absolute; inset:0 auto 0 0; border-radius:3px; background:var(--xp); }
+  .bar b { position:absolute; inset:0 auto 0 0; border-radius:3px; background:color-mix(in oklab, var(--xp) 45%, transparent); }
+  .lvl { display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); margin-top:5px; }
+  .double { margin-top:10px; height:36px; border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; gap:8px; font:700 13px var(--text-font); color:var(--text); background:var(--surface-raised); border:1px solid var(--border-strong); }
+  .double .x2 { padding:1px 6px; border-radius:var(--r-sm); background:var(--accent); color:var(--on-accent); font:400 12px var(--display); }
+  .levelup { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-lg); background:linear-gradient(160deg, color-mix(in oklab, var(--xp) 14%, var(--surface-raised)), var(--surface)); border:1px solid color-mix(in oklab, var(--xp) 45%, transparent); }
+  .levelup .face { width:36px; height:36px; border-radius:var(--r-md); display:grid; place-items:center; color:var(--weapon); background:color-mix(in oklab, var(--weapon) 15%, transparent); }
+  .levelup .t { font:400 15px/1.2 var(--display); color:var(--xp); }
+  .levelup .s { font-size:12.5px; color:var(--text); margin-top:1px; }
+  .note { font-size:12.5px; color:var(--muted); }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .stat { padding:8px 6px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--border); text-align:center; min-width:0; }
+  .stat .v { font:400 16px/1.1 var(--display); font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stat .k { font-size:11px; color:var(--muted); margin-top:3px; }
+  .stat .v .w { color:var(--weapon); }
+  .more { display:flex; align-items:center; justify-content:center; gap:6px; height:32px; font:600 12.5px var(--text-font); color:var(--muted); }
+  .more svg.i { width:16px; height:16px; }
+  .weapons { display:flex; flex-direction:column; gap:8px; padding:10px 12px; border-radius:var(--r-lg); background:var(--surface-sunken); border:1px solid var(--border); }
+  .wrow { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .wrow .ic { color:var(--weapon); } .wrow .ic svg.i { width:16px; height:16px; }
+  .wrow .nm { display:flex; justify-content:space-between; gap:8px; }
+  .wrow .nm span:last-child { font-family:var(--display); color:var(--muted); font-variant-numeric:tabular-nums; }
+  .wrow .track { height:4px; border-radius:2px; background:var(--surface); margin-top:4px; overflow:hidden; }
+  .wrow .track i { display:block; height:100%; border-radius:2px; background:var(--accent); }
+  .cause { font-size:12px; color:var(--muted); }
+
+  .cut { position:relative; isolation:isolate; clip-path:polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c)); background:var(--cut-border) !important; border:0 !important; }
+  .cut::before { content:""; position:absolute; inset:1px; z-index:-1; background:var(--cut-fill);
+    clip-path:polygon(calc(var(--c) - .4px) 0,100% 0,100% calc(100% - var(--c) + .4px),calc(100% - var(--c) + .4px) 100%,0 100%,0 calc(var(--c) - .4px)); }
+  .cut-sm { --c:var(--cut-sm); }
+  .play { width:100%; height:54px; display:flex; align-items:center; justify-content:center; gap:10px; font:400 19px var(--display); letter-spacing:.06em; text-transform:uppercase; color:var(--on-accent);
+          --cut-border:#a0582a; --cut-fill:linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); }
+  .play svg { width:16px; height:16px; fill:currentColor; stroke:none; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .btn { height:40px; border-radius:var(--r-md); display:grid; place-items:center; font:600 13.5px var(--text-font); }
+  .btn.sec { background:var(--surface-raised); color:var(--text); border:1px solid var(--border-strong); }
+  .btn.ghost { color:var(--text); border:1px solid var(--border); }
+  .coin { width:18px; height:18px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #fff16a, var(--coin) 55%, #ff9f00); flex:none; display:inline-block; }
+  .sk { display:inline-block; border-radius:3px; background:linear-gradient(90deg, var(--surface) 0%, var(--surface-raised) 40%, var(--surface) 80%); }
+
+  .kit { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; padding:20px; border-radius:var(--r-xl); background:var(--bg); max-width:1200px; }
+  .kit .cell { display:flex; flex-direction:column; gap:8px; }
+  .kit .knote { font-size:12.5px; color:var(--page-muted); max-width:300px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Экран смерти</h1>
+  <p class="lead">Два шага вместо одного длинного окна (решения пользователя от 07.10.2026). <b>Шаг 1</b> — только пока можно взять второй шанс: время, кто убил и крупно способы продолжить, тихо — «Закончить забег». <b>Шаг 2</b> — итоги: время выживания героем, рекорд и место, награда с полосой уровня, повышение уровня с открытым, три цифры и «Подробнее» с уроном по оружиям. Строится на нынешнем экране (<code>run/DeathOverlay.tsx</code>, <code>SecondChance.tsx</code>, <code>AdContinue.tsx</code>, <code>PaidContinue.tsx</code>, <code>RunDouble.tsx</code>): те же данные, тексты, правила второго шанса и удвоения.</p>
+
+  <h2>Что сохраняется и что меняется</h2>
+  <table class="inv">
+    <tr><th>Элемент</th><th>Сейчас в игре</th><th>В макете</th></tr>
+    <tr><td>Порядок</td><td>Одно окно: итоги, награда, причина, второй шанс, урон по оружиям, кнопки. На телефоне «Ещё раз» — за прокруткой</td><td>Шаг 1 — второй шанс, пока забег ждёт решения (<code>phase: "downed"</code>). Шаг 2 — итоги после отказа или когда продолжить нечем. Оба помещаются на 360 px без прокрутки</td></tr>
+    <tr><td>Второй шанс</td><td>Блок в левой колонке под наградой: ролик и звёзды, у VIP — одна кнопка, бесплатно — в забеге разработчика</td><td>Главное окно шага 1, в тоне здоровья. Способы и их отпадание — как сейчас (<code>second-chance-offers.ts</code>). Внизу «Закончить забег» — <code>declineContinue()</code>, затем шаг 2</td></tr>
+    <tr><td>Заголовок</td><td>«Забег окончен» / «Забег сдан», значок черепа или короны</td><td>Шаг 1: «Вы пали» и время. Шаг 2: как сейчас, значок короны — у рекорда</td></tr>
+    <tr><td>Время и рекорд</td><td>Четыре равные цифры в сетке, рекорд — значком</td><td>Время — героем 46 px, у рекорда — акцентом со свечением; плашки сложности, рекорда и места — под ним</td></tr>
+    <tr><td>Награда</td><td>Строка: монеты, опыт, «Новый уровень», «Открыто: …», удвоение за рекламу</td><td>Карточка: монеты и опыт, полоса уровня после забега (что добавил забег — светлее), удвоение кнопкой «×2 за рекламу». Новый уровень — отдельной плашкой с открытым оружием или навыком</td></tr>
+    <tr><td>Цифры</td><td>Время, уровень, убито, волна</td><td>Три: уровень забега, убито врагов, лучшее оружие. «Волна» уходит: волн с паузами в игре нет</td></tr>
+    <tr><td>Урон по оружиям</td><td>Список с полосами всегда виден</td><td>Под «Подробнее»; там же — кто убил. Раскрытие запоминается на устройстве</td></tr>
+    <tr><td>Кнопки</td><td>«Ещё раз», «В меню», «Поделиться»</td><td>Так же; «Ещё раз» — главная со срезом. «В меню» → «На главную»: меню у нас — лист в шапке, а кнопка ведёт на главную</td></tr>
+  </table>
+
+  <h2>Состояния</h2>
+  <div class="row" id="states"></div>
+
+  <h2>Компоненты</h2>
+  <div class="kit" id="kit"></div>
+</div>
+
+<script>
+  const svg = (d) => `<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
+  const I = {
+    skull: svg('<circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2M12.5 17l-.5-1-.5 1h1z"/><path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"/>'),
+    crown: svg('<path d="M11.56 3.27a.5.5 0 0 1 .88 0l2.95 5.6a1 1 0 0 0 1.52.29l4.27-3.66a.5.5 0 0 1 .82.5l-2.83 10.25a1 1 0 0 1-.96.75H5.8a1 1 0 0 1-.96-.75L2.02 6a.5.5 0 0 1 .82-.5L7.1 9.16a1 1 0 0 0 1.52-.3zM5 21h14"/>'),
+    heart: svg('<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>'),
+    tv: svg('<rect width="20" height="15" x="2" y="7" rx="2"/><path d="m17 2-5 5-5-5"/>'),
+    star: svg('<path d="M11.52 2.3a.53.53 0 0 1 .96 0l2.31 4.68a2.12 2.12 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.12 2.12 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.12 2.12 0 0 0-1.97 0L6.4 21.01a.53.53 0 0 1-.77-.56l.88-5.14a2.12 2.12 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.12 2.12 0 0 0 1.6-1.16z"/>'),
+    trophy: svg('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V17c0 .6-.5 1-1 1.2C7.9 18.8 7 20.2 7 22M14 14.7V17c0 .6.5 1 1 1.2 1.1.6 2 2 2 3.8M18 2H6v7a6 6 0 0 0 12 0z"/>'),
+    chevDown: svg('<path d="m6 9 6 6 6-6"/>'),
+    chevUp: svg('<path d="m18 15-6-6-6 6"/>'),
+    storm: svg('<path d="M6 16.33A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.97"/><path d="m13 12-3 5h4l-3 5"/>'),
+    wardstone: svg('<circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M10.4 21.9a10 10 0 0 0 9.94-15.42"/><path d="M13.5 2.1a10 10 0 0 0-9.84 15.42"/>'),
+    spark: svg('<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>'),
+    knife: svg('<path d="m8 14-6 6h9v-3"/><path d="M18.37 3.63 8 14l3 3L21.37 6.63a2.12 2.12 0 1 0-3-3Z"/>'),
+    hearth: svg('<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>'),
+    play: '<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
+  };
+  const world = `<div class="world">${[[40,120],[90,80],[260,140],[300,260],[60,420],[220,520],[150,610],[310,600],[30,300],[200,90],[120,700],[280,420]].map(([x,y])=>`<i style="left:${x}px;top:${y}px"></i>`).join("")}</div><div class="dim"></div>`;
+
+  const chance = ({ ad = true, stars = 8, vip = false, busy = null }) => {
+    const btns = vip
+      ? `<div class="btns"><div class="cbtn vip">${I.crown}Продолжить с VIP</div></div>`
+      : `<div class="btns ${ad && stars ? "two" : ""}">${ad ? `<div class="cbtn ad${busy === "stars" ? " busy" : ""}">${I.tv}Реклама</div>` : ""}${stars ? `<div class="cbtn stars${busy === "ad" ? " busy" : ""}"><span class="st">${I.star}</span>${stars} <small>звёзд</small></div>` : ""}</div>`;
+    return `<div class="chance"><div class="head"><span class="face">${I.heart}</span><div class="grow"><div class="t">Второй шанс</div><div class="s">Враги вокруг исчезнут, здоровье восстановится — и забег продолжится.</div></div></div>${btns}</div>`;
+  };
+
+  const step1 = (o) => `<div class="modal"><div class="mbody">
+      <span class="icon" style="--tone:var(--danger)">${I.skull}</span>
+      <div class="mtitle">Вы пали на ${o.time}</div>
+      <div class="msub">Убил: ${o.killer}</div>
+      ${chance(o)}
+      ${o.note ? `<div class="hint">${o.note}</div>` : ""}
+    </div><div class="mfoot"><div class="quiet">Закончить забег</div></div></div>`;
+
+  const W = { wardstone: ["Оберег", 18420], spark: ["Искра", 9310], storm: ["Гроза", 6120], knife: ["Нож", 2240] };
+  const weaponsList = (ids) => { const top = W[ids[0]][1]; return `<div class="weapons">${ids.map((id) => `<div class="wrow"><span class="ic">${I[id]}</span><div class="grow"><div class="nm"><span>${W[id][0]}</span><span>${W[id][1].toLocaleString("ru-RU")}</span></div><div class="track"><i style="width:${Math.round(W[id][1] / top * 100)}%"></i></div></div></div>`).join("")}<div class="cause">Убил: Упырь-вожак</div></div>`; };
+
+  const reward = (r) => {
+    if (r.pending) return `<div class="reward"><div class="line"><span class="coins"><span class="coin"></span><span class="sk" style="width:46px;height:16px"></span></span><span class="note">Считаем награду…</span></div><div class="bar"><b style="width:40%"></b></div></div>`;
+    if (r.none) return `<div class="reward"><div class="note">${r.none}</div></div>`;
+    return `<div class="reward"><div class="line"><span class="coins"><span class="coin"></span>+${r.coins}${r.doubled ? ' <span class="x2" style="padding:1px 6px;border-radius:4px;background:var(--accent);color:var(--on-accent);font-size:12px">×2</span>' : ""}</span><span class="xp">+${r.xp} опыта</span></div>
+      <div class="bar"><b style="width:${r.after}%"></b><i style="width:${r.before}%"></i></div><div class="lvl"><span>Уровень ${r.level}</span><span>до ${r.level + 1}-го — ${r.left} опыта</span></div>
+      ${r.double ? `<div class="double">Удвоить монеты <span class="x2">×2</span> за рекламу</div>` : ""}</div>`;
+  };
+
+  const step2 = (o) => `<div class="modal"><div class="mbody">
+      <span class="icon" style="--tone:${o.record ? "var(--accent)" : "var(--danger)"}">${o.record ? I.crown : I.skull}</span>
+      <div class="mtitle">${o.title ?? "Забег окончен"}</div>
+      <div class="hero"><div class="time${o.record ? " rec" : ""}">${o.time}</div><div class="lbl">время выживания</div></div>
+      <div class="badges"><span class="badge">${o.diff}</span>${o.record ? `<span class="badge accent">${I.crown}Новый рекорд</span>` : ""}${o.rank ? `<span class="badge info">${I.trophy}Место ${o.rank}</span>` : ""}</div>
+      ${reward(o.reward)}
+      ${o.levelup ? `<div class="levelup"><span class="face">${I.storm}</span><div class="grow"><div class="t">Новый уровень: ${o.levelup}</div><div class="s">Открыто: Гроза, Залп — следующий забег уже с ними</div></div></div>` : ""}
+      <div class="stats"><div class="stat"><div class="v">${o.level}</div><div class="k">уровень забега</div></div><div class="stat"><div class="v">${o.kills}</div><div class="k">убито врагов</div></div><div class="stat"><div class="v"><span class="w">${o.best}</span></div><div class="k">лучшее оружие</div></div></div>
+      ${o.open ? weaponsList(o.weapons) : ""}
+      <div class="more">${o.open ? "Скрыть" : "Подробнее"} ${o.open ? I.chevUp : I.chevDown}</div>
+    </div><div class="mfoot"><button class="play cut cut-sm">${I.play}Ещё раз</button><div class="pair"><div class="btn sec">На главную</div><div class="btn ghost">Поделиться</div></div></div></div>`;
+
+  const STATES = [
+    { html: step1({ time: "7:42", killer: "Упырь-вожак", ad: true, stars: 8 }),
+      cap: `<b>1. Шаг 1: второй шанс за рекламу и звёзды.</b> Окно короткое: время, кто убил и способы продолжить — блок в тоне здоровья, главное на экране. «Закончить забег» — тихая кнопка внизу: отказ от второго шанса, после него шаг 2. Итогов здесь нет — они предварительные, рекорда и места ещё нет.` },
+    { html: step1({ time: "12:05", killer: "Матрёшка", vip: true }),
+      cap: `<b>2. Шаг 1 с VIP.</b> Одна кнопка «Продолжить с VIP» — платить звёздами за то, что даётся бесплатно, незачем (как сейчас). Отпали все способы — шага 1 нет, сразу шаг 2.` },
+    { html: step1({ time: "4:18", killer: "Крыса", ad: true, stars: 4, busy: "ad", note: "Смотрим ролик — звёзды ждут, пока он не кончится" }),
+      cap: `<b>3. Шаг 1, идёт ролик.</b> Звёзды и ролик разом не берутся: пока идёт одно, другое приглушено (как сейчас). Отказ ролика или оплаты — текст под блоком, тексты <code>run.continue.*</code> — прежние.` },
+    { html: step2({ record: true, time: "12:47", diff: "Сложная", rank: 12, reward: { coins: 184, xp: 420, level: 4, before: 8, after: 8, left: 640 }, levelup: 4, level: 23, kills: "2 914", best: "Оберег" }),
+      cap: `<b>4. Шаг 2: рекорд и новый уровень.</b> Время героем, акцентом со свечением; плашки сложности, рекорда и места — место приходит позже итога и появляется само. Награда с полосой уровня; новый уровень — отдельной плашкой с тем, что открылось (Р42). Удвоения нет: монеты уже удвоены или сеть не показывает ролик.` },
+    { html: step2({ time: "6:31", diff: "Нормальная", reward: { coins: 92, xp: 210, level: 6, before: 54, after: 71, left: 380, double: true }, level: 15, kills: "1 284", best: "Искра" }),
+      cap: `<b>5. Шаг 2: обычный забег.</b> Полоса уровня: сплошная часть — что было до забега, полупрозрачная — что добавил забег. «Удвоить монеты ×2 за рекламу» — как <code>RunDouble</code>, после ролика сумма с отметкой ×2.` },
+    { html: step2({ time: "6:31", diff: "Нормальная", reward: { pending: true }, level: 15, kills: "1 284", best: "Оберег", open: true, weapons: ["wardstone", "spark", "storm", "knife"] }),
+      cap: `<b>6. Подробнее раскрыто, награда считается.</b> Урон по оружиям полосами и кто убил — под «Подробнее»; раскрытие запоминается на устройстве. Награду считает сервер — «Считаем награду…», затем числа без перезапуска экрана. Даже раскрытое окно помещается на 360 px; на более низком экране тело прокручивается, кнопки остаются внизу.` },
+    { html: step2({ title: "Забег сдан", time: "0:24", diff: "Лёгкая", reward: { none: "Слишком короткий забег — без награды" }, level: 2, kills: "31", best: "Нож" }),
+      cap: `<b>7. Забег сдан, без награды.</b> Причина своими словами — тексты <code>run.reward.none.*</code> прежние. Сданный забег второго шанса не предлагает — шага 1 нет.` },
+  ];
+  const root = document.getElementById("states");
+  for (const st of STATES) {
+    const d = document.createElement("div");
+    d.innerHTML = `<div class="phone"><div class="screen">${world}${st.html}</div></div><div class="cap">${st.cap}</div>`;
+    root.appendChild(d);
+  }
+  document.getElementById("kit").innerHTML = [
+    [`<div style="width:330px">${chance({ ad: true, stars: 8 })}</div>`, "Второй шанс — тон здоровья, ролик — главной кнопкой, звёзды — второй"],
+    [`<div style="width:330px">${reward({ coins: 92, xp: 210, level: 6, before: 54, after: 71, left: 380, double: true })}</div>`, "Награда: монеты, опыт, полоса уровня и удвоение"],
+    [`<div style="width:330px" class="levelup"><span class="face">${I.storm}</span><div class="grow"><div class="t">Новый уровень: 4</div><div class="s">Открыто: Гроза, Залп — следующий забег уже с ними</div></div></div>`, "Новый уровень — плашка в тоне опыта, значок открытого — в своём тоне"],
+    [`<div style="width:330px">${weaponsList(["wardstone", "spark", "storm"])}</div>`, "Подробнее: урон по оружиям и кто убил"],
+  ].map(([el, note]) => `<div class="cell">${el}<div class="knote">${note}</div></div>`).join("");
+</script>
+</body>
+</html>
