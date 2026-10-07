@@ -25,6 +25,8 @@ zones:
   - backend/api/test/fulfillment-sweeper.test.ts
   - backend/api/test/payments-alert-notifier.test.ts
   - backend/api/test/payments.integration.test.ts
+  - backend/api/test/helpers/memory-purchases.ts
+  - backend/api/test/chat-target.test.ts
 shared:
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/prisma/schema.prisma
