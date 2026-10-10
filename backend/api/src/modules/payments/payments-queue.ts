@@ -9,6 +9,7 @@ import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import { RunsHooks } from "../runs/runs-hooks.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "./payment-confirmation.js";
 import { PaymentRefunds } from "./payment-refunds.js";
+import { PaymentsHooks } from "./payments-hooks.js";
 import { PurchaseFulfillment } from "./purchase-fulfillment.js";
 import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, type RefundOrder } from "./purchases.repository.js";
 
@@ -23,6 +24,9 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
  * ложится в Redis, а запись в базу повторяется с паузой, пока не пройдёт, и
  * переживает перезапуск процесса. Возврат — так же: не прошёл — повтор, а не
  * молча (docs/34-stage3-plan.md, WP5, п. 5.2).
+ *
+ * Задание, не прошедшее ни одной из десяти попыток, выходит слушателям
+ * (`PaymentsHooks.onAbandoned`): команда узнаёт о нём сообщением, а не из лога.
  *
  * Товар магазина выдаётся тем же заданием, последним шагом: не вышло —
  * задание повторяется целиком, запись оплаты отвечает «уже записано», а
@@ -62,6 +66,8 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     private readonly providers: PaymentProviders,
     private readonly fulfillment: PurchaseFulfillment,
     @Inject(PURCHASES_REPOSITORY) private readonly purchases: Pick<PurchasesRepository, "markFulfilled">,
+    // Слушатели нужны модулю, а не каждому тесту очереди: без них — пустой список.
+    private readonly hooks: PaymentsHooks = new PaymentsHooks(),
   ) {}
 
   /** Оплату есть куда записать и есть кому о ней сообщить: база и площадка, которая присылает подтверждения. */
@@ -82,13 +88,7 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     this.queue = new Queue(QUEUE_NAME, { connection: producer });
     this.worker = new Worker(QUEUE_NAME, (job) => this.process(job), { connection: consumer, concurrency: 2 });
     this.worker.on("failed", (job, error) => {
-      if (job === undefined) return;
-      const final = job.attemptsMade >= (job.opts.attempts ?? 1) || error.name === "UnrecoverableError";
-      this.log(final ? "error" : "warn", final ? "payment_job_abandoned" : "payment_job_failed", {
-        ...describeJob(job.data),
-        attempts: job.attemptsMade,
-        reason: error.message,
-      });
+      if (job !== undefined) void this.jobFailed(job, error);
     });
     this.worker.on("error", (error) => this.log("warn", "worker_error", { reason: error.message }));
     // Не блокирует старт: база или Redis могут быть ещё не готовы, а возвраты
@@ -104,6 +104,26 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
 
   async confirm(payment: ConfirmedPayment): Promise<void> {
     await this.run({ kind: "confirm", payment }, `confirm-${fingerprint(payment.chargeId)}`);
+  }
+
+  /**
+   * Попытка задания не удалась. Последняя — задание брошено: в лог уровнем
+   * `error` и слушателям, чтобы команда узнала о нём без чтения логов. Не
+   * бросает: вызывается из обработчика событий воркера. Вынесено ради тестов.
+   */
+  async jobFailed(job: Pick<Job<PaymentsJob>, "id" | "data" | "attemptsMade" | "opts">, error: Error): Promise<void> {
+    const final = job.attemptsMade >= (job.opts.attempts ?? 1) || error.name === "UnrecoverableError";
+    this.log(final ? "error" : "warn", final ? "payment_job_abandoned" : "payment_job_failed", {
+      ...describeJob(job.data),
+      attempts: job.attemptsMade,
+      reason: error.message,
+    });
+    if (!final) return;
+    try {
+      await this.hooks.emitAbandoned({ jobId: job.id ?? "", kind: job.data.kind, ...identify(job.data), reason: error.message });
+    } catch (hookError: unknown) {
+      this.log("error", "abandoned_emit_failed", { jobId: job.id ?? "", reason: reasonOf(hookError) });
+    }
   }
 
   /** Одно задание. Вынесено ради тестов: очередь вокруг — BullMQ. */
@@ -176,6 +196,16 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
  */
 function fingerprint(chargeId: string): string {
   return createHash("sha256").update(chargeId).digest("hex").slice(0, 32);
+}
+
+/** Оплата и покупка задания: по ним человек сверяет его руками. У внешнего возврата покупки в обновлении нет. */
+function identify(job: PaymentsJob): { chargeId: string; purchaseId: string | null } {
+  switch (job.kind) {
+    case "confirm":
+      return { chargeId: job.payment.chargeId, purchaseId: job.payment.payload };
+    case "refund":
+      return { chargeId: job.order.chargeId, purchaseId: job.order.purchaseId };
+  }
 }
 
 function describeJob(job: PaymentsJob): Record<string, unknown> {
