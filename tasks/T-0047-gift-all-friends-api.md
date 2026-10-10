@@ -3,8 +3,8 @@ id: T-0047
 title: «Подарить всем» — подарок каждому другу одним запросом
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5
 size: S
 depends_on: []
 zones:

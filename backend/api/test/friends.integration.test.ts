@@ -101,6 +101,37 @@ describe.skipIf(DATABASE_URL === "")("дружба на живом Postgres", ()
     expect(await friends.pendingGiftCount(giver, 7)).toBe(0);
   });
 
+  it("«Подарить всем»: ровно тем друзьям, кому сегодня не дарили; не друзьям строк нет; параллельные запросы не дарят дважды", async () => {
+    const giver = await account();
+    const [first, second, third] = [await account(), await account(), await account()] as const;
+    const stranger = await account();
+    for (const friend of [first, second, third]) await friends.befriend(giver, friend, "link", 100);
+
+    // Одному сегодня уже подарено — второго подарка он не получает.
+    expect(await friends.sendGift(giver, first)).toBe(true);
+    expect((await friends.sendGiftsToAll(giver)).sort()).toEqual([second, third].sort());
+    expect(await friends.sendGiftsToAll(giver)).toEqual([]);
+    expect((await friends.giftedToday(giver)).sort()).toEqual([first, second, third].sort());
+    expect(await friends.giftedToday(giver)).not.toContain(stranger);
+    expect(await friends.pendingGiftCount(stranger, 7)).toBe(0);
+
+    // Дружба идёт в любую сторону: даритель может быть и вторым в паре.
+    const other = await account();
+    const friend = await account();
+    await friends.befriend(friend, other, "link", 100);
+    expect(await friends.sendGiftsToAll(other)).toEqual([friend]);
+    expect(await friends.sendGiftsToAll(friend)).toEqual([other]);
+
+    // Две одновременные «Подарить всем»: по строке на друга, а получателей в сумме — по одному.
+    const racer = await account();
+    const crowd = [await account(), await account(), await account(), await account()];
+    for (const member of crowd) await friends.befriend(racer, member, "link", 100);
+    const [left, right] = await Promise.all([friends.sendGiftsToAll(racer), friends.sendGiftsToAll(racer)]);
+    expect([...left, ...right].sort()).toEqual([...crowd].sort());
+    const [rows] = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM friend_gift WHERE from_account_id = ${racer}::uuid`;
+    expect(rows?.count).toBe(crowd.length);
+  });
+
   it("заявки: повтор — «есть», потолки входящих и исходящих, отклонение", async () => {
     const target = await account();
     const [first, second, third] = await Promise.all([account(), account(), account()]);
