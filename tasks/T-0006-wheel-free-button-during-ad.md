@@ -3,8 +3,8 @@ id: T-0006
 title: Кнопка бесплатной крутки не оживает во время крутки за рекламу
 epic: E6
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5
 size: S
 depends_on: []
 zones:

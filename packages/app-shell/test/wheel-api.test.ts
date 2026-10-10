@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import type { AdWatchResult } from "../src/state/ad-watch";
 import { createAdsApi, passSession, type AdOffer } from "../src/state/ads-api";
-import { WHEEL_AD_CLOSED, WHEEL_AD_COOLDOWN, WHEEL_AD_FAILED, WHEEL_NO_ADS, adSpinState, createWheelApi, spinForAd, type WheelApi } from "../src/state/wheel-api";
+import { WHEEL_AD_CLOSED, WHEEL_AD_COOLDOWN, WHEEL_AD_FAILED, WHEEL_NO_ADS, adSpinState, createWheelApi, freeSpinButton, spinForAd, type WheelApi } from "../src/state/wheel-api";
 
 // Клиент колеса (docs/35-stage4-plan.md WP13): сектора и крутка — с сервера,
 // схемой; в теле крутки — только чем крутят, что выпало, решает сервер.
@@ -132,5 +132,32 @@ describe("крутка за рекламу", () => {
     const offer = await createAdsApi(server([], richads)).offer("wheel_spin");
     expect(offer.ok && offer.data.available && offer.data.keys).toEqual({ pubId: "792361", appId: "1396" });
     expect((await createAdsApi(server([], { ...richads, keys: { pubId: 792361 } })).offer("wheel_spin")).ok).toBe(false);
+  });
+});
+
+describe("кнопка бесплатной крутки", () => {
+  it("во время крутки за рекламу бесплатной нет — кнопка остаётся неактивной с «через N»", () => {
+    expect(freeSpinButton({ free: false }, "asking", "ad")).toEqual({ disabled: true, loading: false, label: "next" });
+    expect(freeSpinButton({ free: false }, "spinning", "ad")).toEqual({ disabled: true, loading: false, label: "next" });
+  });
+
+  it("бесплатной нет и ничего не крутится — неактивна, «через N»", () => {
+    expect(freeSpinButton({ free: false }, "idle", "free")).toEqual({ disabled: true, loading: false, label: "next" });
+  });
+
+  it("бесплатная есть и покой — активна", () => {
+    expect(freeSpinButton({ free: true }, "idle", "free")).toEqual({ disabled: false, loading: false, label: "free" });
+  });
+
+  it("бесплатная есть, крутят её же — неактивна и грузится", () => {
+    expect(freeSpinButton({ free: true }, "asking", "free")).toEqual({ disabled: true, loading: true, label: "free" });
+  });
+
+  it("бесплатная есть, крутят за рекламу — неактивна, но не грузится", () => {
+    expect(freeSpinButton({ free: true }, "spinning", "ad")).toEqual({ disabled: true, loading: false, label: "free" });
+  });
+
+  it("вида колеса ещё нет — неактивна", () => {
+    expect(freeSpinButton(null, "idle", "free")).toEqual({ disabled: true, loading: false, label: "free" });
   });
 });
