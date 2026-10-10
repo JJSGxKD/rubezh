@@ -189,9 +189,13 @@ export class PaymentsService {
     return new Set(owned.flatMap((key) => keys.get(key) ?? []));
   }
 
-  /** Состояние покупки — его опрашивает клиент, ожидая подтверждения от Telegram. */
+  /**
+   * Состояние покупки — его опрашивает клиент, ожидая подтверждения от Telegram.
+   * Видно и при выключенной оплате: стоп-кран закрывает только новые счета и
+   * цены, а игрок, оплативший до выключения, должен узнать, что покупка
+   * засчитана и выдана.
+   */
   async purchase(account: AccountRef, purchaseId: string): Promise<PurchaseView> {
-    this.assertEnabled();
     const purchase = await this.purchases.byId(purchaseId);
     // Чужая покупка неотличима от несуществующей: иначе ответ подтверждал бы,
     // что такой id есть.

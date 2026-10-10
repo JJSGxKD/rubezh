@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { PaymentsAlertNotifier, stuckPurchaseText, type PaymentsAlertApi } from "../src/modules/admin-notify/payments-alert-notifier.js";
-import { PaymentsHooks, type StuckPurchase } from "../src/modules/payments/payments-hooks.js";
+import { abandonedJobText, PaymentsAlertNotifier, stuckPurchaseText, type PaymentsAlertApi } from "../src/modules/admin-notify/payments-alert-notifier.js";
+import { PaymentsHooks, type AbandonedJob, type StuckPurchase } from "../src/modules/payments/payments-hooks.js";
 import type { AdminChats, NotifyTargets } from "../src/modules/settings/notify-targets.js";
 import { targetsOf } from "./helpers/notify-targets.js";
 
 /**
  * Сообщение команде о зависшей покупке (tasks/T-0003): один раз на покупку за
- * семь суток, в поток «Покупки», а если его нет — в общий чат.
+ * семь суток, в поток «Покупки», а если его нет — в общий чат. Так же — о
+ * задании оплаты, брошенном после всех попыток (tasks/T-0004): один раз на
+ * задание.
  */
 
 function config(patch: Record<string, string> = {}): AppConfig {
@@ -23,6 +25,17 @@ function stuck(patch: Partial<StuckPurchase> = {}): StuckPurchase {
     chargedStars: 50,
     paidAt: new Date("2026-10-06T09:05:00Z"),
     reason: "connection refused",
+    ...patch,
+  };
+}
+
+function abandoned(patch: Partial<AbandonedJob> = {}): AbandonedJob {
+  return {
+    jobId: "refunded-0123456789abcdef0123456789abcdef",
+    kind: "refunded",
+    chargeId: "charge-1",
+    purchaseId: null,
+    reason: "база недоступна",
     ...patch,
   };
 }
@@ -171,6 +184,124 @@ describe("сообщение команде о зависшей покупке",
     notifier.onModuleInit();
 
     await hooks.emitStuck(stuck());
+
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("сообщение команде о брошенном задании оплаты", () => {
+  it("событие брошенного задания — одно сообщение с видом, оплатой, покупкой и причиной", async () => {
+    const { notifier, sent, hooks } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitAbandoned(abandoned({ kind: "confirm", purchaseId: "11111111-1111-4111-8111-111111111111" }));
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.chat).toEqual({ chatId: "-1001234567890", threadId: null });
+    expect(sent[0]?.text).toBe(
+      [
+        "⚠️ Задание оплаты брошено после всех попыток",
+        "Вид: подтверждение",
+        "Оплата: charge-1",
+        "Покупка: 11111111-1111-4111-8111-111111111111",
+        "Причина: база недоступна",
+        "Нужна ручная сверка покупки.",
+      ].join("\n"),
+    );
+  });
+
+  it("повтор того же jobId — сообщения нет: ключ на семь суток уже стоит", async () => {
+    const { notifier, sent, hooks, redis } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitAbandoned(abandoned());
+    await hooks.emitAbandoned(abandoned({ reason: "другая причина" }));
+
+    expect(sent).toHaveLength(1);
+    const key = redis.values.get("payments:abandoned-alert:refunded-0123456789abcdef0123456789abcdef");
+    expect(key?.args).toEqual(["EX", 604800, "NX"]);
+  });
+
+  it("другое задание — отдельное сообщение", async () => {
+    const { notifier, sent, hooks } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitAbandoned(abandoned());
+    await hooks.emitAbandoned(abandoned({ jobId: "confirm-fedcba9876543210fedcba9876543210" }));
+
+    expect(sent).toHaveLength(2);
+  });
+
+  it("ключ брошенного задания не пересекается с ключом зависшей покупки", async () => {
+    const { notifier, sent, hooks } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitStuck(stuck({ purchaseId: "job-1" }));
+    await hooks.emitAbandoned(abandoned({ jobId: "job-1" }));
+
+    expect(sent).toHaveLength(2);
+  });
+
+  it.each([
+    ["confirm", "подтверждение"],
+    ["refund", "возврат"],
+    ["refunded", "внешний возврат"],
+  ] as const)("вид %s в тексте называется «%s»", (kind, label) => {
+    expect(abandonedJobText(abandoned({ kind }))).toContain(`Вид: ${label}`);
+  });
+
+  it("у задания без покупки в строке «Покупка» стоит прочерк", () => {
+    expect(abandonedJobText(abandoned({ purchaseId: null }))).toContain("Покупка: —");
+  });
+
+  it("свой поток «Покупки» получает сообщение вместо общего чата", async () => {
+    const chats = { general: { chatId: "-100", threadId: null }, payments: { chatId: "-100", threadId: 57 } } as AdminChats;
+    const { notifier, sent, hooks } = setup(config(), { chats: () => chats } as NotifyTargets);
+    notifier.onModuleInit();
+
+    await hooks.emitAbandoned(abandoned());
+
+    expect(sent[0]?.chat).toEqual({ chatId: "-100", threadId: 57 });
+  });
+
+  it("нет чата — не отправляет и не бросает, ключ не занимается", async () => {
+    const { notifier, sent, hooks, redis } = setup(config({ ADMIN_CHAT_ID: "" }));
+    notifier.onModuleInit();
+
+    await expect(hooks.emitAbandoned(abandoned())).resolves.toBeUndefined();
+
+    expect(sent).toEqual([]);
+    expect(redis.values.size).toBe(0);
+  });
+
+  it("отправка упала — не бросает и освобождает ключ: повтор события пришлёт сообщение", async () => {
+    const cfg = config();
+    const sent: string[] = [];
+    let fail = true;
+    const redis = new FakeRedis();
+    const hooks = new PaymentsHooks();
+    const notifier = new PaymentsAlertNotifier(cfg, targetsOf(cfg), hooks, redis as never, {
+      sendMessage: async (_chat, text) => {
+        if (fail) throw new Error("Telegram недоступен");
+        sent.push(text);
+        return 1;
+      },
+    });
+    notifier.onModuleInit();
+
+    await expect(hooks.emitAbandoned(abandoned())).resolves.toBeUndefined();
+    expect(redis.values.size).toBe(0);
+
+    fail = false;
+    await hooks.emitAbandoned(abandoned());
+    expect(sent).toHaveLength(1);
+  });
+
+  it("без токена бота на событие не подписывается", async () => {
+    const { notifier, sent, hooks } = setup(config({ TELEGRAM_BOT_TOKEN: "" }));
+    notifier.onModuleInit();
+
+    await hooks.emitAbandoned(abandoned());
 
     expect(sent).toEqual([]);
   });

@@ -169,6 +169,25 @@ describe("счёт второго шанса", () => {
     expect(await codeOf(service.quote(me, { runId, continueNo: 1, elapsedSec: 60 }, NOW))).toBe("endpoint_disabled");
   });
 
+  it("состояние своей покупки видно и при выключенной оплате: стоп-кран закрывает только новые счета", async () => {
+    const invoice = await service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW);
+    const row = purchases.rows.get(invoice.purchaseId);
+    if (row === undefined) throw new Error("покупки нет");
+    Object.assign(row, { status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
+    build(config({ PAYMENTS_ENABLED: "false" }));
+
+    expect(await service.purchase(me, invoice.purchaseId)).toMatchObject({ purchaseId: invoice.purchaseId, status: "paid", granted: true });
+    expect(await codeOf(service.quote(me, { runId, continueNo: 1, elapsedSec: 60 }, NOW))).toBe("endpoint_disabled");
+    expect(await codeOf(service.invoice(me, { runId, continueNo: 1, elapsedSec: 60 }, NOW))).toBe("endpoint_disabled");
+  });
+
+  it("чужая покупка при выключенной оплате по-прежнему неотличима от несуществующей", async () => {
+    const invoice = await service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW);
+    build(config({ PAYMENTS_ENABLED: "false" }));
+
+    expect(await codeOf(service.purchase(player("999000999"), invoice.purchaseId))).toBe("purchase_not_found");
+  });
+
   it("счёт выставляется на посчитанную цену, а в счёте — id покупки", async () => {
     const invoice = await service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW);
 
