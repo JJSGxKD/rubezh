@@ -29,24 +29,29 @@ async function storeWith(saved: string | null) {
   return { store: useBotNotifications, values };
 }
 
-function choice(state: { friendRequest: boolean; friendGift: boolean; teamMessage: boolean; updates: boolean }) {
-  return { friendRequest: state.friendRequest, friendGift: state.friendGift, teamMessage: state.teamMessage, updates: state.updates };
+function choice(state: { friendRequest: boolean; friendGift: boolean; teamMessage: boolean }) {
+  return { friendRequest: state.friendRequest, friendGift: state.friendGift, teamMessage: state.teamMessage };
 }
 
 describe("выбор дубля в бота на устройстве", () => {
-  it("выбор, сохранённый до «новых версий», не сбрасывается, а новый ключ берёт умолчание", async () => {
-    const { store } = await storeWith(JSON.stringify({ friendRequest: false, friendGift: true, teamMessage: false }));
-    expect(choice(store.getState())).toEqual({ friendRequest: false, friendGift: true, teamMessage: false, updates: true });
+  it("переключатели — заявки, подарки и сообщения команды; о версиях бот не пишет", async () => {
+    const { BOT_NOTIFY_KEYS } = await import("../src/state/bot-notifications");
+    expect([...BOT_NOTIFY_KEYS]).toEqual(["friendRequest", "friendGift", "teamMessage"]);
   });
 
-  it("переключатель «новые версии» сохраняется вместе с остальными", async () => {
-    const { store, values } = await storeWith(null);
-    expect(store.getState().toggle("updates")).toBe(false);
-    expect(JSON.parse(values["bh.bot-notifications.v1"] ?? "{}")).toEqual({ friendRequest: true, friendGift: false, teamMessage: true, updates: false });
+  it("выбор, сохранённый вместе с прежним полем updates, читается без сброса остальных", async () => {
+    const { store } = await storeWith(JSON.stringify({ friendRequest: false, friendGift: true, teamMessage: false, updates: false }));
+    expect(choice(store.getState())).toEqual({ friendRequest: false, friendGift: true, teamMessage: false });
+  });
+
+  it("при записи прежнее поле updates отбрасывается", async () => {
+    const { store, values } = await storeWith(JSON.stringify({ friendRequest: false, friendGift: true, teamMessage: false, updates: false }));
+    expect(store.getState().toggle("teamMessage")).toBe(true);
+    expect(JSON.parse(values["bh.bot-notifications.v1"] ?? "{}")).toEqual({ friendRequest: false, friendGift: true, teamMessage: true });
   });
 
   it("битое значение — умолчания", async () => {
     const { store } = await storeWith(JSON.stringify({ friendRequest: "да" }));
-    expect(choice(store.getState())).toEqual({ friendRequest: true, friendGift: false, teamMessage: true, updates: true });
+    expect(choice(store.getState())).toEqual({ friendRequest: true, friendGift: false, teamMessage: true });
   });
 });
