@@ -122,7 +122,7 @@ export class BotCommands implements BotUpdateHandler, OnModuleInit, OnApplicatio
 
 /** Ответ `/help`: команды для всех и, где уместно, команды администратора. */
 export function helpText(commands: readonly { command: string; description: string; audience: "everyone" | "admin" }[], forAdmin: boolean): string {
-  const lines = ["Рубеж — бот закрытого теста.", "", "Команды:"];
+  const lines = ["«Рубеж» — игра прямо в Telegram. Идёт тест: игра часто обновляется, а отзывы игроков на неё влияют.", "", "Команды:"];
   for (const spec of commands.filter((spec) => spec.audience === "everyone")) {
     lines.push(`/${spec.command} — ${spec.description}`);
   }
@@ -131,7 +131,7 @@ export function helpText(commands: readonly { command: string; description: stri
     lines.push("", "Для администраторов:");
     for (const spec of adminCommands) lines.push(`/${spec.command} — ${spec.description}`);
   }
-  if (!forAdmin) lines.push("", "Вопрос или баг — напишите команде в чат теста.");
+  if (!forAdmin) lines.push("", "Вопрос, баг или идея — напишите команде в игре: «Настройки» → «Написать разработчикам». Новости разработки — в канале @KennixDev.");
   return lines.join("\n");
 }
 
