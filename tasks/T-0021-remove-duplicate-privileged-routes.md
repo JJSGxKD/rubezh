@@ -3,8 +3,8 @@ id: T-0021
 title: Маршруты с правами — только в панели, дубли под токеном игры убраны
 epic: E4
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5
 size: S
 depends_on: []
 zones:
