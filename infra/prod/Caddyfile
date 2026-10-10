@@ -102,9 +102,15 @@ admin.{$DOMAIN} {
 }
 
 # API снаружи — вебхук бота и то, что ходит не со страниц клиента.
+# Префикс панели сюда не пускается — у неё свой домен и cookie-сессия.
 api.{$DOMAIN} {
 	import edge
-	reverse_proxy api:4000
+	handle /api/v1/admin/* {
+		respond 404
+	}
+	handle {
+		reverse_proxy api:4000
+	}
 }
 
 # Веб и гостевая — WP18; до неё адрес ведёт на лендинг.
