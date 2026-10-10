@@ -62,6 +62,28 @@ export function createWheelApi(request: ApiRequest = apiRequest): WheelApi {
  */
 export type AdSpinState = { kind: "hidden" } | { kind: "ready"; pass: boolean } | { kind: "wait"; untilMs: number; pass: boolean };
 
+/** `asking` — ждём сервер, колесо стоит; `spinning` — сектор известен, колесо крутится. */
+export type WheelPhase = "idle" | "asking" | "spinning";
+
+export interface FreeSpinButton {
+  disabled: boolean;
+  loading: boolean;
+  /** `next` — «через N», бесплатной сегодня нет; `free` — «Крутить бесплатно» */
+  label: "free" | "next";
+}
+
+/**
+ * Кнопка бесплатной крутки зависит от того, есть ли она сегодня и идёт ли
+ * крутка вообще, но не от того, какая именно: пока крутят за рекламу, потраченная
+ * бесплатная не должна выглядеть доступной.
+ */
+export function freeSpinButton(view: Pick<WheelView, "free"> | null, phase: WheelPhase, source: "free" | "ad"): FreeSpinButton {
+  if (view === null) return { disabled: true, loading: false, label: "free" };
+  if (!view.free) return { disabled: true, loading: false, label: "next" };
+  if (phase === "idle") return { disabled: false, loading: false, label: "free" };
+  return { disabled: true, loading: source === "free", label: "free" };
+}
+
 /** `playable` — площадка умеет показывать ролики сетей; без этого крутка за рекламу есть только у VIP. */
 export function adSpinState(view: Pick<WheelView, "ad">, nowMs: number, playable: boolean): AdSpinState {
   const ad = view.ad;
