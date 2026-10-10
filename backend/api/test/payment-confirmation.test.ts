@@ -177,23 +177,28 @@ describe("обновления оплаты в боте", () => {
   function setup() {
     const calls: string[] = [];
     const confirmed: ConfirmedPayment[] = [];
+    const refunded: string[] = [];
     const confirmation = {
       answerCheckout: async (checkout: PreCheckout) => void calls.push(`checkout:${checkout.payload}`),
       refunded: async (chargeId: string) => void calls.push(`refunded:${chargeId}`),
     } as unknown as PaymentConfirmation;
-    const queue = { enabled: true, confirm: async (payment: ConfirmedPayment) => void confirmed.push(payment) } as unknown as PaymentsQueue;
+    const queue = {
+      enabled: true,
+      confirm: async (payment: ConfirmedPayment) => void confirmed.push(payment),
+      refunded: async (chargeId: string) => void refunded.push(chargeId),
+    } as unknown as PaymentsQueue;
     const router = new BotRouter();
     const handler = new TelegramPaymentsHandler(router, confirmation, queue);
     handler.onModuleInit();
-    return { router, calls, confirmed };
+    return { router, calls, confirmed, refunded };
   }
 
   it("бот читает предварительную проверку оплаты: без неё Telegram не прислал бы её вовсе", () => {
     expect(ALLOWED_UPDATES).toContain("pre_checkout_query");
   });
 
-  it("проверку, подтверждение и возврат разбирает оплата, команды — нет", async () => {
-    const { router, calls, confirmed } = setup();
+  it("проверку разбирает оплата, подтверждение и возврат — через очередь, команды — нет", async () => {
+    const { router, calls, confirmed, refunded } = setup();
 
     await router.dispatch(
       updateSchema.parse({ update_id: 9, pre_checkout_query: { id: "q-1", from: { id: PLAYER_ID, is_bot: false }, currency: "XTR", total_amount: 3, invoice_payload: "p-1" } }),
@@ -202,7 +207,10 @@ describe("обновления оплаты в боте", () => {
     await router.dispatch(privateMessage({ refunded_payment: charge }));
     await router.dispatch(privateMessage({ text: "/start" }));
 
-    expect(calls).toEqual(["checkout:p-1", "refunded:charge-1"]);
+    // Возврат по спору, как и подтверждение, ложится в очередь: смещение опроса уже
+    // сохранено, и упавшая запись в базу не должна терять отметку насовсем.
+    expect(calls).toEqual(["checkout:p-1"]);
+    expect(refunded).toEqual(["charge-1"]);
     expect(confirmed).toEqual([{ platform: "telegram", chargeId: "charge-1", payload: charge.invoice_payload, payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3 }]);
   });
 
