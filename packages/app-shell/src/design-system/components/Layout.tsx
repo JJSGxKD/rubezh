@@ -1,8 +1,9 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { t } from "../../i18n";
 import { uiFeedback } from "../../state/ui-feedback";
 import { IconButton } from "./Button";
+import { tabLabelMode, type TabLabelMode } from "./tab-labels";
 
 /**
  * Каркас экрана: верхняя панель, прокручиваемое тело, опциональное дно.
@@ -86,25 +87,51 @@ export interface TabBarProps {
 /**
  * Нижняя панель разделов.
  *
- * Разделов шесть, и шесть подписей на экране телефона не помещаются, не
- * превращаясь в мелкий шум. Поэтому подпись есть только у активного раздела, а
- * сам он поднимается над панелью объёмной плиткой — где ты сейчас, видно
- * издалека. Когда ширины хватает всем (планшет, десктоп, ландшафт), подписи
- * показываются у всех: прятать их там незачем. Порог — по ширине самой панели
- * (container query), а не экрана: панель живёт в колонке.
+ * Разделов шесть. Подписи видны у всех, если каждая помещается в свою
+ * вкладку (измеряется, `tab-labels.ts`): на телефонах от 360 px так и есть.
+ * Иначе подпись только у активного раздела, а сам он поднимается над панелью
+ * объёмной плиткой — где ты сейчас, видно издалека. Правило по измерению, а не
+ * по порогу ширины: шрифт и язык сменятся, и порог в пикселях соврал бы.
+ * Подписи рендерятся всегда, неактивные в режиме «только активная»
+ * прозрачны: их можно измерить в любом режиме, а высота панели не меняется.
  *
  * Анимируются только transform и opacity (§3.3): плитка растёт и поднимается,
  * подпись проявляется.
  */
 export function TabBar(props: TabBarProps): ReactNode {
+  const [labelMode, setLabelMode] = useState<TabLabelMode>("active");
+  const row = useRef<HTMLDivElement>(null);
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  const labels = useRef<(HTMLSpanElement | null)[]>([]);
+
+  // До отрисовки: на широком экране подписи не мигают.
+  useLayoutEffect(() => {
+    const count = props.items.length;
+    const measure = (): void => {
+      const labelWidths = labels.current.slice(0, count).map((label) => label?.scrollWidth ?? 0);
+      const tabWidths = tabs.current.slice(0, count).map((tab) => tab?.clientWidth ?? 0);
+      setLabelMode(tabLabelMode(labelWidths, tabWidths));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    // Подпись меняет ширину, когда догрузился веб-шрифт или сменился текст.
+    const observer = new ResizeObserver(measure);
+    if (row.current !== null) observer.observe(row.current);
+    for (const label of labels.current.slice(0, count)) if (label !== null) observer.observe(label);
+    return () => observer.disconnect();
+  }, [props.items]);
+
   return (
-    <nav className="@container shrink-0 border-t border-border bg-surface pb-[var(--app-inset-bottom)]">
-      <div className="mx-auto flex w-full max-w-[640px]">
-        {props.items.map((item) => {
+    <nav className="shrink-0 border-t border-border bg-surface pb-[var(--app-inset-bottom)]">
+      <div ref={row} className="mx-auto flex w-full max-w-[640px]">
+        {props.items.map((item, index) => {
           const active = item.id === props.activeId;
           return (
             <button
               key={item.id}
+              ref={(node) => {
+                tabs.current[index] = node;
+              }}
               type="button"
               aria-current={active ? "page" : undefined}
               aria-label={item.label}
@@ -142,13 +169,18 @@ export function TabBar(props: TabBarProps): ReactNode {
                 {item.badge === undefined ? null : <TabBadge badge={item.badge} />}
               </span>
               <span
+                ref={(node) => {
+                  labels.current[index] = node;
+                }}
                 aria-hidden="true"
                 className={[
-                  "font-display text-xs whitespace-nowrap",
+                  "font-text text-xs font-medium whitespace-nowrap",
                   "transition-[opacity,transform] duration-(--duration-base) ease-out",
                   active
-                    ? "-translate-y-2 font-bold text-accent opacity-100"
-                    : "hidden text-text-muted @min-[560px]:block",
+                    ? "-translate-y-2 text-accent opacity-100"
+                    : labelMode === "all"
+                      ? "text-text-muted opacity-100"
+                      : "text-text-muted opacity-0",
                 ].join(" ")}
               >
                 {item.label}
