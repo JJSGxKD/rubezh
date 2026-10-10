@@ -1,41 +1,29 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { Crown, Skull, Trophy, Wrench } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { Crown, Skull } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
-import { Badge, Button, Modal, Stat, staggerStyle } from "../../design-system/components";
-import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
+import { Button, Modal } from "../../design-system/components";
+import { t } from "../../i18n";
 import "../../i18n/run";
 // Строки награды — в словаре аккаунта: он приезжает с этим чанком, а не с
 // первой загрузкой.
 import "../../i18n/account";
-import { CoinIcon } from "../../design-system/components/CurrencyIcons";
-import { unlockLabel, unlocksGainedBetween } from "../../state/level-unlocks";
+import { useMeta } from "../../state/meta";
 import { useProgress, type RunRewardView } from "../../state/progress";
 import { awaitReward } from "../../state/progress-api";
 import { useRuns } from "../../state/runs";
-import { ItemIcon } from "../item-icons";
+import { ChanceStep, LevelUpCard, ResultsHero, RewardCard, RunDetails, RunStats } from "./death-parts";
+import { deathStep } from "./death-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
-import { SecondChance, type SecondChanceProps } from "./SecondChance";
+import type { SecondChanceProps } from "./SecondChance";
 
 /**
- * Удвоение за рекламу — своим чанком: оно нужно, только когда награда
- * посчитана и в ней есть монеты, а поток рекламы весит больше самой кнопки.
+ * Экран смерти в два шага (design/screens/death.html, решения от 07.10.2026).
+ * Шаг 1 — пока забег ждёт решения о втором шансе и есть способы продолжить:
+ * короткое окно с ним одним. Шаг 2 — итоги: время героем, награда, подробности
+ * по кнопке. Отдельный чанк (`death-overlay-lazy.tsx`): до первой смерти он не
+ * нужен, а весит как треть оверлеев, и первая загрузка за него не платит
+ * (docs/27-design-system-and-app-shell.md §3.4).
  */
-const RunDouble = lazy(async () => ({ default: (await import("./RunDouble")).RunDouble }));
-
-/**
- * Экран смерти. Отдельный чанк (`death-overlay-lazy.tsx`): до первой смерти
- * он не нужен, а весит как треть оверлеев, и первая загрузка за него не
- * платит (docs/27-design-system-and-app-shell.md §3.4).
- */
-
-/**
- * Имя врага для игрока. Врагу, которого геймдизайнер добавил без имени в
- * словаре, лучше показать id, чем ключ перевода.
- */
-function enemyName(id: string): string {
-  const key = `enemy.${id}.name`;
-  return hasTranslation(key) ? t(key) : id;
-}
 
 export interface DeathOverlayProps {
   result: RunResult;
@@ -60,6 +48,8 @@ export interface DeathOverlayProps {
   reward?: RunRewardView;
   /** «Ещё раз» нажато, и новый забег ждёт межстраничную: кнопка крутится, второе нажатие не нужно */
   restarting?: boolean;
+  /** отказ от второго шанса: забег закрывается смертью, и экран переходит к итогам */
+  onDecline(): void;
   onRestart(): void;
   onMenu(): void;
   onShare(): void;
@@ -70,6 +60,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   const { result } = props;
   const stored = useProgress((state) => state.rewards[result.runId]);
   const reward = props.reward ?? (props.showReward === true ? stored : undefined);
+  const detailsOpen = useMeta((state) => state.deathDetailsOpen);
   // Награду считает сервер после ответа на итог — спрашиваем, как только итог
   // этого забега принят. Экран ушёл раньше — опрос доработает сам и обновит
   // шапку.
@@ -77,196 +68,75 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   useEffect(() => {
     if (props.showReward === true && accepted && useProgress.getState().rewards[result.runId] === undefined) void awaitReward(result.runId);
   }, [props.showReward, accepted, result.runId]);
-  // Сверху то, что тянуло забег: урон по оружиям — главный вход
-  // геймдизайнера для баланса (docs/26-stage2-plan.md, WP3).
-  const weapons = [...result.weapons].sort((left, right) => right.damage - left.damage);
-  const topDamage = weapons[0]?.damage ?? 0;
+
+  // Второй шанс — только пока забег ждёт решения: сданный забег игрок
+  // закончил сам, а закрытый смертью продолжить уже нечем.
+  const { secondChance } = props;
+  const waiting = result.outcome === "died" && secondChance !== undefined;
+  const hasWays = secondChance !== undefined && (secondChance.onDevContinue !== undefined || secondChance.paidFor !== undefined || secondChance.adFor !== undefined);
+  const step = deathStep({ phase: waiting ? "downed" : "finished", hasWays });
+  const downedWithoutWays = waiting && !hasWays;
+
+  // Продолжить нечем — шага со вторым шансом нет: забег закрывается смертью,
+  // как и когда способы отпали сами. Итоги появятся, когда он закроется.
+  const { onDecline } = props;
+  const declined = useRef(false);
+  useEffect(() => {
+    if (!downedWithoutWays || declined.current) return;
+    declined.current = true;
+    onDecline();
+  }, [downedWithoutWays, onDecline]);
+
+  if (step === "chance" && secondChance !== undefined) {
+    return (
+      <Modal>
+        <ChanceStep result={result} secondChance={secondChance} onDecline={guarded(ready, onDecline)} />
+      </Modal>
+    );
+  }
+
+  const actions = (
+    <>
+      <Button size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
+        {t("run.death.again")}
+      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="secondary" block onClick={props.onMenu}>
+          {t("run.death.home")}
+        </Button>
+        <Button variant="ghost" block onClick={props.onShare}>
+          {t("run.death.share")}
+        </Button>
+      </div>
+    </>
+  );
 
   return (
     <Modal
       title={result.outcome === "died" ? t("run.death.title") : t("run.death.abandoned")}
       icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
       size="l"
+      // В портрете кнопки — подвал под прокручиваемой частью, в ландшафте — в
+      // правой колонке: «Ещё раз» видна без прокрутки (docs/27-design-system-and-app-shell.md §5.3).
+      footer={<div className="grid gap-2 landscape:hidden">{actions}</div>}
     >
-      {/* Сложность рядом с итогом: рекорд засчитан именно на ней. */}
-      <div className="-mt-1 mb-3 flex flex-wrap justify-center gap-2">
-        <Badge>{t(`difficulty.${result.difficultyId}.name`)}</Badge>
-        {/* Читы — видно сразу: иначе «рекорд» бессмертного забега на скриншоте
-            выглядит настоящим. */}
-        {result.cheats ? (
-          <Badge tone="warning">
-            <Wrench size={12} aria-hidden="true" />
-            {props.cheatsCounted === true ? t("dev.cheats.counted") : t("dev.cheats.notCounted")}
-          </Badge>
-        ) : null}
-        {props.isNewRecord ? (
-          <span className="animate-pop-in" style={staggerStyle(2)}>
-            <Badge tone="accent">
-              <Crown size={12} aria-hidden="true" />
-              {t("run.death.record")}
-            </Badge>
-          </span>
-        ) : null}
-        {/* Место приходит с сервера позже итога — плашка появляется, когда
-            ответ дошёл, и не задерживает сам экран. */}
-        {props.rank === undefined || props.rank === null ? null : (
-          <span className="animate-pop-in">
-            <Badge tone="info">
-              <Trophy size={12} aria-hidden="true" />
-              {t("run.death.rank", { rank: props.rank })}
-            </Badge>
-          </span>
-        )}
-      </div>
-
-      {/* В ландшафте итоги слева, оружие и кнопки справа — «Ещё раз» видна без
-          прокрутки (docs/27-design-system-and-app-shell.md §5.3). */}
-      <div className="grid gap-4 landscape:grid-cols-2">
-        <div>
-          <div className="surface-sunken grid grid-cols-2 gap-4 rounded-lg p-4">
-            <Stat
-              label={t("run.death.survived")}
-              value={formatDuration(result.survivalSec)}
-              large
-              tone={props.isNewRecord ? "accent" : undefined}
-            />
-            <Stat label={t("run.death.level")} value={String(result.level)} large />
-            <Stat label={t("run.death.killed")} value={formatNumber(result.enemiesKilled)} />
-            <Stat label={t("run.death.wave")} value={String(result.waveReached)} />
+      {/* Прокручивается только содержимое: «Ещё раз» остаётся на месте, а
+          окно не выше экрана. Запас — заголовок, подвал с кнопками и поля. */}
+      <div className="max-h-[calc(100dvh-16rem-var(--app-inset-top)-var(--app-inset-bottom))] overflow-y-auto overscroll-contain landscape:max-h-none landscape:overflow-visible">
+        <div className="grid gap-4 landscape:grid-cols-2">
+          <div className="grid content-start gap-3">
+            <ResultsHero result={result} isNewRecord={props.isNewRecord} {...(props.rank === undefined ? {} : { rank: props.rank })} {...(props.cheatsCounted === undefined ? {} : { cheatsCounted: props.cheatsCounted })} />
+            {/* Удвоение — только у настоящего итога: у витрины компонентов сети нет. */}
+            {reward === undefined ? null : <RewardCard reward={reward} {...(props.showReward === true ? { doubleRunId: result.runId } : {})} />}
+            {reward?.status === "granted" ? <LevelUpCard levelBefore={reward.levelBefore} levelAfter={reward.levelAfter} /> : null}
           </div>
-
-          {/* Удвоение — только у настоящего итога: у витрины компонентов сети нет. */}
-          {reward === undefined ? null : <RewardRow reward={reward} {...(props.showReward === true ? { doubleRunId: result.runId } : {})} />}
-
-          {result.deathCause === null ? null : (
-            <p className="mt-3 text-xs text-text-muted">
-              {t("run.death.cause", { enemy: enemyName(result.deathCause) })}
-            </p>
-          )}
-
-          {/* Второй шанс — только пока забег ждёт решения: сданный забег игрок
-              закончил сам, а закрытый смертью продолжить уже нечем. */}
-          {result.outcome === "died" && props.secondChance !== undefined ? (
-            <div className="mt-3">
-              <SecondChance {...props.secondChance} />
-            </div>
-          ) : null}
-        </div>
-
-        <div>
-          {weapons.length === 0 ? null : (
-            <div>
-              <h3 className="mb-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
-                {t("run.death.weapons")}
-              </h3>
-              <ul className="grid gap-2">
-                {weapons.map((weapon, index) => (
-                  <li
-                    key={weapon.id}
-                    className="flex animate-rise-in items-center gap-2 text-sm"
-                    style={staggerStyle(index + 1)}
-                  >
-                    <span className="text-weapon">
-                      <ItemIcon kind="weapon" id={weapon.id} size={16} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-text">
-                          {t(`weapon.${weapon.id}.name`)}
-                          <span className="ml-1 text-text-muted">{weapon.level}</span>
-                        </span>
-                        <span className="font-display tabular-nums text-text-muted">
-                          {formatNumber(weapon.damage)}
-                        </span>
-                      </span>
-                      {/* Доля урона полосой: какое оружие тянуло забег, видно без цифр. */}
-                      <span className="surface-sunken mt-1 block h-1 overflow-hidden rounded-pill">
-                        <span
-                          className="fill-accent block h-full origin-left rounded-pill"
-                          style={{
-                            transform: `scaleX(${topDamage > 0 ? weapon.damage / topDamage : 0})`,
-                          }}
-                        />
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* seed и runId видны только в режиме диагностики: с ними баг
-              воспроизводится, а обычному игроку они ни о чём не говорят. */}
-          {props.diagnostics ? (
-            <p className="mt-4 font-mono text-xs break-all text-text-disabled">
-              {t("run.death.diagnostics", { seed: result.seed, runId: result.runId })}
-            </p>
-          ) : null}
-
-          <div className="mt-5 grid gap-2">
-            <Button size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
-              {t("run.death.again")}
-            </Button>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" block onClick={props.onMenu}>
-                {t("run.death.menu")}
-              </Button>
-              <Button variant="ghost" block onClick={props.onShare}>
-                {t("run.death.share")}
-              </Button>
-            </div>
+          <div className="grid content-start gap-3">
+            <RunStats result={result} />
+            <RunDetails result={result} open={detailsOpen} diagnostics={props.diagnostics} onToggle={(open) => useMeta.getState().rememberDeathDetails(open)} />
+            <div className="hidden gap-2 landscape:grid">{actions}</div>
           </div>
         </div>
       </div>
     </Modal>
-  );
-}
-
-/**
- * Что дал забег. Считает сервер заданием очереди, поэтому сначала «считаем»,
- * потом числа — без перезапуска экрана. Причина отказа видна прямо: игрок,
- * сдавшийся на десятой секунде, должен понять, почему монет нет.
- */
-function RewardRow(props: { reward: RunRewardView; doubleRunId?: string }): ReactNode {
-  const { reward } = props;
-  // Сколько добавило удвоение за рекламу: строка показывает монеты уже с ним.
-  const [bonus, setBonus] = useState(0);
-  if (reward.status === "pending") return <p className="mt-3 text-xs text-text-muted">{t("run.reward.pending")}</p>;
-  if (reward.status === "none") {
-    const key = `run.reward.none.${reward.reason}`;
-    return <p className="mt-3 text-xs text-text-muted">{hasTranslation(key) ? t(key) : t("run.reward.none.other")}</p>;
-  }
-  const levelUp = reward.levelAfter > reward.levelBefore;
-  // Что открыл новый уровень (Р42): следующий забег пойдёт уже с этим.
-  const unlocked = levelUp ? unlocksGainedBetween(reward.levelBefore, reward.levelAfter) : [];
-  return (
-    <div className="mt-3 animate-rise-in">
-      <div className="surface-sunken flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg px-4 py-3">
-        <span className="inline-flex items-center gap-1.5 font-display text-lg font-bold tabular-nums text-text" aria-label={t("run.reward.coinsLabel", { amount: reward.coins + bonus })}>
-          <CoinIcon size={20} />
-          {t("run.reward.coins", { amount: formatNumber(reward.coins + bonus) })}
-          {bonus > 0 ? (
-            <span className="animate-pop-in">
-              <Badge tone="accent">×2</Badge>
-            </span>
-          ) : null}
-        </span>
-        <span className="font-display text-sm font-semibold tabular-nums text-xp">{t("run.reward.xp", { amount: formatNumber(reward.xp) })}</span>
-        {levelUp ? (
-          <span className="animate-pop-in">
-            <Badge tone="accent">{t("run.reward.levelUp", { level: reward.levelAfter })}</Badge>
-          </span>
-        ) : null}
-      </div>
-      {unlocked.length === 0 ? null : (
-        <p className="mt-1.5 animate-rise-in text-sm text-text">{t("run.reward.unlocked", { list: unlocked.map(unlockLabel).join(", ") })}</p>
-      )}
-      {reward.coinsCapped ? <p className="mt-1 text-xs text-text-muted">{t("run.reward.capped")}</p> : null}
-      {props.doubleRunId === undefined || reward.coins <= 0 ? null : (
-        <Suspense fallback={null}>
-          <RunDouble runId={props.doubleRunId} onDoubled={setBonus} />
-        </Suspense>
-      )}
-    </div>
   );
 }

@@ -48,7 +48,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "record";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -81,6 +81,7 @@ export function GalleryScreen(): ReactNode {
           />
           <ListItem title={t("gallery.preview.pause")} onClick={() => setPreview("pause")} />
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
+          <ListItem title={t("run.continue.title")} onClick={() => setPreview("chance")} />
           <ListItem title={t("gallery.preview.record")} onClick={() => setPreview("record")} />
         </ListGroup>
 
@@ -347,6 +348,22 @@ function renderPreview(preview: Preview): ReactNode {
           isNewRecord={false}
           diagnostics
           reward={{ status: "pending" }}
+          onDecline={noop}
+          onRestart={noop}
+          onMenu={noop}
+          onShare={noop}
+        />
+      );
+    case "chance":
+      // Шаг 1: второй шанс — с теми же образцами стадий, что у блоков в витрине выше;
+      // способ нужен, чтобы окно не перешло сразу к итогам, — здесь это кнопка разработчика.
+      return (
+        <DeathOverlay
+          result={SAMPLE_RESULT}
+          isNewRecord={false}
+          diagnostics={false}
+          secondChance={{ onDevContinue: noop, paidPreview: { kind: "ready", offer: LIVE_OFFER }, adPreview: AD_READY }}
+          onDecline={noop}
           onRestart={noop}
           onMenu={noop}
           onShare={noop}
@@ -367,6 +384,7 @@ function renderPreview(preview: Preview): ReactNode {
             levelAfter: 5,
             progress: { level: 5, xp: 1400, xpIntoLevel: 21, xpForNext: 545, nextReward: { coins: 300, gems: 0 } },
           }}
+          onDecline={noop}
           onRestart={noop}
           onMenu={noop}
           onShare={noop}

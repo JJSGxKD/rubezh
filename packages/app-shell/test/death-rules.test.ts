@@ -94,8 +94,8 @@ describe("какие способы второго шанса видны", () =>
     expect(visibleWays({ adStage: { kind: "ready", pass: false, notice: null }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: true, stars: true, vip: false });
   });
 
-  it("оба недоступны — ничего", () => {
-    expect(visibleWays({ adStage: { kind: "unavailable", reason: "no_fill" }, paidStage: { kind: "unavailable", reason: "not_offered" } })).toEqual({ ad: false, stars: false, vip: false });
+  it("оба недоступны — блок звёзд остаётся и сам объясняет, почему купить нельзя (правило прежнее)", () => {
+    expect(visibleWays({ adStage: { kind: "unavailable", reason: "no_fill" }, paidStage: { kind: "unavailable", reason: "not_offered" } })).toEqual({ ad: false, stars: true, vip: false });
   });
 
   it("способов не заведено вовсе — ничего", () => {
