@@ -40,7 +40,6 @@ export const ACCOUNT_SETTING_KEYS = [
   "bot.friendRequest",
   "bot.friendGift",
   "bot.teamMessage",
-  "bot.updates",
 ] as const;
 
 export type AccountSettingKey = (typeof ACCOUNT_SETTING_KEYS)[number];
@@ -206,8 +205,6 @@ function currentValue(key: AccountSettingKey): AccountSettingValue {
       return useBotNotifications.getState().friendGift;
     case "bot.teamMessage":
       return useBotNotifications.getState().teamMessage;
-    case "bot.updates":
-      return useBotNotifications.getState().updates;
   }
 }
 
@@ -234,8 +231,6 @@ function isOwnChoice(key: AccountSettingKey): boolean {
       return currentValue(key) !== BOT_NOTIFY_DEFAULTS.friendGift;
     case "bot.teamMessage":
       return currentValue(key) !== BOT_NOTIFY_DEFAULTS.teamMessage;
-    case "bot.updates":
-      return currentValue(key) !== BOT_NOTIFY_DEFAULTS.updates;
   }
 }
 
