@@ -23,6 +23,8 @@ const GUARDS_METADATA = "__guards__";
 
 interface RouteInfo {
   controller: string;
+  /** путь контроллера без начального слеша; пусто, если не задан */
+  path: string;
   method: string;
   handler: (...args: unknown[]) => unknown;
   guarded: boolean;
@@ -37,6 +39,12 @@ function controllersOf(module: Type<unknown>, seen = new Set<Type<unknown>>()): 
   return [...controllers, ...imports.flatMap((imported) => controllersOf(imported, seen))];
 }
 
+function pathOf(controller: Type<unknown>): string {
+  const path = Reflect.getMetadata(PATH_METADATA, controller) as string | string[] | undefined;
+  const first = Array.isArray(path) ? path[0] : path;
+  return (first ?? "").replace(/^\//, "");
+}
+
 function routesOf(controller: Type<unknown>): RouteInfo[] {
   const prototype = controller.prototype as Record<string, unknown>;
   const classGuards = Reflect.getMetadata(GUARDS_METADATA, controller) !== undefined;
@@ -48,6 +56,7 @@ function routesOf(controller: Type<unknown>): RouteInfo[] {
       const handler = prototype[name] as (...args: unknown[]) => unknown;
       return {
         controller: controller.name,
+        path: pathOf(controller),
         method: name,
         handler,
         guarded: classGuards || Reflect.getMetadata(GUARDS_METADATA, handler) !== undefined,
@@ -96,5 +105,14 @@ describe("права на маршрутах", () => {
       .map((route) => `${route.controller}.${route.method}`);
 
     expect(both).toEqual([]);
+  });
+
+  it("маршрут с правом — только в панели: путь контроллера admin или admin/…", () => {
+    const outside = routes
+      .filter((route) => Reflect.getMetadata(PERMISSION_METADATA, route.handler) !== undefined)
+      .filter((route) => route.path !== "admin" && !route.path.startsWith("admin/"))
+      .map((route) => `${route.controller}.${route.method}`);
+
+    expect(outside, "право — только в панели: перенесите маршрут в `modules/admin` или уберите право").toEqual([]);
   });
 });
