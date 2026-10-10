@@ -3,7 +3,7 @@ id: T-0036
 title: Свежий бэкап базы перед каждым выкатом
 epic: E3
 priority: P1
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5
 size: S
 depends_on: []
