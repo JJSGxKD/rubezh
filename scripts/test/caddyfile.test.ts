@@ -9,7 +9,10 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const ADMIN_PREFIX = "handle /api/v1/admin/* {";
 const ADMIN_DOMAIN = "admin.{$DOMAIN}";
 
-const caddyfile = readFileSync(`${ROOT}infra/prod/Caddyfile`, "utf8").replace(/\r\n/g, "\n");
+const caddyfile = readFileSync(`${ROOT}infra/prod/Caddyfile`, "utf8").replace(
+  /\r\n/g,
+  "\n",
+);
 
 /** Блоки доменов: строка без отступа, кончающаяся на `{`, до `}` на нулевом отступе. */
 function parseDomainBlocks(text: string): Map<string, string> {
@@ -35,7 +38,8 @@ function handleBody(block: string, header: string): string | undefined {
   const start = lines.indexOf(`\t${header}`);
   if (start === -1) return undefined;
   const body: string[] = [];
-  for (let i = start + 1; i < lines.length && lines[i] !== "\t}"; i += 1) body.push(lines[i] ?? "");
+  for (let i = start + 1; i < lines.length && lines[i] !== "\t}"; i += 1)
+    body.push(lines[i] ?? "");
   return body.join("\n");
 }
 
@@ -52,27 +56,40 @@ describe("Caddyfile: префикс панели", () => {
     const block = blockOf("api.{$DOMAIN}");
     expect(handleBody(block, ADMIN_PREFIX)).toContain("respond 404");
     expect(block.indexOf(ADMIN_PREFIX)).toBeGreaterThanOrEqual(0);
-    expect(block.indexOf(ADMIN_PREFIX)).toBeLessThan(block.indexOf("reverse_proxy"));
+    expect(block.indexOf(ADMIN_PREFIX)).toBeLessThan(
+      block.indexOf("reverse_proxy"),
+    );
   });
 
   it("на домене клиента префикс панели закрыт раньше прокси", () => {
     const block = blockOf("tg.{$DOMAIN}");
     expect(handleBody(block, ADMIN_PREFIX)).toContain("respond 404");
-    expect(block.indexOf(ADMIN_PREFIX)).toBeLessThan(block.indexOf("reverse_proxy"));
+    expect(block.indexOf(ADMIN_PREFIX)).toBeLessThan(
+      block.indexOf("reverse_proxy"),
+    );
   });
 
   it("панель проксирует свой префикс", () => {
-    expect(handleBody(blockOf(ADMIN_DOMAIN), ADMIN_PREFIX)).toContain("reverse_proxy api:4000");
+    expect(handleBody(blockOf(ADMIN_DOMAIN), ADMIN_PREFIX)).toContain(
+      "reverse_proxy api:4000",
+    );
   });
 
   it("новый домен с API не забудет закрыть префикс", () => {
     const exposing = [...blocks].filter(
       ([name, block]) =>
-        name !== ADMIN_DOMAIN && (block.includes("\thandle /api/* {") || /^\treverse_proxy api:4000$/m.test(block)),
+        name !== ADMIN_DOMAIN &&
+        (block.includes("\thandle /api/* {") ||
+          /^\treverse_proxy api:4000$/m.test(block) ||
+          block.includes("\thandle {\n\t\treverse_proxy api:4000")),
     );
-    expect(exposing.map(([name]) => name)).toEqual(expect.arrayContaining(["tg.{$DOMAIN}", "api.{$DOMAIN}"]));
+    expect(exposing.map(([name]) => name)).toEqual(
+      expect.arrayContaining(["tg.{$DOMAIN}", "api.{$DOMAIN}"]),
+    );
     for (const [name, block] of exposing) {
-      expect(block, `в блоке ${name} не закрыт ${ADMIN_PREFIX}`).toContain(`\t${ADMIN_PREFIX}`);
+      expect(block, `в блоке ${name} не закрыт ${ADMIN_PREFIX}`).toContain(
+        `\t${ADMIN_PREFIX}`,
+      );
     }
   });
 });
