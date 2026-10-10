@@ -232,6 +232,14 @@ export const SETTINGS = {
    * (`ads/interstitial-policy.ts`), а как часто — эти числа. Рабочие числа:
    * их уточнит выкат на долю игроков.
    */
+  adsSdkMinViewSec: integer(
+    "ads.sdk-min-view-sec",
+    ADS_GROUP,
+    "Минимальный досмотр через SDK",
+    "Досмотр рекламы за награду, показанной SDK сети, засчитывается не раньше стольких секунд после выдачи показа. 0 — без порога. Значение держим только здесь: в репозитории его нет",
+    { min: 0, max: 60, unit: ["секунда", "секунды", "секунд"] },
+    0,
+  ),
   interstitialEveryRuns: integer(
     "ads.interstitial.every-runs",
     ADS_GROUP,

@@ -198,7 +198,18 @@ export class AdsService {
 
   private newSession(viewer: AdViewer, place: AdPlace, block: AdBlockRow, at: Date): NewAdSession {
     const expiresAt = new Date(at.getTime() + SESSION_TTL_MIN[block.success] * MINUTE_MS);
-    return { sessionId: randomBytes(12).toString("base64url"), accountId: viewer.accountId, place, block, creative: null, createdAt: at, expiresAt };
+    return { sessionId: randomBytes(12).toString("base64url"), accountId: viewer.accountId, place, block, creative: null, minViewSec: this.sdkMinViewSec(place), createdAt: at, expiresAt };
+  }
+
+  /**
+   * Порог досмотра через SDK — из панели в момент выдачи, дальше он застывает
+   * в строке сессии. Значения в коде нет: опубликованный порог против
+   * накрутки теряет смысл. У места без награды порога нет.
+   */
+  private sdkMinViewSec(place: AdPlace): number | null {
+    if (!PLACE_RULES[place].rewarded) return null;
+    const sec = this.settings.get(SETTINGS.adsSdkMinViewSec);
+    return sec > 0 ? sec : null;
   }
 
   private async open(session: NewAdSession, creative: AdCreativeShow | null): Promise<AdOffer> {

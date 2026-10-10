@@ -3,7 +3,7 @@ id: T-0029
 title: Досмотр рекламы через SDK засчитывается не раньше порога из панели
 epic: E4
 priority: P1
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5
 size: S
 depends_on: []
