@@ -39,6 +39,16 @@ const PANEL_LOGIN_START = new RegExp(`^/start(?:@\\w+)?\\s+${PANEL_LOGIN_PREFIX}
 /** Прогресс — украшение приветствия: не пришёл за это время — карточка новичка. */
 const PROGRESS_TIMEOUT_MS = 2_000;
 
+/**
+ * Кнопка запуска игры. `web_app` принимает только HTTPS, поэтому на машине
+ * разработчика с `http://localhost` она заменяется ссылкой на Mini App
+ * через самого бота — её Telegram открывает на любом адресе.
+ */
+export function playButtonFor(webAppUrl: string, miniAppLink: string | null, text: string): InlineButton | null {
+  if (webAppUrl.startsWith("https://")) return { text, web_app: { url: webAppUrl } };
+  return miniAppLink === null ? null : { text, url: miniAppLink };
+}
+
 export interface WelcomeProgressSource {
   progress(playerId: string): Promise<WelcomeProgress | null>;
 }
@@ -276,16 +286,8 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
     return rows;
   }
 
-  /**
-   * Кнопка запуска игры. `web_app` принимает только HTTPS, поэтому на машине
-   * разработчика с `http://localhost` она заменяется ссылкой на Mini App
-   * через самого бота — её Telegram открывает на любом адресе.
-   */
   private playButton(text: string): InlineButton | null {
-    const url = this.config.telegram.webAppUrl;
-    if (url.startsWith("https://")) return { text, web_app: { url } };
-    const link = this.identity.miniAppLink;
-    return link === null ? null : { text, url: link };
+    return playButtonFor(this.config.telegram.webAppUrl, this.identity.miniAppLink, text);
   }
 
   private groupKeyboard(): { keyboard?: InlineButton[][] } {
