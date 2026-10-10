@@ -9,9 +9,6 @@ import { track } from "./shell";
  */
 export type ScreenId =
   | "lobby"
-  | "mode"
-  | "weapon"
-  | "boosts"
   | "run"
   | "stress"
   | "arsenal"
