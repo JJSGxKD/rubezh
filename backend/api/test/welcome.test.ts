@@ -12,10 +12,11 @@ import {
   type WelcomeCard,
   type WelcomeProgress,
 } from "../src/platforms/telegram/welcome-card.js";
-import { languageOf } from "../src/platforms/telegram/welcome-texts.js";
+import { languageOf, WELCOME_TEXTS } from "../src/platforms/telegram/welcome-texts.js";
 import {
   StartCommand,
   WelcomeProgressRegistry,
+  playButtonFor,
   type BotStartListener,
   type WelcomeBotApi,
   type WelcomeCardCache,
@@ -332,5 +333,36 @@ describe("/start в боте", () => {
     const nameless = setup({ PUBLIC_WEB_URL: "http://localhost:5173" }, undefined, null);
     await nameless.router.dispatch(start(8));
     expect(nameless.calls[0]?.options.keyboard).toBeUndefined();
+  });
+});
+
+describe("тексты приветствия: идёт тест", () => {
+  it("подпись новичку на русском говорит «Идёт тест» без «закрытого»", () => {
+    const caption = WELCOME_TEXTS.ru.caption("Анна", false);
+    expect(caption).toContain("Идёт тест");
+    expect(caption).not.toContain("закрыт");
+  });
+
+  it("подпись новичку на английском — «in testing» без «closed»", () => {
+    const caption = WELCOME_TEXTS.en.caption("Anna", false);
+    expect(caption).toContain("in testing");
+    expect(caption).not.toContain("closed");
+  });
+
+  it("подсказка в группе не называет тест закрытым", () => {
+    expect(WELCOME_TEXTS.ru.groupHint).not.toContain("закрыт");
+    expect(WELCOME_TEXTS.en.groupHint).not.toContain("closed");
+  });
+
+  it("подпись с рекордом не меняется", () => {
+    expect(WELCOME_TEXTS.ru.caption("Анна", true)).toBe("Анна, рубеж ждёт. Рекорд на картинке — побьёшь?");
+  });
+});
+
+describe("кнопка запуска игры", () => {
+  it("HTTPS — web_app, HTTP со ссылкой на бота — ссылка, иначе кнопки нет", () => {
+    expect(playButtonFor("https://game.example", null, "▶ Играть")).toEqual({ text: "▶ Играть", web_app: { url: "https://game.example" } });
+    expect(playButtonFor("http://localhost:5173", "https://t.me/b?startapp", "▶ Играть")).toEqual({ text: "▶ Играть", url: "https://t.me/b?startapp" });
+    expect(playButtonFor("http://localhost:5173", null, "▶ Играть")).toBeNull();
   });
 });
