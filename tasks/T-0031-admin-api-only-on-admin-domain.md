@@ -3,8 +3,8 @@ id: T-0031
 title: API панели отвечает только на домене панели
 epic: E4
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-4 / sonnet-5.5
 size: S
 depends_on: []
 zones:
