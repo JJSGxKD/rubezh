@@ -1,15 +1,12 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
-import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
-import { PermissionGuard } from "../roles/permission.guard.js";
-import { difficultyQuerySchema, reviewLimitSchema, runFinishSchema, runIdParamSchema, runStartSchema } from "./dto/runs.dto.js";
+import { difficultyQuerySchema, runFinishSchema, runIdParamSchema, runStartSchema } from "./dto/runs.dto.js";
 import { RUNS_LIMITS } from "./runs-limits.js";
 import { RunsService, type FinishResult } from "./runs.service.js";
 import { RunsViewService, type LeaderboardView, type ProfileView, type RunDetailView } from "./runs-view.service.js";
-import type { ReviewRow } from "./runs.repository.js";
 
 /**
  * Забеги под аккаунтом (docs/34-stage3-plan.md, WP4). В контроллере нет
@@ -53,18 +50,9 @@ export class RunsController {
     return { data: await this.view.profile(accountOf(request).accountId) };
   }
 
-  /** Очередь разбора: подозрительные и отклонённые забеги, свежие первыми. */
-  @Get("review")
-  @UseGuards(PermissionGuard)
-  @RequirePermission("players.view")
-  async review(@Query("limit") limit?: string): Promise<{ data: { runs: ReviewRow[] } }> {
-    const parsed = parse(() => reviewLimitSchema.parse(limit ?? undefined), "Некорректный предел");
-    return { data: { runs: await this.view.review(parsed) } };
-  }
-
   /**
    * Лист своего забега в профиле. Последним среди GET: иначе `:runId`
-   * перехватил бы `leaderboard`, `me` и `review`.
+   * перехватил бы `leaderboard` и `me`.
    */
   @Get(":runId")
   async detail(@Req() request: unknown, @Param("runId") runId: string): Promise<{ data: RunDetailView }> {
