@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { Logger } from "@nestjs/common";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { parseStartParam } from "../src/modules/attribution/start-param.js";
 import type { SessionsRepository } from "../src/modules/attribution/sessions.repository.js";
@@ -24,6 +25,8 @@ import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory
 
 class MemoryReferrals implements ReferralsRepository {
   readonly bindings = new Map<string, ReferralBinding>();
+  /** Сколько ближайших вызовов `activate` упадёт — как сбой базы. */
+  failActivate = 0;
   constructor(private readonly accounts: MemoryAccountRepository) {}
   async binding(referredId: string): Promise<ReferralBinding | null> {
     return this.bindings.get(referredId) ?? null;
@@ -34,6 +37,10 @@ class MemoryReferrals implements ReferralsRepository {
     return true;
   }
   async activate(referredId: string, at: Date): Promise<boolean> {
+    if (this.failActivate > 0) {
+      this.failActivate--;
+      throw new Error("база недоступна");
+    }
     const binding = this.bindings.get(referredId);
     if (binding?.status !== "bound") return false;
     this.bindings.set(referredId, { ...binding, status: "activated", activatedAt: at });
@@ -87,7 +94,12 @@ class MemoryReturns implements FriendReturnsRepository {
 
 class FakeWallet {
   readonly grants = new Map<string, GrantInput>();
+  calls = 0;
+  /** Номера вызовов `grant` (с 1), которые упадут. */
+  readonly failCalls = new Set<number>();
   async grant(input: GrantInput): Promise<GrantResult> {
+    this.calls++;
+    if (this.failCalls.has(this.calls)) throw new Error("кошелёк недоступен");
     const duplicate = this.grants.has(input.idempotencyKey);
     if (!duplicate) this.grants.set(input.idempotencyKey, input);
     return { credited: duplicate ? 0 : input.amount, balance: 0, duplicate };
@@ -172,6 +184,11 @@ beforeEach(() => {
     restrictionsGate(restrictions),
   );
 });
+
+/** События, записанные сервисом в лог, по именам. */
+function loggedEvents(spy: { mock: { calls: unknown[][] } }): string[] {
+  return spy.mock.calls.map((call) => (JSON.parse(String(call[0])) as { event: string }).event);
+}
 
 async function inviteLink(owner: Account): Promise<string> {
   return `f-${await friends.linkOf(owner.accountId)}`;
@@ -353,5 +370,88 @@ describe("ограничение наград за друзей (WP44)", () => {
     expect([...wallet.grants.values()].map((grant) => grant.accountId)).toEqual([gone.accountId]);
     await service.onRun(run(gone));
     expect(wallet.grants.size).toBe(1);
+  });
+});
+
+describe("сбой начисления не теряет награду", () => {
+  const DAY = 86_400_000;
+  let log: { mock: { calls: unknown[][] } };
+
+  beforeEach(() => {
+    log = vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  async function invited(): Promise<{ owner: Account; newcomer: Account }> {
+    const owner = await player("1");
+    const newcomer = await player("2");
+    await service.onLogin(login(newcomer, await inviteLink(owner)));
+    runCounts.set(newcomer.accountId, REFERRAL_RULES.activationRuns - 1);
+    return { owner, newcomer };
+  }
+
+  const referralGrants = (): string[] => [...wallet.grants.keys()].filter((key) => key.startsWith("referral:"));
+
+  it("активация: начисление упало — привязка остаётся bound, следующий забег начисляет один раз", async () => {
+    const { newcomer } = await invited();
+    wallet.failCalls.add(wallet.calls + 1);
+    runCounts.set(newcomer.accountId, REFERRAL_RULES.activationRuns);
+
+    await expect(service.onRun(run(newcomer))).rejects.toThrow("кошелёк недоступен");
+    expect(referrals.bindings.get(newcomer.accountId)?.status).toBe("bound");
+    expect(loggedEvents(log)).not.toContain("referral_activated");
+
+    await service.onRun(run(newcomer));
+    expect(referrals.bindings.get(newcomer.accountId)?.status).toBe("activated");
+    expect(referralGrants()).toEqual([`referral:${newcomer.accountId}`]);
+    expect(loggedEvents(log)).toContain("referral_activated");
+  });
+
+  it("активация: отметка упала после начисления — следующий забег отмечает, монеты не удваиваются", async () => {
+    const { owner, newcomer } = await invited();
+    referrals.failActivate = 1;
+    runCounts.set(newcomer.accountId, REFERRAL_RULES.activationRuns);
+
+    await expect(service.onRun(run(newcomer))).rejects.toThrow("база недоступна");
+    expect(referralGrants()).toHaveLength(1);
+    expect(referrals.bindings.get(newcomer.accountId)?.status).toBe("bound");
+
+    await service.onRun(run(newcomer));
+    expect(referrals.bindings.get(newcomer.accountId)?.status).toBe("activated");
+    expect(referralGrants()).toHaveLength(1);
+    expect(wallet.grants.get(`referral:${newcomer.accountId}`)).toMatchObject({ accountId: owner.accountId, amount: REFERRAL_RULES.referrerCoins });
+  });
+
+  it("активация: два параллельных засчитанных забега — монеты один раз, привязка activated", async () => {
+    const { newcomer } = await invited();
+    runCounts.set(newcomer.accountId, REFERRAL_RULES.activationRuns);
+
+    await Promise.all([service.onRun(run(newcomer)), service.onRun(run(newcomer))]);
+
+    expect(referrals.bindings.get(newcomer.accountId)?.status).toBe("activated");
+    expect(referralGrants()).toHaveLength(1);
+    expect(loggedEvents(log).filter((event) => event === "referral_activated")).toHaveLength(1);
+  });
+
+  it("возвращение: начисление второй стороне упало — возвращение не отмечено, следующий забег доначисляет", async () => {
+    const friend = await player("friend");
+    const gone = await player("gone", Date.now() - 400 * DAY);
+    lastSessions.set(gone.accountId, new Date(Date.now() - (RETURN_RULES.absenceDays + 1) * DAY));
+    await service.onLogin(login(gone, await inviteLink(friend), { created: false }));
+    const markRewarded = vi.spyOn(returns, "markRewarded");
+    wallet.failCalls.add(wallet.calls + 2);
+
+    await expect(service.onRun(run(gone))).rejects.toThrow("кошелёк недоступен");
+    expect(markRewarded).not.toHaveBeenCalled();
+    expect([...wallet.grants.values()].map((grant) => grant.accountId)).toEqual([gone.accountId]);
+    expect(loggedEvents(log)).not.toContain("player_return_rewarded");
+
+    await service.onRun(run(gone));
+    expect([...wallet.grants.values()].map((grant) => grant.accountId).sort()).toEqual([friend.accountId, gone.accountId].sort());
+    expect(markRewarded).toHaveBeenCalledTimes(1);
+    expect(loggedEvents(log)).toContain("player_return_rewarded");
+
+    await service.onRun(run(gone));
+    expect(wallet.grants.size).toBe(2);
   });
 });
