@@ -3,7 +3,7 @@ id: T-0004
 title: Внешние возвраты через очередь и сигнал о брошенном задании
 epic: E1
 priority: P0
-status: in-progress
+status: done
 owner: claude-6 / sonnet-5.5
 size: S
 depends_on: [T-0003]
