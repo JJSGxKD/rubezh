@@ -1,31 +1,32 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BOOSTS } from "@bh/core-game";
-import { SectionTitle } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../i18n";
 import "../i18n/boosts";
 import { loadBoostCatalog, type BoostCatalog } from "../state/boosts-api";
 import { useWallet } from "../state/wallet";
 import { boostIcon } from "./boost-icons";
+import { PickTile } from "./pick-tile";
+import { boostTileState, boostToDescribe } from "./pre-run-rules";
 
 /**
- * Бусты на забег перед «В бой» (docs/35-stage4-plan.md §3.5, Р39). Цены — с
- * сервера; что буст делает — из контента движка. Без сети раздела нет: буст
- * покупается только онлайн (Р17), и предложить его без сети значило бы
- * пообещать то, чего не выдать.
+ * Бусты на забег в листе «Перед забегом» (docs/35-stage4-plan.md §3.5, Р39,
+ * Р88). Цены — с сервера; что буст делает — из контента движка. Без сети
+ * раздела нет: буст покупается только онлайн (Р17), и предложить его без сети
+ * значило бы пообещать то, чего не выдать.
  *
- * Отдельным чанком: каталог, тексты и значки не нужны первой загрузке.
+ * Отдельным чанком вместе с листом: каталог, тексты и значки не нужны первой
+ * загрузке.
  */
 
 export interface BoostPickerProps {
   selected: readonly string[];
+  /** какой буст тронули последним — его и описывает лист под плитками */
+  touched: string | null;
   onChange(selected: string[]): void;
+  onTouch(id: string): void;
   /** каталог пришёл — он нужен покупке для цен в аналитике */
   onCatalog(catalog: BoostCatalog | null): void;
-  /** почему покупка не прошла: код ошибки сервера или причина неудачи */
-  error: string | null;
-  /** свой заголовок раздела; на отдельном экране бустов его даёт шапка */
-  heading?: boolean;
 }
 
 export function BoostPicker(props: BoostPickerProps): ReactNode {
@@ -55,58 +56,61 @@ export function BoostPicker(props: BoostPickerProps): ReactNode {
     return unavailable ? <p className="mt-4 text-xs text-text-muted">{t("boosts.offline")}</p> : null;
   }
 
-  const spent = { coins: 0, gems: 0 };
-  for (const id of props.selected) {
-    const price = catalog.boosts.find((boost) => boost.id === id);
-    if (price?.resource === "coins" || price?.resource === "gems") spent[price.resource] += price.amount;
-  }
+  const described = BOOSTS.find((boost) => boost.id === boostToDescribe(props.touched, props.selected));
+  const wallet = balances === null ? null : { coins: balances.coins, gems: balances.gems };
 
   return (
     <>
-      {props.heading === false ? null : <SectionTitle>{t("boosts.title")}</SectionTitle>}
-      <p className="mt-2 mb-3 text-xs text-text-muted">{t("boosts.hint", { max: catalog.maxPerRun })}</p>
-      <ul className="grid gap-2 landscape:grid-cols-2">
+      <div className="mt-2 flex items-baseline justify-between gap-2">
+        <h2 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{t("boosts.title")}</h2>
+        <span className="text-xs text-text-muted tabular-nums">{t("prerun.boosts.count", { count: props.selected.length, max: catalog.maxPerRun })}</span>
+      </div>
+      <ul className="grid grid-cols-3 gap-1.5">
         {BOOSTS.map((boost) => {
           const price = catalog.boosts.find((entry) => entry.id === boost.id);
-          if (price === undefined) return null;
-          const chosen = props.selected.includes(boost.id);
-          const wallet = price.resource === "gems" ? (balances?.gems ?? 0) : (balances?.coins ?? 0);
-          const affordable = chosen || wallet - (price.resource === "gems" ? spent.gems : spent.coins) >= price.amount;
-          const full = !chosen && props.selected.length >= catalog.maxPerRun;
+          if (price === undefined || (price.resource !== "coins" && price.resource !== "gems")) return null;
+          const { chosen, disabled } = boostTileState({
+            id: boost.id,
+            selected: props.selected,
+            price: { resource: price.resource, amount: price.amount },
+            catalog: catalog.boosts,
+            balances: wallet,
+            maxPerRun: catalog.maxPerRun,
+          });
           const Icon = boostIcon(boost.id);
           return (
-            <li key={boost.id}>
-              <button
-                type="button"
-                aria-pressed={chosen}
-                disabled={!chosen && (!affordable || full)}
-                onClick={() => props.onChange(chosen ? props.selected.filter((id) => id !== boost.id) : [...props.selected, boost.id])}
-                className={[
-                  "surface-card flex w-full items-center gap-3 rounded-lg p-3 text-left transition-[transform,opacity] active:scale-[0.98] disabled:opacity-40",
-                  chosen ? "ring-2 ring-accent" : "ring-1 ring-border-strong",
-                ].join(" ")}
-              >
-                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
-                  <Icon size={20} aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-display text-base font-bold text-text">{t(boost.nameKey)}</span>
-                  <span className="mt-0.5 block text-xs text-text-muted">{t(boost.descriptionKey)}</span>
-                </span>
-                <span className="inline-flex shrink-0 items-center gap-1 font-display text-sm font-bold tabular-nums text-text">
-                  {price.resource === "gems" ? <GemIcon size={16} /> : <CoinIcon size={16} />}
-                  {formatNumber(price.amount)}
-                </span>
-              </button>
+            <li key={boost.id} className="min-w-0">
+              <PickTile
+                icon={<Icon size={16} aria-hidden="true" />}
+                tone="info"
+                name={t(boost.nameKey)}
+                corner={
+                  <>
+                    {price.resource === "gems" ? <GemIcon size={12} /> : <CoinIcon size={12} />}
+                    {formatNumber(price.amount)}
+                  </>
+                }
+                selected={chosen}
+                disabled={disabled}
+                onClick={() => {
+                  props.onTouch(boost.id);
+                  props.onChange(chosen ? props.selected.filter((id) => id !== boost.id) : [...props.selected, boost.id]);
+                }}
+              />
             </li>
           );
         })}
       </ul>
-      {props.error === null ? null : (
-        <p role="alert" className="mt-2 text-center text-sm text-danger">
-          {t(props.error)}
-        </p>
-      )}
+      <div className="surface-sunken mt-2 rounded-md px-2.5 py-2 text-xs leading-snug text-text-muted">
+        {described === undefined ? (
+          t("prerun.boosts.hint")
+        ) : (
+          <>
+            <b className="mr-1.5 font-display text-[13px] font-normal text-text">{t(described.nameKey)}</b>
+            {t(described.descriptionKey)}
+          </>
+        )}
+      </div>
     </>
   );
 }

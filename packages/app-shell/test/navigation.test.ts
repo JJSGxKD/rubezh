@@ -22,14 +22,14 @@ describe("стек экранов", () => {
 
   it("кладёт экран сверху и снимает обратно", () => {
     const navigation = useNavigation.getState();
-    navigation.push("mode");
-    navigation.push("weapon");
+    navigation.push("settings");
+    navigation.push("stress");
 
-    expect(currentScreen(useNavigation.getState().stack)).toBe("weapon");
+    expect(currentScreen(useNavigation.getState().stack)).toBe("stress");
     expect(canGoBack(useNavigation.getState().stack)).toBe(true);
 
     useNavigation.getState().pop();
-    expect(currentScreen(useNavigation.getState().stack)).toBe("mode");
+    expect(currentScreen(useNavigation.getState().stack)).toBe("settings");
   });
 
   it("не кладёт тот же экран дважды: двойной тап не должен множить стек", () => {
@@ -40,14 +40,14 @@ describe("стек экранов", () => {
   });
 
   it("заменяет верхний экран, не удлиняя стек", () => {
-    useNavigation.getState().push("weapon");
+    useNavigation.getState().push("stress");
     useNavigation.getState().replace("run");
 
     expect(useNavigation.getState().stack).toEqual(["lobby", "run"]);
   });
 
   it("переключение вкладки сбрасывает стек к её корню", () => {
-    useNavigation.getState().push("mode");
+    useNavigation.getState().push("settings");
     useNavigation.getState().resetTo("shop");
 
     expect(useNavigation.getState().stack).toEqual(["shop"]);

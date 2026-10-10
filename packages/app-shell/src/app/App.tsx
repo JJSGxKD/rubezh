@@ -19,12 +19,11 @@ import { isVersionAtLeast } from "../state/platform-version";
 import { useShell } from "../state/shell";
 import { backAction, backKeyAction, useBackStack, type BackStack } from "../state/back-stack";
 import { CompactOverlay, FirstRunScreen, OutdatedScreen, OutsideScreen } from "../screens/gates";
-import { LobbyScreen, ModeScreen } from "../screens/home";
+import { LobbyScreen } from "../screens/home";
 import { playedBefore, skipFirstRunHints } from "../state/first-run";
 import {
   AboutScreen,
   ArsenalScreen,
-  BoostsScreen,
   DailyScreen,
   DiagnosticsScreen,
   FriendsScreen,
@@ -47,7 +46,6 @@ import {
   StressScreen,
   TasksScreen,
   TestersScreen,
-  WeaponScreen,
   WheelScreen,
   PromoCodeScreen,
   TestNoticeScreen,
@@ -168,12 +166,6 @@ function renderScreen(screen: ScreenId): ReactNode {
   switch (screen) {
     case "lobby":
       return <LobbyScreen />;
-    case "mode":
-      return <ModeScreen />;
-    case "weapon":
-      return <WeaponScreen />;
-    case "boosts":
-      return <BoostsScreen />;
     case "run":
       return <RunScreen />;
     case "feedback":
