@@ -82,6 +82,14 @@ export class FriendsController {
     return { data: await this.friends.claimGifts(account) };
   }
 
+  /** Подарить всем друзьям, кому сегодня ещё не дарили. */
+  @Post("gifts/send-all")
+  async giftAll(@Req() request: unknown): Promise<{ data: { sent: number } }> {
+    const account = accountOf(request);
+    await this.limit(FRIENDS_LIMITS.change, account.accountId);
+    return { data: await this.friends.sendGiftsToAll(account) };
+  }
+
   /** Забрать бонус за число друзей — все достигнутые ступени разом. */
   @Post("bonus/claim")
   async claimBonus(@Req() request: unknown): Promise<{ data: ClaimResult }> {

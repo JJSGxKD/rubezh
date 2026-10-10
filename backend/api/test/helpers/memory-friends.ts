@@ -105,6 +105,17 @@ export class MemoryFriendsRepository implements FriendsRepository {
     return true;
   }
 
+  async sendGiftsToAll(from: string): Promise<string[]> {
+    const sent: string[] = [];
+    for (const key of this.pairs.keys()) {
+      const [a, b] = key.split("|");
+      if (a === undefined || b === undefined || (a !== from && b !== from)) continue;
+      const friend = a === from ? b : a;
+      if (await this.sendGift(from, friend)) sent.push(friend);
+    }
+    return sent;
+  }
+
   async giftedToday(from: string): Promise<string[]> {
     return this.giftRows().filter((gift) => gift.from === from && gift.day === this.today).map((gift) => gift.to);
   }

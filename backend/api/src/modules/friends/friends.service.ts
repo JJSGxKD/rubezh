@@ -164,6 +164,17 @@ export class FriendsService implements OnModuleInit {
     return { sent };
   }
 
+  /** Подарить всем друзьям, кому сегодня не дарили. Повтор в те же сутки — `sent: 0`. */
+  async sendGiftsToAll(actor: AccessTokenClaims): Promise<{ sent: number }> {
+    await this.restrictions.ensure(actor.accountId, "friend_gifts");
+    const recipients = await this.friends.sendGiftsToAll(actor.accountId);
+    // Друзей не больше потолка, так что и получателей не больше.
+    for (const friendId of recipients.slice(0, FRIENDS_RULES.maxFriends)) this.notice("friend_gift", friendId, actor.accountId);
+    // Одна строка в лог на запрос, а не по строке на подарок.
+    this.log("friend_gifts_sent_all", { accountId: actor.accountId, sent: recipients.length });
+    return { sent: recipients.length };
+  }
+
   /**
    * Забрать подарки — старые первыми, не больше суточного потолка. Монеты
    * кладёт кошелёк ключом подарка: повтор после сбоя не начислит дважды, а
