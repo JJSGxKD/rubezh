@@ -324,4 +324,39 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     expect((await repository.interstitialFacts(me, at(MIDNIGHT, 40), { ...query, rewardedSince: at(MIDNIGHT, 35) }))?.lastRewardedAt).toBeNull();
     expect(await repository.interstitialFacts(randomUUID(), MIDNIGHT, query)).toBeNull();
   });
+  it("порог досмотра через SDK: view_sec застывает в строке, ранний досмотр не засчитывается, поздний — да", async () => {
+    const me = await account();
+    const open = async (minViewSec: number | null, place: "wheel_spin" | "interstitial" = "wheel_spin"): Promise<string> => {
+      const sessionId = randomBytes(12).toString("base64url");
+      await repository.createSession({ sessionId, accountId: me, place, block: { ...blockOf("view"), place }, creative: null, minViewSec, createdAt: NOON, expiresAt: at(NOON, 30) });
+      return sessionId;
+    };
+    const viewSecOf = async (sessionId: string): Promise<number | null> => {
+      const [row] = await prisma.$queryRaw<{ view_sec: number | null }[]>`SELECT view_sec FROM ad_session WHERE session_id = ${sessionId}`;
+      return row?.view_sec ?? null;
+    };
+    const statusOf = async (sessionId: string): Promise<string | undefined> => {
+      const [row] = await prisma.$queryRaw<{ status: string }[]>`SELECT status::text FROM ad_session WHERE session_id = ${sessionId}`;
+      return row?.status;
+    };
+    const seconds = (count: number) => new Date(NOON.getTime() + count * 1000);
+
+    const gated = await open(10);
+    expect(await viewSecOf(gated)).toBe(10);
+    expect(await repository.report(gated, me, { kind: "completed" }, seconds(5))).toBeNull();
+    expect(await statusOf(gated)).toBe("pending");
+    expect(await repository.report(gated, me, { kind: "completed" }, seconds(11))).not.toBeNull();
+    expect(await statusOf(gated)).toBe("completed");
+
+    const free = await open(null);
+    expect(await viewSecOf(free)).toBeNull();
+    expect(await repository.report(free, me, { kind: "completed" }, seconds(0))).not.toBeNull();
+
+    // Нулевой порог сервис в строку не пишет, но и сам ноль досмотр не задерживает.
+    const zero = await open(0);
+    expect(await repository.report(zero, me, { kind: "completed" }, seconds(0))).not.toBeNull();
+
+    const interstitial = await open(null, "interstitial");
+    expect(await viewSecOf(interstitial)).toBeNull();
+  });
 });

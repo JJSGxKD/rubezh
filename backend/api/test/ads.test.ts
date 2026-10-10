@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
@@ -364,6 +364,83 @@ describe("креатив сети с API (Taddy, Р78)", () => {
     await service.report(ME, offer.sessionId, { kind: "completed" }, at(NOON, 1), REQUESTER);
     expect(creatives.requests).toEqual([]);
     expect(creatives.notes).toEqual([]);
+  });
+});
+
+describe("порог досмотра через SDK (T-0029)", () => {
+  const KEY = "ads.sdk-min-view-sec";
+  const secAfter = (base: Date, seconds: number) => new Date(base.getTime() + seconds * SECOND);
+
+  /** Что база делает со столбцом `view_sec`: срок из выдачи застывает в строке сессии. */
+  function withViewSecColumn(repository: MemoryAds) {
+    const original = repository.createSession.bind(repository);
+    const created = vi.fn(original);
+    repository.createSession = async (session) => {
+      await created(session);
+      const stored = repository.sessions.at(-1);
+      if (stored !== undefined && session.creative === null) stored.viewSec = session.minViewSec ?? null;
+    };
+    return created;
+  }
+
+  it("выдача SDK-блока места с наградой несёт порог из настройки; настройка 0 — порога нет", async () => {
+    const { service, repository, settings } = setup([block("adsgram", 10)]);
+    const created = withViewSecColumn(repository);
+
+    offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
+    expect(created.mock.calls[0]?.[0].minViewSec ?? null).toBeNull();
+
+    settings.set(KEY, 10);
+    offered(await service.offer(TELEGRAM, "wheel_spin", at(NOON, 600)));
+    expect(created.mock.calls[1]?.[0].minViewSec).toBe(10);
+  });
+
+  it("межстраничная порога не получает: награды у неё нет", async () => {
+    const { service, repository, settings } = setup([block("richads", 10, { place: "interstitial" })]);
+    const created = withViewSecColumn(repository);
+    settings.set(KEY, 10);
+
+    offered(await service.offer(TELEGRAM, "interstitial", NOON));
+
+    expect(created.mock.calls[0]?.[0].minViewSec ?? null).toBeNull();
+    expect(repository.sessions[0]?.viewSec).toBeNull();
+  });
+
+  it("креатив сети с API живёт по своему сроку, порог настройки ему не нужен", async () => {
+    const { service, repository, settings } = setup([block("taddy", 10)]);
+    const created = withViewSecColumn(repository);
+    settings.set(KEY, 10);
+
+    const offer = offered(await service.offer(PLAYER, "wheel_spin", NOON));
+
+    expect(offer.creative?.viewSec).toBe(CREATIVE_VIEW_SEC.rewarded);
+    expect(created.mock.calls[0]?.[0].creative?.viewSec).toBe(CREATIVE_VIEW_SEC.rewarded);
+    expect(repository.sessions[0]?.viewSec).toBe(CREATIVE_VIEW_SEC.rewarded);
+  });
+
+  it("слишком ранний досмотр — ad_session_closed, награды нет; после порога засчитывается", async () => {
+    const { service, repository, settings } = setup([block("adsgram", 10)]);
+    withViewSecColumn(repository);
+    settings.set(KEY, 10);
+    const offer = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
+
+    await expect(service.report(ME, offer.sessionId, { kind: "completed" }, secAfter(NOON, 5))).rejects.toBeInstanceOf(AdSessionClosedError);
+    expect(repository.sessions[0]?.status).not.toBe("completed");
+    await expect(service.claim(ME, offer.sessionId, "wheel_spin", secAfter(NOON, 6))).rejects.toBeInstanceOf(AdNotCompletedError);
+
+    await service.report(ME, offer.sessionId, { kind: "completed" }, secAfter(NOON, 11));
+    expect(repository.sessions[0]?.status).toBe("completed");
+  });
+
+  it("смена настройки уже выданные сессии не меняет", async () => {
+    const { service, repository, settings } = setup([block("adsgram", 10)]);
+    withViewSecColumn(repository);
+    settings.set(KEY, 10);
+    const offer = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
+
+    settings.set(KEY, 0);
+
+    await expect(service.report(ME, offer.sessionId, { kind: "completed" }, secAfter(NOON, 5))).rejects.toBeInstanceOf(AdSessionClosedError);
   });
 });
 
