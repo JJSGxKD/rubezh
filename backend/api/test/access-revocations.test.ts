@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { Logger } from "@nestjs/common";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { AccessRevocations } from "../src/modules/auth/access-revocations.js";
 
@@ -30,6 +31,8 @@ function fakeRedis() {
 }
 
 describe("отзыв токенов доступа", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("токен, выданный раньше секунды отзыва, отозван; в ту же секунду и позже — нет", async () => {
     const redis = fakeRedis();
     const revocations = new AccessRevocations(redis as never, config);
@@ -66,8 +69,8 @@ describe("отзыв токенов доступа", () => {
   it("недоступный Redis не роняет проверку: токен пропускается, в лог идёт предупреждение", async () => {
     const redis = fakeRedis();
     redis.get.mockRejectedValue(new Error("connection refused"));
-    const warn = vi.fn();
-    const revocations = new AccessRevocations(redis as never, config, { warn });
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+    const revocations = new AccessRevocations(redis as never, config);
 
     expect(await revocations.isRevoked("acc", 1)).toBe(false);
     expect(warn).toHaveBeenCalledTimes(1);

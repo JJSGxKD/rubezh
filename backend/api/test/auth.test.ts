@@ -339,12 +339,13 @@ describe("доступ по токену", () => {
 
     it("проверяется аккаунт из токена и секунда выдачи", async () => {
       const isRevoked = vi.fn(async () => false);
-      const token = await signAccessToken(claims, key, 900, 1_234_567);
+      const issuedAtMs = Date.now() - 10_000;
+      const token = await signAccessToken(claims, key, 900, issuedAtMs);
       const guard = new AuthGuard(config(), { isRevoked } as unknown as AccessRevocations);
 
-      await guard.canActivate(contextWith(`Bearer ${token}`).context).catch(() => undefined);
+      await guard.canActivate(contextWith(`Bearer ${token}`).context);
 
-      expect(isRevoked).toHaveBeenCalledWith(claims.accountId, 1_234);
+      expect(isRevoked).toHaveBeenCalledWith(claims.accountId, Math.floor(issuedAtMs / 1000));
     });
   });
 });

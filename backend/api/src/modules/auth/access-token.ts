@@ -41,11 +41,13 @@ const claimsSchema = z.object({
   sub: z.string().uuid(),
   platform: z.enum(["telegram", "max", "vk", "web"]),
   platformUserId: z.string().min(1).max(32),
+  // Секунда выдачи нужна отзыву: токен, выданный раньше «выйти везде», не принимается.
+  iat: z.number().int().nonnegative(),
 });
 
 /** Почему токен не принят. Клиент ветвится по причине: истёк — обновить, остальное — вход заново. */
 export type AccessTokenCheck =
-  | { ok: true; claims: AccessTokenClaims }
+  | { ok: true; claims: AccessTokenClaims; issuedAtSec: number }
   | { ok: false; reason: "expired" | "invalid" };
 
 export function secretKey(hexSecret: string): Uint8Array {
@@ -79,6 +81,7 @@ export async function verifyAccessToken(token: string, secret: Uint8Array, nowMs
     return {
       ok: true,
       claims: { accountId: parsed.sub, platform: parsed.platform, platformUserId: parsed.platformUserId },
+      issuedAtSec: parsed.iat,
     };
   } catch (error: unknown) {
     // Истёкший токен — штатное состояние: клиент обменяет его по токену

@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AccessRevocations } from "./access-revocations.js";
 import { ACCOUNT_REPOSITORY, PrismaAccountRepository } from "./account.repository.js";
 import { AuthController } from "./auth.controller.js";
 import { AuthHooks } from "./auth-hooks.js";
@@ -24,6 +25,7 @@ import { RedisRefreshStore } from "./redis-refresh.store.js";
     AuthService,
     AuthGuard,
     AuthHooks,
+    AccessRevocations,
     { provide: ACCOUNT_REPOSITORY, useClass: PrismaAccountRepository },
     { provide: REFRESH_STORE, useClass: RedisRefreshStore },
   ],
