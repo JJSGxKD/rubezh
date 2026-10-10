@@ -3,7 +3,7 @@ id: T-0017
 title: Подписи у всех вкладок нижней панели, если помещаются
 epic: E6
 priority: P2
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5
 size: S
 depends_on: []
