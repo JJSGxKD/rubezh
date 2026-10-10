@@ -23,6 +23,8 @@ const schema = z.object({
   lastDifficultyId: z.optional(z.enum(DIFFICULTY_IDS)),
   /** последний засчитанный забег — «до рекорда не хватило 0:42» на главной; до WP42 поля не было */
   lastRun: z.optional(z.object({ difficultyId: z.enum(DIFFICULTY_IDS), survivalSec: z.number().check(z.nonnegative()) })),
+  /** раскрыт ли «Подробнее» на экране смерти; старый снимок без поля — свёрнуто */
+  deathDetailsOpen: z.optional(z.boolean()),
 });
 
 type StoredMeta = z.infer<typeof schema>;
@@ -43,8 +45,11 @@ export interface MetaStore {
   best: BestByDifficulty;
   /** последний засчитанный забег; `null` — на этом устройстве ещё не играли */
   lastRun: LastRun | null;
+  /** «Подробнее» на экране смерти раскрыто — помнится на устройстве */
+  deathDetailsOpen: boolean;
   hydrate(): void;
   rememberWeapon(weaponId: string): void;
+  rememberDeathDetails(open: boolean): void;
   rememberDifficulty(difficultyId: DifficultyId): void;
   /** записать итог забега; возвращает `true`, если это новый рекорд его сложности */
   submitRun(result: RunResult, countInRating?: boolean): boolean;
@@ -61,6 +66,7 @@ export const useMeta = create<MetaStore>((set, get) => ({
   lastDifficultyId: DEFAULT_DIFFICULTY_ID,
   best: emptyBest(),
   lastRun: null,
+  deathDetailsOpen: false,
 
   hydrate(): void {
     const stored = value().read();
@@ -70,6 +76,7 @@ export const useMeta = create<MetaStore>((set, get) => ({
       lastWeaponId: stored.lastWeaponId,
       lastDifficultyId: stored.lastDifficultyId ?? DEFAULT_DIFFICULTY_ID,
       lastRun: stored.lastRun ?? null,
+      deathDetailsOpen: stored.deathDetailsOpen ?? false,
       best: Object.fromEntries(
         DIFFICULTY_IDS.map((id) => [id, loadBestSurvivalSec(storage, id)]),
       ) as BestByDifficulty,
@@ -83,6 +90,11 @@ export const useMeta = create<MetaStore>((set, get) => ({
 
   rememberDifficulty(difficultyId: DifficultyId): void {
     set({ lastDifficultyId: difficultyId });
+    persist(get());
+  },
+
+  rememberDeathDetails(open: boolean): void {
+    set({ deathDetailsOpen: open });
     persist(get());
   },
 
@@ -141,5 +153,6 @@ function persist(state: MetaStore): void {
     lastWeaponId: state.lastWeaponId,
     lastDifficultyId: state.lastDifficultyId,
     ...(state.lastRun === null ? {} : { lastRun: state.lastRun }),
+    deathDetailsOpen: state.deathDetailsOpen,
   });
 }

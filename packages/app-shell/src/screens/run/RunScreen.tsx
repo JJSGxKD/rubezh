@@ -163,6 +163,7 @@ export function RunScreen(): ReactNode {
           {...(run.phase === "downed" ? { secondChance: secondChanceFor(run.result, run.devRun) } : {})}
           showReward={run.phase === "finished"}
           restarting={run.restarting}
+          onDecline={() => useRun.getState().declineContinue()}
           onRestart={() => useRun.getState().restart()}
           onMenu={() => navigation.resetTo("lobby")}
           onShare={() => shareRun()}

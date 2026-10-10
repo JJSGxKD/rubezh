@@ -25,6 +25,37 @@ export interface SecondChanceProps {
   adFor?: RunResult;
   /** Состояние рекламы для витрины компонентов. */
   adPreview?: AdContinueStage;
+  /**
+   * `inline` — блок среди прочего (витрина, прежние места); `prominent` —
+   * главное на экране шага второго шанса: подложка в тоне здоровья.
+   */
+  variant?: "inline" | "prominent";
+}
+
+/**
+ * Какие способы продолжить видны. Отпал способ — его кнопка уходит; у VIP —
+ * одна кнопка, а звёзды и ролик не предлагаются: платить за то, что даётся
+ * бесплатно, незачем. Звёзды, когда купить нельзя, а ролик есть, тоже уходят.
+ */
+export function visibleWays(input: { adStage: AdContinueStage | null; paidStage: ContinueStage | null }): { ad: boolean; stars: boolean; vip: boolean } {
+  const { adStage, paidStage } = input;
+  const vip = adStage !== null && (adStage.kind === "ready" || adStage.kind === "watching") && adStage.pass;
+  const showAd = adStage !== null && adStage.kind !== "unavailable";
+  const stars = paidStage !== null && !vip && !(paidStage.kind === "unavailable" && showAd);
+  return { ad: showAd && !vip, stars, vip };
+}
+
+/**
+ * Состояния способов продолжить: живые из сторов, у витрины — заданные
+ * образцы. Нет способа — `null`.
+ */
+export function useSecondChanceStages(props: SecondChanceProps): { adStage: AdContinueStage | null; paidStage: ContinueStage | null } {
+  const starsStage = useContinuePurchase((state) => state.stage);
+  const liveAdStage = useAdContinue((state) => state.stage);
+  return {
+    adStage: props.adPreview ?? (props.adFor === undefined ? null : liveAdStage),
+    paidStage: props.paidPreview ?? (props.paidFor === undefined ? null : starsStage),
+  };
 }
 
 /**
@@ -39,10 +70,7 @@ export interface SecondChanceProps {
  */
 export function SecondChance(props: SecondChanceProps = {}): ReactNode {
   const live = props.paidFor !== undefined || props.adFor !== undefined;
-  const starsStage = useContinuePurchase((state) => state.stage);
-  const liveAdStage = useAdContinue((state) => state.stage);
-  const adStage = props.adPreview ?? (props.adFor === undefined ? null : liveAdStage);
-  const paidStage = props.paidPreview ?? (props.paidFor === undefined ? null : starsStage);
+  const { adStage, paidStage } = useSecondChanceStages(props);
 
   // Какие способы есть — до того, как они начнут отпадать: layout-эффект
   // родителя идёт раньше обычных эффектов кнопок, которые спрашивают сервер.
@@ -54,24 +82,30 @@ export function SecondChance(props: SecondChanceProps = {}): ReactNode {
     expectOffers(offers);
   }, [live, props.paidFor, props.adFor]);
 
-  const vip = adStage !== null && (adStage.kind === "ready" || adStage.kind === "watching") && adStage.pass;
-  const showAd = adStage !== null && adStage.kind !== "unavailable";
-  const showStars = paidStage !== null && !vip && !(paidStage.kind === "unavailable" && showAd);
+  const { ad: showAd, stars: showStars } = visibleWays({ adStage, paidStage });
   // Звёзды и ролик разом не берутся: пока идёт одно, другое ждёт.
   const starsBusy = paidStage !== null && (paidStage.kind === "buying" || paidStage.kind === "confirming" || (paidStage.kind === "retry" && paidStage.purchaseId !== null));
   const adBusy = adStage?.kind === "watching";
   const placeholder = paidStage === null && adStage === null;
   const wide = !(showAd && showStars) && !placeholder;
+  const prominent = props.variant === "prominent";
 
   return (
-    <section aria-label={t("run.continue.title")} className="surface-sunken rounded-lg p-3">
+    <section
+      aria-label={t("run.continue.title")}
+      className={
+        prominent
+          ? "rounded-lg border border-hp/45 bg-gradient-to-br from-hp/12 to-surface p-3.5 shadow-[0_0_28px_-10px_var(--color-hp)]"
+          : "surface-sunken rounded-lg p-3"
+      }
+    >
       <div className="flex items-center gap-3">
         <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-hp/15 text-hp">
           <HeartPulse size={22} aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-display text-base font-bold text-text">{t("run.continue.title")}</span>
+            <span className={`font-display font-bold text-text ${prominent ? "text-[17px]" : "text-base"}`}>{t("run.continue.title")}</span>
             {/* Продолжить нечем — блок честно помечен, а не выглядит сломанным. */}
             {placeholder ? (
               <Badge tone="warning">
