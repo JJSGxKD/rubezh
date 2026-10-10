@@ -3,7 +3,7 @@ id: T-0033
 title: Проверка готовности API — /health/ready смотрит базу и Redis
 epic: E3
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5
 size: S
 depends_on: []
