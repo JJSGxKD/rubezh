@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { formatCountdown } from "../src/screens/meta/schedule";
 import type { DailyWidget, WheelWidget } from "../src/state/home-api";
-import { arrangeWidgets, dailyFace, recordFace, roughCountdown, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
+import { arrangeWidgets, dailyFace, recordFace, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
 
 // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): готовое к забору —
 // первым и во всю ширину, дыр в сетке нет; что говорит каждый виджет —
@@ -134,11 +136,19 @@ describe("рекорд", () => {
 });
 
 describe("отсчёт в плитке", () => {
-  it("от часа — часами вниз, под час — минутами вверх, нуля минут нет", () => {
-    expect(roughCountdown(5 * HOUR + 50 * 60_000)).toEqual({ unit: "hours", value: 5 });
-    expect(roughCountdown(HOUR)).toEqual({ unit: "hours", value: 1 });
-    expect(roughCountdown(HOUR - 1)).toEqual({ unit: "minutes", value: 60 });
-    expect(roughCountdown(11 * 60_000 + 1)).toEqual({ unit: "minutes", value: 12 });
-    expect(roughCountdown(0)).toEqual({ unit: "minutes", value: 1 });
+  // Одно правило точности со всеми отсчётами (`formatCountdown`): вниз не округляем.
+  it("часы не округляются вниз, минуты — вверх, нуля минут нет", () => {
+    expect(formatCountdown(5 * HOUR + 50 * 60_000)).toBe("5 ч 50 мин");
+    expect(formatCountdown(HOUR)).toBe("1 ч");
+    expect(formatCountdown(59.5 * 60_000)).toBe("1 ч");
+    expect(formatCountdown(20 * 1000)).toBe("1 мин");
+  });
+
+  it("плитка берёт отсчёт у formatCountdown, а грубого правила больше нет", async () => {
+    const rules = await import("../src/screens/home-widget-rules");
+    expect("roughCountdown" in rules).toBe(false);
+    const source = readFileSync(new URL("../src/screens/home-widgets.tsx", import.meta.url), "utf8");
+    expect(source).toContain("formatCountdown(ms)");
+    expect(source).not.toContain("roughCountdown");
   });
 });
