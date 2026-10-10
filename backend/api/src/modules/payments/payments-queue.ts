@@ -25,6 +25,9 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
  * переживает перезапуск процесса. Возврат — так же: не прошёл — повтор, а не
  * молча (docs/34-stage3-plan.md, WP5, п. 5.2).
  *
+ * Возврат, пришедший от Telegram (спор игрока, поддержка), — такое же
+ * задание: смещение опроса к этому моменту уже сохранено, и сбой базы без
+ * очереди потерял бы отметку навсегда, а выручка осталась бы завышенной.
  * Задание, не прошедшее ни одной из десяти попыток, выходит слушателям
  * (`PaymentsHooks.onAbandoned`): команда узнаёт о нём сообщением, а не из лога.
  *
@@ -49,7 +52,18 @@ const JOB_OPTIONS = {
 /** Сколько незавершённых возвратов поднимать на старте: больше их бывает только при долгом сбое Telegram. */
 const PENDING_REFUNDS_ON_START = 500;
 
-type PaymentsJob = { kind: "confirm"; payment: ConfirmedPayment } | { kind: "refund"; order: RefundOrder };
+type PaymentsJob =
+  | { kind: "confirm"; payment: ConfirmedPayment }
+  | { kind: "refund"; order: RefundOrder }
+  /** возврат, о котором сообщила площадка; `at` — когда пришло обновление, а не когда запись прошла */
+  | { kind: "refunded"; chargeId: string; at: number };
+
+/** Название события в логе, если задание не удалось выполнить даже без очереди. */
+const UNRECORDED_EVENTS: Record<PaymentsJob["kind"], string> = {
+  confirm: "payment_unrecorded",
+  refund: "refund_unsent",
+  refunded: "refund_unrecorded",
+};
 
 @Injectable()
 export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
@@ -106,6 +120,11 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     await this.run({ kind: "confirm", payment }, `confirm-${fingerprint(payment.chargeId)}`);
   }
 
+  /** Возврат от площадки: игрок оспорил оплату или вернула поддержка. Ошибка сюда не пробивается — как у `confirm`. */
+  async refunded(chargeId: string, nowMs = Date.now()): Promise<void> {
+    await this.run({ kind: "refunded", chargeId, at: nowMs }, `refunded-${fingerprint(chargeId)}`);
+  }
+
   /**
    * Попытка задания не удалась. Последняя — задание брошено: в лог уровнем
    * `error` и слушателям, чтобы команда узнала о нём без чтения логов. Не
@@ -131,6 +150,10 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     const { data } = job;
     if (data.kind === "refund") {
       await this.refunds.refund(data.order);
+      return;
+    }
+    if (data.kind === "refunded") {
+      await this.confirmation.refunded(data.chargeId, data.at);
       return;
     }
     const outcome = await this.confirmation.confirm(data.payment);
@@ -169,7 +192,7 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     try {
       await this.process({ data: job });
     } catch (error: unknown) {
-      this.log("error", job.kind === "confirm" ? "payment_unrecorded" : "refund_unsent", { ...describeJob(job), reason: reasonOf(error) });
+      this.log("error", UNRECORDED_EVENTS[job.kind], { ...describeJob(job), reason: reasonOf(error) });
     }
   }
 
@@ -205,10 +228,13 @@ function identify(job: PaymentsJob): { chargeId: string; purchaseId: string | nu
       return { chargeId: job.payment.chargeId, purchaseId: job.payment.payload };
     case "refund":
       return { chargeId: job.order.chargeId, purchaseId: job.order.purchaseId };
+    case "refunded":
+      return { chargeId: job.chargeId, purchaseId: null };
   }
 }
 
 function describeJob(job: PaymentsJob): Record<string, unknown> {
+  if (job.kind === "refunded") return { kind: job.kind, chargeId: job.chargeId };
   if (job.kind === "refund") {
     const { order } = job;
     return { kind: job.kind, platform: order.platform, chargeId: order.chargeId, purchaseId: order.purchaseId, payerId: order.payerId, reason: order.reason };
