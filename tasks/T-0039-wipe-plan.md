@@ -3,8 +3,8 @@ id: T-0039
 title: План вайпа — у каждой таблицы решение «стираем» или «оставляем»
 epic: E2
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-5 / sonnet-5.5
 size: S
 depends_on: []
 zones:
