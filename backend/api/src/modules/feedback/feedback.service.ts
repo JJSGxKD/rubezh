@@ -5,7 +5,7 @@ import { RateLimitedError, UnavailableError, ValidationError } from "../../commo
 import { withTimeout } from "../../common/with-timeout.js";
 import { describeDbError } from "../../infra/database.js";
 import type { IngestIdentity } from "../ingest/ingest.guard.js";
-import { INGEST_LIMITS } from "../ingest/ingest-limits.js";
+import { INGEST_LIMITS, UNSIGNED_FEEDBACK_LIMITS } from "../ingest/ingest-limits.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { NotifyTargets } from "../settings/notify-targets.js";
 import type { ChatTarget } from "../../platforms/ports/chat-target.js";
@@ -16,6 +16,9 @@ import { feedbackMessage } from "./feedback-message.js";
 
 /** Сколько ждём Telegram: отзыв уже записан, ответ игроку держать незачем. */
 const NOTIFY_TIMEOUT_MS = 5_000;
+
+/** Как часто писать в лог о пропущенной карточке: это прореживание лога, а не состояние лимита. */
+const SKIPPED_LOG_INTERVAL_MS = 3_600_000;
 
 export type FeedbackBotApi = Pick<TelegramBotApi, "sendMessage">;
 
@@ -30,6 +33,7 @@ export type FeedbackBotApi = Pick<TelegramBotApi, "sendMessage">;
 @Injectable()
 export class FeedbackService {
   private readonly logger = new Logger("feedback");
+  private lastSkippedLogAt = 0;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -47,7 +51,7 @@ export class FeedbackService {
     if (Object.keys(feedback.answers).length === 0 && feedback.text.trim() === "") {
       throw new ValidationError("Пустой отзыв: ни ответов, ни текста");
     }
-    await this.enforceLimits(feedback.installId, identity.platformUserId);
+    await this.enforceLimits(feedback.installId, identity);
 
     const feedbackId = randomUUID();
     try {
@@ -70,12 +74,18 @@ export class FeedbackService {
     return { feedbackId };
   }
 
-  /** Лимиты те же, что у отчётов: отзывы приходят редко, а спамить ими легко. */
-  private async enforceLimits(installId: string, platformUserId: string | null): Promise<void> {
+  /**
+   * Лимиты те же, что у отчётов: отзывы приходят редко, а спамить ими легко.
+   * Без подписи запуска сверху — свой лимит по адресу: installId клиент
+   * присылает сам, и держит такой отзыв только адрес.
+   */
+  private async enforceLimits(installId: string, identity: IngestIdentity): Promise<void> {
     const limits = INGEST_LIMITS.feedback;
+    const { platformUserId } = identity;
     const byInstall = await this.limiter.consume(limits.install, installId);
     const byUser = platformUserId === null ? true : await this.limiter.consume(limits.user, platformUserId);
-    if (!byInstall || !byUser) throw new RateLimitedError("Слишком много отзывов, попробуйте позже");
+    const byAddress = platformUserId !== null ? true : await this.limiter.consume(UNSIGNED_FEEDBACK_LIMITS.ip, identity.ip);
+    if (!byInstall || !byUser || !byAddress) throw new RateLimitedError("Слишком много отзывов, попробуйте позже");
   }
 
   private async notify(
@@ -87,6 +97,13 @@ export class FeedbackService {
   ): Promise<void> {
     const chat: ChatTarget | null = this.targets.chats().feedback;
     if (chat === null || this.config.telegram.botToken === "") return;
+
+    // Без подписи карточек в чат — общий потолок: сверх него отзыв остаётся в
+    // базе и в выгрузке, а чат не забивается.
+    if (platformUserId === null && !(await this.limiter.consume(UNSIGNED_FEEDBACK_LIMITS.chat, "all"))) {
+      this.logSkipped();
+      return;
+    }
 
     try {
       await withTimeout(
@@ -100,5 +117,12 @@ export class FeedbackService {
         JSON.stringify({ module: "feedback", event: "notify_failed", reason: error instanceof Error ? error.message : "unknown" }),
       );
     }
+  }
+
+  private logSkipped(): void {
+    const now = Date.now();
+    if (now - this.lastSkippedLogAt < SKIPPED_LOG_INTERVAL_MS) return;
+    this.lastSkippedLogAt = now;
+    this.logger.log(JSON.stringify({ module: "feedback", event: "notify_skipped_unsigned" }));
   }
 }
