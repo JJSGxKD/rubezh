@@ -1,6 +1,7 @@
-import { CanActivate, ExecutionContext, Inject, Injectable } from "@nestjs/common";
+import { CanActivate, ExecutionContext, Inject, Injectable, Optional } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, DomainError, UnauthorizedError } from "../../common/domain-error.js";
+import { AccessRevocations } from "./access-revocations.js";
 import { secretKey, verifyAccessToken, type AccessTokenClaims } from "./access-token.js";
 
 /**
@@ -27,7 +28,12 @@ export class TokenExpiredError extends DomainError {
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
+  // Отзыв необязателен: гард собирают вручную десятки тестов других областей,
+  // а в приложении его всегда даёт AuthModule.
+  constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Optional() private readonly revocations?: AccessRevocations,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (!this.config.auth.enabled) {
@@ -44,6 +50,10 @@ export class AuthGuard implements CanActivate {
     if (!check.ok) {
       if (check.reason === "expired") throw new TokenExpiredError();
       throw new UnauthorizedError("Токен доступа не принят");
+    }
+
+    if (this.revocations !== undefined && (await this.revocations.isRevoked(check.claims.accountId, check.issuedAtSec))) {
+      throw new UnauthorizedError("Сессия завершена — войдите заново");
     }
 
     request.account = check.claims;
