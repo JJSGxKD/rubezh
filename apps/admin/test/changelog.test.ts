@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { entryProblem, fetchChangelog, groupByVersion, publishAudience, publishVersion, releaseState, removeEntry, saveEntry, sourcePr, type ChangelogEntry, type EntryInput } from "../src/api/changelog";
+import { changelogPreview, entryProblem, fetchChangelog, groupByVersion, publishAudience, publishVersion, releaseState, removeEntry, saveEntry, sourcePr, type ChangelogEntry, type EntryInput } from "../src/api/changelog";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -85,5 +85,33 @@ describe("журнал обновлений в панели", () => {
     expect(sourcePr({ sourceKey: "pr-141-2" })).toBe(141);
     expect(sourcePr({ sourceKey: null })).toBeNull();
     expect(sourcePr({})).toBeNull();
+  });
+});
+
+describe("предпросмотр версии", () => {
+  const first = entry({ entryId: "a", text: "Виджеты главной" });
+  const second = entry({ entryId: "b", kind: "fixed", text: "Колесо не зависает" });
+  const other = entry({ entryId: "c", version: "0.5.0", text: "Старое" });
+
+  it("новая строка — в конце версии, строки другой версии не попадают", () => {
+    expect(changelogPreview({ ...INPUT, text: "Рекорд на главной" }, null, [first, second, other])).toEqual({
+      version: "0.6.0",
+      entries: [
+        { kind: "added", text: "Виджеты главной" },
+        { kind: "fixed", text: "Колесо не зависает" },
+        { kind: "added", text: "Рекорд на главной" },
+      ],
+    });
+  });
+
+  it("правленая строка — на своём месте; перенесённая в другую версию — в конец той версии", () => {
+    expect(changelogPreview({ ...INPUT, kind: "changed", text: "Колесо крутится быстрее" }, second, [first, second]).entries).toEqual([
+      { kind: "added", text: "Виджеты главной" },
+      { kind: "changed", text: "Колесо крутится быстрее" },
+    ]);
+    expect(changelogPreview({ ...INPUT, version: "0.5.0", text: "Перенесено" }, first, [first, other]).entries).toEqual([
+      { kind: "added", text: "Старое" },
+      { kind: "added", text: "Перенесено" },
+    ]);
   });
 });

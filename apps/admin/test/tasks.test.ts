@@ -12,6 +12,7 @@ import {
   saveNetworkTask,
   saveTask,
   targetLabel,
+  taskPreview,
   taskProblem,
   withKind,
   withPlatform,
@@ -261,5 +262,26 @@ describe("задания в панели", () => {
 
   it("раздел — под правом tasks.edit", () => {
     expect(SECTIONS.find((section) => section.id === "tasks")?.permission).toBe("tasks.edit");
+  });
+});
+
+describe("предпросмотр задания", () => {
+  it("цель забега — без картинки и ссылки, своей вкладкой; битые числа — нулём", () => {
+    expect(taskPreview(task({ target: Number.NaN, coins: -5, image: "a".repeat(64) }))).toEqual({
+      title: null,
+      kind: "runs",
+      period: "daily",
+      partner: false,
+      target: 0,
+      reward: { coins: 0, gems: 0, shards: 0 },
+      imageId: null,
+      link: null,
+    });
+  });
+
+  it("партнёрская цель — с картинкой и ссылкой, пустая ссылка — без неё", () => {
+    const partner = task({ kind: "channel", period: "achievement", params: { url: " https://t.me/rubezh " }, image: "a".repeat(64) });
+    expect(taskPreview(partner)).toMatchObject({ partner: true, imageId: "a".repeat(64), link: "https://t.me/rubezh" });
+    expect(taskPreview({ ...partner, params: { url: "  " } }).link).toBeNull();
   });
 });
