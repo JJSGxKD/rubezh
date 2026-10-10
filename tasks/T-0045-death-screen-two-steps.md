@@ -3,8 +3,8 @@ id: T-0045
 title: Экран смерти в два шага — сначала второй шанс, потом итоги
 epic: E12
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-5 / sonnet-5.5
 size: M
 depends_on: []
 zones:
