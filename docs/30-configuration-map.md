@@ -108,7 +108,7 @@
 | Фазы боя с боссом: сколько их и по каким долям здоровья | `game/run/boss.ts` → `BOSS_PHASES`, `bossPhase` |
 | Опрос обратной связи: вопросы и варианты | `shared-types` → `FEEDBACK_QUESTIONS`; тексты — ключи `feedback.q.*` в `i18n/ru.json` |
 | Когда звать за отзывом, потолок текста | `app-shell/src/state/feedback.ts` → `ASK_AGAIN_AFTER_RUNS`; `shared-types` → `FEEDBACK_TEXT_MAX` |
-| Лимиты приёма отзывов, размер тела | `modules/ingest/ingest-limits.ts` → `INGEST_LIMITS.feedback` |
+| Лимиты приёма отзывов, размер тела | `modules/ingest/ingest-limits.ts` → `INGEST_LIMITS.feedback`, `UNSIGNED_FEEDBACK_LIMITS` |
 | Сколько отзывов уходит в выгрузку `/feedback` | `modules/feedback/feedback-bot.command.ts` → `EXPORT_LIMIT` |
 | Насколько кастер ускоряется за фазу, время жизни его снарядов, разброс веера | `game/patterns/caster.ts` → `PHASE_SPEEDUP`, `PROJECTILE_TTL_SEC`, `SPREAD_STEP`, `WALL_SPEED_RATIO` |
 | Умолчания поведений оружия, потолок снарядов за выстрел | `game/weapons/weapon-types.ts` → `BEHAVIOR_DEFAULTS`, `MAX_PROJECTILES_PER_SHOT` |
