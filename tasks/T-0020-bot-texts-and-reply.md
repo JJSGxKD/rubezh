@@ -3,7 +3,7 @@ id: T-0020
 title: Бот говорит «идёт тест» и отвечает на обычное сообщение
 epic: E5
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5
 size: M
 depends_on: []
