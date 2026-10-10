@@ -3,8 +3,8 @@ id: T-0030
 title: Отзыв без подписи запуска — строже лимит и потолок карточек в чат
 epic: E4
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5
 size: S
 depends_on: []
 zones:
