@@ -156,7 +156,10 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
               ),
             })}
       >
-        <div className="grid gap-1.5">
+        {/* Прокручивается только содержимое: шапка листа и кнопка «В бой» остаются
+            на месте, а сам лист не уезжает под шапку приложения. Запас — высота
+            шапки Modal, подвала с кнопкой и нижней панели. */}
+        <div className="grid max-h-[max(10rem,calc(100dvh-20rem-var(--app-inset-top)-var(--app-inset-bottom)))] gap-1.5 overflow-y-auto overscroll-contain">
           {modes.length > 0 ? (
             <SegmentedControl
               label={t("weapon.select.screen")}
@@ -227,7 +230,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
                           : {
                               corner: (
                                 <>
-                                  <Lock size={11} aria-hidden="true" />
+                                  <Lock size={11} aria-hidden="true" className="max-[359px]:hidden" />
                                   {t("weapon.select.locked.short", { level: unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", weapon.id) ?? 1 })}
                                 </>
                               ),

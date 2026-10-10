@@ -43,24 +43,24 @@ export function PickTile(props: PickTileProps): ReactNode {
         props.onClick?.();
       }}
       className={[
-        "surface-card relative flex min-w-0 flex-col items-stretch gap-1 rounded-lg p-2 text-left",
+        "surface-card relative flex w-full min-w-0 flex-col items-stretch gap-1 rounded-lg p-2 text-left max-[359px]:p-1.5",
         "transition-[transform,opacity] duration-(--duration-fast) ease-base",
         locked ? "opacity-55" : "active:scale-[0.98]",
         disabled ? "opacity-40" : "",
         props.selected ? "ring-2 ring-accent shadow-[0_0_18px_-8px_var(--color-accent)]" : "ring-1 ring-border-strong",
       ].join(" ")}
     >
-      <span className="flex min-h-7 items-center justify-between gap-1.5">
+      <span className="flex min-h-7 items-center justify-between gap-1.5 max-[359px]:gap-1">
         <span
           className={[
-            "inline-flex size-7 shrink-0 items-center justify-center rounded-md",
+            "inline-flex size-7 shrink-0 items-center justify-center rounded-md max-[359px]:size-6",
             locked ? "bg-surface-sunken text-text-disabled" : TONE_CLASS[props.tone],
           ].join(" ")}
         >
           {props.icon}
         </span>
         {props.corner === undefined ? null : (
-          <span className="inline-flex min-w-0 items-center gap-1 text-[11.5px] leading-none font-semibold tabular-nums text-text-muted">
+          <span className="inline-flex min-w-0 items-center gap-1 text-[11.5px] leading-none font-semibold whitespace-nowrap tabular-nums text-text-muted">
             {props.corner}
           </span>
         )}
