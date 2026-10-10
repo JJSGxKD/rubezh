@@ -3,7 +3,7 @@ id: T-0007
 title: Точные и тикающие отсчёты «через сколько» на главной и в награде дня
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5
 size: S
 depends_on: []
