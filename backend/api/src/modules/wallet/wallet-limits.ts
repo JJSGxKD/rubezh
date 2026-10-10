@@ -64,10 +64,9 @@ export const EXCHANGE_RESOURCES: Record<ExchangeReason, readonly WalletResource[
 export const WALLET_MAX_OPERATION = 10_000_000;
 
 /**
- * Частота по аккаунту. Кошелёк читают шапка и экран итогов — это единицы в
- * минуту; ручные операции делает человек в панели.
+ * Частота по аккаунту. Кошелёк читают шапка и экран итогов — единицы в
+ * минуту.
  */
-export const WALLET_LIMITS: Record<"read" | "adjust", RateLimit> = {
+export const WALLET_LIMITS: Record<"read", RateLimit> = {
   read: { scope: "wallet:read", limit: 600, windowSec: 3600 },
-  adjust: { scope: "wallet:adjust", limit: 60, windowSec: 3600 },
 };
