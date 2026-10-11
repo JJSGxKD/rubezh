@@ -113,6 +113,16 @@ describe("события связи", () => {
   });
 });
 
+describe("проверка связи без окна", () => {
+  it("в тестах и на сервере окна нет — ни таймера, ни событий, и ничего не падает", async () => {
+    const { watchConnection } = await import("../src/state/api-request");
+    expect(() => {
+      watchConnection(true);
+      watchConnection(false);
+    }).not.toThrow();
+  });
+});
+
 describe("исход запроса игрока", () => {
   const schema = z.object({ n: z.number() });
   const get = () => apiRequest("/api/v1/x", schema, { method: "GET" });

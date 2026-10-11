@@ -107,15 +107,16 @@ const onBrowserOnline = (): void => void checkConnection();
 
 /** Пока связи нет — проверять раз в период и по событию браузера `online`. */
 export function watchConnection(on: boolean): void {
-  if (on === (probeTimer !== null)) return;
+  // Без окна (тесты, сервер) проверять некому: ни таймера, ни событий.
+  if (typeof window === "undefined" || on === (probeTimer !== null)) return;
   if (on) {
     probeTimer = setInterval(onBrowserOnline, CONNECTION_PROBE_PERIOD_MS);
-    globalThis.addEventListener("online", onBrowserOnline);
+    window.addEventListener("online", onBrowserOnline);
     return;
   }
   if (probeTimer !== null) clearInterval(probeTimer);
   probeTimer = null;
-  globalThis.removeEventListener("online", onBrowserOnline);
+  window.removeEventListener("online", onBrowserOnline);
 }
 
 /**
