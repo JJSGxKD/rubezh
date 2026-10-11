@@ -2923,7 +2923,6 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant F as Раздача (под локом)
     participant N as notifications
-    participant B as notifications-bot
 
     P->>CL: POST /admin/changelog/publish { version }
     CL->>DB: черновики версии → published_at
@@ -2936,10 +2935,12 @@ sequenceDiagram
         F->>DB: аккаунты площадок после курсора: не заблокирован, заходил за 90 дней
         F->>N: deliverMany(app_update, ключ app_update:<версия>)
         N->>DB: INSERT … ON CONFLICT DO NOTHING RETURNING
-        N-)B: новые строки: дубль в бота по выбору игрока
         F->>DB: курсор — только своего поколения, пачка неполная — done
     end
 ```
+
+В бота выход версии не дублируется: о крупных обновлениях команда пишет
+рассылкой (§4.18, T-0019).
 
 Игрок спрашивает `GET /api/v1/changelog` — строки своей площадки по версиям
 из памяти реплики, открыл журнал — `POST /api/v1/changelog/seen` с самой
