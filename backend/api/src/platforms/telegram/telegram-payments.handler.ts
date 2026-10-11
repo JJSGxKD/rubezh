@@ -59,7 +59,9 @@ export class TelegramPaymentsHandler implements BotUpdateHandler, OnModuleInit {
       return true;
     }
     if (message?.refunded_payment !== undefined) {
-      await this.confirmation.refunded(message.refunded_payment.telegram_payment_charge_id);
+      // Возврат по спору или через поддержку — тоже через очередь: смещение
+      // опроса уже сохранено, и сбой базы потерял бы отметку навсегда.
+      await this.queue.refunded(message.refunded_payment.telegram_payment_charge_id);
       return true;
     }
 
