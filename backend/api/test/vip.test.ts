@@ -1,15 +1,16 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
-import { Module } from "@nestjs/common";
+import { Logger, Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError } from "../src/common/domain-error.js";
 import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
+import type { Account, AccountRepository } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PaymentConfirmation } from "../src/modules/payments/payment-confirmation.js";
@@ -73,6 +74,21 @@ class FakeWallet {
   }
 }
 
+/**
+ * Аккаунты для выдачи: владельца подписки находят по id, как в базе.
+ * Идентификатор на площадке берётся из карты владельцев покупок — её
+ * заполняет оплата в `pay`.
+ */
+function accountsOf(purchases: MemoryPurchasesRepository): Pick<AccountRepository, "byId"> {
+  return {
+    byId: async (accountId): Promise<Account | null> => {
+      const platformUserId = purchases.owners.get(accountId);
+      if (platformUserId === undefined) return null;
+      return { accountId, platform: "telegram", platformUserId, displayName: "Стрелок", username: null, photoUrl: null, createdAt: new Date(), bannedAt: null, banReason: null, created: false };
+    },
+  };
+}
+
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   try {
     await promise;
@@ -96,9 +112,11 @@ function setup(settings = config()) {
   const wallet = new FakeWallet();
   const bonuses = new WalletBonuses();
   const adPasses = new AdPasses();
-  const vip = new VipService(repository, payments, fulfillment, hooks, new SubscriptionRenewal(purchases, providers), wallet as unknown as WalletService, bonuses, adPasses);
+  const renewal = new SubscriptionRenewal(purchases, providers);
+  const accounts = accountsOf(purchases);
+  const vip = new VipService(repository, payments, fulfillment, hooks, renewal, wallet as unknown as WalletService, bonuses, adPasses, accounts);
   vip.onModuleInit();
-  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses, adPasses };
+  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses, adPasses, renewal, accounts };
 }
 
 type Ctx = ReturnType<typeof setup>;
@@ -238,6 +256,177 @@ describe("оформление и продление VIP", () => {
     const later = new Date(Date.now() + 31 * DAY_MS);
     expect(await ctx.vip.view(account, later)).toMatchObject({ active: false, renewal: "cancelled", canResume: false, canOrder: true });
     expect(await codeOf(ctx.vip.resume(account, later))).toBe("vip_resume_unavailable");
+  });
+});
+
+describe("вторая подписка: две оплаты проскочили одновременно (T-0025)", () => {
+  let ctx: Ctx;
+  let account: AccountRef;
+  let logged: { level: string; event: string; fields: Record<string, unknown> }[];
+
+  /** Два счёта, выставленных до первой оплаты: каждый по отдельности законный. */
+  async function twoInvoices(): Promise<[string, string]> {
+    const first = await ctx.vip.order(account);
+    const second = await ctx.vip.order(account);
+    expect(second.purchaseId).not.toBe(first.purchaseId);
+    return [first.purchaseId, second.purchaseId];
+  }
+
+  beforeEach(() => {
+    ctx = setup();
+    account = player();
+    logged = [];
+    for (const level of ["log", "warn", "error"] as const) {
+      vi.spyOn(Logger.prototype, level).mockImplementation((message: unknown) => {
+        const fields = JSON.parse(String(message)) as Record<string, unknown>;
+        logged.push({ level, event: String(fields.event), fields });
+      });
+    }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("у второй подписки продление выключено на площадке и в базе, период выдан и встал за первым, первая не тронута", async () => {
+    const [first, second] = await twoInvoices();
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await pay(ctx, account, first, "charge-1");
+    expect(set).not.toHaveBeenCalled();
+    await pay(ctx, account, second, "charge-2");
+
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith(account, second, false);
+    expect(ctx.api.renewals).toEqual([{ userId: Number(account.platformUserId), chargeId: "charge-2", canceled: true }]);
+    expect(ctx.repository.subscriptions.get(second)).toMatchObject({ renewal: "cancelled", cancelledBy: "game" });
+    expect(ctx.repository.subscriptions.get(first)).toMatchObject({ renewal: "on", cancelledBy: null });
+    // Заплатил — период остаётся: он встаёт за первым, отнимать нечего.
+    const firstPeriod = ctx.repository.periods.get(first);
+    expect(ctx.repository.periods.get(second)?.startsAt).toEqual(firstPeriod?.endsAt);
+    expect(await ctx.purchases.byId(second)).toMatchObject({ fulfilledAt: expect.any(Date) });
+    expect(await ctx.vip.view(account)).toMatchObject({ active: true, renewal: "on" });
+  });
+
+  it("случай пишется в лог уровнем error: событие vip_subscription_twice, аккаунт, оставленная и остановленная подписки", async () => {
+    const [first, second] = await twoInvoices();
+
+    await pay(ctx, account, first, "charge-1");
+    await pay(ctx, account, second, "charge-2");
+
+    const twice = logged.filter((entry) => entry.event === "vip_subscription_twice");
+    expect(twice).toHaveLength(1);
+    expect(twice[0]).toMatchObject({ level: "error", fields: { module: "vip", accountId: account.accountId, kept: first, stopped: second } });
+  });
+
+  it("повтор выдачи второй подписки продление повторно не трогает: период уже был", async () => {
+    const [first, second] = await twoInvoices();
+    await pay(ctx, account, first, "charge-1");
+    await pay(ctx, account, second, "charge-2");
+    const set = vi.spyOn(ctx.renewal, "set");
+    const row = await ctx.purchases.byId(second);
+    if (row === null) throw new Error("покупки нет");
+
+    await ctx.vip.fulfill(row);
+
+    expect(set).not.toHaveBeenCalled();
+    expect(logged.filter((entry) => entry.event === "vip_subscription_twice")).toHaveLength(1);
+  });
+
+  it("новая подписка без других — продление не трогается", async () => {
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await subscribe(ctx, account);
+
+    expect(set).not.toHaveBeenCalled();
+    expect(ctx.api.renewals).toEqual([]);
+    expect(logged.map((entry) => entry.event)).not.toContain("vip_subscription_twice");
+  });
+
+  it("другая подписка отменена или не списала — вторая не дубль: продлевается только одна", async () => {
+    const [first, second] = await twoInvoices();
+    await pay(ctx, account, first, "charge-1");
+    await ctx.vip.cancel(account);
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await pay(ctx, account, second, "charge-2");
+
+    expect(set).not.toHaveBeenCalled();
+    expect(ctx.repository.subscriptions.get(second)).toMatchObject({ renewal: "on" });
+  });
+
+  it("продление первой подписки при другой продлеваемой — продление не трогается", async () => {
+    const first = await subscribe(ctx, account);
+    // Другая подписка с включённым продлением — как после гонки, которую этот случай и ловит.
+    const other = randomUUID();
+    await ctx.repository.addPeriod({ purchaseId: other, subscriptionId: other, accountId: account.accountId, paidAt: new Date(), periodSec: VIP_PERIOD_SEC, at: new Date() });
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await pay(ctx, account, first, "charge-2");
+
+    expect(set).not.toHaveBeenCalled();
+    expect(ctx.repository.subscriptions.get(first)).toMatchObject({ renewal: "on" });
+  });
+
+  it("площадка не приняла выключение — fulfill не бросает, период выдан, причина в логе", async () => {
+    const [first, second] = await twoInvoices();
+    await pay(ctx, account, first, "charge-1");
+    ctx.api.renewalFailWith = new TelegramApiError("editUserStarSubscription", 0, "сеть недоступна", null);
+
+    await expect(pay(ctx, account, second, "charge-2")).resolves.toBeUndefined();
+
+    expect(ctx.repository.periods.has(second)).toBe(true);
+    expect(await ctx.purchases.byId(second)).toMatchObject({ fulfilledAt: expect.any(Date) });
+    expect(ctx.repository.subscriptions.get(second)).toMatchObject({ renewal: "on" });
+    expect(logged).toContainEqual(expect.objectContaining({ level: "error", event: "vip_subscription_twice_stop_failed", fields: expect.objectContaining({ stopped: second }) as Record<string, unknown> }));
+  });
+
+  it("база не записала отмену — fulfill не бросает, период выдан, причина в логе", async () => {
+    const [first, second] = await twoInvoices();
+    await pay(ctx, account, first, "charge-1");
+    ctx.repository.setRenewal = async () => Promise.reject(new Error("база недоступна"));
+
+    await expect(pay(ctx, account, second, "charge-2")).resolves.toBeUndefined();
+
+    expect(ctx.repository.periods.has(second)).toBe(true);
+    expect(logged).toContainEqual(
+      expect.objectContaining({ level: "error", event: "vip_subscription_twice_stop_failed", fields: expect.objectContaining({ reason: "база недоступна" }) as Record<string, unknown> }),
+    );
+  });
+
+  it("не прочиталось состояние подписок — fulfill не бросает: повтор задания период уже не повторит", async () => {
+    const [first, second] = await twoInvoices();
+    await pay(ctx, account, first, "charge-1");
+    ctx.repository.state = async () => Promise.reject(new Error("база недоступна"));
+
+    await expect(pay(ctx, account, second, "charge-2")).resolves.toBeUndefined();
+
+    expect(ctx.repository.periods.has(second)).toBe(true);
+    expect(logged.map((entry) => entry.event)).toContain("vip_subscription_twice_stop_failed");
+  });
+
+  it("аккаунта нет — продление не трогается, fulfill не бросает, в лог error", async () => {
+    const [first, second] = await twoInvoices();
+    await pay(ctx, account, first, "charge-1");
+    vi.spyOn(ctx.accounts, "byId").mockResolvedValue(null);
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await expect(pay(ctx, account, second, "charge-2")).resolves.toBeUndefined();
+
+    expect(set).not.toHaveBeenCalled();
+    expect(ctx.repository.periods.has(second)).toBe(true);
+    expect(logged).toContainEqual(expect.objectContaining({ level: "error", event: "vip_subscription_twice_stop_failed", fields: expect.objectContaining({ stopped: second }) as Record<string, unknown> }));
+  });
+
+  it("площадка ответила отказом — продления там уже нет: в базе отмена игрока, а не наша", async () => {
+    const [first, second] = await twoInvoices();
+    await pay(ctx, account, first, "charge-1");
+    ctx.api.renewalFailWith = new TelegramApiError("editUserStarSubscription", 400, "Bad Request: SUBSCRIPTION_CANCELED", null);
+
+    await pay(ctx, account, second, "charge-2");
+
+    expect(ctx.repository.subscriptions.get(second)).toMatchObject({ renewal: "cancelled", cancelledBy: "player" });
+    expect(logged.map((entry) => entry.event)).toContain("vip_subscription_twice");
   });
 });
 
