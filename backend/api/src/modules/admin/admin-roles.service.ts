@@ -1,11 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { ValidationError } from "../../common/domain-error.js";
+import { ForbiddenError, ValidationError } from "../../common/domain-error.js";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { ROLE_PERMISSIONS, ROLES, type Permission, type Role } from "../roles/permissions.js";
 import type { AuditQuery, AuditRecord } from "../roles/roles.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { AdminSessionService } from "./admin-session.service.js";
 import type { RoleCandidateQuery, RoleTarget } from "./dto/admin.dto.js";
+import { CONFIRMED_ROLES, RoleConfirmations, type RoleConfirmOpened } from "./role-confirmations.js";
 
 /**
  * Роли и журнал в панели (docs/29-admin-panel.md §3, §8). Выдача и отзыв —
@@ -73,9 +75,11 @@ export interface RoleCandidate {
 @Injectable()
 export class AdminRolesService {
   constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     private readonly roles: RolesService,
     private readonly sessions: AdminSessionService,
+    private readonly confirmations: RoleConfirmations,
   ) {}
 
   async assignments(actor: AccountRef): Promise<RoleAssignments> {
@@ -113,9 +117,20 @@ export class AdminRolesService {
     };
   }
 
-  async grant(actor: AccountRef, target: RoleTarget): Promise<{ granted: boolean }> {
+  /**
+   * Владелец и администратор выдаются только после подтверждения в боте тем,
+   * кто выдаёт (docs/29-admin-panel.md §3.4): панель получает ссылку, а не
+   * результат. Остальные роли и машина разработчика — сразу: там владелец и
+   * игрок — один человек, а бота может не быть.
+   */
+  async grant(actor: AccountRef, target: RoleTarget): Promise<{ granted: boolean; confirm: RoleConfirmOpened | null }> {
     const accountId = await this.resolve(target);
-    return { granted: await this.roles.grant(actor, accountId, target.role as Role) };
+    const role = target.role as Role;
+    if (!CONFIRMED_ROLES.includes(role) || this.config.auth.devLogin) return { granted: await this.roles.grant(actor, accountId, role), confirm: null };
+    // Права и запрет выдачи себе проверяются до запроса: бот не должен просить подтвердить заведомо невозможное.
+    await this.roles.require(actor, "roles.assign");
+    if (actor.accountId === accountId) throw new ForbiddenError("Выдать роль себе нельзя");
+    return { granted: false, confirm: await this.confirmations.open(actor, accountId, role) };
   }
 
   async revoke(actor: AccountRef, target: RoleTarget): Promise<{ revoked: boolean; sessionsRevoked: number }> {

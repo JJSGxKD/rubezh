@@ -58,6 +58,7 @@ const unavailableRedis = {
     roleConfirmValues.set(key, value);
     return "OK";
   },
+  get: async (key: string) => roleConfirmValues.get(key) ?? null,
   getdel: async (key: string) => {
     const value = roleConfirmValues.get(key) ?? null;
     roleConfirmValues.delete(key);

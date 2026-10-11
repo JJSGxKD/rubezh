@@ -33,6 +33,10 @@ class FakeRedis {
     return "OK";
   }
 
+  async get(key: string): Promise<string | null> {
+    return this.values.get(key) ?? null;
+  }
+
   async getdel(key: string): Promise<string | null> {
     const value = this.values.get(key) ?? null;
     this.values.delete(key);
@@ -46,7 +50,7 @@ class FakeRedis {
 }
 
 function config(patch: Record<string, string> = {}): AppConfig {
-  return loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID, TELEGRAM_BOT_UPDATES: "polling", ...patch } as NodeJS.ProcessEnv);
+  return loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: "1", TELEGRAM_BOT_UPDATES: "polling", ...patch } as NodeJS.ProcessEnv);
 }
 
 async function setup(options: { botUsername?: string | null } = {}) {

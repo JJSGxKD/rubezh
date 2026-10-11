@@ -30,6 +30,9 @@ class FakeRedis {
     this.values.set(key, value);
     return "OK";
   }
+  async get(key: string): Promise<string | null> {
+    return this.values.get(key) ?? null;
+  }
   async getdel(key: string): Promise<string | null> {
     const value = this.values.get(key) ?? null;
     this.values.delete(key);
