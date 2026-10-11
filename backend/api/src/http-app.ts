@@ -3,6 +3,7 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { APP_CONFIG, type AppConfig } from "./config/app-config.js";
 import { DomainErrorFilter } from "./common/domain-error.filter.js";
 import { API_SECURITY_HEADERS } from "./common/security-headers.js";
+import { ServerErrorAlarm } from "./modules/admin-notify/server-error-alarm.js";
 
 /**
  * Сборка HTTP-приложения — одна для `main.ts` и HTTP-тестов: префикс,
@@ -70,4 +71,22 @@ function configureHttpApp(app: NestFastifyApplication, config: AppConfig): void 
       }
       return payload;
     });
+  // Счётчик ответов 5xx для тревоги команде (tasks/T-0035). `onResponse`, а
+  // не `onSend`: ответ уже ушёл, и счётчик не держит игрока. В тестах
+  // HTTP-слоя без модуля уведомлений провайдера нет — тогда хук не ставится.
+  let alarm: ServerErrorAlarm | null = null;
+  try {
+    alarm = app.get(ServerErrorAlarm, { strict: false });
+  } catch {
+    // Тревоги нет в этой сборке — ничего считать не нужно.
+  }
+  if (alarm !== null) {
+    const counter = alarm;
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .addHook("onResponse", async (_request, reply) => {
+        if (reply.statusCode >= 500) void counter.record(reply.statusCode);
+      });
+  }
 }
