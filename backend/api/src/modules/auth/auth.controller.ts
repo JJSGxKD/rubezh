@@ -2,6 +2,7 @@ import { Body, Controller, Get, Inject, Post, Req, UseGuards } from "@nestjs/com
 import { ZodError } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, RateLimitedError, ValidationError } from "../../common/domain-error.js";
+import { addressOf } from "../../common/request-address.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { AUTH_LIMITS } from "./auth-limits.js";
 import { AuthGuard, accountOf } from "./auth.guard.js";
@@ -161,11 +162,6 @@ function contextOf(request: unknown, client: LoginClient | null, reason: LoginCo
   };
 }
 
-/** Адрес из `req.ip` Fastify: он учитывает число доверенных прокси, а сырой заголовок подделывается одной строкой. */
-function addressOf(request: unknown): string {
-  const ip = (request as { ip?: unknown }).ip;
-  return typeof ip === "string" && ip !== "" ? ip : "unknown";
-}
 
 function parse<T>(read: () => T, message: string): T {
   try {

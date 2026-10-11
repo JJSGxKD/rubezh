@@ -2,6 +2,7 @@ import { Body, Controller, Get, Inject, Post, Req, Res, UseGuards } from "@nestj
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { Public } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
+import { addressOf } from "../../common/request-address.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { clearedSessionCookie, sessionCookie } from "./admin-cookie.js";
@@ -115,8 +116,3 @@ function userAgentOf(request: unknown): string | null {
   return typeof value === "string" ? value.slice(0, 512) : null;
 }
 
-/** Адрес из `req.ip` Fastify: он учитывает число доверенных прокси, а сырой заголовок подделывается одной строкой. */
-function addressOf(request: unknown): string {
-  const ip = (request as { ip?: unknown }).ip;
-  return typeof ip === "string" && ip !== "" ? ip : "unknown";
-}
