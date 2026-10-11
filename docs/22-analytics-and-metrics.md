@@ -166,7 +166,7 @@ Zod-схемы `payload` — в словаре сервера
 | Шеринг | `share_offered`, `share_completed`, `shared_link_opened` |
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
 | Удержание | `daily_reward_claimed` (награда дня, WP13); `wheel_spun` (колесо, WP13); `task_completed`, `achievement_unlocked`, `task_link_opened` (задания и достижения, WP13, Р52) (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
-| Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
+| Техника | `client_error`, `connection_lost`, `connection_restored`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
 | Обратная связь | `feedback_sent` — отзыв с формы обратной связи (`29-admin-panel.md` §6) |
 | Уведомления | `notification_opened` — игрок перешёл из ленты туда, куда звало уведомление (`35-stage4-plan.md` WP28) |
 | Журнал обновлений | `changelog_opened` — игрок открыл «Что нового» (`35-stage4-plan.md` WP31) |
@@ -185,6 +185,7 @@ Zod-схемы `payload` — в словаре сервера
 | `diagnostics_mode_changed` | Сколько тестеров включают диагностику | `setting`, `value` |
 | `app_first_open` | Первый запуск на устройстве — знаменатель воронок закрытого теста | без полей: установка и так в конверте |
 | `client_error` | Ошибки клиента на тестера по версии и устройству (`26-stage2-plan.md` §7) | `scope` — где случилась, `message` — текст без стека, до 512 знаков |
+| `connection_lost`, `connection_restored` | Как часто у игроков пропадает связь с API и на сколько: потеря — два сбоя подряд за 30 секунд или событие браузера `offline`, возвращение — любой ответ сервера (T-0015). Ошибка сервера 4xx и 500 потерей связи не считается | у возвращения — `downtimeSec`, сколько связи не было; у потери полей нет |
 | `share_offered`, `share_completed` | Приглашение друга: сколько нажимают, каким способом и чем кончается (`35-stage4-plan.md` Р63) | `context` (`friends_invite`); `method` — `message` (сообщение от бота), `link` (выбор чата со ссылкой), `copy` (копия ссылки); у завершения — `result`: `sent`, `shared`, `copied`, `cancelled`, `unavailable` |
 | `bench_finished` | Сводка теста производительности — стресс-теста из «Играть» (`28-diagnostics.md` §2.3); полный отчёт уходит в приёмник диагностики (`28-diagnostics.md` §5), не в события | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
 | `feedback_sent` | Сколько игроков доходит до формы обратной связи и отвечают ли они текстом или только опросом. Сам отзыв в события не попадает: он уходит в чат администраторов и в свою таблицу, а здесь — только факт и разрез | `answers` — сколько вопросов отвечено, `hasText` — был ли свободный текст, `runs` — сколько забегов сыграно к этому моменту; `kind: device_info` — игрок поделился сведениями об устройстве из «Помощи в тестировании» (`28-diagnostics.md` §2.2), без поля — отзыв |
