@@ -3,7 +3,7 @@ id: T-0035
 title: Тревога в чат команды о всплеске ошибок 5xx
 epic: E3
 priority: P1
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5
 size: S
 depends_on: [T-0003, T-0033]
