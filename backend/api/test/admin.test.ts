@@ -16,6 +16,7 @@ import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
 import { ADMIN_SESSION_STORE, hashSessionToken } from "../src/modules/admin/admin-session.store.js";
 import { PanelLoginService } from "../src/modules/admin/panel-login.service.js";
+import { RoleConfirmations } from "../src/modules/admin/role-confirmations.js";
 import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
@@ -49,7 +50,20 @@ import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
  * же гвардом, что у игры, выключенная панель отвечает 404.
  */
 
-const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
+/** Лимиты недоступны (`eval` падает), запросы подтверждения ролей — в памяти: SET и GETDEL. */
+const roleConfirmValues = new Map<string, string>();
+const unavailableRedis = {
+  eval: async () => Promise.reject(new Error("connection refused")),
+  set: async (key: string, value: string) => {
+    roleConfirmValues.set(key, value);
+    return "OK";
+  },
+  getdel: async (key: string) => {
+    const value = roleConfirmValues.get(key) ?? null;
+    roleConfirmValues.delete(key);
+    return value;
+  },
+} as unknown as Redis;
 
 class FakeFunnel implements FunnelRepository {
   calls: Array<{ from: Date; to: Date }> = [];
@@ -127,6 +141,7 @@ describe("панель по HTTP", () => {
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         PanelLoginService,
+        RoleConfirmations,
         RateLimiter,
         RolesService,
         PermissionGuard,
@@ -249,7 +264,7 @@ describe("панель по HTTP", () => {
 
     const granted = await server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { platformUserId: "600002", role: "analyst" } });
     expect(granted.statusCode).toBe(201);
-    expect(granted.json().data).toEqual({ granted: true });
+    expect(granted.json().data).toEqual({ granted: true, confirm: null });
     const list = await server.inject({ method: "GET", url: "/api/v1/admin/roles", headers: { cookie } });
     expect(list.json().data.assignments).toEqual([expect.objectContaining({ accountId: target.accountId, displayName: "Юра", role: "analyst" })]);
 
@@ -261,6 +276,44 @@ describe("панель по HTTP", () => {
     expect(unknown.statusCode).toBe(400);
     const audit = await server.inject({ method: "GET", url: "/api/v1/admin/audit?limit=10", headers: { cookie } });
     expect(audit.json().data.entries.map((entry: { action: string }) => entry.action)).toEqual(["roles.revoke", "roles.assign", "admin.login"]);
+  });
+
+  it("роли admin и owner вне машины разработчика — не сразу, а ссылкой на подтверждение в боте", async () => {
+    roleConfirmValues.clear();
+    const server = await start({ AUTH_DEV_LOGIN: "false" });
+    const owner = await accounts.upsert({ platform: "telegram", platformUserId: "600100", displayName: "Вера", username: null, photoUrl: null }, Date.now());
+    await roles.grant(owner.accountId, "owner", null);
+    await store.put(hashSessionToken("vera"), { accountId: owner.accountId, platform: "telegram", platformUserId: "600100", issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });
+    const headers = { cookie: `${ADMIN_SESSION_COOKIE}=vera`, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    const target = await accounts.upsert({ platform: "telegram", platformUserId: "600003", displayName: "Оля", username: null, photoUrl: null }, Date.now());
+    const grant = (role: string, payload: Record<string, string> = { platformUserId: "600003" }) =>
+      server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { ...payload, role } });
+
+    const admin = await grant("admin");
+    expect(admin.statusCode).toBe(201);
+    expect(admin.json().data).toEqual({ granted: false, confirm: { link: expect.stringMatching(/^https:\/\/t\.me\/rubezh_bot\?start=role-[A-Za-z0-9_-]{22}$/), expiresAtMs: expect.any(Number) } });
+    expect(await roles.rolesOf(target.accountId)).toEqual([]);
+    expect(roleConfirmValues.size).toBe(1);
+
+    // Остальные роли — сразу, как раньше.
+    const marketer = await grant("marketer");
+    expect(marketer.json().data).toEqual({ granted: true, confirm: null });
+    expect(await roles.rolesOf(target.accountId)).toEqual(["marketer"]);
+
+    // Себе роль не выдать и не запросить: запрос на самого себя в боте подтверждать нечем.
+    const self = await grant("owner", { accountId: owner.accountId });
+    expect(self.statusCode).toBe(403);
+    expect(roleConfirmValues.size).toBe(1);
+  });
+
+  it("на машине разработчика admin и owner выдаются сразу", async () => {
+    const server = await start();
+    const cookie = await login(server);
+    const headers = { cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    const target = await accounts.upsert({ platform: "telegram", platformUserId: "600004", displayName: "Паша", username: null, photoUrl: null }, Date.now());
+    const granted = await server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { platformUserId: "600004", role: "admin" } });
+    expect(granted.json().data).toEqual({ granted: true, confirm: null });
+    expect(await roles.rolesOf(target.accountId)).toEqual(["admin"]);
   });
 
   it("роли: кто это — до выдачи, кем выдана — по имени, что даёт роль — её права", async () => {
