@@ -97,8 +97,9 @@ export class AuthController {
 
   @Public()
   @Post("logout")
-  async logout(@Body() body: unknown): Promise<{ data: { loggedOut: true } }> {
+  async logout(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { loggedOut: true } }> {
     this.ensureEnabled();
+    await this.limit(AUTH_LIMITS.logout, request);
 
     const { refreshToken } = parse(() => refreshSchema.parse(body), "Некорректный токен продления");
     await this.service.logout(refreshToken);
@@ -108,13 +109,16 @@ export class AuthController {
   @Post("logout-all")
   @UseGuards(AuthGuard)
   async logoutAll(@Req() request: unknown): Promise<{ data: { sessions: number } }> {
-    return { data: { sessions: await this.service.logoutEverywhere(accountOf(request).accountId) } };
+    const { accountId } = accountOf(request);
+    await this.limitAccount(AUTH_LIMITS.logoutAll, accountId);
+    return { data: { sessions: await this.service.logoutEverywhere(accountId) } };
   }
 
   @Get("me")
   @UseGuards(AuthGuard)
-  me(@Req() request: unknown): { data: { accountId: string; platform: string } } {
+  async me(@Req() request: unknown): Promise<{ data: { accountId: string; platform: string } }> {
     const account = accountOf(request);
+    await this.limitAccount(AUTH_LIMITS.me, account.accountId);
     return { data: { accountId: account.accountId, platform: account.platform } };
   }
 
@@ -131,6 +135,11 @@ export class AuthController {
   private async limit(rule: RateLimit, request: unknown): Promise<void> {
     const allowed = await this.limiter.consume(rule, addressOf(request));
     if (!allowed) throw new RateLimitedError("Слишком часто — подождите минуту");
+  }
+
+  /** Лимит для открытой сессии — по аккаунту: за адресом оператора стоят сотни игроков. */
+  private async limitAccount(rule: RateLimit, accountId: string): Promise<void> {
+    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
   }
 }
 
