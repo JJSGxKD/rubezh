@@ -3,7 +3,7 @@ id: T-0027
 title: Обновления бота не теряются при перезапуске — сначала очередь, потом ответ
 epic: E4
 priority: P0
-status: in-progress
+status: done
 owner: claude-6 / sonnet-5.5
 size: M
 depends_on: [T-0020]
