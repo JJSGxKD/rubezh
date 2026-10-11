@@ -3,7 +3,7 @@ id: T-0034
 title: Внешняя проверка прода раз в 5 минут и тревога в чат команды
 epic: E3
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5
 size: S
 depends_on: [T-0033]
