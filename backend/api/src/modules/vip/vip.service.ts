@@ -8,6 +8,7 @@ import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
 import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import { SubscriptionRenewal } from "../payments/subscription-renewal.js";
 import { AdPasses } from "../ads/ads-passes.js";
+import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { WalletBonuses } from "../wallet/wallet-bonus.js";
 import type { GrantReason } from "../wallet/wallet-types.js";
@@ -74,6 +75,7 @@ export class VipService implements OnModuleInit {
     private readonly wallet: WalletService,
     private readonly bonuses: WalletBonuses,
     private readonly adPasses: AdPasses,
+    @Inject(ACCOUNT_REPOSITORY) private readonly accounts: Pick<AccountRepository, "byId">,
   ) {}
 
   onModuleInit(): void {
@@ -186,8 +188,9 @@ export class VipService implements OnModuleInit {
   async fulfill(purchase: StoredPurchase): Promise<void> {
     if (purchase.paidAt === null) throw new Error(`покупка ${purchase.purchaseId} не оплачена — период не выдаётся`);
     const subscriptionId = purchase.renewalOf ?? purchase.purchaseId;
+    const now = new Date();
     const period = await withTimeout(
-      this.repository.addPeriod({ purchaseId: purchase.purchaseId, subscriptionId, accountId: purchase.accountId, paidAt: purchase.paidAt, periodSec: VIP_PERIOD_SEC, at: new Date() }),
+      this.repository.addPeriod({ purchaseId: purchase.purchaseId, subscriptionId, accountId: purchase.accountId, paidAt: purchase.paidAt, periodSec: VIP_PERIOD_SEC, at: now }),
       DB_TIMEOUT_MS,
       "период VIP",
     );
@@ -199,6 +202,41 @@ export class VipService implements OnModuleInit {
       mode: purchase.mode,
       until: period.endsAt.toISOString(),
     });
+    // Продление действующей подписки — не вторая подписка.
+    if (purchase.renewalOf === null) await this.stopSecondSubscription(purchase, now);
+  }
+
+  /**
+   * Две оплаты проскочили предварительную проверку почти одновременно: проверка
+   * второй прошла раньше, чем записана первая. Оплаченный период второй
+   * остаётся у игрока и встал за первым — он заплатил, отнимать нечего, — а
+   * продление второй выключается, чтобы в следующем месяце не было второго
+   * списания. Возврат лишней оплаты здесь не делается (T-0023, T-0024).
+   *
+   * Не бросает: период уже записан, а повтор задания его не повторит
+   * (`created === false`), так что бросок ничего бы не вернул.
+   */
+  private async stopSecondSubscription(purchase: StoredPurchase, now: Date): Promise<void> {
+    const fields = { accountId: purchase.accountId, stopped: purchase.purchaseId };
+    try {
+      const state = await this.state(purchase.accountId, now);
+      const kept = state.subscriptions.find((item) => item.renewal === "on" && item.subscriptionId !== purchase.purchaseId);
+      if (kept === undefined) return;
+
+      const account = await withTimeout(this.accounts.byId(purchase.accountId), DB_TIMEOUT_MS, "аккаунт подписчика");
+      if (account === null) {
+        this.logError("vip_subscription_twice_stop_failed", { ...fields, kept: kept.subscriptionId, reason: "аккаунт не найден" });
+        return;
+      }
+      const ref: AccountRef = { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
+      const result = await this.renewal.set(ref, purchase.purchaseId, false);
+      // Площадка отказала — продления там уже нет (его отменил сам игрок): как в `cancel`.
+      const by: VipCanceller = result === "done" ? "game" : "player";
+      await withTimeout(this.repository.setRenewal(purchase.purchaseId, "cancelled", by, now), DB_TIMEOUT_MS, "продление VIP");
+      this.logError("vip_subscription_twice", { ...fields, kept: kept.subscriptionId });
+    } catch (error: unknown) {
+      this.logError("vip_subscription_twice_stop_failed", { ...fields, reason: error instanceof Error ? error.message : "unknown" });
+    }
   }
 
   /** Игрок отменил или вернул продление на площадке, или площадка не смогла списать период. */
@@ -223,6 +261,10 @@ export class VipService implements OnModuleInit {
 
   private log(event: string, fields: Record<string, unknown>): void {
     this.logger.log(JSON.stringify({ module: "vip", event, ...fields }));
+  }
+
+  private logError(event: string, fields: Record<string, unknown>): void {
+    this.logger.error(JSON.stringify({ module: "vip", event, ...fields }));
   }
 }
 

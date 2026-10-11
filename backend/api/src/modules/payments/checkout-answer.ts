@@ -29,6 +29,7 @@ export type CheckoutRefusal =
   | "unknown_invoice"
   | "foreign_user"
   | "already_paid"
+  | "subscription_active"
   | "price_mismatch"
   | "stale_invoice"
   | "run_finished"
@@ -42,6 +43,7 @@ const MESSAGES: Record<CheckoutRefusal, string> = {
   unknown_invoice: "Счёт не найден — откройте покупку в игре заново.",
   foreign_user: "Этот счёт выставлен другому игроку.",
   already_paid: "Это уже оплачено — вернитесь в игру.",
+  subscription_active: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру.",
   price_mismatch: "Цена изменилась — откройте покупку в игре заново.",
   stale_invoice: "Счёт устарел — откройте покупку в игре заново.",
   run_finished: "Забег уже закончен — продолжать нечего.",
@@ -58,6 +60,8 @@ export function decideCheckout(view: CheckoutView | null, query: PreCheckout, no
   if (query.payerId !== view.platformUserId) return refuse("foreign_user");
   if (isRenewal(purchase)) return query.currency === "XTR" && query.totalAmount === purchase.chargedStars ? { ok: true } : refuse("price_mismatch");
   if (purchase.status !== "pending") return refuse("already_paid");
+  // Новая подписка, пока идёт VIP с продлением, — второе списание каждый месяц.
+  if (SUBSCRIPTION_PRODUCTS.includes(purchase.product) && view.subscriptionLive) return refuse("subscription_active");
   // Сумма — та, на которую выставлен последний счёт. Старая ссылка после
   // повторного счёта с другой ценой сюда не пройдёт.
   if (query.currency !== "XTR" || query.totalAmount !== purchase.chargedStars) return refuse("price_mismatch");

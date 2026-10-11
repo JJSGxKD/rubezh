@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { urgentFirst } from "../src/platforms/telegram/bot-poller.js";
 import { BotRouter } from "../src/platforms/telegram/bot-router.js";
-import { decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
+import { answerOf, decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
@@ -64,7 +64,26 @@ function query(purchase: StoredPurchase, patch: Partial<PreCheckout> = {}): PreC
 }
 
 describe("предварительная проверка оплаты", () => {
-  const view = (purchase: StoredPurchase, runFinished = false, continueTaken = false) => ({ purchase, platformUserId: String(PLAYER_ID), runFinished, continueTaken });
+  const view = (purchase: StoredPurchase, runFinished = false, continueTaken = false, subscriptionLive = false) => ({
+    purchase,
+    platformUserId: String(PLAYER_ID),
+    runFinished,
+    continueTaken,
+    subscriptionLive,
+  });
+
+  /** VIP без забега: ни `runId`, ни номера продолжения — только товар. */
+  const vip = (patch: Partial<StoredPurchase> = {}): StoredPurchase => ({
+    ...pending(),
+    product: "vip",
+    runId: null,
+    continueNo: null,
+    elapsedSec: null,
+    sku: "vip",
+    priceStars: 700,
+    chargedStars: 700,
+    ...patch,
+  });
 
   it("пропускает оплату своего свежего счёта на ту же сумму", () => {
     const purchase = pending();
@@ -87,6 +106,48 @@ describe("предварительная проверка оплаты", () => {
   it("отказывает во второй оплате уже оплаченного продолжения", () => {
     const paid = pending({ status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
     expect(decideCheckout(view(paid), query(paid), NOW, true)).toEqual({ ok: false, reason: "already_paid" });
+  });
+
+  describe("вторая подписка VIP (T-0025)", () => {
+    it("новая подписка, пока у владельца идёт VIP с продлением, — отказ `subscription_active`", () => {
+      const purchase = vip();
+      expect(decideCheckout(view(purchase, false, false, true), query(purchase), NOW, true)).toEqual({ ok: false, reason: "subscription_active" });
+    });
+
+    it("та же покупка без идущего VIP с продлением проходит", () => {
+      const purchase = vip();
+      expect(decideCheckout(view(purchase, false, false, false), query(purchase), NOW, true)).toEqual({ ok: true });
+    });
+
+    it("продление действующей подписки проходит, даже когда VIP идёт и продлевается: площадка спишет его в любом случае", () => {
+      const first = vip({ status: "paid", paidAt: new Date(NOW - 30 * 86_400_000), telegramChargeId: "charge-1" });
+      expect(decideCheckout(view(first, false, false, true), query(first), NOW, true)).toEqual({ ok: true });
+    });
+
+    it("продление с чужой суммой по-прежнему отказ: цену проверяют и у продления", () => {
+      const first = vip({ status: "paid", paidAt: new Date(NOW - 30 * 86_400_000), telegramChargeId: "charge-1" });
+      expect(decideCheckout(view(first, false, false, true), query(first, { totalAmount: 1 }), NOW, true)).toEqual({ ok: false, reason: "price_mismatch" });
+    });
+
+    it("товар магазина при идущем VIP проходит: отказ касается только подписок", () => {
+      const purchase = { ...vip(), product: "shop_item" as const, sku: "gems_60", priceStars: 50, chargedStars: 50 };
+      expect(decideCheckout(view(purchase, false, false, true), query(purchase), NOW, true)).toEqual({ ok: true });
+    });
+
+    it("второй шанс при идущем VIP проходит", () => {
+      const purchase = pending();
+      expect(decideCheckout(view(purchase, false, false, true), query(purchase), NOW, true)).toEqual({ ok: true });
+    });
+
+    it("отказ идёт после «уже оплачено»: оплаченную вторую подписку не называют вторым счётом", () => {
+      const paid = vip({ status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-2", renewalOf: randomUUID() });
+      expect(decideCheckout(view(paid, false, false, true), query(paid), NOW, true)).toEqual({ ok: false, reason: "already_paid" });
+    });
+
+    it("текст отказа — для игрока: что случилось и что делать", () => {
+      const decision = decideCheckout(view(vip(), false, false, true), query(vip()), NOW, true);
+      expect(answerOf(decision)).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру." });
+    });
   });
 });
 
@@ -117,6 +178,33 @@ describe("подтверждение оплаты", () => {
       { queryId: "q-1", answer: { ok: true } },
       { queryId: "q-2", answer: { ok: false, errorMessage: expect.stringContaining("Счёт не найден") } },
     ]);
+  });
+
+  it("вторая подписка VIP: проверка спрашивает репозиторий и отказывает текстом для игрока; без идущего VIP — пускает", async () => {
+    const subscription = { ...pending(), product: "vip" as const, runId: null, continueNo: null, elapsedSec: null, sku: "vip", priceStars: 700, chargedStars: 700 };
+    purchases.rows.set(subscription.purchaseId, subscription);
+    purchases.owners.set(subscription.accountId, String(PLAYER_ID));
+    purchases.subscriptionLive = true;
+
+    await expect(confirmation.answerCheckout(query(subscription), NOW)).resolves.toEqual({ ok: false, reason: "subscription_active" });
+    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру." });
+
+    purchases.subscriptionLive = false;
+    await expect(confirmation.answerCheckout(query(subscription, { queryId: "q-2" }), NOW)).resolves.toEqual({ ok: true });
+  });
+
+  it("оба чтения покупки идут по часам своего вызова: идёт ли VIP, считается на момент проверки", async () => {
+    const asked: number[] = [];
+    const original = purchases.checkout.bind(purchases);
+    purchases.checkout = async (purchaseId: string, at = new Date()) => {
+      asked.push(at.getTime());
+      return await original(purchaseId, at);
+    };
+
+    await confirmation.answerCheckout(query(purchase), NOW);
+    await confirmation.subscriptionChanged({ platform: "telegram", payload: purchase.purchaseId, payerId: String(PLAYER_ID), state: "cancelled" }, NOW + 5_000);
+
+    expect(asked).toEqual([NOW, NOW + 5_000]);
   });
 
   it("база не ответила — отказ «попробуйте ещё раз», а не деньги вслепую", async () => {
