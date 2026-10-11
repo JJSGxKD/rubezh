@@ -49,7 +49,7 @@ export type HistoryEntry = WalletHistoryEntry | ItemHistoryEntry | PurchaseHisto
 
 /** Причины кошелька, которые относятся к бустам и к покупкам, — остальное делят ресурсы. */
 export const BOOST_REASONS: ReadonlySet<string> = new Set(["boost", "boost_refund"]);
-export const PURCHASE_REASONS: ReadonlySet<string> = new Set(["purchase", "shop"]);
+export const PURCHASE_REASONS: ReadonlySet<string> = new Set(["purchase", "shop", "refund_revoke"]);
 
 export function walletCategory(resource: string, reason: string): WalletHistoryEntry["category"] {
   if (BOOST_REASONS.has(reason)) return "boosts";
