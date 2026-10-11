@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { Logger } from "@nestjs/common";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { BotPoller, type BotPollerLocks, type PollerBotApi } from "../src/platforms/telegram/bot-poller.js";
 import { BotRouter, type BotUpdateHandler } from "../src/platforms/telegram/bot-router.js";
@@ -65,6 +66,72 @@ describe("маршрутизатор обновлений", () => {
     const router = new BotRouter();
     router.register({ name: "broken", handle: async () => Promise.reject(new Error("сломался")) });
     await expect(router.dispatch(update(3))).resolves.toBeUndefined();
+  });
+});
+
+describe("обработчик по умолчанию", () => {
+  it("получает обновление, только если его не взял ни один обработчик", async () => {
+    const router = new BotRouter();
+    const taken = recordingHandler("taken", (incoming) => incoming.update_id === 1);
+    const fallback = recordingHandler("fallback", () => true);
+    router.register(taken);
+    router.setFallback(fallback);
+
+    await router.dispatch(update(1));
+    await router.dispatch(update(2));
+
+    expect(taken.seen).toEqual([1, 2]);
+    expect(fallback.seen).toEqual([2]);
+  });
+
+  it("не мешает порядку регистрации: заданный раньше обработчиков, он всё равно последний", async () => {
+    const router = new BotRouter();
+    const fallback = recordingHandler("fallback", () => true);
+    router.setFallback(fallback);
+    router.register(recordingHandler("late", () => true));
+
+    await router.dispatch(update(3));
+
+    expect(fallback.seen).toEqual([]);
+  });
+
+  it("упавший обработчик останавливает разбор: по умолчанию не вызывается, в логе handler_failed", async () => {
+    const router = new BotRouter();
+    const fallback = recordingHandler("fallback", () => true);
+    router.register({ name: "broken", handle: async () => Promise.reject(new Error("сломался")) });
+    router.setFallback(fallback);
+    const error = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    try {
+      await router.dispatch(update(4));
+      expect(fallback.seen).toEqual([]);
+      expect(error.mock.calls.some(([line]) => String(line).includes("handler_failed"))).toBe(true);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("упавший обработчик по умолчанию логируется так же и не роняет разбор", async () => {
+    const router = new BotRouter();
+    router.setFallback({ name: "fallback", handle: async () => Promise.reject(new Error("сломался")) });
+    const error = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    try {
+      await expect(router.dispatch(update(5))).resolves.toBeUndefined();
+      expect(error.mock.calls.some(([line]) => String(line).includes('"handler":"fallback"'))).toBe(true);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("второй раз задать нельзя", () => {
+    const router = new BotRouter();
+    router.setFallback(recordingHandler("one", () => true));
+    expect(() => router.setFallback(recordingHandler("two", () => true))).toThrow("Обработчик по умолчанию уже задан");
+  });
+
+  it("в список команд не попадает", () => {
+    const router = new BotRouter();
+    router.setFallback({ name: "fallback", commands: [{ command: "x", description: "x", audience: "everyone" }], handle: async () => true });
+    expect(router.commands()).toEqual([]);
   });
 });
 

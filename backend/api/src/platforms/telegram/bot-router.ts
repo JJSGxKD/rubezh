@@ -36,9 +36,20 @@ export interface BotCommandSpec {
 export class BotRouter {
   private readonly logger = new Logger("bot");
   private readonly handlers: BotUpdateHandler[] = [];
+  private fallback: BotUpdateHandler | null = null;
 
   register(handler: BotUpdateHandler): void {
     this.handlers.push(handler);
+  }
+
+  /**
+   * Обработчик «по умолчанию»: получает обновление, только если его не взял ни
+   * один обычный. Порядок регистрации модулей для этого ненадёжен, поэтому
+   * он задаётся отдельно и всегда стоит последним.
+   */
+  setFallback(handler: BotUpdateHandler): void {
+    if (this.fallback !== null) throw new Error("Обработчик по умолчанию уже задан");
+    this.fallback = handler;
   }
 
   /** Все команды зарегистрированных обработчиков в порядке регистрации. */
@@ -47,7 +58,8 @@ export class BotRouter {
   }
 
   async dispatch(update: TelegramUpdate): Promise<void> {
-    for (const handler of this.handlers) {
+    const chain = this.fallback === null ? this.handlers : [...this.handlers, this.fallback];
+    for (const handler of chain) {
       try {
         if (await handler.handle(update)) return;
       } catch (error: unknown) {

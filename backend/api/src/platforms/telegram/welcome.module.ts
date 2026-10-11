@@ -3,6 +3,7 @@ import { AdAudience } from "../../modules/ads/ad-audience.js";
 import { AdsModule } from "../../modules/ads/ads.module.js";
 import { AuthModule } from "../../modules/auth/auth.module.js";
 import { RunsModule } from "../../modules/runs/runs.module.js";
+import { BotFallbackReply } from "./bot-fallback.js";
 import { BotModule } from "./bot.module.js";
 import { renderWelcomePng } from "./welcome-card.js";
 import { RunsWelcomeProgress } from "./welcome-progress.js";
@@ -24,6 +25,7 @@ import {
   imports: [BotModule, AuthModule, RunsModule, AdsModule],
   providers: [
     StartCommand,
+    BotFallbackReply,
     WelcomeProgressRegistry,
     RunsWelcomeProgress,
     { provide: WELCOME_CARD_CACHE, useClass: RedisWelcomeCardCache },
