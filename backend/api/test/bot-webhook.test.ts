@@ -5,12 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Module, type Type } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
-import type { Redis } from "ioredis";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
-import { REDIS } from "../src/infra/redis.js";
-import { BotRouter } from "../src/platforms/telegram/bot-router.js";
-import { BotUpdateDedupe, BotWebhookController } from "../src/platforms/telegram/bot-webhook.controller.js";
+import { BotUpdateQueue } from "../src/platforms/telegram/bot-update-queue.js";
+import { BotWebhookController } from "../src/platforms/telegram/bot-webhook.controller.js";
 import { TelegramBotApi, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { multipartOf } from "./helpers/multipart.js";
 
@@ -20,40 +18,30 @@ const TOKEN = "123456:TEST-webhook";
 const CLOUD_API = "https://api.telegram.org";
 const SECRET = "s3cret-webhook-token-0123456789abcdef";
 
-/** Redis в памяти: ровно те команды, которыми вебхук отсекает повторы. */
-function memoryRedis(): Redis {
-  const keys = new Set<string>();
-  return {
-    set: async (key: string, _value: string, ..._args: unknown[]) => {
-      if (keys.has(key)) return null;
-      keys.add(key);
-      return "OK";
-    },
-  } as unknown as Redis;
-}
-
 function update(id: number, text = "/start"): TelegramUpdate {
   return { update_id: id, message: { message_id: id, date: 1, text, chat: { id: 7, type: "private" }, from: { id: 7, is_bot: false, first_name: "Анна" } } };
 }
 
 describe("вебхук бота", () => {
   let app: NestFastifyApplication | null = null;
-  let seen: number[];
+  let enqueued: TelegramUpdate[];
   let release: () => void;
+  let enqueueGate: Promise<void> | null;
+  let enqueueFailure: Error | null;
 
+  /** Очередь обновлений: пишет, что в неё поставили; может зависнуть до `release` или отказать. */
   async function start(env: Record<string, string> = {}): Promise<NestFastifyApplication> {
-    seen = [];
-    const gate = new Promise<void>((resolve) => (release = resolve));
-    const router = new BotRouter();
-    router.register({
-      name: "slow",
-      async handle(incoming) {
-        seen.push(incoming.update_id);
-        // Обработчик дольше ответа: вебхук не должен его ждать.
-        await gate;
-        return true;
+    enqueued = [];
+    enqueueGate = null;
+    enqueueFailure = null;
+    release = () => undefined;
+    const updates = {
+      async enqueue(incoming: TelegramUpdate): Promise<void> {
+        if (enqueueFailure !== null) throw enqueueFailure;
+        if (enqueueGate !== null) await enqueueGate;
+        enqueued.push(incoming);
       },
-    });
+    };
     const config = loadAppConfig({
       NODE_ENV: "test",
       TELEGRAM_BOT_TOKEN: TOKEN,
@@ -65,9 +53,7 @@ describe("вебхук бота", () => {
       controllers: [BotWebhookController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
-        { provide: REDIS, useValue: memoryRedis() },
-        { provide: BotRouter, useValue: router },
-        BotUpdateDedupe,
+        { provide: BotUpdateQueue, useValue: updates },
       ],
     })
     class TestModule {}
@@ -92,33 +78,66 @@ describe("вебхук бота", () => {
     });
   }
 
-  it("отклоняет обновление без секретного токена или с чужим", async () => {
+  it("отклоняет обновление без секретного токена или с чужим, не доходя до очереди", async () => {
     const target = await start();
     expect((await post(target, update(1), null)).statusCode).toBe(401);
     expect((await post(target, update(1), `${SECRET}x`)).statusCode).toBe(401);
-    expect(seen).toEqual([]);
+    expect(enqueued).toEqual([]);
   });
 
-  it("отвечает сразу, не дожидаясь обработчика, и не обрабатывает повтор update_id", async () => {
+  it("верный секрет и обновление: оно в очереди, ответ 200 `accepted`", async () => {
     const target = await start();
-    const first = await post(target, update(10));
-    expect(first.statusCode).toBe(200);
-    expect(first.json()).toEqual({ data: { accepted: true } });
-    const repeat = await post(target, update(10));
-    expect(repeat.json()).toEqual({ data: { accepted: false } });
-    expect(seen).toEqual([10]);
+
+    const response = await post(target, update(10));
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: { accepted: true } });
+    expect(enqueued).toEqual([update(10)]);
   });
 
-  it("непонятное обновление принимает, чтобы Telegram его не повторял", async () => {
+  it("сначала очередь, потом ответ: пока обновление не записано, Telegram «принято» не получает", async () => {
+    const target = await start();
+    enqueueGate = new Promise<void>((resolve) => (release = resolve));
+
+    let answered = false;
+    const pending = post(target, update(11)).then((response) => {
+      answered = true;
+      return response;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(answered).toBe(false);
+
+    release();
+    const response = await pending;
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: { accepted: true } });
+    expect(enqueued).toEqual([update(11)]);
+  });
+
+  it("очередь не приняла обновление (Redis недоступен): 503 без `accepted` — Telegram повторит доставку сам", async () => {
+    const target = await start();
+    enqueueFailure = new Error("Redis недоступен");
+
+    const response = await post(target, update(12));
+
+    expect(response.statusCode).toBe(503);
+    expect(JSON.stringify(response.json())).not.toContain("accepted");
+    expect(JSON.stringify(response.json())).not.toContain("Redis недоступен");
+    expect(enqueued).toEqual([]);
+  });
+
+  it("непонятное обновление принимает, чтобы Telegram его не повторял, но в очередь не ставит", async () => {
     const target = await start();
     const response = await post(target, { update_id: "не число" });
     expect(response.statusCode).toBe(200);
-    expect(seen).toEqual([]);
+    expect(response.json()).toEqual({ data: { accepted: false } });
+    expect(enqueued).toEqual([]);
   });
 
   it("без режима вебхука эндпоинта нет", async () => {
     const target = await start({ TELEGRAM_BOT_UPDATES: "polling" });
     expect((await post(target, update(3))).statusCode).toBe(404);
+    expect(enqueued).toEqual([]);
   });
 
   it("режим вебхука без секрета не стартует", () => {
