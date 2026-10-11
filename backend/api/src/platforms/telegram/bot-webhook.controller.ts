@@ -1,11 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
-import { Body, Controller, HttpCode, Inject, Injectable, Logger, Post, Req } from "@nestjs/common";
-import type { Redis } from "ioredis";
+import { Body, Controller, HttpCode, Inject, Logger, Post, Req } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
-import { DisabledError, UnauthorizedError } from "../../common/domain-error.js";
-import { REDIS } from "../../infra/redis.js";
+import { DisabledError, UnauthorizedError, UnavailableError } from "../../common/domain-error.js";
 import { updateSchema } from "./telegram-bot-api.js";
-import { BotRouter } from "./bot-router.js";
+import { BotUpdateQueue } from "./bot-update-queue.js";
 import { Public } from "../../common/access.js";
 
 /**
@@ -14,33 +12,12 @@ import { Public } from "../../common/access.js";
  * - **Секретный токен** из заголовка `X-Telegram-Bot-Api-Secret-Token` —
  *   единственная защита: неугадываемый путь ею не считается. Без токена
  *   обновление отклоняется, не доходя до разбора.
- * - **Ответ сразу.** Сводка рендерится секунды, выгрузка — минуты; Telegram
- *   считает медленный ответ ошибкой и повторяет обновление. Поэтому
- *   обработчики работают после ответа, а повтор одного `update_id` отсекает
- *   короткий ключ в Redis.
+ * - **Сначала очередь, потом ответ.** Обновление записано в Redis до 200,
+ *   иначе перезапуск процесса терял бы его, в том числе оплату. Повторы одного
+ *   `update_id` отсекает id задания. Сводка рендерится секунды, выгрузка —
+ *   минуты; их разбирает воркер очереди, а не запрос. Redis недоступен — 503,
+ *   и Telegram повторит доставку сам.
  */
-
-/** Сколько помнить обработанные обновления: Telegram повторяет неудачную доставку до суток, но первые попытки — в минуты. */
-const DEDUPE_TTL_SEC = 60 * 60;
-
-@Injectable()
-export class BotUpdateDedupe {
-  private readonly logger = new Logger("bot");
-
-  constructor(@Inject(REDIS) private readonly redis: Redis) {}
-
-  /** `true` — обновление видим впервые. Redis недоступен — обрабатываем: лучше повтор, чем потеря команды. */
-  async claim(updateId: number): Promise<boolean> {
-    try {
-      return (await this.redis.set(`bot:update:${updateId}`, "1", "EX", DEDUPE_TTL_SEC, "NX")) !== null;
-    } catch (error: unknown) {
-      this.logger.warn(
-        JSON.stringify({ module: "bot", event: "dedupe_unavailable", reason: error instanceof Error ? error.message : "unknown" }),
-      );
-      return true;
-    }
-  }
-}
 
 /** Минимальная форма запроса Fastify — см. domain-error.filter.ts. */
 interface WebhookRequest {
@@ -53,8 +30,7 @@ export class BotWebhookController {
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
-    private readonly router: BotRouter,
-    private readonly dedupe: BotUpdateDedupe,
+    private readonly updates: BotUpdateQueue,
   ) {}
 
   // Открыт наружу по замыслу: обновления шлёт Telegram, а не игрок. Проверка
@@ -74,13 +50,16 @@ export class BotWebhookController {
     // Непонятное обновление — «принято»: иначе Telegram повторял бы его, а
     // разобрать его лучше не станет.
     if (!update.success) return { data: { accepted: false } };
-    if (!(await this.dedupe.claim(update.data.update_id))) return { data: { accepted: false } };
-
-    void this.router.dispatch(update.data).catch((error: unknown) => {
-      this.logger.error(
-        JSON.stringify({ module: "bot", event: "dispatch_failed", reason: error instanceof Error ? error.message : "unknown" }),
+    try {
+      await this.updates.enqueue(update.data);
+    } catch (error: unknown) {
+      // Не записано — «принято» не отвечаем: Telegram повторит доставку, а
+      // повтор отсечёт id задания, если запись всё же дошла.
+      this.logger.warn(
+        JSON.stringify({ module: "bot", event: "bot_update_enqueue_failed", updateId: update.data.update_id, reason: error instanceof Error ? error.message : "unknown" }),
       );
-    });
+      throw new UnavailableError("Очередь обновлений недоступна");
+    }
     return { data: { accepted: true } };
   }
 }
