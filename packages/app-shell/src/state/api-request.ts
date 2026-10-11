@@ -1,5 +1,7 @@
 import { z } from "zod/mini";
 import type { AuthFailure } from "./auth-api";
+import { CONNECTION_PROBE_PERIOD_MS, reportReachability, useConnection } from "./connection";
+import { useShell } from "./shell";
 
 /**
  * Запрос к API от имени игрока (docs/34-stage3-plan.md, WP4): забеги, отчёты
@@ -36,6 +38,9 @@ export type ApiFailure = (typeof API_FAILURES)[number];
  */
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; failure: ApiFailure; code?: string };
 
+/** Ответы шлюза, когда сервер API недоступен: для игрока это потеря связи. */
+const UNREACHABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
+
 const errorBodySchema = z.object({ error: z.object({ code: z.string() }) });
 
 export type ApiRequest = <T>(
@@ -55,10 +60,14 @@ export const apiRequest: ApiRequest = async (path, schema, init) => {
     });
   } catch {
     // Обрыв сети и таймаут игроку одинаковы: забег подождёт в очереди.
+    reportReachability("fail");
     return { ok: false, failure: "offline" };
   }
   // Сессии нет — запрос и не уходил: причину знает сессия.
   if (response === null) return { ok: false, failure: sessionFailure(useSession.getState().failure) };
+  // Сервер ответил — связь есть, даже если ответ ошибка: у экрана своя ошибка.
+  // Шлюз без API (502–504) не ответ сервера, а его отсутствие.
+  reportReachability(UNREACHABLE_STATUSES.has(response.status) ? "fail" : "reachable");
   if (!response.ok) {
     const code = await errorCodeOf(response);
     return { ok: false, failure: failureOf(response.status), ...(code === null ? {} : { code }) };
@@ -72,6 +81,42 @@ export const apiRequest: ApiRequest = async (path, schema, init) => {
     return { ok: false, failure: "unavailable" };
   }
 };
+
+/**
+ * Проверка связи (`connection.ts`): самый лёгкий запрос игрока, лимит — 600 в
+ * час на аккаунт. Исход дойдёт до статуса связи сам через `apiRequest`.
+ * Гостю без сессии проверять нечем — запрос и не уходил, ему достаточно сети
+ * браузера. Живёт здесь, чтобы не утяжелять первую загрузку: подгружается,
+ * только когда связь пропала.
+ */
+export async function checkConnection(): Promise<void> {
+  const state = useConnection.getState();
+  if (state.status !== "offline" || state.checking) return;
+  useConnection.setState({ checking: true });
+  try {
+    const guest = useShell.getState().capabilities.auth === undefined;
+    const result = guest ? null : await apiRequest("/api/v1/me/badges", z.unknown(), { method: "GET" });
+    if ((result === null || (!result.ok && result.failure === "no_identity")) && navigator.onLine) reportReachability("reachable");
+  } finally {
+    useConnection.setState({ checking: false });
+  }
+}
+
+let probeTimer: ReturnType<typeof setInterval> | null = null;
+const onBrowserOnline = (): void => void checkConnection();
+
+/** Пока связи нет — проверять раз в период и по событию браузера `online`. */
+export function watchConnection(on: boolean): void {
+  if (on === (probeTimer !== null)) return;
+  if (on) {
+    probeTimer = setInterval(onBrowserOnline, CONNECTION_PROBE_PERIOD_MS);
+    globalThis.addEventListener("online", onBrowserOnline);
+    return;
+  }
+  if (probeTimer !== null) clearInterval(probeTimer);
+  probeTimer = null;
+  globalThis.removeEventListener("online", onBrowserOnline);
+}
 
 /**
  * Причина из сессии — в причину запроса. Заблокированный и не принятый вход

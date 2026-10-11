@@ -126,25 +126,25 @@ describe("исход запроса игрока", () => {
   afterEach(resetConnectionForTests);
 
   /** Сбой запоминается счётчиком, любой ответ сервера его сбрасывает. */
-  async function failures(respond: () => Promise<Response | null>): Promise<number> {
+  async function firstFailAfter(respond: () => Promise<Response | null>): Promise<number | null> {
     sessionStub.fetch.mockRejectedValueOnce(new TypeError("fetch failed"));
     await get();
-    expect(useConnection.getState().failures).toBe(1);
+    expect(useConnection.getState().firstFailAt).not.toBeNull();
     sessionStub.fetch.mockImplementationOnce(respond);
     await get();
-    return useConnection.getState().failures;
+    return useConnection.getState().firstFailAt;
   }
 
   it("обрыв сети — сбой", async () => {
     sessionStub.fetch.mockRejectedValueOnce(new TypeError("fetch failed"));
     expect(await get()).toEqual({ ok: false, failure: "offline" });
-    expect(useConnection.getState().failures).toBe(1);
+    expect(useConnection.getState().firstFailAt).not.toBeNull();
   });
 
   it.each([502, 503, 504])("ответ шлюза %i — сбой", async (status) => {
     sessionStub.fetch.mockResolvedValueOnce(answer(status));
     await get();
-    expect(useConnection.getState().failures).toBe(1);
+    expect(useConnection.getState().firstFailAt).not.toBeNull();
   });
 
   it("два ответа шлюза подряд — нет связи", async () => {
@@ -155,16 +155,16 @@ describe("исход запроса игрока", () => {
   });
 
   it.each([404, 400, 401, 403, 429, 500])("ответ %i — связь есть", async (status) => {
-    expect(await failures(async () => answer(status))).toBe(0);
+    expect(await firstFailAfter(async () => answer(status))).toBeNull();
   });
 
   it("успешный ответ — связь есть", async () => {
-    expect(await failures(async () => answer(200, { data: { n: 1 } }))).toBe(0);
+    expect(await firstFailAfter(async () => answer(200, { data: { n: 1 } }))).toBeNull();
   });
 
   it("нет сессии — запрос не уходил, связь не судится", async () => {
     sessionStub.fetch.mockResolvedValueOnce(null);
     await get();
-    expect(useConnection.getState()).toMatchObject({ status: "online", failures: 0 });
+    expect(useConnection.getState()).toMatchObject({ status: "online", firstFailAt: null });
   });
 });
