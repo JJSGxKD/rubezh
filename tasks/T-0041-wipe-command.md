@@ -3,7 +3,7 @@ id: T-0041
 title: Команда вайпа — подсчёт, снимок и стирание одной транзакцией
 epic: E2
 priority: P1
-status: in-progress
+status: done
 owner: claude-6 / sonnet-5.5
 size: M
 depends_on: [T-0040, T-0036]
