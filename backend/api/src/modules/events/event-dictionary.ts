@@ -257,6 +257,10 @@ export const EVENT_DICTIONARY = {
   // `network` — у задания рекламной сети (WP13, часть 6): награду за него
   // выдал сервер по подтверждению сети, и клиент её дождался.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
+  // Связь с API пропала и вернулась (общая плашка «Нет связи», T-0015);
+  // `downtimeSec` — сколько прошло между потерей и возвращением.
+  connection_lost: { version: 1, payload: payload({}) },
+  connection_restored: { version: 1, payload: payload({ downtimeSec: count }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 
