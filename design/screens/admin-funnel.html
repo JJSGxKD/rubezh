@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — панель: воронка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --surface-raised:#353452; --surface-sunken:#17162a;
+    --border:#43425f; --border-strong:#5b5980; --text:#f3eee6; --muted:#aeaac4; --disabled:#6f6c8a;
+    --accent:#ff8f3f; --on-accent:#230f02; --success:#8ee86b; --danger:#ff5d5d; --warning:#ffc14d; --info:#5ccfff;
+    --r-sm:4px; --r-md:6px; --r-lg:8px;
+    --display:'Russo One', sans-serif; --text-font:'IBM Plex Sans', sans-serif;
+    --page:#0d0c18; --page-muted:#9a97ab;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:14px/1.5 var(--text-font); }
+  .page { max-width:1700px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:400 28px/1.2 var(--display); margin:0 0 8px; letter-spacing:.02em; }
+  h2 { font:400 20px/1.2 var(--display); margin:40px 0 8px; letter-spacing:.02em; }
+  .lead { color:var(--page-muted); max-width:1000px; margin:0 0 8px; font-size:15px; }
+  code { font-size:.92em; }
+  table.inv { border-collapse:collapse; font-size:13.5px; max-width:1200px; margin:8px 0 0; }
+  table.inv td, table.inv th { border:1px solid #2c2b45; padding:6px 10px; text-align:left; vertical-align:top; }
+  table.inv th { color:var(--page-muted); font-weight:600; }
+  .cap { margin-top:10px; font-size:13.5px; color:var(--page-muted); max-width:760px; }
+  .cap b { color:var(--text); }
+  .grow { flex:1; min-width:0; }
+  .frame { width:1240px; border-radius:10px; overflow:hidden; border:1px solid #2c2b45; background:var(--bg); box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .top { display:flex; align-items:center; gap:10px; height:52px; padding:0 20px; border-bottom:1px solid var(--border); }
+  .top .t { font:400 17px var(--display); letter-spacing:.02em; }
+  .top .h { color:var(--muted); font-size:12.5px; }
+  .content { padding:18px 20px 22px; display:flex; flex-direction:column; gap:14px; }
+  .bar-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .chips { display:inline-flex; gap:2px; padding:2px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); }
+  .chips span { height:28px; padding:0 11px; display:grid; place-items:center; border-radius:var(--r-sm); font:600 12px var(--text-font); color:var(--muted); }
+  .chips span.on { background:var(--surface-raised); color:var(--text); box-shadow:inset 0 0 0 1px var(--border-strong); }
+  .sel { height:32px; padding:0 10px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border-strong); display:inline-flex; align-items:center; gap:8px; font-size:13px; }
+  .sel .k { color:var(--muted); font-size:12px; }
+  .toggle { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--text); }
+  .toggle i { width:30px; height:18px; border-radius:9px; background:var(--accent); position:relative; } .toggle i::after { content:""; position:absolute; right:2px; top:2px; width:14px; height:14px; border-radius:50%; background:var(--on-accent); }
+  .btn { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 12px; border-radius:var(--r-md); font:600 12.5px var(--text-font); background:var(--surface-raised); color:var(--text); border:1px solid var(--border-strong); white-space:nowrap; }
+  .panel { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); }
+  .ph { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); }
+  .ph .pt { font:400 14.5px var(--display); letter-spacing:.02em; }
+  .ph .sub { font-size:12px; color:var(--muted); }
+  .ph .help { width:16px; height:16px; border-radius:50%; display:grid; place-items:center; font:700 10px var(--text-font); color:var(--muted); border:1px solid var(--border-strong); }
+  .pb { padding:12px 14px; }
+
+  /* Шаги полосами: ширина — доля от входа */
+  .fun { display:flex; flex-direction:column; gap:6px; }
+  .fstep { display:grid; grid-template-columns:150px 1fr 300px; gap:12px; align-items:center; }
+  .fstep .nm { font-size:13px; } .fstep .nm small { display:block; color:var(--muted); font-size:11px; }
+  .track { position:relative; height:26px; border-radius:var(--r-sm); background:var(--surface-sunken); overflow:hidden; }
+  .track .f { position:absolute; inset:0 auto 0 0; border-radius:var(--r-sm); background:linear-gradient(90deg, color-mix(in oklab, var(--accent) 80%, #fff 8%), color-mix(in oklab, var(--accent) 55%, transparent)); display:flex; align-items:center; padding-left:8px; font:400 13px var(--display); color:var(--on-accent); font-variant-numeric:tabular-nums; }
+  .track .prev { position:absolute; top:0; bottom:0; width:2px; background:var(--text); opacity:.55; }
+  .fstep .st { display:flex; gap:12px; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .fstep .st b { color:var(--text); font-weight:600; }
+  .up { color:var(--success); } .down { color:var(--danger); }
+  .drop { display:flex; align-items:center; gap:8px; margin:2px 0 2px 162px; font-size:12px; color:var(--warning); }
+  .drop i { display:inline-block; height:18px; padding:0 7px; border-radius:var(--r-sm); background:color-mix(in oklab, var(--warning) 16%, transparent); font:700 11px/18px var(--text-font); font-style:normal; }
+
+  table.dt { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.dt th { text-align:right; font-weight:600; font-size:11px; color:var(--muted); padding:6px 6px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  table.dt th:first-child, table.dt td:first-child { text-align:left; }
+  table.dt td { padding:5px 6px; border-bottom:1px solid color-mix(in oklab, var(--border) 60%, transparent); white-space:nowrap; text-align:right; font-variant-numeric:tabular-nums; }
+  table.dt tr.total td { font-weight:600; background:color-mix(in oklab, var(--surface-raised) 45%, transparent); }
+  .src b { font-weight:600; } .src small { display:block; color:var(--muted); font-size:11px; }
+  .hc { display:inline-flex; flex-direction:column; align-items:flex-end; min-width:54px; padding:2px 6px; border-radius:3px; }
+  .hc small { font-size:10.5px; color:var(--muted); }
+  .note { font-size:12px; color:var(--muted); }
+  .flags { display:flex; gap:10px; align-items:center; font-size:12.5px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Панель: воронка</h1>
+  <p class="lead">Экран «Воронка» (<code>apps/admin/src/screens/funnel/FunnelScreen.tsx</code>): те же девять вех (<code>FUNNEL_STEPS</code>), те же источники (<code>touchOf</code>), то же правило «число и доля в одной ячейке» (<code>docs/29-admin-panel.md</code> §5.2). Пользователь 07.10.2026: воронки — в первые макеты панели. Сейчас экран — одна таблица; в макете сверху сама воронка полосами — где теряем новичков, видно без чтения цифр, — а таблица источников подсвечивает долю цветом.</p>
+
+  <h2>Что сохраняется и что меняется</h2>
+  <table class="inv">
+    <tr><th>Элемент</th><th>Сейчас</th><th>В макете</th></tr>
+    <tr><td>Период</td><td>Два поля дат и «Показать»; пусто — 30 дней</td><td>Переключатель «7 · 30 · 90 дней · свой» (свой — те же два поля), площадка — списком, «Сравнить с прошлым периодом»</td></tr>
+    <tr><td>Воронка</td><td>Только строка «Все источники» в таблице</td><td>Полосами: ширина — доля от входа, справа — число, доля от прошлого шага и изменение к прошлому периоду; черта на полосе — где был прошлый период. Шаг с наибольшей потерей — отметкой «больше всего теряем»</td></tr>
+    <tr><td>Источники</td><td>Таблица: площадка, откуда, аккаунтов, девять вех числом и долей</td><td>Так же, но ячейка подсвечена тоном по доле: зелёный — выше, чем у всех, красный — ниже. Строки сортируются по аккаунтам или по любой вехе</td></tr>
+    <tr><td>Доля флага</td><td><code>FlagSplitPanel</code> ниже</td><td>Без изменений, ниже таблицы</td></tr>
+  </table>
+
+  <h2>На ПК</h2>
+  <div class="frame">
+    <div class="top"><span class="t">Воронка</span><span class="h">Откуда приходят игроки и на каком шаге уходят</span></div>
+    <div class="content">
+      <div class="bar-row"><span class="chips"><span>7 дней</span><span class="on">30 дней</span><span>90 дней</span><span>Свой период</span></span><span class="sel"><span class="k">Площадка</span>Все ▾</span><span class="toggle"><i></i>Сравнить с прошлыми 30 днями</span><span class="grow"></span><span class="btn">Обновить</span></div>
+      <div class="panel"><div class="ph"><span class="pt">Воронка новичков</span><span class="help">?</span><span class="sub">8 сен — 7 окт · 2 840 аккаунтов · прошлые 30 дней — 2 310</span></div><div class="pb"><div class="fun" id="fun"></div></div></div>
+      <div class="panel"><div class="ph"><span class="pt">По источникам</span><span class="help">?</span><span class="sub">доля — от аккаунтов строки; цвет — к доле всех источников</span><span class="grow"></span><span class="sel"><span class="k">Сортировка</span>Аккаунтов ↓</span></div><div class="pb"><table class="dt" id="src"></table></div></div>
+      <div class="panel"><div class="ph"><span class="pt">Доля флага</span><span class="help">?</span><span class="sub">как сейчас — FlagSplitPanel</span></div><div class="pb flags">Флаг <span class="sel">new_onboarding ▾</span> · с флагом 1 420 · без 1 420 · 1-й забег 64% против 58%</div></div>
+    </div>
+  </div>
+  <p class="cap"><b>Воронка на 1240 px.</b> Отметка «больше всего теряем» — у шага с наибольшей потерей от прошлого среди первых шести (дальше потеря ожидаема): здесь между «2 забега» и «5 забегов». Черта на полосе — значение прошлого периода; правее черты — стало лучше.</p>
+</div>
+
+<script>
+  const fmt = (n) => n.toLocaleString("ru-RU");
+  const STEPS = [["Вход", "вошли в бота или по ссылке", 2840, 2310], ["Открыл", "открыли игру", 2410, 1940], ["1-й забег", "начали", 2180, 1700], ["Закончил", "закончили первый", 1990, 1560], ["2 забега", "", 1310, 1080], ["5 забегов", "", 820, 640], ["Вернулся D1", "на следующий день", 690, 520], ["Вернулся D7", "через неделю", 260, 190], ["Покупка", "первая за звёзды", 88, 61]];
+  let worst = 1, worstLoss = 0;
+  STEPS.forEach((s, k) => { if (k > 0) { const loss = 1 - s[2] / STEPS[k - 1][2]; if (loss > worstLoss && k < 6) { worstLoss = loss; worst = k; } } });
+  document.getElementById("fun").innerHTML = STEPS.map(([t, sub, n, prev], k) => {
+    const share = n / STEPS[0][2], pshare = prev / STEPS[0][3];
+    const fromPrev = k === 0 ? null : Math.round((n / STEPS[k - 1][2]) * 100);
+    const delta = Math.round((share - pshare) * 1000) / 10;
+    const row = `<div class="fstep"><div class="nm">${t}${sub ? `<small>${sub}</small>` : ""}</div><div class="track"><div class="f" style="width:${Math.max(4, share * 100)}%">${share > 0.08 ? fmt(n) : ""}</div><div class="prev" style="left:${pshare * 100}%"></div></div><div class="st"><span><b>${Math.round(share * 100)}%</b> от входа</span><span>${fromPrev === null ? "—" : `<b>${fromPrev}%</b> от прошлого`}</span><span class="${delta >= 0 ? "up" : "down"}">${k === 0 ? `+${Math.round((n / prev - 1) * 100)}% аккаунтов` : `${delta >= 0 ? "+" : ""}${delta} п.`}</span></div></div>`;
+    return (k === worst ? `<div class="drop"><i>больше всего теряем</i>${100 - Math.round((n / STEPS[k - 1][2]) * 100)}% не доходят от «${STEPS[k - 1][0]}» до «${t}»</div>` : "") + row;
+  }).join("");
+
+  const SRC = [["Все источники", null, [2840, 2410, 2180, 1990, 1310, 820, 690, 260, 88]], ["Органика", "без нашей ссылки", [920, 780, 690, 620, 410, 250, 220, 90, 21]], ["Кампания «stream-1009»", "источник: twitch", [610, 560, 530, 500, 360, 240, 200, 71, 30]], ["Приглашение друга", "кнопка «Пригласить»", [480, 440, 420, 400, 300, 210, 180, 70, 22]], ["Кампания «ads-adsgram»", "источник: adsgram", [540, 400, 330, 280, 140, 70, 50, 16, 7]], ["Ссылка дружбы", "открыл ссылку игрока", [290, 230, 210, 190, 100, 50, 40, 13, 8]]];
+  const heads = ["Вход", "Открыл", "1-й забег", "Закончил", "2 забега", "5 забегов", "D1", "D7", "Покупка"];
+  const total = SRC[0][2];
+  const cell = (v, k, acc, isTotal) => { if (k === 0) return `<td>${fmt(v)}</td>`; const share = v / acc, base = total[k] / total[0]; const diff = share - base; const tone = isTotal ? "transparent" : diff > 0.03 ? `color-mix(in oklab, var(--success) ${Math.min(30, diff * 200)}%, transparent)` : diff < -0.03 ? `color-mix(in oklab, var(--danger) ${Math.min(30, -diff * 200)}%, transparent)` : "transparent"; return `<td><span class="hc" style="background:${tone}">${fmt(v)}<small>${Math.round(share * 100)}%</small></span></td>`; };
+  document.getElementById("src").innerHTML = `<thead><tr><th>Откуда пришли</th><th>Аккаунтов</th>${heads.slice(1).map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${SRC.map(([t, d, v], r) => `<tr class="${r === 0 ? "total" : ""}"><td class="src"><b>${t}</b>${d ? `<small>${d}</small>` : ""}</td>${v.map((x, k) => cell(x, k, v[0], r === 0)).join("")}</tr>`).join("")}</tbody>`;
+</script>
+</body>
+</html>
