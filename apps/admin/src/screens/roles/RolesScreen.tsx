@@ -124,6 +124,8 @@ function GrantDialog({ catalog, accountId, onClose, onGranted }: { catalog: Assi
   const [lookup, setLookup] = useState<Lookup>({ status: "idle" });
   const [role, setRole] = useState<string>("");
   const [pending, setPending] = useState(false);
+  /** Роль выдаётся после подтверждения в боте: диалог ждёт его вместо итога. */
+  const [awaiting, setAwaiting] = useState<{ link: string; role: string; name: string } | null>(null);
 
   useEffect(() => {
     if (input.trim() === "") return setLookup({ status: "idle" });
@@ -154,10 +156,41 @@ function GrantDialog({ catalog, accountId, onClose, onGranted }: { catalog: Assi
     const result = await grantRole(api, { accountId: candidate.accountId }, role);
     setPending(false);
     if (!result.ok) return void toast.error(result.error.message);
+    if (result.data.confirm !== null) return setAwaiting({ link: result.data.confirm.link, role, name: candidate.displayName });
     toast.success(`${candidate.displayName}: роль «${roleName(role)}» выдана`, { description: "Права действуют сразу, без повторного входа" });
     onGranted();
     onClose();
   };
+
+  if (awaiting !== null) {
+    return (
+      <Dialog
+        open
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+        title="Подтвердите в Telegram"
+        description={`Роль «${roleName(awaiting.role)}» для ${awaiting.name} выдаётся только после подтверждения в личном чате с ботом. Ссылка действует 10 минут.`}
+        footer={
+          <>
+            <Button
+              onClick={() => {
+                onGranted();
+                onClose();
+              }}
+            >
+              Готово
+            </Button>
+            <Button tone="primary" onClick={() => window.open(awaiting.link, "_blank", "noopener,noreferrer")}>
+              Открыть бота
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-text-muted">Нажмите «Выдать» в чате с ботом — роль появится сразу. После этого нажмите «Готово»: список ролей перечитается.</p>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog
