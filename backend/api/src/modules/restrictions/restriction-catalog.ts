@@ -13,7 +13,7 @@ import type { Permission } from "../roles/permissions.js";
  * не приходит — иначе ограничение было бы отсрочкой.
  */
 
-export const RESTRICTION_KINDS = ["leaderboard", "referral_rewards", "friend_gifts", "ad_rewards", "promo_codes", "partner_tasks", "all"] as const;
+export const RESTRICTION_KINDS = ["leaderboard", "referral_rewards", "friend_gifts", "ad_rewards", "promo_codes", "partner_tasks", "purchases", "all"] as const;
 
 export type RestrictionKind = (typeof RESTRICTION_KINDS)[number];
 
@@ -74,6 +74,14 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
     permission: "players.restrict",
     silentAllowed: true,
   },
+  purchases: {
+    title: "Покупки",
+    effect:
+      "Покупки за звёзды закрыты: магазин и VIP не выставляют счета, по старым счетам оплата не проходит. Купленное раньше остаётся. Ставится само после возврата звёзд через Telegram.",
+    checkedIn: "shop, vip, payments",
+    permission: "players.restrict",
+    silentAllowed: false,
+  },
   all: {
     title: "Всё — блокировка",
     effect:
@@ -95,6 +103,7 @@ export const RESTRICTION_REASONS = {
   ad_abuse: { title: "Злоупотребление рекламой", player: "Неестественные просмотры рекламы" },
   promo_abuse: { title: "Злоупотребление промокодами", player: "Промокоды использовались не по правилам" },
   abuse: { title: "Оскорбления или спам", player: "Оскорбления или спам" },
+  payment_refund: { title: "Возврат оплаты", player: "Возврат звёзд за покупку" },
   other: { title: "Другое", player: "Нарушение правил игры" },
 } as const satisfies Record<string, { title: string; player: string }>;
 

@@ -1526,7 +1526,7 @@ model AccountRestriction {
   /// сообщить игроку: плашка там, где он упёрся; `false` — молча (О40)
   notify        Boolean
   /// кто наложил; без внешнего ключа — запись переживает аккаунт модератора.
-  /// `null` — перенесено из прежней блокировки
+  /// `null` — система (возврат оплаты) или перенос из прежней блокировки
   imposedBy     String?   @map("imposed_by") @db.Uuid
   liftedAt      DateTime? @map("lifted_at") @db.Timestamptz(3)
   liftedBy      String?   @map("lifted_by") @db.Uuid

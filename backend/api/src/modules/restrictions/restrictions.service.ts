@@ -4,11 +4,11 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { AccountRestrictions } from "./account-restrictions.js";
-import { RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_REASONS, isRestrictionKind, type RestrictionKind, type RestrictionKindInfo } from "./restriction-catalog.js";
+import { RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_LIMITS, RESTRICTION_REASONS, isRestrictionKind, type RestrictionKind, type RestrictionKindInfo, type RestrictionReason } from "./restriction-catalog.js";
 import { banMessage, imposeProblem, isActive, restrictionView, shownText, termProblem, type ImposeInput, type PreviewInput, type RestrictionView } from "./restriction-rules.js";
 import { RestrictionAccountNotFoundError, RestrictionNotFoundError } from "./restrictions-errors.js";
 import { RestrictionsHooks } from "./restrictions-hooks.js";
-import { RESTRICTIONS_REPOSITORY, type RestrictionRow, type RestrictionsRepository } from "./restrictions.repository.js";
+import { RESTRICTIONS_REPOSITORY, type NewRestriction, type RestrictionRow, type RestrictionsRepository } from "./restrictions.repository.js";
 
 /**
  * Наложение и снятие ограничений (docs/35-stage4-plan.md Р75, WP44). Каждое
@@ -84,6 +84,27 @@ export class RestrictionsService {
     const { created, replaced } = await this.db(this.repository.impose(rows, at));
     const banned = created.find((row) => row.kind === "all");
     if (banned !== undefined) await this.db(this.accounts.setBan(accountId, { at, reason: banMessage(banned) }));
+    await this.afterImposed(actor.accountId, accountId, created, replaced, at);
+    return await this.views(created, at);
+  }
+
+  /**
+   * Наложить от имени системы — без права и без автора: решение принял не модератор, а правило
+   * (возврат оплаты, tasks/T-0024). Бессрочно, с сообщением игроку; снять может человек в панели
+   * тем же правом вида. Повторное наложение того же вида заменяет действующее, как у человека.
+   * Блокировку целиком система не накладывает — её решает человек.
+   */
+  async imposeBySystem(accountId: string, kind: RestrictionKind, reason: RestrictionReason, comment: string, at = new Date()): Promise<void> {
+    if (kind === "all") throw new ValidationError("Систему блокировать целиком не просим: блокировка — решение человека");
+    // Автора нет: колонка `imposed_by` и `RestrictionRow` допускают `null`, а `NewRestriction.imposedBy` в
+    // `restrictions.repository.ts` (вне зон T-0024) всё ещё `string`; реализации с `null` работают.
+    const row = { accountId, kind, startsAt: at, endsAt: null, reason, comment: comment.slice(0, RESTRICTION_LIMITS.commentMax), notify: true, imposedBy: null };
+    const { created, replaced } = await this.db(this.repository.impose([row as unknown as NewRestriction], at));
+    await this.afterImposed(null, accountId, created, replaced, at);
+  }
+
+  /** Что идёт за записью строк: сведение заменённых, кеш, слушатели, журнал аудита и лог. `actorId` — `null`: система. */
+  private async afterImposed(actorId: string | null, accountId: string, created: readonly RestrictionRow[], replaced: readonly RestrictionRow[], at: Date): Promise<void> {
     // Заменённые снимаются без своих последствий: новое ограничение того же
     // вида их и так держит.
     await this.db(this.repository.markSettled(replaced.map((row) => row.restrictionId), at));
@@ -91,14 +112,13 @@ export class RestrictionsService {
     await this.hooks.emitImposed({ accountId, kinds: created.map((row) => row.kind), at });
 
     await this.roles.audit({
-      actorAccountId: actor.accountId,
+      actorAccountId: actorId,
       action: "players.restrict",
       target: accountId,
       ...(replaced.length === 0 ? {} : { before: { replaced: replaced.map(auditOf) } }),
       after: { restrictions: created.map(auditOf) },
     });
-    for (const row of created) this.log("account_restricted", { accountId, actor: actor.accountId, kind: row.kind, endsAt: row.endsAt?.toISOString() ?? null, reason: row.reason, notify: row.notify });
-    return await this.views(created, at);
+    for (const row of created) this.log("account_restricted", { accountId, actor: actorId, kind: row.kind, endsAt: row.endsAt?.toISOString() ?? null, reason: row.reason, notify: row.notify });
   }
 
   /** Снять действующее ограничение — с причиной, она остаётся в истории. */
