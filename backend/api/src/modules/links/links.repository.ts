@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { isLinkNetwork, type LinkNetwork } from "./link-networks.js";
+import { isLinkTarget, type LinkTarget } from "./link-targets.js";
 
 /** Ссылки кампаний и клики по ним (docs/24-attribution-and-sharing.md §3). */
 
@@ -20,9 +21,12 @@ export interface LinkInput {
   /** сеть, где куплена реклама; `null` — обычная ссылка */
   network: LinkNetwork | null;
   registrationOn: RegistrationOn;
+  /** куда ведёт ссылка; не задана — Mini App, как у всех ссылок до целей */
+  target?: LinkTarget;
 }
 
-export interface LinkRecord extends LinkInput {
+export interface LinkRecord extends Omit<LinkInput, "target"> {
+  target: LinkTarget;
   createdAt: Date;
 }
 
@@ -44,6 +48,8 @@ export interface LinkStats extends LinkRecord {
   clicks30d: number;
   /** сколько аккаунтов запустили игру по кликам этой ссылки — сессии с `start_ref` клика */
   launches: number;
+  /** сколько аккаунтов запустили игру по прямой ссылке `l-<код>` — сессии вида `link` с кодом ссылки */
+  directLaunches: number;
 }
 
 export const LINKS_REPOSITORY = Symbol("LINKS_REPOSITORY");
@@ -53,6 +59,8 @@ export interface LinksRepository {
   byCode(code: string): Promise<LinkRecord | null>;
   recordClick(click: ClickInput): Promise<void>;
   list(limit: number): Promise<LinkStats[]>;
+  /** Сменить цель; прошлые клики остаются. `null` — ссылки с таким кодом нет. */
+  retarget(code: string, target: LinkTarget): Promise<LinkRecord | null>;
 }
 
 @Injectable()
@@ -66,6 +74,16 @@ export class PrismaLinksRepository implements LinksRepository {
   async byCode(code: string): Promise<LinkRecord | null> {
     const row = await this.prisma.link.findUnique({ where: { code } });
     return row === null ? null : recordOf(row);
+  }
+
+  async retarget(code: string, target: LinkTarget): Promise<LinkRecord | null> {
+    try {
+      return recordOf(await this.prisma.link.update({ where: { code }, data: { target } }));
+    } catch (error: unknown) {
+      // Ссылки с таким кодом нет: Prisma сообщает об этом кодом P2025.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return null;
+      throw error;
+    }
   }
 
   async recordClick(click: ClickInput): Promise<void> {
@@ -104,15 +122,37 @@ export class PrismaLinksRepository implements LinksRepository {
       FROM link_click c
       WHERE c.link_code IN (${Prisma.join(codes)})
       GROUP BY c.link_code`;
+    // Прямые запуски — сессии вида `link`, где `start_ref` — сам код ссылки, без кликов;
+    // у ссылки, по которой не кликали ни разу, они всё равно есть.
+    const direct = await this.prisma.$queryRaw<{ link_code: string; direct_launches: number }[]>`
+      SELECT s.start_ref AS link_code, count(DISTINCT s.account_id)::int AS direct_launches
+      FROM account_session s
+      WHERE s.start_kind = 'link' AND s.start_ref IN (${Prisma.join(codes)})
+      GROUP BY s.start_ref`;
     const byCode = new Map(stats.map((row) => [row.link_code, row]));
+    const directByCode = new Map(direct.map((row) => [row.link_code, row.direct_launches]));
     return links.map((link) => {
       const row = byCode.get(link.code);
-      return { ...recordOf(link), clicks: row?.clicks ?? 0, clicks30d: row?.clicks_30d ?? 0, launches: row?.launches ?? 0 };
+      return {
+        ...recordOf(link),
+        clicks: row?.clicks ?? 0,
+        clicks30d: row?.clicks_30d ?? 0,
+        launches: row?.launches ?? 0,
+        directLaunches: directByCode.get(link.code) ?? 0,
+      };
     });
   }
 }
 
-/** Строка базы — в запись: сеть и момент регистрации держит `CHECK`, здесь только сужение типа. */
-function recordOf(row: Omit<LinkRecord, "network" | "registrationOn"> & { network: string | null; registrationOn: string }): LinkRecord {
-  return { ...row, network: row.network === null || !isLinkNetwork(row.network) ? null : row.network, registrationOn: row.registrationOn === "launch" ? "launch" : "first_run" };
+/**
+ * Строка базы — в запись: сеть и момент регистрации держит `CHECK`, здесь только сужение типа.
+ * Цель, которой код не знает (строка из будущей версии), читается как Mini App — ссылка работает.
+ */
+function recordOf(row: Omit<LinkRecord, "network" | "registrationOn" | "target"> & { network: string | null; registrationOn: string; target: string }): LinkRecord {
+  return {
+    ...row,
+    network: row.network === null || !isLinkNetwork(row.network) ? null : row.network,
+    registrationOn: row.registrationOn === "launch" ? "launch" : "first_run",
+    target: isLinkTarget(row.target) ? row.target : "app",
+  };
 }
