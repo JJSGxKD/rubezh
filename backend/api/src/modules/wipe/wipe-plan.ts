@@ -48,6 +48,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   DiagnosticReport: keep("отчёты диагностики команде"),
   Feedback: keep("отзывы игроков"),
   DataExport: keep("журнал выгрузок"),
+  TesterCompensation: keep("компенсации тестерам выдаются после вайпа"),
 
   // --- остаются: друзья, приглашения, привязки ---
   FriendLink: keep("ссылка дружбы остаётся"),

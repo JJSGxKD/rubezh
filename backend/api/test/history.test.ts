@@ -10,6 +10,8 @@ describe("категория строки кошелька", () => {
     expect(walletCategory("coins", "boost")).toBe("boosts");
     expect(walletCategory("gems", "boost_refund")).toBe("boosts");
     expect(walletCategory("gems", "purchase")).toBe("purchases");
+    // Списание при возврате звёзд (T-0023) видно в разделе покупок.
+    expect(walletCategory("gems", "refund_revoke")).toBe("purchases");
     expect(walletCategory("shard_rare", "salvage")).toBe("shards");
     expect(walletCategory("shard_common", "item_upgrade")).toBe("shards");
     expect(walletCategory("coins", "run_reward")).toBe("currency");

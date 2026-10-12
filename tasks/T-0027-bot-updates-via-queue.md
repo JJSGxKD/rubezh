@@ -3,8 +3,8 @@ id: T-0027
 title: Обновления бота не теряются при перезапуске — сначала очередь, потом ответ
 epic: E4
 priority: P0
-status: ready
-owner:
+status: done
+owner: claude-6 / sonnet-5.5
 size: M
 depends_on: [T-0020]
 zones:
@@ -19,6 +19,7 @@ zones:
 shared:
   - docs/28-diagnostics.md
   - docs/21-diagrams.md
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: extra
@@ -59,7 +60,10 @@ design: null
   нужна и уходит.
 - **Оплата — первой.** `pre_checkout_query` надо ответить за 10 секунд,
   поэтому оно и `successful_payment` ставятся с приоритетом, как сейчас
-  `urgentFirst` в опросе.
+  `urgentFirst` в опросе. **Приоритет получают все задания**, обычные — ниже:
+  в BullMQ задание без приоритета берётся раньше любого приоритетного (список
+  ожидания — до множества приоритетных), и оплата встала бы за всеми `/start`.
+  Ответ тимлидов на вопрос 1 в PR T-0027 от 11.10.2026.
 - **Маршрутизатор сообщает исход.** `dispatch` возвращает `handled`,
   `unhandled` или `failed` с именем обработчика. Падение по-прежнему пишется
   в лог `handler_failed`, но теперь задание видит падение и повторяется.
@@ -125,6 +129,8 @@ design: null
      const JOB_OPTIONS = { attempts: 5, backoff: { type: "exponential", delay: 5_000, jitter: 0.5 }, removeOnComplete: { age: 3600 }, removeOnFail: { age: 86_400 } } as const;
      /** Оплата ждёт ответа 10 секунд — её задания вперёд остальных. */
      const URGENT_PRIORITY = 1;
+     /** Приоритет и у обычных: задание без приоритета BullMQ берёт раньше любого приоритетного. */
+     const ORDINARY_PRIORITY = 2;
      const WORKER_CONCURRENCY = 8;
      ```
 
@@ -132,8 +138,8 @@ design: null
      - `queue.add("update", update, { ...JOB_OPTIONS, jobId: \`update-${update.update_id}\`, priority })`
        с `withTimeout(…, ENQUEUE_TIMEOUT_MS, "очередь обновлений бота")`;
      - `priority = URGENT_PRIORITY`, если в обновлении есть
-       `pre_checkout_query` или `message.successful_payment`. Иначе без
-       приоритета: тот же признак, что у `urgentFirst`, вынести в
+       `pre_checkout_query` или `message.successful_payment`. Иначе
+       `ORDINARY_PRIORITY`, без приоритета задание не ставится: тот же признак, что у `urgentFirst`, вынести в
        экспортируемую функцию `isUrgent(update)` и переиспользовать;
      - очереди нет (выключено) → `Error`;
      - ошибка постановки бросается вызывающему;
@@ -165,8 +171,10 @@ design: null
    3. ошибка постановки → смещение не сдвигается, лог `warn`, следующая
       итерация опроса заберёт ту же пачку. Повторы отсечёт id задания.
 
-   `urgentFirst`, если больше не используется, — удалить вместе с тестом на
-   неё и перенести проверку признака в тест `isUrgent`.
+   `urgentFirst` не удалять: на неё опирается кейс в
+   `test/payment-confirmation.test.ts`, а этот файл в зонах T-0023, она в
+   работе. Функцию и кейс удалят тимлиды после T-0023 (входящие); проверка
+   признака — в тесте `isUrgent`.
 6. **`bot.module.ts`** — `BotUpdateQueue` в `providers`, `BotUpdateDedupe` убрать.
 7. **Документы** — раздел «Документы».
 
@@ -189,8 +197,8 @@ design: null
   - упал обработчик по умолчанию → `failed`.
 - Новый `backend/api/test/bot-update-queue.test.ts`, на подменах очереди и
   маршрутизатора:
-  - `enqueue` обычного сообщения → `add` с `jobId: "update-<id>"` и без
-    приоритета;
+  - `enqueue` обычного сообщения → `add` с `jobId: "update-<id>"` и
+    `priority: 2`;
   - `pre_checkout_query` и `successful_payment` → `priority: 1`;
   - `isUrgent` — по двум срочным и одному обычному обновлению;
   - `add` не ответил за 2 с → `enqueue` бросает;
@@ -198,6 +206,10 @@ design: null
     - данные не по схеме → не бросает, `dispatch` не вызван;
     - `dispatch` → `handled` или `unhandled` → не бросает;
     - `dispatch` → `failed` → бросает.
+  - на живом Redis, как остальные сквозные кейсы файла: очередь на паузе,
+    два обычных обновления, затем срочное → после снятия паузы срочное
+    обработано первым. Этот кейс держит порядок BullMQ при обновлении
+    библиотеки.
 - `backend/api/test/bot-webhook.test.ts`:
   - верный секрет и обновление → `enqueue` вызван, 200 `{ accepted: true }`;
   - `enqueue` бросил → 503, `accepted` не отвечается;
@@ -249,6 +261,10 @@ design: null
     - `alt` записано → 200, иначе → 503 и повтор Telegram;
     - воркер → `BotRouter.dispatch` → обработчик;
     - `alt` `failed` → повтор задания с паузой.
+- `docs/30-configuration-map.md` — строка «Очередь обновлений бота: попытки,
+  пауза, сколько помнить id, параллельность, приоритет оплаты» →
+  `platforms/telegram/bot-update-queue.ts`, `JOB_OPTIONS`,
+  `WORKER_CONCURRENCY`, `URGENT_PRIORITY`, `ORDINARY_PRIORITY`.
 
 ## Критерии приёмки
 
@@ -258,8 +274,9 @@ design: null
 - [ ] Упавший обработчик повторяется: задание `failed` уходит на повтор, на
   последней попытке — лог `bot_update_abandoned`.
 - [ ] Повтор одного `update_id` не обрабатывается дважды.
-- [ ] `pre_checkout_query` и `successful_payment` — с приоритетом.
-- [ ] `BotUpdateDedupe` и `urgentFirst` (если не используется) удалены.
+- [ ] `pre_checkout_query` и `successful_payment` обрабатываются раньше
+  обычных обновлений, стоящих в очереди, — на живом BullMQ.
+- [ ] `BotUpdateDedupe` удалён.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR

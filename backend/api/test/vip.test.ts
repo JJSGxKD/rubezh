@@ -16,9 +16,11 @@ import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PaymentConfirmation } from "../src/modules/payments/payment-confirmation.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
 import { PaymentsHooks } from "../src/modules/payments/payments-hooks.js";
+import { PurchaseRevocation } from "../src/modules/payments/purchase-revocation.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { PaymentsService } from "../src/modules/payments/payments.service.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
+import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
 import { SubscriptionRenewal } from "../src/modules/payments/subscription-renewal.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
@@ -74,6 +76,19 @@ class FakeWallet {
   }
 }
 
+/** Память VIP с отзывом периода: что спросили и что ответить — задаёт тест. */
+class CuttingVipRepository extends MemoryVipRepository {
+  readonly cuts: { purchaseId: string; at: Date }[] = [];
+  cutResult: { subscriptionId: string; removedSec: number; until: Date | null } | null = null;
+  cutFailWith: Error | null = null;
+
+  async cutPeriod(purchaseId: string, at: Date): Promise<{ subscriptionId: string; removedSec: number; until: Date | null } | null> {
+    this.cuts.push({ purchaseId, at });
+    if (this.cutFailWith !== null) throw this.cutFailWith;
+    return this.cutResult;
+  }
+}
+
 /**
  * Аккаунты для выдачи: владельца подписки находят по id, как в базе.
  * Идентификатор на площадке берётся из карты владельцев покупок — её
@@ -99,24 +114,26 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
   throw new Error("ожидался отказ");
 }
 
-function setup(settings = config()) {
+/** `register: false` — выдачу и отзыв зарегистрирует сам Nest при старте модуля: вручную дважды реестр отзыва не примет. */
+function setup(settings = config(), register = true) {
   const purchases = new MemoryPurchasesRepository();
   const api = new FakeStarsApi();
   const providers = starsProviders(api);
   const hooks = new PaymentsHooks();
   const fulfillment = new PurchaseFulfillment();
   const payments = new PaymentsService(settings, purchases, new MemoryRunsRepository(), providers, switchesOf(settings));
-  const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), hooks);
+  const revocation = new PurchaseRevocation();
+  const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), hooks, revocation);
   const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
-  const repository = new MemoryVipRepository();
+  const repository = new CuttingVipRepository();
   const wallet = new FakeWallet();
   const bonuses = new WalletBonuses();
   const adPasses = new AdPasses();
   const renewal = new SubscriptionRenewal(purchases, providers);
   const accounts = accountsOf(purchases);
-  const vip = new VipService(repository, payments, fulfillment, hooks, renewal, wallet as unknown as WalletService, bonuses, adPasses, accounts);
-  vip.onModuleInit();
-  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses, adPasses, renewal, accounts };
+  const vip = new VipService(repository, payments, fulfillment, hooks, renewal, wallet as unknown as WalletService, bonuses, adPasses, accounts, revocation);
+  if (register) vip.onModuleInit();
+  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses, adPasses, renewal, accounts, revocation };
 }
 
 type Ctx = ReturnType<typeof setup>;
@@ -430,6 +447,203 @@ describe("вторая подписка: две оплаты проскочил�
   });
 });
 
+describe("отзыв VIP при внешнем возврате звёзд (T-0023)", () => {
+  let ctx: Ctx;
+  let account: AccountRef;
+  let logged: { level: string; event: string; fields: Record<string, unknown> }[];
+  /** Момент возврата: период в 30 суток, оплаченный сейчас, ещё идёт. */
+  const AT = new Date(Date.UTC(2026, 9, 6, 9, 5, 0));
+
+  async function paidVip(): Promise<StoredPurchase> {
+    const first = await subscribe(ctx, account);
+    const row = await ctx.purchases.byId(first);
+    if (row === null) throw new Error("покупки нет");
+    return row;
+  }
+
+  beforeEach(() => {
+    ctx = setup();
+    account = player();
+    logged = [];
+    for (const level of ["log", "warn", "error"] as const) {
+      vi.spyOn(Logger.prototype, level).mockImplementation((message: unknown) => {
+        const fields = JSON.parse(String(message)) as Record<string, unknown>;
+        logged.push({ level, event: String(fields.event), fields });
+      });
+    }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("период обрезан по моменту возврата, продление выключено на площадке и в базе, строки — для лога и карточки", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 20 * 86_400, until: new Date(Date.UTC(2026, 9, 16, 12, 30)) };
+
+    const result = await ctx.vip.revoke(row, AT);
+
+    expect(ctx.repository.cuts).toEqual([{ purchaseId: row.purchaseId, at: AT }]);
+    expect(ctx.api.renewals).toEqual([{ userId: Number(account.platformUserId), chargeId: "charge-1", canceled: true }]);
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).toMatchObject({ renewal: "cancelled", cancelledBy: "game" });
+    expect(result.lines).toEqual(["VIP: убрано 480 ч, теперь до 2026-10-16 12:30", "продление выключено"]);
+  });
+
+  it("отзыв зовёт площадку для аккаунта из покупки, а не из чужих данных", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await ctx.vip.revoke(row, AT);
+
+    expect(set).toHaveBeenCalledWith(account, row.purchaseId, false);
+  });
+
+  it("продление выключается у подписки периода, а не у покупки: у оплаты продления она — первая покупка", async () => {
+    const first = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: first.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };
+    const renewalPurchase: StoredPurchase = { ...first, purchaseId: randomUUID(), renewalOf: first.purchaseId, telegramChargeId: "charge-2" };
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await ctx.vip.revoke(renewalPurchase, AT);
+
+    expect(ctx.repository.cuts[0]?.purchaseId).toBe(renewalPurchase.purchaseId);
+    expect(set).toHaveBeenCalledWith(account, first.purchaseId, false);
+    expect(ctx.repository.subscriptions.get(first.purchaseId)).toMatchObject({ renewal: "cancelled", cancelledBy: "game" });
+  });
+
+  it("VIP кончился с возвратом — строка говорит об этом, а не обещает «до»", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 30 * 86_400, until: AT };
+
+    const result = await ctx.vip.revoke(row, AT);
+
+    expect(result.lines).toEqual(["VIP: убрано 720 ч, VIP закончился", "продление выключено"]);
+  });
+
+  it("дробные часы пишутся с десятой: полчаса — 0.5 ч", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 1_800, until: new Date(AT.getTime() + 86_400_000) };
+
+    const result = await ctx.vip.revoke(row, AT);
+
+    expect(result.lines[0]).toBe("VIP: убрано 0.5 ч, теперь до 2026-10-07 09:05");
+  });
+
+  it("остаток уже использован — «период уже использован», а продление всё равно выключается", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 0, until: new Date(AT.getTime() + 86_400_000) };
+
+    const result = await ctx.vip.revoke(row, AT);
+
+    expect(result.lines).toEqual(["VIP: период уже использован", "продление выключено"]);
+    expect(ctx.api.renewals).toHaveLength(1);
+  });
+
+  it("периода нет — «VIP: периода нет», ни площадка, ни база не тронуты", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = null;
+
+    const result = await ctx.vip.revoke(row, AT);
+
+    expect(result.lines).toEqual(["VIP: периода нет"]);
+    expect(ctx.api.renewals).toEqual([]);
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).toMatchObject({ renewal: "on" });
+  });
+
+  it("площадка отказала — продления там уже нет: отзыв идёт дальше, в базе отмена", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };
+    ctx.api.renewalFailWith = new TelegramApiError("editUserStarSubscription", 400, "Bad Request: SUBSCRIPTION_CANCELED", null);
+
+    const result = await ctx.vip.revoke(row, AT);
+
+    expect(result.lines.at(-1)).toBe("продление выключено");
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).toMatchObject({ renewal: "cancelled", cancelledBy: "game" });
+  });
+
+  it("площадка недоступна — не роняет отзыв: в лог warn, в базе отмена", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };
+    ctx.api.renewalFailWith = new TelegramApiError("editUserStarSubscription", 0, "сеть недоступна", null);
+
+    await expect(ctx.vip.revoke(row, AT)).resolves.toMatchObject({ lines: expect.any(Array) as string[] });
+
+    expect(logged).toContainEqual(expect.objectContaining({ level: "warn", event: "vip_revoke_renewal_failed", fields: expect.objectContaining({ subscriptionId: row.purchaseId }) as Record<string, unknown> }));
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).toMatchObject({ renewal: "cancelled", cancelledBy: "game" });
+  });
+
+  it("аккаунта нет — площадка не зовётся, отмена в базе записывается, в лог warn", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };
+    vi.spyOn(ctx.accounts, "byId").mockResolvedValue(null);
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await ctx.vip.revoke(row, AT);
+
+    expect(set).not.toHaveBeenCalled();
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).toMatchObject({ renewal: "cancelled", cancelledBy: "game" });
+    expect(logged.map((entry) => entry.event)).toContain("vip_revoke_renewal_failed");
+  });
+
+  it("база не ответила на чтение аккаунта — отзыв бросает, площадка не зовётся: повтор выключит продление там", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };
+    vi.spyOn(ctx.accounts, "byId").mockRejectedValue(new Error("база недоступна"));
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await expect(ctx.vip.revoke(row, AT)).rejects.toThrow("база недоступна");
+
+    expect(set).not.toHaveBeenCalled();
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).not.toMatchObject({ renewal: "cancelled" });
+  });
+
+  it("не записалась отмена в базе — отзыв бросает: обработка возврата повторится", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };
+    ctx.repository.setRenewal = async () => Promise.reject(new Error("база недоступна"));
+
+    await expect(ctx.vip.revoke(row, AT)).rejects.toThrow("база недоступна");
+  });
+
+  it("не обрезался период — отзыв бросает, площадка не зовётся: сначала срок, потом продление", async () => {
+    const row = await paidVip();
+    ctx.repository.cutFailWith = new Error("база недоступна");
+
+    await expect(ctx.vip.revoke(row, AT)).rejects.toThrow("база недоступна");
+
+    expect(ctx.api.renewals).toEqual([]);
+  });
+
+  it("внешний возврат целиком: реестр отдаёт покупку VIP, повтор обработки обрезает с тем же моментом", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 20 * 86_400, until: new Date(Date.UTC(2026, 9, 16)) };
+
+    await ctx.confirmation.refunded("charge-1", AT.getTime());
+    await ctx.confirmation.refunded("charge-1", AT.getTime() + 600_000);
+
+    expect(ctx.repository.cuts).toEqual([
+      { purchaseId: row.purchaseId, at: AT },
+      { purchaseId: row.purchaseId, at: AT },
+    ]);
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).toMatchObject({ renewal: "cancelled", cancelledBy: "game" });
+  });
+
+  it("наш возврат VIP (не внешний) срок и продление не трогает", async () => {
+    const row = await paidVip();
+    await ctx.purchases.requestRefund(row.purchaseId, "undeliverable", AT);
+
+    await ctx.confirmation.refunded("charge-1", AT.getTime());
+
+    expect(ctx.repository.cuts).toEqual([]);
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).toMatchObject({ renewal: "on" });
+  });
+
+  it("VIP регистрирует свой отзыв в реестре сам: чужая вторая регистрация того же вида — ошибка", () => {
+    expect(() => ctx.revocation.register("vip", async () => ({ lines: [] }))).toThrow("отзыв vip уже зарегистрирован");
+  });
+});
+
 describe("увеличенные награды и реклама без ролика (Р44, §3.6)", () => {
   it("пока VIP идёт — надбавка награде дня, колеса, забега и заданий; другим причинам, без VIP и после конца — единица", async () => {
     const ctx = setup();
@@ -518,7 +732,7 @@ describe("VIP по HTTP", () => {
   });
 
   it("без токена — 401; состояние и счёт — 200; самоцветы без VIP — 409", async () => {
-    const ctx = setup();
+    const ctx = setup(config(), false);
     @Module({
       controllers: [VipController],
       providers: [
