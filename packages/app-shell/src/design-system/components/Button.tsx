@@ -13,7 +13,8 @@ import { uiFeedback } from "../../state/ui-feedback";
  */
 /** `stars` — оплата звёздами Telegram: вторичная кнопка в цвете Stars. */
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "stars";
-export type ButtonSize = "m" | "l";
+/** `s` — компактная кнопка в строке плашки; основное действие экрана — `m` и `l`. */
+export type ButtonSize = "s" | "m" | "l";
 
 export interface ButtonProps {
   children: ReactNode;
@@ -38,6 +39,7 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
 };
 
 const SIZE_CLASS: Record<ButtonSize, string> = {
+  s: "min-h-9 rounded-md px-3 text-sm font-semibold",
   m: "min-h-12 rounded-md px-5 text-base font-semibold",
   l: "min-h-16 rounded-lg px-6 text-lg font-bold tracking-wide uppercase",
 };
