@@ -18,6 +18,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/screens/admin-shell.html
+version: v0.9
 ---
 
 # T-0050. Подтверждения в панели по цене ошибки — окно действия и «Отменить»
