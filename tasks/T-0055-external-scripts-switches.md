@@ -27,6 +27,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
+version: v0.8
 ---
 
 # T-0055. Выключатели внешних скриптов клиента в панели — Graspil, учёт аудитории, всё сразу

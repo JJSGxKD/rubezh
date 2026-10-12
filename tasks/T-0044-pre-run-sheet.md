@@ -29,6 +29,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/pre-run.html
+version: v0.8
 ---
 
 # T-0044. «Перед забегом» одним листом — два касания до боя вместо четырёх
