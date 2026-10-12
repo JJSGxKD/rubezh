@@ -1,5 +1,5 @@
 import { Logger } from "@nestjs/common";
-import { UnrecoverableError } from "bullmq";
+import { UnrecoverableError, type Queue } from "bullmq";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { BotRouter, type DispatchResult } from "../src/platforms/telegram/bot-router.js";
@@ -100,14 +100,25 @@ describe("постановка обновления в очередь", () => {
     vi.useRealTimers();
   });
 
-  it("обычное сообщение: задание с id update-<update_id>, без приоритета", async () => {
+  it("обычное сообщение: задание с id update-<update_id> и приоритетом 2", async () => {
     const { queue, fake } = setup();
 
     await queue.enqueue(message(101));
 
     expect(fake.added).toHaveLength(1);
-    expect(fake.added[0]).toMatchObject({ name: "update", data: message(101), options: { jobId: "update-101" } });
-    expect(fake.added[0]?.options).not.toHaveProperty("priority");
+    expect(fake.added[0]).toMatchObject({ name: "update", data: message(101), options: { jobId: "update-101", priority: 2 } });
+  });
+
+  it("возврат оплаты тоже обычный: приоритет 2, а не отсутствие приоритета", async () => {
+    const { queue, fake } = setup();
+    const refunded: TelegramUpdate = {
+      update_id: 108,
+      message: { message_id: 108, date: 1, chat: { id: 7, type: "private" }, from: { id: 7, is_bot: false }, refunded_payment: { currency: "XTR", total_amount: 3, invoice_payload: "p-1", telegram_payment_charge_id: "charge-1" } },
+    };
+
+    await queue.enqueue(refunded);
+
+    expect(fake.added[0]?.options).toMatchObject({ priority: 2 });
   });
 
   it.each([
@@ -260,8 +271,8 @@ describe("задание воркера", () => {
 });
 
 // Сквозной: настоящие BullMQ и Redis. Показывает то, чего подмены не покажут:
-// повтор update_id не заводит второе задание, а обновление доходит до
-// маршрутизатора через воркер.
+// повтор update_id не заводит второе задание, обновление доходит до
+// маршрутизатора через воркер, а оплата обгоняет обычные обновления.
 const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 7);
 
 describe.skipIf(REDIS_URL === "")("очередь обновлений бота на живом Redis", () => {
@@ -307,6 +318,33 @@ describe.skipIf(REDIS_URL === "")("очередь обновлений бота 
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     expect(seen.sort((a, b) => a - b)).toEqual([id, id + 1]);
+  }, 20_000);
+
+  // Держит порядок BullMQ при обновлении библиотеки: задание без приоритета
+  // она берёт раньше любого приоритетного, и оплата встала бы за всеми /start.
+  it("оплата, поставленная последней, обрабатывается раньше обычных обновлений, стоящих в очереди", async () => {
+    const id = 9_000_000 + Math.floor(Math.random() * 900_000);
+    const seen: number[] = [];
+    const router = {
+      dispatch: async (incoming: TelegramUpdate): Promise<DispatchResult> => {
+        seen.push(incoming.update_id);
+        return { status: "handled", handler: "test" };
+      },
+    } as unknown as BotRouter;
+    const live = await started(router);
+    const bull = (live as unknown as { queue: Queue }).queue;
+    await bull.pause();
+    try {
+      await live.enqueue(message(id));
+      await live.enqueue(message(id + 1));
+      await live.enqueue(preCheckout(id + 2));
+    } finally {
+      await bull.resume();
+    }
+    await until(() => seen.length >= 3);
+
+    expect(seen[0]).toBe(id + 2);
+    expect(seen.slice(1).sort((a, b) => a - b)).toEqual([id, id + 1]);
   }, 20_000);
 
   it("Redis недоступен — enqueue бросает, а не теряет обновление", async () => {
