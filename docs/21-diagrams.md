@@ -45,6 +45,7 @@ erDiagram
         datetime last_seen_at
         datetime banned_at "nullable: отметка блокировки целиком для входа — из ACCOUNT_RESTRICTION"
         string ban_reason "nullable: текст игроку — что, до когда и почему"
+        datetime tester_at "nullable: знак «Тестер» — играл до вайпа; ставится снимком, навсегда"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -108,6 +109,7 @@ erDiagram
     PURCHASE ||--o| VIP_PERIOD : "период за оплату"
     ACCOUNT ||--o| VIP_DAILY : "самоцветы VIP дня"
     ACCOUNT ||--o{ SHOWCASE_OFFER : "витрина снаряжения на сутки"
+    ACCOUNT ||--o| TESTER_COMPENSATION : "что вернуть тестеру после вайпа"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -908,6 +910,17 @@ erDiagram
         string lift_comment "nullable, есть ровно у снятого"
         datetime settled_at "nullable: последствия сняты — отметка входа убрана, кеш сброшен"
     }
+
+    TESTER_COMPENSATION {
+        uuid account_id PK "и FK: удалённый аккаунт уносит свою строку"
+        boolean tester "играл до вайпа: знак и бонус"
+        int level "уровень аккаунта в момент снимка"
+        int bonus_gems "5 за уровень, не больше 250; у не тестера 0"
+        json grants "[{ purchaseId, resource, amount }] — что начислили живые невозвращённые покупки"
+        int continue_stars "звёзды за второй шанс: выдача переводит их в самоцветы по курсу О43"
+        datetime snapshot_at
+        datetime claimed_at "nullable: окно «Спасибо за тест» выдало компенсацию"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1073,6 +1086,14 @@ erDiagram
   за рекламу, предварительная проверка оплаты не пропускает. Суточный
   потолок — счёт строк игрока с полуночи по Москве по индексу
   `(account_id, granted_at)`.
+- **`TESTER_COMPENSATION` — снимок перед вайпом** (`35-stage4-plan.md` Р87,
+  T-0040). Вайп стирает кошелёк, журнал покупок в нём и уровень, поэтому «кому
+  что вернуть» записывается заранее — в той же транзакции, что вайп. Таблица
+  в плане вайпа остаётся. Строка есть только у того, кому есть что выдать:
+  тестер, или у него есть невозвращённая покупка, или звёзды за второй шанс.
+  Знак `ACCOUNT.tester_at` ставится снимком, а не при выдаче, и не
+  перезаписывается. Звёзды за второй шанс хранятся звёздами: курс в самоцветы
+  (О43) применяет выдача.
 - **`VIP_SUBSCRIPTION`, `VIP_PERIOD`, `VIP_DAILY` — VIP** (`35-stage4-plan.md`,
   §3.6, Р20, Р44, WP10). Срок VIP — не поле, а журнал периодов: каждая
   оплата — ровно один период, начатый с конца прежнего, и конец VIP — самый
