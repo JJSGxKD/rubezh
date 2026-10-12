@@ -3,7 +3,7 @@ id: T-0024
 title: После возврата звёзд покупки аккаунту закрыты, команда получает карточку
 epic: E1
 priority: P0
-status: in-progress
+status: done
 owner: claude-6 / sonnet-5.5
 size: M
 depends_on: [T-0023]
