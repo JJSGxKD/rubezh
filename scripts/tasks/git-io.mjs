@@ -53,9 +53,15 @@ export function takenIds() {
     .filter((id) => id !== undefined);
 }
 
-/** Открытые PR или `null`, если `gh` нет или он не авторизован. */
+/** Снять метку с PR: `{ ok, stderr }` — без исключения, решает вызывающий. */
+export function removePrLabel(number, label) {
+  const result = spawnSync("gh", ["pr", "edit", String(number), "--remove-label", label], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
+  return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
+}
+
+/** Открытые PR с метками (по ним видна «Доработка») или `null`, если `gh` нет или он не авторизован. */
 export function openPrs() {
-  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft"], {
+  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels"], {
     cwd: ROOT,
     encoding: "utf8",
     maxBuffer: MAX_BUFFER,
