@@ -11,13 +11,15 @@ import { FxAlertNotifier } from "./fx-alert-notifier.js";
 import { PaymentsAlertNotifier } from "./payments-alert-notifier.js";
 import { ReportNotifier } from "./report-notifier.js";
 import { RedisReviewThrottle, REVIEW_THROTTLE } from "./review-throttle.js";
+import { ServerErrorAlarm } from "./server-error-alarm.js";
 
 /**
  * Уведомления в чат администраторов: карточки отчётов диагностики —
  * выключаются переключателем `notify.reports` — и забегов на разбор
  * антифрода — выключаются пустым адресом разбора вместе с общим — и алерты
  * курсов валют в общий чат, пока включён их опрос, сообщения о невыданных
- * покупках в поток «Покупки» (`payments-alert-notifier.ts`) и ежедневная
+ * покупках в поток «Покупки» (`payments-alert-notifier.ts`), тревога о
+ * всплеске ответов 5xx в поток «Сбои сервера» (`server-error-alarm.ts`) и ежедневная
  * статистика в чат статистики (`daily-stats.reporter.ts`). Адреса и переключатель —
  * настройки (`modules/settings`): панель сильнее окружения.
  */
@@ -27,12 +29,14 @@ import { RedisReviewThrottle, REVIEW_THROTTLE } from "./review-throttle.js";
     ReportNotifier,
     FxAlertNotifier,
     PaymentsAlertNotifier,
+    ServerErrorAlarm,
     { provide: REVIEW_THROTTLE, useClass: RedisReviewThrottle },
     DailyStatsReporter,
     { provide: DAILY_STATS_REPOSITORY, useClass: PrismaDailyStatsRepository },
     { provide: DAILY_STATS_LOCKS, useClass: RedisDailyStatsLocks },
   ],
-  // Цифры суток читает и сводка панели — тем же запросом, что отчёт в чат.
-  exports: [DAILY_STATS_REPOSITORY],
+  // Цифры суток читает и сводка панели — тем же запросом, что отчёт в чат;
+  // счётчик ответов 5xx зовёт хук HTTP-приложения (`http-app.ts`).
+  exports: [DAILY_STATS_REPOSITORY, ServerErrorAlarm],
 })
 export class AdminNotifyModule {}

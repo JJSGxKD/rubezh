@@ -157,7 +157,7 @@ export class PaymentConfirmation {
    */
   async subscriptionChanged(update: SubscriptionUpdate, nowMs = Date.now()): Promise<void> {
     const id = purchaseId.safeParse(update.payload);
-    const view = id.success ? await this.purchases.checkout(id.data) : null;
+    const view = id.success ? await this.purchases.checkout(id.data, new Date(nowMs)) : null;
     const fields = { platform: update.platform, purchaseId: update.payload, payerId: update.payerId, state: update.state };
     if (view === null || !SUBSCRIPTION_PRODUCTS.includes(view.purchase.product) || view.platformUserId !== update.payerId) {
       this.log("warn", "subscription_unmatched", fields);
@@ -171,7 +171,7 @@ export class PaymentConfirmation {
     const id = purchaseId.safeParse(query.payload);
     if (!id.success) return decideCheckout(null, query, nowMs, this.switches.payments());
     try {
-      const view = await withTimeout(this.purchases.checkout(id.data), CHECKOUT_READ_TIMEOUT_MS, "покупка для проверки оплаты");
+      const view = await withTimeout(this.purchases.checkout(id.data, new Date(nowMs)), CHECKOUT_READ_TIMEOUT_MS, "покупка для проверки оплаты");
       return decideCheckout(view, query, nowMs, this.switches.payments());
     } catch (error: unknown) {
       // База не ответила — отказываемся от денег, а не берём их вслепую.
