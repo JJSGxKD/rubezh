@@ -116,6 +116,8 @@ enum StartKind {
   friend
   /// кнопка под уведомлением в боте `n-<вид>` (WP28)
   notification
+  /// прямая ссылка кампании l-<код> (Р95)
+  link
 }
 
 // Где началась сессия: в Mini App площадки, в браузере (вход разработчика,
@@ -1023,6 +1025,8 @@ model Link {
   network        String?        @db.VarChar(16)
   /// когда регистрация уходит в сеть: `first_run` — после первого засчитанного забега, `launch` — при первом запуске
   registrationOn String         @default("first_run") @map("registration_on") @db.VarChar(16)
+  /// куда ведёт: app — Mini App, bot — чат с ботом, landing — лендинг
+  target         String         @default("app") @db.VarChar(16)
   clicks         LinkClick[]
   conversions    AdConversion[]
 
