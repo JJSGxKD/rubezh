@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const ADMIN_PREFIX = "handle /api/v1/admin/* {";
 const ADMIN_DOMAIN = "admin.{$DOMAIN}";
+/** До API ходят только через сниппет: адрес игрока и кэш за CDN — в одном месте. */
+const PROXY_API = "import api";
 
 const caddyfile = readFileSync(`${ROOT}infra/prod/Caddyfile`, "utf8").replace(
   /\r\n/g,
@@ -57,7 +59,7 @@ describe("Caddyfile: префикс панели", () => {
     expect(handleBody(block, ADMIN_PREFIX)).toContain("respond 404");
     expect(block.indexOf(ADMIN_PREFIX)).toBeGreaterThanOrEqual(0);
     expect(block.indexOf(ADMIN_PREFIX)).toBeLessThan(
-      block.indexOf("reverse_proxy"),
+      block.indexOf(PROXY_API),
     );
   });
 
@@ -65,13 +67,13 @@ describe("Caddyfile: префикс панели", () => {
     const block = blockOf("tg.{$DOMAIN}");
     expect(handleBody(block, ADMIN_PREFIX)).toContain("respond 404");
     expect(block.indexOf(ADMIN_PREFIX)).toBeLessThan(
-      block.indexOf("reverse_proxy"),
+      block.indexOf(PROXY_API),
     );
   });
 
   it("панель проксирует свой префикс", () => {
     expect(handleBody(blockOf(ADMIN_DOMAIN), ADMIN_PREFIX)).toContain(
-      "reverse_proxy api:4000",
+      PROXY_API,
     );
   });
 
@@ -80,8 +82,8 @@ describe("Caddyfile: префикс панели", () => {
       ([name, block]) =>
         name !== ADMIN_DOMAIN &&
         (block.includes("\thandle /api/* {") ||
-          /^\treverse_proxy api:4000$/m.test(block) ||
-          block.includes("\thandle {\n\t\treverse_proxy api:4000")),
+          /^\timport api$/m.test(block) ||
+          block.includes(`\thandle {\n\t\t${PROXY_API}`)),
     );
     expect(exposing.map(([name]) => name)).toEqual(
       expect.arrayContaining(["tg.{$DOMAIN}", "api.{$DOMAIN}"]),
@@ -91,5 +93,41 @@ describe("Caddyfile: префикс панели", () => {
         `\t${ADMIN_PREFIX}`,
       );
     }
+  });
+});
+
+/** Тело сниппета `(имя) { … }` на нулевом отступе. */
+function snippetBody(name: string): string {
+  const start = caddyfile.indexOf(`\n(${name}) {\n`);
+  if (start === -1) throw new Error(`В Caddyfile нет сниппета (${name})`);
+  const from = start + name.length + 6;
+  return caddyfile.slice(from, caddyfile.indexOf("\n}\n", from));
+}
+
+// Клиент и лендинг — за CDN Bunny (docs/20-env-and-ports.md §2.2): к Caddy
+// приходит узел CDN, адрес игрока — в X-Forwarded-For.
+describe("Caddyfile: за CDN", () => {
+  it("адрес игрока берётся из заголовка только у доверенных узлов, справа налево", () => {
+    const global = caddyfile.slice(caddyfile.indexOf("\n{\n"), caddyfile.indexOf("\n}\n"));
+    expect(global).toContain("import edge/trusted-proxies*.caddy");
+    expect(global).toContain("trusted_proxies_strict");
+    expect(global).toContain("client_ip_headers X-Forwarded-For");
+  });
+
+  it("до API — один адрес игрока и no-store по умолчанию", () => {
+    const api = snippetBody("api");
+    expect(api).toContain("header_up X-Forwarded-For {client_ip}");
+    expect(api).toContain('header ?Cache-Control "no-store"');
+  });
+
+  it("мимо сниппета до API никто не ходит", () => {
+    const outside = caddyfile.replace(snippetBody("api"), "");
+    expect(outside).not.toMatch(/reverse_proxy api:4000/);
+  });
+
+  it("навсегда кэшируются только файлы с хэшем, остальное — no-cache", () => {
+    const spa = snippetBody("spa");
+    expect(spa).toMatch(/handle @hashed \{\n\t\theader Cache-Control "public, max-age=31536000, immutable"\n\t\tfile_server\n\t\}/);
+    expect(spa).toMatch(/\thandle \{\n\t\theader Cache-Control "no-cache"\n\t\ttry_files \{path\} \/index\.html/);
   });
 });

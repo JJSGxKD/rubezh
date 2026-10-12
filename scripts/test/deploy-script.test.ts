@@ -11,6 +11,8 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const read = (name: string): string => readFileSync(`${ROOT}infra/prod/${name}`, "utf8").replace(/\r\n/g, "\n");
 const deploy = read("deploy.sh");
 const backup = read("backup.sh");
+const edgeIps = read("edge-ips.sh");
+const workflow = readFileSync(`${ROOT}.github/workflows/deploy.yml`, "utf8").replace(/\r\n/g, "\n");
 
 describe("deploy.sh: бэкап перед выкатом", () => {
   const callAt = deploy.search(/backup\.sh"? --before-deploy "\$VERSION"/);
@@ -76,9 +78,36 @@ describe("backup.sh: режим перед выкатом", () => {
   });
 });
 
+// Узлы CDN Bunny — доверенные прокси Caddy (docs/20-env-and-ports.md §2.2).
+describe("edge-ips.sh: узлы CDN", () => {
+  it("выкат обновляет список до перечитывания Caddy и не падает, если Bunny не ответил", () => {
+    const call = deploy.indexOf("./edge-ips.sh || log");
+    expect(call).toBeGreaterThan(-1);
+    expect(call).toBeLessThan(deploy.indexOf("caddy reload"));
+    expect(deploy).toContain("EDGE_IPS_NO_RELOAD=1");
+  });
+
+  it("сверка раз в сутки стоит в crontab рядом с бэкапом", () => {
+    expect(deploy).toMatch(/edge_line="[^"]*edge-ips\.sh/);
+    expect(deploy).toContain("-e \"${APP}/edge-ips.sh\"");
+    expect(deploy).toContain("echo \"$edge_line\"");
+  });
+
+  it("workflow выката кладёт скрипт на сервер и делает исполняемым", () => {
+    expect(workflow).toContain("infra/prod/edge-ips.sh");
+    expect(workflow).toMatch(/chmod 755 [^&]*edge-ips\.sh/);
+  });
+
+  it("обрезанный ответ Bunny не заменяет прежний список", () => {
+    expect(edgeIps).toMatch(/MIN_ADDRESSES=\d+/);
+    expect(edgeIps.indexOf("exit 1")).toBeLessThan(edgeIps.indexOf("install -m 644"));
+  });
+});
+
 describe.each([
   ["deploy.sh", deploy],
   ["backup.sh", backup],
+  ["edge-ips.sh", edgeIps],
 ])("%s", (name, text) => {
   it("начинается с bash-шебанга и включает строгий режим", () => {
     expect(text.startsWith("#!/usr/bin/env bash\n")).toBe(true);
