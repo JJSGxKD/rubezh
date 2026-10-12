@@ -36,10 +36,20 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 55 моделей, стирается 18", () => {
+  it("остаётся 56 моделей, стирается 18", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(55);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(56);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(18);
+  });
+});
+
+describe("план вайпа: компенсации тестерам", () => {
+  it("TesterCompensation остаётся: компенсации выдаются после вайпа", () => {
+    expect(plan.TesterCompensation).toEqual({ action: "keep", why: "компенсации тестерам выдаются после вайпа" });
+  });
+
+  it("знак «Тестер» живёт в Account, а он остаётся", () => {
+    expect(plan.Account?.action).toBe("keep");
   });
 });
 
