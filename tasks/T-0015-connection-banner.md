@@ -14,6 +14,7 @@ zones:
   - packages/app-shell/src/design-system/components/Layout.tsx
   - packages/app-shell/src/app/AppHeader.tsx
   - packages/app-shell/test/connection.test.ts
+  - packages/app-shell/src/design-system/components/Button.tsx
 shared:
   - packages/app-shell/src/i18n/ru.json
   - backend/api/src/modules/events/event-dictionary.ts
@@ -21,11 +22,13 @@ shared:
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
   - scripts/bundle-budget.mjs
+  - packages/app-shell/src/state/analytics.ts
 runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/home.html
+version: v0.8
 ---
 
 # T-0015. Общая плашка «Нет связи с сервером»
@@ -61,7 +64,19 @@ design: design/screens/home.html
   - любой успешный ответ или ответ с ошибкой от сервера — сразу «связь есть»;
   - пока связи нет, раз в 20 секунд идёт проверочный запрос;
   - событие браузера `online` и кнопка «Повторить» запускают проверку
-    немедленно.
+    немедленно;
+  - **ответ на запрос, отправленный до события браузера `offline`, связь не
+    возвращает.** Такой ответ сервер мог отдать до обрыва, а браузер
+    разобрал уже после события. Тогда плашка гасла бы через секунду после
+    появления и без действий игрока не возвращалась бы: проверка по
+    таймеру идёт, только пока связи нет. Ответ на запрос, отправленный после
+    события, — обычное «связь есть». Это верно, даже если
+    `navigator.onLine` ещё `false`: в WebView статус браузера может
+    отставать.
+
+  Решение тимлидов от 12.10.2026 после второй проверки PR в браузере: ответ
+  на задержанный запрос пришёл после выключения сети, плашка погасла и не
+  вернулась за 25 секунд при `navigator.onLine === false`.
 
   Проверка — `GET /api/v1/me/badges` через `apiRequest`: он лёгкий, лимит —
   600 в час на аккаунт. У гостя без сессии проверочного запроса нет, гостю
@@ -77,11 +92,31 @@ design: design/screens/home.html
   - `connection.checking` — «Проверяем…»: подпись кнопки, пока идёт проверка.
 - **Вид** — по макету `design/screens/home.html`, состояние 6 и компонент
   «Плашка связи»:
-  - фон `warning` на 10 % прозрачности;
+  - фон — `warning` на 10 % **поверх непрозрачной подложки цвета фона**:
+    плашка прилипает и едет над содержимым, сквозь неё ничего не должно
+    просвечивать. Например,
+    `bg-[color-mix(in_oklab,var(--color-warning)_10%,var(--color-bg))]`;
   - рамка `warning` на 45 %;
   - значок-треугольник `warning` слева;
-  - кнопка `secondary` размера `m` справа;
+  - **компактная** кнопка `secondary` справа, как в макете: новый размер `s`
+    у `Button` (шаг 5), подпись 12 px. Одна строка на любой ширине от 320 px,
+    кнопка под текст не переносится: прилипшая плашка не должна закрывать
+    пол-экрана. С 360 px заголовок помещается в одну строку;
   - скругление `--radius-lg`, отступы 10 × 12 px.
+
+  Решение тимлидов от 12.10.2026 после проверки PR в браузере. С кнопкой
+  размера `m` на 320–390 px плашка выходила высотой 138–142 px: заголовок и
+  текст переносились, а на узких экранах кнопка уходила под текст. Макет
+  держит одну строку с маленькой кнопкой.
+
+  Уточнение после второй проверки, 12.10.2026:
+  - подпись кнопки — 12 px с полями 10 px, как в макете. Высота 36 px
+    остаётся, чтобы попадать пальцем;
+  - с подписью 14 px заголовок на 360 px переносился, и карточка выходила
+    113 px. С подписью 12 px она 92 px, на 390 px — 76 вместо 92;
+  - на 320 px заголовок и текст переносятся при любой кнопке. Это
+    принимаем: сокращённую подпись ради редкой ширины не заводим. Текст —
+    смысл плашки: он говорит, что забег работает.
 
   Появляется и скрывается анимацией прозрачности `--duration-base` (правило
   §3.3 `docs/27`).
@@ -124,13 +159,16 @@ design: design/screens/home.html
    - Чистая функция переходов, тестируемая без таймеров:
 
      ```ts
-     export type Signal = { kind: "fail"; at: number } | { kind: "reachable"; at: number } | { kind: "browser_offline"; at: number } | { kind: "browser_online"; at: number };
+     export type Signal = { kind: "fail"; at: number } | { kind: "reachable"; at: number; sentAt: number } | { kind: "browser_offline"; at: number } | { kind: "browser_online"; at: number };
      export function nextConnection(state: ConnectionState, signal: Signal): ConnectionState
      ```
 
-     В состоянии — счётчик сбоев и время первого из них. Правила — из
-     «Решений»: два сбоя за 30 с или `browser_offline` → `offline`;
-     `reachable` → `online`, счётчик сброшен.
+     В состоянии — счётчик сбоев, время первого из них и время последнего
+     `browser_offline`. Правила — из «Решений»:
+     - два сбоя за 30 с или `browser_offline` → `offline`;
+     - `reachable` → `online`, счётчик сброшен;
+     - `reachable`, у которого `sentAt` не позже последнего
+       `browser_offline`, состояние не меняет: запрос ушёл до обрыва.
    - `reportReachability(kind, at = Date.now())` — вызывает `nextConnection` и
      на переходах шлёт `track("connection_lost", {})` и
      `track("connection_restored", { downtimeSec })`.
@@ -143,12 +181,16 @@ design: design/screens/home.html
 4. **`api-request.ts`.** В `apiRequest`:
    - сбой `fetch` → `reportReachability("fail")`;
    - ответ со статусом 502, 503 или 504 → `reportReachability("fail")`;
-   - любой другой ответ сервера (включая 4xx и 500) → `reportReachability("reachable")`;
+   - любой другой ответ сервера (включая 4xx и 500) → `reportReachability("reachable")`
+     со временем отправки запроса: `apiRequest` запоминает его перед `fetch`;
    - `response === null` (нет сессии) — ничего.
 
    Модуль `connection.ts` подключается статически: он маленький и нужен с
    первого кадра. `failureOf` не менять.
 5. **Новый `design-system/components/ConnectionBanner.tsx`:**
+   - `Button.tsx`: `ButtonSize` получает `"s"` —
+     `min-h-9 rounded-md px-2.5 text-xs font-semibold`. Остальное у кнопки то
+     же: отклик касания, загрузка, `disabled`;
    - читает `useConnection`;
    - при `offline` рисует плашку из «Решений», при `online` — ничего;
    - кнопка — `retryConnection()`, при `checking` — подпись «Проверяем…» и
@@ -164,10 +206,11 @@ design: design/screens/home.html
 7. **`AppHeader.tsx`.** При `offline` — `opacity-60` и
    `transition-opacity` на фишках валют.
 8. **Бюджет.** Стор и плашка — в первой загрузке. Порог «Первая загрузка» в
-   `scripts/bundle-budget.mjs` разрешено поднять **не больше чем на 0,6 КБ**:
-   с объяснением рядом с порогом и строкой в таблице бюджета
-   `docs/27-design-system-and-app-shell.md` §3.4. Если нужно больше — вопрос
-   тимлидам.
+   `scripts/bundle-budget.mjs` разрешено поднять **до 152,8 КБ** (+1,7 КБ,
+   решение тимлидов от 12.10.2026 по вопросу 1 PR: плашка нужна с первого
+   кадра и без сети, ленивой быть не может), с объяснением рядом с порогом и
+   строкой в таблице бюджета `docs/27-design-system-and-app-shell.md` §3.4.
+   Если нужно больше — вопрос тимлидам.
 9. **Документы:**
    - `docs/27` §4.6 (компоненты) — строка о `ConnectionBanner`: одна плашка на
      приложение, когда показывается и что значит;
@@ -210,14 +253,20 @@ design: design/screens/home.html
   - `browser_offline` → сразу `offline`;
   - из `offline` по `reachable` → `online`, счётчик сброшен;
   - `browser_online` сам по себе статус не меняет (только запускает
-    проверку).
+    проверку);
+  - `browser_offline` в момент T, затем `reachable` с `sentAt` раньше T или
+    равным T → остаётся `offline`; с `sentAt` позже T → `online`;
+  - после двух `fail` без события браузера `reachable` с `sentAt` раньше
+    сбоев → `online`: сервер ответил уже после сбоев.
 - **Классификация ответа в `apiRequest`** (подмена `authorizedFetch` по образцу
   существующих тестов `api-request`, если они есть, иначе — новая):
   - `fetch` бросает → сигнал `fail`;
   - 503 → `fail`;
   - 500 → `reachable`;
   - 404 → `reachable`;
-  - 200 → `reachable`.
+  - 200 → `reachable`;
+  - запрос ушёл, затем событие `offline`, затем ответ 200 → статус
+    остаётся `offline`.
 - **События:** переход в `offline` — один `connection_lost`; возвращение
   через 90 с — `connection_restored` с `downtimeSec: 90`; повторные `fail` в
   `offline` событий не шлют.
@@ -242,7 +291,9 @@ design: design/screens/home.html
 - [ ] Один медленный запрос плашку не включает: нужен второй сбой за 30 с.
 - [ ] «Повторить» проверяет связь сразу; связь вернулась — плашка исчезает сама.
 - [ ] События `connection_lost` и `connection_restored` есть в словаре и пишутся.
-- [ ] Первая загрузка выросла не больше чем на 0,6 КБ, порог поднят с объяснением.
+- [ ] Первая загрузка — не больше 152,8 КБ, порог поднят с объяснением.
+- [ ] Плашка — одна строка с компактной кнопкой на 320, 360 и 390 px; на 360 и 390 px заголовок в одну строку; прилипшая, она не просвечивает.
+- [ ] Ответ на запрос, ушедший до события `offline`, плашку не гасит: тест автомата, тест `apiRequest` и проверка в браузере (запрос задержан, сеть выключена до ответа).
 - [ ] Снимки — в PR.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 

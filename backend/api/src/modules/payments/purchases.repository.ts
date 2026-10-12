@@ -63,6 +63,8 @@ export interface CheckoutView {
   runFinished: boolean;
   /** это продолжение забега уже взято за рекламу (WP11) — звёзды за него не нужны */
   continueTaken: boolean;
+  /** у владельца идёт VIP и есть подписка с продлением: новая подписка не нужна */
+  subscriptionLive: boolean;
 }
 
 export interface PaymentRecord {
@@ -134,7 +136,8 @@ export interface PurchasesRepository {
   grantedContinues(runId: string): Promise<number>;
   /** Оплаченные продолжения забега: какое по счёту и по какой секунде посчитана цена */
   grantedForRun(runId: string): Promise<{ continueNo: number; elapsedSec: number }[]>;
-  checkout(purchaseId: string): Promise<CheckoutView | null>;
+  /** @param at момент проверки: по нему решается, идёт ли у владельца VIP */
+  checkout(purchaseId: string, at: Date): Promise<CheckoutView | null>;
   markPaid(record: PaymentRecord): Promise<ConfirmOutcome>;
   /**
    * Продление подписки — новая строка, оплаченная сразу. Повтор той же
@@ -282,11 +285,23 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
     return rows.flatMap((row) => (row.continueNo === null || row.elapsedSec === null ? [] : [{ continueNo: row.continueNo, elapsedSec: row.elapsedSec }]));
   }
 
-  async checkout(purchaseId: string): Promise<CheckoutView | null> {
-    // Одним запросом: на всю проверку у Telegram десять секунд.
+  async checkout(purchaseId: string, at = new Date()): Promise<CheckoutView | null> {
+    // Одним запросом: на всю проверку у Telegram десять секунд. Идёт ли VIP с
+    // продлением — по одной строке из журнала периодов (индекс `account_id,
+    // ends_at`) и из подписок: «живая» подписка — когда есть и то, и другое.
     const row = await this.prisma.purchase.findUnique({
       where: { purchaseId },
-      select: { ...SELECT, account: { select: { platformUserId: true } }, run: { select: { status: true, adContinues: { select: { continueNo: true } } } } },
+      select: {
+        ...SELECT,
+        account: {
+          select: {
+            platformUserId: true,
+            vipPeriods: { where: { endsAt: { gt: at } }, select: { purchaseId: true }, take: 1 },
+            vipSubscriptions: { where: { renewal: "on" }, select: { subscriptionId: true }, take: 1 },
+          },
+        },
+        run: { select: { status: true, adContinues: { select: { continueNo: true } } } },
+      },
     });
     if (row === null) return null;
     const { account, run, ...purchase } = row;
@@ -295,6 +310,7 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
       platformUserId: account.platformUserId,
       runFinished: run?.status === "finished",
       continueTaken: run?.adContinues.some((taken) => taken.continueNo === purchase.continueNo) === true,
+      subscriptionLive: account.vipPeriods.length > 0 && account.vipSubscriptions.length > 0,
     };
   }
 
@@ -316,7 +332,7 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
       if (!isUniqueViolation(error)) throw error;
     }
 
-    const view = await this.checkout(record.purchaseId);
+    const view = await this.checkout(record.purchaseId, record.paidAt);
     if (view === null) return { kind: "unknown" };
     if (updated === 1) return { kind: "paid", purchase: view.purchase, runFinished: view.runFinished, continueTaken: view.continueTaken };
     return view.purchase.telegramChargeId === record.chargeId

@@ -1,7 +1,7 @@
 import type { RateLimit } from "../ingest/rate-limiter.js";
 
 /**
- * Лимиты входа и продления (docs/34-stage3-plan.md, WP1). Бизнес-параметры, а
+ * Лимиты входа, продления, выхода и «кто я» (docs/34-stage3-plan.md, WP1). Бизнес-параметры, а
  * не секреты: меняются здесь, в карте конфигурации — docs/30-configuration-map.md.
  *
  * Пять в минуту с адреса — как в источнике переноса
@@ -13,8 +13,17 @@ import type { RateLimit } from "../ingest/rate-limiter.js";
  * нет, и ограничивать нечего. Мобильные операторы сажают на один адрес сотни
  * абонентов — поэтому потолок не совсем жадный, но и не щедрый: пять входов в
  * минуту с одного адреса перекрывают обычную квартиру и офис.
+ *
+ * Выход — тоже по адресу: аккаунта в запросе нет, только токен продления в
+ * теле; живому игроку хватает десяти в минуту. «Выйти везде» и «кто я» — по
+ * аккаунту: токен уже проверен, а за адресом оператора стоят сотни игроков.
+ * Клиент спрашивает «кто я» при запуске и открытии профиля, «выйти везде» —
+ * раз в жизни, поэтому сто двадцать в час — запас, а не норма.
  */
-export const AUTH_LIMITS: Record<"login" | "refresh", RateLimit> = {
+export const AUTH_LIMITS: Record<"login" | "refresh" | "logout" | "logoutAll" | "me", RateLimit> = {
   login: { scope: "auth:login", limit: 5, windowSec: 60 },
   refresh: { scope: "auth:refresh", limit: 5, windowSec: 60 },
+  logout: { scope: "auth:logout", limit: 10, windowSec: 60 },
+  logoutAll: { scope: "auth:logout-all", limit: 10, windowSec: 3600 },
+  me: { scope: "auth:me", limit: 120, windowSec: 3600 },
 };

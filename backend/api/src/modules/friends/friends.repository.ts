@@ -64,6 +64,8 @@ export interface FriendsRepository {
   remove(a: string, b: string): Promise<boolean>;
   /** Подарок за текущие игровые сутки; `false` — сегодня этому другу уже дарили. */
   sendGift(from: string, to: string): Promise<boolean>;
+  /** Подарить каждому другу, кому в эти сутки ещё не дарили; вернуть, кому подарено. */
+  sendGiftsToAll(from: string): Promise<string[]>;
   /** Кому аккаунт уже подарил сегодня. */
   giftedToday(from: string): Promise<string[]>;
   /** Незабранные подарки не старше `maxAgeDays`, старые первыми. */
@@ -202,6 +204,22 @@ export class PrismaFriendsRepository implements FriendsRepository {
       VALUES (${from}::uuid, ${to}::uuid, ${TODAY})
       ON CONFLICT DO NOTHING`;
     return inserted > 0;
+  }
+
+  /**
+   * Одним запросом, а не циклом: две одновременные «Подарить всем» не подарят
+   * дважды — держит уникальный ключ подарка (от, кому, сутки), а вернётся
+   * только то, что вставил именно этот запрос.
+   */
+  async sendGiftsToAll(from: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ to_account_id: string }[]>`
+      INSERT INTO friend_gift (from_account_id, to_account_id, day)
+      SELECT ${from}::uuid, CASE WHEN account_a = ${from}::uuid THEN account_b ELSE account_a END, ${TODAY}
+      FROM friendship
+      WHERE account_a = ${from}::uuid OR account_b = ${from}::uuid
+      ON CONFLICT DO NOTHING
+      RETURNING to_account_id`;
+    return rows.map((row) => row.to_account_id);
   }
 
   async giftedToday(from: string): Promise<string[]> {

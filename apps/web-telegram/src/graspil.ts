@@ -1,4 +1,4 @@
-import { installTelegramWebAppCompat } from "@bh/adapter-telegram";
+import { loadTelegramWebAppCompat, type TelegramWebAppCompat } from "@bh/adapter-telegram";
 
 /**
  * Graspil — сторонняя аналитика Mini App (решение участника 1 от 26.09.2026,
@@ -15,16 +15,23 @@ import { installTelegramWebAppCompat } from "@bh/adapter-telegram";
  * `vpnsibcom_web/src/app/_components/AnalyticsInit.tsx`).
  *
  * Скрипт грузится асинхронно и после оболочки: аналитика не задерживает
- * первый экран. Не загрузился — игра этого не замечает.
+ * первый экран. Не загрузился — игра этого не замечает. Прослойка — тоже
+ * после оболочки, из чанка рекламы.
  */
 
 const GRASPIL_SCRIPT = "https://w.graspil.com";
 /** Имя очереди — как в сниппете Graspil: по нему скрипт находит свой ключ. */
 const DATA_LAYER = "graspil";
 
-export function loadGraspil(key: string): void {
+export async function loadGraspil(key: string): Promise<void> {
   if (key === "") return;
-  const webApp = installTelegramWebAppCompat();
+  let webApp: TelegramWebAppCompat | null = null;
+  try {
+    webApp = await loadTelegramWebAppCompat();
+  } catch (error: unknown) {
+    // Чанк не догрузился — Graspil возьмёт данные запуска сам, если сможет.
+    console.warn("Прослойка Telegram.WebApp для Graspil не загрузилась:", error);
+  }
 
   // Очередь — глобальная переменная с именем из сниппета: типа у неё нет,
   // поэтому читается и пишется через Reflect, без приведения window.

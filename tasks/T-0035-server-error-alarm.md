@@ -3,8 +3,8 @@ id: T-0035
 title: Тревога в чат команды о всплеске ошибок 5xx
 epic: E3
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5
 size: S
 depends_on: [T-0003, T-0033]
 zones:
@@ -13,6 +13,7 @@ zones:
   - backend/api/src/modules/settings/notify-targets.ts
   - backend/api/src/http-app.ts
   - backend/api/test/server-error-alarm.test.ts
+  - backend/api/test/chat-target.test.ts
 shared:
   - backend/api/src/modules/settings/setting-catalog.ts
   - docs/28-diagnostics.md
@@ -20,7 +21,7 @@ shared:
 runner: any
 executor: sonnet-5.5
 effort: high
-release: patch
+release: minor
 design: null
 ---
 
@@ -81,7 +82,9 @@ design: null
    ```
 3. **`notify-targets.ts`:**
    - `AdminChats` — поле `ops: ChatTarget | null` с комментарием;
-   - `chats()` — `ops: orGeneral(SETTINGS.chatOps)`.
+   - `chats()` — `ops: orGeneral(SETTINGS.chatOps)`;
+   - `test/chat-target.test.ts` сравнивает `chats()` целиком — дописать в
+     ожидание `ops`.
 4. **Новый `modules/admin-notify/server-error-alarm.ts`** — `ServerErrorAlarm`:
    - константы с комментариями «почему»:
 

@@ -7,7 +7,7 @@ import { pluralRu } from "../../common/card/labels.js";
  * понятно до того, как человек открыл игру.
  *
  * Русский — для русского и близких к нему языков интерфейса, и для тех, чей
- * клиент язык не сообщил: закрытый тест русскоязычный. Остальным — английский.
+ * клиент язык не сообщил: игра пока только на русском. Остальным — английский.
  */
 export type WelcomeLanguage = "ru" | "en";
 
@@ -56,9 +56,9 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
     caption: (name, hasRecord) =>
       hasRecord
         ? `${name}, рубеж ждёт. Рекорд на картинке — побьёшь?`
-        : `${name}, добро пожаловать на закрытый тест «Рубежа». Игра открывается кнопкой ниже.`,
+        : `${name}, добро пожаловать в «Рубеж»! Идёт тест: игра часто обновляется, а твои отзывы на неё влияют. Открывай кнопкой ниже.`,
     playButton: "▶ Играть",
-    groupHint: "Рубеж — игра закрытого теста. Открывается в личном чате с ботом: там же рекорд и место в рейтинге.",
+    groupHint: "«Рубеж» — игра прямо в Telegram, сейчас на тесте. Открывается в личном чате с ботом: там же рекорд и место в рейтинге.",
   },
   en: {
     brand: "RUBEZH",
@@ -74,8 +74,8 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
     caption: (name, hasRecord) =>
       hasRecord
         ? `${name}, the line is waiting. Can you beat the record on the card?`
-        : `${name}, welcome to the Rubezh closed test. The game opens with the button below — it is in Russian for now.`,
+        : `${name}, welcome to Rubezh! The game is in testing and updates often — your feedback shapes it. It opens with the button below and is in Russian for now.`,
     playButton: "▶ Play",
-    groupHint: "Rubezh is a closed-test game. Open it in a private chat with the bot — your record and rank live there too.",
+    groupHint: "Rubezh is a game right inside Telegram, now in testing. Open it in a private chat with the bot — your record and rank live there too.",
   },
 };

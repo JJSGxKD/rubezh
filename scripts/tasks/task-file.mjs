@@ -24,7 +24,7 @@ export const RUNNERS = ["any", "local", "human"];
 export const RELEASES = ["none", "patch", "minor"];
 export const EFFORTS = ["low", "medium", "high", "extra"];
 /** Повторяет таблицу исполнителей в tasks/README.md («Исполнители и effort»): новый исполнитель — правка и там, и здесь. */
-export const EXECUTORS = ["sonnet-5.5"];
+export const EXECUTORS = ["sonnet-5.5", "haiku-5.5"];
 
 /** Все поля шапки в порядке из tasks/README.md; других полей у задачи нет. */
 export const FIELDS = [
@@ -34,6 +34,7 @@ export const FIELDS = [
   "priority",
   "status",
   "owner",
+  "author",
   "size",
   "depends_on",
   "zones",
@@ -43,7 +44,30 @@ export const FIELDS = [
   "effort",
   "release",
   "design",
+  "version",
 ];
+
+/** Необязательные поля: задачи, заведённые до них, остаются как были. */
+export const OPTIONAL_FIELDS = new Set(["author", "version"]);
+
+/** Версия-поезд, в которую целит задача (docs/38-release-plan.md): `v0.8`. */
+export const VERSION_RE = /^v\d+\.\d+$/;
+
+/** Кодовое имя роли (tasks/README.md, «Роли и кодовые имена»): `claude-lead-1`, `claude-review-2`. */
+const CODE_NAME_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
+
+/**
+ * `owner` — поток, взявший задачу: «аккаунт / исполнитель / уровень»
+ * (`claude-3 / sonnet-5.5 / medium`). У задач, взятых до потоков, уровня нет —
+ * `effort: null`. Не похоже на владельца — `null`.
+ */
+export function parseOwner(owner) {
+  const parts = String(owner ?? "")
+    .split(" / ")
+    .map((part) => part.trim());
+  if (parts.some((part) => part === "") || parts.length < 2 || parts.length > 3) return null;
+  return { account: parts[0], executor: parts[1], effort: parts[2] ?? null };
+}
 
 const KEY_VALUE_RE = /^([A-Za-z_][A-Za-z0-9_]*):(?:[ ](.*))?$/;
 const LIST_ITEM_RE = /^ {2}- (.*)$/;
@@ -238,7 +262,7 @@ export function validateTask(fileName, data, context) {
   }
 
   for (const field of FIELDS) {
-    if (!Object.hasOwn(data, field)) fail(field, "отсутствует");
+    if (!Object.hasOwn(data, field) && !OPTIONAL_FIELDS.has(field)) fail(field, "отсутствует");
   }
   for (const field of Object.keys(data)) {
     if (!FIELDS.includes(field)) fail(field, "лишнее, такого поля у задачи нет");
@@ -267,6 +291,12 @@ export function validateTask(fileName, data, context) {
   expectEnum("release", RELEASES);
 
   if (Object.hasOwn(data, "owner") && text("owner") === null) fail("owner", `ожидается строка или пусто, а не ${show(data.owner)}`);
+  if (Object.hasOwn(data, "version") && (text("version") === null || !VERSION_RE.test(data.version))) {
+    fail("version", `ожидается версия вида v0.8, а не ${show(data.version)}`);
+  }
+  if (Object.hasOwn(data, "author") && (text("author") === null || !CODE_NAME_RE.test(data.author))) {
+    fail("author", `ожидается кодовое имя вида claude-lead-1, а не ${show(data.author)}`);
+  }
   if (Object.hasOwn(data, "design") && data.design !== null && (text("design") === null || data.design === "")) {
     fail("design", `ожидается путь к макету или null, а не ${show(data.design)}`);
   }

@@ -130,21 +130,27 @@ export class ReferralsService implements OnModuleInit {
     await this.activateReferral(run);
   }
 
-  /** Первый забег вернувшегося — монеты ему и другу, по ключу пары и периода. */
+  /**
+   * Первый забег вернувшегося — монеты ему и другу, по ключу пары и периода.
+   * Сначала начисление, потом отметка «засчитано»: слушатель забега работает
+   * один раз, и отметка, поставленная раньше упавшего начисления, потеряла бы
+   * награду навсегда. Ключи кошелька не дают начислить дважды при повторе.
+   */
   private async rewardReturns(run: RecordedRun): Promise<void> {
     const pending = await this.returns.pending(run.accountId, new Date(run.finishedAt.getTime() - RETURN_RULES.playWithinDays * DAY_MS));
     for (const { friendId, period } of pending) {
-      if (!(await this.returns.markRewarded(run.accountId, friendId, period, run.finishedAt))) continue;
       const key = `friend_return:${run.accountId}:${friendId}:${period}`;
       for (const [accountId, side] of [[run.accountId, "returned"], [friendId, "friend"]] as const) {
-        // Возвращение отмечено, и ограниченной стороне награда не придёт и потом.
+        // Возвращение отмечается и ограниченной стороне, но награда ей не придёт и потом.
         if (await this.withheld(accountId, run.finishedAt)) {
           this.log("referral_reward_withheld", { accountId, source: key });
           continue;
         }
         await this.wallet.grant({ accountId, resource: "coins", amount: RETURN_RULES.coins, reason: "referral_reward", source: key, idempotencyKey: `${key}:${side}` });
       }
-      this.log("player_return_rewarded", { accountId: run.accountId, friendId });
+      if (await this.returns.markRewarded(run.accountId, friendId, period, run.finishedAt)) {
+        this.log("player_return_rewarded", { accountId: run.accountId, friendId });
+      }
     }
   }
 
@@ -155,23 +161,27 @@ export class ReferralsService implements OnModuleInit {
     if (runs < REFERRAL_RULES.activationRuns) return;
     // Сверх суточного потолка активация не пропадает — дождётся следующего забега.
     if ((await this.referrals.activatedToday(binding.referrerId)) >= REFERRAL_RULES.maxActivationsPerDay) return;
-    if (!(await this.referrals.activate(run.accountId, run.finishedAt))) return;
 
-    this.log("referral_activated", { referredId: run.accountId, referrerId: binding.referrerId });
-    // Активация засчитана, а награда пригласившему с ограничением не придёт
-    // ни сейчас, ни после: иначе ограничение было бы отсрочкой.
+    // Начисление раньше отметки: упавшее начисление не должно оставлять
+    // «засчитано» — следующий забег повторит, а ключ кошелька не даст
+    // начислить дважды. Награда пригласившему с ограничением не придёт ни
+    // сейчас, ни после: иначе ограничение было бы отсрочкой.
     if (await this.withheld(binding.referrerId, run.finishedAt)) {
       this.log("referral_reward_withheld", { accountId: binding.referrerId, source: `referral:${run.accountId}` });
-      return;
+    } else {
+      await this.wallet.grant({
+        accountId: binding.referrerId,
+        resource: "coins",
+        amount: REFERRAL_RULES.referrerCoins,
+        reason: "referral_reward",
+        source: `referral:${run.accountId}`,
+        idempotencyKey: `referral:${run.accountId}`,
+      });
     }
-    await this.wallet.grant({
-      accountId: binding.referrerId,
-      resource: "coins",
-      amount: REFERRAL_RULES.referrerCoins,
-      reason: "referral_reward",
-      source: `referral:${run.accountId}`,
-      idempotencyKey: `referral:${run.accountId}`,
-    });
+    // Уже активирован параллельным забегом — монеты не удвоились: ключ тот же.
+    if (await this.referrals.activate(run.accountId, run.finishedAt)) {
+      this.log("referral_activated", { referredId: run.accountId, referrerId: binding.referrerId });
+    }
   }
 
   /** Награды за друзей закрыты ограничением (docs/35-stage4-plan.md WP44). */

@@ -3,8 +3,8 @@ id: T-0022
 title: Лимиты частоты на маршрутах игрока, где их не было
 epic: E4
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5
 size: M
 depends_on: [T-0021]
 zones:
@@ -20,6 +20,8 @@ zones:
   - backend/api/src/modules/ads/ads.controller.ts
   - backend/api/src/modules/ads/adsgram-reward.controller.ts
   - backend/api/test/route-limits.test.ts
+  - backend/api/test/network-tasks.test.ts
+  - backend/api/src/health/readiness.controller.ts
 shared:
   - docs/30-configuration-map.md
 runner: any
@@ -121,8 +123,9 @@ design: null
    Тело — как в нынешних копиях, но без `as`: проверить, что `request` —
    объект и у него есть строковое поле `ip`:
    `typeof request === "object" && request !== null && "ip" in request && typeof request.ip === "string"`.
-   Пустая строка или нет поля — `"unknown"`. Обе копии удалить, контроллеры
-   импортируют общую.
+   Пустая строка или нет поля — `"unknown"`. Все копии удалить, контроллеры
+   импортируют общую. Третья копия — в `health/readiness.controller.ts`
+   (появилась с T-0033): её тоже заменить общей.
 3. **`auth-limits.ts`** — `AUTH_LIMITS` получает:
    - `logout: { scope: "auth:logout", limit: 10, windowSec: 60 }`;
    - `logoutAll: { scope: "auth:logout-all", limit: 10, windowSec: 3600 }`;
@@ -246,6 +249,14 @@ class RecordingLimiter {
 Существующие тесты `auth`, `runs`, `ads`, `admin` остаются зелёными. В
 HTTP-тестах лимит уходит в память: Redis подменён недоступным, а запросов в
 них меньше лимитов.
+
+HTTP-тест адреса награды в `network-tasks.test.ts` собирает свой модуль с
+`AdsgramRewardController` без `IngestModule`. Контроллеру теперь нужен
+`RateLimiter`, и без провайдера Nest его не создаст. В модуль теста —
+провайдер-подмена `RateLimiter`, которая пропускает всё: лимиты проверяет
+`route-limits.test.ts`. Тест на подменах и без базы, поэтому падение
+видно и локально: Nest роняет процесс воркера, и vitest пишет о
+неожиданном выходе, а не о проваленном кейсе.
 
 ## Аналитика
 
