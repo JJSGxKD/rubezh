@@ -50,7 +50,8 @@ const RUN_UI = /^(RunScreen|overlays|run)-[\w-]{8}\.js$/;
 const TEAM = /^(gallery|home-showcase|sound-lab|DevSheet|DevTechPanel)-.*\.js$/;
 /**
  * Реклама — обёртки SDK AdsGram, AdSonar и RichAds и учёт аудитории Taddy
- * (`adapter-telegram/src/ads/`), наш рекламный блок, который рисует
+ * (`adapter-telegram/src/ads/`) с прослойкой `Telegram.WebApp` для чужих SDK
+ * (`adapter-telegram/src/webapp-compat.ts`), наш рекламный блок, который рисует
  * объявление сети с API (`app-shell/src/ads/ad-creative.tsx`), и поток
  * межстраничной при старте забега (`app-shell/src/state/interstitial.ts`).
  * Своя дверь, как звук: грузится по дороге к рекламе и только там, где она
@@ -288,8 +289,12 @@ function measure() {
     // слотами, CSS-переменными и событиями сети, готовность по размеру. 6,4 —
     // переход по заданию ленты Taddy в чанке обёрток (WP13, часть 6, +0,34 КБ):
     // запрос адреса перехода у сети, проверка https и открытие ссылкой
-    // адаптера — здесь, а не в первой загрузке.
-    { name: "Реклама", limitKb: 6.4, matches: (name) => ADS.test(name) && !firstLoad.has(name) },
+    // адаптера — здесь, а не в первой загрузке. 7,1 — прослойка
+    // `Telegram.WebApp` для чужих SDK переехала сюда из первой загрузки
+    // (+0,7 КБ, первая загрузка −0,2 КБ): её ставит учёт Taddy, а Graspil
+    // берёт её после первого экрана; у неё появились ссылки — без них Taddy
+    // грузил официальный SDK с telegram.org.
+    { name: "Реклама", limitKb: 7.1, matches: (name) => ADS.test(name) && !firstLoad.has(name) },
     {
       // woff2 уже сжат, gzip его не уменьшает. Браузер качает подмножество,
       // только встретив его символы, но русскому интерфейсу нужны оба:

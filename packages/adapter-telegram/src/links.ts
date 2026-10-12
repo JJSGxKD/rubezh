@@ -1,3 +1,5 @@
+import { isTMA, openLink, openTelegramLink } from "@tma.js/sdk";
+
 /**
  * Внешняя ссылка из Mini App — канал проекта из задания, страница партнёра
  * (docs/35-stage4-plan.md Р52). Ссылку Telegram открывает `openTelegramLink`:
@@ -14,6 +16,17 @@ export interface LinkSdk {
   linkAvailable(): boolean;
   open(url: string): void;
   browser(url: string): void;
+}
+
+/** Настоящий SDK: адаптер и прослойка `Telegram.WebApp` открывают ссылки одним путём. */
+export function telegramLinkSdk(): LinkSdk {
+  return {
+    telegramAvailable: () => isTMA() && openTelegramLink.isAvailable(),
+    openTelegram: (link) => openTelegramLink(link),
+    linkAvailable: () => isTMA() && openLink.isAvailable(),
+    open: (link) => openLink(link),
+    browser: (link) => void globalThis.open(link, "_blank", "noopener"),
+  };
 }
 
 const TELEGRAM_HOSTS: ReadonlySet<string> = new Set(["t.me", "telegram.me"]);

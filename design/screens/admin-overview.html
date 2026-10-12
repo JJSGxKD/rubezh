@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — панель: сводка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --surface-raised:#353452; --surface-sunken:#17162a;
+    --border:#43425f; --border-strong:#5b5980; --text:#f3eee6; --muted:#aeaac4; --disabled:#6f6c8a;
+    --accent:#ff8f3f; --on-accent:#230f02;
+    --success:#8ee86b; --danger:#ff5d5d; --warning:#ffc14d; --info:#5ccfff; --passive:#c47dff; --stars:#ffd000;
+    --r-sm:4px; --r-md:6px; --r-lg:8px;
+    --display:'Russo One', sans-serif; --text-font:'IBM Plex Sans', sans-serif;
+    --page:#0d0c18; --page-muted:#9a97ab;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:14px/1.5 var(--text-font); }
+  .page { max-width:1700px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:400 28px/1.2 var(--display); margin:0 0 8px; letter-spacing:.02em; }
+  h2 { font:400 20px/1.2 var(--display); margin:40px 0 8px; letter-spacing:.02em; }
+  .lead { color:var(--page-muted); max-width:1000px; margin:0 0 8px; font-size:15px; }
+  code { font-size:.92em; }
+  table.inv { border-collapse:collapse; font-size:13.5px; max-width:1200px; margin:8px 0 0; }
+  table.inv td, table.inv th { border:1px solid #2c2b45; padding:6px 10px; text-align:left; vertical-align:top; }
+  table.inv th { color:var(--page-muted); font-weight:600; }
+  .cap { margin-top:10px; font-size:13.5px; color:var(--page-muted); max-width:760px; }
+  .cap b { color:var(--text); }
+  .grow { flex:1; min-width:0; }
+  .row { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; }
+
+  .frame { width:1240px; border-radius:10px; overflow:hidden; border:1px solid #2c2b45; background:var(--bg); box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .top { display:flex; align-items:center; gap:10px; height:52px; padding:0 20px; border-bottom:1px solid var(--border); }
+  .top .t { font:400 17px var(--display); letter-spacing:.02em; }
+  .top .h { color:var(--muted); font-size:12.5px; }
+  .top .r { margin-left:auto; display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); }
+  .content { padding:18px 20px 22px; display:flex; flex-direction:column; gap:14px; }
+  .btn { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 12px; border-radius:var(--r-md); font:600 12.5px var(--text-font); background:var(--surface-raised); color:var(--text); border:1px solid var(--border-strong); white-space:nowrap; }
+  .chips { display:inline-flex; gap:2px; padding:2px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); }
+  .chips span { height:26px; padding:0 10px; display:grid; place-items:center; border-radius:var(--r-sm); font:600 12px var(--text-font); color:var(--muted); }
+  .chips span.on { background:var(--surface-raised); color:var(--text); box-shadow:inset 0 0 0 1px var(--border-strong); }
+  .panel { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); }
+  .ph { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); }
+  .ph .pt { font:400 14.5px var(--display); letter-spacing:.02em; }
+  .ph .sub { font-size:12px; color:var(--muted); }
+  .ph .help { width:16px; height:16px; border-radius:50%; display:grid; place-items:center; font:700 10px var(--text-font); color:var(--muted); border:1px solid var(--border-strong); }
+  .pb { padding:12px 14px; }
+
+  .att { display:flex; flex-direction:column; }
+  .att li { list-style:none; display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid color-mix(in oklab, var(--border) 60%, transparent); font-size:13px; }
+  .att li:last-child { border-bottom:0; }
+  .att .n { min-width:26px; height:20px; padding:0 6px; border-radius:var(--r-sm); background:color-mix(in oklab, var(--warning) 16%, transparent); color:var(--warning); font:700 11.5px/20px var(--text-font); text-align:center; }
+  .att .go { margin-left:auto; color:var(--accent); font-weight:600; font-size:12.5px; }
+  .att ul { margin:0; padding:0; }
+
+  .tiles { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+  .tile { padding:10px 12px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .tile.ads { border-color:color-mix(in oklab, var(--info) 45%, var(--border)); }
+  .tile .k { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--muted); }
+  .tile .v { display:flex; align-items:baseline; gap:8px; }
+  .tile .v b { font:400 26px/1.05 var(--display); letter-spacing:.01em; font-variant-numeric:tabular-nums; }
+  .up { color:var(--success); font-size:12px; font-weight:600; } .down { color:var(--danger); font-size:12px; font-weight:600; } .flat { color:var(--muted); font-size:12px; }
+  .tile .s { font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .newb { display:inline-block; height:16px; padding:0 5px; border-radius:3px; background:color-mix(in oklab, var(--info) 18%, transparent); color:var(--info); font:700 9.5px/16px var(--text-font); text-transform:uppercase; letter-spacing:.06em; }
+
+  /* Вехи — полосами с конверсией шага, а не строкой */
+  .steps { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:12px; }
+  .step { display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--muted); min-width:0; }
+  .step .barw { height:44px; display:flex; align-items:flex-end; border-radius:var(--r-sm); background:var(--surface-sunken); overflow:hidden; }
+  .step .bar { width:100%; background:linear-gradient(180deg, color-mix(in oklab, var(--accent) 70%, #fff 10%), color-mix(in oklab, var(--accent) 40%, transparent)); border-radius:var(--r-sm) var(--r-sm) 0 0; }
+  .step b { color:var(--text); font:400 15px var(--display); font-variant-numeric:tabular-nums; }
+  .step .cv { color:var(--muted); }
+
+  /* Реклама сегодня */
+  table.dt { width:100%; border-collapse:collapse; font-size:13px; }
+  table.dt th { text-align:left; font-weight:600; font-size:11.5px; color:var(--muted); padding:6px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  table.dt td { padding:7px 10px; border-bottom:1px solid color-mix(in oklab, var(--border) 60%, transparent); white-space:nowrap; }
+  table.dt td.r, table.dt th.r { text-align:right; font-variant-numeric:tabular-nums; }
+  table.dt tr.total td { font-weight:600; background:color-mix(in oklab, var(--surface-raised) 45%, transparent); }
+  .meter { display:inline-block; width:64px; height:6px; border-radius:3px; background:var(--surface-sunken); vertical-align:middle; margin-left:6px; overflow:hidden; }
+  .meter i { display:block; height:100%; background:var(--info); border-radius:3px; }
+  .meter.low i { background:var(--warning); }
+  .nets { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--muted); }
+  .nets span b { color:var(--text); }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px; vertical-align:0; }
+
+  .charts { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .chart h3 { margin:0 0 6px; font-size:13px; font-weight:600; display:flex; justify-content:space-between; }
+  .chart h3 span { color:var(--muted); font-weight:500; font-size:12px; }
+  .bars { display:flex; align-items:flex-end; gap:3px; height:80px; padding-bottom:2px; border-bottom:1px solid var(--border); }
+  .bars i { flex:1; border-radius:2px 2px 0 0; background:color-mix(in oklab, var(--tone) 60%, transparent); }
+  .bars i:last-child { background:var(--tone); }
+  .axis { display:flex; justify-content:space-between; font-size:10.5px; color:var(--disabled); margin-top:3px; }
+
+  .phone { width:390px; height:800px; border-radius:36px; padding:10px; background:#000; box-shadow:0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .screen { width:100%; height:100%; border-radius:28px; overflow:hidden; background:var(--bg); display:flex; flex-direction:column; }
+  .mtop { display:flex; align-items:center; gap:8px; height:52px; padding:0 12px; border-bottom:1px solid var(--border); flex:none; }
+  .mtop .ib { width:34px; height:34px; border-radius:var(--r-md); display:grid; place-items:center; border:1px solid var(--border); font-size:16px; }
+  .mtop .t { font:400 16px var(--display); letter-spacing:.02em; }
+  .mbody { padding:12px; display:flex; flex-direction:column; gap:10px; overflow:hidden; -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 30px),transparent); mask-image:linear-gradient(180deg,#000 calc(100% - 30px),transparent); }
+  .mbody > * { flex:none; }
+  .m2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Панель: сводка</h1>
+  <p class="lead">Первый экран после входа (<code>apps/admin/src/screens/overview/OverviewScreen.tsx</code>): «Ждёт вас», сегодня против вчера к тому же часу, вехи новичков, две недели по суткам. Пользователь 07.10.2026: <b>в сводке не хватает данных по рекламе</b> — добавлены плитка «Реклама», разбор по местам показа и график показов. Числа рекламы — из той же воронки показов, что в разделе «Реклама» (<code>AdSession</code>: предложено → показано → досмотрено → награда), но за сегодня и вчера к тому же часу. Денег от сетей в базе нет — сводка о деньгах рекламы молчит, а не выдумывает.</p>
+
+  <h2>Что сохраняется и что меняется</h2>
+  <table class="inv">
+    <tr><th>Элемент</th><th>Сейчас</th><th>В макете</th></tr>
+    <tr><td>«Ждёт вас»</td><td>Список: число, что ждёт, «Открыть»</td><td>Так же; число — тоном предупреждения</td></tr>
+    <tr><td>Сегодня</td><td>Четыре плитки: новые, играли, забеги, звёзды (без права на выручку — три)</td><td><b>Пять</b>: плюс «Реклама» — досмотренных показов к вчера, ниже — доля досмотра и наград. Период — переключателем «Сегодня · 7 дней · 30 дней» вместо одного «сегодня»</td></tr>
+    <tr><td>Вехи</td><td>Строкой: «вошли → открыли → первый забег → …»</td><td>Полосами с числом и долей от прошлого шага: где теряем новичков, видно с первого взгляда</td></tr>
+    <tr><td>Реклама</td><td>Нет</td><td>Панель «Реклама сегодня»: места показа строками — предложено, показано, досмотрено, доля досмотра полосой (ниже 60% — тоном предупреждения), награды, ошибки; итог; под таблицей — доля сетей. Ссылка — в раздел «Реклама»</td></tr>
+    <tr><td>Две недели</td><td>Четыре графика: новые, играли, забеги, звёзды</td><td>Шесть по три в ряд: плюс «Показы рекламы» и «Покупки»; последний день — ярче</td></tr>
+    <tr><td>Телефон</td><td>—</td><td>Плитки по две, вехи и реклама — карточками, графики — по одному</td></tr>
+  </table>
+
+  <h2>На ПК</h2>
+  <div class="frame">
+    <div class="top"><span class="t">Сводка</span><span class="h">Как идёт игра сегодня против вчера и что ждёт вас</span><span class="r"><span class="chips"><span class="on">Сегодня</span><span>7 дней</span><span>30 дней</span></span>обновлено в 14:32, само — раз в минуту<span class="btn">Обновить</span></span></div>
+    <div class="content" id="desk"></div>
+  </div>
+  <p class="cap"><b>Сводка на 1240 px.</b> Реклама — отдельной плиткой и панелью рядом с вехами: обе отвечают на «где теряем» — новичков и показы. Доля досмотра ниже 60% у места — тоном предупреждения: сеть там не отдаёт ролик или место раздражает.</p>
+
+  <h2>На телефоне</h2>
+  <div class="row"><div><div class="phone"><div class="screen"><div class="mtop"><span class="ib">☰</span><span class="t" style="flex:1">Сводка</span><span class="ib">↻</span></div><div class="mbody" id="mob"></div></div></div></div></div>
+</div>
+
+<script>
+  const fmt = (n) => n.toLocaleString("ru-RU");
+  const tile = (k, v, d, s, cls = "") => `<div class="tile ${cls}"><span class="k">${k}</span><span class="v"><b>${fmt(v)}</b><span class="${d[0]}">${d[1]}</span></span><span class="s">${s}</span></div>`;
+  const tiles = [
+    tile("Новые игроки", 142, ["up", "+18% к вчера"], "бот 61 · ссылки 48 · реклама 33"),
+    tile("Играли", 1284, ["up", "+6%"], "запусков 3 910"),
+    tile("Забеги", 4120, ["flat", "≈ вчера"], "игроков 1 006 · медиана 6:42"),
+    tile("Звёзды", 2350, ["down", "−9%"], "покупок 31 · возвратов 1"),
+    tile(`Реклама <span class="newb">новое</span>`, 2614, ["up", "+12%"], "досмотрено 81% · наград 2 380", "ads"),
+  ];
+  const STEPS = [["Вошли в бота", 240], ["Открыли игру", 198], ["Первый забег", 171], ["Пятый забег", 96], ["Вернулись D1", 64], ["Вернулись D7", 22], ["Первая покупка", 9]];
+  const steps = `<div class="steps">${STEPS.map(([t, n], k) => `<div class="step"><div class="barw"><div class="bar" style="height:${Math.max(6, (n / STEPS[0][1]) * 100)}%"></div></div><b>${fmt(n)}</b><span>${t}</span><span class="cv">${k === 0 ? "—" : `${Math.round((n / STEPS[k - 1][1]) * 100)}% от прошлого`}</span></div>`).join("")}</div>`;
+  // Подписи мест — PLACE_TITLES в apps/admin/src/api/ads.ts.
+  const PLACES = [["Второй шанс", 820, 744, 610, 596, 4], ["Крутка колеса", 1210, 1104, 928, 912, 12], ["Удвоение за забег", 640, 590, 402, 396, 9], ["Задания", 380, 352, 300, 476, 3], ["Между забегами", 520, 496, 374, null, 6]];
+  const sum = PLACES.reduce((a, p) => p.map((v, i) => i === 0 ? "Всего" : (a[i] ?? 0) + (v ?? 0)), []);
+  const adsRow = ([t, off, shown, done, rew, fail], total = false) => { const pct = Math.round((done / shown) * 100); return `<tr class="${total ? "total" : ""}"><td>${t}</td><td class="r">${fmt(off)}</td><td class="r">${fmt(shown)}</td><td class="r">${fmt(done)}</td><td class="r">${pct}%<span class="meter${pct < 60 ? " low" : ""}"><i style="width:${pct}%"></i></span></td><td class="r">${rew === null ? "—" : fmt(rew)}</td><td class="r">${fmt(fail)}</td></tr>`; };
+  const ads = `<div class="panel"><div class="ph"><span class="pt">Реклама сегодня</span><span class="help">?</span><span class="sub">досмотрено 2 614 · вчера к 14:32 — 2 334</span><span class="grow"></span><span style="color:var(--accent);font-weight:600;font-size:12.5px">В раздел «Реклама» →</span></div>
+    <div class="pb"><table class="dt"><thead><tr><th>Место</th><th class="r">Предложено</th><th class="r">Показано</th><th class="r">Досмотрено</th><th class="r">Доля досмотра</th><th class="r">Наград</th><th class="r">Ошибок</th></tr></thead><tbody>${PLACES.map((p) => adsRow(p)).join("")}${adsRow(sum, true)}</tbody></table>
+    <div class="nets"><span><i class="dot" style="background:var(--info)"></i>AdsGram <b>58%</b></span><span><i class="dot" style="background:var(--passive)"></i>Taddy <b>27%</b></span><span><i class="dot" style="background:var(--warning)"></i>RichAds <b>15%</b></span><span>· у показа «Между забегами» наград нет — он без награды</span></div></div></div>`;
+  const att = `<div class="panel"><div class="ph"><span class="pt">Ждёт вас</span><span class="help">?</span></div><div class="pb att"><ul><li><span class="n">7</span>Забегов ждут разбора антифрода<span class="go">Открыть</span></li><li><span class="n">2</span>Строки журнала обновлений — черновики после выката<span class="go">Открыть</span></li><li><span class="n">1</span>Рекламный блок без идентификатора сети — игроки его не видят<span class="go">Открыть</span></li></ul></div></div>`;
+  const today = `<div class="panel"><div class="ph"><span class="pt">Сегодня, 7 октября — с полуночи по Москве</span><span class="help">?</span></div><div class="pb"><div class="tiles">${tiles.join("")}</div>${steps}</div></div>`;
+  const bars = (tone, seq) => `<div class="bars" style="--tone:${tone}">${seq.map((v) => `<i style="height:${v}%"></i>`).join("")}</div><div class="axis"><span>24 сен</span><span>7 окт</span></div>`;
+  const seq = (base) => Array.from({ length: 14 }, (_, k) => Math.min(100, Math.round(base + 30 * Math.abs(Math.sin(k * 1.3 + base)) + k * 2)));
+  const CH = [["Новые игроки", "сегодня 142", "var(--accent)", 30], ["Играли", "1 284", "var(--success)", 45], ["Забеги", "4 120", "var(--passive)", 40], ["Звёзды", "2 350", "var(--stars)", 25], ["Покупки", "31", "var(--warning)", 20], ["Показы рекламы", "2 614", "var(--info)", 35]];
+  const series = `<div class="panel"><div class="ph"><span class="pt">За 14 дней</span><span class="help">?</span></div><div class="pb"><div class="charts">${CH.map(([t, s, tone, b]) => `<div class="chart"><h3>${t}<span>${s}</span></h3>${bars(tone, seq(b))}</div>`).join("")}</div></div></div>`;
+  document.getElementById("desk").innerHTML = att + today + ads + series;
+
+  const mob = `<div class="chips" style="align-self:flex-start"><span class="on">Сегодня</span><span>7 дней</span><span>30 дней</span></div>
+    ${att.replace('<span class="go">Открыть</span>', '<span class="go">›</span>').replace('<span class="go">Открыть</span>', '<span class="go">›</span>').replace('<span class="go">Открыть</span>', '<span class="go">›</span>')}
+    <div class="m2">${tiles.slice(0, 4).join("")}</div>${tiles[4]}
+    <div class="panel"><div class="ph"><span class="pt">Реклама по местам</span></div><div class="pb" style="display:flex;flex-direction:column;gap:8px">${PLACES.slice(0, 3).map(([t, , shown, done, rew]) => { const pct = Math.round((done / shown) * 100); return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px"><span class="grow">${t}</span><span style="color:var(--muted)">${fmt(done)}</span><span>${pct}%</span><span class="meter${pct < 60 ? " low" : ""}"><i style="width:${pct}%"></i></span></div>`; }).join("")}</div></div>`;
+  document.getElementById("mob").innerHTML = mob;
+</script>
+</body>
+</html>
