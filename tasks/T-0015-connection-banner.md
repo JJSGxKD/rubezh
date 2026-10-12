@@ -14,6 +14,7 @@ zones:
   - packages/app-shell/src/design-system/components/Layout.tsx
   - packages/app-shell/src/app/AppHeader.tsx
   - packages/app-shell/test/connection.test.ts
+  - packages/app-shell/src/design-system/components/Button.tsx
 shared:
   - packages/app-shell/src/i18n/ru.json
   - backend/api/src/modules/events/event-dictionary.ts
@@ -21,6 +22,7 @@ shared:
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
   - scripts/bundle-budget.mjs
+  - packages/app-shell/src/state/analytics.ts
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -77,11 +79,21 @@ design: design/screens/home.html
   - `connection.checking` — «Проверяем…»: подпись кнопки, пока идёт проверка.
 - **Вид** — по макету `design/screens/home.html`, состояние 6 и компонент
   «Плашка связи»:
-  - фон `warning` на 10 % прозрачности;
+  - фон — `warning` на 10 % **поверх непрозрачной подложки цвета фона**:
+    плашка прилипает и едет над содержимым, сквозь неё ничего не должно
+    просвечивать. Например,
+    `bg-[color-mix(in_oklab,var(--color-warning)_10%,var(--color-bg))]`;
   - рамка `warning` на 45 %;
   - значок-треугольник `warning` слева;
-  - кнопка `secondary` размера `m` справа;
+  - **компактная** кнопка `secondary` справа, как в макете: новый размер `s`
+    у `Button` (шаг 5). Одна строка на любой ширине от 320 px, кнопка под
+    текст не переносится: прилипшая плашка не должна закрывать пол-экрана;
   - скругление `--radius-lg`, отступы 10 × 12 px.
+
+  Решение тимлидов от 12.10.2026 после проверки PR в браузере. С кнопкой
+  размера `m` на 320–390 px плашка выходила высотой 138–142 px: заголовок и
+  текст переносились, а на узких экранах кнопка уходила под текст. Макет
+  держит одну строку с маленькой кнопкой.
 
   Появляется и скрывается анимацией прозрачности `--duration-base` (правило
   §3.3 `docs/27`).
@@ -149,6 +161,9 @@ design: design/screens/home.html
    Модуль `connection.ts` подключается статически: он маленький и нужен с
    первого кадра. `failureOf` не менять.
 5. **Новый `design-system/components/ConnectionBanner.tsx`:**
+   - `Button.tsx`: `ButtonSize` получает `"s"` —
+     `min-h-9 rounded-md px-3 text-sm font-semibold`. Остальное у кнопки то
+     же: отклик касания, загрузка, `disabled`;
    - читает `useConnection`;
    - при `offline` рисует плашку из «Решений», при `online` — ничего;
    - кнопка — `retryConnection()`, при `checking` — подпись «Проверяем…» и
@@ -164,10 +179,11 @@ design: design/screens/home.html
 7. **`AppHeader.tsx`.** При `offline` — `opacity-60` и
    `transition-opacity` на фишках валют.
 8. **Бюджет.** Стор и плашка — в первой загрузке. Порог «Первая загрузка» в
-   `scripts/bundle-budget.mjs` разрешено поднять **не больше чем на 0,6 КБ**:
-   с объяснением рядом с порогом и строкой в таблице бюджета
-   `docs/27-design-system-and-app-shell.md` §3.4. Если нужно больше — вопрос
-   тимлидам.
+   `scripts/bundle-budget.mjs` разрешено поднять **до 152,8 КБ** (+1,7 КБ,
+   решение тимлидов от 12.10.2026 по вопросу 1 PR: плашка нужна с первого
+   кадра и без сети, ленивой быть не может), с объяснением рядом с порогом и
+   строкой в таблице бюджета `docs/27-design-system-and-app-shell.md` §3.4.
+   Если нужно больше — вопрос тимлидам.
 9. **Документы:**
    - `docs/27` §4.6 (компоненты) — строка о `ConnectionBanner`: одна плашка на
      приложение, когда показывается и что значит;
@@ -242,7 +258,8 @@ design: design/screens/home.html
 - [ ] Один медленный запрос плашку не включает: нужен второй сбой за 30 с.
 - [ ] «Повторить» проверяет связь сразу; связь вернулась — плашка исчезает сама.
 - [ ] События `connection_lost` и `connection_restored` есть в словаре и пишутся.
-- [ ] Первая загрузка выросла не больше чем на 0,6 КБ, порог поднят с объяснением.
+- [ ] Первая загрузка — не больше 152,8 КБ, порог поднят с объяснением.
+- [ ] Плашка — одна строка с компактной кнопкой на 320, 360 и 390 px; прилипшая, она не просвечивает.
 - [ ] Снимки — в PR.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 

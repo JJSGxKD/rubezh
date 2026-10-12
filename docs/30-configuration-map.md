@@ -325,7 +325,11 @@
 | Версии образов Postgres и Redis | `docker-compose.yml` и сервисы джоба `gate` в `.github/workflows/ci.yml`, одни и те же; база бэкенда — `FROM` в `backend/api/Dockerfile`. Точная версия и digest, как обновить — `16-tech-stack-decisions.md` §9.4 |
 | Минимальная версия клиента площадки | `apps/web-telegram/src/main.tsx`, `minPlatformVersion` (обоснование — `27-design-system-and-app-shell.md` §5.2) |
 | Туннель для открытия Mini App с телефона | `infra/frpc/frpc.local.toml` (не коммитится: в нём токен) |
-| Лимиты приёма забегов и листа забега в профиле (по аккаунту) | `backend/api/src/modules/runs/runs-limits.ts`; сколько врагов в «кого больше всего» — `runs/run-details.ts` → `TOP_KILLS_SHOWN` |
+| Лимиты приёма забегов и листа забега в профиле, рейтинга и профиля (по аккаунту) | `backend/api/src/modules/runs/runs-limits.ts`; сколько врагов в «кого больше всего» — `runs/run-details.ts` → `TOP_KILLS_SHOWN` |
+| Лимиты входа, продления, выхода и «кто я» (выход и вход — по адресу, остальное — по аккаунту) | `backend/api/src/modules/auth/auth-limits.ts` → `AUTH_LIMITS` |
+| Лимиты «свои роли» и доступа к инструментам (по аккаунту) | `backend/api/src/modules/roles/roles-limits.ts` → `ROLES_LIMITS` |
+| Лимит выдачи сетей для SDK (по аккаунту) | `backend/api/src/modules/ads/ads.controller.ts` → `NETWORKS_LIMIT` (там же `OFFER_LIMIT`, `INTERSTITIAL_LIMIT`, `REPORT_LIMIT`) |
+| Лимиты адреса награды AdsGram: с адреса — до сверки секрета, на игрока — после | `backend/api/src/modules/ads/adsgram-reward.controller.ts` → `REWARD_IP_LIMIT`, `REWARD_USER_LIMIT` |
 | Правила игры для проверки забега (слоты, сложности, вторые шансы за забег) | `backend/api/src/modules/runs/run-rules.ts` — копия контента, сверяется тестом `scripts/test/run-rules.test.ts` |
 | Лимиты оплаты: цена, счёт, опрос состояния покупки (по аккаунту) | `backend/api/src/modules/payments/payments-limits.ts` |
 | Правило цены второго шанса: начатые минуты, минимум в звезду, потолок | `backend/api/src/modules/payments/continue-price.ts`; сами числа — `CONTINUE_*` в окружении |

@@ -1,6 +1,9 @@
 import { Controller, Get, Req, UseGuards } from "@nestjs/common";
+import { RateLimitedError } from "../../common/domain-error.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
+import { RateLimiter } from "../ingest/rate-limiter.js";
 import { permissionsOf, type Permission, type Role } from "./permissions.js";
+import { ROLES_LIMITS } from "./roles-limits.js";
 import { RolesService } from "./roles.service.js";
 
 /**
@@ -10,13 +13,18 @@ import { RolesService } from "./roles.service.js";
  */
 @Controller("roles")
 export class RolesController {
-  constructor(private readonly roles: RolesService) {}
+  constructor(
+    private readonly roles: RolesService,
+    private readonly limiter: RateLimiter,
+  ) {}
 
   /** Что может сам спрашивающий. Своё — всегда, права на это не нужно. */
   @Get("me")
   @UseGuards(AuthGuard)
   async me(@Req() request: unknown): Promise<{ data: { roles: Role[]; permissions: Permission[] } }> {
-    const roles = await this.roles.rolesFor(accountOf(request));
+    const account = accountOf(request);
+    if (!(await this.limiter.consume(ROLES_LIMITS.me, account.accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    const roles = await this.roles.rolesFor(account);
     return { data: { roles, permissions: [...permissionsOf(roles)] } };
   }
 }
