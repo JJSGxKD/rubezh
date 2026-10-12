@@ -1,5 +1,8 @@
 import { Controller, Get, Req, UseGuards } from "@nestjs/common";
+import { RateLimitedError } from "../../common/domain-error.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
+import { RateLimiter } from "../ingest/rate-limiter.js";
+import { ROLES_LIMITS } from "./roles-limits.js";
 import { ToolsAccessService, type ToolsAccess } from "./tools-access.js";
 
 /**
@@ -9,11 +12,16 @@ import { ToolsAccessService, type ToolsAccess } from "./tools-access.js";
  */
 @Controller("tools")
 export class ToolsController {
-  constructor(private readonly tools: ToolsAccessService) {}
+  constructor(
+    private readonly tools: ToolsAccessService,
+    private readonly limiter: RateLimiter,
+  ) {}
 
   @Get("access")
   @UseGuards(AuthGuard)
   async access(@Req() request: unknown): Promise<{ data: ToolsAccess }> {
-    return { data: await this.tools.forAccount(accountOf(request)) };
+    const account = accountOf(request);
+    if (!(await this.limiter.consume(ROLES_LIMITS.toolsAccess, account.accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    return { data: await this.tools.forAccount(account) };
   }
 }

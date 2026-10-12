@@ -27,6 +27,8 @@ const OFFER_LIMIT: RateLimit = { scope: "ads_offer", limit: 120, windowSec: 3600
  */
 const INTERSTITIAL_LIMIT: RateLimit = { scope: "ads_interstitial", limit: 60, windowSec: 3600 };
 const REPORT_LIMIT: RateLimit = { scope: "ads_report", limit: 600, windowSec: 3600 };
+/** Сети для SDK клиент спрашивает раз при запуске — потолок с большим запасом. */
+const NETWORKS_LIMIT: RateLimit = { scope: "ads_networks", limit: 600, windowSec: 3600 };
 
 /**
  * Язык и премиум — со слов клиента площадки: их ждёт сеть с API для
@@ -79,6 +81,7 @@ export class AdsController {
   @Get("networks")
   async networks(@Req() request: unknown): Promise<{ data: { networks: AdNetworkSetup[]; interstitial: boolean } }> {
     const { accountId, platform } = accountOf(request);
+    await this.limit(NETWORKS_LIMIT, accountId);
     const [networks, interstitial] = await Promise.all([this.audience.launchSetup(platform), this.interstitials.expected({ accountId, platform }, new Date())]);
     return { data: { networks, interstitial } };
   }
