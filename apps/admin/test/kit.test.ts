@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { phoneLayout, type Column } from "../src/ui/kit";
+import { hasPhoneValue, phoneLayout, type Column } from "../src/ui/kit";
 
 // Таблица на телефоне — карточкой строки (tasks/T-0049): главное поле крупно,
 // остальные — парами «название значение», кнопки без заголовка — в углу.
@@ -32,4 +32,22 @@ describe("карточка строки на телефоне", () => {
     expect(layout.pairs.map((column) => column.title)).toEqual(["Игрок"]);
   });
 
+});
+
+describe("пара без значения в карточке", () => {
+  it("пустое значение — null, undefined, false, true и пустая строка — пару не показывает", () => {
+    for (const empty of [null, undefined, false, true, ""]) expect(hasPhoneValue(empty)).toBe(false);
+  });
+
+  it("пустой массив и массив из пустых — тоже пусто", () => {
+    expect(hasPhoneValue([])).toBe(false);
+    expect(hasPhoneValue([null, false, ""])).toBe(false);
+  });
+
+  it("строка, число (в том числе 0) и элемент — значение", () => {
+    expect(hasPhoneValue("Заблокирован")).toBe(true);
+    expect(hasPhoneValue(0)).toBe(true);
+    expect(hasPhoneValue(["", "Да"])).toBe(true);
+    expect(hasPhoneValue({ type: "span", props: {} } as never)).toBe(true);
+  });
 });
