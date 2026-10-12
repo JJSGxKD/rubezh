@@ -112,6 +112,8 @@ export function RunDouble(props: RunDoubleProps): ReactNode {
             {button.kind === "wait"
               ? t("run.double.next", { time: formatCountdown(button.untilMs - now) })
               : t(button.pass ? "run.double.vip" : "run.double.ad")}
+            {/* Отметка ×2 акцентом — как у монет после удвоения. */}
+            <span className="rounded-sm bg-accent px-1.5 font-display text-xs leading-5 text-on-accent">×2</span>
             <span className="inline-flex items-center gap-1 tabular-nums text-accent">
               <CoinIcon size={16} />+{formatNumber(button.coins)}
             </span>

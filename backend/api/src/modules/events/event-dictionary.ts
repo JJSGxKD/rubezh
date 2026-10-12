@@ -131,6 +131,9 @@ export const EVENT_DICTIONARY = {
   // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
   // на какой секунде и волне забега.
   continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
+  // Шаг второго шанса показан (tasks/T-0045): сколько раз предложили и чем —
+  // ролик, звёзды, VIP. Доля `continue_used` от этого — конверсия второго шанса.
+  continue_offered: { version: 1, payload: payload({ ad: z.boolean(), stars: z.boolean(), vip: z.boolean(), elapsedSec: seconds }) },
   // Сервер подтвердил покупку буста на забег (WP8): по событию на буст.
   boost_used: { version: 1, payload: payload({ boost: id, source: id, amount, count }) },
   // Нажал «продолжить за звёзды» — счёт запрошен; в магазине — счёт выставлен.
