@@ -2,7 +2,7 @@ import type { CommandsLanguage } from "./telegram-bot-api.js";
 
 /**
  * Профиль бота на языках интерфейса Telegram (bot-profile.ts). Русский — по
- * умолчанию: закрытый тест русскоязычный, и так же выбирает язык приветствие
+ * умолчанию: игра пока только на русском, и так же выбирает язык приветствие
  * (welcome-texts.ts). Английский — тем, у кого Telegram по-английски.
  *
  * Пределы Telegram: имя — до 64 знаков, короткое описание — до 120, описание
@@ -31,7 +31,7 @@ export const BOT_PROFILE_TEXTS: Record<CommandsLanguage, BotProfileTexts> = {
       "• стихии, боссы и рекорды на каждой сложности",
       "• забег — пара минут, пауза в любой момент",
       "",
-      "Идёт закрытый тест. Жми «Играть» или /start.",
+      "Идёт тест: игра часто обновляется, а отзывы игроков на неё влияют. Жми «Играть» или /start.",
     ].join("\n"),
     menuButton: "Играть",
   },
@@ -45,7 +45,7 @@ export const BOT_PROFILE_TEXTS: Record<CommandsLanguage, BotProfileTexts> = {
       "• elements, bosses and records on every difficulty",
       "• a run takes a couple of minutes, pause anytime",
       "",
-      "Closed test in progress. Tap “Play” or /start.",
+      "The game is in testing and updates often — players' feedback shapes it. Tap “Play” or /start.",
     ].join("\n"),
     menuButton: "Play",
   },

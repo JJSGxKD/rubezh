@@ -3,8 +3,8 @@ id: T-0032
 title: Роли владельца и администратора выдаются только с подтверждением в Telegram
 epic: E4
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5
 size: M
 depends_on: [T-0020]
 zones:

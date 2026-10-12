@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { createHash } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
@@ -222,6 +222,7 @@ describe("картинки по HTTP", () => {
   const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
 
   afterEach(async () => {
+    vi.useRealTimers();
     await app?.close();
     app = null;
   });
@@ -327,6 +328,10 @@ describe("картинки по HTTP", () => {
   });
 
   it("в базу ходит только то, чего нет в памяти: перебор имён упирается в лимит, а уже прочитанная картинка — нет", async () => {
+    // Окно лимита — календарная минута: серия запросов на её границе начала бы счёт заново.
+    // Часы стоят в начале минуты, таймеры — настоящие, чтобы Fastify отвечал как обычно.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 6, 9, 5, 0));
     const s = setup();
     const owner = await person(s, OWNER_ID);
     const { imageId } = await s.service.upload(owner, "task", webp("square96"));

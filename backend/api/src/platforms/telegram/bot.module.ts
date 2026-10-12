@@ -3,7 +3,8 @@ import { BOT_POLLER_LOCKS, BotPoller, RedisBotPollerLocks } from "./bot-poller.j
 import { BotCommands } from "./bot-commands.js";
 import { BOT_PROFILE_STATE, BotProfile, RedisBotProfileState } from "./bot-profile.js";
 import { BotRouter } from "./bot-router.js";
-import { BotUpdateDedupe, BotWebhookController } from "./bot-webhook.controller.js";
+import { BotUpdateQueue } from "./bot-update-queue.js";
+import { BotWebhookController } from "./bot-webhook.controller.js";
 
 /**
  * Бот закрытого теста (docs/28-diagnostics.md §6.1): откуда приходят
@@ -22,7 +23,7 @@ import { BotUpdateDedupe, BotWebhookController } from "./bot-webhook.controller.
     BotCommands,
     BotProfile,
     BotPoller,
-    BotUpdateDedupe,
+    BotUpdateQueue,
     { provide: BOT_POLLER_LOCKS, useClass: RedisBotPollerLocks },
     { provide: BOT_PROFILE_STATE, useClass: RedisBotProfileState },
   ],

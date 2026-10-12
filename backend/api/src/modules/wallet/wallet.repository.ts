@@ -4,8 +4,9 @@ import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { IdempotencyConflictError } from "./wallet-errors.js";
 import { debitWithin, InsufficientBalance, type Tx } from "./wallet-ledger.js";
-import { emptyBalances, type ADMIN_REASON, type Balances, type GrantReason, type SpendReason, type WalletResource } from "./wallet-types.js";
+import { emptyBalances, REVOKE_REASON, type ADMIN_REASON, type Balances, type GrantReason, type SpendReason, type WalletResource } from "./wallet-types.js";
 
 /**
  * Журнал и балансы кошелька (docs/35-stage4-plan.md, Р12, §3.2).
@@ -64,6 +65,25 @@ export type DebitOutcome =
   /** не хватило — ничего не списано, ни по одной строке */
   | { status: "insufficient"; resource: WalletResource; needed: number; balance: number };
 
+export interface RevokeInput {
+  accountId: string;
+  resource: WalletResource;
+  /** ключ записи, которой это начислено: `purchase:<id>:<ресурс>` */
+  grantKey: string;
+  /** ключ самого отзыва: повтор с ним ничего не списывает второй раз */
+  idempotencyKey: string;
+  source: string | null;
+  at: Date;
+}
+
+export type RevokeOutcome =
+  /** `revoked` — забрано сейчас: не больше начисленного и не больше баланса */
+  | { status: "revoked"; revoked: number; granted: number; balance: number }
+  /** отзыв с этим ключом уже был — в ответе то, что забрали тогда */
+  | { status: "duplicate"; revoked: number; granted: number }
+  /** записи начисления нет или забирать нечего: баланс 0 — строка журнала не создаётся */
+  | { status: "nothing"; granted: number };
+
 export interface ExistingEntry {
   accountId: string;
   resource: WalletResource;
@@ -88,6 +108,12 @@ export interface WalletRepository {
   balances(accountId: string): Promise<Balances>;
   /** последние строки журнала, новые первыми */
   recentEntries(accountId: string, limit: number): Promise<WalletEntryRow[]>;
+  /**
+   * Забрать начисленное записью `grantKey` — не больше её суммы и не больше
+   * баланса (tasks/T-0023). Необязателен только ради подмен кошелька в тестах,
+   * которым отзыв не нужен; в базе он есть всегда.
+   */
+  revokeUpTo?(input: RevokeInput): Promise<RevokeOutcome>;
 }
 
 /** Ключ строки списания: у каждого ресурса своя строка журнала, а ключ уникален. */
@@ -154,6 +180,59 @@ export class PrismaWalletRepository implements WalletRepository {
       const balance = (await this.balances(input.accountId))[error.resource];
       return { status: "insufficient", resource: error.resource, needed: error.needed, balance };
     }
+  }
+
+  async revokeUpTo(input: RevokeInput): Promise<RevokeOutcome> {
+    return await this.prisma.$transaction(async (tx) => {
+      // Строка баланса — первой и с блокировкой: параллельные отзывы и траты
+      // встают в очередь и видят уже уменьшенный остаток, а повтор того же
+      // ключа ждёт того, кто его занял. Строки нет — баланс 0, и забирать нечего.
+      const [balanceRow] = await tx.$queryRaw<{ balance: bigint }[]>`
+        SELECT balance FROM wallet_balance
+        WHERE account_id = ${input.accountId}::uuid AND resource = ${input.resource}::"WalletResource"
+        FOR UPDATE
+      `;
+      const balance = Number(balanceRow?.balance ?? 0n);
+
+      // Начисление ищется по своему аккаунту и ресурсу: чужой ключ ничего не даст забрать.
+      const [grantRow] = await tx.$queryRaw<{ amount: bigint }[]>`
+        SELECT amount FROM wallet_entry
+        WHERE idempotency_key = ${input.grantKey} AND account_id = ${input.accountId}::uuid AND resource = ${input.resource}::"WalletResource"
+      `;
+      const granted = Math.max(0, Number(grantRow?.amount ?? 0n));
+
+      const [doneRow] = await tx.$queryRaw<{ account_id: string; resource: string; reason: string; amount: bigint }[]>`
+        SELECT account_id::text AS account_id, resource::text AS resource, reason, amount FROM wallet_entry
+        WHERE idempotency_key = ${input.idempotencyKey}
+      `;
+      if (doneRow !== undefined) {
+        // Ключ занят не отзывом этого игрока и ресурса — ошибка того, кто его собрал.
+        if (doneRow.account_id !== input.accountId || doneRow.resource !== input.resource || doneRow.reason !== REVOKE_REASON) throw new IdempotencyConflictError();
+        return { status: "duplicate", revoked: -Number(doneRow.amount), granted };
+      }
+
+      if (granted === 0) return { status: "nothing", granted: 0 };
+      const take = Math.min(granted, balance);
+      // Баланс 0: ничего не пишем — повтор, когда у игрока что-то появится, заберёт то, что останется от покупки.
+      if (take === 0) return { status: "nothing", granted };
+
+      const [claimed] = await tx.$queryRaw<{ entry_id: string }[]>`
+        INSERT INTO wallet_entry (entry_id, account_id, resource, amount, reason, source, idempotency_key, created_at)
+        VALUES (${randomUUID()}::uuid, ${input.accountId}::uuid, ${input.resource}::"WalletResource", ${BigInt(-take)},
+                ${REVOKE_REASON}, ${input.source}, ${input.idempotencyKey}, ${input.at})
+        ON CONFLICT (idempotency_key) DO NOTHING
+        RETURNING entry_id
+      `;
+      // Блокировка строки баланса уже взята, так что занять ключ между проверкой и записью некому.
+      if (claimed === undefined) throw new Error(`ключ ${input.idempotencyKey} занят другой операцией`);
+      const [updated] = await tx.$queryRaw<{ balance: bigint }[]>`
+        UPDATE wallet_balance SET balance = balance - ${BigInt(take)}, updated_at = ${input.at}
+        WHERE account_id = ${input.accountId}::uuid AND resource = ${input.resource}::"WalletResource" AND balance >= ${BigInt(take)}
+        RETURNING balance
+      `;
+      if (updated === undefined) throw new InsufficientBalance(input.resource, take);
+      return { status: "revoked", revoked: take, granted, balance: Number(updated.balance) };
+    }, TX_OPTIONS);
   }
 
   async balances(accountId: string): Promise<Balances> {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { MessagingReason, MessagingState } from "../src/modules/messaging/messaging.repository.js";
 import type { BotOutcome } from "../src/modules/notifications/notifications.repository.js";
 import { BotNotifyQueue } from "../src/modules/notifications-bot/bot-notify-queue.js";
+import { botRuleOf } from "../src/modules/notifications-bot/bot-notify-rules.js";
 import { BotNotifySender, type BotDelivery, type BotNotifyJob } from "../src/modules/notifications-bot/bot-notify-sender.js";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
@@ -171,20 +172,13 @@ describe("дубль уведомлений в бота", () => {
     expect(s.marks).toEqual([{ notificationId: job.notificationId, outcome: "failed" }]);
   });
 
-  it("выход версии: текст с версией, кнопка в игру; выключил «новые версии» — не пишем; второй выпуск за три дня ждёт в ленте", async () => {
+  it("выход версии в бота не дублируется: задание пропускается, сообщение не уходит (T-0019)", async () => {
     const target = await player(s);
-    const update = (version: string): BotNotifyJob => ({ notificationId: randomUUID(), accountId: target.accountId, kind: "app_update", payload: { version } });
+    const update: BotNotifyJob = { notificationId: randomUUID(), accountId: target.accountId, kind: "app_update", payload: { version: "0.6.0" } };
 
-    expect(await s.sender.deliver(update("0.6.0"), NOW)).toEqual({ status: "sent" });
-    expect(s.messenger.sent[0]?.message).toEqual({
-      text: "Вышло обновление «Рубежа» — версия 0.6.0. Что изменилось — в игре, в меню «Что нового».",
-      button: { text: "▶ Открыть игру", url: "https://t.me/rubezh_bot/play?startapp=n-app_update" },
-    });
-    expect(await s.sender.deliver(update("0.6.1"), NOW)).toEqual({ status: "skipped", reason: "throttled" });
-
-    const other = await player(s);
-    s.settings.set("bot.updates", false);
-    expect(await s.sender.deliver({ ...update("0.6.0"), accountId: other.accountId }, NOW)).toEqual({ status: "skipped", reason: "opted_out" });
+    expect(botRuleOf("app_update")).toBeUndefined();
+    expect(await s.sender.deliver(update, NOW)).toEqual({ status: "skipped", reason: "not_duplicated" });
+    expect(s.messenger.sent).toEqual([]);
   });
 
   it("не пишем: вид не дублируется, аккаунта нет, он заблокирован, данные не по схеме", async () => {

@@ -46,3 +46,14 @@ export const INGEST_LIMITS: Record<IngestKind, IngestLimits> = {
     user: { scope: "reports:user", limit: 30, windowSec: 3600 },
   },
 };
+
+/**
+ * Отзыв без подписи запуска: installId присылает сам клиент, и держит такой
+ * отзыв только адрес. Живому игроку больше трёх отзывов в час не нужно, а в
+ * чат команды без подписи — не больше 20 карточек в час на всех: сверх
+ * этого отзыв сохраняется, но не отправляется.
+ */
+export const UNSIGNED_FEEDBACK_LIMITS = {
+  ip: { scope: "feedback:unsigned-ip", limit: 3, windowSec: 3600 },
+  chat: { scope: "feedback:unsigned-chat", limit: 20, windowSec: 3600 },
+} as const satisfies Record<"ip" | "chat", RateLimit>;

@@ -3,6 +3,7 @@
 # деплоя в /srv/rubezh/app — из workflow выката или руками:
 #
 #   ./deploy.sh v0.6.0-rc.29
+#   ./deploy.sh v0.6.0-rc.29 --no-backup   # только в аварии: без дампа перед выкатом
 #
 # Всё берётся из уже выпущенного релиза: образ API — из GHCR по тегу версии,
 # статика клиента и панели — архивами из GitHub Release. Пересборки перед
@@ -15,6 +16,15 @@
 set -euo pipefail
 
 VERSION="${1:?укажите версию: ./deploy.sh v0.6.0-rc.29}"
+skip_backup=no
+case "${2:-}" in
+  "") ;;
+  --no-backup) skip_backup=yes ;;
+  *)
+    echo "deploy.sh: неизвестный аргумент «$2». Использование: ./deploy.sh <версия> [--no-backup]" >&2
+    exit 2
+    ;;
+esac
 APP="/srv/rubezh/app"
 WEB="/srv/rubezh/web"
 REPO="${REPO:-JJSGxKD/rubezh}"
@@ -137,6 +147,19 @@ log "API ${previous:-—} → ${VERSION}"
 docker compose pull --quiet api
 # Новый образ занял место — проверка ещё раз, пока миграции не начались.
 ensure_space
+# Свежий дамп — прямо перед подъёмом новой версии: миграции применяются при
+# старте её контейнера, то есть со следующей строки, а ближайший ночной дамп
+# может быть на сутки старше. Даже без новых миграций: выкаты редкие, база на
+# тесте небольшая, а выяснять, есть ли миграции, — лишняя сложность.
+# Дамп не сделался — выкат стоит до миграций, API остаётся на прежней версии.
+if [ "$skip_backup" = yes ]; then
+  log "⚠️ выкат без бэкапа (--no-backup) — только для аварий"
+elif ! "${APP}/backup.sh" --before-deploy "$VERSION"; then
+  log "бэкап перед выкатом не сделан — выкат остановлен до миграций, API остаётся на ${previous:-прежней версии}"
+  exit 1
+fi
+# Дамп занял место — проверка ещё раз.
+ensure_space
 set_env_value API_TAG "$VERSION"
 # Повтор выката той же версии после ручной починки: тег не сменился, и
 # compose не пересоздаёт контейнер, а застаёт упавший API в паузе между
@@ -205,6 +228,10 @@ SELECT format('%s ROLE backup WITH LOGIN REPLICATION PASSWORD %L',
 SQL
 fi
 
+# Узлы CDN — до перечитывания Caddy: перечитает он и их. Bunny не ответил —
+# остаётся прежний список, выкат не останавливается.
+EDGE_IPS_NO_RELOAD=1 APP="$APP" ./edge-ips.sh || log "список узлов CDN не обновлён — остаётся прежний"
+
 # Остальные сервисы — по конфигурации из этого выката; Caddy перечитывает
 # сниппеты политики без разрыва соединений.
 docker compose up -d --build --remove-orphans
@@ -215,7 +242,14 @@ cron_line="17 3 * * * ${APP}/backup.sh >> /srv/rubezh/backups/backup.log 2>&1"
 # Пустой crontab у нового пользователя — не ошибка: без `|| true` pipefail
 # остановил бы выкат на этой строке.
 watch_line="*/10 * * * * ${APP}/backup-watch.sh >> /srv/rubezh/backups/backup-watch.log 2>&1"
-{ crontab -l 2>/dev/null | grep -vF -e "${APP}/backup.sh" -e "${APP}/backup-watch.sh" || true; echo "$cron_line"; echo "$watch_line"; } | crontab -
+# Список узлов CDN у Bunny меняется — сверка раз в сутки.
+edge_line="41 4 * * * ${APP}/edge-ips.sh >> ${APP}/edge-ips.log 2>&1"
+{
+  crontab -l 2>/dev/null | grep -vF -e "${APP}/backup.sh" -e "${APP}/backup-watch.sh" -e "${APP}/edge-ips.sh" || true
+  echo "$cron_line"
+  echo "$watch_line"
+  echo "$edge_line"
+} | crontab -
 
 # Старые образы — после успешного выката: прежний остаётся для отката.
 prune_api_images "$VERSION" "$previous"

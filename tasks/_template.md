@@ -5,6 +5,7 @@ epic: E0
 priority: P1
 status: draft
 owner:
+author: claude-lead-1
 size: S
 depends_on: []
 zones:

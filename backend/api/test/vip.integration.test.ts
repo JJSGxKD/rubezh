@@ -154,4 +154,142 @@ describe.skipIf(DATABASE_URL === "")("VIP на живом Postgres", () => {
     await paidVip(me, first);
     expect((await purchases.byAccount(me, 10)).map((row) => row.renewalOf).sort()).toEqual([first, null].sort());
   });
+  describe("неиспользованный остаток периода при возврате звёзд (T-0023)", () => {
+    const MS = (days: number) => days * DAY_MS;
+
+    /** Первая оплата подписки: период в 30 суток с `NOW`. */
+    async function started(me: string): Promise<string> {
+      const first = await paidVip(me);
+      await vip.addPeriod({ purchaseId: first, subscriptionId: first, accountId: me, paidAt: NOW, periodSec: PERIOD_SEC, at: NOW });
+      return first;
+    }
+
+    /** Следующая оплата той же подписки — период встаёт за последним. */
+    async function renewed(me: string, first: string): Promise<string> {
+      const next = await paidVip(me, first);
+      await vip.addPeriod({ purchaseId: next, subscriptionId: first, accountId: me, paidAt: NOW, periodSec: PERIOD_SEC, at: NOW });
+      return next;
+    }
+
+    async function span(purchaseId: string): Promise<[number, number]> {
+      const row = await prisma.vipPeriod.findUniqueOrThrow({ where: { purchaseId } });
+      return [row.startsAt.getTime() - NOW.getTime(), row.endsAt.getTime() - NOW.getTime()];
+    }
+
+    it("один период в 30 суток, возврат через 10 — конец периода в момент возврата, убрано 20 суток", async () => {
+      const me = await account();
+      const first = await started(me);
+
+      const cut = await vip.cutPeriod(first, new Date(NOW.getTime() + MS(10)));
+
+      expect(cut).toEqual({ subscriptionId: first, removedSec: 20 * 86_400, until: new Date(NOW.getTime() + MS(10)) });
+      expect(await span(first)).toEqual([0, MS(10)]);
+      expect((await vip.state(me, NOW)).until).toEqual(new Date(NOW.getTime() + MS(10)));
+    });
+
+    it("два периода подряд, возврат первого через 10 суток — первый кончается в момент возврата, второй сдвинут на 20 суток, срок VIP меньше на 20", async () => {
+      const me = await account();
+      const first = await started(me);
+      const second = await renewed(me, first);
+      expect((await vip.state(me, NOW)).until).toEqual(new Date(NOW.getTime() + MS(60)));
+
+      const cut = await vip.cutPeriod(first, new Date(NOW.getTime() + MS(10)));
+
+      expect(cut).toEqual({ subscriptionId: first, removedSec: 20 * 86_400, until: new Date(NOW.getTime() + MS(40)) });
+      expect(await span(first)).toEqual([0, MS(10)]);
+      expect(await span(second)).toEqual([MS(10), MS(40)]);
+    });
+
+    it("возврат второго, ещё не начавшегося, — убрано всё его время, период остаётся одной миллисекундой: нулевой база не примет", async () => {
+      const me = await account();
+      const first = await started(me);
+      const second = await renewed(me, first);
+
+      const cut = await vip.cutPeriod(second, new Date(NOW.getTime() + MS(10)));
+
+      expect(cut).toEqual({ subscriptionId: first, removedSec: 30 * 86_400, until: new Date(NOW.getTime() + MS(30) + 1) });
+      expect(await span(first)).toEqual([0, MS(30)]);
+      expect(await span(second)).toEqual([MS(30), MS(30) + 1]);
+    });
+
+    it("повтор — убрано 0, даты не меняются", async () => {
+      const me = await account();
+      const first = await started(me);
+      const second = await renewed(me, first);
+      const at = new Date(NOW.getTime() + MS(10));
+      await vip.cutPeriod(first, at);
+      const before = [await span(first), await span(second)];
+
+      const again = await vip.cutPeriod(first, at);
+
+      expect(again).toEqual({ subscriptionId: first, removedSec: 0, until: new Date(NOW.getTime() + MS(40)) });
+      expect([await span(first), await span(second)]).toEqual(before);
+    });
+
+    it("периода нет — null", async () => {
+      expect(await vip.cutPeriod(randomUUID(), NOW)).toBeNull();
+    });
+
+    it("период уже использован целиком — убрано 0, ничего не сдвигается", async () => {
+      const me = await account();
+      const first = await started(me);
+      const second = await renewed(me, first);
+
+      const cut = await vip.cutPeriod(first, new Date(NOW.getTime() + MS(45)));
+
+      expect(cut).toEqual({ subscriptionId: first, removedSec: 0, until: new Date(NOW.getTime() + MS(60)) });
+      expect(await span(first)).toEqual([0, MS(30)]);
+      expect(await span(second)).toEqual([MS(30), MS(60)]);
+    });
+
+    it("не удлиняет: возврат с моментом позже конца периода ничего не меняет, раньше — режет", async () => {
+      const me = await account();
+      const first = await started(me);
+
+      expect((await vip.cutPeriod(first, new Date(NOW.getTime() + MS(40))))?.removedSec).toBe(0);
+      expect(await span(first)).toEqual([0, MS(30)]);
+      expect((await vip.cutPeriod(first, new Date(NOW.getTime() + MS(5))))?.removedSec).toBe(25 * 86_400);
+    });
+
+    it("периоды другого аккаунта не сдвигаются", async () => {
+      const me = await account();
+      const other = await account();
+      const first = await started(me);
+      const strangers = await started(other);
+
+      await vip.cutPeriod(first, new Date(NOW.getTime() + MS(10)));
+
+      expect(await span(strangers)).toEqual([0, MS(30)]);
+      expect((await vip.state(other, NOW)).until).toEqual(new Date(NOW.getTime() + MS(30)));
+    });
+
+    it("пять параллельных вызовов — убрано один раз, второй период сдвинут один раз", async () => {
+      const me = await account();
+      const first = await started(me);
+      const second = await renewed(me, first);
+      const at = new Date(NOW.getTime() + MS(10));
+
+      const cuts = await Promise.all(Array.from({ length: 5 }, () => vip.cutPeriod(first, at)));
+
+      expect(cuts.map((cut) => cut?.removedSec ?? -1).sort((a, b) => a - b)).toEqual([0, 0, 0, 0, 20 * 86_400]);
+      expect(await span(first)).toEqual([0, MS(10)]);
+      expect(await span(second)).toEqual([MS(10), MS(40)]);
+    }, 30_000);
+
+    it("отзыв и выдача нового периода идут одной цепочкой под общим локом: итог тот же в любом порядке", async () => {
+      const me = await account();
+      const first = await started(me);
+      const second = await renewed(me, first);
+      const third = await paidVip(me, first);
+
+      await Promise.all([
+        vip.cutPeriod(first, new Date(NOW.getTime() + MS(10))),
+        vip.addPeriod({ purchaseId: third, subscriptionId: first, accountId: me, paidAt: NOW, periodSec: PERIOD_SEC, at: NOW }),
+      ]);
+
+      expect(await span(first)).toEqual([0, MS(10)]);
+      expect(await span(second)).toEqual([MS(10), MS(40)]);
+      expect(await span(third)).toEqual([MS(40), MS(70)]);
+    }, 30_000);
+  });
 });
