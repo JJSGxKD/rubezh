@@ -3,7 +3,7 @@ id: T-0056
 title: Вход в панель по QR и диплинку — запрос со страницей, без лишнего перехода
 epic: E14
 priority: P1
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
