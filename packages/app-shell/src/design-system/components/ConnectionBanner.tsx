@@ -42,18 +42,20 @@ export function ConnectionBanner(): ReactNode {
       aria-live="polite"
       className={`sticky top-0 z-10 -mx-4 px-4 pb-3 transition-opacity duration-(--duration-base) ease-base ${shown ? "opacity-100" : "opacity-0"}`}
     >
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-lg border border-warning/45 bg-warning/10 px-3 py-2.5 backdrop-blur-sm">
-        {/* Узкий экран: кнопка уходит под текст, а не сжимает его в столбик. */}
-        <div className="flex min-w-48 flex-1 items-start gap-2.5">
-          <TriangleAlert size={20} aria-hidden="true" className="mt-px shrink-0 text-warning" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-text">{t("connection.offline.title")}</p>
-            <p className="text-xs text-text-muted">{t("connection.offline.text")}</p>
-          </div>
+      {/* Подложка непрозрачная: прилипшая плашка не должна просвечивать карточками при прокрутке. */}
+      <div className="flex items-center gap-2.5 rounded-lg border border-warning/45 bg-[color-mix(in_oklab,var(--color-warning)_10%,var(--color-bg))] px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-[13.5px] font-semibold text-text">
+            <TriangleAlert size={18} aria-hidden="true" className="shrink-0 text-warning" />
+            {t("connection.offline.title")}
+          </p>
+          <p className="mt-0.5 text-xs text-text-muted">{t("connection.offline.text")}</p>
         </div>
-        <Button variant="secondary" disabled={checking} onClick={() => void retryConnection()}>
-          {t(checking ? "connection.checking" : "connection.retry")}
-        </Button>
+        <span className="shrink-0">
+          <Button variant="secondary" size="s" disabled={checking} onClick={() => void retryConnection()}>
+            {t(checking ? "connection.checking" : "connection.retry")}
+          </Button>
+        </span>
       </div>
     </div>
   );
