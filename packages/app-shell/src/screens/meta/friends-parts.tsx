@@ -62,8 +62,10 @@ export function BonusTrack(props: BonusProps): ReactNode {
           </span>
         ))}
       </div>
-      {/* Первая подпись прижата влево, последняя — вправо: иначе они выходят за край экрана. */}
-      <div className="relative mx-2.5 mt-3.5 h-4">
+      {/* Первая подпись прижата влево, последняя — вправо: иначе они выходят за край экрана.
+          На узкой полосе значки монет не умещаются рядом с четырёхзначными числами и налезают на соседей —
+          там остаются одни числа: что это монеты, говорит кнопка «Забрать N монет». */}
+      <div className="@container relative mx-2.5 mt-3.5 h-4">
         {bonus.steps.map((step, index) => (
           <span
             key={step.friends}
@@ -72,7 +74,9 @@ export function BonusTrack(props: BonusProps): ReactNode {
               index === 0 ? "left-0" : index === last ? "right-0" : "-translate-x-1/2"
             }`}
           >
-            <CoinIcon size={12} />
+            <span className="hidden @min-[19rem]:inline-flex">
+              <CoinIcon size={12} />
+            </span>
             {formatNumber(step.coins)}
           </span>
         ))}
