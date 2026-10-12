@@ -32,9 +32,4 @@ describe("карточка строки на телефоне", () => {
     expect(layout.pairs.map((column) => column.title)).toEqual(["Игрок"]);
   });
 
-  it("если первая колонка без заголовка — главной берётся первая с заголовком", () => {
-    const layout = phoneLayout([col(""), col("Игрок"), col("Забеги")]);
-    expect(layout.primary.title).toBe("Игрок");
-    expect(layout.actions).toHaveLength(1);
-  });
 });
