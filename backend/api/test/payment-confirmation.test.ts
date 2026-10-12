@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { Logger } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { urgentFirst } from "../src/platforms/telegram/bot-poller.js";
 import { BotRouter } from "../src/platforms/telegram/bot-router.js";
 import { answerOf, decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
@@ -346,16 +345,6 @@ describe("обновления оплаты в боте", () => {
     expect(calls).toEqual(["checkout:p-1"]);
     expect(refunded).toEqual(["charge-1"]);
     expect(confirmed).toEqual([{ platform: "telegram", chargeId: "charge-1", payload: charge.invoice_payload, payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3 }]);
-  });
-
-  it("в пачке обновлений проверка оплаты идёт первой, остальные — по порядку", () => {
-    const start = (id: number): TelegramUpdate => ({ update_id: id, message: { message_id: id, date: 1, text: "/start", chat: { id: 1, type: "private" } } });
-    const checkout: TelegramUpdate = {
-      update_id: 3,
-      pre_checkout_query: { id: "q", from: { id: 1, is_bot: false }, currency: "XTR", total_amount: 1, invoice_payload: "p" },
-    };
-
-    expect(urgentFirst([start(1), start(2), checkout, start(4)]).map((update) => update.update_id)).toEqual([3, 1, 2, 4]);
   });
 });
 

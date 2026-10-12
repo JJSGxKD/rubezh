@@ -10,6 +10,7 @@ import { AdTaskFeeds } from "../src/modules/ads/ad-task-feeds.js";
 import { AdTaskHooks, AdTasks, TASK_SESSION_TTL_MIN, sameSecret } from "../src/modules/ads/ad-tasks.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { AdsgramRewardController } from "../src/modules/ads/adsgram-reward.controller.js";
+import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AdsService } from "../src/modules/ads/ads.service.js";
 import type { PlaceHistory } from "../src/modules/ads/ads.repository.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
@@ -558,6 +559,8 @@ describe("адрес награды AdsGram", () => {
       providers: [
         { provide: AdTasks, useValue: tasks },
         { provide: SECRETS_READER, useValue: secretsOf(secret) },
+        // Лимиты адреса и игрока здесь не предмет: пропускают всё (их проверяет route-limits.test.ts).
+        { provide: RateLimiter, useValue: { consume: async () => true } },
         { provide: APP_CONFIG, useValue: loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv) },
       ],
     })
