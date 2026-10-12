@@ -31,7 +31,7 @@ const LINK = {
   network: null,
   registrationOn: "first_run",
   networkUrl: null,
-  target: "app",
+  target: "app" as const,
   directUrl: "https://t.me/rubezh_bot?startapp=l-Ab12Cd34Ef",
 };
 
