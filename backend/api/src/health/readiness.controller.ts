@@ -3,6 +3,7 @@ import type { FastifyReply } from "fastify";
 import type { Redis } from "ioredis";
 import { Public } from "../common/access.js";
 import { RateLimitedError } from "../common/domain-error.js";
+import { addressOf } from "../common/request-address.js";
 import { withTimeout } from "../common/with-timeout.js";
 import type { PrismaClient } from "../generated/prisma/client.js";
 import { PRISMA } from "../infra/database.js";
@@ -59,10 +60,4 @@ async function check(probe: () => Promise<unknown>, label: string): Promise<Chec
     // Причина публично не отдаётся; для разбора хватает самого факта и логов базы/Redis.
     return "fail";
   }
-}
-
-/** Адрес из `req.ip` Fastify: он учитывает число доверенных прокси, а сырой заголовок подделывается одной строкой. */
-function addressOf(request: unknown): string {
-  const ip = (request as { ip?: unknown }).ip;
-  return typeof ip === "string" && ip !== "" ? ip : "unknown";
 }
