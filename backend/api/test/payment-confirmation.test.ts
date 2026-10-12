@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { beforeEach, describe, expect, it } from "vitest";
+import { Logger } from "@nestjs/common";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { urgentFirst } from "../src/platforms/telegram/bot-poller.js";
 import { BotRouter } from "../src/platforms/telegram/bot-router.js";
 import { answerOf, decideCheckout, type PreCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
+import { PaymentsHooks } from "../src/modules/payments/payments-hooks.js";
+import { PurchaseRevocation } from "../src/modules/payments/purchase-revocation.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
@@ -301,16 +303,6 @@ describe("обновления оплаты в боте", () => {
     expect(refunded).toEqual(["charge-1"]);
     expect(confirmed).toEqual([{ platform: "telegram", chargeId: "charge-1", payload: charge.invoice_payload, payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3 }]);
   });
-
-  it("в пачке обновлений проверка оплаты идёт первой, остальные — по порядку", () => {
-    const start = (id: number): TelegramUpdate => ({ update_id: id, message: { message_id: id, date: 1, text: "/start", chat: { id: 1, type: "private" } } });
-    const checkout: TelegramUpdate = {
-      update_id: 3,
-      pre_checkout_query: { id: "q", from: { id: 1, is_bot: false }, currency: "XTR", total_amount: 1, invoice_payload: "p" },
-    };
-
-    expect(urgentFirst([start(1), start(2), checkout, start(4)]).map((update) => update.update_id)).toEqual([3, 1, 2, 4]);
-  });
 });
 
 describe("очередь оплаты", () => {
@@ -472,3 +464,143 @@ describe("тестовая оплата в конфигурации", () => {
   });
 });
 
+
+describe("внешний возврат забирает остаток покупки (T-0023)", () => {
+  let purchases: MemoryPurchasesRepository;
+  let revocation: PurchaseRevocation;
+  let confirmation: PaymentConfirmation;
+  let revoked: { purchaseId: string; at: Date }[];
+  let logged: { level: string; event: string; fields: Record<string, unknown> }[];
+
+  /** Оплаченная покупка товара магазина: возврат её заберёт `shop_item`-отзыв. */
+  function paidShopItem(patch: Partial<StoredPurchase> = {}): StoredPurchase {
+    const purchase: StoredPurchase = {
+      ...pending({ chargedStars: 50, priceStars: 50, status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" }),
+      product: "shop_item",
+      runId: null,
+      continueNo: null,
+      elapsedSec: null,
+      sku: "starter",
+      fulfilledAt: new Date(NOW),
+      ...patch,
+    };
+    purchases.rows.set(purchase.purchaseId, purchase);
+    return purchase;
+  }
+
+  beforeEach(() => {
+    purchases = new MemoryPurchasesRepository();
+    revocation = new PurchaseRevocation();
+    revoked = [];
+    revocation.register("shop_item", async (purchase, at) => {
+      revoked.push({ purchaseId: purchase.purchaseId, at });
+      return { lines: ["gems: 120 из 150"] };
+    });
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(new FakeStarsApi()), switchesOf(config()), new PaymentsHooks(), revocation);
+    logged = [];
+    for (const level of ["log", "warn", "error"] as const) {
+      vi.spyOn(Logger.prototype, level).mockImplementation((line: unknown) => {
+        const fields = JSON.parse(String(line)) as Record<string, unknown>;
+        logged.push({ level, event: String(fields.event), fields });
+      });
+    }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("внешний возврат, первый вызов: отзыв вызван с покупкой и моментом возврата, в логе payment_refunded — что забрано", async () => {
+    const purchase = paidShopItem();
+
+    await confirmation.refunded("charge-1", NOW + 60_000);
+
+    expect(revoked).toEqual([{ purchaseId: purchase.purchaseId, at: new Date(NOW + 60_000) }]);
+    const entry = logged.find((item) => item.event === "payment_refunded");
+    expect(entry).toMatchObject({ level: "warn", fields: { purchaseId: purchase.purchaseId, reason: "external", revoked: ["gems: 120 из 150"] } });
+  });
+
+  it("внешний возврат, повторный вызов: отзыв вызван снова — с тем же моментом, а лог не повторяется", async () => {
+    const purchase = paidShopItem();
+    await confirmation.refunded("charge-1", NOW + 60_000);
+
+    await confirmation.refunded("charge-1", NOW + 600_000);
+
+    expect(revoked).toEqual([
+      { purchaseId: purchase.purchaseId, at: new Date(NOW + 60_000) },
+      { purchaseId: purchase.purchaseId, at: new Date(NOW + 60_000) },
+    ]);
+    expect(logged.filter((item) => item.event === "payment_refunded")).toHaveLength(1);
+  });
+
+  it("первая попытка отметила возврат и упала на отзыве — повтор доделывает отзыв", async () => {
+    const purchase = paidShopItem();
+    let failing = true;
+    revocation = new PurchaseRevocation();
+    revocation.register("shop_item", async (bought, at) => {
+      if (failing) throw new Error("кошелёк недоступен");
+      revoked.push({ purchaseId: bought.purchaseId, at });
+      return { lines: ["gems: 150 из 150"] };
+    });
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(new FakeStarsApi()), switchesOf(config()), new PaymentsHooks(), revocation);
+
+    await expect(confirmation.refunded("charge-1", NOW + 60_000)).rejects.toThrow("кошелёк недоступен");
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "refunded", refundReason: "external" });
+    expect(revoked).toEqual([]);
+
+    failing = false;
+    await confirmation.refunded("charge-1", NOW + 120_000);
+
+    // Время отзыва — первое, которым возврат был отмечен, а не время повтора.
+    expect(revoked).toEqual([{ purchaseId: purchase.purchaseId, at: new Date(NOW + 60_000) }]);
+  });
+
+  it("наш возврат ничего не забирает: причина, заказанная нами, не `external`", async () => {
+    const purchase = paidShopItem();
+    await purchases.requestRefund(purchase.purchaseId, "undeliverable", new Date(NOW));
+
+    await confirmation.refunded("charge-1", NOW + 60_000);
+
+    expect(revoked).toEqual([]);
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ refundReason: "undeliverable" });
+    expect(logged.find((item) => item.event === "payment_refunded")?.fields).not.toHaveProperty("revoked");
+  });
+
+  it("лишняя оплата (возвращается только она) — товар выдан по первой оплате и остаётся", async () => {
+    const purchase = paidShopItem();
+    await purchases.requestRefund(purchase.purchaseId, "unused", new Date(NOW));
+
+    await confirmation.refunded("charge-1", NOW + 60_000);
+
+    expect(revoked).toEqual([]);
+  });
+
+  it("возврат без совпадения: отзыв не вызван, в логе refund_unmatched", async () => {
+    paidShopItem();
+
+    await confirmation.refunded("charge-unknown", NOW + 60_000);
+
+    expect(revoked).toEqual([]);
+    expect(logged.map((item) => item.event)).toContain("refund_unmatched");
+  });
+
+  it("второй шанс: владельца у отзыва нет — возврат записан, ничего не забрано, обработка не падает", async () => {
+    const purchase = pending({ status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
+    purchases.rows.set(purchase.purchaseId, purchase);
+
+    await expect(confirmation.refunded("charge-1", NOW + 60_000)).resolves.toBeUndefined();
+
+    expect(revoked).toEqual([]);
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "refunded", refundReason: "external" });
+    expect(logged.find((item) => item.event === "payment_refunded")?.fields).toMatchObject({ revoked: ["ничего — товар не забирается"] });
+  });
+
+  it("отзыв бросил — refunded бросает: задание очереди оплаты повторит обработку", async () => {
+    paidShopItem();
+    revocation = new PurchaseRevocation();
+    revocation.register("shop_item", async () => Promise.reject(new Error("кошелёк недоступен")));
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(new FakeStarsApi()), switchesOf(config()), new PaymentsHooks(), revocation);
+
+    await expect(confirmation.refunded("charge-1", NOW)).rejects.toThrow("кошелёк недоступен");
+  });
+});

@@ -54,11 +54,17 @@ export const SPEND_REASONS = ["unlock", "meta_upgrade", "item_upgrade", "item_re
 /** Ручная операция из панели: под правом, с причиной и записью в аудит. */
 export const ADMIN_REASON = "admin_adjust";
 
+/**
+ * Списание остатка покупки при возврате звёзд (tasks/T-0023): не трата игрока
+ * и не начисление «из ничего» — ни потолков, ни суточных счётчиков у неё нет.
+ */
+export const REVOKE_REASON = "refund_revoke";
+
 export type EarnReason = (typeof EARN_REASONS)[number];
 export type ExchangeReason = (typeof EXCHANGE_REASONS)[number];
 export type SpendReason = (typeof SPEND_REASONS)[number];
 export type GrantReason = EarnReason | ExchangeReason | typeof ADMIN_REASON;
-export type WalletReason = GrantReason | SpendReason;
+export type WalletReason = GrantReason | SpendReason | typeof REVOKE_REASON;
 
 export type Balances = Record<WalletResource, number>;
 

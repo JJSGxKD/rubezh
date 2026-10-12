@@ -5,6 +5,7 @@ import { PaymentsUnsupportedError } from "../payments/payments-errors.js";
 import { PaymentsHooks, type SubscriptionChange } from "../payments/payments-hooks.js";
 import { PaymentsService, type ShopInvoice } from "../payments/payments.service.js";
 import { PurchaseFulfillment } from "../payments/purchase-fulfillment.js";
+import { PurchaseRevocation, type Revocation } from "../payments/purchase-revocation.js";
 import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import { SubscriptionRenewal } from "../payments/subscription-renewal.js";
 import { AdPasses } from "../ads/ads-passes.js";
@@ -76,10 +77,13 @@ export class VipService implements OnModuleInit {
     private readonly bonuses: WalletBonuses,
     private readonly adPasses: AdPasses,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: Pick<AccountRepository, "byId">,
+    // Реестр нужен модулю, а не каждому тесту VIP: без него отзыв регистрируется в своём, пустом.
+    private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
   ) {}
 
   onModuleInit(): void {
     this.fulfillment.register("vip", (purchase) => this.fulfill(purchase));
+    this.revocation.register("vip", (purchase, at) => this.revoke(purchase, at));
     this.hooks.onSubscriptionChanged("vip", (change) => this.changed(change));
     this.bonuses.register("vip", (accountId, reason, at) => this.rewardMul(accountId, reason, at));
     this.adPasses.register("vip", (accountId, at) => this.activeAt(accountId, at));
@@ -239,6 +243,54 @@ export class VipService implements OnModuleInit {
     }
   }
 
+  /**
+   * Отзыв остатка при внешнем возврате звёзд (tasks/T-0023): неиспользованная
+   * часть оплаченного периода убирается, следующие периоды цепочки сдвигаются
+   * на убранное, продление подписки выключается. Идемпотентно: обработка
+   * возврата повторяется, пока не пройдёт целиком, и повтор уже обрезанный
+   * период не режет второй раз.
+   *
+   * Сначала срок, потом продление: не обрезался период — бросок, и повтор
+   * начнёт с того же места. Ошибку площадки отзыв не пробивает: продления там
+   * уже может не быть, а срок обрезан.
+   */
+  async revoke(purchase: StoredPurchase, at: Date): Promise<Revocation> {
+    if (this.repository.cutPeriod === undefined) throw new Error("хранилище VIP не умеет обрезать период");
+    const cut = await withTimeout(this.repository.cutPeriod(purchase.purchaseId, at), DB_TIMEOUT_MS, "возврат VIP");
+    if (cut === null) return { lines: ["VIP: периода нет"] };
+
+    await this.stopRenewal(purchase.accountId, cut.subscriptionId, at);
+
+    const lines: string[] = [];
+    if (cut.removedSec === 0) lines.push("VIP: период уже использован");
+    else if (cut.until !== null && cut.until.getTime() > at.getTime()) lines.push(`VIP: убрано ${hoursOf(cut.removedSec)} ч, теперь до ${utcMinute(cut.until)}`);
+    else lines.push(`VIP: убрано ${hoursOf(cut.removedSec)} ч, VIP закончился`);
+    lines.push("продление выключено");
+    return { lines };
+  }
+
+  private async stopRenewal(accountId: string, subscriptionId: string, at: Date): Promise<void> {
+    // Ошибка базы здесь — не ошибка площадки: пусть бросается, обработка возврата повторится
+    // (обрезанный период второй раз ничего не отнимет) и выключит продление на площадке.
+    const account = await withTimeout(this.accounts.byId(accountId), DB_TIMEOUT_MS, "аккаунт подписчика");
+    if (account === null) {
+      this.warnRenewal(accountId, subscriptionId, "аккаунт не найден");
+    } else {
+      try {
+        // Отказ площадки (`rejected`) — продления там уже нет, игрок отменил его сам: идём дальше.
+        await this.renewal.set({ accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId }, subscriptionId, false);
+      } catch (error: unknown) {
+        this.warnRenewal(accountId, subscriptionId, error instanceof Error ? error.message : "unknown");
+      }
+    }
+    await withTimeout(this.repository.setRenewal(subscriptionId, "cancelled", "game", at), DB_TIMEOUT_MS, "продление VIP");
+    this.log("subscription_cancelled", { accountId, subscriptionId, by: "game", cause: "refund" });
+  }
+
+  private warnRenewal(accountId: string, subscriptionId: string, reason: string): void {
+    this.logger.warn(JSON.stringify({ module: "vip", event: "vip_revoke_renewal_failed", accountId, subscriptionId, reason }));
+  }
+
   /** Игрок отменил или вернул продление на площадке, или площадка не смогла списать период. */
   private async changed(change: SubscriptionChange): Promise<void> {
     if (change.subscription.product !== "vip") return;
@@ -273,6 +325,17 @@ const RENEWAL_OF: Record<SubscriptionChange["state"], [VipRenewal, VipCanceller 
   active: ["on", null],
   failed: ["failed", null],
 };
+
+/** Часы убранного: целые — без дроби, иначе с десятой («0.5»). */
+function hoursOf(seconds: number): string {
+  const hours = seconds / 3600;
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+}
+
+/** ГГГГ-ММ-ДД ЧЧ:ММ по UTC: сервер и логи в UTC, команда сверяет по ним. */
+function utcMinute(date: Date): string {
+  return date.toISOString().slice(0, 16).replace("T", " ");
+}
 
 function isActive(state: Pick<VipState, "until">, at: Date): boolean {
   return state.until !== null && state.until.getTime() > at.getTime();

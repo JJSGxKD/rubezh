@@ -8,6 +8,7 @@ import {
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { PANEL_LOGIN_PREFIX } from "../../modules/admin/panel-login.service.js";
+import { ROLE_CONFIRM_PREFIX } from "../../modules/admin/role-confirmations.js";
 import { FeatureSwitches } from "../../modules/settings/feature-switches.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { REDIS } from "../../infra/redis.js";
@@ -36,6 +37,8 @@ const CARD_CACHE_TTL_SEC = 30 * 24 * 60 * 60;
 const START_WINDOW_SEC = 3;
 /** Вход в панель (`panel-login.command.ts`) — не приход игрока: ни карточки, ни касания воронки. */
 const PANEL_LOGIN_START = new RegExp(`^/start(?:@\\w+)?\\s+${PANEL_LOGIN_PREFIX}`);
+/** Подтверждение роли (`role-confirm.command.ts`) — не приход игрока. */
+export const ROLE_CONFIRM_START = new RegExp(`^/start(?:@\\w+)?\\s+${ROLE_CONFIRM_PREFIX}`);
 /** Прогресс — украшение приветствия: не пришёл за это время — карточка новичка. */
 const PROGRESS_TIMEOUT_MS = 2_000;
 
@@ -145,6 +148,7 @@ export class StartCommand implements BotUpdateHandler, OnModuleInit, OnModuleDes
     if (!/^\/start(@\w+)?(\s|$)/.test(message.text)) return false;
     // Вход в панель — не приход игрока: ни карточки, ни касания воронки.
     if (PANEL_LOGIN_START.test(message.text)) return false;
+    if (ROLE_CONFIRM_START.test(message.text)) return false;
 
     const chatId = String(message.chat.id);
     // В группе персональная карточка никому не нужна, а кнопка Mini App там не

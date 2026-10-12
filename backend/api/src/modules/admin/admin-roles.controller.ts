@@ -35,7 +35,7 @@ export class AdminRolesController {
 
   @Post("roles/grant")
   @RequirePermission("roles.assign")
-  async grant(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { granted: boolean } }> {
+  async grant(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { granted: boolean; confirm: { link: string; expiresAtMs: number } | null } }> {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
     return { data: await this.roles.grant(actor, parse(() => roleTargetSchema.parse(body), "Некорректная цель")) };

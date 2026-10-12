@@ -13,7 +13,7 @@ describe("роли", () => {
   });
 
   it("выдача и снятие несут цель и роль, изменяющий заголовок ставит клиент", async () => {
-    const { fetch, calls } = fakeFetch(json(200, { data: { granted: true } }), json(200, { data: { revoked: true, sessionsRevoked: 2 } }));
+    const { fetch, calls } = fakeFetch(json(200, { data: { granted: true, confirm: null } }), json(200, { data: { revoked: true, sessionsRevoked: 2 } }));
     const api = new AdminApi(fetch);
     await grantRole(api, { platformUserId: "555", platform: "telegram" }, "moderator");
     const revoked = await revokeRole(api, { accountId: "a1" }, "moderator");
@@ -21,6 +21,18 @@ describe("роли", () => {
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ platformUserId: "555", platform: "telegram", role: "moderator" });
     expect(calls[1]?.url).toBe("/api/v1/admin/roles/revoke");
     expect(revoked.ok && revoked.data.sessionsRevoked).toBe(2);
+  });
+
+  it("выдача owner и admin отвечает ссылкой на подтверждение в боте, остальные роли — confirm: null", async () => {
+    const link = "https://t.me/rubezh_bot?start=role-AAAAAAAAAAAAAAAAAAAAAA";
+    const { fetch } = fakeFetch(json(200, { data: { granted: false, confirm: { link, expiresAtMs: 1_790_000_000_000 } } }), json(200, { data: { granted: true, confirm: null } }), json(200, { data: { granted: true } }));
+    const api = new AdminApi(fetch);
+    const pending = await grantRole(api, { accountId: "a1" }, "admin");
+    expect(pending.ok && pending.data).toEqual({ granted: false, confirm: { link, expiresAtMs: 1_790_000_000_000 } });
+    const immediate = await grantRole(api, { accountId: "a1" }, "marketer");
+    expect(immediate.ok && immediate.data).toEqual({ granted: true, confirm: null });
+    // Ответ без поля confirm — не наш сервер: схема его не принимает.
+    expect((await grantRole(api, { accountId: "a1" }, "marketer")).ok).toBe(false);
   });
 
   it("имена ролей и «было → стало» для таблицы", () => {
