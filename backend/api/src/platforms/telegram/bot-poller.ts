@@ -4,9 +4,9 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleD
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
-import { TelegramApiError, type TelegramBotApi, type TelegramUpdate } from "./telegram-bot-api.js";
+import { TelegramApiError, type TelegramBotApi } from "./telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
-import { BotRouter } from "./bot-router.js";
+import { BotUpdateQueue } from "./bot-update-queue.js";
 
 /**
  * Чтение обновлений long polling'ом — для машины разработчика, у которой нет
@@ -15,6 +15,9 @@ import { BotRouter } from "./bot-router.js";
  * Читатель на токен один: вебхук и `getUpdates` несовместимы, а второй
  * `getUpdates` получает от Telegram `409`. Роль читателя держит лок в Redis,
  * смещение живёт там же — перезапуск процесса не повторяет старые команды.
+ * Обновления уходят в очередь `bot-updates` (T-0027), а смещение сдвигается
+ * только после того, как в очереди вся пачка: не успели записать — следующий
+ * проход заберёт ту же пачку, а повторы отсекает id задания.
  */
 
 const POLL_TIMEOUT_SEC = 25;
@@ -90,7 +93,7 @@ export class BotPoller implements OnApplicationBootstrap, OnModuleDestroy {
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
-    private readonly router: BotRouter,
+    private readonly updates: BotUpdateQueue,
     @Inject(BOT_POLLER_LOCKS) private readonly locks: BotPollerLocks,
     @Inject(TELEGRAM_BOT_API) private readonly api: PollerBotApi,
   ) {}
@@ -120,10 +123,12 @@ export class BotPoller implements OnApplicationBootstrap, OnModuleDestroy {
     const offset = await this.locks.readOffset();
     const { updates, lastUpdateId } = await this.api.getUpdates(offset, POLL_TIMEOUT_SEC, this.stop.signal);
     this.conflictLogged = false;
-    // Смещение сохраняется до обработки: упавшая отправка не должна
-    // превратиться в бесконечный повтор одной и той же команды.
+    // Порядок срочного задаёт приоритет задания очереди, а не порядок постановки.
+    // Ошибка постановки уходит в `pollLoop`: пауза и повтор той же пачки.
+    for (const update of updates) await this.updates.enqueue(update);
+    // Смещение — после записи всей пачки: упавшая обработка теперь повторяется
+    // заданием, а не превращается в бесконечный повтор одной команды.
     if (lastUpdateId !== null) await this.locks.saveOffset(lastUpdateId + 1);
-    for (const update of urgentFirst(updates)) await this.router.dispatch(update);
   }
 
   private async pollLoop(): Promise<void> {
@@ -162,17 +167,6 @@ export class BotPoller implements OnApplicationBootstrap, OnModuleDestroy {
   private log(level: "log" | "warn" | "error", event: string, fields: Record<string, unknown>): void {
     this.logger[level](JSON.stringify({ module: "bot", event, ...fields }));
   }
-}
-
-/**
- * Предварительную проверку оплаты Telegram ждёт десять секунд, а карточка
- * приветствия рисуется секунды: в одной пачке с командами проверка идёт
- * первой, иначе оплата сорвалась бы из-за чужого `/start`. Остальной порядок
- * сохраняется.
- */
-export function urgentFirst(updates: readonly TelegramUpdate[]): TelegramUpdate[] {
-  const urgent = updates.filter((update) => update.pre_checkout_query !== undefined);
-  return urgent.length === 0 ? [...updates] : [...urgent, ...updates.filter((update) => update.pre_checkout_query === undefined)];
 }
 
 function reasonOf(error: unknown): string {

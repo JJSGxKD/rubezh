@@ -69,3 +69,17 @@ describe("профиль бота", () => {
     }
   });
 });
+
+describe("тексты профиля: идёт тест", () => {
+  it("описание бота не называет тест закрытым и говорит, что идёт тест", () => {
+    expect(BOT_PROFILE_TEXTS.ru.description).not.toMatch(/закрыт/i);
+    expect(BOT_PROFILE_TEXTS.ru.description).toContain("Идёт тест");
+    expect(BOT_PROFILE_TEXTS.en.description).not.toMatch(/closed test/i);
+    expect(BOT_PROFILE_TEXTS.en.description).toContain("testing");
+  });
+
+  it("описание укладывается в 512 знаков Telegram", () => {
+    expect(BOT_PROFILE_TEXTS.ru.description.length).toBeLessThanOrEqual(512);
+    expect(BOT_PROFILE_TEXTS.en.description.length).toBeLessThanOrEqual(512);
+  });
+});

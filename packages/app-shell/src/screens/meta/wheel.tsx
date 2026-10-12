@@ -20,9 +20,11 @@ import {
   WHEEL_SPENT,
   adSpinState,
   createWheelApi,
+  freeSpinButton,
   spinForAd,
   wheelAvailable,
   type AdSpinState,
+  type WheelPhase,
   type WheelSector,
   type WheelSpin,
   type WheelView,
@@ -64,8 +66,6 @@ const NOTICES: Partial<Record<string, { key: string; reload: boolean }>> = {
 };
 
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: WheelView };
-/** `asking` — ждём сервер, колесо стоит; `spinning` — сектор известен, колесо крутится. */
-type Phase = "idle" | "asking" | "spinning";
 
 const api = createWheelApi();
 /**
@@ -78,7 +78,7 @@ const AD_RESTRICTION = ["ad_rewards"];
 export function WheelScreen(): ReactNode {
   const navigation = useNavigation();
   const [state, setState] = useState<Loaded>({ status: "loading" });
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<WheelPhase>("idle");
   const [rotation, setRotation] = useState(0);
   const [won, setWon] = useState<WheelSpin | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -138,6 +138,7 @@ export function WheelScreen(): ReactNode {
   };
 
   const ready = state.status === "ready" ? state.view : null;
+  const freeButton = freeSpinButton(ready, phase, source);
   const now = useClock(ready !== null, CLOCK_STEP_MS);
   const adSpin: AdSpinState = ready === null ? { kind: "hidden" } : adSpinState(ready, now, playable);
   // Акцент — на крутке, которая доступна сейчас: бесплатная потрачена — на рекламе.
@@ -157,11 +158,11 @@ export function WheelScreen(): ReactNode {
               block
               variant={ready?.free === false ? "secondary" : "primary"}
               glow={ready?.free === true && phase === "idle"}
-              disabled={ready === null || (!ready.free && phase === "idle")}
-              loading={phase !== "idle" && source === "free"}
+              disabled={freeButton.disabled}
+              loading={freeButton.loading}
               onClick={() => void spin("free")}
             >
-              {ready !== null && !ready.free && phase === "idle" ? t("wheel.spin.next", { time: formatCountdown(msUntilReset(now, "daily")) }) : t("wheel.spin.free")}
+              {freeButton.label === "next" ? t("wheel.spin.next", { time: formatCountdown(msUntilReset(now, "daily")) }) : t("wheel.spin.free")}
             </Button>
             {adSpin.kind === "hidden" ? null : (
               <Button

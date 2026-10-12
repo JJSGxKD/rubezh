@@ -78,6 +78,23 @@ describe("/help", () => {
     expect(bot.sent[0]?.text).toContain("/export — Выгрузка данных закрытого теста");
   });
 
+  it("игроку: первая строка про тест, где писать команде, и никакого «закрытого теста»", async () => {
+    const bot = setup();
+    await bot.router.dispatch(command("777", "private", "777"));
+    const text = bot.sent[0]?.text ?? "";
+    expect(text.startsWith("«Рубеж» — игра прямо в Telegram. Идёт тест")).toBe(true);
+    expect(text).toContain("«Настройки» → «Написать разработчикам»");
+    expect(text).toContain("@KennixDev");
+    expect(text).not.toContain("закрыт");
+    expect(text).not.toContain("чат теста");
+  });
+
+  it("в чате администраторов строки про форму нет", async () => {
+    const bot = setup();
+    await bot.router.dispatch(command(ADMIN_CHAT, "supergroup", "999", 57));
+    expect(bot.sent[0]?.text).not.toContain("Написать разработчикам");
+  });
+
   it("обычному игроку в личке — только его команды", async () => {
     const bot = setup();
     await bot.router.dispatch(command("777", "private", "777"));
