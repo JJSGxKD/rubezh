@@ -646,10 +646,14 @@ DAU / WAU / MAU и sticky (DAU/MAU). Сессии в сутки, длитель�
   игроками. Без ключа политика источников не пускает ни одного чужого
   скрипта (`scripts/vite/content-security-policy.ts`);
 - Graspil написан под `window.Telegram.WebApp`, а у нас SDK `@tma.js/sdk`.
-  Объект ставит прослойка адаптера — только для чтения
+  Объект ставит прослойка адаптера — только для чтения, кроме ссылок
   (`packages/adapter-telegram/src/webapp-compat.ts`), — а сырые данные
   запуска кладутся в очередь Graspil сразу (`custom_init_data_row`). Второй
-  SDK и скрипт с telegram.org не нужны. Подход — из `vpnsibcom_web`;
+  SDK и скрипт с telegram.org не нужны. Подход — из `vpnsibcom_web`. Та же
+  прослойка ставится перед SDK Taddy (учёт аудитории): без `openLink` и
+  `openTelegramLink` он считает объект урезанным и тянет официальный SDK с
+  telegram.org, который политика источников не пускает. Прослойка — в чанке
+  рекламы, после первого экрана;
 - клики — только по размеченным элементам (`trackClicks: "tagged"`), а не по
   каждому касанию канвы забега; события площадки выключены
   (`trackTgEvents: false`).
