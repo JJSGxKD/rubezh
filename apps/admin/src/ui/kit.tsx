@@ -222,6 +222,15 @@ export function phoneLayout<T>(columns: readonly Column<T>[]): { primary: Column
   };
 }
 
+/**
+ * Есть ли что показать в паре карточки. Пустая ячейка в таблице на ПК —
+ * норма, а подпись без значения на телефоне читается как поломка.
+ */
+export function hasPhoneValue(node: ReactNode): boolean {
+  if (Array.isArray(node)) return node.some((item) => hasPhoneValue(item as ReactNode));
+  return node !== null && node !== undefined && typeof node !== "boolean" && node !== "";
+}
+
 export function DataTable<T>({ columns, rows, rowKey, onRowClick, empty = "Пусто" }: { columns: Column<T>[]; rows: readonly T[]; rowKey: (row: T) => string; onRowClick?: (row: T) => void; empty?: string }) {
   const narrow = useNarrow();
   if (rows.length === 0) return <p className="text-sm text-text-muted">{empty}</p>;
@@ -280,12 +289,16 @@ function PhoneCards<T>({ columns, rows, rowKey, onRowClick }: { columns: readonl
             <div className="min-w-0 text-sm font-semibold">{primary.render(row)}</div>
             {pairs.length === 0 ? null : (
               <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                {pairs.map((column) => (
-                  <div key={column.title} className="flex min-w-0 gap-1.5">
-                    <dt className="text-text-muted">{column.title}</dt>
-                    <dd className="min-w-0 tabular-nums text-text">{column.render(row)}</dd>
-                  </div>
-                ))}
+                {pairs.map((column) => {
+                  const value = column.render(row);
+                  if (!hasPhoneValue(value)) return null;
+                  return (
+                    <div key={column.title} className="flex min-w-0 gap-1.5">
+                      <dt className="text-text-muted">{column.title}</dt>
+                      <dd className="min-w-0 tabular-nums text-text">{value}</dd>
+                    </div>
+                  );
+                })}
               </dl>
             )}
           </div>
