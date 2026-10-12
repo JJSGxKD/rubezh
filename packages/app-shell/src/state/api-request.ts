@@ -52,6 +52,8 @@ export type ApiRequest = <T>(
 export const apiRequest: ApiRequest = async (path, schema, init) => {
   const { authorizedFetch, useSession } = await import("./session");
 
+  // Когда запрос ушёл: ответ на запрос до обрыва связь не возвращает (`connection.ts`).
+  const sentAt = Date.now();
   let response: Response | null;
   try {
     response = await authorizedFetch(path, {
@@ -67,7 +69,7 @@ export const apiRequest: ApiRequest = async (path, schema, init) => {
   if (response === null) return { ok: false, failure: sessionFailure(useSession.getState().failure) };
   // Сервер ответил — связь есть, даже если ответ ошибка: у экрана своя ошибка.
   // Шлюз без API (502–504) не ответ сервера, а его отсутствие.
-  reportReachability(UNREACHABLE_STATUSES.has(response.status) ? "fail" : "reachable");
+  reportReachability(UNREACHABLE_STATUSES.has(response.status) ? "fail" : "reachable", Date.now(), sentAt);
   if (!response.ok) {
     const code = await errorCodeOf(response);
     return { ok: false, failure: failureOf(response.status), ...(code === null ? {} : { code }) };
