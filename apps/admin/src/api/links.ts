@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AdminApi, ApiResult } from "./client";
-import { formatDateTime, formatTime } from "../format";
+import { formatDateTime, formatNumber, formatTime } from "../format";
 
 /**
  * Ссылки кампаний (`/admin/links`, docs/24-attribution-and-sharing.md §3) и
@@ -14,6 +14,19 @@ export type LinkNetwork = (typeof LINK_NETWORKS)[number];
 export const NETWORK_TITLES: Record<LinkNetwork, string> = { adsgram: "AdsGram" };
 
 export type RegistrationOn = "first_run" | "launch";
+
+/** Куда ведёт ссылка (Р95); сервер знает тот же список (`link-targets.ts`). */
+export const LINK_TARGETS = ["app", "bot", "landing"] as const;
+export type LinkTarget = (typeof LINK_TARGETS)[number];
+
+export const TARGET_TITLES: Record<LinkTarget, string> = { app: "Mini App", bot: "Бот", landing: "Лендинг" };
+
+/** Что значит цель — для мастера и карточки. */
+export const TARGET_HINTS: Record<LinkTarget, string> = {
+  app: "Человек сразу попадает в игру.",
+  bot: "Человек попадает в чат с ботом и жмёт «Старт»; игру откроет бот.",
+  landing: "Человек попадает на лендинг; что дальше, решает страница.",
+};
 
 const goalCountsSchema = z.object({ pending: z.number(), sent: z.number(), failed: z.number(), skipped: z.number() });
 const summarySchema = z.object({ "1": goalCountsSchema, "2": goalCountsSchema, "3": goalCountsSchema });
@@ -35,12 +48,18 @@ export const linkSchema = z.object({
   registrationOn: z.enum(["first_run", "launch"]).catch("first_run"),
   /** адрес с макросами сети — его вставляют в кабинет сети; у обычной ссылки `null` */
   networkUrl: z.string().nullable(),
+  // Цель, о которой панель ещё не знает, показывается как Mini App, а не ломает список.
+  target: z.enum(LINK_TARGETS).catch("app"),
+  /** прямой адрес без переходника; `null` — у ссылки сети его нет или бот ещё не представился */
+  directUrl: z.string().nullable(),
 });
 
 export const linkStatsSchema = linkSchema.extend({
   clicks: z.number(),
   clicks30d: z.number(),
   launches: z.number(),
+  /** запуски по прямой ссылке — клика у них нет */
+  directLaunches: z.number(),
   conversions: summarySchema.nullable(),
 });
 
@@ -62,6 +81,7 @@ export interface NewLink {
   note?: string;
   network?: LinkNetwork;
   registrationOn?: RegistrationOn;
+  target?: LinkTarget;
 }
 
 /** Тот же формат, что проверяет сервер: кампания и источник уходят в разрезы аналитики. */
@@ -75,10 +95,25 @@ export function createLink(api: AdminApi, input: NewLink): Promise<ApiResult<Lin
   return api.request("/links", { method: "POST", body: input, schema: linkSchema });
 }
 
+/**
+ * Сменить цель: прошлые клики остаются, новые идут по-новому. `AdminApi.request`
+ * типизирован как `GET | POST` (`api/client.ts` вне зон T-0057), а на деле передаёт
+ * метод в `fetch` как есть и ставит защитный заголовок любому, кроме `GET`, —
+ * поэтому `PATCH` из спецификации здесь приведён к допустимому типу.
+ */
+export function retargetLink(api: AdminApi, code: string, target: LinkTarget): Promise<ApiResult<Link>> {
+  return api.request(`/links/${encodeURIComponent(code)}`, { method: "PATCH" as "POST", body: { target }, schema: linkSchema });
+}
+
 /** Только что заведённая ссылка строкой списка — карточка открывается, не дожидаясь перечитывания. */
 export function freshRow(link: Link): LinkRow {
   const counts = (): GoalCounts => ({ pending: 0, sent: 0, failed: 0, skipped: 0 });
-  return { ...link, clicks: 0, clicks30d: 0, launches: 0, conversions: link.network === null ? null : { "1": counts(), "2": counts(), "3": counts() } };
+  return { ...link, clicks: 0, clicks30d: 0, launches: 0, directLaunches: 0, conversions: link.network === null ? null : { "1": counts(), "2": counts(), "3": counts() } };
+}
+
+/** «Через переходник + прямых» — одним числом в списке; прямые запуски в долю от кликов не входят. */
+export function launchesLabel(row: Pick<LinkRow, "launches" | "directLaunches">): string {
+  return `${formatNumber(row.launches)} + ${formatNumber(row.directLaunches)}`;
 }
 
 /** Доля запусков от кликов, целыми процентами; без кликов — `null`. */
