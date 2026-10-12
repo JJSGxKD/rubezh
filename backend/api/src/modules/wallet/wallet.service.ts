@@ -6,7 +6,7 @@ import { RolesService } from "../roles/roles.service.js";
 import { WalletBonuses } from "./wallet-bonus.js";
 import { EXCHANGE_RESOURCES, WALLET_DAILY_CAPS, WALLET_MAX_OPERATION } from "./wallet-limits.js";
 import { IdempotencyConflictError, InsufficientFundsError } from "./wallet-errors.js";
-import { WALLET_REPOSITORY, type ExistingEntry, type WalletEntryRow, type WalletRepository } from "./wallet.repository.js";
+import { WALLET_REPOSITORY, type ExistingEntry, type RevokeInput, type RevokeOutcome, type WalletEntryRow, type WalletRepository } from "./wallet.repository.js";
 import {
   ADMIN_REASON,
   isEarnReason,
@@ -63,6 +63,9 @@ export interface SpendResult {
   balances: Balances;
   duplicate: boolean;
 }
+
+/** Отзыв начисленного: источник и время необязательны, как у начисления. */
+export type RevokeRequest = Omit<RevokeInput, "source" | "at"> & { source?: string | null; at?: Date };
 
 export interface AdjustInput {
   accountId: string;
@@ -130,6 +133,23 @@ export class WalletService {
       this.logger.warn(JSON.stringify({ module: "wallet", event: "daily_cap_reached", accountId: input.accountId, reason: input.reason, resource: input.resource }));
     }
     return { credited: outcome.credited, balance: outcome.balance, duplicate: false };
+  }
+
+  /**
+   * Забрать начисленное записью `grantKey` при возврате звёзд (tasks/T-0023):
+   * не больше начисленного и не больше баланса, в минус баланс не уходит.
+   * Потраченное не возвращается. Повтор тем же ключом ничего не списывает.
+   */
+  async revokeUpTo(input: RevokeRequest): Promise<RevokeOutcome> {
+    checkKey(input.grantKey);
+    checkKey(input.idempotencyKey);
+    if (this.repository.revokeUpTo === undefined) throw new Error("хранилище кошелька не умеет отзывать начисленное");
+    const outcome = await this.repository.revokeUpTo({ ...input, source: input.source ?? null, at: input.at ?? new Date() });
+    // Пишется только тот раз, когда что-то забрали: повторы и пустые отзывы лог не растят.
+    if (outcome.status === "revoked") {
+      this.logger.warn(JSON.stringify({ module: "wallet", event: "wallet_revoked", accountId: input.accountId, resource: input.resource, revoked: outcome.revoked, granted: outcome.granted }));
+    }
+    return outcome;
   }
 
   /** Трата. Не хватило хоть одного ресурса — не списано ничего, и бросается `InsufficientFundsError`. */
