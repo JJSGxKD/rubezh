@@ -586,6 +586,18 @@ describe("отзыв VIP при внешнем возврате звёзд (T-00
     expect(logged.map((entry) => entry.event)).toContain("vip_revoke_renewal_failed");
   });
 
+  it("база не ответила на чтение аккаунта — отзыв бросает, площадка не зовётся: повтор выключит продление там", async () => {
+    const row = await paidVip();
+    ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };
+    vi.spyOn(ctx.accounts, "byId").mockRejectedValue(new Error("база недоступна"));
+    const set = vi.spyOn(ctx.renewal, "set");
+
+    await expect(ctx.vip.revoke(row, AT)).rejects.toThrow("база недоступна");
+
+    expect(set).not.toHaveBeenCalled();
+    expect(ctx.repository.subscriptions.get(row.purchaseId)).not.toMatchObject({ renewal: "cancelled" });
+  });
+
   it("не записалась отмена в базе — отзыв бросает: обработка возврата повторится", async () => {
     const row = await paidVip();
     ctx.repository.cutResult = { subscriptionId: row.purchaseId, removedSec: 3600, until: new Date(AT.getTime() + 86_400_000) };

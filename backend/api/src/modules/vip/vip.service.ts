@@ -270,16 +270,25 @@ export class VipService implements OnModuleInit {
   }
 
   private async stopRenewal(accountId: string, subscriptionId: string, at: Date): Promise<void> {
-    try {
-      const account = await withTimeout(this.accounts.byId(accountId), DB_TIMEOUT_MS, "аккаунт подписчика");
-      if (account === null) throw new Error("аккаунт не найден");
-      // Отказ площадки (`rejected`) — продления там уже нет, игрок отменил его сам: идём дальше.
-      await this.renewal.set({ accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId }, subscriptionId, false);
-    } catch (error: unknown) {
-      this.logger.warn(JSON.stringify({ module: "vip", event: "vip_revoke_renewal_failed", accountId, subscriptionId, reason: error instanceof Error ? error.message : "unknown" }));
+    // Ошибка базы здесь — не ошибка площадки: пусть бросается, обработка возврата повторится
+    // (обрезанный период второй раз ничего не отнимет) и выключит продление на площадке.
+    const account = await withTimeout(this.accounts.byId(accountId), DB_TIMEOUT_MS, "аккаунт подписчика");
+    if (account === null) {
+      this.warnRenewal(accountId, subscriptionId, "аккаунт не найден");
+    } else {
+      try {
+        // Отказ площадки (`rejected`) — продления там уже нет, игрок отменил его сам: идём дальше.
+        await this.renewal.set({ accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId }, subscriptionId, false);
+      } catch (error: unknown) {
+        this.warnRenewal(accountId, subscriptionId, error instanceof Error ? error.message : "unknown");
+      }
     }
     await withTimeout(this.repository.setRenewal(subscriptionId, "cancelled", "game", at), DB_TIMEOUT_MS, "продление VIP");
     this.log("subscription_cancelled", { accountId, subscriptionId, by: "game", cause: "refund" });
+  }
+
+  private warnRenewal(accountId: string, subscriptionId: string, reason: string): void {
+    this.logger.warn(JSON.stringify({ module: "vip", event: "vip_revoke_renewal_failed", accountId, subscriptionId, reason }));
   }
 
   /** Игрок отменил или вернул продление на площадке, или площадка не смогла списать период. */
