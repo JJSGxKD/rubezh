@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — панель: каркас и компоненты</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Палитра B — те же токены, что у игры (@bh/design-tokens). Панель строже:
+     Russo One — только заголовки разделов и крупные числа, без срезов и
+     свечений, плотные строки. */
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --surface-raised:#353452; --surface-sunken:#17162a;
+    --border:#43425f; --border-strong:#5b5980; --text:#f3eee6; --muted:#aeaac4; --disabled:#6f6c8a;
+    --accent:#ff8f3f; --accent-pressed:#f0782a; --on-accent:#230f02;
+    --success:#8ee86b; --danger:#ff5d5d; --warning:#ffc14d; --info:#5ccfff; --passive:#c47dff;
+    --r-sm:4px; --r-md:6px; --r-lg:8px;
+    --display:'Russo One', sans-serif; --text-font:'IBM Plex Sans', sans-serif;
+    --page:#0d0c18; --page-muted:#9a97ab;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:14px/1.5 var(--text-font); }
+  .page { max-width:1700px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:400 28px/1.2 var(--display); margin:0 0 8px; letter-spacing:.02em; }
+  h2 { font:400 20px/1.2 var(--display); margin:40px 0 8px; letter-spacing:.02em; }
+  .lead { color:var(--page-muted); max-width:1000px; margin:0 0 8px; font-size:15px; }
+  code { font-size:.92em; }
+  table.inv { border-collapse:collapse; font-size:13.5px; max-width:1200px; margin:8px 0 0; }
+  table.inv td, table.inv th { border:1px solid #2c2b45; padding:6px 10px; text-align:left; vertical-align:top; }
+  table.inv th { color:var(--page-muted); font-weight:600; }
+  svg.i { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .grow { flex:1; min-width:0; }
+  .row { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; }
+  .cap { margin-top:10px; font-size:13.5px; color:var(--page-muted); max-width:640px; }
+  .cap b { color:var(--text); }
+
+  /* Окно браузера на ПК */
+  .desk { width:1240px; height:760px; border-radius:10px; overflow:hidden; border:1px solid #2c2b45; background:var(--bg); display:grid; grid-template-columns:216px 1fr; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .side { background:var(--surface-sunken); border-right:1px solid var(--border); padding:12px 10px; display:flex; flex-direction:column; gap:2px; overflow:hidden; }
+  .brand { display:flex; align-items:center; gap:8px; padding:4px 8px 10px; font:400 16px var(--display); letter-spacing:.02em; }
+  .brand i { width:22px; height:22px; border-radius:var(--r-sm); background:linear-gradient(135deg,var(--accent),#c45a1e); }
+  .search { display:flex; align-items:center; gap:6px; height:32px; padding:0 8px; margin:0 0 6px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--border); color:var(--muted); font-size:13px; }
+  .search kbd { margin-left:auto; font:600 10.5px var(--text-font); padding:1px 5px; border-radius:3px; border:1px solid var(--border-strong); color:var(--muted); }
+  .grp { margin-top:10px; padding:0 8px 4px; font:600 10.5px/14px var(--text-font); color:var(--disabled); text-transform:uppercase; letter-spacing:.08em; }
+  .nav { display:flex; align-items:center; gap:8px; height:30px; padding:0 8px; border-radius:var(--r-sm); color:var(--muted); font-size:13.5px; }
+  .nav svg.i { width:16px; height:16px; }
+  .nav.on { background:var(--surface-raised); color:var(--text); box-shadow:inset 2px 0 0 var(--accent); }
+  .nav.on svg.i { color:var(--accent); }
+  .nav .cnt { margin-left:auto; min-width:18px; height:18px; padding:0 5px; border-radius:var(--r-sm); background:color-mix(in oklab, var(--warning) 18%, transparent); color:var(--warning); font:700 10.5px/18px var(--text-font); text-align:center; }
+  .main { display:flex; flex-direction:column; min-width:0; }
+  .top { display:flex; align-items:center; gap:10px; height:52px; padding:0 20px; border-bottom:1px solid var(--border); }
+  .crumbs { display:flex; align-items:baseline; gap:8px; min-width:0; }
+  .crumbs .g { color:var(--muted); } .crumbs .s { color:var(--disabled); }
+  .crumbs .t { font:400 17px var(--display); letter-spacing:.02em; }
+  .crumbs .h { color:var(--muted); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .who { display:flex; align-items:center; gap:8px; margin-left:auto; font-size:13px; }
+  .who .av { width:28px; height:28px; border-radius:50%; background:radial-gradient(circle at 40% 35%, #7b6a8f, #3a3150); }
+  .content { padding:20px; display:flex; flex-direction:column; gap:14px; overflow:hidden; }
+
+  /* Кит */
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; height:32px; padding:0 12px; border-radius:var(--r-md); font:600 13px var(--text-font); white-space:nowrap; border:1px solid transparent; }
+  .btn svg.i { width:15px; height:15px; }
+  .btn.pri { background:var(--accent); color:var(--on-accent); }
+  .btn.sec { background:var(--surface-raised); color:var(--text); border-color:var(--border-strong); }
+  .btn.ghost { color:var(--muted); border-color:var(--border); }
+  .btn.dan { background:color-mix(in oklab, var(--danger) 16%, transparent); color:var(--danger); border-color:color-mix(in oklab, var(--danger) 45%, transparent); }
+  .btn.dis { opacity:.45; }
+  .btn.l { height:40px; padding:0 16px; font-size:14px; }
+  .panel { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); }
+  .ph { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); }
+  .ph .pt { font:400 14.5px var(--display); letter-spacing:.02em; }
+  .ph .help { width:16px; height:16px; border-radius:50%; display:grid; place-items:center; font:700 10px var(--text-font); color:var(--muted); border:1px solid var(--border-strong); }
+  .pb { padding:12px 14px; }
+  .field { display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .field label { font-size:12px; color:var(--muted); font-weight:600; }
+  .input { height:32px; padding:0 10px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border-strong); display:flex; align-items:center; gap:6px; color:var(--text); font-size:13.5px; }
+  .input.ph-t { color:var(--disabled); }
+  .input.err { border-color:var(--danger); }
+  .input .chev { margin-left:auto; color:var(--muted); }
+  .hint { font-size:11.5px; color:var(--muted); } .hint.err { color:var(--danger); }
+  .badge { display:inline-flex; align-items:center; gap:4px; height:20px; padding:0 7px; border-radius:var(--r-sm); font:600 11px/1 var(--text-font); background:var(--surface-raised); color:var(--muted); white-space:nowrap; }
+  .badge.accent { background:color-mix(in oklab, var(--accent) 16%, transparent); color:var(--accent); }
+  .badge.success { background:color-mix(in oklab, var(--success) 15%, transparent); color:var(--success); }
+  .badge.warning { background:color-mix(in oklab, var(--warning) 15%, transparent); color:var(--warning); }
+  .badge.danger { background:color-mix(in oklab, var(--danger) 15%, transparent); color:var(--danger); }
+  .badge.info { background:color-mix(in oklab, var(--info) 15%, transparent); color:var(--info); }
+  .notice { display:flex; gap:8px; align-items:flex-start; padding:9px 12px; border-radius:var(--r-md); font-size:13px; border:1px solid; }
+  .notice svg.i { width:16px; height:16px; margin-top:2px; }
+  .notice.warning { background:color-mix(in oklab, var(--warning) 9%, transparent); border-color:color-mix(in oklab, var(--warning) 40%, transparent); } .notice.warning svg.i { color:var(--warning); }
+  .notice.info { background:color-mix(in oklab, var(--info) 9%, transparent); border-color:color-mix(in oklab, var(--info) 40%, transparent); } .notice.info svg.i { color:var(--info); }
+  .notice.danger { background:color-mix(in oklab, var(--danger) 9%, transparent); border-color:color-mix(in oklab, var(--danger) 40%, transparent); } .notice.danger svg.i { color:var(--danger); }
+  table.dt { width:100%; border-collapse:collapse; font-size:13px; }
+  table.dt th { text-align:left; font-weight:600; font-size:11.5px; color:var(--muted); padding:7px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  table.dt th.sort { color:var(--text); } table.dt th.sort::after { content:" ↓"; color:var(--accent); }
+  table.dt td { padding:8px 10px; border-bottom:1px solid color-mix(in oklab, var(--border) 60%, transparent); white-space:nowrap; }
+  table.dt tr:hover td { background:color-mix(in oklab, var(--surface-raised) 50%, transparent); }
+  table.dt td.r, table.dt th.r { text-align:right; font-variant-numeric:tabular-nums; }
+  .pager { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; font-size:12px; color:var(--muted); }
+  .sk { border-radius:var(--r-sm); background:linear-gradient(90deg, var(--surface-raised) 0%, color-mix(in oklab, var(--surface-raised) 60%, var(--border-strong)) 40%, var(--surface-raised) 80%); height:12px; }
+  .empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:22px; text-align:center; color:var(--muted); font-size:13px; }
+  .empty svg.i { width:28px; height:28px; color:var(--disabled); }
+  .toast { display:flex; align-items:center; gap:10px; width:360px; padding:10px 12px; border-radius:var(--r-lg); background:var(--surface-raised); border:1px solid var(--border-strong); box-shadow:0 12px 30px rgba(0,0,0,.45); font-size:13px; }
+  .toast .bar { position:absolute; }
+  .toast svg.i { width:16px; height:16px; color:var(--success); }
+  .toast .undo { margin-left:auto; color:var(--accent); font-weight:600; }
+  .toast .tm { color:var(--disabled); font-size:11.5px; }
+  .dlg { width:440px; border-radius:var(--r-lg); background:var(--bg); border:1px solid var(--border-strong); box-shadow:0 24px 60px rgba(0,0,0,.55); }
+  .dlg .dh { padding:14px 16px 4px; font:400 17px var(--display); letter-spacing:.02em; }
+  .dlg .dd { padding:0 16px; font-size:13px; color:var(--muted); }
+  .dlg .db { padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+  .dlg .df { display:flex; justify-content:flex-end; gap:8px; padding:12px 16px; border-top:1px solid var(--border); }
+  .change { border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); padding:8px 10px; font-size:12.5px; display:grid; grid-template-columns:auto 1fr; gap:4px 12px; }
+  .change span:nth-child(odd) { color:var(--muted); }
+  .kit { display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; padding:20px; border-radius:10px; background:var(--bg); max-width:1240px; }
+  .cell { display:flex; flex-direction:column; gap:8px; }
+  .knote { font-size:12.5px; color:var(--page-muted); max-width:340px; }
+
+  /* Телефон */
+  .phone { width:390px; height:800px; border-radius:36px; padding:10px; background:#000; box-shadow:0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .screen { position:relative; width:100%; height:100%; border-radius:28px; overflow:hidden; background:var(--bg); display:flex; flex-direction:column; }
+  .mtop { display:flex; align-items:center; gap:8px; height:52px; padding:0 12px; border-bottom:1px solid var(--border); }
+  .mtop .ib { width:34px; height:34px; border-radius:var(--r-md); display:grid; place-items:center; border:1px solid var(--border); color:var(--text); }
+  .mtop .t { font:400 16px var(--display); letter-spacing:.02em; }
+  .mbody { padding:12px; display:flex; flex-direction:column; gap:10px; overflow:hidden; }
+  .mcard { padding:10px 12px; border-radius:var(--r-lg); background:var(--surface); border:1px solid var(--border); display:flex; flex-direction:column; gap:4px; }
+  .mcard .r1 { display:flex; align-items:center; gap:8px; }
+  .mcard .n { font-weight:600; font-size:14px; }
+  .mcard .kv { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:12px; color:var(--muted); }
+  .mcard .kv b { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
+  .sheet { position:absolute; inset:0; background:rgba(8,7,16,.62); }
+  .sheet .s { position:absolute; left:0; top:0; bottom:0; width:300px; background:var(--surface-sunken); border-right:1px solid var(--border-strong); padding:12px 10px; display:flex; flex-direction:column; gap:2px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Панель: каркас и компоненты</h1>
+  <p class="lead">Решения пользователя от 07.10.2026: <b>панель на телефоне — полноценно</b> (меню листом, таблицы карточками), <b>облик — палитра игры, но строже</b> (те же токены палитры B, Russo One — только заголовки и крупные числа, без срезов и свечений, плотные строки), <b>подтверждения — по цене ошибки</b>. Строится на нынешней панели (<code>apps/admin/src/screens/Shell.tsx</code>, <code>ui/kit.tsx</code>, <code>routes.ts</code>): те же группы и разделы, права, подсказки, уведомления.</p>
+
+  <h2>Что сохраняется и что меняется</h2>
+  <table class="inv">
+    <tr><th>Элемент</th><th>Сейчас</th><th>В макете</th></tr>
+    <tr><td>Меню</td><td>Колонка 208 px, группы по правам, разделы текстом</td><td>Колонка 216 px: знак и название, поиск раздела (<kbd>/</kbd>), разделы со значком, у раздела — счётчик того, что ждёт (как «Ждёт вас» в сводке). Активный — подложка и черта акцента слева</td></tr>
+    <tr><td>Шапка</td><td>Группа / раздел, подсказка, имя, роли, «Выйти»</td><td>Так же; раздел — Russo One, роли — в меню аккаунта под аватаром, «Выйти» — там же</td></tr>
+    <tr><td>Телефон</td><td>Нет: сетка 208 px ломается</td><td>До 768 px: шапка с кнопкой меню и названием раздела, меню — лист слева; таблицы — карточками; диалоги — листом снизу</td></tr>
+    <tr><td>Подтверждения</td><td>Вперемешку: второе нажатие, окно с причиной, сразу</td><td><b>Окно</b> — необратимое, деньги, видимое игрокам и роли: что изменится, причина, кнопка с самим действием («Вернуть 50 ⭐»). <b>Сразу с «Отменить»</b> — обратимое внутри команды: черновики, порядок, заметки, фильтры; уведомление 8 с с «Отменить»</td></tr>
+    <tr><td>Таблица</td><td><code>DataTable</code>: заголовки, строки, «Пусто»</td><td>Плотнее: сортировка по заголовку, подсветка строки, страницы снизу; загрузка — полосами-заглушками, пусто — значок и что сделать, ошибка — плашкой с «Повторить»</td></tr>
+  </table>
+
+  <h2>Каркас на ПК</h2>
+  <div class="desk">
+    <aside class="side" id="side"></aside>
+    <div class="main">
+      <div class="top"><div class="crumbs"><span class="g">Поддержка</span><span class="s">/</span><span class="t">Игроки</span><span class="h">Найти игрока и открыть карточку: забеги, покупки, кошелёк, ограничения</span></div><div class="who"><span class="av"></span>Кенни <span class="badge accent">Владелец</span></div></div>
+      <div class="content">
+        <div class="panel"><div class="ph"><span class="pt">Игроки</span><span class="help">?</span><span class="grow"></span><span class="btn sec">Выгрузить</span></div>
+          <div class="pb" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div class="field" style="width:280px"><label>Поиск</label><div class="input ph-t">Имя, @юзернейм или Telegram ID</div></div>
+            <div class="field" style="width:150px"><label>Площадка</label><div class="input">Все <span class="chev">▾</span></div></div>
+            <div class="field" style="width:150px"><label>Платящий</label><div class="input">Любой <span class="chev">▾</span></div></div>
+            <div class="field" style="width:170px"><label>Ограничения</label><div class="input">Любые <span class="chev">▾</span></div></div>
+            <span class="btn pri">Найти</span><span class="btn ghost">Сбросить</span>
+          </div>
+          <table class="dt"><thead><tr><th>Игрок</th><th>Площадка</th><th class="r sort">Последний вход</th><th class="r">Уровень</th><th class="r">Забегов</th><th class="r">⭐ всего</th><th>Источник</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+          <div class="pager"><span>1–8 из 1 284</span><span style="display:flex;gap:6px"><span class="btn ghost dis">← Назад</span><span class="btn sec">Дальше →</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="cap"><b>Список игроков на ПК.</b> Фильтры — строкой над таблицей, сортировка по заголовку (стрелка у активного), строка кликается целиком — карточка игрока. Счётчик у «Разбора забегов» в меню — ждущие разбора.</p>
+
+  <h2>Каркас на телефоне</h2>
+  <div class="row">
+    <div><div class="phone"><div class="screen"><div class="mtop"><span class="ib">${0}</span><span class="t grow">Игроки</span><span class="ib">⌕</span></div><div class="mbody" id="mcards"></div></div></div><p class="cap" style="width:390px"><b>Таблица — карточками.</b> Главное поле — крупно, остальное — парами «название значение». Фильтры — кнопкой в шапке, листом снизу.</p></div>
+    <div><div class="phone"><div class="screen"><div class="mtop"><span class="ib">☰</span><span class="t grow">Игроки</span></div><div class="mbody" style="opacity:.4" id="mcards2"></div><div class="sheet"><div class="s" id="side2"></div></div></div></div><p class="cap" style="width:390px"><b>Меню — лист слева</b> по кнопке ☰: те же группы, поиск раздела, счётчики. Закрыть — тап по затемнению, «Назад», выбор раздела.</p></div>
+  </div>
+
+  <h2>Компоненты</h2>
+  <div class="kit" id="kit"></div>
+</div>
+
+<script>
+  const svg = (d) => `<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
+  const I = {
+    gauge: svg('<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>'),
+    users: svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>'),
+    shield: svg('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'),
+    funnel: svg('<path d="M10 20a1 1 0 0 0 .55.9l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .52-1.35L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.74 1.67l7.22 7.98A2 2 0 0 1 10 14z"/>'),
+    link: svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+    handshake: svg('<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3M3 4h8"/>'),
+    ticket: svg('<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/>'),
+    percent: svg('<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>'),
+    tv: svg('<rect width="20" height="15" x="2" y="7" rx="2"/><path d="m17 2-5 5-5-5"/>'),
+    coins: svg('<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18M7 6h1v4M16.71 13.88l.7.71-2.82 2.82"/>'),
+    list: svg('<path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/>'),
+    send: svg('<path d="M14.54 21.69a.5.5 0 0 0 .94-.03l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.03.94l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/>'),
+    book: svg('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>'),
+    home: svg('<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+    flag: svg('<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"/>'),
+    sliders: svg('<path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/>'),
+    key: svg('<path d="M2.59 18.59A2 2 0 0 0 2 20v2h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1.17a2 2 0 0 0 1.42-.59l.81-.81a6.5 6.5 0 1 0-4.24-4.24z"/><circle cx="16.5" cy="7.5" r=".5"/>'),
+    activity: svg('<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>'),
+    download: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>'),
+    userCog: svg('<circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/><path d="M10 15H6a4 4 0 0 0-4 4v2M21.7 16.4l-.9-.3M15.2 13.9l-.9-.3M16.6 18.7l.3-.9M19.1 12.2l.3-.9M19.6 18.7l-.4-1M16.8 12.3l-.4-1M14.3 16.6l1-.4M20.7 13.8l1-.4"/>'),
+    scroll: svg('<path d="M15 12h-5M15 8h-5M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/>'),
+    alert: svg('<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+    info: svg('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'),
+    check: svg('<path d="M20 6 9 17l-5-5"/>'),
+    inbox: svg('<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
+    search: svg('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
+    menu: svg('<path d="M4 6h16M4 12h16M4 18h16"/>'),
+  };
+  const GROUPS = [
+    ["Обзор", [["Сводка", "gauge"]]],
+    ["Поддержка", [["Игроки", "users", 0, true], ["Разбор забегов", "shield", 7]]],
+    ["Привлечение", [["Воронка", "funnel"], ["Ссылки", "link"], ["Партнёры", "handshake"], ["Промокоды", "ticket"]]],
+    ["Доход", [["Акции", "percent"], ["Реклама", "tv"], ["Курсы", "coins"]]],
+    ["Вовлечение", [["Задания", "list"], ["Рассылки", "send"], ["Журнал обновлений", "book", 2], ["Главная", "home"]]],
+    ["Эксплуатация", [["Флаги", "flag"], ["Настройки", "sliders"], ["Ключи интеграций", "key"], ["Диагностика", "activity"], ["Выгрузки", "download"]]],
+    ["Команда", [["Роли", "userCog"], ["Аудит", "scroll"]]],
+  ];
+  const side = `<div class="brand"><i></i>Рубеж</div><div class="search">${I.search}Найти раздел<kbd>/</kbd></div>` + GROUPS.map(([g, items]) => `<div class="grp">${g}</div>` + items.map(([t, ic, n, on]) => `<div class="nav${on ? " on" : ""}">${I[ic]}${t}${n ? `<span class="cnt">${n}</span>` : ""}</div>`).join("")).join("");
+  document.getElementById("side").innerHTML = side;
+  document.getElementById("side2").innerHTML = side;
+  document.querySelectorAll(".mtop .ib")[0].innerHTML = I.menu;
+  document.querySelectorAll(".mtop .ib")[1].innerHTML = I.search;
+  const P = [["Алина", "@alina_k", "Telegram", "12 мин назад", 23, 184, 1250, "реф: Максим", "warning", "рейтинг закрыт"], ["Максим Орлов", "@orlov", "Telegram", "1 ч назад", 15, 92, 0, "ссылка: stream-1009", "", ""], ["Кира", "—", "Telegram", "3 ч назад", 31, 401, 3800, "органика", "", ""], ["Лёша_88", "@lesha88", "Telegram", "вчера", 6, 14, 50, "AdsGram", "", ""], ["Дина", "@dina", "Telegram", "вчера", 9, 33, 0, "партнёр: kennix", "", ""], ["Сева", "—", "Telegram", "2 дня назад", 2, 3, 0, "органика", "danger", "блокировка"], ["Ника", "@nika", "Telegram", "3 дня назад", 12, 60, 700, "реф: Кира", "", ""], ["Тимур", "—", "Telegram", "5 дней назад", 4, 9, 0, "ссылка: post-0310", "", ""]];
+  document.getElementById("rows").innerHTML = P.map(([n, u, pl, last, lvl, runs, stars, src, tone, flag]) => `<tr><td><b style="font-weight:600">${n}</b> <span style="color:var(--muted)">${u}</span>${flag ? ` <span class="badge ${tone}">${flag}</span>` : ""}</td><td>${pl}</td><td class="r">${last}</td><td class="r">${lvl}</td><td class="r">${runs}</td><td class="r">${stars ? stars.toLocaleString("ru-RU") : "—"}</td><td style="color:var(--muted)">${src}</td><td style="color:var(--disabled)">›</td></tr>`).join("");
+  const mcard = ([n, u, pl, last, lvl, runs, stars, src, tone, flag]) => `<div class="mcard"><div class="r1"><span class="n">${n}</span><span style="color:var(--muted);font-size:12px">${u}</span>${flag ? `<span class="badge ${tone}">${flag}</span>` : ""}<span class="grow"></span><span style="color:var(--disabled)">›</span></div><div class="kv"><span>вход <b>${last}</b></span><span>ур. <b>${lvl}</b></span><span>забегов <b>${runs}</b></span><span>⭐ <b>${stars ? stars.toLocaleString("ru-RU") : "—"}</b></span></div><div class="kv"><span>${src}</span></div></div>`;
+  document.getElementById("mcards").innerHTML = `<div class="input ph-t">${I.search}Имя, @юзернейм или ID</div><div style="display:flex;gap:6px"><span class="btn sec">Фильтры · 1</span><span class="btn ghost">Последний вход ↓</span></div>` + P.slice(0, 6).map(mcard).join("");
+  document.getElementById("mcards2").innerHTML = P.slice(0, 6).map(mcard).join("");
+
+  document.getElementById("kit").innerHTML = [
+    [`<div style="display:flex;gap:8px;flex-wrap:wrap"><span class="btn pri">Сохранить</span><span class="btn sec">Обновить</span><span class="btn ghost">Отмена</span><span class="btn dan">Заблокировать</span><span class="btn pri dis">Сохранить</span></div>`, "Кнопки 32 px: основная (одна на экран), вторичная, тихая, опасная, недоступная. На телефоне — 40 px"],
+    [`<div style="display:flex;gap:10px;width:440px"><div class="field grow"><label>Причина</label><div class="input">Компенсация за сбой 06.10</div><span class="hint">Попадёт в журнал действий</span></div><div class="field grow"><label>Сумма</label><div class="input err">0</div><span class="hint err">Не ноль</span></div></div>`, "Поля: подпись над полем, подсказка или ошибка под ним"],
+    [`<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">черновик</span><span class="badge success">опубликовано</span><span class="badge warning">ждёт разбора</span><span class="badge danger">блокировка</span><span class="badge info">тест</span><span class="badge accent">Владелец</span></div>`, "Метки состояния — тон говорит о смысле, текст — о деталях"],
+    [`<div style="display:flex;flex-direction:column;gap:6px;width:440px"><div class="notice warning">${I.alert}<span>Тестовая оплата: звёзды спишутся и сразу вернутся.</span></div><div class="notice info">${I.info}<span>Изменение увидят игроки через минуту — столько реплика перечитывает настройки.</span></div><div class="notice danger">${I.alert}<span style="flex:1">Не удалось загрузить игроков.</span><span class="btn sec" style="height:26px">Повторить</span></div></div>`, "Плашки: предупреждение, сведения, ошибка с «Повторить»"],
+    [`<div class="panel" style="width:440px"><table class="dt"><thead><tr><th>Игрок</th><th class="r">Забегов</th><th class="r">⭐</th></tr></thead><tbody>${[0, 1, 2].map(() => `<tr><td><div class="sk" style="width:140px"></div></td><td class="r"><div class="sk" style="width:30px;margin-left:auto"></div></td><td class="r"><div class="sk" style="width:40px;margin-left:auto"></div></td></tr>`).join("")}</tbody></table></div>`, "Загрузка таблицы — полосы-заглушки той же высоты строк: ничего не прыгает"],
+    [`<div class="panel" style="width:440px"><div class="empty">${I.inbox}<b style="color:var(--text)">Никого не нашли</b><span>Проверьте имя или сбросьте фильтры</span><span class="btn sec" style="margin-top:4px">Сбросить фильтры</span></div></div>`, "Пусто — что произошло и что сделать дальше"],
+    [`<div class="toast">${I.check}<span>Слайд «Турнир» снят с главной <span class="tm">· 8 с</span></span><span class="undo">Отменить</span></div>`, "Обратимое — сразу, с уведомлением и «Отменить» на 8 секунд. Отмена — обратная операция, а не задержка запроса"],
+    [`<div class="dlg"><div class="dh">Вернуть звёзды?</div><div class="dd">Стартовый набор · 50 ⭐ · Алина</div><div class="db"><div class="change"><span>Игрок получит</span><span>50 ⭐ на счёт Telegram</span><span>Заберём</span><span>самоцветы покупки — до 150, сколько есть</span><span>Отменить</span><span>нельзя</span></div><div class="field"><label>Причина</label><div class="input ph-t">От 3 до 200 символов</div><span class="hint">В журнал действий и в поток «Покупки»</span></div></div><div class="df"><span class="btn ghost">Отмена</span><span class="btn dan">Вернуть 50 ⭐</span></div></div>`, "Окно — для денег, необратимого, видимого игрокам и ролей: «что изменится» таблицей, причина, кнопка называет действие. На телефоне — листом снизу"],
+  ].map(([el, note]) => `<div class="cell">${el}<div class="knote">${note}</div></div>`).join("");
+</script>
+</body>
+</html>

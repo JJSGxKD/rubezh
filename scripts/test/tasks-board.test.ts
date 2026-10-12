@@ -169,6 +169,56 @@ describe("следующая задача", () => {
   });
 });
 
+// Доработка (tasks/README.md, «Доработка»): PR с меткой может закончить любой
+// поток с тем же исполнителем и уровнем.
+describe("доработка", () => {
+  const REWORK = [{ name: "доработка" }];
+
+  it("PR с меткой «доработка» — в своей колонке, будь он хоть черновиком", () => {
+    const prs = [
+      { number: 21, headRefName: "task/T-0004", isDraft: false, labels: REWORK },
+      { number: 22, headRefName: "task/T-0005", isDraft: true, labels: [{ name: "release: patch" }, ...REWORK] },
+    ];
+    const result = classify(FIXTURE, TAKEN, prs, [], EPIC_ORDER);
+    expect(ids(result.rework)).toEqual(["T-0004", "T-0005"]);
+    expect(result.rework.map((entry: { pr: number }) => entry.pr)).toEqual([21, 22]);
+    expect(ids(result.review)).toEqual([]);
+    expect(ids(result.inProgress)).toEqual([]);
+  });
+
+  it("задача на доработке держит свои зоны", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    const prs = [{ number: 21, headRefName: "task/T-0004", isDraft: false, labels: REWORK }];
+    const result = classify(tasks, ["T-0004"], prs, ["a/b.ts"], EPIC_ORDER);
+    expect(result.blocked[0].reason).toContain("T-0004 (на доработке)");
+  });
+
+  it("--effort оставляет задачи только этого уровня — и в доработке, и в свободных", () => {
+    const result = classify(
+      [task("T-0040", { effort: "low" }), task("T-0041", { effort: "medium" }), task("T-0042", { effort: "medium", executor: "haiku-5.5" })],
+      ["T-0041"],
+      [{ number: 30, headRefName: "task/T-0041", isDraft: false, labels: REWORK }],
+      [],
+      EPIC_ORDER,
+    );
+    expect(ids(nextTasks(result.rework, { executor: "sonnet-5.5", effort: "medium" }))).toEqual(["T-0041"]);
+    expect(ids(nextTasks(result.free, { executor: "sonnet-5.5", effort: "medium" }))).toEqual([]);
+    expect(ids(nextTasks(result.free, { executor: "haiku-5.5", effort: "medium" }))).toEqual(["T-0042"]);
+    expect(ids(nextTasks(result.free, { effort: "low" }))).toEqual(["T-0040"]);
+  });
+
+  it("значок — «доработка · #N», жёлтый; в работе с уровнем в owner — только аккаунт", () => {
+    expect(statusBadge({ column: "rework", task: task("T-0001"), pr: 214 })).toEqual({
+      schemaVersion: 1,
+      label: "статус",
+      cacheSeconds: 300,
+      message: "доработка · #214",
+      color: "yellow",
+    });
+    expect(statusBadge({ column: "inProgress", task: task("T-0001"), owner: "claude-3 / haiku-5.5 / low" }).message).toBe("в работе · claude-3");
+  });
+});
+
 describe("причины блокировки в структурном виде", () => {
   it("зависимости и занятые зоны — списками id, чтобы значок не разбирал текст", () => {
     const tasks = [

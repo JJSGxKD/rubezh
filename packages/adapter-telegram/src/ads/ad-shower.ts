@@ -10,6 +10,9 @@ export { prepareInBrowser } from "./audience";
 // переход по заданию ленты Taddy — рядом: строка ленты стоит на том же экране.
 export { mountTaskInBrowser } from "./tasks";
 export { openTaskInBrowser } from "./task-links";
+// Прослойка `Telegram.WebApp` для чужих SDK — здесь: её ставит учёт Taddy, а
+// Graspil берёт её после первого экрана, и в первой загрузке ей делать нечего.
+export { installTelegramWebAppCompat } from "../webapp-compat";
 
 /**
  * Сколько ждём исхода показа. Ролик за награду длится до минуты, и игрок

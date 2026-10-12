@@ -228,6 +228,10 @@ SELECT format('%s ROLE backup WITH LOGIN REPLICATION PASSWORD %L',
 SQL
 fi
 
+# Узлы CDN — до перечитывания Caddy: перечитает он и их. Bunny не ответил —
+# остаётся прежний список, выкат не останавливается.
+EDGE_IPS_NO_RELOAD=1 APP="$APP" ./edge-ips.sh || log "список узлов CDN не обновлён — остаётся прежний"
+
 # Остальные сервисы — по конфигурации из этого выката; Caddy перечитывает
 # сниппеты политики без разрыва соединений.
 docker compose up -d --build --remove-orphans
@@ -238,7 +242,14 @@ cron_line="17 3 * * * ${APP}/backup.sh >> /srv/rubezh/backups/backup.log 2>&1"
 # Пустой crontab у нового пользователя — не ошибка: без `|| true` pipefail
 # остановил бы выкат на этой строке.
 watch_line="*/10 * * * * ${APP}/backup-watch.sh >> /srv/rubezh/backups/backup-watch.log 2>&1"
-{ crontab -l 2>/dev/null | grep -vF -e "${APP}/backup.sh" -e "${APP}/backup-watch.sh" || true; echo "$cron_line"; echo "$watch_line"; } | crontab -
+# Список узлов CDN у Bunny меняется — сверка раз в сутки.
+edge_line="41 4 * * * ${APP}/edge-ips.sh >> ${APP}/edge-ips.log 2>&1"
+{
+  crontab -l 2>/dev/null | grep -vF -e "${APP}/backup.sh" -e "${APP}/backup-watch.sh" -e "${APP}/edge-ips.sh" || true
+  echo "$cron_line"
+  echo "$watch_line"
+  echo "$edge_line"
+} | crontab -
 
 # Старые образы — после успешного выката: прежний остаётся для отката.
 prune_api_images "$VERSION" "$previous"
