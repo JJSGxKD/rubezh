@@ -22,6 +22,7 @@ import type {
 } from "@bh/shared-types";
 import { openInvoiceWith } from "./invoice";
 import { openLinkWith, telegramLinkSdk } from "./links";
+import type { TelegramWebAppCompat } from "./webapp-compat";
 import { createDeviceStorage } from "./storage";
 import { createTelegramUi } from "./ui-telegram";
 
@@ -309,4 +310,9 @@ export { createDeviceStorage } from "./storage";
 export { createTelegramUi } from "./ui-telegram";
 export { createBrowserUi } from "./ui-browser";
 export { sameInsets, sumInsets } from "./insets";
-export { installTelegramWebAppCompat, type TelegramWebAppCompat } from "./webapp-compat";
+export type { TelegramWebAppCompat };
+
+/** `window.Telegram.WebApp` для чужих SDK (`webapp-compat.ts`) — из чанка рекламы: до первого экрана он никому не нужен. */
+export async function loadTelegramWebAppCompat(): Promise<TelegramWebAppCompat | null> {
+  return (await adsChunk()).installTelegramWebAppCompat();
+}
