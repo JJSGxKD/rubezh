@@ -25,6 +25,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/directions/directions-2026-10-c.html
+version: v0.9
 ---
 
 # T-0013. Срезанный угол с рамкой по срезу у главного на экране

@@ -32,6 +32,7 @@ executor: sonnet-5.5
 effort: high
 release: patch
 design: null
+version: v0.8
 ---
 
 # T-0059. Один клиент исходящих запросов — все вызовы внешних API через него
