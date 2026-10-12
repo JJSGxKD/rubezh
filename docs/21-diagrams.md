@@ -2880,6 +2880,40 @@ sequenceDiagram
     AD-->>B: Set-Cookie сессии, роли и права
 ```
 
+### 4.25 Выдача роли владельца или администратора (этап 4, реализовано)
+
+Правило двух ключей (`29-admin-panel.md` §3.4): панель только открывает запрос,
+а роль выдаёт подтверждение в личном чате с ботом — тем, кто выдаёт. Остальные
+роли, снятие любой роли и машина разработчика (`AUTH_DEV_LOGIN`) подтверждения
+не требуют и работают как раньше.
+
+```mermaid
+sequenceDiagram
+    participant B as Браузер панели
+    participant AD as admin
+    participant R as Redis
+    participant BOT as бот Telegram
+    participant A as Тот, кто выдаёт
+    participant RO as roles
+
+    B->>AD: POST /api/v1/admin/roles/grant { цель, role: admin }
+    AD->>RO: право roles.assign, выдача не себе
+    AD->>R: SET admin:role-confirm:<запрос> EX 600<br/>кто выдаёт, кому, какую роль
+    AD-->>B: { granted: false, confirm: { ссылка, срок } }
+    B->>A: «Открыть бота»
+    A->>BOT: /start role-<запрос> (личка)
+    BOT->>AD: prompt — Telegram ID нажавшего = открывшего?
+    BOT->>A: кому и какую роль — «Выдать» / «Отмена»
+    A->>BOT: «Выдать»
+    BOT->>AD: confirm — от Telegram ID нажавшего
+    AD->>R: GETDEL — запрос забирается один раз,<br/>чужому возвращается с остатком срока
+    AD->>RO: grant — права проверяются заново
+    RO->>RO: роль, аудит roles.assign
+    AD-->>BOT: granted / already / no_right
+    BOT->>A: итог в том же сообщении
+    B->>AD: «Готово» — список ролей перечитывается
+```
+
 ### 4.18 Рассылка из панели (этап 4, реализовано)
 
 Базовые рассылки (`35-stage4-plan.md`, WP17; `29-admin-panel.md` §7). Одна

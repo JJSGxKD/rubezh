@@ -3,8 +3,8 @@ id: T-0022
 title: Лимиты частоты на маршрутах игрока, где их не было
 epic: E4
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5
 size: M
 depends_on: [T-0021]
 zones:
