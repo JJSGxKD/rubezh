@@ -190,13 +190,10 @@ function snapshotLines(snapshot: SnapshotTotals): string[] {
 
 /** Вывод `--plan`: сначала стираемые модели в порядке плана, затем оставляемые по алфавиту. */
 export function formatPlan(counts: WipeCounts, today: string): string[] {
-  const kept = Object.entries(WIPE_PLAN)
-    .filter(([, decision]) => decision.action === "keep")
-    .map(([model]) => model)
-    .sort();
+  const kept = MODELS.filter((model) => WIPE_PLAN[model].action === "keep").sort();
   const lines = ["План вайпа — строки по моделям:"];
   for (const model of WIPE_ORDER) lines.push(`стереть  ${model}  ${grouped(counts.rows[model])}`);
-  for (const model of kept) lines.push(`оставить  ${model}  ${grouped(counts.rows[model as Prisma.ModelName])}`);
+  for (const model of kept) lines.push(`оставить  ${model}  ${grouped(counts.rows[model])}`);
   lines.push("", ...snapshotLines(counts.snapshot), "", `Ничего не изменено. Запуск: wipe --run --confirm ${today}`);
   return lines;
 }
