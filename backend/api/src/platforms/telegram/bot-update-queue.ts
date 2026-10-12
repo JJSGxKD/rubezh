@@ -22,8 +22,10 @@ import { updateSchema, type TelegramUpdate } from "./telegram-bot-api.js";
  *   безопасен: запись оплаты идемпотентна по id оплаты, второй ответ на
  *   предварительную проверку Telegram не примет, приветствие отсекает
  *   двойное нажатие своим окном;
- * - оплата идёт с приоритетом: предварительную проверку надо ответить за
- *   десять секунд.
+ * - приоритет получают все задания: оплата — выше, обычные — ниже.
+ *   Предварительную проверку надо ответить за десять секунд, а задание без
+ *   приоритета BullMQ берёт раньше любого приоритетного: оставь обычные без
+ *   него, и оплата встала бы за всеми `/start`.
  */
 
 const QUEUE_NAME = "bot-updates";
@@ -32,6 +34,8 @@ const ENQUEUE_TIMEOUT_MS = 2_000;
 const JOB_OPTIONS = { attempts: 5, backoff: { type: "exponential", delay: 5_000, jitter: 0.5 }, removeOnComplete: { age: 3600 }, removeOnFail: { age: 86_400 } } as const;
 /** Оплата ждёт ответа 10 секунд — её задания вперёд остальных. */
 const URGENT_PRIORITY = 1;
+/** Приоритет и у обычных: задание без приоритета BullMQ берёт раньше любого приоритетного. */
+const ORDINARY_PRIORITY = 2;
 const WORKER_CONCURRENCY = 8;
 
 /**
@@ -89,7 +93,8 @@ export class BotUpdateQueue implements OnApplicationBootstrap, OnModuleDestroy {
    */
   async enqueue(update: TelegramUpdate): Promise<void> {
     if (this.queue === null) throw new Error("Очередь обновлений бота не запущена");
-    const options = { ...JOB_OPTIONS, jobId: `update-${String(update.update_id)}`, ...(isUrgent(update) ? { priority: URGENT_PRIORITY } : {}) };
+    const priority = isUrgent(update) ? URGENT_PRIORITY : ORDINARY_PRIORITY;
+    const options = { ...JOB_OPTIONS, jobId: `update-${String(update.update_id)}`, priority };
     await withTimeout(this.queue.add("update", update, options), ENQUEUE_TIMEOUT_MS, "очередь обновлений бота");
   }
 
