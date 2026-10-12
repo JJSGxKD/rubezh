@@ -229,10 +229,9 @@ export const SETTINGS = {
     fallback: false,
   } satisfies SettingDefinition<boolean>,
   /**
-   * Частота межстраничной (docs/35-stage4-plan.md WP12, часть 10, О18):
-   * когда её показывать, решает политика площадки
-   * (`ads/interstitial-policy.ts`), а как часто — эти числа. Рабочие числа:
-   * их уточнит выкат на долю игроков.
+   * Порог против накрутки: отчёт о досмотре, пришедший раньше срока,
+   * не засчитываем. Боевое значение задаётся только в панели — в
+   * репозиторий оно не попадает.
    */
   adsSdkMinViewSec: integer(
     "ads.sdk-min-view-sec",
@@ -242,6 +241,12 @@ export const SETTINGS = {
     { min: 0, max: 60, unit: ["секунда", "секунды", "секунд"] },
     0,
   ),
+  /**
+   * Частота межстраничной (docs/35-stage4-plan.md WP12, часть 10, О18):
+   * когда её показывать, решает политика площадки
+   * (`ads/interstitial-policy.ts`), а как часто — эти числа. Рабочие числа:
+   * их уточнит выкат на долю игроков.
+   */
   interstitialEveryRuns: integer(
     "ads.interstitial.every-runs",
     ADS_GROUP,
