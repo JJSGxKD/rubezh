@@ -4,6 +4,7 @@ import {
   CONNECTION_FAILURE_WINDOW_MS,
   INITIAL_CONNECTION,
   nextConnection,
+  reportBrowserOffline,
   reportReachability,
   resetConnectionForTests,
   useConnection,
@@ -57,15 +58,45 @@ describe("переходы статуса связи", () => {
 
   it("ответ сервера возвращает связь и сбрасывает счётчик сбоев", () => {
     const offline = after(INITIAL_CONNECTION, { kind: "browser_offline", at: T0 });
-    const back = nextConnection({ ...offline, checking: true }, { kind: "reachable", at: T0 + 5_000 });
+    const back = nextConnection({ ...offline, checking: true }, { kind: "reachable", at: T0 + 5_000, sentAt: T0 + 4_000 });
     expect(back).toEqual(INITIAL_CONNECTION);
     // Сбой после возвращения считается с нуля.
     expect(after(back, { kind: "fail", at: T0 + 6_000 }).status).toBe("online");
   });
 
   it("между сбоями ответ сервера сбрасывает счётчик", () => {
-    const state = after(INITIAL_CONNECTION, { kind: "fail", at: T0 }, { kind: "reachable", at: T0 + 1_000 }, { kind: "fail", at: T0 + 2_000 });
+    const state = after(INITIAL_CONNECTION, { kind: "fail", at: T0 }, { kind: "reachable", at: T0 + 1_000, sentAt: T0 + 500 }, { kind: "fail", at: T0 + 2_000 });
     expect(state.status).toBe("online");
+  });
+
+  it("запрос ушёл до обрыва: ответ с sentAt не позже события offline связь не возвращает", () => {
+    const offline = after(INITIAL_CONNECTION, { kind: "browser_offline", at: T0 });
+    // Раньше события и равный ему — запрос ушёл до обрыва, ответ опоздал.
+    expect(nextConnection(offline, { kind: "reachable", at: T0 + 100, sentAt: T0 - 500 })).toEqual(offline);
+    expect(nextConnection(offline, { kind: "reachable", at: T0 + 100, sentAt: T0 })).toEqual(offline);
+    // Позже события — запрос ушёл уже в обрыв и дошёл: связь есть.
+    expect(nextConnection(offline, { kind: "reachable", at: T0 + 100, sentAt: T0 + 1 }).status).toBe("online");
+  });
+
+  it("опоздавший ответ не гасит плашку и тогда, когда связи уже нет по двум сбоям", () => {
+    const state = after(INITIAL_CONNECTION, { kind: "fail", at: T0 }, { kind: "browser_offline", at: T0 + 1_000 }, { kind: "fail", at: T0 + 2_000 });
+    expect(state.status).toBe("offline");
+    expect(nextConnection(state, { kind: "reachable", at: T0 + 3_000, sentAt: T0 + 500 })).toEqual(state);
+  });
+
+  it("событие offline в уже оффлайне время обновляет: поздний ответ всё равно опоздал", () => {
+    const first = after(INITIAL_CONNECTION, { kind: "browser_offline", at: T0 });
+    const second = nextConnection(first, { kind: "browser_offline", at: T0 + 10_000 });
+    expect(second.lastBrowserOfflineAt).toBe(T0 + 10_000);
+    expect(second.since).toBe(T0);
+    expect(nextConnection(second, { kind: "reachable", at: T0 + 11_000, sentAt: T0 + 5_000 })).toEqual(second);
+  });
+
+  it("после двух сбоев без события браузера ответ, пришедший позже, связь возвращает", () => {
+    const state = after(INITIAL_CONNECTION, { kind: "fail", at: T0 }, { kind: "fail", at: T0 + 1_000 });
+    expect(state.status).toBe("offline");
+    // sentAt раньше сбоев: сервер ответил уже после них — значит, он жив.
+    expect(nextConnection(state, { kind: "reachable", at: T0 + 5_000, sentAt: T0 - 100 })).toEqual(INITIAL_CONNECTION);
   });
 
   it("событие браузера online статус сам не меняет", () => {
@@ -170,6 +201,40 @@ describe("исход запроса игрока", () => {
 
   it("успешный ответ — связь есть", async () => {
     expect(await firstFailAfter(async () => answer(200, { data: { n: 1 } }))).toBeNull();
+  });
+
+  it("запрос ушёл, потом событие offline, потом ответ 200 — статус остаётся offline", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_000_000);
+      let answerLate: (response: Response) => void = () => undefined;
+      sessionStub.fetch.mockImplementationOnce(() => new Promise<Response | null>((resolve) => (answerLate = resolve)));
+      const pending = get();
+      await vi.advanceTimersByTimeAsync(0);
+      vi.setSystemTime(1_002_000);
+      reportBrowserOffline();
+      expect(useConnection.getState().status).toBe("offline");
+
+      answerLate(answer(200, { data: { n: 1 } }));
+      expect(await pending).toEqual({ ok: true, data: { n: 1 } });
+      expect(useConnection.getState().status).toBe("offline");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("запрос ушёл уже после события offline — ответ связь возвращает", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_000_000);
+      reportBrowserOffline();
+      vi.setSystemTime(1_005_000);
+      sessionStub.fetch.mockResolvedValueOnce(answer(200, { data: { n: 1 } }));
+      await get();
+      expect(useConnection.getState().status).toBe("online");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("нет сессии — запрос не уходил, связь не судится", async () => {
