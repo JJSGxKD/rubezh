@@ -27,6 +27,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
+version: v0.9
 ---
 
 # T-0066. Карточка партнёра — TG id, статус, страна, валюта и способ выплаты, процент

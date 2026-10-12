@@ -33,6 +33,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
+version: v0.9
 ---
 
 # T-0067. Ссылки партнёра — ссылка кампании с владельцем-партнёром, привязка игрока по первому входу

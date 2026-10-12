@@ -28,6 +28,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
+version: v0.10
 ---
 
 # T-0063. CoinMarketCap — новый источник курсов; необязательные ключи tonapi и erapi

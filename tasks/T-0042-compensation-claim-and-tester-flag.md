@@ -38,6 +38,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
+version: v0.10
 ---
 
 # T-0042. Компенсация после вайпа — выдача по кнопке и признак «Тестер» в ответах

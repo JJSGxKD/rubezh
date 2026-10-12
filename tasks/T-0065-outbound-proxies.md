@@ -37,6 +37,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
+version: v0.10
 ---
 
 # T-0065. Прокси для исходящих запросов — список в панели, перебор после неудачи напрямую
