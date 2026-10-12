@@ -171,7 +171,6 @@ function contextOf(request: unknown, client: LoginClient | null, reason: LoginCo
   };
 }
 
-
 function parse<T>(read: () => T, message: string): T {
   try {
     return read();
