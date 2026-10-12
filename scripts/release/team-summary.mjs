@@ -297,7 +297,8 @@ export function pullRequestForPush(sha, pullRequests) {
   return pullRequests.find((pr) => pr.merged_at && pr.merge_commit_sha === sha) ?? null;
 }
 
-async function send(token, message) {
+/** Сообщение в чат через Bot API: `target` — из `parseChatTarget`, `parseMode` — "HTML" или `null` для простого текста. */
+export async function sendTelegramMessage(token, target, text, { parseMode = "HTML" } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
@@ -305,10 +306,10 @@ async function send(token, message) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        chat_id: message.target.chatId,
-        ...(message.target.threadId === null ? {} : { message_thread_id: message.target.threadId }),
-        text: message.text,
-        parse_mode: "HTML",
+        chat_id: target.chatId,
+        ...(target.threadId === null ? {} : { message_thread_id: target.threadId }),
+        text,
+        ...(parseMode === null ? {} : { parse_mode: parseMode }),
         link_preview_options: { is_disabled: true },
       }),
       signal: controller.signal,
@@ -319,6 +320,10 @@ async function send(token, message) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function send(token, message) {
+  await sendTelegramMessage(token, message.target, message.text);
 }
 
 async function main() {

@@ -51,6 +51,16 @@ export interface StoredPeriod {
   created: boolean;
 }
 
+/** Что осталось от периода после возврата (tasks/T-0023). */
+export interface CutPeriod {
+  /** подписка периода: её продление выключается */
+  subscriptionId: string;
+  /** сколько убрано, секунд; 0 — ничего (остаток использован или период уже обрезан) */
+  removedSec: number;
+  /** конец VIP после отзыва — самый поздний конец периода аккаунта */
+  until: Date | null;
+}
+
 export const VIP_REPOSITORY = Symbol("VIP_REPOSITORY");
 
 export interface VipRepository {
@@ -72,6 +82,14 @@ export interface VipRepository {
   setRenewal(subscriptionId: string, renewal: VipRenewal, cancelledBy: VipCanceller | null, at: Date): Promise<"updated" | "unchanged" | "missing">;
   /** Отметить самоцветы суток `day`; `false` — их уже забрали */
   claimDaily(accountId: string, day: string, at: Date): Promise<boolean>;
+  /**
+   * Убрать неиспользованный остаток периода оплаты `purchaseId` к моменту
+   * `at`: конец периода — не позже `max(начало + 1 мс, at)`, а периоды
+   * аккаунта после него сдвигаются на убранное время. `null` — периода нет.
+   * Повтор даёт `removedSec: 0`. Необязателен только ради подмен VIP в тестах,
+   * которым отзыв не нужен; в базе он есть всегда.
+   */
+  cutPeriod?(purchaseId: string, at: Date): Promise<CutPeriod | null>;
 }
 
 /** Сколько подписок аккаунта читать: больше двух бывает, только если игрок годами подписывается заново. */
@@ -86,6 +104,9 @@ const subscriptionSchema = z.object({
   until: z.date().nullable(),
 });
 const periodSchema = z.object({ starts_at: z.date(), ends_at: z.date() });
+const cutHeadSchema = z.object({ account_id: z.uuid() });
+const cutRowSchema = z.object({ subscription_id: z.uuid(), ends_at: z.date(), keep_until: z.date() });
+const untilSchema = z.object({ until: z.date().nullable() });
 
 @Injectable()
 export class PrismaVipRepository implements VipRepository {
@@ -148,6 +169,38 @@ export class PrismaVipRepository implements VipRepository {
         RETURNING starts_at, ends_at`;
       const period = periodSchema.parse(inserted);
       return { startsAt: period.starts_at, endsAt: period.ends_at, created: true };
+    });
+  }
+
+  async cutPeriod(purchaseId: string, at: Date): Promise<CutPeriod | null> {
+    return await this.prisma.$transaction(async (tx) => {
+      const [head] = await tx.$queryRaw<unknown[]>`SELECT account_id::text AS account_id FROM vip_period WHERE purchase_id = ${purchaseId}::uuid`;
+      if (head === undefined) return null;
+      const { account_id: accountId } = cutHeadSchema.parse(head);
+      // Тот же замок, что у `addPeriod`: цепочка периодов игрока меняется по одному.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`vip:${accountId}`}))`;
+      // Период читается заново под замком: пока ждали, его могли обрезать или сдвинуть.
+      // Меньше миллисекунды остаться не может: период нулевой длины база не примет
+      // (`vip_period_span_check`), поэтому ещё не начавшийся период сжимается до неё.
+      const [found] = await tx.$queryRaw<unknown[]>`
+        SELECT subscription_id::text AS subscription_id, ends_at, GREATEST(${at}::timestamptz, starts_at + interval '1 millisecond') AS keep_until
+        FROM vip_period WHERE purchase_id = ${purchaseId}::uuid`;
+      if (found === undefined) return null;
+      const period = cutRowSchema.parse(found);
+
+      // Миллисекунды: колонки хранят их с точностью до миллисекунды, и сумма не расходится.
+      const cutMs = Math.max(0, period.ends_at.getTime() - period.keep_until.getTime());
+      if (cutMs > 0) {
+        await tx.$executeRaw`UPDATE vip_period SET ends_at = ${period.keep_until}::timestamptz WHERE purchase_id = ${purchaseId}::uuid`;
+        // Следующие периоды цепочки встают на освободившееся место. Повтор сюда
+        // не доходит: у обрезанного периода `cutMs` уже 0.
+        await tx.$executeRaw`
+          UPDATE vip_period
+          SET starts_at = starts_at - ${cutMs}::float8 * interval '1 millisecond', ends_at = ends_at - ${cutMs}::float8 * interval '1 millisecond'
+          WHERE account_id = ${accountId}::uuid AND purchase_id <> ${purchaseId}::uuid AND starts_at >= ${period.ends_at}::timestamptz`;
+      }
+      const [latest] = await tx.$queryRaw<unknown[]>`SELECT max(ends_at) AS until FROM vip_period WHERE account_id = ${accountId}::uuid`;
+      return { subscriptionId: period.subscription_id, removedSec: Math.round(cutMs / 1000), until: untilSchema.parse(latest).until };
     });
   }
 
