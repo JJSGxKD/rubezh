@@ -100,7 +100,8 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       <Button size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
         {t("run.death.again")}
       </Button>
-      <div className="grid grid-cols-2 gap-2">
+      {/* До 360 px подписи пары не помещаются в одну строку при штатных полях и шрифте. */}
+      <div className="grid grid-cols-2 gap-2 max-[22.5rem]:[&>button]:px-3 max-[22.5rem]:[&>button]:text-sm">
         <Button variant="secondary" block onClick={props.onMenu}>
           {t("run.death.home")}
         </Button>
