@@ -23,6 +23,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/screens/shop.html
+version: v0.9
 ---
 
 # T-0046. Магазин в облике «Сумеречный рубеж» — по макету

@@ -17,6 +17,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
+version: v0.8
 ---
 
 # T-0008. Свечение кнопок и значков — позади, а не поверх
