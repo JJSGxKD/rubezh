@@ -7,7 +7,7 @@ import { formatNumber, t } from "../../i18n";
 import { copyText } from "../../state/clipboard";
 import { friendInviteUrl, type FriendsApi, type FriendsView } from "../../state/friends-api";
 import { track, useShell } from "../../state/shell";
-import { bonusTrack } from "./friends-rules";
+import { bonusTrack, coinIconsNeedRoom } from "./friends-rules";
 
 /**
  * Части экрана друзей (docs/35-stage4-plan.md §3.8, tasks/T-0048): приглашение
@@ -38,6 +38,7 @@ export function BonusTrack(props: BonusProps): ReactNode {
   if (bonus.steps.length === 0) return null;
   const last = bonus.steps.length - 1;
   const { fill } = bonusTrack(bonus.qualified, bonus.steps);
+  const iconsNeedRoom = coinIconsNeedRoom(bonus.steps);
   const at = (index: number): string => `${last === 0 ? 0 : (index / last) * 100}%`;
   return (
     <div className="mt-3">
@@ -63,8 +64,8 @@ export function BonusTrack(props: BonusProps): ReactNode {
         ))}
       </div>
       {/* Первая подпись прижата влево, последняя — вправо: иначе они выходят за край экрана.
-          На узкой полосе значки монет не умещаются рядом с четырёхзначными числами и налезают на соседей —
-          там остаются одни числа: что это монеты, говорит кнопка «Забрать N монет». */}
+          Значок монеты — всегда, пока суммы короче четырёх цифр (`coinIconsNeedRoom`). От 1 000 значок рядом с
+          соседней суммой на самой узкой полосе (экран 320 px) налезает на неё: там он прячется, остаются одни числа. */}
       <div className="@container relative mx-2.5 mt-3.5 h-4">
         {bonus.steps.map((step, index) => (
           <span
@@ -74,7 +75,7 @@ export function BonusTrack(props: BonusProps): ReactNode {
               index === 0 ? "left-0" : index === last ? "right-0" : "-translate-x-1/2"
             }`}
           >
-            <span className="hidden @min-[19rem]:inline-flex">
+            <span className={iconsNeedRoom ? "hidden @min-[19rem]:inline-flex" : "inline-flex"}>
               <CoinIcon size={12} />
             </span>
             {formatNumber(step.coins)}

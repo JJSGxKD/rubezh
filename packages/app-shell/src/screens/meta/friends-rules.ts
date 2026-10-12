@@ -41,3 +41,12 @@ export function bonusTrack(qualified: number, steps: readonly { friends: number 
 export function friendsLayout(friendsCount: number): "invite-first" | "list-first" {
   return friendsCount === 0 ? "invite-first" : "list-first";
 }
+
+/**
+ * Нужно ли значкам монет место: четырёхзначная сумма шага (1 000 и больше) с
+ * значком не умещается рядом с соседней на самой узкой ширине и налезает на
+ * неё. Суммы короче — значок помещается всюду и показывается всегда.
+ */
+export function coinIconsNeedRoom(steps: readonly { coins: number }[]): boolean {
+  return steps.some((step) => step.coins >= 1_000);
+}
