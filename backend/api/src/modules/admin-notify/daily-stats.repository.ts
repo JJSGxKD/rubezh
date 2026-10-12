@@ -22,13 +22,17 @@ export interface DayPoint {
   finishedRuns: number;
   /** только настоящие звёзды, оплаченные в эти сутки */
   stars: number;
+  /** живые оплаты за сутки — их число, а не сумма */
+  purchases: number;
+  /** досмотренные показы рекламы за сутки */
+  adsCompleted: number;
 }
 
 export interface DailyStatsRepository {
   day(window: DayWindow): Promise<DayStats>;
   /**
    * Главные числа по московским суткам за `[from, to)` — для графика в
-   * панели: четыре запроса на весь период, а не пять на каждые сутки.
+   * панели: шесть запросов на весь период, а не по шесть на каждые сутки.
    * Сутки без событий — нулями: провал на графике должен быть виден.
    */
   series(from: Date, to: Date): Promise<DayPoint[]>;
@@ -113,7 +117,7 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
 
   async series(from: Date, to: Date): Promise<DayPoint[]> {
     // Сутки — по Москве, как у отчёта в чат: `AT TIME ZONE` не зависит от пояса соединения.
-    const [accounts, active, runs, stars] = await Promise.all([
+    const [accounts, active, runs, stars, purchases, ads] = await Promise.all([
       this.prisma.$queryRaw`
         SELECT to_char(created_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
         FROM account WHERE created_at >= ${from} AND created_at < ${to} GROUP BY 1`,
@@ -126,12 +130,26 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
       this.prisma.$queryRaw`
         SELECT to_char(paid_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, coalesce(sum(charged_stars), 0) AS n
         FROM purchase WHERE mode = 'live' AND paid_at >= ${from} AND paid_at < ${to} GROUP BY 1`,
+      this.prisma.$queryRaw`
+        SELECT to_char(paid_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
+        FROM purchase WHERE mode = 'live' AND paid_at >= ${from} AND paid_at < ${to} GROUP BY 1`,
+      this.prisma.$queryRaw`
+        SELECT to_char(completed_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
+        FROM ad_session WHERE completed_at >= ${from} AND completed_at < ${to} GROUP BY 1`,
     ]);
     const byDay = (rows: unknown) => new Map(pointSchema.parse(rows).map((row) => [row.day, row.n]));
-    const [newAccounts, activeByDay, runsByDay, starsByDay] = [byDay(accounts), byDay(active), byDay(runs), byDay(stars)];
+    const [newAccounts, activeByDay, runsByDay, starsByDay, purchasesByDay, adsByDay] = [byDay(accounts), byDay(active), byDay(runs), byDay(stars), byDay(purchases), byDay(ads)];
     const points: DayPoint[] = [];
     for (let day = teamDay(from.getTime()), last = teamDay(to.getTime() - 1); day <= last; day = nextDay(day)) {
-      points.push({ day, newAccounts: newAccounts.get(day) ?? 0, active: activeByDay.get(day) ?? 0, finishedRuns: runsByDay.get(day) ?? 0, stars: starsByDay.get(day) ?? 0 });
+      points.push({
+        day,
+        newAccounts: newAccounts.get(day) ?? 0,
+        active: activeByDay.get(day) ?? 0,
+        finishedRuns: runsByDay.get(day) ?? 0,
+        stars: starsByDay.get(day) ?? 0,
+        purchases: purchasesByDay.get(day) ?? 0,
+        adsCompleted: adsByDay.get(day) ?? 0,
+      });
     }
     return points;
   }
