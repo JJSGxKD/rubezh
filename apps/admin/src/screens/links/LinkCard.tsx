@@ -3,15 +3,24 @@ import { api } from "../../services";
 import {
   conversion,
   conversionState,
+  DIRECT_HINT,
+  DIRECT_UNAVAILABLE,
   fetchConversions,
   GOAL_TITLES,
   GOALS,
   goalCounts,
+  LINK_TARGETS,
+  NETWORK_NO_DIRECT,
   NETWORK_TITLES,
   resendConversion,
+  retargetLink,
+  TARGET_HELP,
+  TARGET_HINTS,
+  TARGET_TITLES,
   type Conversion,
   type ConversionSummary,
   type LinkRow,
+  type LinkTarget,
 } from "../../api/links";
 import type { ApiError } from "../../api/client";
 import { formatDateTime, formatNumber } from "../../format";
@@ -19,13 +28,14 @@ import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
-import { Badge, Button, DataTable, ErrorNotice, Help, KeyValue, Loading, Notice } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Help, KeyValue, Loading, Notice, Select } from "../../ui/kit";
 import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { TokenNotice } from "./TokenNotice";
 
 /**
- * Карточка ссылки. У обычной — адрес и цифры. У ссылки сети главное —
+ * Карточка ссылки. У обычной — адрес переходника, прямая ссылка без него и
+ * цифры; цель (Mini App, бот, лендинг) меняется здесь же. У ссылки сети главное —
  * адрес с метками для кабинета и путь от клика до конверсии: что вставить в
  * кабинет, что считается регистрацией и покупкой, что ушло в сеть и что нет.
  */
@@ -68,7 +78,14 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
   return (
     <div className="flex flex-col gap-5">
       {link.network === null || link.networkUrl === null ? (
-        <AddressBox label="Адрес ссылки" url={link.url} primary />
+        <section className="flex flex-col gap-3">
+          <AddressBox label="Адрес ссылки" url={link.url} primary />
+          {link.directUrl === null ? (
+            <p className="text-xs text-text-muted">{DIRECT_UNAVAILABLE}</p>
+          ) : (
+            <AddressBox label="Прямая ссылка" url={link.directUrl} hint={DIRECT_HINT} />
+          )}
+        </section>
       ) : (
         <section className="flex flex-col gap-3">
           <AddressBox label={`Адрес для кабинета ${NETWORK_TITLES[link.network]}`} url={link.networkUrl} primary />
@@ -88,13 +105,16 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
           </ol>
           {adsgramToken ? null : <TokenNotice />}
           <AddressBox label="Адрес без меток — для проверки" url={link.url} hint="Переход по нему засчитается кликом, но в сеть не уйдёт: сеть не знает такого клика." />
+          <p className="text-xs text-text-muted">{NETWORK_NO_DIRECT}</p>
         </section>
       )}
 
       <KeyValue
         items={[
+          ["Куда ведёт", <TargetEditor key="target" link={link} onChanged={onChanged} />, TARGET_HELP],
           ["Кликов", `${formatNumber(link.clicks)}, за 30 дней — ${formatNumber(link.clicks30d)}`],
-          ["Запусков", formatNumber(link.launches), HELP.links.launches],
+          ["Запусков через переходник", formatNumber(link.launches), HELP.links.launches],
+          ["Запусков по прямой ссылке", formatNumber(link.directLaunches), DIRECT_HINT],
           ["Клик → запуск", rate === null ? "—" : `${rate}%`, HELP.links.conversion],
         ]}
       />
@@ -106,6 +126,42 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
         </>
       )}
     </div>
+  );
+}
+
+/** Цель ссылки выбором: сменилась — прошлые клики остаются, новые идут по-новому. */
+function TargetEditor({ link, onChanged }: { link: LinkRow; onChanged: () => void }) {
+  const [saving, setSaving] = useState(false);
+
+  const change = async (target: LinkTarget) => {
+    if (target === link.target) return;
+    setSaving(true);
+    const result = await retargetLink(api, link.code, target);
+    setSaving(false);
+    if (!result.ok) return toast.error(result.error.message);
+    toast.success(`Теперь ссылка ведёт: ${TARGET_TITLES[target]}`);
+    onChanged();
+  };
+
+  return (
+    <span className="flex flex-col items-start gap-1">
+      <Select
+        aria-label="Куда ведёт ссылка"
+        value={link.target}
+        disabled={saving}
+        onChange={(event) => {
+          const next = LINK_TARGETS.find((target) => target === event.target.value);
+          if (next !== undefined) void change(next);
+        }}
+      >
+        {LINK_TARGETS.map((target) => (
+          <option key={target} value={target}>
+            {TARGET_TITLES[target]}
+          </option>
+        ))}
+      </Select>
+      <span className="text-xs text-text-muted">{TARGET_HINTS[link.target]}</span>
+    </span>
   );
 }
 
