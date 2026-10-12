@@ -383,7 +383,9 @@ export function DailyView(props: { face: DailyFace; size: WidgetSize; now: numbe
           face={icon}
           label={label("daily", size)}
           big={face.next === null ? t("widget.daily.tomorrow") : <Reward amount={face.next} />}
-          sub={t("widget.daily.tomorrowIn", { time: inTime(face.untilMs - props.now) })}
+          // В плитке «завтра, через 23 ч 59 мин» не помещается в строку на 320 px, а две строки — в её высоту:
+          // «завтра» уже сказано наградой следующего дня, остаётся «через N», как у колеса.
+          sub={size === "tile" ? inTime(face.untilMs - props.now) : t("widget.daily.tomorrowIn", { time: inTime(face.untilMs - props.now) })}
         />
       );
     case "idle":
