@@ -1,10 +1,11 @@
 import { isTMA, retrieveLaunchParams, retrieveRawInitData } from "@tma.js/sdk";
+import { openLinkWith, telegramLinkSdk, type LinkSdk } from "./links";
 
 /**
- * `window.Telegram.WebApp` для сторонних SDK — аналитики Graspil и ей
- * подобных (docs/22-analytics-and-metrics.md §9). Они написаны под
- * официальный `telegram-web-app.js` и читают данные запуска из этого
- * объекта, а у нас SDK `@tma.js/sdk`, и объекта нет.
+ * `window.Telegram.WebApp` для сторонних SDK — аналитики Graspil, учёта
+ * аудитории Taddy и им подобных (docs/22-analytics-and-metrics.md §9). Они
+ * написаны под официальный `telegram-web-app.js` и читают данные запуска из
+ * этого объекта, а у нас SDK `@tma.js/sdk`, и объекта нет.
  *
  * Прослойка собирает объект из тех же данных запуска, что читает адаптер, —
  * без второго SDK и без загрузки скрипта с telegram.org (подход из
@@ -12,6 +13,11 @@ import { isTMA, retrieveLaunchParams, retrieveRawInitData } from "@tma.js/sdk";
  * типы вместо `any` и `@ts-ignore`, и прослойка **только для чтения** —
  * кнопки, закрытие и полноэкранный режим остаются за адаптером: два SDK,
  * управляющие одной кнопкой, спорили бы о её состоянии.
+ *
+ * Исключение — ссылки: у них нет состояния, о котором можно спорить. Taddy
+ * без `openLink` и `openTelegramLink` считает объект урезанным и грузит
+ * официальный скрипт с telegram.org — политика источников его не пускает, а
+ * пустила бы — он перехватил бы события Telegram у нашего SDK.
  */
 
 type Handler = () => void;
@@ -41,6 +47,8 @@ export interface TelegramWebAppCompat {
   BackButton: CompatButton;
   SettingsButton: CompatButton;
   isVersionAtLeast(version: string): boolean;
+  openLink(url: string): void;
+  openTelegramLink(url: string): void;
   onEvent(event: string, handler: Handler): void;
   offEvent(event: string, handler: Handler): void;
   ready(): void;
@@ -92,6 +100,7 @@ function buildWebApp(): TelegramWebAppCompat {
     BackButton: inertButton(),
     SettingsButton: inertButton(),
     isVersionAtLeast: (wanted) => compareVersions(version, wanted) >= 0,
+    ...compatLinks(telegramLinkSdk()),
     // События площадки чужому SDK не транслируются: подписку на них мы в
     // Graspil выключаем (`trackTgEvents: false`), а ложных событий лучше не
     // слать вовсе.
@@ -99,6 +108,19 @@ function buildWebApp(): TelegramWebAppCompat {
     offEvent: () => undefined,
     ready: () => undefined,
     expand: () => undefined,
+  };
+}
+
+/**
+ * Ссылки чужого SDK — тем же путём, что у адаптера (`links.ts`): канал
+ * Telegram — в клиенте, остальное — во встроенном браузере, без моста — окном
+ * браузера. `openTelegramLink` с чужой ссылкой официальный SDK отвергает, а
+ * здесь она просто откроется в браузере.
+ */
+export function compatLinks(sdk: LinkSdk): Pick<TelegramWebAppCompat, "openLink" | "openTelegramLink"> {
+  return {
+    openLink: (url) => openLinkWith(sdk, url),
+    openTelegramLink: (url) => openLinkWith(sdk, url),
   };
 }
 
