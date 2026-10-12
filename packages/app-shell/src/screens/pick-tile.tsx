@@ -20,6 +20,8 @@ export interface PickTileProps {
   locked?: boolean;
   /** буст не по карману или выбрано максимум — приглушён до 40% */
   disabled?: boolean;
+  /** у закрытого оружия — «Название. Откроется на N уровне»: диктор слышит, когда оно откроется */
+  ariaLabel?: string;
   onClick?: () => void;
 }
 
@@ -35,6 +37,7 @@ export function PickTile(props: PickTileProps): ReactNode {
     <button
       type="button"
       aria-pressed={props.selected}
+      aria-label={props.ariaLabel}
       aria-disabled={locked || disabled ? true : undefined}
       disabled={disabled}
       onClick={() => {

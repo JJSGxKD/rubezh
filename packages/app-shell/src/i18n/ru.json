@@ -76,7 +76,6 @@
   "time.hoursMinutes": "{hours} ч {minutes} мин",
   "time.minutes": "{minutes} мин",
   "mode.endless": "Бесконечный",
-  "mode.dev": "Забег разработчика",
   "dev.title": "Разработчик",
   "dev.setup": "Настроить режим разработчика",
   "dev.setup.clean": "Без читов — забег идёт в рейтинг как обычный",

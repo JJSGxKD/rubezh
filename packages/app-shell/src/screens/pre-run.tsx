@@ -238,6 +238,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
                         name={t(weapon.nameKey)}
                         selected={weapon.id === selectedId}
                         locked={!unlocked}
+                        {...(unlocked ? {} : { ariaLabel: `${t(weapon.nameKey)}. ${t("weapon.select.locked", { level: unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", weapon.id) ?? 1 })}` })}
                         {...(unlocked
                           ? { onClick: () => meta.rememberWeapon(weapon.id) }
                           : {
