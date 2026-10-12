@@ -1,5 +1,7 @@
 import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type KeyboardEvent, type MouseEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { ChevronRight } from "lucide-react";
 import type { ApiError } from "../api/client";
+import { useNarrow } from "./use-media";
 
 /**
  * Базовые компоненты панели (docs/29-admin-panel.md §4): десктоп, плотные
@@ -22,7 +24,7 @@ export function Button({ tone = "secondary", className = "", ...props }: ButtonH
     <button
       type="button"
       {...props}
-      className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_TONES[tone]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-10 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_TONES[tone]} ${className}`}
     />
   );
 }
@@ -198,10 +200,32 @@ export interface Column<T> {
   align?: "left" | "right";
   /** что значит колонка — значок «?» рядом с заголовком */
   help?: string;
+  /** главное поле карточки строки на телефоне; по умолчанию — первая колонка */
+  primary?: boolean;
+  /** не показывать колонку в карточке на телефоне */
+  phone?: "hide";
+}
+
+/**
+ * Раскладка карточки строки на телефоне (tasks/T-0049): главное поле крупно,
+ * остальные колонки — парами «название значение», колонки без заголовка
+ * (кнопки действий) — в углу карточки.
+ */
+export function phoneLayout<T>(columns: readonly Column<T>[]): { primary: Column<T>; pairs: Column<T>[]; actions: Column<T>[] } {
+  const primary = columns.find((column) => column.primary === true) ?? columns[0];
+  if (primary === undefined) throw new Error("В таблице нет колонок");
+  const rest = columns.filter((column) => column !== primary);
+  return {
+    primary,
+    pairs: rest.filter((column) => column.phone !== "hide" && column.title !== ""),
+    actions: rest.filter((column) => column.title === ""),
+  };
 }
 
 export function DataTable<T>({ columns, rows, rowKey, onRowClick, empty = "Пусто" }: { columns: Column<T>[]; rows: readonly T[]; rowKey: (row: T) => string; onRowClick?: (row: T) => void; empty?: string }) {
+  const narrow = useNarrow();
   if (rows.length === 0) return <p className="text-sm text-text-muted">{empty}</p>;
+  if (narrow) return <PhoneCards columns={columns} rows={rows} rowKey={rowKey} onRowClick={onRowClick} />;
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left text-sm">
@@ -226,10 +250,10 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, empty = "Пу�
             <tr
               key={rowKey(row)}
               onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}
-              className={`border-b border-border/60 ${onRowClick === undefined ? "" : "cursor-pointer hover:bg-surface-raised"}`}
+              className={`border-b border-border/60 ${onRowClick === undefined ? "" : "cursor-pointer hover:bg-surface-raised/50"}`}
             >
               {columns.map((column) => (
-                <td key={column.title} className={`px-2 py-1.5 align-top ${column.align === "right" ? "text-right" : ""}`}>
+                <td key={column.title} className={`px-2 py-1.5 align-top tabular-nums ${column.align === "right" ? "text-right" : ""}`}>
                   {column.render(row)}
                 </td>
               ))}
@@ -238,6 +262,44 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, empty = "Пу�
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Таблица на телефоне — список карточек: боковая прокрутка пальцем неудобна и прячет колонки. */
+function PhoneCards<T>({ columns, rows, rowKey, onRowClick }: { columns: readonly Column<T>[]; rows: readonly T[]; rowKey: (row: T) => string; onRowClick: ((row: T) => void) | undefined }) {
+  const { primary, pairs, actions } = phoneLayout(columns);
+  return (
+    <ul className="flex flex-col gap-2">
+      {rows.map((row) => (
+        <li
+          key={rowKey(row)}
+          onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}
+          className={`flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5 ${onRowClick === undefined ? "" : "cursor-pointer active:bg-surface-raised"}`}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div className="min-w-0 text-sm font-semibold">{primary.render(row)}</div>
+            {pairs.length === 0 ? null : (
+              <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                {pairs.map((column) => (
+                  <div key={column.title} className="flex min-w-0 gap-1.5">
+                    <dt className="text-text-muted">{column.title}</dt>
+                    <dd className="min-w-0 tabular-nums text-text">{column.render(row)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+          {actions.length === 0 ? null : (
+            <div className="flex shrink-0 items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+              {actions.map((column, index) => (
+                <span key={index}>{column.render(row)}</span>
+              ))}
+            </div>
+          )}
+          {onRowClick === undefined ? null : <ChevronRight size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-text-disabled" />}
+        </li>
+      ))}
+    </ul>
   );
 }
 
