@@ -44,6 +44,8 @@ describe("обратный отсчёт", () => {
     expect(formatCountdown(5 * HOUR + 12 * MINUTE)).toBe("5 ч 12 мин");
     expect(formatCountdown(HOUR)).toBe("1 ч");
     expect(formatCountdown(12 * MINUTE)).toBe("12 мин");
+    expect(formatCountdown(26 * HOUR)).toBe("1 д 2 ч");
+    expect(formatCountdown(DAY)).toBe("1 д");
   });
 
   it("округляет вверх и не показывает «0 мин» перед самым сбросом", () => {
