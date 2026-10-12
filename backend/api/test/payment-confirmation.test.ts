@@ -8,11 +8,12 @@ import { answerOf, decideCheckout, type PreCheckout } from "../src/modules/payme
 import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
-import { PaymentsHooks } from "../src/modules/payments/payments-hooks.js";
+import { PaymentsHooks, type ExternalRefund } from "../src/modules/payments/payments-hooks.js";
 import { PurchaseRevocation } from "../src/modules/payments/purchase-revocation.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
+import type { RestrictionRow } from "../src/modules/restrictions/restrictions.repository.js";
 import { ALLOWED_UPDATES, TelegramApiError, updateSchema, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { TelegramPaymentsHandler } from "../src/platforms/telegram/telegram-payments.handler.js";
 import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
@@ -150,6 +151,48 @@ describe("предварительная проверка оплаты", () => {
     it("текст отказа — для игрока: что случилось и что делать", () => {
       const decision = decideCheckout(view(vip(), false, false, true), query(vip()), NOW, true);
       expect(answerOf(decision)).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру." });
+    });
+  });
+
+  describe("покупки аккаунту закрыты (T-0024)", () => {
+    it("обычный счёт при закрытых покупках — отказ `purchases_closed`", () => {
+      const purchase = pending();
+      expect(decideCheckout(view(purchase), query(purchase), NOW, true, true)).toEqual({ ok: false, reason: "purchases_closed" });
+    });
+
+    it("счёт магазина и первая оплата VIP тоже закрыты", () => {
+      const shop = { ...vip(), product: "shop_item" as const, sku: "gems_60", priceStars: 50, chargedStars: 50 };
+      expect(decideCheckout(view(shop), query(shop), NOW, true, true)).toEqual({ ok: false, reason: "purchases_closed" });
+      expect(decideCheckout(view(vip()), query(vip()), NOW, true, true)).toEqual({ ok: false, reason: "purchases_closed" });
+    });
+
+    it("продление действующей подписки проходит: площадка спишет его в любом случае, а выключает его отзыв", () => {
+      const first = vip({ status: "paid", paidAt: new Date(NOW - 30 * 86_400_000), telegramChargeId: "charge-1" });
+      expect(decideCheckout(view(first), query(first), NOW, true, true)).toEqual({ ok: true });
+    });
+
+    it("без параметра — прежнее поведение: открытые покупки проходят", () => {
+      const purchase = pending();
+      expect(decideCheckout(view(purchase), query(purchase), NOW, true)).toEqual({ ok: true });
+      expect(decideCheckout(view(purchase), query(purchase), NOW, true, false)).toEqual({ ok: true });
+    });
+
+    it("отказ стоит после продления и перед «уже оплачено»", () => {
+      const paid = pending({ status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
+      expect(decideCheckout(view(paid), query(paid), NOW, true, true)).toEqual({ ok: false, reason: "purchases_closed" });
+      expect(decideCheckout(view(paid), query(paid), NOW, true, false)).toEqual({ ok: false, reason: "already_paid" });
+    });
+
+    it("раньше стоят: оплата выключена, счёта нет, чужой игрок", () => {
+      const purchase = pending();
+      expect(decideCheckout(view(purchase), query(purchase), NOW, false, true)).toEqual({ ok: false, reason: "disabled" });
+      expect(decideCheckout(null, query(purchase), NOW, true, true)).toEqual({ ok: false, reason: "unknown_invoice" });
+      expect(decideCheckout(view(purchase), query(purchase, { payerId: "42" }), NOW, true, true)).toEqual({ ok: false, reason: "foreign_user" });
+    });
+
+    it("текст отказа — для игрока: что случилось и что делать", () => {
+      const decision = decideCheckout(view(pending()), query(pending()), NOW, true, true);
+      expect(answerOf(decision)).toEqual({ ok: false, errorMessage: "Покупки для этого аккаунта закрыты — подробности в игре." });
     });
   });
 });
@@ -613,5 +656,303 @@ describe("внешний возврат забирает остаток поку
     confirmation = new PaymentConfirmation(config(), purchases, starsProviders(new FakeStarsApi()), switchesOf(config()), new PaymentsHooks(), revocation);
 
     await expect(confirmation.refunded("charge-1", NOW)).rejects.toThrow("кошелёк недоступен");
+  });
+});
+
+/** Строка действующего ограничения: сверка нужна лишь «есть ли», подробности сервису ограничений. */
+function closedRow(accountId: string): RestrictionRow {
+  return {
+    restrictionId: randomUUID(),
+    accountId,
+    kind: "purchases",
+    startsAt: new Date(NOW),
+    endsAt: null,
+    reason: "payment_refund",
+    comment: null,
+    notify: true,
+    imposedBy: null,
+    liftedAt: null,
+    liftedBy: null,
+    liftComment: null,
+    settledAt: null,
+  };
+}
+
+/** Ограничения для оплаты: «закрыто ли» и «закрыть» — подменой, которая помнит вызовы. */
+function restrictionsFake() {
+  const closed = new Set<string>();
+  const asked: { accountId: string; kind: string; at: Date }[] = [];
+  const imposed: { accountId: string; kind: string; reason: string; comment: string; at: Date }[] = [];
+  const state = { statusFailWith: null as Error | null, imposeFailWith: null as Error | null, statusHangs: false };
+  const gate = {
+    status: async (accountId: string, kind: string, at: Date = new Date()): Promise<RestrictionRow | null> => {
+      asked.push({ accountId, kind, at });
+      if (state.statusHangs) return await new Promise<never>(() => undefined);
+      if (state.statusFailWith !== null) throw state.statusFailWith;
+      return closed.has(accountId) ? closedRow(accountId) : null;
+    },
+  };
+  const system = {
+    imposeBySystem: async (accountId: string, kind: string, reason: string, comment: string, at: Date = new Date()): Promise<void> => {
+      if (state.imposeFailWith !== null) throw state.imposeFailWith;
+      imposed.push({ accountId, kind, reason, comment, at });
+      closed.add(accountId);
+    },
+  };
+  return { gate, system, closed, asked, imposed, state };
+}
+
+describe("предварительная проверка и закрытые покупки (T-0024)", () => {
+  let purchases: MemoryPurchasesRepository;
+  let api: FakeStarsApi;
+  let restrictions: ReturnType<typeof restrictionsFake>;
+  let confirmation: PaymentConfirmation;
+  let purchase: ContinuePurchase;
+
+  beforeEach(() => {
+    purchases = new MemoryPurchasesRepository();
+    api = new FakeStarsApi();
+    restrictions = restrictionsFake();
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(api), switchesOf(config()), new PaymentsHooks(), new PurchaseRevocation(), restrictions.gate as never, restrictions.system as never);
+    purchase = pending();
+    purchases.rows.set(purchase.purchaseId, purchase);
+    purchases.owners.set(purchase.accountId, String(PLAYER_ID));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("покупки закрыты — Telegram получает отказ с текстом для игрока, а не деньги", async () => {
+    restrictions.closed.add(purchase.accountId);
+
+    await expect(confirmation.answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: false, reason: "purchases_closed" });
+
+    expect(api.answers).toEqual([{ queryId: "q-1", answer: { ok: false, errorMessage: "Покупки для этого аккаунта закрыты — подробности в игре." } }]);
+  });
+
+  it("спрашивает про аккаунт покупки, вид «purchases» и момент своего вызова", async () => {
+    await confirmation.answerCheckout(query(purchase), NOW);
+
+    expect(restrictions.asked).toEqual([{ accountId: purchase.accountId, kind: "purchases", at: new Date(NOW) }]);
+    expect(api.answers[0]?.answer).toEqual({ ok: true });
+  });
+
+  it("закрыт другой аккаунт — этот платит", async () => {
+    restrictions.closed.add(randomUUID());
+
+    await expect(confirmation.answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: true });
+  });
+
+  it("продление действующей подписки проходит, даже когда покупки закрыты", async () => {
+    const first = { ...pending(), product: "vip" as const, runId: null, continueNo: null, elapsedSec: null, sku: "vip", priceStars: 700, chargedStars: 700, status: "paid" as const, paidAt: new Date(NOW - 86_400_000), telegramChargeId: "charge-1", fulfilledAt: new Date(NOW - 86_400_000) };
+    purchases.rows.set(first.purchaseId, first);
+    purchases.owners.set(first.accountId, String(PLAYER_ID));
+    restrictions.closed.add(first.accountId);
+
+    await expect(confirmation.answerCheckout(query(first, { queryId: "q-2" }), NOW)).resolves.toEqual({ ok: true });
+  });
+
+  it("ограничения не прочитались — отказ «попробуйте ещё раз», а не деньги вслепую", async () => {
+    restrictions.state.statusFailWith = new Error("redis недоступен");
+    const logged: string[] = [];
+    vi.spyOn(Logger.prototype, "error").mockImplementation((line: unknown) => void logged.push(String(JSON.parse(String(line)).event)));
+
+    await expect(confirmation.answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: false, reason: "unavailable" });
+
+    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуйте ещё раз") });
+    expect(logged).toContain("pre_checkout_failed");
+  });
+
+  it("ограничения не ответили за срок чтения — тот же отказ, Telegram не ждёт десять секунд", async () => {
+    vi.useFakeTimers();
+    restrictions.state.statusHangs = true;
+    vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+
+    const decision = confirmation.answerCheckout(query(purchase), NOW);
+    await vi.advanceTimersByTimeAsync(3_100);
+
+    await expect(decision).resolves.toEqual({ ok: false, reason: "unavailable" });
+  });
+
+  it("без сервиса ограничений (тесты, где его нет) проверка идёт как прежде", async () => {
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(api), switchesOf(config()));
+
+    await expect(confirmation.answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: true });
+  });
+});
+
+describe("внешний возврат закрывает покупки аккаунту (T-0024)", () => {
+  let purchases: MemoryPurchasesRepository;
+  let restrictions: ReturnType<typeof restrictionsFake>;
+  let hooks: PaymentsHooks;
+  let cards: ExternalRefund[];
+  let confirmation: PaymentConfirmation;
+  let logged: { level: string; event: string; fields: Record<string, unknown> }[];
+
+  function paidShopItem(patch: Partial<StoredPurchase> = {}): StoredPurchase {
+    const purchase: StoredPurchase = {
+      ...pending({ chargedStars: 50, priceStars: 50, status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" }),
+      product: "shop_item",
+      runId: null,
+      continueNo: null,
+      elapsedSec: null,
+      sku: "starter",
+      fulfilledAt: new Date(NOW),
+      ...patch,
+    };
+    purchases.rows.set(purchase.purchaseId, purchase);
+    return purchase;
+  }
+
+  function build(revocation = new PurchaseRevocation()): PaymentConfirmation {
+    return new PaymentConfirmation(config(), purchases, starsProviders(new FakeStarsApi()), switchesOf(config()), hooks, revocation, restrictions.gate as never, restrictions.system as never);
+  }
+
+  beforeEach(() => {
+    purchases = new MemoryPurchasesRepository();
+    restrictions = restrictionsFake();
+    hooks = new PaymentsHooks();
+    cards = [];
+    hooks.onExternalRefund("test", async (refund) => void cards.push(refund));
+    const revocation = new PurchaseRevocation();
+    revocation.register("shop_item", async () => ({ lines: ["gems: 120 из 150"] }));
+    confirmation = build(revocation);
+    logged = [];
+    for (const level of ["log", "warn", "error"] as const) {
+      vi.spyOn(Logger.prototype, level).mockImplementation((line: unknown) => {
+        const fields = JSON.parse(String(line)) as Record<string, unknown>;
+        logged.push({ level, event: String(fields.event), fields });
+      });
+    }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("внешний, первый раз: покупки закрыты системой, причина «Возврат оплаты», комментарий несёт покупку", async () => {
+    const purchase = paidShopItem();
+
+    await confirmation.refunded("charge-1", NOW + 60_000);
+
+    expect(restrictions.imposed).toEqual([
+      { accountId: purchase.accountId, kind: "purchases", reason: "payment_refund", comment: `Возврат звёзд за покупку ${purchase.purchaseId}`, at: new Date(NOW + 60_000) },
+    ]);
+  });
+
+  it("слушатель получает покупку, что забрано, долю возвратов аккаунта и момент возврата", async () => {
+    const purchase = paidShopItem();
+
+    await confirmation.refunded("charge-1", NOW + 60_000);
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ purchase: { purchaseId: purchase.purchaseId, accountId: purchase.accountId }, revoked: ["gems: 120 из 150"], stats: { paid: 1, refunded: 1 }, at: new Date(NOW + 60_000) });
+  });
+
+  it("закрытие идёт после отзыва остатка, а карточка — после закрытия", async () => {
+    paidShopItem();
+    const order: string[] = [];
+    const revocation = new PurchaseRevocation();
+    revocation.register("shop_item", async () => (order.push("отзыв"), { lines: [] }));
+    const original = restrictions.system.imposeBySystem;
+    restrictions.system.imposeBySystem = async (...args) => (order.push("закрытие"), await original(...args));
+    hooks.onExternalRefund("порядок", async () => void order.push("карточка"));
+    confirmation = build(revocation);
+
+    await confirmation.refunded("charge-1", NOW);
+
+    expect(order).toEqual(["отзыв", "закрытие", "карточка"]);
+  });
+
+  it("повтор обработки того же возврата: ни второго наложения, ни второй карточки — аккаунт уже закрыт", async () => {
+    paidShopItem();
+    await confirmation.refunded("charge-1", NOW + 60_000);
+
+    await confirmation.refunded("charge-1", NOW + 600_000);
+
+    expect(restrictions.imposed).toHaveLength(1);
+    expect(cards).toHaveLength(1);
+    expect(logged.filter((item) => item.event === "payment_refunded")).toHaveLength(1);
+  });
+
+  it("первая попытка упала на наложении — повтор закрывает покупки и шлёт карточку, а не пропускает их как «уже было»", async () => {
+    const purchase = paidShopItem();
+    restrictions.state.imposeFailWith = new Error("база недоступна");
+    await expect(confirmation.refunded("charge-1", NOW + 60_000)).rejects.toThrow("база недоступна");
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "refunded", refundReason: "external" });
+    expect(cards).toEqual([]);
+
+    restrictions.state.imposeFailWith = null;
+    await confirmation.refunded("charge-1", NOW + 120_000);
+
+    // Время — то, которым возврат отмечен впервые, как у отзыва остатка.
+    expect(restrictions.imposed).toEqual([expect.objectContaining({ accountId: purchase.accountId, at: new Date(NOW + 60_000) })]);
+    expect(cards).toHaveLength(1);
+    expect(logged.filter((item) => item.event === "payment_refunded")).toHaveLength(1);
+  });
+
+  it("наш возврат (недоставленный товар, лишняя оплата) ничего не закрывает и карточки не шлёт", async () => {
+    const undeliverable = paidShopItem();
+    await purchases.requestRefund(undeliverable.purchaseId, "undeliverable", new Date(NOW));
+    const extra = paidShopItem({ telegramChargeId: "charge-2" });
+    await purchases.requestRefund(extra.purchaseId, "unused", new Date(NOW));
+
+    await confirmation.refunded("charge-1", NOW + 60_000);
+    await confirmation.refunded("charge-2", NOW + 60_000);
+
+    expect(restrictions.imposed).toEqual([]);
+    expect(restrictions.asked).toEqual([]);
+    expect(cards).toEqual([]);
+  });
+
+  it("возврат без совпадения: ничего не закрыто", async () => {
+    paidShopItem();
+
+    await confirmation.refunded("charge-unknown", NOW + 60_000);
+
+    expect(restrictions.imposed).toEqual([]);
+    expect(cards).toEqual([]);
+  });
+
+  it("наложение бросило — refunded бросает: задание очереди оплаты повторит обработку", async () => {
+    paidShopItem();
+    restrictions.state.imposeFailWith = new Error("база недоступна");
+
+    await expect(confirmation.refunded("charge-1", NOW)).rejects.toThrow("база недоступна");
+  });
+
+  it("упавший слушатель карточки не мешает остальным и не роняет обработку", async () => {
+    paidShopItem();
+    hooks.onExternalRefund("сломанный", async () => Promise.reject(new Error("чат недоступен")));
+    const later: string[] = [];
+    hooks.onExternalRefund("после", async () => void later.push("получил"));
+
+    await expect(confirmation.refunded("charge-1", NOW)).resolves.toBeUndefined();
+
+    expect(later).toEqual(["получил"]);
+    expect(cards).toHaveLength(1);
+    expect(logged).toContainEqual(expect.objectContaining({ level: "error", event: "listener_failed", fields: expect.objectContaining({ listener: "сломанный" }) as Record<string, unknown> }));
+  });
+
+  it("второй шанс, возвращённый через Telegram, тоже закрывает покупки: схема «купил → вернул» не зависит от товара", async () => {
+    const second = pending({ status: "paid", paidAt: new Date(NOW), telegramChargeId: "charge-1" });
+    purchases.rows.set(second.purchaseId, second);
+
+    await confirmation.refunded("charge-1", NOW + 60_000);
+
+    expect(restrictions.imposed).toHaveLength(1);
+    expect(cards[0]?.revoked).toEqual(["ничего — товар не забирается"]);
+  });
+
+  it("без сервиса ограничений (тесты, где его нет) возврат только записывается, как до T-0024", async () => {
+    const purchase = paidShopItem();
+    confirmation = new PaymentConfirmation(config(), purchases, starsProviders(new FakeStarsApi()), switchesOf(config()), hooks);
+
+    await expect(confirmation.refunded("charge-1", NOW)).resolves.toBeUndefined();
+
+    expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "refunded" });
+    expect(restrictions.imposed).toEqual([]);
   });
 });
