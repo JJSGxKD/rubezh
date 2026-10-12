@@ -73,7 +73,7 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
     // Досмотренные показы: один в сутках, один — ровно за границей ряда (полночь после последних суток).
     const adSession = (accountId: string, completedAt: Date) =>
       prisma.adSession.create({
-        data: { sessionId: randomUUID().replaceAll("-", ""), accountId, place: "second_chance", networkKey: "test", success: "view", status: "completed", createdAt: completedAt, expiresAt: completedAt, completedAt },
+        data: { sessionId: randomUUID().replaceAll("-", ""), accountId, place: "second_chance", networkKey: "test", success: "view", status: "completed", createdAt: new Date(completedAt.getTime() - 60_000), expiresAt: new Date(completedAt.getTime() + 3_600_000), completedAt },
       });
     await adSession(anna, at("12:00"));
     await adSession(anna, new Date(dayWindow("2031-03-15").to.getTime()));
