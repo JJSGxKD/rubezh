@@ -11,8 +11,17 @@ import { WIPE_ORDER, WIPE_PLAN } from "./wipe-plan.js";
  *
  * - **Что стирать, решает план** (`wipe-plan.ts`, T-0039): команда берёт порядок
  *   из `WIPE_ORDER` и сама ничего не решает.
- * - **Снимок и стирание — одна транзакция.** Между снимком и стиранием никто не
- *   успеет начислить, а упало что угодно — не стёрто ничего и снимка нет.
+ * - **Снимок и стирание — одна транзакция.** Упало что угодно — не стёрто
+ *   ничего и снимка нет.
+ * - **Запись игроков на время вайпа закрыта.** Транзакция атомарна для самой
+ *   команды, но записей игроков не ждёт: начисление между снимком и стиранием
+ *   в снимок не попало бы, а стирание его унесло, запись после `DELETE` своей
+ *   таблицы пережила бы вайп наполовину. Поэтому первым делом транзакция берёт
+ *   `SHARE ROW EXCLUSIVE` на все стираемые таблицы, `purchase` и
+ *   `tester_compensation`: чтение идёт, запись ждёт конца транзакции, а второй
+ *   одновременный запуск ждёт первый и упирается в готовый снимок. Пока захват
+ *   ждёт, за ним стоят все записи игроков, поэтому он ограничен `lock_timeout`:
+ *   лучше упасть с понятным отказом, чем подвесить игру.
  * - **Только `deleteMany`, `TRUNCATE` запрещён.** `TRUNCATE run CASCADE` стёр бы
  *   и журнал покупок, который не стирается никогда. Покупка второго шанса
  *   переживает вайп: связь с забегом `SetNull`, обнуляется только `run_id`.
@@ -23,6 +32,8 @@ import { WIPE_ORDER, WIPE_PLAN } from "./wipe-plan.js";
 /** Потолок всей транзакции вайпа и каждого её запроса: пул держит запрос 15 секунд, а стирание большой таблицы дольше. */
 const TRANSACTION_TIMEOUT_MS = 10 * 60_000;
 const TRANSACTION_MAX_WAIT_MS = 30_000;
+/** Сколько ждать захвата таблиц: пока он ждёт, за ним стоят записи игроков. */
+const LOCK_TIMEOUT_MS = 10_000;
 
 export interface WipeCounts {
   /** сколько строк в каждой модели сейчас — для `--plan` */
@@ -43,6 +54,24 @@ const MODELS = Object.values(Prisma.ModelName);
 /** Потолок запроса пула (15 с) действует и в транзакции вайпа, пока его не поднять: только внутри этой транзакции (`SET LOCAL`). */
 async function allowLongStatements(tx: Prisma.TransactionClient): Promise<void> {
   await tx.$queryRaw`SELECT set_config('statement_timeout', ${String(TRANSACTION_TIMEOUT_MS)}, true)`;
+}
+
+/** Не дождались захвата таблиц: транзакция откатилась, ничего не изменено, запуск можно повторить. */
+export class WipeLockError extends Error {}
+
+/** «Не удалось захватить таблицы за 10 секунд: повторите» — с числом и склонением секунд. */
+export function lockTimeoutText(timeoutMs: number): string {
+  const seconds = Math.max(1, Math.round(timeoutMs / 1000));
+  const last = seconds % 10;
+  const word = seconds % 100 >= 11 && seconds % 100 <= 14 ? "секунд" : last === 1 ? "секунду" : last >= 2 && last <= 4 ? "секунды" : "секунд";
+  return `Не удалось захватить таблицы за ${String(seconds)} ${word}: повторите`;
+}
+
+/** Postgres отменил запрос по `lock_timeout` (код 55P03): драйвер кладёт его то в текст, то в причину. */
+function isLockTimeout(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.message.includes("lock timeout") || error.message.includes("55P03")) return true;
+  return "cause" in error && isLockTimeout(error.cause);
 }
 
 interface Countable {
@@ -76,11 +105,15 @@ export async function planWipe(prisma: PrismaClient, now: Date): Promise<WipeCou
   );
 }
 
-/** Снимок и стирание одной транзакцией. Бросает — ничего не изменено. */
-export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter = deleteAll): Promise<WipeResult> {
+/**
+ * Снимок и стирание одной транзакцией. Бросает — ничего не изменено. `lockTimeoutMs` — сколько
+ * ждать захвата таблиц; тест сокращает его, чтобы не ждать десять секунд.
+ */
+export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter = deleteAll, lockTimeoutMs: number = LOCK_TIMEOUT_MS): Promise<WipeResult> {
   return await prisma.$transaction(
     async (tx) => {
       await allowLongStatements(tx);
+      await lockTables(tx, lockTimeoutMs);
       const snapshot = await takeTesterSnapshot(tx, now, { write: true });
       const deleted: Partial<Record<Prisma.ModelName, number>> = {};
       for (const model of WIPE_ORDER) deleted[model] = (await deleter(tx, model)).count;
@@ -88,6 +121,51 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
     },
     { timeout: TRANSACTION_TIMEOUT_MS, maxWait: TRANSACTION_MAX_WAIT_MS },
   );
+}
+
+/**
+ * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 18 таблиц плана в порядке
+ * `WIPE_ORDER`, затем `purchase` (из неё снимок берёт покупки и ссылку на забег обнуляет стирание)
+ * и `tester_compensation` (по ней снимок проверяет, не было ли вайпа). Полноту против `WIPE_ORDER`
+ * проверяет тест: таблица, добавленная в план без строки здесь, роняет его.
+ */
+export const WIPE_LOCK_TABLES: readonly string[] = [
+  "run_ad_continue",
+  "run_reward",
+  "run_boost",
+  "task_run",
+  "run",
+  "task_progress",
+  "showcase_offer",
+  "item_event",
+  "item",
+  "wallet_entry",
+  "wallet_balance",
+  "wallet_daily",
+  "account_progress",
+  "friend_gift",
+  "daily_reward",
+  "wheel_spin",
+  "vip_daily",
+  "notification",
+  "purchase",
+  "tester_compensation",
+];
+
+/**
+ * Закрыть запись в таблицы вайпа до конца транзакции: чтение идёт, запись и второй запуск ждут.
+ * Срок ожидания — `lock_timeout` только в этой транзакции; не дождались — отказ с текстом, а не зависшая игра.
+ */
+async function lockTables(tx: Prisma.TransactionClient, timeoutMs: number): Promise<void> {
+  await tx.$queryRaw`SELECT set_config('lock_timeout', ${String(timeoutMs)}, true)`;
+  // Имена — из константы выше, не из ввода: идентификаторы в SQL параметром не передать.
+  const tables = WIPE_LOCK_TABLES.map((table) => `"${table}"`).join(", ");
+  try {
+    await tx.$executeRawUnsafe(`LOCK TABLE ${tables} IN SHARE ROW EXCLUSIVE MODE`);
+  } catch (error: unknown) {
+    if (isLockTimeout(error)) throw new WipeLockError(lockTimeoutText(timeoutMs), { cause: error });
+    throw error;
+  }
 }
 
 /**
