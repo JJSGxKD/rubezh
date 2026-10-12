@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { t } from "../../i18n";
 import { uiFeedback } from "../../state/ui-feedback";
 import { IconButton } from "./Button";
+import { ConnectionBanner } from "./ConnectionBanner";
 import { tabLabelMode, type TabLabelMode } from "./tab-labels";
 
 /**
@@ -31,6 +32,7 @@ export function Screen(props: ScreenProps): ReactNode {
       {/* Под шапкой разделов — отступ её высоты: содержимое начинается под ней,
           а при прокрутке уходит под стекло. Внутри раздела отступ нулевой. */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-[var(--app-header-h)] pb-4">
+        <ConnectionBanner />
         {props.children}
       </div>
       {props.footer === undefined ? null : (

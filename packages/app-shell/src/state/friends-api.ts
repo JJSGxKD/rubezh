@@ -49,6 +49,8 @@ export interface FriendsApi {
   remove(accountId: string): Promise<ApiResult<unknown>>;
   claimGifts(): Promise<ApiResult<ClaimResult>>;
   claimBonus(): Promise<ApiResult<ClaimResult>>;
+  /** подарок каждому другу, которому сегодня не дарили; `sent` — сколько ушло */
+  giftAll(): Promise<ApiResult<{ sent: number }>>;
 }
 
 const anything = z.unknown();
@@ -69,6 +71,7 @@ export function createFriendsApi(request: ApiRequest = apiRequest): FriendsApi {
     remove: (accountId) => remove(`/${id(accountId)}`),
     claimGifts: () => post("/gifts/claim", claimSchema),
     claimBonus: () => post("/bonus/claim", claimSchema),
+    giftAll: () => post("/gifts/send-all", z.object({ sent: z.number() })),
   };
 }
 

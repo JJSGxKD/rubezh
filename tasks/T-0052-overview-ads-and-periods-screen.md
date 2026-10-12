@@ -20,6 +20,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/admin-overview.html
+version: v0.9
 ---
 
 # T-0052. Сводка панели — плитка и панель рекламы, вехи полосами, периоды — экран

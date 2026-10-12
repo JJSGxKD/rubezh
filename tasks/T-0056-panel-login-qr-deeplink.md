@@ -31,6 +31,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
+version: v0.8
 ---
 
 # T-0056. Вход в панель по QR и диплинку — запрос со страницей, без лишнего перехода
