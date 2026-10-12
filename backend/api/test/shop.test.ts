@@ -13,12 +13,16 @@ import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PaymentConfirmation } from "../src/modules/payments/payment-confirmation.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
+import { PaymentsHooks } from "../src/modules/payments/payments-hooks.js";
+import { PurchaseRevocation } from "../src/modules/payments/purchase-revocation.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { PaymentsService } from "../src/modules/payments/payments.service.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { EXCHANGE_RESOURCES } from "../src/modules/wallet/wallet-limits.js";
+import { WALLET_RESOURCES, type WalletResource } from "../src/modules/wallet/wallet-types.js";
+import type { RevokeInput, RevokeOutcome } from "../src/modules/wallet/wallet.repository.js";
 import { SHOP_RESOURCES, SHOP_SKUS, TITLE_MAX, contentsOf, shopSkuSchema, skuById } from "../src/modules/shop/shop-catalog.js";
 import { ShopController } from "../src/modules/shop/shop.controller.js";
 import { ShopPromoService } from "../src/modules/shop/shop-promo.service.js";
@@ -72,6 +76,17 @@ class FakeWallet {
     }
     return { credited: input.amount, balance: 0, duplicate };
   }
+
+  /** Отзывы: что кошелёк получил и что отвечает по ресурсу (по умолчанию — «ничего»). */
+  readonly revokes: RevokeInput[] = [];
+  readonly revokePlan = new Map<WalletResource, RevokeOutcome>();
+  revokeFailWith: Error | null = null;
+
+  async revokeUpTo(input: RevokeInput): Promise<RevokeOutcome> {
+    this.revokes.push(input);
+    if (this.revokeFailWith !== null) throw this.revokeFailWith;
+    return this.revokePlan.get(input.resource) ?? { status: "nothing", granted: 0 };
+  }
 }
 
 async function codeOf(promise: Promise<unknown>): Promise<string> {
@@ -90,7 +105,8 @@ class Context {
   tribute = "";
 }
 
-function setup(settings = config()) {
+/** `register: false` — выдачу и отзыв зарегистрирует сам Nest при старте модуля: вручную дважды реестр отзыва не примет. */
+function setup(settings = config(), register = true) {
   const purchases = new MemoryPurchasesRepository();
   const api = new FakeStarsApi();
   const providers = starsProviders(api);
@@ -102,11 +118,12 @@ function setup(settings = config()) {
   const reader: SettingsReader = { get: (setting) => (setting.key === SETTINGS.shopTributeUrl.key ? setting.schema.parse(context.tribute) : setting.fallback), onChange: () => undefined };
   const promoRows = new MemoryShopPromoRepository();
   const promos = new ShopPromoService(promoRows, new RolesService(settings, new MemoryRolesRepository(), new MemoryAccountRepository()));
-  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, promos, reader);
-  shop.onModuleInit();
-  const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings));
+  const revocation = new PurchaseRevocation();
+  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, promos, reader, revocation);
+  if (register) shop.onModuleInit();
+  const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), new PaymentsHooks(), revocation);
   const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
-  return { purchases, api, shop, wallet, queue, context, promoRows };
+  return { purchases, api, shop, wallet, queue, context, promoRows, revocation, confirmation };
 }
 
 /** Площадка подтвердила оплату — задание очереди, как его выполнил бы воркер. */
@@ -391,6 +408,109 @@ describe("выдача оплаченного", () => {
   });
 });
 
+describe("отзыв набора при внешнем возврате (T-0023)", () => {
+  let ctx: ReturnType<typeof setup>;
+  const AT = new Date(NOW + 60_000);
+
+  beforeEach(() => {
+    ctx = setup();
+  });
+
+  /** Оплаченный и возвращённый по спору набор: строка покупки, как её оставляет оплата. */
+  async function refundedPurchase(sku = "starter", chargeId = "charge-1") {
+    const me = player();
+    const invoice = await ctx.shop.order(me, sku);
+    await pay(ctx, invoice.purchaseId, me.platformUserId, chargeId);
+    const row = await ctx.purchases.byId(invoice.purchaseId);
+    if (row === null) throw new Error("покупки нет");
+    return { me, row };
+  }
+
+  it("каждый ресурс отзывается своим ключом: начисление — `purchase:<id>:<ресурс>`, отзыв — `refund:<id>:<ресурс>`, источник — товар", async () => {
+    const { me, row } = await refundedPurchase();
+    ctx.wallet.revokePlan.set("gems", { status: "revoked", revoked: 100, granted: 150, balance: 0 });
+
+    const result = await ctx.shop.revoke(row, AT);
+
+    expect(result).toEqual({ lines: ["gems: 100 из 150"] });
+    const gems = ctx.wallet.revokes.find((call) => call.resource === "gems");
+    expect(gems).toEqual({
+      accountId: me.accountId,
+      resource: "gems",
+      grantKey: `purchase:${row.purchaseId}:gems`,
+      idempotencyKey: `refund:${row.purchaseId}:gems`,
+      source: "shop:starter",
+      at: AT,
+    });
+  });
+
+  it("ресурсы берутся все, а не из каталога: товар мог уйти из каталога после покупки", async () => {
+    const { row } = await refundedPurchase();
+
+    await ctx.shop.revoke({ ...row, sku: "ушёл_из_каталога" }, AT);
+
+    expect(ctx.wallet.revokes.map((call) => call.resource)).toEqual([...WALLET_RESOURCES]);
+    expect(ctx.wallet.revokes.every((call) => call.source === "shop:ушёл_из_каталога")).toBe(true);
+  });
+
+  it("строки результата — по каждому ресурсу, которого касалось начисление: забрано из начисленного", async () => {
+    const { row } = await refundedPurchase();
+    ctx.wallet.revokePlan.set("coins", { status: "duplicate", revoked: 40, granted: 150 });
+    ctx.wallet.revokePlan.set("gems", { status: "nothing", granted: 60 });
+    ctx.wallet.revokePlan.set("shard_rare", { status: "revoked", revoked: 5, granted: 5, balance: 0 });
+
+    const result = await ctx.shop.revoke(row, AT);
+
+    // Порядок — как у ресурсов кошелька; потраченное не возвращается: «0 из 60».
+    expect(result.lines).toEqual(["coins: 40 из 150", "gems: 0 из 60", "shard_rare: 5 из 5"]);
+  });
+
+  it("начислений покупки нет — одна строка «ничего»", async () => {
+    const { row } = await refundedPurchase();
+
+    expect(await ctx.shop.revoke(row, AT)).toEqual({ lines: ["ничего — начислений покупки нет"] });
+  });
+
+  it("ошибка кошелька бросается: обработка возврата упадёт, и очередь доделает отзыв с того же места", async () => {
+    const { row } = await refundedPurchase();
+    ctx.wallet.revokeFailWith = new Error("кошелёк недоступен");
+
+    await expect(ctx.shop.revoke(row, AT)).rejects.toThrow("кошелёк недоступен");
+  });
+
+  it("владелец товара регистрирует отзыв сам: реестр отдаёт покупку магазину", async () => {
+    const { row } = await refundedPurchase();
+    ctx.wallet.revokePlan.set("gems", { status: "revoked", revoked: 150, granted: 150, balance: 0 });
+
+    expect(await ctx.revocation.revoke(row, AT)).toEqual({ lines: ["gems: 150 из 150"] });
+  });
+
+  it("внешний возврат целиком: оплата → выдача → возврат по спору забирает остаток, повтор доделывает тем же ключом", async () => {
+    const { row } = await refundedPurchase("gems_60", "charge-dispute");
+    ctx.wallet.revokePlan.set("gems", { status: "revoked", revoked: 60, granted: 60, balance: 0 });
+
+    await ctx.confirmation.refunded("charge-dispute", NOW + 120_000);
+    await ctx.confirmation.refunded("charge-dispute", NOW + 180_000);
+
+    const gems = ctx.wallet.revokes.filter((call) => call.resource === "gems");
+    expect(gems).toHaveLength(2);
+    expect(gems.map((call) => call.idempotencyKey)).toEqual([`refund:${row.purchaseId}:gems`, `refund:${row.purchaseId}:gems`]);
+    // Время — то, которым возврат отмечен впервые.
+    expect(gems.map((call) => call.at)).toEqual([new Date(NOW + 120_000), new Date(NOW + 120_000)]);
+  });
+
+  it("тестовая оплата возвращается нами и ничего не забирает: набор выдан для проверки выдачи", async () => {
+    const test = setup(config({ PAYMENTS_TEST_MODE: "true", NODE_ENV: "development" }));
+    const me = player();
+    const invoice = await test.shop.order(me, "gems_60");
+    await pay(test, invoice.purchaseId, me.platformUserId, "charge-test");
+
+    await test.confirmation.refunded("charge-test", NOW + 60_000);
+
+    expect(test.wallet.revokes).toEqual([]);
+  });
+});
+
 describe("магазин по HTTP", () => {
   let app: NestFastifyApplication | null = null;
   const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
@@ -401,7 +521,7 @@ describe("магазин по HTTP", () => {
   });
 
   it("без токена — 401; товар — по схеме, цены в теле нет; витрина и счёт — 200", async () => {
-    const ctx = setup();
+    const ctx = setup(config(), false);
     @Module({
       controllers: [ShopController],
       providers: [
