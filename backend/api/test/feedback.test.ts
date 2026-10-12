@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import { Logger } from "@nestjs/common";
+import type { Redis } from "ioredis";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { FeedbackService, type FeedbackBotApi } from "../src/modules/feedback/feedback.service.js";
 import { csvOf } from "../src/modules/feedback/feedback-bot.command.js";
 import { feedbackMessage } from "../src/modules/feedback/feedback-message.js";
 import type { FeedbackRecord, FeedbackRepository, StoredFeedback } from "../src/modules/feedback/feedback.repository.js";
-import type { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { targetsOf } from "./helpers/notify-targets.js";
 
 // Обратная связь (docs/29-admin-panel.md §6): отзыв ложится в базу и уходит в
@@ -12,7 +14,7 @@ import { targetsOf } from "./helpers/notify-targets.js";
 
 const CHAT = "-1004251205331";
 
-function setup(options: { allow?: boolean; failInsert?: boolean; failChat?: boolean } = {}) {
+function setup(options: { allow?: boolean; real?: boolean; failInsert?: boolean; failChat?: boolean } = {}) {
   const config = loadAppConfig({
     NODE_ENV: "test",
     TELEGRAM_BOT_TOKEN: "1:TEST",
@@ -35,7 +37,11 @@ function setup(options: { allow?: boolean; failInsert?: boolean; failChat?: bool
       return sent.length;
     },
   };
-  const limiter = { consume: vi.fn(async () => options.allow ?? true) } as unknown as RateLimiter;
+  // `real` — настоящий лимитер на памяти: Redis недоступен, счёт идёт в процессе
+  const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
+  const limiter = options.real === true
+    ? new RateLimiter(unavailableRedis)
+    : ({ consume: vi.fn(async () => options.allow ?? true) } as unknown as RateLimiter);
 
   return { saved, sent, service: new FeedbackService(config, targetsOf(config), repository, api, limiter) };
 }
@@ -92,6 +98,72 @@ describe("приём отзывов", () => {
   it("упирается в лимит: формой можно долбить так же, как любым эндпоинтом", async () => {
     const { service } = setup({ allow: false });
     await expect(service.receive(body(), identity)).rejects.toThrow(/Слишком много отзывов/);
+  });
+});
+
+describe("отзыв без подписи запуска", () => {
+  const unsigned = (ip: string) => ({ platformUserId: null, ip });
+  const unsignedBody = (n: number) => body({ installId: `install-${n}` });
+
+  it("не больше трёх в час с одного адреса, с другого адреса — снова можно", async () => {
+    const { saved, service } = setup({ real: true });
+
+    for (let n = 1; n <= 3; n += 1) await service.receive(unsignedBody(n), unsigned("10.0.0.1"));
+    await expect(service.receive(unsignedBody(4), unsigned("10.0.0.1"))).rejects.toThrow(/Слишком много отзывов/);
+    await service.receive(unsignedBody(5), unsigned("10.0.0.2"));
+
+    expect(saved).toHaveLength(4);
+  });
+
+  it("лимит без подписи не тратится подписанными отзывами", async () => {
+    const { saved, service } = setup({ real: true });
+
+    // пять отзывов игрока с одного адреса — до лимита `user` (5), а не до трёх
+    for (let n = 1; n <= 5; n += 1) await service.receive(body({ installId: `install-${n}` }), identity);
+    await expect(service.receive(body({ installId: "install-6" }), identity)).rejects.toThrow(/Слишком много отзывов/);
+
+    expect(saved).toHaveLength(5);
+  });
+
+  it("в чат уходит не больше 20 карточек в час на всех, остальные отзывы сохранены", async () => {
+    const log = vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+    try {
+      const { saved, sent, service } = setup({ real: true });
+
+      for (let n = 1; n <= 21; n += 1) await service.receive(unsignedBody(n), unsigned(`10.0.1.${n}`));
+
+      expect(saved).toHaveLength(21);
+      expect(sent).toHaveLength(20);
+      const skipped = log.mock.calls.filter(([message]) => String(message).includes("notify_skipped_unsigned"));
+      expect(skipped).toHaveLength(1);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("лог о пропущенной карточке — не чаще раза в час", async () => {
+    const log = vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+    try {
+      const { sent, service } = setup({ real: true });
+
+      for (let n = 1; n <= 23; n += 1) await service.receive(unsignedBody(n), unsigned(`10.0.2.${n}`));
+
+      expect(sent).toHaveLength(20);
+      const skipped = log.mock.calls.filter(([message]) => String(message).includes("notify_skipped_unsigned"));
+      expect(skipped).toHaveLength(1);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("подписанный отзыв после исчерпания потолка карточек всё равно уходит в чат", async () => {
+    const { sent, service } = setup({ real: true });
+
+    for (let n = 1; n <= 21; n += 1) await service.receive(unsignedBody(n), unsigned(`10.0.3.${n}`));
+    await service.receive(body({ installId: "signed-1" }), identity);
+
+    expect(sent).toHaveLength(21);
+    expect(sent[20]?.text).toContain("645259468");
   });
 });
 

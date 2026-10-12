@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { Logger } from "@nestjs/common";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { BotPoller, type BotPollerLocks, type PollerBotApi } from "../src/platforms/telegram/bot-poller.js";
 import { BotRouter, type BotUpdateHandler } from "../src/platforms/telegram/bot-router.js";
+import type { BotUpdateQueue } from "../src/platforms/telegram/bot-update-queue.js";
 import { TelegramApiError, TelegramBotApi, type TelegramUpdate } from "../src/platforms/telegram/telegram-bot-api.js";
 import { multipartOf } from "./helpers/multipart.js";
 
@@ -61,18 +63,127 @@ describe("маршрутизатор обновлений", () => {
     expect(start.seen).toEqual([2]);
   });
 
-  it("упавший обработчик не роняет чтение обновлений", async () => {
+  it("сообщает исход: взял обработчик — handled с его именем", async () => {
+    const router = new BotRouter();
+    router.register(recordingHandler("stats", (incoming) => incoming.message?.text === "/stats"));
+    router.register(recordingHandler("start", () => true));
+
+    await expect(router.dispatch(update(1, "/stats"))).resolves.toEqual({ status: "handled", handler: "stats" });
+    await expect(router.dispatch(update(2, "/start"))).resolves.toEqual({ status: "handled", handler: "start" });
+  });
+
+  it("никто не взял — unhandled", async () => {
+    const router = new BotRouter();
+    router.register(recordingHandler("stats", () => false));
+
+    await expect(router.dispatch(update(1))).resolves.toEqual({ status: "unhandled" });
+    await expect(new BotRouter().dispatch(update(2))).resolves.toEqual({ status: "unhandled" });
+  });
+
+  it("упавший обработчик не роняет чтение обновлений: failed с его именем, в логе handler_failed", async () => {
     const router = new BotRouter();
     router.register({ name: "broken", handle: async () => Promise.reject(new Error("сломался")) });
-    await expect(router.dispatch(update(3))).resolves.toBeUndefined();
+    const error = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    try {
+      await expect(router.dispatch(update(3))).resolves.toEqual({ status: "failed", handler: "broken" });
+      expect(error.mock.calls.some(([line]) => String(line).includes("handler_failed") && String(line).includes('"handler":"broken"'))).toBe(true);
+    } finally {
+      error.mockRestore();
+    }
+  });
+});
+
+describe("обработчик по умолчанию", () => {
+  it("получает обновление, только если его не взял ни один обработчик", async () => {
+    const router = new BotRouter();
+    const taken = recordingHandler("taken", (incoming) => incoming.update_id === 1);
+    const fallback = recordingHandler("fallback", () => true);
+    router.register(taken);
+    router.setFallback(fallback);
+
+    await expect(router.dispatch(update(1))).resolves.toEqual({ status: "handled", handler: "taken" });
+    await expect(router.dispatch(update(2))).resolves.toEqual({ status: "handled", handler: "fallback" });
+
+    expect(taken.seen).toEqual([1, 2]);
+    expect(fallback.seen).toEqual([2]);
+  });
+
+  it("не взял и обработчик по умолчанию — unhandled", async () => {
+    const router = new BotRouter();
+    router.setFallback(recordingHandler("fallback", () => false));
+
+    await expect(router.dispatch(update(1))).resolves.toEqual({ status: "unhandled" });
+  });
+
+  it("не мешает порядку регистрации: заданный раньше обработчиков, он всё равно последний", async () => {
+    const router = new BotRouter();
+    const fallback = recordingHandler("fallback", () => true);
+    router.setFallback(fallback);
+    router.register(recordingHandler("late", () => true));
+
+    await router.dispatch(update(3));
+
+    expect(fallback.seen).toEqual([]);
+  });
+
+  it("упавший обработчик останавливает разбор: по умолчанию не вызывается, в логе handler_failed", async () => {
+    const router = new BotRouter();
+    const fallback = recordingHandler("fallback", () => true);
+    router.register({ name: "broken", handle: async () => Promise.reject(new Error("сломался")) });
+    router.setFallback(fallback);
+    const error = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    try {
+      await expect(router.dispatch(update(4))).resolves.toEqual({ status: "failed", handler: "broken" });
+      expect(fallback.seen).toEqual([]);
+      expect(error.mock.calls.some(([line]) => String(line).includes("handler_failed"))).toBe(true);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("упавший обработчик по умолчанию логируется так же и не роняет разбор", async () => {
+    const router = new BotRouter();
+    router.setFallback({ name: "fallback", handle: async () => Promise.reject(new Error("сломался")) });
+    const error = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    try {
+      await expect(router.dispatch(update(5))).resolves.toEqual({ status: "failed", handler: "fallback" });
+      expect(error.mock.calls.some(([line]) => String(line).includes('"handler":"fallback"'))).toBe(true);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("второй раз задать нельзя", () => {
+    const router = new BotRouter();
+    router.setFallback(recordingHandler("one", () => true));
+    expect(() => router.setFallback(recordingHandler("two", () => true))).toThrow("Обработчик по умолчанию уже задан");
+  });
+
+  it("в список команд не попадает", () => {
+    const router = new BotRouter();
+    router.setFallback({ name: "fallback", commands: [{ command: "x", description: "x", audience: "everyone" }], handle: async () => true });
+    expect(router.commands()).toEqual([]);
   });
 });
 
 describe("чтение обновлений long polling'ом", () => {
   const cfg = loadAppConfig({ TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_BOT_UPDATES: "polling" });
 
-  function setup(): { poller: BotPoller; locks: MemoryPollerLocks; api: PollerBotApi & { pending: TelegramUpdate[] }; handler: ReturnType<typeof recordingHandler> } {
+  /** Очередь обновлений и замки пишут общий журнал: порядок «в очередь, потом смещение» виден в нём. */
+  function setup(): {
+    poller: BotPoller;
+    locks: MemoryPollerLocks;
+    api: PollerBotApi & { pending: TelegramUpdate[] };
+    journal: string[];
+    updates: Pick<BotUpdateQueue, "enqueue"> & { failOn: number | null };
+  } {
+    const journal: string[] = [];
     const locks = new MemoryPollerLocks();
+    const saveOffset = locks.saveOffset.bind(locks);
+    locks.saveOffset = async (offset: number) => {
+      journal.push(`offset:${String(offset)}`);
+      await saveOffset(offset);
+    };
     const api = {
       pending: [] as TelegramUpdate[],
       async getUpdates() {
@@ -80,28 +191,52 @@ describe("чтение обновлений long polling'ом", () => {
         return { updates, lastUpdateId: updates.at(-1)?.update_id ?? null };
       },
     };
-    const router = new BotRouter();
-    const handler = recordingHandler("all", () => true);
-    router.register(handler);
-    return { poller: new BotPoller(cfg, router, locks, api), locks, api, handler };
+    const updates = {
+      failOn: null as number | null,
+      async enqueue(incoming: TelegramUpdate) {
+        if (incoming.update_id === updates.failOn) throw new Error("очередь недоступна");
+        journal.push(`enqueue:${String(incoming.update_id)}`);
+      },
+    };
+    return { poller: new BotPoller(cfg, updates as unknown as BotUpdateQueue, locks, api), locks, api, journal, updates };
   }
 
-  it("передаёт обновления маршрутизатору и сдвигает смещение", async () => {
-    const { poller, locks, api, handler } = setup();
+  it("кладёт каждое обновление в очередь и только после всей пачки сдвигает смещение", async () => {
+    const { poller, locks, api, journal } = setup();
     api.pending = [update(41), update(42)];
     await poller.pollOnce();
-    expect(handler.seen).toEqual([41, 42]);
+    expect(journal).toEqual(["enqueue:41", "enqueue:42", "offset:43"]);
     expect(locks.offset).toBe(43);
   });
 
+  it("очередь не приняла второе обновление — смещение не сдвигается: ту же пачку заберёт следующий проход", async () => {
+    const { poller, locks, api, journal, updates } = setup();
+    api.pending = [update(41), update(42)];
+    updates.failOn = 42;
+
+    await expect(poller.pollOnce()).rejects.toThrow("очередь недоступна");
+
+    expect(journal).toEqual(["enqueue:41"]);
+    expect(locks.offset).toBeNull();
+  });
+
+  it("пустая пачка ничего не ставит и смещение не трогает", async () => {
+    const { poller, locks, journal } = setup();
+
+    await poller.pollOnce();
+
+    expect(journal).toEqual([]);
+    expect(locks.offset).toBeNull();
+  });
+
   it("не читает обновления, пока роль читателя у другого процесса", async () => {
-    const { poller, locks, api, handler } = setup();
+    const { poller, locks, api, journal } = setup();
     locks.poller = "another-process";
     api.pending = [update(5)];
     const waiting = poller.pollOnce();
     await poller.onModuleDestroy();
     await waiting;
-    expect(handler.seen).toEqual([]);
+    expect(journal).toEqual([]);
   });
 
   it("не запускается, пока чтение обновлений выключено", () => {

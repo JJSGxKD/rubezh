@@ -93,7 +93,6 @@ export const runFinishSchema = z
 
 export const difficultyQuerySchema = z.enum(DIFFICULTIES);
 export const runIdParamSchema = runId;
-export const reviewLimitSchema = z.coerce.number().int().min(1).max(200).default(50);
 
 export type RunStart = z.infer<typeof runStartSchema>;
 export type RunFinish = z.infer<typeof runFinishSchema>;

@@ -156,6 +156,7 @@ describe("влитые PR задач из gh", () => {
 describe("страница доски", () => {
   const entry = (item: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ task: item, ...extra });
   const board = {
+    rework: [entry(task("T-0017", { title: "Ответы", status: "ready", effort: "low", fileName: "T-0017-ans.md" }), { pr: 216 })],
     free: [entry(task("T-0003", { title: "Деньги | оплата", status: "ready", priority: "P0", size: "M", effort: "extra", epic: "E1", fileName: "T-0003-pay.md" }))],
     inProgress: [entry(task("T-0012", { title: "Палитра", status: "ready", fileName: "T-0012-pal.md" }))],
     review: [entry(task("T-0016", { title: "Пересчёт", status: "ready", fileName: "T-0016-rec.md" }), { pr: 215 })],
@@ -171,7 +172,10 @@ describe("страница доски", () => {
   const render = (patch: Record<string, unknown> = {}): string =>
     renderBoardPage({
       board,
-      owners: new Map([["T-0012", "claude-3 / sonnet-5.5"]]),
+      owners: new Map([
+        ["T-0012", "claude-3 / sonnet-5.5"],
+        ["T-0017", "claude-2 / sonnet-5.5 / low"],
+      ]),
       credits,
       people: contributions(credits),
       githubAvailable: true,
@@ -187,6 +191,12 @@ describe("страница доски", () => {
         "# Доска задач",
         "",
         "Обновлено 06.10.2026 10:48 UTC. Страницу пересчитывает workflow `task-board.yml` после захвата, PR и мерджа — руками не править. Как брать задачу — [tasks/README.md](https://github.com/JJSGxKD/rubezh/blob/dev/tasks/README.md#как-взять-задачу).",
+        "",
+        "## Доработка — 1",
+        "",
+        "| Задача | Исполнитель | PR | Вёл |",
+        "|---|---|---|---|",
+        `| [T-0017. Ответы](${BLOB}/T-0017-ans.md) | sonnet-5.5 · low | [#216](https://github.com/JJSGxKD/rubezh/pull/216) | claude-2 / sonnet-5.5 / low |`,
         "",
         "## Можно брать — 1",
         "",

@@ -5,10 +5,13 @@ import { methodFor, priceIn } from "../payments/payment-methods.js";
 import { PaymentsUnsupportedError } from "../payments/payments-errors.js";
 import { PaymentsService, type ShopInvoice } from "../payments/payments.service.js";
 import { PurchaseFulfillment, UndeliverableError } from "../payments/purchase-fulfillment.js";
+import { PurchaseRevocation, type Revocation } from "../payments/purchase-revocation.js";
 import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
+import { WALLET_RESOURCES } from "../wallet/wallet-types.js";
+import type { RevokeOutcome } from "../wallet/wallet.repository.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { badgesOf, gemValuePct, recommendedSku, type ShopBadge } from "./shop-marketing.js";
 import { ShopSkuNotFoundError, ShopSkuUnavailableError } from "./shop-errors.js";
@@ -79,10 +82,13 @@ export class ShopService implements OnModuleInit {
     private readonly items: ItemsService,
     private readonly promos: ShopPromoService,
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
+    // Реестр нужен модулю, а не каждому тесту магазина: без него отзыв регистрируется в своём, пустом.
+    private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
   ) {}
 
   onModuleInit(): void {
     this.fulfillment.register("shop_item", (purchase) => this.fulfill(purchase));
+    this.revocation.register("shop_item", (purchase, at) => this.revoke(purchase, at));
   }
 
   async view(account: AccountRef, at = new Date()): Promise<ShopView> {
@@ -173,9 +179,40 @@ export class ShopService implements OnModuleInit {
     this.log("shop_fulfilled", { accountId: purchase.accountId, sku: sku.id, purchaseId: purchase.purchaseId, mode: purchase.mode });
   }
 
+  /**
+   * Отзыв остатка набора при внешнем возврате звёзд (tasks/T-0023): каждый
+   * ресурс — до того, что осталось от начисления этой покупки, не больше и
+   * не больше баланса. Потраченное не возвращается. Идемпотентно ключом
+   * отзыва: обработка возврата повторяется, пока не пройдёт целиком, и
+   * ресурсы, забранные в прошлую попытку, второй раз не списываются.
+   *
+   * Ресурсы берутся все, а не из каталога: товар мог уйти из каталога после
+   * покупки, а ключи начисления остались.
+   */
+  async revoke(purchase: StoredPurchase, at: Date): Promise<Revocation> {
+    const lines: string[] = [];
+    for (const resource of WALLET_RESOURCES) {
+      const outcome = await this.wallet.revokeUpTo({
+        accountId: purchase.accountId,
+        resource,
+        grantKey: `purchase:${purchase.purchaseId}:${resource}`,
+        idempotencyKey: `refund:${purchase.purchaseId}:${resource}`,
+        source: purchase.sku === null ? "shop" : `shop:${purchase.sku}`,
+        at,
+      });
+      if (outcome.granted > 0) lines.push(`${resource}: ${revokedOf(outcome)} из ${outcome.granted}`);
+    }
+    return { lines: lines.length > 0 ? lines : ["ничего — начислений покупки нет"] };
+  }
+
   private log(event: string, fields: Record<string, unknown>): void {
     this.logger.log(JSON.stringify({ module: "shop", event, ...fields }));
   }
+}
+
+/** Сколько забрали: при `nothing` — ничего (баланс уже пуст), при повторе — то, что забрали в первый раз. */
+function revokedOf(outcome: RevokeOutcome): number {
+  return outcome.status === "nothing" ? 0 : outcome.revoked;
 }
 
 function promoView(promo: PromoRow, percent: number): ShopPromoView {

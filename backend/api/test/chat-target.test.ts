@@ -42,6 +42,7 @@ describe("адрес чата", () => {
       feedback: { chatId: "-100", threadId: 1 },
       runReview: { chatId: "-100", threadId: 1 },
       payments: { chatId: "-100", threadId: 1 },
+      ops: { chatId: "-100", threadId: 1 },
     });
   });
 

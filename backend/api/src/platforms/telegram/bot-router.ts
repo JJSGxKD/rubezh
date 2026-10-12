@@ -29,6 +29,12 @@ export interface BotCommandSpec {
 }
 
 /**
+ * Чем кончился разбор обновления. `failed` отличается от `unhandled`: никто не
+ * взял — повторять нечего, а упавший обработчик задание очереди повторит.
+ */
+export type DispatchResult = { status: "handled"; handler: string } | { status: "unhandled" } | { status: "failed"; handler: string };
+
+/**
  * Одна точка входа обновлений — и для long polling, и для вебхука: откуда
  * пришло обновление, обработчику всё равно.
  */
@@ -36,9 +42,20 @@ export interface BotCommandSpec {
 export class BotRouter {
   private readonly logger = new Logger("bot");
   private readonly handlers: BotUpdateHandler[] = [];
+  private fallback: BotUpdateHandler | null = null;
 
   register(handler: BotUpdateHandler): void {
     this.handlers.push(handler);
+  }
+
+  /**
+   * Обработчик «по умолчанию»: получает обновление, только если его не взял ни
+   * один обычный. Порядок регистрации модулей для этого ненадёжен, поэтому
+   * он задаётся отдельно и всегда стоит последним.
+   */
+  setFallback(handler: BotUpdateHandler): void {
+    if (this.fallback !== null) throw new Error("Обработчик по умолчанию уже задан");
+    this.fallback = handler;
   }
 
   /** Все команды зарегистрированных обработчиков в порядке регистрации. */
@@ -46,13 +63,15 @@ export class BotRouter {
     return this.handlers.flatMap((handler) => [...(handler.commands ?? [])]);
   }
 
-  async dispatch(update: TelegramUpdate): Promise<void> {
-    for (const handler of this.handlers) {
+  async dispatch(update: TelegramUpdate): Promise<DispatchResult> {
+    const chain = this.fallback === null ? this.handlers : [...this.handlers, this.fallback];
+    for (const handler of chain) {
       try {
-        if (await handler.handle(update)) return;
+        if (await handler.handle(update)) return { status: "handled", handler: handler.name };
       } catch (error: unknown) {
-        // Упавший обработчик не должен ронять чтение обновлений: следующее
-        // обновление — уже другая команда другого человека.
+        // Упавший обработчик не пробивается наружу: следующее обновление —
+        // уже другая команда другого человека. Исход `failed` видит очередь
+        // обновлений и повторяет задание.
         this.logger.error(
           JSON.stringify({
             module: "bot",
@@ -62,8 +81,9 @@ export class BotRouter {
             reason: error instanceof Error ? error.message : "unknown",
           }),
         );
-        return;
+        return { status: "failed", handler: handler.name };
       }
     }
+    return { status: "unhandled" };
   }
 }
