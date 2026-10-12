@@ -4,12 +4,14 @@ import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE, isElite } from "../patterns";
-import { ORBITER_RADIUS, orbiterCount, orbiterPosition, type OrbiterPoint } from "../weapons";
+import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE } from "../patterns";
+import { ORBITER_RADIUS, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
+import { orbiterRenderPoints } from "./orbiter-points";
 import { PickupRenderer } from "./pickups";
-import { ENEMY_LOOKS, enemyColor, stageColor, stageCore, WORLD_COLORS } from "./looks";
+import { projectileLook, type ProjectileLook } from "./projectile-look";
+import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
 import { playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
@@ -17,7 +19,9 @@ import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
 import { invulnerableAlpha } from "./invulnerable";
 
-const orbiterScratch: OrbiterPoint = { x: 0, y: 0 };
+/** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
+const orbiterPoints: OrbiterPoint[] = [];
+const lookScratch: ProjectileLook = { texture: "", rotation: 0, scaleX: 1, scaleY: 1 };
 
 /**
  * Рендер состояния симуляции. Отделён от неё полностью: симуляция не знает,
@@ -96,23 +100,25 @@ export class WorldRenderer {
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
 
-    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, isElite(type)));
+    const rankOf = (type: { rank: "normal" | "elite" | "boss" }): EnemyRankLook => (type.rank === "normal" ? undefined : type.rank);
+    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, rankOf(type)));
+    const unitScale = world.config.unitScale;
     // Текстура на пару «тип и ступень»: ступень меняет цвет тела и садит в
     // середину ядро, поэтому одной текстуры на тип не хватает.
     this.stageCount = world.stages.length;
     world.enemyTypes.forEach((type, index) => {
+      // Опасное — с золотой каймой; у рядовых её нет. Толщина задана в игровых единицах.
+      const rim = enemyRim(rankOf(type));
       for (let stage = 0; stage < this.stageCount; stage++) {
         const key = `bh-enemy-${type.id}-s${String(stage)}`;
-        // Элита крупнее и светлее: одинаковые на глаз танк и элитный танк
-        // читаются как дефект, а не как контрольная точка сложности.
-        ensureShapeTexture(
-          scene,
-          key,
-          type.radius,
-          stageColor(colorByType[index], stage),
-          ENEMY_LOOKS[type.pattern].shape,
-          stageCore(stage),
-        );
+        // Тень запечена в текстуру: отдельный спрайт на тень удвоил бы число
+        // объектов. Тело рисуется прежним радиусом, поэтому размер врага на
+        // экране и хитбокс не меняются.
+        ensureShapeTexture(scene, key, type.radius, stageColor(colorByType[index], stage), ENEMY_LOOKS[type.pattern].shape, {
+          core: stageCore(stage),
+          shadow: true,
+          rim: rim === null ? null : { color: rim.color, width: rim.width * unitScale },
+        });
         this.textureKeyByType.push(key);
       }
     });
@@ -125,7 +131,7 @@ export class WorldRenderer {
       .setDepth(-10);
     this.layer = scene.add.container(0, 0).setDepth(0);
 
-    ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "player");
+    ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "player", { shadow: true });
     ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, WORLD_COLORS.projectile, "circle");
     // Снаряд врага крупнее и другой формы: он должен читаться как летящая
     // угроза, а не как мелкий враг, на которого можно бежать.
@@ -181,7 +187,7 @@ export class WorldRenderer {
     this.syncEnemies(t);
     this.syncProjectiles(t);
     this.pickups.sync(t);
-    this.syncOrbiters();
+    this.syncOrbiters(t);
     this.syncBlasts();
     this.weaponEffects.sync(t);
     this.feedback.sync();
@@ -348,42 +354,33 @@ export class WorldRenderer {
         if (sprite.visible) sprite.setVisible(false);
         continue;
       }
-      const fromPlayer = projectiles.fromPlayer[p] === 1;
-      sprite.setTexture(fromPlayer ? "bh-projectile" : "bh-projectile-enemy");
+      const look = projectileLook(projectiles.fromPlayer[p] === 1, projectiles.vx[p], projectiles.vy[p], lookScratch);
+      // Спрайты переиспользуются, поэтому текстура меняется только при смене вида:
+      // setTexture на каждый снаряд каждый кадр — лишняя работа.
+      if (sprite.texture.key !== look.texture) sprite.setTexture(look.texture);
       sprite.setVisible(true);
       sprite.setPosition(
         lerp(projectiles.prevX[p], projectiles.x[p], t),
         lerp(projectiles.prevY[p], projectiles.y[p], t),
       );
-      // Вражеский снаряд вытянут по полёту: видно не только «что-то летит», а
-      // куда именно. Своим это не нужно — они и так летят от игрока.
-      if (fromPlayer) continue;
-      sprite.setRotation(Math.atan2(projectiles.vy[p], projectiles.vx[p]));
-      sprite.setScale(1.15, 0.8);
+      // Поворот и масштаб — всегда: свой снаряд в слоте, где летел вражеский,
+      // не должен остаться повёрнутым и сплюснутым.
+      sprite.setRotation(look.rotation);
+      sprite.setScale(look.scaleX, look.scaleY);
     }
   }
 
   /**
    * Обереги не живут в пуле снарядов: их положение целиком задаётся
-   * состоянием оружия, поэтому рендер спрашивает его у самого оружия.
+   * состоянием оружия, поэтому рендер спрашивает его у самого оружия — с теми
+   * же числами, что у симуляции, и от сглаженной позиции героя.
    */
-  private syncOrbiters(): void {
-    const world = this.world;
-    let drawn = 0;
-
-    for (let slot = 0; slot < world.loadout.weapons.length; slot++) {
-      const weapon = world.loadout.weapons[slot];
-      const type = world.weaponTypes[weapon.typeIndex];
-      if (type.behavior !== "orbit") continue;
-
-      const level = type.levels[Math.min(weapon.level, type.levels.length) - 1];
-      const count = orbiterCount(level);
-      for (let k = 0; k < count; k++) {
-        orbiterPosition(world, slot, level, k, orbiterScratch);
-        const sprite = this.orbiterSprite(drawn++);
-        sprite.setVisible(true);
-        sprite.setPosition(orbiterScratch.x, orbiterScratch.y);
-      }
+  private syncOrbiters(t: number): void {
+    const drawn = orbiterRenderPoints(this.world, t, orbiterPoints);
+    for (let k = 0; k < drawn; k++) {
+      const sprite = this.orbiterSprite(k);
+      sprite.setVisible(true);
+      sprite.setPosition(orbiterPoints[k].x, orbiterPoints[k].y);
     }
 
     for (let i = drawn; i < this.orbiterSprites.length; i++) {

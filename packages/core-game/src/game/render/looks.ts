@@ -2,7 +2,9 @@ import type { EnemyPattern } from "@bh/shared-types";
 
 /**
  * Как выглядит мир забега: формы и цвета врагов, кристаллов, подборов и
- * эффектов. Плейсхолдеры до прихода ассетов (docs/26-stage2-plan.md, WP1).
+ * эффектов. Облик — «Сумеречный рубеж», вид боя «цвет по угрозе»
+ * (`design/README.md`): враги красные и различаются формой, опасное — каймой,
+ * кристаллы яркие, обереги бирюзовые, земля — средний сумеречный тон.
  *
  * Отдельно от рендера и без Phaser: те же данные рисует гайдбук оболочки,
  * и картинка в гайдбуке обязана совпадать с тем, что игрок видит в забеге.
@@ -41,40 +43,62 @@ export interface ShapeLook {
 }
 
 /**
- * У каждого поведения своя форма и цвет, чтобы типы различались на глаз без
- * подписи.
+ * Все враги — красная гамма, поэтому главное различие типа — форма, а оттенок
+ * лишь подсказывает: круг, квадрат, клин читаются на глаз без подписи.
  */
 export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
-  swarm: { shape: "circle", color: 0xff8f6b },
-  chase: { shape: "square", color: 0xc06bff },
-  kite_and_shoot: { shape: "triangle", color: 0x6bd5ff },
+  swarm: { shape: "circle", color: 0xff4d5a },
+  chase: { shape: "square", color: 0xe0245e },
+  kite_and_shoot: { shape: "triangle", color: 0xff6a6a },
   // Ромб отдан кристаллам опыта: рывковый враг — остриё, и цвет у него
   // тревожный, а не «подбери меня».
-  dash: { shape: "chevron", color: 0xff7a1f },
-  orbit: { shape: "ring", color: 0x8cf0ff },
-  exploder: { shape: "hexagon", color: 0xff5a5a },
-  splitter: { shape: "double", color: 0x9be36b },
+  dash: { shape: "chevron", color: 0xff5a2e },
+  orbit: { shape: "ring", color: 0xff7a90 },
+  exploder: { shape: "hexagon", color: 0xff3b30 },
+  splitter: { shape: "double", color: 0xd93a6a },
   // Рой проносится мимо: мелкая быстрая мошкара, не похожая на тех, кто идёт
-  // на игрока, — цвет холодный, форма угловатая.
-  rush: { shape: "mote", color: 0xd8dce8 },
-  // Кастер стоит в стороне и светится перед ударом: тяжёлая фигура и цвет,
-  // которого больше ни у кого нет.
-  caster: { shape: "eye", color: 0xb48cff },
+  // на игрока, — форма угловатая, цвет светлее прочих.
+  rush: { shape: "mote", color: 0xff9a8a },
+  // Кастер стоит в стороне и светится перед ударом: тяжёлая фигура-глаз и самый
+  // тёмный оттенок.
+  caster: { shape: "eye", color: 0xc2185b },
 };
 
+/** Ранг врага на канве: обычный не задан. */
+export type EnemyRankLook = "elite" | "boss" | undefined;
+
 /**
- * Цвет врага на канве. Элита — половина пути к белому: считается по каналам,
- * а не подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
- * останется без своего элитного цвета.
+ * Цвет и доля смешения тела с цветом ранга: элита — жар очага, босс —
+ * ярко-малиновый. Не #e0245e: это цвет рядового `chase`, и его босс не
+ * отличался бы от рядового.
  */
-export function enemyColor(pattern: EnemyPattern, elite: boolean): number {
+const RANK_TINT = {
+  elite: { color: 0xff8f3f, mix: 0.35 },
+  boss: { color: 0xff4f8f, mix: 0.4 },
+} as const;
+
+/**
+ * Цвет врага на канве. Ранг смешивает тело с цветом ранга по каналам, а не
+ * подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
+ * останется без своего цвета элиты.
+ */
+export function enemyColor(pattern: EnemyPattern, rank: EnemyRankLook): number {
   const color = ENEMY_LOOKS[pattern].color;
-  if (!elite) return color;
-  const mix = (channel: number): number => Math.round(channel + (255 - channel) * 0.45);
-  const r = mix((color >> 16) & 0xff);
-  const g = mix((color >> 8) & 0xff);
-  const b = mix(color & 0xff);
-  return (r << 16) | (g << 8) | b;
+  if (rank === undefined) return color;
+  return mixChannels(color, RANK_TINT[rank].color, RANK_TINT[rank].mix);
+}
+
+/** Кайма опасного: золотая, толще у босса. Обводка у рядовых «странновато выглядит» — её нет. */
+export interface EnemyRim {
+  color: number;
+  /** толщина в игровых единицах */
+  width: number;
+}
+
+export function enemyRim(rank: EnemyRankLook): EnemyRim | null {
+  if (rank === "elite") return { color: 0xffd15c, width: 2 };
+  if (rank === "boss") return { color: 0xffd15c, width: 3 };
+  return null;
 }
 
 /**
@@ -87,8 +111,10 @@ export function enemyColor(pattern: EnemyPattern, elite: boolean): number {
  */
 export const STAGE_LOOKS: readonly { mixColor: number; mix: number; core: number | null }[] = [
   { mixColor: 0x000000, mix: 0, core: null },
-  { mixColor: 0xffb038, mix: 0.3, core: 0xffe9b0 },
-  { mixColor: 0xff3b2f, mix: 0.45, core: 0xffd9c0 },
+  // Тонировка красного в оранжевый и красный осталась бы незаметной: вторая
+  // ступень светлеет к золоту, третья темнеет к тёмно-вишнёвому.
+  { mixColor: 0xffd15c, mix: 0.25, core: 0xfff1d6 },
+  { mixColor: 0x3b0a1f, mix: 0.35, core: 0xffd9e0 },
 ];
 
 /** Цвет тела врага на ступени: та же тварь, но матёрее. */
@@ -118,12 +144,12 @@ function mixChannels(from: number, to: number, ratio: number): number {
  * цветом (docs/27-design-system-and-app-shell.md §4.4).
  */
 export const GEM_TIERS: readonly (ShapeLook & { minValue: number; radiusUnits: number })[] = [
-  { minValue: 1, radiusUnits: 5, color: 0x5ccfff, shape: "gem" },
-  { minValue: 3, radiusUnits: 6.5, color: 0x5fe3a1, shape: "gem" },
-  { minValue: 8, radiusUnits: 8, color: 0xc47dff, shape: "gem" },
+  { minValue: 1, radiusUnits: 5, color: 0xb6ff4a, shape: "gem" },
+  { minValue: 3, radiusUnits: 6.5, color: 0xa8f4ff, shape: "gem" },
+  { minValue: 8, radiusUnits: 8, color: 0xd68cff, shape: "gem" },
   // Самый ценный — тоже кристалл, а не другая фигура: ступень читается
   // размером, цветом и искрой внутри, но остаётся кристаллом.
-  { minValue: 20, radiusUnits: 10.5, color: 0xffd36b, shape: "gem_rich" },
+  { minValue: 20, radiusUnits: 10.5, color: 0xffd15c, shape: "gem_rich" },
 ];
 
 /**
@@ -140,20 +166,19 @@ export const PICKUP_LOOKS: readonly (ShapeLook & { id: "medkit" | "magnet" | "dy
  * Остальная палитра мира: персонаж, снаряды, взрывы и земля.
  *
  * Персонаж — единственное, на что игрок смотрит постоянно, и он не делит цвет
- * ни с кольцами вокруг себя, ни с врагами: раньше персонаж и кольцо здоровья
- * были почти одним зелёным и сливались в одно пятно. Тело светлое и
- * нейтральное, цвет несут кольца.
+ * ни с кольцами вокруг себя, ни с врагами: иначе тело и кольцо здоровья
+ * слились бы в одно пятно. Тело светлое и нейтральное, цвет несут кольца.
  */
 export const WORLD_COLORS = {
   player: 0xf4f7ff,
   /** тёмный кант персонажа: светлое тело на светлом фоне иначе теряется */
-  playerEdge: 0x1b2437,
+  playerEdge: 0x1d1c31,
   projectile: 0xffe066,
   enemyProjectile: 0xff6b6b,
-  orbiter: 0xffe0a3,
+  orbiter: 0x46d9c6,
   blast: 0xffa24d,
   strike: 0x9bd0ff,
-  heal: 0x5fe3a1,
+  heal: 0x8ee86b,
   magnetWave: 0x5ccfff,
   dynamiteWave: 0xffb22e,
   /** вспышка персонажа при попадании */
@@ -171,16 +196,16 @@ export const WORLD_COLORS = {
   /** раскалённое ядро вражеского снаряда */
   enemyProjectileCore: 0xfff1e6,
   /** кольцо здоровья: полное, на исходе и почти пустое */
-  hpFull: 0x4ade80,
-  hpMid: 0xffc53d,
-  hpLow: 0xff4d4d,
+  hpFull: 0xff6f90,
+  hpMid: 0xffc14d,
+  hpLow: 0xff3b5c,
   /** кольцо опыта вокруг персонажа */
-  xpRing: 0x7cc4ff,
+  xpRing: 0xb6ff4a,
   /** блик на грани кристалла */
   gemLight: 0xffffff,
   lightningCore: 0xf3f6fc,
-  ground: 0x0d0f14,
-  groundLine: 0x171b24,
+  ground: 0x2b4152,
+  groundLine: 0x33495b,
   /** светлые детали подборов: плашка аптечки, полюса магнита, фитиль */
   pickupLight: 0xf3f6fc,
   dynamiteBand: 0x3a1414,

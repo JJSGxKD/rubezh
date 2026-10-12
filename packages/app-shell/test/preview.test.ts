@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { trustedMessage } from "../src/preview";
-import { draftMessageSchema, PREVIEW_DRAFT } from "../src/preview/protocol";
-import { PREVIEW_REGISTRY } from "../src/preview/registry";
+import { draftMessageSchema, PREVIEW_DRAFT, type TaskDraft } from "../src/preview/protocol";
+import { changelogVersion, PREVIEW_REGISTRY, taskStates } from "../src/preview/registry";
 
 // Страница предпросмотра для панели (docs/35-stage4-plan.md WP32, Р83):
 // черновик — только от панели и только от окна, в которое она встроена;
@@ -47,5 +47,51 @@ describe("реестр предпросмотра", () => {
     expect(html).not.toContain("<img");
     expect(render({ title: "т", text: "п", imageId: "../../etc/passwd", icon: "gift" })).toBeNull();
     expect(render("мусор")).toBeNull();
+  });
+});
+
+describe("версия журнала в предпросмотре", () => {
+  const render = (draft: unknown) => PREVIEW_REGISTRY["changelog-version"].render(draft, { apiBaseUrl: "https://api.gonet.fun" });
+
+  it("карточкой «Что нового»: номер, строки по видам, новая", () => {
+    const html = renderToStaticMarkup(render({ version: "0.6.0", entries: [{ kind: "fixed", text: "Колесо не зависает" }, { kind: "added", text: "Виджеты главной" }] }));
+    expect(html).toContain("0.6.0");
+    expect(html).toContain("Виджеты главной");
+    expect(html).toContain("Колесо не зависает");
+    // Новое — раньше исправленного, как у игрока.
+    expect(html.indexOf("Виджеты главной")).toBeLessThan(html.indexOf("Колесо не зависает"));
+  });
+
+  it("пустая версия и пустые строки — заготовками; битый черновик — ничего", () => {
+    const version = changelogVersion({ version: " ", entries: [{ kind: "added", text: "  " }] }, new Date("2026-10-04T12:00:00.000Z"));
+    expect(version).toMatchObject({ version: "x.y.z", fresh: true, entries: [{ kind: "added", text: "Строка журнала" }] });
+    expect(render({ version: "0.6.0", entries: "мусор" })).toBeNull();
+  });
+});
+
+describe("задание в предпросмотре", () => {
+  const draft: TaskDraft = { title: null, kind: "runs", period: "daily", partner: false, target: 3, reward: { coins: 50, gems: 0, shards: 2 }, imageId: null, link: null };
+  const render = (value: unknown) => PREVIEW_REGISTRY.task.render(value, { apiBaseUrl: "https://api.gonet.fun" });
+
+  it("двумя строками: до выполнения с нулевым прогрессом и выполненным — с «Забрать»", () => {
+    const { before, after } = taskStates(draft);
+    expect([before.value, before.done, after.value, after.done]).toEqual([0, false, 3, true]);
+    expect(before.category).toBe("daily");
+    const html = renderToStaticMarkup(render(draft));
+    expect(html).toContain("Пока не выполнено");
+    expect(html).toContain("Забрать");
+  });
+
+  it("партнёрская цель — своей вкладкой, с картинкой с адреса API; заголовок — как набран", () => {
+    const partner: TaskDraft = { ...draft, title: "  Подпишись на канал  ", kind: "channel", period: "achievement", partner: true, target: 1, imageId: IMAGE, link: "https://t.me/rubezh" };
+    expect(taskStates(partner).before).toMatchObject({ category: "partner", title: "Подпишись на канал", link: "https://t.me/rubezh" });
+    const html = renderToStaticMarkup(render(partner));
+    expect(html).toContain(`https://api.gonet.fun/api/v1/media/${IMAGE}.webp`);
+    expect(html).toContain("Подписаться");
+  });
+
+  it("битый черновик — ничего: картинка не путь медиа, отрицательная награда", () => {
+    expect(render({ ...draft, imageId: "../x" })).toBeNull();
+    expect(render({ ...draft, reward: { coins: -1, gems: 0, shards: 0 } })).toBeNull();
   });
 });

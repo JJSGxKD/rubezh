@@ -1,0 +1,327 @@
+import { describe, expect, it } from "vitest";
+// @ts-expect-error — утилита на чистом JS, типов у неё нет
+import { classify, nextTasks, statusBadge, versionRank } from "../tasks/board.mjs";
+
+// Доска задач: каждая задача — ровно в одной колонке.
+
+const EPIC_ORDER = ["E0", "E1", "E2"];
+
+function task(id: string, patch: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id,
+    fileName: `${id}-x.md`,
+    title: `Задача ${id}`,
+    epic: "E0",
+    priority: "P1",
+    status: "ready",
+    owner: "",
+    size: "S",
+    depends_on: [],
+    zones: [`zones/${id}/**`],
+    shared: [],
+    runner: "any",
+    executor: "sonnet-5.5",
+    effort: "medium",
+    release: "patch",
+    design: null,
+    ...patch,
+  };
+}
+
+function ids(entries: { task: { id: string } }[]): string[] {
+  return entries.map((entry) => entry.task.id);
+}
+
+const FIXTURE = [
+  task("T-0001", { status: "done" }),
+  task("T-0002", { status: "cancelled" }),
+  task("T-0003", { status: "draft" }),
+  task("T-0004"), // ветка и открытый PR → на ревью
+  task("T-0005"), // ветка без PR → в работе
+  task("T-0006", { depends_on: ["T-0005"] }), // ждёт T-0005
+  task("T-0007"), // свободна
+];
+const TAKEN = ["T-0004", "T-0005"];
+const PRS = [{ number: 21, headRefName: "task/T-0004", isDraft: false }];
+
+describe("доска задач", () => {
+  const board = classify(FIXTURE, TAKEN, PRS, [], EPIC_ORDER);
+
+  it("каждая задача — в своей колонке", () => {
+    expect(ids(board.done)).toEqual(["T-0001"]);
+    expect(ids(board.cancelled)).toEqual(["T-0002"]);
+    expect(ids(board.draft)).toEqual(["T-0003"]);
+    expect(ids(board.review)).toEqual(["T-0004"]);
+    expect(ids(board.inProgress)).toEqual(["T-0005"]);
+    expect(ids(board.blocked)).toEqual(["T-0006"]);
+    expect(ids(board.free)).toEqual(["T-0007"]);
+  });
+
+  it("ни одна задача не пропала и не задвоилась", () => {
+    const all = Object.values(board).flat() as { task: { id: string } }[];
+    expect(ids(all).sort()).toEqual(FIXTURE.map((item) => item.id).sort());
+  });
+
+  it("заблокированной — причина: какая зависимость не сделана", () => {
+    expect(board.blocked[0].reason).toContain("T-0005");
+  });
+
+  it("у задачи на ревью виден номер PR", () => {
+    expect(board.review[0].pr).toBe(21);
+  });
+
+  it("PR в черновике — это ещё «в работе»", () => {
+    const draftPr = [{ number: 21, headRefName: "task/T-0004", isDraft: true }];
+    const result = classify(FIXTURE, TAKEN, draftPr, [], EPIC_ORDER);
+    expect(ids(result.review)).toEqual([]);
+    expect(ids(result.inProgress).sort()).toEqual(["T-0004", "T-0005"]);
+  });
+
+  it("без списка PR (нет gh) «на ревью» сливается с «в работе»", () => {
+    const result = classify(FIXTURE, TAKEN, null, [], EPIC_ORDER);
+    expect(ids(result.review)).toEqual([]);
+    expect(ids(result.inProgress).sort()).toEqual(["T-0004", "T-0005"]);
+  });
+
+  it("зависимость, которой нет в реестре, блокирует и называется", () => {
+    const result = classify([task("T-0008", { depends_on: ["T-0099"] })], [], [], [], EPIC_ORDER);
+    expect(result.blocked[0].reason).toContain("T-0099");
+  });
+
+  it("зависимость в статусе done не блокирует", () => {
+    const result = classify([task("T-0001", { status: "done" }), task("T-0002", { depends_on: ["T-0001"] })], [], [], [], EPIC_ORDER);
+    expect(ids(result.free)).toEqual(["T-0002"]);
+  });
+});
+
+describe("пересечение зон на доске", () => {
+  it("зоны пересекаются с задачей в работе — заблокирована, причина называет её", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    const result = classify(tasks, ["T-0004"], [], ["a/b.ts"], EPIC_ORDER);
+    expect(ids(result.blocked)).toEqual(["T-0005"]);
+    expect(result.blocked[0].reason).toContain("T-0004");
+  });
+
+  it("пересечение с задачей на ревью тоже блокирует", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    const prs = [{ number: 7, headRefName: "task/T-0004", isDraft: false }];
+    const result = classify(tasks, ["T-0004"], prs, ["a/b.ts"], EPIC_ORDER);
+    expect(ids(result.blocked)).toEqual(["T-0005"]);
+  });
+
+  it("пересечение с другой свободной задачей не блокирует: занята только та, у которой есть ветка", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    const result = classify(tasks, [], [], ["a/b.ts"], EPIC_ORDER);
+    expect(ids(result.free)).toEqual(["T-0004", "T-0005"]);
+  });
+
+  it("задача с готовой зависимостью не блокируется зонами done-задачи", () => {
+    const tasks = [task("T-0001", { status: "done", zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    const result = classify(tasks, [], [], ["a/b.ts"], EPIC_ORDER);
+    expect(ids(result.free)).toEqual(["T-0005"]);
+  });
+});
+
+describe("порядок в колонке «Свободно»", () => {
+  const tasks = [
+    task("T-0010", { priority: "P2", epic: "E0" }),
+    task("T-0011", { priority: "P0", epic: "E2" }),
+    task("T-0012", { priority: "P0", epic: "E1" }),
+    task("T-0013", { priority: "P0", epic: "E1" }),
+    task("T-0014", { priority: "P1", epic: "E0" }),
+  ];
+
+  it("по приоритету, затем по порядку эпика, затем по id", () => {
+    const result = classify(tasks, [], [], [], EPIC_ORDER);
+    expect(ids(result.free)).toEqual(["T-0012", "T-0013", "T-0011", "T-0014", "T-0010"]);
+  });
+
+  it("эпик, которого нет в epics.md, идёт последним среди своего приоритета", () => {
+    const result = classify([task("T-0020", { epic: "E9" }), task("T-0021", { epic: "E2" })], [], [], [], EPIC_ORDER);
+    expect(ids(result.free)).toEqual(["T-0021", "T-0020"]);
+  });
+});
+
+// Поезд версий (docs/38-release-plan.md): ближняя версия — раньше приоритета.
+describe("версия задачи в порядке выдачи", () => {
+  it("ближняя версия раньше дальней при любом приоритете; без версии — в конце", () => {
+    const result = classify(
+      [task("T-0050", { priority: "P0", version: "v0.10" }), task("T-0051", { priority: "P2", version: "v0.8" }), task("T-0052", { priority: "P0" }), task("T-0053", { priority: "P1", version: "v0.9" })],
+      [],
+      [],
+      [],
+      EPIC_ORDER,
+    );
+    expect(ids(result.free)).toEqual(["T-0051", "T-0053", "T-0050", "T-0052"]);
+  });
+
+  it("versionRank: v0.10 позже v0.9, мусор — как без версии", () => {
+    expect(versionRank("v0.10")).toBeGreaterThan(versionRank("v0.9"));
+    expect(versionRank("v1.0")).toBeGreaterThan(versionRank("v0.99"));
+    expect(versionRank(undefined)).toBe(versionRank("x"));
+  });
+});
+
+describe("следующая задача", () => {
+  const free = classify(
+    [
+      task("T-0030", { runner: "human" }),
+      task("T-0031", { runner: "local" }),
+      task("T-0032", { runner: "any" }),
+      task("T-0033", { runner: "any", executor: "other-model" }),
+    ],
+    [],
+    [],
+    [],
+    EPIC_ORDER,
+  ).free;
+
+  it("по умолчанию — только runner: any; human не показывается никогда", () => {
+    expect(ids(nextTasks(free, {}))).toEqual(["T-0032", "T-0033"]);
+  });
+
+  it("local включает any", () => {
+    expect(ids(nextTasks(free, { runner: "local" }))).toEqual(["T-0031", "T-0032", "T-0033"]);
+  });
+
+  it("--executor оставляет задачи только этого исполнителя", () => {
+    expect(ids(nextTasks(free, { runner: "local", executor: "sonnet-5.5" }))).toEqual(["T-0031", "T-0032"]);
+  });
+});
+
+// Доработка (tasks/README.md, «Доработка»): PR с меткой может закончить любой
+// поток с тем же исполнителем и уровнем.
+describe("доработка", () => {
+  const REWORK = [{ name: "доработка" }];
+
+  it("PR с меткой «доработка» — в своей колонке, будь он хоть черновиком", () => {
+    const prs = [
+      { number: 21, headRefName: "task/T-0004", isDraft: false, labels: REWORK },
+      { number: 22, headRefName: "task/T-0005", isDraft: true, labels: [{ name: "release: patch" }, ...REWORK] },
+    ];
+    const result = classify(FIXTURE, TAKEN, prs, [], EPIC_ORDER);
+    expect(ids(result.rework)).toEqual(["T-0004", "T-0005"]);
+    expect(result.rework.map((entry: { pr: number }) => entry.pr)).toEqual([21, 22]);
+    expect(ids(result.review)).toEqual([]);
+    expect(ids(result.inProgress)).toEqual([]);
+  });
+
+  it("задача на доработке держит свои зоны", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    const prs = [{ number: 21, headRefName: "task/T-0004", isDraft: false, labels: REWORK }];
+    const result = classify(tasks, ["T-0004"], prs, ["a/b.ts"], EPIC_ORDER);
+    expect(result.blocked[0].reason).toContain("T-0004 (на доработке)");
+  });
+
+  it("--effort оставляет задачи только этого уровня — и в доработке, и в свободных", () => {
+    const result = classify(
+      [task("T-0040", { effort: "low" }), task("T-0041", { effort: "medium" }), task("T-0042", { effort: "medium", executor: "haiku-5.5" })],
+      ["T-0041"],
+      [{ number: 30, headRefName: "task/T-0041", isDraft: false, labels: REWORK }],
+      [],
+      EPIC_ORDER,
+    );
+    expect(ids(nextTasks(result.rework, { executor: "sonnet-5.5", effort: "medium" }))).toEqual(["T-0041"]);
+    expect(ids(nextTasks(result.free, { executor: "sonnet-5.5", effort: "medium" }))).toEqual([]);
+    expect(ids(nextTasks(result.free, { executor: "haiku-5.5", effort: "medium" }))).toEqual(["T-0042"]);
+    expect(ids(nextTasks(result.free, { effort: "low" }))).toEqual(["T-0040"]);
+  });
+
+  it("значок — «доработка · #N», жёлтый; в работе с уровнем в owner — только аккаунт", () => {
+    expect(statusBadge({ column: "rework", task: task("T-0001"), pr: 214 })).toEqual({
+      schemaVersion: 1,
+      label: "статус",
+      cacheSeconds: 300,
+      message: "доработка · #214",
+      color: "yellow",
+    });
+    expect(statusBadge({ column: "inProgress", task: task("T-0001"), owner: "claude-3 / haiku-5.5 / low" }).message).toBe("в работе · claude-3");
+  });
+});
+
+describe("причины блокировки в структурном виде", () => {
+  it("зависимости и занятые зоны — списками id, чтобы значок не разбирал текст", () => {
+    const tasks = [
+      task("T-0004", { zones: ["a/**"] }),
+      task("T-0005", { zones: ["a/b.ts"], depends_on: ["T-0006", "T-0099"] }),
+      task("T-0006"),
+    ];
+    const result = classify(tasks, ["T-0004"], [], ["a/b.ts"], EPIC_ORDER);
+    const blocked = result.blocked.find((entry: { task: { id: string } }) => entry.task.id === "T-0005");
+    expect(blocked.waitingFor).toEqual(["T-0006", "T-0099"]);
+    expect(blocked.busyWith).toEqual(["T-0004"]);
+  });
+});
+
+describe("значок статуса", () => {
+  const base = { schemaVersion: 1, label: "статус", cacheSeconds: 300 };
+
+  it("свободно — «можно брать», ярко-зелёный", () => {
+    expect(statusBadge({ column: "free", task: task("T-0001") })).toEqual({ ...base, message: "можно брать", color: "brightgreen" });
+  });
+
+  it("в работе — «в работе · аккаунт», оранжевый; модель из owner отрезана", () => {
+    expect(statusBadge({ column: "inProgress", task: task("T-0001"), owner: "claude-2 / sonnet-5.5" })).toEqual({
+      ...base,
+      message: "в работе · claude-2",
+      color: "orange",
+    });
+  });
+
+  it("в работе без известного владельца — просто «в работе»", () => {
+    expect(statusBadge({ column: "inProgress", task: task("T-0001"), owner: "" }).message).toBe("в работе");
+    expect(statusBadge({ column: "inProgress", task: task("T-0001") }).message).toBe("в работе");
+  });
+
+  it("на ревью — номер PR, синий", () => {
+    expect(statusBadge({ column: "review", task: task("T-0001"), pr: 214 })).toEqual({ ...base, message: "на ревью · #214", color: "blue" });
+  });
+
+  it("заблокировано зависимостью — «ждёт T-0003», красный", () => {
+    expect(statusBadge({ column: "blocked", task: task("T-0001"), waitingFor: ["T-0003"], busyWith: [] })).toEqual({
+      ...base,
+      message: "ждёт T-0003",
+      color: "red",
+    });
+  });
+
+  it("две зависимости перечисляются обе, три — две и «+1»", () => {
+    const blocked = (waitingFor: string[]) => statusBadge({ column: "blocked", task: task("T-0001"), waitingFor, busyWith: [] }).message;
+    expect(blocked(["T-0003", "T-0004"])).toBe("ждёт T-0003, T-0004");
+    expect(blocked(["T-0003", "T-0004", "T-0005"])).toBe("ждёт T-0003, T-0004 +1");
+    expect(blocked(["T-0003", "T-0004", "T-0005", "T-0006", "T-0007"])).toBe("ждёт T-0003, T-0004 +3");
+  });
+
+  it("заблокировано зоной — «зона занята T-0005», красный", () => {
+    expect(statusBadge({ column: "blocked", task: task("T-0001"), waitingFor: [], busyWith: ["T-0005"] })).toEqual({
+      ...base,
+      message: "зона занята T-0005",
+      color: "red",
+    });
+  });
+
+  it("и зависимость, и зона — в значке зависимость: без неё зона ничего не решает", () => {
+    expect(statusBadge({ column: "blocked", task: task("T-0001"), waitingFor: ["T-0003"], busyWith: ["T-0005"] }).message).toBe("ждёт T-0003");
+  });
+
+  it("готово — фиолетовый, как влитый PR", () => {
+    expect(statusBadge({ column: "done", task: task("T-0001") })).toEqual({ ...base, message: "готово", color: "6e40c9" });
+  });
+
+  it("черновик — светло-серый", () => {
+    expect(statusBadge({ column: "draft", task: task("T-0001") })).toEqual({ ...base, message: "черновик", color: "lightgrey" });
+  });
+
+  it("отменено — неактивный", () => {
+    expect(statusBadge({ column: "cancelled", task: task("T-0001") })).toEqual({ ...base, message: "отменено", color: "inactive" });
+  });
+
+  it("у каждой колонки доски есть значок", () => {
+    const board = classify(FIXTURE, TAKEN, PRS, [], EPIC_ORDER);
+    for (const [column, entries] of Object.entries(board) as [string, Record<string, unknown>[]][]) {
+      for (const entry of entries) {
+        expect(statusBadge({ ...entry, column }).message).not.toBe("");
+      }
+    }
+  });
+});

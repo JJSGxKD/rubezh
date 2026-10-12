@@ -25,6 +25,7 @@
     "balance:sim": "vitest run --config vitest.balance.config.ts",
     "budget": "node scripts/bundle-budget.mjs",
     "docs:check": "node scripts/docs-check.mjs",
+    "task": "node scripts/tasks/task.mjs",
     "closed-test:export": "pnpm --filter backend-api export",
     "replay": "node scripts/replay.mjs"
   },

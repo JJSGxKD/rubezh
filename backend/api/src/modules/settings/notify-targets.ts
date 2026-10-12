@@ -21,6 +21,10 @@ export interface AdminChats {
   feedback: ChatTarget | null;
   /** подозрительные и отклонённые забеги — очередь разбора антифрода */
   runReview: ChatTarget | null;
+  /** невыданные покупки, возвраты за снятые товары, брошенные задания оплаты */
+  payments: ChatTarget | null;
+  /** всплеск ответов 5xx: API жив, но запросы массово падают */
+  ops: ChatTarget | null;
 }
 
 /**
@@ -42,6 +46,8 @@ export class NotifyTargets {
       runReports: orGeneral(SETTINGS.chatRuns),
       feedback: orGeneral(SETTINGS.chatFeedback),
       runReview: orGeneral(SETTINGS.chatRunReview),
+      payments: orGeneral(SETTINGS.chatPayments),
+      ops: orGeneral(SETTINGS.chatOps),
     };
   }
 

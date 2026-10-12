@@ -337,3 +337,37 @@ export function networkTaskState(row: Pick<NetworkTaskRow, "active" | "ready">):
   if (!row.ready.block || !row.ready.confirm) return { tone: "warning", label: "Игроки не видят" };
   return { tone: "success", label: "Работает" };
 }
+
+/** Неотрицательное целое из поля формы: пустое и битое — ноль, а не провал черновика. */
+function count(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/**
+ * Черновик предпросмотра (docs/35-stage4-plan.md WP32): из чего игрок видит
+ * строку задания — без лимита, порядка и включения. Партнёрская цель — своей
+ * вкладкой, с картинкой и ссылкой; у цели забега их нет.
+ */
+export function taskPreview(task: TaskDef): {
+  title: string | null;
+  kind: string;
+  period: TaskDef["period"];
+  partner: boolean;
+  target: number;
+  reward: { coins: number; gems: number; shards: number };
+  imageId: string | null;
+  link: string | null;
+} {
+  const partner = PARTNER_KINDS.has(task.kind);
+  const link = task.params?.url.trim() ?? "";
+  return {
+    title: task.title,
+    kind: task.kind,
+    period: task.period,
+    partner,
+    target: count(task.target),
+    reward: { coins: count(task.coins), gems: count(task.gems), shards: count(task.shards) },
+    imageId: partner ? task.image : null,
+    link: partner && link !== "" ? link : null,
+  };
+}

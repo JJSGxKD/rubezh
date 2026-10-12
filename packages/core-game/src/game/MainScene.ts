@@ -30,6 +30,7 @@ import { buildRadarSnapshot } from "./radar";
 import { buildBossSnapshot } from "./run/boss";
 import { buildPlayerStatuses } from "./run/player-statuses";
 import { WorldRenderer } from "./render/WorldRenderer";
+import { WORLD_COLORS } from "./render/looks";
 import { Joystick } from "./joystick";
 import { buildRunResult } from "./run/run-result";
 import { captureWorld, restoreWorld, SnapshotError } from "./run/snapshot";
@@ -187,7 +188,7 @@ export class MainScene extends Phaser.Scene {
     this.runCamera.snapTo(this.world, this.scale.width, this.scale.height);
     this.syncCamera();
 
-    this.cameras.main.setBackgroundColor("#0d0f14");
+    this.cameras.main.setBackgroundColor(WORLD_COLORS.ground);
     this.joystick = new Joystick(this, data.unitScale);
     this.bindKeyboard();
 

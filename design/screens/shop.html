@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — магазин</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Токены «Сумеречного рубежа» — как в home.html. Звёзды Telegram — свой тон
+     --stars (кнопка variant="stars"), VIP — elite и акцент, как VipCard. */
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --surface-raised:#353452; --surface-sunken:#17162a;
+    --border:#43425f; --border-strong:#5b5980; --text:#f3eee6; --muted:#aeaac4; --disabled:#6f6c8a;
+    --accent:#ff8f3f; --accent-pressed:#f0782a; --accent-glow:#ffb67f; --accent-edge:#a0582a; --on-accent:#230f02;
+    --success:#8ee86b; --danger:#ff5d5d; --warning:#ffc14d; --info:#5ccfff; --elite:#ffd15c; --xp:#b6ff4a;
+    --coin:#ffd400; --gem:#ff515e; --stars:#ffd000;
+    --r-sm:4px; --r-md:6px; --r-lg:8px; --r-xl:10px; --cut-sm:8px; --cut-md:10px;
+    --display:'Russo One', sans-serif; --text-font:'IBM Plex Sans', sans-serif;
+    --page:#0d0c18; --page-muted:#9a97ab;
+    --passive:#c47dff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:15px/1.5 var(--text-font); }
+  .page { max-width:1600px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:400 28px/1.2 var(--display); margin:0 0 8px; letter-spacing:.02em; }
+  h2 { font:400 20px/1.2 var(--display); margin:40px 0 8px; letter-spacing:.02em; }
+  .lead, .sub { color:var(--page-muted); max-width:960px; }
+  .lead { margin:0 0 8px; } .sub { margin:0 0 16px; font-size:14px; }
+  code { font-size:.92em; }
+  table.inv { border-collapse:collapse; font-size:13.5px; max-width:1200px; margin:8px 0 0; }
+  table.inv td, table.inv th { border:1px solid #2c2b45; padding:6px 10px; text-align:left; vertical-align:top; }
+  table.inv th { color:var(--page-muted); font-weight:600; }
+  .row { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; }
+  .cap { width:380px; margin-top:10px; font-size:13.5px; color:var(--page-muted); }
+  .cap b { color:var(--text); font-weight:600; }
+  svg.i { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .disp { font-family:var(--display); letter-spacing:.02em; }
+  .grow { flex:1; min-width:0; }
+
+  .phone { width:380px; height:800px; border-radius:36px; padding:10px; background:#000; box-shadow:0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .screen { position:relative; width:100%; height:100%; border-radius:28px; overflow:hidden; background:var(--bg); display:flex; flex-direction:column; }
+  .screen::before { content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(110% 50% at 50% -10%, rgba(255,200,61,.10), transparent 60%), radial-gradient(80% 45% at 100% 105%, rgba(255,81,94,.08), transparent 60%); }
+  .screen > * { position:relative; }
+
+  /* Шапка и нижняя панель — те же, что на главной (home.html) */
+  .header { display:flex; align-items:center; gap:6px; padding:14px 12px 8px; background:rgba(29,28,49,.55); }
+  .ava { position:relative; width:44px; height:44px; flex:none; }
+  .ava svg { position:absolute; inset:0; }
+  .ava .ph { position:absolute; inset:5px; border-radius:50%; background:radial-gradient(circle at 40% 35%, #7b6a8f, #3a3150); }
+  .ava small { position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); min-width:18px; height:16px; padding:0 4px; border-radius:var(--r-sm); background:var(--surface-sunken); border:1px solid var(--border-strong); font:600 10px/14px var(--text-font); text-align:center; }
+  .chip { white-space:nowrap; display:flex; align-items:center; gap:6px; height:36px; padding:0 4px 0 10px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--border); font-weight:700; font-size:13.5px; }
+  .chip.nobuy { padding-right:10px; }
+  .coin { width:16px; height:16px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #fff16a, var(--coin) 55%, #ff9f00); flex:none; display:inline-block; }
+  .gemi { width:13px; height:15px; background:linear-gradient(160deg,#ffc9cc,var(--gem) 55%,#f0303e); clip-path:polygon(50% 0,100% 35%,80% 100%,20% 100%,0 35%); flex:none; display:inline-block; }
+  .buy { width:24px; height:24px; border-radius:var(--r-sm); background:var(--accent); color:var(--on-accent); display:grid; place-items:center; }
+  .buy svg { width:14px; height:14px; stroke-width:3; }
+  .ibtn { position:relative; width:40px; height:40px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--border); display:grid; place-items:center; flex:none; color:var(--text); }
+  .ibtn svg { width:20px; height:20px; }
+  .count { position:absolute; top:-5px; right:-5px; min-width:17px; height:17px; padding:0 4px; border-radius:var(--r-sm); background:var(--accent); color:var(--on-accent); font:700 10px/17px var(--text-font); text-align:center; }
+  .tabs { display:grid; grid-template-columns:repeat(6,1fr); padding:4px 4px 10px; border-top:1px solid var(--border); background:var(--surface); }
+  .tab { position:relative; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:2px; height:56px; font:500 12px/16px var(--text-font); color:var(--muted); white-space:nowrap; }
+  .tab .ic { width:40px; height:40px; display:grid; place-items:center; border-radius:var(--r-md); color:var(--muted); }
+  .tab.on { color:var(--accent); }
+  .tab.on .ic { transform:translateY(-10px) scale(1.08); color:var(--on-accent); background:linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); box-shadow:inset 0 -3px 0 var(--accent-edge), 0 8px 18px -8px rgba(255,143,63,.8); }
+  .tab.on span.l { margin-top:-10px; }
+
+  .body { flex:1; min-height:0; overflow:hidden; padding:2px 12px 12px; display:flex; flex-direction:column; gap:10px;
+          -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 28px),transparent); mask-image:linear-gradient(180deg,#000 calc(100% - 28px),transparent); }
+  .body > * { flex:none; }
+  .ptitle { font:400 22px/1.15 var(--display); letter-spacing:.02em; margin-top:4px; }
+  .stitle { font:600 12px/16px var(--text-font); color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+  .note { font-size:12px; color:var(--muted); line-height:1.4; }
+
+  /* Полоса баннеров: соседний выглядывает, точки под ней (ShopBanners) */
+  .strip { position:relative; height:160px; margin:0 -12px; }
+  .banner { position:absolute; top:0; height:160px; border-radius:var(--r-lg); overflow:hidden; padding:12px 14px; display:flex; flex-direction:column;
+            border:1px solid color-mix(in oklab, var(--tone) 40%, var(--border)); background:linear-gradient(120deg, color-mix(in oklab, var(--tone) 22%, var(--surface-raised)), var(--surface) 70%); }
+  .banner.cur { left:12px; width:86%; } .banner.next { left:calc(86% + 20px); width:86%; opacity:.6; }
+  /* Значок — крупно и полупрозрачно в углу, как BannerArt (88 px, opacity .25) */
+  .banner .art { position:absolute; right:-12px; bottom:-12px; color:var(--tone); opacity:.25; pointer-events:none; }
+  .banner .art svg.i { width:88px; height:88px; stroke-width:1.5; }
+  .eyebrow { font:600 11px/14px var(--text-font); color:var(--tone); text-transform:uppercase; letter-spacing:.06em; }
+  .banner .bt { font:400 19px/1.15 var(--display); letter-spacing:.02em; margin-top:2px; }
+  .banner .bx { font-size:12.5px; color:var(--muted); margin-top:2px; padding-right:62px; line-height:1.35; }
+  .banner .cta { margin-top:auto; align-self:flex-start; }
+  .dots { display:flex; gap:6px; justify-content:center; margin-top:-2px; }
+  .dots i { width:6px; height:6px; border-radius:2px; background:var(--border-strong); } .dots i.on { background:var(--stars); width:18px; }
+  /* Тоны — как TONE в shop-banners.tsx: VIP — элита, стартовый — успех, снаряжение — пассивки, Tribute — звёзды */
+  .t-vip { --tone:var(--elite); } .t-starter { --tone:var(--success); } .t-gear { --tone:var(--passive); } .t-tribute { --tone:var(--stars); }
+
+  /* Вкладки раздела — SegmentedControl */
+  .seg { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:3px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); }
+  .seg span { position:relative; height:34px; display:grid; place-items:center; border-radius:var(--r-sm); font:600 13px var(--text-font); color:var(--muted); }
+  .seg span.on { background:linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); color:var(--on-accent); box-shadow:inset 0 -2px 0 var(--accent-edge); }
+  .seg span .dot { position:absolute; top:6px; right:10px; width:7px; height:7px; border-radius:2px; background:var(--accent); }
+  .seg span.on .dot { background:var(--on-accent); }
+
+  /* Карточки */
+  .card { position:relative; padding:12px; border-radius:var(--r-lg); background:linear-gradient(180deg,var(--surface-raised),var(--surface)); border:1px solid var(--border); overflow:hidden; }
+  .card.stripe::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent); }
+  .card.vip { border-color:color-mix(in oklab, var(--elite) 45%, var(--border)); background:linear-gradient(160deg, color-mix(in oklab, var(--elite) 12%, var(--surface-raised)), var(--surface) 70%); }
+  .card.vip.active { box-shadow:0 0 0 1px color-mix(in oklab, var(--elite) 50%, transparent), 0 0 28px -10px color-mix(in oklab, var(--elite) 70%, transparent); }
+  .card.owned { opacity:.6; }
+  .ch { display:flex; align-items:flex-start; gap:10px; }
+  .crown { width:44px; height:44px; border-radius:var(--r-lg); display:grid; place-items:center; flex:none; color:var(--elite); background:linear-gradient(135deg, color-mix(in oklab, var(--elite) 40%, transparent), color-mix(in oklab, var(--accent) 30%, transparent)); }
+  .crown svg.i { width:24px; height:24px; }
+  .ct { font:400 17px/1.2 var(--display); letter-spacing:.02em; }
+  .cs { font-size:12.5px; color:var(--muted); margin-top:1px; line-height:1.35; }
+  .forYou { font:600 11px/14px var(--text-font); color:var(--accent); text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px; }
+  .perks { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:5px; font-size:13px; }
+  .perks li { display:flex; align-items:center; gap:8px; } .perks svg.i { width:16px; height:16px; color:var(--accent); }
+  .contents { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:8px; font-size:13px; } .contents span { display:inline-flex; align-items:center; gap:6px; }
+  .badges { display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex:none; }
+  .badge { display:inline-flex; align-items:center; gap:4px; height:20px; padding:0 7px; border-radius:var(--r-sm); font:600 11px/1 var(--text-font); }
+  .badge.accent { background:color-mix(in oklab, var(--accent) 18%, transparent); color:var(--accent); }
+  .badge.warning { background:color-mix(in oklab, var(--warning) 18%, transparent); color:var(--warning); }
+  .badge.danger { background:color-mix(in oklab, var(--danger) 18%, transparent); color:var(--danger); }
+  .owned-line { display:flex; align-items:center; gap:6px; margin-top:10px; font-size:13px; font-weight:600; color:var(--success); } .owned-line svg.i { width:16px; height:16px; }
+
+  /* Кнопки: звёзды — свой тон; главная покупка — срез */
+  .sbtn { width:100%; height:42px; margin-top:10px; border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; gap:6px; font:700 14px var(--text-font); color:#2a1a00;
+          background:linear-gradient(180deg,#ffe08a,var(--stars) 50%,#e6a51c); box-shadow:inset 0 -3px 0 #a06e10, inset 0 1px 0 rgba(255,255,255,.45); font-variant-numeric:tabular-nums; }
+  .sbtn s { opacity:.65; font-weight:600; }
+  .sbtn.glow { box-shadow:inset 0 -3px 0 #a06e10, inset 0 1px 0 rgba(255,255,255,.45), 0 0 22px -6px rgba(255,200,61,.8); }
+  .sbtn.cut { --c:var(--cut-sm); clip-path:polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c)); }
+  .star { width:16px; height:16px; color:#7a4c00; }
+  .btn { height:40px; border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; gap:8px; font:600 13.5px var(--text-font); }
+  .btn.pri { color:var(--on-accent); background:linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); box-shadow:inset 0 -3px 0 var(--accent-edge); }
+  .btn.sec { background:var(--surface-raised); color:var(--text); border:1px solid var(--border-strong); }
+  .btn.ghost { color:var(--muted); border:1px solid var(--border); }
+  .btn svg.i { width:18px; height:18px; }
+  .mini { height:30px; padding:0 12px; border-radius:var(--r-sm); display:inline-flex; align-items:center; gap:5px; font:700 12.5px var(--text-font); color:#2a1a00; background:linear-gradient(180deg,#ffe08a,var(--stars) 50%,#e6a51c); box-shadow:inset 0 -2px 0 #a06e10; }
+  .mini.sec { color:var(--text); background:var(--surface-raised); box-shadow:none; border:1px solid var(--border-strong); }
+
+  /* Плитки самоцветов: горсть растёт с набором */
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .pack { position:relative; padding:10px 10px 0; border-radius:var(--r-lg); background:linear-gradient(180deg,var(--surface-raised),var(--surface)); border:1px solid var(--border); text-align:center; overflow:hidden; }
+  .pack.best { border-color:color-mix(in oklab, var(--accent) 55%, transparent); box-shadow:0 0 22px -10px var(--accent); }
+  .pack .tl { position:absolute; top:8px; left:8px; } .pack .tr { position:absolute; top:8px; right:8px; }
+  .pile { height:56px; margin-top:16px; display:flex; align-items:flex-end; justify-content:center; }
+  .pile .gemi { margin:0 -2px; }
+  .pack .n { font:400 26px/1 var(--display); letter-spacing:.02em; font-variant-numeric:tabular-nums; margin-top:6px; }
+  .pack .w { font-size:12px; color:var(--muted); margin-top:2px; }
+  .pack .val { display:inline-block; height:20px; margin-top:4px; padding:0 8px; border-radius:var(--r-sm); font:400 11.5px/20px var(--display); color:var(--success); background:color-mix(in oklab, var(--success) 15%, transparent); }
+  .pack .left { height:20px; margin-top:4px; font:400 11.5px/20px var(--display); color:var(--danger); }
+  .pack .sbtn { margin:8px 0 10px; height:38px; }
+
+  /* Витрина снаряжения: рамка цвета редкости */
+  .offer { display:flex; gap:10px; align-items:center; padding:10px; border-radius:var(--r-lg); background:linear-gradient(180deg,var(--surface-raised),var(--surface)); border:1px solid color-mix(in oklab, var(--tone) 45%, var(--border)); }
+  .offer .tile { width:52px; height:52px; border-radius:var(--r-md); display:grid; place-items:center; flex:none; color:var(--tone); background:color-mix(in oklab, var(--tone) 16%, var(--surface-sunken)); box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--tone) 45%, transparent); position:relative; }
+  .offer .tile svg.i { width:26px; height:26px; }
+  .offer .tile small { position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); padding:0 5px; border-radius:3px; background:var(--surface-sunken); border:1px solid var(--border-strong); font:600 10px/14px var(--text-font); color:var(--text); }
+  .offer .on { font:400 14px/1.2 var(--display); letter-spacing:.02em; }
+  .offer .rr { font-size:11.5px; font-weight:600; color:var(--tone); }
+  .offer .pw { font-size:11.5px; color:var(--muted); }
+  .gbtn { height:32px; padding:0 10px; border-radius:var(--r-sm); display:inline-flex; align-items:center; gap:5px; font:700 13px var(--text-font); color:var(--on-accent); background:linear-gradient(180deg,var(--accent-glow),var(--accent) 48%,var(--accent-pressed)); box-shadow:inset 0 -2px 0 var(--accent-edge); font-variant-numeric:tabular-nums; }
+  .gbtn.sold { color:var(--success); background:color-mix(in oklab, var(--success) 12%, transparent); box-shadow:none; }
+  /* Тона редкостей — как RARITY_TONE в arsenal-parts.tsx */
+  .r-common { --tone:var(--muted); } .r-good { --tone:var(--success); } .r-rare { --tone:var(--info); } .r-epic { --tone:var(--passive); } .r-legend { --tone:var(--elite); } .r-myth { --tone:var(--danger); }
+
+  .listitem { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-lg); background:var(--surface); border:1px solid var(--border); }
+  .listitem .face { width:32px; height:32px; border-radius:var(--r-md); display:grid; place-items:center; color:var(--accent); background:color-mix(in oklab, var(--accent) 15%, transparent); }
+  .listitem .face svg.i { width:18px; height:18px; }
+  .info { display:flex; gap:8px; padding:9px 12px; border-radius:var(--r-lg); background:color-mix(in oklab, var(--info) 10%, transparent); border:1px solid color-mix(in oklab, var(--info) 40%, transparent); font-size:12.5px; line-height:1.4; }
+  .info svg.i { width:18px; height:18px; color:var(--info); margin-top:1px; }
+  .status-ok { text-align:center; font-size:13px; font-weight:600; color:var(--success); }
+  .sk { border-radius:var(--r-lg); background:linear-gradient(90deg, var(--surface) 0%, var(--surface-raised) 40%, var(--surface) 80%); }
+
+  .kit { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; padding:20px; border-radius:var(--r-xl); background:var(--bg); max-width:1200px; }
+  .kit .cell { display:flex; flex-direction:column; gap:8px; }
+  .kit .knote { font-size:12.5px; color:var(--page-muted); max-width:300px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Магазин</h1>
+  <p class="lead">Магазин в облике «Сумеречный рубеж», ширина 360 px. Строится на <b>нынешнем магазине</b> (<code>screens/meta/shop.tsx</code>, <code>shop-parts.tsx</code>, <code>shop-banners.tsx</code>, <code>shop-showcase.tsx</code>): тот же состав, вкладки, правила подачи (состав целиком до оплаты, бейджи и выгоду считает сервер, зачёркнутая цена — только у акции) и тексты. Меняются облик карточек, плитки самоцветов, кнопка звёзд и срез у главной покупки. Числа — из каталога: VIP 700 ⭐ за 30 дней, наборы 60, 330 и 700 самоцветов за 50, 250 и 500 ⭐, стартовый — 150 за 50 ⭐ один раз.</p>
+
+  <h2>Что сохраняется и что меняется</h2>
+  <table class="inv">
+    <tr><th>Элемент</th><th>Сейчас в игре</th><th>В макете</th></tr>
+    <tr><td>Полоса баннеров</td><td>VIP, стартовый, подобранное, снаряжение дня, Tribute; листается пальцем, точки; у VIP и наборов — цена прямо на баннере</td><td>Так же. Тоны — те же, что в коде (<code>TONE</code>): VIP — золото элиты, стартовый — зелёный, снаряжение — сиреневый, Tribute — звёзды, акция — красный. Значок — крупно и полупрозрачно в углу, как сейчас. Соседний выглядывает справа, активная точка — тоном звёзд</td></tr>
+    <tr><td>Вкладки</td><td>«Для вас», «Самоцветы», «Снаряжение»; знак на «Для вас», когда ждут самоцветы VIP</td><td>Так же, <code>SegmentedControl</code> в палитре B; знак — квадратная точка, как счётчики меню</td></tr>
+    <tr><td>VIP</td><td>Карточка с полосой: корона, статус или предложение, три выгоды, «Забрать N самоцветов», цена за период, «Отменить продление» или «Вернуть продление»</td><td>Так же; подложка в тоне элиты, у активной — свечение. Ждут самоцветы — VIP первым, «Забрать» — главной кнопкой</td></tr>
+    <tr><td>Подобранное</td><td>Карточка «Подобрано для вас» с полосой, состав значками, бейджи «Один раз», «Хит», скидка, кнопка звёзд со свечением</td><td>Так же; кнопка звёзд — <b>со срезом</b>: это главная покупка экрана. У остальных покупок среза нет</td></tr>
+    <tr><td>Плитки самоцветов</td><td>По две: значок, число, «самоцветов», «+N% выгоды» или «ещё 5 ч», кнопка звёзд; «Лучшая цена» — с полосой</td><td>По две; вместо одного значка — горсть, растёт с набором (1, 3, 5 самоцветов). «Лучшая цена» — рамка и свечение акцента вместо полосы. Строка под числом одной высоты — кнопки вровень, как сейчас</td></tr>
+    <tr><td>Кнопка звёзд</td><td><code>variant="stars"</code>, значок звезды и число; у акции — зачёркнутая цена каталога</td><td>Так же, тон звёзд с объёмом, как у главных кнопок</td></tr>
+    <tr><td>Tribute на «Самоцветах»</td><td>Плашка над плитками</td><td>Под плитками: с плашкой сверху «Лучшая цена» уходила за прокрутку уже на 360 px</td></tr>
+    <tr><td>Снаряжение</td><td>Витрина суток: предмет, редкость, уровень, мощь, цена самоцветами, «Куплено»; отсчёт до обновления</td><td>Так же; плитка предмета и рамка карточки — цветом редкости, кнопка самоцветов — акцентом</td></tr>
+    <tr><td>Промокод</td><td>Строка «Есть промокод?» под вкладками</td><td>Так же</td></tr>
+  </table>
+
+  <h2>Состояния</h2>
+  <div class="row" id="states"></div>
+
+  <h2>Компоненты</h2>
+  <div class="kit" id="kit"></div>
+</div>
+
+<template id="phone">
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="header">
+        <div class="ava"><span class="ph"></span><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="none" stroke="var(--surface-sunken)" stroke-width="3"/><circle cx="22" cy="22" r="20" fill="none" stroke="var(--xp)" stroke-width="3" stroke-linecap="round" stroke-dasharray="80 126" transform="rotate(-90 22 22)"/></svg><small>6</small></div>
+        <div class="chip nobuy"><span class="coin"></span>5 762</div>
+        <div class="chip"><span class="gemi"></span><span class="gems">21</span><span class="buy"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></span></div>
+        <div class="grow"></div>
+        <div class="ibtn"><svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+        <div class="ibtn"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div>
+      </div>
+      <div class="body"></div>
+      <div class="tabs">
+        <div class="tab on"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m2 7 4.4-4.4A2 2 0 0 1 7.8 2h8.4a2 2 0 0 1 1.4.6L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20v3a2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0z"/></svg></span><span class="l">Магазин</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M8 3h8l4 3-2 4h-2v11H8V10H6L4 6z"/><path d="M10 3c0 1.5 1 2.5 2 2.5S14 4.5 14 3"/></svg></span><span class="l">Арсенал</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2M14.5 6.5 18 3h3v3l-3.5 3.5M5 14l4 4M7 17l-3 3M3 19l2 2"/></svg></span><span class="l">Главная</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/></svg></span><span class="l">Задания</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V17c0 .6-.5 1-1 1.2C7.9 18.8 7 20.2 7 22M14 14.7V17c0 .6.5 1 1 1.2 1.1.6 2 2 2 3.8M18 2H6v7a6 6 0 0 0 12 0z"/></svg></span><span class="l">Рейтинг</span></div>
+        <div class="tab"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></span><span class="l">Друзья</span></div>
+      </div>
+    </div></div>
+    <div class="cap"></div>
+  </div>
+</template>
+
+<script>
+  const svg = (d) => `<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
+  const I = {
+    crown: svg('<path d="M11.56 3.27a.5.5 0 0 1 .88 0l2.95 5.6a1 1 0 0 0 1.52.29l4.27-3.66a.5.5 0 0 1 .82.5l-2.83 10.25a1 1 0 0 1-.96.75H5.8a1 1 0 0 1-.96-.75L2.02 6a.5.5 0 0 1 .82-.5L7.1 9.16a1 1 0 0 0 1.52-.3zM5 21h14"/>'),
+    sparkles: svg('<path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.13a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.13 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.13a.5.5 0 0 1-.96 0z"/>'),
+    trend: svg('<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>'),
+    gift: svg('<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/>'),
+    star: '<svg class="star" viewBox="0 0 24 24" fill="currentColor"><path d="M11.52 2.3a.53.53 0 0 1 .96 0l2.31 4.68a2.12 2.12 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.12 2.12 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.12 2.12 0 0 0-1.97 0L6.4 21.01a.53.53 0 0 1-.77-.56l.88-5.14a2.12 2.12 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.12 2.12 0 0 0 1.6-1.16z"/></svg>',
+    check: svg('<path d="M20 6 9 17l-5-5"/>'),
+    chev: svg('<path d="m9 18 6-6-6-6"/>'),
+    ext: svg('<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'),
+    shirt: svg('<path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>'),
+    amulet: svg('<circle cx="12" cy="15" r="5"/><path d="M8 3l4 7 4-7"/>'),
+    boot: svg('<path d="M6 3h6v9l6 3a3 3 0 0 1 2 3v2H4V3z"/><path d="M4 16h16"/>'),
+    sword: svg('<path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/>'),
+    rocket: svg('<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09zM12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>'),
+    shield: svg('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'),
+    info: svg('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'),
+  };
+  const gem = (s) => `<span class="gemi" style="width:${s * 0.87}px;height:${s}px"></span>`;
+  const pile = (k) => `<div class="pile">${[[26], [22, 30, 22], [20, 26, 34, 26, 20]][k].map(gem).join("")}</div>`;
+  const starsBtn = (n, { glow = false, cut = false, full = null } = {}) => `<div class="sbtn${glow ? " glow" : ""}${cut ? " cut" : ""}">${I.star}${full ? `<s>${full}</s>` : ""}${n}</div>`;
+
+  const banners = (kind) => {
+    const B = {
+      vip: `<div class="banner cur t-vip"><span class="art">${I.crown}</span><span class="eyebrow">Подписка</span><div class="bt">VIP-статус</div><div class="bx">Без рекламы, награды за забег больше и самоцветы каждый день</div><span class="cta mini">${I.star}700</span></div>`,
+      starter: `<div class="banner cur t-starter"><span class="art">${I.rocket}</span><span class="eyebrow">Только один раз</span><div class="bt">Стартовый набор</div><div class="bx" style="display:flex;align-items:center;gap:6px">${gem(14)}150 самоцветов</div><span class="cta mini">${I.star}50</span></div>`,
+      gear: `<div class="banner cur t-gear"><span class="art">${I.shield}</span><span class="eyebrow">Обновляется каждый день</span><div class="bt">Снаряжение дня</div><div class="bx">Конкретные предметы — свойства видны до покупки</div><span class="cta mini sec">Смотреть</span></div>`,
+    };
+    const next = { vip: "t-starter", starter: "t-gear", gear: "t-tribute" }[kind];
+    return `<div class="strip">${B[kind]}<div class="banner next ${next}"></div></div><div class="dots">${[0, 1, 2, 3].map((k) => `<i class="${k === { vip: 0, starter: 1, gear: 3 }[kind] ? "on" : ""}"></i>`).join("")}</div>`;
+  };
+  const seg = (on, dot = false) => `<div class="seg">${["Для вас", "Самоцветы", "Снаряжение"].map((t, k) => `<span class="${k === on ? "on" : ""}">${t}${k === 0 && dot ? '<i class="dot"></i>' : ""}</span>`).join("")}</div>`;
+
+  const vipCard = ({ active = false, claimed = false }) => `<div class="card vip stripe${active ? " active" : ""}"><div class="ch"><span class="crown">${I.crown}</span><div class="grow"><div class="ct">VIP</div><div class="cs">${active ? "VIP до 6 ноября · продлится сам" : "Подписка на 30 дней. Продлевается сама, продление можно отменить в любой момент"}</div></div></div>
+    <ul class="perks"><li>${I.sparkles}Без рекламы: награды за рекламу — сразу, без ролика</li><li>${I.trend}Награды ×1,5: награда дня, колесо, задания и монеты за забег</li><li>${gem(14)}10 самоцветов каждый день</li></ul>
+    ${active ? `<div class="btn ${claimed ? "sec" : "pri"}" style="margin-top:12px">${claimed ? "Самоцветы на сегодня забраны · следующие через 9 ч" : `Забрать 10 самоцветов`}</div><div class="btn ghost" style="margin-top:8px">Отменить продление</div>` : starsBtn("700 за 30 дней", { glow: true })}</div>`;
+
+  const starter = (owned = false) => `<div class="card stripe${owned ? " owned" : ""}"><div class="forYou">Подобрано для вас</div><div class="ch"><div class="grow"><div class="ct" style="font-size:16px">Стартовый набор</div><div class="cs">Один раз на аккаунт — самый выгодный набор самоцветов.</div></div><div class="badges">${owned ? "" : '<span class="badge accent">Один раз</span>'}</div></div>
+    <div class="contents"><span>${gem(14)}150 самоцветов</span></div>${owned ? `<div class="owned-line">${I.check}Куплено</div>` : starsBtn(50, { glow: true, cut: true })}</div>`;
+
+  const packs = (promo = false) => `<div class="g2">
+    <div class="pack"><div class="tr">${promo ? '<span class="badge danger">−20%</span>' : ""}</div>${pile(0)}<div class="n">60</div><div class="w">самоцветов</div>${promo ? '<div class="left">ещё 5 ч 12 мин</div>' : '<div style="height:24px"></div>'}<div class="sbtn" style="margin:8px 0 10px;height:38px">${I.star}${promo ? "<s>50</s>40" : "50"}</div></div>
+    <div class="pack"><div class="tl"><span class="badge warning">Хит</span></div>${pile(1)}<div class="n">330</div><div class="w">самоцветов</div><div class="val">+10% выгоды</div><div class="sbtn" style="margin:8px 0 10px;height:38px">${I.star}250</div></div>
+    <div class="pack best"><div class="tl"><span class="badge accent">Лучшая цена</span></div>${pile(2)}<div class="n">700</div><div class="w">самоцветов</div><div class="val">+17% выгоды</div><div class="sbtn" style="margin:8px 0 10px;height:38px">${I.star}500</div></div>
+  </div>`;
+  const tribute = `<div class="card stripe"><div class="ch"><span class="crown" style="color:var(--stars);background:linear-gradient(135deg, color-mix(in oklab, var(--elite) 40%, transparent), color-mix(in oklab, var(--warning) 25%, transparent))">${I.star.replace('class="star"', 'class="star" style="width:22px;height:22px;color:var(--stars)"')}</span><div class="grow"><div class="ct" style="font-size:15px">Звёзды Telegram дешевле</div><div class="cs">Через Tribute звёзды можно купить выгоднее, чем в самом Telegram.</div></div></div><div class="btn sec" style="margin-top:10px">${I.ext}Открыть Tribute</div></div>`;
+  const offer = (cls, icon, name, rarity, lvl, power, gems, sold = false) => `<div class="offer ${cls}"><span class="tile">${icon}<small>${lvl}</small></span><div class="grow"><div class="on">${name}</div><div class="rr">${rarity}</div><div class="pw">Мощь ${power}</div></div>${sold ? `<span class="gbtn sold">${I.check}Куплено</span>` : `<span class="gbtn">${gem(13)}${gems}</span>`}</div>`;
+  const gear = `<div class="stitle">Витрина снаряжения</div><div class="note">Конкретные предметы — свойства видны до покупки. Каждый день новые.</div>
+    ${offer("r-epic", I.amulet, "Амулет бури", "Эпическое", 12, "1 240", 45)}
+    ${offer("r-rare", I.shirt, "Нагрудник стража", "Редкое", 10, "860", 28)}
+    ${offer("r-good", I.boot, "Сапоги следопыта", "Добротное", 9, "540", 14, true)}
+    ${offer("r-legend", I.sword, "Клинок рубежа", "Легендарное", 14, "2 080", 90)}
+    <div class="note" style="text-align:center">Обновится через 9 ч 41 мин</div>`;
+  const promo = `<div class="listitem"><span class="face">${I.gift}</span><div class="grow"><div style="font-weight:600;font-size:14px">Есть промокод?</div><div class="note">Подарок сразу ляжет в кошелёк</div></div><span style="color:var(--disabled)">${I.chev}</span></div>`;
+  const info = (text) => `<div class="info">${I.info}<span>${text}</span></div>`;
+
+  const STATES = [
+    { body: `<div class="ptitle">Магазин</div>${banners("vip")}${seg(0)}${starter()}${vipCard({})}<div class="btn sec">${gem(14)}Все наборы самоцветов ${I.chev}</div>`,
+      cap: `<b>1. «Для вас», VIP нет.</b> Сверху баннеры, первым — VIP. Подобранное сервером — стартовый набор: кнопка звёзд со срезом, главная покупка экрана. За ним VIP с ценой за период, ниже — дорога ко всем наборам.` },
+    { body: `<div class="ptitle">Магазин</div>${banners("gear")}${seg(0, true)}${vipCard({ active: true })}${starter(true)}`, gems: "31",
+      cap: `<b>2. VIP есть, самоцветы дня ждут.</b> VIP первым, «Забрать 10 самоцветов» — главной кнопкой, на вкладке знак. Статус — «VIP до 6 ноября · продлится сам». Стартовый куплен — «Куплено», карточка приглушена. Баннеров VIP и стартового нет: первый уже оформлен, второй куплен.` },
+    { body: `<div class="ptitle">Магазин</div>${banners("starter")}${seg(1)}${packs(true)}${tribute}`,
+      cap: `<b>3. «Самоцветы».</b> Плитки по две, под ними плашка Tribute: наборы — то, за чем пришли, они не должны уходить за прокрутку. Горсть растёт с набором; «Хит» и «Лучшая цена» — бейджами сервера, «Лучшая цена» — рамкой акцента. На малом наборе акция: −20%, зачёркнутая цена каталога и отсчёт; строка под числом одной высоты — кнопки вровень.` },
+    { body: `<div class="ptitle">Магазин</div>${banners("gear")}${seg(2)}${gear}`,
+      cap: `<b>4. «Снаряжение».</b> Витрина суток: плитка и рамка — цветом редкости, уровень на плитке, мощь, цена самоцветами. Купленное — «Куплено». Внизу — когда обновится. Покупка — через подтверждение, как сейчас.` },
+    { body: `<div class="ptitle">Магазин</div>${info("Покупки за звёзды — только в Telegram. Здесь видно, что продаётся.")}${banners("vip").replace(/<span class="cta mini">[^]*?<\/span>/, "")}${seg(1)}${packs().replace(/<div class="sbtn"[^>]*>[^]*?<\/div>/g, '<div style="height:12px"></div>')}${promo}`,
+      cap: `<b>5. Площадка без оплаты</b> (браузер, MAX и VK до их оплаты). Плашка сверху, цен и кнопок нет — витрина видна, купить нельзя. Тестовая оплата — такой же плашкой: «спишется 1 ⭐ и сразу вернётся».` },
+    { body: `<div class="ptitle">Магазин</div><div class="sk" style="height:136px;margin:0 -12px 0 0"></div><div class="sk" style="height:42px"></div><div class="sk" style="height:150px"></div><div class="sk" style="height:220px"></div>`,
+      cap: `<b>6. Загрузка.</b> Заглушки той же высоты, что баннер, вкладки и карточки, — ничего не прыгает. Сейчас вместо них строка «Загружаем магазин…»; ошибка — как сейчас, «Магазин не загрузился» с повтором.` },
+  ];
+
+  const tpl = document.getElementById("phone");
+  const root = document.getElementById("states");
+  for (const s of STATES) {
+    const n = tpl.content.cloneNode(true);
+    n.querySelector(".body").innerHTML = s.body;
+    if (s.gems) n.querySelector(".gems").textContent = s.gems;
+    n.querySelector(".cap").innerHTML = s.cap;
+    root.appendChild(n);
+  }
+  document.getElementById("kit").innerHTML = [
+    [`<div style="width:300px">${starsBtn(50, { glow: true, cut: true })}</div>`, "Главная покупка: кнопка звёзд со срезом и свечением — одна на экран"],
+    [`<div style="width:300px">${starsBtn(40, { full: 50 })}</div>`, "Кнопка звёзд по акции: зачёркнутая цена каталога перед ценой"],
+    [`<div style="display:flex;gap:6px"><span class="badge accent">Один раз</span><span class="badge warning">Хит</span><span class="badge accent">Лучшая цена</span><span class="badge danger">−20%</span></div>`, "Бейджи: их ставит сервер, экран не придумывает"],
+    [`<div style="display:flex;gap:16px;align-items:flex-end">${pile(0)}${pile(1)}${pile(2)}</div>`, "Горсть самоцветов — по размеру набора: 1, 3, 5"],
+    [`<div style="width:330px">${offer("r-myth", I.amulet, "Сердце пустоты", "Мифическое", 20, "4 100", 160)}</div>`, "Предмет витрины: тон редкости — рамка, плитка и подпись"],
+  ].map(([el, note]) => `<div class="cell">${el}<div class="knote">${note}</div></div>`).join("");
+</script>
+</body>
+</html>

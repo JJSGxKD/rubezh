@@ -100,6 +100,8 @@ enum RefundReason {
   unused
   /// вернули не мы: спор игрока, поддержка Telegram
   external
+  /// товар не выдать по сути — например, снят с витрины: звёзды возвращаются
+  undeliverable
 }
 
 // Откуда открыли игру (docs/34-stage3-plan.md, WP6): разбор параметра запуска
@@ -166,6 +168,8 @@ model Account {
   // история блокировок придёт в аудит вместе с ролями (WP2).
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(3)
   banReason      String?   @map("ban_reason") @db.VarChar(256)
+  /// знак «Тестер» (docs/35-stage4-plan.md Р87): играл до вайпа; ставится снимком, навсегда
+  testerAt       DateTime? @map("tester_at") @db.Timestamptz(3)
 
   roles         AccountRole[]
   runs          Run[]
@@ -217,6 +221,7 @@ model Account {
   vipDaily         VipDaily?
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
+  compensation     TesterCompensation?
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -527,7 +532,9 @@ model Purchase {
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account         Account          @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
-  run             Run?             @relation(fields: [runId], references: [runId], onDelete: Restrict)
+  // SetNull, а не Restrict: вайп стирает забеги (docs/35-stage4-plan.md Р87), а покупка
+  // второго шанса остаётся — без ссылки на забег, с оплатой и номером продолжения.
+  run             Run?             @relation(fields: [runId], references: [runId], onDelete: SetNull)
   renewalFirst    Purchase?        @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
   renewals        Purchase[]       @relation("PurchaseRenewal")
   vipSubscription VipSubscription?
@@ -541,6 +548,13 @@ model Purchase {
   @@index([mode, paidAt])
   // Незавершённые возвраты — очередь поднимает их после перезапуска.
   @@index([refundRequestedAt])
+  // Проход довыдачи: оплаченные и не выданные покупки старше срока. Товар
+  // впереди: у второго шанса (`continue_run`) fulfilled_at не заполняется
+  // никогда — выдачи у него нет, — и без товара каждый использованный второй
+  // шанс навсегда оставался бы в участке с пустым fulfilled_at. У `shop_item`
+  // и `vip` этот участок содержит только зависшие покупки, а второй шанс в
+  // него не попадает.
+  @@index([product, fulfilledAt, paidAt])
   @@map("purchase")
 }
 
@@ -2112,4 +2126,28 @@ enum AdConversionStatus {
   skipped
 
   @@map("ad_conversion_status")
+}
+
+// Компенсации тестерам перед вайпом (docs/35-stage4-plan.md Р87, T-0040)
+
+/// Компенсация после вайпа (docs/35-stage4-plan.md Р87): что вернуть из купленного
+/// и какой бонус дать. Пишется снимком в транзакции вайпа, выдаётся окном
+/// «Спасибо за тест» один раз (`claimedAt`).
+model TesterCompensation {
+  accountId     String    @id @map("account_id") @db.Uuid
+  /// играл до вайпа: знак и бонус
+  tester        Boolean
+  /// уровень аккаунта в момент снимка
+  level         Int
+  bonusGems     Int       @map("bonus_gems")
+  /// что начислили покупки: [{ purchaseId, resource, amount }]
+  grants        Json
+  /// звёзды, списанные за второй шанс: выдача переводит их в самоцветы по курсу О43
+  continueStars Int       @map("continue_stars")
+  snapshotAt    DateTime  @map("snapshot_at") @db.Timestamptz(3)
+  claimedAt     DateTime? @map("claimed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@map("tester_compensation")
 }

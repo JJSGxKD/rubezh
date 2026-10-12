@@ -40,33 +40,42 @@ const effective: ResolvedWeaponLevel = {
 };
 
 /**
+ * Числа уровня оружия в слоте с учётом пассивок — ровно те, которыми бьёт
+ * симуляция. Её зовёт и рендер: считай он по базовому уровню, на экране было
+ * бы меньше оберегов и уже кольцо, чем на самом деле. Пишет в `out` и
+ * возвращает его: выделять объект на кадр нельзя.
+ */
+export function effectiveWeaponLevel(world: World, slot: number, out: ResolvedWeaponLevel): ResolvedWeaponLevel {
+  const stats = world.playerStats;
+  const weapon = world.loadout.weapons[slot];
+  const type = world.weaponTypes[weapon.typeIndex];
+  const level = type.levels[Math.min(weapon.level, type.levels.length) - 1];
+
+  out.damage = level.damage * stats.damageMul;
+  out.cooldownSec = level.cooldownSec * stats.cooldownMul;
+  out.areaRadius = level.areaRadius * stats.areaMul;
+  out.projectileSpeed = level.projectileSpeed * stats.projectileSpeedMul;
+  out.ttlSec = level.ttlSec * stats.durationMul;
+  out.pierce = level.pierce;
+  out.element = level.element;
+  out.statusChance = level.statusChance;
+  // Аура бьёт зоной, снарядов у неё нет — прибавка от пассивки на число
+  // снарядов ей ничего не даёт и не должна раздувать её зону ударов.
+  out.projectiles = type.behavior === "aura" ? level.projectiles : level.projectiles + stats.extraProjectiles;
+  return out;
+}
+
+/**
  * Обновить всё оружие игрока. Пассивки применяются здесь, а не внутри
  * поведений: поведение знает только свои числа на этот тик и ничего не знает
  * ни про уровни, ни про улучшения.
  */
 export function updateWeapons(world: World, dtSec: number): void {
   if (!world.player.alive) return;
-  const stats = world.playerStats;
 
   for (let slot = 0; slot < world.loadout.weapons.length; slot++) {
-    const weapon = world.loadout.weapons[slot];
-    const type = world.weaponTypes[weapon.typeIndex];
-    const level = type.levels[Math.min(weapon.level, type.levels.length) - 1];
-
-    effective.damage = level.damage * stats.damageMul;
-    effective.cooldownSec = level.cooldownSec * stats.cooldownMul;
-    effective.areaRadius = level.areaRadius * stats.areaMul;
-    effective.projectileSpeed = level.projectileSpeed * stats.projectileSpeedMul;
-    effective.ttlSec = level.ttlSec * stats.durationMul;
-    effective.pierce = level.pierce;
-    effective.element = level.element;
-    effective.statusChance = level.statusChance;
-    // Аура бьёт зоной, снарядов у неё нет — прибавка от пассивки на число
-    // снарядов ей ничего не даёт и не должна раздувать её зону ударов.
-    effective.projectiles =
-      type.behavior === "aura" ? level.projectiles : level.projectiles + stats.extraProjectiles;
-
-    WEAPON_BEHAVIORS[type.behavior].update(world, slot, effective, dtSec);
+    const type = world.weaponTypes[world.loadout.weapons[slot].typeIndex];
+    WEAPON_BEHAVIORS[type.behavior].update(world, slot, effectiveWeaponLevel(world, slot, effective), dtSec);
   }
 }
 

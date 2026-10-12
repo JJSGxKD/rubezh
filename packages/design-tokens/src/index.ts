@@ -11,31 +11,33 @@
  * рисует оболочка: HUD, полосы, слоты, цвета площадки.
  */
 export const COLORS = {
-  bg: "#07090e",
-  surface: "#121622",
-  surfaceRaised: "#1b2130",
-  surfaceSunken: "#0b0e15",
-  border: "#262e40",
-  borderStrong: "#3a4560",
-  text: "#f3f6fc",
-  textMuted: "#a8b2c6",
-  textDisabled: "#69738a",
+  bg: "#1d1c31",
+  surface: "#28273f",
+  surfaceRaised: "#353452",
+  surfaceSunken: "#17162a",
+  border: "#43425f",
+  borderStrong: "#5b5980",
+  text: "#f3eee6",
+  textMuted: "#aeaac4",
+  textDisabled: "#6f6c8a",
 
-  accent: "#ffb22e",
-  accentPressed: "#f09a12",
-  accentGlow: "#ffd27a",
-  accentEdge: "#a85a06",
-  onAccent: "#1d1102",
+  accent: "#ff8f3f",
+  accentPressed: "#f0782a",
+  accentGlow: "#ffb67f",
+  accentEdge: "#a0582a",
+  onAccent: "#230f02",
+  secondary: "#46d9c6",
+  onSecondary: "#062b26",
 
   danger: "#ff5d5d",
-  warning: "#ff8c42",
-  success: "#5fe3a1",
+  warning: "#ffc14d",
+  success: "#8ee86b",
   info: "#5ccfff",
 
-  hp: "#5fe3a1",
-  hpLow: "#ff5d5d",
-  xp: "#5ccfff",
-  elite: "#ffd36b",
+  hp: "#ff6f90",
+  hpLow: "#ff3b5c",
+  xp: "#b6ff4a",
+  elite: "#ffd15c",
   weapon: "#ffe066",
   passive: "#c47dff",
 
@@ -73,6 +75,8 @@ export const CSS_VAR_BY_COLOR: Record<ColorToken, string> = {
   accentGlow: "--color-accent-glow",
   accentEdge: "--color-accent-edge",
   onAccent: "--color-on-accent",
+  secondary: "--color-secondary",
+  onSecondary: "--color-on-secondary",
   danger: "--color-danger",
   warning: "--color-warning",
   success: "--color-success",
@@ -100,8 +104,8 @@ export const CSS_VAR_BY_COLOR: Record<ColorToken, string> = {
  * шрифта на свой у игрока на глазах.
  */
 export const FONT_FAMILY = {
-  display: "Rubik Variable",
-  text: "Inter Variable",
+  display: "Russo One",
+  text: "IBM Plex Sans Variable",
 } as const;
 
 /** Длительности переходов, мс. Совпадают с `--duration-*` в tokens.css. */

@@ -8,6 +8,7 @@ import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { answerOf, decideCheckout, refuse, type CheckoutDecision, type PreCheckout } from "./checkout-answer.js";
 import { PaymentsHooks, type SubscriptionState } from "./payments-hooks.js";
+import { PurchaseRevocation } from "./purchase-revocation.js";
 import { SUBSCRIPTION_PRODUCTS } from "./purchase-types.js";
 import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository } from "./purchases.repository.js";
 
@@ -67,6 +68,8 @@ export class PaymentConfirmation {
     private readonly switches: FeatureSwitches,
     // Слушатели нужны модулю, а не каждому тесту подтверждения: без них — пустой список.
     private readonly hooks: PaymentsHooks = new PaymentsHooks(),
+    // То же с отзывом: без владельцев товаров возврат только записывается.
+    private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
   ) {}
 
   async answerCheckout(query: PreCheckout, nowMs = Date.now()): Promise<CheckoutDecision> {
@@ -128,25 +131,41 @@ export class PaymentConfirmation {
     return outcome;
   }
 
-  /** Деньги вернулись игроку — по нашему заказу или по его спору на площадке. */
+  /**
+   * Деньги вернулись игроку — по нашему заказу или по его спору на площадке.
+   *
+   * Внешний возврат забирает то, что осталось от покупки (tasks/T-0023,
+   * решение 06.10.2026): иначе схема «купил → потратил → вернул» открыта.
+   * Наши возвраты ничего не забирают: товар либо не выдавался
+   * (`undeliverable`), либо выдан по первой оплате (лишняя оплата).
+   *
+   * Отзыв — при **каждом** вызове, до проверки `firstTime`: первая попытка
+   * могла отметить возврат и упасть на отзыве, и повтор обязан его доделать.
+   * Ошибка отзыва бросается дальше — задание очереди оплаты повторит
+   * обработку. Момент отзыва — когда возврат отмечен впервые, а не когда
+   * повторили: срок VIP режется по одному и тому же времени.
+   */
   async refunded(chargeId: string, nowMs = Date.now()): Promise<void> {
     const record = await this.purchases.markRefunded(chargeId, new Date(nowMs));
     if (record === null) {
       this.log("warn", "refund_unmatched", { chargeId });
       return;
     }
-    if (!record.firstTime) return;
     const { purchase } = record;
+    const external = purchase.refundReason === "external";
+    const revocation = external ? await this.revocation.revoke(purchase, purchase.refundedAt ?? new Date(nowMs)) : null;
+    if (!record.firstTime) return;
     // Доля возвратов на аккаунт — вход для решения О4: правило появится, когда
     // появятся первые случаи, а счётчик нужен с первого.
-    const stats = purchase.refundReason === "external" ? await this.purchases.refundStats(purchase.accountId) : null;
-    this.log(purchase.refundReason === "external" ? "warn" : "log", "payment_refunded", {
+    const stats = external ? await this.purchases.refundStats(purchase.accountId) : null;
+    this.log(external ? "warn" : "log", "payment_refunded", {
       chargeId,
       purchaseId: purchase.purchaseId,
       accountId: purchase.accountId,
       reason: purchase.refundReason,
       mode: purchase.mode,
       ...(stats === null ? {} : { accountPaid: stats.paid, accountRefunded: stats.refunded }),
+      ...(revocation === null ? {} : { revoked: revocation.lines }),
     });
   }
 
@@ -157,7 +176,7 @@ export class PaymentConfirmation {
    */
   async subscriptionChanged(update: SubscriptionUpdate, nowMs = Date.now()): Promise<void> {
     const id = purchaseId.safeParse(update.payload);
-    const view = id.success ? await this.purchases.checkout(id.data) : null;
+    const view = id.success ? await this.purchases.checkout(id.data, new Date(nowMs)) : null;
     const fields = { platform: update.platform, purchaseId: update.payload, payerId: update.payerId, state: update.state };
     if (view === null || !SUBSCRIPTION_PRODUCTS.includes(view.purchase.product) || view.platformUserId !== update.payerId) {
       this.log("warn", "subscription_unmatched", fields);
@@ -171,7 +190,7 @@ export class PaymentConfirmation {
     const id = purchaseId.safeParse(query.payload);
     if (!id.success) return decideCheckout(null, query, nowMs, this.switches.payments());
     try {
-      const view = await withTimeout(this.purchases.checkout(id.data), CHECKOUT_READ_TIMEOUT_MS, "покупка для проверки оплаты");
+      const view = await withTimeout(this.purchases.checkout(id.data, new Date(nowMs)), CHECKOUT_READ_TIMEOUT_MS, "покупка для проверки оплаты");
       return decideCheckout(view, query, nowMs, this.switches.payments());
     } catch (error: unknown) {
       // База не ответила — отказываемся от денег, а не берём их вслепую.

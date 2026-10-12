@@ -151,6 +151,15 @@ describe("порядок значений", () => {
     expect(new NotifyTargets(service).chats().runReview).toEqual({ chatId: "-100", threadId: null });
   });
 
+  it("поток «Покупки»: пусто — общий чат, задан — свой адрес с темой, переменной окружения нет", async () => {
+    const { service } = setup({ ADMIN_CHAT_ID: "-100" });
+    expect(new NotifyTargets(service).chats().payments).toEqual({ chatId: "-100", threadId: null });
+
+    await service.write(SETTINGS.chatPayments, "-100:57", ACTOR_ID);
+    expect(new NotifyTargets(service).chats().payments).toEqual({ chatId: "-100", threadId: 57 });
+    expect(service.describe().find((state) => state.setting.key === "notify.chat.payments")).toMatchObject({ source: "base", envValue: null });
+  });
+
   it("переключатель из окружения различает «не задан» и «включён»", () => {
     expect(setup().service.describe().find((state) => state.setting.key === "notify.reports")).toMatchObject({ value: true, source: "default", envValue: null });
     expect(setup({ ADMIN_NOTIFY_REPORTS: "true" }).service.describe().find((state) => state.setting.key === "notify.reports")).toMatchObject({ source: "env" });

@@ -147,3 +147,17 @@ function compareVersions(a: string, b: string): number {
 function samePlatforms(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((platform) => b.includes(platform));
 }
+
+/**
+ * Черновик предпросмотра (docs/35-stage4-plan.md WP32): версия из формы
+ * целиком, как её увидит игрок, — строки версии на своих местах, правленая —
+ * на месте прежней, новая — в конце. Площадки не отбираются: команда видит
+ * все строки версии разом.
+ */
+export function changelogPreview(input: EntryInput, original: ChangelogEntry | null, entries: readonly ChangelogEntry[]): { version: string; entries: { kind: string; text: string }[] } {
+  const version = input.version.trim();
+  const current = { kind: input.kind, text: input.text };
+  const rows = entries.filter((entry) => entry.version === version).map((entry) => (entry.entryId === original?.entryId ? current : { kind: entry.kind, text: entry.text }));
+  if (original === null || original.version !== version) rows.push(current);
+  return { version, entries: rows };
+}

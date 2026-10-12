@@ -136,7 +136,9 @@ export function orbiterCount(level: ResolvedWeaponLevel): number {
 
 /**
  * Позиция k-го оберега. Нужна и симуляции, и рендеру: обереги не живут в пуле
- * снарядов, их положение полностью задаётся состоянием оружия.
+ * снарядов, их положение полностью задаётся состоянием оружия. Симуляция
+ * считает от положения героя на тике, рендер передаёт сглаженный центр —
+ * иначе обереги дрожат относительно героя, нарисованного между тиками.
  */
 export function orbiterPosition(
   world: World,
@@ -144,6 +146,8 @@ export function orbiterPosition(
   level: ResolvedWeaponLevel,
   index: number,
   out: OrbiterPoint,
+  centerX: number = world.player.x,
+  centerY: number = world.player.y,
 ): void {
   const weapon = world.loadout.weapons[slot];
   const count = orbiterCount(level);
@@ -154,6 +158,6 @@ export function orbiterPosition(
   const dirX = weapon.dirX * offset[0] - weapon.dirY * offset[1];
   const dirY = weapon.dirX * offset[1] + weapon.dirY * offset[0];
 
-  out.x = world.player.x + dirX * level.areaRadius;
-  out.y = world.player.y + dirY * level.areaRadius;
+  out.x = centerX + dirX * level.areaRadius;
+  out.y = centerY + dirY * level.areaRadius;
 }

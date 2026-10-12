@@ -1,0 +1,41 @@
+# Внешняя проверка прода раз в 5 минут (docs/09-ci-cd.md): адреса — в переменной
+# репозитория UPTIME_URLS, через пробел. Сообщение в чат команды — только при
+# смене состояния; прежнее состояние — итог прошлого завершённого прогона.
+#
+# Расписание (schedule) GitHub запускает только из ветки по умолчанию, то есть
+# из `main`: проверка начнётся после ближайшего релиза. Ручной запуск — для
+# проверки после настройки UPTIME_URLS.
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: telegram
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Проверить прод
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPTIME_URLS: ${{ vars.UPTIME_URLS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TEAM_TELEGRAM_BOT_TOKEN }}
+          TEAM_TELEGRAM_CHAT: ${{ vars.TEAM_TELEGRAM_CHAT }}
+        run: node scripts/ops/uptime-check.mjs

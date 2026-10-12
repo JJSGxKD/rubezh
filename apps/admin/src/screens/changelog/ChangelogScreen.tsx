@@ -5,6 +5,7 @@ import {
   CHANGELOG_PLATFORMS,
   KIND_TITLES,
   TEXT_MAX,
+  changelogPreview,
   entryProblem,
   fetchChangelog,
   groupByVersion,
@@ -24,6 +25,7 @@ import { formatDateTime } from "../../format";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { Badge, Button, ErrorNotice, Field, Input, Loading, Notice, Panel, Select, TextArea } from "../../ui/kit";
+import { PhonePreview } from "../../ui/phone-preview";
 import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -107,7 +109,8 @@ export function ChangelogScreen() {
   return (
     <div className="flex flex-col gap-4">
       <Panel title={original === null ? "Новая строка" : `Строка в ${original.version}`}>
-        <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
+        <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Версия, X.Y.Z">
               <Input value={input.version} disabled={lockedByPublication} onChange={(event) => setInput({ ...input, version: event.target.value.trim() })} placeholder="0.6.0" maxLength={16} className="w-28" />
@@ -144,6 +147,16 @@ export function ChangelogScreen() {
           {/* После добавления поле текста пустое, а версия остаётся для следующей строки: подсказка — когда начали писать. */}
           {problem !== null && input.text.trim() !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
+          {/* Версия так, как её увидит игрок в «Что нового»: та же карточка в странице клиента (Р83). */}
+          <div className="xl:sticky xl:top-4 xl:self-start">
+            <PhonePreview
+              kind="changelog-version"
+              draft={changelogPreview(input, original, state.status === "ok" ? state.data.entries : [])}
+              height={360}
+              caption="Так увидит игрок — версия целиком, строки всех площадок"
+            />
+          </div>
+        </div>
         {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
       </Panel>
 

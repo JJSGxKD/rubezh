@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — направления, круг 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --page-bg:#0b0c10; --page-text:#e8e6e1; --page-muted:#9a978f; --page-line:#25262c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--page-bg); color:var(--page-text); font:15px/1.5 Inter, system-ui, sans-serif; }
+  .page { max-width: 1240px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  .lead { color: var(--page-muted); max-width: 760px; margin: 0 0 32px; }
+  .directions { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 40px 24px; }
+  .dir-head h2 { margin: 0; font-size: 22px; }
+  .dir-head p { margin: 6px 0 14px; color: var(--page-muted); font-size: 14px; }
+  .swatches { display:flex; gap:6px; margin: 0 0 14px; }
+  .swatches span { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,.12); }
+  .phones { display:flex; flex-direction: column; gap: 18px; align-items: center; }
+  .notes { margin-top: 16px; font-size: 13.5px; color: var(--page-muted); }
+  .notes b { color: var(--page-text); }
+  .notes ul { padding-left: 18px; margin: 6px 0; }
+
+  /* ---------- телефон ---------- */
+  .phone { width: 340px; height: 700px; border-radius: 34px; padding: 10px; background: #000; box-shadow: 0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 26px; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+  .screen * { font-family: inherit; }
+  .disp { font-family: var(--font-display) !important; letter-spacing: var(--disp-track, 0); }
+
+  /* фон и орнамент */
+  .screen::before { content:""; position:absolute; inset:0; background: var(--bg-art); pointer-events:none; }
+  .content { position: relative; height: 100%; display: flex; flex-direction: column; }
+
+  /* шапка */
+  .header { display:flex; align-items:center; gap:6px; padding: 14px 12px 10px; }
+  .avatar { position: relative; width: 38px; height: 38px; border-radius: var(--r-avatar); background: var(--surface-2); border: 2px solid var(--accent); display:grid; place-items:center; font-weight:700; color: var(--accent); }
+  .avatar small { position:absolute; bottom:-6px; right:-6px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 10px; padding: 0 4px; }
+  .chip { white-space:nowrap; display:flex; align-items:center; gap:5px; padding: 6px 10px; border-radius: var(--r-chip); background: var(--surface); border: var(--border-w) solid var(--line); font-weight:700; font-size: 13px; }
+  .coin { width: 14px; height: 14px; border-radius: 50%; background: var(--coin); box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); }
+  .gem { width: 12px; height: 14px; background: var(--gem); clip-path: polygon(50% 0, 100% 35%, 80% 100%, 20% 100%, 0 35%); }
+  .grow { flex: 1; }
+  .icon-btn { width: 38px; height: 38px; border-radius: var(--r-chip); background: var(--surface); border: var(--border-w) solid var(--line); display:grid; place-items:center; }
+  .icon-btn svg { width: 18px; height: 18px; stroke: var(--text); }
+
+  /* карточки */
+  .scroll { flex: 1; overflow: hidden; padding: 4px 14px 0; display:flex; flex-direction:column; gap: 10px; }
+  .card { position: relative; border-radius: var(--r-card); background: var(--surface); border: var(--border-w) solid var(--line); padding: 12px; box-shadow: var(--card-shadow); overflow: hidden; }
+  .card.hero { border-color: var(--accent-line); background: var(--surface-hero); }
+  .card .orn { position:absolute; inset:auto -10px -18px auto; width: 120px; height: 60px; opacity: var(--orn-o); background: var(--orn); pointer-events:none; }
+  .row { display:flex; align-items:center; gap: 10px; }
+  .tile { width: 42px; height: 42px; border-radius: var(--r-tile); display:grid; place-items:center; flex: none; background: var(--tile-bg); border: var(--border-w) solid var(--tile-line); }
+  .tile svg { width: 22px; height: 22px; stroke: var(--tile-ic); fill: none; stroke-width: 2; }
+  .eyebrow { font-size: 11.5px; color: var(--muted); }
+  .big { font-size: 19px; font-weight: 700; line-height: 1.1; }
+  .btn { border: 0; border-radius: var(--r-btn); padding: 8px 14px; font-weight: 800; font-size: 13px; color: var(--on-accent); background: var(--accent); box-shadow: var(--btn-shadow); }
+  .btn.ghost { background: transparent; color: var(--text); border: var(--border-w) solid var(--line); box-shadow:none; }
+  .btn.xl { width: 100%; padding: 15px; font-size: 18px; letter-spacing: var(--disp-track, 0); }
+  .week { display:flex; gap:4px; margin-top: 10px; }
+  .week i { flex:1; height: 6px; border-radius: 3px; background: var(--surface-2); }
+  .week i.on { background: var(--accent); }
+  .week i.today { background: var(--accent-soft); }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .small-big { font-size: 18px; font-weight: 700; }
+
+  /* низ */
+  .footer { padding: 10px 14px 8px; }
+  .tabs { display:flex; justify-content: space-around; padding: 8px 6px 12px; border-top: var(--border-w) solid var(--line); background: var(--tabs-bg); }
+  .tabs span { width: 34px; height: 34px; border-radius: 10px; display:grid; place-items:center; }
+  .tabs span.on { background: var(--accent-soft-bg); }
+  .tabs svg { width: 20px; height: 20px; stroke: var(--muted); fill:none; stroke-width: 2; }
+  .tabs span.on svg { stroke: var(--accent); }
+
+  /* забег */
+  .arena { position:absolute; inset:0; background: var(--arena); }
+  .arena svg { position:absolute; inset:0; width:100%; height:100%; }
+  .hud-top { position: relative; padding: 12px 12px 0; display:flex; flex-direction: column; gap: 6px; }
+  .bar { height: 9px; border-radius: 6px; background: rgba(0,0,0,.45); overflow:hidden; border: 1px solid var(--hud-line); }
+  .bar > i { display:block; height:100%; }
+  .bar.hp > i { width: 72%; background: var(--hp); }
+  .bar.xp > i { width: 45%; background: var(--xp); }
+  .hud-row { display:flex; align-items:center; gap: 8px; font-weight:700; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+  .timer { font-size: 20px; }
+  .slots { display:flex; gap: 5px; }
+  .slots b { width: 26px; height: 26px; border-radius: var(--r-tile); background: rgba(0,0,0,.45); border: 1px solid var(--hud-line); display:grid; place-items:center; font-size: 11px; color: var(--text); }
+  .levelup { position:absolute; left: 12px; right: 12px; bottom: 16px; padding: 14px; border-radius: var(--r-card); background: var(--sheet); border: var(--border-w) solid var(--accent-line); box-shadow: 0 -10px 40px rgba(0,0,0,.6); }
+  .levelup h3 { margin: 0 0 10px; font-size: 20px; text-align:center; }
+  .offer { display:flex; gap: 10px; align-items:center; padding: 10px; border-radius: var(--r-tile); background: var(--surface); border: var(--border-w) solid var(--line); margin-top: 8px; }
+  .offer.sel { border-color: var(--accent); background: var(--surface-hero); }
+  .offer .name { font-weight: 800; font-size: 14px; }
+  .offer .delta { font-size: 12px; color: var(--muted); }
+  .offer .delta em { color: var(--accent); font-style: normal; font-weight: 700; }
+
+  .dmg { font-family: var(--font-display); fill: #fff; stroke: #000; stroke-width: 3px; paint-order: stroke; }
+  .dmg.crit { fill: var(--crit); }
+  /* строгие грани — общие для круга 2 */
+  .screen .card, .screen .btn, .screen .tile, .screen .chip, .screen .icon-btn, .screen .offer, .screen .levelup { border-radius: var(--r-card); }
+  .cut .card, .cut .btn, .cut .offer, .cut .levelup {
+    clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  }
+  .stripe .card.hero::after, .stripe .offer.sel::after { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background: var(--accent); }
+  .stripe .offer { position: relative; }
+  .bevel .card, .bevel .offer, .bevel .chip, .bevel .icon-btn { box-shadow: inset 0 1px 0 rgba(255,255,255,.07), inset 0 -2px 0 rgba(0,0,0,.25); }
+  .bevel .btn { box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -3px 0 rgba(0,0,0,.25); }
+
+  .t-a, .t-b, .t-c {
+    --font-display:'Russo One', sans-serif; --font-body:'IBM Plex Sans', sans-serif; --disp-track:.02em;
+    --r-card:3px; --r-tile:2px; --r-btn:3px; --r-chip:3px; --r-avatar:3px; --border-w:1px;
+    --player:#ffffff; --crit:#ffd15c;
+  }
+  /* A: «Резной рубеж» — синева Нави светлее, срезанные углы */
+  .t-a {
+    --bg:#1a2233; --surface:#232d42; --surface-2:#2f3b55; --surface-hero:#2a2c33; --line:#3a4864; --text:#f1ece0; --muted:#a3aabd;
+    --accent:#ffb347; --accent-soft:#9a6a33; --accent-line:#c98a40; --accent-soft-bg:rgba(255,179,71,.16); --on-accent:#221304;
+    --coin:#ffc861; --gem:#ff6470; --hp:linear-gradient(90deg,#d83a44,#ff6470); --xp:linear-gradient(90deg,#38c8f0,#8ae9ff);
+    --tile-bg:#2f3b55; --tile-line:#45557a; --tile-ic:#ffb347; --tabs-bg:#151c2a; --sheet:#1f283b; --hud-line:rgba(241,236,224,.28);
+    --enemy:#ff5a5f; --enemy-edge:#3a0d12; --xp-gem:#5ee0ff; --xp-edge:#e9fbff; --ward:#ffd08a; --ward-edge:#7a4a12;
+    --cut:9px; --card-shadow:none; --btn-shadow:0 0 16px rgba(255,179,71,.35);
+    --orn-o:.22; --orn: repeating-linear-gradient(45deg, transparent 0 8px, #ffb347 8px 9px), repeating-linear-gradient(-45deg, transparent 0 8px, #ffb347 8px 9px);
+    --bg-art: radial-gradient(120% 60% at 50% -10%, rgba(255,179,71,.12), transparent 60%), radial-gradient(80% 50% at 100% 110%, rgba(94,224,255,.10), transparent 60%);
+    --arena: radial-gradient(70% 50% at 50% 55%, #3f5a45 0%, #2c4233 75%), #2c4233;
+  }
+  /* B: «Сумеречный рубеж» — фиолетовые сумерки, полоса-ярлык */
+  .t-b {
+    --bg:#1d1c31; --surface:#28273f; --surface-2:#353452; --surface-hero:#302a3a; --line:#43425f; --text:#f3eee6; --muted:#aeaac4;
+    --accent:#ff8f3f; --accent-soft:#a0582a; --accent-line:#ff8f3f; --accent-soft-bg:rgba(255,143,63,.16); --on-accent:#230f02;
+    --coin:#ffc861; --gem:#ff5f8a; --hp:linear-gradient(90deg,#e0335f,#ff6f90); --xp:linear-gradient(90deg,#8cf04a,#d2ff7a);
+    --tile-bg:#353452; --tile-line:#514f75; --tile-ic:#46d9c6; --tabs-bg:#17162a; --sheet:#232238; --hud-line:rgba(243,238,230,.28);
+    --enemy:#c86bff; --enemy-edge:#24073a; --xp-gem:#b6ff4a; --xp-edge:#f6ffe0; --ward:#46d9c6; --ward-edge:#0b3f39;
+    --card-shadow:none; --btn-shadow:0 0 16px rgba(255,143,63,.35);
+    --orn-o:.14; --orn: repeating-linear-gradient(90deg, #46d9c6 0 2px, transparent 2px 10px);
+    --bg-art: radial-gradient(110% 55% at 50% -10%, rgba(255,143,63,.12), transparent 60%), radial-gradient(80% 50% at 0% 110%, rgba(70,217,198,.12), transparent 60%);
+    --arena: radial-gradient(70% 50% at 50% 55%, #36546a 0%, #263b4c 75%), #263b4c;
+  }
+  /* C: «Зольный рубеж» — тёплый графит, фаска */
+  .t-c {
+    --bg:#1e1c1b; --surface:#2a2725; --surface-2:#38342f; --surface-hero:#30291f; --line:#46403a; --text:#f2ece2; --muted:#ada59a;
+    --accent:#f2b64c; --accent-soft:#8f6a2c; --accent-line:#c99640; --accent-soft-bg:rgba(242,182,76,.15); --on-accent:#201604;
+    --coin:#f2c45c; --gem:#e8524a; --hp:linear-gradient(90deg,#c9372f,#ef5f55); --xp:linear-gradient(90deg,#3fb7ff,#9ad8ff);
+    --tile-bg:#38342f; --tile-line:#554d44; --tile-ic:#f2b64c; --tabs-bg:#181615; --sheet:#262321; --hud-line:rgba(242,236,226,.28);
+    --enemy:#ef4f45; --enemy-edge:#2f0b08; --xp-gem:#53c8ff; --xp-edge:#eef9ff; --ward:#ffd88a; --ward-edge:#6b4513;
+    --card-shadow:none; --btn-shadow:0 0 14px rgba(242,182,76,.3);
+    --orn-o:.16; --orn: repeating-linear-gradient(0deg, transparent 0 6px, #f2b64c 6px 7px);
+    --bg-art: radial-gradient(110% 55% at 50% -10%, rgba(242,182,76,.10), transparent 60%);
+    --arena: radial-gradient(70% 50% at 50% 55%, #5a5340 0%, #403b2e 75%), #403b2e;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Рубеж — направления, круг 2</h1>
+  <p class="lead">Собрано из выбранного в первом круге: шрифты и строгие грани «Панельки» (Russo One и IBM Plex Sans, скругления 2–3 px) и палитра «Нави», но светлее. Отдельно — читаемость боя: фон арены — средний тон, а не чёрный; кристаллы опыта — яркие, с белой обводкой; враги — с тёмным контуром; цифры урона — с обводкой, крит — жёлтым. Три варианта отличаются тоном и «подписью» формы: срезанный угол, полоса-ярлык, фаска.</p>
+
+  <div class="directions" id="dirs"></div>
+</div>
+
+<template id="phones">
+  <div class="phones">
+    <!-- Главная -->
+    <div class="phone"><div class="screen"><div class="content">
+      <div class="header">
+        <div class="avatar">К<small>6</small></div>
+        <div class="chip"><span class="coin"></span>4 849</div>
+        <div class="chip"><span class="gem"></span>21 <b style="color:var(--accent)">+</b></div>
+        <div class="grow"></div>
+        <div class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
+        <div class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="card hero">
+          <div class="orn"></div>
+          <div class="row">
+            <div class="tile"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="12" rx="2"/><path d="M12 9v12M3 13h18M12 9c-2-4-6-4-6-1s6 1 6 1 6 2 6-1-4-3-6 1"/></svg></div>
+            <div class="grow"><div class="eyebrow">Награда дня · день 6</div><div class="big disp">198</div></div>
+            <button class="btn">Забрать</button>
+          </div>
+          <div class="week"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="today"></i><i></i></div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <div class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></div>
+            <div class="grow"><div class="eyebrow">Колесо удачи</div><div class="big disp">Крутка ждёт</div></div>
+            <button class="btn ghost">Крутить</button>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="card"><div class="eyebrow">Рекорд</div><div class="small-big disp">12:17</div><div class="eyebrow">8 забегов</div></div>
+          <div class="card"><div class="eyebrow">Задания</div><div class="small-big disp">5 из 11</div><div class="eyebrow">награды: 1 450</div></div>
+        </div>
+        <div class="card"><div class="row"><div class="tile"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3.5-6 6.5-6s6 2 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c3 0 5 2 5.5 5"/></svg></div><div class="grow"><div class="eyebrow">Друзья</div><div class="small-big">Подарки друг другу</div></div></div></div>
+      </div>
+      <div class="footer"><button class="btn xl disp">Играть</button></div>
+      <div class="tabs">
+        <span class="on"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9H3z"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M12 3 4 7v6c0 5 8 8 8 8s8-3 8-8V7z"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M5 4h14v4a7 7 0 0 1-14 0zM9 21h6M12 15v6"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3.5-6 6.5-6s6 2 6.5 6"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M3 9h18l-2 11H5zM8 9V6a4 4 0 0 1 8 0v3"/></svg></span>
+      </div>
+    </div></div></div>
+
+    <!-- Забег -->
+    <div class="phone"><div class="screen">
+      <div class="arena"><svg viewBox="0 0 320 680">
+        <g opacity=".5"><circle cx="40" cy="120" r="2" fill="var(--muted)"/><circle cx="270" cy="200" r="2" fill="var(--muted)"/><circle cx="90" cy="420" r="2" fill="var(--muted)"/><circle cx="240" cy="520" r="2" fill="var(--muted)"/></g>
+        <!-- враги -->
+        <g fill="var(--enemy)" stroke="var(--enemy-edge)" stroke-width="2.5"><circle cx="70" cy="250" r="9"/><circle cx="96" cy="232" r="9"/><circle cx="250" cy="270" r="9"/><circle cx="270" cy="300" r="9"/><circle cx="60" cy="330" r="9"/><circle cx="235" cy="350" r="12"/></g>
+        <circle cx="200" cy="200" r="20" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="4 6"/>
+        <!-- кристаллы -->
+        <g fill="var(--xp-gem)" stroke="var(--xp-edge)" stroke-width="1.5"><rect x="140" y="250" width="7" height="7" transform="rotate(45 143 253)"/><rect x="190" y="330" width="7" height="7" transform="rotate(45 193 333)"/><rect x="120" y="360" width="7" height="7" transform="rotate(45 123 363)"/></g>
+        <!-- игрок и обереги -->
+        <circle cx="160" cy="300" r="40" fill="none" stroke="var(--accent)" stroke-opacity=".18" stroke-width="2"/>
+        <g fill="var(--ward)" stroke="var(--ward-edge)" stroke-width="2"><rect x="153" y="253" width="14" height="14" transform="rotate(45 160 260)"/><rect x="188" y="313" width="14" height="14" transform="rotate(45 195 320)"/><rect x="118" y="313" width="14" height="14" transform="rotate(45 125 320)"/></g>
+        <circle cx="160" cy="300" r="13" fill="var(--player)" stroke="var(--accent)" stroke-width="3"/>
+        <text x="96" y="222" class="dmg" font-size="14">14</text>
+        <text x="246" y="262" class="dmg crit" font-size="18">38</text>
+      </svg></div>
+      <div class="content">
+        <div class="hud-top">
+          <div class="hud-row"><span class="disp timer">04:12</span><div class="grow"></div><span>Ур. 9</span></div>
+          <div class="bar hp"><i></i></div>
+          <div class="bar xp"><i></i></div>
+          <div class="hud-row"><div class="slots"><b>Иск</b><b>Обр</b><b>Гро</b></div><div class="grow"></div><div class="slots"><b>+</b><b>+</b></div></div>
+        </div>
+        <div class="levelup">
+          <h3 class="disp">Новый уровень</h3>
+          <div class="offer sel"><div class="tile"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div><div><div class="name">Гроза · ур. 3</div><div class="delta">урон 9 → <em>12</em>, разряды 2 → <em>3</em></div></div></div>
+          <div class="offer"><div class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></div><div><div class="name">Оберег · ур. 2</div><div class="delta">обереги 2 → <em>3</em></div></div></div>
+          <div class="offer"><div class="tile"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v6c0 5 8 8 8 8s8-3 8-8V7z"/></svg></div><div><div class="name">Живучесть</div><div class="delta">здоровье +<em>15%</em></div></div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</template>
+
+<script>
+  const DIRS = [
+    {
+      cls: "t-a cut", name: "A. «Резной рубеж»",
+      tagline: "Синева «Нави», на ступень светлее. Срезанные углы у карточек и кнопок — как у резной доски или металлической таблички.",
+      swatches: ["#1a2233", "#232d42", "#ffb347", "#ff5a5f", "#5ee0ff", "#f1ece0"],
+      notes: [
+        "<b>Из первого круга:</b> палитра «Нави», шрифты и строгость «Панельки».",
+        "<b>Подпись:</b> срезанный угол 9 px — запоминается и не стоит ни одной картинки.",
+        "<b>Бой:</b> мшистый средний фон, голубые кристаллы с белой обводкой, красные враги с тёмным контуром, обереги — ромбы янтаря.",
+      ],
+    },
+    {
+      cls: "t-b stripe", name: "B. «Сумеречный рубеж»",
+      tagline: "Сумерки, а не ночь: фиолетово-синий фон, жар очага и бирюза оберегов. Выбранное отмечено полосой слева.",
+      swatches: ["#1d1c31", "#28273f", "#ff8f3f", "#c86bff", "#b6ff4a", "#46d9c6"],
+      notes: [
+        "<b>Из первого круга:</b> тёплый акцент «Нави», шрифты и строгость «Панельки».",
+        "<b>Подпись:</b> полоса-ярлык слева у главного и выбранного — как закладка.",
+        "<b>Бой:</b> сине-зелёный сумеречный фон, лаймовые кристаллы, фиолетовая нечисть, бирюзовые обереги — у каждой роли свой цвет.",
+      ],
+    },
+    {
+      cls: "t-c bevel", name: "C. «Зольный рубеж»",
+      tagline: "Тёплый графит, зола и золото. Фаска сверху и тень снизу у карточек и кнопок — как у кованых табличек.",
+      swatches: ["#1e1c1b", "#2a2725", "#f2b64c", "#ef4f45", "#53c8ff", "#f2ece2"],
+      notes: [
+        "<b>Из первого круга:</b> золото «Нави» без холодной синевы, шрифты и строгость «Панельки».",
+        "<b>Подпись:</b> фаска и тень — объём без скруглений.",
+        "<b>Бой:</b> землистый средний фон, ярко-голубые кристаллы, красная нечисть, золотые обереги.",
+      ],
+    },
+  ];
+  const tpl = document.getElementById("phones");
+  const root = document.getElementById("dirs");
+  for (const d of DIRS) {
+    const col = document.createElement("section");
+    col.innerHTML = `<div class="dir-head"><h2>${d.name}</h2><p>${d.tagline}</p></div>
+      <div class="swatches">${d.swatches.map((c) => `<span style="background:${c}" title="${c}"></span>`).join("")}</div>`;
+    const phones = tpl.content.cloneNode(true);
+    phones.querySelectorAll(".screen").forEach((s) => s.classList.add(...d.cls.split(" ")));
+    col.appendChild(phones);
+    const notes = document.createElement("div");
+    notes.className = "notes";
+    notes.innerHTML = `<ul>${d.notes.map((n) => `<li>${n}</li>`).join("")}</ul>`;
+    col.appendChild(notes);
+    root.appendChild(col);
+  }
+</script>
+</body>
+</html>

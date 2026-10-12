@@ -244,6 +244,19 @@ describe("SDK сетей для учёта аудитории (Р78)", () => {
     expect(await createAudience({ globals: () => bare, loader: plain.loader })(TADDY)).toEqual([{ network: "taddy", ok: true }]);
   });
 
+  it("до скрипта Taddy ставится Telegram.WebApp: без него SDK падает на первой проверке; без ключа — не ставится", async () => {
+    const order: string[] = [];
+    const globals: AdGlobals = {};
+    const loader = { load: async () => void order.push("script") };
+    const beforeLoad = () => void order.push("compat");
+    expect(await createAudience({ globals: () => globals, loader, beforeLoad })(TADDY)).toEqual([{ network: "taddy", ok: false, reason: "load_failed" }]);
+    expect(order).toEqual(["compat", "script"]);
+
+    order.length = 0;
+    await createAudience({ globals: () => globals, loader, beforeLoad })([{ network: "taddy", keys: {} }]);
+    expect(order).toEqual([]);
+  });
+
   it("отказы — причиной, без исключения: нет скрипта, SDK бросил, SDK замолчал, нет ключа, незнакомая сеть", async () => {
     const offline = createAudience({ globals: () => ({}), loader: { load: async () => Promise.reject(new Error("offline")) } });
     expect(await offline(TADDY)).toEqual([{ network: "taddy", ok: false, reason: "load_failed" }]);

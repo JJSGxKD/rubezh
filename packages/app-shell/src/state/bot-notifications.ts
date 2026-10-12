@@ -5,8 +5,8 @@ import { reportError, track, useShell } from "./shell";
 
 /**
  * Что дублировать в бота (docs/35-stage4-plan.md Р51, WP28): заявку в
- * друзья, подарок друга, сообщение команды, выход версии (WP31). Выбор — за аккаунтом, решает по
- * нему сервер, когда пишет в бота; здесь его копия для переключателей и то,
+ * друзья, подарок друга, сообщение команды. О выходе версии бот не пишет (T-0019). Выбор — за
+ * аккаунтом, решает по нему сервер, когда пишет в бота; здесь его копия для переключателей и то,
  * что выбрано и ещё не дошло.
  *
  * Умолчания — те же, что у сервера (`backend/api/src/modules/notifications-bot/bot-notify-rules.ts`),
@@ -20,7 +20,7 @@ import { reportError, track, useShell } from "./shell";
  * импорт замкнул бы их друг на друга.
  */
 
-export const BOT_NOTIFY_DEFAULTS = { friendRequest: true, friendGift: false, teamMessage: true, updates: true } as const;
+export const BOT_NOTIFY_DEFAULTS = { friendRequest: true, friendGift: false, teamMessage: true } as const;
 
 export type BotNotifyKey = keyof typeof BOT_NOTIFY_DEFAULTS;
 export type BotNotifySettings = Record<BotNotifyKey, boolean>;
@@ -30,19 +30,18 @@ export const BOT_NOTIFY_ACCOUNT_KEYS = {
   friendRequest: "bot.friendRequest",
   friendGift: "bot.friendGift",
   teamMessage: "bot.teamMessage",
-  updates: "bot.updates",
 } as const satisfies Record<BotNotifyKey, string>;
 
 export type BotNotifyAccountKey = (typeof BOT_NOTIFY_ACCOUNT_KEYS)[BotNotifyKey];
 
-export const BOT_NOTIFY_KEYS: readonly BotNotifyKey[] = ["friendRequest", "friendGift", "teamMessage", "updates"];
+export const BOT_NOTIFY_KEYS: readonly BotNotifyKey[] = ["friendRequest", "friendGift", "teamMessage"];
 
 const STORAGE_KEY = "bh.bot-notifications.v1";
 /**
- * Ключ, появившийся позже, у сохранённого раньше выбора отсутствует — он
- * берёт умолчание, а не сбрасывает весь выбор к умолчаниям как битый.
+ * Не `strict`: у выбора, сохранённого раньше, бывают поля, которых больше нет
+ * (`updates`), — они отбрасываются, а остальной выбор не сбрасывается как битый.
  */
-const schema = z.object({ friendRequest: z.boolean(), friendGift: z.boolean(), teamMessage: z.boolean(), updates: z.optional(z.boolean()) });
+const schema = z.object({ friendRequest: z.boolean(), friendGift: z.boolean(), teamMessage: z.boolean() });
 type Stored = z.infer<typeof schema>;
 
 export interface BotNotifyStore extends BotNotifySettings {
@@ -76,11 +75,11 @@ export function botNotifyKeyOf(accountKey: string): BotNotifyKey | undefined {
 
 function readStored(): BotNotifySettings {
   const stored = value().read();
-  return { friendRequest: stored.friendRequest, friendGift: stored.friendGift, teamMessage: stored.teamMessage, updates: stored.updates ?? BOT_NOTIFY_DEFAULTS.updates };
+  return { friendRequest: stored.friendRequest, friendGift: stored.friendGift, teamMessage: stored.teamMessage };
 }
 
 function persist(state: BotNotifySettings): void {
-  value().write({ friendRequest: state.friendRequest, friendGift: state.friendGift, teamMessage: state.teamMessage, updates: state.updates });
+  value().write({ friendRequest: state.friendRequest, friendGift: state.friendGift, teamMessage: state.teamMessage });
 }
 
 function value(): ReturnType<typeof createPersistedValue<Stored>> {

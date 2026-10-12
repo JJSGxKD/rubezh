@@ -9,7 +9,9 @@
 export const PREVIEW_DRAFT = "rubezh:preview-draft";
 export const PREVIEW_READY = "rubezh:preview-ready";
 
-export type PreviewKind = "home-slide";
+/** Что умеет показать страница — копия `PREVIEW_KINDS` клиента, совпадение проверяет тест протокола. */
+export const PREVIEW_KINDS = ["home-slide", "changelog-version", "task"] as const;
+export type PreviewKind = (typeof PREVIEW_KINDS)[number];
 
 /**
  * Где страница предпросмотра; пусто — не настроен (`VITE_PREVIEW_URL`).

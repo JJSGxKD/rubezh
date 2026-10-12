@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
+import { FulfillmentSweeper } from "./fulfillment-sweeper.js";
 import { PaymentsHooks } from "./payments-hooks.js";
 import { PaymentConfirmation } from "./payment-confirmation.js";
 import { PaymentRefunds } from "./payment-refunds.js";
@@ -9,6 +10,7 @@ import { PaymentsController } from "./payments.controller.js";
 import { PaymentsQueue } from "./payments-queue.js";
 import { PaymentsService } from "./payments.service.js";
 import { PurchaseFulfillment } from "./purchase-fulfillment.js";
+import { PurchaseRevocation } from "./purchase-revocation.js";
 import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.repository.js";
 import { SubscriptionRenewal } from "./subscription-renewal.js";
 
@@ -20,6 +22,10 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
  * возможна при входе и чтении обновлений бота; стоп-кран — настройка
  * `payments.stars` (запасное значение — `PAYMENTS_ENABLED`), тестовая оплата
  * — только в разработке (`PAYMENTS_TEST_MODE`).
+ *
+ * Оплаченное не остаётся без выдачи: проход довыдачи подбирает покупки, у
+ * которых задание очереди сдалось, и выдаёт их или возвращает звёзды
+ * (`fulfillment-sweeper.ts`).
  *
  * Забеги модуль читает, но не принимает: продолжение продаётся к забегу,
  * который начался на сервере, — отсюда зависимость от `RunsModule`, а не
@@ -36,15 +42,17 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
     PaymentConfirmation,
     PaymentRefunds,
     PaymentsQueue,
+    FulfillmentSweeper,
     PaymentsContinueLedger,
     PaymentsHooks,
     PurchaseFulfillment,
+    PurchaseRevocation,
     SubscriptionRenewal,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
   ],
   // Репозиторий — карточке игрока в панели: покупки аккаунта читаются, не меняются.
   // Сервис и выдача — магазину и VIP: они выставляют счета на товары и выдают их;
-  // продление подписки — VIP.
-  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, SubscriptionRenewal, PURCHASES_REPOSITORY],
+  // отзыв остатка при возврате — им же; продление подписки — VIP.
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PurchaseRevocation, SubscriptionRenewal, PURCHASES_REPOSITORY],
 })
 export class PaymentsModule {}

@@ -1,4 +1,4 @@
-import { isGranted, SUBSCRIPTION_PRODUCTS, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
+import { isGranted, SUBSCRIPTION_PRODUCTS, type PurchaseProduct, type RefundReason, type StoredPurchase } from "../../src/modules/payments/purchase-types.js";
 import type {
   CheckoutView,
   ConfirmOutcome,
@@ -27,6 +27,8 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
   readonly finishedRuns = new Set<string>();
   /** продолжения, взятые за рекламу: `runId:continueNo` */
   readonly adContinues = new Set<string>();
+  /** у владельцев идёт VIP с продлением — то, что в базе считается по журналу периодов и подпискам; тест выставляет его сам */
+  subscriptionLive = false;
 
   async openInvoice(record: InvoiceRecord): Promise<InvoiceOutcome> {
     const existing = [...this.rows.values()].find((row) => row.runId === record.runId && row.continueNo === record.continueNo);
@@ -137,10 +139,16 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
       .sort((a, b) => a.continueNo - b.continueNo);
   }
 
-  async checkout(purchaseId: string): Promise<CheckoutView | null> {
+  async checkout(purchaseId: string, _at = new Date()): Promise<CheckoutView | null> {
     const row = this.rows.get(purchaseId);
     if (row === undefined) return null;
-    return { purchase: { ...row }, platformUserId: this.owners.get(row.accountId) ?? "", runFinished: row.runId !== null && this.finishedRuns.has(row.runId), continueTaken: this.adContinues.has(`${String(row.runId)}:${String(row.continueNo)}`) };
+    return {
+      purchase: { ...row },
+      platformUserId: this.owners.get(row.accountId) ?? "",
+      runFinished: row.runId !== null && this.finishedRuns.has(row.runId),
+      continueTaken: this.adContinues.has(`${String(row.runId)}:${String(row.continueNo)}`),
+      subscriptionLive: this.subscriptionLive,
+    };
   }
 
   async markPaid(record: PaymentRecord): Promise<ConfirmOutcome> {
@@ -208,6 +216,22 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
     return [...this.rows.values()]
       .filter((row) => row.runId === runId && isGranted(row) && (row.continueNo ?? 0) > usedContinues && row.refundRequestedAt === null)
       .map((row) => row.purchaseId);
+  }
+
+  async undelivered(products: readonly PurchaseProduct[], paidBefore: Date, limit: number): Promise<StoredPurchase[]> {
+    return [...this.rows.values()]
+      .filter(
+        (row) =>
+          products.includes(row.product) &&
+          row.paidAt !== null &&
+          row.paidAt.getTime() < paidBefore.getTime() &&
+          row.fulfilledAt === null &&
+          row.refundRequestedAt === null &&
+          row.refundedAt === null,
+      )
+      .sort((a, b) => (a.paidAt?.getTime() ?? 0) - (b.paidAt?.getTime() ?? 0))
+      .slice(0, limit)
+      .map((row) => ({ ...row }));
   }
 
   private orderOf(row: StoredPurchase): RefundOrder | null {

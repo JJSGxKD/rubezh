@@ -10,6 +10,10 @@ export interface ShapeSpec {
   color: number;
   /** светлое ядро поверх фигуры: так читается ступень врага */
   core?: number | null;
+  /** сдвиг тела в текстуре: поле под тень вокруг фигуры */
+  offset?: number;
+  /** кайма по контуру фигуры — у опасных врагов; толщина в пикселях */
+  rim?: { color: number; width: number } | null;
 }
 
 /**
@@ -20,14 +24,61 @@ export interface ShapeSpec {
  * исход забега он не влияет, но таблица читается проще формулы.
  */
 export function drawShape(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void {
-  drawBody(graphics, spec);
-  const core = spec.core;
-  if (core === undefined || core === null) return;
+  const offset = spec.offset ?? 0;
+  if (offset !== 0) {
+    graphics.save();
+    graphics.translateCanvas(offset, offset);
+  }
 
-  // Ядро — круг в середине фигуры: одинаково садится и на круг, и на клин, и
-  // остаётся видимым, когда враг размером в полпальца.
-  graphics.fillStyle(core, 1);
-  graphics.fillCircle(spec.radius, spec.radius, spec.radius * CORE_RATIO);
+  drawBody(graphics, spec);
+  if (spec.rim !== undefined && spec.rim !== null) drawRim(graphics, spec, spec.rim);
+  const core = spec.core;
+  if (core !== undefined && core !== null) {
+    // Ядро — круг в середине фигуры: одинаково садится и на круг, и на клин, и
+    // остаётся видимым, когда враг размером в полпальца.
+    graphics.fillStyle(core, 1);
+    graphics.fillCircle(spec.radius, spec.radius, spec.radius * CORE_RATIO);
+  }
+
+  if (offset !== 0) graphics.restore();
+}
+
+/**
+ * Кайма по контуру той же фигуры. Она идёт внутрь от границы тела, а не
+ * наружу: видимый размер врага и его хитбокс остаются прежними.
+ */
+function drawRim(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec, rim: { color: number; width: number }): void {
+  const r = spec.radius;
+  const half = rim.width / 2;
+  graphics.lineStyle(rim.width, rim.color, 1);
+
+  switch (spec.shape) {
+    case "square":
+      graphics.strokeRect(r * 0.15 + half, r * 0.15 + half, r * 1.7 - rim.width, r * 1.7 - rim.width);
+      return;
+    case "triangle":
+      graphics.strokeTriangle(r, half * 2, r * 2 - half, r * 2 - half, half, r * 2 - half);
+      return;
+    case "chevron":
+      graphics.strokePoints(points(r - half, CHEVRON).map((point) => ({ x: point.x + half, y: point.y + half })), true, true);
+      return;
+    case "hexagon":
+      graphics.strokePoints(points(r - half, HEXAGON).map((point) => ({ x: point.x + half, y: point.y + half })), true, true);
+      return;
+    case "mote":
+      graphics.strokePoints(points(r - half, MOTE).map((point) => ({ x: point.x + half, y: point.y + half })), true, true);
+      return;
+    case "double":
+      graphics.strokeCircle(r * 0.65, r * 0.75, r * 0.6 - half);
+      graphics.strokeCircle(r * 1.35, r * 1.25, r * 0.6 - half);
+      return;
+    case "ring":
+      // У кольца своё тело — линия; кайма окружает её снаружи.
+      graphics.strokeCircle(r, r, r * 0.8 + Math.max(2, r * 0.35) / 2 - half);
+      return;
+    default:
+      graphics.strokeCircle(r, r, r - half);
+  }
 }
 
 /** Доля радиуса, которую занимает ядро ступени. */

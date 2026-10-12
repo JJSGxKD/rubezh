@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — визуальные направления</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Philosopher:wght@400;700&family=Unbounded:wght@500;700;900&family=Nunito:wght@500;700;800&family=Russo+One&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --page-bg:#0b0c10; --page-text:#e8e6e1; --page-muted:#9a978f; --page-line:#25262c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--page-bg); color:var(--page-text); font:15px/1.5 Inter, system-ui, sans-serif; }
+  .page { max-width: 1240px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  .lead { color: var(--page-muted); max-width: 760px; margin: 0 0 32px; }
+  .directions { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 40px 24px; }
+  .dir-head h2 { margin: 0; font-size: 22px; }
+  .dir-head p { margin: 6px 0 14px; color: var(--page-muted); font-size: 14px; }
+  .swatches { display:flex; gap:6px; margin: 0 0 14px; }
+  .swatches span { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,.12); }
+  .phones { display:flex; flex-direction: column; gap: 18px; align-items: center; }
+  .notes { margin-top: 16px; font-size: 13.5px; color: var(--page-muted); }
+  .notes b { color: var(--page-text); }
+  .notes ul { padding-left: 18px; margin: 6px 0; }
+
+  /* ---------- телефон ---------- */
+  .phone { width: 340px; height: 700px; border-radius: 34px; padding: 10px; background: #000; box-shadow: 0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 26px; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+  .screen * { font-family: inherit; }
+  .disp { font-family: var(--font-display) !important; letter-spacing: var(--disp-track, 0); }
+
+  /* фон и орнамент */
+  .screen::before { content:""; position:absolute; inset:0; background: var(--bg-art); pointer-events:none; }
+  .content { position: relative; height: 100%; display: flex; flex-direction: column; }
+
+  /* шапка */
+  .header { display:flex; align-items:center; gap:6px; padding: 14px 12px 10px; }
+  .avatar { position: relative; width: 38px; height: 38px; border-radius: var(--r-avatar); background: var(--surface-2); border: 2px solid var(--accent); display:grid; place-items:center; font-weight:700; color: var(--accent); }
+  .avatar small { position:absolute; bottom:-6px; right:-6px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 10px; padding: 0 4px; }
+  .chip { white-space:nowrap; display:flex; align-items:center; gap:5px; padding: 6px 10px; border-radius: var(--r-chip); background: var(--surface); border: var(--border-w) solid var(--line); font-weight:700; font-size: 13px; }
+  .coin { width: 14px; height: 14px; border-radius: 50%; background: var(--coin); box-shadow: inset 0 -2px 0 rgba(0,0,0,.25); }
+  .gem { width: 12px; height: 14px; background: var(--gem); clip-path: polygon(50% 0, 100% 35%, 80% 100%, 20% 100%, 0 35%); }
+  .grow { flex: 1; }
+  .icon-btn { width: 38px; height: 38px; border-radius: var(--r-chip); background: var(--surface); border: var(--border-w) solid var(--line); display:grid; place-items:center; }
+  .icon-btn svg { width: 18px; height: 18px; stroke: var(--text); }
+
+  /* карточки */
+  .scroll { flex: 1; overflow: hidden; padding: 4px 14px 0; display:flex; flex-direction:column; gap: 10px; }
+  .card { position: relative; border-radius: var(--r-card); background: var(--surface); border: var(--border-w) solid var(--line); padding: 12px; box-shadow: var(--card-shadow); overflow: hidden; }
+  .card.hero { border-color: var(--accent-line); background: var(--surface-hero); }
+  .card .orn { position:absolute; inset:auto -10px -18px auto; width: 120px; height: 60px; opacity: var(--orn-o); background: var(--orn); pointer-events:none; }
+  .row { display:flex; align-items:center; gap: 10px; }
+  .tile { width: 42px; height: 42px; border-radius: var(--r-tile); display:grid; place-items:center; flex: none; background: var(--tile-bg); border: var(--border-w) solid var(--tile-line); }
+  .tile svg { width: 22px; height: 22px; stroke: var(--tile-ic); fill: none; stroke-width: 2; }
+  .eyebrow { font-size: 11.5px; color: var(--muted); }
+  .big { font-size: 19px; font-weight: 700; line-height: 1.1; }
+  .btn { border: 0; border-radius: var(--r-btn); padding: 8px 14px; font-weight: 800; font-size: 13px; color: var(--on-accent); background: var(--accent); box-shadow: var(--btn-shadow); }
+  .btn.ghost { background: transparent; color: var(--text); border: var(--border-w) solid var(--line); box-shadow:none; }
+  .btn.xl { width: 100%; padding: 15px; font-size: 18px; letter-spacing: var(--disp-track, 0); }
+  .week { display:flex; gap:4px; margin-top: 10px; }
+  .week i { flex:1; height: 6px; border-radius: 3px; background: var(--surface-2); }
+  .week i.on { background: var(--accent); }
+  .week i.today { background: var(--accent-soft); }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .small-big { font-size: 18px; font-weight: 700; }
+
+  /* низ */
+  .footer { padding: 10px 14px 8px; }
+  .tabs { display:flex; justify-content: space-around; padding: 8px 6px 12px; border-top: var(--border-w) solid var(--line); background: var(--tabs-bg); }
+  .tabs span { width: 34px; height: 34px; border-radius: 10px; display:grid; place-items:center; }
+  .tabs span.on { background: var(--accent-soft-bg); }
+  .tabs svg { width: 20px; height: 20px; stroke: var(--muted); fill:none; stroke-width: 2; }
+  .tabs span.on svg { stroke: var(--accent); }
+
+  /* забег */
+  .arena { position:absolute; inset:0; background: var(--arena); }
+  .arena svg { position:absolute; inset:0; width:100%; height:100%; }
+  .hud-top { position: relative; padding: 12px 12px 0; display:flex; flex-direction: column; gap: 6px; }
+  .bar { height: 9px; border-radius: 6px; background: rgba(0,0,0,.45); overflow:hidden; border: 1px solid var(--hud-line); }
+  .bar > i { display:block; height:100%; }
+  .bar.hp > i { width: 72%; background: var(--hp); }
+  .bar.xp > i { width: 45%; background: var(--xp); }
+  .hud-row { display:flex; align-items:center; gap: 8px; font-weight:700; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+  .timer { font-size: 20px; }
+  .slots { display:flex; gap: 5px; }
+  .slots b { width: 26px; height: 26px; border-radius: var(--r-tile); background: rgba(0,0,0,.45); border: 1px solid var(--hud-line); display:grid; place-items:center; font-size: 11px; color: var(--text); }
+  .levelup { position:absolute; left: 12px; right: 12px; bottom: 16px; padding: 14px; border-radius: var(--r-card); background: var(--sheet); border: var(--border-w) solid var(--accent-line); box-shadow: 0 -10px 40px rgba(0,0,0,.6); }
+  .levelup h3 { margin: 0 0 10px; font-size: 20px; text-align:center; }
+  .offer { display:flex; gap: 10px; align-items:center; padding: 10px; border-radius: var(--r-tile); background: var(--surface); border: var(--border-w) solid var(--line); margin-top: 8px; }
+  .offer.sel { border-color: var(--accent); background: var(--surface-hero); }
+  .offer .name { font-weight: 800; font-size: 14px; }
+  .offer .delta { font-size: 12px; color: var(--muted); }
+  .offer .delta em { color: var(--accent); font-style: normal; font-weight: 700; }
+
+  /* ---------- направление 1: Навь ---------- */
+  .t-nav {
+    --bg:#0c0f17; --surface:#141927; --surface-2:#1d2436; --surface-hero:#1a1a22; --line:#262e43; --text:#e9e4d8; --muted:#8f93a3;
+    --accent:#f0a24a; --accent-soft:#7a5530; --accent-line:#6a4a2c; --accent-soft-bg:rgba(240,162,74,.14); --on-accent:#1a1006;
+    --coin:#e8b04e; --gem:#c8484a; --hp:linear-gradient(90deg,#b8323a,#e0554e); --xp:linear-gradient(90deg,#4a7fd0,#7fb1ff);
+    --tile-bg:#1d2436; --tile-line:#2c3550; --tile-ic:#f0a24a; --tabs-bg:#0e121c; --sheet:#121624; --hud-line:rgba(233,228,216,.18);
+    --font-display:'Philosopher', serif; --font-body:'Inter', sans-serif; --disp-track:.01em;
+    --r-card:14px; --r-tile:10px; --r-btn:10px; --r-chip:999px; --r-avatar:50%; --border-w:1px;
+    --card-shadow:0 1px 0 rgba(255,255,255,.03) inset; --btn-shadow:0 0 18px rgba(240,162,74,.35);
+    --orn-o:.18; --orn: repeating-linear-gradient(45deg, transparent 0 7px, #f0a24a 7px 8px), repeating-linear-gradient(-45deg, transparent 0 7px, #f0a24a 7px 8px);
+    --bg-art: radial-gradient(120% 60% at 50% -10%, rgba(240,162,74,.10), transparent 60%), radial-gradient(80% 50% at 100% 110%, rgba(74,127,208,.12), transparent 60%);
+    --arena: radial-gradient(60% 45% at 50% 55%, #1f2a1f 0%, #0d130f 70%), #0d130f;
+  }
+  /* ---------- направление 2: Лубок ---------- */
+  .t-lubok {
+    --bg:#16213e; --surface:#1f2d52; --surface-2:#2a3b69; --surface-hero:#2b2a52; --line:#33467a; --text:#fff7e8; --muted:#b9c2dd;
+    --accent:#ffcc33; --accent-soft:#c99a1c; --accent-line:#ffcc33; --accent-soft-bg:rgba(255,204,51,.16); --on-accent:#2a1b00;
+    --coin:#ffcc33; --gem:#ff4d6d; --hp:#ff4d6d; --xp:#4dd2a6;
+    --tile-bg:#e2394f; --tile-line:#ffcc33; --tile-ic:#fff7e8; --tabs-bg:#121a33; --sheet:#1b2747; --hud-line:rgba(255,247,232,.35);
+    --font-display:'Unbounded', sans-serif; --font-body:'Nunito', sans-serif; --disp-track:0;
+    --r-card:20px; --r-tile:14px; --r-btn:16px; --r-chip:999px; --r-avatar:16px; --border-w:2px;
+    --card-shadow:0 4px 0 #0e1630; --btn-shadow:0 4px 0 #b88a10;
+    --orn-o:.35; --orn: radial-gradient(circle at 20px 30px, #e2394f 0 9px, transparent 10px), radial-gradient(circle at 50px 30px, #ffcc33 0 7px, transparent 8px), radial-gradient(circle at 78px 30px, #4dd2a6 0 9px, transparent 10px);
+    --bg-art: radial-gradient(70% 40% at 0% 0%, rgba(226,57,79,.22), transparent 60%), radial-gradient(70% 40% at 100% 100%, rgba(77,210,166,.18), transparent 60%);
+    --arena: radial-gradient(60% 45% at 50% 55%, #3f7d4c 0%, #23462c 75%), #23462c;
+  }
+  /* ---------- направление 3: Панелька ---------- */
+  .t-panel {
+    --bg:#121314; --surface:#1c1e20; --surface-2:#2a2d30; --surface-hero:#1c2218; --line:#33373b; --text:#e6e6e0; --muted:#8c8f8a;
+    --accent:#a7ff3c; --accent-soft:#5c8a22; --accent-line:#a7ff3c; --accent-soft-bg:rgba(167,255,60,.12); --on-accent:#0d1405;
+    --coin:#d9b26a; --gem:#ff3b3b; --hp:#ff3b3b; --xp:#3cc8ff;
+    --tile-bg:#2a2d30; --tile-line:#3d4246; --tile-ic:#a7ff3c; --tabs-bg:#0f1011; --sheet:#17191a; --hud-line:rgba(230,230,224,.2);
+    --font-display:'Russo One', sans-serif; --font-body:'IBM Plex Sans', sans-serif; --disp-track:.03em;
+    --r-card:4px; --r-tile:3px; --r-btn:3px; --r-chip:3px; --r-avatar:3px; --border-w:1px;
+    --card-shadow:none; --btn-shadow:0 0 14px rgba(167,255,60,.45);
+    --orn-o:.12; --orn: repeating-linear-gradient(90deg, #e6e6e0 0 18px, transparent 18px 22px), repeating-linear-gradient(0deg, transparent 0 10px, #e6e6e0 10px 11px);
+    --bg-art: linear-gradient(180deg, rgba(167,255,60,.05), transparent 30%), repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0 2px, transparent 2px 4px);
+    --arena: radial-gradient(60% 45% at 50% 55%, #3a3d3a 0%, #1d1f1d 75%), #1d1f1d;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Рубеж — три визуальных направления</h1>
+  <p class="lead">Сеттинг один: рабочее направление из <code>docs/05</code> — славянский фольклор, постсоветская эстетика, городские легенды. Его уже держит контент: упырь, вещун, матрёшка, оберег, бес, очаг, гроза. Варианты — три прочтения этого сеттинга. Разметка экранов во всех трёх одна, меняются только токены: так будет и в игре. Выберите направление — или соберите своё из частей («палитра из 1, шрифт из 2»).</p>
+
+  <div class="directions" id="dirs"></div>
+</div>
+
+<template id="phones">
+  <div class="phones">
+    <!-- Главная -->
+    <div class="phone"><div class="screen"><div class="content">
+      <div class="header">
+        <div class="avatar">К<small>6</small></div>
+        <div class="chip"><span class="coin"></span>4 849</div>
+        <div class="chip"><span class="gem"></span>21 <b style="color:var(--accent)">+</b></div>
+        <div class="grow"></div>
+        <div class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
+        <div class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="card hero">
+          <div class="orn"></div>
+          <div class="row">
+            <div class="tile"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="12" rx="2"/><path d="M12 9v12M3 13h18M12 9c-2-4-6-4-6-1s6 1 6 1 6 2 6-1-4-3-6 1"/></svg></div>
+            <div class="grow"><div class="eyebrow">Награда дня · день 6</div><div class="big disp">198</div></div>
+            <button class="btn">Забрать</button>
+          </div>
+          <div class="week"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="today"></i><i></i></div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <div class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></div>
+            <div class="grow"><div class="eyebrow">Колесо удачи</div><div class="big disp">Крутка ждёт</div></div>
+            <button class="btn ghost">Крутить</button>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="card"><div class="eyebrow">Рекорд</div><div class="small-big disp">12:17</div><div class="eyebrow">8 забегов</div></div>
+          <div class="card"><div class="eyebrow">Задания</div><div class="small-big disp">5 из 11</div><div class="eyebrow">награды: 1 450</div></div>
+        </div>
+        <div class="card"><div class="row"><div class="tile"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3.5-6 6.5-6s6 2 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c3 0 5 2 5.5 5"/></svg></div><div class="grow"><div class="eyebrow">Друзья</div><div class="small-big">Подарки друг другу</div></div></div></div>
+      </div>
+      <div class="footer"><button class="btn xl disp">Играть</button></div>
+      <div class="tabs">
+        <span class="on"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9H3z"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M12 3 4 7v6c0 5 8 8 8 8s8-3 8-8V7z"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M5 4h14v4a7 7 0 0 1-14 0zM9 21h6M12 15v6"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3.5-6 6.5-6s6 2 6.5 6"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M3 9h18l-2 11H5zM8 9V6a4 4 0 0 1 8 0v3"/></svg></span>
+      </div>
+    </div></div></div>
+
+    <!-- Забег -->
+    <div class="phone"><div class="screen">
+      <div class="arena"><svg viewBox="0 0 320 680">
+        <g opacity=".5"><circle cx="40" cy="120" r="2" fill="var(--muted)"/><circle cx="270" cy="200" r="2" fill="var(--muted)"/><circle cx="90" cy="420" r="2" fill="var(--muted)"/><circle cx="240" cy="520" r="2" fill="var(--muted)"/></g>
+        <!-- враги -->
+        <g fill="var(--gem)"><circle cx="70" cy="250" r="9"/><circle cx="96" cy="232" r="9"/><circle cx="250" cy="270" r="9"/><circle cx="270" cy="300" r="9"/><circle cx="60" cy="330" r="9"/><circle cx="235" cy="350" r="12"/></g>
+        <circle cx="200" cy="200" r="20" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="4 6"/>
+        <!-- кристаллы -->
+        <g fill="var(--xp)"><rect x="140" y="250" width="7" height="7" transform="rotate(45 143 253)"/><rect x="190" y="330" width="7" height="7" transform="rotate(45 193 333)"/><rect x="120" y="360" width="7" height="7" transform="rotate(45 123 363)"/></g>
+        <!-- игрок и обереги -->
+        <circle cx="160" cy="300" r="40" fill="none" stroke="var(--accent)" stroke-opacity=".18" stroke-width="2"/>
+        <circle cx="160" cy="260" r="7" fill="var(--accent)" opacity=".8"/><circle cx="195" cy="320" r="7" fill="var(--accent)" opacity=".8"/><circle cx="125" cy="320" r="7" fill="var(--accent)" opacity=".8"/>
+        <circle cx="160" cy="300" r="13" fill="var(--text)"/>
+        <text x="96" y="222" fill="var(--text)" font-size="13" font-weight="800" style="font-family:var(--font-display)">14</text>
+        <text x="246" y="262" fill="var(--accent)" font-size="16" font-weight="800" style="font-family:var(--font-display)">38</text>
+      </svg></div>
+      <div class="content">
+        <div class="hud-top">
+          <div class="hud-row"><span class="disp timer">04:12</span><div class="grow"></div><span>Ур. 9</span></div>
+          <div class="bar hp"><i></i></div>
+          <div class="bar xp"><i></i></div>
+          <div class="hud-row"><div class="slots"><b>Иск</b><b>Обр</b><b>Гро</b></div><div class="grow"></div><div class="slots"><b>+</b><b>+</b></div></div>
+        </div>
+        <div class="levelup">
+          <h3 class="disp">Новый уровень</h3>
+          <div class="offer sel"><div class="tile"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div><div><div class="name">Гроза · ур. 3</div><div class="delta">урон 9 → <em>12</em>, разряды 2 → <em>3</em></div></div></div>
+          <div class="offer"><div class="tile"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></div><div><div class="name">Оберег · ур. 2</div><div class="delta">обереги 2 → <em>3</em></div></div></div>
+          <div class="offer"><div class="tile"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v6c0 5 8 8 8 8s8-3 8-8V7z"/></svg></div><div><div class="name">Живучесть</div><div class="delta">здоровье +<em>15%</em></div></div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</template>
+
+<script>
+  const DIRS = [
+    {
+      cls: "t-nav", name: "1. «Навь» — тёмная сказка",
+      tagline: "Рубеж между миром живых и Навью. Ночь, туман, тёплый свет очага и оберегов против холодной тьмы.",
+      swatches: ["#0c0f17", "#141927", "#f0a24a", "#c8484a", "#4a7fd0", "#e9e4d8"],
+      notes: [
+        "<b>Шрифт:</b> Philosopher для заголовков, Inter для текста.",
+        "<b>Мотивы:</b> резьба наличников и обережная вышивка тонкими линиями, свечение там, где огонь.",
+        "<b>Сильное:</b> атмосфера и «взрослость», в духе Darkest Dungeon; ближе всего к нынешней тёмной теме с янтарём, так что переход самый дешёвый.",
+        "<b>Слабое:</b> мир требует атмосферных ассетов. Готовых CC0-паков под славянскую тьму мало, придётся перекрашивать. На ярком солнце экран тёмный.",
+      ],
+    },
+    {
+      cls: "t-lubok", name: "2. «Лубок» — яркая народная картинка",
+      tagline: "Сказка как народная картинка: плоский цвет, толстый контур, красный-жёлтый-зелёный на густой синеве.",
+      swatches: ["#16213e", "#1f2d52", "#ffcc33", "#e2394f", "#4dd2a6", "#fff7e8"],
+      notes: [
+        "<b>Шрифт:</b> Unbounded для заголовков, Nunito для текста.",
+        "<b>Мотивы:</b> плоские фигуры, хохломские ягоды и завитки, «вырезанные» кнопки с тенью снизу.",
+        "<b>Сильное:</b> лучше всех читается на маленьком экране и в толпе врагов. Дружелюбно к широкой аудитории Telegram, узнаваемо в подборках. Плоскую графику проще всего рисовать и перекрашивать самим.",
+        "<b>Слабое:</b> легко скатиться в «детскую» игру; нужен строгий отбор цветов, чтобы бой не превратился в конфетти.",
+      ],
+    },
+    {
+      cls: "t-panel", name: "3. «Панелька» — городские легенды",
+      tagline: "Фольклор переехал в спальный район: бетон, трафарет, кислотный неон вывески, упырь в подъезде.",
+      swatches: ["#121314", "#1c1e20", "#a7ff3c", "#ff3b3b", "#3cc8ff", "#e6e6e0"],
+      notes: [
+        "<b>Шрифт:</b> Russo One (конструктивизм) для заголовков, IBM Plex Sans для текста.",
+        "<b>Мотивы:</b> плитка, трафаретные цифры, мелкие углы, неоновая обводка.",
+        "<b>Сильное:</b> самое свежее и мемное для русскоязычной аудитории; отличает игру от всего жанра.",
+        "<b>Слабое:</b> ассетов под это почти нет, всё своё. Нынешний контент (вещун, оберег) придётся частично переосмыслить. Сеттинг уже, чем «сказка».",
+      ],
+    },
+  ];
+  const tpl = document.getElementById("phones");
+  const root = document.getElementById("dirs");
+  for (const d of DIRS) {
+    const col = document.createElement("section");
+    col.innerHTML = `<div class="dir-head"><h2>${d.name}</h2><p>${d.tagline}</p></div>
+      <div class="swatches">${d.swatches.map((c) => `<span style="background:${c}" title="${c}"></span>`).join("")}</div>`;
+    const phones = tpl.content.cloneNode(true);
+    phones.querySelectorAll(".screen").forEach((s) => s.classList.add(d.cls));
+    col.appendChild(phones);
+    const notes = document.createElement("div");
+    notes.className = "notes";
+    notes.innerHTML = `<ul>${d.notes.map((n) => `<li>${n}</li>`).join("")}</ul>`;
+    col.appendChild(notes);
+    root.appendChild(col);
+  }
+</script>
+</body>
+</html>

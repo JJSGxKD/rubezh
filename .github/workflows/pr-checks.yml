@@ -44,3 +44,30 @@ jobs:
       # упавшей проверке заголовка — одна ошибка не должна прятать другую.
       - if: ${{ !cancelled() }}
         run: node scripts/action-pins.mjs --verify
+
+      # Зоны задачи — тем же джобом, по той же причине: новый джоб не был бы
+      # обязательным. Только для веток task/T-NNNN; у остальных PR шаг не
+      # запускается. Дифф за зоны (zones, shared и файл задачи) без вопроса
+      # тимлидам — повод вернуть PR, и ловить его лучше машиной, чем глазами
+      # на приёмке.
+      - if: ${{ !cancelled() && startsWith(github.head_ref, 'task/T-') }}
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          node scripts/tasks/task.mjs diff-check --base "origin/${{ github.base_ref }}"
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+
+      # Захват задачи — тем же джобом и по той же причине. Тот, кто взял задачу
+      # в обход `pnpm task claim` (недоделанная зависимость, чужая занятая зона,
+      # не ready), не проходит: значок статуса — сигнал людям, а защита —
+      # эта проверка. Читает задачи с базы PR, а не из его ветки, чтобы PR не
+      # мог сам поставить себе нужный статус. GH_TOKEN — для списка открытых PR.
+      - if: ${{ !cancelled() && startsWith(github.head_ref, 'task/T-') }}
+        run: |
+          git fetch origin "$BASE_REF"
+          node scripts/tasks/task.mjs claim-check --base "origin/$BASE_REF"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

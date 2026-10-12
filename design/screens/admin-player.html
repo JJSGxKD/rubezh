@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рубеж — панель: карточка игрока</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --surface-raised:#353452; --surface-sunken:#17162a;
+    --border:#43425f; --border-strong:#5b5980; --text:#f3eee6; --muted:#aeaac4; --disabled:#6f6c8a;
+    --accent:#ff8f3f; --on-accent:#230f02; --success:#8ee86b; --danger:#ff5d5d; --warning:#ffc14d; --info:#5ccfff; --elite:#ffd15c; --xp:#b6ff4a; --gem:#ff515e; --coin:#ffd400;
+    --r-sm:4px; --r-md:6px; --r-lg:8px;
+    --display:'Russo One', sans-serif; --text-font:'IBM Plex Sans', sans-serif;
+    --page:#0d0c18; --page-muted:#9a97ab;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:14px/1.5 var(--text-font); }
+  .page { max-width:1700px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font:400 28px/1.2 var(--display); margin:0 0 8px; letter-spacing:.02em; }
+  h2 { font:400 20px/1.2 var(--display); margin:40px 0 8px; letter-spacing:.02em; }
+  .lead { color:var(--page-muted); max-width:1000px; margin:0 0 8px; font-size:15px; }
+  code { font-size:.92em; }
+  table.inv { border-collapse:collapse; font-size:13.5px; max-width:1200px; margin:8px 0 0; }
+  table.inv td, table.inv th { border:1px solid #2c2b45; padding:6px 10px; text-align:left; vertical-align:top; }
+  table.inv th { color:var(--page-muted); font-weight:600; }
+  .cap { margin-top:10px; font-size:13.5px; color:var(--page-muted); max-width:760px; }
+  .cap b { color:var(--text); }
+  .grow { flex:1; min-width:0; }
+  .row { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; }
+  .frame { width:1240px; border-radius:10px; overflow:hidden; border:1px solid #2c2b45; background:var(--bg); box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .content { padding:16px 20px 22px; display:flex; flex-direction:column; gap:12px; }
+  .back { font-size:12.5px; color:var(--muted); }
+  .btn { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 12px; border-radius:var(--r-md); font:600 12.5px var(--text-font); white-space:nowrap; border:1px solid transparent; }
+  .btn.pri { background:var(--accent); color:var(--on-accent); }
+  .btn.sec { background:var(--surface-raised); color:var(--text); border-color:var(--border-strong); }
+  .btn.ghost { color:var(--muted); border-color:var(--border); }
+  .btn.dan { color:var(--danger); background:color-mix(in oklab, var(--danger) 14%, transparent); border-color:color-mix(in oklab, var(--danger) 40%, transparent); }
+  .badge { display:inline-flex; align-items:center; gap:4px; height:20px; padding:0 7px; border-radius:var(--r-sm); font:600 11px/1 var(--text-font); background:var(--surface-raised); color:var(--muted); white-space:nowrap; }
+  .badge.warning { background:color-mix(in oklab, var(--warning) 15%, transparent); color:var(--warning); }
+  .badge.success { background:color-mix(in oklab, var(--success) 15%, transparent); color:var(--success); }
+  .badge.danger { background:color-mix(in oklab, var(--danger) 15%, transparent); color:var(--danger); }
+  .badge.elite { background:color-mix(in oklab, var(--elite) 15%, transparent); color:var(--elite); }
+  .badge.info { background:color-mix(in oklab, var(--info) 15%, transparent); color:var(--info); }
+  .head { display:flex; gap:14px; align-items:center; padding:14px; border-radius:var(--r-lg); background:var(--surface); border:1px solid var(--border); }
+  .av { width:56px; height:56px; border-radius:50%; flex:none; background:radial-gradient(circle at 40% 35%, #7b6a8f, #3a3150); }
+  .nm { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font:400 20px/1.2 var(--display); letter-spacing:.02em; }
+  .meta { display:flex; gap:12px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-top:4px; }
+  .meta code { color:var(--text); }
+  .copy { color:var(--accent); font-weight:600; }
+  .acts { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  .tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); }
+  .tabs span { position:relative; padding:9px 14px; font:600 13px var(--text-font); color:var(--muted); white-space:nowrap; }
+  .tabs span.on { color:var(--text); } .tabs span.on::after { content:""; position:absolute; left:10px; right:10px; bottom:-1px; height:2px; background:var(--accent); }
+  .tabs span i { font-style:normal; margin-left:6px; padding:0 5px; border-radius:3px; background:color-mix(in oklab, var(--warning) 16%, transparent); color:var(--warning); font-size:10.5px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  .panel { border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); }
+  .ph { display:flex; align-items:center; gap:8px; padding:9px 14px; border-bottom:1px solid var(--border); }
+  .ph .pt { font:400 14px var(--display); letter-spacing:.02em; }
+  .ph .go { margin-left:auto; color:var(--accent); font-weight:600; font-size:12px; }
+  .pb { padding:10px 14px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:5px 14px; font-size:13px; }
+  .kv span:nth-child(odd) { color:var(--muted); white-space:nowrap; }
+  .lvl { height:6px; border-radius:3px; background:var(--surface-sunken); margin-top:8px; overflow:hidden; } .lvl i { display:block; height:100%; background:var(--xp); }
+  .nums { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .num { padding:8px 10px; border-radius:var(--r-md); background:var(--surface-sunken); border:1px solid var(--border); }
+  .num b { display:block; font:400 18px/1.1 var(--display); font-variant-numeric:tabular-nums; }
+  .num span { font-size:11.5px; color:var(--muted); }
+  .milestones { display:flex; align-items:flex-start; gap:0; margin-top:2px; }
+  .ms { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; position:relative; font-size:11px; color:var(--muted); text-align:center; }
+  .ms::before { content:""; position:absolute; top:7px; left:-50%; right:50%; height:2px; background:var(--border-strong); }
+  .ms:first-child::before { display:none; }
+  .ms.done::before { background:var(--success); }
+  .ms .d { width:16px; height:16px; border-radius:50%; background:var(--surface-sunken); border:2px solid var(--border-strong); position:relative; z-index:1; }
+  .ms.done .d { background:var(--success); border-color:var(--success); }
+  .ms b { color:var(--text); font-weight:600; font-size:11.5px; }
+  table.dt { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.dt th { text-align:left; font-weight:600; font-size:11px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  table.dt td { padding:7px 8px; border-bottom:1px solid color-mix(in oklab, var(--border) 60%, transparent); white-space:nowrap; }
+  table.dt .r { text-align:right; font-variant-numeric:tabular-nums; }
+  .phone { width:390px; height:800px; border-radius:36px; padding:10px; background:#000; box-shadow:0 0 0 1px #2a2a2a, 0 20px 60px rgba(0,0,0,.5); }
+  .screen { width:100%; height:100%; border-radius:28px; overflow:hidden; background:var(--bg); display:flex; flex-direction:column; }
+  .mtop { display:flex; align-items:center; gap:8px; height:52px; padding:0 12px; border-bottom:1px solid var(--border); flex:none; }
+  .mtop .ib { width:34px; height:34px; border-radius:var(--r-md); display:grid; place-items:center; border:1px solid var(--border); }
+  .mtop .t { font:400 16px var(--display); }
+  .mbody { padding:12px; display:flex; flex-direction:column; gap:10px; overflow:hidden; -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 30px),transparent); mask-image:linear-gradient(180deg,#000 calc(100% - 30px),transparent); }
+  .mbody > * { flex:none; }
+  .mtabs { display:flex; gap:2px; overflow:hidden; border-bottom:1px solid var(--border); margin:0 -12px; padding:0 12px; }
+  .mtabs span { position:relative; padding:8px 10px; font:600 12.5px var(--text-font); color:var(--muted); white-space:nowrap; }
+  .mtabs span.on { color:var(--text); } .mtabs span.on::after { content:""; position:absolute; left:6px; right:6px; bottom:-1px; height:2px; background:var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Панель: карточка игрока</h1>
+  <p class="lead">Карточка игрока (<code>apps/admin/src/screens/players/PlayerCardView.tsx</code>): те же данные и права. Сейчас это одна длинная страница из десятка панелей — шапка, ограничения, вехи, касания, забеги, кошелёк, рекорды, друзья, сообщение, ручная операция, покупки. В макете — <b>шапка с действиями и вкладки</b>: «Сводка» отвечает на вопрос поддержки «кто это и что с ним» за один взгляд, остальное — по вкладкам. Действия — в шапке, по правам; опасные — через окно (каркас, <code>admin-shell.html</code>).</p>
+
+  <h2>Что сохраняется и что меняется</h2>
+  <table class="inv">
+    <tr><th>Элемент</th><th>Сейчас</th><th>В макете</th></tr>
+    <tr><td>Шапка</td><td>Имя, метки ограничений и блокировки, ключ-значение: аккаунт, площадка, ID, юзернейм, с нами с, роли, уровень, писать в бота, предупреждение о тесте</td><td>Имя крупно и метки (платящий, тестер, ограничения, блокировка); строкой — ID, юзернейм, площадка, с нами с, «скопировать». Справа — действия по правам: «Написать», «Ограничить», «Кошелёк ±», «Заблокировать»</td></tr>
+    <tr><td>Раскладка</td><td>Одна страница сеткой в две колонки</td><td>Вкладки: <b>Сводка · Забеги · Покупки · Кошелёк · Друзья · Ограничения</b>. Число на вкладке — что ждёт: не выданные покупки, действующие ограничения. Вкладка — в адресе, ссылка из чата открывает нужную</td></tr>
+    <tr><td>Сводка</td><td>—</td><td>Три колонки: профиль (уровень с полосой, писать в бота, предупреждение), вехи воронки цепочкой с датами, откуда пришёл; ниже — цифры (забегов, лучшее, ⭐ всего, покупок, монеты, самоцветы) и последние покупки и забеги по три строки со ссылкой «все →»</td></tr>
+    <tr><td>Покупки</td><td>Таблица внизу страницы</td><td>Вкладка — таблица и действия T-0038</td></tr>
+    <tr><td>Кошелёк</td><td>Балансы, журнал, ручная операция отдельной панелью</td><td>Вкладка: балансы, журнал; «Кошелёк ±» — окно из шапки (только владелец)</td></tr>
+    <tr><td>Телефон</td><td>—</td><td>Шапка столбиком, действия — кнопкой «Действия», вкладки — прокручиваемой строкой</td></tr>
+  </table>
+
+  <h2>На ПК — вкладка «Сводка»</h2>
+  <div class="frame"><div class="content">
+    <span class="back">← Игроки</span>
+    <div class="head"><span class="av"></span><div class="grow"><div class="nm">Алина <span class="badge success">платящий</span><span class="badge elite">Тестер</span><span class="badge warning">рейтинг закрыт до 12 окт</span></div>
+      <div class="meta"><span>ID <code>5531 902 114</code> <span class="copy">копировать</span></span><span>@alina_k</span><span>Telegram</span><span>с нами с 21 сентября</span><span>аккаунт <code>3f2a…91c0</code></span></div></div>
+      <div class="acts"><span class="btn sec">Написать</span><span class="btn sec">Ограничить…</span><span class="btn sec">Кошелёк ±</span><span class="btn dan">Заблокировать…</span></div></div>
+    <div class="tabs"><span class="on">Сводка</span><span>Забеги</span><span>Покупки<i>1</i></span><span>Кошелёк</span><span>Друзья</span><span>Ограничения<i>1</i></span></div>
+    <div class="grid">
+      <div class="panel"><div class="ph"><span class="pt">Профиль</span></div><div class="pb"><div class="kv"><span>Уровень</span><span>23 · опыт 41 280</span><span>Писать в бота</span><span>можно (запускал бота)</span><span>Предупреждение</span><span>принял 21 сен</span><span>Роли</span><span>—</span></div><div class="lvl"><i style="width:62%"></i></div></div></div>
+      <div class="panel"><div class="ph"><span class="pt">Вехи воронки</span></div><div class="pb"><div class="milestones"></div></div></div>
+      <div class="panel"><div class="ph"><span class="pt">Откуда пришёл</span></div><div class="pb"><div class="kv"><span>Первое касание</span><span>21 сен — реф: Максим</span><span>Последнее</span><span>5 окт — кнопка уведомления</span><span>Последний заход</span><span>12 мин назад</span></div></div></div>
+    </div>
+    <div class="nums" style="grid-template-columns:repeat(6,1fr)"><div class="num"><b>184</b><span>забегов</span></div><div class="num"><b>12:47</b><span>лучшее, сложная · место 4</span></div><div class="num"><b>1 250</b><span>⭐ всего, 6 покупок</span></div><div class="num"><b>1</b><span>возврат</span></div><div class="num"><b>5 762</b><span>монет</span></div><div class="num"><b>21</b><span>самоцвет</span></div></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="panel"><div class="ph"><span class="pt">Последние покупки</span><span class="go">все →</span></div><div class="pb" style="padding:4px 6px"><table class="dt"><tr><td>7 окт 09:30</td><td>магазин: starter</td><td class="r">50 ⭐</td><td><span class="badge warning">не выдан</span></td></tr><tr><td>2 окт 18:12</td><td>VIP</td><td class="r">700 ⭐</td><td><span class="badge success">выдан</span></td></tr><tr><td>28 сен 21:40</td><td>второй шанс №1</td><td class="r">6 ⭐</td><td><span class="badge success">оплачен</span></td></tr></table></div></div>
+      <div class="panel"><div class="ph"><span class="pt">Последние забеги</span><span class="go">все →</span></div><div class="pb" style="padding:4px 6px"><table class="dt"><tr><td>сегодня 14:10</td><td>сложная</td><td class="r">12:47</td><td>ур. 23</td><td>Оберег</td></tr><tr><td>сегодня 13:51</td><td>сложная</td><td class="r">6:02</td><td>ур. 14</td><td>Искра</td></tr><tr><td>вчера 22:30</td><td>нормальная</td><td class="r">9:18</td><td>ур. 19</td><td>Гроза</td></tr></table></div></div>
+    </div>
+  </div></div>
+  <p class="cap"><b>Сводка карточки.</b> Ответ поддержке — кто это и что с ним — на одном экране без прокрутки. На вкладках — число того, что ждёт: не выданная покупка, действующее ограничение. «Ограничить…», «Заблокировать…» и «Кошелёк ±» открывают окна (необратимое и деньги), «Написать» — окно с текстом сообщения: игрок увидит его в ленте простым текстом.</p>
+
+  <h2>На телефоне</h2>
+  <div class="row"><div class="phone"><div class="screen"><div class="mtop"><span class="ib">←</span><span class="t grow">Алина</span><span class="btn sec" style="height:30px">Действия</span></div><div class="mbody">
+    <div style="display:flex;gap:10px;align-items:center"><span class="av" style="width:44px;height:44px"></span><div><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge success">платящий</span><span class="badge elite">Тестер</span><span class="badge warning">рейтинг закрыт</span></div><div class="meta" style="margin-top:4px">@alina_k · Telegram · с 21 сен</div></div></div>
+    <div class="mtabs"><span class="on">Сводка</span><span>Забеги</span><span>Покупки 1</span><span>Кошелёк</span><span>Друзья</span></div>
+    <div class="nums"><div class="num"><b>184</b><span>забегов</span></div><div class="num"><b>1 250</b><span>⭐ всего</span></div><div class="num"><b>23</b><span>уровень</span></div></div>
+    <div class="panel"><div class="ph"><span class="pt">Вехи воронки</span></div><div class="pb"><div class="milestones"></div></div></div>
+    <div class="panel"><div class="ph"><span class="pt">Откуда пришёл</span></div><div class="pb"><div class="kv"><span>Первое</span><span>21 сен — реф: Максим</span><span>Последнее</span><span>5 окт — уведомление</span></div></div></div>
+  </div></div></div></div>
+</div>
+<script>
+  const MS = [["Вход", "21 сен", true], ["1-й забег", "21 сен", true], ["5 забегов", "22 сен", true], ["D1", "22 сен", true], ["D7", "28 сен", true], ["Покупка", "28 сен", true]];
+  const html = (short) => MS.map(([t, d, done]) => `<div class="ms${done ? " done" : ""}"><span class="d"></span><b>${t}</b>${short ? "" : d}</div>`).join("");
+  const blocks = document.querySelectorAll(".milestones");
+  blocks[0].innerHTML = html(false);
+  blocks[1].innerHTML = html(true);
+</script>
+</body>
+</html>

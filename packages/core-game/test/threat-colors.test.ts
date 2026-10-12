@@ -25,6 +25,12 @@ describe("цвета угроз", () => {
     expect(isRed(WORLD_COLORS.projectile)).toBe(false);
   });
 
+  it("свой опыт и обереги красными не бывают: угроза и добыча не совпадают по цвету", () => {
+    expect(isRed(WORLD_COLORS.xpRing)).toBe(false);
+    expect(isRed(WORLD_COLORS.orbiter)).toBe(false);
+    expect(isRed(WORLD_COLORS.threat)).toBe(true);
+  });
+
   it("отдельного жёлтого цвета полосы рывка больше нет", () => {
     expect("dashLane" in WORLD_COLORS).toBe(false);
   });
