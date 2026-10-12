@@ -27,12 +27,22 @@ export const COLUMNS = [
 
 const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
 
+/**
+ * Ранг версии-поезда: ближняя — раньше (docs/38-release-plan.md). Без версии —
+ * после всех: такую задачу ни один поезд не ждёт.
+ */
+export function versionRank(version) {
+  const match = /^v(\d+)\.(\d+)$/.exec(version ?? "");
+  return match === null ? Number.MAX_SAFE_INTEGER : Number(match[1]) * 1000 + Number(match[2]);
+}
+
 function compareTasks(epicOrder) {
   const epicRank = (epic) => {
     const index = epicOrder.indexOf(epic);
     return index === -1 ? epicOrder.length : index;
   };
   return (a, b) =>
+    versionRank(a.task.version) - versionRank(b.task.version) ||
     (PRIORITY_RANK[a.task.priority] ?? 99) - (PRIORITY_RANK[b.task.priority] ?? 99) ||
     epicRank(a.task.epic) - epicRank(b.task.epic) ||
     a.task.id.localeCompare(b.task.id);

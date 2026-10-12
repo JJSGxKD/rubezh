@@ -193,6 +193,16 @@ describe("исполнители, автор и поток", () => {
     }
   });
 
+  it("version необязательна; если есть — вида v0.8", () => {
+    expect(validateTask("T-0003-x.md", { ...valid(), version: "v0.8" })).toEqual([]);
+    expect(validateTask("T-0003-x.md", { ...valid(), version: "v1.10" })).toEqual([]);
+    for (const bad of ["0.8", "v0.8.1", "v0", ""]) {
+      const errors = validateTask("T-0003-x.md", { ...valid(), version: bad });
+      expect(errors, bad).toHaveLength(1);
+      expect(errors[0], bad).toContain("поле version");
+    }
+  });
+
   it("owner — «аккаунт / исполнитель / уровень»; прежний без уровня тоже читается", () => {
     expect(parseOwner("claude-3 / sonnet-5.5 / medium")).toEqual({ account: "claude-3", executor: "sonnet-5.5", effort: "medium" });
     expect(parseOwner("claude-2 / sonnet-5.5")).toEqual({ account: "claude-2", executor: "sonnet-5.5", effort: null });

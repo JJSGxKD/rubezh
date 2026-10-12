@@ -44,10 +44,14 @@ export const FIELDS = [
   "effort",
   "release",
   "design",
+  "version",
 ];
 
 /** Необязательные поля: задачи, заведённые до них, остаются как были. */
-export const OPTIONAL_FIELDS = new Set(["author"]);
+export const OPTIONAL_FIELDS = new Set(["author", "version"]);
+
+/** Версия-поезд, в которую целит задача (docs/38-release-plan.md): `v0.8`. */
+export const VERSION_RE = /^v\d+\.\d+$/;
 
 /** Кодовое имя роли (tasks/README.md, «Роли и кодовые имена»): `claude-lead-1`, `claude-review-2`. */
 const CODE_NAME_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
@@ -287,6 +291,9 @@ export function validateTask(fileName, data, context) {
   expectEnum("release", RELEASES);
 
   if (Object.hasOwn(data, "owner") && text("owner") === null) fail("owner", `ожидается строка или пусто, а не ${show(data.owner)}`);
+  if (Object.hasOwn(data, "version") && (text("version") === null || !VERSION_RE.test(data.version))) {
+    fail("version", `ожидается версия вида v0.8, а не ${show(data.version)}`);
+  }
   if (Object.hasOwn(data, "author") && (text("author") === null || !CODE_NAME_RE.test(data.author))) {
     fail("author", `ожидается кодовое имя вида claude-lead-1, а не ${show(data.author)}`);
   }

@@ -22,6 +22,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/friends.html
+version: v0.8
 ---
 
 # T-0048. Экран друзей — список первым, полоса бонуса и «Подарить всем»
