@@ -1,4 +1,4 @@
-import { hapticFeedback, invoice, isTMA, openLink, openTelegramLink, retrieveLaunchParams, retrieveRawInitData, shareURL, supports } from "@tma.js/sdk";
+import { hapticFeedback, invoice, isTMA, retrieveLaunchParams, retrieveRawInitData, shareURL, supports } from "@tma.js/sdk";
 import type {
   AdNetworkSetup,
   AdShowOutcome,
@@ -21,7 +21,7 @@ import type {
   PlatformUi,
 } from "@bh/shared-types";
 import { openInvoiceWith } from "./invoice";
-import { openLinkWith } from "./links";
+import { openLinkWith, telegramLinkSdk } from "./links";
 import { createDeviceStorage } from "./storage";
 import { createTelegramUi } from "./ui-telegram";
 
@@ -92,16 +92,7 @@ export class TelegramAdapter implements PlatformAdapter {
 
   /** Канал Telegram — внутри клиента, остальное — во встроенном браузере (`links.ts`). */
   openLink(url: string): void {
-    openLinkWith(
-      {
-        telegramAvailable: () => isTMA() && openTelegramLink.isAvailable(),
-        openTelegram: (link) => openTelegramLink(link),
-        linkAvailable: () => isTMA() && openLink.isAvailable(),
-        open: (link) => openLink(link),
-        browser: (link) => void globalThis.open(link, "_blank", "noopener"),
-      },
-      url,
-    );
+    openLinkWith(telegramLinkSdk(), url);
   }
 
   share(_payload: SharePayload): void {
