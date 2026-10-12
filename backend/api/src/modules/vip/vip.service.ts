@@ -10,6 +10,7 @@ import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js"
 import { SubscriptionRenewal } from "../payments/subscription-renewal.js";
 import { AdPasses } from "../ads/ads-passes.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { WalletBonuses } from "../wallet/wallet-bonus.js";
 import type { GrantReason } from "../wallet/wallet-types.js";
@@ -79,6 +80,7 @@ export class VipService implements OnModuleInit {
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: Pick<AccountRepository, "byId">,
     // Реестр нужен модулю, а не каждому тесту VIP: без него отзыв регистрируется в своём, пустом.
     private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
+    private readonly restrictions: AccountRestrictions,
   ) {}
 
   onModuleInit(): void {
@@ -111,6 +113,8 @@ export class VipService implements OnModuleInit {
   }
 
   async order(account: AccountRef, at = new Date()): Promise<ShopInvoice> {
+    // Закрытые покупки (T-0024) отвечают раньше всего остального.
+    await this.restrictions.ensure(account.accountId, "purchases", at);
     const view = await this.view(account, at);
     if (!view.canOrder) throw new VipActiveError();
     if (view.stars === null) throw new PaymentsUnsupportedError();
