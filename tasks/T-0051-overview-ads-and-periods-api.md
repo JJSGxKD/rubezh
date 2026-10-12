@@ -3,7 +3,7 @@ id: T-0051
 title: Сводка панели — реклама, периоды 7 и 30 дней, покупки в ряду — сервер
 epic: E7
 priority: P1
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5 / high
 size: M
 depends_on: []
