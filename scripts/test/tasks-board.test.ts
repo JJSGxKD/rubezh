@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { classify, nextTasks, statusBadge } from "../tasks/board.mjs";
+import { classify, nextTasks, statusBadge, versionRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -139,6 +139,26 @@ describe("порядок в колонке «Свободно»", () => {
   it("эпик, которого нет в epics.md, идёт последним среди своего приоритета", () => {
     const result = classify([task("T-0020", { epic: "E9" }), task("T-0021", { epic: "E2" })], [], [], [], EPIC_ORDER);
     expect(ids(result.free)).toEqual(["T-0021", "T-0020"]);
+  });
+});
+
+// Поезд версий (docs/38-release-plan.md): ближняя версия — раньше приоритета.
+describe("версия задачи в порядке выдачи", () => {
+  it("ближняя версия раньше дальней при любом приоритете; без версии — в конце", () => {
+    const result = classify(
+      [task("T-0050", { priority: "P0", version: "v0.10" }), task("T-0051", { priority: "P2", version: "v0.8" }), task("T-0052", { priority: "P0" }), task("T-0053", { priority: "P1", version: "v0.9" })],
+      [],
+      [],
+      [],
+      EPIC_ORDER,
+    );
+    expect(ids(result.free)).toEqual(["T-0051", "T-0053", "T-0050", "T-0052"]);
+  });
+
+  it("versionRank: v0.10 позже v0.9, мусор — как без версии", () => {
+    expect(versionRank("v0.10")).toBeGreaterThan(versionRank("v0.9"));
+    expect(versionRank("v1.0")).toBeGreaterThan(versionRank("v0.99"));
+    expect(versionRank(undefined)).toBe(versionRank("x"));
   });
 });
 
