@@ -3,7 +3,7 @@ id: T-0040
 title: Снимок перед вайпом — что вернуть тестеру и какой бонус дать
 epic: E2
 priority: P1
-status: in-progress
+status: done
 owner: claude-6 / sonnet-5.5
 size: M
 depends_on: [T-0039]
