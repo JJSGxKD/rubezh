@@ -4,7 +4,7 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleD
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
-import { TelegramApiError, type TelegramBotApi, type TelegramUpdate } from "./telegram-bot-api.js";
+import { TelegramApiError, type TelegramBotApi } from "./telegram-bot-api.js";
 import { TELEGRAM_BOT_API } from "./telegram-bot-api.js";
 import { BotUpdateQueue } from "./bot-update-queue.js";
 
@@ -167,20 +167,6 @@ export class BotPoller implements OnApplicationBootstrap, OnModuleDestroy {
   private log(level: "log" | "warn" | "error", event: string, fields: Record<string, unknown>): void {
     this.logger[level](JSON.stringify({ module: "bot", event, ...fields }));
   }
-}
-
-/**
- * Предварительную проверку оплаты Telegram ждёт десять секунд, а карточка
- * приветствия рисуется секунды: в одной пачке с командами проверка идёт
- * первой, иначе оплата сорвалась бы из-за чужого `/start`. Остальной порядок
- * сохраняется.
- *
- * Опрос её больше не зовёт: срочное идёт в очередь с приоритетом (`isUrgent`).
- * Осталась только ради теста оплаты вне зон T-0027 — удалить вместе с ним.
- */
-export function urgentFirst(updates: readonly TelegramUpdate[]): TelegramUpdate[] {
-  const urgent = updates.filter((update) => update.pre_checkout_query !== undefined);
-  return urgent.length === 0 ? [...updates] : [...urgent, ...updates.filter((update) => update.pre_checkout_query === undefined)];
 }
 
 function reasonOf(error: unknown): string {
