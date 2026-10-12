@@ -137,7 +137,8 @@ describe("вход через бота", () => {
   });
 
   it("сервер без диплинка — ожидание с `deepLink: null`", async () => {
-    const { deepLink: _deepLink, ...old } = OPENED;
+    const old: Record<string, unknown> = { ...OPENED };
+    delete old.deepLink;
     const { store } = await anonymousStore(json(201, { data: old }), json(201, { data: { status: "confirmed", identity: IDENTITY } }));
     const seen: unknown[] = [];
     store.subscribe((state) => state.view.status === "anonymous" && state.view.bot.status === "waiting" && seen.push(state.view.bot.deepLink));
