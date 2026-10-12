@@ -3,7 +3,7 @@ id: T-0048
 title: Экран друзей — список первым, полоса бонуса и «Подарить всем»
 epic: E12
 priority: P2
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5
 size: M
 depends_on: [T-0047]
