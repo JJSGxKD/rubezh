@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bonusTrack, friendsLayout, giftAllCount } from "../src/screens/meta/friends-rules";
+import { bonusTrack, coinIconsNeedRoom, friendsLayout, giftAllCount } from "../src/screens/meta/friends-rules";
 
 // Правила экрана друзей (tasks/T-0048): кому подарит «Подарить всем», как
 // заливается полоса бонуса и что стоит на экране первым.
@@ -52,5 +52,21 @@ describe("порядок экрана", () => {
   it("друзей нет — приглашение первым, друзья есть — список", () => {
     expect(friendsLayout(0)).toBe("invite-first");
     expect(friendsLayout(1)).toBe("list-first");
+  });
+});
+
+describe("значки монет на полосе бонуса", () => {
+  const coins = (...values: number[]) => values.map((value) => ({ coins: value }));
+
+  it("суммы короче четырёх цифр — значкам места хватает", () => {
+    expect(coinIconsNeedRoom(coins(50, 100, 150, 250, 400))).toBe(false);
+    expect(coinIconsNeedRoom(coins(999))).toBe(false);
+    expect(coinIconsNeedRoom([])).toBe(false);
+  });
+
+  it("хоть одна сумма от 1 000 — значки на узкой полосе прячутся", () => {
+    expect(coinIconsNeedRoom(coins(1_000))).toBe(true);
+    expect(coinIconsNeedRoom(coins(100, 500, 1_000))).toBe(true);
+    expect(coinIconsNeedRoom(coins(500, 1_000, 2_500, 5_000, 10_000))).toBe(true);
   });
 });
