@@ -25,10 +25,13 @@ zones:
   - backend/api/test/payments-alert-notifier.test.ts
   - backend/api/test/shop.test.ts
   - backend/api/test/vip.test.ts
+  - backend/api/src/modules/restrictions/restrictions.repository.ts
 shared:
   - backend/api/prisma/schema.prisma
   - docs/29-admin-panel.md
   - docs/35-stage4-plan.md
+  - docs/21-diagrams.md
+  - apps/admin/src/api/audit.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
@@ -147,7 +150,10 @@ T-0023 забирает остаток покупки при внешнем во
    ```
 
    Делает то же, что `impose` после проверок:
-   - строка с `endsAt: null`, `notify: true`, `imposedBy: null`;
+   - строка с `endsAt: null`, `notify: true`, `imposedBy: null`. В
+     `restrictions.repository.ts` у `NewRestriction` — `imposedBy: string | null`:
+     колонка и `RestrictionRow` уже допускают `null`, приведение типа не нужно
+     (ответ на вопрос 2 PR #275);
    - `repository.impose`, `markSettled(replaced)`, `gate.forget`, `hooks.emitImposed`;
    - аудит `players.restrict` с `actorAccountId: null`.
 
@@ -186,8 +192,12 @@ T-0023 забирает остаток покупки при внешнем во
 
    Устроен как соседние `on…`/`emit…`: ошибка слушателя пишется в лог и не
    роняет остальных.
-6. **`payment-confirmation.ts`, `refunded`** — при `external` и `firstTime`,
-   после отзыва T-0023:
+6. **`payment-confirmation.ts`, `refunded`** — при `external`, после отзыва
+   T-0023. Первый раз (`firstTime`) — всегда. Повтор — только если аккаунту
+   покупки ещё не закрыты (`restrictions.status(accountId, "purchases", at) === null`):
+   `markRefunded` отмечает возврат уже на первой попытке, и без этого сбой на
+   наложении оставил бы аккаунт открытым без следа. Закрытому аккаунту повтор
+   не делает ничего (ответ на вопрос 1 PR #275):
    1. `await this.restrictions.imposeBySystem(accountId, "purchases", "payment_refund", "Возврат звёзд за покупку <purchaseId>", at)`.
       Ошибка бросается дальше: задание очереди повторит обработку. Отзыв на
       повторе ничего не спишет дважды (T-0023), а наложение того же вида
@@ -249,7 +259,8 @@ T-0023 забирает остаток покупки при внешнем во
   - без параметра → прежнее поведение, все старые кейсы зелёные;
   - `refunded`, внешний, первый раз → `imposeBySystem(accountId, "purchases", "payment_refund", …)`
     и `emitExternalRefund` с `revoked` и `stats`;
-  - внешний, повтор → ни наложения, ни хука;
+  - внешний, повтор, покупки уже закрыты → ни наложения, ни хука;
+  - внешний, первая попытка упала на наложении, повтор → наложение и хук;
   - наш возврат → ни наложения, ни хука;
   - `imposeBySystem` бросил → `refunded` бросает.
 - `backend/api/test/payments-alert-notifier.test.ts`:
@@ -281,6 +292,12 @@ T-0023 забирает остаток покупки при внешнем во
 - `docs/35-stage4-plan.md`, строки 293–294 «О4 (аккаунты, которые возвращают
   звёзды)» — дописать: «— решено 06.10.2026: остаток забирается (T-0023),
   покупки закрываются до разбора (T-0024)».
+- `docs/21-diagrams.md` §4.24 «Внешний возврат звёзд» — после отзыва остатка
+  два шага: ограничение «Покупки» от системы и карточка в поток «Покупки»;
+  повтор — только если покупки ещё не закрыты (ответ на вопрос 6 PR #275).
+- `apps/admin/src/api/audit.ts` — в словари журнала аудита две строки: вид
+  `purchases` — «покупки», причина `payment_refund` — «возврат оплаты». Без
+  них журнал показывает сырые ключи (ответ на вопрос 5 PR #275).
 
 ## Критерии приёмки
 
