@@ -10,6 +10,7 @@ import { PaymentsController } from "./payments.controller.js";
 import { PaymentsQueue } from "./payments-queue.js";
 import { PaymentsService } from "./payments.service.js";
 import { PurchaseFulfillment } from "./purchase-fulfillment.js";
+import { PurchaseRevocation } from "./purchase-revocation.js";
 import { PrismaPurchasesRepository, PURCHASES_REPOSITORY } from "./purchases.repository.js";
 import { SubscriptionRenewal } from "./subscription-renewal.js";
 
@@ -45,12 +46,13 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
     PaymentsContinueLedger,
     PaymentsHooks,
     PurchaseFulfillment,
+    PurchaseRevocation,
     SubscriptionRenewal,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
   ],
   // Репозиторий — карточке игрока в панели: покупки аккаунта читаются, не меняются.
   // Сервис и выдача — магазину и VIP: они выставляют счета на товары и выдают их;
-  // продление подписки — VIP.
-  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, SubscriptionRenewal, PURCHASES_REPOSITORY],
+  // отзыв остатка при возврате — им же; продление подписки — VIP.
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PurchaseRevocation, SubscriptionRenewal, PURCHASES_REPOSITORY],
 })
 export class PaymentsModule {}
