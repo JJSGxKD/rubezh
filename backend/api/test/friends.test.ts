@@ -255,6 +255,73 @@ describe("подарки", () => {
   });
 });
 
+describe("«Подарить всем»", () => {
+  const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  const giftNotices = (accountId: string) => notices.repository.of(accountId).filter((notice) => notice.kind === "friend_gift");
+
+  async function befriend(owner: Account, friend: Account): Promise<void> {
+    await service.request(claims(friend), owner.accountId);
+    await service.accept(claims(owner), friend.accountId);
+  }
+
+  it("дарит каждому другу, кому сегодня не дарили; одному уже подарено — он не получает второго", async () => {
+    const ann = await player("1");
+    const [bob, cat, dan] = [await player("2"), await player("3"), await player("4")] as const;
+    for (const friend of [bob, cat, dan]) await befriend(ann, friend);
+    await service.sendGift(claims(ann), bob.accountId);
+
+    expect(await service.sendGiftsToAll(claims(ann))).toEqual({ sent: 2 });
+    await settle();
+    expect((await service.view(ann.accountId)).gifts.sentToday.sort()).toEqual([bob.accountId, cat.accountId, dan.accountId].sort());
+    expect(giftNotices(cat.accountId)).toHaveLength(1);
+    expect(giftNotices(dan.accountId)).toHaveLength(1);
+    expect(giftNotices(bob.accountId)).toHaveLength(1);
+    expect(giftNotices(ann.accountId)).toHaveLength(0);
+  });
+
+  it("повтор в те же сутки — `sent: 0` и без новых уведомлений; на следующие сутки дарит снова", async () => {
+    const ann = await player("1");
+    const bob = await player("2");
+    await befriend(ann, bob);
+
+    expect(await service.sendGiftsToAll(claims(ann))).toEqual({ sent: 1 });
+    await settle();
+    expect(await service.sendGiftsToAll(claims(ann))).toEqual({ sent: 0 });
+    await settle();
+    expect(giftNotices(bob.accountId)).toHaveLength(1);
+
+    repository.today = shiftDay(repository.today, 1);
+    expect(await service.sendGiftsToAll(claims(ann))).toEqual({ sent: 1 });
+  });
+
+  it("нет друзей — `sent: 0`", async () => {
+    const lonely = await player("1");
+    expect(await service.sendGiftsToAll(claims(lonely))).toEqual({ sent: 0 });
+  });
+
+  it("не друзьям подарка нет: заявка без ответа дружбой не считается", async () => {
+    const ann = await player("1");
+    const stranger = await player("2");
+    await service.request(claims(ann), stranger.accountId);
+
+    expect(await service.sendGiftsToAll(claims(ann))).toEqual({ sent: 0 });
+    expect((await service.view(ann.accountId)).gifts.sentToday).toEqual([]);
+  });
+
+  it("подарки закрыты ограничением — та же ошибка, что у одиночного подарка", async () => {
+    const ann = await player("1");
+    const bob = await player("2");
+    await befriend(ann, bob);
+    restrictions.restrict(ann.accountId, "friend_gifts");
+
+    await expect(service.sendGiftsToAll(claims(ann))).rejects.toMatchObject({ code: "account_restricted", status: 403 });
+    expect((await service.view(bob.accountId)).gifts.pending).toBe(0);
+
+    restrictions.restrict(bob.accountId, "friend_gifts", { notify: false });
+    await expect(service.sendGiftsToAll(claims(bob))).rejects.toMatchObject({ code: "temporarily_unavailable", status: 503 });
+  });
+});
+
 describe("лента уведомлений", () => {
   // Запись в ленту не ждёт ответа игроку: дать ей отработать.
   const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -528,6 +595,23 @@ describe("HTTP раздела друзей", () => {
     repository.played.add(ann.accountId);
     const bonus = await target.inject({ method: "POST", url: "/api/v1/friends/bonus/claim", headers: { authorization: await bearer(bob) } });
     expect(bonus.json()).toEqual({ data: { claimed: 1, coins: FRIEND_BONUS_RULES.steps[0]?.coins } });
+  });
+
+  it("«Подарить всем»: без токена — 401, с токеном — число подаренных, повтор — ноль", async () => {
+    const target = await start();
+    const ann = await player("1");
+    const bob = await player("2");
+    const cat = await player("3");
+    for (const friend of [bob, cat]) {
+      await service.request(claims(friend), ann.accountId);
+      await service.accept(claims(ann), friend.accountId);
+    }
+    expect((await target.inject({ method: "POST", url: "/api/v1/friends/gifts/send-all" })).statusCode).toBe(401);
+
+    const first = await target.inject({ method: "POST", url: "/api/v1/friends/gifts/send-all", headers: { authorization: await bearer(ann) } });
+    expect(first.json()).toEqual({ data: { sent: 2 } });
+    const again = await target.inject({ method: "POST", url: "/api/v1/friends/gifts/send-all", headers: { authorization: await bearer(ann) } });
+    expect(again.json()).toEqual({ data: { sent: 0 } });
   });
 
   it("мусор в теле и в пути — 400, чужой игрок — 404", async () => {

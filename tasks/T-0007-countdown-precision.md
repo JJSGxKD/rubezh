@@ -3,8 +3,8 @@ id: T-0007
 title: Точные и тикающие отсчёты «через сколько» на главной и в награде дня
 epic: E6
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5
 size: S
 depends_on: []
 zones:
@@ -19,6 +19,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
+version: v0.8
 ---
 
 # T-0007. Точные и тикающие отсчёты «через сколько» на главной и в награде дня

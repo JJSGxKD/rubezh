@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { badgeLine, parseFrontmatter, taskBadge, validateTask, withBadgeLine } from "../tasks/task-file.mjs";
+import { badgeLine, parseFrontmatter, parseOwner, taskBadge, validateTask, withBadgeLine } from "../tasks/task-file.mjs";
 
 // Шапка задачи — строгое подмножество YAML (tasks/T-0002-task-cli.md, «Решения»):
 // разбирает свой парсер, любая другая конструкция — ошибка с номером строки.
@@ -174,6 +174,39 @@ describe("проверка одной задачи", () => {
     const errors = validateTask("T-0003-x.md", { ...valid(), status: "in-progress", owner: "" });
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("T-0003-x.md: поле owner");
+  });
+});
+
+// Потоки и роли (tasks/README.md, «Исполнители и effort», «Роли и кодовые имена»).
+describe("исполнители, автор и поток", () => {
+  it("haiku-5.5 — допущенный исполнитель", () => {
+    expect(validateTask("T-0003-x.md", { ...valid(), executor: "haiku-5.5" })).toEqual([]);
+  });
+
+  it("author необязателен; если есть — кодовое имя роли", () => {
+    expect(validateTask("T-0003-x.md", { ...valid(), author: "claude-lead-1" })).toEqual([]);
+    expect(validateTask("T-0003-x.md", { ...valid(), author: "claude-review-2" })).toEqual([]);
+    for (const bad of ["", "Claude-lead-1", "lead", "claude lead 1"]) {
+      const errors = validateTask("T-0003-x.md", { ...valid(), author: bad });
+      expect(errors, bad).toHaveLength(1);
+      expect(errors[0], bad).toContain("поле author");
+    }
+  });
+
+  it("version необязательна; если есть — вида v0.8", () => {
+    expect(validateTask("T-0003-x.md", { ...valid(), version: "v0.8" })).toEqual([]);
+    expect(validateTask("T-0003-x.md", { ...valid(), version: "v1.10" })).toEqual([]);
+    for (const bad of ["0.8", "v0.8.1", "v0", ""]) {
+      const errors = validateTask("T-0003-x.md", { ...valid(), version: bad });
+      expect(errors, bad).toHaveLength(1);
+      expect(errors[0], bad).toContain("поле version");
+    }
+  });
+
+  it("owner — «аккаунт / исполнитель / уровень»; прежний без уровня тоже читается", () => {
+    expect(parseOwner("claude-3 / sonnet-5.5 / medium")).toEqual({ account: "claude-3", executor: "sonnet-5.5", effort: "medium" });
+    expect(parseOwner("claude-2 / sonnet-5.5")).toEqual({ account: "claude-2", executor: "sonnet-5.5", effort: null });
+    for (const bad of ["", "claude-3", "claude-3 /  / low", "a / b / c / d"]) expect(parseOwner(bad), bad).toBeNull();
   });
 });
 

@@ -120,8 +120,19 @@ export function fetchCandidate(api: AdminApi, target: RoleTarget): Promise<ApiRe
   return api.request("/roles/candidate", { query: target, schema: z.object({ candidate: candidateSchema.nullable() }) });
 }
 
-export function grantRole(api: AdminApi, target: RoleTarget, role: string): Promise<ApiResult<{ granted: boolean }>> {
-  return api.request("/roles/grant", { method: "POST", body: { ...target, role }, schema: z.object({ granted: z.boolean() }) });
+/**
+ * Роли `owner` и `admin` выдаются после подтверждения в боте тем, кто выдаёт
+ * (docs/29-admin-panel.md §3.4): вместо итога приходит ссылка на бота.
+ */
+const grantedSchema = z.object({
+  granted: z.boolean(),
+  confirm: z.object({ link: z.string().url(), expiresAtMs: z.number() }).nullable(),
+});
+
+export type GrantResult = z.infer<typeof grantedSchema>;
+
+export function grantRole(api: AdminApi, target: RoleTarget, role: string): Promise<ApiResult<GrantResult>> {
+  return api.request("/roles/grant", { method: "POST", body: { ...target, role }, schema: grantedSchema });
 }
 
 export function revokeRole(api: AdminApi, target: RoleTarget, role: string): Promise<ApiResult<{ revoked: boolean; sessionsRevoked: number }>> {

@@ -129,10 +129,125 @@ describe.skipIf(DATABASE_URL === "")("покупки на живом Postgres", 
     if (opened.kind !== "opened") throw new Error("счёт не открылся");
     const account = await prisma.account.findUniqueOrThrow({ where: { accountId } });
 
-    await expect(purchases.checkout(opened.purchase.purchaseId)).resolves.toMatchObject({ platformUserId: account.platformUserId, runFinished: false });
+    const at = new Date();
+    await expect(purchases.checkout(opened.purchase.purchaseId, at)).resolves.toMatchObject({ platformUserId: account.platformUserId, runFinished: false, subscriptionLive: false });
     await prisma.run.update({ where: { runId }, data: { status: "finished" } });
-    await expect(purchases.checkout(opened.purchase.purchaseId)).resolves.toMatchObject({ runFinished: true });
-    await expect(purchases.checkout(randomUUID())).resolves.toBeNull();
+    await expect(purchases.checkout(opened.purchase.purchaseId, at)).resolves.toMatchObject({ runFinished: true });
+    await expect(purchases.checkout(randomUUID(), at)).resolves.toBeNull();
+  });
+
+  describe("идёт ли у владельца VIP с продлением (T-0025)", () => {
+    const DAY_MS = 86_400_000;
+
+    async function owner(): Promise<string> {
+      const account = await accounts.upsert(
+        { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Подписчик", username: null, photoUrl: null },
+        Date.now(),
+      );
+      return account.accountId;
+    }
+
+    /** Оплаченная подписка: покупка, подписка с продлением и один период, как их оставляет выдача. */
+    async function subscribed(accountId: string, endsAt: Date, renewal: "on" | "cancelled" | "failed"): Promise<string> {
+      const purchaseId = randomUUID();
+      const paidAt = new Date(endsAt.getTime() - 30 * DAY_MS);
+      await prisma.purchase.create({
+        data: {
+          purchaseId,
+          accountId,
+          product: "vip",
+          sku: "vip",
+          priceStars: 700,
+          chargedStars: 700,
+          mode: "live",
+          status: "paid",
+          telegramChargeId: `charge-${randomUUID()}`,
+          invoicedAt: paidAt,
+          paidAt,
+        },
+      });
+      // База требует, чтобы у отменённого продления был тот, кто его отменил.
+      const cancelledBy = renewal === "cancelled" ? "player" : null;
+      await prisma.vipSubscription.create({ data: { subscriptionId: purchaseId, accountId, renewal, cancelledBy, createdAt: paidAt, updatedAt: paidAt } });
+      await prisma.vipPeriod.create({ data: { purchaseId, subscriptionId: purchaseId, accountId, startsAt: paidAt, endsAt, createdAt: paidAt } });
+      return purchaseId;
+    }
+
+    /** Новый счёт на VIP — тот, чью оплату проверяет Telegram. */
+    async function newInvoice(accountId: string): Promise<string> {
+      const opened = await purchases.openShopInvoice({
+        purchaseId: randomUUID(),
+        accountId,
+        product: "vip",
+        sku: "vip",
+        onceKey: null,
+        priceStars: 700,
+        chargedStars: 700,
+        mode: "live",
+        invoicedAt: new Date(),
+      });
+      if (opened.kind !== "opened") throw new Error("счёт не открылся");
+      return opened.purchase.purchaseId;
+    }
+
+    it("период ещё идёт и продление включено — подписка живая", async () => {
+      const accountId = await owner();
+      const at = new Date();
+      await subscribed(accountId, new Date(at.getTime() + 10 * DAY_MS), "on");
+
+      const view = await purchases.checkout(await newInvoice(accountId), at);
+
+      expect(view).toMatchObject({ subscriptionLive: true });
+    });
+
+    it("период кончился — подписка не живая, даже с включённым продлением", async () => {
+      const accountId = await owner();
+      const at = new Date();
+      await subscribed(accountId, new Date(at.getTime() - 1000), "on");
+
+      await expect(purchases.checkout(await newInvoice(accountId), at)).resolves.toMatchObject({ subscriptionLive: false });
+    });
+
+    it("граница: период, кончающийся ровно в момент проверки, уже не идёт", async () => {
+      const accountId = await owner();
+      const at = new Date();
+      await subscribed(accountId, at, "on");
+
+      await expect(purchases.checkout(await newInvoice(accountId), at)).resolves.toMatchObject({ subscriptionLive: false });
+    });
+
+    it.each(["cancelled", "failed"] as const)("продление `%s` — подписка не живая: списывать нечего", async (renewal) => {
+      const accountId = await owner();
+      const at = new Date();
+      await subscribed(accountId, new Date(at.getTime() + 10 * DAY_MS), renewal);
+
+      await expect(purchases.checkout(await newInvoice(accountId), at)).resolves.toMatchObject({ subscriptionLive: false });
+    });
+
+    it("VIP не было вовсе — подписка не живая", async () => {
+      const accountId = await owner();
+
+      await expect(purchases.checkout(await newInvoice(accountId), new Date())).resolves.toMatchObject({ subscriptionLive: false });
+    });
+
+    it("условия на уровне аккаунта, а не подписки: идущий период одной и включённое продление другой вместе дают живую", async () => {
+      const accountId = await owner();
+      const at = new Date();
+      // Отменённая подписка ещё в оплаченном периоде, а у другой продление числится включённым: если оно настоящее, второй счёт удвоил бы списание.
+      await subscribed(accountId, new Date(at.getTime() + 10 * DAY_MS), "cancelled");
+      await subscribed(accountId, new Date(at.getTime() - DAY_MS), "on");
+
+      await expect(purchases.checkout(await newInvoice(accountId), at)).resolves.toMatchObject({ subscriptionLive: true });
+    });
+
+    it("чужая подписка не считается", async () => {
+      const other = await owner();
+      const at = new Date();
+      await subscribed(other, new Date(at.getTime() + 10 * DAY_MS), "on");
+      const accountId = await owner();
+
+      await expect(purchases.checkout(await newInvoice(accountId), at)).resolves.toMatchObject({ subscriptionLive: false });
+    });
   });
 
   it("возврат записывается один раз и не стирает причину, заказанную нами", async () => {

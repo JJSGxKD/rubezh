@@ -27,6 +27,7 @@ import { ItemsModule } from "./modules/items/items.module.js";
 import { BoostsModule } from "./modules/boosts/boosts.module.js";
 import { TelegramMessagingModule } from "./platforms/telegram/telegram-messaging.module.js";
 import { HealthController } from "./health/health.controller.js";
+import { ReadinessController } from "./health/readiness.controller.js";
 import { AdminModule } from "./modules/admin/admin.module.js";
 import { FriendsModule } from "./modules/friends/friends.module.js";
 import { ReferralsModule } from "./modules/referrals/referrals.module.js";
@@ -146,6 +147,6 @@ export const APP_MODULES = [
  */
 @Module({
   imports: [AppConfigModule, ...APP_MODULES],
-  controllers: [HealthController],
+  controllers: [HealthController, ReadinessController],
 })
 export class AppModule {}

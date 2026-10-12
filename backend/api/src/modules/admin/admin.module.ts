@@ -65,6 +65,7 @@ import { AdminSessionService } from "./admin-session.service.js";
 import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.store.js";
 import { PanelLoginService } from "./panel-login.service.js";
 import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js";
+import { RoleConfirmations } from "./role-confirmations.js";
 
 /**
  * Серверная часть админ-панели (docs/35-stage4-plan.md, WP17;
@@ -115,7 +116,8 @@ import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js"
     { provide: ADMIN_SESSION_STORE, useClass: RedisAdminSessionStore },
     PanelLoginService,
     { provide: PANEL_LOGIN_STORE, useClass: RedisPanelLoginStore },
+    RoleConfirmations,
   ],
-  exports: [PanelLoginService],
+  exports: [PanelLoginService, RoleConfirmations],
 })
 export class AdminModule {}

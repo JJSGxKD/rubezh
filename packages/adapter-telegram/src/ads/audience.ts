@@ -1,4 +1,5 @@
 import type { AdNetworkSetup } from "@bh/shared-types";
+import { installTelegramWebAppCompat } from "../webapp-compat";
 import { TADDY_SCRIPT, ensureScript, type AdGlobals, type NetworkEnv } from "./networks";
 import { browserScriptLoader, type ScriptLoader } from "./script-loader";
 
@@ -36,11 +37,16 @@ async function withTimeout(task: Promise<void>, ms: number): Promise<"done" | "t
  * `vpnsibcom_web`; не поднялся — `init` руками. Затем `ready`: по нему SDK
  * шлёт Taddy `events/start` с параметром запуска — это и есть учёт игрока.
  * Оба шага — один раз за запуск: SDK помнит их сам (`isInit`, `isReady`).
+ *
+ * До скрипта — `beforeLoad`: SDK читает `window.Telegram.WebApp`, и без
+ * прослойки (`webapp-compat.ts`) падает на первой же проверке. Ставит её и
+ * Graspil, но Taddy от Graspil зависеть не должен.
  */
-function prepareTaddy(timeoutMs: number): Prepare {
+function prepareTaddy(timeoutMs: number, beforeLoad: () => void): Prepare {
   return async (setup, env) => {
     const pubId = setup.keys["pubId"] ?? "";
     if (pubId === "") return { network: setup.network, ok: false, reason: "misconfigured" };
+    beforeLoad();
     if (!(await ensureScript(env, () => env.globals().Taddy !== undefined, TADDY_SCRIPT, { "data-pub-id": pubId }))) {
       return { network: setup.network, ok: false, reason: "load_failed" };
     }
@@ -65,12 +71,14 @@ export interface AudienceOptions {
   globals: () => AdGlobals;
   loader: ScriptLoader;
   timeoutMs?: number;
+  /** перед скриптом сети, которой нужен `window.Telegram.WebApp` */
+  beforeLoad?: () => void;
 }
 
 /** Поднять SDK сетей учёта; сеть, которую адаптер не знает, — `unsupported`. */
 export function createAudience(options: AudienceOptions): (setups: readonly AdNetworkSetup[]) => Promise<AudienceResult[]> {
   const timeoutMs = options.timeoutMs ?? AUDIENCE_TIMEOUT_MS;
-  const networks: Readonly<Record<string, Prepare>> = { taddy: prepareTaddy(timeoutMs) };
+  const networks: Readonly<Record<string, Prepare>> = { taddy: prepareTaddy(timeoutMs, options.beforeLoad ?? (() => undefined)) };
   const env: NetworkEnv = { globals: options.globals, loader: options.loader, debug: false, now: Date.now };
   return async (setups) =>
     await Promise.all(
@@ -93,6 +101,7 @@ export async function prepareInBrowser(setups: readonly AdNetworkSetup[]): Promi
     // Объекты SDK — свойства `window`, которых нет в его типах: окно читается как набор необязательных полей.
     globals: () => globalThis as unknown as AdGlobals,
     loader: browserScriptLoader(),
+    beforeLoad: () => void installTelegramWebAppCompat(),
   });
   for (const result of await browserAudience(setups)) {
     if (!result.ok) console.warn(`SDK сети ${result.network} не поднялся: ${result.reason}`);

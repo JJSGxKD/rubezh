@@ -27,6 +27,8 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
   readonly finishedRuns = new Set<string>();
   /** продолжения, взятые за рекламу: `runId:continueNo` */
   readonly adContinues = new Set<string>();
+  /** у владельцев идёт VIP с продлением — то, что в базе считается по журналу периодов и подпискам; тест выставляет его сам */
+  subscriptionLive = false;
 
   async openInvoice(record: InvoiceRecord): Promise<InvoiceOutcome> {
     const existing = [...this.rows.values()].find((row) => row.runId === record.runId && row.continueNo === record.continueNo);
@@ -137,10 +139,16 @@ export class MemoryPurchasesRepository implements PurchasesRepository {
       .sort((a, b) => a.continueNo - b.continueNo);
   }
 
-  async checkout(purchaseId: string): Promise<CheckoutView | null> {
+  async checkout(purchaseId: string, _at = new Date()): Promise<CheckoutView | null> {
     const row = this.rows.get(purchaseId);
     if (row === undefined) return null;
-    return { purchase: { ...row }, platformUserId: this.owners.get(row.accountId) ?? "", runFinished: row.runId !== null && this.finishedRuns.has(row.runId), continueTaken: this.adContinues.has(`${String(row.runId)}:${String(row.continueNo)}`) };
+    return {
+      purchase: { ...row },
+      platformUserId: this.owners.get(row.accountId) ?? "",
+      runFinished: row.runId !== null && this.finishedRuns.has(row.runId),
+      continueTaken: this.adContinues.has(`${String(row.runId)}:${String(row.continueNo)}`),
+      subscriptionLive: this.subscriptionLive,
+    };
   }
 
   async markPaid(record: PaymentRecord): Promise<ConfirmOutcome> {

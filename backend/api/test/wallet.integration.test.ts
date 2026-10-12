@@ -251,4 +251,190 @@ describe.skipIf(DATABASE_URL === "")("кошелёк на живом Postgres", 
 
     await expect(prisma.$executeRaw`UPDATE wallet_balance SET balance = -1 WHERE account_id = ${id}::uuid AND resource = 'coins'`).rejects.toThrow(/wallet_balance_non_negative/);
   });
+  describe("отзыв начисленного при возврате звёзд (T-0023)", () => {
+    function keys() {
+      const purchaseId = randomUUID();
+      return { grantKey: `purchase:${purchaseId}:gems`, revokeKey: `refund:${purchaseId}:gems` };
+    }
+
+    async function bought(accountId: string, grantKey: string, amount: number, resource: "gems" | "coins" = "gems"): Promise<void> {
+      await wallet.grant({ accountId, resource, amount, reason: "purchase", source: "shop:starter", idempotencyKey: grantKey });
+    }
+
+    async function spent(accountId: string, amount: number): Promise<void> {
+      await wallet.spend({ accountId, lines: [{ resource: "gems", amount }], reason: "unlock", idempotencyKey: `spend:${randomUUID()}` });
+    }
+
+    function revoke(accountId: string, grantKey: string, idempotencyKey: string, resource: "gems" | "coins" = "gems") {
+      return wallet.revokeUpTo({ accountId, resource, grantKey, idempotencyKey, source: "shop:starter" });
+    }
+
+    it("начислено 150, на счёте 200 — забрано 150, баланс 50, в журнале строка −150 `refund_revoke`", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(id, grantKey, 150);
+      await wallet.grant({ accountId: id, resource: "gems", amount: 50, reason: "admin_adjust", idempotencyKey: `fund:${randomUUID()}` });
+
+      const outcome = await revoke(id, grantKey, revokeKey);
+
+      expect(outcome).toEqual({ status: "revoked", revoked: 150, granted: 150, balance: 50 });
+      expect((await wallet.balances(id)).gems).toBe(50);
+      const entry = await prisma.walletEntry.findUniqueOrThrow({ where: { idempotencyKey: revokeKey } });
+      expect(entry).toMatchObject({ accountId: id, resource: "gems", amount: -150n, reason: "refund_revoke", source: "shop:starter" });
+    });
+
+    it("начислено 150, на счёте 40 — забрано 40, баланс 0: потраченное не возвращается", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(id, grantKey, 150);
+      await spent(id, 110);
+
+      const outcome = await revoke(id, grantKey, revokeKey);
+
+      expect(outcome).toEqual({ status: "revoked", revoked: 40, granted: 150, balance: 0 });
+      expect((await wallet.balances(id)).gems).toBe(0);
+    });
+
+    it("повтор тем же ключом — duplicate с тем, что забрали тогда; баланс и журнал не меняются", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(id, grantKey, 150);
+      await spent(id, 110);
+      await revoke(id, grantKey, revokeKey);
+      // После отзыва игрок заработал ещё самоцветов: повтор их не трогает.
+      await wallet.grant({ accountId: id, resource: "gems", amount: 100, reason: "admin_adjust", idempotencyKey: `fund:${randomUUID()}` });
+      const before = await entries(id);
+
+      const again = await revoke(id, grantKey, revokeKey);
+
+      expect(again).toEqual({ status: "duplicate", revoked: 40, granted: 150 });
+      expect((await wallet.balances(id)).gems).toBe(100);
+      expect(await entries(id)).toBe(before);
+    });
+
+    it("записи начисления нет — nothing, журнал не тронут", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+      await wallet.grant({ accountId: id, resource: "gems", amount: 30, reason: "admin_adjust", idempotencyKey: `fund:${randomUUID()}` });
+      const before = await entries(id);
+
+      const outcome = await revoke(id, grantKey, revokeKey);
+
+      expect(outcome).toEqual({ status: "nothing", granted: 0 });
+      expect(await entries(id)).toBe(before);
+      expect((await wallet.balances(id)).gems).toBe(30);
+    });
+
+    it("баланс 0 — nothing с тем, сколько начислено, строка журнала не создаётся", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(id, grantKey, 150);
+      await spent(id, 150);
+      const before = await entries(id);
+
+      const outcome = await revoke(id, grantKey, revokeKey);
+
+      expect(outcome).toEqual({ status: "nothing", granted: 150 });
+      expect(await entries(id)).toBe(before);
+      expect(await prisma.walletEntry.findUnique({ where: { idempotencyKey: revokeKey } })).toBeNull();
+      expect((await wallet.balances(id)).gems).toBe(0);
+    });
+
+    it("нет строки баланса вовсе — тоже nothing, а не ошибка", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+
+      await expect(revoke(id, grantKey, revokeKey)).resolves.toEqual({ status: "nothing", granted: 0 });
+    });
+
+    it("начисление чужого аккаунта и другого ресурса не отзывается тем же ключом", async () => {
+      const owner = await account();
+      const other = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(owner, grantKey, 150);
+      await wallet.grant({ accountId: other, resource: "gems", amount: 500, reason: "admin_adjust", idempotencyKey: `fund:${randomUUID()}` });
+      await wallet.grant({ accountId: owner, resource: "coins", amount: 80, reason: "admin_adjust", idempotencyKey: `fund:${randomUUID()}` });
+
+      await expect(revoke(other, grantKey, revokeKey)).resolves.toEqual({ status: "nothing", granted: 0 });
+      await expect(revoke(owner, grantKey, `${revokeKey}:c`, "coins")).resolves.toEqual({ status: "nothing", granted: 0 });
+      expect((await wallet.balances(other)).gems).toBe(500);
+      expect((await wallet.balances(owner)).coins).toBe(80);
+    });
+
+    it("ключ отзыва, занятый чужой операцией, — ошибка, а не молчаливый duplicate", async () => {
+      const first = await account();
+      const second = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(first, grantKey, 100);
+      await revoke(first, grantKey, revokeKey);
+      const otherGrant = keys().grantKey;
+      await bought(second, otherGrant, 100);
+
+      await expect(revoke(second, otherGrant, revokeKey)).rejects.toThrow();
+    });
+
+    it("потолки и суточные счётчики отзыв не трогает", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(id, grantKey, 150);
+
+      await revoke(id, grantKey, revokeKey);
+
+      expect(await prisma.walletDaily.count({ where: { accountId: id } })).toBe(0);
+    });
+
+    it("двадцать параллельных вызовов одним ключом — одна строка журнала, баланс уменьшен один раз", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(id, grantKey, 150);
+      await wallet.grant({ accountId: id, resource: "gems", amount: 50, reason: "admin_adjust", idempotencyKey: `fund:${randomUUID()}` });
+
+      const results = await Promise.all(Array.from({ length: 20 }, () => revoke(id, grantKey, revokeKey)));
+
+      expect(results.filter((result) => result.status === "revoked")).toHaveLength(1);
+      expect(results.filter((result) => result.status === "duplicate")).toHaveLength(19);
+      expect(results.every((result) => result.status !== "nothing" && result.revoked === 150)).toBe(true);
+      expect((await wallet.balances(id)).gems).toBe(50);
+      expect(await prisma.walletEntry.count({ where: { idempotencyKey: revokeKey } })).toBe(1);
+    }, RACE_TIMEOUT_MS);
+
+    it("два параллельных отзыва разными ключами при балансе 100 и начислениях по 80 — забрано не больше 100, баланс не ниже нуля", async () => {
+      const id = await account();
+      const first = keys();
+      const second = keys();
+      await bought(id, first.grantKey, 80);
+      await bought(id, second.grantKey, 80);
+      await spent(id, 60);
+
+      const results = await Promise.all([revoke(id, first.grantKey, first.revokeKey), revoke(id, second.grantKey, second.revokeKey)]);
+
+      const taken = results.reduce((sum, result) => sum + (result.status === "revoked" ? result.revoked : 0), 0);
+      expect(taken).toBe(100);
+      expect((await wallet.balances(id)).gems).toBe(0);
+    }, RACE_TIMEOUT_MS);
+
+    it("отзыв и трата идут в очередь на одной строке баланса: баланс не уходит в минус", async () => {
+      const id = await account();
+      const { grantKey, revokeKey } = keys();
+      await bought(id, grantKey, 100);
+
+      const results = await Promise.allSettled([
+        revoke(id, grantKey, revokeKey),
+        ...Array.from({ length: 5 }, () => wallet.spend({ accountId: id, lines: [{ resource: "gems", amount: 30 }], reason: "unlock", idempotencyKey: `spend:${randomUUID()}` })),
+      ]);
+
+      expect(results[0]?.status).toBe("fulfilled");
+      const balance = (await wallet.balances(id)).gems;
+      expect(balance).toBeGreaterThanOrEqual(0);
+      // Журнал сходится с балансом, что бы ни победило в гонке.
+      expect(await walletMismatches(prisma, id)).toEqual([]);
+    }, RACE_TIMEOUT_MS);
+
+    it("ключи проверяются: пустой или длиннее предела — отказ до базы", async () => {
+      const id = await account();
+
+      await expect(revoke(id, "", "refund:x")).rejects.toThrow();
+      await expect(revoke(id, "purchase:x", "k".repeat(200))).rejects.toThrow();
+    });
+  });
 });
