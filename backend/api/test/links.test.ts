@@ -277,7 +277,8 @@ describe("ссылки в панели: цель", () => {
   function controller(): AdminLinksController {
     const journal = { summaries: async () => new Map() } as unknown as ConversionsJournal;
     const limiter = { consume: async () => true } as unknown as RateLimiter;
-    return new AdminLinksController(service, journal, {} as unknown as SecretsService, limiter);
+    const secrets = { get: () => null } as unknown as SecretsService;
+    return new AdminLinksController(service, journal, secrets, limiter);
   }
 
   it("создание принимает цель, без неё — Mini App; цель не из списка — ошибка границы", async () => {
