@@ -17,7 +17,10 @@ import { RedisRefreshStore } from "./redis-refresh.store.js";
  * соединение на первом запросе, и бэкенд без базы по-прежнему поднимается.
  *
  * `AuthGuard` экспортируется: им закрываются эндпоинты других модулей —
- * забеги и покупки этапа 3.
+ * забеги и покупки этапа 3. Вместе с ним экспортируется `AccessRevocations`:
+ * `@UseGuards(AuthGuard)` Nest собирает в модуле контроллера, а не здесь, и
+ * необязательная зависимость гарда без экспорта молча пуста — отзыв токенов
+ * тогда действует только на маршрутах самого `AuthController`.
  */
 @Module({
   controllers: [AuthController],
@@ -30,6 +33,6 @@ import { RedisRefreshStore } from "./redis-refresh.store.js";
     { provide: REFRESH_STORE, useClass: RedisRefreshStore },
   ],
   // Хуки входа — сессиям и атрибуции: они слушают вход, но в него не вмешиваются.
-  exports: [AuthService, AuthGuard, AuthHooks, ACCOUNT_REPOSITORY],
+  exports: [AuthService, AuthGuard, AccessRevocations, AuthHooks, ACCOUNT_REPOSITORY],
 })
 export class AuthModule {}
