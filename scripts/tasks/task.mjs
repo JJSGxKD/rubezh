@@ -61,7 +61,7 @@ function parseArgs(argv) {
 }
 
 function taskLine({ task, reason, pr }, owner) {
-  const parts = [task.id.padEnd(7), `${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
+  const parts = [task.id.padEnd(7), (task.version ?? "—").padEnd(6), `${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
   const notes = [];
   if (owner !== undefined) notes.push(`взял: ${owner}`);
   if (pr !== undefined) notes.push(`PR ${String(pr)}`);

@@ -5,6 +5,7 @@ import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { formatCompact, formatNumber, t } from "../i18n";
 import { useNavigation, type ScreenId } from "../state/navigation";
 import { badgeText, useBadges } from "../state/badges";
+import { useConnection } from "../state/connection";
 import { useProgress } from "../state/progress";
 import { uiFeedback } from "../state/ui-feedback";
 import { useShell } from "../state/shell";
@@ -37,6 +38,8 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
   const balances = useWallet((state) => state.balances);
   const unread = useBadges((state) => state.notifications);
   const withAccount = useShell((state) => state.capabilities.auth !== undefined);
+  // Без связи числа на фишках — последние известные, а не текущие.
+  const offline = useConnection((state) => state.status === "offline");
 
   return (
     <header className="surface-glass absolute inset-x-0 top-0 z-(--z-header) pt-[calc(0.5rem+var(--app-inset-top))] pr-[calc(0.75rem+var(--app-inset-right))] pb-2 pl-[calc(0.75rem+var(--app-inset-left))]">
@@ -53,7 +56,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
           <LevelAvatar name={name} url={user?.avatarUrl} />
         </button>
 
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+        <div className={`flex min-w-0 flex-1 items-center justify-end gap-1.5 transition-opacity duration-(--duration-base) ease-base ${offline ? "opacity-60" : ""}`}>
           <CurrencyButton icon={<CoinIcon size={20} />} label={t("currency.coins")} value={balances?.coins ?? 0} target="history" />
           <CurrencyButton icon={<GemIcon size={20} />} label={t("currency.premium")} value={balances?.gems ?? 0} target="shop" buy />
         </div>

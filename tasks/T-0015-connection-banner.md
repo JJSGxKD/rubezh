@@ -3,8 +3,8 @@ id: T-0015
 title: Общая плашка «Нет связи с сервером»
 epic: E6
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5
 size: M
 depends_on: []
 zones:
@@ -28,6 +28,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/home.html
+version: v0.8
 ---
 
 # T-0015. Общая плашка «Нет связи с сервером»
