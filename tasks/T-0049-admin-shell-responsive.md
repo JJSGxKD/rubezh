@@ -16,8 +16,8 @@ zones:
   - apps/admin/src/styles.css
   - apps/admin/test/routes.test.ts
   - apps/admin/test/kit.test.ts
-  - apps/admin/package.json
 shared:
+  - apps/admin/package.json
   - docs/29-admin-panel.md
   - pnpm-lock.yaml
 runner: any
