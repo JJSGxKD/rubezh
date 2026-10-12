@@ -141,17 +141,3 @@ export type FriendsFace = { state: "news"; count: number } | { state: "idle" };
 export function friendsFace(count: number): FriendsFace {
   return count > 0 ? { state: "news", count } : { state: "idle" };
 }
-
-const MINUTE_MS = 60_000;
-const HOUR_MS = 60 * MINUTE_MS;
-
-/**
- * Отсчёт для плитки — грубо: «через 5 ч», а под час — «через 12 мин».
- * Минуты к часам в полряда 320 px не помещаются, а до новых суток точность
- * до минуты не нужна. Часы — вниз: «через 5 ч» при 5 ч 50 мин честнее, чем
- * «через 6 ч» при 5 ч 10 мин. Минуты — вверх: «через 0 мин» выглядит как сбой.
- */
-export function roughCountdown(ms: number): { unit: "hours" | "minutes"; value: number } {
-  if (ms >= HOUR_MS) return { unit: "hours", value: Math.floor(ms / HOUR_MS) };
-  return { unit: "minutes", value: Math.max(1, Math.ceil(ms / MINUTE_MS)) };
-}
