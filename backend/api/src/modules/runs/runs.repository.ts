@@ -85,6 +85,8 @@ export interface BestRunRow {
   accountId: string;
   displayName: string;
   photoUrl: string | null;
+  /** знак «Тестер» (Р87); поля нет — не тестер, а дата знака наружу не отдаётся */
+  tester?: true;
   survivalSec: number;
   level: number;
   startingWeaponId: string;
@@ -348,13 +350,14 @@ export class PrismaRunsRepository implements RunsRepository {
         level: true,
         startingWeaponId: true,
         enemiesKilled: true,
-        account: { select: { displayName: true, photoUrl: true } },
+        account: { select: { displayName: true, photoUrl: true, testerAt: true } },
       },
     });
     return rows.map((row) => ({
       accountId: row.accountId,
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
+      ...(row.account.testerAt === null ? {} : { tester: true as const }),
       survivalSec: row.survivalSec ?? 0,
       level: row.level ?? 1,
       startingWeaponId: row.startingWeaponId,
@@ -380,7 +383,7 @@ export class PrismaRunsRepository implements RunsRepository {
         level: true,
         startingWeaponId: true,
         enemiesKilled: true,
-        account: { select: { displayName: true, photoUrl: true } },
+        account: { select: { displayName: true, photoUrl: true, testerAt: true } },
       },
     });
     if (row === null) return null;
@@ -388,6 +391,7 @@ export class PrismaRunsRepository implements RunsRepository {
       accountId: row.accountId,
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
+      ...(row.account.testerAt === null ? {} : { tester: true as const }),
       survivalSec: row.survivalSec ?? 0,
       level: row.level ?? 1,
       startingWeaponId: row.startingWeaponId,
