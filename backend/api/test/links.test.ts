@@ -382,6 +382,10 @@ describe("HTTP /r/:code", () => {
     expect(bot.statusCode).toBe(200);
     expect(bot.headers["content-type"]).toContain("text/html");
     expect(bot.body).toContain("og:title");
+    // Ссылки отдаются через CDN (docs/20 §2.2), а его кеш не различает User-Agent:
+    // превью в общем кеше досталось бы человеку вместо перехода.
+    expect(bot.headers["cache-control"]).toBe("private, max-age=300");
+    expect((await target.inject({ method: "GET", url: `/r/${link.code}`, headers: { "user-agent": HUMAN } })).headers["cache-control"]).toBe("no-store");
 
     expect((await target.inject({ method: "GET", url: "/r/NoSuchCode9", headers: { "user-agent": HUMAN } })).statusCode).toBe(404);
     expect((await target.inject({ method: "GET", url: "/r/../etc", headers: { "user-agent": HUMAN } })).statusCode).toBe(404);

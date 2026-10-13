@@ -534,7 +534,9 @@ model Purchase {
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account         Account          @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
-  run             Run?             @relation(fields: [runId], references: [runId], onDelete: Restrict)
+  // SetNull, а не Restrict: вайп стирает забеги (docs/35-stage4-plan.md Р87), а покупка
+  // второго шанса остаётся — без ссылки на забег, с оплатой и номером продолжения.
+  run             Run?             @relation(fields: [runId], references: [runId], onDelete: SetNull)
   renewalFirst    Purchase?        @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
   renewals        Purchase[]       @relation("PurchaseRenewal")
   vipSubscription VipSubscription?
@@ -1530,7 +1532,7 @@ model AccountRestriction {
   /// сообщить игроку: плашка там, где он упёрся; `false` — молча (О40)
   notify        Boolean
   /// кто наложил; без внешнего ключа — запись переживает аккаунт модератора.
-  /// `null` — перенесено из прежней блокировки
+  /// `null` — система (возврат оплаты) или перенос из прежней блокировки
   imposedBy     String?   @map("imposed_by") @db.Uuid
   liftedAt      DateTime? @map("lifted_at") @db.Timestamptz(3)
   liftedBy      String?   @map("lifted_by") @db.Uuid

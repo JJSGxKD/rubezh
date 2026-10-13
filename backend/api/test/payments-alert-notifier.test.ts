@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { abandonedJobText, PaymentsAlertNotifier, stuckPurchaseText, type PaymentsAlertApi } from "../src/modules/admin-notify/payments-alert-notifier.js";
-import { PaymentsHooks, type AbandonedJob, type StuckPurchase } from "../src/modules/payments/payments-hooks.js";
+import { abandonedJobText, externalRefundText, PaymentsAlertNotifier, stuckPurchaseText, type PaymentsAlertApi } from "../src/modules/admin-notify/payments-alert-notifier.js";
+import { PaymentsHooks, type AbandonedJob, type ExternalRefund, type StuckPurchase } from "../src/modules/payments/payments-hooks.js";
+import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
 import type { AdminChats, NotifyTargets } from "../src/modules/settings/notify-targets.js";
 import { targetsOf } from "./helpers/notify-targets.js";
 
@@ -302,6 +303,171 @@ describe("сообщение команде о брошенном задании
     notifier.onModuleInit();
 
     await hooks.emitAbandoned(abandoned());
+
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("карточка команде о возврате звёзд (T-0024)", () => {
+  function refund(patch: Partial<ExternalRefund> = {}, purchase: Partial<StoredPurchase> = {}): ExternalRefund {
+    return {
+      purchase: {
+        purchaseId: "11111111-1111-4111-8111-111111111111",
+        accountId: "22222222-2222-4222-8222-222222222222",
+        product: "shop_item",
+        runId: null,
+        continueNo: null,
+        elapsedSec: null,
+        sku: "starter_pack",
+        priceStars: 50,
+        chargedStars: 50,
+        mode: "live",
+        status: "refunded",
+        telegramChargeId: "charge-1",
+        invoicedAt: new Date("2026-10-06T09:00:00Z"),
+        paidAt: new Date("2026-10-06T09:05:00Z"),
+        refundReason: "external",
+        refundRequestedAt: null,
+        refundedAt: new Date("2026-10-07T11:30:00Z"),
+        fulfilledAt: new Date("2026-10-06T09:05:00Z"),
+        renewalOf: null,
+        ...purchase,
+      },
+      revoked: ["gems: 120 из 150", "coins: 0 из 400"],
+      stats: { paid: 3, refunded: 1 },
+      at: new Date("2026-10-07T11:30:00Z"),
+      ...patch,
+    };
+  }
+
+  it("внешний возврат — одна карточка в чат команды с товаром, аккаунтом, временем, забранным и долей возвратов", async () => {
+    const { notifier, sent, hooks } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitExternalRefund(refund());
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.chat).toEqual({ chatId: "-1001234567890", threadId: null });
+    expect(sent[0]?.text).toBe(
+      [
+        "↩️ Возврат звёзд",
+        "Товар: starter_pack, 50 ⭐",
+        "Аккаунт: 22222222-2222-4222-8222-222222222222",
+        "Оплачена: 2026-10-06 09:05, возвращена: 2026-10-07 11:30",
+        "Забрано: gems: 120 из 150; coins: 0 из 400",
+        "Возвратов у аккаунта: 1 из 3 оплат",
+        "Покупки аккаунту закрыты — снять ограничение можно в панели.",
+      ].join("\n"),
+    );
+  });
+
+  it("повтор той же покупки — карточки нет: ключ на семь суток уже стоит", async () => {
+    const { notifier, sent, hooks, redis } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitExternalRefund(refund());
+    await hooks.emitExternalRefund(refund({ revoked: ["другое"] }));
+
+    expect(sent).toHaveLength(1);
+    expect(redis.values.get("payments:refund-alert:11111111-1111-4111-8111-111111111111")?.args).toEqual(["EX", 604800, "NX"]);
+  });
+
+  it("другая покупка того же аккаунта — отдельная карточка", async () => {
+    const { notifier, sent, hooks } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitExternalRefund(refund());
+    await hooks.emitExternalRefund(refund({}, { purchaseId: "33333333-3333-4333-8333-333333333333" }));
+
+    expect(sent).toHaveLength(2);
+  });
+
+  it("ключ карточки о возврате не пересекается с ключами зависшей покупки и брошенного задания", async () => {
+    const { notifier, sent, hooks } = setup();
+    notifier.onModuleInit();
+    const id = "11111111-1111-4111-8111-111111111111";
+
+    await hooks.emitStuck(stuck({ purchaseId: id }));
+    await hooks.emitExternalRefund(refund());
+
+    expect(sent).toHaveLength(2);
+  });
+
+  it("нет sku — стоит вид товара; нет забранного — «ничего»; нет оплаты в записи — прочерк", () => {
+    const text = externalRefundText(refund({ revoked: [] }, { sku: null, product: "vip", paidAt: null }));
+
+    expect(text).toContain("Товар: vip, 50 ⭐");
+    expect(text).toContain("Забрано: ничего");
+    expect(text).toContain("Оплачена: —, возвращена: 2026-10-07 11:30");
+  });
+
+  it("время — по UTC, а не по часам машины", () => {
+    const text = externalRefundText(refund({ at: new Date("2026-10-07T23:59:00Z") }, { paidAt: new Date("2026-10-07T00:00:00Z") }));
+
+    expect(text).toContain("Оплачена: 2026-10-07 00:00, возвращена: 2026-10-07 23:59");
+  });
+
+  it("свой поток «Покупки» получает карточку вместо общего чата", async () => {
+    const chats = { general: { chatId: "-100", threadId: null }, payments: { chatId: "-100", threadId: 57 } } as AdminChats;
+    const { notifier, sent, hooks } = setup(config(), { chats: () => chats } as NotifyTargets);
+    notifier.onModuleInit();
+
+    await hooks.emitExternalRefund(refund());
+
+    expect(sent[0]?.chat).toEqual({ chatId: "-100", threadId: 57 });
+  });
+
+  it("нет чата — не отправляет и не бросает, ключ не занимается", async () => {
+    const { notifier, sent, hooks, redis } = setup(config({ ADMIN_CHAT_ID: "" }));
+    notifier.onModuleInit();
+
+    await expect(hooks.emitExternalRefund(refund())).resolves.toBeUndefined();
+
+    expect(sent).toEqual([]);
+    expect(redis.values.size).toBe(0);
+  });
+
+  it("Redis недоступен — не бросает и не отправляет", async () => {
+    const { notifier, sent, hooks } = setup();
+    notifier.onModuleInit();
+    (notifier as unknown as { redis: unknown }).redis = {
+      set: async () => {
+        throw new Error("redis down");
+      },
+    };
+
+    await expect(hooks.emitExternalRefund(refund())).resolves.toBeUndefined();
+    expect(sent).toEqual([]);
+  });
+
+  it("отправка упала — не бросает и освобождает ключ: повторное событие пришлёт карточку", async () => {
+    const cfg = config();
+    const sent: string[] = [];
+    let fail = true;
+    const redis = new FakeRedis();
+    const hooks = new PaymentsHooks();
+    const notifier = new PaymentsAlertNotifier(cfg, targetsOf(cfg), hooks, redis as never, {
+      sendMessage: async (_chat, text) => {
+        if (fail) throw new Error("Telegram недоступен");
+        sent.push(text);
+        return 1;
+      },
+    });
+    notifier.onModuleInit();
+
+    await expect(hooks.emitExternalRefund(refund())).resolves.toBeUndefined();
+    expect(redis.values.size).toBe(0);
+
+    fail = false;
+    await hooks.emitExternalRefund(refund());
+    expect(sent).toHaveLength(1);
+  });
+
+  it("без токена бота на событие не подписывается", async () => {
+    const { notifier, sent, hooks } = setup(config({ TELEGRAM_BOT_TOKEN: "" }));
+    notifier.onModuleInit();
+
+    await hooks.emitExternalRefund(refund());
 
     expect(sent).toEqual([]);
   });

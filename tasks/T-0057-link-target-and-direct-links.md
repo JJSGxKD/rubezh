@@ -33,6 +33,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
+version: v0.8
 ---
 
 # T-0057. Цель ссылки и прямые ссылки — Mini App, бот или лендинг, с переходником и без

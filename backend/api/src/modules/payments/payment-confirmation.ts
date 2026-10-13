@@ -6,11 +6,13 @@ import { FeatureSwitches } from "../settings/feature-switches.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
-import { answerOf, decideCheckout, refuse, type CheckoutDecision, type PreCheckout } from "./checkout-answer.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
+import { RestrictionsService } from "../restrictions/restrictions.service.js";
+import { answerOf, decideCheckout, isRenewal, refuse, type CheckoutDecision, type PreCheckout } from "./checkout-answer.js";
 import { PaymentsHooks, type SubscriptionState } from "./payments-hooks.js";
 import { PurchaseRevocation } from "./purchase-revocation.js";
 import { SUBSCRIPTION_PRODUCTS } from "./purchase-types.js";
-import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository } from "./purchases.repository.js";
+import { PURCHASES_REPOSITORY, type CheckoutView, type ConfirmOutcome, type PurchasesRepository } from "./purchases.repository.js";
 
 /**
  * Что площадка сообщает об оплате (docs/34-stage3-plan.md, WP5, п. 6–8):
@@ -70,6 +72,10 @@ export class PaymentConfirmation {
     private readonly hooks: PaymentsHooks = new PaymentsHooks(),
     // То же с отзывом: без владельцев товаров возврат только записывается.
     private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
+    // Закрытие покупок после внешнего возврата (T-0024). Без них, как в тестах, где ограничений нет,
+    // возврат только записывается и отзывает остаток, а предварительная проверка не спрашивает про покупки.
+    private readonly restrictions?: AccountRestrictions,
+    private readonly system?: RestrictionsService,
   ) {}
 
   async answerCheckout(query: PreCheckout, nowMs = Date.now()): Promise<CheckoutDecision> {
@@ -144,6 +150,13 @@ export class PaymentConfirmation {
    * Ошибка отзыва бросается дальше — задание очереди оплаты повторит
    * обработку. Момент отзыва — когда возврат отмечен впервые, а не когда
    * повторили: срок VIP режется по одному и тому же времени.
+   *
+   * После отзыва аккаунту закрываются покупки (ограничение «Покупки»,
+   * tasks/T-0024) и команде уходит карточка. Это тоже обязано пережить сбой
+   * посреди: первая попытка могла отметить возврат и упасть на закрытии, а
+   * повтор уже не «первый». Поэтому повтор закрывает и шлёт карточку, если
+   * аккаунт ещё открыт; закрытому он ничего не делает — повторное обновление
+   * площадки не накладывает второе ограничение и не шлёт вторую карточку.
    */
   async refunded(chargeId: string, nowMs = Date.now()): Promise<void> {
     const record = await this.purchases.markRefunded(chargeId, new Date(nowMs));
@@ -153,11 +166,16 @@ export class PaymentConfirmation {
     }
     const { purchase } = record;
     const external = purchase.refundReason === "external";
-    const revocation = external ? await this.revocation.revoke(purchase, purchase.refundedAt ?? new Date(nowMs)) : null;
-    if (!record.firstTime) return;
+    const at = purchase.refundedAt ?? new Date(nowMs);
+    const revocation = external ? await this.revocation.revoke(purchase, at) : null;
+    const closing = external && this.system !== undefined && (record.firstTime || !(await this.accountClosed(purchase.accountId, at)));
+    if (!record.firstTime && !closing) return;
     // Доля возвратов на аккаунт — вход для решения О4: правило появится, когда
     // появятся первые случаи, а счётчик нужен с первого.
     const stats = external ? await this.purchases.refundStats(purchase.accountId) : null;
+    if (closing) {
+      await this.system?.imposeBySystem(purchase.accountId, "purchases", "payment_refund", `Возврат звёзд за покупку ${purchase.purchaseId}`, at);
+    }
     this.log(external ? "warn" : "log", "payment_refunded", {
       chargeId,
       purchaseId: purchase.purchaseId,
@@ -167,6 +185,21 @@ export class PaymentConfirmation {
       ...(stats === null ? {} : { accountPaid: stats.paid, accountRefunded: stats.refunded }),
       ...(revocation === null ? {} : { revoked: revocation.lines }),
     });
+    if (closing && revocation !== null && stats !== null) await this.hooks.emitExternalRefund({ purchase, revoked: revocation.lines, stats, at });
+  }
+
+  /**
+   * Закрыты ли покупки аккаунту, который платит. Продление подписки пропускается без вопроса: оно
+   * проходит в любом случае, и сбой чтения ограничений не должен отказать в нём.
+   */
+  private async purchasesClosed(view: CheckoutView | null, nowMs: number): Promise<boolean> {
+    if (view === null || this.restrictions === undefined || isRenewal(view.purchase)) return false;
+    return await this.accountClosed(view.purchase.accountId, new Date(nowMs));
+  }
+
+  private async accountClosed(accountId: string, at: Date): Promise<boolean> {
+    if (this.restrictions === undefined) return false;
+    return (await withTimeout(this.restrictions.status(accountId, "purchases", at), CHECKOUT_READ_TIMEOUT_MS, "ограничения для проверки оплаты")) !== null;
   }
 
   /**
@@ -191,7 +224,7 @@ export class PaymentConfirmation {
     if (!id.success) return decideCheckout(null, query, nowMs, this.switches.payments());
     try {
       const view = await withTimeout(this.purchases.checkout(id.data, new Date(nowMs)), CHECKOUT_READ_TIMEOUT_MS, "покупка для проверки оплаты");
-      return decideCheckout(view, query, nowMs, this.switches.payments());
+      return decideCheckout(view, query, nowMs, this.switches.payments(), await this.purchasesClosed(view, nowMs));
     } catch (error: unknown) {
       // База не ответила — отказываемся от денег, а не берём их вслепую.
       this.log("error", "pre_checkout_failed", { purchaseId: id.data, reason: error instanceof Error ? error.message : "unknown" });

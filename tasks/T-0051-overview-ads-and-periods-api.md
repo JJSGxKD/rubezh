@@ -3,8 +3,8 @@ id: T-0051
 title: Сводка панели — реклама, периоды 7 и 30 дней, покупки в ряду — сервер
 epic: E7
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 size: M
 depends_on: []
 zones:
@@ -13,6 +13,7 @@ zones:
   - backend/api/src/modules/admin-notify/daily-stats.repository.ts
   - backend/api/src/modules/ads/ads.module.ts
   - backend/api/test/admin-overview.test.ts
+  - backend/api/test/daily-stats.integration.test.ts
 shared:
   - docs/29-admin-panel.md
 runner: any
@@ -20,6 +21,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/admin-overview.html
+version: v0.8
 ---
 
 # T-0051. Сводка панели — реклама, периоды 7 и 30 дней, покупки в ряду — сервер
@@ -150,6 +152,14 @@ design: design/screens/admin-overview.html
 - без `analytics.revenue.view` → `purchases` и `stars` в ряду — `null`;
 - чтение рекламы бросило → `ads: null`, остальная сводка на месте;
 - HTTP: `?days=14` → 400.
+
+`backend/api/test/daily-stats.integration.test.ts` — существующий кейс «ряд
+по суткам» на живом Postgres: в ожидаемых точках — `purchases` и
+`adsCompleted` (шаг 2). Покупки считаются по тем же правилам, что `stars`:
+только живые оплаты, тестовая не в счёт. Для `adsCompleted` — хотя бы один
+досмотренный показ в одних из суток окна и один за его границей. Ответ
+claude-lead2-1 на красный `gate` PR #284, 12.10.2026: шаг 2 меняет форму
+`DayPoint`, а тест ряда в зоны не входил.
 
 ## Аналитика
 
