@@ -44,7 +44,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.9
+batch: 1
 ---
 
 # T-0099. Сундук забега: падает с элиты и босса, открывает 1, 3 или 5 улучшений

@@ -17,7 +17,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-NNNN. Заголовок

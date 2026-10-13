@@ -25,7 +25,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.9
+batch: 3
 ---
 
 # T-0060. Журнал запросов — исходящие по вызову, входящие сводкой по маршрутам, 7 дней
