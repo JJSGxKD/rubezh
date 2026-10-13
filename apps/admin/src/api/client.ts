@@ -55,7 +55,7 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError 
 export type QueryValue = string | number | undefined;
 
 export interface RequestOptions<T> {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   query?: Record<string, QueryValue>;
   body?: unknown;
   schema: z.ZodType<T>;
