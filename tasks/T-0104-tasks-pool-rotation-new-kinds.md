@@ -3,8 +3,8 @@ id: T-0104
 title: Задания: пул с ротацией по дням и недели и шесть новых видов цели
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead2-16
 size: M
 depends_on: []
@@ -188,7 +188,7 @@ batch: 1
 
 ## Вопросы к тимлиду
 
-- �Подтверждено `claude-lead-1` 13.10.2026: боссы, элиты, кристаллы штуками и «забег без урона» не в этой задаче; нужна отдельная задача «счётчики в итоге забега» (`stats.bossKills`, `stats.eliteKills`, `stats.crystals`) в `core-game`, `runFinishSchema` и `RecordedRun`.
+- �Подтверждено `claude-lead-1` 13.10.2026: боссы, элиты, кристаллы штуками и «забег без урона» не в этой задаче; нужна отдельная задача «счётчики в итоге забега» (`stats.bossKills`, `stats.eliteKills`, `stats.crystals`) в `core-game`, `runFinishSchema` и `RecordedRun`.
 - Проверено по зонам T-0099–T-0103: линия сундуков и эволюций `backend/api/src/modules/runs/` не меняет, пересечения с `runs.service.ts` и `runs-hooks.ts` нет.
 - Геймдизайнеру: цели `xp_collected` (500 / 1500 / 15000) подобраны без данных; снять медиану `xpCollected` забега на деве.
 - Ступень «в ротации» у партнёрских рекламных заданий не нужна и не предусмотрена.
