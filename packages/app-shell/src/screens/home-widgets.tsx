@@ -302,12 +302,19 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
 }
 
 /** Облик-значок: квадрат тона с иконкой; у широкого — крупнее. */
-function IconFace(props: { size: WidgetSize; children: ReactNode; glow?: boolean }): ReactNode {
+export function IconFace(props: { size: WidgetSize; children: ReactNode; glow?: boolean }): ReactNode {
   const box = props.size === "hero" ? "size-12" : props.size === "row" ? "size-10" : "size-7";
-  return (
+  const tile = (
     <span className={`widget-face relative inline-flex ${box} items-center justify-center rounded-md`}>
-      {props.glow === true ? <span aria-hidden="true" className="widget-motion absolute -inset-2 animate-glow rounded-full bg-[radial-gradient(closest-side,var(--widget-daily-glow),transparent)] opacity-60" /> : null}
       <span className="relative">{props.children}</span>
+    </span>
+  );
+  if (props.glow !== true) return tile;
+  // Свечение — соседний слой позади плитки, а не её потомок: потомок рисуется над фоном плитки и мигает на нём.
+  return (
+    <span className="relative isolate inline-flex">
+      <span aria-hidden="true" className="widget-motion absolute -inset-2 -z-10 animate-glow rounded-full bg-[radial-gradient(closest-side,var(--widget-daily-glow),transparent)] opacity-60" />
+      {tile}
     </span>
   );
 }
