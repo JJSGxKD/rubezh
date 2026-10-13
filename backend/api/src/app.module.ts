@@ -51,6 +51,7 @@ import { TasksModule } from "./modules/tasks/tasks.module.js";
 import { MediaModule } from "./modules/media/media.module.js";
 import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
 import { TestNoticeModule } from "./modules/test-notice/test-notice.module.js";
+import { WipeModule } from "./modules/wipe/wipe.module.js";
 import { AdsModule } from "./modules/ads/ads.module.js";
 import { ShopModule } from "./modules/shop/shop.module.js";
 import { VipModule } from "./modules/vip/vip.module.js";
@@ -138,6 +139,7 @@ export const APP_MODULES = [
   VipModule,
   PromoCodesModule,
   PartnersModule,
+  WipeModule,
 ];
 
 /**

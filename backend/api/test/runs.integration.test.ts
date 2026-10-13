@@ -135,6 +135,33 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect(best).toMatchObject({ displayName: "Анна", survivalSec: 250, level: 11 });
   });
 
+  it("знак «Тестер» (T-0042): у аккаунта с testerAt в лучшем забеге tester: true, у остальных поля нет, а сама дата наружу не уходит", async () => {
+    const tester = await account("Тестер");
+    const plain = await account("Обычный");
+    await prisma.account.update({ where: { accountId: tester }, data: { testerAt: new Date("2026-10-01T10:00:00Z") } });
+    for (const id of [tester, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "normal", survivalSec: 120 }));
+
+    const rows = await runs.bestRuns([tester, plain], "normal");
+    const byId = new Map(rows.map((row) => [row.accountId, row]));
+
+    expect(byId.get(tester)).toMatchObject({ displayName: "Тестер", tester: true });
+    expect(byId.get(plain)).not.toHaveProperty("tester");
+    for (const row of rows) expect(row).not.toHaveProperty("testerAt");
+  });
+
+  it("знак «Тестер»: bestRunOf — то же правило, в том числе для тени", async () => {
+    const tester = await account("Тестер в тени");
+    const plain = await account("Обычный в тени");
+    await prisma.account.update({ where: { accountId: tester }, data: { testerAt: new Date("2026-10-01T10:00:00Z") } });
+    for (const id of [tester, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "easy", survivalSec: 80 }));
+    await runs.finish(finished(randomUUID(), tester, { difficulty: "easy", survivalSec: 300, ranked: false, ratingRestricted: "silent" }));
+
+    expect(await runs.bestRunOf(tester, "easy", false)).toMatchObject({ tester: true, survivalSec: 80 });
+    expect(await runs.bestRunOf(tester, "easy", true)).toMatchObject({ tester: true, survivalSec: 300 });
+    expect(await runs.bestRunOf(plain, "easy", false)).not.toHaveProperty("tester");
+    expect(await runs.bestRunOf(tester, "easy", false)).not.toHaveProperty("testerAt");
+  });
+
   it("пересборка ставит рейтинг по базе и подменяет его целиком", async () => {
     const [slow, fast] = [await account(), await account()];
     await runs.finish(finished(randomUUID(), slow, { difficulty: "easy", survivalSec: 100 }));

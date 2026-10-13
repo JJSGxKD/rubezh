@@ -55,6 +55,8 @@ export const EXCHANGE_RESOURCES: Record<ExchangeReason, readonly WalletResource[
   salvage: ["shard_common", "shard_uncommon", "shard_rare", "shard_epic", "shard_legendary", "shard_mythic"],
   // Возвращается ровно то, чем бусты оплачивают (Р39), — не больше.
   boost_refund: ["coins", "gems"],
+  // Бонус тестеру и самоцветы за второй шанс (Р87, tasks/T-0042): только самоцветы.
+  wipe_compensation: ["gems"],
 };
 
 /**

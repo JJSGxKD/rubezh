@@ -170,7 +170,9 @@
 | Карточки бота: цвета, подписи устройств и исходов | `backend/api/src/common/card/svg.ts` → `PALETTE`, `SERIES` (повторяют `tokens.css`); `common/card/labels.ts` | участник 1 |
 | Бот: long polling, лок читателя, паузы при конфликте и сбое | `backend/api/src/platforms/telegram/bot-poller.ts` → `POLL_TIMEOUT_SEC`, `POLLER_LOCK_TTL_MS`, `STANDBY_MS`, `RETRY_MS` | участник 1 |
 | Кошелёк: суточные потолки начислений по источнику и ресурсу — рабочие значения до чисел экономики; ресурса нет в потолке — источник его не начисляет; у VIP потолок причины с надбавкой растёт на тот же множитель | `backend/api/src/modules/wallet/wallet-limits.ts` → `WALLET_DAILY_CAPS`; надбавка — `wallet-bonus.ts`, её числа — у VIP | участник 1 |
-| Кошелёк: что дают обмены — покупка только самоцветы, разбор только осколки | `backend/api/src/modules/wallet/wallet-limits.ts` → `EXCHANGE_RESOURCES` | участник 1 |
+| Кошелёк: что дают обмены — покупка только самоцветы, разбор только осколки, компенсация после вайпа только самоцветы | `backend/api/src/modules/wallet/wallet-limits.ts` → `EXCHANGE_RESOURCES` | участник 1 |
+| Бонус тестеру после вайпа: самоцветы за уровень и потолок | `backend/api/src/modules/wipe/compensation-rules.ts` → `TESTER_BONUS` | участник 1 |
+| Курс компенсации второго шанса после вайпа (рабочий до О43): самоцветов за звёзды | `backend/api/src/modules/wipe/compensation-rules.ts` → `CONTINUE_RATE` | участник 1 |
 | Кошелёк: потолок одной операции и лимит частоты чтения | `backend/api/src/modules/wallet/wallet-limits.ts` → `WALLET_MAX_OPERATION`, `WALLET_LIMITS` | участник 1 |
 | Снаряжение: базы слотов и пулы свойств, база каждого свойства, правила редкостей — множитель значений, число свойств, множитель цен, осколки разбора (Р38) | `backend/api/src/modules/items/item-catalog.ts` → `SLOT_BASES`, `STAT_BASE`, `RARITY_RULES` | геймдизайнер |
 | Снаряжение: предел и шаг уровня предмета, диапазоны бросков, потолок инвентаря, поправка уровня добычи за сложность | `backend/api/src/modules/items/item-catalog.ts` → `MAX_ITEM_LEVEL`, `LEVEL_STEP`, `MAIN_ROLL`, `EXTRA_ROLL`, `INVENTORY_CAP`, `DIFFICULTY_LEVEL_BONUS` | геймдизайнер |
