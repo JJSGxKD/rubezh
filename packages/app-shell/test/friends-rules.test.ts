@@ -49,9 +49,26 @@ describe("полоса бонуса", () => {
 });
 
 describe("порядок экрана", () => {
-  it("друзей нет — приглашение первым, друзья есть — список", () => {
-    expect(friendsLayout(0)).toBe("invite-first");
-    expect(friendsLayout(1)).toBe("list-first");
+  it("гость не ждёт ответа — приглашение сразу", () => {
+    expect(friendsLayout({ withAccount: false, status: "loading", friendsCount: 0 })).toBe("invite-first");
+  });
+
+  it("до ответа сервера — ни приглашения, ни списка", () => {
+    expect(friendsLayout({ withAccount: true, status: "loading", friendsCount: 0 })).toBe("pending");
+    expect(friendsLayout({ withAccount: true, status: "loading", friendsCount: 5 })).toBe("pending");
+  });
+
+  it("ответ пришёл: друзей нет — приглашение первым", () => {
+    expect(friendsLayout({ withAccount: true, status: "ready", friendsCount: 0 })).toBe("invite-first");
+  });
+
+  it("ответ пришёл: друзья есть — список первым", () => {
+    expect(friendsLayout({ withAccount: true, status: "ready", friendsCount: 1 })).toBe("list-first");
+    expect(friendsLayout({ withAccount: true, status: "ready", friendsCount: 12 })).toBe("list-first");
+  });
+
+  it("сбой загрузки — приглашение крупное, как у тех, у кого друзей нет", () => {
+    expect(friendsLayout({ withAccount: true, status: "failed", friendsCount: 0 })).toBe("invite-first");
   });
 });
 

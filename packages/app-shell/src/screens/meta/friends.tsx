@@ -22,7 +22,9 @@ import { RestrictedPlaque } from "./restricted-plaque";
  *
  * Порядок зависит от друзей (`friendsLayout`): пока их нет — крупное
  * приглашение сверху; когда есть — подарки, заявки и список, а приглашение
- * компактной карточкой с полосой бонуса за число друзей.
+ * компактной карточкой с полосой бонуса за число друзей. Пока сервер не
+ * ответил, экран показывает только «Загружаем друзей…»: приглашение, которое
+ * уступает место списку, мелькало бы у тех, у кого друзья есть.
  */
 
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: FriendsView };
@@ -75,7 +77,7 @@ export function FriendsScreen(): ReactNode {
   };
 
   const view = state.status === "ready" ? state.view : null;
-  const layout = friendsLayout(view?.friends.length ?? 0);
+  const layout = friendsLayout({ withAccount, status: state.status, friendsCount: view?.friends.length ?? 0 });
   const bonus =
     view === null
       ? undefined
@@ -138,7 +140,7 @@ export function FriendsScreen(): ReactNode {
       <ContentColumn>
         <PageTitle>{t("friends.title")}</PageTitle>
         {withAccount ? <RestrictedPlaque kinds={RESTRICTIONS} className="mt-4" /> : null}
-        {layout === "invite-first" ? <Invite api={api} withAccount={withAccount} variant="full" {...(bonus === undefined ? {} : { bonus })} /> : gifts}
+        {layout === "invite-first" ? <Invite api={api} withAccount={withAccount} variant="full" {...(bonus === undefined ? {} : { bonus })} /> : layout === "list-first" ? gifts : null}
 
         {!withAccount ? <InfoNotice text={t("friends.guest")} /> : null}
         {withAccount && state.status === "loading" ? <p className="mt-4 text-sm text-text-muted">{t("friends.loading")}</p> : null}
