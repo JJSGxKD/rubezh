@@ -18,6 +18,8 @@ export default defineConfig({
       "scripts/test/**/*.test.ts",
       // Логика панели — клиент API, сессия, маршруты — без DOM и React.
       "apps/admin/test/**/*.test.ts",
+      // Логика клиента Telegram без DOM.
+      "apps/web-telegram/test/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**"],
     // Тесты не зависят друг от друга и от порядка
