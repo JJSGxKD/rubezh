@@ -90,7 +90,9 @@ describe("правила ограничений", () => {
     expect(imposeProblem(["promo_codes", "ad_rewards"], false)).toBeNull();
     expect(imposeProblem(["promo_codes", "all"], false)).toContain("«Всё — блокировка» молча не накладывается");
     expect(imposeProblem(["all"], true)).toBeNull();
-    expect(RESTRICTION_KINDS.filter((kind) => !RESTRICTION_CATALOG[kind].silentAllowed)).toEqual(["all"]);
+    expect(RESTRICTION_KINDS.filter((kind) => !RESTRICTION_CATALOG[kind].silentAllowed)).toEqual(["purchases", "all"]);
+    // Покупки закрыты — игрок упрётся в отказ при оплате и без плашки.
+    expect(imposeProblem(["purchases"], false)).toContain("«Покупки» молча не накладывается");
   });
 
   it("игрок видит, что закрыто, до какого числа по Москве и причину шаблона", () => {
@@ -262,6 +264,119 @@ describe("наложение и снятие", () => {
     const [row] = await s.service.impose(owner, target.accountId, input({ kinds: ["all"] }), NOW);
     await expect(s.service.lift(designer, row?.restrictionId ?? "", "хочу", NOW)).rejects.toBeInstanceOf(ForbiddenError);
     expect((await s.accounts.byId(target.accountId))?.bannedAt).toEqual(NOW);
+  });
+});
+
+describe("ограничение «Покупки» и наложение системой (T-0024)", () => {
+  const PURCHASE_ID = "11111111-1111-4111-8111-111111111111";
+  const comment = `Возврат звёзд за покупку ${PURCHASE_ID}`;
+
+  it("вид «Покупки» в каталоге: что закрывает, где проверяется, чьё право; причина «Возврат оплаты»", () => {
+    expect(RESTRICTION_KINDS.at(-1)).toBe("all");
+    expect(RESTRICTION_KINDS.at(-2)).toBe("purchases");
+    expect(RESTRICTION_CATALOG.purchases).toMatchObject({
+      title: "Покупки",
+      checkedIn: "shop, vip, payments",
+      permission: "players.restrict",
+      silentAllowed: false,
+    });
+    expect(RESTRICTION_CATALOG.purchases.effect).toContain("магазин и VIP не выставляют счета");
+    expect(RESTRICTION_CATALOG.purchases.effect).toContain("Купленное раньше остаётся");
+    expect(RESTRICTION_REASONS.payment_refund).toEqual({ title: "Возврат оплаты", player: "Возврат звёзд за покупку" });
+    const s = setup();
+    expect(s.service.catalog().kinds.map((item) => item.kind)).toContain("purchases");
+    expect(s.service.catalog().reasons).toContainEqual({ reason: "payment_refund", title: "Возврат оплаты", player: "Возврат звёзд за покупку" });
+  });
+
+  it("система накладывает без автора: бессрочно, с сообщением игроку, строка и журнал — от `null`", async () => {
+    const s = setup();
+    const target = await person(s, "601");
+    const imposed: { accountId: string; kinds: readonly string[]; at: Date }[] = [];
+    s.hooks.onImposed("проверка", async (change) => void imposed.push(change));
+
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+
+    expect(s.repository.rows).toHaveLength(1);
+    expect(s.repository.rows[0]).toMatchObject({ accountId: target.accountId, kind: "purchases", startsAt: NOW, endsAt: null, reason: "payment_refund", comment, notify: true, imposedBy: null, liftedAt: null });
+    expect(s.roles.entries.at(-1)).toMatchObject({
+      actorAccountId: null,
+      action: "players.restrict",
+      target: target.accountId,
+      after: { restrictions: [{ kind: "purchases", endsAt: null, reason: "payment_refund", comment, notify: true }] },
+    });
+    expect(imposed).toEqual([{ accountId: target.accountId, kinds: ["purchases"], at: NOW }]);
+    expect(s.gate.published).toEqual([target.accountId]);
+  });
+
+  it("игрок видит причину шаблона словами: «Покупки — закрыто бессрочно. Причина: Возврат звёзд за покупку»", async () => {
+    const s = setup();
+    const target = await person(s, "602");
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+
+    await expect(s.gate.ensure(target.accountId, "purchases", NOW)).rejects.toThrow("Покупки — закрыто бессрочно. Причина: Возврат звёзд за покупку");
+    await expect(s.gate.ensure(target.accountId, "promo_codes", NOW)).resolves.toBeUndefined();
+    expect(await s.gate.visibleFor(target.accountId, NOW)).toMatchObject([{ kind: "purchases", title: "Покупки", endsAt: null }]);
+  });
+
+  it("повторное наложение того же вида заменяет действующее — не вторая действующая строка", async () => {
+    const s = setup();
+    const target = await person(s, "603");
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+    const later = new Date(NOW.getTime() + HOUR);
+
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", "Возврат звёзд за покупку 22222222-2222-4222-8222-222222222222", later);
+
+    const rows = s.repository.rows.filter((row) => row.kind === "purchases");
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((row) => row.liftedAt === null)).toHaveLength(1);
+    expect(rows.find((row) => row.liftedAt !== null)).toMatchObject({ comment, liftComment: expect.any(String) as string });
+    expect(s.roles.entries.at(-1)).toMatchObject({ before: { replaced: [{ kind: "purchases" }] } });
+  });
+
+  it("блокировку целиком система не накладывает — ошибка, ничего не записано", async () => {
+    const s = setup();
+    const target = await person(s, "604");
+
+    await expect(s.service.imposeBySystem(target.accountId, "all", "other", "x", NOW)).rejects.toThrow("Систему блокировать целиком не просим");
+
+    expect(s.repository.rows).toEqual([]);
+    expect(s.roles.entries).toEqual([]);
+    expect((await s.accounts.byId(target.accountId))?.bannedAt ?? null).toBeNull();
+  });
+
+  it("право для наложения системой не нужно, а снять ограничение может модератор — правом вида", async () => {
+    const s = setup();
+    const moderator = await person(s, "605", "moderator");
+    const designer = await person(s, "606", "game_designer");
+    const target = await person(s, "607");
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+    const row = s.repository.rows[0];
+
+    await expect(s.service.lift(designer, row?.restrictionId ?? "", "хочу", NOW)).rejects.toBeInstanceOf(ForbiddenError);
+    const lifted = await s.service.lift(moderator, row?.restrictionId ?? "", "разобрались", new Date(NOW.getTime() + HOUR));
+
+    expect(lifted).toMatchObject({ state: "lifted", kind: "purchases", imposedBy: null });
+    await expect(s.gate.ensure(target.accountId, "purchases", new Date(NOW.getTime() + 2 * HOUR))).resolves.toBeUndefined();
+  });
+
+  it("в панели это ограничение без автора: строка истории не называет модератора", async () => {
+    const s = setup();
+    const moderator = await person(s, "608", "moderator");
+    const target = await person(s, "609");
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+
+    const [view] = await s.service.history(moderator, target.accountId, NOW);
+
+    expect(view).toMatchObject({ kind: "purchases", state: "active", reasonTitle: "Возврат оплаты", imposedBy: null });
+  });
+
+  it("блокировка целиком закрывает и покупки: у забаненного `status('purchases')` не пуст", async () => {
+    const s = setup();
+    const owner = await person(s, OWNER_ID);
+    const target = await person(s, "610");
+    await s.service.impose(owner, target.accountId, input({ kinds: ["all"], endsAt: null }), NOW);
+
+    expect((await s.gate.status(target.accountId, "purchases", NOW))?.kind).toBe("all");
   });
 });
 
