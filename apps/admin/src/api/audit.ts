@@ -380,6 +380,7 @@ const RESTRICTION_KINDS: Record<string, string> = {
   ad_rewards: "награды за рекламу",
   promo_codes: "промокоды",
   partner_tasks: "партнёрские задания",
+  purchases: "покупки",
   all: "блокировка целиком",
 };
 const RESTRICTION_REASONS: Record<string, string> = {
@@ -388,6 +389,7 @@ const RESTRICTION_REASONS: Record<string, string> = {
   ad_abuse: "злоупотребление рекламой",
   promo_abuse: "злоупотребление промокодами",
   abuse: "оскорбления или спам",
+  payment_refund: "возврат оплаты",
   other: "другое",
 };
 

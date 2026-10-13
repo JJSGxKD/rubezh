@@ -5,10 +5,13 @@ import { GemIcon } from "../../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../../i18n";
 import { openExternalLink } from "../../state/external-link";
 import { useNavigation } from "../../state/navigation";
+import "../../i18n/restrictions";
+import { loadRestrictions, RESTRICTED_CODE, recheckRestriction, useRestricted } from "../../state/restrictions";
 import { createShopApi, shopAvailable, type ShopItem, type ShopView, type VipView } from "../../state/shop-api";
 import { buy, type BuyRequest } from "../../state/shop-purchase";
 import { track, useShell } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
+import { RestrictedPlaque } from "./restricted-plaque";
 import { ShopBanners } from "./shop-banners";
 import { dateOf, GemPackTile, ItemCard, TributePlaque, VipCard } from "./shop-parts";
 import { ShowcaseSection } from "./shop-showcase";
@@ -37,6 +40,19 @@ type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; 
 const api = createShopApi();
 
 /**
+ * Покупки за звёзды закрыты ограничением (docs/35-stage4-plan.md, T-0024): ставится само после
+ * возврата звёзд через Telegram. Кнопки покупки гаснут заранее, над витриной — плашка с причиной.
+ * Остальное в магазине — забрать самоцветы дня, отменить продление, промокод — работает.
+ */
+const PURCHASES_RESTRICTION = ["purchases"];
+
+/** «Занято», когда занимать нечем: гасит кнопки покупки, не крутя спиннер ни на одной из них. */
+const CLOSED_KEY = "purchases:closed";
+
+/** Баннеры, которые не покупка: переход к снаряжению и ссылка Tribute закрытие не гасит. */
+const OPEN_BANNERS: readonly ShopBanner["kind"][] = ["gear", "tribute"];
+
+/**
  * Часы экрана — только пока на витрине акция: её отсчёт идёт, а кончившаяся
  * на глазах показывает цену каталога, по которой сервер и выставит счёт.
  * Отсчёт акции — без секунд, чаще минуты перерисовывать незачем.
@@ -49,6 +65,7 @@ export function ShopScreen(): ReactNode {
   const [notice, setNotice] = useState<Notice>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [tab, setTab] = useState<ShopTab>("featured");
+  const purchasesClosed = useRestricted(PURCHASES_RESTRICTION);
 
   const load = async (quiet = false): Promise<void> => {
     if (!quiet) setState({ status: "loading" });
@@ -62,14 +79,18 @@ export function ShopScreen(): ReactNode {
 
   useEffect(() => {
     if (shopAvailable()) void load();
+    // Закрытие покупок известно до первого нажатия, а не после отказа сервера.
+    void loadRestrictions();
   }, []);
 
   const ready = state.status === "ready" ? state : null;
   const now = useClock(ready?.shop.items.some((item) => item.promo !== undefined && item.promo !== null) === true, CLOCK_STEP_MS);
+  // Кнопки покупки видят «занято», пока покупки закрыты; остальным кнопкам магазина закрытие не мешает.
+  const buyBusy = busy ?? (purchasesClosed ? CLOSED_KEY : null);
 
   /** Покупка набора или VIP: одна за раз — второе окно оплаты поверх первого только запутает. */
   const purchase = async (key: string, name: string, request: BuyRequest): Promise<void> => {
-    if (busy !== null) return;
+    if (busy !== null || purchasesClosed) return;
     setBusy(key);
     setNotice(null);
     const outcome = await buy(request, {
@@ -79,6 +100,11 @@ export function ShopScreen(): ReactNode {
       now: () => Date.now(),
     });
     setBusy(null);
+    if (outcome.kind === "refused" && outcome.code === RESTRICTED_CODE) {
+      // Закрыто ограничением — не сбой: список перечитывается, и плашка встаёт на место ошибки.
+      if ((await recheckRestriction(PURCHASES_RESTRICTION)) === "lifted") setNotice({ tone: "error", text: t("restricted.lifted") });
+      return;
+    }
     setNotice(noticeOf(outcome, name));
     if (outcome.kind === "done") void loadWallet();
     // Витрина после покупки другая: разовый куплен, VIP идёт. После отказа —
@@ -175,7 +201,8 @@ export function ShopScreen(): ReactNode {
   const vipCard =
     ready?.vip === null || ready?.vip === undefined ? null : (
       <VipCard
-        vip={ready.vip}
+        // Кнопку заказа гасит `canOrder`: забрать самоцветы дня и отменить продление при закрытых покупках можно.
+        vip={purchasesClosed ? { ...ready.vip, canOrder: false } : ready.vip}
         busy={busy}
         onOrder={buyVip}
         onCancel={() => setConfirmCancel(true)}
@@ -197,7 +224,9 @@ export function ShopScreen(): ReactNode {
             {!ready.shop.payable ? <InfoNotice text={t("shop.unpayable")} /> : null}
             {ready.shop.mode === "test" ? <InfoNotice text={t("shop.test", { charged: testCharge(ready.shop) })} /> : null}
 
-            <ShopBanners banners={shopBanners(ready.shop, ready.vip, now)} busy={busy} now={now} onAction={onBanner} />
+            {purchasesClosed ? <RestrictedPlaque kinds={PURCHASES_RESTRICTION} /> : null}
+
+            <ShopBanners banners={shopBanners(ready.shop, ready.vip, now).filter((banner) => !purchasesClosed || OPEN_BANNERS.includes(banner.kind))} busy={busy} now={now} onAction={onBanner} />
 
             <SegmentedControl
               label={t("shop.tabs")}
@@ -221,7 +250,7 @@ export function ShopScreen(): ReactNode {
                 shop={ready.shop}
                 vip={ready.vip}
                 vipCard={vipCard}
-                busy={busy}
+                busy={buyBusy}
                 now={now}
                 onBuy={(item) => buyItem(item, ready.shop)}
                 onAllGems={() => setTab("gems")}
@@ -233,7 +262,7 @@ export function ShopScreen(): ReactNode {
                 {tributeOf(ready.shop) === null ? null : <TributePlaque onOpen={() => openTribute(tributeOf(ready.shop) ?? "")} />}
                 <div className="grid grid-cols-2 gap-2">
                   {gemPacks(ready.shop).map((item, index) => (
-                    <GemPackTile key={item.sku} item={item} index={index + 1} busy={busy} now={now} onBuy={() => buyItem(item, ready.shop)} />
+                    <GemPackTile key={item.sku} item={item} index={index + 1} busy={buyBusy} now={now} onBuy={() => buyItem(item, ready.shop)} />
                   ))}
                 </div>
               </div>

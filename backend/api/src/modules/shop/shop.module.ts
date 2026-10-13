@@ -4,6 +4,7 @@ import { ItemsModule } from "../items/items.module.js";
 import { cryptoSeeds } from "../items/items.service.js";
 import { PaymentsModule } from "../payments/payments.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
+import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { ShopController } from "./shop.controller.js";
 import { PrismaShopPromoRepository, SHOP_PROMO_REPOSITORY } from "./shop-promo.repository.js";
 import { ShopPromoService } from "./shop-promo.service.js";
@@ -18,7 +19,7 @@ import { SHOWCASE_SEEDS, ShowcaseService } from "./showcase.service.js";
  * скидка от цены каталога на срок, заводятся в панели.
  */
 @Module({
-  imports: [AuthModule, PaymentsModule, WalletModule, ItemsModule],
+  imports: [AuthModule, PaymentsModule, WalletModule, ItemsModule, RestrictionsModule],
   controllers: [ShopController],
   providers: [
     ShopService,

@@ -28,12 +28,14 @@ export function loginAsDeveloper(api: AdminApi, devUser: string): Promise<ApiRes
   return api.request("/session/dev", { method: "POST", body: { devUser }, schema: identitySchema });
 }
 
-/** Вход через бота, шаг первый: код, ссылка на бота и секрет, по которому эта вкладка заберёт сессию. */
+/** Вход через бота, шаг первый: код, ссылки на бота (обычная и диплинком) и секрет, по которому эта вкладка заберёт сессию. */
 export const botLoginSchema = z.object({
   requestId: z.string(),
   secret: z.string(),
   code: z.string(),
   link: z.string().url(),
+  /** диплинк `tg://resolve…` в установленное приложение; старый сервер его не шлёт */
+  deepLink: z.string().nullable().optional(),
   expiresAt: z.string(),
 });
 

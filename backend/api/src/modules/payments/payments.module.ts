@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { RunsModule } from "../runs/runs.module.js";
+import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
 import { FulfillmentSweeper } from "./fulfillment-sweeper.js";
 import { PaymentsHooks } from "./payments-hooks.js";
@@ -35,7 +36,7 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
  * (`platforms/telegram/telegram-payments.module.ts`).
  */
 @Module({
-  imports: [AuthModule, RunsModule],
+  imports: [AuthModule, RunsModule, RestrictionsModule],
   controllers: [PaymentsController],
   providers: [
     PaymentsService,
