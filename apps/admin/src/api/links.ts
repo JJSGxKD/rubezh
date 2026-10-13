@@ -104,14 +104,9 @@ export function createLink(api: AdminApi, input: NewLink): Promise<ApiResult<Lin
   return api.request("/links", { method: "POST", body: input, schema: linkSchema });
 }
 
-/**
- * Сменить цель: прошлые клики остаются, новые идут по-новому. `AdminApi.request`
- * типизирован как `GET | POST` (`api/client.ts` вне зон T-0057), а на деле передаёт
- * метод в `fetch` как есть и ставит защитный заголовок любому, кроме `GET`, —
- * поэтому `PATCH` из спецификации здесь приведён к допустимому типу.
- */
+/** Сменить цель: прошлые клики остаются, новые идут по-новому. */
 export function retargetLink(api: AdminApi, code: string, target: LinkTarget): Promise<ApiResult<Link>> {
-  return api.request(`/links/${encodeURIComponent(code)}`, { method: "PATCH" as "POST", body: { target }, schema: linkSchema });
+  return api.request(`/links/${encodeURIComponent(code)}`, { method: "PATCH", body: { target }, schema: linkSchema });
 }
 
 /** Только что заведённая ссылка строкой списка — карточка открывается, не дожидаясь перечитывания. */
