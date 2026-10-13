@@ -8,6 +8,7 @@ import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { isCrawler } from "./crawler.js";
 import { newClickId, newLinkCode } from "./link-code.js";
 import { macroQuery, networkParamsOf, type LinkNetwork } from "./link-networks.js";
+import { clickTarget, directUrl, type LinkTarget, type LinkTargetBuilders } from "./link-targets.js";
 import { LINKS_REPOSITORY, type LinkRecord, type LinksRepository, type LinkStats, type RegistrationOn } from "./links.repository.js";
 
 /**
@@ -19,6 +20,10 @@ import { LINKS_REPOSITORY, type LinkRecord, type LinksRepository, type LinkStats
  * Клик пишется мимо ответа: редирект не ждёт базы — на медленной сети каждая
  * лишняя сотня миллисекунд теряет переходы (§3.2). Не записался — лог, а
  * игрок всё равно попадает в игру.
+ *
+ * Куда ведёт переход, решает цель ссылки (Р95): Mini App, чат с ботом или
+ * лендинг. Кроме переходника у ссылки без сети есть прямая — сразу в бота или
+ * Mini App, без клика (`link-targets.ts`).
  */
 
 export interface VisitorInfo {
@@ -48,10 +53,15 @@ export interface NewLink {
   network?: LinkNetwork | null;
   /** когда регистрация уходит в сеть; не задано — после первого засчитанного забега (О39) */
   registrationOn?: RegistrationOn;
+  /** куда ведёт; не задана — Mini App */
+  target?: LinkTarget;
 }
 
-/** Ссылка для панели: адрес и, у ссылки сети, адрес с макросами — его вставляют в кабинет сети. */
-export type LinkView<T extends LinkRecord = LinkRecord> = T & { url: string; networkUrl: string | null };
+/**
+ * Ссылка для панели: адрес переходника, у ссылки сети — адрес с макросами (его
+ * вставляют в кабинет сети), у ссылки без сети — прямой адрес без переходника.
+ */
+export type LinkView<T extends LinkRecord = LinkRecord> = T & { url: string; networkUrl: string | null; directUrl: string | null };
 
 @Injectable()
 export class LinksService {
@@ -71,7 +81,7 @@ export class LinksService {
     if (isCrawler(visitor.userAgent)) return { kind: "preview", url };
 
     const clickId = newClickId();
-    const target = this.appLinks.launch(link.platform, `c-${clickId}`);
+    const target = clickTarget(link.target, clickId, this.builders(link.platform));
     if (target === null) return { kind: "unavailable", url };
 
     void this.links
@@ -94,13 +104,34 @@ export class LinksService {
 
   async create(actor: AccountRef, input: NewLink): Promise<LinkView> {
     await this.roles.require(actor, "links.manage");
-    const link = await this.links.create({ ...input, network: input.network ?? null, registrationOn: input.registrationOn ?? "first_run", code: newLinkCode(), createdBy: actor.accountId });
+    const link = await this.links.create({
+      ...input,
+      network: input.network ?? null,
+      registrationOn: input.registrationOn ?? "first_run",
+      target: input.target ?? "app",
+      code: newLinkCode(),
+      createdBy: actor.accountId,
+    });
     await this.roles.audit({
       actorAccountId: actor.accountId,
       action: "links.create",
       target: link.code,
-      after: { campaign: link.campaign, source: link.source, platform: link.platform, network: link.network, registrationOn: link.network === null ? null : link.registrationOn },
+      after: { campaign: link.campaign, source: link.source, platform: link.platform, target: link.target, network: link.network, registrationOn: link.network === null ? null : link.registrationOn },
     });
+    return this.view(link);
+  }
+
+  /**
+   * Сменить цель ссылки: прошлые клики остаются, новые идут по-новому. Сеть и
+   * код после создания не меняются. `null` — ссылки с таким кодом нет.
+   */
+  async retarget(actor: AccountRef, code: string, target: LinkTarget): Promise<LinkView | null> {
+    await this.roles.require(actor, "links.manage");
+    const before = await this.links.byCode(code);
+    if (before === null) return null;
+    const link = await this.links.retarget(code, target);
+    if (link === null) return null;
+    await this.roles.audit({ actorAccountId: actor.accountId, action: "links.retarget", target: code, before: { target: before.target }, after: { target: link.target } });
     return this.view(link);
   }
 
@@ -117,7 +148,28 @@ export class LinksService {
     const url = this.publicUrl(link.code) ?? `/r/${link.code}`;
     // Макросы — как есть, без кодирования: сеть ищет в адресе `{campaign_id}`
     // буквально, а `%7Bcampaign_id%7D` не подставит.
-    return { ...link, url, networkUrl: link.network === null ? null : `${url}?${macroQuery(link.network)}` };
+    return { ...link, url, networkUrl: link.network === null ? null : `${url}?${macroQuery(link.network)}`, directUrl: directUrl(link, this.builders(link.platform)) };
+  }
+
+  /** Построители адресов цели: Mini App и чат — у адаптера площадки, лендинг — на домене переходника. */
+  private builders(platform: PlatformId): LinkTargetBuilders {
+    return {
+      launch: (param) => this.appLinks.launch(platform, param),
+      chat: (param) => this.appLinks.chat(platform, param),
+      landingBase: this.landingBase(),
+    };
+  }
+
+  /** Домен переходника, а не путь к приложению: лендинг живёт на нём (docs/20-env-and-ports.md §2.1). Пустая строка — адреса нет. */
+  private landingBase(): string {
+    const base = this.config.telegram.webAppUrl;
+    if (base === "") return "";
+    try {
+      const { origin } = new URL(base);
+      return origin === "null" ? "" : origin;
+    } catch {
+      return "";
+    }
   }
 
   /** Адрес ссылки на домене клиента: Caddy отдаёт `/r/*` бэкенду (docs/20-env-and-ports.md §2.1). */

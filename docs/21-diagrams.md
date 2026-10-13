@@ -148,7 +148,7 @@ erDiagram
         uuid account_id FK
         enum platform
         enum place "miniapp|web|channel: channel — /start бота"
-        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|unknown"
+        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|link|unknown"
         string start_param "nullable: из подписанного initData"
         string start_ref "nullable: код клика, id партнёра Telegram"
         string client_platform "nullable: подсказка клиента"
@@ -546,6 +546,7 @@ erDiagram
         string medium "nullable"
         string network "nullable: adsgram — сеть, куда уходят конверсии; CHECK"
         string registration_on "first_run|launch: что сеть считает регистрацией"
+        string target "app|bot|landing: куда ведёт, по умолчанию app (Р95)"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }

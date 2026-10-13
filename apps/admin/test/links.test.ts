@@ -7,9 +7,12 @@ import {
   fetchConversions,
   fetchLinks,
   freshRow,
+  launchesLabel,
   resendConversion,
+  retargetLink,
   SLUG,
   summaryLine,
+  TARGET_TITLES,
   type Conversion,
   type ConversionSummary,
 } from "../src/api/links";
@@ -28,6 +31,8 @@ const LINK = {
   network: null,
   registrationOn: "first_run",
   networkUrl: null,
+  target: "app" as const,
+  directUrl: "https://t.me/rubezh_bot?startapp=l-Ab12Cd34Ef",
 };
 
 const counts = (patch: Partial<Record<"pending" | "sent" | "failed" | "skipped", number>> = {}) => ({ pending: 0, sent: 0, failed: 0, skipped: 0, ...patch });
@@ -49,12 +54,13 @@ const CONVERSION: Conversion = {
 describe("ссылки кампаний", () => {
   it("список со статистикой и новая ссылка", async () => {
     const { fetch, calls } = fakeFetch(
-      json(200, { data: { links: [{ ...LINK, clicks: 40, clicks30d: 12, launches: 10, conversions: null }], postback: { adsgramToken: false } } }),
+      json(200, { data: { links: [{ ...LINK, clicks: 40, clicks30d: 12, launches: 10, directLaunches: 3, conversions: null }], postback: { adsgramToken: false } } }),
       json(200, { data: LINK }),
     );
     const api = new AdminApi(fetch);
     const list = await fetchLinks(api);
     expect(list.ok && list.data.links[0]?.launches).toBe(10);
+    expect(list.ok && list.data.links[0]?.directLaunches).toBe(3);
     expect(list.ok && list.data.postback.adsgramToken).toBe(false);
     await createLink(api, { campaign: "launch", source: "tg" });
     expect(calls[1]?.url).toBe("/api/v1/admin/links");
@@ -71,10 +77,54 @@ describe("ссылки кампаний", () => {
 
   it("сеть, о которой панель не знает, — обычная ссылка, а не сломанный список", async () => {
     const { fetch } = fakeFetch(
-      json(200, { data: { links: [{ ...LINK, network: "future-net", clicks: 1, clicks30d: 1, launches: 0, conversions: null }], postback: { adsgramToken: true } } }),
+      json(200, { data: { links: [{ ...LINK, network: "future-net", clicks: 1, clicks30d: 1, launches: 0, directLaunches: 0, conversions: null }], postback: { adsgramToken: true } } }),
     );
     const list = await fetchLinks(new AdminApi(fetch));
     expect(list.ok && list.data.links[0]?.network).toBeNull();
+  });
+
+  it("цель и прямая ссылка: разбираются из ответа, у ссылки сети прямой ссылки нет", async () => {
+    const network = { ...LINK, network: "adsgram", networkUrl: `${LINK.url}?record={record_data}`, target: "bot", directUrl: null };
+    const { fetch } = fakeFetch(
+      json(200, {
+        data: {
+          links: [
+            { ...LINK, target: "landing", clicks: 5, clicks30d: 5, launches: 1, directLaunches: 2, conversions: null },
+            { ...network, clicks: 9, clicks30d: 9, launches: 4, directLaunches: 0, conversions: { "1": counts(), "2": counts(), "3": counts() } },
+          ],
+          postback: { adsgramToken: true },
+        },
+      }),
+    );
+    const list = await fetchLinks(new AdminApi(fetch));
+    expect(list.ok && list.data.links.map((link) => [link.target, link.directUrl])).toEqual([
+      ["landing", "https://t.me/rubezh_bot?startapp=l-Ab12Cd34Ef"],
+      ["bot", null],
+    ]);
+  });
+
+  it("цель, о которой панель не знает, — Mini App, а не сломанный список", async () => {
+    const { fetch } = fakeFetch(json(200, { data: { links: [{ ...LINK, target: "future-target", clicks: 1, clicks30d: 1, launches: 0, directLaunches: 0, conversions: null }], postback: { adsgramToken: true } } }));
+    const list = await fetchLinks(new AdminApi(fetch));
+    expect(list.ok && list.data.links[0]?.target).toBe("app");
+  });
+
+  it("новая ссылка уходит с целью; смена цели — PATCH с одним полем", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: { ...LINK, target: "bot" } }), json(200, { data: { ...LINK, target: "landing" } }));
+    const api = new AdminApi(fetch);
+    await createLink(api, { campaign: "launch", target: "bot" });
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ campaign: "launch", target: "bot" });
+    const changed = await retargetLink(api, "Ab12Cd34Ef", "landing");
+    expect(calls[1]?.url).toBe("/api/v1/admin/links/Ab12Cd34Ef");
+    expect(calls[1]?.init.method).toBe("PATCH");
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ target: "landing" });
+    expect(changed.ok && changed.data.target).toBe("landing");
+  });
+
+  it("подписи целей и колонка «Запуски»: через переходник + прямых", () => {
+    expect(TARGET_TITLES).toEqual({ app: "Mini App", bot: "Бот", landing: "Лендинг" });
+    expect(launchesLabel({ launches: 10, directLaunches: 3 })).toBe("10 + 3");
+    expect(launchesLabel({ launches: 0, directLaunches: 0 })).toBe("0 + 0");
   });
 
   it("журнал страницами и повтор отправки", async () => {
@@ -92,8 +142,8 @@ describe("ссылки кампаний", () => {
   });
 
   it("заведённая ссылка — строкой списка с нулями: карточка открывается сразу", () => {
-    expect(freshRow({ ...LINK, network: null, registrationOn: "first_run", networkUrl: null })).toMatchObject({ clicks: 0, launches: 0, conversions: null });
-    const row = freshRow({ ...LINK, network: "adsgram", registrationOn: "first_run", networkUrl: `${LINK.url}?record={record_data}` });
+    expect(freshRow({ ...LINK, network: null, registrationOn: "first_run", networkUrl: null })).toMatchObject({ clicks: 0, launches: 0, directLaunches: 0, conversions: null });
+    const row = freshRow({ ...LINK, network: "adsgram", registrationOn: "first_run", networkUrl: `${LINK.url}?record={record_data}`, directUrl: null });
     expect(row.conversions === null ? null : summaryLine(row.conversions)).toEqual({ registrations: 0, purchases: 0, failed: 0, waiting: 0 });
   });
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
@@ -8,6 +8,7 @@ import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { LINK_CODE } from "../links/link-code.js";
 import { LINK_NETWORKS } from "../links/link-networks.js";
+import { LINK_TARGETS } from "../links/link-targets.js";
 import type { LinkStats } from "../links/links.repository.js";
 import { LinksService, type LinkView } from "../links/links.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
@@ -35,7 +36,9 @@ const newLinkSchema = z.object({
   note: z.string().trim().max(200).optional(),
   network: z.enum(LINK_NETWORKS).optional(),
   registrationOn: z.enum(["first_run", "launch"]).optional(),
+  target: z.enum(LINK_TARGETS).optional(),
 });
+const retargetSchema = z.object({ target: z.enum(LINK_TARGETS) });
 const journalQuerySchema = z.object({ before: z.string().max(80).optional() });
 const conversionIdSchema = z.uuid();
 
@@ -80,8 +83,21 @@ export class AdminLinksController {
         platform: "telegram",
         network: input.network ?? null,
         registrationOn: input.registrationOn ?? "first_run",
+        target: input.target ?? "app",
       }),
     };
+  }
+
+  /** Сменить цель: прошлые клики остаются, новые идут по-новому. Сеть и код не меняются. */
+  @Patch(":code")
+  @RequirePermission("links.manage")
+  async retarget(@Req() request: unknown, @Param("code") code: string, @Body() body: unknown): Promise<{ data: LinkView }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId);
+    const { target } = parse(() => retargetSchema.parse(body), "Цель ссылки — Mini App, бот или лендинг");
+    const link = await this.links.retarget(actor, await this.linkCode(code), target);
+    if (link === null) throw new LinkNotFoundError("Ссылки с таким кодом нет");
+    return { data: link };
   }
 
   @Get(":code/conversions")
