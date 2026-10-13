@@ -96,10 +96,8 @@ export class RestrictionsService {
    */
   async imposeBySystem(accountId: string, kind: RestrictionKind, reason: RestrictionReason, comment: string, at = new Date()): Promise<void> {
     if (kind === "all") throw new ValidationError("Систему блокировать целиком не просим: блокировка — решение человека");
-    // Автора нет: колонка `imposed_by` и `RestrictionRow` допускают `null`, а `NewRestriction.imposedBy` в
-    // `restrictions.repository.ts` (вне зон T-0024) всё ещё `string`; реализации с `null` работают.
-    const row = { accountId, kind, startsAt: at, endsAt: null, reason, comment: comment.slice(0, RESTRICTION_LIMITS.commentMax), notify: true, imposedBy: null };
-    const { created, replaced } = await this.db(this.repository.impose([row as unknown as NewRestriction], at));
+    const row: NewRestriction = { accountId, kind, startsAt: at, endsAt: null, reason, comment: comment.slice(0, RESTRICTION_LIMITS.commentMax), notify: true, imposedBy: null };
+    const { created, replaced } = await this.db(this.repository.impose([row], at));
     await this.afterImposed(null, accountId, created, replaced, at);
   }
 
