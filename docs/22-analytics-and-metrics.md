@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `boost_used` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used` |
 | Интерфейс | `screen_viewed`, `settings_changed`; `home_slide_viewed`, `home_slide_clicked` (карусель главной, WP42); `home_widget_clicked` (виджеты главной, WP42) |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded`; `showcase_bought`, `shop_banner_clicked` (магазин, WP10) |
 | Реклама | `ad_shown`, `ad_failed`, `ad_clicked`, `ad_reward_claimed` (WP12); выдача показа — строка `ad_session`, а не событие |
@@ -166,7 +166,7 @@ Zod-схемы `payload` — в словаре сервера
 | Шеринг | `share_offered`, `share_completed`, `shared_link_opened` |
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
 | Удержание | `daily_reward_claimed` (награда дня, WP13); `wheel_spun` (колесо, WP13); `task_completed`, `achievement_unlocked`, `task_link_opened` (задания и достижения, WP13, Р52) (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
-| Техника | `client_error`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
+| Техника | `client_error`, `connection_lost`, `connection_restored`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
 | Обратная связь | `feedback_sent` — отзыв с формы обратной связи (`29-admin-panel.md` §6) |
 | Уведомления | `notification_opened` — игрок перешёл из ленты туда, куда звало уведомление (`35-stage4-plan.md` WP28) |
 | Журнал обновлений | `changelog_opened` — игрок открыл «Что нового» (`35-stage4-plan.md` WP31) |
@@ -185,6 +185,7 @@ Zod-схемы `payload` — в словаре сервера
 | `diagnostics_mode_changed` | Сколько тестеров включают диагностику | `setting`, `value` |
 | `app_first_open` | Первый запуск на устройстве — знаменатель воронок закрытого теста | без полей: установка и так в конверте |
 | `client_error` | Ошибки клиента на тестера по версии и устройству (`26-stage2-plan.md` §7) | `scope` — где случилась, `message` — текст без стека, до 512 знаков |
+| `connection_lost`, `connection_restored` | Как часто у игроков пропадает связь с API и на сколько: потеря — два сбоя подряд за 30 секунд или событие браузера `offline`, возвращение — любой ответ сервера (T-0015). Ошибка сервера 4xx и 500 потерей связи не считается | у возвращения — `downtimeSec`, сколько связи не было; у потери полей нет |
 | `share_offered`, `share_completed` | Приглашение друга: сколько нажимают, каким способом и чем кончается (`35-stage4-plan.md` Р63) | `context` (`friends_invite`); `method` — `message` (сообщение от бота), `link` (выбор чата со ссылкой), `copy` (копия ссылки); у завершения — `result`: `sent`, `shared`, `copied`, `cancelled`, `unavailable` |
 | `bench_finished` | Сводка теста производительности — стресс-теста из «Играть» (`28-diagnostics.md` §2.3); полный отчёт уходит в приёмник диагностики (`28-diagnostics.md` §5), не в события | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
 | `feedback_sent` | Сколько игроков доходит до формы обратной связи и отвечают ли они текстом или только опросом. Сам отзыв в события не попадает: он уходит в чат администраторов и в свою таблицу, а здесь — только факт и разрез | `answers` — сколько вопросов отвечено, `hasText` — был ли свободный текст, `runs` — сколько забегов сыграно к этому моменту; `kind: device_info` — игрок поделился сведениями об устройстве из «Помощи в тестировании» (`28-diagnostics.md` §2.2), без поля — отзыв |
@@ -200,6 +201,7 @@ Zod-схемы `payload` — в словаре сервера
 | `user_authenticated` | Как игрок получил сессию. Доля `reauth` показывает, часто ли сессии теряются на самом деле, — а это прямая проверка решения хранить токен продления в памяти вкладки (`34-stage3-plan.md`, Р3) | `reason`: `launch` — вход на запуске, `refresh` — плановое продление, `reauth` — сервер не принял токен посреди работы |
 | `purchase_initiated`, `purchase_completed`, `purchase_failed` | Воронка покупки: второй шанс (WP5), наборы магазина и VIP (`35-stage4-plan.md` WP10) — сколько нажали «купить», сколько дошли до выдачи и где сорвалось. Это взгляд клиента: выручка и возвраты — по таблице `purchase` (§5.4), клиент о возврате и не узнает; продления VIP списывает площадка без клиента, и их видно только там. `purchase_refunded` клиент не шлёт по той же причине. В магазине `initiated` — счёт выставлен, `completed` — товар лёг на счёт | `product`: `continue_run` / `shop_item` / `vip`, `priceStars` — показанная цена, `chargedStars` — сколько спишется, `mode`: `live` / `test`; у второго шанса — `continueNo`, у магазина — `sku` и у товара по акции — `promoPct`, скидка в процентах: продаёт ли акция; у неудачи — `reason`: `cancelled`, `failed`, `unsupported`, `timeout` или код отказа сервера |
 | `continue_used` | Сколько забегов продолжают после смерти и чем (WP5). Пара к `purchase_completed`: оплата без продолжения — продолжение, которое не взяли, и сервер вернёт за него звёзды. Вместе с `purchase_*` — данные для решения О7 о цене рядом с рекламой | `source`: `premium` — за звёзды, `ad` — за досмотренный ролик, `pass` — с VIP без ролика (WP11), `dev` — бесплатно в забеге разработчика; `elapsedSec` — секунда забега, `wave` |
+| `continue_offered` | Шаг второго шанса на экране смерти показан (tasks/T-0045): сколько раз предложили и чем. Знаменатель для `continue_used`: без него не посчитать, какая доля тех, кому предложили, взяла второй шанс. Событие — один раз на показ шага; сданный забег и забег без способов шага не имеют и события не шлют | `ad` — показан ролик, `stars` — показаны звёзды, `vip` — одна кнопка VIP (с ним `ad` и `stars` ложны); `elapsedSec` — секунда забега |
 | `session_started` | Запуск игры (WP6) — знаменатель удержания по дням и воронок по источнику. Снимок атрибуции — откуда открыли, по подписи, проверенной сервером: клиент сам видит параметр запуска неподписанным. Продление токена и повторный вход посреди работы запуском не считаются. Подробности сессии — класс устройства, подсеть, код клика — в таблице `account_session`, а первое и последнее касание — в `acquisition` (`21-diagrams.md` §1.1) | `startKind`: `organic` / `click` / `invite` / `telegram_affiliate` / `unknown`; `first` — аккаунт заведён этим запуском |
 | `run_synced` | Дошли ли старт и итог забега до сервера (WP4; заменило `playtest_run_synced` этапа 2). Доля стартов с `trusted: false` у честных игроков — это доля забегов без проверки времени, по ней решается О5 (`34-stage3-plan.md`). Растущая доля `queued` с `unauthorized` — теряются сессии, а не сеть | `kind`: `start` / `finish`; `result`: `sent` / `queued` / `dropped`; `trigger`: `start` / `finish` / `launch` / `screen` / `continue`; у отправленного старта — `trusted`, у итога — `verdict`, `rank`, `isNewBest`, `recorded`; у неотправленного — `failure` |
 
@@ -646,10 +648,14 @@ DAU / WAU / MAU и sticky (DAU/MAU). Сессии в сутки, длитель�
   игроками. Без ключа политика источников не пускает ни одного чужого
   скрипта (`scripts/vite/content-security-policy.ts`);
 - Graspil написан под `window.Telegram.WebApp`, а у нас SDK `@tma.js/sdk`.
-  Объект ставит прослойка адаптера — только для чтения
+  Объект ставит прослойка адаптера — только для чтения, кроме ссылок
   (`packages/adapter-telegram/src/webapp-compat.ts`), — а сырые данные
   запуска кладутся в очередь Graspil сразу (`custom_init_data_row`). Второй
-  SDK и скрипт с telegram.org не нужны. Подход — из `vpnsibcom_web`;
+  SDK и скрипт с telegram.org не нужны. Подход — из `vpnsibcom_web`. Та же
+  прослойка ставится перед SDK Taddy (учёт аудитории): без `openLink` и
+  `openTelegramLink` он считает объект урезанным и тянет официальный SDK с
+  telegram.org, который политика источников не пускает. Прослойка — в чанке
+  рекламы, после первого экрана;
 - клики — только по размеченным элементам (`trackClicks: "tagged"`), а не по
   каждому касанию канвы забега; события площадки выключены
   (`trackTgEvents: false`).

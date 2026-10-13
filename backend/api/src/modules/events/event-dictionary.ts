@@ -131,6 +131,9 @@ export const EVENT_DICTIONARY = {
   // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
   // на какой секунде и волне забега.
   continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
+  // Шаг второго шанса показан (tasks/T-0045): сколько раз предложили и чем —
+  // ролик, звёзды, VIP. Доля `continue_used` от этого — конверсия второго шанса.
+  continue_offered: { version: 1, payload: payload({ ad: z.boolean(), stars: z.boolean(), vip: z.boolean(), elapsedSec: seconds }) },
   // Сервер подтвердил покупку буста на забег (WP8): по событию на буст.
   boost_used: { version: 1, payload: payload({ boost: id, source: id, amount, count }) },
   // Нажал «продолжить за звёзды» — счёт запрошен; в магазине — счёт выставлен.
@@ -254,6 +257,10 @@ export const EVENT_DICTIONARY = {
   // `network` — у задания рекламной сети (WP13, часть 6): награду за него
   // выдал сервер по подтверждению сети, и клиент её дождался.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
+  // Связь с API пропала и вернулась (общая плашка «Нет связи», T-0015);
+  // `downtimeSec` — сколько прошло между потерей и возвращением.
+  connection_lost: { version: 1, payload: payload({}) },
+  connection_restored: { version: 1, payload: payload({ downtimeSec: count }) },
   client_error: { version: 1, payload: payload({ scope: id, message: z.string().max(512) }) },
 } as const;
 

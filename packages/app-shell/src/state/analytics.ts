@@ -26,6 +26,7 @@ export const ANALYTICS_EVENTS = [
   "wave_reached",
   "run_synced",
   "continue_used",
+  "continue_offered",
   "boost_used",
   "purchase_initiated",
   "purchase_completed",
@@ -52,6 +53,8 @@ export const ANALYTICS_EVENTS = [
   "ad_failed",
   "ad_clicked",
   "ad_reward_claimed",
+  "connection_lost",
+  "connection_restored",
   "client_error",
 ] as const;
 

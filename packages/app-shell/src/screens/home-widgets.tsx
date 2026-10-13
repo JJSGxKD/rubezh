@@ -15,7 +15,6 @@ import {
   dailyFace,
   friendsFace,
   recordFace,
-  roughCountdown,
   tasksFace,
   wheelFace,
   type Amount,
@@ -28,7 +27,7 @@ import {
   type WidgetId,
   type WidgetSize,
 } from "./home-widget-rules";
-import { msUntilReset, useClock } from "./meta/schedule";
+import { formatCountdown, msUntilReset, useClock } from "./meta/schedule";
 
 /**
  * Виджеты главной (docs/35-stage4-plan.md WP42, часть 3, Р76): награда дня,
@@ -330,10 +329,13 @@ function label(id: WidgetId, size: WidgetSize): string {
   return t(size === "tile" ? `widget.${id}.short` : `widget.${id}.title`);
 }
 
-/** «через 5 ч», «через 12 мин» — грубо, см. `roughCountdown`. */
+/**
+ * «через 5 ч 50 мин», «через 12 мин» — то же правило точности, что у всех
+ * отсчётов (`formatCountdown`): вниз не округляем, иначе игрок вернётся раньше
+ * срока и увидит, что ещё рано.
+ */
 function inTime(ms: number): string {
-  const { unit, value } = roughCountdown(ms);
-  return t("widget.in", { time: unit === "hours" ? t("time.hours", { hours: value }) : t("time.minutes", { minutes: value }) });
+  return t("widget.in", { time: formatCountdown(ms) });
 }
 
 /** Монеты (и осколки, если есть) — значком и числом; словами — для экранного диктора. */
@@ -381,7 +383,9 @@ export function DailyView(props: { face: DailyFace; size: WidgetSize; now: numbe
           face={icon}
           label={label("daily", size)}
           big={face.next === null ? t("widget.daily.tomorrow") : <Reward amount={face.next} />}
-          sub={t("widget.daily.tomorrowIn", { time: inTime(face.untilMs - props.now) })}
+          // В плитке «завтра, через 23 ч 59 мин» не помещается в строку на 320 px, а две строки — в её высоту:
+          // «завтра» уже сказано наградой следующего дня, остаётся «через N», как у колеса.
+          sub={size === "tile" ? inTime(face.untilMs - props.now) : t("widget.daily.tomorrowIn", { time: inTime(face.untilMs - props.now) })}
         />
       );
     case "idle":

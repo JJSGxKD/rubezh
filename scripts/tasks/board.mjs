@@ -6,8 +6,16 @@ import { zonesOverlap } from "./zones.mjs";
  * тесты — scripts/test/tasks-board.test.ts.
  */
 
+/**
+ * Метка PR «нужна доработка» (tasks/README.md, «Доработка»): тимлид или
+ * ревьюер ответил на вопросы или попросил правок, и PR может закончить любой
+ * поток с тем же исполнителем и уровнем — не обязательно тот, что его открыл.
+ */
+export const REWORK_LABEL = "доработка";
+
 /** Колонки в порядке показа: сначала то, что исполнителю нужно прямо сейчас. */
 export const COLUMNS = [
+  { key: "rework", title: "Доработка" },
   { key: "free", title: "Свободно" },
   { key: "inProgress", title: "В работе" },
   { key: "review", title: "На ревью" },
@@ -19,12 +27,22 @@ export const COLUMNS = [
 
 const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
 
+/**
+ * Ранг версии-поезда: ближняя — раньше (docs/38-release-plan.md). Без версии —
+ * после всех: такую задачу ни один поезд не ждёт.
+ */
+export function versionRank(version) {
+  const match = /^v(\d+)\.(\d+)$/.exec(version ?? "");
+  return match === null ? Number.MAX_SAFE_INTEGER : Number(match[1]) * 1000 + Number(match[2]);
+}
+
 function compareTasks(epicOrder) {
   const epicRank = (epic) => {
     const index = epicOrder.indexOf(epic);
     return index === -1 ? epicOrder.length : index;
   };
   return (a, b) =>
+    versionRank(a.task.version) - versionRank(b.task.version) ||
     (PRIORITY_RANK[a.task.priority] ?? 99) - (PRIORITY_RANK[b.task.priority] ?? 99) ||
     epicRank(a.task.epic) - epicRank(b.task.epic) ||
     a.task.id.localeCompare(b.task.id);
@@ -35,8 +53,9 @@ function compareTasks(epicOrder) {
  *
  * - `tasks` — поля задач с `fileName` (как в `readTasks`);
  * - `taken` — id задач, у которых на `origin` есть ветка `task/T-NNNN`;
- * - `prs` — открытые PR `{ number, headRefName, isDraft }` или `null`, если
+ * - `prs` — открытые PR `{ number, headRefName, isDraft, labels? }` или `null`, если
  *   список получить не удалось (нет `gh`): тогда «На ревью» сливается с «В работе»;
+ *   PR с меткой `REWORK_LABEL` — «Доработка», будь он хоть черновиком;
  * - `repoFiles` — файлы репозитория для пересечения зон;
  * - `epicOrder` — эпики в порядке `epics.md`.
  *
@@ -47,6 +66,9 @@ function compareTasks(epicOrder) {
 export function classify(tasks, taken, prs, repoFiles, epicOrder) {
   const branches = new Set(taken);
   const openPrs = new Map((prs ?? []).filter((pr) => !pr.isDraft).map((pr) => [pr.headRefName, pr.number]));
+  const reworkPrs = new Map(
+    (prs ?? []).filter((pr) => (pr.labels ?? []).some((label) => label?.name === REWORK_LABEL)).map((pr) => [pr.headRefName, pr.number]),
+  );
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const result = Object.fromEntries(COLUMNS.map((column) => [column.key, []]));
 
@@ -56,8 +78,10 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
     else if (task.status === "cancelled") result.cancelled.push({ task });
     else if (task.status === "draft") result.draft.push({ task });
     else if (branches.has(task.id)) {
+      const rework = reworkPrs.get(`task/${task.id}`);
       const pr = openPrs.get(`task/${task.id}`);
-      if (pr === undefined) result.inProgress.push({ task });
+      if (rework !== undefined) result.rework.push({ task, pr: rework });
+      else if (pr === undefined) result.inProgress.push({ task });
       else result.review.push({ task, pr });
     } else if (task.status === "in-progress") {
       // На dev этот статус не живёт (tasks/README.md, «Состояния»); без ветки
@@ -69,6 +93,7 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
   const busy = [
     ...result.inProgress.map((entry) => ({ task: entry.task, where: "в работе" })),
     ...result.review.map((entry) => ({ task: entry.task, where: "на ревью" })),
+    ...result.rework.map((entry) => ({ task: entry.task, where: "на доработке" })),
   ];
 
   for (const task of waiting) {
@@ -102,14 +127,18 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
 }
 
 /**
- * Что показать в `pnpm task next`: свободные задачи с подходящим `runner`
- * (по умолчанию `any`; `local` включает `any`; `human` — никогда) и, если
- * задан `executor`, только этого исполнителя. Порядок колонки сохраняется.
+ * Что показать в `pnpm task next`: задачи колонки (свободные или на
+ * доработке) с подходящим `runner` (по умолчанию `any`; `local` включает
+ * `any`; `human` — никогда) и, если заданы, только этого `executor` и
+ * `effort`. Порядок колонки сохраняется.
  */
-export function nextTasks(free, { runner = "any", executor } = {}) {
+export function nextTasks(entries, { runner = "any", executor, effort } = {}) {
   const runners = runner === "local" ? ["any", "local"] : ["any"];
-  return free.filter(
-    (entry) => runners.includes(entry.task.runner) && (executor === undefined || entry.task.executor === executor),
+  return entries.filter(
+    (entry) =>
+      runners.includes(entry.task.runner) &&
+      (executor === undefined || entry.task.executor === executor) &&
+      (effort === undefined || entry.task.effort === effort),
   );
 }
 
@@ -136,6 +165,8 @@ function idList(ids) {
 export function statusBadge(entry) {
   const badge = (message, color) => ({ schemaVersion: 1, label: "статус", message, color, cacheSeconds: BADGE_CACHE_SECONDS });
   switch (entry.column) {
+    case "rework":
+      return badge(`доработка · #${String(entry.pr)}`, "yellow");
     case "free":
       return badge("можно брать", "brightgreen");
     case "inProgress": {

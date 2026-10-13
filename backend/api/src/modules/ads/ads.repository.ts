@@ -60,6 +60,8 @@ export interface NewAdSession {
    * досмотра нет — `viewSec` пуст, выполнение подтверждает сеть.
    */
   creative: { id: string; viewSec: number | null } | null;
+  /** Не раньше скольких секунд после выдачи засчитывается досмотр через SDK; нет или `null` — без порога. У креатива сети с API срок — в `creative.viewSec`. */
+  minViewSec?: number | null;
   createdAt: Date;
   expiresAt: Date;
 }
@@ -292,7 +294,7 @@ export class PrismaAdsRepository implements AdsRepository {
       INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, expires_at, creative_id, view_sec)
       VALUES (${session.sessionId}, ${session.accountId}::uuid, ${session.place}::"AdPlace", ${session.block.blockId}::uuid,
               ${session.block.networkKey}, ${session.block.success}::"AdSuccess", 'pending', ${session.createdAt}, ${session.expiresAt},
-              ${session.creative?.id ?? null}, ${session.creative?.viewSec ?? null}::smallint)`;
+              ${session.creative?.id ?? null}, ${session.creative?.viewSec ?? session.minViewSec ?? null}::smallint)`;
   }
 
   async createFailedSession(session: NewAdSession, reason: string): Promise<void> {

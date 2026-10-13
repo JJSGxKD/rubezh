@@ -72,4 +72,15 @@ describe("клиент раздела «Друзья»", () => {
     expect(friendInviteUrl("https://t.me/PlayRubezhBot", "f-abc123")).toBe("https://t.me/PlayRubezhBot?startapp=f-abc123");
     expect(friendInviteUrl("", "f-abc123")).toBe("");
   });
+
+  it("«Подарить всем» — POST по пути сервера, ответ с числом подаренных", async () => {
+    const calls: Call[] = [];
+    const result = await createFriendsApi(server(calls, { sent: 3 })).giftAll();
+    expect(calls).toEqual([{ path: "/api/v1/friends/gifts/send-all", method: "POST", body: {} }]);
+    expect(result.ok && result.data.sent).toBe(3);
+  });
+
+  it("«Подарить всем»: ответ не по схеме — сбой", async () => {
+    expect((await createFriendsApi(server([], { sent: "три" })).giftAll()).ok).toBe(false);
+  });
 });

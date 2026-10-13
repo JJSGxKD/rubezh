@@ -135,6 +135,13 @@ function contributionSection(credits, people, githubAvailable) {
 export function renderBoardPage({ board, owners, credits, people, githubAvailable, now }) {
   const done = [...board.done].sort((a, b) => b.task.id.localeCompare(a.task.id));
   const sections = [
+    // Доработку заканчивает любой поток с тем же исполнителем и уровнем, не только тот, кто вёл.
+    section(
+      "Доработка",
+      board.rework.length,
+      ["Задача", "Исполнитель", "PR", "Вёл"],
+      board.rework.map(({ task, pr }) => [taskLink(task), `${task.executor} · ${task.effort}`, prLink(pr), owners.get(task.id) || "неизвестно"]),
+    ),
     section(
       "Можно брать",
       board.free.length,

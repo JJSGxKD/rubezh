@@ -11,8 +11,33 @@
 
 # Почта ACME не задаётся: Caddy продлевает сертификаты сам, а письма об
 # истечении нам не нужны.
+#
+# Клиент и лендинг — за CDN Bunny (docs/20-env-and-ports.md §2.2): к Caddy
+# приходит узел CDN, а адрес игрока — в X-Forwarded-For. Верим этому
+# заголовку только от узлов Bunny — их список edge-ips.sh кладёт в
+# edge/trusted-proxies.caddy и обновляет раз в сутки. Разбор справа налево
+# (strict): левые значения заголовка дописал сам клиент, а правое — узел CDN.
+# Без списка (первый запуск) адрес — узел CDN: лимиты частоты общие на узел,
+# но поддельный заголовок не проходит.
 {
 	acme_dns bunny {env.BUNNY_API_KEY}
+	servers {
+		import edge/trusted-proxies*.caddy
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+# До API — адрес игрока одним значением: API верит ровно одному прокси
+# (TRUST_PROXY_HOPS=1), и цепочка «игрок, узел CDN» дала бы ему узел CDN —
+# все игроки за узлом попали бы в один лимит частоты. Ответ без своего
+# Cache-Control CDN не кэширует: no-store по умолчанию, а то, что API
+# разрешает кэшировать (картинки по неизменному адресу), он помечает сам.
+(api) {
+	header ?Cache-Control "no-store"
+	reverse_proxy api:4000 {
+		header_up X-Forwarded-For {client_ip}
+	}
 }
 
 (edge) {
@@ -31,28 +56,35 @@
 }
 
 # Одностраничное приложение из каталога версий. Файлы сборки с хэшем в имени
-# кэшируются навсегда, index.html — никогда: иначе игрок остался бы на
-# старой версии до очистки кэша. У страницы предпросмотра клиента для панели
-# (`preview/`, своя сборка в той же статике) — то же самое: старая точка
-# входа ссылалась бы на файлы удалённой версии.
+# кэшируются навсегда, всё остальное — никогда: index.html, точка входа
+# предпросмотра для панели (`preview/`, своя сборка в той же статике) и любой
+# путь, на который отвечает index.html. Иначе CDN держал бы старую точку
+# входа, а она ссылается на файлы удалённой версии — белый экран.
+# Нет файла с хэшем — 404, а не index.html: страница под адресом скрипта
+# закэшировалась бы навсегда.
 (spa) {
 	root * /srv/web/{args[0]}/current
-	@hashed path /assets/* /preview/assets/*
-	header @hashed Cache-Control "public, max-age=31536000, immutable"
-	@entry path / /index.html /preview/ /preview/index.html
-	header @entry Cache-Control "no-cache"
 	# csp.txt — служебный: политика и так уходит заголовком.
-	@internal path /csp.txt
-	respond @internal 404
-	try_files {path} /index.html
-	file_server
+	handle /csp.txt {
+		respond 404
+	}
+	@hashed path /assets/* /preview/assets/*
+	handle @hashed {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
 }
 
 # Лендинг — пока заглушка: сам лендинг — задача О7 (docs/36-parallel-work.md).
 {$DOMAIN} {
 	import edge
 	handle /r/* {
-		reverse_proxy api:4000
+		import api
 	}
 	handle {
 		import spa landing
@@ -75,10 +107,10 @@ tg.{$DOMAIN} {
 		respond 404
 	}
 	handle /api/* {
-		reverse_proxy api:4000
+		import api
 	}
 	handle /r/* {
-		reverse_proxy api:4000
+		import api
 	}
 	handle {
 		import spa web-telegram
@@ -91,7 +123,7 @@ admin.{$DOMAIN} {
 	import edge/admin*.caddy
 	header X-Frame-Options DENY
 	handle /api/v1/admin/* {
-		reverse_proxy api:4000
+		import api
 	}
 	handle /api/* {
 		respond 404
@@ -109,7 +141,7 @@ api.{$DOMAIN} {
 		respond 404
 	}
 	handle {
-		reverse_proxy api:4000
+		import api
 	}
 }
 
