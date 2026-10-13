@@ -16,7 +16,7 @@ function innerOf(markup: string, tag: string): string {
 }
 
 describe("свечение кнопки", () => {
-  const glowing = renderToStaticMarkup(createElement(Button, { glow: true }, "Крутить"));
+  const glowing = renderToStaticMarkup(createElement(Button, { glow: true, children: "Крутить" }));
 
   it("стоит рядом с кнопкой в обёртке isolate, а не внутри неё", () => {
     expect(glowing.startsWith("<span")).toBe(true);
@@ -33,30 +33,30 @@ describe("свечение кнопки", () => {
     const halo = glowing.slice(glowing.indexOf("<span", 1), glowing.indexOf("</span>"));
     expect(halo).not.toContain("rounded-[inherit]");
     expect(halo).toContain("rounded-md");
-    const large = renderToStaticMarkup(createElement(Button, { glow: true, size: "l" }, "Играть"));
+    const large = renderToStaticMarkup(createElement(Button, { glow: true, size: "l", children: "Играть" }));
     expect(large.slice(large.indexOf("<span", 1), large.indexOf("</span>"))).toContain("rounded-lg");
   });
 
   it("без свечения разметка прежняя: корень — кнопка, обёртки нет", () => {
-    const plain = renderToStaticMarkup(createElement(Button, {}, "Играть"));
+    const plain = renderToStaticMarkup(createElement(Button, { children: "Играть" }));
     expect(plain.startsWith("<button")).toBe(true);
     expect(plain).not.toContain("animate-glow");
   });
 
   it("неактивная кнопка не светится и без обёртки", () => {
-    const disabled = renderToStaticMarkup(createElement(Button, { glow: true, disabled: true }, "Играть"));
+    const disabled = renderToStaticMarkup(createElement(Button, { glow: true, disabled: true, children: "Играть" }));
     expect(disabled.startsWith("<button")).toBe(true);
   });
 
   it("block растягивает обёртку, а кнопка внутри остаётся на всю ширину", () => {
-    const block = renderToStaticMarkup(createElement(Button, { glow: true, block: true }, "Играть"));
+    const block = renderToStaticMarkup(createElement(Button, { glow: true, block: true, children: "Играть" }));
     expect(block.slice(0, block.indexOf(">"))).toContain("w-full");
     expect(block.slice(block.indexOf("<button"), block.indexOf(">", block.indexOf("<button")))).toContain("w-full");
   });
 });
 
 describe("свечение значка виджета", () => {
-  const face = renderToStaticMarkup(createElement(IconFace, { size: "tile", glow: true }, "★"));
+  const face = renderToStaticMarkup(createElement(IconFace, { size: "tile", glow: true, children: "★" }));
 
   it("лежит рядом с плиткой в обёртке isolate, плитка свечения не содержит", () => {
     expect(face.slice(0, face.indexOf(">"))).toContain("isolate");
@@ -70,7 +70,7 @@ describe("свечение значка виджета", () => {
   });
 
   it("без свечения — только плитка", () => {
-    const plain = renderToStaticMarkup(createElement(IconFace, { size: "tile" }, "★"));
+    const plain = renderToStaticMarkup(createElement(IconFace, { size: "tile", children: "★" }));
     expect(plain).not.toContain("animate-glow");
     expect(plain.startsWith("<span class=\"widget-face")).toBe(true);
   });
