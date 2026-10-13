@@ -40,7 +40,7 @@ async function allowedByServer(): Promise<boolean> {
     const response = await fetch(`${API_BASE}/api/v1/client/scripts`, { signal: AbortSignal.timeout(SCRIPTS_TIMEOUT_MS) });
     return response.ok && graspilAllowed(await response.json());
   } catch {
-    // Таймаут и обрыв — тот же ответ «нельзя»; причину называет вызывающий в консоли.
+    // Таймаут и обрыв — тот же ответ «нельзя».
     return false;
   }
 }
@@ -48,10 +48,7 @@ async function allowedByServer(): Promise<boolean> {
 export async function loadGraspil(key: string): Promise<void> {
   if (key === "") return;
   // Аналитика необязательна: выключатель в панели нужен как раз затем, чтобы не тянуть скрипт в сомнении.
-  if (!(await allowedByServer())) {
-    console.info("Graspil выключен в панели или сервер не ответил — не грузим");
-    return;
-  }
+  if (!(await allowedByServer())) return;
   let webApp: TelegramWebAppCompat | null = null;
   try {
     webApp = await loadTelegramWebAppCompat();
