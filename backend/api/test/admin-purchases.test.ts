@@ -137,7 +137,7 @@ describe("поддержка покупок в панели по HTTP", () => {
   }
 
   const headersOf = (token: string) => ({ cookie: `${ADMIN_SESSION_COOKIE}=${token}`, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
-  const urlOf = (action: "refund" | "fulfill", forAccount = accountId, forPurchase = purchaseId) => `/api/v1/admin/players/${forAccount}/purchases/${forPurchase}/${action}`;
+  const urlOf = (action: "refund" | "fulfill", forAccount: string = accountId, forPurchase: string = purchaseId) => `/api/v1/admin/players/${forAccount}/purchases/${forPurchase}/${action}`;
 
   it.each([["refund" as const], ["fulfill" as const]])("админ, %s: 200 и { data: { purchase, actions } }; сервис получил причину без пробелов по краям", async (action) => {
     const response = await server().inject({ method: "POST", url: urlOf(action), headers: headersOf("adm"), payload: { note: "  Игрок написал в поддержку  " } });
