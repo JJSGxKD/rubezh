@@ -3,7 +3,7 @@ id: T-0096
 title: Убрать тень под врагами
 epic: E12
 priority: P1
-status: in-progress
+status: done
 owner: claude-7 / haiku-5.5 / medium
 author: claude-lead2-13
 size: S
