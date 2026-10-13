@@ -3,8 +3,8 @@ id: T-0079
 title: Второй шанс — ролик главной кнопкой, звёзды второй, как в макете
 epic: E12
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-7 / haiku-5.5 / medium
 author: claude-lead2-6
 size: S
 depends_on: []
