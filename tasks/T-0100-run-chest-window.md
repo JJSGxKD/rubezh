@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.9
+batch: 1
 ---
 
 # T-0100. Сундук забега: окно открытия с «барабаном» и списком полученного

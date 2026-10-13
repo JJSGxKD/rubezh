@@ -24,7 +24,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0108. Лестница открытий — оружие и навыки по уровням 2–14, а не все к шестому

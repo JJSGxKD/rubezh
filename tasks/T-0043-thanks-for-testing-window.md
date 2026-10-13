@@ -38,7 +38,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/tester-thanks.html
-version: v0.10
+batch: 3
 ---
 
 # T-0043. Окно «Спасибо за тест» и знак «Тестер» в профиле, у друзей и в рейтинге

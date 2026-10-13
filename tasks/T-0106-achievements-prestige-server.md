@@ -40,7 +40,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0106. Достижения с престижем: сервер, 49 определений, редкость «есть у N%»

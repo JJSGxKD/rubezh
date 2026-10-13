@@ -18,7 +18,7 @@ executor: haiku-5.5
 effort: low
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0082. Список игроков — пустой «Статус» не остаётся подписью без значения в карточке
