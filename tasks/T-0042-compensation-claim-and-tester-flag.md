@@ -3,8 +3,8 @@ id: T-0042
 title: Компенсация после вайпа — выдача по кнопке и признак «Тестер» в ответах
 epic: E2
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-6 / sonnet-5.5 / extra
 size: M
 depends_on: [T-0040]
 zones:
