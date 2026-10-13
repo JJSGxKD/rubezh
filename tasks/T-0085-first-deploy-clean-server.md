@@ -19,7 +19,7 @@ executor: sonnet-5.5
 effort: high
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0085. Первый выкат на чистый сервер проходит без --no-backup
