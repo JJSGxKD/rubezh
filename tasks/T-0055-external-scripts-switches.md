@@ -12,6 +12,7 @@ zones:
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/modules/ads/ad-audience.ts
   - backend/api/src/modules/ads/ads.service.ts
+  - backend/api/src/modules/ads/ads.module.ts
   - backend/api/src/modules/client-scripts/**
   - backend/api/test/client-scripts.test.ts
   - backend/api/test/ads.test.ts
