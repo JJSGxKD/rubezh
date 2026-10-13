@@ -264,7 +264,7 @@ export class RunsService {
 
   /**
    * Подозрительный забег — в лог с причинами. Карточку в чат администраторов
-   * шлёт слушатель хуков (`admin-notify`), а очередь целиком — `GET /runs/review`.
+   * шлёт слушатель хуков (`admin-notify`), а очередь целиком — в панели (`GET /api/v1/admin/runs/review`).
    */
   private logSuspicious(account: AccountRef, runId: string, verdict: RunVerdict, reasons: VerdictReason[]): void {
     this.logger.warn(JSON.stringify({ module: "runs", event: "run_flagged", runId, accountId: account.accountId, verdict, reasons }));
