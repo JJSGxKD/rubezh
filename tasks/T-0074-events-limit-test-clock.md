@@ -3,8 +3,8 @@ id: T-0074
 title: Тест лимита приёмника событий не зависит от границы минуты
 epic: E4
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-9 / haiku-5.5 / low
 author: claude-lead2-5
 size: S
 depends_on: []
