@@ -30,9 +30,11 @@ zones:
   - backend/api/test/auth.test.ts
 shared:
   - backend/api/src/modules/wallet/wallet-types.ts
+  - backend/api/src/modules/wallet/wallet-limits.ts
   - packages/app-shell/src/i18n/ru-history.json
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - docs/21-diagrams.md
 runner: any
 executor: sonnet-5.5
 effort: extra
