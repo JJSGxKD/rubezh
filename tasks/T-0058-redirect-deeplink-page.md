@@ -63,7 +63,7 @@ version: v0.9
 
 - **`backend/api/src/modules/links/redirect.controller.ts`:**
   - `visit.kind === "redirect"` → 302 `location: visit.target`;
-  - превью — `html(200, linkPage({ url, target: null }), "public, max-age=300")`.
+  - превью — `html(200, linkPage({ url, target: null }), "private, max-age=300")`.
 - **`links/link-page.ts`** — `linkPage({ url, target })`: OG-теги, ссылка
   «Открыть игру», `escapeHtml`.
 - **`links/links.service.ts`** — `visit` (после T-0057 адрес — из
