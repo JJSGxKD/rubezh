@@ -21,4 +21,24 @@ describe("ссылки площадки", () => {
     expect(links.launch("vk", "c-x")).toBeNull();
     expect(links.chat("vk", "panel-x")).toBeNull();
   });
+
+  it("Telegram: диплинк в установленный клиент — tg://resolve, без страницы t.me", () => {
+    const links = new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]);
+    expect(links.chatDeep("telegram", "panel-abc")).toBe("tg://resolve?domain=rubezh_bot&start=panel-abc");
+    expect(links.launchDeep("telegram", "c-1")).toBe("tg://resolve?domain=rubezh_bot&startapp=c-1");
+    // Параметр кодируется, как у обычных ссылок: лишний `&` не должен стать вторым параметром.
+    expect(links.chatDeep("telegram", "a&b=c")).toBe("tg://resolve?domain=rubezh_bot&start=a%26b%3Dc");
+  });
+
+  it("диплинка нет: бот не представился или у площадки нет такого метода", () => {
+    const withoutBot = new AppLinks([new TelegramAppLinks({ miniAppLink: null, username: null })]);
+    expect(withoutBot.chatDeep("telegram", "panel-x")).toBeNull();
+    expect(withoutBot.launchDeep("telegram", "c-x")).toBeNull();
+    // Площадка без диплинков — отдаёт обычные ссылки, а `null` значит «веди по обычной».
+    const plain = new AppLinks([{ platform: "vk", launch: () => "https://vk.com/app1?x=1", chat: () => "https://vk.me/bot" }]);
+    expect(plain.chatDeep("vk", "panel-x")).toBeNull();
+    expect(plain.launchDeep("vk", "c-x")).toBeNull();
+    expect(plain.chat("vk", "panel-x")).toBe("https://vk.me/bot");
+    expect(plain.chatDeep("max", "panel-x")).toBeNull();
+  });
 });

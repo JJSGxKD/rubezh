@@ -70,6 +70,13 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
         { purchaseId: randomUUID(), accountId: anna, product: "continue_run", runId: annaRun, continueNo: 3, elapsedSec: 95, priceStars: 30, chargedStars: 1, mode: "test", status: "paid", invoicedAt: at("10:34"), paidAt: at("10:35") },
       ],
     });
+    // Досмотренные показы: один в сутках, один — ровно за границей ряда (полночь после последних суток).
+    const adSession = (accountId: string, completedAt: Date) =>
+      prisma.adSession.create({
+        data: { sessionId: randomUUID().replaceAll("-", ""), accountId, place: "second_chance", networkKey: "test", success: "view", status: "completed", createdAt: new Date(completedAt.getTime() - 60_000), expiresAt: new Date(completedAt.getTime() + 3_600_000), completedAt },
+      });
+    await adSession(anna, at("12:00"));
+    await adSession(anna, new Date(dayWindow("2031-03-15").to.getTime()));
     await prisma.accountFunnel.create({ data: { accountId: anna, enteredAt: at("00:05"), appOpenedAt: at("00:06"), firstRunStartedAt: at("10:00"), returnedD1At: at("10:00"), firstPurchaseAt: at("10:31") } });
     await prisma.accountFunnel.create({ data: { accountId: boris, enteredAt: at("23:59"), runs5At: new Date(window.to.getTime() + 60_000) } });
   });
@@ -93,10 +100,11 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
   it("ряд по суткам: те же границы и фильтры, пустые сутки — нулями", async () => {
     const points = await new PrismaDailyStatsRepository(prisma).series(dayWindow("2031-03-13").from, dayWindow("2031-03-15").to);
     expect(points).toEqual([
-      { day: "2031-03-13", newAccounts: 0, active: 0, finishedRuns: 0, stars: 0 },
-      // Как у суток целиком: без читов, тестовая оплата не в счёт, возвращённая оплата — в сутках оплаты.
-      { day: "2031-03-14", newAccounts: 3, active: 2, finishedRuns: 3, stars: 8 },
-      { day: "2031-03-15", newAccounts: 1, active: 1, finishedRuns: 0, stars: 0 },
+      { day: "2031-03-13", newAccounts: 0, active: 0, finishedRuns: 0, stars: 0, purchases: 0, adsCompleted: 0 },
+      // Как у суток целиком: без читов, тестовая оплата не в счёт, возвращённая оплата — в сутках оплаты;
+      // досмотр за границей ряда в точки не попадает.
+      { day: "2031-03-14", newAccounts: 3, active: 2, finishedRuns: 3, stars: 8, purchases: 2, adsCompleted: 1 },
+      { day: "2031-03-15", newAccounts: 1, active: 1, finishedRuns: 0, stars: 0, purchases: 0, adsCompleted: 0 },
     ]);
   });
 

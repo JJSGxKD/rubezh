@@ -15,6 +15,13 @@ export interface AppLinkBuilder {
    * а сам бот: так подтверждают вход в панель. `null` — не собрать.
    */
   chat(startParam: string): string | null;
+  /**
+   * Та же ссылка на приложение, но диплинком в установленный клиент: без
+   * страницы-переходника площадки. `null` или нет метода — у площадки его нет.
+   */
+  launchDeep?(startParam: string): string | null;
+  /** Чат с ботом диплинком: QR и кнопка входа в панель ведут сразу в клиент. */
+  chatDeep?(startParam: string): string | null;
 }
 
 export class AppLinks {
@@ -30,5 +37,14 @@ export class AppLinks {
 
   chat(platform: PlatformId, startParam: string): string | null {
     return this.builders.get(platform)?.chat(startParam) ?? null;
+  }
+
+  /** Диплинк на приложение; `null` — у площадки диплинков нет, ведут обычной ссылкой. */
+  launchDeep(platform: PlatformId, startParam: string): string | null {
+    return this.builders.get(platform)?.launchDeep?.(startParam) ?? null;
+  }
+
+  chatDeep(platform: PlatformId, startParam: string): string | null {
+    return this.builders.get(platform)?.chatDeep?.(startParam) ?? null;
   }
 }

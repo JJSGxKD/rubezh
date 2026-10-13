@@ -7,6 +7,7 @@ import { PaymentsService, type ShopInvoice } from "../payments/payments.service.
 import { PurchaseFulfillment, UndeliverableError } from "../payments/purchase-fulfillment.js";
 import { PurchaseRevocation, type Revocation } from "../payments/purchase-revocation.js";
 import type { PaymentMode, StoredPurchase } from "../payments/purchase-types.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
@@ -84,6 +85,7 @@ export class ShopService implements OnModuleInit {
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
     // Реестр нужен модулю, а не каждому тесту магазина: без него отзыв регистрируется в своём, пустом.
     private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
+    private readonly restrictions: AccountRestrictions,
   ) {}
 
   onModuleInit(): void {
@@ -133,6 +135,8 @@ export class ShopService implements OnModuleInit {
   }
 
   async order(account: AccountRef, skuId: string, at = new Date()): Promise<ShopInvoice> {
+    // Закрытые покупки (T-0024) отвечают раньше всего остального: аккаунту незачем знать, что с товаром.
+    await this.restrictions.ensure(account.accountId, "purchases", at);
     const sku = skuById(skuId);
     if (sku === undefined) throw new ShopSkuNotFoundError();
     const method = methodFor(account.platform);

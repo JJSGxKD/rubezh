@@ -10,7 +10,7 @@ import { createDailyApi, dailyAvailable, dayOfWeek, type DailyDay, type DailyVie
 import { useNavigation } from "../../state/navigation";
 import { track } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
-import { formatCountdown, msUntilReset } from "./schedule";
+import { formatCountdown, msUntilReset, useClock } from "./schedule";
 
 /**
  * Награда дня: неделя из семи дней, седьмой крупнее
@@ -19,6 +19,9 @@ import { formatCountdown, msUntilReset } from "./schedule";
  * Пропуск дня прогресс не сбрасывает, закрытая неделя поднимает награды — об
  * этом экран говорит прямо, иначе пропуск выглядел бы как потеря.
  */
+
+/** Отсчёт на кнопке — без секунд: часы тикают раз в полминуты, как на виджетах главной. */
+const CLOCK_STEP_MS = 30_000;
 
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: DailyView };
 
@@ -61,6 +64,7 @@ export function DailyScreen(): ReactNode {
   };
 
   const ready = state.status === "ready" ? state.view : null;
+  const now = useClock(ready !== null && !ready.canClaim, CLOCK_STEP_MS);
 
   return (
     <Screen
@@ -69,7 +73,7 @@ export function DailyScreen(): ReactNode {
       footer={
         dailyAvailable() ? (
           <Button size="l" block disabled={ready === null || !ready.canClaim} loading={claiming} onClick={() => void claim()}>
-            {ready !== null && !ready.canClaim ? t("daily.next", { time: formatCountdown(msUntilReset(Date.now(), "daily")) }) : t("daily.claim")}
+            {ready !== null && !ready.canClaim ? t("daily.next", { time: formatCountdown(msUntilReset(now, "daily")) }) : t("daily.claim")}
           </Button>
         ) : undefined
       }

@@ -49,17 +49,27 @@ export class AdminSessionController {
   }
 
   /**
-   * Вход через бота, шаг первый: запрос с кодом и ссылкой на бота. Секрет
+   * Вход через бота, шаг первый: запрос с кодом и ссылками на бота — обычной и диплинком. Секрет
    * запроса уходит только этой вкладке — сессию потом выдают по нему, а не по
    * ссылке, которую можно подсмотреть или переслать.
    */
   @Public()
   @Post("bot")
-  async openBotLogin(@Req() request: unknown): Promise<{ data: { requestId: string; secret: string; code: string; link: string; expiresAt: string } }> {
+  async openBotLogin(@Req() request: unknown): Promise<{ data: { requestId: string; secret: string; code: string; link: string; deepLink: string | null; expiresAt: string } }> {
     this.sessions.ensureEnabled();
     await this.limit(ADMIN_LIMITS.login, addressOf(request));
     const opened = await this.logins.open({ userAgent: userAgentOf(request), ip: addressOf(request) });
-    return { data: { requestId: opened.requestId, secret: opened.secret, code: opened.code, link: opened.link, expiresAt: new Date(opened.expiresAtMs).toISOString() } };
+    return {
+      data: {
+        requestId: opened.requestId,
+        secret: opened.secret,
+        code: opened.code,
+        link: opened.link,
+        // Поле только добавлено: старая панель его не читает (docs/09-ci-cd.md §4).
+        deepLink: opened.deepLink,
+        expiresAt: new Date(opened.expiresAtMs).toISOString(),
+      },
+    };
   }
 
   /** Шаг второй: вкладка спрашивает, подтвердили ли вход. Подтвердили — сессия в cookie, один раз. */
