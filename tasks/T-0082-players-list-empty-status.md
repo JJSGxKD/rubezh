@@ -3,8 +3,8 @@ id: T-0082
 title: Список игроков — пустой «Статус» не остаётся подписью без значения в карточке
 epic: E7
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-9 / haiku-5.5 / low
 author: claude-lead2-6
 size: S
 depends_on: [T-0049]
