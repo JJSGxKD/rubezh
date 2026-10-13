@@ -9,6 +9,7 @@ import { eligibleBlocks, networksOf, servable, viaApi } from "./ad-blocks.js";
 import { AD_CREATIVES, type AdCreative, type AdCreativeSource, type AdRequester } from "./ad-creatives.js";
 import { AdNetworkKeys } from "./ad-network-keys.js";
 import { AdPasses } from "./ads-passes.js";
+import { ClientScripts } from "../client-scripts/client-scripts.service.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import type { RestrictionKind } from "../restrictions/restriction-catalog.js";
 import type { RestrictionRow } from "../restrictions/restrictions.repository.js";
@@ -147,6 +148,8 @@ export class AdsService {
   private readonly logger = new Logger("ads");
   private cache: { blocks: AdBlockRow[]; until: number } | null = null;
 
+  private readonly scripts: ClientScripts;
+
   constructor(
     @Inject(ADS_REPOSITORY) private readonly repository: AdsRepository,
     @Inject(ADS_ROLL) private readonly roll: AdsRoll,
@@ -156,10 +159,15 @@ export class AdsService {
     private readonly keys: AdNetworkKeys,
     private readonly interstitials: InterstitialGate,
     private readonly restrictions: AccountRestrictions,
-  ) {}
+  ) {
+    // Правило «скрипты разрешены» одно на все места (`ClientScripts`); читает те же настройки панели, что и сервис.
+    this.scripts = new ClientScripts(settings);
+  }
 
   /** `moment` — когда клиент просит межстраничную; у других мест не нужен. */
   async offer(viewer: AdViewer, place: AdPlace, at = new Date(), moment: InterstitialMoment = "run_start"): Promise<AdOffer> {
+    // Аварийный выключатель чужих скриптов: ни блока, ни сессии — как будто показывать нечего.
+    if (!this.scripts.ads()) return this.unavailable(viewer, place, "no_fill", null);
     const restricted = await this.restricted(viewer.accountId, place, at);
     if (restricted !== null) return this.unavailable(viewer, place, restricted.notify ? "restricted" : "no_fill", null);
     const [history, pass] = await Promise.all([this.db(this.repository.history(viewer.accountId, place, at)), this.db(this.passes.of(viewer.accountId, at))]);
