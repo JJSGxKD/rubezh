@@ -3,7 +3,7 @@ id: T-0078
 title: Событие continue_offered уходит после ответа проверок, а не при открытии шага
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-5
 size: S
