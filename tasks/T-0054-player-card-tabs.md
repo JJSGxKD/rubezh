@@ -25,7 +25,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/admin-player.html
-version: v0.9
+batch: 2
 ---
 
 # T-0054. Карточка игрока вкладками — шапка с действиями, «Сводка» на один взгляд

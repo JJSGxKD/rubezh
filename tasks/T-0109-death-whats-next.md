@@ -23,7 +23,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0109. Экран смерти — блок «Что дальше» с двумя-тремя ближайшими целями

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { classify, nextTasks, statusBadge, versionRank } from "../tasks/board.mjs";
+import { classify, nextTasks, statusBadge, batchRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -142,11 +142,11 @@ describe("порядок в колонке «Свободно»", () => {
   });
 });
 
-// Поезд версий (docs/38-release-plan.md): ближняя версия — раньше приоритета.
-describe("версия задачи в порядке выдачи", () => {
-  it("ближняя версия раньше дальней при любом приоритете; без версии — в конце", () => {
+// Пачки очереди (docs/38-release-plan.md): ближняя пачка — раньше приоритета.
+describe("пачка задачи в порядке выдачи", () => {
+  it("ближняя пачка раньше дальней при любом приоритете; без пачки — в конце", () => {
     const result = classify(
-      [task("T-0050", { priority: "P0", version: "v0.10" }), task("T-0051", { priority: "P2", version: "v0.8" }), task("T-0052", { priority: "P0" }), task("T-0053", { priority: "P1", version: "v0.9" })],
+      [task("T-0050", { priority: "P0", batch: "10" }), task("T-0051", { priority: "P2", batch: "2" }), task("T-0052", { priority: "P0" }), task("T-0053", { priority: "P1", batch: "3" })],
       [],
       [],
       [],
@@ -155,10 +155,29 @@ describe("версия задачи в порядке выдачи", () => {
     expect(ids(result.free)).toEqual(["T-0051", "T-0053", "T-0050", "T-0052"]);
   });
 
-  it("versionRank: v0.10 позже v0.9, мусор — как без версии", () => {
-    expect(versionRank("v0.10")).toBeGreaterThan(versionRank("v0.9"));
-    expect(versionRank("v1.0")).toBeGreaterThan(versionRank("v0.99"));
-    expect(versionRank(undefined)).toBe(versionRank("x"));
+  it("внутри одной пачки порядок прежний: приоритет, эпик, id", () => {
+    const result = classify(
+      [
+        task("T-0060", { priority: "P1", epic: "E1", batch: "1" }),
+        task("T-0061", { priority: "P1", epic: "E0", batch: "1" }),
+        task("T-0062", { priority: "P0", epic: "E2", batch: "1" }),
+        task("T-0063", { priority: "P1", epic: "E0", batch: "1" }),
+      ],
+      [],
+      [],
+      [],
+      EPIC_ORDER,
+    );
+    expect(ids(result.free)).toEqual(["T-0062", "T-0061", "T-0063", "T-0060"]);
+  });
+
+  it("batchRank: пачка 10 позже пачки 9 (число, а не строка), мусор — как без пачки", () => {
+    expect(batchRank("10")).toBeGreaterThan(batchRank("9"));
+    expect(batchRank(2)).toBe(batchRank("2"));
+    expect(batchRank("1")).toBeLessThan(batchRank("2"));
+    for (const bad of [undefined, null, "", "x", "0", "-1", "1.5", "v0.8"]) {
+      expect(batchRank(bad), String(bad)).toBeGreaterThan(batchRank("999999"));
+    }
   });
 });
 
