@@ -76,12 +76,18 @@ export interface FreeSpinButton {
  * Кнопка бесплатной крутки зависит от того, есть ли она сегодня и идёт ли
  * крутка вообще, но не от того, какая именно: пока крутят за рекламу, потраченная
  * бесплатная не должна выглядеть доступной.
+ * Пока колесо крутится по бесплатной, на кнопке загрузка — до остановки, а не до
+ * ответа сервера.
  */
 export function freeSpinButton(view: Pick<WheelView, "free"> | null, phase: WheelPhase, source: "free" | "ad"): FreeSpinButton {
   if (view === null) return { disabled: true, loading: false, label: "free" };
+  // Своя крутка идёт до остановки колеса: сервер уже списал бесплатную
+  // (`free: false`), но «через N» игрок увидит, когда колесо встанет, а не
+  // посреди вращения.
+  if (phase !== "idle" && source === "free") return { disabled: true, loading: true, label: view.free ? "free" : "next" };
   if (!view.free) return { disabled: true, loading: false, label: "next" };
   if (phase === "idle") return { disabled: false, loading: false, label: "free" };
-  return { disabled: true, loading: source === "free", label: "free" };
+  return { disabled: true, loading: false, label: "free" };
 }
 
 /** `playable` — площадка умеет показывать ролики сетей; без этого крутка за рекламу есть только у VIP. */
