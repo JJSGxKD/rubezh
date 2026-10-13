@@ -400,7 +400,7 @@ erDiagram
         string telegram_charge_id UK "nullable: id оплаты в Telegram"
         datetime invoiced_at "когда выставлен последний счёт"
         datetime paid_at "nullable: продолжение выдано"
-        enum refund_reason "nullable: test_mode|unused|external|undeliverable"
+        enum refund_reason "nullable: test_mode|unused|external|undeliverable|manual"
         datetime refund_requested_at "nullable"
         datetime refunded_at "nullable"
         datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька, период VIP — записан"
@@ -1948,6 +1948,7 @@ flowchart LR
     RESTR -- "account_restriction; отметка блокировки в account" --> PG
     RESTR -- "канал restrictions:changed, лок задачи по сроку" --> REDIS
     ADMINAPI -. "наложить и снять; отзыв сессий при блокировке" .-> RESTR
+    ADMINAPI -- "возврат и выдача покупки поддержкой" --> PAY
     REF -. "можно ли: награды за друзей" .-> RESTR
     FRIENDS -. "можно ли: подарки, бонус за друзей" .-> RESTR
     ADS -. "можно ли: награды за рекламу" .-> RESTR
