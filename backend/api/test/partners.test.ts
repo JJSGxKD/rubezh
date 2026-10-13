@@ -242,7 +242,7 @@ describe("партнёры в панели", () => {
     const paused = await ctx.service.setStatus(marketer, partner.partnerId, "paused", "  Не выходит на связь  ", NOW);
     expect(paused.status).toBe("paused");
     expect(ctx.roles.entries.at(-1)).toEqual(
-      expect.objectContaining({ action: "partners.status", target: partner.partnerId, actorAccountId: marketer.accountId, before: { status: "active" }, after: { status: "paused", reason: "Не выходит на связь" } }),
+      expect.objectContaining({ action: "partner.status", target: partner.partnerId, actorAccountId: marketer.accountId, before: { status: "active" }, after: { status: "paused", reason: "Не выходит на связь" } }),
     );
     expect((await ctx.service.catalog(marketer, NOW)).partners[0]?.status).toBe("paused");
 

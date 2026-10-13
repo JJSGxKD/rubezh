@@ -29,7 +29,7 @@ export class PartnerNotFoundError extends DomainError {
 
 export type PartnerView = PartnerFull & { stats: PartnerStats };
 
-/** Поля, чья правка попадает в аудит «было → стало»; статус — отдельным действием `partners.status`. */
+/** Поля, чья правка попадает в аудит «было → стало»; статус — отдельным действием `partner.status`. */
 const AUDITED_FIELDS = ["name", "contact", "note", "telegramId", "country", "payoutCurrency", "payoutMethod", "sharePercent"] as const;
 
 /** Причина смены статуса: от трёх до двухсот знаков без пробелов по краям. */
@@ -109,7 +109,7 @@ export class PartnersService {
     if (changed === null) throw new PartnerNotFoundError();
     await this.roles.audit({
       actorAccountId: actor.accountId,
-      action: "partners.status",
+      action: "partner.status",
       target: partnerId,
       before: { status: withTerms(changed.before).status },
       after: { status, reason: why },
