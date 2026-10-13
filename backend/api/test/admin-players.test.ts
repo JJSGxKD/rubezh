@@ -98,7 +98,9 @@ function setup() {
   const testNotice = { acceptance: async () => ({ version: 1, acceptedAt: NOW, firstAcceptedAt: NOW }) } as unknown as TestNoticeService;
   const restrictionsRepository = new MemoryRestrictionsRepository();
   const restrictions = new RestrictionsService(restrictionsRepository, accounts, roles, restrictionsGate(restrictionsRepository), new RestrictionsHooks());
-  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice, restrictions);
+  // Что поддержка может сделать с покупкой, решает сервис оплаты (T-0037); здесь важно, кому карточка это показывает.
+  const support = { actionsFor: () => ["refund"] } as never;
+  const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice, restrictions, support);
   return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository, restrictionsRepository };
 }
 
@@ -140,6 +142,44 @@ describe("карточка игрока", () => {
     expect(card.purchases).toBeNull();
     expect(card.roles).toEqual([]);
     expect(s.rolesRepository.entries).toEqual([]);
+  });
+
+  it("покупка в карточке приходит с тем, что поддержка может сделать: у админа и владельца — actions, у геймдизайнера (выручку видит, права поддержки нет) — пусто (T-0037)", async () => {
+    const target = await player(s.accounts);
+    s.purchases.rows.set("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", {
+      purchaseId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      accountId: target.accountId,
+      product: "shop_item",
+      runId: null,
+      continueNo: null,
+      elapsedSec: null,
+      sku: "starter_pack",
+      priceStars: 50,
+      chargedStars: 50,
+      mode: "live",
+      status: "paid",
+      telegramChargeId: "charge-1",
+      invoicedAt: NOW,
+      paidAt: NOW,
+      refundReason: null,
+      refundRequestedAt: null,
+      refundedAt: null,
+      fulfilledAt: NOW,
+      renewalOf: null,
+    });
+    const admin = await player(s.accounts, "600010");
+    await s.rolesRepository.grant(admin.accountId, "admin", null);
+    const designer = await player(s.accounts, "600011");
+    await s.rolesRepository.grant(designer.accountId, "game_designer", null);
+    const refOf = (account: typeof admin, platformUserId: string): AccountRef => ({ accountId: account.accountId, platform: "telegram", platformUserId });
+
+    const asAdmin = await s.service.card(refOf(admin, "600010"), target.accountId);
+    const asDesigner = await s.service.card(refOf(designer, "600011"), target.accountId);
+    const asOwner = await s.service.card(owner, target.accountId);
+
+    expect(asAdmin.purchases?.map((purchase) => purchase.actions)).toEqual([["refund"]]);
+    expect(asOwner.purchases?.map((purchase) => purchase.actions)).toEqual([["refund"]]);
+    expect(asDesigner.purchases?.map((purchase) => [purchase.purchaseId, purchase.actions])).toEqual([["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", []]]);
   });
 
   it("неизвестный аккаунт — 404", async () => {

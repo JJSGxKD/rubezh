@@ -44,6 +44,9 @@ export const PERMISSIONS = [
   // Ручное начисление и списание в кошельке игрока — только владельцу: право
   // начислять валюту дороже любого другого права над игроками
   "players.wallet.adjust",
+  // Поддержка покупок: вернуть звёзды (остаток товара забирается) и повторить
+  // выдачу — владелец и админ; каждое действие с причиной, в журнале и в потоке «Покупки»
+  "payments.support",
   // Рассылки и каналы
   "broadcast.edit",
   "broadcast.send",
@@ -138,6 +141,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "players.ban",
     "players.restrict",
     "players.message",
+    "payments.support",
     "broadcast.edit",
     "broadcast.send",
     "broadcast.approve",

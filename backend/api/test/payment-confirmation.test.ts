@@ -360,7 +360,7 @@ describe("очередь оплаты", () => {
       },
     } as unknown as PaymentConfirmation;
     // Очередь не поднята — как при недоступном Redis.
-    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(new MemoryPurchasesRepository(), starsProviders()), new RunsHooks(), starsProviders(), new PurchaseFulfillment(), new MemoryPurchasesRepository());
+    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(new MemoryPurchasesRepository(), starsProviders(), new PurchaseRevocation()), new RunsHooks(), starsProviders(), new PurchaseFulfillment(), new MemoryPurchasesRepository());
     const payment: ConfirmedPayment = { platform: "telegram", chargeId: "charge-1", payload: randomUUID(), payerId: String(PLAYER_ID), currency: "XTR", totalAmount: 3 };
 
     await queue.confirm(payment);
@@ -393,7 +393,7 @@ describe("возвраты звёзд", () => {
   beforeEach(() => {
     purchases = new MemoryPurchasesRepository();
     refundApi = new FakeStarsApi();
-    refunds = new PaymentRefunds(purchases, starsProviders(refundApi));
+    refunds = new PaymentRefunds(purchases, starsProviders(refundApi), new PurchaseRevocation());
     confirmation = new PaymentConfirmation(config(), purchases, starsProviders(refundApi), switchesOf(config()));
     hooks = new RunsHooks();
     // Очередь без Redis выполняет задания сразу — так видно всю цепочку.

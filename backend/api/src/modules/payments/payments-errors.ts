@@ -50,3 +50,24 @@ export class PaymentsUnavailableError extends DomainError {
     super("payments_unavailable", "Оплата временно недоступна — попробуйте ещё раз", 503);
   }
 }
+
+/** Действие с покупкой сейчас невозможно — текст говорит почему: не оплачена, уже выдана, возврат уже заказан. */
+export class PurchaseActionUnavailableError extends DomainError {
+  constructor(message: string) {
+    super("purchase_action_unavailable", message, 409);
+  }
+}
+
+/** Товара нет в каталоге — выдать нельзя, остаётся вернуть звёзды. */
+export class PurchaseUndeliverableError extends DomainError {
+  constructor() {
+    super("purchase_undeliverable", "Товара нет в каталоге — выдать нельзя. Верните звёзды", 409);
+  }
+}
+
+/** Выдача упала не по сути товара: база, кошелёк, ошибка в коде. Подробности — в логе сервера. */
+export class FulfillFailedError extends DomainError {
+  constructor() {
+    super("fulfill_failed", "Выдача не прошла — подробности в логе сервера. Попробуйте позже", 503);
+  }
+}
