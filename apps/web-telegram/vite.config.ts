@@ -61,6 +61,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/feedback",
       "/api/v1/bot",
       "/api/v1/media",
+      "/api/v1/client",
     ].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },

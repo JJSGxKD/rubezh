@@ -35,7 +35,8 @@ export interface NewRestriction {
   reason: string;
   comment: string | null;
   notify: boolean;
-  imposedBy: string;
+  /** кто наложил; `null` — система (`imposeBySystem`), у неё автора нет */
+  imposedBy: string | null;
 }
 
 export const RESTRICTIONS_REPOSITORY = Symbol("RESTRICTIONS_REPOSITORY");

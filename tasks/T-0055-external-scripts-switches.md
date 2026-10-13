@@ -12,6 +12,7 @@ zones:
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/modules/ads/ad-audience.ts
   - backend/api/src/modules/ads/ads.service.ts
+  - backend/api/src/modules/ads/ads.module.ts
   - backend/api/src/modules/client-scripts/**
   - backend/api/test/client-scripts.test.ts
   - backend/api/test/ads.test.ts
@@ -27,7 +28,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0055. Выключатели внешних скриптов клиента в панели — Graspil, учёт аудитории, всё сразу

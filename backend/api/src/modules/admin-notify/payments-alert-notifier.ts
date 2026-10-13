@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
-import { PaymentsHooks, type AbandonedJob, type StuckPurchase } from "../payments/payments-hooks.js";
+import { PaymentsHooks, type AbandonedJob, type ExternalRefund, type StuckPurchase } from "../payments/payments-hooks.js";
 import { NotifyTargets } from "../settings/notify-targets.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 
@@ -20,6 +20,11 @@ import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/
  * (tasks/T-0004): одно сообщение на задание за семь суток, ключ — его
  * `jobId`. Очередь задание больше не повторит, так что сообщение — единственный
  * сигнал, что запись оплаты или возврата не легла в базу.
+ *
+ * И карточка о возврате звёзд, пришедшем не по нашей воле (tasks/T-0024):
+ * что забрано, сколько возвратов у аккаунта и что покупки ему закрыты. Одна
+ * на покупку за семь суток, ключ — её id: повтор обработки возврата и
+ * повторное событие карточку не удваивают.
  */
 
 const QUIET_SEC = 7 * 24 * 60 * 60;
@@ -44,6 +49,7 @@ export class PaymentsAlertNotifier implements OnModuleInit {
     if (this.config.telegram.botToken === "") return;
     this.hooks.onStuck("admin-notify", (purchase) => this.deliver(purchase));
     this.hooks.onAbandoned("admin-notify", (job) => this.deliverAbandoned(job));
+    this.hooks.onExternalRefund("admin-notify", (refund) => this.deliverExternalRefund(refund));
   }
 
   /** Не бросает: нет чата, Redis или Telegram — в лог, и проход идёт дальше. */
@@ -63,6 +69,16 @@ export class PaymentsAlertNotifier implements OnModuleInit {
       text: abandonedJobText(job),
       fields: { jobId: job.jobId, chargeId: job.chargeId },
       reason: job.reason,
+    });
+  }
+
+  /** Не бросает: возврат уже обработан, и упавшая карточка не должна ронять задание очереди. */
+  async deliverExternalRefund(refund: ExternalRefund): Promise<void> {
+    await this.notify({
+      key: `payments:refund-alert:${refund.purchase.purchaseId}`,
+      text: externalRefundText(refund),
+      fields: { purchaseId: refund.purchase.purchaseId, accountId: refund.purchase.accountId },
+      reason: "external_refund",
     });
   }
 
@@ -116,6 +132,20 @@ export function abandonedJobText(job: AbandonedJob): string {
     `Покупка: ${job.purchaseId ?? "—"}`,
     `Причина: ${job.reason}`,
     "Нужна ручная сверка покупки.",
+  ].join("\n");
+}
+
+/** Текст — для человека в чате: что вернули, кто, что забрано и что теперь с аккаунтом. */
+export function externalRefundText(refund: ExternalRefund): string {
+  const { purchase, revoked, stats, at } = refund;
+  return [
+    "↩️ Возврат звёзд",
+    `Товар: ${purchase.sku ?? purchase.product}, ${String(purchase.chargedStars)} ⭐`,
+    `Аккаунт: ${purchase.accountId}`,
+    `Оплачена: ${purchase.paidAt === null ? "—" : utcMinute(purchase.paidAt)}, возвращена: ${utcMinute(at)}`,
+    `Забрано: ${revoked.length === 0 ? "ничего" : revoked.join("; ")}`,
+    `Возвратов у аккаунта: ${String(stats.refunded)} из ${String(stats.paid)} оплат`,
+    "Покупки аккаунту закрыты — снять ограничение можно в панели.",
   ].join("\n");
 }
 

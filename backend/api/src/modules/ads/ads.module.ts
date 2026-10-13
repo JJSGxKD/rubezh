@@ -60,6 +60,6 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
     { provide: ADS_CATALOG_REPOSITORY, useClass: PrismaAdsCatalogRepository },
     { provide: ADS_ROLL, useValue: cryptoRoll },
   ],
-  exports: [AdsService, AdsCatalogService, AdPasses, AdAudience, AdTasks, AdTaskFeeds, AdTaskHooks],
+  exports: [AdsService, AdsCatalogService, AdPasses, AdAudience, AdTasks, AdTaskFeeds, AdTaskHooks, ADS_CATALOG_REPOSITORY],
 })
 export class AdsModule {}

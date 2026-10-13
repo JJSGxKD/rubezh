@@ -165,3 +165,85 @@ describe("ячейка «Задачи» эпика в реестре", () => {
     expect(errors[0]).toContain("pnpm task fix");
   });
 });
+
+// Пачки очереди (docs/38-release-plan.md): зависимость уходит в main не позже зависящей от неё задачи.
+describe("пачки в зависимостях", () => {
+  it("зависимость в той же или более ранней пачке — без ошибок", () => {
+    const files = [
+      fileOf("T-0001", { batch: "1" }),
+      fileOf("T-0002", { batch: "1", depends_on: "[T-0001]" }),
+      fileOf("T-0003", { batch: "2", depends_on: "[T-0001, T-0002]" }),
+    ];
+    expect(check(files)).toEqual([]);
+  });
+
+  it("зависимость в более поздней пачке — ошибка называет обе задачи и обе пачки", () => {
+    const errors = check([fileOf("T-0001", { batch: "3" }), fileOf("T-0002", { batch: "2", depends_on: "[T-0001]" })]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("T-0002-x.md");
+    expect(errors[0]).toContain("T-0002 (пачка 2)");
+    expect(errors[0]).toContain("T-0001 (пачка 3)");
+  });
+
+  it("пачки сравниваются как числа: зависимость в пачке 10 позже пачки 9", () => {
+    const errors = check([fileOf("T-0001", { batch: "10" }), fileOf("T-0002", { batch: "9", depends_on: "[T-0001]" })]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("T-0002 (пачка 9)");
+    expect(errors[0]).toContain("T-0001 (пачка 10)");
+  });
+
+  it("задача с пачкой не зависит от задачи без пачки — ошибка называет обе задачи", () => {
+    const errors = check([fileOf("T-0001"), fileOf("T-0002", { batch: "1", depends_on: "[T-0001]" })]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("T-0002-x.md");
+    expect(errors[0]).toContain("T-0002 (пачка 1)");
+    expect(errors[0]).toContain("T-0001 (без пачки)");
+  });
+
+  it("черновик без пачки — такая же зависимость без пачки, это не исключение", () => {
+    const errors = check([fileOf("T-0001", { status: "draft" }), fileOf("T-0002", { batch: "1", depends_on: "[T-0001]" })]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("T-0001 (без пачки)");
+  });
+
+  it("сделанная или отменённая зависимость без пачки не мешает", () => {
+    for (const status of ["done", "cancelled"]) {
+      const files = [fileOf("T-0001", { status }), fileOf("T-0002", { batch: "1", depends_on: "[T-0001]" })];
+      expect(check(files), status).toEqual([]);
+    }
+  });
+
+  it("сделанная зависимость в чужой пачке тоже не мешает: она уже в dev", () => {
+    const files = [fileOf("T-0001", { status: "done", batch: "4" }), fileOf("T-0002", { batch: "1", depends_on: "[T-0001]" })];
+    expect(check(files)).toEqual([]);
+  });
+
+  it("задача без пачки может зависеть от задачи с пачкой", () => {
+    expect(check([fileOf("T-0001", { batch: "2" }), fileOf("T-0002", { depends_on: "[T-0001]" })])).toEqual([]);
+  });
+
+  it("несколько нарушений — по ошибке на каждую пару", () => {
+    const files = [
+      fileOf("T-0001", { batch: "5" }),
+      fileOf("T-0002"),
+      fileOf("T-0003", { batch: "1", depends_on: "[T-0001, T-0002]" }),
+    ];
+    const errors = check(files);
+    expect(errors).toHaveLength(2);
+    expect(errors.some((error: string) => error.includes("T-0001 (пачка 5)"))).toBe(true);
+    expect(errors.some((error: string) => error.includes("T-0002 (без пачки)"))).toBe(true);
+  });
+
+  it("несуществующая зависимость не даёт второй, ложной ошибки про пачки", () => {
+    const errors = check([fileOf("T-0002", { batch: "1", depends_on: "[T-0099]" })]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("T-0099");
+    expect(errors[0]).not.toContain("пачк");
+  });
+
+  it("поле version в файле задачи — ошибка реестра", () => {
+    // Задача с битой шапкой в реестр не попадает, поэтому проверка ячейки эпика может добавить своё: смотрим на нужную ошибку.
+    const errors = check([fileOf("T-0001", { version: "v0.8" })]).filter((error: string) => error.includes("version"));
+    expect(errors).toEqual(["T-0001-x.md: поле version заменено полем batch — пачкой очереди, tasks/README.md"]);
+  });
+});

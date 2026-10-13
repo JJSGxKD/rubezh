@@ -60,9 +60,23 @@ export interface AbandonedJob {
   reason: string;
 }
 
+/**
+ * Деньги вернулись игроку не по нашей воле (спор, поддержка Telegram) и остаток покупки
+ * уже забран (tasks/T-0023): команде — карточка, аккаунту покупки уже закрыты (T-0024).
+ */
+export interface ExternalRefund {
+  purchase: StoredPurchase;
+  /** что забрал отзыв остатка — строками, как в логе */
+  revoked: string[];
+  /** настоящие оплаты аккаунта и возвраты по ним не по нашей воле — доля возвратов (О4) */
+  stats: { paid: number; refunded: number };
+  at: Date;
+}
+
 export type StuckListener = (purchase: StuckPurchase) => Promise<void>;
 export type AbandonedListener = (job: AbandonedJob) => Promise<void>;
 
+export type ExternalRefundListener = (refund: ExternalRefund) => Promise<void>;
 export type PaidListener = (purchase: PaidPurchase) => Promise<void>;
 export type SubscriptionListener = (change: SubscriptionChange) => Promise<void>;
 
@@ -73,6 +87,7 @@ export class PaymentsHooks {
   private readonly subscriptions: { name: string; listener: SubscriptionListener }[] = [];
   private readonly stuck: { name: string; listener: StuckListener }[] = [];
   private readonly abandoned: { name: string; listener: AbandonedListener }[] = [];
+  private readonly externalRefunds: { name: string; listener: ExternalRefundListener }[] = [];
 
   onPaid(name: string, listener: PaidListener): void {
     this.paid.push({ name, listener });
@@ -90,6 +105,10 @@ export class PaymentsHooks {
     this.abandoned.push({ name, listener });
   }
 
+  onExternalRefund(name: string, listener: ExternalRefundListener): void {
+    this.externalRefunds.push({ name, listener });
+  }
+
   /** После записи оплаты; упавший слушатель не отменяет ни её, ни остальных. */
   emitPaid(purchase: PaidPurchase): Promise<void> {
     return this.emit(this.paid, purchase, { purchaseId: purchase.purchaseId });
@@ -103,6 +122,11 @@ export class PaymentsHooks {
   /** Задание оплаты брошено после всех попыток. Упавший слушатель не мешает остальным. */
   emitAbandoned(job: AbandonedJob): Promise<void> {
     return this.emit(this.abandoned, job, { jobId: job.jobId });
+  }
+
+  /** Внешний возврат обработан: остаток забран, покупки закрыты. Упавший слушатель не мешает остальным. */
+  emitExternalRefund(refund: ExternalRefund): Promise<void> {
+    return this.emit(this.externalRefunds, refund, { purchaseId: refund.purchase.purchaseId });
   }
 
   emitSubscriptionChanged(change: SubscriptionChange): Promise<void> {

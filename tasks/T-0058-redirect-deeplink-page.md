@@ -23,7 +23,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.9
+batch: 3
 ---
 
 # T-0058. Переходник ссылок открывает Telegram диплинком — с запасным t.me

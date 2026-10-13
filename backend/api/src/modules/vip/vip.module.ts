@@ -3,6 +3,7 @@ import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { PaymentsModule } from "../payments/payments.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
+import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { VipController } from "./vip.controller.js";
 import { PrismaVipRepository, VIP_REPOSITORY } from "./vip.repository.js";
 import { VipService } from "./vip.service.js";
@@ -14,7 +15,7 @@ import { VipService } from "./vip.service.js";
  * рекламы, и те о VIP не знают.
  */
 @Module({
-  imports: [AuthModule, PaymentsModule, WalletModule, AdsModule],
+  imports: [AuthModule, PaymentsModule, WalletModule, AdsModule, RestrictionsModule],
   controllers: [VipController],
   providers: [VipService, { provide: VIP_REPOSITORY, useClass: PrismaVipRepository }],
   exports: [VipService],
