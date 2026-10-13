@@ -48,7 +48,10 @@ async function allowedByServer(): Promise<boolean> {
 export async function loadGraspil(key: string): Promise<void> {
   if (key === "") return;
   // Аналитика необязательна: выключатель в панели нужен как раз затем, чтобы не тянуть скрипт в сомнении.
-  if (!(await allowedByServer())) return;
+  if (!(await allowedByServer())) {
+    console.info("Graspil выключен в панели или сервер не ответил — не грузим");
+    return;
+  }
   let webApp: TelegramWebAppCompat | null = null;
   try {
     webApp = await loadTelegramWebAppCompat();
