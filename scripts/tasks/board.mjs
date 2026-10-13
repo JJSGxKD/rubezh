@@ -1,3 +1,4 @@
+import { BATCH_RE } from "./task-file.mjs";
 import { zonesOverlap } from "./zones.mjs";
 
 /**
@@ -28,12 +29,13 @@ export const COLUMNS = [
 const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
 
 /**
- * Ранг версии-поезда: ближняя — раньше (docs/38-release-plan.md). Без версии —
- * после всех: такую задачу ни один поезд не ждёт.
+ * Ранг пачки очереди: меньше — раньше (docs/38-release-plan.md). Без пачки —
+ * после всех: такую задачу ни одна пачка не ждёт. Принимает и строку из шапки
+ * (`"2"`), и число; всё, что не целое от 1, — как отсутствие пачки.
  */
-export function versionRank(version) {
-  const match = /^v(\d+)\.(\d+)$/.exec(version ?? "");
-  return match === null ? Number.MAX_SAFE_INTEGER : Number(match[1]) * 1000 + Number(match[2]);
+export function batchRank(batch) {
+  const number = typeof batch === "string" ? (BATCH_RE.test(batch) ? Number(batch) : Number.NaN) : batch;
+  return Number.isInteger(number) && number >= 1 ? number : Number.MAX_SAFE_INTEGER;
 }
 
 function compareTasks(epicOrder) {
@@ -42,7 +44,7 @@ function compareTasks(epicOrder) {
     return index === -1 ? epicOrder.length : index;
   };
   return (a, b) =>
-    versionRank(a.task.version) - versionRank(b.task.version) ||
+    batchRank(a.task.batch) - batchRank(b.task.batch) ||
     (PRIORITY_RANK[a.task.priority] ?? 99) - (PRIORITY_RANK[b.task.priority] ?? 99) ||
     epicRank(a.task.epic) - epicRank(b.task.epic) ||
     a.task.id.localeCompare(b.task.id);
@@ -60,7 +62,7 @@ function compareTasks(epicOrder) {
  * - `epicOrder` — эпики в порядке `epics.md`.
  *
  * Возвращает `{ <колонка>: [{ task, reason?, pr?, waitingFor?, busyWith? }] }`,
- * внутри колонки порядок: приоритет, эпик, id. У заблокированных `waitingFor` —
+ * внутри колонки порядок: пачка, приоритет, эпик, id. У заблокированных `waitingFor` —
  * id недоделанных зависимостей, `busyWith` — id задач, чьи зоны заняты.
  */
 export function classify(tasks, taken, prs, repoFiles, epicOrder) {
