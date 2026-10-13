@@ -92,7 +92,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
                       <X size={18} aria-hidden="true" />
                     </Dialog.Close>
                   </div>
-                  <MenuColumn groups={groups} route={route} query={query} onQuery={setQuery} searchRef={searchRef} />
+                  <MenuColumn groups={groups} route={route} query={query} onQuery={setQuery} searchRef={searchRef} onNavigate={() => setSheetOpen(false)} />
                   <div className="border-t border-border p-3">
                     <AccountBlock identity={identity} />
                   </div>
@@ -163,12 +163,15 @@ function MenuColumn({
   query,
   onQuery,
   searchRef,
+  onNavigate,
 }: {
   groups: SectionGroup[];
   route: Route | null;
   query: string;
   onQuery: (query: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
+  /** Лист меню на телефоне закрывается выбором раздела, в том числе уже открытого: тот же адрес `hashchange` не даёт. */
+  onNavigate?: () => void;
 }) {
   const shown = filterGroups(groups, query);
   return (
@@ -203,6 +206,7 @@ function MenuColumn({
                   href={hrefOf({ section: section.id, id: null })}
                   title={section.hint}
                   aria-current={active ? "page" : undefined}
+                  onClick={onNavigate}
                   className={`flex h-[30px] items-center gap-2 rounded-sm px-2 text-[13.5px] max-md:h-10 ${
                     active ? "bg-surface-raised text-text shadow-[inset_2px_0_0_var(--color-accent)]" : "text-text-muted hover:bg-surface-raised/60 hover:text-text"
                   }`}
