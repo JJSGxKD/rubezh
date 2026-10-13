@@ -1,10 +1,11 @@
 import { checkEpicCells } from "./epics.mjs";
-import { FILE_NAME_RE, parseFrontmatter, validateTask } from "./task-file.mjs";
+import { FILE_NAME_RE, batchNumber, parseFrontmatter, validateTask } from "./task-file.mjs";
 
 /**
  * Проверка реестра задач целиком (tasks/README.md): уникальные `id`, эпики из
- * `epics.md`, существующие зависимости, нет циклов. Чистые функции — файлы и
- * текст `epics.md` приходят снаружи, тесты — scripts/test/tasks-registry.test.ts.
+ * `epics.md`, существующие зависимости, нет циклов, зависимости не позже по
+ * пачкам очереди. Чистые функции — файлы и текст `epics.md` приходят снаружи,
+ * тесты — scripts/test/tasks-registry.test.ts.
  */
 
 /** Задача — это файл `tasks/T-*.md`; остальное в каталоге (README, epics, inbox, шаблон и будущее) не проверяется. */
@@ -82,6 +83,38 @@ function findCycles(tasks) {
   return [...cycles.values()];
 }
 
+/** Сделанная или отменённая задача уже не ждёт выхода в main: от её пачки ничего не зависит. */
+function isSettled(task) {
+  return task.status === "done" || task.status === "cancelled";
+}
+
+/**
+ * Пачки в зависимостях (docs/38-release-plan.md, §5): зависимость уходит в main
+ * не позже зависящей задачи, а задача с пачкой не ждёт задачу без пачки —
+ * иначе пачка не соберётся. Сделанные и отменённые задачи не в счёт; зависимости
+ * без файла в реестре — ошибка другой проверки. Одна ошибка на пару.
+ */
+export function checkBatches(tasks) {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const errors = [];
+  for (const task of tasks) {
+    const batch = batchNumber(task);
+    if (batch === null || isSettled(task)) continue;
+    for (const id of task.depends_on) {
+      const dependency = byId.get(id);
+      if (dependency === undefined || isSettled(dependency)) continue;
+      const dependencyBatch = batchNumber(dependency);
+      const head = `${task.fileName}: поле depends_on — ${task.id} (пачка ${String(batch)}) зависит от ${id}`;
+      if (dependencyBatch === null) {
+        errors.push(`${head} (без пачки): отдай ${id} пачку ${String(batch)} или раньше, либо убери зависимость`);
+      } else if (dependencyBatch > batch) {
+        errors.push(`${head} (пачка ${String(dependencyBatch)}): зависимость уходит в main позже; перенеси ${id} в пачку ${String(batch)} или раньше, либо ${task.id} — в пачку ${String(dependencyBatch)} или позже`);
+      }
+    }
+  }
+  return errors;
+}
+
 /** Все ошибки реестра: пустой список — реестр в порядке. */
 export function checkRegistry(files, epicsMarkdown) {
   const { tasks, errors } = readTasks(files);
@@ -101,6 +134,7 @@ export function checkRegistry(files, epicsMarkdown) {
   }
 
   for (const cycle of findCycles(tasks)) errors.push(`цикл в depends_on: ${cycle}`);
+  errors.push(...checkBatches(tasks));
   errors.push(...checkEpicCells(epicsMarkdown, tasks));
   return errors;
 }
