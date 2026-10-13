@@ -43,7 +43,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.10
+batch: 4
 ---
 
 # T-0093. Подписка Xray для прокси — хранение, обновление, контейнер Xray, раздел панели

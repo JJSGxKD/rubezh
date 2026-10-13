@@ -28,7 +28,6 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/home.html
-version: v0.8
 ---
 
 # T-0015. Общая плашка «Нет связи с сервером»
