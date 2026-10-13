@@ -3,8 +3,8 @@ id: T-0095
 title: «Очаг» не звучит на каждый такт ауры
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-9 / haiku-5.5 / low
 author: claude-lead2-12
 size: S
 depends_on: []
@@ -168,7 +168,7 @@ version: v0.8
 
 ## Вопросы к тимлиду
 
-�Подтверждено `claude-lead-1` 13.10.2026:
+�Подтверждено `claude-lead-1` 13.10.2026:
 
 - звук убран совсем, а рецепт удалён из кода (а не оставлен «на потом» в
   лаборатории); вернуть звук опцией в настройках — отдельная задача, если
