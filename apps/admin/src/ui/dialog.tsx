@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
 import { Dialog as Primitive } from "radix-ui";
+import { useNarrow } from "./use-media";
 
 /**
  * Модальное окно панели на Radix: фокус заперт внутри, Escape и щелчок мимо
  * закрывают, фон не прокручивается. Длинная форма прокручивается внутри
- * окна, а заголовок и кнопки остаются на месте.
+ * окна, а заголовок и кнопки остаются на месте. На телефоне (до 768 px) окно
+ * выезжает листом снизу: центральное окно на узком экране ломает ширину, а
+ * лист достаётся большому пальцу.
  */
 export function Dialog({
   open,
@@ -21,6 +24,7 @@ export function Dialog({
   footer?: ReactNode;
   children: ReactNode;
 }) {
+  const narrow = useNarrow();
   return (
     <Primitive.Root open={open} onOpenChange={onOpenChange}>
       <Primitive.Portal>
@@ -28,7 +32,11 @@ export function Dialog({
         <Primitive.Content
           // Без описания Radix ждёт явного отказа от него — иначе предупреждает в консоли.
           {...(description === undefined ? { "aria-describedby": undefined } : {})}
-          className="fixed top-1/2 left-1/2 z-40 flex max-h-[90vh] w-[min(760px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-md border border-border-strong bg-surface shadow-panel focus:outline-none"
+          className={
+            narrow
+              ? "fixed inset-x-0 bottom-0 z-40 flex max-h-[90vh] flex-col rounded-t-lg border border-b-0 border-border-strong bg-surface shadow-panel focus:outline-none"
+              : "fixed top-1/2 left-1/2 z-40 flex max-h-[90vh] w-[min(760px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-md border border-border-strong bg-surface shadow-panel focus:outline-none"
+          }
         >
           <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
             <div>

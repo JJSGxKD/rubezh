@@ -28,6 +28,7 @@ export type CheckoutRefusal =
   | "disabled"
   | "unknown_invoice"
   | "foreign_user"
+  | "purchases_closed"
   | "already_paid"
   | "subscription_active"
   | "price_mismatch"
@@ -42,6 +43,7 @@ const MESSAGES: Record<CheckoutRefusal, string> = {
   disabled: "Оплата сейчас недоступна.",
   unknown_invoice: "Счёт не найден — откройте покупку в игре заново.",
   foreign_user: "Этот счёт выставлен другому игроку.",
+  purchases_closed: "Покупки для этого аккаунта закрыты — подробности в игре.",
   already_paid: "Это уже оплачено — вернитесь в игру.",
   subscription_active: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру.",
   price_mismatch: "Цена изменилась — откройте покупку в игре заново.",
@@ -51,7 +53,12 @@ const MESSAGES: Record<CheckoutRefusal, string> = {
   unavailable: "Оплата временно недоступна — попробуйте ещё раз.",
 };
 
-export function decideCheckout(view: CheckoutView | null, query: PreCheckout, nowMs: number, enabled: boolean): CheckoutDecision {
+/**
+ * `purchasesClosed` — аккаунту закрыты покупки (ограничение «Покупки», T-0024). Закрытое не
+ * проходит, кроме продления подписки: площадка спишет его в любом случае, а выключает его
+ * отзыв остатка при возврате. По умолчанию открыто — прежнее поведение.
+ */
+export function decideCheckout(view: CheckoutView | null, query: PreCheckout, nowMs: number, enabled: boolean, purchasesClosed = false): CheckoutDecision {
   if (!enabled) return refuse("disabled");
   if (view === null) return refuse("unknown_invoice");
   const { purchase } = view;
@@ -59,6 +66,7 @@ export function decideCheckout(view: CheckoutView | null, query: PreCheckout, no
   // а значит и продолжение, — чужие.
   if (query.payerId !== view.platformUserId) return refuse("foreign_user");
   if (isRenewal(purchase)) return query.currency === "XTR" && query.totalAmount === purchase.chargedStars ? { ok: true } : refuse("price_mismatch");
+  if (purchasesClosed) return refuse("purchases_closed");
   if (purchase.status !== "pending") return refuse("already_paid");
   // Новая подписка, пока идёт VIP с продлением, — второе списание каждый месяц.
   if (SUBSCRIPTION_PRODUCTS.includes(purchase.product) && view.subscriptionLive) return refuse("subscription_active");
@@ -77,7 +85,7 @@ export function decideCheckout(view: CheckoutView | null, query: PreCheckout, no
  * оплаченной и давно не свежей. Спросит она перед этим или нет, отказать
  * нельзя: подтверждение запишет оплату продлением (`payment-confirmation.ts`).
  */
-function isRenewal(purchase: StoredPurchase): boolean {
+export function isRenewal(purchase: StoredPurchase): boolean {
   return SUBSCRIPTION_PRODUCTS.includes(purchase.product) && purchase.renewalOf === null && isGranted(purchase);
 }
 

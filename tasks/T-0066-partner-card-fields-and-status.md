@@ -118,7 +118,7 @@ version: v0.9
    транзакции, где `lockSourceSlot`.
 5. **`partners.service.ts`:**
    - `setStatus(actor, partnerId, status, reason)` — `partners.edit`,
-     причина 3…200, аудит `partners.status`;
+     причина 3…200, аудит `partner.status` (как соседние `partner.create` и `partner.update`; ответ тимлида на вопрос 3 PR #299);
    - `update` — аудит изменённых полей «было → стало»;
    - TG id занят другим партнёром → 409 «Этот TG id уже у партнёра «…»».
 6. **`admin-partners.controller.ts`** — `PUT /api/v1/admin/partners/:id/status`;

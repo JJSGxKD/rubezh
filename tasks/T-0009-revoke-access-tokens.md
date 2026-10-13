@@ -3,8 +3,8 @@ id: T-0009
 title: Выход везде и блокировка сразу закрывают выданные токены доступа
 epic: E4
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5
 size: S
 depends_on: []
 zones:

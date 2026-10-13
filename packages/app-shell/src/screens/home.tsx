@@ -1,31 +1,11 @@
-import { useEffect, useState, type ReactNode } from "react";
-import {
-  BookOpen,
-  ChevronRight,
-  Flame,
-  History,
-  Wrench,
-  Infinity as InfinityIcon,
-  Lock,
-  Map as MapIcon,
-  MessageSquareHeart,
-  Play,
-} from "lucide-react";
-import {
-  Badge,
-  Button,
-  Card,
-  ContentColumn,
-  Modal,
-  Screen,
-} from "../design-system/components";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { BookOpen, ChevronRight, History, MessageSquareHeart, Play } from "lucide-react";
+import { Button, Card, ContentColumn, Modal, Screen } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
-import { useDevMode } from "../state/dev-mode";
 import { useNavigation } from "../state/navigation";
-import { useToolsAccess } from "../state/tools";
-import { preloadScreens } from "../app/lazy-screens";
+import { PreRunSheetLazy, preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine, useRun } from "../state/run";
 import { useSavedRun, type SavedRun } from "../state/run-save";
 import { useShell } from "../state/shell";
@@ -40,7 +20,8 @@ const PRELOAD_DELAY_MS = 1500;
 
 /**
  * Лобби: карусель «Сейчас в игре», виджеты — награда дня, колесо, задания,
- * рекорд и друзья — и «Играть» (docs/27-design-system-and-app-shell.md §6,
+ * рекорд и друзья — и «Играть», которая открывает лист «Перед забегом»
+ * (docs/27-design-system-and-app-shell.md §6,
  * docs/35-stage4-plan.md WP42). Карусель и виджеты — одним чанком после
  * первого кадра (`home-live.ts`): первой загрузке они не нужны.
  */
@@ -49,6 +30,7 @@ export function LobbyScreen(): ReactNode {
   const runs = useMeta((state) => state.runs);
   const saved = useSavedRun((state) => state.saved);
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
+  const [preRunOpen, setPreRunOpen] = useState(false);
   const askFeedback = shouldAskFeedback(runs, useFeedback((state) => state.sentAtRuns));
   usePreloadEngine();
 
@@ -57,7 +39,7 @@ export function LobbyScreen(): ReactNode {
     <Screen
       footer={
         saved === null ? (
-          <Button size="l" block glow onClick={() => navigation.push("mode")}>
+          <Button size="l" block glow onClick={() => setPreRunOpen(true)}>
             <Play size={22} fill="currentColor" />
             {t("lobby.play")}
           </Button>
@@ -147,7 +129,7 @@ export function LobbyScreen(): ReactNode {
               onClick={() => {
                 useSavedRun.getState().clear();
                 setConfirmingNewRun(false);
-                navigation.push("mode");
+                setPreRunOpen(true);
               }}
             >
               {t("lobby.newRun.confirm")}
@@ -160,6 +142,14 @@ export function LobbyScreen(): ReactNode {
       >
         <p className="text-sm text-text-muted">{t("lobby.newRun.text")}</p>
       </Modal>
+    ) : null}
+
+    {/* Лист поверх главной: сложность, оружие и бусты, «В бой» — второе касание
+        (Р88). Чанк лобби подтягивает в простое, поэтому заглушки нет. */}
+    {preRunOpen ? (
+      <Suspense fallback={null}>
+        <PreRunSheetLazy onClose={() => setPreRunOpen(false)} />
+      </Suspense>
     ) : null}
     </div>
   );
@@ -305,95 +295,4 @@ function preloadEverything(): void {
   import("../state/ad-networks")
     .then(async (module) => await module.prepareAdNetworks())
     .catch(() => undefined);
-}
-
-/** Выбор режима. «Бесконечный» рабочий, «Кампания» — заглушка. */
-export function ModeScreen(): ReactNode {
-  const navigation = useNavigation();
-  // Стресс-тест открыт всем на плейтесте и команде вне его: правило решает
-  // сервер (docs/28-diagnostics.md §2.3), здесь только не показываем лишнего.
-  const access = useToolsAccess();
-
-  return (
-    <Screen title={t("mode.title")} onBack={() => navigation.pop()}>
-      <ContentColumn>
-        <div className="mt-2 grid gap-3">
-          <Card
-            appearIndex={0}
-            stripe="accent"
-            onClick={() => {
-              useDevMode.getState().arm(false);
-              navigation.push("weapon");
-            }}
-          >
-            <div className="flex items-center gap-4">
-              <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
-                <InfinityIcon size={26} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <span className="font-display text-lg font-bold text-text">{t("mode.endless")}</span>
-                <p className="mt-1 text-xs text-text-muted">{t("mode.endless.description")}</p>
-              </div>
-            </div>
-          </Card>
-          {access.devMode ? (
-            <Card
-              appearIndex={1}
-              stripe="passive"
-              onClick={() => {
-                useDevMode.getState().arm(true);
-                navigation.push("weapon");
-              }}
-            >
-              <div className="flex items-center gap-4">
-                <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-passive/15 text-passive">
-                  <Wrench size={24} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-display text-lg font-bold text-text">{t("mode.dev")}</span>
-                    <Badge tone="passive">{t("mode.dev.badge")}</Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-text-muted">{t("mode.dev.description")}</p>
-                </div>
-              </div>
-            </Card>
-          ) : null}
-          {access.stressTest ? (
-            <Card appearIndex={2} stripe="info" onClick={() => navigation.push("stress")}>
-              <div className="flex items-center gap-4">
-                <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
-                  <Flame size={24} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-display text-lg font-bold text-text">{t("mode.stress")}</span>
-                    <Badge tone="info">{t("mode.stress.badge")}</Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-text-muted">{t("mode.stress.description")}</p>
-                </div>
-              </div>
-            </Card>
-          ) : null}
-          <Card appearIndex={3} disabled>
-            <div className="flex items-center gap-4">
-              <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-md bg-surface-raised text-text-muted">
-                <MapIcon size={24} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-display text-lg font-bold text-text">{t("mode.campaign")}</span>
-                  <Badge tone="warning">
-                    <Lock size={12} />
-                    {t("app.inDevelopment")}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-xs text-text-muted">{t("mode.campaign.description")}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </ContentColumn>
-    </Screen>
-  );
 }

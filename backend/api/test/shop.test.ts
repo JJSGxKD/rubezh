@@ -38,6 +38,7 @@ import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { MemoryShopPromoRepository } from "./helpers/memory-shop-promos.js";
 import { switchesOf } from "./helpers/notify-targets.js";
@@ -119,11 +120,12 @@ function setup(settings = config(), register = true) {
   const promoRows = new MemoryShopPromoRepository();
   const promos = new ShopPromoService(promoRows, new RolesService(settings, new MemoryRolesRepository(), new MemoryAccountRepository()));
   const revocation = new PurchaseRevocation();
-  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, promos, reader, revocation);
+  const restrictions = new MemoryRestrictionsRepository();
+  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, promos, reader, revocation, restrictionsGate(restrictions));
   if (register) shop.onModuleInit();
   const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), new PaymentsHooks(), revocation);
   const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
-  return { purchases, api, shop, wallet, queue, context, promoRows, revocation, confirmation };
+  return { purchases, api, shop, wallet, queue, context, promoRows, revocation, confirmation, restrictions };
 }
 
 /** Площадка подтвердила оплату — задание очереди, как его выполнил бы воркер. */
@@ -223,6 +225,64 @@ describe("витрина и счёт", () => {
     expect(await codeOf(ctx.shop.order(me, "chest_legendary"))).toBe("shop_sku_not_found");
     expect(await codeOf(ctx.shop.order(player("vk", "12345"), "gems_60"))).toBe("payments_unsupported");
     expect(await codeOf(ctx.shop.order(player("telegram", "dev-1"), "gems_60"))).toBe("payments_unsupported");
+  });
+
+  describe("покупки аккаунту закрыты (T-0024)", () => {
+    it("при ограничении «Покупки» счёт не выставляется: отказ `account_restricted`, покупки и счёта в Telegram нет", async () => {
+      const me = player();
+      ctx.restrictions.restrict(me.accountId, "purchases");
+
+      expect(await codeOf(ctx.shop.order(me, "gems_330"))).toBe("account_restricted");
+
+      expect(ctx.purchases.rows.size).toBe(0);
+      expect(ctx.api.sent).toEqual([]);
+    });
+
+    it("текст отказа — шаблон причины для игрока", async () => {
+      const me = player();
+      ctx.restrictions.restrict(me.accountId, "purchases", { reason: "payment_refund" });
+
+      await expect(ctx.shop.order(me, "gems_330")).rejects.toThrow("Покупки — закрыто бессрочно. Причина: Возврат звёзд за покупку");
+    });
+
+    it("проверка — первой: неизвестный товар и площадка без оплаты закрытому аккаунту отвечают тем же отказом", async () => {
+      const me = player();
+      ctx.restrictions.restrict(me.accountId, "purchases");
+
+      expect(await codeOf(ctx.shop.order(me, "chest_legendary"))).toBe("account_restricted");
+      expect(await codeOf(ctx.shop.order({ ...me, platform: "vk" }, "gems_60"))).toBe("account_restricted");
+    });
+
+    it("блокировка целиком закрывает и покупки", async () => {
+      const me = player();
+      ctx.restrictions.restrict(me.accountId, "all");
+
+      expect(await codeOf(ctx.shop.order(me, "gems_60"))).toBe("account_restricted");
+    });
+
+    it("другое ограничение, снятое и истёкшее покупок не закрывает", async () => {
+      const me = player();
+      ctx.restrictions.restrict(me.accountId, "promo_codes");
+      ctx.restrictions.restrict(me.accountId, "purchases", { endsAt: new Date(Date.now() - 1_000) });
+
+      expect(await ctx.shop.order(me, "gems_60")).toMatchObject({ sku: "gems_60", status: "pending" });
+    });
+
+    it("чужое ограничение этому аккаунту не мешает", async () => {
+      ctx.restrictions.restrict(player("telegram", "999000111").accountId, "purchases");
+
+      expect(await ctx.shop.order(player(), "gems_60")).toMatchObject({ status: "pending" });
+    });
+
+    it("уже оплаченное остаётся: закрытие не отзывает выданное и не мешает видеть витрину", async () => {
+      const me = player();
+      const invoice = await ctx.shop.order(me, "starter");
+      await pay(ctx, invoice.purchaseId, me.platformUserId);
+      ctx.restrictions.restrict(me.accountId, "purchases");
+
+      expect((await ctx.shop.view(me)).items.find((item) => item.sku === "starter")?.owned).toBe(true);
+      expect(ctx.wallet.grants.length).toBeGreaterThan(0);
+    });
   });
 
   it("стартовый набор — один: второй счёт ложится на ту же покупку, после оплаты счёта нет, витрина помечает купленным", async () => {
