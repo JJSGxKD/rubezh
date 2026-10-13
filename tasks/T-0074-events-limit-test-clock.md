@@ -16,7 +16,7 @@ executor: haiku-5.5
 effort: low
 release: none
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0074. Тест лимита приёмника событий не зависит от границы минуты

@@ -41,7 +41,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.10
+batch: 4
 ---
 
 # T-0070. Постбэки в s2s-сети и партнёру — шаблон адреса, click_id и sub1…sub5

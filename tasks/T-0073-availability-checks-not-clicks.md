@@ -30,7 +30,7 @@ executor: sonnet-5.5
 effort: high
 release: patch
 design: null
-version: v0.8
+batch: 2
 ---
 
 # T-0073. Проверки доступности не считаются кликами; клики без класса устройства — отдельной строкой
