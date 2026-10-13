@@ -3,8 +3,8 @@ id: T-0055
 title: Выключатели внешних скриптов клиента в панели — Graspil, учёт аудитории, всё сразу
 epic: E14
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
