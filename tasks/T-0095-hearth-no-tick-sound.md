@@ -20,7 +20,7 @@ executor: haiku-5.5
 effort: low
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0095. «Очаг» не звучит на каждый такт ауры

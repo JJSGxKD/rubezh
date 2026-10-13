@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0090. QR входа на https, домен ссылок Telegram — настройкой в панели

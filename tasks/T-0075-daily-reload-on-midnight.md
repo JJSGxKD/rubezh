@@ -19,7 +19,7 @@ executor: haiku-5.5
 effort: medium
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0075. Награда дня сама обновляется на смене суток по Москве

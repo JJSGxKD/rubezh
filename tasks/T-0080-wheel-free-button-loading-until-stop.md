@@ -17,7 +17,7 @@ executor: haiku-5.5
 effort: low
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0080. Колесо — на кнопке бесплатной крутки загрузка идёт до остановки колеса

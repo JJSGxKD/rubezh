@@ -7,7 +7,7 @@ import { checkClaim } from "./claim.mjs";
 import { fixEpicCells } from "./epics.mjs";
 import { BASE, ROOT, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
 import { checkRegistry, readTasks } from "./registry.mjs";
-import { badgeLine, parseFrontmatter, parseOwner, validateTask, withBadgeLine } from "./task-file.mjs";
+import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
 
 /**
@@ -61,7 +61,8 @@ function parseArgs(argv) {
 }
 
 function taskLine({ task, reason, pr }, owner) {
-  const parts = [task.id.padEnd(7), (task.version ?? "—").padEnd(6), `${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
+  const batch = batchNumber(task);
+  const parts = [task.id.padEnd(7), (batch === null ? "—" : `пачка ${String(batch)}`).padEnd(8),`${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
   const notes = [];
   if (owner !== undefined) notes.push(`взял: ${owner}`);
   if (pr !== undefined) notes.push(`PR ${String(pr)}`);
