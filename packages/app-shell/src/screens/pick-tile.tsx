@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 import { uiFeedback } from "../state/ui-feedback";
+import { SELECTED_MARK_CLASS } from "./pick-tile-rules";
 
 /**
  * Плитка выбора в листе «Перед забегом» (docs/35-stage4-plan.md, Р88) —
  * общая у оружия и бустов. Две строки: сверху значок и то, что справа от него
  * (цена буста или уровень у закрытого оружия), ниже имя во всю ширину — так
- * оно не обрезается и на 320 px.
+ * оно не обрезается и на 320 px. Значок выбора лежит внутри плитки, а не
+ * торчит за её угол: выступ дал бы прокручиваемому листу горизонтальную полосу.
  */
 export interface PickTileProps {
   icon: ReactNode;
@@ -70,8 +72,8 @@ export function PickTile(props: PickTileProps): ReactNode {
       </span>
       <span className="block truncate font-display text-[12.5px] leading-tight text-text">{props.name}</span>
       {props.selected ? (
-        <span aria-hidden="true" className="absolute -top-1.5 -right-1.5 inline-flex size-4 items-center justify-center rounded-sm bg-accent text-on-accent">
-          <Check size={11} strokeWidth={3.5} />
+        <span aria-hidden="true" className={SELECTED_MARK_CLASS}>
+          <Check size={10} strokeWidth={3.5} />
         </span>
       ) : null}
     </button>
