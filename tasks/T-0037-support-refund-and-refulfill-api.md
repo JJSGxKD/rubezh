@@ -3,7 +3,7 @@ id: T-0037
 title: Поддержка возвращает звёзды и повторяет выдачу покупки — сервер
 epic: E1
 priority: P0
-status: in-progress
+status: done
 owner: claude-6 / sonnet-5.5 / extra
 size: M
 depends_on: [T-0024]
