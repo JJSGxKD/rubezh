@@ -65,8 +65,10 @@ export class RedirectController {
 
     const visit = await this.links.visit(code, visitor);
     if (visit.kind === "not_found") return html(404, notFoundPage(), "no-store");
-    // Превью краулеру кешируется: мессенджеры спрашивают страницу повторно.
-    if (visit.kind === "preview") return html(200, linkPage({ url: visit.url, target: null }), "public, max-age=300");
+    // Превью кеширует только сам мессенджер — он спрашивает страницу повторно.
+    // Общий кеш нельзя: ссылки идут через CDN, его кеш не различает User-Agent,
+    // и человек после краулера получил бы превью вместо перехода.
+    if (visit.kind === "preview") return html(200, linkPage({ url: visit.url, target: null }), "private, max-age=300");
     if (visit.kind === "unavailable") return html(503, linkPage({ url: visit.url, target: null }), "no-store");
     void reply.status(302).header("location", visit.target).header("cache-control", "no-store").send();
   }
