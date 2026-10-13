@@ -4,6 +4,7 @@ import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
 import { secretKey, signAccessToken, verifyAccessToken } from "../src/modules/auth/access-token.js";
 import { AccessRevocations } from "../src/modules/auth/access-revocations.js";
+import { AuthController } from "../src/modules/auth/auth.controller.js";
 import { AuthGuard, accountOf } from "../src/modules/auth/auth.guard.js";
 import { AuthHooks } from "../src/modules/auth/auth-hooks.js";
 import { AuthService, hashToken } from "../src/modules/auth/auth.service.js";
@@ -347,5 +348,35 @@ describe("доступ по токену", () => {
 
       expect(isRevoked).toHaveBeenCalledWith(claims.accountId, Math.floor(issuedAtMs / 1000));
     });
+  });
+});
+
+describe("знак «Тестер» в виде сессии (T-0042)", () => {
+  const request = { ip: "203.0.113.9", headers: {} };
+  const limiter = { consume: async () => true };
+  const account = { accountId: "00000000-0000-4000-8000-000000000042", displayName: "Путник", photoUrl: null, createdAt: new Date("2026-09-01T10:00:00Z"), created: false };
+
+  async function sessionOf(patch: Record<string, unknown>) {
+    const service = { refreshSession: async () => ({ accessToken: "a".repeat(20), expiresInSec: 900, refreshToken: "r".repeat(32), account: { ...account, ...patch } }) };
+    const controller = new AuthController(service as never, limiter as never, config());
+    return (await controller.refresh(request, { refreshToken: "r".repeat(32) })).data.account;
+  }
+
+  it("у тестера в аккаунте tester: true, а даты знака нет", async () => {
+    const view = await sessionOf({ testerAt: new Date("2026-10-01T10:00:00Z") });
+
+    expect(view).toEqual({ accountId: account.accountId, displayName: "Путник", photoUrl: null, createdAt: "2026-09-01T10:00:00.000Z", created: false, tester: true });
+    expect(view).not.toHaveProperty("testerAt");
+  });
+
+  it("у обычного игрока поля tester нет вовсе — вид прежний", async () => {
+    const view = await sessionOf({ testerAt: null });
+
+    expect(view).toEqual({ accountId: account.accountId, displayName: "Путник", photoUrl: null, createdAt: "2026-09-01T10:00:00.000Z", created: false });
+    expect(view).not.toHaveProperty("tester");
+  });
+
+  it("аккаунт без поля testerAt (подмена старого вида) — тоже не тестер", async () => {
+    expect(await sessionOf({})).not.toHaveProperty("tester");
   });
 });

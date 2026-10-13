@@ -69,6 +69,20 @@ describe.skipIf(!live)("панель на живых Postgres и Redis", () => {
     expect(await accounts.search("   ", 10)).toEqual([]);
   });
 
+  it("знак «Тестер» (T-0042): аккаунт отдаёт testerAt — null у обычного и дату у отмеченного, во всех методах выборки", async () => {
+    const plain = await account({ username: `plain_${marker}` });
+    const tester = await account({ username: `tester_${marker}` });
+    const at = new Date("2026-10-01T10:00:00Z");
+    await prisma.account.update({ where: { accountId: tester.accountId }, data: { testerAt: at } });
+
+    expect(plain.testerAt).toBeNull();
+    expect((await accounts.byId(plain.accountId))?.testerAt).toBeNull();
+    expect((await accounts.byId(tester.accountId))?.testerAt).toEqual(at);
+    expect((await accounts.byPlatformUser("telegram", tester.platformUserId))?.testerAt).toEqual(at);
+    expect((await accounts.search(`@tester_${marker}`, 5))[0]?.testerAt).toEqual(at);
+    expect((await accounts.upsert({ platform: "telegram", platformUserId: tester.platformUserId, displayName: "Тестер", username: null }, Date.now())).testerAt).toEqual(at);
+  });
+
   it("блокировка и снятие — в аккаунте, несуществующий — null", async () => {
     const target = await account();
     const at = new Date("2026-09-26T10:00:00Z");
