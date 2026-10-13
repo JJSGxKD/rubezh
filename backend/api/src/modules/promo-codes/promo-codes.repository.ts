@@ -5,6 +5,7 @@ import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { PLATFORM_IDS } from "../../platforms/ports/platform.js";
 import { lockSourceSlot } from "../attribution/source-slot.js";
+import { PARTNER_STATUSES, bindsNewPlayers } from "../partners/partner-rules.js";
 import { PROMO_KINDS, promoRewardSchema, type PromoCampaignRow, type PromoCampaignUpdate, type PromoReward } from "./promo-code-rules.js";
 
 /**
@@ -133,6 +134,16 @@ function toRow(raw: unknown): PromoCampaignRow {
 }
 
 /** Откат транзакции погашения с причиной: Prisma откатывает её по любому исключению. */
+/**
+ * Привязывает ли партнёр новых игроков сейчас — только активный (`bindsNewPlayers`). Статус читается
+ * в транзакции активации, до блокировки слота источника; нет партнёра или статус неизвестен — не привязывает.
+ */
+async function partnerBinds(tx: Prisma.TransactionClient, partnerId: string): Promise<boolean> {
+  const [row] = await tx.$queryRaw<{ status: string }[]>`SELECT status FROM partner WHERE partner_id = ${partnerId}::uuid`;
+  const status = PARTNER_STATUSES.find((known) => known === row?.status);
+  return status !== undefined && bindsNewPlayers(status);
+}
+
 class RedeemRollback extends Error {
   constructor(readonly outcome: "used" | "exhausted") {
     super(outcome);
@@ -300,8 +311,9 @@ export class PrismaPromoCodesRepository implements PromoCodesRepository {
         if (counted === 0) throw new RedeemRollback("exhausted");
         // Привязка — в той же транзакции: активированный код партнёра без
         // привязки или привязка без активации считались бы по-разному.
+        // Не активный партнёр награду кода даёт, но игрока за собой не записывает и слот источника не занимает.
         let bound = false;
-        if (input.partnerId !== null && (await lockSourceSlot(tx, input.accountId)) === "free") {
+        if (input.partnerId !== null && (await partnerBinds(tx, input.partnerId)) && (await lockSourceSlot(tx, input.accountId)) === "free") {
           bound =
             (await tx.$executeRaw`
               INSERT INTO partner_binding (account_id, partner_id, campaign_id, bound_at)
