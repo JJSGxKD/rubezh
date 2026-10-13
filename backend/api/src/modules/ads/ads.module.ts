@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
+import { ClientScriptsModule } from "../client-scripts/client-scripts.module.js";
 import { FlagsModule } from "../flags/flags.module.js";
 import { FlagsService } from "../flags/flags.service.js";
 import { AdAudience } from "./ad-audience.js";
@@ -39,7 +40,7 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
  * хозяин места `task`, подписавшись на `AdTaskHooks`.
  */
 @Module({
-  imports: [AuthModule, FlagsModule, RestrictionsModule],
+  imports: [AuthModule, ClientScriptsModule, FlagsModule, RestrictionsModule],
   controllers: [AdsController, AdsgramRewardController],
   providers: [
     AdsService,
