@@ -41,7 +41,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0037. Поддержка возвращает звёзды и повторяет выдачу покупки — сервер

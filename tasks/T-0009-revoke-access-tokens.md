@@ -22,7 +22,6 @@ executor: sonnet-5.5
 effort: high
 release: patch
 design: null
-version: v0.8
 ---
 
 # T-0009. Выход везде и блокировка сразу закрывают выданные токены доступа

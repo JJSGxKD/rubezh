@@ -34,7 +34,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0010. Разрешение боту писать — после первого забега и в настройках

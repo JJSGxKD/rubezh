@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-7
 size: S
-depends_on: [T-0044]
+depends_on: [T-0044, T-0094]
 zones:
   - packages/app-shell/src/design-system/components/Layout.tsx
   - packages/app-shell/src/design-system/components/segmented-rules.ts
@@ -22,12 +22,12 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0084. Тесный `SegmentedControl`: подписи сжимаются на узком экране, без обёрток снаружи
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0084.json)](README.md#значки-статуса) [![T-0044](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0044.json&label=T-0044)](T-0044-pre-run-sheet.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0084.json)](README.md#значки-статуса) [![T-0044](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0044.json&label=T-0044)](T-0044-pre-run-sheet.md) [![T-0094](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0094.json&label=T-0094)](T-0094-prerun-no-sideways-scroll.md)
 
 ## Зачем
 

@@ -5,7 +5,7 @@
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
 RUN apk add --no-cache \
-      age=1.3.1-r6 \
+      age=1.3.2-r0 \
       bash=5.3.9-r1 \
       coreutils=9.11-r0 \
       curl=8.22.0-r0 \
