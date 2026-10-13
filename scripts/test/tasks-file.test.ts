@@ -193,14 +193,32 @@ describe("исполнители, автор и поток", () => {
     }
   });
 
-  it("version необязательна; если есть — вида v0.8", () => {
-    expect(validateTask("T-0003-x.md", { ...valid(), version: "v0.8" })).toEqual([]);
-    expect(validateTask("T-0003-x.md", { ...valid(), version: "v1.10" })).toEqual([]);
-    for (const bad of ["0.8", "v0.8.1", "v0", ""]) {
-      const errors = validateTask("T-0003-x.md", { ...valid(), version: bad });
-      expect(errors, bad).toHaveLength(1);
-      expect(errors[0], bad).toContain("поле version");
+  it("batch необязательна; если есть — целое число от 1", () => {
+    expect(validateTask("T-0003-x.md", { ...valid(), batch: "1" })).toEqual([]);
+    expect(validateTask("T-0003-x.md", { ...valid(), batch: "12" })).toEqual([]);
+    for (const bad of ["0", "-1", "1.5", "02", "v0.8", "", "две", null]) {
+      const errors = validateTask("T-0003-x.md", { ...valid(), batch: bad });
+      expect(errors, String(bad)).toHaveLength(1);
+      expect(errors[0], String(bad)).toContain("T-0003-x.md: поле batch");
+      expect(errors[0], String(bad)).toContain("пачки");
     }
+  });
+
+  it("version больше не допускается: одна ошибка, которая называет замену", () => {
+    for (const version of ["v0.8", "v0.10", ""]) {
+      const errors = validateTask("T-0003-x.md", { ...valid(), version });
+      expect(errors, version).toHaveLength(1);
+      expect(errors[0], version).toBe(
+        "T-0003-x.md: поле version заменено полем batch — пачкой очереди, tasks/README.md",
+      );
+    }
+  });
+
+  it("шапка с batch разбирается и проходит проверку", () => {
+    const parsed = parseFrontmatter(headerWith((lines) => lines.splice(lines.indexOf("---", 1), 0, "batch: 2")));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.data.batch).toBe("2");
+    expect(validateTask("T-0003-x.md", parsed.data)).toEqual([]);
   });
 
   it("owner — «аккаунт / исполнитель / уровень»; прежний без уровня тоже читается", () => {
