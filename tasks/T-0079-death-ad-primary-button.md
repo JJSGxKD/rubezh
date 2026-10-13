@@ -19,7 +19,7 @@ executor: haiku-5.5
 effort: medium
 release: patch
 design: design/screens/death.html
-version: v0.8
+batch: 1
 ---
 
 # T-0079. Второй шанс — ролик главной кнопкой, звёзды второй, как в макете

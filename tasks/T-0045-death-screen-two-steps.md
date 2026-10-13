@@ -29,7 +29,6 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/death.html
-version: v0.8
 ---
 
 # T-0045. Экран смерти в два шага — сначала второй шанс, потом итоги
