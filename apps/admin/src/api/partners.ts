@@ -176,13 +176,9 @@ export function updatePartner(api: AdminApi, partnerId: string, form: PartnerFor
   return api.request(`/partners/${encodeURIComponent(partnerId)}`, { method: "POST", body: bodyOf(form), schema: partnerSchema });
 }
 
-/**
- * Сменить статус: причина обязательна, уходит в аудит. `AdminApi.request` типизирован как `GET | POST`
- * (`api/client.ts` вне зон T-0066), а на деле передаёт метод в `fetch` как есть и ставит защитный
- * заголовок любому, кроме `GET`, — поэтому `PUT` из спецификации приведён к допустимому типу.
- */
+/** Сменить статус: причина обязательна, уходит в аудит. */
 export function setPartnerStatus(api: AdminApi, partnerId: string, status: PartnerStatus, reason: string): Promise<ApiResult<Partner>> {
-  return api.request(`/partners/${encodeURIComponent(partnerId)}/status`, { method: "PUT" as "POST", body: { status, reason: reason.trim() }, schema: partnerSchema });
+  return api.request(`/partners/${encodeURIComponent(partnerId)}/status`, { method: "PUT", body: { status, reason: reason.trim() }, schema: partnerSchema });
 }
 
 /** Фильтр списка по статусу: по умолчанию все, кроме отклонённых; «все» показывает и их. */
