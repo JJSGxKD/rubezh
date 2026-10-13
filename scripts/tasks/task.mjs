@@ -391,7 +391,7 @@ function runClaimCheck(flags) {
 
 function runStatusJson(flags) {
   if (flags.out === undefined) fail("Укажи каталог: pnpm task status-json --out <каталог>");
-  const { board } = loadBoard();
+  const { state, board } = loadBoard();
   const dir = join(flags.out, "status");
   mkdirSync(dir, { recursive: true });
   const owners = new Map();
@@ -408,6 +408,11 @@ function runStatusJson(flags) {
   }
   writeFileSync(join(dir, "free.json"), `${JSON.stringify(freeBadge(board.free.length))}\n`);
 
+  // Значок потоков — на каждый эпик из epics.md и на эпик, известный только задачам: ячейка epics.md ссылается на файл.
+  const summary = streamsSummary(board);
+  const epics = new Set([...state.epicOrder, ...Object.keys(summary.epics)]);
+  for (const epic of epics) writeFileSync(join(dir, `epic-${epic}.json`), `${JSON.stringify(epicStreamsBadge(summary.epics[epic] ?? []))}\n`);
+
   // Один вызов gh: от него зависят и раздел «Вклад», и его пометка «нет данных».
   const mergedPrs = mergedTaskPrs();
   const credits = taskCredits(board.done, mergedPrs);
@@ -420,7 +425,7 @@ function runStatusJson(flags) {
     now: new Date(),
   });
   writeFileSync(join(flags.out, "README.md"), page);
-  console.log(`Значки статуса: ${String(count)} задач → ${dir}`);
+  console.log(`Значки статуса: ${String(count)} задач и ${String(epics.size)} эпиков → ${dir}`);
 }
 
 function main(argv) {

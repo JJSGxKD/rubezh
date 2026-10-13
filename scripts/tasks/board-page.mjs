@@ -1,4 +1,4 @@
-import { BADGE_CACHE_SECONDS } from "./board.mjs";
+import { BADGE_CACHE_SECONDS, streamRows, streamsSummary } from "./board.mjs";
 import { REPOSITORY } from "./task-file.mjs";
 
 /**
@@ -110,6 +110,26 @@ function section(title, count, headers, rows) {
   return `## ${title} — ${String(count)}\n\n${rows.length === 0 ? "Пусто." : table(headers, rows)}`;
 }
 
+/**
+ * Раздел «Потоки сейчас» (tasks/README.md, «Автопоток»): какие потоки — модель
+ * и уровень — запускать и что ждёт. Заголовок без числа: на него ведёт ссылка
+ * из epics.md (`#потоки-сейчас`). Строки те же, что у `pnpm task streams`.
+ */
+function streamsSection(streams) {
+  const { now, queue } = streamRows(streams);
+  const link = (item) => {
+    const text = `[${item.id}](${TASKS_URL}/${item.fileName})`;
+    return item.batch === null ? text : `${text} (п.${String(item.batch)})`;
+  };
+  const intro =
+    "Какие потоки запускать в автопоток (`tasks/README.md`, «Автопоток»): доработка раньше новых задач, п.N — пачка выпуска. Строка `local` — задачи только для потоков на машине разработчика. То же даёт `pnpm task streams`.";
+  const nowRows = now.map((row) => [row.label, String(row.free), String(row.rework), row.shown.map(link).join(", ") + (row.more > 0 ? ` +${String(row.more)}` : "")]);
+  const queueRows = queue.map((row) => [row.label, String(row.count), row.batch === null ? "без пачки" : String(row.batch)]);
+  const nowPart = nowRows.length === 0 ? "Нечего: ни свободных задач, ни доработки." : table(["Поток", "Свободно", "Доработка", "Ближайшие задачи"], nowRows);
+  const queuePart = queueRows.length === 0 ? "Ничего нет." : table(["Поток", "Ждут", "Ближайшая пачка"], queueRows);
+  return `## Потоки сейчас\n\n${intro}\n\n### Запускать сейчас\n\n${nowPart}\n\n### На очереди\n\n${queuePart}`;
+}
+
 function contributionSection(credits, people, githubAvailable) {
   const intro = "Очки — сумма размеров сделанных задач: S — 1, M — 2. Это наглядность, а не формула выплат: доли участников — `docs/11-revenue-split.md`.";
   if (!githubAvailable) return `## Вклад\n\n${intro}\n\nНет данных GitHub: список влитых PR не получен.`;
@@ -135,6 +155,7 @@ function contributionSection(credits, people, githubAvailable) {
 export function renderBoardPage({ board, owners, credits, people, githubAvailable, now }) {
   const done = [...board.done].sort((a, b) => b.task.id.localeCompare(a.task.id));
   const sections = [
+    streamsSection(streamsSummary(board).streams),
     // Доработку заканчивает любой поток с тем же исполнителем и уровнем, не только тот, кто вёл.
     section(
       "Доработка",
