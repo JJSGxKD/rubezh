@@ -3,7 +3,7 @@ id: T-0095
 title: «Очаг» не звучит на каждый такт ауры
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-9 / haiku-5.5 / low
 author: claude-lead2-12
 size: S
