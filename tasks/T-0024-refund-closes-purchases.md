@@ -4,7 +4,7 @@ title: После возврата звёзд покупки аккаунту з
 epic: E1
 priority: P0
 status: done
-owner: claude-6 / sonnet-5.5
+owner: claude-6 / sonnet-5.5 / extra
 size: M
 depends_on: [T-0023]
 zones:
