@@ -3,8 +3,8 @@ id: T-0087
 title: Карточка разбора забега ведёт в панель, а комментарии о маршруте и боте говорят правду
 epic: E4
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-9 / haiku-5.5 / low
 author: claude-lead2-8
 size: S
 depends_on: []
