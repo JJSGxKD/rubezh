@@ -1978,11 +1978,25 @@ model Partner {
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+  /// Telegram ID партнёра — для будущего входа в его кабинет; уникален среди партнёров (Р96)
+  telegramId     String?  @unique @map("telegram_id") @db.VarChar(20)
+  /// applied — заявка, active — активен, paused — приостановлен, rejected — отклонён;
+  /// новых игроков к партнёру привязывает только active, прежние привязки статус не трогает
+  status         String   @default("active") @db.VarChar(16)
+  /// страна, где партнёр получает выплаты, — ISO-код из двух букв
+  country        String?  @db.VarChar(2)
+  /// валюта выплаты — код из ядра курсов (`@bh/fx`)
+  payoutCurrency String?  @map("payout_currency") @db.VarChar(8)
+  /// реквизиты словами: «USDT TRC-20 на …», «карта Тинькофф»
+  payoutMethod   String?  @map("payout_method") @db.VarChar(200)
+  /// доля от платежей приведённых игроков, 0–100: записывается, но пока не начисляется (О44)
+  sharePercent   Decimal? @map("share_percent") @db.Decimal(5, 2)
 
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
 
   @@index([createdAt])
+  @@index([status])
   @@map("partner")
 }
 

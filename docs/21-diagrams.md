@@ -859,6 +859,12 @@ erDiagram
         uuid created_by "без FK"
         datetime created_at
         datetime updated_at
+        string telegram_id "nullable, UK: вход в будущий кабинет"
+        string status "applied|active|paused|rejected, по умолчанию active: привязывает новых игроков только active"
+        string country "nullable: ISO-код двух букв, где получает выплаты"
+        string payout_currency "nullable: код из ядра курсов"
+        string payout_method "nullable: реквизиты словами"
+        decimal share_percent "nullable, 0–100: записывается, не начисляется до модели учёта (О44)"
     }
 
     PARTNER_BINDING {
