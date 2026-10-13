@@ -144,7 +144,8 @@ describe("checkConnection", () => {
     sessionStub.fetch.mockImplementationOnce(() => new Promise<Response | null>((resolve) => (reply = resolve)));
 
     const first = checkConnection();
-    await Promise.resolve();
+    // Запрос уходит не в этот же тик: до него apiRequest ждёт сессию.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(useConnection.getState().checking).toBe(true);
     await checkConnection();
     expect(sessionStub.fetch).toHaveBeenCalledTimes(1);
