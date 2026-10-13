@@ -21,7 +21,7 @@ executor: haiku-5.5
 effort: low
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0087. Карточка разбора забега ведёт в панель, а комментарии говорят правду

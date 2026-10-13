@@ -20,7 +20,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0078. Событие continue_offered уходит после ответа проверок, а не при открытии шага
