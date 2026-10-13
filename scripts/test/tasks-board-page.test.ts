@@ -184,6 +184,8 @@ describe("страница доски", () => {
     });
 
   const BLOB = "https://github.com/JJSGxKD/rubezh/blob/dev/tasks";
+  const STREAMS_INTRO =
+    "Какие потоки запускать в автопоток (`tasks/README.md`, «Автопоток»): доработка раньше новых задач, п.N — пачка выпуска. Строка `local` — задачи только для потоков на машине разработчика. То же даёт `pnpm task streams`.";
 
   it("страница целиком", () => {
     expect(render()).toBe(
@@ -191,6 +193,23 @@ describe("страница доски", () => {
         "# Доска задач",
         "",
         "Обновлено 06.10.2026 10:48 UTC. Страницу пересчитывает workflow `task-board.yml` после захвата, PR и мерджа — руками не править. Как брать задачу — [tasks/README.md](https://github.com/JJSGxKD/rubezh/blob/dev/tasks/README.md#как-взять-задачу).",
+        "",
+        "## Потоки сейчас",
+        "",
+        STREAMS_INTRO,
+        "",
+        "### Запускать сейчас",
+        "",
+        "| Поток | Свободно | Доработка | Ближайшие задачи |",
+        "|---|---|---|---|",
+        `| sonnet-5.5 / low | 0 | 1 | [T-0017](${BLOB}/T-0017-ans.md) |`,
+        `| sonnet-5.5 / extra | 1 | 0 | [T-0003](${BLOB}/T-0003-pay.md) |`,
+        "",
+        "### На очереди",
+        "",
+        "| Поток | Ждут | Ближайшая пачка |",
+        "|---|---|---|",
+        "| sonnet-5.5 / medium | 1 | без пачки |",
         "",
         "## Доработка — 1",
         "",
@@ -245,6 +264,42 @@ describe("страница доски", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  describe("раздел «Потоки сейчас»", () => {
+    const empty = { rework: [], free: [], inProgress: [], review: [], blocked: [], done: [], draft: [], cancelled: [] };
+
+    it("заголовок без числа: на якорь #потоки-сейчас ведёт ссылка из epics.md", () => {
+      expect(render()).toContain("\n## Потоки сейчас\n");
+    });
+
+    it("раздел стоит первым — до колонок доски", () => {
+      const page = render();
+      expect(page.indexOf("## Потоки сейчас")).toBeGreaterThan(-1);
+      expect(page.indexOf("## Потоки сейчас")).toBeLessThan(page.indexOf("## Доработка"));
+    });
+
+    it("задача с пачкой — «(п.N)», больше пяти — «+N», local отдельной строкой", () => {
+      const many = Array.from({ length: 6 }, (_, index) =>
+        entry(task(`T-010${String(index)}`, { status: "ready", batch: "2", effort: "high", runner: index === 5 ? "local" : "any", fileName: `T-010${String(index)}-x.md` })),
+      );
+      const page = render({ board: { ...empty, free: many } });
+      expect(page).toContain(`| sonnet-5.5 / high | 5 | 0 | [T-0100](${BLOB}/T-0100-x.md) (п.2), [T-0101](${BLOB}/T-0101-x.md) (п.2), [T-0102](${BLOB}/T-0102-x.md) (п.2), [T-0103](${BLOB}/T-0103-x.md) (п.2), [T-0104](${BLOB}/T-0104-x.md) (п.2) |`);
+      expect(page).toContain(`| sonnet-5.5 / high · local | 1 | 0 | [T-0105](${BLOB}/T-0105-x.md) (п.2) |`);
+    });
+
+    it("свободных, доработки и очереди нет — короткие строки вместо таблиц", () => {
+      const page = render({ board: empty });
+      expect(page).toContain("### Запускать сейчас\n\nНечего: ни свободных задач, ни доработки.");
+      expect(page).toContain("### На очереди\n\nНичего нет.");
+    });
+
+    it("пары без задач в таблицу не попадают", () => {
+      const page = render({ board: { ...empty, blocked: board.blocked } });
+      expect(page).toContain("### Запускать сейчас\n\nНечего");
+      expect(page).toContain("| sonnet-5.5 / medium | 1 | без пачки |");
+      expect(page).not.toContain("haiku");
+    });
   });
 
   it("черновики и отменённые на странице не показываются", () => {
