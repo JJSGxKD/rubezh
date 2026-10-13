@@ -3,8 +3,8 @@ id: T-0066
 title: Карточка партнёра — TG id, статус, страна, валюта и способ выплаты, процент
 epic: E14
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-6 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []

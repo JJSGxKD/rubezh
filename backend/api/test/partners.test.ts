@@ -19,7 +19,7 @@ import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
-import { partnerInputSchema, withinBindWindow } from "../src/modules/partners/partner-rules.js";
+import { PARTNER_STATUSES, bindsNewPlayers, partnerInputSchema, withinBindWindow } from "../src/modules/partners/partner-rules.js";
 import { PartnersService } from "../src/modules/partners/partners.service.js";
 import { ROLE_PERMISSIONS } from "../src/modules/roles/permissions.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
@@ -91,6 +91,64 @@ describe("правила партнёров", () => {
   });
 });
 
+describe("условия партнёра", () => {
+  const base = { name: "Канал", contact: null, note: null };
+
+  it("TG id, страна, валюта, способ выплаты и процент: пробелы срезаются, процент — с двумя знаками", () => {
+    expect(
+      partnerInputSchema.parse({ ...base, telegramId: " 123456789 ", country: "RU", payoutCurrency: "USDT", payoutMethod: " USDT TRC-20 на T9yX… ", sharePercent: "12.5" }),
+    ).toEqual({ ...base, telegramId: "123456789", country: "RU", payoutCurrency: "USDT", payoutMethod: "USDT TRC-20 на T9yX…", sharePercent: "12.50" });
+    // Граничные значения проходят: двадцать цифр, ноль и сто процентов, любая валюта ядра курсов.
+    for (const good of [{ telegramId: "1".repeat(20) }, { sharePercent: "0" }, { sharePercent: "100" }, { sharePercent: "100.00" }, { sharePercent: "007.5" }, { payoutCurrency: "GRAM" }, { payoutMethod: "x".repeat(200) }]) {
+      expect(partnerInputSchema.safeParse({ ...base, ...good }).success, JSON.stringify(good)).toBe(true);
+    }
+  });
+
+  it("пустые строки и null — null; не названное не появляется, чтобы правка без них ничего не стирала", () => {
+    expect(partnerInputSchema.parse({ ...base, telegramId: "", country: "", payoutCurrency: "", payoutMethod: "  ", sharePercent: "" })).toEqual({
+      ...base,
+      telegramId: null,
+      country: null,
+      payoutCurrency: null,
+      payoutMethod: null,
+      sharePercent: null,
+    });
+    expect(partnerInputSchema.parse({ ...base, telegramId: null, sharePercent: null })).toEqual({ ...base, telegramId: null, sharePercent: null });
+    expect(partnerInputSchema.parse(base)).toEqual(base);
+  });
+
+  it("отказ: TG id с буквами или длиннее двадцати цифр, страна не двумя заглавными, неизвестная валюта, процент не от 0 до 100", () => {
+    const bad = [
+      { telegramId: "12ab" },
+      { telegramId: "1".repeat(21) },
+      { telegramId: "-5" },
+      { country: "ru" },
+      { country: "RUS" },
+      { country: "Р" },
+      { payoutCurrency: "EURO" },
+      { payoutCurrency: "usd" },
+      { payoutCurrency: "BTC" },
+      { payoutMethod: "x".repeat(201) },
+      { sharePercent: "100.01" },
+      { sharePercent: "101" },
+      { sharePercent: "1000" },
+      { sharePercent: "abc" },
+      { sharePercent: "12.345" },
+      { sharePercent: "-1" },
+      { sharePercent: ".5" },
+      { sharePercent: "5." },
+    ];
+    for (const patch of bad) expect(partnerInputSchema.safeParse({ ...base, ...patch }).success, JSON.stringify(patch)).toBe(false);
+    // Статус в общей форме не меняется: отдельная ручка, с причиной.
+    expect(partnerInputSchema.safeParse({ ...base, status: "paused" }).success).toBe(false);
+  });
+
+  it("четыре статуса; новых игроков привязывает только активный", () => {
+    expect(PARTNER_STATUSES).toEqual(["applied", "active", "paused", "rejected"]);
+    for (const status of PARTNER_STATUSES) expect(bindsNewPlayers(status), status).toBe(status === "active");
+  });
+});
+
 describe("партнёры в панели", () => {
   it("маркетолог заводит и правит с аудитом; бухгалтерия только смотрит; модератору — ничего", async () => {
     const ctx = setup();
@@ -109,6 +167,104 @@ describe("партнёры в панели", () => {
     expect(await codeOf(ctx.service.create(finance, { name: "Ещё", contact: null, note: null }, NOW))).toBe("forbidden");
     const moderator = await person(ctx, "300", "moderator");
     expect(await codeOf(ctx.service.catalog(moderator, NOW))).toBe("forbidden");
+  });
+
+  it("партнёр с условиями: по умолчанию активен, всё записано и видно в карточке; без условий — null", async () => {
+    const ctx = setup();
+    const marketer = await person(ctx, "110", "marketer");
+    const plain = await ctx.service.create(marketer, { name: "Без условий", contact: null, note: null }, NOW);
+    expect(plain).toMatchObject({ status: "active", telegramId: null, country: null, payoutCurrency: null, payoutMethod: null, sharePercent: null });
+
+    const full = await ctx.service.create(
+      marketer,
+      { name: "С условиями", contact: "@deal", note: null, telegramId: "424242", country: "KZ", payoutCurrency: "USDT", payoutMethod: "USDT TRC-20 на T9yX", sharePercent: "15.00" },
+      NOW,
+    );
+    expect(full).toMatchObject({ status: "active", telegramId: "424242", country: "KZ", payoutCurrency: "USDT", payoutMethod: "USDT TRC-20 на T9yX", sharePercent: "15.00" });
+    expect(ctx.roles.entries.at(-1)).toMatchObject({ action: "partner.create", after: { telegramId: "424242", sharePercent: "15.00", status: "active" } });
+    expect((await ctx.service.detail(marketer, full.partnerId, NOW)).partner).toMatchObject({ telegramId: "424242", country: "KZ" });
+  });
+
+  it("правка: в аудит — только изменённые поля «было → стало», смена страны и валюты видна; не названное не стирается", async () => {
+    const ctx = setup();
+    const marketer = await person(ctx, "120", "marketer");
+    const created = await ctx.service.create(marketer, { name: "Блогер", contact: "@blog", note: null, country: "RU", payoutCurrency: "RUB", sharePercent: "10.00" }, NOW);
+
+    const changed = await ctx.service.update(marketer, created.partnerId, { name: "Блогер", contact: "@blog", note: null, country: "KZ", payoutCurrency: "USDT", sharePercent: null }, NOW);
+    expect(ctx.roles.entries.at(-1)).toMatchObject({
+      action: "partner.update",
+      target: created.partnerId,
+      before: { country: "RU", payoutCurrency: "RUB", sharePercent: "10.00" },
+      after: { country: "KZ", payoutCurrency: "USDT", sharePercent: null },
+    });
+    expect(Object.keys(ctx.roles.entries.at(-1)?.after as object).sort()).toEqual(["country", "payoutCurrency", "sharePercent"]);
+    expect(changed).toMatchObject({ country: "KZ", payoutCurrency: "USDT", sharePercent: null, contact: "@blog" });
+
+    // Правка без полей условий их не трогает: форма старой версии ничего не стирает.
+    const again = await ctx.service.update(marketer, created.partnerId, { name: "Блогер 2", contact: "@blog", note: null }, NOW);
+    expect(again).toMatchObject({ name: "Блогер 2", country: "KZ", payoutCurrency: "USDT" });
+  });
+
+  it("TG id уникален среди партнёров: второй получает 409 с именем первого; свой же id — не конфликт", async () => {
+    const ctx = setup();
+    const marketer = await person(ctx, "130", "marketer");
+    const first = await ctx.service.create(marketer, { name: "Первый", contact: null, note: null, telegramId: "5550001" }, NOW);
+
+    const clash = ctx.service.create(marketer, { name: "Второй", contact: null, note: null, telegramId: "5550001" }, NOW);
+    expect(await codeOf(clash)).toBe("partner_telegram_taken");
+    await expect(ctx.service.create(marketer, { name: "Второй", contact: null, note: null, telegramId: "5550001" }, NOW)).rejects.toMatchObject({
+      status: 409,
+      message: "Этот TG id уже у партнёра «Первый»",
+    });
+
+    const second = await ctx.service.create(marketer, { name: "Второй", contact: null, note: null }, NOW);
+    expect(await codeOf(ctx.service.update(marketer, second.partnerId, { name: "Второй", contact: null, note: null, telegramId: "5550001" }, NOW))).toBe("partner_telegram_taken");
+    // Свой TG id той же формой — правка как правка; другой партнёр с другим id тоже.
+    expect(await ctx.service.update(marketer, first.partnerId, { name: "Первый", contact: null, note: "ок", telegramId: "5550001" }, NOW)).toMatchObject({ telegramId: "5550001", note: "ок" });
+    expect(await ctx.service.update(marketer, second.partnerId, { name: "Второй", contact: null, note: null, telegramId: "5550002" }, NOW)).toMatchObject({ telegramId: "5550002" });
+  });
+
+  it("смена статуса: только с partners.edit, причина от трёх до двухсот знаков, в аудит «было → стало» с причиной", async () => {
+    const ctx = setup();
+    const marketer = await person(ctx, "140", "marketer");
+    const partner = await ctx.service.create(marketer, { name: "Канал", contact: null, note: null }, NOW);
+
+    const finance = await person(ctx, "141", "finance");
+    expect(await codeOf(ctx.service.setStatus(finance, partner.partnerId, "paused", "Не выходит на связь", NOW))).toBe("forbidden");
+    const moderator = await person(ctx, "142", "moderator");
+    expect(await codeOf(ctx.service.setStatus(moderator, partner.partnerId, "paused", "Не выходит на связь", NOW))).toBe("forbidden");
+
+    for (const reason of ["", "ок", "  я ", "x".repeat(201)]) {
+      expect(await codeOf(ctx.service.setStatus(marketer, partner.partnerId, "paused", reason, NOW)), JSON.stringify(reason)).toBe("validation_failed");
+    }
+    expect((await ctx.service.detail(marketer, partner.partnerId, NOW)).partner.status).toBe("active");
+
+    const paused = await ctx.service.setStatus(marketer, partner.partnerId, "paused", "  Не выходит на связь  ", NOW);
+    expect(paused.status).toBe("paused");
+    expect(ctx.roles.entries.at(-1)).toEqual(
+      expect.objectContaining({ action: "partner.status", target: partner.partnerId, actorAccountId: marketer.accountId, before: { status: "active" }, after: { status: "paused", reason: "Не выходит на связь" } }),
+    );
+    expect((await ctx.service.catalog(marketer, NOW)).partners[0]?.status).toBe("paused");
+
+    expect(await codeOf(ctx.service.setStatus(marketer, randomUUID(), "active", "Нет такого", NOW))).toBe("partner_not_found");
+  });
+
+  it("смена статуса прежних привязок не трогает: приведённые остаются за партнёром при любом статусе", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "150", "admin");
+    const partner = await ctx.service.create(admin, { name: "Блогер", contact: null, note: null }, NOW);
+    const campaignId = "33333333-3333-4333-8333-333333333333";
+    await ctx.promo.create(
+      { campaignId, title: "Код", kind: "shared", reward: { coins: 100, gems: 0, shard_common: 0, shard_uncommon: 0 }, message: null, maxRedemptions: null, newPlayersDays: null, platforms: [], note: null, partnerId: partner.partnerId, createdBy: admin.accountId, createdAt: NOW, startsAt: new Date(NOW.getTime() - DAY), endsAt: null },
+      [{ code: "BLOG9", display: "BLOG9" }],
+      null,
+    );
+    for (const accountId of ["a", "b", "c"]) await ctx.promo.redeem({ campaignId, accountId, code: "BLOG9", batch: false, partnerId: partner.partnerId, at: NOW });
+
+    for (const status of ["paused", "rejected", "applied", "active"] as const) {
+      await ctx.service.setStatus(admin, partner.partnerId, status, "Смена для проверки", NOW);
+      expect((await ctx.service.detail(admin, partner.partnerId, NOW)).partner.stats.bound, status).toBe(3);
+    }
   });
 
   it("карточка: что принёс — привязки по дням, коды с состоянием и привязанными ими игроками", async () => {
@@ -193,5 +349,67 @@ describe("партнёры по HTTP панели", () => {
     expect(detail.json<{ data: { partner: { name: string }; codes: unknown[] } }>().data).toMatchObject({ partner: { name: "Канал 2" }, codes: [] });
     expect((await app.inject({ method: "GET", url: `${base}/не-uuid`, headers })).statusCode).toBe(400);
     expect((await app.inject({ method: "GET", url: `${base}/${randomUUID()}`, headers })).statusCode).toBe(404);
+  });
+
+  it("условия и статус по HTTP: поля условий в теле и ответе, PUT /:id/status с причиной; мусор — 400, занятый TG id — 409", async () => {
+    const cfg = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
+    const ctx = setup(cfg);
+    @Module({
+      controllers: [AdminSessionController, AdminPartnersController],
+      providers: [
+        { provide: APP_CONFIG, useValue: cfg },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: ACCOUNT_REPOSITORY, useValue: ctx.accounts },
+        { provide: ROLES_REPOSITORY, useValue: ctx.roles },
+        { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
+        { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
+        { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
+        { provide: PartnersService, useValue: ctx.service },
+        PanelLoginService,
+        RateLimiter,
+        RolesService,
+        PermissionGuard,
+        AuthGuard,
+        AdminSessionService,
+        AdminSessionGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+
+    const login = await app.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser: `dev-${OWNER_ID}:Владелец` } });
+    const cookie = `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(String(login.headers["set-cookie"]))?.[1] ?? ""}`;
+    const headers = { cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    const base = "/api/v1/admin/partners";
+    const terms = { telegramId: "900100", country: "KZ", payoutCurrency: "USDT", payoutMethod: "USDT TRC-20 на T9yX", sharePercent: "12.5" };
+    const payload = { name: "Канал", contact: "@channel", note: null, ...terms };
+
+    for (const bad of [{ telegramId: "abc" }, { country: "kz" }, { payoutCurrency: "BTC" }, { sharePercent: "100.5" }, { status: "paused" }]) {
+      expect((await app.inject({ method: "POST", url: base, headers, payload: { ...payload, ...bad } })).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    const created = await app.inject({ method: "POST", url: base, headers, payload });
+    expect(created.statusCode).toBe(201);
+    expect(created.json<{ data: unknown }>().data).toMatchObject({ status: "active", telegramId: "900100", country: "KZ", payoutCurrency: "USDT", sharePercent: "12.50" });
+    const partnerId = created.json<{ data: { partnerId: string } }>().data.partnerId;
+
+    const other = await app.inject({ method: "POST", url: base, headers, payload: { name: "Другой", contact: null, note: null } });
+    const taken = await app.inject({ method: "POST", url: `${base}/${other.json<{ data: { partnerId: string } }>().data.partnerId}`, headers, payload: { name: "Другой", contact: null, note: null, telegramId: "900100" } });
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json<{ error: { code: string; message: string } }>().error).toEqual({ code: "partner_telegram_taken", message: "Этот TG id уже у партнёра «Канал»" });
+
+    const url = `${base}/${partnerId}/status`;
+    const body = { status: "paused", reason: "Не выходит на связь" };
+    expect((await app.inject({ method: "PUT", url, headers: { cookie }, payload: body })).statusCode).toBe(403);
+    for (const bad of [{ ...body, status: "banned" }, { ...body, reason: "ок" }, { status: "paused" }, { ...body, extra: 1 }]) {
+      expect((await app.inject({ method: "PUT", url, headers, payload: bad })).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    expect((await app.inject({ method: "PUT", url: `${base}/не-uuid/status`, headers, payload: body })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PUT", url: `${base}/${randomUUID()}/status`, headers, payload: body })).statusCode).toBe(404);
+    const paused = await app.inject({ method: "PUT", url, headers, payload: body });
+    expect(paused.statusCode).toBe(200);
+    expect(paused.json<{ data: { status: string } }>().data.status).toBe("paused");
+    expect((await app.inject({ method: "GET", url: `${base}/${partnerId}`, headers })).json<{ data: { partner: { status: string } } }>().data.partner.status).toBe("paused");
   });
 });
