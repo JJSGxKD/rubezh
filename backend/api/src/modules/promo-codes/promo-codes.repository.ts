@@ -133,7 +133,6 @@ function toRow(raw: unknown): PromoCampaignRow {
   };
 }
 
-/** Откат транзакции погашения с причиной: Prisma откатывает её по любому исключению. */
 /**
  * Привязывает ли партнёр новых игроков сейчас — только активный (`bindsNewPlayers`). Статус читается
  * в транзакции активации, до блокировки слота источника; нет партнёра или статус неизвестен — не привязывает.
@@ -144,6 +143,7 @@ async function partnerBinds(tx: Prisma.TransactionClient, partnerId: string): Pr
   return status !== undefined && bindsNewPlayers(status);
 }
 
+/** Откат транзакции погашения с причиной: Prisma откатывает её по любому исключению. */
 class RedeemRollback extends Error {
   constructor(readonly outcome: "used" | "exhausted") {
     super(outcome);
