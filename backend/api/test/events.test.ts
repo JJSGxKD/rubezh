@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Module, type Type } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
@@ -87,6 +87,7 @@ describe("приёмник событий", () => {
   }
 
   afterEach(async () => {
+    vi.useRealTimers();
     await app?.close();
     app = null;
   });
@@ -94,6 +95,9 @@ describe("приёмник событий", () => {
   function post(target: NestFastifyApplication, body: unknown, headers: Record<string, string> = {}) {
     return target.inject({ method: "POST", url: "/api/v1/events", headers: { origin: ORIGIN, ...headers }, payload: body as object });
   }
+
+  /** Пачка из ста событий — столько стоит в лимите установки. */
+  const hundredEvents = (): unknown => ({ events: Array.from({ length: 100 }, () => event()) });
 
   it("принимает пачку с ответом 202 и не выбрасывает её из-за одного битого события", async () => {
     const target = await start();
@@ -145,12 +149,26 @@ describe("приёмник событий", () => {
   });
 
   it("считает лимит установки в событиях: пачки по сто быстро упираются в него", async () => {
+    // Окно лимита — календарная минута: серия запросов на её границе начала бы
+    // счёт заново. Часы стоят в середине минуты, таймеры — настоящие.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 13, 10, 0, 30));
     const target = await start();
-    const batch = (): unknown => ({ events: Array.from({ length: 100 }, () => event()) });
     const statuses: number[] = [];
-    for (let i = 0; i < 7; i++) statuses.push((await post(target, batch())).statusCode);
+    for (let i = 0; i < 7; i++) statuses.push((await post(target, hundredEvents())).statusCode);
     expect(statuses.slice(0, 6)).toEqual([202, 202, 202, 202, 202, 202]);
     expect(statuses[6]).toBe(429);
+  });
+
+  it("на границе минуты счёт лимита установки начинается заново — поэтому кейс выше закрепляет часы", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 13, 10, 0, 59));
+    const target = await start();
+    for (let i = 0; i < 6; i++) expect((await post(target, hundredEvents())).statusCode).toBe(202);
+    expect((await post(target, hundredEvents())).statusCode).toBe(429);
+    // Наступила следующая минута — окно другое, счёт с нуля.
+    vi.setSystemTime(Date.UTC(2026, 9, 13, 10, 1, 0));
+    expect((await post(target, hundredEvents())).statusCode).toBe(202);
   });
 
   it("отвечает 503, когда пачку некуда записать, — клиент оставит её у себя", async () => {
