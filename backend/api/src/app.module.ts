@@ -52,6 +52,7 @@ import { MediaModule } from "./modules/media/media.module.js";
 import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
 import { TestNoticeModule } from "./modules/test-notice/test-notice.module.js";
 import { AdsModule } from "./modules/ads/ads.module.js";
+import { ClientScriptsModule } from "./modules/client-scripts/client-scripts.module.js";
 import { ShopModule } from "./modules/shop/shop.module.js";
 import { VipModule } from "./modules/vip/vip.module.js";
 import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
@@ -134,6 +135,7 @@ export const APP_MODULES = [
   TasksModule,
   TestNoticeModule,
   AdsModule,
+  ClientScriptsModule,
   ShopModule,
   VipModule,
   PromoCodesModule,
