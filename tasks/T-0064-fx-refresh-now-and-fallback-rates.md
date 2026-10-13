@@ -30,7 +30,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.10
+batch: 4
 ---
 
 # T-0064. Курсы руками — «Обновить сейчас» у источника и запасной ручной курс любой валюты
