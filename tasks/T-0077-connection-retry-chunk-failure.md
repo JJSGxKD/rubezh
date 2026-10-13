@@ -3,8 +3,8 @@ id: T-0077
 title: «Повторить» на плашке связи отвечает, даже если код проверки не загрузился
 epic: E6
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-5
 size: S
 depends_on: []
