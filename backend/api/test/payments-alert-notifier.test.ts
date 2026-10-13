@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
-import { abandonedJobText, externalRefundText, PaymentsAlertNotifier, stuckPurchaseText, type PaymentsAlertApi } from "../src/modules/admin-notify/payments-alert-notifier.js";
-import { PaymentsHooks, type AbandonedJob, type ExternalRefund, type StuckPurchase } from "../src/modules/payments/payments-hooks.js";
+import { abandonedJobText, externalRefundText, PaymentsAlertNotifier, stuckPurchaseText, supportActionText, type PaymentsAlertApi } from "../src/modules/admin-notify/payments-alert-notifier.js";
+import { PaymentsHooks, type AbandonedJob, type ExternalRefund, type StuckPurchase, type SupportAction } from "../src/modules/payments/payments-hooks.js";
 import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
 import type { AdminChats, NotifyTargets } from "../src/modules/settings/notify-targets.js";
 import { targetsOf } from "./helpers/notify-targets.js";
@@ -80,7 +80,7 @@ describe("сообщение команде о зависшей покупке",
         "Аккаунт: 22222222-2222-4222-8222-222222222222",
         "Оплачена: 2026-10-06 09:05",
         "Причина: connection refused",
-        "Проход повторяет выдачу каждые 5 минут; нужна проверка.",
+        "Проход повторяет выдачу каждые 5 минут; нужна проверка. В панели: карточка игрока → «Покупки».",
       ].join("\n"),
     );
   });
@@ -112,6 +112,11 @@ describe("сообщение команде о зависшей покупке",
 
     expect(sent[0]?.text).toContain("Звёзды возвращаются автоматически.");
     expect(sent[0]?.text).not.toContain("нужна проверка");
+  });
+
+  it("не undeliverable — текст кончается подсказкой, где искать покупку в панели; у undeliverable строка прежняя (T-0037)", () => {
+    expect(stuckPurchaseText(stuck()).endsWith("нужна проверка. В панели: карточка игрока → «Покупки».")).toBe(true);
+    expect(stuckPurchaseText(stuck({ reason: "undeliverable" })).endsWith("Звёзды возвращаются автоматически.")).toBe(true);
   });
 
   it("у товара без sku в сообщении стоит название вида товара", () => {
@@ -468,6 +473,133 @@ describe("карточка команде о возврате звёзд (T-0024
     notifier.onModuleInit();
 
     await hooks.emitExternalRefund(refund());
+
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("сообщение команде о действии поддержки с покупкой (T-0037)", () => {
+  function support(patch: Partial<SupportAction> = {}, purchase: Partial<StoredPurchase> = {}): SupportAction {
+    return {
+      kind: "refund",
+      purchase: {
+        purchaseId: "11111111-1111-4111-8111-111111111111",
+        accountId: "22222222-2222-4222-8222-222222222222",
+        product: "shop_item",
+        runId: null,
+        continueNo: null,
+        elapsedSec: null,
+        sku: "starter_pack",
+        priceStars: 50,
+        chargedStars: 50,
+        mode: "live",
+        status: "paid",
+        telegramChargeId: "charge-1",
+        invoicedAt: new Date("2026-10-06T09:00:00Z"),
+        paidAt: new Date("2026-10-06T09:05:00Z"),
+        refundReason: "manual",
+        refundRequestedAt: new Date("2026-10-07T11:30:00Z"),
+        refundedAt: null,
+        fulfilledAt: new Date("2026-10-06T09:05:00Z"),
+        renewalOf: null,
+        ...purchase,
+      },
+      actorName: "Анна из поддержки",
+      note: "Игрок написал в поддержку",
+      at: new Date("2026-10-07T11:30:00Z"),
+      ...patch,
+    };
+  }
+
+  it("возврат: текст целиком — товар, аккаунт, кто, причина и что будет дальше", () => {
+    expect(supportActionText(support())).toBe(
+      [
+        "↩️ Возврат звёзд вручную",
+        "Товар: starter_pack, 50 ⭐",
+        "Аккаунт: 22222222-2222-4222-8222-222222222222",
+        "Кто: Анна из поддержки",
+        "Причина: Игрок написал в поддержку",
+        "Звёзды вернутся заданием очереди. Если покупка выдана, после возврата заберём остаток.",
+      ].join("\n"),
+    );
+  });
+
+  it("выдача: текст целиком — без строки про очередь", () => {
+    expect(supportActionText(support({ kind: "fulfill" }))).toBe(
+      [
+        "✅ Покупка выдана вручную",
+        "Товар: starter_pack, 50 ⭐",
+        "Аккаунт: 22222222-2222-4222-8222-222222222222",
+        "Кто: Анна из поддержки",
+        "Причина: Игрок написал в поддержку",
+      ].join("\n"),
+    );
+  });
+
+  it("нет sku — стоит вид товара", () => {
+    expect(supportActionText(support({}, { sku: null, product: "vip" }))).toContain("Товар: vip, 50 ⭐");
+  });
+
+  it("событие поддержки — сообщение в чат команды, в поток «Покупки», если он задан", async () => {
+    const chats = { general: { chatId: "-100", threadId: null }, payments: { chatId: "-100", threadId: 57 } } as AdminChats;
+    const { notifier, sent, hooks } = setup(config(), { chats: () => chats } as NotifyTargets);
+    notifier.onModuleInit();
+
+    await hooks.emitSupport(support());
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.chat).toEqual({ chatId: "-100", threadId: 57 });
+    expect(sent[0]?.text).toBe(supportActionText(support()));
+  });
+
+  it("два одинаковых события — два сообщения: каждое действие отдельное решение человека, ключа дедупликации нет", async () => {
+    const { notifier, sent, hooks, redis } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitSupport(support());
+    await hooks.emitSupport(support());
+
+    expect(sent).toHaveLength(2);
+    expect(redis.values.size).toBe(0);
+  });
+
+  it("возврат и выдача одной покупки — два сообщения", async () => {
+    const { notifier, sent, hooks } = setup();
+    notifier.onModuleInit();
+
+    await hooks.emitSupport(support({ kind: "fulfill" }));
+    await hooks.emitSupport(support({ kind: "refund" }));
+
+    expect(sent.map((message) => message.text.split("\n")[0])).toEqual(["✅ Покупка выдана вручную", "↩️ Возврат звёзд вручную"]);
+  });
+
+  it("нет чата — не отправляет и не бросает", async () => {
+    const { notifier, sent, hooks } = setup(config({ ADMIN_CHAT_ID: "" }));
+    notifier.onModuleInit();
+
+    await expect(hooks.emitSupport(support())).resolves.toBeUndefined();
+
+    expect(sent).toEqual([]);
+  });
+
+  it("отправка упала — не бросает: действие уже выполнено и записано в журнал", async () => {
+    const cfg = config();
+    const hooks = new PaymentsHooks();
+    const notifier = new PaymentsAlertNotifier(cfg, targetsOf(cfg), hooks, new FakeRedis() as never, {
+      sendMessage: async () => {
+        throw new Error("Telegram недоступен");
+      },
+    });
+    notifier.onModuleInit();
+
+    await expect(hooks.emitSupport(support())).resolves.toBeUndefined();
+  });
+
+  it("без токена бота на событие не подписывается", async () => {
+    const { notifier, sent, hooks } = setup(config({ TELEGRAM_BOT_TOKEN: "" }));
+    notifier.onModuleInit();
+
+    await hooks.emitSupport(support());
 
     expect(sent).toEqual([]);
   });
