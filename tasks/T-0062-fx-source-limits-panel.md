@@ -34,7 +34,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.9
+batch: 3
 ---
 
 # T-0062. Лимиты источников курсов в панели — сколько осталось, правка лимита и счётчика, предупреждения

@@ -29,7 +29,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-version: v0.9
+batch: 2
 ---
 
 # T-0103. Рецепты эволюций в игре: подсказка на карточке, гайдбук, значок готовности

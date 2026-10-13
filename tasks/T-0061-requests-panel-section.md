@@ -28,7 +28,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.9
+batch: 3
 ---
 
 # T-0061. Раздел «Запросы» в панели — исходящие вызовы и сводка входящих

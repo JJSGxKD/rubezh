@@ -33,7 +33,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.9
+batch: 2
 ---
 
 # T-0089. Пропуск рекламы VIP — отдельной меткой «Пропуск VIP», не досмотр

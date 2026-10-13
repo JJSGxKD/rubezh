@@ -37,7 +37,6 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.8
 ---
 
 # T-0024. После возврата звёзд покупки аккаунту закрыты, команда получает карточку
