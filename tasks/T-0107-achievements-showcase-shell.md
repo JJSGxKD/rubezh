@@ -39,7 +39,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0107. Витрина достижений: категории, редкость, любимые и престиж в профиле и рейтинге

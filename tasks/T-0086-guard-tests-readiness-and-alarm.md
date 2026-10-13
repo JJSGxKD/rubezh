@@ -17,7 +17,7 @@ executor: haiku-5.5
 effort: medium
 release: none
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0086. Два теста охраны проверяют то, что обещают
