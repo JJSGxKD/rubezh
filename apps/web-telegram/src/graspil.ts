@@ -23,8 +23,35 @@ const GRASPIL_SCRIPT = "https://w.graspil.com";
 /** Имя очереди — как в сниппете Graspil: по нему скрипт находит свой ключ. */
 const DATA_LAYER = "graspil";
 
+/** Адрес API — тот же, что у клиента в `main.tsx`: на dev-сервере свой origin, в сборке `VITE_API_URL`. */
+const API_BASE = import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? "");
+const SCRIPTS_TIMEOUT_MS = 5_000;
+
+/** Грузить ли Graspil по ответу сервера: только явное «да»; сбой, не тот ответ — нет. */
+export function graspilAllowed(body: unknown): boolean {
+  if (typeof body !== "object" || body === null || !("data" in body)) return false;
+  const { data } = body;
+  return typeof data === "object" && data !== null && "graspil" in data && data.graspil === true;
+}
+
+/** Спросить сервер, можно ли грузить Graspil (выключатель в панели). Нет ответа — нельзя. */
+async function allowedByServer(): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/client/scripts`, { signal: AbortSignal.timeout(SCRIPTS_TIMEOUT_MS) });
+    return response.ok && graspilAllowed(await response.json());
+  } catch {
+    // Таймаут и обрыв — тот же ответ «нельзя»; причину называет вызывающий в консоли.
+    return false;
+  }
+}
+
 export async function loadGraspil(key: string): Promise<void> {
   if (key === "") return;
+  // Аналитика необязательна: выключатель в панели нужен как раз затем, чтобы не тянуть скрипт в сомнении.
+  if (!(await allowedByServer())) {
+    console.info("Graspil выключен в панели или сервер не ответил — не грузим");
+    return;
+  }
   let webApp: TelegramWebAppCompat | null = null;
   try {
     webApp = await loadTelegramWebAppCompat();
