@@ -320,6 +320,8 @@ describe("карточка забега на разбор", () => {
     expect(text).toContain("Нормальная · 12:34 · уровень 18 · убийств 34000 · погиб от swarm_rat");
     expect(text).toContain("забег дольше, чем прошло по часам сервера; старт не дошёл");
     expect(text).toContain(`Забег ${run.runId}`);
+    expect(text).toContain("только в панели: раздел «Разбор забегов»");
+    expect(text).not.toContain("runs/review");
   });
 
   it("без аккаунта — полный идентификатор: по нему его ещё можно найти", () => {
