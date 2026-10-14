@@ -871,7 +871,7 @@ describe("каталог из панели", () => {
     const ctx = setup();
     const owner = await person(ctx, OWNER_ID);
     const view = await ctx.service.catalog(owner);
-    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "channel", "link", "bot"]);
+    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "channel", "link", "bot"]);
     expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
     expect(view.tasks).toHaveLength(CATALOG.length);
   });

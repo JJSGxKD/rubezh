@@ -56,7 +56,10 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
   const runId = () => `tasks-it-${String(Date.now())}-${String(runNo++)}`;
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    // Адаптер сам параметр `schema` из адреса не читает: без него запросы моделей
+    // уходят в `public`, даже если миграции применены в отдельную схему.
+    const schema = new URL(DATABASE_URL).searchParams.get("schema") ?? undefined;
+    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }, { schema }) });
     accounts = new PrismaAccountRepository(prisma);
     repository = new PrismaTasksRepository(prisma);
     catalog = await repository.catalog();
