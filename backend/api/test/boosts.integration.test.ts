@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { PrismaClient } from "../src/generated/prisma/client.js";
@@ -17,6 +16,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Бусты на живом Postgres с настоящим кошельком (docs/17-testing-strategy.md
@@ -55,7 +55,7 @@ describe.skipIf(DATABASE_URL === "")("бусты на живом Postgres", () =
 
   beforeAll(() => {
     config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv);
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 20, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 20);
     accounts = new PrismaAccountRepository(prisma);
     const roles = new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());
     wallet = new WalletService(new PrismaWalletRepository(prisma), config, roles);
