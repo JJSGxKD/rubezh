@@ -3,8 +3,8 @@ id: T-0086
 title: Два теста охраны проверяют то, что обещают: публичность готовности и тревогу 5xx в полной сборке
 epic: E3
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / haiku-5.5 / medium
 author: claude-lead2-8
 size: S
 depends_on: []
