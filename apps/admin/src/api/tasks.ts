@@ -410,7 +410,7 @@ function count(value: number): number {
  * строку задания — без лимита, порядка и включения. Партнёрская цель — своей
  * вкладкой, с картинкой и ссылкой; у цели забега их нет.
  */
-export function taskPreview(task: TaskDef): {
+export function taskPreview(task: Pick<TaskDef, "title" | "kind" | "period" | "target" | "coins" | "gems" | "shards" | "image" | "params"> & Partial<TaskDef>): {
   title: string | null;
   kind: string;
   period: TaskDef["period"];
