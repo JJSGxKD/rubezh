@@ -24,10 +24,23 @@ import {
   TaskShapeLockedError,
 } from "../src/modules/tasks/tasks-errors.js";
 import { NetworkTasksService } from "../src/modules/tasks/network-tasks.service.js";
-import { RUN_KINDS, TASK_LIMIT_GRACE_MIN, countsForTasks, rewardReason, slotsFor, taskDefSchema, type TaskDef, type TaskParticipation } from "../src/modules/tasks/task-rules.js";
+import { gameDayOf, pickPool } from "../src/modules/tasks/task-pool.js";
+import {
+  RUN_KINDS,
+  TASK_LIMIT_GRACE_MIN,
+  WEAPON_ELEMENTS,
+  countsForTasks,
+  rewardReason,
+  slotsFor,
+  taskDefSchema,
+  type PoolTier,
+  type TaskDef,
+  type TaskParticipation,
+} from "../src/modules/tasks/task-rules.js";
 import { TasksController } from "../src/modules/tasks/tasks.controller.js";
 import { ACHIEVEMENT_PERIOD_START, type TaskDelta, type TaskProgressRow, type TasksRepository } from "../src/modules/tasks/tasks.repository.js";
-import { TasksService } from "../src/modules/tasks/tasks.service.js";
+import { TasksService, viewOf } from "../src/modules/tasks/tasks.service.js";
+import { WEAPONS } from "../../../packages/core-game/src/content/weapons";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
@@ -52,7 +65,7 @@ const DAY = 24 * HOUR;
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 
 function def(taskId: string, patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId, period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...patch };
+  return { taskId, period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...patch };
 }
 
 const CATALOG: TaskDef[] = [
@@ -219,6 +232,9 @@ function run(patch: Partial<RecordedRun> = {}): RecordedRun {
     level: 22,
     enemiesKilled: 400,
     startingWeaponId: "spark",
+    weapons: [{ id: "spark", level: 3 }],
+    boosts: [],
+    xpCollected: null,
     deathCause: null,
     cheats: false,
     continues: 0,
@@ -855,7 +871,7 @@ describe("каталог из панели", () => {
     const ctx = setup();
     const owner = await person(ctx, OWNER_ID);
     const view = await ctx.service.catalog(owner);
-    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "channel", "link", "bot"]);
+    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "channel", "link", "bot"]);
     expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
     expect(view.tasks).toHaveLength(CATALOG.length);
   });
@@ -980,5 +996,193 @@ describe("задания по HTTP", () => {
     ];
     for (const request of bad) expect((await app.inject({ method: "POST", headers, ...request })).statusCode).toBe(400);
     expect(calls).toHaveLength(2);
+  });
+});
+
+describe("новые виды цели", () => {
+  const sample = run({ difficulty: "hard", survivalSec: 200.9, weapons: [{ id: "storm", level: 2 }], boosts: ["fury"], xpCollected: 700 });
+
+  it("опыт за забег: сумма, нет данных — ноль", () => {
+    expect(RUN_KINDS.xp_collected).toMatchObject({ op: "sum" });
+    expect(RUN_KINDS.xp_collected.measure(sample)).toBe(700);
+    expect(RUN_KINDS.xp_collected.measure(run({ xpCollected: null }))).toBe(0);
+  });
+
+  it("забег с оружием: оружие в наборе к концу забега, чужое не считается", () => {
+    expect(RUN_KINDS.weapon_runs).toMatchObject({ op: "sum" });
+    expect(RUN_KINDS.weapon_runs.measure(sample, { weapon: "storm" })).toBe(1);
+    expect(RUN_KINDS.weapon_runs.measure(sample, { weapon: "spark" })).toBe(0);
+    expect(RUN_KINDS.weapon_runs.measure(sample, null)).toBe(0);
+  });
+
+  it("забег с оружием стихии: стихия по таблице сервера", () => {
+    expect(RUN_KINDS.element_runs.measure(sample, { element: "lightning" })).toBe(1);
+    expect(RUN_KINDS.element_runs.measure(sample, { element: "fire" })).toBe(0);
+    expect(RUN_KINDS.element_runs.measure(run({ weapons: [{ id: "knife", level: 1 }] }), { element: "fire" })).toBe(0);
+  });
+
+  it("забег на сложности и лучшее время на ней", () => {
+    expect(RUN_KINDS.difficulty_runs.measure(sample, { difficulty: "hard" })).toBe(1);
+    expect(RUN_KINDS.difficulty_runs.measure(sample, { difficulty: "easy" })).toBe(0);
+    expect(RUN_KINDS.difficulty_survive_sec).toMatchObject({ op: "max" });
+    expect(RUN_KINDS.difficulty_survive_sec.measure(sample, { difficulty: "hard" })).toBe(200);
+    expect(RUN_KINDS.difficulty_survive_sec.measure(sample, { difficulty: "normal" })).toBe(0);
+  });
+
+  it("забег с бустом: без оплаченных бустов — ноль", () => {
+    expect(RUN_KINDS.boost_runs.measure(sample)).toBe(1);
+    expect(RUN_KINDS.boost_runs.measure(run({ boosts: [] }))).toBe(0);
+  });
+
+  it("схема: фильтр обязателен там, где он нужен, и нигде больше", () => {
+    const weapon = def("daily_weapon_spark", { kind: "weapon_runs", filter: { weapon: "spark" }, tier: "easy", target: 2 });
+    expect(taskDefSchema.safeParse(weapon).success).toBe(true);
+    expect(taskDefSchema.safeParse({ ...weapon, filter: null }).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_x", { kind: "runs", filter: { weapon: "spark" } })).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_boost", { kind: "boost_runs", filter: { weapon: "spark" } })).success).toBe(false);
+    expect(taskDefSchema.safeParse({ ...def("daily_el", { kind: "element_runs" }), filter: { element: "water" } }).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_el", { kind: "element_runs", filter: { element: "fire" } })).success).toBe(true);
+    // не тот ключ фильтра для вида
+    expect(taskDefSchema.safeParse(def("daily_el", { kind: "element_runs", filter: { weapon: "spark" } })).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_df", { kind: "difficulty_runs", filter: { difficulty: "hard" } })).success).toBe(true);
+    expect(taskDefSchema.safeParse({ ...def("daily_df", { kind: "difficulty_survive_sec" }), filter: { difficulty: "legend" } }).success).toBe(false);
+    // лишний ключ в фильтре
+    expect(taskDefSchema.safeParse(def("daily_df", { kind: "difficulty_runs", filter: { difficulty: "hard", weapon: "spark" } })).success).toBe(false);
+  });
+
+  it("схема: ступень — у дневных и недельных заданий, не у достижений и не у партнёрских", () => {
+    expect(taskDefSchema.safeParse(def("daily_a", { tier: "hard" })).success).toBe(true);
+    expect(taskDefSchema.safeParse(def("weekly_a", { period: "weekly", tier: "medium" })).success).toBe(true);
+    expect(taskDefSchema.safeParse(def("ach_a", { period: "achievement", tier: "easy" })).success).toBe(false);
+    expect(taskDefSchema.safeParse({ ...def("daily_a"), tier: "epic" }).success).toBe(false);
+    expect(taskDefSchema.safeParse(channelTask({ period: "weekly", tier: "easy" })).success).toBe(false);
+    expect(taskDefSchema.safeParse(channelTask()).success).toBe(true);
+  });
+
+  it("строка панели без ступени и фильтра разбирается: поля по умолчанию пусты", () => {
+    const old: Record<string, unknown> = { ...def("daily_runs") };
+    delete old.filter;
+    delete old.tier;
+    expect(taskDefSchema.parse(old)).toMatchObject({ tier: null, filter: null });
+  });
+
+  it("у цели с фильтром категория — срок, а не «партнёры»", () => {
+    const weapon = def("daily_weapon_spark", { kind: "weapon_runs", filter: { weapon: "spark" }, tier: "easy" });
+    const [view] = viewOf([weapon], [], new Map(), NOON);
+    expect(view).toMatchObject({ category: "daily", tier: "easy", filter: { weapon: "spark" } });
+    const [partner] = viewOf([channelTask()], [], new Map([["ach_channel", { completions: 0, openedAt: null, completedAt: null }]]), NOON);
+    expect(partner).toMatchObject({ category: "partner", tier: null, filter: null });
+  });
+
+  it("стихии оружия на сервере — как в контенте игры: оружие со стихией в таблице, без стихии — нет", () => {
+    for (const weapon of WEAPONS) {
+      if (weapon.element === undefined) expect(Object.hasOwn(WEAPON_ELEMENTS, weapon.id), `${weapon.id}: стихии нет`).toBe(false);
+      else expect(WEAPON_ELEMENTS[weapon.id], `${weapon.id}: стихия`).toBe(weapon.element);
+    }
+    const ids = new Set(WEAPONS.map((weapon) => weapon.id));
+    for (const id of Object.keys(WEAPON_ELEMENTS)) expect(ids.has(id), `${id}: такого оружия нет в контенте`).toBe(true);
+  });
+});
+
+describe("ротация: что двигает забег и что видит игрок", () => {
+  const TIERS: PoolTier[] = ["easy", "medium", "hard"];
+
+  /** 20 дневных строк пула: 8 лёгких, 8 средних, 4 сложных; цель 1, чтобы забег выполнял любую. */
+  function poolRows(): TaskDef[] {
+    const sizes = { easy: 8, medium: 8, hard: 4 };
+    return TIERS.flatMap((tier) => Array.from({ length: sizes[tier] }, (_, index) => def(`pool_${tier}_${String(index + 1)}`, { tier, target: 1, coins: 50 })));
+  }
+
+  function poolSetup() {
+    const ctx = setup();
+    ctx.repository.defs.splice(0, ctx.repository.defs.length, ...poolRows(), def("always_on", { target: 1 }));
+    return ctx;
+  }
+
+  const chosenAt = (at: Date) => pickPool(poolRows(), "daily", gameDayOf(at));
+
+  it("игрок видит пять из пула и строку без ступени; забег двигает только выбранные", async () => {
+    const ctx = poolSetup();
+    await ctx.hooks.emit(run());
+    const tasks = await ctx.service.view(PLAYER, NOON);
+    const chosen = chosenAt(NOON);
+
+    expect(
+      tasks
+        .filter((task) => task.id.startsWith("pool_"))
+        .map((task) => task.id)
+        .sort(),
+    ).toEqual([...chosen].sort());
+    expect(tasks).toHaveLength(6);
+    expect(tasks.every((task) => task.done)).toBe(true);
+    const moved = [...ctx.repository.rows.values()].filter((row) => row.taskId.startsWith("pool_")).map((row) => row.taskId);
+    expect(moved.sort()).toEqual([...chosen].sort());
+  });
+
+  it("невыбранное нельзя забрать запросом, выбранное — можно", async () => {
+    const ctx = poolSetup();
+    await ctx.hooks.emit(run());
+    const chosen = chosenAt(NOON);
+    const other = poolRows().find((task) => !chosen.has(task.taskId));
+    if (other === undefined) throw new Error("в пуле нет невыбранной строки");
+    await expect(ctx.service.claim(PLAYER, other.taskId, NOON)).rejects.toBeInstanceOf(TaskNotFoundError);
+    const first = [...chosen][0] ?? "";
+    await expect(ctx.service.claim(PLAYER, first, NOON)).resolves.toMatchObject({ claimed: true });
+  });
+
+  it("знак меню считает только выбранные", async () => {
+    const ctx = poolSetup();
+    await ctx.hooks.emit(run());
+    // пять выбранных и строка без ступени
+    expect(await ctx.service.badge(ME, NOON)).toBe(6);
+  });
+
+  it("на следующих сутках набор другой, а вчерашний прогресс остаётся у вчерашних строк", async () => {
+    const ctx = poolSetup();
+    await ctx.hooks.emit(run());
+    const sets = new Set<string>();
+    for (let day = 0; day < 10; day++) sets.add([...chosenAt(new Date(NOON.getTime() + day * DAY))].sort().join(","));
+    expect(sets.size).toBeGreaterThan(1);
+
+    const tomorrow = new Date(NOON.getTime() + DAY);
+    const seen = (await ctx.service.view(PLAYER, tomorrow)).filter((task) => task.id.startsWith("pool_"));
+    expect(seen.map((task) => task.id).sort()).toEqual([...chosenAt(tomorrow)].sort());
+    // срок кончился: то, что выполнено вчера, сегодня не выполнено
+    expect(seen.every((task) => !task.done)).toBe(true);
+  });
+
+  it("два игрока видят один набор", async () => {
+    const ctx = poolSetup();
+    const other: AccountRef = { accountId: "00000000-0000-4000-8000-00000000f002", platform: "telegram", platformUserId: "555000222" };
+    const mine = (await ctx.service.view(PLAYER, NOON)).map((task) => task.id);
+    const theirs = (await ctx.service.view(other, NOON)).map((task) => task.id);
+    expect(theirs).toEqual(mine);
+  });
+
+  it("панель получает набор «сегодня в ротации» и каталог целиком", async () => {
+    const ctx = poolSetup();
+    const designer = await person(ctx, "502", "game_designer");
+    const catalog = await ctx.service.catalog(designer, NOON);
+    expect(catalog.tasks).toHaveLength(21);
+    expect([...catalog.rotation.daily].sort()).toEqual([...chosenAt(NOON)].sort());
+    expect(catalog.rotation.weekly).toEqual([]);
+  });
+
+  it("панель сохраняет ступень и фильтр, правка ступени доходит до каталога", async () => {
+    const ctx = setup();
+    const designer = await person(ctx, "503", "game_designer");
+    const fresh = def("daily_weapon_spark", { kind: "weapon_runs", filter: { weapon: "spark" }, tier: "easy", target: 2 });
+    await ctx.service.save(designer, fresh);
+    expect(ctx.repository.defs.find((task) => task.taskId === "daily_weapon_spark")).toMatchObject({ tier: "easy", filter: { weapon: "spark" } });
+    await ctx.service.save(designer, { ...fresh, tier: "hard" });
+    expect(ctx.repository.defs.find((task) => task.taskId === "daily_weapon_spark")?.tier).toBe("hard");
+  });
+
+  it("забег с оружием двигает задание про оружие, чужое оружие — нет", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(def("daily_weapon_storm", { kind: "weapon_runs", filter: { weapon: "storm" }, target: 2 }));
+    await ctx.hooks.emit(run({ weapons: [{ id: "storm", level: 1 }] }));
+    await ctx.hooks.emit(run({ weapons: [{ id: "spark", level: 1 }] }));
+    expect(byId(await ctx.service.view(PLAYER, NOON), "daily_weapon_storm")).toMatchObject({ value: 1, done: false });
   });
 });

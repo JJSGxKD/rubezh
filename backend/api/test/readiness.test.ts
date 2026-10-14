@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
+import { PUBLIC_METADATA } from "../src/common/access.js";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { ReadinessController } from "../src/health/readiness.controller.js";
 import { createHttpApp } from "../src/http-app.js";
@@ -73,10 +74,8 @@ describe("GET /health/ready", () => {
     expect(Date.now() - started).toBeLessThan(3_000);
   });
 
-  it("не требует токена доступа", async () => {
-    const app = await appWith(ok, async () => "PONG");
-    const response = await app.inject({ method: "GET", url: "/health/ready" });
-    expect(response.statusCode).not.toBe(401);
+  it("помечен публичным: охрану токеном для всех маршрутов держит route-permissions.test.ts", () => {
+    expect(Reflect.getMetadata(PUBLIC_METADATA, ReadinessController.prototype.ready)).toBe(true);
   });
 
   it("живёт на корне, без префикса /api/v1", async () => {

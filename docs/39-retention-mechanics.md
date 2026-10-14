@@ -116,7 +116,7 @@ A/B-данных по отдельным механикам в источник�
 | Второй шанс | Одно продолжение за Stars или рекламу | `content/continue.ts`, `screens/run/SecondChance.tsx` |
 | Уровень аккаунта | До 100, опыт `150·(n−1)^1.6`, потолки наград за забег | `backend/api/src/modules/progress/progress-rules.ts` |
 | Награда дня, колесо | Есть | `modules/daily`, `modules/wheel` |
-| Задания | Вкладки: ежедневные, недельные, достижения, партнёрские. Каталог в базе, правится из панели. Стартово 5 + 4 + 10; 5 видов цели: `runs`, `kills`, `survive_sec`, `best_survival_sec`, `run_level` | `backend/api/src/modules/tasks/task-rules.ts`, `packages/app-shell/src/screens/meta/tasks.tsx` |
+| Задания | Вкладки: ежедневные, недельные, достижения, партнёрские. Каталог в базе, правится из панели. Пул с ротацией по дням и неделям: 20 дневных и 12 недельных, игрок видит 5 и 6, набор считается от даты (`task-pool.ts`); достижений 10; 11 видов цели: `runs`, `kills`, `survive_sec`, `best_survival_sec`, `run_level`, `xp_collected`, `weapon_runs`, `element_runs`, `difficulty_runs`, `difficulty_survive_sec`, `boost_runs` | `backend/api/src/modules/tasks/task-rules.ts`, `task-pool.ts`, `packages/app-shell/src/screens/meta/tasks.tsx` |
 | Достижения | Только период `achievement` в той же таблице; редкости, витрины, «есть у N%» нет | там же |
 | Рейтинг | Лучшее время по сложностям; сезонов и дивизионов нет, хотя Р48 про дивизионы пишет | `backend/api/src/modules/runs/leaderboard.store.ts`, `screens/meta/rating.tsx` |
 | Арсенал | 6 слотов, 6 редкостей, 19 свойств; улучшение, перековка, слияние, разбор | `modules/items`, `screens/meta/arsenal.tsx` |

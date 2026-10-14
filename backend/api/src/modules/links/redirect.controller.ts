@@ -70,6 +70,8 @@ export class RedirectController {
     // и человек после краулера получил бы превью вместо перехода.
     if (visit.kind === "preview") return html(200, linkPage({ url: visit.url, target: null }), "private, max-age=300");
     if (visit.kind === "unavailable") return html(503, linkPage({ url: visit.url, target: null }), "no-store");
+    // Проверка доступности: 200 — «ссылка жива». Без кеша: общий кеш отдал бы эту заглушку человеку.
+    if (visit.kind === "check") return html(200, linkPage({ url: visit.url, target: null }), "no-store");
     void reply.status(302).header("location", visit.target).header("cache-control", "no-store").send();
   }
 }

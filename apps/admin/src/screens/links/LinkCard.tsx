@@ -3,6 +3,7 @@ import { api } from "../../services";
 import {
   conversion,
   conversionState,
+  deviceRows,
   DIRECT_HINT,
   DIRECT_UNAVAILABLE,
   fetchConversions,
@@ -75,6 +76,7 @@ function copy(text: string, what: string): void {
 
 function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramToken: boolean; onChanged: () => void }) {
   const rate = conversion(link);
+  const devices = deviceRows(link.devices);
   return (
     <div className="flex flex-col gap-5">
       {link.network === null || link.networkUrl === null ? (
@@ -112,12 +114,23 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
       <KeyValue
         items={[
           ["Куда ведёт", <TargetEditor key="target" link={link} onChanged={onChanged} />, TARGET_HELP],
-          ["Кликов", `${formatNumber(link.clicks)}, за 30 дней — ${formatNumber(link.clicks30d)}`],
+          ["Кликов", `${formatNumber(link.clicks)}, за 30 дней — ${formatNumber(link.clicks30d)}`, HELP.links.clicks],
           ["Запусков через переходник", formatNumber(link.launches), HELP.links.launches],
           ["Запусков по прямой ссылке", formatNumber(link.directLaunches), DIRECT_HINT],
           ["Клик → запуск", rate === null ? "—" : `${rate}%`, HELP.links.conversion],
         ]}
       />
+
+      {devices.length === 0 ? null : (
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">Клики по устройствам</h3>
+          <KeyValue
+            items={devices.map((row): [string, string] | [string, string, string] =>
+              row.key === "unknown" ? [row.title, formatNumber(row.count), HELP.links.deviceUnknown] : [row.title, formatNumber(row.count)],
+            )}
+          />
+        </section>
+      )}
 
       {link.conversions === null ? null : (
         <>

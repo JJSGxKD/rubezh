@@ -4,6 +4,8 @@ import {
   conversion,
   conversionState,
   createLink,
+  DEVICE_TITLES,
+  deviceRows,
   fetchConversions,
   fetchLinks,
   freshRow,
@@ -121,6 +123,35 @@ describe("ссылки кампаний", () => {
     expect(changed.ok && changed.data.target).toBe("landing");
   });
 
+  it("клики по устройствам: числа разбираются, ответ старого сервера без них — четыре нуля", async () => {
+    const { fetch } = fakeFetch(
+      json(200, {
+        data: {
+          links: [
+            { ...LINK, clicks: 37, clicks30d: 37, launches: 2, directLaunches: 0, conversions: null, devices: { mobile: 3, desktop: 0, web: 0, unknown: 34 } },
+            { ...LINK, code: "Zz99Yy88Xx", clicks: 5, clicks30d: 5, launches: 1, directLaunches: 0, conversions: null },
+          ],
+          postback: { adsgramToken: true },
+        },
+      }),
+    );
+    const list = await fetchLinks(new AdminApi(fetch));
+    expect(list.ok && list.data.links.map((link) => link.devices)).toEqual([
+      { mobile: 3, desktop: 0, web: 0, unknown: 34 },
+      { mobile: 0, desktop: 0, web: 0, unknown: 0 },
+    ]);
+  });
+
+  it("строки «Клики по устройствам»: нулевые пропускаются, «не определено» — последней", () => {
+    expect(deviceRows({ mobile: 3, desktop: 0, web: 0, unknown: 34 })).toEqual([
+      { key: "mobile", title: "С телефона", count: 3 },
+      { key: "unknown", title: "Устройство не определено", count: 34 },
+    ]);
+    expect(deviceRows({ mobile: 0, desktop: 0, web: 0, unknown: 0 })).toEqual([]);
+    expect(deviceRows({ mobile: 1, desktop: 2, web: 3, unknown: 4 }).map((row) => row.key)).toEqual(["mobile", "desktop", "web", "unknown"]);
+    expect(DEVICE_TITLES.unknown).toBe("Устройство не определено");
+  });
+
   it("подписи целей и колонка «Запуски»: через переходник + прямых", () => {
     expect(TARGET_TITLES).toEqual({ app: "Mini App", bot: "Бот", landing: "Лендинг" });
     expect(launchesLabel({ launches: 10, directLaunches: 3 })).toBe("10 + 3");
@@ -142,7 +173,7 @@ describe("ссылки кампаний", () => {
   });
 
   it("заведённая ссылка — строкой списка с нулями: карточка открывается сразу", () => {
-    expect(freshRow({ ...LINK, network: null, registrationOn: "first_run", networkUrl: null })).toMatchObject({ clicks: 0, launches: 0, directLaunches: 0, conversions: null });
+    expect(freshRow({ ...LINK, network: null, registrationOn: "first_run", networkUrl: null })).toMatchObject({ clicks: 0, launches: 0, directLaunches: 0, conversions: null, devices: { mobile: 0, desktop: 0, web: 0, unknown: 0 } });
     const row = freshRow({ ...LINK, network: "adsgram", registrationOn: "first_run", networkUrl: `${LINK.url}?record={record_data}`, directUrl: null });
     expect(row.conversions === null ? null : summaryLine(row.conversions)).toEqual({ registrations: 0, purchases: 0, failed: 0, waiting: 0 });
   });

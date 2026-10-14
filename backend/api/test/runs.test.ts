@@ -451,3 +451,40 @@ describe("лист забега в профиле", () => {
     expect(runFinishSchema.safeParse({ ...base, stats: { damageTaken: 1, xpCollected: 1, waveReached: 1, topKills: tooMany } }).success).toBe(false);
   });
 });
+
+describe("итог забега для слушателей: оружие, бусты, опыт", () => {
+  type BoostAnswer = "paid" | "unpaid";
+
+  function setup(answer: BoostAnswer) {
+    const runs = new MemoryRunsRepository();
+    const board = new MemoryLeaderboardStore();
+    const hooks = new RunsHooks();
+    const recorded: RecordedRun[] = [];
+    hooks.onRecorded("test", async (run) => void recorded.push(run));
+    const loadouts = new RunLoadouts();
+    loadouts.provideBoosts({ check: async () => answer });
+    const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
+    const service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), loadouts, ratingRestrictions(runs, board).rating);
+    return { service, recorded };
+  }
+
+  it("оружие к концу забега доходит до слушателей, опыт — из статистики, нет статистики — null", async () => {
+    const { service, recorded } = setup("paid");
+    await service.finish(account(), finish(randomUUID(), { survivalSec: 300, weapons: [{ id: "knife", level: 2 }, { id: "storm", level: 1 }] }));
+    expect(recorded[0]).toMatchObject({ weapons: [{ id: "knife", level: 2 }, { id: "storm", level: 1 }], boosts: [], xpCollected: null });
+
+    const stats = { damageTaken: 10, xpCollected: 700, waveReached: 3, topKills: [] };
+    await service.finish(account(), finish(randomUUID(), { survivalSec: 300, stats }));
+    expect(recorded[1]).toMatchObject({ xpCollected: 700 });
+  });
+
+  it("оплаченные бусты доходят до слушателей, неоплаченные — нет", async () => {
+    const paid = setup("paid");
+    await paid.service.finish(account(), finish(randomUUID(), { survivalSec: 300, boosts: ["fury"] }));
+    expect(paid.recorded[0]).toMatchObject({ boosts: ["fury"] });
+
+    const unpaid = setup("unpaid");
+    await unpaid.service.finish(account(), finish(randomUUID(), { survivalSec: 300, boosts: ["fury"] }));
+    expect(unpaid.recorded[0]).toMatchObject({ boosts: [], verdict: "rejected" });
+  });
+});
