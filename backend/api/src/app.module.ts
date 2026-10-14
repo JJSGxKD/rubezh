@@ -57,6 +57,7 @@ import { ShopModule } from "./modules/shop/shop.module.js";
 import { VipModule } from "./modules/vip/vip.module.js";
 import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
 import { PartnersModule } from "./modules/partners/partners.module.js";
+import { SeasonsModule } from "./modules/seasons/seasons.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -140,6 +141,7 @@ export const APP_MODULES = [
   PromoCodesModule,
   PartnersModule,
   WipeModule,
+  SeasonsModule,
 ];
 
 /**
