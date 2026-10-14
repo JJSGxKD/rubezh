@@ -5,6 +5,7 @@ import type { PlatformId } from "../../platforms/ports/platform.js";
 import { classifyClient } from "../attribution/client-class.js";
 import { ipPrefix } from "../attribution/ip-prefix.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
+import { checkerOf } from "./availability-checkers.js";
 import { isCrawler } from "./crawler.js";
 import { newClickId, newLinkCode } from "./link-code.js";
 import { macroQuery, networkParamsOf, type LinkNetwork } from "./link-networks.js";
@@ -41,7 +42,9 @@ export type Visit =
   | { kind: "not_found" }
   | { kind: "preview"; url: string | null }
   | { kind: "redirect"; target: string }
-  | { kind: "unavailable"; url: string | null };
+  | { kind: "unavailable"; url: string | null }
+  /** сервис проверки доступности: страница «ссылка жива», клик не пишется */
+  | { kind: "check"; url: string | null };
 
 export interface NewLink {
   campaign: string;
@@ -83,6 +86,14 @@ export class LinksService {
     const clickId = newClickId();
     const target = clickTarget(link.target, clickId, this.builders(link.platform));
     if (target === null) return { kind: "unavailable", url };
+
+    // Проверка стоит после «недоступно»: монитор обязан видеть настоящую
+    // недоступность приложения, а не заглушку с кодом 200.
+    const checker = checkerOf({ userAgent: visitor.userAgent, refererHost: hostOf(visitor.referer) });
+    if (checker !== null) {
+      this.logger.log(JSON.stringify({ module: "links", event: "availability_check_skipped", link: link.code, service: checker }));
+      return { kind: "check", url };
+    }
 
     void this.links
       .recordClick({
