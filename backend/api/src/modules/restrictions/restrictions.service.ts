@@ -4,8 +4,9 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { AccountRestrictions } from "./account-restrictions.js";
-import { RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_LIMITS, RESTRICTION_REASONS, isRestrictionKind, type RestrictionKind, type RestrictionKindInfo, type RestrictionReason } from "./restriction-catalog.js";
+import { RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_LIMITS, RESTRICTION_REASONS, isHiddenKind, isRestrictionKind, type RestrictionKind, type RestrictionKindInfo, type RestrictionReason } from "./restriction-catalog.js";
 import { banMessage, imposeProblem, isActive, restrictionView, shownText, termProblem, type ImposeInput, type PreviewInput, type RestrictionView } from "./restriction-rules.js";
+import { HIDDEN_KIND_PERMISSION, IMPOSE_INVALID_TEXT, PREVIEW_INVALID_TEXT, hasHiddenKind, imposedAuditAction, liftedAuditAction, visibleRows } from "./restriction-visibility.js";
 import { RestrictionAccountNotFoundError, RestrictionNotFoundError } from "./restrictions-errors.js";
 import { RestrictionsHooks } from "./restrictions-hooks.js";
 import { RESTRICTIONS_REPOSITORY, type NewRestriction, type RestrictionRow, type RestrictionsRepository } from "./restrictions.repository.js";
@@ -53,9 +54,11 @@ export class RestrictionsService {
     private readonly hooks: RestrictionsHooks,
   ) {}
 
-  catalog(): RestrictionCatalogView {
+  /** Скрытые виды в каталоге — только тому, у кого есть право вида (T-0112). */
+  async catalog(actor: AccountRef): Promise<RestrictionCatalogView> {
+    const withHidden = await this.roles.can(actor, HIDDEN_KIND_PERMISSION);
     return {
-      kinds: RESTRICTION_KINDS.map((kind) => ({ kind, ...RESTRICTION_CATALOG[kind] })),
+      kinds: RESTRICTION_KINDS.filter((kind) => withHidden || !RESTRICTION_CATALOG[kind].hidden).map((kind) => ({ kind, ...RESTRICTION_CATALOG[kind] })),
       reasons: Object.entries(RESTRICTION_REASONS).map(([reason, text]) => ({ reason, ...text })),
     };
   }
@@ -64,7 +67,8 @@ export class RestrictionsService {
    * Черновик глазами игрока: тексты — тем же кодом, что отказ, а проблема —
    * та же, на которой упадёт наложение. Ничего не пишет.
    */
-  preview(input: PreviewInput, at = new Date()): RestrictionPreview {
+  async preview(actor: AccountRef, input: PreviewInput, at = new Date()): Promise<RestrictionPreview> {
+    await this.hideFromBlind(actor, input.kinds, PREVIEW_INVALID_TEXT);
     const endsAt = input.endsAt === null ? null : new Date(input.endsAt);
     return {
       problem: termProblem(endsAt, at) ?? imposeProblem(input.kinds, input.notify),
@@ -73,6 +77,7 @@ export class RestrictionsService {
   }
 
   async impose(actor: AccountRef, accountId: string, input: ImposeInput, at = new Date()): Promise<RestrictionView[]> {
+    await this.hideFromBlind(actor, input.kinds, IMPOSE_INVALID_TEXT);
     for (const permission of new Set(input.kinds.map((kind) => RESTRICTION_CATALOG[kind].permission))) await this.roles.require(actor, permission);
     if (actor.accountId === accountId) throw new ValidationError("Ограничить себя нельзя");
     const endsAt = input.endsAt === null ? null : new Date(input.endsAt);
@@ -111,7 +116,7 @@ export class RestrictionsService {
 
     await this.roles.audit({
       actorAccountId: actorId,
-      action: "players.restrict",
+      action: imposedAuditAction(created.map((row) => row.kind)),
       target: accountId,
       ...(replaced.length === 0 ? {} : { before: { replaced: replaced.map(auditOf) } }),
       after: { restrictions: created.map(auditOf) },
@@ -123,12 +128,14 @@ export class RestrictionsService {
   async lift(actor: AccountRef, restrictionId: string, comment: string, at = new Date()): Promise<RestrictionView> {
     const row = await this.db(this.repository.byId(restrictionId));
     if (row === null || !isActive(row, at)) throw new RestrictionNotFoundError();
+    // Скрытую строку без права не видно вовсе: ответ тот же, что на несуществующую.
+    if (isHiddenKind(row.kind) && !(await this.roles.can(actor, HIDDEN_KIND_PERMISSION))) throw new RestrictionNotFoundError();
     await this.roles.require(actor, isRestrictionKind(row.kind) ? RESTRICTION_CATALOG[row.kind].permission : "players.ban");
     const lifted = await this.db(this.repository.lift(restrictionId, actor.accountId, comment, at));
     if (lifted === null) throw new RestrictionNotFoundError();
     await this.settle([lifted], at);
 
-    await this.roles.audit({ actorAccountId: actor.accountId, action: "players.unrestrict", target: row.accountId, before: auditOf(row), after: { comment } });
+    await this.roles.audit({ actorAccountId: actor.accountId, action: liftedAuditAction(row.kind), target: row.accountId, before: auditOf(row), after: { comment } });
     this.log("account_restriction_lifted", { accountId: row.accountId, actor: actor.accountId, kind: row.kind, early: true });
     const [view] = await this.views([lifted], at);
     if (view === undefined) throw new RestrictionNotFoundError();
@@ -145,7 +152,8 @@ export class RestrictionsService {
   /** История аккаунта для карточки в панели — новые сверху. */
   async history(actor: AccountRef, accountId: string, at = new Date()): Promise<RestrictionView[]> {
     await this.roles.require(actor, "players.view");
-    return await this.views(await this.db(this.repository.byAccount(accountId, HISTORY_SHOWN)), at);
+    const rows = await this.db(this.repository.byAccount(accountId, HISTORY_SHOWN));
+    return await this.views(visibleRows(rows, await this.roles.can(actor, HIDDEN_KIND_PERMISSION)), at);
   }
 
   /**
@@ -196,6 +204,15 @@ export class RestrictionsService {
       if (account !== null) names.set(id, account.displayName);
     }
     return rows.map((row) => restrictionView(row, at, names));
+  }
+
+  /**
+   * Скрытый вид без права отказывает так же, как на кривое тело, а не «нет
+   * права»: иначе сам ответ подсказал бы, что вид есть.
+   */
+  private async hideFromBlind(actor: AccountRef, kinds: readonly RestrictionKind[], message: string): Promise<void> {
+    if (!hasHiddenKind(kinds)) return;
+    if (!(await this.roles.can(actor, HIDDEN_KIND_PERMISSION))) throw new ValidationError(message);
   }
 
   private async db<T>(promise: Promise<T>): Promise<T> {
