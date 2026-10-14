@@ -253,9 +253,10 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       await projection.recorded(recorded(finished(id, season, { survivalSec: 300 })));
 
       const ttl = await redis.pttl(`seasons:${season.key}:easy`);
+      const expected = season.endsAt.getTime() + 21 * DAY - Date.now();
 
-      expect(ttl).toBeGreaterThan(season.endsAt.getTime() + 21 * DAY - Date.now() - 60_000);
-      expect(ttl).toBeLessThanOrEqual(season.endsAt.getTime() + 21 * DAY - Date.now());
+      // Часы Redis и теста могут расходиться на секунды: проверяется порядок величины, не миллисекунды.
+      expect(Math.abs(ttl - expected)).toBeLessThan(60_000);
     });
 
     it("настоящий приём забега: повтор итога из очереди клиента второй записи не даёт", async () => {
