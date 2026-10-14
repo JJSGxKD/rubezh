@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { HIDDEN_KINDS } from "../restrictions/restriction-catalog.js";
 import type { PlayerCursor, PlayerFilters, PlayerSort } from "./player-list-query.js";
 
 /**
@@ -47,6 +48,12 @@ export interface PlayerPage {
   cursor: PlayerCursor | null;
   /** сколько строк вернуть — на одну больше страницы, чтобы знать, есть ли следующая */
   limit: number;
+  /**
+   * Показывать ли скрытые виды ограничений: только тому, у кого есть право
+   * вида. Не задано — скрытые исключены из видов строки и из всех фильтров
+   * по ограничениям.
+   */
+  showHidden?: boolean;
 }
 
 export const PLAYER_LIST_REPOSITORY = Symbol("PLAYER_LIST_REPOSITORY");
@@ -77,14 +84,19 @@ const rowSchema = z.object({
 /**
  * Действующее ограничение аккаунта строки: не снято и срок не вышел. Ещё не
  * сведённое — условие идёт по индексу `(account_id, starts_at)` и не
- * трогает историю.
+ * трогает историю. Без права скрытые виды не считаются ограничением вовсе:
+ * ни в видах строки, ни в «любом», ни в «без ограничений».
  */
-const ACTIVE_RESTRICTION = Prisma.sql`r.account_id = a.account_id AND r.settled_at IS NULL AND r.lifted_at IS NULL AND (r.ends_at IS NULL OR r.ends_at > now())`;
+function activeRestriction(showHidden: boolean): Prisma.Sql {
+  const hidden = showHidden || HIDDEN_KINDS.length === 0 ? Prisma.empty : Prisma.sql` AND r.kind NOT IN (${Prisma.join(HIDDEN_KINDS)})`;
+  return Prisma.sql`r.account_id = a.account_id AND r.settled_at IS NULL AND r.lifted_at IS NULL AND (r.ends_at IS NULL OR r.ends_at > now())${hidden}`;
+}
 
-const SELECT = Prisma.sql`
+function selectSql(showHidden: boolean): Prisma.Sql {
+  return Prisma.sql`
   SELECT a.account_id, a.platform::text AS platform, a.display_name, a.photo_url, a.platform_user_id, a.username,
     a.created_at, a.last_seen_at, a.banned_at, a.ban_reason,
-    ARRAY(SELECT r.kind::text FROM account_restriction r WHERE ${ACTIVE_RESTRICTION} ORDER BY r.kind) AS restrictions,
+    ARRAY(SELECT r.kind::text FROM account_restriction r WHERE ${activeRestriction(showHidden)} ORDER BY r.kind) AS restrictions,
     COALESCE(p.level, 1) AS level,
     q.first_start_kind::text AS source,
     (SELECT l.campaign FROM link_click lc JOIN link l ON l.code = lc.link_code
@@ -96,9 +108,11 @@ const SELECT = Prisma.sql`
   LEFT JOIN acquisition q ON q.account_id = a.account_id
   LEFT JOIN account_funnel f ON f.account_id = a.account_id
   LEFT JOIN account_messaging m ON m.account_id = a.account_id`;
+}
 
 /** Условия фильтров, кроме уровня: уровень у сортировки по нему свой, по отрезкам. */
-export function filterConditions(filters: PlayerFilters): Prisma.Sql[] {
+export function filterConditions(filters: PlayerFilters, showHidden = false): Prisma.Sql[] {
+  const active = activeRestriction(showHidden);
   const conditions: Prisma.Sql[] = [];
   if (filters.platform !== undefined) conditions.push(Prisma.sql`a.platform = ${filters.platform}::"Platform"`);
   if (filters.registeredFrom !== undefined) conditions.push(Prisma.sql`a.created_at >= ${filters.registeredFrom}`);
@@ -113,9 +127,9 @@ export function filterConditions(filters: PlayerFilters): Prisma.Sql[] {
   }
   if (filters.payer !== undefined) conditions.push(filters.payer ? Prisma.sql`f.first_purchase_at IS NOT NULL` : Prisma.sql`f.first_purchase_at IS NULL`);
   if (filters.banned !== undefined) conditions.push(filters.banned ? Prisma.sql`a.banned_at IS NOT NULL` : Prisma.sql`a.banned_at IS NULL`);
-  if (filters.restricted === "any") conditions.push(Prisma.sql`EXISTS (SELECT 1 FROM account_restriction r WHERE ${ACTIVE_RESTRICTION})`);
-  else if (filters.restricted === "none") conditions.push(Prisma.sql`NOT EXISTS (SELECT 1 FROM account_restriction r WHERE ${ACTIVE_RESTRICTION})`);
-  else if (filters.restricted !== undefined) conditions.push(Prisma.sql`EXISTS (SELECT 1 FROM account_restriction r WHERE ${ACTIVE_RESTRICTION} AND r.kind = ${filters.restricted})`);
+  if (filters.restricted === "any") conditions.push(Prisma.sql`EXISTS (SELECT 1 FROM account_restriction r WHERE ${active})`);
+  else if (filters.restricted === "none") conditions.push(Prisma.sql`NOT EXISTS (SELECT 1 FROM account_restriction r WHERE ${active})`);
+  else if (filters.restricted !== undefined) conditions.push(Prisma.sql`EXISTS (SELECT 1 FROM account_restriction r WHERE ${active} AND r.kind = ${filters.restricted})`);
   if (filters.canMessage !== undefined) conditions.push(filters.canMessage ? Prisma.sql`m.can_message` : Prisma.sql`m.can_message IS NOT TRUE`);
   return conditions;
 }
@@ -138,14 +152,14 @@ function where(conditions: Prisma.Sql[]): Prisma.Sql {
 export function timeOrderedSql(page: PlayerPage): Prisma.Sql {
   const column = page.sort === "registered" ? Prisma.sql`a.created_at` : Prisma.sql`a.last_seen_at`;
   const { min, max } = levelRange(page.filters);
-  const conditions = filterConditions(page.filters);
+  const conditions = filterConditions(page.filters, page.showHidden === true);
   if (min > 1 || max < NO_LEVEL_CAP) conditions.push(Prisma.sql`COALESCE(p.level, 1) BETWEEN ${min} AND ${max}`);
   if (page.cursor !== null) {
     const at = new Date(page.cursor.value);
     conditions.push(page.order === "desc" ? Prisma.sql`(${column}, a.account_id) < (${at}, ${page.cursor.accountId}::uuid)` : Prisma.sql`(${column}, a.account_id) > (${at}, ${page.cursor.accountId}::uuid)`);
   }
   const direction = page.order === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`;
-  return Prisma.sql`${SELECT} ${where(conditions)} ORDER BY ${column} ${direction}, a.account_id ${direction} LIMIT ${page.limit}`;
+  return Prisma.sql`${selectSql(page.showHidden === true)} ${where(conditions)} ORDER BY ${column} ${direction}, a.account_id ${direction} LIMIT ${page.limit}`;
 }
 
 export type LevelSegment = "levelled" | "first";
@@ -172,17 +186,18 @@ export function levelSegmentSql(page: PlayerPage, segment: LevelSegment, limit: 
   const inFirstLevel = cursor !== null && cursor.value <= 1;
   const desc = page.order === "desc";
   const direction = desc ? Prisma.sql`DESC` : Prisma.sql`ASC`;
-  const conditions = filterConditions(page.filters);
+  const showHidden = page.showHidden === true;
+  const conditions = filterConditions(page.filters, showHidden);
   if (segment === "first") {
     conditions.push(Prisma.sql`(p.level IS NULL OR p.level <= 1)`);
     if (cursor !== null && inFirstLevel) conditions.push(desc ? Prisma.sql`a.account_id < ${cursor.accountId}::uuid` : Prisma.sql`a.account_id > ${cursor.accountId}::uuid`);
-    return Prisma.sql`${SELECT} ${where(conditions)} ORDER BY a.account_id ${direction} LIMIT ${limit}`;
+    return Prisma.sql`${selectSql(showHidden)} ${where(conditions)} ORDER BY a.account_id ${direction} LIMIT ${limit}`;
   }
   conditions.push(Prisma.sql`p.level BETWEEN ${Math.max(min, 2)} AND ${max}`);
   if (cursor !== null && !inFirstLevel) {
     conditions.push(desc ? Prisma.sql`(p.level, p.account_id) < (${cursor.value}, ${cursor.accountId}::uuid)` : Prisma.sql`(p.level, p.account_id) > (${cursor.value}, ${cursor.accountId}::uuid)`);
   }
-  return Prisma.sql`${SELECT} ${where(conditions)} ORDER BY p.level ${direction}, p.account_id ${direction} LIMIT ${limit}`;
+  return Prisma.sql`${selectSql(showHidden)} ${where(conditions)} ORDER BY p.level ${direction}, p.account_id ${direction} LIMIT ${limit}`;
 }
 
 @Injectable()
