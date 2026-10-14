@@ -1,8 +1,8 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaRestrictionsRepository, REPLACED_COMMENT, type NewRestriction } from "../src/modules/restrictions/restrictions.repository.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Ограничения на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -22,7 +22,7 @@ describe.skipIf(DATABASE_URL === "")("ограничения на живом Pos
   let repository: PrismaRestrictionsRepository;
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     repository = new PrismaRestrictionsRepository(prisma);
   });
