@@ -374,3 +374,57 @@ describe("забеги в рейтинге по HTTP", () => {
     expect(await board.best("hard", target.accountId)).toBe(420);
   });
 });
+
+describe("доска зрителя: `boardOf` (T-0112)", () => {
+  async function owner(): Promise<AccountRef> {
+    const staff = await player("владелец");
+    await rolesRepository.grant(staff.accountId, "owner", null);
+    return staff;
+  }
+
+  it("без ограничения — общая доска; с отдельной доской — полная; блокировка целиком, снятое и истёкшее — общая", async () => {
+    const boss = await owner();
+    const [free, split, banned, lifted, expired] = [await player("Свободный"), await player("Отдельная"), await player("Заблокирован"), await player("Снято"), await player("Истекло")];
+    const now = Date.now();
+    await restrictions.impose(boss, split.accountId, input({ kinds: ["separate_board"], notify: false }), new Date(now));
+    await restrictions.impose(moderator, banned.accountId, input({ kinds: ["all"], reason: "abuse" }), new Date(now));
+    const [row] = await restrictions.impose(boss, lifted.accountId, input({ kinds: ["separate_board"], notify: false }), new Date(now));
+    await restrictions.lift(boss, row?.restrictionId ?? "", "ошиблись", new Date(now + 1000));
+    await restrictions.impose(boss, expired.accountId, input({ kinds: ["separate_board"], notify: false, endsAt: new Date(now + DAY).toISOString() }), new Date(now));
+
+    expect(await rating.rating.boardOf(free.accountId)).toBe("common");
+    expect(await rating.rating.boardOf(split.accountId)).toBe("full");
+    // Блокировку целиком `status` подставляет вместо любого вида — это не отдельная доска.
+    expect(await rating.rating.boardOf(banned.accountId)).toBe("common");
+    expect(await rating.rating.boardOf(lifted.accountId)).toBe("common");
+    expect(await rating.rating.boardOf(expired.accountId, new Date(now + DAY - 1000))).toBe("full");
+    expect(await rating.rating.boardOf(expired.accountId, new Date(now + DAY + 1000))).toBe("common");
+  });
+
+  it("сразу после `forget` — без ожидания полминуты кеша", async () => {
+    const target = await player("Игрок");
+    expect(await rating.rating.boardOf(target.accountId)).toBe("common");
+    rating.restrictions.restrict(target.accountId, "separate_board", { notify: false });
+    // Кеш реплики ещё держит прежний ответ.
+    expect(await rating.rating.boardOf(target.accountId)).toBe("common");
+
+    await rating.gate.forget(target.accountId);
+    expect(await rating.rating.boardOf(target.accountId)).toBe("full");
+  });
+
+  it("вид не меняет игру: забеги рейтинговые, из досок игрок не пропадает, рейтинг для него не закрыт", async () => {
+    const boss = await owner();
+    const target = await player("Игрок");
+    await service.finish(target, finish({ survivalSec: 300 }));
+    await restrictions.impose(boss, target.accountId, input({ kinds: ["separate_board"], notify: false }));
+
+    expect(await board.best("normal", target.accountId)).toBe(300);
+    const run = finish({ survivalSec: 400 });
+    expect(await service.finish(target, run)).toMatchObject({ recorded: true, verdict: "ok", isNewBest: true, rank: 1 });
+    expect(runs.rows.get(run.runId)).toMatchObject({ ranked: true });
+    expect(runs.rows.get(run.runId)?.ratingRestricted ?? null).toBeNull();
+    expect((await view.detail(target.accountId, run.runId)).rating).toBe("ranked");
+    expect(await rating.rating.hold(target.accountId)).toBeNull();
+    expect(await rating.rating.excluded()).toEqual([]);
+  });
+});
