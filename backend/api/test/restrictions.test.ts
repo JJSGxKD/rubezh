@@ -114,16 +114,16 @@ describe("правила ограничений", () => {
     const s = setup();
     const moderator = await person(s, "500", "moderator");
     const endsAt = new Date(NOW.getTime() + 3 * DAY).toISOString();
-    const told = s.service.preview(moderator, { kinds: ["promo_codes", "all"], endsAt, reason: "promo_abuse", notify: true }, NOW);
+    const told = await s.service.preview(moderator, { kinds: ["promo_codes", "all"], endsAt, reason: "promo_abuse", notify: true }, NOW);
     expect(told.problem).toBeNull();
     expect(told.shown).toEqual([
       { kind: "promo_codes", title: "Промокоды", text: "Промокоды — закрыто до 4 октября, 15:00 МСК. Причина: Промокоды использовались не по правилам" },
       { kind: "all", title: "Всё — блокировка", text: "Аккаунт заблокирован до 4 октября, 15:00 МСК. Причина: Промокоды использовались не по правилам" },
     ]);
-    const silent = s.service.preview(moderator, { kinds: ["ad_rewards", "leaderboard"], endsAt: null, reason: "ad_abuse", notify: false }, NOW);
+    const silent = await s.service.preview(moderator, { kinds: ["ad_rewards", "leaderboard"], endsAt: null, reason: "ad_abuse", notify: false }, NOW);
     expect(silent.shown.map((item) => item.text)).toEqual(["Сейчас недоступно — попробуйте позже", expect.stringMatching(/^Ничего: в рейтинге игрок видит себя/)]);
-    expect(s.service.preview(moderator, { kinds: ["all"], endsAt: null, reason: "abuse", notify: false }, NOW).problem).toMatch(/молча не накладывается/);
-    expect(s.service.preview(moderator, { kinds: ["promo_codes"], endsAt: new Date(NOW.getTime() - DAY).toISOString(), reason: "abuse", notify: true }, NOW).problem).toMatch(/Срок уже прошёл/);
+    expect((await s.service.preview(moderator, { kinds: ["all"], endsAt: null, reason: "abuse", notify: false }, NOW)).problem).toMatch(/молча не накладывается/);
+    expect((await s.service.preview(moderator, { kinds: ["promo_codes"], endsAt: new Date(NOW.getTime() - DAY).toISOString(), reason: "abuse", notify: true }, NOW)).problem).toMatch(/Срок уже прошёл/);
   });
 
   it("вход панели: виды без повторов, причина из шаблонов, комментарий ограничен, лишнее поле — отказ", () => {
@@ -523,11 +523,11 @@ describe("скрытое ограничение «Отдельная доска�
     const [row] = await s.service.impose(owner, target.accountId, hidden(), NOW);
     const id = row?.restrictionId ?? "";
 
-    const refused = await s.service.lift(moderator, id, "хочу", NOW).catch((error: Error) => error);
-    const unknown = await s.service.lift(moderator, "00000000-0000-4000-8000-000000000999", "хочу", NOW).catch((error: Error) => error);
+    const refused: unknown = await s.service.lift(moderator, id, "хочу", NOW).catch((error: unknown) => error);
+    const unknown: unknown = await s.service.lift(moderator, "00000000-0000-4000-8000-000000000999", "хочу", NOW).catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(RestrictionNotFoundError);
     // Тот же ответ, что на несуществующее.
-    expect(refused.message).toBe(unknown.message);
+    expect(refused).toEqual(unknown);
     expect(s.repository.rows[0]?.liftedAt).toBeNull();
 
     const lifted = await s.service.lift(owner, id, "разобрались", new Date(NOW.getTime() + HOUR));
