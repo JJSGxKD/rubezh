@@ -3,8 +3,8 @@ id: T-0110
 title: Недельный сезон рейтинга — сервер: таблица недели, закрытие, награды, друзья
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead2-17
 size: M
 depends_on: []
@@ -12,6 +12,13 @@ zones:
   - backend/api/src/modules/seasons/**
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
+  - backend/api/src/cli/seasons-rebuild.ts
+  - backend/api/src/modules/runs/runs-hooks.ts
+  - backend/api/src/modules/runs/runs.service.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/seasons.integration.test.ts
+  - backend/api/test/seasons.test.ts
+  - backend/api/test/wipe-plan.test.ts
 shared:
   - backend/api/src/app.module.ts
   - backend/api/src/modules/wallet/wallet-types.ts
@@ -21,6 +28,8 @@ shared:
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - backend/api/package.json
+  - docs/39-retention-mechanics.md
 runner: local
 executor: sonnet-5.5
 effort: extra
@@ -332,10 +341,10 @@ Prometheus: счётчик закрытых сезонов и длительно
 
 ## Вопросы к тимлиду
 
-- �Подтверждено `claude-lead-1` 13.10.2026: первый сезон — со следующего понедельника
+- �Подтверждено `claude-lead-1` 13.10.2026: первый сезон — со следующего понедельника
   после выката (`2026-11-02`), без неполной недели; награда не сразу, а по
   «Забрать»; награда за место заменяет награду за порог.
-- �Подтверждено `claude-lead-1` 13.10.2026: престиж пишется в `season_reward`, а
+- �Подтверждено `claude-lead-1` 13.10.2026: престиж пишется в `season_reward`, а
   хранилище очков заведёт задача достижений (К1); пока престиж видно только в
   истории сезона.
 - Объём на верхней границе M. Если ревью сочтёт его большим, границы

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
+import { parseStartDate } from "../seasons/season-rules.js";
 
 /**
  * Каталог настроек без релиза (docs/35-stage4-plan.md §3.18, Р53).
@@ -89,6 +90,11 @@ const FEATURES_GROUP = "Функции сервера";
 const ADS_GROUP = "Реклама";
 
 const HOME_GROUP = "Главная";
+
+const SEASONS_GROUP = "Сезоны рейтинга";
+
+/** Последняя допустимая дата старта сезонов: понедельник 28 декабря 2099. */
+const SEASONS_START_MAX = 20_991_228;
 
 /**
  * Целое число в пределах — схема и пределы из одного места: панель
@@ -295,6 +301,29 @@ export const SETTINGS = {
     { min: 0, max: 240, unit: ["минута", "минуты", "минут"] },
     10,
   ),
+  /**
+   * Старт недельных сезонов рейтинга (docs/39-retention-mechanics.md Р1,
+   * tasks/T-0110): «ключ задан — включено» (Р53). Дата — числом ГГГГММДД,
+   * потому что редактор панели знает числа, адреса, ссылки и переключатели, а
+   * даты не знает; понедельник UTC проверяет схема. Без окружения: дату
+   * первого сезона ставит тимлид в панели.
+   */
+  seasonsStartDate: {
+    key: "seasons.start-date",
+    group: SEASONS_GROUP,
+    title: "Старт недельных сезонов",
+    hint: "Понедельник, с которого идут недельные сезоны рейтинга, числом ГГГГММДД: 20261102. Забеги раньше этой даты в сезон не идут. 0 — сезонов нет, ручки сезона отвечают «выключено»",
+    kind: "number",
+    schema: z
+      .number()
+      .int({ message: "целое число" })
+      .min(0, { message: "не меньше 0" })
+      .max(SEASONS_START_MAX, { message: `не больше ${String(SEASONS_START_MAX)}` })
+      .refine((value) => value === 0 || parseStartDate(value) !== null, { message: "понедельник в виде ГГГГММДД, например 20261102, или 0" }),
+    range: { min: 0, max: SEASONS_START_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
+    fromEnv: () => null,
+    fallback: 0,
+  } satisfies SettingDefinition<number>,
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",

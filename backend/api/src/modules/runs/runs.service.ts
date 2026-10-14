@@ -195,6 +195,8 @@ export class RunsService {
       const after = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false);
       if (after !== null && after.survivalSec !== best?.survivalSec) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.survivalSec);
     }
+    // Недельная таблица сезона и другие проекции пересчитываются по базе: решение модератора они узнают отсюда.
+    await this.hooks.emitRankingChanged({ accountId: changed.accountId, difficulty: changed.difficulty });
     await this.roles.audit({
       actorAccountId: actor.accountId,
       action: ranked ? "players.run.rerank" : "players.run.unrank",
