@@ -1,6 +1,6 @@
 import "reflect-metadata";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Module, type Type } from "@nestjs/common";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Logger, Module, type Type } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
 import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
@@ -53,7 +53,7 @@ class MemoryLinks implements LinksRepository {
     this.clicks.push(click);
   }
   async list(): Promise<LinkStats[]> {
-    return [...this.links.values()].map((link) => ({ ...link, clicks: this.clicks.filter((click) => click.linkCode === link.code).length, clicks30d: 0, launches: 0, directLaunches: 0 }));
+    return [...this.links.values()].map((link) => ({ ...link, clicks: this.clicks.filter((click) => click.linkCode === link.code).length, clicks30d: 0, launches: 0, directLaunches: 0, devices: { mobile: 0, desktop: 0, web: 0, unknown: 0 } }));
   }
 }
 
@@ -320,6 +320,66 @@ describe("ссылки в панели: цель", () => {
   });
 });
 
+describe("проверки доступности", () => {
+  const actor = { accountId: "a1", platform: "telegram" as const, platformUserId: "1" };
+  const plain = { campaign: "c", source: null, medium: null, note: null, platform: "telegram" as const };
+  const UPTIMEROBOT = "Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)";
+
+  async function settled(): Promise<void> {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  it("Referer check-host.net — не клик: страница-заглушка вместо перехода", async () => {
+    const link = await service.create(actor, plain);
+    const visit = await service.visit(link.code, visitor({ referer: "https://check-host.net/check-http?host=x" }));
+    expect(visit).toEqual({ kind: "check", url: `https://rubezh.example/r/${link.code}` });
+    await settled();
+    expect(repository.clicks).toEqual([]);
+  });
+
+  it("User-Agent сервиса при обычном Referer — тоже не клик", async () => {
+    const link = await service.create(actor, plain);
+    expect((await service.visit(link.code, visitor({ userAgent: UPTIMEROBOT }))).kind).toBe("check");
+    await settled();
+    expect(repository.clicks).toEqual([]);
+  });
+
+  it("похожий хост Referer — человек: переход и клик", async () => {
+    const link = await service.create(actor, plain);
+    expect((await service.visit(link.code, visitor({ referer: "https://check-host.net.evil.example/" }))).kind).toBe("redirect");
+    await settled();
+    expect(repository.clicks).toHaveLength(1);
+  });
+
+  it("приложение недоступно — монитор видит настоящую недоступность", async () => {
+    const link = await service.create(actor, plain);
+    miniApp = null;
+    expect((await service.visit(link.code, visitor({ userAgent: UPTIMEROBOT }))).kind).toBe("unavailable");
+    expect(repository.clicks).toEqual([]);
+  });
+
+  it("краулер превью остаётся краулером", async () => {
+    const link = await service.create(actor, plain);
+    expect(await service.visit(link.code, visitor({ userAgent: "TelegramBot (like TwitterBot)" }))).toEqual({ kind: "preview", url: `https://rubezh.example/r/${link.code}` });
+  });
+
+  it("отсечённая проверка — строка лога с сервисом; для человека лога нет", async () => {
+    const spy = vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+    try {
+      const link = await service.create(actor, plain);
+      await service.visit(link.code, visitor());
+      expect(spy).not.toHaveBeenCalled();
+
+      await service.visit(link.code, visitor({ userAgent: "Pingdom.com_bot_version_1.4_(http://www.pingdom.com/)" }));
+      expect(spy).toHaveBeenCalledTimes(1);
+      const line: unknown = JSON.parse(String(spy.mock.calls[0]?.[0]));
+      expect(line).toMatchObject({ module: "links", event: "availability_check_skipped", service: "pingdom", link: link.code });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 describe("разбор посетителя и страница", () => {
   it("от Referer — только хост, от Accept-Language — первый язык", () => {
     expect(hostOf("https://t.me/s/channel?x=1")).toBe("t.me");
@@ -389,5 +449,28 @@ describe("HTTP /r/:code", () => {
 
     expect((await target.inject({ method: "GET", url: "/r/NoSuchCode9", headers: { "user-agent": HUMAN } })).statusCode).toBe(404);
     expect((await target.inject({ method: "GET", url: "/r/../etc", headers: { "user-agent": HUMAN } })).statusCode).toBe(404);
+  });
+
+  it("проверка доступности: 200 без кеша и без клика; краулеру превью — по-прежнему с кешем мессенджера", async () => {
+    const target = await start();
+    const link = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "c", source: null, medium: null, note: null, platform: "telegram" });
+
+    const monitor = await target.inject({ method: "GET", url: `/r/${link.code}`, headers: { "user-agent": "Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)" } });
+    expect(monitor.statusCode).toBe(200);
+    expect(monitor.headers["cache-control"]).toBe("no-store");
+    expect(monitor.body).toContain("og:title");
+
+    const fromCheckHost = await target.inject({ method: "GET", url: `/r/${link.code}`, headers: { "user-agent": HUMAN, referer: "https://check-host.net/check-http?host=x" } });
+    expect(fromCheckHost.statusCode).toBe(200);
+    expect(fromCheckHost.headers["cache-control"]).toBe("no-store");
+
+    const crawler = await target.inject({ method: "GET", url: `/r/${link.code}`, headers: { "user-agent": "TelegramBot (like TwitterBot)" } });
+    expect(crawler.headers["cache-control"]).toBe("private, max-age=300");
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(repository.clicks).toEqual([]);
+
+    miniApp = null;
+    expect((await target.inject({ method: "GET", url: `/r/${link.code}`, headers: { "user-agent": "Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)" } })).statusCode).toBe(503);
   });
 });
