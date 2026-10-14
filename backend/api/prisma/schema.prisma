@@ -190,6 +190,9 @@ model Account {
   settings      AccountSettings?
   // Конверсии закупленной рекламы (WP43)
   adConversions AdConversion[]
+  // Недельные сезоны рейтинга (T-0110)
+  seasonResults SeasonResult[]
+  seasonRewards SeasonReward[]
 
   // Друзья (WP14)
   friendLink       FriendLink?
@@ -457,6 +460,8 @@ model Run {
   @@index([accountId, finishedAt])
   // Пересборка лидерборда: лучший рейтинговый забег каждого по сложности.
   @@index([difficulty, ranked, survivalSec])
+  // Закрытие недельного сезона: рейтинговые забеги сложности за окно недели.
+  @@index([difficulty, finishedAt])
   // Очередь разбора: подозрительные и отклонённые, свежие первыми.
   @@index([verdict, finishedAt])
   @@map("run")
@@ -2170,4 +2175,75 @@ model TesterCompensation {
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
   @@map("tester_compensation")
+}
+
+// Недельный сезон рейтинга (docs/39-retention-mechanics.md Р1, tasks/T-0110)
+
+/// Закрытый недельный сезон (календарная неделя UTC). Строка появляется в
+/// транзакции закрытия первой: уникальный `season_key` делает закрытие
+/// идемпотентным и безопасным при двух репликах. Незакрытых сезонов в таблице нет.
+model Season {
+  /// дата понедельника: `2026-11-02`
+  seasonKey String   @id @map("season_key") @db.VarChar(10)
+  startsAt  DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt    DateTime @map("ends_at") @db.Timestamptz(3)
+  closedAt  DateTime @map("closed_at") @db.Timestamptz(3)
+  /// сколько аккаунтов попали в итоги хоть одной сложности
+  players   Int
+  /// скольким назначена награда
+  rewarded  Int
+
+  results SeasonResult[]
+  rewards SeasonReward[]
+
+  @@map("season")
+}
+
+/// Итог аккаунта на сложности за сезон: лучшее рейтинговое время недели и
+/// окончательное место. Ограничение рейтинга на момент закрытия — аккаунта
+/// в итогах нет. Пишется закрытием один раз.
+model SeasonResult {
+  seasonKey  String     @map("season_key") @db.VarChar(10)
+  accountId  String     @map("account_id") @db.Uuid
+  difficulty Difficulty
+  bestSec    Float      @map("best_sec")
+  place      Int
+  /// сколько игроков было в таблице сложности
+  boardSize  Int        @map("board_size")
+
+  season  Season  @relation(fields: [seasonKey], references: [seasonKey], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([seasonKey, accountId, difficulty])
+  @@index([seasonKey, difficulty, place])
+  // История аккаунта: его сезоны.
+  @@index([accountId, seasonKey])
+  @@map("season_result")
+}
+
+/// Награда аккаунта за сезон — одна на пару (сезон, аккаунт). Ждёт «Забрать»:
+/// `pending` → `claimed` одним условным обновлением. Монеты кладёт кошелёк
+/// ключом `season:<сезон>:<аккаунт>`; престиж только записан — хранилища очков
+/// престижа пока нет (достижения, К1).
+model SeasonReward {
+  seasonKey  String      @map("season_key") @db.VarChar(10)
+  accountId  String      @map("account_id") @db.Uuid
+  coins      Int
+  prestige   Int
+  /// сложность награды за место; у награды за порог — `null`
+  difficulty Difficulty?
+  place      Int?
+  /// `place` или `threshold`
+  kind       String      @db.VarChar(10)
+  /// `pending` или `claimed`
+  status     String      @db.VarChar(10)
+  claimedAt  DateTime?   @map("claimed_at") @db.Timestamptz(3)
+
+  season  Season  @relation(fields: [seasonKey], references: [seasonKey], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([seasonKey, accountId])
+  // Ждущие награды аккаунта: знак меню и список «Забрать».
+  @@index([accountId, status])
+  @@map("season_reward")
 }
