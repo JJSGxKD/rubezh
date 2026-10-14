@@ -1,10 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaProgressRepository } from "../src/modules/progress/progress.repository.js";
 import { PrismaRunDoubleRepository } from "../src/modules/progress/run-double.repository.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Удвоение награды за забег на живом Postgres (docs/17-testing-strategy.md
@@ -39,7 +39,7 @@ describe.skipIf(DATABASE_URL === "")("удвоение награды на жи�
   }
 
   beforeAll(() => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     progress = new PrismaProgressRepository(prisma);
     repository = new PrismaRunDoubleRepository(prisma);

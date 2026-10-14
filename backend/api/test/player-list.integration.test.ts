@@ -1,9 +1,9 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Prisma, PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaPlayerListRepository, levelSegmentSql, timeOrderedSql, type PlayerListRow, type PlayerPage } from "../src/modules/player-list/player-list.repository.js";
 import type { PlayerFilters, PlayerSort } from "../src/modules/player-list/player-list-query.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Список игроков на живом Postgres (docs/35-stage4-plan.md WP32; адрес —
@@ -40,7 +40,7 @@ describe.skipIf(DATABASE_URL === "")("список игроков на живо�
   }
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     repository = new PrismaPlayerListRepository(prisma);
     const accounts = new PrismaAccountRepository(prisma);
     // Шесть игроков; у двух — одинаковое время регистрации: курсор обязан различать их по id.
