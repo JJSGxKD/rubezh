@@ -1,9 +1,9 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaNotificationsRepository } from "../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Лента уведомлений на живом Postgres (docs/17-testing-strategy.md §4.2;
@@ -31,7 +31,7 @@ describe.skipIf(DATABASE_URL === "")("уведомления на живом Pos
     service.notify({ accountId: to, kind: "friend_gift", payload: { fromAccountId: to, fromName: "Дым" }, dedupeKey: key, at });
 
   beforeAll(() => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     repository = new PrismaNotificationsRepository(prisma);
     service = new NotificationsService(repository);

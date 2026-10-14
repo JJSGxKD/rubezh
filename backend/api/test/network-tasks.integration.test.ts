@@ -1,5 +1,4 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAdsRepository, type AdBlockRow, type NewAdSession } from "../src/modules/ads/ads.repository.js";
@@ -7,6 +6,7 @@ import { claimVerdict } from "../src/modules/ads/ads.service.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { admitsTask } from "../src/modules/tasks/network-task-rules.js";
 import { PrismaNetworkTasksRepository } from "../src/modules/tasks/network-tasks.repository.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Задания рекламных сетей на живом Postgres (docs/35-stage4-plan.md WP13,
@@ -54,7 +54,7 @@ describe.skipIf(DATABASE_URL === "")("задания сетей на живом 
   }
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     ads = new PrismaAdsRepository(prisma);
     rows = new PrismaNetworkTasksRepository(prisma);

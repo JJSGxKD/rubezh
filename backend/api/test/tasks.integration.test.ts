@@ -1,4 +1,3 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
@@ -8,6 +7,7 @@ import { rewardReason, type TaskParams, type TaskDef } from "../src/modules/task
 import { ACHIEVEMENT_PERIOD_START, PrismaTasksRepository, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import { webp } from "./helpers/webp-samples.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Задания на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -49,7 +49,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
   const runId = () => `tasks-it-${String(Date.now())}-${String(runNo++)}`;
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     repository = new PrismaTasksRepository(prisma);
     catalog = await repository.catalog();
