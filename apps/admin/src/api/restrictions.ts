@@ -11,7 +11,15 @@ import type { AdminApi, ApiResult } from "./client";
 
 const iso = z.string();
 
-const kindSchema = z.object({ kind: z.string(), title: z.string(), effect: z.string(), permission: z.string(), silentAllowed: z.boolean() });
+const kindSchema = z.object({
+  kind: z.string(),
+  title: z.string(),
+  effect: z.string(),
+  permission: z.string(),
+  silentAllowed: z.boolean(),
+  /** скрытый вид приходит только тем, у кого есть его право; сервер старше панели поля не шлёт — не скрыт */
+  hidden: z.boolean().default(false),
+});
 const reasonSchema = z.object({ reason: z.string(), title: z.string(), player: z.string() });
 
 export const restrictionCatalogSchema = z.object({ kinds: z.array(kindSchema), reasons: z.array(reasonSchema) });
@@ -92,9 +100,40 @@ export function endsAtOf(draft: Pick<RestrictDraft, "term" | "until">, now: Date
   return new Date(now.getTime() + days * DAY_MS).toISOString();
 }
 
-/** Блокировку игрок видит при входе — молча её не наложить. */
-export function notifyOf(draft: Pick<RestrictDraft, "kinds" | "notify">): boolean {
+const NO_HIDDEN: ReadonlySet<string> = new Set();
+
+/** Скрытые виды каталога — те, что пришли с `hidden`; без права вида их в каталоге нет. */
+export function hiddenKindsOf(catalog: RestrictionCatalog): ReadonlySet<string> {
+  return new Set(catalog.kinds.filter((item) => item.hidden).map((item) => item.kind));
+}
+
+/** Виды, которые отмечают галочками: все, кроме блокировки целиком — у неё своя кнопка. */
+export function pickableKinds(catalog: RestrictionCatalog): RestrictionKindInfo[] {
+  return catalog.kinds.filter((item) => item.kind !== BAN_KIND);
+}
+
+/** Выбран ли скрытый вид — тогда «сообщить игроку» выключено и недоступно. */
+export function notifyLocked(draft: Pick<RestrictDraft, "kinds">, hidden: ReadonlySet<string> = NO_HIDDEN): boolean {
+  return draft.kinds.includes(BAN_KIND) || draft.kinds.some((kind) => hidden.has(kind));
+}
+
+/** Блокировку игрок видит при входе — молча её не наложить; скрытый вид, наоборот, всегда молча. */
+export function notifyOf(draft: Pick<RestrictDraft, "kinds" | "notify">, hidden: ReadonlySet<string> = NO_HIDDEN): boolean {
+  if (draft.kinds.some((kind) => hidden.has(kind))) return false;
   return draft.kinds.includes(BAN_KIND) || draft.notify;
+}
+
+/**
+ * Галочка вида. Блокировка целиком и скрытый вид идут по одному: выбор любого
+ * снимает остальные, и выбор обычного вида снимает их. Скрытому «сообщить»
+ * выключается — у него нет ничего, что можно сообщить.
+ */
+export function toggleKind(draft: RestrictDraft, kind: string, checked: boolean, hidden: ReadonlySet<string> = NO_HIDDEN): RestrictDraft {
+  if (hidden.has(kind) && checked) return { ...draft, kinds: [kind], notify: false };
+  const kinds = !checked ? draft.kinds.filter((item) => item !== kind) : kind === BAN_KIND ? [BAN_KIND] : [...draft.kinds.filter((item) => item !== kind && !hidden.has(item)), kind];
+  // Ушли от скрытого вида — «сообщить игроку» снова доступно и включено, как в пустом диалоге.
+  const left = draft.kinds.some((item) => hidden.has(item)) && !kinds.some((item) => hidden.has(item));
+  return { ...draft, kinds, notify: left ? emptyDraft().notify : draft.notify };
 }
 
 /** Что не так с черновиком до отправки; `null` — готов. Срок и молчание сверх этого проверяет сервер предпросмотром. */
@@ -115,11 +154,11 @@ export interface ImposeBody {
 }
 
 /** Тело наложения; `null` — черновик не готов (причина — `draftProblem`). */
-export function imposeBody(draft: RestrictDraft, now: Date): ImposeBody | null {
+export function imposeBody(draft: RestrictDraft, now: Date, hidden: ReadonlySet<string> = NO_HIDDEN): ImposeBody | null {
   const endsAt = endsAtOf(draft, now);
   if (draftProblem(draft, now) !== null || endsAt === undefined) return null;
   const comment = draft.comment.trim();
-  return { kinds: [...draft.kinds], endsAt, reason: draft.reason, comment: comment === "" ? null : comment, notify: notifyOf(draft) };
+  return { kinds: [...draft.kinds], endsAt, reason: draft.reason, comment: comment === "" ? null : comment, notify: notifyOf(draft, hidden) };
 }
 
 /** Подпись главной кнопки — что случится по нажатию, а не «Сохранить». */

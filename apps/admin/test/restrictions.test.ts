@@ -198,8 +198,10 @@ describe("скрытый вид в диалоге (T-0112)", () => {
     expect(toggleKind(withBoard, "promo_codes", true, hidden).kinds).toEqual(["promo_codes"]);
     expect(toggleKind(withBoard, BAN_KIND, true, hidden).kinds).toEqual([BAN_KIND]);
     expect(toggleKind(withBoard, "separate_board", false, hidden).kinds).toEqual([]);
-    // Сообщение игроку возвращается тем, чем было до вида: после снятия вида галочка снова доступна.
+    // Ушли от вида — «сообщить игроку» снова доступно и включено, как в пустом диалоге.
     expect(notifyLocked(toggleKind(withBoard, "separate_board", false, hidden), hidden)).toBe(false);
+    expect(toggleKind(withBoard, "separate_board", false, hidden).notify).toBe(true);
+    expect(toggleKind(withBoard, "promo_codes", true, hidden).notify).toBe(true);
   });
 
   it("блокировка целиком по-прежнему снимает остальные виды и всегда видна игроку", () => {
