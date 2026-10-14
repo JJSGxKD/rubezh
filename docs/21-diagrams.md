@@ -633,8 +633,10 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level; партнёрские — channel, link, bot"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; партнёрские — channel, link, bot"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
+        string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
+        json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
         int target "больше нуля"
         string title "nullable: текст по виду цели у клиента"
         int coins
@@ -1018,6 +1020,11 @@ erDiagram
   Подписка на канал бывает ежедневной и еженедельной (Р82): срок — тот же
   `period`, каждый срок — своя строка прогресса, бот спрашивается при
   каждом заборе. У ссылки и бота повтора нет — переход не проверить.
+  Ротация (`39-retention-mechanics.md` П1, Р102): у строк пула есть ступень
+  `tier`, из которой чистая функция от игровых суток или недели (по
+  Москве) выбирает набор — 2/2/1 дневных, 2/3/1 недельных. Набор нигде не
+  хранится: он одинаков у всех игроков и реплик, забег двигает только
+  выбранные, невыбранные нельзя забрать, знак меню их не считает.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
