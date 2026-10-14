@@ -12,6 +12,7 @@ import { PrismaFriendsRepository } from "../src/modules/friends/friends.reposito
 import type { RestrictionRow } from "../src/modules/restrictions/restrictions.repository.js";
 import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
+import { DIFFICULTIES } from "../src/modules/runs/run-rules.js";
 import { PrismaRunsRepository, type RunFinishRecord } from "../src/modules/runs/runs.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { boardViewSchema, claimResultSchema, overviewSchema } from "../src/modules/seasons/dto/seasons.dto.js";
@@ -44,6 +45,11 @@ import { redisDatabase } from "./helpers/redis-database.js";
  * прогонов, и закрытый сезон прошлого прогона не должен мешать этому. Старт
  * сезонов настройки ставится на ту же неделю, чтобы «просроченными» были
  * только сезоны самого теста. Redis — своя база (сдвиг 8).
+ *
+ * Неделя принадлежит одному тесту целиком. Занятость проверяется не только по
+ * базе: часть тестов пишет в таблицу недели, не трогая базу, и без памяти о
+ * выданных неделях два теста изредка получали одну и ту же — тогда «всего в
+ * таблице» оказывалось больше, чем положил сам тест.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -123,13 +129,22 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
     return created.accountId;
   }
 
-  /** Неделя далёкого будущего, на которой (и на `weeks - 1` следующих) ещё нет ни сезона, ни забегов. */
+  /** Недели, уже выданные тестам этого прогона: тест, не записавший ничего в базу, всё равно держит свою неделю. */
+  const handedOut = new Set<string>();
+
+  /** Неделя далёкого будущего, на которой (и на `weeks - 1` следующих) нет ни сезона, ни забегов, ни таблицы в Redis, ни другого теста. */
   async function freeWeek(weeks = 1): Promise<Season> {
     for (;;) {
       const season = seasonOf(new Date(FIRST_MONDAY + (1_000 + Math.floor(Math.random() * 1_400)) * 7 * DAY));
       const until = new Date(season.startsAt.getTime() + weeks * 7 * DAY);
+      const keys = Array.from({ length: weeks }, (_, index) => seasonOf(new Date(season.startsAt.getTime() + index * 7 * DAY)).key);
+      if (keys.some((key) => handedOut.has(key))) continue;
       const taken = (await prisma.season.count({ where: { startsAt: { gte: season.startsAt, lt: until } } })) + (await prisma.run.count({ where: { finishedAt: { gte: season.startsAt, lt: until } } }));
-      if (taken === 0) return season;
+      if (taken > 0) continue;
+      const boards = keys.flatMap((key) => DIFFICULTIES.map((difficulty) => `seasons:${key}:${difficulty}`));
+      if ((await redis.exists(...boards)) > 0) continue;
+      for (const key of keys) handedOut.add(key);
+      return season;
     }
   }
 
