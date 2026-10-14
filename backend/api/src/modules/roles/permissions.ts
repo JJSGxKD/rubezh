@@ -38,6 +38,8 @@ export const PERMISSIONS = [
   // награды за друзей, подарки, реклама, промокоды, партнёрские задания.
   // Блокировка целиком — по-прежнему `players.ban`
   "players.restrict",
+  // Скрытое ограничение «Отдельная доска»: видеть, накладывать, снимать
+  "players.board.restrict",
   // Сообщение команды в ленту игрока: ответ на жалобу, объяснение блокировки
   // или поправки (docs/35-stage4-plan.md Р51)
   "players.message",
@@ -234,3 +236,10 @@ export function permissionsOf(roles: readonly Role[]): ReadonlySet<Permission> {
 export function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
+
+/**
+ * Начало имён действий журнала, которые видит только держатель права
+ * `players.board.restrict`: сама запись «наложена отдельная доска» выдаёт
+ * вид, как и его строка в истории.
+ */
+export const HIDDEN_AUDIT_PREFIX = "players.board.";
