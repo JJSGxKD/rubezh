@@ -3,7 +3,7 @@ id: T-0104
 title: Задания: пул с ротацией по дням и недели и шесть новых видов цели
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / high
 author: claude-lead2-16
 size: M
@@ -34,6 +34,10 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
+  - backend/api/test/admin-notify.test.ts
+  - backend/api/test/home.test.ts
+  - backend/api/test/payment-confirmation.test.ts
+  - backend/api/test/referrals.test.ts
 runner: local
 executor: sonnet-5.5
 effort: high
