@@ -25,10 +25,39 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   survive_sec: "Время в сумме, с",
   best_survival_sec: "Рекорд времени, с",
   run_level: "Уровень в забеге",
+  xp_collected: "Опыт в сумме",
+  weapon_runs: "Забеги с оружием",
+  element_runs: "Забеги со стихией",
+  difficulty_runs: "Забеги на сложности",
+  difficulty_survive_sec: "Время на сложности, с",
+  boost_runs: "Забеги с бустом",
   channel: "Подписка на канал",
   link: "Переход по ссылке",
   bot: "Запуск бота",
 };
+
+/** Ступени пула ротации: из строк ступени игрок видит набор дня или недели. */
+export const POOL_TIERS = ["easy", "medium", "hard"] as const;
+export type PoolTier = (typeof POOL_TIERS)[number];
+export const TIER_TITLES: Record<PoolTier, string> = { easy: "Лёгкое", medium: "Среднее", hard: "Сложное" };
+/** Пусто — задание в игре всегда, как до ротации. */
+export const NO_TIER_TITLE = "Не в ротации (всегда)";
+
+/** Фильтр цели забега; ключ вида — тот же, что у сервера (`tasks/task-rules.ts`, `RUN_FILTER_KEYS`). */
+export type FilterKey = "weapon" | "element" | "difficulty";
+export const FILTER_KEYS: Record<string, FilterKey> = {
+  weapon_runs: "weapon",
+  element_runs: "element",
+  difficulty_runs: "difficulty",
+  difficulty_survive_sec: "difficulty",
+};
+export const FILTER_LABELS: Record<FilterKey, string> = { weapon: "оружие", element: "стихия", difficulty: "сложность" };
+
+/** Русские имена для выбора фильтра: панель движка не знает, список сверяет только глаз команды. */
+export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало" };
+export const ELEMENT_TITLES: Record<string, string> = { fire: "Огонь", cold: "Холод", lightning: "Молния", poison: "Яд" };
+export const DIFFICULTY_TITLES: Record<string, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
+export const FILTER_OPTIONS: Record<FilterKey, Record<string, string>> = { weapon: WEAPON_TITLES, element: ELEMENT_TITLES, difficulty: DIFFICULTY_TITLES };
 
 /** Подписка — её проверяет бот площадки по каналу. */
 export const CHANNEL_KIND = "channel";
@@ -79,6 +108,13 @@ const paramsSchema = z.object({
 });
 export type TaskParams = z.infer<typeof paramsSchema>;
 
+const filterSchema = z.object({
+  weapon: z.string().optional(),
+  element: z.string().optional(),
+  difficulty: z.string().optional(),
+});
+export type TaskFilter = z.infer<typeof filterSchema>;
+
 const taskSchema = z.object({
   taskId: z.string(),
   period: z.enum(TASK_PERIODS),
@@ -93,6 +129,10 @@ const taskSchema = z.object({
   passPoints: z.number(),
   sort: z.number(),
   active: z.boolean(),
+  /** ступень пула ротации; сервер до ротации поля не отдавал */
+  tier: z.enum(POOL_TIERS).nullable().default(null),
+  /** оружие, стихия или сложность цели; сервер до ротации поля не отдавал */
+  filter: filterSchema.nullable().default(null),
   /** лимит выполнений партнёрской цели; сервер до лимита поля не отдавал */
   limit: z.number().nullable().default(null),
   /** картинка 1:1 партнёрской цели — id из `media`; сервер до картинок поля не отдавал */
@@ -141,6 +181,8 @@ const catalogSchema = z.object({
   networks: z.array(networkTaskSchema).default([]),
   /** сколько игроков выполнили партнёрскую цель; сервер до лимита поля не отдавал */
   completions: z.record(z.string(), z.number()).default({}),
+  /** id заданий пула, что в игре сейчас; сервер до ротации поля не отдавал */
+  rotation: z.object({ daily: z.array(z.string()), weekly: z.array(z.string()) }).default({ daily: [], weekly: [] }),
 });
 export type TaskCatalog = z.infer<typeof catalogSchema>;
 
@@ -150,7 +192,7 @@ export function fetchTasks(api: AdminApi): Promise<ApiResult<TaskCatalog>> {
 
 export function saveTask(api: AdminApi, task: TaskDef): Promise<ApiResult<TaskDef>> {
   const title = task.title?.trim() ?? "";
-  return api.request("/tasks", { method: "POST", body: { ...task, taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task) }, schema: taskSchema });
+  return api.request("/tasks", { method: "POST", body: { ...task, taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task), filter: cleanFilter(task) }, schema: taskSchema });
 }
 
 /**
@@ -166,6 +208,13 @@ function cleanParams(task: Pick<TaskDef, "kind" | "params">): TaskParams | null 
   }
   const platforms = partnerPlatforms(task.params);
   return platforms.length === 0 ? { url } : { platforms: PARTNER_PLATFORMS.filter((platform) => platforms.includes(platform)), url };
+}
+
+/** Фильтр в том виде, что принимает сервер: один ключ вида, остальное убрано. */
+function cleanFilter(task: Pick<TaskDef, "kind" | "filter">): TaskFilter | null {
+  const key = FILTER_KEYS[task.kind];
+  const value = key === undefined ? undefined : task.filter?.[key];
+  return key === undefined || value === undefined || value === "" ? null : { [key]: value };
 }
 
 /** Площадки ссылки или бота; пусто — все. Запись прошлой панели с одной площадкой — список из неё. */
@@ -189,7 +238,8 @@ export function togglePlatform(params: TaskParams | null, platform: PartnerPlatf
  * поле формы сохраняет.
  */
 export function withKind(task: TaskDef, kind: string): TaskDef {
-  if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null, limit: null, image: null };
+  // Фильтр принадлежит виду: у другого вида он был бы чужим.
+  if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null, limit: null, image: null, filter: null };
   const url = task.params?.url ?? "";
   const kept = partnerPlatforms(task.params);
   const channelPlatform = task.params?.platform ?? CHANNEL_PLATFORMS.find((platform) => kept.includes(platform)) ?? "telegram";
@@ -197,7 +247,7 @@ export function withKind(task: TaskDef, kind: string): TaskDef {
     kind === CHANNEL_KIND ? { platform: channelPlatform, chat: task.params?.chat ?? "", url } : kept.length === 0 ? { url } : { platforms: kept, url };
   // Повтор выбирают у подписки сами; ссылка и бот — только разово.
   const period = kind === CHANNEL_KIND && task.kind === CHANNEL_KIND ? task.period : "achievement";
-  return { ...task, kind, period, target: 1, params };
+  return { ...task, kind, period, target: 1, params, filter: null, tier: null };
 }
 
 /** Площадка партнёрской цели; `undefined` — цель видна на всех площадках. */
@@ -228,6 +278,15 @@ function partnerProblem(task: TaskDef): string | null {
   return null;
 }
 
+function filterProblemOf(task: Pick<TaskDef, "kind" | "filter">): string | null {
+  const key = FILTER_KEYS[task.kind];
+  const present = Object.entries(task.filter ?? {}).filter(([, value]) => value !== undefined && value !== "");
+  if (key === undefined) return present.length === 0 ? null : "У этого вида фильтра нет";
+  const value = task.filter?.[key];
+  if (present.length !== 1 || value === undefined || value === "") return `У этого вида нужен фильтр: ${FILTER_LABELS[key]}`;
+  return null;
+}
+
 function nonNegativeInt(value: number): boolean {
   return Number.isInteger(value) && value >= 0;
 }
@@ -244,6 +303,9 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if (![task.coins, task.gems, task.shards, task.passPoints, task.sort].every(nonNegativeInt)) return "Награда, очки пасса и порядок — целые неотрицательные";
   if (task.coins + task.gems + task.shards === 0) return "Без награды задание некому выполнять — дайте монеты, самоцветы или осколки";
   if ((task.title?.trim().length ?? 0) > TITLE_MAX) return `Заголовок — до ${String(TITLE_MAX)} знаков`;
+  if (task.tier !== null && (task.period === "achievement" || PARTNER_KINDS.has(task.kind))) return "Ступень — только у дневных и недельных заданий";
+  const filterProblem = filterProblemOf(task);
+  if (filterProblem !== null) return filterProblem;
   if (PARTNER_KINDS.has(task.kind)) return partnerProblem(task);
   if (task.params !== null) return "Ссылка — только у партнёрских целей";
   if (task.limit !== null) return "Лимит выполнений — только у партнёрских целей";
