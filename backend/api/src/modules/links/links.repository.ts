@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
+import { CHECKER_REFERER_HOSTS } from "./availability-checkers.js";
 import { isLinkNetwork, type LinkNetwork } from "./link-networks.js";
 import { isLinkTarget, type LinkTarget } from "./link-targets.js";
 
@@ -43,6 +44,14 @@ export interface ClickInput {
   networkParams: Record<string, string> | null;
 }
 
+/** Клики по классу устройства; без класса (`NULL`) и любой незнакомый — в `unknown`. */
+export interface DeviceCounts {
+  mobile: number;
+  desktop: number;
+  web: number;
+  unknown: number;
+}
+
 export interface LinkStats extends LinkRecord {
   clicks: number;
   clicks30d: number;
@@ -50,6 +59,7 @@ export interface LinkStats extends LinkRecord {
   launches: number;
   /** сколько аккаунтов запустили игру по прямой ссылке `l-<код>` — сессии вида `link` с кодом ссылки */
   directLaunches: number;
+  devices: DeviceCounts;
 }
 
 export const LINKS_REPOSITORY = Symbol("LINKS_REPOSITORY");
@@ -112,15 +122,25 @@ export class PrismaLinksRepository implements LinksRepository {
     const codes = links.map((link) => link.code);
     // Запуски — по сессиям с кодом клика этой ссылки: связь клика с игроком
     // уже пишет атрибуция (`start_kind = click`, `start_ref = click_id`).
-    const stats = await this.prisma.$queryRaw<{ link_code: string; clicks: number; clicks_30d: number; launches: number }[]>`
+    // Клики проверок доступности, записанные до T-0073, в базе остаются, но не
+    // считаются. У клика без Referer хост `NULL`, а `NULL NOT IN (...)` даёт
+    // `NULL`, поэтому условие явно пропускает `IS NULL`.
+    const stats = await this.prisma.$queryRaw<
+      { link_code: string; clicks: number; clicks_30d: number; mobile_clicks: number; desktop_clicks: number; web_clicks: number; unknown_clicks: number; launches: number }[]
+    >`
       SELECT c.link_code,
              count(*)::int AS clicks,
              count(*) FILTER (WHERE c.at > now() - interval '30 days')::int AS clicks_30d,
+             count(*) FILTER (WHERE c.device_class = 'mobile')::int AS mobile_clicks,
+             count(*) FILTER (WHERE c.device_class = 'desktop')::int AS desktop_clicks,
+             count(*) FILTER (WHERE c.device_class = 'web')::int AS web_clicks,
+             count(*) FILTER (WHERE c.device_class IS NULL OR c.device_class NOT IN ('mobile', 'desktop', 'web'))::int AS unknown_clicks,
              (SELECT count(DISTINCT s.account_id)::int FROM account_session s
                JOIN link_click lc ON lc.click_id = s.start_ref
                WHERE s.start_kind = 'click' AND lc.link_code = c.link_code) AS launches
       FROM link_click c
       WHERE c.link_code IN (${Prisma.join(codes)})
+        AND (c.referer_host IS NULL OR c.referer_host NOT IN (${Prisma.join(CHECKER_REFERER_HOSTS)}))
       GROUP BY c.link_code`;
     // Прямые запуски — сессии вида `link`, где `start_ref` — сам код ссылки, без кликов;
     // у ссылки, по которой не кликали ни разу, они всё равно есть.
@@ -139,6 +159,7 @@ export class PrismaLinksRepository implements LinksRepository {
         clicks30d: row?.clicks_30d ?? 0,
         launches: row?.launches ?? 0,
         directLaunches: directByCode.get(link.code) ?? 0,
+        devices: { mobile: row?.mobile_clicks ?? 0, desktop: row?.desktop_clicks ?? 0, web: row?.web_clicks ?? 0, unknown: row?.unknown_clicks ?? 0 },
       };
     });
   }

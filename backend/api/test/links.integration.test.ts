@@ -69,12 +69,29 @@ describe.skipIf(DATABASE_URL === "")("ссылки на живом Postgres", ()
     await launch(sessions, direct, "link", code);
 
     const stats = (await links.list(500)).find((row) => row.code === code);
-    expect(stats).toMatchObject({ clicks: 2, clicks30d: 2, launches: 2, directLaunches: 1 });
+    expect(stats).toMatchObject({ clicks: 2, clicks30d: 2, launches: 2, directLaunches: 1, devices: { mobile: 2, desktop: 0, web: 0, unknown: 0 } });
 
     // Тот же игрок по прямой ссылке ещё раз — всё ещё один; чужой код — не этой ссылки.
     await launch(sessions, direct, "link", code);
     await launch(sessions, await newAccount("Чужой"), "link", newLinkCode());
     expect((await links.list(500)).find((row) => row.code === code)).toMatchObject({ launches: 2, directLaunches: 1 });
+  });
+
+  it("проверки доступности не считаются, устройства — отдельно; клики без Referer считаются", async () => {
+    const code = newLinkCode();
+    await links.create({ code, platform: "telegram", campaign: "checks", source: null, medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run" });
+    const utm = { source: null, medium: null, campaign: null, content: null, term: null };
+    const click = (refererHost: string | null, deviceClass: string | null) =>
+      links.recordClick({ clickId: newClickId(), linkCode: code, at: new Date(), utm, refererHost, deviceClass, ipPrefix: null, language: null, networkParams: null });
+    await click("t.me", "mobile");
+    await click(null, "mobile");
+    await click(null, "unknown");
+    await click(null, null);
+    // Клик проверки, записанный до отсечения на входе: в базе остаётся, в цифры не идёт.
+    await click("check-host.net", "unknown");
+
+    const stats = (await links.list(500)).find((row) => row.code === code);
+    expect(stats).toMatchObject({ clicks: 4, clicks30d: 4, devices: { mobile: 2, desktop: 0, web: 0, unknown: 2 } });
   });
 
   it("у ссылки без кликов прямые запуски всё равно считаются", async () => {

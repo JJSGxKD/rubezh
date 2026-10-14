@@ -63,12 +63,19 @@ export const linkSchema = z.object({
   directUrl: z.string().nullable(),
 });
 
+/** Клики по классу устройства; без класса и незнакомый класс сервер сводит в `unknown`. */
+const deviceCountsSchema = z.object({ mobile: z.number(), desktop: z.number(), web: z.number(), unknown: z.number() });
+
+export type DeviceCounts = z.infer<typeof deviceCountsSchema>;
+
 export const linkStatsSchema = linkSchema.extend({
   clicks: z.number(),
   clicks30d: z.number(),
   launches: z.number(),
   /** запуски по прямой ссылке — клика у них нет */
   directLaunches: z.number(),
+  // Сервер старее панели: блока устройств нет, список не ломается.
+  devices: deviceCountsSchema.catch({ mobile: 0, desktop: 0, web: 0, unknown: 0 }),
   conversions: summarySchema.nullable(),
 });
 
@@ -112,7 +119,29 @@ export function retargetLink(api: AdminApi, code: string, target: LinkTarget): P
 /** Только что заведённая ссылка строкой списка — карточка открывается, не дожидаясь перечитывания. */
 export function freshRow(link: Link): LinkRow {
   const counts = (): GoalCounts => ({ pending: 0, sent: 0, failed: 0, skipped: 0 });
-  return { ...link, clicks: 0, clicks30d: 0, launches: 0, directLaunches: 0, conversions: link.network === null ? null : { "1": counts(), "2": counts(), "3": counts() } };
+  return { ...link, clicks: 0, clicks30d: 0, launches: 0, directLaunches: 0, devices: { mobile: 0, desktop: 0, web: 0, unknown: 0 }, conversions: link.network === null ? null : { "1": counts(), "2": counts(), "3": counts() } };
+}
+
+export type DeviceKey = keyof DeviceCounts;
+
+export const DEVICE_TITLES: Record<DeviceKey, string> = {
+  mobile: "С телефона",
+  desktop: "С компьютера",
+  web: "Из веб-версии",
+  unknown: "Устройство не определено",
+};
+
+export interface DeviceRow {
+  key: DeviceKey;
+  title: string;
+  count: number;
+}
+
+const DEVICE_ORDER: readonly DeviceKey[] = ["mobile", "desktop", "web", "unknown"];
+
+/** Строки блока «Клики по устройствам»: телефон, компьютер, веб, не определено; нулевые пропускаются. */
+export function deviceRows(devices: DeviceCounts): DeviceRow[] {
+  return DEVICE_ORDER.filter((key) => devices[key] > 0).map((key) => ({ key, title: DEVICE_TITLES[key], count: devices[key] }));
 }
 
 /** «Через переходник + прямых» — одним числом в списке; прямые запуски в долю от кликов не входят. */
