@@ -3,7 +3,7 @@ id: T-0110
 title: Недельный сезон рейтинга — сервер: таблица недели, закрытие, награды, друзья
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead2-17
 size: M
@@ -12,6 +12,13 @@ zones:
   - backend/api/src/modules/seasons/**
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
+  - backend/api/src/cli/seasons-rebuild.ts
+  - backend/api/src/modules/runs/runs-hooks.ts
+  - backend/api/src/modules/runs/runs.service.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/seasons.integration.test.ts
+  - backend/api/test/seasons.test.ts
+  - backend/api/test/wipe-plan.test.ts
 shared:
   - backend/api/src/app.module.ts
   - backend/api/src/modules/wallet/wallet-types.ts
@@ -21,6 +28,8 @@ shared:
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - backend/api/package.json
+  - docs/39-retention-mechanics.md
 runner: local
 executor: sonnet-5.5
 effort: extra
