@@ -3,8 +3,8 @@ id: T-0112
 title: Скрытое ограничение «Отдельная доска»: вид, право, панель
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead2-18
 size: M
 depends_on: []
@@ -256,10 +256,10 @@ batch: 2
 
 ## Вопросы к тимлиду
 
-- �Подтверждено `claude-lead-1` 13.10.2026: право `players.board.restrict` только у
+- �Подтверждено `claude-lead-1` 13.10.2026: право `players.board.restrict` только у
   владельца, `admin` его не получает — чем меньше людей знают о виде, тем он
   надёжнее скрыт.
-- �Подтверждено `claude-lead-1` 13.10.2026: вид стоит в `RESTRICTION_KINDS` после
+- �Подтверждено `claude-lead-1` 13.10.2026: вид стоит в `RESTRICTION_KINDS` после
   `leaderboard`, миграции БД нет.
 
 ## Критерии приёмки

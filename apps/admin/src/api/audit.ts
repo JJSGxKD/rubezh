@@ -87,6 +87,8 @@ const ACTION_TITLES: Record<string, string> = {
   "players.unban": "Снятие блокировки",
   "players.restrict": "Ограничение игрока",
   "players.unrestrict": "Снятие ограничения",
+  "players.board.set": "Отдельная доска: наложена",
+  "players.board.unset": "Отдельная доска: снята",
   "players.run.unrank": "Снятие забега с рейтинга",
   "players.run.rerank": "Возврат забега в рейтинг",
   "players.message": "Сообщение игроку",

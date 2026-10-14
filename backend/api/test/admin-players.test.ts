@@ -12,6 +12,9 @@ import type { FunnelMilestones, FunnelRepository } from "../src/modules/funnel/f
 import type { FlagSplit } from "../src/modules/funnel/flag-split-report.js";
 import { EMPTY_SPLIT_GROUP } from "./helpers/flag-split.js";
 import type { MessagingService } from "../src/modules/messaging/messaging.service.js";
+import { playerListQuerySchema } from "../src/modules/player-list/player-list-query.js";
+import type { PlayerListRepository, PlayerListRow, PlayerPage } from "../src/modules/player-list/player-list.repository.js";
+import { PlayerListService } from "../src/modules/player-list/player-list.service.js";
 import type { ProgressService } from "../src/modules/progress/progress.service.js";
 import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
 import { RestrictionsService } from "../src/modules/restrictions/restrictions.service.js";
@@ -101,7 +104,7 @@ function setup() {
   // Что поддержка может сделать с покупкой, решает сервис оплаты (T-0037); здесь важно, кому карточка это показывает.
   const support = { actionsFor: () => ["refund"] } as never;
   const service = new AdminPlayersService(accounts, new FakeFunnel(), sessions, purchases, roles, messaging, progress, runs, wallet, auth, adminSessions, notifications.service, testNotice, restrictions, support);
-  return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository, restrictionsRepository };
+  return { accounts, rolesRepository, purchases, store, roles, service, gameSessionsRevoked, feed: notifications.repository, restrictionsRepository, restrictions };
 }
 
 async function player(accounts: MemoryAccountRepository, platformUserId = String(500_000 + Math.floor(Math.random() * 1000))) {
@@ -293,5 +296,121 @@ describe("сообщение команды", () => {
     expect(s.feed.of(target.accountId)).toEqual([]);
 
     expect(await s.service.message(asModerator, target.accountId, "Жалобу рассмотрели", "panel-key-0006", NOW)).toEqual({ duplicate: false });
+  });
+});
+
+describe("скрытое ограничение «Отдельная доска» в панели (T-0112)", () => {
+  let s: ReturnType<typeof setup>;
+
+  beforeEach(() => {
+    s = setup();
+  });
+
+  const hiddenInput = { kinds: ["separate_board" as const], endsAt: null, reason: "leaderboard_cheat" as const, comment: "проверка", notify: false };
+
+  async function moderatorOf(id: string): Promise<AccountRef> {
+    const account = await player(s.accounts, id);
+    await s.rolesRepository.grant(account.accountId, "moderator", null);
+    return { accountId: account.accountId, platform: "telegram", platformUserId: id };
+  }
+
+  it("владелец накладывает через карточку: в ответе строка вида, сессии не отзываются, журнал — `players.board.set`", async () => {
+    const target = await player(s.accounts);
+    const result = await s.service.restrict(owner, target.accountId, hiddenInput, NOW);
+
+    expect(result.restrictions.map((view) => [view.kind, view.notify])).toEqual([["separate_board", false]]);
+    expect(result.revokedSessions).toBe(0);
+    expect(s.gameSessionsRevoked).toEqual([]);
+    expect(s.rolesRepository.entries.map((entry) => entry.action)).toEqual(["players.board.set"]);
+  });
+
+  it("модератор получает тот же отказ, что на кривое тело: вид не выдаётся ни ответом, ни журналом", async () => {
+    const target = await player(s.accounts);
+    const moderator = await moderatorOf("600010");
+
+    const refusal = s.service.restrict(moderator, target.accountId, hiddenInput, NOW);
+    await expect(refusal).rejects.toBeInstanceOf(ValidationError);
+    await expect(refusal).rejects.toThrow("Некорректное ограничение: нужны виды, срок и причина");
+    expect(s.restrictionsRepository.rows).toEqual([]);
+    expect(s.rolesRepository.entries).toEqual([]);
+  });
+
+  it("история игрока в карточке: у модератора строки вида нет, у владельца — есть", async () => {
+    const target = await player(s.accounts);
+    const moderator = await moderatorOf("600011");
+    await s.service.restrict(owner, target.accountId, hiddenInput, NOW);
+    await s.service.restrict(owner, target.accountId, { ...hiddenInput, kinds: ["promo_codes" as const], reason: "promo_abuse" as const, notify: true }, new Date(NOW.getTime() + 1000));
+
+    expect((await s.restrictions.history(owner, target.accountId, NOW)).map((view) => view.kind)).toEqual(["promo_codes", "separate_board"]);
+    expect((await s.restrictions.history(moderator, target.accountId, NOW)).map((view) => view.kind)).toEqual(["promo_codes"]);
+  });
+});
+
+describe("список игроков и скрытое ограничение (T-0112)", () => {
+  function row(index: number, restrictions: string[]): PlayerListRow {
+    return {
+      accountId: `00000000-0000-4000-8000-00000000001${String(index)}`,
+      platform: "telegram",
+      displayName: `Игрок ${String(index)}`,
+      photoUrl: null,
+      platformUserId: String(800 + index),
+      username: null,
+      createdAt: new Date(Date.UTC(2026, 8, index + 1)),
+      lastSeenAt: new Date(Date.UTC(2026, 8, 30)),
+      bannedAt: null,
+      banReason: null,
+      restrictions,
+      level: 3,
+      source: null,
+      campaign: null,
+      payer: false,
+      canMessage: null,
+    };
+  }
+
+  class FakeList implements PlayerListRepository {
+    readonly calls: PlayerPage[] = [];
+    constructor(private readonly rows: PlayerListRow[]) {}
+    async page(page: PlayerPage): Promise<PlayerListRow[]> {
+      this.calls.push(page);
+      return this.rows;
+    }
+  }
+
+  async function lists(rows: PlayerListRow[]) {
+    const accounts = new MemoryAccountRepository();
+    const rolesRepository = new MemoryRolesRepository();
+    const repository = new FakeList(rows);
+    const service = new PlayerListService(repository, new RolesService(config(), rolesRepository, accounts));
+    const account = await player(accounts, "600020");
+    await rolesRepository.grant(account.accountId, "moderator", null);
+    const moderator: AccountRef = { accountId: account.accountId, platform: "telegram", platformUserId: "600020" };
+    return { repository, service, moderator };
+  }
+
+  it("запрос «видит скрытые» идёт от права актора: владелец — да, модератор — нет", async () => {
+    const l = await lists([row(1, ["separate_board"])]);
+    await l.service.list(owner, playerListQuerySchema.parse({ restricted: "any" }));
+    await l.service.list(l.moderator, playerListQuerySchema.parse({ restricted: "any" }));
+
+    expect(l.repository.calls.map((page) => page.showHidden)).toEqual([true, false]);
+  });
+
+  it("виды в строке: у модератора скрытого нет, даже если репозиторий его вернул; у владельца — как есть", async () => {
+    const l = await lists([row(1, ["promo_codes", "separate_board"])]);
+
+    expect((await l.service.list(l.moderator, playerListQuerySchema.parse({}))).players[0]?.restrictions).toEqual(["promo_codes"]);
+    expect((await l.service.list(owner, playerListQuerySchema.parse({}))).players[0]?.restrictions).toEqual(["promo_codes", "separate_board"]);
+  });
+
+  it("фильтр по скрытому виду: у владельца работает, у модератора — как на неизвестное значение, в базу не идёт", async () => {
+    const l = await lists([row(1, ["separate_board"])]);
+    await l.service.list(owner, playerListQuerySchema.parse({ restricted: "separate_board" }));
+    expect(l.repository.calls).toHaveLength(1);
+
+    const refusal = l.service.list(l.moderator, playerListQuerySchema.parse({ restricted: "separate_board" }));
+    await expect(refusal).rejects.toBeInstanceOf(ValidationError);
+    await expect(refusal).rejects.toThrow("Некорректные фильтры списка игроков");
+    expect(l.repository.calls).toHaveLength(1);
   });
 });
