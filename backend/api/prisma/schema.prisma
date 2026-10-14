@@ -1501,6 +1501,14 @@ model TaskDef {
   /// картинка 1:1 партнёрского задания (Р82); `null` — значок вида у клиента.
   /// Только у партнёрской цели — `CHECK` в миграции
   imageId         String?    @map("image_id") @db.VarChar(64)
+  /// ступень пула ротации (docs/39-retention-mechanics.md П1): из строк
+  /// ступени игрок видит набор дня или недели; `null` — строка в игре всегда
+  /// (партнёрские цели, достижения, добавленные руками). `CHECK` в миграции
+  tier            String?    @db.VarChar(8)
+  /// фильтр цели забега — оружие, стихия или сложность (`tasks/task-rules.ts`,
+  /// `RUN_FILTER_KEYS`); отдельно от `params`, чтобы партнёрскую цель по-прежнему
+  /// отличал именно он
+  filter          Json?
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.

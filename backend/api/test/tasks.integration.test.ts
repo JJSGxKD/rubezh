@@ -3,8 +3,15 @@ import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { imageIdOf } from "../src/modules/media/image-rules.js";
 import { PrismaMediaRepository } from "../src/modules/media/media.repository.js";
-import { rewardReason, type TaskParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
-import { ACHIEVEMENT_PERIOD_START, PrismaTasksRepository, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
+import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
+import { POOL_QUOTA, gameDayOf, gameWeekStartOf, pickPool } from "../src/modules/tasks/task-pool.js";
+import { POOL_TIERS, type TaskParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { TaskNotFoundError } from "../src/modules/tasks/tasks-errors.js";
+import { ACHIEVEMENT_PERIOD_START, PrismaTasksRepository, periodStartSql, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
+import { TasksService } from "../src/modules/tasks/tasks.service.js";
+import type { AccountRef } from "../src/modules/roles/roles.service.js";
+import type { WalletService } from "../src/modules/wallet/wallet.service.js";
+import { Prisma } from "../src/generated/prisma/client.js";
 import { WALLET_DAILY_CAPS } from "../src/modules/wallet/wallet-limits.js";
 import { webp } from "./helpers/webp-samples.js";
 import { testPrisma } from "./helpers/test-prisma.js";
@@ -59,16 +66,58 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     await prisma.$disconnect();
   });
 
+  /**
+   * Самый щедрый набор, который игрок может забрать за сутки: у строк пула
+   * — лучшие по ступени в пределах квоты, остальные строки — все.
+   */
+  function richestSet(period: "daily" | "weekly"): TaskDef[] {
+    const rows = catalog.filter((task) => task.active && task.period === period);
+    const pooled = POOL_TIERS.flatMap((tier) =>
+      rows
+        .filter((task) => task.tier === tier)
+        .sort((a, b) => b.coins + b.shards * 10 - (a.coins + a.shards * 10))
+        .slice(0, POOL_QUOTA[period][tier]),
+    );
+    return [...rows.filter((task) => task.tier === null), ...pooled];
+  }
+
   it("каталог по умолчанию — из миграции, и честный игрок не упирается в суточные потолки", () => {
     expect(catalog.map((task) => task.taskId)).toEqual(expect.arrayContaining(["daily_runs", "weekly_runs", "ach_survive_5"]));
+    const sets = {
+      task_reward: [...richestSet("daily"), ...richestSet("weekly")],
+      achievement_reward: catalog.filter((task) => task.active && task.period === "achievement"),
+    };
     for (const reason of ["task_reward", "achievement_reward"] as const) {
-      const tasks = catalog.filter((task) => task.active && rewardReason(task.period) === reason);
+      const tasks = sets[reason];
       const cap = WALLET_DAILY_CAPS[reason];
       expect(tasks.reduce((sum, task) => sum + task.coins, 0), `${reason}: монеты`).toBeLessThanOrEqual(cap.coins ?? 0);
       expect(tasks.reduce((sum, task) => sum + task.gems, 0), `${reason}: самоцветы`).toBeLessThanOrEqual(cap.gems ?? 0);
       expect(tasks.reduce((sum, task) => sum + task.shards, 0), `${reason}: осколки`).toBeLessThanOrEqual(cap.shard_common ?? 0);
     }
     expect(catalog.filter((task) => task.period !== "achievement").every((task) => task.gems === 0)).toBe(true);
+  });
+
+  it("миграция пула: 20 дневных (8/8/4) и 12 недельных (4/5/3), у старых строк ступень, награды прежние", () => {
+    const count = (period: "daily" | "weekly") =>
+      Object.fromEntries(POOL_TIERS.map((tier) => [tier, catalog.filter((task) => task.period === period && task.tier === tier).length]));
+    expect(count("daily")).toEqual({ easy: 8, medium: 8, hard: 4 });
+    expect(count("weekly")).toEqual({ easy: 4, medium: 5, hard: 3 });
+
+    const old: [string, string | null, number, number][] = [
+      ["daily_runs", "easy", 120, 0],
+      ["daily_kills", "medium", 150, 0],
+      ["daily_survive", "medium", 150, 3],
+      ["daily_level", "hard", 100, 0],
+      ["weekly_runs", "easy", 800, 10],
+      ["weekly_kills", "medium", 1000, 0],
+      ["weekly_survive", "medium", 1000, 10],
+    ];
+    for (const [taskId, tier, coins, shards] of old) expect(catalog.find((task) => task.taskId === taskId), taskId).toMatchObject({ tier, coins, shards });
+    // достижения в ротацию не входят
+    expect(catalog.filter((task) => task.period === "achievement").every((task) => task.tier === null)).toBe(true);
+    // новые виды цели сеются с фильтром
+    expect(catalog.find((task) => task.taskId === "daily_weapon_spark")).toMatchObject({ kind: "weapon_runs", filter: { weapon: "spark" }, target: 2, tier: "easy", coins: 70 });
+    expect(catalog.find((task) => task.taskId === "weekly_hard_240")).toMatchObject({ kind: "difficulty_survive_sec", filter: { difficulty: "hard" }, tier: "hard", coins: 900, shards: 5 });
   });
 
   it("копит и помнит лучший, не уходит за цель, отмечает выполнение", async () => {
@@ -140,6 +189,8 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       period: "weekly",
       kind: "kills",
       params: null,
+      filter: null,
+      tier: null,
       target: 500,
       title: "Проверка",
       coins: 50,
@@ -172,6 +223,8 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       period: "achievement",
       kind: "channel",
       params,
+      filter: null,
+      tier: null,
       target: 1,
       title: null,
       coins: 0,
@@ -245,6 +298,8 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       period,
       kind: "channel",
       params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" },
+      filter: null,
+      tier: null,
       target: 1,
       title: null,
       coins: 10,
@@ -335,5 +390,118 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
 
     expect(await repository.update({ ...task, image: null }, await account(), NOON)).toBe(true);
     expect((await repository.catalog()).find((candidate) => candidate.taskId === task.taskId)?.image).toBeNull();
+  });
+
+  describe("ротация пула", () => {
+    function tasksService(): TasksService {
+      const wallet = { grant: async (input: { amount: number }) => ({ credited: input.amount, balance: 0, duplicate: false }) } as unknown as WalletService;
+      const unused = {} as never;
+      return new TasksService(repository, wallet, new RunsHooks(), unused, unused, unused, unused);
+    }
+
+    async function player(): Promise<AccountRef> {
+      const accountId = await account();
+      return { accountId, platform: "telegram", platformUserId: "1" };
+    }
+
+    function finished(accountId: string): RecordedRun {
+      return {
+        runId: runId(),
+        accountId,
+        difficulty: "easy",
+        outcome: "died",
+        survivalSec: 400,
+        level: 22,
+        enemiesKilled: 400,
+        startingWeaponId: "spark",
+        weapons: [{ id: "spark", level: 3 }],
+        boosts: ["fury"],
+        xpCollected: 600,
+        deathCause: null,
+        cheats: false,
+        continues: 0,
+        ranked: true,
+        verdict: "ok",
+        reasons: [],
+        finishedAt: NOON,
+      };
+    }
+
+    const chosenDaily = (at: Date) => pickPool(catalog, "daily", gameDayOf(at));
+    const chosenWeekly = (at: Date) => pickPool(catalog, "weekly", gameWeekStartOf(at));
+    const pooled = (id: string) => catalog.some((task) => task.taskId === id && task.tier !== null);
+
+    it("забег игрока двигает только выбранные на этот день задания пула", async () => {
+      const service = tasksService();
+      const me = await player();
+      await service.onRun(finished(me.accountId));
+
+      const moved = (await repository.progress(me.accountId, NOON)).map((row) => row.taskId).filter(pooled);
+      expect(moved.length).toBeGreaterThan(0);
+      const allowed = new Set([...chosenDaily(NOON), ...chosenWeekly(NOON)]);
+      for (const id of moved) expect(allowed.has(id), `${id} не в ротации`).toBe(true);
+      // невыбранные дневные остаются без строки прогресса
+      const idle = catalog.filter((task) => task.period === "daily" && task.tier !== null && !chosenDaily(NOON).has(task.taskId));
+      expect(idle.length).toBe(15);
+      for (const task of idle) expect(moved).not.toContain(task.taskId);
+    });
+
+    it("невыбранное нельзя забрать запросом; новые виды двигаются забегом", async () => {
+      const service = tasksService();
+      const me = await player();
+      await service.onRun(finished(me.accountId));
+      const chosen = chosenDaily(NOON);
+      const unchosen = catalog.find((task) => task.period === "daily" && task.tier !== null && !chosen.has(task.taskId));
+      await expect(service.claim(me, unchosen?.taskId ?? "", NOON)).rejects.toBeInstanceOf(TaskNotFoundError);
+
+      // опыт, оружие и буст из итога — своими видами (каждое из шести, что выбрано сегодня или на неделе)
+      const view = await service.view(me, NOON);
+      const kinds = new Set(view.map((task) => task.kind));
+      expect(kinds.size).toBeGreaterThan(1);
+      for (const task of view.filter((candidate) => ["xp_collected", "boost_runs"].includes(candidate.kind))) expect(task.value, task.id).toBeGreaterThan(0);
+      for (const task of view) expect(task.category, task.id).not.toBe("partner");
+    });
+
+    it("два игрока видят один набор, а на следующих сутках набор другой", async () => {
+      const service = tasksService();
+      const [first, second] = [await player(), await player()];
+      const ids = async (who: AccountRef, at: Date) =>
+        (await service.view(who, at))
+          .filter((task) => pooled(task.id))
+          .map((task) => task.id)
+          .sort();
+      expect(await ids(first, NOON)).toEqual(await ids(second, NOON));
+      expect(await ids(first, NOON)).toEqual([...chosenDaily(NOON), ...chosenWeekly(NOON)].sort());
+
+      const sets = new Set<string>();
+      for (let day = 0; day < 10; day++) sets.add((await ids(first, new Date(NOON.getTime() + day * 86_400_000))).join(","));
+      expect(sets.size).toBeGreaterThan(1);
+    });
+
+    it("знак меню не считает выполненное невыбранное", async () => {
+      const service = tasksService();
+      const me = await player();
+      const chosen = chosenDaily(NOON);
+      const unchosen = catalog.find((task) => task.period === "daily" && task.tier !== null && !chosen.has(task.taskId));
+      if (unchosen === undefined) throw new Error("в пуле нет невыбранной строки");
+      await repository.applyRun({
+        runId: runId(),
+        accountId: me.accountId,
+        at: NOON,
+        deltas: [{ taskId: unchosen.taskId, period: "daily", target: unchosen.target, op: "sum", amount: unchosen.target }],
+      });
+      expect((await repository.progress(me.accountId, NOON)).some((row) => row.taskId === unchosen.taskId && row.done)).toBe(true);
+      expect(await service.badge(me.accountId, NOON)).toBe(0);
+    });
+
+    it("границы суток и недели в коде совпадают с базой", async () => {
+      const edges = ["2026-10-13T20:59:59Z", "2026-10-13T21:00:00Z", "2026-10-18T20:59:59Z", "2026-10-18T21:00:00Z", "2026-10-04T20:59:59Z", "2026-10-04T21:00:00Z"].map((iso) => new Date(iso));
+      for (const at of edges) {
+        const [row] = await prisma.$queryRaw<{ day: string; week: string }[]>`
+          SELECT ${periodStartSql(Prisma.sql`'daily'::text`, at)}::text AS day, ${periodStartSql(Prisma.sql`'weekly'::text`, at)}::text AS week`;
+        expect(gameDayOf(at), at.toISOString()).toBe(row?.day);
+        expect(gameWeekStartOf(at), at.toISOString()).toBe(row?.week);
+      }
+    });
   });
 });

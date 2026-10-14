@@ -21,6 +21,12 @@ export interface RecordedRun {
   level: number;
   enemiesKilled: number;
   startingWeaponId: string;
+  /** оружие в наборе к концу забега — со слов клиента, как и весь итог */
+  weapons: { id: string; level: number }[];
+  /** оплаченные на этот забег бусты; неоплаченные и не заявленные — пусто */
+  boosts: string[];
+  /** собранный опыт из статистики итога; итог без статистики — `null` */
+  xpCollected: number | null;
   deathCause: string | null;
   cheats: boolean;
   /** сколько вторых шансов взято: оплаченные сверх этого числа не использованы */
