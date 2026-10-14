@@ -6,7 +6,7 @@ import { imageIdOf } from "../src/modules/media/image-rules.js";
 import { PrismaMediaRepository } from "../src/modules/media/media.repository.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { POOL_QUOTA, gameDayOf, gameWeekStartOf, pickPool } from "../src/modules/tasks/task-pool.js";
-import { POOL_TIERS, rewardReason, type TaskParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { POOL_TIERS, type TaskParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { TaskNotFoundError } from "../src/modules/tasks/tasks-errors.js";
 import { ACHIEVEMENT_PERIOD_START, PrismaTasksRepository, periodStartSql, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";

@@ -1060,7 +1060,9 @@ describe("новые виды цели", () => {
   });
 
   it("строка панели без ступени и фильтра разбирается: поля по умолчанию пусты", () => {
-    const { filter: _filter, tier: _tier, ...old } = def("daily_runs");
+    const old: Record<string, unknown> = { ...def("daily_runs") };
+    delete old.filter;
+    delete old.tier;
     expect(taskDefSchema.parse(old)).toMatchObject({ tier: null, filter: null });
   });
 
