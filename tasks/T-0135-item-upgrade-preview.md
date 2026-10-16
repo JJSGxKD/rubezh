@@ -3,8 +3,8 @@ id: T-0135
 title: Карточка предмета — «было → станет» перед улучшением
 epic: E6
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
