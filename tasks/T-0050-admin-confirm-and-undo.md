@@ -3,8 +3,8 @@ id: T-0050
 title: Подтверждения в панели по цене ошибки — окно действия и «Отменить»
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-3 / sonnet-5.5 / medium
 size: S
 depends_on: [T-0049]
 zones:
