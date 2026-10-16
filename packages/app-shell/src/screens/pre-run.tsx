@@ -59,15 +59,6 @@ const MODE_LABEL: Record<PreRunMode, string> = {
  * уровнем, на котором откроется (Р41, Р42). Бусты покупаются на сервере, так
  * что есть только с входом; не купились — лист остаётся открытым с причиной.
  */
-/**
- * До 384 px сегменты переключателей уже не помещаются при штатных шрифте и
- * полях («Сложная», «Стресс» уходят за край), до 360 px — и при 12 px.
- * `SegmentedControl` общий и размера не принимает, поэтому сжимаем сегменты
- * снаружи: ступенями, чтобы на 390 px и шире вид не менялся.
- */
-const NARROW_SEGMENTS =
-  "max-[24rem]:[&_[role=tab]]:px-1 max-[24rem]:[&_[role=tab]]:text-xs max-[22.5rem]:[&_[role=tab]]:px-0.5 max-[22.5rem]:[&_[role=tab]]:text-[0.6875rem]";
-
 export function PreRunSheet(props: { onClose: () => void }): ReactNode {
   const { onClose } = props;
   const navigation = useNavigation();
@@ -172,17 +163,16 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
             не прокручивается. */}
         <div className="-mx-1 grid max-h-[max(10rem,calc(100dvh-20rem-var(--app-inset-top)-var(--app-inset-bottom)))] grid-cols-1 gap-1.5 overflow-x-hidden overflow-y-auto overscroll-contain px-1">
           {modes.length > 0 ? (
-            <div className={NARROW_SEGMENTS}>
-              <SegmentedControl
-                label={t("weapon.select.screen")}
-                activeId={mode}
-                onSelect={(id) => {
-                  setMode(id as PreRunMode);
-                  useDevMode.getState().arm(id === "dev");
-                }}
-                items={modes.map((id) => ({ id, label: t(MODE_LABEL[id]) }))}
-              />
-            </div>
+            <SegmentedControl
+              size="s"
+              label={t("weapon.select.screen")}
+              activeId={mode}
+              onSelect={(id) => {
+                setMode(id as PreRunMode);
+                useDevMode.getState().arm(id === "dev");
+              }}
+              items={modes.map((id) => ({ id, label: t(MODE_LABEL[id]) }))}
+            />
           ) : null}
 
           {mode === "stress" ? (
@@ -218,14 +208,13 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
                 </Card>
               ) : null}
 
-              <div className={NARROW_SEGMENTS}>
-                <SegmentedControl
-                  label={t("difficulty.title")}
-                  activeId={meta.lastDifficultyId}
-                  onSelect={(id) => meta.rememberDifficulty(id as DifficultyId)}
-                  items={DIFFICULTIES.map((difficulty) => ({ id: difficulty.id, label: t(difficulty.nameKey) }))}
-                />
-              </div>
+              <SegmentedControl
+                size="s"
+                label={t("difficulty.title")}
+                activeId={meta.lastDifficultyId}
+                onSelect={(id) => meta.rememberDifficulty(id as DifficultyId)}
+                items={DIFFICULTIES.map((difficulty) => ({ id: difficulty.id, label: t(difficulty.nameKey) }))}
+              />
               <p className="text-xs text-text-muted">{t(`difficulty.${meta.lastDifficultyId}.description`)}</p>
 
               <h2 className="mt-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{t("weapon.select.title")}</h2>
