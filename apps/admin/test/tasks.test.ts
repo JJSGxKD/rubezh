@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
+  FILTER_KEYS,
   TASK_LIMIT_RANGE,
+  TIER_TITLES,
   cadenceLabel,
   completionsLabel,
   fetchTasks,
@@ -29,7 +31,7 @@ import { fakeFetch, json } from "./helpers";
 // каталог — по срокам в порядке показа игроку.
 
 function task(patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, limit: null, image: null, ...patch };
+  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, limit: null, image: null, ...patch };
 }
 
 describe("задания в панели", () => {
@@ -283,5 +285,55 @@ describe("предпросмотр задания", () => {
     const partner = task({ kind: "channel", period: "achievement", params: { url: " https://t.me/rubezh " }, image: "a".repeat(64) });
     expect(taskPreview(partner)).toMatchObject({ partner: true, imageId: "a".repeat(64), link: "https://t.me/rubezh" });
     expect(taskPreview({ ...partner, params: { url: "  " } }).link).toBeNull();
+  });
+});
+
+describe("ротация пула и фильтр цели", () => {
+  it("форма отклоняет вид с фильтром без фильтра, лишний фильтр и не тот ключ фильтра", () => {
+    expect(taskProblem(task({ taskId: "w_1", kind: "weapon_runs", filter: { weapon: "spark" } }), true)).toBeNull();
+    expect(taskProblem(task({ taskId: "w_1", kind: "weapon_runs" }), true)).toMatch(/фильтр/);
+    expect(taskProblem(task({ taskId: "w_1", kind: "weapon_runs", filter: { element: "fire" } }), true)).toMatch(/фильтр/);
+    expect(taskProblem(task({ taskId: "w_1", kind: "element_runs", filter: { element: "fire" } }), true)).toBeNull();
+    expect(taskProblem(task({ taskId: "w_1", kind: "difficulty_survive_sec", filter: { difficulty: "hard" } }), true)).toBeNull();
+    expect(taskProblem(task({ taskId: "w_1", kind: "runs", filter: { weapon: "spark" } }), true)).toMatch(/фильтр/);
+    expect(taskProblem(task({ taskId: "w_1", kind: "boost_runs", filter: null }), true)).toBeNull();
+    expect(Object.keys(FILTER_KEYS).sort()).toEqual(["difficulty_runs", "difficulty_survive_sec", "element_runs", "weapon_runs"]);
+  });
+
+  it("ступень — только у дневных и недельных заданий и не у партнёрских", () => {
+    expect(taskProblem(task({ taskId: "t_1", tier: "hard" }), true)).toBeNull();
+    expect(taskProblem(task({ taskId: "t_1", period: "weekly", tier: "easy" }), true)).toBeNull();
+    expect(taskProblem(task({ taskId: "t_1", period: "achievement", tier: "easy" }), true)).toMatch(/Ступень/);
+    const partner = task({ taskId: "t_1", kind: "channel", period: "weekly", target: 1, tier: "easy", params: { platform: "telegram", chat: "@rubezh", url: "https://t.me/rubezh" } });
+    expect(taskProblem(partner, true)).toMatch(/Ступень/);
+    expect(Object.keys(TIER_TITLES)).toEqual(["easy", "medium", "hard"]);
+  });
+
+  it("смена вида подставляет или убирает фильтр, смена на партнёрский убирает ступень", () => {
+    expect(withKind(task({ filter: { weapon: "spark" } }), "runs").filter).toBeNull();
+    expect(withKind(task(), "element_runs").filter).toBeNull();
+    expect(withKind(task({ tier: "easy" }), "channel").tier).toBeNull();
+    expect(withKind(task({ tier: "easy" }), "kills").tier).toBe("easy");
+  });
+
+  it("ступень и фильтр уходят на сервер; старый сервер без них и без набора читается", async () => {
+    const { fetch, calls } = fakeFetch(
+      json(200, { data: { tasks: [{ ...task(), filter: undefined, tier: undefined }], kinds: ["runs"], periods: ["daily"] } }),
+      json(200, { data: task({ kind: "weapon_runs", filter: { weapon: "spark" }, tier: "easy" }) }),
+    );
+    const api = new AdminApi(fetch);
+    const list = await fetchTasks(api);
+    expect(list.ok && list.data.tasks[0]).toMatchObject({ tier: null, filter: null });
+    expect(list.ok && list.data.rotation).toEqual({ daily: [], weekly: [] });
+
+    await saveTask(api, task({ kind: "weapon_runs", filter: { weapon: "spark" }, tier: "easy" }));
+    expect(JSON.parse(String(calls[1]?.init.body))).toMatchObject({ kind: "weapon_runs", filter: { weapon: "spark" }, tier: "easy" });
+  });
+
+  it("набор «сегодня в ротации» приходит с каталогом", async () => {
+    const rotation = { daily: ["daily_runs"], weekly: ["weekly_runs"] };
+    const { fetch } = fakeFetch(json(200, { data: { tasks: [task()], kinds: ["runs"], periods: ["daily"], rotation } }));
+    const list = await fetchTasks(new AdminApi(fetch));
+    expect(list.ok && list.data.rotation).toEqual(rotation);
   });
 });

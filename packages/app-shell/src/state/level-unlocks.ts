@@ -38,6 +38,23 @@ export function unlocksGainedBetween(fromLevel: number, toLevel: number): LevelU
   return gained;
 }
 
+/**
+ * Ближайшее открытие выше `level`: уровни без открытий (на лестнице их до двух
+ * подряд) пропускаются. После последней строки таблицы — `null`.
+ */
+export function nextUnlockAfter(level: number): { level: number; unlocks: LevelUnlock[] } | null {
+  const last = Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level));
+  for (let candidate = level + 1; candidate <= last; candidate++) {
+    const unlocks = unlocksGainedAt(candidate);
+    if (unlocks.length > 0) return { level: candidate, unlocks };
+  }
+  return null;
+}
+
+export function nextUnlockLabel(next: { level: number; unlocks: LevelUnlock[] }): string {
+  return t("level.open.next", { level: next.level, list: next.unlocks.map(unlockLabel).join(", ") });
+}
+
 export function unlockLabel(unlock: LevelUnlock): string {
   switch (unlock.kind) {
     case "weapon":

@@ -3,8 +3,8 @@ id: T-0056
 title: Вход в панель по QR и диплинку — запрос со страницей, без лишнего перехода
 epic: E14
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -31,7 +31,6 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.8
 ---
 
 # T-0056. Вход в панель по QR и диплинку — запрос со страницей, без лишнего перехода

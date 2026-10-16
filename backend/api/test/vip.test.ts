@@ -36,6 +36,7 @@ import { TelegramApiError } from "../src/platforms/telegram/telegram-bot-api.js"
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
+import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { gameDay, MemoryVipRepository } from "./helpers/memory-vip.js";
 import { switchesOf } from "./helpers/notify-targets.js";
@@ -123,17 +124,19 @@ function setup(settings = config(), register = true) {
   const fulfillment = new PurchaseFulfillment();
   const payments = new PaymentsService(settings, purchases, new MemoryRunsRepository(), providers, switchesOf(settings));
   const revocation = new PurchaseRevocation();
-  const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), hooks, revocation);
-  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
+  const restrictions = new MemoryRestrictionsRepository();
+  const gate = restrictionsGate(restrictions);
+  const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), hooks, revocation, gate);
+  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers, new PurchaseRevocation()), new RunsHooks(), providers, fulfillment, purchases);
   const repository = new CuttingVipRepository();
   const wallet = new FakeWallet();
   const bonuses = new WalletBonuses();
   const adPasses = new AdPasses();
   const renewal = new SubscriptionRenewal(purchases, providers);
   const accounts = accountsOf(purchases);
-  const vip = new VipService(repository, payments, fulfillment, hooks, renewal, wallet as unknown as WalletService, bonuses, adPasses, accounts, revocation);
+  const vip = new VipService(repository, payments, fulfillment, hooks, renewal, wallet as unknown as WalletService, bonuses, adPasses, accounts, revocation, gate);
   if (register) vip.onModuleInit();
-  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses, adPasses, renewal, accounts, revocation };
+  return { purchases, api, confirmation, queue, repository, wallet, vip, bonuses, adPasses, renewal, accounts, revocation, restrictions };
 }
 
 type Ctx = ReturnType<typeof setup>;
@@ -173,6 +176,67 @@ describe("план VIP", () => {
     const account = player("max");
     expect(await ctx.vip.view(account)).toMatchObject({ stars: null, chargedStars: null, active: false, canOrder: true });
     expect(await codeOf(ctx.vip.order(account))).toBe("payments_unsupported");
+  });
+});
+
+describe("покупки аккаунту закрыты (T-0024)", () => {
+  let ctx: Ctx;
+  let account: AccountRef;
+
+  beforeEach(() => {
+    ctx = setup();
+    account = player();
+  });
+
+  it("при ограничении «Покупки» счёт VIP не выставляется: отказ `account_restricted`, покупки и счёта в Telegram нет", async () => {
+    ctx.restrictions.restrict(account.accountId, "purchases");
+
+    expect(await codeOf(ctx.vip.order(account))).toBe("account_restricted");
+
+    expect(ctx.purchases.rows.size).toBe(0);
+    expect(ctx.api.sent).toEqual([]);
+  });
+
+  it("текст отказа — шаблон причины для игрока", async () => {
+    ctx.restrictions.restrict(account.accountId, "purchases", { reason: "payment_refund" });
+
+    await expect(ctx.vip.order(account)).rejects.toThrow("Покупки — закрыто бессрочно. Причина: Возврат звёзд за покупку");
+  });
+
+  it("проверка — первой: площадка без оплаты закрытому аккаунту отвечает тем же отказом", async () => {
+    const closed = player("max");
+    ctx.restrictions.restrict(closed.accountId, "purchases");
+
+    expect(await codeOf(ctx.vip.order(closed))).toBe("account_restricted");
+  });
+
+  it("блокировка целиком закрывает и покупки VIP", async () => {
+    ctx.restrictions.restrict(account.accountId, "all");
+
+    expect(await codeOf(ctx.vip.order(account))).toBe("account_restricted");
+  });
+
+  it("другое ограничение и истёкшее покупок не закрывают", async () => {
+    ctx.restrictions.restrict(account.accountId, "ad_rewards");
+    ctx.restrictions.restrict(account.accountId, "purchases", { endsAt: new Date(Date.now() - 1_000) });
+
+    expect(await ctx.vip.order(account)).toMatchObject({ status: "pending" });
+  });
+
+  it("VIP, оплаченный раньше, идёт своим чередом: закрытие покупок его не трогает", async () => {
+    const invoice = await ctx.vip.order(account);
+    await pay(ctx, account, invoice.purchaseId, "charge-1");
+    ctx.restrictions.restrict(account.accountId, "purchases");
+
+    expect(await ctx.vip.view(account)).toMatchObject({ active: true, renewal: "on" });
+  });
+
+  it("продление уже оплаченной подписки проходит предварительную проверку и при закрытых покупках", async () => {
+    const invoice = await ctx.vip.order(account);
+    await pay(ctx, account, invoice.purchaseId, "charge-1");
+    ctx.restrictions.restrict(account.accountId, "purchases");
+
+    await expect(ctx.confirmation.answerCheckout({ platform: "telegram", queryId: "q-renew", payerId: account.platformUserId, currency: "XTR", totalAmount: VIP_PLAN.stars, payload: invoice.purchaseId })).resolves.toEqual({ ok: true });
   });
 });
 

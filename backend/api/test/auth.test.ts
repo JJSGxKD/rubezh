@@ -1,8 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
 import { secretKey, signAccessToken, verifyAccessToken } from "../src/modules/auth/access-token.js";
+import { AccessRevocations } from "../src/modules/auth/access-revocations.js";
+import { AuthController } from "../src/modules/auth/auth.controller.js";
 import { AuthGuard, accountOf } from "../src/modules/auth/auth.guard.js";
 import { AuthHooks } from "../src/modules/auth/auth-hooks.js";
 import { AuthService, hashToken } from "../src/modules/auth/auth.service.js";
@@ -39,7 +41,13 @@ describe("токен доступа", () => {
   it("подписывает и читает обратно", async () => {
     const token = await signAccessToken(claims, key, 900, 1_000_000);
 
-    expect(await verifyAccessToken(token, key, 1_000_000)).toEqual({ ok: true, claims });
+    expect(await verifyAccessToken(token, key, 1_000_000)).toEqual({ ok: true, claims, issuedAtSec: 1_000 });
+  });
+
+  it("отдаёт секунду выдачи: по ней сверяется отзыв", async () => {
+    const token = await signAccessToken(claims, key, 900, 1_234_567);
+
+    expect(await verifyAccessToken(token, key, 1_234_567)).toMatchObject({ ok: true, issuedAtSec: 1_234 });
   });
 
   it("истёкший отличается от неверного: по нему клиент обновляет сессию", async () => {
@@ -162,6 +170,22 @@ describe("вход и продление сессии", () => {
 
     expect(await service.logoutEverywhere(first.account.accountId)).toBe(2);
     expect(refresh.liveCount).toBe(0);
+  });
+
+  it("выход везде сначала отзывает токены доступа, потом токены продления", async () => {
+    const calls: string[] = [];
+    const revocations = { revokeBefore: async () => void calls.push("access") } as unknown as AccessRevocations;
+    const spyRefresh = new MemoryRefreshStore();
+    const revokeAll = spyRefresh.revokeAll.bind(spyRefresh);
+    spyRefresh.revokeAll = async (accountId: string) => {
+      calls.push("refresh");
+      return await revokeAll(accountId);
+    };
+    const wired = new AuthService(config(), accounts, spyRefresh, new AuthHooks(), launchVerifiersFor(config()), revocations);
+
+    await wired.logoutEverywhere(crypto.randomUUID());
+
+    expect(calls).toEqual(["access", "refresh"]);
   });
 
   it("в хранилище уходит хэш, а не сам токен: слепок базы не даёт входа", async () => {
@@ -292,5 +316,67 @@ describe("доступ по токену", () => {
 
   it("схема не Bearer не пускает: подпись запуска сюда не годится", async () => {
     await expect(new AuthGuard(config()).canActivate(contextWith("tma user=...").context)).rejects.toThrow(DomainError);
+  });
+
+  describe("отзыв «выйти везде»", () => {
+    const revoked = (issuedAtSec: number) => ({ isRevoked: async (_id: string, at: number) => at < issuedAtSec }) as unknown as AccessRevocations;
+
+    it("токен, выданный до отзыва, не пускает", async () => {
+      const token = await signAccessToken(claims, key, 900, Date.now() - 10_000);
+      const guard = new AuthGuard(config(), revoked(Math.floor(Date.now() / 1000) - 5));
+
+      await expect(guard.canActivate(contextWith(`Bearer ${token}`).context)).rejects.toMatchObject({
+        status: 401,
+        message: "Сессия завершена — войдите заново",
+      });
+    });
+
+    it("токен, выданный после отзыва, проходит", async () => {
+      const token = await signAccessToken(claims, key, 900, Date.now());
+      const guard = new AuthGuard(config(), revoked(Math.floor(Date.now() / 1000) - 5));
+
+      expect(await guard.canActivate(contextWith(`Bearer ${token}`).context)).toBe(true);
+    });
+
+    it("проверяется аккаунт из токена и секунда выдачи", async () => {
+      const isRevoked = vi.fn(async () => false);
+      const issuedAtMs = Date.now() - 10_000;
+      const token = await signAccessToken(claims, key, 900, issuedAtMs);
+      const guard = new AuthGuard(config(), { isRevoked } as unknown as AccessRevocations);
+
+      await guard.canActivate(contextWith(`Bearer ${token}`).context);
+
+      expect(isRevoked).toHaveBeenCalledWith(claims.accountId, Math.floor(issuedAtMs / 1000));
+    });
+  });
+});
+
+describe("знак «Тестер» в виде сессии (T-0042)", () => {
+  const request = { ip: "203.0.113.9", headers: {} };
+  const limiter = { consume: async () => true };
+  const account = { accountId: "00000000-0000-4000-8000-000000000042", displayName: "Путник", photoUrl: null, createdAt: new Date("2026-09-01T10:00:00Z"), created: false };
+
+  async function sessionOf(patch: Record<string, unknown>) {
+    const service = { refreshSession: async () => ({ accessToken: "a".repeat(20), expiresInSec: 900, refreshToken: "r".repeat(32), account: { ...account, ...patch } }) };
+    const controller = new AuthController(service as never, limiter as never, config());
+    return (await controller.refresh(request, { refreshToken: "r".repeat(32) })).data.account;
+  }
+
+  it("у тестера в аккаунте tester: true, а даты знака нет", async () => {
+    const view = await sessionOf({ testerAt: new Date("2026-10-01T10:00:00Z") });
+
+    expect(view).toEqual({ accountId: account.accountId, displayName: "Путник", photoUrl: null, createdAt: "2026-09-01T10:00:00.000Z", created: false, tester: true });
+    expect(view).not.toHaveProperty("testerAt");
+  });
+
+  it("у обычного игрока поля tester нет вовсе — вид прежний", async () => {
+    const view = await sessionOf({ testerAt: null });
+
+    expect(view).toEqual({ accountId: account.accountId, displayName: "Путник", photoUrl: null, createdAt: "2026-09-01T10:00:00.000Z", created: false });
+    expect(view).not.toHaveProperty("tester");
+  });
+
+  it("аккаунт без поля testerAt (подмена старого вида) — тоже не тестер", async () => {
+    expect(await sessionOf({})).not.toHaveProperty("tester");
   });
 });

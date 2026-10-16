@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { PARTNER_CODE_ROUTE, fetchPartner, share, type PartnerDetail } from "../../api/partners";
+import { NO_ACCRUAL_NOTE, NO_BINDING_NOTE, PARTNER_CODE_ROUTE, STATUS_TITLES, TERMS_HELP, bindsNewPlayers, fetchPartner, share, statusTone, type PartnerDetail } from "../../api/partners";
 import { STATE_TITLES, STATE_TONES, batchMask } from "../../api/promo-codes";
 import { formatDateTime, formatNumber } from "../../format";
 import { api } from "../../services";
@@ -10,15 +10,18 @@ import { Badge, Button, DataTable, ErrorNotice, Help, KeyValue, Loading } from "
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { PartnerDialog } from "./PartnerDialog";
+import { PartnerStatusDialog } from "./PartnerStatusDialog";
 
 /**
- * Карточка партнёра: что он принёс — плитками сверху, привязки по дням,
- * его коды с тем, сколько игроков привязал каждый. «Завести код партнёра»
- * открывает мастер промокодов с ним уже выбранным.
+ * Карточка партнёра: статус и условия выплат, что он принёс — плитками,
+ * привязки по дням, его коды с тем, сколько игроков привязал каждый. «Сменить
+ * статус…» — отдельное окно с причиной. «Завести код партнёра» открывает
+ * мастер промокодов с ним уже выбранным.
  */
 export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partnerId: string; canEdit: boolean; onClose: () => void; onChanged: () => void }) {
   const { state, reload } = useApi(() => fetchPartner(api, partnerId), [partnerId]);
   const [editing, setEditing] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
   const detail = state.status === "ok" ? state.data : null;
 
   if (editing && detail !== null) {
@@ -26,6 +29,19 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
       <PartnerDialog
         partner={detail.partner}
         onClose={() => setEditing(false)}
+        onSaved={() => {
+          reload();
+          onChanged();
+        }}
+      />
+    );
+  }
+
+  if (changingStatus && detail !== null) {
+    return (
+      <PartnerStatusDialog
+        partner={detail.partner}
+        onClose={() => setChangingStatus(false)}
         onSaved={() => {
           reload();
           onChanged();
@@ -59,15 +75,25 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
     >
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
-      {detail === null ? null : <CardBody detail={detail} />}
+      {detail === null ? null : <CardBody detail={detail} canEdit={canEdit} onChangeStatus={() => setChangingStatus(true)} />}
     </Dialog>
   );
 }
 
-function CardBody({ detail }: { detail: PartnerDetail }) {
-  const { stats } = detail.partner;
+function CardBody({ detail, canEdit, onChangeStatus }: { detail: PartnerDetail; canEdit: boolean; onChangeStatus: () => void }) {
+  const { stats, status } = detail.partner;
   return (
     <div className="flex flex-col gap-5">
+      <section className="flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1.5 text-xs text-text-muted">
+          Статус
+          <Help text={TERMS_HELP.status} />
+        </span>
+        <Badge tone={statusTone(status)}>{STATUS_TITLES[status]}</Badge>
+        {canEdit ? <Button onClick={onChangeStatus}>Сменить статус…</Button> : null}
+        {bindsNewPlayers(status) ? null : <span className="text-xs text-warning">{NO_BINDING_NOTE}</span>}
+      </section>
+
       <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <Tile title="Привёл" help={HELP.partners.bound} value={formatNumber(stats.bound)} sub={`из ${formatNumber(stats.redeemed)} активаций его кодов`} />
         <Tile title="Играли" help={HELP.partners.played} value={formatNumber(stats.played)} sub={`${share(stats.played, stats.bound)} приведённых`} />
@@ -107,9 +133,32 @@ function CardBody({ detail }: { detail: PartnerDetail }) {
         />
       </section>
 
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">Выплаты</h3>
+        <KeyValue
+          items={[
+            ["Страна", detail.partner.country ?? dash, TERMS_HELP.country],
+            ["Валюта", detail.partner.payoutCurrency ?? dash, TERMS_HELP.payoutCurrency],
+            ["Способ", detail.partner.payoutMethod ?? dash],
+            [
+              "Процент",
+              detail.partner.sharePercent === null ? (
+                dash
+              ) : (
+                <span>
+                  {detail.partner.sharePercent}% <span className="text-text-muted">· {NO_ACCRUAL_NOTE}</span>
+                </span>
+              ),
+              TERMS_HELP.sharePercent,
+            ],
+          ]}
+        />
+      </section>
+
       <KeyValue
         items={[
-          ["Договорённости", detail.partner.note ?? <span className="text-text-muted">—</span>, HELP.partners.note],
+          ["TG id", detail.partner.telegramId ?? dash, TERMS_HELP.telegramId],
+          ["Договорённости", detail.partner.note ?? dash, HELP.partners.note],
           ["Заведён", formatDateTime(detail.partner.createdAt)],
           ["Окно привязки", `новички до ${String(detail.rules.bindWindowDays)} дней с регистрации`, HELP.partners.window],
         ]}
@@ -117,6 +166,8 @@ function CardBody({ detail }: { detail: PartnerDetail }) {
     </div>
   );
 }
+
+const dash = <span className="text-text-muted">—</span>;
 
 function Tile({ title, help, value, sub }: { title: string; help: string; value: string; sub: ReactNode }) {
   return (

@@ -19,20 +19,28 @@ export type SessionView =
   | { status: "ready"; identity: AdminIdentity };
 
 /**
- * Вход через бота (docs/29-admin-panel.md §8): код на экране, ссылка на бота,
+ * Вход через бота (docs/29-admin-panel.md §8): запрос открывается вместе со
+ * страницей, на экране — QR и кнопка с диплинком, код и запасная ссылка,
  * ожидание подтверждения. Сессию сервер ставит cookie при первом опросе после
- * «Войти» в боте.
+ * «Войти» в боте. `renewals` — сколько раз запрос уже заменён новым после
+ * истечения.
  */
 export type BotLoginView =
   | { status: "idle" }
   | { status: "opening" }
-  | { status: "waiting"; code: string; link: string; expiresAtMs: number }
+  | { status: "waiting"; code: string; link: string; deepLink: string | null; expiresAtMs: number; renewals: number }
   | { status: "failed"; message: string };
 
 export interface SessionState {
   view: SessionView;
   restore(): Promise<void>;
   loginDev(devUser: string): Promise<void>;
+  /**
+   * Страница входа показана анонимному посетителю — открыть запрос сам. Вход
+   * уже идёт или завершился отказом — ничего не делает: «Начать заново» —
+   * `loginBot()`.
+   */
+  startBotLogin(): Promise<void>;
   /** Открыть вход через бота и ждать подтверждения — до успеха, отказа, срока или отмены. */
   loginBot(): Promise<void>;
   cancelBot(): void;
@@ -45,6 +53,13 @@ export interface SessionTiming {
   now(): number;
   wait(ms: number): Promise<void>;
 }
+
+/**
+ * Сколько запросов входа подряд открывается само: шесть по пять минут — полчаса.
+ * Дальше «Время вышло» и ручное «Начать заново»: забытая вкладка не плодит
+ * запросы в Redis бесконечно.
+ */
+export const MAX_BOT_REQUESTS = 6;
 
 const TIMING: SessionTiming = {
   pollMs: 2_000,
@@ -79,6 +94,56 @@ export function createSessionStore(api: AdminApi, timing: SessionTiming = TIMING
       if (attempt === botAttempt && view.status === "anonymous") set({ view: { ...view, bot } });
     };
 
+    /**
+     * Одна попытка входа: открыть запрос, ждать подтверждения; истёк — открыть
+     * новый сам, но не больше `MAX_BOT_REQUESTS` подряд. Отказ бота нового
+     * запроса не открывает: человек должен прочитать причину.
+     */
+    const run = async (): Promise<void> => {
+      const attempt = ++botAttempt;
+      setBot(attempt, { status: "opening" });
+      for (let renewals = 0; attempt === botAttempt; renewals++) {
+        const opened = await openBotLogin(api);
+        if (!opened.ok) {
+          if (opened.error.kind === "disabled") return set({ view: { status: "blocked", error: opened.error } });
+          return setBot(attempt, { status: "failed", message: opened.error.message });
+        }
+        const expiresAtMs = Date.parse(opened.data.expiresAt);
+        setBot(attempt, { status: "waiting", code: opened.data.code, link: opened.data.link, deepLink: opened.data.deepLink ?? null, expiresAtMs, renewals });
+
+        const outcome = await waitForAnswer(attempt, opened.data, expiresAtMs);
+        if (outcome !== "expired") return;
+        if (renewals + 1 >= MAX_BOT_REQUESTS) return setBot(attempt, { status: "failed", message: "Время вышло — начните вход заново" });
+      }
+    };
+
+    /** Опрос одного запроса: `expired` — срок вышел и нужен новый; `done` — исход уже показан. */
+    const waitForAnswer = async (attempt: number, opened: Parameters<typeof pollBotLogin>[1], expiresAtMs: number): Promise<"expired" | "done"> => {
+      while (attempt === botAttempt) {
+        await timing.wait(timing.pollMs);
+        if (attempt !== botAttempt) return "done";
+        if (timing.now() > expiresAtMs) return "expired";
+        const result = await pollBotLogin(api, opened);
+        // Сеть моргнула — пробуем снова на следующем шаге: запрос ещё жив.
+        if (!result.ok && result.error.kind === "offline") continue;
+        if (!result.ok) {
+          setBot(attempt, { status: "failed", message: result.error.message });
+          return "done";
+        }
+        const poll = result.data;
+        if (poll.status === "pending") continue;
+        if (poll.status === "expired") return "expired";
+        if (poll.status === "confirmed") {
+          botAttempt++;
+          set({ view: { status: "ready", identity: poll.identity } });
+          return "done";
+        }
+        setBot(attempt, { status: "failed", message: BOT_REFUSALS[poll.reason] });
+        return "done";
+      }
+      return "done";
+    };
+
     return {
       view: { status: "loading" },
 
@@ -99,33 +164,14 @@ export function createSessionStore(api: AdminApi, timing: SessionTiming = TIMING
         set({ view: anonymous(null, result.error) });
       },
 
-      async loginBot() {
-        const attempt = ++botAttempt;
-        setBot(attempt, { status: "opening" });
-        const opened = await openBotLogin(api);
-        if (!opened.ok) {
-          if (opened.error.kind === "disabled") return set({ view: { status: "blocked", error: opened.error } });
-          return setBot(attempt, { status: "failed", message: opened.error.message });
-        }
-        const expiresAtMs = Date.parse(opened.data.expiresAt);
-        setBot(attempt, { status: "waiting", code: opened.data.code, link: opened.data.link, expiresAtMs });
+      async startBotLogin() {
+        const view = get().view;
+        if (view.status !== "anonymous" || view.bot.status !== "idle") return;
+        await run();
+      },
 
-        while (attempt === botAttempt) {
-          await timing.wait(timing.pollMs);
-          if (attempt !== botAttempt) return;
-          if (timing.now() > expiresAtMs) return setBot(attempt, { status: "failed", message: "Время вышло — начните вход заново" });
-          const result = await pollBotLogin(api, opened.data);
-          // Сеть моргнула — пробуем снова на следующем шаге: запрос ещё жив.
-          if (!result.ok && result.error.kind === "offline") continue;
-          if (!result.ok) return setBot(attempt, { status: "failed", message: result.error.message });
-          const poll = result.data;
-          if (poll.status === "pending") continue;
-          if (poll.status === "confirmed") {
-            botAttempt++;
-            return set({ view: { status: "ready", identity: poll.identity } });
-          }
-          return setBot(attempt, { status: "failed", message: poll.status === "declined" ? BOT_REFUSALS[poll.reason] : "Запрос истёк — начните вход заново" });
-        }
+      async loginBot() {
+        await run();
       },
 
       cancelBot() {

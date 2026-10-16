@@ -51,12 +51,26 @@ describe("запрос входа", () => {
     const { logins, store } = setup();
     const opened = await logins.open({ userAgent: CHROME_WINDOWS, ip: "95.24.10.7" }, NOW);
     expect(opened.link).toBe(`https://t.me/rubezh_bot?start=panel-${opened.requestId}`);
+    // Тот же запрос диплинком — QR и кнопка ведут сразу в приложение Telegram.
+    expect(opened.deepLink).toBe(`tg://resolve?domain=rubezh_bot&start=panel-${opened.requestId}`);
     expect(opened.requestId).toMatch(/^[A-Za-z0-9_-]{22}$/);
     expect(opened.code).toMatch(/^\d{4}$/);
     expect(opened.expiresAtMs).toBe(NOW + 300_000);
     // В хранилище — хэш секрета, а не он сам.
     expect(store.requests.get(opened.requestId)?.secretHash).not.toContain(opened.secret);
     expect(await logins.prompt(opened.requestId)).toEqual({ code: opened.code, device: "Chrome · Windows", place: "95.24.*.*", expiresAtMs: NOW + 300_000 });
+  });
+
+  it("у площадки нет диплинков — запрос открывается с обычной ссылкой, `deepLink` пуст", async () => {
+    const cfg = config();
+    const accounts = new MemoryAccountRepository();
+    const roles = new RolesService(cfg, new MemoryRolesRepository(), accounts);
+    const sessions = new AdminSessionService(cfg, accounts, new MemoryAdminSessionStore(), roles);
+    const plain = { platform: "telegram" as const, launch: () => null, chat: (param: string) => `https://t.me/rubezh_bot?start=${param}` };
+    const logins = new PanelLoginService(new MemoryPanelLoginStore(), accounts, roles, sessions, new AppLinks([plain]));
+    const opened = await logins.open({ userAgent: null, ip: "1.2.3.4" }, NOW);
+    expect(opened.link).toContain("start=panel-");
+    expect(opened.deepLink).toBeNull();
   });
 
   it("бот ещё не представился — запрос не открыть", async () => {

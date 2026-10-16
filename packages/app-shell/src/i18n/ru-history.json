@@ -37,6 +37,7 @@
   "history.reason.refund_revoke": "Возврат звёзд за покупку",
   "history.reason.salvage": "Разбор предмета",
   "history.reason.boost_refund": "Возврат бустов: забег не начался",
+  "history.reason.wipe_compensation": "Спасибо за тест",
   "history.reason.unlock": "Открытие",
   "history.reason.meta_upgrade": "Постоянное улучшение",
   "history.reason.item_upgrade": "Улучшение предмета",

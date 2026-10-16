@@ -13,7 +13,7 @@ import type { Permission } from "../roles/permissions.js";
  * не приходит — иначе ограничение было бы отсрочкой.
  */
 
-export const RESTRICTION_KINDS = ["leaderboard", "referral_rewards", "friend_gifts", "ad_rewards", "promo_codes", "partner_tasks", "all"] as const;
+export const RESTRICTION_KINDS = ["leaderboard", "separate_board", "referral_rewards", "friend_gifts", "ad_rewards", "promo_codes", "partner_tasks", "purchases", "all"] as const;
 
 export type RestrictionKind = (typeof RESTRICTION_KINDS)[number];
 
@@ -27,6 +27,12 @@ export interface RestrictionKindInfo {
   permission: Permission;
   /** можно ли наложить молча, без плашки у игрока */
   silentAllowed: boolean;
+  /**
+   * Скрытый вид: его не видит игрок и сотрудник без права вида — ни в
+   * каталоге, ни в истории, ни в списках, ни в журнале (см.
+   * `restriction-visibility.ts`).
+   */
+  hidden: boolean;
 }
 
 export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> = {
@@ -37,6 +43,16 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
     checkedIn: "runs",
     permission: "players.restrict",
     silentAllowed: true,
+    hidden: false,
+  },
+  separate_board: {
+    title: "Отдельная доска",
+    effect:
+      "Игрок остаётся в рейтинге и читает полную доску, остальные видят общую без него. Места и награды за места считаются по доске того, кто смотрит. Игрок не видит ничего. Призы — только внутриигровые",
+    checkedIn: "runs",
+    permission: "players.board.restrict",
+    silentAllowed: true,
+    hidden: true,
   },
   referral_rewards: {
     title: "Награды за друзей",
@@ -45,6 +61,7 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
     checkedIn: "referrals, friends",
     permission: "players.restrict",
     silentAllowed: true,
+    hidden: false,
   },
   friend_gifts: {
     title: "Подарки друзьям",
@@ -52,6 +69,7 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
     checkedIn: "friends",
     permission: "players.restrict",
     silentAllowed: true,
+    hidden: false,
   },
   ad_rewards: {
     title: "Награды за рекламу",
@@ -59,6 +77,7 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
     checkedIn: "ads",
     permission: "players.restrict",
     silentAllowed: true,
+    hidden: false,
   },
   promo_codes: {
     title: "Промокоды",
@@ -66,6 +85,7 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
     checkedIn: "promo-codes",
     permission: "players.restrict",
     silentAllowed: true,
+    hidden: false,
   },
   partner_tasks: {
     title: "Партнёрские задания",
@@ -73,6 +93,16 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
     checkedIn: "tasks",
     permission: "players.restrict",
     silentAllowed: true,
+    hidden: false,
+  },
+  purchases: {
+    title: "Покупки",
+    effect:
+      "Покупки за звёзды закрыты: магазин и VIP не выставляют счета, по старым счетам оплата не проходит. Купленное раньше остаётся. Ставится само после возврата звёзд через Telegram.",
+    checkedIn: "shop, vip, payments",
+    permission: "players.restrict",
+    silentAllowed: false,
+    hidden: false,
   },
   all: {
     title: "Всё — блокировка",
@@ -81,6 +111,7 @@ export const RESTRICTION_CATALOG: Record<RestrictionKind, RestrictionKindInfo> =
     checkedIn: "auth",
     permission: "players.ban",
     silentAllowed: false,
+    hidden: false,
   },
 };
 
@@ -95,6 +126,7 @@ export const RESTRICTION_REASONS = {
   ad_abuse: { title: "Злоупотребление рекламой", player: "Неестественные просмотры рекламы" },
   promo_abuse: { title: "Злоупотребление промокодами", player: "Промокоды использовались не по правилам" },
   abuse: { title: "Оскорбления или спам", player: "Оскорбления или спам" },
+  payment_refund: { title: "Возврат оплаты", player: "Возврат звёзд за покупку" },
   other: { title: "Другое", player: "Нарушение правил игры" },
 } as const satisfies Record<string, { title: string; player: string }>;
 
@@ -113,4 +145,12 @@ export const RESTRICTION_LIMITS = {
 
 export function isRestrictionKind(value: string): value is RestrictionKind {
   return (RESTRICTION_KINDS as readonly string[]).includes(value);
+}
+
+/** Скрытые виды — те, что не видны игроку и сотруднику без права вида. */
+export const HIDDEN_KINDS: readonly RestrictionKind[] = RESTRICTION_KINDS.filter((kind) => RESTRICTION_CATALOG[kind].hidden);
+
+/** Незнакомый вид из базы (запись новее кода) скрытым не считается: показывать его нечем. */
+export function isHiddenKind(kind: string): boolean {
+  return isRestrictionKind(kind) && RESTRICTION_CATALOG[kind].hidden;
 }

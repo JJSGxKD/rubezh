@@ -153,6 +153,12 @@ describe("кнопка бесплатной крутки", () => {
     expect(freeSpinButton({ free: true }, "asking", "free")).toEqual({ disabled: true, loading: true, label: "free" });
   });
 
+  it("бесплатная уже списана, колесо крутится по ней — грузится до остановки, «через N» не появляется", () => {
+    expect(freeSpinButton({ free: false }, "spinning", "free")).toEqual({ disabled: true, loading: true, label: "next" });
+    expect(freeSpinButton({ free: false }, "asking", "free")).toEqual({ disabled: true, loading: true, label: "next" });
+    expect(freeSpinButton({ free: true }, "spinning", "free")).toEqual({ disabled: true, loading: true, label: "free" });
+  });
+
   it("бесплатная есть, крутят за рекламу — неактивна, но не грузится", () => {
     expect(freeSpinButton({ free: true }, "spinning", "ad")).toEqual({ disabled: true, loading: false, label: "free" });
   });

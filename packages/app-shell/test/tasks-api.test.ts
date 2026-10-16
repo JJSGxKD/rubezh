@@ -1,3 +1,6 @@
+import ru from "../src/i18n/ru.json";
+import ruTasks from "../src/i18n/ru-tasks.json";
+import "../src/i18n/tasks";
 import { describe, expect, it } from "vitest";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import {
@@ -6,6 +9,7 @@ import {
   createTasksApi,
   feedActionKey,
   feedCheckNotice,
+  goalFilterParams,
   isClaimable,
   isFeedTask,
   isOpenKind,
@@ -238,5 +242,45 @@ describe("картинка задания", () => {
     for (const foreign of ["https://evil.example/pixel.gif", "//evil.example/x.webp", "/api/v1/media/../../etc/passwd", `/api/v1/media/${"a".repeat(64)}.svg`, "javascript:alert(1)"]) {
       expect(taskImageUrl(foreign, "https://tg.rubezh.gonet.fun")).toBeNull();
     }
+  });
+});
+
+describe("ротация заданий и новые виды цели", () => {
+  it("ответ без ступени и фильтра разбирается; с ними — тоже", async () => {
+    const old = await createTasksApi(server([], { tasks: [TASK] })).view();
+    expect(old.ok && old.data.tasks[0]).toMatchObject({ id: "daily_runs" });
+    expect(old.ok && old.data.tasks[0]?.filter).toBeUndefined();
+
+    const fresh = await createTasksApi(
+      server([], { tasks: [{ ...TASK, id: "daily_weapon_spark", kind: "weapon_runs", tier: "easy", filter: { weapon: "spark" } }, { ...TASK, id: "daily_boost", kind: "boost_runs", tier: null, filter: null }] }),
+    ).view();
+    expect(fresh.ok && fresh.data.tasks.map((task) => [task.tier, task.filter])).toEqual([
+      ["easy", { weapon: "spark" }],
+      [null, null],
+    ]);
+  });
+
+  it("незнакомый фильтр от сервера новее клиента не роняет экран", async () => {
+    const view = await createTasksApi(server([], { tasks: [{ ...TASK, kind: "weapon_runs", tier: "easy", filter: { weapon: "spark", something: "new" } }] })).view();
+    expect(view.ok).toBe(true);
+  });
+
+  it("тексты: ключи всех новых видов и стихий есть, а оружие и сложности стартового пула имеют имена", () => {
+    const kinds = ["xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs"];
+    for (const kind of kinds) expect(ruTasks[`task.kind.${kind}` as keyof typeof ruTasks], `task.kind.${kind}`).toBeTypeOf("string");
+    for (const element of ["fire", "cold", "lightning", "poison"]) expect(ruTasks[`task.element.${element}` as keyof typeof ruTasks], `task.element.${element}`).toBeTypeOf("string");
+    const names = ru as Record<string, string>;
+    for (const weapon of ["spark", "knife", "storm", "wardstone"]) expect(names[`weapon.${weapon}.name`], `weapon.${weapon}.name`).toBeTypeOf("string");
+    for (const difficulty of ["normal", "hard"]) expect(names[`difficulty.${difficulty}.name`], `difficulty.${difficulty}.name`).toBeTypeOf("string");
+  });
+
+  it("текст цели с фильтром строится из имён оружия, стихии и сложности", () => {
+    expect(goalFilterParams({ kind: "weapon_runs", filter: { weapon: "spark" } })).toEqual({ weapon: "Искра" });
+    expect(goalFilterParams({ kind: "element_runs", filter: { element: "fire" } })).toEqual({ element: "Огонь" });
+    expect(goalFilterParams({ kind: "difficulty_runs", filter: { difficulty: "hard" } })).toEqual({ difficulty: "Сложная" });
+    expect(goalFilterParams({ kind: "difficulty_survive_sec", filter: { difficulty: "hard" } })).toEqual({ difficulty: "Сложная" });
+    // нет фильтра — без аргументов, экран не падает
+    expect(goalFilterParams({ kind: "weapon_runs", filter: null })).toEqual({});
+    expect(goalFilterParams({ kind: "runs" })).toEqual({});
   });
 });

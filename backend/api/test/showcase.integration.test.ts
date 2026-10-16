@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { PrismaClient } from "../src/generated/prisma/client.js";
@@ -19,6 +18,7 @@ import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.
 import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Витрина на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -52,7 +52,7 @@ describe.skipIf(DATABASE_URL === "")("витрина на живом Postgres", 
 
   beforeAll(() => {
     const config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL, JWT_ACCESS_SECRET: SECRET, TELEGRAM_BOT_TOKEN: "1:TEST" } as NodeJS.ProcessEnv);
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 20, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 20);
     accounts = new PrismaAccountRepository(prisma);
     wallet = new WalletService(new PrismaWalletRepository(prisma), config, new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository()));
     items = new PrismaItemsRepository(prisma);

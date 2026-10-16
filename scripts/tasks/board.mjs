@@ -1,3 +1,4 @@
+import { BATCH_RE, EFFORTS, EXECUTORS, batchNumber } from "./task-file.mjs";
 import { zonesOverlap } from "./zones.mjs";
 
 /**
@@ -28,12 +29,13 @@ export const COLUMNS = [
 const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
 
 /**
- * Ранг версии-поезда: ближняя — раньше (docs/38-release-plan.md). Без версии —
- * после всех: такую задачу ни один поезд не ждёт.
+ * Ранг пачки очереди: меньше — раньше (docs/38-release-plan.md). Без пачки —
+ * после всех: такую задачу ни одна пачка не ждёт. Принимает и строку из шапки
+ * (`"2"`), и число; всё, что не целое от 1, — как отсутствие пачки.
  */
-export function versionRank(version) {
-  const match = /^v(\d+)\.(\d+)$/.exec(version ?? "");
-  return match === null ? Number.MAX_SAFE_INTEGER : Number(match[1]) * 1000 + Number(match[2]);
+export function batchRank(batch) {
+  const number = typeof batch === "string" ? (BATCH_RE.test(batch) ? Number(batch) : Number.NaN) : batch;
+  return Number.isInteger(number) && number >= 1 ? number : Number.MAX_SAFE_INTEGER;
 }
 
 function compareTasks(epicOrder) {
@@ -42,7 +44,7 @@ function compareTasks(epicOrder) {
     return index === -1 ? epicOrder.length : index;
   };
   return (a, b) =>
-    versionRank(a.task.version) - versionRank(b.task.version) ||
+    batchRank(a.task.batch) - batchRank(b.task.batch) ||
     (PRIORITY_RANK[a.task.priority] ?? 99) - (PRIORITY_RANK[b.task.priority] ?? 99) ||
     epicRank(a.task.epic) - epicRank(b.task.epic) ||
     a.task.id.localeCompare(b.task.id);
@@ -60,7 +62,7 @@ function compareTasks(epicOrder) {
  * - `epicOrder` — эпики в порядке `epics.md`.
  *
  * Возвращает `{ <колонка>: [{ task, reason?, pr?, waitingFor?, busyWith? }] }`,
- * внутри колонки порядок: приоритет, эпик, id. У заблокированных `waitingFor` —
+ * внутри колонки порядок: пачка, приоритет, эпик, id. У заблокированных `waitingFor` —
  * id недоделанных зависимостей, `busyWith` — id задач, чьи зоны заняты.
  */
 export function classify(tasks, taken, prs, repoFiles, epicOrder) {
@@ -189,4 +191,164 @@ export function statusBadge(entry) {
     default:
       throw new Error(`неизвестная колонка доски: ${String(entry.column)}`);
   }
+}
+
+/** Задачи `human` делает человек: потоку они не нужны и в сводку потоков не попадают. */
+const STREAM_RUNNERS = ["any", "local"];
+
+/** Сколько задач потока показывают таблица и команда: дальше — «+N». */
+export const STREAM_TASKS_SHOWN = 5;
+
+/** Сколько пар помещает значок эпика: длинное сообщение не влезает в картинку, остаток — «+N». */
+const EPIC_BADGE_STREAMS_SHOWN = 3;
+
+function rankIn(list, value) {
+  const index = list.indexOf(value);
+  return index === -1 ? list.length : index;
+}
+
+/** Порядок потоков: модель, уровень от лёгкого к тяжёлому, потом `any` перед `local`. */
+function compareStreams(a, b) {
+  return (
+    rankIn(EXECUTORS, a.executor) - rankIn(EXECUTORS, b.executor) ||
+    a.executor.localeCompare(b.executor) ||
+    rankIn(EFFORTS, a.effort) - rankIn(EFFORTS, b.effort) ||
+    rankIn(STREAM_RUNNERS, a.runner) - rankIn(STREAM_RUNNERS, b.runner)
+  );
+}
+
+/**
+ * Сводка для разработчика, который запускает потоки (tasks/README.md,
+ * «Автопоток»): по каждой паре «модель + уровень» — что можно делать сейчас и
+ * что ждёт. Поверх результата `classify`; `runner` учитывается отдельно, потому
+ * что `local` берут только потоки на машине разработчика.
+ *
+ * Возвращает `{ streams, epics }`: `streams` — все потоки, `epics` — то же по
+ * эпикам (`{ E10: [...] }`). Поток — `{ executor, effort, runner, now, queue }`:
+ * - `now` — доработка и свободные (`rework` у первых): сначала доработка, как в
+ *   `pnpm task next`, внутри каждой — порядок колонки: пачка, приоритет, эпик;
+ * - `queue` — заблокированные зависимостью или зоной, порядок колонки.
+ * Элемент — `{ id, fileName, batch }` (`batch` — число или `null`). Пары без
+ * задач в сводку не входят.
+ */
+export function streamsSummary(board) {
+  const total = new Map();
+  const perEpic = new Map();
+
+  const streamIn = (map, task) => {
+    const key = `${task.executor}/${task.effort}/${task.runner}`;
+    let stream = map.get(key);
+    if (stream === undefined) {
+      stream = { executor: task.executor, effort: task.effort, runner: task.runner, now: [], queue: [] };
+      map.set(key, stream);
+    }
+    return stream;
+  };
+
+  const place = (entry, list, extra) => {
+    const { task } = entry;
+    if (!STREAM_RUNNERS.includes(task.runner)) return;
+    if (!perEpic.has(task.epic)) perEpic.set(task.epic, new Map());
+    const item = { id: task.id, fileName: task.fileName, batch: batchNumber(task), ...extra };
+    for (const map of [total, perEpic.get(task.epic)]) streamIn(map, task)[list].push(item);
+  };
+
+  for (const entry of board.rework) place(entry, "now", { rework: true });
+  for (const entry of board.free) place(entry, "now", { rework: false });
+  for (const entry of board.blocked) place(entry, "queue", {});
+
+  const sorted = (map) => [...map.values()].sort(compareStreams);
+  return { streams: sorted(total), epics: Object.fromEntries([...perEpic].map(([epic, map]) => [epic, sorted(map)])) };
+}
+
+/** Имя потока для людей: «sonnet-5.5 / high», для `local` — с пометкой. */
+export function streamLabel(stream) {
+  const base = `${stream.executor} / ${stream.effort}`;
+  return stream.runner === "local" ? `${base} · local` : base;
+}
+
+/** Короткое имя для значка: «sonnet·high», версия модели отрезана. */
+function streamShortLabel(stream) {
+  const model = stream.executor.replace(/-\d+(?:\.\d+)*$/, "");
+  return `${model}·${stream.effort}${stream.runner === "local" ? "·local" : ""}`;
+}
+
+/**
+ * Строки таблиц потоков — общие для команды `pnpm task streams` и страницы
+ * доски, чтобы они не разошлись. `now` — потоки, где есть что делать сейчас,
+ * `queue` — потоки, где что-то ждёт; пустые пары не попадают ни туда, ни сюда.
+ * В `now`: `free` и `rework` — сколько задач, `shown` — первые
+ * `STREAM_TASKS_SHOWN`, `more` — сколько не поместилось. В `queue`: `count` и
+ * `batch` — ближайшая пачка ожидающих (`null` — ни у одной нет пачки).
+ */
+export function streamRows(streams) {
+  const now = streams
+    .filter((stream) => stream.now.length > 0)
+    .map((stream) => ({
+      label: streamLabel(stream),
+      free: stream.now.filter((item) => !item.rework).length,
+      rework: stream.now.filter((item) => item.rework).length,
+      shown: stream.now.slice(0, STREAM_TASKS_SHOWN),
+      more: Math.max(0, stream.now.length - STREAM_TASKS_SHOWN),
+    }));
+  const queue = streams
+    .filter((stream) => stream.queue.length > 0)
+    .map((stream) => {
+      const batches = stream.queue.map((item) => item.batch).filter((batch) => batch !== null);
+      return { label: streamLabel(stream), count: stream.queue.length, batch: batches.length === 0 ? null : Math.min(...batches) };
+    });
+  return { now, queue };
+}
+
+/** Номер задачи с пачкой для текста: «T-0095 (п.1)»; пачки нет — просто номер. */
+export function streamItemText(item) {
+  return item.batch === null ? item.id : `${item.id} (п.${String(item.batch)})`;
+}
+
+function alignedColumns(rows) {
+  const widths = [];
+  for (const row of rows) row.forEach((cell, index) => (widths[index] = Math.max(widths[index] ?? 0, cell.length)));
+  return rows.map((row) => row.map((cell, index) => (index === row.length - 1 ? cell : cell.padEnd(widths[index]))).join("  "));
+}
+
+/** Текст для терминала: «Запускать сейчас» и «На очереди», пустые пары не печатаются. */
+export function renderStreamsText(streams) {
+  const { now, queue } = streamRows(streams);
+  const lines = [];
+  if (now.length === 0) lines.push("Запускать сейчас нечего: ни свободных задач, ни доработки.");
+  else {
+    lines.push("Запускать сейчас — доработка раньше новых (п.N — пачка выпуска):");
+    const rows = now.map((row) => [
+      row.label,
+      `свободно ${String(row.free)}, на доработке ${String(row.rework)}`,
+      row.shown.map(streamItemText).join(", ") + (row.more > 0 ? ` +${String(row.more)}` : ""),
+    ]);
+    lines.push(...alignedColumns(rows).map((line) => `  ${line}`));
+  }
+  lines.push("");
+  if (queue.length === 0) lines.push("На очереди ничего нет.");
+  else {
+    lines.push("На очереди — ждут зависимостей или занятых зон:");
+    const rows = queue.map((row) => [row.label, `ждут ${String(row.count)}, ${row.batch === null ? "без пачки" : `ближайшая пачка ${String(row.batch)}`}`]);
+    lines.push(...alignedColumns(rows).map((line) => `  ${line}`));
+  }
+  return lines;
+}
+
+/**
+ * Значок потоков эпика (endpoint-формат shields.io), `streams` — потоки эпика
+ * из `streamsSummary`. Есть что делать сейчас — «сейчас: sonnet·high 2, haiku·low 1»
+ * (до трёх пар по убыванию числа задач, остаток — «+N»), зелёный; нет —
+ * «нет свободных · в очереди N», светло-серый.
+ */
+export function epicStreamsBadge(streams) {
+  const badge = (message, color) => ({ schemaVersion: 1, label: "потоки", message, color, cacheSeconds: BADGE_CACHE_SECONDS });
+  const active = streams.filter((stream) => stream.now.length > 0).sort((a, b) => b.now.length - a.now.length);
+  if (active.length === 0) {
+    const queued = streams.reduce((sum, stream) => sum + stream.queue.length, 0);
+    return badge(queued === 0 ? "нет свободных" : `нет свободных · в очереди ${String(queued)}`, "lightgrey");
+  }
+  const shown = active.slice(0, EPIC_BADGE_STREAMS_SHOWN).map((stream) => `${streamShortLabel(stream)} ${String(stream.now.length)}`);
+  const rest = active.length - EPIC_BADGE_STREAMS_SHOWN;
+  return badge(`сейчас: ${shown.join(", ")}${rest > 0 ? ` +${String(rest)}` : ""}`, "brightgreen");
 }

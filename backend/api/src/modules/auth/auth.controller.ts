@@ -32,6 +32,8 @@ export interface AccountView {
   createdAt: string;
   /** аккаунт заведён этим входом: по нему клиент шлёт `user_registered` ровно раз */
   created: boolean;
+  /** знак «Тестер» (Р87); поля нет — не тестер */
+  tester?: true;
 }
 
 interface SessionView {
@@ -143,7 +145,12 @@ export class AuthController {
   }
 }
 
-function view(result: { accessToken: string; expiresInSec: number; refreshToken: string; account: { accountId: string; displayName: string; photoUrl: string | null; createdAt: Date; created: boolean } }): SessionView {
+function view(result: {
+  accessToken: string;
+  expiresInSec: number;
+  refreshToken: string;
+  account: { accountId: string; displayName: string; photoUrl: string | null; createdAt: Date; created: boolean; testerAt?: Date | null };
+}): SessionView {
   return {
     accessToken: result.accessToken,
     expiresInSec: result.expiresInSec,
@@ -154,6 +161,8 @@ function view(result: { accessToken: string; expiresInSec: number; refreshToken:
       photoUrl: result.account.photoUrl,
       createdAt: result.account.createdAt.toISOString(),
       created: result.account.created,
+      // Дата знака наружу не уходит — только сам знак, и только у тестера.
+      ...(result.account.testerAt ? { tester: true as const } : {}),
     },
   };
 }

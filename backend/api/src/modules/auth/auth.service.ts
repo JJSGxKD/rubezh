@@ -1,11 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, ForbiddenError, UnauthorizedError, ValidationError } from "../../common/domain-error.js";
 import { parseStartParam, type StartParam } from "../attribution/start-param.js";
 import { LaunchVerifiers } from "../../platforms/ports/launch-verifier.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { ACCOUNT_REPOSITORY, type Account, type AccountRepository } from "./account.repository.js";
+import { AccessRevocations } from "./access-revocations.js";
 import { secretKey, signAccessToken } from "./access-token.js";
 import { AuthHooks, PLAIN_LOGIN, type LoginContext, type LoginEvent } from "./auth-hooks.js";
 import { parseDevUser } from "./dev-login.js";
@@ -65,6 +66,7 @@ export class AuthService {
     @Inject(REFRESH_STORE) private readonly refresh: RefreshStore,
     private readonly hooks: AuthHooks,
     private readonly launches: LaunchVerifiers,
+    @Optional() private readonly revocations?: AccessRevocations,
   ) {}
 
   /**
@@ -183,8 +185,12 @@ export class AuthService {
     await this.refresh.take(hashToken(refreshToken));
   }
 
-  /** Выход со всех устройств. */
+  /**
+   * Выход со всех устройств. Сначала закрываются уже выданные токены доступа,
+   * потом токены продления: иначе между шагами сессию можно было бы продлить.
+   */
   async logoutEverywhere(accountId: string): Promise<number> {
+    await this.revocations?.revokeBefore(accountId, Date.now());
     return await this.refresh.revokeAll(accountId);
   }
 

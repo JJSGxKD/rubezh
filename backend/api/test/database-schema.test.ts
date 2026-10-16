@@ -1,50 +1,26 @@
-import "reflect-metadata";
-import { describe, expect, it, vi } from "vitest";
-import { loadAppConfig } from "../src/config/app-config.js";
-import { DatabaseSchemaCheck, describeDbError } from "../src/infra/database.js";
-import type { PrismaClient } from "../src/generated/prisma/client.js";
+import { describe, expect, it } from "vitest";
+import { schemaOf } from "../src/infra/database.js";
 
-// Непринятые миграции — самая частая причина «ничего не пишется»: Prisma
-// говорит «таблицы нет», но не говорит, что делать.
+// Схема из адреса базы: локальные исполнители гоняют интеграционные тесты в своей
+// схеме одной тестовой базы (`?schema=t0104`), и адаптер обязан её услышать —
+// иначе все ходят в `public` и чистят таблицы друг другу.
+describe("схема из адреса базы", () => {
+  const base = "postgresql://u:p@localhost:5432/rubezh_test";
 
-function config(patch: Record<string, string> = {}) {
-  return loadAppConfig({ NODE_ENV: "test", DATABASE_URL: "postgresql://unused", EVENTS_INGEST_ENABLED: "true", ...patch });
-}
-
-function prismaWith(tables: string[]): PrismaClient {
-  return { $queryRaw: async () => tables.map((table) => ({ table_name: table })) } as unknown as PrismaClient;
-}
-
-describe("проверка схемы на старте", () => {
-  it("называет недостающие таблицы и что сделать", async () => {
-    const errors: string[] = [];
-    const check = new DatabaseSchemaCheck(config(), prismaWith(["analytics_event"]));
-    vi.spyOn(Reflect.get(check, "logger") as { error: (line: string) => void }, "error").mockImplementation((line: string) => void errors.push(line));
-
-    await check.onApplicationBootstrap();
-
-    expect(errors).toHaveLength(1);
-    expect(JSON.parse(errors[0] ?? "{}")).toMatchObject({
-      event: "schema_incomplete",
-      missing: ["diagnostic_report", "data_export"],
-      hint: expect.stringContaining("prisma:deploy"),
-    });
+  it("без параметра и с public — схема по умолчанию", () => {
+    expect(schemaOf(base)).toBeNull();
+    expect(schemaOf(`${base}?schema=public`)).toBeNull();
+    expect(schemaOf(`${base}?schema=`)).toBeNull();
   });
 
-  it("молчит, когда всё на месте, и не роняет старт без базы", async () => {
-    const check = new DatabaseSchemaCheck(config(), prismaWith(["analytics_event", "diagnostic_report", "data_export"]));
-    const errors = vi.spyOn(Reflect.get(check, "logger") as { error: (line: string) => void }, "error").mockImplementation(() => undefined);
-    await check.onApplicationBootstrap();
-    expect(errors).not.toHaveBeenCalled();
-
-    const broken = new DatabaseSchemaCheck(config(), { $queryRaw: async () => Promise.reject(new Error("connect ECONNREFUSED")) } as unknown as PrismaClient);
-    vi.spyOn(Reflect.get(broken, "logger") as { warn: (line: string) => void }, "warn").mockImplementation(() => undefined);
-    await expect(broken.onApplicationBootstrap()).resolves.toBeUndefined();
+  it("своя схема читается из адреса", () => {
+    expect(schemaOf(`${base}?schema=t0104`)).toBe("t0104");
+    expect(schemaOf(`${base}?sslmode=disable&schema=t_0110`)).toBe("t_0110");
   });
 
-  it("к «таблицы нет» добавляет подсказку, к остальным ошибкам — нет", () => {
-    expect(describeDbError(new Error("The table public.analytics_event does not exist in the current database."))).toContain("prisma:deploy");
-    expect(describeDbError(new Error("connect ECONNREFUSED"))).toBe("connect ECONNREFUSED");
-    expect(describeDbError("что-то не то")).toBe("unknown");
+  it("имя схемы с недопустимыми знаками — ошибка, а не строка в search_path", () => {
+    expect(() => schemaOf(`${base}?schema=t0104;drop`)).toThrow("схемы");
+    expect(() => schemaOf(`${base}?schema=T0104`)).toThrow("схемы");
+    expect(() => schemaOf(`${base}?schema=${"a".repeat(64)}`)).toThrow("схемы");
   });
 });

@@ -51,11 +51,13 @@ import { TasksModule } from "./modules/tasks/tasks.module.js";
 import { MediaModule } from "./modules/media/media.module.js";
 import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
 import { TestNoticeModule } from "./modules/test-notice/test-notice.module.js";
+import { WipeModule } from "./modules/wipe/wipe.module.js";
 import { AdsModule } from "./modules/ads/ads.module.js";
 import { ShopModule } from "./modules/shop/shop.module.js";
 import { VipModule } from "./modules/vip/vip.module.js";
 import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
 import { PartnersModule } from "./modules/partners/partners.module.js";
+import { SeasonsModule } from "./modules/seasons/seasons.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -138,6 +140,8 @@ export const APP_MODULES = [
   VipModule,
   PromoCodesModule,
   PartnersModule,
+  WipeModule,
+  SeasonsModule,
 ];
 
 /**

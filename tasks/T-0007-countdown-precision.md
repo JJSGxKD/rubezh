@@ -19,7 +19,6 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-version: v0.8
 ---
 
 # T-0007. Точные и тикающие отсчёты «через сколько» на главной и в награде дня

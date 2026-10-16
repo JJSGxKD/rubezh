@@ -41,7 +41,7 @@ export const AUDIT_PAGE = 50;
  * началам имён действий.
  */
 export const AUDIT_AREAS = [
-  { id: "support", title: "Поддержка", prefixes: ["players.", "wallet.", "referrals."] },
+  { id: "support", title: "Поддержка", prefixes: ["players.", "wallet.", "referrals.", "payments."] },
   { id: "growth", title: "Привлечение", prefixes: ["links.", "partner.", "promo."] },
   { id: "revenue", title: "Доход", prefixes: ["shop.", "ads.", "fx."] },
   { id: "engagement", title: "Вовлечение", prefixes: ["tasks.", "broadcast.", "changelog."] },
@@ -87,6 +87,8 @@ const ACTION_TITLES: Record<string, string> = {
   "players.unban": "Снятие блокировки",
   "players.restrict": "Ограничение игрока",
   "players.unrestrict": "Снятие ограничения",
+  "players.board.set": "Отдельная доска: наложена",
+  "players.board.unset": "Отдельная доска: снята",
   "players.run.unrank": "Снятие забега с рейтинга",
   "players.run.rerank": "Возврат забега в рейтинг",
   "players.message": "Сообщение игроку",
@@ -106,12 +108,14 @@ const ACTION_TITLES: Record<string, string> = {
   "tasks.network.update": "Правка заданий рекламной сети",
   "partner.create": "Новый партнёр",
   "partner.update": "Правка партнёра",
+  "partner.status": "Смена статуса партнёра",
   "shop.promo.create": "Новая акция",
   "shop.promo.cancel": "Снятие акции",
   "home.slide.create": "Новый слайд главной",
   "home.slide.update": "Правка слайда главной",
   "home.slide.archive": "Снятие слайда главной",
   "links.create": "Новая ссылка",
+  "links.retarget": "Смена цели ссылки",
   "links.conversion.send": "Повторная отправка конверсии в сеть",
   "broadcast.create": "Новая рассылка",
   "broadcast.update": "Правка рассылки",
@@ -133,6 +137,8 @@ const ACTION_TITLES: Record<string, string> = {
   "ads.network.update": "Правка рекламной сети",
   "ads.block.create": "Новый рекламный блок",
   "ads.block.update": "Правка рекламного блока",
+  "payments.refund": "Возврат звёзд вручную",
+  "payments.fulfill": "Повторная выдача покупки",
 };
 
 /** Незнакомое действие — новее панели — показывается как записано: лучше код, чем пустота. */
@@ -182,7 +188,7 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
   }
   if (target === null) return null;
   const area = action.split(".")[0] ?? "";
-  if (["players", "wallet", "referrals", "roles"].includes(area)) {
+  if (["players", "wallet", "referrals", "roles", "payments"].includes(area)) {
     return { kind: "игрок", label: entry.targetName ?? short(target), route: { section: "players", id: target } };
   }
   switch (area) {
@@ -380,6 +386,7 @@ const RESTRICTION_KINDS: Record<string, string> = {
   ad_rewards: "награды за рекламу",
   promo_codes: "промокоды",
   partner_tasks: "партнёрские задания",
+  purchases: "покупки",
   all: "блокировка целиком",
 };
 const RESTRICTION_REASONS: Record<string, string> = {
@@ -388,6 +395,7 @@ const RESTRICTION_REASONS: Record<string, string> = {
   ad_abuse: "злоупотребление рекламой",
   promo_abuse: "злоупотребление промокодами",
   abuse: "оскорбления или спам",
+  payment_refund: "возврат оплаты",
   other: "другое",
 };
 

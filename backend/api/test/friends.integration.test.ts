@@ -62,6 +62,30 @@ describe.skipIf(DATABASE_URL === "")("дружба на живом Postgres", ()
     expect(await friends.areFriends(a, b)).toBe(false);
   });
 
+  it("знак «Тестер» (T-0042): в списке друзей и заявках у тестера tester: true, у остальных поля нет, даты знака в строке нет", async () => {
+    const me = await account();
+    const tester = await account();
+    const plain = await account();
+    const incoming = await account();
+    const outgoing = await account();
+    await prisma.account.updateMany({ where: { accountId: { in: [tester, incoming, outgoing] } }, data: { testerAt: new Date("2026-10-01T10:00:00Z") } });
+    await friends.befriend(me, tester, "link", 10);
+    await friends.befriend(me, plain, "link", 10);
+    const limits = { maxIncoming: 5, maxOutgoing: 5 };
+    await friends.request(incoming, me, limits);
+    await friends.request(me, outgoing, limits);
+
+    const list = new Map((await friends.friends(me, 10)).map((row) => [row.accountId, row]));
+    const [asked] = await friends.incoming(me, 10);
+    const [sent] = await friends.outgoing(me, 10);
+
+    expect(list.get(tester)).toMatchObject({ tester: true, source: "link" });
+    expect(list.get(plain)).not.toHaveProperty("tester");
+    expect(asked).toMatchObject({ accountId: incoming, tester: true });
+    expect(sent).toMatchObject({ accountId: outgoing, tester: true });
+    for (const row of [...list.values(), asked, sent]) expect(row).not.toHaveProperty("testerAt");
+  });
+
   it("база сама не даёт перевёрнутую пару и заявку самому себе", async () => {
     const a = await account();
     const b = await account();
