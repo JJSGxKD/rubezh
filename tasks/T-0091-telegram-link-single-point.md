@@ -3,7 +3,7 @@ id: T-0091
 title: Ссылки Telegram собираются в одном месте — подготовка к смене домена
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-10
 size: S
