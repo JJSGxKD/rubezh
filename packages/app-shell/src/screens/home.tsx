@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { BookOpen, ChevronRight, History, MessageSquareHeart, Play } from "lucide-react";
 import { Button, Card, ContentColumn, Modal, Screen } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
+import { botAccessSupported, shouldOfferBotAccess, useBotAccess } from "../state/bot-access";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
@@ -31,7 +32,11 @@ export function LobbyScreen(): ReactNode {
   const saved = useSavedRun((state) => state.saved);
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   const [preRunOpen, setPreRunOpen] = useState(false);
-  const askFeedback = shouldAskFeedback(runs, useFeedback((state) => state.sentAtRuns));
+  const live = useHomeLive();
+  const offerBotAccess = useBotAccessOffer(runs, live);
+  // Две просьбы на одном экране — навязчиво: пока зовём разрешить бота, отзыв ждёт.
+  const feedbackSentAtRuns = useFeedback((state) => state.sentAtRuns);
+  const askFeedback = !offerBotAccess && shouldAskFeedback(runs, feedbackSentAtRuns);
   usePreloadEngine();
 
   return (
@@ -97,6 +102,8 @@ export function LobbyScreen(): ReactNode {
         {/* Отзыв зовут оставить после первого же забега и дальше раз в
             десяток: спрашивать в каждый запуск — верный способ, чтобы форму
             перестали замечать (docs/29-admin-panel.md §6). */}
+        {offerBotAccess && live !== null ? <live.HomeBotAccess /> : null}
+
         {askFeedback ? (
           <div className="mt-3">
             <Card appearIndex={5} stripe="accent" onClick={() => navigation.push("feedback")}>
@@ -189,6 +196,22 @@ function useHomeLive(): HomeLive | null {
     };
   }, []);
   return live;
+}
+
+/**
+ * Звать ли разрешить боту писать (tasks/T-0010). Что разрешения нет, говорит
+ * сервер, и спрашиваем его вместе с живой частью главной: пока он молчит, не
+ * знаем — не зовём. Счёт прежних просьб читается с устройства.
+ */
+function useBotAccessOffer(runs: number, live: HomeLive | null): boolean {
+  const canMessage = useBotAccess((state) => state.canMessage);
+  const asks = useBotAccess((state) => state.asks);
+  useEffect(() => {
+    if (live === null) return;
+    live.hydrateBotAccess();
+    void live.loadBotAccess();
+  }, [live]);
+  return shouldOfferBotAccess({ runs, canMessage, supported: botAccessSupported(), asks, now: Date.now() });
 }
 
 /**

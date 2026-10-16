@@ -59,5 +59,9 @@
   "widget.friends.short": "Друзья",
   "widget.friends.news": "{n} {n, plural, one {новое} few {новых} many {новых} other {новых}}",
   "widget.friends.newsHint": "подарки и заявки",
-  "widget.friends.idle": "Подарки друг другу"
+  "widget.friends.idle": "Подарки друг другу",
+  "home.botAccess.title": "Разрешить сообщения от бота",
+  "home.botAccess.text": "Напишем, когда друг пришлёт подарок или заявку, и о важных обновлениях. Без спама.",
+  "home.botAccess.allow": "Разрешить",
+  "home.botAccess.later": "Не сейчас"
 }
