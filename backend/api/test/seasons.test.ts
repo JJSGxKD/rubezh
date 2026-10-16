@@ -17,6 +17,7 @@ import {
   THRESHOLD_REWARD,
   THRESHOLD_SEC,
   dueSeasons,
+  MAX_CATCH_UP_WEEKS,
   parseStartDate,
   placeReward,
   rewardFor,
@@ -80,18 +81,41 @@ describe("seasonByKey", () => {
 
 describe("dueSeasons: какие сезоны пора закрыть", () => {
   const start = new Date("2026-11-02T00:00:00Z");
+  const keys = (result: { due: { key: string }[] }) => result.due.map((season) => season.key);
 
   it("сезон ещё идёт — закрывать нечего; ровно в конце — пора", () => {
-    expect(dueSeasons(start, new Date("2026-11-08T23:59:59.999Z"))).toEqual([]);
-    expect(dueSeasons(start, new Date("2026-11-09T00:00:00Z")).map((season) => season.key)).toEqual(["2026-11-02"]);
+    expect(dueSeasons(start, new Date("2026-11-08T23:59:59.999Z"))).toEqual({ due: [], skipped: 0 });
+    expect(keys(dueSeasons(start, new Date("2026-11-09T00:00:00Z")))).toEqual(["2026-11-02"]);
   });
 
   it("сервер лежал две недели — просрочены оба сезона, по порядку", () => {
-    expect(dueSeasons(start, new Date("2026-11-16T03:00:00Z")).map((season) => season.key)).toEqual(["2026-11-02", "2026-11-09"]);
+    const result = dueSeasons(start, new Date("2026-11-16T03:00:00Z"));
+    expect(keys(result)).toEqual(["2026-11-02", "2026-11-09"]);
+    expect(result.skipped).toBe(0);
   });
 
   it("до первого сезона закрывать нечего", () => {
-    expect(dueSeasons(start, new Date("2026-10-30T00:00:00Z"))).toEqual([]);
+    expect(dueSeasons(start, new Date("2026-10-30T00:00:00Z"))).toEqual({ due: [], skipped: 0 });
+  });
+
+  it("старт три недели назад — только два последних закончившихся сезона, старший пропущен", () => {
+    const result = dueSeasons(new Date("2026-10-19T00:00:00Z"), new Date("2026-11-09T12:00:00Z"));
+    expect(keys(result)).toEqual(["2026-10-26", "2026-11-02"]);
+    expect(result.skipped).toBe(1);
+  });
+
+  it("старт на текущей неделе — закрывать нечего, ничего не пропущено", () => {
+    expect(dueSeasons(new Date("2026-11-09T00:00:00Z"), new Date("2026-11-11T10:00:00Z"))).toEqual({ due: [], skipped: 0 });
+  });
+
+  it("сезон кончился ровно две недели назад — ещё в пределах догона", () => {
+    const result = dueSeasons(new Date("2026-10-26T00:00:00Z"), new Date("2026-11-16T00:00:00Z"));
+    expect(keys(result)).toEqual(["2026-10-26", "2026-11-02", "2026-11-09"]);
+    expect(result.skipped).toBe(0);
+  });
+
+  it("потолок догона — две недели", () => {
+    expect(MAX_CATCH_UP_WEEKS).toBe(2);
   });
 });
 
