@@ -35,7 +35,7 @@ describe("что открывает уровень", () => {
     expect(unlocksGainedAt(4)).toEqual([{ kind: "weapon", id: "storm" }]);
     expect(unlocksGainedAt(5)).toEqual([]);
     expect(unlocksGainedAt(14)).toEqual([{ kind: "passive", id: "tempering" }]);
-    expect(unlocksGainedBetween(4, 6)).toEqual([
+    expect(unlocksGainedBetween(3, 6)).toEqual([
       { kind: "weapon", id: "storm" },
       { kind: "passive", id: "ward" },
     ]);
