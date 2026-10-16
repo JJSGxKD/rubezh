@@ -3,8 +3,8 @@ id: T-0042
 title: Компенсация после вайпа — выдача по кнопке и признак «Тестер» в ответах
 epic: E2
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-6 / sonnet-5.5 / extra
 size: M
 depends_on: [T-0040]
 zones:
@@ -30,15 +30,17 @@ zones:
   - backend/api/test/auth.test.ts
 shared:
   - backend/api/src/modules/wallet/wallet-types.ts
+  - backend/api/src/modules/wallet/wallet-limits.ts
   - packages/app-shell/src/i18n/ru-history.json
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - docs/21-diagrams.md
 runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.10
+batch: 3
 ---
 
 # T-0042. Компенсация после вайпа — выдача по кнопке и признак «Тестер» в ответах

@@ -5,6 +5,7 @@ import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { imposeSchema, liftSchema, previewSchema, type RestrictionView } from "../restrictions/restriction-rules.js";
+import { IMPOSE_INVALID_TEXT, PREVIEW_INVALID_TEXT } from "../restrictions/restriction-visibility.js";
 import { RestrictionsService, type RestrictionCatalogView, type RestrictionPreview } from "../restrictions/restrictions.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
@@ -30,16 +31,16 @@ export class AdminRestrictionsController {
 
   @Get("restrictions/catalog")
   @RequirePermission("players.view")
-  catalog(): { data: RestrictionCatalogView } {
-    return { data: this.restrictions.catalog() };
+  async catalog(@Req() request: unknown): Promise<{ data: RestrictionCatalogView }> {
+    return { data: await this.restrictions.catalog(accountOf(request)) };
   }
 
   /** Что увидит игрок — пока модератор заполняет диалог; ничего не пишет, поэтому без лимита изменений. */
   @Post("restrictions/preview")
   @HttpCode(200)
   @RequirePermission("players.restrict")
-  preview(@Body() body: unknown): { data: RestrictionPreview } {
-    return { data: this.restrictions.preview(parse(() => previewSchema.parse(body), "Некорректный черновик ограничения")) };
+  async preview(@Req() request: unknown, @Body() body: unknown): Promise<{ data: RestrictionPreview }> {
+    return { data: await this.restrictions.preview(accountOf(request), parse(() => previewSchema.parse(body), PREVIEW_INVALID_TEXT)) };
   }
 
   @Get("players/:accountId/restrictions")
@@ -53,7 +54,7 @@ export class AdminRestrictionsController {
   async impose(@Req() request: unknown, @Param("accountId") accountId: string, @Body() body: unknown): Promise<{ data: RestrictResult }> {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
-    const input = parse(() => imposeSchema.parse(body), "Некорректное ограничение: нужны виды, срок и причина");
+    const input = parse(() => imposeSchema.parse(body), IMPOSE_INVALID_TEXT);
     return { data: await this.players.restrict(actor, parseAccountId(accountId), input) };
   }
 

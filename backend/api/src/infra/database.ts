@@ -22,13 +22,36 @@ const CONNECT_TIMEOUT_MS = 3_000;
 const STATEMENT_TIMEOUT_MS = 15_000;
 const POOL_SIZE = 10;
 
+/** Имя схемы Postgres без кавычек: строчные латиница, цифры и «_», до 63 знаков. */
+const SCHEMA_NAME_RE = /^[a-z_][a-z0-9_]{0,62}$/;
+
+/**
+ * Схема из адреса базы (`?schema=…`); `null` — схема по умолчанию (`public`).
+ * Драйвер pg параметр не читает, поэтому его передаёт `createPrisma`: так
+ * локальные исполнители гоняют интеграционные тесты каждый в своей схеме одной
+ * тестовой базы (tasks/README.md, «Автопоток»). Имя попадает в `search_path`,
+ * поэтому недопустимое — ошибка, а не строка в команде.
+ */
+export function schemaOf(databaseUrl: string): string | null {
+  const schema = new URL(databaseUrl).searchParams.get("schema");
+  if (schema === null || schema === "" || schema === "public") return null;
+  if (!SCHEMA_NAME_RE.test(schema)) throw new Error(`недопустимое имя схемы в адресе базы: ${schema}`);
+  return schema;
+}
+
 export function createPrisma(config: AppConfig): PrismaClient {
-  const adapter = new PrismaPg({
-    connectionString: config.databaseUrl,
-    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
-    statement_timeout: STATEMENT_TIMEOUT_MS,
-    max: POOL_SIZE,
-  });
+  const schema = schemaOf(config.databaseUrl);
+  const adapter = new PrismaPg(
+    {
+      connectionString: config.databaseUrl,
+      connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+      statement_timeout: STATEMENT_TIMEOUT_MS,
+      max: POOL_SIZE,
+      // Сырые запросы ($queryRaw) пишут таблицы без схемы — их ведёт search_path.
+      ...(schema === null ? {} : { options: `-c search_path=${schema}` }),
+    },
+    schema === null ? undefined : { schema },
+  );
   return new PrismaClient({ adapter });
 }
 

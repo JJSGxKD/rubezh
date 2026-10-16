@@ -20,6 +20,10 @@ export const adminDevLoginSchema = z.object({ devUser: z.string().min(1).max(128
 export const panelLoginPollSchema = z.object({ requestId: z.string().min(1).max(64), secret: z.string().min(1).max(128) });
 
 export const accountIdSchema = z.string().uuid();
+export const purchaseIdSchema = z.string().uuid();
+
+/** Причина действия поддержки с покупкой — в журнал и в сообщение команде. */
+export const purchaseSupportSchema = z.object({ note: z.string().trim().min(3).max(200) });
 
 export const playerSearchSchema = z.object({
   query: z.string().trim().min(1).max(64),

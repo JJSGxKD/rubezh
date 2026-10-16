@@ -1,10 +1,10 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaAccountSettingsRepository } from "../src/modules/account-settings/account-settings.repository.js";
 import { AccountSettingsService } from "../src/modules/account-settings/account-settings.service.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Настройки аккаунта на живом Postgres (docs/17-testing-strategy.md §4.2;
@@ -28,7 +28,7 @@ describe.skipIf(DATABASE_URL === "")("настройки аккаунта на �
   }
 
   beforeAll(() => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 20, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 20);
     accounts = new PrismaAccountRepository(prisma);
     service = new AccountSettingsService(new PrismaAccountSettingsRepository(prisma));
   });

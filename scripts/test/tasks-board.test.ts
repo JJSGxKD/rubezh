@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { classify, nextTasks, statusBadge, versionRank } from "../tasks/board.mjs";
+import { classify, epicStreamsBadge, nextTasks, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -142,11 +142,11 @@ describe("порядок в колонке «Свободно»", () => {
   });
 });
 
-// Поезд версий (docs/38-release-plan.md): ближняя версия — раньше приоритета.
-describe("версия задачи в порядке выдачи", () => {
-  it("ближняя версия раньше дальней при любом приоритете; без версии — в конце", () => {
+// Пачки очереди (docs/38-release-plan.md): ближняя пачка — раньше приоритета.
+describe("пачка задачи в порядке выдачи", () => {
+  it("ближняя пачка раньше дальней при любом приоритете; без пачки — в конце", () => {
     const result = classify(
-      [task("T-0050", { priority: "P0", version: "v0.10" }), task("T-0051", { priority: "P2", version: "v0.8" }), task("T-0052", { priority: "P0" }), task("T-0053", { priority: "P1", version: "v0.9" })],
+      [task("T-0050", { priority: "P0", batch: "10" }), task("T-0051", { priority: "P2", batch: "2" }), task("T-0052", { priority: "P0" }), task("T-0053", { priority: "P1", batch: "3" })],
       [],
       [],
       [],
@@ -155,10 +155,29 @@ describe("версия задачи в порядке выдачи", () => {
     expect(ids(result.free)).toEqual(["T-0051", "T-0053", "T-0050", "T-0052"]);
   });
 
-  it("versionRank: v0.10 позже v0.9, мусор — как без версии", () => {
-    expect(versionRank("v0.10")).toBeGreaterThan(versionRank("v0.9"));
-    expect(versionRank("v1.0")).toBeGreaterThan(versionRank("v0.99"));
-    expect(versionRank(undefined)).toBe(versionRank("x"));
+  it("внутри одной пачки порядок прежний: приоритет, эпик, id", () => {
+    const result = classify(
+      [
+        task("T-0060", { priority: "P1", epic: "E1", batch: "1" }),
+        task("T-0061", { priority: "P1", epic: "E0", batch: "1" }),
+        task("T-0062", { priority: "P0", epic: "E2", batch: "1" }),
+        task("T-0063", { priority: "P1", epic: "E0", batch: "1" }),
+      ],
+      [],
+      [],
+      [],
+      EPIC_ORDER,
+    );
+    expect(ids(result.free)).toEqual(["T-0062", "T-0061", "T-0063", "T-0060"]);
+  });
+
+  it("batchRank: пачка 10 позже пачки 9 (число, а не строка), мусор — как без пачки", () => {
+    expect(batchRank("10")).toBeGreaterThan(batchRank("9"));
+    expect(batchRank(2)).toBe(batchRank("2"));
+    expect(batchRank("1")).toBeLessThan(batchRank("2"));
+    for (const bad of [undefined, null, "", "x", "0", "-1", "1.5", "v0.8"]) {
+      expect(batchRank(bad), String(bad)).toBeGreaterThan(batchRank("999999"));
+    }
   });
 });
 
@@ -323,5 +342,158 @@ describe("значок статуса", () => {
         expect(statusBadge({ ...entry, column }).message).not.toBe("");
       }
     }
+  });
+});
+
+// Потоки автопотока (tasks/README.md, «Автопоток»): что запускать сейчас и что ждёт.
+describe("потоки", () => {
+  const REWORK = [{ name: "доработка" }];
+  const high = { executor: "sonnet-5.5", effort: "high" };
+  const tasks = [
+    task("T-0201", { ...high, epic: "E1", batch: "1" }),
+    task("T-0202", { ...high, epic: "E1", batch: "2" }),
+    task("T-0203", { ...high, epic: "E0" }), // без пачки — после пачек
+    task("T-0204", { executor: "haiku-5.5", effort: "low", epic: "E0", batch: "1" }),
+    task("T-0205", { effort: "medium", epic: "E0", runner: "local" }),
+    task("T-0206", { effort: "medium", epic: "E0", runner: "human" }), // делает человек — потоку не нужна
+    task("T-0207", { ...high, epic: "E1", batch: "1" }), // на доработке
+    task("T-0208", { ...high, epic: "E1", batch: "3", depends_on: ["T-0209"] }),
+    task("T-0209", { effort: "low", epic: "E2" }), // в работе
+    task("T-0210", { ...high, epic: "E1", depends_on: ["T-0209"] }), // без пачки
+    task("T-0211", { ...high, epic: "E1", batch: "2", status: "done" }),
+    task("T-0212", { ...high, epic: "E1", batch: "2", status: "draft" }),
+  ];
+  const prs = [{ number: 40, headRefName: "task/T-0207", isDraft: true, labels: REWORK }];
+  const board = classify(tasks, ["T-0207", "T-0209"], prs, [], EPIC_ORDER);
+  const { streams, epics } = streamsSummary(board);
+  type Item = { id: string; batch: number | null; rework?: boolean };
+  type Stream = { executor: string; effort: string; runner: string; now: Item[]; queue: Item[] };
+  const brief = (list: Stream[]) => list.map((stream) => [stream.executor, stream.effort, stream.runner, stream.now.map((item) => item.id), stream.queue.map((item) => item.id)]);
+
+  it("пары: модель, уровень, раннер — any перед local; пустые пары не входят", () => {
+    expect(brief(streams)).toEqual([
+      ["sonnet-5.5", "medium", "local", ["T-0205"], []],
+      ["sonnet-5.5", "high", "any", ["T-0207", "T-0201", "T-0202", "T-0203"], ["T-0208", "T-0210"]],
+      ["haiku-5.5", "low", "any", ["T-0204"], []],
+    ]);
+  });
+
+  it("доработка в now раньше новых, внутри — порядок колонки: пачка, приоритет, эпик", () => {
+    const stream: Stream = streams[1];
+    expect(stream.now.map((item) => item.rework)).toEqual([true, false, false, false]);
+    expect(stream.now.map((item) => item.batch)).toEqual([1, 1, 2, null]);
+    expect(stream.queue.map((item) => item.batch)).toEqual([3, null]);
+  });
+
+  it("человек, сделанные, черновики и задачи в работе в сводку не попадают", () => {
+    const all = JSON.stringify(streams);
+    for (const id of ["T-0206", "T-0209", "T-0211", "T-0212"]) expect(all).not.toContain(id);
+  });
+
+  it("элемент хранит имя файла, чтобы страница доски сделала ссылку", () => {
+    expect(streams[0].now[0]).toEqual({ id: "T-0205", fileName: "T-0205-x.md", batch: null, rework: false });
+  });
+
+  it("то же по эпикам: каждая задача — в потоках своего эпика", () => {
+    expect(Object.keys(epics).sort()).toEqual(["E0", "E1"]);
+    expect(brief(epics.E0)).toEqual([
+      ["sonnet-5.5", "medium", "local", ["T-0205"], []],
+      ["sonnet-5.5", "high", "any", ["T-0203"], []],
+      ["haiku-5.5", "low", "any", ["T-0204"], []],
+    ]);
+    expect(brief(epics.E1)).toEqual([["sonnet-5.5", "high", "any", ["T-0207", "T-0201", "T-0202"], ["T-0208", "T-0210"]]]);
+  });
+
+  it("задач нет — потоков нет", () => {
+    expect(streamsSummary(classify([], [], [], [], EPIC_ORDER))).toEqual({ streams: [], epics: {} });
+  });
+
+  it("неизвестная модель идёт после известных, а не пропадает", () => {
+    const odd = classify([task("T-0301", { executor: "opus-9", effort: "high" }), task("T-0302", { effort: "extra" })], [], [], [], EPIC_ORDER);
+    expect(brief(streamsSummary(odd).streams).map((row) => row[0])).toEqual(["sonnet-5.5", "opus-9"]);
+  });
+
+  describe("строки таблиц", () => {
+    it("now — сколько свободно и на доработке; queue — сколько ждут и ближайшая пачка", () => {
+      const { now, queue } = streamRows(streams);
+      expect(now.map((row: { label: string; free: number; rework: number }) => [row.label, row.free, row.rework])).toEqual([
+        ["sonnet-5.5 / medium · local", 1, 0],
+        ["sonnet-5.5 / high", 3, 1],
+        ["haiku-5.5 / low", 1, 0],
+      ]);
+      expect(queue).toEqual([{ label: "sonnet-5.5 / high", count: 2, batch: 3 }]);
+    });
+
+    it("показываются первые пять задач, остальные — числом", () => {
+      const many = Array.from({ length: 7 }, (_, index) => task(`T-040${String(index)}`, high));
+      const { now } = streamRows(streamsSummary(classify(many, [], [], [], EPIC_ORDER)).streams);
+      expect(now[0].shown.map((item: Item) => item.id)).toEqual(["T-0400", "T-0401", "T-0402", "T-0403", "T-0404"]);
+      expect(now[0].more).toBe(2);
+    });
+
+    it("у ждущих нет пачки ни у одной — batch null", () => {
+      const waiting = classify([task("T-0501"), task("T-0502", { depends_on: ["T-0501"] })], ["T-0501"], [], [], EPIC_ORDER);
+      expect(streamRows(streamsSummary(waiting).streams).queue[0].batch).toBeNull();
+    });
+  });
+
+  describe("текст для терминала", () => {
+    const text = renderStreamsText(streams).join("\n");
+
+    it("свободное и доработка по потокам, id с пачкой, local отдельной строкой", () => {
+      expect(text).toContain("sonnet-5.5 / medium · local  свободно 1, на доработке 0  T-0205");
+      expect(text).toContain("свободно 3, на доработке 1  T-0207 (п.1), T-0201 (п.1), T-0202 (п.2), T-0203");
+    });
+
+    it("очередь — сколько ждут и ближайшая пачка; пары без ждущих не печатаются", () => {
+      const queue = text.slice(text.indexOf("На очереди"));
+      expect(queue).toContain("sonnet-5.5 / high  ждут 2, ближайшая пачка 3");
+      expect(queue).not.toContain("haiku");
+      expect(queue).not.toContain("local");
+    });
+
+    it("пустая доска — короткие строки вместо таблиц", () => {
+      expect(renderStreamsText([])).toEqual(["Запускать сейчас нечего: ни свободных задач, ни доработки.", "", "На очереди ничего нет."]);
+    });
+  });
+
+  describe("значок эпика", () => {
+    const stream = (executor: string, effort: string, now: number, queue = 0, runner = "any") => ({
+      executor,
+      effort,
+      runner,
+      now: Array.from({ length: now }, (_, index) => ({ id: `T-${String(index)}` })),
+      queue: Array.from({ length: queue }, (_, index) => ({ id: `T-${String(index)}` })),
+    });
+
+    it("есть что делать — «сейчас: пары по убыванию числа», зелёный", () => {
+      expect(epicStreamsBadge([stream("haiku-5.5", "low", 1), stream("sonnet-5.5", "high", 2)])).toEqual({
+        schemaVersion: 1,
+        label: "потоки",
+        message: "сейчас: sonnet·high 2, haiku·low 1",
+        color: "brightgreen",
+        cacheSeconds: 300,
+      });
+    });
+
+    it("больше трёх пар — три и «+N»; local помечается", () => {
+      const badge = epicStreamsBadge([
+        stream("sonnet-5.5", "low", 4),
+        stream("sonnet-5.5", "medium", 3),
+        stream("sonnet-5.5", "high", 2, 0, "local"),
+        stream("haiku-5.5", "low", 1),
+        stream("haiku-5.5", "high", 1),
+      ]);
+      expect(badge.message).toBe("сейчас: sonnet·low 4, sonnet·medium 3, sonnet·high·local 2 +2");
+    });
+
+    it("свободных нет, но есть очередь — светло-серый «нет свободных · в очереди N»", () => {
+      const badge = epicStreamsBadge([stream("sonnet-5.5", "high", 0, 2), stream("haiku-5.5", "low", 0, 1)]);
+      expect(badge).toMatchObject({ message: "нет свободных · в очереди 3", color: "lightgrey" });
+    });
+
+    it("в эпике ничего нет — просто «нет свободных»", () => {
+      expect(epicStreamsBadge([])).toMatchObject({ message: "нет свободных", color: "lightgrey" });
+    });
   });
 });

@@ -1,13 +1,13 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { COLUMNS, REWORK_LABEL, classify, nextTasks, statusBadge } from "./board.mjs";
+import { COLUMNS, REWORK_LABEL, classify, epicStreamsBadge, nextTasks, renderStreamsText, statusBadge, streamsSummary } from "./board.mjs";
 import { contributions, freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
 import { checkClaim } from "./claim.mjs";
 import { fixEpicCells } from "./epics.mjs";
 import { BASE, ROOT, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
 import { checkRegistry, readTasks } from "./registry.mjs";
-import { badgeLine, parseFrontmatter, parseOwner, validateTask, withBadgeLine } from "./task-file.mjs";
+import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
 
 /**
@@ -21,6 +21,7 @@ const USAGE = `Команды:
   pnpm task board [--all]                  доска из origin/dev (--all — и отменённые)
   pnpm task next [--runner any|local] [--executor <модель>] [--effort <уровень>]
                                            доработка и свободные задачи, лучшая — первой
+  pnpm task streams [--epic E10]           какие потоки (модель и уровень) запускать сейчас и что ждёт в очереди
   pnpm task claim T-NNNN --owner "<аккаунт / модель / уровень>"
                                            захватить задачу веткой task/T-NNNN
   pnpm task resume T-NNNN --owner "<аккаунт / модель / уровень>"
@@ -61,7 +62,8 @@ function parseArgs(argv) {
 }
 
 function taskLine({ task, reason, pr }, owner) {
-  const parts = [task.id.padEnd(7), (task.version ?? "—").padEnd(6), `${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
+  const batch = batchNumber(task);
+  const parts = [task.id.padEnd(7), (batch === null ? "—" : `пачка ${String(batch)}`).padEnd(8),`${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
   const notes = [];
   if (owner !== undefined) notes.push(`взял: ${owner}`);
   if (pr !== undefined) notes.push(`PR ${String(pr)}`);
@@ -99,6 +101,18 @@ function runBoard(flags) {
     const busy = column.key === "inProgress" || column.key === "review" || column.key === "rework";
     for (const entry of entries) console.log(taskLine(entry, busy ? ownerOf(entry.task) : undefined));
   }
+}
+
+/** Какие потоки запускать (tasks/README.md, «Автопоток»): свободное и доработка по парам «модель + уровень», ниже — очередь. */
+function runStreams(flags) {
+  const { board } = loadBoard();
+  const summary = streamsSummary(board);
+  const epic = flags.epic;
+  if (epic !== undefined && summary.epics[epic] === undefined) {
+    console.log(`В эпике ${epic} нет задач для потоков: ни свободных, ни доработки, ни ждущих.`);
+    return;
+  }
+  for (const line of renderStreamsText(epic === undefined ? summary.streams : summary.epics[epic])) console.log(line);
 }
 
 function runNext(flags) {
@@ -377,7 +391,7 @@ function runClaimCheck(flags) {
 
 function runStatusJson(flags) {
   if (flags.out === undefined) fail("Укажи каталог: pnpm task status-json --out <каталог>");
-  const { board } = loadBoard();
+  const { state, board } = loadBoard();
   const dir = join(flags.out, "status");
   mkdirSync(dir, { recursive: true });
   const owners = new Map();
@@ -394,6 +408,11 @@ function runStatusJson(flags) {
   }
   writeFileSync(join(dir, "free.json"), `${JSON.stringify(freeBadge(board.free.length))}\n`);
 
+  // Значок потоков — на каждый эпик из epics.md и на эпик, известный только задачам: ячейка epics.md ссылается на файл.
+  const summary = streamsSummary(board);
+  const epics = new Set([...state.epicOrder, ...Object.keys(summary.epics)]);
+  for (const epic of epics) writeFileSync(join(dir, `epic-${epic}.json`), `${JSON.stringify(epicStreamsBadge(summary.epics[epic] ?? []))}\n`);
+
   // Один вызов gh: от него зависят и раздел «Вклад», и его пометка «нет данных».
   const mergedPrs = mergedTaskPrs();
   const credits = taskCredits(board.done, mergedPrs);
@@ -406,7 +425,7 @@ function runStatusJson(flags) {
     now: new Date(),
   });
   writeFileSync(join(flags.out, "README.md"), page);
-  console.log(`Значки статуса: ${String(count)} задач → ${dir}`);
+  console.log(`Значки статуса: ${String(count)} задач и ${String(epics.size)} эпиков → ${dir}`);
 }
 
 function main(argv) {
@@ -419,6 +438,8 @@ function main(argv) {
       return runBoard(flags);
     case "next":
       return runNext(flags);
+    case "streams":
+      return runStreams(flags);
     case "claim":
       return runClaim(positional, flags);
     case "resume":

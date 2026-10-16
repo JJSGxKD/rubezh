@@ -46,6 +46,12 @@ describe("перечень прав и состав ролей", () => {
     expect(granted.has("roles.assign")).toBe(false);
   });
 
+  it("право поддержки покупок payments.support — у владельца и администратора, у остальных ролей его нет (T-0037)", () => {
+    for (const role of ROLES) {
+      expect(ROLE_PERMISSIONS[role].includes("payments.support"), role).toBe(role === "owner" || role === "admin");
+    }
+  });
+
   it("у администратора нет бухгалтерии и раздачи ролей", () => {
     const granted = permissionsOf(["admin"]);
 

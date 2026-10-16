@@ -43,10 +43,10 @@ export const EARN_REASONS = [
 /**
  * Начисления, у которых ценность пришла извне или из уже полученного:
  * покупка оплачена, осколки — разобранный предмет, бусты вернулись за забег,
- * который так и не начался. Потолок им не нужен — их ограничивает то, что
- * было у игрока.
+ * который так и не начался, и компенсация после вайпа (Р87): ценность была у
+ * игрока до него. Потолок им не нужен — их ограничивает то, что было у игрока.
  */
-export const EXCHANGE_REASONS = ["purchase", "salvage", "boost_refund"] as const;
+export const EXCHANGE_REASONS = ["purchase", "salvage", "boost_refund", "wipe_compensation"] as const;
 
 /** На что тратят. */
 export const SPEND_REASONS = ["unlock", "meta_upgrade", "item_upgrade", "item_reroll", "item_merge", "boost", "shop"] as const;

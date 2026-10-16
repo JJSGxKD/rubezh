@@ -157,7 +157,7 @@ export class ReportNotifier implements OnModuleInit, OnApplicationBootstrap, OnM
 
   /**
    * Забег на разбор — карточкой, но не чаще раза в час на аккаунт: остальное
-   * лежит в `GET /runs/review`. Забег, прошедший проверки, карточки не
+   * лежит в панели (`GET /api/v1/admin/runs/review`). Забег, прошедший проверки, карточки не
    * получает вовсе, как и забег с читами: его пометил сам разработчик.
    */
   async enqueueReview(run: RecordedRun): Promise<void> {

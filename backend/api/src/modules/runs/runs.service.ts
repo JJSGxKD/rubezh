@@ -152,6 +152,9 @@ export class RunsService {
       level: run.level,
       enemiesKilled: run.enemiesKilled,
       startingWeaponId: run.startingWeaponId,
+      weapons: run.weapons.map((weapon) => ({ id: weapon.id, level: weapon.level })),
+      boosts: boosts === "paid" ? [...run.boosts] : [],
+      xpCollected: run.stats?.xpCollected ?? null,
       deathCause: run.deathCause,
       cheats: run.cheats,
       continues: run.continues.length,
@@ -192,6 +195,8 @@ export class RunsService {
       const after = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false);
       if (after !== null && after.survivalSec !== best?.survivalSec) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.survivalSec);
     }
+    // Недельная таблица сезона и другие проекции пересчитываются по базе: решение модератора они узнают отсюда.
+    await this.hooks.emitRankingChanged({ accountId: changed.accountId, difficulty: changed.difficulty });
     await this.roles.audit({
       actorAccountId: actor.accountId,
       action: ranked ? "players.run.rerank" : "players.run.unrank",
@@ -264,7 +269,7 @@ export class RunsService {
 
   /**
    * Подозрительный забег — в лог с причинами. Карточку в чат администраторов
-   * шлёт слушатель хуков (`admin-notify`), а очередь целиком — `GET /runs/review`.
+   * шлёт слушатель хуков (`admin-notify`), а очередь целиком — в панели (`GET /api/v1/admin/runs/review`).
    */
   private logSuspicious(account: AccountRef, runId: string, verdict: RunVerdict, reasons: VerdictReason[]): void {
     this.logger.warn(JSON.stringify({ module: "runs", event: "run_flagged", runId, accountId: account.accountId, verdict, reasons }));

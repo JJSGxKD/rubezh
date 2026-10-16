@@ -10,6 +10,7 @@ import { createDailyApi, dailyAvailable, dayOfWeek, type DailyDay, type DailyVie
 import { useNavigation } from "../../state/navigation";
 import { track } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
+import { dailyReloadDelayMs } from "./daily-reload";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
 
 /**
@@ -23,7 +24,7 @@ import { formatCountdown, msUntilReset, useClock } from "./schedule";
 /** Отсчёт на кнопке — без секунд: часы тикают раз в полминуты, как на виджетах главной. */
 const CLOCK_STEP_MS = 30_000;
 
-type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: DailyView };
+type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: DailyView; loadedAt: number };
 
 const api = createDailyApi();
 
@@ -33,15 +34,26 @@ export function DailyScreen(): ReactNode {
   const [claiming, setClaiming] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = async (): Promise<void> => {
-    setState({ status: "loading" });
+  // silent — перечитывание на смене суток: экран не уходит в «загрузку» и не
+  // перерисовывает дни, пока ответ не пришёл.
+  const load = async (silent = false): Promise<void> => {
+    if (!silent) setState({ status: "loading" });
     const response = await api.view();
-    setState(response.ok ? { status: "ready", view: response.data } : { status: "failed" });
+    setState(response.ok ? { status: "ready", view: response.data, loadedAt: Date.now() } : { status: "failed" });
   };
 
   useEffect(() => {
     if (dailyAvailable()) void load();
   }, []);
+
+  const loadedAt = state.status === "ready" ? state.loadedAt : null;
+  // Сутки сменились — награда новая. Перечитываем один раз; ответ ставит
+  // новый `loadedAt`, и эффект заводит таймер на следующие сутки.
+  useEffect(() => {
+    if (loadedAt === null) return;
+    const timer = setTimeout(() => void load(true), dailyReloadDelayMs(loadedAt, Date.now()));
+    return () => clearTimeout(timer);
+  }, [loadedAt]);
 
   const claim = async (): Promise<void> => {
     if (state.status !== "ready") return;
@@ -53,7 +65,7 @@ export function DailyScreen(): ReactNode {
       return;
     }
     const { view } = response.data;
-    setState({ status: "ready", view });
+    setState({ status: "ready", view, loadedAt: Date.now() });
     if (response.data.claimed) {
       const today = view.days.find((day) => day.today);
       if (today !== undefined) track("daily_reward_claimed", { day: dayOfWeek(today, view.days), week: view.week });

@@ -1,4 +1,3 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import type { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
@@ -12,6 +11,7 @@ import { NotificationsService } from "../src/modules/notifications/notifications
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Журнал обновлений на живом Postgres (docs/17-testing-strategy.md §4.2;
@@ -42,7 +42,7 @@ describe.skipIf(DATABASE_URL === "")("журнал обновлений на ж�
   }
 
   beforeAll(() => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     repository = new PrismaChangelogRepository(prisma);
     notifications = new NotificationsService(new PrismaNotificationsRepository(prisma));

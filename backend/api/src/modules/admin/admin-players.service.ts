@@ -10,10 +10,12 @@ import { MessagingService } from "../messaging/messaging.service.js";
 import type { TestNoticeAcceptance } from "../test-notice/test-notice.repository.js";
 import { TestNoticeService } from "../test-notice/test-notice.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
-import type { StoredPurchase } from "../payments/purchase-types.js";
+import { PurchaseSupport } from "../payments/purchase-support.js";
+import type { PurchaseAction, StoredPurchase } from "../payments/purchase-types.js";
 import { PURCHASES_REPOSITORY, type PurchasesRepository } from "../payments/purchases.repository.js";
 import { ProgressService, type ProgressView } from "../progress/progress.service.js";
 import type { ImposeInput, RestrictionView } from "../restrictions/restriction-rules.js";
+import { HIDDEN_KIND_PERMISSION, visibleRows } from "../restrictions/restriction-visibility.js";
 import { RestrictionsService } from "../restrictions/restrictions.service.js";
 import type { Role } from "../roles/permissions.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
@@ -49,6 +51,9 @@ export interface PlayerRow {
   pii: { platformUserId: string; username: string | null } | null;
 }
 
+/** Покупка в карточке — с тем, что поддержка может сделать сейчас; без права `payments.support` список пуст. */
+export type CardPurchase = StoredPurchase & { actions: PurchaseAction[] };
+
 export interface PlayerCard {
   account: PlayerRow;
   roles: Role[];
@@ -59,7 +64,7 @@ export interface PlayerCard {
   runs: ProfileView;
   wallet: { balances: Balances; entries: WalletEntryRow[] };
   /** `null` — права на платежи нет */
-  purchases: StoredPurchase[] | null;
+  purchases: CardPurchase[] | null;
   /** предупреждение об открытом тесте (WP33); `null` — не принимал */
   testNotice: TestNoticeAcceptance | null;
 }
@@ -98,6 +103,7 @@ export class AdminPlayersService {
     private readonly notifications: NotificationsService,
     private readonly testNotice: TestNoticeService,
     private readonly restrictions: RestrictionsService,
+    private readonly support: PurchaseSupport,
   ) {}
 
   async search(actor: AccountRef, query: string, limit: number): Promise<PlayerRow[]> {
@@ -115,7 +121,11 @@ export class AdminPlayersService {
     const account = await this.accounts.byId(accountId);
     if (account === null) throw new AccountNotFoundError();
 
-    const [withPii, withPayments] = await Promise.all([this.roles.can(actor, "players.pii.view"), this.roles.can(actor, "analytics.revenue.view")]);
+    const [withPii, withPayments, withSupport] = await Promise.all([
+      this.roles.can(actor, "players.pii.view"),
+      this.roles.can(actor, "analytics.revenue.view"),
+      this.roles.can(actor, "payments.support"),
+    ]);
     const target: AccountRef = { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 
     const [roles, funnel, acquisition, messaging, progress, runs, balances, entries, purchases, testNotice] = await Promise.all([
@@ -142,7 +152,7 @@ export class AdminPlayersService {
       progress,
       runs,
       wallet: { balances, entries },
-      purchases,
+      purchases: purchases === null ? null : purchases.map((purchase) => ({ ...purchase, actions: withSupport ? this.support.actionsFor(purchase) : [] })),
       testNotice,
     };
   }
@@ -155,7 +165,9 @@ export class AdminPlayersService {
   async restrict(actor: AccountRef, accountId: string, input: ImposeInput, now = new Date()): Promise<RestrictResult> {
     if (actor.accountId === accountId) throw new ValidationError("Ограничить себя нельзя");
     if ((await this.accounts.byId(accountId)) === null) throw new AccountNotFoundError();
-    const restrictions = await this.restrictions.impose(actor, accountId, input, now);
+    const imposed = await this.restrictions.impose(actor, accountId, input, now);
+    // Скрытый вид в ответе — только держателю права вида: у остальных его не наложить, но ответ подстрахован.
+    const restrictions = visibleRows(imposed, await this.roles.can(actor, HIDDEN_KIND_PERMISSION));
     if (!input.kinds.includes("all")) return { restrictions, revokedSessions: 0 };
     const [game, panel] = await Promise.all([this.auth.logoutEverywhere(accountId), this.adminSessions.revokeAll(accountId)]);
     return { restrictions, revokedSessions: game + panel };

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { fetchPartners, share, type Partner } from "../../api/partners";
+import { STATUS_FILTERS, STATUS_TITLES, fetchPartners, filterPartners, share, statusTone, type Partner, type StatusFilter } from "../../api/partners";
 import { formatNumber } from "../../format";
 import { api } from "../../services";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
 import { HELP } from "../../ui/help";
-import { Button, DataTable, ErrorNotice, Loading, Notice, Panel } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { PartnerCard } from "./PartnerCard";
@@ -15,8 +15,9 @@ import { PartnerDialog } from "./PartnerDialog";
  * Партнёры (docs/35-stage4-plan.md WP41, часть 2): кто приводит игроков
  * своими промокодами и что эти игроки принесли — от кодов до звёзд. Число
  * без доли не говорит ничего, поэтому у сыгравших и платящих рядом — доля
- * от приведённых. Карточка открывается и по адресу `#/partners/<id>`: на
- * неё ведёт карточка игрока.
+ * от приведённых. Список фильтруется по статусу: по умолчанию все, кроме
+ * отклонённых. Карточка открывается и по адресу `#/partners/<id>`: на неё
+ * ведёт карточка игрока.
  */
 export function PartnersScreen({ id }: { id: string | null }) {
   const { state, reload } = useApi(() => fetchPartners(api), []);
@@ -24,12 +25,14 @@ export function PartnersScreen({ id }: { id: string | null }) {
   const canEdit = can(view, "partners.edit");
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState<string | null>(id);
+  const [filter, setFilter] = useState<StatusFilter>("visible");
 
   useEffect(() => setOpenId(id), [id]);
 
   if (state.status === "loading") return <Loading />;
   if (state.status === "error") return <ErrorNotice error={state.error} onRetry={reload} />;
-  const { partners, rules } = state.data;
+  const { rules } = state.data;
+  const partners = filterPartners(state.data.partners, filter);
 
   const close = () => {
     setOpenId(null);
@@ -55,11 +58,30 @@ export function PartnersScreen({ id }: { id: string | null }) {
             партнёром при вводе его кода. Выплат партнёрам пока нет — здесь видно, сколько стоят приведённые ими игроки.
           </Notice>
         </div>
+        <div className="mb-3 flex items-center gap-2">
+          <label htmlFor="partner-status-filter" className="text-xs text-text-muted">
+            Статус
+          </label>
+          <Select
+            id="partner-status-filter"
+            value={filter}
+            onChange={(event) => {
+              const next = STATUS_FILTERS.find(([value]) => value === event.target.value);
+              if (next !== undefined) setFilter(next[0]);
+            }}
+          >
+            {STATUS_FILTERS.map(([value, title]) => (
+              <option key={value} value={value}>
+                {title}
+              </option>
+            ))}
+          </Select>
+        </div>
         <DataTable
           rows={partners}
           rowKey={(partner) => partner.partnerId}
           onRowClick={(partner) => setOpenId(partner.partnerId)}
-          empty={canEdit ? "Партнёров ещё нет — заведите первого кнопкой «Новый партнёр»" : "Партнёров ещё нет"}
+          empty={state.data.partners.length > 0 ? "Нет партнёров с таким статусом" : canEdit ? "Партнёров ещё нет — заведите первого кнопкой «Новый партнёр»" : "Партнёров ещё нет"}
           columns={[
             {
               title: "Партнёр",
@@ -70,6 +92,7 @@ export function PartnersScreen({ id }: { id: string | null }) {
                 </span>
               ),
             },
+            { title: "Статус", render: (partner) => <Badge tone={statusTone(partner.status)}>{STATUS_TITLES[partner.status]}</Badge> },
             { title: "Коды", help: HELP.partners.codes, render: (partner) => <CodesCell partner={partner} /> },
             { title: "Активации", help: HELP.partners.redeemed, align: "right", render: (partner) => formatNumber(partner.stats.redeemed) },
             { title: "Привёл", help: HELP.partners.bound, align: "right", render: (partner) => formatNumber(partner.stats.bound) },

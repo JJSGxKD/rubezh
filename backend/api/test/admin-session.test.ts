@@ -6,7 +6,12 @@ import { DisabledError, DomainError, UnauthorizedError, ValidationError } from "
 import { ADMIN_CSRF_HEADER, ADMIN_CSRF_VALUE, ADMIN_SESSION_COOKIE, clearedSessionCookie, parseCookies, sessionCookie } from "../src/modules/admin/admin-cookie.js";
 import { CsrfRejectedError, PanelAccessError } from "../src/modules/admin/admin-errors.js";
 import { AdminSessionGuard, adminSessionOf } from "../src/modules/admin/admin-session.guard.js";
+import { AdminSessionController } from "../src/modules/admin/admin-session.controller.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
+import { PanelLoginService } from "../src/modules/admin/panel-login.service.js";
+import { AppLinks } from "../src/platforms/ports/app-links.js";
+import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
+import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 import { hashSessionToken } from "../src/modules/admin/admin-session.store.js";
 import { accountOf } from "../src/modules/auth/auth.guard.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
@@ -216,5 +221,20 @@ describe("гвард", () => {
 
   it("не пускает случайный uuid вместо токена", async () => {
     await expect(s.guard.canActivate(contextOf(requestWith(randomUUID())))).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+});
+
+describe("вход через бота: ответ сервера", () => {
+  it("запрос отдаёт обычную ссылку и диплинк на то же приложение Telegram", async () => {
+    const { accounts, roles, service, config: cfg } = setup();
+    const links = new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]);
+    const logins = new PanelLoginService(new MemoryPanelLoginStore(), accounts, new RolesService(cfg, roles, accounts), service, links);
+    const controller = new AdminSessionController(service, logins, { consume: async () => true } as never, cfg);
+
+    const { data } = await controller.openBotLogin({ ip: "1.2.3.4", headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0) Chrome/140.0 Safari/537.36" } });
+    expect(data.link).toBe(`https://t.me/rubezh_bot?start=panel-${data.requestId}`);
+    expect(data.deepLink).toBe(`tg://resolve?domain=rubezh_bot&start=panel-${data.requestId}`);
+    // Прежние поля на месте: старая панель читает только их.
+    expect(Object.keys(data).sort()).toEqual(["code", "deepLink", "expiresAt", "link", "requestId", "secret"]);
   });
 });

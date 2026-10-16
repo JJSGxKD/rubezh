@@ -24,7 +24,7 @@ executor: sonnet-5.5
 effort: extra
 release: patch
 design: null
-version: v0.9
+batch: 3
 ---
 
 # T-0069. Постбэки — слой «событие → назначение», AdsGram первым назначением

@@ -1,15 +1,28 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { PARTNER_LIMITS, createPartner, emptyPartnerForm, partnerFormOf, partnerFormSchema, updatePartner, type Partner, type PartnerForm } from "../../api/partners";
+import {
+  NO_ACCRUAL_NOTE,
+  PARTNER_LIMITS,
+  PAYOUT_CURRENCIES,
+  TERMS_HELP,
+  createPartner,
+  emptyPartnerForm,
+  partnerFormOf,
+  partnerFormSchema,
+  updatePartner,
+  type Partner,
+  type PartnerForm,
+} from "../../api/partners";
 import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
-import { Button, Field, Input, TextArea } from "../../ui/kit";
+import { Button, Field, Input, Select, TextArea } from "../../ui/kit";
 import { toast } from "../../ui/toast";
 
 /**
- * Новый партнёр или правка: как его зовёт команда, как связаться и о чём
- * договорились. Коды партнёра заводят в «Промокодах» — кнопкой из его
+ * Новый партнёр или правка: как его зовёт команда, как связаться, куда и в
+ * чём платить и о чём договорились. Статус здесь не меняется — отдельным
+ * окном, с причиной. Коды партнёра заводят в «Промокодах» — кнопкой из его
  * карточки, с ним уже выбранным.
  */
 export function PartnerDialog({ partner, onClose, onSaved }: { partner: Partner | null; onClose: () => void; onSaved: (partner: Partner) => void }) {
@@ -50,9 +63,40 @@ export function PartnerDialog({ partner, onClose, onSaved }: { partner: Partner 
         <Field label="Название" hint="как его зовёт команда; игроки его не видят" error={errors.name?.message}>
           <Input {...form.register("name")} placeholder="Канал «Игровой угол»" maxLength={PARTNER_LIMITS.nameMax + 10} className="w-full max-w-md" autoFocus />
         </Field>
-        <Field label="Как связаться" help={HELP.partners.contact} error={errors.contact?.message}>
-          <Input {...form.register("contact")} placeholder="@corner_admin или https://t.me/corner" maxLength={PARTNER_LIMITS.contactMax + 10} className="w-full max-w-md" />
-        </Field>
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold">Связь</h3>
+          <Field label="Как связаться" help={HELP.partners.contact} error={errors.contact?.message}>
+            <Input {...form.register("contact")} placeholder="@corner_admin или https://t.me/corner" maxLength={PARTNER_LIMITS.contactMax + 10} className="w-full max-w-md" />
+          </Field>
+          <Field label="TG id" hint="число; для будущего кабинета" help={TERMS_HELP.telegramId} error={errors.telegramId?.message}>
+            <Input {...form.register("telegramId")} inputMode="numeric" placeholder="123456789" maxLength={24} className="w-full max-w-xs" />
+          </Field>
+        </section>
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold">Выплаты</h3>
+          <div className="flex flex-wrap gap-3">
+            <Field label="Страна" hint="две буквы" help={TERMS_HELP.country} error={errors.country?.message}>
+              <Input {...form.register("country")} placeholder="KZ" maxLength={3} className="w-20 uppercase" />
+            </Field>
+            <Field label="Валюта" help={TERMS_HELP.payoutCurrency} error={errors.payoutCurrency?.message}>
+              <Select {...form.register("payoutCurrency")}>
+                <option value="">не указана</option>
+                {PAYOUT_CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Процент" hint="от 0 до 100" help={TERMS_HELP.sharePercent} error={errors.sharePercent?.message}>
+              <Input {...form.register("sharePercent")} inputMode="decimal" placeholder="12.5" maxLength={7} className="w-28" />
+            </Field>
+          </div>
+          <Field label="Способ выплаты" help={TERMS_HELP.payoutMethod} error={errors.payoutMethod?.message}>
+            <Input {...form.register("payoutMethod")} placeholder="USDT TRC-20 на T…" maxLength={PARTNER_LIMITS.payoutMethodMax + 10} className="w-full max-w-md" />
+          </Field>
+          <p className="max-w-md text-xs text-text-muted">Процент пока только записывается — {NO_ACCRUAL_NOTE}.</p>
+        </section>
         <Field label={`Договорённости — ${String(form.watch("note").trim().length)} из ${String(PARTNER_LIMITS.noteMax)}`} help={HELP.partners.note} error={errors.note?.message}>
           <TextArea {...form.register("note")} rows={4} placeholder="Пост раз в неделю до декабря, код на 500 монет новичкам" className="w-full max-w-md" />
         </Field>

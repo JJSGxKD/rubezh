@@ -4,7 +4,7 @@ import { Badge, Card, ContentColumn, Screen, SectionTitle } from "../../design-s
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
-import { unlockLabel, unlocksGainedAt } from "../../state/level-unlocks";
+import { nextUnlockAfter, nextUnlockLabel, unlockLabel, unlocksGainedAt } from "../../state/level-unlocks";
 import { useNavigation } from "../../state/navigation";
 import { useProgress, type ProgressView } from "../../state/progress";
 import { AccountLevel } from "./account-level";
@@ -47,6 +47,7 @@ export function LevelScreen(): ReactNode {
 function OpenNow(props: { level: number }): ReactNode {
   const open = unlocksAt(ACCOUNT_UNLOCKS, props.level);
   const all = open.weapons.size === WEAPONS.length && open.passives.size === PASSIVES.length;
+  const next = all ? null : nextUnlockAfter(props.level);
   return (
     <>
       <SectionTitle>{t("level.open")}</SectionTitle>
@@ -61,7 +62,7 @@ function OpenNow(props: { level: number }): ReactNode {
             mobility: open.limits.passives.mobility,
           })}
         </span>
-        {all ? <span className="text-text">{t("level.allOpen")}</span> : null}
+        {all ? <span className="text-text">{t("level.allOpen")}</span> : next === null ? null : <span className="text-text">{nextUnlockLabel(next)}</span>}
       </div>
     </>
   );
