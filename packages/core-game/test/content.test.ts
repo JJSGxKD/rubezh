@@ -280,7 +280,7 @@ describe("таблица разблокировок уровня аккаунт�
   it("стартовый набор новичка не урезан", () => {
     const first = unlocksAt(ACCOUNT_UNLOCKS, 1);
     expect([...first.weapons].sort()).toEqual(["knife", "spark", "wardstone"]);
-    expect([...first.passives].sort()).toEqual(["haste", "lodestone", "might", "mending", "swiftness", "vitality"]);
+    expect([...first.passives].sort()).toEqual(["haste", "lodestone", "mending", "might", "swiftness", "vitality"]);
     expect(first.limits).toEqual({ weapons: 2, passives: { attack: 1, defense: 1, mobility: 1 } });
   });
 
