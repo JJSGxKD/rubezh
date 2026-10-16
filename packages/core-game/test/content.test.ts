@@ -277,6 +277,29 @@ describe("таблица разблокировок уровня аккаунт�
     for (const passive of PASSIVES) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "passive", passive.id), passive.id).not.toBeNull();
   });
 
+  it("стартовый набор новичка не урезан", () => {
+    const first = unlocksAt(ACCOUNT_UNLOCKS, 1);
+    expect([...first.weapons].sort()).toEqual(["knife", "spark", "wardstone"]);
+    expect([...first.passives].sort()).toEqual(["haste", "lodestone", "might", "mending", "swiftness", "vitality"]);
+    expect(first.limits).toEqual({ weapons: 2, passives: { attack: 1, defense: 1, mobility: 1 } });
+  });
+
+  it("лестница закреплена: калибровка геймдизайнера правит эти числа и таблицу вместе", () => {
+    const weapons: [string, number][] = [["hearth", 2], ["storm", 4], ["sting", 11]];
+    const passives: [string, number][] = [["reach", 3], ["ward", 6], ["volley", 8], ["tempering", 14]];
+    for (const [id, level] of weapons) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", id), id).toBe(level);
+    for (const [id, level] of passives) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "passive", id), id).toBe(level);
+  });
+
+  it("между открытиями не больше трёх уровней", () => {
+    const levels = ACCOUNT_UNLOCKS.map((row) => row.level).sort((a, b) => a - b);
+    for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1], `уровни ${levels[i - 1]} и ${levels[i]}`).toBeLessThanOrEqual(3);
+  });
+
+  it("лестница не длиннее двадцатого уровня: дальше место под оружие поездов", () => {
+    expect(Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level))).toBeLessThanOrEqual(20);
+  });
+
   it("ловит оружие без уровня, дубль, убывающие слоты и категорию, где выбирать нечего", () => {
     const problems = findUnlockProblems(
       [
