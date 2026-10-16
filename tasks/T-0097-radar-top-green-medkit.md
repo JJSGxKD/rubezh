@@ -3,7 +3,7 @@ id: T-0097
 title: Радар забега — наверх, аптечки на нём зелёные
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-13
 size: S
