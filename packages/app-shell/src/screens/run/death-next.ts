@@ -63,7 +63,7 @@ function recordGoal(input: NextGoalsInput): NextGoal | null {
 function taskGoal(input: NextGoalsInput): NextGoal | null {
   let best: { period: "daily" | "weekly"; id: string; value: number; target: number; closeness: number } | null = null;
   for (const task of input.tasks) {
-    const period = task.period === "daily" || task.period === "weekly" ? task.period : null;
+    const period: "daily" | "weekly" | null = task.period === "daily" ? "daily" : task.period === "weekly" ? "weekly" : null;
     if (task.done || period === null || !RUN_TASK_KINDS.includes(task.kind)) continue;
     // Нулевая цель — деление на ноль: такое задание пропускаем.
     if (!(task.target > 0)) continue;
