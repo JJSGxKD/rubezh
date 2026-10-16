@@ -38,6 +38,22 @@ import { createTelegramUi } from "./ui-telegram";
  * SocialLead — отдельно, см. docs/07-monetization-and-ads.md.
  */
 export class TelegramAdapter implements PlatformAdapter {
+  /**
+   * Разрешение боту писать — с Bot API 6.9. Метода нет, пока клиент старше или
+   * мы вне Telegram: оболочка по его отсутствию не показывает ни карточку, ни
+   * пункт настроек. Тело — ленивым чанком по нажатию.
+   */
+  readonly requestBotMessages?: () => Promise<"allowed" | "declined" | "unavailable">;
+
+  constructor() {
+    const version = isTMA() ? describeTelegramClient().version : null;
+    if (version !== null && supports("web_app_request_write_access", version)) {
+      this.requestBotMessages = async () => {
+        const { requestWriteAccess } = await import("./write-access");
+        return await requestWriteAccess();
+      };
+    }
+  }
 
   /** локальный рекорд, настройки и installId — docs/27-design-system-and-app-shell.md §7 */
   readonly storage: KeyValueStorage = createDeviceStorage();
