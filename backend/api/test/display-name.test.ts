@@ -33,9 +33,11 @@ describe("лишние знаки выбрасываются", () => {
     const raw = [..."Zalgo"].map((letter) => letter + marks).join("");
     const result = cleanName(raw);
     expect(result.verdict).toBe("symbols");
-    expect(result.name?.replace(/\p{Mn}/gu, "")).toBe("Zalgo");
-    expect(result.name).not.toMatch(/\p{Mn}{4}/u);
-    expect(result.name).toMatch(/\p{Mn}{3}/u);
+    // NFKC склеивает часть знаков с буквой («o» + рожок → «ơ»): считаем в разложенном виде.
+    const decomposed = result.name?.normalize("NFD") ?? "";
+    expect(decomposed.replace(/\p{Mn}/gu, "")).toBe("Zalgo");
+    expect(decomposed).not.toMatch(/\p{Mn}{4}/u);
+    expect(decomposed).toMatch(/\p{Mn}{3}/u);
   });
 
   it("охватывающие знаки U+0489 — «кружева»: остались одни пробелы, ника нет", () => {
@@ -86,7 +88,7 @@ describe("длина", () => {
   it("30 знаков — 23 и «…»", () => {
     const result = cleanName("Абвгде".repeat(5));
     expect(result.verdict).toBe("trimmed");
-    expect(result.name).toBe(`${"Абвгде".repeat(3)}Абвго…`.slice(0, 0) + "Абвгде".repeat(5).slice(0, 23) + "…");
+    expect(result.name).toBe("Абвгде".repeat(5).slice(0, 23) + "…");
     expect([...new Intl.Segmenter("ru", { granularity: "grapheme" }).segment(result.name ?? "")]).toHaveLength(24);
   });
 
