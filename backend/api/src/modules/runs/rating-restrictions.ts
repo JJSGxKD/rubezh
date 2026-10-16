@@ -33,6 +33,9 @@ const REDIS_TIMEOUT_MS = 2_000;
 /** Виды, которые закрывают рейтинг: свой и блокировка целиком. */
 const RATING_KINDS = new Set(["leaderboard", "all"]);
 
+/** Доска, которую читает игрок: полная (с отдельной доской) или общая, без игроков отдельной доски. */
+export type BoardView = "full" | "common";
+
 const RELEASE_SCRIPT = `
 if redis.call("GET", KEYS[1]) == ARGV[1] then
   return redis.call("DEL", KEYS[1])
@@ -74,6 +77,18 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
   async hold(accountId: string, at = new Date()): Promise<RatingRestricted | null> {
     const row = await this.restrictions.status(accountId, "leaderboard", at);
     return row === null ? null : row.notify ? "notified" : "silent";
+  }
+
+  /**
+   * Какую доску читает аккаунт: `"full"` — только при действующем скрытом
+   * ограничении «Отдельная доска» (T-0112). Блокировку целиком `status`
+   * подставляет вместо любого вида — это не отдельная доска, а закрытый
+   * рейтинг: она `"common"`. Через порт «можно ли», поэтому сброс кеша после
+   * наложения действует сразу, а не через полминуты.
+   */
+  async boardOf(accountId: string, at = new Date()): Promise<BoardView> {
+    const row = await this.restrictions.status(accountId, "separate_board", at);
+    return row?.kind === "separate_board" ? "full" : "common";
   }
 
   /** Кому рейтинг закрыт сейчас — пересборка досок их не возвращает. */

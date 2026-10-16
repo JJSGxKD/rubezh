@@ -13,6 +13,7 @@
     "export": "node --conditions=source --import @swc-node/register/esm-register src/cli/closed-test-export.ts",
     "bot:webhook": "node --conditions=source --import @swc-node/register/esm-register src/cli/bot-webhook.ts",
     "runs:rebuild-leaderboard": "node --conditions=source --import @swc-node/register/esm-register src/cli/runs-rebuild-leaderboard.ts",
+    "seasons:rebuild": "node --conditions=source --import @swc-node/register/esm-register src/cli/seasons-rebuild.ts",
     "wipe": "node --conditions=source --import @swc-node/register/esm-register src/cli/wipe.ts",
     "funnel:report": "node --conditions=source --import @swc-node/register/esm-register src/cli/funnel-report.ts",
     "wallet:reconcile": "node --conditions=source --import @swc-node/register/esm-register src/cli/wallet-reconcile.ts",

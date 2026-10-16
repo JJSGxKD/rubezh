@@ -3,7 +3,8 @@ import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import type { PartnerInput, PartnerRow, PartnerStats } from "./partner-rules.js";
+import { PartnerTelegramTakenError } from "./partner-errors.js";
+import { PARTNER_STATUSES, type PartnerPatch, type PartnerRow, type PartnerStats } from "./partner-rules.js";
 
 /**
  * Партнёры в базе (`partner`, `partner_binding`) и то, что они принесли.
@@ -44,9 +45,13 @@ export interface PartnersRepository {
   /** привязки по игровым суткам с `since` */
   daily(partnerId: string, since: Date): Promise<{ day: string; count: number }[]>;
   campaigns(partnerId: string): Promise<PartnerCampaignRow[]>;
+  /** TG id занят другим партнёром — `PartnerTelegramTakenError` с его именем */
   create(partner: PartnerRow): Promise<void>;
-  /** `null` — партнёра нет */
-  update(partnerId: string, input: PartnerInput, at: Date): Promise<{ before: PartnerRow; after: PartnerRow } | null>;
+  /**
+   * Меняет только названные поля — `null` стирает, не названное остаётся. `null` в ответе — партнёра нет;
+   * занятый TG id — `PartnerTelegramTakenError`.
+   */
+  update(partnerId: string, patch: PartnerPatch, at: Date): Promise<{ before: PartnerRow; after: PartnerRow } | null>;
   names(): Promise<{ partnerId: string; name: string }[]>;
   /** к какому партнёру привязан игрок; `null` — ни к какому */
   bindingOf(accountId: string): Promise<PartnerBindingView | null>;
@@ -60,6 +65,13 @@ const rowSchema = z.object({
   created_by: z.string(),
   created_at: z.date(),
   updated_at: z.date(),
+  telegram_id: z.string().nullable(),
+  // Статус из базы читается строго: молча принять неизвестный за «активен» значило бы привязывать игроков к тому, кого не звали.
+  status: z.enum(PARTNER_STATUSES),
+  country: z.string().nullable(),
+  payout_currency: z.string().nullable(),
+  payout_method: z.string().nullable(),
+  share_percent: z.string().nullable(),
 });
 
 const statsSchema = z.object({
@@ -74,7 +86,21 @@ const statsSchema = z.object({
 
 function toRow(raw: unknown): PartnerRow {
   const row = rowSchema.parse(raw);
-  return { partnerId: row.partner_id, name: row.name, contact: row.contact, note: row.note, createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at };
+  return {
+    partnerId: row.partner_id,
+    name: row.name,
+    contact: row.contact,
+    note: row.note,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    telegramId: row.telegram_id,
+    status: row.status,
+    country: row.country,
+    payoutCurrency: row.payout_currency,
+    payoutMethod: row.payout_method,
+    sharePercent: row.share_percent,
+  };
 }
 
 function toStats(raw: unknown): PartnerStats {
@@ -82,7 +108,33 @@ function toStats(raw: unknown): PartnerStats {
   return { codes: row.codes, activeCodes: row.active_codes, redeemed: row.redeemed, bound: row.bound, played: row.played, payers: row.payers, stars: row.stars };
 }
 
-const COLUMNS = Prisma.sql`p.partner_id::text, p.name, p.contact, p.note, p.created_by::text, p.created_at, p.updated_at`;
+// Процент — текстом: десятичная доля не должна пройти через двоичную дробь.
+const COLUMNS = Prisma.sql`p.partner_id::text, p.name, p.contact, p.note, p.created_by::text, p.created_at, p.updated_at,
+  p.telegram_id, p.status, p.country, p.payout_currency, p.payout_method, p.share_percent::text AS share_percent`;
+
+/**
+ * Колонки, которые правка может менять. Имена — из этой константы, а не из ввода: идентификатор в
+ * запрос параметром не передать, поэтому в SQL он идёт готовым, а значение — параметром.
+ */
+const PATCH_COLUMNS = {
+  name: "name",
+  contact: "contact",
+  note: "note",
+  telegramId: "telegram_id",
+  status: "status",
+  country: "country",
+  payoutCurrency: "payout_currency",
+  payoutMethod: "payout_method",
+  sharePercent: "share_percent",
+} as const satisfies Record<keyof PartnerPatch, string>;
+
+/** Нарушение уникальности TG id: код Postgres 23505 приходит то как P2002, то в `meta` сырого запроса. */
+function isUniqueViolation(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === "P2002" || JSON.stringify(error.meta ?? {}).includes("23505");
+  }
+  return error instanceof Error && /23505|duplicate key/i.test(error.message);
+}
 
 /**
  * Партнёры со статистикой. Платящие и звёзды — живые оплаты после привязки:
@@ -180,21 +232,44 @@ export class PrismaPartnersRepository implements PartnersRepository {
   }
 
   async create(partner: PartnerRow): Promise<void> {
-    await this.prisma.$executeRaw`
-      INSERT INTO partner (partner_id, name, contact, note, created_by, created_at, updated_at)
-      VALUES (${partner.partnerId}::uuid, ${partner.name}, ${partner.contact}, ${partner.note}, ${partner.createdBy}::uuid, ${partner.createdAt}, ${partner.updatedAt})`;
+    try {
+      await this.prisma.$executeRaw`
+        INSERT INTO partner (partner_id, name, contact, note, created_by, created_at, updated_at,
+                             telegram_id, status, country, payout_currency, payout_method, share_percent)
+        VALUES (${partner.partnerId}::uuid, ${partner.name}, ${partner.contact}, ${partner.note}, ${partner.createdBy}::uuid, ${partner.createdAt}, ${partner.updatedAt},
+                ${partner.telegramId ?? null}, ${partner.status ?? "active"}, ${partner.country ?? null}, ${partner.payoutCurrency ?? null},
+                ${partner.payoutMethod ?? null}, ${partner.sharePercent ?? null}::numeric)`;
+    } catch (error: unknown) {
+      throw await this.telegramTaken(error, partner.telegramId ?? null);
+    }
   }
 
-  async update(partnerId: string, input: PartnerInput, at: Date): Promise<{ before: PartnerRow; after: PartnerRow } | null> {
-    return await this.prisma.$transaction(async (tx) => {
-      const [raw] = await tx.$queryRaw<unknown[]>`SELECT ${COLUMNS} FROM partner p WHERE p.partner_id = ${partnerId}::uuid FOR UPDATE`;
-      if (raw === undefined) return null;
-      const before = toRow(raw);
-      await tx.$executeRaw`
-        UPDATE partner SET name = ${input.name}, contact = ${input.contact}, note = ${input.note}, updated_at = ${at}
-        WHERE partner_id = ${partnerId}::uuid`;
-      return { before, after: { ...before, ...input, updatedAt: at } };
+  async update(partnerId: string, patch: PartnerPatch, at: Date): Promise<{ before: PartnerRow; after: PartnerRow } | null> {
+    // Названные поля — пары «колонка = значение»; не названные (undefined) в запрос не попадают и остаются как были.
+    const named = (Object.keys(PATCH_COLUMNS) as (keyof PartnerPatch)[]).filter((key) => patch[key] !== undefined);
+    const assignments = named.map((key) => {
+      const value = patch[key];
+      return key === "sharePercent" ? Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}::numeric` : Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}`;
     });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const [raw] = await tx.$queryRaw<unknown[]>`SELECT ${COLUMNS} FROM partner p WHERE p.partner_id = ${partnerId}::uuid FOR UPDATE`;
+        if (raw === undefined) return null;
+        const before = toRow(raw);
+        await tx.$executeRaw`UPDATE partner SET ${Prisma.join([...assignments, Prisma.sql`updated_at = ${at}`])} WHERE partner_id = ${partnerId}::uuid`;
+        const changes = Object.fromEntries(named.map((key) => [key, patch[key]]));
+        return { before, after: { ...before, ...changes, updatedAt: at } };
+      });
+    } catch (error: unknown) {
+      throw await this.telegramTaken(error, patch.telegramId ?? null);
+    }
+  }
+
+  /** Нарушение уникальности TG id — отказ с именем держателя; прочие ошибки — как были. */
+  private async telegramTaken(error: unknown, telegramId: string | null): Promise<unknown> {
+    if (telegramId === null || !isUniqueViolation(error)) return error;
+    const [holder] = await this.prisma.$queryRaw<{ name: string }[]>`SELECT name FROM partner WHERE telegram_id = ${telegramId} LIMIT 1`;
+    return holder === undefined ? error : new PartnerTelegramTakenError(holder.name);
   }
 
   async names(): Promise<{ partnerId: string; name: string }[]> {

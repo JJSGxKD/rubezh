@@ -21,14 +21,15 @@ import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AccountRestrictions } from "../src/modules/restrictions/account-restrictions.js";
-import { RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_REASONS, type RestrictionKind } from "../src/modules/restrictions/restriction-catalog.js";
-import { banMessage, imposeProblem, imposeSchema, playerMessage, termProblem, untilText } from "../src/modules/restrictions/restriction-rules.js";
+import { HIDDEN_KINDS, RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_REASONS, isHiddenKind, type RestrictionKind } from "../src/modules/restrictions/restriction-catalog.js";
+import { banMessage, imposeProblem, imposeSchema, playerMessage, shownText, termProblem, untilText } from "../src/modules/restrictions/restriction-rules.js";
 import { RestrictionsController } from "../src/modules/restrictions/restrictions.controller.js";
 import { AccountRestrictedError, RestrictionNotFoundError, RestrictionSilentError } from "../src/modules/restrictions/restrictions-errors.js";
 import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
 import { RestrictionsService } from "../src/modules/restrictions/restrictions.service.js";
 import { RestrictionsSettler } from "../src/modules/restrictions/restrictions-settler.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
+import { PERMISSIONS, ROLES, ROLE_PERMISSIONS, type Role } from "../src/modules/roles/permissions.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -62,7 +63,7 @@ function setup() {
   return { accounts, roles, repository, gate, service, hooks };
 }
 
-async function person(s: ReturnType<typeof setup>, id: string, role?: "moderator" | "game_designer"): Promise<AccountRef> {
+async function person(s: ReturnType<typeof setup>, id: string, role?: Role): Promise<AccountRef> {
   const account = await s.accounts.upsert({ platform: "telegram", platformUserId: id, displayName: `Игрок ${id}`, username: null, photoUrl: null }, NOW.getTime());
   if (role !== undefined) await s.roles.grant(account.accountId, role, null);
   return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
@@ -90,7 +91,9 @@ describe("правила ограничений", () => {
     expect(imposeProblem(["promo_codes", "ad_rewards"], false)).toBeNull();
     expect(imposeProblem(["promo_codes", "all"], false)).toContain("«Всё — блокировка» молча не накладывается");
     expect(imposeProblem(["all"], true)).toBeNull();
-    expect(RESTRICTION_KINDS.filter((kind) => !RESTRICTION_CATALOG[kind].silentAllowed)).toEqual(["all"]);
+    expect(RESTRICTION_KINDS.filter((kind) => !RESTRICTION_CATALOG[kind].silentAllowed)).toEqual(["purchases", "all"]);
+    // Покупки закрыты — игрок упрётся в отказ при оплате и без плашки.
+    expect(imposeProblem(["purchases"], false)).toContain("«Покупки» молча не накладывается");
   });
 
   it("игрок видит, что закрыто, до какого числа по Москве и причину шаблона", () => {
@@ -107,19 +110,20 @@ describe("правила ограничений", () => {
     for (const reason of Object.keys(RESTRICTION_REASONS)) expect(banMessage({ endsAt: longest, reason }).length, reason).toBeLessThanOrEqual(256);
   });
 
-  it("предпросмотр: игрок увидит тот же текст, что в отказе; молча — нейтральное «недоступно», рейтинг — ничего; проблема черновика — словами", () => {
+  it("предпросмотр: игрок увидит тот же текст, что в отказе; молча — нейтральное «недоступно», рейтинг — ничего; проблема черновика — словами", async () => {
     const s = setup();
+    const moderator = await person(s, "500", "moderator");
     const endsAt = new Date(NOW.getTime() + 3 * DAY).toISOString();
-    const told = s.service.preview({ kinds: ["promo_codes", "all"], endsAt, reason: "promo_abuse", notify: true }, NOW);
+    const told = await s.service.preview(moderator, { kinds: ["promo_codes", "all"], endsAt, reason: "promo_abuse", notify: true }, NOW);
     expect(told.problem).toBeNull();
     expect(told.shown).toEqual([
       { kind: "promo_codes", title: "Промокоды", text: "Промокоды — закрыто до 4 октября, 15:00 МСК. Причина: Промокоды использовались не по правилам" },
       { kind: "all", title: "Всё — блокировка", text: "Аккаунт заблокирован до 4 октября, 15:00 МСК. Причина: Промокоды использовались не по правилам" },
     ]);
-    const silent = s.service.preview({ kinds: ["ad_rewards", "leaderboard"], endsAt: null, reason: "ad_abuse", notify: false }, NOW);
+    const silent = await s.service.preview(moderator, { kinds: ["ad_rewards", "leaderboard"], endsAt: null, reason: "ad_abuse", notify: false }, NOW);
     expect(silent.shown.map((item) => item.text)).toEqual(["Сейчас недоступно — попробуйте позже", expect.stringMatching(/^Ничего: в рейтинге игрок видит себя/)]);
-    expect(s.service.preview({ kinds: ["all"], endsAt: null, reason: "abuse", notify: false }, NOW).problem).toMatch(/молча не накладывается/);
-    expect(s.service.preview({ kinds: ["promo_codes"], endsAt: new Date(NOW.getTime() - DAY).toISOString(), reason: "abuse", notify: true }, NOW).problem).toMatch(/Срок уже прошёл/);
+    expect((await s.service.preview(moderator, { kinds: ["all"], endsAt: null, reason: "abuse", notify: false }, NOW)).problem).toMatch(/молча не накладывается/);
+    expect((await s.service.preview(moderator, { kinds: ["promo_codes"], endsAt: new Date(NOW.getTime() - DAY).toISOString(), reason: "abuse", notify: true }, NOW)).problem).toMatch(/Срок уже прошёл/);
   });
 
   it("вход панели: виды без повторов, причина из шаблонов, комментарий ограничен, лишнее поле — отказ", () => {
@@ -262,6 +266,342 @@ describe("наложение и снятие", () => {
     const [row] = await s.service.impose(owner, target.accountId, input({ kinds: ["all"] }), NOW);
     await expect(s.service.lift(designer, row?.restrictionId ?? "", "хочу", NOW)).rejects.toBeInstanceOf(ForbiddenError);
     expect((await s.accounts.byId(target.accountId))?.bannedAt).toEqual(NOW);
+  });
+});
+
+describe("ограничение «Покупки» и наложение системой (T-0024)", () => {
+  const PURCHASE_ID = "11111111-1111-4111-8111-111111111111";
+  const comment = `Возврат звёзд за покупку ${PURCHASE_ID}`;
+
+  it("вид «Покупки» в каталоге: что закрывает, где проверяется, чьё право; причина «Возврат оплаты»", async () => {
+    expect(RESTRICTION_KINDS.at(-1)).toBe("all");
+    expect(RESTRICTION_KINDS.at(-2)).toBe("purchases");
+    expect(RESTRICTION_CATALOG.purchases).toMatchObject({
+      title: "Покупки",
+      checkedIn: "shop, vip, payments",
+      permission: "players.restrict",
+      silentAllowed: false,
+    });
+    expect(RESTRICTION_CATALOG.purchases.effect).toContain("магазин и VIP не выставляют счета");
+    expect(RESTRICTION_CATALOG.purchases.effect).toContain("Купленное раньше остаётся");
+    expect(RESTRICTION_REASONS.payment_refund).toEqual({ title: "Возврат оплаты", player: "Возврат звёзд за покупку" });
+    const s = setup();
+    const moderator = await person(s, "511", "moderator");
+    expect((await s.service.catalog(moderator)).kinds.map((item) => item.kind)).toContain("purchases");
+    expect((await s.service.catalog(moderator)).reasons).toContainEqual({ reason: "payment_refund", title: "Возврат оплаты", player: "Возврат звёзд за покупку" });
+  });
+
+  it("система накладывает без автора: бессрочно, с сообщением игроку, строка и журнал — от `null`", async () => {
+    const s = setup();
+    const target = await person(s, "601");
+    const imposed: { accountId: string; kinds: readonly string[]; at: Date }[] = [];
+    s.hooks.onImposed("проверка", async (change) => void imposed.push(change));
+
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+
+    expect(s.repository.rows).toHaveLength(1);
+    expect(s.repository.rows[0]).toMatchObject({ accountId: target.accountId, kind: "purchases", startsAt: NOW, endsAt: null, reason: "payment_refund", comment, notify: true, imposedBy: null, liftedAt: null });
+    expect(s.roles.entries.at(-1)).toMatchObject({
+      actorAccountId: null,
+      action: "players.restrict",
+      target: target.accountId,
+      after: { restrictions: [{ kind: "purchases", endsAt: null, reason: "payment_refund", comment, notify: true }] },
+    });
+    expect(imposed).toEqual([{ accountId: target.accountId, kinds: ["purchases"], at: NOW }]);
+    expect(s.gate.published).toEqual([target.accountId]);
+  });
+
+  it("игрок видит причину шаблона словами: «Покупки — закрыто бессрочно. Причина: Возврат звёзд за покупку»", async () => {
+    const s = setup();
+    const target = await person(s, "602");
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+
+    await expect(s.gate.ensure(target.accountId, "purchases", NOW)).rejects.toThrow("Покупки — закрыто бессрочно. Причина: Возврат звёзд за покупку");
+    await expect(s.gate.ensure(target.accountId, "promo_codes", NOW)).resolves.toBeUndefined();
+    expect(await s.gate.visibleFor(target.accountId, NOW)).toMatchObject([{ kind: "purchases", title: "Покупки", endsAt: null }]);
+  });
+
+  it("повторное наложение того же вида заменяет действующее — не вторая действующая строка", async () => {
+    const s = setup();
+    const target = await person(s, "603");
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+    const later = new Date(NOW.getTime() + HOUR);
+
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", "Возврат звёзд за покупку 22222222-2222-4222-8222-222222222222", later);
+
+    const rows = s.repository.rows.filter((row) => row.kind === "purchases");
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((row) => row.liftedAt === null)).toHaveLength(1);
+    expect(rows.find((row) => row.liftedAt !== null)).toMatchObject({ comment, liftComment: expect.any(String) as string });
+    expect(s.roles.entries.at(-1)).toMatchObject({ before: { replaced: [{ kind: "purchases" }] } });
+  });
+
+  it("блокировку целиком система не накладывает — ошибка, ничего не записано", async () => {
+    const s = setup();
+    const target = await person(s, "604");
+
+    await expect(s.service.imposeBySystem(target.accountId, "all", "other", "x", NOW)).rejects.toThrow("Систему блокировать целиком не просим");
+
+    expect(s.repository.rows).toEqual([]);
+    expect(s.roles.entries).toEqual([]);
+    expect((await s.accounts.byId(target.accountId))?.bannedAt ?? null).toBeNull();
+  });
+
+  it("право для наложения системой не нужно, а снять ограничение может модератор — правом вида", async () => {
+    const s = setup();
+    const moderator = await person(s, "605", "moderator");
+    const designer = await person(s, "606", "game_designer");
+    const target = await person(s, "607");
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+    const row = s.repository.rows[0];
+
+    await expect(s.service.lift(designer, row?.restrictionId ?? "", "хочу", NOW)).rejects.toBeInstanceOf(ForbiddenError);
+    const lifted = await s.service.lift(moderator, row?.restrictionId ?? "", "разобрались", new Date(NOW.getTime() + HOUR));
+
+    expect(lifted).toMatchObject({ state: "lifted", kind: "purchases", imposedBy: null });
+    await expect(s.gate.ensure(target.accountId, "purchases", new Date(NOW.getTime() + 2 * HOUR))).resolves.toBeUndefined();
+  });
+
+  it("в панели это ограничение без автора: строка истории не называет модератора", async () => {
+    const s = setup();
+    const moderator = await person(s, "608", "moderator");
+    const target = await person(s, "609");
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", comment, NOW);
+
+    const [view] = await s.service.history(moderator, target.accountId, NOW);
+
+    expect(view).toMatchObject({ kind: "purchases", state: "active", reasonTitle: "Возврат оплаты", imposedBy: null });
+  });
+
+  it("блокировка целиком закрывает и покупки: у забаненного `status('purchases')` не пуст", async () => {
+    const s = setup();
+    const owner = await person(s, OWNER_ID);
+    const target = await person(s, "610");
+    await s.service.impose(owner, target.accountId, input({ kinds: ["all"], endsAt: null }), NOW);
+
+    expect((await s.gate.status(target.accountId, "purchases", NOW))?.kind).toBe("all");
+  });
+});
+
+describe("скрытое ограничение «Отдельная доска» (T-0112)", () => {
+  const MALFORMED = "Некорректное ограничение: нужны виды, срок и причина";
+  const hidden = (patch: Partial<Parameters<RestrictionsService["impose"]>[2]> = {}) => input({ kinds: ["separate_board"], notify: false, reason: "leaderboard_cheat", ...patch });
+
+  it("в каталоге: скрытый, молчаливый, право владельца, проверяется в забегах; стоит сразу после «Рейтинга», у остальных не скрыт", () => {
+    expect(RESTRICTION_CATALOG.separate_board).toMatchObject({
+      title: "Отдельная доска",
+      checkedIn: "runs",
+      permission: "players.board.restrict",
+      silentAllowed: true,
+      hidden: true,
+    });
+    expect(RESTRICTION_CATALOG.separate_board.effect).toBe(
+      "Игрок остаётся в рейтинге и читает полную доску, остальные видят общую без него. Места и награды за места считаются по доске того, кто смотрит. Игрок не видит ничего. Призы — только внутриигровые",
+    );
+    expect(RESTRICTION_KINDS.indexOf("separate_board")).toBe(RESTRICTION_KINDS.indexOf("leaderboard") + 1);
+    expect(HIDDEN_KINDS).toEqual(["separate_board"]);
+    expect(RESTRICTION_KINDS.filter((kind) => RESTRICTION_CATALOG[kind].hidden)).toEqual([...HIDDEN_KINDS]);
+    for (const kind of RESTRICTION_KINDS) expect(isHiddenKind(kind), kind).toBe(kind === "separate_board");
+    expect(isHiddenKind("unknown_kind")).toBe(false);
+    expect(RESTRICTION_KINDS.at(-1)).toBe("all");
+    expect(RESTRICTION_KINDS.at(-2)).toBe("purchases");
+  });
+
+  it("правила наложения: молча и один; с сообщением игроку или вместе с другим видом — проблема", () => {
+    expect(imposeProblem(["separate_board"], false)).toBeNull();
+    expect(imposeProblem(["separate_board"], true)).toBe("Скрытое ограничение накладывается молча и отдельно от других");
+    expect(imposeProblem(["separate_board", "promo_codes"], false)).toBe("Скрытое ограничение накладывается молча и отдельно от других");
+    expect(imposeProblem(["leaderboard", "separate_board"], false)).toBe("Скрытое ограничение накладывается молча и отдельно от других");
+    expect(imposeProblem(["leaderboard"], false)).toBeNull();
+  });
+
+  it("предпросмотр для держателя права: «Ничего: игрок не видит ни плашки, ни изменений в интерфейсе» — и при любом notify", async () => {
+    const s = setup();
+    const owner = await person(s, "700", "owner");
+    const text = "Ничего: игрок не видит ни плашки, ни изменений в интерфейсе";
+    expect(shownText("separate_board", null, "other", false)).toBe(text);
+    expect(shownText("separate_board", null, "other", true)).toBe(text);
+    const quiet = await s.service.preview(owner, { kinds: ["separate_board"], endsAt: null, reason: "leaderboard_cheat", notify: false }, NOW);
+    expect(quiet).toEqual({ problem: null, shown: [{ kind: "separate_board", title: "Отдельная доска", text }] });
+    const loud = await s.service.preview(owner, { kinds: ["separate_board"], endsAt: null, reason: "leaderboard_cheat", notify: true }, NOW);
+    expect(loud.problem).toBe("Скрытое ограничение накладывается молча и отдельно от других");
+  });
+
+  it("игрок не видит вида: строка с notify = true, записанная в обход сервиса, ему не отдаётся", async () => {
+    const s = setup();
+    s.repository.restrict("a", "separate_board", { notify: true });
+    s.repository.restrict("a", "promo_codes", { notify: true });
+    s.repository.restrict("b", "separate_board", { notify: false });
+
+    expect((await s.gate.visibleFor("a", NOW)).map((view) => view.kind)).toEqual(["promo_codes"]);
+    expect(await s.gate.visibleFor("b", NOW)).toEqual([]);
+  });
+
+  it("каталог: владельцу — с видом, модератору и админу — без него", async () => {
+    const s = setup();
+    const [owner, moderator, admin] = [await person(s, "701", "owner"), await person(s, "702", "moderator"), await person(s, "703", "admin")];
+    const visible = RESTRICTION_KINDS.filter((kind) => kind !== "separate_board");
+
+    expect((await s.service.catalog(owner)).kinds.map((item) => item.kind)).toEqual([...RESTRICTION_KINDS]);
+    expect((await s.service.catalog(owner)).kinds.find((item) => item.kind === "separate_board")).toMatchObject({ title: "Отдельная доска", hidden: true, silentAllowed: true });
+    expect((await s.service.catalog(moderator)).kinds.map((item) => item.kind)).toEqual(visible);
+    expect((await s.service.catalog(admin)).kinds.map((item) => item.kind)).toEqual(visible);
+    expect((await s.service.catalog(moderator)).kinds.every((item) => item.hidden === false)).toBe(true);
+  });
+
+  it("предпросмотр модератором: тот же отказ, что на кривой черновик, — вид не выдаётся", async () => {
+    const s = setup();
+    const moderator = await person(s, "704", "moderator");
+    const body = { kinds: ["separate_board" as RestrictionKind], endsAt: null, reason: "leaderboard_cheat" as const, notify: false };
+    const refusal = s.service.preview(moderator, body, NOW);
+    await expect(refusal).rejects.toBeInstanceOf(ValidationError);
+    await expect(refusal).rejects.toThrow("Некорректный черновик ограничения");
+  });
+
+  it("владелец накладывает: строка, кеш сброшен, журнал `players.board.set` с прежними полями", async () => {
+    const s = setup();
+    const owner = await person(s, "705", "owner");
+    const target = await person(s, "706");
+    const views = await s.service.impose(owner, target.accountId, hidden({ comment: "подозрение на накрутку" }), NOW);
+
+    expect(views.map((view) => [view.kind, view.state, view.notify, view.reasonTitle])).toEqual([["separate_board", "active", false, "Накрутка рейтинга"]]);
+    expect(s.gate.published).toEqual([target.accountId]);
+    expect((await s.gate.status(target.accountId, "separate_board", NOW))?.kind).toBe("separate_board");
+    expect(s.roles.entries.at(-1)).toMatchObject({
+      actorAccountId: owner.accountId,
+      action: "players.board.set",
+      target: target.accountId,
+      after: { restrictions: [{ kind: "separate_board", reason: "leaderboard_cheat", comment: "подозрение на накрутку", notify: false }] },
+    });
+    // Игроку ни один вопрос о нём не отдаёт ничего, а его забеги по-прежнему рейтинговые — вид меняет только доску.
+    expect(await s.gate.visibleFor(target.accountId, NOW)).toEqual([]);
+  });
+
+  it("повторное наложение заменяет действующее; журнал помнит замену под тем же действием", async () => {
+    const s = setup();
+    const owner = await person(s, "707", "owner");
+    const target = await person(s, "708");
+    await s.service.impose(owner, target.accountId, hidden(), NOW);
+    await s.service.impose(owner, target.accountId, hidden({ endsAt: null }), new Date(NOW.getTime() + HOUR));
+
+    const history = await s.service.history(owner, target.accountId, new Date(NOW.getTime() + HOUR));
+    expect(history.map((view) => [view.kind, view.state])).toEqual([
+      ["separate_board", "active"],
+      ["separate_board", "replaced"],
+    ]);
+    expect(s.roles.entries.at(-1)).toMatchObject({ action: "players.board.set", before: { replaced: [{ kind: "separate_board" }] } });
+  });
+
+  it("модератор и админ: тот же ValidationError, что на кривое тело; в базу, журнал и кеш — ничего", async () => {
+    const s = setup();
+    const target = await person(s, "709");
+    for (const role of ["moderator", "admin"] as const) {
+      const staff = await person(s, role === "moderator" ? "710" : "711", role);
+      const refusal = s.service.impose(staff, target.accountId, hidden(), NOW);
+      await expect(refusal, role).rejects.toBeInstanceOf(ValidationError);
+      await expect(refusal, role).rejects.toThrow(MALFORMED);
+    }
+    expect(s.repository.rows).toEqual([]);
+    expect(s.roles.entries).toEqual([]);
+    expect(s.gate.published).toEqual([]);
+  });
+
+  it("смешанный набор и сообщение игроку владельцу отказывают словами; себя ограничить нельзя", async () => {
+    const s = setup();
+    const owner = await person(s, "712", "owner");
+    const target = await person(s, "713");
+    await expect(s.service.impose(owner, target.accountId, hidden({ kinds: ["separate_board", "promo_codes"] }), NOW)).rejects.toThrow("Скрытое ограничение накладывается молча и отдельно от других");
+    await expect(s.service.impose(owner, target.accountId, hidden({ notify: true }), NOW)).rejects.toThrow("Скрытое ограничение накладывается молча и отдельно от других");
+    await expect(s.service.impose(owner, owner.accountId, hidden(), NOW)).rejects.toThrow("Ограничить себя нельзя");
+    expect(s.repository.rows).toEqual([]);
+  });
+
+  it("снятие: модератору строки как будто нет, владелец снимает с `players.board.unset`; повтор — «нет такого»", async () => {
+    const s = setup();
+    const [owner, moderator] = [await person(s, "714", "owner"), await person(s, "715", "moderator")];
+    const target = await person(s, "716");
+    const [row] = await s.service.impose(owner, target.accountId, hidden(), NOW);
+    const id = row?.restrictionId ?? "";
+
+    const refused: unknown = await s.service.lift(moderator, id, "хочу", NOW).catch((error: unknown) => error);
+    const unknown: unknown = await s.service.lift(moderator, "00000000-0000-4000-8000-000000000999", "хочу", NOW).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(RestrictionNotFoundError);
+    // Тот же ответ, что на несуществующее.
+    expect(refused).toEqual(unknown);
+    expect(s.repository.rows[0]?.liftedAt).toBeNull();
+
+    const lifted = await s.service.lift(owner, id, "разобрались", new Date(NOW.getTime() + HOUR));
+    expect(lifted).toMatchObject({ kind: "separate_board", state: "lifted", liftComment: "разобрались" });
+    expect(s.roles.entries.map((entry) => entry.action)).toEqual(["players.board.set", "players.board.unset"]);
+    expect(s.roles.entries.at(-1)).toMatchObject({ target: target.accountId, before: { kind: "separate_board" }, after: { comment: "разобрались" } });
+    await expect(s.service.lift(owner, id, "ещё раз", new Date(NOW.getTime() + 2 * HOUR))).rejects.toBeInstanceOf(RestrictionNotFoundError);
+  });
+
+  it("история: строка вида — владельцу, модератору её нет; прочие виды видны обоим", async () => {
+    const s = setup();
+    const [owner, moderator] = [await person(s, "717", "owner"), await person(s, "718", "moderator")];
+    const target = await person(s, "719");
+    await s.service.impose(owner, target.accountId, hidden(), NOW);
+    await s.service.impose(owner, target.accountId, input(), new Date(NOW.getTime() + HOUR));
+
+    const at = new Date(NOW.getTime() + 2 * HOUR);
+    expect((await s.service.history(owner, target.accountId, at)).map((view) => view.kind)).toEqual(["promo_codes", "separate_board"]);
+    expect((await s.service.history(moderator, target.accountId, at)).map((view) => view.kind)).toEqual(["promo_codes"]);
+  });
+
+  it("слушатели получают вид в `kinds`; истёкшее снимает задача и зовёт `emitSettled`", async () => {
+    const s = setup();
+    const owner = await person(s, "720", "owner");
+    const target = await person(s, "721");
+    const imposed: string[][] = [];
+    const settled: string[][] = [];
+    s.hooks.onImposed("доски", async (change) => void imposed.push([...change.kinds]));
+    s.hooks.onSettled("доски", async (change) => void settled.push([...change.kinds]));
+
+    await s.service.impose(owner, target.accountId, hidden({ endsAt: new Date(NOW.getTime() + DAY).toISOString() }), NOW);
+    expect(imposed).toEqual([["separate_board"]]);
+
+    expect(await s.service.settleDue(new Date(NOW.getTime() + DAY + 60_000))).toBe(1);
+    expect(settled).toEqual([["separate_board"]]);
+    expect(s.repository.rows[0]?.settledAt).not.toBeNull();
+    expect(await s.service.settleDue(new Date(NOW.getTime() + DAY + 120_000))).toBe(0);
+  });
+
+  it("право: есть у владельца и ни у одной другой роли", () => {
+    expect(PERMISSIONS).toContain("players.board.restrict");
+    expect(ROLE_PERMISSIONS.owner).toContain("players.board.restrict");
+    for (const role of ROLES.filter((item) => item !== "owner")) expect(ROLE_PERMISSIONS[role], role).not.toContain("players.board.restrict");
+  });
+
+  it("журнал аудита: строки `players.board.*` — только с правом вида; остальные видны всем, у кого `audit.view`", async () => {
+    const s = setup();
+    const [owner, admin] = [await person(s, "722", "owner"), await person(s, "723", "admin")];
+    const target = await person(s, "724");
+    const [row] = await s.service.impose(owner, target.accountId, hidden(), NOW);
+    await s.service.impose(owner, target.accountId, input(), new Date(NOW.getTime() + HOUR));
+    await s.service.lift(owner, row?.restrictionId ?? "", "достаточно", new Date(NOW.getTime() + 2 * HOUR));
+    const rolesService = new RolesService(config(), s.roles, s.accounts);
+    const query = { limit: 10, before: null, actions: [], actorAccountId: null, target: null };
+
+    expect((await rolesService.auditPage(owner, query)).map((entry) => entry.action)).toEqual(["players.board.unset", "players.restrict", "players.board.set"]);
+    expect((await rolesService.auditPage(admin, query)).map((entry) => entry.action)).toEqual(["players.restrict"]);
+    expect((await rolesService.auditPage(admin, { ...query, actions: ["players.board."] })).map((entry) => entry.action)).toEqual([]);
+  });
+
+  it("журнал аудита: страница без права набирается из следующих записей, а не обрывается на скрытых", async () => {
+    const s = setup();
+    const owner = await person(s, "725", "owner");
+    const admin = await person(s, "726", "admin");
+    const rolesService = new RolesService(config(), s.roles, s.accounts);
+    await s.roles.append({ actorAccountId: owner.accountId, action: "settings.save", target: "a" });
+    for (let index = 0; index < 5; index += 1) await s.roles.append({ actorAccountId: owner.accountId, action: "players.board.set", target: `t${String(index)}` });
+    await s.roles.append({ actorAccountId: owner.accountId, action: "settings.save", target: "b" });
+
+    const page = await rolesService.auditPage(admin, { limit: 2, before: null, actions: [], actorAccountId: null, target: null });
+    expect(page.map((entry) => [entry.action, entry.target])).toEqual([
+      ["settings.save", "b"],
+      ["settings.save", "a"],
+    ]);
   });
 });
 
@@ -408,7 +748,8 @@ describe("ограничения в панели по HTTP", () => {
 
     const catalog = await app.inject({ method: "GET", url: "/api/v1/admin/restrictions/catalog", headers });
     expect(catalog.statusCode).toBe(200);
-    expect(catalog.json().data.kinds.map((item: { kind: string }) => item.kind)).toEqual([...RESTRICTION_KINDS]);
+    // Модератору скрытого вида в каталоге нет (T-0112).
+    expect(catalog.json().data.kinds.map((item: { kind: string }) => item.kind)).toEqual(RESTRICTION_KINDS.filter((kind) => !RESTRICTION_CATALOG[kind].hidden));
 
     const preview = await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers, payload: { kinds: ["ad_rewards"], endsAt: null, reason: "ad_abuse", notify: true } });
     expect(preview.statusCode).toBe(200);
@@ -436,6 +777,116 @@ describe("ограничения в панели по HTTP", () => {
     const again = await app.inject({ method: "POST", url: lift, headers, payload: { comment: "ещё раз" } });
     expect(again.statusCode).toBe(404);
     expect(again.json().error.code).toBe("restriction_not_found");
+  });
+});
+
+describe("скрытое ограничение по HTTP (T-0112)", () => {
+  let app: NestFastifyApplication | null = null;
+  const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+  });
+
+  it("игроку «мои ограничения» отдают пусто, даже если строка вида записана с notify = true", async () => {
+    const s = setup();
+    const me = await person(s, "800");
+    s.repository.restrict(me.accountId, "separate_board", { notify: true });
+    @Module({
+      controllers: [RestrictionsController],
+      providers: [
+        { provide: APP_CONFIG, useValue: config() },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: AccountRestrictions, useValue: s.gate },
+        RateLimiter,
+        AuthGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+
+    const token = await signAccessToken({ accountId: me.accountId, platform: "telegram", platformUserId: "800" }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
+    const mine = await app.inject({ method: "GET", url: "/api/v1/me/restrictions", headers: { authorization: `Bearer ${token}` } });
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json().data.restrictions).toEqual([]);
+  });
+
+  it("в панели: каталог, предпросмотр и наложение — владельцу с видом, модератору — как на неизвестное; история и снятие по праву", async () => {
+    const s = setup();
+    const store = new MemoryAdminSessionStore();
+    const players = { restrict: async (actor: AccountRef, accountId: string, body: Parameters<RestrictionsService["impose"]>[2]) => ({ restrictions: await s.service.impose(actor, accountId, body), revokedSessions: 0 }) };
+    @Module({
+      controllers: [AdminRestrictionsController],
+      providers: [
+        { provide: APP_CONFIG, useValue: config() },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: ACCOUNT_REPOSITORY, useValue: s.accounts },
+        { provide: ROLES_REPOSITORY, useValue: s.roles },
+        { provide: ADMIN_SESSION_STORE, useValue: store },
+        { provide: RestrictionsService, useValue: s.service },
+        { provide: AdminPlayersService, useValue: players },
+        RateLimiter,
+        RolesService,
+        PermissionGuard,
+        AdminSessionService,
+        AdminSessionGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+
+    const owner = await person(s, "801", "owner");
+    const moderator = await person(s, "802", "moderator");
+    const target = await person(s, "803");
+    await store.put(hashSessionToken("own"), { ...owner, issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });
+    await store.put(hashSessionToken("mod"), { ...moderator, issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });
+    const as = (who: "own" | "mod") => ({ cookie: `${ADMIN_SESSION_COOKIE}=${who}`, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
+    const base = `/api/v1/admin/players/${target.accountId}/restrictions`;
+    const draft = { kinds: ["separate_board"], endsAt: null, reason: "leaderboard_cheat", notify: false };
+    const body = { ...draft, comment: "проверка", endsAt: new Date(Date.now() + DAY).toISOString() };
+    const kindsOf = (response: { json(): { data: { kinds: { kind: string }[] } } }) => response.json().data.kinds.map((item) => item.kind);
+
+    const ownerCatalog = await app.inject({ method: "GET", url: "/api/v1/admin/restrictions/catalog", headers: as("own") });
+    const modCatalog = await app.inject({ method: "GET", url: "/api/v1/admin/restrictions/catalog", headers: as("mod") });
+    expect(kindsOf(ownerCatalog)).toContain("separate_board");
+    expect(kindsOf(modCatalog)).not.toContain("separate_board");
+
+    // Предпросмотр: владельцу — текст, модератору — тот же отказ, что на кривое тело.
+    const ownerPreview = await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers: as("own"), payload: draft });
+    expect(ownerPreview.statusCode).toBe(200);
+    expect(ownerPreview.json().data.shown[0].text).toBe("Ничего: игрок не видит ни плашки, ни изменений в интерфейсе");
+    const modPreview = await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers: as("mod"), payload: draft });
+    const badPreview = await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers: as("mod"), payload: { ...draft, kinds: [] } });
+    expect(modPreview.statusCode).toBe(400);
+    expect(modPreview.json()).toEqual(badPreview.json());
+
+    // Наложение: модератору — 400, как на кривое тело; ничего не записано.
+    const modImpose = await app.inject({ method: "POST", url: base, headers: as("mod"), payload: body });
+    const badImpose = await app.inject({ method: "POST", url: base, headers: as("mod"), payload: { ...body, kinds: ["ad_rewards", "ad_rewards"] } });
+    expect(modImpose.statusCode).toBe(400);
+    expect(modImpose.json()).toEqual(badImpose.json());
+    expect(s.repository.rows).toEqual([]);
+
+    const imposed = await app.inject({ method: "POST", url: base, headers: as("own"), payload: body });
+    expect(imposed.statusCode).toBe(201);
+    const [created] = imposed.json().data.restrictions as { restrictionId: string; kind: string; notify: boolean }[];
+    expect(created).toMatchObject({ kind: "separate_board", notify: false });
+
+    // История и снятие.
+    expect((await app.inject({ method: "GET", url: base, headers: as("own") })).json().data.restrictions).toHaveLength(1);
+    expect((await app.inject({ method: "GET", url: base, headers: as("mod") })).json().data.restrictions).toEqual([]);
+    const lift = `/api/v1/admin/restrictions/${created?.restrictionId ?? ""}/lift`;
+    const modLift = await app.inject({ method: "POST", url: lift, headers: as("mod"), payload: { comment: "хочу" } });
+    expect(modLift.statusCode).toBe(404);
+    expect(modLift.json().error.code).toBe("restriction_not_found");
+    const ownerLift = await app.inject({ method: "POST", url: lift, headers: as("own"), payload: { comment: "разобрались" } });
+    expect(ownerLift.statusCode).toBe(201);
+    expect(ownerLift.json().data).toMatchObject({ kind: "separate_board", state: "lifted" });
   });
 });
 

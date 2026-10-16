@@ -3,8 +3,8 @@ id: T-0024
 title: После возврата звёзд покупки аккаунту закрыты, команда получает карточку
 epic: E1
 priority: P0
-status: ready
-owner:
+status: done
+owner: claude-6 / sonnet-5.5 / extra
 size: M
 depends_on: [T-0023]
 zones:
@@ -37,7 +37,6 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-version: v0.8
 ---
 
 # T-0024. После возврата звёзд покупки аккаунту закрыты, команда получает карточку

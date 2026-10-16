@@ -70,6 +70,17 @@ describe("рецепты звуков", () => {
     expect(overrides.uiTap?.level).toBe(0.2);
     expect(readLabOverrides(memoryStorage({ [LAB_OVERRIDES_KEY]: "{битый json" }))).toEqual({});
   });
+
+  it("рецепта «Очага» нет, а старая правка с его id не ломает чтение", () => {
+    expect(Object.hasOwn(SOUND_RECIPES, "hearth")).toBe(false);
+    const storage = memoryStorage({
+      [LAB_OVERRIDES_KEY]: JSON.stringify({
+        uiTap: { ...SOUND_RECIPES.uiTap, level: 0.2 },
+        hearth: { ...SOUND_RECIPES.spark },
+      }),
+    });
+    expect(Object.keys(readLabOverrides(storage))).toEqual(["uiTap"]);
+  });
 });
 
 describe("план звуков забега", () => {
@@ -86,6 +97,15 @@ describe("план звуков забега", () => {
     const storm = planCueSounds(cues({ weapons: { storm: 1, spark: 1 } }), 0).map((request) => request.id);
     expect(storm).toEqual(["spark"]);
     expect(planCueSounds(cues({ strikes: 1 }), 0).map((request) => request.id)).toEqual(["storm"]);
+  });
+
+  it("«Очаг» тактом ауры не звучит даже при большом счёте; остальное оружие звучит", () => {
+    expect(planCueSounds(cues({ weapons: { hearth: 3 } }), 0)).toEqual([]);
+    expect(planCueSounds(cues({ weapons: { hearth: 1, spark: 1 } }), 0).map((request) => request.id)).toEqual(["spark"]);
+    for (const id of ["spark", "knife", "wardstone"]) {
+      const ids = planCueSounds(cues({ weapons: { [id]: 1 } }), 0).map((request) => request.id);
+      expect(ids, id).toEqual([id]);
+    }
   });
 
   it("важное — впереди толпы: при потолке голосов режутся последние", () => {

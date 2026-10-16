@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { IMAGE_ID } from "../media/image-rules.js";
 import { runReward } from "../progress/progress-rules.js";
+import { DIFFICULTIES } from "../runs/run-rules.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import type { RecordedRun } from "../runs/runs-hooks.js";
 import type { EarnReason } from "../wallet/wallet-types.js";
@@ -22,9 +23,55 @@ export const TASK_PERIODS = ["daily", "weekly", "achievement"] as const;
 export type TaskPeriod = (typeof TASK_PERIODS)[number];
 
 /**
+ * Фильтр цели забега: оружие, стихия или сложность. Какой ключ нужен какому
+ * виду — `RUN_FILTER_KEYS`; лежит в своей колонке, а не в `params`, чтобы
+ * партнёрскую цель по-прежнему отличал именно `params`.
+ */
+export const ELEMENTS = ["fire", "cold", "lightning", "poison"] as const;
+export type TaskElement = (typeof ELEMENTS)[number];
+
+export const runFilterSchema = z
+  .object({
+    weapon: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{1,47}$/)
+      .optional(),
+    element: z.enum(ELEMENTS).optional(),
+    difficulty: z.enum(DIFFICULTIES).optional(),
+  })
+  .strict();
+
+export type RunFilter = z.infer<typeof runFilterSchema>;
+
+/** Виды с фильтром и ключ, который каждому нужен: ровно один. */
+export const RUN_FILTER_KEYS = {
+  weapon_runs: "weapon",
+  element_runs: "element",
+  difficulty_runs: "difficulty",
+  difficulty_survive_sec: "difficulty",
+} as const;
+
+/** Ступени пула ротации (docs/39-retention-mechanics.md П1). */
+export const POOL_TIERS = ["easy", "medium", "hard"] as const;
+export type PoolTier = (typeof POOL_TIERS)[number];
+
+/**
+ * Стихия оружия на сервере: в итоге забега приходит только id оружия. Таблицу
+ * сверяет тест с `core-game/src/content/weapons.ts` — новое оружие со стихией
+ * роняет его, пока строку не добавили.
+ */
+export const WEAPON_ELEMENTS: Readonly<Record<string, TaskElement>> = {
+  wardstone: "cold",
+  hearth: "fire",
+  storm: "lightning",
+  sting: "poison",
+};
+
+/**
  * Виды целей, которые двигает забег: `sum` копит за срок, `max` помнит лучший
  * забег. Новый вид — код здесь (и строка текста у клиента), новое задание на
- * готовом виде — строка каталога в панели.
+ * готовом виде — строка каталога в панели. `measure` получает фильтр строки
+ * каталога: у видов без фильтра он `null` и игнорируется.
  */
 export const RUN_KINDS = {
   /** сыграть забегов */
@@ -37,7 +84,29 @@ export const RUN_KINDS = {
   best_survival_sec: { op: "max", measure: (run: TaskRun) => Math.floor(run.survivalSec) },
   /** дорасти в одном забеге до уровня */
   run_level: { op: "max", measure: (run: TaskRun) => run.level },
-} as const satisfies Record<string, { op: "sum" | "max"; measure: (run: TaskRun) => number }>;
+  /** собрать опыт в сумме; забег без статистики — ноль */
+  xp_collected: { op: "sum", measure: (run: TaskRun) => run.xpCollected ?? 0 },
+  /** сыграть забег с оружием в наборе к концу */
+  weapon_runs: {
+    op: "sum",
+    measure: (run: TaskRun, filter?: RunFilter | null) => (run.weapons.some((weapon) => weapon.id === filter?.weapon) ? 1 : 0),
+  },
+  /** сыграть забег с оружием стихии */
+  element_runs: {
+    op: "sum",
+    measure: (run: TaskRun, filter?: RunFilter | null) =>
+      filter?.element !== undefined && run.weapons.some((weapon) => WEAPON_ELEMENTS[weapon.id] === filter.element) ? 1 : 0,
+  },
+  /** сыграть забег на сложности */
+  difficulty_runs: { op: "sum", measure: (run: TaskRun, filter?: RunFilter | null) => (run.difficulty === filter?.difficulty ? 1 : 0) },
+  /** продержаться в одном забеге на сложности, секунд */
+  difficulty_survive_sec: {
+    op: "max",
+    measure: (run: TaskRun, filter?: RunFilter | null) => (run.difficulty === filter?.difficulty ? Math.floor(run.survivalSec) : 0),
+  },
+  /** сыграть забег с оплаченным бустом */
+  boost_runs: { op: "sum", measure: (run: TaskRun) => (run.boosts.length > 0 ? 1 : 0) },
+} as const satisfies Record<string, { op: "sum" | "max"; measure: (run: TaskRun, filter?: RunFilter | null) => number }>;
 
 export type RunKind = keyof typeof RUN_KINDS;
 
@@ -109,7 +178,7 @@ export function visibleOn(params: TaskParams | null, platform: PlatformId): bool
   return params.platform === undefined || params.platform === platform;
 }
 
-export type TaskRun = Pick<RecordedRun, "difficulty" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict">;
+export type TaskRun = Pick<RecordedRun, "difficulty" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected">;
 
 /**
  * Засчитывается тот же забег, что приносит награду: с читами, отклонённый
@@ -153,6 +222,10 @@ export const taskDefSchema = z
     passPoints: z.number().int().nonnegative().max(10_000),
     sort: z.number().int().min(0).max(10_000),
     active: z.boolean(),
+    /** ступень пула ротации; `null` — строка в игре всегда (партнёрские цели, достижения, добавленные руками) */
+    tier: z.enum(POOL_TIERS).nullable().default(null),
+    /** фильтр цели — оружие, стихия или сложность; у видов без фильтра пусто */
+    filter: runFilterSchema.nullable().default(null),
     /** лимит выполнений партнёрской цели — сколько игроков получат награду; `null` — без лимита, и панель до лимита поля не слала */
     limit: z.number().int().min(TASK_LIMIT_RANGE.min).max(TASK_LIMIT_RANGE.max).nullable().default(null),
     /** картинка 1:1 партнёрской цели (Р82) — id из `media`; `null` — значок вида, и панель до картинок поля не слала */
@@ -176,6 +249,21 @@ export const taskDefSchema = z
     path: ["params"],
   })
   // Партнёрское действие делается, а не копится: за срок его не «наберёшь».
+  .refine((task) => task.tier === null || (task.period !== "achievement" && !isCheckedKind(task.kind)), {
+    message: "ступень — только у дневных и недельных заданий",
+    path: ["tier"],
+  })
+  .superRefine((task, ctx) => {
+    const key = filterKeyOf(task.kind);
+    if (key === null) {
+      if (task.filter !== null) ctx.addIssue({ code: "custom", message: "у этого вида фильтра нет", path: ["filter"] });
+      return;
+    }
+    const keys = task.filter === null ? [] : Object.entries(task.filter).filter(([, value]) => value !== undefined).map(([name]) => name);
+    if (keys.length !== 1 || keys[0] !== key) {
+      ctx.addIssue({ code: "custom", message: `у этого вида нужен фильтр: ${FILTER_LABELS[key]}`, path: ["filter"] });
+    }
+  })
   .refine((task) => !isCheckedKind(task.kind) || task.target === 1, { message: "у партнёрской цели цель — 1", path: ["target"] })
   // Повтор — только там, где каждый срок проверяет бот: повтор перехода по
   // ссылке платил бы каждый день за одно и то же нажатие.
@@ -184,7 +272,14 @@ export const taskDefSchema = z
     path: ["period"],
   });
 
-function isCheckedKind(kind: TaskKind): boolean {
+const FILTER_LABELS = { weapon: "оружие", element: "стихия", difficulty: "сложность" } as const;
+
+/** Ключ фильтра вида; `null` — у вида фильтра нет. */
+export function filterKeyOf(kind: TaskKind): "weapon" | "element" | "difficulty" | null {
+  return Object.hasOwn(RUN_FILTER_KEYS, kind) ? RUN_FILTER_KEYS[kind as keyof typeof RUN_FILTER_KEYS] : null;
+}
+
+export function isCheckedKind(kind: TaskKind): boolean {
   return (CHECKED_KINDS as readonly string[]).includes(kind);
 }
 

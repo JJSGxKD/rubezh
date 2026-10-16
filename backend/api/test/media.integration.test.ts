@@ -1,10 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { imageIdOf } from "../src/modules/media/image-rules.js";
 import { PrismaMediaRepository } from "../src/modules/media/media.repository.js";
 import { webp } from "./helpers/webp-samples.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Картинки на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -20,7 +20,7 @@ describe.skipIf(DATABASE_URL === "")("картинки на живом Postgres"
   let repository: PrismaMediaRepository;
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 5, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 5);
     repository = new PrismaMediaRepository(prisma);
   });
 

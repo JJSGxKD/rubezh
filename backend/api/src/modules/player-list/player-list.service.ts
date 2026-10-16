@@ -1,8 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { ForbiddenError } from "../../common/domain-error.js";
+import { ForbiddenError, ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
+import { isHiddenKind } from "../restrictions/restriction-catalog.js";
+import { HIDDEN_KIND_PERMISSION } from "../restrictions/restriction-visibility.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
-import { decodePlayerCursor, encodePlayerCursor, type PlayerListQuery } from "./player-list-query.js";
+import { PLAYER_LIST_INVALID_TEXT, decodePlayerCursor, encodePlayerCursor, type PlayerListQuery } from "./player-list-query.js";
 import { PLAYER_LIST_REPOSITORY, type PlayerListRepository, type PlayerListRow } from "./player-list.repository.js";
 
 /**
@@ -50,12 +52,18 @@ export class PlayerListService {
 
   async list(actor: AccountRef, query: PlayerListQuery): Promise<PlayerListView> {
     await this.roles.require(actor, "players.view");
-    const [withPii, withPayments] = await Promise.all([this.roles.can(actor, "players.pii.view"), this.roles.can(actor, "analytics.revenue.view")]);
+    const [withPii, withPayments, withHidden] = await Promise.all([
+      this.roles.can(actor, "players.pii.view"),
+      this.roles.can(actor, "analytics.revenue.view"),
+      this.roles.can(actor, HIDDEN_KIND_PERMISSION),
+    ]);
     if (query.payer !== undefined && !withPayments) throw new ForbiddenError("Фильтр по оплатам — с правом на выручку");
+    // Скрытого вида для сотрудника без права нет: фильтр по нему — неизвестное значение (T-0112).
+    if (!withHidden && query.restricted !== undefined && isHiddenKind(query.restricted)) throw new ValidationError(PLAYER_LIST_INVALID_TEXT);
 
     const { sort, order, cursor, limit, ...filters } = query;
     const rows = await withTimeout(
-      this.repository.page({ filters, sort, order, cursor: cursor === undefined ? null : decodePlayerCursor(cursor, sort), limit: limit + 1 }),
+      this.repository.page({ filters, sort, order, cursor: cursor === undefined ? null : decodePlayerCursor(cursor, sort), limit: limit + 1, showHidden: withHidden }),
       DB_TIMEOUT_MS,
       "список игроков",
     );
@@ -66,10 +74,14 @@ export class PlayerListService {
       await this.roles.audit({ actorAccountId: actor.accountId, action: "players.pii.view", target: null, after: { list: filters, shown: page.length } });
     }
     return {
-      players: page.map((row) => itemOf(row, withPii, withPayments)),
+      players: page.map((row) => itemOf(row, withPii, withPayments, withHidden)),
       nextCursor: rows.length > limit && last !== undefined ? encodePlayerCursor({ sort, value: cursorValue(last, sort), accountId: last.accountId }) : null,
     };
   }
+}
+
+function visibleKinds(kinds: readonly string[], withHidden: boolean): string[] {
+  return withHidden ? [...kinds] : kinds.filter((kind) => !isHiddenKind(kind));
 }
 
 function cursorValue(row: PlayerListRow, sort: PlayerListQuery["sort"]): number {
@@ -78,7 +90,7 @@ function cursorValue(row: PlayerListRow, sort: PlayerListQuery["sort"]): number 
   return row.level;
 }
 
-function itemOf(row: PlayerListRow, withPii: boolean, withPayments: boolean): PlayerListItem {
+function itemOf(row: PlayerListRow, withPii: boolean, withPayments: boolean, withHidden: boolean): PlayerListItem {
   return {
     accountId: row.accountId,
     platform: row.platform,
@@ -92,7 +104,8 @@ function itemOf(row: PlayerListRow, withPii: boolean, withPayments: boolean): Pl
     payer: withPayments ? row.payer : null,
     canMessage: row.canMessage,
     banned: row.bannedAt === null ? null : { at: row.bannedAt.toISOString(), reason: row.banReason },
-    restrictions: row.restrictions,
+    // Репозиторий скрытые виды без права и так не отдаёт; здесь — второй замок.
+    restrictions: visibleKinds(row.restrictions, withHidden),
     pii: withPii ? { platformUserId: row.platformUserId, username: row.username } : null,
   };
 }

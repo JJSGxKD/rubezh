@@ -5,6 +5,7 @@ import { APP_MODULES } from "../src/app.module.js";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { HealthController } from "../src/health/health.controller.js";
 import { createHttpApp } from "../src/http-app.js";
+import { ServerErrorAlarm } from "../src/modules/admin-notify/server-error-alarm.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 
 /**
@@ -24,7 +25,7 @@ const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const REDIS_URL = process.env.PLAYTEST_TEST_REDIS_URL ?? "";
 
 describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("приложение целиком", () => {
-  it("собирается из всех модулей и отвечает на /health", async () => {
+  it("собирается из всех модулей, отвечает на /health и держит тревогу 5xx", async () => {
     const config = loadAppConfig({
       NODE_ENV: "test",
       ...AUTH_ENV,
@@ -47,6 +48,9 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("приложение �
       await app.getHttpAdapter().getInstance().ready();
       const response = await app.inject({ method: "GET", url: "/health" });
       expect(response.statusCode).toBe(200);
+      // Хук 5xx в http-app.ts ставится, только если провайдер найден, и молча:
+      // без этой проверки тревога пропала бы из приложения без единой строки в логе.
+      expect(app.get(ServerErrorAlarm, { strict: false })).toBeInstanceOf(ServerErrorAlarm);
     } finally {
       await app.close();
     }

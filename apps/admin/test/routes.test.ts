@@ -1,17 +1,20 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { Users } from "lucide-react";
 import { describe, expect, it } from "vitest";
-import { SECTION_GROUPS, SECTIONS as MENU, hrefOf, locateSection, parseRoute, resolveRoute, visibleGroups, visibleSections, type Section, type SectionGroup } from "../src/routes";
+import { SECTION_GROUPS, SECTIONS as MENU, filterGroups, hrefOf, locateSection, parseRoute, resolveRoute, visibleGroups, visibleSections, type Section, type SectionGroup } from "../src/routes";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../src/format";
 
 const SECTIONS: Section[] = [
-  { id: "players", title: "Игроки", hint: "карточка игрока", permission: "players.view" },
-  { id: "roles", title: "Роли", hint: "кто что может", permission: "roles.assign" },
+  { id: "players", title: "Игроки", hint: "карточка игрока", permission: "players.view", icon: Users },
+  { id: "roles", title: "Роли", hint: "кто что может", permission: "roles.assign", icon: Users },
 ];
+
+const AUDIT: Section = { id: "audit", title: "Аудит", hint: "кто что менял", permission: "audit.view", icon: Users };
 
 const GROUPS: SectionGroup[] = [
   { title: "Поддержка", sections: [SECTIONS[0] as Section] },
-  { title: "Команда", sections: [SECTIONS[1] as Section, { id: "audit", title: "Аудит", hint: "кто что менял", permission: "audit.view" }] },
+  { title: "Команда", sections: [SECTIONS[1] as Section, AUDIT] },
 ];
 
 describe("маршруты панели", () => {
@@ -40,7 +43,7 @@ describe("меню панели", () => {
   it("группа без открытых разделов не показывается, в остальных — только открытые", () => {
     expect(visibleGroups(["players.view", "audit.view"], GROUPS)).toEqual([
       { title: "Поддержка", sections: [SECTIONS[0]] },
-      { title: "Команда", sections: [{ id: "audit", title: "Аудит", hint: "кто что менял", permission: "audit.view" }] },
+      { title: "Команда", sections: [AUDIT] },
     ]);
     expect(visibleGroups(["players.view"], GROUPS).map((group) => group.title)).toEqual(["Поддержка"]);
     expect(visibleGroups([], GROUPS)).toEqual([]);
@@ -63,10 +66,44 @@ describe("меню панели", () => {
     }
   });
 
+  it("у каждого раздела есть значок — компонент, а не пустое место в меню", () => {
+    for (const section of MENU) {
+      expect(["function", "object"], section.id).toContain(typeof section.icon);
+      expect(section.icon, section.id).toBeTruthy();
+    }
+  });
+
   it("у каждого раздела меню есть экран, и каждый экран стоит в меню", () => {
     const source = readFileSync(fileURLToPath(new URL("../src/screens/sections.tsx", import.meta.url)), "utf8");
     const screens = [...source.matchAll(/^\s+"?([a-z-]+)"?: \(/gm)].map((match) => match[1]);
     expect([...screens].sort()).toEqual(MENU.map((section) => section.id).sort());
+  });
+});
+
+describe("поиск раздела в меню", () => {
+  const titles = (groups: SectionGroup[]) => groups.map((group) => `${group.title}: ${group.sections.map((section) => section.title).join(", ")}`);
+
+  it("совпадение в названии без регистра — группа остаётся только с совпавшими разделами", () => {
+    expect(titles(filterGroups(GROUPS, "игр"))).toEqual(["Поддержка: Игроки"]);
+    expect(titles(filterGroups(GROUPS, "  ИГРОКИ "))).toEqual(["Поддержка: Игроки"]);
+    expect(titles(filterGroups(GROUPS, "ауд"))).toEqual(["Команда: Аудит"]);
+  });
+
+  it("совпадение в подсказке тоже находит раздел", () => {
+    expect(titles(filterGroups(GROUPS, "карточка"))).toEqual(["Поддержка: Игроки"]);
+    expect(titles(filterGroups(GROUPS, "что"))).toEqual(["Команда: Роли, Аудит"]);
+  });
+
+  it("пустой запрос — все группы, ничего не совпало — пусто", () => {
+    expect(filterGroups(GROUPS, "")).toEqual(GROUPS);
+    expect(filterGroups(GROUPS, "   ")).toEqual(GROUPS);
+    expect(filterGroups(GROUPS, "нет-такого")).toEqual([]);
+  });
+
+  it("на настоящем меню: «рассыл» — Рассылки, «антифрод» — Разбор забегов по подсказке", () => {
+    expect(filterGroups(SECTION_GROUPS, "рассыл").flatMap((group) => group.sections.map((section) => section.title))).toContain("Рассылки");
+    expect(filterGroups(SECTION_GROUPS, "антифрод").flatMap((group) => group.sections.map((section) => section.title))).toEqual(["Разбор забегов"]);
+    expect(filterGroups(SECTION_GROUPS, "")).toEqual(SECTION_GROUPS);
   });
 });
 

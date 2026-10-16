@@ -111,12 +111,11 @@ export class WorldRenderer {
       const rim = enemyRim(rankOf(type));
       for (let stage = 0; stage < this.stageCount; stage++) {
         const key = `bh-enemy-${type.id}-s${String(stage)}`;
-        // Тень запечена в текстуру: отдельный спрайт на тень удвоил бы число
-        // объектов. Тело рисуется прежним радиусом, поэтому размер врага на
-        // экране и хитбокс не меняются.
+        // Тени под врагом нет: на живом тесте запечённая тень смотрелась плохо.
+        // Текстура ровно по размеру тела, тело в её центре, как у снарядов, поэтому
+        // размер врага на экране и хитбокс прежние.
         ensureShapeTexture(scene, key, type.radius, stageColor(colorByType[index], stage), ENEMY_LOOKS[type.pattern].shape, {
           core: stageCore(stage),
-          shadow: true,
           rim: rim === null ? null : { color: rim.color, width: rim.width * unitScale },
         });
         this.textureKeyByType.push(key);

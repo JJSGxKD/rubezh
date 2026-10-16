@@ -3,7 +3,7 @@ import { Bot, Check, Crown, Crosshair, ExternalLink, Hourglass, Megaphone, Play,
 import { Badge, Button, Card, ProgressBar } from "../../design-system/components";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
-import { isClaimable, isOpenKind, slotsText, tabOf, taskLink, type TaskItem } from "../../state/tasks-api";
+import { goalFilterParams, isClaimable, isOpenKind, slotsText, tabOf, taskLink, type TaskItem } from "../../state/tasks-api";
 import { formatCountdown, msUntilReset } from "./schedule";
 import { TaskImage } from "./task-image";
 import { RewardChips } from "./task-reward";
@@ -169,5 +169,5 @@ function achievementName(task: TaskItem): string | null {
 function goalText(task: TaskItem): string {
   const key = `task.kind.${task.kind}`;
   if (!hasTranslation(key)) return formatNumber(task.target);
-  return t(key, { target: task.target, count: formatNumber(task.target), time: formatCountdown(task.target * 1000) });
+  return t(key, { target: task.target, count: formatNumber(task.target), time: formatCountdown(task.target * 1000), ...goalFilterParams(task) });
 }

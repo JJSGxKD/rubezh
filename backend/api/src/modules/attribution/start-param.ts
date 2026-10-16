@@ -1,3 +1,5 @@
+import { LINK_CODE } from "../links/link-code.js";
+
 /**
  * Параметр запуска Mini App (`start_param`) — откуда пришёл игрок
  * (docs/34-stage3-plan.md, WP6; docs/24-attribution-and-sharing.md §5).
@@ -15,6 +17,10 @@
  * - `click` — `c-<код>`, ссылка через нашу редирект-страницу. Строка клика с
  *   источником и кампанией появится вместе с ней, а код запоминается уже
  *   сейчас: сессии, не записанные сегодня, задним числом не восстановятся;
+ * - `link` — `l-<код ссылки>`, прямая ссылка кампании без переходника
+ *   (docs/35-stage4-plan.md Р95): клика нет, есть только запуск. Касание то
+ *   же, что у `click`; код — тот же, что в `/r/<код>`, и проверяется тем же
+ *   правилом `LINK_CODE`, второго правила кода нет;
  * - `invite` — приглашение друга из раздела «Друзья»;
  * - `friend` — `f-<код>`, ссылка дружбы: открыл — стал другом владельца
  *   ссылки (docs/35-stage4-plan.md §3.8). Код — ключ к строке `friend_link`,
@@ -32,7 +38,7 @@
  * потом чинил отдельный крон.
  */
 
-export const START_KINDS = ["organic", "click", "invite", "telegram_affiliate", "friend", "notification", "unknown"] as const;
+export const START_KINDS = ["organic", "click", "invite", "telegram_affiliate", "friend", "notification", "link", "unknown"] as const;
 export type StartKind = (typeof START_KINDS)[number];
 
 export interface StartParam {
@@ -51,6 +57,8 @@ const TELEGRAM_AFFILIATE = /^_tgr_([A-Za-z0-9_-]{1,59})$/;
 const FRIEND = /^f-([A-Za-z0-9]{8,32})$/;
 /** Кнопка уведомления в боте — `modules/notifications-bot/bot-notify-texts.ts`. */
 const NOTIFICATION = /^n-([a-z_]{3,32})$/;
+/** Прямая ссылка кампании: префикс, дальше — код ссылки по `LINK_CODE`. */
+const DIRECT_LINK_PREFIX = "l-";
 /** Приглашение друга — `app-shell/src/screens/meta/friends.tsx`, `INVITE_START_PARAM`. */
 const INVITE = "invite";
 
@@ -68,6 +76,10 @@ export function parseStartParam(value: string | null | undefined): StartParam {
   if (friend !== null) return { kind: "friend", raw: value, ref: friend[1] ?? null };
   const notification = NOTIFICATION.exec(value);
   if (notification !== null) return { kind: "notification", raw: value, ref: notification[1] ?? null };
+  if (value.startsWith(DIRECT_LINK_PREFIX)) {
+    const code = value.slice(DIRECT_LINK_PREFIX.length);
+    if (LINK_CODE.test(code)) return { kind: "link", raw: value, ref: code };
+  }
   if (value === INVITE) return { kind: "invite", raw: value, ref: null };
   return { kind: "unknown", raw: value, ref: null };
 }

@@ -5,6 +5,7 @@ import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { decideCheckout } from "../src/modules/payments/checkout-answer.js";
 import { PaymentConfirmation, type ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
+import { PurchaseRevocation } from "../src/modules/payments/purchase-revocation.js";
 import { PaymentsHooks, type SubscriptionChange } from "../src/modules/payments/payments-hooks.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { PaymentsService } from "../src/modules/payments/payments.service.js";
@@ -64,7 +65,7 @@ function setup(settings = config()) {
   fulfillment.register("vip", async (purchase) => void fulfilled.push(purchase));
   const payments = new PaymentsService(settings, purchases, new MemoryRunsRepository(), providers, switchesOf(settings));
   const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), hooks);
-  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
+  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers, new PurchaseRevocation()), new RunsHooks(), providers, fulfillment, purchases);
   return { purchases, api, providers, hooks, payments, confirmation, queue, fulfilled };
 }
 

@@ -1,8 +1,10 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import type { PlayerFilters, PlayerSort } from "../src/modules/player-list/player-list-query.js";
+import { PrismaPlayerListRepository } from "../src/modules/player-list/player-list.repository.js";
 import { PrismaRestrictionsRepository, REPLACED_COMMENT, type NewRestriction } from "../src/modules/restrictions/restrictions.repository.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Ограничения на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -22,7 +24,7 @@ describe.skipIf(DATABASE_URL === "")("ограничения на живом Pos
   let repository: PrismaRestrictionsRepository;
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     repository = new PrismaRestrictionsRepository(prisma);
   });
@@ -115,5 +117,49 @@ describe.skipIf(DATABASE_URL === "")("ограничения на живом Pos
 
     await prisma.$executeRaw`DELETE FROM account WHERE account_id = ${target}::uuid`;
     expect(await repository.byAccount(target, 10)).toEqual([]);
+  });
+
+  it("скрытый вид: база его принимает, он действует и виден порту «можно ли»", async () => {
+    const [target, owner] = [await account(), await account()];
+    const at = new Date();
+    const { created } = await repository.impose([row(target, owner, { kind: "separate_board", startsAt: at, endsAt: null, notify: false })], at);
+
+    expect(created[0]).toMatchObject({ kind: "separate_board", notify: false });
+    expect((await repository.active(target, at)).map((item) => item.kind)).toEqual(["separate_board"]);
+    expect(await repository.activeAccounts(["separate_board"], at, 100_000)).toContain(target);
+  });
+
+  it("список игроков: без права вид исключён из видов строки и из фильтров «any», «none» и по самому виду; с правом — как у остальных", async () => {
+    const [onlyHidden, mixed, plain, owner] = [await account(), await account(), await account(), await account()];
+    const at = new Date();
+    const own = (accountId: string, kind: string) => row(accountId, owner, { kind, startsAt: at, endsAt: null, notify: false });
+    await repository.impose([own(onlyHidden, "separate_board"), own(mixed, "separate_board"), own(mixed, "promo_codes")], at);
+    const lists = new PrismaPlayerListRepository(prisma);
+    const mine = [onlyHidden, mixed, plain];
+    const found = async (restricted: PlayerFilters["restricted"], showHidden: boolean, sort: PlayerSort = "registered") => {
+      const rows = await lists.page({ filters: { restricted }, sort, order: "desc", cursor: null, limit: 100_000, showHidden });
+      return new Map(rows.filter((item) => mine.includes(item.accountId)).map((item) => [item.accountId, item.restrictions]));
+    };
+
+    for (const sort of ["registered", "level"] as const) {
+      const blind = await found("any", false, sort);
+      expect([...blind.keys()].sort(), sort).toEqual([mixed]);
+      expect(blind.get(mixed), sort).toEqual(["promo_codes"]);
+
+      const sighted = await found("any", true, sort);
+      expect([...sighted.keys()].sort(), sort).toEqual([onlyHidden, mixed].sort());
+      expect(sighted.get(onlyHidden), sort).toEqual(["separate_board"]);
+      expect(sighted.get(mixed), sort).toEqual(["promo_codes", "separate_board"]);
+    }
+
+    // «Без ограничений» без права включает аккаунт, у которого только скрытый вид, — для сотрудника его нет.
+    expect([...(await found("none", false)).keys()].sort()).toEqual([onlyHidden, plain].sort());
+    expect([...(await found("none", true)).keys()]).toEqual([plain]);
+    // Фильтр по самому виду без права не находит никого.
+    expect((await found("separate_board", false)).size).toBe(0);
+    expect([...(await found("separate_board", true)).keys()].sort()).toEqual([onlyHidden, mixed].sort());
+    // Без указания «видит скрытые» вид исключён — безопасное умолчание.
+    const rows = await lists.page({ filters: { restricted: "any" }, sort: "registered", order: "desc", cursor: null, limit: 100_000 });
+    expect(rows.some((item) => item.accountId === onlyHidden)).toBe(false);
   });
 });

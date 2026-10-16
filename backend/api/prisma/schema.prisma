@@ -102,6 +102,8 @@ enum RefundReason {
   external
   /// товар не выдать по сути — например, снят с витрины: звёзды возвращаются
   undeliverable
+  /// вернула поддержка из панели; остаток покупки забирается после возврата
+  manual
 }
 
 // Откуда открыли игру (docs/34-stage3-plan.md, WP6): разбор параметра запуска
@@ -116,6 +118,8 @@ enum StartKind {
   friend
   /// кнопка под уведомлением в боте `n-<вид>` (WP28)
   notification
+  /// прямая ссылка кампании l-<код> (Р95)
+  link
 }
 
 // Где началась сессия: в Mini App площадки, в браузере (вход разработчика,
@@ -186,6 +190,9 @@ model Account {
   settings      AccountSettings?
   // Конверсии закупленной рекламы (WP43)
   adConversions AdConversion[]
+  // Недельные сезоны рейтинга (T-0110)
+  seasonResults SeasonResult[]
+  seasonRewards SeasonReward[]
 
   // Друзья (WP14)
   friendLink       FriendLink?
@@ -453,6 +460,8 @@ model Run {
   @@index([accountId, finishedAt])
   // Пересборка лидерборда: лучший рейтинговый забег каждого по сложности.
   @@index([difficulty, ranked, survivalSec])
+  // Закрытие недельного сезона: рейтинговые забеги сложности за окно недели.
+  @@index([difficulty, finishedAt])
   // Очередь разбора: подозрительные и отклонённые, свежие первыми.
   @@index([verdict, finishedAt])
   @@map("run")
@@ -1025,6 +1034,8 @@ model Link {
   network        String?        @db.VarChar(16)
   /// когда регистрация уходит в сеть: `first_run` — после первого засчитанного забега, `launch` — при первом запуске
   registrationOn String         @default("first_run") @map("registration_on") @db.VarChar(16)
+  /// куда ведёт: app — Mini App, bot — чат с ботом, landing — лендинг
+  target         String         @default("app") @db.VarChar(16)
   clicks         LinkClick[]
   conversions    AdConversion[]
 
@@ -1495,6 +1506,14 @@ model TaskDef {
   /// картинка 1:1 партнёрского задания (Р82); `null` — значок вида у клиента.
   /// Только у партнёрской цели — `CHECK` в миграции
   imageId         String?    @map("image_id") @db.VarChar(64)
+  /// ступень пула ротации (docs/39-retention-mechanics.md П1): из строк
+  /// ступени игрок видит набор дня или недели; `null` — строка в игре всегда
+  /// (партнёрские цели, достижения, добавленные руками). `CHECK` в миграции
+  tier            String?    @db.VarChar(8)
+  /// фильтр цели забега — оружие, стихия или сложность (`tasks/task-rules.ts`,
+  /// `RUN_FILTER_KEYS`); отдельно от `params`, чтобы партнёрскую цель по-прежнему
+  /// отличал именно он
+  filter          Json?
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
@@ -1528,7 +1547,7 @@ model AccountRestriction {
   /// сообщить игроку: плашка там, где он упёрся; `false` — молча (О40)
   notify        Boolean
   /// кто наложил; без внешнего ключа — запись переживает аккаунт модератора.
-  /// `null` — перенесено из прежней блокировки
+  /// `null` — система (возврат оплаты) или перенос из прежней блокировки
   imposedBy     String?   @map("imposed_by") @db.Uuid
   liftedAt      DateTime? @map("lifted_at") @db.Timestamptz(3)
   liftedBy      String?   @map("lifted_by") @db.Uuid
@@ -1978,11 +1997,25 @@ model Partner {
   createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+  /// Telegram ID партнёра — для будущего входа в его кабинет; уникален среди партнёров (Р96)
+  telegramId     String?  @unique @map("telegram_id") @db.VarChar(20)
+  /// applied — заявка, active — активен, paused — приостановлен, rejected — отклонён;
+  /// новых игроков к партнёру привязывает только active, прежние привязки статус не трогает
+  status         String   @default("active") @db.VarChar(16)
+  /// страна, где партнёр получает выплаты, — ISO-код из двух букв
+  country        String?  @db.VarChar(2)
+  /// валюта выплаты — код из ядра курсов (`@bh/fx`)
+  payoutCurrency String?  @map("payout_currency") @db.VarChar(8)
+  /// реквизиты словами: «USDT TRC-20 на …», «карта Тинькофф»
+  payoutMethod   String?  @map("payout_method") @db.VarChar(200)
+  /// доля от платежей приведённых игроков, 0–100: записывается, но пока не начисляется (О44)
+  sharePercent   Decimal? @map("share_percent") @db.Decimal(5, 2)
 
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
 
   @@index([createdAt])
+  @@index([status])
   @@map("partner")
 }
 
@@ -2150,4 +2183,75 @@ model TesterCompensation {
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
   @@map("tester_compensation")
+}
+
+// Недельный сезон рейтинга (docs/39-retention-mechanics.md Р1, tasks/T-0110)
+
+/// Закрытый недельный сезон (календарная неделя UTC). Строка появляется в
+/// транзакции закрытия первой: уникальный `season_key` делает закрытие
+/// идемпотентным и безопасным при двух репликах. Незакрытых сезонов в таблице нет.
+model Season {
+  /// дата понедельника: `2026-11-02`
+  seasonKey String   @id @map("season_key") @db.VarChar(10)
+  startsAt  DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt    DateTime @map("ends_at") @db.Timestamptz(3)
+  closedAt  DateTime @map("closed_at") @db.Timestamptz(3)
+  /// сколько аккаунтов попали в итоги хоть одной сложности
+  players   Int
+  /// скольким назначена награда
+  rewarded  Int
+
+  results SeasonResult[]
+  rewards SeasonReward[]
+
+  @@map("season")
+}
+
+/// Итог аккаунта на сложности за сезон: лучшее рейтинговое время недели и
+/// окончательное место. Ограничение рейтинга на момент закрытия — аккаунта
+/// в итогах нет. Пишется закрытием один раз.
+model SeasonResult {
+  seasonKey  String     @map("season_key") @db.VarChar(10)
+  accountId  String     @map("account_id") @db.Uuid
+  difficulty Difficulty
+  bestSec    Float      @map("best_sec")
+  place      Int
+  /// сколько игроков было в таблице сложности
+  boardSize  Int        @map("board_size")
+
+  season  Season  @relation(fields: [seasonKey], references: [seasonKey], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([seasonKey, accountId, difficulty])
+  @@index([seasonKey, difficulty, place])
+  // История аккаунта: его сезоны.
+  @@index([accountId, seasonKey])
+  @@map("season_result")
+}
+
+/// Награда аккаунта за сезон — одна на пару (сезон, аккаунт). Ждёт «Забрать»:
+/// `pending` → `claimed` одним условным обновлением. Монеты кладёт кошелёк
+/// ключом `season:<сезон>:<аккаунт>`; престиж только записан — хранилища очков
+/// престижа пока нет (достижения, К1).
+model SeasonReward {
+  seasonKey  String      @map("season_key") @db.VarChar(10)
+  accountId  String      @map("account_id") @db.Uuid
+  coins      Int
+  prestige   Int
+  /// сложность награды за место; у награды за порог — `null`
+  difficulty Difficulty?
+  place      Int?
+  /// `place` или `threshold`
+  kind       String      @db.VarChar(10)
+  /// `pending` или `claimed`
+  status     String      @db.VarChar(10)
+  claimedAt  DateTime?   @map("claimed_at") @db.Timestamptz(3)
+
+  season  Season  @relation(fields: [seasonKey], references: [seasonKey], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([seasonKey, accountId])
+  // Ждущие награды аккаунта: знак меню и список «Забрать».
+  @@index([accountId, status])
+  @@map("season_reward")
 }

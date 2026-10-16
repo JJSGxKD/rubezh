@@ -1,8 +1,8 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaDailyRepository } from "../src/modules/daily/daily.repository.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Награда дня на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -26,7 +26,7 @@ describe.skipIf(DATABASE_URL === "")("награда дня на живом Post
   }
 
   beforeAll(() => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     repository = new PrismaDailyRepository(prisma);
   });

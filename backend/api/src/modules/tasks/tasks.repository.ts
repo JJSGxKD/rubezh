@@ -3,7 +3,7 @@ import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { TASK_KIND_IDS, TASK_PERIODS, taskParamsSchema, type TaskDef, type TaskKind, type TaskParticipation, type TaskPeriod } from "./task-rules.js";
+import { POOL_TIERS, TASK_KIND_IDS, TASK_PERIODS, runFilterSchema, taskParamsSchema, type TaskDef, type TaskKind, type TaskParticipation, type TaskPeriod } from "./task-rules.js";
 
 /**
  * Задания в базе: каталог (`task_def`), прогресс по срокам (`task_progress`)
@@ -92,6 +92,8 @@ const defSchema = z.object({
   sort: z.number().int(),
   active: z.boolean(),
   params: z.unknown(),
+  tier: z.enum(POOL_TIERS).nullable(),
+  filter: z.unknown(),
 });
 
 const progressSchema = z.object({ task_id: z.string(), period_start: z.string(), value: z.number().int(), done: z.boolean(), claimed: z.boolean() });
@@ -112,7 +114,7 @@ export class PrismaTasksRepository implements TasksRepository {
 
   async catalog(): Promise<TaskDef[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id
+      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, tier, filter
       FROM task_def ORDER BY period, sort, task_id`;
     const defs: TaskDef[] = [];
     for (const raw of rows) {
@@ -125,11 +127,18 @@ export class PrismaTasksRepository implements TasksRepository {
         this.logger.error(JSON.stringify({ module: "tasks", event: "task_params_invalid", taskId: row.task_id }));
         continue;
       }
+      const filter = row.filter === null ? null : runFilterSchema.safeParse(row.filter);
+      if (filter !== null && !filter.success) {
+        this.logger.error(JSON.stringify({ module: "tasks", event: "task_filter_invalid", taskId: row.task_id }));
+        continue;
+      }
       defs.push({
         taskId: row.task_id,
         period: row.period,
         kind: row.kind,
         params: params === null ? null : params.data,
+        filter: filter === null ? null : filter.data,
+        tier: row.tier,
         target: row.target,
         title: row.title,
         coins: row.coins,
@@ -191,9 +200,9 @@ export class PrismaTasksRepository implements TasksRepository {
   async insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean> {
     return (
       (await this.prisma.$executeRaw`
-        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, created_at, updated_at, updated_by)
+        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, tier, filter, created_at, updated_at, updated_by)
         VALUES (${task.taskId}, ${task.period}::"TaskPeriod", ${task.kind}, ${task.target}, ${task.title}, ${task.coins}, ${task.gems}, ${task.shards},
-                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${task.limit}, ${task.image}, ${at}, ${at}, ${actorAccountId}::uuid)
+                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${task.limit}, ${task.image}, ${task.tier}, ${filterJson(task)}::jsonb, ${at}, ${at}, ${actorAccountId}::uuid)
         ON CONFLICT (task_id) DO NOTHING`) > 0
     );
   }
@@ -205,7 +214,7 @@ export class PrismaTasksRepository implements TasksRepository {
       (await this.prisma.$executeRaw`
         UPDATE task_def SET target = ${task.target}, title = ${task.title}, coins = ${task.coins}, gems = ${task.gems}, shards = ${task.shards},
           pass_points = ${task.passPoints}, sort = ${task.sort}, active = ${task.active}, params = ${paramsJson(task)}::jsonb,
-          completion_limit = ${task.limit}, image_id = ${task.image}, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
+          completion_limit = ${task.limit}, image_id = ${task.image}, tier = ${task.tier}, filter = ${filterJson(task)}::jsonb, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
         WHERE task_id = ${task.taskId}`) > 0
     );
   }
@@ -286,4 +295,9 @@ export class PrismaTasksRepository implements TasksRepository {
 /** Параметры цели в колонку `jsonb`: у целей забега — пусто. */
 function paramsJson(task: Pick<TaskDef, "params">): string | null {
   return task.params === null ? null : JSON.stringify(task.params);
+}
+
+/** Фильтр цели в колонку `jsonb`: у видов без фильтра — пусто. */
+function filterJson(task: Pick<TaskDef, "filter">): string | null {
+  return task.filter === null ? null : JSON.stringify(task.filter);
 }

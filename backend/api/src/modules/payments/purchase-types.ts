@@ -6,7 +6,7 @@
 
 export type PaymentMode = "live" | "test";
 export type PurchaseStatus = "pending" | "paid" | "refunded";
-export type RefundReason = "test_mode" | "unused" | "external" | "undeliverable";
+export type RefundReason = "test_mode" | "unused" | "external" | "undeliverable" | "manual";
 /** Что продаётся: второй шанс в забеге, товар каталога магазина или VIP (WP10). */
 export type PurchaseProduct = "continue_run" | "shop_item" | "vip";
 
@@ -15,6 +15,9 @@ export type PurchaseProduct = "continue_run" | "shop_item" | "vip";
  * счёту. Каждое списание — своя строка покупки со ссылкой на первую.
  */
 export const SUBSCRIPTION_PRODUCTS: readonly PurchaseProduct[] = ["vip"];
+
+/** Что поддержка может сделать с покупкой сейчас: вернуть звёзды или повторить выдачу. */
+export type PurchaseAction = "refund" | "fulfill";
 
 export interface StoredPurchase {
   purchaseId: string;

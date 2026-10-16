@@ -1,5 +1,4 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import type { AdSuccess } from "../src/modules/ads/ads-rules.js";
@@ -8,6 +7,7 @@ import { PrismaAdsRepository, type AdBlockRow } from "../src/modules/ads/ads.rep
 import { claimVerdict } from "../src/modules/ads/ads.service.js";
 import { REWARDED_VIDEO_PLACES } from "../src/modules/ads/interstitial-gate.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Реклама на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -55,7 +55,7 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
   }
 
   beforeAll(async () => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 10, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 10);
     accounts = new PrismaAccountRepository(prisma);
     repository = new PrismaAdsRepository(prisma);
     await prisma.$executeRaw`INSERT INTO ad_network (network_key, name, active, priority, updated_at) VALUES (${network}, 'Проверка', true, 5, now())`;

@@ -4,7 +4,7 @@ import { ForbiddenError, ValidationError } from "../../common/domain-error.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import type { AccountPlatform } from "../auth/access-token.js";
 import { isDeveloperAccount } from "../auth/dev-login.js";
-import { permissionsOf, type Permission, type Role } from "./permissions.js";
+import { HIDDEN_AUDIT_PREFIX, permissionsOf, type Permission, type Role } from "./permissions.js";
 import { ROLES_REPOSITORY, type AuditEntry, type AuditQuery, type AuditRecord, type RoleAssignment, type RolesRepository } from "./roles.repository.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 
@@ -23,6 +23,9 @@ import type { PlatformId } from "../../platforms/ports/platform.js";
  * долго, а стоит мгновенный отзыв одного запроса по индексу на уже
  * авторизованном запросе.
  */
+
+/** Сколько страниц журнала просмотреть, добирая строки без скрытых записей. */
+const AUDIT_HIDDEN_PASSES = 20;
 
 export interface AccountRef {
   accountId: string;
@@ -107,7 +110,28 @@ export class RolesService {
   /** Страница журнала с отбором — под правом на чтение аудита. */
   async auditPage(actor: AccountRef, query: AuditQuery): Promise<AuditRecord[]> {
     await this.require(actor, "audit.view");
-    return await this.repository.auditPage(query);
+    if (await this.can(actor, "players.board.restrict")) return await this.repository.auditPage(query);
+    return await this.auditWithoutHidden(query);
+  }
+
+  /**
+   * Страница без записей скрытых действий (`players.board.*`): сотруднику без
+   * права их нет вовсе. Отобранные строки добираются следующими страницами
+   * репозитория — иначе скрытая запись оставляла бы дыру в странице и
+   * курсор «дальше» врал бы. Потолок обходов — от журнала, целиком
+   * состоящего из скрытого.
+   */
+  private async auditWithoutHidden(query: AuditQuery): Promise<AuditRecord[]> {
+    const shown: AuditRecord[] = [];
+    let before = query.before;
+    for (let pass = 0; pass < AUDIT_HIDDEN_PASSES && shown.length < query.limit; pass += 1) {
+      const rows = await this.repository.auditPage({ ...query, before, limit: query.limit });
+      shown.push(...rows.filter((row) => !row.action.startsWith(HIDDEN_AUDIT_PREFIX)));
+      const last = rows.at(-1);
+      if (last === undefined || rows.length < query.limit) break;
+      before = { createdAt: last.createdAt, entryId: last.entryId };
+    }
+    return shown.slice(0, query.limit);
   }
 
   /**

@@ -37,9 +37,19 @@ export function bonusTrack(qualified: number, steps: readonly { friends: number 
   return { fill: (passed - 1 + between) / (steps.length - 1), next, left };
 }
 
-/** Порядок экрана: друзей нет — крупное приглашение сверху; есть — список первым. */
-export function friendsLayout(friendsCount: number): "invite-first" | "list-first" {
-  return friendsCount === 0 ? "invite-first" : "list-first";
+export type FriendsLoadStatus = "loading" | "failed" | "ready";
+export type FriendsLayout = "pending" | "invite-first" | "list-first";
+
+/**
+ * Порядок экрана. Пока сервер не ответил, ни крупного приглашения, ни списка:
+ * иначе у игрока с друзьями приглашение мелькнуло бы и уступило место списку.
+ * Гость ответа не дождётся, а сбой загрузки — уже ответ: у обоих приглашение
+ * крупное, как и у тех, у кого друзей нет.
+ */
+export function friendsLayout(input: { withAccount: boolean; status: FriendsLoadStatus; friendsCount: number }): FriendsLayout {
+  if (!input.withAccount) return "invite-first";
+  if (input.status === "loading") return "pending";
+  return input.friendsCount === 0 ? "invite-first" : "list-first";
 }
 
 /**

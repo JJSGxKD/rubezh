@@ -38,6 +38,8 @@ export interface LeaderboardView {
     rank: number;
     name: string;
     photoUrl: string | null;
+    /** знак «Тестер» (Р87); поля нет — не тестер */
+    tester?: true;
     survivalSec: number;
     level: number;
     startingWeaponId: string;
@@ -133,6 +135,7 @@ export class RunsViewService {
             rank: index + 1,
             name: row.displayName,
             photoUrl: row.photoUrl,
+            ...(row.tester ? { tester: true as const } : {}),
             survivalSec: entry.survivalSec,
             level: row.level,
             startingWeaponId: row.startingWeaponId,
@@ -163,6 +166,7 @@ export class RunsViewService {
       rank,
       name: mine.displayName,
       photoUrl: mine.photoUrl,
+      ...(mine.tester ? { tester: true as const } : {}),
       survivalSec: mine.survivalSec,
       level: mine.level,
       startingWeaponId: mine.startingWeaponId,

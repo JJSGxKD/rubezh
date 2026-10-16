@@ -1,22 +1,31 @@
 import { describe, expect, it } from "vitest";
+import { actionTitle, isKnownAction } from "../src/api/audit";
 import { AdminApi } from "../src/api/client";
 import {
+  BAN_KIND,
   draftProblem,
   emptyDraft,
   endsAtOf,
   fetchRestrictionCatalog,
   fetchRestrictions,
+  hiddenKindsOf,
   imposeBody,
   imposeRestriction,
   leftText,
   liftRestriction,
+  notifyLocked,
+  notifyOf,
   outcomeText,
+  pickableKinds,
   previewRestriction,
+  restrictionCatalogSchema,
   submitLabel,
+  toggleKind,
   type Restriction,
   type RestrictDraft,
 } from "../src/api/restrictions";
 import { formatDateTime, localInput } from "../src/format";
+import { HELP } from "../src/ui/help";
 import { fakeFetch, json } from "./helpers";
 
 /**
@@ -135,5 +144,80 @@ describe("ограничения по API", () => {
     ]);
     expect(JSON.parse(String(calls[3]?.init.body))).toEqual({ ...body, comment: null });
     expect(JSON.parse(String(calls[4]?.init.body))).toEqual({ comment: "ошиблись" });
+  });
+});
+
+describe("скрытый вид в диалоге (T-0112)", () => {
+  const promo = { kind: "promo_codes", title: "Промокоды", effect: "Промокоды не погашаются.", permission: "players.restrict", silentAllowed: true, hidden: false };
+  const ads = { kind: "ad_rewards", title: "Награды за рекламу", effect: "Реклама за награду не предлагается.", permission: "players.restrict", silentAllowed: true, hidden: false };
+  const ban = { kind: "all", title: "Всё — блокировка", effect: "Вход в игру закрыт.", permission: "players.ban", silentAllowed: false, hidden: false };
+  const board = { kind: "separate_board", title: "Отдельная доска", effect: "Игрок остаётся в рейтинге и читает полную доску.", permission: "players.board.restrict", silentAllowed: true, hidden: true };
+  const reasons = [{ reason: "promo_abuse", title: "Злоупотребление промокодами", player: "Промокоды использовались не по правилам" }];
+
+  it("каталог с видом: он помечен скрытым; без поля `hidden` — не скрыт (сервер старше панели)", () => {
+    const legacy = { kind: promo.kind, title: promo.title, effect: promo.effect, permission: promo.permission, silentAllowed: promo.silentAllowed };
+    const parsed = restrictionCatalogSchema.parse({ kinds: [legacy, board], reasons });
+    expect(parsed.kinds.map((item) => [item.kind, item.hidden])).toEqual([
+      ["promo_codes", false],
+      ["separate_board", true],
+    ]);
+    expect([...hiddenKindsOf(parsed)]).toEqual(["separate_board"]);
+  });
+
+  it("в каталоге без вида пункта нет: скрытых нет, список видов и формы диалога прежние", () => {
+    const catalog = restrictionCatalogSchema.parse({ kinds: [promo, ads, ban], reasons });
+    expect(hiddenKindsOf(catalog).size).toBe(0);
+    expect(pickableKinds(catalog).map((item) => item.kind)).toEqual(["promo_codes", "ad_rewards"]);
+    const picked = toggleKind(draft({ kinds: ["promo_codes"], notify: true }), "ad_rewards", true, hiddenKindsOf(catalog));
+    expect(picked.kinds).toEqual(["promo_codes", "ad_rewards"]);
+    expect(picked.notify).toBe(true);
+  });
+
+  it("вид приходит в списке видов вместе с обычными — блокировка целиком в него не входит", () => {
+    const catalog = restrictionCatalogSchema.parse({ kinds: [promo, board, ban], reasons });
+    expect(pickableKinds(catalog).map((item) => item.kind)).toEqual(["promo_codes", "separate_board"]);
+  });
+
+  it("выбор вида снимает остальные галочки и выключает «сообщить игроку», переключатель недоступен", () => {
+    const hidden = hiddenKindsOf(restrictionCatalogSchema.parse({ kinds: [promo, ads, board], reasons }));
+    const picked = toggleKind(draft({ kinds: ["promo_codes", "ad_rewards"], notify: true }), "separate_board", true, hidden);
+
+    expect(picked.kinds).toEqual(["separate_board"]);
+    expect(picked.notify).toBe(false);
+    expect(notifyOf(picked, hidden)).toBe(false);
+    expect(notifyLocked(picked, hidden)).toBe(true);
+    expect(notifyLocked(draft({ kinds: ["promo_codes"] }), hidden)).toBe(false);
+    // Пока вид выбран, «сообщить» не включить и руками: тело наложения всё равно молча.
+    expect(imposeBody({ ...picked, notify: true }, NOW, hidden)).toMatchObject({ kinds: ["separate_board"], notify: false });
+  });
+
+  it("выбор другого вида или блокировки снимает скрытый (и наоборот); снятая галочка вида оставляет пустой набор", () => {
+    const hidden = hiddenKindsOf(restrictionCatalogSchema.parse({ kinds: [promo, board, ban], reasons }));
+    const withBoard = draft({ kinds: ["separate_board"], notify: false });
+
+    expect(toggleKind(withBoard, "promo_codes", true, hidden).kinds).toEqual(["promo_codes"]);
+    expect(toggleKind(withBoard, BAN_KIND, true, hidden).kinds).toEqual([BAN_KIND]);
+    expect(toggleKind(withBoard, "separate_board", false, hidden).kinds).toEqual([]);
+    // Ушли от вида — «сообщить игроку» снова доступно и включено, как в пустом диалоге.
+    expect(notifyLocked(toggleKind(withBoard, "separate_board", false, hidden), hidden)).toBe(false);
+    expect(toggleKind(withBoard, "separate_board", false, hidden).notify).toBe(true);
+    expect(toggleKind(withBoard, "promo_codes", true, hidden).notify).toBe(true);
+  });
+
+  it("блокировка целиком по-прежнему снимает остальные виды и всегда видна игроку", () => {
+    const hidden = hiddenKindsOf(restrictionCatalogSchema.parse({ kinds: [promo, board, ban], reasons }));
+    expect(toggleKind(draft({ kinds: ["promo_codes"] }), BAN_KIND, true, hidden).kinds).toEqual([BAN_KIND]);
+    expect(imposeBody(draft({ kinds: [BAN_KIND], notify: false }), NOW, hidden)).toMatchObject({ notify: true });
+  });
+
+  it("журнал: подписи действий вида нейтральные — «Отдельная доска: наложена» и «Отдельная доска: снята»", () => {
+    expect(actionTitle("players.board.set")).toBe("Отдельная доска: наложена");
+    expect(actionTitle("players.board.unset")).toBe("Отдельная доска: снята");
+    expect(isKnownAction("players.board.set")).toBe(true);
+    expect(isKnownAction("players.board.unset")).toBe(true);
+  });
+
+  it("подсказка к виду — одна фраза, без перечня того, что он делает с досками", () => {
+    expect(HELP.players.hiddenKind).toMatch(/^[^.]+\.$/);
   });
 });

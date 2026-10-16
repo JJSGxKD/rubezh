@@ -4,6 +4,7 @@ import { t } from "../../i18n";
 import { uiFeedback } from "../../state/ui-feedback";
 import { IconButton } from "./Button";
 import { ConnectionBanner } from "./ConnectionBanner";
+import { segmentFitClass, segmentedLayout, type SegmentedSize } from "./segmented-rules";
 import { tabLabelMode, type TabLabelMode } from "./tab-labels";
 
 /**
@@ -210,9 +211,6 @@ export interface SegmentedItem {
   badge?: number;
 }
 
-/** Сколько сегментов помещается строкой; больше — сетка в два столбца. */
-const SEGMENTS_IN_ROW = 3;
-
 /**
  * Переключатель видов внутри раздела: «ежедневные / недельные / достижения».
  * Выбранный сегмент поднимается объёмной плашкой — как кнопка, а не просто
@@ -224,12 +222,17 @@ const SEGMENTS_IN_ROW = 3;
  * прокручивается вбок, и выбранный всегда в кадре. Четыре и больше — сеткой
  * в два столбца: четыре русские подписи со знаками в 328 px не помещаются
  * ни при каком читаемом шрифте, а лента на два экрана прячет половину видов.
+ *
+ * `size="s"` — для тесных мест: на узком экране подписи сжимаются
+ * (`segmented-rules.ts`), а не уходят за край.
  */
 export function SegmentedControl(props: {
   items: readonly SegmentedItem[];
   activeId: string;
   label: string;
   onSelect(id: string): void;
+  /** "s" — для тесных мест: на узком экране подписи сжимаются (segmented-rules.ts). */
+  size?: SegmentedSize;
 }): ReactNode {
   const list = useRef<HTMLDivElement>(null);
   // Только вбок и только внутри ленты: `scrollIntoView` двигал бы и страницу.
@@ -249,7 +252,7 @@ export function SegmentedControl(props: {
       aria-label={props.label}
       className={[
         "surface-sunken relative gap-1 rounded-lg p-1",
-        props.items.length > SEGMENTS_IN_ROW ? "grid grid-cols-2" : "flex overflow-x-auto [scrollbar-width:none]",
+        segmentedLayout(props.items.length) === "grid" ? "grid grid-cols-2" : "flex overflow-x-auto [scrollbar-width:none]",
       ].join(" ")}
     >
       {props.items.map((item) => {
@@ -266,7 +269,8 @@ export function SegmentedControl(props: {
               props.onSelect(item.id);
             }}
             className={[
-              "relative inline-flex min-h-11 flex-1 shrink-0 items-center justify-center rounded-md px-2 font-display text-sm font-semibold whitespace-nowrap",
+              "relative inline-flex min-h-11 flex-1 shrink-0 items-center justify-center rounded-md font-display font-semibold whitespace-nowrap",
+              segmentFitClass(props.size ?? "m"),
               "transition-transform duration-(--duration-fast) ease-base active:scale-[0.97]",
               active ? "btn-secondary" : "text-text-muted",
             ].join(" ")}

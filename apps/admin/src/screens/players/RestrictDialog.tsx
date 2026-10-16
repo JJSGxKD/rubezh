@@ -7,12 +7,16 @@ import {
   draftProblem,
   emptyDraft,
   endsAtOf,
+  hiddenKindsOf,
   imposeBody,
   imposeRestriction,
+  notifyLocked,
   notifyOf,
+  pickableKinds,
   previewRestriction,
   submitLabel,
   TERMS,
+  toggleKind,
   type RestrictDraft,
   type Restriction,
   type RestrictionCatalog,
@@ -70,9 +74,12 @@ export function RestrictDialog({
   }, [open]);
 
   const set = (patch: Partial<RestrictDraft>) => setDraft((current) => ({ ...current, ...patch }));
+  // Скрытый вид приходит в каталоге только тем, у кого есть его право; остальные его не видят вовсе.
+  const hidden = useMemo(() => hiddenKindsOf(catalog), [catalog]);
   const banned = draft.kinds.includes(BAN_KIND);
+  const hiddenPicked = draft.kinds.some((kind) => hidden.has(kind));
   const endsAt = endsAtOf(draft, now);
-  const notify = notifyOf(draft);
+  const notify = notifyOf(draft, hidden);
 
   // Что увидит игрок — со слов сервера; спрашиваем, когда черновику есть что показать.
   const kindsKey = draft.kinds.join(",");
@@ -95,17 +102,14 @@ export function RestrictDialog({
     };
   }, [previewBody]);
 
-  const toggle = (kind: string, checked: boolean) => {
-    if (kind === BAN_KIND) return set({ kinds: checked ? [BAN_KIND] : [] });
-    set({ kinds: checked ? [...draft.kinds.filter((item) => item !== kind), kind] : draft.kinds.filter((item) => item !== kind) });
-  };
+  const toggle = (kind: string, checked: boolean) => setDraft((current) => toggleKind(current, kind, checked, hidden));
 
   const problem = draftProblem(draft, now) ?? preview?.problem ?? null;
   const ready = problem === null && preview !== null && previewBody !== null;
 
   const submit = async () => {
     // Срок «на N дней» — от нажатия, а не от открытия диалога.
-    const body = imposeBody(draft, new Date());
+    const body = imposeBody(draft, new Date(), hidden);
     if (body === null) return;
     setPending(true);
     setError(null);
@@ -120,7 +124,7 @@ export function RestrictDialog({
     onDone();
   };
 
-  const kinds = catalog.kinds.filter((item) => item.kind !== BAN_KIND);
+  const kinds = pickableKinds(catalog);
   const ban = catalog.kinds.find((item) => item.kind === BAN_KIND);
   const reason = catalog.reasons.find((item) => item.reason === draft.reason);
   const activeOf = (kind: string) => active.find((row) => row.kind === kind && row.state === "active");
@@ -192,16 +196,18 @@ export function RestrictDialog({
         </section>
 
         <section className="flex flex-col gap-1.5">
-          <label className={`flex items-center gap-2 text-sm ${banned ? "text-text-muted" : "cursor-pointer"}`}>
-            <input type="checkbox" checked={notify} disabled={banned} onChange={(event) => set({ notify: event.target.checked })} />
+          <label className={`flex items-center gap-2 text-sm ${notifyLocked(draft, hidden) ? "text-text-muted" : "cursor-pointer"}`}>
+            <input type="checkbox" checked={notify} disabled={notifyLocked(draft, hidden)} onChange={(event) => set({ notify: event.target.checked })} />
             Сообщить игроку
           </label>
           <p className="text-xs text-text-muted">
             {banned
               ? "Блокировку игрок видит при входе — молча её не наложить."
-              : notify
-                ? "Там, где игрок упрётся, он увидит, что закрыто, до какого числа и почему."
-                : "Молча: в закрытом игрок увидит нейтральное «недоступно», как при сбое; в рейтинге — тень, он видит себя на своём месте."}
+              : hiddenPicked
+                ? "Этот вид накладывается только молча: игрок не увидит ничего."
+                : notify
+                  ? "Там, где игрок упрётся, он увидит, что закрыто, до какого числа и почему."
+                  : "Молча: в закрытом игрок увидит нейтральное «недоступно», как при сбое; в рейтинге — тень, он видит себя на своём месте."}
           </p>
         </section>
 
@@ -255,6 +261,7 @@ function KindOption({
           {active === undefined ? null : <Badge tone="warning">{active.endsAt === null ? "уже закрыто бессрочно" : `уже закрыто до ${formatDateTime(active.endsAt)}`}</Badge>}
         </span>
         <span className="text-xs leading-snug text-text-muted">{info.effect}</span>
+        {info.hidden ? <span className="text-xs leading-snug text-text-muted">{HELP.players.hiddenKind}</span> : null}
         {active !== undefined && checked ? <span className="text-xs text-warning">Новое заменит действующее — с этим сроком и причиной.</span> : null}
       </span>
     </label>

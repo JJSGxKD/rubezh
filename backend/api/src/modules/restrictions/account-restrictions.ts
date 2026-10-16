@@ -69,9 +69,12 @@ export class AccountRestrictions implements OnModuleInit, OnModuleDestroy {
     throw hit.notify ? new AccountRestrictedError(playerMessage(hit)) : new RestrictionSilentError();
   }
 
-  /** Что игрок видит в профиле: действующие, о которых решили сообщить. */
+  /** Что игрок видит в профиле: действующие, о которых решили сообщить; скрытые виды — никогда. */
   async visibleFor(accountId: string, at = new Date()): Promise<PlayerRestrictionView[]> {
-    return (await this.rows(accountId, at)).filter((row) => row.notify && isActive(row, at)).map(playerView);
+    return (await this.rows(accountId, at)).flatMap((row) => {
+      const view = row.notify && isActive(row, at) ? playerView(row) : null;
+      return view === null ? [] : [view];
+    });
   }
 
   /**

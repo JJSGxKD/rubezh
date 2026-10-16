@@ -1,7 +1,25 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
-import { conversion, createLink, fetchLinks, freshRow, NETWORK_TITLES, SLUG, summaryLine, type Link, type LinkRow, type RegistrationOn } from "../../api/links";
+import {
+  conversion,
+  createLink,
+  fetchLinks,
+  freshRow,
+  LAUNCHES_HELP,
+  launchesLabel,
+  LINK_TARGETS,
+  NETWORK_TITLES,
+  SLUG,
+  summaryLine,
+  TARGET_HELP,
+  TARGET_HINTS,
+  TARGET_TITLES,
+  type Link,
+  type LinkRow,
+  type LinkTarget,
+  type RegistrationOn,
+} from "../../api/links";
 import { formatDateTime, formatNumber } from "../../format";
 import { ChoiceCards } from "../../ui/choice";
 import { Badge, Button, DataTable, ErrorNotice, Field, Help, Input, Loading, Notice, Panel } from "../../ui/kit";
@@ -15,7 +33,9 @@ import { TokenNotice } from "./TokenNotice";
 /**
  * Ссылки кампаний: завести ссылку `/r/<код>` для поста, канала, партнёра
  * или закупки в рекламной сети и видеть клики и запуски по ней. Клики
- * краулеров превью сюда не попадают. Ссылка сети вдобавок отдаёт сети
+ * краулеров превью сюда не попадают. У ссылки есть цель — Mini App, бот или
+ * лендинг (Р95) — и, если это не закупка в сети, прямой адрес без
+ * переходника: клика у него нет, считаются только запуски. Ссылка сети вдобавок отдаёт сети
  * регистрации и покупки пришедших новичков (WP43) — карточка ссылки
  * показывает адрес для кабинета и журнал отправленного. Карточка
  * открывается и по адресу `#/links/<код>`: на неё ведёт журнал аудита.
@@ -26,6 +46,7 @@ type Placement = "plain" | "adsgram";
 export function LinksScreen({ id }: { id: string | null }) {
   const { state, reload } = useApi(() => fetchLinks(api), []);
   const [placement, setPlacement] = useState<Placement>("plain");
+  const [target, setTarget] = useState<LinkTarget>("app");
   const [registrationOn, setRegistrationOn] = useState<RegistrationOn>("first_run");
   const [campaign, setCampaign] = useState("");
   const [source, setSource] = useState("");
@@ -53,6 +74,7 @@ export function LinksScreen({ id }: { id: string | null }) {
       campaign,
       source: source || undefined,
       note: note.trim() || undefined,
+      target,
       ...(network === undefined ? {} : { network, registrationOn }),
     });
     if (!result.ok) return setError(result.error);
@@ -62,6 +84,7 @@ export function LinksScreen({ id }: { id: string | null }) {
     setSource("");
     setNote("");
     setPlacement("plain");
+    setTarget("app");
     toast.success(network === undefined ? "Ссылка заведена" : "Ссылка заведена — вставьте адрес с метками в кабинет сети");
     reload();
     // Сразу карточка: адрес нужен прямо сейчас, а у ссылки сети — ещё и инструкция к кабинету.
@@ -94,6 +117,20 @@ export function LinksScreen({ id }: { id: string | null }) {
                   description: "Плюс адрес с метками для кабинета AdsGram: регистрации и покупки пришедших новичков уйдут в сеть, и она будет приводить тех, кто играет и платит.",
                 },
               ]}
+            />
+          </ChoiceGroup>
+          <ChoiceGroup label="Куда ведёт" help={TARGET_HELP}>
+            <ChoiceCards<LinkTarget>
+              label="Куда ведёт"
+              value={target}
+              onChange={setTarget}
+              columns={3}
+              choices={LINK_TARGETS.map((value) => ({
+                value,
+                title: TARGET_TITLES[value],
+                description: TARGET_HINTS[value],
+                ...(value === "app" ? { aside: <Badge tone="accent">по умолчанию</Badge> } : {}),
+              }))}
             />
           </ChoiceGroup>
           {placement === "plain" ? null : (
@@ -158,6 +195,7 @@ export function LinksScreen({ id }: { id: string | null }) {
                   <span className="inline-flex flex-wrap items-center gap-1.5">
                     {row.campaign}
                     {row.network === null ? null : <Badge tone="accent">{NETWORK_TITLES[row.network]}</Badge>}
+                    {row.target === "app" ? null : <Badge>{TARGET_TITLES[row.target]}</Badge>}
                   </span>
                 ),
               },
@@ -165,7 +203,7 @@ export function LinksScreen({ id }: { id: string | null }) {
               { title: "Адрес", render: (row) => <code className="text-xs">{row.url}</code> },
               { title: "Кликов", render: (row) => formatNumber(row.clicks), align: "right" },
               { title: "За 30 дней", render: (row) => formatNumber(row.clicks30d), align: "right" },
-              { title: "Запусков", help: HELP.links.launches, render: (row) => formatNumber(row.launches), align: "right" },
+              { title: "Запусков", help: LAUNCHES_HELP, render: (row) => <span className="whitespace-nowrap">{launchesLabel(row)}</span>, align: "right" },
               { title: "Клик → запуск", help: HELP.links.conversion, render: (row) => (conversion(row) === null ? "—" : `${conversion(row)}%`), align: "right" },
               { title: "Отдано сети", help: HELP.links.networkConversions, render: (row) => <NetworkCell row={row} /> },
               { title: "Заведена", render: (row) => formatDateTime(row.createdAt) },

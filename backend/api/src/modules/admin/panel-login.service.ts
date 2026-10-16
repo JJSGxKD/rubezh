@@ -41,6 +41,8 @@ export interface PanelLoginOpened {
   code: string;
   /** ссылка на бота с запросом в параметре старта */
   link: string;
+  /** то же диплинком в установленное приложение; `null` — у площадки диплинков нет */
+  deepLink: string | null;
   expiresAtMs: number;
 }
 
@@ -97,7 +99,7 @@ export class PanelLoginService {
       STORE_TIMEOUT_MS,
       "запрос входа",
     );
-    return { requestId, secret, code, link, expiresAtMs: nowMs + LOGIN_TTL_SEC * 1000 };
+    return { requestId, secret, code, link, deepLink: this.links.chatDeep("telegram", `${PANEL_LOGIN_PREFIX}${requestId}`), expiresAtMs: nowMs + LOGIN_TTL_SEC * 1000 };
   }
 
   /** Запрос, который ещё ждёт подтверждения; `null` — истёк, неизвестен или уже решён. */
