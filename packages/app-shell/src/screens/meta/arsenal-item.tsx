@@ -42,6 +42,11 @@ export function ItemSheet(props: {
             {item.equipped ? t("arsenal.item.unequip") : t("arsenal.item.equip")}
           </Button>
           {item.upgrade === null ? <p className="text-center text-xs text-text-muted">{t("arsenal.item.maxLevel")}</p> : null}
+          {item.next === undefined ? null : (
+            <p className="text-center text-xs text-text-muted tabular-nums">
+              {t("arsenal.item.powerNext", { from: formatNumber(item.power), to: formatNumber(item.next.power) })}
+            </p>
+          )}
           <div className={`grid gap-2 ${item.upgrade !== null && item.reroll !== null ? "grid-cols-2" : "grid-cols-1"}`}>
             {item.upgrade === null ? null : (
               <Button variant="secondary" block disabled={props.busy} onClick={() => props.onAction({ kind: "upgrade", itemId: item.itemId })}>
@@ -87,13 +92,15 @@ export function ItemSheet(props: {
       )}
 
       <h3 className="mt-4 text-xs font-semibold text-text-muted">{t("arsenal.item.main")}</h3>
-      <StatRow stat={item.main.stat} value={item.main.value} />
+      <StatRow stat={item.main.stat} value={item.main.value} nextValue={item.next?.main.value} />
 
       <h3 className="mt-3 text-xs font-semibold text-text-muted">{t("arsenal.item.extras")}</h3>
       {rerolling ? <p className="mb-1 text-xs text-text-muted">{t("arsenal.item.rerollPick")}</p> : null}
       {item.extras.length === 0 ? <p className="text-sm text-text-muted">{t("arsenal.item.noExtras")}</p> : null}
       <ul className="grid gap-1">
-        {item.extras.map((extra, index) => (
+        {item.extras.map((extra, index) => {
+          const nextValue = item.next?.extras[index]?.stat === extra.stat ? item.next.extras[index]?.value : undefined;
+          return (
           <li key={`${extra.stat}-${index}`}>
             {rerolling ? (
               <button
@@ -105,23 +112,34 @@ export function ItemSheet(props: {
                 }}
                 className="w-full rounded-md ring-1 ring-accent/60 active:scale-[0.98]"
               >
-                <StatRow stat={extra.stat} value={extra.value} />
+                <StatRow stat={extra.stat} value={extra.value} nextValue={nextValue} />
               </button>
             ) : (
-              <StatRow stat={extra.stat} value={extra.value} />
+              <StatRow stat={extra.stat} value={extra.value} nextValue={nextValue} />
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
     </Modal>
   );
 }
 
-function StatRow(props: { stat: string; value: number }): ReactNode {
+function StatRow(props: { stat: string; value: number; nextValue?: number | undefined }): ReactNode {
+  const changes = props.nextValue !== undefined && props.nextValue !== props.value;
   return (
     <div className="flex items-center justify-between px-2 py-1.5 text-sm">
       <span className="text-text">{statName(props.stat)}</span>
-      <span className="font-semibold tabular-nums text-success">{statValue(props.stat, props.value)}</span>
+      {changes ? (
+        <span className="font-semibold tabular-nums">
+          <span className="text-text-muted">{statValue(props.stat, props.value)}</span>
+          <span aria-hidden="true" className="text-text-muted"> → </span>
+          <span className="sr-only">{t("arsenal.item.statBecomes")}</span>
+          <span className="text-success">{statValue(props.stat, props.nextValue ?? props.value)}</span>
+        </span>
+      ) : (
+        <span className="font-semibold tabular-nums text-success">{statValue(props.stat, props.value)}</span>
+      )}
     </div>
   );
 }
