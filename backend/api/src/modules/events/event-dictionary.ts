@@ -108,6 +108,9 @@ export const EVENT_DICTIONARY = {
   // со ссылкой, copy — копия ссылки; у старых клиентов поля нет.
   share_offered: { version: 1, payload: payload({ context: id, method: id.optional() }) },
   share_completed: { version: 1, payload: payload({ context: id, result: id, method: id.optional() }) },
+  // Разрешение боту писать (T-0010): где спросили и чем кончилось.
+  bot_access_offered: { version: 1, payload: payload({ place: id }) },
+  bot_access_result: { version: 1, payload: payload({ place: id, result: id }) },
   run_started: {
     version: 1,
     payload: payload({

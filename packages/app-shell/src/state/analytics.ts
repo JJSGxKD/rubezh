@@ -16,6 +16,8 @@ export const ANALYTICS_EVENTS = [
   "settings_changed",
   "share_offered",
   "share_completed",
+  "bot_access_offered",
+  "bot_access_result",
   "run_started",
   "run_resumed",
   "run_finished",

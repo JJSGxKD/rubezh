@@ -164,6 +164,7 @@ Zod-схемы `payload` — в словаре сервера
 | Рефералы | `referral_link_created`, `referral_bound`, `referral_activated`, `referral_reward_granted` |
 | Партнёры | `partner_click`, `partner_registration`, `partner_ftd`, `partner_revenue_accrued`, `partner_payout` |
 | Шеринг | `share_offered`, `share_completed`, `shared_link_opened` |
+| Сообщения от бота | `bot_access_offered`, `bot_access_result` |
 | Прогрессия | `level_up`, `item_obtained`, `character_unlocked` |
 | Удержание | `daily_reward_claimed` (награда дня, WP13); `wheel_spun` (колесо, WP13); `task_completed`, `achievement_unlocked`, `task_link_opened` (задания и достижения, WP13, Р52) (`05-game-design.md` §3, `07-monetization-and-ads.md` §7) |
 | Техника | `client_error`, `connection_lost`, `connection_restored`, `fps_sample`, `load_time`, `diagnostics_mode_changed`, `bench_finished` |
@@ -187,6 +188,7 @@ Zod-схемы `payload` — в словаре сервера
 | `client_error` | Ошибки клиента на тестера по версии и устройству (`26-stage2-plan.md` §7) | `scope` — где случилась, `message` — текст без стека, до 512 знаков |
 | `connection_lost`, `connection_restored` | Как часто у игроков пропадает связь с API и на сколько: потеря — два сбоя подряд за 30 секунд или событие браузера `offline`, возвращение — любой ответ сервера (T-0015). Ошибка сервера 4xx и 500 потерей связи не считается | у возвращения — `downtimeSec`, сколько связи не было; у потери полей нет |
 | `share_offered`, `share_completed` | Приглашение друга: сколько нажимают, каким способом и чем кончается (`35-stage4-plan.md` Р63) | `context` (`friends_invite`); `method` — `message` (сообщение от бота), `link` (выбор чата со ссылкой), `copy` (копия ссылки); у завершения — `result`: `sent`, `shared`, `copied`, `cancelled`, `unavailable` |
+| `bot_access_offered`, `bot_access_result` | Просьба разрешить боту писать игроку (T-0010): сколько соглашаются на главной после первого забега и в настройках | `place` — `lobby` или `settings`; у результата `result` — `allowed`, `declined`, `unavailable` («Не сейчас» на карточке событий не пишет) |
 | `bench_finished` | Сводка теста производительности — стресс-теста из «Играть» (`28-diagnostics.md` §2.3); полный отчёт уходит в приёмник диагностики (`28-diagnostics.md` §5), не в события | `mode`, `stopReason`, `peakObjects`, `verdict`, `reportId` |
 | `feedback_sent` | Сколько игроков доходит до формы обратной связи и отвечают ли они текстом или только опросом. Сам отзыв в события не попадает: он уходит в чат администраторов и в свою таблицу, а здесь — только факт и разрез | `answers` — сколько вопросов отвечено, `hasText` — был ли свободный текст, `runs` — сколько забегов сыграно к этому моменту; `kind: device_info` — игрок поделился сведениями об устройстве из «Помощи в тестировании» (`28-diagnostics.md` §2.2), без поля — отзыв |
 | `notification_opened` | Ведут ли уведомления обратно в игру: какие виды открывают, а какие только прочитывают. Сама лента — таблица `notification`, прочитанное — её поле, поэтому событие — только о переходе | `kind` — вид уведомления: `friend_request`, `friend_gift`, `rare_loot` |
