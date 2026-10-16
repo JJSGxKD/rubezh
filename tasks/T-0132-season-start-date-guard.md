@@ -3,8 +3,8 @@ id: T-0132
 title: Дата начала сезонов не в прошлом — проверка при сохранении и потолок догона
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
