@@ -256,7 +256,9 @@ describe("строка значков", () => {
     const fileName = "T-0003-x.md";
     const data = { ...valid(), depends_on: ["T-0001"] };
     const right = badgeLine(data, FILE_NAMES);
-    const bodyWith = (...lines: string[]): string => ["", "# T-0003. Заголовок", "", ...lines, "", "## Зачем"].join("\n");
+    // Раздел «PR» совпадает с шапкой valid(): иначе проверка раздела «PR» (T-0146) добавит свою ошибку.
+    const PR_SECTION = ["## PR", "", "- **Заголовок:** `fix(app-shell): Чинить X`", "- **Метка:** `release: patch`"];
+    const bodyWith = (...lines: string[]): string => ["", "# T-0003. Заголовок", "", ...lines, "", "## Зачем", "", ...PR_SECTION].join("\n");
 
     it("верная строка — без ошибок", () => {
       expect(validateTask(fileName, data, { body: bodyWith(right), fileNames: FILE_NAMES })).toEqual([]);
@@ -282,7 +284,7 @@ describe("строка значков", () => {
     });
 
     it("нет заголовка «# T-NNNN. …» — ошибка", () => {
-      const errors = validateTask(fileName, data, { body: ["", "# Другое", "", right].join("\n"), fileNames: FILE_NAMES });
+      const errors = validateTask(fileName, data, { body: ["", "# Другое", "", right, "", ...PR_SECTION].join("\n"), fileNames: FILE_NAMES });
       expect(errors).toHaveLength(1);
       expect(errors[0]).toContain("заголовок");
     });
@@ -396,8 +398,8 @@ describe("раздел «PR» против шапки", () => {
     expect(checkPrSection(fileName, { ...valid(), release: "none" }, prBody("docs(tasks): Описать X", "release: none"))).toEqual([]);
   });
 
-  it("заголовок не по формату — ошибка с текстом parsePrTitle, остальные правила не проверяются", () => {
-    const errors = checkPrSection(fileName, { ...valid(), release: "minor" }, prBody("Добавить X", "release: patch"));
+  it("заголовок не по формату — ошибка с текстом parsePrTitle, минимум по типу не проверяется", () => {
+    const errors = checkPrSection(fileName, { ...valid(), release: "minor" }, prBody("Добавить X", "release: minor"));
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("заголовок не соответствует формату");
   });
