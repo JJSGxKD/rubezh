@@ -7,8 +7,7 @@
  * грузится отсюда же: прямой импорт из витрины компонентов унёс бы код
  * виджетов в общий с ней чанк, а игроку — лишний килобайт на главной.
  */
-export { hydrateBotAccess, loadBotAccess } from "../state/bot-access-sync";
-export { HomeBotAccess } from "./home-bot-access";
+export { HomeBotAccess, hydrateBotAccess, loadBotAccess } from "./home-bot-access";
 export { HomeCarousel } from "./home-carousel";
 export { HomeWidgets } from "./home-widgets";
 

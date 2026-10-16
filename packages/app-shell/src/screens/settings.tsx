@@ -15,7 +15,7 @@ import { t } from "../i18n";
 import "../i18n/bot";
 import { noteAccountSetting } from "../state/account-settings";
 import { botAccessSupported, useBotAccess } from "../state/bot-access";
-import { hydrateBotAccess, loadBotAccess, requestBotAccess } from "../state/bot-access-sync";
+import { hydrateBotAccess, loadBotAccess, requestBotAccess } from "./home-bot-access";
 import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
 import { useDiagnostics } from "../state/diagnostics";
 import { useGraphics } from "../state/graphics";
