@@ -42,11 +42,6 @@ export function ItemSheet(props: {
             {item.equipped ? t("arsenal.item.unequip") : t("arsenal.item.equip")}
           </Button>
           {item.upgrade === null ? <p className="text-center text-xs text-text-muted">{t("arsenal.item.maxLevel")}</p> : null}
-          {item.next === undefined ? null : (
-            <p className="text-center text-xs text-text-muted tabular-nums">
-              {t("arsenal.item.powerNext", { from: formatNumber(item.power), to: formatNumber(item.next.power) })}
-            </p>
-          )}
           <div className={`grid gap-2 ${item.upgrade !== null && item.reroll !== null ? "grid-cols-2" : "grid-cols-1"}`}>
             {item.upgrade === null ? null : (
               <Button variant="secondary" block disabled={props.busy} onClick={() => props.onAction({ kind: "upgrade", itemId: item.itemId })}>
@@ -65,6 +60,11 @@ export function ItemSheet(props: {
               </Button>
             )}
           </div>
+          {item.next === undefined ? null : (
+            <p className="text-center text-xs text-text-muted tabular-nums">
+              {t("arsenal.item.powerNext", { from: formatNumber(item.power), to: formatNumber(item.next.power) })}
+            </p>
+          )}
           <Button
             variant={salvaging ? "danger" : "ghost"}
             block
