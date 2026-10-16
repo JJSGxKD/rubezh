@@ -3,7 +3,7 @@ id: T-0081
 title: Друзья — на узком экране кнопки заявки и «Подарить» значками, имя читается
 epic: E12
 priority: P2
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-6
 size: S
