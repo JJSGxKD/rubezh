@@ -3,7 +3,7 @@ id: T-0108
 title: Лестница открытий — оружие и навыки по уровням 2–14, а не все к шестому
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-17
 size: S
