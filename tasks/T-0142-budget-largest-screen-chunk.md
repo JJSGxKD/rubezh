@@ -3,7 +3,7 @@ id: T-0142
 title: Бюджет экранов — порог на самый большой экран, сумма — предупреждением
 epic: E0
 priority: P2
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
