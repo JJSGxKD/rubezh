@@ -3,7 +3,7 @@ id: T-0088
 title: Внешняя проверка прода без ложных тревог и без записи развёртывания на каждый прогон
 epic: E3
 priority: P2
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-8
 size: M
