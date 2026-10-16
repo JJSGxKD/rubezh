@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { badgeLine, parseFrontmatter, parseOwner, taskBadge, validateTask, withBadgeLine } from "../tasks/task-file.mjs";
+import { badgeLine, checkPrSection, parseFrontmatter, parseOwner, taskBadge, validateTask, withBadgeLine } from "../tasks/task-file.mjs";
 
 // Шапка задачи — строгое подмножество YAML (tasks/T-0002-task-cli.md, «Решения»):
 // разбирает свой парсер, любая другая конструкция — ошибка с номером строки.
@@ -346,5 +346,91 @@ describe("withBadgeLine", () => {
   it("заголовка нет — текст без изменений", () => {
     const noHeading = "---\nid: T-0003\n---\n\nПросто текст.\n";
     expect(withBadgeLine(noHeading, expected)).toBe(noHeading);
+  });
+});
+
+describe("раздел «PR» против шапки", () => {
+  const fileName = "T-0003-x.md";
+  const TITLE_MINOR = "feat(app-shell): Добавить X";
+
+  // Раздел «PR» со строками заголовка и метки; `null` — строки нет.
+  const prBody = (title: string | null, label: string | null): string =>
+    [
+      "# T-0003. Заголовок",
+      "",
+      "## Что и почему",
+      "",
+      "Текст.",
+      "",
+      "## PR",
+      "",
+      ...(title === null ? [] : [`- **Заголовок:** \`${title}\``]),
+      ...(label === null ? [] : [`- **Метка:** \`${label}\``]),
+      "",
+      "## Для игроков",
+      "",
+      "- нет",
+    ].join("\n");
+
+  it("метка совпадает с шапкой и не ниже типа заголовка — без ошибок", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "minor" }, prBody(TITLE_MINOR, "release: minor"))).toEqual([]);
+  });
+
+  it("метка не совпадает с шапкой — ошибка с обоими значениями", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "minor" }, prBody(TITLE_MINOR, "release: patch"))).toEqual([
+      `${fileName}: поле release — в шапке minor, в разделе «PR» patch`,
+    ]);
+  });
+
+  it("метка ниже, чем требует тип заголовка, — ошибка «ниже»", () => {
+    expect(
+      checkPrSection(fileName, { ...valid(), release: "patch" }, prBody("feat(app-shell): Добавить X", "release: patch")),
+    ).toEqual([`${fileName}: поле release — patch ниже minor для заголовка feat(app-shell): Добавить X`]);
+  });
+
+  it("feat в области dev требует только patch — без ошибок", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "patch" }, prBody("feat(dev): Добавить X", "release: patch"))).toEqual([]);
+  });
+
+  it("docs при метке none — без ошибок", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "none" }, prBody("docs(tasks): Описать X", "release: none"))).toEqual([]);
+  });
+
+  it("заголовок не по формату — ошибка с текстом parsePrTitle, остальные правила не проверяются", () => {
+    const errors = checkPrSection(fileName, { ...valid(), release: "minor" }, prBody("Добавить X", "release: patch"));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("заголовок не соответствует формату");
+  });
+
+  it("нет строки «Метка» — ошибка, заголовок всё равно проверяется", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "patch" }, prBody("fix(app-shell): Чинить X", null))).toEqual([
+      `${fileName}: раздел «PR» — нет строки «Метка»`,
+    ]);
+  });
+
+  it("нет строки «Заголовок» — ошибка", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "patch" }, prBody(null, "release: patch"))).toEqual([
+      `${fileName}: раздел «PR» — нет строки «Заголовок»`,
+    ]);
+  });
+
+  it("проверка идёт только для ready и in-progress: черновик с расхождением — без ошибок", () => {
+    const data = { ...valid(), status: "draft", release: "minor" };
+    expect(validateTask(fileName, data, { body: prBody(TITLE_MINOR, "release: patch"), fileNames: {} })).toEqual([]);
+  });
+
+  it("закрытая задача с расхождением — без ошибок", () => {
+    const data = { ...valid(), status: "done", release: "minor" };
+    expect(validateTask(fileName, data, { body: prBody(TITLE_MINOR, "release: patch"), fileNames: {} })).toEqual([]);
+  });
+
+  it("ready с расхождением — validateTask отдаёт ошибку", () => {
+    const data = { ...valid(), status: "ready", release: "minor" };
+    const errors = validateTask(fileName, data, { body: prBody(TITLE_MINOR, "release: patch"), fileNames: {} });
+    expect(errors).toEqual([`${fileName}: поле release — в шапке minor, в разделе «PR» patch`]);
+  });
+
+  it("без тела задачи (захват по шапке) раздел не проверяется", () => {
+    expect(validateTask(fileName, { ...valid(), status: "ready", release: "minor" })).toEqual([]);
   });
 });
