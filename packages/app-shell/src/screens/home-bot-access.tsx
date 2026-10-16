@@ -3,7 +3,7 @@ import { BellRing } from "lucide-react";
 import { Button, Card } from "../design-system/components";
 import { t } from "../i18n";
 import "../i18n/home";
-import { dismissBotAccess, requestBotAccess } from "../state/bot-access";
+import { dismissBotAccess, requestBotAccess } from "../state/bot-access-sync";
 
 /**
  * Карточка «Разрешить сообщения от бота» на главной после первого забега

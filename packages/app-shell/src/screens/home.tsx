@@ -2,7 +2,7 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { BookOpen, ChevronRight, History, MessageSquareHeart, Play } from "lucide-react";
 import { Button, Card, ContentColumn, Modal, Screen } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
-import { botAccessSupported, hydrateBotAccess, loadBotAccess, shouldOfferBotAccess, useBotAccess } from "../state/bot-access";
+import { botAccessSupported, shouldOfferBotAccess, useBotAccess } from "../state/bot-access";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
@@ -33,7 +33,7 @@ export function LobbyScreen(): ReactNode {
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   const [preRunOpen, setPreRunOpen] = useState(false);
   const live = useHomeLive();
-  const offerBotAccess = useBotAccessOffer(runs, live !== null);
+  const offerBotAccess = useBotAccessOffer(runs, live);
   // Две просьбы на одном экране — навязчиво: пока зовём разрешить бота, отзыв ждёт.
   const feedbackSentAtRuns = useFeedback((state) => state.sentAtRuns);
   const askFeedback = !offerBotAccess && shouldAskFeedback(runs, feedbackSentAtRuns);
@@ -203,15 +203,14 @@ function useHomeLive(): HomeLive | null {
  * сервер, и спрашиваем его вместе с живой частью главной: пока он молчит, не
  * знаем — не зовём. Счёт прежних просьб читается с устройства.
  */
-function useBotAccessOffer(runs: number, liveReady: boolean): boolean {
+function useBotAccessOffer(runs: number, live: HomeLive | null): boolean {
   const canMessage = useBotAccess((state) => state.canMessage);
   const asks = useBotAccess((state) => state.asks);
   useEffect(() => {
-    hydrateBotAccess();
-  }, []);
-  useEffect(() => {
-    if (liveReady) void loadBotAccess();
-  }, [liveReady]);
+    if (live === null) return;
+    live.hydrateBotAccess();
+    void live.loadBotAccess();
+  }, [live]);
   return shouldOfferBotAccess({ runs, canMessage, supported: botAccessSupported(), asks, now: Date.now() });
 }
 

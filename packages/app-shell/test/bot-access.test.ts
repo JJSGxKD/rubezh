@@ -1,18 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { PlatformAdapter } from "@bh/shared-types";
 import type { ApiResult } from "../src/state/api-request";
-import {
-  ASK_AGAIN_AFTER_MS,
-  BOT_ACCESS_ASKS_KEY,
-  dismissBotAccess,
-  hydrateBotAccess,
-  loadBotAccess,
-  MAX_ASKS,
-  requestBotAccess,
-  shouldOfferBotAccess,
-  useBotAccess,
-  type BotAccessApi,
-} from "../src/state/bot-access";
+import { ASK_AGAIN_AFTER_MS, BOT_ACCESS_ASKS_KEY, MAX_ASKS, shouldOfferBotAccess, useBotAccess } from "../src/state/bot-access";
+import { dismissBotAccess, hydrateBotAccess, loadBotAccess, requestBotAccess, type BotAccessApi } from "../src/state/bot-access-sync";
 import { useShell } from "../src/state/shell";
 
 // Разрешение боту писать (tasks/T-0010): после первого забега зовём один раз,

@@ -1,8 +1,5 @@
-import { z } from "zod/mini";
 import { create } from "zustand";
-import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
-import { createPersistedValue } from "./persisted";
-import { reportError, track, useShell } from "./shell";
+import { useShell } from "./shell";
 
 /**
  * Разрешение боту писать (tasks/T-0010). Бот пишет только тем, кто начинал с
@@ -13,6 +10,10 @@ import { reportError, track, useShell } from "./shell";
  * дальше не чаще раза в две недели, всего трижды: после отказа настойчивость
  * только злит. Счёт и дата живут на устройстве. Всегда доступно в настройках,
  * пока разрешения нет.
+ *
+ * Модуль — только состояние и правило показа: он едет с первой загрузкой, на
+ * главной нужен «звать ли». Запрос, чтение с сервера и устройства — в
+ * `bot-access-sync.ts`, чанком главной и настроек.
  *
  * Есть ли разрешение, знает сервер (`GET /api/v1/me/messaging`): не
  * ответил — не знаем и не спрашиваем. После «Разрешить» клиент считает
@@ -35,10 +36,7 @@ export interface BotAccessAsks {
   lastAt: number | null;
 }
 
-const asksSchema = z.object({ count: z.number(), lastAt: z.nullable(z.number()) });
-const viewSchema = z.object({ canMessage: z.boolean() });
-
-const NO_ASKS: BotAccessAsks = { count: 0, lastAt: null };
+export const NO_ASKS: BotAccessAsks = { count: 0, lastAt: null };
 
 export interface BotAccessStore {
   /** `null` — сервер не ответил: не знаем */
@@ -47,20 +45,6 @@ export interface BotAccessStore {
 }
 
 export const useBotAccess = create<BotAccessStore>()(() => ({ canMessage: null, asks: NO_ASKS }));
-
-const persisted = () =>
-  createPersistedValue({
-    storage: useShell.getState().storage,
-    key: BOT_ACCESS_ASKS_KEY,
-    schema: asksSchema,
-    fallback: NO_ASKS,
-    onBroken: (key, reason) => reportError("bot-access", `${key}: ${reason}`),
-  });
-
-/** Прочитать счёт показов с устройства — при запуске. */
-export function hydrateBotAccess(): void {
-  useBotAccess.setState({ asks: persisted().read() });
-}
 
 /**
  * Звать ли игрока разрешить боту писать: площадка умеет, сервер подтвердил,
@@ -73,56 +57,8 @@ export function shouldOfferBotAccess(input: { runs: number; canMessage: boolean 
   return asks.lastAt === null || now - asks.lastAt >= ASK_AGAIN_AFTER_MS;
 }
 
-export interface BotAccessApi {
-  mine(): Promise<ApiResult<{ canMessage: boolean }>>;
-}
-
-/** `request` подменяется в тестах: сеть и сессия им не нужны. */
-export function createBotAccessApi(request: ApiRequest = apiRequest): BotAccessApi {
-  return { mine: () => request("/api/v1/me/messaging", viewSchema, { method: "GET" }) };
-}
-
-/** Спросить сервер; не ответил — остаётся прежнее («не знаем» или последний ответ). */
-export async function loadBotAccess(api?: BotAccessApi): Promise<void> {
-  if (api === undefined && useShell.getState().capabilities.auth === undefined) return;
-  const response = await (api ?? createBotAccessApi()).mine();
-  if (response.ok) useBotAccess.setState({ canMessage: response.data.canMessage });
-}
-
 /** Умеет ли площадка просить разрешение — по наличию метода адаптера. */
 export function botAccessSupported(): boolean {
   return useShell.getState().adapter?.requestBotMessages !== undefined;
 }
 
-function countAsk(now: number): void {
-  const asks = { count: useBotAccess.getState().asks.count + 1, lastAt: now };
-  useBotAccess.setState({ asks });
-  persisted().write(asks);
-}
-
-/**
- * Показать системное окно. «Разрешить» — разрешение считается полученным
- * сразу; отказ, закрытое окно и тишина — счёт +1: просьбу показали, и
- * считать её нужно так же, как «Не сейчас».
- */
-export async function requestBotAccess(place: BotAccessPlace, now = Date.now()): Promise<BotAccessResult> {
-  const request = useShell.getState().adapter?.requestBotMessages;
-  if (request === undefined) return "unavailable";
-  track("bot_access_offered", { place });
-  let result: BotAccessResult;
-  try {
-    result = await request.call(useShell.getState().adapter);
-  } catch (error: unknown) {
-    reportError("bot-access", error instanceof Error ? error.message : "запрос разрешения не удался");
-    result = "unavailable";
-  }
-  track("bot_access_result", { place, result });
-  if (result === "allowed") useBotAccess.setState({ canMessage: true });
-  else if (result === "declined") countAsk(now);
-  return result;
-}
-
-/** «Не сейчас» — просьбу показали и отложили; площадку не зовём. */
-export function dismissBotAccess(now = Date.now()): void {
-  countAsk(now);
-}

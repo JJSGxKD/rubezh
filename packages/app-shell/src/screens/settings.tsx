@@ -14,7 +14,8 @@ import { Slider } from "../design-system/components/Slider";
 import { t } from "../i18n";
 import "../i18n/bot";
 import { noteAccountSetting } from "../state/account-settings";
-import { botAccessSupported, loadBotAccess, requestBotAccess, useBotAccess } from "../state/bot-access";
+import { botAccessSupported, useBotAccess } from "../state/bot-access";
+import { hydrateBotAccess, loadBotAccess, requestBotAccess } from "../state/bot-access-sync";
 import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
 import { useDiagnostics } from "../state/diagnostics";
 import { useGraphics } from "../state/graphics";
@@ -46,7 +47,9 @@ export function SettingsScreen(): ReactNode {
   const [askingBot, setAskingBot] = useState(false);
   const [hintsReset, setHintsReset] = useState(false);
   useEffect(() => {
-    if (botAvailable) void loadBotAccess();
+    if (!botAvailable) return;
+    hydrateBotAccess();
+    void loadBotAccess();
   }, [botAvailable]);
 
   return (
