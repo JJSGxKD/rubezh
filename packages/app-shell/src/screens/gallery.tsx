@@ -54,6 +54,7 @@ export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [segment, setSegment] = useState("daily");
+  const [difficultySegment, setDifficultySegment] = useState("normal");
   const [sheet, setSheet] = useState(false);
   const [adResult, setAdResult] = useState<CreativeResult["kind"] | null>(null);
 
@@ -168,6 +169,14 @@ export function GalleryScreen(): ReactNode {
             { id: "weekly", label: t("tasks.weekly") },
             { id: "achievements", label: t("tasks.achievements") },
           ]}
+        />
+        <p className="mt-3 mb-1 text-xs text-text-muted">{t("gallery.segmented.smallHint")}</p>
+        <SegmentedControl
+          size="s"
+          label={t("gallery.segmented.small")}
+          activeId={difficultySegment}
+          onSelect={setDifficultySegment}
+          items={["easy", "normal", "hard"].map((id) => ({ id, label: t(`difficulty.${id}.name`) }))}
         />
 
         <SectionTitle>{t("gallery.progress")}</SectionTitle>
