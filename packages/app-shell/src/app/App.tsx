@@ -49,6 +49,7 @@ import {
   WheelScreen,
   PromoCodeScreen,
   TestNoticeScreen,
+  TesterThanksScreen,
 } from "./lazy-screens";
 
 /**
@@ -200,6 +201,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <PromoCodeScreen />;
     case "testNotice":
       return <TestNoticeScreen />;
+    case "testerThanks":
+      return <TesterThanksScreen />;
     case "settings":
       return <SettingsScreen />;
     case "testers":

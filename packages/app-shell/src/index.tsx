@@ -149,6 +149,11 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
           import("./state/test-notice")
             .then(({ syncTestNotice }) => syncTestNotice())
             .catch((error: unknown) => console.warn("Предупреждение о тесте не загрузилось:", error));
+          // Компенсация тестеру после вайпа — окно в лобби, после
+          // предупреждения о тесте (docs/35-stage4-plan.md Р87).
+          import("./state/compensation")
+            .then(({ syncCompensation }) => syncCompensation())
+            .catch((error: unknown) => console.warn("Компенсация тестеру не загрузилась:", error));
           // Знаки меню и колокольчик — тогда же и на каждом возврате в
           // приложение (docs/35-stage4-plan.md §3.17).
           import("./state/badges-api")
