@@ -74,10 +74,10 @@ function apply(signal: Signal): void {
   useConnection.setState(after);
   if (before.status === "online" && after.status === "offline") {
     track("connection_lost", {});
-    void prober().then((module) => module.watchConnection(true));
+    watchProbe(true);
   } else if (before.status === "offline" && after.status === "online") {
     track("connection_restored", { downtimeSec: Math.max(0, Math.round((signal.at - (before.since ?? signal.at)) / 1000)) });
-    void prober().then((module) => module.watchConnection(false));
+    watchProbe(false);
   }
 }
 
@@ -99,11 +99,68 @@ export function reportBrowserOffline(at = Date.now()): void {
  * подгружаются, только когда связь пропала: первому кадру они не нужны, а
  * первая загрузка под бюджетом (`pnpm budget`).
  */
-const prober = () => import("./api-request");
+interface ProberModule {
+  checkConnection(): Promise<void>;
+  watchConnection(on: boolean): void;
+}
+
+/** Сколько ждать чанк проверки: дольше — считаем, что до сервера не достучаться. */
+export const PROBER_LOAD_TIMEOUT_MS = 8_000;
+
+const defaultProber = (): Promise<ProberModule> => import("./api-request");
+let prober: () => Promise<ProberModule> = defaultProber;
+
+/** Подмена загрузчика чанка; `null` — вернуть настоящий. */
+export function setProberForTests(loader: (() => Promise<ProberModule>) | null): void {
+  prober = loader ?? defaultProber;
+}
+
+/** Чанк проверки или `null`: не загрузился или не успел за `PROBER_LOAD_TIMEOUT_MS`. */
+async function loadProber(): Promise<ProberModule | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), PROBER_LOAD_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([prober(), late]);
+  } catch {
+    // Импорт упал: сеть оборвалась раньше, чем чанк доехал. Связи по-прежнему
+    // нет, плашка остаётся, а следующее нажатие попробует загрузить чанк снова.
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Включить или выключить таймер проверки, который живёт в чанке. */
+function watchProbe(on: boolean): void {
+  prober()
+    .then((module) => module.watchConnection(on))
+    .catch(() => {
+      // Чанк не доехал, а связи нет: без него таймер не заработает, поэтому
+      // пока связь не вернулась, грузим чанк снова раз в период проверки.
+      // Выключать нечего: таймер, которого нет, уже выключен.
+      if (!on || reloadTimer !== null || useConnection.getState().status !== "offline") return;
+      reloadTimer = setTimeout(() => {
+        reloadTimer = null;
+        if (useConnection.getState().status === "offline") watchProbe(true);
+      }, CONNECTION_PROBE_PERIOD_MS);
+    });
+}
 
 /** Проверить связь сейчас — кнопка «Повторить». */
-export function retryConnection(): Promise<void> {
-  return prober().then((module) => module.checkConnection());
+export async function retryConnection(): Promise<void> {
+  const { status, checking } = useConnection.getState();
+  if (status !== "offline" || checking) return;
+  // Кнопка говорит «Проверяем…» с нажатия, а не с момента, когда доехал чанк:
+  // молчащее нажатие хуже честного «связи нет».
+  useConnection.setState({ checking: true });
+  const module = await loadProber();
+  // Флаг снимается до вызова: у проверки в чанке свой флаг и своя защита от повтора.
+  useConnection.setState({ checking: false });
+  await module?.checkConnection();
 }
 
 /** События браузера — один раз, при первом импорте; в тестах без окна их нет. */
@@ -111,5 +168,7 @@ if (typeof window !== "undefined") window.addEventListener("offline", () => repo
 
 export function resetConnectionForTests(): void {
   useConnection.setState({ ...INITIAL_CONNECTION });
-  void prober().then((module) => module.watchConnection(false));
+  if (reloadTimer !== null) clearTimeout(reloadTimer);
+  reloadTimer = null;
+  watchProbe(false);
 }
