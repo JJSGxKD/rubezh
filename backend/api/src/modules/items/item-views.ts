@@ -18,11 +18,20 @@ export interface ItemView {
   extras: { stat: ItemStat; value: number }[];
   /** `null` — уровень в потолке аккаунта */
   upgrade: ItemCost | null;
+  /** что будет после улучшения; нет, когда улучшать некуда */
+  next?: ItemNext;
   reroll: ItemCost | null;
   /** осколков его редкости за разбор */
   salvage: number;
   /** игрок ещё не открывал его лист — знак на вкладке арсенала (Р50) */
   isNew: boolean;
+}
+
+export interface ItemNext {
+  level: number;
+  power: number;
+  main: { stat: ItemStat; value: number };
+  extras: { stat: ItemStat; value: number }[];
 }
 
 export interface InventoryView {
@@ -43,18 +52,28 @@ export interface InventoryView {
   merge: Partial<Record<ItemRarity, ItemCost>>;
 }
 
+/** Значения предмета на заданном уровне — теми же функциями, что и сам вид. */
+function valuesAt(row: ItemRow, level: number): Pick<ItemView, "power" | "main" | "extras"> {
+  const shape: ItemShape = { ...row, level };
+  return {
+    power: itemPower(shape),
+    main: { stat: row.rolls.main.stat, value: statValue(row.rolls.main.stat, row.rarity, level, row.rolls.main.roll) },
+    extras: row.rolls.extras.map((extra) => ({ stat: extra.stat, value: statValue(extra.stat, row.rarity, level, extra.roll) })),
+  };
+}
+
 export function itemView(row: ItemRow, accountLevel: number): ItemView {
   const shape: ItemShape = row;
+  const upgrade = upgradeCost(shape, accountLevel);
   return {
     itemId: row.itemId,
     slot: row.slot,
     rarity: row.rarity,
     level: row.level,
     equipped: row.equipped,
-    power: itemPower(shape),
-    main: { stat: row.rolls.main.stat, value: statValue(row.rolls.main.stat, row.rarity, row.level, row.rolls.main.roll) },
-    extras: row.rolls.extras.map((extra) => ({ stat: extra.stat, value: statValue(extra.stat, row.rarity, row.level, extra.roll) })),
-    upgrade: upgradeCost(shape, accountLevel),
+    ...valuesAt(row, row.level),
+    upgrade,
+    ...(upgrade === null ? {} : { next: { level: row.level + 1, ...valuesAt(row, row.level + 1) } }),
     reroll: row.rolls.extras.length === 0 ? null : rerollCost(shape),
     salvage: salvageYield(shape),
     isNew: row.seenAt === null,

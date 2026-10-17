@@ -30,6 +30,8 @@ const itemSchema = z.object({
   main: statSchema,
   extras: z.array(statSchema),
   upgrade: z.nullable(costSchema),
+  // Необязательное: старый сервер его не пришлёт, тогда карточка без «станет».
+  next: z.optional(z.object({ level: z.number(), power: z.number(), main: statSchema, extras: z.array(statSchema) })),
   reroll: z.nullable(costSchema),
   salvage: z.number(),
   // Необязательное: сервер старше знаков меню его не пришлёт — тогда нового нет.
