@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
+import { Outbound } from "../../infra/outbound/outbound.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
@@ -60,6 +61,8 @@ export class AdminSecretsService {
     private readonly roles: RolesService,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    // Без модуля клиента (тесты) проверка идёт глобальным fetch.
+    @Optional() private readonly outbound?: Outbound,
   ) {}
 
   async list(actor: AccountRef): Promise<SecretsOverview> {
@@ -116,7 +119,7 @@ export class AdminSecretsService {
    * смотреть); с ним — ещё не сохранённым из формы (право менять: ключ
    * приходит от человека, который собирается его записать).
    */
-  async check(actor: AccountRef, key: string, candidate: string | null, fetchImpl: typeof fetch = fetch): Promise<SecretCheckResult> {
+  async check(actor: AccountRef, key: string, candidate: string | null, fetchImpl?: typeof fetch): Promise<SecretCheckResult> {
     await this.roles.require(actor, candidate === null ? "secrets.view" : "secrets.edit");
     const secret = this.definition(key);
     if (secret.check === undefined) throw new SecretUncheckableError();
@@ -124,7 +127,7 @@ export class AdminSecretsService {
     if (value === null) throw new SecretMissingError();
     const problem = candidate === null ? null : secretProblem(secret, value);
     if (problem !== null) throw new ValidationError(problem);
-    return await secret.check(value, fetchImpl);
+    return await secret.check(value, fetchImpl ?? this.outbound?.forService("secrets.check") ?? fetch);
   }
 
   private definition(key: string): SecretDefinition {
