@@ -27,6 +27,13 @@ const KNOWN_DEFAULTS = new Set<string>([
   "platforms/telegram/telegram-bot-api.ts: fetchImpl: FetchLike = fetch,",
 ]);
 
+/**
+ * Метки каталога, под которые отдельного места вызова пока нет: креатив Taddy
+ * приходит тем же клиентом, что и остальные вызовы `taddy.api`. Метка
+ * зарезервирована за сетями со своим API креативов.
+ */
+const RESERVED = new Set<string>(["ads.creatives"]);
+
 function sourcesOf(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: "utf8" })
     .filter((name) => name.endsWith(".ts"))
@@ -84,6 +91,6 @@ describe("исходящие запросы идут через один кли�
       }
     }
     for (const service of used) expect(OUTBOUND_SERVICES as readonly string[], service).toContain(service);
-    for (const service of OUTBOUND_SERVICES) expect(used.has(service), `сервис ${service} никто не использует`).toBe(true);
+    for (const service of OUTBOUND_SERVICES) expect(used.has(service) || RESERVED.has(service), `сервис ${service} никто не использует`).toBe(true);
   });
 });
