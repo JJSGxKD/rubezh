@@ -26,6 +26,8 @@ export interface AuthAccount {
   createdAt: string;
   /** аккаунт заведён этим входом — по нему шлётся `user_registered` */
   created: boolean;
+  /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
+  tester?: true | undefined;
 }
 
 export interface Session {
@@ -103,6 +105,7 @@ const sessionSchema = z.object({
     photoUrl: z.nullable(z.string()),
     createdAt: z.string(),
     created: z.boolean(),
+    tester: z.optional(z.literal(true)),
   }),
   launch: z.optional(z.object({ startKind: z.string() })),
 });
