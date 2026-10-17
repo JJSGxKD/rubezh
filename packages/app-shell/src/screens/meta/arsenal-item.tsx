@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Button, Modal } from "../../design-system/components";
-import { formatNumber, t } from "../../i18n";
+import { Button, Hint, Modal } from "../../design-system/components";
+import { formatNumber, hasTranslation, t } from "../../i18n";
 import type { ItemAction, ItemView } from "../../state/items-api";
 import { CostLabel, rarityName, slotIcon, slotName, statName, statValue, toneOf } from "./arsenal-parts";
 
@@ -92,7 +92,7 @@ export function ItemSheet(props: {
       )}
 
       <h3 className="mt-4 text-xs font-semibold text-text-muted">{t("arsenal.item.main")}</h3>
-      <StatRow stat={item.main.stat} value={item.main.value} nextValue={item.next?.main.value} />
+      <StatRow stat={item.main.stat} value={item.main.value} nextValue={item.next?.main.value} withHint />
 
       <h3 className="mt-3 text-xs font-semibold text-text-muted">{t("arsenal.item.extras")}</h3>
       {rerolling ? <p className="mb-1 text-xs text-text-muted">{t("arsenal.item.rerollPick")}</p> : null}
@@ -115,7 +115,7 @@ export function ItemSheet(props: {
                   <StatRow stat={extra.stat} value={extra.value} nextValue={nextValue} />
                 </button>
               ) : (
-                <StatRow stat={extra.stat} value={extra.value} nextValue={nextValue} />
+                <StatRow stat={extra.stat} value={extra.value} nextValue={nextValue} withHint />
               )}
             </li>
           );
@@ -125,23 +125,40 @@ export function ItemSheet(props: {
   );
 }
 
-function StatRow(props: { stat: string; value: number; nextValue?: number | undefined }): ReactNode {
+/**
+ * withHint — кнопка «?» у названия. В режиме перекрутки строка уже кнопка, и
+ * вложенная кнопка была бы невалидна, поэтому там подсказки нет.
+ */
+function StatRow(props: { stat: string; value: number; nextValue?: number | undefined; withHint?: boolean }): ReactNode {
   const changes = props.nextValue !== undefined && props.nextValue !== props.value;
+  const hintKey = `item.stat.${props.stat}.hint`;
+  const name = <span className="text-text">{statName(props.stat)}</span>;
+  const value = changes ? (
+    <span className="flex min-w-0 flex-wrap items-baseline justify-end gap-x-1 font-semibold tabular-nums">
+      <span className="whitespace-nowrap text-text-muted">{statValue(props.stat, props.value)}</span>
+      <span aria-hidden="true" className="text-text-muted">
+        →
+      </span>
+      <span className="sr-only">{t("arsenal.item.statBecomes")}</span>
+      <span className="whitespace-nowrap text-success">{statValue(props.stat, props.nextValue ?? props.value)}</span>
+    </span>
+  ) : (
+    <span className="font-semibold tabular-nums text-success">{statValue(props.stat, props.value)}</span>
+  );
+  // С подсказкой значение уходит в правый слот строки, а пояснение — под всю строку.
+  if (props.withHint === true && hasTranslation(hintKey)) {
+    return (
+      <div className="px-2 py-1.5 text-sm">
+        <Hint label={statName(props.stat)} text={t(hintKey)} end={value}>
+          {name}
+        </Hint>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center justify-between gap-3 px-2 py-1.5 text-sm">
-      <span className="text-text">{statName(props.stat)}</span>
-      {changes ? (
-        <span className="flex min-w-0 flex-wrap items-baseline justify-end gap-x-1 font-semibold tabular-nums">
-          <span className="whitespace-nowrap text-text-muted">{statValue(props.stat, props.value)}</span>
-          <span aria-hidden="true" className="text-text-muted">
-            →
-          </span>
-          <span className="sr-only">{t("arsenal.item.statBecomes")}</span>
-          <span className="whitespace-nowrap text-success">{statValue(props.stat, props.nextValue ?? props.value)}</span>
-        </span>
-      ) : (
-        <span className="font-semibold tabular-nums text-success">{statValue(props.stat, props.value)}</span>
-      )}
+      {name}
+      {value}
     </div>
   );
 }
