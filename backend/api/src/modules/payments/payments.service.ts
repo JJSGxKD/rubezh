@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { FeatureSwitches } from "../settings/feature-switches.js";
 import { DisabledError, ValidationError } from "../../common/domain-error.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { CONTINUES_PER_RUN } from "../runs/run-rules.js";
+import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RUNS_REPOSITORY, type RunsRepository } from "../runs/runs.repository.js";
 import { PaymentProviders, PaymentProviderUnavailableError, type ProviderInvoice } from "../../platforms/ports/payment-provider.js";
 import { continuePrice } from "./continue-price.js";
@@ -109,6 +110,8 @@ export class PaymentsService {
     @Inject(RUNS_REPOSITORY) private readonly runs: Pick<RunsRepository, "find">,
     private readonly providers: PaymentProviders,
     private readonly switches: FeatureSwitches,
+    // Необязателен, чтобы позиционные вызовы в тестах без ограничений не ломались.
+    @Optional() private readonly restrictions?: AccountRestrictions,
   ) {}
 
   /** Сколько стоит продолжить — без записи и без обращения к Telegram: спрашивают на каждой смерти. */
@@ -117,6 +120,8 @@ export class PaymentsService {
   }
 
   async invoice(account: AccountRef, request: ContinueRequest, nowMs = Date.now()): Promise<ContinueInvoice> {
+    // Закрытые покупки отказывают до счёта: иначе отказ придёт только от Telegram на последнем шаге.
+    await this.restrictions?.ensure(account.accountId, "purchases", new Date(nowMs));
     const offer = await this.offer(account, request, nowMs);
     const outcome = await this.purchases.openInvoice({
       purchaseId: randomUUID(),

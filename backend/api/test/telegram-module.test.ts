@@ -5,6 +5,7 @@ import { BotIdentity } from "../src/platforms/telegram/bot-identity.js";
 import "reflect-metadata";
 import { describe, expect, it } from "vitest";
 import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import { Outbound, NOOP_SINK } from "../src/infra/outbound/outbound.js";
 import { TELEGRAM_BOT_API, TelegramBotApi } from "../src/platforms/telegram/telegram-bot-api.js";
 import { TelegramModule } from "../src/platforms/telegram/telegram.module.js";
 
@@ -17,7 +18,7 @@ import { TelegramModule } from "../src/platforms/telegram/telegram.module.js";
 interface FactoryProvider {
   provide: unknown;
   inject: unknown[];
-  useFactory: (config: AppConfig) => unknown;
+  useFactory: (config: AppConfig, outbound: Outbound) => unknown;
 }
 
 function providersOf(module: unknown): unknown[] {
@@ -69,8 +70,8 @@ describe("модуль Telegram", () => {
     );
 
     expect(factory, "провайдер клиента Bot API").toBeDefined();
-    expect(factory?.inject).toEqual([APP_CONFIG]);
-    expect(factory?.useFactory(config)).toBeInstanceOf(TelegramBotApi);
+    expect(factory?.inject).toEqual([APP_CONFIG, Outbound]);
+    expect(factory?.useFactory(config, new Outbound(NOOP_SINK))).toBeInstanceOf(TelegramBotApi);
     expect(providers).toContain(BotIdentity);
   });
 

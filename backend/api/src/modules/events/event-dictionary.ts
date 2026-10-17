@@ -134,6 +134,11 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
   },
+  // Тестер забрал компенсацию после вайпа (Р87, tasks/T-0043): дошли ли и сколько выдано.
+  compensation_claimed: {
+    version: 1,
+    payload: payload({ tester: z.boolean(), bonusGems: count, restoredGems: count, continueGems: count }),
+  },
   // Второй шанс взят (docs/07-monetization-and-ads.md §8): откуда — `dev`
   // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
   // на какой секунде и волне забега.

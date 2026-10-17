@@ -1377,6 +1377,8 @@ export interface LeaderboardEntry {
   startingWeaponId: string;
   enemiesKilled: number;
   isMe: boolean;
+  /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
+  tester?: true | undefined;
 }
 
 export interface Leaderboard {

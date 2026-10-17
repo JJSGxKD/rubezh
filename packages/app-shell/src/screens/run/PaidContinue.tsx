@@ -7,6 +7,10 @@ import { t } from "../../i18n";
 import "../../i18n/run";
 import "../../i18n/payments";
 import { useContinuePurchase, type ContinueStage } from "../../state/continue-purchase";
+import { RestrictedPlaque } from "../meta/restricted-plaque";
+
+/** Ограничение, которое закрывает оплату второго шанса; плашка берёт его из общего списка. */
+const PURCHASES_RESTRICTION = ["purchases"];
 
 /**
  * Покупка второго шанса за звёзды — кнопка с ценой и строка состояния под
@@ -26,12 +30,19 @@ export function PaidContinue(props: { result: RunResult; locked?: boolean }): Re
   useEffect(() => () => useContinuePurchase.getState().reset(), []);
 
   return (
-    <PaidContinueView
-      stage={stage}
-      locked={props.locked === true}
-      onBuy={() => void useContinuePurchase.getState().buy()}
-      onRetry={() => void useContinuePurchase.getState().retry()}
-    />
+    <>
+      <PaidContinueView
+        stage={stage}
+        locked={props.locked === true}
+        onBuy={() => void useContinuePurchase.getState().buy()}
+        onRetry={() => void useContinuePurchase.getState().retry()}
+      />
+      {/* Срок и причину говорит сервер словами плашки; compact — с экрана смерти
+          уходить некуда, «Написать нам» есть в профиле. */}
+      {stage.kind === "unavailable" && stage.reason === "restricted" ? (
+        <RestrictedPlaque kinds={PURCHASES_RESTRICTION} compact className="order-last col-span-full" />
+      ) : null}
+    </>
   );
 }
 

@@ -16,6 +16,13 @@ vi.mock("@bh/core-game", async (importOriginal) => ({
   loadRunEngine: engine.load,
 }));
 
+const restrictions = vi.hoisted(() => ({ load: vi.fn(async () => undefined) }));
+
+vi.mock("../src/state/restrictions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/state/restrictions")>()),
+  loadRestrictions: restrictions.load,
+}));
+
 const { useRun } = await import("../src/state/run");
 const { useMeta } = await import("../src/state/meta");
 const { initShell } = await import("../src/state/shell");
@@ -164,6 +171,7 @@ describe("покупка второго шанса", () => {
     payments = new FakePayments();
     setPaymentsApiForTests(payments);
     resetPaymentsAvailabilityForTests();
+    restrictions.load.mockClear();
     invoiceStatus = "paid";
     opened = [];
     events = [];
@@ -285,6 +293,42 @@ describe("покупка второго шанса", () => {
     await useContinuePurchase.getState().prepare(result());
 
     expect(useContinuePurchase.getState().stage).toEqual({ kind: "unavailable", reason: "not_offered" });
+    expect(canOfferPaidContinue()).toBe(false);
+  });
+
+  it("покупки закрыты ограничением — причина «restricted», список ограничений перечитан, звёзды не предлагают", async () => {
+    await downed();
+    await useContinuePurchase.getState().prepare(result());
+    payments.invoices = [{ ok: false, failure: "disabled", code: "account_restricted" }];
+
+    await useContinuePurchase.getState().buy();
+
+    expect(useContinuePurchase.getState().stage).toEqual({ kind: "unavailable", reason: "restricted" });
+    expect(restrictions.load).toHaveBeenCalledWith(true);
+    expect(canOfferPaidContinue()).toBe(false);
+    expect(opened).toEqual([]);
+  });
+
+  it("тихое ограничение выглядит как сбой — повтор, а не «закрыто»", async () => {
+    await downed();
+    await useContinuePurchase.getState().prepare(result());
+    payments.invoices = [{ ok: false, failure: "unavailable", code: "temporarily_unavailable" }];
+
+    await useContinuePurchase.getState().buy();
+
+    expect(useContinuePurchase.getState().stage).toMatchObject({ kind: "retry", reason: "offline" });
+    expect(restrictions.load).not.toHaveBeenCalled();
+  });
+
+  it("прочий 403 без кода — как раньше: оплата не предлагается, ограничения не перечитываются", async () => {
+    await downed();
+    await useContinuePurchase.getState().prepare(result());
+    payments.invoices = [{ ok: false, failure: "disabled" }];
+
+    await useContinuePurchase.getState().buy();
+
+    expect(useContinuePurchase.getState().stage).toEqual({ kind: "unavailable", reason: "not_offered" });
+    expect(restrictions.load).not.toHaveBeenCalled();
     expect(canOfferPaidContinue()).toBe(false);
   });
 

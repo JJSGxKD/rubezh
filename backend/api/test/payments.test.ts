@@ -5,6 +5,8 @@ import { DomainError } from "../src/common/domain-error.js";
 import { PaymentsContinueLedger } from "../src/modules/payments/continue-ledger.js";
 import { continuePrice, startedMinutes } from "../src/modules/payments/continue-price.js";
 import { continueRequestSchema } from "../src/modules/payments/dto/payments.dto.js";
+import type { AccountRestrictions } from "../src/modules/restrictions/account-restrictions.js";
+import { AccountRestrictedError, RestrictionSilentError } from "../src/modules/restrictions/restrictions-errors.js";
 import { PaymentsService } from "../src/modules/payments/payments.service.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunContinues } from "../src/modules/runs/run-continues.js";
@@ -150,6 +152,45 @@ describe("счёт второго шанса", () => {
 
   it("продолжений не больше, чем даёт игра", async () => {
     expect(await codeOf(service.quote(me, { runId, continueNo: 2, elapsedSec: 60 }, NOW))).toBe("continue_unavailable");
+  });
+
+  describe("ограничение «Покупки»", () => {
+    function buildWith(error: Error | null): void {
+      const restrictions = {
+        ensure: async (accountId: string, kind: string): Promise<void> => {
+          if (error !== null && accountId === me.accountId && kind === "purchases") throw error;
+        },
+      } as unknown as AccountRestrictions;
+      service = new PaymentsService(config(), purchases, runs, starsProviders(invoices), switchesOf(config()), restrictions);
+    }
+
+    it("закрытые покупки с уведомлением — отказ с текстом, счёт не открыт", async () => {
+      buildWith(new AccountRestrictedError("Покупки закрыты: возврат оплаты"));
+      expect(await codeOf(service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW))).toBe("account_restricted");
+      expect(invoices.sent).toHaveLength(0);
+      expect(purchases.rows.size).toBe(0);
+    });
+
+    it("тихое ограничение — нейтральный отказ, счёт не открыт", async () => {
+      buildWith(new RestrictionSilentError());
+      expect(await codeOf(service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW))).toBe("temporarily_unavailable");
+      expect(invoices.sent).toHaveLength(0);
+      expect(purchases.rows.size).toBe(0);
+    });
+
+    it("цена на смерти ограничения не спрашивает", async () => {
+      buildWith(new AccountRestrictedError("закрыто"));
+      expect(await service.quote(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW)).toMatchObject({ priceStars: 3 });
+    });
+
+    it("без ограничения счёт открыт, как раньше", async () => {
+      buildWith(null);
+      expect(await service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW)).toMatchObject({ status: "pending" });
+    });
+
+    it("сервис без restrictions открывает счёт", async () => {
+      expect(await service.invoice(me, { runId, continueNo: 1, elapsedSec: 125 }, NOW)).toMatchObject({ status: "pending" });
+    });
   });
 
   it("чужой забег — отказ, а не счёт за чужое продолжение", async () => {

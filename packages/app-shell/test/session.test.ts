@@ -35,7 +35,7 @@ function shell(options: { launchData?: string | null; auth?: boolean; devUser?: 
 }
 
 /** Ответ сервера: `data` в конверте — как отдаёт бэкенд. */
-function sessionBody(patch: { created?: boolean; expiresInSec?: number; refresh?: string; startKind?: string } = {}): string {
+function sessionBody(patch: { created?: boolean; expiresInSec?: number; refresh?: string; startKind?: string; tester?: true } = {}): string {
   return JSON.stringify({
     data: {
       ...(patch.startKind === undefined ? {} : { launch: { startKind: patch.startKind } }),
@@ -48,6 +48,7 @@ function sessionBody(patch: { created?: boolean; expiresInSec?: number; refresh?
         photoUrl: null,
         createdAt: "2026-09-23T00:00:00.000Z",
         created: patch.created ?? false,
+        ...(patch.tester === undefined ? {} : { tester: patch.tester }),
       },
     },
   });
@@ -94,6 +95,17 @@ describe("вход в сессию", () => {
 
     expect(useSession.getState().status).toBe("ready");
     expect(useSession.getState().account?.displayName).toBe("Дым");
+  });
+
+  it("признак тестера в аккаунте разбирается; без поля — не тестер", async () => {
+    stubFetch([() => ok(sessionBody({ tester: true }))]);
+    await useSession.getState().signIn();
+    expect(useSession.getState().account?.tester).toBe(true);
+
+    resetSessionForTests();
+    stubFetch([() => ok(sessionBody())]);
+    await useSession.getState().signIn();
+    expect(useSession.getState().account?.tester).toBeUndefined();
   });
 
   it("о заведении аккаунта сообщает ровно раз, о входе — каждый раз", async () => {

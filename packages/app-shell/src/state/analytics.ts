@@ -26,6 +26,7 @@ export const ANALYTICS_EVENTS = [
   "wave_reached",
   "chest_found",
   "chest_opened",
+  "compensation_claimed",
   "run_synced",
   "continue_used",
   "continue_offered",

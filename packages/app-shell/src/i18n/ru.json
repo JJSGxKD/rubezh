@@ -132,6 +132,7 @@
   "passive.ward.description": "Меньше урона от каждого попадания.",
   "passive.tempering.name": "Закалка",
   "passive.tempering.description": "Меньше урона от огня, холода, молнии и яда, и их состояния короче.",
+  "tester.badge": "Тестер",
   "upgrade.heal.name": "Лечение",
   "upgrade.heal.description": "Восстановить часть здоровья.",
   "upgrade.xp.name": "Опыт",
