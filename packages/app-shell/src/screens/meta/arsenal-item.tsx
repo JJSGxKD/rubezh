@@ -133,21 +133,32 @@ function StatRow(props: { stat: string; value: number; nextValue?: number | unde
   const changes = props.nextValue !== undefined && props.nextValue !== props.value;
   const hintKey = `item.stat.${props.stat}.hint`;
   const name = <span className="text-text">{statName(props.stat)}</span>;
+  const value = changes ? (
+    <span className="flex min-w-0 flex-wrap items-baseline justify-end gap-x-1 font-semibold tabular-nums">
+      <span className="whitespace-nowrap text-text-muted">{statValue(props.stat, props.value)}</span>
+      <span aria-hidden="true" className="text-text-muted">
+        →
+      </span>
+      <span className="sr-only">{t("arsenal.item.statBecomes")}</span>
+      <span className="whitespace-nowrap text-success">{statValue(props.stat, props.nextValue ?? props.value)}</span>
+    </span>
+  ) : (
+    <span className="font-semibold tabular-nums text-success">{statValue(props.stat, props.value)}</span>
+  );
+  // С подсказкой значение уходит в правый слот строки, а пояснение — под всю строку.
+  if (props.withHint === true && hasTranslation(hintKey)) {
+    return (
+      <div className="px-2 py-1.5 text-sm">
+        <Hint label={statName(props.stat)} text={t(hintKey)} end={value}>
+          {name}
+        </Hint>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center justify-between gap-3 px-2 py-1.5 text-sm">
-      {props.withHint === true && hasTranslation(hintKey) ? <Hint label={statName(props.stat)} text={t(hintKey)}>{name}</Hint> : name}
-      {changes ? (
-        <span className="flex min-w-0 flex-wrap items-baseline justify-end gap-x-1 font-semibold tabular-nums">
-          <span className="whitespace-nowrap text-text-muted">{statValue(props.stat, props.value)}</span>
-          <span aria-hidden="true" className="text-text-muted">
-            →
-          </span>
-          <span className="sr-only">{t("arsenal.item.statBecomes")}</span>
-          <span className="whitespace-nowrap text-success">{statValue(props.stat, props.nextValue ?? props.value)}</span>
-        </span>
-      ) : (
-        <span className="font-semibold tabular-nums text-success">{statValue(props.stat, props.value)}</span>
-      )}
+      {name}
+      {value}
     </div>
   );
 }
