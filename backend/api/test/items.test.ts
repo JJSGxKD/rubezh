@@ -13,6 +13,8 @@ import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { itemMergeSchema, itemRerollSchema } from "../src/modules/items/dto/items.dto.js";
 import { ITEM_RARITIES, ITEM_SLOTS, RARITY_RULES } from "../src/modules/items/item-catalog.js";
+import { itemView } from "../src/modules/items/item-views.js";
+import type { ItemRow } from "../src/modules/items/items.repository.js";
 import { loadoutKey, signLoadout, verifyLoadout } from "../src/modules/items/item-loadout.js";
 import { ItemNotFoundError, ItemRuleError } from "../src/modules/items/items-errors.js";
 import { ItemsController } from "../src/modules/items/items.controller.js";
@@ -225,5 +227,37 @@ describe("итог надетого в инвентаре", () => {
     expect(order).toEqual([...order].sort((x, y) => x - y));
     // Новый — тот, чей лист игрок ещё не открывал.
     expect(view.items.map((item) => item.isNew)).toEqual([false, false, true]);
+  });
+});
+
+describe("предмет — что будет после улучшения", () => {
+  function row(level: number): ItemRow {
+    return {
+      itemId: "item-1",
+      accountId: "acc",
+      slot: "weapon",
+      rarity: "rare",
+      level,
+      seed: 1,
+      rolls: { main: { stat: "damage", roll: 1.1 }, extras: [{ stat: "damageFire", roll: 0.9 }] },
+      equipped: false,
+      source: "test",
+      createdAt: new Date(0),
+      seenAt: null,
+    };
+  }
+
+  it("ниже потолка — next равен предмету уровнем выше", () => {
+    const view = itemView(row(3), 10);
+    const after = itemView(row(4), 10);
+    expect(view.next).toEqual({ level: 4, power: after.power, main: after.main, extras: after.extras });
+    expect(view.next?.power).toBeGreaterThan(view.power);
+  });
+
+  it("в потолке аккаунта — upgrade и next нет", () => {
+    const capped = itemView(row(6), 1);
+    expect(capped.upgrade).toBeNull();
+    expect(capped.next).toBeUndefined();
+    expect("next" in capped).toBe(false);
   });
 });
