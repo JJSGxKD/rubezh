@@ -8,6 +8,7 @@
   "run.continue.retry.slow_confirmation": "Оплата ещё подтверждается. Если не подтвердится, звёзды вернутся",
   "run.continue.unavailable.not_offered": "Сейчас второй шанс не купить",
   "run.continue.unavailable.unverified": "Сервер не видел начала забега — второй шанс недоступен",
+  "run.continue.unavailable.restricted": "Покупки для аккаунта закрыты",
   "run.continue.unavailable.used_up": "Второй шанс в этом забеге уже взят",
   "run.continue.vip": "Продолжить с VIP — без рекламы",
   "run.continue.vip.short": "С VIP",
