@@ -9,6 +9,7 @@ import { MessagePreparers } from "./ports/prepared-message.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "./telegram/telegram-bot-api.js";
 import { BotIdentity } from "./telegram/bot-identity.js";
 import { TelegramAppLinks } from "./telegram/telegram-app-links.js";
+import { TELEGRAM_LINK_ORIGIN, fixedLinkOrigin, type LinkOrigin } from "./telegram/telegram-link-format.js";
 import { TelegramChannelMembership, type MembershipBotApi } from "./telegram/telegram-channel-membership.js";
 import { TelegramStarsProvider } from "./telegram/telegram-stars-provider.js";
 import { TelegramLaunchVerifier } from "./telegram/telegram-launch-verifier.js";
@@ -41,8 +42,8 @@ export function channelMembershipsFor(config: AppConfig, telegramApi: Membership
 }
 
 /** Ссылка запуска приложения: пока только Telegram — у MAX и VK приложений ещё нет. */
-export function appLinksFor(identity: BotIdentity): AppLinks {
-  return new AppLinks([new TelegramAppLinks(identity)]);
+export function appLinksFor(identity: BotIdentity, origin: LinkOrigin = fixedLinkOrigin): AppLinks {
+  return new AppLinks([new TelegramAppLinks(identity, origin)]);
 }
 
 /** Подготовленные сообщения для приглашений (Р63): пока только бот Telegram. */
@@ -60,11 +61,12 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
   providers: [
     { provide: LaunchVerifiers, inject: [APP_CONFIG], useFactory: launchVerifiersFor },
     { provide: PaymentProviders, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: paymentProvidersFor },
-    { provide: AppLinks, inject: [BotIdentity], useFactory: appLinksFor },
+    { provide: TELEGRAM_LINK_ORIGIN, useValue: fixedLinkOrigin },
+    { provide: AppLinks, inject: [BotIdentity, TELEGRAM_LINK_ORIGIN], useFactory: appLinksFor },
     { provide: Messengers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messengersFor },
     { provide: ChannelMemberships, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: channelMembershipsFor },
     { provide: MessagePreparers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messagePreparersFor },
   ],
-  exports: [LaunchVerifiers, PaymentProviders, AppLinks, Messengers, ChannelMemberships, MessagePreparers],
+  exports: [LaunchVerifiers, PaymentProviders, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, MessagePreparers],
 })
 export class PlatformsModule {}
