@@ -2,11 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../src/state/api-request";
 import {
   CONNECTION_FAILURE_WINDOW_MS,
+  CONNECTION_PROBE_PERIOD_MS,
   INITIAL_CONNECTION,
+  PROBER_LOAD_TIMEOUT_MS,
   nextConnection,
   reportBrowserOffline,
   reportReachability,
   resetConnectionForTests,
+  retryConnection,
+  setProberForTests,
   useConnection,
   type ConnectionState,
 } from "../src/state/connection";
@@ -241,5 +245,136 @@ describe("исход запроса игрока", () => {
     sessionStub.fetch.mockResolvedValueOnce(null);
     await get();
     expect(useConnection.getState()).toMatchObject({ status: "online", firstFailAt: null });
+  });
+});
+
+describe("кнопка «Повторить» и загрузка чанка проверки", () => {
+  let events: { event: string; payload: unknown }[];
+
+  /** Связь пропала, загрузчик уже позвали при потере — счёт вызовов начинается заново. */
+  async function goOffline(loader: { mockClear(): void }): Promise<void> {
+    reportReachability("fail", T0);
+    reportReachability("fail", T0 + 1_000);
+    await vi.advanceTimersByTimeAsync(0);
+    loader.mockClear();
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetConnectionForTests();
+    events = [];
+    initShell({ ...useShell.getState(), analytics: (event, payload) => events.push({ event, payload }) });
+  });
+
+  afterEach(() => {
+    setProberForTests(null);
+    vi.useRealTimers();
+    resetConnectionForTests();
+  });
+
+  it("чанк упал: «Проверяем…» с нажатия, ошибки нет, затем снова «Повторить», плашка на месте", async () => {
+    const loader = vi.fn(() => Promise.reject(new Error("Failed to fetch")));
+    setProberForTests(loader);
+    await goOffline(loader);
+
+    const pending = retryConnection();
+    expect(useConnection.getState().checking).toBe(true);
+    await expect(pending).resolves.toBeUndefined();
+
+    expect(useConnection.getState().checking).toBe(false);
+    expect(useConnection.getState().status).toBe("offline");
+  });
+
+  it("чанк не отвечает: ждём не дольше PROBER_LOAD_TIMEOUT_MS, потом снова «Повторить»", async () => {
+    const loader = vi.fn(() => new Promise<never>(() => undefined));
+    setProberForTests(loader);
+    await goOffline(loader);
+
+    let done = false;
+    const pending = retryConnection().then(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(PROBER_LOAD_TIMEOUT_MS - 1);
+    expect(useConnection.getState().checking).toBe(true);
+    expect(done).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(useConnection.getState().checking).toBe(false);
+    expect(useConnection.getState().status).toBe("offline");
+    expect(done).toBe(true);
+  });
+
+  it("чанк загрузился: проверка вызвана один раз, и флаг к её началу уже снят", async () => {
+    let checkingInside: boolean | null = null;
+    const checkConnection = vi.fn(async () => {
+      checkingInside = useConnection.getState().checking;
+    });
+    const loader = vi.fn(async () => ({ checkConnection, watchConnection: () => undefined }));
+    setProberForTests(loader);
+    await goOffline(loader);
+
+    await retryConnection();
+
+    expect(checkConnection).toHaveBeenCalledTimes(1);
+    expect(checkingInside).toBe(false);
+  });
+
+  it("связь есть или проверка уже идёт — загрузчик не зовут", async () => {
+    const loader = vi.fn(async () => ({ checkConnection: async () => undefined, watchConnection: () => undefined }));
+    setProberForTests(loader);
+
+    await retryConnection();
+    expect(loader).not.toHaveBeenCalled();
+
+    await goOffline(loader);
+    useConnection.setState({ checking: true });
+    await retryConnection();
+    expect(loader).not.toHaveBeenCalled();
+  });
+
+  it("потеря связи при упавшем чанке: ничего не бросает, событие одно, загрузка повторяется через период", async () => {
+    const loader = vi.fn(() => Promise.reject(new Error("Failed to fetch")));
+    setProberForTests(loader);
+
+    reportReachability("fail", T0);
+    reportReachability("fail", T0 + 1_000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(events.filter((entry) => entry.event === "connection_lost")).toHaveLength(1);
+    expect(loader).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(CONNECTION_PROBE_PERIOD_MS);
+    expect(loader).toHaveBeenCalledTimes(2);
+    expect(useConnection.getState().status).toBe("offline");
+  });
+
+  it("повторная загрузка чанка не множит таймеры: один перезапуск за период", async () => {
+    const loader = vi.fn(() => Promise.reject(new Error("Failed to fetch")));
+    setProberForTests(loader);
+
+    reportReachability("fail", T0);
+    reportReachability("fail", T0 + 1_000);
+    await vi.advanceTimersByTimeAsync(CONNECTION_PROBE_PERIOD_MS * 3);
+
+    // 1 при потере и по одному на каждый из трёх периодов
+    expect(loader).toHaveBeenCalledTimes(4);
+  });
+
+  it("связь вернулась до срока: возвращение выключает таймер, и после срока загрузки больше нет", async () => {
+    const loader = vi.fn(() => Promise.reject(new Error("Failed to fetch")));
+    setProberForTests(loader);
+
+    reportReachability("fail", T0);
+    reportReachability("fail", T0 + 1_000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(loader).toHaveBeenCalledTimes(1);
+
+    reportReachability("reachable", T0 + 5_000, T0 + 4_000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useConnection.getState().status).toBe("online");
+    expect(loader).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(CONNECTION_PROBE_PERIOD_MS * 2);
+    expect(loader).toHaveBeenCalledTimes(2);
   });
 });
