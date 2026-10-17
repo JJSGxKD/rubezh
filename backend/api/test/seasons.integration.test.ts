@@ -646,7 +646,8 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
         const season = seasonOf(new Date(base.startsAt.getTime() + week * 7 * DAY));
         await play(id, season, { survivalSec: 200 + week });
       }
-      await close.closeDue(new Date(base.startsAt.getTime() + 10 * 7 * DAY + HOUR));
+      // Задание закрытия догоняет не больше двух недель (MAX_CATCH_UP_WEEKS): закрываем неделя за неделей, как в жизни.
+      for (let week = 1; week <= 10; week++) await close.closeDue(new Date(base.startsAt.getTime() + week * 7 * DAY + HOUR));
 
       const answer = await view.overview(id, new Date(base.startsAt.getTime() + 11 * 7 * DAY));
 
