@@ -3,7 +3,7 @@ id: T-0059
 title: Один клиент исходящих запросов — все вызовы внешних API через него
 epic: E13
 priority: P1
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
