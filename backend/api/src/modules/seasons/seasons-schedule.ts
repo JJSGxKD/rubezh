@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { dueSeasons, parseStartDate, seasonOf, type Season } from "./season-rules.js";
@@ -11,6 +11,8 @@ import { dueSeasons, parseStartDate, seasonOf, type Season } from "./season-rule
  */
 @Injectable()
 export class SeasonSchedule {
+  private readonly logger = new Logger("seasons");
+
   constructor(@Inject(SETTINGS_READER) private readonly settings: SettingsReader) {}
 
   /** Понедельник первого сезона; `null` — сезонов нет. */
@@ -24,9 +26,15 @@ export class SeasonSchedule {
     return start === null || at.getTime() < start.getTime() ? null : seasonOf(at);
   }
 
-  /** Закончившиеся к `now` сезоны с первого, по порядку; закрытые отсеивает вызывающий. */
+  /**
+   * Закончившиеся к `now` сезоны по порядку, не старше потолка догона;
+   * закрытые отсеивает вызывающий. Пропущенные потолком — строкой в лог.
+   */
   due(now: Date): Season[] {
     const start = this.startsAt();
-    return start === null ? [] : dueSeasons(start, now);
+    if (start === null) return [];
+    const { due, skipped } = dueSeasons(start, now);
+    if (skipped > 0) this.logger.warn(JSON.stringify({ module: "seasons", event: "season_backfill_capped", skipped }));
+    return due;
   }
 }
