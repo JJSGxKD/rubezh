@@ -39,11 +39,16 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
   }, [tabTitle]);
 
   // На невысоком экране меню прокручивается само по себе — открытый по ссылке
-  // «Аудит» не должен прятаться под его нижним краем.
+  // «Аудит» не должен прятаться под его нижним краем. На телефоне колонка меню
+  // появляется только при открытии листа, поэтому прокрутка нужна и тогда; кадр
+  // ждёт, пока колонка отрисуется.
   const sectionId = route?.section ?? null;
   useEffect(() => {
-    document.querySelector('nav [aria-current="page"]')?.scrollIntoView({ block: "nearest" });
-  }, [sectionId]);
+    const frame = requestAnimationFrame(() => {
+      document.querySelector('nav [aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [sectionId, sheetOpen]);
 
   // «Назад» в браузере и любой переход закрывают лист меню: маршрут сменился.
   const hash = hashRoute === null ? "" : hrefOf(hashRoute);

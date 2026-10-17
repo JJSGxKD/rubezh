@@ -12,10 +12,10 @@ zones:
   - backend/api/src/modules/payments/payments.service.ts
   - backend/api/test/payments.test.ts
   - packages/app-shell/src/screens/run/PaidContinue.tsx
-  - packages/app-shell/src/screens/run/paid-continue-rules.ts
-  - packages/app-shell/test/paid-continue-rules.test.ts
+  - packages/app-shell/src/state/continue-purchase.ts
+  - packages/app-shell/test/continue-purchase.test.ts
+  - packages/app-shell/src/i18n/ru-payments.json
 shared:
-  - packages/app-shell/src/i18n/ru.json
   - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
@@ -49,9 +49,18 @@ batch: 2
   устроен.
 - **`quote`** (цена на каждой смерти) не меняется: без записи и лишних чтений.
   Отказ приходит только на «Оплатить».
-- **Клиент:** на `account_restricted` экран второго шанса показывает текст
-  сервера вместо общего «не получилось»; на `temporarily_unavailable` — уже
-  существующий текст временной недоступности. Ролик за второй шанс остаётся.
+- **Клиент:** на `account_restricted` экран второго шанса показывает, что
+  покупки закрыты, и плашку ограничения со сроком и причиной от сервера —
+  так же, как удвоение награды и магазин (WP44 ч.4). Тихое ограничение
+  (`temporarily_unavailable`) выглядит как сбой: строка «Нет связи с
+  сервером» и «Повторить», как сейчас (О40). Ролик за второй шанс остаётся.
+
+Ответ claude-lead-1 на вопрос PR #363, 17.10.2026: шаги 3–5 переписаны.
+Текст ограничения не тянется из тела ошибки: `api-request.ts` разбирает
+только `code`, а срок и причину словами сервера уже отдаёт
+`/me/restrictions` — их показывает `RestrictedPlaque`. Поэтому
+`api-request.ts` и `payments-api.ts` не трогаем, причина отказа становится
+состоянием стора покупки, а `paidErrorText` не нужен.
 
 ## Как сейчас
 
@@ -64,7 +73,16 @@ batch: 2
   `AccountRestrictedError` (`account_restricted`, 403), `RestrictionSilentError`
   (`temporarily_unavailable`, 503).
 - `packages/app-shell/src/screens/run/PaidContinue.tsx` — оплата второго шанса и
-  её ошибки.
+  её ошибки: `lineOf` берёт текст по ключу `run.continue.unavailable.<причина>`.
+- `packages/app-shell/src/state/continue-purchase.ts`, `settleFailure` (96–107):
+  403 разбирается как `failure: "disabled"` (`failureOf` в `api-request.ts`),
+  поэтому `account_restricted` сейчас уходит в `markPaymentsOff()` и
+  `unavailable("not_offered")` — «Сейчас второй шанс не купить» без причины.
+  503 — `failure: "unavailable"` → `retry("offline")`.
+- Образец плашки на экране итогов — `screens/run/RunDouble.tsx:123`
+  (`RestrictedPlaque … compact`); список ограничений — `state/restrictions.ts`
+  (`loadRestrictions`, `RESTRICTED_CODE`); вид ограничения покупок —
+  `PURCHASES_RESTRICTION = ["purchases"]` в `screens/meta/shop.tsx:47`.
 
 ## Шаги по порядку
 
@@ -75,12 +93,31 @@ batch: 2
    ломаются. `RestrictionsModule` уже в импортах `payments.module.ts`, и он
    экспортирует `AccountRestrictions`. В `invoice` первой строкой:
    `await this.restrictions?.ensure(account.accountId, "purchases", new Date(nowMs))`.
-3. **`paid-continue-rules.ts`** (новый, чистая функция) —
-   `paidErrorText(code: string | null, message: string | null): { key: string } | { text: string }`:
-   - `account_restricted` с текстом → `{ text: message }`;
-   - `temporarily_unavailable` → ключ уже существующего текста временной недоступности;
-   - остальное → прежний ключ ошибки оплаты.
-4. **`PaidContinue.tsx`** — текст ошибки через `paidErrorText`; разметку не менять.
+3. **`state/continue-purchase.ts`.**
+   - `UnavailableReason` += `"restricted"`, в комментарии к типу: «покупки
+     аккаунта закрыты ограничением, о котором игроку сообщили».
+   - В `settleFailure` **первой** веткой, до проверки `disabled`:
+     `answer.code === RESTRICTED_CODE` (из `state/restrictions.ts`) →
+     `markPaymentsOff()`, `void loadRestrictions(true)`,
+     `unavailable("restricted")`. `markPaymentsOff` — как и сейчас при 403:
+     дальше в этом запуске второй шанс за звёзды этому аккаунту не
+     предлагается; `loadRestrictions(true)` — чтобы плашка встала со свежим
+     списком.
+   - `temporarily_unavailable` не трогать: он уже уходит в `retry("offline")`.
+4. **`PaidContinue.tsx`.**
+   - `PaidContinueView` не меняется: он остаётся без стора и сети, его рисует
+     витрина. Строку под кнопкой `lineOf` возьмёт сам по ключу
+     `run.continue.unavailable.restricted`.
+   - В `PaidContinue` после `<PaidContinueView … />`: при
+     `stage.kind === "unavailable" && stage.reason === "restricted"` —
+     `<RestrictedPlaque kinds={PURCHASES_RESTRICTION} compact className="order-last col-span-full" />`,
+     `const PURCHASES_RESTRICTION = ["purchases"]` — в этом файле, как в
+     `shop.tsx:47`. `compact` — без «Написать нам»: с экрана смерти уходить
+     некуда, кнопка есть в профиле.
+   - `i18n/ru-payments.json`: `"run.continue.unavailable.restricted": "Покупки для аккаунта закрыты"`.
+5. **Убрать из ветки** `screens/run/paid-continue-rules.ts` и
+   `test/paid-continue-rules.test.ts`: причина теперь в состоянии стора, а
+   текст сервера — в плашке. Отдельным коммитом.
 
 ## Чего не трогаем
 
@@ -95,7 +132,14 @@ batch: 2
   - тихое ограничение → `RestrictionSilentError`, `openInvoice` не вызван;
   - без ограничения → счёт открыт, как раньше;
   - сервис без `restrictions` (как в старых тестах) → счёт открыт.
-- `packages/app-shell/test/paid-continue-rules.test.ts` — три ветки `paidErrorText`.
+- `packages/app-shell/test/continue-purchase.test.ts`, по образцу соседних
+  кейсов с подменой `PaymentsApi`:
+  - `invoice` → `{ ok: false, failure: "disabled", code: "account_restricted" }` →
+    `stage` = `{ kind: "unavailable", reason: "restricted" }`,
+    `canOfferPaidContinue()` → `false`;
+  - `invoice` → `{ ok: false, failure: "unavailable", code: "temporarily_unavailable" }` →
+    `stage` = `retry` с причиной `offline`, как раньше;
+  - прочий 403 без кода (`failure: "disabled"`) → `unavailable("not_offered")`, как раньше.
 
 ## Аналитика
 
@@ -112,8 +156,11 @@ batch: 2
 
 ## Критерии приёмки
 
-- [ ] Закрытый аккаунт не получает ссылку на оплату второго шанса и видит текст
-  ограничения.
+- [ ] Закрытый аккаунт не получает ссылку на оплату второго шанса, под кнопкой
+  видит «Покупки для аккаунта закрыты» и плашку ограничения со сроком и
+  причиной.
+- [ ] Тихое ограничение выглядит как сбой: «Нет связи с сервером» и «Повторить».
+- [ ] `paid-continue-rules.ts` и его теста в диффе PR нет.
 - [ ] Открытому аккаунту всё как раньше; `quote` не изменился.
 - [ ] Гейт (`CLAUDE.md`) зелёный.
 
@@ -127,5 +174,5 @@ batch: 2
   ```
   📋 **СВОДКА: В DEV ВЛИТ PR #<номер> — ВТОРОЙ ШАНС УВАЖАЕТ ЗАКРЫТЫЕ ПОКУПКИ**
 
-  Аккаунт, которому закрыли покупки после возврата звёзд, больше не получает ссылку на оплату второго шанса: сервер отказывает сразу и показывает причину. Раньше отказ приходил только от Telegram на последнем шаге.
+  Аккаунт, которому закрыли покупки после возврата звёзд, больше не получает ссылку на оплату второго шанса: сервер отказывает сразу, а на экране смерти — плашка ограничения со сроком и причиной. Раньше отказ приходил только от Telegram на последнем шаге.
   ```

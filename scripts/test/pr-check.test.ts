@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { evaluateReleaseLabels, hasBreakingSection, minimumReleaseLevel, parsePrTitle, requiresBreakingSection } from "../release/pr-check.mjs";
+import { checkSummary, checkTaskLine, checkTrailers, evaluateReleaseLabels, hasBreakingSection, minimumReleaseLevel, parsePrTitle, requiresBreakingSection } from "../release/pr-check.mjs";
 
 // Формат заголовка — CLAUDE.md, «Коммиты». Проверка PR — docs/09-ci-cd.md §8.1.
 
@@ -124,5 +124,88 @@ describe("hasBreakingSection", () => {
 
   it("раздела нет вовсе", () => {
     expect(hasBreakingSection("## Что и почему\nтекст")).toBe(false);
+  });
+});
+
+describe("checkSummary", () => {
+  const body = (summary: string) => `Задача: tasks/T-0001-x.md\n\n## Сводка для команды\n\n${summary}\n\n## Пост в канал\n\nтекст`;
+
+  it("принимает сводку с номером этого PR в заголовке", () => {
+    expect(checkSummary(body("📋 **СВОДКА: В DEV ВЛИТ PR #123 — ТЕКСТ**\n\nОписание"), 123)).toEqual([]);
+  });
+
+  it("отклоняет сводку без номера", () => {
+    expect(checkSummary(body("📋 **СВОДКА: В DEV ВЛИТ PR — ТЕКСТ**"), 123)).toHaveLength(1);
+  });
+
+  it("отклоняет чужой номер", () => {
+    expect(checkSummary(body("📋 **СВОДКА: В DEV ВЛИТ PR #99 — ТЕКСТ**"), 123)).toHaveLength(1);
+  });
+
+  it("не принимает #1234 за #123", () => {
+    expect(checkSummary(body("📋 **СВОДКА: PR #1234 — ТЕКСТ**"), 123)).toHaveLength(1);
+  });
+
+  it.each(["#<номер>", "#НОМЕР"])("отклоняет заглушку %s с подсказкой", (stub) => {
+    const errors = checkSummary(body(`📋 **СВОДКА: В DEV ВЛИТ PR ${stub} — ТЕКСТ**`), 123);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("впишите номер PR");
+  });
+
+  it("отклоняет раздел в блоке кода", () => {
+    const errors = checkSummary(body("```\n📋 **СВОДКА: В DEV ВЛИТ PR #123 — ТЕКСТ**\n```"), 123);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("блоке кода");
+  });
+
+  it("отклоняет описание без раздела", () => {
+    expect(checkSummary("Задача: tasks/T-0001-x.md", 123)).toHaveLength(1);
+    expect(checkSummary("", 123)).toHaveLength(1);
+  });
+});
+
+describe("checkTaskLine", () => {
+  const files = ["T-0042-wipe.md", "T-0043-other.md"];
+
+  it("принимает верную строку и существующий файл", () => {
+    expect(checkTaskLine("Задача: tasks/T-0042-wipe.md\n\nтекст", "task/T-0042", files)).toEqual([]);
+  });
+
+  it("отклоняет несуществующий файл", () => {
+    expect(checkTaskLine("Задача: tasks/T-0042-nope.md", "task/T-0042", files)).toHaveLength(1);
+  });
+
+  it("отклоняет чужой id в строке", () => {
+    expect(checkTaskLine("Задача: tasks/T-0043-other.md", "task/T-0042", files)).toHaveLength(1);
+  });
+
+  it("отклоняет описание без строки «Задача:» первой", () => {
+    expect(checkTaskLine("текст\nЗадача: tasks/T-0042-wipe.md", "task/T-0042", files)).toHaveLength(1);
+    expect(checkTaskLine("", "task/T-0042", files)).toHaveLength(1);
+  });
+
+  it("не проверяет ветки не из task/*", () => {
+    expect(checkTaskLine("", "feat/anything", files)).toEqual([]);
+    expect(checkTaskLine("", "task/not-an-id", files)).toEqual([]);
+  });
+});
+
+describe("checkTrailers", () => {
+  const trailer = "Co-Authored-By: Claude <noreply@anthropic.com>";
+
+  it("принимает трейлер после пустой строки", () => {
+    expect(checkTrailers([{ sha: "a".repeat(40), message: `Заголовок\n\nТекст\n\n${trailer}\n` }])).toEqual([]);
+    expect(checkTrailers([{ sha: "a".repeat(40), message: `Заголовок\n\n${trailer}\n` }])).toEqual([]);
+  });
+
+  it("отклоняет трейлер сразу под заголовком и называет короткий sha", () => {
+    const errors = checkTrailers([{ sha: "abcdef0123456789".repeat(2) + "abcdef01", message: `Заголовок\n${trailer}\n` }]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("abcdef0");
+    expect(errors[0]).not.toContain("abcdef01234");
+  });
+
+  it("пропускает коммиты без трейлера", () => {
+    expect(checkTrailers([{ sha: "b".repeat(40), message: "Заголовок\nбез трейлера\n" }])).toEqual([]);
   });
 });

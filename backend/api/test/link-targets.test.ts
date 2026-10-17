@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clickTarget, directUrl, LINK_TARGETS } from "../src/modules/links/link-targets.js";
+import { clickDeepTarget, clickTarget, directUrl, LINK_TARGETS } from "../src/modules/links/link-targets.js";
 
 /**
  * Цель ссылки (docs/35-stage4-plan.md Р95): куда ведёт переходник после клика
@@ -69,5 +69,30 @@ describe("прямая ссылка", () => {
     expect(directUrl(link("app"), notReady)).toBeNull();
     expect(directUrl(link("bot"), notReady)).toBeNull();
     expect(directUrl(link("landing"), { ...builders, landingBase: "" })).toBeNull();
+  });
+});
+
+describe("диплинк после клика", () => {
+  const deepBuilders = {
+    launchDeep: (param: string) => `tg://resolve?domain=rubezh_bot&startapp=${encodeURIComponent(param)}`,
+    chatDeep: (param: string) => `tg://resolve?domain=rubezh_bot&start=${encodeURIComponent(param)}`,
+  };
+
+  it("app — диплинк Mini App с кодом клика c-<клик>", () => {
+    expect(clickDeepTarget("app", "Ab12Cd34Ef56", deepBuilders)).toBe("tg://resolve?domain=rubezh_bot&startapp=c-Ab12Cd34Ef56");
+  });
+
+  it("bot — диплинк чата с c-<клик>", () => {
+    expect(clickDeepTarget("bot", "Ab12Cd34Ef56", deepBuilders)).toBe("tg://resolve?domain=rubezh_bot&start=c-Ab12Cd34Ef56");
+  });
+
+  it("landing — диплинка нет: это страница, а не клиент площадки", () => {
+    expect(clickDeepTarget("landing", "Ab12Cd34Ef56", deepBuilders)).toBeNull();
+  });
+
+  it("построитель вернул null (площадка без диплинков, бот не представился) — null", () => {
+    const none = { launchDeep: () => null, chatDeep: () => null };
+    expect(clickDeepTarget("app", "Ab12Cd34Ef56", none)).toBeNull();
+    expect(clickDeepTarget("bot", "Ab12Cd34Ef56", none)).toBeNull();
   });
 });
