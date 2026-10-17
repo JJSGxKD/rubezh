@@ -1,0 +1,57 @@
+{
+  "log": {
+    "loglevel": "warning",
+    "access": "none"
+  },
+  "inbounds": [
+    {
+      "tag": "in-0",
+      "listen": "127.0.0.1",
+      "port": 10800,
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": false
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "out-{{KEY}}",
+      "protocol": "shadowsocks",
+      "settings": {
+        "servers": [
+          {
+            "address": "example.com",
+            "port": 8388,
+            "method": "2022-blake3-aes-128-gcm",
+            "password": "cGFzc3dvcmQxMjM0NTY3OA=="
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none"
+      },
+      "mux": {
+        "enabled": false
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": [
+          "in-0"
+        ],
+        "outboundTag": "out-{{KEY}}"
+      }
+    ]
+  }
+}
