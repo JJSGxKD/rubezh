@@ -11,6 +11,7 @@ import {
   CurrencyChip,
   Emblem,
   IconButton,
+  Hint,
   IconEmblem,
   ListGroup,
   ListItem,
@@ -158,6 +159,16 @@ export function GalleryScreen(): ReactNode {
             toggle={{ checked: false, disabled: true, onChange: () => undefined }}
           />
         </ListGroup>
+
+        <SectionTitle>{t("gallery.hint")}</SectionTitle>
+        <div className="grid gap-3">
+          <Hint label={t("gallery.hint.label")} text={t("gallery.hint.text")}>
+            <span className="text-sm text-text">{t("gallery.hint.label")}</span>
+          </Hint>
+          <Hint label={t("gallery.hint.label")} text={t("gallery.hint.text")} initiallyOpen>
+            <span className="text-sm text-text">{t("gallery.hint.label")}</span>
+          </Hint>
+        </div>
 
         <SectionTitle>{t("gallery.segmented")}</SectionTitle>
         <SegmentedControl
