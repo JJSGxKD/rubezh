@@ -1,4 +1,4 @@
-import type { DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -274,6 +274,12 @@ export interface RunOptions {
    * «Ещё раз» заводит новый и бусты не переносит.
    */
   runId?: string;
+  /**
+   * Останавливать забег, когда игрок открыл сундук: оболочка показывает окно
+   * наград и отвечает `closeChest`. Без поля сундук открывается на ходу, а
+   * награды приходят событием `chestOpened`.
+   */
+  pauseOnChest?: boolean;
 }
 
 /**
@@ -322,6 +328,14 @@ export interface RunEvents {
   waveReached: { index: number; elapsedSec: number };
   /** набран уровень: мир стоит, пока оболочка не вернёт выбор */
   levelUp: { level: number; options: UpgradeOption[]; queued: number };
+  /** выпал сундук: `index` с нуля, `size` — сколько улучшений в нём */
+  chestFound: { index: number; size: ChestSize; source: ChestSource; elapsedSec: number };
+  /**
+   * Игрок открыл сундук, награды уже выданы. С `pauseOnChest` мир стоит, пока
+   * оболочка не ответит `closeChest`. `fallbacks` — сколько наград запасные
+   * (аптечка, опыт).
+   */
+  chestOpened: { index: number; size: ChestSize; rewards: ChestReward[]; fallbacks: number; elapsedSec: number };
   paused: { reason: RunPauseReason; elapsedSec: number };
   resumed: { elapsedSec: number };
   /** техническая сводка — только с `diagnostics.fpsOverlay` или `dev.visuals.techInfo` */
@@ -523,6 +537,11 @@ export interface RunContinueOptions {
 export interface RunSession {
   on<E extends keyof RunEvents>(event: E, handler: (payload: RunEvents[E]) => void): () => void;
   chooseUpgrade(optionId: string): void;
+  /**
+   * Закрыть окно сундука при `pauseOnChest`: забег идёт дальше или, если
+   * набран уровень, переходит к выбору улучшения. Вне окна сундука — ничего.
+   */
+  closeChest(): void;
   pause(reason: RunPauseReason): void;
   resume(): void;
   abandon(): void;

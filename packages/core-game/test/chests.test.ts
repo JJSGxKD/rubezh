@@ -65,7 +65,7 @@ function chestSizes(world: World): number[] {
 }
 
 function chestsOnField(world: World): number {
-  return CHEST_KINDS.reduce((sum, kind) => sum + countOnField(world, kind), 0);
+  return CHEST_KINDS.reduce<number>((sum, kind) => sum + countOnField(world, kind), 0);
 }
 
 // --- Мини-мир без выбора: всё на потолке ---------------------------------------
