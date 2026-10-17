@@ -9,6 +9,9 @@
  * зависимость в этот инструмент не нужны.
  */
 
+import { minimumReleaseLevel, parsePrTitle } from "../release/pr-check.mjs";
+import { compareReleaseLevels } from "../release/semver.mjs";
+
 export const FILE_NAME_RE = /^(T-\d{4})-[a-z0-9-]+\.md$/;
 const ID_RE = /^T-\d{4}$/;
 
@@ -255,6 +258,57 @@ function badgeProblem(data, body, fileNames) {
   return null;
 }
 
+const PR_TITLE_LINE_RE = /^- \*\*Заголовок:\*\* `(.+)`\s*$/;
+const PR_LABEL_LINE_RE = /^- \*\*Метка:\*\* `release: (\S+)`\s*$/;
+
+/** Строки раздела «## PR» — от него до следующего `## ` или конца файла. */
+function prSectionLines(body) {
+  const lines = body.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^## PR\s*$/.test(line));
+  if (start < 0) return [];
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => line.startsWith("## "));
+  return end < 0 ? rest : rest.slice(0, end);
+}
+
+/**
+ * Раздел «PR» спецификации (tasks/T-0146) должен совпадать с шапкой: в нём
+ * есть заголовок и метка, метка равна полю `release`, а поле `release` не
+ * ниже того, что требует тип заголовка. Иначе исполнитель берёт метку из
+ * одного места, и PR уходит на доработку уже после открытия.
+ *
+ * Вызывает `validateTask` только для `ready` и `in-progress`: у черновика
+ * спецификация не дописана, закрытая задача историю не меняет.
+ */
+export function checkPrSection(fileName, data, body) {
+  const prefix = `${fileName}: раздел «PR»`;
+  const lines = prSectionLines(body);
+  const titleMatch = lines.map((line) => PR_TITLE_LINE_RE.exec(line)).find((match) => match !== null);
+  const labelMatch = lines.map((line) => PR_LABEL_LINE_RE.exec(line)).find((match) => match !== null);
+  const errors = [];
+
+  if (titleMatch === undefined) errors.push(`${prefix} — нет строки «Заголовок»`);
+  if (labelMatch === undefined) errors.push(`${prefix} — нет строки «Метка»`);
+
+  if (titleMatch !== undefined) {
+    const title = parsePrTitle(titleMatch[1]);
+    if (!title.valid) {
+      errors.push(`${prefix} — заголовок: ${title.errors.join("; ")}`);
+    } else {
+      const minimum = minimumReleaseLevel(title, 0);
+      if (compareReleaseLevels(data.release, minimum) < 0) {
+        errors.push(`${fileName}: поле release — ${data.release} ниже ${minimum} для заголовка ${titleMatch[1]}`);
+      }
+    }
+  }
+
+  if (labelMatch !== undefined && labelMatch[1] !== data.release) {
+    errors.push(`${fileName}: поле release — в шапке ${data.release}, в разделе «PR» ${labelMatch[1]}`);
+  }
+
+  return errors;
+}
+
 /**
  * Проверяет одну задачу: `fileName` — имя файла без каталога, `data` — то, что
  * вернул `parseFrontmatter`. Возвращает список ошибок вида
@@ -336,6 +390,10 @@ export function validateTask(fileName, data, context) {
     fail("zones", `у задачи в статусе ${data.status} зоны не могут быть пустыми`);
   }
   if (data.status === "in-progress" && text("owner") === "") fail("owner", "у задачи in-progress должно быть указано, кто её взял");
+
+  if (context !== undefined && (data.status === "ready" || data.status === "in-progress")) {
+    errors.push(...checkPrSection(fileName, data, context.body));
+  }
 
   if (context !== undefined && errors.length === 0) {
     const problem = badgeProblem(data, context.body, context.fileNames);
