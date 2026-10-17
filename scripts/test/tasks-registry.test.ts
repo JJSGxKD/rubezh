@@ -61,7 +61,9 @@ function fileOf(id: string, patch: Record<string, string> = {}, name = `${id}-x.
     ...patch,
   };
   const lines = Object.entries(fields).map(([key, value]) => `${key}:${value === "" ? "" : ` ${value}`}`);
-  return { name, text: ["---", ...lines, "---", "", `# ${id}. Задача`, "", badgesOf(id, fields.depends_on), ""].join("\n") };
+  // Раздел «PR» обязателен у задач ready и in-progress (T-0146): заголовок корректен, метка равна release.
+  const pr = ["## PR", "", "- **Заголовок:** `fix(app-shell): Чинить X`", `- **Метка:** \`release: ${fields.release}\``, ""];
+  return { name, text: ["---", ...lines, "---", "", `# ${id}. Задача`, "", badgesOf(id, fields.depends_on), "", ...pr].join("\n") };
 }
 
 describe("реестр задач", () => {

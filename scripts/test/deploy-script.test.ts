@@ -30,6 +30,32 @@ describe("deploy.sh: бэкап перед выкатом", () => {
     expect(callAt).toBeLessThan(upAt);
   });
 
+  it("Postgres поднимается раньше дампа, без пересоздания", () => {
+    const postgresAt = deploy.search(/API_TAG="\$VERSION" docker compose up -d --no-recreate --wait [^\n]*postgres/);
+    expect(postgresAt).toBeGreaterThan(-1);
+    expect(postgresAt).toBeLessThan(callAt);
+  });
+
+  it("не поднявшаяся база останавливает выкат до дампа", () => {
+    const postgresAt = deploy.search(/API_TAG="\$VERSION" docker compose up -d --no-recreate --wait [^\n]*postgres/);
+    const between = deploy.slice(postgresAt, callAt);
+    expect(between).toContain("exit 1");
+    expect(between).toContain("Postgres не поднялся");
+  });
+
+  it("образ тянется под тегом версии до дампа", () => {
+    const pullAt = deploy.indexOf('API_TAG="$VERSION" docker compose pull');
+    expect(pullAt).toBeGreaterThan(-1);
+    expect(pullAt).toBeLessThan(callAt);
+  });
+
+  it("тег версии не уходит в окружение скрипта", () => {
+    // Окружение сильнее .env: откат записал бы прежний тег в файл, а compose
+    // взял бы новый из окружения и снова поднял неудавшуюся версию.
+    expect(deploy).not.toMatch(/^\s*export\s+API_TAG/m);
+    expect(deploy).not.toMatch(/^\s*API_TAG=\S*\s*$/m);
+  });
+
   it("после дампа места проверяется ещё раз", () => {
     expect(deploy.slice(callAt)).toContain("ensure_space");
     expect(deploy.slice(callAt).indexOf("ensure_space")).toBeLessThan(deploy.slice(callAt).indexOf('set_env_value API_TAG "$VERSION"'));

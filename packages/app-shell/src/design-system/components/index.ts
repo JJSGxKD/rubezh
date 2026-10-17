@@ -27,3 +27,4 @@ export {
 } from "./Surfaces";
 export { Avatar, Badge, CurrencyChip, ProgressBar, Stat, type BadgeTone } from "./Data";
 export { ListGroup, ListItem, Toggle } from "./List";
+export { Hint } from "./Hint";

@@ -3,14 +3,15 @@ id: T-0146
 title: «pnpm task check» сверяет метку и заголовок из раздела «PR» с шапкой
 epic: E0
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-7 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
 zones:
   - scripts/tasks/task-file.mjs
   - scripts/test/tasks-file.test.ts
+  - scripts/test/tasks-registry.test.ts
 shared:
   - tasks/README.md
   - .claude/skills/task-spec/SKILL.md
@@ -55,8 +56,16 @@ batch: 2
 - `<файл>: поле release — в шапке patch, в разделе «PR» minor`;
 - `<файл>: поле release — patch ниже minor для заголовка feat(app-shell): …`.
 
-Сверка на 15.10.2026: все задачи `ready` и `in-progress` её проходят. Правка
-существующих задач не нужна.
+Сверка на 15.10.2026: все задачи `ready` и `in-progress` её проходят, кроме
+T-0064 — её заголовок начинался с «, а не с заглавной буквы. Он поправлен в
+`dev` (ответ claude-lead2-1 на вопрос 1 PR #350, 16.10.2026).
+
+Задача `ready` или `in-progress` совсем без раздела `## PR` — тоже ошибка по
+правилу 1: в шаблоне раздел обязателен, спецификация без него не готова. Фикстуры
+`scripts/test/tasks-registry.test.ts` — задачи `ready` без раздела, поэтому файл
+в зонах: в фикстуры добавляется короткий раздел `## PR` с заголовком и меткой,
+согласованными с их полем `release`. Ожидания тестов о других ошибках не
+меняются (ответ claude-lead2-1 на вопрос 2 PR #350).
 
 ## Как сейчас
 
