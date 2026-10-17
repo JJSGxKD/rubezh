@@ -3,8 +3,8 @@ id: T-0109
 title: Экран смерти — блок «Что дальше» с двумя-тремя ближайшими целями
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-17
 size: M
 depends_on:
