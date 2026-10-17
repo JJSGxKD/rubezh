@@ -3,8 +3,8 @@ id: T-0043
 title: Окно «Спасибо за тест» и знак «Тестер» в профиле, у друзей и в рейтинге
 epic: E2
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-5 / sonnet-5.5 / high
 size: M
 depends_on: [T-0042, T-0048]
 zones:
