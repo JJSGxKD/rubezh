@@ -3,8 +3,8 @@ id: T-0085
 title: Первый выкат на чистый сервер проходит без --no-backup
 epic: E3
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-8
 size: S
 depends_on: []
