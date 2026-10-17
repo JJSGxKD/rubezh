@@ -57,6 +57,8 @@ export interface BalanceRunResult {
   peakEnemies: number;
   /** секунда, на которой бот взял второй уровень; 0 — не взял вовсе */
   firstLevelUpSec: number;
+  /** сколько сундуков выпало за забег */
+  chestsFound: number;
   /** сколько сундуков бот открыл за забег */
   chestsOpened: number;
   /** забег упёрся в аварийный потолок, а не кончился смертью */
@@ -113,6 +115,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     xpCollected: world.stats.xpCollected,
     peakEnemies: world.stats.peakEnemies,
     firstLevelUpSec,
+    chestsFound: world.stats.chestsFound,
     chestsOpened: world.stats.chestsOpened,
     timedOut: world.player.alive,
   };
