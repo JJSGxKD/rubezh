@@ -308,7 +308,9 @@ function measure() {
     // проверка площадки, вызов чанка и список его предзагрузки, ожидание на
     // кнопке «Ещё раз». 12,8 — экран забега помнит, раскрыто ли «Подробнее»
     // на экране смерти (T-0045, +0,1 КБ).
-    { name: "Интерфейс забега", limitKb: 12.9, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
+    // 13,1 — «Что дальше» на экране смерти: семь строк `run.next.*` в словаре
+    // забега (T-0109, +0,2 КБ).
+    { name: "Интерфейс забега", limitKb: 13.1, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
     { name: "Инструменты команды", limitKb: 14, matches: (name) => TEAM.test(name) && !firstLoad.has(name) },
     { name: "Движок и стенд", limitKb: 380, matches: (name) => ENGINE.test(name) },
     { name: "Звук", limitKb: 15, matches: (name) => AUDIO.test(name) && !firstLoad.has(name) },
