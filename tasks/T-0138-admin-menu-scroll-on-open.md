@@ -3,8 +3,8 @@ id: T-0138
 title: Меню панели на телефоне открывается прокрученным к открытому разделу
 epic: E7
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-9 / haiku-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []

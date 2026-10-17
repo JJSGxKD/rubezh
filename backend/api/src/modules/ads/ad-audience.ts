@@ -4,13 +4,16 @@ import { TADDY_API, primaryLanguage } from "./ad-creatives.js";
 import { AD_NETWORK_PROFILES, keysProblem, missingKeys } from "./ad-networks.js";
 import { AdNetworkKeys } from "./ad-network-keys.js";
 import type { TaddyApi } from "./taddy-api.js";
+import { ClientScripts } from "../client-scripts/client-scripts.service.js";
 
 /**
  * Учёт аудитории рекламными сетями (docs/35-stage4-plan.md WP12, часть 9,
  * Р78). Сколько рекламы сеть даст, зависит от того, сколько игроков она
  * видит, — а видит она тех, у кого поднят её SDK, и тех, кто запускал бота.
  * Поэтому SDK такой сети поднимается у каждого игрока её площадок, пока у
- * сети заданы ключи, — включена она или нет; выключить учёт — стереть ключ.
+ * сети заданы ключи, — включена она или нет; выключить учёт одной сети —
+ * стереть ключ, всех сразу — настройка `client.scripts.ad-audience` (или
+ * аварийная `client.scripts.all`) в панели.
  */
 
 /** Сеть, чей SDK клиент поднимает при запуске, и публичные ключи для него. */
@@ -31,10 +34,12 @@ export class AdAudience {
   constructor(
     private readonly keys: AdNetworkKeys,
     @Inject(TADDY_API) private readonly taddy: TaddyApi,
+    private readonly scripts: ClientScripts,
   ) {}
 
   /** Сети для SDK на старте: учитывают аудиторию, работают на площадке игрока и имеют все ключи нужного вида. */
   async launchSetup(platform: PlatformId): Promise<AdNetworkSetup[]> {
+    if (!this.scripts.adAudience()) return [];
     const all = await this.keys.all();
     return AD_NETWORK_PROFILES.filter((profile) => profile.trackAudience === true && profile.platforms.includes(platform)).flatMap((profile) => {
       const keys = all.get(profile.key);

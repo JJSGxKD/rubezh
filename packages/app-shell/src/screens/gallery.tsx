@@ -11,6 +11,7 @@ import {
   CurrencyChip,
   Emblem,
   IconButton,
+  Hint,
   IconEmblem,
   ListGroup,
   ListItem,
@@ -54,6 +55,7 @@ export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [segment, setSegment] = useState("daily");
+  const [difficultySegment, setDifficultySegment] = useState("normal");
   const [sheet, setSheet] = useState(false);
   const [adResult, setAdResult] = useState<CreativeResult["kind"] | null>(null);
 
@@ -158,6 +160,21 @@ export function GalleryScreen(): ReactNode {
           />
         </ListGroup>
 
+        <SectionTitle>{t("gallery.hint")}</SectionTitle>
+        <div className="grid gap-3">
+          <Hint label={t("gallery.hint.label")} text={t("gallery.hint.text")}>
+            <span className="text-sm text-text">{t("gallery.hint.label")}</span>
+          </Hint>
+          <Hint
+            label={t("gallery.hint.label")}
+            text={t("gallery.hint.text")}
+            end={<span className="text-sm font-semibold tabular-nums text-success">+7%</span>}
+            initiallyOpen
+          >
+            <span className="text-sm text-text">{t("gallery.hint.label")}</span>
+          </Hint>
+        </div>
+
         <SectionTitle>{t("gallery.segmented")}</SectionTitle>
         <SegmentedControl
           label={t("gallery.segmented")}
@@ -168,6 +185,14 @@ export function GalleryScreen(): ReactNode {
             { id: "weekly", label: t("tasks.weekly") },
             { id: "achievements", label: t("tasks.achievements") },
           ]}
+        />
+        <p className="mt-3 mb-1 text-xs text-text-muted">{t("gallery.segmented.smallHint")}</p>
+        <SegmentedControl
+          size="s"
+          label={t("gallery.segmented.small")}
+          activeId={difficultySegment}
+          onSelect={setDifficultySegment}
+          items={["easy", "normal", "hard"].map((id) => ({ id, label: t(`difficulty.${id}.name`) }))}
         />
 
         <SectionTitle>{t("gallery.progress")}</SectionTitle>
