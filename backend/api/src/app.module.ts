@@ -5,6 +5,7 @@ import { AuthModule } from "./modules/auth/auth.module.js";
 import { RolesModule } from "./modules/roles/roles.module.js";
 import { RunsModule } from "./modules/runs/runs.module.js";
 import { DatabaseModule } from "./infra/database.js";
+import { OutboundModule } from "./infra/outbound/outbound.module.js";
 import { RedisModule } from "./infra/redis.js";
 import { AdminNotifyModule } from "./modules/admin-notify/admin-notify.module.js";
 import { BotModule } from "./platforms/telegram/bot.module.js";
@@ -59,6 +60,7 @@ import { VipModule } from "./modules/vip/vip.module.js";
 import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
 import { PartnersModule } from "./modules/partners/partners.module.js";
 import { SeasonsModule } from "./modules/seasons/seasons.module.js";
+import { OnlineModule } from "./modules/online/online.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -82,13 +84,15 @@ import { SeasonsModule } from "./modules/seasons/seasons.module.js";
  * меню одним ответом (там же, WP28); changelog — журнал обновлений по
  * площадкам и уведомление о выходе версии (там же, WP31); promo-codes —
  * промокоды: ввод игроком и кампании в панели, partners — партнёры и
- * приведённые ими игроки (там же, WP41).
+ * приведённые ими игроки (там же, WP41); online — сколько людей в игре и в
+ * забеге, Р107 (там же, T-0147).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
 export const APP_MODULES = [
   RedisModule,
   DatabaseModule,
+  OutboundModule,
   SettingsModule,
   SecretsModule,
   AdConversionsModule,
@@ -144,6 +148,7 @@ export const APP_MODULES = [
   PartnersModule,
   WipeModule,
   SeasonsModule,
+  OnlineModule,
 ];
 
 /**
