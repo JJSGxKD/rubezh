@@ -297,12 +297,12 @@ describe("выключатели функций", () => {
 describe("настройки в панели", () => {
   const OWNER_ID = "777000111";
 
-  async function panel(env: Record<string, string> = {}) {
+  async function panel(env: Record<string, string> = {}, now: Date = new Date()) {
     const cfg = config({ ADMIN_TELEGRAM_IDS: OWNER_ID, ...env });
     const accounts = new MemoryAccountRepository();
     const rolesRepository = new MemoryRolesRepository();
     const settings = new SettingsService(cfg, new MemorySettings(), new FakeRedis() as unknown as Redis);
-    const admin = new AdminSettingsService(settings, new RolesService(cfg, rolesRepository, accounts));
+    const admin = new AdminSettingsService(settings, new RolesService(cfg, rolesRepository, accounts), () => now);
     const ownerAccount = await accounts.upsert({ platform: "telegram", platformUserId: OWNER_ID, displayName: "Владелец", username: null, photoUrl: null }, Date.now());
     const strangerAccount = await accounts.upsert({ platform: "telegram", platformUserId: "5", displayName: "Гость", username: null, photoUrl: null }, Date.now());
     const ref = (account: typeof ownerAccount) => ({ accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId });
@@ -341,6 +341,33 @@ describe("настройки в панели", () => {
     await expect(admin.save(owner, "ads.interstitial.every-runs", 0)).rejects.toMatchObject({ code: "validation_failed", message: "Межстраничная: каждые N забегов: не меньше 1" });
     await expect(admin.save(owner, "ads.interstitial.every-runs", "4")).rejects.toMatchObject({ code: "validation_failed" });
     expect((await admin.list(owner)).find((view) => view.key === "notify.reports")?.range).toBeNull();
+  });
+
+  describe("старт сезонов не в прошлом", () => {
+    // Среда 11.11.2026: понедельник этой недели — 9.11, следующей — 16.11.
+    const NOW = new Date("2026-11-11T10:00:00Z");
+    const PAST_TEXT = "Старт недельных сезонов: Старт сезонов не может быть в прошлом — укажите понедельник этой или следующей недели";
+
+    it("понедельник прошлой недели отклоняется текстом из решения", async () => {
+      const { admin, owner } = await panel({}, NOW);
+      await expect(admin.save(owner, "seasons.start-date", 20261102)).rejects.toMatchObject({ code: "validation_failed", message: PAST_TEXT });
+    });
+
+    it("понедельник этой и следующей недели сохраняется", async () => {
+      const { admin, owner } = await panel({}, NOW);
+      expect(await admin.save(owner, "seasons.start-date", 20261109)).toMatchObject({ value: 20261109, source: "base" });
+      expect(await admin.save(owner, "seasons.start-date", 20261116)).toMatchObject({ value: 20261116 });
+    });
+
+    it("ноль — выключено — сохраняется всегда", async () => {
+      const { admin, owner } = await panel({}, NOW);
+      expect(await admin.save(owner, "seasons.start-date", 0)).toMatchObject({ value: 0 });
+    });
+
+    it("не понедельник — прежняя ошибка схемы, а не про прошлое", async () => {
+      const { admin, owner } = await panel({}, NOW);
+      await expect(admin.save(owner, "seasons.start-date", 20261110)).rejects.toMatchObject({ code: "validation_failed", message: expect.stringContaining("понедельник в виде ГГГГММДД") });
+    });
   });
 
   it("без права settings.edit — отказ во всём", async () => {

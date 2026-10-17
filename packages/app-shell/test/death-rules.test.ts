@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { bestWeapon, deathStep, levelBar } from "../src/screens/run/death-rules";
-import { visibleWays } from "../src/screens/run/SecondChance";
+import { continueOfferedPayload, visibleWays, waysAnswered } from "../src/screens/run/SecondChance";
+import type { AdContinueStage } from "../src/state/ad-continue";
+import type { ContinueStage } from "../src/state/continue-purchase";
 
 // Правила экрана смерти в два шага (design/screens/death.html): какой шаг
 // показать, какая полоса уровня и какое оружие лучшее, какие способы второго
 // шанса видны.
 
 const OFFER = { continueNo: 1, priceStars: 7, chargedStars: 7, mode: "live" } as const;
+
+// Образцы состояний проверок способов.
+const AD_READY: AdContinueStage = { kind: "ready", pass: false, notice: null };
+const AD_VIP: AdContinueStage = { kind: "ready", pass: true, notice: null };
+const AD_GONE: AdContinueStage = { kind: "unavailable", reason: "no_fill" };
+const STARS_READY: ContinueStage = { kind: "ready", offer: OFFER };
+const STARS_GONE: ContinueStage = { kind: "unavailable", reason: "used_up" };
 
 describe("шаг экрана смерти", () => {
   it("пока забег ждёт решения и есть способы — шаг со вторым шансом", () => {
@@ -100,5 +109,77 @@ describe("какие способы второго шанса видны", () =>
 
   it("способов не заведено вовсе — ничего", () => {
     expect(visibleWays({ adStage: null, paidStage: null })).toEqual({ ad: false, stars: false, vip: false });
+  });
+});
+
+describe("ответили ли проверки способов", () => {
+  it("false, пока спрашивает хоть одна", () => {
+    expect(waysAnswered({ adStage: { kind: "idle" }, paidStage: { kind: "idle" } })).toBe(false);
+    expect(waysAnswered({ adStage: { kind: "checking" }, paidStage: { kind: "loading" } })).toBe(false);
+    expect(waysAnswered({ adStage: AD_READY, paidStage: { kind: "loading" } })).toBe(false);
+    expect(waysAnswered({ adStage: { kind: "checking" }, paidStage: STARS_READY })).toBe(false);
+  });
+
+  it("true, когда ответили обе", () => {
+    expect(waysAnswered({ adStage: AD_READY, paidStage: STARS_READY })).toBe(true);
+    expect(waysAnswered({ adStage: AD_GONE, paidStage: STARS_GONE })).toBe(true);
+  });
+
+  it("повтор покупки — тоже ответ", () => {
+    expect(waysAnswered({ adStage: AD_READY, paidStage: { kind: "retry", reason: "offline", offer: null, purchaseId: null } })).toBe(true);
+  });
+
+  it("только ролик", () => {
+    expect(waysAnswered({ adStage: { kind: "checking" }, paidStage: null })).toBe(false);
+    expect(waysAnswered({ adStage: AD_READY, paidStage: null })).toBe(true);
+  });
+
+  it("только звёзды", () => {
+    expect(waysAnswered({ adStage: null, paidStage: { kind: "idle" } })).toBe(false);
+    expect(waysAnswered({ adStage: null, paidStage: STARS_READY })).toBe(true);
+  });
+
+  it("способов нет — спрашивать нечего", () => {
+    expect(waysAnswered({ adStage: null, paidStage: null })).toBe(true);
+  });
+});
+
+describe("событие continue_offered", () => {
+  it("первый кадр шага и пока спрашивает сервер — не уходит", () => {
+    expect(continueOfferedPayload({ adStage: { kind: "idle" }, paidStage: { kind: "idle" } }, 100)).toBeNull();
+    expect(continueOfferedPayload({ adStage: { kind: "checking" }, paidStage: { kind: "loading" } }, 100)).toBeNull();
+  });
+
+  it("обычный игрок: ролик и звёзды по ответам", () => {
+    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_READY }, 311.6)).toEqual({ ad: true, stars: true, vip: false, elapsedSec: 312 });
+  });
+
+  it("VIP — одна кнопка", () => {
+    expect(continueOfferedPayload({ adStage: AD_VIP, paidStage: STARS_READY }, 90)).toEqual({ ad: false, stars: false, vip: true, elapsedSec: 90 });
+  });
+
+  it("ролика нет — только звёзды", () => {
+    expect(continueOfferedPayload({ adStage: AD_GONE, paidStage: STARS_READY }, 50)).toEqual({ ad: false, stars: true, vip: false, elapsedSec: 50 });
+  });
+
+  it("звёзд нет — только ролик", () => {
+    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_GONE }, 50)).toEqual({ ad: true, stars: false, vip: false, elapsedSec: 50 });
+  });
+
+  it("все способы отпали — предлагать нечего, события нет", () => {
+    expect(continueOfferedPayload({ adStage: AD_GONE, paidStage: STARS_GONE }, 50)).toBeNull();
+  });
+
+  it("способов нет вовсе (остался только продолжение разработчика) — события нет", () => {
+    expect(continueOfferedPayload({ adStage: null, paidStage: null }, 50)).toBeNull();
+  });
+
+  it("только звёзды", () => {
+    expect(continueOfferedPayload({ adStage: null, paidStage: STARS_READY }, 70)).toEqual({ ad: false, stars: true, vip: false, elapsedSec: 70 });
+  });
+
+  it("секунда забега округляется", () => {
+    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_READY }, 0.4)?.elapsedSec).toBe(0);
+    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_READY }, 59.5)?.elapsedSec).toBe(60);
   });
 });

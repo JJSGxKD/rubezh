@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
-import { parseStartDate } from "../seasons/season-rules.js";
+import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 /**
  * Каталог настроек без релиза (docs/35-stage4-plan.md §3.18, Р53).
@@ -48,6 +48,12 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
   /** значение из окружения; `null` — в окружении не задано */
   readonly fromEnv: (config: AppConfig) => T | null;
   readonly fallback: T;
+  /**
+   * Проверка, которой нужно текущее время, — только при сохранении из панели;
+   * текст ошибки или `null`. Схема времени не знает, и значение из окружения или
+   * базы через неё не отсекается.
+   */
+  saveCheck?(value: T, now: Date): string | null;
 }
 
 export const SETTING_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
@@ -85,11 +91,26 @@ const urlSchema = z
   .max(256)
   .refine((value) => value === "" || (URL.canParse(value) && new URL(value).protocol === "https:"), { message: "ссылка https://… или пусто" });
 
+const LINKS_GROUP = "Ссылки Telegram";
+
+/** Равнозначные домены ссылок Telegram (core.telegram.org/api/links); telegram.org — сайт, в списке его нет. */
+export const TELEGRAM_LINK_ORIGINS: readonly string[] = ["https://t.me", "https://telegram.me", "https://telegram.dog"];
+
+/** Домен из списка без пути, параметров и учётных данных; иначе `null`. */
+export function telegramLinkOriginOf(value: string): string | null {
+  if (!URL.canParse(value)) return null;
+  const url = new URL(value);
+  const bare = url.pathname === "/" && url.search === "" && url.hash === "" && url.username === "" && url.password === "";
+  return bare && TELEGRAM_LINK_ORIGINS.includes(url.origin) ? url.origin : null;
+}
+
 const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
 
 const HOME_GROUP = "Главная";
+
+const CLIENT_SCRIPTS_GROUP = "Внешние скрипты клиента";
 
 const SEASONS_GROUP = "Сезоны рейтинга";
 
@@ -203,6 +224,24 @@ export const SETTINGS = {
     schema: urlSchema,
     fromEnv: () => null,
     fallback: "",
+  } satisfies SettingDefinition<string>,
+  /**
+   * Домен ссылок Telegram (docs/35-stage4-plan.md, Р100): t.me бывает
+   * недоступен, и домен выбирается настройкой, без релиза. Окружения у ключа
+   * нет — решение команды на ходу правится в панели.
+   */
+  telegramLinkHost: {
+    key: "telegram.link-host",
+    group: LINKS_GROUP,
+    title: "Домен ссылок Telegram",
+    hint: "Каким адресом начинаются ссылки на бота и Mini App, которые строит сервер: приглашения, кнопки бота, ссылки кампаний, вход в панель. Допустимы https://t.me (умолчание), https://telegram.me и https://telegram.dog — переключите, если t.me недоступен. Уже разосланные ссылки не меняются",
+    kind: "url",
+    schema: z
+      .string()
+      .trim()
+      .refine((value) => telegramLinkOriginOf(value) !== null, { message: "один из https://t.me, https://telegram.me, https://telegram.dog" }),
+    fromEnv: () => null,
+    fallback: "https://t.me",
   } satisfies SettingDefinition<string>,
   /**
    * Канал проекта (docs/35-stage4-plan.md WP42): слайд «Наш канал» в
@@ -323,6 +362,10 @@ export const SETTINGS = {
     range: { min: 0, max: SEASONS_START_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
     fromEnv: () => null,
     fallback: 0,
+    saveCheck: (value, now) => {
+      const start = parseStartDate(value);
+      return start !== null && start.getTime() < seasonOf(now).startsAt.getTime() ? "Старт сезонов не может быть в прошлом — укажите понедельник этой или следующей недели" : null;
+    },
   } satisfies SettingDefinition<number>,
   paymentsStars: feature(
     "payments.stars",
@@ -331,6 +374,41 @@ export const SETTINGS = {
     (config) => config.payments.starsEnv,
     true,
   ),
+  /**
+   * Чужие скрипты клиента выключаются из панели без релиза (docs/35-stage4-plan.md
+   * Р93): чужой скрипт может сломать игру или затормозить первый экран. Только
+   * из панели — в `.env` их нет; умолчание «включено» оставляет всё как было.
+   */
+  clientScriptsGraspil: {
+    key: "client.scripts.graspil",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "Аналитика Graspil",
+    hint: "Сторонняя аналитика Mini App. Выключено — клиент не грузит её скрипт: на случай, если он ломает игру или тормозит первый экран. Вступает в силу при следующем запуске игры",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
+  clientScriptsAdAudience: {
+    key: "client.scripts.ad-audience",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "SDK учёта аудитории рекламных сетей",
+    hint: "SDK рекламных сетей, которые поднимаются при запуске для учёта аудитории (Taddy). Выключено — сети не видят игроков, и рекламы от них может стать меньше. Показы рекламы выключаются в разделе «Реклама» у каждой сети",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
+  clientScriptsAll: {
+    key: "client.scripts.all",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "Внешние скрипты клиента",
+    hint: "Аварийный выключатель: выключено — клиент не грузит ни одного чужого скрипта — ни аналитики, ни SDK учёта, ни рекламы. Для случая, когда чужой скрипт уронил игру, а какой — ещё не ясно",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
 } as const;
 
 export const SETTING_LIST: readonly SettingDefinition[] = Object.values(SETTINGS);

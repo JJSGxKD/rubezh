@@ -18,6 +18,8 @@ export default defineConfig({
       "scripts/test/**/*.test.ts",
       // Логика панели — клиент API, сессия, маршруты — без DOM и React.
       "apps/admin/test/**/*.test.ts",
+      // Логика клиента Telegram без DOM.
+      "apps/web-telegram/test/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**"],
     // Тесты не зависят друг от друга и от порядка
@@ -31,6 +33,7 @@ export default defineConfig({
       // Бэкенд берёт ядро курсов собранным (`dist`), а тесты — исходником:
       // иначе прогон тестов зависел бы от того, собран ли пакет.
       "@bh/fx": `${repoRoot}packages/fx/src/index.ts`,
+      "@bh/proxy-kit": `${repoRoot}packages/proxy-kit/src/index.ts`,
     },
   },
 });

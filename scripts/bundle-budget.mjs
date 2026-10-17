@@ -10,6 +10,7 @@
 import { gzipSync } from "node:zlib";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /** Какое приложение считаем эталоном: оно уходит в закрытый тест первым. */
 const APP_DIST = "apps/web-telegram/dist";
@@ -34,6 +35,9 @@ const AUDIO = /^(sound-director|recipes|lab-overrides|music|synth|audio-engine)-
  * всё равно не начнётся (docs/27-design-system-and-app-shell.md §3.4). Своей
  * строкой — иначе он съел бы запас экранов меню, которые игрок открывает
  * руками.
+ *
+ * 12,9 — радар вверху и зелёная аптечка в отдельной таблице цветов (T-0097,
+ * +0,1 КБ).
  */
 // Хэш чанка — восемь знаков: `run-engine-…` сюда не попадает, у него после
 // `run-` идёт имя, а не хэш.
@@ -94,6 +98,8 @@ function measure() {
   const files = readdirSync(ASSETS).filter((name) => statSync(join(ASSETS, name)).isFile());
   const firstLoad = firstLoadChunks(files);
   const isJs = (name) => name.endsWith(".js");
+  const isScreen = (name) =>
+    isJs(name) && !firstLoad.has(name) && !ENGINE.test(name) && !AUDIO.test(name) && !TEAM.test(name) && !RUN_UI.test(name) && !ADS.test(name);
 
   const budgets = [
     // 150: на этапе 3 порог поднимался до 152 под проверку версии клиента,
@@ -130,6 +136,19 @@ function measure() {
     // загрузке. Проверку и таймер держит `api-request.ts`.
     { name: "Оболочка, первая загрузка", limitKb: 152.8, matches: (name) => firstLoad.has(name) },
     { name: "CSS", limitKb: 30, matches: (name) => name.endsWith(".css") },
+    {
+      // 15: самый большой ленивый экран — единственное, что здесь проваливает
+      // гейт (T-0142). Замер на dev 14.10.2026 — 12,68 КБ (экран магазина
+      // `shop`), порог — замер + 15%, округлённый вверх до 0,5 КБ. Сумма
+      // экранов растёт с каждой фичей по определению и порогом быть не
+      // может — она ниже строкой «следим»; ловить надо один раздутый экран,
+      // который игрок ждёт при открытии.
+      name: "Самый большой экран",
+      limitKb: 15,
+      kind: "fail",
+      measure: "max",
+      matches: isScreen,
+    },
     {
       // 55: из прежних 60 вынесены инструменты команды (9 КБ), запас игровых
       // экранов остался прежним — около 4 КБ, а не вырос на их вес. 64 —
@@ -278,10 +297,10 @@ function measure() {
       // уровне N» (T-0108), «что дальше» на экране смерти (T-0109), окно
       // сундука (T-0100) — оценка по 0,3–0,5 КБ. Каждая пишет свой прирост
       // в описании PR; вышло больше запаса — вопрос тимлиду.
-      name: "Экраны по требованию",
+      name: "Экраны по требованию, всего",
       limitKb: 145,
-      matches: (name) =>
-        isJs(name) && !firstLoad.has(name) && !ENGINE.test(name) && !AUDIO.test(name) && !TEAM.test(name) && !RUN_UI.test(name) && !ADS.test(name),
+      kind: "watch",
+      matches: isScreen,
     },
     // 12,5, а не 12: управление с клавиатуры на ПК — пауза, выбор улучшения,
     // подсказки клавиш (WP23, +0,6 КБ) — и значок щита бустов (WP8). 12,7 —
@@ -289,7 +308,7 @@ function measure() {
     // проверка площадки, вызов чанка и список его предзагрузки, ожидание на
     // кнопке «Ещё раз». 12,8 — экран забега помнит, раскрыто ли «Подробнее»
     // на экране смерти (T-0045, +0,1 КБ).
-    { name: "Интерфейс забега", limitKb: 12.8, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
+    { name: "Интерфейс забега", limitKb: 12.9, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
     { name: "Инструменты команды", limitKb: 14, matches: (name) => TEAM.test(name) && !firstLoad.has(name) },
     { name: "Движок и стенд", limitKb: 380, matches: (name) => ENGINE.test(name) },
     { name: "Звук", limitKb: 15, matches: (name) => AUDIO.test(name) && !firstLoad.has(name) },
@@ -320,14 +339,45 @@ function measure() {
     },
   ];
 
-  return budgets.map((budget) => {
-    const matched = files.filter((name) => budget.matches(name));
-    const bytes = matched.reduce((total, name) => {
-      const content = readFileSync(join(ASSETS, name));
-      return total + (budget.compressed === true ? content.length : gzipSync(content).length);
-    }, 0);
-    return { ...budget, files: matched, kb: bytes / 1024 };
+  const sized = files.map((name) => {
+    const content = readFileSync(join(ASSETS, name));
+    // Шрифтам gzip не нужен: считаются как есть.
+    return { name, bytes: name.endsWith(".woff2") ? content.length : gzipSync(content).length, rawBytes: content.length };
   });
+  return budgetRows(sized, budgets);
+}
+
+/**
+ * Строки отчёта по размерам файлов. Чистая функция — тест без сборки
+ * (`scripts/test/bundle-budget.test.ts`). Размеры в байтах: `bytes` — gzip,
+ * `rawBytes` — как есть (для групп с `compressed`).
+ *
+ * `kind: "fail"` (по умолчанию) — превышение проваливает гейт; `"watch"` —
+ * только пометка «следим»: так следят за суммой, которая растёт сама.
+ * `measure: "max"` — мера группы это самый большой чанк, а не сумма.
+ */
+export function budgetRows(files, groups) {
+  return groups.map((group) => {
+    const matched = files.filter((file) => group.matches(file.name));
+    const size = (file) => (group.compressed === true ? file.rawBytes : file.bytes);
+    const bytes = group.measure === "max" ? Math.max(0, ...matched.map(size)) : matched.reduce((total, file) => total + size(file), 0);
+    const largest = group.measure === "max" ? matched.reduce((top, file) => (top === undefined || size(file) > size(top) ? file : top), undefined) : undefined;
+    const kb = bytes / 1024;
+    return {
+      name: group.name,
+      kb,
+      limitKb: group.limitKb,
+      kind: group.kind ?? "fail",
+      over: kb > group.limitKb,
+      files: matched.map((file) => file.name),
+      ...(largest === undefined ? {} : { largest: largest.name }),
+    };
+  });
+}
+
+/** Гейт падает от строки «fail» за порогом и от группы без файлов (сборка не та). */
+export function budgetFailed(rows) {
+  return rows.some((row) => row.files.length === 0 || (row.kind === "fail" && row.over));
 }
 
 /**
@@ -375,21 +425,22 @@ function main() {
     failed = true;
   }
 
-  for (const row of measure()) {
-    const over = row.kb > row.limitKb;
-    failed = failed || over;
-    const mark = over ? "ПРЕВЫШЕН" : "ок";
+  const rows = measure();
+  for (const row of rows) {
+    const mark = row.over ? (row.kind === "watch" ? "следим" : "ПРЕВЫШЕН") : "ок";
     console.log(
       `  ${row.name.padEnd(28)} ${row.kb.toFixed(1).padStart(7)} КБ / ${String(row.limitKb).padStart(4)} КБ  ${mark}`,
     );
+    // Какой экран раздулся — в отчёте, а не в поиске по dist.
+    if (row.largest !== undefined && row.over) console.log(`      самый большой: ${row.largest}`);
     if (process.argv.includes("--files")) {
       for (const file of row.files) console.log(`      ${file}`);
     }
     if (row.files.length === 0) {
       console.log(`    файлов не нашлось — сборка не та или её не делали`);
-      failed = true;
     }
   }
+  failed = failed || budgetFailed(rows);
 
   if (failed) {
     console.error(
@@ -400,4 +451,4 @@ function main() {
   console.log("\nВсё в бюджете.");
 }
 
-main();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main();
