@@ -29,6 +29,9 @@ zones:
   - packages/core-game/src/game/render/textures.ts
   - packages/core-game/src/game/balance/**
   - packages/core-game/src/run-api.ts
+  - packages/core-game/src/engine/run-bus.ts
+  - packages/core-game/src/engine/run-engine.ts
+  - scripts/balance/balance-sim.ts
   - packages/core-game/test/**
   - packages/app-shell/src/state/run.ts
   - packages/app-shell/src/i18n/ru.json
@@ -38,6 +41,7 @@ shared:
   - packages/app-shell/src/state/analytics.ts
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - docs/32-balance.md
   - CLAUDE.md
 runner: any
 executor: sonnet-5.5
@@ -261,10 +265,23 @@ batch: 1
 
 ## Вопросы к тимлиду
 
-- �Подтверждено `claude-lead-1` 13.10.2026: первое событие элиты на 90 с, первый сундук размера 1;
+- Подтверждено `claude-lead-1` 13.10.2026: первое событие элиты на 90 с, первый сундук размера 1;
   бот умирает до 2:00 — сдвинуть на 120 с (одна строка).
-- �Подтверждено `claude-lead-1` 13.10.2026: версия снимка 8 отбрасывает сохранённые незавершённые
+- Подтверждено `claude-lead-1` 13.10.2026: версия снимка 8 отбрасывает сохранённые незавершённые
   забеги тестеров при выкате.
+- Ответы claude-lead2-1 на вопросы PR #366, 17.10.2026:
+  - В зонах — `engine/run-bus.ts` и `engine/run-engine.ts`: шаг 7 вводит события
+    `chestFound`, `chestOpened` и `RunSession.closeChest()`, а шина и реализация
+    сессии живут там. `scripts/balance/balance-sim.ts` — колонка «сундуков» из шага 6,
+    `docs/32-balance.md` — коридоры из раздела «Документы».
+  - Запасная награда выбирается на каждую награду сундука, как в шаге 4: после
+    аптечки здоровье выше `lowHpRatio`, и следующая — опыт. Тест «все `heal`»
+    ставит здоровье так, чтобы порог не был пройден ни после одной аптечки;
+    алгоритм не меняется.
+  - `CIRCLING_SEED` в `run-recording.test.ts` подбирается заново, как велит
+    комментарий теста: элита на 90 с меняет судьбу прежнего seed.
+  - Порог `balance-properties` («сундук открыт не меньше чем в половине забегов
+    дольше 240 с», замер 0,4) — решение `claude-lead-1` и геймдизайнера, ждёт ответа.
 
 ## Критерии приёмки
 

@@ -12,7 +12,7 @@ import { AdminLinksController } from "../src/modules/admin/admin-links.controlle
 import type { ConversionsJournal } from "../src/modules/ad-conversions/conversions-journal.service.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { isCrawler } from "../src/modules/links/crawler.js";
-import { escapeHtml, linkPage } from "../src/modules/links/link-page.js";
+import { escapeHtml, linkPage, OPEN_SCRIPT_HASH } from "../src/modules/links/link-page.js";
 import type { LinkTarget } from "../src/modules/links/link-targets.js";
 import { LINKS_REPOSITORY, type ClickInput, type LinkInput, type LinkRecord, type LinksRepository, type LinkStats } from "../src/modules/links/links.repository.js";
 import { hostOf, languageOf, LinksService, type VisitorInfo } from "../src/modules/links/links.service.js";
@@ -125,6 +125,8 @@ describe("переход по ссылке", () => {
     expect(visit.kind).toBe("redirect");
     const target = visit.kind === "redirect" ? visit.target : "";
     expect(target).toMatch(/^https:\/\/t\.me\/rubezh_bot\?startapp=c-[A-Za-z0-9]{12}$/);
+    // Диплинк той же цели с тем же кодом клика (tasks/T-0058).
+    expect(visit.kind === "redirect" ? visit.deep : null).toMatch(/^tg:\/\/resolve\?domain=rubezh_bot&startapp=c-[A-Za-z0-9]{12}$/);
     await new Promise((resolve) => setImmediate(resolve));
     expect(repository.clicks[0]).toMatchObject({ linkCode: link.code, refererHost: "t.me", language: "ru-RU", ipPrefix: "198.51.100.0/24", deviceClass: "mobile", utm: { campaign: "launch" } });
     expect(target.endsWith(`c-${repository.clicks[0]?.clickId}`)).toBe(true);
@@ -427,14 +429,20 @@ describe("HTTP /r/:code", () => {
     const target = await start();
     const link = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "c", source: null, medium: null, note: null, platform: "telegram" });
 
+    // Цель «Mini App»: страница с диплинком, а не 302 на t.me (tasks/T-0058).
     const human = await target.inject({ method: "GET", url: `/r/${link.code}?utm_source=tg`, headers: { "user-agent": HUMAN } });
-    expect(human.statusCode).toBe(302);
-    expect(human.headers.location).toMatch(/startapp=c-/);
+    expect(human.statusCode).toBe(200);
+    expect(human.headers["content-type"]).toContain("text/html");
+    expect(human.headers["cache-control"]).toBe("no-store");
+    expect(human.headers["x-robots-tag"]).toBe("noindex");
+    expect(human.headers["content-security-policy"]).toBe(`default-src 'none'; script-src ${OPEN_SCRIPT_HASH}; frame-ancestors 'none'`);
+    expect(human.body).toMatch(/tg:\/\/resolve\?domain=rubezh_bot&amp;startapp=c-[A-Za-z0-9]{12}/);
+    expect(human.body).toMatch(/https:\/\/t\.me\/rubezh_bot\?startapp=c-[A-Za-z0-9]{12}/);
 
     // Ссылка сети: переходник передаёт макросы как пришли — профиль сети разберёт их сам.
     const network = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "ag", source: null, medium: null, note: null, platform: "telegram", network: "adsgram" });
     const fromAd = await target.inject({ method: "GET", url: `/r/${network.code}?campaign=55&record=ab12cd34&pub=9`, headers: { "user-agent": HUMAN } });
-    expect(fromAd.statusCode).toBe(302);
+    expect(fromAd.statusCode).toBe(200);
     await new Promise((resolve) => setImmediate(resolve));
     expect(repository.clicks.at(-1)?.networkParams).toEqual({ campaign: "55", pub: "9", record: "ab12cd34" });
 
@@ -449,6 +457,29 @@ describe("HTTP /r/:code", () => {
 
     expect((await target.inject({ method: "GET", url: "/r/NoSuchCode9", headers: { "user-agent": HUMAN } })).statusCode).toBe(404);
     expect((await target.inject({ method: "GET", url: "/r/../etc", headers: { "user-agent": HUMAN } })).statusCode).toBe(404);
+  });
+
+  it("цель «лендинг» — по-прежнему 302 без скрипта и со строгой политикой API", async () => {
+    const target = await start();
+    const landing = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "c", source: null, medium: null, note: null, platform: "telegram", target: "landing" });
+
+    const human = await target.inject({ method: "GET", url: `/r/${landing.code}`, headers: { "user-agent": HUMAN } });
+    expect(human.statusCode).toBe(302);
+    expect(human.headers.location).toMatch(/^https:\/\/rubezh\.example\/\?c=/);
+    expect(human.headers["content-security-policy"]).toBe("default-src 'none'; frame-ancestors 'none'");
+  });
+
+  it("цель «бот»: страница с диплинком в чат; площадка без диплинков — 302 на прежний адрес", async () => {
+    const target = await start();
+    const chat = await service.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "c", source: null, medium: null, note: null, platform: "telegram", target: "bot" });
+    const page = await target.inject({ method: "GET", url: `/r/${chat.code}`, headers: { "user-agent": HUMAN } });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toMatch(/tg:\/\/resolve\?domain=rubezh_bot&amp;start=c-/);
+
+    // Нет адаптера с диплинками — переход как раньше.
+    const bare = new LinksService(config(), repository, new AppLinks([{ platform: "telegram", launch: (param) => `https://t.me/rubezh_bot?startapp=${param}`, chat: (param) => `https://t.me/rubezh_bot?start=${param}` }]), allow);
+    const visit = await bare.visit(chat.code, visitor());
+    expect(visit).toMatchObject({ kind: "redirect", deep: null });
   });
 
   it("проверка доступности: 200 без кеша и без клика; краулеру превью — по-прежнему с кешем мессенджера", async () => {

@@ -14,6 +14,7 @@ zones:
   - backend/api/src/modules/seasons/seasons-schedule.ts
   - backend/api/test/settings.test.ts
   - backend/api/test/seasons.test.ts
+  - backend/api/test/seasons.integration.test.ts
 shared:
   - backend/api/src/modules/settings/setting-catalog.ts
   - docs/30-configuration-map.md
@@ -50,6 +51,15 @@ batch: 2
    `season_backfill_capped` с числом пропущенных. Слой защищает и от даты,
    заданной в обход панели (окружение, база), и от долгого простоя сервера.
    Пропустить награду безопаснее, чем раздать её пачкой задним числом.
+
+Интеграционный тест истории сезонов (`seasons.integration.test.ts`, «не больше
+восьми закрытых сезонов») закрывал десять недель одним вызовом `closeDue` —
+с потолком догона так закрываются только две. Тест закрывает неделю за
+неделей, как работает задание, поэтому файл в зонах. Строка
+`season_backfill_capped` пишется на каждом проходе, пока старые сезоны
+остаются незакрытыми, — так и задумано: это сигнал, что дату задали в обход
+панели или сервер долго стоял (ответ claude-lead2-1 на вопрос PR #358,
+17.10.2026).
 
 ## Как сейчас
 
