@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from "react";
 import type { InviteResult } from "@bh/shared-types";
-import { Check, Copy, Gift, Send, Trophy, UserPlus } from "lucide-react";
+import { Check, Copy, Gift, Send, Trophy, UserPlus, X } from "lucide-react";
 import { Avatar, Button, Card, IconEmblem, SectionTitle } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../../i18n";
 import { copyText } from "../../state/clipboard";
 import { friendInviteUrl, type FriendsApi, type FriendsView } from "../../state/friends-api";
 import { track, useShell } from "../../state/shell";
-import { bonusTrack, coinIconsNeedRoom } from "./friends-rules";
+import { bonusTrack, coinIconsNeedRoom, peerActionView, type PeerActionKind } from "./friends-rules";
 
 /**
  * Части экрана друзей (docs/35-stage4-plan.md §3.8, tasks/T-0048): приглашение
@@ -287,6 +287,27 @@ export function GiftAll(props: { count: number; coins: number; busy: boolean; cl
   );
 }
 
+// Ширина окна, с которой кнопки в строке игрока снова подписаны текстом (решение 13.10.2026).
+// В Tailwind 4 `max-[430px]` — строго уже 430 px, а `min-[430px]` — от 430 включительно.
+const TEXT_FROM_430 = "max-[430px]:hidden";
+const ICON_ONLY_BELOW_430 = "min-[430px]:hidden";
+
+/**
+ * Кнопка в строке игрока: на экране уже 430 px — значок с подписью для
+ * диктора, от 430 px — текстом. Так имя не вытесняется кнопками.
+ */
+export function PeerAction(props: { kind: PeerActionKind; variant: "secondary" | "ghost"; loading?: boolean; disabled?: boolean; onClick: () => void }): ReactNode {
+  const view = peerActionView(props.kind);
+  const label = t(view.labelKey);
+  const Icon = view.icon === "check" ? Check : view.icon === "x" ? X : Gift;
+  return (
+    <Button variant={props.variant} loading={props.loading === true} disabled={props.disabled === true} ariaLabel={label} onClick={props.onClick}>
+      <Icon size={16} aria-hidden="true" className={view.iconWithText ? "" : ICON_ONLY_BELOW_430} />
+      <span className={TEXT_FROM_430}>{label}</span>
+    </Button>
+  );
+}
+
 /**
  * Строка другого игрока: имя и аватар — то же, что и так видно в рейтинге.
  * После имени — место под знак (`badge`): знак «Тестер» рисует T-0043.
@@ -302,7 +323,9 @@ export function PeerRow(props: { name: string; photoUrl: string | null; children
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
           aria-label={props.onPress === undefined ? props.name : t("friends.remove.title", { name: props.name })}
         >
-          <Avatar name={props.name} url={props.photoUrl} size={36} />
+          <span className="shrink-0">
+            <Avatar name={props.name} url={props.photoUrl} size={36} />
+          </span>
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="min-w-0 truncate text-sm font-medium text-text">{props.name}</span>
             {props.badge}
