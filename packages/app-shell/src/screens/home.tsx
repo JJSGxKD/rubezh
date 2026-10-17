@@ -204,8 +204,7 @@ function useHomeLive(): HomeLive | null {
  * знаем — не зовём. Счёт прежних просьб читается с устройства.
  */
 function useBotAccessOffer(runs: number, live: HomeLive | null): boolean {
-  const canMessage = useBotAccess((state) => state.canMessage);
-  const asks = useBotAccess((state) => state.asks);
+  const { canMessage, asks } = useBotAccess();
   useEffect(() => {
     if (live === null) return;
     live.hydrateBotAccess();

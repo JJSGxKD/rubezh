@@ -37,6 +37,12 @@ import { createTelegramUi } from "./ui-telegram";
  * (`ads/`), цепочку сетей ведёт сервер; пассивные баннеры и промо-посты
  * SocialLead — отдельно, см. docs/07-monetization-and-ads.md.
  */
+/** Умеет ли клиент Telegram метод моста: вне Telegram и без версии — нет. */
+function clientSupports(method: Parameters<typeof supports>[0]): boolean {
+  const version = isTMA() ? describeTelegramClient().version : null;
+  return version !== null && supports(method, version);
+}
+
 export class TelegramAdapter implements PlatformAdapter {
   /**
    * Разрешение боту писать — с Bot API 6.9. Метода нет, пока клиент старше или
@@ -46,12 +52,8 @@ export class TelegramAdapter implements PlatformAdapter {
   readonly requestBotMessages?: () => Promise<"allowed" | "declined" | "unavailable">;
 
   constructor() {
-    const version = isTMA() ? describeTelegramClient().version : null;
-    if (version !== null && supports("web_app_request_write_access", version)) {
-      this.requestBotMessages = async () => {
-        const { requestWriteAccess } = await import("./write-access");
-        return await requestWriteAccess();
-      };
+    if (clientSupports("web_app_request_write_access")) {
+      this.requestBotMessages = () => import("./write-access").then((module) => module.requestWriteAccess());
     }
   }
 
@@ -133,8 +135,7 @@ export class TelegramAdapter implements PlatformAdapter {
 
   /** Сообщение от бота — с Mini Apps 8.0; в клиенте старше и в браузере его нет. */
   inviteMethods(): InviteMethods {
-    const version = describeTelegramClient().version;
-    return { preparedMessage: isTMA() && version !== null && supports("web_app_send_prepared_message", version) };
+    return { preparedMessage: clientSupports("web_app_send_prepared_message") };
   }
 
   async sharePreparedMessage(messageId: string): Promise<InviteResult> {

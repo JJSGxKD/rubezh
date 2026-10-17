@@ -50,11 +50,8 @@ export const useBotAccess = create<BotAccessStore>()(() => ({ canMessage: null, 
  * Звать ли игрока разрешить боту писать: площадка умеет, сервер подтвердил,
  * что разрешения нет, игрок сыграл, и просьбой не надоели.
  */
-export function shouldOfferBotAccess(input: { runs: number; canMessage: boolean | null; supported: boolean; asks: BotAccessAsks; now: number }): boolean {
-  const { runs, canMessage, supported, asks, now } = input;
-  if (!supported || canMessage !== false || runs < 1) return false;
-  if (asks.count >= MAX_ASKS) return false;
-  return asks.lastAt === null || now - asks.lastAt >= ASK_AGAIN_AFTER_MS;
+export function shouldOfferBotAccess({ runs, canMessage, supported, asks, now }: { runs: number; canMessage: boolean | null; supported: boolean; asks: BotAccessAsks; now: number }): boolean {
+  return supported && canMessage === false && runs > 0 && asks.count < MAX_ASKS && (asks.lastAt === null || now - asks.lastAt >= ASK_AGAIN_AFTER_MS);
 }
 
 /** Умеет ли площадка просить разрешение — по наличию метода адаптера. */
