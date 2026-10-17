@@ -9,6 +9,7 @@ import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { loadWallet } from "../../state/wallet-api";
 import { friendsLayout, giftAllCount } from "./friends-rules";
 import { GiftAll, Gifts, Invite, PeerAction, PeerRow } from "./friends-parts";
+import { TesterBadge } from "./tester-badge";
 import { RestrictedPlaque } from "./restricted-plaque";
 
 /**
@@ -88,7 +89,7 @@ export function FriendsScreen(): ReactNode {
         <SectionTitle>{t("friends.incoming")}</SectionTitle>
         <div className="grid gap-2">
           {view.incoming.map((request) => (
-            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl}>
+            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
               <PeerAction kind="accept" variant="secondary" loading={busy === `accept:${request.accountId}`} onClick={() => void act(`accept:${request.accountId}`, () => api.accept(request.accountId))} />
               <PeerAction kind="decline" variant="ghost" loading={busy === `decline:${request.accountId}`} onClick={() => void act(`decline:${request.accountId}`, () => api.decline(request.accountId))} />
             </PeerRow>
@@ -103,7 +104,7 @@ export function FriendsScreen(): ReactNode {
         <SectionTitle>{t("friends.outgoing")}</SectionTitle>
         <div className="grid gap-2">
           {view.outgoing.map((request) => (
-            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl}>
+            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
               <Button variant="ghost" loading={busy === `cancel:${request.accountId}`} onClick={() => void act(`cancel:${request.accountId}`, () => api.cancel(request.accountId))}>
                 {t("friends.cancel")}
               </Button>
@@ -171,7 +172,13 @@ export function FriendsScreen(): ReactNode {
               {view.friends.map((friend) => {
                 const gifted = view.gifts.sentToday.includes(friend.accountId);
                 return (
-                  <PeerRow key={friend.accountId} name={friend.displayName} photoUrl={friend.photoUrl} onPress={() => setRemoving(friend)}>
+                  <PeerRow
+                    key={friend.accountId}
+                    name={friend.displayName}
+                    photoUrl={friend.photoUrl}
+                    badge={friend.tester === true ? <TesterBadge /> : undefined}
+                    onPress={() => setRemoving(friend)}
+                  >
                     <PeerAction
                       kind={gifted ? "gifted" : "gift"}
                       variant="secondary"
