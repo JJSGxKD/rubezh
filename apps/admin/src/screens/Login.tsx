@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSession } from "../state/use-session";
+import { loginLinks } from "./login-links";
 import { QrCode } from "../ui/qr-code";
 import { Button, Field, Input, Notice } from "../ui/kit";
 
@@ -8,9 +9,10 @@ const QR_SIZE = 200;
 
 /**
  * Вход в панель (docs/29-admin-panel.md §8): подтверждением в боте — на
- * проде это единственный путь. Запрос открывается вместе со страницей: QR и
- * кнопка ведут диплинком сразу в приложение Telegram, запасная ссылка — на
- * t.me в браузере. Бот показывает такой же код, устройство и место: по ним
+ * проде это единственный путь. Запрос открывается вместе со страницей: QR
+ * ведёт на https-ссылку t.me, потому что камеры Android не открывают `tg://`,
+ * а кнопка — диплинком сразу в приложение Telegram; запасная ссылка — в
+ * браузере. Бот показывает такой же код, устройство и место: по ним
  * видно подмену, когда чужой QR показывают чужому человеку. Вход
  * разработчика — только в сборке для разработки: на проде сервер его всё
  * равно не примет.
@@ -28,6 +30,7 @@ export function Login() {
 
   if (view.status !== "anonymous") return null;
   const { bot } = view;
+  const links = bot.status === "waiting" ? loginLinks(bot) : null;
 
   return (
     <main className="grid min-h-screen place-items-center p-6">
@@ -37,18 +40,18 @@ export function Login() {
 
         {bot.status === "waiting" ? (
           <div className="flex flex-col items-center gap-3 text-center">
-            <QrCode value={bot.deepLink ?? bot.link} size={QR_SIZE} label="QR для входа через Telegram" />
+            <QrCode value={links?.qr ?? bot.link} size={QR_SIZE} label="QR для входа через Telegram" />
             <p className="text-sm text-text-muted">Отсканируйте телефоном с Telegram или нажмите кнопку — бот покажет такой же код</p>
             <p className="font-mono text-4xl tracking-widest" aria-label={`Код ${bot.code}`}>
               {bot.code}
             </p>
             <a
-              href={bot.deepLink ?? bot.link}
+              href={links?.button ?? bot.link}
               className="inline-flex w-full items-center justify-center rounded-sm bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-accent-pressed"
             >
               Открыть Telegram
             </a>
-            <a href={bot.link} target="_blank" rel="noopener noreferrer" className="text-xs text-text-muted underline hover:text-text">
+            <a href={links?.fallback ?? bot.link} target="_blank" rel="noopener noreferrer" className="text-xs text-text-muted underline hover:text-text">
               Telegram не установлен на этом устройстве? Открыть в браузере
             </a>
             <p className="text-xs text-text-muted">Сверьте код в боте и нажмите «Войти» — панель откроется сама.</p>
