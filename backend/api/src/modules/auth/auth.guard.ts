@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Inject, Injectable, Optional } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DisabledError, DomainError, UnauthorizedError } from "../../common/domain-error.js";
+import { ONLINE_ACTIVITY, type OnlineActivity } from "../online/online-activity.js";
 import { AccessRevocations } from "./access-revocations.js";
 import { secretKey, verifyAccessToken, type AccessTokenClaims } from "./access-token.js";
 
@@ -33,6 +34,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Optional() private readonly revocations?: AccessRevocations,
+    @Optional() @Inject(ONLINE_ACTIVITY) private readonly online?: OnlineActivity,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -57,7 +59,20 @@ export class AuthGuard implements CanActivate {
     }
 
     request.account = check.claims;
+    this.markActive(check.claims);
     return true;
+  }
+
+  /**
+   * Активность — любой запрос под сессией (Р107), поэтому клиент не шлёт
+   * пинг, если уже ходил в API. Не ждём и не даём счётчику уронить запрос.
+   */
+  private markActive(claims: AccessTokenClaims): void {
+    try {
+      this.online?.touch(claims, new Date());
+    } catch {
+      // Счётчик — витрина: сбой отметки не повод отказать игроку.
+    }
   }
 }
 

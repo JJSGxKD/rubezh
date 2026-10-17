@@ -93,6 +93,8 @@ const HOME_GROUP = "Главная";
 
 const CLIENT_SCRIPTS_GROUP = "Внешние скрипты клиента";
 
+const ONLINE_GROUP = "Онлайн";
+
 const SEASONS_GROUP = "Сезоны рейтинга";
 
 /** Последняя допустимая дата старта сезонов: понедельник 28 декабря 2099. */
@@ -368,6 +370,38 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: true,
   } satisfies SettingDefinition<boolean>,
+  onlineWindowSec: integer(
+    "online.window-sec",
+    ONLINE_GROUP,
+    "Окно активности, с",
+    "Аккаунт считается онлайн, пока с последней активности прошло меньше окна",
+    { min: 30, max: 600, unit: ["секунда", "секунды", "секунд"] },
+    120,
+  ),
+  onlinePingSec: integer(
+    "online.ping-sec",
+    ONLINE_GROUP,
+    "Интервал пинга, с",
+    "Клиент шлёт пинг с этим интервалом; если он не меньше половины окна, берётся половина окна",
+    { min: 15, max: 300, unit: ["секунда", "секунды", "секунд"] },
+    45,
+  ),
+  onlineMinShown: integer(
+    "online.min-shown",
+    ONLINE_GROUP,
+    "Онлайн виден игроку от",
+    "Ниже — игрок видит «сегодня играли»",
+    { min: 0, max: 100000, unit: ["аккаунт", "аккаунта", "аккаунтов"] },
+    20,
+  ),
+  onlineRunMinShown: integer(
+    "online.run-min-shown",
+    ONLINE_GROUP,
+    "«В забеге» виден игроку от",
+    "Ниже — на кнопке «Играть» числа нет",
+    { min: 0, max: 100000, unit: ["аккаунт", "аккаунта", "аккаунтов"] },
+    5,
+  ),
 } as const;
 
 export const SETTING_LIST: readonly SettingDefinition[] = Object.values(SETTINGS);
