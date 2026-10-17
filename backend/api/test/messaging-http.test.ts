@@ -76,7 +76,7 @@ describe("GET /api/v1/me/messaging", () => {
   });
 
   it("состояние «можно» — canMessage: true, причина и время наружу не идут", async () => {
-    current = { canMessage: true, reason: "allowed", changedAt: new Date("2026-10-10T10:00:00Z") };
+    current = { canMessage: true, reason: "write_access", changedAt: new Date("2026-10-10T10:00:00Z") };
     const http = await app();
     const response = await http.inject({ method: "GET", url: "/api/v1/me/messaging", headers: { authorization: `Bearer ${await token()}` } });
     expect(response.statusCode).toBe(200);
