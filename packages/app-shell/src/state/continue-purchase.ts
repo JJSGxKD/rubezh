@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type { ApiResult } from "./api-request";
 import { createPaymentsApi, type ContinueOffer, type ContinueRequest, type PaymentsApi } from "./payments-api";
 import { markPaymentsOff } from "./payments-availability";
+import { RESTRICTED_CODE, loadRestrictions } from "./restrictions";
 import { closeOffer } from "./second-chance-offers";
 import { useRun } from "./run";
 import { useRuns } from "./runs";
@@ -41,8 +42,12 @@ export type ContinueStage =
   | { kind: "unavailable"; reason: UnavailableReason };
 
 export type RetryReason = "offline" | "payment_failed" | "slow_confirmation";
-/** `not_offered` — оплаты нет; `unverified` — сервер не видел старта забега; `used_up` — продолжения кончились. */
-export type UnavailableReason = "not_offered" | "unverified" | "used_up";
+/**
+ * `not_offered` — оплаты нет; `unverified` — сервер не видел старта забега;
+ * `used_up` — продолжения кончились; `restricted` — покупки аккаунта закрыты
+ * ограничением, о котором игроку сообщили.
+ */
+export type UnavailableReason = "not_offered" | "unverified" | "used_up" | "restricted";
 
 export interface ContinuePurchaseStore {
   stage: ContinueStage;
@@ -95,6 +100,13 @@ export const useContinuePurchase = create<ContinuePurchaseStore>((set, get) => {
 
   /** Отказ сервера — в состояние экрана. */
   function settleFailure(answer: Extract<ApiResult<unknown>, { ok: false }>, offer: ContinueOffer | null = null): void {
+    // Раньше проверки «выключено»: ограничение тоже приходит отказом 403, но
+    // игроку нужна плашка со сроком, а не молчаливое «не предлагается».
+    if (answer.code === RESTRICTED_CODE) {
+      markPaymentsOff();
+      void loadRestrictions(true);
+      return unavailable("restricted");
+    }
     if (answer.failure === "disabled" || answer.code === "payments_unsupported") {
       markPaymentsOff();
       unavailable("not_offered");
