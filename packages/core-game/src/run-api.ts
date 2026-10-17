@@ -91,6 +91,7 @@ export const RADAR_BLIP = {
   medkit: 2,
   magnet: 3,
   dynamite: 4,
+  chest: 5,
 } as const;
 
 export type RadarBlipKind = (typeof RADAR_BLIP)[keyof typeof RADAR_BLIP];
