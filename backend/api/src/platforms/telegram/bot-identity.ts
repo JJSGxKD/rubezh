@@ -1,6 +1,7 @@
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap, type OnModuleDestroy } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "./telegram-bot-api.js";
+import { TELEGRAM_LINK_ORIGIN, fixedLinkOrigin, webLink, type LinkOrigin } from "./telegram-link-format.js";
 
 /**
  * Имя бота — для ссылки на Mini App `https://t.me/<бот>?startapp`. Она нужна
@@ -21,6 +22,8 @@ export class BotIdentity implements OnApplicationBootstrap, OnModuleDestroy {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(TELEGRAM_BOT_API) private readonly api: IdentityBotApi,
+    // Без модуля платформ (тесты) токена нет, и берётся домен по умолчанию.
+    @Optional() @Inject(TELEGRAM_LINK_ORIGIN) private readonly linkOrigin: LinkOrigin = fixedLinkOrigin,
   ) {}
 
   /** `null` — имя ещё не узнали или бот выключен. */
@@ -30,7 +33,7 @@ export class BotIdentity implements OnApplicationBootstrap, OnModuleDestroy {
 
   /** Ссылка на Mini App через бота; `null` — имя бота неизвестно. */
   get miniAppLink(): string | null {
-    return this.botUsername === null ? null : `https://t.me/${this.botUsername}?startapp`;
+    return this.botUsername === null ? null : webLink(this.linkOrigin.origin(), this.botUsername, "app");
   }
 
   onApplicationBootstrap(): void {
