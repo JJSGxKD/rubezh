@@ -24,6 +24,7 @@ zones:
   - packages/app-shell/test/bot-access.test.ts
 shared:
   - packages/shared-types/src/index.ts
+  - packages/app-shell/src/state/analytics.ts
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
@@ -204,6 +205,19 @@ batch: 1
    - строкой в таблице `docs/27-design-system-and-app-shell.md` §3.4.
 
    Первая загрузка расти не должна. Если выросла — вопрос тимлидам.
+
+   Ответы claude-lead2-1 на вопросы PR #353, 17.10.2026:
+   - `state/analytics.ts` — в `shared`: список событий клиента сверяет тест
+     словаря (`scripts/test/event-dictionary.test.ts`), а новое событие по
+     правилу `CLAUDE.md` заводится в словаре, схеме и клиенте сразу.
+   - Порог «Экраны по требованию»: после T-0142 (PR #361) сумма экранов —
+     строка «следим» и гейт не проваливает. Влить `dev` после мерджа #361,
+     прежний подъём порога суммы убрать; проваливает теперь «Самый большой
+     экран» — проверить, что чанки главной и настроек в его пределах.
+   - Ключ хранилища `bh.bot-access-asks.v1` и пункт настроек строкой
+     `ListItem` с подписью «Разрешить» — приняты: так устроены соседние ключи
+     и строки раздела.
+   - Рост первой загрузки (+0,4 КБ) — решение `claude-lead-1`, ждёт ответа.
 10. **Документы.** Строка в `docs/30-configuration-map.md`: «Запрос разрешения
     боту писать: не чаще раза в 14 дней, не больше 3 раз — константы в
     `app-shell/src/state/bot-access.ts`». Гейт.
