@@ -1,6 +1,7 @@
 import type { UpgradeOption } from "@bh/shared-types";
 import type { SimInput } from "../sim/step";
 import type { World } from "../sim/world";
+import { chestSizeOf } from "../sim/chests";
 import { ORBITER_RADIUS } from "../weapons";
 
 /**
@@ -45,6 +46,12 @@ const CONTACT_MARGIN_UNITS = 20;
  */
 const APPROACH_RADIUS_UNITS = 460;
 
+/**
+ * Дальность, на которой бот замечает сундук и идёт к нему, пока рядом нет
+ * угрозы. Сундук не притягивается, и без этого бот не открыл бы ни одного.
+ */
+const CHEST_SEEK_RADIUS_UNITS = 520;
+
 /** Порядок предпочтений уклоняющегося бота: сначала урон, потом живучесть. */
 const DODGING_PRIORITY: readonly UpgradeOption["kind"][] = [
   "weapon_level",
@@ -64,6 +71,33 @@ function passiveBot(): Bot {
     // Пассивный берёт первое предложенное: он и не должен играть хорошо.
     choose: (offers) => offers[0].id,
   };
+}
+
+const scratchChest = { x: 0, y: 0 };
+
+/**
+ * Направление к ближайшему сундуку в пределах `CHEST_SEEK_RADIUS_UNITS`.
+ * Возвращает `false`, если сундука рядом нет.
+ */
+function seekChest(world: World, out: { x: number; y: number }): boolean {
+  const player = world.player;
+  const pool = world.pickups;
+  const reach = CHEST_SEEK_RADIUS_UNITS * world.config.unitScale;
+  let nearest = reach;
+  let found = false;
+
+  for (let i = 0; i < pool.count; i++) {
+    if (pool.alive[i] === 0 || chestSizeOf(pool.kind[i]) === null) continue;
+    const dx = pool.x[i] - player.x;
+    const dy = pool.y[i] - player.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance < 1e-3 || distance >= nearest) continue;
+    nearest = distance;
+    out.x = dx / distance;
+    out.y = dy / distance;
+    found = true;
+  }
+  return found;
 }
 
 function dodgingBot(): Bot {
@@ -115,6 +149,10 @@ function dodgingBot(): Bot {
       if (length >= 1e-3) {
         lastX = awayX / length;
         lastY = awayY / length;
+      } else if (seekChest(world, scratchChest)) {
+        // Угрозы рядом нет, а сундук в пределах видимости — забираем его.
+        lastX = scratchChest.x;
+        lastY = scratchChest.y;
       } else if (nearest < Infinity) {
         // Угрозы рядом нет — идём к ближайшему врагу: так работает и орбита, и
         // оружие, бьющее по направлению взгляда.

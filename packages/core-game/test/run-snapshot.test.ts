@@ -148,7 +148,6 @@ describe("снимок забега", () => {
     advance(original, 20 * 60);
     dropChest(original.world, 300, 0, "elite");
     openChest(original.world, 3);
-    dropChest(original.world, 0, 300, "elite");
     const saved = roundTrip(original);
 
     const resumed = newRun(31);

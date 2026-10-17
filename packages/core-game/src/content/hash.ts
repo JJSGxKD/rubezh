@@ -1,4 +1,5 @@
 import { BOOSTS, MAX_BOOSTS_PER_RUN } from "./boosts";
+import { CHESTS } from "./chests";
 import { CONTINUE } from "./continue";
 import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
@@ -40,6 +41,7 @@ function hashContent(): string {
     ENDLESS_CURVE,
     MAPS,
     DROPS,
+    CHESTS,
     DIFFICULTIES,
     CONTINUE,
     BOOSTS,
