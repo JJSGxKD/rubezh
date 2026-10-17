@@ -3,7 +3,7 @@ id: T-0117
 title: Враги в духе Vampire Survivors: без стрелка, два рядовых и элита
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-18
 size: M
