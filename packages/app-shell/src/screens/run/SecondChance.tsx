@@ -46,6 +46,31 @@ export function visibleWays(input: { adStage: AdContinueStage | null; paidStage:
 }
 
 /**
+ * Ответили ли проверки способов. Пока ролик (`idle`, `checking`) или звёзды
+ * (`idle`, `loading`) спрашивают сервер, флаги `visibleWays` — догадка: ролик
+ * «есть», VIP «нет». Способа нет вовсе (`null`) — спрашивать нечего, это тоже ответ.
+ */
+export function waysAnswered(input: { adStage: AdContinueStage | null; paidStage: ContinueStage | null }): boolean {
+  const { adStage, paidStage } = input;
+  const adAsking = adStage !== null && (adStage.kind === "idle" || adStage.kind === "checking");
+  const paidAsking = paidStage !== null && (paidStage.kind === "idle" || paidStage.kind === "loading");
+  return !adAsking && !paidAsking;
+}
+
+/** Тело события `continue_offered`. `null` — слать нечего: ответов ещё нет или предложить нечего. */
+export function continueOfferedPayload(
+  input: { adStage: AdContinueStage | null; paidStage: ContinueStage | null },
+  survivalSec: number,
+): { ad: boolean; stars: boolean; vip: boolean; elapsedSec: number } | null {
+  if (!waysAnswered(input)) return null;
+  // Все существующие способы отпали (или их нет): шага у игрока нет, предлагать было нечего.
+  const adGone = input.adStage === null || input.adStage.kind === "unavailable";
+  const paidGone = input.paidStage === null || input.paidStage.kind === "unavailable";
+  if (adGone && paidGone) return null;
+  return { ...visibleWays(input), elapsedSec: Math.round(survivalSec) };
+}
+
+/**
  * Состояния способов продолжить: живые из сторов, у витрины — заданные
  * образцы. Нет способа — `null`.
  */
