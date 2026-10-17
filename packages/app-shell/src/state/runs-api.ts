@@ -47,6 +47,7 @@ const leaderboardSchema = z.object({
       startingWeaponId: z.string(),
       enemiesKilled: z.number(),
       isMe: z.boolean(),
+      tester: z.optional(z.literal(true)),
     }),
   ),
   me: z.nullable(z.object({ rank: z.number(), survivalSec: z.number() })),

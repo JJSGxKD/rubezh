@@ -36,6 +36,21 @@ describe("клиент раздела «Друзья»", () => {
     expect(view.ok && view.data.incoming[0]?.displayName).toBe("Лис");
   });
 
+  it("знак тестера у друга и в заявке разбирается; без поля — не тестер", async () => {
+    const view = await createFriendsApi(
+      server([], {
+        ...VIEW,
+        friends: [{ ...VIEW.friends[0], tester: true }],
+        incoming: [{ ...VIEW.incoming[0], tester: true }],
+      }),
+    ).view();
+    expect(view.ok && view.data.friends[0]?.tester).toBe(true);
+    expect(view.ok && view.data.incoming[0]?.tester).toBe(true);
+
+    const plain = await createFriendsApi(server([], VIEW)).view();
+    expect(plain.ok && plain.data.friends[0]?.tester).toBeUndefined();
+  });
+
   it("ответ не по схеме — сбой, а не полупустой экран", async () => {
     expect((await createFriendsApi(server([], { friends: "нет" })).view()).ok).toBe(false);
   });

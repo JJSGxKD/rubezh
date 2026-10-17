@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap, type OnModuleDestroy } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { withTimeout } from "../../common/with-timeout.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { Outbound } from "../../infra/outbound/outbound.js";
 import { REDIS } from "../../infra/redis.js";
 import { SECRETS } from "../secrets/secret-catalog.js";
 import { SECRETS_READER, type SecretsReader } from "../secrets/secrets.service.js";
@@ -54,6 +55,8 @@ export class AdConversionsService implements OnApplicationBootstrap, OnModuleDes
     @Inject(CONVERSIONS_REPOSITORY) private readonly repository: ConversionsRepository,
     @Inject(SECRETS_READER) private readonly secrets: SecretsReader,
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
+    // Без модуля клиента (тесты) постбэки идут глобальным fetch.
+    @Optional() private readonly outbound?: Outbound,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -67,7 +70,7 @@ export class AdConversionsService implements OnApplicationBootstrap, OnModuleDes
   }
 
   /** Один проход; `null` — не запускался: идёт предыдущий или лок у другой реплики. */
-  async tick(now = new Date(), fetchImpl: typeof fetch = fetch): Promise<TickReport | null> {
+  async tick(now = new Date(), fetchImpl?: typeof fetch): Promise<TickReport | null> {
     if (this.running) return null;
     this.running = true;
     try {
@@ -75,7 +78,7 @@ export class AdConversionsService implements OnApplicationBootstrap, OnModuleDes
       const claimed = await this.redis.set(LOCK_KEY, token, "PX", LOCK_TTL_MS, "NX");
       if (claimed === null) return null;
       try {
-        const report = await this.pass(now, fetchImpl);
+        const report = await this.pass(now, fetchImpl ?? this.outbound?.forService("ads.postback") ?? fetch);
         if (Object.values(report).some((count) => count > 0)) this.log("log", "pass", { ...report });
         return report;
       } finally {

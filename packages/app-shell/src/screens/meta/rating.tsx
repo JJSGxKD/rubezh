@@ -21,6 +21,7 @@ import { ItemIcon } from "../item-icons";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { RankMark, SurvivalTime, SyncProblem } from "./sync-ui";
+import { TesterBadge } from "./tester-badge";
 
 /**
  * Рейтинг закрытого теста: лучшее время каждого игрока, отдельно по
@@ -173,6 +174,7 @@ function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): Reac
         <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-text">
           {entry.rank === 1 ? <Crown size={14} aria-hidden="true" className="shrink-0 text-elite" /> : null}
           <span className="truncate">{entry.name}</span>
+          {entry.tester === true ? <TesterBadge /> : null}
           {entry.isMe ? (
             <span className="shrink-0">
               <Badge tone="accent">{t("rating.you")}</Badge>
