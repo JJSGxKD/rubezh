@@ -16,6 +16,7 @@ import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
 import { RunLoading } from "./RunLoading";
+import { ChestOverlay } from "./ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./overlays";
 import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
 import { DevSheetLazy } from "./dev-sheet-lazy";
@@ -143,6 +144,12 @@ export function RunScreen(): ReactNode {
           onChoose={(optionId) => useRun.getState().choose(optionId)}
           onStats={openStats}
         />
+      ) : null}
+
+      {/* Сундук: мир стоит, награды уже выданы. Лист «Характеристики» и панель
+          разработчика в этой фазе не открываются — окно только показывает. */}
+      {run.phase === "chest" && run.chest !== null ? (
+        <ChestOverlay chest={run.chest} onTake={() => useRun.getState().closeChest()} />
       ) : null}
 
       {/* Лист закрывается сам, если мир снова пошёл: характеристики — снимок
