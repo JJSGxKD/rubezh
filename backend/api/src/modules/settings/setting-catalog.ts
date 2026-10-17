@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
-import { parseStartDate } from "../seasons/season-rules.js";
+import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 /**
  * Каталог настроек без релиза (docs/35-stage4-plan.md §3.18, Р53).
@@ -48,6 +48,12 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
   /** значение из окружения; `null` — в окружении не задано */
   readonly fromEnv: (config: AppConfig) => T | null;
   readonly fallback: T;
+  /**
+   * Проверка, которой нужно текущее время, — только при сохранении из панели;
+   * текст ошибки или `null`. Схема времени не знает, и значение из окружения или
+   * базы через неё не отсекается.
+   */
+  saveCheck?(value: T, now: Date): string | null;
 }
 
 export const SETTING_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
@@ -84,6 +90,19 @@ const urlSchema = z
   .trim()
   .max(256)
   .refine((value) => value === "" || (URL.canParse(value) && new URL(value).protocol === "https:"), { message: "ссылка https://… или пусто" });
+
+const LINKS_GROUP = "Ссылки Telegram";
+
+/** Равнозначные домены ссылок Telegram (core.telegram.org/api/links); telegram.org — сайт, в списке его нет. */
+export const TELEGRAM_LINK_ORIGINS: readonly string[] = ["https://t.me", "https://telegram.me", "https://telegram.dog"];
+
+/** Домен из списка без пути, параметров и учётных данных; иначе `null`. */
+export function telegramLinkOriginOf(value: string): string | null {
+  if (!URL.canParse(value)) return null;
+  const url = new URL(value);
+  const bare = url.pathname === "/" && url.search === "" && url.hash === "" && url.username === "" && url.password === "";
+  return bare && TELEGRAM_LINK_ORIGINS.includes(url.origin) ? url.origin : null;
+}
 
 const FEATURES_GROUP = "Функции сервера";
 
@@ -209,6 +228,24 @@ export const SETTINGS = {
     fallback: "",
   } satisfies SettingDefinition<string>,
   /**
+   * Домен ссылок Telegram (docs/35-stage4-plan.md, Р100): t.me бывает
+   * недоступен, и домен выбирается настройкой, без релиза. Окружения у ключа
+   * нет — решение команды на ходу правится в панели.
+   */
+  telegramLinkHost: {
+    key: "telegram.link-host",
+    group: LINKS_GROUP,
+    title: "Домен ссылок Telegram",
+    hint: "Каким адресом начинаются ссылки на бота и Mini App, которые строит сервер: приглашения, кнопки бота, ссылки кампаний, вход в панель. Допустимы https://t.me (умолчание), https://telegram.me и https://telegram.dog — переключите, если t.me недоступен. Уже разосланные ссылки не меняются",
+    kind: "url",
+    schema: z
+      .string()
+      .trim()
+      .refine((value) => telegramLinkOriginOf(value) !== null, { message: "один из https://t.me, https://telegram.me, https://telegram.dog" }),
+    fromEnv: () => null,
+    fallback: "https://t.me",
+  } satisfies SettingDefinition<string>,
+  /**
    * Канал проекта (docs/35-stage4-plan.md WP42): слайд «Наш канал» в
    * карусели главной. Не секрет и меняется без релиза — канал можно
    * переименовать или завести новый.
@@ -327,6 +364,10 @@ export const SETTINGS = {
     range: { min: 0, max: SEASONS_START_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
     fromEnv: () => null,
     fallback: 0,
+    saveCheck: (value, now) => {
+      const start = parseStartDate(value);
+      return start !== null && start.getTime() < seasonOf(now).startsAt.getTime() ? "Старт сезонов не может быть в прошлом — укажите понедельник этой или следующей недели" : null;
+    },
   } satisfies SettingDefinition<number>,
   paymentsStars: feature(
     "payments.stars",

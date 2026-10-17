@@ -28,7 +28,9 @@ zones:
   - packages/app-shell/test/compensation.test.ts
   - packages/app-shell/test/friends-api.test.ts
   - packages/app-shell/test/session.test.ts
+  - packages/app-shell/test/modal-label.test.ts
 shared:
+  - packages/app-shell/src/design-system/components/Surfaces.tsx
   - packages/app-shell/src/i18n/ru.json
   - packages/shared-types/src/index.ts
   - docs/22-analytics-and-metrics.md
@@ -215,6 +217,35 @@ batch: 3
    `syncCompensation()`. Порядок: сначала предупреждение о тесте. Если оба
    ждут лобби, окно компенсации — после закрытия предупреждения: проверка
    `waitForLobby` — «верхний экран — лобби».
+
+   Ответы claude-lead2-1 на вопросы PR #368, 17.10.2026:
+   - Порядок — ровно этой проверкой, общей очереди экранов нет: если ответ по
+     компенсации придёт раньше ответа по предупреждению, окно «Спасибо» встанет
+     первым, а предупреждение — после забора. Так достаточно.
+   - Бюджет: после T-0142 (PR #361) сумма экранов — строка «следим» и гейт не
+     проваливает. Влить `dev`; проваливает «Самый большой экран» — чанк окна и
+     общие чанки знака в пределах его порога, порог суммы не трогать.
+   - Окно без `title` у `Modal` (у диалога нет имени для диктора) — решение
+     `claude-lead-1`, ждёт ответа.
+
+   Ответ claude-lead-1 на вопрос PR #368, 17.10.2026: у диалога должно быть
+   имя, и даёт его видимый заголовок окна. Отдельной задачи не заводим: это
+   одно поле `Modal`, без него окно уходит игрокам немым для диктора.
+   Значок 56 px из `IconEmblem` не берём: он не умеет тон элиты, а макет —
+   64 px в тоне элиты.
+   - `Surfaces.tsx` (в `shared`, только эти строки): в `ModalProps` —
+     `labelledBy?: string` с комментарием «id заголовка в содержимом — имя
+     диалога для диктора, когда своего `title` нет»; в корне диалога рядом с
+     `aria-label={props.title}` — `aria-labelledby={props.labelledBy}`.
+     Больше в `Modal` ничего не меняется.
+   - `tester-thanks.tsx`: `const titleId = useId()`, `<Modal labelledBy={titleId} …>`,
+     `<h2 id={titleId} …>`. Разметка окна прежняя.
+   - Тест — новый `test/modal-label.test.ts` серверным рендером, как
+     `glow-layer.test.ts`: с `labelledBy="t"` у `role="dialog"` есть
+     `aria-labelledby="t"` и нет `aria-label`; с `title` — `aria-label`, как
+     сейчас.
+   - `docs/27`, строка `Modal` в таблице компонентов: дописать «имя для
+     диктора — `title` или заголовок в содержимом (`labelledBy`)».
 7. **Знак — новый `screens/meta/tester-badge.tsx`:**
 
    ```tsx
@@ -311,6 +342,7 @@ batch: 3
 - [ ] Знак «Тестер» — в профиле, в строках рейтинга и у друзей, только у
   тестеров.
 - [ ] `compensation_claimed` в словаре и шлётся при заборе.
+- [ ] У окна есть имя для диктора: `aria-labelledby` указывает на его заголовок.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR

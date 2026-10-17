@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { settingByKey, type SettingDefinition, type SettingKind, type SettingRange, type SettingValue } from "../settings/setting-catalog.js";
@@ -34,6 +34,8 @@ export class AdminSettingsService {
   constructor(
     private readonly settings: SettingsService,
     private readonly roles: RolesService,
+    // Часы — только для тестов; без них (в приложении) Nest отдаёт `undefined`.
+    @Optional() private readonly clock: () => Date = () => new Date(),
   ) {}
 
   async list(actor: AccountRef): Promise<SettingView[]> {
@@ -46,6 +48,8 @@ export class AdminSettingsService {
     const setting = this.definition(key);
     const parsed = setting.schema.safeParse(raw);
     if (!parsed.success) throw new ValidationError(`${setting.title}: ${parsed.error.issues[0]?.message ?? "некорректное значение"}`);
+    const refused = setting.saveCheck?.(parsed.data, this.clock());
+    if (refused !== undefined && refused !== null) throw new ValidationError(`${setting.title}: ${refused}`);
     const before = this.state(setting);
     await this.settings.write(setting, parsed.data, actor.accountId);
     const after = this.state(setting);
