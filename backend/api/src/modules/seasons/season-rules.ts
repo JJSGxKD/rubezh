@@ -54,14 +54,32 @@ export function seasonByKey(key: string): Season | null {
 }
 
 /**
- * Сезоны с первого по последний закончившийся к `now`, по порядку. Закрытые
- * среди них отсеивает вызывающий: сервер лежал две недели — обе просрочены, и
- * закрыть надо обе.
+ * Сколько недель назад может кончиться сезон, чтобы его ещё закрыли. Старше —
+ * пропускаем: награда за давнюю неделю, розданная пачкой задним числом (дата
+ * старта в прошлом, долгий простой сервера), хуже пропущенной награды.
  */
-export function dueSeasons(start: Date, now: Date): Season[] {
+export const MAX_CATCH_UP_WEEKS = 2;
+
+export interface DueSeasons {
+  due: Season[];
+  /** сколько закончившихся сезонов отброшено потолком догона */
+  skipped: number;
+}
+
+/**
+ * Закончившиеся к `now` сезоны с первого, по порядку, но не старше потолка
+ * догона `MAX_CATCH_UP_WEEKS`. Закрытые среди них отсеивает вызывающий:
+ * сервер лежал две недели — обе просрочены, и закрыть надо обе.
+ */
+export function dueSeasons(start: Date, now: Date): DueSeasons {
+  const oldestEnd = now.getTime() - MAX_CATCH_UP_WEEKS * WEEK_MS;
   const due: Season[] = [];
-  for (let startMs = mondayOf(start); startMs + WEEK_MS <= now.getTime(); startMs += WEEK_MS) due.push(seasonFrom(startMs));
-  return due;
+  let skipped = 0;
+  for (let startMs = mondayOf(start); startMs + WEEK_MS <= now.getTime(); startMs += WEEK_MS) {
+    if (startMs + WEEK_MS < oldestEnd) skipped++;
+    else due.push(seasonFrom(startMs));
+  }
+  return { due, skipped };
 }
 
 /** Самое раннее и самое позднее значение настройки: 8 цифр ГГГГММДД. */

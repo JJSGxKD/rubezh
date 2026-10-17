@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
-import { parseStartDate } from "../seasons/season-rules.js";
+import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 /**
  * Каталог настроек без релиза (docs/35-stage4-plan.md §3.18, Р53).
@@ -48,6 +48,12 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
   /** значение из окружения; `null` — в окружении не задано */
   readonly fromEnv: (config: AppConfig) => T | null;
   readonly fallback: T;
+  /**
+   * Проверка, которой нужно текущее время, — только при сохранении из панели;
+   * текст ошибки или `null`. Схема времени не знает, и значение из окружения или
+   * базы через неё не отсекается.
+   */
+  saveCheck?(value: T, now: Date): string | null;
 }
 
 export const SETTING_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
@@ -323,6 +329,10 @@ export const SETTINGS = {
     range: { min: 0, max: SEASONS_START_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
     fromEnv: () => null,
     fallback: 0,
+    saveCheck: (value, now) => {
+      const start = parseStartDate(value);
+      return start !== null && start.getTime() < seasonOf(now).startsAt.getTime() ? "Старт сезонов не может быть в прошлом — укажите понедельник этой или следующей недели" : null;
+    },
   } satisfies SettingDefinition<number>,
   paymentsStars: feature(
     "payments.stars",
