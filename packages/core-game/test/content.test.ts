@@ -9,6 +9,9 @@ import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES } from "../src/content/difficulty";
 import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
 import { findStageProblems } from "../src/game/sim/stages";
 import { describe, expect, it } from "vitest";
+import { BALANCE_TARGETS } from "../src/content/balance-targets";
+import { CHESTS } from "../src/content/chests";
+import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
 import { ENEMY_STAGES } from "../src/content/stages";
 import { MAPS } from "../src/content/maps";
@@ -17,7 +20,9 @@ import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS } from "../src/game/patterns";
+import { findChestsProblems } from "../src/game/sim/chests";
 import { findMapContentProblems } from "../src/game/sim/map-types";
+import { MAX_PICKUPS, MAX_PICKUPS_OF_KIND } from "../src/game/sim/pickups";
 import { findTimelineProblems } from "../src/game/sim/timeline-content";
 import { findPassiveContentProblems } from "../src/game/progression/passives";
 import { xpForLevel } from "../src/game/progression/levels";
@@ -430,5 +435,64 @@ describe("проверка контента пассивок", () => {
     expect(findPassiveContentProblems(defs as unknown as PassiveDef[])).toEqual([
       "пассивка a: категория atack не из attack, defense, mobility",
     ]);
+  });
+});
+
+describe("контент сундуков забега", () => {
+  it("проходит проверку целиком", () => {
+    expect(findChestsProblems(CHESTS)).toEqual([]);
+  });
+
+  it("ловит размер вне набора 1, 3, 5", () => {
+    expect(findChestsProblems({ ...CHESTS, opening: [1, 2 as never] }).join("\n")).toContain("opening");
+    expect(findChestsProblems({ ...CHESTS, sizes: [{ size: 4 as never, weight: 1 }, ...CHESTS.sizes] }).join("\n")).toContain("sizes");
+  });
+
+  it("ловит вес не больше нуля", () => {
+    const sizes = CHESTS.sizes.map((entry, i) => (i === 0 ? { ...entry, weight: 0 } : entry));
+    expect(findChestsProblems({ ...CHESTS, sizes }).join("\n")).toContain("weight");
+  });
+
+  it("ловит bossMinSize, которого нет среди sizes", () => {
+    const sizes = CHESTS.sizes.filter((entry) => entry.size !== 5);
+    expect(findChestsProblems({ ...CHESTS, sizes, bossMinSize: 5 }).join("\n")).toContain("bossMinSize");
+  });
+
+  it("ловит ownedWeightMul меньше единицы", () => {
+    expect(findChestsProblems({ ...CHESTS, ownedWeightMul: 0.5 }).join("\n")).toContain("ownedWeightMul");
+  });
+
+  it("ловит lowHpRatio и xpRatio вне (0, 1]", () => {
+    for (const key of ["lowHpRatio", "xpRatio"] as const) {
+      for (const value of [0, -0.1, 1.2]) {
+        expect(findChestsProblems({ ...CHESTS, [key]: value }).join("\n"), `${key} = ${String(value)}`).toContain(key);
+      }
+    }
+    expect(findChestsProblems({ ...CHESTS, lowHpRatio: 1, xpRatio: 1 })).toEqual([]);
+  });
+
+  it("ловит maxOnField не целый или за потолком вида", () => {
+    for (const value of [-1, 1.5, MAX_PICKUPS_OF_KIND + 1]) {
+      expect(findChestsProblems({ ...CHESTS, maxOnField: value }).join("\n"), `maxOnField = ${String(value)}`).toContain(
+        "maxOnField",
+      );
+    }
+    expect(findChestsProblems({ ...CHESTS, maxOnField: 0 })).toEqual([]);
+  });
+
+  it("кладёт первое событие элиты или босса в коридор первого сундука", () => {
+    const ranked = new Set(ENEMIES.filter((enemy) => enemy.rank !== undefined).map((enemy) => enemy.id));
+    const first = TIMELINE.flatMap((segment) =>
+      (segment.events ?? []).filter((event) => ranked.has(event.enemy)).map(() => segment.fromSec),
+    ).sort((a, b) => a - b)[0];
+
+    expect(first).toBeDefined();
+    expect(first).toBeGreaterThanOrEqual(BALANCE_TARGETS.firstChestEventSec.min);
+    expect(first).toBeLessThanOrEqual(BALANCE_TARGETS.firstChestEventSec.max);
+  });
+
+  it("не переполняет пул подборов суммой потолков", () => {
+    const total = DROPS.medkits.maxOnField + DROPS.magnets.maxOnField + DROPS.dynamite.maxOnField + CHESTS.maxOnField;
+    expect(total).toBeLessThanOrEqual(MAX_PICKUPS);
   });
 });

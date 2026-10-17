@@ -80,6 +80,16 @@ describe("свойства баланса", () => {
     );
   });
 
+  it("доводит уклоняющегося бота до сундука в забегах дольше четырёх минут", { timeout: 60_000 }, () => {
+    // Порог не подгоняется под результат: сундук — цель «дожить до элиты», и
+    // если бот до него не доходит, это вопрос к балансу, а не к тесту.
+    const longRuns = dodgingRuns().filter((run) => run.survivalSec > 240);
+    expect(longRuns.length).toBeGreaterThan(0);
+
+    const withChest = longRuns.filter((run) => run.chestsOpened >= 1).length;
+    expect(withChest / longRuns.length).toBeGreaterThanOrEqual(0.5);
+  });
+
   it("повторяет забег бота в точности — иначе таблица калибровки ничего не значит", { timeout: 60_000 }, () => {
     const first = simulateBalanceRun({ seed: 77, skill: "dodging", maxSec: 900 });
     const second = simulateBalanceRun({ seed: 77, skill: "dodging", maxSec: 900 });

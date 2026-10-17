@@ -1,6 +1,7 @@
 import type { EnemyPattern } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
-import { ENEMY_LOOKS, enemyColor, enemyRim, GEM_TIERS, WORLD_COLORS } from "../src/game/render/looks";
+import { ENEMY_LOOKS, enemyColor, enemyRim, GEM_TIERS, PICKUP_LOOKS, WORLD_COLORS } from "../src/game/render/looks";
+import { PICKUP_KIND } from "../src/game/sim/pickups";
 
 // Облик боя «Сумеречный рубеж» (design/README.md, «Вид боя»; tasks/T-0014):
 // враги красные и различаются формой, опасное — каймой, кристаллы яркие.
@@ -119,5 +120,27 @@ describe("кристаллы и мир", () => {
     expect([WORLD_COLORS.hpFull, WORLD_COLORS.hpMid, WORLD_COLORS.hpLow]).toEqual([0xff6f90, 0xffc14d, 0xff3b5c]);
     expect(WORLD_COLORS.xpRing).toBe(0xb6ff4a);
     expect(WORLD_COLORS.heal).toBe(0x8ee86b);
+  });
+});
+
+describe("облик подборов", () => {
+  it("у каждого вида подбора есть облик, а сундуки различаются размером", () => {
+    for (const [name, kind] of Object.entries(PICKUP_KIND)) {
+      expect(PICKUP_LOOKS[kind], `подбор ${name}`).toBeDefined();
+    }
+    expect(PICKUP_LOOKS).toHaveLength(Object.keys(PICKUP_KIND).length);
+
+    const [one, three, five] = [PICKUP_KIND.chestOne, PICKUP_KIND.chestThree, PICKUP_KIND.chestFive].map(
+      (kind) => PICKUP_LOOKS[kind],
+    );
+    expect([one.id, three.id, five.id]).toEqual(["chest_one", "chest_three", "chest_five"]);
+    expect(one.size).toBeLessThan(three.size);
+    expect(three.size).toBeLessThan(five.size);
+    expect(new Set([one.key, three.key, five.key]).size).toBe(3);
+  });
+
+  it("ключи текстур подборов не повторяются", () => {
+    const keys = PICKUP_LOOKS.map((look) => look.key);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
