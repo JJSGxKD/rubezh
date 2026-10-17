@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Пакет берут в другие проекты команды и собранным в бэкенд: ESM с
+    // NodeNext, как у бэкенда, и без DOM — исходники пакетов собранный
+    // бэкенд не импортирует (docs/34-stage3-plan.md, Р6).
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    // Рантайм — Node. Из его типов нужны `node:crypto`, `Buffer` и глобальные
+    // `fetch`, `URL`, `AbortSignal`.
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

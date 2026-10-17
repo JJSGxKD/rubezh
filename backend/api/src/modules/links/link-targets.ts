@@ -47,6 +47,25 @@ export function clickTarget(target: LinkTarget, clickId: string, builders: LinkT
   return addressOf(target, `c-${clickId}`, "c", clickId, builders);
 }
 
+/**
+ * Диплинк той же цели: только `app` и `bot`; у лендинга и у площадки без
+ * диплинков — `null`, и переходник отвечает обычным 302 (Р94, Р95).
+ */
+export function clickDeepTarget(
+  target: LinkTarget,
+  clickId: string,
+  builders: { launchDeep(param: string): string | null; chatDeep(param: string): string | null },
+): string | null {
+  switch (target) {
+    case "app":
+      return builders.launchDeep(`c-${clickId}`);
+    case "bot":
+      return builders.chatDeep(`c-${clickId}`);
+    case "landing":
+      return null;
+  }
+}
+
 /** Прямая ссылка; `null` — у ссылки с сетью её нет или площадку сейчас не собрать. */
 export function directUrl(link: { code: string; target: LinkTarget; network: string | null }, builders: LinkTargetBuilders): string | null {
   if (link.network !== null) return null;
