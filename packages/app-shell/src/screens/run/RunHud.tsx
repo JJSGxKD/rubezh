@@ -120,6 +120,13 @@ export function RunHud(props: RunHudProps): ReactNode {
           редко и обязана быть замеченной, но не закрывать здоровье. */}
       {hud.boss === null ? null : <BossBar boss={hud.boss} />}
 
+      {/* Радар под верхними полосами, у правого края: внизу экрана его закрывает
+          рука, ведущая джойстик. В потоке, а не поверх: полоса босса, когда она
+          есть, остаётся над ним и ничего не накрывает. */}
+      <div className="flex justify-end pt-2 pr-[calc(1rem+var(--app-inset-right))]">
+        <Radar radar={hud.radar} />
+      </div>
+
       <div className="mt-auto px-4 pb-3">
         <HintBanner hud={hud} />
       </div>
@@ -134,9 +141,6 @@ export function RunHud(props: RunHudProps): ReactNode {
           ))}
           <RunBoostSlots ids={hud.boosts} survivalSec={hud.survivalSec} />
         </div>
-        {/* Радар в нижнем правом углу: там его не закрывает палец, ведущий
-            джойстик, и он не спорит с таймером за верх экрана. */}
-        <Radar radar={hud.radar} />
       </div>
     </div>
   );
