@@ -4,6 +4,7 @@ import {
   Button,
   ContentColumn,
   ErrorState,
+  Hint,
   PageTitle,
   Screen,
   SectionTitle,
@@ -466,7 +467,13 @@ function EquippedTotals(props: { totals: readonly { stat: string; value: number 
       <ul className="grid grid-cols-1 gap-x-4 gap-y-0.5 text-sm landscape:grid-cols-2">
         {props.totals.map((total) => (
           <li key={total.stat} className="flex items-center justify-between">
-            <span className="text-text">{statName(total.stat)}</span>
+            {hasTranslation(`item.stat.${total.stat}.hint`) ? (
+              <Hint label={statName(total.stat)} text={t(`item.stat.${total.stat}.hint`)}>
+                <span className="text-text">{statName(total.stat)}</span>
+              </Hint>
+            ) : (
+              <span className="text-text">{statName(total.stat)}</span>
+            )}
             <span className="font-semibold tabular-nums text-success">{statValue(total.stat, total.value)}</span>
           </li>
         ))}
