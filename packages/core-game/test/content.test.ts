@@ -34,6 +34,10 @@ import { createWorld } from "../src/game/sim/world";
 // (docs/17-testing-strategy.md §3.1). Геймдизайнер узнаёт об ошибке из CI
 // через минуту, а не из ручного плейтеста через день.
 
+// Паттерны, которых в контенте больше нет: стрелков убрали (Р69, docs/35-stage4-plan.md),
+// а код паттерна и снаряды остаются до WP36.
+const RETIRED_PATTERNS: readonly string[] = ["kite_and_shoot"];
+
 describe("контент врагов", () => {
   it("не содержит дублирующихся id", () => {
     const ids = ENEMIES.map((enemy) => enemy.id);
@@ -60,11 +64,51 @@ describe("контент врагов", () => {
     expect(findEnemyContentProblems(ENEMIES)).toEqual([]);
   });
 
-  it("содержит врага на каждом реализованном паттерне", () => {
+  it("содержит врага на каждом реализованном паттерне, кроме выведенных из контента", () => {
     const used = new Set(ENEMIES.map((enemy) => enemy.pattern));
     for (const pattern of IMPLEMENTED_PATTERNS) {
+      if (RETIRED_PATTERNS.includes(pattern)) continue;
       expect(used, `паттерн ${pattern}`).toContain(pattern);
     }
+  });
+
+  it("не ставит врагов на выведенные паттерны", () => {
+    for (const enemy of ENEMIES) {
+      expect(RETIRED_PATTERNS, `враг ${enemy.id}`).not.toContain(enemy.pattern);
+    }
+  });
+
+  it("не содержит блуждающего огонька ни среди врагов, ни в таймлайне, ни в пуле", () => {
+    expect(ENEMIES.map((enemy) => enemy.id)).not.toContain("shooter_wisp");
+    for (const segment of TIMELINE) {
+      expect(segment.spawns.map((spawn) => spawn.enemy), `отрезок ${segment.fromSec}`).not.toContain("shooter_wisp");
+      expect((segment.events ?? []).map((event) => event.enemy), `события ${segment.fromSec}`).not.toContain("shooter_wisp");
+    }
+    expect(ENDLESS_CURVE.pool).not.toContain("shooter_wisp");
+  });
+
+  it("описывает пеших врагов без стрелка по таблице задачи", () => {
+    const byId = new Map(ENEMIES.map((enemy) => [enemy.id, enemy]));
+    expect(byId.get("bone_walker")).toMatchObject({ pattern: "chase", threat: 2, params: { steeringPerSec: 1.2 } });
+    expect(byId.get("bone_walker")?.rank).toBeUndefined();
+    expect(byId.get("bone_walker")?.resist).toBeUndefined();
+    expect(byId.get("mire_shambler")).toMatchObject({ pattern: "swarm", threat: 5, resist: { fire: 0.4, lightning: -0.4 } });
+    expect(byId.get("mire_shambler")?.rank).toBeUndefined();
+    expect(byId.get("elite_grave_knight")).toMatchObject({
+      pattern: "dash",
+      rank: "elite",
+      threat: 34,
+      resist: { poison: 0.5, fire: -0.4 },
+      params: { triggerDistance: 260, telegraphSec: 0.7, dashSpeed: 340, dashDurationSec: 0.8, recoverSec: 1.4 },
+    });
+    // Стихии атаки у них нет: рою её не дают, а у элиты читается рывок.
+    for (const id of ["bone_walker", "mire_shambler", "elite_grave_knight"]) expect(byId.get(id)?.element, id).toBeUndefined();
+  });
+
+  it("не даёт опыта меньше за более крепкого рядового", () => {
+    const regular = ENEMIES.filter((enemy) => enemy.rank === undefined);
+    const byHp = [...regular].sort((a, b) => a.hp - b.hp);
+    expect(byHp.find((enemy) => enemy.id === "mire_shambler")!.xp).toBeGreaterThan(byHp.find((enemy) => enemy.id === "bone_walker")!.xp);
   });
 });
 
@@ -182,6 +226,35 @@ describe("контент таймлайна спавна", () => {
     for (const id of ENDLESS_CURVE.pool) {
       expect(introduced, `враг ${id} попадает в смесь, ни разу не показавшись отдельно`).toContain(id);
     }
+  });
+
+  it("не снижает бюджет угрозы в секунду там, где огонёк заменён пешими врагами", () => {
+    // Прежний огонёк стоил perSec × 3 в секунду; замена не слабее (docs/35-stage4-plan.md, Р69).
+    const previous: [number, string, number][] = [
+      [60, "bone_walker", 0.9],
+      [120, "bone_walker", 0.75],
+      [180, "mire_shambler", 1.05],
+      [270, "mire_shambler", 0.9],
+      [300, "bone_walker", 1.35],
+    ];
+    const threatOf = new Map(ENEMIES.map((enemy) => [enemy.id, enemy.threat ?? 0]));
+    for (const [fromSec, enemy, budget] of previous) {
+      const spawn = TIMELINE.find((segment) => segment.fromSec === fromSec)?.spawns.find((entry) => entry.enemy === enemy);
+      expect(spawn, `отрезок ${fromSec}: ${enemy}`).toBeDefined();
+      expect(spawn!.perSec * (threatOf.get(enemy) ?? 0), `отрезок ${fromSec}`).toBeGreaterThanOrEqual(budget - 1e-9);
+    }
+  });
+
+  it("показывает могильного рыцаря событием на 240-й секунде и в бесконечном режиме, но не потоком", () => {
+    const segment = TIMELINE.find((entry) => entry.fromSec === 240);
+    expect(segment?.events).toContainEqual({ kind: "flank", enemy: "elite_grave_knight", count: 1 });
+    expect(ENDLESS_CURVE.events).toContainEqual({ everySegments: 6, kind: "flank", enemy: "elite_grave_knight", count: 1 });
+    expect(ENDLESS_CURVE.pool).not.toContain("elite_grave_knight");
+  });
+
+  it("ставит ходока на пятое место пула, а увальня — после упыря", () => {
+    expect(ENDLESS_CURVE.pool[4]).toBe("bone_walker");
+    expect(ENDLESS_CURVE.pool.indexOf("mire_shambler")).toBe(ENDLESS_CURVE.pool.indexOf("tank_ghoul") + 1);
   });
 
   it("держит элит вне обычного потока — они приходят событиями", () => {

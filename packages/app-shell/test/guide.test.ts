@@ -40,6 +40,19 @@ describe("гайдбук", () => {
     expect(eliteEnemies().every((enemy) => enemy.def.rank !== undefined)).toBe(true);
   });
 
+  it("называет новых пеших врагов по именам и показывает каждого один раз, элиту — отдельно", () => {
+    const regular = regularEnemies().map((enemy) => enemy.def.id);
+    const elite = eliteEnemies().map((enemy) => enemy.def.id);
+    for (const id of ["bone_walker", "mire_shambler", "elite_grave_knight"]) {
+      expect(hasTranslation(`enemy.${id}.name`), id).toBe(true);
+    }
+    expect(regular.filter((id) => id === "bone_walker")).toHaveLength(1);
+    expect(regular.filter((id) => id === "mire_shambler")).toHaveLength(1);
+    expect(elite.filter((id) => id === "elite_grave_knight")).toHaveLength(1);
+    expect(regular).not.toContain("elite_grave_knight");
+    expect(regular).not.toContain("shooter_wisp");
+  });
+
   it("говорит, на кого распадается делящийся, с числом из контента или умолчания", () => {
     const splitters = [...regularEnemies(), ...eliteEnemies()].filter((enemy) => enemy.def.pattern === "splitter");
     expect(splitters.length).toBeGreaterThan(0);
