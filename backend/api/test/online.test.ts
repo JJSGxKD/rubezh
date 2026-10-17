@@ -15,7 +15,7 @@ import { panelSettings } from "./helpers/settings.js";
  */
 
 const NOW = new Date("2026-10-15T12:00:00.000Z");
-const CLAIMS: AccessTokenClaims = { accountId: "acc-1", platform: "telegram", platformUserId: "1" };
+const CLAIMS: AccessTokenClaims = { accountId: "3f6b1a52-8c1e-4d6a-9b6e-1d2c3b4a5f60", platform: "telegram", platformUserId: "1" };
 
 const zero: PlatformCounts = { app: 0, run: 0, today: 0 };
 
@@ -144,8 +144,8 @@ describe("пинг: отметки в хранилище", () => {
     await service.ping(CLAIMS, false, NOW);
 
     expect(repository.inRunCalls).toEqual([
-      ["acc-1", "telegram", true, NOW.getTime()],
-      ["acc-1", "telegram", false, NOW.getTime()],
+      ["3f6b1a52-8c1e-4d6a-9b6e-1d2c3b4a5f60", "telegram", true, NOW.getTime()],
+      ["3f6b1a52-8c1e-4d6a-9b6e-1d2c3b4a5f60", "telegram", false, NOW.getTime()],
     ]);
   });
 
@@ -243,7 +243,7 @@ describe("активность из гарда", () => {
     service.touch(CLAIMS, new Date("2026-10-15T21:30:00.000Z"));
     await vi.waitFor(() => expect(repository.touches).toHaveLength(1));
 
-    expect(repository.touches[0]).toEqual(["acc-1", "telegram", new Date("2026-10-15T21:30:00.000Z").getTime(), "2026-10-16"]);
+    expect(repository.touches[0]).toEqual(["3f6b1a52-8c1e-4d6a-9b6e-1d2c3b4a5f60", "telegram", new Date("2026-10-15T21:30:00.000Z").getTime(), "2026-10-16"]);
   });
 
   it("сбой Redis не бросает и не ждёт: `touch` возвращается сразу", () => {
