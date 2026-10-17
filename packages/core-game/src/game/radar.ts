@@ -20,6 +20,9 @@ const BLIP_BY_PICKUP: Record<number, number> = {
   [PICKUP_KIND.medkit]: RADAR_BLIP.medkit,
   [PICKUP_KIND.magnet]: RADAR_BLIP.magnet,
   [PICKUP_KIND.dynamite]: RADAR_BLIP.dynamite,
+  [PICKUP_KIND.chestOne]: RADAR_BLIP.chest,
+  [PICKUP_KIND.chestThree]: RADAR_BLIP.chest,
+  [PICKUP_KIND.chestFive]: RADAR_BLIP.chest,
 };
 
 export function buildRadarSnapshot(world: World): RadarSnapshot {

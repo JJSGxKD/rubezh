@@ -298,7 +298,8 @@ describe("контент подборов", () => {
     // Рендер берёт вид по индексу вида из симуляции: перестановка строк
     // превратила бы аптечку в динамит на земле.
     for (const [id, kind] of Object.entries(PICKUP_KIND)) {
-      expect(PICKUP_LOOKS[kind]?.id, id).toBe(id);
+      // Ключ вида — camelCase (`chestOne`), id облика — snake_case (`chest_one`).
+      expect(PICKUP_LOOKS[kind]?.id, id).toBe(id.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`));
     }
     expect(PICKUP_LOOKS).toHaveLength(Object.keys(PICKUP_KIND).length);
   });

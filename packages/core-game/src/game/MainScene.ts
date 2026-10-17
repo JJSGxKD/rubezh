@@ -18,6 +18,7 @@ import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
 import { inspectWorld } from "./run/inspect";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
+import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { applyContinue, canContinue } from "./sim/continue";
@@ -70,7 +71,7 @@ const MAX_DEV_STEP_TICKS = 600;
  * пауза, выбор улучшения и смерть обязаны быть детерминированными — иначе
  * повтор забега по логу ввода разойдётся с оригиналом.
  */
-type RunPhase = "running" | "choosing" | "paused" | "downed" | "dead";
+type RunPhase = "running" | "choosing" | "chest" | "paused" | "downed" | "dead";
 
 export interface MainSceneData {
   seed: number;
@@ -103,6 +104,8 @@ export interface MainSceneData {
    * (docs/35-stage4-plan.md §3.5). Без поля движок заводит id сам.
    */
   runId?: string;
+  /** останавливать забег на открытом сундуке до `closeChest` */
+  pauseOnChest?: boolean;
 }
 
 /**
@@ -137,6 +140,8 @@ export class MainScene extends Phaser.Scene {
   /** в забеге включали читы — пометка не снимается до конца забега */
   private cheatsUsed = false;
   private devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
+  /** сколько записей о сундуках сцена уже отдала оболочке; после снимка — с нуля */
+  private chestCursor: ChestCursor = { found: 0, opened: 0 };
   private cueTracker!: CueTracker;
   private cueTimerMs = 0;
   /** направление прошлого кадра: от него считается гистерезис квантования */
@@ -162,6 +167,7 @@ export class MainScene extends Phaser.Scene {
     this.cheatsUsed = resume?.cheats === true;
     this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
     this.inputCode = IDLE_CODE;
+    this.chestCursor = { found: 0, opened: 0 };
 
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
     // Продолженный забег — с тем набором, с которым начался: надетое могло
@@ -281,7 +287,8 @@ export class MainScene extends Phaser.Scene {
       this.probe.stepped(this.inputCode, this.world);
       this.accumulatorMs -= TICK_MS;
       steps++;
-      if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
+      this.emitChestEvents();
+      if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest()) break;
     }
     const simMs = measure ? performance.now() - simStartedAt : 0;
     this.trackDevInfo(deltaMs, simMs, steps);
@@ -314,6 +321,9 @@ export class MainScene extends Phaser.Scene {
       this.handleDeath();
       return;
     }
+    // Окно сундука идёт первым: выбор уровня, набранный той же наградой, ждёт
+    // его закрытия (`closeChest`).
+    if (this.isInChest()) return;
     if (isAwaitingChoice(this.world)) this.enterChoice();
   }
 
@@ -391,6 +401,21 @@ export class MainScene extends Phaser.Scene {
     // Переведи она себя в «бежим» сама, сразу после команды выбора, — затёрла
     // бы уже пришедший следующий выбор из очереди: экран пропадает, а мир
     // остаётся стоять.
+    this.sceneData.bus.emit("resumed", { elapsedSec: this.world.stats.elapsedSec });
+  }
+
+  /**
+   * Закрыть окно сундука. Награды выданы ещё при открытии, поэтому здесь
+   * только возврат в забег — или к выбору уровня, если сундук его набрал.
+   */
+  closeChest(): void {
+    if (this.phase !== "chest") return;
+    this.emitHud();
+    if (isAwaitingChoice(this.world)) {
+      this.enterChoice();
+      return;
+    }
+    this.phase = "running";
     this.sceneData.bus.emit("resumed", { elapsedSec: this.world.stats.elapsedSec });
   }
 
@@ -500,6 +525,7 @@ export class MainScene extends Phaser.Scene {
     for (let i = 0; i < count; i++) {
       this.step(IDLE_INPUT);
       this.probe.stepped(IDLE_CODE, this.world);
+      this.emitChestEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
     }
     this.worldRenderer.sync(1);
@@ -591,6 +617,31 @@ export class MainScene extends Phaser.Scene {
     return kind === "weapons"
       ? world.loadout.weapons.map((slot) => ({ id: world.weaponTypes[slot.typeIndex].id, level: slot.level }))
       : world.loadout.passives.map((slot) => ({ id: world.passiveTypes[slot.typeIndex].id, level: slot.level }));
+  }
+
+  /**
+   * Новые сундуки — оболочке. Открытие при `pauseOnChest` останавливает
+   * забег: мир стоит, пока оболочка не ответит `closeChest`.
+   */
+  private emitChestEvents(): void {
+    const events = takeChestEvents(this.world, this.chestCursor);
+    this.chestCursor = events.cursor;
+    const bus = this.sceneData.bus;
+    for (const found of events.found) bus.emit("chestFound", found);
+    for (const opening of events.opened) bus.emit("chestOpened", opening);
+    if (events.opened.length > 0 && this.sceneData.pauseOnChest === true) this.enterChest();
+  }
+
+  /** Отдельным методом: после шага симуляции фаза могла смениться, а TS этого не видит. */
+  private isInChest(): boolean {
+    return this.phase === "chest";
+  }
+
+  private enterChest(): void {
+    if (this.phase !== "running") return;
+    this.phase = "chest";
+    this.joystick.setVisible(false);
+    this.emitHud();
   }
 
   private enterChoice(): void {

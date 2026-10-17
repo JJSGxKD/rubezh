@@ -37,6 +37,7 @@ export function createRunEngine(): RunEngine {
         ...(options.continues === undefined ? {} : { continues: options.continues }),
         ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
         ...(options.runId === undefined ? {} : { runId: options.runId }),
+        ...(options.pauseOnChest === undefined ? {} : { pauseOnChest: options.pauseOnChest }),
         bus,
       };
       host.game.scene.add("main", MainScene, true, sceneData);
@@ -60,6 +61,9 @@ export function createRunEngine(): RunEngine {
         },
         chooseUpgrade(optionId: string): void {
           scene()?.applyChoice(optionId);
+        },
+        closeChest(): void {
+          scene()?.closeChest();
         },
         pause(reason: RunPauseReason): void {
           scene()?.pauseRun(reason);

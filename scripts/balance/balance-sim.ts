@@ -68,15 +68,16 @@ it("свод калибровки баланса", () => {
   rows.push("");
   rows.push(`Seed на сценарий: ${SEEDS}. Отпечаток контента — в итоге каждого забега.`);
   rows.push("");
-  rows.push("| Сценарий | медиана, с | p10 | p90 | до минуты | уровень | волна | 1-й уровень, с |");
-  rows.push("|---|---|---|---|---|---|---|---|");
+  rows.push("| Сценарий | медиана, с | p10 | p90 | до минуты | уровень | волна | 1-й уровень, с | сундуков |");
+  rows.push("|---|---|---|---|---|---|---|---|---|");
 
   for (const [name, runs] of byScenario) {
     const summary = summarizeRuns(runs);
     rows.push(
       `| ${name} | ${fixed(summary.medianSurvivalSec)} | ${fixed(summary.p10SurvivalSec)} | ` +
         `${fixed(summary.p90SurvivalSec)} | ${percent(summary.deathsBeforeMinuteRatio)} | ` +
-        `${summary.medianLevel} | ${summary.medianWave} | ${fixed(summary.medianFirstLevelUpSec)} |`,
+        `${summary.medianLevel} | ${summary.medianWave} | ${fixed(summary.medianFirstLevelUpSec)} | ` +
+        `${summary.medianChestsOpened} |`,
     );
   }
 

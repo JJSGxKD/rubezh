@@ -1,5 +1,6 @@
 import type {
   BoostDef,
+  ChestsDef,
   ContinueDef,
   DifficultyDef,
   DropsDef,
@@ -20,7 +21,8 @@ import { combineModifiers, findBoostProblems, resolveBoosts } from "../progressi
 import { addWeapon, createLoadout } from "../progression/loadout";
 import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
-import { createRng } from "./rng";
+import { createRng, deriveSeed, STREAM_SALT } from "./rng";
+import { findChestsProblems } from "./chests";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
@@ -59,6 +61,20 @@ const FALLBACK_DROPS: DropsDef = {
   medkits: { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 },
   magnets: { chance: 0, eliteChance: 0, maxOnField: 0 },
   dynamite: { chance: 0, eliteChance: 0, maxOnField: 0, radiusUnits: 420, eliteHpRatio: 0.3 },
+};
+
+/**
+ * Сундуков в тестах симуляции нет: `maxOnField: 0` не даёт ни выпасть, ни
+ * сдвинуть генератор, и тесты паттернов от сундука не меняются.
+ */
+const FALLBACK_CHESTS: ChestsDef = {
+  opening: [],
+  sizes: [{ size: 1, weight: 1 }],
+  bossMinSize: 1,
+  ownedWeightMul: 1,
+  lowHpRatio: 0.7,
+  xpRatio: 0.5,
+  maxOnField: 0,
 };
 
 /**
@@ -128,6 +144,8 @@ export interface CreateWorldOptions {
   loadoutLimits?: LoadoutLimits;
   /** что падает с убитых врагов; по умолчанию — один кристалл */
   drops?: DropsDef;
+  /** сундук забега; по умолчанию — без сундуков */
+  chests?: ChestsDef;
   /** второй шанс; по умолчанию — одно продолжение */
   continueRules?: ContinueDef;
   /** уровень сложности; по умолчанию — без поправок */
@@ -182,6 +200,12 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error(`Некорректный контент выпадения:\n${dropProblems.join("\n")}`);
   }
 
+  const chestRules = options.chests ?? FALLBACK_CHESTS;
+  const chestProblems = findChestsProblems(chestRules);
+  if (chestProblems.length > 0) {
+    throw new Error(`Некорректный контент сундуков:\n${chestProblems.join("\n")}`);
+  }
+
   const continueRules = options.continueRules ?? FALLBACK_CONTINUE;
   const continueProblems = findContinueProblems(continueRules);
   if (continueProblems.length > 0) {
@@ -234,6 +258,14 @@ export function createWorld(options: CreateWorldOptions): World {
     levelCurve,
     loadoutLimits,
     drops,
+    chestRules,
+    chests: {
+      rng: createRng(deriveSeed(options.seed, STREAM_SALT.chest)),
+      dropped: 0,
+      opened: 0,
+      founds: [],
+      openings: [],
+    },
     continueRules,
     difficultyLevel,
     playerStats,
@@ -315,6 +347,8 @@ export function createWorld(options: CreateWorldOptions): World {
       medkitsCollected: 0,
       magnetsCollected: 0,
       dynamiteCollected: 0,
+      chestsFound: 0,
+      chestsOpened: 0,
       distance: 0,
       peakEnemies: 0,
       enemiesRecycled: 0,
