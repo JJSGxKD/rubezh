@@ -678,7 +678,10 @@ DAU / WAU / MAU и sticky (DAU/MAU). Сессии в сутки, длитель�
   рекламы, после первого экрана;
 - клики — только по размеченным элементам (`trackClicks: "tagged"`), а не по
   каждому касанию канвы забега; события площадки выключены
-  (`trackTgEvents: false`).
+  (`trackTgEvents: false`);
+- Graspil выключается из панели настройкой `client.scripts.graspil` или
+  `client.scripts.all` (tasks/T-0055): клиент спрашивает
+  `GET /api/v1/client/scripts` и без ответа не грузит скрипт.
 
 **Что уходит в Graspil** — данные запуска Telegram: ID, имя, username, язык
 и фото игрока, параметр запуска и платформа. Это тот же набор, что получает

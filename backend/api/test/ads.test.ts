@@ -24,6 +24,7 @@ import type { AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdsController } from "../src/modules/ads/ads.controller.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { AdAudience } from "../src/modules/ads/ad-audience.js";
+import { ClientScripts } from "../src/modules/client-scripts/client-scripts.service.js";
 import { eligibleBlocks } from "../src/modules/ads/ad-blocks.js";
 import { NetworkCreatives, taddyUser, type AdRequester } from "../src/modules/ads/ad-creatives.js";
 import { CREATIVE_VIEW_SEC } from "../src/modules/ads/ad-networks.js";
@@ -218,6 +219,21 @@ describe("выдача показа", () => {
     expect(offered(await service.offer(TELEGRAM, "wheel_spin", NOON)).debug).toBe(false);
     settings.set("ads.test-mode", true);
     expect(offered(await service.offer(TELEGRAM, "wheel_spin", at(NOON, 1))).debug).toBe(true);
+  });
+
+  it("аварийный выключатель скриптов: показ отвечает «нечего показать» и сессию не заводит (client.scripts.all)", async () => {
+    const { service, settings, repository } = setup([block("adsgram", 10)]);
+    settings.set("client.scripts.all", false);
+    expect(await service.offer(TELEGRAM, "wheel_spin", NOON)).toMatchObject({ available: false, reason: "no_fill" });
+    expect(repository.sessions).toEqual([]);
+    settings.set("client.scripts.all", true);
+    expect(offered(await service.offer(TELEGRAM, "wheel_spin", at(NOON, 1)))).toMatchObject({ network: "adsgram" });
+  });
+
+  it("выключатель учёта аудитории показы не трогает", async () => {
+    const { service, settings } = setup([block("adsgram", 10)]);
+    settings.set("client.scripts.ad-audience", false);
+    expect(offered(await service.offer(TELEGRAM, "wheel_spin", NOON))).toMatchObject({ network: "adsgram" });
   });
 
   it("отказ первой сети уводит к следующей, все на паузе — к давнее всех выданной", async () => {
@@ -533,7 +549,7 @@ describe("Taddy: игрок и отметки", () => {
 describe("учёт аудитории сетью (Р78)", () => {
   const PUB_ID = "14cbeb980853dd416003462ca4db7c12";
 
-  function audienceWith(networks: { networkKey: string; keys: Record<string, string> }[]) {
+  function audienceWith(networks: { networkKey: string; keys: Record<string, string> }[], settings = panelSettings()) {
     const repository = new MemoryAds();
     repository.networks = networks;
     const starts: { pubId: string; user: TaddyUser; startParam: string | null }[] = [];
@@ -543,7 +559,7 @@ describe("учёт аудитории сетью (Р78)", () => {
       viewThrough: async () => undefined,
       start: async (pubId, user, startParam) => void starts.push({ pubId, user, startParam }),
     };
-    return { starts, audience: new AdAudience(new AdNetworkKeys(repository), taddy) };
+    return { starts, audience: new AdAudience(new AdNetworkKeys(repository), taddy, new ClientScripts(settings)) };
   }
 
   it("SDK на старте — у сети учёта с ключами, включена она или нет; только на её площадке", async () => {
@@ -554,6 +570,19 @@ describe("учёт аудитории сетью (Р78)", () => {
     ]);
     expect(await audience.launchSetup("telegram")).toEqual([{ network: "taddy", keys: { pubId: PUB_ID } }]);
     expect(await audience.launchSetup("vk")).toEqual([]);
+  });
+
+  it("учёт выключен в панели — SDK не поднимается, хотя ключи заданы (client.scripts.ad-audience)", async () => {
+    const settings = panelSettings({ "client.scripts.ad-audience": false });
+    const { audience } = audienceWith([{ networkKey: "taddy", keys: { pubId: PUB_ID } }], settings);
+    expect(await audience.launchSetup("telegram")).toEqual([]);
+    settings.set("client.scripts.ad-audience", true);
+    expect(await audience.launchSetup("telegram")).toEqual([{ network: "taddy", keys: { pubId: PUB_ID } }]);
+  });
+
+  it("аварийный выключатель всех скриптов — тоже пусто (client.scripts.all)", async () => {
+    const { audience } = audienceWith([{ networkKey: "taddy", keys: { pubId: PUB_ID } }], panelSettings({ "client.scripts.all": false }));
+    expect(await audience.launchSetup("telegram")).toEqual([]);
   });
 
   it("стёртый или кривой ключ — SDK не поднимается", async () => {
@@ -835,7 +864,7 @@ describe("реклама по HTTP", () => {
 
   async function start(
     service: AdsService,
-    audience = new AdAudience(new AdNetworkKeys(new MemoryAds()), new FakeTaddyApi()),
+    audience = new AdAudience(new AdNetworkKeys(new MemoryAds()), new FakeTaddyApi(), new ClientScripts(panelSettings())),
     gate = interstitialGate(new MemoryAds(), panelSettings()),
   ): Promise<NestFastifyApplication> {
     @Module({
