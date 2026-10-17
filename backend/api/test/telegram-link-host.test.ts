@@ -31,7 +31,7 @@ describe("запись каталога telegram.link-host", () => {
   });
 
   it("окружения у ключа нет: решение правится в панели", () => {
-    expect(setting.fromEnv(loadAppConfig({}))).toBeNull();
+    expect(setting.fromEnv()).toBeNull();
   });
 
   it("домены из списка — равнозначные домены ссылок Telegram, telegram.org среди них нет", () => {
