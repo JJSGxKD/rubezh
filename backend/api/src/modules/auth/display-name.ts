@@ -14,9 +14,9 @@ export interface CleanName {
 
 const MAX_GRAPHEMES = 24;
 /** Склейка эмодзи: без неё семья и флаги распадаются на части. */
-const ZERO_WIDTH_JOINER = "‍";
+const ZERO_WIDTH_JOINER = "\u200d";
 /** Выбор вида эмодзи — не надстрочный знак «залго», в счёт не идёт. */
-const EMOJI_SELECTORS = new Set(["️", "︎"]);
+const EMOJI_SELECTORS = new Set(["\ufe0f", "\ufe0e"]);
 /** Больше трёх надстрочных знаков на букву не бывает ни в одной письменности, кроме «залго». */
 const MAX_MARKS = 3;
 

@@ -107,9 +107,19 @@ describe("мат", () => {
     expect(cleanName(`${"Абвгде".repeat(4)} хуй`).verdict).toBe("profanity");
   });
 
-  it.each(["Корабля", "Рубль", "Застрахуй", "Сукно", "Scunthorpe", "Оскорблённый", "Хлебушек", "Сукачёв", "Dickens", "Психуй", "Nigel", "Nigeria"])("%s — не мат", (name) => {
+  it.each(["Корабля", "Рубль", "Застрахуй", "Сукно", "Scunthorpe", "Оскорблённый", "Хлебушек", "Сукачёв", "Dickens", "Психуй", "Nigel", "Nigeria", "NightHunter", "Night Fury", "Nightmare", "Nightingale", "Nigmatullin", "Nigina", "Сучков", "Dickson", "Shitij", "Ebubekir"])("%s — не мат", (name) => {
     expect(cleanName(name).verdict).not.toBe("profanity");
     expect(cleanName(name).name).not.toBeNull();
+  });
+});
+
+describe("мат рядом с исключением", () => {
+  it.each(["nightnigga", "Night_Nigger", "Сучков сука", "Ebubekir_ebi"])("%s — мат", (name) => {
+    expect(cleanName(name).verdict).toBe("profanity");
+  });
+
+  it("username с night не отбрасывается, когда мат в имени из Telegram", () => {
+    expect(displayNameFor("сука", "@nightowl", "acc-1").name).toBe("nightowl");
   });
 });
 
