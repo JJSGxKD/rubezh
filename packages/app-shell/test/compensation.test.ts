@@ -58,6 +58,9 @@ function server(pending: CompensationView | null, claim: { alreadyClaimed?: bool
 
 const events: [string, unknown][] = [];
 
+/** Только события компенсации: переходы между экранами шлют свои `screen_viewed`. */
+const claimed = (): [string, unknown][] => events.filter(([name]) => name === "compensation_claimed");
+
 beforeEach(() => {
   events.length = 0;
   const storage = new Map<string, string>();
@@ -145,7 +148,7 @@ describe("«Забрать»", () => {
     await syncCompensation(fake.api);
 
     expect(await claimCompensation(fake.api)).toBe(true);
-    expect(events).toEqual([["compensation_claimed", { tester: true, bonusGems: 60, restoredGems: 150, continueGems: 12 }]]);
+    expect(claimed()).toEqual([["compensation_claimed", { tester: true, bonusGems: 60, restoredGems: 150, continueGems: 12 }]]);
     expect(useCompensation.getState().pending).toBeNull();
   });
 
@@ -154,7 +157,7 @@ describe("«Забрать»", () => {
     await syncCompensation(fake.api);
 
     expect(await claimCompensation(fake.api)).toBe(true);
-    expect(events).toEqual([]);
+    expect(claimed()).toEqual([]);
     expect(useCompensation.getState().pending).toBeNull();
   });
 
@@ -163,7 +166,7 @@ describe("«Забрать»", () => {
     await syncCompensation(fake.api);
 
     expect(await claimCompensation(fake.api)).toBe(false);
-    expect(events).toEqual([]);
+    expect(claimed()).toEqual([]);
     expect(useCompensation.getState().pending).toEqual(FULL);
   });
 
@@ -173,6 +176,6 @@ describe("«Забрать»", () => {
     expect(await claimCompensation(failing.api)).toBe(false);
 
     expect(await claimCompensation(server(FULL).api)).toBe(true);
-    expect(events).toHaveLength(1);
+    expect(claimed()).toHaveLength(1);
   });
 });

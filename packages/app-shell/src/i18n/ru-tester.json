@@ -1,0 +1,16 @@
+{
+  "tester.thanks.title": "Спасибо за тест!",
+  "tester.thanks.text": "Вы играли до релиза и помогли сделать «Рубеж» лучше. Прогресс обнулился, как мы и предупреждали, — а купленное и подарок за тест уже ждут.",
+  "tester.returned.title": "Купленное вернулось",
+  "tester.returned.text": "Перед релизом мы обнулили прогресс. Всё, что вы купили за звёзды, возвращается на счёт.",
+  "tester.line.restored": "Купленное за звёзды",
+  "tester.line.continue": "Второй шанс",
+  "tester.line.continue.hint": "за купленные продолжения",
+  "tester.line.bonus": "Бонус за уровень {level}",
+  "tester.line.badge": "Знак «Тестер»",
+  "tester.line.badge.hint": "в профиле, у друзей и в рейтинге",
+  "tester.total": "Всего",
+  "tester.claim": "Забрать",
+  "tester.claiming": "Забираем…",
+  "tester.failed": "Не получилось — попробуйте ещё раз. Ничего не потеряется."
+}
