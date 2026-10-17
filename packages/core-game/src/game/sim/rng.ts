@@ -49,3 +49,22 @@ export function createRng(seed: number): Rng {
     },
   };
 }
+
+/**
+ * Соли независимых потоков от seed забега. Сундуку и своим карточкам нужен
+ * собственный генератор: общий `world.rng` сдвинулся бы от любого их броска,
+ * и вместе с ним поехали бы все golden и все предложения уровней.
+ */
+export const STREAM_SALT = { chest: 0x43485354, cards: 0x43415244 } as const;
+
+/**
+ * Seed отдельного потока: перемешивание целых (финализатор murmur3), чтобы
+ * соседние seed забега давали несвязанные потоки. Только целочисленная
+ * арифметика — результат одинаков в любом JS-движке.
+ */
+export function deriveSeed(seed: number, salt: number): number {
+  let h = (seed ^ Math.imul(salt, 0x9e3779b1)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
+}

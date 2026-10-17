@@ -3,6 +3,7 @@ import { ENEMIES } from "../../content/enemies";
 import { ENEMY_STAGES } from "../../content/stages";
 import { MAPS } from "../../content/maps";
 import { findDifficulty } from "../../content/difficulty";
+import { CHESTS } from "../../content/chests";
 import { DROPS } from "../../content/drops";
 import { ACCOUNT_UNLOCKS } from "../../content/unlocks";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../../content/upgrades";
@@ -56,6 +57,8 @@ export interface BalanceRunResult {
   peakEnemies: number;
   /** секунда, на которой бот взял второй уровень; 0 — не взял вовсе */
   firstLevelUpSec: number;
+  /** сколько сундуков бот открыл за забег */
+  chestsOpened: number;
   /** забег упёрся в аварийный потолок, а не кончился смертью */
   timedOut: boolean;
 }
@@ -72,6 +75,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     levelCurve: LEVEL_CURVE,
     loadoutLimits: open?.limits ?? LOADOUT_LIMITS,
     drops: DROPS,
+    chests: CHESTS,
     map: MAPS[0],
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined
@@ -109,6 +113,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     xpCollected: world.stats.xpCollected,
     peakEnemies: world.stats.peakEnemies,
     firstLevelUpSec,
+    chestsOpened: world.stats.chestsOpened,
     timedOut: world.player.alive,
   };
 }
@@ -135,6 +140,8 @@ export interface BalanceSummary {
   medianLevel: number;
   medianWave: number;
   medianFirstLevelUpSec: number;
+  /** медиана открытых сундуков за забег */
+  medianChestsOpened: number;
   timedOut: number;
 }
 
@@ -143,6 +150,7 @@ export function summarizeRuns(results: readonly BalanceRunResult[]): BalanceSumm
   const levels = results.map((run) => run.level).sort((a, b) => a - b);
   const waves = results.map((run) => run.wave).sort((a, b) => a - b);
   const firstLevelUps = results.map((run) => run.firstLevelUpSec).sort((a, b) => a - b);
+  const chests = results.map((run) => run.chestsOpened).sort((a, b) => a - b);
 
   return {
     runs: results.length,
@@ -156,6 +164,7 @@ export function summarizeRuns(results: readonly BalanceRunResult[]): BalanceSumm
     medianLevel: quantile(levels, 0.5),
     medianWave: quantile(waves, 0.5),
     medianFirstLevelUpSec: quantile(firstLevelUps, 0.5),
+    medianChestsOpened: quantile(chests, 0.5),
     timedOut: results.filter((run) => run.timedOut).length,
   };
 }

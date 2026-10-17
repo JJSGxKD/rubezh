@@ -40,6 +40,10 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "swarm_rat", perSec: 2.2 },
       { enemy: "circler_crow", perSec: 1.4, burst: 8 },
     ],
+    // Первая элита приходит на 90-й секунде, а не на 300-й: первый сундук
+    // должен выпасть около 2:00, пока большинство ботов-забегов ещё живо
+    // (docs/39-retention-mechanics.md §3).
+    events: [{ kind: "ring", enemy: "elite_ghoul", count: 1 }],
   },
   {
     fromSec: 120,

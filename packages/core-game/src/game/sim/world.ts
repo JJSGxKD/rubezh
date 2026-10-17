@@ -1,4 +1,4 @@
-import type { ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
+import type { ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -164,6 +164,10 @@ export interface RunStats {
   magnetsCollected: number;
   /** подобранный динамит */
   dynamiteCollected: number;
+  /** выпавшие сундуки */
+  chestsFound: number;
+  /** открытые сундуки */
+  chestsOpened: number;
   /** пройденное расстояние: в бесконечном мире это показатель стиля игры */
   distance: number;
   /** пик числа живых врагов за забег — сколько игрок вытянул одновременно */
@@ -182,6 +186,40 @@ export interface RunStats {
  * контента не пропустит.
  */
 export const MAX_CONTINUES_PER_RUN = 5;
+
+/** Выпавший сундук — запись для сцены и аналитики. */
+export interface ChestFound {
+  /** порядковый номер выпадения с нуля */
+  index: number;
+  size: ChestSize;
+  source: ChestSource;
+  elapsedSec: number;
+}
+
+/** Открытый сундук: что в нём было. */
+export interface ChestOpening {
+  /** порядковый номер открытия с нуля */
+  index: number;
+  size: ChestSize;
+  rewards: ChestReward[];
+  /** сколько наград — запасные (аптечка и опыт) */
+  fallbacks: number;
+  elapsedSec: number;
+}
+
+/**
+ * Сундуки забега. `rng`, `dropped` и `opened` — состояние и входят в снимок;
+ * `founds` и `openings` — выход для сцены, её курсор забирает новые записи, а
+ * после восстановления из снимка списки пусты.
+ */
+export interface ChestState {
+  /** собственный поток случайности: `world.rng` сундуки не трогают */
+  rng: Rng;
+  dropped: number;
+  opened: number;
+  founds: ChestFound[];
+  openings: ChestOpening[];
+}
 
 /** Опыт, уровень и очередь выборов внутри забега. */
 export interface ProgressionState {
@@ -227,6 +265,9 @@ export interface World {
   loadoutLimits: LoadoutLimits;
   /** что падает с убитых врагов */
   drops: DropsDef;
+  /** правила сундука забега */
+  chestRules: ChestsDef;
+  chests: ChestState;
   /** второй шанс: сколько раз и с чем игрок возвращается после смерти */
   continueRules: ContinueDef;
   /**

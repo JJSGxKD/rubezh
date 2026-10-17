@@ -555,6 +555,14 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       track("wave_reached", { wave: index, elapsedSec: Math.round(elapsedSec) });
     }),
 
+    created.on("chestFound", ({ index, size, source, elapsedSec }) => {
+      track("chest_found", { index, size, source, elapsedSec: Math.round(elapsedSec) });
+    }),
+
+    created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
+      track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
+    }),
+
     created.on("paused", ({ reason, elapsedSec }) => {
       set({ phase: "paused", pauseReason: reason });
       // Сворачивание — самый частый путь к закрытию приложения: сохраняемся

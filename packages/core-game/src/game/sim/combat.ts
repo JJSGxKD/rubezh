@@ -1,6 +1,7 @@
 import { isElite, onEnemyKilled } from "../patterns";
 import { dropGems } from "./gems";
 import { rollPickups } from "./pickups";
+import { dropChest } from "./chests";
 import { stageOf } from "./stages";
 import { CHAIN_SHARE, chainTargets, damageMultiplier, ELEMENT_LIGHTNING, ELEMENT_PHYSICAL, tryApplyStatus } from "./elements";
 import { despawnEnemy, NO_OWNER_TYPE, type World } from "./world";
@@ -103,6 +104,7 @@ export function killEnemy(world: World, index: number): void {
     // незачем убивать — выгоднее убежать к обычным.
     dropGems(world, x, y, Math.round(type.xp * stage.xpMul));
     rollPickups(world, x, y, isElite(type));
+    dropChest(world, x, y, type.rank);
   }
   onEnemyKilled(type.pattern, world, index);
 }

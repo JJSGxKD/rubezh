@@ -33,4 +33,11 @@ export const BALANCE_TARGETS = {
    * прочитать.
    */
   firstLevelUpSec: { min: 3, max: 30 },
+
+  /**
+   * Секунда первого события элиты или босса в таймлайне: с неё падает первый
+   * сундук. Раньше минуты игрок ещё не освоился, позже двух — большинство
+   * бот-забегов умирает до сундука (docs/39-retention-mechanics.md §3).
+   */
+  firstChestEventSec: { min: 60, max: 120 },
 } as const;

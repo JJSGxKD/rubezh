@@ -35,7 +35,9 @@ export type ShapeKind =
   | "bolt"
   | "medkit"
   | "magnet"
-  | "dynamite";
+  | "dynamite"
+  /** сундук забега: корпус, крышка и замок */
+  | "chest";
 
 export interface ShapeLook {
   shape: ShapeKind;
@@ -153,13 +155,22 @@ export const GEM_TIERS: readonly (ShapeLook & { minValue: number; radiusUnits: n
 ];
 
 /**
- * Подборы — по индексу вида в симуляции: аптечка, магнит, динамит. Виды
- * различаются силуэтом: крест, подкова, шашка с фитилём (§4.4).
+ * Подборы — по индексу вида в симуляции: аптечка, магнит, динамит и три
+ * сундука. Виды различаются силуэтом: крест, подкова, шашка с фитилём,
+ * сундук с замком (§4.4). Золотой оттенок сундука крепнет с размером, а сам
+ * он крупнее прочих подборов: награда должна быть видна издалека.
  */
-export const PICKUP_LOOKS: readonly (ShapeLook & { id: "medkit" | "magnet" | "dynamite"; key: string; size: number })[] = [
+export const PICKUP_LOOKS: readonly (ShapeLook & {
+  id: "medkit" | "magnet" | "dynamite" | "chest_one" | "chest_three" | "chest_five";
+  key: string;
+  size: number;
+})[] = [
   { id: "medkit", key: "bh-medkit", shape: "medkit", color: 0xff5d5d, size: 1 },
   { id: "magnet", key: "bh-magnet-pickup", shape: "magnet", color: 0x5ccfff, size: 1.2 },
   { id: "dynamite", key: "bh-dynamite-pickup", shape: "dynamite", color: 0xff5d5d, size: 1.35 },
+  { id: "chest_one", key: "bh-chest-one", shape: "chest", color: 0xd9a441, size: 1.3 },
+  { id: "chest_three", key: "bh-chest-three", shape: "chest", color: 0xf0bb3a, size: 1.5 },
+  { id: "chest_five", key: "bh-chest-five", shape: "chest", color: 0xffd44d, size: 1.7 },
 ];
 
 /**
