@@ -3,8 +3,8 @@ id: T-0149
 title: Чистка ников — символы, длина, мат, замена пустого
 epic: E4
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
