@@ -3,7 +3,7 @@ id: T-0100
 title: Сундук забега: окно открытия с «барабаном» и списком полученного
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-14
 size: M
