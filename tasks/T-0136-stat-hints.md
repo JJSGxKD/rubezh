@@ -3,7 +3,7 @@ id: T-0136
 title: Подсказки к параметрам снаряжения — что значит каждый
 epic: E6
 priority: P2
-status: in-progress
+status: done
 owner: claude-7 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
