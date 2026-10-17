@@ -9,7 +9,7 @@ import { checkerOf } from "./availability-checkers.js";
 import { isCrawler } from "./crawler.js";
 import { newClickId, newLinkCode } from "./link-code.js";
 import { macroQuery, networkParamsOf, type LinkNetwork } from "./link-networks.js";
-import { clickTarget, directUrl, type LinkTarget, type LinkTargetBuilders } from "./link-targets.js";
+import { clickDeepTarget, clickTarget, directUrl, type LinkTarget, type LinkTargetBuilders } from "./link-targets.js";
 import { LINKS_REPOSITORY, type LinkRecord, type LinksRepository, type LinkStats, type RegistrationOn } from "./links.repository.js";
 
 /**
@@ -41,7 +41,8 @@ export interface VisitorInfo {
 export type Visit =
   | { kind: "not_found" }
   | { kind: "preview"; url: string | null }
-  | { kind: "redirect"; target: string }
+  /** `deep` — диплинк в клиент площадки; `null` — переходник отвечает обычным 302 на `target` */
+  | { kind: "redirect"; target: string; deep: string | null }
   | { kind: "unavailable"; url: string | null }
   /** сервис проверки доступности: страница «ссылка жива», клик не пишется */
   | { kind: "check"; url: string | null };
@@ -110,7 +111,11 @@ export class LinksService {
       .catch((error: unknown) => {
         this.logger.warn(JSON.stringify({ module: "links", event: "click_record_failed", link: link.code, reason: error instanceof Error ? error.message : "unknown" }));
       });
-    return { kind: "redirect", target };
+    const deep = clickDeepTarget(link.target, clickId, {
+      launchDeep: (param) => this.appLinks.launchDeep(link.platform, param),
+      chatDeep: (param) => this.appLinks.chatDeep(link.platform, param),
+    });
+    return { kind: "redirect", target, deep };
   }
 
   async create(actor: AccountRef, input: NewLink): Promise<LinkView> {

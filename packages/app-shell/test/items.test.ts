@@ -71,6 +71,20 @@ beforeEach(() => {
   useItems.setState({ inventory: null });
 });
 
+describe("что будет после улучшения", () => {
+  const NEXT = { level: 4, power: 64, main: { stat: "damage", value: 0.06 }, extras: [{ stat: "damageFire", value: 0.08 }] };
+
+  it("схема разбирает предмет с next и без него", async () => {
+    const withNext = { ...INVENTORY, items: [{ ...ITEM, next: NEXT }] };
+    const inventory = await loadInventory(createItemsApi(server([], { "/api/v1/items": withNext })));
+    expect(inventory).toBeNull();
+    expect(useItems.getState().inventory?.items[0]?.next).toEqual(NEXT);
+
+    await loadInventory(createItemsApi(server([], { "/api/v1/items": INVENTORY })));
+    expect(useItems.getState().inventory?.items[0]?.next).toBeUndefined();
+  });
+});
+
 describe("снимок надетого на устройстве", () => {
   it("сохраняется для следующего забега — и без снаряжения: в снимке уровень аккаунта", async () => {
     const calls: Call[] = [];
