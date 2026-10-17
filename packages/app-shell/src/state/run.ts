@@ -1,4 +1,4 @@
-import { ELEMENTS, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   loadRunEngine,
   type HudSnapshot,
@@ -33,9 +33,17 @@ import { clientErrorCount, reportError, track, useShell } from "./shell";
  */
 /**
  * `downed` — игрок умер, но второй шанс ещё есть: мир стоит, итог отложен до
- * решения (docs/07-monetization-and-ads.md §8).
+ * решения (docs/07-monetization-and-ads.md §8). `chest` — игрок открыл сундук,
+ * мир стоит, пока окно с наградами не закроют (tasks/T-0100).
  */
-export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "downed" | "finished" | "error";
+export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "chest" | "downed" | "finished" | "error";
+
+/** Открытый сундук: что вынул игрок, награды уже выданы движком. */
+export interface OpenedChest {
+  index: number;
+  size: number;
+  rewards: ChestReward[];
+}
 
 /**
  * Этап загрузки забега для экрана загрузки: чанк движка, затем мир до первого
@@ -104,6 +112,8 @@ export interface RunStore {
   offers: UpgradeOption[];
   /** сколько уровней ещё ждёт выбора */
   queued: number;
+  /** открытый сундук — пока фаза `chest` */
+  chest: OpenedChest | null;
   level: number;
   result: RunResult | null;
   isNewRecord: boolean;
@@ -131,6 +141,8 @@ export interface RunStore {
   continueRun(source: ContinueSource): void;
   /** отказ от второго шанса: забег закрывается смертью */
   declineContinue(): void;
+  /** Забрать награды сундука и закрыть окно: забег идёт дальше или открывается выбор уровня. */
+  closeChest(): void;
   choose(optionId: string): void;
   restart(): void;
   stop(): void;
@@ -197,6 +209,7 @@ const IDLE = {
   hud: null,
   offers: [] as UpgradeOption[],
   queued: 0,
+  chest: null as OpenedChest | null,
   level: 1,
   result: null,
   isNewRecord: false,
@@ -318,6 +331,7 @@ export const useRun = create<RunStore>((set, get) => ({
         // можно купить или взять за рекламу: иначе смерть ждала бы решения,
         // которого не принять (docs/34-stage3-plan.md, WP5; WP11).
         continues: devRun || canOfferContinue(),
+        pauseOnChest: true,
         ...(resume !== undefined || (signed === null && boostIds.length === 0 && accountLevel === undefined)
           ? {}
           : {
@@ -399,6 +413,13 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.declineContinue();
   },
 
+  closeChest(): void {
+    if (get().phase !== "chest") return;
+    // Фазу дальше ведёт движок: `resumed` или следующий выбор уровня, если он
+    // накопился, пока окно было открыто, — как в `choose`.
+    session?.closeChest();
+  },
+
   choose(optionId: string): void {
     if (get().phase !== "levelUp") return;
     track("upgrade_chosen", { option: optionId, level: get().level });
@@ -443,7 +464,7 @@ export const useRun = create<RunStore>((set, get) => ({
   stop(): void {
     // Уход с экрана посреди забега — не конец забега: он сохраняется и ждёт
     // в лобби. Уход с экрана смерти — отказ от второго шанса.
-    if (isInProgress(get().phase)) saveRun();
+    if (isRunActivePhase(get().phase)) saveRun();
     if (get().phase === "downed") session?.declineContinue();
     // Незавершённый запуск тоже отменяем: иначе он доедет и создаст игру,
     // которой уже некому владеть.
@@ -547,7 +568,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
         haptic("levelUp");
         audio.runEvent("levelUp");
       }
-      set({ phase: "levelUp", offers: options, queued, level });
+      set({ phase: "levelUp", offers: options, queued, level, chest: null });
       saveRun();
     }),
 
@@ -561,6 +582,10 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
+      // Звук и отклик — как у набора уровня: отдельного звука сундука нет.
+      haptic("levelUp");
+      audio.runEvent("levelUp");
+      set({ phase: "chest", chest: { index, size, rewards } });
     }),
 
     created.on("paused", ({ reason, elapsedSec }) => {
@@ -573,7 +598,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       }
     }),
 
-    created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [] })),
+    created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [], chest: null })),
 
     created.on("devInfo", (devInfo) => set({ devInfo })),
 
@@ -767,8 +792,9 @@ function isLowHp(hud: HudSnapshot): boolean {
   return hud.maxHp > 0 && hud.hp / hud.maxHp <= LOW_HP_RATIO;
 }
 
-function isInProgress(phase: RunPhase): boolean {
-  return phase === "running" || phase === "paused" || phase === "levelUp";
+/** Забег идёт и его есть что сохранять: бег, пауза, выбор уровня или окно сундука. */
+export function isRunActivePhase(phase: RunPhase): boolean {
+  return phase === "running" || phase === "paused" || phase === "levelUp" || phase === "chest";
 }
 
 /**
