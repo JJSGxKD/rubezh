@@ -60,3 +60,31 @@ export function friendsLayout(input: { withAccount: boolean; status: FriendsLoad
 export function coinIconsNeedRoom(steps: readonly { coins: number }[]): boolean {
   return steps.some((step) => step.coins >= 1_000);
 }
+
+export type PeerActionKind = "accept" | "decline" | "gift" | "gifted";
+
+export interface PeerActionView {
+  /** Ключ подписи: текст на широком экране и `aria-label` на узком. */
+  labelKey: string;
+  icon: "check" | "x" | "gift";
+  /** Значок виден и рядом с текстом (подарки); у заявок он только вместо текста. */
+  iconWithText: boolean;
+}
+
+/**
+ * Какой значок и какая подпись у кнопки в строке игрока. На узком экране
+ * кнопки без текста, чтобы имя не сжималось до буквы; подпись для диктора —
+ * те же слова, что и текст на широком.
+ */
+export function peerActionView(kind: PeerActionKind): PeerActionView {
+  switch (kind) {
+    case "accept":
+      return { labelKey: "friends.accept", icon: "check", iconWithText: false };
+    case "decline":
+      return { labelKey: "friends.decline", icon: "x", iconWithText: false };
+    case "gift":
+      return { labelKey: "friends.gift", icon: "gift", iconWithText: true };
+    case "gifted":
+      return { labelKey: "friends.gift.sent", icon: "check", iconWithText: true };
+  }
+}

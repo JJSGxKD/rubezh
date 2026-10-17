@@ -1,6 +1,29 @@
-import { Toaster as Sonner } from "sonner";
+import { Toaster as Sonner, toast } from "sonner";
 
-export { toast } from "sonner";
+export { toast };
+
+/** Сколько висит уведомление с «Отменить», мс. */
+export const UNDO_WINDOW_MS = 8000;
+
+/**
+ * Обратимое действие сделано: уведомление на 8 секунд с «Отменить».
+ * Запрос не задерживается — отмена это обратная операция вызывающего, поэтому
+ * закрытая вкладка ничего не теряет и не обманывает.
+ */
+export function toastWithUndo(text: string, undo: () => Promise<void>): void {
+  toast.success(text, {
+    duration: UNDO_WINDOW_MS,
+    action: {
+      label: "Отменить",
+      onClick: () => {
+        undo().then(
+          () => toast("Отменено"),
+          () => toast.error("Не удалось отменить — сделайте обратное вручную"),
+        );
+      },
+    },
+  });
+}
 
 /**
  * Уведомления об исходе действия (sonner): «сохранено» и «сервер отказал»
