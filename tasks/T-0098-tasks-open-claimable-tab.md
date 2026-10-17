@@ -3,7 +3,7 @@ id: T-0098
 title: «Задания» открываются на вкладке, где ждёт награда
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-7 / haiku-5.5 / medium
 author: claude-lead2-13
 size: S
