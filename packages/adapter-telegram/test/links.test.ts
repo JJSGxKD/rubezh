@@ -19,9 +19,12 @@ function sdk(patch: Partial<LinkSdk> = {}) {
 }
 
 describe("ссылки из Telegram", () => {
-  it("ссылка Telegram — только https на t.me или telegram.me", () => {
+  it("ссылка Telegram — только https на t.me, telegram.me или telegram.dog", () => {
     expect(isTelegramLink("https://t.me/rubezh_game")).toBe(true);
     expect(isTelegramLink("https://telegram.me/rubezh_game")).toBe(true);
+    expect(isTelegramLink("https://telegram.dog/rubezh_game")).toBe(true);
+    expect(isTelegramLink("http://telegram.dog/x")).toBe(false);
+    expect(isTelegramLink("https://telegram.org/x")).toBe(false);
     expect(isTelegramLink("http://t.me/rubezh_game")).toBe(false);
     expect(isTelegramLink("https://t.me.evil.example/x")).toBe(false);
     expect(isTelegramLink("tg://resolve?domain=x")).toBe(false);

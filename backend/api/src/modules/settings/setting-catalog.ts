@@ -85,6 +85,19 @@ const urlSchema = z
   .max(256)
   .refine((value) => value === "" || (URL.canParse(value) && new URL(value).protocol === "https:"), { message: "ссылка https://… или пусто" });
 
+const LINKS_GROUP = "Ссылки Telegram";
+
+/** Равнозначные домены ссылок Telegram (core.telegram.org/api/links); telegram.org — сайт, в списке его нет. */
+export const TELEGRAM_LINK_ORIGINS: readonly string[] = ["https://t.me", "https://telegram.me", "https://telegram.dog"];
+
+/** Домен из списка без пути, параметров и учётных данных; иначе `null`. */
+export function telegramLinkOriginOf(value: string): string | null {
+  if (!URL.canParse(value)) return null;
+  const url = new URL(value);
+  const bare = url.pathname === "/" && url.search === "" && url.hash === "" && url.username === "" && url.password === "";
+  return bare && TELEGRAM_LINK_ORIGINS.includes(url.origin) ? url.origin : null;
+}
+
 const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
@@ -205,6 +218,24 @@ export const SETTINGS = {
     schema: urlSchema,
     fromEnv: () => null,
     fallback: "",
+  } satisfies SettingDefinition<string>,
+  /**
+   * Домен ссылок Telegram (docs/35-stage4-plan.md, Р100): t.me бывает
+   * недоступен, и домен выбирается настройкой, без релиза. Окружения у ключа
+   * нет — решение команды на ходу правится в панели.
+   */
+  telegramLinkHost: {
+    key: "telegram.link-host",
+    group: LINKS_GROUP,
+    title: "Домен ссылок Telegram",
+    hint: "Каким адресом начинаются ссылки на бота и Mini App, которые строит сервер: приглашения, кнопки бота, ссылки кампаний, вход в панель. Допустимы https://t.me (умолчание), https://telegram.me и https://telegram.dog — переключите, если t.me недоступен. Уже разосланные ссылки не меняются",
+    kind: "url",
+    schema: z
+      .string()
+      .trim()
+      .refine((value) => telegramLinkOriginOf(value) !== null, { message: "один из https://t.me, https://telegram.me, https://telegram.dog" }),
+    fromEnv: () => null,
+    fallback: "https://t.me",
   } satisfies SettingDefinition<string>,
   /**
    * Канал проекта (docs/35-stage4-plan.md WP42): слайд «Наш канал» в
