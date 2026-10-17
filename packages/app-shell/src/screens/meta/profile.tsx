@@ -29,6 +29,7 @@ export { HistoryScreen } from "./history";
 export { LevelScreen } from "./level";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { SurvivalTime, SyncProblem } from "./sync-ui";
+import { TesterBadge } from "./tester-badge";
 
 /**
  * Профиль игрока: аккаунт, счётчики и рекорды с сервера, последние забеги
@@ -79,7 +80,10 @@ export function ProfileScreen(): ReactNode {
           <div className="flex items-center gap-3">
             <Avatar name={name} url={avatar ?? null} size={56} />
             <div className="min-w-0">
-              <p className="truncate font-display text-lg font-bold text-text">{name}</p>
+              <p className="flex min-w-0 items-center gap-2 font-display text-lg font-bold text-text">
+                <span className="truncate">{name}</span>
+                {account?.tester === true ? <TesterBadge size="l" /> : null}
+              </p>
               <p className="text-xs text-text-muted">
                 {account === null ? t("profile.local") : t("profile.since", { date: formatSince(account.createdAt) })}
               </p>
