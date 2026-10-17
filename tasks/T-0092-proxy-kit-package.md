@@ -3,8 +3,8 @@ id: T-0092
 title: Пакет proxy-kit — разбор подписки Xray, конфиг спутника, пул узлов
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-11
 size: M
 depends_on: []

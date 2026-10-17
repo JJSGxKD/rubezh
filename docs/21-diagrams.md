@@ -1586,6 +1586,7 @@ flowchart TD
     CG["packages/core-game<br/>забег: симуляция + Phaser, content/*"]
     ST["packages/shared-types<br/>контракты, лист графа"]
     FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
+    PK["packages/proxy-kit<br/>подписки Xray, конфиг спутника, пул узлов:<br/>ядро без игры, Nest и Prisma"]
     API["backend/api<br/>NestJS"]
     DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
 

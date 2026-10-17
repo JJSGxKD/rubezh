@@ -3,8 +3,8 @@ id: T-0084
 title: Тесный `SegmentedControl`: подписи сжимаются на узком экране, без обёрток снаружи
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-7
 size: S
 depends_on: [T-0044, T-0094]

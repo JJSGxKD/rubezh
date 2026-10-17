@@ -1,8 +1,10 @@
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { isServicePr } from "./branches.mjs";
 import { RELEASE_LEVELS, compareReleaseLevels, parseStableTag } from "./semver.mjs";
 import { addLabel, latestStableTag, listComments, postComment, viewPr } from "./git.mjs";
 import { PLAYER_NOTES_SECTION, parsePlayerNotes } from "./player-notes.mjs";
+import { TEAM_SECTION, extractSection } from "./team-summary.mjs";
 
 /**
  * Проверка заголовка и метки релиза на PR (docs/09-ci-cd.md §8.1, «Проверка PR»).
@@ -98,6 +100,70 @@ export function hasBreakingSection(body) {
   return withoutComments.trim().length > 0;
 }
 
+/**
+ * Сводка для команды (раздел `## Сводка для команды`): бот при мердже шлёт её в
+ * чат как есть, поэтому номер PR и отсутствие блока кода проверяются до мерджа.
+ */
+export function checkSummary(body, number) {
+  const section = extractSection(body, TEAM_SECTION);
+  if (section === null) return [`сводка: нет раздела «${TEAM_SECTION}»`];
+  if (section.startsWith("```")) return ["сводка: сводка в блоке кода — бот отправит её как есть"];
+
+  const [firstLine = ""] = section.split("\n");
+  if (/#(<номер>|НОМЕР)/i.test(firstLine)) return ["сводка: впишите номер PR в заголовок сводки вместо заглушки"];
+  if (!new RegExp(`#${number}(?!\\d)`).test(firstLine)) {
+    return [`сводка: в первой строке сводки нет номера этого PR (#${number})`];
+  }
+  return [];
+}
+
+/**
+ * Первая строка описания ветки задачи — `Задача: tasks/T-NNNN-….md`; файл
+ * лежит в `tasks/` ветки PR и принадлежит той же задаче, что и ветка.
+ */
+export function checkTaskLine(body, headRefName, taskFiles) {
+  const branch = /^task\/(T-\d{4})$/.exec(headRefName ?? "");
+  if (!branch) return [];
+
+  const first = (body ?? "").replace(/\r\n/g, "\n").split("\n").find((line) => line.trim() !== "") ?? "";
+  const match = /^Задача:\s*`?tasks\/(T-\d{4})-[^\s`/]+\.md`?\s*$/.exec(first.trim());
+  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/${branch[1]}-….md»`];
+  if (match[1] !== branch[1]) return [`задача: в строке «Задача:» ${match[1]}, а ветка ${branch[1]}`];
+
+  const file = first.trim().replace(/^Задача:\s*`?tasks\//, "").replace(/`$/, "");
+  if (!taskFiles.includes(file)) return [`задача: файла tasks/${file} нет в ветке PR`];
+  return [];
+}
+
+/**
+ * Трейлер `Co-Authored-By:` сразу под заголовком git склеивает с заголовком:
+ * между ними нужна пустая строка.
+ */
+export function checkTrailers(messages) {
+  const errors = [];
+  for (const { sha, message } of messages) {
+    const lines = message.replace(/\r\n/g, "\n").split("\n");
+    const hasTrailer = lines.some((line) => /^co-authored-by:/i.test(line));
+    if (hasTrailer && lines.length > 1 && lines[1].trim() !== "") {
+      errors.push(`коммит ${sha.slice(0, 7)}: трейлеры нужно отделить от заголовка пустой строкой`);
+    }
+  }
+  return errors;
+}
+
+function taskFilesAt(ref) {
+  const out = execFileSync("git", ["ls-tree", "--name-only", ref, "tasks/"], { encoding: "utf8" });
+  return out.split("\n").map((line) => line.replace(/^tasks\//, "")).filter((name) => /^T-\d{4}-.+\.md$/.test(name));
+}
+
+function prCommitMessages(base, head) {
+  const out = execFileSync("git", ["log", "--format=%H%x00%B%x00", `${base}..${head}`], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const parts = out.split("\0");
+  const messages = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) messages.push({ sha: parts[i].trim(), message: parts[i + 1] });
+  return messages;
+}
+
 function main() {
   const number = process.env.PR_NUMBER;
   if (!number) throw new Error("PR_NUMBER не задан");
@@ -153,6 +219,13 @@ function main() {
   // дешевле поймать здесь, чем пропустить строку при сборке релиза.
   if (!service) {
     for (const error of parsePlayerNotes(pr.body).errors) errors.push(`раздел «${PLAYER_NOTES_SECTION}»: ${error}`);
+  }
+
+  if (!service) {
+    errors.push(...checkSummary(pr.body, Number(number)));
+    const head = `origin/${pr.headRefName}`;
+    errors.push(...checkTaskLine(pr.body, pr.headRefName, taskFilesAt(head)));
+    errors.push(...checkTrailers(prCommitMessages(`origin/${pr.baseRefName}`, head)));
   }
 
   for (const error of errors) console.error(`ошибка  ${error}`);

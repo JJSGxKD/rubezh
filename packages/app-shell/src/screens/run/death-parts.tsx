@@ -13,7 +13,7 @@ import type { RunRewardView } from "../../state/progress";
 import { track } from "../../state/shell";
 import { ItemIcon } from "../item-icons";
 import { bestWeapon, levelBar } from "./death-rules";
-import { SecondChance, useSecondChanceStages, visibleWays, type SecondChanceProps } from "./SecondChance";
+import { SecondChance, continueOfferedPayload, useSecondChanceStages, type SecondChanceProps } from "./SecondChance";
 
 /**
  * Части экрана смерти (design/screens/death.html): шаг со вторым шансом и
@@ -44,17 +44,19 @@ function enemyName(id: string): string {
 export function ChanceStep(props: { result: RunResult; secondChance: SecondChanceProps; onDecline(): void }): ReactNode {
   const { result, secondChance } = props;
   const stages = useSecondChanceStages(secondChance);
-  const shown = useRef(false);
+  const sent = useRef(false);
+  // Пока проверки спрашивают сервер, флаги были бы догадкой, поэтому до ответа `null`.
+  const offered = continueOfferedPayload(stages, result.survivalSec);
 
-  // Шаг показан — один раз: по этому событию считается доля взявших второй
-  // шанс. Повторный монтаж в режиме разработки второй раз не пишется.
+  // Шаг предложил способы — один раз: по этому событию считается доля взявших
+  // второй шанс. Объект `offered` новый на каждом рендере, повтор отсекает
+  // `sent`: ни перемены способов потом (ролик ушёл, звёзды отпали), ни повторный
+  // монтаж в режиме разработки второй раз не пишут.
   useEffect(() => {
-    if (shown.current) return;
-    shown.current = true;
-    const ways = visibleWays(stages);
-    track("continue_offered", { ad: ways.ad, stars: ways.stars, vip: ways.vip, elapsedSec: Math.round(result.survivalSec) });
-    // Только момент показа: дальше способы меняются сами, и событие не повторяется.
-  }, [stages, result.survivalSec]);
+    if (sent.current || offered === null) return;
+    sent.current = true;
+    track("continue_offered", offered);
+  }, [offered]);
 
   return (
     <div className="grid gap-3">

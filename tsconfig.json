@@ -8,6 +8,9 @@
       "path": "packages/fx"
     },
     {
+      "path": "packages/proxy-kit"
+    },
+    {
       "path": "packages/design-tokens"
     },
     {

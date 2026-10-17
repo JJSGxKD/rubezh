@@ -3,6 +3,7 @@ import { RADAR_BLIP, type RadarSnapshot } from "@bh/core-game";
 import { COLORS } from "../../design-system/tokens";
 import { t } from "../../i18n";
 import "../../i18n/run";
+import { RADAR_COLORS } from "./radar-looks";
 
 /**
  * Радар забега: враги, элиты и подборы вокруг игрока в пределах кольца спавна
@@ -68,7 +69,7 @@ function draw(context: CanvasRenderingContext2D, radar: RadarSnapshot, size: num
   context.stroke();
 
   const blips = radar.blips;
-  context.fillStyle = COLORS.danger;
+  context.fillStyle = RADAR_COLORS.enemy;
   for (let i = 0; i < radar.count; i++) {
     if (blips[i * 3 + 2] !== RADAR_BLIP.enemy) continue;
     dot(context, center + blips[i * 3] * radius, center + blips[i * 3 + 1] * radius, BLIP_PX * ratio);
@@ -83,19 +84,19 @@ function draw(context: CanvasRenderingContext2D, radar: RadarSnapshot, size: num
     const y = center + blips[i * 3 + 1] * radius;
     const size = PICKUP_PX * ratio;
     if (kind === RADAR_BLIP.elite) {
-      context.fillStyle = COLORS.elite;
+      context.fillStyle = RADAR_COLORS.elite;
       dot(context, x, y, ELITE_PX * ratio);
     } else if (kind === RADAR_BLIP.medkit) {
-      context.fillStyle = COLORS.hp;
+      context.fillStyle = RADAR_COLORS.medkit;
       cross(context, x, y, size);
     } else if (kind === RADAR_BLIP.magnet) {
-      context.strokeStyle = COLORS.xp;
+      context.strokeStyle = RADAR_COLORS.magnet;
       context.lineWidth = 1.6 * ratio;
       context.beginPath();
       context.arc(x, y, size * 0.8, 0, Math.PI * 2);
       context.stroke();
     } else if (kind === RADAR_BLIP.dynamite) {
-      context.fillStyle = COLORS.warning;
+      context.fillStyle = RADAR_COLORS.dynamite;
       diamond(context, x, y, size);
     }
   }

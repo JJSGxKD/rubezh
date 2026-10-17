@@ -50,6 +50,7 @@
   "level.open": "Открыто сейчас",
   "level.open.weapons": "Оружие: {open} из {total}",
   "level.open.passives": "Навыки: {open} из {total}",
+  "level.open.next": "Дальше: на {level}-м уровне — {list}",
   "level.open.slots": "Слоты: оружие {weapons}, атака {attack}, защита {defense}, подвижность {mobility}",
   "level.allOpen": "Всё оружие и навыки открыты — дальше уровни приносят награды и поднимают потолок предметов",
   "level.unlock.weapon": "оружие «{name}»",
