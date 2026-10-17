@@ -44,6 +44,11 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
   l: "min-h-16 rounded-lg px-6 text-lg font-bold tracking-wide uppercase",
 };
 
+/** Скругление кнопки: у обёртки свечения радиуса нет, `inherit` не сработал бы. */
+function radiusOf(size: ButtonSize): string {
+  return SIZE_CLASS[size].split(" ").find((name) => name.startsWith("rounded-")) ?? "rounded-md";
+}
+
 export function Button(props: ButtonProps): ReactNode {
   const { variant = "primary", size = "m", disabled = false, loading = false } = props;
   const inactive = disabled || loading;
@@ -54,7 +59,7 @@ export function Button(props: ButtonProps): ReactNode {
     props.onClick?.();
   };
 
-  return (
+  const button = (
     <button
       type="button"
       aria-label={props.ariaLabel}
@@ -70,14 +75,22 @@ export function Button(props: ButtonProps): ReactNode {
         props.block === true ? "w-full" : "",
       ].join(" ")}
     >
-      {props.glow === true && !inactive ? (
-        <span
-          aria-hidden="true"
-          className="halo-accent pointer-events-none absolute -inset-3 -z-10 animate-glow rounded-[inherit]"
-        />
-      ) : null}
       {loading ? <Spinner /> : props.children}
     </button>
+  );
+
+  if (props.glow !== true || inactive) return button;
+
+  // Свечение — соседний слой позади кнопки: потомок с отрицательным z-index
+  // рисовался бы над её фоном, и фон мигал бы вместе с ореолом.
+  return (
+    <span className={`relative isolate ${props.block === true ? "flex w-full" : "inline-flex"}`}>
+      <span
+        aria-hidden="true"
+        className={`halo-accent pointer-events-none absolute -inset-3 -z-10 animate-glow ${radiusOf(size)}`}
+      />
+      {button}
+    </span>
   );
 }
 

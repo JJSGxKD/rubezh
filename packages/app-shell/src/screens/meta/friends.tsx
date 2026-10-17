@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Gift } from "lucide-react";
 import { Button, ContentColumn, ErrorState, Modal, PageTitle, Screen, SectionTitle, InfoNotice } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/friends";
@@ -9,7 +8,7 @@ import { createFriendsApi, friendsAvailable, type FriendEntry, type FriendsView 
 import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { loadWallet } from "../../state/wallet-api";
 import { friendsLayout, giftAllCount } from "./friends-rules";
-import { GiftAll, Gifts, Invite, PeerRow } from "./friends-parts";
+import { GiftAll, Gifts, Invite, PeerAction, PeerRow } from "./friends-parts";
 import { RestrictedPlaque } from "./restricted-plaque";
 
 /**
@@ -90,12 +89,8 @@ export function FriendsScreen(): ReactNode {
         <div className="grid gap-2">
           {view.incoming.map((request) => (
             <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl}>
-              <Button variant="secondary" loading={busy === `accept:${request.accountId}`} onClick={() => void act(`accept:${request.accountId}`, () => api.accept(request.accountId))}>
-                {t("friends.accept")}
-              </Button>
-              <Button variant="ghost" loading={busy === `decline:${request.accountId}`} onClick={() => void act(`decline:${request.accountId}`, () => api.decline(request.accountId))}>
-                {t("friends.decline")}
-              </Button>
+              <PeerAction kind="accept" variant="secondary" loading={busy === `accept:${request.accountId}`} onClick={() => void act(`accept:${request.accountId}`, () => api.accept(request.accountId))} />
+              <PeerAction kind="decline" variant="ghost" loading={busy === `decline:${request.accountId}`} onClick={() => void act(`decline:${request.accountId}`, () => api.decline(request.accountId))} />
             </PeerRow>
           ))}
         </div>
@@ -177,15 +172,13 @@ export function FriendsScreen(): ReactNode {
                 const gifted = view.gifts.sentToday.includes(friend.accountId);
                 return (
                   <PeerRow key={friend.accountId} name={friend.displayName} photoUrl={friend.photoUrl} onPress={() => setRemoving(friend)}>
-                    <Button
+                    <PeerAction
+                      kind={gifted ? "gifted" : "gift"}
                       variant="secondary"
                       disabled={gifted || giftsClosed}
                       loading={busy === `gift:${friend.accountId}`}
                       onClick={() => void act(`gift:${friend.accountId}`, () => api.gift(friend.accountId))}
-                    >
-                      {gifted ? <Check size={16} aria-hidden="true" /> : <Gift size={16} aria-hidden="true" />}
-                      {gifted ? t("friends.gift.sent") : t("friends.gift")}
-                    </Button>
+                    />
                   </PeerRow>
                 );
               })}
