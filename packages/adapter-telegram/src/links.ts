@@ -29,7 +29,7 @@ export function telegramLinkSdk(): LinkSdk {
   };
 }
 
-const TELEGRAM_HOSTS: ReadonlySet<string> = new Set(["t.me", "telegram.me"]);
+const TELEGRAM_HOSTS: ReadonlySet<string> = new Set(["t.me", "telegram.me", "telegram.dog"]);
 
 export function isTelegramLink(url: string): boolean {
   if (!URL.canParse(url)) return false;
