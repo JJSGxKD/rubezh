@@ -3439,6 +3439,45 @@ sequenceDiagram
   по ключу `season:<сезон>:<аккаунт>`, затем `pending → claimed` условным
   `UPDATE`. Сбой между шагами награды не теряет: повтор найдёт монеты по ключу.
 
+### 4.28 Счётчик онлайна: пинг, пересчёт, ответ (этап 4, реализовано)
+
+Любой запрос под сессией игрока — активность (`AuthGuard` не ждёт Redis), а
+клиент шлёт пинг только в тишине. Пересчёт раз в 15 с — одно задание BullMQ на
+все реплики. Пороги применяет сервер (`online/online.service.ts`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Клиент
+    participant G as AuthGuard
+    participant O as OnlineService
+    participant R as Redis
+    participant J as Задание online (раз в 15 с)
+    participant A as Панель
+
+    C->>G: любой запрос с токеном
+    G--)O: touch(аккаунт) — без ожидания
+    O--)R: ZADD online:app:площадка, PFADD online:day:сутки
+    C->>O: POST /online/ping { inRun }
+    O->>R: ZADD или ZREM online:run:площадка
+    O->>R: GET online:counts
+    R-->>O: готовые числа
+    O-->>C: online, inRun, todayPlayed — null ниже порога, nextPingSec
+    J->>O: recount(now)
+    O->>R: ZREMRANGEBYSCORE старше окна, ZCARD, PFCOUNT
+    O->>R: SET online:counts
+    O->>R: рекорд выше прежнего — SET online:peak
+    A->>O: GET /admin/online
+    O-->>A: по площадкам, итог и рекорд, без порогов
+```
+
+- **Запись не блокирует ответ.** Сбой Redis при отметке активности — строка
+  `warn` не чаще раза в минуту; запрос игрока проходит.
+- **Читают готовое.** Пинг делает один `GET`; считает только задание, поэтому
+  нагрузка на Redis не растёт с числом игроков.
+- **«Сегодня играли»** — HyperLogLog на игровые сутки (Москва): точность около
+  1%, память постоянная.
+
 ---
 
 ## 5. Топология развёртывания
