@@ -168,8 +168,10 @@ describe("подписи целей", () => {
 });
 
 describe("уровень из награды", () => {
-  const progress = { level: 3, xp: 0, xpIntoLevel: 400, xpForNext: 500, nextReward: null };
-  const granted = (patch: Partial<{ levelBefore: number; levelAfter: number; xp: number; progress: typeof progress & { xpForNext: number | null } }> = {}) => ({
+  const progress: { level: number; xp: number; xpIntoLevel: number; xpForNext: number | null; nextReward: null } = {
+    level: 3, xp: 0, xpIntoLevel: 400, xpForNext: 500, nextReward: null,
+  };
+  const granted = (patch: Partial<{ levelBefore: number; levelAfter: number; xp: number; progress: typeof progress }> = {}) => ({
     status: "granted" as const,
     coins: 10,
     coinsCapped: false,
