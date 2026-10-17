@@ -5,6 +5,7 @@ import { AuthModule } from "./modules/auth/auth.module.js";
 import { RolesModule } from "./modules/roles/roles.module.js";
 import { RunsModule } from "./modules/runs/runs.module.js";
 import { DatabaseModule } from "./infra/database.js";
+import { OutboundModule } from "./infra/outbound/outbound.module.js";
 import { RedisModule } from "./infra/redis.js";
 import { AdminNotifyModule } from "./modules/admin-notify/admin-notify.module.js";
 import { BotModule } from "./platforms/telegram/bot.module.js";
@@ -91,6 +92,7 @@ import { OnlineModule } from "./modules/online/online.module.js";
 export const APP_MODULES = [
   RedisModule,
   DatabaseModule,
+  OutboundModule,
   SettingsModule,
   SecretsModule,
   AdConversionsModule,
