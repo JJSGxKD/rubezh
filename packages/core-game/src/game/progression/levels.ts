@@ -1,4 +1,5 @@
 import type { LevelCurveDef, PassiveCategory, UpgradeOption } from "@bh/shared-types";
+import type { Rng } from "../sim/rng";
 import type { World } from "../sim/world";
 import { computePlayerStats } from "./passives";
 import { healChanges, passiveChanges, weaponChanges } from "./upgrade-changes";
@@ -37,11 +38,13 @@ export function xpForLevel(curve: LevelCurveDef, level: number): number {
  * несколько, а выбор игрок делает по одному — иначе три экрана подряд
  * схлопнулись бы в один и два улучшения пропали.
  */
-export function addXp(world: World, amount: number): void {
+export function addXp(world: World, amount: number, counted = true): void {
   const progression = world.progression;
   progression.xp += amount;
   progression.totalXp += amount;
-  world.stats.xpCollected += amount;
+  // Опыт из сундука в «собрано» не идёт: счётчик показывает кристаллы, которые
+  // игрок подобрал, и запасная награда исказила бы его.
+  if (counted) world.stats.xpCollected += amount;
 
   while (progression.xp >= progression.xpToNext) {
     progression.xp -= progression.xpToNext;
@@ -76,12 +79,12 @@ export function prepareOffers(world: World): UpgradeOption[] {
   return progression.offers;
 }
 
-interface Candidate {
+export interface Candidate {
   option: UpgradeOption;
   weight: number;
 }
 
-function collectCandidates(world: World): Candidate[] {
+export function collectCandidates(world: World): Candidate[] {
   const candidates: Candidate[] = [];
   const loadout = world.loadout;
 
@@ -174,19 +177,7 @@ function pickWeighted(world: World, candidates: Candidate[], count: number): Upg
   const picked: UpgradeOption[] = [];
 
   while (picked.length < count && pool.length > 0) {
-    let total = 0;
-    for (const candidate of pool) total += candidate.weight;
-
-    let roll = world.rng.nextFloat() * total;
-    let index = pool.length - 1;
-    for (let i = 0; i < pool.length; i++) {
-      roll -= pool[i].weight;
-      if (roll <= 0) {
-        index = i;
-        break;
-      }
-    }
-
+    const index = drawWeighted(world.rng, pool);
     picked.push(pool[index].option);
     pool.splice(index, 1);
   }
@@ -194,10 +185,30 @@ function pickWeighted(world: World, candidates: Candidate[], count: number): Upg
 }
 
 /**
+ * Индекс элемента по весам. Генератор приходит снаружи: карточки уровня
+ * бросают `world.rng`, сундук — свой поток.
+ */
+export function drawWeighted(rng: Rng, pool: readonly { weight: number }[]): number {
+  let total = 0;
+  for (const candidate of pool) total += candidate.weight;
+
+  let roll = rng.nextFloat() * total;
+  let index = pool.length - 1;
+  for (let i = 0; i < pool.length; i++) {
+    roll -= pool[i].weight;
+    if (roll <= 0) {
+      index = i;
+      break;
+    }
+  }
+  return index;
+}
+
+/**
  * Запасной вариант, когда всё собрано и прокачано до потолка: выбор из
  * ничего хуже, чем небольшая награда.
  */
-function healOption(): UpgradeOption {
+export function healOption(): UpgradeOption {
   return {
     id: HEAL_OPTION_ID,
     kind: "heal",
@@ -218,6 +229,18 @@ export function chooseUpgrade(world: World, optionId: string): boolean {
   const option = world.progression.offers.find((candidate) => candidate.id === optionId);
   if (option === undefined) return false;
 
+  applyUpgrade(world, option);
+  world.progression.offers = [];
+  world.progression.pendingLevelUps = Math.max(0, world.progression.pendingLevelUps - 1);
+  return true;
+}
+
+/**
+ * Применить улучшение к набору и пересчитать характеристики. Очередь уровней
+ * и предложения не трогает: её очищает выбор игрока, а сундук выдаёт
+ * улучшения мимо карточек.
+ */
+export function applyUpgrade(world: World, option: UpgradeOption): void {
   switch (option.kind) {
     case "weapon_new": {
       const typeIndex = world.weaponTypes.findIndex((type) => type.id === option.refId);
@@ -246,9 +269,6 @@ export function chooseUpgrade(world: World, optionId: string): boolean {
   }
 
   refreshPlayerStats(world);
-  world.progression.offers = [];
-  world.progression.pendingLevelUps = Math.max(0, world.progression.pendingLevelUps - 1);
-  return true;
 }
 
 /**

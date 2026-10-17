@@ -181,6 +181,21 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
       graphics.fillStyle(DYNAMITE_SPARK, 1);
       graphics.fillCircle(r * 1.35, r * 0.18, r * 0.2);
       return;
+    case "chest":
+      // Сундук: тёмный кант, цветной корпус, более светлая крышка и замок.
+      // Силуэт — широкий прямоугольник с выпуклой крышкой, не крест и не
+      // подкова (§4.4); размер сундука несёт цвет и масштаб, а не форма.
+      graphics.fillStyle(CHEST_EDGE, 1);
+      graphics.fillRoundedRect(r * 0.05, r * 0.45, r * 1.9, r * 1.4, r * 0.25);
+      graphics.fillStyle(spec.color, 1);
+      graphics.fillRoundedRect(r * 0.2, r * 0.9, r * 1.6, r * 0.8, r * 0.15);
+      graphics.fillStyle(mixLight(spec.color), 1);
+      graphics.fillRoundedRect(r * 0.2, r * 0.55, r * 1.6, r * 0.5, r * 0.2);
+      graphics.fillStyle(CHEST_EDGE, 1);
+      graphics.fillRect(r * 0.2, r * 0.98, r * 1.6, r * 0.1);
+      graphics.fillStyle(PICKUP_LIGHT, 1);
+      graphics.fillRoundedRect(r * 0.82, r * 0.82, r * 0.36, r * 0.4, r * 0.08);
+      return;
     case "player":
       // Тёмный кант и светлое тело: персонаж не теряется ни на светлом
       // (рой, кристаллы), ни на тёмной земле, и не спорит цветом с кольцами
@@ -223,6 +238,17 @@ const MEDKIT_BODY = WORLD_COLORS.pickupLight;
 /** Светлые детали подборов: полюса магнита, фитиль. */
 const PICKUP_LIGHT = WORLD_COLORS.pickupLight;
 const DYNAMITE_BAND = WORLD_COLORS.dynamiteBand;
+/** Кант сундука — как тёмная полоса динамита. */
+const CHEST_EDGE = WORLD_COLORS.dynamiteBand;
+
+/** Крышка сундука светлее корпуса: каждый канал на треть ближе к белому. */
+function mixLight(color: number): number {
+  const channel = (shift: number): number => {
+    const value = (color >> shift) & 0xff;
+    return Math.round(value + (255 - value) / 3);
+  };
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0);
+}
 const DYNAMITE_SPARK = WORLD_COLORS.dynamiteSpark;
 
 /** Вершины в долях радиуса относительно центра фигуры. */

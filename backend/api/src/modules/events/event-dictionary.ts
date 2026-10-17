@@ -127,6 +127,13 @@ export const EVENT_DICTIONARY = {
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },
   wave_reached: { version: 1, payload: payload({ wave: count, elapsedSec: seconds }) },
+  // Сундук забега (docs/39-retention-mechanics.md Б1): выпал с элиты или босса
+  // и открыт касанием. `size` — сколько улучшений в нём (1, 3 или 5).
+  chest_found: { version: 1, payload: payload({ index: count, size: count, source: id, elapsedSec: seconds }) },
+  chest_opened: {
+    version: 1,
+    payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
+  },
   // Тестер забрал компенсацию после вайпа (Р87, tasks/T-0043): дошли ли и сколько выдано.
   compensation_claimed: {
     version: 1,

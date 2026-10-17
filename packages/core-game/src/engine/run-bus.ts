@@ -19,6 +19,8 @@ export class RunBus {
     hud: new Set(),
     waveReached: new Set(),
     levelUp: new Set(),
+    chestFound: new Set(),
+    chestOpened: new Set(),
     paused: new Set(),
     resumed: new Set(),
     devInfo: new Set(),

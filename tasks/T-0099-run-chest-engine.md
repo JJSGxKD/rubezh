@@ -3,8 +3,8 @@ id: T-0099
 title: Сундук забега: падает с элиты и босса, открывает 1, 3 или 5 улучшений
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-14
 size: M
 depends_on: []

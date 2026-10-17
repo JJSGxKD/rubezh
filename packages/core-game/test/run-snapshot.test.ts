@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CHESTS } from "../src/content/chests";
 import { findDifficulty } from "../src/content/difficulty";
 import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
@@ -8,6 +9,7 @@ import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
 import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
 import { captureWorld, restoreWorld, SnapshotError } from "../src/game/run/snapshot";
+import { dropChest, openChest } from "../src/game/sim/chests";
 import { createTimelineDirector } from "../src/game/sim/director";
 import type { Spawner } from "../src/game/sim/spawner";
 import { stepWorld, type SimInput } from "../src/game/sim/step";
@@ -33,6 +35,7 @@ function newRun(seed: number): Run {
       levelCurve: LEVEL_CURVE,
       loadoutLimits: LOADOUT_LIMITS,
       drops: DROPS,
+      chests: CHESTS,
       map: MAPS[0],
     }),
     director: createTimelineDirector(TIMELINE, ENDLESS_CURVE),
@@ -109,6 +112,7 @@ describe("снимок забега", () => {
         levelCurve: LEVEL_CURVE,
         loadoutLimits: LOADOUT_LIMITS,
         drops: DROPS,
+        chests: CHESTS,
         map: MAPS[0],
         difficulty: hard,
       });
@@ -139,6 +143,44 @@ describe("снимок забега", () => {
     expect(resumed.world.progression.offers).toEqual(original.world.progression.offers);
   });
 
+  it("сохраняет поток сундуков: следующий сундук такой же, как без перерыва", () => {
+    const original = newRun(31);
+    advance(original, 20 * 60);
+    dropChest(original.world, 300, 0, "elite");
+    openChest(original.world, 3);
+    const saved = roundTrip(original);
+
+    const resumed = newRun(31);
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(resumed.world.chests.dropped).toBe(original.world.chests.dropped);
+    expect(resumed.world.chests.opened).toBe(original.world.chests.opened);
+    expect(resumed.world.chests.rng.getState()).toBe(original.world.chests.rng.getState());
+    expect(resumed.world.stats.chestsFound).toBe(original.world.stats.chestsFound);
+
+    dropChest(original.world, -300, 0, "boss");
+    dropChest(resumed.world, -300, 0, "boss");
+    openChest(original.world, 5);
+    openChest(resumed.world, 5);
+    const last = <T>(list: T[]): T => list[list.length - 1];
+    expect(last(resumed.world.chests.founds)).toEqual(last(original.world.chests.founds));
+    expect(last(resumed.world.chests.openings).rewards.map((reward) => reward.id)).toEqual(
+      last(original.world.chests.openings).rewards.map((reward) => reward.id),
+    );
+    expect(resumed.world.chests.rng.getState()).toBe(original.world.chests.rng.getState());
+  });
+
+  it("не тащит в снимок события для сцены: после восстановления они пусты", () => {
+    const original = newRun(32);
+    dropChest(original.world, 300, 0, "elite");
+    const saved = roundTrip(original) as { chest?: Record<string, unknown> };
+    expect(Object.keys(saved.chest ?? {}).sort()).toEqual(["dropped", "opened", "rng"]);
+
+    const resumed = newRun(32);
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(resumed.world.chests.founds).toEqual([]);
+    expect(resumed.world.chests.openings).toEqual([]);
+  });
+
   it("не меняет мир, с которого снят", () => {
     const run = newRun(9);
     advance(run, 20 * 60);
@@ -156,6 +198,13 @@ describe("снимок забега", () => {
     expect(() => restoreWorld(newRun(1).world, newRun(1).director, { ...saved, version: 999 })).toThrow(
       SnapshotError,
     );
+  });
+
+  it("отказывается читать снимок прежней версии 7: в нём нет сундуков", () => {
+    const run = newRun(1);
+    const saved = roundTrip(run) as Record<string, unknown>;
+    expect(saved.version).toBe(8);
+    expect(() => restoreWorld(newRun(1).world, newRun(1).director, { ...saved, version: 7 })).toThrow(SnapshotError);
   });
 
   it("отказывается читать испорченный снимок, а не рождает мир с NaN", () => {
