@@ -91,6 +91,8 @@ const ADS_GROUP = "Реклама";
 
 const HOME_GROUP = "Главная";
 
+const CLIENT_SCRIPTS_GROUP = "Внешние скрипты клиента";
+
 const SEASONS_GROUP = "Сезоны рейтинга";
 
 /** Последняя допустимая дата старта сезонов: понедельник 28 декабря 2099. */
@@ -331,6 +333,41 @@ export const SETTINGS = {
     (config) => config.payments.starsEnv,
     true,
   ),
+  /**
+   * Чужие скрипты клиента выключаются из панели без релиза (docs/35-stage4-plan.md
+   * Р93): чужой скрипт может сломать игру или затормозить первый экран. Только
+   * из панели — в `.env` их нет; умолчание «включено» оставляет всё как было.
+   */
+  clientScriptsGraspil: {
+    key: "client.scripts.graspil",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "Аналитика Graspil",
+    hint: "Сторонняя аналитика Mini App. Выключено — клиент не грузит её скрипт: на случай, если он ломает игру или тормозит первый экран. Вступает в силу при следующем запуске игры",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
+  clientScriptsAdAudience: {
+    key: "client.scripts.ad-audience",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "SDK учёта аудитории рекламных сетей",
+    hint: "SDK рекламных сетей, которые поднимаются при запуске для учёта аудитории (Taddy). Выключено — сети не видят игроков, и рекламы от них может стать меньше. Показы рекламы выключаются в разделе «Реклама» у каждой сети",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
+  clientScriptsAll: {
+    key: "client.scripts.all",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "Внешние скрипты клиента",
+    hint: "Аварийный выключатель: выключено — клиент не грузит ни одного чужого скрипта — ни аналитики, ни SDK учёта, ни рекламы. Для случая, когда чужой скрипт уронил игру, а какой — ещё не ясно",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
 } as const;
 
 export const SETTING_LIST: readonly SettingDefinition[] = Object.values(SETTINGS);
