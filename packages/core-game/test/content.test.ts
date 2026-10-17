@@ -241,7 +241,7 @@ describe("контент таймлайна спавна", () => {
     for (const [fromSec, enemy, budget] of previous) {
       const spawn = TIMELINE.find((segment) => segment.fromSec === fromSec)?.spawns.find((entry) => entry.enemy === enemy);
       expect(spawn, `отрезок ${fromSec}: ${enemy}`).toBeDefined();
-      expect(spawn!.perSec * (threatOf.get(enemy) ?? 0), `отрезок ${fromSec}`).toBeGreaterThanOrEqual(budget - 1e-9);
+      expect((spawn?.perSec ?? 0) * (threatOf.get(enemy) ?? 0), `отрезок ${fromSec}`).toBeGreaterThanOrEqual(budget - 1e-9);
     }
   });
 
