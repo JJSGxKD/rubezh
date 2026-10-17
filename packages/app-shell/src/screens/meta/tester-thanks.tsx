@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { FlaskConical, Gift, Heart, ArrowUp, Star, type LucideIcon } from "lucide-react";
 import { Button, Modal } from "../../design-system/components";
 import { GemIcon } from "../../design-system/components/CurrencyIcons";
@@ -22,6 +22,7 @@ export function TesterThanksScreen(): ReactNode {
   const view = useCompensation((state) => state.pending);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const titleId = useId();
 
   // «Назад» ничего не делает: слой есть, а обработчик пустой.
   useBackLayer(() => undefined);
@@ -49,6 +50,7 @@ export function TesterThanksScreen(): ReactNode {
 
   return (
     <Modal
+      labelledBy={titleId}
       footer={
         <>
           {failed ? (
@@ -69,7 +71,7 @@ export function TesterThanksScreen(): ReactNode {
         >
           {view.tester ? <FlaskConical size={30} /> : <Gift size={30} />}
         </span>
-        <h2 className="text-center font-display text-[22px] leading-tight text-text">
+        <h2 id={titleId} className="text-center font-display text-[22px] leading-tight text-text">
           {view.tester ? t("tester.thanks.title") : t("tester.returned.title")}
         </h2>
         <p className="text-center text-[13px] leading-snug text-text-muted">
