@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_MAP_ID, type RunInspection } from "@bh/core-game";
 import type { RunResult } from "@bh/shared-types";
 import { ErrorState } from "../../design-system/components";
@@ -16,7 +16,6 @@ import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
 import { RunLoading } from "./RunLoading";
-import { ChestOverlay } from "./ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./overlays";
 import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
 import { DevSheetLazy } from "./dev-sheet-lazy";
@@ -24,6 +23,14 @@ import { DevTechPanelLazy } from "./dev-tech-panel-lazy";
 import { RunStatsSheet } from "./RunStatsSheet";
 import { useRunKeyboard } from "./run-keys";
 import type { SecondChanceProps } from "./SecondChance";
+
+/**
+ * Окно сундука — отдельным чанком, как экран смерти: до первого сундука оно не
+ * нужно, а интерфейс забега упирается в бюджет (`pnpm budget`). Чанк
+ * подтягивается, как только забег пошёл, чтобы касание сундука не ждало сети.
+ */
+const loadChestOverlay = (): Promise<typeof import("./ChestOverlay")> => import("./ChestOverlay");
+const ChestOverlay = lazy(async () => ({ default: (await loadChestOverlay()).ChestOverlay }));
 
 /**
  * Экран забега: канва Phaser на весь экран, HUD слоем поверх и оверлеи
@@ -98,7 +105,10 @@ export function RunScreen(): ReactNode {
   // чтобы смерть не ждала сети.
   const running = run.phase === "running";
   useEffect(() => {
-    if (running) prefetchDeathOverlay();
+    if (!running) return;
+    prefetchDeathOverlay();
+    // Не догрузилось — не беда: `lazy` попробует снова, когда сундук откроют.
+    loadChestOverlay().catch(() => undefined);
   }, [running]);
 
   return (
@@ -149,7 +159,9 @@ export function RunScreen(): ReactNode {
       {/* Сундук: мир стоит, награды уже выданы. Лист «Характеристики» и панель
           разработчика в этой фазе не открываются — окно только показывает. */}
       {run.phase === "chest" && run.chest !== null ? (
-        <ChestOverlay chest={run.chest} onTake={() => useRun.getState().closeChest()} />
+        <Suspense fallback={null}>
+          <ChestOverlay chest={run.chest} onTake={() => useRun.getState().closeChest()} />
+        </Suspense>
       ) : null}
 
       {/* Лист закрывается сам, если мир снова пошёл: характеристики — снимок
