@@ -112,7 +112,7 @@ A/B-данных по отдельным механикам в источник�
 | Подборы | Кристаллы, аптечка, магнит, динамит | `content/drops.ts` |
 | Карты, сложности | Одна карта `frontier`; 3 сложности | `content/maps.ts`, `content/difficulty.ts` |
 | Бусты на забег | 6: fury, bulwark, lure, aegis, head_start, insight | `content/boosts.ts` |
-| Открытия по уровню | Всё открыто к 6-му уровню; `sting` — на 6-м | `content/unlocks.ts` |
+| Открытия по уровню | Лестница 2–14 (новое открытие каждые 1–3 уровня); 15–20 — резерв под оружие поездов | `content/unlocks.ts` |
 | Второй шанс | Одно продолжение за Stars или рекламу | `content/continue.ts`, `screens/run/SecondChance.tsx` |
 | Уровень аккаунта | До 100, опыт `150·(n−1)^1.6`, потолки наград за забег | `backend/api/src/modules/progress/progress-rules.ts` |
 | Награда дня, колесо | Есть | `modules/daily`, `modules/wheel` |

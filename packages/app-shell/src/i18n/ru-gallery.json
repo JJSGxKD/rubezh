@@ -9,6 +9,8 @@
   "gallery.brand": "Знак и оформление",
   "gallery.stub": "Заглушка раздела",
   "gallery.segmented": "Переключатель видов",
+  "gallery.segmented.small": "Тесный переключатель",
+  "gallery.segmented.smallHint": "Тот же переключатель с size=\"s\": на экране уже 384 px подписи сжимаются, чтобы «Нормальная» и «Сложная» не уходили за край.",
   "gallery.screens": "Экраны на тестовых данных",
   "gallery.preview.boot": "Запуск приложения",
   "gallery.preview.runLoading": "Загрузка забега",
