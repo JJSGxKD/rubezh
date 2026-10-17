@@ -1,5 +1,6 @@
 import { Global, Module } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
+import { Outbound } from "../../infra/outbound/outbound.js";
 import { BotIdentity } from "./bot-identity.js";
 import { TELEGRAM_BOT_API, TelegramBotApi } from "./telegram-bot-api.js";
 
@@ -13,9 +14,9 @@ import { TELEGRAM_BOT_API, TelegramBotApi } from "./telegram-bot-api.js";
   providers: [
     {
       provide: TELEGRAM_BOT_API,
-      inject: [APP_CONFIG],
-      useFactory: (config: AppConfig): TelegramBotApi =>
-        new TelegramBotApi(config.telegram.botToken, config.telegram.apiRoot),
+      inject: [APP_CONFIG, Outbound],
+      useFactory: (config: AppConfig, outbound: Outbound): TelegramBotApi =>
+        new TelegramBotApi(config.telegram.botToken, config.telegram.apiRoot, outbound.forService("telegram.bot")),
     },
     BotIdentity,
   ],

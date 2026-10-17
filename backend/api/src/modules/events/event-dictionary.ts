@@ -130,6 +130,11 @@ export const EVENT_DICTIONARY = {
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },
   wave_reached: { version: 1, payload: payload({ wave: count, elapsedSec: seconds }) },
+  // Тестер забрал компенсацию после вайпа (Р87, tasks/T-0043): дошли ли и сколько выдано.
+  compensation_claimed: {
+    version: 1,
+    payload: payload({ tester: z.boolean(), bonusGems: count, restoredGems: count, continueGems: count }),
+  },
   // Второй шанс взят (docs/07-monetization-and-ads.md §8): откуда — `dev`
   // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
   // на какой секунде и волне забега.

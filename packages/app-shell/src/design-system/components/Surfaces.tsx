@@ -103,6 +103,8 @@ export function Card(props: CardProps): ReactNode {
  */
 export interface ModalProps {
   title?: string;
+  /** id заголовка в содержимом — имя диалога для диктора, когда своего `title` нет */
+  labelledBy?: string;
   /** значок над заголовком — у модалок забега он заменяет иллюстрацию */
   icon?: ReactNode;
   children: ReactNode;
@@ -147,6 +149,7 @@ export function Modal(props: ModalProps): ReactNode {
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
+      aria-labelledby={props.labelledBy}
       className={[
         "absolute inset-0 flex px-4",
         "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",

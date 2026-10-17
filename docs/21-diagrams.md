@@ -1802,6 +1802,7 @@ flowchart LR
         PROMOC["promo-codes<br/>промокоды и коды партнёров:<br/>ключ кода, активация, реализовано"]
         RESTR["restrictions<br/>ограничения игрока по видам и на срок:<br/>«можно ли» с кешем 30 с, снятие по сроку<br/>под локом, реализовано"]
         SEASONS["seasons<br/>недельный сезон рейтинга: таблица недели,<br/>закрытие по понедельникам UTC, награды<br/>за порог и за место, друзья, реализовано"]
+        OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, запись о каждой попытке<br/>в приёмник (пока пустой), реализовано"]
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
     end
 
@@ -1855,11 +1856,13 @@ flowchart LR
     PAY -- порт оплаты --> TGADP
     AUTH -- порт проверки запуска --> TGADP
     INGEST -- порт проверки запуска --> TGADP
-    TGADP -- createInvoiceLink, answerPreCheckoutQuery, refundStarPayment --> TGAPI
+    TGADP -- createInvoiceLink, answerPreCheckoutQuery, refundStarPayment --> OUTBOUND
+    OUTBOUND -- "telegram.bot" --> TGAPI
     PAY --> QUEUE
     WELCOME -. рекорд и место .-> RUNS
     EXPORT --> QUEUE
-    FXM -- раз в минуту, под локом --> FXSRC
+    FXM -- раз в минуту, под локом --> OUTBOUND
+    OUTBOUND -- "fx.cbr, fx.ecb, fx.erapi, fx.coingecko, fx.tonapi, fx.binance" --> FXSRC
     FXM --> PG
     FXM --> REDIS
     FXM -. алерты курсов .-> NOTIFY
@@ -1881,7 +1884,7 @@ flowchart LR
     BOOSTS --> PG
     ITEMS --> PG
     EXPORT --> PG
-    QUEUE -- sendPhoto, sendDocument --> TGAPI
+    QUEUE -- sendPhoto, sendDocument --> OUTBOUND
 
     AUTH --> PG
     AUTH --> REDIS
@@ -1908,7 +1911,8 @@ flowchart LR
     RUNS -. слушатели записанного забега .-> PAY
     ADS -- "ad_network, ad_block, ad_session" --> PG
     ADSGRAMAPI -. "адрес награды задания: /api/v1/ads/adsgram/reward, секрет в пути" .-> CADDY
-    ADS -. "ads/get и показы креатива; exchange/feed, exchange/check — задания ленты" .-> TADDYAPI
+    ADS -. "ads/get и показы креатива; exchange/feed, exchange/check — задания ленты" .-> OUTBOUND
+    OUTBOUND -. "taddy.api, taddy.exchange" .-> TADDYAPI
     ADMINAPI -. "сети, блоки, воронка показов" .-> ADS
     WHEEL -. "забор сессии места wheel_spin" .-> ADS
     REF --> PG
@@ -1941,7 +1945,9 @@ flowchart LR
     ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG
     ADCONV -- "лок ad-conversions:lock" --> REDIS
     ADCONV -. токен конверсий на каждой отправке .-> SECRETS
-    ADCONV -- "confirm_conversion, таймаут 5 с" --> ADSGRAMAPI
+    ADCONV -- "confirm_conversion, таймаут 5 с" --> OUTBOUND
+    OUTBOUND -- "ads.postback" --> ADSGRAMAPI
+    ADMINAPI -- "проверка ключа интеграции: secrets.check" --> OUTBOUND
     ADMINAPI -. "журнал и повтор конверсий ссылки" .-> ADCONV
     ADMINAPI -. рассылки .-> BCAST
     BCAST --> PG
@@ -3438,6 +3444,45 @@ sequenceDiagram
 - **Награду игрок забирает сам** (`POST /api/v1/seasons/:key/claim`): монеты
   по ключу `season:<сезон>:<аккаунт>`, затем `pending → claimed` условным
   `UPDATE`. Сбой между шагами награды не теряет: повтор найдёт монеты по ключу.
+
+### 4.28 Счётчик онлайна: пинг, пересчёт, ответ (этап 4, реализовано)
+
+Любой запрос под сессией игрока — активность (`AuthGuard` не ждёт Redis), а
+клиент шлёт пинг только в тишине. Пересчёт раз в 15 с — одно задание BullMQ на
+все реплики. Пороги применяет сервер (`online/online.service.ts`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Клиент
+    participant G as AuthGuard
+    participant O as OnlineService
+    participant R as Redis
+    participant J as Задание online (раз в 15 с)
+    participant A as Панель
+
+    C->>G: любой запрос с токеном
+    G--)O: touch(аккаунт) — без ожидания
+    O--)R: ZADD online:app:площадка, PFADD online:day:сутки
+    C->>O: POST /online/ping { inRun }
+    O->>R: ZADD или ZREM online:run:площадка
+    O->>R: GET online:counts
+    R-->>O: готовые числа
+    O-->>C: online, inRun, todayPlayed — null ниже порога, nextPingSec
+    J->>O: recount(now)
+    O->>R: ZREMRANGEBYSCORE старше окна, ZCARD, PFCOUNT
+    O->>R: SET online:counts
+    O->>R: рекорд выше прежнего — SET online:peak
+    A->>O: GET /admin/online
+    O-->>A: по площадкам, итог и рекорд, без порогов
+```
+
+- **Запись не блокирует ответ.** Сбой Redis при отметке активности — строка
+  `warn` не чаще раза в минуту; запрос игрока проходит.
+- **Читают готовое.** Пинг делает один `GET`; считает только задание, поэтому
+  нагрузка на Redis не растёт с числом игроков.
+- **«Сегодня играли»** — HyperLogLog на игровые сутки (Москва): точность около
+  1%, память постоянная.
 
 ---
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap, type OnModuleDestroy } from "@nestjs/common";
 import {
   createBinanceSource,
   createCbrSource,
@@ -17,6 +17,8 @@ import type { Redis } from "ioredis";
 import { SECRETS } from "../secrets/secret-catalog.js";
 import { SECRETS_READER, type SecretsReader } from "../secrets/secrets.service.js";
 import { FeatureSwitches } from "../settings/feature-switches.js";
+import { Outbound } from "../../infra/outbound/outbound.js";
+import type { OutboundService } from "../../infra/outbound/outbound-services.js";
 import { REDIS } from "../../infra/redis.js";
 import { FxHooks } from "./fx-hooks.js";
 import { FX_STORE } from "./fx.store.js";
@@ -49,17 +51,17 @@ return 0
  * проходе: заменённый в панели работает со следующей минуты без
  * перезапуска (docs/35-stage4-plan.md Р84). Платный важнее демо.
  */
-export function fxSources(secrets: SecretsReader, fetchImpl: typeof fetch = fetch): RateSource[] {
+export function fxSources(secrets: SecretsReader, fetchFor: (service: OutboundService) => typeof fetch = () => fetch): RateSource[] {
   const pro = secrets.get(SECRETS.coingeckoPro);
   const demo = secrets.get(SECRETS.coingeckoDemo);
   const key = pro !== null ? { plan: "pro" as const, value: pro } : demo !== null ? { plan: "demo" as const, value: demo } : null;
   return [
-    createCbrSource({ fetch: fetchImpl }),
-    createEcbSource({ fetch: fetchImpl }),
-    createErApiSource({ fetch: fetchImpl }),
-    createCoinGeckoSource({ fetch: fetchImpl, ...(key === null ? {} : { key }) }),
-    createTonApiSource({ fetch: fetchImpl }),
-    createBinanceSource({ fetch: fetchImpl }),
+    createCbrSource({ fetch: fetchFor("fx.cbr") }),
+    createEcbSource({ fetch: fetchFor("fx.ecb") }),
+    createErApiSource({ fetch: fetchFor("fx.erapi") }),
+    createCoinGeckoSource({ fetch: fetchFor("fx.coingecko"), ...(key === null ? {} : { key }) }),
+    createTonApiSource({ fetch: fetchFor("fx.tonapi") }),
+    createBinanceSource({ fetch: fetchFor("fx.binance") }),
   ];
 }
 
@@ -75,7 +77,15 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
     private readonly hooks: FxHooks,
     private readonly switches: FeatureSwitches,
+    // Без модуля клиента (тесты) источники берут глобальный fetch.
+    @Optional() private readonly outbound?: Outbound,
   ) {}
+
+  /** Клиент источника с меткой сервиса; без клиента — глобальный fetch. */
+  private fetchFor(): (service: OutboundService) => typeof fetch {
+    const outbound = this.outbound;
+    return outbound === undefined ? () => fetch : (service) => outbound.forService(service);
+  }
 
   /**
    * Таймер идёт всегда, а опрос включают и выключают на ходу из панели:
@@ -92,7 +102,7 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /** Один проход; `null` — не запускался: идёт предыдущий, лок у другой реплики или Redis недоступен. */
-  async tick(sources: readonly RateSource[] = fxSources(this.secrets), now = new Date()): Promise<RefreshReport | null> {
+  async tick(sources: readonly RateSource[] = fxSources(this.secrets, this.fetchFor()), now = new Date()): Promise<RefreshReport | null> {
     if (this.running || !this.switches.fxPolling()) return null;
     this.running = true;
     try {

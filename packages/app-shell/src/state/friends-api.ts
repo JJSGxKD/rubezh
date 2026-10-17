@@ -10,7 +10,13 @@ import { useShell } from "./shell";
  * Модуль грузится вместе с экраном друзей — первой загрузке он не нужен.
  */
 
-const peer = { accountId: z.string(), displayName: z.string(), photoUrl: z.nullable(z.string()) };
+const peer = {
+  accountId: z.string(),
+  displayName: z.string(),
+  photoUrl: z.nullable(z.string()),
+  /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
+  tester: z.optional(z.literal(true)),
+};
 
 const friendSchema = z.object({ ...peer, since: z.string(), source: z.string() });
 const requestSchema = z.object({ ...peer, at: z.string() });
