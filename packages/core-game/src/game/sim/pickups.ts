@@ -2,6 +2,7 @@ import type { DropsDef } from "@bh/shared-types";
 // Импорт по кругу (combat.ts зовёт выпадение подборов, динамит зовёт
 // убийство) безопасен: обе функции вызываются в игре, а не при загрузке модуля.
 import { isElite } from "../patterns";
+import { chestSizeOf, openChest } from "./chests";
 import { killEnemy } from "./combat";
 import { createDirection, randomDirection } from "./directions";
 import { pushSimEvent, SIM_EVENT } from "./events";
@@ -32,6 +33,9 @@ export const PICKUP_KIND = {
   medkit: 0,
   magnet: 1,
   dynamite: 2,
+  chestOne: 3,
+  chestThree: 4,
+  chestFive: 5,
 } as const;
 
 export type PickupKind = (typeof PICKUP_KIND)[keyof typeof PICKUP_KIND];
@@ -56,8 +60,9 @@ export const PICKUP_RADIUS_UNITS = 9;
 const PULL_AT_EDGE = 0.18;
 const PULL_AT_PLAYER = 0.75;
 
-const SCATTER_MIN = 8;
-const SCATTER_MAX = 20;
+/** Разброс от места смерти, игровые единицы; общий с сундуком. */
+export const SCATTER_MIN_UNITS = 8;
+export const SCATTER_MAX_UNITS = 20;
 
 const scratch = createDirection();
 
@@ -123,7 +128,7 @@ function roll(
   if (countOnField(world, kind) >= def.maxOnField) return;
 
   randomDirection(world.rng, scratch);
-  const distance = world.rng.nextRange(SCATTER_MIN, SCATTER_MAX) * world.config.unitScale;
+  const distance = world.rng.nextRange(SCATTER_MIN_UNITS, SCATTER_MAX_UNITS) * world.config.unitScale;
   const bounds = world.config.bounds;
   spawnPickup(
     world,
@@ -197,6 +202,15 @@ export function updatePickups(world: World): void {
     // То, что сейчас нельзя взять, и не тянется: аптечка при полном здоровье
     // иначе ходила за игроком по пятам, подбираясь и не подбираясь.
     if (!canTake(world, pool.kind[i])) continue;
+    // Сундук не притягивается: к нему идут сами, это часть решения игрока.
+    const chestSize = chestSizeOf(pool.kind[i]);
+    if (chestSize !== null) {
+      if (distance <= touch) {
+        remove(world, i);
+        openChest(world, chestSize);
+      }
+      continue;
+    }
     if (distance > touch) {
       pullToPlayer(world, i, distance);
       continue;
@@ -211,7 +225,7 @@ export function updatePickups(world: World): void {
         remove(world, i);
         attractAllGems(world);
         break;
-      default:
+      case PICKUP_KIND.dynamite:
         remove(world, i);
         detonate(world);
     }
