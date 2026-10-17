@@ -3,7 +3,7 @@ id: T-0146
 title: «pnpm task check» сверяет метку и заголовок из раздела «PR» с шапкой
 epic: E0
 priority: P3
-status: in-progress
+status: done
 owner: claude-7 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
