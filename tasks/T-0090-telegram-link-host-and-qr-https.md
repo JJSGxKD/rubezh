@@ -3,7 +3,7 @@ id: T-0090
 title: QR входа на https, домен ссылок Telegram — настройкой в панели
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-10
 size: M
