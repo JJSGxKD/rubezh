@@ -165,7 +165,12 @@ export function GalleryScreen(): ReactNode {
           <Hint label={t("gallery.hint.label")} text={t("gallery.hint.text")}>
             <span className="text-sm text-text">{t("gallery.hint.label")}</span>
           </Hint>
-          <Hint label={t("gallery.hint.label")} text={t("gallery.hint.text")} initiallyOpen>
+          <Hint
+            label={t("gallery.hint.label")}
+            text={t("gallery.hint.text")}
+            end={<span className="text-sm font-semibold tabular-nums text-success">+7%</span>}
+            initiallyOpen
+          >
             <span className="text-sm text-text">{t("gallery.hint.label")}</span>
           </Hint>
         </div>
