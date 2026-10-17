@@ -2,11 +2,12 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { UnrecoverableError } from "bullmq";
 import { PaymentProviderRejectedError, PaymentProviders } from "../../platforms/ports/payment-provider.js";
 import type { ConfirmedPayment } from "./payment-confirmation.js";
+import { PurchaseRevocation } from "./purchase-revocation.js";
 import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, type RefundOrder } from "./purchases.repository.js";
 
 /**
  * Возвраты звёзд (docs/34-stage3-plan.md, WP5, п. 5.2 и 8): что вернуть и
- * как. Возвращаем сами в пяти случаях:
+ * как. Возвращаем сами в шести случаях:
  *
  * - **тестовая оплата** (Р14) — звезда возвращается сразу после
  *   подтверждения, продолжение засчитано;
@@ -16,7 +17,9 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
  * - **вторая оплата того же продолжения** — одно продолжение, одна оплата;
  * - **оплата без покупки** — продать было нечего;
  * - **товар не выдать по сути** — его сняли с витрины, а оплата уже пришла
- *   (проход довыдачи, `fulfillment-sweeper.ts`).
+ *   (проход довыдачи, `fulfillment-sweeper.ts`);
+ * - **по решению поддержки** — из панели (`purchase-support.ts`), остаток
+ *   покупки забирается после возврата.
  *
  * Сам возврат идёт через очередь (`payments-queue.ts`): упавший повторяется,
  * а не пропадает молча. Заказ возврата пишется в базу раньше обращения к
@@ -31,6 +34,8 @@ export class PaymentRefunds {
   constructor(
     @Inject(PURCHASES_REPOSITORY) private readonly purchases: PurchasesRepository,
     private readonly providers: PaymentProviders,
+    // Без отзывателей отзывать нечего; в приложении Nest подставляет общий экземпляр модуля.
+    private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
   ) {}
 
   /** Что вернуть после подтверждения оплаты. */
@@ -71,6 +76,11 @@ export class PaymentRefunds {
     return await this.request(purchaseId, "undeliverable", nowMs);
   }
 
+  /** Возврат по решению поддержки (`purchase-support.ts`): звёзды, а после них — остаток покупки. */
+  async manual(purchaseId: string, nowMs = Date.now()): Promise<RefundOrder[]> {
+    return await this.request(purchaseId, "manual", nowMs);
+  }
+
   /** Возвраты, заказанные до перезапуска и ещё не подтверждённые. */
   async pending(limit: number): Promise<RefundOrder[]> {
     return await this.purchases.pendingRefunds(limit);
@@ -92,11 +102,17 @@ export class PaymentRefunds {
       this.log("error", "refund_rejected", { ...describe(order), reason: error.message });
       throw new UnrecoverableError(error.message);
     }
-    if (order.purchaseId !== null) await this.purchases.markRefunded(order.chargeId, new Date(nowMs));
-    this.log("log", "refund_done", describe(order));
+    const record = order.purchaseId === null ? null : await this.purchases.markRefunded(order.chargeId, new Date(nowMs));
+    // Остаток по решению поддержки забирается после того, как звёзды ушли, а не до: если площадка
+    // окончательно откажет, игрок не останется ни без звёзд, ни без товара. Отзыв — при каждом вызове,
+    // а не только при первой отметке возврата: первая попытка могла отметить его и упасть на отзыве,
+    // а повтор получит от площадки «уже возвращено». Ошибка отзыва бросается дальше — задание повторится.
+    const revocation =
+      record !== null && record.purchase.refundReason === "manual" ? await this.revocation.revoke(record.purchase, record.purchase.refundedAt ?? new Date(nowMs)) : null;
+    this.log("log", "refund_done", { ...describe(order), ...(revocation === null ? {} : { revoked: revocation.lines }) });
   }
 
-  private async request(purchaseId: string, reason: "test_mode" | "unused" | "undeliverable", nowMs: number): Promise<RefundOrder[]> {
+  private async request(purchaseId: string, reason: "test_mode" | "unused" | "undeliverable" | "manual", nowMs: number): Promise<RefundOrder[]> {
     const order = await this.purchases.requestRefund(purchaseId, reason, new Date(nowMs));
     return order === null ? [] : [order];
   }

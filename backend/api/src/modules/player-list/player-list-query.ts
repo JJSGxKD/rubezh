@@ -56,6 +56,12 @@ export const playerListQuerySchema = z
 
 export type PlayerListQuery = z.output<typeof playerListQuerySchema>;
 
+/**
+ * Ответ на кривые фильтры. Фильтр по скрытому виду без права отвечает им же:
+ * вид для такого сотрудника — неизвестное значение.
+ */
+export const PLAYER_LIST_INVALID_TEXT = "Некорректные фильтры списка игроков";
+
 /** Фильтры без сортировки и страницы — то, что уходит в условие выборки. */
 export type PlayerFilters = Omit<PlayerListQuery, "sort" | "order" | "cursor" | "limit">;
 

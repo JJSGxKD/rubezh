@@ -24,16 +24,21 @@ import {
   TASK_LIMIT_GRACE_MIN,
   TASK_PERIODS,
   countsForTasks,
+  isCheckedKind,
   isRunKind,
   rewardReason,
   slotsFor,
   visibleOn,
+  type PoolTier,
+  type RunFilter,
   type TaskCategory,
   type TaskDef,
   type TaskKind,
   type TaskParticipation,
   type TaskPeriod,
+  type TaskRun,
 } from "./task-rules.js";
+import { inPlay, rotationAt } from "./task-pool.js";
 import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepository } from "./tasks.repository.js";
 
 /**
@@ -80,6 +85,10 @@ export interface TaskView {
   slots: { left: number; total: number; holdUntil: string | null } | null;
   /** картинка 1:1 партнёрской цели — путь от адреса API; нет — значок вида */
   image: string | null;
+  /** ступень пула ротации; `null` — задание в игре всегда */
+  tier: PoolTier | null;
+  /** оружие, стихия или сложность цели — по ним клиент строит текст */
+  filter: RunFilter | null;
 }
 
 export interface TaskCatalogView {
@@ -88,6 +97,8 @@ export interface TaskCatalogView {
   periods: readonly TaskPeriod[];
   /** сколько игроков выполнили цель — у выполненных хоть раз */
   completions: Record<string, number>;
+  /** что сейчас в ротации: id набора дня и недели */
+  rotation: { daily: string[]; weekly: string[] };
 }
 
 export interface TaskClaimResult {
@@ -204,7 +215,7 @@ export class TasksService implements OnModuleInit {
   /** Каталог, прогресс и участие игрока — разом: экран заданий ждёт самого долгого из трёх. */
   private async state(account: AccountRef, at: Date): Promise<{ defs: TaskDef[]; progress: TaskProgressRow[]; participation: Map<string, TaskParticipation> }> {
     const [defs, progress, participation] = await Promise.all([
-      this.visible(account),
+      this.visible(account, at),
       this.db(this.repository.progress(account.accountId, at)),
       this.db(this.repository.participation(account.accountId)),
     ]);
@@ -243,15 +254,17 @@ export class TasksService implements OnModuleInit {
 
   /** Знак меню: сколько наград можно забрать прямо сейчас (Р50). */
   async badge(accountId: string, at = new Date()): Promise<number> {
-    const progress = await this.db(this.repository.progress(accountId, at));
-    return progress.filter((row) => row.done && !row.claimed).length;
+    const [progress, active] = await Promise.all([this.db(this.repository.progress(accountId, at)), this.active()]);
+    // Невыбранное из пула забрать нельзя, значит и знак его не считает.
+    const playing = new Set(inPlay(active, at).map((def) => def.taskId));
+    return progress.filter((row) => row.done && !row.claimed && playing.has(row.taskId)).length;
   }
 
   /** Весь каталог, и выключенное, с видами и сроками для формы — панели. */
-  async catalog(actor: AccountRef): Promise<TaskCatalogView> {
+  async catalog(actor: AccountRef, at = new Date()): Promise<TaskCatalogView> {
     await this.roles.require(actor, "tasks.edit");
     const [tasks, completions] = await Promise.all([this.db(this.repository.catalog()), this.db(this.repository.completions())]);
-    return { tasks, kinds: TASK_KIND_IDS, periods: TASK_PERIODS, completions: Object.fromEntries(completions) };
+    return { tasks, kinds: TASK_KIND_IDS, periods: TASK_PERIODS, completions: Object.fromEntries(completions), rotation: rotationAt(tasks, at) };
   }
 
   /**
@@ -285,10 +298,13 @@ export class TasksService implements OnModuleInit {
    */
   async onRun(run: RecordedRun): Promise<void> {
     if (!countsForTasks(run)) return;
-    const deltas: TaskDelta[] = (await this.active()).flatMap((def) => {
+    // Забег двигает только то, что было в игре на его момент: невыбранное из
+    // пула прогресса не копит.
+    const deltas: TaskDelta[] = inPlay(await this.active(), run.finishedAt).flatMap((def) => {
       if (!isRunKind(def.kind)) return [];
       const kind = RUN_KINDS[def.kind];
-      return [{ taskId: def.taskId, period: def.period, target: def.target, op: kind.op, amount: kind.measure(run) }];
+      const measure: (run: TaskRun, filter: RunFilter | null) => number = kind.measure;
+      return [{ taskId: def.taskId, period: def.period, target: def.target, op: kind.op, amount: measure(run, def.filter) }];
     });
     if (deltas.every((delta) => delta.amount <= 0)) return;
     await this.db(this.repository.applyRun({ runId: run.runId, accountId: run.accountId, at: run.finishedAt, deltas }));
@@ -299,9 +315,13 @@ export class TasksService implements OnModuleInit {
     this.cache = null;
   }
 
-  /** Включённые цели, которые игрок может выполнить: цель другой площадки ему не показывается, цель без площадки — всем. */
-  private async visible(account: AccountRef): Promise<TaskDef[]> {
-    return (await this.active()).filter((def) => visibleOn(def.params, account.platform));
+  /**
+   * Включённые цели, которые игрок может выполнить: цель другой площадки ему
+   * не показывается, цель без площадки — всем; из пула — только набор дня и
+   * недели на `at`.
+   */
+  private async visible(account: AccountRef, at: Date): Promise<TaskDef[]> {
+    return inPlay(await this.active(), at).filter((def) => visibleOn(def.params, account.platform));
   }
 
   private async active(): Promise<TaskDef[]> {
@@ -343,7 +363,7 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
     return {
       id: def.taskId,
       period: def.period,
-      category: def.params === null ? def.period : "partner",
+      category: isCheckedKind(def.kind) ? "partner" : def.period,
       kind: def.kind,
       title: def.title,
       target: def.target,
@@ -355,6 +375,8 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
       link: def.params?.url ?? null,
       slots,
       image: def.image === null ? null : imagePath(def.image),
+      tier: def.tier,
+      filter: def.filter,
     };
   });
 }

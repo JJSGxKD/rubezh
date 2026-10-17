@@ -21,6 +21,12 @@ export interface RecordedRun {
   level: number;
   enemiesKilled: number;
   startingWeaponId: string;
+  /** оружие в наборе к концу забега — со слов клиента, как и весь итог */
+  weapons: { id: string; level: number }[];
+  /** оплаченные на этот забег бусты; неоплаченные и не заявленные — пусто */
+  boosts: string[];
+  /** собранный опыт из статистики итога; итог без статистики — `null` */
+  xpCollected: number | null;
   deathCause: string | null;
   cheats: boolean;
   /** сколько вторых шансов взято: оплаченные сверх этого числа не использованы */
@@ -44,11 +50,25 @@ export interface StartedRun {
 
 export type StartListener = (run: StartedRun) => Promise<void>;
 
+/**
+ * Модератор снял забег с рейтинга или вернул его: рейтинговое лучшее время
+ * игрока на сложности могло измениться. Проекции рейтинга, кроме вечного (его
+ * `RunsService` пересчитывает сам), пересчитывают его по базе — недельная
+ * таблица сезона (tasks/T-0110).
+ */
+export interface RankingChange {
+  accountId: string;
+  difficulty: Difficulty;
+}
+
+export type RankingListener = (change: RankingChange) => Promise<void>;
+
 @Injectable()
 export class RunsHooks {
   private readonly logger = new Logger("runs");
   private readonly listeners: { name: string; listener: RunListener }[] = [];
   private readonly startListeners: { name: string; listener: StartListener }[] = [];
+  private readonly rankingListeners: { name: string; listener: RankingListener }[] = [];
 
   onRecorded(name: string, listener: RunListener): void {
     this.listeners.push({ name, listener });
@@ -56,6 +76,31 @@ export class RunsHooks {
 
   onStarted(name: string, listener: StartListener): void {
     this.startListeners.push({ name, listener });
+  }
+
+  onRankingChanged(name: string, listener: RankingListener): void {
+    this.rankingListeners.push({ name, listener });
+  }
+
+  /** После снятия забега или возврата: упавший слушатель не мешает остальным и не отменяет решение модератора. */
+  async emitRankingChanged(change: RankingChange): Promise<void> {
+    await Promise.all(
+      this.rankingListeners.map(async ({ name, listener }) => {
+        try {
+          await listener(change);
+        } catch (error: unknown) {
+          this.logger.error(
+            JSON.stringify({
+              module: "runs",
+              event: "ranking_listener_failed",
+              listener: name,
+              accountId: change.accountId,
+              reason: error instanceof Error ? error.message : "unknown",
+            }),
+          );
+        }
+      }),
+    );
   }
 
   /** Как `emit`: после ответа игроку, упавший слушатель не мешает остальным. */

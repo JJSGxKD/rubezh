@@ -3,8 +3,8 @@ id: T-0057
 title: Цель ссылки и прямые ссылки — Mini App, бот или лендинг, с переходником и без
 epic: E14
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-6 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []

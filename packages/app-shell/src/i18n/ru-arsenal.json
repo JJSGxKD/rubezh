@@ -29,6 +29,8 @@
   "arsenal.item.main": "Главное свойство",
   "arsenal.item.extras": "Дополнительные свойства",
   "arsenal.item.noExtras": "У обычного предмета дополнительных свойств нет.",
+  "arsenal.item.powerNext": "Мощь {from} → {to}",
+  "arsenal.item.statBecomes": "станет",
   "arsenal.item.powerDelta": "{delta} к мощи надетого",
   "arsenal.item.equip": "Надеть",
   "arsenal.item.unequip": "Снять",

@@ -3,8 +3,8 @@ id: T-0076
 title: «Друзья»: крупное приглашение не мелькает, пока экран грузится
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-7 / haiku-5.5 / medium
 author: claude-lead2-5
 size: S
 depends_on: []

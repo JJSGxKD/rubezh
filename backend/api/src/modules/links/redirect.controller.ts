@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Public } from "../../common/access.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { LINK_CODE } from "./link-code.js";
-import { linkPage, notFoundPage } from "./link-page.js";
+import { linkPage, notFoundPage, openPage, OPEN_SCRIPT_HASH } from "./link-page.js";
 import { LinksService, type VisitorInfo } from "./links.service.js";
 
 /**
@@ -70,6 +70,21 @@ export class RedirectController {
     // и человек после краулера получил бы превью вместо перехода.
     if (visit.kind === "preview") return html(200, linkPage({ url: visit.url, target: null }), "private, max-age=300");
     if (visit.kind === "unavailable") return html(503, linkPage({ url: visit.url, target: null }), "no-store");
+    // Проверка доступности: 200 — «ссылка жива». Без кеша: общий кеш отдал бы эту заглушку человеку.
+    if (visit.kind === "check") return html(200, linkPage({ url: visit.url, target: null }), "no-store");
+    // Диплинк есть — страница с ним: Telegram открывается сразу, а если его
+    // нет на устройстве, через 2,5 с уходим на прежний https://t.me. Политика
+    // пускает единственный скрипт — по хэшу, без 'unsafe-inline'.
+    if (visit.deep !== null) {
+      void reply
+        .status(200)
+        .header("content-type", "text/html; charset=utf-8")
+        .header("cache-control", "no-store")
+        .header("x-robots-tag", "noindex")
+        .header("content-security-policy", `default-src 'none'; script-src ${OPEN_SCRIPT_HASH}; frame-ancestors 'none'`)
+        .send(openPage({ deep: visit.deep, fallback: visit.target }));
+      return;
+    }
     void reply.status(302).header("location", visit.target).header("cache-control", "no-store").send();
   }
 }

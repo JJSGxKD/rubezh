@@ -3,8 +3,8 @@ id: T-0073
 title: Проверки доступности не считаются кликами; клики без класса устройства — отдельной строкой
 epic: E14
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead2-4
 size: M
 depends_on: [T-0057]

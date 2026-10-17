@@ -3,8 +3,8 @@ id: T-0075
 title: Награда дня сама обновляется на смене суток по Москве
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-7 / haiku-5.5 / medium
 author: claude-lead2-5
 size: S
 depends_on: []

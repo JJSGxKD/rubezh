@@ -30,6 +30,7 @@ export class MemoryAccountRepository implements AccountRepository {
       createdAt: new Date(nowMs),
       bannedAt: null,
       banReason: null,
+      testerAt: null,
       created: true,
     };
     this.byKey.set(key, account);

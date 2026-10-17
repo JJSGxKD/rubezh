@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
-import { PaymentsHooks, type AbandonedJob, type ExternalRefund, type StuckPurchase } from "../payments/payments-hooks.js";
+import { PaymentsHooks, type AbandonedJob, type ExternalRefund, type StuckPurchase, type SupportAction } from "../payments/payments-hooks.js";
 import { NotifyTargets } from "../settings/notify-targets.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/telegram-bot-api.js";
 
@@ -25,6 +25,10 @@ import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/
  * что забрано, сколько возвратов у аккаунта и что покупки ему закрыты. Одна
  * на покупку за семь суток, ключ — её id: повтор обработки возврата и
  * повторное событие карточку не удваивают.
+ *
+ * И сообщение о ручном действии поддержки с покупкой (tasks/T-0037): кто,
+ * кому, что и почему. Без дедупликации: каждое действие — отдельное решение
+ * человека, а повторное нажатие сервер отклоняет сам.
  */
 
 const QUIET_SEC = 7 * 24 * 60 * 60;
@@ -50,6 +54,7 @@ export class PaymentsAlertNotifier implements OnModuleInit {
     this.hooks.onStuck("admin-notify", (purchase) => this.deliver(purchase));
     this.hooks.onAbandoned("admin-notify", (job) => this.deliverAbandoned(job));
     this.hooks.onExternalRefund("admin-notify", (refund) => this.deliverExternalRefund(refund));
+    this.hooks.onSupport("admin-notify", (action) => this.deliverSupport(action));
   }
 
   /** Не бросает: нет чата, Redis или Telegram — в лог, и проход идёт дальше. */
@@ -82,25 +87,38 @@ export class PaymentsAlertNotifier implements OnModuleInit {
     });
   }
 
-  private async notify(message: { key: string; text: string; fields: Record<string, unknown>; reason: string }): Promise<void> {
+  /** Не бросает: действие уже выполнено и записано в журнал, и упавшее сообщение не должно превращать его в ошибку запроса. */
+  async deliverSupport(action: SupportAction): Promise<void> {
+    await this.notify({
+      key: null,
+      text: supportActionText(action),
+      fields: { purchaseId: action.purchase.purchaseId, accountId: action.purchase.accountId },
+      reason: `support_${action.kind}`,
+    });
+  }
+
+  /** `key: null` — без дедупликации: сообщение уходит каждый раз. */
+  private async notify(message: { key: string | null; text: string; fields: Record<string, unknown>; reason: string }): Promise<void> {
     const { key, text, fields, reason } = message;
     const chat = this.targets.chats().payments;
     if (chat === null) {
       this.logger.warn(JSON.stringify({ module: "admin-notify", event: "payments_alert_no_chat", ...fields }));
       return;
     }
-    try {
-      if ((await this.redis.set(key, "1", "EX", QUIET_SEC, "NX")) === null) return;
-    } catch (error: unknown) {
-      this.logger.warn(JSON.stringify({ module: "admin-notify", event: "payments_alert_skipped", ...fields, reason: reasonOf(error) }));
-      return;
+    if (key !== null) {
+      try {
+        if ((await this.redis.set(key, "1", "EX", QUIET_SEC, "NX")) === null) return;
+      } catch (error: unknown) {
+        this.logger.warn(JSON.stringify({ module: "admin-notify", event: "payments_alert_skipped", ...fields, reason: reasonOf(error) }));
+        return;
+      }
     }
     try {
       await this.api.sendMessage(chat, text, AbortSignal.timeout(SEND_TIMEOUT_MS));
       this.logger.log(JSON.stringify({ module: "admin-notify", event: "payments_alert_sent", ...fields, reason }));
     } catch (error: unknown) {
       this.logger.warn(JSON.stringify({ module: "admin-notify", event: "payments_alert_failed", ...fields, reason: reasonOf(error) }));
-      await this.redis.del(key).catch(() => 0);
+      if (key !== null) await this.redis.del(key).catch(() => 0);
     }
   }
 }
@@ -113,7 +131,9 @@ export function stuckPurchaseText(purchase: StuckPurchase): string {
     `Аккаунт: ${purchase.accountId}`,
     `Оплачена: ${utcMinute(purchase.paidAt)}`,
     `Причина: ${purchase.reason}`,
-    purchase.reason === "undeliverable" ? "Звёзды возвращаются автоматически." : "Проход повторяет выдачу каждые 5 минут; нужна проверка.",
+    purchase.reason === "undeliverable"
+      ? "Звёзды возвращаются автоматически."
+      : "Проход повторяет выдачу каждые 5 минут; нужна проверка. В панели: карточка игрока → «Покупки».",
   ].join("\n");
 }
 
@@ -147,6 +167,19 @@ export function externalRefundText(refund: ExternalRefund): string {
     `Возвратов у аккаунта: ${String(stats.refunded)} из ${String(stats.paid)} оплат`,
     "Покупки аккаунту закрыты — снять ограничение можно в панели.",
   ].join("\n");
+}
+
+/** Текст — для человека в чате: кто, кому, что сделал с покупкой и почему. */
+export function supportActionText(action: SupportAction): string {
+  const { kind, purchase, actorName, note } = action;
+  const head = [
+    kind === "refund" ? "↩️ Возврат звёзд вручную" : "✅ Покупка выдана вручную",
+    `Товар: ${purchase.sku ?? purchase.product}, ${String(purchase.chargedStars)} ⭐`,
+    `Аккаунт: ${purchase.accountId}`,
+    `Кто: ${actorName}`,
+    `Причина: ${note}`,
+  ];
+  return (kind === "refund" ? [...head, "Звёзды вернутся заданием очереди. Если покупка выдана, после возврата заберём остаток."] : head).join("\n");
 }
 
 /** ГГГГ-ММ-ДД ЧЧ:ММ по UTC: сервер и логи в UTC, команда сверяет покупку по ним. */

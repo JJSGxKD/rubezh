@@ -280,7 +280,7 @@ describe("отправка уведомления", () => {
 });
 
 // Забеги на разбор антифрода (docs/34-stage3-plan.md, WP4): карточка зовёт
-// администратора посмотреть, очередь целиком — GET /runs/review.
+// администратора посмотреть, очередь целиком — в панели, GET /api/v1/admin/runs/review.
 
 const REVIEW_ENV = {
   AUTH_ENABLED: "true",
@@ -298,6 +298,9 @@ function recorded(patch: Partial<RecordedRun> = {}): RecordedRun {
     level: 18,
     enemiesKilled: 34_000,
     startingWeaponId: "knife",
+    weapons: [],
+    boosts: [],
+    xpCollected: null,
     deathCause: "swarm_rat",
     cheats: false,
     continues: 0,
@@ -320,6 +323,8 @@ describe("карточка забега на разбор", () => {
     expect(text).toContain("Нормальная · 12:34 · уровень 18 · убийств 34000 · погиб от swarm_rat");
     expect(text).toContain("забег дольше, чем прошло по часам сервера; старт не дошёл");
     expect(text).toContain(`Забег ${run.runId}`);
+    expect(text).toContain("только в панели: раздел «Разбор забегов»");
+    expect(text).not.toContain("runs/review");
   });
 
   it("без аккаунта — полный идентификатор: по нему его ещё можно найти", () => {

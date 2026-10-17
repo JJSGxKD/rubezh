@@ -3,8 +3,8 @@ id: T-0080
 title: Колесо — на кнопке бесплатной крутки загрузка идёт до остановки колеса
 epic: E6
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-9 / haiku-5.5 / low
 author: claude-lead2-6
 size: S
 depends_on: []

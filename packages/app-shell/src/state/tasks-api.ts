@@ -1,4 +1,5 @@
 import { z } from "zod/mini";
+import { t } from "../i18n";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
 import { useShell } from "./shell";
 
@@ -37,6 +38,12 @@ const taskSchema = z.object({
   slots: z.optional(z.nullable(z.object({ left: z.number(), total: z.number(), holdUntil: z.nullable(z.string()) }))),
   /** картинка 1:1 партнёрской цели (Р82) — путь от адреса API; сервер до картинок поля не отдавал */
   image: z.optional(z.nullable(z.string())),
+  /** ступень пула ротации — экрану не нужна, сервер до ротации поля не отдавал */
+  tier: z.optional(z.nullable(z.string())),
+  /** оружие, стихия или сложность цели — по ним строится текст; сервер до ротации поля не отдавал */
+  filter: z.optional(
+    z.nullable(z.object({ weapon: z.optional(z.string()), element: z.optional(z.string()), difficulty: z.optional(z.string()) })),
+  ),
 });
 /**
  * Задание рекламной сети (docs/35-stage4-plan.md WP13, часть 6). У AdsGram
@@ -119,6 +126,22 @@ export type TaskReward = z.infer<typeof rewardSchema>;
 export type TaskClaim = z.infer<typeof claimSchema>;
 
 /** Вкладка задания: партнёрские — своей, остальные — по сроку. */
+/**
+ * Аргументы текста цели с фильтром: имя оружия, стихии или сложности из
+ * словарей игры. Нет фильтра — пусто: текст без аргумента не упадёт, а
+ * строка по `title` из каталога его и не спрашивает.
+ */
+export function goalFilterParams(task: Pick<TaskItem, "kind"> & { filter?: TaskItem["filter"] }): Record<string, string> {
+  const filter = task.filter ?? null;
+  if (filter === null) return {};
+  if (task.kind === "weapon_runs" && filter.weapon !== undefined) return { weapon: t(`weapon.${filter.weapon}.name`) };
+  if (task.kind === "element_runs" && filter.element !== undefined) return { element: t(`task.element.${filter.element}`) };
+  if ((task.kind === "difficulty_runs" || task.kind === "difficulty_survive_sec") && filter.difficulty !== undefined) {
+    return { difficulty: t(`difficulty.${filter.difficulty}.name`) };
+  }
+  return {};
+}
+
 export type TaskTab = "daily" | "weekly" | "achievement" | "partner";
 
 export function tabOf(task: Pick<TaskItem, "category" | "period">): TaskTab {

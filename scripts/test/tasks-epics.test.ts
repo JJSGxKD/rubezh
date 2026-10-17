@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { checkEpicCells, epicTasksCell, fixEpicCells } from "../tasks/epics.mjs";
+import { checkEpicCells, epicStreamsBlock, epicTasksCell, fixEpicCells, STREAMS_END, STREAMS_START } from "../tasks/epics.mjs";
 
 // Ячейка «Задачи» в tasks/epics.md — живые значки задач эпика (T-0018).
 
@@ -83,5 +83,49 @@ describe("правка ячеек эпиков", () => {
 
   it("исправный текст не меняется", () => {
     expect(fixEpicCells(epics(E0, E1), TASKS)).toBe(epics(E0, E1));
+  });
+});
+
+// Раздел «Потоки по эпикам» под таблицей: значок, какие потоки запускать для эпика сейчас.
+// В таблице значки широкие и нечитаемы, поэтому — по строке на эпик.
+const STREAMS_URL = "https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status";
+const BOARD = "https://github.com/JJSGxKD/rubezh/blob/task-board/README.md#потоки-сейчас";
+const streamsLine = (title: string, epic: string): string => `- **${title}** — [![потоки](${STREAMS_URL}/epic-${epic}.json)](${BOARD})`;
+const BLOCK = [streamsLine("E0. Процесс", "E0"), streamsLine("E1. Деньги", "E1")].join("\n");
+
+function epicsWithSection(block: string): string {
+  return [epics(E0, E1), "## Потоки по эпикам", "", STREAMS_START, block, STREAMS_END, ""].join("\n");
+}
+
+describe("раздел «Потоки по эпикам»", () => {
+  it("по строке на эпик с задачами, в порядке таблицы; эпик без задач пропускается", () => {
+    expect(epicStreamsBlock(epics(E0, E1), TASKS)).toBe(BLOCK);
+  });
+
+  it("совпадает — ошибок нет", () => {
+    expect(checkEpicCells(epicsWithSection(BLOCK), TASKS)).toEqual([]);
+  });
+
+  it("расхождение — одна ошибка про раздел", () => {
+    const errors = checkEpicCells(epicsWithSection(streamsLine("E0. Процесс", "E0")), TASKS);
+    expect(errors).toEqual(["epics.md: раздел «Потоки по эпикам» не совпадает с реестром, поправит pnpm task fix"]);
+  });
+
+  it("правка ставит раздел между метками и не трогает остальное", () => {
+    const fixed = fixEpicCells(epicsWithSection("старое"), TASKS);
+    expect(fixed).toBe(epicsWithSection(BLOCK));
+    expect(checkEpicCells(fixed, TASKS)).toEqual([]);
+    expect(fixed).toContain("| Цель нулевого | P0 |");
+  });
+
+  it("исправный текст не меняется", () => {
+    const text = epicsWithSection(BLOCK);
+    expect(fixEpicCells(text, TASKS)).toBe(text);
+  });
+
+  it("без меток раздел не требуется и не появляется", () => {
+    const text = epics(E0, E1);
+    expect(checkEpicCells(text, TASKS)).toEqual([]);
+    expect(fixEpicCells(text, TASKS)).toBe(text);
   });
 });

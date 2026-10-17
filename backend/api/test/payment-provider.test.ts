@@ -3,6 +3,7 @@ import { loadAppConfig } from "../src/config/app-config.js";
 import { PaymentConfirmation } from "../src/modules/payments/payment-confirmation.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
+import { PurchaseRevocation } from "../src/modules/payments/purchase-revocation.js";
 import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { PaymentProviderRejectedError, PaymentProviderUnavailableError, PaymentProviders } from "../src/platforms/ports/payment-provider.js";
@@ -58,7 +59,7 @@ describe("когда продажа имеет смысл", () => {
 
   function queue(providers: PaymentProviders): PaymentsQueue {
     const purchases = new MemoryPurchasesRepository();
-    return new PaymentsQueue(config(), new PaymentConfirmation(config(), purchases, providers, switchesOf(config())), new PaymentRefunds(purchases, providers), new RunsHooks(), providers, new PurchaseFulfillment(), purchases);
+    return new PaymentsQueue(config(), new PaymentConfirmation(config(), purchases, providers, switchesOf(config())), new PaymentRefunds(purchases, providers, new PurchaseRevocation()), new RunsHooks(), providers, new PurchaseFulfillment(), purchases);
   }
 
   it("есть площадка, которая сообщит об оплате, — очередь включена", () => {

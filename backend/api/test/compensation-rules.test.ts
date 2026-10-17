@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { TESTER_BONUS, bonusGems, compensationGrantsSchema, grantOfKey } from "../src/modules/wipe/compensation-rules.js";
+import { CONTINUE_RATE, TESTER_BONUS, bonusGems, compensationGrantsSchema, continueGems, grantOfKey } from "../src/modules/wipe/compensation-rules.js";
 
 /**
  * Правила компенсации тестеру (docs/35-stage4-plan.md, Р87, tasks/T-0040):
@@ -103,5 +103,27 @@ describe("схема grants", () => {
   it("не массив — отказ", () => {
     expect(compensationGrantsSchema.safeParse({ purchaseId, resource: "gems", amount: 5 }).success).toBe(false);
     expect(compensationGrantsSchema.safeParse(null).success).toBe(false);
+  });
+});
+
+describe("компенсация второго шанса (T-0042)", () => {
+  it("курс — пара целых «6 самоцветов за 5 звёзд»: дробный множитель дал бы шум округления", () => {
+    expect(CONTINUE_RATE).toEqual({ gems: 6, stars: 5 });
+  });
+
+  it.each([
+    [0, 0],
+    [1, 2],
+    [3, 4],
+    [5, 6],
+    [7, 9],
+    [10, 12],
+    [50, 60],
+  ])("%i ⭐ второго шанса — %i самоцветов, вверх до целого", (stars, gems) => {
+    expect(continueGems(stars)).toBe(gems);
+  });
+
+  it("всегда целое число самоцветов", () => {
+    for (let stars = 0; stars <= 200; stars += 1) expect(Number.isInteger(continueGems(stars))).toBe(true);
   });
 });
