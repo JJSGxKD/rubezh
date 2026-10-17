@@ -45,7 +45,7 @@ describe("входы и правила", () => {
 
   it("порт входа — basePort + слот; на каждый вход правило на свой выход", () => {
     const slots = new Map(nodes.map((source, index) => [source.key, index * 2] as const));
-    const config = buildXrayConfig(nodes, slots, OPTIONS) as {
+    const config = buildXrayConfig(nodes, slots, { ...OPTIONS, slotCount: 16 }) as {
       inbounds: { tag: string; port: number; listen: string }[];
       outbounds: { tag: string }[];
       routing: { rules: { inboundTag: string[]; outboundTag: string }[] };
