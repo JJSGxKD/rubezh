@@ -3,8 +3,8 @@ id: T-0147
 title: Счётчик онлайна — бэкенд: активность, пинг, подсчёт, ключи настроек
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
