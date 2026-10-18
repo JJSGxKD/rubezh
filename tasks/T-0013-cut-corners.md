@@ -3,8 +3,8 @@ id: T-0013
 title: Срезанный угол с рамкой по срезу у главного на экране
 epic: E12
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 size: M
 depends_on: [T-0012, T-0008, T-0010]
 zones:
