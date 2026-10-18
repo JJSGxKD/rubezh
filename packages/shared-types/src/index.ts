@@ -230,6 +230,8 @@ export interface PlatformAdapter {
   sharePreparedMessage?(messageId: string): Promise<InviteResult>;
   /** Текст в буфер обмена средствами площадки; `false` — не дала. Нет метода — буфер браузера. */
   copyText?(text: string): Promise<boolean>;
+  /** Попросить у игрока разрешение, чтобы бот мог ему писать. Нет метода — площадка так не умеет. */
+  requestBotMessages?(): Promise<"allowed" | "declined" | "unavailable">;
   /**
    * Подписанные данные запуска для сервера — в Telegram строка `initData`.
    * Сервер проверяет подпись и узнаёт по ней игрока; `null` — площадка их не
