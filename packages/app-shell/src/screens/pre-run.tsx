@@ -120,6 +120,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
         placement="bottom"
         // Пока идёт покупка, лист не закрывается: списанные бусты остались бы без забега.
         onDismiss={buying ? () => undefined : onClose}
+        pinFooter
         {...(mode === "stress"
           ? {}
           : {
@@ -156,12 +157,11 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
               ),
             })}
       >
-        {/* Прокручивается только содержимое: шапка листа и кнопка «В бой» остаются
-            на месте, а сам лист не уезжает под шапку приложения. Запас — высота
-            шапки Modal, подвала с кнопкой и нижней панели. Боковой запас `-mx-1 px-1`
-            оставляет место кольцу выбранной плитки в крайней колонке, а вбок лист
-            не прокручивается. */}
-        <div className="-mx-1 grid max-h-[max(10rem,calc(100dvh-20rem-var(--app-inset-top)-var(--app-inset-bottom)))] grid-cols-1 gap-1.5 overflow-x-hidden overflow-y-auto overscroll-contain px-1">
+        {/* Содержимое прокручивает сам `Modal`: шапка листа и кнопка «В бой»
+            закреплены (`pinFooter`), а лист не уезжает под шапку приложения.
+            Кольцу выбранной плитки в крайней колонке хватает бокового
+            отступа тела модалки. */}
+        <div className="grid grid-cols-1 gap-1.5">
           {modes.length > 0 ? (
             <SegmentedControl
               size="s"
