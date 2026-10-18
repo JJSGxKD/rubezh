@@ -41,7 +41,7 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
       <p className="-mt-1 mb-2 text-center text-sm text-text-muted short:hidden">
         {t("run.chest.subtitle", { count: chest.rewards.length })}
       </p>
-      <ul className="grid gap-2 short:gap-1.5 landscape:grid-cols-2">
+      <ul className="grid gap-2 short:gap-1 landscape:grid-cols-2">
         {chest.rewards.map((reward, index) => (
           <RewardRow key={`${String(chest.index)}:${String(index)}`} index={index} reward={reward} />
         ))}
@@ -71,7 +71,7 @@ function RewardRow(props: { index: number; reward: ChestReward }): ReactNode {
   const row = { "--row": index } as CSSProperties;
 
   return (
-    <li className="surface-sunken flex items-center gap-3 rounded-md px-3 py-1.5" style={row}>
+    <li className="surface-sunken flex items-center gap-3 rounded-md px-3 py-1.5 short:py-1" style={row}>
       {/* Окно высотой в одну плитку: лента из шести едет вверх и встаёт на награде. */}
       <div className="size-12 shrink-0 overflow-hidden rounded-md" aria-hidden="true">
         <div
