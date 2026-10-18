@@ -145,6 +145,7 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
       title={t("run.levelUp.title", { level: props.level })}
       icon={<Star size={28} fill="currentColor" />}
       size="l"
+      cut
     >
       {/* На невысоком экране подсказка уходит: что выбирать, говорят сами
           карточки, а строка нужна третьей карточке. */}

@@ -38,6 +38,8 @@
   --animate-pop-in: pop-in var(--duration-slow) var(--ease-spring) both;
   --animate-sheet-in: sheet-in var(--duration-slow) var(--ease-out) both;
   --animate-rise-in: rise-in var(--duration-slow) var(--ease-out) both;
+  /* «Барабан» сундука: лента из шести плиток по 3rem встаёт на награде. */
+  --animate-chest-reel: chest-reel var(--duration-slow) var(--ease-out) both;
   --animate-glow: glow 2.4s var(--ease-base) infinite;
   --animate-float: float 3.2s var(--ease-base) infinite;
   --animate-ping-dot: ping-dot 1.6s var(--ease-out) infinite;
@@ -120,6 +122,15 @@
     from {
       opacity: 0;
       transform: translateY(12px);
+    }
+  }
+
+  @keyframes chest-reel {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-15rem);
     }
   }
 
@@ -623,16 +634,26 @@
     var(--color-bg);
 }
 
+/*
+ * Заливки поверхностей — одним значением на прежнюю утилиту и на её срезанный
+ * двойник (`cut-*` ниже): градиент не копируется, и две версии не разойдутся.
+ */
+:root {
+  --fill-card: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface));
+  --fill-card-selected: linear-gradient(180deg, color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised)), var(--color-surface));
+  --fill-panel: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface) 45%);
+  --fill-primary: linear-gradient(180deg, var(--color-accent-glow), var(--color-accent) 48%, var(--color-accent-pressed));
+}
+
 @utility surface-card {
-  background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface));
+  background: var(--fill-card);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
 }
 
 /* Выбранная карточка: кромка акцента и тёплая подложка — плюс значок, цветом одним не передаётся (§4.4). */
 @utility surface-card-selected {
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised)), var(--color-surface));
+  background: var(--fill-card-selected);
   border: 1px solid var(--color-accent);
   box-shadow:
     var(--shadow-card),
@@ -641,7 +662,7 @@
 }
 
 @utility surface-panel {
-  background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface) 45%);
+  background: var(--fill-panel);
   border: 1px solid var(--color-border-strong);
   box-shadow: var(--shadow-panel);
 }
@@ -651,10 +672,67 @@
   box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.6);
 }
 
+/*
+ * Срезанный угол с рамкой по срезу (design/README.md, «Срезанный угол»): два
+ * слоя одного многоугольника — внешний цвета рамки и внутренний с отступом на
+ * её толщину. Внутренний сдвинут на 0,4 px (толщина × (√2 − 1)), чтобы рамка
+ * на диагонали была той же толщины, что на прямых краях. `clip-path` обрезает
+ * `box-shadow`, поэтому у срезанного элемента нет ни тени, ни внешнего свечения.
+ */
+@utility cut-frame {
+  position: relative;
+  isolation: isolate;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+
+@utility cut-fill {
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  clip-path: polygon(
+    calc(var(--cut) - 0.4px) 0,
+    100% 0,
+    100% calc(100% - var(--cut) + 0.4px),
+    calc(100% - var(--cut) + 0.4px) 100%,
+    0 100%,
+    0 calc(var(--cut) - 0.4px)
+  );
+}
+
+/* Цвет рамки — у внешнего слоя, заливка — у внутреннего: пара на каждую поверхность. */
+@utility cut-card {
+  background: var(--color-border);
+  & > .cut-fill {
+    background: var(--fill-card);
+  }
+}
+
+@utility cut-card-selected {
+  background: var(--color-accent);
+  & > .cut-fill {
+    background: var(--fill-card-selected);
+  }
+}
+
+@utility cut-panel {
+  background: var(--color-border-strong);
+  & > .cut-fill {
+    background: var(--fill-panel);
+  }
+}
+
+@utility cut-primary {
+  color: var(--color-on-accent);
+  background: var(--color-accent-edge);
+  & > .cut-fill {
+    background: var(--fill-primary);
+  }
+}
+
 /* Кнопки: заливка сверху светлее, внизу кромка — при нажатии кнопка «проседает». */
 @utility btn-primary {
   color: var(--color-on-accent);
-  background: linear-gradient(180deg, var(--color-accent-glow), var(--color-accent) 48%, var(--color-accent-pressed));
+  background: var(--fill-primary);
   box-shadow:
     inset 0 -4px 0 var(--color-accent-edge),
     inset 0 1px 0 rgb(255 255 255 / 0.5),

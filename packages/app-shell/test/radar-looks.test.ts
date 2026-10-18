@@ -27,7 +27,7 @@ describe("цвета точек радара", () => {
     expect(RADAR_COLORS.medkit).not.toBe(RADAR_COLORS.elite);
   });
 
-  it("все пять цветов попарно различны", () => {
-    expect(new Set(Object.values(RADAR_COLORS)).size).toBe(5);
+  it("все шесть цветов попарно различны", () => {
+    expect(new Set(Object.values(RADAR_COLORS)).size).toBe(6);
   });
 });

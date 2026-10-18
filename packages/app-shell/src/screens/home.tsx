@@ -44,7 +44,7 @@ export function LobbyScreen(): ReactNode {
     <Screen
       footer={
         saved === null ? (
-          <Button size="l" block glow onClick={() => setPreRunOpen(true)}>
+          <Button size="l" block glow cut onClick={() => setPreRunOpen(true)}>
             <Play size={22} fill="currentColor" />
             {t("lobby.play")}
           </Button>
@@ -56,6 +56,7 @@ export function LobbyScreen(): ReactNode {
               size="l"
               block
               glow
+              cut
               onClick={() => {
                 useRun.getState().intend({ kind: "resume", snapshot: saved });
                 navigation.push("run");

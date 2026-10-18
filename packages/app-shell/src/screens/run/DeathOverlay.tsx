@@ -118,6 +118,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       title={result.outcome === "died" ? t("run.death.title") : t("run.death.abandoned")}
       icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
       size="l"
+      cut
       // В портрете кнопки — подвал под прокручиваемой частью, в ландшафте — в
       // правой колонке: «Ещё раз» видна без прокрутки (docs/27-design-system-and-app-shell.md §5.3).
       footer={<div className="grid gap-2 landscape:hidden">{actions}</div>}
