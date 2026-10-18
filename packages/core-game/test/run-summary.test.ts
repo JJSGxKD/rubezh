@@ -29,7 +29,7 @@ const MAX_TICKS = 60 * 480;
  * двадцать врагов приходили так разреженно, что игрок доживал до конца
  * сценария. Эталон — про смерть, а не про то, как долго он не наступает.
  */
-const GOLDEN_POPULATION = 36;
+const GOLDEN_POPULATION = 28;
 
 /**
  * Seed эталона. Подобран так, чтобы забег дожил до полного набора: с тремя
@@ -37,10 +37,10 @@ const GOLDEN_POPULATION = 36;
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
  * аптечку, магнитом с динамитом, появлением нетопырей в смеси и стихийными
- * атаками врагов и заменой стрелка пешими врагами (T-0117). Распределение времени по seed при этом остаётся прежним, поэтому
+ * атаками врагов. Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 21;
+const GOLDEN_SEED = 2;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -172,36 +172,36 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 34.63,
-      level: 9,
-      xpCollected: 138,
-      enemiesKilled: 93,
+      survivalSec: 68.27,
+      level: 13,
+      xpCollected: 291,
+      enemiesKilled: 191,
       killsByEnemy: {
-        swarm_rat: 29,
-        tank_ghoul: 4,
-        bone_walker: 6,
-        mire_shambler: 18,
-        dasher_wolf: 8,
-        circler_crow: 7,
-        bomber_imp: 5,
-        rushing_bats: 15,
-        splitter_slime: 1,
+        swarm_rat: 78,
+        tank_ghoul: 11,
+        shooter_wisp: 22,
+        dasher_wolf: 14,
+        circler_crow: 18,
+        bomber_imp: 15,
+        splitter_slime: 11,
+        rushing_bats: 22,
       },
-      damageDealt: 1710,
-      damageTaken: 106,
+      damageDealt: 2469,
+      damageTaken: 180,
       weapons: [
-        { id: "spark", level: 1, damage: 1027 },
-        { id: "hearth", level: 2, damage: 169 },
-        { id: "sting", level: 1, damage: 514 },
+        { id: "spark", level: 1, damage: 1371 },
+        { id: "wardstone", level: 2, damage: 272 },
+        { id: "sting", level: 2, damage: 826 },
       ],
       passives: [
-        { id: "volley", level: 2 },
-        { id: "reach", level: 1 },
-        { id: "swiftness", level: 2 },
+        { id: "swiftness", level: 3 },
+        { id: "haste", level: 3 },
+        { id: "volley", level: 1 },
+        { id: "mending", level: 1 },
       ],
-      deathCause: "tank_ghoul",
-      distance: 5547,
-      peakEnemies: 38,
+      deathCause: "shooter_wisp",
+      distance: 11815,
+      peakEnemies: 30,
     });
   });
 

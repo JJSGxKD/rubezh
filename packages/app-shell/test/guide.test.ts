@@ -50,7 +50,6 @@ describe("гайдбук", () => {
     expect(regular.filter((id) => id === "mire_shambler")).toHaveLength(1);
     expect(elite.filter((id) => id === "elite_grave_knight")).toHaveLength(1);
     expect(regular).not.toContain("elite_grave_knight");
-    expect(regular).not.toContain("shooter_wisp");
   });
 
   it("говорит, на кого распадается делящийся, с числом из контента или умолчания", () => {

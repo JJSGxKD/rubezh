@@ -31,7 +31,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
     fromSec: 60,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.2 },
-      { enemy: "bone_walker", perSec: 0.5, burst: 4 },
+      { enemy: "shooter_wisp", perSec: 0.3, burst: 2 },
     ],
   },
   {
@@ -50,7 +50,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
     spawns: [
       { enemy: "swarm_rat", perSec: 2.4 },
       { enemy: "circler_crow", perSec: 0.9 },
-      { enemy: "bone_walker", perSec: 0.4 },
+      { enemy: "shooter_wisp", perSec: 0.25 },
       { enemy: "tank_ghoul", perSec: 0.12, burst: 1 },
     ],
   },
@@ -68,7 +68,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
     spawns: [
       { enemy: "swarm_rat", perSec: 2.6 },
       { enemy: "circler_crow", perSec: 1.6 },
-      { enemy: "mire_shambler", perSec: 0.22, burst: 2 },
+      { enemy: "shooter_wisp", perSec: 0.35 },
     ],
     events: [{ kind: "ring", enemy: "circler_crow", count: 16 }],
   },
@@ -91,9 +91,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "rushing_bats", perSec: 1.2 },
       { enemy: "splitter_slime", perSec: 0.3, burst: 2 },
     ],
-    // Рыцарь — вторая элита забега: после первой на 90-й секунде и до кольца
-    // на 300-й (docs/39-retention-mechanics.md §3).
-    events: [{ kind: "flank", enemy: "elite_grave_knight", count: 1 }],
   },
   {
     fromSec: 270,
@@ -101,7 +98,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "swarm_rat", perSec: 2.8 },
       { enemy: "circler_crow", perSec: 1.1 },
       { enemy: "rushing_bats", perSec: 0.8 },
-      { enemy: "mire_shambler", perSec: 0.2 },
+      { enemy: "shooter_wisp", perSec: 0.3 },
       { enemy: "bomber_imp", perSec: 0.45 },
       { enemy: "tank_ghoul", perSec: 0.2 },
     ],
@@ -113,7 +110,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "swarm_rat", perSec: 3 },
       { enemy: "circler_crow", perSec: 1.8 },
       { enemy: "rushing_bats", perSec: 1 },
-      { enemy: "bone_walker", perSec: 0.7 },
+      { enemy: "shooter_wisp", perSec: 0.45 },
       { enemy: "dasher_wolf", perSec: 0.4 },
     ],
     // Первая контрольная точка сложности: элита приходит в назначенную минуту,
@@ -145,11 +142,10 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     "circler_crow",
     "rushing_bats",
     "dasher_wolf",
-    "bone_walker",
+    "shooter_wisp",
     "bomber_imp",
     "splitter_slime",
     "tank_ghoul",
-    "mire_shambler",
   ],
   startTypes: 5,
   typesPerSegment: 1,
@@ -158,7 +154,6 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     { everySegments: 2, kind: "ring", enemy: "circler_crow", count: 20 },
     { everySegments: 3, kind: "flank", enemy: "swarm_rat", count: 20 },
     { everySegments: 4, kind: "ring", enemy: "elite_ghoul", count: 2 },
-    { everySegments: 6, kind: "flank", enemy: "elite_grave_knight", count: 1 },
     { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
     { everySegments: 7, kind: "ring", enemy: "boss_seer", count: 1 },
   ],
