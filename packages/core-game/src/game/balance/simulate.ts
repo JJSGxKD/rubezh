@@ -14,7 +14,7 @@ import { unlocksAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
 import { stepWorld } from "../sim/step";
 import { createWorld, TICK_SEC } from "../sim/world";
-import { createBot, type BotSkill } from "./bot";
+import { createBot, type BotSkill, type DodgingBotOptions } from "./bot";
 
 /**
  * Прогон забега ботом на боевом контенте — вход калибровки баланса
@@ -42,6 +42,8 @@ export interface BalanceRunOptions {
    */
   accountLevel?: number;
   maxSec?: number;
+  /** параметры уклоняющегося бота для замера по сетке; не заданы — `DODGING_BOT_DEFAULTS` */
+  bot?: Partial<DodgingBotOptions>;
 }
 
 export interface BalanceRunResult {
@@ -85,7 +87,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
       : { startingWeaponId: options.startingWeaponId }),
   });
   const director = createTimelineDirector(TIMELINE, ENDLESS_CURVE);
-  const bot = createBot(options.skill);
+  const bot = createBot(options.skill, options.bot);
   const maxTicks = Math.round((options.maxSec ?? DEFAULT_MAX_SEC) / TICK_SEC);
 
   let firstLevelUpSec = 0;
