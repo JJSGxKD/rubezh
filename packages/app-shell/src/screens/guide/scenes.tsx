@@ -165,9 +165,32 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
           <circle cx={r * 0.35} cy={-r * 0.82} r={r * 0.2} fill={hex(WORLD_COLORS.dynamiteSpark)} />
         </>
       );
+    case "chest": {
+      // Те же пропорции, что у текстуры движка (`render/shapes.ts`): тёмный
+      // кант, корпус, более светлая крышка и замок.
+      const edge = hex(WORLD_COLORS.dynamiteBand);
+      return (
+        <>
+          <rect x={-r * 0.95} y={-r * 0.55} width={r * 1.9} height={r * 1.4} rx={r * 0.25} fill={edge} />
+          <rect x={-r * 0.8} y={-r * 0.1} width={r * 1.6} height={r * 0.8} rx={r * 0.15} fill={fill} />
+          <rect x={-r * 0.8} y={-r * 0.45} width={r * 1.6} height={r * 0.5} rx={r * 0.2} fill={lighten(props.color)} />
+          <rect x={-r * 0.8} y={-r * 0.02} width={r * 1.6} height={r * 0.1} fill={edge} />
+          <rect x={-r * 0.18} y={-r * 0.18} width={r * 0.36} height={r * 0.4} rx={r * 0.08} fill={light} />
+        </>
+      );
+    }
     default:
       return <circle r={r} fill={fill} />;
   }
+}
+
+/** Крышка сундука светлее корпуса: каждый канал на треть ближе к белому, как на канве. */
+function lighten(color: number): string {
+  const channel = (shift: number): number => {
+    const value = (color >> shift) & 0xff;
+    return Math.round(value + (255 - value) / 3);
+  };
+  return hex((channel(16) << 16) | (channel(8) << 8) | channel(0));
 }
 
 /** Гранёный кристалл: тело, светлая верхняя грань, тень снизу и искра у ценного. */
@@ -505,7 +528,7 @@ export function WeaponScene(props: { behavior: WeaponBehavior; label: string }):
 }
 
 /** Подбор или кристалл отдельным значком: для списков, без сцены. */
-export function PickupIcon(props: { id: "medkit" | "magnet" | "dynamite"; size?: number }): ReactNode {
+export function PickupIcon(props: { id: "medkit" | "magnet" | "dynamite" | "chest_three"; size?: number }): ReactNode {
   const look = PICKUP_LOOKS.find((entry) => entry.id === props.id) ?? PICKUP_LOOKS[0];
   const size = props.size ?? 40;
   return (

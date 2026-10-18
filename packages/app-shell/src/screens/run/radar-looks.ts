@@ -11,4 +11,7 @@ export const RADAR_COLORS = {
   medkit: COLORS.success,
   magnet: COLORS.xp,
   dynamite: COLORS.warning,
+  // Золото занято элитой и динамитом, зелёное — аптечкой, салатовое — магнитом:
+  // сундук — фиолетовым токеном предметов, и квадратом, а не точкой или ромбом.
+  chest: COLORS.passive,
 } as const;

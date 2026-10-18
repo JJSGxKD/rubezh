@@ -38,6 +38,8 @@
   --animate-pop-in: pop-in var(--duration-slow) var(--ease-spring) both;
   --animate-sheet-in: sheet-in var(--duration-slow) var(--ease-out) both;
   --animate-rise-in: rise-in var(--duration-slow) var(--ease-out) both;
+  /* «Барабан» сундука: лента из шести плиток по 3rem встаёт на награде. */
+  --animate-chest-reel: chest-reel var(--duration-slow) var(--ease-out) both;
   --animate-glow: glow 2.4s var(--ease-base) infinite;
   --animate-float: float 3.2s var(--ease-base) infinite;
   --animate-ping-dot: ping-dot 1.6s var(--ease-out) infinite;
@@ -120,6 +122,15 @@
     from {
       opacity: 0;
       transform: translateY(12px);
+    }
+  }
+
+  @keyframes chest-reel {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-15rem);
     }
   }
 

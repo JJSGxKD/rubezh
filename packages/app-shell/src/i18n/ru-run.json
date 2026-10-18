@@ -1,5 +1,11 @@
 {
   "run.boss.phase": "Фаза {phase}/{phases}",
+  "run.chest.announce": "Получено: {names}",
+  "run.chest.subtitle": "Улучшений: {count}",
+  "run.chest.take": "Забрать",
+  "run.chest.title.1": "Малый сундук",
+  "run.chest.title.3": "Сундук",
+  "run.chest.title.5": "Большой сундук",
   "run.continue.ad": "Продолжить за рекламу",
   "run.continue.ad.short": "Реклама",
   "run.continue.dev": "Продолжить бесплатно — режим разработчика",
