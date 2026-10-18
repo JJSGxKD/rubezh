@@ -84,9 +84,9 @@ describe("симуляция", () => {
 
     // Эталон обновлён вместе со стихийными атаками врагов: состояния на
     // игроке меняют его здоровье и ход, а новое оружие — пул выбора.
-    expect(run.checksum).toBe(-1667484673);
-    expect(run.world.stats.enemiesKilled).toBe(510);
-    expect(run.world.progression.level).toBe(16);
+    expect(run.checksum).toBe(1639302521);
+    expect(run.world.stats.enemiesKilled).toBe(220);
+    expect(run.world.progression.level).toBe(13);
   });
 
   it("расходится на другом seed — иначе seed ни на что не влияет", () => {
