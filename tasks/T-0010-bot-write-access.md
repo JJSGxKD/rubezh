@@ -3,8 +3,8 @@ id: T-0010
 title: Разрешение боту писать — после первого забега и в настройках
 epic: E5
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 size: M
 depends_on: []
 zones:
