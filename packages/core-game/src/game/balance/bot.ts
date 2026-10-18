@@ -73,11 +73,13 @@ export interface DodgingBotOptions {
 }
 
 /**
- * Несовершенство уклоняющегося бота. Значения — наименее несовершенная пара
- * из сетки замера, при которой коридор калибровки держится и на контенте
- * `dev`, и без огонька (docs/32-balance.md §3.2, «Замер по сетке»).
+ * Несовершенство уклоняющегося бота. Пара выбрана по смыслу, а не по лучшей
+ * строке таблицы замера: 18 тиков — 0,3 с, обычная реакция человека на
+ * телефоне, четыре врага — сколько удерживает взгляд в толпе. Таблица шумная
+ * (пять seed на оружие), победителя по ней не выбрать; на контенте `dev` пара
+ * держит коридор (docs/32-balance.md §3.2, «Замер по сетке»).
  */
-export const DODGING_BOT_DEFAULTS: DodgingBotOptions = { reactionTicks: 15, attentionCount: 4 };
+export const DODGING_BOT_DEFAULTS: DodgingBotOptions = { reactionTicks: 18, attentionCount: 4 };
 
 export function createBot(skill: BotSkill, options: Partial<DodgingBotOptions> = {}): Bot {
   if (skill === "passive") return passiveBot();
