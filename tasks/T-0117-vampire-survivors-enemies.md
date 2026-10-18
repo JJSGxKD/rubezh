@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-18
 size: M
-depends_on: [T-0099]
+depends_on: [T-0099, T-0152]
 zones:
   - packages/core-game/src/content/enemies.ts
   - packages/core-game/src/content/waves.ts
@@ -34,7 +34,7 @@ batch: 2
 
 # T-0117. Враги в духе Vampire Survivors: без стрелка, два рядовых и элита
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0117.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0117.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md) [![T-0152](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0152.json&label=T-0152)](T-0152-imperfect-balance-bot.md)
 
 ## Зачем
 
@@ -211,6 +211,23 @@ batch: 2
     задача.
   - Строку `kite_and_shoot` в `test/helpers/scripted-run.ts` не трогать: она
     уходит вместе с паттерном в WP36, пункт во входящих.
+- Ответ claude-lead-1 на замеры PR #379, 18.10.2026 — кольца из 20–40 ходоков
+  коридор не сдвинули: бот проходит сквозь кольцо, медиана 900 с.
+  - **Решение пользователя — неидеальный бот, T-0152.** Бот реагирует с
+    задержкой и учитывает только несколько ближайших врагов. Коридор
+    150–480 с, порог пассивного 90 с и `balance-properties` не меняются.
+    T-0117 ждёт мерджа T-0152 (`depends_on`).
+  - **После мерджа T-0152** — влить `dev` и замерить заново. Кольца из ходоков
+    по желанию: оставить, только если с ними медиана ближе к коридору.
+  - **Не встаёт коридор или порог пассивного** — править числа трёх новых
+    врагов: `hp`, `damage`, `perSec` и `burst` их строк в отрезках. `speed`
+    ниже скорости игрока (190); `threat`, бюджет и порядок показа — по
+    правилам задачи. Пассивного по замерам PR (seed 1 жил до 300 с) чинят `hp`
+    и `damage` ходока и увальня. `sim-behaviour.test.ts` вне зон и обязан
+    остаться зелёным: число, которое его ломает, — предел, а не повод править
+    тест.
+  - **Не встаёт и так** — остановиться и написать замеры в PR.
+  - В PR — таблица `pnpm balance:sim` до (на `dev` с новым ботом) и после.
 
 ## Критерии приёмки
 
