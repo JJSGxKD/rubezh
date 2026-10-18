@@ -81,16 +81,15 @@ export const DODGING_BOT_DEFAULTS: DodgingBotOptions = { reactionTicks: 15, atte
 
 export function createBot(skill: BotSkill, options: Partial<DodgingBotOptions> = {}): Bot {
   if (skill === "passive") return passiveBot();
-  const { reactionTicks, attentionCount } = { ...DODGING_BOT_DEFAULTS, ...options };
-  requirePositiveInteger("reactionTicks", reactionTicks);
-  requirePositiveInteger("attentionCount", attentionCount);
-  return dodgingBot({ reactionTicks, attentionCount });
-}
-
-function requirePositiveInteger(name: string, value: number): void {
-  if (!Number.isInteger(value) || value < 1) {
-    throw new Error(`Бот калибровки: ${name} должен быть целым числом от 1`);
+  const merged: DodgingBotOptions = { ...DODGING_BOT_DEFAULTS, ...options };
+  // Имена полей берутся из самого объекта: так сообщение всегда называет
+  // то поле, которое не прошло проверку.
+  for (const [name, value] of Object.entries(merged)) {
+    if (!Number.isInteger(value) || value < 1) {
+      throw new Error(`Бот калибровки: ${name} должен быть целым числом от 1`);
+    }
   }
+  return dodgingBot(merged);
 }
 
 function passiveBot(): Bot {
