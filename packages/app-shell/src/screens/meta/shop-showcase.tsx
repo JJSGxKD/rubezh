@@ -122,11 +122,16 @@ function RefreshLine(): ReactNode {
 function OfferCard(props: { offer: ShowcaseOffer; index: number; busy: string | null; onBuy: () => void }): ReactNode {
   const { offer } = props;
   const tone = toneOf(offer.rarity);
+  // Рамка карточки — цвет редкости из того же тона, что у плитки; `Card`
+  // своих классов не принимает, поэтому рамка на оболочке.
+  const ring = tone.tile.split(" ").find((name) => name.startsWith("ring-")) ?? "ring-border-strong";
   return (
+    <div className={`flex rounded-lg ring-1 ${ring}`}>
     <Card appearIndex={props.index} disabled={offer.sold}>
       <div className="flex items-start gap-3">
-        <span aria-hidden="true" className={`inline-flex size-12 shrink-0 items-center justify-center rounded-lg ring-2 ${tone.tile}`}>
+        <span aria-hidden="true" className={`relative inline-flex size-[52px] shrink-0 items-center justify-center rounded-lg ring-2 ${tone.tile}`}>
           {slotIcon(offer.slot, 24)}
+          <span className="absolute inset-x-0 bottom-0.5 text-center font-display text-[10px] leading-none font-bold tabular-nums">{offer.level}</span>
         </span>
         <div className="min-w-0 flex-1">
           <p className={`font-display text-sm font-bold ${tone.text}`}>{itemLabel(offer)}</p>
@@ -152,7 +157,7 @@ function OfferCard(props: { offer: ShowcaseOffer; index: number; busy: string | 
         <div className="mt-3">
           <Button
             block
-            variant="secondary"
+            size="s"
             disabled={props.busy !== null}
             loading={props.busy === offer.offerId}
             ariaLabel={t("showcase.buy", { gems: formatNumber(offer.gems), n: offer.gems })}
@@ -164,5 +169,6 @@ function OfferCard(props: { offer: ShowcaseOffer; index: number; busy: string | 
         </div>
       )}
     </Card>
+    </div>
   );
 }
