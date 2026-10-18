@@ -3,8 +3,8 @@ id: T-0152
 title: Бот калибровки с задержкой реакции и ограниченным вниманием
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
