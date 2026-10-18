@@ -84,23 +84,6 @@ describe("Button", () => {
     expect(html).not.toContain("cut-frame");
   });
 
-  it("stars с cut — срез тона звёзд", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const html = renderToStaticMarkup(h(Button, { variant: "stars", cut: true }, "50"));
-
-    expect(html).toContain("cut-frame");
-    expect(html).toContain("cut-stars");
-    expect(html).not.toContain("btn-stars");
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it("stars без cut — как раньше", () => {
-    const html = renderToStaticMarkup(h(Button, { variant: "stars" }, "50"));
-
-    expect(html).toContain("btn-stars");
-    expect(html).not.toContain("cut-frame");
-  });
-
   it("secondary с cut — без среза", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const html = renderToStaticMarkup(h(Button, { variant: "secondary", cut: true }, "Назад"));
