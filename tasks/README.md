@@ -535,7 +535,7 @@ PR принимается, если выполнено всё:
 | `backend/api/src/modules/settings/setting-catalog.ts` | новый ключ — строкой в своей группе |
 | `apps/web-telegram/vite.config.ts` | префикс прокси — одна строка |
 | `packages/app-shell/src/i18n/ru.json` | новые экраны строк сюда **не добавляют**: у экрана свой ленивый словарь (`i18n/account.ts` — образец) |
-| `scripts/bundle-budget.mjs` | порог поднимают только тимлиды, и только если спецификация это разрешает |
+| `scripts/bundle-budget.mjs` | пороги с запасом около пятой части поднимают только тимлиды, отдельным PR (`docs/27-design-system-and-app-shell.md` §3.4) |
 | `docs/30-configuration-map.md`, `docs/21-diagrams.md` | строки своей задачи — в конец таблицы своей темы; сущности ER — в конец блока `erDiagram` |
 | `CLAUDE.md`, `README.md` | только строка, которую называет спецификация |
 | `pnpm-lock.yaml` | конфликт **не решается руками**: после перебазирования `pnpm install`, и в коммит идёт то, что он записал |
