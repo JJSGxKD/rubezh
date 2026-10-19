@@ -18,7 +18,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 3
+batch: 1
 ---
 
 # T-0154. Политика источников пускает цепочки SDK рекламы и Google Fonts
