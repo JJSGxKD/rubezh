@@ -4,7 +4,6 @@ import { readSnapshotCounters } from "@bh/core-game";
 import { useDevMode } from "./dev-mode";
 import { useMeta } from "./meta";
 import { currentScreen, useNavigation } from "./navigation";
-import { outcomeFields } from "./run";
 import { takeIncompatibleRun, type SavedRun } from "./run-save";
 import { useRuns } from "./runs";
 import { track } from "./shell";
@@ -99,7 +98,7 @@ export function settleInterruptedRun(): void {
   // Рекорд на устройстве; на сервер этот итог не идёт — там уже своя запись.
   const result = resultOf(saved, { survivalSec, level, enemiesKilled, xpCollected });
   const isNewRecord = useMeta.getState().submitRun(result, countInRating);
-  track("run_abandoned", { ...outcomeFields(result, isNewRecord), interrupted: "update" });
+  track("run_abandoned", abandonedFields(result, isNewRecord));
 
   useInterruptedNotice.setState({ notice: { survivalSec, level } });
   waitForLobby();
@@ -157,6 +156,29 @@ function resultOf(
     peakEnemies: 0,
     cheats: saved.cheats === true,
     continues: [],
+  };
+}
+
+/**
+ * Поля `run_abandoned` (docs/22-analytics-and-metrics.md §3.3). Набор тот же,
+ * что у обычного исхода (`outcomeFields` в `state/run.ts`), без полей, которых у
+ * сохранения нет: продолжений и урона по стихиям. `wave` — 0: отрезок
+ * таймлайна в сохранении не записан.
+ */
+function abandonedFields(result: RunResult, isNewRecord: boolean): Record<string, string | number | boolean> {
+  return {
+    seed: result.seed,
+    survivalSec: Math.round(result.survivalSec),
+    level: result.level,
+    wave: result.waveReached,
+    enemiesKilled: result.enemiesKilled,
+    weapon: result.startingWeaponId,
+    map: result.mapId,
+    difficulty: result.difficultyId,
+    contentHash: result.contentHash,
+    isNewRecord,
+    cheats: result.cheats,
+    interrupted: "update",
   };
 }
 

@@ -716,8 +716,7 @@ function countsInRating(get: GetState): boolean {
   return get().devRun && useDevMode.getState().settings.countInRating;
 }
 
-/** Поля события об исходе забега; их же шлёт засчёт забега, прерванного обновлением. */
-export function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, string | number | boolean> {
+function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, string | number | boolean> {
   return {
     seed: result.seed,
     survivalSec: Math.round(result.survivalSec),
