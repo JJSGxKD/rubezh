@@ -3,8 +3,8 @@ id: T-0117
 title: Враги в духе Vampire Survivors: два рядовых и элита
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-18
 size: M
 depends_on: [T-0099]

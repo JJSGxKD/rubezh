@@ -34,6 +34,13 @@ export const ENEMIES: EnemyDef[] = [
   // Огонёк стреляет огнём, но через раз: снаряды летят часто, и горение с
   // каждого сделало бы стрелка вдвое опаснее.
   { id: "shooter_wisp", hp: 12, speed: 40, damage: 5, xp: 3, threat: 3, pattern: "kite_and_shoot", resist: { fire: 0.5, cold: -0.5 }, element: "fire", statusChance: 0.5 },
+  // Ходок идёт широкими дугами и тянется за игроком колонной: он не бросается
+  // напрямик, как крыса, а поэтому его строй приходится разрывать, а не
+  // обегать. Бьёт физически: рою стихию атаки не дают.
+  { id: "bone_walker", hp: 9, speed: 78, damage: 4, xp: 2, threat: 2, pattern: "chase", params: { steeringPerSec: 1.2 } },
+  // Увалень — медленный бульдозер напрямик. К огню стоек, к молнии уязвим: у
+  // стойкого врага всегда пара (docs/32-balance.md §2.5).
+  { id: "mire_shambler", hp: 34, speed: 26, damage: 7, xp: 5, threat: 5, pattern: "swarm", resist: { fire: 0.4, lightning: -0.4 } },
   // Волк морозит: замедление после рывка — вторая причина от него уходить.
   { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, xp: 3, threat: 3, pattern: "dash", resist: { cold: 0.4, fire: -0.25 }, element: "cold" },
   // Вороны берут числом и теснотой кольца: приходят стаей, заходят широко и
@@ -94,6 +101,21 @@ export const ENEMIES: EnemyDef[] = [
     pattern: "chase",
     params: { steeringPerSec: 2.4 },
     resist: { fire: -0.3, cold: 0.4 },
+  },
+  // Рыцарь выходит с фланга, мигает и таранит: у рывка есть телеграф, и на
+  // элите крупнее он читается лучше, чем у рядового волка. Стихии атаки нет —
+  // страшен сам таран.
+  {
+    id: "elite_grave_knight",
+    hp: 320,
+    speed: 46,
+    damage: 18,
+    xp: 30,
+    threat: 34,
+    rank: "elite",
+    pattern: "dash",
+    params: { triggerDistance: 260, telegraphSec: 0.7, dashSpeed: 340, dashDurationSec: 0.8, recoverSec: 1.4 },
+    resist: { poison: 0.5, fire: -0.4 },
   },
   // Кастер держится в стороне и бьёт по площади: кольцо, веер или ползущая
   // стена — какое заклинание пойдёт следующим, не угадать. Чем меньше у него
