@@ -215,10 +215,14 @@ export function GemPackTile(props: { item: ShopItem; index: number; busy: string
   const stars = price.stars;
   const best = item.badge === "best";
   return (
-    // «Лучшая цена» выделена рамкой и свечением акцента, а не полосой слева;
-    // оболочка нужна затем, что у `Card` нет своего класса.
-    <div className={["flex rounded-lg", best ? "shadow-[0_0_22px_-10px] shadow-accent ring-1 ring-accent/55" : ""].join(" ")}>
-    <Card appearIndex={props.index} compact>
+    // «Лучшая цена» выделена рамкой и свечением акцента, а не полосой слева.
+    // Рамка и появление — на оболочке: у `Card` нет своего класса, а карточка
+    // не должна въезжать в уже стоящую на месте рамку.
+    <div
+      className={["flex animate-rise-in rounded-lg", best ? "shadow-[0_0_22px_-10px] shadow-accent ring-1 ring-accent/55" : ""].join(" ")}
+      style={staggerStyle(props.index)}
+    >
+    <Card compact>
       {badge === null ? null : (
         <span className="absolute top-2 left-2">
           <Badge tone={item.badge === "best" ? "accent" : "warning"}>{badge}</Badge>

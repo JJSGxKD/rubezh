@@ -126,8 +126,10 @@ function OfferCard(props: { offer: ShowcaseOffer; index: number; busy: string | 
   // своих классов не принимает, поэтому рамка на оболочке.
   const ring = tone.tile.split(" ").find((name) => name.startsWith("ring-")) ?? "ring-border-strong";
   return (
-    <div className={`flex rounded-lg ring-1 ${ring}`}>
-    <Card appearIndex={props.index} disabled={offer.sold}>
+    // Появление и приглушение проданной — тоже на оболочке: рамка редкости
+    // въезжает и гаснет вместе с карточкой.
+    <div className={`flex animate-rise-in rounded-lg ring-1 ${ring} ${offer.sold ? "opacity-60" : ""}`} style={staggerStyle(props.index)}>
+    <Card>
       <div className="flex items-start gap-3">
         <span aria-hidden="true" className={`relative inline-flex size-[52px] shrink-0 items-center justify-center rounded-lg ring-2 ${tone.tile}`}>
           {slotIcon(offer.slot, 24)}
