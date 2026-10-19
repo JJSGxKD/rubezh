@@ -3,7 +3,7 @@ id: T-0083
 title: `Modal`: закреплённый подвал при прокручиваемом теле
 epic: E6
 priority: P2
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-7
 size: S
