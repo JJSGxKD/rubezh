@@ -3,8 +3,8 @@ id: T-0101
 title: Переброс, пропуск и изгнание карточек на выборе улучшения
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-14
 size: M
 depends_on: [T-0099]
