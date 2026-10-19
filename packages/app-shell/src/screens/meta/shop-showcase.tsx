@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
-import { Badge, Button, Card, ErrorState, Modal, SectionTitle } from "../../design-system/components";
+import { Badge, Button, Card, ErrorState, Modal, SectionTitle, staggerStyle } from "../../design-system/components";
 import { GemIcon } from "../../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/arsenal";
