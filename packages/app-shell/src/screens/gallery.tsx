@@ -56,7 +56,7 @@ export function GalleryScreen(): ReactNode {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [segment, setSegment] = useState("daily");
   const [difficultySegment, setDifficultySegment] = useState("normal");
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState<"long" | "pinned" | null>(null);
   const [adResult, setAdResult] = useState<CreativeResult["kind"] | null>(null);
 
   // Блок — тем же путём, что в игре: свой корень поверх приложения, «Назад» и Esc — через стек.
@@ -89,7 +89,8 @@ export function GalleryScreen(): ReactNode {
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
         <ListGroup>
-          <ListItem title={t("gallery.modal.long")} hint={t("gallery.modal.longHint")} onClick={() => setSheet(true)} />
+          <ListItem title={t("gallery.modal.long")} hint={t("gallery.modal.longHint")} onClick={() => setSheet("long")} />
+          <ListItem title={t("gallery.modal.pinned")} hint={t("gallery.modal.pinnedHint")} onClick={() => setSheet("pinned")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.ads")}</SectionTitle>
@@ -239,7 +240,7 @@ export function GalleryScreen(): ReactNode {
         <StubScreen icon={<Star size={36} />} title="Заглушка раздела" text={t("stub.soon")} />
         <StubNotice text={t("reward.stub")} />
       </ContentColumn>
-      {sheet ? <ModalsPreview onClose={() => setSheet(false)} /> : null}
+      {sheet !== null ? <ModalsPreview pinFooter={sheet === "pinned"} onClose={() => setSheet(null)} /> : null}
     </Screen>
   );
 }
@@ -275,14 +276,15 @@ function demoAd(): AdCreative {
  * сверху, и вторая модалка поверх него. «Назад» и Esc закрывают верхнюю,
  * лист под ней остаётся.
  */
-function ModalsPreview(props: { onClose(): void }): ReactNode {
+function ModalsPreview(props: { pinFooter: boolean; onClose(): void }): ReactNode {
   const [nested, setNested] = useState(false);
   return (
     <>
       <Modal
-        title={t("gallery.modal.long")}
+        title={t(props.pinFooter ? "gallery.modal.pinned" : "gallery.modal.long")}
         placement="bottom"
         onDismiss={props.onClose}
+        pinFooter={props.pinFooter}
         footer={
           <Button block onClick={() => setNested(true)}>
             {t("gallery.modal.nested")}

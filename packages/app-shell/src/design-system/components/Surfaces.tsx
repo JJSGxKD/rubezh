@@ -6,6 +6,7 @@ import { uiFeedback } from "../../state/ui-feedback";
 import { Button, IconButton } from "./Button";
 import { CutFrame } from "./CutFrame";
 import { Badge } from "./Data";
+import { modalFooterPlacement } from "./modal-rules";
 
 /**
  * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
@@ -128,6 +129,12 @@ export interface ModalProps {
   icon?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /**
+   * Подвал не прокручивается с телом, а закреплён под ним: на длинном листе
+   * прокручивается только середина, шапка и подвал на месте. Без `footer` не
+   * действует. Выключено по умолчанию — модалки забега тесные (§5.3).
+   */
+  pinFooter?: boolean;
   /** снизу — лист подтверждения, по центру — модалка забега */
   placement?: "center" | "bottom";
   /** широкая — для трёх карточек в ряд в ландшафте (§5.3) */
@@ -164,6 +171,7 @@ export function Modal(props: ModalProps): ReactNode {
   // значок у них — сам предмет, и разносить его с названием нельзя. Тогда в
   // шапке только крестик.
   const headerTitle = closable && props.icon === undefined;
+  const footerPlacement = modalFooterPlacement({ hasFooter: props.footer !== undefined, pinFooter: props.pinFooter === true });
 
   return (
     <div
@@ -199,7 +207,8 @@ export function Modal(props: ModalProps): ReactNode {
         ) : null}
         <div
           className={[
-            "min-h-0 overflow-y-auto overscroll-contain px-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4",
+            "min-h-0 overflow-y-auto overscroll-contain px-5 short:px-4 landscape:px-4",
+            footerPlacement === "pinned" ? "" : "pb-5 short:pb-4 landscape:pb-4",
             closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
           ].join(" ")}
         >
@@ -222,8 +231,11 @@ export function Modal(props: ModalProps): ReactNode {
             </h2>
           )}
           {props.children}
-          {props.footer === undefined ? null : <div className="mt-5 grid gap-2">{props.footer}</div>}
+          {footerPlacement === "scroll" ? <div className="mt-5 grid gap-2">{props.footer}</div> : null}
         </div>
+        {footerPlacement === "pinned" ? (
+          <div className="grid shrink-0 gap-2 px-5 pt-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4">{props.footer}</div>
+        ) : null}
       </Panel>
     </div>
   );
