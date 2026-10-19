@@ -13,8 +13,10 @@ import { reportError, useShell } from "./shell";
  * лобби появляется «Продолжить». Сохранение одно — забег у игрока тоже один.
  *
  * Снимок годится только для той версии контента и формата, на которой снят:
- * после обновления игры числа врагов и оружия другие, и такое сохранение
- * молча удаляется, а не продолжается криво.
+ * после обновления игры числа врагов и оружия другие, и такое сохранение не
+ * продолжается криво. Но и не пропадает молча: пока забег не засчитан, запись
+ * лежит на устройстве, а `settleInterruptedRun` (`run-interrupted.ts`) забирает
+ * её через `takeIncompatibleRun` и отправляет брошенным забегом.
  */
 const SAVE_KEY = "bh.run.v1.save";
 
@@ -33,6 +35,10 @@ const savedRunSchema = z.object({
     level: z.number(),
     weapons: z.array(slotSchema),
     passives: z.array(slotSchema),
+    // Счётчики есть у снимков этой сборки и новее; у прошлой их нет — тогда
+    // убийства читаются из тела мира (`readSnapshotCounters`).
+    enemiesKilled: z.optional(z.number()),
+    xpCollected: z.optional(z.number()),
   }),
   // Состояние мира проверяет сам движок: его формат знает только он.
   world: z.unknown(),
@@ -58,12 +64,9 @@ export const useSavedRun = create<SavedRunStore>((set) => ({
 
   hydrate(): void {
     const stored = value().read();
-    if (stored !== null && !isResumable(stored)) {
-      value().write(null);
-      set({ saved: null });
-      return;
-    }
-    set({ saved: stored });
+    // Несовместимое сохранение не предлагается к продолжению, но и не стирается:
+    // его заберёт `settleInterruptedRun`, а пока забег не засчитан, он единственный.
+    set({ saved: stored !== null && !isResumable(stored) ? null : stored });
   },
 
   save(snapshot): void {
@@ -78,6 +81,18 @@ export const useSavedRun = create<SavedRunStore>((set) => ({
     set({ saved: null });
   },
 }));
+
+/**
+ * Забрать сохранение, которое на этой сборке не продолжается (другой формат
+ * или контент): запись стирается, а то, что в ней было, возвращается тому, кто
+ * засчитает забег. Совместимое сохранение не трогается — `null`.
+ */
+export function takeIncompatibleRun(): SavedRun | null {
+  const stored = value().read();
+  if (stored === null || isResumable(stored)) return null;
+  value().write(null);
+  return stored;
+}
 
 /** Можно ли продолжить сохранение на этой сборке. */
 export function isResumable(saved: Pick<RunSnapshot, "format" | "contentHash">): boolean {
