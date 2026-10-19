@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CHESTS } from "../src/content/chests";
 import { findDifficulty } from "../src/content/difficulty";
@@ -8,7 +9,9 @@ import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
 import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
-import { captureWorld, restoreWorld, SnapshotError } from "../src/game/run/snapshot";
+import { captureWorld, restoreWorld, SnapshotError, WORLD_SNAPSHOT_VERSION } from "../src/game/run/snapshot";
+import { RUN_SNAPSHOT_FORMAT } from "../src/run-api";
+import { readSnapshotCounters } from "../src/snapshot-counters";
 import { dropChest, openChest } from "../src/game/sim/chests";
 import { createTimelineDirector } from "../src/game/sim/director";
 import type { Spawner } from "../src/game/sim/spawner";
@@ -220,5 +223,33 @@ describe("снимок забега", () => {
     expect(() => restoreWorld(newRun(1).world, newRun(1).director, brokenArray)).toThrow(SnapshotError);
 
     expect(() => restoreWorld(newRun(1).world, newRun(1).director, "мусор")).toThrow(SnapshotError);
+  });
+});
+
+describe("счётчики в сводке снимка (tasks/T-0163)", () => {
+  it("тело снимка читается теми же счётчиками, что у мира", () => {
+    const run = newRun(5);
+    advance(run, 20 * 60);
+    expect(run.world.stats.enemiesKilled).toBeGreaterThan(0);
+
+    expect(readSnapshotCounters(roundTrip(run))).toEqual({
+      enemiesKilled: run.world.stats.enemiesKilled,
+      xpCollected: run.world.stats.xpCollected,
+    });
+  });
+
+  it("captureSnapshot кладёт в summary убийства и опыт мира", () => {
+    // Сцена Phaser в тесте не поднимается: сводку собирает одно выражение в
+    // `MainScene.captureSnapshot`, и проверяется оно по исходнику.
+    const source = readFileSync(new URL("../src/game/MainScene.ts", import.meta.url), "utf8");
+    const summary = /summary:\s*\{[^}]*\}/.exec(source)?.[0] ?? "";
+
+    expect(summary).toContain("enemiesKilled: world.stats.enemiesKilled");
+    expect(summary).toContain("xpCollected: world.stats.xpCollected");
+  });
+
+  it("поле необязательное, поэтому формат снимка и мира прежний", () => {
+    expect(RUN_SNAPSHOT_FORMAT).toBe(7);
+    expect(WORLD_SNAPSHOT_VERSION).toBe(8);
   });
 });

@@ -26,7 +26,7 @@ vi.mock("@bh/core-game", async (importOriginal) => ({
 }));
 
 const { useRun } = await import("../src/state/run");
-const { useSavedRun } = await import("../src/state/run-save");
+const { takeIncompatibleRun, useSavedRun } = await import("../src/state/run-save");
 const { initShell } = await import("../src/state/shell");
 
 const SAVE_KEY = "bh.run.v1.save";
@@ -167,14 +167,40 @@ describe("сохранение прерванного забега", () => {
     expect(useSavedRun.getState().saved?.runId).toBe("run-1");
   });
 
-  it("не предлагает продолжить забег, снятый на другой версии контента или формата", () => {
+  it("не предлагает продолжить забег, снятый на другой версии контента или формата, но и не стирает его", () => {
     storage.set(SAVE_KEY, JSON.stringify({ ...snapshot({ contentHash: "old" }), savedAt: 1 }));
     useSavedRun.getState().hydrate();
     expect(useSavedRun.getState().saved).toBeNull();
+    // Запись ждёт `settleInterruptedRun`: пока забег не засчитан, стирать нельзя.
+    expect(storage.get(SAVE_KEY)).not.toBeNull();
 
     storage.set(SAVE_KEY, JSON.stringify({ ...snapshot({ format: RUN_SNAPSHOT_FORMAT + 1 }), savedAt: 1 }));
     useSavedRun.getState().hydrate();
     expect(useSavedRun.getState().saved).toBeNull();
+    expect(storage.get(SAVE_KEY)).not.toBeNull();
+  });
+
+  it("takeIncompatibleRun отдаёт несовместимое сохранение и стирает его, совместимое не трогает", () => {
+    storage.set(SAVE_KEY, JSON.stringify({ ...snapshot({ contentHash: "old" }), savedAt: 1 }));
+    const taken = takeIncompatibleRun();
+    expect(taken?.contentHash).toBe("old");
+    expect(storage.get(SAVE_KEY)).toBeNull();
+    expect(takeIncompatibleRun()).toBeNull();
+
+    storage.set(SAVE_KEY, JSON.stringify({ ...snapshot(), savedAt: 1 }));
+    expect(takeIncompatibleRun()).toBeNull();
+    expect(storage.get(SAVE_KEY)).not.toBeNull();
+  });
+
+  it("схема сохранения принимает summary со счётчиками и без них", () => {
+    const withCounters = { ...snapshot(), summary: { ...snapshot().summary, enemiesKilled: 12, xpCollected: 34 }, savedAt: 1 };
+    storage.set(SAVE_KEY, JSON.stringify(withCounters));
+    useSavedRun.getState().hydrate();
+    expect(useSavedRun.getState().saved?.summary).toMatchObject({ enemiesKilled: 12, xpCollected: 34 });
+
+    storage.set(SAVE_KEY, JSON.stringify({ ...snapshot(), savedAt: 1 }));
+    useSavedRun.getState().hydrate();
+    expect(useSavedRun.getState().saved?.runId).toBe("run-1");
   });
 
   it("новый забег занимает место сохранения, продолженный — нет", async () => {
