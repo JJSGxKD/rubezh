@@ -159,9 +159,9 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
       >
         {/* Содержимое прокручивает сам `Modal`: шапка листа и кнопка «В бой»
             закреплены (`pinFooter`), а лист не уезжает под шапку приложения.
-            Кольцу выбранной плитки в крайней колонке хватает бокового
-            отступа тела модалки. */}
-        <div className="grid grid-cols-1 gap-1.5">
+            Боковой запас `-mx-1 px-1` оставляет место кольцу выбранной плитки
+            в крайней колонке, а вбок лист не прокручивается. */}
+        <div className="-mx-1 grid grid-cols-1 gap-1.5 overflow-x-hidden px-1">
           {modes.length > 0 ? (
             <SegmentedControl
               size="s"
