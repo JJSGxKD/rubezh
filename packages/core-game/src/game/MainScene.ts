@@ -17,6 +17,7 @@ import {
 import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
 import { inspectWorld } from "./run/inspect";
+import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { isEmptyLoadout } from "./progression/run-loadout";
@@ -412,6 +413,46 @@ export class MainScene extends Phaser.Scene {
     this.sceneData.bus.emit("resumed", { elapsedSec: this.world.stats.elapsedSec });
   }
 
+  /** Переброс карточек: заменить все предложенные новыми (`progression/card-tools.ts`). */
+  rerollOffers(): void {
+    this.applyCardToolCommand(REROLL_COMMAND);
+  }
+
+  /** Пропуск уровня: без улучшения, за долю опыта до следующего. */
+  skipOffers(): void {
+    this.applyCardToolCommand(SKIP_COMMAND);
+  }
+
+  /** Изгнание: предмет карточки пропадает из забега, на его место встаёт новая. */
+  banishOffer(optionId: string): void {
+    this.applyCardToolCommand(`${BANISH_PREFIX}${optionId}`);
+  }
+
+  /**
+   * Общий путь трёх действий. Команда приходит из интерфейса, поэтому мир её
+   * проверяет сам; невозможная — тихий выход, как у неизвестного выбора. Действие
+   * — часть лога ввода: на этом тике повтор применит ту же команду.
+   */
+  private applyCardToolCommand(command: string): void {
+    if (this.phase !== "choosing") return;
+    const level = this.world.progression.level;
+    const outcome = applyCardTool(this.world, command);
+    if (outcome === null) return;
+    this.probe.choice(this.world, command);
+    this.sceneData.bus.emit("cardTool", {
+      kind: outcome.kind,
+      left: outcome.left,
+      level,
+      ...(outcome.item === null ? {} : { item: outcome.item }),
+    });
+    if (outcome.kind === "skip") {
+      this.finishChoice();
+      return;
+    }
+    this.emitHud();
+    this.emitLevelUp(true);
+  }
+
   /**
    * Закрыть окно сундука. Награды выданы ещё при открытии, поэтому здесь
    * только возврат в забег — или к выбору уровня, если сундук его набрал.
@@ -661,9 +702,9 @@ export class MainScene extends Phaser.Scene {
     this.emitLevelUp();
   }
 
-  private emitLevelUp(): void {
+  private emitLevelUp(refreshed = false): void {
     const progression = this.world.progression;
-    this.probe.event(this.world, "level", progression.level);
+    if (!refreshed) this.probe.event(this.world, "level", progression.level);
     this.probe.event(this.world, "offer", progression.offers.map((offer) => offer.id).join(","));
     this.sceneData.bus.emit("levelUp", {
       level: progression.level,
@@ -671,6 +712,10 @@ export class MainScene extends Phaser.Scene {
       // Сколько уровней ещё ждёт выбора: игрок должен понимать, что экран
       // откроется снова, а не гадать (docs/26-stage2-plan.md, WP2).
       queued: Math.max(0, progression.pendingLevelUps - 1),
+      tools: { ...progression.tools },
+      toolsTotal: { ...progression.toolsTotal },
+      canReroll: canReroll(this.world),
+      refreshed,
     });
   }
 

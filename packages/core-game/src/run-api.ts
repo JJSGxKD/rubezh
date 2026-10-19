@@ -1,4 +1,4 @@
-import type { ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -335,7 +335,25 @@ export interface RunEvents {
   /** начался новый отрезок таймлайна спавна — `wave_reached` в аналитике */
   waveReached: { index: number; elapsedSec: number };
   /** набран уровень: мир стоит, пока оболочка не вернёт выбор */
-  levelUp: { level: number; options: UpgradeOption[]; queued: number };
+  levelUp: {
+    level: number;
+    options: UpgradeOption[];
+    queued: number;
+    /** зарядов переброса, пропуска и изгнания осталось */
+    tools: CardTools;
+    /** зарядов выдано на забег: кнопки вида, которого нет за весь забег, не рисуются */
+    toolsTotal: CardTools;
+    /** сработает ли переброс прямо сейчас — есть ли чем заменить карточки */
+    canReroll: boolean;
+    /** карточки заменены на том же уровне (переброс, изгнание), а не набран новый */
+    refreshed: boolean;
+  };
+  /**
+   * Игрок применил действие с карточками и оно сработало. `left` — зарядов
+   * этого вида осталось, `item` — изгнанный предмет (`weapon:<id>` /
+   * `passive:<id>`), у остальных действий его нет.
+   */
+  cardTool: { kind: keyof CardTools; left: number; level: number; item?: string };
   /** выпал сундук: `index` с нуля, `size` — сколько улучшений в нём */
   chestFound: { index: number; size: ChestSize; source: ChestSource; elapsedSec: number };
   /**
@@ -545,6 +563,12 @@ export interface RunContinueOptions {
 export interface RunSession {
   on<E extends keyof RunEvents>(event: E, handler: (payload: RunEvents[E]) => void): () => void;
   chooseUpgrade(optionId: string): void;
+  /** заменить все карточки на новые; без заряда или без альтернатив — ничего */
+  rerollOffers(): void;
+  /** взять уровень без улучшения за долю опыта до следующего */
+  skipOffers(): void;
+  /** убрать предмет карточки из забега насовсем; лечение изгнать нельзя */
+  banishOffer(optionId: string): void;
   /**
    * Закрыть окно сундука при `pauseOnChest`: забег идёт дальше или, если
    * набран уровень, переходит к выбору улучшения. Вне окна сундука — ничего.
