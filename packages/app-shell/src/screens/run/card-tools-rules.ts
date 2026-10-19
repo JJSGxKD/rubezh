@@ -53,7 +53,10 @@ export function toolButtons(input: ToolButtonsInput): ToolButton[] {
 export type CardTapAction = "choose" | "banish" | "ignore";
 
 /** Что делает тап по карточке: выбор, изгнание в режиме изгнания или ничего. */
-export function cardTapAction(mode: "choose" | "banish", offer: UpgradeOption): CardTapAction {
+export function cardTapAction(
+  mode: "choose" | "banish",
+  offer: UpgradeOption,
+): CardTapAction {
   if (mode === "choose") return "choose";
   return offer.kind === "heal" ? "ignore" : "banish";
 }
