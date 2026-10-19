@@ -2,6 +2,7 @@ import { Global, Module } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../config/app-config.js";
 import { SETTINGS_READER, type SettingsReader } from "../modules/settings/settings.service.js";
 import { AppLinks } from "./ports/app-links.js";
+import { BotMentions } from "./ports/bot-mention.js";
 import { ChannelMemberships } from "./ports/channel-membership.js";
 import { LaunchVerifiers } from "./ports/launch-verifier.js";
 import { Messengers } from "./ports/messenger.js";
@@ -12,6 +13,7 @@ import { BotIdentity } from "./telegram/bot-identity.js";
 import { TelegramAppLinks } from "./telegram/telegram-app-links.js";
 import { SettingsLinkOrigin } from "./telegram/settings-link-origin.js";
 import { TELEGRAM_LINK_ORIGIN, fixedLinkOrigin, type LinkOrigin } from "./telegram/telegram-link-format.js";
+import { TelegramBotMention } from "./telegram/telegram-bot-mention.js";
 import { TelegramChannelMembership, type MembershipBotApi } from "./telegram/telegram-channel-membership.js";
 import { TelegramStarsProvider } from "./telegram/telegram-stars-provider.js";
 import { TelegramLaunchVerifier } from "./telegram/telegram-launch-verifier.js";
@@ -43,6 +45,11 @@ export function channelMembershipsFor(config: AppConfig, telegramApi: Membership
   return new ChannelMemberships([new TelegramChannelMembership(telegramApi, config.telegram.botToken !== "")]);
 }
 
+/** Юзернейм бота в имени и bio (Р110): пока только Telegram — у MAX и VK такой возможности нет, заданий там нет. */
+export function botMentionsFor(config: AppConfig, telegramApi: TelegramBotApi, identity: BotIdentity): BotMentions {
+  return new BotMentions([new TelegramBotMention(telegramApi, () => identity.username, config.telegram.botToken !== "")]);
+}
+
 /** Домен ссылок Telegram — из настройки панели (Р100); читается при каждой сборке ссылки. */
 export function linkOriginFor(settings: SettingsReader): LinkOrigin {
   return new SettingsLinkOrigin(settings);
@@ -72,8 +79,9 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
     { provide: AppLinks, inject: [BotIdentity, TELEGRAM_LINK_ORIGIN], useFactory: appLinksFor },
     { provide: Messengers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messengersFor },
     { provide: ChannelMemberships, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: channelMembershipsFor },
+    { provide: BotMentions, inject: [APP_CONFIG, TELEGRAM_BOT_API, BotIdentity], useFactory: botMentionsFor },
     { provide: MessagePreparers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messagePreparersFor },
   ],
-  exports: [LaunchVerifiers, PaymentProviders, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, MessagePreparers],
+  exports: [LaunchVerifiers, PaymentProviders, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, BotMentions, MessagePreparers],
 })
 export class PlatformsModule {}
