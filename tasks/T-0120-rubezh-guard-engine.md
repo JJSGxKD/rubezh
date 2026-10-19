@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-19
 size: M
-depends_on: [T-0099, T-0102]
+depends_on: [T-0099, T-0102, T-0170]
 zones:
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/rubezh.ts
@@ -43,7 +43,7 @@ batch: 3
 
 # T-0120. Рубеж — цель забега, движок: страж на отметке, победа в итоге забега
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0120.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](T-0102-weapon-evolutions-data-and-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0120.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](T-0102-weapon-evolutions-data-and-engine.md) [![T-0170](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0170.json&label=T-0170)](T-0170-cordon-ring-engine.md)
 
 ## Зачем
 
@@ -92,6 +92,9 @@ batch: 3
 9. **Коридоры** в `BALANCE_TARGETS.rubezh` (стартовые): здоровье стража не ниже
    1,3 здоровья самого крепкого из прочих боссов; доля забегов уклоняющегося
    бота, дошедших до отметки, не выше 0,35, победивших — не выше 0,15.
+
+Решение claude-lead-1 от 19.10.2026: T-0120 зависит от T-0170: обе задачи правят общие файлы движка
+(`shared-types`, `world.ts`, `step.ts`, `looks.ts`), параллельно их не берут.
 
 ## Как сейчас
 
