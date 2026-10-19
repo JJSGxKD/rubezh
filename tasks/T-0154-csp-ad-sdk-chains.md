@@ -3,7 +3,7 @@ id: T-0154
 title: Политика источников пускает цепочки SDK рекламы и Google Fonts
 epic: E3
 priority: P1
-status: in-progress
+status: done
 owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
