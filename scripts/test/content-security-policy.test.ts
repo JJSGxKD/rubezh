@@ -68,6 +68,48 @@ describe("политика источников клиента", () => {
     expect(build.get("connect-src")).not.toContain("https:");
   });
 
+  // Р108 (docs/35-stage4-plan.md): цепочки подгрузки SDK и шрифты Google Fonts — только с рекламой.
+  const CHAIN_SCRIPTS = ["https://7ool.net", "https://eu.convers.link", "https://us.convers.link", "https://yandex.ru/ads/system/context.js"];
+
+  it("с рекламой скрипты цепочек RichAds из Р108 разрешены дословно, а script-src остаётся строгим", () => {
+    const withAds = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", ads: true }));
+    const scripts = withAds.get("script-src") ?? [];
+    for (const source of CHAIN_SCRIPTS) expect(scripts, source).toContain(source);
+    for (const loose of ["'unsafe-inline'", "'unsafe-eval'", "https:", "*"]) expect(scripts, loose).not.toContain(loose);
+  });
+
+  it("новые источники скриптов — без шаблонов поддоменов и без http:", () => {
+    const withAds = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", ads: true }));
+    for (const source of withAds.get("script-src") ?? []) {
+      if (!CHAIN_SCRIPTS.includes(source)) continue;
+      expect(source.startsWith("http:"), source).toBe(false);
+      expect(source.includes("*"), source).toBe(false);
+    }
+  });
+
+  it("с рекламой стиль Google Fonts разрешён в style-src, а шрифт — в font-src", () => {
+    const withAds = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", ads: true }));
+    expect(withAds.get("style-src")).toEqual(["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]);
+    expect(withAds.get("font-src")).toEqual(["'self'", "https://fonts.gstatic.com"]);
+  });
+
+  it("без рекламы нового нет ни в скриптах, ни в стилях, ни в шрифтах: MAX и VK", () => {
+    const graspilOnly = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", graspil: true }));
+    for (const policy of [build, graspilOnly]) {
+      const all = [...(policy.get("script-src") ?? []), ...(policy.get("style-src") ?? []), ...(policy.get("font-src") ?? [])];
+      for (const source of [...CHAIN_SCRIPTS, "https://fonts.googleapis.com", "https://fonts.gstatic.com"]) expect(all, source).not.toContain(source);
+      expect(policy.get("style-src")).toEqual(["'self'", "'unsafe-inline'"]);
+      expect(policy.get("font-src")).toEqual(["'self'"]);
+    }
+  });
+
+  it("в dev с рекламой те же адреса: политика строится из одного списка", () => {
+    const devAds = directives(contentSecurityPolicy({ mode: "dev", apiOrigin: "", ads: true }));
+    for (const source of CHAIN_SCRIPTS) expect(devAds.get("script-src"), source).toContain(source);
+    expect(devAds.get("style-src")).toContain("https://fonts.googleapis.com");
+    expect(devAds.get("font-src")).toContain("https://fonts.gstatic.com");
+  });
+
   it("пускает во фрейм Telegram Web — иначе игра там не откроется", () => {
     expect(build.get("frame-ancestors")).toContain("https://web.telegram.org");
   });
