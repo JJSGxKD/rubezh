@@ -3,8 +3,8 @@ id: T-0058
 title: Переходник ссылок открывает Telegram диплинком — с запасным t.me
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0056, T-0057]
@@ -23,7 +23,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-version: v0.9
+batch: 3
 ---
 
 # T-0058. Переходник ссылок открывает Telegram диплинком — с запасным t.me

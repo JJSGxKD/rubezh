@@ -6,6 +6,7 @@ import {
   RESTRICTION_LIMITS,
   RESTRICTION_REASONS,
   RESTRICTION_REASON_KEYS,
+  isHiddenKind,
   isRestrictionKind,
   type RestrictionKind,
 } from "./restriction-catalog.js";
@@ -51,8 +52,18 @@ export function termProblem(endsAt: Date | null, at: Date): string | null {
   return null;
 }
 
-/** Что не так с набором; `null` — годится. Молча нельзя накладывать то, что игрок увидит всё равно. */
+/** Скрытый вид идёт один и молча: у вида общие «сообщить», причина и срок на всё наложение. */
+export const HIDDEN_ALONE_TEXT = "Скрытое ограничение накладывается молча и отдельно от других";
+
+/** Что игрок прочтёт о скрытом виде: ничего — предпросмотр говорит это прямо. */
+export const HIDDEN_SHOWN_TEXT = "Ничего: игрок не видит ни плашки, ни изменений в интерфейсе";
+
+/**
+ * Что не так с набором; `null` — годится. Молча нельзя накладывать то, что
+ * игрок увидит всё равно; скрытое, наоборот, только молча и отдельно.
+ */
 export function imposeProblem(kinds: readonly RestrictionKind[], notify: boolean): string | null {
+  if (kinds.some(isHiddenKind)) return notify || kinds.length > 1 ? HIDDEN_ALONE_TEXT : null;
   if (notify) return null;
   const loud = kinds.find((kind) => !RESTRICTION_CATALOG[kind].silentAllowed);
   return loud === undefined ? null : `«${RESTRICTION_CATALOG[loud].title}» молча не накладывается: игрок всё равно увидит отказ`;
@@ -105,6 +116,7 @@ export const SHADOW_TEXT = "Ничего: в рейтинге игрок вид�
  */
 export function shownText(kind: RestrictionKind, endsAt: Date | null, reason: string, notify: boolean): string {
   if (kind === "all") return banMessage({ endsAt, reason });
+  if (isHiddenKind(kind)) return HIDDEN_SHOWN_TEXT;
   if (notify) return playerMessage({ kind, endsAt, reason });
   return kind === "leaderboard" ? SHADOW_TEXT : SILENT_MESSAGE;
 }
@@ -122,7 +134,12 @@ export interface PlayerRestrictionView {
   reason: string;
 }
 
-export function playerView(row: RestrictionRow): PlayerRestrictionView {
+/**
+ * Строка для игрока; `null` — скрытый вид: он не отдаётся, даже если в базе
+ * записан с `notify = true`.
+ */
+export function playerView(row: RestrictionRow): PlayerRestrictionView | null {
+  if (isHiddenKind(row.kind)) return null;
   return { kind: row.kind, title: titleOf(row.kind), endsAt: row.endsAt?.toISOString() ?? null, until: untilText(row.endsAt), reason: reasonText(row.reason) };
 }
 

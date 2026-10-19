@@ -9,6 +9,9 @@ import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES } from "../src/content/difficulty";
 import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
 import { findStageProblems } from "../src/game/sim/stages";
 import { describe, expect, it } from "vitest";
+import { BALANCE_TARGETS } from "../src/content/balance-targets";
+import { CHESTS } from "../src/content/chests";
+import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
 import { ENEMY_STAGES } from "../src/content/stages";
 import { MAPS } from "../src/content/maps";
@@ -17,7 +20,9 @@ import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS } from "../src/game/patterns";
+import { findChestsProblems } from "../src/game/sim/chests";
 import { findMapContentProblems } from "../src/game/sim/map-types";
+import { MAX_PICKUPS, MAX_PICKUPS_OF_KIND } from "../src/game/sim/pickups";
 import { findTimelineProblems } from "../src/game/sim/timeline-content";
 import { findPassiveContentProblems } from "../src/game/progression/passives";
 import { xpForLevel } from "../src/game/progression/levels";
@@ -60,6 +65,36 @@ describe("контент врагов", () => {
     for (const pattern of IMPLEMENTED_PATTERNS) {
       expect(used, `паттерн ${pattern}`).toContain(pattern);
     }
+  });
+
+  it("описывает пеших врагов по таблице задачи", () => {
+    const byId = new Map(ENEMIES.map((enemy) => [enemy.id, enemy]));
+    expect(byId.get("bone_walker")).toMatchObject({ pattern: "chase", threat: 2, params: { steeringPerSec: 1.2 } });
+    expect(byId.get("bone_walker")?.rank).toBeUndefined();
+    expect(byId.get("bone_walker")?.resist).toBeUndefined();
+    expect(byId.get("mire_shambler")).toMatchObject({ pattern: "swarm", threat: 5, resist: { fire: 0.4, lightning: -0.4 } });
+    expect(byId.get("mire_shambler")?.rank).toBeUndefined();
+    expect(byId.get("elite_grave_knight")).toMatchObject({
+      pattern: "dash",
+      rank: "elite",
+      threat: 34,
+      resist: { poison: 0.5, fire: -0.4 },
+      params: { triggerDistance: 260, telegraphSec: 0.7, dashSpeed: 340, dashDurationSec: 0.8, recoverSec: 1.4 },
+    });
+    // Стихии атаки у них нет: рою её не дают, а у элиты читается рывок.
+    for (const id of ["bone_walker", "mire_shambler", "elite_grave_knight"]) expect(byId.get(id)?.element, id).toBeUndefined();
+  });
+
+  it("оставляет блуждающего огонька в врагах, отрезках и пуле", () => {
+    expect(ENEMIES.map((enemy) => enemy.id)).toContain("shooter_wisp");
+    const fromSecs = TIMELINE.filter((segment) => segment.spawns.some((spawn) => spawn.enemy === "shooter_wisp")).map((segment) => segment.fromSec);
+    expect(fromSecs).toEqual([60, 120, 180, 270, 300]);
+    expect(ENDLESS_CURVE.pool).toContain("shooter_wisp");
+  });
+
+  it("не даёт опыта меньше за более крепкого рядового", () => {
+    const xpOf = (id: string) => ENEMIES.find((enemy) => enemy.id === id)!.xp;
+    expect(xpOf("mire_shambler")).toBeGreaterThan(xpOf("bone_walker"));
   });
 });
 
@@ -179,6 +214,30 @@ describe("контент таймлайна спавна", () => {
     }
   });
 
+  it("показывает пеших врагов в расписанных отрезках с числами задачи", () => {
+    const perSec = (fromSec: number, enemy: string) =>
+      TIMELINE.find((segment) => segment.fromSec === fromSec)?.spawns.find((spawn) => spawn.enemy === enemy);
+    expect(perSec(60, "bone_walker")).toMatchObject({ perSec: 0.5, burst: 4 });
+    expect(perSec(120, "bone_walker")).toMatchObject({ perSec: 0.4 });
+    expect(perSec(180, "mire_shambler")).toMatchObject({ perSec: 0.22, burst: 2 });
+    expect(perSec(270, "mire_shambler")).toMatchObject({ perSec: 0.2 });
+    expect(perSec(300, "bone_walker")).toMatchObject({ perSec: 0.7 });
+  });
+
+  it("показывает могильного рыцаря событием на 240-й секунде и в бесконечном режиме, но не потоком", () => {
+    const segment = TIMELINE.find((entry) => entry.fromSec === 240);
+    expect(segment?.events).toContainEqual({ kind: "flank", enemy: "elite_grave_knight", count: 1 });
+    expect(ENDLESS_CURVE.events).toContainEqual({ everySegments: 6, kind: "flank", enemy: "elite_grave_knight", count: 1 });
+    expect(ENDLESS_CURVE.pool).not.toContain("elite_grave_knight");
+  });
+
+  it("ставит новых рядовых в конец пула, не сдвигая прежних", () => {
+    const pool = ENDLESS_CURVE.pool;
+    expect(pool.indexOf("bone_walker")).toBe(pool.indexOf("tank_ghoul") + 1);
+    expect(pool.indexOf("mire_shambler")).toBe(pool.indexOf("tank_ghoul") + 2);
+    expect(pool.indexOf("shooter_wisp")).toBe(4);
+  });
+
   it("держит элит вне обычного потока — они приходят событиями", () => {
     const elites = new Set(ENEMIES.filter((enemy) => enemy.rank !== undefined).map((enemy) => enemy.id));
     expect(elites.size).toBeGreaterThan(0);
@@ -275,6 +334,29 @@ describe("таблица разблокировок уровня аккаунт�
   it("уровень открытия знает каждое оружие и навык", () => {
     for (const weapon of WEAPONS) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", weapon.id), weapon.id).not.toBeNull();
     for (const passive of PASSIVES) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "passive", passive.id), passive.id).not.toBeNull();
+  });
+
+  it("стартовый набор новичка не урезан", () => {
+    const first = unlocksAt(ACCOUNT_UNLOCKS, 1);
+    expect([...first.weapons].sort()).toEqual(["knife", "spark", "wardstone"]);
+    expect([...first.passives].sort()).toEqual(["haste", "lodestone", "mending", "might", "swiftness", "vitality"]);
+    expect(first.limits).toEqual({ weapons: 2, passives: { attack: 1, defense: 1, mobility: 1 } });
+  });
+
+  it("лестница закреплена: калибровка геймдизайнера правит эти числа и таблицу вместе", () => {
+    const weapons: [string, number][] = [["hearth", 2], ["storm", 4], ["sting", 11]];
+    const passives: [string, number][] = [["reach", 3], ["ward", 6], ["volley", 8], ["tempering", 14]];
+    for (const [id, level] of weapons) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", id), id).toBe(level);
+    for (const [id, level] of passives) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "passive", id), id).toBe(level);
+  });
+
+  it("между открытиями не больше трёх уровней", () => {
+    const levels = ACCOUNT_UNLOCKS.map((row) => row.level).sort((a, b) => a - b);
+    for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1], `уровни ${levels[i - 1]} и ${levels[i]}`).toBeLessThanOrEqual(3);
+  });
+
+  it("лестница не длиннее двадцатого уровня: дальше место под оружие поездов", () => {
+    expect(Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level))).toBeLessThanOrEqual(20);
   });
 
   it("ловит оружие без уровня, дубль, убывающие слоты и категорию, где выбирать нечего", () => {
@@ -407,5 +489,64 @@ describe("проверка контента пассивок", () => {
     expect(findPassiveContentProblems(defs as unknown as PassiveDef[])).toEqual([
       "пассивка a: категория atack не из attack, defense, mobility",
     ]);
+  });
+});
+
+describe("контент сундуков забега", () => {
+  it("проходит проверку целиком", () => {
+    expect(findChestsProblems(CHESTS)).toEqual([]);
+  });
+
+  it("ловит размер вне набора 1, 3, 5", () => {
+    expect(findChestsProblems({ ...CHESTS, opening: [1, 2 as never] }).join("\n")).toContain("opening");
+    expect(findChestsProblems({ ...CHESTS, sizes: [{ size: 4 as never, weight: 1 }, ...CHESTS.sizes] }).join("\n")).toContain("sizes");
+  });
+
+  it("ловит вес не больше нуля", () => {
+    const sizes = CHESTS.sizes.map((entry, i) => (i === 0 ? { ...entry, weight: 0 } : entry));
+    expect(findChestsProblems({ ...CHESTS, sizes }).join("\n")).toContain("weight");
+  });
+
+  it("ловит bossMinSize, которого нет среди sizes", () => {
+    const sizes = CHESTS.sizes.filter((entry) => entry.size !== 5);
+    expect(findChestsProblems({ ...CHESTS, sizes, bossMinSize: 5 }).join("\n")).toContain("bossMinSize");
+  });
+
+  it("ловит ownedWeightMul меньше единицы", () => {
+    expect(findChestsProblems({ ...CHESTS, ownedWeightMul: 0.5 }).join("\n")).toContain("ownedWeightMul");
+  });
+
+  it("ловит lowHpRatio и xpRatio вне (0, 1]", () => {
+    for (const key of ["lowHpRatio", "xpRatio"] as const) {
+      for (const value of [0, -0.1, 1.2]) {
+        expect(findChestsProblems({ ...CHESTS, [key]: value }).join("\n"), `${key} = ${String(value)}`).toContain(key);
+      }
+    }
+    expect(findChestsProblems({ ...CHESTS, lowHpRatio: 1, xpRatio: 1 })).toEqual([]);
+  });
+
+  it("ловит maxOnField не целый или за потолком вида", () => {
+    for (const value of [-1, 1.5, MAX_PICKUPS_OF_KIND + 1]) {
+      expect(findChestsProblems({ ...CHESTS, maxOnField: value }).join("\n"), `maxOnField = ${String(value)}`).toContain(
+        "maxOnField",
+      );
+    }
+    expect(findChestsProblems({ ...CHESTS, maxOnField: 0 })).toEqual([]);
+  });
+
+  it("кладёт первое событие элиты или босса в коридор первого сундука", () => {
+    const ranked = new Set(ENEMIES.filter((enemy) => enemy.rank !== undefined).map((enemy) => enemy.id));
+    const first = TIMELINE.flatMap((segment) =>
+      (segment.events ?? []).filter((event) => ranked.has(event.enemy)).map(() => segment.fromSec),
+    ).sort((a, b) => a - b)[0];
+
+    expect(first).toBeDefined();
+    expect(first).toBeGreaterThanOrEqual(BALANCE_TARGETS.firstChestEventSec.min);
+    expect(first).toBeLessThanOrEqual(BALANCE_TARGETS.firstChestEventSec.max);
+  });
+
+  it("не переполняет пул подборов суммой потолков", () => {
+    const total = DROPS.medkits.maxOnField + DROPS.magnets.maxOnField + DROPS.dynamite.maxOnField + CHESTS.maxOnField;
+    expect(total).toBeLessThanOrEqual(MAX_PICKUPS);
   });
 });

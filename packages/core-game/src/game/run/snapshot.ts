@@ -19,7 +19,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 7;
+export const WORLD_SNAPSHOT_VERSION = 8;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -64,6 +64,8 @@ export interface WorldSnapshot {
   projectiles: EncodedPool;
   gems: EncodedPool;
   pickups: EncodedPool;
+  /** состояние сундуков; записи для сцены (`founds`, `openings`) не входят */
+  chest: { rng: number; dropped: number; opened: number };
   spawner: unknown;
 }
 
@@ -86,6 +88,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     projectiles: encodeRecord(world.projectiles, world.projectiles.count),
     gems: encodeRecord(world.gems, world.gems.count),
     pickups: encodeRecord(world.pickups, world.pickups.count),
+    chest: { rng: world.chests.rng.getState(), dropped: world.chests.dropped, opened: world.chests.opened },
     spawner: spawner.saveState?.() ?? null,
   };
 }
@@ -117,6 +120,13 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   decodeRecord(world.projectiles, snapshot.projectiles, "projectiles");
   decodeRecord(world.gems, snapshot.gems, "gems");
   decodeRecord(world.pickups, snapshot.pickups, "pickups");
+
+  const chest = asRecord(snapshot.chest, "chest");
+  world.chests.rng.setState(asNumber(chest.rng, "chest.rng"));
+  world.chests.dropped = asNumber(chest.dropped, "chest.dropped");
+  world.chests.opened = asNumber(chest.opened, "chest.opened");
+  world.chests.founds = [];
+  world.chests.openings = [];
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.

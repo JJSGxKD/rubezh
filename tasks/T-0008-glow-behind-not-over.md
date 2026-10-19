@@ -3,8 +3,8 @@ id: T-0008
 title: Свечение кнопок и значков — позади, а не поверх
 epic: E6
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5 / medium
 size: S
 depends_on: [T-0007]
 zones:
@@ -17,7 +17,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0008. Свечение кнопок и значков — позади, а не поверх

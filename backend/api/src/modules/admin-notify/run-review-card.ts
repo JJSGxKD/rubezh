@@ -67,7 +67,7 @@ export function reviewCardText(run: ReviewCardRun, account: ReviewCardAccount | 
     who,
     `${DIFFICULTY_LABELS[run.difficulty]} · ${formatDuration(run.survivalSec)} · уровень ${run.level} · убийств ${run.enemiesKilled} · ${end}`,
     `Почему: ${run.reasons.map((reason) => REASON_LABELS[reason]).join("; ")}`,
-    "В рейтинг не попал. Другие забеги этого аккаунта в ближайший час — без карточек, только в GET /api/v1/runs/review.",
+    "В рейтинг не попал. Другие забеги этого аккаунта в ближайший час — без карточек, только в панели: раздел «Разбор забегов».",
     `Забег ${run.runId}`,
   ].join("\n");
 }

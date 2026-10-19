@@ -3,8 +3,8 @@ id: T-0077
 title: «Повторить» на плашке связи отвечает, даже если код проверки не загрузился
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-5
 size: S
 depends_on: []
@@ -19,7 +19,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0077. «Повторить» на плашке связи отвечает, даже если код проверки не загрузился

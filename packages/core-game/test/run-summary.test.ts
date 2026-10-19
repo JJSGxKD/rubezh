@@ -36,11 +36,11 @@ const GOLDEN_POPULATION = 28;
  * оружиями проверки ниже разносят урон по слотам, а не меряют одно стартовое.
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
- * аптечку, магнитом с динамитом, появлением нетопырей в смеси и стихийными
- * атаками врагов. Распределение времени по seed при этом остаётся прежним, поэтому
+ * аптечку, магнитом с динамитом, появлением нетопырей в смеси, стихийными
+ * атаками врагов и пешими врагами рядом с огоньком. Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 2;
+const GOLDEN_SEED = 1;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -172,35 +172,36 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 68.27,
-      level: 13,
-      xpCollected: 291,
-      enemiesKilled: 191,
+      survivalSec: 39.43,
+      level: 9,
+      xpCollected: 139,
+      enemiesKilled: 94,
       killsByEnemy: {
-        swarm_rat: 78,
-        tank_ghoul: 11,
-        shooter_wisp: 22,
-        dasher_wolf: 14,
-        circler_crow: 18,
-        bomber_imp: 15,
-        splitter_slime: 11,
-        rushing_bats: 22,
+        swarm_rat: 35,
+        tank_ghoul: 5,
+        shooter_wisp: 8,
+        bone_walker: 4,
+        mire_shambler: 14,
+        dasher_wolf: 6,
+        circler_crow: 5,
+        bomber_imp: 2,
+        rushing_bats: 9,
+        splitter_slime: 6,
       },
-      damageDealt: 2469,
-      damageTaken: 180,
+      damageDealt: 1577,
+      damageTaken: 103,
       weapons: [
-        { id: "spark", level: 1, damage: 1371 },
-        { id: "wardstone", level: 2, damage: 272 },
-        { id: "sting", level: 2, damage: 826 },
+        { id: "spark", level: 2, damage: 812 },
+        { id: "sting", level: 1, damage: 470 },
+        { id: "storm", level: 1, damage: 295 },
       ],
       passives: [
-        { id: "swiftness", level: 3 },
-        { id: "haste", level: 3 },
-        { id: "volley", level: 1 },
-        { id: "mending", level: 1 },
+        { id: "ward", level: 2 },
+        { id: "lodestone", level: 1 },
+        { id: "volley", level: 2 },
       ],
       deathCause: "shooter_wisp",
-      distance: 11815,
+      distance: 5833,
       peakEnemies: 30,
     });
   });

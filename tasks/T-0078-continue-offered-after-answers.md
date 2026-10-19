@@ -3,8 +3,8 @@ id: T-0078
 title: Событие continue_offered уходит после ответа проверок, а не при открытии шага
 epic: E6
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5 / medium
 author: claude-lead2-5
 size: S
 depends_on: []
@@ -20,7 +20,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0078. Событие continue_offered уходит после ответа проверок, а не при открытии шага

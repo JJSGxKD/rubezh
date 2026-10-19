@@ -124,7 +124,7 @@ function setup(settings = config(), register = true) {
   const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, promos, reader, revocation, restrictionsGate(restrictions));
   if (register) shop.onModuleInit();
   const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), new PaymentsHooks(), revocation);
-  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
+  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers, new PurchaseRevocation()), new RunsHooks(), providers, fulfillment, purchases);
   return { purchases, api, shop, wallet, queue, context, promoRows, revocation, confirmation, restrictions };
 }
 

@@ -45,6 +45,8 @@ function task(patch: Partial<TaskView> = {}): TaskView {
     link: "https://t.me/partner",
     slots: null,
     image: null,
+    tier: null,
+    filter: null,
     ...patch,
   };
 }

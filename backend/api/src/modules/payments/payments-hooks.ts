@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { PaymentMode, PurchaseProduct, StoredPurchase } from "./purchase-types.js";
+import type { PaymentMode, PurchaseAction, PurchaseProduct, StoredPurchase } from "./purchase-types.js";
 
 /**
  * Что случилось с оплатой — кому это интересно: воронке (первая покупка),
@@ -73,12 +73,23 @@ export interface ExternalRefund {
   at: Date;
 }
 
+/** Действие поддержки с покупкой — для сообщения команде. */
+export interface SupportAction {
+  kind: PurchaseAction;
+  purchase: StoredPurchase;
+  /** имя того, кто сделал, — как в аккаунте; нет аккаунта — его id */
+  actorName: string;
+  note: string;
+  at: Date;
+}
+
 export type StuckListener = (purchase: StuckPurchase) => Promise<void>;
 export type AbandonedListener = (job: AbandonedJob) => Promise<void>;
 
 export type ExternalRefundListener = (refund: ExternalRefund) => Promise<void>;
 export type PaidListener = (purchase: PaidPurchase) => Promise<void>;
 export type SubscriptionListener = (change: SubscriptionChange) => Promise<void>;
+export type SupportListener = (action: SupportAction) => Promise<void>;
 
 @Injectable()
 export class PaymentsHooks {
@@ -88,6 +99,7 @@ export class PaymentsHooks {
   private readonly stuck: { name: string; listener: StuckListener }[] = [];
   private readonly abandoned: { name: string; listener: AbandonedListener }[] = [];
   private readonly externalRefunds: { name: string; listener: ExternalRefundListener }[] = [];
+  private readonly support: { name: string; listener: SupportListener }[] = [];
 
   onPaid(name: string, listener: PaidListener): void {
     this.paid.push({ name, listener });
@@ -109,6 +121,10 @@ export class PaymentsHooks {
     this.externalRefunds.push({ name, listener });
   }
 
+  onSupport(name: string, listener: SupportListener): void {
+    this.support.push({ name, listener });
+  }
+
   /** После записи оплаты; упавший слушатель не отменяет ни её, ни остальных. */
   emitPaid(purchase: PaidPurchase): Promise<void> {
     return this.emit(this.paid, purchase, { purchaseId: purchase.purchaseId });
@@ -127,6 +143,11 @@ export class PaymentsHooks {
   /** Внешний возврат обработан: остаток забран, покупки закрыты. Упавший слушатель не мешает остальным. */
   emitExternalRefund(refund: ExternalRefund): Promise<void> {
     return this.emit(this.externalRefunds, refund, { purchaseId: refund.purchase.purchaseId });
+  }
+
+  /** Поддержка вернула звёзды или повторила выдачу: действие уже выполнено и записано. Упавший слушатель не мешает остальным. */
+  emitSupport(action: SupportAction): Promise<void> {
+    return this.emit(this.support, action, { purchaseId: action.purchase.purchaseId });
   }
 
   emitSubscriptionChanged(change: SubscriptionChange): Promise<void> {

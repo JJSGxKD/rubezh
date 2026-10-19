@@ -32,6 +32,8 @@ export type ScreenId =
   | "soundLab"
   | "about"
   | "testNotice"
+  | "testerThanks"
+  | "runInterrupted"
   | "promoCode";
 
 /** Корни разделов нижней панели: переключение вкладки сбрасывает стек. */

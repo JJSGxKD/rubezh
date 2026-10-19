@@ -11,6 +11,7 @@ import { useMeta } from "../../state/meta";
 import { useProgress, type RunRewardView } from "../../state/progress";
 import { awaitReward } from "../../state/progress-api";
 import { useRuns } from "../../state/runs";
+import { DeathNext } from "./DeathNext";
 import { ChanceStep, LevelUpCard, ResultsHero, RewardCard, RunDetails, RunStats } from "./death-parts";
 import { deathStep } from "./death-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
@@ -117,6 +118,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       title={result.outcome === "died" ? t("run.death.title") : t("run.death.abandoned")}
       icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
       size="l"
+      cut
       // В портрете кнопки — подвал под прокручиваемой частью, в ландшафте — в
       // правой колонке: «Ещё раз» видна без прокрутки (docs/27-design-system-and-app-shell.md §5.3).
       footer={<div className="grid gap-2 landscape:hidden">{actions}</div>}
@@ -130,6 +132,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
             {/* Удвоение — только у настоящего итога: у витрины компонентов сети нет. */}
             {reward === undefined ? null : <RewardCard reward={reward} {...(props.showReward === true ? { doubleRunId: result.runId } : {})} />}
             {reward?.status === "granted" ? <LevelUpCard levelBefore={reward.levelBefore} levelAfter={reward.levelAfter} /> : null}
+            <DeathNext result={result} isNewRecord={props.isNewRecord} reward={reward} withTasks={props.showReward === true} />
           </div>
           <div className="grid content-start gap-3">
             <RunStats result={result} />

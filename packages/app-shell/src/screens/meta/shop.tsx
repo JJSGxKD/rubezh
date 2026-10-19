@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ChevronRight, Gift } from "lucide-react";
-import { Button, ContentColumn, ErrorState, InfoNotice, ListGroup, ListItem, Modal, PageTitle, Screen, SectionTitle, SegmentedControl } from "../../design-system/components";
+import { Button, ContentColumn, ErrorState, InfoNotice, ListGroup, ListItem, Modal, PageTitle, Screen, SectionTitle, SegmentedControl, staggerStyle } from "../../design-system/components";
 import { GemIcon } from "../../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../../i18n";
 import { openExternalLink } from "../../state/external-link";
@@ -14,6 +14,7 @@ import { loadWallet } from "../../state/wallet-api";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { ShopBanners } from "./shop-banners";
 import { dateOf, GemPackTile, ItemCard, TributePlaque, VipCard } from "./shop-parts";
+import { gemsOf } from "./shop-look";
 import { ShowcaseSection } from "./shop-showcase";
 import { useClock } from "./schedule";
 import { itemName, noticeOf, shopBanners, shownPrice, tributeOf, vipWaiting, type Notice, type ShopBanner, type ShopTab } from "./shop-texts";
@@ -198,6 +199,8 @@ export function ShopScreen(): ReactNode {
     openExternalLink(url);
   };
 
+  const packSizes = ready === null ? [] : gemPacks(ready.shop).map(gemsOf);
+
   const vipCard =
     ready?.vip === null || ready?.vip === undefined ? null : (
       <VipCard
@@ -216,7 +219,7 @@ export function ShopScreen(): ReactNode {
       <ContentColumn>
         <PageTitle>{t("shop.title")}</PageTitle>
         {!shopAvailable() ? <InfoNotice text={t("shop.guest")} /> : null}
-        {state.status === "loading" && shopAvailable() ? <p className="mt-2 text-sm text-text-muted">{t("shop.loading")}</p> : null}
+        {state.status === "loading" && shopAvailable() ? <ShopSkeleton /> : null}
         {state.status === "failed" ? <ErrorState text={t("shop.failed")} onRetry={() => void load()} /> : null}
 
         {ready === null ? null : (
@@ -259,12 +262,13 @@ export function ShopScreen(): ReactNode {
 
             {tab === "gems" ? (
               <div className="grid gap-3">
-                {tributeOf(ready.shop) === null ? null : <TributePlaque onOpen={() => openTribute(tributeOf(ready.shop) ?? "")} />}
                 <div className="grid grid-cols-2 gap-2">
                   {gemPacks(ready.shop).map((item, index) => (
-                    <GemPackTile key={item.sku} item={item} index={index + 1} busy={buyBusy} now={now} onBuy={() => buyItem(item, ready.shop)} />
+                    <GemPackTile key={item.sku} item={item} index={index + 1} busy={buyBusy} now={now} packs={packSizes} onBuy={() => buyItem(item, ready.shop)} />
                   ))}
                 </div>
+                {/* Под плитками: с плашкой сверху «Лучшая цена» уходила за прокрутку уже на 360 px. */}
+                {tributeOf(ready.shop) === null ? null : <TributePlaque onOpen={() => openTribute(tributeOf(ready.shop) ?? "")} />}
               </div>
             ) : null}
 
@@ -359,4 +363,18 @@ function gemPacks(shop: ShopView): ShopItem[] {
 /** Сколько спишет тестовая оплата — по первому товару с ценой: она одна на всё. */
 function testCharge(shop: ShopView): number {
   return shop.items.find((item) => item.chargedStars !== undefined && item.chargedStars !== null)?.chargedStars ?? 1;
+}
+
+/**
+ * Заглушки на время загрузки той же высоты, что баннер, вкладки и карточки:
+ * экран не прыгает, когда приходит ответ.
+ */
+function ShopSkeleton(): ReactNode {
+  return (
+    <div className="mt-2 grid gap-4" aria-busy>
+      {[160, 42, 150, 220].map((height, index) => (
+        <div key={height} aria-hidden="true" className="surface-card animate-pulse rounded-lg" style={{ height, ...staggerStyle(index) }} />
+      ))}
+    </div>
+  );
 }

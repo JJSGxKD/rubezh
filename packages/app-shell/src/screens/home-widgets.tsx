@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ChevronRight, Gift, Trophy, Users } from "lucide-react";
-import { staggerStyle } from "../design-system/components";
+import { CutFrame, staggerStyle } from "../design-system/components";
 import { CoinIcon } from "../design-system/components/CurrencyIcons";
 import { ShardIcon } from "../design-system/components/ShardIcon";
 import { formatDuration, formatNumber, t } from "../i18n";
@@ -175,7 +175,7 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
     case "daily": {
       const face = dailyFace(widgets.daily, badges.daily > 0, now);
       return (
-        <Frame id={id} size={size} index={index} ready={face.state === "ready"} onOpen={open(face.state, () => navigation.push("daily"))}>
+        <Frame id={id} size={size} index={index} ready={face.state === "ready"} cut={face.state === "ready"} onOpen={open(face.state, () => navigation.push("daily"))}>
           <DailyView face={face} size={size} now={now} />
         </Frame>
       );
@@ -219,24 +219,33 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
  * Рамка виджета: тон, подложка по готовности, размер — из токенов; касание —
  * по всей плитке. Без `onOpen` — витрина: та же рамка, но никуда не ведёт.
  */
-export function Frame(props: { id: WidgetId; size: WidgetSize; index: number; ready: boolean; onOpen?: () => void; children: ReactNode }): ReactNode {
+export function Frame(props: { id: WidgetId; size: WidgetSize; index: number; ready: boolean; cut?: boolean; onOpen?: () => void; children: ReactNode }): ReactNode {
+  const cut = props.cut === true;
   const className = [
     TONE[props.id],
     SIZE[props.size],
-    props.ready ? "widget-surface-ready" : "widget-surface",
-    "relative flex min-w-0 animate-rise-in items-center gap-3 overflow-hidden rounded-lg p-3 text-left",
+    cut ? "" : props.ready ? "widget-surface-ready" : "widget-surface",
+    // Со срезом поверхность, скругление и поля — у `CutFrame` внутри.
+    cut ? "relative flex min-w-0 animate-rise-in text-left" : "relative flex min-w-0 animate-rise-in items-center gap-3 overflow-hidden rounded-lg p-3 text-left",
     "transition-transform duration-(--duration-fast) ease-base",
   ].join(" ");
+  const content = cut ? (
+    <CutFrame tone="card-selected" size="md" className="flex h-full w-full min-w-0 items-center gap-3 overflow-hidden p-3 text-left">
+      {props.children}
+    </CutFrame>
+  ) : (
+    props.children
+  );
   if (props.onOpen === undefined) {
     return (
       <div className={className} style={staggerStyle(props.index)}>
-        {props.children}
+        {content}
       </div>
     );
   }
   return (
     <button type="button" onClick={props.onOpen} style={staggerStyle(props.index)} className={`${className} active:scale-[0.98]`}>
-      {props.children}
+      {content}
     </button>
   );
 }
@@ -302,12 +311,19 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
 }
 
 /** Облик-значок: квадрат тона с иконкой; у широкого — крупнее. */
-function IconFace(props: { size: WidgetSize; children: ReactNode; glow?: boolean }): ReactNode {
+export function IconFace(props: { size: WidgetSize; children: ReactNode; glow?: boolean }): ReactNode {
   const box = props.size === "hero" ? "size-12" : props.size === "row" ? "size-10" : "size-7";
-  return (
+  const tile = (
     <span className={`widget-face relative inline-flex ${box} items-center justify-center rounded-md`}>
-      {props.glow === true ? <span aria-hidden="true" className="widget-motion absolute -inset-2 animate-glow rounded-full bg-[radial-gradient(closest-side,var(--widget-daily-glow),transparent)] opacity-60" /> : null}
       <span className="relative">{props.children}</span>
+    </span>
+  );
+  if (props.glow !== true) return tile;
+  // Свечение — соседний слой позади плитки, а не её потомок: потомок рисуется над фоном плитки и мигает на нём.
+  return (
+    <span className="relative isolate inline-flex">
+      <span aria-hidden="true" className="widget-motion absolute -inset-2 -z-10 animate-glow rounded-full bg-[radial-gradient(closest-side,var(--widget-daily-glow),transparent)] opacity-60" />
+      {tile}
     </span>
   );
 }

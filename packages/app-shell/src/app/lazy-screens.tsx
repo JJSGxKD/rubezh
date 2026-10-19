@@ -34,6 +34,8 @@ const loaders = {
   daily: () => import("../screens/meta/daily"),
   wheel: () => import("../screens/meta/wheel"),
   testNotice: () => import("../screens/meta/test-notice"),
+  testerThanks: () => import("../screens/meta/tester-thanks"),
+  runInterrupted: () => import("../screens/meta/run-interrupted"),
   stress: () => import("../screens/stress/StressScreen"),
   soundLab: () => import("../screens/sound-lab"),
   diagnostics: () => import("../screens/diagnostics"),
@@ -75,6 +77,8 @@ export const WheelScreen = screen(loaders.wheel, "WheelScreen");
 // всё равно заранее, в простое лобби.
 export const PromoCodeScreen = screen(loaders.shop, "PromoCodeScreen");
 export const TestNoticeScreen = screen(loaders.testNotice, "TestNoticeScreen");
+export const TesterThanksScreen = screen(loaders.testerThanks, "TesterThanksScreen");
+export const RunInterruptedScreen = screen(loaders.runInterrupted, "RunInterruptedScreen");
 export const GuideScreen = screen(loaders.guide, "GuideScreen");
 export const FeedbackScreen = screen(loaders.feedback, "FeedbackScreen");
 export const StressScreen = screen(loaders.stress, "StressScreen");

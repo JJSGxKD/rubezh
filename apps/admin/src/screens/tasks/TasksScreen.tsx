@@ -4,15 +4,21 @@ import {
   CHANNEL_KIND,
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
+  FILTER_KEYS,
+  FILTER_LABELS,
+  FILTER_OPTIONS,
   GROUP_TITLES,
   KIND_TITLES,
+  NO_TIER_TITLE,
   PARTNER_KINDS,
   PARTNER_PLATFORMS,
   PARTNER_PLATFORM_TITLES,
   PERIOD_TITLES,
+  POOL_TIERS,
   REPEAT_TITLES,
   TASK_LIMIT_RANGE,
   TASK_PERIODS,
+  TIER_TITLES,
   TIME_KINDS,
   TITLE_MAX,
   completionsLabel,
@@ -27,6 +33,7 @@ import {
   togglePlatform,
   withKind,
   withPlatform,
+  type PoolTier,
   type TaskParams,
   type TaskDef,
 } from "../../api/tasks";
@@ -41,7 +48,7 @@ import { NetworkTasksPanel } from "./NetworkTasksPanel";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
-const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null };
+const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null };
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): что игроку делать
@@ -85,6 +92,8 @@ export function TasksScreen() {
   };
 
   const partner = PARTNER_KINDS.has(input.kind);
+  const filterKey = FILTER_KEYS[input.kind];
+  const pooled = !partner && input.period !== "achievement";
   const channel = input.kind === CHANNEL_KIND;
   const setParams = (patch: Partial<TaskParams>) => setInput({ ...input, params: { ...(input.params ?? { url: "" }), ...patch } });
 
@@ -136,6 +145,33 @@ export function TasksScreen() {
                 ))}
               </Select>
             </Field>
+            {filterKey === undefined ? null : (
+              <Field label={`Фильтр: ${FILTER_LABELS[filterKey]}`} help={HELP.tasks.filter}>
+                <Select
+                  value={input.filter?.[filterKey] ?? ""}
+                  onChange={(event) => setInput({ ...input, filter: event.target.value === "" ? null : { [filterKey]: event.target.value } })}
+                >
+                  <option value="">выберите</option>
+                  {Object.entries(FILTER_OPTIONS[filterKey]).map(([id, title]) => (
+                    <option key={id} value={id}>
+                      {title}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {pooled ? (
+              <Field label="Ступень" help={HELP.tasks.tier}>
+                <Select value={input.tier ?? ""} onChange={(event) => setInput({ ...input, tier: POOL_TIERS.find((tier) => tier === event.target.value) ?? null })}>
+                  <option value="">{NO_TIER_TITLE}</option>
+                  {POOL_TIERS.map((tier) => (
+                    <option key={tier} value={tier}>
+                      {TIER_TITLES[tier]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
             {partner ? null : (
               <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
                 <Input {...number("target")} min={1} />
@@ -256,6 +292,7 @@ export function TasksScreen() {
         {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
       </Panel>
 
+      {state.status === "ok" ? <RotationPanel rotation={state.data.rotation} catalog={state.data.tasks} /> : null}
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok"
@@ -273,6 +310,10 @@ export function TasksScreen() {
                 columns={[
                   { title: "id", render: (task) => <span className="font-mono text-xs">{task.taskId}</span> },
                   { title: "Вид", render: (task) => KIND_TITLES[task.kind] ?? task.kind },
+                  // Ступень — у дневных и недельных: из ступени пула берётся набор дня.
+                  ...(group.group === "daily" || group.group === "weekly"
+                    ? [{ title: "Ступень", render: (task: TaskDef) => (task.tier === null ? <span className="text-text-muted">всегда</span> : TIER_TITLES[task.tier]) }]
+                    : []),
                   { title: "Цель", align: "right", render: (task) => targetLabel(task) },
                   {
                     title: "Заголовок",
@@ -314,5 +355,40 @@ export function TasksScreen() {
         : null}
       {state.status === "ok" ? <NetworkTasksPanel rows={state.data.networks} onSaved={reload} /> : null}
     </div>
+  );
+}
+
+/**
+ * Что в ротации сейчас: id набора дня и недели по тем же правилам, что у
+ * игрока. Правка пула в течение суток меняет набор у всех сразу — правят
+ * вечером.
+ */
+function RotationPanel({ rotation, catalog }: { rotation: { daily: string[]; weekly: string[] }; catalog: readonly TaskDef[] }) {
+  const tierOf = (taskId: string): PoolTier | null => catalog.find((task) => task.taskId === taskId)?.tier ?? null;
+  const list = (ids: readonly string[]) =>
+    ids.length === 0 ? (
+      <span className="text-text-muted">пул пуст</span>
+    ) : (
+      ids.map((id) => (
+        <span key={id} className="mr-3 inline-block whitespace-nowrap font-mono text-xs">
+          {id}
+          {tierOf(id) === null ? null : <span className="text-text-muted"> · {TIER_TITLES[tierOf(id) ?? "easy"].toLowerCase()}</span>}
+        </span>
+      ))
+    );
+  return (
+    <Panel title="Сегодня в ротации">
+      <div className="flex flex-col gap-2 text-sm">
+        <div>
+          <span className="mr-2 text-text-muted">День:</span>
+          {list(rotation.daily)}
+        </div>
+        <div>
+          <span className="mr-2 text-text-muted">Неделя:</span>
+          {list(rotation.weekly)}
+        </div>
+        <Notice tone="info">Правка пула в течение суток меняет сегодняшний набор у всех игроков — правьте вечером.</Notice>
+      </div>
+    </Panel>
   );
 }

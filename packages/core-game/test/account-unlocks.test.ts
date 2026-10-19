@@ -5,7 +5,7 @@ import { WEAPONS } from "../src/content/weapons";
 import { replayRecording } from "../src/game/diagnostics/replay";
 import { chooseUpgrade, prepareOffers } from "../src/game/progression/levels";
 import { isEmptyLoadout, sanitizeLoadout } from "../src/game/progression/run-loadout";
-import { unlocksAt } from "../src/game/progression/unlocks";
+import { unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
 import { createRunWorld } from "../src/game/run-world";
 import { circling, recordHeadlessRun } from "./helpers/recorded-run";
 
@@ -46,8 +46,12 @@ describe("мир забега по уровню аккаунта", () => {
     expect(world(1, "wardstone").weaponTypes[world(1, "wardstone").loadout.weapons[0].typeIndex].id).toBe("wardstone");
     const locked = world(1, "sting");
     expect(locked.weaponTypes[locked.loadout.weapons[0].typeIndex].id).toBe(WEAPONS.find((weapon) => unlocksAt(ACCOUNT_UNLOCKS, 1).weapons.has(weapon.id))?.id);
-    const opened = world(6, "sting");
+    const stingLevel = unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", "sting") ?? 0;
+    const opened = world(stingLevel, "sting");
     expect(opened.weaponTypes[opened.loadout.weapons[0].typeIndex].id).toBe("sting");
+    const before = world(stingLevel - 1, "sting");
+    const firstOpen = WEAPONS.find((weapon) => unlocksAt(ACCOUNT_UNLOCKS, stingLevel - 1).weapons.has(weapon.id))?.id;
+    expect(before.weaponTypes[before.loadout.weapons[0].typeIndex].id).toBe(firstOpen);
   });
 
   it("предлагает только открытое и не больше слотов уровня", () => {

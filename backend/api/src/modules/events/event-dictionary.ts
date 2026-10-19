@@ -63,6 +63,10 @@ const runOutcome = payload({
   contentHash: id,
   isNewRecord: z.boolean(),
   cheats: z.boolean(),
+  // Откуда забег: `update` — прерван обновлением игры и засчитан брошенным при
+  // следующем запуске (tasks/T-0163). Необязательное: обычный исход поля не
+  // несёт, версия прежняя.
+  interrupted: id.optional(),
   // Сводка производительности (docs/28-diagnostics.md §3.2). Необязательная:
   // сборки до неё её не шлют, а смысл остальных полей она не меняет.
   perfFrames: count.optional(),
@@ -108,6 +112,9 @@ export const EVENT_DICTIONARY = {
   // со ссылкой, copy — копия ссылки; у старых клиентов поля нет.
   share_offered: { version: 1, payload: payload({ context: id, method: id.optional() }) },
   share_completed: { version: 1, payload: payload({ context: id, result: id, method: id.optional() }) },
+  // Разрешение боту писать (T-0010): где спросили и чем кончилось.
+  bot_access_offered: { version: 1, payload: payload({ place: id }) },
+  bot_access_result: { version: 1, payload: payload({ place: id, result: id }) },
   run_started: {
     version: 1,
     payload: payload({
@@ -127,6 +134,18 @@ export const EVENT_DICTIONARY = {
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },
   wave_reached: { version: 1, payload: payload({ wave: count, elapsedSec: seconds }) },
+  // Сундук забега (docs/39-retention-mechanics.md Б1): выпал с элиты или босса
+  // и открыт касанием. `size` — сколько улучшений в нём (1, 3 или 5).
+  chest_found: { version: 1, payload: payload({ index: count, size: count, source: id, elapsedSec: seconds }) },
+  chest_opened: {
+    version: 1,
+    payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
+  },
+  // Тестер забрал компенсацию после вайпа (Р87, tasks/T-0043): дошли ли и сколько выдано.
+  compensation_claimed: {
+    version: 1,
+    payload: payload({ tester: z.boolean(), bonusGems: count, restoredGems: count, continueGems: count }),
+  },
   // Второй шанс взят (docs/07-monetization-and-ads.md §8): откуда — `dev`
   // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
   // на какой секунде и волне забега.

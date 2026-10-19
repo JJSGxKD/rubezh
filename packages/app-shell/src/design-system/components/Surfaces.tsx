@@ -4,7 +4,9 @@ import { t } from "../../i18n";
 import { useBackLayer } from "../../state/back-stack";
 import { uiFeedback } from "../../state/ui-feedback";
 import { Button, IconButton } from "./Button";
+import { CutFrame } from "./CutFrame";
 import { Badge } from "./Data";
+import { modalFooterPlacement } from "./modal-rules";
 
 /**
  * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
@@ -35,18 +37,27 @@ export interface CardProps {
   appearIndex?: number;
   /** уменьшенные поля — для карточек, которые обязаны помещаться втроём в модалку */
   compact?: boolean;
+  /**
+   * Срезанный угол с рамкой по срезу вместо скругления (design/README.md): им
+   * отмечено главное на экране, поэтому свойство включают точечно. Внешней
+   * тени у среза нет — её обрезает `clip-path`.
+   */
+  cut?: boolean;
 }
 
 export function Card(props: CardProps): ReactNode {
   const interactive = props.onClick !== undefined;
   const selected = props.selected === true;
+  const cut = props.cut === true;
+  const padding = props.compact === true ? "p-3" : "p-4";
   const className = [
     // flex-col: кнопка по умолчанию центрирует содержимое по вертикали, и в
     // ряду карточек разной длины текст «плавал» бы на разной высоте.
-    "relative flex w-full flex-col overflow-hidden rounded-lg text-left",
-    props.compact === true ? "p-3" : "p-4",
+    // У среза обрезку и скругление делает сам `CutFrame`, поля — его слой.
+    cut ? "relative flex w-full flex-col text-left" : "relative flex w-full flex-col overflow-hidden rounded-lg text-left",
+    cut ? "" : padding,
     "transition-transform duration-(--duration-fast) ease-base",
-    selected ? "surface-card-selected" : "surface-card",
+    cut ? "" : selected ? "surface-card-selected" : "surface-card",
     interactive ? "active:scale-[0.98]" : "",
     props.disabled === true ? "opacity-60" : "",
     props.appearIndex === undefined ? "" : "animate-rise-in",
@@ -74,10 +85,19 @@ export function Card(props: CardProps): ReactNode {
     </>
   );
 
+  // Срез оборачивает содержимое, а не сам элемент: кнопка остаётся кнопкой.
+  const content = cut ? (
+    <CutFrame tone={selected ? "card-selected" : "card"} size="md" className={`flex w-full flex-col text-left ${padding}`}>
+      {body}
+    </CutFrame>
+  ) : (
+    body
+  );
+
   if (!interactive) {
     return (
       <div className={className} style={style}>
-        {body}
+        {content}
       </div>
     );
   }
@@ -91,7 +111,7 @@ export function Card(props: CardProps): ReactNode {
       className={className}
       style={style}
     >
-      {body}
+      {content}
     </button>
   );
 }
@@ -103,10 +123,18 @@ export function Card(props: CardProps): ReactNode {
  */
 export interface ModalProps {
   title?: string;
+  /** id заголовка в содержимом — имя диалога для диктора, когда своего `title` нет */
+  labelledBy?: string;
   /** значок над заголовком — у модалок забега он заменяет иллюстрацию */
   icon?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /**
+   * Подвал не прокручивается с телом, а закреплён под ним: на длинном листе
+   * прокручивается только середина, шапка и подвал на месте. Без `footer` не
+   * действует. Выключено по умолчанию — модалки забега тесные (§5.3).
+   */
+  pinFooter?: boolean;
   /** снизу — лист подтверждения, по центру — модалка забега */
   placement?: "center" | "bottom";
   /** широкая — для трёх карточек в ряд в ландшафте (§5.3) */
@@ -117,6 +145,8 @@ export interface ModalProps {
    * карточки улучшения не должен ничего делать.
    */
   onDismiss?: () => void;
+  /** срезанный угол панели (design/README.md): у окон выбора и итога забега */
+  cut?: boolean;
 }
 
 export function Modal(props: ModalProps): ReactNode {
@@ -141,12 +171,14 @@ export function Modal(props: ModalProps): ReactNode {
   // значок у них — сам предмет, и разносить его с названием нельзя. Тогда в
   // шапке только крестик.
   const headerTitle = closable && props.icon === undefined;
+  const footerPlacement = modalFooterPlacement({ hasFooter: props.footer !== undefined, pinFooter: props.pinFooter === true });
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
+      aria-labelledby={props.labelledBy}
       className={[
         "absolute inset-0 flex px-4",
         "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
@@ -156,9 +188,9 @@ export function Modal(props: ModalProps): ReactNode {
       style={{ zIndex: "var(--z-modal)" }}
     >
       <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" onClick={onDismiss} />
-      <div
+      <Panel
+        cut={props.cut === true}
         className={[
-          "surface-panel relative flex max-h-full w-full flex-col overflow-hidden rounded-xl",
           wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
           bottom ? "animate-sheet-in" : "animate-pop-in",
         ].join(" ")}
@@ -175,7 +207,8 @@ export function Modal(props: ModalProps): ReactNode {
         ) : null}
         <div
           className={[
-            "min-h-0 overflow-y-auto overscroll-contain px-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4",
+            "min-h-0 overflow-y-auto overscroll-contain px-5 short:px-4 landscape:px-4",
+            footerPlacement === "pinned" ? "" : "pb-5 short:pb-4 landscape:pb-4",
             closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
           ].join(" ")}
         >
@@ -198,9 +231,28 @@ export function Modal(props: ModalProps): ReactNode {
             </h2>
           )}
           {props.children}
-          {props.footer === undefined ? null : <div className="mt-5 grid gap-2">{props.footer}</div>}
+          {footerPlacement === "scroll" ? <div className="mt-5 grid gap-2">{props.footer}</div> : null}
         </div>
-      </div>
+        {footerPlacement === "pinned" ? (
+          <div className="grid shrink-0 gap-2 px-5 pt-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4">{props.footer}</div>
+        ) : null}
+      </Panel>
+    </div>
+  );
+}
+
+/** Панель модалки: со срезом — `CutFrame`, без него — прежняя поверхность со скруглением. */
+function Panel(props: { cut: boolean; className: string; children: ReactNode }): ReactNode {
+  if (props.cut) {
+    return (
+      <CutFrame tone="panel" size="md" className={`flex max-h-full w-full flex-col overflow-hidden ${props.className}`}>
+        {props.children}
+      </CutFrame>
+    );
+  }
+  return (
+    <div className={`surface-panel relative flex max-h-full w-full flex-col overflow-hidden rounded-xl ${props.className}`}>
+      {props.children}
     </div>
   );
 }

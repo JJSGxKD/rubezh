@@ -18,6 +18,8 @@ export interface FriendPeer {
   accountId: string;
   displayName: string;
   photoUrl: string | null;
+  /** знак «Тестер» (Р87); поля нет — не тестер, а дата знака в строку не попадает */
+  tester?: true;
 }
 
 export interface FriendRow extends FriendPeer {
@@ -87,7 +89,15 @@ export function orderedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-const PEER = { accountId: true, displayName: true, photoUrl: true } as const;
+const PEER = { accountId: true, displayName: true, photoUrl: true, testerAt: true } as const;
+
+/**
+ * Строка другого игрока: имя, аватар и знак — без даты знака. Строки собираются не разворотом выборки: новое
+ * поле выборки иначе утекло бы в ответ как есть.
+ */
+function peerOf(row: { accountId: string; displayName: string; photoUrl: string | null; testerAt: Date | null }): FriendPeer {
+  return { accountId: row.accountId, displayName: row.displayName, photoUrl: row.photoUrl, ...(row.testerAt === null ? {} : { tester: true as const }) };
+}
 
 @Injectable()
 export class PrismaFriendsRepository implements FriendsRepository {
@@ -120,7 +130,7 @@ export class PrismaFriendsRepository implements FriendsRepository {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
-    return rows.map((row) => ({ ...(row.accountA === accountId ? row.b : row.a), since: row.createdAt, source: row.source }));
+    return rows.map((row) => ({ ...peerOf(row.accountA === accountId ? row.b : row.a), since: row.createdAt, source: row.source }));
   }
 
   async count(accountId: string): Promise<number> {
@@ -134,7 +144,7 @@ export class PrismaFriendsRepository implements FriendsRepository {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
-    return rows.map((row) => ({ ...row.from, at: row.createdAt }));
+    return rows.map((row) => ({ ...peerOf(row.from), at: row.createdAt }));
   }
 
   async outgoing(accountId: string, limit: number): Promise<RequestRow[]> {
@@ -144,7 +154,7 @@ export class PrismaFriendsRepository implements FriendsRepository {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
-    return rows.map((row) => ({ ...row.to, at: row.createdAt }));
+    return rows.map((row) => ({ ...peerOf(row.to), at: row.createdAt }));
   }
 
   async areFriends(a: string, b: string): Promise<boolean> {

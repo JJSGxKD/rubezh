@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { batchCode, codeKey, type PromoCampaignRow } from "../src/modules/promo-codes/promo-code-rules.js";
 import { PrismaPromoCodesRepository, type NewPromoCampaign, type PromoCodeDraft } from "../src/modules/promo-codes/promo-codes.repository.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Промокоды на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -56,7 +56,7 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
   }
 
   beforeAll(() => {
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL, max: 12, connectionTimeoutMillis: 30_000 }) });
+    prisma = testPrisma(DATABASE_URL, 12);
     repository = new PrismaPromoCodesRepository(prisma);
     accounts = new PrismaAccountRepository(prisma);
   });

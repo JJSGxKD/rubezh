@@ -20,6 +20,7 @@ import { PartnersModule } from "../partners/partners.module.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
 import { AdminMediaController } from "./admin-media.controller.js";
+import { AdminPurchasesController } from "./admin-purchases.controller.js";
 import { AdminRestrictionsController } from "./admin-restrictions.controller.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { MediaModule } from "../media/media.module.js";
@@ -98,6 +99,7 @@ import { RoleConfirmations } from "./role-confirmations.js";
     AdminTasksController,
     AdminMediaController,
     AdminRestrictionsController,
+    AdminPurchasesController,
     AdminAdsController,
     AdminShopController,
     AdminPromoCodesController,

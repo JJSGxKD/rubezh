@@ -1,20 +1,24 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
-import { partnerInputSchema } from "../partners/partner-rules.js";
+import { PARTNER_STATUSES, partnerInputSchema } from "../partners/partner-rules.js";
 import { PartnersService, type PartnerDetail, type PartnerView } from "../partners/partners.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 
+/** Смена статуса: сам статус и причина; длину причины проверяет сервис — одна проверка на все пути. */
+const statusSchema = z.object({ status: z.enum(PARTNER_STATUSES), reason: z.string().max(1_000) }).strict();
+
 /**
  * Партнёры в панели (docs/35-stage4-plan.md WP41, часть 2; docs/29-admin-panel.md):
  * смотрят под `partners.view`, заводят и правят под `partners.edit`, каждое
  * изменение — в аудит. Удаления нет: по партнёру считаются его игроки.
+ * Статус партнёра меняется отдельной ручкой, с причиной.
  */
 @Controller("admin/partners")
 @UseGuards(AdminSessionGuard, PermissionGuard)
@@ -50,6 +54,14 @@ export class AdminPartnersController {
     const actor = await this.consume(request);
     const input = parse(() => partnerInputSchema.parse(body), "Некорректный партнёр");
     return { data: await this.partners.update(actor, partnerIdOf(partnerId), input) };
+  }
+
+  @Put(":partnerId/status")
+  @RequirePermission("partners.edit")
+  async setStatus(@Req() request: unknown, @Param("partnerId") partnerId: string, @Body() body: unknown): Promise<{ data: PartnerView }> {
+    const actor = await this.consume(request);
+    const { status, reason } = parse(() => statusSchema.parse(body), "Нужны статус — заявка, активен, приостановлен или отклонён — и причина");
+    return { data: await this.partners.setStatus(actor, partnerIdOf(partnerId), status, reason) };
   }
 
   private async consume(request: unknown) {

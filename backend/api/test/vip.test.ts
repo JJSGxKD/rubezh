@@ -127,7 +127,7 @@ function setup(settings = config(), register = true) {
   const restrictions = new MemoryRestrictionsRepository();
   const gate = restrictionsGate(restrictions);
   const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), hooks, revocation, gate);
-  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers), new RunsHooks(), providers, fulfillment, purchases);
+  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers, new PurchaseRevocation()), new RunsHooks(), providers, fulfillment, purchases);
   const repository = new CuttingVipRepository();
   const wallet = new FakeWallet();
   const bonuses = new WalletBonuses();

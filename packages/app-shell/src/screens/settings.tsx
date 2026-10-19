@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CONTENT_HASH } from "@bh/core-game";
 import {
   ContentColumn,
@@ -14,6 +14,8 @@ import { Slider } from "../design-system/components/Slider";
 import { t } from "../i18n";
 import "../i18n/bot";
 import { noteAccountSetting } from "../state/account-settings";
+import { botAccessSupported, useBotAccess } from "../state/bot-access";
+import { hydrateBotAccess, loadBotAccess, requestBotAccess } from "./home-bot-access";
 import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
 import { useDiagnostics } from "../state/diagnostics";
 import { useGraphics } from "../state/graphics";
@@ -41,7 +43,14 @@ export function SettingsScreen(): ReactNode {
   // Бот пишет только аккаунту и только там, где у площадки он есть.
   const botAvailable = useShell((state) => state.capabilities.auth !== undefined && state.capabilities.botUrl !== "");
   const bot = useBotNotifications();
+  const canMessage = useBotAccess((state) => state.canMessage);
+  const [askingBot, setAskingBot] = useState(false);
   const [hintsReset, setHintsReset] = useState(false);
+  useEffect(() => {
+    if (!botAvailable) return;
+    hydrateBotAccess();
+    void loadBotAccess();
+  }, [botAvailable]);
 
   return (
     <Screen title={t("settings.title")} onBack={() => navigation.pop()}>
@@ -133,6 +142,19 @@ export function SettingsScreen(): ReactNode {
                 пишет. Лента в игре получает всё независимо от этого выбора. */}
             <SectionTitle>{t("settings.bot")}</SectionTitle>
             <ListGroup>
+              {/* Пока сервер не ответил, не знаем — пункта нет. */}
+              {canMessage === false && botAccessSupported() ? (
+                <ListItem
+                  title={t("settings.bot.allow")}
+                  hint={t("settings.bot.allow.hint")}
+                  value={t("settings.bot.allow.action")}
+                  disabled={askingBot}
+                  onClick={() => {
+                    setAskingBot(true);
+                    void requestBotAccess("settings").finally(() => setAskingBot(false));
+                  }}
+                />
+              ) : null}
               {BOT_NOTIFY_KEYS.map((key) => (
                 <ListItem
                   key={key}

@@ -4,6 +4,7 @@ import {
   Button,
   ContentColumn,
   ErrorState,
+  Hint,
   PageTitle,
   Screen,
   SectionTitle,
@@ -463,13 +464,27 @@ function EquippedTotals(props: { totals: readonly { stat: string; value: number 
   return (
     <section className="surface-sunken mt-3 rounded-lg p-3" aria-label={t("arsenal.totals")}>
       <h2 className="mb-1 text-xs font-semibold text-text-muted">{t("arsenal.totals")}</h2>
-      <ul className="grid grid-cols-1 gap-x-4 gap-y-0.5 text-sm landscape:grid-cols-2">
-        {props.totals.map((total) => (
-          <li key={total.stat} className="flex items-center justify-between">
-            <span className="text-text">{statName(total.stat)}</span>
-            <span className="font-semibold tabular-nums text-success">{statValue(total.stat, total.value)}</span>
-          </li>
-        ))}
+      {/* Шаг между строками — gap-y-1.5: области нажатия соседних «?» не должны перекрываться. */}
+      <ul className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm landscape:grid-cols-2">
+        {props.totals.map((total) => {
+          const name = <span className="text-text">{statName(total.stat)}</span>;
+          const value = <span className="font-semibold tabular-nums text-success">{statValue(total.stat, total.value)}</span>;
+          if (!hasTranslation(`item.stat.${total.stat}.hint`)) {
+            return (
+              <li key={total.stat} className="flex items-center justify-between">
+                {name}
+                {value}
+              </li>
+            );
+          }
+          return (
+            <li key={total.stat}>
+              <Hint label={statName(total.stat)} text={t(`item.stat.${total.stat}.hint`)} end={value}>
+                {name}
+              </Hint>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

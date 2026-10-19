@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { uiFeedback } from "../../state/ui-feedback";
+import { CutFrame } from "./CutFrame";
 
 /**
  * Кнопка. Минимальная область нажатия — 44×44 CSS px, даже если сама кнопка
@@ -27,6 +28,12 @@ export interface ButtonProps {
   block?: boolean;
   /** «дышащий» ореол — только у одного действия на экране, иначе он ничего не выделяет */
   glow?: boolean;
+  /**
+   * Срезанный угол с рамкой по срезу (design/README.md) — только у главной
+   * кнопки экрана: `variant="primary"` или `"stars"` (главная покупка
+   * магазина). У других вариантов игнорируется.
+   */
+  cut?: boolean;
   ariaLabel?: string;
 }
 
@@ -44,9 +51,42 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
   l: "min-h-16 rounded-lg px-6 text-lg font-bold tracking-wide uppercase",
 };
 
+/** Кнопка со срезом: высота и шрифт те же, что у обычной, а поля и скругление уходят внутрь среза. */
+const CUT_BUTTON_CLASS: Record<ButtonSize, string> = {
+  s: "min-h-9 text-xs font-semibold",
+  m: "min-h-12 text-base font-semibold",
+  l: "min-h-16 text-lg font-bold tracking-wide uppercase",
+};
+
+const CUT_PADDING_CLASS: Record<ButtonSize, string> = { s: "px-2.5", m: "px-5", l: "px-6" };
+
+/** Скругление кнопки: у обёртки свечения радиуса нет, `inherit` не сработал бы. */
+function radiusOf(size: ButtonSize): string {
+  return SIZE_CLASS[size].split(" ").find((name) => name.startsWith("rounded-")) ?? "rounded-md";
+}
+
+/** Не-главные варианты со `cut` предупреждаем один раз за сессию, а не на каждой отрисовке. */
+const warnedCut = new Set<ButtonVariant>();
+
+/**
+ * Срез у кнопки — только главное действие экрана: `primary` или кнопка звёзд
+ * (главная покупка магазина). Остальным `cut` не нужен: тихо проглотить его
+ * значило бы спрятать ошибку вёрстки.
+ */
+function cutAllowed(variant: ButtonVariant, requested: boolean): boolean {
+  if (!requested) return false;
+  if (variant === "primary" || variant === "stars") return true;
+  if (!warnedCut.has(variant)) {
+    warnedCut.add(variant);
+    console.warn(`Button: свойство cut работает только у variant="primary" и "stars", у "${variant}" оно игнорируется`);
+  }
+  return false;
+}
+
 export function Button(props: ButtonProps): ReactNode {
   const { variant = "primary", size = "m", disabled = false, loading = false } = props;
   const inactive = disabled || loading;
+  const cut = cutAllowed(variant, props.cut === true);
 
   const handleClick = (): void => {
     if (inactive) return;
@@ -54,7 +94,7 @@ export function Button(props: ButtonProps): ReactNode {
     props.onClick?.();
   };
 
-  return (
+  const button = (
     <button
       type="button"
       aria-label={props.ariaLabel}
@@ -65,19 +105,40 @@ export function Button(props: ButtonProps): ReactNode {
         "relative isolate inline-flex items-center justify-center gap-2 font-display",
         "transition-transform duration-(--duration-fast) ease-base",
         "active:translate-y-0.5 active:scale-[0.98] disabled:opacity-45 disabled:active:translate-y-0 disabled:active:scale-100",
-        VARIANT_CLASS[variant],
-        SIZE_CLASS[size],
+        // Заливку, рамку и скругление у среза рисует `CutFrame` внутри кнопки.
+        cut ? "" : VARIANT_CLASS[variant],
+        cut ? CUT_BUTTON_CLASS[size] : SIZE_CLASS[size],
         props.block === true ? "w-full" : "",
       ].join(" ")}
     >
-      {props.glow === true && !inactive ? (
-        <span
-          aria-hidden="true"
-          className="halo-accent pointer-events-none absolute -inset-3 -z-10 animate-glow rounded-[inherit]"
-        />
-      ) : null}
-      {loading ? <Spinner /> : props.children}
+      {cut ? (
+        <CutFrame
+          tone={variant === "stars" ? "stars" : "primary"}
+          size="sm"
+          className={`flex flex-1 items-center justify-center gap-2 self-stretch ${CUT_PADDING_CLASS[size]}`}
+        >
+          {loading ? <Spinner /> : props.children}
+        </CutFrame>
+      ) : loading ? (
+        <Spinner />
+      ) : (
+        props.children
+      )}
     </button>
+  );
+
+  if (props.glow !== true || inactive) return button;
+
+  // Свечение — соседний слой позади кнопки: потомок с отрицательным z-index
+  // рисовался бы над её фоном, и фон мигал бы вместе с ореолом.
+  return (
+    <span className={`relative isolate ${props.block === true ? "flex w-full" : "inline-flex"}`}>
+      <span
+        aria-hidden="true"
+        className={`halo-accent pointer-events-none absolute -inset-3 -z-10 animate-glow ${radiusOf(size)}`}
+      />
+      {button}
+    </span>
   );
 }
 

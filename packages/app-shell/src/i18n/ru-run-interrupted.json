@@ -1,0 +1,6 @@
+{
+  "runInterrupted.title": "Игра обновилась — забег засчитан",
+  "runInterrupted.text": "Забег прервался из-за обновления, но не пропал.",
+  "runInterrupted.result": "Вы продержались {time} и дошли до уровня {level}.",
+  "runInterrupted.ok": "Понятно"
+}

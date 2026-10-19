@@ -17,6 +17,7 @@ import { watchPlatform } from "./state/platform";
 import { useTools } from "./state/tools";
 import { useRuns } from "./state/runs";
 import { recoverDownedRun } from "./state/run";
+import { settleInterruptedRun } from "./state/run-interrupted";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
@@ -104,6 +105,10 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // очереди забегов, которые он пополнит (state/downed-run.ts).
   recoverDownedRun();
   useDevMode.getState().hydrate();
+  // Забег, прерванный обновлением игры, засчитывается брошенным — после
+  // рекорда, очереди итогов и настроек разработчика, которые ему нужны
+  // (state/run-interrupted.ts).
+  settleInterruptedRun();
   useGraphics.getState().hydrate();
   useFeedback.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
@@ -149,6 +154,11 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
           import("./state/test-notice")
             .then(({ syncTestNotice }) => syncTestNotice())
             .catch((error: unknown) => console.warn("Предупреждение о тесте не загрузилось:", error));
+          // Компенсация тестеру после вайпа — окно в лобби, после
+          // предупреждения о тесте (docs/35-stage4-plan.md Р87).
+          import("./state/compensation")
+            .then(({ syncCompensation }) => syncCompensation())
+            .catch((error: unknown) => console.warn("Компенсация тестеру не загрузилась:", error));
           // Знаки меню и колокольчик — тогда же и на каждом возврате в
           // приложение (docs/35-stage4-plan.md §3.17).
           import("./state/badges-api")

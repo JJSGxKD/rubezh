@@ -144,13 +144,6 @@ export const SOUND_RECIPES = {
       { kind: "hiss", dur: 0.02, seed: 21, filter: "lowpass", f0: 1800, peak: 0.15, decay: 0.015 },
     ],
   },
-  hearth: {
-    bus: "weapons", level: 0.45, voices: 1, gap: 0.35, send: 0.12, dur: 0.42, variants: 2, pitch: [1, 0.94],
-    layers: [
-      { kind: "hiss", dur: 0.36, seed: 31, filter: "lowpass", f0: 380, f1: 180, glide: 0.3, attack: 0.05, peak: 0.36, decay: 0.3 },
-      { kind: "tone", f0: 68, f1: 50, glide: 0.25, attack: 0.03, peak: 0.28, decay: 0.28 },
-    ],
-  },
   storm: {
     bus: "weapons", level: 0.62, voices: 1, gap: 0.4, send: 0.3, dur: 1.15, variants: 3, pitch: [1, 0.95, 1.05],
     layers: [

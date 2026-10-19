@@ -6,6 +6,7 @@ import { t } from "../../i18n";
 import "../../i18n/run";
 import "../../i18n/payments";
 import { useAdContinue, type AdContinueStage } from "../../state/ad-continue";
+import { adButtonLook } from "./ad-continue-look";
 
 /**
  * Второй шанс за рекламу — кнопка и строка состояния под ней
@@ -33,24 +34,17 @@ export function AdContinue(props: { result: RunResult; locked: boolean; wide: bo
  */
 export function AdContinueView(props: { stage: AdContinueStage; locked: boolean; wide: boolean; onWatch(): void }): ReactNode {
   const { stage } = props;
-  const pass = (stage.kind === "ready" || stage.kind === "watching") && stage.pass;
+  const look = adButtonLook(stage, { locked: props.locked, wide: props.wide });
   const line = lineOf(stage);
 
   return (
     <>
-      {stage.kind === "unavailable" ? null : (
-        <Button
-          block
-          variant="secondary"
-          loading={stage.kind === "checking" || stage.kind === "watching"}
-          disabled={stage.kind !== "ready" || props.locked}
-          ariaLabel={t(pass ? "run.continue.vip" : "run.continue.ad")}
-          onClick={props.onWatch}
-        >
-          {pass ? <Crown size={18} aria-hidden="true" /> : <Tv size={18} aria-hidden="true" />}
+      {look === null ? null : (
+        <Button block variant={look.variant} loading={look.loading} disabled={look.disabled} ariaLabel={t(look.ariaKey)} onClick={props.onWatch}>
+          {look.pass ? <Crown size={18} aria-hidden="true" /> : <Tv size={18} aria-hidden="true" />}
           {/* Рядом с кнопкой звёзд — коротко: колонка экрана смерти узкая, и
               «За рекламу» переносилась на две строки. Одна — целиком. */}
-          {t(pass ? (props.wide ? "run.continue.vip.wide" : "run.continue.vip.short") : props.wide ? "run.continue.ad" : "run.continue.ad.short")}
+          {t(look.labelKey)}
         </Button>
       )}
       {line === null ? null : (

@@ -3,8 +3,8 @@ id: T-0088
 title: Внешняя проверка прода без ложных тревог и без записи развёртывания на каждый прогон
 epic: E3
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead2-8
 size: M
 depends_on: []
@@ -21,7 +21,7 @@ executor: sonnet-5.5
 effort: high
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0088. Внешняя проверка прода без ложных тревог и записей развёртывания

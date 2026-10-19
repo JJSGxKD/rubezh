@@ -78,7 +78,7 @@ erDiagram
     ACCOUNT ||--o{ REFERRAL_BINDING : "кого пригласил"
     ACCOUNT ||--o{ FRIEND_RETURN : "вернулся по ссылке друга / помог вернуть"
     ACCOUNT ||--o{ FRIEND_BONUS : "забранные ступени бонуса за друзей"
-    LINK ||--o{ LINK_CLICK : "клики; краулеры превью не пишутся"
+    LINK ||--o{ LINK_CLICK : "клики; краулеры превью и проверки доступности не пишутся"
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
     LINK ||--o{ AD_CONVERSION : "конверсии в сеть ссылки"
     LINK_CLICK ||--o{ AD_CONVERSION : "клик, который привёл новичка"
@@ -110,6 +110,10 @@ erDiagram
     ACCOUNT ||--o| VIP_DAILY : "самоцветы VIP дня"
     ACCOUNT ||--o{ SHOWCASE_OFFER : "витрина снаряжения на сутки"
     ACCOUNT ||--o| TESTER_COMPENSATION : "что вернуть тестеру после вайпа"
+    SEASON ||--o{ SEASON_RESULT : "итоги аккаунтов по сложностям"
+    SEASON ||--o{ SEASON_REWARD : "награды аккаунтов"
+    ACCOUNT ||--o{ SEASON_RESULT : "место в закрытом сезоне"
+    ACCOUNT ||--o{ SEASON_REWARD : "награда за сезон"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -148,7 +152,7 @@ erDiagram
         uuid account_id FK
         enum platform
         enum place "miniapp|web|channel: channel — /start бота"
-        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|unknown"
+        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|link|unknown"
         string start_param "nullable: из подписанного initData"
         string start_ref "nullable: код клика, id партнёра Telegram"
         string client_platform "nullable: подсказка клиента"
@@ -400,7 +404,7 @@ erDiagram
         string telegram_charge_id UK "nullable: id оплаты в Telegram"
         datetime invoiced_at "когда выставлен последний счёт"
         datetime paid_at "nullable: продолжение выдано"
-        enum refund_reason "nullable: test_mode|unused|external|undeliverable"
+        enum refund_reason "nullable: test_mode|unused|external|undeliverable|manual"
         datetime refund_requested_at "nullable"
         datetime refunded_at "nullable"
         datetime fulfilled_at "nullable: товар магазина выдан журналом кошелька, период VIP — записан"
@@ -546,6 +550,7 @@ erDiagram
         string medium "nullable"
         string network "nullable: adsgram — сеть, куда уходят конверсии; CHECK"
         string registration_on "first_run|launch: что сеть считает регистрацией"
+        string target "app|bot|landing: куда ведёт, по умолчанию app (Р95)"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }
@@ -632,8 +637,10 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level; партнёрские — channel, link, bot"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; партнёрские — channel, link, bot"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
+        string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
+        json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
         int target "больше нуля"
         string title "nullable: текст по виду цели у клиента"
         int coins
@@ -859,6 +866,12 @@ erDiagram
         uuid created_by "без FK"
         datetime created_at
         datetime updated_at
+        string telegram_id "nullable, UK: вход в будущий кабинет"
+        string status "applied|active|paused|rejected, по умолчанию active: привязывает новых игроков только active"
+        string country "nullable: ISO-код двух букв, где получает выплаты"
+        string payout_currency "nullable: код из ядра курсов"
+        string payout_method "nullable: реквизиты словами"
+        decimal share_percent "nullable, 0–100: записывается, не начисляется до модели учёта (О44)"
     }
 
     PARTNER_BINDING {
@@ -920,6 +933,36 @@ erDiagram
         int continue_stars "звёзды за второй шанс: выдача переводит их в самоцветы по курсу О43"
         datetime snapshot_at
         datetime claimed_at "nullable: окно «Спасибо за тест» выдало компенсацию"
+    }
+
+    SEASON {
+        string season_key PK "дата понедельника UTC: 2026-11-02"
+        datetime starts_at
+        datetime ends_at
+        datetime closed_at "когда закрыт; строки нет, пока сезон не закрыт"
+        int players "аккаунтов в итогах хоть одной сложности"
+        int rewarded "скольким назначена награда"
+    }
+
+    SEASON_RESULT {
+        string season_key PK "и FK на SEASON"
+        uuid account_id PK "и FK на ACCOUNT"
+        enum difficulty PK "easy / normal / hard"
+        float best_sec "лучшее рейтинговое время недели"
+        int place "с единицы; при равном времени выше показавший раньше"
+        int board_size "игроков в таблице сложности"
+    }
+
+    SEASON_REWARD {
+        string season_key PK "и FK на SEASON"
+        uuid account_id PK "и FK на ACCOUNT: одна награда на пару"
+        int coins
+        int prestige "только записан: хранилища очков пока нет"
+        enum difficulty "nullable: у награды за место"
+        int place "nullable: у награды за место"
+        string kind "place или threshold"
+        string status "pending или claimed"
+        datetime claimed_at "nullable: забрано"
     }
 ```
 
@@ -1011,6 +1054,11 @@ erDiagram
   Подписка на канал бывает ежедневной и еженедельной (Р82): срок — тот же
   `period`, каждый срок — своя строка прогресса, бот спрашивается при
   каждом заборе. У ссылки и бота повтора нет — переход не проверить.
+  Ротация (`39-retention-mechanics.md` П1, Р102): у строк пула есть ступень
+  `tier`, из которой чистая функция от игровых суток или недели (по
+  Москве) выбирает набор — 2/2/1 дневных, 2/3/1 недельных. Набор нигде не
+  хранится: он одинаков у всех игроков и реплик, забег двигает только
+  выбранные, невыбранные нельзя забрать, знак меню их не считает.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
@@ -1093,7 +1141,21 @@ erDiagram
   тестер, или у него есть невозвращённая покупка, или звёзды за второй шанс.
   Знак `ACCOUNT.tester_at` ставится снимком, а не при выдаче, и не
   перезаписывается. Звёзды за второй шанс хранятся звёздами: курс в самоцветы
-  (О43) применяет выдача.
+  (О43) применяет выдача. Выдача (T-0042) сначала начисляет по ключам, потом
+  ставит `claimed_at` условным `UPDATE` — повтор безопасен.
+- **`SEASON`, `SEASON_RESULT`, `SEASON_REWARD` — недельный сезон рейтинга**
+  (`39-retention-mechanics.md` Р1, `tasks/T-0110`, поток закрытия — §4.27).
+  Таблицы появляются закрытием: строка `SEASON` вставляется в транзакции
+  первой, и её первичный ключ делает закрытие идемпотентным при любом числе
+  реплик. Незакрытых сезонов в таблице нет — идущую неделю показывает живая
+  таблица в Redis (`seasons:<сезон>:<сложность>`, проекция `run`). Итог
+  считается из `run` (`ranked`, `finished_at` в окне недели), а не из Redis,
+  поэтому снятие забега модератором до закрытия учтено само. Награда одна на
+  пару (сезон, аккаунт) и ждёт «Забрать»: монеты кладёт кошелёк ключом
+  `season:<сезон>:<аккаунт>` с причиной `season_reward`, потом `status`
+  становится `claimed` условным `UPDATE`. Проверки вида, статуса и места —
+  `CHECK` в миграции. Всё уходит вместе с аккаунтом; план вайпа оставляет
+  таблицы (`wipe-plan.ts`, решение тимлидов — открытый вопрос `T-0110`).
 - **`VIP_SUBSCRIPTION`, `VIP_PERIOD`, `VIP_DAILY` — VIP** (`35-stage4-plan.md`,
   §3.6, Р20, Р44, WP10). Срок VIP — не поле, а журнал периодов: каждая
   оплата — ровно один период, начатый с конца прежнего, и конец VIP — самый
@@ -1524,6 +1586,7 @@ flowchart TD
     CG["packages/core-game<br/>забег: симуляция + Phaser, content/*"]
     ST["packages/shared-types<br/>контракты, лист графа"]
     FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
+    PK["packages/proxy-kit<br/>подписки Xray, конфиг спутника, пул узлов:<br/>ядро без игры, Nest и Prisma"]
     API["backend/api<br/>NestJS"]
     DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
 
@@ -1735,8 +1798,11 @@ flowchart LR
         TASKS["tasks<br/>задания и достижения: каталог в базе,<br/>прогресс от забегов, реализовано"]
         MEDIA["media<br/>картинки из панели в базе по хэшу:<br/>проверка WebP, вечный кеш, реализовано"]
         TESTNOTICE["test-notice<br/>предупреждение об открытом тесте:<br/>принятие на аккаунт, реализовано"]
+        WIPE["wipe<br/>компенсация тестеру после вайпа:<br/>выдача по кнопке, один раз, реализовано"]
         PROMOC["promo-codes<br/>промокоды и коды партнёров:<br/>ключ кода, активация, реализовано"]
         RESTR["restrictions<br/>ограничения игрока по видам и на срок:<br/>«можно ли» с кешем 30 с, снятие по сроку<br/>под локом, реализовано"]
+        SEASONS["seasons<br/>недельный сезон рейтинга: таблица недели,<br/>закрытие по понедельникам UTC, награды<br/>за порог и за место, друзья, реализовано"]
+        OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, запись о каждой попытке<br/>в приёмник (пока пустой), реализовано"]
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
     end
 
@@ -1790,11 +1856,13 @@ flowchart LR
     PAY -- порт оплаты --> TGADP
     AUTH -- порт проверки запуска --> TGADP
     INGEST -- порт проверки запуска --> TGADP
-    TGADP -- createInvoiceLink, answerPreCheckoutQuery, refundStarPayment --> TGAPI
+    TGADP -- createInvoiceLink, answerPreCheckoutQuery, refundStarPayment --> OUTBOUND
+    OUTBOUND -- "telegram.bot" --> TGAPI
     PAY --> QUEUE
     WELCOME -. рекорд и место .-> RUNS
     EXPORT --> QUEUE
-    FXM -- раз в минуту, под локом --> FXSRC
+    FXM -- раз в минуту, под локом --> OUTBOUND
+    OUTBOUND -- "fx.cbr, fx.ecb, fx.erapi, fx.coingecko, fx.tonapi, fx.binance" --> FXSRC
     FXM --> PG
     FXM --> REDIS
     FXM -. алерты курсов .-> NOTIFY
@@ -1816,7 +1884,7 @@ flowchart LR
     BOOSTS --> PG
     ITEMS --> PG
     EXPORT --> PG
-    QUEUE -- sendPhoto, sendDocument --> TGAPI
+    QUEUE -- sendPhoto, sendDocument --> OUTBOUND
 
     AUTH --> PG
     AUTH --> REDIS
@@ -1843,7 +1911,8 @@ flowchart LR
     RUNS -. слушатели записанного забега .-> PAY
     ADS -- "ad_network, ad_block, ad_session" --> PG
     ADSGRAMAPI -. "адрес награды задания: /api/v1/ads/adsgram/reward, секрет в пути" .-> CADDY
-    ADS -. "ads/get и показы креатива; exchange/feed, exchange/check — задания ленты" .-> TADDYAPI
+    ADS -. "ads/get и показы креатива; exchange/feed, exchange/check — задания ленты" .-> OUTBOUND
+    OUTBOUND -. "taddy.api, taddy.exchange" .-> TADDYAPI
     ADMINAPI -. "сети, блоки, воронка показов" .-> ADS
     WHEEL -. "забор сессии места wheel_spin" .-> ADS
     REF --> PG
@@ -1876,7 +1945,9 @@ flowchart LR
     ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG
     ADCONV -- "лок ad-conversions:lock" --> REDIS
     ADCONV -. токен конверсий на каждой отправке .-> SECRETS
-    ADCONV -- "confirm_conversion, таймаут 5 с" --> ADSGRAMAPI
+    ADCONV -- "confirm_conversion, таймаут 5 с" --> OUTBOUND
+    OUTBOUND -- "ads.postback" --> ADSGRAMAPI
+    ADMINAPI -- "проверка ключа интеграции: secrets.check" --> OUTBOUND
     ADMINAPI -. "журнал и повтор конверсий ссылки" .-> ADCONV
     ADMINAPI -. рассылки .-> BCAST
     BCAST --> PG
@@ -1927,6 +1998,16 @@ flowchart LR
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
     ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE
+    CADDY -- "/api/v1/me/compensation" --> WIPE
+    WIPE -- "tester_compensation: прочитать, отметить" --> PG
+    WIPE -. "начисления по ключам покупок и wipe:*" .-> WALLET
+    CADDY -- "/api/v1/seasons" --> SEASONS
+    SEASONS -- "season, season_result, season_reward; итоги из run" --> PG
+    SEASONS -- "seasons:сезон:сложность, лок закрытия" --> REDIS
+    RUNS -. "записанный забег и смена ранга, RunsHooks" .-> SEASONS
+    SEASONS -. "награда ключом season:сезон:аккаунт" .-> WALLET
+    SEASONS -. "принятые друзья для таблицы друзей" .-> FRIENDS
+    SEASONS -. "ограничение рейтинга: убрать, вернуть, исключить из итогов" .-> RESTR
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
@@ -1948,6 +2029,7 @@ flowchart LR
     RESTR -- "account_restriction; отметка блокировки в account" --> PG
     RESTR -- "канал restrictions:changed, лок задачи по сроку" --> REDIS
     ADMINAPI -. "наложить и снять; отзыв сессий при блокировке" .-> RESTR
+    ADMINAPI -- "возврат и выдача покупки поддержкой" --> PAY
     REF -. "можно ли: награды за друзей" .-> RESTR
     FRIENDS -. "можно ли: подарки, бонус за друзей" .-> RESTR
     ADS -. "можно ли: награды за рекламу" .-> RESTR
@@ -2385,7 +2467,8 @@ sequenceDiagram
 
 Краулер мессенджера, запрашивающий превью ссылки, кликом **не считается** —
 иначе одна отправка в чат порождает фантомный клик и занижает конверсию
-(`24-attribution-and-sharing.md` §3.3).
+(`24-attribution-and-sharing.md` §3.3). Так же не считаются известные
+сервисы проверки доступности: они получают страницу 200 без кеша.
 
 ### 4.6 Аналитический конвейер
 
@@ -3310,6 +3393,96 @@ sequenceDiagram
   её задания идут с приоритетом 1. Приоритет получают и обычные обновления —
   2: BullMQ берёт задание без приоритета раньше любого приоритетного, и оплата
   встала бы за всеми `/start`.
+
+### 4.27 Закрытие недельного сезона (этап 4, реализовано)
+
+Раз в 15 минут (`seasons/season-close.job.ts`, планировщик BullMQ с одним id)
+сервер закрывает **все** просроченные сезоны: сервер лежал две недели — закроет
+обе, по порядку. Включается ключом `seasons.start-date`; пока он пуст, проход —
+одно чтение настройки.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant J as Задание BullMQ
+    participant S as SeasonsCloseService
+    participant R as Redis
+    participant P as Postgres
+
+    J->>S: closeDue(now)
+    S->>S: сезоны с начала до последнего закончившегося
+    S->>R: SET seasons:close:lock токен NX PX
+    alt лок занят другой репликой
+        S-->>J: ничего, следующий проход через 15 минут
+    else лок взят
+        S->>P: какие из сезонов уже закрыты
+        loop каждый незакрытый сезон по порядку
+            S->>P: транзакция: INSERT season ON CONFLICT DO NOTHING
+            alt строка не вставлена (закрыла другая реплика)
+                P-->>S: 0 строк — пропустить, события нет
+            else вставлена
+                S->>P: INSERT season_result — rank() по времени, при равенстве раньше показавший
+                S->>P: INSERT season_reward пачками — награда за место или за порог
+                S->>P: UPDATE season: players, rewarded
+                P-->>S: коммит
+                S->>S: лог season_closed
+            end
+        end
+        S->>R: снять лок, только если токен свой
+    end
+```
+
+- **Три слоя защиты, каждый ловит своё.** Расписание с одним id — задание берёт
+  одна реплика. Лок Redis с токеном — вторая, всё же запустившая закрытие,
+  уходит сразу, а чужой лок не снимается. Первичный ключ `season_key` — если
+  лок потерялся: вторая транзакция ждёт на вставке строки сезона, после
+  коммита первой получает ноль строк и ничего не пишет.
+- **Итоги — из `run`, не из Redis.** Окно `finished_at` — понедельник 00:00
+  включительно, следующий понедельник 00:00 исключительно (UTC); только
+  `ranked = true` и законченные забеги. Аккаунты с закрытым рейтингом на
+  момент закрытия исключены целиком: без места и награды.
+- **Награду игрок забирает сам** (`POST /api/v1/seasons/:key/claim`): монеты
+  по ключу `season:<сезон>:<аккаунт>`, затем `pending → claimed` условным
+  `UPDATE`. Сбой между шагами награды не теряет: повтор найдёт монеты по ключу.
+
+### 4.28 Счётчик онлайна: пинг, пересчёт, ответ (этап 4, реализовано)
+
+Любой запрос под сессией игрока — активность (`AuthGuard` не ждёт Redis), а
+клиент шлёт пинг только в тишине. Пересчёт раз в 15 с — одно задание BullMQ на
+все реплики. Пороги применяет сервер (`online/online.service.ts`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Клиент
+    participant G as AuthGuard
+    participant O as OnlineService
+    participant R as Redis
+    participant J as Задание online (раз в 15 с)
+    participant A as Панель
+
+    C->>G: любой запрос с токеном
+    G--)O: touch(аккаунт) — без ожидания
+    O--)R: ZADD online:app:площадка, PFADD online:day:сутки
+    C->>O: POST /online/ping { inRun }
+    O->>R: ZADD или ZREM online:run:площадка
+    O->>R: GET online:counts
+    R-->>O: готовые числа
+    O-->>C: online, inRun, todayPlayed — null ниже порога, nextPingSec
+    J->>O: recount(now)
+    O->>R: ZREMRANGEBYSCORE старше окна, ZCARD, PFCOUNT
+    O->>R: SET online:counts
+    O->>R: рекорд выше прежнего — SET online:peak
+    A->>O: GET /admin/online
+    O-->>A: по площадкам, итог и рекорд, без порогов
+```
+
+- **Запись не блокирует ответ.** Сбой Redis при отметке активности — строка
+  `warn` не чаще раза в минуту; запрос игрока проходит.
+- **Читают готовое.** Пинг делает один `GET`; считает только задание, поэтому
+  нагрузка на Redis не растёт с числом игроков.
+- **«Сегодня играли»** — HyperLogLog на игровые сутки (Москва): точность около
+  1%, память постоянная.
 
 ---
 

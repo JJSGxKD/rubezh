@@ -230,6 +230,8 @@ export interface PlatformAdapter {
   sharePreparedMessage?(messageId: string): Promise<InviteResult>;
   /** Текст в буфер обмена средствами площадки; `false` — не дала. Нет метода — буфер браузера. */
   copyText?(text: string): Promise<boolean>;
+  /** Попросить у игрока разрешение, чтобы бот мог ему писать. Нет метода — площадка так не умеет. */
+  requestBotMessages?(): Promise<"allowed" | "declined" | "unavailable">;
   /**
    * Подписанные данные запуска для сервера — в Telegram строка `initData`.
    * Сервер проверяет подпись и узнаёт по ней игрока; `null` — площадка их не
@@ -1034,6 +1036,37 @@ export interface DropsDef {
   };
 }
 
+/** Сколько улучшений выдаёт сундук забега. */
+export type ChestSize = 1 | 3 | 5;
+
+/** Кто роняет сундук: с рядовых врагов он не падает. */
+export type ChestSource = "elite" | "boss";
+
+/**
+ * Сундук забега (docs/39-retention-mechanics.md Б1): падает с элиты и босса,
+ * при касании выдаёт несколько улучшений сам. Числа — стартовые, их крутит
+ * геймдизайнер в `content/chests.ts`.
+ */
+export interface ChestsDef {
+  /** размеры первых сундуков по порядку выпадения; дальше — по весам `sizes` */
+  opening: readonly ChestSize[];
+  /** вес каждого размера в броске после схемы `opening` */
+  sizes: readonly { size: ChestSize; weight: number }[];
+  /** сундук с босса не меньше этого размера; значение должно быть среди `sizes` */
+  bossMinSize: ChestSize;
+  /** во сколько раз вес повышения уже взятого предмета больше веса нового; не меньше 1 */
+  ownedWeightMul: number;
+  /** ниже этой доли здоровья запасная награда — аптечка; от 0 (не включая) до 1 */
+  lowHpRatio: number;
+  /** запасной опыт — доля пути до следующего уровня; от 0 (не включая) до 1 */
+  xpRatio: number;
+  /** сундуков на поле одновременно; 0 — сундуков нет */
+  maxOnField: number;
+}
+
+/** Награда сундука: те же улучшения, что на карточках, и опыт как запасной вариант. */
+export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: UpgradeOptionKind | "xp" };
+
 /**
  * Уровень сложности забега. Выбирается перед забегом; рекорд и лидерборд
  * ведутся по каждому отдельно — время на «Сложной» и на «Лёгкой» несравнимо.
@@ -1346,6 +1379,8 @@ export interface LeaderboardEntry {
   startingWeaponId: string;
   enemiesKilled: number;
   isMe: boolean;
+  /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
+  tester?: true | undefined;
 }
 
 export interface Leaderboard {

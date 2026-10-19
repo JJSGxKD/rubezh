@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { badgeLine, parseFrontmatter, parseOwner, taskBadge, validateTask, withBadgeLine } from "../tasks/task-file.mjs";
+import { badgeLine, checkPrSection, parseFrontmatter, parseOwner, taskBadge, validateTask, withBadgeLine } from "../tasks/task-file.mjs";
 
 // Шапка задачи — строгое подмножество YAML (tasks/T-0002-task-cli.md, «Решения»):
 // разбирает свой парсер, любая другая конструкция — ошибка с номером строки.
@@ -193,14 +193,32 @@ describe("исполнители, автор и поток", () => {
     }
   });
 
-  it("version необязательна; если есть — вида v0.8", () => {
-    expect(validateTask("T-0003-x.md", { ...valid(), version: "v0.8" })).toEqual([]);
-    expect(validateTask("T-0003-x.md", { ...valid(), version: "v1.10" })).toEqual([]);
-    for (const bad of ["0.8", "v0.8.1", "v0", ""]) {
-      const errors = validateTask("T-0003-x.md", { ...valid(), version: bad });
-      expect(errors, bad).toHaveLength(1);
-      expect(errors[0], bad).toContain("поле version");
+  it("batch необязательна; если есть — целое число от 1", () => {
+    expect(validateTask("T-0003-x.md", { ...valid(), batch: "1" })).toEqual([]);
+    expect(validateTask("T-0003-x.md", { ...valid(), batch: "12" })).toEqual([]);
+    for (const bad of ["0", "-1", "1.5", "02", "v0.8", "", "две", null]) {
+      const errors = validateTask("T-0003-x.md", { ...valid(), batch: bad });
+      expect(errors, String(bad)).toHaveLength(1);
+      expect(errors[0], String(bad)).toContain("T-0003-x.md: поле batch");
+      expect(errors[0], String(bad)).toContain("пачки");
     }
+  });
+
+  it("version больше не допускается: одна ошибка, которая называет замену", () => {
+    for (const version of ["v0.8", "v0.10", ""]) {
+      const errors = validateTask("T-0003-x.md", { ...valid(), version });
+      expect(errors, version).toHaveLength(1);
+      expect(errors[0], version).toBe(
+        "T-0003-x.md: поле version заменено полем batch — пачкой очереди, tasks/README.md",
+      );
+    }
+  });
+
+  it("шапка с batch разбирается и проходит проверку", () => {
+    const parsed = parseFrontmatter(headerWith((lines) => lines.splice(lines.indexOf("---", 1), 0, "batch: 2")));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.data.batch).toBe("2");
+    expect(validateTask("T-0003-x.md", parsed.data)).toEqual([]);
   });
 
   it("owner — «аккаунт / исполнитель / уровень»; прежний без уровня тоже читается", () => {
@@ -238,7 +256,9 @@ describe("строка значков", () => {
     const fileName = "T-0003-x.md";
     const data = { ...valid(), depends_on: ["T-0001"] };
     const right = badgeLine(data, FILE_NAMES);
-    const bodyWith = (...lines: string[]): string => ["", "# T-0003. Заголовок", "", ...lines, "", "## Зачем"].join("\n");
+    // Раздел «PR» совпадает с шапкой valid(): иначе проверка раздела «PR» (T-0146) добавит свою ошибку.
+    const PR_SECTION = ["## PR", "", "- **Заголовок:** `fix(app-shell): Чинить X`", "- **Метка:** `release: patch`"];
+    const bodyWith = (...lines: string[]): string => ["", "# T-0003. Заголовок", "", ...lines, "", "## Зачем", "", ...PR_SECTION].join("\n");
 
     it("верная строка — без ошибок", () => {
       expect(validateTask(fileName, data, { body: bodyWith(right), fileNames: FILE_NAMES })).toEqual([]);
@@ -264,7 +284,7 @@ describe("строка значков", () => {
     });
 
     it("нет заголовка «# T-NNNN. …» — ошибка", () => {
-      const errors = validateTask(fileName, data, { body: ["", "# Другое", "", right].join("\n"), fileNames: FILE_NAMES });
+      const errors = validateTask(fileName, data, { body: ["", "# Другое", "", right, "", ...PR_SECTION].join("\n"), fileNames: FILE_NAMES });
       expect(errors).toHaveLength(1);
       expect(errors[0]).toContain("заголовок");
     });
@@ -328,5 +348,91 @@ describe("withBadgeLine", () => {
   it("заголовка нет — текст без изменений", () => {
     const noHeading = "---\nid: T-0003\n---\n\nПросто текст.\n";
     expect(withBadgeLine(noHeading, expected)).toBe(noHeading);
+  });
+});
+
+describe("раздел «PR» против шапки", () => {
+  const fileName = "T-0003-x.md";
+  const TITLE_MINOR = "feat(app-shell): Добавить X";
+
+  // Раздел «PR» со строками заголовка и метки; `null` — строки нет.
+  const prBody = (title: string | null, label: string | null): string =>
+    [
+      "# T-0003. Заголовок",
+      "",
+      "## Что и почему",
+      "",
+      "Текст.",
+      "",
+      "## PR",
+      "",
+      ...(title === null ? [] : [`- **Заголовок:** \`${title}\``]),
+      ...(label === null ? [] : [`- **Метка:** \`${label}\``]),
+      "",
+      "## Для игроков",
+      "",
+      "- нет",
+    ].join("\n");
+
+  it("метка совпадает с шапкой и не ниже типа заголовка — без ошибок", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "minor" }, prBody(TITLE_MINOR, "release: minor"))).toEqual([]);
+  });
+
+  it("метка не совпадает с шапкой — ошибка с обоими значениями", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "minor" }, prBody(TITLE_MINOR, "release: patch"))).toEqual([
+      `${fileName}: поле release — в шапке minor, в разделе «PR» patch`,
+    ]);
+  });
+
+  it("метка ниже, чем требует тип заголовка, — ошибка «ниже»", () => {
+    expect(
+      checkPrSection(fileName, { ...valid(), release: "patch" }, prBody("feat(app-shell): Добавить X", "release: patch")),
+    ).toEqual([`${fileName}: поле release — patch ниже minor для заголовка feat(app-shell): Добавить X`]);
+  });
+
+  it("feat в области dev требует только patch — без ошибок", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "patch" }, prBody("feat(dev): Добавить X", "release: patch"))).toEqual([]);
+  });
+
+  it("docs при метке none — без ошибок", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "none" }, prBody("docs(tasks): Описать X", "release: none"))).toEqual([]);
+  });
+
+  it("заголовок не по формату — ошибка с текстом parsePrTitle, минимум по типу не проверяется", () => {
+    const errors = checkPrSection(fileName, { ...valid(), release: "minor" }, prBody("Добавить X", "release: minor"));
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("заголовок не соответствует формату");
+  });
+
+  it("нет строки «Метка» — ошибка, заголовок всё равно проверяется", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "patch" }, prBody("fix(app-shell): Чинить X", null))).toEqual([
+      `${fileName}: раздел «PR» — нет строки «Метка»`,
+    ]);
+  });
+
+  it("нет строки «Заголовок» — ошибка", () => {
+    expect(checkPrSection(fileName, { ...valid(), release: "patch" }, prBody(null, "release: patch"))).toEqual([
+      `${fileName}: раздел «PR» — нет строки «Заголовок»`,
+    ]);
+  });
+
+  it("проверка идёт только для ready и in-progress: черновик с расхождением — без ошибок", () => {
+    const data = { ...valid(), status: "draft", release: "minor" };
+    expect(validateTask(fileName, data, { body: prBody(TITLE_MINOR, "release: patch"), fileNames: {} })).toEqual([]);
+  });
+
+  it("закрытая задача с расхождением — без ошибок", () => {
+    const data = { ...valid(), status: "done", release: "minor" };
+    expect(validateTask(fileName, data, { body: prBody(TITLE_MINOR, "release: patch"), fileNames: {} })).toEqual([]);
+  });
+
+  it("ready с расхождением — validateTask отдаёт ошибку", () => {
+    const data = { ...valid(), status: "ready", release: "minor" };
+    const errors = validateTask(fileName, data, { body: prBody(TITLE_MINOR, "release: patch"), fileNames: {} });
+    expect(errors).toEqual([`${fileName}: поле release — в шапке minor, в разделе «PR» patch`]);
+  });
+
+  it("без тела задачи (захват по шапке) раздел не проверяется", () => {
+    expect(validateTask(fileName, { ...valid(), status: "ready", release: "minor" })).toEqual([]);
   });
 });

@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Gift } from "lucide-react";
 import { Button, ContentColumn, ErrorState, Modal, PageTitle, Screen, SectionTitle, InfoNotice } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/friends";
@@ -9,7 +8,8 @@ import { createFriendsApi, friendsAvailable, type FriendEntry, type FriendsView 
 import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { loadWallet } from "../../state/wallet-api";
 import { friendsLayout, giftAllCount } from "./friends-rules";
-import { GiftAll, Gifts, Invite, PeerRow } from "./friends-parts";
+import { GiftAll, Gifts, Invite, PeerAction, PeerRow } from "./friends-parts";
+import { TesterBadge } from "./tester-badge";
 import { RestrictedPlaque } from "./restricted-plaque";
 
 /**
@@ -22,7 +22,9 @@ import { RestrictedPlaque } from "./restricted-plaque";
  *
  * Порядок зависит от друзей (`friendsLayout`): пока их нет — крупное
  * приглашение сверху; когда есть — подарки, заявки и список, а приглашение
- * компактной карточкой с полосой бонуса за число друзей.
+ * компактной карточкой с полосой бонуса за число друзей. Пока сервер не
+ * ответил, экран показывает только «Загружаем друзей…»: приглашение, которое
+ * уступает место списку, мелькало бы у тех, у кого друзья есть.
  */
 
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; view: FriendsView };
@@ -75,7 +77,7 @@ export function FriendsScreen(): ReactNode {
   };
 
   const view = state.status === "ready" ? state.view : null;
-  const layout = friendsLayout(view?.friends.length ?? 0);
+  const layout = friendsLayout({ withAccount, status: state.status, friendsCount: view?.friends.length ?? 0 });
   const bonus =
     view === null
       ? undefined
@@ -87,13 +89,9 @@ export function FriendsScreen(): ReactNode {
         <SectionTitle>{t("friends.incoming")}</SectionTitle>
         <div className="grid gap-2">
           {view.incoming.map((request) => (
-            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl}>
-              <Button variant="secondary" loading={busy === `accept:${request.accountId}`} onClick={() => void act(`accept:${request.accountId}`, () => api.accept(request.accountId))}>
-                {t("friends.accept")}
-              </Button>
-              <Button variant="ghost" loading={busy === `decline:${request.accountId}`} onClick={() => void act(`decline:${request.accountId}`, () => api.decline(request.accountId))}>
-                {t("friends.decline")}
-              </Button>
+            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
+              <PeerAction kind="accept" variant="secondary" loading={busy === `accept:${request.accountId}`} onClick={() => void act(`accept:${request.accountId}`, () => api.accept(request.accountId))} />
+              <PeerAction kind="decline" variant="ghost" loading={busy === `decline:${request.accountId}`} onClick={() => void act(`decline:${request.accountId}`, () => api.decline(request.accountId))} />
             </PeerRow>
           ))}
         </div>
@@ -106,7 +104,7 @@ export function FriendsScreen(): ReactNode {
         <SectionTitle>{t("friends.outgoing")}</SectionTitle>
         <div className="grid gap-2">
           {view.outgoing.map((request) => (
-            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl}>
+            <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
               <Button variant="ghost" loading={busy === `cancel:${request.accountId}`} onClick={() => void act(`cancel:${request.accountId}`, () => api.cancel(request.accountId))}>
                 {t("friends.cancel")}
               </Button>
@@ -138,7 +136,7 @@ export function FriendsScreen(): ReactNode {
       <ContentColumn>
         <PageTitle>{t("friends.title")}</PageTitle>
         {withAccount ? <RestrictedPlaque kinds={RESTRICTIONS} className="mt-4" /> : null}
-        {layout === "invite-first" ? <Invite api={api} withAccount={withAccount} variant="full" {...(bonus === undefined ? {} : { bonus })} /> : gifts}
+        {layout === "invite-first" ? <Invite api={api} withAccount={withAccount} variant="full" {...(bonus === undefined ? {} : { bonus })} /> : layout === "list-first" ? gifts : null}
 
         {!withAccount ? <InfoNotice text={t("friends.guest")} /> : null}
         {withAccount && state.status === "loading" ? <p className="mt-4 text-sm text-text-muted">{t("friends.loading")}</p> : null}
@@ -174,16 +172,20 @@ export function FriendsScreen(): ReactNode {
               {view.friends.map((friend) => {
                 const gifted = view.gifts.sentToday.includes(friend.accountId);
                 return (
-                  <PeerRow key={friend.accountId} name={friend.displayName} photoUrl={friend.photoUrl} onPress={() => setRemoving(friend)}>
-                    <Button
+                  <PeerRow
+                    key={friend.accountId}
+                    name={friend.displayName}
+                    photoUrl={friend.photoUrl}
+                    badge={friend.tester === true ? <TesterBadge /> : undefined}
+                    onPress={() => setRemoving(friend)}
+                  >
+                    <PeerAction
+                      kind={gifted ? "gifted" : "gift"}
                       variant="secondary"
                       disabled={gifted || giftsClosed}
                       loading={busy === `gift:${friend.accountId}`}
                       onClick={() => void act(`gift:${friend.accountId}`, () => api.gift(friend.accountId))}
-                    >
-                      {gifted ? <Check size={16} aria-hidden="true" /> : <Gift size={16} aria-hidden="true" />}
-                      {gifted ? t("friends.gift.sent") : t("friends.gift")}
-                    </Button>
+                    />
                   </PeerRow>
                 );
               })}

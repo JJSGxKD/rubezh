@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bonusTrack, coinIconsNeedRoom, friendsLayout, giftAllCount } from "../src/screens/meta/friends-rules";
+import ru from "../src/i18n/ru-friends.json";
+import { bonusTrack, coinIconsNeedRoom, friendsLayout, giftAllCount, peerActionView } from "../src/screens/meta/friends-rules";
 
 // Правила экрана друзей (tasks/T-0048): кому подарит «Подарить всем», как
 // заливается полоса бонуса и что стоит на экране первым.
@@ -49,9 +50,26 @@ describe("полоса бонуса", () => {
 });
 
 describe("порядок экрана", () => {
-  it("друзей нет — приглашение первым, друзья есть — список", () => {
-    expect(friendsLayout(0)).toBe("invite-first");
-    expect(friendsLayout(1)).toBe("list-first");
+  it("гость не ждёт ответа — приглашение сразу", () => {
+    expect(friendsLayout({ withAccount: false, status: "loading", friendsCount: 0 })).toBe("invite-first");
+  });
+
+  it("до ответа сервера — ни приглашения, ни списка", () => {
+    expect(friendsLayout({ withAccount: true, status: "loading", friendsCount: 0 })).toBe("pending");
+    expect(friendsLayout({ withAccount: true, status: "loading", friendsCount: 5 })).toBe("pending");
+  });
+
+  it("ответ пришёл: друзей нет — приглашение первым", () => {
+    expect(friendsLayout({ withAccount: true, status: "ready", friendsCount: 0 })).toBe("invite-first");
+  });
+
+  it("ответ пришёл: друзья есть — список первым", () => {
+    expect(friendsLayout({ withAccount: true, status: "ready", friendsCount: 1 })).toBe("list-first");
+    expect(friendsLayout({ withAccount: true, status: "ready", friendsCount: 12 })).toBe("list-first");
+  });
+
+  it("сбой загрузки — приглашение крупное, как у тех, у кого друзей нет", () => {
+    expect(friendsLayout({ withAccount: true, status: "failed", friendsCount: 0 })).toBe("invite-first");
   });
 });
 
@@ -68,5 +86,32 @@ describe("значки монет на полосе бонуса", () => {
     expect(coinIconsNeedRoom(coins(1_000))).toBe(true);
     expect(coinIconsNeedRoom(coins(100, 500, 1_000))).toBe(true);
     expect(coinIconsNeedRoom(coins(500, 1_000, 2_500, 5_000, 10_000))).toBe(true);
+  });
+});
+
+describe("кнопки в строке игрока", () => {
+  const dictionary = new Map<string, string>(Object.entries(ru));
+
+  it("принять — галочка, значок только вместо текста", () => {
+    expect(peerActionView("accept")).toEqual({ labelKey: "friends.accept", icon: "check", iconWithText: false });
+  });
+
+  it("отклонить — крестик, значок только вместо текста", () => {
+    expect(peerActionView("decline")).toEqual({ labelKey: "friends.decline", icon: "x", iconWithText: false });
+  });
+
+  it("подарить и подарено — значок виден и рядом с текстом", () => {
+    expect(peerActionView("gift")).toEqual({ labelKey: "friends.gift", icon: "gift", iconWithText: true });
+    expect(peerActionView("gifted")).toEqual({ labelKey: "friends.gift.sent", icon: "check", iconWithText: true });
+  });
+
+  it("подписи теми же словами, что и текст: значок без слова не остаётся без подписи", () => {
+    const labels = (["accept", "decline", "gift", "gifted"] as const).map((kind) => dictionary.get(peerActionView(kind).labelKey));
+    expect(labels).toEqual(["Принять", "Отклонить", "Подарить", "Подарено"]);
+  });
+
+  it("подписи различны: две кнопки не получат одну", () => {
+    const keys = (["accept", "decline", "gift", "gifted"] as const).map((kind) => peerActionView(kind).labelKey);
+    expect(new Set(keys).size).toBe(4);
   });
 });

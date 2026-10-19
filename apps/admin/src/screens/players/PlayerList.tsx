@@ -21,6 +21,7 @@ import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, P
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
+import { statusBadges } from "./list-status";
 
 /**
  * Список игроков с фильтрами (docs/35-stage4-plan.md WP32). Фильтры и
@@ -200,11 +201,14 @@ export function PlayerList() {
               {
                 title: "Статус",
                 render: (player) => {
-                  const limited = player.restrictions.filter((kind) => kind !== "all");
-                  return (
+                  const badges = statusBadges(player, kindTitle);
+                  return badges.length === 0 ? null : (
                     <span className="flex flex-wrap gap-1">
-                      {player.banned === null ? null : <Badge tone="danger">заблокирован</Badge>}
-                      {limited.length === 0 ? null : <Badge tone="warning">закрыто: {limited.map(kindTitle).join(", ")}</Badge>}
+                      {badges.map((badge) => (
+                        <Badge key={badge.text} tone={badge.tone}>
+                          {badge.text}
+                        </Badge>
+                      ))}
                     </span>
                   );
                 },

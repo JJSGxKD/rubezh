@@ -30,6 +30,11 @@ export interface Account extends AccountIdentity {
   /** `null` — аккаунт не заблокирован */
   bannedAt: Date | null;
   banReason: string | null;
+  /**
+   * Знак «Тестер» (Р87): когда аккаунт отмечен играющим до вайпа; `null` — не тестер. Необязателен в типе, чтобы
+   * подмены, собирающие `Account` руками, не ломались; настоящее хранилище отдаёт его всегда.
+   */
+  testerAt?: Date | null;
   /** аккаунт заведён этим входом, а не найден */
   created: boolean;
 }
@@ -177,6 +182,7 @@ type AccountRow = {
   createdAt: Date;
   bannedAt: Date | null;
   banReason: string | null;
+  testerAt: Date | null;
 };
 
 function toAccount(row: AccountRow, created: boolean): Account {
@@ -190,6 +196,7 @@ function toAccount(row: AccountRow, created: boolean): Account {
     createdAt: row.createdAt,
     bannedAt: row.bannedAt,
     banReason: row.banReason,
+    testerAt: row.testerAt,
     created,
   };
 }

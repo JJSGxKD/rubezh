@@ -3,8 +3,8 @@ id: T-0087
 title: Карточка разбора забега ведёт в панель, а комментарии о маршруте и боте говорят правду
 epic: E4
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-9 / haiku-5.5 / low
 author: claude-lead2-8
 size: S
 depends_on: []
@@ -21,7 +21,7 @@ executor: haiku-5.5
 effort: low
 release: patch
 design: null
-version: v0.8
+batch: 1
 ---
 
 # T-0087. Карточка разбора забега ведёт в панель, а комментарии говорят правду

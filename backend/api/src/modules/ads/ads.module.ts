@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
+import { Outbound } from "../../infra/outbound/outbound.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { ClientScriptsModule } from "../client-scripts/client-scripts.module.js";
 import { FlagsModule } from "../flags/flags.module.js";
 import { FlagsService } from "../flags/flags.service.js";
 import { AdAudience } from "./ad-audience.js";
@@ -39,7 +41,7 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
  * хозяин места `task`, подписавшись на `AdTaskHooks`.
  */
 @Module({
-  imports: [AuthModule, FlagsModule, RestrictionsModule],
+  imports: [AuthModule, ClientScriptsModule, FlagsModule, RestrictionsModule],
   controllers: [AdsController, AdsgramRewardController],
   providers: [
     AdsService,
@@ -53,8 +55,8 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
     InterstitialGate,
     { provide: INTERSTITIAL_FLAGS, useExisting: FlagsService },
     { provide: AD_CREATIVES, useClass: NetworkCreatives },
-    { provide: TADDY_API, useFactory: () => new HttpTaddyApi() },
-    { provide: TADDY_EXCHANGE, useFactory: () => new HttpTaddyExchange() },
+    { provide: TADDY_API, inject: [Outbound], useFactory: (outbound: Outbound) => new HttpTaddyApi(outbound.forService("taddy.api")) },
+    { provide: TADDY_EXCHANGE, inject: [Outbound], useFactory: (outbound: Outbound) => new HttpTaddyExchange(outbound.forService("taddy.exchange")) },
     { provide: ADS_REPOSITORY, useClass: PrismaAdsRepository },
     { provide: ADS_CATALOG_REPOSITORY, useClass: PrismaAdsCatalogRepository },
     { provide: ADS_ROLL, useValue: cryptoRoll },

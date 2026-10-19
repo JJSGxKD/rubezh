@@ -3,8 +3,8 @@ id: T-0059
 title: Один клиент исходящих запросов — все вызовы внешних API через него
 epic: E13
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -24,6 +24,7 @@ zones:
   - backend/api/src/platforms/telegram/bot.module.ts
   - backend/api/test/outbound.test.ts
   - backend/api/test/outbound-sites.test.ts
+  - backend/api/test/telegram-module.test.ts
 shared:
   - backend/api/src/app.module.ts
   - docs/21-diagrams.md
@@ -32,7 +33,7 @@ executor: sonnet-5.5
 effort: high
 release: patch
 design: null
-version: v0.8
+batch: 2
 ---
 
 # T-0059. Один клиент исходящих запросов — все вызовы внешних API через него
@@ -102,7 +103,19 @@ version: v0.8
 - **Секреты в адресе не уходят никуда.** Путь чистится до записи:
   - query отбрасывается целиком;
   - сегмент `bot<…>` у Bot API → `bot***`;
-  - сегменты длиннее 24 знаков из `[A-Za-z0-9_-]` → `***`.
+  - сегменты из `[A-Za-z0-9_-]` длиной 24 знака и больше → `***`.
+
+Ответы claude-lead-1 на вопросы PR #374, 17.10.2026:
+- `backend/api/test/telegram-module.test.ts` — в зонах. Это тест сборки
+  модуля: он сверяет `inject` фабрики Bot API, а фабрика теперь получает
+  `Outbound`. Тест повторяет шаг 3, поведение модуля он не проверяет, так что
+  правило «прежние тесты модулей — без правок» на него не распространяется.
+- Порог ключа — 24 знака и больше: ключ из примера в «Тестах»
+  (`0123456789abcdef01234567`) ровно 24 знака, а прежняя формулировка
+  «длиннее 24» его бы не скрыла.
+- `ads.creatives` остаётся в каталоге без места вызова: креативы сетей
+  `ad-creatives.ts` получает через клиентов сетей, своего `fetch` у него нет.
+  Метка пригодится, когда загрузка креатива станет отдельным запросом.
 
 ## Как сейчас
 

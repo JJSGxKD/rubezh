@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
+import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 /**
  * Каталог настроек без релиза (docs/35-stage4-plan.md §3.18, Р53).
@@ -47,6 +48,12 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
   /** значение из окружения; `null` — в окружении не задано */
   readonly fromEnv: (config: AppConfig) => T | null;
   readonly fallback: T;
+  /**
+   * Проверка, которой нужно текущее время, — только при сохранении из панели;
+   * текст ошибки или `null`. Схема времени не знает, и значение из окружения или
+   * базы через неё не отсекается.
+   */
+  saveCheck?(value: T, now: Date): string | null;
 }
 
 export const SETTING_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
@@ -84,11 +91,33 @@ const urlSchema = z
   .max(256)
   .refine((value) => value === "" || (URL.canParse(value) && new URL(value).protocol === "https:"), { message: "ссылка https://… или пусто" });
 
+const LINKS_GROUP = "Ссылки Telegram";
+
+/** Равнозначные домены ссылок Telegram (core.telegram.org/api/links); telegram.org — сайт, в списке его нет. */
+export const TELEGRAM_LINK_ORIGINS: readonly string[] = ["https://t.me", "https://telegram.me", "https://telegram.dog"];
+
+/** Домен из списка без пути, параметров и учётных данных; иначе `null`. */
+export function telegramLinkOriginOf(value: string): string | null {
+  if (!URL.canParse(value)) return null;
+  const url = new URL(value);
+  const bare = url.pathname === "/" && url.search === "" && url.hash === "" && url.username === "" && url.password === "";
+  return bare && TELEGRAM_LINK_ORIGINS.includes(url.origin) ? url.origin : null;
+}
+
 const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
 
 const HOME_GROUP = "Главная";
+
+const CLIENT_SCRIPTS_GROUP = "Внешние скрипты клиента";
+
+const ONLINE_GROUP = "Онлайн";
+
+const SEASONS_GROUP = "Сезоны рейтинга";
+
+/** Последняя допустимая дата старта сезонов: понедельник 28 декабря 2099. */
+const SEASONS_START_MAX = 20_991_228;
 
 /**
  * Целое число в пределах — схема и пределы из одного места: панель
@@ -199,6 +228,24 @@ export const SETTINGS = {
     fallback: "",
   } satisfies SettingDefinition<string>,
   /**
+   * Домен ссылок Telegram (docs/35-stage4-plan.md, Р100): t.me бывает
+   * недоступен, и домен выбирается настройкой, без релиза. Окружения у ключа
+   * нет — решение команды на ходу правится в панели.
+   */
+  telegramLinkHost: {
+    key: "telegram.link-host",
+    group: LINKS_GROUP,
+    title: "Домен ссылок Telegram",
+    hint: "Каким адресом начинаются ссылки на бота и Mini App, которые строит сервер: приглашения, кнопки бота, ссылки кампаний, вход в панель. Допустимы https://t.me (умолчание), https://telegram.me и https://telegram.dog — переключите, если t.me недоступен. Уже разосланные ссылки не меняются",
+    kind: "url",
+    schema: z
+      .string()
+      .trim()
+      .refine((value) => telegramLinkOriginOf(value) !== null, { message: "один из https://t.me, https://telegram.me, https://telegram.dog" }),
+    fromEnv: () => null,
+    fallback: "https://t.me",
+  } satisfies SettingDefinition<string>,
+  /**
    * Канал проекта (docs/35-stage4-plan.md WP42): слайд «Наш канал» в
    * карусели главной. Не секрет и меняется без релиза — канал можно
    * переименовать или завести новый.
@@ -295,12 +342,106 @@ export const SETTINGS = {
     { min: 0, max: 240, unit: ["минута", "минуты", "минут"] },
     10,
   ),
+  /**
+   * Старт недельных сезонов рейтинга (docs/39-retention-mechanics.md Р1,
+   * tasks/T-0110): «ключ задан — включено» (Р53). Дата — числом ГГГГММДД,
+   * потому что редактор панели знает числа, адреса, ссылки и переключатели, а
+   * даты не знает; понедельник UTC проверяет схема. Без окружения: дату
+   * первого сезона ставит тимлид в панели.
+   */
+  seasonsStartDate: {
+    key: "seasons.start-date",
+    group: SEASONS_GROUP,
+    title: "Старт недельных сезонов",
+    hint: "Понедельник, с которого идут недельные сезоны рейтинга, числом ГГГГММДД: 20261102. Забеги раньше этой даты в сезон не идут. 0 — сезонов нет, ручки сезона отвечают «выключено»",
+    kind: "number",
+    schema: z
+      .number()
+      .int({ message: "целое число" })
+      .min(0, { message: "не меньше 0" })
+      .max(SEASONS_START_MAX, { message: `не больше ${String(SEASONS_START_MAX)}` })
+      .refine((value) => value === 0 || parseStartDate(value) !== null, { message: "понедельник в виде ГГГГММДД, например 20261102, или 0" }),
+    range: { min: 0, max: SEASONS_START_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
+    fromEnv: () => null,
+    fallback: 0,
+    saveCheck: (value, now) => {
+      const start = parseStartDate(value);
+      return start !== null && start.getTime() < seasonOf(now).startsAt.getTime() ? "Старт сезонов не может быть в прошлом — укажите понедельник этой или следующей недели" : null;
+    },
+  } satisfies SettingDefinition<number>,
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",
     "Новые счета на второй шанс и подтверждение перед оплатой. Уже оплаченное засчитывается всегда. Нужны вход и чтение обновлений бота",
     (config) => config.payments.starsEnv,
     true,
+  ),
+  /**
+   * Чужие скрипты клиента выключаются из панели без релиза (docs/35-stage4-plan.md
+   * Р93): чужой скрипт может сломать игру или затормозить первый экран. Только
+   * из панели — в `.env` их нет; умолчание «включено» оставляет всё как было.
+   */
+  clientScriptsGraspil: {
+    key: "client.scripts.graspil",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "Аналитика Graspil",
+    hint: "Сторонняя аналитика Mini App. Выключено — клиент не грузит её скрипт: на случай, если он ломает игру или тормозит первый экран. Вступает в силу при следующем запуске игры",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
+  clientScriptsAdAudience: {
+    key: "client.scripts.ad-audience",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "SDK учёта аудитории рекламных сетей",
+    hint: "SDK рекламных сетей, которые поднимаются при запуске для учёта аудитории (Taddy). Выключено — сети не видят игроков, и рекламы от них может стать меньше. Показы рекламы выключаются в разделе «Реклама» у каждой сети",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
+  clientScriptsAll: {
+    key: "client.scripts.all",
+    group: CLIENT_SCRIPTS_GROUP,
+    title: "Внешние скрипты клиента",
+    hint: "Аварийный выключатель: выключено — клиент не грузит ни одного чужого скрипта — ни аналитики, ни SDK учёта, ни рекламы. Для случая, когда чужой скрипт уронил игру, а какой — ещё не ясно",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: true,
+  } satisfies SettingDefinition<boolean>,
+  onlineWindowSec: integer(
+    "online.window-sec",
+    ONLINE_GROUP,
+    "Окно активности, с",
+    "Аккаунт считается онлайн, пока с последней активности прошло меньше окна",
+    { min: 30, max: 600, unit: ["секунда", "секунды", "секунд"] },
+    120,
+  ),
+  onlinePingSec: integer(
+    "online.ping-sec",
+    ONLINE_GROUP,
+    "Интервал пинга, с",
+    "Клиент шлёт пинг с этим интервалом; если он не меньше половины окна, берётся половина окна",
+    { min: 15, max: 300, unit: ["секунда", "секунды", "секунд"] },
+    45,
+  ),
+  onlineMinShown: integer(
+    "online.min-shown",
+    ONLINE_GROUP,
+    "Онлайн виден игроку от",
+    "Ниже — игрок видит «сегодня играли»",
+    { min: 0, max: 100000, unit: ["аккаунт", "аккаунта", "аккаунтов"] },
+    20,
+  ),
+  onlineRunMinShown: integer(
+    "online.run-min-shown",
+    ONLINE_GROUP,
+    "«В забеге» виден игроку от",
+    "Ниже — на кнопке «Играть» числа нет",
+    { min: 0, max: 100000, unit: ["аккаунт", "аккаунта", "аккаунтов"] },
+    5,
   ),
 } as const;
 

@@ -28,6 +28,7 @@ import { NetworkTasks } from "./network-tasks";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { TaskRow } from "./task-row";
 import { rewardText } from "./task-reward";
+import { TASK_TAB_OF, viewAfterLoad, type TasksView } from "./tasks-rules";
 
 /**
  * «Задания»: ежедневные, недельные и достижения
@@ -47,19 +48,16 @@ import { rewardText } from "./task-reward";
  * Там же — задания рекламных сетей (WP13, часть 6, `network-tasks.tsx`):
  * сразу за тем, что можно забрать.
  */
-type View = "daily" | "weekly" | "achievements" | "partner";
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; tasks: TaskItem[]; networks: NetworkTaskItem[] };
-
-const TAB_OF: Record<View, TaskTab> = { daily: "daily", weekly: "weekly", achievements: "achievement", partner: "partner" };
 
 const api = createTasksApi();
 /** Партнёрские задания — свои и сетей — закрывает своё ограничение (WP44). */
 const PARTNER_RESTRICTION = ["partner_tasks"];
 
 export function TasksScreen(): ReactNode {
-  // Пока игрок не выбрал сам — партнёрские, если они есть: они первые в очереди
-  // (решение участника 1, 01.10.2026). Нет партнёрских — ежедневные.
-  const [chosen, setView] = useState<View | null>(null);
+  // Пока игрок не выбрал сам — вкладка с наградой, иначе партнёрские, иначе
+  // ежедневные: правило в tasks-rules.ts.
+  const [chosen, setView] = useState<TasksView | null>(null);
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [claiming, setClaiming] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ taskId: string; text: string } | null>(null);
@@ -79,11 +77,10 @@ export function TasksScreen(): ReactNode {
     if (!response.ok) return setState({ status: "failed" });
     const networks = response.data.networks ?? [];
     setState({ status: "ready", tasks: response.data.tasks, networks });
-    // Вкладка по умолчанию решается однажды, по первому ответу: задание сети
-    // уходит на паузу посреди проверки, и экран не должен сам перескочить
-    // с «Партнёров» на «День», пока игрок ждёт награду.
+    // Вкладка решается однажды, по первому ответу: задание сети уходит на паузу
+    // посреди проверки, и экран не должен сам перескочить, пока игрок ждёт награду.
     const partner = networks.some((item) => item.offer !== null || (isFeedTask(item) && item.nextAt === null)) || response.data.tasks.some((task) => tabOf(task) === "partner");
-    setView((current) => current ?? (partner ? "partner" : "daily"));
+    setView((current) => viewAfterLoad({ chosen: current, tasks: response.data.tasks, hasPartner: partner }));
   };
 
   /** Перечитать без «загрузки» на экране — за подтверждением задания сети. */
@@ -126,8 +123,8 @@ export function TasksScreen(): ReactNode {
 
   const all = state.status === "ready" ? state.tasks : [];
   const networks = state.status === "ready" ? state.networks : [];
-  const view: View = chosen ?? "daily";
-  const tasks = sortTasks(all.filter((task) => tabOf(task) === TAB_OF[view]));
+  const view: TasksView = chosen ?? "daily";
+  const tasks = sortTasks(all.filter((task) => tabOf(task) === TASK_TAB_OF[view]));
   // Порядок вкладки общий (WP13, часть 6): что можно забрать — первым,
   // задания сетей — сразу за ним, дальше — остальное.
   const claimable = tasks.filter(isClaimable);
@@ -173,7 +170,7 @@ export function TasksScreen(): ReactNode {
           <SegmentedControl
             label={t("tasks.title")}
             activeId={view}
-            onSelect={(id) => setView(id as View)}
+            onSelect={(id) => setView(id as TasksView)}
             items={[
               { id: "partner", label: t("tasks.partner"), badge: waiting("partner") },
               { id: "daily", label: t("tasks.daily"), badge: waiting("daily") },
