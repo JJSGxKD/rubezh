@@ -17,6 +17,7 @@ import { watchPlatform } from "./state/platform";
 import { useTools } from "./state/tools";
 import { useRuns } from "./state/runs";
 import { recoverDownedRun } from "./state/run";
+import { settleInterruptedRun } from "./state/run-interrupted";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
@@ -104,6 +105,10 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // очереди забегов, которые он пополнит (state/downed-run.ts).
   recoverDownedRun();
   useDevMode.getState().hydrate();
+  // Забег, прерванный обновлением игры, засчитывается брошенным — после
+  // рекорда, очереди итогов и настроек разработчика, которые ему нужны
+  // (state/run-interrupted.ts).
+  settleInterruptedRun();
   useGraphics.getState().hydrate();
   useFeedback.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
