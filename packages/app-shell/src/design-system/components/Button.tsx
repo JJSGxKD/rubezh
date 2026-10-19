@@ -30,7 +30,8 @@ export interface ButtonProps {
   glow?: boolean;
   /**
    * Срезанный угол с рамкой по срезу (design/README.md) — только у главной
-   * кнопки экрана, `variant="primary"`. У других вариантов игнорируется.
+   * кнопки экрана: `variant="primary"` или `"stars"` (главная покупка
+   * магазина). У других вариантов игнорируется.
    */
   cut?: boolean;
   ariaLabel?: string;
