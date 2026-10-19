@@ -6,7 +6,7 @@ import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
 import { ENEMY_STAGES } from "./stages";
-import { ACCOUNT_UNLOCKS } from "./unlocks";
+import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "./waves";
 import { WEAPONS } from "./weapons";
@@ -46,6 +46,8 @@ function hashContent(): string {
     CONTINUE,
     BOOSTS,
     MAX_BOOSTS_PER_RUN,
+    CARD_TOOL_UNLOCKS,
+    CARD_TOOL_RULES,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.

@@ -972,6 +972,31 @@ export interface BoostDef {
   startLevels?: number;
   /** сколько лишних карточек на каждом выборе улучшения */
   extraOffers?: number;
+  /** заряды действий с карточками на забег — прибавка к зарядам уровня аккаунта */
+  cardTools?: Partial<CardTools>;
+}
+
+/**
+ * Заряды действий на выборе улучшения (docs/39-retention-mechanics.md Б3):
+ * переброс меняет карточки, пропуск берёт уровень за опыт, изгнание убирает
+ * предмет из забега.
+ */
+export interface CardTools {
+  reroll: number;
+  skip: number;
+  banish: number;
+}
+
+/**
+ * Строка таблицы зарядов по уровню аккаунта: значение — итог с этого уровня,
+ * как у слотов; не заданное — как строкой ниже.
+ */
+export type CardToolUnlockDef = { level: number } & Partial<CardTools>;
+
+/** Правила действий с карточками — данные геймдизайнера. */
+export interface CardToolRules {
+  /** доля опыта до следующего уровня, которую платит пропуск */
+  skipXpRatio: number;
 }
 
 /**
