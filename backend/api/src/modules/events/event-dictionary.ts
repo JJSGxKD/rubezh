@@ -63,6 +63,10 @@ const runOutcome = payload({
   contentHash: id,
   isNewRecord: z.boolean(),
   cheats: z.boolean(),
+  // Откуда забег: `update` — прерван обновлением игры и засчитан брошенным при
+  // следующем запуске (tasks/T-0163). Необязательное: обычный исход поля не
+  // несёт, версия прежняя.
+  interrupted: id.optional(),
   // Сводка производительности (docs/28-diagnostics.md §3.2). Необязательная:
   // сборки до неё её не шлют, а смысл остальных полей она не меняет.
   perfFrames: count.optional(),

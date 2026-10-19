@@ -273,7 +273,7 @@
 | `bh.install.v1.id` | `installId` устройства | `state/install.ts` |
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
-| `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts` | `state/run-save.ts` |
+| `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts`. Снимок другой сборки не продолжается, а засчитывается брошенным забегом: уходит в очередь итогов (`bh.runs.v1.pending`) и стирается; старше `SETTLE_MAX_AGE_MS` (14 суток, константа в `state/run-interrupted.ts`) — стирается без отправки | `state/run-save.ts`, `state/run-interrupted.ts` |
 | `bh.run.v1.downed` | итог забега, который ждёт решения о втором шансе; брошенный на экране смерти уходит смертью при следующем запуске | `state/downed-run.ts` |
 | `bh.runs.v1.pending` | старты и итоги забегов, ещё не дошедшие до сервера, — по порядку, до 40 записей, старые вытесняются | `state/runs.ts` |
 | `bh.playtest.v1.pending` | очередь прошлой сборки, одни итоги; при запуске переносится в `bh.runs.v1.pending` и снимается | `state/runs.ts` |

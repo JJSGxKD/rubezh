@@ -84,6 +84,10 @@ export type {
 // Версия формата снимка — оболочка сверяет сохранение до того, как предложить «Продолжить».
 export { RADAR_BLIP, RUN_RECORDING_SCHEMA, RUN_SNAPSHOT_FORMAT } from "./run-api";
 
+// Счётчики забега из тела снимка чужой сборки — для засчёта прерванного забега
+// (tasks/T-0163). Файл ничего не импортирует: движок остаётся отдельным чанком.
+export { readSnapshotCounters, type SnapshotCounters } from "./snapshot-counters";
+
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).
 export { xpForLevel, OFFERS_PER_LEVEL } from "./game/progression/levels";

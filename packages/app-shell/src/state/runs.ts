@@ -114,6 +114,13 @@ export interface RunsStore {
   registerStart(start: { runId: string; difficultyId: DifficultyId; startingWeaponId: string }): void;
   /** поставить итог забега в очередь и попробовать отправить */
   submitRun(result: RunResult, countInRating?: boolean): void;
+  /**
+   * Поставить в очередь готовый итог забега, прерванного обновлением игры
+   * (`run-interrupted.ts`). Итог с таким `runId` уже в очереди — ничего не
+   * добавляется: сервер на повтор отвечает прежним результатом, но очередь
+   * не должна пухнуть от одного забега.
+   */
+  submitSettled(submission: RunFinishSubmission): void;
   flush(trigger: FlushTrigger): Promise<void>;
   /** обновить лидерборд; `null` — удалось, иначе причина неудачи */
   loadLeaderboard(difficultyId: DifficultyId): Promise<ApiFailure | null>;
@@ -150,6 +157,15 @@ export const useRuns = create<RunsStore>((set, get) => ({
     enqueue({ kind: "finish", ...toSubmission(result, countInRating) });
     set({ pending: pendingOf(queue().read()) });
     void get().flush("finish");
+  },
+
+  submitSettled(submission): void {
+    if (api() === null) return;
+    const queued = queue().read().some((entry) => entry.kind === "finish" && entry.runId === submission.runId);
+    if (queued) return;
+    enqueue({ kind: "finish", ...submission });
+    set({ pending: pendingOf(queue().read()) });
+    void get().flush("launch");
   },
 
   async flush(trigger): Promise<void> {
