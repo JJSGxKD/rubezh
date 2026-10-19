@@ -30,7 +30,8 @@ export interface ButtonProps {
   glow?: boolean;
   /**
    * Срезанный угол с рамкой по срезу (design/README.md) — только у главной
-   * кнопки экрана, `variant="primary"`. У других вариантов игнорируется.
+   * кнопки экрана: `variant="primary"` или `"stars"` (главная покупка
+   * магазина). У других вариантов игнорируется.
    */
   cut?: boolean;
   ariaLabel?: string;
@@ -68,15 +69,16 @@ function radiusOf(size: ButtonSize): string {
 const warnedCut = new Set<ButtonVariant>();
 
 /**
- * Срез у кнопки — только главное действие экрана (`primary`). Остальным
- * `cut` не нужен: тихо проглотить его значило бы спрятать ошибку вёрстки.
+ * Срез у кнопки — только главное действие экрана: `primary` или кнопка звёзд
+ * (главная покупка магазина). Остальным `cut` не нужен: тихо проглотить его
+ * значило бы спрятать ошибку вёрстки.
  */
 function cutAllowed(variant: ButtonVariant, requested: boolean): boolean {
   if (!requested) return false;
-  if (variant === "primary") return true;
+  if (variant === "primary" || variant === "stars") return true;
   if (!warnedCut.has(variant)) {
     warnedCut.add(variant);
-    console.warn(`Button: свойство cut работает только у variant="primary", у "${variant}" оно игнорируется`);
+    console.warn(`Button: свойство cut работает только у variant="primary" и "stars", у "${variant}" оно игнорируется`);
   }
   return false;
 }
@@ -111,7 +113,7 @@ export function Button(props: ButtonProps): ReactNode {
     >
       {cut ? (
         <CutFrame
-          tone="primary"
+          tone={variant === "stars" ? "stars" : "primary"}
           size="sm"
           className={`flex flex-1 items-center justify-center gap-2 self-stretch ${CUT_PADDING_CLASS[size]}`}
         >

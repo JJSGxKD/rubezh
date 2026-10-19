@@ -3,8 +3,8 @@ id: T-0046
 title: Магазин в облике «Сумеречный рубеж» — по макету
 epic: E12
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-3 / sonnet-5.5 / medium
 size: M
 depends_on: [T-0013]
 zones:

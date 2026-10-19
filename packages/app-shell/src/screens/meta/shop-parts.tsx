@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { Check, Crown, ExternalLink, Sparkles, TrendingUp } from "lucide-react";
-import { Badge, Button, Card } from "../../design-system/components";
+import { Badge, Button, Card, staggerStyle } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
 import { ShardIcon, shardRarity } from "../../design-system/components/ShardIcon";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import type { ShopItem, VipView } from "../../state/shop-api";
 import { formatCountdown, msUntilReset } from "./schedule";
+import { gemPileSize, gemsOf } from "./shop-look";
 import { badgeLabel, buyLabel, itemName, promoLeft, resourceLabel, shownPrice, type ShopPromo } from "./shop-texts";
 
 /**
@@ -43,9 +44,9 @@ export function ResourceIcon(props: { resource: string; size?: number }): ReactN
 }
 
 /** Цена кнопкой; по акции — с зачёркнутой ценой каталога перед ней. */
-export function StarsButton(props: { stars: number; full?: number | null; label: string; busy: boolean; disabled: boolean; glow?: boolean; block?: boolean; onClick: () => void }): ReactNode {
+export function StarsButton(props: { stars: number; full?: number | null; label: string; busy: boolean; disabled: boolean; glow?: boolean; cut?: boolean; block?: boolean; onClick: () => void }): ReactNode {
   return (
-    <Button block={props.block ?? true} variant="stars" glow={props.glow} disabled={props.disabled} loading={props.busy} ariaLabel={props.label} onClick={props.onClick}>
+    <Button block={props.block ?? true} variant="stars" glow={props.glow} cut={props.cut} disabled={props.disabled} loading={props.busy} ariaLabel={props.label} onClick={props.onClick}>
       <StarsIcon size={18} />
       {props.full === undefined || props.full === null ? null : <s className="tabular-nums opacity-70">{formatNumber(props.full)}</s>}
       <span className="tabular-nums">{formatNumber(props.stars)}</span>
@@ -69,7 +70,16 @@ export function VipCard(props: {
   const { vip, busy } = props;
   const stars = vip.stars;
   return (
-    <Card selected={vip.active} stripe="accent" appearIndex={0}>
+    // Своя разметка вместо `Card`: у него нет подложки тона. VIP — в тоне элиты
+    // (design/screens/shop.html), у действующего ещё и свечение.
+    <div
+      className={[
+        "relative flex w-full animate-rise-in flex-col overflow-hidden rounded-lg border border-elite/45 bg-linear-to-br from-elite/12 via-surface-raised to-surface p-4 text-left",
+        vip.active ? "shadow-[0_0_28px_-10px] shadow-elite/70 ring-1 ring-elite/50" : "",
+      ].join(" ")}
+      style={staggerStyle(0)}
+    >
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-accent" />
       <div className="flex items-start gap-3">
         <span aria-hidden="true" className="inline-flex size-12 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-elite/40 to-accent/30 text-elite">
           <Crown size={26} />
@@ -139,7 +149,7 @@ export function VipCard(props: {
           </Button>
         ) : null}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -184,7 +194,7 @@ export function ItemCard(props: { item: ShopItem; index: number; busy: string | 
       ) : stars === null ? null : (
         <div className="mt-3">
           {price.promo === null ? null : <p className="mb-1.5 text-xs font-semibold text-danger">{t("shop.promo.left", { time: promoLeft(price.promo, props.now) })}</p>}
-          <StarsButton stars={stars} full={price.full} label={buyLabel(item, price)} busy={props.busy === item.sku} disabled={props.busy !== null} glow={props.forYou} onClick={props.onBuy} />
+          <StarsButton stars={stars} full={price.full} label={buyLabel(item, price)} busy={props.busy === item.sku} disabled={props.busy !== null} glow={props.forYou} cut={props.forYou} onClick={props.onBuy} />
         </div>
       )}
     </Card>
@@ -197,14 +207,22 @@ export function ItemCard(props: { item: ShopItem; index: number; busy: string | 
  * дорогом за самоцвет наборе.
  * Всё это сервер считает, а не придумывает экран.
  */
-export function GemPackTile(props: { item: ShopItem; index: number; busy: string | null; now: number; onBuy: () => void }): ReactNode {
+export function GemPackTile(props: { item: ShopItem; index: number; busy: string | null; now: number; packs: readonly number[]; onBuy: () => void }): ReactNode {
   const { item } = props;
-  const gems = item.contents.find((part) => part.resource === "gems")?.amount ?? 0;
+  const gems = gemsOf(item);
   const badge = badgeLabel(item.badge);
   const price = shownPrice(item, props.now);
   const stars = price.stars;
+  const best = item.badge === "best";
   return (
-    <Card appearIndex={props.index} compact stripe={item.badge === "best" ? "accent" : undefined}>
+    // «Лучшая цена» выделена рамкой и свечением акцента, а не полосой слева.
+    // Рамка и появление — на оболочке: у `Card` нет своего класса, а карточка
+    // не должна въезжать в уже стоящую на месте рамку.
+    <div
+      className={["flex animate-rise-in rounded-lg", best ? "shadow-[0_0_22px_-10px] shadow-accent ring-1 ring-accent/55" : ""].join(" ")}
+      style={staggerStyle(props.index)}
+    >
+    <Card compact>
       {badge === null ? null : (
         <span className="absolute top-2 left-2">
           <Badge tone={item.badge === "best" ? "accent" : "warning"}>{badge}</Badge>
@@ -216,8 +234,8 @@ export function GemPackTile(props: { item: ShopItem; index: number; busy: string
         </span>
       )}
       <div className="mt-5 flex flex-col items-center gap-1 text-center">
-        <GemIcon size={44} />
-        <p className="font-display text-2xl font-bold tabular-nums text-text">{formatNumber(gems)}</p>
+        <GemPile size={gemPileSize(gems, props.packs)} />
+        <p className="font-display text-[26px] font-bold tabular-nums text-text">{formatNumber(gems)}</p>
         <p className="text-xs text-text-muted">{t("shop.gems.word", { n: gems })}</p>
         {/* Одна строка под числом у всех плиток — кнопки стоят вровень. Идущая акция важнее выгоды: она кончится. */}
         {price.promo !== null ? (
@@ -234,6 +252,23 @@ export function GemPackTile(props: { item: ShopItem; index: number; busy: string
         </div>
       )}
     </Card>
+    </div>
+  );
+}
+
+/** Высоты значков в горсти, от края к краю: середина крупнее (design/screens/shop.html). */
+const PILE_HEIGHTS: Record<1 | 3 | 5, readonly number[]> = { 1: [26], 3: [22, 30, 22], 5: [20, 26, 34, 26, 20] };
+
+/** Горсть самоцветов по размеру набора: значки внахлёст на 2 px, ряд прижат к низу. */
+function GemPile(props: { size: 1 | 3 | 5 }): ReactNode {
+  return (
+    <div aria-hidden="true" className="flex h-14 items-end justify-center">
+      {PILE_HEIGHTS[props.size].map((height, index) => (
+        <span key={index} className={index === 0 ? "" : "-ml-0.5"}>
+          <GemIcon size={height} />
+        </span>
+      ))}
+    </div>
   );
 }
 

@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "@bh/design-tokens/tokens.css";
 
+/* Кромка кнопки звёзд со срезом: именованной переменной, а не литералом в утилите. Без префикса `--color-`: цвета палитры живут в пакете токенов (tokens.test.ts). */
+:root {
+  --stars-edge: #a06e10;
+}
+
 /*
  * Токены дизайн-системы — единственный источник визуальных значений
  * (docs/27-design-system-and-app-shell.md §4.2). Базовые — палитра,
@@ -643,6 +648,7 @@
   --fill-card-selected: linear-gradient(180deg, color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised)), var(--color-surface));
   --fill-panel: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface) 45%);
   --fill-primary: linear-gradient(180deg, var(--color-accent-glow), var(--color-accent) 48%, var(--color-accent-pressed));
+  --fill-stars-cut: linear-gradient(180deg, #ffe08a, var(--color-stars) 50%, #e6a51c);
 }
 
 @utility surface-card {
@@ -726,6 +732,15 @@
   background: var(--color-accent-edge);
   & > .cut-fill {
     background: var(--fill-primary);
+  }
+}
+
+/* Кнопка звёзд со срезом — золотая, как в макете магазина; плоская `btn-stars` остаётся тёмной. */
+@utility cut-stars {
+  color: var(--color-on-stars);
+  background: var(--stars-edge);
+  & > .cut-fill {
+    background: var(--fill-stars-cut);
   }
 }
 

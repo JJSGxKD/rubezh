@@ -11,7 +11,7 @@ import type { CSSProperties, ReactNode } from "react";
  * верхний и правый нижний углы. Краски и геометрия — в `tokens.css`
  * (`cut-frame`, `cut-fill`, `cut-<тон>`).
  */
-export type CutTone = "card" | "card-selected" | "panel" | "primary";
+export type CutTone = "card" | "card-selected" | "panel" | "primary" | "stars";
 
 /** `md` — карточки и окна, `sm` — кнопки: размеры среза берутся из токенов. */
 export type CutSize = "sm" | "md";
@@ -24,6 +24,7 @@ const TONE_CLASS: Record<CutTone, string> = {
   "card-selected": "cut-card-selected",
   panel: "cut-panel",
   primary: "cut-primary",
+  stars: "cut-stars",
 };
 
 export interface CutFrameProps {
