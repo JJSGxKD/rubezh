@@ -226,6 +226,14 @@ export interface RunSnapshotSummary {
   level: number;
   weapons: RunSlotState[];
   passives: RunSlotState[];
+  /**
+   * Убийства к моменту снимка. Необязательное: снимок прошлой сборки поля не
+   * знает, и тогда счётчик читается из тела мира (`readSnapshotCounters`) —
+   * формат снимка из-за поля не меняется.
+   */
+  enemiesKilled?: number;
+  /** Опыт, собранный к моменту снимка; нет поля — как у `enemiesKilled`. */
+  xpCollected?: number;
 }
 
 export interface RunOptions {

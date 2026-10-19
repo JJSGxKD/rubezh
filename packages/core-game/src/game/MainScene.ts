@@ -486,6 +486,8 @@ export class MainScene extends Phaser.Scene {
         level: world.progression.level,
         weapons: this.slotsOf("weapons"),
         passives: this.slotsOf("passives"),
+        enemiesKilled: world.stats.enemiesKilled,
+        xpCollected: world.stats.xpCollected,
       },
       world: captureWorld(world, this.spawner),
       ...(this.cheatsUsed ? { cheats: true } : {}),
