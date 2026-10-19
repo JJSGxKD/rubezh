@@ -371,9 +371,9 @@ function testCharge(shop: ShopView): number {
  */
 function ShopSkeleton(): ReactNode {
   return (
-    <div className="mt-2 grid gap-4" aria-hidden="true">
+    <div className="mt-2 grid gap-4" aria-busy>
       {[160, 42, 150, 220].map((height, index) => (
-        <div key={height} className="surface-card animate-pulse rounded-lg" style={{ height, ...staggerStyle(index) }} />
+        <div key={height} aria-hidden="true" className="surface-card animate-pulse rounded-lg" style={{ height, ...staggerStyle(index) }} />
       ))}
     </div>
   );

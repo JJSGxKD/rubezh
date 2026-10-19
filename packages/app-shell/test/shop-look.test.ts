@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Button } from "../src/design-system/components";
 import { gemPileSize } from "../src/screens/meta/shop-look";
 
@@ -39,12 +39,16 @@ describe("размер горсти самоцветов", () => {
 });
 
 // Срез у кнопки звёзд: главная покупка магазина (design/screens/shop.html).
-// Остальные варианты, кроме главной кнопки, по-прежнему без среза.
+// Плоская кнопка звёзд без `cut` не меняется.
 
-function button(props: { variant: "stars" | "secondary"; cut?: boolean }): string {
+function button(props: { variant: "stars"; cut?: boolean }): string {
   const children: ReactNode = "50";
   return renderToStaticMarkup(createElement(Button, { ...props, children }));
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("срез у кнопки звёзд", () => {
   it("stars с cut — срез тона звёзд вместо плоской кнопки", () => {
@@ -55,7 +59,6 @@ describe("срез у кнопки звёзд", () => {
     expect(html).toContain("cut-stars");
     expect(html).not.toContain("btn-stars");
     expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
   });
 
   it("stars без cut — как раньше", () => {
