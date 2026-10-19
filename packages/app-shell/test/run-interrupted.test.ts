@@ -76,6 +76,11 @@ describe("забег, прерванный обновлением", () => {
     useRuns.getState().hydrate();
   }
 
+  /** Что осталось в хранилище сохранения: стирание пишет `null`, а не убирает ключ. */
+  function saveLeft(): unknown {
+    return JSON.parse(storage.get(SAVE_KEY) ?? "null");
+  }
+
   function put(record: Record<string, unknown>): void {
     storage.set(SAVE_KEY, JSON.stringify(record));
   }
@@ -147,7 +152,7 @@ describe("забег, прерванный обновлением", () => {
       passives: [{ id: "might", level: 2 }],
     });
     expect(queued()[0]).not.toHaveProperty("cheats");
-    expect(storage.get(SAVE_KEY)).toBeNull();
+    expect(saveLeft()).toBeNull();
   });
 
   it("другой формат снимка засчитывается так же", () => {
@@ -156,7 +161,7 @@ describe("забег, прерванный обновлением", () => {
 
     expect(queued()).toHaveLength(1);
     expect(queued()[0]).toMatchObject({ outcome: "abandoned", enemiesKilled: 41, contentHash: CONTENT_HASH });
-    expect(storage.get(SAVE_KEY)).toBeNull();
+    expect(saveLeft()).toBeNull();
   });
 
   it("счётчики из summary главнее тела мира, а без счётчика в теле — убийств ноль", () => {
@@ -176,7 +181,7 @@ describe("забег, прерванный обновлением", () => {
     settleInterruptedRun();
 
     expect(queued()).toHaveLength(0);
-    expect(storage.get(SAVE_KEY)).not.toBeNull();
+    expect(saveLeft()).not.toBeNull();
     expect(useInterruptedNotice.getState().notice).toBeNull();
   });
 
@@ -184,7 +189,7 @@ describe("забег, прерванный обновлением", () => {
     put(savedRun({ savedAt: Date.now() - SETTLE_MAX_AGE_MS - 1000 }));
     settleInterruptedRun();
     expect(queued()).toHaveLength(0);
-    expect(storage.get(SAVE_KEY)).toBeNull();
+    expect(saveLeft()).toBeNull();
     expect(useInterruptedNotice.getState().notice).toBeNull();
 
     put(savedRun({ savedAt: Date.now() - SETTLE_MAX_AGE_MS + DAY_MS }));
@@ -224,7 +229,7 @@ describe("забег, прерванный обновлением", () => {
 
     expect(queued()).toHaveLength(1);
     expect(queued()[0]).toMatchObject({ enemiesKilled: 41, survivalSec: 184.5 });
-    expect(storage.get(SAVE_KEY)).toBeNull();
+    expect(saveLeft()).toBeNull();
   });
 
   it("обычный забег: в записи нет cheats, рекорд устройства обновлён", () => {
@@ -268,7 +273,7 @@ describe("забег, прерванный обновлением", () => {
     settleInterruptedRun();
 
     expect(storage.get(QUEUE_KEY)).toBeNull();
-    expect(storage.get(SAVE_KEY)).toBeNull();
+    expect(saveLeft()).toBeNull();
     expect(useMeta.getState().best.hard).toBeGreaterThan(184);
   });
 

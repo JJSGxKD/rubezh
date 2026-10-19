@@ -97,6 +97,11 @@ function memoryStorage(): KeyValueStorage & { values: Record<string, string> } {
 
 let storage = memoryStorage();
 
+/** Что осталось в хранилище сохранения: стирание пишет `null`, а не убирает ключ. */
+function saveLeft(): unknown {
+  return JSON.parse(storage.get(SAVE_KEY) ?? "null");
+}
+
 function options(resume?: RunSnapshot): Parameters<ReturnType<typeof useRun.getState>["start"]>[0] {
   return {
     container: {} as HTMLElement,
@@ -172,24 +177,24 @@ describe("сохранение прерванного забега", () => {
     useSavedRun.getState().hydrate();
     expect(useSavedRun.getState().saved).toBeNull();
     // Запись ждёт `settleInterruptedRun`: пока забег не засчитан, стирать нельзя.
-    expect(storage.get(SAVE_KEY)).not.toBeNull();
+    expect(saveLeft()).not.toBeNull();
 
     storage.set(SAVE_KEY, JSON.stringify({ ...snapshot({ format: RUN_SNAPSHOT_FORMAT + 1 }), savedAt: 1 }));
     useSavedRun.getState().hydrate();
     expect(useSavedRun.getState().saved).toBeNull();
-    expect(storage.get(SAVE_KEY)).not.toBeNull();
+    expect(saveLeft()).not.toBeNull();
   });
 
   it("takeIncompatibleRun отдаёт несовместимое сохранение и стирает его, совместимое не трогает", () => {
     storage.set(SAVE_KEY, JSON.stringify({ ...snapshot({ contentHash: "old" }), savedAt: 1 }));
     const taken = takeIncompatibleRun();
     expect(taken?.contentHash).toBe("old");
-    expect(storage.get(SAVE_KEY)).toBeNull();
+    expect(saveLeft()).toBeNull();
     expect(takeIncompatibleRun()).toBeNull();
 
     storage.set(SAVE_KEY, JSON.stringify({ ...snapshot(), savedAt: 1 }));
     expect(takeIncompatibleRun()).toBeNull();
-    expect(storage.get(SAVE_KEY)).not.toBeNull();
+    expect(saveLeft()).not.toBeNull();
   });
 
   it("схема сохранения принимает summary со счётчиками и без них", () => {
