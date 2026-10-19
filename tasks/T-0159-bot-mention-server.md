@@ -3,8 +3,8 @@ id: T-0159
 title: Юзернейм бота в имени и bio — порт площадки BotMentions и getChat у Telegram
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
