@@ -19,9 +19,13 @@ import { loadTelegramWebAppCompat, type TelegramWebAppCompat } from "@bh/adapter
  * после оболочки, из чанка рекламы.
  */
 
-const GRASPIL_SCRIPT = "https://w.graspil.com";
 /** Имя очереди — как в сниппете Graspil: по нему скрипт находит свой ключ. */
 const DATA_LAYER = "graspil";
+/**
+ * Имя очереди скрипт узнаёт из параметра `l` своего адреса, как в сниппете
+ * кабинета. Без него он ключа не находит, и сервер Graspil отвечает 401.
+ */
+export const GRASPIL_SCRIPT = `https://w.graspil.com?l=${DATA_LAYER}`;
 
 /** Адрес API — тот же, что у клиента в `main.tsx`: на dev-сервере свой origin, в сборке `VITE_API_URL`. */
 const API_BASE = import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? "");
