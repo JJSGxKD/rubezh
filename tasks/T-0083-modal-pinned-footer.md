@@ -22,7 +22,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 2
+batch: 1
 ---
 
 # T-0083. `Modal`: закреплённый подвал при прокручиваемом теле
