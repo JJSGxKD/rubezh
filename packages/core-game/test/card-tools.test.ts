@@ -1,6 +1,5 @@
 import type { BoostDef, EnemyDef, LoadoutLimits, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
-import { BOOSTS } from "../src/content/boosts";
 import { CHESTS } from "../src/content/chests";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
