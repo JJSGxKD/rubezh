@@ -104,15 +104,28 @@ export const AD_SCRIPT_ORIGINS = [
  *   ответа идёт с параметрами обратного вызова, путь решение не называет, поэтому
  *   разрешены хосты;
  * - RichAds подключает скрипт Яндекса: путь указан, потому что `yandex.ru`
- *   целиком слишком широк. Что грузит сам скрипт Яндекса, из Р108 не видно —
- *   список дополняется по отчётам о блокировках, а не догадкой.
+ *   целиком слишком широк;
+ * - `context.js` Яндекса сам грузит сборки из `yastatic.net/partner-code-bundles/`
+ *   (Р122, консоль игрока): источник с путём, а не хост, потому что с этого хоста
+ *   Яндекс раздаёт всё подряд, а реклама берёт только этот каталог. Список
+ *   дополняется по отчётам о блокировках, а не догадкой.
  */
 export const AD_CHAIN_SCRIPT_SOURCES = [
   "https://7ool.net",
   "https://eu.convers.link",
   "https://us.convers.link",
   "https://yandex.ru/ads/system/context.js",
+  "https://yastatic.net/partner-code-bundles/",
 ] as const;
+
+/**
+ * Стили `tg-ob.js` RichAds (Р122): `7ool.net` и `cdn.adx1.com` — хосты целиком,
+ * потому что путь их стилей содержит номер площадки и меняется. Только при рекламе.
+ */
+export const AD_CHAIN_STYLE_ORIGINS = ["https://7ool.net", "https://cdn.adx1.com"] as const;
+
+/** Шрифт объявлений Яндекса (Р122): только каталог шрифтов, не весь `yastatic.net`. Только при рекламе. */
+export const AD_CHAIN_FONT_SOURCES = ["https://yastatic.net/s3/home/fonts/"] as const;
 
 /**
  * Google Fonts для SDK Taddy: он тянет стиль Roboto со своего же шрифтового
@@ -155,7 +168,7 @@ export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = 
     // В разработке React вставляет встроенный скрипт горячей перезагрузки, а
     // Vite — стили через <style>. В сборке ни того ни другого нет.
     "script-src": dev ? ["'self'", "'unsafe-inline'", ...scripts] : ["'self'", ...scripts],
-    "style-src": ["'self'", "'unsafe-inline'", ...(ads ? GOOGLE_FONTS_STYLE_ORIGINS : [])],
+    "style-src": ["'self'", "'unsafe-inline'", ...(ads ? [...GOOGLE_FONTS_STYLE_ORIGINS, ...AD_CHAIN_STYLE_ORIGINS] : [])],
     // Картинки заданий из панели отдаёт API (`/api/v1/media`): в проде он на
     // своём же домене, а в разработке — на своём порту.
     "img-src": ["'self'", "data:", "blob:", ...(api === null ? [] : [api]), ...AVATAR_ORIGINS, ...creatives],
@@ -164,7 +177,7 @@ export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = 
     // Клиент Vite ждёт сервер после обрыва HMR в воркере из blob: — без
     // него страница не узнает, что сервер вернулся.
     "worker-src": dev ? ["'self'", "blob:"] : ["'self'"],
-    "font-src": ["'self'", ...(ads ? GOOGLE_FONTS_FONT_ORIGINS : [])],
+    "font-src": ["'self'", ...(ads ? [...GOOGLE_FONTS_FONT_ORIGINS, ...AD_CHAIN_FONT_SOURCES] : [])],
     "connect-src": ["'self'", ...(api === null ? [] : [api]), ...connects, ...(dev ? ["ws:", "wss:"] : [])],
     "frame-ancestors": [...FRAME_ANCESTORS, ...adminOrigins],
     "base-uri": ["'self'"],
