@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead-1
 size: M
-depends_on: [T-0130, T-0166, T-0190]
+depends_on: [T-0130, T-0166, T-0190, T-0196]
 zones:
   - packages/app-shell/src/screens/challenge.tsx
   - packages/app-shell/src/screens/challenge-rules.ts
@@ -38,7 +38,7 @@ batch: 3
 
 # T-0131. Испытание дня — вход с главной, лист испытания, таблица дня, расписание в панели
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0131.json)](README.md#значки-статуса) [![T-0130](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0130.json&label=T-0130)](T-0130-daily-challenge-server.md) [![T-0166](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0166.json&label=T-0166)](T-0166-narrow-screen-leftovers.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0131.json)](README.md#значки-статуса) [![T-0130](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0130.json&label=T-0130)](T-0130-daily-challenge-server.md) [![T-0166](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0166.json&label=T-0166)](T-0166-narrow-screen-leftovers.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0196](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0196.json&label=T-0196)](T-0196-player-power-pressure-wiring.md)
 
 ## Зачем
 
