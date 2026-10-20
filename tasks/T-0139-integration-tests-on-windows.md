@@ -3,8 +3,8 @@ id: T-0139
 title: Полный прогон интеграционных тестов проходит и на Windows
 epic: E0
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
