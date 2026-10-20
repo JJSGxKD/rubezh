@@ -1,9 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { loadAppConfig } from "../src/config/app-config.js";
 import { PrismaClient } from "../src/generated/prisma/client.js";
+import { AdPasses } from "../src/modules/ads/ads-passes.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { PaymentsHooks } from "../src/modules/payments/payments-hooks.js";
+import { PaymentsService } from "../src/modules/payments/payments.service.js";
+import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
+import { PurchaseRevocation } from "../src/modules/payments/purchase-revocation.js";
 import { PrismaPurchasesRepository } from "../src/modules/payments/purchases.repository.js";
-import { PrismaVipRepository } from "../src/modules/vip/vip.repository.js";
+import { SubscriptionRenewal } from "../src/modules/payments/subscription-renewal.js";
+import { PrismaVipRepository, type PeriodRecord, type StoredPeriod, type VipState, type VipSubscriptionRow } from "../src/modules/vip/vip.repository.js";
+import { VipService } from "../src/modules/vip/vip.service.js";
+import { WalletBonuses } from "../src/modules/wallet/wallet-bonus.js";
+import type { WalletService } from "../src/modules/wallet/wallet.service.js";
+import { AUTH_ENV } from "./helpers/auth-env.js";
+import { FakeStarsApi, starsProviders } from "./helpers/fake-stars-api.js";
+import { MemoryRunsRepository } from "./helpers/memory-runs.js";
+import { restrictionsGate } from "./helpers/memory-restrictions.js";
+import { switchesOf } from "./helpers/notify-targets.js";
 import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
@@ -11,13 +26,53 @@ import { testPrisma } from "./helpers/test-prisma.js";
  * TEST_DATABASE_URL, без него пропуск): периоды выстраиваются в цепочку и под
  * гонкой, повтор выдачи — тот же период; отменённое остаётся за тем, кто
  * отменил первым, а оплата продления не перебивает отмену, записанную позже
- * неё; самоцветы — раз в московские сутки.
+ * неё; самоцветы — раз в московские сутки; две подписки сразу не остаются
+ * без продления обе (T-0140).
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const NOW = new Date(Date.UTC(2026, 8, 30, 9));
 const PERIOD_SEC = 30 * 24 * 3600;
 const DAY_MS = 86_400_000;
+
+/**
+ * Репозиторий VIP, в котором выдачи читают подписки только после того, как
+ * обе записали период: каждая видит другую с продлением. Живая гонка даёт это
+ * лишь иногда, а здесь — каждый раз.
+ */
+class CrossingVipRepository extends PrismaVipRepository {
+  private written = 0;
+  private release: () => void = () => undefined;
+  private readonly allWritten = new Promise<void>((resolve) => {
+    this.release = resolve;
+  });
+
+  constructor(
+    prisma: PrismaClient,
+    private readonly writers: number,
+  ) {
+    super(prisma);
+  }
+
+  override async addPeriod(record: PeriodRecord): Promise<StoredPeriod> {
+    const stored = await super.addPeriod(record);
+    this.written += 1;
+    if (this.written >= this.writers) this.release();
+    return stored;
+  }
+
+  override async state(accountId: string, at: Date): Promise<VipState> {
+    await this.allWritten;
+    return await super.state(accountId, at);
+  }
+}
+
+/** Подписка, у которой продление должно остаться: запись раньше, при равенстве времени — меньший идентификатор. */
+function expectedWinner(subscriptions: readonly VipSubscriptionRow[]): string {
+  const [winner] = [...subscriptions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.subscriptionId < b.subscriptionId ? -1 : 1));
+  if (winner === undefined) throw new Error("подписок нет");
+  return winner.subscriptionId;
+}
 
 describe.skipIf(DATABASE_URL === "")("VIP на живом Postgres", () => {
   let prisma: PrismaClient;
@@ -291,5 +346,76 @@ describe.skipIf(DATABASE_URL === "")("VIP на живом Postgres", () => {
       expect(await span(second)).toEqual([MS(10), MS(40)]);
       expect(await span(third)).toEqual([MS(40), MS(70)]);
     }, 30_000);
+  });
+
+  describe("две подписки сразу: продление остаётся у одной (T-0140)", () => {
+    const REPEATS = 20;
+    const api = new FakeStarsApi();
+
+    const chargeOf = (purchaseId: string): string => `charge-${purchaseId}`;
+
+    /** Выдача на живой базе; платформа — подделка, остальные зависимости выдаче не нужны. */
+    function fulfilment(repository: PrismaVipRepository): (purchaseId: string) => Promise<void> {
+      const settings = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, TELEGRAM_BOT_UPDATES: "polling", PAYMENTS_ENABLED: "true" } as NodeJS.ProcessEnv);
+      const providers = starsProviders(api);
+      const service = new VipService(
+        repository,
+        new PaymentsService(settings, purchases, new MemoryRunsRepository(), providers, switchesOf(settings)),
+        new PurchaseFulfillment(),
+        new PaymentsHooks(),
+        new SubscriptionRenewal(purchases, providers),
+        {} as unknown as WalletService,
+        new WalletBonuses(),
+        new AdPasses(),
+        accounts,
+        new PurchaseRevocation(),
+        restrictionsGate(),
+      );
+      return async (purchaseId) => {
+        const row = await purchases.byId(purchaseId);
+        if (row === null) throw new Error(`покупки ${purchaseId} нет`);
+        await service.fulfill(row);
+      };
+    }
+
+    function renewalCalls(ids: readonly string[]) {
+      return api.renewals.filter((item) => ids.some((id) => chargeOf(id) === item.chargeId));
+    }
+
+    /** Две выдачи разом и всё, что должно быть верно после них и после их повтора. */
+    async function bothAtOnce(fulfil: (purchaseId: string) => Promise<void>): Promise<void> {
+      const me = await account();
+      const ids = [await paidVip(me), await paidVip(me)];
+
+      await Promise.all(ids.map((id) => fulfil(id)));
+
+      const state = await vip.state(me, NOW);
+      expect(state.subscriptions).toHaveLength(2);
+      const winner = expectedWinner(state.subscriptions);
+      const loser = ids.find((id) => id !== winner) ?? "";
+      expect(state.subscriptions.filter((item) => item.renewal === "on").map((item) => item.subscriptionId)).toEqual([winner]);
+      expect(state.subscriptions.find((item) => item.subscriptionId === loser)).toMatchObject({ renewal: "cancelled", cancelledBy: "game" });
+      // Оплаченные периоды остаются у игрока обе: VIP идёт на 60 суток, возврата нет.
+      expect(await prisma.vipPeriod.count({ where: { accountId: me } })).toBe(2);
+      expect(state.until).toEqual(new Date(NOW.getTime() + 60 * DAY_MS));
+      // Площадку просили выключить продление только проигравшей.
+      const calls = renewalCalls(ids);
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls.every((item) => item.chargeId === chargeOf(loser) && item.canceled)).toBe(true);
+
+      // Повтор выдач ничего не меняет и площадку не трогает.
+      await Promise.all(ids.map((id) => fulfil(id)));
+      expect(renewalCalls(ids)).toHaveLength(calls.length);
+      expect((await vip.state(me, NOW)).subscriptions).toEqual(state.subscriptions);
+    }
+
+    it(`две выдачи параллельно на одном аккаунте — продление ровно у одной, у более ранней; ${REPEATS} повторов подряд`, async () => {
+      const fulfil = fulfilment(vip);
+      for (let attempt = 0; attempt < REPEATS; attempt += 1) await bothAtOnce(fulfil);
+    }, 120_000);
+
+    it(`обе выдачи читают подписки уже после обеих записей — продление не пропадает у обеих; ${REPEATS} повторов подряд`, async () => {
+      for (let attempt = 0; attempt < REPEATS; attempt += 1) await bothAtOnce(fulfilment(new CrossingVipRepository(prisma, 2)));
+    }, 120_000);
   });
 });
