@@ -96,6 +96,14 @@ const userSchema = z.object({
 
 const chatSchema = z.object({ id: z.number().int(), type: z.string() });
 
+const chatInfoSchema = z.object({
+  id: z.number().int(),
+  type: z.string(),
+  first_name: z.string().max(256).optional(),
+  last_name: z.string().max(256).optional(),
+  bio: z.string().max(512).optional(),
+});
+
 /**
  * Оплата и её возврат в Stars — сообщения от Telegram в личном чате с
  * игроком. Границы щедрые: обновление, не прошедшее схему, пропускается, а
@@ -445,6 +453,17 @@ export class TelegramBotApi {
     const result = await this.call("getChatMember", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.getChatMember(chat, userId, abort));
     const member = z.object({ status: z.string().max(32), is_member: z.boolean().optional() }).parse(result);
     return { status: member.status, isMember: member.is_member ?? null };
+  }
+
+  /**
+   * Данные личного чата с игроком (`ChatFullInfo`): имя, фамилия и «о себе».
+   * `bio` нет, если оно пустое или закрыто настройкой приватности — Telegram
+   * эти случаи не различает.
+   */
+  async getChat(chatId: number, signal?: AbortSignal): Promise<{ firstName: string | null; lastName: string | null; bio: string | null }> {
+    const result = await this.call("getChat", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.getChat(chatId, abort));
+    const chat = chatInfoSchema.parse(result);
+    return { firstName: chat.first_name ?? null, lastName: chat.last_name ?? null, bio: chat.bio ?? null };
   }
 
   /** Вернуть звёзды игроку. Отказ `CHARGE_ALREADY_REFUNDED` — повтор уже сделанного возврата. */
