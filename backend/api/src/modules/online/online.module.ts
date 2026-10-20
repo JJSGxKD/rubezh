@@ -1,36 +1,22 @@
 import { Module } from "@nestjs/common";
-import { AdminSessionGuard } from "../admin/admin-session.guard.js";
-import { AdminSessionService } from "../admin/admin-session.service.js";
-import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "../admin/admin-session.store.js";
+import { AdminModule } from "../admin/admin.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
+import { OnlineCoreModule } from "./online-core.module.js";
 import { OnlineAdminController, OnlineController } from "./online.controller.js";
 import { OnlineJob } from "./online.job.js";
-import { ONLINE_REPOSITORY, RedisOnlineRepository } from "./online.repository.js";
-import { OnlineService } from "./online.service.js";
 
 /**
  * Счётчик онлайна (Р107, docs/35-stage4-plan.md): пинг игрока, снимок для
  * панели и пересчёт раз в 15 с.
  *
- * Отметку активности ставит `AuthGuard` через порт `ONLINE_ACTIVITY` — его
- * даёт `AuthModule`, чтобы авторизация не импортировала этот модуль (цикл).
- *
- * Гард панели собирается здесь сам: `AdminModule` его не экспортирует, а
- * правка чужого модуля ради одного маршрута хуже второго экземпляра
- * сервиса без собственного состояния.
+ * Сервис счётчика приходит из `OnlineCoreModule`: он один на приложение, и им же
+ * `AuthGuard` отмечает активность через порт `ONLINE_ACTIVITY`. Гард панели
+ * приходит из `AdminModule`, который экспортирует его для таких модулей.
  */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AdminModule, OnlineCoreModule],
   controllers: [OnlineController, OnlineAdminController],
-  providers: [
-    OnlineService,
-    OnlineJob,
-    RateLimiter,
-    AdminSessionService,
-    AdminSessionGuard,
-    { provide: ONLINE_REPOSITORY, useClass: RedisOnlineRepository },
-    { provide: ADMIN_SESSION_STORE, useClass: RedisAdminSessionStore },
-  ],
+  providers: [OnlineJob, RateLimiter],
 })
 export class OnlineModule {}

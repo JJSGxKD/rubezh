@@ -120,6 +120,9 @@ import { RoleConfirmations } from "./role-confirmations.js";
     { provide: PANEL_LOGIN_STORE, useClass: RedisPanelLoginStore },
     RoleConfirmations,
   ],
-  exports: [PanelLoginService, RoleConfirmations],
+  // Гард панели закрывает маршруты модулей, у которых контроллер вне `AdminModule`.
+  // Он экспортируется вместе с сервисом сессий: `@UseGuards(...)` Nest собирает в
+  // модуле контроллера, а не здесь (то же, что у `AuthGuard` в `auth.module.ts`).
+  exports: [PanelLoginService, RoleConfirmations, AdminSessionGuard, AdminSessionService],
 })
 export class AdminModule {}
