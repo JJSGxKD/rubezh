@@ -102,7 +102,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
         {t("run.death.again")}
       </Button>
       {/* До 360 px подписи пары не помещаются в одну строку при штатных полях и шрифте. */}
-      <div className="grid grid-cols-2 gap-2 max-[22.5rem]:[&>button]:px-3 max-[22.5rem]:[&>button]:text-sm">
+      <div className="grid grid-cols-2 gap-2 max-[22.5rem]:[&>button]:px-3 max-[22.5rem]:[&>button]:text-sm landscape:contents">
         <Button variant="secondary" block onClick={props.onMenu}>
           {t("run.death.home")}
         </Button>
@@ -119,13 +119,15 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
       size="l"
       cut
-      // В портрете кнопки — подвал под прокручиваемой частью, в ландшафте — в
-      // правой колонке: «Ещё раз» видна без прокрутки (docs/27-design-system-and-app-shell.md §5.3).
-      footer={<div className="grid gap-2 landscape:hidden">{actions}</div>}
+      pinFooter
+      // Кнопки закреплены внизу окна: при любом числе карточек видны все три.
+      // В портрете «Ещё раз» и пара под ней, в ландшафте — один ряд из трёх
+      // (docs/27-design-system-and-app-shell.md §5.3).
+      footer={<div className="grid gap-2 landscape:grid-cols-[2fr_1fr_1fr]">{actions}</div>}
     >
-      {/* Прокручивается только содержимое: «Ещё раз» остаётся на месте, а
-          окно не выше экрана. Запас — заголовок, подвал с кнопками и поля. */}
-      <div className="max-h-[calc(100dvh-16rem-var(--app-inset-top)-var(--app-inset-bottom))] overflow-y-auto overscroll-contain landscape:max-h-none landscape:overflow-visible">
+      {/* Прокрутка одна — тело модалки: окно не выше экрана, а карточки
+          уходят под неё, не унося за край кнопки. */}
+      <div>
         <div className="grid gap-4 landscape:grid-cols-2">
           <div className="grid content-start gap-3">
             <ResultsHero result={result} isNewRecord={props.isNewRecord} {...(props.rank === undefined ? {} : { rank: props.rank })} {...(props.cheatsCounted === undefined ? {} : { cheatsCounted: props.cheatsCounted })} />
@@ -137,7 +139,6 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
           <div className="grid content-start gap-3">
             <RunStats result={result} />
             <RunDetails result={result} open={detailsOpen} diagnostics={props.diagnostics} onToggle={(open) => useMeta.getState().rememberDeathDetails(open)} />
-            <div className="hidden gap-2 landscape:grid">{actions}</div>
           </div>
         </div>
       </div>
