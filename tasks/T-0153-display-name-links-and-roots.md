@@ -3,8 +3,8 @@ id: T-0153
 title: Ники без ссылок и упоминаний, словарь мата точнее
 epic: E4
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-5 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0149]
