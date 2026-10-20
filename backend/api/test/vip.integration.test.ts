@@ -388,6 +388,9 @@ describe.skipIf(DATABASE_URL === "")("VIP на живом Postgres", () => {
       const ids = [await paidVip(me), await paidVip(me)];
 
       await Promise.all(ids.map((id) => fulfil(id)));
+      // Выдача записала период — покупки выданы, как это делает журнал выдач; иначе довыдача
+      // (`undelivered`, потолок 500 строк по всей базе) наткнулась бы на них при повторных прогонах.
+      await prisma.purchase.updateMany({ where: { purchaseId: { in: ids } }, data: { fulfilledAt: NOW } });
 
       const state = await vip.state(me, NOW);
       expect(state.subscriptions).toHaveLength(2);
