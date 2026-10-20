@@ -3,7 +3,7 @@ id: T-0200
 title: Панель за CDN Bunny — Caddy, тесты и документы; зона и DNS ставит тимлид
 epic: E3
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
