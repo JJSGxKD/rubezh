@@ -3,7 +3,7 @@ id: T-0185
 title: Модалки и листы — поверх шапки и нижней панели
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
