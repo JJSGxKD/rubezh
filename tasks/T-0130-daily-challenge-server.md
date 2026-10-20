@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-22
 size: M
-depends_on: [T-0129, T-0122]
+depends_on: [T-0129, T-0122, T-0191, T-0193]
 zones:
   - backend/api/src/modules/challenge/**
   - backend/api/src/modules/runs/dto/runs.dto.ts
@@ -42,7 +42,7 @@ batch: 3
 
 # T-0130. Испытание дня: сервер — расписание, выдача попыток, проверка, награда, таблица дня
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0130.json)](README.md#значки-статуса) [![T-0129](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0129.json&label=T-0129)](T-0129-daily-challenge-engine.md) [![T-0122](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0122.json&label=T-0122)](T-0122-run-modifiers-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0130.json)](README.md#значки-статуса) [![T-0129](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0129.json&label=T-0129)](T-0129-daily-challenge-engine.md) [![T-0122](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0122.json&label=T-0122)](T-0122-run-modifiers-server.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md)
 
 ## Зачем
 
@@ -54,6 +54,8 @@ batch: 3
 Экраны и панель — T-0131. Решение Р105, `docs/39-retention-mechanics.md` Б9.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** `CHALLENGE_DEFAULT_DIFFICULTY` — `hard`, а не `normal`: «Нормальную» новый клиент не выдаёт (T-0190), рейтинговая сложность одна (T-0191).
 
 Исполнитель их не пересматривает. Числа стартовые, **геймдизайнер калибрует**.
 

@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-22
 size: M
-depends_on: [T-0119]
+depends_on: [T-0119, T-0190, T-0193, T-0194]
 zones:
   - packages/shared-types/src/index.ts
   - packages/core-game/src/game/run/challenge.ts
@@ -34,7 +34,7 @@ batch: 3
 
 # T-0129. Испытание дня: движок — фиксированный seed и набор на старте забега
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0129.json)](README.md#значки-статуса) [![T-0119](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0119.json&label=T-0119)](T-0119-run-modifiers-hurry-inverse.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0129.json)](README.md#значки-статуса) [![T-0119](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0119.json&label=T-0119)](T-0119-run-modifiers-hurry-inverse.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md) [![T-0194](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0194.json&label=T-0194)](T-0194-limit-break-offers.md)
 
 ## Зачем
 
@@ -47,6 +47,8 @@ batch: 3
 (T-0130) и экраны (T-0131) строятся на этом. Решение Р105.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Сложность плана суток — `hard`; поле `difficultyId` в плане остаётся (id не сводятся, T-0190).
 
 Исполнитель их не пересматривает.
 
