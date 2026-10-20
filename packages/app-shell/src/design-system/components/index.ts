@@ -27,5 +27,6 @@ export {
   type CardStripe,
 } from "./Surfaces";
 export { Avatar, Badge, CurrencyChip, ProgressBar, Stat, type BadgeTone } from "./Data";
+export { ModalHostProvider, useModalHost } from "./modal-host";
 export { ListGroup, ListItem, Toggle } from "./List";
 export { Hint } from "./Hint";
