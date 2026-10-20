@@ -3,7 +3,7 @@ id: T-0164
 title: Тесты «61-й запрос — 429» не падают на смене минуты
 epic: E0
 priority: P2
-status: in-progress
+status: done
 owner: claude-15 / haiku-5.5 / low
 author: claude-lead-1
 size: S
