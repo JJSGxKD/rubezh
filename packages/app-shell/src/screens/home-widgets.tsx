@@ -27,7 +27,7 @@ import {
   type WidgetId,
   type WidgetSize,
 } from "./home-widget-rules";
-import { formatCountdown, msUntilReset, useClock } from "./meta/schedule";
+import { formatCountdown, formatCountdownShort, msUntilReset, useClock } from "./meta/schedule";
 
 /**
  * Виджеты главной (docs/35-stage4-plan.md WP42, часть 3, Р76): награда дня,
@@ -354,6 +354,21 @@ function inTime(ms: number): string {
   return t("widget.in", { time: formatCountdown(ms) });
 }
 
+/**
+ * Подпись «через …» для плитки: на окне уже 360 px — короткое «через 23:59»,
+ * от 360 px — полное. Полная подпись помещается в плитку с 360 px, а на 320
+ * (плитка 138 px) обрезалась бы; две формы вместо переноса, чтобы не менять
+ * высоту плиток.
+ */
+function inTimeTile(ms: number): ReactNode {
+  return (
+    <>
+      <span className="min-[360px]:hidden">{t("widget.in", { time: formatCountdownShort(ms) })}</span>
+      <span className="max-[360px]:hidden">{inTime(ms)}</span>
+    </>
+  );
+}
+
 /** Монеты (и осколки, если есть) — значком и числом; словами — для экранного диктора. */
 function Reward(props: { amount: Amount; size?: number }): ReactNode {
   const size = props.size ?? 16;
@@ -401,7 +416,7 @@ export function DailyView(props: { face: DailyFace; size: WidgetSize; now: numbe
           big={face.next === null ? t("widget.daily.tomorrow") : <Reward amount={face.next} />}
           // В плитке «завтра, через 23 ч 59 мин» не помещается в строку на 320 px, а две строки — в её высоту:
           // «завтра» уже сказано наградой следующего дня, остаётся «через N», как у колеса.
-          sub={size === "tile" ? inTime(face.untilMs - props.now) : t("widget.daily.tomorrowIn", { time: inTime(face.untilMs - props.now) })}
+          sub={size === "tile" ? inTimeTile(face.untilMs - props.now) : t("widget.daily.tomorrowIn", { time: inTime(face.untilMs - props.now) })}
         />
       );
     case "idle":
@@ -455,10 +470,10 @@ export function WheelView(props: { face: WheelFace; size: WidgetSize; now: numbe
     case "ad":
       return <Layout size={size} face={wheel} label={label("wheel", size)} big={t("widget.wheel.ad")} sub={face.vip ? t("widget.wheel.vipHint") : t("widget.wheel.adHint")} />;
     case "cooldown":
-      return <Layout size={size} face={wheel} label={label("wheel", size)} big={t("widget.wheel.ad")} sub={inTime(face.untilMs - props.now)} />;
+      return <Layout size={size} face={wheel} label={label("wheel", size)} big={t("widget.wheel.ad")} sub={size === "tile" ? inTimeTile(face.untilMs - props.now) : inTime(face.untilMs - props.now)} />;
     case "waiting":
       // Ждать до новых суток — крючком остаётся джекпот, отсчёт — мелко.
-      return <Layout size={size} face={wheel} label={label("wheel", size)} big={jackpot(face.jackpot) ?? t("widget.wheel.free")} sub={inTime(face.untilMs - props.now)} />;
+      return <Layout size={size} face={wheel} label={label("wheel", size)} big={jackpot(face.jackpot) ?? t("widget.wheel.free")} sub={size === "tile" ? inTimeTile(face.untilMs - props.now) : inTime(face.untilMs - props.now)} />;
     case "idle":
       return <Layout size={size} face={wheel} label={label("wheel", size)} big={t("widget.wheel.idle")} quiet />;
   }
