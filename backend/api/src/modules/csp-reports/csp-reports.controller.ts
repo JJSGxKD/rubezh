@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
-import { RequirePermission } from "../../common/access.js";
+import { Public, RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { addressOf } from "../../common/request-address.js";
 import { AdminSessionGuard } from "../admin/admin-session.guard.js";
@@ -26,6 +26,9 @@ export class CspReportsController {
     private readonly limiter: RateLimiter,
   ) {}
 
+  // Отчёт шлёт сам браузер, не клиент игры: токена игрока у него нет. Защита —
+  // лимит по адресу, потолок тела и закрытый набор хранимых значений.
+  @Public()
   @Post()
   @HttpCode(204)
   async receive(@Req() request: unknown, @Body() body: unknown): Promise<void> {
