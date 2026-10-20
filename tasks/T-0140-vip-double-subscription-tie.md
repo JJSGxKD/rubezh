@@ -3,7 +3,7 @@ id: T-0140
 title: Две подписки VIP одновременно — продление остаётся у одной
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: S
