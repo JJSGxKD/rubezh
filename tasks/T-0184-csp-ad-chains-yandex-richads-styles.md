@@ -3,8 +3,8 @@ id: T-0184
 title: Политика источников пускает сборки Яндекса и стили RichAds — вторая волна цепочек рекламы
 epic: E3
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
