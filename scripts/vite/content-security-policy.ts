@@ -66,7 +66,20 @@ export interface PolicyInput {
    * предпросмотр есть только у неё.
    */
   adminOrigins?: readonly string[];
+  /**
+   * Просить браузер сообщать о каждом заблокированном адресе (Р108,
+   * `REPORT_URI_PATH`): у Telegram-сборки с рекламой, где список разрешённых
+   * адресов SDK дополняется по этим отчётам. У панели и других площадок
+   * приёмника в политике нет.
+   */
+  reports?: boolean;
 }
+
+/**
+ * Путь приёмника отчётов на API (`backend/api/src/modules/csp-reports`).
+ * Без домена — тот же, что у клиента (прод, `VITE_API_URL` пуст).
+ */
+export const REPORT_URI_PATH = "/api/v1/csp-reports";
 
 /**
  * Graspil — аналитика Mini App (решение участника 1 от 26.09.2026,
@@ -156,7 +169,7 @@ export const FRAME_ANCESTORS = ["'self'", "https://web.telegram.org"] as const;
  */
 export const AVATAR_ORIGINS = ["https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"] as const;
 
-export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = false, adminOrigins = [] }: PolicyInput): string {
+export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = false, adminOrigins = [], reports = false }: PolicyInput): string {
   const dev = mode === "dev";
   const api = originOf(apiOrigin);
   const scripts = [...(graspil ? GRASPIL_SCRIPT_ORIGINS : []), ...(ads ? [...AD_SCRIPT_ORIGINS, ...AD_CHAIN_SCRIPT_SOURCES] : [])];
@@ -183,6 +196,11 @@ export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = 
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
     "object-src": ["'none'"],
+    // Только `report-uri`, не `report-to`: политика уходит заголовком (Caddy в
+    // проде, Vite на dev-сервере), и `report-uri` в заголовке работает, а
+    // `report-to` требует ещё и `Reporting-Endpoints`, тогда как выкат ставит
+    // один заголовок из `csp.txt`. Приёмник понимает оба формата тела.
+    ...(reports ? { "report-uri": [api === null ? REPORT_URI_PATH : `${api}${REPORT_URI_PATH}`] } : {}),
   };
 
   const policy = Object.entries(directives).map(([name, sources]) => `${name} ${sources.join(" ")}`);

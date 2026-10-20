@@ -3,8 +3,8 @@ id: T-0155
 title: Отчёты политики источников — директива в политике и приём со сводкой
 epic: E3
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0154, T-0184]
