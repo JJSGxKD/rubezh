@@ -33,7 +33,7 @@ export function WidgetShowcase(props: { now: number }): ReactNode {
   return (
     <div className="grid grid-cols-2 gap-3">
       {examples.map((example, index) => (
-        <Frame key={index} id={example.id} size={example.size} index={index} ready={example.ready}>
+        <Frame key={index} id={example.id} size={example.size} index={index} ready={example.ready} cut={example.id === "daily" && example.ready}>
           {example.view}
         </Frame>
       ))}
