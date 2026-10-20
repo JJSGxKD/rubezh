@@ -3,7 +3,7 @@ id: T-0188
 title: «Что нового» скрыт у игроков до пересмотра журнала
 epic: E6
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
