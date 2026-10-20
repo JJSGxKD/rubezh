@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-19
 size: M
-depends_on: [T-0120, T-0113]
+depends_on: [T-0120, T-0113, T-0191, T-0193]
 zones:
   - packages/shared-types/src/index.ts
   - backend/api/src/modules/runs/dto/runs.dto.ts
@@ -38,7 +38,7 @@ batch: 3
 
 # T-0121. Рубеж — цель забега, сервер: проверка победы, награда ×2, отметка в рейтинге
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json)](README.md#значки-статуса) [![T-0120](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0120.json&label=T-0120)](T-0120-rubezh-guard-engine.md) [![T-0113](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0113.json&label=T-0113)](T-0113-boards-by-viewer.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json)](README.md#значки-статуса) [![T-0120](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0120.json&label=T-0120)](T-0120-rubezh-guard-engine.md) [![T-0113](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0113.json&label=T-0113)](T-0113-boards-by-viewer.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md)
 
 ## Зачем
 
@@ -50,6 +50,8 @@ batch: 3
 N с» — T-0124, та же пачка.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Рейтинговая сложность одна — `hard` (T-0191): доска рубежа — `lb:rubezh:hard`, награда победы считается от базы `hard`; для `easy` и `normal` победа рубежа не пишется в доску.
 
 Исполнитель их не пересматривает. Числа стартовые, **геймдизайнер калибрует**.
 

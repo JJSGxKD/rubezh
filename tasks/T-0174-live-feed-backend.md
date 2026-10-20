@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead-1
 size: M
-depends_on: [T-0112]
+depends_on: [T-0112, T-0191]
 zones:
   - backend/api/src/modules/feed/**
   - backend/api/src/modules/seasons/seasons.module.ts
@@ -31,7 +31,7 @@ batch: 3
 
 # T-0174. Лента живых событий — сервер: запись настоящих событий за сутки, кэш, маршрут
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0174.json)](README.md#значки-статуса) [![T-0112](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0112.json&label=T-0112)](T-0112-separate-board-restriction.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0174.json)](README.md#значки-статуса) [![T-0112](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0112.json&label=T-0112)](T-0112-separate-board-restriction.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md)
 
 ## Зачем
 
@@ -43,6 +43,8 @@ batch: 3
 два вида, которые сервер знает уже сейчас.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Рейтинговая сложность одна — `hard` (T-0191). Ключ ленты по сложности строится для `hard`; «первый рейтинговый» и «рекорд недели» считаются только по `hard` с отсечки `rating.since-date`.
 
 Р114 (19.10.2026) дословно: события — **только настоящие, за последние
 сутки**: новый рекорд недели, забег дольше 10 минут, убитый босс, редкий

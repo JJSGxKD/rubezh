@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-3
 size: M
-depends_on: [T-0053, T-0054]
+depends_on: [T-0053, T-0054, T-0191]
 zones:
   - backend/api/src/modules/attribution/source-slot.ts
   - backend/api/src/modules/attribution/telegram-affiliate.repository.ts
@@ -48,7 +48,7 @@ batch: 4
 
 # T-0072. Метка партнёрки Telegram у игрока — слот источника занят, процент и срок программы в настройках
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0072.json)](README.md#значки-статуса) [![T-0053](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json&label=T-0053)](T-0053-funnel-chart-screen.md) [![T-0054](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0054.json&label=T-0054)](T-0054-player-card-tabs.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0072.json)](README.md#значки-статуса) [![T-0053](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json&label=T-0053)](T-0053-funnel-chart-screen.md) [![T-0054](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0054.json&label=T-0054)](T-0054-player-card-tabs.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md)
 
 ## Зачем
 

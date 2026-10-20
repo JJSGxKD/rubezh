@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-19
 size: M
-depends_on: [T-0121, T-0109]
+depends_on: [T-0121, T-0109, T-0186, T-0190, T-0193]
 zones:
   - packages/app-shell/src/screens/run/RubezhBanner.tsx
   - packages/app-shell/src/screens/run/RubezhResult.tsx
@@ -35,7 +35,7 @@ batch: 3
 
 # T-0124. Рубеж — цель забега, оболочка: баннеры, «до рубежа N с», отметка в рейтинге
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json)](README.md#значки-статуса) [![T-0121](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json&label=T-0121)](T-0121-rubezh-win-reward-server.md) [![T-0109](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0109.json&label=T-0109)](T-0109-death-whats-next.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json)](README.md#значки-статуса) [![T-0121](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json&label=T-0121)](T-0121-rubezh-win-reward-server.md) [![T-0109](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0109.json&label=T-0109)](T-0109-death-whats-next.md) [![T-0186](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0186.json&label=T-0186)](T-0186-death-screen-pinned-actions.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md)
 
 ## Зачем
 
