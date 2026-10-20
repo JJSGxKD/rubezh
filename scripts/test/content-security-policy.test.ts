@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { adminContentSecurityPolicy } from "../../apps/admin/src/csp";
 import { contentSecurityPolicy } from "../vite/content-security-policy";
+import { devServerConfig } from "../vite/dev-server";
 
 /**
  * Политика источников клиента (docs/34-stage3-plan.md, WP3).
@@ -217,5 +219,65 @@ describe("политика источников клиента", () => {
     expect(dev.get("script-src")).toContain("'unsafe-inline'");
     expect(dev.get("connect-src")).toEqual(expect.arrayContaining(["ws:", "wss:"]));
     expect(dev.get("frame-ancestors")).toEqual(build.get("frame-ancestors"));
+  });
+});
+
+describe("отчёты о заблокированных адресах (Р108)", () => {
+  const withReports = (apiOrigin: string, mode: "dev" | "build" = "build", ads = true) => contentSecurityPolicy({ mode, apiOrigin, ads, reports: true });
+
+  it("с отчётами политика просит браузер слать их на тот же домен, если API там же", () => {
+    expect(directives(withReports("")).get("report-uri")).toEqual(["/api/v1/csp-reports"]);
+  });
+
+  it("API на другом домене — отчёты уходят на его источник, без пути адреса API", () => {
+    const reportUri = directives(withReports("https://api.rubezh.gonet.fun/api/v1")).get("report-uri");
+
+    expect(reportUri).toEqual(["https://api.rubezh.gonet.fun/api/v1/csp-reports"]);
+  });
+
+  it("без reports директивы нет вовсе, как и в панели", () => {
+    expect(build.has("report-uri")).toBe(false);
+    expect(dev.has("report-uri")).toBe(false);
+    expect(directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", ads: true })).has("report-uri")).toBe(false);
+    expect(directives(adminContentSecurityPolicy("build")).has("report-uri")).toBe(false);
+    expect(directives(adminContentSecurityPolicy("dev")).has("report-uri")).toBe(false);
+  });
+
+  it("report-to не используется: ему нужен отдельный заголовок, а выкат ставит один", () => {
+    expect(directives(withReports("")).has("report-to")).toBe(false);
+  });
+
+  it("директива идёт последней в той же строке политики, остальные не изменились", () => {
+    const without = contentSecurityPolicy({ mode: "build", apiOrigin: "https://api.rubezh.gonet.fun", ads: true });
+    const policy = contentSecurityPolicy({ mode: "build", apiOrigin: "https://api.rubezh.gonet.fun", ads: true, reports: true });
+    const parts = policy.split("; ");
+    const objectSrc = parts.indexOf("object-src 'none'");
+
+    expect(parts[objectSrc + 1]).toBe("report-uri https://api.rubezh.gonet.fun/api/v1/csp-reports");
+    expect(parts.filter((part) => !part.startsWith("report-uri "))).toEqual(without.split("; "));
+    expect(parts[parts.length - 1]).toBe("upgrade-insecure-requests");
+  });
+
+  it("в разработке отчёты тоже включаются: политика одна на dev-сервер, просмотр и Caddy", () => {
+    expect(directives(withReports("", "dev")).get("report-uri")).toEqual(["/api/v1/csp-reports"]);
+  });
+});
+
+describe("отчёты на dev-сервере: только там, где есть реклама", () => {
+  const input = { env: {}, repoRoot: "/rubezh", port: 5173, tunnelHostVar: "DEV_TUNNEL_TELEGRAM_HOST" };
+  const reportUri = (options: ReturnType<typeof devServerConfig>["server"]) => directives(String(options.headers?.["content-security-policy"])).get("report-uri");
+
+  it("Telegram-сборка с рекламой шлёт отчёты и на dev-сервере, и на просмотре сборки", () => {
+    const { server, preview } = devServerConfig({ ...input, ads: true });
+
+    expect(reportUri(server)).toEqual(["/api/v1/csp-reports"]);
+    expect(reportUri(preview)).toEqual(["/api/v1/csp-reports"]);
+  });
+
+  it("MAX и VK без рекламы приёмника в политике не прописывают", () => {
+    const { server, preview } = devServerConfig(input);
+
+    expect(reportUri(server)).toBeUndefined();
+    expect(reportUri(preview)).toBeUndefined();
   });
 });
