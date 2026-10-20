@@ -1774,6 +1774,7 @@ model AdSession {
   @@index([accountId, place, createdAt])
   // Воронка в панели — все показы за сутки, неделю или месяц.
   @@index([createdAt])
+  @@index([completedAt])
   @@map("ad_session")
 }
 
