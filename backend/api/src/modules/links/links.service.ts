@@ -204,7 +204,8 @@ export class LinksService {
 export function hostOf(referer: string | null): string | null {
   if (referer === null || referer === "") return null;
   try {
-    return new URL(referer).host.slice(0, 255) || null;
+    // `hostname`, а не `host`: порт в хост не пишем, иначе проверка доступности с нестандартным портом не отсекается.
+    return new URL(referer).hostname.slice(0, 255) || null;
   } catch {
     return null;
   }
