@@ -3,8 +3,8 @@ id: T-0186
 title: Итоги забега — все кнопки видны без прокрутки, прокрутка одна
 epic: E6
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
