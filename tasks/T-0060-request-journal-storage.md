@@ -3,8 +3,8 @@ id: T-0060
 title: Журнал запросов — исходящие по вызову, входящие сводкой по маршрутам, 7 дней
 epic: E13
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0059]
