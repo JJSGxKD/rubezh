@@ -46,6 +46,8 @@ erDiagram
         datetime banned_at "nullable: отметка блокировки целиком для входа — из ACCOUNT_RESTRICTION"
         string ban_reason "nullable: текст игроку — что, до когда и почему"
         datetime tester_at "nullable: знак «Тестер» — играл до вайпа; ставится снимком, навсегда"
+        string platform_name "nullable: ник с площадки как пришёл, до 256 знаков; обновляется при каждом входе, виден только в панели"
+        datetime name_locked_at "nullable: ник закреплён модератором, вход display_name не перезаписывает"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
