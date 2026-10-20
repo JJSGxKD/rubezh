@@ -24,6 +24,7 @@ import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type Tim
 import { installErrorReporting } from "./state/error-reporting";
 import { useFeedback } from "./state/feedback";
 import { useGraphics } from "./state/graphics";
+import { useRadarSetting } from "./state/radar-setting";
 import { createId } from "./state/ids";
 import { REPORT_QUEUE_KEY } from "./state/report-keys";
 
@@ -110,6 +111,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // (state/run-interrupted.ts).
   settleInterruptedRun();
   useGraphics.getState().hydrate();
+  useRadarSetting.getState().hydrate();
   useFeedback.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
   // Звук — после настроек: громкость игрока применяется с первого звука.
