@@ -221,7 +221,7 @@
 | Стихии на игроке: сила и длительность состояний от атак врагов, потолок сопротивления игрока; рабочие числа | `packages/core-game/src/game/sim/player-status.ts` → `PLAYER_BURN_*`, `PLAYER_CHILL_*`, `PLAYER_SHOCK_*`, `PLAYER_POISON_*`, `MAX_PLAYER_RESIST` | участник 1 |
 | Прод: сервисы, лимиты памяти, образы, сети | `infra/prod/compose.yml` | участник 1 |
 | Прод: домены, прокси, кэширование статики, туннели | `infra/prod/Caddyfile`, `infra/prod/frps.toml` | участник 1 |
-| Прод: CDN — pull-зоны Bunny, доверенные узлы CDN | кабинет Bunny (`20-env-and-ports.md` §2.2), список узлов — `infra/prod/edge-ips.sh` | участник 1 |
+| Прод: CDN — pull-зоны Bunny (`rubezh-tg`, `rubezh-site`, `rubezh-admin`), доверенные узлы CDN | кабинет Bunny (`20-env-and-ports.md` §2.2), список узлов — `infra/prod/edge-ips.sh` | участник 1 |
 | Прод: переменные compose и API, их прод-значения | `infra/prod/env.example`, `infra/prod/api.env.example`; сами файлы — только на сервере | участник 1 |
 | Выкат и бэкап: сколько версий статики хранить, расписание и срок хранения бэкапов | `infra/prod/deploy.sh` → `KEEP_WEB_VERSIONS`, строка crontab; `infra/prod/backup.sh` → `KEEP_LOCAL` | участник 1 |
 | Бэкап на момент (Р54): хранилище, срок хранения, час базовой копии, пороги здоровья | хранилище — `BACKUP_S3_ZONE`, `BACKUP_S3_PASSWORD`, `BACKUP_S3_REGION` в `.env` сервера (`infra/prod/env.example`); `infra/prod/backup/backupctl.sh` → `KEEP_DAYS`, `DAILY_HOUR_UTC`, `DAILY_RETRY_SEC`, `BASE_MAX_AGE_SEC`, `FIRST_BASE_GRACE_SEC`, пороги отправки в `health`; как часто закрывается сегмент журнала — `archive_timeout` в `infra/prod/compose.yml`; как часто смотрит сторож — строка crontab в `infra/prod/deploy.sh` | участник 1 |
