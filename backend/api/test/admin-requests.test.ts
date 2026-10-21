@@ -2,9 +2,10 @@ import "reflect-metadata";
 import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
+import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { REDIS } from "../src/infra/redis.js";
 import { ADMIN_SESSION_COOKIE } from "../src/modules/admin/admin-cookie.js";
 import { AdminRequestsController } from "../src/modules/admin/admin-requests.controller.js";
@@ -14,6 +15,7 @@ import { ADMIN_SESSION_STORE, hashSessionToken } from "../src/modules/admin/admi
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { BUCKET_COUNT, JOURNAL_CLOCK } from "../src/modules/request-journal/journal-rules.js";
 import {
+  PrismaRequestJournalRepository,
   REQUEST_JOURNAL_READER,
   type InboundRouteRow,
   type InboundSeriesPoint,
@@ -31,6 +33,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
  * Раздел «Запросы» панели по HTTP (tasks/T-0061): права, разбор периода и
@@ -362,5 +365,125 @@ describe("раздел «Запросы» панели по HTTP", () => {
 
       expect(body.data.routes[0]).toMatchObject({ count: 5, median: null, p95: null });
     });
+  });
+});
+
+/**
+ * Чтения журнала на живом Postgres (адрес — TEST_DATABASE_URL, без него
+ * пропуск): подмена не покажет, что `percentile_cont` и сложение массивов
+ * корзин по позициям написаны верно. Свои строки — по метке в службе и
+ * маршруте: таблицы общие на базу.
+ */
+const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
+const SERVICE = "t0061.service";
+const ROUTE = "/t0061/runs/:runId";
+
+describe.skipIf(DATABASE_URL === "")("чтения журнала запросов на живом Postgres", () => {
+  let prisma: PrismaClient;
+  let repository: PrismaRequestJournalRepository;
+  const minute = (minutesAgo: number): Date => new Date(Math.floor(Date.now() / 60_000) * 60_000 - minutesAgo * 60_000);
+  const window = (): [Date, Date] => [new Date(Date.now() - DAY), new Date(Date.now() + 60_000)];
+
+  async function clean(): Promise<void> {
+    await prisma.outboundCall.deleteMany({ where: { service: SERVICE } });
+    await prisma.inboundMinute.deleteMany({ where: { route: { startsWith: "/t0061/" } } });
+  }
+
+  beforeAll(() => {
+    prisma = testPrisma(DATABASE_URL, 4);
+    repository = new PrismaRequestJournalRepository(prisma);
+  });
+
+  beforeEach(clean);
+
+  afterAll(async () => {
+    await clean();
+    await prisma.$disconnect();
+  });
+
+  const call = (durationMs: number, values: Partial<{ ok: boolean; via: string; status: number | null; error: string | null; at: Date }> = {}) => ({
+    at: values.at ?? new Date(Date.now() - 60_000),
+    service: SERVICE,
+    method: "GET",
+    host: "t0061.example",
+    path: "/x",
+    status: values.status === undefined ? 200 : values.status,
+    ok: values.ok ?? true,
+    durationMs,
+    via: values.via ?? "direct",
+    attempt: 1,
+    error: values.error ?? null,
+  });
+
+  it("сводка исходящих: счётчики, ошибки, прокси, медиана и p95 точные; чужое окно не считается", async () => {
+    await prisma.outboundCall.createMany({
+      data: [
+        call(100),
+        call(200, { via: "proxy-1" }),
+        call(300, { ok: false, status: 503 }),
+        call(400, { ok: false, status: null, error: "timeout" }),
+        call(900, { at: new Date(Date.now() - 3 * DAY) }),
+      ],
+    });
+
+    const rows = await repository.outboundSummary(...window());
+    const mine = rows.find((row) => row.service === SERVICE);
+
+    expect(mine).toEqual({ service: SERVICE, count: 4, errors: 2, viaProxy: 1, medianMs: 250, p95Ms: 385 });
+  });
+
+  it("вызовы: новые первыми, id строкой, «только ошибки», курсор «раньше», окно периода", async () => {
+    await prisma.outboundCall.createMany({
+      data: [call(10), call(20, { ok: false, status: 500 }), call(30), call(40, { ok: false, status: 502 }), call(50, { at: new Date(Date.now() - 3 * DAY) })],
+    });
+
+    const all = await repository.outboundCalls({ from: window()[0], service: SERVICE, onlyErrors: false, beforeId: null, limit: 100 });
+    expect(all.map((row) => row.durationMs)).toEqual([40, 30, 20, 10]);
+    expect(typeof all[0]?.id).toBe("string");
+
+    const errors = await repository.outboundCalls({ from: window()[0], service: SERVICE, onlyErrors: true, beforeId: null, limit: 100 });
+    expect(errors.map((row) => row.durationMs)).toEqual([40, 20]);
+
+    const older = await repository.outboundCalls({ from: window()[0], service: SERVICE, onlyErrors: false, beforeId: all[1]?.id ?? null, limit: 1 });
+    expect(older.map((row) => row.durationMs)).toEqual([20]);
+  });
+
+  it("маршруты: счётчики и корзины складываются по минутам, классы статуса остаются раздельно", async () => {
+    await prisma.inboundMinute.createMany({
+      data: [
+        { minute: minute(3), method: "GET", route: ROUTE, statusClass: "2xx", count: 10, buckets: [6, 4, 0, 0, 0, 0, 0, 0, 0] },
+        { minute: minute(2), method: "GET", route: ROUTE, statusClass: "2xx", count: 5, buckets: [1, 0, 3, 0, 0, 0, 0, 0, 1] },
+        { minute: minute(2), method: "GET", route: ROUTE, statusClass: "5xx", count: 2, buckets: [0, 0, 0, 0, 0, 0, 0, 0, 2] },
+      ],
+    });
+
+    const rows = (await repository.inboundRoutes(...window())).filter((row) => row.route === ROUTE);
+    const byClass = new Map(rows.map((row) => [row.statusClass, row]));
+
+    expect(byClass.get("2xx")).toMatchObject({ count: 15, buckets: [7, 4, 3, 0, 0, 0, 0, 0, 1] });
+    expect(byClass.get("5xx")).toMatchObject({ count: 2, buckets: [0, 0, 0, 0, 0, 0, 0, 0, 2] });
+  });
+
+  it("график: шаг «час» собирает минуты часа, 5xx — отдельным числом; шаг «минута» оставляет минуты", async () => {
+    const hourStart = new Date(Math.floor((Date.now() - 2 * 3_600_000) / 3_600_000) * 3_600_000);
+    await prisma.inboundMinute.createMany({
+      data: [
+        { minute: new Date(hourStart.getTime() + 5 * 60_000), method: "GET", route: ROUTE, statusClass: "2xx", count: 10, buckets: [10, 0, 0, 0, 0, 0, 0, 0, 0] },
+        { minute: new Date(hourStart.getTime() + 6 * 60_000), method: "GET", route: ROUTE, statusClass: "5xx", count: 3, buckets: [3, 0, 0, 0, 0, 0, 0, 0, 0] },
+      ],
+    });
+    const from = new Date(hourStart.getTime() - 60_000);
+    const to = new Date(hourStart.getTime() + 3_600_000);
+
+    const hourly = await repository.inboundSeries(from, to, "hour");
+    const minutely = await repository.inboundSeries(from, to, "minute");
+
+    // таблица общая: чужие строки могут лечь в тот же час, поэтому «не меньше»
+    const hour = hourly.find((point) => point.at.getTime() === hourStart.getTime());
+    expect(hour?.total).toBeGreaterThanOrEqual(13);
+    expect(hour?.errors).toBeGreaterThanOrEqual(3);
+    const sixth = minutely.find((point) => point.at.getTime() === hourStart.getTime() + 6 * 60_000);
+    expect(sixth?.errors).toBeGreaterThanOrEqual(3);
+    expect(minutely.length).toBeGreaterThan(1);
   });
 });
