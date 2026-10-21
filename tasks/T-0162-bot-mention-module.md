@@ -20,7 +20,10 @@ shared:
   - backend/api/prisma/migrations/*_bot_mention/**
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
+  - docs/35-stage4-plan.md
   - docs/30-configuration-map.md
   - docs/21-diagrams.md
 runner: local
