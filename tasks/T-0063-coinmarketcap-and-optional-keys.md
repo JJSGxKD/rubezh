@@ -3,7 +3,7 @@ id: T-0063
 title: CoinMarketCap — новый источник курсов; необязательные ключи tonapi и erapi
 epic: E13
 priority: P2
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -186,12 +186,12 @@ Binance ключа для котировок не требует — не тро
 
 ## Критерии приёмки
 
-- [ ] С ключом CoinMarketCap курс Gram и USDT приходит и от него, без
+- [x] С ключом CoinMarketCap курс Gram и USDT приходит и от него, без
   ключа источника нет.
-- [ ] Ключи tonapi и erapi необязательны: без них — как сейчас, с ними —
+- [x] Ключи tonapi и erapi необязательны: без них — как сейчас, с ними —
   свой адрес и тариф.
-- [ ] Ключи проверяются кнопкой в «Ключах интеграций».
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Ключи проверяются кнопкой в «Ключах интеграций».
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
