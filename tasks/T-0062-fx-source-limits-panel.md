@@ -3,7 +3,7 @@ id: T-0062
 title: Лимиты источников курсов в панели — сколько осталось, правка лимита и счётчика, предупреждения
 epic: E13
 priority: P1
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
