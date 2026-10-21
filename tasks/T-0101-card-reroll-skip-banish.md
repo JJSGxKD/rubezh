@@ -4,7 +4,7 @@ title: Переброс, пропуск и изгнание карточек н�
 epic: E10
 priority: P1
 status: done
-owner: claude-5 / sonnet-5.5 / high
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-14
 size: M
 depends_on: [T-0099]
