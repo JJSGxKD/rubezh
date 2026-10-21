@@ -7,6 +7,7 @@ import {
   createEcbSource,
   createErApiSource,
   createTonApiSource,
+  monthOf,
   refreshRates,
   type RateAlerts,
   type RateSource,
@@ -21,7 +22,8 @@ import { Outbound } from "../../infra/outbound/outbound.js";
 import type { OutboundService } from "../../infra/outbound/outbound-services.js";
 import { REDIS } from "../../infra/redis.js";
 import { FxHooks } from "./fx-hooks.js";
-import { FX_STORE } from "./fx.store.js";
+import { applyLimits, crossedThresholds } from "./fx-limits.js";
+import { FX_STORE, type LimitStore } from "./fx.store.js";
 
 /**
  * Обновление курсов по расписанию (docs/35-stage4-plan.md, §3.12). Раз в
@@ -33,11 +35,19 @@ import { FX_STORE } from "./fx.store.js";
  * Срок лока — худший проход: шесть источников по десять секунд и база.
  * Снимается лок только своим токеном — проход, переживший свой лок, не снимет
  * чужой.
+ *
+ * **Лимиты из панели** (Р89, T-0062). Перед проходом читаются лимиты, и у
+ * источников подменяется тариф: ядро считает расписание по лимиту панели, а не
+ * только по тарифу из кода. После прохода сравнивается счётчик «до» и «после»:
+ * порог 80% или 100%, перейдённый впервые за месяц, — событие для чата команды.
+ * «Впервые» держит Redis (`SET NX`) на 35 суток: повтор прохода и вторая реплика
+ * второго сообщения не дадут.
  */
 
 const TICK_MS = 60_000;
 const LOCK_KEY = "fx:refresh:lock";
 const LOCK_TTL_MS = 90_000;
+const BUDGET_KEY_TTL_SEC = 35 * 24 * 60 * 60;
 
 const RELEASE_SCRIPT = `
 if redis.call("GET", KEYS[1]) == ARGV[1] then
@@ -73,7 +83,8 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
 
   constructor(
     @Inject(SECRETS_READER) private readonly secrets: SecretsReader,
-    @Inject(FX_STORE) private readonly store: RateStore,
+    // Без лимитов (хранилище ядра в тестах) источники идут по тарифу из кода.
+    @Inject(FX_STORE) private readonly store: RateStore & Partial<LimitStore>,
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
     private readonly hooks: FxHooks,
     private readonly switches: FeatureSwitches,
@@ -110,7 +121,10 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
       const claimed = await this.redis.set(LOCK_KEY, token, "PX", LOCK_TTL_MS, "NX");
       if (claimed === null) return null;
       try {
-        const report = await refreshRates({ sources, store: this.store, alerts: this.alerts(), now });
+        const limited = applyLimits(sources, (await this.store.limits?.()) ?? new Map());
+        const before = await this.usedThisMonth(limited, now);
+        const report = await refreshRates({ sources: limited, store: this.store, alerts: this.alerts(), now });
+        await this.announceBudget(limited, before, now);
         // В лог — только проход, в котором что-то случилось: иначе он растёт
         // на строку в минуту без пользы.
         if (report.accepted.length + report.rejected.length + report.failed.length > 0) {
@@ -125,6 +139,40 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
       return null;
     } finally {
       this.running = false;
+    }
+  }
+
+  /** Сколько запросов источники с месячным лимитом сделали в месяце `now`; счётчик прошлого месяца — ноль. */
+  private async usedThisMonth(sources: readonly RateSource[], now: Date): Promise<Map<string, number>> {
+    const month = monthOf(now);
+    const used = new Map<string, number>();
+    for (const source of sources) {
+      if (source.tariff.perMonth === null) continue;
+      const state = await this.store.sourceState(source.id);
+      used.set(source.id, state?.usage.month === month ? state.usage.used : 0);
+    }
+    return used;
+  }
+
+  /**
+   * События о порогах расхода. Сбой Redis или хуков проход не роняет: курсы
+   * уже приняты и сохранены, а сообщение о лимите — не причина терять отчёт.
+   */
+  private async announceBudget(sources: readonly RateSource[], before: ReadonlyMap<string, number>, now: Date): Promise<void> {
+    try {
+      const month = monthOf(now);
+      const after = await this.usedThisMonth(sources, now);
+      for (const source of sources) {
+        const perMonth = source.tariff.perMonth;
+        const used = after.get(source.id);
+        if (perMonth === null || used === undefined) continue;
+        for (const threshold of crossedThresholds(before.get(source.id) ?? 0, used, perMonth)) {
+          const first = await this.redis.set(`fx:budget:${source.id}:${month}:${String(threshold)}`, "1", "EX", BUDGET_KEY_TTL_SEC, "NX");
+          if (first !== null) this.hooks.emit({ kind: "source_budget", source: source.id, month, used, perMonth, threshold });
+        }
+      }
+    } catch (error: unknown) {
+      this.logger.warn(JSON.stringify({ module: "fx", event: "budget_alert_failed", reason: error instanceof Error ? error.message : "unknown" }));
     }
   }
 
