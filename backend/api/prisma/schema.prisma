@@ -74,6 +74,8 @@ enum PurchaseProduct {
   shop_item
   /// VIP — подписка площадки (WP10, Р20, Р44): период за каждую оплату
   vip
+  /// донат проекту (Р109): добровольная сумма без игровых ценностей, `sku` — всегда `donation`, не разовый
+  donation
 }
 
 // Режим оплаты (docs/34-stage3-plan.md, Р14). `test` — разработка: игрок
@@ -178,6 +180,8 @@ model Account {
   platformName   String?   @map("platform_name") @db.VarChar(256)
   /// ник закреплён модератором: вход его не перезаписывает
   nameLockedAt   DateTime? @map("name_locked_at") @db.Timestamptz(3)
+  /// знак «Поддержал проект» (Р109): когда подтверждён первый донат; снимается внешним возвратом
+  supporterAt    DateTime? @map("supporter_at") @db.Timestamptz(3)
 
   roles         AccountRole[]
   runs          Run[]

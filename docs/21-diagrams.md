@@ -48,6 +48,7 @@ erDiagram
         datetime tester_at "nullable: знак «Тестер» — играл до вайпа; ставится снимком, навсегда"
         string platform_name "nullable: ник с площадки как пришёл, до 256 знаков; обновляется при каждом входе, виден только в панели"
         datetime name_locked_at "nullable: ник закреплён модератором, вход display_name не перезаписывает"
+        datetime supporter_at "nullable: знак «Поддержал проект» (Р109) — когда подтверждён первый донат; снимается внешним возвратом, если других донатов нет"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -401,11 +402,11 @@ erDiagram
     PURCHASE {
         uuid purchase_id PK "он же payload счёта"
         uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
-        enum product "continue_run|shop_item|vip"
+        enum product "continue_run|shop_item|vip|donation"
         string run_id FK "nullable: только у второго шанса; SetNull — вайп стирает забеги, покупка остаётся; UK вместе с continue_no"
         int continue_no "nullable: какое продолжение забега, с единицы"
         float elapsed_sec "nullable: секунда забега, по которой посчитана цена"
-        string sku "nullable: товар каталога магазина или план VIP — пусто только у continue_run"
+        string sku "nullable: товар каталога магазина, план VIP или donation у доната — пусто только у continue_run"
         string once_key UK "nullable: разовый товар — одна строка на товар и аккаунт"
         int price_stars "цена по правилу Р5.1 — её видит игрок"
         int charged_stars "сколько списано: в тестовом режиме — одна звезда"
