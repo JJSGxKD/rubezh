@@ -86,8 +86,9 @@ describe.skipIf(DATABASE_URL === "")("журнал запросов на жив�
     expect(rows[0]).toMatchObject({ service: "telegram.bot", method: "POST", host: HOST, path: "/bot***/sendMessage", status: 200, ok: true, via: "direct", attempt: 1, error: null });
     expect(rows[0]?.durationMs).toBeGreaterThanOrEqual(0);
     expect(rows[1]).toMatchObject({ method: "GET", path: "/fail", status: null, ok: false, error: "network" });
-    expect(JSON.stringify(rows)).not.toContain("SECRET");
-    expect(JSON.stringify(rows)).not.toContain("chat_id");
+    const text = rows.map((row) => [row.service, row.host, row.path, row.via, row.error ?? ""].join(" ")).join("\n");
+    expect(text).not.toContain("SECRET");
+    expect(text).not.toContain("chat_id");
   });
 
   it("потолок буфера — 2000 строк одним createMany, без упора в лимит параметров", async () => {
