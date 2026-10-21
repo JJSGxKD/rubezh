@@ -50,6 +50,12 @@ class OnlyThese extends PrismaConversionsRepository {
   }
 }
 
+/** Какое ограничение таблицы сработало — по имени из ошибки базы. */
+const CLICK_KEY = /ad_conversion_click_id_goal_destination_key/;
+const PURCHASE_KEY = /ad_conversion_purchase_id_destination_key/;
+const GOAL_CHECK = /ad_conversion_goal_check/;
+const PURCHASE_CHECK = /ad_conversion_purchase_check/;
+
 const FREE_LOCK = {
   async set(): Promise<"OK"> {
     return "OK";
@@ -337,8 +343,8 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
 
     await insertRow(player, code, { goal: 1, destination: "s2s" });
     await insertRow(player, code, { goal: 1, destination: "partner" });
-    await expect(insertRow(player, code, { goal: 1, destination: "s2s" })).rejects.toThrow();
-    await expect(insertRow(player, code, { goal: 1, destination: "adsgram" })).rejects.toThrow();
+    await expect(insertRow(player, code, { goal: 1, destination: "s2s" })).rejects.toThrow(CLICK_KEY);
+    await expect(insertRow(player, code, { goal: 1, destination: "adsgram" })).rejects.toThrow(CLICK_KEY);
     expect(await ofAccount(player.accountId)).toHaveLength(3);
   });
 
@@ -351,11 +357,12 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     await conversions.sweep(new Date());
 
     await insertRow(player, code, { goal: 2, destination: "s2s", purchaseId: first });
-    await expect(insertRow(player, code, { goal: 2, destination: "s2s", purchaseId: first })).rejects.toThrow();
+    // Та же оплата тому же назначению: нарушены оба ключа, база называет любой из них.
+    await expect(insertRow(player, code, { goal: 2, destination: "s2s", purchaseId: first })).rejects.toThrow(/ad_conversion_(purchase_id_destination|click_id_goal_destination)_key/);
     // Та же оплата тому же назначению другой целью — тоже та же строка.
-    await expect(insertRow(player, code, { goal: 3, destination: "adsgram", purchaseId: first })).rejects.toThrow();
+    await expect(insertRow(player, code, { goal: 3, destination: "adsgram", purchaseId: first })).rejects.toThrow(PURCHASE_KEY);
     // Первая покупка клика одному назначению — одна, хотя оплата другая.
-    await expect(insertRow(player, code, { goal: 2, destination: "s2s", purchaseId: second })).rejects.toThrow();
+    await expect(insertRow(player, code, { goal: 2, destination: "s2s", purchaseId: second })).rejects.toThrow(CLICK_KEY);
     // Повторные не ограничены ключом на клик: ограничивает только ключ на оплату.
     await insertRow(player, code, { goal: 3, destination: "s2s", purchaseId: second });
     await insertRow(player, code, { goal: 3, destination: "s2s", purchaseId: third });
@@ -367,17 +374,17 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     const player = await playerFromClick(code);
     const paid = await purchase(player.accountId, 40);
 
-    await expect(insertRow(player, code, { goal: 1, destination: "tiktok" })).rejects.toThrow();
-    await expect(insertRow(player, code, { goal: 5 })).rejects.toThrow();
-    await expect(insertRow(player, code, { goal: 0 })).rejects.toThrow();
-    await expect(insertRow(player, code, { goal: 4, purchaseId: paid })).rejects.toThrow();
-    await expect(insertRow(player, code, { goal: 1, purchaseId: paid })).rejects.toThrow();
-    await expect(insertRow(player, code, { goal: 2 })).rejects.toThrow();
-    await expect(insertRow(player, code, { goal: 3 })).rejects.toThrow();
+    await expect(insertRow(player, code, { goal: 1, destination: "tiktok" })).rejects.toThrow(/ad_conversion_destination_check/);
+    await expect(insertRow(player, code, { goal: 5 })).rejects.toThrow(GOAL_CHECK);
+    await expect(insertRow(player, code, { goal: 0 })).rejects.toThrow(GOAL_CHECK);
+    await expect(insertRow(player, code, { goal: 4, purchaseId: paid })).rejects.toThrow(PURCHASE_CHECK);
+    await expect(insertRow(player, code, { goal: 1, purchaseId: paid })).rejects.toThrow(PURCHASE_CHECK);
+    await expect(insertRow(player, code, { goal: 2 })).rejects.toThrow(PURCHASE_CHECK);
+    await expect(insertRow(player, code, { goal: 3 })).rejects.toThrow(PURCHASE_CHECK);
 
     await insertRow(player, code, { goal: 4 });
     // Возврат на следующий день — один на клик и назначение, как регистрация.
-    await expect(insertRow(player, code, { goal: 4 })).rejects.toThrow();
+    await expect(insertRow(player, code, { goal: 4 })).rejects.toThrow(CLICK_KEY);
     await insertRow(player, code, { goal: 4, destination: "partner" });
     expect((await ofAccount(player.accountId)).map((row) => [row.goal, row.destination])).toEqual([
       [4, "adsgram"],
