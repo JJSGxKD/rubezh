@@ -11,6 +11,8 @@ depends_on: []
 zones:
   - backend/api/src/modules/export/export.service.ts
   - backend/api/test/export.test.ts
+  - backend/api/src/common/zip/zip-writer.ts
+  - backend/api/test/zip-writer.test.ts
 shared: []
 runner: any
 executor: sonnet-5.5
