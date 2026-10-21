@@ -7,10 +7,17 @@ import { parse } from "./admin-parse.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 
 /** Период: пусто — сутки; чужое значение — 400, а не молчаливые сутки. */
-const periodSchema = z.object({ period: z.enum(REQUEST_PERIODS).default("day") });
+const periodField = z.enum(REQUEST_PERIODS).default("day");
+
+/** Свой разбор периода нужен ради сообщения: лишнее поле и неверный период — разные ошибки. */
+const periodOnlySchema = z.object({ period: periodField });
+
+/** Лишнее поле в query — ошибка, а не молчаливое игнорирование: опечатка в `errors` иначе вернула бы все вызовы. */
+const periodSchema = z.strictObject({ period: periodField });
 
 /** Вызовы: служба — метка клиента исходящих (колонка на 32 знака), курсор — `id` строки, «только ошибки» — `errors=1`. */
-const callsSchema = z.object({
+const callsSchema = z.strictObject({
+  period: periodField,
   service: z.string().min(1).max(32).optional(),
   errors: z.literal("1").optional(),
   before: z
@@ -41,8 +48,8 @@ export class AdminRequestsController {
   @Get("outbound")
   @RequirePermission("requests.view")
   async outbound(@Query() query: unknown): Promise<{ data: OutboundPage }> {
-    const period = periodOf(query);
-    const filter = parse(() => callsSchema.parse(query), "Некорректные параметры списка вызовов");
+    const period = periodOf(query, callsSchema);
+    const filter = parse(() => callsSchema.parse(query), QUERY_MESSAGE);
     return { data: await this.journal.outboundCalls(period, { service: filter.service ?? null, onlyErrors: filter.errors === "1", before: filter.before ?? null }) };
   }
 
@@ -53,6 +60,11 @@ export class AdminRequestsController {
   }
 }
 
-function periodOf(query: unknown): RequestPeriod {
-  return parse(() => periodSchema.parse(query), PERIOD_MESSAGE).period;
+const QUERY_MESSAGE = "Некорректные параметры запроса";
+
+/** Период из query; сначала сам период, потому что его ошибка называется отдельно. */
+function periodOf(query: unknown, schema: typeof periodSchema | typeof callsSchema = periodSchema): RequestPeriod {
+  const { period } = parse(() => periodOnlySchema.parse(query), PERIOD_MESSAGE);
+  parse(() => schema.parse(query), QUERY_MESSAGE);
+  return period;
 }
