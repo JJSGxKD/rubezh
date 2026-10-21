@@ -28,7 +28,7 @@ import { DONATIONS_REPOSITORY, type DonationsRepository } from "./donations.repo
  * вне игры, сервер лишь отдаёт ссылку площадки игрока.
  */
 
-/** Как сложился путь ссылки Tribute — разрез события `donation_link_clicked`. */
+/** Чья это ссылка Tribute: Telegram или веба — клиент берёт разрез из ответа, а не угадывает по площадке. */
 export type TributeWay = "tribute_telegram" | "tribute_web";
 
 export interface DonationView {
