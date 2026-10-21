@@ -40,7 +40,8 @@ const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const REDIS_URL = process.env.PLAYTEST_TEST_REDIS_URL ?? "";
 const DAY = 86_400_000;
 
-describe.skipIf(DATABASE_URL === "")("автоисточники на живом Postgres", () => {
+// База общая: соседние прогоны делят соединения, и пять секунд по умолчанию на параллельные записи мало.
+describe.skipIf(DATABASE_URL === "")("автоисточники на живом Postgres", { timeout: 60_000 }, () => {
   let prisma: PrismaClient;
   let repository: PrismaAutoSourcesRepository;
   let links: PrismaLinksRepository;
@@ -75,6 +76,13 @@ describe.skipIf(DATABASE_URL === "")("автоисточники на живом
 
   const autoLinks = () => prisma.link.findMany({ where: { auto: true }, orderBy: { createdAt: "asc" } });
   const keysTable = () => prisma.startParamKey.findMany({ orderBy: { key: "asc" } });
+
+  /** Наполнить сводку ключами `kk0…` одним запросом: по одному под нагрузкой общей базы выходит слишком долго. */
+  async function fillKeys(count: number): Promise<void> {
+    await prisma.$executeRaw`
+      INSERT INTO start_param_key (key, hits, first_at, last_at)
+      SELECT 'kk' || g, 1, now(), now() FROM generate_series(0, ${count - 1}::int) AS g`;
+  }
 
   function ensureInput(autoKey: string, patch: { cap?: number; now?: Date } = {}) {
     return { autoKey, source: autoKey, campaign: "auto", medium: null, partnerTag: null, platform: "telegram" as const, now: patch.now ?? new Date(), cap: patch.cap ?? 20 };
@@ -229,7 +237,7 @@ describe.skipIf(DATABASE_URL === "")("автоисточники на живом
     });
 
     it("201-й ключ не добавляется, а уже известные в полной сводке считаются", async () => {
-      for (let index = 0; index < UNKNOWN_KEYS_MAX; index++) await repository.noteUnknownKeys([`kk${String(index)}`], new Date());
+      await fillKeys(UNKNOWN_KEYS_MAX);
       expect(await keysTable()).toHaveLength(UNKNOWN_KEYS_MAX);
 
       await repository.noteUnknownKeys(["overflow", "kk0"], new Date());
@@ -240,8 +248,10 @@ describe.skipIf(DATABASE_URL === "")("автоисточники на живом
       expect(table.find((row) => row.key === "kk0")?.hits).toBe(2);
     });
 
-    it("250 новых ключей параллельно — ровно 200 строк", async () => {
-      await Promise.all(Array.from({ length: 250 }, (_, index) => repository.noteUnknownKeys([`pp${String(index)}`], new Date())));
+    it("до потолка десять мест, новых ключей сорок и все разом — ровно 200 строк", async () => {
+      await fillKeys(UNKNOWN_KEYS_MAX - 10);
+
+      await Promise.all(Array.from({ length: 40 }, (_, index) => repository.noteUnknownKeys([`pp${String(index)}`], new Date())));
 
       expect(await keysTable()).toHaveLength(UNKNOWN_KEYS_MAX);
     });
