@@ -25,6 +25,10 @@ export interface WeaponType {
   nameKey: string;
   descriptionKey: string;
   weight: number;
+  /** id базового оружия, если это эволюция */
+  evolvedFrom?: string;
+  /** навык рецепта эволюции */
+  recipePassive?: string;
   levels: ResolvedWeaponLevel[];
 }
 
@@ -81,6 +85,9 @@ export function findWeaponContentProblems(defs: readonly WeaponDef[]): string[] 
       problems.push(`оружие ${def.id}: поведение ${String(def.behavior)} не реализовано`);
       continue;
     }
+    if ((def.evolvedFrom === undefined) !== (def.recipe === undefined)) {
+      problems.push(`оружие ${def.id}: evolvedFrom и recipe задаются вместе`);
+    }
     if (def.levels.length === 0) {
       problems.push(`оружие ${def.id}: нет ни одного уровня`);
       continue;
@@ -136,6 +143,8 @@ export function resolveWeaponTypes(defs: readonly WeaponDef[], unitScale: number
     nameKey: def.nameKey,
     descriptionKey: def.descriptionKey,
     weight: def.weight ?? 1,
+    ...(def.evolvedFrom === undefined ? {} : { evolvedFrom: def.evolvedFrom }),
+    ...(def.recipe === undefined ? {} : { recipePassive: def.recipe.passive }),
     levels: def.levels.map((level) => ({ ...resolveLevel(def.behavior, level, unitScale), element: ELEMENTS.indexOf(def.element ?? "physical") })),
   }));
 }
