@@ -9,8 +9,6 @@ author: claude-lead-1
 size: M
 depends_on: [T-0179, T-0180]
 zones:
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
   - backend/api/src/modules/attribution/start-param.ts
   - backend/api/src/modules/auth/auth.service.ts
   - backend/api/src/modules/links/link-targets.ts
@@ -36,6 +34,8 @@ shared:
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
   - docs/33-telegram-mini-app-pitfalls.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: extra

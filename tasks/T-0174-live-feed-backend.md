@@ -11,8 +11,6 @@ depends_on: [T-0112, T-0191]
 zones:
   - backend/api/src/modules/feed/**
   - backend/api/src/modules/seasons/seasons.module.ts
-  - backend/api/src/modules/settings/setting-catalog.ts
-  - backend/api/src/app.module.ts
   - backend/api/test/feed.test.ts
   - backend/api/test/feed.integration.test.ts
   - backend/api/test/feed.http.test.ts
@@ -21,6 +19,8 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/21-diagrams.md
+  - backend/api/src/modules/settings/setting-catalog.ts
+  - backend/api/src/app.module.ts
 runner: local
 executor: sonnet-5.5
 effort: high

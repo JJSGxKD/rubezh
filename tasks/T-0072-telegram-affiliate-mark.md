@@ -14,7 +14,6 @@ zones:
   - backend/api/src/modules/attribution/telegram-affiliate.marker.ts
   - backend/api/src/modules/attribution/attribution.module.ts
   - backend/api/src/modules/admin/admin-players.service.ts
-  - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/telegram-affiliate.test.ts
   - backend/api/test/telegram-affiliate.integration.test.ts
   - backend/api/test/helpers/memory-telegram-affiliate.ts
@@ -38,6 +37,7 @@ shared:
   - docs/24-attribution-and-sharing.md
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
 runner: local
 executor: sonnet-5.5
 effort: extra

@@ -11,7 +11,6 @@ depends_on: []
 zones:
   - backend/api/src/modules/restrictions/**
   - backend/api/src/modules/runs/rating-restrictions.ts
-  - backend/api/src/modules/roles/permissions.ts
   - backend/api/src/modules/roles/roles.service.ts
   - backend/api/src/modules/admin/admin-restrictions.controller.ts
   - backend/api/src/modules/admin/admin-players.service.ts
@@ -30,6 +29,7 @@ shared:
   - backend/api/test/admin-players.test.ts
   - backend/api/test/admin.test.ts
   - docs/29-admin-panel.md
+  - backend/api/src/modules/roles/permissions.ts
 runner: local
 executor: sonnet-5.5
 effort: high

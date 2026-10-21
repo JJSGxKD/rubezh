@@ -10,7 +10,6 @@ size: M
 depends_on: []
 zones:
   - apps/admin/package.json
-  - pnpm-lock.yaml
   - apps/admin/src/ui/sortable-list.tsx
   - apps/admin/src/ui/sortable-order.ts
   - apps/admin/src/ui/kit.tsx
@@ -31,6 +30,7 @@ zones:
 shared:
   - docs/29-admin-panel.md
   - docs/16-tech-stack-decisions.md
+  - pnpm-lock.yaml
 runner: any
 executor: sonnet-5.5
 effort: high
