@@ -1,4 +1,4 @@
-import type { EnemyDef, RunLoadout } from "@bh/shared-types";
+import type { BoostDef, EnemyDef, RunLoadout } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { BOOSTS, MAX_BOOSTS_PER_RUN } from "../src/content/boosts";
 import { PASSIVES } from "../src/content/upgrades";
@@ -45,6 +45,37 @@ describe("бусты: контент", () => {
     expect(findBoostProblems([{ id: "x", nameKey: "", descriptionKey: "" }])).toEqual(["x: буст ничего не делает"]);
     expect(findBoostProblems([{ id: "y", nameKey: "", descriptionKey: "", modifiers: { damage: 99 } }])[0]).toContain("y.damage");
     expect(findBoostProblems([{ id: "z", nameKey: "", descriptionKey: "", startLevels: 0.5 }])[0]).toContain("z.startLevels");
+  });
+
+  it("заряды карточек — эффект: каждый вид — целое от 1 до 5, пустой объект и ноль не годятся", () => {
+    const def = (cardTools: BoostDef["cardTools"]): BoostDef => ({ id: "c", nameKey: "", descriptionKey: "", cardTools });
+    expect(findBoostProblems([def({ reroll: 1 })])).toEqual([]);
+    expect(findBoostProblems([def({ reroll: 5, skip: 1, banish: 3 })])).toEqual([]);
+    expect(findBoostProblems([def({})])).toEqual(["c: буст ничего не делает"]);
+    expect(findBoostProblems([def({ skip: 0 })]).join("\n")).toContain("c.cardTools.skip");
+    expect(findBoostProblems([def({ banish: 6 })]).join("\n")).toContain("c.cardTools.banish");
+    expect(findBoostProblems([def({ reroll: 1.5 })]).join("\n")).toContain("c.cardTools.reroll");
+  });
+
+  it("«Контроль» в контенте: по одному заряду каждого вида", () => {
+    expect(BOOSTS.find((boost) => boost.id === "control")?.cardTools).toEqual({ reroll: 1, skip: 1, banish: 1 });
+  });
+});
+
+describe("бусты: заряды карточек", () => {
+  const extra: BoostDef[] = [
+    ...BOOSTS,
+    { id: "twice", nameKey: "", descriptionKey: "", cardTools: { reroll: 2 } },
+  ];
+
+  it("складываются по видам, повтор и незнакомый id отбрасываются", () => {
+    const resolved = resolveBoosts(extra, ["control", "twice", "control", "nope"], MAX_BOOSTS_PER_RUN);
+    expect(resolved.cardTools).toEqual({ reroll: 3, skip: 1, banish: 1 });
+    expect(resolved.ids).toEqual(["control", "twice"]);
+  });
+
+  it("без таких бустов — нули", () => {
+    expect(resolveBoosts(BOOSTS, ["fury"], MAX_BOOSTS_PER_RUN).cardTools).toEqual({ reroll: 0, skip: 0, banish: 0 });
   });
 });
 

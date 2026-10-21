@@ -96,6 +96,9 @@ const ACTION_TITLES: Record<string, string> = {
   "referrals.reject": "Отклонение приглашения",
   "data.export": "Выгрузка данных",
   "fx.manual_rate": "Заданный курс",
+  "fx.limit.set": "Лимит источника курсов",
+  "fx.limit.reset": "Лимит источника курсов сброшен",
+  "fx.used.correct": "Счётчик источника курсов поправлен",
   "settings.save": "Изменение настройки",
   "settings.reset": "Сброс настройки к окружению",
   "secrets.save": "Замена ключа интеграции",
@@ -221,7 +224,10 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
         ? { kind: "сеть", label: target, route: { section: "ads", id: null } }
         : { kind: "блок", label: named(entry, "externalId") ?? short(target), route: { section: "ads", id: null } };
     case "fx":
-      return { kind: "курс", label: target.replace(":", " · "), route: { section: "fx", id: null } };
+      // Цель лимита и счётчика — код источника, а заданного курса — пара «валюта:назначение».
+      return action === "fx.limit.set" || action === "fx.limit.reset" || action === "fx.used.correct"
+        ? { kind: "источник курсов", label: target, route: { section: "fx", id: null } }
+        : { kind: "курс", label: target.replace(":", " · "), route: { section: "fx", id: null } };
     case "data":
       return { kind: "выгрузка", label: short(target), route: { section: "exports", id: null } };
     default:
@@ -308,6 +314,9 @@ const FIELD_TITLES: Record<string, string> = {
   forWhom: "кому",
   pinned: "первым в карусели",
   archivedAt: "снят",
+  perMonth: "лимит в месяц",
+  used: "израсходовано",
+  month: "месяц",
 };
 
 export function fieldTitle(key: string): string {

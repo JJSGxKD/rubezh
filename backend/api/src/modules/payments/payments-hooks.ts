@@ -13,6 +13,8 @@ import type { PaymentMode, PurchaseAction, PurchaseProduct, StoredPurchase } fro
 export interface PaidPurchase {
   purchaseId: string;
   accountId: string;
+  /** что оплачено: донат (Р109) — поддержка, а не покупка, и слушатели денег-за-товар его пропускают */
+  product: PurchaseProduct;
   /** тестовая оплата — не выручка: слушатели, которым нужны деньги, её пропускают */
   mode: PaymentMode;
   at: Date;

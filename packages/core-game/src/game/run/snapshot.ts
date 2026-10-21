@@ -1,3 +1,4 @@
+import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import type { Spawner } from "../sim/spawner";
 import type { World } from "../sim/world";
 
@@ -19,7 +20,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 8;
+export const WORLD_SNAPSHOT_VERSION = 9;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -52,6 +53,8 @@ interface EncodedPool {
 export interface WorldSnapshot {
   version: number;
   rng: number;
+  /** поток новых карточек после переброса и изгнания */
+  cardRng: number;
   player: World["player"];
   playerStats: World["playerStats"];
   playerStatsBase: World["playerStatsBase"];
@@ -74,6 +77,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
   return {
     version: WORLD_SNAPSHOT_VERSION,
     rng: world.rng.getState(),
+    cardRng: world.cardRng.getState(),
     player: { ...world.player },
     playerStats: { ...world.playerStats },
     playerStatsBase: { ...world.playerStatsBase },
@@ -106,6 +110,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   }
 
   world.rng.setState(asNumber(snapshot.rng, "rng"));
+  world.cardRng.setState(asNumber(snapshot.cardRng, "cardRng"));
   assignNumbers(world.player, snapshot.player, "player");
   world.player.alive = asBoolean(asRecord(snapshot.player, "player").alive, "player.alive");
   assignNumbers(world.playerStats, snapshot.playerStats, "playerStats");
@@ -170,7 +175,19 @@ function restoreProgression(input: unknown): World["progression"] {
     // это данные устройства самого игрока; незнакомый предмет в варианте
     // выбор просто пропускает (`chooseUpgrade`), а не роняет забег.
     offers: cloneJson(asArray(progression.offers, "progression.offers")) as World["progression"]["offers"],
+    tools: restoreCardTools(progression.tools, "progression.tools"),
+    toolsTotal: restoreCardTools(progression.toolsTotal, "progression.toolsTotal"),
+    banished: asArray(progression.banished, "progression.banished").map((key, i) => asString(key, `progression.banished[${i}]`)),
   };
+}
+
+function restoreCardTools(input: unknown, path: string): World["progression"]["tools"] {
+  const tools = asRecord(input, path);
+  // Заряды из хранилища устройства не выше страховки движка: подправленный
+  // снимок не должен выдавать бесконечные перебросы.
+  const charge = (kind: "reroll" | "skip" | "banish"): number =>
+    Math.min(MAX_CARD_TOOLS, Math.max(0, Math.floor(asNumber(tools[kind], `${path}.${kind}`))));
+  return { reroll: charge("reroll"), skip: charge("skip"), banish: charge("banish") };
 }
 
 // --- Типизированные массивы ---------------------------------------------------
@@ -304,6 +321,11 @@ function asNumber(value: unknown, path: string): number {
   if (typeof value !== "number" || Number.isNaN(value)) {
     throw new SnapshotError(`${path}: ожидалось число`);
   }
+  return value;
+}
+
+function asString(value: unknown, path: string): string {
+  if (typeof value !== "string") throw new SnapshotError(`${path}: ожидалась строка`);
   return value;
 }
 

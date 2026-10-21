@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import {
+  AMOUNTS_MAX_LENGTH,
   SETTING_PLACEHOLDER,
   SOURCE_TITLES,
   URL_MAX,
@@ -98,7 +99,7 @@ export function SettingsScreen({ focus = null }: { focus?: string | null }) {
           value={String(editing.value)}
           onChange={(event) => setEditing({ key: row.key, value: event.target.value })}
           placeholder={SETTING_PLACEHOLDER[row.kind]}
-          maxLength={row.kind === "url" ? URL_MAX : row.kind === "number" ? 9 : 32}
+          maxLength={row.kind === "url" ? URL_MAX : row.kind === "number" ? 9 : row.kind === "amounts" ? AMOUNTS_MAX_LENGTH : 32}
           inputMode={row.kind === "number" ? "numeric" : undefined}
           className={row.kind === "url" ? "w-96" : row.kind === "number" ? "w-20 text-right tabular-nums" : "w-56"}
           autoFocus

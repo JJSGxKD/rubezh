@@ -3,8 +3,8 @@ id: T-0187
 title: Строки свойств предмета — значение не переносится, прибавка видна и при малом шаге
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []

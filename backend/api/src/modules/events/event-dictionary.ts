@@ -141,6 +141,12 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
   },
+  // Действия с карточками на выборе улучшения (docs/39-retention-mechanics.md Б3):
+  // `level` — уровень выбора, `left` — зарядов этого вида осталось, `item` —
+  // изгнанный предмет (`weapon:<id>` / `passive:<id>`).
+  card_rerolled: { version: 1, payload: payload({ level: count, left: count }) },
+  card_skipped: { version: 1, payload: payload({ level: count, left: count }) },
+  card_banished: { version: 1, payload: payload({ level: count, left: count, item: id }) },
   // Тестер забрал компенсацию после вайпа (Р87, tasks/T-0043): дошли ли и сколько выдано.
   compensation_claimed: {
     version: 1,

@@ -7,6 +7,16 @@ import type { PlatformId } from "../../platforms/ports/platform.js";
  * юнит-тесты, а сервис только подаёт им записи из кеша.
  */
 
+/**
+ * Журнал скрыт у игроков до пересмотра того, как его вести (Р125,
+ * docs/35-stage4-plan.md): с 0.6 записи не публиковались, и пустой раздел
+ * говорил, что игра стоит на месте. Константа гасит знак меню, слайд главной,
+ * раздачу `app_update` и напоминание о черновиках в сводке панели; таблицы,
+ * API и экран журнала остаются, вернуть журнал — правка этой константы и её
+ * двойника в `app-shell/src/state/changelog-api.ts`.
+ */
+export const CHANGELOG_FOR_PLAYERS = false;
+
 export const CHANGELOG_KINDS = ["added", "changed", "fixed"] as const;
 
 export type ChangelogKind = (typeof CHANGELOG_KINDS)[number];

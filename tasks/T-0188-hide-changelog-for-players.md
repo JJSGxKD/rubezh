@@ -3,8 +3,8 @@ id: T-0188
 title: «Что нового» скрыт у игроков до пересмотра журнала
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
@@ -21,6 +21,7 @@ zones:
   - backend/api/src/modules/changelog/changelog-fanout.ts
   - backend/api/src/modules/admin/admin-overview.service.ts
   - backend/api/test/changelog.test.ts
+  - backend/api/test/changelog.integration.test.ts
   - backend/api/test/admin-overview.test.ts
   - apps/admin/src/screens/changelog/ChangelogScreen.tsx
 shared:

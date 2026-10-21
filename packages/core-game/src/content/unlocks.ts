@@ -1,4 +1,4 @@
-import type { AccountUnlockDef } from "@bh/shared-types";
+import type { AccountUnlockDef, CardToolRules, CardToolUnlockDef } from "@bh/shared-types";
 
 /**
  * Что открывает уровень аккаунта (docs/35-stage4-plan.md Р41, §3.13, О25).
@@ -35,3 +35,23 @@ export const ACCOUNT_UNLOCKS: AccountUnlockDef[] = [
   { level: 11, weapons: ["sting"] },
   { level: 14, passives: ["tempering"] },
 ];
+
+/**
+ * Заряды переброса, пропуска и изгнания карточек по уровню аккаунта
+ * (docs/39-retention-mechanics.md Б3, docs/35-stage4-plan.md Р102). Значение
+ * строки — итог с её уровня, как у слотов. Отдельный массив, а не поля
+ * `ACCOUNT_UNLOCKS`: лестницу открытий правят отдельно, и обе таблицы не
+ * должны конфликтовать. Числа стартовые, калибрует геймдизайнер. На уровнях
+ * 1–2 зарядов нет: новичок видит три карточки, как раньше.
+ */
+export const CARD_TOOL_UNLOCKS: CardToolUnlockDef[] = [
+  { level: 1, reroll: 0, skip: 0, banish: 0 },
+  { level: 3, reroll: 1 },
+  { level: 6, skip: 1 },
+  { level: 9, reroll: 2, banish: 1 },
+  { level: 14, skip: 2 },
+  { level: 20, reroll: 3, banish: 2 },
+];
+
+/** Правила действий с карточками: пропуск платит долей пути до следующего уровня. */
+export const CARD_TOOL_RULES: CardToolRules = { skipXpRatio: 0.3 };

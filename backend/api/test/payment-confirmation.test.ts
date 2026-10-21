@@ -266,6 +266,30 @@ describe("подтверждение оплаты", () => {
     expect(await purchases.grantedContinues(purchase.runId)).toBe(1);
   });
 
+  it("событие оплаты несёт вид товара: слушатели отличают донат от покупки (Р109); повтор события не рождает", async () => {
+    const hooks = new PaymentsHooks();
+    const heard: { purchaseId: string; product: string; mode: string }[] = [];
+    hooks.onPaid("test", async (paid) => void heard.push({ purchaseId: paid.purchaseId, product: paid.product, mode: paid.mode }));
+    const listening = new PaymentConfirmation(config(), purchases, starsProviders(api), switchesOf(config()), hooks);
+    const donation: StoredPurchase = { ...pending(), product: "donation", runId: null, continueNo: null, elapsedSec: null, sku: "donation", priceStars: 50, chargedStars: 50 };
+    const shop: StoredPurchase = { ...donation, purchaseId: randomUUID(), product: "shop_item", sku: "gems_60" };
+    for (const row of [donation, shop]) {
+      purchases.rows.set(row.purchaseId, row);
+      purchases.owners.set(row.accountId, String(PLAYER_ID));
+    }
+
+    await listening.confirm(payment({ chargeId: "charge-d", payload: donation.purchaseId, totalAmount: 50 }), NOW);
+    await listening.confirm(payment({ chargeId: "charge-s", payload: shop.purchaseId, totalAmount: 50 }), NOW);
+    await listening.confirm(payment({ chargeId: "charge-d", payload: donation.purchaseId, totalAmount: 50 }), NOW + 1_000);
+    await listening.confirm(payment({ chargeId: "charge-c", payload: purchase.purchaseId }), NOW);
+
+    expect(heard).toEqual([
+      { purchaseId: donation.purchaseId, product: "donation", mode: "live" },
+      { purchaseId: shop.purchaseId, product: "shop_item", mode: "live" },
+      { purchaseId: purchase.purchaseId, product: "continue_run", mode: "live" },
+    ]);
+  });
+
   it("повтор подтверждения от Telegram ничего не удваивает", async () => {
     await confirmation.confirm(payment(), NOW);
     await expect(confirmation.confirm(payment(), NOW + 1000)).resolves.toMatchObject({ kind: "duplicate" });

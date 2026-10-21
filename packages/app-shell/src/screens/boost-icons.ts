@@ -1,4 +1,4 @@
-import { Eye, Heart, Magnet, Plus, Shield, Sparkles, Swords, type LucideIcon } from "lucide-react";
+import { Eye, Heart, Magnet, Plus, Shield, Shuffle, Sparkles, Swords, type LucideIcon } from "lucide-react";
 
 /**
  * Значки бустов — общие у выбора перед забегом и у плашек в забеге: буст,
@@ -13,6 +13,7 @@ const BOOST_ICONS: Readonly<Record<string, LucideIcon>> = {
   aegis: Shield,
   head_start: Plus,
   insight: Eye,
+  control: Shuffle,
 };
 
 export function boostIcon(id: string): LucideIcon {

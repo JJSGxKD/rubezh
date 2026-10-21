@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
@@ -47,6 +47,19 @@ import { MemoryChangelogRepository } from "./helpers/memory-changelog.js";
 import { memoryNotifications, type MemoryNotificationsRepository } from "./helpers/memory-notifications.js";
 import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+
+// Р125: журнал скрыт у игроков константой. Остальные тесты проверяют механику
+// журнала, поэтому по умолчанию он «включён»; скрытый журнал — отдельный блок ниже.
+const visibility = vi.hoisted(() => ({ forPlayers: true }));
+vi.mock("../src/modules/changelog/changelog-rules.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/modules/changelog/changelog-rules.js")>();
+  return {
+    ...original,
+    get CHANGELOG_FOR_PLAYERS() {
+      return visibility.forPlayers;
+    },
+  };
+});
 
 /**
  * Журнал обновлений (docs/35-stage4-plan.md Р61, WP31): игрок видит строки
@@ -362,6 +375,37 @@ describe("раздача уведомления о версии", () => {
     s.locks.clear();
     s.repository.pendingReleases = async () => Promise.reject(new Error("база недоступна"));
     expect(await s.fanout.tick(new Date(T0))).toBeNull();
+    expect(s.locks.size).toBe(0);
+  });
+});
+
+describe("журнал скрыт у игроков (Р125)", () => {
+  let s: Setup;
+  let owner: AccountRef;
+
+  beforeEach(async () => {
+    s = setup();
+    owner = await player(s, "telegram", OWNER_ID);
+    visibility.forPlayers = false;
+  });
+
+  afterEach(() => {
+    visibility.forPlayers = true;
+  });
+
+  it("знак — ноль без обращения к базе, даже при опубликованной версии", async () => {
+    const veteran = await player(s, "telegram", "10", T0 - DAY);
+    s.repository.published = async () => Promise.reject(new Error("в базу ходить не нужно"));
+    expect(await s.service.badge(veteran, new Date(T0 + 2 * DAY))).toBe(0);
+  });
+
+  it("публикация записывается, но раздача ничего не пишет и не берёт лок", async () => {
+    const telegram = await player(s, "telegram", "1");
+    await s.service.save(owner, { version: "0.6.0", kind: "added", platforms: ["telegram"], text: "Новое" });
+    await s.service.publish(owner, "0.6.0", new Date(T0));
+
+    expect(await s.fanout.tick(new Date(T0))).toBe(0);
+    expect(s.notifications.of(telegram.accountId)).toEqual([]);
     expect(s.locks.size).toBe(0);
   });
 });

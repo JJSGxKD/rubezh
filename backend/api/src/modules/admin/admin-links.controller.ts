@@ -27,6 +27,10 @@ import { AdminSessionGuard } from "./admin-session.guard.js";
  *
  * Ссылка сети (WP43, Р86) — ещё и адрес с макросами для кабинета сети и
  * журнал конверсий, ушедших в него.
+ *
+ * Ссылка партнёра (Р96, T-0067) — та же ссылка с владельцем `partnerId`: он
+ * задаётся при создании, `PATCH` его не принимает, а список фильтруется
+ * по `?partner=<id>`.
  */
 const slug = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/, "латиница в нижнем регистре, цифры, дефис и подчёркивание");
 const newLinkSchema = z.object({
@@ -37,8 +41,11 @@ const newLinkSchema = z.object({
   network: z.enum(LINK_NETWORKS).optional(),
   registrationOn: z.enum(["first_run", "launch"]).optional(),
   target: z.enum(LINK_TARGETS).optional(),
+  partnerId: z.uuid().optional(),
 });
-const retargetSchema = z.object({ target: z.enum(LINK_TARGETS) });
+// Строго: владельца после создания не сменить, и лишнее поле в теле — ошибка, а не молчаливо брошенный `partnerId`.
+const retargetSchema = z.object({ target: z.enum(LINK_TARGETS) }).strict();
+const listQuerySchema = z.object({ partner: z.uuid().optional() });
 const journalQuerySchema = z.object({ before: z.string().max(80).optional() });
 const conversionIdSchema = z.uuid();
 
@@ -56,8 +63,9 @@ export class AdminLinksController {
 
   @Get()
   @RequirePermission("links.manage")
-  async list(@Req() request: unknown): Promise<{ data: { links: LinkListRow[]; postback: { adsgramToken: boolean } } }> {
-    const links = await this.links.list(accountOf(request));
+  async list(@Req() request: unknown, @Query() query: unknown): Promise<{ data: { links: LinkListRow[]; postback: { adsgramToken: boolean } } }> {
+    const { partner } = parse(() => listQuerySchema.parse(query), "Партнёр в фильтре — идентификатор из карточки партнёра");
+    const links = await this.links.list(accountOf(request), partner === undefined ? {} : { partnerId: partner });
     const summaries = await this.journal.summaries(links.filter((link) => link.network !== null).map((link) => link.code));
     return {
       data: {
@@ -84,17 +92,18 @@ export class AdminLinksController {
         network: input.network ?? null,
         registrationOn: input.registrationOn ?? "first_run",
         target: input.target ?? "app",
+        partnerId: input.partnerId ?? null,
       }),
     };
   }
 
-  /** Сменить цель: прошлые клики остаются, новые идут по-новому. Сеть и код не меняются. */
+  /** Сменить цель: прошлые клики остаются, новые идут по-новому. Сеть, код и владелец не меняются. */
   @Patch(":code")
   @RequirePermission("links.manage")
   async retarget(@Req() request: unknown, @Param("code") code: string, @Body() body: unknown): Promise<{ data: LinkView }> {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
-    const { target } = parse(() => retargetSchema.parse(body), "Цель ссылки — Mini App, бот или лендинг");
+    const { target } = parse(() => retargetSchema.parse(body), "Меняется только цель ссылки — Mini App, бот или лендинг; владельца после создания не сменить");
     const link = await this.links.retarget(actor, await this.linkCode(code), target);
     if (link === null) throw new LinkNotFoundError("Ссылки с таким кодом нет");
     return { data: link };

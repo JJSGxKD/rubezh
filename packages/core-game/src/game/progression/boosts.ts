@@ -1,4 +1,4 @@
-import type { BoostDef, LoadoutStat } from "@bh/shared-types";
+import type { BoostDef, CardTools, LoadoutStat } from "@bh/shared-types";
 import { LOADOUT_BOUNDS } from "./run-loadout";
 
 /**
@@ -18,13 +18,22 @@ export interface RunBoosts {
   shieldHits: number;
   startLevels: number;
   extraOffers: number;
+  /** заряды карточек от бустов, сумма по всем */
+  cardTools: CardTools;
 }
 
-export const NO_BOOSTS: RunBoosts = { ids: [], modifiers: {}, shieldHits: 0, startLevels: 0, extraOffers: 0 };
+export const NO_BOOSTS: RunBoosts = {
+  ids: [],
+  modifiers: {},
+  shieldHits: 0,
+  startLevels: 0,
+  extraOffers: 0,
+  cardTools: { reroll: 0, skip: 0, banish: 0 },
+};
 
 export function resolveBoosts(types: readonly BoostDef[], ids: readonly string[], maxPerRun: number): RunBoosts {
   const byId = new Map(types.map((type) => [type.id, type]));
-  const resolved: RunBoosts = { ids: [], modifiers: {}, shieldHits: 0, startLevels: 0, extraOffers: 0 };
+  const resolved: RunBoosts = { ...NO_BOOSTS, ids: [], modifiers: {}, cardTools: { reroll: 0, skip: 0, banish: 0 } };
   for (const id of ids) {
     if (resolved.ids.length >= maxPerRun) break;
     const type = byId.get(id);
@@ -36,6 +45,9 @@ export function resolveBoosts(types: readonly BoostDef[], ids: readonly string[]
     resolved.shieldHits += type.shieldHits ?? 0;
     resolved.startLevels += type.startLevels ?? 0;
     resolved.extraOffers += type.extraOffers ?? 0;
+    resolved.cardTools.reroll += type.cardTools?.reroll ?? 0;
+    resolved.cardTools.skip += type.cardTools?.skip ?? 0;
+    resolved.cardTools.banish += type.cardTools?.banish ?? 0;
   }
   return resolved;
 }
@@ -63,7 +75,12 @@ export function findBoostProblems(types: readonly BoostDef[]): string[] {
   for (const type of types) {
     if (seen.has(type.id)) problems.push(`${type.id}: id повторяется`);
     seen.add(type.id);
-    const effects = Object.keys(type.modifiers ?? {}).length + (type.shieldHits ?? 0) + (type.startLevels ?? 0) + (type.extraOffers ?? 0);
+    const effects =
+      Object.keys(type.modifiers ?? {}).length +
+      (type.shieldHits ?? 0) +
+      (type.startLevels ?? 0) +
+      (type.extraOffers ?? 0) +
+      Object.keys(type.cardTools ?? {}).length;
     if (effects === 0) problems.push(`${type.id}: буст ничего не делает`);
     for (const [stat, value] of Object.entries(type.modifiers ?? {}) as [LoadoutStat, number][]) {
       if (!(stat in LOADOUT_BOUNDS)) problems.push(`${type.id}: неизвестный параметр ${stat}`);
@@ -72,6 +89,10 @@ export function findBoostProblems(types: readonly BoostDef[]): string[] {
     for (const field of ["shieldHits", "startLevels", "extraOffers"] as const) {
       const value = type[field];
       if (value !== undefined && !(Number.isInteger(value) && value > 0 && value <= 5)) problems.push(`${type.id}.${field}: целое от 1 до 5, а не ${value}`);
+    }
+    for (const kind of ["reroll", "skip", "banish"] as const) {
+      const value = type.cardTools?.[kind];
+      if (value !== undefined && !(Number.isInteger(value) && value > 0 && value <= 5)) problems.push(`${type.id}.cardTools.${kind}: целое от 1 до 5, а не ${value}`);
     }
   }
   return problems;

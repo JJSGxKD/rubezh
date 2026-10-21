@@ -6,6 +6,7 @@ import { createBadgesApi, loadBadges } from "../src/state/badges-api";
 import { useItems } from "../src/state/items";
 import { createItemsApi, markItemsSeen, type InventoryView, type ItemView } from "../src/state/items-api";
 import { createNotificationsApi, formatWhen, loadFeed, markRead } from "../src/state/notifications-api";
+import { describeNotification } from "../src/screens/meta/notifications";
 import { initShell } from "../src/state/shell";
 
 // Знаки меню и лента уведомлений на клиенте (docs/35-stage4-plan.md Р50, Р51,
@@ -119,5 +120,15 @@ describe("знаки меню и уведомления на клиенте", ()
     expect(formatWhen("2026-09-30T09:00:00.000Z", now)).toBe("3 часа назад");
     expect(formatWhen("2026-09-20T09:00:00.000Z", now)).toBe("20 сентября");
     expect(formatWhen("не дата", now)).toBe("");
+  });
+});
+
+describe("уведомление о версии при скрытом журнале (Р125)", () => {
+  it("текст остаётся в ленте, но никуда не ведёт", () => {
+    const described = describeNotification({ id: "n2", kind: "app_update", data: { version: "0.6.0" }, createdAt: "2026-09-30T10:00:00.000Z", read: false });
+
+    expect(described?.text).toContain("0.6.0");
+    expect(described?.target).toBeNull();
+    expect(described?.over).toBeUndefined();
   });
 });

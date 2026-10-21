@@ -7,6 +7,7 @@ import {
   ListItem,
   Screen,
   SectionTitle,
+  SegmentedControl,
   Wordmark,
 } from "../design-system/components";
 import { audio } from "../audio";
@@ -22,6 +23,7 @@ import { useGraphics } from "../state/graphics";
 import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
+import { RADAR_POSITIONS, useRadarSetting } from "../state/radar-setting";
 import { useToolsAccess } from "../state/tools";
 import { useSettings, type VolumeKey } from "../state/settings";
 import { useShell } from "../state/shell";
@@ -39,6 +41,7 @@ export function SettingsScreen(): ReactNode {
   const settings = useSettings();
   const diagnostics = useDiagnostics((state) => state.enabled);
   const graphics = useGraphics();
+  const radar = useRadarSetting((state) => state.position);
   const supportsFullscreen = useShell((state) => state.adapter.ui.supportsFullscreen);
   // Бот пишет только аккаунту и только там, где у площадки он есть.
   const botAvailable = useShell((state) => state.capabilities.auth !== undefined && state.capabilities.botUrl !== "");
@@ -113,6 +116,20 @@ export function SettingsScreen(): ReactNode {
           />
         </ListGroup>
         <p className="mt-2 text-xs text-text-muted">{t("settings.scope.device")}</p>
+
+        {/* Радар — настройка устройства (Р113): низа нет, там его закрывает палец. */}
+        <SectionTitle>{t("settings.radar")}</SectionTitle>
+        <SegmentedControl
+          label={t("settings.radar.label")}
+          activeId={radar}
+          items={RADAR_POSITIONS.map((id) => ({ id, label: t(`settings.radar.${id}`) }))}
+          onSelect={(id) => {
+            const position = RADAR_POSITIONS.find((item) => item === id);
+            if (position !== undefined) useRadarSetting.getState().set(position);
+          }}
+        />
+        <p className="mt-2 text-xs text-text-muted">{t("settings.radar.hint")}</p>
+        <p className="mt-1 text-xs text-text-muted">{t("settings.radar.scope")}</p>
 
         <SectionTitle>{t("settings.language")}</SectionTitle>
         <ListGroup>

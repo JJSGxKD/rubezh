@@ -1,4 +1,4 @@
-import type { ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
+import type { CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -233,6 +233,12 @@ export interface ProgressionState {
   pendingLevelUps: number;
   /** предложенные варианты; непустой список означает, что мир ждёт выбора */
   offers: UpgradeOption[];
+  /** сколько зарядов переброса, пропуска и изгнания осталось (`progression/card-tools.ts`) */
+  tools: CardTools;
+  /** сколько зарядов выдано на забег — чтобы оболочка рисовала «осталось из» */
+  toolsTotal: CardTools;
+  /** изгнанные предметы забега: ключи `weapon:<id>` и `passive:<id>`, без повторов */
+  banished: string[];
 }
 
 /**
@@ -268,6 +274,14 @@ export interface World {
   /** правила сундука забега */
   chestRules: ChestsDef;
   chests: ChestState;
+  /**
+   * Отдельный поток случайности для новых карточек после переброса и
+   * изгнания: `world.rng` они не трогают, и забег без зарядов не меняется
+   * ни на бит.
+   */
+  cardRng: Rng;
+  /** правила действий с карточками */
+  cardRules: CardToolRules;
   /** второй шанс: сколько раз и с чем игрок возвращается после смерти */
   continueRules: ContinueDef;
   /**

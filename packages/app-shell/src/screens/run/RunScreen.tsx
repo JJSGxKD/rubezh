@@ -152,6 +152,18 @@ export function RunScreen(): ReactNode {
           queued={run.queued}
           {...(run.hud === null ? {} : { loadout: run.hud })}
           onChoose={(optionId) => useRun.getState().choose(optionId)}
+          {...(run.toolsTotal.reroll + run.toolsTotal.skip + run.toolsTotal.banish === 0
+            ? {}
+            : {
+                tools: {
+                  left: run.tools,
+                  total: run.toolsTotal,
+                  canReroll: run.canReroll,
+                  onReroll: () => useRun.getState().reroll(),
+                  onSkip: () => useRun.getState().skip(),
+                  onBanish: (optionId: string) => useRun.getState().banish(optionId),
+                },
+              })}
           onStats={openStats}
         />
       ) : null}

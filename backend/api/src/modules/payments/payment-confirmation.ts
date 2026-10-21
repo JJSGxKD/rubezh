@@ -116,7 +116,13 @@ export class PaymentConfirmation {
     switch (outcome.kind) {
       case "paid":
         this.log("log", "payment_confirmed", { ...fields, product: outcome.purchase.product, runId: outcome.purchase.runId, renewalOf: outcome.purchase.renewalOf, mode: outcome.purchase.mode });
-        void this.hooks.emitPaid({ purchaseId: outcome.purchase.purchaseId, accountId: outcome.purchase.accountId, mode: outcome.purchase.mode, at: new Date(nowMs) });
+        void this.hooks.emitPaid({
+          purchaseId: outcome.purchase.purchaseId,
+          accountId: outcome.purchase.accountId,
+          product: outcome.purchase.product,
+          mode: outcome.purchase.mode,
+          at: new Date(nowMs),
+        });
         break;
       case "duplicate":
         this.log("log", "payment_duplicate_update", fields);

@@ -30,12 +30,26 @@ export const DIRECT_UNAVAILABLE = "Прямую ссылку сейчас не �
 export const LAUNCHES_HELP =
   "Первое число — запуски игры по кликам через переходник, второе — по прямой ссылке без него. Прямые клики не создают, поэтому в «Клик → запуск» они не входят. Засчитывает сервер по подписанному параметру запуска.";
 
+/** Чья ссылка (Р96, T-0067): наша или партнёра; владелец задаётся при создании и потом не меняется. */
+export const OWNER_TITLES = { own: "Наша", partner: "Партнёра" } as const;
+export type LinkOwnerKind = keyof typeof OWNER_TITLES;
+
+/** Подсказки владельца. Словарь подсказок панели (`ui/help.ts`) вне зон T-0067, поэтому тексты — рядом с подписями. */
+export const OWNER_HELP =
+  "Наша — обычная ссылка команды. Партнёра — игрок, который впервые пришёл по ней, записывается за партнёром, если тот активен, аккаунт не старше окна привязки, а игрока ещё никто не привёл: ни друг, ни другой партнёр. Владельца после создания не сменить: клики и привязки уже записаны за ним.";
+export const OWNER_NO_PARTNERS = "Активных партнёров нет — заведите партнёра или верните его в статус «активен» в разделе «Партнёры».";
+export const OWNER_PARTNERS_UNAVAILABLE = "Список партнёров не открылся — ссылка партнёра сейчас недоступна. Попробуйте обновить страницу.";
+
 /** Что значит цель — для мастера и карточки. */
 export const TARGET_HINTS: Record<LinkTarget, string> = {
   app: "Человек сразу попадает в игру.",
   bot: "Человек попадает в чат с ботом и жмёт «Старт»; игру откроет бот.",
   landing: "Человек попадает на лендинг; что дальше, решает страница.",
 };
+
+/** Владелец-партнёр ссылки; ссылка команды и сервер старше партнёрских ссылок дают `null`. */
+const linkPartnerSchema = z.object({ partnerId: z.string(), name: z.string() });
+export type LinkPartner = z.infer<typeof linkPartnerSchema>;
 
 const goalCountsSchema = z.object({ pending: z.number(), sent: z.number(), failed: z.number(), skipped: z.number() });
 const summarySchema = z.object({ "1": goalCountsSchema, "2": goalCountsSchema, "3": goalCountsSchema });
@@ -61,6 +75,8 @@ export const linkSchema = z.object({
   target: z.enum(LINK_TARGETS).catch("app"),
   /** прямой адрес без переходника; `null` — у ссылки сети его нет или бот ещё не представился */
   directUrl: z.string().nullable(),
+  // Сервер старее партнёрских ссылок или прислал мусор: ссылка считается ссылкой команды, список не ломается.
+  partner: linkPartnerSchema.nullable().catch(null),
 });
 
 /** Клики по классу устройства; без класса и незнакомый класс сервер сводит в `unknown`. */
@@ -98,10 +114,24 @@ export interface NewLink {
   network?: LinkNetwork;
   registrationOn?: RegistrationOn;
   target?: LinkTarget;
+  /** партнёр-владелец; не задан — ссылка команды */
+  partnerId?: string;
 }
 
 /** Тот же формат, что проверяет сервер: кампания и источник уходят в разрезы аналитики. */
 export const SLUG = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/** Маршрут мастера ссылки с выбранным партнёром: `#/links/partner:<id>` — из карточки партнёра. */
+export const LINK_PARTNER_ROUTE = "partner:";
+
+export function partnerOfLinkRoute(id: string | null): string | null {
+  return id !== null && id.startsWith(LINK_PARTNER_ROUTE) && id.length > LINK_PARTNER_ROUTE.length ? id.slice(LINK_PARTNER_ROUTE.length) : null;
+}
+
+/** Чья ссылка словами для колонки «Партнёр»: имя партнёра или «Наша». */
+export function ownerLabel(partner: LinkPartner | null): string {
+  return partner === null ? OWNER_TITLES.own : partner.name;
+}
 
 export function fetchLinks(api: AdminApi): Promise<ApiResult<LinksResponse>> {
   return api.request("/links", { schema: linksResponseSchema });

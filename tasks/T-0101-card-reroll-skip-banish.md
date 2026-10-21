@@ -3,8 +3,8 @@ id: T-0101
 title: Переброс, пропуск и изгнание карточек на выборе улучшения
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-14
 size: M
 depends_on: [T-0099]
@@ -21,6 +21,9 @@ zones:
   - packages/core-game/src/game/run/snapshot.ts
   - packages/core-game/src/game/MainScene.ts
   - packages/core-game/src/game/diagnostics/replay.ts
+  - packages/core-game/src/engine/run-engine.ts
+  - packages/core-game/src/engine/run-bus.ts
+  - packages/core-game/src/content/hash.ts
   - packages/core-game/src/run-api.ts
   - packages/core-game/test/**
   - backend/api/src/modules/boosts/boost-catalog.ts
@@ -41,7 +44,9 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - packages/app-shell/src/state/analytics.ts
   - docs/22-analytics-and-metrics.md
+  - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
+  - docs/32-balance.md
   - CLAUDE.md
 runner: any
 executor: sonnet-5.5

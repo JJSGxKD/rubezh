@@ -7,27 +7,38 @@ import {
   freshness,
   manualRate,
   manualToRate,
+  monthOf,
+  nextPollDelayMs,
   takeSnapshot,
   type CurrencyCode,
   type Freshness,
   type ManualRate,
   type ManualRatePurpose,
-  type RateStore,
+  type RateSource,
   type RatesSnapshot,
 } from "@bh/fx";
-import { ValidationError } from "../../common/domain-error.js";
+import { DomainError, ValidationError } from "../../common/domain-error.js";
 import { SECRETS_READER, type SecretsReader } from "../secrets/secrets.service.js";
 import { FeatureSwitches } from "../settings/feature-switches.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
+import { effectiveTariff, usedShare } from "./fx-limits.js";
 import { fxSources } from "./fx.refresher.js";
-import { FX_STORE } from "./fx.store.js";
+import { FX_STORE, type FxStore, type SourceLimit } from "./fx.store.js";
 
 /**
  * Курсы для панели и для слоя цен (docs/35-stage4-plan.md, §3.12): обзор со
- * свежестью, заданные курсы валют площадок и снимок.
+ * свежестью, заданные курсы валют площадок, снимок и лимиты источников
+ * (Р89): остаток запросов, лимит из панели и правка счётчика.
  */
 
 const DAY_MS = 86_400_000;
+
+/** Источника с таким именем нет в коде — править в панели можно только то, что опрашивается. */
+export class FxSourceNotFoundError extends DomainError {
+  constructor() {
+    super("fx_source_not_found", "Источника курсов с таким именем нет", 404);
+  }
+}
 
 export interface RateView {
   currency: CurrencyCode;
@@ -53,11 +64,18 @@ export interface ManualView extends Omit<RateView, "usdPerUnit" | "unitsPerUsd">
 
 export interface SourceView {
   source: string;
+  /** имя тарифа из кода; лимит из панели его не меняет */
   tariff: string;
+  /** месяц счётчика `ГГГГ-ММ` по UTC; `null` — источник ещё не опрашивали */
   month: string | null;
+  /** запросов в текущем месяце: с новым месяцем счётчик начинается с нуля */
   used: number;
   pausedUntil: string | null;
   nextPollAt: string | null;
+  /** месячный лимит и откуда он: тариф из кода или панель */
+  limit: { perMonth: number | null; from: "tariff" | "panel" };
+  /** доля лимита; без лимита — `null`, сверх лимита — больше единицы */
+  usedShare: number | null;
 }
 
 export interface FxOverview {
@@ -81,7 +99,7 @@ export interface ManualInput {
 @Injectable()
 export class FxService {
   constructor(
-    @Inject(FX_STORE) private readonly store: RateStore,
+    @Inject(FX_STORE) private readonly store: FxStore,
     @Inject(SECRETS_READER) private readonly secrets: SecretsReader,
     private readonly roles: RolesService,
     private readonly switches: FeatureSwitches,
@@ -107,19 +125,110 @@ export class FxService {
       }
     }
 
+    const limits = await this.store.limits();
     const sources: SourceView[] = [];
-    for (const source of fxSources(this.secrets)) {
-      const state = await this.store.sourceState(source.id);
-      sources.push({
-        source: source.id,
-        tariff: source.tariff.name,
-        month: state?.usage.month ?? null,
-        used: state?.usage.used ?? 0,
-        pausedUntil: state?.usage.pausedUntil?.toISOString() ?? null,
-        nextPollAt: state?.nextPollAt.toISOString() ?? null,
+    for (const source of fxSources(this.secrets)) sources.push(await this.sourceView(source, limits.get(source.id), now));
+    return { enabled: this.switches.fxPolling(), rates, missing, manual, sources };
+  }
+
+  /** Источник для панели: счётчик месяца, лимит и его происхождение. */
+  private async sourceView(source: RateSource, override: SourceLimit | undefined, now: Date): Promise<SourceView> {
+    const state = await this.store.sourceState(source.id);
+    const month = monthOf(now);
+    // Счётчик прошлого месяца в новом — ноль, как и считает ядро.
+    const used = state?.usage.month === month ? state.usage.used : 0;
+    const limit = limitState(source, override);
+    return {
+      source: source.id,
+      tariff: source.tariff.name,
+      month: state === null ? null : month,
+      used,
+      pausedUntil: state?.usage.pausedUntil?.toISOString() ?? null,
+      nextPollAt: state?.nextPollAt.toISOString() ?? null,
+      limit,
+      usedShare: usedShare(used, limit.perMonth),
+    };
+  }
+
+  /**
+   * Лимит источника в месяц (Р89): запросов в календарный месяц UTC или
+   * `null` — «без лимита». Под правом, с причиной и записью в аудит «было →
+   * стало»; со следующего прохода опросы идут по новому лимиту.
+   */
+  async setLimit(actor: AccountRef, source: string, perMonth: number | null, note: string, now = new Date()): Promise<SourceView> {
+    await this.roles.require(actor, "fx.rates.edit");
+    const known = this.sourceOf(source);
+    const before = (await this.store.limits()).get(source);
+    await this.store.setLimit(source, perMonth, note, actor.accountId, now);
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: "fx.limit.set",
+      target: source,
+      before: limitState(known, before),
+      after: { perMonth, from: "panel", note },
+    });
+    return await this.afterEdit(known, now);
+  }
+
+  /** Сброс к тарифу из кода. Строки в панели не было — сбрасывать нечего, в журнал это не идёт. */
+  async resetLimit(actor: AccountRef, source: string, now = new Date()): Promise<SourceView> {
+    await this.roles.require(actor, "fx.rates.edit");
+    const known = this.sourceOf(source);
+    const before = (await this.store.limits()).get(source);
+    if (before !== undefined) {
+      await this.store.resetLimit(source);
+      await this.roles.audit({
+        actorAccountId: actor.accountId,
+        action: "fx.limit.reset",
+        target: source,
+        before: limitState(known, before),
+        after: limitState(known, undefined),
       });
     }
-    return { enabled: this.switches.fxPolling(), rates, missing, manual, sources };
+    return await this.afterEdit(known, now);
+  }
+
+  /**
+   * Поправить счётчик, когда он разошёлся с кабинетом поставщика: новое
+   * значение за текущий месяц, причина — в аудит. С новым месяцем счётчик, как
+   * и раньше, начинается с нуля.
+   */
+  async correctUsed(actor: AccountRef, source: string, used: number, note: string, now = new Date()): Promise<SourceView> {
+    await this.roles.require(actor, "fx.rates.edit");
+    const known = this.sourceOf(source);
+    const month = monthOf(now);
+    const state = await this.store.sourceState(source);
+    await this.store.setUsed(source, used, month, now);
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: "fx.used.correct",
+      target: source,
+      before: { month, used: state?.usage.month === month ? state.usage.used : 0 },
+      after: { month, used, note },
+    });
+    return await this.afterEdit(known, now);
+  }
+
+  private sourceOf(id: string): RateSource {
+    const source = fxSources(this.secrets).find((candidate) => candidate.id === id);
+    if (source === undefined) throw new FxSourceNotFoundError();
+    return source;
+  }
+
+  /**
+   * После правки ближайший опрос мог устареть: у исчерпанного источника он
+   * стоит на начале следующего месяца, и поднятый лимит иначе заработал бы
+   * только тогда. Срок пересчитывается по новым числам и только
+   * приближается — правка опрос не откладывает.
+   */
+  private async afterEdit(source: RateSource, now: Date): Promise<SourceView> {
+    const override = (await this.store.limits()).get(source.id);
+    const state = await this.store.sourceState(source.id);
+    if (state !== null) {
+      const at = new Date(now.getTime() + nextPollDelayMs(effectiveTariff(source.tariff, override), state.usage, now));
+      if (at < state.nextPollAt) await this.store.pullPollForward(source.id, at);
+    }
+    return await this.sourceView(source, override, now);
   }
 
   /**
@@ -182,6 +291,11 @@ export class FxService {
   async snapshot(now = new Date()): Promise<RatesSnapshot> {
     return await takeSnapshot(this.store, now);
   }
+}
+
+/** Месячный лимит источника и откуда он: строка в панели или тариф из кода. */
+function limitState(source: RateSource, override: SourceLimit | undefined): SourceView["limit"] {
+  return { perMonth: effectiveTariff(source.tariff, override).perMonth, from: override === undefined ? "tariff" : "panel" };
 }
 
 function view(currency: CurrencyCode, usdPerUnit: Decimal, sources: readonly string[], observedAt: Date): Omit<RateView, "freshness"> {
