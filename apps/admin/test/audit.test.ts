@@ -162,3 +162,22 @@ describe("действия поддержки покупок, партнёров
     expect(auditObject(refund)).toMatchObject({ kind: "игрок", route: { section: "players", id: "acc-1" } });
   });
 });
+
+describe("действия над лимитами источников курсов", () => {
+  it("названы словами, а объект — источник, а не курс", () => {
+    expect(actionTitle("fx.limit.set")).toBe("Лимит источника курсов");
+    expect(actionTitle("fx.limit.reset")).toBe("Лимит источника курсов сброшен");
+    expect(actionTitle("fx.used.correct")).toBe("Счётчик источника курсов поправлен");
+    const limit = entry({ action: "fx.limit.set", target: "coingecko" });
+    expect(auditObject(limit)).toEqual({ kind: "источник курсов", label: "coingecko", route: { section: "fx", id: null } });
+    expect(auditObject(entry({ action: "fx.used.correct", target: "cbr" }))?.kind).toBe("источник курсов");
+    // Заданный курс по-прежнему — пара валюта : назначение.
+    expect(auditObject(entry({ action: "fx.manual_rate", target: "RUB:payout" }))?.kind).toBe("курс");
+  });
+
+  it("поля записи названы словами", () => {
+    expect(fieldTitle("perMonth")).toBe("лимит в месяц");
+    expect(fieldTitle("used")).toBe("израсходовано");
+    expect(fieldTitle("month")).toBe("месяц");
+  });
+});

@@ -2261,6 +2261,18 @@ model SeasonReward {
   @@map("season_reward")
 }
 
+// Лимит источника курсов из панели (docs/35-stage4-plan.md Р89, T-0062): строки нет — тариф из кода.
+model FxSourceLimit {
+  source    String   @id @db.VarChar(32)
+  /// запросов в календарный месяц UTC; null — без месячного лимита
+  perMonth  Int?     @map("per_month")
+  note      String   @db.VarChar(200)
+  updatedBy String   @map("updated_by") @db.Uuid
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@map("fx_source_limit")
+}
+
 // Журнал исходящих запросов (docs/35-stage4-plan.md Р92, T-0060): попытка — строка, 7 суток.
 model OutboundCall {
   id         BigInt   @id @default(autoincrement())

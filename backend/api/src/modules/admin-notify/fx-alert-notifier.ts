@@ -10,7 +10,7 @@ import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/
 /**
  * Алерты курсов в общий чат команды (`ADMIN_CHAT_ID`, docs/35-stage4-plan.md,
  * §3.12): скачок, который не приняли, устаревший или просроченный курс,
- * молчащий источник.
+ * молчащий источник, расход месячного лимита источника на 80% и 100%.
  *
  * **Окно тишины.** Проход обновления идёт раз в минуту, и устаревший курс
  * сообщал бы о себе шестьдесят раз в час. Один алерт на причину — раз в
@@ -66,7 +66,60 @@ function keyOf(alert: FxAlert): string {
       return `stale:${alert.currency}:${alert.purpose ?? "rate"}:${alert.state}`;
     case "source_failed":
       return `source:${alert.source}`;
+    case "source_budget":
+      // Своё окно на месяц и порог: порог 80% не глушит сообщение о 100%, а новый месяц — оба.
+      return `budget:${alert.source}:${alert.month}:${String(alert.threshold)}`;
   }
+}
+
+/** Как источник называется для человека; незнакомый называется кодом. */
+const SOURCE_NAMES: Record<string, string> = {
+  coingecko: "CoinGecko",
+  cbr: "ЦБ РФ",
+  ecb: "ЕЦБ",
+  erapi: "ExchangeRate-API",
+  tonapi: "TON API",
+  binance: "Binance",
+};
+
+/** Месяц в двух падежах: «за октябрь» и «до 1 ноября». */
+const MONTHS: readonly (readonly [nominative: string, genitive: string])[] = [
+  ["январь", "января"],
+  ["февраль", "февраля"],
+  ["март", "марта"],
+  ["апрель", "апреля"],
+  ["май", "мая"],
+  ["июнь", "июня"],
+  ["июль", "июля"],
+  ["август", "августа"],
+  ["сентябрь", "сентября"],
+  ["октябрь", "октября"],
+  ["ноябрь", "ноября"],
+  ["декабрь", "декабря"],
+];
+
+/** Число с неразрывным пробелом между разрядами: «10 000» не разорвёт перенос строки. */
+function grouped(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+/** `ГГГГ-ММ` → «за октябрь» и «до 1 ноября»; декабрь кончается 1 января. */
+function monthPhrases(month: string): { name: string; until: string } {
+  const index = Number(month.slice(5, 7)) - 1;
+  const current = MONTHS[index];
+  const next = MONTHS[(index + 1) % 12];
+  if (current === undefined || next === undefined) return { name: month, until: "начала следующего месяца" };
+  return { name: current[0], until: `1 ${next[1]}` };
+}
+
+function budgetText(alert: Extract<FxAlert, { kind: "source_budget" }>): string {
+  const source = SOURCE_NAMES[alert.source] ?? alert.source;
+  const { name, until } = monthPhrases(alert.month);
+  if (alert.threshold === 100) {
+    return `🛑 ${source}: лимит ${grouped(alert.perMonth)} запросов за ${name} исчерпан. Источник молчит до ${until}, курс берут остальные`;
+  }
+  const percent = Math.floor((alert.used * 100) / alert.perMonth);
+  return `📊 ${source}: израсходовано ${grouped(alert.used)} из ${grouped(alert.perMonth)} запросов за ${name} (${String(percent)}%). Курс опрашивается реже, до ${until} хватит`;
 }
 
 const STATE_TEXT: Record<Extract<FxAlert, { kind: "rate_stale" }>["state"], string> = {
@@ -88,5 +141,7 @@ export function fxAlertText(alert: FxAlert): string {
         : `⏳ Заданный курс ${alert.currency} (${alert.purpose === "price" ? "цена для игрока" : "выплата нам"}) ${STATE_TEXT[alert.state]}. Поставьте новый в панели.`;
     case "source_failed":
       return `📡 Источник курсов ${alert.source} не ответил: ${alert.reason}. Остальные продолжают.`;
+    case "source_budget":
+      return budgetText(alert);
   }
 }

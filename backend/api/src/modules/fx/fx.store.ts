@@ -29,11 +29,41 @@ import { PRISMA } from "../../infra/database.js";
 
 export const FX_STORE = Symbol("FX_STORE");
 
+/** Лимит источника, заданный в панели; строки нет — действует тариф из кода (Р89). */
+export interface SourceLimit {
+  /** запросов в календарный месяц UTC; `null` — без месячного лимита */
+  perMonth: number | null;
+  note: string;
+  updatedBy: string;
+  updatedAt: Date;
+}
+
+/**
+ * То, что хранилище бэкенда умеет сверх порта ядра: лимиты из панели и правка
+ * счётчика. Ядро про них не знает — тариф подменяется снаружи.
+ */
+export interface LimitStore {
+  limits(): Promise<ReadonlyMap<string, SourceLimit>>;
+  setLimit(source: string, perMonth: number | null, note: string, actor: string, now?: Date): Promise<void>;
+  resetLimit(source: string): Promise<void>;
+  /**
+   * Счётчик месяца одним запросом. Срок следующего опроса и паузу он не
+   * трогает; у источника, которого ещё не опрашивали, заводит состояние с
+   * опросом «пора» — как и без строки.
+   */
+  setUsed(source: string, used: number, month: string, now?: Date): Promise<void>;
+  /** Следующий опрос — не позже `at`: позже названного срока сдвигается, раньше остаётся. */
+  pullPollForward(source: string, at: Date): Promise<void>;
+}
+
+/** Порт ядра плюс лимиты из панели — это отдаёт модулю Postgres. */
+export type FxStore = RateStore & LimitStore;
+
 const rateJson = z.object({ usdPerUnit: z.string(), sources: z.array(z.string()), observedAt: z.string() });
 const ratesJson = z.record(z.string(), rateJson);
 
 @Injectable()
-export class PrismaRateStore implements RateStore {
+export class PrismaRateStore implements FxStore {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   async latestQuotes(currency: CurrencyCode): Promise<Quote[]> {
@@ -88,6 +118,35 @@ export class PrismaRateStore implements RateStore {
   async saveSourceState(source: string, state: SourceState): Promise<void> {
     const data = { month: state.usage.month, used: state.usage.used, pausedUntil: state.usage.pausedUntil, nextPollAt: state.nextPollAt };
     await this.prisma.fxSourceState.upsert({ where: { source }, create: { source, ...data }, update: data });
+  }
+
+  async limits(): Promise<ReadonlyMap<string, SourceLimit>> {
+    const rows = await this.prisma.fxSourceLimit.findMany();
+    return new Map(rows.map((row) => [row.source, { perMonth: row.perMonth, note: row.note, updatedBy: row.updatedBy, updatedAt: row.updatedAt }]));
+  }
+
+  async setLimit(source: string, perMonth: number | null, note: string, actor: string, now = new Date()): Promise<void> {
+    const data = { perMonth, note, updatedBy: actor, updatedAt: now };
+    await this.prisma.fxSourceLimit.upsert({ where: { source }, create: { source, ...data }, update: data });
+  }
+
+  async resetLimit(source: string): Promise<void> {
+    await this.prisma.fxSourceLimit.deleteMany({ where: { source } });
+  }
+
+  async setUsed(source: string, used: number, month: string, now = new Date()): Promise<void> {
+    // Один `INSERT … ON CONFLICT DO UPDATE`: счётчик и месяц меняются разом.
+    // В `update` — только они: срок опроса и пауза остаются как были, следующий
+    // опрос пересчитает срок сам.
+    await this.prisma.fxSourceState.upsert({
+      where: { source },
+      create: { source, month, used, pausedUntil: null, nextPollAt: now },
+      update: { month, used },
+    });
+  }
+
+  async pullPollForward(source: string, at: Date): Promise<void> {
+    await this.prisma.fxSourceState.updateMany({ where: { source, nextPollAt: { gt: at } }, data: { nextPollAt: at } });
   }
 
   async currentManual(currency: CurrencyCode, purpose: ManualRatePurpose): Promise<ManualRate | null> {
