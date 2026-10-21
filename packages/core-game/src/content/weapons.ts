@@ -145,4 +145,77 @@ export const WEAPONS: WeaponDef[] = [
       { damage: 11, cooldownSec: 0.27, projectiles: 3, pierce: 4, projectileSpeed: 560, ttlSec: 1.9, statusChance: 1 },
     ],
   },
+
+  // Эволюции (tasks/T-0102, docs/39-retention-mechanics.md Б2): базовое оружие
+  // на последнем уровне плюс навык рецепта превращаются в сундуке в одну
+  // сильную версию в том же слоте. Один уровень, то же поведение и та же
+  // стихия; сила по формуле `урон · снаряды / пауза` выше максимума базового в
+  // 2,35–2,8 раза (коридор — `EVOLUTION_POWER_RATIO`). Пары по категориям
+  // навыков: две атаки, две мобильности, две защиты. Пары и числа стартовые —
+  // калибрует и утверждает геймдизайнер. В `unlocks.ts` эволюции не вносятся:
+  // открыты вместе с базовым.
+  {
+    id: "starfall",
+    behavior: "projectile_nearest",
+    nameKey: "weapon.starfall.name",
+    descriptionKey: "weapon.starfall.description",
+    evolvedFrom: "spark",
+    recipe: { passive: "haste" },
+    levels: [{ damage: 26, cooldownSec: 0.13, projectiles: 4, pierce: 3, projectileSpeed: 700, ttlSec: 2 }],
+  },
+  {
+    id: "tempest",
+    behavior: "area_strike",
+    nameKey: "weapon.tempest.name",
+    descriptionKey: "weapon.tempest.description",
+    element: "lightning",
+    evolvedFrom: "storm",
+    recipe: { passive: "volley" },
+    levels: [{ damage: 42, cooldownSec: 1.05, projectiles: 6, areaRadius: 135, statusChance: 0.75 }],
+  },
+  {
+    id: "blade_whirl",
+    behavior: "projectile_facing",
+    nameKey: "weapon.blade_whirl.name",
+    descriptionKey: "weapon.blade_whirl.description",
+    evolvedFrom: "knife",
+    recipe: { passive: "swiftness" },
+    levels: [{ damage: 22, cooldownSec: 0.2, projectiles: 8, pierce: 6, projectileSpeed: 800, ttlSec: 1.6 }],
+  },
+  {
+    id: "frost_crown",
+    behavior: "orbit",
+    nameKey: "weapon.frost_crown.name",
+    descriptionKey: "weapon.frost_crown.description",
+    element: "cold",
+    evolvedFrom: "wardstone",
+    recipe: { passive: "lodestone" },
+    levels: [{ damage: 48, cooldownSec: 0.2, projectiles: 6, areaRadius: 124, projectileSpeed: 560, statusChance: 0.6 }],
+  },
+  {
+    id: "forge",
+    behavior: "aura",
+    nameKey: "weapon.forge.name",
+    descriptionKey: "weapon.forge.description",
+    element: "fire",
+    evolvedFrom: "hearth",
+    recipe: { passive: "mending" },
+    levels: [{ damage: 28, cooldownSec: 0.22, areaRadius: 175, statusChance: 0.5 }],
+  },
+  {
+    id: "viper",
+    behavior: "projectile_nearest",
+    nameKey: "weapon.viper.name",
+    descriptionKey: "weapon.viper.description",
+    element: "poison",
+    evolvedFrom: "sting",
+    recipe: { passive: "tempering" },
+    levels: [{ damage: 18, cooldownSec: 0.22, projectiles: 4, pierce: 6, projectileSpeed: 600, ttlSec: 2, statusChance: 1 }],
+  },
 ];
+
+/** Базовое оружие: то, что открывается уровнем аккаунта и выбирается стартовым. */
+export const BASE_WEAPONS: readonly WeaponDef[] = WEAPONS.filter((weapon) => weapon.evolvedFrom === undefined);
+
+/** Эволюции базового оружия: их выдаёт только сундук забега. */
+export const WEAPON_EVOLUTIONS: readonly WeaponDef[] = WEAPONS.filter((weapon) => weapon.evolvedFrom !== undefined);
