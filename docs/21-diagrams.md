@@ -83,6 +83,7 @@ erDiagram
     ACCOUNT ||--o{ FRIEND_BONUS : "забранные ступени бонуса за друзей"
     LINK ||--o{ LINK_CLICK : "клики; краулеры превью и проверки доступности не пишутся"
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
+    LINK |o..o{ ACCOUNT_SESSION : "start_ref = auto_key, вид tagged (Р116), без внешнего ключа"
     LINK ||--o{ AD_CONVERSION : "конверсии в сеть ссылки"
     LINK_CLICK ||--o{ AD_CONVERSION : "клик, который привёл новичка"
     ACCOUNT ||--o{ AD_CONVERSION : "новичок из рекламы"
@@ -157,9 +158,9 @@ erDiagram
         uuid account_id FK
         enum platform
         enum place "miniapp|web|channel: channel — /start бота"
-        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|link|unknown"
+        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|link|tagged|unknown"
         string start_param "nullable: из подписанного initData"
-        string start_ref "nullable: код клика, id партнёра Telegram"
+        string start_ref "nullable: код клика, id партнёра Telegram, набор пар ссылки с метками"
         string client_platform "nullable: подсказка клиента"
         string client_version "nullable"
         enum device_class "mobile|desktop|web|unknown"
@@ -565,6 +566,11 @@ erDiagram
         string registration_on "first_run|launch: что сеть считает регистрацией"
         string target "app|bot|landing: куда ведёт, по умолчанию app (Р95)"
         uuid partner_id FK "nullable: владелец-партнёр, ссылка команды — пусто; не меняется; партнёра со ссылками не удалить"
+        boolean auto "источник заведён сам по параметру запуска (Р116)"
+        string auto_key UK "nullable: канонический набор известных пар src-…_cmp-…"
+        string partner_tag "nullable: метка prt-… (Р116), не владелец; к карточке партнёра не привязана"
+        string title "nullable: название из панели; пусто — показывается кампания"
+        datetime hidden_at "nullable: скрыт в панели; запуски по нему считаются"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }
@@ -1002,6 +1008,13 @@ erDiagram
         string status_class PK "2xx, 3xx, 4xx или 5xx"
         int count
         int[] buckets "ответы по корзинам 25, 50, 100, 250, 500, 1000, 2500, 5000 мс и «дольше»"
+    }
+
+    START_PARAM_KEY {
+        string key PK "незнакомый ключ параметра запуска ключ-значение (Р116), до 16 знаков; значения не храним"
+        int hits "сколько раз встретился"
+        datetime first_at
+        datetime last_at
     }
 ```
 
