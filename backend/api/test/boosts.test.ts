@@ -22,6 +22,11 @@ describe("каталог бустов", () => {
     }
   });
 
+  it("«Контроль» продаётся за 5 самоцветов (tasks/T-0101)", () => {
+    expect(BOOST_PRICES.control).toEqual({ resource: "gems", amount: 5 });
+    expect(priceOf(["control", "fury"])).toEqual({ coins: 150, gems: 5 });
+  });
+
   it("цена набора — по ресурсам; незнакомый буст — набор не продаётся", () => {
     expect(priceOf(["fury", "aegis", "head_start"])).toEqual({ coins: 270, gems: 4 });
     expect(priceOf(["fury", "nope"])).toBeNull();

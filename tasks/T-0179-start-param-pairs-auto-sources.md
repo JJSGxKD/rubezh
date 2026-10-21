@@ -38,6 +38,9 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/24-attribution-and-sharing.md
   - docs/30-configuration-map.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
+  - backend/api/src/modules/settings/setting-catalog.ts
 runner: local
 executor: sonnet-5.5
 effort: extra

@@ -225,3 +225,18 @@ describe("словарь мата точнее (tasks/T-0153)", () => {
     }
   });
 });
+
+describe("латинские имена после транслитерации (tasks/T-0201)", () => {
+  it.each(["Thuy", "thuy", "THUY", "Thuya", "Xuyang", "Thuy Linh", "Anh Thuy", "ThuyLinh"])("%s — не мат", (name) => {
+    expect(cleanName(name).verdict, name).not.toBe("profanity");
+    expect(cleanName(name).name, name).not.toBeNull();
+  });
+
+  it.each(["Duy", "Tuy", "Quy", "Suhail", "Nguyen", "Huyen", "Huynh", "Hui", "Khuyen", "Duyen"])("%s — не мат, закреплено", (name) => {
+    expect(cleanName(name).verdict, name).not.toBe("profanity");
+  });
+
+  it.each(["huy", "Huy", "nahuy", "xuy", "xyu", "huy Вася", "Thuy huy", "nahuy Thuy"])("%s — по-прежнему мат", (name) => {
+    expect(cleanName(name).verdict, name).toBe("profanity");
+  });
+});

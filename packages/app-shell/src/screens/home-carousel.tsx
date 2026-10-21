@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSwipeStrip } from "../design-system/components/swipe-strip";
 import { t } from "../i18n";
 import "../i18n/home";
 import { useBadges } from "../state/badges";
+import { changelogAvailable } from "../state/changelog-api";
 import { refreshHome, safeLink, slideImageUrl, useHome, type HomeSlide } from "../state/home-api";
 import { openExternalLink } from "../state/external-link";
 import { TAB_ROOTS, useNavigation } from "../state/navigation";
@@ -48,12 +49,22 @@ function useMedia(query: string): boolean {
   return matches;
 }
 
+/**
+ * Слайды, которые игрок вправе видеть. Журнал скрыт (Р125): слайд журнала
+ * сервер не пришлёт, а слайд команды с экраном журнала мог завести человек в
+ * панели — схема слайдов не сужается, поэтому отсев здесь.
+ */
+export function visibleSlides(slides: readonly HomeSlide[]): HomeSlide[] {
+  if (changelogAvailable()) return [...slides];
+  return slides.filter((slide) => slide.kind !== "changelog" && !(slide.kind === "team" && slide.target.kind === "screen" && slide.target.screen === "changelog"));
+}
+
 export function HomeCarousel(): ReactNode {
   const data = useHome((state) => state.data);
   const failed = useHome((state) => state.failed);
   const badgesAt = useBadges((state) => state.loadedAt);
   // Не ответил сервер, а показать нечего, — карусели нет, главная работает без неё.
-  const slides = data?.slides ?? (failed ? [] : null);
+  const slides = useMemo(() => (data === null ? (failed ? [] : null) : visibleSlides(data.slides)), [data, failed]);
   const total = slides?.length ?? 0;
   const { strip, current, dragClass, scrollToIndex, handlers } = useSwipeStrip(total);
   const touched = useRef(false);

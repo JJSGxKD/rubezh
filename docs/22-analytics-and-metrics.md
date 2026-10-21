@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `card_rerolled`, `card_skipped`, `card_banished` |
 | Интерфейс | `screen_viewed`, `settings_changed`; `home_slide_viewed`, `home_slide_clicked` (карусель главной, WP42); `home_widget_clicked` (виджеты главной, WP42) |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded`; `showcase_bought`, `shop_banner_clicked` (магазин, WP10) |
 | Реклама | `ad_shown`, `ad_failed`, `ad_clicked`, `ad_reward_claimed` (WP12); выдача показа — строка `ad_session`, а не событие |
@@ -182,7 +182,7 @@ Zod-схемы `payload` — в словаре сервера
 | `run_paused` | Как часто забег прерывается — вход для решения о длине забега | `reason`: `manual` / `app_inactive`, `elapsedSec` |
 | `run_resumed` | Сколько прерванных забегов игроки продолжают — окупилось ли сохранение и как часто приложение закрывают посреди забега | `seed`, `elapsedSec`, `level` |
 | `screen_viewed` | Путь по интерфейсу; заходы в заглушки — замер интереса к будущим разделам | `screen`, `stub` |
-| `settings_changed` | Какие настройки меняют — режим экрана, вибрацию, громкость, отображение боя | `setting`, `value`, `scope`: `account` — настройка идёт на все устройства игрока, `device` — остаётся у этого (`35-stage4-plan.md`, WP29); у смены режима экрана клиентом Telegram — `source: platform` |
+| `settings_changed` | Какие настройки меняют — режим экрана, вибрацию, громкость, отображение боя, положение радара (`radar.position`) | `setting`, `value`, `scope`: `account` — настройка идёт на все устройства игрока, `device` — остаётся у этого (`35-stage4-plan.md`, WP29); у смены режима экрана клиентом Telegram — `source: platform` |
 | `diagnostics_mode_changed` | Сколько тестеров включают диагностику | `setting`, `value` |
 | `app_first_open` | Первый запуск на устройстве — знаменатель воронок закрытого теста | без полей: установка и так в конверте |
 | `client_error` | Ошибки клиента на тестера по версии и устройству (`26-stage2-plan.md` §7) | `scope` — где случилась, `message` — текст без стека, до 512 знаков |
@@ -228,6 +228,9 @@ Zod-схемы `payload` — в словаре сервера
 | `ad_reward_claimed` | Дошла ли награда за рекламу: хозяин места (колесо, удвоение за забег) забрал сессию и выдал награду. Досмотр без этого события — награда, потерянная по дороге (обрыв, кулдаун), и повод разбираться. У задания рекламной сети (`35-stage4-plan.md` WP13, часть 6) награду выдаёт сервер по подтверждению сети, а событие шлёт клиент, дождавшись её: задание, выполненное в сети, но без события, — подтверждение не дошло или пришло позже, чем ждал экран. У задания ленты Taddy награда выдана к ответу на «Проверить», и событие идёт сразу | `place`, `source`: `ad` — за досмотренный ролик, `pass` — VIP без ролика; `network` — у задания сети (`place: task`) |
 | `chest_found` | Сундук забега выпал (T-0099, `39-retention-mechanics.md` Б1): доля забегов, дожитых до элиты, и секунда первого сундука — проверка, что он приходит около 2:00. Знаменатель для `chest_opened` | `index` — порядковый номер выпадения с нуля, `size` — 1 / 3 / 5, `source` — `elite` или `boss`, `elapsedSec` |
 | `chest_opened` | Игрок коснулся сундука: сколько доходят до выпавшего и что внутри. Доля `fallbacks` показывает, как часто улучшать уже нечего, — сигнал нехватки контента в позднем забеге | `index`, `size`, `rewards` — сколько наград выдано, `fallbacks` — сколько из них запасные (аптечка, опыт), `elapsedSec` |
+| `card_rerolled` | Игрок перебросил карточки на выборе улучшения (T-0101, `39-retention-mechanics.md` Б3): как часто тратят заряд и на каких уровнях. Доля забегов с зарядом, который так и не потратили, — сигнал, что число зарядов завышено | `level` — уровень выбора, `left` — зарядов переброса осталось |
+| `card_skipped` | Игрок пропустил уровень за опыт вместо улучшения: на каком уровне он готов отказаться от карточек. Рост доли пропусков на ранних уровнях говорит, что карточки не радуют | `level`, `left` — зарядов пропуска осталось |
+| `card_banished` | Игрок изгнал предмет из забега: какие предметы изгоняют чаще всего — кандидаты на ребаланс или на замену. Событие шлётся, только когда изгнание сработало | `level`, `left` — зарядов изгнания осталось, `item` — `weapon:<id>` или `passive:<id>` |
 | `compensation_claimed` | Дошла ли компенсация после вайпа (Р87, tasks/T-0043): какая доля тестеров забрала подарок и сколько самоцветов выдано. Шлёт клиент после первого забора — повтор (`alreadyClaimed`) события не даёт | `tester` — играл ли до вайпа, `bonusGems` — бонус за уровень, `restoredGems` — вернувшееся из купленного, `continueGems` — за второй шанс |
 
 **Воронка аккаунта — таблица, а не события** (`35-stage4-plan.md`, Р30,

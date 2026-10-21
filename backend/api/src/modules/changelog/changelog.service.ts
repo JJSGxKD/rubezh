@@ -7,7 +7,7 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repo
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { ChangelogEntryNotFoundError } from "./changelog-errors.js";
 import { ChangelogFanout } from "./changelog-fanout.js";
-import { CHANGELOG_PAGE_DEFAULT, freshVersions, pageOf, releasePlatforms, visibleOn, type ChangelogPage, type PublishedEntry } from "./changelog-rules.js";
+import { CHANGELOG_FOR_PLAYERS, CHANGELOG_PAGE_DEFAULT, freshVersions, pageOf, releasePlatforms, visibleOn, type ChangelogPage, type PublishedEntry } from "./changelog-rules.js";
 import {
   CHANGELOG_REPOSITORY,
   type ChangelogEntryInput,
@@ -71,6 +71,8 @@ export class ChangelogService {
 
   /** Знак меню: сколько версий вышло после того, как игрок открывал журнал. */
   async badge(player: Player, now = new Date()): Promise<number> {
+    // Журнал скрыт у игроков (Р125): знака нет и в базу за ним не ходим.
+    if (!CHANGELOG_FOR_PLAYERS) return 0;
     const entries = await this.entries(now.getTime());
     // Пустой журнал площадки — ни одного запроса о самом игроке.
     if (!entries.some((entry) => visibleOn(entry, player.platform))) return 0;
