@@ -62,6 +62,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/bot",
       "/api/v1/media",
       "/api/v1/client",
+      "/api/v1/csp-reports",
     ].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },
@@ -97,7 +98,7 @@ export default defineConfig(({ mode, command }) => {
       react(),
       tailwindcss(),
       stableDevSession(),
-      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim(), graspil, ads: true, adminOrigins: adminOrigins(env, false) })),
+      edgePolicyFile(contentSecurityPolicy({ mode: "build", apiOrigin: (env.VITE_API_URL ?? "").trim(), graspil, ads: true, reports: true, adminOrigins: adminOrigins(env, false) })),
     ],
     // Страницу предпросмотра на dev-сервере отдаёт этот же сервер (preview/): ей
     // нужны адреса панели — с петлёй по умолчанию (scripts/vite/preview-origins.ts).

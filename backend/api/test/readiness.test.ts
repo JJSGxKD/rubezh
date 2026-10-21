@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
@@ -46,6 +46,7 @@ async function appWith(postgres: Probe, redisPing: Probe): Promise<NestFastifyAp
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
+  vi.useRealTimers();
 });
 
 describe("GET /health/ready", () => {
@@ -85,6 +86,10 @@ describe("GET /health/ready", () => {
   });
 
   it("на 61-й запрос с одного адреса за минуту отвечает 429", async () => {
+    // Окно лимита — календарная минута: серия на её границе начала бы счёт заново.
+    // Часы стоят в середине минуты, таймеры — настоящие.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 13, 10, 0, 30));
     const app = await appWith(ok, async () => "PONG");
     for (let i = 0; i < 60; i += 1) {
       expect((await app.inject({ method: "GET", url: "/health/ready" })).statusCode).toBe(200);

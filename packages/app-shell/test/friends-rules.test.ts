@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import ru from "../src/i18n/ru-friends.json";
-import { bonusTrack, coinIconsNeedRoom, friendsLayout, giftAllCount, peerActionView } from "../src/screens/meta/friends-rules";
+import { bonusTrack, coinIconsNeedRoom, friendsLayout, giftAllCount, PEER_TEXT_FROM_PX, peerActionView } from "../src/screens/meta/friends-rules";
 
 // Правила экрана друзей (tasks/T-0048): кому подарит «Подарить всем», как
 // заливается полоса бонуса и что стоит на экране первым.
@@ -113,5 +114,22 @@ describe("кнопки в строке игрока", () => {
   it("подписи различны: две кнопки не получат одну", () => {
     const keys = (["accept", "decline", "gift", "gifted"] as const).map((kind) => peerActionView(kind).labelKey);
     expect(new Set(keys).size).toBe(4);
+  });
+});
+
+describe("порог текста на кнопках строки игрока", () => {
+  it("у пары кнопок заявки порог выше, чем у одной кнопки", () => {
+    expect(PEER_TEXT_FROM_PX.single).toBe(430);
+    expect(PEER_TEXT_FROM_PX.pair).toBe(540);
+    expect(PEER_TEXT_FROM_PX.pair).toBeGreaterThan(PEER_TEXT_FROM_PX.single);
+  });
+
+  it("числа в классах Tailwind и в константе не разъезжаются", () => {
+    const source = readFileSync(new URL("../src/screens/meta/friends-parts.tsx", import.meta.url), "utf8");
+
+    for (const px of [PEER_TEXT_FROM_PX.single, PEER_TEXT_FROM_PX.pair]) {
+      expect(source).toContain(`max-[${px}px]:hidden`);
+      expect(source).toContain(`min-[${px}px]:hidden`);
+    }
   });
 });

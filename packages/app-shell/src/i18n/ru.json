@@ -75,6 +75,7 @@
   "time.hours": "{hours} ч",
   "time.hoursMinutes": "{hours} ч {minutes} мин",
   "time.minutes": "{minutes} мин",
+  "time.clock": "{hours}:{minutes}",
   "mode.endless": "Бесконечный",
   "dev.title": "Разработчик",
   "dev.setup": "Настроить режим разработчика",

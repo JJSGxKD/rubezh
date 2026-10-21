@@ -66,7 +66,20 @@ export interface PolicyInput {
    * предпросмотр есть только у неё.
    */
   adminOrigins?: readonly string[];
+  /**
+   * Просить браузер сообщать о каждом заблокированном адресе (Р108,
+   * `REPORT_URI_PATH`): у Telegram-сборки с рекламой, где список разрешённых
+   * адресов SDK дополняется по этим отчётам. У панели и других площадок
+   * приёмника в политике нет.
+   */
+  reports?: boolean;
 }
+
+/**
+ * Путь приёмника отчётов на API (`backend/api/src/modules/csp-reports`).
+ * Без домена — тот же, что у клиента (прод, `VITE_API_URL` пуст).
+ */
+export const REPORT_URI_PATH = "/api/v1/csp-reports";
 
 /**
  * Graspil — аналитика Mini App (решение участника 1 от 26.09.2026,
@@ -104,15 +117,28 @@ export const AD_SCRIPT_ORIGINS = [
  *   ответа идёт с параметрами обратного вызова, путь решение не называет, поэтому
  *   разрешены хосты;
  * - RichAds подключает скрипт Яндекса: путь указан, потому что `yandex.ru`
- *   целиком слишком широк. Что грузит сам скрипт Яндекса, из Р108 не видно —
- *   список дополняется по отчётам о блокировках, а не догадкой.
+ *   целиком слишком широк;
+ * - `context.js` Яндекса сам грузит сборки из `yastatic.net/partner-code-bundles/`
+ *   (Р122, консоль игрока): источник с путём, а не хост, потому что с этого хоста
+ *   Яндекс раздаёт всё подряд, а реклама берёт только этот каталог. Список
+ *   дополняется по отчётам о блокировках, а не догадкой.
  */
 export const AD_CHAIN_SCRIPT_SOURCES = [
   "https://7ool.net",
   "https://eu.convers.link",
   "https://us.convers.link",
   "https://yandex.ru/ads/system/context.js",
+  "https://yastatic.net/partner-code-bundles/",
 ] as const;
+
+/**
+ * Стили `tg-ob.js` RichAds (Р122): `7ool.net` и `cdn.adx1.com` — хосты целиком,
+ * потому что путь их стилей содержит номер площадки и меняется. Только при рекламе.
+ */
+export const AD_CHAIN_STYLE_ORIGINS = ["https://7ool.net", "https://cdn.adx1.com"] as const;
+
+/** Шрифт объявлений Яндекса (Р122): только каталог шрифтов, не весь `yastatic.net`. Только при рекламе. */
+export const AD_CHAIN_FONT_SOURCES = ["https://yastatic.net/s3/home/fonts/"] as const;
 
 /**
  * Google Fonts для SDK Taddy: он тянет стиль Roboto со своего же шрифтового
@@ -143,7 +169,7 @@ export const FRAME_ANCESTORS = ["'self'", "https://web.telegram.org"] as const;
  */
 export const AVATAR_ORIGINS = ["https://t.me", "https://*.telesco.pe", "https://*.cdn-telegram.org"] as const;
 
-export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = false, adminOrigins = [] }: PolicyInput): string {
+export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = false, adminOrigins = [], reports = false }: PolicyInput): string {
   const dev = mode === "dev";
   const api = originOf(apiOrigin);
   const scripts = [...(graspil ? GRASPIL_SCRIPT_ORIGINS : []), ...(ads ? [...AD_SCRIPT_ORIGINS, ...AD_CHAIN_SCRIPT_SOURCES] : [])];
@@ -155,7 +181,7 @@ export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = 
     // В разработке React вставляет встроенный скрипт горячей перезагрузки, а
     // Vite — стили через <style>. В сборке ни того ни другого нет.
     "script-src": dev ? ["'self'", "'unsafe-inline'", ...scripts] : ["'self'", ...scripts],
-    "style-src": ["'self'", "'unsafe-inline'", ...(ads ? GOOGLE_FONTS_STYLE_ORIGINS : [])],
+    "style-src": ["'self'", "'unsafe-inline'", ...(ads ? [...GOOGLE_FONTS_STYLE_ORIGINS, ...AD_CHAIN_STYLE_ORIGINS] : [])],
     // Картинки заданий из панели отдаёт API (`/api/v1/media`): в проде он на
     // своём же домене, а в разработке — на своём порту.
     "img-src": ["'self'", "data:", "blob:", ...(api === null ? [] : [api]), ...AVATAR_ORIGINS, ...creatives],
@@ -164,12 +190,17 @@ export function contentSecurityPolicy({ mode, apiOrigin, graspil = false, ads = 
     // Клиент Vite ждёт сервер после обрыва HMR в воркере из blob: — без
     // него страница не узнает, что сервер вернулся.
     "worker-src": dev ? ["'self'", "blob:"] : ["'self'"],
-    "font-src": ["'self'", ...(ads ? GOOGLE_FONTS_FONT_ORIGINS : [])],
+    "font-src": ["'self'", ...(ads ? [...GOOGLE_FONTS_FONT_ORIGINS, ...AD_CHAIN_FONT_SOURCES] : [])],
     "connect-src": ["'self'", ...(api === null ? [] : [api]), ...connects, ...(dev ? ["ws:", "wss:"] : [])],
     "frame-ancestors": [...FRAME_ANCESTORS, ...adminOrigins],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
     "object-src": ["'none'"],
+    // Только `report-uri`, не `report-to`: политика уходит заголовком (Caddy в
+    // проде, Vite на dev-сервере), и `report-uri` в заголовке работает, а
+    // `report-to` требует ещё и `Reporting-Endpoints`, тогда как выкат ставит
+    // один заголовок из `csp.txt`. Приёмник понимает оба формата тела.
+    ...(reports ? { "report-uri": [api === null ? REPORT_URI_PATH : `${api}${REPORT_URI_PATH}`] } : {}),
   };
 
   const policy = Object.entries(directives).map(([name, sources]) => `${name} ${sources.join(" ")}`);

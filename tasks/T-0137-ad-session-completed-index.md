@@ -3,8 +3,8 @@ id: T-0137
 title: Индекс досмотров по времени завершения — для ряда сводки панели
 epic: E4
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []

@@ -3,8 +3,8 @@ id: T-0165
 title: Гард панели экспортирует AdminModule, счётчик онлайна — один сервис
 epic: E4
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []

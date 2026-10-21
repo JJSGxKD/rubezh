@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, msUntilReset } from "../src/screens/meta/schedule";
+import { formatCountdown, formatCountdownShort, msUntilReset } from "../src/screens/meta/schedule";
 import { sectorCenterDeg, spinRotationDeg } from "../src/screens/meta/wheel-math";
 
 // Мета: сброс заданий и поворот колеса
@@ -53,6 +53,28 @@ describe("обратный отсчёт", () => {
     expect(formatCountdown(20 * 1000)).toBe("1 мин");
     expect(formatCountdown(0)).toBe("1 мин");
     expect(formatCountdown(-5)).toBe("1 мин");
+  });
+});
+
+describe("короткий обратный отсчёт для узкой плитки", () => {
+  it("от часа до суток — «часы:минуты» с ведущим нулём у минут", () => {
+    expect(formatCountdownShort(23 * HOUR + 59 * MINUTE)).toBe("23:59");
+    expect(formatCountdownShort(5 * HOUR + 50 * MINUTE)).toBe("5:50");
+    expect(formatCountdownShort(HOUR)).toBe("1:00");
+    expect(formatCountdownShort(HOUR + 5 * MINUTE)).toBe("1:05");
+  });
+
+  it("меньше часа — минутами, секунды округляются вверх", () => {
+    expect(formatCountdownShort(59 * MINUTE)).toBe("59 мин");
+    expect(formatCountdownShort(30 * 1000)).toBe("1 мин");
+  });
+
+  it("23 ч 59 мин 30 с округляется вверх до суток, а не до «24:00»", () => {
+    expect(formatCountdownShort(23 * HOUR + 59 * MINUTE + 30 * 1000)).toBe("1 д");
+  });
+
+  it("от суток — как обычный отсчёт", () => {
+    expect(formatCountdownShort(2 * DAY + 3 * HOUR)).toBe(formatCountdown(2 * DAY + 3 * HOUR));
   });
 });
 
