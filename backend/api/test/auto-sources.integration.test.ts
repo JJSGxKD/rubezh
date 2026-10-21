@@ -1,8 +1,13 @@
+import "reflect-metadata";
 import { randomUUID } from "node:crypto";
-import { Logger } from "@nestjs/common";
+import { Global, Logger, Module, type Type } from "@nestjs/common";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadAppConfig } from "../src/config/app-config.js";
+import { APP_MODULES } from "../src/app.module.js";
+import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
+import { HealthController } from "../src/health/health.controller.js";
+import { createHttpApp } from "../src/http-app.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
+import { AttributionModule } from "../src/modules/attribution/attribution.module.js";
 import { SessionRecorder } from "../src/modules/attribution/session-recorder.js";
 import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.repository.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
@@ -11,6 +16,7 @@ import { AuthService } from "../src/modules/auth/auth.service.js";
 import { newLinkCode } from "../src/modules/links/link-code.js";
 import { PrismaAutoSourcesRepository, UNKNOWN_KEYS_MAX } from "../src/modules/links/auto-sources.repository.js";
 import { AutoSourcesService } from "../src/modules/links/auto-sources.service.js";
+import { LinksModule } from "../src/modules/links/links.module.js";
 import { PrismaLinksRepository } from "../src/modules/links/links.repository.js";
 import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -31,6 +37,7 @@ import { testPrisma } from "./helpers/test-prisma.js";
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
+const REDIS_URL = process.env.PLAYTEST_TEST_REDIS_URL ?? "";
 const DAY = 86_400_000;
 
 describe.skipIf(DATABASE_URL === "")("автоисточники на живом Postgres", () => {
@@ -340,5 +347,60 @@ describe.skipIf(DATABASE_URL === "")("автоисточники на живом
       expect((await autoLinks()).filter((row) => row.autoKey === key)).toHaveLength(1);
       expect(await prisma.accountSession.count({ where: { startKind: "tagged", startRef: key } })).toBe(2);
     });
+  });
+});
+
+/** Модули, которые модуль подключает через `imports`; динамический модуль — его класс. */
+function importsOf(module: unknown): unknown[] {
+  const list: unknown = Reflect.getMetadata("imports", module as object);
+  if (!Array.isArray(list)) return [];
+  return list.map((entry: unknown) => (typeof entry === "object" && entry !== null && "module" in entry ? entry.module : entry));
+}
+
+function reaches(from: unknown, target: unknown, seen = new Set<unknown>()): boolean {
+  if (from === target) return true;
+  if (seen.has(from)) return false;
+  seen.add(from);
+  return importsOf(from).some((next) => reaches(next, target, seen));
+}
+
+describe("автоисточники в графе модулей", () => {
+  // Параметр рекордера необязателен: забытый импорт или экспорт молча выключил бы автоисточники,
+  // а цикл модулей уронил бы только сервер. Граф читается из метаданных Nest, без базы и Redis.
+  it("AttributionModule подключает LinksModule, тот отдаёт AutoSourcesService, обратной связи нет", () => {
+    expect(importsOf(AttributionModule)).toContain(LinksModule);
+    expect(Reflect.getMetadata("exports", LinksModule)).toContain(AutoSourcesService);
+    expect(reaches(LinksModule, AttributionModule)).toBe(false);
+  });
+});
+
+describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("автоисточники в приложении целиком", () => {
+  it("приложение собирается, а рекордер сессий получает тот же AutoSourcesService, что модуль ссылок", async () => {
+    const config = loadAppConfig({
+      NODE_ENV: "test",
+      ...AUTH_ENV,
+      DATABASE_URL,
+      REDIS_URL,
+      TELEGRAM_API_ROOT: "http://127.0.0.1:9",
+      TELEGRAM_BOT_UPDATES: "off",
+    } as NodeJS.ProcessEnv);
+
+    @Global()
+    @Module({ providers: [{ provide: APP_CONFIG, useValue: config }], exports: [APP_CONFIG] })
+    class TestConfigModule {}
+
+    @Module({ imports: [TestConfigModule, ...APP_MODULES], controllers: [HealthController] })
+    class BootModule {}
+
+    const app = await createHttpApp(BootModule as Type<unknown>, { logger: false });
+    try {
+      await app.init();
+      await app.getHttpAdapter().getInstance().ready();
+      const autoSources = app.get(AutoSourcesService, { strict: false });
+      expect(autoSources).toBeInstanceOf(AutoSourcesService);
+      expect((app.get(SessionRecorder, { strict: false }) as unknown as { autoSources: unknown }).autoSources).toBe(autoSources);
+    } finally {
+      await app.close();
+    }
   });
 });
