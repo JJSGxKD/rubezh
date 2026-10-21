@@ -3,8 +3,8 @@ id: T-0141
 title: Хост Referer без порта — проверки доступности отсекаются и с портом
 epic: E14
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-1 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []

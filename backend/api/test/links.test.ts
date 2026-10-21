@@ -385,6 +385,9 @@ describe("проверки доступности", () => {
 describe("разбор посетителя и страница", () => {
   it("от Referer — только хост, от Accept-Language — первый язык", () => {
     expect(hostOf("https://t.me/s/channel?x=1")).toBe("t.me");
+    // Порт нестандартный — в хост не входит: иначе проверка доступности не отсеклась бы от точного совпадения.
+    expect(hostOf("https://check-host.net:8443/check")).toBe("check-host.net");
+    expect(hostOf("https://t.me/x")).toBe("t.me");
     expect(hostOf("не адрес")).toBeNull();
     expect(languageOf("ru-RU,ru;q=0.9,en;q=0.8")).toBe("ru-RU");
     expect(languageOf("*")).toBeNull();
