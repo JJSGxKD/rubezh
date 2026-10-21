@@ -10,19 +10,27 @@ import {
   launchesLabel,
   LINK_TARGETS,
   NETWORK_TITLES,
+  OWNER_HELP,
+  OWNER_NO_PARTNERS,
+  OWNER_PARTNERS_UNAVAILABLE,
+  OWNER_TITLES,
+  ownerLabel,
+  partnerOfLinkRoute,
   SLUG,
   summaryLine,
   TARGET_HELP,
   TARGET_HINTS,
   TARGET_TITLES,
   type Link,
+  type LinkOwnerKind,
   type LinkRow,
   type LinkTarget,
   type RegistrationOn,
 } from "../../api/links";
+import { activePartners, fetchPartners } from "../../api/partners";
 import { formatDateTime, formatNumber } from "../../format";
 import { ChoiceCards } from "../../ui/choice";
-import { Badge, Button, DataTable, ErrorNotice, Field, Help, Input, Loading, Notice, Panel } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, Help, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
@@ -39,12 +47,22 @@ import { TokenNotice } from "./TokenNotice";
  * регистрации и покупки пришедших новичков (WP43) — карточка ссылки
  * показывает адрес для кабинета и журнал отправленного. Карточка
  * открывается и по адресу `#/links/<код>`: на неё ведёт журнал аудита.
+ *
+ * Первый шаг мастера — чья ссылка: наша или партнёра (T-0067). У ссылки
+ * партнёра новичок записывается за ним при первом входе; выбрать можно
+ * только активного партнёра, а владельца потом не сменить. Из карточки
+ * партнёра мастер открывается по `#/links/partner:<id>` с ним уже выбранным.
  */
 
 type Placement = "plain" | "adsgram";
 
 export function LinksScreen({ id }: { id: string | null }) {
   const { state, reload } = useApi(() => fetchLinks(api), []);
+  // Партнёры нужны мастеру; не открылись (нет права, сбой) — ссылка команды заводится как обычно.
+  const { state: partnersState } = useApi(() => fetchPartners(api), []);
+  const partners = partnersState.status === "ok" ? activePartners(partnersState.data.partners) : [];
+  const [owner, setOwner] = useState<LinkOwnerKind>("own");
+  const [partnerId, setPartnerId] = useState("");
   const [placement, setPlacement] = useState<Placement>("plain");
   const [target, setTarget] = useState<LinkTarget>("app");
   const [registrationOn, setRegistrationOn] = useState<RegistrationOn>("first_run");
@@ -55,9 +73,16 @@ export function LinksScreen({ id }: { id: string | null }) {
   const [openCode, setOpenCode] = useState<string | null>(id);
   const [created, setCreated] = useState<Link | null>(null);
 
-  useEffect(() => setOpenCode(id), [id]);
+  // Из карточки партнёра — мастер с ним выбранным; по коду ссылки — её карточка.
+  useEffect(() => {
+    const fromPartner = partnerOfLinkRoute(id);
+    if (fromPartner === null) return setOpenCode(id);
+    setOpenCode(null);
+    setOwner("partner");
+    setPartnerId(fromPartner);
+  }, [id]);
 
-  const valid = SLUG.test(campaign) && (source === "" || SLUG.test(source));
+  const valid = SLUG.test(campaign) && (source === "" || SLUG.test(source)) && (owner === "own" || partners.some((partner) => partner.partnerId === partnerId));
 
   const choosePlacement = (next: Placement) => {
     setPlacement(next);
@@ -75,6 +100,7 @@ export function LinksScreen({ id }: { id: string | null }) {
       source: source || undefined,
       note: note.trim() || undefined,
       target,
+      ...(owner === "partner" ? { partnerId } : {}),
       ...(network === undefined ? {} : { network, registrationOn }),
     });
     if (!result.ok) return setError(result.error);
@@ -85,6 +111,8 @@ export function LinksScreen({ id }: { id: string | null }) {
     setNote("");
     setPlacement("plain");
     setTarget("app");
+    setOwner("own");
+    setPartnerId("");
     toast.success(network === undefined ? "Ссылка заведена" : "Ссылка заведена — вставьте адрес с метками в кабинет сети");
     reload();
     // Сразу карточка: адрес нужен прямо сейчас, а у ссылки сети — ещё и инструкция к кабинету.
@@ -104,6 +132,38 @@ export function LinksScreen({ id }: { id: string | null }) {
     <div className="flex flex-col gap-4">
       <Panel title="Новая ссылка">
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
+          <ChoiceGroup label="Чья ссылка" help={OWNER_HELP}>
+            <ChoiceCards<LinkOwnerKind>
+              label="Чья ссылка"
+              value={owner}
+              onChange={setOwner}
+              choices={[
+                { value: "own", title: OWNER_TITLES.own, description: "Обычная ссылка команды: игроки ни за кого не записываются." },
+                {
+                  value: "partner",
+                  title: OWNER_TITLES.partner,
+                  description: "Новичок по ней записывается за партнёром при первом входе — по тем же правилам, что и по его промокоду.",
+                  disabled: partners.length === 0,
+                },
+              ]}
+            />
+            {partnersState.status === "error" ? <p className="text-xs text-text-muted">{OWNER_PARTNERS_UNAVAILABLE}</p> : null}
+            {partnersState.status === "ok" && partners.length === 0 ? <p className="text-xs text-text-muted">{OWNER_NO_PARTNERS}</p> : null}
+          </ChoiceGroup>
+          {owner === "partner" ? (
+            <div className="flex max-w-3xl flex-col gap-1">
+              <Field label="Партнёр" hint="только активные: ссылку неактивного партнёра никто бы не привязал">
+                <Select value={partnerId} onChange={(event) => setPartnerId(event.target.value)} className="w-full max-w-md">
+                  <option value="">— выберите партнёра —</option>
+                  {partners.map((partner) => (
+                    <option key={partner.partnerId} value={partner.partnerId}>
+                      {partner.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          ) : null}
           <ChoiceGroup label="Где размещается" help={HELP.links.network}>
             <ChoiceCards<Placement>
               label="Где размещается"
@@ -198,6 +258,11 @@ export function LinksScreen({ id }: { id: string | null }) {
                     {row.target === "app" ? null : <Badge>{TARGET_TITLES[row.target]}</Badge>}
                   </span>
                 ),
+              },
+              {
+                title: "Партнёр",
+                help: OWNER_HELP,
+                render: (row) => (row.partner === null ? <span className="text-text-muted">{ownerLabel(null)}</span> : <Badge tone="info">{ownerLabel(row.partner)}</Badge>),
               },
               { title: "Источник", render: (row) => row.source ?? "—" },
               { title: "Адрес", render: (row) => <code className="text-xs">{row.url}</code> },

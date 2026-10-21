@@ -238,7 +238,7 @@ describe("ссылки партнёра", () => {
 
   it("строка списка заведённой ссылки сохраняет владельца; колонка «Партнёр» — имя или «Наша»", () => {
     const partner = { partnerId: PARTNER_ID, name: "Канал" };
-    expect(freshRow({ ...LINK, partner }).partner).toEqual(partner);
+    expect(freshRow({ ...LINK, network: null, registrationOn: "first_run", networkUrl: null, partner }).partner).toEqual(partner);
     expect(ownerLabel(partner)).toBe("Канал");
     expect(ownerLabel(null)).toBe(OWNER_TITLES.own);
     expect(OWNER_TITLES).toEqual({ own: "Наша", partner: "Партнёра" });
