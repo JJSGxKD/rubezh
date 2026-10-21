@@ -105,6 +105,9 @@ function coingeckoCheck(plan: "demo" | "pro") {
 }
 
 const FX_SERVICE = "Курсы валют · CoinGecko";
+const CMC_SERVICE = "Курсы валют · CoinMarketCap";
+const TONAPI_SERVICE = "Курсы валют · tonapi";
+const ERAPI_SERVICE = "Курсы валют · ExchangeRate-API";
 const ADSGRAM_SERVICE = "Трекинг закупок · AdsGram";
 const ADSGRAM_TASKS_SERVICE = "Задания сетей · AdsGram";
 
@@ -142,6 +145,61 @@ export const SECRETS = {
     example: "CG-AbCdEfGh1234567890",
     fromEnv: (config) => nonEmpty(config.fx.coingeckoDemoKey),
     check: coingeckoCheck("demo"),
+  },
+  coinmarketcap: {
+    key: "fx.coinmarketcap",
+    service: CMC_SERVICE,
+    title: "Ключ CoinMarketCap",
+    hint: "Четвёртый источник курса Gram и USDT, тариф Basic — 10 000 кредитов в месяц. Без ключа источника нет",
+    cabinetUrl: "https://pro.coinmarketcap.com/account",
+    // Ключ CoinMarketCap — UUID.
+    pattern: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    example: "12345678-aaaa-4bbb-8ccc-123456789abc",
+    // Только из панели: ключ перевыпускают в кабинете, окружение не нужно.
+    fromEnv: () => null,
+    // `/v1/key/info` кредитов не тратит.
+    check: keyCheck({
+      service: "CoinMarketCap",
+      url: () => "https://pro-api.coinmarketcap.com/v1/key/info",
+      headers: (value) => ({ "X-CMC_PRO_API_KEY": value }),
+      refusalHint: "проверьте, что ключ скопирован целиком из кабинета CoinMarketCap",
+    }),
+  },
+  tonapi: {
+    key: "fx.tonapi",
+    service: TONAPI_SERVICE,
+    title: "Ключ tonapi",
+    hint: "Необязателен: без ключа курс Gram идёт открытым лимитом",
+    cabinetUrl: "https://tonconsole.com",
+    // Ключ tonapi из TON Console — длинная строка из латиницы, цифр, точек и дефисов (бывает JWT).
+    pattern: /^[A-Za-z0-9._-]{16,512}$/,
+    example: "AFABCDEFGHIJKLMNOPQRSTUV",
+    fromEnv: () => null,
+    // Отдельного запроса «проверить ключ» у сервиса нет — спрашиваем курс.
+    check: keyCheck({
+      service: "tonapi",
+      url: () => "https://tonapi.io/v2/rates?tokens=ton&currencies=usd",
+      headers: (value) => ({ Authorization: `Bearer ${value}` }),
+      refusalHint: "проверьте, что ключ скопирован целиком из TON Console",
+    }),
+  },
+  erapi: {
+    key: "fx.erapi",
+    service: ERAPI_SERVICE,
+    title: "Ключ ExchangeRate-API",
+    hint: "Необязателен: без ключа курсы рубля и евро идут открытым адресом",
+    cabinetUrl: "https://app.exchangerate-api.com",
+    // Ключ уходит в путь адреса — только латиница и цифры.
+    pattern: /^[A-Za-z0-9]{8,64}$/,
+    example: "0123456789abcdef01234567",
+    fromEnv: () => null,
+    // `/quota` запросы тарифа не расходует.
+    check: keyCheck({
+      service: "ExchangeRate-API",
+      url: (value) => `https://v6.exchangerate-api.com/v6/${encodeURIComponent(value)}/quota`,
+      headers: () => ({}),
+      refusalHint: "проверьте, что ключ скопирован целиком из кабинета ExchangeRate-API",
+    }),
   },
   adsgramConversionToken: {
     key: "adsgram.conversion-token",

@@ -5,7 +5,7 @@ import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { AdminSecretsService } from "../src/modules/admin/admin-secrets.service.js";
 import { fxSources } from "../src/modules/fx/fx.refresher.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
-import { SECRETS, SECRET_KEY, SECRET_LIST, fingerprintOf, secretProblem } from "../src/modules/secrets/secret-catalog.js";
+import { SECRETS, SECRET_KEY, SECRET_LIST, fingerprintOf, secretProblem, type SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
 import { SecretCipher, SecretUnreadableError, keyIdOf, type SealedSecret } from "../src/modules/secrets/secret-cipher.js";
 import type { SecretsRepository, StoredSecret } from "../src/modules/secrets/secrets.repository.js";
 import { SECRETS_CHANNEL, SecretsDisabledError, SecretsService } from "../src/modules/secrets/secrets.service.js";
@@ -324,7 +324,8 @@ describe("ключи курсов: CoinMarketCap, tonapi, erapi (tasks/T-0063)",
 
   it("три записи в каталоге, ключи — только из панели: окружения у них нет", () => {
     expect([SECRETS.coinmarketcap.key, SECRETS.tonapi.key, SECRETS.erapi.key]).toEqual(["fx.coinmarketcap", "fx.tonapi", "fx.erapi"]);
-    for (const secret of [SECRETS.coinmarketcap, SECRETS.tonapi, SECRETS.erapi]) {
+    const definitions: SecretDefinition[] = [SECRETS.coinmarketcap, SECRETS.tonapi, SECRETS.erapi];
+    for (const secret of definitions) {
       expect(secret.fromEnv(config({ FX_COINGECKO_DEMO_KEY: DEMO })), secret.key).toBeNull();
       expect(secret.check, secret.key).toBeDefined();
     }
@@ -343,7 +344,7 @@ describe("ключи курсов: CoinMarketCap, tonapi, erapi (tasks/T-0063)",
     expect(secretProblem(SECRETS.coinmarketcap, CMC)).toBeNull();
     expect(secretProblem(SECRETS.tonapi, TONAPI)).toBeNull();
     expect(secretProblem(SECRETS.erapi, ERAPI)).toBeNull();
-    expect(secretProblem(SECRETS.coinmarketcap, "не-ключ")).toContain(SECRETS.coinmarketcap.example);
+    expect(secretProblem(SECRETS.coinmarketcap, "not-a-key")).toContain(SECRETS.coinmarketcap.example);
     expect(secretProblem(SECRETS.erapi, "abc/../x")).not.toBeNull();
     expect(secretProblem(SECRETS.erapi, `${ERAPI}\n`)).toContain("без пробелов");
     expect(secretProblem(SECRETS.tonapi, "короткий")).not.toBeNull();
