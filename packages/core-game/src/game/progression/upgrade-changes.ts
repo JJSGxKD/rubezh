@@ -56,11 +56,24 @@ export function weaponChanges(
   const next = type.levels[toLevel - 1];
   const previous = fromLevel === null ? null : type.levels[fromLevel - 1];
   if (next === undefined) return [];
+  return diffWeaponLevels(type, previous ?? null, next, unitScale);
+}
 
+/**
+ * Что меняется между двумя уровнями — одного оружия или базового и его
+ * эволюции. Поля берутся по поведению `type`; `previous === null` — новое
+ * оружие, и тогда показываются только его главные числа.
+ */
+function diffWeaponLevels(
+  type: Pick<WeaponType, "behavior">,
+  previous: ResolvedWeaponLevel | null,
+  next: ResolvedWeaponLevel,
+  unitScale: number,
+): UpgradeChange[] {
   const changes: UpgradeChange[] = [];
   for (const field of FIELDS_BY_BEHAVIOR[type.behavior]) {
     const to = unscale(field, next[field], unitScale);
-    if (previous === null || previous === undefined) {
+    if (previous === null) {
       // Пробивание ноль у нового оружия — не свойство, а его отсутствие.
       if (!HEADLINE_FIELDS.has(field) || (field === "pierce" && to === 0)) continue;
       changes.push(change(weaponLabel(type.behavior, field), null, to, "value", field === "cooldownSec"));
@@ -75,7 +88,7 @@ export function weaponChanges(
   // Шанс состояния — у стихийного оружия главное число наравне с уроном:
   // «шанс поджечь 15 → 17» и есть то, за что берут уровень «Очага».
   const chance = round(next.statusChance * 100);
-  const previousChance = previous === null || previous === undefined ? null : round(previous.statusChance * 100);
+  const previousChance = previous === null ? null : round(previous.statusChance * 100);
   if (chance > 0 && chance !== previousChance) {
     changes.push(change(statusChanceLabel(next.element), previousChance, chance, "value", false));
   }
