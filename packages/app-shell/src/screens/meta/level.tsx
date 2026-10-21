@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { ACCOUNT_UNLOCKS, PASSIVES, unlocksAt, WEAPONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, PASSIVES, unlocksAt, BASE_WEAPONS } from "@bh/core-game";
 import { Badge, Card, ContentColumn, Screen, SectionTitle } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../../i18n";
@@ -46,13 +46,13 @@ export function LevelScreen(): ReactNode {
 
 function OpenNow(props: { level: number }): ReactNode {
   const open = unlocksAt(ACCOUNT_UNLOCKS, props.level);
-  const all = open.weapons.size === WEAPONS.length && open.passives.size === PASSIVES.length;
+  const all = open.weapons.size === BASE_WEAPONS.length && open.passives.size === PASSIVES.length;
   const next = all ? null : nextUnlockAfter(props.level);
   return (
     <>
       <SectionTitle>{t("level.open")}</SectionTitle>
       <div className="surface-sunken grid gap-1 rounded-lg px-4 py-3 text-sm text-text-muted">
-        <span>{t("level.open.weapons", { open: open.weapons.size, total: WEAPONS.length })}</span>
+        <span>{t("level.open.weapons", { open: open.weapons.size, total: BASE_WEAPONS.length })}</span>
         <span>{t("level.open.passives", { open: open.passives.size, total: PASSIVES.length })}</span>
         <span>
           {t("level.open.slots", {

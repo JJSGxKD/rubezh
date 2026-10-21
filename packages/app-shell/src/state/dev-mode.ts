@@ -1,4 +1,4 @@
-import { PASSIVES, WEAPONS, type RunDevCommand, type RunDevOptions } from "@bh/core-game";
+import { PASSIVES, BASE_WEAPONS, type RunDevCommand, type RunDevOptions } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
 import { effectiveAccess, useTools } from "./tools";
@@ -122,7 +122,7 @@ export function devModeAllowed(): boolean {
 export function toRunDev(settings: DevSettings): RunDevOptions {
   const start: RunDevCommand[] = [];
   // Уровень 99 движок сводит к последнему уровню каждого предмета.
-  if (settings.start.allWeapons) for (const weapon of WEAPONS) start.push({ kind: "giveWeapon", id: weapon.id, level: 99 });
+  if (settings.start.allWeapons) for (const weapon of BASE_WEAPONS) start.push({ kind: "giveWeapon", id: weapon.id, level: 99 });
   if (settings.start.allPassives) for (const passive of PASSIVES) start.push({ kind: "givePassive", id: passive.id, level: 99 });
   if (settings.start.minute > 0) start.push({ kind: "jumpToMinute", minute: settings.start.minute });
   return { visuals: { ...settings.visuals }, cheats: { ...settings.cheats }, timeScale: settings.timeScale, start };
