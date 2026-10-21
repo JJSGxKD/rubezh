@@ -87,7 +87,7 @@ erDiagram
     LINK ||--o{ AD_CONVERSION : "конверсии в сеть ссылки"
     LINK_CLICK ||--o{ AD_CONVERSION : "клик, который привёл новичка"
     ACCOUNT ||--o{ AD_CONVERSION : "новичок из рекламы"
-    PURCHASE |o--o| AD_CONVERSION : "оплата — первая или повторная покупка"
+    PURCHASE |o--o{ AD_CONVERSION : "оплата — первая или повторная покупка, по строке на назначение"
     FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
     BROADCAST ||--o{ BROADCAST_DELIVERY : "доставка каждому получателю"
     ACCOUNT ||--o{ BROADCAST_DELIVERY : "получал рассылки"
@@ -589,13 +589,14 @@ erDiagram
     }
 
     AD_CONVERSION {
-        uuid conversion_id PK
-        string network "adsgram"
+        uuid conversion_id PK "идентификатор события для приёмника: один на событие и назначение"
+        string network "имя назначения, как destination: колонка нужна откату кода"
+        string destination "adsgram|s2s|partner; CHECK"
         string link_code FK
-        string click_id FK "уникален с целью 1 и 2: одна регистрация и первая покупка на клик"
+        string click_id FK "уникален с целью и назначением при цели 1, 2, 4: одна регистрация, первая покупка и возврат на клик"
         uuid account_id FK
-        int goal "1 регистрация, 2 первая покупка, 3 повторная; CHECK"
-        uuid purchase_id FK "nullable, уникален: у покупки — всегда, у регистрации — никогда"
+        int goal "код события: 1 регистрация, 2 первая покупка, 3 повторная, 4 возврат на следующий день; CHECK 1–4"
+        uuid purchase_id FK "nullable, уникален с назначением: у целей 2 и 3 — всегда, у остальных — никогда"
         enum status "pending|sent|failed|skipped"
         string reason "nullable: no_token, team, no_macros"
         int attempts
@@ -1398,7 +1399,11 @@ erDiagram
   конверсию не теряет, а повтор прохода не задваивает её уникальными
   ключами. Новичок — аккаунт, созданный после клика: старый игрок,
   открывший игру по рекламе, сети не отдаётся. Оплата уходит с
-  `RESTRICT`: удалить её, пока о ней знает сеть, нельзя.
+  `RESTRICT`: удалить её, пока о ней знает сеть, нельзя. Строка — одно
+  событие для одного назначения (T-0069): `destination` — `adsgram`, `s2s`
+  или `partner`, `goal` — код события (`registration`, `purchase_first`,
+  `purchase_repeat`, `d1_return`), ключи — на (клик, цель, назначение) и
+  (оплата, назначение).
 - **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
   после — запись истории: текст неизменен, кто создал, одобрил и запустил —
   без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
@@ -1870,7 +1875,7 @@ flowchart LR
         BOOSTS["boosts<br/>бусты: покупка до старта,<br/>возврат, сверка в итоге, реализовано"]
         ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, настройки, реализовано"]
         LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, макросы сети<br/>на клике, реализовано"]
-        ADCONV["ad-conversions<br/>конверсии закупок: проход<br/>раз в минуту под локом, постбэк<br/>в сеть с повтором, реализовано"]
+        ADCONV["ad-conversions<br/>конверсии закупок: проход раз в минуту<br/>под локом, событие → назначение,<br/>постбэк с повтором, реализовано"]
         FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
         SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
         SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
@@ -3199,6 +3204,13 @@ sequenceDiagram
 регистрация и покупки новичка уходят в кабинет сети. Конверсии выводятся из
 фактов проходом раз в минуту — ни забег, ни оплата о сети не знают.
 
+Слой «событие → назначение» (T-0069): игра порождает события
+`registration`, `purchase_first`, `purchase_repeat` (и закладывает
+`d1_return`), а получатели — назначения `adsgram`, `s2s`, `partner` — адаптеры
+с общим контрактом. Какое назначение что получает, проход берёт из одного
+набора (`destinations/destination-targets.ts`); сервис отправляет то, что
+подготовило назначение. Сейчас подключён один адаптер — AdsGram.
+
 ```mermaid
 sequenceDiagram
     participant AG as AdsGram
@@ -3206,6 +3218,7 @@ sequenceDiagram
     participant L as links (/r/:код)
     participant DB as PostgreSQL
     participant C as ad-conversions (под локом)
+    participant D as назначение AdsGram
     participant S as secrets
 
     AG-->>U: реклама: /r/<код>?campaign=…&record=…
@@ -3219,7 +3232,8 @@ sequenceDiagram
         C->>DB: дописать покупки: live, оплачена, без возврата, отлежалась 10 минут, за 30 суток
         Note right of DB: ON CONFLICT DO NOTHING — повтор не задваивает
         C->>DB: созревшие pending, до 100
-        C->>S: токен конверсий
+        C->>D: подготовить запрос по событию
+        D->>S: токен конверсий
         alt токена нет
             C->>DB: ждёт, причина no_token, проверка через 5 минут
         else нет record и campaign
