@@ -20,9 +20,11 @@ zones:
   - backend/api/src/infra/outbound/outbound-services.ts
   - backend/api/test/secrets.test.ts
   - backend/api/test/fx.test.ts
+  - backend/api/test/outbound.test.ts
 shared:
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - docs/21-diagrams.md
 runner: any
 executor: sonnet-5.5
 effort: high
