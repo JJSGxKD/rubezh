@@ -40,6 +40,18 @@ export interface LinkRecord extends Omit<LinkInput, "target" | "partnerId"> {
   /** `null` — ссылка команды */
   partner: LinkOwner | null;
   createdAt: Date;
+  // Поля автоисточника (Р116) из базы приходят всегда; необязательны они ради записей, собранных
+  // не из базы, — подмены репозитория в тестах. Нет поля — ссылка заведена командой.
+  /** источник заведён сам по параметру запуска `src-…_cmp-…` */
+  auto?: boolean;
+  /** канонический набор известных пар; `null` — у ссылок, заведённых командой */
+  autoKey?: string | null;
+  /** метка партнёра из пары `prt-…`: к карточке партнёра не привязана (поле `partner` — владелец) */
+  partnerTag?: string | null;
+  /** название, которое дали в панели; `null` — показывается кампания */
+  title?: string | null;
+  /** скрыт в панели; запуски по нему считаются */
+  hiddenAt?: Date | null;
 }
 
 /** Какие ссылки отдать списку: без условий — все. */
@@ -178,12 +190,23 @@ export class PrismaLinksRepository implements LinksRepository {
         AND (c.referer_host IS NULL OR split_part(c.referer_host, ':', 1) NOT IN (${Prisma.join(CHECKER_REFERER_HOSTS)}))
       GROUP BY c.link_code`;
     // Прямые запуски — сессии вида `link`, где `start_ref` — сам код ссылки, без кликов;
-    // у ссылки, по которой не кликали ни разу, они всё равно есть.
+    // у ссылки, по которой не кликали ни разу, они всё равно есть. Автоисточник (Р116) ловит ещё и
+    // сессии вида `tagged` с его набором пар: связь идёт по ключу, а не по времени, поэтому запуски
+    // первых игроков, пришедших до заведения источника, считаются сразу. Один игрок по обоим путям —
+    // один запуск.
     const direct = await this.prisma.$queryRaw<{ link_code: string; direct_launches: number }[]>`
-      SELECT s.start_ref AS link_code, count(DISTINCT s.account_id)::int AS direct_launches
-      FROM account_session s
-      WHERE s.start_kind = 'link' AND s.start_ref IN (${Prisma.join(codes)})
-      GROUP BY s.start_ref`;
+      SELECT t.link_code, count(DISTINCT t.account_id)::int AS direct_launches
+      FROM (
+        SELECT s.start_ref AS link_code, s.account_id
+        FROM account_session s
+        WHERE s.start_kind = 'link' AND s.start_ref IN (${Prisma.join(codes)})
+        UNION ALL
+        SELECT l.code AS link_code, s.account_id
+        FROM link l
+        JOIN account_session s ON s.start_kind = 'tagged' AND s.start_ref = l.auto_key
+        WHERE l.code IN (${Prisma.join(codes)})
+      ) t
+      GROUP BY t.link_code`;
     const byCode = new Map(stats.map((row) => [row.link_code, row]));
     const directByCode = new Map(direct.map((row) => [row.link_code, row.direct_launches]));
     return links.map((link) => {

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Logger } from "@nestjs/common";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
@@ -44,6 +45,9 @@ describe.skipIf(DATABASE_URL === "")("автоисточники на живом
   const run = randomUUID().replaceAll("-", "").slice(0, 8);
 
   beforeAll(() => {
+    // Строки исхода для этого файла — шум: цифры проверяются по базе.
+    vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+    vi.spyOn(Logger.prototype, "debug").mockImplementation(() => undefined);
     prisma = testPrisma(DATABASE_URL, 8);
     repository = new PrismaAutoSourcesRepository(prisma);
     links = new PrismaLinksRepository(prisma);

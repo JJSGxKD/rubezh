@@ -42,9 +42,9 @@ class MemoryAutoSources implements AutoSourcesRepository {
   async ensure(input: AutoSourceInput): Promise<AutoSourceOutcome> {
     this.ensured.push(input);
     if (this.failing) throw new Error("база недоступна");
-    // Скрытый источник — такой же заведённый: нового не создаётся.
-    if (this.sources.has(input.autoKey)) return "existing";
+    // Нуль — выключатель: базы такая сессия не касается. Скрытый источник — такой же заведённый.
     if (input.cap <= 0) return "capped";
+    if (this.sources.has(input.autoKey)) return "existing";
     const since = input.now.getTime() - DAY;
     const recent = [...this.sources.values()].filter((row) => row.createdAt.getTime() > since).length;
     if (recent >= input.cap) return "capped";
@@ -83,6 +83,9 @@ function session(startParam: string | null, patch: { platform?: "telegram" | "ma
 }
 
 beforeEach(() => {
+  // Строки исхода — предмет одного теста; остальным они только шумят в отчёте.
+  vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+  vi.spyOn(Logger.prototype, "debug").mockImplementation(() => undefined);
   repository = new MemoryAutoSources();
   settings.set("links.auto-daily-cap", 20);
   service = new AutoSourcesService(repository, settings);
@@ -283,8 +286,8 @@ describe("сводка незнакомых ключей", () => {
 
 describe("лог исхода", () => {
   it("«created» — уровнем log, «existing» и «capped» — debug; значения пар в лог не пишутся", async () => {
-    const log = vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
-    const debug = vi.spyOn(Logger.prototype, "debug").mockImplementation(() => undefined);
+    const log = vi.mocked(Logger.prototype.log);
+    const debug = vi.mocked(Logger.prototype.debug);
     settings.set("links.auto-daily-cap", 1);
 
     await service.onSession(session("src-tgads_cmp-oct"));
