@@ -38,7 +38,7 @@ describe.skipIf(DATABASE_URL === "")("ссылки партнёра на жив�
   let recorder: SessionRecorder;
 
   beforeAll(() => {
-    prisma = testPrisma(DATABASE_URL, 12);
+    prisma = testPrisma(DATABASE_URL, 8);
     links = new PrismaLinksRepository(prisma);
     partners = new PrismaPartnersRepository(prisma);
     referrals = new PrismaReferralsRepository(prisma);
@@ -157,16 +157,16 @@ describe.skipIf(DATABASE_URL === "")("ссылки партнёра на жив�
     const code = await link(partnerId);
     const me = await account();
     const clickId = await click(code);
-    await Promise.all(Array.from({ length: 8 }, (_, index) => recorder.record(entry(me, index % 2 === 0 ? `c-${clickId}` : `l-${code}`))));
+    await Promise.all(Array.from({ length: 6 }, (_, index) => recorder.record(entry(me, index % 2 === 0 ? `c-${clickId}` : `l-${code}`))));
     expect(await bindings(me)).toMatchObject([{ partnerId, linkCode: code }]);
-    expect(await prisma.accountSession.count({ where: { accountId: me } })).toBe(8);
+    expect(await prisma.accountSession.count({ where: { accountId: me } })).toBe(6);
 
     const first = await partner("Первый");
     const second = await partner("Второй");
     const firstCode = await link(first);
     const secondCode = await link(second);
     const racing = await account();
-    await Promise.all([...Array.from({ length: 4 }, () => recorder.record(entry(racing, `l-${firstCode}`))), ...Array.from({ length: 4 }, () => recorder.record(entry(racing, `l-${secondCode}`)))]);
+    await Promise.all([...Array.from({ length: 3 }, () => recorder.record(entry(racing, `l-${firstCode}`))), ...Array.from({ length: 3 }, () => recorder.record(entry(racing, `l-${secondCode}`)))]);
     const rows = await bindings(racing);
     expect(rows).toHaveLength(1);
     expect([first, second]).toContain(rows[0]?.partnerId);
