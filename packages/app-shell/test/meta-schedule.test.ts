@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatCountdown, formatCountdownShort, msUntilReset } from "../src/screens/meta/schedule";
-import { sectorCenterDeg, spinRotationDeg } from "../src/screens/meta/wheel-math";
+import { labelUpsideDown, sectorCenterDeg, spinRotationDeg } from "../src/screens/meta/wheel-math";
 
 // Мета: сброс заданий и поворот колеса
 // (docs/07-monetization-and-ads.md §7, docs/27-design-system-and-app-shell.md §6).
@@ -105,5 +105,23 @@ describe("колесо удачи", () => {
         }
       }
     }
+  });
+});
+
+describe("подписи секторов колеса", () => {
+  // Подпись поворачивается вместе с сектором: в нижней половине без
+  // переворота «150» читается как «051», а «1 000» — как «000 1».
+  it("в нижней половине колеса подпись переворачивается, в верхней — нет", () => {
+    expect(labelUpsideDown(sectorCenterDeg(0, 8))).toBe(false);
+    expect(labelUpsideDown(sectorCenterDeg(1, 8))).toBe(false);
+    expect(labelUpsideDown(sectorCenterDeg(2, 8))).toBe(true);
+    expect(labelUpsideDown(sectorCenterDeg(5, 8))).toBe(true);
+    expect(labelUpsideDown(sectorCenterDeg(6, 8))).toBe(false);
+    expect(labelUpsideDown(sectorCenterDeg(7, 8))).toBe(false);
+  });
+
+  it("сектор ровно сбоку читается без переворота", () => {
+    expect(labelUpsideDown(90)).toBe(false);
+    expect(labelUpsideDown(270)).toBe(false);
   });
 });
