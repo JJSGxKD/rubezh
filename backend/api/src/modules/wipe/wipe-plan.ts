@@ -122,6 +122,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   WheelSpin: wipe("крутки колеса"),
   VipDaily: wipe("день забора самоцветов VIP"),
   Notification: wipe("лента уведомлений"),
+  BotMentionTask: wipe("серия и награждённые сутки задания «юзернейм бота» — прогресс того же рода, что награда дня; кошелёк после вайпа обнулён, серию не продолжают"),
 };
 
 /** Порядок стирания: дочерние раньше родительских. Ровно модели с `action: "wipe"`. */
@@ -144,4 +145,5 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "WheelSpin",
   "VipDaily",
   "Notification",
+  "BotMentionTask",
 ];

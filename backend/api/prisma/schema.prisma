@@ -239,6 +239,7 @@ model Account {
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
   compensation     TesterCompensation?
+  botMentionTasks  BotMentionTask[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -2332,6 +2333,32 @@ model InboundMinute {
   @@id([minute, method, route, statusClass])
   @@index([route, minute(sort: Desc)])
   @@map("inbound_minute")
+}
+
+// Задания «юзернейм бота» (T-0162): имя и bio игрока на площадке, награда за игровые сутки (docs/35-stage4-plan.md Р110).
+// Допустимые значения `kind` и `last_result` держат CHECK в миграции: Prisma их не выражает.
+model BotMentionTask {
+  accountId    String    @map("account_id") @db.Uuid
+  /// `name` или `bio`
+  kind         String    @db.VarChar(4)
+  startedAt    DateTime  @map("started_at") @db.Timestamptz(3)
+  /// серия на последние сутки с наградой; на экране — `activeStreak`
+  streak       Int       @default(0)
+  bestStreak   Int       @default(0) @map("best_streak")
+  rewardedDays Int       @default(0) @map("rewarded_days")
+  /// последние игровые сутки (по Москве) с наградой
+  lastDay      DateTime? @map("last_day") @db.Date
+  /// игровые сутки последней проверки с исходом; по нему ночной проход выбирает, кого пора проверять
+  checkedDay   DateTime? @map("checked_day") @db.Date
+  checkedAt    DateTime? @map("checked_at") @db.Timestamptz(3)
+  /// `present`, `absent`, `hidden` или `unavailable`; текст имени и bio не хранится
+  lastResult   String?   @map("last_result") @db.VarChar(11)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, kind])
+  @@index([checkedDay])
+  @@map("bot_mention_task")
 }
 
 // Незнакомый ключ параметра запуска ключ-значение (Р116, T-0179): сколько раз и когда последний,
