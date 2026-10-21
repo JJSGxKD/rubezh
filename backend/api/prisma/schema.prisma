@@ -559,7 +559,7 @@ model Purchase {
   renewals        Purchase[]       @relation("PurchaseRenewal")
   vipSubscription VipSubscription?
   vipPeriod       VipPeriod?
-  adConversion    AdConversion?
+  adConversions   AdConversion[]
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -2153,16 +2153,25 @@ model HomeSlide {
 // владельца ссылки и очередь отправки в одной таблице. Строки выводятся из
 // фактов — первого касания, забегов, оплат, — поэтому потерянное событие не
 // теряет конверсию.
+//
+// Слой «событие → назначение» (T-0069): строка — одно событие для одного
+// назначения. Ключи: оплата и назначение; клик, цель и назначение — частичным
+// индексом `ad_conversion_click_id_goal_destination_key` для целей 1, 2, 4
+// (повторных покупок на клик много). Prisma частичные индексы не описывает,
+// он только в миграции.
 model AdConversion {
   conversionId  String             @id @default(uuid()) @map("conversion_id") @db.Uuid
+  /// имя назначения, как `destination`; колонка осталась от первой версии — откату кода она нужна
   network       String             @db.VarChar(16)
   linkCode      String             @map("link_code") @db.VarChar(16)
   clickId       String             @map("click_id") @db.VarChar(16)
   accountId     String             @map("account_id") @db.Uuid
-  /// цель сети: 1 — регистрация, 2 — первая покупка, 3 — повторная
+  /// код события: 1 — регистрация, 2 — первая покупка, 3 — повторная (совпадают с `goaltype` AdsGram), 4 — возврат на следующий день
   goal          Int                @db.SmallInt
-  /// оплата цели 2 и 3; у регистрации — `null`
-  purchaseId    String?            @unique @map("purchase_id") @db.Uuid
+  /// куда уходит: `adsgram`, `s2s` или `partner`; новое назначение — адаптером и значением в `CHECK`
+  destination   String             @default("adsgram") @db.VarChar(16)
+  /// оплата цели 2 и 3; у остальных — `null`
+  purchaseId    String?            @map("purchase_id") @db.Uuid
   status        AdConversionStatus @default(pending)
   /// почему не отправлена: `team` — аккаунт команды, `no_macros` — сеть не подставила макросы, `no_token` — нет токена кабинета
   reason        String?            @db.VarChar(32)
@@ -2179,6 +2188,7 @@ model AdConversion {
   account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
 
+  @@unique([purchaseId, destination])
   @@index([status, nextAttemptAt])
   @@index([linkCode, createdAt])
   @@map("ad_conversion")
