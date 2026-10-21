@@ -31,7 +31,7 @@ import {
 } from "../../state/wheel-api";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
-import { sectorCenterDeg, spinRotationDeg } from "./wheel-math";
+import { labelUpsideDown, sectorCenterDeg, spinRotationDeg } from "./wheel-math";
 
 /**
  * Колесо удачи (docs/07-monetization-and-ads.md §7, docs/35-stage4-plan.md
@@ -289,6 +289,8 @@ function sectorLabel(sector: Pick<WheelSector, "resource" | "amount">): string {
 
 /** Радиус секторов в единицах viewBox; обод и огни — снаружи него. */
 const R = 108;
+/** Середина подписи от края колеса: вокруг неё подпись переворачивается в нижней половине. */
+const LABEL_FROM_RIM = 53;
 const RIM_LIGHTS = 16;
 
 /** Лицо колеса: сектора, значки наград и обод. Геометрия — в единицах viewBox. */
@@ -321,7 +323,13 @@ function WheelFace(props: { sectors: readonly WheelSector[] }): ReactNode {
           <svg x={-12} y={-R + 16} width={24} height={24} overflow="visible">
             <SectorIcon resource={sector.resource} size={24} />
           </svg>
-          <text y={-R + 58} textAnchor="middle" className="fill-current font-display text-sm font-bold text-text">
+          <text
+            y={-R + LABEL_FROM_RIM}
+            textAnchor="middle"
+            dominantBaseline="central"
+            transform={labelUpsideDown(sectorCenterDeg(index, count)) ? `rotate(180 0 ${String(-R + LABEL_FROM_RIM)})` : undefined}
+            className="fill-current font-display text-sm font-bold text-text"
+          >
             {formatNumber(sector.amount)}
           </text>
         </g>
