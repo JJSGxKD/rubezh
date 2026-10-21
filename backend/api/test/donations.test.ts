@@ -86,8 +86,9 @@ function setup(options: SetupOptions = {}) {
   const donations = new DonationsService(payments, fulfillment, revocation, supporters, restrictionsGate(restrictions), reader);
   donations.onModuleInit();
   const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), new PaymentsHooks(), revocation);
-  const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers, revocation), new RunsHooks(), providers, fulfillment, purchases);
-  return { purchases, api, payments, fulfillment, revocation, supporters, restrictions, donations, confirmation, queue, reader };
+  const refunds = new PaymentRefunds(purchases, providers, revocation);
+  const queue = new PaymentsQueue(settings, confirmation, refunds, new RunsHooks(), providers, fulfillment, purchases);
+  return { purchases, api, payments, fulfillment, revocation, supporters, restrictions, donations, confirmation, refunds, queue, reader };
 }
 
 /** Площадка подтвердила оплату — задание очереди, как его выполнил бы воркер. */
@@ -135,9 +136,10 @@ describe("ключи панели", () => {
     const keys = [SETTINGS.donateAmounts, SETTINGS.donateTributeUrlTelegram, SETTINGS.donateTributeUrlWeb, SETTINGS.donateHomeSlide];
     expect(keys.map((setting) => setting.key)).toEqual(["donate.amounts", "donate.tribute-url-telegram", "donate.tribute-url-web", "donate.home-slide"]);
     for (const setting of keys) {
-      expect(setting.group, setting.key).toBe("Донаты");
-      expect(setting.fromEnv(config()), setting.key).toBeNull();
-      expect(SETTING_LIST, setting.key).toContain(setting);
+      const listed = SETTING_LIST.find((entry) => entry.key === setting.key);
+      expect(listed, setting.key).toBe(setting);
+      expect(listed?.group, setting.key).toBe("Донаты");
+      expect(listed?.fromEnv(config()), setting.key).toBeNull();
     }
     expect(SETTINGS.donateAmounts.fallback).toBe("50, 100, 250, 500, 1000");
     expect(SETTINGS.donateAmounts.kind).toBe("amounts");
@@ -449,6 +451,19 @@ describe("снятие знака внешним возвратом", () => {
 
     expect(await ctx.supporters.isSupporter(me.accountId)).toBe(true);
     expect(await ctx.supporters.isSupporter(stranger.accountId)).toBe(false);
+  });
+
+  it("возврат по решению поддержки идёт тем же отзывом: единственный донат — знак снят, при втором — остаётся", async () => {
+    const me = player();
+    const only = await donated(ctx, me, 100, "charge-m1");
+    for (const order of await ctx.refunds.manual(only.purchaseId, NOW + 60_000)) await ctx.refunds.refund(order, NOW + 120_000);
+    expect(await ctx.supporters.isSupporter(me.accountId)).toBe(false);
+
+    const again = player("telegram", "555000444");
+    const first = await donated(ctx, again, 100, "charge-m2");
+    await donated(ctx, again, 250, "charge-m3");
+    for (const order of await ctx.refunds.manual(first.purchaseId, NOW + 60_000)) await ctx.refunds.refund(order, NOW + 120_000);
+    expect(await ctx.supporters.isSupporter(again.accountId)).toBe(true);
   });
 
   it("тестовая оплата возвращается нами и знак не снимает", async () => {

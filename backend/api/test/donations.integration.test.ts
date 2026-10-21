@@ -226,17 +226,19 @@ describe.skipIf(DATABASE_URL === "")("донаты на живом Postgres", ()
       expect(invoice).toMatchObject({ sku: "donation", status: "pending", priceStars: 250, chargedStars: 250 });
       const confirm = (chargeId: string) =>
         ctx.queue.process({ data: { kind: "confirm", payment: { platform: "telegram", chargeId, payload: invoice.purchaseId, payerId: me.platformUserId, currency: "XTR", totalAmount: 250 } } });
-      await confirm("charge-flow");
+      // Идентификатор оплаты уникален на всю таблицу, а база между прогонами не чистится.
+      const chargeId = `charge-flow-${me.accountId}`;
+      await confirm(chargeId);
 
       const bornAt = await supporterAt(me.accountId);
       expect(bornAt).not.toBeNull();
       expect((await ctx.service.view(ref)).supporter).toBe(true);
       expect(await purchases.byId(invoice.purchaseId)).toMatchObject({ status: "paid", product: "donation", fulfilledAt: expect.any(Date) });
 
-      await confirm("charge-flow");
+      await confirm(chargeId);
       expect(await supporterAt(me.accountId)).toEqual(bornAt);
 
-      await ctx.confirmation.refunded("charge-flow", new Date(NOW.getTime() + 60_000).getTime());
+      await ctx.confirmation.refunded(chargeId, NOW.getTime() + 60_000);
       expect(await supporterAt(me.accountId)).toBeNull();
       expect((await ctx.service.view(ref)).supporter).toBe(false);
     });
