@@ -114,6 +114,14 @@ export function budgetTone(usedShare: number | null): "neutral" | "warning" | "d
   return usedShare >= 0.8 ? "warning" : "neutral";
 }
 
+/**
+ * Доля в целых процентах вниз: 79,9% — это 79, чтобы «80%» всегда значило
+ * предупреждение. Добавка — на ошибку двоичной дроби: 0,29 × 100 = 28,999…
+ */
+export function sharePercent(usedShare: number): number {
+  return Math.floor(usedShare * 100 + 1e-9);
+}
+
 /** «6 120 из 10 000»; без лимита — счётчик и «без лимита». */
 export function usageText(source: Pick<SourceRow, "used" | "limit">): string {
   const { perMonth } = source.limit;

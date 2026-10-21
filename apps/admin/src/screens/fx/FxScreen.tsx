@@ -15,6 +15,7 @@ import {
   resetSourceLimit,
   setManualRate,
   setSourceLimit,
+  sharePercent,
   usageText,
   usedValueProblem,
   type ManualRateInput,
@@ -59,10 +60,10 @@ function UsageCell({ source }: { source: SourceRow }) {
     <span className="flex min-w-36 flex-col gap-1">
       <span className="whitespace-nowrap">
         <span className={tone.text}>{usageText(source)}</span>
-        {share === null ? null : <span className="text-text-muted">{` · ${String(Math.floor(share * 100))}%`}</span>}
+        {share === null ? null : <span className="text-text-muted">{` · ${String(sharePercent(share))}%`}</span>}
       </span>
       {share === null ? null : (
-        <span role="progressbar" aria-label="Израсходовано" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.floor(share * 100))} className="h-1 w-full overflow-hidden rounded-pill bg-surface-raised">
+        <span role="progressbar" aria-label="Израсходовано" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, sharePercent(share))} className="h-1 w-full overflow-hidden rounded-pill bg-surface-raised">
           <span className={`block h-full ${tone.bar}`} style={{ width: `${String(Math.min(100, Math.round(share * 100)))}%` }} />
         </span>
       )}

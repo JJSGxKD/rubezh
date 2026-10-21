@@ -11,6 +11,7 @@ import {
   resetSourceLimit,
   setManualRate,
   setSourceLimit,
+  sharePercent,
   usageText,
   usedProblem,
   type ManualRateInput,
@@ -102,6 +103,16 @@ describe("лимиты источников", () => {
     expect(budgetTone(0.999)).toBe("warning");
     expect(budgetTone(1)).toBe("danger");
     expect(budgetTone(1.3)).toBe("danger");
+  });
+
+  it("доля в процентах — целая вниз и без ошибки двоичной дроби: 0,29 — это 29%, а не 28", () => {
+    expect(sharePercent(0.29)).toBe(29);
+    expect(sharePercent(0.612)).toBe(61);
+    expect(sharePercent(0.8)).toBe(80);
+    expect(sharePercent(0.999)).toBe(99);
+    expect(sharePercent(1)).toBe(100);
+    expect(sharePercent(1.2)).toBe(120);
+    expect(sharePercent(0)).toBe(0);
   });
 
   it("подписи: «6 120 из 10 000», «без лимита», откуда лимит", () => {
