@@ -3,14 +3,16 @@ id: T-0202
 title: Флак выгрузки — ENOENT во временном каталоге, потоки не закрываются при ошибке
 epic: E0
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
 zones:
   - backend/api/src/modules/export/export.service.ts
   - backend/api/test/export.test.ts
+  - backend/api/src/common/zip/zip-writer.ts
+  - backend/api/test/zip-writer.test.ts
 shared: []
 runner: any
 executor: sonnet-5.5

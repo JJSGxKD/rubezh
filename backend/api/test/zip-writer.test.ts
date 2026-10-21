@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -70,5 +70,35 @@ describe("ZIP выгрузки", () => {
     await zip.addFile("a.txt", lines(10, "a"));
     await zip.finish();
     expect(await splitFile(path, 1024 * 1024, join(dir, "parts"))).toEqual([path]);
+  });
+
+  it("abort закрывает файловый поток: после него каталог удаляется без необработанных ошибок", async () => {
+    const uncaught: unknown[] = [];
+    const onUncaught = (error: unknown): void => void uncaught.push(error);
+    process.on("uncaughtException", onUncaught);
+    try {
+      const path = join(dir, "broken.zip");
+      const zip = new ZipWriter(path);
+      await expect(
+        zip.addFile(
+          "a.ndjson",
+          (async function* () {
+            yield "первая строка\n";
+            throw new Error("источник упал");
+          })(),
+        ),
+      ).rejects.toThrow("источник упал");
+
+      await zip.abort();
+      rmSync(dir, { recursive: true, force: true });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(existsSync(path)).toBe(false);
+      expect(uncaught).toEqual([]);
+      // Повторный abort безвреден: в catch его зовут, не зная, что уже закрыто.
+      await expect(zip.abort()).resolves.toBeUndefined();
+    } finally {
+      process.off("uncaughtException", onUncaught);
+    }
   });
 });
