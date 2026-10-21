@@ -3,7 +3,7 @@ id: T-0201
 title: Фильтр ников — латинские имена не ловятся корнем после транслитерации
 epic: E4
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S

@@ -27,18 +27,19 @@ const PREFIXES = ["за", "у", "на", "вы", "по", "от", "до", "раз"
 
 /**
  * Слова, которые целиком совпадают с корнем, но не мат: Hue, Huey, Dick, Ebi,
- * Suka, Suki. Подстрока здесь не годится — она вырезала бы корень и из
- * «huesos», «dickhead». Сравнение буквальное, только латиницей: кириллическое
- * «Сука» и «хуе» под исключение не попадают.
+ * Suka, Suki, а также вьетнамское и китайское имена Thuy, Thuya, Xuyang — после
+ * свёртки конечного «y» в «й» они дают корень. Подстрока здесь не годится — она
+ * вырезала бы корень и из «huesos», «dickhead». Сравнение буквальное, только
+ * латиницей: кириллическое «Сука» и «хуе» под исключение не попадают.
  */
-const ALLOWED_WORDS = new Set(["hue", "huey", "dick", "ebi", "suka", "suki"]);
+const ALLOWED_WORDS = new Set(["hue", "huey", "dick", "ebi", "suka", "suki", "thuy", "thuya", "xuyang"]);
 
 /**
  * Подстроки, которые вырезаются из свёртки до поиска корней. «nigg» после
  * схлопывания повторов — «nig», поэтому английские имена на «nige» вынесены
  * сюда же.
  */
-const ALLOWED = ["страхуй", "психуй", "сукно", "сукровиц", "сукач", "dickens", "nigel", "nigeri", "night", "nigmat", "nigin", "сучков", "dickson", "shitij", "ebubekir", "shitov", "shitake", "nahuel"];
+const ALLOWED = ["страхуй", "психуй", "сукно", "сукровиц", "сукач", "dickens", "nigel", "nigeri", "night", "nigmat", "nigin", "сучков", "dickson", "shitij", "ebubekir", "shitov", "shitake", "nahuel", "thuy"];
 
 /** Символы, которыми прячут корень: «х.у.й», «х_у_й». */
 export const SEPARATORS = /[\s.\-_*]+/u;
