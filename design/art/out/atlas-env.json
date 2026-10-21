@@ -1,0 +1,434 @@
+{
+ "frames": {
+  "decor/landmark_pillar0": {
+   "frame": {
+    "x": 2,
+    "y": 2,
+    "w": 175,
+    "h": 175
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 175,
+    "h": 175
+   },
+   "sourceSize": {
+    "w": 175,
+    "h": 175
+   }
+  },
+  "decor/landmark_well0": {
+   "frame": {
+    "x": 179,
+    "y": 2,
+    "w": 150,
+    "h": 150
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 150,
+    "h": 150
+   },
+   "sourceSize": {
+    "w": 150,
+    "h": 150
+   }
+  },
+  "decor/puddle0": {
+   "frame": {
+    "x": 331,
+    "y": 2,
+    "w": 85,
+    "h": 85
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 85,
+    "h": 85
+   },
+   "sourceSize": {
+    "w": 85,
+    "h": 85
+   }
+  },
+  "decor/puddle1": {
+   "frame": {
+    "x": 418,
+    "y": 2,
+    "w": 85,
+    "h": 85
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 85,
+    "h": 85
+   },
+   "sourceSize": {
+    "w": 85,
+    "h": 85
+   }
+  },
+  "decor/grave0": {
+   "frame": {
+    "x": 505,
+    "y": 2,
+    "w": 75,
+    "h": 75
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 75,
+    "h": 75
+   },
+   "sourceSize": {
+    "w": 75,
+    "h": 75
+   }
+  },
+  "decor/grave1": {
+   "frame": {
+    "x": 582,
+    "y": 2,
+    "w": 75,
+    "h": 75
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 75,
+    "h": 75
+   },
+   "sourceSize": {
+    "w": 75,
+    "h": 75
+   }
+  },
+  "decor/cross0": {
+   "frame": {
+    "x": 659,
+    "y": 2,
+    "w": 65,
+    "h": 65
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 65,
+    "h": 65
+   },
+   "sourceSize": {
+    "w": 65,
+    "h": 65
+   }
+  },
+  "decor/cross1": {
+   "frame": {
+    "x": 726,
+    "y": 2,
+    "w": 65,
+    "h": 65
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 65,
+    "h": 65
+   },
+   "sourceSize": {
+    "w": 65,
+    "h": 65
+   }
+  },
+  "decor/stump0": {
+   "frame": {
+    "x": 793,
+    "y": 2,
+    "w": 60,
+    "h": 60
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 60,
+    "h": 60
+   },
+   "sourceSize": {
+    "w": 60,
+    "h": 60
+   }
+  },
+  "decor/reeds0": {
+   "frame": {
+    "x": 855,
+    "y": 2,
+    "w": 55,
+    "h": 55
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 55,
+    "h": 55
+   },
+   "sourceSize": {
+    "w": 55,
+    "h": 55
+   }
+  },
+  "decor/reeds1": {
+   "frame": {
+    "x": 912,
+    "y": 2,
+    "w": 55,
+    "h": 55
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 55,
+    "h": 55
+   },
+   "sourceSize": {
+    "w": 55,
+    "h": 55
+   }
+  },
+  "decor/stone0": {
+   "frame": {
+    "x": 969,
+    "y": 2,
+    "w": 45,
+    "h": 45
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 45,
+    "h": 45
+   },
+   "sourceSize": {
+    "w": 45,
+    "h": 45
+   }
+  },
+  "decor/stone1": {
+   "frame": {
+    "x": 2,
+    "y": 179,
+    "w": 45,
+    "h": 45
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 45,
+    "h": 45
+   },
+   "sourceSize": {
+    "w": 45,
+    "h": 45
+   }
+  },
+  "decor/stone2": {
+   "frame": {
+    "x": 49,
+    "y": 179,
+    "w": 45,
+    "h": 45
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 45,
+    "h": 45
+   },
+   "sourceSize": {
+    "w": 45,
+    "h": 45
+   }
+  },
+  "decor/bones0": {
+   "frame": {
+    "x": 96,
+    "y": 179,
+    "w": 40,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 40,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 40,
+    "h": 40
+   }
+  },
+  "decor/bones1": {
+   "frame": {
+    "x": 138,
+    "y": 179,
+    "w": 40,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 40,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 40,
+    "h": 40
+   }
+  },
+  "decor/grass0": {
+   "frame": {
+    "x": 180,
+    "y": 179,
+    "w": 40,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 40,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 40,
+    "h": 40
+   }
+  },
+  "decor/grass1": {
+   "frame": {
+    "x": 222,
+    "y": 179,
+    "w": 40,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 40,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 40,
+    "h": 40
+   }
+  },
+  "decor/grass2": {
+   "frame": {
+    "x": 264,
+    "y": 179,
+    "w": 40,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 40,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 40,
+    "h": 40
+   }
+  },
+  "decor/mushrooms0": {
+   "frame": {
+    "x": 306,
+    "y": 179,
+    "w": 35,
+    "h": 35
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 35,
+    "h": 35
+   },
+   "sourceSize": {
+    "w": 35,
+    "h": 35
+   }
+  },
+  "decor/mushrooms1": {
+   "frame": {
+    "x": 343,
+    "y": 179,
+    "w": 35,
+    "h": 35
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 35,
+    "h": 35
+   },
+   "sourceSize": {
+    "w": 35,
+    "h": 35
+   }
+  }
+ },
+ "meta": {
+  "app": "design/art/src/build.mjs",
+  "image": "atlas-env.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 1024,
+   "h": 228
+  },
+  "scale": "2.5"
+ }
+}
