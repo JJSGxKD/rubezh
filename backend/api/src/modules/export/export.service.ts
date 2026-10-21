@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream, type WriteStream } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -100,6 +100,9 @@ export class ExportService {
     const cleanup = (): Promise<void> => rm(dir, { recursive: true, force: true });
     await this.repository.start({ exportId, source: request.source, requestedBy: request.requestedBy, period: request.period });
 
+    // Поток таблицы забегов живёт дольше первого `await`: при сбое его закрывают
+    // до удаления каталога, иначе отложенное открытие файла даёт ENOENT.
+    let runs: WriteStream | undefined;
     try {
       const fileName = `rubezh-export-${dayOf(request.period.from)}-${dayOf(request.period.to)}-${exportId.slice(0, 8)}.zip`;
       const zipPath = join(dir, fileName);
@@ -109,8 +112,11 @@ export class ExportService {
       const eventTypes: Record<string, number> = {};
 
       const zip = new ZipWriter(zipPath);
-      const runs = createWriteStream(runsPath);
-      await writeLine(runs, `${RUN_COLUMNS.join(",")}\n`);
+      const runsStream = createWriteStream(runsPath);
+      runs = runsStream;
+      // Без обработчика ошибка записи вылетает необработанной; с ним — доходит до `once`/`drain` ниже и попадает в catch.
+      runsStream.on("error", () => undefined);
+      await writeLine(runsStream, `${RUN_COLUMNS.join(",")}\n`);
 
       await zip.addFile(
         "events.ndjson",
@@ -120,12 +126,12 @@ export class ExportService {
           eventTypes[row.eventType] = (eventTypes[row.eventType] ?? 0) + 1;
           if (RUN_EVENTS.has(row.eventType)) {
             counts.runs++;
-            await writeLine(runs, runLine(row, user));
+            await writeLine(runsStream, runLine(row, user));
           }
         }),
       );
-      runs.end();
-      await once(runs, "finish");
+      runsStream.end();
+      await once(runsStream, "finish");
 
       await zip.addFile(
         "diagnostic_reports.ndjson",
@@ -158,7 +164,11 @@ export class ExportService {
       );
       return { exportId, period: request.period, fileName, zipPath, parts, sizeBytes, counts, appVersions: [...appVersions].sort(), cleanup };
     } catch (error: unknown) {
-      await cleanup();
+      // Сначала закрываем потоки, потом удаляем каталог; сбой самой уборки не затирает исходную ошибку.
+      await closeStream(runs);
+      await cleanup().catch((cleanupError: unknown) => {
+        this.logger.warn(JSON.stringify({ module: "export", event: "cleanup_failed", exportId, reason: cleanupError instanceof Error ? cleanupError.message : "unknown" }));
+      });
       await this.finish(exportId, { status: "failed", events: 0, reports: 0, sizeBytes: 0, parts: 0, error: error instanceof Error ? error.message : "unknown" });
       throw error;
     }
@@ -312,6 +322,14 @@ function manifest(input: {
       run: z.toJSONSchema(submitRunReportSchema, { unrepresentable: "any" }),
     },
   };
+}
+
+/** Уничтожить поток записи и дождаться закрытия файла; уже закрытый — не трогаем. */
+async function closeStream(stream: WriteStream | undefined): Promise<void> {
+  if (stream === undefined || stream.closed) return;
+  const closed = once(stream, "close").catch(() => undefined);
+  stream.destroy();
+  await closed;
 }
 
 async function writeLine(stream: NodeJS.WritableStream, line: string): Promise<void> {
