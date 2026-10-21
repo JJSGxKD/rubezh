@@ -13,6 +13,7 @@ zones:
   - backend/api/src/modules/links/links.repository.ts
   - backend/api/src/modules/admin/admin-links.controller.ts
   - backend/api/src/modules/attribution/session-recorder.ts
+  - backend/api/src/modules/attribution/attribution.module.ts
   - backend/api/src/modules/partners/**
   - backend/api/test/partner-links.test.ts
   - backend/api/test/partner-links.integration.test.ts
@@ -25,6 +26,7 @@ zones:
 shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/
+  - backend/api/test/app-boot.integration.test.ts
   - docs/21-diagrams.md
   - docs/23-referral-and-partner-program.md
   - docs/24-attribution-and-sharing.md
