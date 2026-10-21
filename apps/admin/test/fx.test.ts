@@ -86,7 +86,9 @@ describe("лимиты источников", () => {
   });
 
   it("ответ сервера без лимита (старее панели) не разбирается — честное «не разобрался»", async () => {
-    const { limit: _limit, usedShare: _share, ...old } = SOURCE;
+    const old: Partial<typeof SOURCE> = { ...SOURCE };
+    delete old.limit;
+    delete old.usedShare;
     const overview = { enabled: true, rates: [], missing: [], manual: [], sources: [old] };
     const result = await fetchFxOverview(new AdminApi(fakeFetch(json(200, { data: overview })).fetch));
     expect(result.ok).toBe(false);
