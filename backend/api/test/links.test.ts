@@ -39,7 +39,18 @@ class MemoryLinks implements LinksRepository {
   readonly partners = new Map<string, string>();
   async create(link: LinkInput): Promise<LinkRecord> {
     const { partnerId, ...rest } = link;
-    const record = { ...rest, target: link.target ?? "app", partner: partnerId == null ? null : { partnerId, name: this.partners.get(partnerId) ?? "" }, createdAt: new Date() };
+    const record: LinkRecord = {
+      ...rest,
+      target: link.target ?? "app",
+      partner: partnerId == null ? null : { partnerId, name: this.partners.get(partnerId) ?? "" },
+      createdAt: new Date(),
+      // Ссылка команды: пометки автоисточника, названия и скрытия у неё нет.
+      auto: false,
+      autoKey: null,
+      partnerTag: null,
+      title: null,
+      hiddenAt: null,
+    };
     this.links.set(link.code, record);
     return record;
   }

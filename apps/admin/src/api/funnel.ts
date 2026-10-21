@@ -118,6 +118,8 @@ export function touchOf(row: FunnelRow): { title: string; detail: string | null 
       return { title: "Партнёрская программа Telegram", detail: row.startRef };
     case "notification":
       return { title: "Кнопка уведомления в боте", detail: row.startRef };
+    case "tagged":
+      return { title: "Ссылка с метками", detail: row.startRef };
     case "unknown":
       return { title: "Неизвестно", detail: "нет записи о первом запуске или ссылка незнакомого вида" };
     default:

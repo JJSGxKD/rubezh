@@ -6,6 +6,17 @@
 /** Цели сети: 1 — регистрация, 2 — первая покупка, 3 — повторная (документация AdsGram, `goaltype`). */
 export type ConversionGoal = 1 | 2 | 3;
 
+export function isConversionGoal(goal: number): goal is ConversionGoal {
+  return goal === 1 || goal === 2 || goal === 3;
+}
+
+/**
+ * Валюта платежа как заплачено, без пересчёта (docs/37-accounting.md, О44):
+ * сумма покупки в постбэке — списанные звёзды. Появится колонка валюты у
+ * покупки — берём её.
+ */
+export const PAYMENT_CURRENCY = "XTR";
+
 /**
  * Окна (О39, **рабочие числа**):
  * - регистрация — первый засчитанный забег не позже 7 суток после клика: сеть

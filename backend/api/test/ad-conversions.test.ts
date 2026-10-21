@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { Logger } from "@nestjs/common";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
+import type { Outbound } from "../src/infra/outbound/outbound.js";
 import { ConversionsJournal, cursorOf, parseCursor } from "../src/modules/ad-conversions/conversions-journal.service.js";
 import { RETRY_DELAYS_MIN, adsgramPostbackUrl, redacted, retryAt, verdictOf } from "../src/modules/ad-conversions/conversion-rules.js";
 import {
@@ -10,6 +12,9 @@ import {
   type DueConversion,
 } from "../src/modules/ad-conversions/conversions.repository.js";
 import { AdConversionsService } from "../src/modules/ad-conversions/conversions.service.js";
+import { AdsgramDestination } from "../src/modules/ad-conversions/destinations/adsgram.destination.js";
+import type { DestinationKind, PostbackDestination, Prepared } from "../src/modules/ad-conversions/destinations/destination.js";
+import type { PostbackEvent } from "../src/modules/ad-conversions/postback-events.js";
 import { macroQuery, networkParamsOf } from "../src/modules/links/link-networks.js";
 import type { RolesService } from "../src/modules/roles/roles.service.js";
 import type { SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
@@ -61,7 +66,7 @@ class MemoryConversions implements ConversionsRepository {
   }
   async requeue(linkCode: string, conversionId: string): Promise<ConversionRow | null> {
     this.calls.push(`requeue:${linkCode}:${conversionId}`);
-    return conversionId === "missing" ? null : { conversionId, goal: 1, status: "pending", reason: null, attempts: 0, httpStatus: null, lastError: null, accountId: "a", createdAt: NOW, sentAt: null, nextAttemptAt: NOW };
+    return conversionId === "missing" ? null : { conversionId, goal: 1, event: "registration", destination: "adsgram", status: "pending", reason: null, attempts: 0, httpStatus: null, lastError: null, accountId: "a", createdAt: NOW, sentAt: null, nextAttemptAt: NOW };
   }
 }
 
@@ -80,15 +85,61 @@ function secretsWith(token: string | null): SecretsReader {
 }
 
 function due(patch: Partial<DueConversion> = {}): DueConversion {
-  return { conversionId: "c1", network: "adsgram", goal: 1, attempts: 0, params: { record: "7f3a1b6c", campaign: "55" }, telegramId: "790807933", ...patch };
+  return {
+    conversionId: "c1",
+    destination: "adsgram",
+    event: "registration",
+    attempts: 0,
+    params: { record: "7f3a1b6c", campaign: "55" },
+    telegramId: "790807933",
+    purchase: null,
+    ...patch,
+  };
 }
 
-function setup(token: string | null = TOKEN) {
+function setup(token: string | null = TOKEN, destinations?: PostbackDestination[], outbound?: Outbound) {
   const repository = new MemoryConversions();
   const lock = new FakeLock();
-  const service = new AdConversionsService(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv), repository, secretsWith(token), lock as never);
+  const service = new AdConversionsService(
+    loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv),
+    repository,
+    destinations ?? [new AdsgramDestination(secretsWith(token))],
+    lock as never,
+    outbound,
+  );
   return { repository, lock, service };
 }
+
+/** Подменное назначение: что подготовить — решает тест, вызовы запоминаются. */
+class FakeDestination implements PostbackDestination {
+  readonly prepared: string[] = [];
+  constructor(
+    readonly kind: DestinationKind,
+    readonly accepts: readonly PostbackEvent[],
+    private readonly answer: Prepared | (() => Promise<Prepared>),
+  ) {}
+  async prepare(conversion: DueConversion): Promise<Prepared> {
+    this.prepared.push(conversion.conversionId);
+    return typeof this.answer === "function" ? await this.answer() : this.answer;
+  }
+}
+
+const ALL_EVENTS: readonly PostbackEvent[] = ["registration", "purchase_first", "purchase_repeat", "d1_return"];
+const SECRET_URL = "https://hook.example.test/in?token=SECRET_VALUE&e=reg";
+const SAFE_URL = "https://hook.example.test/in?token=***&e=reg";
+
+/** Строки, ушедшие в лог сервиса за тест. */
+function captureLog() {
+  const lines: string[] = [];
+  const sink = (message: unknown): void => void lines.push(String(message));
+  vi.spyOn(Logger.prototype, "log").mockImplementation(sink);
+  vi.spyOn(Logger.prototype, "warn").mockImplementation(sink);
+  return lines;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function fakeFetch(respond: (url: string) => Response | Promise<Response>) {
   const urls: string[] = [];
@@ -196,6 +247,189 @@ describe("отправка", () => {
     lock.held = true;
     expect(await service.tick(NOW, fakeFetch(() => new Response("")).fetchImpl)).toBeNull();
     expect(repository.sweeps).toBe(0);
+  });
+});
+
+describe("назначения постбэков", () => {
+  it("назначение отказало без повтора — «не отправлена» с его текстом, попытка засчитана, сеть не спрашивается", async () => {
+    const destination = new FakeDestination("s2s", ALL_EVENTS, { kind: "fail", message: "в шаблоне адреса нет макроса {click_id}", retry: false });
+    const { repository, service } = setup(TOKEN, [destination]);
+    repository.queue = [due({ destination: "s2s" })];
+    const { urls, fetchImpl } = fakeFetch(() => new Response("", { status: 200 }));
+    const report = await service.tick(NOW, fetchImpl);
+    expect(urls).toEqual([]);
+    expect(report).toMatchObject({ failed: 1, deferred: 0, sent: 0 });
+    expect(repository.states.get("c1")).toMatchObject({ status: "failed", attempts: 1, nextAt: null, httpStatus: null, error: "в шаблоне адреса нет макроса {click_id}" });
+  });
+
+  it("назначение отказало с повтором — повтор по расписанию; попытки кончились — «не отправлена»", async () => {
+    const destination = new FakeDestination("s2s", ALL_EVENTS, { kind: "fail", message: "приёмник недоступен", retry: true });
+    const { repository, service } = setup(TOKEN, [destination]);
+    repository.queue = [due({ conversionId: "again", destination: "s2s", attempts: 2 }), due({ conversionId: "last", destination: "s2s", attempts: RETRY_DELAYS_MIN.length })];
+    const report = await service.tick(NOW, fakeFetch(() => new Response("")).fetchImpl);
+    expect(report).toMatchObject({ failed: 1, deferred: 1 });
+    expect(repository.states.get("again")).toMatchObject({ status: "pending", attempts: 3, nextAt: new Date("2026-10-02T12:15:00.000Z"), error: "приёмник недоступен" });
+    expect(repository.states.get("last")).toMatchObject({ status: "failed", attempts: RETRY_DELAYS_MIN.length + 1, nextAt: null });
+  });
+
+  it("назначения нет в реестре — пропущено с прежней причиной unknown_network, сеть не спрашивается", async () => {
+    const { repository, service } = setup();
+    repository.queue = [due({ destination: "partner" }), due({ conversionId: "c2", destination: "s2s" })];
+    const { urls, fetchImpl } = fakeFetch(() => new Response("", { status: 200 }));
+    const report = await service.tick(NOW, fetchImpl);
+    expect(urls).toEqual([]);
+    expect(report).toMatchObject({ skipped: 2, sent: 0 });
+    expect(repository.states.get("c1")).toMatchObject({ status: "skipped", reason: "unknown_network" });
+    expect(repository.states.get("c2")).toMatchObject({ status: "skipped", reason: "unknown_network" });
+  });
+
+  it("назначение не принимает событие — пропущено до подготовки запроса; AdsGram возврата не получает", async () => {
+    const destination = new FakeDestination("s2s", ["registration"], { kind: "request", url: new URL(SECRET_URL), logUrl: SAFE_URL });
+    const { repository, service } = setup(TOKEN, [destination, new AdsgramDestination(secretsWith(TOKEN))]);
+    repository.queue = [due({ conversionId: "s2s-return", destination: "s2s", event: "d1_return" }), due({ conversionId: "ads-return", event: "d1_return" })];
+    const { urls, fetchImpl } = fakeFetch(() => new Response("", { status: 200 }));
+    await service.tick(NOW, fetchImpl);
+    expect(urls).toEqual([]);
+    expect(destination.prepared).toEqual([]);
+    expect(repository.states.get("s2s-return")).toMatchObject({ status: "skipped", reason: "unknown_network" });
+    expect(repository.states.get("ads-return")).toMatchObject({ status: "skipped", reason: "unknown_network" });
+  });
+
+  it("назначение ждёт настройки — отложено на его срок, попытка не тратится", async () => {
+    const destination = new FakeDestination("s2s", ALL_EVENTS, { kind: "wait", reason: "no_template", recheckMin: 7 });
+    const { repository, service } = setup(TOKEN, [destination]);
+    repository.queue = [due({ destination: "s2s", attempts: 3 })];
+    const { urls, fetchImpl } = fakeFetch(() => new Response("", { status: 200 }));
+    const report = await service.tick(NOW, fetchImpl);
+    expect(urls).toEqual([]);
+    expect(report).toMatchObject({ deferred: 1 });
+    expect(repository.states.get("c1")).toMatchObject({ status: "pending", attempts: 0, reason: "no_template", nextAt: new Date("2026-10-02T12:07:00.000Z") });
+  });
+
+  it("назначение пропустило само — причина его, сеть не спрашивается", async () => {
+    const destination = new FakeDestination("partner", ALL_EVENTS, { kind: "skip", reason: "no_click_id" });
+    const { repository, service } = setup(TOKEN, [destination]);
+    repository.queue = [due({ destination: "partner" })];
+    const { urls, fetchImpl } = fakeFetch(() => new Response("", { status: 200 }));
+    await service.tick(NOW, fetchImpl);
+    expect(urls).toEqual([]);
+    expect(repository.states.get("c1")).toMatchObject({ status: "skipped", reason: "no_click_id" });
+  });
+
+  it("запрос назначения уходит как задан: метод, заголовки и тело; срок ожидания ставит сервис, сигнал назначения не теряется", async () => {
+    const own = new AbortController();
+    const destination = new FakeDestination("s2s", ALL_EVENTS, {
+      kind: "request",
+      url: new URL("https://hook.example.test/in"),
+      init: { method: "POST", headers: { "content-type": "application/json" }, body: '{"event":"registration"}', signal: own.signal },
+      logUrl: "https://hook.example.test/in",
+    });
+    const { repository, service } = setup(TOKEN, [destination]);
+    repository.queue = [due({ destination: "s2s" })];
+    const seen: { input: string; init: RequestInit | undefined }[] = [];
+    const fetchImpl = (async (input: URL | string, init?: RequestInit) => {
+      seen.push({ input: String(input), init });
+      return new Response("", { status: 200 });
+    }) as typeof fetch;
+    await service.tick(NOW, fetchImpl);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.input).toBe("https://hook.example.test/in");
+    expect(seen[0]?.init).toMatchObject({ method: "POST", headers: { "content-type": "application/json" }, body: '{"event":"registration"}' });
+    const signal = seen[0]?.init?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(false);
+    own.abort();
+    expect(signal?.aborted).toBe(true);
+    expect(repository.states.get("c1")).toMatchObject({ status: "sent", httpStatus: 200 });
+  });
+
+  it("в лог идёт logUrl, адрес с секретом — никогда: ни при отказе сети, ни при её недоступности", async () => {
+    const lines = captureLog();
+    const destination = new FakeDestination("s2s", ALL_EVENTS, { kind: "request", url: new URL(SECRET_URL), logUrl: SAFE_URL });
+    const { repository, service } = setup(TOKEN, [destination]);
+    repository.queue = [due({ conversionId: "refused", destination: "s2s" })];
+    await service.tick(NOW, fakeFetch(() => new Response("busy", { status: 503 })).fetchImpl);
+    repository.queue = [due({ conversionId: "down", destination: "s2s" })];
+    await service.tick(NOW, fakeFetch(() => Promise.reject(new Error("connect ECONNREFUSED"))).fetchImpl);
+
+    const log = lines.join("\n");
+    expect(log).toContain(SAFE_URL);
+    expect(log).toContain("postback_rejected");
+    expect(log).toContain("postback_failed");
+    expect(log).not.toContain("SECRET_VALUE");
+    expect(JSON.stringify([...repository.states.values()])).not.toContain("SECRET_VALUE");
+  });
+
+  it("токен AdsGram не попадает ни в лог, ни в журнал конверсий", async () => {
+    const lines = captureLog();
+    const { repository, service } = setup();
+    repository.queue = [due({ conversionId: "bad" }), due({ conversionId: "down" })];
+    await service.tick(NOW, fakeFetch((url) => (repository.states.size === 0 && url.includes("record") ? new Response("invalid", { status: 400 }) : Promise.reject(new Error("socket hang up")))).fetchImpl);
+    expect(lines.join("\n")).toContain("token=***");
+    expect(lines.join("\n")).not.toContain(TOKEN);
+    expect(JSON.stringify([...repository.states.values()])).not.toContain(TOKEN);
+  });
+
+  it("назначение упало при подготовке — конверсия повторится по расписанию, очередь не встаёт", async () => {
+    const lines = captureLog();
+    const broken = new FakeDestination("s2s", ALL_EVENTS, async () => {
+      throw new Error("шаблон не разобрался");
+    });
+    const { repository, service } = setup(TOKEN, [broken, new AdsgramDestination(secretsWith(TOKEN))]);
+    repository.queue = [due({ conversionId: "broken", destination: "s2s" }), due({ conversionId: "fine" })];
+    const { urls, fetchImpl } = fakeFetch(() => new Response("ok", { status: 200 }));
+    const report = await service.tick(NOW, fetchImpl);
+    expect(report).toMatchObject({ sent: 1, deferred: 1 });
+    expect(urls).toHaveLength(1);
+    expect(repository.states.get("broken")).toMatchObject({ status: "pending", attempts: 1, nextAt: new Date("2026-10-02T12:01:00.000Z") });
+    expect(repository.states.get("broken")?.error).toContain("шаблон не разобрался");
+    expect(repository.states.get("fine")).toMatchObject({ status: "sent" });
+    expect(lines.join("\n")).toContain("postback_prepare_failed");
+  });
+
+  it("несколько назначений: каждая конверсия уходит своему, по виду назначения", async () => {
+    const other = new FakeDestination("partner", ALL_EVENTS, { kind: "request", url: new URL("https://partner.example.test/cb?click=1"), logUrl: "https://partner.example.test/cb?click=1" });
+    const { repository, service } = setup(TOKEN, [new AdsgramDestination(secretsWith(TOKEN)), other]);
+    repository.queue = [due({ conversionId: "ads" }), due({ conversionId: "ptn", destination: "partner", event: "purchase_first" })];
+    const { urls, fetchImpl } = fakeFetch(() => new Response("ok", { status: 200 }));
+    const report = await service.tick(NOW, fetchImpl);
+    expect(report).toMatchObject({ sent: 2 });
+    expect(urls).toEqual([`https://api.adsgram.ai/confirm_conversion?token=${TOKEN}&record=7f3a1b6c&goaltype=1`, "https://partner.example.test/cb?click=1"]);
+    expect(other.prepared).toEqual(["ptn"]);
+  });
+
+  it("отправка идёт общим клиентом с меткой ads.postback; fetch теста сильнее клиента", async () => {
+    const services: string[] = [];
+    const clientUrls: string[] = [];
+    const outbound = {
+      forService: (name: string) => {
+        services.push(name);
+        return (async (input: URL | string) => {
+          clientUrls.push(String(input));
+          return new Response("ok", { status: 200 });
+        }) as typeof fetch;
+      },
+    } as unknown as Outbound;
+
+    const viaClient = setup(TOKEN, undefined, outbound);
+    viaClient.repository.queue = [due()];
+    await viaClient.service.tick(NOW);
+    expect(services).toEqual(["ads.postback"]);
+    expect(clientUrls).toHaveLength(1);
+    expect(viaClient.repository.states.get("c1")).toMatchObject({ status: "sent" });
+
+    const viaTest = setup(TOKEN, undefined, outbound);
+    viaTest.repository.queue = [due()];
+    const { urls, fetchImpl } = fakeFetch(() => new Response("ok", { status: 200 }));
+    await viaTest.service.tick(NOW, fetchImpl);
+    expect(urls).toHaveLength(1);
+    expect(clientUrls).toHaveLength(1);
+  });
+
+  it("два назначения одного вида в реестре — ошибка при сборке: иначе конверсию взяло бы любое", () => {
+    const first = new FakeDestination("s2s", ALL_EVENTS, { kind: "skip", reason: "x" });
+    const second = new FakeDestination("s2s", ALL_EVENTS, { kind: "skip", reason: "x" });
+    expect(() => setup(TOKEN, [first, second])).toThrow(/s2s/);
   });
 });
 

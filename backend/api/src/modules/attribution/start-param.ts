@@ -1,4 +1,5 @@
 import { LINK_CODE } from "../links/link-code.js";
+import { parsePairs } from "./start-param-pairs.js";
 
 /**
  * Параметр запуска Mini App (`start_param`) — откуда пришёл игрок
@@ -29,6 +30,10 @@ import { LINK_CODE } from "../links/link-code.js";
  * - `notification` — `n-<вид>`, кнопка под уведомлением в боте
  *   (docs/35-stage4-plan.md WP28): по ней видно, возвращают ли сообщения
  *   бота в игру. Вид — в `ref`;
+ * - `tagged` — пары «ключ-значение» `src-tgads_cmp-oct` (Р116,
+ *   `start-param-pairs.ts`): сервер сам заводит по ним источник. В `ref` —
+ *   канонический набор известных пар, поэтому порядок и регистр пар одну ссылку
+ *   на несколько не делят;
  * - `unknown` — всё прочее. Сырая строка сохраняется: её можно разобрать
  *   заново, когда появится новый вид ссылок.
  *
@@ -38,7 +43,7 @@ import { LINK_CODE } from "../links/link-code.js";
  * потом чинил отдельный крон.
  */
 
-export const START_KINDS = ["organic", "click", "invite", "telegram_affiliate", "friend", "notification", "link", "unknown"] as const;
+export const START_KINDS = ["organic", "click", "invite", "telegram_affiliate", "friend", "notification", "link", "tagged", "unknown"] as const;
 export type StartKind = (typeof START_KINDS)[number];
 
 export interface StartParam {
@@ -47,6 +52,12 @@ export interface StartParam {
   raw: string | null;
   /** идентификатор внутри: код клика, id партнёра Telegram; `null` — его нет */
   ref: string | null;
+  /**
+   * Незнакомые ключи пар по алфавиту, без значений. Поле есть только у параметра, разобранного как
+   * пары (`tagged`, а также `unknown`, где известных ключей нет, но пары есть), — у остальных видов
+   * его нет вовсе.
+   */
+  unknownKeys?: string[];
 }
 
 /** Алфавит и длина, которые допускает Telegram. Иное в подписанных данных — не параметр, а поломка. */
@@ -81,5 +92,11 @@ export function parseStartParam(value: string | null | undefined): StartParam {
     if (LINK_CODE.test(code)) return { kind: "link", raw: value, ref: code };
   }
   if (value === INVITE) return { kind: "invite", raw: value, ref: null };
+  // Пары — последними: приставки `c-`, `l-`, `f-`, `n-` и `_tgr_` разобраны выше и пар не касаются.
+  const pairs = parsePairs(value);
+  if (pairs !== null) {
+    if (pairs.canonical !== null) return { kind: "tagged", raw: value, ref: pairs.canonical, unknownKeys: pairs.unknownKeys };
+    return { kind: "unknown", raw: value, ref: null, unknownKeys: pairs.unknownKeys };
+  }
   return { kind: "unknown", raw: value, ref: null };
 }

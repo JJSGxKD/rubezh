@@ -59,6 +59,7 @@ const SOURCE_TITLES: Readonly<Record<string, string>> = {
   invite: "приглашения",
   friend: "друзья",
   telegram_affiliate: "партнёрка Telegram",
+  tagged: "ссылки с метками",
   unknown: "неизвестно",
 };
 
