@@ -1,3 +1,4 @@
+import type { WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { CHESTS } from "../src/content/chests";
 import { DROPS } from "../src/content/drops";
@@ -54,9 +55,9 @@ function setPassive(world: World, id: string, level: number): void {
 }
 
 /** Набор, который движок отдаёт расчёту готовности: id оружия и навыков с уровнями. */
-function loadoutIds(world: World): { weapons: string[]; passives: { id: string; level: number }[] } {
+function loadoutIds(world: World): { weapons: { id: string; level: number }[]; passives: { id: string; level: number }[] } {
   return {
-    weapons: world.loadout.weapons.map((slot) => world.weaponTypes[slot.typeIndex]?.id ?? ""),
+    weapons: world.loadout.weapons.map((slot) => ({ id: world.weaponTypes[slot.typeIndex]?.id ?? "", level: slot.level })),
     passives: world.loadout.passives.map((slot) => ({ id: world.passiveTypes[slot.typeIndex]?.id ?? "", level: slot.level })),
   };
 }
@@ -246,7 +247,7 @@ describe("генератор мира", () => {
 
 describe("контрольная сумма забега", () => {
   /** Сценарный забег фиксированной длины: первый вариант на каждом выборе. */
-  function runChecksum(weapons: typeof WEAPONS): number {
+  function runChecksum(weapons: WeaponDef[]): number {
     const world = newWorld({ seed: 5, weapons });
     const spawner = createConstantPopulationSpawner(40);
     for (let tick = 0; tick < 3000; tick++) {
@@ -258,7 +259,7 @@ describe("контрольная сумма забега", () => {
   }
 
   it("забег без эволюции: сумма с WEAPONS равна сумме с BASE_WEAPONS", { timeout: 30_000 }, () => {
-    expect(runChecksum(WEAPONS)).toBe(runChecksum(BASE_WEAPONS));
+    expect(runChecksum(WEAPONS)).toBe(runChecksum([...BASE_WEAPONS]));
   });
 
   it("слепок с эволюцией в слоте восстанавливается с той же суммой", () => {
