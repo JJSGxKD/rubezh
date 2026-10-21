@@ -7,8 +7,11 @@
 export type PaymentMode = "live" | "test";
 export type PurchaseStatus = "pending" | "paid" | "refunded";
 export type RefundReason = "test_mode" | "unused" | "external" | "undeliverable" | "manual";
-/** Что продаётся: второй шанс в забеге, товар каталога магазина или VIP (WP10). */
-export type PurchaseProduct = "continue_run" | "shop_item" | "vip";
+/**
+ * Что продаётся: второй шанс в забеге, товар каталога магазина, VIP (WP10) или
+ * донат проекту (Р109) — добровольная сумма без игровых ценностей.
+ */
+export type PurchaseProduct = "continue_run" | "shop_item" | "vip" | "donation";
 
 /**
  * Подписка площадки (Р20): площадка списывает каждый период сама, по тому же
