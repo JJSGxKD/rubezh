@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { LinksModule } from "../links/links.module.js";
+import { LINKS_REPOSITORY, PrismaLinksRepository } from "../links/links.repository.js";
 import { PartnerLinkBinder } from "./partner-links.js";
 import { PARTNER_LINKS, PrismaPartnerLinksSource } from "./partner-links.repository.js";
 import { PARTNERS_REPOSITORY, PrismaPartnersRepository } from "./partners.repository.js";
@@ -11,10 +11,20 @@ import { PartnersService } from "./partners.service.js";
  * при активации кода партнёра, по ссылке — `PartnerLinkBinder` из записи
  * сессии (T-0067); этот модуль — карточки партнёров, их ссылки и статистика
  * для панели.
+ *
+ * Репозиторий ссылок здесь свой экземпляр того же класса, что у модуля
+ * ссылок: карточке партнёра нужны только клики и запуски — теми же
+ * запросами, что в списке ссылок, чтобы числа совпадали, — а контроллер
+ * переходника и сервис ссылок ей ни к чему.
  */
 @Module({
-  imports: [LinksModule],
-  providers: [PartnersService, PartnerLinkBinder, { provide: PARTNERS_REPOSITORY, useClass: PrismaPartnersRepository }, { provide: PARTNER_LINKS, useClass: PrismaPartnerLinksSource }],
+  providers: [
+    PartnersService,
+    PartnerLinkBinder,
+    { provide: PARTNERS_REPOSITORY, useClass: PrismaPartnersRepository },
+    { provide: LINKS_REPOSITORY, useClass: PrismaLinksRepository },
+    { provide: PARTNER_LINKS, useClass: PrismaPartnerLinksSource },
+  ],
   exports: [PartnersService, PartnerLinkBinder],
 })
 export class PartnersModule {}

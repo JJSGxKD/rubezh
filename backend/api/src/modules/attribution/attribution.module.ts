@@ -1,6 +1,5 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
-import { PartnersModule } from "../partners/partners.module.js";
 import { RedisSessionDedupe, SESSION_DEDUPE } from "./session-dedupe.js";
 import { SessionRecorder } from "./session-recorder.js";
 import { PrismaSessionsRepository, SESSIONS_REPOSITORY } from "./sessions.repository.js";
@@ -13,12 +12,9 @@ import { PrismaSessionsRepository, SESSIONS_REPOSITORY } from "./sessions.reposi
  * Строка клика редирект-страницы (docs/24-attribution-and-sharing.md §3)
  * придёт вместе с ней; до тех пор код клика из параметра запуска
  * запоминается в сессии и касаниях как есть.
- *
- * Партнёры нужны записи сессии: по клику или прямой ссылке она привязывает
- * игрока к партнёру-владельцу ссылки (T-0067).
  */
 @Module({
-  imports: [AuthModule, PartnersModule],
+  imports: [AuthModule],
   providers: [
     SessionRecorder,
     { provide: SESSIONS_REPOSITORY, useClass: PrismaSessionsRepository },

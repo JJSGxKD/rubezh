@@ -12,7 +12,6 @@ import { RedirectController } from "./redirect.controller.js";
   imports: [AuthModule],
   controllers: [RedirectController],
   providers: [LinksService, { provide: LINKS_REPOSITORY, useClass: PrismaLinksRepository }],
-  // Репозиторий — карточке партнёра: клики и запуски его ссылок те же, что в списке ссылок.
-  exports: [LinksService, LINKS_REPOSITORY],
+  exports: [LinksService],
 })
 export class LinksModule {}
