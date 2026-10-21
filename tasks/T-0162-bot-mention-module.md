@@ -3,7 +3,7 @@ id: T-0162
 title: Юзернейм бота в имени и bio — модуль на сервере: проверка, награда, серия, ночной проход
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
