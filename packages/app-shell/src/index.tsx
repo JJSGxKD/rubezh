@@ -24,8 +24,8 @@ import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type Tim
 import { installErrorReporting } from "./state/error-reporting";
 import { useFeedback } from "./state/feedback";
 import { useGraphics } from "./state/graphics";
-import { useRadarSetting } from "./state/radar-setting";
 import { createId } from "./state/ids";
+import { useRadarSetting } from "./state/radar-setting";
 import { REPORT_QUEUE_KEY } from "./state/report-keys";
 
 /**

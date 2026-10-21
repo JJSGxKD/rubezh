@@ -4,11 +4,11 @@ import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
 import "../../i18n/run";
+import { radarPlacementClass, useRadarSetting } from "../../state/radar-setting";
 import { ItemIcon } from "../item-icons";
 import { BossBar } from "./BossBar";
 import { HintBanner } from "./HintBanner";
 import { PlayerStatuses } from "./PlayerStatuses";
-import { radarPlacementClass, useRadarSetting } from "../../state/radar-setting";
 import { Radar } from "./Radar";
 import { RunBoostSlots } from "./run-boosts-lazy";
 

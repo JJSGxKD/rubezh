@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter } from "@bh/shared-types";
 import { DEFAULT_RADAR_POSITION, radarPlacementClass, useRadarSetting } from "../src/state/radar-setting";
-import { initShell } from "../src/state/shell";
+import { initShell, useShell } from "../src/state/shell";
 
 // Положение радара (docs/35-stage4-plan.md Р113): настройка устройства, по
 // умолчанию справа сверху; внизу радара нет ни при каком значении.
@@ -30,10 +30,10 @@ function mount(withStorage = true): void {
   initShell({
     adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
     capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false },
-    ...(withStorage ? { storage } : {}),
+    storage: withStorage ? storage : undefined,
     analytics: (event, payload) => events.push({ event, payload }),
     build: { version: "test", contentHash: "", platform: "web" },
-  } as Parameters<typeof initShell>[0]);
+  });
   useRadarSetting.setState({ position: DEFAULT_RADAR_POSITION });
   useRadarSetting.getState().hydrate();
 }
@@ -76,8 +76,10 @@ describe("положение радара", () => {
 
   it("без хранилища не падает, значение держится в памяти", () => {
     mount(false);
+    expect(useShell.getState().storage).toBeUndefined();
     expect(() => useRadarSetting.getState().set("left")).not.toThrow();
     expect(useRadarSetting.getState().position).toBe("left");
+    expect(storage.values[KEY]).toBeUndefined();
   });
 });
 
