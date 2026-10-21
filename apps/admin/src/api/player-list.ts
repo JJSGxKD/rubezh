@@ -19,6 +19,7 @@ export const LIST_SOURCES = [
   ["friend", "по ссылке дружбы"],
   ["telegram_affiliate", "партнёрка Telegram"],
   ["notification", "из уведомления бота"],
+  ["tagged", "ссылка с метками"],
   ["unknown", "неизвестно"],
 ] as const;
 
