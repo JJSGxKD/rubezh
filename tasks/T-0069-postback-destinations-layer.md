@@ -3,7 +3,7 @@ id: T-0069
 title: Постбэки — слой «событие → назначение», AdsGram первым назначением
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead2-2
 size: M
