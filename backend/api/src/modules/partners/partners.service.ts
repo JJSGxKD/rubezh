@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { campaignState, type PromoCampaignState } from "../promo-codes/promo-code-rules.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { PartnerNotFoundError, PartnerTelegramTakenError } from "./partner-errors.js";
+import { PARTNER_LINKS, type PartnerLinks, type PartnerLinksSource, type PartnerLinkStats } from "./partner-links.repository.js";
 import { PARTNER_RULES, PARTNER_STATUSES, withTerms, type PartnerFull, type PartnerInput, type PartnerStats, type PartnerStatus } from "./partner-rules.js";
 import { PARTNERS_REPOSITORY, type PartnerBindingView, type PartnerCampaignRow, type PartnersRepository } from "./partners.repository.js";
 
@@ -35,20 +36,30 @@ export interface PartnerDetail {
   /** привязки по игровым суткам за последние `DAILY_DAYS` */
   daily: { day: string; count: number }[];
   codes: (PartnerCampaignRow & { state: PromoCampaignState })[];
+  /** ссылки партнёра с кликами и запусками (T-0067) */
+  links: PartnerLinkStats[];
+  /** игроков, привязанных по ссылкам; привязанные кодами сюда не входят */
+  linkBound: number;
   rules: typeof PARTNER_RULES;
 }
 
 const DB_TIMEOUT_MS = 3_000;
 const LIST_LIMIT = 500;
 const DAILY_DAYS = 30;
+const NO_LINKS: PartnerLinks = { links: [], bound: 0 };
 
 @Injectable()
 export class PartnersService {
   private readonly logger = new Logger("partners");
 
+  /**
+   * `partnerLinks` — источник ссылок для карточки. Необязателен: сервис партнёров живёт и без модуля
+   * ссылок, карточка тогда показывает пустой блок.
+   */
   constructor(
     @Inject(PARTNERS_REPOSITORY) private readonly repository: PartnersRepository,
     private readonly roles: RolesService,
+    @Optional() @Inject(PARTNER_LINKS) private readonly partnerLinks: PartnerLinksSource | null = null,
   ) {}
 
   async catalog(actor: AccountRef, at = new Date()): Promise<{ partners: PartnerView[]; rules: typeof PARTNER_RULES }> {
@@ -60,11 +71,19 @@ export class PartnersService {
     await this.roles.require(actor, "partners.view");
     const partner = await this.db(this.repository.byId(partnerId, at));
     if (partner === null) throw new PartnerNotFoundError();
-    const [daily, codes] = await Promise.all([
+    const [daily, codes, linked] = await Promise.all([
       this.db(this.repository.daily(partnerId, new Date(at.getTime() - DAILY_DAYS * 86_400_000))),
       this.db(this.repository.campaigns(partnerId)),
+      this.partnerLinks === null ? NO_LINKS : this.db(this.partnerLinks.forPartner(partnerId)),
     ]);
-    return { partner: withTerms(partner), daily, codes: codes.map((code) => ({ ...code, state: campaignState(code, at) })), rules: PARTNER_RULES };
+    return {
+      partner: withTerms(partner),
+      daily,
+      codes: codes.map((code) => ({ ...code, state: campaignState(code, at) })),
+      links: linked.links,
+      linkBound: linked.bound,
+      rules: PARTNER_RULES,
+    };
   }
 
   /** Новый партнёр — активный: заявки заводит команда, статус меняется после, с причиной. */
