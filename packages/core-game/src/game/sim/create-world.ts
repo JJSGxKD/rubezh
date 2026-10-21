@@ -1,5 +1,7 @@
 import type {
   BoostDef,
+  CardToolRules,
+  CardTools,
   ChestsDef,
   ContinueDef,
   DifficultyDef,
@@ -19,6 +21,7 @@ import { computePlayerStats, resolvePassiveTypes, type PlayerStatsBase } from ".
 import { EMPTY_LOADOUT, sanitizeLoadout } from "../progression/run-loadout";
 import { combineModifiers, findBoostProblems, resolveBoosts } from "../progression/boosts";
 import { addWeapon, createLoadout } from "../progression/loadout";
+import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, deriveSeed, STREAM_SALT } from "./rng";
@@ -67,6 +70,8 @@ const FALLBACK_DROPS: DropsDef = {
  * Сундуков в тестах симуляции нет: `maxOnField: 0` не даёт ни выпасть, ни
  * сдвинуть генератор, и тесты паттернов от сундука не меняются.
  */
+const FALLBACK_CARD_RULES: CardToolRules = { skipXpRatio: 0.3 };
+
 const FALLBACK_CHESTS: ChestsDef = {
   opening: [],
   sizes: [{ size: 1, weight: 1 }],
@@ -146,6 +151,10 @@ export interface CreateWorldOptions {
   drops?: DropsDef;
   /** сундук забега; по умолчанию — без сундуков */
   chests?: ChestsDef;
+  /** заряды карточек от уровня аккаунта; по умолчанию — нули */
+  cardTools?: Partial<CardTools>;
+  /** правила действий с карточками; по умолчанию — пропуск платит 30% пути */
+  cardRules?: CardToolRules;
   /** второй шанс; по умолчанию — одно продолжение */
   continueRules?: ContinueDef;
   /** уровень сложности; по умолчанию — без поправок */
@@ -245,6 +254,12 @@ export function createWorld(options: CreateWorldOptions): World {
   // «Фора»: уровни сразу в очередь выбора — как если бы опыт набрался на
   // первом тике. Порог следующего — уже от нового уровня.
   const startLevel = 1 + boosts.startLevels;
+  // Заряды уровня аккаунта плюс заряды бустов, но не выше страховки движка.
+  const toolsTotal: CardTools = {
+    reroll: Math.min(MAX_CARD_TOOLS, (options.cardTools?.reroll ?? 0) + boosts.cardTools.reroll),
+    skip: Math.min(MAX_CARD_TOOLS, (options.cardTools?.skip ?? 0) + boosts.cardTools.skip),
+    banish: Math.min(MAX_CARD_TOOLS, (options.cardTools?.banish ?? 0) + boosts.cardTools.banish),
+  };
 
   const cellSize = gridCellSize(scale);
   return {
@@ -266,6 +281,8 @@ export function createWorld(options: CreateWorldOptions): World {
       founds: [],
       openings: [],
     },
+    cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),
+    cardRules: options.cardRules ?? FALLBACK_CARD_RULES,
     continueRules,
     difficultyLevel,
     playerStats,
@@ -281,6 +298,9 @@ export function createWorld(options: CreateWorldOptions): World {
       totalXp: 0,
       pendingLevelUps: boosts.startLevels,
       offers: [],
+      tools: { ...toolsTotal },
+      toolsTotal,
+      banished: [],
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора
     // спавна — стенд испытаний, тесты паттернов — она такой и остаётся.

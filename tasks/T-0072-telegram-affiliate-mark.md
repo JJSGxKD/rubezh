@@ -14,7 +14,6 @@ zones:
   - backend/api/src/modules/attribution/telegram-affiliate.marker.ts
   - backend/api/src/modules/attribution/attribution.module.ts
   - backend/api/src/modules/admin/admin-players.service.ts
-  - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/telegram-affiliate.test.ts
   - backend/api/test/telegram-affiliate.integration.test.ts
   - backend/api/test/helpers/memory-telegram-affiliate.ts
@@ -38,6 +37,7 @@ shared:
   - docs/24-attribution-and-sharing.md
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
 runner: local
 executor: sonnet-5.5
 effort: extra
@@ -67,6 +67,8 @@ batch: 4
   будущей бухгалтерии (WP50). Деньги в этой задаче не считаются.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 21.10.2026 (приёмка #429, T-0067).** Сейчас первое касание `_tgr_` (`telegram_affiliate`) слот источника не занимает: `source-slot.ts` про него не знает, и игрок из партнёрки Telegram в первые 7 суток может быть привязан и по ссылке партнёра (T-0067), и по промокоду. Эта задача закрывает дыру в `source-slot.ts`; привязчик ссылок партнёра берёт слот через `lockSourceSlot` и подхватит правку сам. В тесты — кейс: аккаунт с первым касанием `_tgr_` не привязывается по ссылке партнёра и по коду.
 
 - **Р97** (`docs/35-stage4-plan.md`, WP49 часть 5, 12.10.2026): игрок по ссылке
   партнёрки Telegram помечается навсегда, слот источника занят ею, реферер и

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ChartColumn, History, Layers, Pause, Sparkles, Star, Wrench } from "lucide-react";
-import type { UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { CardTools, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import type { RunSlotState } from "@bh/core-game";
 import {
   Badge,
@@ -13,6 +13,8 @@ import {
 import { formatDuration, t } from "../../i18n";
 import "../../i18n/run";
 import { ItemTile, type ItemKind } from "../item-icons";
+import { CardToolsBar } from "./CardTools";
+import { cardTapAction, toolButtons } from "./card-tools-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
 import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
 import { formatChange } from "./upgrade-format";
@@ -112,12 +114,38 @@ export interface LevelUpOverlayProps {
   /** текущий набор — показать, сколько слотов каждой категории занято */
   loadout?: { weapons: readonly RunSlotState[]; passives: readonly RunSlotState[] };
   onChoose(optionId: string): void;
+  /**
+   * Действия с карточками: переброс, пропуск, изгнание. Без поля ряда нет —
+   * экран прежний, как у игрока без зарядов.
+   */
+  tools?: {
+    left: CardTools;
+    total: CardTools;
+    canReroll: boolean;
+    onReroll(): void;
+    onSkip(): void;
+    onBanish(optionId: string): void;
+  };
   /** открыть лист «Характеристики» — плашкой в ряду слотов, без лишней строки */
   onStats?: () => void;
 }
 
 export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   const ready = useTapGuard();
+  // Режим изгнания привязан к набору карточек: сменились (переброс, изгнание,
+  // новый уровень) — он кончился, следующую карточку игрок выбирает заново.
+  const offersKey = props.offers.map((offer) => offer.id).join("|");
+  const [banish, setBanish] = useState({ key: offersKey, on: false });
+  const banishing = banish.on && banish.key === offersKey;
+  const tools = props.tools;
+  const buttons =
+    tools === undefined ? [] : toolButtons({ left: tools.left, total: tools.total, canReroll: tools.canReroll, offers: props.offers });
+  const mode = banishing ? "banish" : "choose";
+  const tap = (offer: UpgradeOption): void => {
+    const action = cardTapAction(mode, offer);
+    if (action === "choose") props.onChoose(offer.id);
+    else if (action === "banish") tools?.onBanish(offer.id);
+  };
   const slotExtras =
     props.queued > 0 || props.onStats !== undefined ? (
       <>
@@ -184,7 +212,7 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
               appearIndex={index}
               compact
               stripe={kind === "passive" ? "passive" : kind === "weapon" ? "weapon" : "info"}
-              onClick={guarded(ready, () => props.onChoose(offer.id))}
+              onClick={guarded(ready, () => tap(offer))}
             >
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <ItemTile kind={kind} id={offer.refId} size="s" />
@@ -205,6 +233,21 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
           );
         })}
       </div>
+      {tools === undefined ? null : (
+        <>
+          <CardToolsBar
+            buttons={buttons}
+            banishing={banishing}
+            onReroll={guarded(ready, tools.onReroll)}
+            onSkip={guarded(ready, tools.onSkip)}
+            onToggleBanish={guarded(ready, () => setBanish({ key: offersKey, on: !banishing }))}
+          />
+          {/* На невысоком экране подпись уходит: числа на кнопках говорят сами. */}
+          {buttons.length === 0 ? null : (
+            <p className="mt-2 text-center text-xs text-text-muted short:hidden">{t("run.tools.caption")}</p>
+          )}
+        </>
+      )}
     </Modal>
   );
 }

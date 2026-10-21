@@ -485,6 +485,9 @@ golden-тесты, и тест контента требует, чтобы он�
 { id: "aegis", nameKey: "…", descriptionKey: "…", shieldHits: 1 }
 { id: "head_start", nameKey: "…", descriptionKey: "…", startLevels: 2 }
 { id: "insight", nameKey: "…", descriptionKey: "…", extraOffers: 1 }
+// заряды переброса, пропуска и изгнания карточек; к ним прибавляются заряды
+// уровня аккаунта (CARD_TOOL_UNLOCKS в content/unlocks.ts)
+{ id: "control", nameKey: "…", descriptionKey: "…", cardTools: { reroll: 1, skip: 1, banish: 1 } }
 ```
 
 Прибавки вместе со снаряжением упираются в пределы движка (`LOADOUT_BOUNDS`),

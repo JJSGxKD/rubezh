@@ -1,4 +1,4 @@
-import { ELEMENTS, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type CardTools, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   loadRunEngine,
   type HudSnapshot,
@@ -112,6 +112,12 @@ export interface RunStore {
   offers: UpgradeOption[];
   /** сколько уровней ещё ждёт выбора */
   queued: number;
+  /** зарядов переброса, пропуска и изгнания осталось — на выборе улучшения */
+  tools: CardTools;
+  /** зарядов выдано на забег: кнопки вида, которого не было, не рисуются */
+  toolsTotal: CardTools;
+  /** есть ли чем заменить карточки при переброске */
+  canReroll: boolean;
   /** открытый сундук — пока фаза `chest` */
   chest: OpenedChest | null;
   level: number;
@@ -144,6 +150,12 @@ export interface RunStore {
   /** Забрать награды сундука и закрыть окно: забег идёт дальше или открывается выбор уровня. */
   closeChest(): void;
   choose(optionId: string): void;
+  /** Переброс карточек на выборе улучшения. */
+  reroll(): void;
+  /** Пропуск уровня: без улучшения, за долю опыта. */
+  skip(): void;
+  /** Изгнание предмета карточки из забега. */
+  banish(optionId: string): void;
   restart(): void;
   stop(): void;
   /** характеристики забега для листа «Характеристики»; `null` — забега нет */
@@ -203,12 +215,17 @@ let pendingDiagnostics: RunDiagnostics | null = null;
 /** Ошибок клиента к началу забега: запись несёт, сколько случилось за забег. */
 let errorsAtRunStart = 0;
 
+const NO_TOOLS: CardTools = { reroll: 0, skip: 0, banish: 0 };
+
 const IDLE = {
   phase: "idle" as RunPhase,
   loadingStage: null as RunLoadingStage | null,
   hud: null,
   offers: [] as UpgradeOption[],
   queued: 0,
+  tools: NO_TOOLS,
+  toolsTotal: NO_TOOLS,
+  canReroll: false,
   chest: null as OpenedChest | null,
   level: 1,
   result: null,
@@ -430,6 +447,25 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.chooseUpgrade(optionId);
   },
 
+  reroll(): void {
+    if (get().phase !== "levelUp") return;
+    audio.runEvent("choose");
+    session?.rerollOffers();
+  },
+
+  skip(): void {
+    if (get().phase !== "levelUp") return;
+    audio.runEvent("choose");
+    // Фазу ведёт движок, как в `choose`: следующий выбор из очереди или `resumed`.
+    session?.skipOffers();
+  },
+
+  banish(optionId: string): void {
+    if (get().phase !== "levelUp") return;
+    audio.runEvent("choose");
+    session?.banishOffer(optionId);
+  },
+
   restart(): void {
     if (session === null || get().restarting) return;
     // «Ещё раз» с экрана смерти — отказ от второго шанса: забег закрывается
@@ -556,20 +592,29 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       audio.cues(cues);
     }),
 
-    created.on("levelUp", ({ level, options, queued }) => {
+    created.on("levelUp", ({ level, options, queued, tools, toolsTotal, canReroll, refreshed }) => {
       const first = options[0];
       if (get().devRun && useDevMode.getState().settings.autoPickUpgrades && first !== undefined) {
         // Без экрана и без аналитики выбора: это не решение игрока.
         created.chooseUpgrade(first.id);
         return;
       }
-      track("upgrade_offered", { level, count: options.length, queued });
+      // Переброс и изгнание обновляют карточки того же уровня: это не новое
+      // предложение, и считать его в воронку нельзя.
+      if (!refreshed) track("upgrade_offered", { level, count: options.length, queued });
       if (get().phase !== "levelUp") {
         haptic("levelUp");
         audio.runEvent("levelUp");
       }
-      set({ phase: "levelUp", offers: options, queued, level, chest: null });
+      set({ phase: "levelUp", offers: options, queued, level, chest: null, tools, toolsTotal, canReroll });
       saveRun();
+    }),
+
+    created.on("cardTool", ({ kind, left, level, item }) => {
+      // Только когда движок применил действие: нажатие без заряда в аналитику не идёт.
+      if (kind === "reroll") track("card_rerolled", { level, left });
+      else if (kind === "skip") track("card_skipped", { level, left });
+      else track("card_banished", { level, left, item: item ?? "" });
     }),
 
     created.on("waveReached", ({ index, elapsedSec }) => {

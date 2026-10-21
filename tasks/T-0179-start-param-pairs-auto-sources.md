@@ -9,8 +9,6 @@ author: claude-lead-1
 size: M
 depends_on: []
 zones:
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
   - backend/api/src/modules/attribution/start-param.ts
   - backend/api/src/modules/attribution/start-param-pairs.ts
   - backend/api/src/modules/attribution/session-recorder.ts
@@ -20,7 +18,6 @@ zones:
   - backend/api/src/modules/links/auto-sources.repository.ts
   - backend/api/src/modules/links/links.repository.ts
   - backend/api/src/modules/links/links.module.ts
-  - backend/api/src/modules/settings/setting-catalog.ts
   - apps/admin/src/api/broadcasts.ts
   - apps/admin/src/api/funnel.ts
   - apps/admin/src/api/overview.ts
@@ -35,6 +32,9 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/24-attribution-and-sharing.md
   - docs/30-configuration-map.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
+  - backend/api/src/modules/settings/setting-catalog.ts
 runner: local
 executor: sonnet-5.5
 effort: extra

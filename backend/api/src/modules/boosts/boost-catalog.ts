@@ -26,6 +26,9 @@ export const BOOST_PRICES: Readonly<Record<string, BoostPrice>> = {
   aegis: { resource: "coins", amount: 120 },
   head_start: { resource: "gems", amount: 4 },
   insight: { resource: "gems", amount: 6 },
+  // Заряды переброса, пропуска и изгнания карточек (T-0101): меняют ход
+  // забега сильнее прибавки, поэтому — за самоцветы.
+  control: { resource: "gems", amount: 5 },
 };
 
 /** Не больше бустов на забег — столько же, сколько применяет движок. */

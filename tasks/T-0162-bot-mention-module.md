@@ -10,22 +10,22 @@ size: M
 depends_on: [T-0159]
 zones:
   - backend/api/src/modules/bot-mention/**
-  - backend/api/src/app.module.ts
   - backend/api/test/bot-mention.test.ts
   - backend/api/test/bot-mention-sweep.test.ts
   - backend/api/test/bot-mention.integration.test.ts
   - backend/api/test/bot-mention.http.test.ts
 shared:
+  - docs/30-configuration-map.md
+  - docs/21-diagrams.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/*_bot_mention/**
   - backend/api/src/modules/settings/setting-catalog.ts
+  - backend/api/src/app.module.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
   - backend/api/test/wipe-plan.test.ts
   - backend/api/test/wipe-runner.integration.test.ts
   - docs/35-stage4-plan.md
-  - docs/30-configuration-map.md
-  - docs/21-diagrams.md
 runner: local
 executor: sonnet-5.5
 effort: extra

@@ -1,5 +1,6 @@
 import { CONTENT_HASH } from "../../content/hash";
 import type { RunRecording, RunRecordingResult } from "../../run-api";
+import { applyCardTool, isCardToolCommand } from "../progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { buildRunResult } from "../run/run-result";
 import { createRunWorld } from "../run-world";
@@ -88,9 +89,9 @@ export function replayRecording(recording: RunRecording, contentHash: string = C
   const applyChoices = (): string | null => {
     while (choiceIndex < recording.choices.length && recording.choices[choiceIndex][0] === world.stats.tick) {
       const [tick, optionId] = recording.choices[choiceIndex++];
-      if (!isAwaitingChoice(world) || !chooseUpgrade(world, optionId)) {
-        return `выбор «${optionId}» на тике ${tick} не ложится на забег`;
-      }
+      // Переброс, пропуск и изгнание идут в лог теми же выборами с условными id.
+      const applied = isAwaitingChoice(world) && (isCardToolCommand(optionId) ? applyCardTool(world, optionId) !== null : chooseUpgrade(world, optionId));
+      if (!applied) return `выбор «${optionId}» на тике ${tick} не ложится на забег`;
     }
     return null;
   };

@@ -14,7 +14,6 @@ depends_on:
   - T-0102
 zones:
   - backend/api/src/modules/tasks/task-rules.ts
-  - backend/api/prisma/migrations/**
   - backend/api/test/tasks.test.ts
   - backend/api/test/tasks.integration.test.ts
   - backend/api/test/achievements.integration.test.ts
@@ -29,6 +28,7 @@ shared:
   - backend/api/prisma/schema.prisma
   - docs/22-analytics-and-metrics.md
   - docs/39-retention-mechanics.md
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: high

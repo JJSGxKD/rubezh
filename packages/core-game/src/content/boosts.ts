@@ -19,6 +19,8 @@ export const BOOSTS: readonly BoostDef[] = [
   { id: "aegis", nameKey: "boost.aegis.name", descriptionKey: "boost.aegis.description", shieldHits: 1 },
   { id: "head_start", nameKey: "boost.head_start.name", descriptionKey: "boost.head_start.description", startLevels: 2 },
   { id: "insight", nameKey: "boost.insight.name", descriptionKey: "boost.insight.description", extraOffers: 1 },
+  // По одному заряду каждого вида: переброс, пропуск и изгнание карточек на выборе.
+  { id: "control", nameKey: "boost.control.name", descriptionKey: "boost.control.description", cardTools: { reroll: 1, skip: 1, banish: 1 } },
 ];
 
 /** Сколько бустов берётся на один забег; каждый — не больше одного раза. */

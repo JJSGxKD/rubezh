@@ -62,6 +62,15 @@ export function createRunEngine(): RunEngine {
         chooseUpgrade(optionId: string): void {
           scene()?.applyChoice(optionId);
         },
+        rerollOffers(): void {
+          scene()?.rerollOffers();
+        },
+        skipOffers(): void {
+          scene()?.skipOffers();
+        },
+        banishOffer(optionId: string): void {
+          scene()?.banishOffer(optionId);
+        },
         closeChest(): void {
           scene()?.closeChest();
         },
