@@ -40,18 +40,16 @@ export interface LinkRecord extends Omit<LinkInput, "target" | "partnerId"> {
   /** `null` — ссылка команды */
   partner: LinkOwner | null;
   createdAt: Date;
-  // Поля автоисточника (Р116) из базы приходят всегда; необязательны они ради записей, собранных
-  // не из базы, — подмены репозитория в тестах. Нет поля — ссылка заведена командой.
-  /** источник заведён сам по параметру запуска `src-…_cmp-…` */
-  auto?: boolean;
+  /** источник заведён сам по параметру запуска `src-…_cmp-…` (Р116) */
+  auto: boolean;
   /** канонический набор известных пар; `null` — у ссылок, заведённых командой */
-  autoKey?: string | null;
+  autoKey: string | null;
   /** метка партнёра из пары `prt-…`: к карточке партнёра не привязана (поле `partner` — владелец) */
-  partnerTag?: string | null;
+  partnerTag: string | null;
   /** название, которое дали в панели; `null` — показывается кампания */
-  title?: string | null;
+  title: string | null;
   /** скрыт в панели; запуски по нему считаются */
-  hiddenAt?: Date | null;
+  hiddenAt: Date | null;
 }
 
 /** Какие ссылки отдать списку: без условий — все. */
