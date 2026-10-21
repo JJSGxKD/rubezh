@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import {
@@ -28,6 +28,7 @@ import { ConfirmDialog } from "../../ui/confirm-dialog";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select, type Column } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
+import { useNarrow } from "../../ui/use-media";
 
 /**
  * Курсы валют (docs/29-admin-panel.md §3.3, «Курсы валют»): смотрят многие,
@@ -53,12 +54,12 @@ const USAGE_TONES = {
 } as const;
 
 /** «6 120 из 10 000», доля, полоса и откуда лимит; без лимита — без полосы. */
-function UsageCell({ source }: { source: SourceRow }) {
+function UsageCell({ source, children }: { source: SourceRow; children?: ReactNode }) {
   const tone = USAGE_TONES[budgetTone(source.usedShare)];
   const share = source.usedShare;
   return (
-    <span className="flex min-w-36 flex-col gap-1">
-      <span className="whitespace-nowrap">
+    <span className="flex flex-col gap-1 md:min-w-36">
+      <span className="md:whitespace-nowrap">
         <span className={tone.text}>{usageText(source)}</span>
         {share === null ? null : <span className="text-text-muted">{` · ${String(sharePercent(share))}%`}</span>}
       </span>
@@ -68,6 +69,7 @@ function UsageCell({ source }: { source: SourceRow }) {
         </span>
       )}
       <span className="text-xs text-text-muted">{limitCaption(source)}</span>
+      {children}
     </span>
   );
 }
@@ -76,24 +78,27 @@ type SourceEdit = { kind: "limit" | "used"; source: SourceRow };
 
 function SourcesPanel({ sources, canEdit, onChanged }: { sources: readonly SourceRow[]; canEdit: boolean; onChanged: () => void }) {
   const [editing, setEditing] = useState<SourceEdit | null>(null);
+  const narrow = useNarrow();
+  const actions = (source: SourceRow): ReactNode => (
+    <span className="flex flex-wrap items-start gap-1.5 whitespace-nowrap md:flex-col md:items-stretch">
+      <Button aria-label={`Изменить лимит источника ${source.source}`} onClick={() => setEditing({ kind: "limit", source })}>
+        Изменить лимит…
+      </Button>
+      <Button aria-label={`Поправить счётчик источника ${source.source}`} onClick={() => setEditing({ kind: "used", source })}>
+        Поправить счётчик…
+      </Button>
+    </span>
+  );
   const columns: Column<SourceRow>[] = [
     { title: "Источник", render: (source) => source.source },
     { title: "Тариф", render: (source) => source.tariff },
-    { title: "Израсходовано", help: HELP.fx.limit, render: (source) => <UsageCell source={source} /> },
+    // На телефоне действия живут в самой ячейке расхода: в карточке боковая колонка
+    // с двумя кнопками выдавила бы поля, а ячейка расхода — то, чего они касаются.
+    { title: "Израсходовано", help: HELP.fx.limit, render: (source) => <UsageCell source={source}>{canEdit && narrow ? actions(source) : null}</UsageCell> },
     { title: "Пауза до", render: (source) => formatDateTime(source.pausedUntil) },
     { title: "Следующий опрос", render: (source) => formatDateTime(source.nextPollAt) },
   ];
-  if (canEdit) {
-    columns.push({
-      title: "",
-      render: (source) => (
-        <span className="flex flex-wrap justify-end gap-1.5">
-          <Button onClick={() => setEditing({ kind: "limit", source })}>Изменить лимит…</Button>
-          <Button onClick={() => setEditing({ kind: "used", source })}>Поправить счётчик…</Button>
-        </span>
-      ),
-    });
-  }
+  if (canEdit && !narrow) columns.push({ title: "", render: actions });
   const close = () => setEditing(null);
 
   return (
