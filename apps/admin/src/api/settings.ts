@@ -16,7 +16,7 @@ export const settingSchema = z.object({
   group: z.string(),
   title: z.string(),
   hint: z.string(),
-  kind: z.enum(["chat", "boolean", "url", "number"]),
+  kind: z.enum(["chat", "boolean", "url", "number", "amounts"]),
   /** сервер до числовых настроек поля не отдавал */
   range: rangeSchema.nullable().optional(),
   value: valueSchema,
@@ -51,6 +51,25 @@ const CHAT_TARGET = /^-?\d{1,20}(?::\d{1,10})?$/;
 /** Ссылка — только https, до 256 знаков; пусто — «не задана». */
 export const URL_MAX = 256;
 
+/** Список сумм доната — короткая строка («50, 100, 250»): восемь сумм до шести знаков и запятые с пробелами влезают в сорок. */
+export const AMOUNTS_MAX_LENGTH = 40;
+
+/**
+ * Правило списка сумм доната — копия серверной (`donations/donation-amounts.ts`,
+ * пакетов между панелью и бэкендом нет): от одной до восьми целых сумм от 1 до
+ * 100000 через запятую, пробелы вокруг не мешают.
+ */
+const AMOUNTS_MAX_COUNT = 8;
+const AMOUNT_MAX = 100_000;
+const AMOUNTS_PROBLEM = "от одной до восьми сумм через запятую, например 50, 100, 250";
+
+function amountsProblem(text: string): string | null {
+  const parts = text.split(",").map((part) => part.trim());
+  if (parts.length > AMOUNTS_MAX_COUNT) return AMOUNTS_PROBLEM;
+  const valid = parts.every((part) => /^\d{1,6}$/.test(part) && Number(part) >= 1 && Number(part) <= AMOUNT_MAX);
+  return valid ? null : AMOUNTS_PROBLEM;
+}
+
 /**
  * Число из поля ввода: только целое, без пробелов и знаков после запятой;
  * иначе `null`. `Number("")` дал бы ноль, а пустое поле — не ноль.
@@ -73,12 +92,18 @@ export function settingProblem({ kind, range }: SettingShape, value: SettingValu
     const valid = text === "" || (text.length <= URL_MAX && URL.canParse(text) && new URL(text).protocol === "https:");
     return valid ? null : `Ссылка — https://…, до ${String(URL_MAX)} знаков, или пусто`;
   }
+  if (kind === "amounts") return amountsProblem(text);
   if (kind !== "chat") return null;
   return text === "" || CHAT_TARGET.test(text) ? null : "Адрес — id чата или id:тема, например -1001234567890:57";
 }
 
 /** Подсказка в поле ввода по виду настройки. */
-export const SETTING_PLACEHOLDER: Record<Exclude<SettingRow["kind"], "boolean">, string> = { chat: "-1001234567890:57", url: "https://t.me/…", number: "" };
+export const SETTING_PLACEHOLDER: Record<Exclude<SettingRow["kind"], "boolean">, string> = {
+  chat: "-1001234567890:57",
+  url: "https://t.me/…",
+  number: "",
+  amounts: "50, 100, 250",
+};
 
 export const SOURCE_TITLES: Record<SettingRow["source"], string> = { base: "панель", env: "окружение", default: "умолчание" };
 
