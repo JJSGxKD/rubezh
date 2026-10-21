@@ -3,8 +3,8 @@ id: T-0202
 title: Флак выгрузки — ENOENT во временном каталоге, потоки не закрываются при ошибке
 epic: E0
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
