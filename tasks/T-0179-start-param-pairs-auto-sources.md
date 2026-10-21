@@ -3,8 +3,8 @@ id: T-0179
 title: Авторазбор стартовых параметров ключ-значение — автоисточники и сводка незнакомых ключей
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []
