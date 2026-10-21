@@ -21,6 +21,7 @@ zones:
   - backend/api/src/modules/changelog/changelog-fanout.ts
   - backend/api/src/modules/admin/admin-overview.service.ts
   - backend/api/test/changelog.test.ts
+  - backend/api/test/changelog.integration.test.ts
   - backend/api/test/admin-overview.test.ts
   - apps/admin/src/screens/changelog/ChangelogScreen.tsx
 shared:
