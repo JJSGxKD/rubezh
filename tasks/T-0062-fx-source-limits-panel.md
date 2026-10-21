@@ -27,6 +27,10 @@ shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/
   - apps/admin/src/ui/help.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
 runner: local
