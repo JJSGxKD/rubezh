@@ -16,6 +16,8 @@ import { fetchBytes, fetchJson, type FetchLike } from "./http.js";
  * - **ЕЦБ** — евро и доллар. Рубля у ЕЦБ нет с марта 2022 года;
  * - **ExchangeRate-API**, открытый доступ, — запасной для всего фиата: без
  *   ключа, обновление раз в сутки, `429` на двадцать минут при злоупотреблении.
+ *   С ключом (необязателен, Р89) — адрес `v6.exchangerate-api.com` с ключом в
+ *   пути и тариф Free на 1 500 запросов в месяц.
  *   Условия: при показе курсов — ссылка «Rates By Exchange Rate API», данные
  *   нельзя перераспространять. Мы их не показываем и не раздаём, а берём
  *   одним из голосов медианы.
@@ -24,7 +26,14 @@ import { fetchBytes, fetchJson, type FetchLike } from "./http.js";
 const HOUR = 3_600_000;
 
 const OFFICIAL_TARIFF: Tariff = { name: "official", perMinute: 1, perMonth: null, minIntervalMs: 4 * HOUR };
-const ERAPI_TARIFF: Tariff = { name: "open-access", perMinute: 1, perMonth: null, minIntervalMs: 12 * HOUR };
+/** Раз в 12 часов — около 60 запросов в месяц: в лимит с ключом (1 500) укладываемся с большим запасом. */
+export const ERAPI_TARIFFS: Record<"open" | "keyed", Tariff> = {
+  open: { name: "open-access", perMinute: 1, perMonth: null, minIntervalMs: 12 * HOUR },
+  keyed: { name: "keyed", perMinute: 1, perMonth: 1500, minIntervalMs: 12 * HOUR },
+};
+
+/** Ключ уходит в путь адреса: только знаки, которые не нужно кодировать и которыми нельзя выйти из пути. */
+const ERAPI_KEY = /^[A-Za-z0-9]{8,64}$/;
 
 /** Момент котировки фиату даёт сам источник — дата курса, — часы ему не нужны. */
 interface SourceOptions {
@@ -105,20 +114,28 @@ export const ERAPI_CURRENCIES: readonly SourceCurrency[] = [
   { currency: "EUR", sourceId: "EUR" },
 ];
 
-const erapiSchema = z.object({
-  result: z.literal("success"),
-  base_code: z.literal("USD"),
-  time_last_update_unix: z.number().int().positive(),
-  rates: z.record(z.string(), z.number().positive()),
-});
+const rates = z.record(z.string(), z.number().positive());
 
-export function createErApiSource(options: SourceOptions): RateSource {
+/** Открытый адрес отдаёт курсы в `rates`, адрес с ключом — в `conversion_rates`; остальное в ответах то же. */
+const erapiSchema = z
+  .object({
+    result: z.literal("success"),
+    base_code: z.literal("USD"),
+    time_last_update_unix: z.number().int().positive(),
+    rates: rates.optional(),
+    conversion_rates: rates.optional(),
+  })
+  .refine((body) => body.rates !== undefined || body.conversion_rates !== undefined);
+
+export function createErApiSource(options: SourceOptions & { key?: string }): RateSource {
+  if (options.key !== undefined && !ERAPI_KEY.test(options.key)) throw new RangeError("ключ ExchangeRate-API: только латинские буквы и цифры");
+  const url = options.key === undefined ? "https://open.er-api.com/v6/latest/USD" : `https://v6.exchangerate-api.com/v6/${options.key}/latest/USD`;
   return {
     id: "erapi",
     currencies: ERAPI_CURRENCIES,
-    tariff: ERAPI_TARIFF,
+    tariff: options.key === undefined ? ERAPI_TARIFFS.open : ERAPI_TARIFFS.keyed,
     async fetch(signal) {
-      return parseErApi(await fetchJson(options.fetch, "erapi", "https://open.er-api.com/v6/latest/USD", signal, erapiSchema));
+      return parseErApi(await fetchJson(options.fetch, "erapi", url, signal, erapiSchema));
     },
   };
 }
@@ -126,7 +143,7 @@ export function createErApiSource(options: SourceOptions): RateSource {
 /** База — доллар, курс — сколько единиц за доллар. */
 export function parseErApi(body: z.infer<typeof erapiSchema>): Quote[] {
   const observedAt = new Date(body.time_last_update_unix * 1000);
-  const matched = matchBySourceId<number>(ERAPI_CURRENCIES, Object.entries(body.rates));
+  const matched = matchBySourceId<number>(ERAPI_CURRENCIES, Object.entries(body.rates ?? body.conversion_rates ?? {}));
   return [...matched].map(([code, unitsPerUsd]: [CurrencyCode, number]) => quoteFromUnitsPerUsd(code, unitsPerUsd, "erapi", observedAt));
 }
 
