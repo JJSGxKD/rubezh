@@ -3,8 +3,8 @@ id: T-0061
 title: Раздел «Запросы» в панели — исходящие вызовы и сводка входящих
 epic: E13
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0060, T-0049]
