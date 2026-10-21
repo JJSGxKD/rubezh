@@ -32,6 +32,8 @@ zones:
   - packages/app-shell/src/screens/meta/level.tsx
   - packages/app-shell/src/screens/guide/guide-data.ts
   - packages/app-shell/test/**
+  - packages/app-shell/src/screens/run/chest-rules.ts
+  - backend/api/src/modules/tasks/task-rules.ts
 shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - packages/app-shell/src/i18n/ru.json
