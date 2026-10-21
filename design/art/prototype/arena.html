@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Арена арта — прототип</title>
+<!--
+  Черновой прототип дизайнера (design/art/README.md). Не код игры: проверяет
+  спрайты в игровом масштабе, бесконечную землю с зонами и эффекты на толпе.
+  Phaser — той же версии, что в игре (apps/web-telegram/package.json).
+  Открывать через любой статический сервер из корня репозитория:
+    npx http-server . -p 8090   →   http://localhost:8090/design/art/prototype/arena.html
+  Phaser берётся из node_modules после `pnpm install`; нет его — с CDN той же версии.
+  Параметры адреса: ?enemies=300&mode=sprites|shapes&auto=1&zones=1&decor=1&fx=1&seed=7&area=380000&clean=1&x=0&y=0
+-->
+<style>
+  :root { --bg: #1d1c31; --text: #f3eee6; --muted: #aeaac4; --accent: #ff8f3f; --panel: rgba(29, 28, 49, 0.82); }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.35 system-ui, sans-serif; overflow: hidden; }
+  #game { position: fixed; inset: 0; }
+  #hud { position: fixed; left: 8px; top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--panel); max-width: calc(100vw - 32px); }
+  #hud b { color: var(--accent); }
+  #hud button { font: inherit; color: var(--text); background: #353452; border: 1px solid #4a4970; border-radius: 6px; padding: 4px 8px; margin: 4px 4px 0 0; }
+  #hud button[aria-pressed="true"] { background: var(--accent); color: #1d1c31; border-color: var(--accent); }
+  #stats { color: var(--muted); font-variant-numeric: tabular-nums; }
+  body.clean #hud { display: none; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud">
+  <div id="stats">…</div>
+  <div id="toggles"></div>
+</div>
+<script>
+const Q = new URLSearchParams(location.search);
+const opt = {
+  enemies: Number(Q.get("enemies") ?? 220),
+  mode: Q.get("mode") ?? "sprites",
+  auto: Q.get("auto") !== "0",
+  zones: Q.get("zones") !== "0",
+  decor: Q.get("decor") !== "0",
+  fx: Q.get("fx") !== "0",
+  patches: Q.get("patches") !== "0",
+  ground: Q.get("ground") !== "0",
+  seed: Number(Q.get("seed") ?? 7),
+  stage: Number(Q.get("stage") ?? -1),
+};
+if (Q.get("clean") === "1") document.body.classList.add("clean");
+
+/** Пикселей атласа на игровую единицу — как в design/art/src/build.mjs. */
+const PPU = 2.5;
+/** Видимая площадь мира в движении — content/maps.ts, viewAreaMoving; `area` — обзор сверху для проверки зон. */
+const VIEW_AREA = Number(Q.get("area") ?? 380000);
+/** Сторона чанка окружения в игровых единицах. */
+const CHUNK = 384;
+const HERO_SPEED = 190;
+const ENEMIES = [
+  { id: "swarm_rat", w: 10, speed: 90, r: 7, shape: "circle", color: 0xff4d5a },
+  { id: "bone_walker", w: 3, speed: 78, r: 12, shape: "square", color: 0xe0245e },
+  { id: "dasher_wolf", w: 2, speed: 60, r: 10, shape: "chevron", color: 0xff5a2e },
+  { id: "shooter_wisp", w: 2, speed: 40, r: 9, shape: "triangle", color: 0xff6a6a },
+  { id: "circler_crow", w: 4, speed: 120, r: 8, shape: "ring", color: 0xff7a90 },
+  { id: "tank_ghoul", w: 1, speed: 30, r: 12, shape: "square", color: 0xe0245e, late: true },
+  { id: "bomber_imp", w: 1, speed: 80, r: 9, shape: "hexagon", color: 0xff3b30, late: true },
+  { id: "rushing_bats", w: 3, speed: 160, r: 6, shape: "mote", color: 0xff9a8a, late: true },
+  { id: "splitter_slime", w: 1, speed: 40, r: 13, shape: "double", color: 0xd93a6a, late: true },
+  { id: "mire_shambler", w: 1, speed: 26, r: 7, shape: "circle", color: 0xff4d5a, late: true },
+];
+const ELITES = [
+  { id: "elite_ghoul", speed: 38, r: 20.4, shape: "square", color: 0xf2614c, rank: "elite" },
+  { id: "boss_seer", speed: 30, r: 33.6, shape: "eye", color: 0xd55a8f, rank: "boss" },
+];
+const ZONE_COLORS = { meadow: 0x33506a, graveyard: 0x434660, mire: 0x2b5656 };
+const DECOR = {
+  meadow: [["grass", 3, 9], ["stone", 3, 3], ["mushrooms", 2, 2], ["stump", 1, 1]],
+  graveyard: [["cross", 2, 4], ["grave", 2, 3], ["stone", 3, 2], ["bones", 2, 2]],
+  mire: [["reeds", 2, 6], ["puddle", 2, 2], ["grass", 3, 4], ["mushrooms", 2, 1], ["bones", 2, 1]],
+};
+
+/** Хэш координат чанка: раскладка декора повторяется при возвращении. Рендер, не симуляция. */
+function hash(x, y, salt) {
+  let h = (x * 374761393 + y * 668265263 + salt * 2147483647 + opt.seed * 1013904223) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function rngFor(x, y, salt) {
+  let i = 0;
+  return () => hash(x, y, salt * 31 + i++);
+}
+/** Сглаженный шум по сетке крупных ячеек — из него зона чанка. */
+function valueNoise(x, y, cell, salt) {
+  const gx = Math.floor(x / cell), gy = Math.floor(y / cell);
+  const fx = x / cell - gx, fy = y / cell - gy;
+  const s = (t) => t * t * (3 - 2 * t);
+  const a = hash(gx, gy, salt), b = hash(gx + 1, gy, salt), c = hash(gx, gy + 1, salt), d = hash(gx + 1, gy + 1, salt);
+  return a + (b - a) * s(fx) + (c - a) * s(fy) + (a - b - c + d) * s(fx) * s(fy);
+}
+/** Сторона клетки земли: одна нейтральная плитка 512 px на 256 единиц. */
+const GROUND_CELL = 256;
+/** Доля основы нейтральной плитки — NEUTRAL_BASE в src/env.mjs. */
+const NEUTRAL_BASE = 0xdc / 0xff;
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+/**
+ * Цвет земли в точке: зоны смешиваются по тому же шуму, что выбирает декор,
+ * но плавно, а пятна против повтора — медленная волна светлоты ±8 %.
+ * Результат делится на светлоту нейтральной плитки: тинт её умножает.
+ */
+function groundColor(x, y) {
+  const n = valueNoise(x, y, CHUNK * 5, 11);
+  const g = opt.zones ? smooth(0.42, 0.3, n) : 0;
+  const m = opt.zones ? smooth(0.6, 0.72, n) : 0;
+  const w = 1 - g - m;
+  const light = opt.patches ? 1 + (valueNoise(x, y, 700, 23) - 0.5) * 0.16 + (valueNoise(x, y, 230, 29) - 0.5) * 0.06 : 1;
+  const ch = (shift) => {
+    const v = ((ZONE_COLORS.meadow >> shift) & 255) * w + ((ZONE_COLORS.graveyard >> shift) & 255) * g + ((ZONE_COLORS.mire >> shift) & 255) * m;
+    return Math.min(255, Math.round((v * light) / NEUTRAL_BASE));
+  };
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
+function zoneAt(x, y) {
+  if (!opt.zones) return "meadow";
+  const n = valueNoise(x, y, CHUNK * 5, 11);
+  return n < 0.36 ? "graveyard" : n > 0.66 ? "mire" : "meadow";
+}
+
+function defineArena() {
+return class Arena extends Phaser.Scene {
+  preload() {
+    this.load.atlas("core", "../out/atlas-core.png", "../out/atlas-core.json");
+    this.load.atlas("late", "../out/atlas-late.png", "../out/atlas-late.json");
+    this.load.atlas("env", "../out/atlas-env.png", "../out/atlas-env.json");
+    this.load.image("ground", "../out/ground-neutral.webp");
+  }
+
+  create() {
+    const cam = this.cameras.main;
+    this.pxPerUnit = Math.sqrt((this.scale.width * this.scale.height) / VIEW_AREA);
+    cam.setZoom(this.pxPerUnit);
+    cam.setBackgroundColor(0x33506a);
+    this.makeShapeTextures();
+    this.makeBlobTexture();
+
+    // Земля — сетка квадов нейтральной плитки с окраской по вершинам: цвет
+    // зоны и пятна против повтора считаются в углах клеток и плавно
+    // интерполируются видеокартой. Ни одного лишнего слоя поверх земли — каждый
+    // пиксель земли заливается ровно один раз (design/art/environment.md, §4).
+    this.groundCells = new Map();
+    this.groundPool = [];
+    this.chunks = new Map();
+    this.decorPool = [];
+
+    this.hero = { x: Number(Q.get("x") ?? 0), y: Number(Q.get("y") ?? 0), vx: 1, vy: 0, t: 0 };
+    this.heroSprite = this.add.image(0, 0, "core", "hero/idle0").setDepth(10).setScale(1 / PPU);
+    this.heroShape = this.add.image(0, 0, "shape-hero").setScale(1 / PPU).setDepth(10).setVisible(false);
+
+    this.enemies = [];
+    for (let i = 0; i < opt.enemies; i++) this.enemies.push(this.spawnEnemy(this.pickType(i), true));
+    for (const def of ELITES) this.enemies.push(this.spawnEnemy(def, true));
+
+    this.fx = [];
+    this.keys = this.input.keyboard.createCursorKeys();
+    this.wasd = this.input.keyboard.addKeys("W,A,S,D");
+    this.frameTimes = [];
+    this.applyMode();
+    buildToggles(this);
+    // Для автоматических снимков и замеров (design/art/README.md, «Как проверить»).
+    window.__arena = this;
+  }
+
+  pickType(i) {
+    const pool = ENEMIES;
+    const total = pool.reduce((s, e) => s + e.w, 0);
+    let r = hash(i, 0, 3) * total;
+    for (const e of pool) { if ((r -= e.w) <= 0) return e; }
+    return pool[0];
+  }
+
+  spawnEnemy(def, initial) {
+    const a = Math.random() * Math.PI * 2;
+    const dist = initial ? 120 + Math.random() * 380 : 420 + Math.random() * 60;
+    const stage = opt.stage >= 0 ? opt.stage : def.rank ? 0 : Math.random() < 0.25 ? 1 : Math.random() < 0.15 ? 2 : 0;
+    const atlas = this.textures.get("core").has(`${def.id}/s0/walk0`) ? "core" : "late";
+    const sprites = opt.mode === "sprites";
+    const sprite = this.add.image(0, 0, atlas, `${def.id}/s${stage}/walk0`).setScale(1 / PPU).setDepth(5).setVisible(sprites);
+    const shape = this.add.image(0, 0, `shape-${def.id}`).setScale(1 / PPU).setDepth(5).setVisible(!sprites);
+    const e = { def, atlas, stage, x: this.hero.x + Math.cos(a) * dist, y: this.hero.y + Math.sin(a) * dist, sprite, shape, phase: Math.random(), hp: 1, hitAt: -1 };
+    if (!initial && opt.fx) this.playFx("spawn", e.x, e.y + def.r * 0.3, 5, 0xffffff, def.r * 2.2);
+    return e;
+  }
+
+  makeShapeTextures() {
+    const draw = (key, r, color, shape, rim) => {
+      const g = this.make.graphics({ x: 0, y: 0 }, false);
+      g.fillStyle(color, 1);
+      const R = r * PPU;
+      if (shape === "circle") g.fillCircle(R, R, R);
+      else if (shape === "square") g.fillRect(R * 0.15, R * 0.15, R * 1.7, R * 1.7);
+      else if (shape === "triangle") g.fillTriangle(R, 0, R * 2, R * 2, 0, R * 2);
+      else if (shape === "chevron") g.fillPoints([{ x: R, y: 0 }, { x: R * 2, y: R * 2 }, { x: R, y: R * 1.4 }, { x: 0, y: R * 2 }], true);
+      else if (shape === "ring") { g.lineStyle(Math.max(2, R * 0.35), color, 1); g.strokeCircle(R, R, R * 0.8); }
+      else if (shape === "hexagon") g.fillPoints([0, 1, 2, 3, 4, 5].map((k) => ({ x: R + Math.cos(k * Math.PI / 3) * R, y: R + Math.sin(k * Math.PI / 3) * R })), true);
+      else if (shape === "double") { g.fillCircle(R * 0.65, R * 0.75, R * 0.6); g.fillCircle(R * 1.35, R * 1.25, R * 0.6); }
+      else if (shape === "mote") g.fillPoints([{ x: R, y: 0 }, { x: R * 1.2, y: R * 0.8 }, { x: R * 2, y: R }, { x: R * 1.2, y: R * 1.2 }, { x: R, y: R * 2 }, { x: R * 0.8, y: R * 1.2 }, { x: 0, y: R }, { x: R * 0.8, y: R * 0.8 }], true);
+      else if (shape === "eye") { g.lineStyle(Math.max(2, R * 0.22), color, 1); g.strokeCircle(R, R, R * 0.78); g.fillCircle(R, R, R * 0.38); }
+      if (rim) { g.lineStyle(rim * PPU, 0xffd15c, 1); g.strokeCircle(R, R, R - rim * PPU / 2); }
+      g.generateTexture(key, Math.ceil(R * 2), Math.ceil(R * 2));
+      g.destroy();
+    };
+    for (const e of ENEMIES) draw(`shape-${e.id}`, e.r, e.color, e.shape);
+    for (const e of ELITES) draw(`shape-${e.id}`, e.r, e.color, e.shape, e.rank === "boss" ? 3 : 2);
+    const g = this.make.graphics({ x: 0, y: 0 }, false);
+    g.fillStyle(0x1d1c31, 1); g.fillCircle(10 * PPU, 10 * PPU, 10 * PPU);
+    g.fillStyle(0xf4f7ff, 1); g.fillCircle(10 * PPU, 10 * PPU, 8.4 * PPU);
+    g.generateTexture("shape-hero", 20 * PPU, 20 * PPU); g.destroy();
+  }
+
+  /** Мягкое пятно зоны: одна маленькая текстура, растянутая на сотни единиц. */
+  groundCell(gx, gy) {
+    const img = this.groundPool.pop() ?? this.add.image(0, 0, "ground").setOrigin(0, 0).setDepth(-100);
+    img.setVisible(true).setPosition(gx * GROUND_CELL, gy * GROUND_CELL).setScale(GROUND_CELL / img.width);
+    const c = (x, y) => groundColor(x * GROUND_CELL, y * GROUND_CELL);
+    img.setTint(c(gx, gy), c(gx + 1, gy), c(gx, gy + 1), c(gx + 1, gy + 1));
+    return img;
+  }
+
+  updateGround() {
+    const view = this.cameras.main.worldView;
+    const x0 = Math.floor(view.x / GROUND_CELL), x1 = Math.floor(view.right / GROUND_CELL);
+    const y0 = Math.floor(view.y / GROUND_CELL), y1 = Math.floor(view.bottom / GROUND_CELL);
+    const wanted = new Set();
+    for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) {
+      const key = gx * 100003 + gy;
+      wanted.add(key);
+      if (!this.groundCells.has(key)) this.groundCells.set(key, this.groundCell(gx, gy));
+    }
+    for (const [key, img] of this.groundCells) if (!wanted.has(key)) { img.setVisible(false); this.groundPool.push(img); this.groundCells.delete(key); }
+  }
+
+  /** Перекрасить видимую землю — после переключателей зон и пятен. */
+  repaintGround() {
+    for (const img of this.groundCells.values()) { img.setVisible(false); this.groundPool.push(img); }
+    this.groundCells.clear();
+  }
+
+  makeBlobTexture() {
+    const size = 128;
+    const tex = this.textures.createCanvas("blob", size, size);
+    const ctx = tex.getContext();
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.55, "rgba(255,255,255,0.75)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    tex.refresh();
+  }
+
+  applyMode() {
+    const sprites = opt.mode === "sprites";
+    this.heroSprite.setVisible(sprites);
+    this.heroShape.setVisible(!sprites);
+    for (const e of this.enemies) { e.sprite.setVisible(sprites); e.shape.setVisible(!sprites); }
+    for (const img of this.groundCells.values()) img.setVisible(sprites);
+    this.cameras.main.setBackgroundColor(sprites ? 0x33506a : 0x2b4152);
+    if (!sprites) for (const c of this.chunks.values()) this.releaseChunk(c);
+    if (!sprites) this.chunks.clear();
+  }
+
+  /** Чанки вокруг камеры: появляются при входе в обзор, уходят в пул при выходе. */
+  updateChunks() {
+    if (opt.mode !== "sprites") return;
+    const view = this.cameras.main.worldView;
+    const x0 = Math.floor((view.x - CHUNK) / CHUNK), x1 = Math.floor((view.right + CHUNK) / CHUNK);
+    const y0 = Math.floor((view.y - CHUNK) / CHUNK), y1 = Math.floor((view.bottom + CHUNK) / CHUNK);
+    const wanted = new Set();
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+      const key = `${cx},${cy}`;
+      wanted.add(key);
+      if (!this.chunks.has(key)) this.chunks.set(key, this.buildChunk(cx, cy));
+    }
+    for (const [key, chunk] of this.chunks) if (!wanted.has(key)) { this.releaseChunk(chunk); this.chunks.delete(key); }
+  }
+
+  takeDecor() {
+    const img = this.decorPool.pop() ?? this.add.image(0, 0, "env", "decor/grass0");
+    return img.setVisible(true);
+  }
+
+  buildChunk(cx, cy) {
+    const items = [];
+    const r = rngFor(cx, cy, 5);
+    const zone = zoneAt((cx + 0.5) * CHUNK, (cy + 0.5) * CHUNK);
+    if (opt.decor) {
+      for (const [id, variants, count] of DECOR[zone]) {
+        for (let k = 0; k < count; k++) {
+          // Декор группируется кучками, а не сеется равномерно: равномерная
+          // россыпь читается как узор и выдаёт повтор раньше, чем плитка.
+          const clusterX = r(), clusterY = r();
+          const x = (cx + clusterX) * CHUNK + (r() - 0.5) * 60;
+          const y = (cy + clusterY) * CHUNK + (r() - 0.5) * 60;
+          const img = this.takeDecor().setTexture("env", `decor/${id}${Math.floor(r() * variants)}`);
+          img.clearTint().setAlpha(1).setPosition(x, y).setScale((0.85 + r() * 0.3) / PPU).setFlipX(r() < 0.5).setDepth(-50);
+          items.push(img);
+        }
+      }
+      // Ориентир — примерно в одном чанке из двенадцати: редкий, чтобы оставаться приметой.
+      if (r() < 0.085) {
+        const id = zone === "mire" || r() < 0.5 ? "landmark_pillar" : "landmark_well";
+        const img = this.takeDecor().setTexture("env", `decor/${id}0`).clearTint().setAlpha(1);
+        img.setPosition((cx + 0.3 + r() * 0.4) * CHUNK, (cy + 0.3 + r() * 0.4) * CHUNK).setScale(1 / PPU).setFlipX(false).setDepth(-40);
+        items.push(img);
+      }
+    }
+    return { items };
+  }
+
+  releaseChunk(chunk) {
+    for (const img of chunk.items) { img.setVisible(false); this.decorPool.push(img); }
+  }
+
+  playFx(id, x, y, frames, tint, units) {
+    let fx = this.fx.find((f) => !f.active);
+    if (!fx) { fx = { img: this.add.image(0, 0, "core", `fx/${id}0`).setDepth(8) }; this.fx.push(fx); }
+    const frame = this.textures.getFrame("core", `fx/${id}0`);
+    fx.active = true; fx.id = id; fx.t = 0; fx.frames = frames;
+    fx.img.setVisible(true).setPosition(x, y).setFrame(`fx/${id}0`).setScale(units / (frame.width / PPU) / PPU).setTint(tint);
+  }
+
+  update(time, dtMs) {
+    const dt = Math.min(dtMs, 50) / 1000;
+    this.frameTimes.push(dtMs);
+    if (this.frameTimes.length > 120) this.frameTimes.shift();
+
+    // Герой: клавиши или автопилот по кругу.
+    let mx = (this.keys.right.isDown || this.wasd.D.isDown ? 1 : 0) - (this.keys.left.isDown || this.wasd.A.isDown ? 1 : 0);
+    let my = (this.keys.down.isDown || this.wasd.S.isDown ? 1 : 0) - (this.keys.up.isDown || this.wasd.W.isDown ? 1 : 0);
+    if (opt.auto && mx === 0 && my === 0) { const a = time / 4000; mx = Math.cos(a); my = Math.sin(a * 0.7); }
+    const len = Math.hypot(mx, my);
+    const moving = len > 0.01;
+    if (moving) { this.hero.vx = mx / len; this.hero.vy = my / len; this.hero.x += this.hero.vx * HERO_SPEED * dt; this.hero.y += this.hero.vy * HERO_SPEED * dt; }
+    this.hero.t += dt;
+    const heroFrame = moving ? `hero/walk${Math.floor(this.hero.t * 8) % 4}` : `hero/idle${Math.floor(this.hero.t * 1.5) % 2}`;
+    this.heroSprite.setFrame(heroFrame).setPosition(this.hero.x, this.hero.y).setFlipX(this.hero.vx < 0);
+    this.heroShape.setPosition(this.hero.x, this.hero.y);
+    this.cameras.main.centerOn(this.hero.x, this.hero.y);
+
+    if (opt.mode === "sprites" && opt.ground) this.updateGround();
+    this.updateChunks();
+
+    const sprites = opt.mode === "sprites";
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i];
+      const dx = this.hero.x - e.x, dy = this.hero.y - e.y;
+      const d = Math.hypot(dx, dy) || 1;
+      e.x += (dx / d) * e.def.speed * dt * 0.6;
+      e.y += (dy / d) * e.def.speed * dt * 0.6;
+      e.phase += dt * (e.def.speed / 60) * 1.6;
+      // Гибель у героя — условная: прототип проверяет облик, а не бой.
+      if (d < 40 + e.def.r && !e.def.rank) {
+        if (opt.fx) { this.playFx("death", e.x, e.y, 6, e.def.color, e.def.r * 3.2); this.playFx("hit", e.x, e.y - e.def.r * 0.4, 4, 0xffe066, 10); }
+        e.sprite.destroy(); e.shape.destroy();
+        this.enemies[i] = this.spawnEnemy(e.def, false);
+        continue;
+      }
+      if (sprites) {
+        const frame = `${e.def.id}/s${e.stage}/walk${Math.floor(e.phase * 4) % 4}`;
+        if (e.sprite.frame.name !== frame) e.sprite.setFrame(frame);
+        e.sprite.setPosition(e.x, e.y).setFlipX(dx < 0);
+      } else {
+        e.shape.setPosition(e.x, e.y);
+      }
+    }
+
+    for (const fx of this.fx) {
+      if (!fx.active) continue;
+      fx.t += dt;
+      const k = Math.floor(fx.t / 0.05);
+      if (k >= fx.frames) { fx.active = false; fx.img.setVisible(false); continue; }
+      fx.img.setFrame(`fx/${fx.id}${k}`);
+    }
+
+    if (time - (this.lastStats ?? 0) > 500) {
+      this.lastStats = time;
+      const avg = this.frameTimes.reduce((s, v) => s + v, 0) / this.frameTimes.length;
+      const worst = Math.max(...this.frameTimes);
+      document.getElementById("stats").innerHTML =
+        `<b>${opt.mode === "sprites" ? "Спрайты" : "Фигуры (как сейчас)"}</b> · врагов ${this.enemies.length} · ` +
+        `кадр ${avg.toFixed(1)} мс, худший ${worst.toFixed(0)} · чанков ${this.chunks.size}, декора в пуле ${this.decorPool.length} · ` +
+        `объектов ${this.children.length} · зона «${zoneAt(this.hero.x, this.hero.y)}»`;
+    }
+  }
+}
+
+}
+
+function buildToggles(scene) {
+  const root = document.getElementById("toggles");
+  const add = (label, key, onChange) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    const sync = () => b.setAttribute("aria-pressed", String(key === "mode" ? opt.mode === "sprites" : opt[key]));
+    b.onclick = () => { if (key === "mode") opt.mode = opt.mode === "sprites" ? "shapes" : "sprites"; else opt[key] = !opt[key]; sync(); onChange(); };
+    sync();
+    root.append(b);
+  };
+  const rebuild = () => { for (const c of scene.chunks.values()) scene.releaseChunk(c); scene.chunks.clear(); scene.repaintGround(); };
+  add("Спрайты", "mode", () => scene.applyMode());
+  add("Зоны", "zones", rebuild);
+  add("Декор", "decor", rebuild);
+  add("Пятна", "patches", rebuild);
+  add("Эффекты", "fx", () => {});
+  add("Автопилот", "auto", () => {});
+}
+
+function boot() {
+const dpr = Math.min(window.devicePixelRatio || 1, 3);
+new Phaser.Game({
+  type: Phaser.WEBGL,
+  parent: "game",
+  width: Math.round(innerWidth * dpr),
+  height: Math.round(innerHeight * dpr),
+  backgroundColor: "#33506a",
+  scale: { mode: Phaser.Scale.NONE, zoom: 1 / dpr },
+  render: { antialias: true, pixelArt: false },
+  scene: defineArena(),
+});
+}
+
+const PHASER_SOURCES = [
+  "../../../apps/web-telegram/node_modules/phaser/dist/phaser.min.js",
+  "https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js",
+];
+(function load(i) {
+  const s = document.createElement("script");
+  s.src = PHASER_SOURCES[i];
+  s.onload = boot;
+  s.onerror = () => (i + 1 < PHASER_SOURCES.length ? load(i + 1) : (document.getElementById("stats").textContent = "Phaser не загрузился"));
+  document.head.append(s);
+})(0);
+</script>
+</body>
+</html>

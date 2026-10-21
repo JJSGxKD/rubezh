@@ -25,14 +25,22 @@ function rng(seed) {
  */
 export const ZONES = {
   meadow: { base: "#33506a", spot: "#2c475e", light: "#3d5c74", fleck: "#4a6d7c" },
-  graveyard: { base: "#3a4860", spot: "#323e55", light: "#46536b", fleck: "#58627a" },
-  mire: { base: "#2f5260", spot: "#284653", light: "#38606a", fleck: "#467466" },
+  graveyard: { base: "#434660", spot: "#393c55", light: "#4f526c", fleck: "#5f617a" },
+  mire: { base: "#2b5656", spot: "#244a4b", light: "#356464", fleck: "#467466" },
+  // Нейтральная плитка под окраску по вершинам: цвет зоны умножается на неё в
+  // рендере, поэтому основа светлая, пятна — на полтона темнее и светлее.
+  neutral: { base: "#dcdcdc", spot: "#c6c6c6", light: "#f2f2f2", fleck: "#fafafa" },
 };
+
+/** Доля основы нейтральной плитки: тинт зоны = желаемый цвет / NEUTRAL_BASE. */
+export const NEUTRAL_BASE = 0xdc / 0xff;
 
 /**
  * Бесшовная плитка: каждое пятно рисуется девять раз со сдвигом на размер
- * плитки, и то, что вышло за край, входит с другой стороны. Пятна крупные и
- * мягкие — мелкий узор на плитке выдал бы повтор через два экрана.
+ * плитки, и то, что вышло за край, входит с другой стороны. Пятна на плитке
+ * тихие: крупный рисунок повторяется каждые 256 единиц и на обзоре
+ * складывается в решётку. Крупную неровность даёт не плитка, а пятна чанков
+ * поверх неё (prototype/arena.html, `buildChunk`).
  */
 export function groundTile(zone, size = 512, seed = 7) {
   const z = ZONES[zone];
@@ -47,7 +55,7 @@ export function groundTile(zone, size = 512, seed = 7) {
   const k = size / 256;
   for (let i = 0; i < 16; i++) {
     const x = r() * size, y = r() * size, rx = (20 + r() * 44) * k, ry = rx * (0.5 + r() * 0.4);
-    blobs += wrap(`<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(ry)}" fill="${i % 3 === 0 ? z.light : z.spot}" opacity="0.8" transform="rotate(${f(r() * 180)} ${f(x)} ${f(y)})"/>`);
+    blobs += wrap(`<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(ry)}" fill="${i % 3 === 0 ? z.light : z.spot}" opacity="0.45" transform="rotate(${f(r() * 180)} ${f(x)} ${f(y)})"/>`);
   }
   // Травинки кучками по три-пять: одиночные штрихи на плитке складываются в
   // ровную сетку точек и выдают повтор, кучки — нет.

@@ -192,7 +192,10 @@ async function main() {
   // Плитки земли — отдельными текстурами: TileSprite повторяет текстуру целиком.
   // WebP, а не PNG: у плитки нет прозрачности, а размытые пятна сжимаются
   // в 3–4 КБ против 210 КБ PNG без видимой разницы.
-  for (const zone of Object.keys(ZONES)) {
+  // Нужна одна нейтральная плитка: цвет зоны рендер кладёт окраской по вершинам.
+  // Плитки зон собираются только для сравнения: `ART_ZONE_TILES=1`.
+  const tiles = process.env.ART_ZONE_TILES === "1" ? Object.keys(ZONES) : ["neutral"];
+  for (const zone of tiles) {
     const size = 512;
     const png = Buffer.from(await renderSheet(page, { width: size, height: size, frames: [{ svg: groundTile(zone, size), x: 0, y: 0, size }] }, "image/webp"), "base64");
     writeFileSync(join(OUT, `ground-${zone}.webp`), png);

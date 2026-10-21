@@ -1,11 +1,11 @@
 [
  {
   "pack": "core",
-  "frames": 100,
-  "atlas": "1024×1116",
-  "fill": "85%",
-  "png": "67 КБ",
-  "gpu": "4.4 МБ"
+  "frames": 105,
+  "atlas": "1024×1148",
+  "fill": "83%",
+  "png": "68 КБ",
+  "gpu": "4.5 МБ"
  },
  {
   "pack": "late",
@@ -24,27 +24,11 @@
   "gpu": "0.9 МБ"
  },
  {
-  "pack": "ground-meadow",
+  "pack": "ground-neutral",
   "frames": 1,
   "atlas": "512×512",
   "fill": "100%",
   "png": "4 КБ",
-  "gpu": "1.00 МБ"
- },
- {
-  "pack": "ground-graveyard",
-  "frames": 1,
-  "atlas": "512×512",
-  "fill": "100%",
-  "png": "4 КБ",
-  "gpu": "1.00 МБ"
- },
- {
-  "pack": "ground-mire",
-  "frames": 1,
-  "atlas": "512×512",
-  "fill": "100%",
-  "png": "5 КБ",
   "gpu": "1.00 МБ"
  }
 ]
