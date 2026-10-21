@@ -1,6 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { dirname } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import type {
   EventExportRow,
@@ -183,5 +187,85 @@ describe("выгрузка закрытого теста", () => {
     expect(csvCell("=HYPERLINK(1)")).toBe("'=HYPERLINK(1)");
     expect(csvCell(-5)).toBe("-5");
     expect(csvCell(null)).toBe("");
+  });
+});
+
+// Сбой посреди выгрузки: потоки закрываются до удаления каталога, исходная
+// ошибка доходит до вызывающего, а необработанных исключений нет (T-0202).
+describe("выгрузка: сбой посреди работы", () => {
+  let tmp: string;
+  let previousTmp: string | undefined;
+  const uncaught: unknown[] = [];
+  const onUncaught = (error: unknown): void => void uncaught.push(error);
+
+  beforeEach(async () => {
+    // Свой временный каталог: по нему видно, что выгрузка за собой убрала.
+    tmp = await mkdtemp(join(tmpdir(), "export-test-"));
+    previousTmp = process.env.TMPDIR;
+    process.env.TMPDIR = tmp;
+    uncaught.length = 0;
+    process.on("uncaughtException", onUncaught);
+    process.on("unhandledRejection", onUncaught);
+  });
+
+  afterEach(async () => {
+    process.off("uncaughtException", onUncaught);
+    process.off("unhandledRejection", onUncaught);
+    if (previousTmp === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmp;
+    await rm(tmp, { recursive: true, force: true });
+  });
+
+  const runEvents = (count: number): EventExportRow[] =>
+    Array.from({ length: count }, (_, index) =>
+      event(index, {
+        eventType: "run_finished",
+        payload: { seed: 7, survivalSec: 412, level: 18, wave: 7, enemiesKilled: 900, weapon: "spark", map: "meadow", difficulty: "normal", contentHash: "abc", isNewRecord: true, cheats: false },
+      }),
+    );
+
+  async function settle(): Promise<void> {
+    await sleep(150);
+  }
+
+  it("репозиторий упал на второй странице событий: исходная ошибка, каталог убран, необработанных исключений нет", async () => {
+    const repository = new MemoryExportRepository();
+    repository.events = runEvents(2_500);
+    const original = repository.eventsPage.bind(repository);
+    repository.eventsPage = async (period, after, limit) => {
+      if (after !== null) throw new Error("статья на второй странице");
+      return original(period, after, limit);
+    };
+
+    await expect(service(repository).build({ period: { from: null, to: NOW }, source: "cli", requestedBy: "cli" })).rejects.toThrow("статья на второй странице");
+    await settle();
+
+    expect(readdirSync(tmp).filter((name) => name.startsWith("rubezh-export-"))).toEqual([]);
+    expect(uncaught).toEqual([]);
+    expect([...repository.journal.values()][0]).toMatchObject({ status: "failed", error: "статья на второй странице" });
+  });
+
+  it("репозиторий упал на отчётах (таблица забегов уже закрыта): то же", async () => {
+    const repository = new MemoryExportRepository();
+    repository.events = runEvents(10);
+    repository.reportsPage = async () => Promise.reject(new Error("отчёты недоступны"));
+
+    await expect(service(repository).build({ period: { from: null, to: NOW }, source: "cli", requestedBy: "cli" })).rejects.toThrow("отчёты недоступны");
+    await settle();
+
+    expect(readdirSync(tmp).filter((name) => name.startsWith("rubezh-export-"))).toEqual([]);
+    expect(uncaught).toEqual([]);
+  });
+
+  it("сбой на первой странице, пока файлы ещё открываются: каталог не уходит из-под потоков", async () => {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const repository = new MemoryExportRepository();
+      repository.eventsPage = async () => Promise.reject(new Error("сразу упало"));
+      await expect(service(repository).build({ period: { from: null, to: NOW }, source: "cli", requestedBy: "cli" })).rejects.toThrow("сразу упало");
+    }
+    await settle();
+
+    expect(readdirSync(tmp).filter((name) => name.startsWith("rubezh-export-"))).toEqual([]);
+    expect(uncaught).toEqual([]);
   });
 });
