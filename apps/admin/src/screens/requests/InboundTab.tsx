@@ -1,4 +1,4 @@
-import { fetchInbound, formatLatency, formatShare, seriesChart, serverErrorTone, type Inbound, type RequestPeriod } from "../../api/requests";
+import { MAX_CHART_BARS, fetchInbound, formatLatency, formatShare, groupSeries, seriesChart, serverErrorTone, type Inbound, type RequestPeriod } from "../../api/requests";
 import { formatDateTime, formatNumber, formatTime } from "../../format";
 import { api } from "../../services";
 import { HELP } from "../../ui/help";
@@ -42,28 +42,33 @@ function axisLabel(at: string, step: Inbound["step"], period: string): string {
  * видно и объём, и долю отказов.
  */
 function Chart({ report }: { report: Inbound }) {
-  const { max, bars } = seriesChart(report.series);
-  const total = report.series.reduce((sum, point) => sum + point.total, 0);
-  const errors = report.series.reduce((sum, point) => sum + point.errors, 0);
+  const grouped = groupSeries(report.series, MAX_CHART_BARS);
+  const { max, bars } = seriesChart(grouped);
+  const total = grouped.reduce((sum, point) => sum + point.total, 0);
+  const errors = grouped.reduce((sum, point) => sum + point.errors, 0);
   if (total === 0) return <p className="text-sm text-text-muted">За этот период ответов не было</p>;
-  const first = report.series[0];
-  const last = report.series.at(-1);
+  const first = grouped[0];
+  const last = grouped.at(-1);
+  const unit = report.step === "minute" ? "мин" : "ч";
   const step = report.step === "minute" ? "минуту" : "час";
+  // Склеенные шаги — один столбец: максимум считается по нему, а не по одному шагу.
+  const stepsPerBar = grouped.reduce((most, point) => Math.max(most, point.steps), 1);
   return (
     <div className="flex flex-col gap-1">
       <div
-        className="flex h-32 items-end gap-px"
+        className="flex h-32 min-w-0 items-end gap-px overflow-hidden"
         role="img"
         aria-label={`Ответы сервера: всего ${formatNumber(total)}, из них 5xx — ${formatNumber(errors)}, самый нагруженный шаг — ${formatNumber(max)}`}
       >
-        {report.series.map((point, index) => {
+        {grouped.map((point, index) => {
           const bar = bars[index];
           if (bar === undefined) return null;
+          const span = point.steps > 1 ? ` (${String(point.steps)} ${unit})` : "";
           return (
             <span
               key={point.at}
-              title={`${axisLabel(point.at, report.step, report.period)}: ${formatNumber(point.total)}${point.errors === 0 ? "" : `, из них 5xx ${formatNumber(point.errors)}`}`}
-              className="relative flex h-full min-w-px flex-1 items-end"
+              title={`${axisLabel(point.at, report.step, report.period)}${span}: ${formatNumber(point.total)}${point.errors === 0 ? "" : `, из них 5xx ${formatNumber(point.errors)}`}`}
+              className="relative flex h-full min-w-0 flex-1 items-end"
             >
               <span className={`w-full rounded-t-sm ${point.total === 0 ? "bg-surface-raised" : "bg-accent"}`} style={{ height: `${String(Math.max(point.total === 0 ? 2 : 4, Math.round(bar.total * 100)))}%` }}>
                 {point.errors === 0 ? null : <span className="absolute bottom-0 left-0 w-full bg-danger" style={{ height: `${String(Math.max(4, Math.round(bar.errors * 100)))}%` }} />}
@@ -75,7 +80,7 @@ function Chart({ report }: { report: Inbound }) {
       <p className="flex flex-wrap justify-between gap-x-3 text-xs text-text-muted">
         <span>{first === undefined ? "" : axisLabel(first.at, report.step, report.period)}</span>
         <span>
-          всего {formatNumber(total)} · 5xx {formatNumber(errors)} · максимум за {step} {formatNumber(max)}
+          всего {formatNumber(total)} · 5xx {formatNumber(errors)} · максимум за {stepsPerBar > 1 ? `${String(stepsPerBar)} ${unit}` : step} {formatNumber(max)}
         </span>
         <span>{last === undefined ? "" : axisLabel(last.at, report.step, report.period)}</span>
       </p>

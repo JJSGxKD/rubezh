@@ -147,6 +147,40 @@ export function viaLabel(via: string): string {
   return via === "direct" ? "напрямую" : via;
 }
 
+/**
+ * Сколько столбцов рисуется самое большее. Неделя по часам — 169 точек, и по
+ * столбику в пиксель-два на телефоне шириной 320 они не помещаются: график
+ * расширял бы страницу. Число столбцов зависит от того, сколько их влезает, а
+ * не от периода.
+ */
+export const MAX_CHART_BARS = 96;
+
+/** Столбец графика после склейки соседних шагов: `steps` — сколько шагов в нём. */
+export interface GroupedPoint {
+  at: string;
+  total: number;
+  errors: number;
+  steps: number;
+}
+
+/** Склеивает подряд идущие шаги, пока их не станет не больше `maxBars`; суммы сохраняются, время — первого шага. */
+export function groupSeries(series: Inbound["series"], maxBars: number): GroupedPoint[] {
+  const size = Math.max(1, Math.ceil(series.length / Math.max(1, Math.floor(maxBars))));
+  const grouped: GroupedPoint[] = [];
+  for (let from = 0; from < series.length; from += size) {
+    const chunk = series.slice(from, from + size);
+    const first = chunk[0];
+    if (first === undefined) continue;
+    grouped.push({
+      at: first.at,
+      total: chunk.reduce((sum, point) => sum + point.total, 0),
+      errors: chunk.reduce((sum, point) => sum + point.errors, 0),
+      steps: chunk.length,
+    });
+  }
+  return grouped;
+}
+
 /** Столбец графика: высоты — доли от максимума по ряду, чтобы экран не считал сам. */
 export interface ChartBar {
   at: string;
