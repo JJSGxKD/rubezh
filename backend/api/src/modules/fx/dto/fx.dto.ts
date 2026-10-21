@@ -23,3 +23,21 @@ export const manualRateSchema = z.object({
 });
 
 export type ManualRateBody = z.infer<typeof manualRateSchema>;
+
+const MAX_REQUESTS = 100_000_000;
+const noteSchema = z.string().trim().min(3).max(200);
+
+// «Без лимита» — явный `null`, а не пропущенное поле: забытый ключ не должен
+// молча снять лимит с источника.
+export const sourceLimitSchema = z.object({
+  perMonth: z.number().int().min(1).max(MAX_REQUESTS).nullable(),
+  note: noteSchema,
+});
+
+export const sourceUsedSchema = z.object({
+  used: z.number().int().min(0).max(MAX_REQUESTS),
+  note: noteSchema,
+});
+
+export type SourceLimitBody = z.infer<typeof sourceLimitSchema>;
+export type SourceUsedBody = z.infer<typeof sourceUsedSchema>;
