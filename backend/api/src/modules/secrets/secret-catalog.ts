@@ -64,26 +64,44 @@ const CHECK_TIMEOUT_MS = 5_000;
 
 const nonEmpty = (value: string): string | null => (value === "" ? null : value);
 
-/** Пинг CoinGecko: у демо и платного ключа свой адрес и свой заголовок. */
-function coingeckoCheck(plan: "demo" | "pro") {
+interface KeyCheckSpec {
+  /** как сервис называется в сообщениях панели */
+  service: string;
+  url: (value: string) => string;
+  headers: (value: string) => Record<string, string>;
+  /** что проверить, когда сервис не принял ключ */
+  refusalHint: string;
+}
+
+/** Проверка связи с сервисом ключом: один лёгкий запрос, ответы — словами для панели. */
+function keyCheck(spec: KeyCheckSpec) {
   return async (value: string, fetchImpl: typeof fetch): Promise<SecretCheckResult> => {
-    const host = plan === "pro" ? "https://pro-api.coingecko.com" : "https://api.coingecko.com";
     try {
-      const response = await fetchImpl(`${host}/api/v3/ping`, {
-        headers: { [`x-cg-${plan}-api-key`]: value, accept: "application/json" },
+      const response = await fetchImpl(spec.url(value), {
+        headers: { ...spec.headers(value), accept: "application/json" },
         signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
       });
-      if (response.ok) return { ok: true, message: "CoinGecko принял ключ" };
+      if (response.ok) return { ok: true, message: `${spec.service} принял ключ` };
       if (response.status === 401 || response.status === 403 || response.status === 400) {
-        return { ok: false, message: `CoinGecko не принял ключ (${String(response.status)}): проверьте, что ключ ${plan === "pro" ? "платный" : "демо"} и скопирован целиком` };
+        return { ok: false, message: `${spec.service} не принял ключ (${String(response.status)}): ${spec.refusalHint}` };
       }
-      if (response.status === 429) return { ok: false, message: "CoinGecko ответил «слишком много запросов» — ключ не проверен, попробуйте через минуту" };
-      return { ok: false, message: `CoinGecko ответил ${String(response.status)} — ключ не проверен` };
+      if (response.status === 429) return { ok: false, message: `${spec.service} ответил «слишком много запросов» — ключ не проверен, попробуйте через минуту` };
+      return { ok: false, message: `${spec.service} ответил ${String(response.status)} — ключ не проверен` };
     } catch (error: unknown) {
       const timeout = error instanceof Error && error.name === "TimeoutError";
-      return { ok: false, message: timeout ? "CoinGecko не ответил за 5 секунд — ключ не проверен" : "CoinGecko недоступен с сервера — ключ не проверен" };
+      return { ok: false, message: timeout ? `${spec.service} не ответил за 5 секунд — ключ не проверен` : `${spec.service} недоступен с сервера — ключ не проверен` };
     }
   };
+}
+
+/** Пинг CoinGecko: у демо и платного ключа свой адрес и свой заголовок. */
+function coingeckoCheck(plan: "demo" | "pro") {
+  return keyCheck({
+    service: "CoinGecko",
+    url: () => `${plan === "pro" ? "https://pro-api.coingecko.com" : "https://api.coingecko.com"}/api/v3/ping`,
+    headers: (value) => ({ [`x-cg-${plan}-api-key`]: value }),
+    refusalHint: `проверьте, что ключ ${plan === "pro" ? "платный" : "демо"} и скопирован целиком`,
+  });
 }
 
 const FX_SERVICE = "Курсы валют · CoinGecko";
