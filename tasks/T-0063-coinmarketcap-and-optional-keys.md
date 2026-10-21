@@ -3,8 +3,8 @@ id: T-0063
 title: CoinMarketCap — новый источник курсов; необязательные ключи tonapi и erapi
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0062]
