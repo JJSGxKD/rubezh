@@ -20,6 +20,13 @@ import { ServerErrorAlarm } from "./modules/admin-notify/server-error-alarm.js";
  */
 export const BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 
+/**
+ * Потолок тела отчёта браузера о заблокированном адресе. Настоящий отчёт —
+ * сотни байт; приёмник открыт без входа, и больше нескольких килобайт ему
+ * присылать незачем.
+ */
+export const CSP_REPORT_BODY_LIMIT_BYTES = 16 * 1024;
+
 type EntryModule = Parameters<typeof NestFactory.create>[0];
 
 export interface HttpAppOptions {
@@ -51,6 +58,22 @@ function configureHttpApp(app: NestFastifyApplication, config: AppConfig): void 
   // `/r/<код>` — адрес редирект-ссылки в чатах и постах, а не API
   // (docs/24-attribution-and-sharing.md §3.1).
   app.setGlobalPrefix("api/v1", { exclude: ["health", "health/ready", "r/:code"] });
+
+  // Браузер шлёт отчёты политики источников с собственными типами тела —
+  // `application/csp-report` (report-uri) и `application/reports+json`
+  // (report-to); Fastify знает только json и text/plain и ответил бы 415.
+  // Остальные типы по-прежнему отклоняются.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addContentTypeParser(["application/csp-report", "application/reports+json"], { parseAs: "string", bodyLimit: CSP_REPORT_BODY_LIMIT_BYTES }, (_request, body, done) => {
+      try {
+        done(null, JSON.parse(String(body)));
+      } catch {
+        // Текст ошибки разбора не берём: в нём бывают куски тела.
+        done(Object.assign(new Error("Некорректный отчёт"), { statusCode: 400 }), undefined);
+      }
+    });
 
   app.enableCors({
     origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : false,

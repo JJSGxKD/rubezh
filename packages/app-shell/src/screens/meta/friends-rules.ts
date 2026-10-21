@@ -61,6 +61,15 @@ export function coinIconsNeedRoom(steps: readonly { coins: number }[]): boolean 
   return steps.some((step) => step.coins >= 1_000);
 }
 
+/**
+ * Ширина окна, с которой кнопки в строке игрока снова подписаны текстом. У
+ * пары (заявка: «Принять» и «Отклонить») порог выше: по замерам PR #354 на 430
+ * px с текстом имя сжималось до 56 px, а ширина имени при текстовых кнопках —
+ * `W − 374`; 540 px оставляют около 166 px, как у строки с «Подарить» (158 px).
+ * Числа продублированы классами Tailwind в `friends-parts.tsx` — их сверяет тест.
+ */
+export const PEER_TEXT_FROM_PX = { single: 430, pair: 540 } as const;
+
 export type PeerActionKind = "accept" | "decline" | "gift" | "gifted";
 
 export interface PeerActionView {

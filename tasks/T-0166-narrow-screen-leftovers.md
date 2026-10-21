@@ -3,8 +3,8 @@ id: T-0166
 title: Узкие экраны: время в плитке награды, имя в заявке в друзья, срез в витрине
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []

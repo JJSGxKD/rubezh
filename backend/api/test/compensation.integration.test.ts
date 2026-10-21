@@ -27,12 +27,14 @@ describe.skipIf(DATABASE_URL === "")("компенсация после вайп
   let accounts: PrismaAccountRepository;
   let wallet: WalletService;
   let service: CompensationService;
+  const createdAccounts: string[] = [];
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
       { platform: "telegram", platformUserId: String(740_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Тестер", username: null, photoUrl: null },
       Date.now(),
     );
+    createdAccounts.push(created.accountId);
     return created.accountId;
   }
 
@@ -57,6 +59,8 @@ describe.skipIf(DATABASE_URL === "")("компенсация после вайп
   });
 
   afterAll(async () => {
+    // Строки компенсации — общая таблица: за собой убираем, иначе снимок тестеров увидит чужое.
+    await prisma.testerCompensation.deleteMany({ where: { accountId: { in: createdAccounts } } });
     await prisma.$disconnect();
   });
 

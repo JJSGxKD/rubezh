@@ -1,4 +1,5 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Check, Info, Lock, X } from "lucide-react";
 import { t } from "../../i18n";
 import { useBackLayer } from "../../state/back-stack";
@@ -6,7 +7,8 @@ import { uiFeedback } from "../../state/ui-feedback";
 import { Button, IconButton } from "./Button";
 import { CutFrame } from "./CutFrame";
 import { Badge } from "./Data";
-import { modalFooterPlacement } from "./modal-rules";
+import { useModalHost } from "./modal-host";
+import { modalFooterPlacement, modalMount } from "./modal-rules";
 
 /**
  * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
@@ -153,6 +155,8 @@ export function Modal(props: ModalProps): ReactNode {
   const bottom = props.placement === "bottom";
   const wide = props.size === "l";
   const { onDismiss } = props;
+  const host = useModalHost();
+  const mount = modalMount(host);
 
   // Лист снизу шуршит на открытии и закрытии; модалки забега — уровень,
   // пауза, смерть — звучат своими звуками событий, а не листом.
@@ -173,14 +177,14 @@ export function Modal(props: ModalProps): ReactNode {
   const headerTitle = closable && props.icon === undefined;
   const footerPlacement = modalFooterPlacement({ hasFooter: props.footer !== undefined, pinFooter: props.pinFooter === true });
 
-  return (
+  const dialog = (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
       aria-labelledby={props.labelledBy}
       className={[
-        "absolute inset-0 flex px-4",
+        "pointer-events-auto absolute inset-0 flex px-4",
         "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
         "pr-[calc(1rem+var(--app-inset-right))] pl-[calc(1rem+var(--app-inset-left))]",
         bottom ? "items-end justify-center" : "items-center justify-center",
@@ -239,6 +243,9 @@ export function Modal(props: ModalProps): ReactNode {
       </Panel>
     </div>
   );
+
+  if (mount === "wait") return null;
+  return mount === "portal" && host ? createPortal(dialog, host) : dialog;
 }
 
 /** Панель модалки: со срезом — `CutFrame`, без него — прежняя поверхность со скруглением. */

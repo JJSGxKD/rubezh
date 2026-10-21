@@ -82,7 +82,7 @@ export function devServerConfig({ env, repoRoot, port, tunnelHostVar, proxy, gra
   // видно здесь, а не у тестера.
   const apiOrigin = (env.VITE_API_URL ?? "").trim();
   const policy = (mode: "dev" | "build") => ({
-    headers: { "content-security-policy": contentSecurityPolicy({ mode, apiOrigin, graspil, ads, adminOrigins: preview ? adminOrigins(env, mode === "dev") : [] }) },
+    headers: { "content-security-policy": contentSecurityPolicy({ mode, apiOrigin, graspil, ads, reports: ads, adminOrigins: preview ? adminOrigins(env, mode === "dev") : [] }) },
   });
 
   return {

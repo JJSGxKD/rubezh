@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modalFooterPlacement } from "../src/design-system/components/modal-rules";
+import { modalFooterPlacement, modalMount } from "../src/design-system/components/modal-rules";
 
 // Где живёт подвал модалки: закреплять нечего без подвала, поэтому опция без
 // `footer` не должна снимать у тела нижний отступ.
@@ -16,5 +16,19 @@ describe("место подвала модалки", () => {
 
   it("с подвалом и опцией — «pinned»", () => {
     expect(modalFooterPlacement({ hasFooter: true, pinFooter: true })).toBe("pinned");
+  });
+});
+
+describe("куда рисовать модалку", () => {
+  it("слоя нет (undefined) — на месте: витрина, предпросмотр, серверный рендер", () => {
+    expect(modalMount(undefined)).toBe("inline");
+  });
+
+  it("слой есть, узла ещё нет (null) — ждём, на месте не рисуем", () => {
+    expect(modalMount(null)).toBe("wait");
+  });
+
+  it("узел слоя есть — рисуем в него", () => {
+    expect(modalMount({})).toBe("portal");
   });
 });
