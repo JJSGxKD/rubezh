@@ -78,8 +78,22 @@ export function statName(stat: string): string {
 /** Здоровье, восстановление и броня — числом, остальное — прибавкой в процентах. */
 const FLAT_STATS: ReadonlySet<string> = new Set(["maxHp", "regenPerSec", "armor"]);
 
-export function statValue(stat: string, value: number): string {
-  return FLAT_STATS.has(stat) ? `+${formatDecimal(value, 1)}` : `+${formatDecimal(value * 100, 1)}%`;
+export function statValue(stat: string, value: number, digits = 1): string {
+  return FLAT_STATS.has(stat) ? `+${formatDecimal(value, digits)}` : `+${formatDecimal(value * 100, digits)}%`;
+}
+
+/**
+ * «Было → стало» для строки свойства. Малая прибавка на одном знаке после
+ * запятой совпадает с прежней — тогда показываем два знака. Если и на двух
+ * одинаково, свойство не меняется: `to: null`, строка показывает одно значение.
+ */
+export function statChange(stat: string, from: number, to: number): { from: string; to: string | null } {
+  for (const digits of [1, 2]) {
+    const before = statValue(stat, from, digits);
+    const after = statValue(stat, to, digits);
+    if (before !== after) return { from: before, to: after };
+  }
+  return { from: statValue(stat, from), to: null };
 }
 
 export function itemLabel(item: Pick<ItemView, "slot" | "rarity" | "level">): string {
