@@ -32,11 +32,24 @@ export function msUntilReset(nowMs: number, period: ResetPeriod): number {
 }
 
 /**
+ * Отсчёт — одно слово: пробелы внутри неразрывные. Иначе «Следующая — через
+ * 19 ч 44 мин» в узкой карточке рвётся на «…19 ч» и «44 мин», и хвост
+ * читается как отдельное число. Переносится отсчёт только целиком.
+ */
+function unbreakable(text: string): string {
+  return text.replaceAll(" ", "\u00a0");
+}
+
+/**
  * «5 ч 12 мин», «3 д 4 ч», «12 мин» — без нулевых хвостов вроде «1 ч 0 мин».
  * Секунды не показываются: таймер на экране заданий не тикает каждую секунду,
  * и застывшие секунды врали бы.
  */
 export function formatCountdown(ms: number): string {
+  return unbreakable(countdownText(ms));
+}
+
+function countdownText(ms: number): string {
   // Вверх: «через 0 мин» за полминуты до сброса выглядит как ошибка.
   const total = Math.max(1, Math.ceil(ms / MINUTE_MS));
   const days = Math.floor(total / MINUTES_PER_DAY);

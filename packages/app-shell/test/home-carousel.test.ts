@@ -76,7 +76,7 @@ describe("тексты слайдов", () => {
 
   it("акция: заголовок команды или свой, подпись — сколько осталось; кончившаяся так и называется", () => {
     const promo = ALL[0] as Extract<HomeSlide, { kind: "promo" }>;
-    expect([titleOf(promo), textOf(promo, NOW)]).toEqual(["Акция в магазине", "ещё 1 ч"]);
+    expect([titleOf(promo), textOf(promo, NOW)]).toEqual(["Акция в магазине", "ещё 1\u00a0ч"]);
     expect(titleOf({ ...promo, title: "Осенняя распродажа" })).toBe("Осенняя распродажа");
     expect(textOf(promo, Date.parse(promo.endsAt))).toBe("Акция закончилась");
   });

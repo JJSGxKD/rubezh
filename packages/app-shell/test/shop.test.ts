@@ -155,7 +155,7 @@ describe("подача магазина", () => {
     // Сервер до акций полей не присылал.
     expect(shownPrice({ sku: "gems_60", kind: "gems", contents: [], stars: 50, once: false, owned: false }, NOW)).toEqual({ stars: 50, full: null, promo: null });
 
-    expect(promoLeft(item.promo, NOW)).toBe("1 ч");
+    expect(promoLeft(item.promo, NOW)).toBe("1\u00a0ч");
     expect(buyLabel(item, shownPrice(item, NOW))).toBe("Купить «Мешочек самоцветов» за 175 звёзд вместо 250");
     expect(buyLabel(item, shownPrice(item, NOW + HOUR))).toBe("Купить «Мешочек самоцветов» за 250 звёзд");
   });

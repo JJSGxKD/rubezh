@@ -138,10 +138,10 @@ describe("рекорд", () => {
 describe("отсчёт в плитке", () => {
   // Одно правило точности со всеми отсчётами (`formatCountdown`): вниз не округляем.
   it("часы не округляются вниз, минуты — вверх, нуля минут нет", () => {
-    expect(formatCountdown(5 * HOUR + 50 * 60_000)).toBe("5 ч 50 мин");
-    expect(formatCountdown(HOUR)).toBe("1 ч");
-    expect(formatCountdown(59.5 * 60_000)).toBe("1 ч");
-    expect(formatCountdown(20 * 1000)).toBe("1 мин");
+    expect(formatCountdown(5 * HOUR + 50 * 60_000)).toBe("5\u00a0ч\u00a050\u00a0мин");
+    expect(formatCountdown(HOUR)).toBe("1\u00a0ч");
+    expect(formatCountdown(59.5 * 60_000)).toBe("1\u00a0ч");
+    expect(formatCountdown(20 * 1000)).toBe("1\u00a0мин");
   });
 
   it("плитка берёт отсчёт у formatCountdown, а грубого правила больше нет", async () => {
