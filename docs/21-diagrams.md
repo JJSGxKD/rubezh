@@ -83,10 +83,11 @@ erDiagram
     ACCOUNT ||--o{ FRIEND_BONUS : "забранные ступени бонуса за друзей"
     LINK ||--o{ LINK_CLICK : "клики; краулеры превью и проверки доступности не пишутся"
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
+    LINK |o..o{ ACCOUNT_SESSION : "start_ref = auto_key, вид tagged (Р116), без внешнего ключа"
     LINK ||--o{ AD_CONVERSION : "конверсии в сеть ссылки"
     LINK_CLICK ||--o{ AD_CONVERSION : "клик, который привёл новичка"
     ACCOUNT ||--o{ AD_CONVERSION : "новичок из рекламы"
-    PURCHASE |o--o| AD_CONVERSION : "оплата — первая или повторная покупка"
+    PURCHASE |o--o{ AD_CONVERSION : "оплата — первая или повторная покупка, по строке на назначение"
     FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
     BROADCAST ||--o{ BROADCAST_DELIVERY : "доставка каждому получателю"
     ACCOUNT ||--o{ BROADCAST_DELIVERY : "получал рассылки"
@@ -128,6 +129,7 @@ erDiagram
     LINK |o--o{ PARTNER_BINDING : "по какой ссылке; ссылка удалена — код пуст"
     ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
     ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
+    ACCOUNT ||--o{ BOT_MENTION_TASK : "задания «юзернейм бота»: имя и bio"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -157,9 +159,9 @@ erDiagram
         uuid account_id FK
         enum platform
         enum place "miniapp|web|channel: channel — /start бота"
-        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|link|unknown"
+        enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|link|tagged|unknown"
         string start_param "nullable: из подписанного initData"
-        string start_ref "nullable: код клика, id партнёра Telegram"
+        string start_ref "nullable: код клика, id партнёра Telegram, набор пар ссылки с метками"
         string client_platform "nullable: подсказка клиента"
         string client_version "nullable"
         enum device_class "mobile|desktop|web|unknown"
@@ -565,6 +567,11 @@ erDiagram
         string registration_on "first_run|launch: что сеть считает регистрацией"
         string target "app|bot|landing: куда ведёт, по умолчанию app (Р95)"
         uuid partner_id FK "nullable: владелец-партнёр, ссылка команды — пусто; не меняется; партнёра со ссылками не удалить"
+        boolean auto "источник заведён сам по параметру запуска (Р116)"
+        string auto_key UK "nullable: канонический набор известных пар src-…_cmp-…"
+        string partner_tag "nullable: метка prt-… (Р116), не владелец; к карточке партнёра не привязана"
+        string title "nullable: название из панели; пусто — показывается кампания"
+        datetime hidden_at "nullable: скрыт в панели; запуски по нему считаются"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }
@@ -582,13 +589,14 @@ erDiagram
     }
 
     AD_CONVERSION {
-        uuid conversion_id PK
-        string network "adsgram"
+        uuid conversion_id PK "идентификатор события для приёмника: один на событие и назначение"
+        string network "имя назначения, как destination: колонка нужна откату кода"
+        string destination "adsgram|s2s|partner; CHECK"
         string link_code FK
-        string click_id FK "уникален с целью 1 и 2: одна регистрация и первая покупка на клик"
+        string click_id FK "уникален с целью и назначением при цели 1, 2, 4: одна регистрация, первая покупка и возврат на клик"
         uuid account_id FK
-        int goal "1 регистрация, 2 первая покупка, 3 повторная; CHECK"
-        uuid purchase_id FK "nullable, уникален: у покупки — всегда, у регистрации — никогда"
+        int goal "код события: 1 регистрация, 2 первая покупка, 3 повторная, 4 возврат на следующий день; CHECK 1–4"
+        uuid purchase_id FK "nullable, уникален с назначением: у целей 2 и 3 — всегда, у остальных — никогда"
         enum status "pending|sent|failed|skipped"
         string reason "nullable: no_token, team, no_macros"
         int attempts
@@ -1003,6 +1011,26 @@ erDiagram
         int count
         int[] buckets "ответы по корзинам 25, 50, 100, 250, 500, 1000, 2500, 5000 мс и «дольше»"
     }
+
+    BOT_MENTION_TASK {
+        uuid account_id PK "и FK на ACCOUNT: аккаунт уносит свои строки"
+        string kind PK "name или bio (CHECK)"
+        datetime started_at "когда игрок начал задание: первая проверка"
+        int streak "серия на последние сутки с наградой; на экране — если last_day сегодня или вчера"
+        int best_streak
+        int rewarded_days "всего суток с наградой"
+        date last_day "nullable: последние игровые сутки по Москве с наградой"
+        date checked_day "nullable: игровые сутки последней проверки с исходом; по индексу ночной проход выбирает очередь"
+        datetime checked_at "nullable"
+        string last_result "nullable: present, absent, hidden или unavailable (CHECK); текста имени и bio нет"
+    }
+
+    START_PARAM_KEY {
+        string key PK "незнакомый ключ параметра запуска ключ-значение (Р116), до 16 знаков; значения не храним"
+        int hits "сколько раз встретился"
+        datetime first_at
+        datetime last_at
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1195,6 +1223,19 @@ erDiagram
   становится `claimed` условным `UPDATE`. Проверки вида, статуса и места —
   `CHECK` в миграции. Всё уходит вместе с аккаунтом; план вайпа оставляет
   таблицы (`wipe-plan.ts`, решение тимлидов — открытый вопрос `T-0110`).
+- **`BOT_MENTION_TASK` — задания «юзернейм бота»** (`35-stage4-plan.md` Р110,
+  `tasks/T-0162`, поток — §4.32). Строка на аккаунт и вид (имя или bio) —
+  «задание начато»; заводит её первая проверка игрока, просмотр экрана — нет.
+  Серию, число награждённых суток и отметку проверки меняет один `UPDATE`
+  (`rewardDay`) с условием `last_day < сутки`: две одновременные проверки или
+  повтор тех же суток дают один рост серии, а награда задним числом не
+  проходит. Отметка «убрал» (`markChecked`) награждённые сутки не перекрывает
+  и по суткам не идёт назад. Индекс по `checked_day` нужен ночному проходу:
+  «кого пора проверять» — строки, чьи сутки проверки не сегодняшние. Игровые
+  сутки (граница — полночь по Москве) считает код (`gameDayOf`), в базе —
+  `date`. Текст имени и bio не хранится нигде: порт отдаёт только итог. План
+  вайпа таблицу стирает (`wipe-plan.ts`): серия и награждённые сутки — прогресс
+  того же рода, что награда дня, а кошелёк после вайпа обнулён.
 - **`VIP_SUBSCRIPTION`, `VIP_PERIOD`, `VIP_DAILY` — VIP** (`35-stage4-plan.md`,
   §3.6, Р20, Р44, WP10). Срок VIP — не поле, а журнал периодов: каждая
   оплата — ровно один период, начатый с конца прежнего, и конец VIP — самый
@@ -1358,7 +1399,11 @@ erDiagram
   конверсию не теряет, а повтор прохода не задваивает её уникальными
   ключами. Новичок — аккаунт, созданный после клика: старый игрок,
   открывший игру по рекламе, сети не отдаётся. Оплата уходит с
-  `RESTRICT`: удалить её, пока о ней знает сеть, нельзя.
+  `RESTRICT`: удалить её, пока о ней знает сеть, нельзя. Строка — одно
+  событие для одного назначения (T-0069): `destination` — `adsgram`, `s2s`
+  или `partner`, `goal` — код события (`registration`, `purchase_first`,
+  `purchase_repeat`, `d1_return`), ключи — на (клик, цель, назначение) и
+  (оплата, назначение).
 - **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
   после — запись истории: текст неизменен, кто создал, одобрил и запустил —
   без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
@@ -1830,7 +1875,7 @@ flowchart LR
         BOOSTS["boosts<br/>бусты: покупка до старта,<br/>возврат, сверка в итоге, реализовано"]
         ADMINAPI["admin<br/>панель: cookie-сессия, игроки,<br/>роли, курсы, отчёты, выгрузки,<br/>ссылки, флаги, настройки, реализовано"]
         LINKS["links<br/>/r/:код вне префикса API,<br/>клики, краулеры, макросы сети<br/>на клике, реализовано"]
-        ADCONV["ad-conversions<br/>конверсии закупок: проход<br/>раз в минуту под локом, постбэк<br/>в сеть с повтором, реализовано"]
+        ADCONV["ad-conversions<br/>конверсии закупок: проход раз в минуту<br/>под локом, событие → назначение,<br/>постбэк с повтором, реализовано"]
         FLAGS["flags<br/>фича-флаги по площадке и доле,<br/>кеш правил 30 с, реализовано"]
         SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
         SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
@@ -1855,6 +1900,7 @@ flowchart LR
         SEASONS["seasons<br/>недельный сезон рейтинга: таблица недели,<br/>закрытие по понедельникам UTC, награды<br/>за порог и за место, друзья, реализовано"]
         OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, запись о каждой попытке<br/>в приёмник (пока пустой), реализовано"]
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
+        BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -2109,6 +2155,12 @@ flowchart LR
     HOME -. "слайд «Поддержать проект», если есть способ поддержать" .-> DONATE
     HOME -- "home_slide; регистрация и первая оплата для аудитории" --> PG
     ADMINAPI -. "слайды команды: завести, поправить, снять" .-> HOME
+    CADDY -- "/api/v1/bot-mention" --> BOTMENTION
+    BOTMENTION -- "bot_mention_task: состояние, серия, очередь проверки" --> PG
+    BOTMENTION -- "лок прохода bot-mention:sweep:lock, пауза bot-mention:pause; очередь bot-mention" --> REDIS
+    BOTMENTION -. "награда ключом bot-mention:аккаунт:вид:сутки:ресурс" .-> WALLET
+    BOTMENTION -. "порт BotMentions: getChat — имя и bio, наружу только итог" .-> TGADP
+    BOTMENTION -. "включено ли и награды за сутки" .-> SETTINGS
 
     TG -.статика и конфиг.-> CDN
 ```
@@ -3152,6 +3204,13 @@ sequenceDiagram
 регистрация и покупки новичка уходят в кабинет сети. Конверсии выводятся из
 фактов проходом раз в минуту — ни забег, ни оплата о сети не знают.
 
+Слой «событие → назначение» (T-0069): игра порождает события
+`registration`, `purchase_first`, `purchase_repeat` (и закладывает
+`d1_return`), а получатели — назначения `adsgram`, `s2s`, `partner` — адаптеры
+с общим контрактом. Какое назначение что получает, проход берёт из одного
+набора (`destinations/destination-targets.ts`); сервис отправляет то, что
+подготовило назначение. Сейчас подключён один адаптер — AdsGram.
+
 ```mermaid
 sequenceDiagram
     participant AG as AdsGram
@@ -3159,6 +3218,7 @@ sequenceDiagram
     participant L as links (/r/:код)
     participant DB as PostgreSQL
     participant C as ad-conversions (под локом)
+    participant D as назначение AdsGram
     participant S as secrets
 
     AG-->>U: реклама: /r/<код>?campaign=…&record=…
@@ -3172,7 +3232,8 @@ sequenceDiagram
         C->>DB: дописать покупки: live, оплачена, без возврата, отлежалась 10 минут, за 30 суток
         Note right of DB: ON CONFLICT DO NOTHING — повтор не задваивает
         C->>DB: созревшие pending, до 100
-        C->>S: токен конверсий
+        C->>D: подготовить запрос по событию
+        D->>S: токен конверсий
         alt токена нет
             C->>DB: ждёт, причина no_token, проверка через 5 минут
         else нет record и campaign
@@ -3680,6 +3741,87 @@ sequenceDiagram
   стоп-краном `payments.stars`, у площадки нет способа или он не принимает
   игрока, или покупки аккаунту закрыты. Ссылка Tribute от этого не зависит:
   оплата идёт вне игры, знака за неё нет.
+
+### 4.32 Задания «юзернейм бота»: проверка игрока и ночной проход (этап 4, реализована серверная часть)
+
+Игрок вписывает юзернейм бота игры в имя на площадке и, отдельно, в bio
+(Р110, `35-stage4-plan.md`, `tasks/T-0162`); сервер проверяет и платит за
+игровые сутки. Площадку домен знает только через порт `BotMentions`
+(`platforms/ports/bot-mention.ts`): у Telegram это `getChat`, текст имени и bio
+из адаптера не выходит. Функция выключена, пока в панели не включён
+`bot-mention.enabled` и не назначена награда виду.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as Клиент
+    participant S as BotMentionService
+    participant W as BotMentionSweepService
+    participant J as Планировщик BullMQ, раз в 5 минут
+    participant R as Redis
+    participant DB as Postgres bot_mention_task
+    participant P as Порт BotMentions
+    participant T as Bot API getChat
+    participant L as Кошелёк
+
+    K->>S: POST /bot-mention/:kind/check, тела нет
+    S->>DB: ensure — задание начато (ON CONFLICT DO NOTHING)
+    alt сутки уже награждены
+        S-->>K: done_today, площадка не спрашивается
+    else пауза площадки жива (bot-mention:pause)
+        S-->>K: retry, площадка не спрашивается
+    else
+        S->>P: check(id игрока, [вид])
+        P->>T: getChat
+        T-->>P: имя и bio
+        P-->>S: checked / retry / unavailable — без текстов
+        opt present
+            S->>L: grant по ресурсам, ключ bot-mention:аккаунт:вид:сутки:ресурс
+            S->>DB: rewardDay — один UPDATE: серия, сутки, отметка проверки
+        end
+        opt absent, hidden, unavailable
+            S->>DB: markChecked — только отметка, награды нет
+        end
+        S-->>K: outcome, credited, view
+    end
+
+    J->>W: run()
+    W->>R: SET bot-mention:sweep:lock NX PX 600000
+    W->>R: PTTL bot-mention:pause — пауза жива, проход пуст
+    W->>DB: due(площадка, сутки, виды с наградой, floor(rate × 240 / 2))
+    loop по одному аккаунту, пауза ceil(1000 / (rate / 2))
+        W->>P: check(id, оба вида одним вызовом)
+        P-->>W: checked / retry / unavailable
+        alt retry
+            W->>R: SET bot-mention:pause PX afterSec — проход оборван
+        else checked
+            W->>S: settle для каждого вида — как у игрока
+            S->>L: grant, тот же ключ
+            S->>DB: rewardDay или markChecked
+        else unavailable
+            W->>DB: markChecked(unavailable) — до следующих суток не ест квоту
+        end
+    end
+    W->>R: снять лок скриптом по токену
+```
+
+- **Одна награда за сутки.** Ключ кошелька содержит дату, а `rewardDay` — один
+  `UPDATE` с условием `last_day < сутки`: двадцать одновременных проверок дают
+  одну запись на ресурс и один рост серии. Сначала кошелёк, потом отметка —
+  сбой между ними лечится повторной проверкой по тому же ключу.
+- **Серия.** Растёт, если прошлая награда — за вчера, иначе начинается заново;
+  размер награды от серии не зависит. Убравший юзернейм не теряет
+  полученного и не платит штрафа: награды за сутки просто нет. Закрытое и
+  пустое bio порт не различает — исход `hidden`, награды нет.
+- **Половина темпа бота.** Пачка и пауза считаются от `ratePerSec / 2`: вторая
+  половина — рассылкам, уведомлениям и проверкам игроков. `retry` площадки
+  обрывает проход и ставит общую паузу — ручная проверка отвечает `retry`, пока
+  она жива.
+- **Сутки — на момент ответа площадки.** Проход идёт минуты и может пересечь
+  полночь по Москве: аккаунт, проверенный после неё, получает награду за новые
+  сутки, а выбор очереди идёт по суткам начала прохода.
+- **Две реплики.** Лок прохода не пускает вторую; токен в значении не даёт
+  снять чужой лок, срок 10 минут — страховка от упавшего процесса.
 
 ---
 

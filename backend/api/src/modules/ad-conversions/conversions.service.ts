@@ -5,19 +5,21 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { Outbound } from "../../infra/outbound/outbound.js";
 import { REDIS } from "../../infra/redis.js";
-import { SECRETS } from "../secrets/secret-catalog.js";
-import { SECRETS_READER, type SecretsReader } from "../secrets/secrets.service.js";
-import { NO_TOKEN_RECHECK_MIN, POSTBACK_TIMEOUT_MS, SEND_BATCH, adsgramPostbackUrl, redacted, retryAt, verdictOf } from "./conversion-rules.js";
+import { POSTBACK_TIMEOUT_MS, SEND_BATCH, retryAt, verdictOf } from "./conversion-rules.js";
 import { CONVERSIONS_REPOSITORY, type ConversionsRepository, type DueConversion } from "./conversions.repository.js";
+import { POSTBACK_DESTINATIONS, UNKNOWN_DESTINATION_REASON, type DestinationKind, type PostbackDestination, type Prepared } from "./destinations/destination.js";
 
 /**
- * Отправка конверсий в сети, где куплена реклама (docs/35-stage4-plan.md
- * Р86, WP43). Раз в минуту под локом Redis одна реплика: дописывает
- * конверсии из фактов (`conversions.repository.ts`), отправляет созревшие и
- * обнуляет макросы кликов старше окна.
+ * Отправка конверсий назначениям (docs/35-stage4-plan.md Р86, WP43; слой
+ * «событие → назначение» — tasks/T-0069). Раз в минуту под локом Redis одна
+ * реплика: дописывает конверсии из фактов (`conversions.repository.ts`),
+ * отправляет созревшие и обнуляет макросы кликов старше окна.
  *
- * Токен кабинета берётся в момент отправки: заданный в панели работает со
- * следующего прохода. Нет токена — конверсия ждёт, а не теряется.
+ * Что и куда отправлять, знает назначение (`destinations/`): сервис лишь
+ * просит его подготовить запрос и сам отправляет — со сроком, повторами и
+ * записью в журнал. Секреты назначение читает в момент подготовки: заданный
+ * в панели работает со следующего прохода. Нет настройки — конверсия ждёт, а
+ * не теряется.
  */
 
 const TICK_MS = 60_000;
@@ -44,20 +46,29 @@ export interface TickReport {
   purged: number;
 }
 
+type Outcome = "sent" | "failed" | "deferred" | "skipped";
+
 @Injectable()
 export class AdConversionsService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger("ad-conversions");
+  private readonly destinations = new Map<DestinationKind, PostbackDestination>();
   private timer: NodeJS.Timeout | null = null;
   private running = false;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CONVERSIONS_REPOSITORY) private readonly repository: ConversionsRepository,
-    @Inject(SECRETS_READER) private readonly secrets: SecretsReader,
+    @Inject(POSTBACK_DESTINATIONS) destinations: readonly PostbackDestination[],
     @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
     // Без модуля клиента (тесты) постбэки идут глобальным fetch.
     @Optional() private readonly outbound?: Outbound,
-  ) {}
+  ) {
+    for (const destination of destinations) {
+      // Два назначения одного вида взяли бы конверсию любое из двух.
+      if (this.destinations.has(destination.kind)) throw new Error(`Назначение постбэков ${destination.kind} подключено дважды`);
+      this.destinations.set(destination.kind, destination);
+    }
+  }
 
   onApplicationBootstrap(): void {
     if (this.config.databaseUrl === "") return;
@@ -104,42 +115,71 @@ export class AdConversionsService implements OnApplicationBootstrap, OnModuleDes
     return report;
   }
 
-  private async send(conversion: DueConversion, now: Date, fetchImpl: typeof fetch): Promise<"sent" | "failed" | "deferred" | "skipped"> {
-    if (conversion.network !== "adsgram") {
-      await this.repository.skip(conversion.conversionId, "unknown_network");
-      return "skipped";
-    }
-    const token = this.secrets.get(SECRETS.adsgramConversionToken);
-    if (token === null) {
-      await this.repository.defer(conversion.conversionId, new Date(now.getTime() + NO_TOKEN_RECHECK_MIN * 60_000), "no_token");
-      return "deferred";
-    }
-    const url = adsgramPostbackUrl(token, conversion);
-    if (url === null) {
-      await this.repository.skip(conversion.conversionId, "no_macros");
+  private async send(conversion: DueConversion, now: Date, fetchImpl: typeof fetch): Promise<Outcome> {
+    const destination = this.destinations.get(conversion.destination);
+    if (destination === undefined || !destination.accepts.includes(conversion.event)) {
+      await this.repository.skip(conversion.conversionId, UNKNOWN_DESTINATION_REASON);
       return "skipped";
     }
 
-    const attempts = conversion.attempts + 1;
+    let prepared: Prepared;
     try {
-      const response = await fetchImpl(url, { signal: AbortSignal.timeout(POSTBACK_TIMEOUT_MS) });
-      const verdict = verdictOf(response.status);
-      if (verdict === "sent") {
-        await this.repository.markSent(conversion.conversionId, response.status, now);
-        return "sent";
-      }
-      const body = (await response.text().catch(() => "")).slice(0, 160);
-      const nextAt = verdict === "retry" ? retryAt(attempts, now) : null;
-      await this.repository.markFailed(conversion.conversionId, attempts, nextAt, response.status, `ответ ${String(response.status)}${body === "" ? "" : `: ${body}`}`);
-      this.log("warn", "postback_rejected", { conversionId: conversion.conversionId, status: response.status, url: redacted(url), retry: nextAt !== null });
-      return nextAt === null ? "failed" : "deferred";
+      prepared = await destination.prepare(conversion);
     } catch (error: unknown) {
-      const timeout = error instanceof Error && error.name === "TimeoutError";
-      const nextAt = retryAt(attempts, now);
-      await this.repository.markFailed(conversion.conversionId, attempts, nextAt, null, timeout ? "сеть не ответила за 5 секунд" : `сеть недоступна: ${reasonOf(error)}`);
-      this.log("warn", "postback_failed", { conversionId: conversion.conversionId, url: redacted(url), reason: reasonOf(error), retry: nextAt !== null });
-      return nextAt === null ? "failed" : "deferred";
+      // Упавшее назначение не должно останавливать очередь: конверсия повторится по расписанию.
+      const outcome = await this.fail(conversion, now, true, null, `назначение не подготовило запрос: ${reasonOf(error)}`);
+      this.log("warn", "postback_prepare_failed", { conversionId: conversion.conversionId, destination: conversion.destination, reason: reasonOf(error), retry: outcome === "deferred" });
+      return outcome;
     }
+
+    switch (prepared.kind) {
+      case "wait":
+        await this.repository.defer(conversion.conversionId, new Date(now.getTime() + prepared.recheckMin * 60_000), prepared.reason);
+        return "deferred";
+      case "skip":
+        await this.repository.skip(conversion.conversionId, prepared.reason);
+        return "skipped";
+      case "fail": {
+        const outcome = await this.fail(conversion, now, prepared.retry, null, prepared.message);
+        this.log("warn", "postback_not_sent", { conversionId: conversion.conversionId, destination: conversion.destination, reason: prepared.message, retry: outcome === "deferred" });
+        return outcome;
+      }
+      case "request":
+        return await this.deliver(conversion, prepared, now, fetchImpl);
+    }
+  }
+
+  /** Отправить готовый запрос и записать исход: ответ сети, сбой или таймаут. В лог — только `logUrl`. */
+  private async deliver(conversion: DueConversion, prepared: Extract<Prepared, { kind: "request" }>, now: Date, fetchImpl: typeof fetch): Promise<Outcome> {
+    const timeout = AbortSignal.timeout(POSTBACK_TIMEOUT_MS);
+    const own = prepared.init?.signal;
+    let response: Response;
+    try {
+      response = await fetchImpl(prepared.url, { ...prepared.init, signal: own === undefined || own === null ? timeout : AbortSignal.any([own, timeout]) });
+    } catch (error: unknown) {
+      const isTimeout = error instanceof Error && error.name === "TimeoutError";
+      const outcome = await this.fail(conversion, now, true, null, isTimeout ? "сеть не ответила за 5 секунд" : `сеть недоступна: ${reasonOf(error)}`);
+      this.log("warn", "postback_failed", { conversionId: conversion.conversionId, destination: conversion.destination, url: prepared.logUrl, reason: reasonOf(error), retry: outcome === "deferred" });
+      return outcome;
+    }
+
+    const verdict = verdictOf(response.status);
+    if (verdict === "sent") {
+      await this.repository.markSent(conversion.conversionId, response.status, now);
+      return "sent";
+    }
+    const body = (await response.text().catch(() => "")).slice(0, 160);
+    const outcome = await this.fail(conversion, now, verdict === "retry", response.status, `ответ ${String(response.status)}${body === "" ? "" : `: ${body}`}`);
+    this.log("warn", "postback_rejected", { conversionId: conversion.conversionId, destination: conversion.destination, status: response.status, url: prepared.logUrl, retry: outcome === "deferred" });
+    return outcome;
+  }
+
+  /** Попытка не удалась: повторить по расписанию (`retry`) или сразу «не отправлена», когда повторов нет или они кончились. */
+  private async fail(conversion: DueConversion, now: Date, retry: boolean, httpStatus: number | null, message: string): Promise<"failed" | "deferred"> {
+    const attempts = conversion.attempts + 1;
+    const nextAt = retry ? retryAt(attempts, now) : null;
+    await this.repository.markFailed(conversion.conversionId, attempts, nextAt, httpStatus, message);
+    return nextAt === null ? "failed" : "deferred";
   }
 
   private log(level: "log" | "warn", event: string, fields: Record<string, unknown>): void {

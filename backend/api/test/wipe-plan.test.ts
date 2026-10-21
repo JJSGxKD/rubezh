@@ -36,10 +36,10 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 62 модели, стирается 18", () => {
+  it("остаётся 63 модели, стирается 19", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(62);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(18);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(63);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(19);
   });
 });
 
@@ -83,6 +83,7 @@ describe("план вайпа: порядок стирания", () => {
       "WheelSpin",
       "VipDaily",
       "Notification",
+      "BotMentionTask",
     ]);
   });
 
