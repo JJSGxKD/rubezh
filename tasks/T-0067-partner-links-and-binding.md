@@ -3,7 +3,7 @@ id: T-0067
 title: Ссылки партнёра — ссылка кампании с владельцем-партнёром, привязка игрока по первому входу
 epic: E14
 priority: P1
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
