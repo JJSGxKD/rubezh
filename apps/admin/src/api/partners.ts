@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AdminApi, ApiResult } from "./client";
+import { LINK_NETWORKS, LINK_TARGETS } from "./links";
 
 /**
  * Партнёры (`/admin/partners`, docs/35-stage4-plan.md WP41, часть 2): кто
@@ -79,6 +80,23 @@ const rulesSchema = z.object({ bindWindowDays: z.number() });
 const catalogSchema = z.object({ partners: z.array(partnerSchema), rules: rulesSchema });
 export type PartnerCatalog = z.infer<typeof catalogSchema>;
 
+/** Ссылка партнёра в его карточке: те же клики и запуски, что в списке ссылок, и сколько игроков она привязала. */
+const partnerLinkSchema = z.object({
+  code: z.string(),
+  campaign: z.string(),
+  source: z.string().nullable(),
+  // Цель и сеть, о которых панель ещё не знает, не ломают карточку: цель читается как Mini App, сеть — как её отсутствие.
+  target: z.enum(LINK_TARGETS).catch("app"),
+  network: z.enum(LINK_NETWORKS).nullable().catch(null),
+  createdAt: z.string(),
+  clicks: z.number(),
+  clicks30d: z.number(),
+  launches: z.number(),
+  directLaunches: z.number(),
+  bound: z.number(),
+});
+export type PartnerLink = z.infer<typeof partnerLinkSchema>;
+
 const detailSchema = z.object({
   partner: partnerSchema,
   daily: z.array(z.object({ day: z.string(), count: z.number() })),
@@ -97,6 +115,10 @@ const detailSchema = z.object({
       state: z.string(),
     }),
   ),
+  // Сервер старее ссылок партнёра: блока нет, карточка показывает пустой.
+  links: z.array(partnerLinkSchema).catch([]),
+  /** игроков, привязанных по ссылкам; привязанные кодами сюда не входят */
+  linkBound: z.number().catch(0),
   rules: rulesSchema,
 });
 export type PartnerDetail = z.infer<typeof detailSchema>;
@@ -194,6 +216,14 @@ export function filterPartners<T extends { status: PartnerStatus }>(partners: re
   if (filter === "all") return [...partners];
   if (filter === "visible") return partners.filter((partner) => partner.status !== "rejected");
   return partners.filter((partner) => partner.status === filter);
+}
+
+/** Партнёры для выбора в мастере ссылки: только активные, по алфавиту — ссылку неактивного партнёра никто не привяжет. */
+export function activePartners(partners: readonly Pick<Partner, "partnerId" | "name" | "status">[]): { partnerId: string; name: string }[] {
+  return partners
+    .filter((partner) => bindsNewPlayers(partner.status))
+    .map(({ partnerId, name }) => ({ partnerId, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ru"));
 }
 
 /** Доля от числа словами для таблицы: «12 · 40%»; от нуля — прочерк, а не «NaN%». */
