@@ -1,11 +1,30 @@
 import { useState } from "react";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
-import { fetchFxOverview, MANUAL_PURPOSES, manualRateProblem, PLATFORM_CURRENCIES, QUOTE_CURRENCIES, setManualRate, type ManualRateInput } from "../../api/fx";
+import {
+  budgetTone,
+  correctSourceUsed,
+  fetchFxOverview,
+  limitCaption,
+  limitValueProblem,
+  MANUAL_PURPOSES,
+  manualRateProblem,
+  parseCount,
+  PLATFORM_CURRENCIES,
+  QUOTE_CURRENCIES,
+  resetSourceLimit,
+  setManualRate,
+  setSourceLimit,
+  usageText,
+  usedValueProblem,
+  type ManualRateInput,
+  type SourceRow,
+} from "../../api/fx";
 import { formatDateTime, formatNumber } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
-import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { ConfirmDialog } from "../../ui/confirm-dialog";
+import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select, type Column } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
@@ -22,6 +41,168 @@ const FRESHNESS: Record<string, { tone: "success" | "warning" | "danger"; text: 
 function FreshnessBadge({ value }: { value: string }) {
   const known = FRESHNESS[value];
   return known === undefined ? <Badge>{value}</Badge> : <Badge tone={known.tone}>{known.text}</Badge>;
+}
+
+/** Тон расхода лимита: цвет числа и полосы; обычный — без окраски числа. */
+const USAGE_TONES = {
+  neutral: { text: "", bar: "bg-accent" },
+  warning: { text: "text-warning", bar: "bg-warning" },
+  danger: { text: "text-danger", bar: "bg-danger" },
+} as const;
+
+/** «6 120 из 10 000», доля, полоса и откуда лимит; без лимита — без полосы. */
+function UsageCell({ source }: { source: SourceRow }) {
+  const tone = USAGE_TONES[budgetTone(source.usedShare)];
+  const share = source.usedShare;
+  return (
+    <span className="flex min-w-36 flex-col gap-1">
+      <span className="whitespace-nowrap">
+        <span className={tone.text}>{usageText(source)}</span>
+        {share === null ? null : <span className="text-text-muted">{` · ${String(Math.floor(share * 100))}%`}</span>}
+      </span>
+      {share === null ? null : (
+        <span role="progressbar" aria-label="Израсходовано" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.floor(share * 100))} className="h-1 w-full overflow-hidden rounded-pill bg-surface-raised">
+          <span className={`block h-full ${tone.bar}`} style={{ width: `${String(Math.min(100, Math.round(share * 100)))}%` }} />
+        </span>
+      )}
+      <span className="text-xs text-text-muted">{limitCaption(source)}</span>
+    </span>
+  );
+}
+
+type SourceEdit = { kind: "limit" | "used"; source: SourceRow };
+
+function SourcesPanel({ sources, canEdit, onChanged }: { sources: readonly SourceRow[]; canEdit: boolean; onChanged: () => void }) {
+  const [editing, setEditing] = useState<SourceEdit | null>(null);
+  const columns: Column<SourceRow>[] = [
+    { title: "Источник", render: (source) => source.source },
+    { title: "Тариф", render: (source) => source.tariff },
+    { title: "Израсходовано", help: HELP.fx.limit, render: (source) => <UsageCell source={source} /> },
+    { title: "Пауза до", render: (source) => formatDateTime(source.pausedUntil) },
+    { title: "Следующий опрос", render: (source) => formatDateTime(source.nextPollAt) },
+  ];
+  if (canEdit) {
+    columns.push({
+      title: "",
+      render: (source) => (
+        <span className="flex flex-wrap justify-end gap-1.5">
+          <Button onClick={() => setEditing({ kind: "limit", source })}>Изменить лимит…</Button>
+          <Button onClick={() => setEditing({ kind: "used", source })}>Поправить счётчик…</Button>
+        </span>
+      ),
+    });
+  }
+  const close = () => setEditing(null);
+
+  return (
+    <Panel title="Источники" help={HELP.fx.sourcesPanel}>
+      <DataTable rows={sources} rowKey={(source) => source.source} empty="Источников нет" columns={columns} />
+      {editing?.kind === "limit" ? <LimitDialog source={editing.source} onClose={close} onSaved={onChanged} /> : null}
+      {editing?.kind === "used" ? <UsedDialog source={editing.source} onClose={close} onSaved={onChanged} /> : null}
+    </Panel>
+  );
+}
+
+interface SourceDialogProps {
+  source: SourceRow;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+const limitText = (perMonth: number | null) => (perMonth === null ? "без лимита" : formatNumber(perMonth));
+
+/**
+ * Лимит запросов в месяц (Р89): число или «без лимита», причина в аудит,
+ * «Сбросить к тарифу» возвращает лимит из кода. Лимит в минуту и интервал
+ * опроса не правятся — это защита поставщика, а не тариф.
+ */
+function LimitDialog({ source, onClose, onSaved }: SourceDialogProps) {
+  const [unlimited, setUnlimited] = useState(source.limit.perMonth === null);
+  const [text, setText] = useState(source.limit.perMonth === null ? "" : String(source.limit.perMonth));
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const perMonth = unlimited ? null : parseCount(text);
+  const problem = limitValueProblem(perMonth);
+
+  const reset = async () => {
+    setResetting(true);
+    setResetError(null);
+    const result = await resetSourceLimit(api, source.source);
+    setResetting(false);
+    if (!result.ok) return setResetError(result.error.message);
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      title={`Лимит источника «${source.source}»`}
+      subject={`Сейчас: ${limitText(source.limit.perMonth)}, ${limitCaption(source)}`}
+      problem={problem}
+      changes={problem === null ? [{ label: "Запросов в месяц", value: `${limitText(source.limit.perMonth)} → ${limitText(perMonth)}` }] : []}
+      reason={{ min: 3, max: 200, hint: "Попадёт в аудит вместе с прежним лимитом." }}
+      action="Сохранить лимит"
+      onConfirm={async (reason) => {
+        const result = await setSourceLimit(api, source.source, { perMonth, note: reason });
+        if (!result.ok) return { ok: false, error: result.error.message };
+        onSaved();
+        return { ok: true };
+      }}
+    >
+      <div className="flex flex-col gap-3">
+        <Field label="Запросов в календарный месяц (по UTC)" hint="Опросы растянутся на месяц, чтобы лимита хватило.">
+          <Input inputMode="numeric" value={text} disabled={unlimited} onChange={(event) => setText(event.target.value)} placeholder="10 000" className="w-40" />
+        </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={unlimited} onChange={(event) => setUnlimited(event.target.checked)} />
+          Без лимита
+        </label>
+        {source.limit.from === "panel" ? (
+          <div className="flex flex-col items-start gap-1.5">
+            <Button disabled={resetting} onClick={() => void reset()}>
+              {resetting ? "Сбрасываем…" : `Сбросить к тарифу «${source.tariff}»`}
+            </Button>
+            {resetError === null ? null : <Notice>{resetError}</Notice>}
+          </div>
+        ) : null}
+      </div>
+    </ConfirmDialog>
+  );
+}
+
+/** Счётчик запросов за текущий месяц: поправить, когда он разошёлся с кабинетом поставщика. */
+function UsedDialog({ source, onClose, onSaved }: SourceDialogProps) {
+  const [text, setText] = useState(String(source.used));
+  const used = parseCount(text);
+  const problem = usedValueProblem(used);
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      title={`Счётчик источника «${source.source}»`}
+      subject={`Сейчас в этом месяце: ${formatNumber(source.used)}`}
+      problem={problem}
+      changes={problem === null ? [{ label: "Запросов за месяц", value: `${formatNumber(source.used)} → ${formatNumber(used)}` }] : []}
+      reason={{ min: 3, max: 200, hint: "Например, «сверились с кабинетом поставщика». Попадёт в аудит." }}
+      action="Поправить счётчик"
+      onConfirm={async (reason) => {
+        const result = await correctSourceUsed(api, source.source, { used, note: reason });
+        if (!result.ok) return { ok: false, error: result.error.message };
+        onSaved();
+        return { ok: true };
+      }}
+    >
+      <Field label="Запросов за текущий месяц" hint="Если расходится с кабинетом поставщика. С новым месяцем счётчик начнётся с нуля.">
+        <Input inputMode="numeric" value={text} onChange={(event) => setText(event.target.value)} className="w-40" />
+      </Field>
+    </ConfirmDialog>
+  );
 }
 
 export function FxScreen() {
@@ -68,20 +249,7 @@ export function FxScreen() {
             />
           </Panel>
           {can(view, "fx.rates.edit") ? <ManualRateForm onSaved={reload} /> : null}
-          <Panel title="Источники" help={HELP.fx.sourcesPanel}>
-            <DataTable
-              rows={state.data.sources}
-              rowKey={(source) => source.source}
-              empty="Источников нет"
-              columns={[
-                { title: "Источник", render: (source) => source.source },
-                { title: "Тариф", render: (source) => source.tariff },
-                { title: "Запросов за месяц", render: (source) => formatNumber(source.used), align: "right" },
-                { title: "Пауза до", render: (source) => formatDateTime(source.pausedUntil) },
-                { title: "Следующий опрос", render: (source) => formatDateTime(source.nextPollAt) },
-              ]}
-            />
-          </Panel>
+          <SourcesPanel sources={state.data.sources} canEdit={can(view, "fx.rates.edit")} onChanged={reload} />
         </>
       ) : null}
     </div>

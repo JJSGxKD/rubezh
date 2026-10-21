@@ -136,16 +136,24 @@ function noteProblem(note: string): string | null {
   return length < 3 || length > 200 ? "Причина — от 3 до 200 символов: она попадёт в аудит" : null;
 }
 
+/** Число лимита в границах сервера. Причину окно проверяет само: у неё своё поле. */
+export function limitValueProblem(perMonth: number | null): string | null {
+  if (perMonth !== null && (!Number.isInteger(perMonth) || perMonth < 1 || perMonth > MAX_REQUESTS)) return `Лимит — целое от 1 до ${formatNumber(MAX_REQUESTS)} или «без лимита»`;
+  return null;
+}
+
+export function usedValueProblem(used: number): string | null {
+  if (!Number.isInteger(used) || used < 0 || used > MAX_REQUESTS) return `Счётчик — целое от 0 до ${formatNumber(MAX_REQUESTS)}`;
+  return null;
+}
+
 /** Те же границы, что у сервера: не отправлять заведомо отклонённое. `null` — годно. */
 export function limitProblem(input: LimitInput): string | null {
-  const { perMonth } = input;
-  if (perMonth !== null && (!Number.isInteger(perMonth) || perMonth < 1 || perMonth > MAX_REQUESTS)) return `Лимит — целое от 1 до ${formatNumber(MAX_REQUESTS)} или «без лимита»`;
-  return noteProblem(input.note);
+  return limitValueProblem(input.perMonth) ?? noteProblem(input.note);
 }
 
 export function usedProblem(input: UsedInput): string | null {
-  if (!Number.isInteger(input.used) || input.used < 0 || input.used > MAX_REQUESTS) return `Счётчик — целое от 0 до ${formatNumber(MAX_REQUESTS)}`;
-  return noteProblem(input.note);
+  return usedValueProblem(input.used) ?? noteProblem(input.note);
 }
 
 /** Те же границы, что у `manualRateSchema` на сервере: не отправлять заведомо отклонённое. `null` — годно. */
