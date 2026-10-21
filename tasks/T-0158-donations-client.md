@@ -32,6 +32,9 @@ zones:
   - packages/app-shell/test/session.test.ts
   - packages/app-shell/test/shop.test.ts
 shared:
+  - packages/app-shell/src/state/analytics.ts
+  - backend/api/src/modules/events/event-dictionary.ts
+  - docs/22-analytics-and-metrics.md
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/i18n/ru-home.json
   - packages/app-shell/src/i18n/ru-history.json
@@ -281,7 +284,11 @@ batch: 3
 
 - `purchase_initiated` / `purchase_completed` / `purchase_failed` — штатно из `buy()`,
   `product = "donation"`, `sku = "donation"` (событие и поля уже в словаре).
-- `donation_link_clicked { way, place }` — добавляет T-0157 в словарь; здесь
+- `donation_link_clicked { way, place }` — **заводит эта задача целиком** (поправка
+  `claude-lead-1` от 21.10.2026, вопрос #430: тест `scripts/test/event-dictionary.test.ts`
+  требует одновременной правки словаря сервера и списка клиента): сначала строка в
+  `docs/22` §3.3, затем словарь `backend/api/src/modules/events/event-dictionary.ts` и
+  Zod-схема, затем `ANALYTICS_EVENTS` в `packages/app-shell/src/state/analytics.ts`, потом
   отправка: `way` — из ответа сервера (`tribute_telegram` или `tribute_web`), `place` — `about`,
   `profile` или `home`.
 - Слайд — штатные `home_slide_viewed` / `home_slide_clicked` со `slide = "donate"`.

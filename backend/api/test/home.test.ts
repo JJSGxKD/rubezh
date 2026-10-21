@@ -7,6 +7,7 @@ import { viewOf as dailyViewOf, type DailyService } from "../src/modules/daily/d
 import { dailyWidget, tasksWidget, wheelWidget } from "../src/modules/home/home-widgets.js";
 import type { AccountRestrictions } from "../src/modules/restrictions/account-restrictions.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
+import type { DonationView, DonationsService } from "../src/modules/donations/donations.service.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsReader } from "../src/modules/settings/settings.service.js";
 import type { ShopItemView, ShopService } from "../src/modules/shop/shop.service.js";
@@ -52,7 +53,7 @@ function task(patch: Partial<TaskView> = {}): TaskView {
 }
 
 function sources(patch: Partial<HomeSources> = {}): HomeSources {
-  return { shop: { items: [] }, vip: null, freshVersions: 0, invite: false, channelUrl: "", tasks: [], team: [], ...patch };
+  return { shop: { items: [] }, vip: null, freshVersions: 0, invite: false, channelUrl: "", donate: false, tasks: [], team: [], ...patch };
 }
 
 const promo = (percent: number, hours: number) => ({ percent, endsAt: new Date(NOW.getTime() + hours * HOUR), title: null });
@@ -130,6 +131,30 @@ describe("слайды главной", () => {
     expect(slides[3]).toMatchObject({ kind: "team", title: "Конкурс", image: null, icon: "trophy" });
   });
 
+  it("поддержка проекта — сразу после канала и до партнёрского задания; выключена — слайда нет", () => {
+    const base = { invite: true, channelUrl: "https://t.me/rubezh", tasks: [task()] };
+    const withDonate = pickSlides(sources({ ...base, donate: true }), NOW);
+    expect(withDonate.map((slide) => slide.id)).toEqual(["invite", "channel", "donate", "task:channel_news"]);
+    expect(withDonate[2]).toEqual({ id: "donate", kind: "donate" });
+    expect(pickSlides(sources({ ...base, donate: false }), NOW).map((slide) => slide.id)).toEqual(["invite", "channel", "task:channel_news"]);
+    // Канала нет — слайд поддержки идёт на его место, всё равно до задания.
+    expect(pickSlides(sources({ donate: true, tasks: [task()] }), NOW).map((slide) => slide.id)).toEqual(["donate", "task:channel_news"]);
+  });
+
+  it("поддержка — в хвосте очереди: когда пять слайдов ценнее, её отрезает потолок", () => {
+    const five = sources({
+      shop: { items: [item({ sku: "bundle_m", kind: "bundle", promo: promo(30, 5) }), item({ sku: "starter", kind: "starter", once: true, stars: 25 })] },
+      vip: { active: false, canOrder: true, stars: 700 },
+      freshVersions: 2,
+      invite: true,
+      channelUrl: "https://t.me/rubezh",
+      donate: true,
+    });
+    const slides = pickSlides(five, NOW);
+    expect(slides).toHaveLength(HOME_SLIDES_MAX);
+    expect(slides.map((slide) => slide.kind)).toEqual(["promo", "changelog", "vip", "starter", "invite"]);
+  });
+
   it("задание дня — партнёрское, не выполненное и с местами; задания забега и разобранные — нет", () => {
     expect(partnerTaskOfDay([task({ category: "daily", kind: "runs" }), task({ id: "a", done: true }), task({ id: "b", slots: { left: 0, total: 100, holdUntil: null } }), task({ id: "c" })])?.id).toBe("c");
     expect(partnerTaskOfDay([task({ claimed: true, done: true })])).toBeNull();
@@ -148,6 +173,12 @@ function service(
     seen?: AudienceFacts[];
     daily?: () => Promise<unknown>;
     wheel?: () => Promise<unknown>;
+    /** слайд поддержки включён в панели */
+    donateSlide?: boolean;
+    /** вид доната, как его отдаёт модуль донатов */
+    donation?: () => Promise<DonationView>;
+    /** к каким соседям сходила главная — для проверки, что выключенный слайд не тратит чтение */
+    asked?: string[];
   } = {},
 ): HomeService {
   const shop = { view: patch.shop ?? (async () => ({ items: [item({ sku: "starter", kind: "starter", once: true })] })) } as unknown as ShopService;
@@ -155,7 +186,14 @@ function service(
   const changelog = { badge: async () => 0 } as unknown as ChangelogService;
   const tasks = { view: patch.tasks ?? (async () => [task()]) } as unknown as TasksService;
   const restrictions = { status: async (_id: string, kind: string) => ((patch.restricted ?? []).includes(kind) ? { kind } : null) } as unknown as AccountRestrictions;
-  const settings: SettingsReader = { get: (setting) => (setting.key === SETTINGS.homeChannelUrl.key ? (patch.channel ?? "") : setting.fallback) as never, onChange: () => undefined };
+  const settings: SettingsReader = {
+    get: (setting) => {
+      if (setting.key === SETTINGS.homeChannelUrl.key) return (patch.channel ?? "") as never;
+      if (setting.key === SETTINGS.donateHomeSlide.key) return (patch.donateSlide ?? false) as never;
+      return setting.fallback as never;
+    },
+    onChange: () => undefined,
+  };
   // Слайды команды — заглушкой, которая запоминает, что сервис узнал об игроке.
   const teamSlides = {
     audienceFacts: patch.facts ?? (async () => ({ createdAt: new Date(NOW.getTime() - 2 * 24 * HOUR), payer: true })),
@@ -163,15 +201,48 @@ function service(
   } as unknown as TeamSlidesService;
   const daily = { view: patch.daily ?? (async () => dailyViewOf(2, false, 1)) } as unknown as DailyService;
   const wheel = { view: patch.wheel ?? (async () => wheelViewOf(1, true, AD_NONE)) } as unknown as WheelService;
-  return new HomeService(shop, vip, changelog, tasks, restrictions, settings, teamSlides, daily, wheel);
+  const donations = {
+    view: async () => {
+      patch.asked?.push("donations");
+      return await (patch.donation ?? (async () => DONATE_STARS))();
+    },
+  } as unknown as DonationsService;
+  return new HomeService(shop, vip, changelog, tasks, restrictions, settings, teamSlides, daily, wheel, donations);
 }
 
 const AD_NONE: WheelView["ad"] = { available: false, readyAt: null, pass: null };
+
+const DONATE_STARS: DonationView = { stars: { min: 1, max: 10_000, presets: [50, 100], mode: "live" }, tribute: null, supporter: false };
+const DONATE_NOTHING: DonationView = { stars: null, tribute: null, supporter: false };
 
 describe("главная в сервисе", () => {
   it("собирает слайды из соседей; канал — из настроек", async () => {
     const view = await service({ channel: "https://t.me/rubezh" }).view(account, NOW);
     expect(view.slides.map((slide) => slide.id)).toEqual(["vip", "starter", "invite", "channel", "task:channel_news"]);
+  });
+
+  it("слайд поддержки: включён в панели и есть чем поддержать — после канала, до задания", async () => {
+    const view = await service({ channel: "https://t.me/rubezh", donateSlide: true }).view(account, NOW);
+    expect(view.slides.map((slide) => slide.id)).toEqual(["vip", "starter", "invite", "channel", "donate"]);
+    const tribute: DonationView = { stars: null, tribute: { url: "https://t.me/tribute/app", way: "tribute_telegram" }, supporter: false };
+    // Только ссылка Tribute — тоже способ поддержать.
+    const linkOnly = await service({ donateSlide: true, donation: async () => tribute }).view(account, NOW);
+    expect(linkOnly.slides.map((slide) => slide.kind)).toContain("donate");
+  });
+
+  it("слайда поддержки нет: настройка выключена (умолчание), способов нет или модуль не ответил — а главная цела", async () => {
+    const asked: string[] = [];
+    const off = await service({ donateSlide: false, asked }).view(account, NOW);
+    expect(off.slides.map((slide) => slide.kind)).not.toContain("donate");
+    // Выключенный слайд не тратит чтение донатов на каждую главную.
+    expect(asked).toEqual([]);
+
+    const nothing = await service({ donateSlide: true, donation: async () => DONATE_NOTHING }).view(account, NOW);
+    expect(nothing.slides.map((slide) => slide.kind)).not.toContain("donate");
+
+    const down = await service({ donateSlide: true, donation: async () => Promise.reject(new Error("база недоступна")) }).view(account, NOW);
+    expect(down.slides.map((slide) => slide.kind)).toEqual(["vip", "starter", "invite", "task"]);
+    expect(down.widgets.daily).not.toBeNull();
   });
 
   it("не ответил магазин — без акции и набора, остальное на месте", async () => {

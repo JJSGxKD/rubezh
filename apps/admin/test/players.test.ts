@@ -186,6 +186,11 @@ describe("покупки в карточке игрока", () => {
     expect(purchaseLabel({ sku: undefined, continueNo: 1 })).toBe("второй шанс №1");
   });
 
+  it("донат — «донат», а не товар магазина, хотя sku у него задан (Р109)", () => {
+    expect(purchaseLabel({ product: "donation", sku: "donation", continueNo: null, renewalOf: null })).toBe("донат");
+    expect(purchaseLabel({ product: "donation", sku: null, continueNo: null, renewalOf: null })).toBe("донат");
+  });
+
   it("VIP — отдельно первая оплата подписки и её продления", () => {
     expect(purchaseLabel({ product: "vip", sku: "vip_month", continueNo: null, renewalOf: null })).toBe("VIP");
     expect(purchaseLabel({ product: "vip", sku: "vip_month", continueNo: null, renewalOf: "p-1" })).toBe("VIP, продление");

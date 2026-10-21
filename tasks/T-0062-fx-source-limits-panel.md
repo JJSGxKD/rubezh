@@ -3,8 +3,8 @@ id: T-0062
 title: Лимиты источников курсов в панели — сколько осталось, правка лимита и счётчика, предупреждения
 epic: E13
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0059]
@@ -27,6 +27,10 @@ shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/
   - apps/admin/src/ui/help.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
 runner: local

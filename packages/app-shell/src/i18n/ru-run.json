@@ -94,5 +94,12 @@
   "run.next.level.unlock": "До {level}-го уровня — {xp} опыта, откроется: {list}",
   "run.next.task.daily": "Задание дня почти выполнено — {value} из {target}",
   "run.next.task.weekly": "Задание недели почти выполнено — {value} из {target}",
-  "run.next.unlock": "Откроется на {level}-м уровне: {list}"
+  "run.next.unlock": "Откроется на {level}-м уровне: {list}",
+  "run.tools.reroll": "Переброс",
+  "run.tools.skip": "Пропуск",
+  "run.tools.banish": "Изгнание",
+  "run.tools.banish.hint": "Выбери карточку — она не появится до конца забега",
+  "run.tools.banish.cancel": "Отмена",
+  "run.tools.caption": "Переброс меняет карточки, пропуск даёт опыт, изгнание убирает предмет из забега",
+  "run.tools.left": "Осталось: {count}"
 }

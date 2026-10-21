@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { fetchSettings, groupSettings, parseInteger, resetSetting, saveSetting, settingProblem, settingText, type SettingRow } from "../src/api/settings";
+import { AMOUNTS_MAX_LENGTH, fetchSettings, groupSettings, parseInteger, resetSetting, saveSetting, SETTING_PLACEHOLDER, settingProblem, settingText, type SettingRow } from "../src/api/settings";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -47,6 +47,31 @@ describe("настройки в панели", () => {
     expect(settingProblem({ kind: "chat" }, "@team")).not.toBeNull();
     expect(settingProblem({ kind: "chat" }, "-100:")).not.toBeNull();
     expect(settingProblem({ kind: "boolean" }, true)).toBeNull();
+  });
+
+  it("список сумм доната: те же случаи, что на сервере (parseAmounts), и тот же текст отказа", () => {
+    const amounts = { kind: "amounts" as const };
+    expect(settingProblem(amounts, "50, 100,250")).toBeNull();
+    expect(settingProblem(amounts, " 1 ,100000 ")).toBeNull();
+    expect(settingProblem(amounts, "5")).toBeNull();
+    expect(settingProblem(amounts, "1, 2, 3, 4, 5, 6, 7, 8")).toBeNull();
+    const problem = "от одной до восьми сумм через запятую, например 50, 100, 250";
+    for (const bad of ["", "   ", "abc", "0, 5", "1.5", "-5", "50,", ",50", "50,,100", "50; 100", "1, 2, 3, 4, 5, 6, 7, 8, 9", "100001"]) {
+      expect(settingProblem(amounts, bad), JSON.stringify(bad)).toBe(problem);
+    }
+    // В поле пишут текстом, но число из сохранённого значения не должно ломать проверку.
+    expect(settingProblem(amounts, 50)).toBeNull();
+    expect(SETTING_PLACEHOLDER.amounts).toBe("50, 100, 250");
+    expect(AMOUNTS_MAX_LENGTH).toBe(40);
+  });
+
+  it("список сумм читается строкой как есть; сервер отдаёт такой вид ключа, и панель его принимает", async () => {
+    const AMOUNTS: SettingRow = { ...CHAT, key: "donate.amounts", group: "Донаты", title: "Готовые суммы доната, ⭐", kind: "amounts", value: "50, 100, 250", source: "default", envValue: null, fallback: "50, 100, 250, 500, 1000" };
+    expect(settingText(AMOUNTS, AMOUNTS.value)).toBe("50, 100, 250");
+    expect(settingText(AMOUNTS, "")).toBe("не задан");
+    const { fetch } = fakeFetch(json(200, { data: { settings: [AMOUNTS] } }));
+    const list = await fetchSettings(new AdminApi(fetch));
+    expect(list.ok && list.data.settings[0]?.kind).toBe("amounts");
   });
 
   it("число — целое в пределах, с единицей словами; пустое поле — не ноль", () => {

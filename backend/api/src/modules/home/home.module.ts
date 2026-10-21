@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { ChangelogModule } from "../changelog/changelog.module.js";
 import { DailyModule } from "../daily/daily.module.js";
+import { DonationsModule } from "../donations/donations.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { SettingsModule } from "../settings/settings.module.js";
@@ -20,7 +21,7 @@ import { TeamSlidesService } from "./team-slides.service.js";
  * панели (`home_slide`): их правит раздел «Главная» через `TeamSlidesService`.
  */
 @Module({
-  imports: [AuthModule, ShopModule, VipModule, ChangelogModule, TasksModule, DailyModule, WheelModule, RestrictionsModule, SettingsModule, MediaModule],
+  imports: [AuthModule, ShopModule, VipModule, ChangelogModule, TasksModule, DailyModule, WheelModule, DonationsModule, RestrictionsModule, SettingsModule, MediaModule],
   controllers: [HomeController],
   providers: [HomeService, TeamSlidesService, { provide: TEAM_SLIDE_REPOSITORY, useClass: PrismaTeamSlideRepository }],
   exports: [TeamSlidesService],

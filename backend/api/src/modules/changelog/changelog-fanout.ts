@@ -5,7 +5,7 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
-import { FANOUT_ACTIVE_DAYS, FANOUT_BATCH, FANOUT_MAX_BATCHES, releaseDedupeKey } from "./changelog-rules.js";
+import { CHANGELOG_FOR_PLAYERS, FANOUT_ACTIVE_DAYS, FANOUT_BATCH, FANOUT_MAX_BATCHES, releaseDedupeKey } from "./changelog-rules.js";
 import { CHANGELOG_REPOSITORY, type ChangelogReleaseRecord, type ChangelogRepository } from "./changelog.repository.js";
 
 /**
@@ -67,6 +67,8 @@ export class ChangelogFanout implements OnApplicationBootstrap, OnModuleDestroy 
 
   /** Один проход; сколько уведомлений записано, `null` — не запускался: идёт предыдущий, лок у другой реплики или сбой. */
   async tick(now = new Date()): Promise<number | null> {
+    // Журнал скрыт у игроков (Р125): уведомления о версиях не раздаём, лок не берём.
+    if (!CHANGELOG_FOR_PLAYERS) return 0;
     if (this.running) return null;
     this.running = true;
     try {

@@ -8,6 +8,7 @@ import { MAPS } from "../src/content/maps";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
+import { applyCardTool, BANISH_PREFIX, REROLL_COMMAND } from "../src/game/progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
 import { captureWorld, restoreWorld, SnapshotError, WORLD_SNAPSHOT_VERSION } from "../src/game/run/snapshot";
 import { RUN_SNAPSHOT_FORMAT } from "../src/run-api";
@@ -16,7 +17,7 @@ import { dropChest, openChest } from "../src/game/sim/chests";
 import { createTimelineDirector } from "../src/game/sim/director";
 import type { Spawner } from "../src/game/sim/spawner";
 import { stepWorld, type SimInput } from "../src/game/sim/step";
-import { createWorld, TICK_SEC, type World } from "../src/game/sim/world";
+import { createWorld, TICK_SEC, type CreateWorldOptions, type World } from "../src/game/sim/world";
 import { checksumWorld } from "./helpers/scripted-run";
 
 // Продолжение прерванного забега (game/run/snapshot.ts): снимок, записанный в
@@ -28,9 +29,10 @@ interface Run {
   director: Spawner;
 }
 
-function newRun(seed: number): Run {
+function newRun(seed: number, patch: Partial<CreateWorldOptions> = {}): Run {
   return {
     world: createWorld({
+      ...patch,
       seed,
       enemies: ENEMIES,
       weapons: WEAPONS,
@@ -172,6 +174,48 @@ describe("снимок забега", () => {
     expect(resumed.world.chests.rng.getState()).toBe(original.world.chests.rng.getState());
   });
 
+  it("сохраняет заряды карточек, изгнанное и поток: следующие карточки такие же", () => {
+    const patch = { cardTools: { reroll: 3, skip: 1, banish: 2 } };
+    const original = newRun(77, patch);
+    while (!isAwaitingChoice(original.world)) {
+      original.director.update(original.world, TICK_SEC);
+      stepWorld(original.world, DIRECTIONS[0]);
+    }
+    expect(applyCardTool(original.world, REROLL_COMMAND)).not.toBeNull();
+    expect(applyCardTool(original.world, `${BANISH_PREFIX}${original.world.progression.offers[0].id}`)).not.toBeNull();
+    const saved = roundTrip(original);
+
+    const resumed = newRun(77, patch);
+    restoreWorld(resumed.world, resumed.director, saved);
+    const { tools, toolsTotal, banished } = original.world.progression;
+    expect(resumed.world.progression.tools).toEqual(tools);
+    expect(resumed.world.progression.toolsTotal).toEqual(toolsTotal);
+    expect(resumed.world.progression.banished).toEqual(banished);
+    expect(banished).toHaveLength(1);
+    expect(resumed.world.cardRng.getState()).toBe(original.world.cardRng.getState());
+    expect(resumed.world.progression.offers).toEqual(original.world.progression.offers);
+
+    applyCardTool(original.world, REROLL_COMMAND);
+    applyCardTool(resumed.world, REROLL_COMMAND);
+    expect(resumed.world.progression.offers.map((offer) => offer.id)).toEqual(original.world.progression.offers.map((offer) => offer.id));
+    expect(resumed.world.cardRng.getState()).toBe(original.world.cardRng.getState());
+  });
+
+  it("битые заряды и изгнанное в снимке — SnapshotError, а не мир с NaN", () => {
+    const saved = roundTrip(newRun(1, { cardTools: { reroll: 1, skip: 0, banish: 0 } })) as { progression: Record<string, unknown> };
+    for (const broken of [
+      { tools: null },
+      { tools: { reroll: "много", skip: 0, banish: 0 } },
+      { toolsTotal: [] },
+      { banished: "weapon:spark" },
+      { banished: [1] },
+    ]) {
+      const input = { ...saved, progression: { ...saved.progression, ...broken } };
+      expect(() => restoreWorld(newRun(1).world, newRun(1).director, input), JSON.stringify(broken)).toThrow(SnapshotError);
+    }
+    expect(() => restoreWorld(newRun(1).world, newRun(1).director, { ...saved, cardRng: undefined })).toThrow(SnapshotError);
+  });
+
   it("не тащит в снимок события для сцены: после восстановления они пусты", () => {
     const original = newRun(32);
     dropChest(original.world, 300, 0, "elite");
@@ -203,11 +247,11 @@ describe("снимок забега", () => {
     );
   });
 
-  it("отказывается читать снимок прежней версии 7: в нём нет сундуков", () => {
+  it("отказывается читать снимок прежней версии 8: в нём нет зарядов карточек", () => {
     const run = newRun(1);
     const saved = roundTrip(run) as Record<string, unknown>;
-    expect(saved.version).toBe(8);
-    expect(() => restoreWorld(newRun(1).world, newRun(1).director, { ...saved, version: 7 })).toThrow(SnapshotError);
+    expect(saved.version).toBe(9);
+    expect(() => restoreWorld(newRun(1).world, newRun(1).director, { ...saved, version: 8 })).toThrow(SnapshotError);
   });
 
   it("отказывается читать испорченный снимок, а не рождает мир с NaN", () => {
@@ -250,6 +294,6 @@ describe("счётчики в сводке снимка (tasks/T-0163)", () => {
 
   it("поле необязательное, поэтому формат снимка и мира прежний", () => {
     expect(RUN_SNAPSHOT_FORMAT).toBe(7);
-    expect(WORLD_SNAPSHOT_VERSION).toBe(8);
+    expect(WORLD_SNAPSHOT_VERSION).toBe(9);
   });
 });

@@ -19,8 +19,6 @@ zones:
   - backend/api/src/modules/runs/leaderboard-rebuild.ts
   - backend/api/src/modules/progress/progress-rules.ts
   - backend/api/src/modules/progress/run-rewards.ts
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
   - backend/api/test/**
 shared:
   - backend/api/src/modules/events/event-dictionary.ts
@@ -28,6 +26,8 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/32-balance.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: high

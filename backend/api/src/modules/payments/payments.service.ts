@@ -75,7 +75,7 @@ export interface PurchaseView {
 
 /** Что магазин продаёт этим счётом: цену и текст решает магазин, оплату — этот модуль. */
 export interface ShopOrder {
-  /** товар каталога или VIP */
+  /** товар каталога, VIP или донат (сумму и текст решает модуль донатов) */
   product: Exclude<PurchaseProduct, "continue_run">;
   sku: string;
   priceStars: number;
@@ -262,6 +262,18 @@ export class PaymentsService {
   /** Режим оплаты: тестовый — только в разработке (Р14). */
   get mode(): PaymentMode {
     return this.config.payments.testMode ? "test" : "live";
+  }
+
+  /**
+   * Примет ли площадка оплату этого игрока сейчас: стоп-кран включён, у
+   * площадки есть способ оплаты, и он принимает этот аккаунт. То же условие,
+   * что в начале `shopInvoice`, но без исключения: по нему решают, показывать
+   * ли игроку оплату звёздами вообще.
+   */
+  canPay(account: AccountRef): boolean {
+    if (!this.switches.payments()) return false;
+    const provider = this.providers.for(account.platform);
+    return provider !== null && provider.accepts(account.platformUserId);
   }
 
   private async invoiceLink(account: AccountRef, purchase: StoredPurchase, invoice: ProviderInvoice): Promise<string> {

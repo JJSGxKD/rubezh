@@ -40,6 +40,8 @@ export class FunnelTracker implements OnModuleInit {
     this.payments.onPaid("funnel", async (purchase) => {
       // Тестовая оплата — проверка платёжной цепочки, а не покупка игрока.
       if (purchase.mode !== "live") return;
+      // Поддержка, а не покупка (Р109): донор без покупки остаётся «не платящим» для воронки и аудиторий слайдов.
+      if (purchase.product === "donation") return;
       await this.mark("first_purchase", purchase.accountId, () => this.funnel.firstPurchase(purchase.accountId, purchase.at));
     });
   }

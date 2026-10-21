@@ -219,8 +219,10 @@ export function rejectReferral(api: AdminApi, accountId: string, reason: string)
   return api.request(`/players/${encodeURIComponent(accountId)}/referral/reject`, { method: "POST", body: { reason }, schema: z.object({ rejected: z.boolean() }) });
 }
 
-/** Что куплено — словами: второй шанс с номером продолжения или товар магазина. */
+/** Что куплено — словами: второй шанс с номером продолжения, товар магазина или донат. */
 export function purchaseLabel(purchase: Pick<PlayerPurchase, "product" | "sku" | "continueNo" | "renewalOf">): string {
+  // До проверки sku: у доната он задан («donation»), но это не товар магазина.
+  if (purchase.product === "donation") return "донат";
   if (purchase.product === "vip") return purchase.renewalOf === null || purchase.renewalOf === undefined ? "VIP" : "VIP, продление";
   if (purchase.sku !== null && purchase.sku !== undefined) return `магазин: ${purchase.sku}`;
   return purchase.continueNo === null ? "—" : `второй шанс №${String(purchase.continueNo)}`;

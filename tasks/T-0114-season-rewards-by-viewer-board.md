@@ -10,8 +10,6 @@ size: M
 depends_on: [T-0110, T-0113]
 zones:
   - backend/api/src/modules/seasons/**
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
 shared:
   - backend/api/src/modules/runs/runs.service.ts
   - backend/api/src/modules/runs/rating-restrictions.ts
@@ -19,6 +17,8 @@ shared:
   - backend/api/test/boards-by-viewer.test.ts
   - docs/21-diagrams.md
   - docs/32-balance.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: high

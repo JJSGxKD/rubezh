@@ -394,6 +394,7 @@ function Upgrades(): ReactNode {
         </section>
       ))}
       <Topic index={0} icon={<ItemIcon kind="heal" id="" size={20} />} title={t("guide.upgrades.heal.title")} text={t("guide.upgrades.heal.text")} />
+      <Topic index={1} icon={<Shuffle size={20} aria-hidden="true" />} title={t("guide.upgrades.tools.title")} text={t("guide.upgrades.tools.text")} />
     </>
   );
 }

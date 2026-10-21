@@ -48,6 +48,7 @@ erDiagram
         datetime tester_at "nullable: знак «Тестер» — играл до вайпа; ставится снимком, навсегда"
         string platform_name "nullable: ник с площадки как пришёл, до 256 знаков; обновляется при каждом входе, виден только в панели"
         datetime name_locked_at "nullable: ник закреплён модератором, вход display_name не перезаписывает"
+        datetime supporter_at "nullable: знак «Поддержал проект» (Р109) — когда подтверждён первый донат; снимается внешним возвратом, если других донатов нет"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -123,6 +124,8 @@ erDiagram
     PARTNER ||--o{ PARTNER_BINDING : "привёл игроков"
     ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
     PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
+    PARTNER |o--o{ LINK : "ссылки партнёра: владелец задаётся при создании"
+    LINK |o--o{ PARTNER_BINDING : "по какой ссылке; ссылка удалена — код пуст"
     ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
     ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
 
@@ -304,6 +307,14 @@ erDiagram
         datetime next_poll_at
     }
 
+    FX_SOURCE_LIMIT {
+        string source PK "строки нет — тариф из кода"
+        int per_month "nullable: запросов в месяц по UTC, null — без лимита"
+        string note "причина правки, и в аудите"
+        uuid updated_by "кто поменял в панели"
+        datetime updated_at
+    }
+
     ACCOUNT_PROGRESS {
         uuid account_id PK,FK
         bigint xp "только растёт"
@@ -393,11 +404,11 @@ erDiagram
     PURCHASE {
         uuid purchase_id PK "он же payload счёта"
         uuid account_id FK "Restrict: деньги не уходят вместе с аккаунтом"
-        enum product "continue_run|shop_item|vip"
+        enum product "continue_run|shop_item|vip|donation"
         string run_id FK "nullable: только у второго шанса; SetNull — вайп стирает забеги, покупка остаётся; UK вместе с continue_no"
         int continue_no "nullable: какое продолжение забега, с единицы"
         float elapsed_sec "nullable: секунда забега, по которой посчитана цена"
-        string sku "nullable: товар каталога магазина или план VIP — пусто только у continue_run"
+        string sku "nullable: товар каталога магазина, план VIP или donation у доната — пусто только у continue_run"
         string once_key UK "nullable: разовый товар — одна строка на товар и аккаунт"
         int price_stars "цена по правилу Р5.1 — её видит игрок"
         int charged_stars "сколько списано: в тестовом режиме — одна звезда"
@@ -553,6 +564,7 @@ erDiagram
         string network "nullable: adsgram — сеть, куда уходят конверсии; CHECK"
         string registration_on "first_run|launch: что сеть считает регистрацией"
         string target "app|bot|landing: куда ведёт, по умолчанию app (Р95)"
+        uuid partner_id FK "nullable: владелец-партнёр, ссылка команды — пусто; не меняется; партнёра со ссылками не удалить"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }
@@ -880,6 +892,7 @@ erDiagram
         uuid account_id PK,FK "слот источника один: либо это, либо REFERRAL_BINDING"
         uuid partner_id FK "партнёра с игроками не удалить"
         uuid campaign_id FK "nullable: каким кодом"
+        string link_code FK "nullable: по какой ссылке партнёра; у привязки кодом пусто"
         datetime bound_at
     }
 
@@ -965,6 +978,30 @@ erDiagram
         string kind "place или threshold"
         string status "pending или claimed"
         datetime claimed_at "nullable: забрано"
+    }
+
+    OUTBOUND_CALL {
+        bigint id PK
+        datetime at "когда начата попытка"
+        string service "из списка сервисов клиента исходящих: fx.cbr, telegram.bot…"
+        string method
+        string host "без порта и учётных данных"
+        string path "без query, токены и ключи заменены звёздочками"
+        int status "nullable: ответа не было"
+        boolean ok
+        int duration_ms
+        string via "direct или id прокси"
+        int attempt
+        string error "nullable: timeout, network или aborted"
+    }
+
+    INBOUND_MINUTE {
+        datetime minute PK "начало минуты, UTC"
+        string method PK
+        string route PK "шаблон маршрута /api/v1/runs/:runId, не адрес"
+        string status_class PK "2xx, 3xx, 4xx или 5xx"
+        int count
+        int[] buckets "ответы по корзинам 25, 50, 100, 250, 500, 1000, 2500, 5000 мс и «дольше»"
     }
 ```
 
@@ -1200,7 +1237,10 @@ erDiagram
   (`23-referral-and-partner-program.md` §5). Внешним ключом это не
   выразить, поэтому обе записи идут под одной блокировкой аккаунта
   (`attribution/source-slot.ts`). Выплат партнёрам нет — они после лонча
-  (§1.3).
+  (§1.3). Ссылка партнёра (`LINK.partner_id`, T-0067) привязывает так же,
+  но по первому входу: сессия вида `click` или `link` после записи зовёт
+  привязку, та берёт тот же слот источника и пишет `PARTNER_BINDING` с
+  `link_code`.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1217,7 +1257,9 @@ erDiagram
   игроке. Коды валют — строкой, а не перечислением базы: перечень живёт в
   ядре `packages/fx`, и новая валюта не требует миграции. Котировка — одна
   на источник и валюту, текущий курс — один на валюту, история и заданные
-  курсы — только добавлением, снимок неизменяем.
+  курсы — только добавлением, снимок неизменяем. `FX_SOURCE_LIMIT` — месячный
+  лимит источника, заданный в панели (Р89): строки нет — действует тариф из
+  кода (`packages/fx/src/sources/*`), «без лимита» — строка с `null`.
 - **`WALLET_ENTRY` — журнал кошелька, `WALLET_BALANCE` — его проекция**
   (`35-stage4-plan.md`, WP3). Любая ценность игрока — строка журнала с
   уникальным ключом идемпотентности; баланс меняется в той же транзакции и
@@ -1322,6 +1364,11 @@ erDiagram
   без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
   пара — ключ; её же читает сегмент следующей рассылки, чтобы не писать
   тому, кто получал недавно.
+- **Журнал запросов — `OUTBOUND_CALL` и `INBOUND_MINUTE`** (Р92, поток —
+  §4.30). Наблюдение за сервером, а не учёт: ни одной связи с аккаунтом.
+  Исходящие — строка на попытку; входящие — сводка по минуте, методу,
+  шаблону маршрута и классу статуса, без адресов. Обе таблицы чистятся
+  через 7 суток, поэтому при вайпе остаются.
 
 ### 1.2 Планируемое расширение (этап 4 и дальше, ещё не реализовано)
 
@@ -1763,6 +1810,7 @@ flowchart LR
         PAY["payments<br/>второй шанс, товары и подписка за Stars: цена,<br/>счёт, подтверждение, продления, возвраты, выдача, довыдача, реализовано"]
         SHOP["shop<br/>магазин: каталог с фиксированным<br/>составом, цены способа оплаты, акции, реализовано"]
         VIP["vip<br/>подписка площадки: журнал периодов,<br/>продление, самоцветы дня, надбавка к наградам, реализовано"]
+        DONATE["donations<br/>донаты проекту: счёт на любую сумму,<br/>знак «Поддержал проект», ссылки Tribute, реализовано"]
         ADS["ads<br/>реклама: выбор сети, воронка показа,<br/>кулдаун места, реализовано ядро"]
         REF["referrals"]
         CONTENT["content<br/>версии конфигурации"]
@@ -1802,6 +1850,7 @@ flowchart LR
         TESTNOTICE["test-notice<br/>предупреждение об открытом тесте:<br/>принятие на аккаунт, реализовано"]
         WIPE["wipe<br/>компенсация тестеру после вайпа:<br/>выдача по кнопке, один раз, реализовано"]
         PROMOC["promo-codes<br/>промокоды и коды партнёров:<br/>ключ кода, активация, реализовано"]
+        PARTNERS["partners<br/>карточки партнёров, их ссылки,<br/>привязка по первому входу, реализовано"]
         RESTR["restrictions<br/>ограничения игрока по видам и на срок:<br/>«можно ли» с кешем 30 с, снятие по сроку<br/>под локом, реализовано"]
         SEASONS["seasons<br/>недельный сезон рейтинга: таблица недели,<br/>закрытие по понедельникам UTC, награды<br/>за порог и за место, друзья, реализовано"]
         OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, запись о каждой попытке<br/>в приёмник (пока пустой), реализовано"]
@@ -1908,6 +1957,11 @@ flowchart LR
     VIP -- "самоцветы дня ключом суток" --> WALLET
     WALLET -. "надбавка к наградам: регистр надбавок" .-> VIP
     VIP -- "vip_subscription, vip_period, vip_daily" --> PG
+    CADDY -- "/api/v1/donations" --> DONATE
+    DONATE -- "счёт на сумму, может ли площадка принять оплату" --> PAY
+    PAY -. "выдача знака и его снятие при возврате: регистры выдачи и отзыва" .-> DONATE
+    DONATE -- "account.supporter_at, purchase.product = donation" --> PG
+    DONATE -. "можно ли: покупки" .-> RESTR
     RUNS -. сверка продолжений с покупками .-> PAY
     RUNS -. "второй шанс: забор сессии места second_chance" .-> ADS
     RUNS -. слушатели записанного забега .-> PAY
@@ -2040,6 +2094,9 @@ flowchart LR
     CADDY -- "/api/v1/promo-codes" --> PROMOC
     PROMOC -. "награда ключом кампании и игрока" .-> WALLET
     PROMOC -. "можно ли: промокоды" .-> RESTR
+    PARTNERS --> PG
+    ATTR -. "сессия вида click или link: привязка по ссылке партнёра в слот источника" .-> PARTNERS
+    PARTNERS -. "ссылки партнёра: клики и запуски теми же запросами, что в списке ссылок" .-> LINKS
     CADDY -- "/api/v1/me/home" --> HOME
     HOME -. "акции и стартовый набор" .-> SHOP
     HOME -. "VIP, если его нет" .-> VIP
@@ -2048,7 +2105,8 @@ flowchart LR
     HOME -. "виджет: неделя и завтрашняя награда" .-> DAILY
     HOME -. "виджет: крутка, джекпот, крутка за рекламу" .-> WHEEL
     HOME -. "можно ли: друзья, партнёрские задания" .-> RESTR
-    HOME -. "канал проекта" .-> SETTINGS
+    HOME -. "канал проекта; слайд доната включён ли" .-> SETTINGS
+    HOME -. "слайд «Поддержать проект», если есть способ поддержать" .-> DONATE
     HOME -- "home_slide; регистрация и первая оплата для аудитории" --> PG
     ADMINAPI -. "слайды команды: завести, поправить, снять" .-> HOME
 
@@ -3521,6 +3579,107 @@ sequenceDiagram
   отчёта теряется со строкой `warn` не чаще раза в минуту.
 - **Чужого не хранится:** ни путей и параметров адреса, ни адреса страницы, ни
   данных игрока — ни в Redis, ни в логе.
+
+### 4.30 Журнал запросов: исходящие и входящие (этап 4, реализовано хранение)
+
+Команде видно, какие запросы приходят на сервер и какие уходят наружу (Р92).
+Исходящие пишет клиент `infra/outbound` через сменный приёмник; входящие
+считает хук `onResponse` в `http-app.ts`. Читает журнал раздел «Запросы»
+панели — задача T-0061.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as Код сервера (Outbound.forService)
+    participant B as BufferedOutboundSink
+    participant P as Postgres
+    participant C as Игрок, панель
+    participant H as Хук onResponse
+    participant I as InboundCounter
+    participant R as Redis
+    participant J as JournalRollup
+
+    K->>B: write(запись о попытке) — в память, вызов не ждёт
+    B->>P: раз в 5 с и при остановке: createMany, потолок буфера 2000
+    C->>H: запрос обслужен, ответ ушёл
+    H->>I: count(метод, шаблон маршрута, статус, время) — без /health*
+    I->>R: MULTI: HINCRBY число, HINCRBY корзина, EXPIRE 2 часа
+    J->>R: раз в минуту под локом request-journal:lock: HGETALL прошедших минут
+    J->>P: INSERT … ON CONFLICT DO UPDATE — прибавляет к строке минуты
+    J->>R: DEL ключа минуты после записи
+    J->>P: раз в сутки: DELETE старше 7 суток пачками по 5000
+```
+
+- **Запись исходящих не тормозит вызов.** Приёмник синхронный и не бросает;
+  при всплеске лишнее сверх 2000 записей отбрасывается со счётчиком и `warn`
+  раз в минуту. База не принимает пачку три сброса подряд — пачка выбрасывается.
+- **Redis лёг — входящие не считаются** 10 секунд подряд, минута теряется,
+  запрос игрока не ждёт и не падает.
+- **Повтор переноса не задваивает:** ключ минуты удаляется после записи, а
+  запоздавшая запись в давнюю минуту прибавится отдельной порцией. Минуту
+  берут не раньше, чем через 5 секунд после её конца.
+- **Низкая кардинальность:** в ключе — шаблон маршрута, а не адрес; ни
+  идентификаторов игроков, ни query в сводке нет.
+
+### 4.31 Донат проекту: заказ, оплата, знак, возврат (этап 4, реализовано серверная часть)
+
+Игрок поддерживает проект звёздами на любую целую сумму в пределах способа
+оплаты площадки (Р109, `35-stage4-plan.md`, T-0157) и получает знак «Поддержал
+проект». Игровых ценностей у доната нет. Донат идёт цепочкой магазина (§4.15):
+счёт, подтверждение очередью, возвраты и довыдача — прежние; отличается вид
+покупки (`donation`) и выдача — знак на аккаунте.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as Клиент
+    participant S as DonationsService
+    participant R as Ограничения аккаунта
+    participant P as PaymentsService
+    participant DB as Postgres purchase и account
+    participant T as Telegram
+    participant Q as Очередь payments
+    participant F as PurchaseFulfillment
+    participant V as PurchaseRevocation
+
+    K->>S: GET /donations
+    S-->>K: stars {min, max, presets, mode} или null; tribute {url, way} или null; supporter
+    K->>S: POST /donations/orders {amount}
+    S->>R: ensure «Покупки» (закрыто — отказ раньше всего)
+    S->>S: сумма целая и в пределах способа, иначе 400 «Некорректная сумма»
+    S->>P: shopInvoice(donation, sku donation, цена — сумма, не разовый)
+    P->>DB: INSERT purchase pending — новая строка на каждый счёт
+    P->>T: createInvoiceLink
+    P-->>K: purchaseId, invoiceUrl
+    K->>T: окно оплаты
+    T->>Q: оплата подтверждена → confirm
+    Q->>DB: markPaid: pending → paid, идемпотентно по charge_id
+    Q->>F: fulfill(purchase)
+    F->>S: fulfill
+    S->>DB: UPDATE account SET supporter_at = COALESCE(supporter_at, paid_at)
+    Q->>DB: markFulfilled
+    opt возврат не по нашей воле или по решению поддержки
+        T->>Q: refunded_payment
+        Q->>V: revoke(purchase)
+        V->>S: revoke
+        S->>DB: транзакция: FOR UPDATE по аккаунту, другого оплаченного и не возвращённого доната нет → supporter_at = NULL
+    end
+```
+
+- **Знак ставится однажды.** `COALESCE(supporter_at, …)` не перезаписывает дату
+  первого доната: повтор задания подтверждения и параллельные выдачи безвредны.
+  Строка аккаунта блокируется при каждой пометке, поэтому она дожидается
+  снятия знака, а не проходит мимо него.
+- **Донат не покупка для воронки.** Событие оплаты (`PaymentsHooks.onPaid`)
+  несёт вид товара, `FunnelTracker` донат пропускает: донор остаётся «не
+  платящим» (`22-analytics-and-metrics.md` §5.4).
+- **Знак снимается, только если других донатов нет.** Оплаченные, не
+  возвращённые и без заказанного возврата донаты того же аккаунта знак держат;
+  обработка возврата повторяется до конца, и повтор отвечает так же.
+- **Звёздная часть вида — по условиям.** `stars: null`, если оплата выключена
+  стоп-краном `payments.stars`, у площадки нет способа или он не принимает
+  игрока, или покупки аккаунту закрыты. Ссылка Tribute от этого не зависит:
+  оплата идёт вне игры, знака за неё нет.
 
 ---
 

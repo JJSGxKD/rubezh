@@ -62,6 +62,8 @@ import { PartnersModule } from "./modules/partners/partners.module.js";
 import { SeasonsModule } from "./modules/seasons/seasons.module.js";
 import { OnlineModule } from "./modules/online/online.module.js";
 import { CspReportsModule } from "./modules/csp-reports/csp-reports.module.js";
+import { RequestJournalModule } from "./modules/request-journal/request-journal.module.js";
+import { DonationsModule } from "./modules/donations/donations.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -87,7 +89,10 @@ import { CspReportsModule } from "./modules/csp-reports/csp-reports.module.js";
  * промокоды: ввод игроком и кампании в панели, partners — партнёры и
  * приведённые ими игроки (там же, WP41); online — сколько людей в игре и в
  * забеге, Р107 (там же, T-0147); csp-reports — сводка отчётов браузера о
- * заблокированных адресах, Р108 (там же, T-0155).
+ * заблокированных адресах, Р108 (там же, T-0155);
+ * request-journal — журнал исходящих вызовов и сводка входящих по маршрутам,
+ * Р92 (там же, T-0060); donations — донаты проекту и знак «Поддержал
+ * проект», Р109 (там же, T-0157).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -152,6 +157,8 @@ export const APP_MODULES = [
   SeasonsModule,
   OnlineModule,
   CspReportsModule,
+  RequestJournalModule,
+  DonationsModule,
 ];
 
 /**
