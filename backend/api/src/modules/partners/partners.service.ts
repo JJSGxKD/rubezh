@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { DomainError, ValidationError } from "../../common/domain-error.js";
+import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { campaignState, type PromoCampaignState } from "../promo-codes/promo-code-rules.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
-import { PartnerTelegramTakenError } from "./partner-errors.js";
+import { PartnerNotFoundError, PartnerTelegramTakenError } from "./partner-errors.js";
 import { PARTNER_RULES, PARTNER_STATUSES, withTerms, type PartnerFull, type PartnerInput, type PartnerStats, type PartnerStatus } from "./partner-rules.js";
 import { PARTNERS_REPOSITORY, type PartnerBindingView, type PartnerCampaignRow, type PartnersRepository } from "./partners.repository.js";
 
@@ -20,12 +20,6 @@ import { PARTNERS_REPOSITORY, type PartnerBindingView, type PartnerCampaignRow, 
  * решит модель учёта (О44). Статус меняется отдельно, с причиной: он
  * решает, привязывает ли партнёр новых игроков.
  */
-
-export class PartnerNotFoundError extends DomainError {
-  constructor() {
-    super("partner_not_found", "Партнёра нет", 404);
-  }
-}
 
 export type PartnerView = PartnerFull & { stats: PartnerStats };
 
