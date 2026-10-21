@@ -211,6 +211,13 @@ describe("раздел «Запросы» панели по HTTP", () => {
       expect(response.json().error.message).toBe("Период — час, сутки или неделя");
     });
 
+    it.each(URLS)("%s: лишнее поле в query — 400, а не молчаливое игнорирование", async (url) => {
+      const response = await get(`${url}?period=day&limit=5000`);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.message).toBe("Некорректные параметры запроса");
+      expect(reader.summaryWindows.length + reader.routeWindows.length + reader.callQueries.length + reader.seriesCalls.length).toBe(0);
+    });
+
     it("параметры вызовов: before не число, служба длиннее колонки — 400", async () => {
       const badBefore = await get("outbound?before=abc");
       const badService = await get(`outbound?service=${"я".repeat(33)}`);

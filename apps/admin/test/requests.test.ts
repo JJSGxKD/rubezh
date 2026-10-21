@@ -7,7 +7,9 @@ import {
   fetchOutboundSummary,
   formatLatency,
   formatShare,
+  groupSeries,
   inboundSchema,
+  MAX_CHART_BARS,
   outboundCallsSchema,
   outboundSummarySchema,
   seriesChart,
@@ -134,6 +136,41 @@ describe("график входящих", () => {
     const chart = seriesChart([{ at: AT, total: 0, errors: 0 }]);
     expect(chart.max).toBe(0);
     expect(chart.bars).toEqual([{ at: AT, total: 0, errors: 0 }]);
+  });
+});
+
+describe("ширина графика", () => {
+  const HOUR = 3_600_000;
+  const START = Date.parse("2026-10-05T00:00:00.000Z");
+  /** Неделя по часам: 169 точек, как отдаёт сервер, с известной суммой. */
+  const week = Array.from({ length: 169 }, (_, index) => ({ at: new Date(START + index * HOUR).toISOString(), total: index % 5, errors: index % 7 === 0 ? 1 : 0 }));
+
+  it("неделя не даёт больше столбцов, чем влезает в телефон: 169 точек → не больше MAX_CHART_BARS", () => {
+    expect(MAX_CHART_BARS).toBeLessThanOrEqual(100);
+    const grouped = groupSeries(week, MAX_CHART_BARS);
+    expect(grouped.length).toBeLessThanOrEqual(MAX_CHART_BARS);
+    expect(grouped.length).toBeGreaterThan(MAX_CHART_BARS / 2);
+  });
+
+  it("группировка ничего не теряет: суммы ответов и 5xx те же, время столбца — первой точки", () => {
+    const grouped = groupSeries(week, MAX_CHART_BARS);
+    expect(grouped.reduce((sum, bar) => sum + bar.total, 0)).toBe(week.reduce((sum, point) => sum + point.total, 0));
+    expect(grouped.reduce((sum, bar) => sum + bar.errors, 0)).toBe(week.reduce((sum, point) => sum + point.errors, 0));
+    expect(grouped[0]?.at).toBe(week[0]?.at);
+    expect(grouped.reduce((sum, bar) => sum + bar.steps, 0)).toBe(169);
+  });
+
+  it("час и сутки не склеиваются: 61 и 25 точек остаются как есть", () => {
+    const hour = week.slice(0, 61);
+    const day = week.slice(0, 25);
+    expect(groupSeries(hour, MAX_CHART_BARS)).toHaveLength(61);
+    expect(groupSeries(day, MAX_CHART_BARS)).toHaveLength(25);
+    expect(groupSeries(day, MAX_CHART_BARS).every((bar) => bar.steps === 1)).toBe(true);
+  });
+
+  it("пустой ряд и предел меньше единицы не ломают группировку", () => {
+    expect(groupSeries([], MAX_CHART_BARS)).toEqual([]);
+    expect(groupSeries(week, 0).length).toBeGreaterThan(0);
   });
 });
 
