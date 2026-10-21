@@ -4,6 +4,7 @@ import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
 import "../../i18n/run";
+import { radarPlacementClass, useRadarSetting } from "../../state/radar-setting";
 import { ItemIcon } from "../item-icons";
 import { BossBar } from "./BossBar";
 import { HintBanner } from "./HintBanner";
@@ -36,6 +37,8 @@ const LOW_HP_RATIO = 0.3;
 export function RunHud(props: RunHudProps): ReactNode {
   const { hud } = props;
   const low = hud.maxHp > 0 && hud.hp / hud.maxHp <= LOW_HP_RATIO;
+  // Подписка по селектору: HUD не перерисовывается от прочего в сторе.
+  const radarClass = radarPlacementClass(useRadarSetting((state) => state.position));
 
   return (
     <div
@@ -120,12 +123,15 @@ export function RunHud(props: RunHudProps): ReactNode {
           редко и обязана быть замеченной, но не закрывать здоровье. */}
       {hud.boss === null ? null : <BossBar boss={hud.boss} />}
 
-      {/* Радар под верхними полосами, у правого края: внизу экрана его закрывает
-          рука, ведущая джойстик. В потоке, а не поверх: полоса босса, когда она
-          есть, остаётся над ним и ничего не накрывает. */}
-      <div className="flex justify-end pt-2 pr-[calc(1rem+var(--app-inset-right))]">
-        <Radar radar={hud.radar} />
-      </div>
+      {/* Радар под верхними полосами, у края по выбору игрока (Р113); внизу
+          экрана его закрывает рука, ведущая джойстик, поэтому низа нет. В
+          потоке, а не поверх: полоса босса, когда она есть, остаётся над ним
+          и ничего не накрывает. Выключен — не рисуется вовсе. */}
+      {radarClass === null ? null : (
+        <div className={radarClass}>
+          <Radar radar={hud.radar} />
+        </div>
+      )}
 
       <div className="mt-auto px-4 pb-3">
         <HintBanner hud={hud} />

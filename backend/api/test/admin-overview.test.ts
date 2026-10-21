@@ -135,8 +135,10 @@ async function setup(options: { changelogFails?: boolean } = {}) {
   const owner = await person("1", "owner");
   const colleague = await person("2", "marketer");
   const stats = new FakeStats();
+  let changelogListed = 0;
   const changelog = {
     list: async () => {
+      changelogListed++;
       if (options.changelogFails === true) throw new Error("база не ответила");
       return { entries: [line("0.6.0", false), line("0.6.0", false), line("0.6.1", false), line("0.5.0", true)], releases: [] };
     },
@@ -145,7 +147,7 @@ async function setup(options: { changelogFails?: boolean } = {}) {
     list: async () => [broadcast(colleague.accountId, "draft"), broadcast(owner.accountId, "draft"), broadcast(colleague.accountId, "done")],
   } as unknown as BroadcastsService;
   const runs = { review: async () => [flagged(2), flagged(30)] } as unknown as RunsViewService;
-  return { service: new AdminOverviewService(stats, roles, changelog, broadcasts, runs, ads as unknown as AdsCatalogRepository), stats, ads, owner, person };
+  return { service: new AdminOverviewService(stats, roles, changelog, broadcasts, runs, ads as unknown as AdsCatalogRepository), stats, ads, owner, person, changelogCalls: () => changelogListed };
 }
 
 describe("сводка панели", () => {
@@ -227,18 +229,24 @@ describe("сводка панели", () => {
     expect(overview.attention.length).toBeGreaterThan(0);
   });
 
-  it("владельцу — выручка и всё, что ждёт: черновики версий, рассылки коллег, свежий разбор", async () => {
+  it("владельцу — выручка и всё, что ждёт: рассылки коллег, свежий разбор; черновики версий не напоминаются (Р125)", async () => {
     const { service, owner } = await setup();
     const overview = await service.overview(owner, 1, NOW);
     expect(overview.today.revenue).toEqual({ stars: 150, purchases: 3, refunds: 0 });
     expect(overview.series[0]?.stars).toBe(150);
     expect(overview.series[0]?.purchases).toBe(3);
     expect(overview.attention).toEqual([
-      { section: "changelog", count: 2, text: "«Что нового» ждёт публикации — версии 0.6.0, 0.6.1" },
       // Свой черновик и законченная рассылка не ждут.
       { section: "broadcasts", count: 1, text: "Рассылки коллег в черновиках — проверить, одобрить и запустить: 1" },
       { section: "review", count: 1, text: "Забегов на разбор за сутки: 1" },
     ]);
+  });
+
+  it("журнал скрыт у игроков: черновики версий в сводке не показываются и не запрашиваются", async () => {
+    const { service, owner, changelogCalls } = await setup();
+    const overview = await service.overview(owner, 1, NOW);
+    expect(overview.attention.map((item) => item.section)).not.toContain("changelog");
+    expect(changelogCalls()).toBe(0);
   });
 
   it("аналитику — без выручки и без чужих дел; модератору сводка закрыта", async () => {

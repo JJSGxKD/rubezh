@@ -112,7 +112,7 @@
 | Подборы (аптечка, магнит, динамит): радиус касания, полёт, потолок пула и потолок вида; вид на земле, пульсация, кольца лечения и магнита | `game/sim/pickups.ts` → `PICKUP_RADIUS_UNITS`, `PICKUP_LAND_TICKS`, `MAX_PICKUPS`, `MAX_PICKUPS_OF_KIND`; `render/looks.ts` → `PICKUP_LOOKS`; `render/pickups.ts` → `PICKUP_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS`, `MAGNET_RING_UNITS` |
 | Числа урона: сколько на экране, сколько новых за кадр, жизнь, подъём, размер; вспышка гибели | `game/render/combat-feedback.ts` → `MAX_NUMBERS`, `MAX_NEW_NUMBERS_PER_FRAME`, `NUMBER_*`, `BURST_*` |
 | Телеграфы: кольцо взрыва, полоса рывка | `game/render/telegraphs.ts` |
-| Радар: сколько точек, радиус; размер и вид в HUD | `game/radar.ts` → `MAX_BLIPS`; `app-shell/src/screens/run/Radar.tsx` → `SIZE_PX`, `*_PX` |
+| Радар: сколько точек, радиус; размер и вид в HUD | `game/radar.ts` → `MAX_BLIPS`; `app-shell/src/screens/run/Radar.tsx` → `SIZE_PX`, `*_PX`; положение — выбор игрока, `app-shell/src/state/radar-setting.ts` (`bh.radar.v1`, устройство) |
 | Размер клетки сетки коллизий | `game/sim/grid.ts` → `gridCellSize` |
 | Хитбоксы и умолчания паттернов, множители элиты и босса | `game/patterns/enemy-types.ts` → `PATTERN_TRAITS`, `PATTERN_DEFAULTS`, `ELITE_RADIUS_MUL`, `BOSS_RADIUS_MUL` |
 | Фазы боя с боссом: сколько их и по каким долям здоровья | `game/run/boss.ts` → `BOSS_PHASES`, `bossPhase` |
