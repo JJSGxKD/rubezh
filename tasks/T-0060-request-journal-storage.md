@@ -20,6 +20,8 @@ shared:
   - backend/api/src/app.module.ts
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
 runner: local
 executor: sonnet-5.5
 effort: extra
