@@ -60,6 +60,17 @@ export function weaponChanges(
 }
 
 /**
+ * Что даёт эволюция: «было → стало» между последним уровнем базового оружия и
+ * единственным уровнем эволюции.
+ */
+export function evolutionChanges(base: WeaponType, evolved: WeaponType, unitScale: number): UpgradeChange[] {
+  const previous = base.levels.at(-1);
+  const next = evolved.levels[0];
+  if (previous === undefined || next === undefined) return [];
+  return diffWeaponLevels(evolved, previous, next, unitScale);
+}
+
+/**
  * Что меняется между двумя уровнями — одного оружия или базового и его
  * эволюции. Поля берутся по поведению `type`; `previous === null` — новое
  * оружие, и тогда показываются только его главные числа.
