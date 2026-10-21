@@ -96,6 +96,22 @@ function twinkleFrames() {
 }
 
 /**
+ * Снаряды — по одному кадру, смотрят вправо: рендер поворачивает их по
+ * скорости (`projectile-look.ts` уже это делает). Цвет — роль «своё оружие —
+ * тёплое и бирюза», вражеский сгусток — красный с горячим ядром, как сейчас.
+ */
+function projectiles() {
+  return {
+    spark: [svg(`<path d="M-44 0 Q-10 -9 18 -6 L18 6 Q-10 9 -44 0 Z" fill="#ffb67f" opacity="0.75"/><circle cx="18" r="14" fill="#ffd15c"/><circle cx="20" cy="-2" r="7" fill="#fff6dc"/>`)],
+    knife: [svg(`<path d="M-36 -5 L-12 -5 L-12 -9 L-6 -9 L-6 -5 L30 -5 L44 0 L30 5 L-6 5 L-6 9 L-12 9 L-12 5 L-36 5 Z" fill="#e9ecf5"/><path d="M-6 -5 L30 -5 L44 0 L-6 0 Z" fill="#ffffff"/><rect x="-36" y="-5" width="24" height="10" rx="3" fill="#8a5a3c"/>`)],
+    sting: [svg(`<path d="M-44 0 L30 -4 L46 0 L30 4 Z" fill="#8ee05a"/><path d="M-44 0 L30 -1.5 L46 0 Z" fill="#d9f7c4"/><circle cx="-30" cy="0" r="6" fill="#6fcf3a" opacity="0.6"/>`)],
+    ward: [svg(`<circle r="40" fill="#46d9c6" opacity="0.25"/><path d="M0 -34 L30 0 L0 34 L-30 0 Z" fill="#46d9c6"/><path d="M0 -34 L30 0 L0 0 Z" fill="#b9fff4"/><path d="M-12 0 h24 M0 -12 v24" stroke="#1d5a55" stroke-width="5" stroke-linecap="round"/>`)],
+    bolt: [svg(`<circle r="38" fill="#ff6b6b" opacity="0.35"/><circle r="26" fill="#ff6b6b"/><circle r="12" fill="#fff1e6"/>`)],
+  };
+}
+const PROJ = projectiles();
+
+/**
  * Размер ячейки — в игровых единицах при масштабе 1. Взрыв рендер растягивает
  * до радиуса из события: мягкая форма терпит растяжение вдвое.
  */
@@ -105,4 +121,9 @@ export const FX = [
   { id: "blast", units: 64, frames: blastFrames() },
   { id: "spawn", units: 32, frames: spawnFrames() },
   { id: "twinkle", units: 12, frames: twinkleFrames() },
+  { id: "proj_spark", units: 12, frames: PROJ.spark },
+  { id: "proj_knife", units: 14, frames: PROJ.knife },
+  { id: "proj_sting", units: 14, frames: PROJ.sting },
+  { id: "orbiter_ward", units: 16, frames: PROJ.ward },
+  { id: "proj_enemy", units: 12, frames: PROJ.bolt },
 ];

@@ -12,6 +12,7 @@ import { ENEMY_ART } from "./creatures.mjs";
 import { HERO_DEFS, HERO_STATES } from "./hero.mjs";
 import { creaturePalette, enemyBody, STAGES } from "./palette.mjs";
 import { svgFrame, PPU, CELL_K } from "./build.mjs";
+import { FX } from "./fx.mjs";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "out");
 const GROUND = "#33506a";
@@ -145,12 +146,33 @@ function heroBoard() {
   return { width: 1380, height: 230, items };
 }
 
+/** Эффекты: кадры по порядку; белые — в цвете, как их окрасит тинт в рендере. */
+function fxBoard() {
+  const tints = { hit: ["#ffffff", "#ffe066", "#9bd0ff"], death: ["#ff4d5a", "#ff5a2e", "#ff7a90"], twinkle: ["#b6ff4a", "#d68cff"] };
+  const items = [{ text: "Запечённые эффекты: кадры по порядку · белые окрашены, как их окрасит тинт", x: 24, y: 30, size: 22, bold: true }];
+  let y = 46;
+  for (const fx of FX) {
+    const variants = tints[fx.id] ?? [null];
+    for (const tint of variants) {
+      items.push({ ground: true, x: 16, y, w: 1350, h: 120 });
+      items.push({ text: `fx/${fx.id}${tint ? ` · тинт ${tint}` : ""}`, x: 24, y: y + 22, size: 15, bold: true });
+      items.push({ text: `${fx.frames.length} кадров · ${fx.units} ед.`, x: 24, y: y + 42, size: 13, color: "#d7dcef" });
+      fx.frames.forEach((svg, k) => {
+        const colored = tint === null ? svg : svg.replaceAll('"#fff"', `"${tint}"`).replaceAll("#e8e4ee", tint).replaceAll("#b9b3c7", tint);
+        items.push({ svg: colored, x: 260 + k * 118, y: y + 4, size: 112 });
+      });
+      y += 124;
+    }
+  }
+  return { width: 1380, height: y + 10, items };
+}
+
 async function main() {
   const path = process.env.PLAYWRIGHT_MODULE ?? "/opt/node-tools/node_modules/playwright/index.mjs";
   const { chromium } = await import(pathToFileURL(path).href);
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  for (const [name, board] of [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()]]) {
+  for (const [name, board] of [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()]]) {
     writeFileSync(join(OUT, `sheet-${name}.png`), Buffer.from(await renderBoard(page, board), "base64"));
   }
   await browser.close();

@@ -1920,9 +1920,109 @@
     "h": 60
    }
   },
-  "fx/twinkle0": {
+  "fx/orbiter_ward0": {
    "frame": {
     "x": 762,
+    "y": 1051,
+    "w": 40,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 40,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 40,
+    "h": 40
+   }
+  },
+  "fx/proj_knife0": {
+   "frame": {
+    "x": 804,
+    "y": 1051,
+    "w": 35,
+    "h": 35
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 35,
+    "h": 35
+   },
+   "sourceSize": {
+    "w": 35,
+    "h": 35
+   }
+  },
+  "fx/proj_sting0": {
+   "frame": {
+    "x": 841,
+    "y": 1051,
+    "w": 35,
+    "h": 35
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 35,
+    "h": 35
+   },
+   "sourceSize": {
+    "w": 35,
+    "h": 35
+   }
+  },
+  "fx/proj_enemy0": {
+   "frame": {
+    "x": 878,
+    "y": 1051,
+    "w": 30,
+    "h": 30
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 30,
+    "h": 30
+   },
+   "sourceSize": {
+    "w": 30,
+    "h": 30
+   }
+  },
+  "fx/proj_spark0": {
+   "frame": {
+    "x": 910,
+    "y": 1051,
+    "w": 30,
+    "h": 30
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 30,
+    "h": 30
+   },
+   "sourceSize": {
+    "w": 30,
+    "h": 30
+   }
+  },
+  "fx/twinkle0": {
+   "frame": {
+    "x": 942,
     "y": 1051,
     "w": 30,
     "h": 30
@@ -1942,7 +2042,7 @@
   },
   "fx/twinkle1": {
    "frame": {
-    "x": 794,
+    "x": 974,
     "y": 1051,
     "w": 30,
     "h": 30
@@ -1962,8 +2062,8 @@
   },
   "fx/twinkle2": {
    "frame": {
-    "x": 826,
-    "y": 1051,
+    "x": 2,
+    "y": 1115,
     "w": 30,
     "h": 30
    },
@@ -1982,8 +2082,8 @@
   },
   "fx/twinkle3": {
    "frame": {
-    "x": 858,
-    "y": 1051,
+    "x": 34,
+    "y": 1115,
     "w": 30,
     "h": 30
    },
@@ -2007,7 +2107,7 @@
   "format": "RGBA8888",
   "size": {
    "w": 1024,
-   "h": 1116
+   "h": 1148
   },
   "scale": "2.5"
  }
