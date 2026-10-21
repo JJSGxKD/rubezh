@@ -9,8 +9,6 @@ author: claude-lead-1
 size: M
 depends_on: [T-0167]
 zones:
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
   - backend/api/src/modules/home/team-slide-rules.ts
   - backend/api/src/modules/home/team-slide.repository.ts
   - backend/api/src/modules/home/team-slides.service.ts
@@ -29,6 +27,8 @@ zones:
 shared:
   - docs/29-admin-panel.md
   - docs/21-diagrams.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: high
