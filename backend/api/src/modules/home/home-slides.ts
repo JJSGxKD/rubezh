@@ -9,7 +9,7 @@ import type { TeamSlideIcon, TeamSlideRow, TeamSlideTarget } from "./team-slide-
  * порядке, решает сервер — по ценности для игрока, как полосу магазина:
  * идущая акция, новое в версии, пока журнал не открыт, VIP, пока его нет,
  * стартовый набор, пока не куплен, приглашение друзей, канал проекта,
- * партнёрское задание дня. Слайды команды из панели — после акции и нового
+ * поддержка проекта (если включена), партнёрское задание дня. Слайды команды из панели — после акции и нового
  * в версии, а закреплённые командой — первыми: важность анонса знает она.
  *
  * Правило — чистой функцией: его проверяют без базы, а сервис только
@@ -26,6 +26,7 @@ export type HomeSlide =
   | { id: "starter"; kind: "starter"; stars: number }
   | { id: "invite"; kind: "invite" }
   | { id: "channel"; kind: "channel"; url: string }
+  | { id: "donate"; kind: "donate" }
   | { id: string; kind: "task"; taskId: string; taskKind: string; title: string | null; image: string | null; reward: TaskView["reward"] }
   | { id: string; kind: "team"; slideId: string; title: string; text: string; image: string | null; icon: TeamSlideIcon; target: TeamSlideTarget };
 
@@ -39,6 +40,8 @@ export interface HomeSources {
   invite: boolean;
   /** канал проекта из настроек; пусто — слайда нет */
   channelUrl: string;
+  /** слайд «Поддержать проект» (Р109): включён в панели, и у игрока есть хоть один способ поддержать */
+  donate: boolean;
   /** задания игрока; под ограничением партнёрских — пусто */
   tasks: readonly TaskView[];
   /** слайды команды для этого игрока — уже по площадке и аудитории (`teamSlidesFor`) */
@@ -71,6 +74,8 @@ export function pickSlides(sources: HomeSources, now: Date): HomeSlide[] {
 
   if (sources.invite) slides.push({ id: "invite", kind: "invite" });
   if (sources.channelUrl !== "") slides.push({ id: "channel", kind: "channel", url: sources.channelUrl });
+  // Поддержка проекта — не выгода игроку, а просьба, поэтому после всего, что даёт ему что-то, и до задания дня.
+  if (sources.donate) slides.push({ id: "donate", kind: "donate" });
 
   const task = partnerTaskOfDay(sources.tasks);
   if (task !== null) {

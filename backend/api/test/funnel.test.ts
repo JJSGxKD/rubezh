@@ -78,9 +78,20 @@ describe("вехи воронки", () => {
     const { funnel, runs, payments } = tracked();
     await runs.emitStarted({ runId: "r-1", accountId: "a-1", at: new Date(NOW) });
     await runs.emit({ runId: "r-1", accountId: "a-1", finishedAt: new Date(NOW) } as RecordedRun);
-    await payments.emitPaid({ purchaseId: "p-1", accountId: "a-1", mode: "test", at: new Date(NOW) });
-    await payments.emitPaid({ purchaseId: "p-2", accountId: "a-1", mode: "live", at: new Date(NOW) });
+    await payments.emitPaid({ purchaseId: "p-1", accountId: "a-1", product: "shop_item", mode: "test", at: new Date(NOW) });
+    await payments.emitPaid({ purchaseId: "p-2", accountId: "a-1", product: "shop_item", mode: "live", at: new Date(NOW) });
     expect(funnel.calls).toEqual(["run_started:a-1", "run_recorded:a-1", "purchase:a-1"]);
+  });
+
+  it("донат — поддержка, а не покупка (Р109): первую покупку не отмечает; остальные товары — как прежде", async () => {
+    const { funnel, payments } = tracked();
+    await payments.emitPaid({ purchaseId: "d-1", accountId: "a-1", product: "donation", mode: "live", at: new Date(NOW) });
+    expect(funnel.calls).toEqual([]);
+
+    for (const product of ["shop_item", "vip", "continue_run"] as const) {
+      await payments.emitPaid({ purchaseId: `p-${product}`, accountId: `a-${product}`, product, mode: "live", at: new Date(NOW) });
+    }
+    expect(funnel.calls).toEqual(["purchase:a-shop_item", "purchase:a-vip", "purchase:a-continue_run"]);
   });
 
   it("упавшая запись вехи не роняет событие", async () => {
