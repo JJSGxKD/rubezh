@@ -4,6 +4,7 @@ import {
   createBinanceSource,
   createCbrSource,
   createCoinGeckoSource,
+  createCoinMarketCapSource,
   createEcbSource,
   createErApiSource,
   createTonApiSource,
@@ -57,20 +58,26 @@ return 0
 `;
 
 /**
- * Источники одного прохода. Ключ CoinGecko читается здесь, на каждом
- * проходе: заменённый в панели работает со следующей минуты без
- * перезапуска (docs/35-stage4-plan.md Р84). Платный важнее демо.
+ * Источники одного прохода. Ключи читаются здесь, на каждом проходе:
+ * заменённый в панели работает со следующей минуты без перезапуска
+ * (docs/35-stage4-plan.md Р84). У CoinGecko платный важнее демо; CoinMarketCap
+ * есть только с ключом; ключи tonapi и erapi необязательны (Р89) — без них
+ * источники ходят на открытые адреса.
  */
 export function fxSources(secrets: SecretsReader, fetchFor: (service: OutboundService) => typeof fetch = () => fetch): RateSource[] {
   const pro = secrets.get(SECRETS.coingeckoPro);
   const demo = secrets.get(SECRETS.coingeckoDemo);
   const key = pro !== null ? { plan: "pro" as const, value: pro } : demo !== null ? { plan: "demo" as const, value: demo } : null;
+  const coinMarketCap = secrets.get(SECRETS.coinmarketcap);
+  const tonapi = secrets.get(SECRETS.tonapi);
+  const erapi = secrets.get(SECRETS.erapi);
   return [
     createCbrSource({ fetch: fetchFor("fx.cbr") }),
     createEcbSource({ fetch: fetchFor("fx.ecb") }),
-    createErApiSource({ fetch: fetchFor("fx.erapi") }),
+    createErApiSource({ fetch: fetchFor("fx.erapi"), ...(erapi === null ? {} : { key: erapi }) }),
     createCoinGeckoSource({ fetch: fetchFor("fx.coingecko"), ...(key === null ? {} : { key }) }),
-    createTonApiSource({ fetch: fetchFor("fx.tonapi") }),
+    ...(coinMarketCap === null ? [] : [createCoinMarketCapSource({ fetch: fetchFor("fx.coinmarketcap"), key: coinMarketCap })]),
+    createTonApiSource({ fetch: fetchFor("fx.tonapi"), ...(tonapi === null ? {} : { key: tonapi }) }),
     createBinanceSource({ fetch: fetchFor("fx.binance") }),
   ];
 }
