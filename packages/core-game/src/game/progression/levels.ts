@@ -75,7 +75,7 @@ export function prepareOffers(world: World): UpgradeOption[] {
 
   const candidates = collectCandidates(world);
   progression.offers =
-    candidates.length === 0 ? [healOption()] : pickWeighted(world, candidates, OFFERS_PER_LEVEL + world.boosts.extraOffers);
+    candidates.length === 0 ? [healOption()] : pickWeighted(world.rng, candidates, OFFERS_PER_LEVEL + world.boosts.extraOffers);
   return progression.offers;
 }
 
@@ -88,7 +88,11 @@ export function collectCandidates(world: World): Candidate[] {
   const candidates: Candidate[] = [];
   const loadout = world.loadout;
 
+  const banished = world.progression.banished;
+
   world.weaponTypes.forEach((type, typeIndex) => {
+    // Изгнанное не предлагается ни карточкой, ни сундуком — ни новым, ни уровнем.
+    if (banished.includes(`weapon:${type.id}`)) return;
     const slot = weaponSlotOf(loadout, typeIndex);
     if (slot < 0) {
       if (loadout.weapons.length >= world.loadoutLimits.weapons) return;
@@ -124,6 +128,7 @@ export function collectCandidates(world: World): Candidate[] {
   });
 
   world.passiveTypes.forEach((type, typeIndex) => {
+    if (banished.includes(`passive:${type.id}`)) return;
     const slot = passiveSlotOf(loadout, typeIndex);
     if (slot < 0) {
       // Слоты — по категории пассивки, а не общие на все.
@@ -171,13 +176,17 @@ export function passivesInCategory(world: World, category: PassiveCategory): num
   return count;
 }
 
-/** Взвешенный выбор без повторов: один и тот же вариант не предлагается дважды. */
-function pickWeighted(world: World, candidates: Candidate[], count: number): UpgradeOption[] {
+/**
+ * Взвешенный выбор без повторов: один и тот же вариант не предлагается
+ * дважды. Генератор приходит снаружи — карточки уровня бросают `world.rng`,
+ * переброс — свой поток.
+ */
+export function pickWeighted(rng: Rng, candidates: readonly Candidate[], count: number): UpgradeOption[] {
   const pool = [...candidates];
   const picked: UpgradeOption[] = [];
 
   while (picked.length < count && pool.length > 0) {
-    const index = drawWeighted(world.rng, pool);
+    const index = drawWeighted(rng, pool);
     picked.push(pool[index].option);
     pool.splice(index, 1);
   }

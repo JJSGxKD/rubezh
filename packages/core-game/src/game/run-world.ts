@@ -7,11 +7,11 @@ import { DROPS } from "../content/drops";
 import { ENEMIES } from "../content/enemies";
 import { ENEMY_STAGES } from "../content/stages";
 import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
-import { ACCOUNT_UNLOCKS } from "../content/unlocks";
+import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "../content/unlocks";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
 import { WEAPONS } from "../content/weapons";
-import { unlocksAt } from "./progression/unlocks";
+import { cardToolsAt, unlocksAt } from "./progression/unlocks";
 import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
 import { createWorld, type World } from "./sim/world";
@@ -62,6 +62,9 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     continueRules: CONTINUE,
     boosts: BOOSTS,
     maxBoostsPerRun: MAX_BOOSTS_PER_RUN,
+    // Без уровня зарядов нет: на этом наборе идут golden-тесты и запись прошлой сборки.
+    ...(level === undefined ? {} : { cardTools: cardToolsAt(CARD_TOOL_UNLOCKS, level) }),
+    cardRules: CARD_TOOL_RULES,
     map,
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined ? {} : { startingWeaponId: options.startingWeaponId }),
