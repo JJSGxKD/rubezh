@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatNumber } from "../format";
 import type { AdminApi, ApiResult } from "./client";
 
 /**
@@ -36,6 +37,10 @@ const sourceSchema = z.object({
   used: z.number(),
   pausedUntil: z.string().nullable(),
   nextPollAt: z.string().nullable(),
+  /** месячный лимит: число или `null` — без лимита; `from` — из тарифа в коде или из панели */
+  limit: z.object({ perMonth: z.number().nullable(), from: z.enum(["tariff", "panel"]) }),
+  /** доля лимита; без лимита `null`, сверх лимита больше единицы */
+  usedShare: z.number().nullable(),
 });
 
 export const fxOverviewSchema = z.object({
@@ -48,6 +53,7 @@ export const fxOverviewSchema = z.object({
 
 export type FxOverview = z.infer<typeof fxOverviewSchema>;
 export type ManualRate = z.infer<typeof manualSchema>;
+export type SourceRow = z.infer<typeof sourceSchema>;
 
 /** Валюты площадок, курс которых задаётся руками, и валюты котировки — те же списки, что у сервера. */
 export const PLATFORM_CURRENCIES = ["XTR"] as const;
@@ -72,6 +78,74 @@ export function fetchFxOverview(api: AdminApi): Promise<ApiResult<FxOverview>> {
 
 export function setManualRate(api: AdminApi, input: ManualRateInput): Promise<ApiResult<ManualRate>> {
   return api.request("/fx/manual", { method: "POST", body: input, schema: manualSchema });
+}
+
+/** Границы счётчиков запросов — те же, что у `sourceLimitSchema` и `sourceUsedSchema` на сервере. */
+export const MAX_REQUESTS = 100_000_000;
+
+export interface LimitInput {
+  /** запросов в месяц; `null` — без лимита */
+  perMonth: number | null;
+  note: string;
+}
+
+export interface UsedInput {
+  used: number;
+  note: string;
+}
+
+/** Лимит источника: в панели он правится, а сброс возвращает тариф из кода (Р89). */
+export function setSourceLimit(api: AdminApi, source: string, input: LimitInput): Promise<ApiResult<SourceRow>> {
+  return api.request(`/fx/sources/${encodeURIComponent(source)}/limit`, { method: "PUT", body: { perMonth: input.perMonth, note: input.note.trim() }, schema: sourceSchema });
+}
+
+export function resetSourceLimit(api: AdminApi, source: string): Promise<ApiResult<SourceRow>> {
+  return api.request(`/fx/sources/${encodeURIComponent(source)}/limit`, { method: "DELETE", schema: sourceSchema });
+}
+
+export function correctSourceUsed(api: AdminApi, source: string, input: UsedInput): Promise<ApiResult<SourceRow>> {
+  return api.request(`/fx/sources/${encodeURIComponent(source)}/used`, { method: "PUT", body: { used: input.used, note: input.note.trim() }, schema: sourceSchema });
+}
+
+/** Тон расхода лимита: с 80% — предупреждение, с 100% — опасность. */
+export function budgetTone(usedShare: number | null): "neutral" | "warning" | "danger" {
+  if (usedShare === null) return "neutral";
+  if (usedShare >= 1) return "danger";
+  return usedShare >= 0.8 ? "warning" : "neutral";
+}
+
+/** «6 120 из 10 000»; без лимита — счётчик и «без лимита». */
+export function usageText(source: Pick<SourceRow, "used" | "limit">): string {
+  const { perMonth } = source.limit;
+  return perMonth === null ? `${formatNumber(source.used)}, без лимита` : `${formatNumber(source.used)} из ${formatNumber(perMonth)}`;
+}
+
+/** Откуда лимит: тариф из кода или правка в панели. */
+export function limitCaption(source: Pick<SourceRow, "tariff" | "limit">): string {
+  return source.limit.from === "panel" ? "задан в панели" : `по тарифу «${source.tariff}»`;
+}
+
+/** Целое из поля: пробелы между разрядами не мешают; не целое — `NaN`. */
+export function parseCount(text: string): number {
+  const compact = text.replace(/\s/g, "");
+  return /^\d{1,15}$/.test(compact) ? Number(compact) : Number.NaN;
+}
+
+function noteProblem(note: string): string | null {
+  const length = note.trim().length;
+  return length < 3 || length > 200 ? "Причина — от 3 до 200 символов: она попадёт в аудит" : null;
+}
+
+/** Те же границы, что у сервера: не отправлять заведомо отклонённое. `null` — годно. */
+export function limitProblem(input: LimitInput): string | null {
+  const { perMonth } = input;
+  if (perMonth !== null && (!Number.isInteger(perMonth) || perMonth < 1 || perMonth > MAX_REQUESTS)) return `Лимит — целое от 1 до ${formatNumber(MAX_REQUESTS)} или «без лимита»`;
+  return noteProblem(input.note);
+}
+
+export function usedProblem(input: UsedInput): string | null {
+  if (!Number.isInteger(input.used) || input.used < 0 || input.used > MAX_REQUESTS) return `Счётчик — целое от 0 до ${formatNumber(MAX_REQUESTS)}`;
+  return noteProblem(input.note);
 }
 
 /** Те же границы, что у `manualRateSchema` на сервере: не отправлять заведомо отклонённое. `null` — годно. */
