@@ -16,7 +16,6 @@ zones:
   - backend/api/src/modules/tasks/tasks.repository.ts
   - backend/api/src/modules/friends/friends.repository.ts
   - backend/api/src/modules/friends/friends.service.ts
-  - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/achievements.test.ts
   - backend/api/test/achievements.integration.test.ts
   - backend/api/test/tasks.test.ts
@@ -35,6 +34,7 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
 runner: local
 executor: sonnet-5.5
 effort: extra

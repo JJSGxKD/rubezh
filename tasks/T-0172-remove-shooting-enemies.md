@@ -33,7 +33,6 @@ zones:
   - packages/core-game/test/looks.test.ts
   - packages/core-game/test/no-enemy-projectiles.test.ts
   - packages/core-game/test/helpers/scripted-run.ts
-  - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/i18n/ru-guide.json
   - packages/app-shell/src/screens/guide/scenes.tsx
   - packages/app-shell/test/guide.test.ts
@@ -46,6 +45,7 @@ shared:
   - docs/32-balance.md
   - docs/35-stage4-plan.md
   - docs/39-retention-mechanics.md
+  - packages/app-shell/src/i18n/ru.json
 runner: any
 executor: sonnet-5.5
 effort: high

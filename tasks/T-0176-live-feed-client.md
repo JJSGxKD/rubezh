@@ -16,11 +16,11 @@ zones:
   - packages/app-shell/src/screens/home.tsx
   - packages/app-shell/test/feed-api.test.ts
   - packages/app-shell/test/home-feed-rules.test.ts
-  - backend/api/src/modules/events/event-dictionary.ts
 shared:
   - packages/app-shell/src/i18n/ru-home.json
   - docs/27-design-system-and-app-shell.md
   - docs/22-analytics-and-metrics.md
+  - backend/api/src/modules/events/event-dictionary.ts
 runner: any
 executor: sonnet-5.5
 effort: high

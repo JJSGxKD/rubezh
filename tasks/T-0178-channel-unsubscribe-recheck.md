@@ -9,8 +9,6 @@ author: claude-lead-1
 size: M
 depends_on: [T-0177, T-0167, T-0169]
 zones:
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
   - backend/api/src/modules/tasks/channel-watch-rules.ts
   - backend/api/src/modules/tasks/channel-watch.repository.ts
   - backend/api/src/modules/tasks/channel-watch.service.ts
@@ -25,6 +23,8 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: extra

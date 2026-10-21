@@ -16,8 +16,6 @@ zones:
   - packages/core-game/src/game/MainScene.ts
   - packages/core-game/src/run-api.ts
   - packages/core-game/test/ad-reroll.test.ts
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
   - backend/api/src/modules/ads/ads-rules.ts
   - backend/api/src/modules/ads/ad-networks.ts
   - backend/api/src/modules/ads/ads.service.ts
@@ -30,7 +28,6 @@ zones:
   - backend/api/src/modules/runs/run-verdict.ts
   - backend/api/src/modules/runs/runs.service.ts
   - backend/api/src/modules/runs/dto/runs.dto.ts
-  - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
   - backend/api/test/run-ad-reroll.test.ts
   - backend/api/test/run-ad-reroll.integration.test.ts
@@ -58,6 +55,9 @@ shared:
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
+  - backend/api/src/modules/wipe/wipe-plan.ts
 runner: local
 executor: sonnet-5.5
 effort: extra

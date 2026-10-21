@@ -14,13 +14,13 @@ zones:
   - packages/core-game/test/content.test.ts
   - packages/core-game/test/boss-ram.test.ts
   - packages/core-game/test/balance-properties.test.ts
-  - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/test/guide.test.ts
 shared:
   - CLAUDE.md
   - docs/05-game-design.md
   - docs/32-balance.md
   - docs/39-retention-mechanics.md
+  - packages/app-shell/src/i18n/ru.json
 runner: any
 executor: sonnet-5.5
 effort: medium

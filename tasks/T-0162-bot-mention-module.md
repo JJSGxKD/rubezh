@@ -3,17 +3,13 @@ id: T-0162
 title: Юзернейм бота в имени и bio — модуль на сервере: проверка, награда, серия, ночной проход
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0159]
 zones:
   - backend/api/src/modules/bot-mention/**
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/*_bot_mention/**
-  - backend/api/src/modules/settings/setting-catalog.ts
-  - backend/api/src/app.module.ts
   - backend/api/test/bot-mention.test.ts
   - backend/api/test/bot-mention-sweep.test.ts
   - backend/api/test/bot-mention.integration.test.ts
@@ -21,6 +17,15 @@ zones:
 shared:
   - docs/30-configuration-map.md
   - docs/21-diagrams.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/*_bot_mention/**
+  - backend/api/src/modules/settings/setting-catalog.ts
+  - backend/api/src/app.module.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
+  - docs/35-stage4-plan.md
 runner: local
 executor: sonnet-5.5
 effort: extra

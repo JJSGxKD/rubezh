@@ -122,6 +122,8 @@ enum StartKind {
   notification
   /// прямая ссылка кампании l-<код> (Р95)
   link
+  /// ссылка с метками ключ-значение, источник заведён сам (Р116)
+  tagged
 }
 
 // Где началась сессия: в Mini App площадки, в браузере (вход разработчика,
@@ -237,6 +239,7 @@ model Account {
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
   compensation     TesterCompensation?
+  botMentionTasks  BotMentionTask[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -556,7 +559,7 @@ model Purchase {
   renewals        Purchase[]       @relation("PurchaseRenewal")
   vipSubscription VipSubscription?
   vipPeriod       VipPeriod?
-  adConversion    AdConversion?
+  adConversions   AdConversion[]
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -1046,6 +1049,16 @@ model Link {
   target         String           @default("app") @db.VarChar(16)
   /// владелец-партнёр (T-0067): пришедшие по ссылке игроки записываются за ним; `null` — ссылка команды. Задаётся при создании и не меняется
   partnerId      String?          @map("partner_id") @db.Uuid
+  /// источник заведён сам по параметру запуска (Р116)
+  auto           Boolean          @default(false)
+  /// канонический набор известных пар: src-…_cmp-…
+  autoKey        String?          @unique @map("auto_key") @db.VarChar(64)
+  /// метка партнёра из пары prt-… (Р116): только метка, к карточке партнёра не привязана
+  partnerTag     String?          @map("partner_tag") @db.VarChar(64)
+  /// название, которое дали в панели; пусто — показывается кампания
+  title          String?          @db.VarChar(80)
+  /// скрыт в панели; запуски по нему считаются
+  hiddenAt       DateTime?        @map("hidden_at") @db.Timestamptz(3)
   clicks         LinkClick[]
   conversions    AdConversion[]
   bindings       PartnerBinding[]
@@ -2140,16 +2153,25 @@ model HomeSlide {
 // владельца ссылки и очередь отправки в одной таблице. Строки выводятся из
 // фактов — первого касания, забегов, оплат, — поэтому потерянное событие не
 // теряет конверсию.
+//
+// Слой «событие → назначение» (T-0069): строка — одно событие для одного
+// назначения. Ключи: оплата и назначение; клик, цель и назначение — частичным
+// индексом `ad_conversion_click_id_goal_destination_key` для целей 1, 2, 4
+// (повторных покупок на клик много). Prisma частичные индексы не описывает,
+// он только в миграции.
 model AdConversion {
   conversionId  String             @id @default(uuid()) @map("conversion_id") @db.Uuid
+  /// имя назначения, как `destination`; колонка осталась от первой версии — откату кода она нужна
   network       String             @db.VarChar(16)
   linkCode      String             @map("link_code") @db.VarChar(16)
   clickId       String             @map("click_id") @db.VarChar(16)
   accountId     String             @map("account_id") @db.Uuid
-  /// цель сети: 1 — регистрация, 2 — первая покупка, 3 — повторная
+  /// код события: 1 — регистрация, 2 — первая покупка, 3 — повторная (совпадают с `goaltype` AdsGram), 4 — возврат на следующий день
   goal          Int                @db.SmallInt
-  /// оплата цели 2 и 3; у регистрации — `null`
-  purchaseId    String?            @unique @map("purchase_id") @db.Uuid
+  /// куда уходит: `adsgram`, `s2s` или `partner`; новое назначение — адаптером и значением в `CHECK`
+  destination   String             @default("adsgram") @db.VarChar(16)
+  /// оплата цели 2 и 3; у остальных — `null`
+  purchaseId    String?            @map("purchase_id") @db.Uuid
   status        AdConversionStatus @default(pending)
   /// почему не отправлена: `team` — аккаунт команды, `no_macros` — сеть не подставила макросы, `no_token` — нет токена кабинета
   reason        String?            @db.VarChar(32)
@@ -2166,6 +2188,7 @@ model AdConversion {
   account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
 
+  @@unique([purchaseId, destination])
   @@index([status, nextAttemptAt])
   @@index([linkCode, createdAt])
   @@map("ad_conversion")
@@ -2320,4 +2343,41 @@ model InboundMinute {
   @@id([minute, method, route, statusClass])
   @@index([route, minute(sort: Desc)])
   @@map("inbound_minute")
+}
+
+// Задания «юзернейм бота» (T-0162): имя и bio игрока на площадке, награда за игровые сутки (docs/35-stage4-plan.md Р110).
+// Допустимые значения `kind` и `last_result` держат CHECK в миграции: Prisma их не выражает.
+model BotMentionTask {
+  accountId    String    @map("account_id") @db.Uuid
+  /// `name` или `bio`
+  kind         String    @db.VarChar(4)
+  startedAt    DateTime  @map("started_at") @db.Timestamptz(3)
+  /// серия на последние сутки с наградой; на экране — `activeStreak`
+  streak       Int       @default(0)
+  bestStreak   Int       @default(0) @map("best_streak")
+  rewardedDays Int       @default(0) @map("rewarded_days")
+  /// последние игровые сутки (по Москве) с наградой
+  lastDay      DateTime? @map("last_day") @db.Date
+  /// игровые сутки последней проверки с исходом; по нему ночной проход выбирает, кого пора проверять
+  checkedDay   DateTime? @map("checked_day") @db.Date
+  checkedAt    DateTime? @map("checked_at") @db.Timestamptz(3)
+  /// `present`, `absent`, `hidden` или `unavailable`; текст имени и bio не хранится
+  lastResult   String?   @map("last_result") @db.VarChar(11)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, kind])
+  @@index([checkedDay])
+  @@map("bot_mention_task")
+}
+
+// Незнакомый ключ параметра запуска ключ-значение (Р116, T-0179): сколько раз и когда последний,
+// значения не храним. Не больше 200 ключей — потолок держит запись (links/auto-sources.repository.ts).
+model StartParamKey {
+  key     String   @id @db.VarChar(16)
+  hits    Int
+  firstAt DateTime @map("first_at") @db.Timestamptz(3)
+  lastAt  DateTime @map("last_at") @db.Timestamptz(3)
+
+  @@map("start_param_key")
 }

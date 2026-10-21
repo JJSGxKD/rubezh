@@ -124,7 +124,19 @@ const CLIENT_SCRIPTS_GROUP = "Внешние скрипты клиента";
 
 const ONLINE_GROUP = "Онлайн";
 
+const AUTO_SOURCES_GROUP = "Автоисточники";
+
 const SEASONS_GROUP = "Сезоны рейтинга";
+
+const BOT_MENTION_GROUP = "Юзернейм бота";
+
+/**
+ * Предел награды за сутки — суточный потолок причины `task_reward`
+ * (`wallet/wallet-limits.ts`): больше всё равно срезалось бы кошельком.
+ */
+const MENTION_COINS = { min: 0, max: 10_000, unit: ["монета", "монеты", "монет"] } as const satisfies SettingRange;
+const MENTION_GEMS = { min: 0, max: 50, unit: ["самоцвет", "самоцвета", "самоцветов"] } as const satisfies SettingRange;
+const MENTION_SHARDS = { min: 0, max: 100, unit: ["осколок", "осколка", "осколков"] } as const satisfies SettingRange;
 
 /** Последняя допустимая дата старта сезонов: понедельник 28 декабря 2099. */
 const SEASONS_START_MAX = 20_991_228;
@@ -498,6 +510,31 @@ export const SETTINGS = {
     "Ниже — на кнопке «Играть» числа нет",
     { min: 0, max: 100000, unit: ["аккаунт", "аккаунта", "аккаунтов"] },
     5,
+  ),
+  // Переключатель — через `feature`, но в своей группе: награды лежат рядом, а не в «Функциях сервера».
+  botMentionEnabled: {
+    ...feature(
+      "bot-mention.enabled",
+      "Задания «юзернейм бота»",
+      "Игрок вписывает юзернейм бота в имя или bio, сервер раз в игровые сутки проверяет и платит за сутки. Вид без награды игрокам не показывается",
+      () => null,
+      false,
+    ),
+    group: BOT_MENTION_GROUP,
+  } satisfies SettingDefinition<boolean>,
+  botMentionNameCoins: integer("bot-mention.name.coins", BOT_MENTION_GROUP, "Имя: монеты за сутки", "Награда за сутки, пока юзернейм бота стоит в имени. 0 — награды нет", MENTION_COINS, 0),
+  botMentionNameGems: integer("bot-mention.name.gems", BOT_MENTION_GROUP, "Имя: самоцветы за сутки", "Награда за сутки, пока юзернейм бота стоит в имени. 0 — награды нет", MENTION_GEMS, 0),
+  botMentionNameShards: integer("bot-mention.name.shards", BOT_MENTION_GROUP, "Имя: осколки за сутки", "Обычные осколки за сутки, пока юзернейм бота стоит в имени. 0 — награды нет", MENTION_SHARDS, 0),
+  botMentionBioCoins: integer("bot-mention.bio.coins", BOT_MENTION_GROUP, "Bio: монеты за сутки", "Награда за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_COINS, 0),
+  botMentionBioGems: integer("bot-mention.bio.gems", BOT_MENTION_GROUP, "Bio: самоцветы за сутки", "Награда за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_GEMS, 0),
+  botMentionBioShards: integer("bot-mention.bio.shards", BOT_MENTION_GROUP, "Bio: осколки за сутки", "Обычные осколки за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_SHARDS, 0),
+  linksAutoDailyCap: integer(
+    "links.auto-daily-cap",
+    AUTO_SOURCES_GROUP,
+    "Новых автоисточников в сутки",
+    "Сколько новых источников в сутки сервер заводит сам по ссылкам с метками. Нуль — не заводить; запуски по таким ссылкам всё равно записываются и подхватятся, когда источник появится",
+    { min: 0, max: 500, unit: ["источник", "источника", "источников"] },
+    20,
   ),
 } as const;
 

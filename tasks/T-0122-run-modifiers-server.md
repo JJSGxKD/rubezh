@@ -15,14 +15,14 @@ zones:
   - backend/api/src/modules/runs/runs.repository.ts
   - backend/api/src/modules/progress/progress-rules.ts
   - backend/api/src/modules/progress/run-rewards.ts
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
   - backend/api/test/**
 shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: high
