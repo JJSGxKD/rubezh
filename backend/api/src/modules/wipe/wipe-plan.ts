@@ -74,6 +74,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   MediaImage: keep("картинки панели"),
   Link: keep("ссылки кампаний"),
   LinkClick: keep("клики по ссылкам — атрибуция"),
+  StartParamKey: keep("сводка незнакомых ключей параметра запуска — без игроков и значений, нужна команде (Р116)"),
   AdNetwork: keep("настройка рекламных сетей"),
   NetworkTask: keep("настройка заданий сетей"),
   AdBlock: keep("рекламные блоки"),

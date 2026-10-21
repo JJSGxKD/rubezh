@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseStartParam } from "../src/modules/attribution/start-param.js";
+import { START_KINDS, parseStartParam } from "../src/modules/attribution/start-param.js";
 import { newLinkCode } from "../src/modules/links/link-code.js";
 
 // Параметр запуска (docs/34-stage3-plan.md, WP6): откуда пришёл игрок.
@@ -58,6 +58,22 @@ describe("разбор параметра запуска", () => {
     expect(parseStartParam("r-123_source-channel")).toEqual({ kind: "unknown", raw: "r-123_source-channel", ref: null });
     // Похоже на клик, но код не той длины — не клик.
     expect(parseStartParam("c-abc")).toMatchObject({ kind: "unknown", raw: "c-abc" });
+  });
+
+  it("старые форматы после появления пар разбираются как раньше (Р116)", () => {
+    expect(parseStartParam("c-AbCdEf123456")).toEqual({ kind: "click", raw: "c-AbCdEf123456", ref: "AbCdEf123456" });
+    expect(parseStartParam("l-AbCdEf1234")).toEqual({ kind: "link", raw: "l-AbCdEf1234", ref: "AbCdEf1234" });
+    expect(parseStartParam("f-AbCdEf1234")).toEqual({ kind: "friend", raw: "f-AbCdEf1234", ref: "AbCdEf1234" });
+    expect(parseStartParam("n-friend_request")).toEqual({ kind: "notification", raw: "n-friend_request", ref: "friend_request" });
+    expect(parseStartParam("invite")).toEqual({ kind: "invite", raw: "invite", ref: null });
+    expect(parseStartParam("_tgr_123")).toEqual({ kind: "telegram_affiliate", raw: "_tgr_123", ref: "123" });
+    // Вход в панель и подтверждение роли разбирает бот раньше атрибуции; здесь они не пары.
+    for (const value of ["panel-AbCdEfGhIjKlMnOpQrStUv", "role-AbCdEfGhIjKlMnOpQrStUv"]) expect(parseStartParam(value), value).toEqual({ kind: "unknown", raw: value, ref: null });
+  });
+
+  it("список видов запуска включает «tagged» — ссылку с метками", () => {
+    expect(START_KINDS).toContain("tagged");
+    expect(parseStartParam("src-tgads_cmp-oct")).toMatchObject({ kind: "tagged", ref: "src-tgads_cmp-oct" });
   });
 
   it("то, чего Telegram не пропускает, не хранится даже сырым", () => {

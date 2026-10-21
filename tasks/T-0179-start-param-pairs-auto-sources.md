@@ -3,8 +3,8 @@ id: T-0179
 title: Авторазбор стартовых параметров ключ-значение — автоисточники и сводка незнакомых ключей
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []
@@ -28,13 +28,16 @@ zones:
   - backend/api/test/auto-sources.integration.test.ts
   - backend/api/test/session-recorder.test.ts
 shared:
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
+  - backend/api/src/modules/settings/setting-catalog.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/links.test.ts
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/24-attribution-and-sharing.md
   - docs/30-configuration-map.md
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
-  - backend/api/src/modules/settings/setting-catalog.ts
 runner: local
 executor: sonnet-5.5
 effort: extra

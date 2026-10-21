@@ -124,6 +124,8 @@ const CLIENT_SCRIPTS_GROUP = "Внешние скрипты клиента";
 
 const ONLINE_GROUP = "Онлайн";
 
+const AUTO_SOURCES_GROUP = "Автоисточники";
+
 const SEASONS_GROUP = "Сезоны рейтинга";
 
 const BOT_MENTION_GROUP = "Юзернейм бота";
@@ -526,6 +528,14 @@ export const SETTINGS = {
   botMentionBioCoins: integer("bot-mention.bio.coins", BOT_MENTION_GROUP, "Bio: монеты за сутки", "Награда за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_COINS, 0),
   botMentionBioGems: integer("bot-mention.bio.gems", BOT_MENTION_GROUP, "Bio: самоцветы за сутки", "Награда за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_GEMS, 0),
   botMentionBioShards: integer("bot-mention.bio.shards", BOT_MENTION_GROUP, "Bio: осколки за сутки", "Обычные осколки за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_SHARDS, 0),
+  linksAutoDailyCap: integer(
+    "links.auto-daily-cap",
+    AUTO_SOURCES_GROUP,
+    "Новых автоисточников в сутки",
+    "Сколько новых источников в сутки сервер заводит сам по ссылкам с метками. Нуль — не заводить; запуски по таким ссылкам всё равно записываются и подхватятся, когда источник появится",
+    { min: 0, max: 500, unit: ["источник", "источника", "источников"] },
+    20,
+  ),
 } as const;
 
 export const SETTING_LIST: readonly SettingDefinition[] = Object.values(SETTINGS);

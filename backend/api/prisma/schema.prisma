@@ -122,6 +122,8 @@ enum StartKind {
   notification
   /// прямая ссылка кампании l-<код> (Р95)
   link
+  /// ссылка с метками ключ-значение, источник заведён сам (Р116)
+  tagged
 }
 
 // Где началась сессия: в Mini App площадки, в браузере (вход разработчика,
@@ -1047,6 +1049,16 @@ model Link {
   target         String           @default("app") @db.VarChar(16)
   /// владелец-партнёр (T-0067): пришедшие по ссылке игроки записываются за ним; `null` — ссылка команды. Задаётся при создании и не меняется
   partnerId      String?          @map("partner_id") @db.Uuid
+  /// источник заведён сам по параметру запуска (Р116)
+  auto           Boolean          @default(false)
+  /// канонический набор известных пар: src-…_cmp-…
+  autoKey        String?          @unique @map("auto_key") @db.VarChar(64)
+  /// метка партнёра из пары prt-… (Р116): только метка, к карточке партнёра не привязана
+  partnerTag     String?          @map("partner_tag") @db.VarChar(64)
+  /// название, которое дали в панели; пусто — показывается кампания
+  title          String?          @db.VarChar(80)
+  /// скрыт в панели; запуски по нему считаются
+  hiddenAt       DateTime?        @map("hidden_at") @db.Timestamptz(3)
   clicks         LinkClick[]
   conversions    AdConversion[]
   bindings       PartnerBinding[]
@@ -2347,4 +2359,15 @@ model BotMentionTask {
   @@id([accountId, kind])
   @@index([checkedDay])
   @@map("bot_mention_task")
+}
+
+// Незнакомый ключ параметра запуска ключ-значение (Р116, T-0179): сколько раз и когда последний,
+// значения не храним. Не больше 200 ключей — потолок держит запись (links/auto-sources.repository.ts).
+model StartParamKey {
+  key     String   @id @db.VarChar(16)
+  hits    Int
+  firstAt DateTime @map("first_at") @db.Timestamptz(3)
+  lastAt  DateTime @map("last_at") @db.Timestamptz(3)
+
+  @@map("start_param_key")
 }
