@@ -96,6 +96,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   FxManualRate: keep("курсы валют — не данные игрока"),
   FxSnapshot: keep("снимки курсов — на них ссылаются цены и платежи"),
   FxSourceState: keep("состояние источников курсов"),
+  FxSourceLimit: keep("лимиты источников курсов задаёт команда в панели"),
 
   // --- стираются: игровой прогресс ---
   RunAdContinue: wipe("второй шанс за рекламу — часть забега"),
