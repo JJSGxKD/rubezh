@@ -1,5 +1,5 @@
 import type { Redis } from "ioredis";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
@@ -12,6 +12,19 @@ import { RolesService } from "../src/modules/roles/roles.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+
+// Р125: журнал скрыт у игроков константой. Тест проверяет механику раздачи,
+// поэтому по умолчанию журнал «открыт»; скрытый режим — отдельный кейс.
+const visibility = vi.hoisted(() => ({ forPlayers: true }));
+vi.mock("../src/modules/changelog/changelog-rules.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/modules/changelog/changelog-rules.js")>();
+  return {
+    ...original,
+    get CHANGELOG_FOR_PLAYERS() {
+      return visibility.forPlayers;
+    },
+  };
+});
 
 /**
  * Журнал обновлений на живом Postgres (docs/17-testing-strategy.md §4.2;
@@ -50,6 +63,10 @@ describe.skipIf(DATABASE_URL === "")("журнал обновлений на ж�
 
   afterAll(async () => {
     await prisma.$disconnect();
+  });
+
+  afterEach(() => {
+    visibility.forPlayers = true;
   });
 
   it("версии — по числам; публикуются только черновики своей версии", async () => {
@@ -186,5 +203,32 @@ describe.skipIf(DATABASE_URL === "")("журнал обновлений на ж�
       cursor = page.nextCursor;
     } while (found === undefined && cursor !== null);
     expect(found?.entries.map((line) => line.text)).toEqual(["Для браузера", "Ещё строка"]);
+  });
+  it("журнал скрыт у игроков (Р125): проход раздачи возвращает 0 и уведомлений не пишет", async () => {
+    const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv);
+    const locks = new Map<string, string>();
+    const redis = {
+      set: async (key: string, value: string) => (locks.has(key) ? null : (locks.set(key, value), "OK")),
+      eval: async (_script: string, _keys: number, key: string) => (locks.delete(key) ? 1 : 0),
+    } as unknown as Redis;
+    const fanout = new ChangelogFanout(config, repository, accounts, notifications, redis);
+    const rolesRepository = new MemoryRolesRepository();
+    const service = new ChangelogService(repository, accounts, new RolesService(config, rolesRepository, accounts), fanout);
+    const owner = await account("web");
+    await rolesRepository.grant(owner, "admin", null);
+    const actor = { accountId: owner, platform: "web" as const, platformUserId: "owner" };
+    const player = await account("web");
+    const release = version();
+    await service.save(actor, { version: release, kind: "added", platforms: ["web"], text: "Для браузера" });
+    await service.publish(actor, release);
+
+    visibility.forPlayers = false;
+    expect(await fanout.tick()).toBe(0);
+    expect(locks.size).toBe(0);
+    expect(await prisma.notification.count({ where: { accountId: player, kind: "app_update", dedupeKey: `app_update:${release}` } })).toBe(0);
+
+    // Версия остаётся в очереди раздачи — доводим её, чтобы она не попала игрокам соседних тестов.
+    visibility.forPlayers = true;
+    while ((await repository.pendingReleases()).some((candidate) => candidate.version === release)) await fanout.tick();
   });
 });

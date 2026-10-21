@@ -5,6 +5,7 @@ import { DAILY_STATS_REPOSITORY, type DailyStatsRepository, type DayPoint } from
 import { ADS_CATALOG_REPOSITORY, type AdFunnelRow, type AdsCatalogRepository } from "../ads/ads-catalog.repository.js";
 import { AD_PLACES } from "../ads/ads-rules.js";
 import { BroadcastsService } from "../broadcasts/broadcasts.service.js";
+import { CHANGELOG_FOR_PLAYERS } from "../changelog/changelog-rules.js";
 import { ChangelogService } from "../changelog/changelog.service.js";
 import { permissionsOf, type Permission } from "../roles/permissions.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
@@ -158,7 +159,8 @@ export class AdminOverviewService {
    */
   private async attention(actor: AccountRef, can: ReadonlySet<Permission>, now: Date): Promise<AttentionItem[]> {
     const items = await Promise.all([
-      can.has("changelog.publish") ? this.safely("журнал обновлений", () => this.changelogDrafts(actor)) : null,
+      // Журнал скрыт у игроков (Р125): черновики версий не напоминаются.
+      CHANGELOG_FOR_PLAYERS && can.has("changelog.publish") ? this.safely("журнал обновлений", () => this.changelogDrafts(actor)) : null,
       can.has("broadcast.send") ? this.safely("рассылки", () => this.broadcastDrafts(actor)) : null,
       can.has("players.view") ? this.safely("разбор забегов", () => this.freshReview(now)) : null,
     ]);

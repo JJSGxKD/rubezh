@@ -5,6 +5,7 @@ import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
 import type { ApiFailure } from "../../state/api-request";
 import { useNavigation, type ScreenId } from "../../state/navigation";
+import { changelogAvailable } from "../../state/changelog-api";
 import { formatWhen, loadFeed, markRead, type NotificationItem } from "../../state/notifications-api";
 import { track } from "../../state/shell";
 
@@ -70,7 +71,7 @@ export function NotificationsScreen(): ReactNode {
   );
 }
 
-interface Described {
+export interface Described {
   icon: ReactNode;
   /** заголовок над текстом — у сообщения команды, чтобы было видно, от кого оно */
   title?: string;
@@ -81,7 +82,7 @@ interface Described {
   over?: boolean;
 }
 
-function describe(item: NotificationItem): Described | null {
+export function describeNotification(item: NotificationItem): Described | null {
   const name = typeof item.data.fromName === "string" ? item.data.fromName : t("notifications.someone");
   switch (item.kind) {
     case "friend_request":
@@ -99,7 +100,7 @@ function describe(item: NotificationItem): Described | null {
     case "team_message":
       return typeof item.data.text === "string" ? { icon: <Megaphone size={20} />, title: t("notification.team_message"), text: item.data.text, target: null } : null;
     case "app_update":
-      return typeof item.data.version === "string" ? { icon: <Newspaper size={20} />, text: t("notification.app_update", { version: item.data.version }), target: "changelog", over: true } : null;
+      return typeof item.data.version === "string" ? { icon: <Newspaper size={20} />, text: t("notification.app_update", { version: item.data.version }), ...(changelogAvailable() ? { target: "changelog" as const, over: true } : { target: null }) } : null;
     default:
       return null;
   }
@@ -116,7 +117,7 @@ function refundText(data: Record<string, unknown>): string {
 }
 
 function NotificationRow(props: { item: NotificationItem; index: number }): ReactNode {
-  const described = describe(props.item);
+  const described = describeNotification(props.item);
   if (described === null) return null;
   const { target, over } = described;
   const open =

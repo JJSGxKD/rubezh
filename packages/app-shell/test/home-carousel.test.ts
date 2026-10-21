@@ -3,6 +3,7 @@ import { hasTranslation } from "../src/i18n";
 import "../src/i18n/home";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { createHomeApi, forgetHomeForTests, safeLink, slideImageUrl, type HomeSlide } from "../src/state/home-api";
+import { visibleSlides } from "../src/screens/home-carousel";
 import { textOf, titleOf } from "../src/screens/home-slide";
 
 // Карусель главной (docs/35-stage4-plan.md WP42): слайды решает сервер, клиент
@@ -84,5 +85,15 @@ describe("тексты слайдов", () => {
     const task = ALL[6] as Extract<HomeSlide, { kind: "task" }>;
     expect(textOf(task, NOW)).toBe("за задание");
     expect(textOf({ ...task, reward: { coins: 0, gems: 0, shards: 3 } }, NOW)).toBe("Награда за выполнение");
+  });
+});
+
+describe("слайды при скрытом журнале (Р125)", () => {
+  const team = (screen: "changelog" | "shop"): HomeSlide => ({ id: `team:${screen}`, kind: "team", slideId: screen, title: "t", text: "x", image: null, icon: "megaphone", target: { kind: "screen", screen } });
+
+  it("слайд журнала и слайд команды с экраном журнала отфильтрованы, соседние на месте", () => {
+    const shown = visibleSlides([...ALL, team("changelog"), team("shop")]);
+
+    expect(shown.map((slide) => slide.id)).toEqual(["promo:bundle_m", "vip", "starter", "invite", "channel", "task:a", "team:shop"]);
   });
 });
