@@ -40,6 +40,8 @@ export class ZipWriter {
 
   constructor(path: string) {
     this.out = createWriteStream(path);
+    // Без обработчика ошибка открытия или записи вылетает необработанной; она доходит до вызывающего через `once`.
+    this.out.on("error", () => undefined);
   }
 
   /** Добавить файл из потока строк или буферов — например, NDJSON по страницам базы. */
@@ -121,6 +123,18 @@ export class ZipWriter {
     this.out.end();
     await once(this.out, "finish");
     return this.offset;
+  }
+
+  /**
+   * Бросить архив при сбое: уничтожить файловый поток и дождаться закрытия,
+   * чтобы каталог можно было удалять, не оставив отложенного открытия или
+   * записи, которые дали бы ENOENT. Закрытый поток и повторный вызов — не ошибка.
+   */
+  async abort(): Promise<void> {
+    if (this.out.closed) return;
+    const closed = once(this.out, "close").catch(() => undefined);
+    this.out.destroy();
+    await closed;
   }
 
   private async write(chunk: Buffer): Promise<void> {
