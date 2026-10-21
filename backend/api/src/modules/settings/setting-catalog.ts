@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
+import { AMOUNTS_PROBLEM, parseAmounts } from "../donations/donation-amounts.js";
 import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 /**
@@ -19,7 +20,8 @@ import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 export type SettingValue = string | boolean | number;
 
-export type SettingKind = "chat" | "boolean" | "url" | "number";
+/** `amounts` — список сумм через запятую («50, 100, 250»): редактор панели — текстовое поле, правило — `parseAmounts`. */
+export type SettingKind = "chat" | "boolean" | "url" | "number" | "amounts";
 
 /**
  * Пределы числа и в чём оно — для редактора панели: поле не даст ввести
@@ -109,6 +111,14 @@ const FEATURES_GROUP = "Функции сервера";
 const ADS_GROUP = "Реклама";
 
 const HOME_GROUP = "Главная";
+
+const DONATE_GROUP = "Донаты";
+
+/** Готовые суммы доната: от одной до восьми, целые, через запятую (`parseAmounts`). */
+const amountsSchema = z
+  .string()
+  .trim()
+  .refine((value) => parseAmounts(value) !== null, { message: AMOUNTS_PROBLEM });
 
 const CLIENT_SCRIPTS_GROUP = "Внешние скрипты клиента";
 
@@ -260,6 +270,52 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: "",
   } satisfies SettingDefinition<string>,
+  /**
+   * Донаты проекту (docs/35-stage4-plan.md, Р109): готовые суммы, ссылки
+   * Tribute для Telegram и веба и слайд главной. Предел суммы — в способе
+   * оплаты площадки (`payments/payment-methods.ts`), ключа для него нет.
+   * Окружения у ключей нет: решения команды на ходу правятся в панели.
+   */
+  donateAmounts: {
+    key: "donate.amounts",
+    group: DONATE_GROUP,
+    title: "Готовые суммы доната, ⭐",
+    hint: "Кнопки сумм на листе доната через запятую, до восьми, например 50, 100, 250. Суммы вне пределов способа оплаты площадки не показываются",
+    kind: "amounts",
+    schema: amountsSchema,
+    fromEnv: () => null,
+    fallback: "50, 100, 250, 500, 1000",
+  } satisfies SettingDefinition<string>,
+  donateTributeUrlTelegram: {
+    key: "donate.tribute-url-telegram",
+    group: DONATE_GROUP,
+    title: "Tribute для Telegram",
+    hint: "Кнопка «Поддержать через Tribute» у игроков Telegram — ссылка https://… Пусто — кнопки нет",
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  donateTributeUrlWeb: {
+    key: "donate.tribute-url-web",
+    group: DONATE_GROUP,
+    title: "Tribute для веба",
+    hint: "То же для игроков в вебе. Пусто — кнопки нет",
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  donateHomeSlide: {
+    key: "donate.home-slide",
+    group: DONATE_GROUP,
+    title: "Слайд доната в карусели главной",
+    hint: "Слайд «Поддержать проект» в карусели главной. Показывается, только если у игрока есть хоть один способ поддержать",
+    kind: "boolean",
+    schema: z.boolean(),
+    fromEnv: () => null,
+    fallback: false,
+  } satisfies SettingDefinition<boolean>,
   /**
    * Тестовые показы сетей (docs/35-stage4-plan.md WP12): SDK получает
    * `debug` и крутит пробные ролики. Без окружения: на тестовом сервере её
