@@ -65,6 +65,12 @@ export const WEAPON_ELEMENTS: Readonly<Record<string, TaskElement>> = {
   hearth: "fire",
   storm: "lightning",
   sting: "poison",
+  // Эволюции (T-0102) наследуют стихию базового: задание «убить огнём» должно
+  // засчитывать и «Горн».
+  frost_crown: "cold",
+  forge: "fire",
+  tempest: "lightning",
+  viper: "poison",
 };
 
 /**
