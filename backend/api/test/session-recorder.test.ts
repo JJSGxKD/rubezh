@@ -84,18 +84,19 @@ describe("автоисточник при записи сессии", () => {
     expect(onSession).not.toHaveBeenCalled();
   });
 
-  it("ошибка автоисточника: process не падает, сессия записана, в лог — warn без значений пар", async () => {
+  it("ошибка автоисточника: process не падает, сессия записана, в лог — warn с видом ошибки, без сообщения и значений пар", async () => {
     const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
     const sessions = new MemorySessions();
+    // Сообщение Prisma несёт значения запроса, поэтому в лог оно не идёт.
     const onSession = vi.fn(async () => {
-      throw new Error("база недоступна");
+      throw Object.assign(new Error("Unique constraint failed: src-tgads_cmp-secretvalue"), { code: "P2002" });
     });
 
     await expect(subject(sessions, { onSession }).process({ data: { session: sessionOf(login("src-tgads_cmp-secretvalue")) } })).resolves.toBeUndefined();
 
     expect(sessions.recorded).toHaveLength(1);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toMatchObject({ module: "attribution", event: "auto_source_failed", reason: "база недоступна" });
+    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toMatchObject({ module: "attribution", event: "auto_source_failed", error: "Error:P2002" });
     expect(String(warn.mock.calls[0]?.[0])).not.toContain("secretvalue");
   });
 

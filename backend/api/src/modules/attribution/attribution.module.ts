@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
+import { LinksModule } from "../links/links.module.js";
 import { PartnersModule } from "../partners/partners.module.js";
 import { RedisSessionDedupe, SESSION_DEDUPE } from "./session-dedupe.js";
 import { SessionRecorder } from "./session-recorder.js";
@@ -19,9 +20,14 @@ import { PrismaSessionsRepository, SESSIONS_REPOSITORY } from "./sessions.reposi
  * от атрибуции ни прямо, ни через другие модули — цикла нет. Параметр
  * привязки у `SessionRecorder` необязателен, поэтому забытый импорт молча
  * выключил бы её: подключение держит тест сборки приложения.
+ *
+ * Ссылки с метками заводят источник при записи сессии (Р116, T-0179):
+ * рекордеру нужен `AutoSourcesService` из `LinksModule`, а тот модуль
+ * атрибуции не импортирует — цикла нет. Параметр рекордера так же
+ * необязателен, и подключение держит тот же тест.
  */
 @Module({
-  imports: [AuthModule, PartnersModule],
+  imports: [AuthModule, PartnersModule, LinksModule],
   providers: [
     SessionRecorder,
     { provide: SESSIONS_REPOSITORY, useClass: PrismaSessionsRepository },

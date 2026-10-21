@@ -6,6 +6,7 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { createQueueConnection } from "../../infra/queues.js";
 import { AuthHooks, type LoginEvent } from "../auth/auth-hooks.js";
+import { AutoSourcesService } from "../links/auto-sources.service.js";
 import { PartnerLinkBinder } from "../partners/partner-links.js";
 import { classifyClient } from "./client-class.js";
 import { ipPrefix } from "./ip-prefix.js";
@@ -28,6 +29,10 @@ import { SESSIONS_REPOSITORY, type SessionRecord, type SessionsRepository } from
  * сессии. Сбой привязки сессию не откатывает: сессия уже записана, а
  * задание очереди падает и повторяется; повтор записи сессии — безвредный
  * дубль, так что на деле повторяется одна привязка.
+ *
+ * Ссылка с метками (`src-…_cmp-…`, Р116) ещё и заводит источник — тоже сразу после записи сессии
+ * и только за настоящую запись: повтор задания очереди («duplicate») источники и счётчики не двигает.
+ * Сбой источника сессию не откатывает и задание не роняет: источник заведёт следующий игрок.
  */
 
 const QUEUE_NAME = "sessions";
@@ -66,6 +71,8 @@ export class SessionRecorder implements OnModuleInit, OnApplicationBootstrap, On
     @Inject(SESSION_DEDUPE) private readonly dedupe: SessionDedupe,
     // Побочная запись: без неё (записи сессий в тестах) сессия пишется, как до ссылок партнёров.
     @Optional() @Inject(PartnerLinkBinder) private readonly partnerLinks: PartnerLinkBinder | null = null,
+    // Побочная запись, как и привязка: без модуля ссылок сессии пишутся, а источники не заводятся.
+    @Optional() @Inject(AutoSourcesService) private readonly autoSources: AutoSourcesService | null = null,
   ) {}
 
   onModuleInit(): void {
@@ -103,12 +110,14 @@ export class SessionRecorder implements OnModuleInit, OnApplicationBootstrap, On
         this.log("warn", "enqueue_failed", { sessionId: session.sessionId, reason: reasonOf(error) });
       }
     }
+    let written: "recorded" | "duplicate";
     try {
-      await this.sessions.record(session);
+      written = await this.sessions.record(session);
     } catch (error: unknown) {
       this.log("warn", "session_lost", { accountId: session.accountId, startKind: session.startKind, reason: reasonOf(error) });
       return;
     }
+    if (written === "recorded") await this.noteAutoSource(session);
     // Очереди нет — повторять некому: сбой привязки только в лог, вход он не держит.
     try {
       await this.bindToPartner(session);
@@ -122,7 +131,9 @@ export class SessionRecorder implements OnModuleInit, OnApplicationBootstrap, On
    * записывает сессию ещё раз (это дубль, не ошибка) и довозит привязку.
    */
   async process(job: Pick<Job<{ session: SessionRecord }>, "data">): Promise<void> {
-    await this.sessions.record(job.data.session);
+    const written = await this.sessions.record(job.data.session);
+    // Источник — до привязки: упавшая привязка повторит задание, а повтор («duplicate») источник уже не заведёт.
+    if (written === "recorded") await this.noteAutoSource(job.data.session);
     await this.bindToPartner(job.data.session);
   }
 
@@ -150,6 +161,20 @@ export class SessionRecorder implements OnModuleInit, OnApplicationBootstrap, On
     }
   }
 
+  /**
+   * Ссылка с метками заводит источник, незнакомые ключи идут в сводку. Решает сервис ссылок: какие
+   * сессии ему интересны, рекордер не знает. В лог — только вид ошибки: сообщение Prisma несёт
+   * значения запроса, а значения пар вписывает кто угодно.
+   */
+  private async noteAutoSource(session: SessionRecord): Promise<void> {
+    if (this.autoSources === null) return;
+    try {
+      await this.autoSources.onSession({ startParam: session.startParam, platform: session.platform, startedAt: session.startedAt });
+    } catch (error: unknown) {
+      this.log("warn", "auto_source_failed", { accountId: session.accountId, error: errorKind(error) });
+    }
+  }
+
   private log(level: "log" | "warn" | "error", event: string, fields: Record<string, unknown>): void {
     this.logger[level](JSON.stringify({ module: "attribution", event, ...fields }));
   }
@@ -173,6 +198,12 @@ export function sessionOf(login: LoginEvent): SessionRecord {
     ipPrefix: ipPrefix(login.ip),
     startedAt: login.at.toISOString(),
   };
+}
+
+function errorKind(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? `${error.name}:${code}` : error.name;
 }
 
 function reasonOf(error: unknown): string {
