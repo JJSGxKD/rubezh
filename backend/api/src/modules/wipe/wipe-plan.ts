@@ -52,7 +52,6 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   Season: keep("закрытые недельные сезоны; вайп перед лончем идёт позже сезонов закрытого теста, решение тимлидов — T-0110, вопрос в PR"),
   SeasonResult: keep("итоги недельных сезонов; решение по вайпу сезонов — T-0110, вопрос в PR"),
   SeasonReward: keep("ждущая награда сезона не пропадает; решение по вайпу сезонов — T-0110, вопрос в PR"),
-  BotMentionTask: keep("задание привязано к профилю игрока на площадке, а не к кошельку; решение по вайпу — T-0162, вопрос в PR"),
 
   // --- остаются: друзья, приглашения, привязки ---
   FriendLink: keep("ссылка дружбы остаётся"),
@@ -122,6 +121,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   WheelSpin: wipe("крутки колеса"),
   VipDaily: wipe("день забора самоцветов VIP"),
   Notification: wipe("лента уведомлений"),
+  BotMentionTask: wipe("серия и награждённые сутки задания «юзернейм бота» — прогресс того же рода, что награда дня; кошелёк после вайпа обнулён, серию не продолжают"),
 };
 
 /** Порядок стирания: дочерние раньше родительских. Ровно модели с `action: "wipe"`. */
@@ -144,4 +144,5 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "WheelSpin",
   "VipDaily",
   "Notification",
+  "BotMentionTask",
 ];
