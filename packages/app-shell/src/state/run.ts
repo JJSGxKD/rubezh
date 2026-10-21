@@ -1,6 +1,8 @@
 import { ELEMENTS, type CardTools, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
+  describeEvolution,
   loadRunEngine,
+  WEAPONS,
   type HudSnapshot,
   type RunDevCommand,
   type RunDevInfo,
@@ -627,6 +629,11 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
+      for (const reward of rewards) {
+        if (reward.kind !== "weapon_evolve") continue;
+        const recipe = describeEvolution(WEAPONS, reward.refId);
+        track("evolution_unlocked", { evolution: reward.refId, weapon: recipe?.weaponId ?? "", passive: recipe?.passiveId ?? "", chest: index, level: get().level, elapsedSec: Math.round(elapsedSec) });
+      }
       // Звук и отклик — как у набора уровня: отдельного звука сундука нет.
       haptic("levelUp");
       audio.runEvent("levelUp");

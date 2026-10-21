@@ -141,6 +141,13 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
   },
+  // Эволюция оружия (docs/39-retention-mechanics.md Б2, T-0102): сундук превратил
+  // базовое оружие `weapon` в `evolution` по навыку `passive`. `chest` — номер
+  // сундука забега, `level` — уровень игрока.
+  evolution_unlocked: {
+    version: 1,
+    payload: payload({ evolution: id, weapon: id, passive: id, chest: count, level: count, elapsedSec: seconds }),
+  },
   // Действия с карточками на выборе улучшения (docs/39-retention-mechanics.md Б3):
   // `level` — уровень выбора, `left` — зарядов этого вида осталось, `item` —
   // изгнанный предмет (`weapon:<id>` / `passive:<id>`).

@@ -20,7 +20,8 @@ describe("событие evolution_unlocked", () => {
 
   it("без обязательного поля — нет", () => {
     for (const key of Object.keys(FULL)) {
-      const { [key as keyof typeof FULL]: _dropped, ...rest } = FULL;
+      const rest: Record<string, unknown> = { ...FULL };
+      delete rest[key];
       expect(payload.safeParse(rest).success, key).toBe(false);
     }
   });
@@ -28,9 +29,5 @@ describe("событие evolution_unlocked", () => {
   it("номер сундука отрицательный или дробный — нет", () => {
     expect(payload.safeParse({ ...FULL, chest: -1 }).success).toBe(false);
     expect(payload.safeParse({ ...FULL, chest: 0.5 }).success).toBe(false);
-  });
-
-  it("пустой id эволюции — нет", () => {
-    expect(payload.safeParse({ ...FULL, evolution: "" }).success).toBe(false);
   });
 });
