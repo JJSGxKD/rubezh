@@ -104,7 +104,7 @@ describe("лимиты источников", () => {
 
   it("подписи: «6 120 из 10 000», «без лимита», откуда лимит", () => {
     expect(usageText(SOURCE)).toBe(`${formatNumber(6_120)} из ${formatNumber(10_000)}`);
-    expect(usageText({ ...SOURCE, limit: { perMonth: null, from: "tariff" }, usedShare: null })).toBe(`${formatNumber(6_120)}, без лимита`);
+    expect(usageText({ ...SOURCE, limit: { perMonth: null, from: "tariff" } })).toBe(`${formatNumber(6_120)}, без лимита`);
     expect(limitCaption(SOURCE)).toBe("по тарифу «demo»");
     expect(limitCaption({ ...SOURCE, limit: { perMonth: 20_000, from: "panel" } })).toBe("задан в панели");
   });
