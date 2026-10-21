@@ -103,6 +103,7 @@ export class ExportService {
     // Поток таблицы забегов живёт дольше первого `await`: при сбое его закрывают
     // до удаления каталога, иначе отложенное открытие файла даёт ENOENT.
     let runs: WriteStream | undefined;
+    let zip: ZipWriter | undefined;
     try {
       const fileName = `rubezh-export-${dayOf(request.period.from)}-${dayOf(request.period.to)}-${exportId.slice(0, 8)}.zip`;
       const zipPath = join(dir, fileName);
@@ -111,14 +112,15 @@ export class ExportService {
       const appVersions = new Set<string>();
       const eventTypes: Record<string, number> = {};
 
-      const zip = new ZipWriter(zipPath);
+      const archive = new ZipWriter(zipPath);
+      zip = archive;
       const runsStream = createWriteStream(runsPath);
       runs = runsStream;
       // Без обработчика ошибка записи вылетает необработанной; с ним — доходит до `once`/`drain` ниже и попадает в catch.
       runsStream.on("error", () => undefined);
       await writeLine(runsStream, `${RUN_COLUMNS.join(",")}\n`);
 
-      await zip.addFile(
+      await archive.addFile(
         "events.ndjson",
         this.eventLines(request.period, key, async (row, user) => {
           counts.events++;
@@ -133,19 +135,19 @@ export class ExportService {
       runsStream.end();
       await once(runsStream, "finish");
 
-      await zip.addFile(
+      await archive.addFile(
         "diagnostic_reports.ndjson",
         this.reportLines(request.period, key, (row) => {
           counts.reports++;
           appVersions.add(row.appVersion);
         }),
       );
-      await zip.addFile("runs.csv", createReadStream(runsPath));
-      await zip.addFile(
+      await archive.addFile("runs.csv", createReadStream(runsPath));
+      await archive.addFile(
         "manifest.json",
         single(JSON.stringify(manifest({ exportId, request, counts, eventTypes, appVersions: [...appVersions].sort() }), null, 2)),
       );
-      const sizeBytes = await zip.finish();
+      const sizeBytes = await archive.finish();
       const parts = await splitFile(zipPath, EXPORT_PART_BYTES, join(dir, "parts"));
 
       this.logger.log(
@@ -166,6 +168,7 @@ export class ExportService {
     } catch (error: unknown) {
       // Сначала закрываем потоки, потом удаляем каталог; сбой самой уборки не затирает исходную ошибку.
       await closeStream(runs);
+      await zip?.abort();
       await cleanup().catch((cleanupError: unknown) => {
         this.logger.warn(JSON.stringify({ module: "export", event: "cleanup_failed", exportId, reason: cleanupError instanceof Error ? cleanupError.message : "unknown" }));
       });
