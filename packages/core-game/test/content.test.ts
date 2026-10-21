@@ -18,7 +18,7 @@ import { MAPS } from "../src/content/maps";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
-import { WEAPONS } from "../src/content/weapons";
+import { BASE_WEAPONS, WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS } from "../src/game/patterns";
 import { findChestsProblems } from "../src/game/sim/chests";
 import { findMapContentProblems } from "../src/game/sim/map-types";
@@ -311,7 +311,7 @@ describe("контент пассивок и прокачки", () => {
 });
 
 describe("таблица разблокировок уровня аккаунта", () => {
-  const content = { weapons: WEAPONS.map((weapon) => weapon.id), passives: new Map(PASSIVES.map((passive) => [passive.id, passive.category])) };
+  const content = { weapons: BASE_WEAPONS.map((weapon) => weapon.id), passives: new Map(PASSIVES.map((passive) => [passive.id, passive.category])) };
 
   it("проходит проверку целиком: каждое оружие и навык открываются ровно на одном уровне, слоты не убывают", () => {
     expect(findUnlockProblems(ACCOUNT_UNLOCKS, content, LOADOUT_LIMITS)).toEqual([]);
@@ -320,7 +320,7 @@ describe("таблица разблокировок уровня аккаунт�
   it("на последнем уровне открыто всё, и слоты — потолок контента: golden-тесты идут на этом наборе", () => {
     const last = Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level));
     const open = unlocksAt(ACCOUNT_UNLOCKS, last);
-    expect(open.weapons.size).toBe(WEAPONS.length);
+    expect(open.weapons.size).toBe(BASE_WEAPONS.length);
     expect(open.passives.size).toBe(PASSIVES.length);
     expect(open.limits).toEqual(LOADOUT_LIMITS);
     expect(unlocksAt(ACCOUNT_UNLOCKS, last + 50)).toEqual(open);
@@ -332,7 +332,7 @@ describe("таблица разблокировок уровня аккаунт�
   });
 
   it("уровень открытия знает каждое оружие и навык", () => {
-    for (const weapon of WEAPONS) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", weapon.id), weapon.id).not.toBeNull();
+    for (const weapon of BASE_WEAPONS) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", weapon.id), weapon.id).not.toBeNull();
     for (const passive of PASSIVES) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "passive", passive.id), passive.id).not.toBeNull();
   });
 
