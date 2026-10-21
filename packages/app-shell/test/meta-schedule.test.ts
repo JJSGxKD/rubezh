@@ -11,6 +11,8 @@ const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const utc = (iso: string): number => Date.parse(iso);
+/** Отсчёт пишется с неразрывными пробелами — в ожиданиях они через этот помощник. */
+const nb = (text: string): string => text.replaceAll(" ", "\u00a0");
 
 describe("сброс заданий по московскому времени", () => {
   it("ежедневный — в полночь по Москве, то есть в 21:00 UTC", () => {
@@ -39,20 +41,31 @@ describe("сброс заданий по московскому времени",
 
 describe("обратный отсчёт", () => {
   it("показывает самое крупное и без нулевых хвостов", () => {
-    expect(formatCountdown(3 * DAY + 4 * HOUR + 10 * MINUTE)).toBe("3 д 4 ч");
-    expect(formatCountdown(2 * DAY)).toBe("2 д");
-    expect(formatCountdown(5 * HOUR + 12 * MINUTE)).toBe("5 ч 12 мин");
-    expect(formatCountdown(HOUR)).toBe("1 ч");
-    expect(formatCountdown(12 * MINUTE)).toBe("12 мин");
-    expect(formatCountdown(26 * HOUR)).toBe("1 д 2 ч");
-    expect(formatCountdown(DAY)).toBe("1 д");
+    expect(formatCountdown(3 * DAY + 4 * HOUR + 10 * MINUTE)).toBe(nb("3 д 4 ч"));
+    expect(formatCountdown(2 * DAY)).toBe(nb("2 д"));
+    expect(formatCountdown(5 * HOUR + 12 * MINUTE)).toBe(nb("5 ч 12 мин"));
+    expect(formatCountdown(HOUR)).toBe(nb("1 ч"));
+    expect(formatCountdown(12 * MINUTE)).toBe(nb("12 мин"));
+    expect(formatCountdown(26 * HOUR)).toBe(nb("1 д 2 ч"));
+    expect(formatCountdown(DAY)).toBe(nb("1 д"));
   });
 
   it("округляет вверх и не показывает «0 мин» перед самым сбросом", () => {
-    expect(formatCountdown(59.5 * MINUTE)).toBe("1 ч");
-    expect(formatCountdown(20 * 1000)).toBe("1 мин");
-    expect(formatCountdown(0)).toBe("1 мин");
-    expect(formatCountdown(-5)).toBe("1 мин");
+    expect(formatCountdown(59.5 * MINUTE)).toBe(nb("1 ч"));
+    expect(formatCountdown(20 * 1000)).toBe(nb("1 мин"));
+    expect(formatCountdown(0)).toBe(nb("1 мин"));
+    expect(formatCountdown(-5)).toBe(nb("1 мин"));
+  });
+});
+
+describe("перенос отсчёта", () => {
+  // «Следующая — через 19 ч / 44 мин»: хвост «44 мин» на отдельной строке
+  // читается как другое число. Отсчёт — одно слово: переносится целиком.
+  it("отсчёт не рвётся по строкам — внутри только неразрывные пробелы", () => {
+    for (const ms of [19 * HOUR + 44 * MINUTE, 3 * DAY + 4 * HOUR, 12 * MINUTE, 26 * HOUR]) {
+      expect(formatCountdown(ms)).not.toMatch(/ /);
+      expect(formatCountdownShort(ms)).not.toMatch(/ /);
+    }
   });
 });
 
@@ -65,12 +78,12 @@ describe("короткий обратный отсчёт для узкой пл�
   });
 
   it("меньше часа — минутами, секунды округляются вверх", () => {
-    expect(formatCountdownShort(59 * MINUTE)).toBe("59 мин");
-    expect(formatCountdownShort(30 * 1000)).toBe("1 мин");
+    expect(formatCountdownShort(59 * MINUTE)).toBe(nb("59 мин"));
+    expect(formatCountdownShort(30 * 1000)).toBe(nb("1 мин"));
   });
 
   it("23 ч 59 мин 30 с округляется вверх до суток, а не до «24:00»", () => {
-    expect(formatCountdownShort(23 * HOUR + 59 * MINUTE + 30 * 1000)).toBe("1 д");
+    expect(formatCountdownShort(23 * HOUR + 59 * MINUTE + 30 * 1000)).toBe(nb("1 д"));
   });
 
   it("от суток — как обычный отсчёт", () => {

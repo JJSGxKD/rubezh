@@ -153,8 +153,8 @@ describe("подписи целей", () => {
   });
 
   it("задание недели и дня", () => {
-    expect(goalText({ kind: "task", closeness: 0.8, period: "weekly", value: 4, target: 5 })).toBe("Задание недели почти выполнено — 4 из 5");
-    expect(goalText({ kind: "task", closeness: 0.8, period: "daily", value: 4, target: 5 })).toBe("Задание дня почти выполнено — 4 из 5");
+    expect(goalText({ kind: "task", closeness: 0.8, period: "weekly", value: 4, target: 5 })).toBe("Задание недели почти выполнено\u00a0— 4\u00a0из\u00a05");
+    expect(goalText({ kind: "task", closeness: 0.8, period: "daily", value: 4, target: 5 })).toBe("Задание дня почти выполнено\u00a0— 4\u00a0из\u00a05");
   });
 
   it("уровень без открытий и с ними", () => {

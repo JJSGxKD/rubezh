@@ -150,8 +150,7 @@ function ProgressLine(props: { task: TaskItem }): ReactNode {
  */
 function repeatHint(task: TaskItem): string | null {
   if (tabOf(task) !== "partner" || task.period === "achievement") return null;
-  // Число с единицей — неразрывно: «7 ч» не должно разъехаться по строкам.
-  if (task.claimed) return t("tasks.repeat.next", { time: formatCountdown(msUntilReset(Date.now(), task.period)).replace(/(\d) /g, "$1\u00a0") });
+  if (task.claimed) return t("tasks.repeat.next", { time: formatCountdown(msUntilReset(Date.now(), task.period)) });
   return t(task.period === "daily" ? "tasks.repeat.daily" : "tasks.repeat.weekly");
 }
 
