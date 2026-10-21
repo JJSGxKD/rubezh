@@ -15,6 +15,7 @@ import { PartnersScreen } from "./partners/PartnersScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
 import { PromoCodesScreen } from "./promo-codes/PromoCodesScreen";
 import { PromosScreen } from "./promos/PromosScreen";
+import { RequestsScreen } from "./requests/RequestsScreen";
 import { ReviewScreen } from "./review/ReviewScreen";
 import { AuditScreen } from "./roles/AuditScreen";
 import { RolesScreen } from "./roles/RolesScreen";
@@ -34,6 +35,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
+  requests: () => <RequestsScreen />,
   exports: () => <ExportsScreen />,
   links: (id) => <LinksScreen id={id} />,
   flags: () => <FlagsScreen />,
