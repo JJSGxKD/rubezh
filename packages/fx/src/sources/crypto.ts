@@ -130,8 +130,8 @@ export function parseCoinMarketCap(body: unknown, now: Date): Quote[] {
 /**
  * Тариф TON API. Без ключа — секунда на запрос; курс DEX меняется быстрее, но
  * нам хватит пяти минут. С ключом лимит у сервиса выше, а наш опрос прежний:
- * числа лимита с ключом не сверены с документацией (tasks/T-0063, вопрос в PR) —
- * они правятся в панели.
+ * числа лимита с ключом — как без ключа, проверить в TON Console; настоящий
+ * лимит выставляется в панели (tasks/T-0063, T-0062).
  */
 export const TONAPI_TARIFFS: Record<"keyless" | "keyed", Tariff> = {
   keyless: { name: "keyless", perMinute: 60, perMonth: null, minIntervalMs: 5 * MINUTE },

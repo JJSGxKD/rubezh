@@ -236,6 +236,9 @@ describe("tonapi и erapi: ключ необязателен", () => {
     expect(served.calls[0]?.url).toBe("https://open.er-api.com/v6/latest/USD");
   });
 
+  // Фикстура erapi-v6-latest.json собрана по документации ExchangeRate-API, а не снята
+  // с источника: заменить снятой, когда будет ключ (в ответе с ключом курсы лежат в
+  // `conversion_rates`, у открытого адреса — в `rates`).
   it("erapi с ключом — адрес v6 с ключом в пути, тариф «с ключом» (1 500 в месяц), курсы читаются из ответа с ключом", async () => {
     const served = answering(fixture("erapi-v6-latest.json"));
     const keyed = createErApiSource({ ...served, key: "0123456789abcdef01234567" });
