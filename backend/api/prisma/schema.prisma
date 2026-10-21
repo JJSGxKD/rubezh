@@ -2272,3 +2272,38 @@ model FxSourceLimit {
 
   @@map("fx_source_limit")
 }
+
+// Журнал исходящих запросов (docs/35-stage4-plan.md Р92, T-0060): попытка — строка, 7 суток.
+model OutboundCall {
+  id         BigInt   @id @default(autoincrement())
+  at         DateTime @db.Timestamptz(3)
+  service    String   @db.VarChar(32)
+  method     String   @db.VarChar(8)
+  host       String   @db.VarChar(128)
+  path       String   @db.VarChar(256)
+  status     Int?     @db.SmallInt
+  ok         Boolean
+  durationMs Int      @map("duration_ms")
+  via        String   @db.VarChar(40)
+  attempt    Int      @db.SmallInt
+  error      String?  @db.VarChar(16)
+
+  @@index([at(sort: Desc)])
+  @@index([service, at(sort: Desc)])
+  @@map("outbound_call")
+}
+
+// Сводка входящих по минутам (Р92, T-0060): без адресов и игроков, 7 суток.
+model InboundMinute {
+  minute      DateTime @db.Timestamptz(0)
+  method      String   @db.VarChar(8)
+  route       String   @db.VarChar(160)
+  statusClass String   @map("status_class") @db.VarChar(3)
+  count       Int
+  /// число ответов по корзинам времени LATENCY_BUCKETS_MS и «дольше» — последней
+  buckets     Int[]
+
+  @@id([minute, method, route, statusClass])
+  @@index([route, minute(sort: Desc)])
+  @@map("inbound_minute")
+}

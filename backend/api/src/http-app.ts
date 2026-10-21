@@ -4,6 +4,8 @@ import { APP_CONFIG, type AppConfig } from "./config/app-config.js";
 import { DomainErrorFilter } from "./common/domain-error.filter.js";
 import { API_SECURITY_HEADERS } from "./common/security-headers.js";
 import { ServerErrorAlarm } from "./modules/admin-notify/server-error-alarm.js";
+import { InboundCounter } from "./modules/request-journal/inbound-counter.js";
+import { NO_ROUTE, isServiceRoute } from "./modules/request-journal/journal-rules.js";
 
 /**
  * Сборка HTTP-приложения — одна для `main.ts` и HTTP-тестов: префикс,
@@ -110,6 +112,27 @@ function configureHttpApp(app: NestFastifyApplication, config: AppConfig): void 
       .getInstance()
       .addHook("onResponse", async (_request, reply) => {
         if (reply.statusCode >= 500) void counter.record(reply.statusCode);
+      });
+  }
+
+  // Сводка входящих запросов по маршрутам (docs/35-stage4-plan.md Р92,
+  // tasks/T-0060). Считается шаблон маршрута, а не адрес; ответ игроку уже
+  // ушёл, и счётчик его не ждёт. Без модуля журнала хук не ставится.
+  let inbound: InboundCounter | null = null;
+  try {
+    inbound = app.get(InboundCounter, { strict: false });
+  } catch {
+    // Журнала нет в этой сборке — считать нечего.
+  }
+  if (inbound !== null) {
+    const journal = inbound;
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .addHook("onResponse", async (request, reply) => {
+        const route = request.routeOptions.url ?? NO_ROUTE;
+        if (isServiceRoute(route)) return;
+        void journal.count(request.method, route, reply.statusCode, reply.elapsedTime);
       });
   }
 }

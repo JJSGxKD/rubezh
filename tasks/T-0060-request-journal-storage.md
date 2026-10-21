@@ -3,8 +3,8 @@ id: T-0060
 title: Журнал запросов — исходящие по вызову, входящие сводкой по маршрутам, 7 дней
 epic: E13
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0059]
@@ -20,6 +20,8 @@ shared:
   - backend/api/src/app.module.ts
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
 runner: local
 executor: sonnet-5.5
 effort: extra
