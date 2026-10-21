@@ -46,6 +46,8 @@ erDiagram
         datetime banned_at "nullable: отметка блокировки целиком для входа — из ACCOUNT_RESTRICTION"
         string ban_reason "nullable: текст игроку — что, до когда и почему"
         datetime tester_at "nullable: знак «Тестер» — играл до вайпа; ставится снимком, навсегда"
+        string platform_name "nullable: ник с площадки как пришёл, до 256 знаков; обновляется при каждом входе, виден только в панели"
+        datetime name_locked_at "nullable: ник закреплён модератором, вход display_name не перезаписывает"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -3483,6 +3485,42 @@ sequenceDiagram
   нагрузка на Redis не растёт с числом игроков.
 - **«Сегодня играли»** — HyperLogLog на игровые сутки (Москва): точность около
   1%, память постоянная.
+
+### 4.29 Отчёты политики источников: браузер → API → Redis → панель (этап 4, реализовано)
+
+Политика Telegram-сборки просит браузер сообщать о каждом заблокированном
+адресе (`report-uri`, Р108), а сервер копит сводку, по которой список
+разрешённых адресов рекламных SDK дополняется точно. Приём открыт без входа,
+лимит — по адресу; из тела берутся только директива и имя хоста
+(`csp-reports/csp-report-parse.ts`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Браузер игрока
+    participant X as Caddy
+    participant S as CspReportsController
+    participant R as Redis
+    participant A as Панель
+
+    B->>X: POST /api/v1/csp-reports (application/csp-report)
+    X->>S: проксирует запрос
+    S->>R: лимит rl:csp-reports:ip — не больше 300 в минуту с адреса
+    S->>S: тело → директива и хост, остальное отбрасывается
+    S->>R: Lua: HINCRBY csp:count, HSET csp:last, EXPIRE 30 суток
+    Note over S,R: пар уже 200 и пара новая — INCR csp:overflow
+    S-->>B: 204
+    A->>S: GET /admin/csp-reports (diagnostics.view)
+    S->>R: HGETALL csp:count, csp:last, GET csp:overflow
+    S-->>A: директива, хост, число, момент; свежие сверху
+```
+
+- **Базы нет.** Сводка живёт в Redis, ограничена 200 парами и устаревает за
+  30 суток после последней записи; кнопки сброса нет.
+- **Сбой Redis не роняет приём:** лимит уходит на память процесса, запись
+  отчёта теряется со строкой `warn` не чаще раза в минуту.
+- **Чужого не хранится:** ни путей и параметров адреса, ни адреса страницы, ни
+  данных игрока — ни в Redis, ни в логе.
 
 ---
 

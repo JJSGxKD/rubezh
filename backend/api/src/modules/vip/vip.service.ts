@@ -216,32 +216,49 @@ export class VipService implements OnModuleInit {
 
   /**
    * Две оплаты проскочили предварительную проверку почти одновременно: проверка
-   * второй прошла раньше, чем записана первая. Оплаченный период второй
-   * остаётся у игрока и встал за первым — он заплатил, отнимать нечего, — а
-   * продление второй выключается, чтобы в следующем месяце не было второго
-   * списания. Возврат лишней оплаты здесь не делается (T-0023, T-0024).
+   * второй прошла раньше, чем записана первая. Оплаченный период обеих
+   * остаётся у игрока — он заплатил, отнимать нечего, — а продление
+   * выключается у одной, чтобы в следующем месяце не было второго списания.
+   * Возврат лишней оплаты здесь не делается (T-0023, T-0024).
+   *
+   * Проигравшую выбирают одинаково обе выдачи: подписку с более поздней записью
+   * в журнале, при равенстве времени — с большим идентификатором. Обе читают
+   * одни и те же сохранённые значения, поэтому выключают одну и ту же
+   * подписку, а выдаваемая может оказаться и выигравшей. Если бы каждая
+   * выключала свою, то при встречном чтении обе остались бы без продления.
+   * Выключение повторяемо, так что две выдачи за одну проигравшую безвредны,
+   * а у уже выключенной вызов ничего не делает.
    *
    * Не бросает: период уже записан, а повтор задания его не повторит
    * (`created === false`), так что бросок ничего бы не вернул.
    */
   private async stopSecondSubscription(purchase: StoredPurchase, now: Date): Promise<void> {
-    const fields = { accountId: purchase.accountId, stopped: purchase.purchaseId };
+    let fields: Record<string, unknown> = { accountId: purchase.accountId, purchaseId: purchase.purchaseId };
     try {
       const state = await this.state(purchase.accountId, now);
-      const kept = state.subscriptions.find((item) => item.renewal === "on" && item.subscriptionId !== purchase.purchaseId);
-      if (kept === undefined) return;
+      const other = state.subscriptions.find((item) => item.renewal === "on" && item.subscriptionId !== purchase.purchaseId);
+      if (other === undefined) return;
+      // Выдача записала подписку до чтения: её отсутствие — сбой чтения, и выбрать проигравшую нечем.
+      const own = state.subscriptions.find((item) => item.subscriptionId === purchase.purchaseId);
+      if (own === undefined) throw new Error("своей подписки нет в журнале");
+
+      const loser = laterSubscription(own, other);
+      const kept = loser === own ? other : own;
+      fields = { ...fields, stopped: loser.subscriptionId, kept: kept.subscriptionId };
+      // Другая выдача уже выключила проигравшую, или игрок отменил её сам: делать нечего.
+      if (loser.renewal !== "on") return;
 
       const account = await withTimeout(this.accounts.byId(purchase.accountId), DB_TIMEOUT_MS, "аккаунт подписчика");
       if (account === null) {
-        this.logError("vip_subscription_twice_stop_failed", { ...fields, kept: kept.subscriptionId, reason: "аккаунт не найден" });
+        this.logError("vip_subscription_twice_stop_failed", { ...fields, reason: "аккаунт не найден" });
         return;
       }
       const ref: AccountRef = { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
-      const result = await this.renewal.set(ref, purchase.purchaseId, false);
+      const result = await this.renewal.set(ref, loser.subscriptionId, false);
       // Площадка отказала — продления там уже нет (его отменил сам игрок): как в `cancel`.
       const by: VipCanceller = result === "done" ? "game" : "player";
-      await withTimeout(this.repository.setRenewal(purchase.purchaseId, "cancelled", by, now), DB_TIMEOUT_MS, "продление VIP");
-      this.logError("vip_subscription_twice", { ...fields, kept: kept.subscriptionId });
+      await withTimeout(this.repository.setRenewal(loser.subscriptionId, "cancelled", by, now), DB_TIMEOUT_MS, "продление VIP");
+      this.logError("vip_subscription_twice", { accountId: purchase.accountId, stopped: loser.subscriptionId, kept: kept.subscriptionId });
     } catch (error: unknown) {
       this.logError("vip_subscription_twice_stop_failed", { ...fields, reason: error instanceof Error ? error.message : "unknown" });
     }
@@ -348,6 +365,17 @@ function isActive(state: Pick<VipState, "until">, at: Date): boolean {
 /** Вернуть продление можем только отменённое нами и пока оплаченный период подписки идёт. */
 function isResumable(subscription: VipSubscriptionRow, at: Date): boolean {
   return subscription.renewal === "cancelled" && subscription.cancelledBy === "game" && subscription.until !== null && subscription.until.getTime() > at.getTime();
+}
+
+/**
+ * Более поздняя из двух подписок по времени записи в журнал, при равенстве —
+ * с большим идентификатором. Порядок один для любой пары, с какой стороны её
+ * ни сравнивай: от него зависит, что обе выдачи выключат одну подписку.
+ */
+function laterSubscription(a: VipSubscriptionRow, b: VipSubscriptionRow): VipSubscriptionRow {
+  const byTime = a.createdAt.getTime() - b.createdAt.getTime();
+  if (byTime !== 0) return byTime > 0 ? a : b;
+  return a.subscriptionId > b.subscriptionId ? a : b;
 }
 
 /** Режим оплаты и сколько спишется за цену — правило модуля оплаты. */

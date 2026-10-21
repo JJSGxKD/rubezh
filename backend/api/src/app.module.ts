@@ -61,6 +61,7 @@ import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
 import { PartnersModule } from "./modules/partners/partners.module.js";
 import { SeasonsModule } from "./modules/seasons/seasons.module.js";
 import { OnlineModule } from "./modules/online/online.module.js";
+import { CspReportsModule } from "./modules/csp-reports/csp-reports.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -85,7 +86,8 @@ import { OnlineModule } from "./modules/online/online.module.js";
  * площадкам и уведомление о выходе версии (там же, WP31); promo-codes —
  * промокоды: ввод игроком и кампании в панели, partners — партнёры и
  * приведённые ими игроки (там же, WP41); online — сколько людей в игре и в
- * забеге, Р107 (там же, T-0147).
+ * забеге, Р107 (там же, T-0147); csp-reports — сводка отчётов браузера о
+ * заблокированных адресах, Р108 (там же, T-0155).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
  */
@@ -149,6 +151,7 @@ export const APP_MODULES = [
   WipeModule,
   SeasonsModule,
   OnlineModule,
+  CspReportsModule,
 ];
 
 /**

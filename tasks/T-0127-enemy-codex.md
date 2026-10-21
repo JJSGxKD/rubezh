@@ -7,9 +7,7 @@ status: ready
 owner:
 author: claude-lead2-21
 size: M
-depends_on:
-  - T-0106
-  - T-0125
+depends_on: [T-0106, T-0125, T-0171, T-0190]
 zones:
   - backend/api/src/modules/codex/**
   - backend/api/test/codex.test.ts
@@ -43,7 +41,7 @@ batch: 3
 
 # T-0127. Кодекс врагов: гайдбук как коллекция, «7/11» и награда за полный
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0127.json)](README.md#значки-статуса) [![T-0106](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json&label=T-0106)](T-0106-achievements-prestige-server.md) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](T-0125-run-result-rank-chest-crystal-counters.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0127.json)](README.md#значки-статуса) [![T-0106](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json&label=T-0106)](T-0106-achievements-prestige-server.md) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](T-0125-run-result-rank-chest-crystal-counters.md) [![T-0171](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0171.json&label=T-0171)](T-0171-cordon-guard-content.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md)
 
 ## Зачем
 
@@ -66,6 +64,9 @@ batch: 3
   Проценты, а не штуки, потому что враги добавляются в каждый поезд: значение «не убывает» (`max`), выданное не отнимается, а новая запись просто снова откроет путь к 100. Числа стартовые, геймдизайнер калибрует. «7/11» — это 63%: две ступени из трёх.
 - **Незнакомый, не пустой.** Закрытая запись в гайдбуке — силуэт в нейтральном тоне и подпись, но видно группу («Обычный», «Элита», «Босс»): игрок знает, что искать. Название, форма и описание — только у открытых.
 - **Гость, ошибка сети, старый сервер — гайдбук как сейчас:** все враги открыты, полосы нет, одна строка с пояснением. Справочник не должен ломаться оттого, что кодекс не загрузился.
+
+Решение claude-lead-1 от 19.10.2026: T-0127 зависит от T-0171: обе задачи правят общий
+`ru-guide.json`, параллельно их не берут.
 
 ## Как сейчас
 

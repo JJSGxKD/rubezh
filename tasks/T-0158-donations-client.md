@@ -7,7 +7,7 @@ status: draft
 owner:
 author: claude-lead-1
 size: M
-depends_on: [T-0157, T-0161]
+depends_on: [T-0157, T-0161, T-0188, T-0190]
 zones:
   - packages/app-shell/src/state/donations-api.ts
   - packages/app-shell/src/state/shop-purchase.ts
@@ -46,7 +46,7 @@ batch: 3
 
 # T-0158. Донаты проекту — клиент: лист доната, ссылки Tribute, знак, благодарность, слайд
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0158.json)](README.md#значки-статуса) [![T-0157](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0157.json&label=T-0157)](T-0157-donations-backend.md) [![T-0161](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0161.json&label=T-0161)](T-0161-supporter-badge-api.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0158.json)](README.md#значки-статуса) [![T-0157](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0157.json&label=T-0157)](T-0157-donations-backend.md) [![T-0161](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0161.json&label=T-0161)](T-0161-supporter-badge-api.md) [![T-0188](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0188.json&label=T-0188)](T-0188-hide-changelog-for-players.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md)
 
 ## Зачем
 

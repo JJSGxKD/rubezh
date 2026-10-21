@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-19
 size: M
-depends_on: [T-0108]
+depends_on: [T-0108, T-0192, T-0193, T-0194, T-0195, T-0196, T-0198]
 zones:
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/modifiers.ts
@@ -43,7 +43,7 @@ batch: 3
 
 # T-0119. Модификаторы забега «Спешка» и «Инверсия»: данные и движок
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0119.json)](README.md#значки-статуса) [![T-0108](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0108.json&label=T-0108)](T-0108-unlock-ladder.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0119.json)](README.md#значки-статуса) [![T-0108](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0108.json&label=T-0108)](T-0108-unlock-ladder.md) [![T-0192](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0192.json&label=T-0192)](T-0192-pressure-after-minute-8.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md) [![T-0194](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0194.json&label=T-0194)](T-0194-limit-break-offers.md) [![T-0195](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0195.json&label=T-0195)](T-0195-player-power-pressure-engine.md) [![T-0196](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0196.json&label=T-0196)](T-0196-player-power-pressure-wiring.md) [![T-0198](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0198.json&label=T-0198)](T-0198-remove-enemy-projectile-code.md)
 
 ## Зачем
 
@@ -55,6 +55,8 @@ batch: 3
 T-0122, выбор в листе «Перед забегом» — T-0123; три задачи едут одной пачкой.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Модификаторы ложатся поверх единой сложности `hard`; формулы и примеры с «Лёгкой» и «Нормальной» пересчитываются от `hard`. Множители `hard` меняет T-0192 — брать их из влитого контента, а не из этой спецификации.
 
 Исполнитель их не пересматривает. Числа стартовые, **геймдизайнер калибрует**.
 

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
@@ -269,7 +270,9 @@ function useTemporaryDatabase(): TemporaryDatabase {
       skipReason = `нельзя создать временную базу: ${error instanceof Error ? error.message : "unknown"}`;
       return;
     }
-    execFileSync(resolve(API_DIR, "node_modules/.bin/prisma"), ["migrate", "deploy"], {
+    // Точка входа пакета через тот же Node: на Windows в .bin лежит prisma.cmd, а .cmd без оболочки не запускается.
+    const prismaEntry = createRequire(import.meta.url).resolve("prisma/build/index.js", { paths: [API_DIR] });
+    execFileSync(process.execPath, [prismaEntry, "migrate", "deploy"], {
       cwd: API_DIR,
       env: { ...process.env, DATABASE_URL: withDatabase(databaseName) },
       stdio: "pipe",

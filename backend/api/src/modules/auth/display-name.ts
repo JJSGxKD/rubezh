@@ -1,3 +1,4 @@
+import { stripLinksAndMentions } from "./display-name-links.js";
 import { hasProfanity } from "./display-name-words.js";
 
 /**
@@ -74,7 +75,9 @@ function clean(raw: string, limit: boolean): { name: string | null; verdict: Nam
   // Табуляция и перевод строки — управляющие, но по смыслу пробелы.
   const spaced = raw.normalize("NFKC").replace(/[\t\n\r\v\f]/gu, " ");
   // Знаки считаются в разложенном виде: «o» с рожком из NFKC — буква с уже одним знаком.
-  const name = collapseSpaces(stripSymbols(spaced.normalize("NFD")).normalize("NFC"));
+  // Ссылки и упоминания — после чистки знаков (невидимый знак внутри «t.me» уже
+  // ушёл, полноширинная запись свёрнута NFKC) и до проверки «нет букв» и обрезки.
+  const name = collapseSpaces(stripLinksAndMentions(stripSymbols(spaced.normalize("NFD")).normalize("NFC")));
   if (!/[\p{L}\p{N}]/u.test(name)) return { name: null, verdict: "empty" };
   if (hasProfanity(name)) return { name: null, verdict: "profanity" };
   const parts = graphemes(name);

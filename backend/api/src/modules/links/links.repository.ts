@@ -140,7 +140,7 @@ export class PrismaLinksRepository implements LinksRepository {
                WHERE s.start_kind = 'click' AND lc.link_code = c.link_code) AS launches
       FROM link_click c
       WHERE c.link_code IN (${Prisma.join(codes)})
-        AND (c.referer_host IS NULL OR c.referer_host NOT IN (${Prisma.join(CHECKER_REFERER_HOSTS)}))
+        AND (c.referer_host IS NULL OR split_part(c.referer_host, ':', 1) NOT IN (${Prisma.join(CHECKER_REFERER_HOSTS)}))
       GROUP BY c.link_code`;
     // Прямые запуски — сессии вида `link`, где `start_ref` — сам код ссылки, без кликов;
     // у ссылки, по которой не кликали ни разу, они всё равно есть.

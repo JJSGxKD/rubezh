@@ -3,11 +3,11 @@ id: T-0155
 title: Отчёты политики источников — директива в политике и приём со сводкой
 epic: E3
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
-depends_on: [T-0154]
+depends_on: [T-0154, T-0184]
 zones:
   - scripts/vite/content-security-policy.ts
   - scripts/vite/dev-server.ts
@@ -33,7 +33,7 @@ batch: 3
 
 # T-0155. Отчёты политики источников — директива в политике и приём со сводкой
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json)](README.md#значки-статуса) [![T-0154](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0154.json&label=T-0154)](T-0154-csp-ad-sdk-chains.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json)](README.md#значки-статуса) [![T-0154](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0154.json&label=T-0154)](T-0154-csp-ad-sdk-chains.md) [![T-0184](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0184.json&label=T-0184)](T-0184-csp-ad-chains-yandex-richads-styles.md)
 
 [![T-0154](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0154.json&label=T-0154)](T-0154-csp-ad-sdk-chains.md)
 

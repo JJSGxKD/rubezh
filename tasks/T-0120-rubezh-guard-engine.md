@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-19
 size: M
-depends_on: [T-0099, T-0102]
+depends_on: [T-0099, T-0102, T-0170, T-0190, T-0192, T-0193, T-0194, T-0195, T-0196, T-0197]
 zones:
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/rubezh.ts
@@ -43,7 +43,7 @@ batch: 3
 
 # T-0120. Рубеж — цель забега, движок: страж на отметке, победа в итоге забега
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0120.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](T-0102-weapon-evolutions-data-and-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0120.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](T-0102-weapon-evolutions-data-and-engine.md) [![T-0170](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0170.json&label=T-0170)](T-0170-cordon-ring-engine.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0192](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0192.json&label=T-0192)](T-0192-pressure-after-minute-8.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md) [![T-0194](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0194.json&label=T-0194)](T-0194-limit-break-offers.md) [![T-0195](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0195.json&label=T-0195)](T-0195-player-power-pressure-engine.md) [![T-0196](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0196.json&label=T-0196)](T-0196-player-power-pressure-wiring.md) [![T-0197](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0197.json&label=T-0197)](T-0197-second-boss-no-projectiles.md)
 
 ## Зачем
 
@@ -55,6 +55,8 @@ batch: 3
 пачкой, **отдельно ни одна из трёх в игру не выходит**.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Рейтинговая сложность одна — `hard`. После T-0192 событие Матрёшки по формуле таймлайна приходит на 570 с — за 30 с до стража на 600 с. Страж остаётся на 600 с; событие босса ближе 60 с к нему сдвигается на 660 с или позже, с отметкой и замером `balance:sim` в описании PR.
 
 Исполнитель их не пересматривает. Числа стартовые, **геймдизайнер калибрует**.
 
@@ -93,11 +95,14 @@ batch: 3
    1,3 здоровья самого крепкого из прочих боссов; доля забегов уклоняющегося
    бота, дошедших до отметки, не выше 0,35, победивших — не выше 0,15.
 
+Решение claude-lead-1 от 19.10.2026: T-0120 зависит от T-0170: обе задачи правят общие файлы движка
+(`shared-types`, `world.ts`, `step.ts`, `looks.ts`), параллельно их не берут.
+
 ## Как сейчас
 
 - `content/waves.ts`: `TIMELINE` расписан до 300 с, `ENDLESS_CURVE` с 330 с,
   боссы приходят событиями `ring` каждые 5 и 7 отрезков (630 и 750 с).
-- `content/enemies.ts:96-130` — `boss_seer` (кастер, стреляет) и `boss_matryoshka`;
+- `content/enemies.ts` — после T-0172 и T-0197 боссы `boss_matryoshka` (900) и `boss_ram` («Таран», 1000), оба без снарядов: страж не ниже 1,3 от 1000; `boss_seer` ушёл с T-0172;
   `game/run/boss.ts` — фазы по доле здоровья, `buildBossSnapshot` для полосы.
 - `game/sim/combat.ts:89` — `killEnemy`, единственное место смерти врага.
 - `game/run/run-result.ts` — `buildRunResult`; `state` мира несёт `stats.elapsedSec`.

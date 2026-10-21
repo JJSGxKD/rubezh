@@ -53,6 +53,17 @@ export function formatCountdown(ms: number): string {
 }
 
 /**
+ * Короткая форма для узкой плитки: от часа до суток — «23:59» вместо «23 ч 59
+ * мин». Минуты округляются вверх по тому же правилу, что в `formatCountdown`,
+ * поэтому 23 ч 59 мин 30 с — это уже сутки, а не «24:00»; остальное — как там.
+ */
+export function formatCountdownShort(ms: number): string {
+  const total = Math.max(1, Math.ceil(ms / MINUTE_MS));
+  if (total < 60 || total >= MINUTES_PER_DAY) return formatCountdown(ms);
+  return t("time.clock", { hours: Math.floor(total / 60), minutes: String(total % 60).padStart(2, "0") });
+}
+
+/**
  * Часы экрана для отсчётов «через 5 мин» — только пока отсчёт на экране:
  * остальное время экран не перерисовывается зря. Шаг выбирает экран: отсчёт
  * без секунд не требует тикать каждую секунду. Живут рядом с отсчётом: у

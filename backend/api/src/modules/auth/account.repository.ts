@@ -2,11 +2,34 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { AccountPlatform } from "./access-token.js";
+import { displayNameFor, type CleanName } from "./display-name.js";
 
 /**
  * Аккаунты игроков (docs/34-stage3-plan.md, WP1). Запрос к базе живёт здесь,
  * а не в сервисе (docs/15-engineering-standards.md §2.3).
  */
+
+/** Ширина столбцов `display_name` и `platform_name`: Postgres считает знаки, а не кодовые единицы. */
+const DISPLAY_NAME_MAX = 128;
+const PLATFORM_NAME_MAX = 256;
+
+/**
+ * Обрезка по знакам без многоточия. `slice` по строке разорвал бы пару
+ * суррогатов (эмодзи) посередине, и в базу ушёл бы битый знак.
+ */
+function cutChars(text: string, max: number): string {
+  return text.length <= max ? text : [...text].slice(0, max).join("");
+}
+
+/**
+ * Ник, как он лежит в базе: очищенный и умещённый в столбец. Вход и команда
+ * `names:clean` считают его одной функцией — иначе на длинной склейке эмодзи
+ * они разошлись бы, и команда переписывала бы тот же ник при каждом запуске.
+ */
+export function storedNameFor(raw: string, username: string | null, accountId: string): CleanName {
+  const clean = displayNameFor(raw, username, accountId);
+  return { name: cutChars(clean.name, DISPLAY_NAME_MAX), verdict: clean.verdict };
+}
 
 export interface AccountIdentity {
   platform: AccountPlatform;
@@ -35,6 +58,14 @@ export interface Account extends AccountIdentity {
    * подмены, собирающие `Account` руками, не ломались; настоящее хранилище отдаёт его всегда.
    */
   testerAt?: Date | null;
+  /**
+   * Ник с площадки как пришёл при последнем входе — только для панели
+   * (tasks/T-0150); `null` — аккаунт заведён до этого поля и не входил после.
+   * Необязателен в типе по той же причине, что `testerAt`.
+   */
+  platformName?: string | null;
+  /** Ник закреплён модератором, вход его не меняет; `null` — не закреплён. */
+  nameLockedAt?: Date | null;
   /** аккаунт заведён этим входом, а не найден */
   created: boolean;
 }
@@ -45,7 +76,9 @@ export interface AccountRepository {
   /**
    * Найти аккаунт по площадке или завести. Имя и аватар обновляются на каждом
    * входе: игрок сменил их в Telegram — мы показываем новые, а не те, что
-   * запомнили при регистрации.
+   * запомнили при регистрации. Ник при этом чистится (`displayNameFor`), а
+   * как пришёл — остаётся в `platformName` для панели; закреплённый
+   * модератором ник вход не перезаписывает.
    */
   upsert(identity: AccountArrival, nowMs: number): Promise<Account>;
   byId(accountId: string): Promise<Account | null>;
@@ -91,20 +124,43 @@ export class PrismaAccountRepository implements AccountRepository {
     const now = new Date(nowMs);
     const key = { platform: identity.platform, platformUserId: identity.platformUserId };
 
+    const platformName = cutChars(identity.displayName, PLATFORM_NAME_MAX);
+    const newAccountId = crypto.randomUUID();
+
     // Признак «завели сейчас» — по времени создания: upsert не говорит, какая
     // из веток сработала, а событие user_registered нужно ровно один раз.
+    // Ветка update ник не пишет: чистый ник и закрепление решаются вторым запросом.
     const row = await this.prisma.account.upsert({
       where: { platform_platformUserId: key },
-      create: { accountId: crypto.randomUUID(), ...identity, createdAt: now, lastSeenAt: now },
+      create: {
+        accountId: newAccountId,
+        ...key,
+        displayName: storedNameFor(identity.displayName, identity.username, newAccountId).name,
+        platformName,
+        username: identity.username,
+        photoUrl: identity.photoUrl,
+        createdAt: now,
+        lastSeenAt: now,
+      },
       update: {
-        displayName: identity.displayName,
+        platformName,
         username: identity.username,
         ...(identity.photoUrl === undefined ? {} : { photoUrl: identity.photoUrl }),
         lastSeenAt: now,
       },
     });
+    const created = row.createdAt.getTime() === now.getTime();
 
-    return toAccount(row, row.createdAt.getTime() === now.getTime());
+    // Чистый ник считается от id аккаунта (запасное «Игрок NNNN» постоянно для
+    // него), а у найденного аккаунта id известен только после upsert — поэтому
+    // два запроса, а не один. Закрепление проверяет сам UPDATE ... WHERE: сверка
+    // с прочитанной строкой пропустила бы закрепление, поставленное в панели
+    // между чтением и записью. Менять нечего — второго запроса нет.
+    const cleanName = storedNameFor(identity.displayName, identity.username, row.accountId).name;
+    if (row.nameLockedAt !== null || row.displayName === cleanName) return toAccount(row, created);
+    const renamed = await this.prisma.account.updateMany({ where: { accountId: row.accountId, nameLockedAt: null }, data: { displayName: cleanName } });
+    // Ноль строк — модератор закрепил ник в эту самую минуту: остаётся прежний.
+    return toAccount(renamed.count === 0 ? row : { ...row, displayName: cleanName }, created);
   }
 
   async byId(accountId: string): Promise<Account | null> {
@@ -183,6 +239,8 @@ type AccountRow = {
   bannedAt: Date | null;
   banReason: string | null;
   testerAt: Date | null;
+  platformName: string | null;
+  nameLockedAt: Date | null;
 };
 
 function toAccount(row: AccountRow, created: boolean): Account {
@@ -197,6 +255,8 @@ function toAccount(row: AccountRow, created: boolean): Account {
     bannedAt: row.bannedAt,
     banReason: row.banReason,
     testerAt: row.testerAt,
+    platformName: row.platformName,
+    nameLockedAt: row.nameLockedAt,
     created,
   };
 }

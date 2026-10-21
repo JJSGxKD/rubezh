@@ -21,6 +21,9 @@ zones:
   - packages/core-game/src/game/run/snapshot.ts
   - packages/core-game/src/game/MainScene.ts
   - packages/core-game/src/game/diagnostics/replay.ts
+  - packages/core-game/src/engine/run-engine.ts
+  - packages/core-game/src/engine/run-bus.ts
+  - packages/core-game/src/content/hash.ts
   - packages/core-game/src/run-api.ts
   - packages/core-game/test/**
   - backend/api/src/modules/boosts/boost-catalog.ts
@@ -41,7 +44,9 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - packages/app-shell/src/state/analytics.ts
   - docs/22-analytics-and-metrics.md
+  - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
+  - docs/32-balance.md
   - CLAUDE.md
 runner: any
 executor: sonnet-5.5

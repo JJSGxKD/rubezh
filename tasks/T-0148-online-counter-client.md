@@ -7,7 +7,7 @@ status: draft
 owner:
 author: claude-lead-1
 size: M
-depends_on: [T-0147]
+depends_on: [T-0147, T-0176]
 zones:
   - packages/app-shell/src/state/online.ts
   - packages/app-shell/src/app/AppHeader.tsx
@@ -27,7 +27,7 @@ batch: 3
 
 # T-0148. Счётчик онлайна — клиент и панель: шапка, кнопка «Играть», разбивка
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0148.json)](README.md#значки-статуса) [![T-0147](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0147.json&label=T-0147)](T-0147-online-counter-backend.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0148.json)](README.md#значки-статуса) [![T-0147](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0147.json&label=T-0147)](T-0147-online-counter-backend.md) [![T-0176](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0176.json&label=T-0176)](T-0176-live-feed-client.md)
 
 ## Зачем
 
@@ -45,6 +45,9 @@ batch: 3
   `online: null` — «сегодня играли N»;
 - `inRun` — подписью на кнопке «Играть», `null` — подписи нет;
 - панель — разбивка по площадкам и рекорд, обновление раз в 15 с.
+
+Решение claude-lead-1 от 19.10.2026: T-0148 зависит от T-0176: обе задачи правят `home.tsx`, и
+место под кнопкой «Играть» сначала занимает лента событий.
 
 ## Открытые вопросы — до `ready`
 

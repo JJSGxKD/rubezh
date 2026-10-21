@@ -131,3 +131,42 @@ describe("Caddyfile: за CDN", () => {
     expect(spa).toMatch(/\thandle \{\n\t\theader Cache-Control "no-cache"\n\t\ttry_files \{path\} \/index\.html/);
   });
 });
+
+// Панель тоже за CDN Bunny (Р134): адрес администратора и кэш приходят из общих
+// частей, блок домена ничего не переопределяет.
+describe("Caddyfile: панель за CDN", () => {
+  const admin = (): string => blockOf(ADMIN_DOMAIN);
+
+  it("блок панели собран из общих частей", () => {
+    for (const part of ["import edge", "import edge/admin*.caddy", "import spa admin", "header X-Frame-Options DENY"]) expect(admin(), part).toContain(part);
+  });
+
+  it("блок панели ничего не переопределяет: адрес и кэш — из сниппетов и глобального блока", () => {
+    for (const own of ["trusted_proxies", "client_ip_headers", "header_up", "reverse_proxy", "Cache-Control"]) expect(admin(), own).not.toContain(own);
+  });
+
+  it("префикс панели — ровно через сниппет api, остальной /api/* — 404", () => {
+    expect(handleBody(admin(), ADMIN_PREFIX)?.trim()).toBe(PROXY_API);
+    expect(handleBody(admin(), "handle /api/* {")?.trim()).toBe("respond 404");
+  });
+
+  it("доверие узлам CDN задано один раз, глобально", () => {
+    for (const [name, body] of blocks) {
+      expect(body, name).not.toContain("trusted_proxies");
+      expect(body, name).not.toContain("client_ip_headers");
+    }
+  });
+
+  it("домены за CDN идут через import edge; api и туннели к CDN-специфике не привязаны", () => {
+    for (const name of ["{$DOMAIN}", "tg.{$DOMAIN}", ADMIN_DOMAIN]) expect(blockOf(name), name).toContain("import edge");
+    expect(blockOf("api.{$DOMAIN}")).not.toContain("import edge/");
+    for (const [name, body] of blocks) {
+      if (name.includes(".dev.")) expect(body, name).not.toContain("import edge");
+    }
+  });
+
+  it("верхний комментарий называет панель среди доменов за CDN", () => {
+    const comment = caddyfile.slice(0, caddyfile.indexOf("\n{\n"));
+    expect(comment).toMatch(/Клиент, лендинг и панель — за CDN Bunny/);
+  });
+});
