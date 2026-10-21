@@ -26,6 +26,7 @@ import { testPrisma } from "./helpers/test-prisma.js";
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const DAY = 86_400_000;
+const LONG_AGO = new Date(Date.UTC(2020, 0, 1));
 const utm = { source: null, medium: null, campaign: null, content: null, term: null };
 
 describe.skipIf(DATABASE_URL === "")("ссылки партнёра на живом Postgres", () => {
@@ -53,10 +54,14 @@ describe.skipIf(DATABASE_URL === "")("ссылки партнёра на жив�
     await prisma.$disconnect();
   });
 
+  /**
+   * Партнёры теста датируются давно: соседние интеграционные тесты ищут своих партнёров в списке
+   * «пятьсот новейших», и строки этого файла, заведённые «сейчас», на общей базе вытеснили бы их
+   * за границу списка.
+   */
   async function partner(name = "Канал", terms: Partial<PartnerRow> = {}): Promise<string> {
     const partnerId = randomUUID();
-    const at = new Date();
-    await partners.create({ partnerId, name, contact: null, note: null, createdBy: randomUUID(), createdAt: at, updatedAt: at, ...terms });
+    await partners.create({ partnerId, name, contact: null, note: null, createdBy: randomUUID(), createdAt: LONG_AGO, updatedAt: LONG_AGO, ...terms });
     return partnerId;
   }
 
