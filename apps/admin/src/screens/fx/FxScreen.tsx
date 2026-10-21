@@ -31,6 +31,7 @@ import { useApi } from "../../ui/use-api";
 /**
  * Курсы валют (docs/29-admin-panel.md §3.3, «Курсы валют»): смотрят многие,
  * заданный курс звёзд ставит только владелец — у него право `fx.rates.edit`.
+ * Оно же правит лимит источника и его счётчик запросов.
  */
 const FRESHNESS: Record<string, { tone: "success" | "warning" | "danger"; text: string }> = {
   fresh: { tone: "success", text: "свежий" },
