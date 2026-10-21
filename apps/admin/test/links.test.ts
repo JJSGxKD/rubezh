@@ -10,6 +10,10 @@ import {
   fetchLinks,
   freshRow,
   launchesLabel,
+  LINK_PARTNER_ROUTE,
+  OWNER_TITLES,
+  ownerLabel,
+  partnerOfLinkRoute,
   resendConversion,
   retargetLink,
   SLUG,
@@ -18,6 +22,7 @@ import {
   type Conversion,
   type ConversionSummary,
 } from "../src/api/links";
+import { activePartners, fetchPartner, type Partner } from "../src/api/partners";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -35,6 +40,7 @@ const LINK = {
   networkUrl: null,
   target: "app" as const,
   directUrl: "https://t.me/rubezh_bot?startapp=l-Ab12Cd34Ef",
+  partner: null as { partnerId: string; name: string } | null,
 };
 
 const counts = (patch: Partial<Record<"pending" | "sent" | "failed" | "skipped", number>> = {}) => ({ pending: 0, sent: 0, failed: 0, skipped: 0, ...patch });
@@ -185,6 +191,108 @@ describe("ссылки кампаний", () => {
     expect(conversion({ clicks: 40, launches: 10 })).toBe(25);
     expect(conversion({ clicks: 0, launches: 0 })).toBeNull();
     expect(SECTIONS.find((section) => section.id === "links")?.permission).toBe("links.manage");
+  });
+});
+
+const PARTNER_ID = "0c4a5c1e-6a57-4d43-8a2a-0f3f6d0a9b10";
+
+describe("ссылки партнёра", () => {
+  it("владелец в виде ссылки: партнёр разбирается, у ссылки команды и у сервера старше панели — null", async () => {
+    const { fetch } = fakeFetch(
+      json(200, {
+        data: {
+          links: [
+            { ...LINK, partner: { partnerId: PARTNER_ID, name: "Канал" }, clicks: 5, clicks30d: 5, launches: 1, directLaunches: 0, conversions: null },
+            { ...LINK, code: "Zz99Yy88Xx", partner: null, clicks: 1, clicks30d: 1, launches: 0, directLaunches: 0, conversions: null },
+            { ...LINK, code: "Qq11Ww22Ee", clicks: 1, clicks30d: 1, launches: 0, directLaunches: 0, conversions: null },
+          ],
+          postback: { adsgramToken: true },
+        },
+      }),
+    );
+    const list = await fetchLinks(new AdminApi(fetch));
+    expect(list.ok && list.data.links.map((link) => link.partner)).toEqual([{ partnerId: PARTNER_ID, name: "Канал" }, null, null]);
+  });
+
+  it("владелец с мусором вместо партнёра не ломает список: ссылка считается ссылкой команды", async () => {
+    const { fetch } = fakeFetch(json(200, { data: { links: [{ ...LINK, partner: { name: 5 }, clicks: 1, clicks30d: 1, launches: 0, directLaunches: 0, conversions: null }], postback: { adsgramToken: true } } }));
+    const list = await fetchLinks(new AdminApi(fetch));
+    expect(list.ok && list.data.links[0]?.partner).toBeNull();
+  });
+
+  it("новая ссылка партнёра уходит с partnerId, ссылка команды — без него; смена цели владельца не несёт", async () => {
+    const { fetch, calls } = fakeFetch(
+      json(200, { data: { ...LINK, partner: { partnerId: PARTNER_ID, name: "Канал" } } }),
+      json(200, { data: LINK }),
+      json(200, { data: { ...LINK, target: "bot", partner: { partnerId: PARTNER_ID, name: "Канал" } } }),
+    );
+    const api = new AdminApi(fetch);
+    const created = await createLink(api, { campaign: "channel-post", partnerId: PARTNER_ID });
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ campaign: "channel-post", partnerId: PARTNER_ID });
+    expect(created.ok && created.data.partner).toEqual({ partnerId: PARTNER_ID, name: "Канал" });
+    await createLink(api, { campaign: "own-post" });
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ campaign: "own-post" });
+    await retargetLink(api, "Ab12Cd34Ef", "bot");
+    expect(JSON.parse(String(calls[2]?.init.body))).toEqual({ target: "bot" });
+  });
+
+  it("строка списка заведённой ссылки сохраняет владельца; колонка «Партнёр» — имя или «Наша»", () => {
+    const partner = { partnerId: PARTNER_ID, name: "Канал" };
+    expect(freshRow({ ...LINK, network: null, registrationOn: "first_run", networkUrl: null, partner }).partner).toEqual(partner);
+    expect(ownerLabel(partner)).toBe("Канал");
+    expect(ownerLabel(null)).toBe(OWNER_TITLES.own);
+    expect(OWNER_TITLES).toEqual({ own: "Наша", partner: "Партнёра" });
+  });
+
+  it("маршрут «Завести ссылку» из карточки партнёра: #/links/partner:<id> разбирается обратно, код ссылки — нет", () => {
+    expect(partnerOfLinkRoute(`${LINK_PARTNER_ROUTE}${PARTNER_ID}`)).toBe(PARTNER_ID);
+    expect(partnerOfLinkRoute(LINK.code)).toBeNull();
+    expect(partnerOfLinkRoute(null)).toBeNull();
+    expect(partnerOfLinkRoute(LINK_PARTNER_ROUTE)).toBeNull();
+  });
+
+  it("в мастере выбирают только активных партнёров, по алфавиту", () => {
+    const row = (name: string, status: Partner["status"]): Pick<Partner, "partnerId" | "name" | "status"> => ({ partnerId: `id-${name}`, name, status });
+    const rows = [row("Яндекс", "active"), row("Блогер", "paused"), row("Арбуз", "active"), row("Заявка", "applied"), row("Отказ", "rejected")];
+    expect(activePartners(rows)).toEqual([
+      { partnerId: "id-Арбуз", name: "Арбуз" },
+      { partnerId: "id-Яндекс", name: "Яндекс" },
+    ]);
+    expect(activePartners([])).toEqual([]);
+  });
+
+  it("карточка партнёра: ссылки с кликами и запусками и число привязанных по ссылкам; сервер старше панели — пусто", async () => {
+    const partnerLink = { code: "Ab12Cd34Ef", campaign: "channel-post", source: "tg", target: "bot", network: null, createdAt: "2026-10-21T10:00:00.000Z", clicks: 40, clicks30d: 12, launches: 10, directLaunches: 3, bound: 6 };
+    const partner = {
+      partnerId: PARTNER_ID,
+      name: "Канал",
+      contact: null,
+      note: null,
+      createdAt: "2026-10-02T09:00:00.000Z",
+      updatedAt: "2026-10-02T09:00:00.000Z",
+      telegramId: null,
+      status: "active",
+      country: null,
+      payoutCurrency: null,
+      payoutMethod: null,
+      sharePercent: null,
+      stats: { codes: 0, activeCodes: 0, redeemed: 0, bound: 6, played: 3, payers: 1, stars: 250 },
+    };
+    const { fetch } = fakeFetch(
+      json(200, { data: { partner, daily: [], codes: [], rules: { bindWindowDays: 7 }, links: [partnerLink, { ...partnerLink, code: "Zz99Yy88Xx", target: "future-target", network: "future-net" }], linkBound: 6 } }),
+      json(200, { data: { partner, daily: [], codes: [], rules: { bindWindowDays: 7 } } }),
+    );
+    const api = new AdminApi(fetch);
+    const detail = await fetchPartner(api, PARTNER_ID);
+    expect(detail.ok && detail.data.linkBound).toBe(6);
+    expect(detail.ok && detail.data.links.map((link) => [link.code, link.target, link.network, link.clicks, link.launches, link.directLaunches, link.bound])).toEqual([
+      ["Ab12Cd34Ef", "bot", null, 40, 10, 3, 6],
+      // Цель и сеть, о которых панель не знает, не ломают карточку.
+      ["Zz99Yy88Xx", "app", null, 40, 10, 3, 6],
+    ]);
+    const old = await fetchPartner(api, PARTNER_ID);
+    expect(old.ok && old.data.links).toEqual([]);
+    expect(old.ok && old.data.linkBound).toBe(0);
   });
 });
 

@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Logger, Module, type Type } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
@@ -34,10 +35,16 @@ const HUMAN = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like G
 class MemoryLinks implements LinksRepository {
   readonly links = new Map<string, LinkRecord>();
   readonly clicks: ClickInput[] = [];
+  /** партнёры, которые есть в базе: id → название */
+  readonly partners = new Map<string, string>();
   async create(link: LinkInput): Promise<LinkRecord> {
-    const record = { ...link, target: link.target ?? "app", createdAt: new Date() };
+    const { partnerId, ...rest } = link;
+    const record = { ...rest, target: link.target ?? "app", partner: partnerId == null ? null : { partnerId, name: this.partners.get(partnerId) ?? "" }, createdAt: new Date() };
     this.links.set(link.code, record);
     return record;
+  }
+  async partnerName(partnerId: string): Promise<string | null> {
+    return this.partners.get(partnerId) ?? null;
   }
   async retarget(code: string, target: LinkTarget): Promise<LinkRecord | null> {
     const link = this.links.get(code);
@@ -52,8 +59,10 @@ class MemoryLinks implements LinksRepository {
   async recordClick(click: ClickInput): Promise<void> {
     this.clicks.push(click);
   }
-  async list(): Promise<LinkStats[]> {
-    return [...this.links.values()].map((link) => ({ ...link, clicks: this.clicks.filter((click) => click.linkCode === link.code).length, clicks30d: 0, launches: 0, directLaunches: 0, devices: { mobile: 0, desktop: 0, web: 0, unknown: 0 } }));
+  async list(_limit: number, filter: { partnerId?: string } = {}): Promise<LinkStats[]> {
+    return [...this.links.values()]
+      .filter((link) => filter.partnerId === undefined || link.partner?.partnerId === filter.partnerId)
+      .map((link) => ({ ...link, clicks: this.clicks.filter((click) => click.linkCode === link.code).length, clicks30d: 0, launches: 0, directLaunches: 0, devices: { mobile: 0, desktop: 0, web: 0, unknown: 0 } }));
   }
 }
 
@@ -314,11 +323,137 @@ describe("ссылки в панели: цель", () => {
     const panel = controller();
     await panel.create(request, { campaign: "launch", target: "bot" });
     await panel.create(request, { campaign: "ag", network: "adsgram" });
-    const rows = (await panel.list(request)).data.links;
+    const rows = (await panel.list(request, {})).data.links;
     expect(rows.map((row) => [row.target, row.directUrl === null, row.directLaunches])).toEqual([
       ["bot", false, 0],
       ["app", true, 0],
     ]);
+  });
+});
+
+describe("ссылки партнёра", () => {
+  const actor = { accountId: "a1", platform: "telegram" as const, platformUserId: "1" };
+  const request = { account: actor };
+  const partnerId = randomUUID();
+  const otherPartnerId = randomUUID();
+  let audits: AuditEntry[];
+  let recording: LinksService;
+
+  beforeEach(() => {
+    audits = [];
+    repository.partners.set(partnerId, "Канал «Игровой угол»");
+    repository.partners.set(otherPartnerId, "Блогер");
+    const roles = {
+      require: async () => undefined,
+      audit: async (entry: AuditEntry) => {
+        audits.push(entry);
+      },
+    } as unknown as RolesService;
+    recording = new LinksService(config(), repository, telegramLinks(), roles);
+  });
+
+  function panel(links: LinksService = service): AdminLinksController {
+    const journal = { summaries: async () => new Map() } as unknown as ConversionsJournal;
+    const limiter = { consume: async () => true } as unknown as RateLimiter;
+    const secrets = { get: () => null } as unknown as SecretsService;
+    return new AdminLinksController(links, journal, secrets, limiter);
+  }
+
+  const plain = { campaign: "channel-post", source: null, medium: null, note: null, platform: "telegram" as const };
+
+  it("ссылка партнёра: владелец — в виде, в записи и в аудите; цель, прямая ссылка и переходник — как у любой", async () => {
+    const link = await recording.create(actor, { ...plain, partnerId });
+    expect(link.partner).toEqual({ partnerId, name: "Канал «Игровой угол»" });
+    expect(link.target).toBe("app");
+    expect(link.directUrl).toBe(`https://t.me/rubezh_bot?startapp=l-${link.code}`);
+    expect(link.url).toBe(`https://rubezh.example/r/${link.code}`);
+    expect(repository.links.get(link.code)?.partner?.partnerId).toBe(partnerId);
+    expect(audits.at(-1)).toMatchObject({ action: "links.create", target: link.code, after: { partnerId, campaign: "channel-post" } });
+    // Переход по ней — обычный клик, ссылка ничем не отличается от нашей.
+    expect((await recording.visit(link.code, visitor())).kind).toBe("redirect");
+  });
+
+  it("ссылка команды — владельца нет: partner равен null, в аудите partnerId тоже null", async () => {
+    const own = await recording.create(actor, plain);
+    expect(own.partner).toBeNull();
+    expect(audits.at(-1)).toMatchObject({ after: { partnerId: null } });
+  });
+
+  it("партнёра с таким id нет — 404, ссылка не заведена, аудита нет", async () => {
+    const before = repository.links.size;
+    await expect(recording.create(actor, { ...plain, partnerId: randomUUID() })).rejects.toMatchObject({ code: "partner_not_found", status: 404 });
+    expect(repository.links.size).toBe(before);
+    expect(audits).toEqual([]);
+  });
+
+  it("закупка партнёра в AdsGram: сеть и макросы на месте, владелец — партнёр", async () => {
+    const link = await recording.create(actor, { ...plain, source: "adsgram", network: "adsgram", partnerId });
+    expect(link.partner?.partnerId).toBe(partnerId);
+    expect(link.network).toBe("adsgram");
+    expect(link.networkUrl).toContain("{record_data}");
+    expect(link.directUrl).toBeNull();
+  });
+
+  it("список: без фильтра все ссылки, с фильтром — только ссылки партнёра", async () => {
+    await recording.create(actor, plain);
+    const mine = await recording.create(actor, { ...plain, partnerId });
+    await recording.create(actor, { ...plain, partnerId: otherPartnerId });
+
+    expect(await recording.list(actor)).toHaveLength(3);
+    const filtered = await recording.list(actor, { partnerId });
+    expect(filtered.map((link) => link.code)).toEqual([mine.code]);
+    expect(await recording.list(actor, { partnerId: randomUUID() })).toEqual([]);
+  });
+
+  it("список видят только с правом links.manage — и с фильтром тоже", async () => {
+    const guarded = new LinksService(config(), repository, telegramLinks(), deny);
+    await expect(guarded.list(actor, { partnerId })).rejects.toThrow("нет права");
+  });
+
+  it("панель: partnerId в теле создания — uuid существующего партнёра; ответ несёт владельца", async () => {
+    const created = (await panel().create(request, { campaign: "channel-post", partnerId })).data;
+    expect(created.partner).toEqual({ partnerId, name: "Канал «Игровой угол»" });
+    expect(repository.links.get(created.code)?.partner?.partnerId).toBe(partnerId);
+  });
+
+  it("панель: создание с несуществующим партнёром — 404", async () => {
+    await expect(panel().create(request, { campaign: "channel-post", partnerId: randomUUID() })).rejects.toMatchObject({ code: "partner_not_found", status: 404 });
+  });
+
+  it("панель: partnerId не uuid или не строка — ошибка границы, а не 404", async () => {
+    await expect(panel().create(request, { campaign: "channel-post", partnerId: "kanal" })).rejects.toThrow(ValidationError);
+    await expect(panel().create(request, { campaign: "channel-post", partnerId: 7 })).rejects.toThrow(ValidationError);
+    await expect(panel().create(request, { campaign: "channel-post", partnerId: null })).rejects.toThrow(ValidationError);
+  });
+
+  it("панель: PATCH с partnerId — 400; владелец и цель не меняются", async () => {
+    const link = (await panel().create(request, { campaign: "channel-post", partnerId })).data;
+    const error = await panel()
+      .retarget(request, link.code, { target: "bot", partnerId: otherPartnerId })
+      .then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(error).toMatchObject({ status: 400 });
+    // Владельца нет и среди прочих лишних полей: смены владельца нет вовсе.
+    await expect(panel().retarget(request, link.code, { target: "bot", partner: null })).rejects.toThrow(ValidationError);
+    await expect(panel().retarget(request, link.code, { partnerId: otherPartnerId })).rejects.toThrow(ValidationError);
+    expect(repository.links.get(link.code)).toMatchObject({ target: "app", partner: { partnerId } });
+    // Без лишнего — как раньше.
+    expect((await panel().retarget(request, link.code, { target: "bot" })).data).toMatchObject({ target: "bot", partner: { partnerId } });
+  });
+
+  it("панель: список с ?partner=<id> — только ссылки партнёра; не uuid — ошибка границы", async () => {
+    const controller = panel();
+    await controller.create(request, { campaign: "own-post" });
+    const theirs = (await controller.create(request, { campaign: "channel-post", partnerId })).data;
+    await controller.create(request, { campaign: "blogger-post", partnerId: otherPartnerId });
+
+    expect((await controller.list(request, {})).data.links).toHaveLength(3);
+    const filtered = (await controller.list(request, { partner: partnerId })).data.links;
+    expect(filtered.map((link) => [link.code, link.partner?.name])).toEqual([[theirs.code, "Канал «Игровой угол»"]]);
+    await expect(controller.list(request, { partner: "kanal" })).rejects.toThrow(ValidationError);
   });
 });
 

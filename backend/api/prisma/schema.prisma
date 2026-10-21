@@ -1024,26 +1024,32 @@ model FriendReturn {
 // сессией и касанием игрока (`account_session.start_ref`).
 model Link {
   /// случайный, не угадывается перебором и не несёт данных
-  code           String         @id @db.VarChar(16)
+  code           String           @id @db.VarChar(16)
   /// куда ведёт прямой режим
-  platform       Platform       @default(telegram)
-  campaign       String         @db.VarChar(64)
-  source         String?        @db.VarChar(64)
-  medium         String?        @db.VarChar(64)
-  note           String?        @db.VarChar(200)
+  platform       Platform         @default(telegram)
+  campaign       String           @db.VarChar(64)
+  source         String?          @db.VarChar(64)
+  medium         String?          @db.VarChar(64)
+  note           String?          @db.VarChar(200)
   /// кто завёл; без внешнего ключа — ссылка кампании переживает аккаунт
-  createdBy      String?        @map("created_by") @db.Uuid
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdBy      String?          @map("created_by") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   /// сеть, где куплена реклама, — ей уходят конверсии (WP43); `null` — обычная ссылка
-  network        String?        @db.VarChar(16)
+  network        String?          @db.VarChar(16)
   /// когда регистрация уходит в сеть: `first_run` — после первого засчитанного забега, `launch` — при первом запуске
-  registrationOn String         @default("first_run") @map("registration_on") @db.VarChar(16)
+  registrationOn String           @default("first_run") @map("registration_on") @db.VarChar(16)
   /// куда ведёт: app — Mini App, bot — чат с ботом, landing — лендинг
-  target         String         @default("app") @db.VarChar(16)
+  target         String           @default("app") @db.VarChar(16)
+  /// владелец-партнёр (T-0067): пришедшие по ссылке игроки записываются за ним; `null` — ссылка команды. Задаётся при создании и не меняется
+  partnerId      String?          @map("partner_id") @db.Uuid
   clicks         LinkClick[]
   conversions    AdConversion[]
+  bindings       PartnerBinding[]
+
+  partner Partner? @relation(fields: [partnerId], references: [partnerId], onDelete: Restrict)
 
   @@index([createdAt])
+  @@index([partnerId])
   @@map("link")
 }
 
@@ -2018,6 +2024,7 @@ model Partner {
 
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
+  links     Link[]
 
   @@index([createdAt])
   @@index([status])
@@ -2033,10 +2040,13 @@ model PartnerBinding {
   /// по какому коду; `null` — кампанию удалили (удаляют только неактивированные, так что на практике не бывает)
   campaignId String?  @map("campaign_id") @db.Uuid
   boundAt    DateTime @map("bound_at") @db.Timestamptz(3)
+  /// по какой ссылке партнёра (T-0067); `null` — привязал код или ссылку уже удалили
+  linkCode   String?  @map("link_code") @db.VarChar(16)
 
   account  Account        @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   partner  Partner        @relation(fields: [partnerId], references: [partnerId], onDelete: Restrict)
   campaign PromoCampaign? @relation(fields: [campaignId], references: [campaignId], onDelete: SetNull)
+  link     Link?          @relation(fields: [linkCode], references: [code], onDelete: SetNull)
 
   @@index([partnerId, boundAt])
   @@index([campaignId])

@@ -123,6 +123,8 @@ erDiagram
     PARTNER ||--o{ PARTNER_BINDING : "привёл игроков"
     ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
     PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
+    PARTNER |o--o{ LINK : "ссылки партнёра: владелец задаётся при создании"
+    LINK |o--o{ PARTNER_BINDING : "по какой ссылке; ссылка удалена — код пуст"
     ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
     ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
 
@@ -561,6 +563,7 @@ erDiagram
         string network "nullable: adsgram — сеть, куда уходят конверсии; CHECK"
         string registration_on "first_run|launch: что сеть считает регистрацией"
         string target "app|bot|landing: куда ведёт, по умолчанию app (Р95)"
+        uuid partner_id FK "nullable: владелец-партнёр, ссылка команды — пусто; не меняется; партнёра со ссылками не удалить"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }
@@ -888,6 +891,7 @@ erDiagram
         uuid account_id PK,FK "слот источника один: либо это, либо REFERRAL_BINDING"
         uuid partner_id FK "партнёра с игроками не удалить"
         uuid campaign_id FK "nullable: каким кодом"
+        string link_code FK "nullable: по какой ссылке партнёра; у привязки кодом пусто"
         datetime bound_at
     }
 
@@ -1232,7 +1236,10 @@ erDiagram
   (`23-referral-and-partner-program.md` §5). Внешним ключом это не
   выразить, поэтому обе записи идут под одной блокировкой аккаунта
   (`attribution/source-slot.ts`). Выплат партнёрам нет — они после лонча
-  (§1.3).
+  (§1.3). Ссылка партнёра (`LINK.partner_id`, T-0067) привязывает так же,
+  но по первому входу: сессия вида `click` или `link` после записи зовёт
+  привязку, та берёт тот же слот источника и пишет `PARTNER_BINDING` с
+  `link_code`.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1841,6 +1848,7 @@ flowchart LR
         TESTNOTICE["test-notice<br/>предупреждение об открытом тесте:<br/>принятие на аккаунт, реализовано"]
         WIPE["wipe<br/>компенсация тестеру после вайпа:<br/>выдача по кнопке, один раз, реализовано"]
         PROMOC["promo-codes<br/>промокоды и коды партнёров:<br/>ключ кода, активация, реализовано"]
+        PARTNERS["partners<br/>карточки партнёров, их ссылки,<br/>привязка по первому входу, реализовано"]
         RESTR["restrictions<br/>ограничения игрока по видам и на срок:<br/>«можно ли» с кешем 30 с, снятие по сроку<br/>под локом, реализовано"]
         SEASONS["seasons<br/>недельный сезон рейтинга: таблица недели,<br/>закрытие по понедельникам UTC, награды<br/>за порог и за место, друзья, реализовано"]
         OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, запись о каждой попытке<br/>в приёмник (пока пустой), реализовано"]
@@ -2079,6 +2087,9 @@ flowchart LR
     CADDY -- "/api/v1/promo-codes" --> PROMOC
     PROMOC -. "награда ключом кампании и игрока" .-> WALLET
     PROMOC -. "можно ли: промокоды" .-> RESTR
+    PARTNERS --> PG
+    ATTR -. "сессия вида click или link: привязка по ссылке партнёра в слот источника" .-> PARTNERS
+    PARTNERS -. "ссылки партнёра: клики и запуски теми же запросами, что в списке ссылок" .-> LINKS
     CADDY -- "/api/v1/me/home" --> HOME
     HOME -. "акции и стартовый набор" .-> SHOP
     HOME -. "VIP, если его нет" .-> VIP

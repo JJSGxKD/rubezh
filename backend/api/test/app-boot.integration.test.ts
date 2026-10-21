@@ -8,9 +8,11 @@ import { createHttpApp } from "../src/http-app.js";
 import { ServerErrorAlarm } from "../src/modules/admin-notify/server-error-alarm.js";
 import { AdminModule } from "../src/modules/admin/admin.module.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
+import { SessionRecorder } from "../src/modules/attribution/session-recorder.js";
 import { ONLINE_ACTIVITY } from "../src/modules/online/online-activity.js";
 import { OnlineModule } from "../src/modules/online/online.module.js";
 import { OnlineService } from "../src/modules/online/online.service.js";
+import { PartnerLinkBinder } from "../src/modules/partners/partner-links.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 
 /**
@@ -64,6 +66,13 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("приложение �
       // Гард панели у маршрута онлайна — тот же сервис сессий, что в AdminModule.
       const adminSessions = app.select(AdminModule).get(AdminSessionService, { strict: false });
       expect(app.select(OnlineModule).get(AdminSessionService, { strict: false })).toBe(adminSessions);
+      // Привязка по ссылке партнёра (T-0067): параметр `SessionRecorder` необязателен, и забытый
+      // импорт модуля партнёров молча выключил бы её — запись сессий шла бы как раньше. Привязчик
+      // у рекордера — тот же экземпляр, что в модуле партнёров.
+      const recorder = app.get(SessionRecorder, { strict: false });
+      const binder = app.get(PartnerLinkBinder, { strict: false });
+      expect(binder).toBeInstanceOf(PartnerLinkBinder);
+      expect((recorder as unknown as { partnerLinks: unknown }).partnerLinks).toBe(binder);
     } finally {
       await app.close();
     }
