@@ -60,3 +60,18 @@ export function RibbonTitle(props: { id?: string; tone: string; children: ReactN
     </div>
   );
 }
+
+/**
+ * «Новое» уголком-лентой в правом верхнем углу карточки или строки: новое
+ * важнее уровня и читается до текста. Родитель — `relative overflow-hidden`.
+ */
+export function CornerRibbon(props: { children: ReactNode; className?: string; style?: CSSProperties }): ReactNode {
+  return (
+    <span
+      className={`absolute top-0 right-0 rounded-bl-md bg-accent px-2 py-0.5 font-display text-[10px] font-bold tracking-wide text-on-accent uppercase ${props.className ?? ""}`}
+      style={props.style}
+    >
+      {props.children}
+    </span>
+  );
+}
