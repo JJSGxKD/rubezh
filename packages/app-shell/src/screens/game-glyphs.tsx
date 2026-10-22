@@ -49,12 +49,23 @@ export const ELEMENT_GLYPHS: Readonly<Record<"fire" | "cold" | "lightning" | "po
   poison: [["f", "M12 3c3 4 6 7.2 6 11a6 6 0 0 1-12 0c0-3.8 3-7 6-11z"], ["s", "M9.5 14a2.5 2.5 0 0 0 2.5 2.5"]],
 };
 
+/** Бусты — по id в `content/boosts.ts`: топор «Ярости», крепость, приманка, круглый щит «Эгиды», шевроны «Форы», глаз «Чутья», веер карт «Контроля». */
+export const BOOST_GLYPHS: Readonly<Record<string, Glyph>> = {
+  fury: [["s3", "M4.5 20L15 9.5"], ["f", "M12.5 4c4 .2 7.3 3.5 7.5 7.5l-4.3.9-4.1-4.1z"], ["s", "M10 5.5l8.5 8.5"]],
+  bulwark: [["f", "M4 21V8h3V5.5h2.5V8h5V5.5H17V8h3v13z"], ["d", "M12 18.5s-3-1.8-3-4a1.6 1.6 0 0 1 3-.9 1.6 1.6 0 0 1 3 .9c0 2.2-3 4-3 4z"]],
+  lure: [["f", "M12 6l4 6-4 6-4-6z"], ["s", "M5 7.5a9 9 0 0 0 0 9M19 7.5a9 9 0 0 1 0 9M2.5 5a12.5 12.5 0 0 0 0 14M21.5 5a12.5 12.5 0 0 1 0 14"]],
+  aegis: [["f", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"], ["s", "M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"], ["d", "M12 9.5l2 2.5-2 2.5-2-2.5z"]],
+  head_start: [["s3", "M6 12l6-5 6 5M6 18l6-5 6 5"], ["d", "M12 2.5l1.5 2-1.5 2-1.5-2z"]],
+  insight: [["f", "M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"], ["d", "M12 9l2.2 3-2.2 3-2.2-3z"], ["s", "M12 2.5v1.5M5.5 4.5l1 1.2M18.5 4.5l-1 1.2"]],
+  control: [["f", "M4 7.5l5-1.5 3 10.5-5 1.5z"], ["f", "M10 4.5h5v11h-5z"], ["f", "M15.5 6.5l5 1.5-3 10.5-5-1.5z"]],
+};
+
 /** Лечение на карточке уровня. */
 export const HEAL_GLYPH: Glyph = [["f", "M12 20.5S3.5 15.5 3.5 9.2A4.4 4.4 0 0 1 12 7a4.4 4.4 0 0 1 8.5 2.2c0 6.3-8.5 11.3-8.5 11.3z"], ["s", "M12 10v6M9 13h6"]];
 
-export function GameGlyph(props: { glyph: Glyph; size: number }): ReactNode {
+export function GameGlyph(props: { glyph: Glyph; size: number; className?: string | undefined }): ReactNode {
   return (
-    <svg width={props.size} height={props.size} viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={props.size} height={props.size} viewBox="0 0 24 24" aria-hidden="true" className={props.className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       {props.glyph.map(([layer, d]) =>
         layer === "f" ? (
           <path key={d} d={d} fill="currentColor" fillOpacity={0.28} />
