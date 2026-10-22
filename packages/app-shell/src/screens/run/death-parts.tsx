@@ -11,6 +11,8 @@ import "../../i18n/account";
 import { unlockLabel, unlocksGainedBetween } from "../../state/level-unlocks";
 import type { RunRewardView } from "../../state/progress";
 import { track } from "../../state/shell";
+import { CountUp } from "../count-up";
+import { COUNT_UP_MS } from "../count-up-rules";
 import { ItemIcon } from "../item-icons";
 import { bestWeapon, levelBar } from "./death-rules";
 import { SecondChance, continueOfferedPayload, useSecondChanceStages, type SecondChanceProps } from "./SecondChance";
@@ -157,14 +159,16 @@ export function RewardCard(props: { reward: RunRewardView; doubleRunId?: string 
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
         <span className="inline-flex items-center gap-1.5 font-display text-xl leading-none tabular-nums text-text" aria-label={t("run.reward.coinsLabel", { amount: reward.coins + bonus })}>
           <CoinIcon size={20} />
-          {t("run.reward.coins", { amount: formatNumber(reward.coins + bonus) })}
+          <CountUp value={reward.coins + bonus} format={(amount) => t("run.reward.coins", { amount: formatNumber(amount) })} />
           {bonus > 0 ? (
             <span className="animate-pop-in">
               <Badge tone="accent">×2</Badge>
             </span>
           ) : null}
         </span>
-        <span className="font-display text-sm tabular-nums text-xp">{t("run.reward.xp", { amount: formatNumber(reward.xp) })}</span>
+        <span className="font-display text-sm tabular-nums text-xp" aria-label={t("run.reward.xp", { amount: formatNumber(reward.xp) })}>
+          <CountUp value={reward.xp} format={(amount) => t("run.reward.xp", { amount: formatNumber(amount) })} />
+        </span>
       </div>
       <LevelBarTrack before={bar.before} after={bar.after} />
       <div className="mt-1.5 flex justify-between gap-2 text-[11.5px] text-text-muted">
@@ -183,12 +187,22 @@ export function RewardCard(props: { reward: RunRewardView; doubleRunId?: string 
 
 /**
  * Полоса уровня: сплошная часть — что было до забега, полупрозрачная — что
- * добавил забег. Анимируется только `transform` (`scaleX`).
+ * добавил забег. Добавленное доливается от «было» в такт набегающим числам
+ * (`COUNT_UP_MS`). Анимируется только `transform` (`scaleX`).
  */
 function LevelBarTrack(props: { before: number; after: number; pending?: boolean }): ReactNode {
+  const [grown, setGrown] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setGrown(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const after = grown || props.pending === true ? props.after : props.before;
   return (
     <div className="relative mt-2.5 h-1.5 overflow-hidden rounded-sm bg-xp/15" role="presentation">
-      <span className={`absolute inset-0 origin-left rounded-sm bg-xp/45 ${props.pending === true ? "animate-pulse" : ""}`} style={{ transform: `scaleX(${props.after})` }} />
+      <span
+        className={`absolute inset-0 origin-left rounded-sm bg-xp/45 transition-transform ease-out ${props.pending === true ? "animate-pulse" : ""}`}
+        style={{ transform: `scaleX(${after})`, transitionDuration: `${String(COUNT_UP_MS)}ms` }}
+      />
       <span className="absolute inset-0 origin-left rounded-sm bg-xp" style={{ transform: `scaleX(${props.before})` }} />
     </div>
   );
