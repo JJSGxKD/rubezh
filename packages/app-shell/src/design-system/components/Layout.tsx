@@ -324,13 +324,16 @@ export function SectionTitle(props: { children: ReactNode }): ReactNode {
   );
 }
 
+const MOTION_CLASS = { forward: "animate-screen-forward", back: "animate-screen-back", rise: "animate-screen-in" } as const;
+
 /**
  * Появление экрана при смене. Ключ — идентификатор экрана: React монтирует
  * новый узел, и анимация проигрывается один раз, без таймеров и состояния.
+ * `motion` — с какой стороны въехать (`screenMotion` в state/navigation.ts).
  */
-export function ScreenTransition(props: { screenKey: string; children: ReactNode }): ReactNode {
+export function ScreenTransition(props: { screenKey: string; motion?: keyof typeof MOTION_CLASS; children: ReactNode }): ReactNode {
   return (
-    <div key={props.screenKey} className="h-full animate-screen-in">
+    <div key={props.screenKey} className={`h-full ${MOTION_CLASS[props.motion ?? "rise"]}`}>
       {props.children}
     </div>
   );

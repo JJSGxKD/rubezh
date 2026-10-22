@@ -1,5 +1,5 @@
 import { memo, type CSSProperties, type ReactNode } from "react";
-import { AMBIENT, emberLayout, starLayout } from "./ambient-rules";
+import { AMBIENT, emberLayout, palisadeShift, starLayout } from "./ambient-rules";
 
 const STARS = starLayout(AMBIENT.stars);
 const EMBERS = emberLayout(AMBIENT.embers);
@@ -14,7 +14,7 @@ const EMBERS = emberLayout(AMBIENT.embers);
  * батарею. «Меньше движения» останавливает анимации на первом кадре, где
  * искры прозрачны, а звёзды стоят.
  */
-export const AmbientSky = memo(function AmbientSky(): ReactNode {
+export const AmbientSky = memo(function AmbientSky(props: { depth?: number | null }): ReactNode {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
       {STARS.map((star, index) => (
@@ -47,7 +47,7 @@ export const AmbientSky = memo(function AmbientSky(): ReactNode {
           }
         />
       ))}
-      <Palisade />
+      <Palisade shift={palisadeShift(props.depth ?? null)} />
     </div>
   );
 });
@@ -56,7 +56,7 @@ export const AmbientSky = memo(function AmbientSky(): ReactNode {
  * Частокол рубежа по низу экрана — образ названия игры. Тёмным по тёмному:
  * его чувствуют, а не разглядывают.
  */
-function Palisade(): ReactNode {
+function Palisade(props: { shift: number }): ReactNode {
   const stakes: string[] = [];
   for (let i = 0; i < 40; i++) {
     const x = i * 10;
@@ -64,7 +64,12 @@ function Palisade(): ReactNode {
     stakes.push(`M${String(x)} 60V${String(60 - h)}l5-6 5 6V60z`);
   }
   return (
-    <svg viewBox="0 0 400 60" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-14 w-full opacity-60">
+    <svg
+      viewBox="0 0 400 60"
+      preserveAspectRatio="none"
+      className="absolute bottom-0 -left-6 h-14 w-[calc(100%+3rem)] opacity-60 transition-transform duration-700 ease-out"
+      style={{ transform: `translateX(${String(props.shift)}px)` }}
+    >
       <path d={stakes.join("")} fill="var(--color-surface-sunken)" />
       <path d="M0 46h400" stroke="var(--color-surface-sunken)" strokeWidth="3" />
     </svg>
