@@ -13,6 +13,8 @@ import {
   sparkVectors,
 } from "../src/screens/run/chest-rules";
 import { isRunActivePhase } from "../src/state/run";
+import { PICKUP_LOOKS } from "@bh/core-game";
+import { COLORS } from "../src/design-system/tokens";
 import ru from "../src/i18n/ru.json";
 import ruRun from "../src/i18n/ru-run.json";
 
@@ -162,6 +164,21 @@ describe("сцена открытия", () => {
     expect(headlineChange(reward({ kind: "weapon_level", changes: [] }))).toBeNull();
     // У опыта число своё — строкой под названием, а не изменением.
     expect(headlineChange(reward({ kind: "xp", refId: "", changes: fresh }))).toBeNull();
+  });
+});
+
+describe("сундук на поле и в окне — один тон", () => {
+  // Ореол на земле обещает ярус, окно его выполняет: разойдись тона, игрок шёл
+  // бы к бирюзовому свету, а получал золотое окно.
+  it("ореол сундука на поле — тот же токен, что ярус окна", () => {
+    const hex = (token: string): number => Number.parseInt(token.slice(1), 16);
+    const aura = (id: string): number | undefined => PICKUP_LOOKS.find((look) => look.id === id)?.aura;
+    expect(CHEST_LOOKS.small.tone).toBe("var(--color-accent)");
+    expect(aura("chest_one")).toBe(hex(COLORS.accent));
+    expect(CHEST_LOOKS.medium.tone).toBe("var(--color-secondary)");
+    expect(aura("chest_three")).toBe(hex(COLORS.secondary));
+    expect(CHEST_LOOKS.grand.tone).toBe("var(--color-elite)");
+    expect(aura("chest_five")).toBe(hex(COLORS.elite));
   });
 });
 

@@ -26,6 +26,8 @@ export class PickupRenderer {
   private readonly pickupSprites: Phaser.GameObjects.Image[] = [];
   /** вид подбора, под который сейчас стоит текстура спрайта */
   private readonly pickupSpriteKind: Uint8Array;
+  /** ореол сундука по слоту подбора: сияние и столб света; создаётся по первому сундуку в слоте */
+  private readonly auras: ({ glow: Phaser.GameObjects.Image; beam: Phaser.GameObjects.Image } | null)[] = [];
 
   constructor(scene: Phaser.Scene, world: World, layer: Phaser.GameObjects.Container) {
     this.scene = scene;
@@ -42,6 +44,7 @@ export class PickupRenderer {
     for (const look of PICKUP_LOOKS) {
       ensureShapeTexture(scene, look.key, PICKUP_RADIUS_UNITS * scale * look.size, look.color, look.shape, { shadow: true });
     }
+    ensureAuraTextures(scene);
   }
 
   sync(t: number): void {
@@ -106,10 +109,12 @@ export class PickupRenderer {
       const sprite = this.pickupSprite(i);
       if (pickups.alive[i] === 0) {
         if (sprite.visible) sprite.setVisible(false);
+        this.hideAura(i);
         continue;
       }
 
       const kind = pickups.kind[i];
+      this.syncAura(i, sprite, kind, tick - pickups.bornTick[i] - PICKUP_LAND_TICKS + t, tick);
       if (this.pickupSpriteKind[i] !== kind) {
         sprite.setTexture(PICKUP_LOOKS[kind]?.key ?? PICKUP_LOOKS[PICKUP_KIND.medkit].key);
         this.pickupSpriteKind[i] = kind;
@@ -129,6 +134,48 @@ export class PickupRenderer {
       sprite.setPosition(pickups.x[i], pickups.y[i]);
       sprite.setScale(1 + 0.12 * triangle((tick + i * 11) % PICKUP_PULSE_TICKS, PICKUP_PULSE_TICKS));
     }
+  }
+
+  /**
+   * Ореол сундука: сияние под ним и столб света над ним, оба тоном яруса.
+   * Сундук — главная награда, и в толпе его видно не по коробке, а по свету.
+   * Слои — прямо под спрайтом сундука, поэтому сам сундук всегда поверх.
+   */
+  private syncAura(index: number, sprite: Phaser.GameObjects.Image, kind: number, sinceLand: number, tick: number): void {
+    const tone = PICKUP_LOOKS[kind]?.aura;
+    if (tone === undefined) {
+      this.hideAura(index);
+      return;
+    }
+    let aura = this.auras[index] ?? null;
+    if (aura === null) {
+      const glow = this.scene.add.image(0, 0, AURA_GLOW_KEY).setBlendMode(ADD_BLEND);
+      const beam = this.scene.add.image(0, 0, AURA_BEAM_KEY).setBlendMode(ADD_BLEND).setOrigin(0.5, 1);
+      this.layer.addAt([glow, beam], this.layer.getIndex(sprite));
+      aura = { glow, beam };
+      this.auras[index] = aura;
+    }
+    const size = PICKUP_RADIUS_UNITS * this.world.config.unitScale * (PICKUP_LOOKS[kind]?.size ?? 1);
+    const state = chestAura(sinceLand, tick, index);
+    aura.glow
+      .setVisible(state.alpha > 0)
+      .setTint(tone)
+      .setAlpha(state.alpha)
+      .setPosition(sprite.x, sprite.y)
+      .setScale(((size * AURA_GLOW_RADIUS_MUL) / AURA_GLOW_PX) * state.glowScale);
+    aura.beam
+      .setVisible(state.beamAlpha > 0)
+      .setTint(tone)
+      .setAlpha(state.beamAlpha)
+      .setPosition(sprite.x, sprite.y)
+      .setScale((size * AURA_BEAM_WIDTH_MUL) / AURA_BEAM_WIDTH_PX, (size * AURA_BEAM_HEIGHT_MUL) / AURA_BEAM_HEIGHT_PX);
+  }
+
+  private hideAura(index: number): void {
+    const aura = this.auras[index] ?? null;
+    if (aura === null || !aura.glow.visible) return;
+    aura.glow.setVisible(false);
+    aura.beam.setVisible(false);
   }
 
   private gemSprite(index: number): Phaser.GameObjects.Image {
@@ -160,6 +207,78 @@ const SHIMMER_PERIOD_TICKS = 48;
 const GEM_HOP_UNITS = 18;
 const PICKUP_HOP_UNITS = 26;
 const PICKUP_PULSE_TICKS = 40;
+
+/** Ореол сундука проявляется за треть секунды после приземления. */
+export const CHEST_AURA_FADE_TICKS = 20;
+/** Дыхание ореола — медленнее пульса подбора: свет, а не мигалка. */
+const CHEST_AURA_PERIOD_TICKS = 84;
+const AURA_GLOW_KEY = "bh-chest-aura-glow";
+const AURA_BEAM_KEY = "bh-chest-aura-beam";
+const AURA_GLOW_PX = 64;
+const AURA_BEAM_WIDTH_PX = 32;
+const AURA_BEAM_HEIGHT_PX = 128;
+/** Радиус сияния и размеры столба — в радиусах сундука. */
+const AURA_GLOW_RADIUS_MUL = 2.6;
+const AURA_BEAM_WIDTH_MUL = 1.5;
+const AURA_BEAM_HEIGHT_MUL = 7;
+/** `Phaser.BlendModes.ADD`: модуль рендера импортирует Phaser только типом. */
+const ADD_BLEND = 1;
+
+export interface ChestAuraState {
+  alpha: number;
+  glowScale: number;
+  beamAlpha: number;
+}
+
+/**
+ * Ореол сундука в кадре: проявление после приземления и дыхание. Сияние
+ * разгорается, когда столб гаснет, и наоборот: вместе они не слепят, а свет
+ * всё время в движении. Слот сдвигает фазу — два сундука рядом не в такт.
+ */
+export function chestAura(sinceLand: number, tick: number, slot: number): ChestAuraState {
+  const fade = Math.min(1, Math.max(0, sinceLand / CHEST_AURA_FADE_TICKS));
+  const phase = (((tick + slot * 23) % CHEST_AURA_PERIOD_TICKS) + CHEST_AURA_PERIOD_TICKS) % CHEST_AURA_PERIOD_TICKS;
+  const pulse = triangle(phase, CHEST_AURA_PERIOD_TICKS);
+  return {
+    alpha: fade * (0.45 + 0.35 * pulse),
+    glowScale: 1 + 0.2 * pulse,
+    beamAlpha: fade * (0.25 + 0.45 * (1 - pulse)),
+  };
+}
+
+/**
+ * Текстуры ореола — белые, тон даёт тинт: одна пара на все сундуки. Мягкость
+ * — наложением полупрозрачных слоёв, без градиентов канвы: Graphics их не
+ * умеет, а запекается это один раз.
+ */
+function ensureAuraTextures(scene: Phaser.Scene): void {
+  if (!scene.textures.exists(AURA_GLOW_KEY)) {
+    const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
+    const rings = 14;
+    for (let k = 0; k < rings; k++) {
+      graphics.fillStyle(0xffffff, 0.075);
+      graphics.fillCircle(AURA_GLOW_PX, AURA_GLOW_PX, AURA_GLOW_PX * (1 - k / rings));
+    }
+    graphics.generateTexture(AURA_GLOW_KEY, AURA_GLOW_PX * 2, AURA_GLOW_PX * 2);
+    graphics.destroy();
+  }
+  if (!scene.textures.exists(AURA_BEAM_KEY)) {
+    const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
+    const bands = 16;
+    const columns = 6;
+    const band = AURA_BEAM_HEIGHT_PX / bands;
+    // Снизу — ярче и шире к центру, кверху столб тает.
+    for (let j = 0; j < bands; j++) {
+      for (let k = 0; k < columns; k++) {
+        const width = AURA_BEAM_WIDTH_PX * (1 - k / columns);
+        graphics.fillStyle(0xffffff, 0.15 * (1 - j / bands));
+        graphics.fillRect((AURA_BEAM_WIDTH_PX - width) / 2, AURA_BEAM_HEIGHT_PX - (j + 1) * band, width, band);
+      }
+    }
+    graphics.generateTexture(AURA_BEAM_KEY, AURA_BEAM_WIDTH_PX, AURA_BEAM_HEIGHT_PX);
+    graphics.destroy();
+  }
+}
 
 
 function gemTextureKey(tier: number): string {
