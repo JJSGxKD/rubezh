@@ -116,7 +116,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   return (
     <Modal
       title={result.outcome === "died" ? t("run.death.title") : t("run.death.abandoned")}
-      icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
+      icon={props.isNewRecord ? <RecordCrown /> : <Skull size={26} />}
       size="l"
       cut
       pinFooter
@@ -143,5 +143,29 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Корона нового рекорда с лучами за ней — тот же веер, что за сундуком
+ * (`effects.md` §6.1): рекорд — награда, и выглядит наградой. Лучи — за
+ * кругом значка, вращается слой целиком (только `transform`).
+ */
+function RecordCrown(): ReactNode {
+  return (
+    <>
+      <span aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 -z-10 -mt-22 -ml-22 size-44">
+        <span className="block size-full animate-chest-rays-in">
+          <span
+            className="block size-full animate-chest-rays-spin rounded-full"
+            style={{
+              backgroundImage: "repeating-conic-gradient(from 0deg, color-mix(in oklab, var(--color-accent) 32%, transparent) 0deg 7deg, transparent 7deg 22deg)",
+              maskImage: "radial-gradient(closest-side, black 30%, transparent 85%)",
+            }}
+          />
+        </span>
+      </span>
+      <Crown size={28} />
+    </>
   );
 }
