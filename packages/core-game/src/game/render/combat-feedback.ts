@@ -282,7 +282,7 @@ export class CombatFeedback {
     sprite.setVisible(true);
     this.burstBornTick[b] = tick;
     // Кадр развеивания сам разлетается — масштаб у него постоянный, по диаметру вспышки.
-    this.burstScale[b] = art !== null ? (radius * BURST_RADIUS_MUL * 2) / sprite.frame.width : (radius * BURST_RADIUS_MUL) / (BURST_TEXTURE_UNITS * this.world.config.unitScale);
+    this.burstScale[b] = art !== null ? (radius * BURST_RADIUS_MUL * 2) / sprite.frame.realWidth : (radius * BURST_RADIUS_MUL) / (BURST_TEXTURE_UNITS * this.world.config.unitScale);
   }
 
   private animateBursts(tick: number): void {

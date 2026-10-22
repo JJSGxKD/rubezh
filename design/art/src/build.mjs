@@ -127,22 +127,27 @@ export function collectFrames() {
   return packs;
 }
 
-/** Полочная упаковка: высокие кадры первыми, ширина атласа — степень двойки. */
+/**
+ * Полочная упаковка прямоугольников: высокие первыми. Кадр — обрезанный по
+ * альфе прямоугольник `w × h` (без обрезки — квадрат ячейки).
+ */
 export function pack(frames, maxWidth = 1024, pad = 2) {
-  const sorted = [...frames].sort((a, b) => b.size - a.size || a.name.localeCompare(b.name));
+  const w = (frame) => frame.w ?? frame.size;
+  const h = (frame) => frame.h ?? frame.size;
+  const sorted = [...frames].sort((a, b) => h(b) - h(a) || a.name.localeCompare(b.name));
   let x = pad;
   let y = pad;
   let shelf = 0;
   for (const frame of sorted) {
-    if (x + frame.size + pad > maxWidth) {
+    if (x + w(frame) + pad > maxWidth) {
       x = pad;
       y += shelf + pad;
       shelf = 0;
     }
     frame.x = x;
     frame.y = y;
-    x += frame.size + pad;
-    shelf = Math.max(shelf, frame.size);
+    x += w(frame) + pad;
+    shelf = Math.max(shelf, h(frame));
   }
   // Высота — кратная четырём, а не степень двойки: WebGL2 и Phaser держат
   // такие текстуры без мип-карт, а степень двойки съедала бы до половины атласа.
@@ -172,14 +177,62 @@ export async function renderSheet(page, layout, mime = "image/png") {
   }, { ...layout, mime });
 }
 
+/**
+ * Отрисовать кадры в браузере и найти у каждого границы непрозрачного.
+ * Холсты кадров остаются в странице до `composeAtlas`.
+ */
+async function trimFrames(page, frames) {
+  const bounds = await page.evaluate(async (list) => {
+    window.__frames = {};
+    const out = [];
+    for (const frame of list) {
+      const canvas = document.createElement("canvas");
+      canvas.width = frame.size;
+      canvas.height = frame.size;
+      const ctx = canvas.getContext("2d");
+      const img = new Image();
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(frame.svg)}`;
+      await img.decode();
+      ctx.drawImage(img, 0, 0, frame.size, frame.size);
+      const data = ctx.getImageData(0, 0, frame.size, frame.size).data;
+      let x0 = frame.size, y0 = frame.size, x1 = -1, y1 = -1;
+      for (let y = 0; y < frame.size; y++) for (let x = 0; x < frame.size; x++) {
+        if (data[(y * frame.size + x) * 4 + 3] > 2) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      // Пустой кадр (погасший эффект) — точка 1×1, чтобы атлас не терял имя.
+      if (x1 < 0) { x0 = 0; y0 = 0; x1 = 0; y1 = 0; }
+      // Поле в пиксель: линейная фильтрация не должна тянуть цвет соседа по атласу.
+      x0 = Math.max(0, x0 - 1); y0 = Math.max(0, y0 - 1); x1 = Math.min(frame.size - 1, x1 + 1); y1 = Math.min(frame.size - 1, y1 + 1);
+      window.__frames[frame.name] = canvas;
+      out.push({ tx: x0, ty: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 });
+    }
+    return out;
+  }, frames.map(({ name, svg, size }) => ({ name, svg, size })));
+  frames.forEach((frame, i) => Object.assign(frame, bounds[i]));
+}
+
+/** Сложить обрезанные кадры в атлас по раскладке `pack`. */
+async function composeAtlas(page, layout) {
+  return page.evaluate(({ width, height, frames }) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    for (const f of frames) ctx.drawImage(window.__frames[f.name], f.tx, f.ty, f.w, f.h, f.x, f.y, f.w, f.h);
+    return canvas.toDataURL("image/png").split(",")[1];
+  }, { width: layout.width, height: layout.height, frames: layout.frames.map(({ name, tx, ty, w, h, x, y }) => ({ name, tx, ty, w, h, x, y })) });
+}
+
 function phaserJson(layout, image) {
   const frames = {};
   for (const frame of layout.frames) {
+    // Обрезанный кадр: Phaser ставит его на место в исходной ячейке, и
+    // центр спрайта остаётся центром ячейки — масштаб и якорь прежние.
     frames[frame.name] = {
-      frame: { x: frame.x, y: frame.y, w: frame.size, h: frame.size },
+      frame: { x: frame.x, y: frame.y, w: frame.w, h: frame.h },
       rotated: false,
-      trimmed: false,
-      spriteSourceSize: { x: 0, y: 0, w: frame.size, h: frame.size },
+      trimmed: true,
+      spriteSourceSize: { x: frame.tx, y: frame.ty, w: frame.w, h: frame.h },
       sourceSize: { w: frame.size, h: frame.size },
     };
   }
@@ -193,16 +246,18 @@ async function main() {
   const packs = collectFrames();
   const report = [];
   for (const [name, frames] of Object.entries(packs)) {
+    await trimFrames(page, frames);
     const layout = pack(frames);
-    const png = Buffer.from(await renderSheet(page, layout), "base64");
+    const png = Buffer.from(await composeAtlas(page, layout), "base64");
     const file = join(OUT, `atlas-${name}.png`);
     writeFileSync(file, png);
     // Палитра — отдельным шагом на Python (Pillow): без него атлас остаётся полноцветным.
     const quantized = spawnSync("python3", [join(HERE, "quantize.py"), file], { stdio: "inherit" }).status === 0;
     if (!quantized) console.warn(`без палитры: ${file}`);
     writeFileSync(join(OUT, `atlas-${name}.json`), `${JSON.stringify(phaserJson(layout, `atlas-${name}.png`), null, 1)}\n`);
-    const used = frames.reduce((sum, frame) => sum + frame.size * frame.size, 0);
-    report.push({ pack: name, frames: frames.length, atlas: `${layout.width}×${layout.height}`, fill: `${Math.round((used / (layout.width * layout.height)) * 100)}%`, png: `${Math.round(statSync(join(OUT, `atlas-${name}.png`)).size / 1024)} КБ`, gpu: `${((layout.width * layout.height * 4) / 1048576).toFixed(1)} МБ` });
+    const used = frames.reduce((sum, frame) => sum + frame.w * frame.h, 0);
+    const cells = frames.reduce((sum, frame) => sum + frame.size * frame.size, 0);
+    report.push({ pack: name, frames: frames.length, atlas: `${layout.width}×${layout.height}`, fill: `${Math.round((used / (layout.width * layout.height)) * 100)}%`, trim: `${Math.round((used / cells) * 100)}% ячейки`, png: `${Math.round(statSync(join(OUT, `atlas-${name}.png`)).size / 1024)} КБ`, gpu: `${((layout.width * layout.height * 4) / 1048576).toFixed(1)} МБ` });
   }
   // Плитки земли — отдельными текстурами: TileSprite повторяет текстуру целиком.
   // WebP, а не PNG: у плитки нет прозрачности, а размытые пятна сжимаются

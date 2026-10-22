@@ -339,7 +339,7 @@ return class Arena extends Phaser.Scene {
     if (!fx) { fx = { img: this.add.image(0, 0, "core", `fx/${id}0`).setDepth(8) }; this.fx.push(fx); }
     const frame = this.textures.getFrame("core", `fx/${id}0`);
     fx.active = true; fx.id = id; fx.t = 0; fx.frames = frames;
-    fx.img.setVisible(true).setPosition(x, y).setFrame(`fx/${id}0`).setScale(units / (frame.width / PPU) / PPU).setTint(tint);
+    fx.img.setVisible(true).setPosition(x, y).setFrame(`fx/${id}0`).setScale(units / frame.realWidth).setTint(tint);
   }
 
   update(time, dtMs) {
