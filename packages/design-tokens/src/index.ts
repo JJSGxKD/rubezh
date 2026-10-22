@@ -47,10 +47,13 @@ export const COLORS = {
   coinHi: "#fff16a",
   coin: "#ffd400",
   coinLo: "#ff9f00",
+  coinDeep: "#b45f00",
   gemHi: "#ffc9cc",
   gemLight: "#ff8891",
   gem: "#ff515e",
   gemLo: "#f0303e",
+  gemDeep: "#9e1020",
+  ink: "#120f1e",
 } as const;
 
 export type ColorToken = keyof typeof COLORS;
@@ -92,10 +95,13 @@ export const CSS_VAR_BY_COLOR: Record<ColorToken, string> = {
   coinHi: "--color-coin-hi",
   coin: "--color-coin",
   coinLo: "--color-coin-lo",
+  coinDeep: "--color-coin-deep",
   gemHi: "--color-gem-hi",
   gemLight: "--color-gem-light",
   gem: "--color-gem",
   gemLo: "--color-gem-lo",
+  gemDeep: "--color-gem-deep",
+  ink: "--color-ink",
 };
 
 /**
