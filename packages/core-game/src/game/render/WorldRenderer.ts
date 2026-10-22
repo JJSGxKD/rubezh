@@ -13,6 +13,7 @@ import { PickupRenderer } from "./pickups";
 import { projectileLook, type ProjectileLook } from "./projectile-look";
 import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
+import { artFlashStart, NO_FLASH } from "./hit-flash";
 import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
 import { activePlayerStatus, activeStatus, playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
@@ -69,6 +70,8 @@ export class WorldRenderer {
    * врагов, и сортировать весь слой с телеграфами и подборами нельзя.
    */
   private readonly enemyLayer: Phaser.GameObjects.Container;
+  /** начало прошлой вспышки попадания у спрайта арта — по слоту */
+  private readonly artFlashStart: Int32Array;
   private readonly markLayer: Phaser.GameObjects.Container;
   private readonly marks: StatusMarks;
   private readonly heroMark: StatusMarks;
@@ -116,6 +119,7 @@ export class WorldRenderer {
     this.world = world;
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
+    this.artFlashStart = new Int32Array(world.config.maxEnemies).fill(NO_FLASH);
 
     const rankOf = (type: { rank: "normal" | "elite" | "boss" }): EnemyRankLook => (type.rank === "normal" ? undefined : type.rank);
     const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, rankOf(type)));
@@ -363,12 +367,17 @@ export class WorldRenderer {
       // Попадание важнее телеграфа: игрок должен видеть, что снаряд дошёл.
       // Тон состояния — ниже обоих: телеграф предупреждает об ударе, а
       // состояние только подсказывает, что с врагом.
-      // У спрайта белая заливка — крупное белое пятно: вспышка короче, чем у фигуры.
-      const hitFlash = this.art.shows(i) ? ART_HIT_FLASH_TICKS : HIT_FLASH_TICKS;
-      let look =
-        tick - enemies.hitTick[i] < hitFlash
-          ? LOOK.hit
-          : lookFor(type.pattern, enemies.phase[i], tick);
+      // У спрайта белая заливка — крупное белое пятно: вспышка короче, чем у
+      // фигуры, и под сплошным огнём не перезапускается каждым ударом.
+      let flashing: boolean;
+      if (this.art.shows(i)) {
+        const start = artFlashStart(tick, enemies.hitTick[i], this.artFlashStart[i]);
+        flashing = start !== null;
+        if (start !== null) this.artFlashStart[i] = start;
+      } else {
+        flashing = tick - enemies.hitTick[i] < HIT_FLASH_TICKS;
+      }
+      let look = flashing ? LOOK.hit : lookFor(type.pattern, enemies.phase[i], tick);
       // У спрайта состояние — знаком над головой (status-marks.ts), заливкой —
       // только заморозка. Знак не зависит от вспышки попадания: иначе он
       // мигал бы на каждом ударе по горящему.
@@ -682,8 +691,7 @@ const HEAL_RING_UNITS = 40;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;
-/** Вспышка и раздувание попадания у спрайта чернового арта (design/art/registry.md, F-06). */
-const ART_HIT_FLASH_TICKS = 3;
+/** Раздувание попадания у спрайта чернового арта (design/art/registry.md, F-06); вспышка — `hit-flash.ts`. */
 const ART_HIT_SCALE = 1.1;
 
 /** Сброшенный вид: следующий кадр обязательно применит вид заново. */
