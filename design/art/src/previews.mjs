@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ENEMY_ART } from "./creatures.mjs";
 import { HERO_DEFS, HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
-import { creaturePalette, enemyBody, STAGES } from "./palette.mjs";
+import { creaturePalette, enemyBody, enemyEye, STAGES } from "./palette.mjs";
 import { svgFrame, PPU, CELL_K } from "./build.mjs";
 import { FX } from "./fx.mjs";
 import { PICKUPS } from "./pickups.mjs";
@@ -24,9 +24,10 @@ function heroSvg(state, k) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${HERO_STATES[state][k]()}</svg>`;
 }
 
-function enemySvg(art, stage, t, style = "C") {
-  const palette = style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(enemyBody(art.pattern, art.rank, stage), STAGES[stage].eye);
-  return svgFrame(art.draw(t, palette), { rank: art.rank, radius: art.radius, style });
+function enemySvg(art, stage, t, style = "C", version = 2) {
+  const palette =
+    style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(enemyBody(art.pattern, art.rank, stage, art.id, version), enemyEye(stage, version));
+  return svgFrame(art.draw(t, palette), { rank: art.rank, radius: art.radius, style, hostile: version === 2 && style === "C" });
 }
 
 /** Ячейка в игровом масштабе: размер в экранных пикселях, как на телефоне. */
@@ -48,8 +49,8 @@ async function renderBoard(page, board) {
         ctx.fillText(item.text, item.x, item.y);
         continue;
       }
-      if (item.ground) {
-        ctx.fillStyle = ground;
+      if (item.ground || item.fill !== undefined) {
+        ctx.fillStyle = item.fill ?? ground;
         ctx.fillRect(item.x, item.y, item.w, item.h);
         continue;
       }
@@ -82,7 +83,7 @@ function conceptsBoard() {
     items.push({ svg: heroSvg("walk", 1), x, y: y + 10, size: 170 });
     x += 180;
     for (const art of picks) {
-      items.push({ svg: enemySvg(art, 0, 0.25, style.id), x, y: y + 10, size: 170 });
+      items.push({ svg: enemySvg(art, 0, 0.25, style.id, 1), x, y: y + 10, size: 170 });
       x += 175;
     }
     // Игровой масштаб: те же существа размером с экранный пиксель телефона.
@@ -91,7 +92,7 @@ function conceptsBoard() {
     gx += 40;
     for (const art of picks) {
       const size = gameSize(art.radius) / 2;
-      items.push({ svg: enemySvg(art, 0, 0.25, style.id), x: gx, y: y + 120 - size / 2, size });
+      items.push({ svg: enemySvg(art, 0, 0.25, style.id, 1), x: gx, y: y + 120 - size / 2, size });
       gx += size + 8;
     }
     y += 200;
@@ -207,12 +208,52 @@ function skinsBoard() {
   return { width: 1380, height: 290, items };
 }
 
+/**
+ * Палитра v1 против v2 (direction-v2.md §4.2): ступени рядом, в игровом
+ * масштабе, на земле трёх зон и рядом с героем — как в бою.
+ */
+function paletteBoard() {
+  const zones = [
+    ["луг", "#33506a"],
+    ["погост", "#434660"],
+    ["топь", "#2b5656"],
+  ];
+  const items = [];
+  items.push({ text: "Палитра врагов: v1 «цвет по угрозе» → v2 «свой цвет + глаза и свечение Нави»", x: 24, y: 30, size: 22, bold: true });
+  items.push({ text: "v1 · ступени 1–3", x: 260, y: 62, size: 14, color: "#aeaac4" });
+  items.push({ text: "v2 · ступени 1–3 (луг)", x: 560, y: 62, size: 14, color: "#aeaac4" });
+  items.push({ text: "v2 · погост и топь", x: 900, y: 62, size: 14, color: "#aeaac4" });
+  const rowH = 96;
+  let y = 74;
+  const hero = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${HERO_STATES.idle[0]()}</svg>`;
+  for (const art of ENEMY_ART) {
+    const stages = art.rank === undefined ? 3 : 1;
+    const size = Math.min(rowH - 8, gameSize(art.radius) * 0.62);
+    items.push({ text: art.id, x: 24, y: y + rowH / 2, size: 14, bold: true });
+    items.push({ ground: true, x: 250, y, w: 290, h: rowH - 6 });
+    items.push({ ground: true, x: 550, y, w: 330, h: rowH - 6 });
+    for (let s = 0; s < stages; s++) items.push({ svg: enemySvg(art, s, 0.25, "C", 1), x: 258 + s * (size + 6), y: y + (rowH - 6 - size) / 2, size });
+    // герой рядом — сравнить контраст
+    items.push({ svg: hero, x: 558, y: y + (rowH - 6 - 70) / 2, size: 70 });
+    for (let s = 0; s < stages; s++) items.push({ svg: enemySvg(art, s, 0.25, "C", 2), x: 632 + s * (size + 6), y: y + (rowH - 6 - size) / 2, size });
+    zones.slice(1).forEach(([, color], i) => {
+      items.push({ fill: color, x: 890 + i * 180, y, w: 170, h: rowH - 6 });
+      items.push({ svg: enemySvg(art, 0, 0.25, "C", 2), x: 900 + i * 180, y: y + (rowH - 6 - size) / 2, size });
+      if (stages > 1) items.push({ svg: enemySvg(art, 2, 0.25, "C", 2), x: 900 + i * 180 + size + 6, y: y + (rowH - 6 - size) / 2, size });
+    });
+    y += rowH;
+  }
+  return { width: 1260, height: y + 12, items };
+}
+
 async function main() {
   const path = process.env.PLAYWRIGHT_MODULE ?? "/opt/node-tools/node_modules/playwright/index.mjs";
   const { chromium } = await import(pathToFileURL(path).href);
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  for (const [name, board] of [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()]]) {
+  const only = process.env.SHEETS?.split(",");
+  const boards = [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()], ["palette", paletteBoard()]];
+  for (const [name, board] of boards.filter(([name]) => only === undefined || only.includes(name))) {
     writeFileSync(join(OUT, `sheet-${name}.png`), Buffer.from(await renderBoard(page, board), "base64"));
   }
   await browser.close();

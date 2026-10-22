@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ENEMY_ART } from "./creatures.mjs";
 import { HERO_DEFS, HERO_RADIUS, HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
-import { creaturePalette, enemyBody, GOLD_RIM, hex, STAGES } from "./palette.mjs";
+import { creaturePalette, enemyBody, enemyEye, GOLD_RIM, hex, NAV_GLOW, STAGES } from "./palette.mjs";
 import { FX } from "./fx.mjs";
 import { PICKUPS } from "./pickups.mjs";
 import { decorFrames, groundTile, ZONES } from "./env.mjs";
@@ -52,10 +52,16 @@ function rimFilter(id, color, radius) {
  * рисунок не знает, рядовой он, элита или вариант для сравнения.
  * Толщина каймы — в игровых единицах, как `enemyRim` в looks.ts (2 у элиты, 3 у босса).
  */
-export function svgFrame(inner, { rank, radius, style = "C", defs = "" } = {}) {
+export function svgFrame(inner, { rank, radius, style = "C", defs = "", hostile = false } = {}) {
   const unitsPerBox = (radius * 2 * CELL_K) / 100;
   let filters = defs;
   let body = inner;
+  // Свечение Нави под врагом (палитра v2): общий знак враждебности вместо
+  // сплошного красного. Под каймой ранга, чтобы кайма обводила только тело.
+  const glow = hostile
+    ? `<radialGradient id="nav"><stop offset="0" stop-color="${hex(NAV_GLOW)}" stop-opacity="0.75"/><stop offset="1" stop-color="${hex(NAV_GLOW)}" stop-opacity="0"/></radialGradient>`
+    : "";
+  filters += glow;
   if (rank !== undefined) {
     const width = (rank === "boss" ? 3 : 2) / unitsPerBox;
     filters += rimFilter("rank", hex(GOLD_RIM), (width * 0.5).toFixed(2));
@@ -69,14 +75,16 @@ export function svgFrame(inner, { rank, radius, style = "C", defs = "" } = {}) {
     filters += rimFilter("rimB", "#ff4d5a", (0.9 / unitsPerBox).toFixed(2));
     body = `<g filter="url(#rimB)">${body}</g>`;
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${filters}</defs>${body}</svg>`;
+  const under = hostile ? `<ellipse cx="0" cy="42" rx="34" ry="9" fill="url(#nav)"/>` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${filters}</defs>${under}${body}</svg>`;
 }
 
-function enemyFrames(art, stage, style = "C") {
-  const body = enemyBody(art.pattern, art.rank, stage);
+function enemyFrames(art, stage, style = "C", version = 2) {
+  const body = enemyBody(art.pattern, art.rank, stage, art.id, version);
   const palette =
-    style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(body, STAGES[stage].eye);
-  return Array.from({ length: WALK_FRAMES }, (_, k) => svgFrame(art.draw(k / WALK_FRAMES, palette), { rank: art.rank, radius: art.radius, style }));
+    style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(body, enemyEye(stage, version));
+  const hostile = version === 2 && style === "C";
+  return Array.from({ length: WALK_FRAMES }, (_, k) => svgFrame(art.draw(k / WALK_FRAMES, palette), { rank: art.rank, radius: art.radius, style, hostile }));
 }
 
 export { CELL_K };
