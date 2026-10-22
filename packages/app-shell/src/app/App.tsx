@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { ListChecks, Store, Swords, Trophy, Users } from "lucide-react";
 import { ArmorIcon, ModalHostProvider, ScreenTransition, TabBar, type TabItem } from "../design-system/components";
+import { AmbientSky } from "./AmbientSky";
 import { AppHeader } from "./AppHeader";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
@@ -104,7 +105,11 @@ export function App(): ReactNode {
           заголовком и кнопкой «назад». Лежит поверх прокрутки, а не над ней:
           содержимое уходит под её стекло (WP30). */}
       {showTabs ? <AppHeader onMenu={() => setMenuOpen(true)} /> : null}
-      <main className="relative min-h-0 flex-1">
+      {/* isolate: живой фон — нижним слоем внутри `main`, под экранами, но над
+          заливкой приложения; частокол встаёт прямо над нижней панелью. */}
+      <main className="relative isolate min-h-0 flex-1">
+        {/* Живой фон — вне забега: под канвой он только жёг бы батарею. */}
+        {screen === "run" ? null : <AmbientSky />}
         {screen === "run" || runUnderneath ? (
           <div
             aria-hidden={runUnderneath}
