@@ -13,7 +13,7 @@ import type { SoundId, SoundRecipe } from "./recipes";
  */
 
 export type SoundScene = "lobby" | "run" | "pause" | "choice" | "finished" | "silent";
-export type RunSoundEvent = "levelUp" | "choose" | "death" | "abandon" | "record" | "chestDrop" | "chestOpen" | "bossPhase";
+export type RunSoundEvent = "levelUp" | "choose" | "death" | "abandon" | "record" | "chestDrop" | "chestRattle" | "chestOpen" | "bossPhase";
 export type UiSound = "tap" | "select" | "primary" | "back" | "toggleOn" | "toggleOff" | "sheetOpen" | "sheetClose" | "reward" | "error";
 
 export interface HudSound {
@@ -123,6 +123,14 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
   return plan;
 }
 
+/** Лад звонов сундука — та же пентатоника, что лесенка опыта, до октавы. */
+const REVEAL_STEPS = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2];
+
+/** Высота звона награды сундука: каждая следующая выше, пятая и дальше — октава. */
+export function revealRate(index: number): number {
+  return REVEAL_STEPS[Math.min(index, REVEAL_STEPS.length - 1)] ?? 1;
+}
+
 export class SoundDirector {
   readonly engine: AudioEngine;
   private scene: SoundScene = "lobby";
@@ -169,7 +177,12 @@ export class SoundDirector {
     // Сундук падает с элиты в тот же миг, что звучит её гибель: удар со
     // сдвигом не сливается с ней в один звук.
     else if (event === "chestDrop") this.engine.play("chestDrop", { delay: 0.15 });
-    else if (event === "chestOpen" || event === "bossPhase") this.engine.play(event);
+    else if (event === "chestRattle" || event === "chestOpen" || event === "bossPhase") this.engine.play(event);
+  }
+
+  /** Звон награды сундука: лесенкой вверх, по одному на награду. */
+  chestReveal(index: number): void {
+    this.engine.play("chestReveal", { rate: revealRate(index) });
   }
 
   cues(cues: RunCues): void {

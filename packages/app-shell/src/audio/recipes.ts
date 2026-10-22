@@ -315,6 +315,26 @@ export const SOUND_RECIPES = {
       { kind: "bell", f: 2093, t: 0.1, peak: 0.09, decay: 0.3 },
     ],
   },
+  // Тряска перед вскрытием: три деревянных стука с бряцанием монет, каждый
+  // громче прежнего — предвкушение, а не просто ожидание.
+  chestRattle: {
+    bus: "rewards", level: 0.5, voices: 1, gap: 0.5, send: 0.1, dur: 0.8, variants: 1,
+    layers: [0, 0.24, 0.46].flatMap((t, i) => [
+      { kind: "tone" as const, t, f0: 210 + i * 20, f1: 120, glide: 0.04, peak: 0.25 + i * 0.08, decay: 0.07 },
+      { kind: "hiss" as const, t, dur: 0.04, seed: 121 + i, filter: "lowpass" as const, f0: 1400, peak: 0.18 + i * 0.05, decay: 0.03 },
+      { kind: "bell" as const, f: 2637 + i * 160, t: t + 0.02, peak: 0.04 + i * 0.015, decay: 0.12 },
+    ]),
+  },
+  // Звон награды: оболочка поднимает его лесенкой (`revealRate`), чтобы
+  // пятая награда звучала выше первой — счёт добычи слышен.
+  chestReveal: {
+    bus: "rewards", level: 0.55, voices: 2, gap: 0.08, send: 0.3, dur: 0.6, variants: 1,
+    layers: [
+      { kind: "bell", f: 1174.66, peak: 0.2, decay: 0.35, index: 0.7 },
+      { kind: "bell", f: 2349.32, t: 0.01, peak: 0.08, decay: 0.2 },
+      { kind: "hiss", dur: 0.05, seed: 131, filter: "highpass", f0: 6000, peak: 0.06, decay: 0.04 },
+    ],
+  },
   chestOpen: {
     bus: "rewards", level: 0.62, voices: 1, gap: 0.6, send: 0.35, duck: 0.5, dur: 1.4, variants: 1,
     layers: [

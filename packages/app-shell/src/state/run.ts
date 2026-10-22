@@ -629,9 +629,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
-      // Отклик — как у набора уровня, а звук свой: награда больше одной карточки.
-      haptic("levelUp");
-      audio.runEvent("chestOpen");
+      // Звук и отклик вскрытия — у сцены окна: она трясёт сундук перед ним.
       set({ phase: "chest", chest: { index, size, rewards } });
     }),
 

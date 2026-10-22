@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { ChestReward } from "@bh/shared-types";
-import { announceText, chestTitleKey, reelStrip, rewardView } from "../src/screens/run/chest-rules";
+import {
+  announceText,
+  CHEST_LOOKS,
+  CHEST_TIMING,
+  chestTier,
+  chestTitleKey,
+  headlineChange,
+  reelStrip,
+  revealTimes,
+  rewardView,
+  sparkVectors,
+} from "../src/screens/run/chest-rules";
 import { isRunActivePhase } from "../src/state/run";
 import ru from "../src/i18n/ru.json";
 import ruRun from "../src/i18n/ru-run.json";
@@ -95,6 +106,62 @@ describe("лента «барабана»", () => {
   it("лечение и опыт приходят на ленту своими метками, а не пустой строкой", () => {
     expect(reelStrip(0, reward({ kind: "heal", refId: "" }), pool)[5]).toBe("heal");
     expect(reelStrip(0, reward({ kind: "xp", refId: "" }), pool)[5]).toBe("xp");
+  });
+});
+
+// Сцена открытия (design/art/effects.md, «Открытие сундука»): сундук трясётся,
+// крышка слетает с выбросом искр, награды выпадают по одной. Числа сцены —
+// здесь, чтобы звук и анимация шли по одному расписанию.
+describe("сцена открытия", () => {
+  it("ярус по размеру: 1 — малый, 5 — большой, прочее — средний", () => {
+    expect(chestTier(1)).toBe("small");
+    expect(chestTier(3)).toBe("medium");
+    expect(chestTier(5)).toBe("grand");
+    expect(chestTier(2)).toBe("medium");
+  });
+
+  it("чем больше сундук, тем больше искр и дольше предвкушение — выгода видна до первой награды", () => {
+    expect(CHEST_LOOKS.small.sparks).toBeLessThan(CHEST_LOOKS.medium.sparks);
+    expect(CHEST_LOOKS.medium.sparks).toBeLessThan(CHEST_LOOKS.grand.sparks);
+    expect(CHEST_LOOKS.small.shakeMs).toBeLessThan(CHEST_LOOKS.medium.shakeMs);
+    expect(CHEST_LOOKS.medium.shakeMs).toBeLessThan(CHEST_LOOKS.grand.shakeMs);
+    // Малый сундук падает с каждой элиты: тряска не дольше полсекунды.
+    expect(CHEST_LOOKS.small.shakeMs).toBeLessThanOrEqual(500);
+  });
+
+  it("награды встают по одной, с равным шагом после вскрытия", () => {
+    const times = revealTimes(3, false);
+    expect(times).toHaveLength(3);
+    expect(times[0]).toBe(CHEST_TIMING.firstRevealMs + CHEST_TIMING.reelMs);
+    expect((times[1] ?? 0) - (times[0] ?? 0)).toBe(CHEST_TIMING.revealGapMs);
+    expect((times[2] ?? 0) - (times[1] ?? 0)).toBe(CHEST_TIMING.revealGapMs);
+  });
+
+  it("без движения награды встают сразу — звук не отстаёт от картинки", () => {
+    expect(revealTimes(3, true)).toEqual([0, 0, 0]);
+  });
+
+  it("искры: заданное число, все разлетаются наружу и одинаково при каждом показе", () => {
+    const sparks = sparkVectors(12);
+    expect(sparks).toHaveLength(12);
+    expect(sparkVectors(12)).toEqual(sparks);
+    for (const spark of sparks) expect(Math.hypot(spark.x, spark.y)).toBeGreaterThan(40);
+    // Веер, а не луч: искры летят во все стороны.
+    expect(sparks.some((spark) => spark.x < 0)).toBe(true);
+    expect(sparks.some((spark) => spark.x > 0)).toBe(true);
+  });
+
+  it("выгода награды — первое изменение с «было»: игрок видит, на сколько выросло", () => {
+    const changes = [
+      { labelKey: "upgrade.stat.damage", from: 7, to: 9, format: "value" as const, lowerIsBetter: false },
+      { labelKey: "upgrade.stat.projectiles", from: 1, to: 2, format: "value" as const, lowerIsBetter: false },
+    ];
+    expect(headlineChange(reward({ kind: "weapon_level", changes }))?.labelKey).toBe("upgrade.stat.damage");
+    const fresh = [{ labelKey: "upgrade.stat.damage", from: null, to: 6, format: "value" as const, lowerIsBetter: false }];
+    expect(headlineChange(reward({ kind: "weapon_new", changes: fresh }))?.to).toBe(6);
+    expect(headlineChange(reward({ kind: "weapon_level", changes: [] }))).toBeNull();
+    // У опыта число своё — строкой под названием, а не изменением.
+    expect(headlineChange(reward({ kind: "xp", refId: "", changes: fresh }))).toBeNull();
   });
 });
 

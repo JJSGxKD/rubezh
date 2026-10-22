@@ -1,6 +1,7 @@
 {
   "run.boss.phase": "Фаза {phase}/{phases}",
   "run.chest.announce": "Получено: {names}",
+  "run.chest.open": "Открыть сундук",
   "run.chest.subtitle": "Улучшений: {count}",
   "run.chest.take": "Забрать",
   "run.chest.title.1": "Малый сундук",

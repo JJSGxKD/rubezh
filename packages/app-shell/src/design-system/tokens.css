@@ -4,6 +4,10 @@
 /* Кромка кнопки звёзд со срезом: именованной переменной, а не литералом в утилите. Без префикса `--color-`: цвета палитры живут в пакете токенов (tokens.test.ts). */
 :root {
   --stars-edge: #a06e10;
+  /* Дерево сундука в окне награды: тёплый тёмный тон под оковкой цвета яруса. */
+  --chest-wood: #6b4128;
+  --chest-wood-lo: #46291a;
+  --chest-wood-hi: #8a5a37;
 }
 
 /*
@@ -45,6 +49,23 @@
   --animate-rise-in: rise-in var(--duration-slow) var(--ease-out) both;
   /* «Барабан» сундука: лента из шести плиток по 3rem встаёт на награде. */
   --animate-chest-reel: chest-reel var(--duration-slow) var(--ease-out) both;
+  /*
+   * Сцена открытия сундука (design/art/effects.md): тряска нарастает, крышка
+   * слетает пружиной, вспышка и искры — из-под неё, лучи медленно вращаются
+   * за сундуком, пока окно открыто. Длительности тряски и ленты задаёт сцена
+   * переменными из chest-rules.ts — звук идёт по тем же числам.
+   */
+  --animate-chest-shake: chest-shake var(--chest-shake) var(--ease-base) both;
+  --animate-chest-pop: chest-pop 420ms var(--ease-spring) both;
+  --animate-chest-lid: chest-lid 520ms var(--ease-spring) both;
+  --animate-chest-flash: chest-flash 520ms var(--ease-out) both;
+  --animate-chest-rays-in: chest-rays-in 600ms var(--ease-out) both;
+  --animate-chest-rays-spin: chest-rays-spin 14s linear infinite;
+  --animate-chest-spark: chest-spark 900ms var(--ease-out) both;
+  --animate-chest-beam: chest-beam 700ms var(--ease-out) both;
+  --animate-chest-land: chest-land 380ms var(--ease-spring) both;
+  --animate-chest-shine: chest-shine 600ms var(--ease-out) both;
+  --animate-chest-cover: chest-cover var(--duration-base) var(--ease-out) both;
   --animate-glow: glow 2.4s var(--ease-base) infinite;
   --animate-float: float 3.2s var(--ease-base) infinite;
   --animate-ping-dot: ping-dot 1.6s var(--ease-out) infinite;
@@ -136,6 +157,129 @@
     }
     to {
       transform: translateY(-15rem);
+    }
+  }
+
+  @keyframes chest-shake {
+    0% {
+      transform: scale(0.85) rotate(0);
+    }
+    18% {
+      transform: scale(0.96) rotate(-3deg);
+    }
+    34% {
+      transform: scale(0.98) rotate(3deg);
+    }
+    50% {
+      transform: scale(1) rotate(-5deg);
+    }
+    64% {
+      transform: scale(1.02) rotate(5deg);
+    }
+    78% {
+      transform: scale(1.05) rotate(-7deg);
+    }
+    90% {
+      transform: scale(1.08) rotate(7deg);
+    }
+    100% {
+      transform: scale(1.1) rotate(0);
+    }
+  }
+
+  @keyframes chest-pop {
+    0% {
+      transform: scale(1.1, 1.1);
+    }
+    30% {
+      transform: scale(1.18, 0.86);
+    }
+    100% {
+      transform: scale(1, 1);
+    }
+  }
+
+  @keyframes chest-lid {
+    from {
+      transform: translateY(0) rotate(0);
+    }
+    to {
+      transform: translateY(-34%) rotate(-22deg);
+    }
+  }
+
+  @keyframes chest-flash {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.2);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(2.4);
+    }
+  }
+
+  @keyframes chest-rays-in {
+    from {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+  }
+
+  @keyframes chest-rays-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes chest-spark {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(0.4) rotate(45deg);
+    }
+    12% {
+      opacity: 1;
+      transform: translate(calc(var(--spark-x) * 0.25), calc(var(--spark-y) * 0.25)) scale(1.2) rotate(45deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--spark-x), calc(var(--spark-y) + 28px)) scale(0.3) rotate(225deg);
+    }
+  }
+
+  @keyframes chest-beam {
+    from {
+      opacity: 0;
+      transform: scaleY(0.1);
+    }
+  }
+
+  @keyframes chest-land {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.05);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes chest-shine {
+    from {
+      opacity: 0.85;
+      transform: translateX(-120%) skewX(-18deg);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(320%) skewX(-18deg);
+    }
+  }
+
+  @keyframes chest-cover {
+    to {
+      opacity: 0;
     }
   }
 
