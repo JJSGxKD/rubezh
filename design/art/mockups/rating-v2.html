@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рейтинг эффективности v2</title>
+<!--
+  Макет к design/art/meta-v2.md §2: очки эффективности забега (О36, Р66),
+  разбор по пяти осям, стиль игрока, пьедестал, дивизионы сезона.
+  Снимок — out/preview/rating-v2.png.
+-->
+<style>
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0400-045F; }
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+  :root { color-scheme: dark;
+    --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a; --border-strong: #5b5980; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --on-accent: #230f02; --secondary: #46d9c6; --elite: #ffd15c; --info: #5ccfff; --hp: #ff6f90; --xp: #b6ff4a; --weapon: #ffe066; --passive: #c47dff;
+    --rare: #5ccfff; --epic: #c47dff; --legendary: #ffd15c; --mythic: #ff5d6c; --ink: #120f1e;
+    --ax-t: #46d9c6; --ax-k: #ff8f3f; --ax-h: #ffd15c; --ax-c: #5ccfff; --ax-b: #c47dff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.35 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; width: 1640px; }
+  h1 { font: 22px/1.2 "Russo One", system-ui; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 130ch; }
+  .grid { display: flex; gap: 22px; align-items: flex-start; }
+  .phone { width: 380px; height: 800px; border-radius: 22px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45, 0 20px 40px -20px #000; }
+  .cap { width: 380px; margin-top: 8px; color: var(--muted); font-size: 12.5px; } .cap b { color: var(--text); }
+  .screen { position: absolute; inset: 0; padding: 14px; overflow: hidden; background: radial-gradient(120% 55% at 50% -12%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 62%), var(--bg); }
+  .d { font-family: "Russo One", system-ui; } .muted { color: var(--muted); } .small { font-size: 12px; } .tiny { font-size: 11px; }
+  .title { font: 26px/1.1 "Russo One", system-ui; margin: 2px 0 10px; display: flex; align-items: center; gap: 10px; } .title .back { color: var(--muted); font-size: 22px; }
+  .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--sunken); margin-bottom: 8px; }
+  .tabs span { flex: 1; text-align: center; padding: 7px 2px; border-radius: 7px; font: 12.5px/1 "Russo One"; color: var(--muted); }
+  .tabs span.on { color: var(--text); background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .chips { display: flex; gap: 6px; margin-bottom: 10px; } .chips span { padding: 4px 10px; border-radius: 99px; background: var(--sunken); font-size: 12px; color: var(--muted); } .chips span.on { color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+  .sec { display: flex; align-items: center; gap: 8px; margin: 12px 0 8px; font: 12px/1 "Russo One"; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .sec::before { content: ""; width: 7px; height: 7px; transform: rotate(45deg); background: var(--accent); }
+  .sec::after { content: ""; flex: 1; height: 6px; opacity: .5; background: repeating-linear-gradient(90deg, var(--border-strong) 0 4px, transparent 4px 9px); }
+  .podium { position: relative; height: 262px; border-radius: 12px; overflow: hidden; background: radial-gradient(60% 60% at 50% 80%, #ffd15c33, transparent 70%), linear-gradient(180deg, #3a2860, #1d1733 70%, #120f1e); }
+  .ped { position: absolute; bottom: 0; width: 110px; text-align: center; }
+  .ped img { height: 108px; display: block; margin: 0 auto -4px; filter: drop-shadow(0 6px 8px #000a); }
+  .ped .block { border-radius: 8px 8px 0 0; padding: 6px 4px 8px; background: linear-gradient(180deg, color-mix(in oklab, var(--tone) 40%, var(--raised)), var(--surface)); box-shadow: inset 0 2px 0 color-mix(in oklab, var(--tone) 70%, transparent); }
+  .ped .pl { font: 22px/1 "Russo One"; color: var(--tone); }
+  .ped .nm { font: 12px/1.2 "Russo One"; margin-top: 3px; }
+  .ped .pt { font-size: 11px; color: var(--muted); }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .grow { flex: 1; min-width: 0; }
+  .lrow { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 8px; background: var(--sunken); margin-bottom: 5px; }
+  .lrow.me { background: linear-gradient(90deg, #ff8f3f26, transparent 70%), var(--sunken); box-shadow: inset 3px 0 0 var(--accent); }
+  .place { width: 24px; text-align: center; font: 14px/1 "Russo One"; color: var(--muted); }
+  .ava { position: relative; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; flex: none; background: radial-gradient(70% 70% at 50% 35%, #4a3d78, #1d1733); box-shadow: inset 0 0 0 2px var(--frame, var(--border-strong)), inset 0 0 0 3px #120f1e; }
+  .ava img { position: absolute; left: 50%; top: 52%; width: 88%; transform: translate(-50%, -50%); }
+  .style { display: inline-flex; align-items: center; gap: 4px; font: 10.5px/1 "Russo One"; color: var(--st); padding: 3px 6px 3px 4px; border-radius: 5px; background: color-mix(in oklab, var(--st) 14%, var(--ink)); }
+  .style svg { width: 13px; height: 13px; }
+  .pts { font: 15px/1 "Russo One"; }
+  .sticky { position: absolute; left: 10px; right: 10px; bottom: 10px; padding: 9px 10px; border-radius: 10px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: 0 -10px 24px -8px #000c, inset 0 0 0 1px var(--accent); }
+  .card { border-radius: 10px; padding: 12px; background: linear-gradient(180deg, var(--raised), var(--surface)); border: 1px solid #ffffff10; }
+  .axis { display: grid; grid-template-columns: 22px 92px 1fr 52px; gap: 8px; align-items: center; margin-bottom: 7px; }
+  .axis .ic { width: 22px; height: 22px; color: var(--c); }
+  .axis .nm { font: 12px/1.15 "Russo One"; } .axis .nm small { display: block; font: 10.5px/1.2 "IBM Plex Sans", system-ui; color: var(--muted); }
+  .axis .tr { position: relative; height: 10px; border-radius: 5px; background: #ffffff12; }
+  .axis .tr i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--c); }
+  .axis .tr b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; opacity: .55; }
+  .axis .v { text-align: right; font: 13px/1 "Russo One"; }
+  .div { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .div > div { text-align: center; padding: 8px 2px; border-radius: 8px; background: var(--sunken); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 55%, transparent); }
+  .div .rg { width: 26px; height: 26px; margin: 0 auto 4px; border-radius: 50%; box-shadow: inset 0 0 0 3px var(--tone), inset 0 0 0 5px #120f1e; background: radial-gradient(#4a3d78, #1d1733); }
+  .div .n { font: 11px/1.1 "Russo One"; } .div .p { font-size: 10px; color: var(--muted); }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font: 10px/1.5 "Russo One"; text-transform: uppercase; color: var(--ink); background: var(--tone); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="s-wall" viewBox="0 0 24 24"><path d="M4 21V8h3V5.5h2.5V8h5V5.5H17V8h3v13z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="s-storm" viewBox="0 0 24 24"><path d="M13.5 2.5L5.5 13.5h5.5l-1.5 8 8-11h-5.5z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="s-hunt" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 1.5v5M12 17.5v5M1.5 12h5M17.5 12h5" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="s-shadow" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2"/><path d="M4 20L20 4" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="s-craft" viewBox="0 0 24 24"><path d="M12 2.5l2 7.5 7.5 2-7.5 2-2 7.5-2-7.5L2.5 12l7.5-2z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
+<h1>Рейтинг эффективности v2 — очки забега, разбор, стиль, сезон</h1>
+<p class="lead">Рейтинг — не «кто дольше простоял», а «кто сыграл лучше для своей силы» (Р66). Очки складываются из пяти осей; каждая — относительно ожидаемого для силы игрока и минуты забега. Разбор виден в карточке забега, а самая сильная ось даёт <b>стиль</b> — значок у имени в рейтинге. Механизм и числа — <b>meta-v2.md §2</b>.</p>
+
+<div class="grid">
+
+<div>
+<div class="phone"><div class="screen">
+  <div class="title">Рейтинг</div>
+  <div class="tabs"><span class="on">Сезон</span><span>Друзья</span><span>Чат</span><span>Дивизион</span></div>
+  <div class="chips"><span class="on">Сезон 4 · ещё 12 дн.</span><span>Неделя</span><span>Всё время</span></div>
+  <div class="podium">
+    <div class="ped" style="left:135px;--tone: var(--legendary)"><img src="../out/portrait-hero-navi.svg" alt="" style="height:122px"><div class="block" style="height:86px"><div class="pl">1</div><div class="nm">Велимир</div><div class="pt">9 812</div></div></div>
+    <div class="ped" style="left:18px;--tone:#d9dde8"><img src="../out/portrait-hero-knyaz.svg" alt=""><div class="block" style="height:72px"><div class="pl">2</div><div class="nm">Ярослава</div><div class="pt">9 440</div></div></div>
+    <div class="ped" style="right:18px;--tone:#c98a5a"><img src="../out/portrait-hero-skomoroh.svg" alt=""><div class="block" style="height:64px"><div class="pl">3</div><div class="nm">Мирон</div><div class="pt">8 905</div></div></div>
+  </div>
+  <div style="margin-top:8px">
+    <div class="lrow"><span class="place">4</span><span class="ava" style="--frame: var(--legendary)"><img src="../out/avatar-hero-ohotnitsa.svg" alt=""></span><div class="grow"><b class="d" style="font-size:13px">Злата</b><div><span class="style" style="--st: var(--ax-h)"><svg><use href="#s-hunt"/></svg>Охотник</span></div></div><span class="pts">8 112</span></div>
+    <div class="lrow"><span class="place">5</span><span class="ava" style="--frame: var(--legendary)"><img src="../out/avatar-hero-keeper.svg" alt=""></span><div class="grow"><b class="d" style="font-size:13px">Тимур</b><div><span class="style" style="--st: var(--ax-t)"><svg><use href="#s-wall"/></svg>Стена</span></div></div><span class="pts">7 960</span></div>
+    <div class="lrow"><span class="place">6</span><span class="ava" style="--frame: var(--legendary)"><img src="../out/avatar-hero-vityaz.svg" alt=""></span><div class="grow"><b class="d" style="font-size:13px">Добрыня</b><div><span class="style" style="--st: var(--ax-k)"><svg><use href="#s-storm"/></svg>Ураган</span></div></div><span class="pts">7 705</span></div>
+    <div class="lrow"><span class="place">7</span><span class="ava" style="--frame: var(--legendary)"><img src="../out/avatar-hero-vedunya.svg" alt=""></span><div class="grow"><b class="d" style="font-size:13px">Любава</b><div><span class="style" style="--st: var(--ax-c)"><svg><use href="#s-shadow"/></svg>Тень</span></div></div><span class="pts">7 640</span></div>
+  </div>
+  <div class="sticky"><div class="row"><span class="place" style="color:var(--accent)">38</span><span class="ava" style="--frame:#d9dde8"><img src="../out/avatar-hero-vedunya.svg" alt=""></span><div class="grow"><b class="d" style="font-size:13px">Ты</b><div class="tiny muted">до 37-го — <b style="color:var(--text)">140 очков</b> · серебро</div></div><span class="pts">4 205</span></div></div>
+</div></div>
+<p class="cap"><b>Сезон</b>: пьедестал топ-3 — облики целиком, ниже — строки с <b>стилем</b> игрока: значок самой сильной оси его лучшего забега. Внизу всегда «Ты» и сколько очков до следующего места — цель на один забег, а не на сезон. Круги — сезон, друзья, чат, дивизион (WP15); периоды — сезон, неделя, всё время.</p>
+</div>
+
+<div>
+<div class="phone"><div class="screen">
+  <div class="title"><span class="back">‹</span>Забег · 9 812</div>
+  <div class="card">
+    <div class="row"><span class="ava" style="width:44px;height:44px;--frame: var(--mythic)"><img src="../out/avatar-hero-navi.svg" alt=""></span><div class="grow"><b class="d">Велимир</b><div class="tiny muted">31:48 · уровень 41 · мощь 2 340</div></div><span class="style" style="--st: var(--ax-t)"><svg><use href="#s-wall"/></svg>Стена</span></div>
+    <svg viewBox="-110 -100 220 200" width="100%" height="190" style="margin-top:4px">
+      <g fill="none" stroke="#ffffff1c">
+        <polygon points="0,-80 76,-25 47,65 -47,65 -76,-25"/><polygon points="0,-53 51,-16 31,43 -31,43 -51,-16"/><polygon points="0,-27 25,-8 16,22 -16,22 -25,-8"/>
+      </g>
+      <polygon points="0,-53 51,-16 31,43 -31,43 -51,-16" fill="none" stroke="#fff" stroke-opacity=".35" stroke-dasharray="3 3"/>
+      <polygon points="0,-86 64,-21 34,47 -41,56 -55,-18" fill="#46d9c633" stroke="#46d9c6" stroke-width="2.5" stroke-linejoin="round"/>
+      <g font-family="Russo One" font-size="10" text-anchor="middle">
+        <text x="0" y="-90" fill="#46d9c6">Стойкость</text><text x="92" y="-26" fill="#ff8f3f">Натиск</text><text x="56" y="80" fill="#ffd15c">Охота</text><text x="-56" y="80" fill="#5ccfff">Чистота</text><text x="-90" y="-26" fill="#c47dff">Сборка</text>
+      </g>
+    </svg>
+    <div class="tiny muted" style="text-align:center;margin-top:-6px">пунктир — ожидаемое для его силы</div>
+  </div>
+  <div class="sec">Разбор очков</div>
+  <div class="axis" style="--c: var(--ax-t)"><svg class="ic"><use href="#s-wall"/></svg><div class="nm">Стойкость<small>31:48 при 10:00</small></div><div class="tr"><i style="width:96%"></i><b style="left:40%"></b></div><div class="v">4 180</div></div>
+  <div class="axis" style="--c: var(--ax-k)"><svg class="ic"><use href="#s-storm"/></svg><div class="nm">Натиск<small>412 / мин</small></div><div class="tr"><i style="width:71%"></i><b style="left:50%"></b></div><div class="v">1 760</div></div>
+  <div class="axis" style="--c: var(--ax-h)"><svg class="ic"><use href="#s-hunt"/></svg><div class="nm">Охота<small>6 боссов · 58 элит</small></div><div class="tr"><i style="width:64%"></i><b style="left:50%"></b></div><div class="v">2 050</div></div>
+  <div class="axis" style="--c: var(--ax-c)"><svg class="ic"><use href="#s-shadow"/></svg><div class="nm">Чистота<small>урон −38%</small></div><div class="tr"><i style="width:69%"></i><b style="left:50%"></b></div><div class="v">982</div></div>
+  <div class="axis" style="--c: var(--ax-b)"><svg class="ic"><use href="#s-craft"/></svg><div class="nm">Сборка<small>2 эволюции</small></div><div class="tr"><i style="width:56%"></i><b style="left:50%"></b></div><div class="v">840</div></div>
+  <div class="sec">Сборка</div>
+  <div class="row" style="gap:6px;flex-wrap:wrap">
+    <span class="badge" style="--tone: var(--weapon)">Очаг 8</span><span class="badge" style="--tone: var(--weapon)">Гроза 8</span><span class="badge" style="--tone: var(--elite)">Звездопад</span><span class="badge" style="--tone: var(--passive)">Мощь 5</span><span class="badge" style="--tone: var(--passive)">Броня 5</span><span class="badge" style="--tone: var(--secondary)">Буст: Эгида</span>
+  </div>
+  <p class="tiny muted" style="margin-top:10px">Забег прошёл проверку повтором на сервере. Сила считается на старте: уровень, снаряжение, улучшения, бусты — под неё подстроен и сам забег (Р65), и ожидаемое по осям.</p>
+</div></div>
+<p class="cap"><b>Карточка забега</b> (WP35) из строки рейтинга: «паутина» пяти осей против ожидаемого для силы игрока (пунктир) и разбор очков полосами — видно, <b>за что</b> очки и где расти. Тонкая черта на полосе — ожидаемое. Ниже — сборка: оружие, эволюции, навыки, бусты. Персональных данных нет.</p>
+</div>
+
+<div>
+<div class="phone"><div class="screen">
+  <div class="title">Сезон 4</div>
+  <div class="card">
+    <div class="row"><div class="grow"><div class="d" style="font-size:16px">Ты — серебро</div><div class="tiny muted">топ-35% сезона · лучший забег 4 205</div></div><div style="text-align:right"><div class="d" style="color:var(--elite)">12 дн.</div><div class="tiny muted">до конца</div></div></div>
+    <div style="height:10px;border-radius:5px;background:#ffffff14;margin:10px 0 4px;position:relative;overflow:hidden"><i style="position:absolute;left:0;top:0;bottom:0;width:62%;background:linear-gradient(90deg,#d9dde8,#ffd15c)"></i></div>
+    <div class="row tiny muted"><span>серебро</span><span class="grow"></span><span>до золота — 610 очков</span></div>
+  </div>
+  <div class="sec">Дивизионы</div>
+  <div class="div">
+    <div style="--tone:#8f8aa8"><div class="rg"></div><div class="n">Без</div><div class="p">0 забегов</div></div>
+    <div style="--tone:#c98a5a"><div class="rg"></div><div class="n">Бронза</div><div class="p">все</div></div>
+    <div style="--tone:#d9dde8"><div class="rg"></div><div class="n">Серебро</div><div class="p">топ-35%</div></div>
+    <div style="--tone: var(--legendary)"><div class="rg"></div><div class="n">Золото</div><div class="p">топ-10%</div></div>
+    <div style="--tone: var(--mythic)"><div class="rg"></div><div class="n">Рубин</div><div class="p">топ-1%</div></div>
+  </div>
+  <div class="sec">Награды сезона</div>
+  <div class="lrow"><span class="badge" style="--tone: var(--mythic)">топ-10</span><div class="grow small">Облик «Навий страж» и знак «Топ-10 · сезон 4»</div></div>
+  <div class="lrow"><span class="badge" style="--tone: var(--legendary)">золото</span><div class="grow small">Рамка «Золото» на сезон, 300 самоцветов</div></div>
+  <div class="lrow"><span class="badge" style="--tone:#d9dde8">серебро</span><div class="grow small">Рамка «Серебро», 150 самоцветов, окрас</div></div>
+  <div class="lrow"><span class="badge" style="--tone:#c98a5a">бронза</span><div class="grow small">5 000 монет</div></div>
+  <div class="sec">Твой стиль</div>
+  <div class="card">
+    <div class="row"><span class="style" style="--st: var(--ax-c);font-size:13px;padding:5px 8px"><svg style="width:18px;height:18px"><use href="#s-shadow"/></svg>Тень</span><div class="grow tiny muted">Твоя сильная ось — <b style="color:var(--text)">Чистота</b>: ты получаешь на 41% меньше урона, чем ожидается. Слабая — Натиск.</div></div>
+    <div class="tiny muted" style="margin-top:8px">Подсказка: «Гроза» и «Мощь» поднимут Натиск — так растут очки быстрее всего.</div>
+  </div>
+</div></div>
+<p class="cap"><b>Сезон и дивизион</b>: место в процентах сезона, а не в абсолютных очках — дивизион не цементируется первыми игроками (docs/10 §4). Награды сезона — облик и знак (престиж) плюс валюта. <b>«Твой стиль»</b> — сильная и слабая ось по последним забегам и подсказка, что растит очки, — рейтинг подсказывает, как играть лучше.</p>
+</div>
+
+</div>
+</body>
+</html>
