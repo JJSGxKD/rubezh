@@ -14,7 +14,9 @@ import { useNarrow } from "./use-media";
 type Tone = "neutral" | "accent" | "danger" | "success" | "warning" | "info";
 
 const BUTTON_TONES = {
-  primary: "bg-accent text-on-accent hover:bg-accent-pressed",
+  // Выключенная главная — нейтральная, а не бледно-оранжевая: бурая кнопка
+  // читалась как «нажата» или «грузится», а не как «пока нельзя».
+  primary: "bg-accent text-on-accent hover:bg-accent-pressed disabled:bg-surface-raised disabled:text-text-muted disabled:hover:bg-surface-raised",
   secondary: "bg-surface-raised text-text border border-border hover:border-border-strong",
   danger: "bg-danger/15 text-danger border border-danger/40 hover:bg-danger/25",
 } as const;
