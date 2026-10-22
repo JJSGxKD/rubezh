@@ -76,6 +76,11 @@ export function statusTone(enemies: EnemyPool, index: number, tick: number): num
  */
 export function playerStatusTone(player: PlayerState, tick: number): number {
   if (tick % STATUS_PULSE_TICKS >= STATUS_PULSE_ON) return STATUS_TONE.none;
+  return activePlayerStatus(player);
+}
+
+/** Состояние персонажа без пульса — тот же порядок, что у врага. */
+export function activePlayerStatus(player: PlayerState): number {
   if (player.shockTimer > 0) return STATUS_TONE.shock;
   if (player.burnTimer > 0) return STATUS_TONE.burn;
   if (player.poisonTimer > 0) return STATUS_TONE.poison;
