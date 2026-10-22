@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-9 -9 122 122"><defs><linearGradient id="rf-steel" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100"><stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#ece7f8"/><stop offset="1" stop-color="#a99fcb"/></linearGradient>
+  <linearGradient id="rf-ember" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100"><stop offset="0" stop-color="#ffe7a3"/><stop offset="0.45" stop-color="#ffb22e"/><stop offset="1" stop-color="#e0700f"/></linearGradient>
+  <linearGradient id="rf-ward" gradientUnits="userSpaceOnUse" x1="0" y1="29" x2="0" y2="71"><stop offset="0" stop-color="#c9fff6"/><stop offset="1" stop-color="#25c4b4"/></linearGradient>
+  <linearGradient id="rf-gloss" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="0.16" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="rf-glow"><stop offset="0" stop-color="#c9fff6" stop-opacity="0.9"/><stop offset="0.35" stop-color="#25c4b4" stop-opacity="0.35"/><stop offset="1" stop-color="#25c4b4" stop-opacity="0"/></radialGradient></defs><clipPath id="rf-zhe-5"><rect x="-5" y="-5" width="114" height="110"/></clipPath><g transform="translate(0 4)" clip-path="url(#rf-zhe-5)">
+    <path d="M52 -13V113" stroke="#120f1e" stroke-width="30"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="#120f1e" stroke-width="28" fill="none"/>
+  </g><path transform="translate(0 4)" d="M52 22L80 50L52 78L24 50Z" fill="#120f1e" stroke="none" stroke-width="0" stroke-linejoin="round"/><clipPath id="rf-zhe-5"><rect x="-5" y="-5" width="114" height="110"/></clipPath><g transform="translate(0 0)" clip-path="url(#rf-zhe-5)">
+    <path d="M52 -13V113" stroke="#120f1e" stroke-width="30"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="#120f1e" stroke-width="28" fill="none"/>
+  </g><path transform="translate(0 0)" d="M52 22L80 50L52 78L24 50Z" fill="#120f1e" stroke="none" stroke-width="0" stroke-linejoin="round"/><clipPath id="rf-zhe-0"><rect x="0" y="0" width="104" height="100"/></clipPath><g transform="translate(0 4)" clip-path="url(#rf-zhe-0)">
+    <path d="M52 -8V108" stroke="#7a3208" stroke-width="20"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="#7a3208" stroke-width="18" fill="none"/>
+  </g><clipPath id="rf-zhe-0"><rect x="0" y="0" width="104" height="100"/></clipPath><g transform="translate(0 2.5)" clip-path="url(#rf-zhe-0)">
+    <path d="M52 -8V108" stroke="#7a3208" stroke-width="20"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="#7a3208" stroke-width="18" fill="none"/>
+  </g><clipPath id="rf-zhe-0"><rect x="0" y="0" width="104" height="100"/></clipPath><g transform="translate(0 1)" clip-path="url(#rf-zhe-0)">
+    <path d="M52 -8V108" stroke="#7a3208" stroke-width="20"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="#7a3208" stroke-width="18" fill="none"/>
+  </g><clipPath id="rf-zhe-0"><rect x="0" y="0" width="104" height="100"/></clipPath><g transform="translate(0 0)" clip-path="url(#rf-zhe-0)">
+    <path d="M52 -8V108" stroke="url(#rf-ember)" stroke-width="20"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="url(#rf-ember)" stroke-width="18" fill="none"/>
+  </g><clipPath id="rf-zhe-0"><rect x="0" y="0" width="104" height="100"/></clipPath><g transform="translate(0 0)" clip-path="url(#rf-zhe-0)">
+    <path d="M52 -8V108" stroke="url(#rf-gloss)" stroke-width="20"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="url(#rf-gloss)" stroke-width="18" fill="none"/>
+  </g><path d="M52 27L75 50L52 73L29 50Z" fill="#120f1e"/>
+    <path d="M52 31L71 50L52 69L33 50Z" fill="url(#rf-ward)"/>
+    <path d="M52 34L61 43L46 45Z" fill="#fff" fill-opacity="0.85"/></svg>

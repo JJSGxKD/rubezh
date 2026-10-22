@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><defs><linearGradient id="fv-steel" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100"><stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#ece7f8"/><stop offset="1" stop-color="#a99fcb"/></linearGradient>
+  <linearGradient id="fv-ember" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100"><stop offset="0" stop-color="#ffe7a3"/><stop offset="0.45" stop-color="#ffb22e"/><stop offset="1" stop-color="#e0700f"/></linearGradient>
+  <linearGradient id="fv-ward" gradientUnits="userSpaceOnUse" x1="0" y1="29" x2="0" y2="71"><stop offset="0" stop-color="#c9fff6"/><stop offset="1" stop-color="#25c4b4"/></linearGradient>
+  <linearGradient id="fv-gloss" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="100"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="0.16" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="fv-glow"><stop offset="0" stop-color="#c9fff6" stop-opacity="0.9"/><stop offset="0.35" stop-color="#25c4b4" stop-opacity="0.35"/><stop offset="1" stop-color="#25c4b4" stop-opacity="0"/></radialGradient></defs><rect width="128" height="128" rx="28" fill="#1b1830"/><g transform="translate(64 64) scale(0.92) translate(-52 -50)"><clipPath id="fv-zhe-7"><rect x="-7" y="-7" width="118" height="114"/></clipPath><g transform="translate(0 0)" clip-path="url(#fv-zhe-7)">
+    <path d="M52 -15V115" stroke="#120f1e" stroke-width="34"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="#120f1e" stroke-width="32" fill="none"/>
+  </g><path transform="translate(0 0)" d="M52 20L82 50L52 80L22 50Z" fill="#120f1e" stroke="none" stroke-width="0" stroke-linejoin="round"/><clipPath id="fv-zhe-7"><rect x="-7" y="-7" width="118" height="114"/></clipPath><g transform="translate(0 0)" clip-path="url(#fv-zhe-7)">
+    <path d="M52 -15V115" stroke="#120f1e" stroke-width="34"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="#120f1e" stroke-width="32" fill="none"/>
+  </g><path transform="translate(0 0)" d="M52 20L82 50L52 80L22 50Z" fill="#120f1e" stroke="none" stroke-width="0" stroke-linejoin="round"/><clipPath id="fv-zhe-0"><rect x="0" y="0" width="104" height="100"/></clipPath><g transform="translate(0 0)" clip-path="url(#fv-zhe-0)">
+    <path d="M52 -8V108" stroke="url(#fv-ember)" stroke-width="20"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="url(#fv-ember)" stroke-width="18" fill="none"/>
+  </g><clipPath id="fv-zhe-0"><rect x="0" y="0" width="104" height="100"/></clipPath><g transform="translate(0 0)" clip-path="url(#fv-zhe-0)">
+    <path d="M52 -8V108" stroke="url(#fv-gloss)" stroke-width="20"/>
+    <path d="M-4 -6L52 50L108 106M108 -6L52 50L-4 106" stroke="url(#fv-gloss)" stroke-width="18" fill="none"/>
+  </g><path d="M52 27L75 50L52 73L29 50Z" fill="#120f1e"/>
+    <path d="M52 31L71 50L52 69L33 50Z" fill="url(#fv-ward)"/>
+    <path d="M52 34L61 43L46 45Z" fill="#fff" fill-opacity="0.85"/></g></svg>

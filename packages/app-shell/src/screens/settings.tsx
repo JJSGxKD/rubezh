@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CONTENT_HASH } from "@bh/core-game";
 import {
   ContentColumn,
-  Emblem,
   ListGroup,
   ListItem,
   Screen,
@@ -304,7 +303,6 @@ export function AboutScreen(): ReactNode {
       <ContentColumn>
         {/* Бренд — здесь и на заставке, а не на главной (Р76). */}
         <div className="mt-2 mb-5 flex flex-col items-center gap-2 text-center">
-          <Emblem size={64} />
           <Wordmark />
           <p className="max-w-[300px] text-sm text-text-muted">{t("lobby.tagline")}</p>
         </div>
