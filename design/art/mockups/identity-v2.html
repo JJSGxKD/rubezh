@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Личность игрока v2</title>
+<!--
+  Макет к design/art/direction-v2.md §7.3: профиль, карточка игрока, знаки
+  (теги), облик и аватар-знак. Решения тимлида, на которые он опирается, —
+  docs/35-stage4-plan.md Р47 (аватар), Р48 (карточка), Р49 (внешний вид).
+  Портреты — design/art/out/portrait-hero-*.svg и avatar-hero-*.svg
+  (node design/art/src/portraits.mjs). Снимок — out/preview/identity-v2.png.
+-->
+<style>
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0400-045F; }
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+  /* Значения — токены «Сумеречного рубежа» (packages/design-tokens/src/tokens.css). */
+  :root {
+    color-scheme: dark;
+    --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a;
+    --border: #43425f; --border-strong: #5b5980; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --on-accent: #230f02; --secondary: #46d9c6; --elite: #ffd15c; --info: #5ccfff;
+    --weapon: #ffe066; --passive: #c47dff; --hp: #ff6f90; --xp: #b6ff4a; --success: #8ee86b;
+    --common: #b9b6cc; --uncommon: #8ee86b; --rare: #5ccfff; --epic: #c47dff; --legendary: #ffd15c; --mythic: #ff5d6c;
+    --ink: #120f1e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.35 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; width: 2010px; }
+  h1 { font: 700 22px/1.2 "Russo One", system-ui; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 120ch; }
+  .grid { display: flex; gap: 22px; align-items: flex-start; }
+  .phone { width: 380px; height: 800px; border-radius: 22px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45, 0 20px 40px -20px #000; }
+  .cap { width: 380px; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+  .cap b { color: var(--text); }
+  .screen { position: absolute; inset: 0; padding: 14px; overflow: hidden; background: radial-gradient(120% 55% at 50% -12%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 62%), var(--bg); }
+  .d { font-family: "Russo One", system-ui; }
+  .title { font: 26px/1.1 "Russo One", system-ui; margin: 2px 0 10px; display: flex; align-items: center; gap: 10px; }
+  .title .back { color: var(--muted); font-size: 22px; }
+  .muted { color: var(--muted); } .small { font-size: 12px; } .tiny { font-size: 11px; }
+  .card { border-radius: 10px; padding: 12px; background: linear-gradient(180deg, var(--raised), var(--surface)); border: 1px solid #ffffff10; box-shadow: inset 0 1px 0 #ffffff0d, 0 10px 24px -14px #000; }
+  .sunken { background: var(--sunken); border-radius: 8px; }
+  .sec { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font: 12px/1 "Russo One", system-ui; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .sec::before { content: ""; width: 7px; height: 7px; transform: rotate(45deg); background: var(--accent); }
+  .sec::after { content: ""; flex: 1; height: 6px; opacity: .5; background: repeating-linear-gradient(90deg, var(--border-strong) 0 4px, transparent 4px 9px); }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 6px; padding: 12px; font: 15px/1 "Russo One", system-ui; text-transform: uppercase; color: var(--on-accent); background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -4px 0 #a0582a; }
+  .btn.sec2 { color: var(--text); text-transform: none; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 -3px 0 var(--sunken); border: 1px solid var(--border-strong); font-size: 13px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .grow { flex: 1; min-width: 0; }
+
+  /* Сцена карточки: небо, частокол, свет облика */
+  .stage { position: relative; height: 230px; border-radius: 12px; overflow: hidden; --tone: var(--legendary);
+    background: radial-gradient(60% 55% at 50% 70%, color-mix(in oklab, var(--tone) 34%, transparent), transparent 70%), linear-gradient(180deg, #3a2860, #1d1733 70%, #120f1e);
+    box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--tone) 55%, transparent), inset 0 0 0 5px #120f1e88; }
+  .stage .pal { position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='60'%3E%3Cpath d='M2 60V18L18 4L34 18V60Z' fill='%23100d1c' stroke='%23ff8f3f' stroke-opacity='.45' stroke-width='2'/%3E%3C/svg%3E") repeat-x bottom/34px 52px; }
+  .stage .hero { position: absolute; left: 50%; bottom: 14px; height: 190px; transform: translateX(-50%); filter: drop-shadow(0 6px 10px #0009); }
+  .stage .star { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; opacity: .7; }
+  .stage .spark { position: absolute; width: 6px; height: 6px; transform: rotate(45deg); background: var(--tone); opacity: .8; }
+  .stage .ribbon { position: absolute; top: 10px; left: 10px; }
+  .rar { display: inline-flex; align-items: center; gap: 5px; border-radius: 4px; padding: 2px 7px; font: 10px/1.5 "Russo One", system-ui; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); background: var(--tone); }
+
+  /* Аватар-знак (Р47) */
+  .ava { position: relative; width: 56px; height: 56px; flex: none; --frame: var(--border-strong); }
+  .ava .disk { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; background: radial-gradient(70% 70% at 50% 35%, #4a3d78, #1d1733); box-shadow: inset 0 0 0 3px var(--frame), inset 0 0 0 5px #120f1e; }
+  .ava .disk img { position: absolute; left: 50%; top: 52%; width: 88%; transform: translate(-50%, -50%); }
+  .ava .lvl { position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); min-width: 22px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--ink); border: 2px solid var(--frame); font: 10px/14px "Russo One"; text-align: center; }
+  .ava .check { position: absolute; right: -3px; top: -3px; width: 20px; height: 20px; }
+  .ava.big { width: 88px; height: 88px; } .ava.big .lvl { height: 22px; min-width: 28px; font-size: 12px; line-height: 18px; bottom: -8px; }
+  .ava.s { width: 36px; height: 36px; } .ava.s .disk { box-shadow: inset 0 0 0 2px var(--frame), inset 0 0 0 3px #120f1e; } .ava.s .lvl { display: none; } .ava.s .check { width: 15px; height: 15px; right: -4px; top: -4px; }
+
+  /* Знак (тег) */
+  .tag { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px 0 4px; border-radius: 6px; font: 11px/1 "Russo One", system-ui; color: var(--tone); --tone: var(--common);
+    background: color-mix(in oklab, var(--tone) 14%, var(--sunken)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 55%, transparent); white-space: nowrap; }
+  .tag svg { width: 16px; height: 16px; }
+  .tag.l { height: 28px; font-size: 12.5px; padding: 0 10px 0 6px; } .tag.l svg { width: 20px; height: 20px; }
+  .tile { position: relative; border-radius: 10px; padding: 10px 6px 8px; text-align: center; --tone: var(--common);
+    background: radial-gradient(90% 60% at 50% 20%, color-mix(in oklab, var(--tone) 22%, transparent), transparent 70%), var(--sunken);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 50%, transparent); }
+  .tile .gl { width: 40px; height: 40px; margin: 0 auto 6px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in oklab, var(--tone) 18%, var(--ink)); box-shadow: inset 0 0 0 2px var(--tone); color: var(--tone); }
+  .tile .gl svg { width: 24px; height: 24px; }
+  .tile .n { font: 11.5px/1.15 "Russo One", system-ui; }
+  .tile .h { font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .tile.locked { opacity: .55; } .tile.locked .gl { color: var(--muted); box-shadow: inset 0 0 0 2px var(--border-strong); background: var(--ink); }
+  .tile.sel { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 3px #ff8f3f33; }
+  .tile .pin { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; transform: rotate(45deg); background: var(--accent); }
+
+  .stat { padding: 8px; border-radius: 8px; background: var(--sunken); }
+  .stat b { display: block; font: 18px/1.1 "Russo One", system-ui; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  .wrow { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--sunken); margin-bottom: 6px; }
+  .wg { width: 32px; height: 32px; border-radius: 7px; display: grid; place-items: center; background: color-mix(in oklab, var(--weapon) 15%, var(--ink)); color: var(--weapon); }
+  .bar { height: 6px; border-radius: 3px; background: #ffffff14; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--weapon); }
+
+  .skin { position: relative; border-radius: 10px; padding: 6px 4px 8px; text-align: center; --tone: var(--common);
+    background: radial-gradient(80% 60% at 50% 40%, color-mix(in oklab, var(--tone) 26%, transparent), transparent 70%), var(--sunken);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 60%, transparent); }
+  .skin img { height: 92px; display: block; margin: 0 auto; }
+  .skin .n { font: 11px/1.2 "Russo One", system-ui; }
+  .skin .src { font-size: 10px; color: var(--muted); }
+  .skin.locked img { filter: brightness(.35) saturate(.3); }
+  .skin.on { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 3px #ff8f3f33; }
+  .lock { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); width: 22px; height: 22px; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 70px; border-radius: 18px 18px 0 0; padding: 14px; background: linear-gradient(180deg, var(--raised), var(--surface) 30%, var(--bg)); box-shadow: 0 -20px 40px -10px #000c; }
+  .scrim { position: absolute; inset: 0; background: rgb(18 15 30 / .7); }
+  .grip { width: 42px; height: 5px; border-radius: 3px; background: var(--border-strong); margin: 0 auto 10px; }
+  .listrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--sunken); margin-bottom: 6px; }
+  .place { width: 26px; text-align: center; font: 15px/1 "Russo One"; color: var(--muted); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- знаки тегов: тот же язык, что значки оружия (screens/game-glyphs.tsx) — сетка 24, контур 2 -->
+    <symbol id="t-crown" viewBox="0 0 24 24"><path d="M3 18L4.5 7l4.5 4L12 4l3 7 4.5-4L21 18z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M4 21h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="t-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4.5" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2"/><path d="M11 11l9 9M16 16l2.5-2.5M18.5 18.5L21 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="t-heart" viewBox="0 0 24 24"><path d="M12 20.5S3.5 15.5 3.5 9.2A4.4 4.4 0 0 1 12 7a4.4 4.4 0 0 1 8.5 2.2c0 6.3-8.5 11.3-8.5 11.3z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="t-rune" viewBox="0 0 24 24"><path d="M12 3v18M4.5 4.5L12 12l7.5-7.5M4.5 19.5L12 12l7.5 7.5" stroke="currentColor" stroke-width="2.4" fill="none"/><path d="M12 9.5l2.5 2.5-2.5 2.5-2.5-2.5z" fill="currentColor"/></symbol>
+    <symbol id="t-laurel" viewBox="0 0 24 24"><path d="M12 21c-6-2-8.5-7-8-13M12 21c6-2 8.5-7 8-13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M5 11.5l-2-1M5.5 15l-2.2 0M8 18l-1.5 1.6M19 11.5l2-1M18.5 15l2.2 0M16 18l1.5 1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 5l1.5 3 3 .5-2.2 2 .6 3-2.9-1.5-2.9 1.5.6-3-2.2-2 3-.5z" fill="currentColor"/></symbol>
+    <symbol id="t-skull" viewBox="0 0 24 24"><path d="M12 3a8 8 0 0 0-8 8c0 3 1.5 4.5 3 5.5V20h10v-3.5c1.5-1 3-2.5 3-5.5a8 8 0 0 0-8-8z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="9" cy="11.5" r="1.8" fill="currentColor"/><circle cx="15" cy="11.5" r="1.8" fill="currentColor"/><path d="M10 20v-2.5M14 20v-2.5" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="t-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.5 7.5-8 9-4.5-1.5-8-4.5-8-9V6z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="t-fire" viewBox="0 0 24 24"><path d="M12 2.5c2.8 3 5.5 5.5 5.5 9.5a5.5 5.5 0 0 1-11 0c0-2.5 1.2-4 2.5-5 0 2 .8 3.2 2 3.5-.2-3 0-5.3 1-8z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="t-people" viewBox="0 0 24 24"><circle cx="8" cy="8" r="3.5" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="9" r="2.8" stroke="currentColor" stroke-width="2" fill="none"/><path d="M2.5 20c.5-4 3-6 5.5-6s5 2 5.5 6M14 14.5c3 0 6 1.5 7 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="t-hourglass" viewBox="0 0 24 24"><path d="M6 3h12M6 21h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 3c0 5 9 5 9 9s-9 4-9 9h9c0-5-9-5-9-9s9-4 9-9z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="t-gem" viewBox="0 0 24 24"><path d="M12 2.5l6.5 9.5-6.5 9.5L5.5 12z" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M5.5 12h13M12 2.5L9.8 12l2.2 9.5" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="t-dawn" viewBox="0 0 24 24"><path d="M3 17h18M6 17a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="2" fill="currentColor" fill-opacity=".3"/><path d="M12 4v3M5 8l2 2M19 8l-2 2M3 21h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="t-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2" fill="#120f1e" stroke="#aeaac4" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="#aeaac4" stroke-width="2" fill="none"/></symbol>
+    <symbol id="chk-gold" viewBox="0 0 20 20"><path d="M10 1l2.4 1.8 3-.2.8 2.9 2.5 1.7-1.1 2.8 1.1 2.8-2.5 1.7-.8 2.9-3-.2L10 19l-2.4-1.8-3 .2-.8-2.9-2.5-1.7L2.4 10 1.3 7.2l2.5-1.7.8-2.9 3 .2z" fill="#ffd15c" stroke="#120f1e" stroke-width="1.4"/><path d="M6.5 10.2l2.4 2.4 4.6-4.8" stroke="#120f1e" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="chk-blue" viewBox="0 0 20 20"><path d="M10 1l2.4 1.8 3-.2.8 2.9 2.5 1.7-1.1 2.8 1.1 2.8-2.5 1.7-.8 2.9-3-.2L10 19l-2.4-1.8-3 .2-.8-2.9-2.5-1.7L2.4 10 1.3 7.2l2.5-1.7.8-2.9 3 .2z" fill="#5ccfff" stroke="#120f1e" stroke-width="1.4"/><path d="M6.5 10.2l2.4 2.4 4.6-4.8" stroke="#120f1e" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="w-spark" viewBox="0 0 24 24"><path d="M12 2.5l2 7.5 7.5 2-7.5 2-2 7.5-2-7.5L2.5 12l7.5-2z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="w-hearth" viewBox="0 0 24 24"><path d="M12 3c2.5 2.6 5 4.8 5 8a5 5 0 0 1-10 0c0-1.9.9-3.2 2-4.2 0 1.7.8 2.9 2 3.2-.3-2.6 0-4.6 1-7z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2"/><path d="M4 20.5h16" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="w-storm" viewBox="0 0 24 24"><path d="M7 15a4 4 0 1 1 .8-7.9A5.5 5.5 0 0 1 18 9a3 3 0 0 1-.5 6z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2"/><path d="M12.5 13l-2.5 4h3.5L11 21.5" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
+  </defs>
+</svg>
+
+<h1>Личность игрока v2 — профиль, карточка, знаки, облик, аватар</h1>
+<p class="lead">Игрок возвращается не только за забегом, но и за тем, как он выглядит для других. Облик, знаки и витрина видны везде, где игрока видят: рейтинг, друзья, чат, карточка, картинки бота. Решения — <b>direction-v2.md §7.3</b>; опора — Р47 (аватар), Р48 (карточка), Р49 (внешний вид). Всё — только облик: на бой не влияет.</p>
+
+<div class="grid">
+
+<!-- 1. Профиль (свой) -->
+<div>
+<div class="phone"><div class="screen">
+  <div class="title"><span class="back">‹</span>Профиль</div>
+  <div class="stage" style="--tone: var(--legendary)">
+    <i class="star" style="left:30px;top:24px"></i><i class="star" style="left:300px;top:40px"></i><i class="star" style="left:220px;top:16px"></i><i class="star" style="left:90px;top:60px"></i>
+    <i class="spark" style="left:70px;top:150px"></i><i class="spark" style="left:290px;top:120px"></i><i class="spark" style="left:250px;top:170px;opacity:.5"></i>
+    <span class="ribbon rar" style="--tone: var(--legendary)">легендарный облик · Князь</span>
+    <div class="pal"></div>
+    <img class="hero" src="../out/portrait-hero-knyaz.svg" alt="">
+  </div>
+  <div class="row" style="margin-top:-30px;padding:0 10px;position:relative">
+    <div class="ava big" style="--frame: var(--legendary)"><div class="disk"><img src="../out/avatar-hero-knyaz.svg" alt=""></div><span class="lvl">24</span><svg class="check"><use href="#chk-gold"/></svg></div>
+    <div class="grow" style="padding-top:30px">
+      <div class="d" style="font-size:19px">Ярослава</div>
+      <span class="tag" style="--tone: var(--rare)"><svg><use href="#t-skull"/></svg>Гроза боссов</span>
+    </div>
+  </div>
+  <div class="row" style="gap:6px;margin-top:12px">
+    <span class="btn sec2" style="flex:1">Облик</span><span class="btn sec2" style="flex:1">Знаки · 9</span><span class="btn sec2" style="flex:1">Поделиться</span>
+  </div>
+  <div class="sec">Витрина</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+    <div class="tile" style="--tone: var(--legendary)"><div class="gl"><svg><use href="#t-laurel"/></svg></div><div class="n">Топ-10 сезона</div><div class="h">есть у 0,4%</div></div>
+    <div class="tile" style="--tone: var(--epic)"><div class="gl"><svg><use href="#t-hourglass"/></svg></div><div class="n">20 минут</div><div class="h">есть у 2%</div></div>
+    <div class="tile" style="--tone: var(--rare)"><div class="gl"><svg><use href="#t-skull"/></svg></div><div class="n">Гроза боссов</div><div class="h">есть у 6%</div></div>
+  </div>
+  <div class="sec">Счёт</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+    <div class="stat"><b>412</b><span>забегов</span></div><div class="stat"><b>186 тыс.</b><span>врагов</span></div><div class="stat"><b>21:04</b><span>лучший</span></div>
+    <div class="stat"><b>38</b><span>боссов</span></div><div class="stat"><b>91 ч</b><span>в бою</span></div><div class="stat"><b>№ 7</b><span>сезон</span></div>
+  </div>
+  <div class="sec">По оружию</div>
+  <div class="wrow"><span class="wg"><svg width="20" height="20"><use href="#w-hearth"/></svg></span><div class="grow"><div class="row"><b class="d" style="font-size:13px">Очаг</b><span class="grow"></span><span class="small muted">148 забегов · 21:04</span></div><div class="bar" style="margin-top:5px"><i style="width:82%"></i></div></div></div>
+  <div class="wrow"><span class="wg"><svg width="20" height="20"><use href="#w-storm"/></svg></span><div class="grow"><div class="row"><b class="d" style="font-size:13px">Гроза</b><span class="grow"></span><span class="small muted">96 забегов · 17:30</span></div><div class="bar" style="margin-top:5px"><i style="width:54%"></i></div></div></div>
+</div></div>
+<p class="cap"><b>Профиль — сначала карточка</b>: так тебя видят другие. Сцена — облик целиком на сумеречном небе с частоколом, свет и рамка — редкость облика. Аватар с уровнем, золотая галочка VIP (Р47). Под именем — выбранный знак. «Витрина» — три закреплённых достижения или знака с «есть у N%». Счёт и «По оружию» — то, ради чего игроки сравнивают себя.</p>
+</div>
+
+<!-- 2. Карточка чужого игрока -->
+<div>
+<div class="phone"><div class="screen" style="padding:0">
+  <div style="padding:14px"><div class="title" style="opacity:.35">Рейтинг</div>
+    <div class="listrow" style="opacity:.35"><span class="place">5</span><div class="ava s"><div class="disk"><img src="../out/avatar-hero-keeper.svg" alt=""></div></div><span class="grow">Тимур</span><b class="d">23:10</b></div>
+  </div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="grip"></div>
+    <div class="stage" style="height:200px;--tone: var(--mythic)">
+      <i class="star" style="left:40px;top:20px"></i><i class="star" style="left:280px;top:34px"></i>
+      <i class="spark" style="left:60px;top:120px;background:#b07cff"></i><i class="spark" style="left:280px;top:140px;background:#b07cff"></i>
+      <span class="ribbon rar" style="--tone: var(--mythic)">мифический облик · Навий страж</span>
+      <div class="pal"></div>
+      <img class="hero" src="../out/portrait-hero-navi.svg" alt="" style="height:165px">
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="ava" style="--frame: var(--mythic)"><div class="disk"><img src="../out/avatar-hero-navi.svg" alt=""></div><span class="lvl">41</span><svg class="check"><use href="#chk-blue"/></svg></div>
+      <div class="grow"><div class="d" style="font-size:18px">Велимир</div><div class="row" style="gap:5px;margin-top:4px"><span class="tag" style="--tone: var(--mythic)"><svg><use href="#t-laurel"/></svg>Чемпион · сезон 3</span></div></div>
+      <div style="text-align:right"><div class="d" style="font-size:22px;color:var(--elite)">№ 1</div><div class="tiny muted">сезон 4</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px">
+      <div class="stat"><b>31:48</b><span>лучший</span></div><div class="stat"><b>9 812</b><span>очков</span></div><div class="stat"><b>1,2 тыс.</b><span>забегов</span></div><div class="stat"><b>214</b><span>боссов</span></div>
+    </div>
+    <div class="sec">Знаки · 23</div>
+    <div class="row" style="flex-wrap:wrap;gap:5px">
+      <span class="tag" style="--tone: var(--mythic)"><svg><use href="#t-laurel"/></svg>Чемпион · сезон 3</span>
+      <span class="tag" style="--tone: var(--legendary)"><svg><use href="#t-hourglass"/></svg>30 минут</span>
+      <span class="tag" style="--tone: var(--epic)"><svg><use href="#t-shield"/></svg>Без единой царапины</span>
+      <span class="tag" style="--tone: var(--secondary)"><svg><use href="#t-key"/></svg>Тестер</span>
+      <span class="tag muted" style="--tone: var(--border-strong)">+19</span>
+    </div>
+    <div class="row" style="gap:6px;margin-top:14px">
+      <span class="btn" style="flex:1.3">В друзья</span><span class="btn sec2" style="flex:1">Подарок</span><span class="btn sec2" style="width:46px">⋯</span>
+    </div>
+    <p class="tiny muted" style="text-align:center;margin-top:8px">«⋯» — сравнить рекорды, поделиться карточкой, пожаловаться</p>
+  </div>
+</div></div>
+<p class="cap"><b>Карточка игрока</b> — тап по любому игроку в рейтинге, друзьях, чате (Р48). Сцена с обликом, аватар со знаками (синяя галочка — доверенный аккаунт), место в сезоне, ключевые числа, все знаки с первыми пятью наверху. Действия: в друзья, подарок; в «⋯» — сравнить рекорды, поделиться картинкой с реферальной ссылкой, пожаловаться.</p>
+</div>
+
+<!-- 3. Знаки -->
+<div>
+<div class="phone"><div class="screen">
+  <div class="title"><span class="back">‹</span>Знаки</div>
+  <div class="card" style="padding:10px">
+    <div class="small muted" style="margin-bottom:6px">В списках рядом с именем:</div>
+    <div class="row"><div class="ava s" style="--frame: var(--legendary)"><div class="disk"><img src="../out/avatar-hero-knyaz.svg" alt=""></div><svg class="check"><use href="#chk-gold"/></svg></div><b class="d">Ярослава</b><span class="tag" style="--tone: var(--rare)"><svg><use href="#t-skull"/></svg>Гроза боссов</span><span class="grow"></span><b class="d">21:04</b></div>
+    <div class="tiny muted" style="margin-top:6px">Тапни знак, чтобы выбрать. Долгое нажатие — закрепить на витрине (до трёх).</div>
+  </div>
+  <div class="sec">Статус</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+    <div class="tile" style="--tone: var(--legendary)"><div class="gl"><svg><use href="#t-crown"/></svg></div><div class="n">VIP</div><div class="h">пока активен</div></div>
+    <div class="tile" style="--tone: var(--secondary)"><div class="gl"><svg><use href="#t-key"/></svg></div><div class="n">Тестер</div><div class="h">закрытый тест</div></div>
+    <div class="tile" style="--tone: var(--hp)"><div class="gl"><svg><use href="#t-heart"/></svg></div><div class="n">Меценат</div><div class="h">поддержал</div></div>
+    <div class="tile locked"><div class="gl"><svg><use href="#t-dawn"/></svg></div><div class="n">Первый рассвет</div><div class="h">до релиза</div></div>
+  </div>
+  <div class="sec">Заслуги</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+    <div class="tile sel" style="--tone: var(--rare)"><span class="pin"></span><div class="gl"><svg><use href="#t-skull"/></svg></div><div class="n">Гроза боссов</div><div class="h">50 боссов</div></div>
+    <div class="tile" style="--tone: var(--epic)"><span class="pin"></span><div class="gl"><svg><use href="#t-hourglass"/></svg></div><div class="n">20 минут</div><div class="h">2% игроков</div></div>
+    <div class="tile" style="--tone: var(--uncommon)"><div class="gl"><svg><use href="#t-fire"/></svg></div><div class="n">Огнепоклонник</div><div class="h">10 тыс. огнём</div></div>
+    <div class="tile" style="--tone: var(--uncommon)"><div class="gl"><svg><use href="#t-people"/></svg></div><div class="n">Душа компании</div><div class="h">5 друзей</div></div>
+    <div class="tile locked"><div class="gl"><svg><use href="#t-shield"/></svg></div><div class="n">Без царапины</div><div class="h">10 мин без урона</div></div>
+    <div class="tile locked"><div class="gl"><svg><use href="#t-gem"/></svg></div><div class="n">Коллекционер</div><div class="h">всё оружие</div></div>
+    <div class="tile locked"><div class="gl"><svg><use href="#t-rune"/></svg></div><div class="n">Хранитель рубежа</div><div class="h">100 дней</div></div>
+    <div class="tile locked"><div class="gl"><svg><use href="#t-hourglass"/></svg></div><div class="n">30 минут</div><div class="h">0,3% игроков</div></div>
+  </div>
+  <div class="sec">Сезоны</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+    <div class="tile" style="--tone: var(--legendary)"><span class="pin"></span><div class="gl"><svg><use href="#t-laurel"/></svg></div><div class="n">Топ-10</div><div class="h">сезон 3</div></div>
+    <div class="tile" style="--tone: var(--rare)"><div class="gl"><svg><use href="#t-laurel"/></svg></div><div class="n">Топ-100</div><div class="h">сезон 2</div></div>
+  </div>
+</div></div>
+<p class="cap"><b>Знаки (теги)</b>: статусные выдаёт команда или покупка (VIP, Тестер, Меценат, Команда, Партнёр), заслуженные — игра (достижения, сезоны, друзья, стаж). Редкость — та же шкала, что у предметов. В списках — <b>один</b> выбранный знак рядом с именем; на витрину — до трёх. Закрытые видны силуэтом с условием — это цель, а не тайна.</p>
+</div>
+
+<!-- 4. Облик -->
+<div>
+<div class="phone"><div class="screen">
+  <div class="title"><span class="back">‹</span>Облик</div>
+  <div class="stage" style="height:210px;--tone: var(--rare)">
+    <i class="star" style="left:40px;top:30px"></i><i class="star" style="left:300px;top:24px"></i>
+    <span class="ribbon rar" style="--tone: var(--rare)">редкий · Ведунья</span>
+    <div class="pal"></div>
+    <img class="hero" src="../out/portrait-hero-vedunya.svg" alt="" style="height:175px">
+  </div>
+  <div style="display:flex;gap:4px;padding:4px;border-radius:10px;background:var(--sunken);margin:10px 0">
+    <span class="d" style="flex:1;text-align:center;padding:8px;border-radius:7px;background:linear-gradient(180deg,var(--raised),var(--surface));font-size:13px">Облики</span>
+    <span class="d muted" style="flex:1;text-align:center;padding:8px;font-size:13px">Окрасы</span>
+    <span class="d muted" style="flex:1;text-align:center;padding:8px;font-size:13px">Рамки</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+    <div class="skin" style="--tone: var(--common)"><img src="../out/portrait-hero-keeper.svg" alt="" style="height:80px;margin-top:8px"><div class="n">Хранитель</div><div class="src">есть</div></div>
+    <div class="skin on" style="--tone: var(--rare)"><img src="../out/portrait-hero-vedunya.svg" alt=""><div class="n">Ведунья</div><div class="src">надет</div></div>
+    <div class="skin" style="--tone: var(--rare)"><img src="../out/portrait-hero-vityaz.svg" alt=""><div class="n">Витязь</div><div class="src">есть</div></div>
+    <div class="skin locked" style="--tone: var(--epic)"><img src="../out/portrait-hero-ohotnitsa.svg" alt=""><svg class="lock"><use href="#t-lock"/></svg><div class="n">Охотница</div><div class="src">50 элит луком</div></div>
+    <div class="skin locked" style="--tone: var(--legendary)"><img src="../out/portrait-hero-knyaz.svg" alt=""><svg class="lock"><use href="#t-lock"/></svg><div class="n">Князь</div><div class="src" style="color:var(--legendary)">с VIP</div></div>
+    <div class="skin locked" style="--tone: var(--epic)"><img src="../out/portrait-hero-skomoroh.svg" alt=""><svg class="lock"><use href="#t-lock"/></svg><div class="n">Скоморох</div><div class="src">ярмарка · 450 <span style="color:var(--mythic)">♦</span></div></div>
+    <div class="skin locked" style="--tone: var(--mythic)"><img src="../out/portrait-hero-navi.svg" alt=""><svg class="lock"><use href="#t-lock"/></svg><div class="n">Навий страж</div><div class="src">топ-10 сезона</div></div>
+  </div>
+</div></div>
+<p class="cap"><b>Облик</b> (Р49): сцена сверху показывает выбранный облик целиком, ниже — облики, окрасы и рамки аватара. Закрытый облик виден силуэтом с условием: уровень, задания, достижение, VIP, сезон, событие. <b>За деньги — только конкретный облик, видный до покупки</b> (Р11): Скоморох на ярмарке за самоцветы. Облик видно в забеге, арсенале, карточке, аватаре и на картинках бота.</p>
+</div>
+
+<!-- 5. Аватар-знак -->
+<div>
+<div class="phone"><div class="screen">
+  <div class="title">Аватар-знак</div>
+  <div class="card">
+    <div class="row" style="justify-content:space-around;padding:8px 0 14px">
+      <div style="text-align:center"><div class="ava"><div class="disk"><img src="../out/avatar-hero-keeper.svg" alt=""></div><span class="lvl">3</span></div><div class="tiny muted" style="margin-top:12px">новичок</div></div>
+      <div style="text-align:center"><div class="ava" style="--frame:#c98a5a"><div class="disk"><img src="../out/avatar-hero-vityaz.svg" alt=""></div><span class="lvl">12</span></div><div class="tiny muted" style="margin-top:12px">бронза</div></div>
+      <div style="text-align:center"><div class="ava" style="--frame:#d9dde8"><div class="disk"><img src="../out/avatar-hero-vedunya.svg" alt=""></div><span class="lvl">18</span><svg class="check"><use href="#chk-blue"/></svg></div><div class="tiny muted" style="margin-top:12px">серебро</div></div>
+      <div style="text-align:center"><div class="ava" style="--frame: var(--legendary)"><div class="disk"><img src="../out/avatar-hero-knyaz.svg" alt=""></div><span class="lvl">24</span><svg class="check"><use href="#chk-gold"/></svg></div><div class="tiny muted" style="margin-top:12px">золото · VIP</div></div>
+      <div style="text-align:center"><div class="ava" style="--frame: var(--mythic)"><div class="disk"><img src="../out/avatar-hero-navi.svg" alt=""></div><span class="lvl">41</span></div><div class="tiny muted" style="margin-top:12px">рубин</div></div>
+    </div>
+    <div class="tiny muted">Голова облика в круге; <b style="color:var(--text)">рамка — дивизион этого сезона</b>, внизу — уровень аккаунта; золотая галочка — VIP, синяя — доверенный аккаунт. Один компонент везде: шапка, рейтинг, друзья, чат, карточка (Р47). Фото из Telegram — по выбору игрока в «Облике → Рамки», голова облика — по умолчанию.</div>
+  </div>
+  <div class="sec">В рейтинге</div>
+  <div class="listrow" style="background:linear-gradient(90deg,#ffd15c22,transparent 60%),var(--sunken)"><span class="place" style="color:var(--elite)">1</span><div class="ava s" style="--frame: var(--mythic)"><div class="disk"><img src="../out/avatar-hero-navi.svg" alt=""></div></div><div class="grow"><b class="d" style="font-size:14px">Велимир</b><div><span class="tag" style="--tone: var(--mythic)"><svg><use href="#t-laurel"/></svg>Чемпион</span></div></div><b class="d">9 812</b></div>
+  <div class="listrow"><span class="place">2</span><div class="ava s" style="--frame: var(--legendary)"><div class="disk"><img src="../out/avatar-hero-knyaz.svg" alt=""></div><svg class="check"><use href="#chk-gold"/></svg></div><div class="grow"><b class="d" style="font-size:14px">Ярослава</b><div><span class="tag" style="--tone: var(--rare)"><svg><use href="#t-skull"/></svg>Гроза боссов</span></div></div><b class="d">9 440</b></div>
+  <div class="listrow"><span class="place">3</span><div class="ava s" style="--frame:#d9dde8"><div class="disk"><img src="../out/avatar-hero-skomoroh.svg" alt=""></div><svg class="check"><use href="#chk-blue"/></svg></div><div class="grow"><b class="d" style="font-size:14px">Мирон</b><div><span class="tag" style="--tone: var(--secondary)"><svg><use href="#t-key"/></svg>Тестер</span></div></div><b class="d">8 905</b></div>
+  <div class="listrow"><span class="place">4</span><div class="ava s" style="--frame:#c98a5a"><div class="disk"><img src="../out/avatar-hero-ohotnitsa.svg" alt=""></div></div><div class="grow"><b class="d" style="font-size:14px">Злата</b></div><b class="d">8 112</b></div>
+  <div class="sec">Знак в узкой строке</div>
+  <div class="row" style="gap:8px;flex-wrap:wrap">
+    <span class="tag" style="--tone: var(--rare)"><svg><use href="#t-skull"/></svg>Гроза боссов</span>
+    <span class="tag" style="--tone: var(--rare);padding:0 4px"><svg><use href="#t-skull"/></svg></span>
+    <span class="tiny muted">на 320 px от знака остаётся значок — имя важнее</span>
+  </div>
+</div></div>
+<p class="cap"><b>Аватар-знак</b> и строка списка: голова облика, рамка дивизиона, уровень, галочки. В строке рейтинга под именем — выбранный знак; на узком экране — только его значок. Топ-1 — тёплая подсветка строки, как у забираемой награды.</p>
+</div>
+
+</div>
+</body>
+</html>
