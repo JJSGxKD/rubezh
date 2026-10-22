@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Crown, ListChecks, Lock, Sparkles } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
+import { SectionTitle } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/run";
 // Подписи открытий — в словаре аккаунта: он приезжает с этим чанком.
@@ -67,7 +68,9 @@ export function DeathNext(props: { result: RunResult; isNewRecord: boolean; rewa
 
   return (
     <section className="animate-pop-in rounded-lg border border-border bg-surface px-3 py-2.5" aria-label={t("run.next.title")}>
-      <h3 className="font-display text-xs tracking-widest text-text-muted uppercase">{t("run.next.title")}</h3>
+      <SectionTitle as="h3" spacing="">
+        {t("run.next.title")}
+      </SectionTitle>
       <ul className="mt-1.5 grid gap-1.5">
         {goals.map((goal) => {
           const Icon = ICON[goal.kind];
