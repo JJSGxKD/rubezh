@@ -9,7 +9,7 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ENEMY_ART } from "./creatures.mjs";
-import { HERO_DEFS, HERO_STATES } from "./hero.mjs";
+import { HERO_DEFS, HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
 import { creaturePalette, enemyBody, STAGES } from "./palette.mjs";
 import { svgFrame, PPU, CELL_K } from "./build.mjs";
 import { FX } from "./fx.mjs";
@@ -188,12 +188,31 @@ function pickupsBoard() {
   return { width: 1900, height: 310, items };
 }
 
+/** Облики героя: крупно, в игровом масштабе и среди врагов — облик не должен теряться в толпе. */
+function skinsBoard() {
+  const items = [{ text: "Облики героя: палитры одного рисунка, все светлые — роль «герой — белый» не меняется", x: 24, y: 30, size: 22, bold: true }];
+  items.push({ ground: true, x: 16, y: 46, w: 1350, h: 230 });
+  const rat = ENEMY_ART.find((a) => a.id === "swarm_rat");
+  HERO_SKINS.forEach((skin, i) => {
+    const x = 28 + i * 335;
+    const draw = (state, k) => withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${heroDefs()}</defs>${HERO_STATES[state][k]()}</svg>`);
+    items.push({ svg: draw("idle", 0), x, y: 52, size: 150 });
+    items.push({ svg: draw("walk", 1), x: x + 150, y: 52, size: 150 });
+    const game = gameSize(10, 2.6) / 2;
+    items.push({ svg: enemySvg(rat, 0, 0), x: x + 40, y: 222, size: gameSize(rat.radius) / 2 });
+    items.push({ svg: draw("walk", 1), x: x + 70, y: 214, size: game });
+    items.push({ svg: enemySvg(rat, 1, 0.5), x: x + 104, y: 226, size: gameSize(rat.radius) / 2 });
+    items.push({ text: skin.name, x: x + 150, y: 240, size: 16, bold: true });
+  });
+  return { width: 1380, height: 290, items };
+}
+
 async function main() {
   const path = process.env.PLAYWRIGHT_MODULE ?? "/opt/node-tools/node_modules/playwright/index.mjs";
   const { chromium } = await import(pathToFileURL(path).href);
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  for (const [name, board] of [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()]]) {
+  for (const [name, board] of [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()]]) {
     writeFileSync(join(OUT, `sheet-${name}.png`), Buffer.from(await renderBoard(page, board), "base64"));
   }
   await browser.close();

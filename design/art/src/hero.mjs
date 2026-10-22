@@ -5,10 +5,36 @@
 // Контур — признак героя: у врагов его нет (design/README.md, «Вид боя»),
 // поэтому тёмный кант читается как «это я» даже в толпе красных тел.
 
-import { HERO as H } from "./palette.mjs";
+import { HERO } from "./palette.mjs";
 import { twoTone } from "./creatures.mjs";
 
 const TAU = Math.PI * 2;
+
+/**
+ * Палитра, которой рисуются кадры. Облик героя (`HERO_SKINS`) — та же поза
+ * другой палитрой: рисунок не повторяется, и облики не расходятся с героем
+ * по пропорциям.
+ */
+let H = HERO;
+
+/** Нарисовать кадры героя другой палитрой: `draw` вызывается внутри. */
+export function withHeroPalette(palette, draw) {
+  const previous = H;
+  H = { ...HERO, ...palette };
+  try {
+    return draw();
+  } finally {
+    H = previous;
+  }
+}
+
+/** Фильтр канта — с цветом канта текущей палитры. */
+export function heroDefs() {
+  return `<filter id="heroEdge" x="-50%" y="-50%" width="200%" height="200%">
+<feMorphology in="SourceAlpha" operator="dilate" radius="2.2" result="d"/>
+<feFlood flood-color="${H.edge}"/><feComposite in2="d" operator="in" result="o"/>
+<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+}
 const f = (n) => (Math.round(n * 10) / 10).toString();
 
 /**
@@ -82,10 +108,18 @@ function edge(inner) {
   return `<g filter="url(#heroEdge)">${inner}</g>`;
 }
 
-export const HERO_DEFS = `<filter id="heroEdge" x="-50%" y="-50%" width="200%" height="200%">
-<feMorphology in="SourceAlpha" operator="dilate" radius="2.2" result="d"/>
-<feFlood flood-color="${H.edge}"/><feComposite in2="d" operator="in" result="o"/>
-<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+export const HERO_DEFS = heroDefs();
 
-/** Радиус героя в игровых единицах — тот же, что у фигуры-заглушки (SimConfig). */
 export const HERO_RADIUS = 10;
+
+/**
+ * Облики героя — палитры, а не новые рисунки (design/art/registry.md, G-05).
+ * Все светлые: роль «герой — белый» (design/README.md) не меняется с обликом,
+ * иначе игрок теряет себя в толпе. Меняются шарф, оберег и оттенок плаща.
+ */
+export const HERO_SKINS = [
+  { id: "keeper", name: "Хранитель", palette: {} },
+  { id: "herbalist", name: "Знахарка", palette: { cloak: "#f1f6ea", cloakShade: "#c4d0b6", cloakDeep: "#8d9a7c", scarf: "#b07cf0", scarfShade: "#7e4fc0", ward: "#46d9c6" } },
+  { id: "frost", name: "Зимний дозор", palette: { cloak: "#eef5ff", cloakShade: "#b9cbe6", cloakDeep: "#8199bf", scarf: "#5ccfff", scarfShade: "#2f8fc4", ward: "#b8ecff", wardLight: "#ffffff", boots: "#2f3b5c" } },
+  { id: "gilded", name: "Золотой рубеж", palette: { cloak: "#fff7e2", cloakShade: "#e6cf9a", cloakDeep: "#b89a5a", scarf: "#3f6fd0", scarfShade: "#2a4c96", ward: "#ffd15c", wardLight: "#fff6c8", staff: "#5a3d2a" } },
+];

@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ENEMY_ART } from "./creatures.mjs";
-import { HERO_DEFS, HERO_RADIUS, HERO_STATES } from "./hero.mjs";
+import { HERO_DEFS, HERO_RADIUS, HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
 import { creaturePalette, enemyBody, GOLD_RIM, hex, STAGES } from "./palette.mjs";
 import { FX } from "./fx.mjs";
 import { PICKUPS } from "./pickups.mjs";
@@ -87,7 +87,7 @@ export function cellSize(radius, k = CELL_K) {
 
 /** Все кадры атласов: имя → { svg, size }. */
 export function collectFrames() {
-  const packs = { core: [], late: [], env: decorFrames(PPU) };
+  const packs = { core: [], late: [], env: decorFrames(PPU), skins: [] };
   for (const [state, frames] of Object.entries(HERO_STATES)) {
     frames.forEach((draw, k) => {
       packs.core.push({
@@ -96,6 +96,16 @@ export function collectFrames() {
         size: cellSize(HERO_RADIUS, 2.6),
       });
     });
+  }
+  // Облики — свой пак: грузятся, когда игрок открывает раздел или выбрал облик
+  // (docs/27 §3.5). Только покой и шаг: ранение и смерть — кадры обычного героя.
+  for (const skin of HERO_SKINS.slice(1)) {
+    for (const state of ["idle", "walk"]) {
+      HERO_STATES[state].forEach((draw, k) => {
+        const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${heroDefs()}</defs>${draw()}</svg>`);
+        packs.skins.push({ name: `hero-${skin.id}/${state}${k}`, svg, size: cellSize(HERO_RADIUS, 2.6) });
+      });
+    }
   }
   for (const art of ENEMY_ART) {
     const pack = CORE_ENEMIES.has(art.id) ? packs.core : packs.late;

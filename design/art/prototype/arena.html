@@ -11,7 +11,7 @@
   Открывать через любой статический сервер из корня репозитория:
     npx http-server . -p 8090   →   http://localhost:8090/design/art/prototype/arena.html
   Phaser берётся из node_modules после `pnpm install`; нет его — с CDN той же версии.
-  Параметры адреса: ?enemies=300&mode=sprites|shapes&auto=1&zones=1&decor=1&fx=1&seed=7&area=380000&clean=1&x=0&y=0
+  Параметры адреса: ?enemies=300&mode=sprites|shapes&auto=1&zones=1&decor=1&fx=1&seed=7&area=380000&clean=1&x=0&y=0&skin=frost
 -->
 <style>
   :root { --bg: #1d1c31; --text: #f3eee6; --muted: #aeaac4; --accent: #ff8f3f; --panel: rgba(29, 28, 49, 0.82); }
@@ -42,6 +42,8 @@ const opt = {
   fx: Q.get("fx") !== "0",
   patches: Q.get("patches") !== "0",
   ground: Q.get("ground") !== "0",
+  /** облик героя: keeper (по умолчанию), herbalist, frost, gilded — пак skins */
+  skin: Q.get("skin") ?? "keeper",
   seed: Number(Q.get("seed") ?? 7),
   stage: Number(Q.get("stage") ?? -1),
 };
@@ -131,6 +133,7 @@ return class Arena extends Phaser.Scene {
     this.load.atlas("core", "../out/atlas-core.png", "../out/atlas-core.json");
     this.load.atlas("late", "../out/atlas-late.png", "../out/atlas-late.json");
     this.load.atlas("env", "../out/atlas-env.png", "../out/atlas-env.json");
+    this.load.atlas("skins", "../out/atlas-skins.png", "../out/atlas-skins.json");
     this.load.image("ground", "../out/ground-neutral.webp");
   }
 
@@ -352,8 +355,9 @@ return class Arena extends Phaser.Scene {
     const moving = len > 0.01;
     if (moving) { this.hero.vx = mx / len; this.hero.vy = my / len; this.hero.x += this.hero.vx * HERO_SPEED * dt; this.hero.y += this.hero.vy * HERO_SPEED * dt; }
     this.hero.t += dt;
-    const heroFrame = moving ? `hero/walk${Math.floor(this.hero.t * 8) % 4}` : `hero/idle${Math.floor(this.hero.t * 1.5) % 2}`;
-    this.heroSprite.setFrame(heroFrame).setPosition(this.hero.x, this.hero.y).setFlipX(this.hero.vx < 0);
+    const heroState = moving ? `walk${Math.floor(this.hero.t * 8) % 4}` : `idle${Math.floor(this.hero.t * 1.5) % 2}`;
+    const skinned = opt.skin !== "keeper";
+    this.heroSprite.setTexture(skinned ? "skins" : "core", skinned ? `hero-${opt.skin}/${heroState}` : `hero/${heroState}`).setPosition(this.hero.x, this.hero.y).setFlipX(this.hero.vx < 0);
     this.heroShape.setPosition(this.hero.x, this.hero.y);
     this.cameras.main.centerOn(this.hero.x, this.hero.y);
 

@@ -24,6 +24,14 @@
   "gpu": "0.9 МБ"
  },
  {
+  "pack": "skins",
+  "frames": 18,
+  "atlas": "1024×400",
+  "fill": "74%",
+  "png": "24 КБ",
+  "gpu": "1.6 МБ"
+ },
+ {
   "pack": "ground-neutral",
   "frames": 1,
   "atlas": "512×512",
