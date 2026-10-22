@@ -46,8 +46,29 @@ export type TabId = (typeof TAB_ROOTS)[number];
  */
 const STUB_SCREENS: ReadonlySet<ScreenId> = new Set<ScreenId>([]);
 
+/**
+ * Куда сдвигается мир при смене экрана (design/art/direction-v2.md §4.4):
+ * вглубь и на вкладку правее — новый экран въезжает справа, назад и левее —
+ * слева, остальное (замена экрана, первый показ) — просто проявляется.
+ * Переход рассказывает, где игрок оказался, а не только что он сменился.
+ */
+export type ScreenMotion = "forward" | "back" | "rise";
+
+export function screenMotion(prev: readonly ScreenId[], next: readonly ScreenId[]): ScreenMotion {
+  if (next.length > prev.length) return "forward";
+  if (next.length < prev.length) return "back";
+  const from = prev[0];
+  const to = next[0];
+  if (prev.length === 1 && from !== undefined && to !== undefined && from !== to && isTab(from) && isTab(to)) {
+    return TAB_ROOTS.indexOf(to) > TAB_ROOTS.indexOf(from) ? "forward" : "back";
+  }
+  return "rise";
+}
+
 export interface NavigationStore {
   stack: ScreenId[];
+  /** как сдвинулся мир последним переходом — для `ScreenTransition` */
+  motion: ScreenMotion;
   push(screen: ScreenId): void;
   pop(): void;
   replace(screen: ScreenId): void;
@@ -56,10 +77,11 @@ export interface NavigationStore {
 
 export const useNavigation = create<NavigationStore>((set, get) => ({
   stack: ["lobby"],
+  motion: "rise",
 
   push(screen): void {
     if (current(get().stack) === screen) return;
-    set({ stack: [...get().stack, screen] });
+    set({ stack: [...get().stack, screen], motion: "forward" });
     reportScreen(screen);
   },
 
@@ -69,18 +91,18 @@ export const useNavigation = create<NavigationStore>((set, get) => ({
     // но событие может прийти и от жеста площадки.
     if (stack.length <= 1) return;
     const next = stack.slice(0, -1);
-    set({ stack: next });
+    set({ stack: next, motion: "back" });
     reportScreen(current(next));
   },
 
   replace(screen): void {
     const stack = get().stack;
-    set({ stack: [...stack.slice(0, -1), screen] });
+    set({ stack: [...stack.slice(0, -1), screen], motion: "rise" });
     reportScreen(screen);
   },
 
   resetTo(screen): void {
-    set({ stack: [screen] });
+    set({ stack: [screen], motion: screenMotion(get().stack, [screen]) });
     reportScreen(screen);
   },
 }));

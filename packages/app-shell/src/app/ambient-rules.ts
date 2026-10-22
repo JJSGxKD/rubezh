@@ -52,3 +52,20 @@ export function emberLayout(count: number): Ember[] {
     durationSec: 9 + (index % 4) * 1.5,
   }));
 }
+
+/** Сдвиг частокола на вкладку, px: экран въезжает на 28 px, дальний слой — меньше. */
+export const PALISADE_STEP_PX = 5;
+
+/** Запас частокола за краями экрана, px: сдвиг не должен открывать пустой край. */
+export const PALISADE_OVERHANG_PX = 24;
+
+/**
+ * Параллакс фона (design/art/direction-v2.md §4.4): частокол чуть сдвигается
+ * с номером вкладки — переход на вкладку правее ведёт мир влево, и дальний
+ * слой движется медленнее экрана. `null` — не вкладка: частокол по центру.
+ */
+export function palisadeShift(depth: number | null): number {
+  if (depth === null) return 0;
+  const centre = 2.5;
+  return Math.round((centre - depth) * PALISADE_STEP_PX);
+}

@@ -43,6 +43,8 @@
    * оболочки (§3.3). Длительности — из переменных ниже.
    */
   --animate-screen-in: screen-in var(--duration-base) var(--ease-out) both;
+  --animate-screen-forward: screen-forward var(--duration-base) var(--ease-out) both;
+  --animate-screen-back: screen-back var(--duration-base) var(--ease-out) both;
   --animate-fade-in: fade-in var(--duration-slow) var(--ease-base) both;
   --animate-pop-in: pop-in var(--duration-slow) var(--ease-spring) both;
   --animate-sheet-in: sheet-in var(--duration-slow) var(--ease-out) both;
@@ -110,6 +112,21 @@
     from {
       opacity: 0;
       transform: translateY(8px);
+    }
+  }
+
+  /* Сдвиг мира при переходе (§4.4 direction-v2): экран въезжает с той стороны, куда шёл игрок. */
+  @keyframes screen-forward {
+    from {
+      opacity: 0;
+      transform: translateX(28px);
+    }
+  }
+
+  @keyframes screen-back {
+    from {
+      opacity: 0;
+      transform: translateX(-28px);
     }
   }
 

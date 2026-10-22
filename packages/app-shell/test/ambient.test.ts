@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { AMBIENT, emberLayout, starLayout } from "../src/app/ambient-rules";
+import { TAB_ROOTS } from "../src/state/navigation";
+import { AMBIENT, emberLayout, PALISADE_OVERHANG_PX, palisadeShift, starLayout } from "../src/app/ambient-rules";
 
 // Живой фон приложения (design/art/direction-v2.md §4.4): звёзды мерцают,
 // искры очага поднимаются. Раскладка без случайности — один и тот же фон на
@@ -38,5 +39,21 @@ describe("искры", () => {
 
   it("не вылетают пачкой: задержки разные", () => {
     expect(new Set(embers.map((ember) => ember.delaySec)).size).toBe(embers.length);
+  });
+});
+
+describe("параллакс частокола", () => {
+  it("вкладка правее ведёт частокол влево, и сдвиг не открывает пустой край", () => {
+    const shifts = TAB_ROOTS.map((_, index) => palisadeShift(index));
+    for (let i = 1; i < shifts.length; i++) expect(shifts[i]).toBeLessThan(shifts[i - 1] ?? 0);
+    for (const shift of shifts) expect(Math.abs(shift)).toBeLessThan(PALISADE_OVERHANG_PX);
+  });
+
+  it("дальний слой движется меньше экрана: шаг меньше въезда экрана", () => {
+    expect(Math.abs(palisadeShift(1) - palisadeShift(0))).toBeLessThan(28);
+  });
+
+  it("не вкладка — частокол по центру", () => {
+    expect(palisadeShift(null)).toBe(0);
   });
 });
