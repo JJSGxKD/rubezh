@@ -141,6 +141,12 @@ export class ScreenBoundary extends Component<{ children: ReactNode }, BoundaryS
 
   override render(): ReactNode {
     if (!this.state.failed) return this.props.children;
-    return <ErrorState text={t("error.screen")} onRetry={() => globalThis.location.reload()} />;
+    // Ошибка встаёт на место экрана, мимо `Screen`: отступ от прозрачной шапки
+    // разделов — здесь же, иначе заголовок ошибки уезжал под шапку.
+    return (
+      <div className="h-full overflow-y-auto px-4 pt-[var(--app-header-h)]">
+        <ErrorState text={t("error.screen")} onRetry={() => globalThis.location.reload()} />
+      </div>
+    );
   }
 }
