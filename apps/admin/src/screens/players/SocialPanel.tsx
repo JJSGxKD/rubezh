@@ -74,9 +74,9 @@ export function SocialPanel({ accountId }: { accountId: string }) {
             ]}
           />
           {state.data.referredBy?.status === "bound" && can(view, "players.ban") ? (
-            <div className="flex items-end gap-2">
+            <div className="flex flex-wrap items-end gap-2">
               <Field label="Причина отклонения" hint="Попадёт в аудит вместе с прежним статусом.">
-                <Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={256} className="w-80" />
+                <Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={256} className="w-80 max-w-full" />
               </Field>
               {confirming ? (
                 <>

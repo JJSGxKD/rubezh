@@ -149,7 +149,7 @@ export function ChangelogScreen() {
           {problem !== null && input.text.trim() !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
           {/* Версия так, как её увидит игрок в «Что нового»: та же карточка в странице клиента (Р83). */}
-          <div className="xl:sticky xl:top-4 xl:self-start">
+          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
             <PhonePreview
               kind="changelog-version"
               draft={changelogPreview(input, original, state.status === "ok" ? state.data.entries : [])}
