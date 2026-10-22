@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Button, Hint, Modal } from "../../design-system/components";
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import type { ItemAction, ItemView } from "../../state/items-api";
-import { CostLabel, rarityName, slotIcon, slotName, statChange, statName, statValue, toneOf } from "./arsenal-parts";
+import { CostLabel, RarityGlow, rarityName, slotIcon, slotName, statChange, statName, statValue, toneOf } from "./arsenal-parts";
 
 /**
  * Лист предмета: свойства, мощь против надетого в том же слоте и операции.
@@ -29,7 +29,12 @@ export function ItemSheet(props: {
     <Modal
       placement="bottom"
       title={slotName(item.slot)}
-      icon={<span className={`inline-flex size-14 items-center justify-center rounded-lg ring-2 ${toneOf(item.rarity).tile}`}>{slotIcon(item.slot, 28)}</span>}
+      icon={
+        <span className={`relative isolate inline-flex size-14 items-center justify-center rounded-lg ring-2 ${toneOf(item.rarity).tile}`}>
+          <RarityGlow rarity={item.rarity} seed={item.itemId} />
+          {slotIcon(item.slot, 28)}
+        </span>
+      }
       onDismiss={props.onClose}
       footer={
         <div className="grid gap-2">

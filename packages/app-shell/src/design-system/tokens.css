@@ -1140,3 +1140,25 @@ body {
   background: linear-gradient(90deg, color-mix(in oklab, var(--row-tone) 18%, transparent), transparent 72%);
   box-shadow: inset 3px 0 0 color-mix(in oklab, var(--row-tone) 80%, transparent);
 }
+
+/*
+ * Редкость предмета v2 (screens/meta/rarity-look.ts): камень в оправе, а не
+ * плоская заливка. Тон — `--rarity-tone`. Слои кладутся под значок слота
+ * (`-z-1` в плитке с `isolate`), поэтому свет не мутит значок.
+ */
+@utility rarity-glow {
+  background:
+    radial-gradient(90% 70% at 50% 108%, color-mix(in oklab, var(--rarity-tone) 48%, transparent), transparent 72%),
+    linear-gradient(180deg, color-mix(in oklab, var(--rarity-tone) 12%, transparent), transparent 55%);
+}
+
+/* Оправа: тёмный зазор и тонкий ободок тона внутри обводки — как у реликвии. */
+@utility rarity-facets {
+  box-shadow:
+    inset 0 0 0 2px color-mix(in oklab, var(--color-bg) 55%, transparent),
+    inset 0 0 0 3px color-mix(in oklab, var(--rarity-tone) 42%, transparent);
+}
+
+@utility rarity-halo {
+  box-shadow: 0 0 14px -1px color-mix(in oklab, var(--rarity-tone) 60%, transparent);
+}
