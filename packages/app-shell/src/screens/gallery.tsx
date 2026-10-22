@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { AdCreative, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { AdCreative, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
@@ -33,6 +33,7 @@ import { useNavigation } from "../state/navigation";
 import { BootScreen } from "./gates";
 import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
+import { ChestOverlay } from "./run/ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 import { SecondChance } from "./run/SecondChance";
 import type { AdContinueStage } from "../state/ad-continue";
@@ -49,7 +50,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -85,6 +86,9 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
           <ListItem title={t("run.continue.title")} onClick={() => setPreview("chance")} />
           <ListItem title={t("gallery.preview.record")} onClick={() => setPreview("record")} />
+          <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
+          <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
+          <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -368,6 +372,12 @@ function renderPreview(preview: Preview): ReactNode {
           onStats={noop}
         />
       );
+    case "chest1":
+    case "chest3":
+    case "chest5": {
+      const size = preview === "chest1" ? 1 : preview === "chest3" ? 3 : 5;
+      return <ChestOverlay chest={{ index: size, size, rewards: SAMPLE_CHEST.slice(0, size) }} onTake={noop} />;
+    }
     case "pause":
       return <PauseOverlay elapsedSec={187} onResume={noop} onSettings={noop} onSurrender={noop} onStats={noop} />;
     case "death":
@@ -498,6 +508,15 @@ const SAMPLE_OFFERS: UpgradeOption[] = [
     descriptionKey: "passive.might.description",
     changes: [change("upgrade.stat.passive.damage", 1.1, 1.2, "percent")],
   },
+];
+
+/** Сундук: все виды наград — новое, уровни, лечение и опыт. */
+const SAMPLE_CHEST: ChestReward[] = [
+  { ...SAMPLE_OFFERS[1]!, kind: "weapon_level" },
+  { ...KNIFE_NEW, kind: "weapon_new" },
+  { ...SAMPLE_OFFERS[2]!, kind: "passive_level" },
+  { id: "heal", kind: "heal", refId: "", level: 0, nameKey: "upgrade.heal.name", descriptionKey: "upgrade.heal.description", changes: [] },
+  { id: "xp", kind: "xp", refId: "", level: 0, nameKey: "upgrade.xp.name", descriptionKey: "upgrade.xp.description", changes: [change("upgrade.xp.label", null, 40, "plus")] },
 ];
 
 /** Самые длинные тексты словаря — на них вёрстка ломается первой (§4.3). */

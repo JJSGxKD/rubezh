@@ -5,7 +5,7 @@ import { volumeCurve } from "../src/audio/audio-engine";
 import { DEFAULT_VOLUMES, bossPhaseRaised } from "../src/audio";
 import { LAB_OVERRIDES_KEY, readLabOverrides, recipeSchema } from "../src/audio/lab-overrides";
 import { BUSES, SOUND_RECIPES, UI_SOUNDS } from "../src/audio/recipes";
-import { gemNotes, planCueSounds } from "../src/audio/sound-director";
+import { gemNotes, planCueSounds, revealRate } from "../src/audio/sound-director";
 import { sceneFor } from "../src/state/audio-sync";
 import { useSettings } from "../src/state/settings";
 import { initShell } from "../src/state/shell";
@@ -122,6 +122,13 @@ describe("план звуков забега", () => {
     expect(bossPhaseRaised(boss(0), boss(1))).toBe(true);
     expect(bossPhaseRaised(boss(1), null)).toBe(false);
     expect(bossPhaseRaised(boss(2), boss(1, "boss_other"))).toBe(false);
+  });
+
+  it("награды сундука звенят лесенкой вверх и не уходят выше октавы", () => {
+    const rates = [0, 1, 2, 3, 4, 5, 6, 9].map(revealRate);
+    expect(rates[0]).toBe(1);
+    for (let i = 1; i < 6; i++) expect(rates[i] ?? 0).toBeGreaterThan(rates[i - 1] ?? 0);
+    expect(Math.max(...rates)).toBe(2);
   });
 
   it("важное — впереди толпы: при потолке голосов режутся последние", () => {

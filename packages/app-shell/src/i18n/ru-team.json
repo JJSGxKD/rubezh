@@ -189,6 +189,8 @@
   "soundLab.sound.record": "Рекорд",
   "soundLab.sound.chestDrop": "Выпал сундук",
   "soundLab.sound.chestOpen": "Сундук открыт",
+  "soundLab.sound.chestRattle": "Сундук трясётся",
+  "soundLab.sound.chestReveal": "Награда из сундука",
   "soundLab.sound.uiTap": "Нажатие",
   "soundLab.sound.uiBack": "Назад",
   "soundLab.sound.uiPress": "Главная кнопка",

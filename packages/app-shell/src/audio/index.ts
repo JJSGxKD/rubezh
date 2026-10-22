@@ -108,6 +108,10 @@ export const audio = {
   runEvent(event: RunSoundEvent): void {
     director?.runEvent(event);
   },
+  /** Звон `index`-й награды сундука — сцена открытия зовёт его по расписанию. */
+  chestReveal(index: number): void {
+    director?.chestReveal(index);
+  },
   hud(state: HudSound): void {
     director?.setHud(state);
   },
