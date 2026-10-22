@@ -48,18 +48,25 @@ export const STATUS_PULSE_ON = 10;
  */
 const PULSE_SLOT_SHIFT = 7;
 
-/**
- * Тон врага в этот тик. Заморозка горит постоянно: она длится секунду, и
- * игрок должен увидеть её сразу, а не на следующем такте пульса.
- */
-export function statusTone(enemies: EnemyPool, index: number, tick: number): number {
+/** Самое важное для боя состояние врага, без пульса — порядок `STATUS_TONE`. */
+export function activeStatus(enemies: EnemyPool, index: number): number {
   if (enemies.frozenTimer[index] > 0) return STATUS_TONE.frozen;
-  if ((tick + index * PULSE_SLOT_SHIFT) % STATUS_PULSE_TICKS >= STATUS_PULSE_ON) return STATUS_TONE.none;
   if (enemies.shockTimer[index] > 0) return STATUS_TONE.shock;
   if (enemies.burnTimer[index] > 0) return STATUS_TONE.burn;
   if (enemies.poisonTimer[index] > 0) return STATUS_TONE.poison;
   if (enemies.chillTimer[index] > 0) return STATUS_TONE.chill;
   return STATUS_TONE.none;
+}
+
+/**
+ * Тон врага в этот тик. Заморозка горит постоянно: она длится секунду, и
+ * игрок должен увидеть её сразу, а не на следующем такте пульса.
+ */
+export function statusTone(enemies: EnemyPool, index: number, tick: number): number {
+  const status = activeStatus(enemies, index);
+  if (status === STATUS_TONE.frozen) return status;
+  if ((tick + index * PULSE_SLOT_SHIFT) % STATUS_PULSE_TICKS >= STATUS_PULSE_ON) return STATUS_TONE.none;
+  return status;
 }
 
 /**
