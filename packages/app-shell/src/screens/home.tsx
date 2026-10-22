@@ -44,7 +44,7 @@ export function LobbyScreen(): ReactNode {
     <Screen
       footer={
         saved === null ? (
-          <Button size="l" block glow cut onClick={() => setPreRunOpen(true)}>
+          <Button size="l" block glow cut shine onClick={() => setPreRunOpen(true)}>
             <Play size={22} fill="currentColor" />
             {t("lobby.play")}
           </Button>

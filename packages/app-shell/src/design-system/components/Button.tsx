@@ -34,6 +34,12 @@ export interface ButtonProps {
    * магазина). У других вариантов игнорируется.
    */
   cut?: boolean;
+  /**
+   * Блик: раз в несколько секунд по кнопке пробегает полоса света — у
+   * главного действия экрана, которое должно звать («Играть»). Только
+   * `transform` и `opacity`; при «меньше движения» блика нет.
+   */
+  shine?: boolean;
   ariaLabel?: string;
 }
 
@@ -118,6 +124,7 @@ export function Button(props: ButtonProps): ReactNode {
           className={`flex flex-1 items-center justify-center gap-2 self-stretch ${CUT_PADDING_CLASS[size]}`}
         >
           {loading ? <Spinner /> : props.children}
+          {props.shine === true && !inactive ? <Shine /> : null}
         </CutFrame>
       ) : loading ? (
         <Spinner />
@@ -138,6 +145,22 @@ export function Button(props: ButtonProps): ReactNode {
         className={`halo-accent pointer-events-none absolute -inset-3 -z-10 animate-glow ${radiusOf(size)}`}
       />
       {button}
+    </span>
+  );
+}
+
+/**
+ * Полоса света по заливке, под надписью: z-index −1 в слое `CutFrame` — тот
+ * же, что у заливки, но позже в разметке. Над текстом блик бледнил бы его.
+ * Срез `CutFrame` обрезает полосу по форме кнопки.
+ */
+function Shine(): ReactNode {
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 -z-1 overflow-hidden">
+      <span
+        className="absolute inset-y-0 left-0 w-1/3 animate-btn-shine"
+        style={{ backgroundImage: "linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-text) 55%, transparent), transparent)" }}
+      />
     </span>
   );
 }
