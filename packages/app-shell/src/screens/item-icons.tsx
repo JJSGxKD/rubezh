@@ -1,64 +1,21 @@
 import type { ReactNode } from "react";
-import {
-  Anvil,
-  BicepsFlexed,
-  Bug,
-  CloudLightning,
-  Flame,
-  Footprints,
-  Heart,
-  HeartPlus,
-  HeartPulse,
-  Hourglass,
-  Layers,
-  Magnet,
-  Orbit,
-  Radius,
-  Shield,
-  Slice,
-  Sparkles,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { GameGlyph, HEAL_GLYPH, PASSIVE_GLYPHS, WEAPON_GLYPHS } from "./game-glyphs";
 
 /**
- * Значки оружия и пассивок — временные, из набора иконок, до своих ассетов
- * (docs/27-design-system-and-app-shell.md §1.4).
- *
- * Соответствие живёт в оболочке, а не в контенте: контент не знает, чем его
- * рисуют. Оружие, для которого значка ещё нет, получает общий — геймдизайнер
- * добавляет оружие данными и не обязан ждать правки интерфейса.
+ * Значки оружия и пассивок — свои (`game-glyphs.tsx`, design/art/direction-v2.md
+ * §4.5). Соответствие живёт в оболочке, а не в контенте: контент не знает,
+ * чем его рисуют. Оружие, для которого значка ещё нет, получает общий —
+ * геймдизайнер добавляет оружие данными и не обязан ждать правки интерфейса.
  */
-const WEAPON_ICONS: Readonly<Record<string, LucideIcon>> = {
-  spark: Zap,
-  knife: Slice,
-  wardstone: Orbit,
-  hearth: Flame,
-  storm: CloudLightning,
-  sting: Bug,
-};
-
-const PASSIVE_ICONS: Readonly<Record<string, LucideIcon>> = {
-  might: BicepsFlexed,
-  haste: Hourglass,
-  reach: Radius,
-  volley: Layers,
-  swiftness: Footprints,
-  vitality: Heart,
-  mending: HeartPulse,
-  lodestone: Magnet,
-  ward: Shield,
-  tempering: Anvil,
-};
 
 export type ItemKind = "weapon" | "passive" | "heal";
 
 export function ItemIcon(props: { kind: ItemKind; id: string; size?: number }): ReactNode {
-  const Icon =
-    props.kind === "heal"
-      ? HeartPlus
-      : ((props.kind === "weapon" ? WEAPON_ICONS : PASSIVE_ICONS)[props.id] ?? Sparkles);
-  return <Icon size={props.size ?? 20} aria-hidden="true" />;
+  const size = props.size ?? 20;
+  const glyph = props.kind === "heal" ? HEAL_GLYPH : (props.kind === "weapon" ? WEAPON_GLYPHS : PASSIVE_GLYPHS)[props.id];
+  if (glyph !== undefined) return <GameGlyph glyph={glyph} size={size} />;
+  return <Sparkles size={size} aria-hidden="true" />;
 }
 
 const TILE_TONE: Record<ItemKind, string> = {
