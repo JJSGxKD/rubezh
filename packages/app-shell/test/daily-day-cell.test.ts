@@ -7,7 +7,7 @@ import { DayCell } from "../src/screens/meta/daily";
 // узкую плитку на 320 px. Сегодняшний день подписан так же, как остальные, —
 // «День N», а «сегодня» передают рамка, цвет и точка.
 
-const day = { coins: 60, shards: 0, claimed: false, today: true };
+const day = { day: 1, coins: 60, shards: 0, claimed: false, today: true };
 
 describe("плитка дня награды", () => {
   it("сегодня — та же подпись «День N», без «Сегодня»", () => {
