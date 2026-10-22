@@ -164,13 +164,20 @@ export const PICKUP_LOOKS: readonly (ShapeLook & {
   id: "medkit" | "magnet" | "dynamite" | "chest_one" | "chest_three" | "chest_five";
   key: string;
   size: number;
+  /**
+   * Тон ореола на земле — только у сундуков. Тот же, что у яруса в окне
+   * вскрытия (`chest-rules.ts` оболочки): малый — жар очага, средний —
+   * бирюза оберегов, большой — золото элиты. Размер награды читается
+   * цветом света издалека, и окно продолжает то, что игрок видел на поле.
+   */
+  aura?: number;
 })[] = [
   { id: "medkit", key: "bh-medkit", shape: "medkit", color: 0xff5d5d, size: 1 },
   { id: "magnet", key: "bh-magnet-pickup", shape: "magnet", color: 0x5ccfff, size: 1.2 },
   { id: "dynamite", key: "bh-dynamite-pickup", shape: "dynamite", color: 0xff5d5d, size: 1.35 },
-  { id: "chest_one", key: "bh-chest-one", shape: "chest", color: 0xd9a441, size: 1.3 },
-  { id: "chest_three", key: "bh-chest-three", shape: "chest", color: 0xf0bb3a, size: 1.5 },
-  { id: "chest_five", key: "bh-chest-five", shape: "chest", color: 0xffd44d, size: 1.7 },
+  { id: "chest_one", key: "bh-chest-one", shape: "chest", color: 0xd9a441, size: 1.3, aura: 0xff8f3f },
+  { id: "chest_three", key: "bh-chest-three", shape: "chest", color: 0xf0bb3a, size: 1.5, aura: 0x46d9c6 },
+  { id: "chest_five", key: "bh-chest-five", shape: "chest", color: 0xffd44d, size: 1.7, aura: 0xffd15c },
 ];
 
 /**
