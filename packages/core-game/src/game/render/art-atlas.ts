@@ -1,6 +1,8 @@
 import type Phaser from "phaser";
 import { ART_ENV_KEY, ART_GROUND_KEY } from "./art-ground";
 import type { PickupArt } from "./pickups";
+import { STATUS_MARK_FRAMES, type StatusMarkArt } from "./status-marks";
+import { STATUS_TONE } from "./status-tones";
 
 /**
  * Черновой арт забега (design/art/README.md): атласы героя и врагов вместо
@@ -155,6 +157,7 @@ export class ArtMode {
   private pickupFrames: PickupArt | null = null;
   private deathFrames: ArtFrame[] = [];
   private orbiterFrame: ArtFrame | null = null;
+  private statusMarkFrames: StatusMarkArt = [];
   /** показанный кадр у слота врага; −1 — слот рисуется фигурой */
   private readonly shown: Int16Array;
   private readonly left: Uint8Array;
@@ -215,6 +218,15 @@ export class ArtMode {
     };
     this.deathFrames = Array.from({ length: 6 }, (_, k) => this.atlas.find(`fx/death${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
     this.orbiterFrame = this.atlas.find("fx/orbiter_ward0");
+    const tones = Object.values(STATUS_TONE);
+    this.statusMarkFrames = Array.from({ length: Math.max(...tones) + 1 }, (_, tone) =>
+      (STATUS_MARK_FRAMES[tone] ?? []).map((name) => this.atlas.find(name)).filter((frame): frame is ArtFrame => frame !== null),
+    );
+  }
+
+  /** Кадры знаков состояний для `StatusMarks`; `null` — режим выключен. */
+  statusMarkArt(): StatusMarkArt | null {
+    return this.enabled ? this.statusMarkFrames : null;
   }
 
   /**

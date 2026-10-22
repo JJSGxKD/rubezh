@@ -13,7 +13,8 @@ import { PickupRenderer } from "./pickups";
 import { projectileLook, type ProjectileLook } from "./projectile-look";
 import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
-import { playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
+import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
+import { activePlayerStatus, activeStatus, playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
@@ -68,6 +69,9 @@ export class WorldRenderer {
    * врагов, и сортировать весь слой с телеграфами и подборами нельзя.
    */
   private readonly enemyLayer: Phaser.GameObjects.Container;
+  private readonly markLayer: Phaser.GameObjects.Container;
+  private readonly marks: StatusMarks;
+  private readonly heroMark: StatusMarks;
   /** черновой арт за флагом разработчика (`RunDevVisuals.sprites`) */
   private readonly art: ArtMode;
   /** земля и декор чернового арта; создаются при первом включении режима */
@@ -164,6 +168,10 @@ export class WorldRenderer {
     this.rings = new PlayerRings(scene, world, this.layer);
     this.enemyLayer = scene.add.container(0, 0);
     this.layer.add(this.enemyLayer);
+    this.markLayer = scene.add.container(0, 0);
+    this.layer.add(this.markLayer);
+    this.marks = new StatusMarks(scene, this.markLayer);
+    this.heroMark = new StatusMarks(scene, this.markLayer);
     this.art = new ArtMode(scene, world);
     this.eventsRead = world.events.written;
   }
@@ -255,6 +263,10 @@ export class WorldRenderer {
       // режиме арта враги под героем, без него — прежний порядок.
       if (this.art.on) this.layer.moveBelow<Phaser.GameObjects.GameObject>(this.enemyLayer, this.player);
       else this.layer.bringToTop(this.enemyLayer);
+      // Знаки состояний — сразу над врагами: над головой, но под героем.
+      this.layer.moveAbove<Phaser.GameObjects.GameObject>(this.markLayer, this.enemyLayer);
+      this.marks.setArt(this.art.statusMarkArt(), this.art.scale);
+      this.heroMark.setArt(this.art.statusMarkArt(), this.art.scale);
       if (this.art.on && this.artGround === null) this.artGround = new ArtGround(this.scene, this.layer, this.world.config.unitScale);
       this.artGround?.setVisible(this.art.on);
       // Знак под ногами — на земле: сразу над землёй и декором, под всеми, кто по ней ходит.
@@ -279,6 +291,16 @@ export class WorldRenderer {
     const tick = this.world.stats.tick;
     const hitAge = tick - this.playerHitTick;
     const healAge = tick - this.playerHealTick;
+    // У героя-спрайта состояние — знаком над капюшоном, как у врагов: заливка
+    // превращала его в сплошной силуэт цвета стихии. Знак не гаснет на
+    // вспышке попадания — горение не прерывается ударом.
+    const art = this.player.texture.key !== "bh-player";
+    const status = art ? activePlayerStatus(this.world.player) : STATUS_TONE.none;
+    this.heroMark.begin();
+    if (status !== STATUS_TONE.none) {
+      this.heroMark.place(0, this.player.x, this.player.y - this.world.config.player.radius * HERO_MARK_RISE, status, tick);
+    }
+    this.heroMark.end();
 
     // Попадание важнее лечения: если было и то и другое, игрок должен видеть урон.
     if (hitAge < HIT_FLASH_TICKS) {
@@ -294,7 +316,7 @@ export class WorldRenderer {
     // Тон состояния на персонаже — без переключателя: это его собственное
     // состояние, и без тона непонятно, почему здоровье тает без попаданий
     // (docs/27-design-system-and-app-shell.md §7.1).
-    const tone = playerStatusTone(this.world.player, tick);
+    const tone = art ? STATUS_TONE.none : playerStatusTone(this.world.player, tick);
     if (tone !== STATUS_TONE.none) {
       this.player.setTintFill(STATUS_TONE_COLORS[tone] ?? WORLD_COLORS.hurt);
       this.player.setScale(this.heroScale());
@@ -319,6 +341,7 @@ export class WorldRenderer {
     // экране, не хочет и мерцания толпы (docs/27-design-system-and-app-shell.md §7.1).
     const statusTones = this.weaponEffects.enabled;
     this.telegraphs.begin();
+    this.marks.begin();
 
     for (let i = 0; i < enemies.count; i++) {
       const sprite = this.enemySprite(i);
@@ -346,13 +369,21 @@ export class WorldRenderer {
         tick - enemies.hitTick[i] < hitFlash
           ? LOOK.hit
           : lookFor(type.pattern, enemies.phase[i], tick);
-      if (look === LOOK.normal && statusTones) look = LOOK.status + statusTone(enemies, i, tick);
+      // У спрайта состояние — знаком над головой (status-marks.ts), заливкой —
+      // только заморозка. Знак не зависит от вспышки попадания: иначе он
+      // мигал бы на каждом ударе по горящему.
+      const mark = statusTones && this.art.shows(i) ? activeStatus(enemies, i) : STATUS_TONE.none;
+      if (look === LOOK.normal && statusTones) {
+        if (!this.art.shows(i)) look = LOOK.status + statusTone(enemies, i, tick);
+        else if (keepsFill(mark)) look = LOOK.status + mark;
+      }
       this.applyLook(sprite, i, look);
       sprite.setVisible(true);
 
       const x = lerp(enemies.prevX[i], enemies.x[i], t);
       const y = lerp(enemies.prevY[i], enemies.y[i], t);
       sprite.setPosition(x, y);
+      if (mark !== STATUS_TONE.none) this.marks.place(i, x, y - type.radius * MARK_RISE, mark, tick);
       // Остриё смотрит туда, куда враг идёт, а на замахе — куда ударит: клин,
       // повёрнутый не в ту сторону, читается как чужой враг. Фигуры без
       // острия разворот не трогает — и сбрасывает его, если слот пула достался
@@ -391,6 +422,7 @@ export class WorldRenderer {
     }
 
     this.telegraphs.end();
+    this.marks.end();
     this.art.sortEnemies(this.enemyLayer);
   }
 
