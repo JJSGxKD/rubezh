@@ -123,9 +123,14 @@ export function DailyScreen(): ReactNode {
   );
 }
 
-function DayCell(props: { day: DailyDay; index: number; last: boolean }): ReactNode {
+/**
+ * Плитка дня. Сегодняшний день подписан так же, как остальные, — «День N»:
+ * «СЕГОДНЯ» в узкой плитке на 320 px упиралось в края. «Сегодня» передают
+ * рамка, цвет подписи и точка перед ней.
+ */
+export function DayCell(props: { day: DailyDay; index: number; last: boolean }): ReactNode {
   const { day } = props;
-  const label = day.today && !day.claimed ? t("daily.today") : t("daily.day", { day: props.index + 1 });
+  const label = t("daily.day", { day: props.index + 1 });
   return (
     <li
       aria-current={day.today ? "date" : undefined}
@@ -138,7 +143,10 @@ function DayCell(props: { day: DailyDay; index: number; last: boolean }): ReactN
         props.last ? "col-span-2 landscape:col-span-1" : "",
       ].join(" ")}
     >
-      <span className={["font-display text-xs font-semibold tracking-wide uppercase", day.today ? "text-accent" : "text-text-muted"].join(" ")}>{label}</span>
+      <span className={["inline-flex items-center gap-1 font-display text-xs font-semibold tracking-wide whitespace-nowrap uppercase", day.today ? "text-accent" : "text-text-muted"].join(" ")}>
+        {day.today ? <span aria-hidden="true" data-today-dot="" className="size-1.5 shrink-0 rounded-full bg-accent" /> : null}
+        {label}
+      </span>
       <span aria-hidden="true" className={`inline-flex items-center justify-center gap-1 rounded-md bg-accent/15 ${props.last ? "h-14 px-3" : "size-11"}`}>
         {day.claimed ? <Check size={props.last ? 28 : 20} className="text-success" /> : <CoinIcon size={props.last ? 28 : 20} />}
         {day.shards > 0 && !day.claimed ? <ShardIcon rarity="common" size={22} /> : null}
