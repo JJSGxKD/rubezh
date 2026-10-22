@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { EnemyDef, StatusElement } from "@bh/shared-types";
 import { ELEMENT_TONE, STATUS_TONE_COLORS } from "@bh/core-game";
 import { t } from "../../i18n";
+import { ELEMENT_GLYPHS, GameGlyph } from "../game-glyphs";
 import { enemyAttackElement, enemyResists, weaponElements } from "./guide-data";
 import { hex } from "./scenes";
 
@@ -11,12 +12,16 @@ import { hex } from "./scenes";
  * мерцает враг в её состоянии: прочитав «огонь», игрок узнаёт горящего.
  */
 
+/**
+ * Знак стихии — формой и цветом, как над врагом в забеге и на карточке
+ * уровня (design/art/direction-v2.md §4.5): кружок различался только цветом.
+ */
 export function ElementDot(props: { element: StatusElement; size?: number }): ReactNode {
-  const size = props.size ?? 10;
+  const size = props.size ?? 12;
   return (
-    <svg viewBox="-5 -5 10 10" width={size} height={size} className="shrink-0" aria-hidden="true">
-      <circle r={5} fill={hex(STATUS_TONE_COLORS[ELEMENT_TONE[props.element]] ?? 0xffffff)} />
-    </svg>
+    <span className="inline-flex shrink-0" style={{ color: hex(STATUS_TONE_COLORS[ELEMENT_TONE[props.element]] ?? 0xffffff) }}>
+      <GameGlyph glyph={ELEMENT_GLYPHS[props.element]} size={size} />
+    </span>
   );
 }
 
