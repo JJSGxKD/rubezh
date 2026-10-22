@@ -161,7 +161,7 @@
 | Цвета шапки и панели Telegram | `app-shell/src/design-system/tokens.ts` → `PLATFORM_COLORS` | визуальный стиль |
 | Файлы шрифтов и подмножества алфавитов | `design-system/fonts.css`; новый алфавит — ещё и бюджет шрифтов ниже, §7 | визуальный стиль |
 | Заставка до загрузки JS: знак, цвета, полоса | `apps/web-*/index.html`, во всех трёх одинаково; цвета — копия токенов числами | визуальный стиль |
-| Знак игры | `design-system/components/Brand.tsx` → `Emblem` и та же фигура в `index.html` | визуальный стиль |
+| Знак игры | рисунок — `design/art/src/logo.mjs` (сетка букв, руна, цвета `BRAND`), он пишет `design-system/brand/*.svg` и `design/art/out/brand/*` (значок приложения, иконка вкладки); вывод — `design-system/components/Brand.tsx`; заставка и иконка вкладки в `apps/web-*/index.html` — тот же SVG вставкой | визуальный стиль |
 | Значки оружия и пассивок | `app-shell/src/screens/item-icons.tsx` → `WEAPON_ICONS`, `PASSIVE_ICONS`; нет значка — общий | владелец |
 | Любой текст интерфейса, включая имена оружия и пассивок | `app-shell/src/i18n/ru.json` | владелец |
 | Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | владелец |
