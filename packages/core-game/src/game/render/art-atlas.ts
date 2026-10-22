@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import type { PickupArt } from "./pickups";
 
 /**
  * Черновой арт забега (design/art/README.md): атласы героя и врагов вместо
@@ -128,6 +129,8 @@ export class ArtMode {
   /** кадры по индексу «(тип × ступени + ступень) × кадры шага + кадр»; `null` — арта нет */
   private frames: (ArtFrame | null)[] = [];
   private heroFrames: { idle: ArtFrame[]; walk: ArtFrame[] } | null = null;
+  private pickupFrames: PickupArt | null = null;
+  private deathFrames: ArtFrame[] = [];
   /** показанный кадр у слота врага; −1 — слот рисуется фигурой */
   private readonly shown: Int16Array;
   private readonly left: Uint8Array;
@@ -180,6 +183,23 @@ export class ArtMode {
     const idle = hero("idle", 2);
     const walk = hero("walk", ART_WALK_FRAMES);
     this.heroFrames = idle.length > 0 && walk.length > 0 ? { idle, walk } : null;
+    // Порядок — как у GEM_TIERS и PICKUP_LOOKS в looks.ts: индекс ступени и вида подбора.
+    this.pickupFrames = {
+      gems: ["gem1", "gem2", "gem3", "gem4"].map((id) => this.atlas.find(`pickup/${id}/0`)),
+      pickups: ["medkit", "magnet", "dynamite", "chest1", "chest3", "chest5"].map((id) => this.atlas.find(`pickup/${id}/0`)),
+      scale: this.scale,
+    };
+    this.deathFrames = Array.from({ length: 6 }, (_, k) => this.atlas.find(`fx/death${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
+  }
+
+  /** Кадры подборов для `PickupRenderer`; `null` — режим выключен. */
+  pickupArt(): PickupArt | null {
+    return this.enabled ? this.pickupFrames : null;
+  }
+
+  /** Кадры развеивания для `CombatFeedback`; `null` — режим выключен. */
+  deathArt(): readonly ArtFrame[] | null {
+    return this.enabled && this.deathFrames.length > 0 ? this.deathFrames : null;
   }
 
   /**
