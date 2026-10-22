@@ -77,3 +77,12 @@ describe("итоги забега: раскладка", () => {
     expect(markup).not.toContain(">Поделиться<");
   });
 });
+
+// Новый рекорд — награда и выглядит наградой: за короной лучи, как за
+// сундуком (design/art/effects.md §6.3). У обычного итога лучей нет.
+describe("лучи нового рекорда", () => {
+  it("за короной рекорда — лучи, у обычного итога — нет", () => {
+    expect(render({ isNewRecord: true })).toContain("animate-chest-rays-spin");
+    expect(render({ isNewRecord: false })).not.toContain("animate-chest-rays-spin");
+  });
+});
