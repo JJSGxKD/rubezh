@@ -29,6 +29,8 @@ import {
   type WheelSpin,
   type WheelView,
 } from "../../state/wheel-api";
+import { burstAt, RewardBurst, type Burst } from "../reward-burst";
+import { resourceGlyph } from "../reward-burst-rules";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
 import { sectorCenterDeg, sectorLabelUpsideDown, spinRotationDeg } from "./wheel-math";
@@ -81,6 +83,7 @@ export function WheelScreen(): ReactNode {
   const [phase, setPhase] = useState<WheelPhase>("idle");
   const [rotation, setRotation] = useState(0);
   const [won, setWon] = useState<WheelSpin | null>(null);
+  const [burst, setBurst] = useState<Burst | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pending = useRef<WheelSpin | null>(null);
   const [source, setSource] = useState<"free" | "ad">("free");
@@ -132,6 +135,11 @@ export function WheelScreen(): ReactNode {
     if (result === null) return;
     setWon(result);
     uiFeedback("reward");
+    // Приз вылетает из ступицы: колесо встало — награда «выпала» из него.
+    const glyph = resourceGlyph(result.resource);
+    if (glyph !== null) {
+      setBurst(burstAt(document.querySelector("[data-wheel-hub]"), result.credited, glyph.icon, glyph.icon === "shard" ? glyph.rarity : undefined));
+    }
     track("wheel_spun", { source, sector: result.sector, reward: result.resource, amount: result.amount });
     void loadWallet();
     void loadBadges();
@@ -212,6 +220,7 @@ export function WheelScreen(): ReactNode {
               </span>
               <span
                 aria-hidden="true"
+                data-wheel-hub=""
                 className="surface-card absolute top-1/2 left-1/2 inline-flex size-14 -translate-1/2 items-center justify-center rounded-full text-accent"
               >
                 <LoaderPinwheel size={26} />
@@ -227,6 +236,7 @@ export function WheelScreen(): ReactNode {
               )}
               {notice === null ? null : <p className="text-sm font-semibold text-text-muted">{notice}</p>}
             </div>
+            {burst === null ? null : <RewardBurst key={burst.key} burst={burst} onDone={() => setBurst(null)} />}
             {restricted ? <RestrictedPlaque kinds={AD_RESTRICTION} /> : null}
 
             <SectionTitle>{t("wheel.odds")}</SectionTitle>
