@@ -121,6 +121,7 @@ node design/art/src/build.mjs          # атласы, земля, отчёт о
 node design/art/src/previews.mjs       # листы концепций, бестиария, героя, эффектов
 pnpm dev:telegram                       # нужен для следующей строки
 node design/art/src/render-sounds.mjs  # OGG предложенных звуков
+node design/art/src/admin-overflow.mjs # админка на 390 без боковой прокрутки (нужна запущенная панель)
 npx http-server . -p 8090               # затем открыть в браузере:
 #   /design/art/prototype/arena.html — прототип
 #   /design/art/mockups/ui-fixes.html — макеты интерфейса
