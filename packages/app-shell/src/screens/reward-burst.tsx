@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { ShardIcon } from "../design-system/components/ShardIcon";
 import { formatNumber } from "../i18n";
-import { burstVectors, COIN_BURST } from "./reward-burst-rules";
+import { burstVectors, COIN_BURST, type BurstIcon } from "./reward-burst-rules";
 
 /**
  * Забор награды — событие, а не строка: значки веером вылетают из места
@@ -11,7 +11,7 @@ import { burstVectors, COIN_BURST } from "./reward-burst-rules";
  * экраны въезжают трансформом, и `fixed` внутри них считался бы от экрана.
  */
 
-export type BurstIcon = "coin" | "gem" | "shard";
+export type { BurstIcon };
 
 export interface Burst {
   key: number;

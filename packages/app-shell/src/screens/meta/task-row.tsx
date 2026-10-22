@@ -94,7 +94,10 @@ export function TaskRow(props: {
             </div>
           ) : null}
         </div>
-        <RewardChips reward={task.reward} />
+        {/* Метка — откуда вылетает награда при заборе (`reward-burst.tsx`). */}
+        <span data-task-reward={task.id} className="shrink-0">
+          <RewardChips reward={task.reward} />
+        </span>
       </div>
       {/* Под строкой и во всю ширину: в правой колонке кнопка сжимала полосу
           прогресса до точки на узком телефоне. */}

@@ -25,3 +25,16 @@ export function burstVectors(count: number): BurstCoin[] {
     return { x: Math.round(Math.cos(angle) * reach), y: Math.round(Math.sin(angle) * reach), delayMs: (index % 3) * 45 };
   });
 }
+
+export type BurstIcon = "coin" | "gem" | "shard";
+
+/**
+ * Чем выстреливает награда из нескольких валют — самым ценным, что в ней
+ * есть: самоцвет за звёзды, монета за игру, осколок — добавка к ним.
+ */
+export function mainResource(reward: { coins: number; gems: number; shards: number }): { icon: BurstIcon; amount: number } | null {
+  if (reward.gems > 0) return { icon: "gem", amount: reward.gems };
+  if (reward.coins > 0) return { icon: "coin", amount: reward.coins };
+  if (reward.shards > 0) return { icon: "shard", amount: reward.shards };
+  return null;
+}
