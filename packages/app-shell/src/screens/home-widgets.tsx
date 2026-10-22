@@ -313,16 +313,20 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
 /** Облик-значок: квадрат тона с иконкой; у широкого — крупнее. */
 export function IconFace(props: { size: WidgetSize; children: ReactNode; glow?: boolean }): ReactNode {
   const box = props.size === "hero" ? "size-12" : props.size === "row" ? "size-10" : "size-7";
+  // У светящейся плитки фон непрозрачный: сквозь полупрозрачный видно, как свечение мигает под значком.
+  // Имена классов — целыми словами: сканер Tailwind склейку вроде `widget-face${…}` не узнаёт.
+  const solid = props.glow === true ? "glow-face-solid" : "";
   const tile = (
-    <span className={`widget-face relative inline-flex ${box} items-center justify-center rounded-md`}>
+    <span className={`widget-face ${solid} relative inline-flex ${box} items-center justify-center rounded-md`}>
       <span className="relative">{props.children}</span>
     </span>
   );
   if (props.glow !== true) return tile;
   // Свечение — соседний слой позади плитки, а не её потомок: потомок рисуется над фоном плитки и мигает на нём.
+  // Форма — плитки, а не круг: круглое пятно за квадратом читается грязью на экране.
   return (
     <span className="relative isolate inline-flex">
-      <span aria-hidden="true" className="widget-motion absolute -inset-2 -z-10 animate-glow rounded-full bg-[radial-gradient(closest-side,var(--widget-daily-glow),transparent)] opacity-60" />
+      <span aria-hidden="true" className="widget-motion absolute -inset-1.5 -z-10 animate-glow rounded-lg bg-(--widget-daily-glow) opacity-45 blur-md" />
       {tile}
     </span>
   );
