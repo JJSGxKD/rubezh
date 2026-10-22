@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { burstVectors, COIN_BURST, mainResource } from "../src/screens/reward-burst-rules";
+import { burstVectors, COIN_BURST, mainResource, resourceGlyph } from "../src/screens/reward-burst-rules";
 
 // Забор награды — событие, а не строка текста (design/art/ui-ux.md, U-16):
 // значки вылетают веером из места награды и всплывает сумма.
@@ -29,5 +29,17 @@ describe("чем выстреливает награда задания", () => 
 
   it("пустая награда — без выброса", () => {
     expect(mainResource({ coins: 0, gems: 0, shards: 0 })).toBeNull();
+  });
+});
+
+describe("чем выстреливает приз колеса", () => {
+  it("монеты — монетами, осколок — осколком своей редкости", () => {
+    expect(resourceGlyph("coins")).toEqual({ icon: "coin" });
+    expect(resourceGlyph("gems")).toEqual({ icon: "gem" });
+    expect(resourceGlyph("shard_rare")).toEqual({ icon: "shard", rarity: "rare" });
+  });
+
+  it("незнакомый ресурс — без выброса, а не чужим значком", () => {
+    expect(resourceGlyph("pass_points")).toBeNull();
   });
 });

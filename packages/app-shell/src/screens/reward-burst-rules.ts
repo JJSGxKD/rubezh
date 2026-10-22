@@ -38,3 +38,16 @@ export function mainResource(reward: { coins: number; gems: number; shards: numb
   if (reward.shards > 0) return { icon: "shard", amount: reward.shards };
   return null;
 }
+
+export type BurstGlyph = { icon: "coin" } | { icon: "gem" } | { icon: "shard"; rarity: string };
+
+/**
+ * Значок выброса по имени ресурса сервера: «coins», «gems», «shard_<редкость>».
+ * Незнакомый ресурс — без выброса: чужой значок соврал бы о призе.
+ */
+export function resourceGlyph(resource: string): BurstGlyph | null {
+  if (resource === "coins") return { icon: "coin" };
+  if (resource === "gems") return { icon: "gem" };
+  if (resource.startsWith("shard_")) return { icon: "shard", rarity: resource.slice("shard_".length) };
+  return null;
+}
