@@ -19,7 +19,7 @@ import { ItemMedallion, type ItemKind } from "../item-icons";
 import { CardToolsBar } from "./CardTools";
 import { cardTapAction, toolButtons } from "./card-tools-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
-import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
+import { CategoryLabel, ElementLabel, passiveCategoryOf, SlotSummary, weaponElementOf } from "./SlotSummary";
 import { formatChange } from "./upgrade-format";
 
 /**
@@ -312,6 +312,7 @@ function OfferTag(props: { offer: UpgradeOption }): ReactNode {
   const { offer } = props;
   if (offer.kind === "heal") return null;
   const category = offer.kind === "passive_new" || offer.kind === "passive_level" ? passiveCategoryOf(offer.refId) : null;
+  const element = offer.kind === "weapon_new" || offer.kind === "weapon_level" ? weaponElementOf(offer.refId) : null;
 
   // «Новое» — уголком-лентой карточки, как в окне сундука; здесь — только уровень.
   const badge = isNew(offer) ? null : (
@@ -320,11 +321,12 @@ function OfferTag(props: { offer: UpgradeOption }): ReactNode {
     </Badge>
   );
 
-  if (category === null) return badge;
+  if (category === null && element === null) return badge;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
       {badge}
-      <CategoryLabel category={category} />
+      {category === null ? null : <CategoryLabel category={category} />}
+      {element === null ? null : <ElementLabel element={element} />}
     </span>
   );
 }

@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { Crosshair, Shield, Swords, Wind } from "lucide-react";
-import { PASSIVE_CATEGORIES, type PassiveCategory } from "@bh/shared-types";
-import { LOADOUT_LIMITS, PASSIVES, type RunSlotState } from "@bh/core-game";
+import { PASSIVE_CATEGORIES, type PassiveCategory, type StatusElement } from "@bh/shared-types";
+import { LOADOUT_LIMITS, PASSIVES, WEAPONS, type RunSlotState } from "@bh/core-game";
 import { t } from "../../i18n";
+import { ELEMENT_GLYPHS, GameGlyph } from "../game-glyphs";
+import { toneColor } from "./PlayerStatuses";
 import "../../i18n/run";
 
 /**
@@ -62,6 +64,28 @@ export function SlotSummary(props: {
 }
 
 /** Категория пассивки подписью: значок и имя — не только цвет (§4.4). */
+/** Стихия оружия; `null` — физический урон, метки нет. */
+export function weaponElementOf(id: string): StatusElement | null {
+  const element = WEAPONS.find((weapon) => weapon.id === id)?.element;
+  return element === undefined || element === "physical" ? null : element;
+}
+
+/**
+ * Стихия оружия на карточке (design/art/direction-v2.md §4.5): тем же знаком
+ * и цветом, что над врагом в забеге и в полоске состояний, — игрок выбирает
+ * огонь против стойких к холоду, а не «ещё одно оружие».
+ */
+export function ElementLabel(props: { element: StatusElement }): ReactNode {
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+      <span className="inline-flex" style={{ color: toneColor(props.element) }}>
+        <GameGlyph glyph={ELEMENT_GLYPHS[props.element]} size={14} />
+      </span>
+      {t(`run.element.${props.element}`)}
+    </span>
+  );
+}
+
 export function CategoryLabel(props: { category: PassiveCategory }): ReactNode {
   return (
     <span className="inline-flex items-center gap-1 text-xs text-text-muted">

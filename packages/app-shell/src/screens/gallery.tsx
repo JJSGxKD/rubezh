@@ -570,7 +570,16 @@ const LONG_OFFERS: UpgradeOption[] = [
     descriptionKey: "passive.mending.description",
     changes: [change("upgrade.stat.passive.regenPerSec", null, 0.4, "plus")],
   },
-  KNIFE_NEW,
+  // Оружие со стихией: метка стихии рядом с уровнем — самая длинная строка тегов.
+  {
+    id: "w:sting",
+    kind: "weapon_level",
+    refId: "sting",
+    level: 4,
+    nameKey: "weapon.sting.name",
+    descriptionKey: "weapon.sting.description",
+    changes: [change("upgrade.stat.damage", 8, 9), change("upgrade.stat.pierce", 3, 4)],
+  },
   {
     id: "heal",
     kind: "heal",
