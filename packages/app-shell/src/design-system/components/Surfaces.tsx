@@ -149,6 +149,12 @@ export interface ModalProps {
   onDismiss?: () => void;
   /** срезанный угол панели (design/README.md): у окон выбора и итога забега */
   cut?: boolean;
+  /**
+   * Сцена над панелью, а в ландшафте — слева от неё: сундук с лучами и
+   * искрами. Панель обрезает содержимое, а сцене нужен простор над
+   * затемнением.
+   */
+  hero?: ReactNode;
 }
 
 export function Modal(props: ModalProps): ReactNode {
@@ -177,6 +183,59 @@ export function Modal(props: ModalProps): ReactNode {
   const headerTitle = closable && props.icon === undefined;
   const footerPlacement = modalFooterPlacement({ hasFooter: props.footer !== undefined, pinFooter: props.pinFooter === true });
 
+  const panel = (
+    <Panel
+      cut={props.cut === true}
+      className={[
+        wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
+        props.hero === undefined ? "" : "min-h-0",
+        bottom ? "animate-sheet-in" : "animate-pop-in",
+      ].join(" ")}
+    >
+      {/* Закрываемую модалку закрывают там, где палец, — сверху (Р81).
+          Шапка не прокручивается: крестик виден и в конце длинного листа. */}
+      {closable ? (
+        <header className="flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 short:pl-4 landscape:pl-4">
+          {headerTitle ? <h2 className="min-w-0 flex-1 pt-2 font-display text-xl font-bold text-text">{props.title}</h2> : <span className="flex-1" />}
+          <IconButton label={t("app.close")} feedback={bottom ? null : "back"} onClick={onDismiss}>
+            <X size={22} />
+          </IconButton>
+        </header>
+      ) : null}
+      <div
+        className={[
+          "min-h-0 overflow-y-auto overscroll-contain px-5 short:px-4 landscape:px-4",
+          footerPlacement === "pinned" ? "" : "pb-5 short:pb-4 landscape:pb-4",
+          closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
+        ].join(" ")}
+      >
+        {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
+            счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
+            прокрутку (§5.3). */}
+        {props.icon === undefined ? null : (
+          <div className="mb-2 flex justify-center short:hidden landscape:hidden">
+            <IconEmblem>{props.icon}</IconEmblem>
+          </div>
+        )}
+        {props.title === undefined || headerTitle ? null : (
+          <h2
+            className={[
+              "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
+              props.icon === undefined ? "" : "text-center",
+            ].join(" ")}
+          >
+            {props.title}
+          </h2>
+        )}
+        {props.children}
+        {footerPlacement === "scroll" ? <div className="mt-5 grid gap-2">{props.footer}</div> : null}
+      </div>
+      {footerPlacement === "pinned" ? (
+        <div className="grid shrink-0 gap-2 px-5 pt-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4">{props.footer}</div>
+      ) : null}
+    </Panel>
+  );
+
   const dialog = (
     <div
       role="dialog"
@@ -192,55 +251,16 @@ export function Modal(props: ModalProps): ReactNode {
       style={{ zIndex: "var(--z-modal)" }}
     >
       <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" onClick={onDismiss} />
-      <Panel
-        cut={props.cut === true}
-        className={[
-          wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
-          bottom ? "animate-sheet-in" : "animate-pop-in",
-        ].join(" ")}
-      >
-        {/* Закрываемую модалку закрывают там, где палец, — сверху (Р81).
-            Шапка не прокручивается: крестик виден и в конце длинного листа. */}
-        {closable ? (
-          <header className="flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 short:pl-4 landscape:pl-4">
-            {headerTitle ? <h2 className="min-w-0 flex-1 pt-2 font-display text-xl font-bold text-text">{props.title}</h2> : <span className="flex-1" />}
-            <IconButton label={t("app.close")} feedback={bottom ? null : "back"} onClick={onDismiss}>
-              <X size={22} />
-            </IconButton>
-          </header>
-        ) : null}
-        <div
-          className={[
-            "min-h-0 overflow-y-auto overscroll-contain px-5 short:px-4 landscape:px-4",
-            footerPlacement === "pinned" ? "" : "pb-5 short:pb-4 landscape:pb-4",
-            closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
-          ].join(" ")}
-        >
-          {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
-              счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
-              прокрутку (§5.3). */}
-          {props.icon === undefined ? null : (
-            <div className="mb-2 flex justify-center short:hidden landscape:hidden">
-              <IconEmblem>{props.icon}</IconEmblem>
-            </div>
-          )}
-          {props.title === undefined || headerTitle ? null : (
-            <h2
-              className={[
-                "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
-                props.icon === undefined ? "" : "text-center",
-              ].join(" ")}
-            >
-              {props.title}
-            </h2>
-          )}
-          {props.children}
-          {footerPlacement === "scroll" ? <div className="mt-5 grid gap-2">{props.footer}</div> : null}
+      {props.hero === undefined ? (
+        panel
+      ) : (
+        // Сцена и панель — одной колонкой: панель сжимается под прокрутку,
+        // а сцена остаётся целой.
+        <div className="relative flex max-h-full w-full max-w-[420px] flex-col items-center landscape:max-w-[760px] landscape:flex-row">
+          {props.hero}
+          {panel}
         </div>
-        {footerPlacement === "pinned" ? (
-          <div className="grid shrink-0 gap-2 px-5 pt-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4">{props.footer}</div>
-        ) : null}
-      </Panel>
+      )}
     </div>
   );
 
