@@ -225,7 +225,9 @@ export class WorldRenderer {
       lerp(this.world.player.prevY, this.world.player.y, t),
     );
     const hero = this.world.player;
-    if (!this.art.applyHero(this.player, this.world.stats.tick, hero.vx, hero.vy, hero.faceX) && this.player.texture.key !== "bh-player") {
+    const tick = this.world.stats.tick;
+    const hurt = tick - this.playerHitTick < HIT_FLASH_TICKS;
+    if (!this.art.applyHero(this.player, tick, hero.vx, hero.vy, hero.faceX, hurt) && this.player.texture.key !== "bh-player") {
       this.player.setTexture("bh-player").setFlipX(false);
     }
     this.player.setVisible(this.world.player.alive);
@@ -307,13 +309,17 @@ export class WorldRenderer {
     this.heroMark.end();
 
     // Попадание важнее лечения: если было и то и другое, игрок должен видеть урон.
+    // У спрайта — кадр отдачи и тон умножением: сплошная заливка превращала
+    // героя в красный силуэт, а рисунок и есть то, что игрок узнаёт в толпе.
     if (hitAge < HIT_FLASH_TICKS) {
-      this.player.setTintFill(WORLD_COLORS.hurt);
+      if (art) this.player.setTint(HERO_HURT_TINT);
+      else this.player.setTintFill(WORLD_COLORS.hurt);
       this.player.setScale(this.heroScale() * (1 + 0.25 * (1 - hitAge / HIT_FLASH_TICKS)));
       return;
     }
     if (healAge < HIT_FLASH_TICKS) {
-      this.player.setTintFill(WORLD_COLORS.heal);
+      if (art) this.player.setTint(HERO_HEAL_TINT);
+      else this.player.setTintFill(WORLD_COLORS.heal);
       this.player.setScale(this.heroScale() * (1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS)));
       return;
     }
@@ -686,6 +692,9 @@ const HEAL_RING_UNITS = 40;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;
+/** Тон героя-спрайта на попадании и лечении — умножением, рисунок остаётся виден. */
+const HERO_HURT_TINT = 0xff8a8a;
+const HERO_HEAL_TINT = 0xb4ffb0;
 /** Раздувание попадания у спрайта чернового арта (design/art/registry.md, F-06); вспышка — `hit-flash.ts`. */
 const ART_HIT_SCALE = 1.1;
 

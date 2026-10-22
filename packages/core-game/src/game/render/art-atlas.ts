@@ -79,6 +79,16 @@ export function enemyFrameName(id: string, stage: number, frame: number): string
  * Куда смотрит спрайт: по знаку скорости, но с порогом. Враг, идущий почти
  * вертикально, иначе мерцал бы отражением от каждого шевеления по x.
  */
+/**
+ * Поза героя-спрайта: на попадании — кадр отдачи (откинулся, зажмурился)
+ * вместо красной заливки силуэта, иначе шаг или дыхание. Отдача важнее хода:
+ * удар должен читаться и на бегу.
+ */
+export function heroPose(moving: boolean, hurt: boolean): "hurt" | "walk" | "idle" {
+  if (hurt) return "hurt";
+  return moving ? "walk" : "idle";
+}
+
 export function faceLeft(vx: number, speed: number, wasLeft: boolean): boolean {
   const threshold = Math.max(1e-6, speed * 0.2);
   if (vx < -threshold) return true;
@@ -153,7 +163,7 @@ export class ArtMode {
   private enabled = false;
   /** кадры по индексу «(тип × ступени + ступень) × кадры шага + кадр»; `null` — арта нет */
   private frames: (ArtFrame | null)[] = [];
-  private heroFrames: { idle: ArtFrame[]; walk: ArtFrame[] } | null = null;
+  private heroFrames: { idle: ArtFrame[]; walk: ArtFrame[]; hurt: ArtFrame | null } | null = null;
   private pickupFrames: PickupArt | null = null;
   private deathFrames: ArtFrame[] = [];
   private orbiterFrame: ArtFrame | null = null;
@@ -209,7 +219,7 @@ export class ArtMode {
       Array.from({ length: count }, (_, k) => this.atlas.find(`hero/${state}${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
     const idle = hero("idle", 2);
     const walk = hero("walk", ART_WALK_FRAMES);
-    this.heroFrames = idle.length > 0 && walk.length > 0 ? { idle, walk } : null;
+    this.heroFrames = idle.length > 0 && walk.length > 0 ? { idle, walk, hurt: this.atlas.find("hero/hurt0") } : null;
     // Порядок — как у GEM_TIERS и PICKUP_LOOKS в looks.ts: индекс ступени и вида подбора.
     this.pickupFrames = {
       gems: ["gem1", "gem2", "gem3", "gem4"].map((id) => this.atlas.find(`pickup/${id}/0`)),
@@ -287,14 +297,18 @@ export class ArtMode {
     if (this.enabled) layer.sort("depth");
   }
 
-  /** Кадр героя: шаг на ходу, дыхание на месте. `false` — рисуется фигура. */
-  applyHero(sprite: Phaser.GameObjects.Image, tick: number, vx: number, vy: number, faceX: number): boolean {
+  /**
+   * Кадр героя: шаг на ходу, дыхание на месте, отдача на попадании. `false` —
+   * рисуется фигура.
+   */
+  applyHero(sprite: Phaser.GameObjects.Image, tick: number, vx: number, vy: number, faceX: number, hurt = false): boolean {
     const frames = this.enabled ? this.heroFrames : null;
     if (frames === null) return false;
     const moving = Math.abs(vx) + Math.abs(vy) > 1e-3;
-    const list = moving ? frames.walk : frames.idle;
-    const frame = list[moving ? walkFrame(tick, 0) % list.length : Math.floor(tick / 40) % list.length];
-    if (frame !== undefined && (sprite.texture.key !== frame.texture || sprite.frame.name !== frame.frame)) sprite.setTexture(frame.texture, frame.frame);
+    const pose = heroPose(moving, hurt && frames.hurt !== null);
+    const list = pose === "walk" ? frames.walk : frames.idle;
+    const frame = pose === "hurt" ? frames.hurt : list[pose === "walk" ? walkFrame(tick, 0) % list.length : Math.floor(tick / 40) % list.length];
+    if (frame !== undefined && frame !== null && (sprite.texture.key !== frame.texture || sprite.frame.name !== frame.frame)) sprite.setTexture(frame.texture, frame.frame);
     this.heroLeft = faceLeft(faceX, 1, this.heroLeft);
     if (sprite.flipX !== this.heroLeft) sprite.setFlipX(this.heroLeft);
     return true;
