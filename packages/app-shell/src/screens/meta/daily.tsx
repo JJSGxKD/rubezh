@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CalendarCheck, Check } from "lucide-react";
 import { Button, ContentColumn, ErrorState, IconEmblem, InfoNotice, Screen, staggerStyle } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
@@ -9,8 +10,9 @@ import { loadBadges } from "../../state/badges-api";
 import { createDailyApi, dailyAvailable, dayOfWeek, type DailyDay, type DailyView } from "../../state/daily-api";
 import { useNavigation } from "../../state/navigation";
 import { track } from "../../state/shell";
+import { uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
-import { coinPile, PILE_SPOTS } from "./daily-pile";
+import { burstVectors, COIN_BURST, coinPile, PILE_SPOTS } from "./daily-pile";
 import { dailyReloadDelayMs } from "./daily-reload";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
 
@@ -34,6 +36,7 @@ export function DailyScreen(): ReactNode {
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [claiming, setClaiming] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [burst, setBurst] = useState<Burst | null>(null);
 
   // silent — перечитывание на смене суток: экран не уходит в «загрузку» и не
   // перерисовывает дни, пока ответ не пришёл.
@@ -71,6 +74,8 @@ export function DailyScreen(): ReactNode {
       const today = view.days.find((day) => day.today);
       if (today !== undefined) track("daily_reward_claimed", { day: dayOfWeek(today, view.days), week: view.week });
       setNotice(t("daily.got", { what: gotText(response.data.coins, response.data.shards) }));
+      uiFeedback("reward");
+      setBurst(burstFrom(response.data.coins));
       void loadWallet();
     }
     void loadBadges();
@@ -124,6 +129,7 @@ export function DailyScreen(): ReactNode {
               ))}
             </ol>
             {notice === null ? null : <p className="mt-3 text-center text-sm font-semibold text-success">{notice}</p>}
+            {burst === null ? null : <CoinBurst key={burst.key} burst={burst} onDone={() => setBurst(null)} />}
             <p className="mt-4 text-xs text-text-muted">{t("daily.step.hint")}</p>
             {ready.nextStep > ready.step ? <p className="mt-1 text-xs text-text-muted">{t("daily.step.next", { step: formatDecimal(ready.nextStep) })}</p> : null}
           </>
@@ -166,6 +172,57 @@ export function DayCell(props: { day: DailyDay; index: number; last: boolean; pi
         {day.shards > 0 ? <span className="text-text-muted"> +{day.shards}</span> : null}
       </span>
     </li>
+  );
+}
+
+interface Burst {
+  key: number;
+  x: number;
+  y: number;
+  coins: number;
+}
+
+/**
+ * Откуда вылетают монеты — из сегодняшней плитки. Без движения системы
+ * выброса нет: награду и так называет строка под неделей.
+ */
+function burstFrom(coins: number): Burst | null {
+  if (typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
+  const tile = document.querySelector('[aria-current="date"]');
+  if (tile === null) return null;
+  const rect = tile.getBoundingClientRect();
+  return { key: performance.now(), x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, coins };
+}
+
+/**
+ * Забор награды — событие, а не строка: монеты веером вылетают из плитки
+ * дня и осыпаются, над ней всплывает сумма. Слой — порталом в `body`:
+ * экран въезжает трансформом, и `fixed` внутри него считался бы от экрана.
+ */
+function CoinBurst(props: { burst: Burst; onDone(): void }): ReactNode {
+  const { burst, onDone } = props;
+  useEffect(() => {
+    const timer = setTimeout(onDone, 1200);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+  return createPortal(
+    <div aria-hidden="true" className="pointer-events-none fixed" style={{ left: burst.x, top: burst.y, zIndex: "var(--z-toast)" }}>
+      {burstVectors(COIN_BURST.coins).map((coin, index) => (
+        <span
+          key={index}
+          className="absolute -mt-2.5 -ml-2.5 animate-coin-burst"
+          style={{ "--burst-x": `${String(coin.x)}px`, "--burst-y": `${String(coin.y)}px`, animationDelay: `${String(coin.delayMs)}ms` } as CSSProperties}
+        >
+          <CoinIcon size={20} />
+        </span>
+      ))}
+      <span className="absolute -top-4 left-0 -translate-x-1/2">
+        <span className="block animate-reward-float font-display text-2xl font-bold whitespace-nowrap text-coin tabular-nums">
+          +{formatNumber(burst.coins)}
+        </span>
+      </span>
+    </div>,
+    document.body,
   );
 }
 
