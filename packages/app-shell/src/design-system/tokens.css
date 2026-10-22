@@ -1026,6 +1026,17 @@
 
 /* Оплата звёздами: вторичная кнопка с подсветкой цвета Stars — цена читается
    как оплата в Telegram, но не спорит с главным действием экрана. */
+/*
+ * Выключенная главная кнопка: поверхность вместо заливки акцента. Бледный
+ * оранжевый над тёмным фоном становится бурым и читается как поломка.
+ */
+@utility btn-resting {
+  color: var(--color-text-muted);
+  background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface));
+  border: 1px solid var(--color-border-strong);
+  box-shadow: inset 0 -3px 0 var(--color-surface-sunken);
+}
+
 @utility btn-stars {
   color: var(--color-text);
   background: linear-gradient(
