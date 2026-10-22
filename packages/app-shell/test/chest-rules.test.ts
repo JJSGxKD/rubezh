@@ -9,6 +9,7 @@ import {
   headlineChange,
   reelStrip,
   revealTimes,
+  REWARD_TONE,
   rewardView,
   sparkVectors,
 } from "../src/screens/run/chest-rules";
@@ -179,6 +180,16 @@ describe("сундук на поле и в окне — один тон", () => 
     expect(aura("chest_three")).toBe(hex(COLORS.secondary));
     expect(CHEST_LOOKS.grand.tone).toBe("var(--color-elite)");
     expect(aura("chest_five")).toBe(hex(COLORS.elite));
+  });
+});
+
+// Окно сундука v2 (design/art/direction-v2.md §4.3): строка награды светится
+// цветом вида предмета — оружие, навык, лечение, опыт различимы до чтения.
+describe("тон строки награды", () => {
+  it("у каждого вида свой токен, и они не повторяются", () => {
+    const tones = (["weapon", "passive", "heal", "xp"] as const).map((icon) => REWARD_TONE[icon]);
+    expect(tones.every((tone) => tone.startsWith("var(--color-"))).toBe(true);
+    expect(new Set(tones).size).toBe(4);
   });
 });
 

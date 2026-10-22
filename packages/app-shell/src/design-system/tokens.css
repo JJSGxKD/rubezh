@@ -1041,3 +1041,49 @@ body {
     transition-duration: var(--duration-fast) !important;
   }
 }
+
+/*
+ * Реликвия — материал дизайн-системы v2 (design/art/direction-v2.md §4.4)
+ * для окон наград: сундук, эволюция, достижения, награды сезона. Не плоская
+ * карточка, а вещь мира: сумеречный ларец с кованой каймой-оберегом, свет
+ * яруса падает сверху. Тон — переменная `--relic-tone` (токен палитры).
+ */
+@utility relic-frame {
+  background:
+    radial-gradient(120% 55% at 50% 0%, color-mix(in oklab, var(--relic-tone) 24%, transparent), transparent 72%),
+    linear-gradient(180deg, color-mix(in oklab, var(--color-surface-raised) 85%, var(--relic-tone)), var(--color-surface) 38%, var(--color-surface-sunken));
+  border: 1px solid color-mix(in oklab, var(--relic-tone) 60%, var(--color-border-strong));
+  box-shadow:
+    var(--shadow-panel),
+    inset 0 0 0 3px color-mix(in oklab, var(--color-bg) 75%, transparent),
+    inset 0 0 0 4px color-mix(in oklab, var(--relic-tone) 38%, transparent);
+}
+
+/*
+ * Кайма-оберег: цепь ромбов, большой и малый через перемычку — мотив
+ * вышивки. Узор — маской, цвет — фоном: так кайма берёт тон яруса, а SVG в
+ * data-URI переменных не читает.
+ */
+@utility relic-band {
+  background-color: var(--relic-tone);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5 6 0l6 5-6 5zM12 5l6-3.6L24 5l-6 3.6z'/%3E%3Crect y='4.4' width='24' height='1.2'/%3E%3C/svg%3E");
+  mask-size: 24px 10px;
+  mask-repeat: repeat-x;
+  mask-position: center;
+  opacity: 0.75;
+}
+
+/*
+ * Строка награды: глубина ларца, а свет вида предмета — отдельным слоем
+ * (`relic-row-glow`), который проявляется, когда награда встала: до этого
+ * цвет выдал бы, что внутри. Тон — `--row-tone`.
+ */
+@utility relic-row {
+  background: var(--color-surface-sunken);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+@utility relic-row-glow {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--row-tone) 18%, transparent), transparent 72%);
+  box-shadow: inset 3px 0 0 color-mix(in oklab, var(--row-tone) 80%, transparent);
+}

@@ -3,7 +3,7 @@ import { Star } from "lucide-react";
 import type { ChestReward } from "@bh/shared-types";
 import { PASSIVES, WEAPONS } from "@bh/core-game";
 import { audio } from "../../audio";
-import { Badge, Button, Modal } from "../../design-system/components";
+import { Badge, Button, Modal, RibbonTitle } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/run";
 import type { OpenedChest } from "../../state/run";
@@ -16,6 +16,7 @@ import {
   chestTier,
   chestTitleKey,
   headlineChange,
+  REWARD_TONE,
   reelStrip,
   revealTimes,
   rewardView,
@@ -95,6 +96,7 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
   return (
     <Modal
       labelledBy={titleId}
+      relic={look.tone}
       hero={
         <ChestScene
           tier={tier}
@@ -104,15 +106,14 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
         />
       }
     >
-      {/* Заголовок «бьёт» в миг вскрытия: размер сундука — первое, что игрок узнаёт. */}
-      <h2
-        id={titleId}
-        className={["text-center font-display text-2xl font-bold text-text short:text-xl landscape:text-xl", opened ? "animate-chest-pop" : ""].join(" ")}
-      >
-        {t(chestTitleKey(chest.size))}
-      </h2>
+      {/* Заголовок на ленте «бьёт» в миг вскрытия: размер сундука — первое, что игрок узнаёт. */}
+      <div className={["mt-1 flex justify-center", opened ? "animate-chest-pop" : ""].join(" ")}>
+        <RibbonTitle id={titleId} tone={look.tone}>
+          {t(chestTitleKey(chest.size))}
+        </RibbonTitle>
+      </div>
       {/* На невысоком экране подпись уходит: каждая строка на счету. */}
-      <p className="mb-2 text-center text-sm text-text-muted short:hidden">{t("run.chest.subtitle", { count: chest.rewards.length })}</p>
+      <p className="mt-1.5 mb-2 text-center text-sm text-text-muted short:hidden">{t("run.chest.subtitle", { count: chest.rewards.length })}</p>
       <ul className="mt-2 grid gap-2 short:mt-1 short:gap-1 landscape:grid-cols-2">
         {chest.rewards.map((reward, index) => (
           <RewardRow
@@ -273,11 +274,21 @@ function RewardRow(props: { index: number; reward: ChestReward; opened: boolean;
   const headline = headlineChange(reward);
   const land = { animationDelay: `${String(landMs)}ms` };
   const after = { animationDelay: `${String(landMs + 120)}ms` };
+  const isNew = view.tag?.kind === "new";
 
   return (
-    <li className={["surface-sunken relative flex items-center gap-3 overflow-hidden rounded-md px-3 py-1.5 short:py-1", opened ? "animate-chest-land" : ""].join(" ")} style={land}>
-      {/* Окно высотой в одну плитку: лента из шести едет вверх и встаёт на награде. */}
-      <div className="relative size-12 shrink-0 overflow-hidden rounded-md" aria-hidden="true">
+    <li
+      className={["relic-row relative flex items-center gap-3 overflow-hidden rounded-lg py-1.5 pr-3 pl-3.5 short:py-1", opened ? "animate-chest-land" : ""].join(" ")}
+      style={{ ...land, "--row-tone": REWARD_TONE[view.icon] } as CSSProperties}
+    >
+      {/* Свет вида предмета — когда награда встала, не раньше. */}
+      <span
+        aria-hidden="true"
+        className={["relic-row-glow pointer-events-none absolute inset-0", opened ? "animate-fade-in motion-reduce:animate-none" : "opacity-0"].join(" ")}
+        style={land}
+      />
+      {/* Медальон высотой в одну плитку: лента из шести едет вверх и встаёт на награде. */}
+      <div className="relative size-12 shrink-0 overflow-hidden rounded-full ring-2 ring-border-strong" aria-hidden="true">
         <div
           className={["flex flex-col motion-reduce:-translate-y-60 motion-reduce:animate-none", opened ? "animate-chest-reel" : ""].join(" ")}
           style={{
@@ -294,25 +305,43 @@ function RewardRow(props: { index: number; reward: ChestReward; opened: boolean;
         {/* До вскрытия плитка закрыта: игрок видит, сколько наград внутри, но не какие. */}
         <span
           className={[
-            "absolute inset-0 flex items-center justify-center rounded-md bg-surface-raised font-display text-xl text-text-muted",
+            "absolute inset-0 flex items-center justify-center rounded-full bg-surface-raised font-display text-xl text-text-muted",
             opened ? "animate-chest-cover" : "",
           ].join(" ")}
           style={{ animationDelay: `${String(landMs - CHEST_TIMING.reelMs)}ms` }}
         >
           ?
         </span>
+        <span
+          className={["absolute inset-0 rounded-full ring-2 ring-(--row-tone) ring-inset", opened ? "animate-fade-in motion-reduce:animate-none" : "opacity-0"].join(" ")}
+          style={land}
+        />
       </div>
       {/* Название, выгода и метка проявляются, когда лента встала. */}
       <div className={["min-w-0 flex-1", opened ? "animate-fade-in motion-reduce:animate-none" : "opacity-0"].join(" ")} style={land}>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="min-w-0 font-display text-base font-bold break-words text-text">{t(reward.nameKey)}</span>
-          <span className={opened ? "inline-flex animate-pop-in" : "inline-flex opacity-0"} style={after}>
-            <RewardTagBadge tag={view.tag} />
-          </span>
+          {isNew ? null : (
+            <span className={opened ? "inline-flex animate-pop-in" : "inline-flex opacity-0"} style={after}>
+              <RewardTagBadge tag={view.tag} />
+            </span>
+          )}
         </div>
         {xpAmount === null ? null : <div className="font-display text-sm font-semibold text-xp tabular-nums">{xpAmount}</div>}
         {headline === null ? null : <ChangeLine change={headline} />}
       </div>
+      {/* Новый предмет — уголком-лентой: «новое» важнее уровня и видно до чтения. */}
+      {isNew ? (
+        <span
+          className={[
+            "absolute top-0 right-0 rounded-bl-md bg-accent px-2 py-0.5 font-display text-[10px] font-bold tracking-wide text-on-accent uppercase",
+            opened ? "animate-pop-in" : "opacity-0",
+          ].join(" ")}
+          style={after}
+        >
+          {t("run.levelUp.new")}
+        </span>
+      ) : null}
       {/* Блик по строке в миг, когда награда встала. */}
       {opened ? (
         <span
