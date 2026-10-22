@@ -285,7 +285,7 @@ export function TasksScreen() {
           {problem !== null && input.taskId !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
           {/* Строка так, как её увидит игрок в «Заданиях», — до выполнения и готовой к забору (Р83). */}
-          <div className="xl:sticky xl:top-4 xl:self-start">
+          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
             <PhonePreview kind="task" draft={taskPreview(input)} height={320} caption="Так увидит игрок — вкладка заданий" />
           </div>
         </div>

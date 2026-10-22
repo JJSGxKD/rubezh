@@ -116,7 +116,7 @@ function NetworkCard({ view, network, profile, canEdit, onSaved }: { view: AdsVi
             </p>
             <ul className="flex flex-col gap-1.5 text-sm">
               {profile.formats.map((support) => (
-                <li key={support.format} className="leading-snug">
+                <li key={support.format} className="leading-snug wrap-anywhere">
                   <span className="font-medium">{FORMAT_TITLES[support.format] ?? support.format}</span>
                   {support.delivery === "api" ? (
                     <span className="ml-1.5 inline-flex items-center gap-1 align-middle">

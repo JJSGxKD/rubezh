@@ -283,7 +283,8 @@ function PhoneCards<T>({ columns, rows, rowKey, onRowClick }: { columns: readonl
         <li
           key={rowKey(row)}
           onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}
-          className={`flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5 ${onRowClick === undefined ? "" : "cursor-pointer active:bg-surface-raised"}`}
+          // Перенос: четыре кнопки действий рядом с текстом на 390 не помещаются — уходят строкой ниже.
+          className={`flex flex-wrap items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5 ${onRowClick === undefined ? "" : "cursor-pointer active:bg-surface-raised"}`}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="min-w-0 text-sm font-semibold">{primary.render(row)}</div>
@@ -303,7 +304,7 @@ function PhoneCards<T>({ columns, rows, rowKey, onRowClick }: { columns: readonl
             )}
           </div>
           {actions.length === 0 ? null : (
-            <div className="flex shrink-0 items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+            <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()}>
               {actions.map((column, index) => (
                 <span key={index}>{column.render(row)}</span>
               ))}
