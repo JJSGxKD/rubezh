@@ -19,6 +19,7 @@ import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
 import { invulnerableAlpha } from "./invulnerable";
 import { ArtMode } from "./art-atlas";
+import { ArtGround } from "./art-ground";
 
 /** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
 const orbiterPoints: OrbiterPoint[] = [];
@@ -67,6 +68,8 @@ export class WorldRenderer {
   private readonly enemyLayer: Phaser.GameObjects.Container;
   /** черновой арт за флагом разработчика (`RunDevVisuals.sprites`) */
   private readonly art: ArtMode;
+  /** земля и декор чернового арта; создаются при первом включении режима */
+  private artGround: ArtGround | null = null;
   /** индекс текстуры врага: тип и ступень вместе, см. конструктор */
   private readonly enemySpriteType: Int16Array;
   private readonly stageCount: number;
@@ -179,6 +182,7 @@ export class WorldRenderer {
     this.layer.setScale(zoom);
     this.layer.setPosition(width / 2 - x * zoom, height / 2 - y * zoom);
 
+    this.artGround?.update(x, y, width / (2 * zoom), height / (2 * zoom));
     this.ground.setSize(width, height);
     this.ground.setTileScale(zoom, zoom);
     this.ground.setTilePosition(x - width / (2 * zoom), y - height / (2 * zoom));
@@ -249,6 +253,9 @@ export class WorldRenderer {
       // режиме арта враги под героем, без него — прежний порядок.
       if (this.art.on) this.layer.moveBelow<Phaser.GameObjects.GameObject>(this.enemyLayer, this.player);
       else this.layer.bringToTop(this.enemyLayer);
+      if (this.art.on && this.artGround === null) this.artGround = new ArtGround(this.scene, this.layer, this.world.config.unitScale);
+      this.artGround?.setVisible(this.art.on);
+      this.ground.setVisible(!this.art.on);
     });
   }
 
