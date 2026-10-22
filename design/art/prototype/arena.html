@@ -160,6 +160,8 @@ return class Arena extends Phaser.Scene {
     for (const def of ELITES) this.enemies.push(this.spawnEnemy(def, true));
 
     this.fx = [];
+    // Кристаллы опыта: пул, как у врагов; притягиваются к герою в радиусе подбора.
+    this.gems = [];
     this.keys = this.input.keyboard.createCursorKeys();
     this.wasd = this.input.keyboard.addKeys("W,A,S,D");
     this.frameTimes = [];
@@ -320,6 +322,15 @@ return class Arena extends Phaser.Scene {
     for (const img of chunk.items) { img.setVisible(false); this.decorPool.push(img); }
   }
 
+  dropGem(x, y, tier) {
+    let g = this.gems.find((it) => !it.active);
+    if (!g) { g = { img: this.add.image(0, 0, "core", "pickup/gem1/0").setDepth(4) }; this.gems.push(g); }
+    const frame = this.textures.getFrame("core", `pickup/gem${tier}/0`);
+    Object.assign(g, { active: true, x, y, tier, t: 0 });
+    g.img.setVisible(opt.mode === "sprites").setFrame(`pickup/gem${tier}/0`).setScale(1 / PPU).setPosition(x, y);
+    return frame;
+  }
+
   playFx(id, x, y, frames, tint, units) {
     let fx = this.fx.find((f) => !f.active);
     if (!fx) { fx = { img: this.add.image(0, 0, "core", `fx/${id}0`).setDepth(8) }; this.fx.push(fx); }
@@ -360,6 +371,7 @@ return class Arena extends Phaser.Scene {
       // Гибель у героя — условная: прототип проверяет облик, а не бой.
       if (d < 40 + e.def.r && !e.def.rank) {
         if (opt.fx) { this.playFx("death", e.x, e.y, 6, e.def.color, e.def.r * 3.2); this.playFx("hit", e.x, e.y - e.def.r * 0.4, 4, 0xffe066, 10); }
+        this.dropGem(e.x + (e.def.r + 30) * (dx > 0 ? -1 : 1), e.y, e.def.r >= 12 ? 3 : e.def.r >= 9 ? 2 : 1);
         e.sprite.destroy(); e.shape.destroy();
         this.enemies[i] = this.spawnEnemy(e.def, false);
         continue;
@@ -371,6 +383,17 @@ return class Arena extends Phaser.Scene {
       } else {
         e.shape.setPosition(e.x, e.y);
       }
+    }
+
+    for (const g of this.gems) {
+      if (!g.active) continue;
+      g.t += dt;
+      const gx = this.hero.x - g.x, gy = this.hero.y - g.y, gd = Math.hypot(gx, gy) || 1;
+      if (gd < 10) { g.active = false; g.img.setVisible(false); continue; }
+      // Радиус подбора — PICKUP_RADIUS_PX игры (90 единиц): ближе — кристалл летит к герою с разгоном.
+      if (gd < 90) { const v = 120 + (90 - gd) * 6; g.x += (gx / gd) * v * dt; g.y += (gy / gd) * v * dt; }
+      const frames = g.tier >= 3 ? 2 : 1;
+      g.img.setPosition(g.x, g.y).setFrame(`pickup/gem${g.tier}/${Math.floor(g.t * 3) % frames}`);
     }
 
     for (const fx of this.fx) {

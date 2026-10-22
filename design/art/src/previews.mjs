@@ -13,6 +13,7 @@ import { HERO_DEFS, HERO_STATES } from "./hero.mjs";
 import { creaturePalette, enemyBody, STAGES } from "./palette.mjs";
 import { svgFrame, PPU, CELL_K } from "./build.mjs";
 import { FX } from "./fx.mjs";
+import { PICKUPS } from "./pickups.mjs";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "out");
 const GROUND = "#33506a";
@@ -167,12 +168,32 @@ function fxBoard() {
   return { width: 1380, height: y + 10, items };
 }
 
+/** Подборы: крупно и в игровом масштабе — рядом, чтобы видеть, читается ли ступень кристалла. */
+function pickupsBoard() {
+  const items = [{ text: "Подборы: кристаллы четырёх ступеней, аптечка, магнит, динамит, сундуки 1 · 3 · 5 (закрыт / открыт)", x: 24, y: 30, size: 22, bold: true }];
+  items.push({ ground: true, x: 16, y: 46, w: 1870, h: 250 });
+  let x = 28;
+  for (const pickup of PICKUPS) {
+    pickup.frames.forEach((svg, k) => {
+      items.push({ svg, x, y: 56, size: 96 });
+      if (k === 0) {
+        const game = Math.round(pickup.units * GAME_PX) / 2;
+        items.push({ svg, x: x + 48 - game / 2, y: 230 - game / 2, size: game });
+        items.push({ text: pickup.id, x, y: 170, size: 13, color: "#d7dcef" });
+      }
+      x += 100;
+    });
+  }
+  items.push({ text: "↑ крупно · ↓ в игровом масштабе", x: 28, y: 290, size: 13, color: "#d7dcef" });
+  return { width: 1900, height: 310, items };
+}
+
 async function main() {
   const path = process.env.PLAYWRIGHT_MODULE ?? "/opt/node-tools/node_modules/playwright/index.mjs";
   const { chromium } = await import(pathToFileURL(path).href);
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  for (const [name, board] of [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()]]) {
+  for (const [name, board] of [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()]]) {
     writeFileSync(join(OUT, `sheet-${name}.png`), Buffer.from(await renderBoard(page, board), "base64"));
   }
   await browser.close();

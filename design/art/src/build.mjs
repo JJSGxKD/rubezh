@@ -15,6 +15,7 @@ import { ENEMY_ART } from "./creatures.mjs";
 import { HERO_DEFS, HERO_RADIUS, HERO_STATES } from "./hero.mjs";
 import { creaturePalette, enemyBody, GOLD_RIM, hex, STAGES } from "./palette.mjs";
 import { FX } from "./fx.mjs";
+import { PICKUPS } from "./pickups.mjs";
 import { decorFrames, groundTile, ZONES } from "./env.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -105,6 +106,10 @@ export function collectFrames() {
         pack.push({ name: `${art.id}/s${stage}/walk${k}`, svg, size: cellSize(art.radius) });
       });
     }
+  }
+  // Подборы — в core: кристаллы и аптечки падают с первой минуты.
+  for (const pickup of PICKUPS) {
+    pickup.frames.forEach((svg, k) => packs.core.push({ name: `pickup/${pickup.id}/${k}`, svg, size: Math.ceil(pickup.units * PPU) }));
   }
   for (const fx of FX) {
     fx.frames.forEach((svg, k) => packs.core.push({ name: `fx/${fx.id}${k}`, svg, size: Math.ceil(fx.units * PPU) }));
