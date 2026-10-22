@@ -269,7 +269,7 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
         <span className="min-w-0">
           {/* Тихая строка — подсказка без данных: мельче и в две строки, а не обрезанная крупная. */}
           {props.quiet === true ? (
-            <span className="line-clamp-2 text-sm leading-snug text-text-muted">{props.big}</span>
+            <span className="line-clamp-2 text-sm leading-snug text-balance text-text-muted">{props.big}</span>
           ) : (
             <span className="block truncate font-display text-base leading-tight font-bold text-text">{props.big}</span>
           )}

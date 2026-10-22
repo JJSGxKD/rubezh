@@ -1,8 +1,11 @@
 import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { formatCountdown } from "../src/screens/meta/schedule";
 import type { DailyWidget, WheelWidget } from "../src/state/home-api";
 import { arrangeWidgets, dailyFace, recordFace, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
+import { FriendsView } from "../src/screens/home-widgets";
 
 // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): готовое к забору —
 // первым и во всю ширину, дыр в сетке нет; что говорит каждый виджет —
@@ -150,5 +153,15 @@ describe("отсчёт в плитке", () => {
     const source = readFileSync(new URL("../src/screens/home-widgets.tsx", import.meta.url), "utf8");
     expect(source).toContain("formatCountdown(ms)");
     expect(source).not.toContain("roughCountdown");
+  });
+});
+
+describe("подсказка тихой плитки главной", () => {
+  // «Подарки друг / другу», «Крутка раз в / день»: без балансировки на 320 px
+  // последнее слово повисало на второй строке (design/art/ui-ux.md, U-07).
+  it("переносится сбалансированно, а не с висячим словом", () => {
+    const tile = renderToStaticMarkup(createElement(FriendsView, { face: { state: "idle" }, size: "tile" }));
+    expect(tile).toContain("Подарки друг другу");
+    expect(tile).toContain("text-balance");
   });
 });
