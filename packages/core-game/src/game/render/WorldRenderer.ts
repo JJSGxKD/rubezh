@@ -422,7 +422,7 @@ export class WorldRenderer {
       if (type.pattern === "dash" && enemies.phase[i] === DASH_PHASE.telegraph) {
         const length = type.params.dashSpeed * type.params.dashDurationSec;
         const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
-        this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, progress);
+        this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, type.radius, progress);
       }
       if (type.pattern === "caster" && enemies.phase[i] === CASTER_PHASE.windup) {
         // Кольцо вокруг кастера растёт к моменту удара — та же грамматика
