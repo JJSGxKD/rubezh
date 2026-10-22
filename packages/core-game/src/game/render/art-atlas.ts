@@ -15,6 +15,15 @@ import type { PickupArt } from "./pickups";
 /** Пикселей атласа на игровую единицу — `PPU` в design/art/src/build.mjs. */
 export const ART_PPU = 2.5;
 
+/**
+ * Во сколько раз растянуть кадр оберега, чтобы его свечение совпало с зоной
+ * удара: ячейка кадра — 16 единиц (`units` в design/art/src/fx.mjs), свечение
+ * — 0,8 ячейки, а бьёт оберег на `ORBITER_RADIUS` вокруг себя.
+ */
+export function orbiterArtScale(orbiterRadius: number): number {
+  return (orbiterRadius * 2) / (16 * 0.8);
+}
+
 /** Кадров шага у врага и героя. */
 export const ART_WALK_FRAMES = 4;
 
@@ -145,6 +154,7 @@ export class ArtMode {
   private heroFrames: { idle: ArtFrame[]; walk: ArtFrame[] } | null = null;
   private pickupFrames: PickupArt | null = null;
   private deathFrames: ArtFrame[] = [];
+  private orbiterFrame: ArtFrame | null = null;
   /** показанный кадр у слота врага; −1 — слот рисуется фигурой */
   private readonly shown: Int16Array;
   private readonly left: Uint8Array;
@@ -204,6 +214,15 @@ export class ArtMode {
       scale: this.scale,
     };
     this.deathFrames = Array.from({ length: 6 }, (_, k) => this.atlas.find(`fx/death${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
+    this.orbiterFrame = this.atlas.find("fx/orbiter_ward0");
+  }
+
+  /**
+   * Кадр оберега «Оберегов»; `null` — режим выключен. Плоский бирюзовый круг
+   * фигуры среди спрайтов выглядел заплаткой.
+   */
+  orbiterArt(): ArtFrame | null {
+    return this.enabled ? this.orbiterFrame : null;
   }
 
   /** Кадры подборов для `PickupRenderer`; `null` — режим выключен. */

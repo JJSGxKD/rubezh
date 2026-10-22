@@ -18,12 +18,14 @@ import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
 import { invulnerableAlpha } from "./invulnerable";
-import { ArtMode } from "./art-atlas";
+import { ArtMode, orbiterArtScale } from "./art-atlas";
 import { ArtGround } from "./art-ground";
 
 /** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
 const orbiterPoints: OrbiterPoint[] = [];
 const lookScratch: ProjectileLook = { texture: "", rotation: 0, scaleX: 1, scaleY: 1 };
+/** Вращение оберега черновой арта — оборот примерно за четыре секунды. */
+const ORBITER_SPIN_PER_TICK = (Math.PI * 2) / 240;
 
 /**
  * Рендер состояния симуляции. Отделён от неё полностью: симуляция не знает,
@@ -423,10 +425,16 @@ export class WorldRenderer {
    */
   private syncOrbiters(t: number): void {
     const drawn = orbiterRenderPoints(this.world, t, orbiterPoints);
+    const art = this.art.orbiterArt();
+    // Оберег черновой арта медленно вращается: свет в движении, а не наклейка.
+    const spin = art === null ? 0 : (this.world.stats.tick + t) * ORBITER_SPIN_PER_TICK;
     for (let k = 0; k < drawn; k++) {
       const sprite = this.orbiterSprite(k);
+      if (art === null && sprite.texture.key !== "bh-orbiter") sprite.setTexture("bh-orbiter").setScale(1).setRotation(0);
+      if (art !== null && sprite.frame.name !== art.frame) sprite.setTexture(art.texture, art.frame).setScale(this.art.scale * orbiterArtScale(ORBITER_RADIUS));
       sprite.setVisible(true);
       sprite.setPosition(orbiterPoints[k].x, orbiterPoints[k].y);
+      if (art !== null) sprite.setRotation(spin + k);
     }
 
     for (let i = drawn; i < this.orbiterSprites.length; i++) {

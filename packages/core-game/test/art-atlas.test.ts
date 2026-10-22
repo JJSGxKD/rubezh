@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
-import { ART_WALK_FRAMES, enemyFrameName, faceLeft, walkFrame } from "../src/game/render/art-atlas";
+import { ART_WALK_FRAMES, enemyFrameName, faceLeft, orbiterArtScale, walkFrame } from "../src/game/render/art-atlas";
 
 // Черновой арт забега за переключателем разработчика (design/art/README.md):
 // рендер, на исход забега не влияет.
@@ -54,5 +54,12 @@ describe("атлас покрывает контент", () => {
 
   it("у героя есть покой и шаг", () => {
     for (const name of ["hero/idle0", "hero/idle1", "hero/walk0", "hero/walk3"]) expect(frames.has(name), name).toBe(true);
+  });
+});
+
+describe("оберег черновой арта", () => {
+  it("свечение кадра совпадает с зоной удара оберега", () => {
+    // Ячейка 16 единиц, свечение — 0,8 ячейки: диаметр 12,8 × масштаб = 2 × радиус удара.
+    expect(16 * 0.8 * orbiterArtScale(16)).toBeCloseTo(32, 6);
   });
 });
