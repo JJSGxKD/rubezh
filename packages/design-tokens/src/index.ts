@@ -104,7 +104,7 @@ export const CSS_VAR_BY_COLOR: Record<ColorToken, string> = {
  * шрифта на свой у игрока на глазах.
  */
 export const FONT_FAMILY = {
-  display: "Tektur",
+  display: "Russo One",
   text: "IBM Plex Sans Variable",
 } as const;
 

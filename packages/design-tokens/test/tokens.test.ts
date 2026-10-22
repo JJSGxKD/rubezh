@@ -52,8 +52,8 @@ describe("базовые токены дизайна", () => {
     expect(COLORS.xp).toBe("#b6ff4a");
   });
 
-  it("гарнитуры направления: Tektur и IBM Plex Sans", () => {
-    expect(FONT_FAMILY).toEqual({ display: "Tektur", text: "IBM Plex Sans Variable" });
+  it("гарнитуры направления: Russo One и IBM Plex Sans", () => {
+    expect(FONT_FAMILY).toEqual({ display: "Russo One", text: "IBM Plex Sans Variable" });
   });
 
   it("не вход Tailwind: его импортирует вход приложения после tailwindcss", () => {
