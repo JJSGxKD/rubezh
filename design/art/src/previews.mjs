@@ -271,13 +271,68 @@ function plannedBoard() {
   return { width: 1260, height: y + 12, items };
 }
 
+/** Спрайт врага, подкрашенный льдом умножением, с инеем поверх — как предлагается для заморозки поля. */
+function frosted(svg) {
+  const filter = `<filter id="ice" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0.72 0 0 0 0.12  0 0.86 0 0 0.12  0 0 1 0 0.14  0 0 0 1 0" result="m"/><feFlood flood-color="#e6f7ff" flood-opacity="0.22"/><feComposite in2="SourceAlpha" operator="in" result="w"/><feMerge><feMergeNode in="m"/><feMergeNode in="w"/></feMerge></filter>`;
+  const head = svg.indexOf("</defs>");
+  return `${svg.slice(0, head)}${filter}</defs><g filter="url(#ice)">${svg.slice(head + 7, -6)}</g></svg>`;
+}
+
+/** Спрайт врага сплошной заливкой — как тон заморозки у фигуры сейчас. */
+function filled(svg, color) {
+  const filter = `<filter id="fill"><feFlood flood-color="${color}"/><feComposite in2="SourceAlpha" operator="in"/></filter>`;
+  const head = svg.indexOf("</defs>");
+  return `${svg.slice(0, head)}${filter}</defs><g filter="url(#fill)">${svg.slice(head + 7, -6)}</g></svg>`;
+}
+
+/**
+ * Раскадровка запланированных эффектов (design/art/direction-v2.md §5.1):
+ * подбор «Заморозка» и заморозка поля (T-0116), падение «Метеора» и кратер
+ * (T-0118). Кадры уже в атласе core; движок их возьмёт, когда задачи сделают.
+ */
+function plannedFxBoard() {
+  const items = [{ text: "Запланированные эффекты: заморозка поля (T-0116) и «Метеор» (T-0118)", x: 24, y: 30, size: 22, bold: true }];
+  const freeze = PICKUPS.find((pickup) => pickup.id === "freeze");
+  const fxOf = (id) => FX.find((fx) => fx.id === id);
+  let y = 50;
+  items.push({ ground: true, x: 16, y, w: 1350, h: 200 });
+  items.push({ text: "Подбор «Заморозка»", x: 26, y: y + 24, size: 16, bold: true });
+  items.push({ text: "звезда: не ромб, не магнит", x: 26, y: y + 46, size: 13, color: "#d7dcef" });
+  freeze.frames.forEach((svg, k) => items.push({ svg, x: 26 + k * 120, y: y + 64, size: 120 }));
+  const game = Math.round(freeze.units * GAME_PX);
+  items.push({ svg: freeze.frames[0], x: 290, y: y + 120 - game / 2, size: game });
+  const crowd = ["swarm_rat", "dasher_wolf", "bone_walker", "elite_ghoul"].map((id) => ENEMY_ART.find((art) => art.id === id)).filter(Boolean);
+  const row = (label, note, x0, look) => {
+    items.push({ text: label, x: x0, y: y + 24, size: 15, bold: true });
+    items.push({ text: note, x: x0, y: y + 44, size: 12, color: "#d7dcef" });
+    crowd.forEach((art, k) => items.push({ svg: look(enemySvg(art, 0, 0.25)), x: x0 + k * 82, y: y + 70, size: 110 }));
+  };
+  row("Поле до заморозки", "свой цвет у каждого", 360, (svg) => svg);
+  row("Заливка (как у фигуры)", "статуи — но кто есть кто, не видно", 700, (svg) => filled(svg, "#b8ecff"));
+  row("Предложение: лёд умножением", "рисунок виден, поле застыло", 1030, frosted);
+  y += 210;
+  items.push({ ground: true, x: 16, y, w: 1350, h: 200 });
+  items.push({ text: "«Метеор» и «Огненный ливень»", x: 26, y: y + 24, size: 16, bold: true });
+  items.push({ text: "падает сверху-справа, бьёт, кратер остывает", x: 26, y: y + 46, size: 13, color: "#d7dcef" });
+  const meteor = fxOf("meteor").frames;
+  const scorch = fxOf("scorch").frames;
+  const blast = fxOf("blast").frames;
+  // Камень идёт к точке удара сверху-справа вниз-влево — хвост за ним.
+  [0, 1, 2].forEach((k) => items.push({ svg: meteor[k % 2], x: 420 - k * 74, y: y + 8 + k * 50, size: 80 }));
+  items.push({ svg: blast[1] ?? blast[0], x: 520, y: y + 56, size: 130 });
+  scorch.forEach((svg, k) => items.push({ svg, x: 690 + k * 160, y: y + 50, size: 150 }));
+  items.push({ text: "удар", x: 560, y: y + 190, size: 12, color: "#d7dcef" });
+  items.push({ text: "кратер: жар → пепел за четыре кадра", x: 690, y: y + 190, size: 12, color: "#d7dcef" });
+  return { width: 1380, height: y + 216, items };
+}
+
 async function main() {
   const path = process.env.PLAYWRIGHT_MODULE ?? "/opt/node-tools/node_modules/playwright/index.mjs";
   const { chromium } = await import(pathToFileURL(path).href);
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const only = process.env.SHEETS?.split(",");
-  const boards = [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()], ["palette", paletteBoard()], ["planned", plannedBoard()]];
+  const boards = [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()], ["palette", paletteBoard()], ["planned", plannedBoard()], ["planned-fx", plannedFxBoard()]];
   for (const [name, board] of boards.filter(([name]) => only === undefined || only.includes(name))) {
     writeFileSync(join(OUT, `sheet-${name}.png`), Buffer.from(await renderBoard(page, board), "base64"));
   }

@@ -162,6 +162,51 @@ function statusFrames() {
 const STATUS = statusFrames();
 
 /**
+ * «Метеор» (T-0118, design/art/direction-v2.md §5.1) — заготовка для режима
+ * арта: камень с огненным хвостом падает сверху-справа под тем же углом, что
+ * `meteorTrail` в задаче, и оставляет кратер. Хвост — к правому верхнему
+ * углу ячейки: рендер ведёт кадр по прямой к точке удара, не поворачивая.
+ * Два кадра — пламя хвоста дрожит.
+ */
+function meteorFrames() {
+  // Хвост — языком пламени: широкий у камня, сходит на нет к правому верхнему углу.
+  const tail = (k) => {
+    const len = k === 0 ? 1 : 1.1;
+    const tip = (r) => `${f(-14 + 50 * r * len)} ${f(4 - 50 * r * len)}`;
+    const outer = `M-3.4 14.6 Q${f(22 + k * 3)} ${f(-2 - k * 3)} ${tip(1)} Q${f(-2 + k * 3)} ${f(-22 + k * 3)} -24.6 -6.6 Z`;
+    const inner = `M-8.3 9.7 Q${f(12 + k * 2)} ${f(-6 - k * 2)} ${tip(0.72)} Q${f(-4 + k * 2)} ${f(-16 + k * 2)} -19.7 -1.7 Z`;
+    const embers = [0.55, 0.8, 0.95].map((r, i) => `<circle cx="${f(-14 + 50 * r * len + (i - 1) * 5)}" cy="${f(4 - 50 * r * len + (1 - i) * 4)}" r="${f(2.6 - i * 0.6)}" fill="#ffd15c" opacity="${f(0.9 - i * 0.2)}"/>`).join("");
+    return `<path d="${outer}" fill="#ff7a2e" opacity="0.7"/><path d="${inner}" fill="#ffd15c" opacity="0.9"/>${embers}`;
+  };
+  const rock = `<circle cx="-14" cy="4" r="17" fill="#ff7a2e" opacity="0.45"/>
+<path d="M-28 2 L-22 -10 L-8 -14 L2 -6 L0 10 L-10 18 L-24 14 Z" fill="#5a3d2a" stroke="#1d1c31" stroke-width="3" stroke-linejoin="round"/>
+<path d="M-20 -6 L-10 -10 L-4 -4 L-14 0 Z" fill="#8a5a3c"/><path d="M-6 4 L-2 -2 L0 8 L-8 14 Z" fill="#ffd15c"/>`;
+  return [0, 1].map((k) => svg(`${tail(k)}${rock}`));
+}
+
+/**
+ * Кратер метеора: выжженное пятно с трещинами, которые остывают — от жара к
+ * тёмному за четыре кадра. Лежит на земле под врагами; рендер растягивает
+ * его до радиуса удара.
+ */
+function scorchFrames() {
+  return [0, 1, 2, 3].map((k) => {
+    const heat = 1 - k / 3;
+    const cracks = [0.4, 1.5, 2.6, 3.7, 4.8, 5.8]
+      .map((a, i) => {
+        const r1 = 14 + (i % 2) * 6;
+        const r2 = 30 + (i % 3) * 5;
+        return `M${f(Math.cos(a) * r1)} ${f(Math.sin(a) * r1 * 0.55)} L${f(Math.cos(a + 0.15) * r2)} ${f(Math.sin(a + 0.15) * r2 * 0.55)}`;
+      })
+      .join(" ");
+    return svg(`<ellipse rx="44" ry="25" fill="#1d1418" opacity="${f(0.55 * (0.4 + 0.6 * (1 - k / 4)))}"/>
+<ellipse rx="26" ry="14" fill="#2b1a17" opacity="0.8"/>
+<path d="${cracks}" stroke="#ff7a2e" stroke-width="${f(2 + 2 * heat)}" stroke-linecap="round" opacity="${f(heat)}"/>
+<ellipse rx="14" ry="7" fill="#ffd15c" opacity="${f(0.7 * heat)}"/>`);
+  });
+}
+
+/**
  * Размер ячейки — в игровых единицах при масштабе 1. Взрыв рендер растягивает
  * до радиуса из события: мягкая форма терпит растяжение вдвое.
  */
@@ -176,6 +221,9 @@ export const FX = [
   { id: "proj_sting", units: 14, frames: PROJ.sting },
   { id: "orbiter_ward", units: 16, frames: PROJ.ward },
   { id: "proj_enemy", units: 12, frames: PROJ.bolt },
+  // Заготовки под T-0118: оружия ещё нет в движке, кадры ждут в атласе.
+  { id: "meteor", units: 20, frames: meteorFrames() },
+  { id: "scorch", units: 48, frames: scorchFrames() },
   { id: "status_burn", units: 14, frames: STATUS.burn },
   { id: "status_chill", units: 14, frames: STATUS.chill },
   { id: "status_frozen", units: 14, frames: STATUS.frozen },

@@ -1,5 +1,5 @@
 // Подборы на земле: кристаллы опыта четырёх ступеней, аптечка, магнит,
-// динамит и сундуки трёх размеров. Цвета и размеры — из
+// динамит, заморозка и сундуки трёх размеров. Цвета и размеры — из
 // `core-game/src/game/render/looks.ts` (GEM_TIERS, PICKUP_LOOKS): ценность
 // кристалла читается цветом и размером, вид подбора — силуэтом
 // (`docs/27-design-system-and-app-shell.md` §4.4).
@@ -57,6 +57,33 @@ ${[-18, 0, 18].map((x) => `<rect x="${x - 9}" y="-24" width="18" height="54" rx=
 </g>`);
 }
 
+/**
+ * Заморозка (T-0116, design/art/direction-v2.md §5.1): ледяная звезда —
+ * шесть игл вокруг инеистой сферы со снежинкой. Силуэт не ромб, как у
+ * кристаллов опыта, и не дуга магнита того же голубого: звезда с шипами
+ * читается «лёд, а не опыт». `phase` — блик обходит иглы, два кадра.
+ */
+function freeze(phase) {
+  const spikes = [0, 1, 2, 3, 4, 5]
+    .map((i) => {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+      const tip = [Math.cos(a) * 44, Math.sin(a) * 44 - 4];
+      const l = [Math.cos(a - 0.32) * 18, Math.sin(a - 0.32) * 18 - 4];
+      const r = [Math.cos(a + 0.32) * 18, Math.sin(a + 0.32) * 18 - 4];
+      const lit = i === (phase === 0 ? 5 : 1);
+      return `<path d="M${f(l[0])} ${f(l[1])} L${f(tip[0])} ${f(tip[1])} L${f(r[0])} ${f(r[1])} Z" fill="${lit ? "#ffffff" : "#b8ecff"}" stroke="#4f9dff" stroke-width="2.5" stroke-linejoin="round"/>`;
+    })
+    .join("");
+  const flake = [0, 1, 2]
+    .map((i) => {
+      const a = (i / 3) * Math.PI;
+      return `M${f(Math.cos(a) * -11)} ${f(Math.sin(a) * -11 - 4)} L${f(Math.cos(a) * 11)} ${f(Math.sin(a) * 11 - 4)}`;
+    })
+    .join(" ");
+  return svg(`${shadow(24)}${spikes}<circle cx="0" cy="-4" r="19" fill="#e6f7ff" stroke="#4f9dff" stroke-width="3"/>
+<circle cx="-6" cy="-11" r="6" fill="#ffffff" opacity="0.8"/><path d="${flake}" stroke="#4f9dff" stroke-width="3.5" stroke-linecap="round"/>`);
+}
+
 /** Сундук: корпус, крышка, золотые полосы и замок. `open` — крышка откинута, изнутри свет. */
 function chest(gold, open) {
   const wood = "#7a4a33";
@@ -82,6 +109,8 @@ export const PICKUPS = [
   { id: "medkit", units: 22, frames: [medkit()] },
   { id: "magnet", units: 24, frames: [magnet()] },
   { id: "dynamite", units: 26, frames: [dynamite(0), dynamite(1)] },
+  // Заготовка под T-0116: подбора ещё нет в движке, кадры ждут в атласе.
+  { id: "freeze", units: 26, frames: [freeze(0), freeze(1)] },
   { id: "chest1", units: 28, frames: [chest("#d9a441", false), chest("#d9a441", true)] },
   { id: "chest3", units: 32, frames: [chest("#f0bb3a", false), chest("#f0bb3a", true)] },
   { id: "chest5", units: 36, frames: [chest("#ffd44d", false), chest("#ffd44d", true)] },
