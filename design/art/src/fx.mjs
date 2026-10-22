@@ -112,6 +112,34 @@ function projectiles() {
 const PROJ = projectiles();
 
 /**
+ * Снаряды эволюций (T-0102, design/art/direction-v2.md §4.5): эволюция —
+ * превращение, а не прибавка чисел, поэтому у неё свой облик того же
+ * силуэта, что у базового: игрок узнаёт оружие и видит, что оно выросло.
+ * Заготовки — в движке их нет, пока эволюций нет в контенте.
+ */
+function evolvedProjectiles() {
+  const star = (r, cx = 0, cy = 0) => {
+    const pts = Array.from({ length: 10 }, (_, i) => {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const rr = i % 2 === 0 ? r : r * 0.45;
+      return `${f(cx + Math.cos(a) * rr)} ${f(cy + Math.sin(a) * rr)}`;
+    });
+    return `M${pts.join(" L")} Z`;
+  };
+  return {
+    // «Звездопад» из «Искры»: звезда с длинным хвостом звёздной пыли.
+    starfall: [svg(`<path d="M-46 0 Q-10 -12 14 -8 L14 8 Q-10 12 -46 0 Z" fill="#ffe9a0" opacity="0.65"/><circle cx="-30" cy="-4" r="2.5" fill="#fff6dc"/><circle cx="-18" cy="5" r="2" fill="#fff6dc"/><path d="${star(22, 18)}" fill="#ffd15c" stroke="#fff6dc" stroke-width="3" stroke-linejoin="round"/><circle cx="18" r="7" fill="#fffbe8"/>`)],
+    // «Вихрь клинков» из «Ножа»: клинок с золотой гардой и дугой взмаха.
+    blade_whirl: [svg(`<path d="M-40 -16 A40 40 0 0 1 -6 -26" fill="none" stroke="#ffd15c" stroke-width="4" stroke-linecap="round" opacity="0.6"/><path d="M-30 -6 L-8 -6 L-8 -12 L-2 -12 L-2 -6 L32 -6 L46 0 L32 6 L-2 6 L-2 12 L-8 12 L-8 6 L-30 6 Z" fill="#f6f2ff"/><path d="M-2 -6 L32 -6 L46 0 L-2 0 Z" fill="#ffffff"/><rect x="-8" y="-12" width="6" height="24" rx="2" fill="#ffd15c"/><rect x="-30" y="-6" width="22" height="12" rx="3" fill="#6a3d8a"/>`)],
+    // «Гадюка» из «Жала»: игла длиннее и темнее, с каплями яда в следе.
+    viper: [svg(`<path d="M-46 0 L30 -6 L48 0 L30 6 Z" fill="#3f8a2a"/><path d="M-46 0 L30 -2 L48 0 Z" fill="#b8f08f"/><path d="M14 -6 L22 -14 L24 -5 Z" fill="#3f8a2a"/><circle cx="-34" cy="7" r="5" fill="#6fcf3a" opacity="0.8"/><circle cx="-22" cy="-7" r="3.5" fill="#6fcf3a" opacity="0.6"/>`)],
+    // «Ледяной венец» из «Оберегов»: ромб оберега — льдом и с зубцами венца.
+    frost_crown: [svg(`<circle r="42" fill="#9fd2ff" opacity="0.25"/><path d="M0 -38 L30 0 L0 38 L-30 0 Z" fill="#9fd2ff" stroke="#e6f7ff" stroke-width="3"/><path d="M0 -38 L30 0 L0 0 Z" fill="#e6f7ff"/><path d="M-14 -24 L-8 -40 L-2 -26 M2 -26 L8 -40 L14 -24" fill="none" stroke="#e6f7ff" stroke-width="4" stroke-linejoin="round"/><path d="M-12 0 h24 M0 -12 v24" stroke="#2f5f8f" stroke-width="5" stroke-linecap="round"/>`)],
+  };
+}
+const EVOLVED = evolvedProjectiles();
+
+/**
  * Знаки состояний (design/art/direction-v2.md §4.5): над головой врага-спрайта
  * вместо заливки цветом стихии — заливка стирала рисунок и мигала толпой.
  * Знак — силуэт стихии в тёмном канте, чтобы читался на любой земле: язычок
@@ -221,6 +249,11 @@ export const FX = [
   { id: "proj_sting", units: 14, frames: PROJ.sting },
   { id: "orbiter_ward", units: 16, frames: PROJ.ward },
   { id: "proj_enemy", units: 12, frames: PROJ.bolt },
+  // Заготовки под T-0102: эволюций ещё нет в контенте.
+  { id: "proj_starfall", units: 14, frames: EVOLVED.starfall },
+  { id: "proj_blade_whirl", units: 16, frames: EVOLVED.blade_whirl },
+  { id: "proj_viper", units: 16, frames: EVOLVED.viper },
+  { id: "orbiter_frost_crown", units: 18, frames: EVOLVED.frost_crown },
   // Заготовки под T-0118: оружия ещё нет в движке, кадры ждут в атласе.
   { id: "meteor", units: 20, frames: meteorFrames() },
   { id: "scorch", units: 48, frames: scorchFrames() },

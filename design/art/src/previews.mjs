@@ -288,7 +288,7 @@ function filled(svg, color) {
 /**
  * Раскадровка запланированных эффектов (design/art/direction-v2.md §5.1):
  * подбор «Заморозка» и заморозка поля (T-0116), падение «Метеора» и кратер
- * (T-0118). Кадры уже в атласе core; движок их возьмёт, когда задачи сделают.
+ * (T-0118), снаряды эволюций (T-0102). Кадры уже в атласе core; движок их возьмёт, когда задачи сделают.
  */
 function plannedFxBoard() {
   const items = [{ text: "Запланированные эффекты: заморозка поля (T-0116) и «Метеор» (T-0118)", x: 24, y: 30, size: 22, bold: true }];
@@ -323,7 +323,18 @@ function plannedFxBoard() {
   scorch.forEach((svg, k) => items.push({ svg, x: 690 + k * 160, y: y + 50, size: 150 }));
   items.push({ text: "удар", x: 560, y: y + 190, size: 12, color: "#d7dcef" });
   items.push({ text: "кратер: жар → пепел за четыре кадра", x: 690, y: y + 190, size: 12, color: "#d7dcef" });
-  return { width: 1380, height: y + 216, items };
+  y += 210;
+  items.push({ ground: true, x: 16, y, w: 1350, h: 170 });
+  items.push({ text: "Эволюции (T-0102): тот же силуэт — оружие выросло", x: 26, y: y + 24, size: 16, bold: true });
+  const pairs = [["proj_spark", "proj_starfall", "Искра → Звездопад"], ["proj_knife", "proj_blade_whirl", "Нож → Вихрь клинков"], ["proj_sting", "proj_viper", "Жало → Гадюка"], ["orbiter_ward", "orbiter_frost_crown", "Обереги → Ледяной венец"]];
+  pairs.forEach(([base, evolved, label], k) => {
+    const x = 26 + k * 335;
+    items.push({ text: label, x, y: y + 50, size: 13, color: "#d7dcef" });
+    items.push({ svg: fxOf(base).frames[0], x, y: y + 58, size: 100 });
+    items.push({ text: "→", x: x + 112, y: y + 116, size: 26, bold: true });
+    items.push({ svg: fxOf(evolved).frames[0], x: x + 150, y: y + 58, size: 100 });
+  });
+  return { width: 1380, height: y + 186, items };
 }
 
 async function main() {
