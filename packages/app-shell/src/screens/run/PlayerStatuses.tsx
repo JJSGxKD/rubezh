@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import type { StatusElement } from "@bh/shared-types";
-import { ELEMENT_TONE, STATUS_TONE_COLORS, type PlayerStatusSnapshot } from "@bh/core-game";
+import type { PlayerStatusSnapshot } from "@bh/core-game";
 import { t } from "../../i18n";
-import { ELEMENT_GLYPHS, GameGlyph } from "../game-glyphs";
+import { ElementMark } from "../element-mark";
 import "../../i18n/run";
 
 /**
@@ -12,11 +11,6 @@ import "../../i18n/run";
  * мерцает персонаж на канве, той же формой стоит знак над спрайтом, и форма
  * не даёт спутать огонь с ядом тому, кто плохо различает цвета.
  */
-
-export function toneColor(element: StatusElement): string {
-  const color = STATUS_TONE_COLORS[ELEMENT_TONE[element]] ?? 0xffffff;
-  return `#${color.toString(16).padStart(6, "0")}`;
-}
 
 export function PlayerStatuses(props: { statuses: readonly PlayerStatusSnapshot[] }): ReactNode {
   if (props.statuses.length === 0) return null;
@@ -29,9 +23,7 @@ export function PlayerStatuses(props: { statuses: readonly PlayerStatusSnapshot[
             className="flex items-center gap-0.5 rounded-pill bg-bg/70 px-1.5 py-0.5 font-display text-xs font-bold tabular-nums text-text"
             aria-label={t(`run.status.${status.element}`, { stacks: status.stacks })}
           >
-            <span className="inline-flex" style={{ color: toneColor(status.element) }}>
-              <GameGlyph glyph={ELEMENT_GLYPHS[status.element]} size={12} />
-            </span>
+            <ElementMark element={status.element} size={12} />
             {/* Слои яда важнее секунд: от них зависит, сколько он снимает. */}
             {status.element === "poison" && status.stacks > 1 ? `×${String(status.stacks)}` : Math.ceil(status.sec)}
           </li>

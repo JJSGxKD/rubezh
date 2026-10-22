@@ -1,29 +1,14 @@
 import type { ReactNode } from "react";
 import type { EnemyDef, StatusElement } from "@bh/shared-types";
-import { ELEMENT_TONE, STATUS_TONE_COLORS } from "@bh/core-game";
 import { t } from "../../i18n";
-import { ELEMENT_GLYPHS, GameGlyph } from "../game-glyphs";
+import { ElementMark } from "../element-mark";
 import { enemyAttackElement, enemyResists, weaponElements } from "./guide-data";
-import { hex } from "./scenes";
 
 /**
  * Стихии в гайдбуке (docs/35-stage4-plan.md, WP6): что делает каждая, у кого
  * какая стойкость, какая стихия у оружия. Цвет стихии — тот же, каким на поле
  * мерцает враг в её состоянии: прочитав «огонь», игрок узнаёт горящего.
  */
-
-/**
- * Знак стихии — формой и цветом, как над врагом в забеге и на карточке
- * уровня (design/art/direction-v2.md §4.5): кружок различался только цветом.
- */
-export function ElementDot(props: { element: StatusElement; size?: number }): ReactNode {
-  const size = props.size ?? 12;
-  return (
-    <span className="inline-flex shrink-0" style={{ color: hex(STATUS_TONE_COLORS[ELEMENT_TONE[props.element]] ?? 0xffffff) }}>
-      <GameGlyph glyph={ELEMENT_GLYPHS[props.element]} size={size} />
-    </span>
-  );
-}
 
 /** Состояния стихий, которые есть у оружия, — для раздела основ. */
 export function ElementList(): ReactNode {
@@ -32,7 +17,7 @@ export function ElementList(): ReactNode {
       {weaponElements().map((element) => (
         <li key={element} className="surface-sunken flex items-start gap-3 rounded-md px-3 py-2">
           <span className="mt-1">
-            <ElementDot element={element} size={14} />
+            <ElementMark element={element} size={14} />
           </span>
           <span className="min-w-0">
             <span className="block font-display text-sm font-semibold text-text">{t(`guide.element.${element}`)}</span>
@@ -44,11 +29,11 @@ export function ElementList(): ReactNode {
   );
 }
 
-/** Стихия на карточке оружия — цветной кружок и имя. */
+/** Стихия на карточке оружия — знак и имя. */
 export function ElementTag(props: { element: StatusElement }): ReactNode {
   return (
     <span className="inline-flex items-center gap-1 text-xs text-text">
-      <ElementDot element={props.element} />
+      <ElementMark element={props.element} size={12} />
       {t(`guide.element.${props.element}`)}
     </span>
   );
@@ -74,7 +59,7 @@ function ElementGroup(props: { label: string; elements: StatusElement[] }): Reac
       {props.label}
       {props.elements.map((element) => (
         <span key={element} className="inline-flex items-center gap-1 text-text">
-          <ElementDot element={element} />
+          <ElementMark element={element} size={12} />
           {t(`guide.element.${element}`).toLowerCase()}
         </span>
       ))}
