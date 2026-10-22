@@ -112,6 +112,56 @@ function projectiles() {
 const PROJ = projectiles();
 
 /**
+ * Знаки состояний (design/art/direction-v2.md §4.5): над головой врага-спрайта
+ * вместо заливки цветом стихии — заливка стирала рисунок и мигала толпой.
+ * Знак — силуэт стихии в тёмном канте, чтобы читался на любой земле: язычок
+ * пламени, снежинка, кристаллы льда, молния, капля яда. Цвета — те же, что у
+ * тона состояния (`status-tones.ts`): игрок узнаёт стихию по цвету и форме.
+ * Два кадра — дрожание пламени, разряд, пузырёк; холод и лёд стоят.
+ */
+const EDGE = "#1d1c31";
+function statusFrames() {
+  const outline = (d) => `<path d="${d}" fill="none" stroke="${EDGE}" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const flame = (sway, tall) => {
+    const d = `M0 ${f(-34 * tall)} C${f(10 + sway)} ${f(-18 * tall)} 24 -4 22 12 C20 28 8 36 0 36 C-8 36 -20 28 -22 12 C-24 -2 ${f(-6 + sway)} -10 0 ${f(-34 * tall)} Z`;
+    const inner = `M${f(sway * 0.5)} ${f(-14 * tall)} C${f(6 + sway * 0.5)} -4 12 6 11 16 C10 26 4 30 0 30 C-4 30 -10 26 -11 16 C-12 8 ${f(-4 + sway * 0.5)} 0 ${f(sway * 0.5)} ${f(-14 * tall)} Z`;
+    return svg(`${outline(d)}<path d="${d}" fill="#ff7a2e"/><path d="${inner}" fill="#ffd15c"/><ellipse cx="0" cy="22" rx="5" ry="7" fill="#fff6dc"/>`);
+  };
+  const flake = () => {
+    const arms = [0, 1, 2, 3, 4, 5].map((i) => {
+      const a = (i / 6) * TAU - Math.PI / 2;
+      const x = Math.cos(a), y = Math.sin(a);
+      const bx = Math.cos(a + 0.6), by = Math.sin(a + 0.6), cx = Math.cos(a - 0.6), cy = Math.sin(a - 0.6);
+      return `M0 0 L${f(x * 34)} ${f(y * 34)} M${f(x * 20)} ${f(y * 20)} L${f(x * 20 + bx * 11)} ${f(y * 20 + by * 11)} M${f(x * 20)} ${f(y * 20)} L${f(x * 20 + cx * 11)} ${f(y * 20 + cy * 11)}`;
+    }).join(" ");
+    return svg(`<path d="${arms}" stroke="${EDGE}" stroke-width="14" stroke-linecap="round" fill="none"/><path d="${arms}" stroke="#9fd2ff" stroke-width="6" stroke-linecap="round" fill="none"/><circle r="8" fill="#e6f5ff" stroke="${EDGE}" stroke-width="3"/>`);
+  };
+  const shard = (x, y, h, w) => `M${f(x)} ${f(y - h)} L${f(x + w)} ${f(y)} L${f(x)} ${f(y + h * 0.35)} L${f(x - w)} ${f(y)} Z`;
+  const ice = () => {
+    const shards = [shard(-14, 10, 30, 10), shard(14, 12, 26, 9), shard(0, 2, 40, 12)];
+    return svg(`${shards.map(outline).join("")}${shards.map((d) => `<path d="${d}" fill="#b8ecff"/>`).join("")}<path d="${shard(0, 2, 40, 12).replace(/L[^L]*L[^L]*Z$/, "")} L0 2 Z" fill="#ffffff" opacity="0.85"/>`);
+  };
+  const bolt = (flash) => {
+    const d = "M6 -38 L-16 4 L-2 4 L-10 38 L18 -8 L3 -8 L12 -38 Z";
+    const sparks = flash ? `<circle cx="-22" cy="-18" r="4" fill="#fff6c8"/><circle cx="24" cy="18" r="3.5" fill="#fff6c8"/>` : "";
+    return svg(`${outline(d)}<path d="${d}" fill="${flash ? "#fff6c8" : "#fff06a"}"/><path d="M6 -38 L-8 -4 L-2 -4 Z" fill="#ffffff" opacity="0.8"/>${sparks}`);
+  };
+  const drop = (bubble) => {
+    const d = "M0 -36 C8 -20 24 -4 24 12 C24 26 13 36 0 36 C-13 36 -24 26 -24 12 C-24 -4 -8 -20 0 -36 Z";
+    const b = bubble ? `<circle cx="20" cy="-22" r="7" fill="#8ee05a" stroke="${EDGE}" stroke-width="3.5"/>` : `<circle cx="22" cy="-10" r="5" fill="#8ee05a" stroke="${EDGE}" stroke-width="3"/>`;
+    return svg(`${outline(d)}<path d="${d}" fill="#6fcf3a"/><path d="M-12 8 C-12 -2 -6 -10 -2 -16" stroke="#d9f7c4" stroke-width="5" stroke-linecap="round" fill="none"/>${b}`);
+  };
+  return {
+    burn: [flame(0, 1), flame(4, 1.08)],
+    chill: [flake()],
+    frozen: [ice()],
+    shock: [bolt(false), bolt(true)],
+    poison: [drop(false), drop(true)],
+  };
+}
+const STATUS = statusFrames();
+
+/**
  * Размер ячейки — в игровых единицах при масштабе 1. Взрыв рендер растягивает
  * до радиуса из события: мягкая форма терпит растяжение вдвое.
  */
@@ -126,4 +176,9 @@ export const FX = [
   { id: "proj_sting", units: 14, frames: PROJ.sting },
   { id: "orbiter_ward", units: 16, frames: PROJ.ward },
   { id: "proj_enemy", units: 12, frames: PROJ.bolt },
+  { id: "status_burn", units: 14, frames: STATUS.burn },
+  { id: "status_chill", units: 14, frames: STATUS.chill },
+  { id: "status_frozen", units: 14, frames: STATUS.frozen },
+  { id: "status_shock", units: 14, frames: STATUS.shock },
+  { id: "status_poison", units: 14, frames: STATUS.poison },
 ];
