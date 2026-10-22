@@ -3,7 +3,7 @@ import { Star } from "lucide-react";
 import type { ChestReward } from "@bh/shared-types";
 import { PASSIVES, WEAPONS } from "@bh/core-game";
 import { audio } from "../../audio";
-import { Badge, Button, Modal, RibbonTitle } from "../../design-system/components";
+import { Badge, Button, CornerRibbon, Modal, RibbonTitle } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/run";
 import type { OpenedChest } from "../../state/run";
@@ -332,15 +332,9 @@ function RewardRow(props: { index: number; reward: ChestReward; opened: boolean;
       </div>
       {/* Новый предмет — уголком-лентой: «новое» важнее уровня и видно до чтения. */}
       {isNew ? (
-        <span
-          className={[
-            "absolute top-0 right-0 rounded-bl-md bg-accent px-2 py-0.5 font-display text-[10px] font-bold tracking-wide text-on-accent uppercase",
-            opened ? "animate-pop-in" : "opacity-0",
-          ].join(" ")}
-          style={after}
-        >
+        <CornerRibbon className={opened ? "animate-pop-in" : "opacity-0"} style={after}>
           {t("run.levelUp.new")}
-        </span>
+        </CornerRibbon>
       ) : null}
       {/* Блик по строке в миг, когда награда встала. */}
       {opened ? (

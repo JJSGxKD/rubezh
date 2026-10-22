@@ -90,3 +90,26 @@ export function ItemTile(props: { kind: ItemKind; id: string; size?: "s" | "m" }
     </span>
   );
 }
+
+const MEDALLION_RING: Record<ItemKind, string> = {
+  weapon: "ring-weapon text-weapon",
+  passive: "ring-passive text-passive",
+  heal: "ring-hp text-hp",
+};
+
+/**
+ * Значок предмета медальоном — язык окон наград v2
+ * (design/art/direction-v2.md §4.4): круг с кольцом цвета вида и светом изнутри,
+ * как в окне сундука. Плитка (`ItemTile`) остаётся там, где предметы идут
+ * списком и стопкой.
+ */
+export function ItemMedallion(props: { kind: ItemKind; id: string }): ReactNode {
+  return (
+    <span
+      className={`relative inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-sunken ring-2 ${MEDALLION_RING[props.kind]}`}
+      style={{ backgroundImage: "radial-gradient(closest-side, color-mix(in oklab, currentColor 22%, transparent), transparent)" }}
+    >
+      <ItemIcon kind={props.kind} id={props.id} size={18} />
+    </span>
+  );
+}
