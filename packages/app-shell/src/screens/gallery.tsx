@@ -347,6 +347,7 @@ function renderPreview(preview: Preview): ReactNode {
           queued={0}
           loadout={{ weapons: [{ id: "spark", level: 2 }], passives: [{ id: "might", level: 1 }] }}
           onChoose={noop}
+          onStats={noop}
         />
       );
     case "levelUpLong":
@@ -368,6 +369,7 @@ function renderPreview(preview: Preview): ReactNode {
             ],
           }}
           onChoose={noop}
+          onStats={noop}
         />
       );
     case "chest1":

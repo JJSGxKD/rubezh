@@ -32,27 +32,32 @@ export function SlotSummary(props: {
     if (category !== null) used[category]++;
   }
 
+  // Ширину меряет сама строка, а не экран: модалка в ландшафте широкая и на
+  // телефоне. На узкой панели фишки — значок и счёт одной строкой, подписи
+  // остаются для диктора: две строки фишек съедали место у третьей карточки.
   return (
-    <ul className="flex flex-wrap justify-center gap-1.5" aria-label={t("run.slots")}>
-      <SlotChip
-        icon={<Swords size={14} aria-hidden="true" />}
-        label={t("run.slots.weapons")}
-        used={props.weapons.length}
-        limit={LOADOUT_LIMITS.weapons}
-        tone="weapon"
-      />
-      {PASSIVE_CATEGORIES.map((category) => (
+    <div className="@container">
+      <ul className="flex flex-nowrap justify-center gap-1.5" aria-label={t("run.slots")}>
         <SlotChip
-          key={category}
-          icon={CATEGORY_ICONS[category]}
-          label={t(`passive.category.${category}`)}
-          used={used[category]}
-          limit={LOADOUT_LIMITS.passives[category]}
-          tone="passive"
+          icon={<Swords size={14} aria-hidden="true" />}
+          label={t("run.slots.weapons")}
+          used={props.weapons.length}
+          limit={LOADOUT_LIMITS.weapons}
+          tone="weapon"
         />
-      ))}
-      {props.extra === undefined ? null : <li className="inline-flex flex-wrap gap-1.5">{props.extra}</li>}
-    </ul>
+        {PASSIVE_CATEGORIES.map((category) => (
+          <SlotChip
+            key={category}
+            icon={CATEGORY_ICONS[category]}
+            label={t(`passive.category.${category}`)}
+            used={used[category]}
+            limit={LOADOUT_LIMITS.passives[category]}
+            tone="passive"
+          />
+        ))}
+        {props.extra === undefined ? null : <li className="inline-flex shrink-0 gap-1.5">{props.extra}</li>}
+      </ul>
+    </div>
   );
 }
 
@@ -78,12 +83,12 @@ function SlotChip(props: {
   return (
     <li
       className={[
-        "surface-sunken inline-flex items-center gap-1 rounded-pill px-2 py-0.5 font-display text-xs font-semibold tabular-nums",
+        "surface-sunken inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-0.5 font-display text-xs font-semibold whitespace-nowrap tabular-nums",
         full ? "text-text-disabled" : props.tone === "weapon" ? "text-weapon" : "text-passive",
       ].join(" ")}
     >
       {props.icon}
-      <span className={full ? "text-text-disabled" : "text-text"}>{props.label}</span>
+      <span className={["sr-only @sm:not-sr-only", full ? "text-text-disabled" : "text-text"].join(" ")}>{props.label}</span>
       <span>
         {props.used}/{props.limit}
       </span>
