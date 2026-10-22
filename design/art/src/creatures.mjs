@@ -312,6 +312,86 @@ ${twoTone(doll, P.body, P.shade, -3, -3)}
 </g>`;
 }
 
+// ───────────────────── запланированные (direction-v2.md §5.1) ─────────────────────
+
+/**
+ * Страж рубежа (T-0120) — Чур: в славянской мифологии хранитель границ.
+ * Резной деревянный идол-воин с копьём, летит над землёй и проносится насквозь
+ * (паттерн rush). Глаза-угли, на груди — знак-оберег.
+ */
+function rubezhGuard(t, P) {
+  const w = Math.sin(t * TAU);
+  const hover = w * 2.5;
+  const lean = 8;
+  const trail = [0, 1, 2]
+    .map((k) => `<path d="M${f(-26 - k * 9)} ${f(-6 + k * 8 + hover)} H${f(-12 - k * 9)}" stroke="${P.light}" stroke-width="${f(3 - k * 0.8)}" stroke-linecap="round" opacity="${f(0.5 - k * 0.14)}"/>`)
+    .join("");
+  const pillar = `<path d="M-14 ${f(34 + hover)} L-16 ${f(-18 + hover)} Q-16 ${f(-30 + hover)} -8 ${f(-36 + hover)} L8 ${f(-36 + hover)} Q16 ${f(-30 + hover)} 16 ${f(-18 + hover)} L14 ${f(34 + hover)} Z"/>`;
+  return `<g transform="rotate(${f(lean)} 0 10)">
+${trail}
+${twoTone(pillar, P.body, P.shade, -3, -2)}
+<path d="M-15 ${f(-6 + hover)} H15 M-14 ${f(12 + hover)} H14 M-13 ${f(26 + hover)} H13" stroke="${P.deep}" stroke-width="2.4"/>
+${twoTone(`<path d="M-12 ${f(-36 + hover)} L0 ${f(-52 + hover)} L12 ${f(-36 + hover)} Z"/>`, P.light, P.body)}
+<path d="M-10 ${f(-24 + hover)} H10" stroke="${P.pupil}" stroke-width="5" stroke-linecap="round"/>
+${glowEye(-5, -24 + hover, 2.1, P)}${glowEye(5, -24 + hover, 2.1, P)}
+<path d="M0 ${f(-2 + hover)} L6 ${f(4 + hover)} L0 ${f(10 + hover)} L-6 ${f(4 + hover)} Z" fill="${P.eye}" opacity="0.85"/>
+<path d="M0 ${f(1 + hover)} L3 ${f(4 + hover)} L0 ${f(7 + hover)} L-3 ${f(4 + hover)} Z" fill="${P.deep}"/>
+<path d="M12 ${f(-10 + hover)} L46 ${f(-30 + hover)}" stroke="${P.bone}" stroke-width="3.6" stroke-linecap="round"/>
+<path d="M42 ${f(-36 + hover)} L52 ${f(-34 + hover)} L46 ${f(-26 + hover)} Z" fill="${P.light}"/>
+<ellipse cx="0" cy="${f(40 + hover * 0.4)}" rx="12" ry="3" fill="${P.eye}" opacity="0.22"/>
+</g>`;
+}
+
+/**
+ * Страж кольца (T-0171) — щитоносец строя. Большой круглый щит развёрнут к
+ * игроку: двадцать стражей в кольце читаются стеной щитов, а не толпой.
+ */
+function cordonGuard(t, P) {
+  const w = Math.sin(t * TAU);
+  const bob = -Math.abs(w) * 1.5;
+  return `
+${leg(-8, 16 + bob, w * 0.35, 22, 7, P.deep)}${leg(4, 16 + bob, -w * 0.35, 22, 7, P.shade)}
+${twoTone(`<path d="M-18 ${f(20 + bob)} L-20 ${f(-10 + bob)} Q-4 ${f(-20 + bob)} 12 ${f(-10 + bob)} L10 ${f(20 + bob)} Z"/>`, P.body, P.shade)}
+${twoTone(`<path d="M-12 ${f(-14 + bob)} Q-12 ${f(-36 + bob)} 0 ${f(-36 + bob)} Q12 ${f(-36 + bob)} 12 ${f(-14 + bob)} Z"/>`, P.light, P.body)}
+<path d="M-6 ${f(-24 + bob)} H12" stroke="${P.pupil}" stroke-width="3.5"/>${glowEye(6, -24 + bob, 1.7, P)}
+<path d="M0 ${f(-36 + bob)} V${f(-44 + bob)}" stroke="${P.light}" stroke-width="3" stroke-linecap="round"/>
+<path d="M-16 ${f(-6 + bob)} L-24 ${f(-46 + bob)}" stroke="${P.bone}" stroke-width="3.4" stroke-linecap="round"/>
+<path d="M-28 ${f(-52 + bob)} L-24 ${f(-42 + bob)} L-20 ${f(-52 + bob)} Z" fill="${P.light}"/>
+${twoTone(`<circle cx="14" cy="${f(2 + bob)}" r="22"/>`, P.deep, P.pupil, -2, -2)}
+<circle cx="14" cy="${f(2 + bob)}" r="22" fill="none" stroke="${P.bone}" stroke-width="3"/>
+<circle cx="14" cy="${f(2 + bob)}" r="14" fill="none" stroke="${P.shade}" stroke-width="2"/>
+<path d="M14 ${f(-12 + bob)} L22 ${f(2 + bob)} L14 ${f(16 + bob)} L6 ${f(2 + bob)} Z" fill="${P.eye}" opacity="0.75"/>
+<circle cx="14" cy="${f(2 + bob)}" r="4" fill="${P.bone}"/>`;
+}
+
+/**
+ * Таран (T-0197) — огромный зверь-баран, паттерн dash: подходит, мигает и
+ * рвётся по прямой рогами вперёд. Силуэт — остриё, как у волка, но
+ * тяжёлое: рога и загривок.
+ */
+function ram(t, P) {
+  const a = Math.sin(t * TAU);
+  const bob = -Math.abs(Math.cos(t * TAU)) * 2;
+  const legs =
+    leg(-22, 10 + bob, -a * 0.5, 24, 8, P.deep) +
+    leg(-12, 10 + bob, -a * 0.5 + 0.3, 24, 8, P.shade) +
+    leg(10, 10 + bob, a * 0.5, 24, 8, P.deep) +
+    leg(20, 10 + bob, a * 0.5 - 0.3, 24, 8, P.shade);
+  const body = `<path d="M-38 ${f(6 + bob)} Q-40 ${f(-22 + bob)} -14 ${f(-28 + bob)} Q8 ${f(-34 + bob)} 22 ${f(-24 + bob)} L30 ${f(-8 + bob)} Q30 ${f(14 + bob)} 6 ${f(16 + bob)} Q-24 ${f(20 + bob)} -38 ${f(6 + bob)} Z"/>`;
+  const wool = [-30, -20, -10, 0, 10]
+    .map((x, k) => `<circle cx="${f(x)}" cy="${f(-24 + (k % 2) * 4 + bob)}" r="7" fill="${P.light}" opacity="0.55"/>`)
+    .join("");
+  return `
+${legs}
+${twoTone(body, P.body, P.shade, -3, -3)}
+${wool}
+${twoTone(`<path d="M18 ${f(-22 + bob)} Q40 ${f(-24 + bob)} 46 ${f(-6 + bob)} Q44 ${f(8 + bob)} 30 ${f(8 + bob)} Q18 ${f(4 + bob)} 18 ${f(-22 + bob)} Z"/>`, P.body, P.deep)}
+<path d="M24 ${f(-20 + bob)} Q8 ${f(-40 + bob)} 26 ${f(-46 + bob)} Q44 ${f(-48 + bob)} 44 ${f(-30 + bob)} Q40 ${f(-20 + bob)} 32 ${f(-26 + bob)}" fill="none" stroke="${P.bone}" stroke-width="7" stroke-linecap="round"/>
+<path d="M30 ${f(-34 + bob)} Q36 ${f(-38 + bob)} 38 ${f(-30 + bob)}" fill="none" stroke="${P.shade}" stroke-width="2"/>
+${glowEye(36, -10 + bob, 2.4, P)}
+<path d="M42 ${f(2 + bob)} L50 ${f(0 + bob)}" stroke="${P.pupil}" stroke-width="2" stroke-linecap="round"/>`;
+}
+
 // ───────────────────────── каталог ─────────────────────────
 
 /**
@@ -335,4 +415,8 @@ export const ENEMY_ART = [
   { id: "elite_grave_knight", pattern: "dash", rank: "elite", radius: 10 * 1.7, draw: graveKnight },
   { id: "boss_seer", pattern: "caster", rank: "boss", radius: 14 * 2.4, draw: seer },
   { id: "boss_matryoshka", pattern: "splitter", rank: "boss", radius: 13 * 2.4, draw: matryoshka },
+  // Запланированные (direction-v2.md §5.1): облик готов раньше контента.
+  { id: "rubezh_guard", pattern: "rush", rank: "boss", radius: 6 * 2.4, draw: rubezhGuard, planned: "T-0120" },
+  { id: "cordon_guard", pattern: "chase", radius: 14, draw: cordonGuard, planned: "T-0171" },
+  { id: "boss_ram", pattern: "dash", rank: "boss", radius: 10 * 2.4, draw: ram, planned: "T-0197" },
 ];

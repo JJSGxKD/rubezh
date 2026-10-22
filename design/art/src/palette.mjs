@@ -83,6 +83,9 @@ export const SPECIES_COLOR = {
   elite_grave_knight: 0x8d97ab, // латы
   boss_seer: 0x6c4fa8, // вещун (уходит, T-0172)
   boss_matryoshka: 0xd8322f, // красная — её образ
+  rubezh_guard: 0x9a7350, // Чур — старое дерево
+  cordon_guard: 0x7f8796, // латы щитоносца
+  boss_ram: 0x6b5446, // тёмная шерсть Тарана
 };
 
 /**

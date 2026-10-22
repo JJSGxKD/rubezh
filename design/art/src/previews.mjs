@@ -246,13 +246,38 @@ function paletteBoard() {
   return { width: 1260, height: y + 12, items };
 }
 
+/** Облик запланированных существ (direction-v2.md §5.1): кадры шага и игровой масштаб рядом с героем. */
+function plannedBoard() {
+  const items = [];
+  const planned = ENEMY_ART.filter((art) => art.planned !== undefined);
+  items.push({ text: "Запланированные существа — облик до контента (палитра v2)", x: 24, y: 30, size: 22, bold: true });
+  const rowH = 170;
+  let y = 50;
+  const hero = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${HERO_STATES.idle[0]()}</svg>`;
+  for (const art of planned) {
+    items.push({ ground: true, x: 16, y, w: 1230, h: rowH - 8 });
+    items.push({ text: art.id, x: 26, y: y + 24, size: 16, bold: true });
+    items.push({ text: `${art.planned} · ${art.pattern}${art.rank ? ` · ${art.rank}` : ""}`, x: 26, y: y + 46, size: 13, color: "#d7dcef" });
+    let x = 220;
+    for (let k = 0; k < 4; k++) {
+      items.push({ svg: enemySvg(art, 0, k / 4), x, y: y + 6, size: rowH - 20 });
+      x += rowH - 14;
+    }
+    const game = gameSize(art.radius) / 2;
+    items.push({ svg: hero, x: 900, y: y + (rowH - 8) / 2 - gameSize(10, 2.6) / 4, size: gameSize(10, 2.6) / 2 });
+    items.push({ svg: enemySvg(art, 0, 0.25), x: 1000, y: y + (rowH - 8) / 2 - game / 2, size: game });
+    y += rowH;
+  }
+  return { width: 1260, height: y + 12, items };
+}
+
 async function main() {
   const path = process.env.PLAYWRIGHT_MODULE ?? "/opt/node-tools/node_modules/playwright/index.mjs";
   const { chromium } = await import(pathToFileURL(path).href);
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const only = process.env.SHEETS?.split(",");
-  const boards = [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()], ["palette", paletteBoard()]];
+  const boards = [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()], ["palette", paletteBoard()], ["planned", plannedBoard()]];
   for (const [name, board] of boards.filter(([name]) => only === undefined || only.includes(name))) {
     writeFileSync(join(OUT, `sheet-${name}.png`), Buffer.from(await renderBoard(page, board), "base64"));
   }
