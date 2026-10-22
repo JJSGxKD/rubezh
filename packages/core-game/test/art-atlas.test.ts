@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
-import { ART_WALK_FRAMES, enemyFrameName, faceLeft, orbiterArtScale, walkFrame } from "../src/game/render/art-atlas";
+import { ART_WALK_FRAMES, enemyFrameName, faceLeft, heroPose, orbiterArtScale, walkFrame } from "../src/game/render/art-atlas";
 
 // Черновой арт забега за переключателем разработчика (design/art/README.md):
 // рендер, на исход забега не влияет.
@@ -61,5 +61,22 @@ describe("оберег черновой арта", () => {
   it("свечение кадра совпадает с зоной удара оберега", () => {
     // Ячейка 16 единиц, свечение — 0,8 ячейки: диаметр 12,8 × масштаб = 2 × радиус удара.
     expect(16 * 0.8 * orbiterArtScale(16)).toBeCloseTo(32, 6);
+  });
+});
+
+describe("поза героя-спрайта", () => {
+  it("на попадании — кадр отдачи, и на бегу тоже", () => {
+    expect(heroPose(false, true)).toBe("hurt");
+    expect(heroPose(true, true)).toBe("hurt");
+  });
+
+  it("без попадания — шаг на ходу, дыхание на месте", () => {
+    expect(heroPose(true, false)).toBe("walk");
+    expect(heroPose(false, false)).toBe("idle");
+  });
+
+  it("кадр отдачи лежит в атласе core", () => {
+    const atlas = JSON.parse(readFileSync(new URL("../../../design/art/out/atlas-core.json", import.meta.url), "utf8")) as { frames: Record<string, unknown> };
+    expect(atlas.frames["hero/hurt0"]).toBeDefined();
   });
 });
