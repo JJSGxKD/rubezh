@@ -28,6 +28,7 @@ const VISUAL_KEYS: readonly DevVisualKey[] = [
   "telegraphs",
   "damageNumbers",
   "effects",
+  "sprites",
 ];
 
 const START_MINUTES = [0, 5, 10, 15, 20] as const;
@@ -92,7 +93,7 @@ function ViewTab(props: { settings: DevSettings }): ReactNode {
           key={key}
           title={t(`dev.visual.${key}`)}
           toggle={{
-            checked: props.settings.visuals[key],
+            checked: props.settings.visuals[key] === true,
             onChange: () => update((s) => ({ ...s, visuals: { ...s.visuals, [key]: !s.visuals[key] } })),
           }}
         />

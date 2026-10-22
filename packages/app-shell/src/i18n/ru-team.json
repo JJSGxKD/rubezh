@@ -17,6 +17,7 @@
   "dev.visual.telegraphs": "Телеграфы угроз",
   "dev.visual.damageNumbers": "Числа урона",
   "dev.visual.effects": "Эффекты оружия и взрывы",
+  "dev.visual.sprites": "Черновой арт: спрайты вместо фигур",
   "dev.time.speed": "Скорость времени",
   "dev.time.spawnPaused": "Остановить спавн",
   "dev.time.freezeEnemies": "Заморозить врагов",

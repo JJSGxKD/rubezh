@@ -18,6 +18,7 @@ import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
 import { invulnerableAlpha } from "./invulnerable";
+import { ArtMode } from "./art-atlas";
 
 /** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
 const orbiterPoints: OrbiterPoint[] = [];
@@ -59,6 +60,13 @@ export class WorldRenderer {
   /** повторяющийся фон: единственное, что даёт почувствовать движение мира */
   private readonly ground: Phaser.GameObjects.TileSprite;
   private readonly enemySprites: Phaser.GameObjects.Image[] = [];
+  /**
+   * Враги — своим подслоем: режиму чернового арта нужен порядок по `y` среди
+   * врагов, и сортировать весь слой с телеграфами и подборами нельзя.
+   */
+  private readonly enemyLayer: Phaser.GameObjects.Container;
+  /** черновой арт за флагом разработчика (`RunDevVisuals.sprites`) */
+  private readonly art: ArtMode;
   /** индекс текстуры врага: тип и ступень вместе, см. конструктор */
   private readonly enemySpriteType: Int16Array;
   private readonly stageCount: number;
@@ -149,6 +157,9 @@ export class WorldRenderer {
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
     this.layer.add(this.player);
     this.rings = new PlayerRings(scene, world, this.layer);
+    this.enemyLayer = scene.add.container(0, 0);
+    this.layer.add(this.enemyLayer);
+    this.art = new ArtMode(scene, world);
     this.eventsRead = world.events.written;
   }
 
@@ -195,6 +206,10 @@ export class WorldRenderer {
       lerp(this.world.player.prevX, this.world.player.x, t),
       lerp(this.world.player.prevY, this.world.player.y, t),
     );
+    const hero = this.world.player;
+    if (!this.art.applyHero(this.player, this.world.stats.tick, hero.vx, hero.vy, hero.faceX) && this.player.texture.key !== "bh-player") {
+      this.player.setTexture("bh-player").setFlipX(false);
+    }
     this.player.setVisible(this.world.player.alive);
     this.player.setAlpha(invulnerableAlpha(this.world.player.invulnerableTicks));
     this.applyPlayerFlash();
@@ -224,6 +239,11 @@ export class WorldRenderer {
       (visuals.hitboxes || visuals.pickupRadius || visuals.weaponRadii || visuals.spawnRings || visuals.bounds || visuals.grid);
     if (wantsDebug && this.debug === null) this.debug = new DebugOverlay(this.scene, this.world, this.layer);
     this.debug?.setVisible(wantsDebug);
+    this.art.setWanted(visuals?.sprites === true, () => {
+      // Режим сменился — кэши вида и текстуры слотов устарели целиком.
+      this.enemySpriteType.fill(-1);
+      this.enemySpriteLook.fill(LOOK_NONE);
+    });
   }
 
   private applyEffectSwitches(): void {
@@ -246,12 +266,12 @@ export class WorldRenderer {
     // Попадание важнее лечения: если было и то и другое, игрок должен видеть урон.
     if (hitAge < HIT_FLASH_TICKS) {
       this.player.setTintFill(WORLD_COLORS.hurt);
-      this.player.setScale(1 + 0.25 * (1 - hitAge / HIT_FLASH_TICKS));
+      this.player.setScale(this.heroScale() * (1 + 0.25 * (1 - hitAge / HIT_FLASH_TICKS)));
       return;
     }
     if (healAge < HIT_FLASH_TICKS) {
       this.player.setTintFill(WORLD_COLORS.heal);
-      this.player.setScale(1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS));
+      this.player.setScale(this.heroScale() * (1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS)));
       return;
     }
     // Тон состояния на персонаже — без переключателя: это его собственное
@@ -260,11 +280,16 @@ export class WorldRenderer {
     const tone = playerStatusTone(this.world.player, tick);
     if (tone !== STATUS_TONE.none) {
       this.player.setTintFill(STATUS_TONE_COLORS[tone] ?? WORLD_COLORS.hurt);
-      this.player.setScale(1);
+      this.player.setScale(this.heroScale());
       return;
     }
     this.player.clearTint();
-    this.player.setScale(1);
+    this.player.setScale(this.heroScale());
+  }
+
+  /** Масштаб героя: кадр атласа крупнее фигуры в пикселях текстуры. */
+  private heroScale(): number {
+    return this.player.texture.key === "bh-player" ? 1 : this.art.scale;
   }
 
   private syncEnemies(t: number): void {
@@ -287,7 +312,9 @@ export class WorldRenderer {
 
       const typeIndex = enemies.type[i];
       const texture = typeIndex * this.stageCount + Math.min(enemies.stage[i], this.stageCount - 1);
-      if (this.enemySpriteType[i] !== texture) {
+      if (this.art.applyEnemy(sprite, i, texture, tick)) {
+        this.enemySpriteType[i] = -1;
+      } else if (this.enemySpriteType[i] !== texture) {
         sprite.setTexture(this.textureKeyByType[texture]);
         this.enemySpriteType[i] = texture;
       }
@@ -311,7 +338,9 @@ export class WorldRenderer {
       // повёрнутый не в ту сторону, читается как чужой враг. Фигуры без
       // острия разворот не трогает — и сбрасывает его, если слот пула достался
       // им от клина.
-      if (ENEMY_LOOKS[type.pattern].shape === "chevron") {
+      if (this.art.shows(i)) {
+        this.art.faceEnemy(sprite, i, enemies.vx[i], enemies.vy[i]);
+      } else if (ENEMY_LOOKS[type.pattern].shape === "chevron") {
         const aimed = enemies.phase[i] === DASH_PHASE.telegraph || enemies.phase[i] === DASH_PHASE.dash;
         const faceX = aimed ? enemies.dirX[i] : enemies.vx[i];
         const faceY = aimed ? enemies.dirY[i] : enemies.vy[i];
@@ -343,6 +372,7 @@ export class WorldRenderer {
     }
 
     this.telegraphs.end();
+    this.art.sortEnemies(this.enemyLayer);
   }
 
   private syncProjectiles(t: number): void {
@@ -392,10 +422,14 @@ export class WorldRenderer {
    * setScale на каждого врага каждый кадр — лишняя работа на сотнях объектов.
    */
   private applyLook(sprite: Phaser.GameObjects.Image, index: number, look: number): void {
-    if (this.enemySpriteLook[index] === look && sprite.visible) return;
-    this.enemySpriteLook[index] = look;
+    // Кадр атласа другого размера, чем фигура: смена «фигура ↔ арт» — тоже смена вида.
+    const art = this.art.shows(index);
+    const key = art ? look + LOOK_ART : look;
+    if (this.enemySpriteLook[index] === key && sprite.visible) return;
+    this.enemySpriteLook[index] = key;
+    const base = art ? this.art.scale : 1;
     sprite.setAlpha(look === LOOK.dim ? 0.35 : 1);
-    sprite.setScale(look === LOOK.hit ? 1.25 : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1);
+    sprite.setScale(base * (look === LOOK.hit ? 1.25 : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1));
     // Заливка, а не умножение: белый множитель цвет не меняет вовсе, и
     // телеграф с попаданием читались бы только по размеру спрайта. Заливка
     // перекрашивает спрайт целиком и сохраняет его форму по альфе. Тон
@@ -520,7 +554,7 @@ export class WorldRenderer {
    */
   private enemySprite(index: number): Phaser.GameObjects.Image {
     while (this.enemySprites.length <= index) {
-      this.enemySprites.push(this.createHiddenSprite(this.textureKeyByType[0] ?? "bh-player"));
+      this.enemySprites.push(this.createHiddenSprite(this.textureKeyByType[0] ?? "bh-player", this.enemyLayer));
     }
     return this.enemySprites[index];
   }
@@ -533,9 +567,9 @@ export class WorldRenderer {
   }
 
   /** Все объекты мира живут в слое: камера — это его трансформация. */
-  private createHiddenSprite(key: string): Phaser.GameObjects.Image {
+  private createHiddenSprite(key: string, layer: Phaser.GameObjects.Container = this.layer): Phaser.GameObjects.Image {
     const sprite = this.scene.add.image(0, 0, key).setVisible(false).setDepth(1);
-    this.layer.add(sprite);
+    layer.add(sprite);
     return sprite;
   }
 
@@ -590,6 +624,11 @@ const HEAL_RING_UNITS = 40;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;
+
+/** Сброшенный вид: следующий кадр обязательно применит вид заново. */
+const LOOK_NONE = 255;
+/** Прибавка к коду вида у слота с кадром атласа: масштаб у него другой. */
+const LOOK_ART = 128;
 
 const LOOK = {
   normal: 0,
