@@ -3,8 +3,7 @@ import { Crosshair, Shield, Swords, Wind } from "lucide-react";
 import { PASSIVE_CATEGORIES, type PassiveCategory, type StatusElement } from "@bh/shared-types";
 import { LOADOUT_LIMITS, PASSIVES, WEAPONS, type RunSlotState } from "@bh/core-game";
 import { t } from "../../i18n";
-import { ELEMENT_GLYPHS, GameGlyph } from "../game-glyphs";
-import { toneColor } from "./PlayerStatuses";
+import { ElementMark } from "../element-mark";
 import "../../i18n/run";
 
 /**
@@ -78,9 +77,7 @@ export function weaponElementOf(id: string): StatusElement | null {
 export function ElementLabel(props: { element: StatusElement }): ReactNode {
   return (
     <span className="inline-flex items-center gap-1 text-xs text-text-muted">
-      <span className="inline-flex" style={{ color: toneColor(props.element) }}>
-        <GameGlyph glyph={ELEMENT_GLYPHS[props.element]} size={14} />
-      </span>
+      <ElementMark element={props.element} size={14} />
       {t(`run.element.${props.element}`)}
     </span>
   );
