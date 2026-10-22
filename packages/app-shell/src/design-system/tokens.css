@@ -71,6 +71,8 @@
   /* Живой фон приложения (direction-v2.md §4.4): длительности задаёт раскладка. */
   --animate-star-twinkle: star-twinkle 4s var(--ease-base) infinite;
   --animate-ember-rise: ember-rise 10s linear infinite;
+  /* Блик главной кнопки: пробегает за доли секунды, потом пауза — зовёт, а не мигает. */
+  --animate-btn-shine: btn-shine 4.5s var(--ease-out) infinite;
   --animate-reward-float: reward-float 1100ms var(--ease-out) both;
   --animate-glow: glow 2.4s var(--ease-base) infinite;
   --animate-float: float 3.2s var(--ease-base) infinite;
@@ -280,6 +282,27 @@
     to {
       opacity: 0;
       transform: translateX(320%) skewX(-18deg);
+    }
+  }
+
+  @keyframes btn-shine {
+    0% {
+      opacity: 0;
+      transform: translateX(-120%) skewX(-20deg);
+    }
+    3% {
+      opacity: 1;
+    }
+    19% {
+      opacity: 0.9;
+    }
+    24% {
+      opacity: 0;
+      transform: translateX(360%) skewX(-20deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(360%) skewX(-20deg);
     }
   }
 
