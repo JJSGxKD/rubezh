@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { formatCountdown } from "../src/screens/meta/schedule";
 import type { DailyWidget, WheelWidget } from "../src/state/home-api";
 import { arrangeWidgets, dailyFace, recordFace, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
-import { FriendsView } from "../src/screens/home-widgets";
+import { FriendsView, TasksView } from "../src/screens/home-widgets";
 
 // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): готовое к забору —
 // первым и во всю ширину, дыр в сетке нет; что говорит каждый виджет —
@@ -163,5 +163,20 @@ describe("подсказка тихой плитки главной", () => {
     const tile = renderToStaticMarkup(createElement(FriendsView, { face: { state: "idle" }, size: "tile" }));
     expect(tile).toContain("Подарки друг другу");
     expect(tile).toContain("text-balance");
+  });
+});
+
+// Кольцо заданий без числа (design/art/ui-ux.md, U-10): пустая дорожка до
+// ответа сервера читалась сломанным значком. Без числа в кольце — значок
+// заданий, с числом — как раньше.
+describe("кольцо заданий без числа", () => {
+  it("в тихой плитке в кольце значок заданий", () => {
+    const html = renderToStaticMarkup(createElement(TasksView, { face: { state: "idle" }, size: "tile" }));
+    expect(html).toContain("lucide-list-checks");
+  });
+
+  it("с прогрессом значка нет — его место у числа", () => {
+    const html = renderToStaticMarkup(createElement(TasksView, { face: { state: "progress", done: 1, total: 4 }, size: "tile" }));
+    expect(html).not.toContain("lucide-list-checks");
   });
 });

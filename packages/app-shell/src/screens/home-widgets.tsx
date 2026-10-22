@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ChevronRight, Gift, Trophy, Users } from "lucide-react";
+import { ChevronRight, Gift, ListChecks, Trophy, Users } from "lucide-react";
 import { CutFrame, staggerStyle } from "../design-system/components";
 import { CoinIcon } from "../design-system/components/CurrencyIcons";
 import { ShardIcon } from "../design-system/components/ShardIcon";
@@ -531,7 +531,11 @@ export function TasksView(props: { face: TasksFace; size: WidgetSize }): ReactNo
   }
 }
 
-/** Кольцо прогресса суток: дорожка видна и пустой; в широком — «2/4» внутри. */
+/**
+ * Кольцо прогресса суток: дорожка видна и пустой; в широком — «2/4» внутри.
+ * Без числа — до ответа сервера и без заданий суток — внутри значок заданий:
+ * одна пустая дорожка читалась сломанным значком (U-10).
+ */
 function Ring(props: { size: number; done: number; total: number | null }): ReactNode {
   const radius = 16;
   const length = 2 * Math.PI * radius;
@@ -543,7 +547,9 @@ function Ring(props: { size: number; done: number; total: number | null }): Reac
         {/* Пустое кольцо — только дорожка: скруглённый конец нулевой дуги рисовал бы точку. */}
         {share === 0 ? null : <circle cx="20" cy="20" r={radius} fill="none" stroke="var(--widget-tone)" strokeWidth="5" strokeLinecap="round" strokeDasharray={`${(share * length).toFixed(2)} ${length.toFixed(2)}`} />}
       </svg>
-      {props.total === null || props.size < 40 ? null : (
+      {props.total === null ? (
+        <ListChecks aria-hidden="true" size={Math.round(props.size * 0.45)} className="absolute text-(--widget-tone)" />
+      ) : props.size < 40 ? null : (
         <span aria-hidden="true" className="absolute font-display text-[11px] font-bold text-text tabular-nums">
           {props.done}/{props.total}
         </span>
