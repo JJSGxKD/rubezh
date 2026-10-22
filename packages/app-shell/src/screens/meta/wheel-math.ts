@@ -23,6 +23,16 @@ export function labelUpsideDown(centerDeg: number): boolean {
 }
 
 /**
+ * Перевернуть ли подпись сектора при повороте колеса `rotationDeg`. Колесо
+ * после крутки стоит повёрнутым, и переворот по положению в покое ставил
+ * выигрыш под стрелкой вверх ногами. Поворот — итоговый: подписи встают как
+ * надо к медленному концу крутки, а в быстром начале их не разглядеть.
+ */
+export function sectorLabelUpsideDown(index: number, count: number, rotationDeg: number): boolean {
+  return labelUpsideDown(sectorCenterDeg(index, count) + rotationDeg);
+}
+
+/**
  * Итоговый поворот колеса, при котором середина сектора `index` окажется под
  * стрелкой сверху. Поворот только растёт — колесо всегда крутится вперёд — и
  * делает не меньше `turns` полных оборотов, иначе крутка выглядит как рывок.

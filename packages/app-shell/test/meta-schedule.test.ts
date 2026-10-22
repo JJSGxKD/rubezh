@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatCountdown, formatCountdownShort, msUntilReset } from "../src/screens/meta/schedule";
-import { labelUpsideDown, sectorCenterDeg, spinRotationDeg } from "../src/screens/meta/wheel-math";
+import { labelUpsideDown, sectorCenterDeg, sectorLabelUpsideDown, spinRotationDeg } from "../src/screens/meta/wheel-math";
 
 // Мета: сброс заданий и поворот колеса
 // (docs/07-monetization-and-ads.md §7, docs/27-design-system-and-app-shell.md §6).
@@ -123,5 +123,19 @@ describe("подписи секторов колеса", () => {
   it("сектор ровно сбоку читается без переворота", () => {
     expect(labelUpsideDown(90)).toBe(false);
     expect(labelUpsideDown(270)).toBe(false);
+  });
+
+  // После крутки колесо стоит повёрнутым, и переворот по положению в покое
+  // ставил выигрыш под стрелкой вверх ногами — туда, куда смотрит игрок.
+  it("переворот считается от текущего поворота колеса: выигрыш под стрелкой читается прямо", () => {
+    for (const count of [6, 8, 10]) {
+      for (let index = 0; index < count; index++) {
+        const rotation = spinRotationDeg(0, index, count, 5);
+        expect(sectorLabelUpsideDown(index, count, rotation), `${String(count)} секторов, выигрыш ${String(index)}`).toBe(false);
+      }
+    }
+    // В покое — как раньше: верх прямо, низ перевёрнут.
+    expect(sectorLabelUpsideDown(0, 8, 0)).toBe(false);
+    expect(sectorLabelUpsideDown(4, 8, 0)).toBe(true);
   });
 });
