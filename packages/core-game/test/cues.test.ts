@@ -64,6 +64,18 @@ describe("сигналы забега", () => {
     expect(cues).toMatchObject({ kills: 2, eliteKills: 1, eliteSpawns: 0, explosions: 2, explosionsNear: 1 });
   });
 
+  // Босс — событие забега, а не ещё одна элита: у него свой рог
+  // (design/art/sound.md, S-03), поэтому его появление считается отдельно.
+  it("появление босса считается отдельно от элиты", () => {
+    const target = world();
+    const tracker = new CueTracker(target);
+    spawnEnemy(target, typeIndex(target, "boss_seer"), 600, 0);
+    expect(tracker.collect()).toMatchObject({ eliteSpawns: 1, bossSpawns: 1 });
+
+    spawnEnemy(target, typeIndex(target, "elite_ghoul"), -600, 0);
+    expect(tracker.collect()).toMatchObject({ eliteSpawns: 1, bossSpawns: 0 });
+  });
+
   it("отмечает начало угрозы, а не каждый тик её отсчёта", () => {
     const target = world();
     target.loadout.weapons.length = 0;
