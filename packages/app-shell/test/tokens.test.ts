@@ -36,15 +36,18 @@ describe("токены оболочки", () => {
     expect([...families].sort()).toEqual([FONT_FAMILY.display, FONT_FAMILY.text].sort());
   });
 
-  it("Russo One объявлен с диапазоном весов 100–900: единственное начертание не должно синтезировать полужирный", () => {
+  it("Tektur объявлен переменным с весами 400–900: полужирный берётся из файла, а не рисуется поддельным", () => {
     const fonts = readFileSync(
       fileURLToPath(new URL("../src/design-system/fonts.css", import.meta.url)),
       "utf8",
     );
     const faces = [...fonts.matchAll(/@font-face\s*\{([^}]*)\}/g)].map((match) => match[1] ?? "");
-    const russo = faces.filter((face) => face.includes('font-family: "Russo One"'));
-    expect(russo.length).toBeGreaterThan(0);
-    for (const face of russo) expect(face).toMatch(/font-weight:\s*100 900;/);
+    const display = faces.filter((face) => face.includes('font-family: "Tektur"'));
+    expect(display.length).toBeGreaterThan(0);
+    for (const face of display) {
+      expect(face).toMatch(/font-weight:\s*400 900;/);
+      expect(face).toContain("wght-normal.woff2");
+    }
     expect(faces.some((face) => face.includes('font-family: "IBM Plex Sans Variable"'))).toBe(true);
   });
 

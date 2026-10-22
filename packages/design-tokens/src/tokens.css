@@ -76,11 +76,12 @@
   --color-gem-lo: #f0303e;
 
   /*
-   * Типографика. Две гарнитуры (§4.3): Russo One — акцидентная для заголовков,
-   * кнопок и крупных цифр, IBM Plex Sans — текстовая. Обе с кириллицей, файлы —
+   * Типографика. Две гарнитуры (§4.3): Tektur — акцидентная для заголовков,
+   * кнопок и крупных цифр (её срезы — те же, что у логотипа и «среза»
+   * карточек), IBM Plex Sans — текстовая. Обе с кириллицей, файлы —
    * в бандле (fonts.css). Системные стеки за ними — на время загрузки файла.
    */
-  --font-display: "Russo One", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Tektur", "Segoe UI", system-ui, sans-serif;
   --font-text: "IBM Plex Sans Variable", system-ui, "Segoe UI", Roboto, sans-serif;
 
   --text-xs: 12px;

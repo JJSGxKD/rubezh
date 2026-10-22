@@ -207,10 +207,10 @@ export class CombatFeedback {
       const scale = this.world.config.unitScale;
       const text = this.scene.add
         .text(0, 0, "", {
-          // Russo One — одно начертание: «800» нарисовал бы поддельный
-          // полужирный, поэтому fontStyle обычный.
-          fontFamily: '"Russo One", "Segoe UI", system-ui, sans-serif',
-          fontStyle: "normal",
+          // Tektur — переменный шрифт, вес 800 берётся из файла: цифра урона
+          // плотная, как надписи интерфейса. Шрифт грузит оболочка.
+          fontFamily: '"Tektur", "Segoe UI", system-ui, sans-serif',
+          fontStyle: "800",
           fontSize: `${Math.round(NUMBER_SIZE_UNITS * scale)}px`,
           color: "#ffffff",
         })
