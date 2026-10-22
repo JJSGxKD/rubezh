@@ -13,7 +13,7 @@ import type { SoundId, SoundRecipe } from "./recipes";
  */
 
 export type SoundScene = "lobby" | "run" | "pause" | "choice" | "finished" | "silent";
-export type RunSoundEvent = "levelUp" | "choose" | "death" | "abandon" | "record";
+export type RunSoundEvent = "levelUp" | "choose" | "death" | "abandon" | "record" | "chestDrop" | "chestOpen" | "bossPhase";
 export type UiSound = "tap" | "select" | "primary" | "back" | "toggleOn" | "toggleOff" | "sheetOpen" | "sheetClose" | "reward" | "error";
 
 export interface HudSound {
@@ -100,7 +100,10 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
   // предупреждение, а не атака.
   if (cues.playerHit > 0) add("hurt");
   if (cues.dynamite > 0) add("dynamite");
-  if (cues.eliteSpawns > 0) add("eliteHorn");
+  // Босс — тоже элита по рангу, но звучит своим рогом: элитный рог здесь
+  // только за элит, вышедших вместе с ним.
+  if (cues.bossSpawns > 0) add("bossArrive");
+  if (cues.eliteSpawns > cues.bossSpawns) add("eliteHorn");
   if (cues.eliteKills > 0) add("eliteDown");
   if (cues.heal > 0) add("heal");
   if (cues.magnet > 0) add("magnet");
@@ -163,6 +166,10 @@ export class SoundDirector {
     else if (event === "choose") this.engine.play("choose");
     else if (event === "record") this.engine.play("record");
     else if (event === "death") this.engine.play("defeat");
+    // Сундук падает с элиты в тот же миг, что звучит её гибель: удар со
+    // сдвигом не сливается с ней в один звук.
+    else if (event === "chestDrop") this.engine.play("chestDrop", { delay: 0.15 });
+    else if (event === "chestOpen" || event === "bossPhase") this.engine.play(event);
   }
 
   cues(cues: RunCues): void {

@@ -323,6 +323,7 @@ function simulatedCues(weapons: number, density: number): RunCues {
     kills: Math.round(Math.random() * 30 * density * 0.033 * 3),
     eliteKills: chance(0.03),
     eliteSpawns: chance(0.02),
+    bossSpawns: 0,
     xp: chance(6 * density),
     fuses: chance(0.5 * density),
     dashWarns: chance(0.4 * density),

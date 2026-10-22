@@ -199,6 +199,28 @@ export const SOUND_RECIPES = {
     ],
   },
 
+  // Босс — событие забега, а не ещё одна элита: рог ниже и длиннее, с
+  // колоколом в хвосте. Смена фазы — удар и падающий гул: полоса здоровья
+  // сменила деление, и ухо узнаёт об этом раньше, чем глаз найдёт полосу.
+  bossArrive: {
+    bus: "threats", level: 0.62, voices: 1, gap: 3, send: 0.6, duck: 2, dur: 3, variants: 1,
+    layers: [
+      { kind: "tone", f0: 48, f1: 36, glide: 0.3, peak: 0.55, decay: 0.45 },
+      { kind: "tone", f0: 48, f1: 36, glide: 0.3, t: 0.45, peak: 0.5, decay: 0.45 },
+      { kind: "swell", wave: "sawtooth", f0: 73.42, attack: 0.4, hold: 0.8, release: 0.8, peak: 0.12, detune: [0, 6, -6], filter: { type: "lowpass", f0: 250, f1: 1100, glide: 0.6, q: 1.4 } },
+      { kind: "swell", wave: "sawtooth", f0: 110, t: 0.45, attack: 0.4, hold: 0.7, release: 0.8, peak: 0.1, detune: [0, 6], filter: { type: "lowpass", f0: 250, f1: 1300, glide: 0.6, q: 1.4 } },
+      { kind: "bell", f: 293.66, t: 0.9, peak: 0.08, decay: 1.2 },
+    ],
+  },
+  bossPhase: {
+    bus: "threats", level: 0.6, voices: 1, gap: 2, send: 0.45, duck: 0.8, dur: 1.2, variants: 1,
+    layers: [
+      { kind: "hiss", dur: 0.05, seed: 111, filter: "highpass", f0: 1500, peak: 0.4, decay: 0.04 },
+      { kind: "tone", f0: 90, f1: 42, glide: 0.6, peak: 0.4, decay: 0.7 },
+      { kind: "swell", wave: "sawtooth", f0: 55, f1: 49, glide: 0.8, t: 0.05, attack: 0.05, hold: 0.3, release: 0.6, peak: 0.12, detune: [0, 9], filter: { type: "lowpass", f0: 400, f1: 150, glide: 0.8, q: 2 } },
+    ],
+  },
+
   // --- персонаж ---------------------------------------------------------------
   hurt: {
     bus: "player", level: 0.55, voices: 1, gap: 0.18, send: 0.05, duck: 0.25, dur: 0.24, variants: 2, pitch: [1, 0.91],
@@ -278,6 +300,29 @@ export const SOUND_RECIPES = {
     layers: [
       ...[587.33, 880, 1174.66, 1479.98].map((f, i) => ({ kind: "bell" as const, f, t: i * 0.1, peak: 0.2, decay: 0.5, index: 0.8 })),
       ...[587.33, 739.99, 880, 1174.66].map((f) => ({ kind: "bell" as const, f, t: 0.46, peak: 0.1, decay: 1.4, index: 0.5 })),
+    ],
+  },
+
+  // Сундук: падение — глухой удар с искрой, чтобы сундук заметили в толпе;
+  // открытие — щелчок замка и восходящая россыпь, длиннее уровня: награда
+  // больше одной карточки.
+  chestDrop: {
+    bus: "rewards", level: 0.6, voices: 1, gap: 0.3, send: 0.15, dur: 0.6, variants: 2, pitch: [1, 0.94],
+    layers: [
+      { kind: "tone", f0: 150, f1: 70, glide: 0.08, peak: 0.5, decay: 0.18 },
+      { kind: "hiss", dur: 0.08, seed: 81, filter: "lowpass", f0: 900, peak: 0.35, decay: 0.06 },
+      { kind: "bell", f: 1568, t: 0.06, peak: 0.12, decay: 0.35 },
+      { kind: "bell", f: 2093, t: 0.1, peak: 0.09, decay: 0.3 },
+    ],
+  },
+  chestOpen: {
+    bus: "rewards", level: 0.62, voices: 1, gap: 0.6, send: 0.35, duck: 0.5, dur: 1.4, variants: 1,
+    layers: [
+      { kind: "hiss", dur: 0.03, seed: 91, filter: "highpass", f0: 3000, peak: 0.3, decay: 0.02 },
+      { kind: "tone", f0: 220, f1: 180, glide: 0.03, peak: 0.25, decay: 0.06 },
+      ...[587.33, 659.26, 783.99, 880].map((f, i) => ({ kind: "bell" as const, f, t: 0.08 + i * 0.07, peak: 0.16, decay: i === 3 ? 0.55 : 0.5 })),
+      { kind: "bell", f: 1174.66, t: 0.38, peak: 0.18, decay: 0.8 },
+      { kind: "hiss", t: 0.3, dur: 0.9, seed: 93, filter: "highpass", f0: 7000, attack: 0.2, peak: 0.035, decay: 0.45 },
     ],
   },
 

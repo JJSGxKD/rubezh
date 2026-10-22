@@ -12,7 +12,7 @@ import {
 } from "@bh/core-game";
 import { create } from "zustand";
 import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
-import { audio } from "../audio";
+import { audio, bossPhaseRaised } from "../audio";
 import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
 import { runGraphics } from "./graphics";
@@ -579,6 +579,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       // Низкое здоровье — один раз на спуск ниже порога, а не на каждый снимок.
       const previous = get().hud;
       if (previous !== null && isLowHp(hud) && !isLowHp(previous) && hud.hp > 0) haptic("lowHp");
+      if (bossPhaseRaised(previous?.boss ?? null, hud.boss)) audio.runEvent("bossPhase");
       audio.hud({
         hpRatio: hud.maxHp > 0 ? hud.hp / hud.maxHp : 1,
         weapons: hud.weapons.length,
@@ -623,13 +624,14 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("chestFound", ({ index, size, source, elapsedSec }) => {
       track("chest_found", { index, size, source, elapsedSec: Math.round(elapsedSec) });
+      audio.runEvent("chestDrop");
     }),
 
     created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
-      // Звук и отклик — как у набора уровня: отдельного звука сундука нет.
+      // Отклик — как у набора уровня, а звук свой: награда больше одной карточки.
       haptic("levelUp");
-      audio.runEvent("levelUp");
+      audio.runEvent("chestOpen");
       set({ phase: "chest", chest: { index, size, rewards } });
     }),
 
