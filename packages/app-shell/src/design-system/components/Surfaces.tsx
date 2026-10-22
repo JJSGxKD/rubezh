@@ -9,6 +9,7 @@ import { CutFrame } from "./CutFrame";
 import { Badge } from "./Data";
 import { useModalHost } from "./modal-host";
 import { modalFooterPlacement, modalMount } from "./modal-rules";
+import { RelicFrame } from "./RelicFrame";
 
 /**
  * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
@@ -155,6 +156,11 @@ export interface ModalProps {
    * затемнением.
    */
   hero?: ReactNode;
+  /**
+   * Панель-реликвия v2 тоном из токенов (`RelicFrame`) вместо обычной
+   * панели — у окон наград.
+   */
+  relic?: string;
 }
 
 export function Modal(props: ModalProps): ReactNode {
@@ -186,6 +192,7 @@ export function Modal(props: ModalProps): ReactNode {
   const panel = (
     <Panel
       cut={props.cut === true}
+      relic={props.relic}
       className={[
         wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
         props.hero === undefined ? "" : "min-h-0",
@@ -269,7 +276,14 @@ export function Modal(props: ModalProps): ReactNode {
 }
 
 /** Панель модалки: со срезом — `CutFrame`, без него — прежняя поверхность со скруглением. */
-function Panel(props: { cut: boolean; className: string; children: ReactNode }): ReactNode {
+function Panel(props: { cut: boolean; relic?: string | undefined; className: string; children: ReactNode }): ReactNode {
+  if (props.relic !== undefined) {
+    return (
+      <RelicFrame tone={props.relic} className={props.className}>
+        {props.children}
+      </RelicFrame>
+    );
+  }
   if (props.cut) {
     return (
       <CutFrame tone="panel" size="md" className={`flex max-h-full w-full flex-col overflow-hidden ${props.className}`}>
