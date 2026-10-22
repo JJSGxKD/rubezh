@@ -11,7 +11,8 @@ import { BOOST_GLYPHS, GameGlyph } from "./game-glyphs";
  */
 export type BoostIcon = (props: { size: number; className?: string; "aria-hidden"?: "true" }) => ReactNode;
 
-const FALLBACK: BoostIcon = (props) => <Sparkles size={props.size} className={props.className} aria-hidden="true" />;
+/** Общий значок — у буста, которому своего знака ещё не нарисовали. */
+export const BOOST_FALLBACK: BoostIcon = (props) => <Sparkles size={props.size} className={props.className} aria-hidden="true" />;
 
 // Компоненты созданы один раз: React не пересоздаёт значок на каждой перерисовке.
 const ICONS = new Map<string, BoostIcon>(
@@ -19,5 +20,5 @@ const ICONS = new Map<string, BoostIcon>(
 );
 
 export function boostIcon(id: string): BoostIcon {
-  return ICONS.get(id) ?? FALLBACK;
+  return ICONS.get(id) ?? BOOST_FALLBACK;
 }
