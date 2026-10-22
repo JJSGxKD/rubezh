@@ -28,4 +28,11 @@ describe("плитка дня награды", () => {
     const html = renderToStaticMarkup(createElement(DayCell, { day, index: 6, last: true }));
     expect(html).toContain("whitespace-nowrap");
   });
+
+  it("монеты лежат горстью своего размера, полученный день — галочкой", () => {
+    const coins = (html: string): number => html.match(/data-pile-coin/g)?.length ?? 0;
+    expect(coins(renderToStaticMarkup(createElement(DayCell, { day, index: 0, last: false, pile: 3 })))).toBe(3);
+    expect(coins(renderToStaticMarkup(createElement(DayCell, { day, index: 0, last: false })))).toBe(1);
+    expect(coins(renderToStaticMarkup(createElement(DayCell, { day: { ...day, claimed: true }, index: 0, last: false, pile: 3 })))).toBe(0);
+  });
 });
