@@ -217,7 +217,7 @@ export class WorldRenderer {
     this.player.setVisible(this.world.player.alive);
     this.player.setAlpha(invulnerableAlpha(this.world.player.invulnerableTicks));
     this.applyPlayerFlash();
-    this.rings.draw(this.player.x, this.player.y);
+    this.rings.draw(this.player.x, this.player.y, this.art.on);
 
     if (this.debug !== null && this.visuals !== null) this.debug.draw(this.visuals, t, this.zoom);
   }
@@ -255,6 +255,8 @@ export class WorldRenderer {
       else this.layer.bringToTop(this.enemyLayer);
       if (this.art.on && this.artGround === null) this.artGround = new ArtGround(this.scene, this.layer, this.world.config.unitScale);
       this.artGround?.setVisible(this.art.on);
+      // Знак под ногами — на земле: сразу над землёй и декором, под всеми, кто по ней ходит.
+      if (this.art.on) this.layer.moveTo(this.rings.ground, 2);
       this.ground.setVisible(!this.art.on);
     });
   }
