@@ -10,6 +10,7 @@ import { createDailyApi, dailyAvailable, dayOfWeek, type DailyDay, type DailyVie
 import { useNavigation } from "../../state/navigation";
 import { track } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
+import { coinPile, PILE_SPOTS } from "./daily-pile";
 import { dailyReloadDelayMs } from "./daily-reload";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
 
@@ -110,7 +111,16 @@ export function DailyScreen(): ReactNode {
             </div>
             <ol className="mt-3 grid grid-cols-4 gap-2 landscape:grid-cols-7">
               {ready.days.map((day, index) => (
-                <DayCell key={day.day} day={day} index={index} last={index === ready.days.length - 1} />
+                <DayCell
+                  key={day.day}
+                  day={day}
+                  index={index}
+                  last={index === ready.days.length - 1}
+                  pile={coinPile(
+                    day.coins,
+                    ready.days.map((entry) => entry.coins),
+                  )}
+                />
               ))}
             </ol>
             {notice === null ? null : <p className="mt-3 text-center text-sm font-semibold text-success">{notice}</p>}
@@ -128,7 +138,7 @@ export function DailyScreen(): ReactNode {
  * «СЕГОДНЯ» в узкой плитке на 320 px упиралось в края. «Сегодня» передают
  * рамка, цвет подписи и точка перед ней.
  */
-export function DayCell(props: { day: DailyDay; index: number; last: boolean }): ReactNode {
+export function DayCell(props: { day: DailyDay; index: number; last: boolean; pile?: number }): ReactNode {
   const { day } = props;
   const label = t("daily.day", { day: props.index + 1 });
   return (
@@ -147,8 +157,8 @@ export function DayCell(props: { day: DailyDay; index: number; last: boolean }):
         {day.today ? <span aria-hidden="true" data-today-dot="" className="size-1.5 shrink-0 rounded-full bg-accent" /> : null}
         {label}
       </span>
-      <span aria-hidden="true" className={`inline-flex items-center justify-center gap-1 rounded-md bg-accent/15 ${props.last ? "h-14 px-3" : "size-11"}`}>
-        {day.claimed ? <Check size={props.last ? 28 : 20} className="text-success" /> : <CoinIcon size={props.last ? 28 : 20} />}
+      <span aria-hidden="true" className={`inline-flex items-center justify-center gap-1 rounded-md bg-accent/15 ${props.last ? "h-14 px-2" : "size-11"}`}>
+        {day.claimed ? <Check size={props.last ? 28 : 20} className="text-success" /> : <CoinPile size={props.pile ?? 1} large={props.last} />}
         {day.shards > 0 && !day.claimed ? <ShardIcon rarity="common" size={22} /> : null}
       </span>
       <span aria-hidden="true" className="min-h-5 font-display text-sm font-bold tabular-nums text-text">
@@ -156,6 +166,35 @@ export function DayCell(props: { day: DailyDay; index: number; last: boolean }):
         {day.shards > 0 ? <span className="text-text-muted"> +{day.shards}</span> : null}
       </span>
     </li>
+  );
+}
+
+/**
+ * Горсть монет (U-12): чем щедрее день, тем больше монет — рост награды
+ * виден до того, как прочитаешь число. Монеты — в плитке, без анимации:
+ * неделя на экране и так выезжает лесенкой.
+ */
+function CoinPile(props: { size: number; large: boolean }): ReactNode {
+  const spots = PILE_SPOTS[Math.min(Math.max(props.size, 1), PILE_SPOTS.length) - 1] ?? [];
+  const coin = props.large ? 22 : 18;
+  const spread = props.large ? 1.35 : 1;
+  // Рамка — под самую широкую горсть: раскладка в пределах ±13 × ±8 px
+  // (`PILE_SPOTS`), иначе крайние монеты вылезали за плитку.
+  const width = coin + 26 * spread;
+  const height = coin + 16 * spread;
+  return (
+    <span className="relative inline-block shrink-0" style={{ width, height }}>
+      {spots.map(([x, y], index) => (
+        <span
+          key={index}
+          data-pile-coin=""
+          className="absolute"
+          style={{ left: (width - coin) / 2 + x * spread, top: (height - coin) / 2 + y * spread }}
+        >
+          <CoinIcon size={coin} />
+        </span>
+      ))}
+    </span>
   );
 }
 
