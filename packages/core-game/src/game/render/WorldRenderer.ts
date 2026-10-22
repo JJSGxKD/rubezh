@@ -243,6 +243,12 @@ export class WorldRenderer {
       // Режим сменился — кэши вида и текстуры слотов устарели целиком.
       this.enemySpriteType.fill(-1);
       this.enemySpriteLook.fill(LOOK_NONE);
+      this.pickups.setArt(this.art.pickupArt());
+      this.feedback.setDeathArt(this.art.deathArt());
+      // Спрайты крупнее фигур, и толпа поверх героя прятала его целиком: в
+      // режиме арта враги под героем, без него — прежний порядок.
+      if (this.art.on) this.layer.moveBelow<Phaser.GameObjects.GameObject>(this.enemyLayer, this.player);
+      else this.layer.bringToTop(this.enemyLayer);
     });
   }
 
@@ -323,8 +329,10 @@ export class WorldRenderer {
       // Попадание важнее телеграфа: игрок должен видеть, что снаряд дошёл.
       // Тон состояния — ниже обоих: телеграф предупреждает об ударе, а
       // состояние только подсказывает, что с врагом.
+      // У спрайта белая заливка — крупное белое пятно: вспышка короче, чем у фигуры.
+      const hitFlash = this.art.shows(i) ? ART_HIT_FLASH_TICKS : HIT_FLASH_TICKS;
       let look =
-        tick - enemies.hitTick[i] < HIT_FLASH_TICKS
+        tick - enemies.hitTick[i] < hitFlash
           ? LOOK.hit
           : lookFor(type.pattern, enemies.phase[i], tick);
       if (look === LOOK.normal && statusTones) look = LOOK.status + statusTone(enemies, i, tick);
@@ -429,7 +437,8 @@ export class WorldRenderer {
     this.enemySpriteLook[index] = key;
     const base = art ? this.art.scale : 1;
     sprite.setAlpha(look === LOOK.dim ? 0.35 : 1);
-    sprite.setScale(base * (look === LOOK.hit ? 1.25 : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1));
+    const hitScale = art ? ART_HIT_SCALE : 1.25;
+    sprite.setScale(base * (look === LOOK.hit ? hitScale : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1));
     // Заливка, а не умножение: белый множитель цвет не меняет вовсе, и
     // телеграф с попаданием читались бы только по размеру спрайта. Заливка
     // перекрашивает спрайт целиком и сохраняет его форму по альфе. Тон
@@ -619,6 +628,9 @@ const HEAL_RING_UNITS = 40;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;
+/** Вспышка и раздувание попадания у спрайта чернового арта (design/art/registry.md, F-06). */
+const ART_HIT_FLASH_TICKS = 3;
+const ART_HIT_SCALE = 1.1;
 
 /** Сброшенный вид: следующий кадр обязательно применит вид заново. */
 const LOOK_NONE = 255;
