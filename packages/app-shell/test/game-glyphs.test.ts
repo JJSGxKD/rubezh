@@ -1,8 +1,9 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PASSIVES, WEAPONS } from "@bh/core-game";
-import { HEAL_GLYPH, PASSIVE_GLYPHS, WEAPON_GLYPHS } from "../src/screens/game-glyphs";
+import { BOOSTS, PASSIVES, WEAPONS } from "@bh/core-game";
+import { boostIcon } from "../src/screens/boost-icons";
+import { BOOST_GLYPHS, HEAL_GLYPH, PASSIVE_GLYPHS, WEAPON_GLYPHS } from "../src/screens/game-glyphs";
 import { ItemIcon } from "../src/screens/item-icons";
 
 // Свои значки оружия и навыков (design/art/direction-v2.md §4.5). Полноту не
@@ -35,5 +36,22 @@ describe("значки оружия и навыков", () => {
   it("лечение — свой значок", () => {
     expect(HEAL_GLYPH.length).toBeGreaterThan(0);
     expect(icon("heal", "heal")).toContain("fill-opacity");
+  });
+});
+
+describe("значки бустов", () => {
+  const boost = (id: string): string => renderToStaticMarkup(createElement(boostIcon(id), { size: 16 }));
+
+  it("у буста из контента — свой знак, у незнакомого — общий значок", () => {
+    for (const def of BOOSTS) {
+      if (BOOST_GLYPHS[def.id] === undefined) continue;
+      expect(boost(def.id), def.id).not.toContain("lucide");
+    }
+    expect(boost("нет_такого")).toContain("lucide");
+  });
+
+  it("нет знаков для бустов, которых нет в контенте", () => {
+    const ids = new Set(BOOSTS.map((def) => def.id));
+    for (const id of Object.keys(BOOST_GLYPHS)) expect(ids.has(id), id).toBe(true);
   });
 });
