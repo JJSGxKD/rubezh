@@ -158,7 +158,8 @@ function Shine(): ReactNode {
   return (
     <span aria-hidden="true" className="pointer-events-none absolute inset-0 -z-1 overflow-hidden">
       <span
-        className="absolute inset-y-0 left-0 w-1/3 animate-btn-shine"
+        // Прозрачна вне анимации: при «меньше движения» анимация кончается сразу, и полоса не должна застыть на кнопке.
+        className="absolute inset-y-0 left-0 w-1/3 animate-btn-shine opacity-0"
         style={{ backgroundImage: "linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-text) 55%, transparent), transparent)" }}
       />
     </span>
