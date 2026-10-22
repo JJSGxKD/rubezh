@@ -58,3 +58,21 @@ export function levelFlash(age: number): { scale: number; alpha: number } | null
   const t = age / LEVEL_FLASH_TICKS;
   return { scale: 1 + 1.4 * (1 - (1 - t) * (1 - t)), alpha: 0.9 * (1 - t) };
 }
+
+/** Ободок щита «Эгиды» — шире знака: здоровье остаётся читаемым внутри. */
+export const SHIELD_RIM = { scale: 1.22, color: 0xfff6c8 } as const;
+
+/** Бусин щита рисуется не больше этого: дальше их не сосчитать взглядом. */
+export const SHIELD_BEADS_MAX = 5;
+
+/** Шаг между бусинами по эллипсу, радианы. */
+const BEAD_STEP = 0.38;
+
+/**
+ * Углы бусин щита — по одной на оставшееся попадание, симметрично вокруг
+ * передней точки: сколько ударов ещё примет щит, видно под ногами.
+ */
+export function shieldBeads(hits: number): number[] {
+  const count = Math.max(0, Math.min(SHIELD_BEADS_MAX, Math.floor(hits)));
+  return Array.from({ length: count }, (_, i) => FRONT + (i - (count - 1) / 2) * BEAD_STEP);
+}
