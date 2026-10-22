@@ -8,6 +8,7 @@ import {
   ProgressBar,
   Wordmark,
 } from "../design-system/components";
+import { AmbientSky } from "../app/AmbientSky";
 import { t } from "../i18n";
 
 /**
@@ -143,10 +144,20 @@ export function FirstRunScreen(props: { onAccept(): void }): ReactNode {
   );
 }
 
-/** `still` — без анимации появления: заставка подменяет статичную разметку и не должна мигать. */
+/**
+ * `still` — без анимации появления: заставка подменяет статичную разметку и не должна мигать.
+ *
+ * За экраном — тот же живой фон, что за меню (design/art/direction-v2.md
+ * §4.4): заставка — первое, что видит игрок, и мир начинается с неё.
+ * Статичная заставка `index.html` фона не знает, поэтому он проявляется
+ * плавно, а не вспыхивает при подмене.
+ */
 function Centered(props: { children: ReactNode; still?: boolean }): ReactNode {
   return (
-    <div className="bg-app flex h-full items-center justify-center overflow-y-auto px-6 pt-[var(--app-inset-top)] pb-[var(--app-inset-bottom)]">
+    <div className="bg-app relative isolate flex h-full items-center justify-center overflow-y-auto px-6 pt-[var(--app-inset-top)] pb-[var(--app-inset-bottom)]">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 animate-fade-in [animation-duration:900ms]">
+        <AmbientSky />
+      </div>
       <ContentColumn>
         <div
           className={[
