@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import { ART_ENV_KEY, ART_GROUND_KEY } from "./art-ground";
 import type { PickupArt } from "./pickups";
 
 /**
@@ -31,7 +32,15 @@ const ATLASES = [
     png: new URL("../../../../../design/art/out/atlas-late.png", import.meta.url).href,
     json: new URL("../../../../../design/art/out/atlas-late.json", import.meta.url).href,
   },
+  {
+    key: ART_ENV_KEY,
+    png: new URL("../../../../../design/art/out/atlas-env.png", import.meta.url).href,
+    json: new URL("../../../../../design/art/out/atlas-env.json", import.meta.url).href,
+  },
 ] as const;
+
+/** Нейтральная плитка земли: цвет зоны рендер кладёт окраской по вершинам. */
+const GROUND_URL = new URL("../../../../../design/art/out/ground-neutral.webp", import.meta.url).href;
 
 /** Где лежит кадр: ключ текстуры атласа и имя кадра. */
 export interface ArtFrame {
@@ -81,7 +90,7 @@ export class ArtAtlas {
   /** Начать загрузку один раз; `onReady` — когда оба атласа на месте. */
   load(onReady: () => void): void {
     if (this.state !== "idle") return;
-    if (ATLASES.every((atlas) => this.scene.textures.exists(atlas.key))) {
+    if (this.loaded()) {
       this.state = "ready";
       onReady();
       return;
@@ -90,12 +99,17 @@ export class ArtAtlas {
     for (const atlas of ATLASES) {
       if (!this.scene.textures.exists(atlas.key)) this.scene.load.atlas(atlas.key, atlas.png, atlas.json);
     }
+    if (!this.scene.textures.exists(ART_GROUND_KEY)) this.scene.load.image(ART_GROUND_KEY, GROUND_URL);
     this.scene.load.once("complete", () => {
       // Недошедший атлас не роняет забег: режим разработчика остаётся на фигурах.
-      this.state = ATLASES.every((atlas) => this.scene.textures.exists(atlas.key)) ? "ready" : "failed";
+      this.state = this.loaded() ? "ready" : "failed";
       if (this.state === "ready") onReady();
     });
     this.scene.load.start();
+  }
+
+  private loaded(): boolean {
+    return ATLASES.every((atlas) => this.scene.textures.exists(atlas.key)) && this.scene.textures.exists(ART_GROUND_KEY);
   }
 
   /** Кадр по имени из любого атласа; `null` — у врага ещё нет арта. */
