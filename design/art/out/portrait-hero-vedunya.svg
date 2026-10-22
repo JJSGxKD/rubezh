@@ -3,9 +3,9 @@
 <feFlood flood-color="#1d1c31"/><feComposite in2="d" operator="in" result="o"/>
 <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="34" rx="18" ry="6" fill="#000" opacity="0.32"/><g filter="url(#heroEdge)"><g opacity="1" transform="translate(0 32) scale(1 1) translate(0 -32) rotate(0 0 32)">
 <path d="M-5 32 L-4 18" stroke="#3a3022" stroke-width="7" stroke-linecap="round"/><path d="M5 32 L4 18" stroke="#3a3022" stroke-width="7" stroke-linecap="round"/>
-<clipPath id="c23"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></clipPath>
+<clipPath id="c34"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></clipPath>
 <g fill="#3e6a43"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g>
-<g clip-path="url(#c23)"><g fill="#5e8f62" transform="translate(-3 -2)"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g></g>
+<g clip-path="url(#c34)"><g fill="#5e8f62" transform="translate(-3 -2)"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g></g>
 <path d="M-14 24 Q-2 28 12 23" fill="none" stroke="#2a4a2e" stroke-width="2" opacity="0.7"/>
 <path d="M-13 -16 Q-17 -37 2 -38 Q17 -37 16 -25 L13 -22 Q8 -30 0 -30 Q-5 -20 -6 -7 Q-12 -7 -13 -16 Z" fill="#b8642e"/>
 <circle cx="-11" cy="-6" r="3.4" fill="#b8642e"/><circle cx="-12.2" cy="0" r="3.1" fill="#b8642e"/><circle cx="-13.4" cy="6" r="2.8" fill="#b8642e"/><circle cx="-14.6" cy="12" r="2.5" fill="#b8642e"/>
