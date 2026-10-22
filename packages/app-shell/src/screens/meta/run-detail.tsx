@@ -7,7 +7,7 @@ import "../../i18n/arsenal";
 import "../../i18n/boosts";
 import { damageShares, loadRunDetail, type RunDetail } from "../../state/run-detail-api";
 import { ItemIcon } from "../item-icons";
-import { itemLabel, slotIcon, toneOf } from "./arsenal-parts";
+import { RarityGlow, itemLabel, slotIcon, toneOf } from "./arsenal-parts";
 
 /**
  * Лист забега из «Последних забегов» профиля (docs/35-stage4-plan.md, WP4;
@@ -110,7 +110,10 @@ function Body(props: { run: RunDetail }): ReactNode {
               const tone = toneOf(item.rarity);
               return (
                 <li key={`${item.slot}-${index}`} className="flex items-center gap-2 text-sm">
-                  <span className={`inline-flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ${tone.tile}`}>{slotIcon(item.slot, 16)}</span>
+                  <span className={`relative isolate inline-flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ${tone.tile}`}>
+                    <RarityGlow rarity={item.rarity} seed={`${item.slot}-${String(index)}`} />
+                    {slotIcon(item.slot, 16)}
+                  </span>
                   <span className={`min-w-0 ${tone.text}`}>{itemLabel(item)}</span>
                 </li>
               );

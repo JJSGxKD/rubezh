@@ -7,7 +7,7 @@ import "../../i18n/arsenal";
 import type { ShopApi, ShowcaseOffer, ShowcaseView } from "../../state/shop-api";
 import { track } from "../../state/shell";
 import { loadWallet } from "../../state/wallet-api";
-import { itemLabel, slotIcon, statName, statValue, toneOf } from "./arsenal-parts";
+import { RarityGlow, itemLabel, slotIcon, statName, statValue, toneOf } from "./arsenal-parts";
 import { formatCountdown, msUntilReset } from "./schedule";
 import { showcaseRefusal, type Notice } from "./shop-texts";
 
@@ -131,7 +131,8 @@ function OfferCard(props: { offer: ShowcaseOffer; index: number; busy: string | 
     <div className={`flex animate-rise-in rounded-lg ring-1 ${ring} ${offer.sold ? "opacity-60" : ""}`} style={staggerStyle(props.index)}>
     <Card>
       <div className="flex items-start gap-3">
-        <span aria-hidden="true" className={`relative inline-flex size-[52px] shrink-0 items-center justify-center rounded-lg ring-2 ${tone.tile}`}>
+        <span aria-hidden="true" className={`relative isolate inline-flex size-[52px] shrink-0 items-center justify-center rounded-lg ring-2 ${tone.tile}`}>
+          <RarityGlow rarity={offer.rarity} seed={offer.offerId} />
           {slotIcon(offer.slot, 24)}
           <span className="absolute inset-x-0 bottom-0.5 text-center font-display text-[10px] leading-none font-bold tabular-nums">{offer.level}</span>
         </span>
