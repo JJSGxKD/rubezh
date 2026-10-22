@@ -314,13 +314,23 @@ export function PageTitle(props: { children: ReactNode }): ReactNode {
  * §4.4): ромб перед подписью и затухающая цепь ромбов после неё — тот же
  * мотив вышивки, что у окон наград, только шёпотом.
  */
-export function SectionTitle(props: { children: ReactNode }): ReactNode {
+export function SectionTitle(props: {
+  children: ReactNode;
+  /** `h3` — подзаголовок внутри листа или карточки */
+  as?: "h2" | "h3";
+  /** отступы вокруг; по умолчанию — как у раздела экрана */
+  spacing?: string;
+  /** справа после каймы — счётчик вроде «0 из 3» */
+  end?: ReactNode;
+}): ReactNode {
+  const Tag = props.as ?? "h2";
   return (
-    <h2 className="mt-6 mb-2 flex items-center gap-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
+    <Tag className={`${props.spacing ?? "mt-6 mb-2"} flex items-center gap-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase`}>
       <span aria-hidden="true" className="size-1.5 shrink-0 rotate-45 bg-accent" />
       <span className="min-w-0">{props.children}</span>
       <span aria-hidden="true" className="section-rule h-2.5 min-w-6 flex-1" />
-    </h2>
+      {props.end === undefined ? null : <span className="shrink-0 font-sans tracking-normal normal-case tabular-nums">{props.end}</span>}
+    </Tag>
   );
 }
 

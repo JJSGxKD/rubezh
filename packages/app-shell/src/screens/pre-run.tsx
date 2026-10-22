@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ChevronRight, Lock, Wrench } from "lucide-react";
 import type { DifficultyId } from "@bh/shared-types";
 import { ACCOUNT_UNLOCKS, DIFFICULTIES, unlockLevelOf, unlocksAt, WEAPONS } from "@bh/core-game";
-import { Button, Card, Modal, SegmentedControl } from "../design-system/components";
+import { Button, Card, Modal, SectionTitle, SegmentedControl } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../i18n";
 import "../i18n/boosts";
@@ -217,7 +217,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
               />
               <p className="text-xs text-text-muted">{t(`difficulty.${meta.lastDifficultyId}.description`)}</p>
 
-              <h2 className="mt-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{t("weapon.select.title")}</h2>
+              <SectionTitle spacing="mt-2">{t("weapon.select.title")}</SectionTitle>
               <ul className="grid grid-cols-3 gap-1.5">
                 {weapons.map((weapon) => {
                   const unlocked = open.has(weapon.id);

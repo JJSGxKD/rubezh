@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Badge, Button, ErrorState, Modal, Stat, type BadgeTone } from "../../design-system/components";
+import { Badge, Button, ErrorState, Modal, SectionTitle, Stat, type BadgeTone } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/account";
@@ -63,7 +63,9 @@ export function RunDetailSheet(props: { runId: string; onClose(): void }): React
 function Part(props: { title: string; children: ReactNode }): ReactNode {
   return (
     <section className="grid gap-2">
-      <h3 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{props.title}</h3>
+      <SectionTitle as="h3" spacing="">
+        {props.title}
+      </SectionTitle>
       {props.children}
     </section>
   );
