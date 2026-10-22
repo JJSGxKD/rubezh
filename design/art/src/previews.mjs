@@ -14,6 +14,7 @@ import { creaturePalette, enemyBody, enemyEye, STAGES } from "./palette.mjs";
 import { svgFrame, PPU, CELL_K } from "./build.mjs";
 import { FX } from "./fx.mjs";
 import { PICKUPS } from "./pickups.mjs";
+import { SECRETS } from "./secrets.mjs";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "out");
 const GROUND = "#33506a";
@@ -281,6 +282,35 @@ function plannedBoard() {
   return { width: 1260, height: y + 12, items };
 }
 
+/**
+ * Тайники рубежа (meta-v2.md §5): крупно по состояниям и в игровом масштабе
+ * рядом с героем — тайник должен читаться местом, а не ещё одним врагом.
+ */
+function secretsBoard() {
+  const items = [{ text: "Тайники рубежа: найден → действует; в игровом масштабе рядом с героем", x: 24, y: 30, size: 22, bold: true }];
+  const hero = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${HERO_STATES.idle[0]()}</svg>`;
+  const rowH = 190;
+  let y = 50;
+  for (const secret of SECRETS) {
+    items.push({ ground: true, x: 16, y, w: 1230, h: rowH - 10 });
+    items.push({ text: secret.name, x: 26, y: y + 26, size: 17, bold: true });
+    items.push({ text: secret.what, x: 26, y: y + 48, size: 12.5, color: "#d7dcef" });
+    let x = 330;
+    for (const [state, draw] of Object.entries(secret.states)) {
+      items.push({ svg: draw(), x, y: y + 4, size: rowH - 20 });
+      items.push({ text: state, x: x + 6, y: y + rowH - 16, size: 11, color: "#aeb6cf" });
+      x += rowH;
+    }
+    const game = gameSize(secret.units / 2, 1);
+    const heroSize = gameSize(10, 2.6) / 2;
+    const draw = secret.states.found ?? secret.states.hint;
+    items.push({ svg: draw(), x: 860, y: y + (rowH - 10) / 2 - game / 2, size: game });
+    items.push({ svg: hero, x: 860 + game + 10, y: y + (rowH - 10) / 2 - heroSize / 2, size: heroSize });
+    y += rowH;
+  }
+  return { width: 1260, height: y + 12, items };
+}
+
 /** Спрайт врага, подкрашенный льдом умножением, с инеем поверх — как предлагается для заморозки поля. */
 function frosted(svg) {
   const filter = `<filter id="ice" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0.72 0 0 0 0.12  0 0.86 0 0 0.12  0 0 1 0 0.14  0 0 0 1 0" result="m"/><feFlood flood-color="#e6f7ff" flood-opacity="0.22"/><feComposite in2="SourceAlpha" operator="in" result="w"/><feMerge><feMergeNode in="m"/><feMergeNode in="w"/></feMerge></filter>`;
@@ -353,7 +383,7 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const only = process.env.SHEETS?.split(",");
-  const boards = [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()], ["palette", paletteBoard()], ["planned", plannedBoard()], ["planned-fx", plannedFxBoard()]];
+  const boards = [["concepts", conceptsBoard()], ["roster", rosterBoard()], ["hero", heroBoard()], ["fx", fxBoard()], ["pickups", pickupsBoard()], ["skins", skinsBoard()], ["palette", paletteBoard()], ["planned", plannedBoard()], ["planned-fx", plannedFxBoard()], ["secrets", secretsBoard()]];
   for (const [name, board] of boards.filter(([name]) => only === undefined || only.includes(name))) {
     writeFileSync(join(OUT, `sheet-${name}.png`), Buffer.from(await renderBoard(page, board), "base64"));
   }
