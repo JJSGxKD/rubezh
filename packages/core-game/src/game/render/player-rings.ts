@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { World } from "../sim/world";
 import { WORLD_COLORS } from "./looks";
-import { ellipsePoints, hpArc, levelFlash, SIGIL } from "./player-sigil";
+import { ellipsePoints, hpArc, levelFlash, SHIELD_RIM, shieldBeads, SIGIL } from "./player-sigil";
 
 /**
  * Кольца вокруг персонажа: здоровье убывает по кругу, как часы, а опыт
@@ -111,6 +111,25 @@ export class PlayerRings {
       const alpha = hp > PULSE_BELOW ? 0.95 : 0.55 + 0.45 * pulse(tick);
       ground.lineStyle(width, color, alpha);
       strokeLine(ground, ellipsePoints(cx, cy, rx, ry, arc.start, arc.end, SIGIL_SEGMENTS));
+    }
+
+    // Щит «Эгиды» — светлый ободок вокруг знака и бусина на каждое попадание,
+    // которое он ещё примет: щит виден до удара, а не только вспышкой после.
+    const shield = this.world.player.shieldHits;
+    if (shield > 0) {
+      const srx = rx * SHIELD_RIM.scale;
+      const sry = ry * SHIELD_RIM.scale;
+      ground.lineStyle(width * 0.45, SHIELD_RIM.color, 0.7);
+      ground.strokeEllipse(cx, cy, srx * 2, sry * 2);
+      ground.fillStyle(SHIELD_RIM.color, 0.95);
+      for (const angle of shieldBeads(shield)) {
+        const bx = cx + Math.cos(angle) * srx;
+        const by = cy + Math.sin(angle) * sry;
+        // Ромб двумя треугольниками — без новых объектов в каждом кадре.
+        const half = width * 0.7;
+        ground.fillTriangle(bx, by - width, bx + half, by, bx - half, by);
+        ground.fillTriangle(bx - half, by, bx + half, by, bx, by + width);
+      }
     }
 
     // Новый уровень — кольцо расходится от знака: момент виден на герое.

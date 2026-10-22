@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ellipsePoints, hpArc, LEVEL_FLASH_TICKS, levelFlash } from "../src/game/render/player-sigil";
+import { ellipsePoints, hpArc, LEVEL_FLASH_TICKS, levelFlash, SHIELD_BEADS_MAX, SHIELD_RIM, shieldBeads } from "../src/game/render/player-sigil";
 
 // Знак под ногами героя-спрайта (design/art/direction-v2.md §4.1): здоровье —
 // дугой эллипса на земле, а не кольцами поверх тела. Дуга тает с тыльной
@@ -50,5 +50,25 @@ describe("вспышка нового уровня", () => {
     expect(middle?.scale).toBeGreaterThan(start?.scale ?? 0);
     expect(levelFlash(LEVEL_FLASH_TICKS)).toBeNull();
     expect(levelFlash(-1)).toBeNull();
+  });
+});
+
+describe("щит «Эгиды» на знаке", () => {
+  it("бусина на каждое оставшееся попадание, симметрично спереди", () => {
+    expect(shieldBeads(0)).toEqual([]);
+    expect(shieldBeads(1)).toEqual([Math.PI / 2]);
+    const three = shieldBeads(3);
+    expect(three).toHaveLength(3);
+    expect(three[1]).toBeCloseTo(Math.PI / 2);
+    expect((three[0] ?? 0) + (three[2] ?? 0)).toBeCloseTo(Math.PI);
+  });
+
+  it("бусин не больше, чем сосчитать взглядом", () => {
+    expect(shieldBeads(40)).toHaveLength(SHIELD_BEADS_MAX);
+    expect(shieldBeads(-2)).toEqual([]);
+  });
+
+  it("ободок шире знака: дуга здоровья остаётся внутри", () => {
+    expect(SHIELD_RIM.scale).toBeGreaterThan(1);
   });
 });
