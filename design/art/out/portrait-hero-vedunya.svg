@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -56 62 94"><defs><filter id="heroEdge" x="-50%" y="-50%" width="200%" height="200%">
+<feMorphology in="SourceAlpha" operator="dilate" radius="2.2" result="d"/>
+<feFlood flood-color="#1d1c31"/><feComposite in2="d" operator="in" result="o"/>
+<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="34" rx="18" ry="6" fill="#000" opacity="0.32"/><g filter="url(#heroEdge)"><g opacity="1" transform="translate(0 32) scale(1 1) translate(0 -32) rotate(0 0 32)">
+<path d="M-5 32 L-4 18" stroke="#3a3022" stroke-width="7" stroke-linecap="round"/><path d="M5 32 L4 18" stroke="#3a3022" stroke-width="7" stroke-linecap="round"/>
+<clipPath id="c23"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></clipPath>
+<g fill="#3e6a43"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g>
+<g clip-path="url(#c23)"><g fill="#5e8f62" transform="translate(-3 -2)"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g></g>
+<path d="M-14 24 Q-2 28 12 23" fill="none" stroke="#2a4a2e" stroke-width="2" opacity="0.7"/>
+<path d="M-13 -16 Q-17 -37 2 -38 Q17 -37 16 -25 L13 -22 Q8 -30 0 -30 Q-5 -20 -6 -7 Q-12 -7 -13 -16 Z" fill="#b8642e"/>
+<circle cx="-11" cy="-6" r="3.4" fill="#b8642e"/><circle cx="-12.2" cy="0" r="3.1" fill="#b8642e"/><circle cx="-13.4" cy="6" r="2.8" fill="#b8642e"/><circle cx="-14.6" cy="12" r="2.5" fill="#b8642e"/>
+<path d="M0 -30 Q14 -32 14 -20 Q12 -14 2 -15 Q-2 -22 0 -30 Z" fill="#f2c39b"/>
+<path d="M2 -15 Q8 -14 13 -18" fill="none" stroke="#d39a76" stroke-width="2"/><ellipse cx="10" cy="-23" rx="1.7" ry="2.3" fill="#1d1c31"/><ellipse cx="4" cy="-23" rx="1.5" ry="2.1" fill="#1d1c31"/>
+<circle cx="-13" cy="-28" r="2.6" fill="#7bc96f"/><circle cx="-11" cy="-30" r="3.4" fill="#ff7a9c"/><circle cx="-11" cy="-30" r="1.2" fill="#c9652a"/><circle cx="-7" cy="-33" r="2.6" fill="#7bc96f"/><circle cx="-5" cy="-35" r="3.4" fill="#fff1a6"/><circle cx="-5" cy="-35" r="1.2" fill="#c9652a"/><circle cx="0" cy="-35" r="2.6" fill="#7bc96f"/><circle cx="2" cy="-37" r="3.4" fill="#ff7a9c"/><circle cx="2" cy="-37" r="1.2" fill="#c9652a"/><circle cx="7" cy="-34" r="2.6" fill="#7bc96f"/><circle cx="9" cy="-36" r="3.4" fill="#fff1a6"/><circle cx="9" cy="-36" r="1.2" fill="#c9652a"/><circle cx="13" cy="-29" r="2.6" fill="#7bc96f"/><circle cx="15" cy="-31" r="3.4" fill="#ff7a9c"/><circle cx="15" cy="-31" r="1.2" fill="#c9652a"/>
+<path d="M-11 -12 Q2 -6 13 -12 L12 -6 Q2 0 -10 -6 Z" fill="#f2d16b"/>
+<path d="M-9 -8 Q-20 -6 -26 2 L-18 -1 Z" fill="#c2a03e"/>
+<g transform="rotate(0 18 8)">
+<path d="M18 -28 L20 34" stroke="#6e4c33" stroke-width="3.4" stroke-linecap="round"/>
+<path d="M18 -28 Q17 -40 26 -40 Q32 -38 29 -31" fill="none" stroke="#6e4c33" stroke-width="3.2" stroke-linecap="round"/>
+<circle cx="29" cy="-21" r="10" fill="#ffcf6a" opacity="0.28"/>
+<path d="M29 -31 V-28" stroke="#1d1c31" stroke-width="1.4"/>
+<path d="M25 -28 H33 L34 -17 L29 -14 L24 -17 Z" fill="#4a3a2c"/>
+<path d="M26.5 -26 H31.5 L32 -18 L29 -16.5 L26 -18 Z" fill="#ffcf6a"/>
+<path d="M29 -24 Q31 -21 29 -19 Q27 -21 29 -24 Z" fill="#fff6d8"/>
+</g>
+<path d="M10 -4 Q16 2 19 4" stroke="#3e6a43" stroke-width="6" stroke-linecap="round" fill="none"/>
+</g></g></svg>

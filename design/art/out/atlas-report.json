@@ -28,12 +28,12 @@
  },
  {
   "pack": "skins",
-  "frames": 18,
-  "atlas": "1024×236",
-  "fill": "67%",
-  "trim": "53% ячейки",
-  "png": "21 КБ",
-  "gpu": "0.9 МБ"
+  "frames": 54,
+  "atlas": "1024×596",
+  "fill": "81%",
+  "trim": "54% ячейки",
+  "png": "64 КБ",
+  "gpu": "2.3 МБ"
  },
  {
   "pack": "ground-neutral",

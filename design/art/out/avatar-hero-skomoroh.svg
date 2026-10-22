@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-22 -55 50 50"><defs><filter id="heroEdge" x="-50%" y="-50%" width="200%" height="200%">
+<feMorphology in="SourceAlpha" operator="dilate" radius="2.2" result="d"/>
+<feFlood flood-color="#1d1c31"/><feComposite in2="d" operator="in" result="o"/>
+<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="34" rx="18" ry="6" fill="#000" opacity="0.32"/><g filter="url(#heroEdge)"><g opacity="1" transform="translate(0 32) scale(1 1) translate(0 -32) rotate(0 0 32)">
+<path d="M-5 32 L-4 18" stroke="#3a2a4a" stroke-width="7" stroke-linecap="round"/><path d="M5 32 L4 18" stroke="#3a2a4a" stroke-width="7" stroke-linecap="round"/>
+<clipPath id="c34"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></clipPath>
+<g fill="#b23c2a"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g>
+<g clip-path="url(#c34)"><g fill="#e0573f" transform="translate(-3 -2)"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g></g>
+<path d="M-14 24 Q-2 28 12 23" fill="none" stroke="#7c2618" stroke-width="2" opacity="0.7"/>
+<path d="M0 -30 Q14 -32 14 -20 Q12 -14 2 -15 Q-2 -22 0 -30 Z" fill="#f2c39b"/>
+<path d="M2 -15 Q8 -14 13 -18" fill="none" stroke="#d39a76" stroke-width="2"/><ellipse cx="10" cy="-23" rx="1.7" ry="2.3" fill="#1d1c31"/><ellipse cx="4" cy="-23" rx="1.5" ry="2.1" fill="#1d1c31"/>
+<path d="M-12 -26 Q-22 -34 -19 -47 Q-10 -36 3 -31 Z" fill="#ffd15c"/>
+<path d="M2 -31 Q12 -42 23 -45 Q22 -32 16 -25 Z" fill="#46d9c6"/>
+<path d="M-13 -28 Q2 -33 17 -27 L17 -23 Q2 -28 -13 -24 Z" fill="#ffb22e"/>
+<circle cx="-19" cy="-48" r="2.6" fill="#ffb22e"/><circle cx="23.5" cy="-46" r="2.6" fill="#ffb22e"/>
+<path d="M-11 -12 Q2 -6 13 -12 L12 -6 Q2 0 -10 -6 Z" fill="#46d9c6"/>
+<path d="M-9 -8 Q-20 -6 -26 2 L-18 -1 Z" fill="#2a9f90"/>
+<g transform="rotate(0 18 8)">
+<path d="M18 -30 L20 34" stroke="#7a5236" stroke-width="3.4" stroke-linecap="round"/>
+<path d="M18 -30 q8 2 10 10 q-6 -3 -10 -2 Z" fill="#ffd15c"/>
+<path d="M18 -30 q-8 4 -9 13 q4 -5 9 -7 Z" fill="#46d9c6"/>
+<circle cx="18" cy="-33" r="3.6" fill="#ffb22e"/><circle cx="17" cy="-34" r="1.2" fill="#fff" opacity="0.8"/>
+</g>
+<path d="M10 -4 Q16 2 19 4" stroke="#b23c2a" stroke-width="6" stroke-linecap="round" fill="none"/>
+</g></g></svg>
