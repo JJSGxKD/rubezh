@@ -102,7 +102,7 @@ describe("план звуков забега", () => {
   it("«Очаг» тактом ауры не звучит даже при большом счёте; остальное оружие звучит", () => {
     expect(planCueSounds(cues({ weapons: { hearth: 3 } }), 0)).toEqual([]);
     expect(planCueSounds(cues({ weapons: { hearth: 1, spark: 1 } }), 0).map((request) => request.id)).toEqual(["spark"]);
-    for (const id of ["spark", "knife", "wardstone"]) {
+    for (const id of ["spark", "knife", "wardstone", "sting"]) {
       const ids = planCueSounds(cues({ weapons: { [id]: 1 } }), 0).map((request) => request.id);
       expect(ids, id).toEqual([id]);
     }
