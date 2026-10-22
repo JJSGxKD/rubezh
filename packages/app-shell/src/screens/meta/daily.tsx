@@ -9,7 +9,7 @@ import { loadBadges } from "../../state/badges-api";
 import { createDailyApi, dailyAvailable, dayOfWeek, type DailyDay, type DailyView } from "../../state/daily-api";
 import { useNavigation } from "../../state/navigation";
 import { track } from "../../state/shell";
-import { uiFeedback } from "../../state/ui-feedback";
+import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { coinPile, PILE_SPOTS } from "./daily-pile";
@@ -74,7 +74,7 @@ export function DailyScreen(): ReactNode {
       const today = view.days.find((day) => day.today);
       if (today !== undefined) track("daily_reward_claimed", { day: dayOfWeek(today, view.days), week: view.week });
       setNotice(t("daily.got", { what: gotText(response.data.coins, response.data.shards) }));
-      uiFeedback("reward");
+      rewardFeedback(response.data.coins > 0 ? "coins" : response.data.shards > 0 ? "shards" : null);
       // Монеты вылетают из сегодняшней плитки.
       setBurst(burstAt(document.querySelector('[aria-current="date"]'), response.data.coins, "coin"));
       void loadWallet();

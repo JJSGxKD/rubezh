@@ -9,7 +9,7 @@ import { loadBadges } from "../../state/badges-api";
 import { useNavigation } from "../../state/navigation";
 import { restrictionRefusal } from "../../state/restrictions";
 import { track, useShell } from "../../state/shell";
-import { uiFeedback } from "../../state/ui-feedback";
+import { rewardFeedback, uiFeedback, type RewardResource } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import type { AdWatchResult } from "../../state/ad-watch";
 import {
@@ -33,7 +33,7 @@ import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { resourceGlyph } from "../reward-burst-rules";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
-import { sectorCenterDeg, sectorLabelUpsideDown, spinRotationDeg } from "./wheel-math";
+import { sectorCenterDeg, sectorLabelUpsideDown, spinRotationDeg, spinTicks } from "./wheel-math";
 
 /**
  * Колесо удачи (docs/07-monetization-and-ads.md §7, docs/35-stage4-plan.md
@@ -86,6 +86,7 @@ export function WheelScreen(): ReactNode {
   const [burst, setBurst] = useState<Burst | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pending = useRef<WheelSpin | null>(null);
+  const ticks = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [source, setSource] = useState<"free" | "ad">("free");
   const [restricted, setRestricted] = useState(false);
   // То же, что `adsPlayable` потока рекламы: сам поток грузится по нажатию, а не с экраном.
@@ -100,6 +101,23 @@ export function WheelScreen(): ReactNode {
   useEffect(() => {
     if (wheelAvailable()) void load();
   }, []);
+
+  const stopTicks = (): void => {
+    for (const timer of ticks.current) clearTimeout(timer);
+    ticks.current = [];
+  };
+  useEffect(() => stopTicks, []);
+
+  /**
+   * Трещотка: щелчок на каждый сектор под стрелкой, в такт замедлению. При
+   * «меньше движения» колесо встаёт почти сразу, и щелчков нет — остаётся
+   * звон выигрыша.
+   */
+  const startTicks = (from: number, to: number, count: number): void => {
+    stopTicks();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    ticks.current = spinTicks(from, to, count).map((tick) => setTimeout(() => uiFeedback(tick.slow ? "wheelTickSlow" : "wheelTick"), tick.atMs));
+  };
 
   const spin = async (kind: "free" | "ad"): Promise<void> => {
     if (state.status !== "ready" || phase !== "idle") return;
@@ -125,16 +143,19 @@ export function WheelScreen(): ReactNode {
     pending.current = response.data;
     setState({ status: "ready", view: response.data.view });
     setPhase("spinning");
-    setRotation((current) => spinRotationDeg(current, response.data.sector, response.data.view.sectors.length, SPIN_TURNS));
+    const target = spinRotationDeg(rotation, response.data.sector, response.data.view.sectors.length, SPIN_TURNS);
+    setRotation(target);
+    startTicks(rotation, target, response.data.view.sectors.length);
   };
 
   const onSpinEnd = (event: TransitionEvent<HTMLDivElement>): void => {
     if (event.target !== event.currentTarget || event.propertyName !== "transform") return;
     const result = pending.current;
+    stopTicks();
     setPhase("idle");
     if (result === null) return;
     setWon(result);
-    uiFeedback("reward");
+    rewardFeedback(accrualOf(result.resource));
     // Приз вылетает из ступицы: колесо встало — награда «выпала» из него.
     const glyph = resourceGlyph(result.resource);
     if (glyph !== null) {
@@ -367,4 +388,10 @@ function arcPath(index: number, count: number, radius: number): string {
   const [x1, y1] = polar(radius, (index * 360) / count);
   const [x2, y2] = polar(radius, ((index + 1) * 360) / count);
   return `M${x1} ${y1}A${radius} ${radius} 0 0 1 ${x2} ${y2}`;
+}
+
+/** Звук начисления по ресурсу сервера: «coins», «gems», «shard_<редкость>». */
+function accrualOf(resource: string): RewardResource | null {
+  if (resource === "coins" || resource === "gems") return resource;
+  return resource.startsWith("shard_") ? "shards" : null;
 }
