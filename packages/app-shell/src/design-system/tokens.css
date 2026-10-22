@@ -66,6 +66,9 @@
   --animate-chest-land: chest-land 380ms var(--ease-spring) both;
   --animate-chest-shine: chest-shine 600ms var(--ease-out) both;
   --animate-chest-cover: chest-cover var(--duration-base) var(--ease-out) both;
+  /* Забор награды: монеты вылетают веером и осыпаются, сумма всплывает над плиткой. */
+  --animate-coin-burst: coin-burst 800ms var(--ease-out) both;
+  --animate-reward-float: reward-float 1100ms var(--ease-out) both;
   --animate-glow: glow 2.4s var(--ease-base) infinite;
   --animate-float: float 3.2s var(--ease-base) infinite;
   --animate-ping-dot: ping-dot 1.6s var(--ease-out) infinite;
@@ -274,6 +277,44 @@
     to {
       opacity: 0;
       transform: translateX(320%) skewX(-18deg);
+    }
+  }
+
+  @keyframes coin-burst {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(0.5);
+    }
+    15% {
+      opacity: 1;
+      transform: translate(calc(var(--burst-x) * 0.3), calc(var(--burst-y) * 0.3)) scale(1.15);
+    }
+    65% {
+      opacity: 1;
+      transform: translate(var(--burst-x), var(--burst-y)) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(calc(var(--burst-x) * 1.1), calc(var(--burst-y) + 36px)) scale(0.8);
+    }
+  }
+
+  @keyframes reward-float {
+    0% {
+      opacity: 0;
+      transform: translateY(8px) scale(0.6);
+    }
+    20% {
+      opacity: 1;
+      transform: translateY(-10px) scale(1.15);
+    }
+    70% {
+      opacity: 1;
+      transform: translateY(-34px) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-52px) scale(1);
     }
   }
 
