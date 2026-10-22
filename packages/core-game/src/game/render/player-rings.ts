@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { World } from "../sim/world";
 import { WORLD_COLORS } from "./looks";
+import { ellipsePoints, hpArc, levelFlash, SIGIL } from "./player-sigil";
 
 /**
  * Кольца вокруг персонажа: здоровье убывает по кругу, как часы, а опыт
@@ -12,6 +13,10 @@ import { WORLD_COLORS } from "./looks";
  *
  * Рисуется одним `Graphics` на два кольца: две дуги в кадре дешевле, чем
  * спрайты с масками, и не плодят объектов.
+ *
+ * У героя-спрайта колец нет: они режут тело. Вместо них — знак под ногами
+ * (`player-sigil.ts`): здоровье дугой эллипса на земле, свой `Graphics` под
+ * героем и врагами; опыт — только в HUD.
  */
 
 /** Радиусы колец в радиусах персонажа: здоровье ближе, опыт снаружи. */
@@ -31,6 +36,10 @@ const PULSE_TICKS = 45;
 
 export class PlayerRings {
   private readonly graphics: Phaser.GameObjects.Graphics;
+  /** знак под ногами — на земле, под героем и врагами */
+  readonly ground: Phaser.GameObjects.Graphics;
+  private shownLevel: number;
+  private levelUpTick = Number.NEGATIVE_INFINITY;
 
   constructor(
     scene: Phaser.Scene,
@@ -38,16 +47,27 @@ export class PlayerRings {
     layer: Phaser.GameObjects.Container,
   ) {
     this.graphics = scene.add.graphics().setDepth(2);
+    this.ground = scene.add.graphics();
+    layer.add(this.ground);
     layer.add(this.graphics);
+    this.shownLevel = world.progression.level;
   }
 
-  /** `x`, `y` — уже сглаженная позиция персонажа этого кадра. */
-  draw(x: number, y: number): void {
+  /**
+   * `x`, `y` — уже сглаженная позиция персонажа этого кадра; `sigil` — герой
+   * нарисован спрайтом, и вместо колец — знак под ногами.
+   */
+  draw(x: number, y: number, sigil = false): void {
     const graphics = this.graphics;
     graphics.clear();
+    this.ground.clear();
 
     const player = this.world.player;
     if (!player.alive) return;
+    if (sigil) {
+      this.drawSigil(x, y);
+      return;
+    }
 
     const scale = this.world.config.player.radius;
     const maxHp = this.world.playerStats.maxHp;
@@ -64,6 +84,44 @@ export class PlayerRings {
 
   destroy(): void {
     this.graphics.destroy();
+    this.ground.destroy();
+  }
+
+  private drawSigil(x: number, y: number): void {
+    const ground = this.ground;
+    const r = this.world.config.player.radius;
+    const cx = x;
+    const cy = y + r * SIGIL.offsetY;
+    const rx = r * SIGIL.rx;
+    const ry = r * SIGIL.ry;
+    const width = r * SIGIL.width;
+    const maxHp = this.world.playerStats.maxHp;
+    const hp = maxHp > 0 ? Math.max(0, Math.min(1, this.world.player.hp / maxHp)) : 0;
+    const tick = this.world.stats.tick;
+
+    // Подложка — тёмная и цветная: знак читается и на светлом лугу, и на погосте.
+    ground.lineStyle(width * 1.6, 0x000000, 0.28);
+    ground.strokeEllipse(cx, cy, rx * 2, ry * 2);
+    const color = hpColor(hp);
+    ground.lineStyle(width, color, TRACK_ALPHA);
+    ground.strokeEllipse(cx, cy, rx * 2, ry * 2);
+
+    const arc = hpArc(hp);
+    if (arc !== null) {
+      const alpha = hp > PULSE_BELOW ? 0.95 : 0.55 + 0.45 * pulse(tick);
+      ground.lineStyle(width, color, alpha);
+      strokeLine(ground, ellipsePoints(cx, cy, rx, ry, arc.start, arc.end, SIGIL_SEGMENTS));
+    }
+
+    // Новый уровень — кольцо расходится от знака: момент виден на герое.
+    const level = this.world.progression.level;
+    if (level > this.shownLevel) this.levelUpTick = tick;
+    this.shownLevel = level;
+    const flash = levelFlash(tick - this.levelUpTick);
+    if (flash !== null) {
+      ground.lineStyle(width * 0.8, WORLD_COLORS.xpRing, flash.alpha);
+      ground.strokeEllipse(cx, cy, rx * 2 * flash.scale, ry * 2 * flash.scale);
+    }
   }
 
   private ring(
@@ -96,6 +154,16 @@ export class PlayerRings {
  */
 function hpColor(fill: number): number {
   return fill > 0.6 ? WORLD_COLORS.hpFull : fill > PULSE_BELOW ? WORLD_COLORS.hpMid : WORLD_COLORS.hpLow;
+}
+
+/** Отрезков на полный эллипс знака: глаз не видит граней, а точек немного. */
+const SIGIL_SEGMENTS = 40;
+
+function strokeLine(graphics: Phaser.GameObjects.Graphics, points: readonly number[]): void {
+  graphics.beginPath();
+  graphics.moveTo(points[0] ?? 0, points[1] ?? 0);
+  for (let i = 2; i < points.length; i += 2) graphics.lineTo(points[i] ?? 0, points[i + 1] ?? 0);
+  graphics.strokePath();
 }
 
 /** Треугольная волна 0 → 1 → 0: без тригонометрии, её здесь и не нужно. */
