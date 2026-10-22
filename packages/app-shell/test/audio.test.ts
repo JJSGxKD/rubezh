@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter } from "@bh/shared-types";
-import type { RunCues } from "@bh/core-game";
+import type { BossSnapshot, RunCues } from "@bh/core-game";
 import { volumeCurve } from "../src/audio/audio-engine";
-import { DEFAULT_VOLUMES } from "../src/audio";
+import { DEFAULT_VOLUMES, bossPhaseRaised } from "../src/audio";
 import { LAB_OVERRIDES_KEY, readLabOverrides, recipeSchema } from "../src/audio/lab-overrides";
 import { BUSES, SOUND_RECIPES, UI_SOUNDS } from "../src/audio/recipes";
 import { gemNotes, planCueSounds } from "../src/audio/sound-director";
@@ -24,6 +24,7 @@ function cues(patch: Partial<RunCues> = {}): RunCues {
     kills: 0,
     eliteKills: 0,
     eliteSpawns: 0,
+    bossSpawns: 0,
     xp: 0,
     fuses: 0,
     dashWarns: 0,
@@ -106,6 +107,21 @@ describe("план звуков забега", () => {
       const ids = planCueSounds(cues({ weapons: { [id]: 1 } }), 0).map((request) => request.id);
       expect(ids, id).toEqual([id]);
     }
+  });
+
+  it("босс звучит своим рогом, а не рогом элиты; элита рядом с боссом — своим", () => {
+    expect(planCueSounds(cues({ eliteSpawns: 1, bossSpawns: 1 }), 0).map((request) => request.id)).toEqual(["bossArrive"]);
+    expect(planCueSounds(cues({ eliteSpawns: 2, bossSpawns: 1 }), 0).map((request) => request.id)).toEqual(["bossArrive", "eliteHorn"]);
+    expect(planCueSounds(cues({ eliteSpawns: 1 }), 0).map((request) => request.id)).toEqual(["eliteHorn"]);
+  });
+
+  it("смена фазы босса звучит на росте фазы того же босса, а не на его выходе", () => {
+    const boss = (phase: number, enemyId = "boss_seer"): BossSnapshot => ({ enemyId, hp: 100, maxHp: 100, phase, phases: 3 });
+    expect(bossPhaseRaised(null, boss(0))).toBe(false);
+    expect(bossPhaseRaised(boss(0), boss(0))).toBe(false);
+    expect(bossPhaseRaised(boss(0), boss(1))).toBe(true);
+    expect(bossPhaseRaised(boss(1), null)).toBe(false);
+    expect(bossPhaseRaised(boss(2), boss(1, "boss_other"))).toBe(false);
   });
 
   it("важное — впереди толпы: при потолке голосов режутся последние", () => {
