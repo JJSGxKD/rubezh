@@ -135,7 +135,7 @@
 | Формы и цвета врагов, кристаллов, подборов, персонажа и эффектов — на канве и в гайдбуке сразу | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `STAGE_LOOKS`, `WORLD_COLORS` |
 | Вспышка попадания, взрывы, плитка фона | `game/render/WorldRenderer.ts` → `HIT_FLASH_TICKS`, `BLAST_*`, `GROUND_TILE_UNITS` |
 | Тон состояния врага: цвета стихий на канве и в гайдбуке, пульс, порядок важности | `game/render/status-tones.ts` → `STATUS_TONE_COLORS`, `ELEMENT_TONE`, `STATUS_PULSE_*` |
-| Телеграфы угроз: за сколько до выстрела виден прицел стрелка, толщина полос | `game/render/telegraphs.ts` → `AIM_TELEGRAPH_SEC`, `LANE_WIDTH_UNITS`, `AIM_WIDTH_UNITS`; отсчёт взрыва и рывка берётся из `fuseSec` и `telegraphSec` врага |
+| Телеграфы угроз: за сколько до выстрела виден прицел стрелка, толщина полос | `game/render/telegraphs.ts` → `AIM_TELEGRAPH_SEC`, `LANE_WIDTH_UNITS`, `AIM_WIDTH_UNITS`; ширина полосы рывка — тело врага (`laneWidth`), прозрачность подложки и доля отсчёта — `LANE_TRACK_ALPHA`, `LANE_FILL_SHARE`; отсчёт взрыва и рывка берётся из `fuseSec` и `telegraphSec` врага |
 | Граница «Очага» и молния «Грозы»: вспышка, высота и изгиб молнии | `game/render/weapon-effects.ts` → `AURA_FLASH_TICKS`, `BOLT_LIFETIME_TICKS`, `BOLT_HEIGHT_UNITS`, `BOLT_JITTER_UNITS` |
 | Потолок шагов симуляции за кадр, частота снимков HUD | `game/MainScene.ts` → `MAX_STEPS_PER_FRAME`, `HUD_INTERVAL_MS` |
 | Бот калибровки: дистанции страха и сближения, стратегия выбора | `game/balance/bot.ts` |
