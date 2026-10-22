@@ -36,6 +36,9 @@ for (const skin of HERO_SKINS) {
   const file = join(OUT, `portrait-hero-${skin.id}.svg`);
   writeFileSync(file, svg);
   console.log(`${file} · ${String(Buffer.byteLength(svg))} Б · рамка ${frame.join(" ")}`);
+  // Для картинок бота — все облики в одной рамке, чтобы карточка не зависела от облика.
+  const cardSvg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ARCHETYPE_BOX.join(" ")}"><defs>${heroDefs()}</defs>${HERO_STATES.idle[0]()}</svg>\n`);
+  writeFileSync(join(OUT, `card-hero-${skin.id}.svg`), cardSvg);
   const headSvg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${HEAD_BOX.join(" ")}"><defs>${heroDefs()}</defs>${HERO_STATES.idle[0]()}</svg>\n`);
   writeFileSync(join(OUT, `avatar-hero-${skin.id}.svg`), headSvg);
 }

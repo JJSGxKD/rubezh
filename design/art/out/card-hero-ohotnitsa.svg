@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-30 -56 62 94"><defs><filter id="heroEdge" x="-50%" y="-50%" width="200%" height="200%">
+<feMorphology in="SourceAlpha" operator="dilate" radius="2.2" result="d"/>
+<feFlood flood-color="#1d1c31"/><feComposite in2="d" operator="in" result="o"/>
+<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="34" rx="18" ry="6" fill="#000" opacity="0.32"/><g filter="url(#heroEdge)"><g opacity="1" transform="translate(0 32) scale(1 1) translate(0 -32) rotate(0 0 32)">
+<path d="M-5 32 L-4 18" stroke="#2f2a26" stroke-width="7" stroke-linecap="round"/><path d="M5 32 L4 18" stroke="#2f2a26" stroke-width="7" stroke-linecap="round"/>
+<clipPath id="c39"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></clipPath>
+<g fill="#664c33"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g>
+<g clip-path="url(#c39)"><g fill="#8a6a4a" transform="translate(-3 -2)"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g></g>
+<path d="M-14 24 Q-2 28 12 23" fill="none" stroke="#47331f" stroke-width="2" opacity="0.7"/>
+<path d="M-8 -37 L-5 -49 L1 -39 Z" fill="#6f778c"/><path d="M5 -39 L11 -49 L14 -35 Z" fill="#a6aec0"/>
+<clipPath id="c40"><path d="M-14 -14 Q-16 -40 2 -40 Q18 -40 16 -20 Q14 -10 2 -9 Q-10 -8 -14 -14 Z"/></clipPath>
+<g fill="#6f778c"><path d="M-14 -14 Q-16 -40 2 -40 Q18 -40 16 -20 Q14 -10 2 -9 Q-10 -8 -14 -14 Z"/></g>
+<g clip-path="url(#c40)"><g fill="#a6aec0" transform="translate(-2 -2)"><path d="M-14 -14 Q-16 -40 2 -40 Q18 -40 16 -20 Q14 -10 2 -9 Q-10 -8 -14 -14 Z"/></g></g>
+<path d="M0 -30 Q14 -32 14 -20 Q12 -14 2 -15 Q-2 -22 0 -30 Z" fill="#f2c39b"/>
+<path d="M2 -15 Q8 -14 13 -18" fill="none" stroke="#d39a76" stroke-width="2"/><ellipse cx="10" cy="-23" rx="1.7" ry="2.3" fill="#1d1c31"/><ellipse cx="4" cy="-23" rx="1.5" ry="2.1" fill="#1d1c31"/>
+<path d="M-2 -34 Q10 -40 21 -31 Q13 -27 2 -29 Z" fill="#6f778c"/>
+<circle cx="20.5" cy="-31" r="1.6" fill="#1d1c31"/>
+<path d="M-12 -12 L-9 -6 L-6 -11 L-3 -5 L0 -10" fill="none" stroke="#6f778c" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M-11 -12 Q2 -6 13 -12 L12 -6 Q2 0 -10 -6 Z" fill="#d0563d"/>
+<path d="M-9 -8 Q-20 -6 -26 2 L-18 -1 Z" fill="#9c3a26"/>
+<g transform="rotate(0 18 8)">
+<path d="M19 -32 Q35 2 19 36" fill="none" stroke="#7a5236" stroke-width="3.4" stroke-linecap="round"/>
+<path d="M19 -32 L19 36" stroke="#e8e2d4" stroke-width="1"/>
+<path d="M17 -30 Q24 -36 22 -26" fill="none" stroke="#d0563d" stroke-width="1.6"/>
+</g>
+<path d="M10 -4 Q16 2 19 4" stroke="#664c33" stroke-width="6" stroke-linecap="round" fill="none"/>
+</g></g></svg>

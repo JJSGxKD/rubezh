@@ -132,6 +132,7 @@ node design/art/src/build.mjs          # атласы, земля, отчёт о
 node design/art/src/previews.mjs       # листы концепций, бестиария, героя, эффектов
 node design/art/src/portraits.mjs      # портреты героя вектором для меню (после build.mjs)
 node design/art/src/logo.mjs           # логотип v2: словесный знак, руна, значок приложения, иконка вкладки → out/brand и оболочка
+node design/art/src/bot-art.mjs        # бренд для картинок бота → backend/api/src/common/card/brand-art.ts (после logo.mjs и portraits.mjs)
 pnpm dev:telegram                       # нужен для следующей строки
 node design/art/src/render-sounds.mjs  # OGG предложенных звуков
 node design/art/src/admin-overflow.mjs # админка на 390 без боковой прокрутки (нужна запущенная панель)
