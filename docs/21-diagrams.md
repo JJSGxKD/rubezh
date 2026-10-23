@@ -1959,7 +1959,7 @@ flowchart LR
     WELCOME -. рекорд и место .-> RUNS
     EXPORT --> QUEUE
     FXM -- раз в минуту, под локом --> OUTBOUND
-    OUTBOUND -- "fx.cbr, fx.ecb, fx.erapi, fx.coingecko, fx.tonapi, fx.binance" --> FXSRC
+    OUTBOUND -- "fx.cbr, fx.ecb, fx.erapi, fx.coingecko, fx.coinmarketcap, fx.tonapi, fx.binance" --> FXSRC
     FXM --> PG
     FXM --> REDIS
     FXM -. алерты курсов .-> NOTIFY
