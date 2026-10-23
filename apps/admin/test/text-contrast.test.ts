@@ -52,4 +52,11 @@ describe("текст панели читается", () => {
     const shell = readFileSync(join(SRC, "screens/Shell.tsx"), "utf8");
     expect(shell).toMatch(/h-\[30px\] items-center[^`]*focus-visible:-outline-offset-2/);
   });
+
+  it("на телефоне мелкие кнопки панели — не меньше 24 px: подсказка «?» с зоной вокруг, переключатели предпросмотра — 40 px", () => {
+    const kit = readFileSync(join(SRC, "ui/kit.tsx"), "utf8");
+    expect(kit).toMatch(/cursor-help[^"]*after:absolute after:-inset-2\.5/);
+    const preview = readFileSync(join(SRC, "ui/phone-preview.tsx"), "utf8");
+    expect(preview.match(/max-md:min-h-10/g)?.length).toBe(2);
+  });
 });

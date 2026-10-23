@@ -116,7 +116,9 @@ export function Help({ text }: { text: string }) {
         }}
         onFocus={(event) => show(event.currentTarget)}
         onBlur={hide}
-        className="inline-flex size-4 cursor-help items-center justify-center rounded-full border border-border-strong text-[10px] leading-none font-semibold text-text-muted select-none hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent focus-visible:outline-none"
+        // Знак 16 px, а палец на телефоне промахивается: прозрачная зона
+        // касания вокруг — 36 px (docs/27 §4.4).
+        className="relative inline-flex size-4 cursor-help items-center justify-center rounded-full border border-border-strong text-[10px] leading-none font-semibold text-text-muted select-none after:absolute after:-inset-2.5 after:content-[''] hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent focus-visible:outline-none"
       >
         ?
       </span>
