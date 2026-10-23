@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Crosshair, Flame, History, Hourglass, Lightbulb, Shuffle, Swords } from "lucide-react";
+import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, Swords } from "lucide-react";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
 import { DIFFICULTIES, DROPS, LOADOUT_LIMITS } from "@bh/core-game";
@@ -14,11 +14,13 @@ import {
 import { formatDecimal, formatDuration, t } from "../../i18n";
 import "../../i18n/guide";
 import { useNavigation } from "../../state/navigation";
+import { useProgress } from "../../state/progress";
 import { ItemIcon, ItemTile } from "../item-icons";
 import { formatChange } from "../run/upgrade-format";
 import {
   eliteEnemies,
   enemyStages,
+  evolutionRecipes,
   passiveCategories,
   passiveRange,
   regularEnemies,
@@ -28,6 +30,7 @@ import {
   unlockLevel,
   weaponElement,
   weaponGrowth,
+  type EvolutionRecipe,
   type GuideEnemy,
 } from "./guide-data";
 import { ElementList, ElementTag, ResistLine } from "./elements";
@@ -288,6 +291,8 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
 }
 
 function Weapons(): ReactNode {
+  // Уровень аккаунта: с сервера, а до ответа — из подписанного снимка; без обоих — первый.
+  const level = useProgress((state) => state.progress?.level ?? state.runLevel ?? 1);
   return (
     <>
       <p className="text-sm text-text-muted">{t("guide.weapons.intro")}</p>
@@ -299,7 +304,51 @@ function Weapons(): ReactNode {
       {levelWeapons().map((weapon, index) => (
         <WeaponCard key={weapon.id} weapon={weapon} index={index} />
       ))}
+      <SectionTitle>{t("guide.weapons.evolutions")}</SectionTitle>
+      <p className="text-sm text-text-muted">{t("guide.weapons.evolutionsIntro")}</p>
+      {evolutionRecipes(level).map((recipe, index) => (
+        <EvolutionCard key={recipe.evolution} recipe={recipe} index={index} />
+      ))}
     </>
+  );
+}
+
+/** Рецепт эволюции: оружие + навык → эволюция. Закрытый уровнем аккаунта — под замком, но название и описание видны (К3). */
+function EvolutionCard(props: { recipe: EvolutionRecipe; index: number }): ReactNode {
+  const { recipe } = props;
+  const name = t(`weapon.${recipe.evolution}.name`);
+  return (
+    <Card appearIndex={Math.min(props.index, 6)} stripe="weapon">
+      <div className={recipe.locked ? "opacity-70" : ""}>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <ItemTile kind="weapon" id={recipe.weapon} size="s" />
+          <span aria-hidden="true" className="text-text-muted">
+            +
+          </span>
+          <ItemTile kind="passive" id={recipe.passive} size="s" />
+          <span aria-hidden="true" className="text-text-muted">
+            →
+          </span>
+          <ItemTile kind="weapon" id={recipe.evolution} size="s" />
+          <h3 className="min-w-0 font-display text-base font-bold text-text">{name}</h3>
+        </div>
+        <p className="mt-1 text-xs text-text-muted">
+          {t("guide.evolution.recipe", { weapon: t(`weapon.${recipe.weapon}.name`), passive: t(`passive.${recipe.passive}.name`), evolution: name })}
+        </p>
+        <p className="mt-1 text-sm text-text-muted">{t(`weapon.${recipe.evolution}.description`)}</p>
+        <p className="mt-1 text-xs text-text-muted">{t("guide.evolution.power", { ratio: formatDecimal(recipe.powerRatio, 1) })}</p>
+        <div className="mt-2">
+          {recipe.locked ? (
+            <Badge tone="muted">
+              <Lock size={12} aria-hidden="true" />
+              {t("guide.evolution.locked", { level: recipe.unlockLevel })}
+            </Badge>
+          ) : (
+            <UnlockBadge level={recipe.unlockLevel} />
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 

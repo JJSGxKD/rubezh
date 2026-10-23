@@ -7,6 +7,7 @@ import "../../i18n/arsenal";
 import "../../i18n/boosts";
 import { damageShares, loadRunDetail, type RunDetail } from "../../state/run-detail-api";
 import { ItemIcon } from "../item-icons";
+import { isEvolutionWeapon } from "../run/evolution-hints";
 import { itemLabel, slotIcon, toneOf } from "./arsenal-parts";
 
 /**
@@ -183,7 +184,7 @@ function Weapons(props: { run: RunDetail }): ReactNode {
                   <ItemIcon kind="weapon" id={weapon.id} size={16} />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-text">{nameOf("weapon", weapon.id)}</span>
-                <span className="text-xs text-text-muted">{t("runDetail.weaponLevel", { level: weapon.level })}</span>
+                <span className="text-xs text-text-muted">{isEvolutionWeapon(weapon.id) ? t("runDetail.weaponEvolved") : t("runDetail.weaponLevel", { level: weapon.level })}</span>
               </div>
               {share === null || weapon.damage === null ? null : (
                 <>

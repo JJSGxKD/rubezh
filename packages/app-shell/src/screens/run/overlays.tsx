@@ -14,6 +14,7 @@ import { formatDuration, t } from "../../i18n";
 import "../../i18n/run";
 import { ItemTile, type ItemKind } from "../item-icons";
 import { CardToolsBar } from "./CardTools";
+import { hintForOffer } from "./evolution-hints";
 import { cardTapAction, toolButtons } from "./card-tools-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
 import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
@@ -229,6 +230,7 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
                 <p className="mt-1.5 text-xs text-text-muted landscape:line-clamp-2">{t(offer.descriptionKey)}</p>
               ) : null}
               <ChangeList changes={offer.changes} />
+              <EvolutionHint offer={offer} loadout={props.loadout} />
             </Card>
           );
         })}
@@ -291,9 +293,27 @@ function ChangeList(props: { changes: readonly UpgradeChange[] }): ReactNode {
   );
 }
 
+/**
+ * Рецепт эволюции одной строкой под изменениями (tasks/T-0103): подсказка
+ * нужна там, где игрок решает, и только когда есть смысл. Текст, без анимации.
+ */
+function EvolutionHint(props: { offer: UpgradeOption; loadout: LevelUpOverlayProps["loadout"] }): ReactNode {
+  const hint = hintForOffer(props.offer, props.loadout ?? { weapons: [], passives: [] });
+  if (hint === null) return null;
+  const params = Object.fromEntries(
+    Object.entries(hint.params).map(([name, id]) => [name, t(name === "passive" ? `passive.${id}.name` : `weapon.${id}.name`)]),
+  );
+  return (
+    <p className="surface-sunken mt-2 flex items-start gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-text-muted">
+      <Sparkles size={12} aria-hidden="true" className="mt-0.5 shrink-0 text-accent" />
+      {t(hint.key, params)}
+    </p>
+  );
+}
+
 function kindOf(offer: UpgradeOption): ItemKind {
   if (offer.kind === "heal") return "heal";
-  return offer.kind === "weapon_new" || offer.kind === "weapon_level" ? "weapon" : "passive";
+  return offer.kind === "weapon_new" || offer.kind === "weapon_level" || offer.kind === "weapon_evolve" ? "weapon" : "passive";
 }
 
 /**
@@ -306,7 +326,12 @@ function OfferTag(props: { offer: UpgradeOption }): ReactNode {
   const category = offer.kind === "passive_new" || offer.kind === "passive_level" ? passiveCategoryOf(offer.refId) : null;
 
   const badge =
-    offer.kind === "weapon_new" || offer.kind === "passive_new" ? (
+    offer.kind === "weapon_evolve" ? (
+      <Badge tone="accent">
+        <Sparkles size={12} aria-hidden="true" />
+        {t("run.levelUp.evolve")}
+      </Badge>
+    ) : offer.kind === "weapon_new" || offer.kind === "passive_new" ? (
       <Badge tone="accent">
         <Sparkles size={12} aria-hidden="true" />
         {t("run.levelUp.new")}

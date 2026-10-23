@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import {
   Anvil,
   BicepsFlexed,
+  Biohazard,
   Bug,
   CloudLightning,
   Flame,
@@ -16,7 +17,10 @@ import {
   Radius,
   Shield,
   Slice,
+  Snowflake,
   Sparkles,
+  Swords,
+  Tornado,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -36,6 +40,13 @@ const WEAPON_ICONS: Readonly<Record<string, LucideIcon>> = {
   hearth: Flame,
   storm: CloudLightning,
   sting: Bug,
+  // Эволюции (tasks/T-0103): у каждой свой значок, запасной «искры» их не различал бы.
+  starfall: Sparkles,
+  tempest: Tornado,
+  blade_whirl: Swords,
+  frost_crown: Snowflake,
+  forge: Anvil,
+  viper: Biohazard,
 };
 
 const PASSIVE_ICONS: Readonly<Record<string, LucideIcon>> = {
@@ -50,6 +61,11 @@ const PASSIVE_ICONS: Readonly<Record<string, LucideIcon>> = {
   ward: Shield,
   tempering: Anvil,
 };
+
+/** Есть ли у оружия свой значок, а не запасной. */
+export function hasOwnWeaponIcon(id: string): boolean {
+  return WEAPON_ICONS[id] !== undefined;
+}
 
 export type ItemKind = "weapon" | "passive" | "heal";
 

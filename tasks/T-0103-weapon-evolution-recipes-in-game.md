@@ -3,8 +3,8 @@ id: T-0103
 title: Рецепты эволюций в игре: подсказка на карточке, гайдбук, значок готовности
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead2-15
 size: M
 depends_on: [T-0102, T-0100]
