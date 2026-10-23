@@ -262,7 +262,7 @@ export function RunDetails(props: { result: RunResult; open: boolean; diagnostic
         type="button"
         aria-expanded={open}
         onClick={() => props.onToggle(!open)}
-        className="flex h-8 w-full items-center justify-center gap-1.5 text-[12.5px] font-semibold text-text-muted active:text-text"
+        className="hit-tall flex h-8 w-full items-center justify-center gap-1.5 text-[12.5px] font-semibold text-text-muted active:text-text"
       >
         {open ? t("run.death.less") : t("run.death.more")}
         {open ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
