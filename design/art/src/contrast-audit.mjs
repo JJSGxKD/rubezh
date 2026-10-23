@@ -7,7 +7,7 @@
  * Здесь иначе: текст на экране прячется, кадр снимается, и цвет каждой
  * подписи — с прозрачностью её и предков — сравнивается с пикселями, которые
  * под ней на самом деле. Текст под панелью вкладок или окном не меряется: его
- * не видно.
+ * не видно. Прозрачные слои касаний поверх HUD текст не закрывают.
  *
  * Порог — WCAG 2.2: 4,5:1 для обычного текста, 3:1 для крупного (от 24 px или
  * от 18,66 px полужирного). Выключенное (`disabled`, `aria-disabled`) и
@@ -45,14 +45,34 @@ await page.waitForTimeout(3500);
 const navigation = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => name.includes("/state/navigation")));
 if (navigation === undefined) throw new Error("Модуль навигации не найден — это dev-сервер оболочки?");
 
-/** Подписи в окне: цвет с прозрачностью предков, размер, рамка текста. */
-const collect = () =>
-  page.evaluate(() => {
+/**
+ * Подписи в окне: цвет с прозрачностью предков, размер, рамка текста. На время
+ * сбора всё ловит касания: `elementFromPoint` пропускает `pointer-events: none`,
+ * а так устроены HUD забега и подписи поверх кнопок.
+ */
+async function collect() {
+  const touchable = await page.addStyleTag({ content: "*{pointer-events:auto!important}" });
+  const items = await page.evaluate(() => {
     const parse = (value) => {
       const match = /rgba?\(([^)]+)\)/.exec(value);
       if (match === null) return null;
       const [r, g, b, a = "1"] = match[1].split(/[\s,/]+/).filter(Boolean);
       return [Number(r), Number(g), Number(b), Number(a)];
+    };
+    // Подпись закрыта, если над ней в стопке есть слой, который что-то рисует:
+    // фон, картинка, канва. Прозрачные слои касаний поверх HUD не в счёт.
+    const paints = (node) => {
+      if (["IMG", "CANVAS", "VIDEO"].includes(node.tagName)) return true;
+      const style = getComputedStyle(node);
+      const bg = parse(style.backgroundColor);
+      return style.backgroundImage !== "none" || (bg !== null && bg[3] > 0.5);
+    };
+    const covered = (el, x, y) => {
+      for (const node of document.elementsFromPoint(x, y)) {
+        if (node === el || el.contains(node) || node.contains(el)) return false;
+        if (paints(node)) return true;
+      }
+      return true;
     };
     const items = [];
     const seen = new Set();
@@ -75,8 +95,7 @@ const collect = () =>
       if (box.width < 2 || box.height < 2 || box.bottom < 0 || box.top > innerHeight || box.right < 0 || box.left > innerWidth) continue;
       const cx = Math.min(innerWidth - 1, Math.max(0, (box.left + box.right) / 2));
       const cy = Math.min(innerHeight - 1, Math.max(0, (box.top + box.bottom) / 2));
-      const top = document.elementFromPoint(cx, cy);
-      if (top === null || !(el.contains(top) || top.contains(el))) continue;
+      if (covered(el, cx, cy)) continue;
       items.push({
         text: node.textContent.trim().slice(0, 40),
         color: [color[0], color[1], color[2], color[3] * opacity],
@@ -88,6 +107,9 @@ const collect = () =>
     }
     return items;
   });
+  await touchable.evaluate((node) => node.remove());
+  return items;
+}
 
 /** Кадр без текста — и контраст каждой подписи к пикселям под ней. */
 async function measure(items) {
