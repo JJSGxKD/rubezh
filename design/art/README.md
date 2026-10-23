@@ -134,6 +134,7 @@ node design/art/src/portraits.mjs      # портреты героя векто�
 node design/art/src/logo.mjs           # логотип v2: словесный знак, руна, значок приложения, иконка вкладки → out/brand и оболочка
 node design/art/src/bot-art.mjs        # бренд для картинок бота → backend/api/src/common/card/brand-art.ts (после logo.mjs и portraits.mjs)
 node design/art/src/promo.mjs          # промо 1:1, 16:9, 21:9 → out/promo/*.png и mockups/promo-*.html
+node design/art/src/platform-kit.mjs   # значки площадок 16…1024 и превью Mini App 640×360 → out/platform (после logo.mjs и promo.mjs)
 pnpm dev:telegram                       # нужен для следующей строки
 node design/art/src/render-sounds.mjs  # OGG предложенных звуков
 node design/art/src/admin-overflow.mjs # админка на 390 без боковой прокрутки (нужна запущенная панель)
