@@ -1,0 +1,28 @@
+{
+  "status": {
+    "timestamp": "2026-09-25T12:00:00.000Z",
+    "error_code": 0,
+    "error_message": null,
+    "elapsed": 11,
+    "credit_count": 1,
+    "notice": null
+  },
+  "data": {
+    "825": {
+      "id": 825,
+      "name": "Tether USDt",
+      "symbol": "USDT",
+      "slug": "tether",
+      "last_updated": "2026-09-25T11:59:00.000Z",
+      "quote": { "USD": { "price": 0.99975, "volume_24h": 61234567890.12, "last_updated": "2026-09-25T11:59:00.000Z" } }
+    },
+    "11419": {
+      "id": 11419,
+      "name": "Toncoin",
+      "symbol": "GRAM",
+      "slug": "toncoin",
+      "last_updated": "2026-09-25T11:58:30.000Z",
+      "quote": { "USD": { "price": 1.4301, "volume_24h": 345678901.23, "last_updated": "2026-09-25T11:58:30.000Z" } }
+    }
+  }
+}

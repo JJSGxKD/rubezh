@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ENEMIES, LOADOUT_LIMITS, PASSIVES, BASE_WEAPONS } from "@bh/core-game";
+import { ENEMIES, LOADOUT_LIMITS, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 import { hasTranslation } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
 import "../src/i18n/guide";
 import {
   eliteEnemies,
+  evolutionRecipes,
   enemyResists,
   passiveCategories,
   passiveRange,
@@ -124,5 +125,14 @@ describe("гайдбук", () => {
     // Сопротивление — процентами, как на карточке выбора.
     const tempering = PASSIVES.find((passive) => passive.stat === "resist");
     expect(tempering === undefined ? null : passiveRange(tempering)).toMatchObject({ from: 15, to: 60 });
+  });
+
+  it("у каждой эволюции есть строка рецепта, и название с описанием переведены", () => {
+    const recipes = evolutionRecipes(1);
+    for (const weapon of WEAPON_EVOLUTIONS) {
+      expect(recipes.some((recipe) => recipe.evolution === weapon.id), weapon.id).toBe(true);
+      expect(hasTranslation(weapon.nameKey), weapon.nameKey).toBe(true);
+      expect(hasTranslation(weapon.descriptionKey), weapon.descriptionKey).toBe(true);
+    }
   });
 });

@@ -102,6 +102,7 @@
   "runDetail.loot": "Добыча",
   "runDetail.weapons": "Оружие",
   "runDetail.weaponLevel": "ур. {level}",
+  "runDetail.weaponEvolved": "Эволюция",
   "runDetail.damage": "{damage} урона · {share}%",
   "runDetail.passives": "Навыки",
   "runDetail.boosts": "Бусты",
