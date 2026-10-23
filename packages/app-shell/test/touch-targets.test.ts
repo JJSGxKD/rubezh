@@ -36,4 +36,9 @@ describe("зона касания маленьких элементов", () => 
     const banners = readFileSync(new URL("../src/screens/meta/shop-banners.tsx", import.meta.url), "utf8");
     expect(banners).toMatch(/shop\.banner\.position[\s\S]{0,200}hit-tall/);
   });
+
+  it("«Подробнее» на итогах забега", () => {
+    const death = readFileSync(new URL("../src/screens/run/death-parts.tsx", import.meta.url), "utf8");
+    expect(death).toMatch(/aria-expanded=\{open\}[\s\S]{0,120}hit-tall/);
+  });
 });
