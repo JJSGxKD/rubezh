@@ -48,17 +48,20 @@ export function PickTile(props: PickTileProps): ReactNode {
         props.onClick?.();
       }}
       className={[
-        "surface-card relative flex w-full min-w-0 flex-col items-stretch gap-1 rounded-lg p-2 text-left max-[359px]:p-1.5",
+        "surface-card relative flex w-full min-w-0 flex-col items-stretch gap-[4px] rounded-lg p-[8px] text-left max-[359px]:p-[6px]",
         "transition-[transform,opacity] duration-(--duration-fast) ease-base",
         locked ? "opacity-55" : "active:scale-[0.98]",
         disabled ? "opacity-40" : "",
         props.selected ? "ring-2 ring-accent shadow-[0_0_18px_-8px_var(--color-accent)]" : "ring-1 ring-border-strong",
       ].join(" ")}
     >
-      <span className="flex min-h-7 items-center justify-between gap-1.5 max-[359px]:gap-1">
+      <span className="flex min-h-[28px] items-center justify-between gap-[6px] max-[359px]:gap-[4px]">
         <span
           className={[
-            "inline-flex size-7 shrink-0 items-center justify-center rounded-md max-[359px]:size-6",
+            // Рамка значка, поля и зазоры плитки — в px, как и её подписи: с
+            // крупным шрифтом системы они в rem росли и выдавливали «ур. N»
+            // за край плитки.
+            "inline-flex size-[28px] shrink-0 items-center justify-center rounded-md max-[359px]:size-[24px]",
             locked ? "bg-surface-sunken text-text-disabled" : TONE_CLASS[props.tone],
           ].join(" ")}
         >
