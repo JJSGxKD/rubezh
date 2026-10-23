@@ -108,7 +108,7 @@ function CollectionRow(props: { kind: "weapon" | "passive"; title: string; items
                   </span>
                 </span>
               )}
-              <span className={`w-full text-[11px] leading-tight tracking-tight ${open ? "text-text" : "text-text-disabled"}`}>
+              <span className={`w-full text-[11px] leading-tight tracking-tight ${open ? "text-text" : "text-text-muted"}`}>
                 {open ? name : t("level.collection.at", { level: item.level })}
               </span>
             </li>
