@@ -59,7 +59,7 @@ export function PhonePreview({ kind, draft, height, caption }: { kind: PreviewKi
               type="button"
               aria-pressed={candidate === width}
               onClick={() => setWidth(candidate)}
-              className={`rounded-sm border px-1.5 py-0.5 tabular-nums ${candidate === width ? "border-accent text-text" : "border-border hover:border-border-strong"}`}
+              className={`rounded-sm border px-1.5 py-0.5 tabular-nums max-md:min-h-10 max-md:px-2.5 ${candidate === width ? "border-accent text-text" : "border-border hover:border-border-strong"}`}
             >
               {candidate}
             </button>
@@ -72,7 +72,7 @@ export function PhonePreview({ kind, draft, height, caption }: { kind: PreviewKi
               type="button"
               aria-pressed={candidate === orientation}
               onClick={() => setOrientation(candidate)}
-              className={`rounded-sm border px-1.5 py-0.5 ${candidate === orientation ? "border-accent text-text" : "border-border hover:border-border-strong"}`}
+              className={`rounded-sm border px-1.5 py-0.5 max-md:min-h-10 max-md:px-2.5 ${candidate === orientation ? "border-accent text-text" : "border-border hover:border-border-strong"}`}
             >
               {candidate === "portrait" ? "портрет" : "ландшафт"}
             </button>
