@@ -212,7 +212,8 @@ function MenuColumn({
                   title={section.hint}
                   aria-current={active ? "page" : undefined}
                   onClick={onNavigate}
-                  className={`flex h-[30px] items-center gap-2 rounded-sm px-2 text-[13.5px] max-md:h-10 ${
+                  // Меню прокручивается своей колонкой и срезало бы кольцо фокуса по бокам — внутрь.
+                  className={`flex h-[30px] items-center gap-2 rounded-sm px-2 text-[13.5px] focus-visible:-outline-offset-2 max-md:h-10 ${
                     active ? "bg-surface-raised text-text shadow-[inset_2px_0_0_var(--color-accent)]" : "text-text-muted hover:bg-surface-raised/60 hover:text-text"
                   }`}
                 >

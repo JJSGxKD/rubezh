@@ -41,4 +41,15 @@ describe("текст панели читается", () => {
     const css = readFileSync(join(SRC, "styles.css"), "utf8");
     expect(css).toMatch(/@utility badge-tinted \{[^}]*var\(--color-surface-sunken\)/);
   });
+
+  it("фокус с клавиатуры — то же кольцо, что в игре, в слое base", () => {
+    const css = readFileSync(join(SRC, "styles.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const base = /@layer base \{[\s\S]*?\n\}/.exec(css)?.[0] ?? "";
+    expect(base).toMatch(/:focus-visible \{[^}]*outline: 2px solid var\(--color-accent-glow\)/);
+  });
+
+  it("пункты меню — кольцом внутрь: колонка меню прокручивается и срезает всё снаружи", () => {
+    const shell = readFileSync(join(SRC, "screens/Shell.tsx"), "utf8");
+    expect(shell).toMatch(/h-\[30px\] items-center[^`]*focus-visible:-outline-offset-2/);
+  });
 });
