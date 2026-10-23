@@ -430,6 +430,18 @@ export const SOUND_RECIPES = {
       { kind: "tone", wave: "triangle", f0: 2200, f1: 1700, glide: 0.008, peak: 0.05, decay: 0.012 },
     ],
   },
+  // Покупка: глухой стук кошеля, монеты внутри и светлый звон «готово». Глухо
+  // и тепло, чтобы не путаться с начислением наград — те звенят в открытую.
+  uiPurchase: {
+    bus: "ui", level: 0.55, voices: 1, gap: 0.5, send: 0.3, dur: 1, variants: 1,
+    layers: [
+      { kind: "tone", f0: 150, f1: 95, glide: 0.06, peak: 0.3, decay: 0.09 },
+      { kind: "hiss", dur: 0.09, seed: 330, filter: "bandpass", f0: 900, f1: 500, glide: 0.08, q: 1.2, peak: 0.12, decay: 0.06 },
+      ...[0.05, 0.1, 0.16].map((t, i) => ({ kind: "bell" as const, f: [2349.32, 2793.83, 2489.02][i] ?? 2500, t, peak: 0.05, decay: 0.07, index: 1.4 })),
+      { kind: "bell", f: 1567.98, t: 0.24, peak: 0.11, decay: 0.45, index: 0.5 },
+      { kind: "bell", f: 2349.32, t: 0.3, peak: 0.08, decay: 0.55, index: 0.5 },
+    ],
+  },
   uiError: {
     bus: "ui", level: 0.5, voices: 1, gap: 0.2, send: 0.05, dur: 0.32, variants: 1,
     layers: [
@@ -455,5 +467,6 @@ export const UI_SOUNDS: readonly SoundId[] = [
   "uiShards",
   "uiWheelTick",
   "uiTally",
+  "uiPurchase",
   "uiError",
 ];
