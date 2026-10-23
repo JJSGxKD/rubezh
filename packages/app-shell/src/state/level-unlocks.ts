@@ -1,4 +1,4 @@
-import { ACCOUNT_UNLOCKS, unlocksAt, unlocksOfLevel } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, PASSIVES, unlocksAt, unlocksOfLevel, WEAPONS } from "@bh/core-game";
 import { PASSIVE_CATEGORIES, type PassiveCategory } from "@bh/shared-types";
 import { t } from "../i18n";
 
@@ -49,6 +49,32 @@ export function nextUnlockAfter(level: number): { level: number; unlocks: LevelU
     if (unlocks.length > 0) return { level: candidate, unlocks };
   }
   return null;
+}
+
+export interface CollectionItem {
+  id: string;
+  /** уровень аккаунта, на котором предмет открывается */
+  level: number;
+}
+
+/**
+ * Всё оружие и все навыки с уровнем открытия, по порядку открытия — для
+ * коллекции на экране уровня: открытое видно целиком, закрытое — целью
+ * «откроется на N-м». Чего нет в таблице разблокировок, в коллекцию не идёт:
+ * это проверяет тест контента, а не экран.
+ */
+export function collectionByLevel(): { weapons: CollectionItem[]; passives: CollectionItem[] } {
+  const weapons: CollectionItem[] = [];
+  const passives: CollectionItem[] = [];
+  const rows = [...ACCOUNT_UNLOCKS].sort((a, b) => a.level - b.level);
+  for (const row of rows) {
+    for (const id of row.weapons ?? []) weapons.push({ id, level: row.level });
+    for (const id of row.passives ?? []) passives.push({ id, level: row.level });
+  }
+  const known = (ids: readonly { id: string }[]) => new Set(ids.map((item) => item.id));
+  const weaponIds = known(WEAPONS);
+  const passiveIds = known(PASSIVES);
+  return { weapons: weapons.filter((item) => weaponIds.has(item.id)), passives: passives.filter((item) => passiveIds.has(item.id)) };
 }
 
 export function nextUnlockLabel(next: { level: number; unlocks: LevelUnlock[] }): string {

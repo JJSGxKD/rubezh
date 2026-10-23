@@ -8,11 +8,12 @@ import type { ProgressView } from "../../state/progress";
  * уровня и что даст следующий — чтобы уровень был целью, а не цифрой. Общий
  * для профиля и экрана уровня.
  */
-export function AccountLevel(props: { progress: ProgressView }): ReactNode {
+export function AccountLevel(props: { progress: ProgressView; flush?: boolean }): ReactNode {
   const { progress } = props;
   const share = progress.xpForNext === null || progress.xpForNext === 0 ? 1 : Math.min(1, progress.xpIntoLevel / progress.xpForNext);
+  // В профиле уровень идёт под именем и отделён отступом; в своей карточке — `flush`.
   return (
-    <div className="mt-4">
+    <div className={props.flush === true ? undefined : "mt-4"}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-display text-sm font-bold text-text">{t("profile.level", { level: progress.level })}</span>
         <span className="text-xs tabular-nums text-text-muted">
