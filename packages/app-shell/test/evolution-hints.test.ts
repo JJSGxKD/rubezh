@@ -84,7 +84,9 @@ describe("рецепты в гайдбуке", () => {
   it("закрыты те, чей уровень выше уровня аккаунта", () => {
     const closed = (level: number): string[] => evolutionRecipes(level).filter((recipe) => recipe.locked).map((recipe) => recipe.evolution);
     expect(closed(1).sort()).toEqual(["forge", "tempest", "viper"]);
-    expect(closed(6)).toEqual([]);
+    // tempest = «Буря» (4) + «Залп» (8), viper = «Жало» (11) + «Закалка» (14): по таблице открытий.
+    expect(closed(6).sort()).toEqual(["tempest", "viper"]);
+    expect(closed(14)).toEqual([]);
   });
 
   it("сила эволюции лежит в коридоре", () => {
