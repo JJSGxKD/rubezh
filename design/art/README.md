@@ -139,7 +139,7 @@ python3 design/art/src/cvd.py кадр.png -o полоса.png  # кадр гл�
 pnpm dev:telegram                       # нужен для следующей строки
 node design/art/src/render-sounds.mjs  # OGG предложенных звуков
 node design/art/src/admin-overflow.mjs # админка на 390 без боковой прокрутки (нужна запущенная панель)
-STATE=state.json node design/art/src/contrast-audit.mjs  # контраст подписей на готовых экранах — по пикселям под текстом (нужна запущенная оболочка)
+STATE=state.json PREVIEWS=1 node design/art/src/contrast-audit.mjs  # контраст подписей на экранах и окнах забега из витрины — по пикселям под текстом (нужна запущенная оболочка)
 npx http-server . -p 8090               # затем открыть в браузере:
 #   /design/art/prototype/arena.html — прототип
 #   /design/art/mockups/ui-fixes.html — макеты интерфейса

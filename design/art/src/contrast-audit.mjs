@@ -19,8 +19,13 @@
  *
  *   STATE=state.json WIDTH=390 node design/art/src/contrast-audit.mjs
  *   SCREENS=shop,daily WIDTH=320 HEIGHT=640 node design/art/src/contrast-audit.mjs
+ *   PREVIEWS=1 STATE=state.json node design/art/src/contrast-audit.mjs
+ * PREVIEWS=1 — ещё и окна забега из витрины компонентов (уровень, пауза,
+ * смерть, рекорд, второй шанс, сундуки): в настоящем забеге до них долго
+ * идти. Витрина открыта игроку с правом `tools.dev`.
  * Код выхода 1 — где-то текст ниже порога.
  */
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const APP_URL = process.env.APP_URL ?? "http://127.0.0.1:5173";
@@ -155,25 +160,60 @@ async function measure(items) {
 }
 
 let failed = 0;
-for (const id of SCREENS) {
-  await page.evaluate(
-    async ([url, screen, tab]) => {
-      const { useNavigation } = await import(url);
-      const nav = useNavigation.getState();
-      if (tab) nav.resetTo(screen);
-      else nav.push(screen);
-    },
-    [navigation, id, TABS.has(id)],
-  );
-  await page.waitForTimeout(1800);
-  const results = await measure(await collect());
+let measured = 0;
+const verdict = (id, results) => {
+  measured += 1;
   const bad = results.filter((item) => item.median < item.need);
   failed += bad.length;
   console.log(`${bad.length === 0 ? "✓" : "✗"} ${id.padEnd(14)} подписей ${String(results.length).padStart(3)}${bad.length === 0 ? "" : `, ниже порога ${bad.length}`}`);
   for (const item of bad) {
     console.log(`    ${item.median.toFixed(2)} при пороге ${item.need} · ${item.size}px/${item.weight} · «${item.text}» · ${item.classes}`);
   }
+};
+const go = (id, tab) =>
+  page.evaluate(
+    async ([url, screen, isTab]) => {
+      const { useNavigation } = await import(url);
+      const nav = useNavigation.getState();
+      if (isTab) nav.resetTo(screen);
+      else nav.push(screen);
+    },
+    [navigation, id, tab],
+  );
+
+for (const id of SCREENS) {
+  await go(id, TABS.has(id));
+  await page.waitForTimeout(1800);
+  verdict(id, await measure(await collect()));
+}
+
+if (process.env.PREVIEWS === "1") {
+  // Заголовки строк витрины — из её словаря: новое окно в витрине попадёт в
+  // замер без правки скрипта.
+  const gallery = JSON.parse(readFileSync(new URL("../../../packages/app-shell/src/i18n/ru-gallery.json", import.meta.url), "utf8"));
+  const shell = JSON.parse(readFileSync(new URL("../../../packages/app-shell/src/i18n/ru.json", import.meta.url), "utf8"));
+  const titles = Object.entries(gallery)
+    .filter(([key]) => key.startsWith("gallery.preview."))
+    .flatMap(([key, text]) => (key === "gallery.preview.chest" ? [1, 3, 5].map((size) => text.replace("{size}", String(size))) : [text]));
+  titles.push(shell["run.continue.title"]);
+  await go("gallery", false);
+  await page.waitForTimeout(2000);
+  for (const title of titles) {
+    const row = page.getByRole("button", { name: title, exact: true }).first();
+    if ((await row.count()) === 0) continue;
+    await row.scrollIntoViewIfNeeded();
+    await row.click();
+    await page.waitForTimeout(2200);
+    verdict(title.slice(0, 14), await measure(await collect()));
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    const close = page.getByRole("button", { name: /^закрыть$/i }).last();
+    if ((await page.getByRole("button", { name: title, exact: true }).count()) === 0 && (await close.count()) > 0) {
+      await close.click();
+      await page.waitForTimeout(600);
+    }
+  }
 }
 await browser.close();
-console.log(failed === 0 ? `все подписи ${SCREENS.length} экранов не ниже порога на ${WIDTH}×${HEIGHT}` : `ниже порога: ${failed}`);
+console.log(failed === 0 ? `все подписи на ${measured} экранах и окнах не ниже порога на ${WIDTH}×${HEIGHT}` : `ниже порога: ${failed}`);
 process.exitCode = failed === 0 ? 0 : 1;
