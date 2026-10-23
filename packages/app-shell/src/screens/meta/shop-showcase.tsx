@@ -6,6 +6,7 @@ import { formatNumber, t } from "../../i18n";
 import "../../i18n/arsenal";
 import type { ShopApi, ShowcaseOffer, ShowcaseView } from "../../state/shop-api";
 import { track } from "../../state/shell";
+import { uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { RarityGlow, itemLabel, slotIcon, statName, statValue, toneOf } from "./arsenal-parts";
 import { formatCountdown, msUntilReset } from "./schedule";
@@ -58,6 +59,7 @@ export function ShowcaseSection(props: { api: ShopApi; appearFrom: number; onNee
     setState({ status: "ready", view: response.data.view });
     setNotice({ tone: "success", text: t("showcase.got", { item: itemLabel(offer) }) });
     track("showcase_bought", { slot: offer.slot, rarity: offer.rarity, level: offer.level, gems: offer.gems });
+    uiFeedback("purchase");
     void loadWallet();
   };
 
