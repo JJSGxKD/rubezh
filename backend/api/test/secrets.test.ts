@@ -6,6 +6,7 @@ import { AdminSecretsService } from "../src/modules/admin/admin-secrets.service.
 import { fxSources } from "../src/modules/fx/fx.refresher.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { SECRETS, SECRET_KEY, SECRET_LIST, fingerprintOf, secretProblem, type SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
+import { safePath } from "../src/infra/outbound/outbound-path.js";
 import { SecretCipher, SecretUnreadableError, keyIdOf, type SealedSecret } from "../src/modules/secrets/secret-cipher.js";
 import type { SecretsRepository, StoredSecret } from "../src/modules/secrets/secrets.repository.js";
 import { SECRETS_CHANNEL, SecretsDisabledError, SecretsService } from "../src/modules/secrets/secrets.service.js";
@@ -382,6 +383,38 @@ describe("ключи курсов: CoinMarketCap, tonapi, erapi (tasks/T-0063)",
     expect(asked[0]?.url).toBe("https://tonapi.io/v2/rates?tokens=ton&currencies=usd");
     expect(asked[0]?.headers).toMatchObject({ Authorization: `Bearer ${TONAPI}` });
     await expect(SECRETS.tonapi.check(TONAPI, answeringStatus(401).fetchImpl)).resolves.toMatchObject({ ok: false });
+  });
+
+  it("сторож: любой ключ erapi, который принимает шаблон, журнал исходящих прячет — и в опросе, и в проверке", () => {
+    // Ключ ExchangeRate-API уходит в путь адреса, а `safePath` прячет только длинные сегменты. Пока
+    // шаблон пускает ключ короче, чем прячет журнал, ключ ляжет в `outbound_call.path` открытым текстом.
+    const alphabet = "0123456789abcdefABCDEFghijklmnopqrstuvwxyzGHIJKLMNOPQRSTUVWXYZ";
+    const accepted: string[] = [];
+    for (let length = 1; length <= 100; length++) {
+      for (const char of [alphabet[0], alphabet[10], alphabet[16], alphabet[20], alphabet[40], alphabet[60]]) {
+        const key = (char ?? "0").repeat(length);
+        if (SECRETS.erapi.pattern.test(key)) accepted.push(key);
+      }
+    }
+    expect(accepted.length).toBeGreaterThan(0);
+    const shortest = accepted.reduce((a, b) => (b.length < a.length ? b : a));
+    const longest = accepted.reduce((a, b) => (b.length > a.length ? b : a));
+    for (const key of [shortest, longest, ...accepted]) {
+      for (const url of [`https://v6.exchangerate-api.com/v6/${key}/latest/USD`, `https://v6.exchangerate-api.com/v6/${key}/quota`]) {
+        expect(safePath(url).path, `ключ из ${String(key.length)} знаков`).not.toContain(key);
+      }
+    }
+    expect(safePath(`https://v6.exchangerate-api.com/v6/${shortest}/quota`).path).toBe("/v6/***/quota");
+  });
+
+  it("ключ erapi — 24 шестнадцатеричных знака, как у сервиса: короче, длиннее и с чужими знаками шаблон не принимает", () => {
+    const valid = "0123456789abcdef01234567";
+    expect(SECRETS.erapi.pattern.test(valid)).toBe(true);
+    expect(SECRETS.erapi.pattern.test(valid.toUpperCase())).toBe(true);
+    expect(SECRETS.erapi.pattern.test(valid.slice(1))).toBe(false);
+    expect(SECRETS.erapi.pattern.test(`${valid}0`)).toBe(false);
+    expect(SECRETS.erapi.pattern.test(`${valid.slice(1)}g`)).toBe(false);
+    expect(secretProblem(SECRETS.erapi, "abcdef12")).toContain(SECRETS.erapi.example);
   });
 
   it("сервис не ответил — ключ не проверен, а не «неверный»", async () => {

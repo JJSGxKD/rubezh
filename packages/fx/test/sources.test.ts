@@ -254,6 +254,14 @@ describe("tonapi и erapi: ключ необязателен", () => {
   it("ключ erapi с чужими знаками в адрес не попадает: источник отказывается собраться", () => {
     expect(() => createErApiSource({ fetch: answering("{}").fetch, key: "abc/../x" })).toThrow(/ключ/);
   });
+
+  it("ключ erapi — ровно 24 шестнадцатеричных знака: короче 24 бросает RangeError, длиннее и не-hex — тоже", () => {
+    const valid = "0123456789abcdef01234567";
+    expect(() => createErApiSource({ fetch: answering("{}").fetch, key: valid })).not.toThrow();
+    for (const key of [valid.slice(1), "abcdef12", "a", `${valid}0`, `${valid.slice(1)}g`]) {
+      expect(() => createErApiSource({ fetch: answering("{}").fetch, key }), key).toThrow(RangeError);
+    }
+  });
 });
 
 describe("сбои источника", () => {
