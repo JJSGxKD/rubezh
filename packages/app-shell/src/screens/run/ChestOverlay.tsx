@@ -112,8 +112,10 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
           {t(chestTitleKey(chest.size))}
         </RibbonTitle>
       </div>
-      {/* На невысоком экране подпись уходит: каждая строка на счету. */}
-      <p className="mt-1.5 mb-2 text-center text-sm text-text-muted short:hidden">{t("run.chest.subtitle", { count: chest.rewards.length })}</p>
+      {/* На невысоком экране подпись уходит: каждая строка на счету.
+          Основным текстом: верх реликвии подсвечен тоном яруса, и серый у
+          большого сундука падал до 3,5:1. */}
+      <p className="mt-1.5 mb-2 text-center text-sm text-text short:hidden">{t("run.chest.subtitle", { count: chest.rewards.length })}</p>
       <ul className="mt-2 grid gap-2 short:mt-1 short:gap-1 landscape:grid-cols-2">
         {chest.rewards.map((reward, index) => (
           <RewardRow
