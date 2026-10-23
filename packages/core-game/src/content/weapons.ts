@@ -146,6 +146,28 @@ export const WEAPONS: WeaponDef[] = [
     ],
   },
 
+  {
+    // Седьмое оружие и первое «поезда» (Р105): редко и крупно — один-два удара
+    // за срабатывание, огонь поджигает, а не шокирует, как гроза. Открывается
+    // на 16-м уровне аккаунта; эволюция — «Огненный ливень». Числа стартовые,
+    // калибрует геймдизайнер.
+    id: "meteor",
+    behavior: "area_strike",
+    nameKey: "weapon.meteor.name",
+    descriptionKey: "weapon.meteor.description",
+    element: "fire",
+    levels: [
+      { damage: 16, cooldownSec: 2.4, projectiles: 1, areaRadius: 88, statusChance: 0.3 },
+      { damage: 19, cooldownSec: 2.3, projectiles: 1, areaRadius: 92, statusChance: 0.34 },
+      { damage: 22, cooldownSec: 2.2, projectiles: 2, areaRadius: 96, statusChance: 0.38 },
+      { damage: 26, cooldownSec: 2.1, projectiles: 2, areaRadius: 100, statusChance: 0.42 },
+      { damage: 30, cooldownSec: 2.0, projectiles: 2, areaRadius: 104, statusChance: 0.46 },
+      { damage: 34, cooldownSec: 1.9, projectiles: 2, areaRadius: 108, statusChance: 0.5 },
+      { damage: 38, cooldownSec: 1.8, projectiles: 2, areaRadius: 113, statusChance: 0.55 },
+      { damage: 44, cooldownSec: 1.7, projectiles: 2, areaRadius: 118, statusChance: 0.6 },
+    ],
+  },
+
   // Эволюции (tasks/T-0102, docs/39-retention-mechanics.md Б2): базовое оружие
   // на последнем уровне плюс навык рецепта превращаются в сундуке в одну
   // сильную версию в том же слоте. Один уровень, то же поведение и та же
@@ -211,6 +233,16 @@ export const WEAPONS: WeaponDef[] = [
     evolvedFrom: "sting",
     recipe: { passive: "tempering" },
     levels: [{ damage: 18, cooldownSec: 0.22, projectiles: 4, pierce: 6, projectileSpeed: 600, ttlSec: 2, statusChance: 1 }],
+  },
+  {
+    id: "fire_rain",
+    behavior: "area_strike",
+    nameKey: "weapon.fire_rain.name",
+    descriptionKey: "weapon.fire_rain.description",
+    element: "fire",
+    evolvedFrom: "meteor",
+    recipe: { passive: "reach" },
+    levels: [{ damage: 64, cooldownSec: 1.4, projectiles: 3, areaRadius: 150, statusChance: 0.85 }],
   },
 ];
 

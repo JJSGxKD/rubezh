@@ -34,6 +34,8 @@ export const ACCOUNT_UNLOCKS: AccountUnlockDef[] = [
   { level: 8, passives: ["volley"] },
   { level: 11, weapons: ["sting"] },
   { level: 14, passives: ["tempering"] },
+  // Оружие поезда: уровни 15–20 отданы новому оружию (Р105).
+  { level: 16, weapons: ["meteor"] },
 ];
 
 /**

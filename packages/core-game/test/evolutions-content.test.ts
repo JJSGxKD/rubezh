@@ -108,7 +108,7 @@ describe("эволюции в контенте", () => {
       expect(texts[weapon.nameKey] ?? "", weapon.nameKey).not.toBe("");
       expect(texts[weapon.descriptionKey] ?? "", weapon.descriptionKey).not.toBe("");
     }
-    expect(WEAPON_EVOLUTIONS.map((weapon) => texts[weapon.nameKey])).toEqual(["Звездопад", "Буря", "Вихрь клинков", "Ледяной венец", "Горн", "Гадюка"]);
+    expect(WEAPON_EVOLUTIONS.map((weapon) => texts[weapon.nameKey])).toEqual(["Звездопад", "Буря", "Вихрь клинков", "Ледяной венец", "Горн", "Гадюка", "Огненный ливень"]);
   });
 
   it("навыки рецептов не повторяются и пары разведены по категориям: слотов хватает на каждую", () => {
@@ -119,9 +119,11 @@ describe("эволюции в контенте", () => {
       const category = PASSIVES.find((passive) => passive.id === id)?.category ?? "";
       byCategory.set(category, (byCategory.get(category) ?? 0) + 1);
     }
-    expect(byCategory.get("attack")).toBe(2);
+    // «Дальнобойность» (рецепт «Метеора», T-0118) — третья пара атаки
+    expect(byCategory.get("attack")).toBe(3);
     expect(byCategory.get("mobility")).toBe(2);
     expect(byCategory.get("defense")).toBe(2);
+    expect(LOADOUT_LIMITS.passives.attack).toBeLessThan(3);
     // слотов защиты и мобильности меньше, чем пар: игрок выбирает, какую эволюцию строить
     expect(LOADOUT_LIMITS.passives.defense).toBeLessThan(2);
     expect(LOADOUT_LIMITS.passives.mobility).toBeLessThan(2);
