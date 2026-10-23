@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Панель: редактор баланса</title>
+<!--
+  Макет к design/art/direction-v2.md §4.6, AD-13: редактор баланса из
+  docs/19-content-admin.md — черновик, проверка схемой и ссылками, прогон
+  симуляции против коридоров content/balance-targets.ts, staging, публикация,
+  откат. Снимок — out/preview/admin-balance.png.
+-->
+<style>
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0400-045F; }
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+  /* Те же токены, что у игры; панель строже — без срезов и свечений, плотные строки. */
+  :root {
+    --bg:#1d1c31; --surface:#28273f; --raised:#353452; --sunken:#17162a; --border:#43425f; --border-strong:#5b5980;
+    --text:#f3eee6; --muted:#aeaac4; --disabled:#6f6c8a; --accent:#ff8f3f; --on-accent:#230f02;
+    --success:#8ee86b; --danger:#ff5d5d; --warning:#ffc14d; --info:#5ccfff; --passive:#c47dff; --weapon:#ffe066;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0d0c18; color: var(--text); font: 13.5px/1.45 "IBM Plex Sans", system-ui, sans-serif; padding: 24px; width: 1488px; }
+  h1 { font: 22px/1.2 "Russo One"; margin: 0 0 4px; } .lead { color: #9a97ab; margin: 0 0 16px; max-width: 150ch; }
+  .app { width: 1440px; height: 900px; display: grid; grid-template-columns: 220px 1fr; background: var(--bg); border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px #2c2a45; }
+  .side { background: var(--sunken); border-right: 1px solid var(--border); padding: 16px 10px; }
+  .side .brand { font: 16px "Russo One"; padding: 4px 10px 14px; }
+  .side .grp { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--disabled); padding: 12px 10px 4px; }
+  .side a { display: flex; justify-content: space-between; padding: 7px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; }
+  .side a.on { background: var(--raised); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+  .side .cnt { font-size: 11px; color: var(--warning); }
+  .main { display: grid; grid-template-rows: auto auto 1fr auto; min-width: 0; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .bar h2 { font: 20px "Russo One"; margin: 0 12px 0 0; }
+  .ver { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 6px; background: var(--surface); font-size: 12.5px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .btn { padding: 7px 12px; border-radius: 6px; background: var(--raised); box-shadow: inset 0 0 0 1px #ffffff14; font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .btn.p { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+  .btn.off { background: var(--surface); color: var(--disabled); box-shadow: inset 0 0 0 1px var(--border); }
+  .sp { flex: 1; }
+  .tabs { display: flex; gap: 2px; padding: 0 20px; border-bottom: 1px solid var(--border); }
+  .tabs span { padding: 10px 12px; color: var(--muted); } .tabs span.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+  .tabs b { font-size: 11px; color: var(--warning); margin-left: 4px; }
+  .work { display: grid; grid-template-columns: 1fr 420px; min-height: 0; }
+  .tbl { padding: 14px 20px; overflow: hidden; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 6px 8px; border-bottom: 1px solid #ffffff0b; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.num { text-align: right; } th.num { text-align: right; }
+  tr.edited td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+  .cell-ed { background: #ffc14d1a; border-radius: 4px; } .was { color: var(--disabled); text-decoration: line-through; margin-right: 6px; } .now { color: var(--warning); font-weight: 600; }
+  .cell-err { background: #ff5d5d22; box-shadow: inset 0 0 0 1px var(--danger); border-radius: 4px; color: var(--danger); font-weight: 600; }
+  .err-tip { display: block; font-size: 11.5px; color: var(--danger); font-weight: 400; white-space: normal; }
+  .ename { display: flex; align-items: center; gap: 8px; } .eicon { width: 22px; height: 22px; border-radius: 50%; display: inline-block; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 99px; background: var(--surface); color: var(--muted); font-size: 12px; }
+  .res { font-size: 12px; white-space: normal; }
+  tr.errrow td { color: var(--danger); font-size: 12px; padding: 2px 8px 8px 38px; border-bottom: 1px solid #ff5d5d33; white-space: normal; } .res .p { color: var(--info); } .res .m { color: var(--warning); }
+  .rank { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #ffd15c22; color: #ffd15c; margin-left: 4px; }
+  .panel { border-left: 1px solid var(--border); padding: 14px 18px; background: #201f36; overflow: hidden; }
+  .panel h3 { font: 15px "Russo One"; margin: 0 0 2px; } .panel .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .metric { padding: 10px 0; border-bottom: 1px solid #ffffff0b; }
+  .metric .row { display: flex; justify-content: space-between; gap: 8px; }
+  .metric .name { font-weight: 600; } .ok { color: var(--success); } .bad { color: var(--danger); } .warn { color: var(--warning); }
+  .corr { position: relative; height: 18px; margin-top: 8px; border-radius: 4px; background: var(--sunken); }
+  .corr .zone { position: absolute; top: 0; bottom: 0; background: #8ee86b2a; box-shadow: inset 1px 0 0 #8ee86b88, inset -1px 0 0 #8ee86b88; }
+  .corr .old, .corr .new { position: absolute; top: -3px; width: 3px; height: 24px; border-radius: 2px; }
+  .corr .old { background: var(--disabled); } .corr .new { background: var(--warning); }
+  .scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--disabled); margin-top: 3px; }
+  .checks div { padding: 4px 0; font-size: 12.5px; }
+  .foot { display: flex; gap: 16px; align-items: center; padding: 10px 20px; border-top: 1px solid var(--border); background: var(--sunken); font-size: 12.5px; color: var(--muted); }
+  .cap { margin: 10px 0 0; color: var(--muted); max-width: 150ch; } .cap b { color: var(--text); }
+  .notes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; } .notes span { padding: 9px 11px; border-radius: 8px; background: #28273f; font-size: 12.5px; color: var(--muted); } .notes b { color: var(--text); }
+</style>
+</head>
+<body>
+<h1>Панель: редактор баланса (AD-13)</h1>
+<p class="lead">Геймдизайнер правит числа без git и без релиза — по рельсам `docs/19-content-admin.md`: черновик проверяется схемой и ссылками, перед публикацией сервер прогоняет симуляцию и показывает, как правка сдвинула забег против коридоров `content/balance-targets.ts`; публикация — сначала staging, откат — одной кнопкой. Цены — отдельный режим со вторым подтверждением.</p>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">Рубеж · панель</div>
+    <div class="grp">Аналитика</div><a>Обзор</a><a>Воронки</a>
+    <div class="grp">Контент</div>
+    <a class="on">Баланс <span class="cnt">черновик · 3</span></a><a>Задания</a><a>Промокоды</a><a>Журнал «Что нового»</a>
+    <div class="grp">Игроки</div><a>Поиск</a><a>Рассылки</a>
+    <div class="grp">Деньги</div><a>Бухгалтерия</a><a>Цены <span class="cnt">2 подтв.</span></a>
+  </aside>
+  <section class="main">
+    <div class="bar">
+      <h2>Баланс</h2>
+      <span class="ver"><i class="dot" style="background:var(--success)"></i>В игре: v47 · 21.10, 18:04</span>
+      <span class="ver"><i class="dot" style="background:var(--warning)"></i>Черновик: 3 правки · Аня</span>
+      <span class="sp"></span>
+      <span class="btn">История и откат</span>
+      <span class="btn">Прогнать симуляцию</span>
+      <span class="btn off" title="Сначала исправить ошибку проверки">В staging</span>
+      <span class="btn off">Опубликовать</span>
+    </div>
+    <div class="tabs"><span class="on">Враги <b>3</b></span><span>Таймлайн</span><span>Оружие</span><span>Навыки</span><span>Сундуки</span><span>Сложность</span><span>Открытия по уровню</span></div>
+    <div class="work">
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Враг</th><th class="num">Здоровье</th><th class="num">Скорость</th><th class="num">Урон</th><th class="num">Опыт</th><th class="num">Угроза</th><th>Поведение</th><th>Стойкость</th></tr></thead>
+          <tbody>
+            <tr><td><span class="ename"><i class="eicon" style="background:#7a6a72"></i>Крыса</span></td><td class="num">5</td><td class="num">90</td><td class="num">3</td><td class="num">1</td><td class="num">1</td><td><span class="tag">рой</span></td><td class="res">—</td></tr>
+            <tr class="edited"><td><span class="ename"><i class="eicon" style="background:#8a5a6a"></i>Упырь</span></td><td class="num"><span class="cell-ed"><span class="was">60</span><span class="now">72</span></span></td><td class="num">30</td><td class="num">8</td><td class="num"><span class="cell-ed"><span class="was">6</span><span class="now">7</span></span></td><td class="num">8</td><td><span class="tag">погоня</span></td><td class="res"><span class="m">уязвим: огонь 30%</span> · <span class="p">стоек: холод 40%</span></td></tr>
+            <tr><td><span class="ename"><i class="eicon" style="background:#d8d2c4"></i>Костяной ходок</span></td><td class="num">9</td><td class="num">78</td><td class="num">4</td><td class="num">2</td><td class="num">2</td><td><span class="tag">погоня</span></td><td class="res">—</td></tr>
+            <tr><td><span class="ename"><i class="eicon" style="background:#5f7a4a"></i>Болотный увалень</span></td><td class="num">34</td><td class="num">26</td><td class="num">7</td><td class="num">5</td><td class="num">5</td><td><span class="tag">рой</span></td><td class="res"><span class="p">стоек: огонь 40%</span> · <span class="m">уязвим: молния 40%</span></td></tr>
+            <tr class="edited"><td><span class="ename"><i class="eicon" style="background:#8f949e"></i>Волк</span></td><td class="num">14</td><td class="num">60</td><td class="num"><span class="cell-err">&nbsp;0&nbsp;</span></td><td class="num">3</td><td class="num">3</td><td><span class="tag">рывок</span></td><td class="res"><span class="p">стоек: холод 40%</span> · <span class="m">уязвим: огонь 25%</span></td></tr>
+            <tr class="errrow"><td colspan="8">✗ Волк, урон 0 — нельзя сохранить: урон не меньше 1, волк, который не ранит, не угроза. Было 7.</td></tr>
+            <tr><td><span class="ename"><i class="eicon" style="background:#3a3448"></i>Ворон</span></td><td class="num">14</td><td class="num">200</td><td class="num">4</td><td class="num">2</td><td class="num">3</td><td><span class="tag">кружит</span></td><td class="res">—</td></tr>
+            <tr><td><span class="ename"><i class="eicon" style="background:#c0563a"></i>Бес-подрывник</span></td><td class="num">10</td><td class="num">80</td><td class="num">18</td><td class="num">4</td><td class="num">4</td><td><span class="tag">взрыв</span></td><td class="res"><span class="p">стоек: огонь 70%</span> · <span class="m">уязвим: холод 30%</span></td></tr>
+            <tr><td><span class="ename"><i class="eicon" style="background:#6fa36a"></i>Слизень</span></td><td class="num">24</td><td class="num">40</td><td class="num">5</td><td class="num">4</td><td class="num">5</td><td><span class="tag">делится</span></td><td class="res"><span class="m">уязвим: молния 40%</span> · <span class="p">стоек: яд 50%</span></td></tr>
+            <tr><td><span class="ename"><i class="eicon" style="background:#8a5a6a;box-shadow:0 0 0 2px #ffd15c"></i>Упырь-вожак<span class="rank">элита</span></span></td><td class="num">260</td><td class="num">38</td><td class="num">14</td><td class="num">25</td><td class="num">30</td><td><span class="tag">погоня</span></td><td class="res"><span class="m">уязвим: огонь 30%</span> · <span class="p">стоек: холод 40%</span></td></tr>
+            <tr><td><span class="ename"><i class="eicon" style="background:#d4513f;box-shadow:0 0 0 2px #ffd15c"></i>Матрёшка<span class="rank">босс</span></span></td><td class="num">900</td><td class="num">44</td><td class="num">22</td><td class="num">80</td><td class="num">240</td><td><span class="tag">делится</span></td><td class="res">—</td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:12px;color:var(--muted);font-size:12.5px">Числа — значением, а не ползунком: геймдизайнер знает число. Новый враг — строкой «+ Враг» на существующем поведении; новое поведение — код участника 1, и в списке поведений его нет (`docs/19` §2). Удалить врага нельзя, пока он в таймлайне — сначала из таймлайна (§5).</div>
+      </div>
+      <aside class="panel">
+        <h3>Симуляция: черновик против v47</h3>
+        <div class="sub">200 забегов бота на зерне, лёгкая сложность · 41 с назад · прогнана до правки «Волк: урон 0» — <b class="warn">устарела</b></div>
+        <div class="metric"><div class="row"><span class="name">Пассивный бот умирает до 1:30</span><span class="ok">1:12 → 1:18 ✓</span></div>
+          <div class="corr"><i class="zone" style="left:0;width:50%"></i><i class="old" style="left:40%"></i><i class="new" style="left:43%"></i></div><div class="scale"><span>0</span><span>1:30</span><span>3:00</span></div></div>
+        <div class="metric"><div class="row"><span class="name">Медиана уклоняющегося</span><span class="ok">4:05 → 3:40 ✓</span></div>
+          <div class="corr"><i class="zone" style="left:25%;width:55%"></i><i class="old" style="left:40.8%"></i><i class="new" style="left:36.7%"></i></div><div class="scale"><span>0</span><span>2:30</span><span>8:00</span><span>10:00</span></div></div>
+        <div class="metric"><div class="row"><span class="name">Умерли до минуты</span><span class="warn">14% → 19% · у края</span></div>
+          <div class="corr"><i class="zone" style="left:0;width:66%"></i><i class="old" style="left:46.7%"></i><i class="new" style="left:63.3%;background:var(--warning)"></i></div><div class="scale"><span>0%</span><span>20%</span><span>30%</span></div></div>
+        <div class="metric"><div class="row"><span class="name">Первый выбор улучшения</span><span class="ok">0:11 → 0:11 ✓</span></div>
+          <div class="corr"><i class="zone" style="left:5%;width:45%"></i><i class="old" style="left:18%"></i><i class="new" style="left:18.4%"></i></div><div class="scale"><span>0</span><span>0:30</span><span>1:00</span></div></div>
+        <div class="metric"><div class="row"><span class="name">Первый сундук</span><span class="ok">1:30 → 1:30 ✓</span></div>
+          <div class="corr"><i class="zone" style="left:33%;width:33%"></i><i class="old" style="left:50%"></i><i class="new" style="left:50.4%"></i></div><div class="scale"><span>0</span><span>1:00</span><span>2:00</span><span>3:00</span></div></div>
+        <div class="checks" style="margin-top:10px">
+          <div class="ok">✓ Бюджет угрозы не убывает по таймлайну</div>
+          <div class="ok">✓ Каждый тип показан отдельно до смеси</div>
+          <div class="bad">✗ Проверка схемы: «Волк», урон 0 — нельзя сохранить</div>
+          <div style="color:var(--muted)">○ Golden-сценарии: прогнать заново после исправления</div>
+        </div>
+      </aside>
+    </div>
+    <div class="foot"><span>Правки черновика: <b style="color:var(--text)">Упырь</b> здоровье 60 → 72, опыт 6 → 7 · <b style="color:var(--text)">Волк</b> урон 7 → 0</span><span class="sp"></span><span>Публикация — снапшот v48 в git отдельным коммитом (`docs/19` §7); выкат 10% → 50% → 100%</span></div>
+  </section>
+</div>
+<p class="cap"><b>Как читать.</b> Изменённая ячейка — жёлтой, с прежним числом зачёркнутым; ошибка схемы — красной рамкой и словами, почему нельзя, прямо в ячейке, а не тостом. Справа — тот же расчёт, что `pnpm balance:sim`, но для человека без git: каждая метрика — полосой с зелёным коридором из `balance-targets.ts`, серая риска — v47, жёлтая — черновик. «Опубликовать» не нажимается, пока есть ошибка схемы или симуляция старше последней правки.</p>
+<div class="notes">
+  <span><b>Порядок рельсов</b> — как в `docs/19` §4: схема → ссылки → симуляция → staging → прод. Кнопка каждого шага живёт только после предыдущего.</span>
+  <span><b>Цены</b> — вкладка в «Деньгах», не здесь: правка цены ждёт второго участника, счётчик «2 подтв.» — у пункта меню.</span>
+  <span><b>История</b> — версии списком с автором и дельтой метрик; откат — «Вернуть v46» с тем же прогоном, чтобы видеть, к чему вернулись.</span>
+  <span><b>Телефон</b> — только просмотр и откат: правка таблицы чисел на 390 px — способ ошибиться.</span>
+</div>
+</body>
+</html>
