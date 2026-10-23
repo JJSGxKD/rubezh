@@ -3,8 +3,8 @@ id: T-0170
 title: Кольцо стражей — движок: событие таймлайна, паттерн строя, непроходимое тело
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
