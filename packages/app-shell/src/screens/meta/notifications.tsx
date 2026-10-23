@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Gift, Megaphone, Newspaper, PackageOpen, Sparkles, UserPlus } from "lucide-react";
-import { Button, Card, ContentColumn, ErrorState, InfoNotice, Screen } from "../../design-system/components";
+import { Bell, Gift, Megaphone, Newspaper, PackageOpen, Sparkles, UserPlus } from "lucide-react";
+import { Button, Card, ContentColumn, EmptyState, ErrorState, Screen } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
 import type { ApiFailure } from "../../state/api-request";
@@ -53,7 +53,7 @@ export function NotificationsScreen(): ReactNode {
       <ContentColumn>
         {state.status === "loading" ? <p className="text-sm text-text-muted">{t("notifications.loading")}</p> : null}
         {state.status === "failed" ? <ErrorState text={t("notifications.failed")} onRetry={() => void first()} /> : null}
-        {state.status === "ready" && state.items.length === 0 ? <InfoNotice text={t("notifications.empty")} /> : null}
+        {state.status === "ready" && state.items.length === 0 ? <EmptyState icon={<Bell size={26} />} text={t("notifications.empty")} /> : null}
         {state.status === "ready" ? (
           <div className="grid gap-2">
             {state.items.map((item, index) => (
