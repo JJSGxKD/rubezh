@@ -186,13 +186,13 @@ describe("подпись виджета читается и на готовом"
   // подпись падала до 4,47:1 при пороге 4,5 (design/art/src/contrast-audit.mjs,
   // ландшафт). Готовый ставит подписи основной текст — он и так зовёт.
   it("готовый виджет переключает подпись на основной текст, обычный — нет", () => {
-    const frame = (isReady: boolean) => renderToStaticMarkup(createElement(Frame, { id: "wheel", size: "wide", index: 0, ready: isReady, children: "x" }));
+    const frame = (isReady: boolean) => renderToStaticMarkup(createElement(Frame, { id: "wheel", size: "hero", index: 0, ready: isReady, children: "x" }));
     expect(frame(true)).toContain("[--widget-label:var(--color-text)]");
     expect(frame(false)).not.toContain("--widget-label");
   });
 
   it("подпись берёт цвет из переменной, по умолчанию — приглушённый", () => {
-    const html = renderToStaticMarkup(createElement(WheelView, { face: wheelFace(WHEEL, true, NOW, true), size: "wide", now: NOW }));
+    const html = renderToStaticMarkup(createElement(WheelView, { face: wheelFace(WHEEL, true, NOW, true), size: "hero", now: NOW }));
     expect(html).toContain("text-[var(--widget-label,var(--color-text-muted))]");
   });
 });
