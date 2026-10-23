@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { COLORS } from "../src/design-system/tokens";
-import { RADAR_COLORS } from "../src/screens/run/radar-looks";
+import { RADAR_BLIP } from "@bh/core-game";
+import { RADAR_COLORS, RADAR_SHAPES } from "../src/screens/run/radar-looks";
 
 // Цвета точек радара (tasks/T-0097): аптечка зелёная, как подбор на земле, —
 // красная сливалась с врагами. Раскладку («радар вверху справа») тестом не
@@ -29,5 +30,20 @@ describe("цвета точек радара", () => {
 
   it("все шесть цветов попарно различны", () => {
     expect(new Set(Object.values(RADAR_COLORS)).size).toBe(6);
+  });
+});
+
+// Цветовая слепота (design/art/meta-v2.md §9, «Доступность»): при дейтеранопии
+// и протанопии красный враг и золотая элита на радаре — одна и та же
+// жёлто-оливковая точка. Вид точки обязан читаться формой, без цвета.
+describe("формы точек радара", () => {
+  it("у каждого вида своя форма — без цвета их тоже не спутать", () => {
+    const kinds = Object.keys(RADAR_BLIP);
+    expect(Object.keys(RADAR_SHAPES).sort()).toEqual([...kinds].sort());
+    expect(new Set(Object.values(RADAR_SHAPES)).size).toBe(kinds.length);
+  });
+
+  it("элита — не простая точка, как рядовой враг", () => {
+    expect(RADAR_SHAPES.elite).not.toBe(RADAR_SHAPES.enemy);
   });
 });
