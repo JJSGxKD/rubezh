@@ -32,8 +32,13 @@ export const ERAPI_TARIFFS: Record<"open" | "keyed", Tariff> = {
   keyed: { name: "keyed", perMinute: 1, perMonth: 1500, minIntervalMs: 12 * HOUR },
 };
 
-/** Ключ уходит в путь адреса: только знаки, которые не нужно кодировать и которыми нельзя выйти из пути. */
-const ERAPI_KEY = /^[A-Za-z0-9]{8,64}$/;
+/**
+ * Ключ ExchangeRate-API — 24 шестнадцатеричных знака. Он уходит в путь адреса:
+ * шестнадцатеричные знаки не нужно кодировать и ими нельзя выйти из пути, а длина
+ * не короче той, от которой журнал исходящих прячет сегмент пути (`safePath`).
+ * Тот же шаблон — в каталоге ключей бэкенда.
+ */
+const ERAPI_KEY = /^[0-9a-fA-F]{24}$/;
 
 /** Момент котировки фиату даёт сам источник — дата курса, — часы ему не нужны. */
 interface SourceOptions {
@@ -128,7 +133,7 @@ const erapiSchema = z
   .refine((body) => body.rates !== undefined || body.conversion_rates !== undefined);
 
 export function createErApiSource(options: SourceOptions & { key?: string }): RateSource {
-  if (options.key !== undefined && !ERAPI_KEY.test(options.key)) throw new RangeError("ключ ExchangeRate-API: только латинские буквы и цифры");
+  if (options.key !== undefined && !ERAPI_KEY.test(options.key)) throw new RangeError("ключ ExchangeRate-API: 24 шестнадцатеричных знака");
   const url = options.key === undefined ? "https://open.er-api.com/v6/latest/USD" : `https://v6.exchangerate-api.com/v6/${options.key}/latest/USD`;
   return {
     id: "erapi",
