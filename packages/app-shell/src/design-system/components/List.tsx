@@ -102,7 +102,7 @@ export function Toggle(props: ToggleProps): ReactNode {
         props.onChange();
       }}
       className={[
-        "relative h-8 w-13 shrink-0 rounded-pill",
+        "hit-tall h-8 w-13 shrink-0 rounded-pill",
         "transition-colors duration-(--duration-base) ease-base",
         props.checked ? "fill-accent" : "surface-sunken",
         props.disabled === true ? "opacity-40" : "",

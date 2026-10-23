@@ -55,8 +55,10 @@ export function HistoryScreen(): ReactNode {
           <>
             <p className="text-sm text-text-muted">{t("history.intro")}</p>
             {/* Фильтры — своей прокруткой: на узком экране шесть кнопок не
-                помещаются, а страница вбок не прокручивается. */}
-            <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label={t("history.title")}>
+                помещаются, а страница вбок не прокручивается. Поля сверху и
+                снизу — под зону касания фильтров (`hit-tall`): прокрутка
+                обрезала бы её по своему краю. */}
+            <div className="-mx-4 mt-1.5 flex gap-2 overflow-x-auto px-4 py-1.5" role="tablist" aria-label={t("history.title")}>
               {HISTORY_FILTERS.map((id) => (
                 <button
                   key={id}
@@ -64,7 +66,7 @@ export function HistoryScreen(): ReactNode {
                   role="tab"
                   aria-selected={id === filter}
                   onClick={() => setFilter(id)}
-                  className={`shrink-0 rounded-pill px-3 py-1.5 text-sm font-semibold transition-transform active:scale-95 ${id === filter ? "bg-accent text-on-accent" : "surface-sunken text-text-muted"}`}
+                  className={`hit-tall shrink-0 rounded-pill px-3 py-1.5 text-sm font-semibold transition-transform active:scale-95 ${id === filter ? "bg-accent text-on-accent" : "surface-sunken text-text-muted"}`}
                 >
                   {t(`history.filter.${id}`)}
                 </button>
