@@ -3,8 +3,8 @@ id: T-0102
 title: Эволюции оружия: рецепты в контенте и выдача сундуком
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-15
 size: M
 depends_on: [T-0099, T-0101]
@@ -32,6 +32,8 @@ zones:
   - packages/app-shell/src/screens/meta/level.tsx
   - packages/app-shell/src/screens/guide/guide-data.ts
   - packages/app-shell/test/**
+  - packages/app-shell/src/screens/run/chest-rules.ts
+  - backend/api/src/modules/tasks/task-rules.ts
 shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - packages/app-shell/src/i18n/ru.json
@@ -312,20 +314,20 @@ evolution_unlocked: {
 
 ## Критерии приёмки
 
-- [ ] В `WEAPONS` шесть эволюций после базовых; `findEvolutionProblems` и
+- [x] В `WEAPONS` шесть эволюций после базовых; `findEvolutionProblems` и
   `findWeaponContentProblems` дают `[]`; сила каждой в `EVOLUTION_POWER_RATIO`.
-- [ ] Карточки уровня и сундук не предлагают эволюции и эволюционировавшее
+- [x] Карточки уровня и сундук не предлагают эволюции и эволюционировавшее
   базовое; стартовым оружием эволюция стать не может.
-- [ ] `readyEvolutionOption` и `applyEvolution` не берут чисел из `world.rng`;
+- [x] `readyEvolutionOption` и `applyEvolution` не берут чисел из `world.rng`;
   контрольная сумма забега без эволюции не изменилась.
-- [ ] Сундук первой наградой применяет готовую эволюцию; слот базового занят
+- [x] Сундук первой наградой применяет готовую эволюцию; слот базового занят
   ею, число оружий не выросло.
-- [ ] `evolution_unlocked` в словаре, Zod-схеме и `docs/22`, приходит с полным
+- [x] `evolution_unlocked` в словаре, Zod-схеме и `docs/22`, приходит с полным
   набором полей.
-- [ ] В выборе и счёте оружия оболочка использует `BASE_WEAPONS`.
-- [ ] Эталоны обновлены только там, где в прогоне есть эволюция; таблица
+- [x] В выборе и счёте оружия оболочка использует `BASE_WEAPONS`.
+- [x] Эталоны обновлены только там, где в прогоне есть эволюция; таблица
   `pnpm balance:sim` приложена к PR.
-- [ ] Дифф только в зонах задачи; гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Дифф только в зонах задачи; гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ChevronRight, Lock, Wrench } from "lucide-react";
 import type { DifficultyId } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, DIFFICULTIES, unlockLevelOf, unlocksAt, WEAPONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, DIFFICULTIES, unlockLevelOf, unlocksAt, BASE_WEAPONS } from "@bh/core-game";
 import { Button, Card, Modal, SegmentedControl } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../i18n";
@@ -86,7 +86,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
   }, []);
 
   const open = unlocksAt(ACCOUNT_UNLOCKS, level).weapons;
-  const weapons = [...WEAPONS].sort((a, b) => (unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", a.id) ?? 1) - (unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", b.id) ?? 1));
+  const weapons = [...BASE_WEAPONS].sort((a, b) => (unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", a.id) ?? 1) - (unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", b.id) ?? 1));
   const selectedId = open.has(meta.lastWeaponId) ? meta.lastWeaponId : (weapons.find((weapon) => open.has(weapon.id))?.id ?? "");
   const selectedWeapon = weapons.find((weapon) => weapon.id === selectedId);
   const cost = catalog === null ? {} : boostCost(boosts, catalog.boosts);

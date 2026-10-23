@@ -7,7 +7,7 @@ import { replayRecording } from "../src/game/diagnostics/replay";
 import { chooseUpgrade, prepareOffers } from "../src/game/progression/levels";
 import { isEmptyLoadout, sanitizeLoadout } from "../src/game/progression/run-loadout";
 import { MAX_CARD_TOOLS } from "../src/game/progression/card-tools";
-import { cardToolsAt, findCardToolProblems, unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
+import { cardToolsAt, findCardToolProblems, unlockLevelOf, unlocksAt, weaponsOpenAt } from "../src/game/progression/unlocks";
 import { createRunWorld } from "../src/game/run-world";
 import { createWorld } from "../src/game/sim/world";
 import { circling, recordHeadlessRun } from "./helpers/recorded-run";
@@ -40,7 +40,9 @@ describe("мир забега по уровню аккаунта", () => {
   it("первый уровень — стартовый набор и урезанные слоты", () => {
     const first = unlocksAt(ACCOUNT_UNLOCKS, 1);
     const novice = world(1);
-    expect(ids(novice.weaponTypes)).toEqual([...first.weapons].sort());
+    // открыты три базовых и три их эволюции: эволюция идёт вместе с базовым
+    expect(ids(novice.weaponTypes)).toEqual(ids(weaponsOpenAt(WEAPONS, first)));
+    expect(novice.weaponTypes.filter((type) => first.weapons.has(type.id))).toHaveLength(first.weapons.size);
     expect(ids(novice.passiveTypes)).toEqual([...first.passives].sort());
     expect(novice.loadoutLimits).toEqual(first.limits);
   });

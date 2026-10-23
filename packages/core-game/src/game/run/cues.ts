@@ -112,7 +112,9 @@ export class CueTracker {
       if (weapon === undefined) continue;
       // Перезарядка выросла — оружие сработало: после удара она взводится заново.
       if (weapon.cooldown > (this.lastCooldown[slot] ?? 0) + 1e-6) {
-        const id = world.weaponTypes[weapon.typeIndex]?.id ?? "";
+        // Звук эволюции — звук базового: своего у неё нет.
+        const type = world.weaponTypes[weapon.typeIndex];
+        const id = type?.evolvedFrom ?? type?.id ?? "";
         cues.weapons[id] = (cues.weapons[id] ?? 0) + 1;
         any = true;
       }

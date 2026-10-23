@@ -1,6 +1,7 @@
 import type { LevelCurveDef, PassiveCategory, UpgradeOption } from "@bh/shared-types";
 import type { Rng } from "../sim/rng";
 import type { World } from "../sim/world";
+import { applyEvolution, isWeaponOfferable } from "./evolutions";
 import { computePlayerStats } from "./passives";
 import { healChanges, passiveChanges, weaponChanges } from "./upgrade-changes";
 import {
@@ -93,6 +94,8 @@ export function collectCandidates(world: World): Candidate[] {
   world.weaponTypes.forEach((type, typeIndex) => {
     // Изгнанное не предлагается ни карточкой, ни сундуком — ни новым, ни уровнем.
     if (banished.includes(`weapon:${type.id}`)) return;
+    // Эволюцию выдаёт только сундук, а базовое с взятой эволюцией не возвращается.
+    if (!isWeaponOfferable(world, typeIndex)) return;
     const slot = weaponSlotOf(loadout, typeIndex);
     if (slot < 0) {
       if (loadout.weapons.length >= world.loadoutLimits.weapons) return;
@@ -262,6 +265,9 @@ export function applyUpgrade(world: World, option: UpgradeOption): void {
       if (slot >= 0) world.loadout.weapons[slot].level = option.level;
       break;
     }
+    case "weapon_evolve":
+      applyEvolution(world, option.refId);
+      break;
     case "passive_new": {
       const typeIndex = world.passiveTypes.findIndex((type) => type.id === option.refId);
       if (typeIndex >= 0) addPassive(world.loadout, typeIndex);

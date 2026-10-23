@@ -10,7 +10,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, WEAPONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, BASE_WEAPONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -76,12 +76,12 @@ export function unlockLevel(kind: "weapon" | "passive", id: string): number {
 
 /** Оружие первого уровня: с ним приходит новичок, стартовым берётся любое. */
 export function firstLevelWeapons(): WeaponDef[] {
-  return WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) === 1);
+  return BASE_WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) === 1);
 }
 
 /** Оружие, которое открывает уровень аккаунта, — по порядку открытия. */
 export function levelWeapons(): WeaponDef[] {
-  return WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) > 1).sort((a, b) => unlockLevel("weapon", a.id) - unlockLevel("weapon", b.id));
+  return BASE_WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) > 1).sort((a, b) => unlockLevel("weapon", a.id) - unlockLevel("weapon", b.id));
 }
 
 /**
@@ -134,7 +134,7 @@ export function weaponElement(weapon: WeaponDef): StatusElement | null {
  * стихии без оружия гайдбук не описывает: игроку его не наложить.
  */
 export function weaponElements(): StatusElement[] {
-  const used = new Set(WEAPONS.map(weaponElement));
+  const used = new Set(BASE_WEAPONS.map(weaponElement));
   return ELEMENTS.filter((element): element is StatusElement => element !== "physical" && used.has(element));
 }
 

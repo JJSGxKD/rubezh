@@ -11,7 +11,7 @@ import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "../content/
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
 import { WEAPONS } from "../content/weapons";
-import { cardToolsAt, unlocksAt } from "./progression/unlocks";
+import { cardToolsAt, unlocksAt, weaponsOpenAt } from "./progression/unlocks";
 import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
 import { createWorld, type World } from "./sim/world";
@@ -53,7 +53,7 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     seed: options.seed,
     enemies: ENEMIES,
     stages: ENEMY_STAGES,
-    weapons: open === null ? WEAPONS : WEAPONS.filter((weapon) => open.weapons.has(weapon.id)),
+    weapons: open === null ? WEAPONS : weaponsOpenAt(WEAPONS, open),
     passives: open === null ? PASSIVES : PASSIVES.filter((passive) => open.passives.has(passive.id)),
     levelCurve: LEVEL_CURVE,
     loadoutLimits: open?.limits ?? LOADOUT_LIMITS,

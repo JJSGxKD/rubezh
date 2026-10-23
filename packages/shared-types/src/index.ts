@@ -818,6 +818,11 @@ export interface WeaponLevel {
   statusChance?: number;
 }
 
+/** Рецепт эволюции: навык, который должен быть в наборе рядом с базовым оружием на максимуме. */
+export interface WeaponRecipe {
+  passive: string;
+}
+
 export interface WeaponDef {
   id: string;
   behavior: WeaponBehavior;
@@ -827,6 +832,13 @@ export interface WeaponDef {
   weight?: number;
   /** стихия урона; не задана — физический */
   element?: ElementId;
+  /**
+   * Эволюция базового оружия `evolvedFrom` (tasks/T-0102): запись после всех
+   * базовых, один уровень, то же поведение и стихия. Задаётся вместе с `recipe`.
+   * Выдаёт её только сундук забега; в карточках уровня её нет.
+   */
+  evolvedFrom?: string;
+  recipe?: WeaponRecipe;
   /** уровни по порядку: levels[0] — первый уровень */
   levels: WeaponLevel[];
 }
@@ -1156,6 +1168,7 @@ export type UpgradeOptionKind =
   | "weapon_level"
   | "passive_new"
   | "passive_level"
+  | "weapon_evolve"
   | "heal";
 
 /**

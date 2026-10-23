@@ -91,7 +91,9 @@ export { readSnapshotCounters, type SnapshotCounters } from "./snapshot-counters
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).
 export { xpForLevel, OFFERS_PER_LEVEL } from "./game/progression/levels";
-export { unlocksAt, unlockLevelOf, unlocksOfLevel, type AccountUnlocks } from "./game/progression/unlocks";
+export { unlocksAt, unlockLevelOf, unlocksOfLevel, weaponsOpenAt, type AccountUnlocks } from "./game/progression/unlocks";
+// Эволюции оружия: состояние рецепта для экрана и разбор эволюции для аналитики.
+export { describeEvolution, evolutionProgress, type EvolutionProgress, type EvolutionState, type LoadoutIds } from "./game/progression/evolutions";
 
 // Итог забега: движок считает, оболочка показывает, хранит рекорд и отправляет
 // (docs/26-stage2-plan.md, WP3).

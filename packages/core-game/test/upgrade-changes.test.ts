@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { resolvePassiveTypes } from "../src/game/progression/passives";
-import { healChanges, passiveChanges, weaponChanges } from "../src/game/progression/upgrade-changes";
+import { evolutionChanges, healChanges, passiveChanges, weaponChanges } from "../src/game/progression/upgrade-changes";
 import { resolveWeaponTypes } from "../src/game/weapons/weapon-types";
 
 // Что даёт вариант выбора: строки «урон 6 → 7» для карточки улучшения.
@@ -109,3 +109,33 @@ describe("что даёт улучшение", () => {
     expect(weaponChanges(weapon("spark"), 8, 9, 1)).toEqual([]);
   });
 });
+
+describe("что даёт эволюция", () => {
+  it("«Очаг» → «Горн»: радиус 140 → 175, шанс 30 → 50, пауза 0,28 → 0,22, урон 13 → 28", () => {
+    const changes = evolutionChanges(weapon("hearth"), weapon("forge"), 1);
+
+    expect(changes).toEqual([
+      { labelKey: "upgrade.stat.damage", from: 13, to: 28, format: "value", lowerIsBetter: false },
+      { labelKey: "upgrade.stat.aura.cooldownSec", from: 0.28, to: 0.22, format: "value", lowerIsBetter: true },
+      { labelKey: "upgrade.stat.aura.areaRadius", from: 140, to: 175, format: "value", lowerIsBetter: false },
+      { labelKey: "upgrade.stat.statusChance.fire", from: 30, to: 50, format: "value", lowerIsBetter: false },
+    ]);
+  });
+
+  it("«Искра» → «Звездопад»: снаряды 3 → 4, пробив 2 → 3, урон 16 → 26; пауза 0,15 → 0,13", () => {
+    const changes = evolutionChanges(weapon("spark"), weapon("starfall"), 1);
+    const byLabel = new Map(changes.map((change) => [change.labelKey, change]));
+
+    expect(byLabel.get("upgrade.stat.damage")).toMatchObject({ from: 16, to: 26 });
+    expect(byLabel.get("upgrade.stat.projectiles")).toMatchObject({ from: 3, to: 4 });
+    expect(byLabel.get("upgrade.stat.pierce")).toMatchObject({ from: 2, to: 3 });
+    expect(byLabel.get("upgrade.stat.cooldownSec")).toMatchObject({ from: 0.15, to: 0.13 });
+  });
+
+  it("числа в единицах контента, а не в пикселях устройства", () => {
+    const changes = evolutionChanges(weapon("hearth", 3), weapon("forge", 3), 3);
+
+    expect(changes.find((change) => change.labelKey === "upgrade.stat.aura.areaRadius")).toMatchObject({ from: 140, to: 175 });
+  });
+});
+
