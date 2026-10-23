@@ -24,6 +24,7 @@ import {
 } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
+import { BotMentionRows } from "./bot-mention-rows";
 import { NetworkTasks } from "./network-tasks";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { TaskRow } from "./task-row";
@@ -198,6 +199,7 @@ export function TasksScreen(): ReactNode {
               {partner ? <NetworkTasks items={networks} firstIndex={claimable.length} refresh={refresh} onCount={setNetworkRows} /> : null}
               {rest.map((task, index) => row(task, claimable.length + (partner ? networkRows : 0) + index))}
             </div>
+            {view === "daily" ? <BotMentionRows /> : null}
           </div>
         )}
       </ContentColumn>
