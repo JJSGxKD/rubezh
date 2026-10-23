@@ -235,6 +235,14 @@ export const EVENT_DICTIONARY = {
   // по achievement_unlocked; открытие без награды — «не подписался». У
   // задания рекламной сети (WP13, часть 6) — `kind: network` и `network`.
   task_link_opened: { version: 1, payload: payload({ task: id, kind: id, network: id.optional() }) },
+  // Задания «юзернейм бота в имени и в bio» (docs/35-stage4-plan.md Р110, T-0160):
+  // событие шлёт клиент после ответа сервера. Ночные проверки сервера клиент не
+  // видит — их факты в таблице `bot_mention_task` и журнале кошелька (T-0162).
+  bot_mention_started: { version: 1, payload: payload({ kind: z.enum(["name", "bio"]) }) },
+  bot_mention_checked: {
+    version: 1,
+    payload: payload({ kind: z.enum(["name", "bio"]), outcome: z.enum(["present", "absent", "hidden", "unavailable", "retry", "done_today"]) }),
+  },
   // Купил предмет с витрины снаряжения (docs/35-stage4-plan.md §3.6, WP10):
   // какие редкости и слоты берут и за сколько — вход для цен витрины (О1, О9).
   // Списание — журнал кошелька (причина shop), предмет — журнал предметов.
