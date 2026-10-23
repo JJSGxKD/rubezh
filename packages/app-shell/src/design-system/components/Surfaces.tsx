@@ -1,4 +1,4 @@
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, Info, Lock, X } from "lucide-react";
 import { t } from "../../i18n";
@@ -6,6 +6,7 @@ import { useBackLayer } from "../../state/back-stack";
 import { uiFeedback } from "../../state/ui-feedback";
 import { Button, IconButton } from "./Button";
 import { CutFrame } from "./CutFrame";
+import { useDialogFocus } from "./dialog-focus";
 import { Badge } from "./Data";
 import { useModalHost } from "./modal-host";
 import { modalFooterPlacement, modalMount } from "./modal-rules";
@@ -169,6 +170,8 @@ export function Modal(props: ModalProps): ReactNode {
   const { onDismiss } = props;
   const host = useModalHost();
   const mount = modalMount(host);
+  const root = useRef<HTMLDivElement>(null);
+  useDialogFocus(root, mount !== "wait");
 
   // Лист снизу шуршит на открытии и закрытии; модалки забега — уровень,
   // пауза, смерть — звучат своими звуками событий, а не листом.
@@ -245,12 +248,16 @@ export function Modal(props: ModalProps): ReactNode {
 
   const dialog = (
     <div
+      ref={root}
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
       aria-labelledby={props.labelledBy}
+      // Фокус при открытии ставится на само окно (`useDialogFocus`): кольцо
+      // вокруг всего экрана ничего не говорит — его нет.
+      tabIndex={-1}
       className={[
-        "pointer-events-auto absolute inset-0 flex px-4",
+        "pointer-events-auto absolute inset-0 flex px-4 focus-visible:outline-none",
         "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
         "pr-[calc(1rem+var(--app-inset-right))] pl-[calc(1rem+var(--app-inset-left))]",
         bottom ? "items-end justify-center" : "items-center justify-center",
