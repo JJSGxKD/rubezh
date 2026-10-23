@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { damageEnemy } from "../src/game/sim/combat";
+import { pushPlayerOutOfGuards } from "../src/game/sim/cordon";
 import { vectorLength } from "../src/game/sim/vector";
 import { spawnEnemy } from "../src/game/sim/world";
 import { advanceRun, aliveGuards, CORDON_RING, createCordonRun, GUARD, stepRun, type CordonRun } from "./helpers/scripted-run";
@@ -68,14 +69,51 @@ describe("кольцо держит игрока", () => {
     expect(distanceFromCenter(run)).toBeGreaterThan(run.world.cordon.radius - 40);
   });
 
-  it("скольжение: под острым углом игрок смещается вдоль строя, а не прилипает", () => {
+  it("скольжение: упёршись в строй и нажав вдоль него, игрок идёт по строю, а не прилипает", () => {
     const run = assembled();
-    advanceRun(run, 4, { moveX: 1, moveY: 0.35 });
+    advanceRun(run, 3, { moveX: 1, moveY: 0 });
     const yBefore = run.world.player.y;
-    advanceRun(run, 3, { moveX: 1, moveY: 0.35 });
 
-    expect(Math.abs(run.world.player.y - yBefore)).toBeGreaterThan(30);
+    advanceRun(run, 3, { moveX: 0, moveY: 1 });
+
+    expect(Math.abs(run.world.player.y - yBefore)).toBeGreaterThan(60);
     expect(distanceFromCenter(run)).toBeLessThanOrEqual(run.world.cordon.radius);
+  });
+
+  it("выталкивание: скорость вглубь тела гасится, вдоль — остаётся, игрок встаёт на сумму радиусов", () => {
+    const run = createCordonRun({ count: 1 });
+    stepRun(run);
+    const [guard] = aliveGuards(run.world);
+    if (guard === undefined) throw new Error("нет стража");
+    run.world.enemies.x[guard] = 50;
+    run.world.enemies.y[guard] = 0;
+    run.world.player.x = 30;
+    run.world.player.y = 0;
+    run.world.player.vx = 100;
+    run.world.player.vy = 80;
+
+    pushPlayerOutOfGuards(run.world);
+
+    expect(run.world.player.x).toBeCloseTo(50 - GUARD_RADIUS - PLAYER_RADIUS, 6);
+    expect(run.world.player.vx).toBe(0);
+    expect(run.world.player.vy).toBe(80);
+  });
+
+  it("выталкивание: совпавшие центры не дают деления на ноль, скорость от стража не гасится", () => {
+    const run = createCordonRun({ count: 1 });
+    stepRun(run);
+    const [guard] = aliveGuards(run.world);
+    if (guard === undefined) throw new Error("нет стража");
+    run.world.enemies.x[guard] = 10;
+    run.world.enemies.y[guard] = 10;
+    run.world.player.x = 10;
+    run.world.player.y = 10;
+
+    pushPlayerOutOfGuards(run.world);
+
+    expect(Number.isFinite(run.world.player.x)).toBe(true);
+    expect(Number.isFinite(run.world.player.y)).toBe(true);
+    expect(run.world.player.x).toBeCloseTo(10 + GUARD_RADIUS + PLAYER_RADIUS, 6);
   });
 });
 
@@ -98,8 +136,13 @@ describe("проход", () => {
 
 describe("сжатие толкает игрока", () => {
   it("игрок у кромки: строй сжимается, игрока теснит к центру, в тело страж не входит", () => {
-    const run = assembled({ radius: 200, minRadius: 80, shrinkPerSec: 6, lifeSec: 120 });
+    const ring = { radius: 300, minRadius: 80, shrinkPerSec: 6, lifeSec: 120 };
+    const run = createCordonRun({ ring });
+    // строй собран, но ещё не сжат до предела: впереди не меньше десяти секунд сжатия
+    advanceRun(run, (run.world.config.view.spawnRadius + 48 - ring.radius) / (40 - ring.shrinkPerSec) + 3);
+    expect(aliveGuards(run.world)).toHaveLength(40);
     const radius = run.world.cordon.radius;
+    expect(radius - 10 * ring.shrinkPerSec).toBeGreaterThan(ring.minRadius);
     run.world.player.x = run.world.cordon.centerX + radius - GUARD_RADIUS - PLAYER_RADIUS - 1;
     run.world.player.y = run.world.cordon.centerY;
     const start = distanceFromCenter(run);
@@ -110,7 +153,7 @@ describe("сжатие толкает игрока", () => {
       closest = Math.min(closest, nearestGuard(run));
     }
 
-    expect(distanceFromCenter(run)).toBeLessThan(start - 20);
+    expect(distanceFromCenter(run)).toBeLessThan(start - 40);
     expect(closest).toBeGreaterThanOrEqual(GUARD_RADIUS + PLAYER_RADIUS - 1);
   });
 });
