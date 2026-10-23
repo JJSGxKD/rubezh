@@ -381,7 +381,7 @@ function Group(props: { title: string; hint?: string | undefined; children: Reac
   return (
     <section>
       <h3 className="mb-1.5 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{props.title}</h3>
-      {props.hint === undefined ? null : <p className="-mt-1 mb-1.5 text-xs text-text-disabled">{props.hint}</p>}
+      {props.hint === undefined ? null : <p className="-mt-1 mb-1.5 text-xs text-text-muted">{props.hint}</p>}
       {props.children}
     </section>
   );

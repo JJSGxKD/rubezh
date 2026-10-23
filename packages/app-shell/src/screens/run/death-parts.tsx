@@ -301,7 +301,7 @@ export function RunDetails(props: { result: RunResult; open: boolean; diagnostic
           {result.deathCause === null ? null : <p className="text-xs text-text-muted">{t("run.death.cause", { enemy: enemyName(result.deathCause) })}</p>}
           {/* seed и runId видны только в режиме диагностики: с ними баг
               воспроизводится, а обычному игроку они ни о чём не говорят. */}
-          {props.diagnostics ? <p className="font-mono text-xs break-all text-text-disabled">{t("run.death.diagnostics", { seed: result.seed, runId: result.runId })}</p> : null}
+          {props.diagnostics ? <p className="font-mono text-xs break-all text-text-muted">{t("run.death.diagnostics", { seed: result.seed, runId: result.runId })}</p> : null}
         </div>
       ) : null}
     </div>
