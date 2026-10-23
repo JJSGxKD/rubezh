@@ -66,6 +66,16 @@ export function rewardFeedback(resource: RewardResource | null): void {
 }
 
 /**
+ * Валюта, которой звучит награда из нескольких: самоцвет слышнее монет,
+ * монеты — осколков. Пустая награда — `null`: звучит только общий звон.
+ */
+export function mainAccrual(reward: { coins: number; gems: number; shards: number }): RewardResource | null {
+  if (reward.gems > 0) return "gems";
+  if (reward.coins > 0) return "coins";
+  return reward.shards > 0 ? "shards" : null;
+}
+
+/**
  * Щелчок счёта баланса в шапке. Без вибрации: щелчков до восьми за
  * секунду, и вибрация на каждый слилась бы в дребезг, а награду уже
  * отметила вибрация забора.
