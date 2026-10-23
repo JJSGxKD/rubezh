@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Toggle } from "../src/design-system/components";
+import { Slider } from "../src/design-system/components/Slider";
 import { SlideDots } from "../src/screens/home-slide";
 
 // Зона касания (docs/27 §4.4): облик бывает ниже 44 px — переключатель 32,
@@ -40,5 +41,10 @@ describe("зона касания маленьких элементов", () => 
   it("«Подробнее» на итогах забега", () => {
     const death = readFileSync(new URL("../src/screens/run/death-parts.tsx", import.meta.url), "utf8");
     expect(death).toMatch(/aria-expanded=\{open\}[\s\S]{0,120}hit-tall/);
+  });
+
+  it("ползунок — 44 px по высоте, а строка не растёт: поля отрицательные", () => {
+    const html = renderToStaticMarkup(createElement(Slider, { label: "Музыка", value: 40, onChange: () => undefined }));
+    expect(html).toMatch(/type="range"[^>]*class="-my-1\.5 h-11 /);
   });
 });
