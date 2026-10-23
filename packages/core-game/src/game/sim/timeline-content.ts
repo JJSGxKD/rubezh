@@ -1,4 +1,5 @@
 import type {
+  CordonRingDef,
   EndlessCurveDef,
   EnemyDef,
   TimelineEventDef,
@@ -21,10 +22,11 @@ export function findTimelineProblems(
 ): string[] {
   const threatById = new Map(enemies.map((def) => [def.id, def.threat ?? defaultThreat(def)]));
   const eliteIds = new Set(enemies.filter((def) => def.rank !== undefined).map((def) => def.id));
+  const enemyById = new Map(enemies.map((def) => [def.id, def]));
 
   const problems = [
-    ...findSegmentProblems(timeline, threatById, eliteIds),
-    ...findCurveProblems(curve, timeline, threatById, eliteIds),
+    ...findSegmentProblems(timeline, threatById, eliteIds, enemyById),
+    ...findCurveProblems(curve, timeline, threatById, eliteIds, enemyById),
   ];
   problems.push(...findThreatProblems(timeline, curve, threatById));
   return problems;
@@ -34,6 +36,7 @@ function findSegmentProblems(
   timeline: readonly TimelineSegmentDef[],
   threatById: ReadonlyMap<string, number>,
   eliteIds: ReadonlySet<string>,
+  enemyById: ReadonlyMap<string, EnemyDef>,
 ): string[] {
   const problems: string[] = [];
   if (timeline.length === 0) return ["таймлайн пуст: забегу не с чего начинаться"];
@@ -65,6 +68,9 @@ function findSegmentProblems(
         // контрольная точка сложности перестаёт быть контрольной точкой.
         problems.push(`${where}: элита ${spawn.enemy} приходит только событием`);
       }
+      if (enemyById.get(spawn.enemy)?.pattern === "cordon") {
+        problems.push(`${where}: страж ${spawn.enemy} приходит только событием cordon`);
+      }
       if (spawn.perSec !== undefined && !(spawn.perSec > 0)) {
         problems.push(`${where}: perSec у ${spawn.enemy} должен быть больше нуля`);
       }
@@ -76,7 +82,7 @@ function findSegmentProblems(
       }
     }
 
-    problems.push(...findEventProblems(segment.events ?? [], where, threatById));
+    problems.push(...findEventProblems(segment.events ?? [], where, threatById, enemyById));
   }
   return problems;
 }
@@ -85,15 +91,59 @@ function findEventProblems(
   events: readonly TimelineEventDef[],
   where: string,
   threatById: ReadonlyMap<string, number>,
+  enemyById: ReadonlyMap<string, EnemyDef>,
 ): string[] {
   const problems: string[] = [];
   for (const event of events) {
     if (!threatById.has(event.enemy)) {
       problems.push(`${where}: в событии ${event.kind} нет врага ${event.enemy}`);
     }
+    const guard = enemyById.get(event.enemy)?.pattern === "cordon";
+    if (event.kind === "cordon") {
+      if (event.ring === undefined) problems.push(`${where}: у события cordon нет ring`);
+      if (!Number.isInteger(event.count) || event.count < 1 || event.count > CORDON_MAX_COUNT) {
+        problems.push(`${where}: count в событии cordon — целое от 1 до ${CORDON_MAX_COUNT}`);
+      }
+      if (enemyById.has(event.enemy) && !guard) {
+        problems.push(`${where}: враг ${event.enemy} в событии cordon — не паттерна cordon`);
+      }
+      if (event.ring !== undefined) problems.push(...findRingProblems(event.ring, where, enemyById.get(event.enemy)));
+      continue;
+    }
+    if (event.ring !== undefined) problems.push(`${where}: ring задаётся только у события cordon, а не ${event.kind}`);
+    if (guard) problems.push(`${where}: страж ${event.enemy} в событии ${event.kind}: он приходит только кольцом cordon`);
     if (!Number.isInteger(event.count) || event.count < 1) {
       problems.push(`${where}: count в событии ${event.kind} — целое, не меньше единицы`);
     }
+  }
+  return problems;
+}
+
+/*
+ * Границы кольца стартовые — калибрует геймдизайнер. Их держит смысл механики:
+ * стражи приходят снаружи экрана (radius меньше кольца спавна), а строй не
+ * сжимается до тесноты, в которой игрока раздавит стенка.
+ */
+const CORDON_MAX_COUNT = 64;
+const CORDON_MAX_RADIUS = 420;
+const CORDON_MIN_RADIUS_FLOOR = 60;
+const CORDON_LIFE_SEC = { min: 5, max: 120 } as const;
+
+function findRingProblems(ring: CordonRingDef, where: string, guard: EnemyDef | undefined): string[] {
+  const problems: string[] = [];
+  if (!(ring.minRadius >= CORDON_MIN_RADIUS_FLOOR)) {
+    problems.push(`${where}: ring.minRadius — не меньше ${CORDON_MIN_RADIUS_FLOOR}: теснее строй раздавит игрока`);
+  }
+  if (!(ring.radius <= CORDON_MAX_RADIUS)) {
+    problems.push(`${where}: ring.radius — не больше ${CORDON_MAX_RADIUS}: стражи обязаны приходить снаружи экрана`);
+  }
+  if (!(ring.minRadius < ring.radius)) problems.push(`${where}: ring.minRadius должен быть меньше ring.radius`);
+  if (!(ring.shrinkPerSec > 0)) problems.push(`${where}: ring.shrinkPerSec должен быть больше нуля`);
+  else if (guard !== undefined && ring.shrinkPerSec > guard.speed) {
+    problems.push(`${where}: ring.shrinkPerSec не больше скорости стража (${guard.speed}): быстрее строй не удержать`);
+  }
+  if (!(ring.lifeSec >= CORDON_LIFE_SEC.min && ring.lifeSec <= CORDON_LIFE_SEC.max)) {
+    problems.push(`${where}: ring.lifeSec — от ${CORDON_LIFE_SEC.min} до ${CORDON_LIFE_SEC.max} секунд`);
   }
   return problems;
 }
@@ -103,6 +153,7 @@ function findCurveProblems(
   timeline: readonly TimelineSegmentDef[],
   threatById: ReadonlyMap<string, number>,
   eliteIds: ReadonlySet<string>,
+  enemyById: ReadonlyMap<string, EnemyDef>,
 ): string[] {
   const problems: string[] = [];
   const lastManual = timeline.length === 0 ? -1 : timeline[timeline.length - 1].fromSec;
@@ -126,6 +177,7 @@ function findCurveProblems(
   for (const id of curve.pool) {
     if (!threatById.has(id)) problems.push(`кривая: врага ${id} нет в контенте`);
     else if (eliteIds.has(id)) problems.push(`кривая: элита ${id} не входит в обычную смесь`);
+    else if (enemyById.get(id)?.pattern === "cordon") problems.push(`кривая: страж ${id} не входит в обычную смесь: он приходит только кольцом`);
   }
 
   if (!(curve.startTypes >= 1)) problems.push("кривая: startTypes должен быть не меньше единицы");
@@ -142,7 +194,7 @@ function findCurveProblems(
       problems.push(`кривая: everySegments в событии ${event.kind} — целое, не меньше единицы`);
     }
   }
-  problems.push(...findEventProblems(curve.events, "кривая", threatById));
+  problems.push(...findEventProblems(curve.events, "кривая", threatById, enemyById));
   return problems;
 }
 

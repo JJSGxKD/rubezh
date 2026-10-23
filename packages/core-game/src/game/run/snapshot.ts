@@ -1,4 +1,5 @@
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
+import { createCordonState, type CordonState } from "../sim/cordon";
 import type { Spawner } from "../sim/spawner";
 import type { World } from "../sim/world";
 
@@ -69,6 +70,8 @@ export interface WorldSnapshot {
   pickups: EncodedPool;
   /** состояние сундуков; записи для сцены (`founds`, `openings`) не входят */
   chest: { rng: number; dropped: number; opened: number };
+  /** кольцо стражей; в снимках прежнего формата поля нет — это «кольца нет» */
+  cordon?: CordonState;
   spawner: unknown;
 }
 
@@ -93,6 +96,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     gems: encodeRecord(world.gems, world.gems.count),
     pickups: encodeRecord(world.pickups, world.pickups.count),
     chest: { rng: world.chests.rng.getState(), dropped: world.chests.dropped, opened: world.chests.opened },
+    cordon: { ...world.cordon },
     spawner: spawner.saveState?.() ?? null,
   };
 }
@@ -132,10 +136,32 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   world.chests.opened = asNumber(chest.opened, "chest.opened");
   world.chests.founds = [];
   world.chests.openings = [];
+  restoreCordon(world, snapshot.cordon);
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
   world.events.written = 0;
+}
+
+/**
+ * Кольцо стражей. Отсутствие поля — снимок до кольца: версию формата не
+ * поднимали, старый снимок читается, и кольца в нём нет.
+ */
+function restoreCordon(world: World, input: unknown): void {
+  if (input === undefined) {
+    Object.assign(world.cordon, createCordonState());
+    return;
+  }
+  const raw = asRecord(input, "cordon");
+  Object.assign(world.cordon, {
+    active: asBoolean(raw.active, "cordon.active"),
+    centerX: asNumber(raw.centerX, "cordon.centerX"),
+    centerY: asNumber(raw.centerY, "cordon.centerY"),
+    radius: asNumber(raw.radius, "cordon.radius"),
+    minRadius: asNumber(raw.minRadius, "cordon.minRadius"),
+    shrinkPerSec: asNumber(raw.shrinkPerSec, "cordon.shrinkPerSec"),
+    timeLeftSec: asNumber(raw.timeLeftSec, "cordon.timeLeftSec"),
+  });
 }
 
 // --- Набор и прогрессия -------------------------------------------------------

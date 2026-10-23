@@ -529,6 +529,8 @@ export interface EnemyPatternParams {
      */
     runSec?: number;
   };
+  /** Страж кольца держит место в строю; числа кольца — у события таймлайна, а не у врага. */
+  cordon: Record<string, never>;
 }
 
 export type EnemyPattern = keyof EnemyPatternParams;
@@ -725,12 +727,31 @@ export interface TimelineSpawnDef {
  * Событие отрезка: `ring` окружает игрока кольцом, `flank` выбрасывает рой с
  * одной стороны. И то, и другое появляется за пределами видимой области.
  */
-export type TimelineEventKind = "ring" | "flank";
+export type TimelineEventKind = "ring" | "flank" | "cordon";
+
+/**
+ * Кольцо стражей (Р112, tasks/T-0170): числа самого кольца — у события, а не у
+ * врага, потому что одному стражу в разных кольцах нужны разные числа. Все
+ * расстояния — в игровых единицах, время — в секундах; движок сам умножает их
+ * на плотность экрана. Границы допустимого проверяет `findTimelineProblems`.
+ */
+export interface CordonRingDef {
+  /** на каком расстоянии от центра стражи встают в строй: меньше расстояния спавна, чтобы приходили снаружи экрана */
+  radius: number;
+  /** до какого радиуса строй сжимается и дальше не идёт: иначе игрока раздавит стенкой */
+  minRadius: number;
+  /** на сколько единиц в секунду строй сжимается; не быстрее скорости стража — иначе строй не удержать */
+  shrinkPerSec: number;
+  /** сколько секунд кольцо живёт, если строй не пробили: потом стражи исчезают */
+  lifeSec: number;
+}
 
 export interface TimelineEventDef {
   kind: TimelineEventKind;
   enemy: string;
   count: number;
+  /** числа кольца; обязательны у события `cordon` и запрещены у остальных */
+  ring?: CordonRingDef;
 }
 
 export interface TimelineSegmentDef {
@@ -748,6 +769,8 @@ export interface EndlessEventDef {
   kind: TimelineEventKind;
   enemy: string;
   count: number;
+  /** числа кольца; обязательны у события `cordon` */
+  ring?: CordonRingDef;
 }
 
 /**
