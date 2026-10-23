@@ -373,6 +373,7 @@ function RarityPreview(): ReactNode {
 
 function renderPreview(preview: Preview): ReactNode {
   const noop = (): void => undefined;
+  const shareNoop = (): Promise<null> => Promise.resolve(null);
 
   switch (preview) {
     case "boot":
@@ -430,7 +431,7 @@ function renderPreview(preview: Preview): ReactNode {
           onDecline={noop}
           onRestart={noop}
           onMenu={noop}
-          onShare={noop}
+          onShare={shareNoop}
         />
       );
     case "chance":
@@ -445,7 +446,7 @@ function renderPreview(preview: Preview): ReactNode {
           onDecline={noop}
           onRestart={noop}
           onMenu={noop}
-          onShare={noop}
+          onShare={shareNoop}
         />
       );
     default:
@@ -466,7 +467,7 @@ function renderPreview(preview: Preview): ReactNode {
           onDecline={noop}
           onRestart={noop}
           onMenu={noop}
-          onShare={noop}
+          onShare={shareNoop}
         />
       );
   }
