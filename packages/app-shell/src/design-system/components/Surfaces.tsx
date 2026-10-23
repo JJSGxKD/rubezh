@@ -393,6 +393,20 @@ export function InfoNotice(props: { text: string }): ReactNode {
   );
 }
 
+/**
+ * Пустой раздел — знаком и словами посередине, а не сноской сверху: пустой
+ * экран со сноской у края выглядит недогруженным. Знак — тот же медальон, что
+ * над наградой дня и промокодом, только спокойный: пустота — не событие.
+ */
+export function EmptyState(props: { icon: ReactNode; text: string }): ReactNode {
+  return (
+    <div className="flex animate-rise-in flex-col items-center gap-3 px-2 py-10 text-center">
+      <IconEmblem tone="muted">{props.icon}</IconEmblem>
+      <p className="max-w-[300px] text-sm text-text-muted">{props.text}</p>
+    </div>
+  );
+}
+
 /** Сообщение об ошибке с одним действием: без него игрок упирается в тупик. */
 export function ErrorState(props: { text: string; onRetry?: () => void }): ReactNode {
   return (
