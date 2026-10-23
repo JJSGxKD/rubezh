@@ -4,6 +4,7 @@ import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/p
 import type { LoadoutState } from "../progression/loadout";
 import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
+import type { CordonState } from "./cordon";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -274,6 +275,8 @@ export interface World {
   /** правила сундука забега */
   chestRules: ChestsDef;
   chests: ChestState;
+  /** кольцо стражей: одно за раз, состояние входит в снимок (Р112) */
+  cordon: CordonState;
   /**
    * Отдельный поток случайности для новых карточек после переброса и
    * изгнания: `world.rng` они не трогают, и забег без зарядов не меняется

@@ -1,4 +1,4 @@
-import type { EndlessCurveDef, TimelineEventKind, TimelineSegmentDef } from "@bh/shared-types";
+import type { CordonRingDef, EndlessCurveDef, TimelineEventKind, TimelineSegmentDef } from "@bh/shared-types";
 import type { World } from "./world";
 
 /**
@@ -25,6 +25,8 @@ export interface SegmentEvent {
   kind: TimelineEventKind;
   typeIndex: number;
   count: number;
+  /** числа кольца; есть только у события `cordon` */
+  ring?: CordonRingDef;
 }
 
 export interface SegmentPlan {
@@ -195,12 +197,12 @@ function pickMix(world: World, candidates: readonly number[], size: number): num
 
 function resolveEvents(
   world: World,
-  defs: readonly { kind: TimelineEventKind; enemy: string; count: number }[],
+  defs: readonly { kind: TimelineEventKind; enemy: string; count: number; ring?: CordonRingDef | undefined }[],
 ): SegmentEvent[] {
   const events: SegmentEvent[] = [];
   for (const def of defs) {
     const typeIndex = world.enemyTypes.findIndex((type) => type.id === def.enemy);
-    if (typeIndex >= 0) events.push({ kind: def.kind, typeIndex, count: def.count });
+    if (typeIndex >= 0) events.push({ kind: def.kind, typeIndex, count: def.count, ...(def.ring === undefined ? {} : { ring: def.ring }) });
   }
   return events;
 }

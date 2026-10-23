@@ -18,7 +18,7 @@ import { createTimelineDirector } from "../src/game/sim/director";
 import type { Spawner } from "../src/game/sim/spawner";
 import { stepWorld, type SimInput } from "../src/game/sim/step";
 import { createWorld, TICK_SEC, type CreateWorldOptions, type World } from "../src/game/sim/world";
-import { checksumWorld } from "./helpers/scripted-run";
+import { advanceRun, checksumWorld, createCordonRun } from "./helpers/scripted-run";
 
 // Продолжение прерванного забега (game/run/snapshot.ts): снимок, записанный в
 // строку и прочитанный обратно, обязан дать ровно тот же забег, что шёл бы без
@@ -297,3 +297,52 @@ describe("счётчики в сводке снимка (tasks/T-0163)", () => {
     expect(WORLD_SNAPSHOT_VERSION).toBe(9);
   });
 });
+
+describe("снимок посреди кольца стражей", () => {
+  /** Снимок после `before` секунд, восстановленный в свежий мир и прокрученный ещё на 10 секунд, против непрерывного мира. */
+  function resumeAfter(before: number): void {
+    const original = createCordonRun({ seed: 21 });
+    advanceRun(original, before);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as unknown;
+
+    const resumed = createCordonRun({ seed: 21 });
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.cordon).toEqual(original.world.cordon);
+
+    advanceRun(original, 10);
+    advanceRun(resumed, 10);
+
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.cordon).toEqual(original.world.cordon);
+    expect(resumed.world.cordon.active).toBe(true);
+  }
+
+  it("посреди прихода стражей: продолженный мир идёт ровно так же", { timeout: 30_000 }, () => {
+    resumeAfter(4);
+  });
+
+  it("посреди удержания: радиус, оставшееся время и центр совпадают", { timeout: 30_000 }, () => {
+    resumeAfter(14);
+  });
+
+  it("снимок прежнего формата без поля cordon читается: кольца нет", () => {
+    const original = createCordonRun({ seed: 3, timeline: [{ fromSec: 0, spawns: [], events: [] }] });
+    advanceRun(original, 2);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as Record<string, unknown>;
+    delete saved.cordon;
+
+    const resumed = createCordonRun({ seed: 3, timeline: [{ fromSec: 0, spawns: [], events: [] }] });
+    expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
+    expect(resumed.world.cordon.active).toBe(false);
+  });
+
+  it("битое поле cordon — ошибка снимка, а не NaN в мире", () => {
+    const run = createCordonRun({ seed: 3 });
+    advanceRun(run, 1);
+    const saved = JSON.parse(JSON.stringify(captureWorld(run.world, run.director))) as Record<string, unknown>;
+    saved.cordon = { active: true, centerX: "x" };
+    expect(() => restoreWorld(createCordonRun({ seed: 3 }).world, createCordonRun({ seed: 3 }).director, saved)).toThrow(SnapshotError);
+  });
+});
+
