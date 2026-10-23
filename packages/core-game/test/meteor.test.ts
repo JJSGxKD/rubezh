@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CHESTS } from "../src/content/chests";
 import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
@@ -9,6 +10,8 @@ import { findWeaponContentProblems } from "../src/game/weapons";
 import { meteorTrail } from "../src/game/render/weapon-effects";
 import { SIM_EVENT } from "../src/game/sim/events";
 import { checksumWorld } from "../src/game/sim/checksum";
+import { addPassive, addWeapon, weaponSlotOf } from "../src/game/progression/loadout";
+import { openChest } from "../src/game/sim/chests";
 import { IDLE_INPUT, stepWorld } from "../src/game/sim/step";
 import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 
@@ -17,11 +20,11 @@ import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 // грозы, и свой вид события для рендера.
 
 function world(weaponId: string, seed = 11): World {
-  return createWorld({ seed, enemies: ENEMIES, weapons: WEAPONS, passives: PASSIVES, levelCurve: LEVEL_CURVE, loadoutLimits: LOADOUT_LIMITS, drops: DROPS, startingWeaponId: weaponId });
+  return createWorld({ seed, enemies: ENEMIES, weapons: WEAPONS, passives: PASSIVES, levelCurve: LEVEL_CURVE, loadoutLimits: LOADOUT_LIMITS, drops: DROPS, chests: CHESTS, startingWeaponId: weaponId });
 }
 
-function withEnemy(target: World, x = 120, y = 0): number {
-  const slot = spawnEnemy(target, target.enemyTypes.findIndex((type) => type.id === "swarm_rat"), x, y);
+function withEnemy(target: World, x = 120, y = 0, id = "swarm_rat"): number {
+  const slot = spawnEnemy(target, target.enemyTypes.findIndex((type) => type.id === id), x, y);
   if (slot < 0) throw new Error("пул исчерпан");
   return slot;
 }
@@ -102,19 +105,23 @@ describe("вид удара", () => {
     expect(run()).toBe(run());
   });
 
-  it("враг в радиусе удара загорается при шансе 1", () => {
+  it("враг в радиусе удара загорается при шансе 1, за радиусом — нет", () => {
     const target = world("meteor");
     const typeIndex = target.weaponTypes.findIndex((type) => type.id === "meteor");
     const level = target.weaponTypes[typeIndex]?.levels[0];
     if (level === undefined) throw new Error("нет уровня");
     level.statusChance = 1;
-    const inside = withEnemy(target, 60, 0);
-    const outside = withEnemy(target, 900, 0);
-    for (let tick = 0; tick < 400 && target.enemies.burnTimer[inside] === 0; tick++) {
-      stepWorld(target, IDLE_INPUT);
-    }
-    expect(target.enemies.burnTimer[inside]).toBeGreaterThan(0);
-    expect(target.enemies.burnTimer[outside]).toBe(0);
+    // Живучие враги: удар не убивает их, и горение успевает наложиться.
+    const near = withEnemy(target, 60, 0, "tank_ghoul");
+    const far = withEnemy(target, 900, 0, "tank_ghoul");
+    for (let tick = 0; tick < 400 && target.events.written === 0; tick++) stepWorld(target, IDLE_INPUT);
+    expect(target.events.written).toBeGreaterThan(0);
+
+    // Центр удара выбирает генератор: горит тот, кто ближе к центру, второй — нет.
+    const centerX = target.events.x[0] ?? 0;
+    const [hit, missed] = Math.abs(target.enemies.x[near] - centerX) < Math.abs(target.enemies.x[far] - centerX) ? [near, far] : [far, near];
+    expect(target.enemies.burnTimer[hit]).toBeGreaterThan(0);
+    expect(target.enemies.burnTimer[missed]).toBe(0);
   });
 });
 
@@ -137,5 +144,23 @@ describe("траектория падения", () => {
     expect(small.fromX).toBeGreaterThan(0);
     expect(small.fromY).toBeLessThan(0);
     expect(Math.hypot(large.fromX, large.fromY)).toBeGreaterThan(Math.hypot(small.fromX, small.fromY));
+  });
+});
+
+describe("эволюция «Метеора»", () => {
+  it("сундук с готовым рецептом (8-й уровень и «Дальнобойность») выдаёт «Огненный ливень» в том же слоте", () => {
+    const target = world("meteor");
+    const meteorIndex = target.weaponTypes.findIndex((type) => type.id === "meteor");
+    const reachIndex = target.passiveTypes.findIndex((type) => type.id === "reach");
+    const slot = weaponSlotOf(target.loadout, meteorIndex);
+    (slot >= 0 ? target.loadout.weapons[slot] : addWeapon(target.loadout, meteorIndex)).level = 8;
+    addPassive(target.loadout, reachIndex);
+
+    openChest(target, 3);
+
+    expect(target.chests.openings[0]?.rewards[0]).toMatchObject({ kind: "weapon_evolve", refId: "fire_rain" });
+    const rainIndex = target.weaponTypes.findIndex((type) => type.id === "fire_rain");
+    expect(weaponSlotOf(target.loadout, rainIndex)).toBeGreaterThanOrEqual(0);
+    expect(weaponSlotOf(target.loadout, meteorIndex)).toBe(-1);
   });
 });

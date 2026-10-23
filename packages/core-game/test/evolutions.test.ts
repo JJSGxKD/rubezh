@@ -75,7 +75,7 @@ describe("готовность эволюции по набору", () => {
 
   it("по записи на эволюцию в порядке контента", () => {
     const progress = evolutionProgress(WEAPONS, loadoutIds(newWorld()));
-    expect(progress.map((entry) => entry.evolutionId)).toEqual(["starfall", "tempest", "blade_whirl", "frost_crown", "forge", "viper"]);
+    expect(progress.map((entry) => entry.evolutionId)).toEqual(["starfall", "tempest", "blade_whirl", "frost_crown", "forge", "viper", "fire_rain"]);
     expect(progress[0]).toMatchObject({ weaponId: "spark", passiveId: "haste", weaponMaxLevel: 8 });
   });
 

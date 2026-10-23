@@ -458,6 +458,11 @@ export class WorldRenderer {
         this.weaponEffects.strike(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot]);
         continue;
       }
+      if (kind === SIM_EVENT.strikeFire) {
+        // Огненный удар: тот же переключатель, что у молнии, но падает камень.
+        this.weaponEffects.meteor(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot]);
+        continue;
+      }
       if (kind !== SIM_EVENT.explosion) continue;
       this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
     }

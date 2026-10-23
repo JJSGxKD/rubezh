@@ -108,8 +108,8 @@ describe("статистика забега", () => {
     const result = resultOf(world, GOLDEN_SEED);
     const byElement = Object.values(result.damageByElement).reduce((sum, damage) => sum + damage, 0);
     expect(byElement).toBeCloseTo(result.damageDealt, 6);
-    // В эталоне есть «Жало»: яд обязан попасть в свою стихию, а не в физический.
-    expect(result.damageByElement.poison ?? 0).toBeGreaterThan(0);
+    // В эталоне есть «Метеор»: огонь и горение обязаны попасть в свою стихию, а не в физический.
+    expect(result.damageByElement.fire ?? 0).toBeGreaterThan(0);
     expect(Object.values(result.damageByElement).every((damage) => damage > 0)).toBe(true);
   });
 
@@ -172,36 +172,35 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 39.43,
-      level: 9,
-      xpCollected: 139,
-      enemiesKilled: 94,
+      survivalSec: 29.92,
+      level: 7,
+      xpCollected: 81,
+      enemiesKilled: 60,
       killsByEnemy: {
-        swarm_rat: 35,
-        tank_ghoul: 5,
+        swarm_rat: 23,
+        tank_ghoul: 2,
         shooter_wisp: 8,
-        bone_walker: 4,
-        mire_shambler: 14,
-        dasher_wolf: 6,
-        circler_crow: 5,
-        bomber_imp: 2,
-        rushing_bats: 9,
-        splitter_slime: 6,
+        bone_walker: 1,
+        mire_shambler: 6,
+        dasher_wolf: 4,
+        circler_crow: 7,
+        bomber_imp: 1,
+        rushing_bats: 5,
+        splitter_slime: 3,
       },
-      damageDealt: 1577,
-      damageTaken: 103,
+      damageDealt: 1088,
+      damageTaken: 124,
       weapons: [
-        { id: "spark", level: 2, damage: 812 },
-        { id: "sting", level: 1, damage: 470 },
-        { id: "storm", level: 1, damage: 295 },
+        { id: "spark", level: 3, damage: 740 },
+        { id: "meteor", level: 1, damage: 246 },
+        { id: "storm", level: 1, damage: 102 },
       ],
       passives: [
-        { id: "ward", level: 2 },
+        { id: "vitality", level: 1 },
         { id: "lodestone", level: 1 },
-        { id: "volley", level: 2 },
       ],
       deathCause: "shooter_wisp",
-      distance: 5833,
+      distance: 4319,
       peakEnemies: 30,
     });
   });
