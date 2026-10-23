@@ -59,6 +59,15 @@ describe("мир забега по уровню аккаунта", () => {
     expect(before.weaponTypes[before.loadout.weapons[0].typeIndex].id).toBe(firstOpen);
   });
 
+  it("«Метеор» закрыт на 15-м уровне и открыт на 16-м, эволюция вместе с ним", () => {
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 15).weapons.has("meteor")).toBe(false);
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 16).weapons.has("meteor")).toBe(true);
+    expect(ids(world(15).weaponTypes)).not.toContain("meteor");
+    expect(ids(world(16).weaponTypes)).toEqual(expect.arrayContaining(["meteor", "fire_rain"]));
+    expect(ACCOUNT_UNLOCKS.some((row) => row.weapons?.includes("fire_rain"))).toBe(false);
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 1).weapons.size).toBe(3);
+  });
+
   it("предлагает только открытое и не больше слотов уровня", () => {
     const novice = world(1);
     const first = unlocksAt(ACCOUNT_UNLOCKS, 1);

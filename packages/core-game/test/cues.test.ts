@@ -115,5 +115,13 @@ describe("сигналы забега", () => {
     expect(fired.spark).toBeGreaterThan(3);
     expect(fired.starfall).toBeUndefined();
   });
+
+  it("считает оба вида удара по площади: молнию и падающий камень", () => {
+    const target = world();
+    const tracker = new CueTracker(target);
+    pushSimEvent(target.events, { kind: SIM_EVENT.strike, x: 10, y: 10, radius: 80, tick: 1 });
+    pushSimEvent(target.events, { kind: SIM_EVENT.strikeFire, x: 20, y: 10, radius: 90, tick: 1 });
+    expect(tracker.collect()).toMatchObject({ strikes: 2 });
+  });
 });
 

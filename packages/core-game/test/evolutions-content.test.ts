@@ -51,8 +51,8 @@ describe("эволюции в контенте", () => {
   });
 
   it("шесть эволюций стоят после всех базовых, у каждого базового — ровно одна", () => {
-    expect(BASE_WEAPONS).toHaveLength(6);
-    expect(WEAPON_EVOLUTIONS).toHaveLength(6);
+    expect(BASE_WEAPONS).toHaveLength(7);
+    expect(WEAPON_EVOLUTIONS).toHaveLength(7);
     const firstEvolution = WEAPONS.findIndex((weapon) => weapon.evolvedFrom !== undefined);
     expect(WEAPONS.slice(firstEvolution).every((weapon) => weapon.evolvedFrom !== undefined)).toBe(true);
     for (const weapon of BASE_WEAPONS) {
@@ -69,6 +69,7 @@ describe("эволюции в контенте", () => {
       ["wardstone", "lodestone", "frost_crown"],
       ["hearth", "mending", "forge"],
       ["sting", "tempering", "viper"],
+      ["meteor", "reach", "fire_rain"],
     ]);
   });
 
@@ -211,7 +212,7 @@ describe("эволюции и таблица открытий", () => {
     }
   });
 
-  it("на последнем уровне открыто всё: двенадцать видов в порядке контента", () => {
+  it("на последнем уровне открыто всё: четырнадцать видов в порядке контента", () => {
     const last = unlocksAt(ACCOUNT_UNLOCKS, Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level)));
     expect(weaponsOpenAt(WEAPONS, last).map((weapon) => weapon.id)).toEqual(WEAPONS.map((weapon) => weapon.id));
   });

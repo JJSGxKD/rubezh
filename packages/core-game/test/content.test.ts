@@ -345,7 +345,7 @@ describe("таблица разблокировок уровня аккаунт�
   });
 
   it("лестница закреплена: калибровка геймдизайнера правит эти числа и таблицу вместе", () => {
-    const weapons: [string, number][] = [["hearth", 2], ["storm", 4], ["sting", 11]];
+    const weapons: [string, number][] = [["hearth", 2], ["storm", 4], ["sting", 11], ["meteor", 16]];
     const passives: [string, number][] = [["reach", 3], ["ward", 6], ["volley", 8], ["tempering", 14]];
     for (const [id, level] of weapons) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", id), id).toBe(level);
     for (const [id, level] of passives) expect(unlockLevelOf(ACCOUNT_UNLOCKS, "passive", id), id).toBe(level);
