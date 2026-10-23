@@ -1,11 +1,13 @@
-import { memo, useEffect, useState, type ReactNode } from "react";
-import { Check, Lightbulb } from "lucide-react";
+import { lazy, memo, Suspense, useEffect, useState, type ReactNode } from "react";
+import { Check } from "lucide-react";
 import { Emblem, ProgressBar } from "../../design-system/components";
 import { DURATION } from "../../design-system/tokens";
 import { t } from "../../i18n";
 import "../../i18n/run";
 import type { RunLoadingStage } from "../../state/run";
+import { useShell } from "../../state/shell";
 import { ItemTile } from "../item-icons";
+import { CARD_ROTATE_MS, cardAt, cardShown, loadingDeck, takeCardIndex } from "./loading-cards";
 
 /**
  * Экран загрузки забега: от «В бой» до первого кадра.
@@ -18,8 +20,15 @@ import { ItemTile } from "../item-icons";
  * рывком поверх заставки.
  */
 
-/** Сколько подсказок в словаре: `run.tip.1` … `run.tip.N`. */
-const TIP_COUNT = 5;
+const DECK = loadingDeck();
+
+/**
+ * Карточка колоды со своим словарём — отдельным чанком: колода растёт с
+ * игрой, а чанк интерфейса забега на пределе бюджета. Лобби подтягивает его
+ * заранее вместе с движком (`preloadRunEngine`); не успел — карточка
+ * проявится, когда придёт, без заглушки.
+ */
+const LoadingCardNote = lazy(async () => ({ default: (await import("./LoadingCardNote")).LoadingCardNote }));
 
 const STAGES = ["engine", "world", "fight"] as const;
 type ShownStage = (typeof STAGES)[number];
@@ -32,8 +41,9 @@ export interface RunLoadingProps {
 export const RunLoading = memo(function RunLoading(props: RunLoadingProps): ReactNode {
   const active = props.stage !== null;
   const [mounted, setMounted] = useState(active);
-  // Подсказка выбирается один раз на показ, а не на каждый снимок HUD.
-  const [tip] = useState(() => 1 + Math.floor(Math.random() * TIP_COUNT));
+  // Карточка берётся один раз на показ, а не на каждый снимок HUD.
+  const [index, setIndex] = useState(() => takeCardIndex(useShell.getState().storage));
+  const card = cardAt(DECK, index);
 
   useEffect(() => {
     if (active) {
@@ -43,6 +53,16 @@ export const RunLoading = memo(function RunLoading(props: RunLoadingProps): Reac
     const timer = setTimeout(() => setMounted(false), DURATION.slow);
     return () => clearTimeout(timer);
   }, [active]);
+
+  // Затянулась загрузка — следующая карточка; следующий показ продолжит после неё.
+  useEffect(() => {
+    if (!active) return;
+    const timer = setTimeout(() => {
+      cardShown(useShell.getState().storage, index + 1);
+      setIndex(index + 1);
+    }, CARD_ROTATE_MS);
+    return () => clearTimeout(timer);
+  }, [active, index]);
 
   if (!mounted) return null;
 
@@ -84,10 +104,11 @@ export const RunLoading = memo(function RunLoading(props: RunLoadingProps): Reac
           </ol>
         </div>
 
-        <p className="surface-card flex items-start gap-2 rounded-lg p-3 text-left text-xs text-text-muted">
-          <Lightbulb size={16} className="mt-px shrink-0 text-accent" aria-hidden="true" />
-          {t(`run.tip.${tip}`)}
-        </p>
+        {card === undefined ? null : (
+          <Suspense fallback={null}>
+            <LoadingCardNote card={card} />
+          </Suspense>
+        )}
       </div>
     </div>
   );
