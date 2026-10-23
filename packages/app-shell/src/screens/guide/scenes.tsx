@@ -421,6 +421,32 @@ export function EnemyScene(props: {
           ))}
         </Stage>
       );
+    case "cordon": {
+      // Строй вокруг игрока: восемь мест через 45°, справа место пустое — там
+      // пробит проход. Сцена статичная: ни одной новой анимации.
+      const cx = VIEW_W / 2;
+      const ringRadius = 34;
+      const slots = Array.from({ length: 8 }, (_, slot) => {
+        const angle = (slot * Math.PI) / 4;
+        return { slot, x: cx + Math.cos(angle) * ringRadius, y: py + Math.sin(angle) * ringRadius };
+      });
+      return (
+        <Stage label={props.label}>
+          <Player x={cx} y={py} />
+          {slots.map(({ slot, x, y }) =>
+            slot === 0 ? (
+              <At key={slot} x={x} y={y}>
+                <circle r={size * 0.8} fill="none" stroke={hex(color)} strokeOpacity={0.35} strokeDasharray="3 3" />
+              </At>
+            ) : (
+              <At key={slot} x={x} y={y}>
+                <WorldShape shape={look.shape} color={color} r={size * 0.8} />
+              </At>
+            ),
+          )}
+        </Stage>
+      );
+    }
     default:
       return (
         <Stage label={props.label}>
