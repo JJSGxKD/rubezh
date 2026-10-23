@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { formatCountdown } from "../src/screens/meta/schedule";
 import type { DailyWidget, WheelWidget } from "../src/state/home-api";
 import { arrangeWidgets, dailyFace, recordFace, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
-import { FriendsView, TasksView } from "../src/screens/home-widgets";
+import { Frame, FriendsView, TasksView, WheelView } from "../src/screens/home-widgets";
 
 // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): готовое к забору —
 // первым и во всю ширину, дыр в сетке нет; что говорит каждый виджет —
@@ -178,5 +178,21 @@ describe("кольцо заданий без числа", () => {
   it("с прогрессом значка нет — его место у числа", () => {
     const html = renderToStaticMarkup(createElement(TasksView, { face: { state: "progress", done: 1, total: 4 }, size: "tile" }));
     expect(html).not.toContain("lucide-list-checks");
+  });
+});
+
+describe("подпись виджета читается и на готовом", () => {
+  // Готовый виджет подкрашен тоном сильнее (`widget-surface-ready`), и серая
+  // подпись падала до 4,47:1 при пороге 4,5 (design/art/src/contrast-audit.mjs,
+  // ландшафт). Готовый ставит подписи основной текст — он и так зовёт.
+  it("готовый виджет переключает подпись на основной текст, обычный — нет", () => {
+    const frame = (isReady: boolean) => renderToStaticMarkup(createElement(Frame, { id: "wheel", size: "wide", index: 0, ready: isReady, children: "x" }));
+    expect(frame(true)).toContain("[--widget-label:var(--color-text)]");
+    expect(frame(false)).not.toContain("--widget-label");
+  });
+
+  it("подпись берёт цвет из переменной, по умолчанию — приглушённый", () => {
+    const html = renderToStaticMarkup(createElement(WheelView, { face: wheelFace(WHEEL, true, NOW, true), size: "wide", now: NOW }));
+    expect(html).toContain("text-[var(--widget-label,var(--color-text-muted))]");
   });
 });
