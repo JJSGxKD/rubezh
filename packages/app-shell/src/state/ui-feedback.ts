@@ -61,3 +61,12 @@ export function rewardFeedback(resource: RewardResource | null): void {
   uiFeedback("reward");
   if (resource !== null) audio.ui(ACCRUAL_SOUND[resource]);
 }
+
+/**
+ * Щелчок счёта баланса в шапке. Без вибрации: щелчков до восьми за
+ * секунду, и вибрация на каждый слилась бы в дребезг, а награду уже
+ * отметила вибрация забора.
+ */
+export function tallyTick(rate: number): void {
+  audio.ui("tally", rate);
+}
