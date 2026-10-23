@@ -13,6 +13,7 @@ import type { RunRewardView } from "../../state/progress";
 import { track } from "../../state/shell";
 import { ItemIcon } from "../item-icons";
 import { bestWeapon, levelBar } from "./death-rules";
+import { isEvolutionWeapon } from "./evolution-hints";
 import { SecondChance, continueOfferedPayload, useSecondChanceStages, type SecondChanceProps } from "./SecondChance";
 
 /**
@@ -267,7 +268,7 @@ export function RunDetails(props: { result: RunResult; open: boolean; diagnostic
                       <span className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-text">
                           {t(`weapon.${weapon.id}.name`)}
-                          <span className="ml-1 text-text-muted">{weapon.level}</span>
+                          <span className="ml-1 text-text-muted">{isEvolutionWeapon(weapon.id) ? t("run.evolution.badge") : weapon.level}</span>
                         </span>
                         <span className="font-display tabular-nums text-text-muted">{formatNumber(weapon.damage)}</span>
                       </span>

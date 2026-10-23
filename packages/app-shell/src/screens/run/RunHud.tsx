@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { Heart, Pause, Shield, Wrench } from "lucide-react";
+import { Heart, Pause, Shield, Sparkles, Wrench } from "lucide-react";
 import type { HudSnapshot } from "@bh/core-game";
 import { IconButton, ProgressBar } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
 import "../../i18n/run";
 import { radarPlacementClass, useRadarSetting } from "../../state/radar-setting";
 import { ItemIcon } from "../item-icons";
+import { isEvolutionWeapon, slotEvolutionState } from "./evolution-hints";
 import { BossBar } from "./BossBar";
 import { HintBanner } from "./HintBanner";
 import { PlayerStatuses } from "./PlayerStatuses";
@@ -140,7 +141,13 @@ export function RunHud(props: RunHudProps): ReactNode {
       <div className="flex items-end gap-3 pr-[calc(1rem+var(--app-inset-right))] pb-[calc(0.75rem+var(--app-inset-bottom))] pl-[calc(1rem+var(--app-inset-left))]">
         <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
           {hud.weapons.map((slot) => (
-            <Slot key={`w-${slot.id}`} id={slot.id} level={slot.level} kind="weapon" />
+            <Slot
+              key={`w-${slot.id}`}
+              id={slot.id}
+              level={slot.level}
+              kind="weapon"
+              ready={slotEvolutionState({ weapons: hud.weapons, passives: hud.passives }, slot.id) === "ready"}
+            />
           ))}
           {hud.passives.map((slot) => (
             <Slot key={`p-${slot.id}`} id={slot.id} level={slot.level} kind="passive" />
@@ -153,20 +160,26 @@ export function RunHud(props: RunHudProps): ReactNode {
 }
 
 /** Слот набора: значок предмета и уровень — оружие отличается от пассивки цветом и рамкой. */
-function Slot(props: { id: string; level: number; kind: "weapon" | "passive" }): ReactNode {
+function Slot(props: { id: string; level: number; kind: "weapon" | "passive"; ready?: boolean }): ReactNode {
   const name = t(`${props.kind}.${props.id}.name`);
+  // У эволюции единственный уровень «1» ничего не говорит — вместо него слово.
+  const evolved = props.kind === "weapon" && isEvolutionWeapon(props.id);
+  const label = evolved ? t("run.evolution.badge") : String(props.level);
+  const ready = props.ready === true;
 
   return (
     <span
-      title={`${name} · ${props.level}`}
+      title={`${name} · ${label}${ready ? ` · ${t("run.evolution.slotReady")}` : ""}`}
       className={[
-        "inline-flex items-center gap-1 rounded-sm border bg-bg/70 px-1.5 py-0.5",
+        "relative inline-flex items-center gap-1 rounded-sm border bg-bg/70 px-1.5 py-0.5",
         "font-display text-xs font-bold tabular-nums",
         props.kind === "weapon" ? "border-weapon/40 text-weapon" : "border-passive/40 text-passive",
       ].join(" ")}
     >
       <ItemIcon kind={props.kind} id={props.id} size={14} />
-      <span className="text-text">{props.level}</span>
+      <span className="text-text">{label}</span>
+      {/* Готовность — статичный значок, не анимация: HUD живёт под канвой (§3.3). */}
+      {ready ? <Sparkles size={12} aria-label={t("run.evolution.slotReady")} className="text-accent" /> : null}
     </span>
   );
 }
