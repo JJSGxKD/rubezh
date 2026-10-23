@@ -205,6 +205,7 @@
   "soundLab.sound.uiGems": "Начисление самоцветов",
   "soundLab.sound.uiShards": "Начисление осколков",
   "soundLab.sound.uiWheelTick": "Трещотка колеса",
+  "soundLab.sound.uiTally": "Счёт баланса в шапке",
   "soundLab.sound.uiError": "Ошибка",
   "diagnostics.reports": "Последние отчёты",
   "diagnostics.reports.empty": "Отчётов пока нет. Записи забегов уходят команде сами, если в «Помощи в тестировании» включена запись.",

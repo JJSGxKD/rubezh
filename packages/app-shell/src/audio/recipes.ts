@@ -421,6 +421,15 @@ export const SOUND_RECIPES = {
       { kind: "hiss", dur: 0.01, seed: 320, filter: "highpass", f0: 4000, peak: 0.06, decay: 0.008 },
     ],
   },
+  // Счёт баланса в шапке: монета ложится на монету — короткий звонкий щелчок.
+  // Тон поднимает скорость воспроизведения (`rate`), поэтому вариант один.
+  uiTally: {
+    bus: "ui", level: 0.35, voices: 3, gap: 0.03, send: 0.05, dur: 0.08, variants: 1,
+    layers: [
+      { kind: "bell", f: 3729.31, peak: 0.08, decay: 0.045, index: 1.6 },
+      { kind: "tone", wave: "triangle", f0: 2200, f1: 1700, glide: 0.008, peak: 0.05, decay: 0.012 },
+    ],
+  },
   uiError: {
     bus: "ui", level: 0.5, voices: 1, gap: 0.2, send: 0.05, dur: 0.32, variants: 1,
     layers: [
@@ -445,5 +454,6 @@ export const UI_SOUNDS: readonly SoundId[] = [
   "uiGems",
   "uiShards",
   "uiWheelTick",
+  "uiTally",
   "uiError",
 ];

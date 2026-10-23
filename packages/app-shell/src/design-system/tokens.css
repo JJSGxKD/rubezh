@@ -70,6 +70,7 @@
   --animate-chest-cover: chest-cover var(--duration-base) var(--ease-out) both;
   /* Забор награды: монеты вылетают веером и осыпаются, сумма всплывает над плиткой. */
   --animate-coin-burst: coin-burst 800ms var(--ease-out) both;
+  --animate-balance-bump: balance-bump 520ms var(--ease-spring) both;
   /* Живой фон приложения (direction-v2.md §4.4): длительности задаёт раскладка. */
   --animate-star-twinkle: star-twinkle 4s var(--ease-base) infinite;
   --animate-ember-rise: ember-rise 10s linear infinite;
@@ -366,6 +367,23 @@
     100% {
       opacity: 0;
       transform: translate(calc(var(--burst-x) * 1.1), calc(var(--burst-y) + 36px)) scale(0.8);
+    }
+  }
+
+  /* Значок валюты в шапке, когда баланс начал набегать: монета подпрыгивает
+     и чуть поворачивается, будто на неё легла ещё одна. */
+  @keyframes balance-bump {
+    0% {
+      transform: scale(1);
+    }
+    35% {
+      transform: scale(1.3) rotate(-8deg);
+    }
+    70% {
+      transform: scale(0.95) rotate(3deg);
+    }
+    100% {
+      transform: scale(1);
     }
   }
 

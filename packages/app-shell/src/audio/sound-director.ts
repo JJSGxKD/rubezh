@@ -28,6 +28,7 @@ export type UiSound =
   | "gems"
   | "shards"
   | "wheelTick"
+  | "tally"
   | "error";
 
 export interface HudSound {
@@ -49,6 +50,7 @@ const UI_SOUND_IDS: Record<UiSound, SoundId> = {
   gems: "uiGems",
   shards: "uiShards",
   wheelTick: "uiWheelTick",
+  tally: "uiTally",
   error: "uiError",
 };
 
@@ -171,8 +173,9 @@ export class SoundDirector {
     this.engine.setVolumes(volumes);
   }
 
-  ui(kind: UiSound): void {
-    this.engine.play(UI_SOUND_IDS[kind]);
+  /** `rate` — тон: счёт в шапке поднимает его к концу. */
+  ui(kind: UiSound, rate?: number): void {
+    this.engine.play(UI_SOUND_IDS[kind], rate === undefined ? {} : { rate });
   }
 
   setScene(scene: SoundScene): void {

@@ -99,8 +99,8 @@ export function unlockAudio(): Promise<SoundDirector | null> {
 }
 
 export const audio = {
-  ui(kind: UiSound): void {
-    director?.ui(kind);
+  ui(kind: UiSound, rate?: number): void {
+    director?.ui(kind, rate);
   },
   cues(cues: RunCues): void {
     director?.cues(cues);
