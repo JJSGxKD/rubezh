@@ -18,6 +18,7 @@ zones:
   - packages/app-shell/test/bot-mention-api.test.ts
   - packages/app-shell/test/bot-mention-rules.test.ts
   - packages/app-shell/test/bot-mention-rows.test.ts
+  - apps/web-telegram/vite.config.ts
 shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
