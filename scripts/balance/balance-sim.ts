@@ -5,7 +5,7 @@ import { it } from "vitest";
 import { BALANCE_TARGETS } from "../../packages/core-game/src/content/balance-targets";
 import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
 import { ACCOUNT_UNLOCKS } from "../../packages/core-game/src/content/unlocks";
-import { WEAPONS } from "../../packages/core-game/src/content/weapons";
+import { BASE_WEAPONS } from "../../packages/core-game/src/content/weapons";
 import { unlocksAt } from "../../packages/core-game/src/game/progression/unlocks";
 import {
   simulateBalanceRun,
@@ -68,8 +68,8 @@ it("свод калибровки баланса", () => {
   rows.push("");
   rows.push(`Seed на сценарий: ${SEEDS}. Отпечаток контента — в итоге каждого забега.`);
   rows.push("");
-  rows.push("| Сценарий | медиана, с | p10 | p90 | до минуты | уровень | волна | 1-й уровень, с | сундуков |");
-  rows.push("|---|---|---|---|---|---|---|---|---|");
+  rows.push("| Сценарий | медиана, с | p10 | p90 | до минуты | уровень | волна | 1-й уровень, с | сундуков | эволюций |");
+  rows.push("|---|---|---|---|---|---|---|---|---|---|");
 
   for (const [name, runs] of byScenario) {
     const summary = summarizeRuns(runs);
@@ -77,7 +77,7 @@ it("свод калибровки баланса", () => {
       `| ${name} | ${fixed(summary.medianSurvivalSec)} | ${fixed(summary.p10SurvivalSec)} | ` +
         `${fixed(summary.p90SurvivalSec)} | ${percent(summary.deathsBeforeMinuteRatio)} | ` +
         `${summary.medianLevel} | ${summary.medianWave} | ${fixed(summary.medianFirstLevelUpSec)} | ` +
-        `${summary.medianChestsOpened} |`,
+        `${summary.medianChestsOpened} | ${summary.medianEvolutions} |`,
     );
   }
 
@@ -96,7 +96,7 @@ function buildScenarios(): Scenario[] {
   // Оружие первого уровня аккаунта: с ним приходит новичок, и эталоны
   // сценариев набраны на нём (docs/35-stage4-plan.md §3.13).
   const firstLevel = unlocksAt(ACCOUNT_UNLOCKS, 1).weapons;
-  const starting = WEAPONS.filter((weapon) => firstLevel.has(weapon.id)).map((weapon) => weapon.id);
+  const starting = BASE_WEAPONS.filter((weapon) => firstLevel.has(weapon.id)).map((weapon) => weapon.id);
   const scenarios: Scenario[] = [];
 
   // Пассивный прогоняется на одном оружии: он всё равно не стреляет осмысленно,

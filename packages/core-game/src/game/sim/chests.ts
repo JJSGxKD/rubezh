@@ -1,4 +1,5 @@
 import type { ChestReward, ChestSize, ChestSource, ChestsDef, EnemyRank } from "@bh/shared-types";
+import { readyEvolutionOption } from "../progression/evolutions";
 import { addXp, applyUpgrade, collectCandidates, drawWeighted, healOption } from "../progression/levels";
 import { createDirection, randomDirection } from "./directions";
 import { countOnField, MAX_PICKUPS_OF_KIND, PICKUP_KIND, SCATTER_MAX_UNITS, SCATTER_MIN_UNITS, spawnPickup, type PickupKind } from "./pickups";
@@ -134,7 +135,16 @@ export function openChest(world: World, size: ChestSize): void {
   const rewards: ChestReward[] = [];
   let fallbacks = 0;
 
-  for (let k = 0; k < size; k++) {
+  // Готовая эволюция — первой наградой и без броска: сундук из одной награды
+  // отдаёт только её. Готовность смотрится один раз, в начале: награды этого же
+  // сундука эволюцию не создают, она придёт со следующим.
+  const evolution = readyEvolutionOption(world);
+  if (evolution !== null) {
+    applyUpgrade(world, evolution);
+    rewards.push(evolution);
+  }
+
+  for (let k = rewards.length; k < size; k++) {
     const candidates = collectCandidates(world);
     if (candidates.length === 0) {
       rewards.push(fallbackReward(world));

@@ -1,4 +1,4 @@
-import { PASSIVE_CATEGORIES, type AccountUnlockDef, type CardToolUnlockDef, type CardTools, type LoadoutLimits } from "@bh/shared-types";
+import { PASSIVE_CATEGORIES, type AccountUnlockDef, type CardToolUnlockDef, type CardTools, type LoadoutLimits, type WeaponDef } from "@bh/shared-types";
 import { MAX_CARD_TOOLS } from "./card-tools";
 
 /**
@@ -38,6 +38,15 @@ export function unlocksAt(table: readonly AccountUnlockDef[], level: number): Ac
     }
   }
   return { weapons, passives, limits };
+}
+
+/**
+ * Оружие, доступное в забеге при открытом наборе: базовое из таблицы и его
+ * эволюция — она открыта вместе с базовым и в таблицу не вносится (Р102,
+ * tasks/T-0102). Порядок — как в контенте.
+ */
+export function weaponsOpenAt(defs: readonly WeaponDef[], open: AccountUnlocks): WeaponDef[] {
+  return defs.filter((def) => open.weapons.has(def.evolvedFrom ?? def.id));
 }
 
 /** На каком уровне открывается оружие или навык; `null` — таблица его не знает. */

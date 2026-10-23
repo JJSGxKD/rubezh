@@ -41,3 +41,10 @@ export const BALANCE_TARGETS = {
    */
   firstChestEventSec: { min: 60, max: 120 },
 } as const;
+
+/**
+ * Во сколько раз эволюция сильнее последнего уровня базового оружия, по силе
+ * `урон · снаряды / пауза` (tasks/T-0102, docs/32-balance.md). Ниже нижней
+ * границы эволюции не за что хотеть, выше верхней — она ломает таймлайн.
+ */
+export const EVOLUTION_POWER_RATIO = { min: 1.8, max: 3.5 } as const;

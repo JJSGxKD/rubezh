@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENEMIES, LOADOUT_LIMITS, PASSIVES, WEAPONS } from "@bh/core-game";
+import { ENEMIES, LOADOUT_LIMITS, PASSIVES, BASE_WEAPONS } from "@bh/core-game";
 import { hasTranslation } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
 import "../src/i18n/guide";
@@ -29,7 +29,7 @@ describe("гайдбук", () => {
   });
 
   it("объясняет каждое поведение оружия", () => {
-    for (const weapon of WEAPONS) {
+    for (const weapon of BASE_WEAPONS) {
       expect(hasTranslation(`guide.behavior.${weapon.behavior}`), weapon.behavior).toBe(true);
     }
   });
@@ -68,7 +68,7 @@ describe("гайдбук", () => {
   });
 
   it("показывает рост оружия только по тем числам, что меняются, и подписывает их", () => {
-    for (const weapon of WEAPONS) {
+    for (const weapon of BASE_WEAPONS) {
       const growth = weaponGrowth(weapon);
       expect(growth.length, weapon.id).toBeGreaterThan(0);
       for (const change of growth) {
@@ -104,7 +104,7 @@ describe("гайдбук", () => {
   });
 
   it("показывает рост шанса состояния у стихийного оружия в процентах", () => {
-    for (const weapon of WEAPONS.filter((candidate) => candidate.element !== undefined)) {
+    for (const weapon of BASE_WEAPONS.filter((candidate) => candidate.element !== undefined)) {
       const chance = weaponGrowth(weapon).find((change) => change.labelKey.startsWith("upgrade.stat.statusChance."));
       expect(chance, weapon.id).toBeDefined();
       expect(Number.isInteger(chance?.from) && Number.isInteger(chance?.to), weapon.id).toBe(true);

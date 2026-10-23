@@ -34,6 +34,9 @@ export function rewardView(reward: ChestReward): RewardView {
       return { icon: "passive", refId: reward.refId, tag: { kind: "new" } };
     case "weapon_level":
       return { icon: "weapon", refId: reward.refId, tag: { kind: "level", level: reward.level } };
+    // Эволюция — новое оружие в слоте базового; своя метка и подсказка — в T-0103.
+    case "weapon_evolve":
+      return { icon: "weapon", refId: reward.refId, tag: { kind: "new" } };
     case "passive_level":
       return { icon: "passive", refId: reward.refId, tag: { kind: "level", level: reward.level } };
     case "heal":

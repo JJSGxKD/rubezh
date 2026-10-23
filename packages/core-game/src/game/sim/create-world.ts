@@ -407,8 +407,9 @@ function scalePlayerConfig(player: PlayerConfig, scale: number): PlayerConfig {
  */
 function findStartingWeapon(types: readonly WeaponType[], requestedId?: string): number {
   if (requestedId !== undefined) {
-    const requested = types.findIndex((type) => type.id === requestedId);
+    // Эволюция стартовым оружием не бывает: её выдаёт сундук.
+    const requested = types.findIndex((type) => type.id === requestedId && type.evolvedFrom === undefined);
     if (requested >= 0) return requested;
   }
-  return types.length > 0 ? 0 : -1;
+  return types.findIndex((type) => type.evolvedFrom === undefined);
 }
