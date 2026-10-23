@@ -28,6 +28,7 @@ zones:
   - packages/core-game/test/cordon-content.test.ts
   - packages/core-game/test/run-snapshot.test.ts
   - packages/core-game/test/looks.test.ts
+  - packages/core-game/test/content.test.ts
   - packages/core-game/test/helpers/scripted-run.ts
 shared:
   - CLAUDE.md
