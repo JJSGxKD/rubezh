@@ -21,4 +21,12 @@ describe("крупный шрифт не распирает рамки", () => {
     expect(layout).toMatch(/min-h-16 min-w-0 flex-1/);
     expect(layout).toMatch(/relative inline-flex size-\[44px\] items-center justify-center rounded-lg/);
   });
+
+  it("плитка выбора перед забегом: рамка значка, поля и зазоры в px — «ур. N» в углу не выдавливается", () => {
+    const tile = read("../src/screens/pick-tile.tsx");
+    expect(tile).toMatch(/inline-flex size-\[28px\] shrink-0/);
+    expect(tile).not.toMatch(/\bsize-7\b/);
+    expect(tile).toMatch(/rounded-lg p-\[8px\]/);
+    expect(tile).toMatch(/justify-between gap-\[6px\]/);
+  });
 });
