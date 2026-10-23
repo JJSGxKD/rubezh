@@ -131,7 +131,7 @@ function FunnelLine({ overview }: { overview: Overview }) {
       <span>Вехи сегодня:</span>
       {steps.map(([title, count], index) => (
         <span key={title} className="whitespace-nowrap">
-          {index === 0 ? null : <span className="mr-2 text-text-disabled">→</span>}
+          {index === 0 ? null : <span aria-hidden="true" className="mr-2 text-text-disabled">→</span>}
           {title} <span className="text-text tabular-nums">{formatNumber(count)}</span>
         </span>
       ))}

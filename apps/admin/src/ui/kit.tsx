@@ -18,7 +18,10 @@ const BUTTON_TONES = {
   // читалась как «нажата» или «грузится», а не как «пока нельзя».
   primary: "bg-accent text-on-accent hover:bg-accent-pressed disabled:bg-surface-raised disabled:text-text-muted disabled:hover:bg-surface-raised",
   secondary: "bg-surface-raised text-text border border-border hover:border-border-strong",
-  danger: "bg-danger/15 text-danger border border-danger/40 hover:bg-danger/25",
+  // Подложка от фона, а не полупрозрачная: на карточке красный текст на ней
+  // давал 4,3:1 при пороге 4,5 (docs/27 §4.4).
+  danger:
+    "bg-[color-mix(in_oklab,var(--color-danger)_8%,var(--color-bg))] text-danger border border-danger/40 hover:bg-[color-mix(in_oklab,var(--color-danger)_14%,var(--color-bg))]",
 } as const;
 
 export function Button({ tone = "secondary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { tone?: keyof typeof BUTTON_TONES }) {
@@ -144,7 +147,7 @@ export function Field({ label, hint, help, error, children }: { label: string; h
           {error}
         </span>
       )}
-      {hint === undefined ? null : <span className="text-xs text-text-disabled">{hint}</span>}
+      {hint === undefined ? null : <span className="text-xs text-text-muted">{hint}</span>}
     </label>
   );
 }
@@ -166,11 +169,11 @@ export function Panel({ title, help, actions, children }: { title: string; help?
 
 const BADGE_TONES: Record<Tone, string> = {
   neutral: "bg-surface-raised text-text-muted",
-  accent: "bg-accent/15 text-accent",
-  danger: "bg-danger/15 text-danger",
-  success: "bg-success/15 text-success",
-  warning: "bg-warning/15 text-warning",
-  info: "bg-info/15 text-info",
+  accent: "badge-tinted [--badge-tone:var(--color-accent)]",
+  danger: "badge-tinted [--badge-tone:var(--color-danger)]",
+  success: "badge-tinted [--badge-tone:var(--color-success)]",
+  warning: "badge-tinted [--badge-tone:var(--color-warning)]",
+  info: "badge-tinted [--badge-tone:var(--color-info)]",
 };
 
 export function Badge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {

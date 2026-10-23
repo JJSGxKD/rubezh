@@ -211,7 +211,7 @@ export function TasksScreen() {
                       </label>
                     ))}
                   </div>
-                  <span className="text-xs text-text-disabled">ничего не отмечено — на всех площадках</span>
+                  <span className="text-xs text-text-muted">ничего не отмечено — на всех площадках</span>
                 </fieldset>
               )}
               {channel ? (

@@ -55,3 +55,13 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/*
+ * Плашка тона — непрозрачной подложкой на лунке, как в игре
+ * (docs/27-design-system-and-app-shell.md §4.4): полупрозрачная светлела на
+ * карточке, и цветной текст падал ниже 4,5:1.
+ */
+@utility badge-tinted {
+  color: var(--badge-tone);
+  background: color-mix(in oklab, var(--badge-tone) 15%, var(--color-surface-sunken));
+}

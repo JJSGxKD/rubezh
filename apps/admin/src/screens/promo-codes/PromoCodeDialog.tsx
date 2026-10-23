@@ -361,7 +361,7 @@ function useCodeCheck(code: string): CheckState {
 }
 
 function CodeStatus({ check }: { check: CheckState }) {
-  if (check.state === "idle") return <span className="text-xs text-text-disabled">Латиница, кириллица и цифры; от 4 знаков</span>;
+  if (check.state === "idle") return <span className="text-xs text-text-muted">Латиница, кириллица и цифры; от 4 знаков</span>;
   if (check.state === "checking") return <span className="text-xs text-text-muted">Проверяем…</span>;
   if (check.state === "failed") return <span className="text-xs text-warning">Не удалось проверить: {check.message}</span>;
   const { result } = check;
