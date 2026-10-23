@@ -72,7 +72,7 @@ export function PromoCodesScreen({ id }: { id: string | null }) {
               onClick={() => setFilter(item.id)}
               className={`rounded-pill border px-3 py-1 text-xs transition-colors ${current === item.id ? "border-accent bg-accent/15 text-accent" : "border-border text-text-muted hover:border-border-strong hover:text-text"}`}
             >
-              {item.title} <span className="opacity-70">{counts.get(item.id) ?? 0}</span>
+              {item.title} <span>{counts.get(item.id) ?? 0}</span>
             </button>
           ))}
         </div>
