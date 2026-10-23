@@ -75,4 +75,10 @@ describe("контраст палитры", () => {
     expect(contrast(channels(COLORS.onSecondary), channels(COLORS.secondary))).toBeGreaterThanOrEqual(NORMAL);
     expect(contrast(channels(COLORS.onStars), channels(COLORS.stars))).toBeGreaterThanOrEqual(NORMAL);
   });
+
+  it("красная кнопка — подложкой от фона: от поверхности красный текст не дотягивает", () => {
+    // `btn-danger` оболочки: тон 8% поверх фона.
+    expect(contrast(channels(COLORS.danger), tint("danger", "bg", 0.08))).toBeGreaterThanOrEqual(NORMAL);
+    expect(contrast(channels(COLORS.danger), tint("danger", "surface", 0.08))).toBeLessThan(NORMAL);
+  });
 });

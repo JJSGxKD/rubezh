@@ -1078,9 +1078,12 @@
     var(--shadow-button);
 }
 
+/* Подложка — от фона, а не от поверхности: на поверхности красный текст
+   давал 4,3:1 при пороге 4,5 (docs/27 §4.4), на фоне — 5:1, и кромка лунки
+   под кнопкой остаётся видна. */
 @utility btn-danger {
   color: var(--color-danger);
-  background: color-mix(in oklab, var(--color-danger) 8%, var(--color-surface));
+  background: color-mix(in oklab, var(--color-danger) 8%, var(--color-bg));
   border: 1px solid color-mix(in oklab, var(--color-danger) 45%, transparent);
   box-shadow: inset 0 -3px 0 var(--color-surface-sunken);
 }
