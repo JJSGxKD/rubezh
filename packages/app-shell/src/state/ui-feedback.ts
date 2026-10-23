@@ -21,6 +21,7 @@ export type UiFeedback =
   | "reward"
   | "wheelTick"
   | "wheelTickSlow"
+  | "purchase"
   | "error";
 
 const FEEDBACK: Record<UiFeedback, { sound: UiSound | null; haptic: HapticEvent | null }> = {
@@ -37,6 +38,8 @@ const FEEDBACK: Record<UiFeedback, { sound: UiSound | null; haptic: HapticEvent 
   // каждый слилась бы в дребезг, поэтому она только на медленном конце.
   wheelTick: { sound: "wheelTick", haptic: null },
   wheelTickSlow: { sound: "wheelTick", haptic: "select" },
+  // Покупка — главное действие игрока в магазине, оно и отзывается крупно.
+  purchase: { sound: "purchase", haptic: "primary" },
   error: { sound: "error", haptic: null },
 };
 

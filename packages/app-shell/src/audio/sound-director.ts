@@ -29,6 +29,7 @@ export type UiSound =
   | "shards"
   | "wheelTick"
   | "tally"
+  | "purchase"
   | "error";
 
 export interface HudSound {
@@ -51,6 +52,7 @@ const UI_SOUND_IDS: Record<UiSound, SoundId> = {
   shards: "uiShards",
   wheelTick: "uiWheelTick",
   tally: "uiTally",
+  purchase: "uiPurchase",
   error: "uiError",
 };
 
