@@ -284,6 +284,7 @@
 | `bh.install.v1.id` | `installId` устройства | `state/install.ts` |
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
+| `bh.loadingCard.v1` | какая карточка колоды загрузки забега следующая | `screens/run/loading-cards.ts` |
 | `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts`. Снимок другой сборки не продолжается, а засчитывается брошенным забегом: уходит в очередь итогов (`bh.runs.v1.pending`) и стирается; старше `SETTLE_MAX_AGE_MS` (14 суток, константа в `state/run-interrupted.ts`) — стирается без отправки | `state/run-save.ts`, `state/run-interrupted.ts` |
 | `bh.run.v1.downed` | итог забега, который ждёт решения о втором шансе; брошенный на экране смерти уходит смертью при следующем запуске | `state/downed-run.ts` |
 | `bh.runs.v1.pending` | старты и итоги забегов, ещё не дошедшие до сервера, — по порядку, до 40 записей, старые вытесняются | `state/runs.ts` |
@@ -382,6 +383,7 @@
 | Клиент: как часто и сколько ждать подтверждения оплаты сервером | `packages/app-shell/src/state/continue-purchase.ts` → `CONFIRM_POLL_MS`, `CONFIRM_TIMEOUT_MS` |
 | Клиент: когда покупку второго шанса вообще предлагают | `packages/app-shell/src/state/payments-availability.ts` |
 | Тексты покупки второго шанса — отдельный словарь, едет в чанке экрана смерти | `packages/app-shell/src/i18n/ru-payments.json` |
+| Советы и предания экрана загрузки забега: тексты, сколько их, порядок колоды, когда карточка сменяется | тексты — `packages/app-shell/src/i18n/ru-loading.json` (`run.tip.N`, `run.lore.N`), свой чанк; число и порядок — `app-shell/src/screens/run/loading-cards.ts` → `TIP_COUNT`, `LORE_COUNT`, `BASIC_TIPS`, `loadingDeck`, смена — `CARD_ROTATE_MS`; что словарь и колода сходятся, проверяет тест |
 | Тексты об аккаунте и состоянии входа — отдельный словарь профиля и рейтинга; что сказать на какой отказ входа | `packages/app-shell/src/i18n/ru-account.json`; `state/session-notice.ts` → `KIND_BY_FAILURE` |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 

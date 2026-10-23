@@ -871,6 +871,8 @@ export function preloadRunEngine(): void {
 
   preloading = true;
   void import("./run-loadouts").catch(() => undefined);
+  // Карточка экрана загрузки со своим словарём — отдельным чанком.
+  void import("../screens/run/LoadingCardNote").catch(() => undefined);
   loadRunEngine().catch((error: unknown) => {
     preloading = false;
     reportError("run", `предзагрузка движка не удалась: ${String(error)}`);
