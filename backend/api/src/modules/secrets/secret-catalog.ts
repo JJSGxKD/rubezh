@@ -64,29 +64,50 @@ const CHECK_TIMEOUT_MS = 5_000;
 
 const nonEmpty = (value: string): string | null => (value === "" ? null : value);
 
-/** Пинг CoinGecko: у демо и платного ключа свой адрес и свой заголовок. */
-function coingeckoCheck(plan: "demo" | "pro") {
+interface KeyCheckSpec {
+  /** как сервис называется в сообщениях панели */
+  service: string;
+  url: (value: string) => string;
+  headers: (value: string) => Record<string, string>;
+  /** что проверить, когда сервис не принял ключ */
+  refusalHint: string;
+}
+
+/** Проверка связи с сервисом ключом: один лёгкий запрос, ответы — словами для панели. */
+function keyCheck(spec: KeyCheckSpec) {
   return async (value: string, fetchImpl: typeof fetch): Promise<SecretCheckResult> => {
-    const host = plan === "pro" ? "https://pro-api.coingecko.com" : "https://api.coingecko.com";
     try {
-      const response = await fetchImpl(`${host}/api/v3/ping`, {
-        headers: { [`x-cg-${plan}-api-key`]: value, accept: "application/json" },
+      const response = await fetchImpl(spec.url(value), {
+        headers: { ...spec.headers(value), accept: "application/json" },
         signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
       });
-      if (response.ok) return { ok: true, message: "CoinGecko принял ключ" };
+      if (response.ok) return { ok: true, message: `${spec.service} принял ключ` };
       if (response.status === 401 || response.status === 403 || response.status === 400) {
-        return { ok: false, message: `CoinGecko не принял ключ (${String(response.status)}): проверьте, что ключ ${plan === "pro" ? "платный" : "демо"} и скопирован целиком` };
+        return { ok: false, message: `${spec.service} не принял ключ (${String(response.status)}): ${spec.refusalHint}` };
       }
-      if (response.status === 429) return { ok: false, message: "CoinGecko ответил «слишком много запросов» — ключ не проверен, попробуйте через минуту" };
-      return { ok: false, message: `CoinGecko ответил ${String(response.status)} — ключ не проверен` };
+      if (response.status === 429) return { ok: false, message: `${spec.service} ответил «слишком много запросов» — ключ не проверен, попробуйте через минуту` };
+      return { ok: false, message: `${spec.service} ответил ${String(response.status)} — ключ не проверен` };
     } catch (error: unknown) {
       const timeout = error instanceof Error && error.name === "TimeoutError";
-      return { ok: false, message: timeout ? "CoinGecko не ответил за 5 секунд — ключ не проверен" : "CoinGecko недоступен с сервера — ключ не проверен" };
+      return { ok: false, message: timeout ? `${spec.service} не ответил за 5 секунд — ключ не проверен` : `${spec.service} недоступен с сервера — ключ не проверен` };
     }
   };
 }
 
+/** Пинг CoinGecko: у демо и платного ключа свой адрес и свой заголовок. */
+function coingeckoCheck(plan: "demo" | "pro") {
+  return keyCheck({
+    service: "CoinGecko",
+    url: () => `${plan === "pro" ? "https://pro-api.coingecko.com" : "https://api.coingecko.com"}/api/v3/ping`,
+    headers: (value) => ({ [`x-cg-${plan}-api-key`]: value }),
+    refusalHint: `проверьте, что ключ ${plan === "pro" ? "платный" : "демо"} и скопирован целиком`,
+  });
+}
+
 const FX_SERVICE = "Курсы валют · CoinGecko";
+const CMC_SERVICE = "Курсы валют · CoinMarketCap";
+const TONAPI_SERVICE = "Курсы валют · tonapi";
+const ERAPI_SERVICE = "Курсы валют · ExchangeRate-API";
 const ADSGRAM_SERVICE = "Трекинг закупок · AdsGram";
 const ADSGRAM_TASKS_SERVICE = "Задания сетей · AdsGram";
 
@@ -124,6 +145,63 @@ export const SECRETS = {
     example: "CG-AbCdEfGh1234567890",
     fromEnv: (config) => nonEmpty(config.fx.coingeckoDemoKey),
     check: coingeckoCheck("demo"),
+  },
+  coinmarketcap: {
+    key: "fx.coinmarketcap",
+    service: CMC_SERVICE,
+    title: "Ключ CoinMarketCap",
+    hint: "Четвёртый источник курса Gram и USDT, тариф Basic — 10 000 кредитов в месяц. Без ключа источника нет",
+    cabinetUrl: "https://pro.coinmarketcap.com/account",
+    // Ключ CoinMarketCap — UUID.
+    pattern: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    example: "12345678-aaaa-4bbb-8ccc-123456789abc",
+    // Только из панели: ключ перевыпускают в кабинете, окружение не нужно.
+    fromEnv: () => null,
+    // `/v1/key/info` кредитов не тратит.
+    check: keyCheck({
+      service: "CoinMarketCap",
+      url: () => "https://pro-api.coinmarketcap.com/v1/key/info",
+      headers: (value) => ({ "X-CMC_PRO_API_KEY": value }),
+      refusalHint: "проверьте, что ключ скопирован целиком из кабинета CoinMarketCap",
+    }),
+  },
+  tonapi: {
+    key: "fx.tonapi",
+    service: TONAPI_SERVICE,
+    title: "Ключ tonapi",
+    hint: "Необязателен: без ключа курс Gram идёт открытым лимитом",
+    cabinetUrl: "https://tonconsole.com",
+    // Ключ tonapi из TON Console — длинная строка из латиницы, цифр, точек и дефисов (бывает JWT).
+    pattern: /^[A-Za-z0-9._-]{16,512}$/,
+    example: "AFABCDEFGHIJKLMNOPQRSTUV",
+    fromEnv: () => null,
+    // Отдельного запроса «проверить ключ» у сервиса нет — спрашиваем курс.
+    check: keyCheck({
+      service: "tonapi",
+      url: () => "https://tonapi.io/v2/rates?tokens=ton&currencies=usd",
+      headers: (value) => ({ Authorization: `Bearer ${value}` }),
+      refusalHint: "проверьте, что ключ скопирован целиком из TON Console",
+    }),
+  },
+  erapi: {
+    key: "fx.erapi",
+    service: ERAPI_SERVICE,
+    title: "Ключ ExchangeRate-API",
+    hint: "Необязателен: без ключа курсы рубля и евро идут открытым адресом",
+    cabinetUrl: "https://app.exchangerate-api.com",
+    // Ключ ExchangeRate-API — 24 шестнадцатеричных знака. Он уходит в путь адреса, а журнал
+    // исходящих прячет сегмент только от 24 знаков (`outbound-path.ts`): шаблон не должен пускать
+    // ключ короче, иначе он ляжет в журнал открытым текстом. Сторож — тест в `secrets.test.ts`.
+    pattern: /^[0-9a-fA-F]{24}$/,
+    example: "0123456789abcdef01234567",
+    fromEnv: () => null,
+    // `/quota` запросы тарифа не расходует.
+    check: keyCheck({
+      service: "ExchangeRate-API",
+      url: (value) => `https://v6.exchangerate-api.com/v6/${encodeURIComponent(value)}/quota`,
+      headers: () => ({}),
+      refusalHint: "проверьте, что ключ скопирован целиком из кабинета ExchangeRate-API",
+    }),
   },
   adsgramConversionToken: {
     key: "adsgram.conversion-token",

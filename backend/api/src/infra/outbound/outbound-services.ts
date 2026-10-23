@@ -15,6 +15,7 @@ export const OUTBOUND_SERVICES = [
   "fx.ecb",
   "fx.erapi",
   "fx.coingecko",
+  "fx.coinmarketcap",
   "fx.tonapi",
   "fx.binance",
   "telegram.bot",

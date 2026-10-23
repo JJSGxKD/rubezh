@@ -134,6 +134,24 @@ describe("источники из окружения", () => {
     expect(tariff({ FX_COINGECKO_DEMO_KEY: "CG-demo", FX_COINGECKO_PRO_KEY: "CG-pro" })).toBe("pro");
   });
 
+  it("CoinMarketCap: без ключа его нет среди источников, с ключом — есть и идёт после CoinGecko", () => {
+    const withKeys = (values: Record<string, string>) => ({ get: (secret: { key: string }) => values[secret.key] ?? null });
+    const ids = (values: Record<string, string>) => fxSources(withKeys(values)).map((source) => source.id);
+    expect(ids({})).not.toContain("coinmarketcap");
+    const keyed = ids({ "fx.coinmarketcap": "12345678-aaaa-4bbb-8ccc-123456789abc" });
+    expect(keyed).toContain("coinmarketcap");
+    expect(keyed.indexOf("coinmarketcap")).toBe(keyed.indexOf("coingecko") + 1);
+  });
+
+  it("tonapi и erapi: без ключей — прежние тарифы, с ключами — свои", () => {
+    const tariffs = (values: Record<string, string>) => {
+      const sources = fxSources({ get: (secret) => values[secret.key] ?? null });
+      return [sources.find((source) => source.id === "tonapi")?.tariff.name, sources.find((source) => source.id === "erapi")?.tariff.name];
+    };
+    expect(tariffs({})).toEqual(["keyless", "open-access"]);
+    expect(tariffs({ "fx.tonapi": "AFTONAPIKEYSECRET1234567890", "fx.erapi": "0123456789abcdef01234567" })).toEqual(["keyed", "keyed"]);
+  });
+
   it("опрос выключен по умолчанию: включённый ходит в интернет", () => {
     expect(switchesOf(config()).fxPolling()).toBe(false);
     expect(switchesOf(config({ FX_ENABLED: "true" })).fxPolling()).toBe(true);

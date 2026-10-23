@@ -5,7 +5,8 @@ import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { AdminSecretsService } from "../src/modules/admin/admin-secrets.service.js";
 import { fxSources } from "../src/modules/fx/fx.refresher.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
-import { SECRETS, SECRET_KEY, SECRET_LIST, fingerprintOf, secretProblem } from "../src/modules/secrets/secret-catalog.js";
+import { SECRETS, SECRET_KEY, SECRET_LIST, fingerprintOf, secretProblem, type SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
+import { safePath } from "../src/infra/outbound/outbound-path.js";
 import { SecretCipher, SecretUnreadableError, keyIdOf, type SealedSecret } from "../src/modules/secrets/secret-cipher.js";
 import type { SecretsRepository, StoredSecret } from "../src/modules/secrets/secrets.repository.js";
 import { SECRETS_CHANNEL, SecretsDisabledError, SecretsService } from "../src/modules/secrets/secrets.service.js";
@@ -316,3 +317,126 @@ describe("ключи в панели", () => {
     expect((await rolesRepository.recentAudit(10)).map((entry) => entry.action).sort()).toEqual(["secrets.reset", "secrets.save"]);
   });
 });
+
+describe("ключи курсов: CoinMarketCap, tonapi, erapi (tasks/T-0063)", () => {
+  const CMC = "12345678-aaaa-4bbb-8ccc-123456789abc";
+  const TONAPI = "AFTONAPIKEYSECRET1234567890";
+  const ERAPI = "0123456789abcdef01234567";
+
+  it("три записи в каталоге, ключи — только из панели: окружения у них нет", () => {
+    expect([SECRETS.coinmarketcap.key, SECRETS.tonapi.key, SECRETS.erapi.key]).toEqual(["fx.coinmarketcap", "fx.tonapi", "fx.erapi"]);
+    const definitions: SecretDefinition[] = [SECRETS.coinmarketcap, SECRETS.tonapi, SECRETS.erapi];
+    for (const secret of definitions) {
+      expect(secret.fromEnv(config({ FX_COINGECKO_DEMO_KEY: DEMO })), secret.key).toBeNull();
+      expect(secret.check, secret.key).toBeDefined();
+    }
+  });
+
+  it("подсказки — как в решении: CoinMarketCap обязателен для источника, tonapi и erapi необязательны", () => {
+    expect(SECRETS.coinmarketcap.title).toBe("Ключ CoinMarketCap");
+    expect(SECRETS.coinmarketcap.hint).toBe("Четвёртый источник курса Gram и USDT, тариф Basic — 10 000 кредитов в месяц. Без ключа источника нет");
+    expect(SECRETS.tonapi.title).toBe("Ключ tonapi");
+    expect(SECRETS.tonapi.hint).toBe("Необязателен: без ключа курс Gram идёт открытым лимитом");
+    expect(SECRETS.erapi.title).toBe("Ключ ExchangeRate-API");
+    expect(SECRETS.erapi.hint).toBe("Необязателен: без ключа курсы рубля и евро идут открытым адресом");
+  });
+
+  it("вид ключа проверяется до записи: свой пример проходит, чужой вид и мусор — нет", () => {
+    expect(secretProblem(SECRETS.coinmarketcap, CMC)).toBeNull();
+    expect(secretProblem(SECRETS.tonapi, TONAPI)).toBeNull();
+    expect(secretProblem(SECRETS.erapi, ERAPI)).toBeNull();
+    expect(secretProblem(SECRETS.coinmarketcap, "not-a-key")).toContain(SECRETS.coinmarketcap.example);
+    expect(secretProblem(SECRETS.erapi, "abc/../x")).not.toBeNull();
+    expect(secretProblem(SECRETS.erapi, `${ERAPI}\n`)).toContain("без пробелов");
+    expect(secretProblem(SECRETS.tonapi, "короткий")).not.toBeNull();
+  });
+
+  function answeringStatus(status: number) {
+    const asked: { url: string; headers: Record<string, string> }[] = [];
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      asked.push({ url, headers: (init?.headers ?? {}) as Record<string, string> });
+      return new Response("{}", { status });
+    }) as typeof fetch;
+    return { asked, fetchImpl };
+  }
+
+  it("проверка CoinMarketCap — /v1/key/info, который кредиты не тратит", async () => {
+    const { asked, fetchImpl } = answeringStatus(200);
+    await expect(SECRETS.coinmarketcap.check(CMC, fetchImpl)).resolves.toEqual({ ok: true, message: "CoinMarketCap принял ключ" });
+    expect(asked[0]?.url).toBe("https://pro-api.coinmarketcap.com/v1/key/info");
+    expect(asked[0]?.headers).toMatchObject({ "X-CMC_PRO_API_KEY": CMC });
+    const refused = answeringStatus(401);
+    await expect(SECRETS.coinmarketcap.check(CMC, refused.fetchImpl)).resolves.toMatchObject({ ok: false, message: expect.stringContaining("не принял ключ (401)") });
+  });
+
+  it("проверка erapi — /v6/<ключ>/quota; отказ — «не принял», перегрузка — «не проверен»", async () => {
+    const { asked, fetchImpl } = answeringStatus(200);
+    await expect(SECRETS.erapi.check(ERAPI, fetchImpl)).resolves.toEqual({ ok: true, message: "ExchangeRate-API принял ключ" });
+    expect(asked[0]?.url).toBe(`https://v6.exchangerate-api.com/v6/${ERAPI}/quota`);
+    await expect(SECRETS.erapi.check(ERAPI, answeringStatus(403).fetchImpl)).resolves.toMatchObject({ ok: false, message: expect.stringContaining("не принял ключ (403)") });
+    await expect(SECRETS.erapi.check(ERAPI, answeringStatus(429).fetchImpl)).resolves.toMatchObject({ ok: false, message: expect.stringContaining("ключ не проверен") });
+  });
+
+  it("проверка tonapi — запросом курса с заголовком Bearer", async () => {
+    const { asked, fetchImpl } = answeringStatus(200);
+    await expect(SECRETS.tonapi.check(TONAPI, fetchImpl)).resolves.toEqual({ ok: true, message: "tonapi принял ключ" });
+    expect(asked[0]?.url).toBe("https://tonapi.io/v2/rates?tokens=ton&currencies=usd");
+    expect(asked[0]?.headers).toMatchObject({ Authorization: `Bearer ${TONAPI}` });
+    await expect(SECRETS.tonapi.check(TONAPI, answeringStatus(401).fetchImpl)).resolves.toMatchObject({ ok: false });
+  });
+
+  it("сторож: любой ключ erapi, который принимает шаблон, журнал исходящих прячет — и в опросе, и в проверке", () => {
+    // Ключ ExchangeRate-API уходит в путь адреса, а `safePath` прячет только длинные сегменты. Пока
+    // шаблон пускает ключ короче, чем прячет журнал, ключ ляжет в `outbound_call.path` открытым текстом.
+    const alphabet = "0123456789abcdefABCDEFghijklmnopqrstuvwxyzGHIJKLMNOPQRSTUVWXYZ";
+    const accepted: string[] = [];
+    for (let length = 1; length <= 100; length++) {
+      for (const char of [alphabet[0], alphabet[10], alphabet[16], alphabet[20], alphabet[40], alphabet[60]]) {
+        const key = (char ?? "0").repeat(length);
+        if (SECRETS.erapi.pattern.test(key)) accepted.push(key);
+      }
+    }
+    expect(accepted.length).toBeGreaterThan(0);
+    const shortest = accepted.reduce((a, b) => (b.length < a.length ? b : a));
+    const longest = accepted.reduce((a, b) => (b.length > a.length ? b : a));
+    for (const key of [shortest, longest, ...accepted]) {
+      for (const url of [`https://v6.exchangerate-api.com/v6/${key}/latest/USD`, `https://v6.exchangerate-api.com/v6/${key}/quota`]) {
+        expect(safePath(url).path, `ключ из ${String(key.length)} знаков`).not.toContain(key);
+      }
+    }
+    expect(safePath(`https://v6.exchangerate-api.com/v6/${shortest}/quota`).path).toBe("/v6/***/quota");
+  });
+
+  it("ключ erapi — 24 шестнадцатеричных знака, как у сервиса: короче, длиннее и с чужими знаками шаблон не принимает", () => {
+    const valid = "0123456789abcdef01234567";
+    expect(SECRETS.erapi.pattern.test(valid)).toBe(true);
+    expect(SECRETS.erapi.pattern.test(valid.toUpperCase())).toBe(true);
+    expect(SECRETS.erapi.pattern.test(valid.slice(1))).toBe(false);
+    expect(SECRETS.erapi.pattern.test(`${valid}0`)).toBe(false);
+    expect(SECRETS.erapi.pattern.test(`${valid.slice(1)}g`)).toBe(false);
+    expect(secretProblem(SECRETS.erapi, "abcdef12")).toContain(SECRETS.erapi.example);
+  });
+
+  it("сервис не ответил — ключ не проверен, а не «неверный»", async () => {
+    const down = (async () => {
+      throw new TypeError("fetch failed");
+    }) as typeof fetch;
+    await expect(SECRETS.coinmarketcap.check(CMC, down)).resolves.toEqual({ ok: false, message: "CoinMarketCap недоступен с сервера — ключ не проверен" });
+  });
+
+  it("источники берут ключи на каждом проходе: CoinMarketCap появляется с ключом, tonapi и erapi переходят на свой тариф", async () => {
+    const { service } = setup();
+    const byId = () => new Map(fxSources(service).map((source) => [source.id, source]));
+    expect(byId().has("coinmarketcap")).toBe(false);
+    expect(byId().get("tonapi")?.tariff.name).toBe("keyless");
+    expect(byId().get("erapi")?.tariff.name).toBe("open-access");
+
+    await service.write(SECRETS.coinmarketcap, CMC, ACTOR_ID);
+    await service.write(SECRETS.tonapi, TONAPI, ACTOR_ID);
+    await service.write(SECRETS.erapi, ERAPI, ACTOR_ID);
+    expect(byId().get("coinmarketcap")?.tariff.name).toBe("basic");
+    expect(byId().get("tonapi")?.tariff.name).toBe("keyed");
+    expect(byId().get("erapi")?.tariff.name).toBe("keyed");
+  });
+});
+
