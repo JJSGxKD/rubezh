@@ -142,7 +142,8 @@ export function TabBar(props: TabBarProps): ReactNode {
                 if (!active) uiFeedback("select");
                 props.onSelect(item.id);
               }}
-              className="group relative flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 pt-1"
+              // Крайние вкладки стоят у края экрана — кольцо фокуса внутрь.
+              className="group relative flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 pt-1 focus-visible:-outline-offset-2"
             >
               <span
                 className={[

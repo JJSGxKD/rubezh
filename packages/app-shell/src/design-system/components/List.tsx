@@ -65,7 +65,8 @@ export function ListItem(props: ListItemProps): ReactNode {
   const className = [
     "flex min-h-14 w-full items-center gap-3 bg-surface px-4 py-3 text-left",
     "transition-colors duration-(--duration-fast) ease-base",
-    interactive ? "active:bg-surface-raised" : "",
+    // Группа строк обрезает всё снаружи строки — кольцо фокуса внутрь.
+    interactive ? "active:bg-surface-raised focus-visible:-outline-offset-2" : "",
     props.disabled === true ? "opacity-50" : "",
   ].join(" ");
 
