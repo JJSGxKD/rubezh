@@ -97,6 +97,9 @@ export const PERMISSIONS = [
   "secrets.view",
   "secrets.edit",
   "diagnostics.view",
+  // Смотреть журнал запросов сервера (Р92): куда он ходит и что к нему
+  // приходит — без игроков, но с хостами и путями внешних сервисов
+  "requests.view",
   "data.export",
   // Инструменты команды в клиенте: режим разработчика, витрина, лаборатория
   "tools.dev",
@@ -164,6 +167,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "settings.edit",
     "secrets.view",
     "diagnostics.view",
+    "requests.view",
     "data.export",
     "tools.dev",
     "audit.view",
