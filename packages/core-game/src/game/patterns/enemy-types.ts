@@ -15,19 +15,25 @@ export interface PatternTraits {
   radius: number;
   /** бьёт ли касанием; стрелок и подрывник наносят урон иначе */
   contactDamage: boolean;
+  /** тело непроходимо для игрока: он выталкивается из него и скользит вдоль */
+  solid: boolean;
+  /** место врага задаёт не расстояние до игрока, а строй: отставшего не уносит вперёд */
+  anchored: boolean;
 }
 
 export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
-  swarm: { radius: 7, contactDamage: true },
-  chase: { radius: 12, contactDamage: true },
-  kite_and_shoot: { radius: 9, contactDamage: false },
-  dash: { radius: 10, contactDamage: true },
-  orbit: { radius: 8, contactDamage: true },
-  exploder: { radius: 9, contactDamage: false },
-  splitter: { radius: 13, contactDamage: true },
-  rush: { radius: 6, contactDamage: true },
+  swarm: { radius: 7, contactDamage: true, solid: false, anchored: false },
+  chase: { radius: 12, contactDamage: true, solid: false, anchored: false },
+  kite_and_shoot: { radius: 9, contactDamage: false, solid: false, anchored: false },
+  dash: { radius: 10, contactDamage: true, solid: false, anchored: false },
+  orbit: { radius: 8, contactDamage: true, solid: false, anchored: false },
+  exploder: { radius: 9, contactDamage: false, solid: false, anchored: false },
+  splitter: { radius: 13, contactDamage: true, solid: false, anchored: false },
+  rush: { radius: 6, contactDamage: true, solid: false, anchored: false },
   // Кастер бьёт заклинаниями, а не телом: касанием урона нет.
-  caster: { radius: 14, contactDamage: false },
+  caster: { radius: 14, contactDamage: false, solid: false, anchored: false },
+  // Страж кольца: тело не пускает игрока, а место в строю он не бросает, куда бы ни ушёл игрок.
+  cordon: { radius: 14, contactDamage: true, solid: true, anchored: true },
 };
 
 /**
@@ -144,6 +150,7 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
     burstCount: 8,
     projectileSpeed: 220,
   },
+  cordon: {},
 };
 
 /** Параметры, которые геймдизайнер вправе задать каждому паттерну. */
@@ -157,6 +164,7 @@ const ALLOWED_PARAMS: Record<EnemyPattern, readonly string[]> = {
   splitter: ["children"],
   rush: ["leadSec", "runSec"],
   caster: ["preferredDistance", "castIntervalSec", "telegraphSec", "burstCount", "projectileSpeed"],
+  cordon: [],
 };
 
 /** Расстояния и скорости пересчитываются в пиксели устройства, время — нет. */
@@ -203,6 +211,8 @@ export interface EnemyType {
   pattern: EnemyPattern;
   radius: number;
   contactDamage: boolean;
+  solid: boolean;
+  anchored: boolean;
   params: ResolvedPatternParams;
   /**
    * Множитель урона по стихиям, по индексу стихии (`sim/elements.ts`):
@@ -405,6 +415,8 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       pattern: def.pattern,
       radius: traits.radius * rankRadiusMul(def.rank ?? "normal") * unitScale,
       contactDamage: traits.contactDamage,
+      solid: traits.solid,
+      anchored: traits.anchored,
       params: resolveParams(def, indexById, unitScale),
       resistMul: ELEMENTS.map((element) => (element === "physical" ? 1 : 1 - (def.resist?.[element] ?? 0))),
       element: def.element === undefined ? ELEMENT_PHYSICAL : ELEMENTS.indexOf(def.element),
