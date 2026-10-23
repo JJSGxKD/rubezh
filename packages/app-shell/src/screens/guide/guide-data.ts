@@ -1,6 +1,7 @@
 import {
   ELEMENTS,
   PASSIVE_CATEGORIES,
+  type BoostDef,
   type EnemyDef,
   type EnemyStageDef,
   type PassiveCategory,
@@ -10,7 +11,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, BOOSTS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -244,4 +245,13 @@ export function evolutionRecipes(accountLevel: number): EvolutionRecipe[] {
     });
   }
   return recipes;
+}
+
+/**
+ * Бусты для гайдбука — из контента, в его порядке: новый буст, добавленный
+ * данными, сам встаёт в список. Цены здесь нет — её решает сервер, и она видна
+ * в листе «Перед забегом».
+ */
+export function guideBoosts(): readonly BoostDef[] {
+  return BOOSTS;
 }
