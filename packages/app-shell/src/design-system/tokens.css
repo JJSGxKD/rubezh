@@ -889,6 +889,15 @@
     0 0 24px -8px color-mix(in oklab, var(--widget-tone) 70%, transparent);
 }
 
+/* Плашка-значок тона: тон поверх лунки непрозрачно, а не полупрозрачно поверх
+   того, что под ней. Полупрозрачная светлела на поднятой и выбранной карточке,
+   и мелкий цветной текст падал ниже 4,5:1 (docs/27 §4.2,
+   design-tokens/test/contrast.test.ts). */
+@utility badge-tinted {
+  color: var(--badge-tone);
+  background: color-mix(in oklab, var(--badge-tone) 15%, var(--color-surface-sunken));
+}
+
 /* Облик виджета — значок, колесо, кольцо — на подложке его тона. */
 @utility widget-face {
   color: var(--widget-tone);
