@@ -32,6 +32,6 @@ describe("кольцо фокуса", () => {
 
   it("вкладки нижней панели — тоже внутрь: крайние стоят у края экрана", () => {
     const layout = readFileSync(new URL("../src/design-system/components/Layout.tsx", import.meta.url), "utf8");
-    expect(layout).toMatch(/min-h-16 flex-1[^"]*focus-visible:-outline-offset-2/);
+    expect(layout).toMatch(/min-h-16[^"]*focus-visible:-outline-offset-2/);
   });
 });

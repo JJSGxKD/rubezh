@@ -44,6 +44,10 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
 
   return (
     <header className="surface-glass absolute inset-x-0 top-0 z-(--z-header) pt-[calc(0.5rem+var(--app-inset-top))] pr-[calc(0.75rem+var(--app-inset-right))] pb-2 pl-[calc(0.75rem+var(--app-inset-left))]">
+      {/* Рамки кнопок и значков — в px, а не в rem: значки в них и так в px,
+          а с крупным шрифтом системы (Android масштабирует текст WebView) рамки
+          росли бы вместе с текстом, и на 320 px при 150 % аватар наезжал на
+          монеты. Растёт только текст — числа баланса. */}
       <div className="@container mx-auto flex w-full max-w-[640px] items-center gap-1.5">
         <button
           type="button"
@@ -52,7 +56,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
             uiFeedback("tap");
             useNavigation.getState().push("profile");
           }}
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full transition-transform duration-(--duration-fast) ease-base active:scale-95"
+          className="inline-flex size-[44px] shrink-0 items-center justify-center rounded-full transition-transform duration-(--duration-fast) ease-base active:scale-95"
         >
           <LevelAvatar name={name} url={user?.avatarUrl} />
         </button>
@@ -72,7 +76,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
               uiFeedback("tap");
               useNavigation.getState().push("notifications");
             }}
-            className="btn-secondary relative hidden size-11 shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90 @min-[21.5rem]:inline-flex"
+            className="btn-secondary relative hidden size-[44px] shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90 @min-[21.5rem]:inline-flex"
           >
             <Bell size={22} />
             <CountBadge count={unread} />
@@ -86,7 +90,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
             uiFeedback("tap");
             props.onMenu();
           }}
-          className="btn-secondary relative inline-flex size-11 shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90"
+          className="btn-secondary relative inline-flex size-[44px] shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90"
         >
           <Menu size={22} />
           {/* Знак на меню — только там, где колокольчика в шапке нет: одно и то
@@ -130,8 +134,8 @@ function LevelAvatar(props: { name: string; url: string | null | undefined }): R
   });
 
   return (
-    <span className="relative inline-flex size-11 items-center justify-center">
-      <svg aria-hidden="true" viewBox="0 0 44 44" className="absolute inset-0 size-11 -rotate-90">
+    <span className="relative inline-flex size-[44px] items-center justify-center">
+      <svg aria-hidden="true" viewBox="0 0 44 44" className="absolute inset-0 size-[44px] -rotate-90">
         <circle cx="22" cy="22" r={RING} fill="none" stroke="var(--color-border-strong)" strokeWidth="2.5" />
         {share > 0 ? (
           <circle
@@ -174,18 +178,18 @@ function CurrencyButton(props: { id: string; icon: ReactNode; label: string; val
     else useNavigation.getState().push(props.target);
   };
   return (
-    <button type="button" aria-label={`${props.label}: ${formatNumber(props.value ?? 0)}`} onClick={open} className="group inline-flex min-h-11 shrink-0 items-center">
+    <button type="button" aria-label={`${props.label}: ${formatNumber(props.value ?? 0)}`} onClick={open} className="group inline-flex min-h-[44px] shrink-0 items-center">
       <span
-        className={`surface-sunken inline-flex h-8 items-center gap-1 rounded-pill pl-1 transition-transform duration-(--duration-fast) ease-base group-active:scale-95 ${props.buy === true ? "pr-1" : "pr-2.5"}`}
+        className={`surface-sunken inline-flex h-[32px] items-center gap-1 rounded-pill pl-1 transition-transform duration-(--duration-fast) ease-base group-active:scale-95 ${props.buy === true ? "pr-1" : "pr-2.5"}`}
       >
-        <span ref={icon} className="inline-flex size-6 items-center justify-center">
+        <span ref={icon} className="inline-flex size-[24px] items-center justify-center">
           {props.icon}
         </span>
         <span className="min-w-6 font-display text-sm font-bold whitespace-nowrap tabular-nums text-text">
           <BalanceValue id={props.id} value={props.value} format={formatCompact} bump={icon} />
         </span>
         {props.buy === true ? (
-          <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-on-accent">
+          <span className="inline-flex size-[20px] items-center justify-center rounded-full bg-accent text-on-accent">
             <Plus size={14} strokeWidth={3} />
           </span>
         ) : null}

@@ -143,11 +143,17 @@ export function TabBar(props: TabBarProps): ReactNode {
                 props.onSelect(item.id);
               }}
               // Крайние вкладки стоят у края экрана — кольцо фокуса внутрь.
-              className="group relative flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 pt-1 focus-visible:-outline-offset-2"
+              // `min-w-0`: без него вкладку распирает её подпись, даже скрытая,
+              // и при крупном шрифте ряд вылезал за экран, а замер режима
+              // подписей сравнивал подпись с вкладкой, которую она же растянула.
+              className="group relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 pt-1 focus-visible:-outline-offset-2"
             >
+              {/* Плитка — в px, а не в rem: значок в ней и так в px, а с крупным
+                  шрифтом системы плитка росла бы вместе с текстом и у крайних
+                  вкладок вылезала за экран. */}
               <span
                 className={[
-                  "relative inline-flex size-11 items-center justify-center rounded-lg",
+                  "relative inline-flex size-[44px] items-center justify-center rounded-lg",
                   "transition-transform duration-(--duration-base) ease-spring",
                   active ? "-translate-y-3 scale-110" : "group-active:scale-90",
                 ].join(" ")}
