@@ -145,6 +145,17 @@ describe("облик подборов", () => {
     expect(new Set([one.key, three.key, five.key]).size).toBe(3);
   });
 
+  // Ореол сундука на земле — тон яруса окна вскрытия: размер сундука читается
+  // издалека цветом света, а не только величиной коробки.
+  it("у сундуков ореол своего тона, у прочих подборов ореола нет", () => {
+    const auras = [PICKUP_KIND.chestOne, PICKUP_KIND.chestThree, PICKUP_KIND.chestFive].map((kind) => PICKUP_LOOKS[kind].aura);
+    expect(auras.every((aura) => typeof aura === "number")).toBe(true);
+    expect(new Set(auras).size).toBe(3);
+    for (const kind of [PICKUP_KIND.medkit, PICKUP_KIND.magnet, PICKUP_KIND.dynamite]) {
+      expect(PICKUP_LOOKS[kind].aura).toBeUndefined();
+    }
+  });
+
   it("ключи текстур подборов не повторяются", () => {
     const keys = PICKUP_LOOKS.map((look) => look.key);
     expect(new Set(keys).size).toBe(keys.length);

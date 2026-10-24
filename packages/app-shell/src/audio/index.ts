@@ -1,5 +1,5 @@
 import type { KeyValueStorage } from "@bh/shared-types";
-import type { RunCues } from "@bh/core-game";
+import type { BossSnapshot, RunCues } from "@bh/core-game";
 import type { AudioVolumes } from "./audio-engine";
 import type { HudSound, RunSoundEvent, SoundDirector, SoundScene, UiSound } from "./sound-director";
 
@@ -24,6 +24,17 @@ export type { AudioVolumes, HudSound, RunSoundEvent, SoundScene, UiSound };
  * нажатие, и в бою он тонул (docs/31-audio-and-haptics.md §6).
  */
 export const DEFAULT_VOLUMES: AudioVolumes = { master: 60, effects: 85, ui: 90 };
+
+/**
+ * Сменил ли босс фазу между снимками HUD. Выход босса звучит по сигналам
+ * забега (`bossSpawns`), здесь — только рост фазы того же босса: новый босс
+ * с ненулевой фазой — это выход, а не перелом боя. Живёт здесь, а не в
+ * режиссёре: оболочка зовёт её на каждый снимок HUD, а режиссёр — в
+ * отдельном чанке.
+ */
+export function bossPhaseRaised(previous: BossSnapshot | null, next: BossSnapshot | null): boolean {
+  return previous !== null && next !== null && previous.enemyId === next.enemyId && next.phase > previous.phase;
+}
 
 let director: SoundDirector | null = null;
 let loading: Promise<SoundDirector | null> | null = null;
@@ -96,6 +107,10 @@ export const audio = {
   },
   runEvent(event: RunSoundEvent): void {
     director?.runEvent(event);
+  },
+  /** Звон `index`-й награды сундука — сцена открытия зовёт его по расписанию. */
+  chestReveal(index: number): void {
+    director?.chestReveal(index);
   },
   hud(state: HudSound): void {
     director?.setHud(state);

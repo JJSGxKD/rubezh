@@ -14,7 +14,7 @@ import {
 } from "@bh/core-game";
 import { create } from "zustand";
 import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
-import { audio } from "../audio";
+import { audio, bossPhaseRaised } from "../audio";
 import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
 import { runGraphics } from "./graphics";
@@ -581,6 +581,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       // Низкое здоровье — один раз на спуск ниже порога, а не на каждый снимок.
       const previous = get().hud;
       if (previous !== null && isLowHp(hud) && !isLowHp(previous) && hud.hp > 0) haptic("lowHp");
+      if (bossPhaseRaised(previous?.boss ?? null, hud.boss)) audio.runEvent("bossPhase");
       audio.hud({
         hpRatio: hud.maxHp > 0 ? hud.hp / hud.maxHp : 1,
         weapons: hud.weapons.length,
@@ -625,6 +626,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("chestFound", ({ index, size, source, elapsedSec }) => {
       track("chest_found", { index, size, source, elapsedSec: Math.round(elapsedSec) });
+      audio.runEvent("chestDrop");
     }),
 
     created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
@@ -634,9 +636,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
         const recipe = describeEvolution(WEAPONS, reward.refId);
         track("evolution_unlocked", { evolution: reward.refId, weapon: recipe?.weaponId ?? "", passive: recipe?.passiveId ?? "", chest: index, level: get().level, elapsedSec: Math.round(elapsedSec) });
       }
-      // Звук и отклик — как у набора уровня: отдельного звука сундука нет.
-      haptic("levelUp");
-      audio.runEvent("levelUp");
+      // Звук и отклик вскрытия — у сцены окна: она трясёт сундук перед ним.
       set({ phase: "chest", chest: { index, size, rewards } });
     }),
 

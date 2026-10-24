@@ -683,7 +683,10 @@ export interface RunCues {
   strikes: number;
   kills: number;
   eliteKills: number;
+  /** вышедшие элиты, боссы в том числе */
   eliteSpawns: number;
+  /** вышедшие боссы: у босса свой рог, элита рядом с ним — своим */
+  bossSpawns: number;
   /** собранный опыт — кристаллы */
   xp: number;
   /** начала угроз: подрывник поджёг фитиль, волк замер перед рывком и рванул, стрелок выстрелил */

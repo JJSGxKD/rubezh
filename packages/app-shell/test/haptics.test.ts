@@ -21,6 +21,7 @@ function cues(patch: Partial<RunCues> = {}): RunCues {
     kills: 0,
     eliteKills: 0,
     eliteSpawns: 0,
+    bossSpawns: 0,
     xp: 0,
     fuses: 0,
     dashWarns: 0,

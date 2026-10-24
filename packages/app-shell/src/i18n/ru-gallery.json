@@ -22,6 +22,7 @@
   "gallery.preview.pause": "Пауза",
   "gallery.preview.death": "Смерть, режим диагностики",
   "gallery.preview.record": "Смерть с новым рекордом",
+  "gallery.preview.chest": "Сундук на {size}",
   "gallery.modals": "Модалки",
   "gallery.modal.long": "Длинный лист",
   "gallery.modal.longHint": "Крестик сверху виден и в конце прокрутки; «Назад» и Esc закрывают лист, а не витрину.",
