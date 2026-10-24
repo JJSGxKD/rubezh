@@ -161,6 +161,11 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
           import("./state/compensation")
             .then(({ syncCompensation }) => syncCompensation())
             .catch((error: unknown) => console.warn("Компенсация тестеру не загрузилась:", error));
+          // Флаги игрока — тогда же, после входа: арт тестерам и дальше все
+          // флаги клиента (docs/35-stage4-plan.md, Р143). Сбой — флаги выключены.
+          import("./state/flags")
+            .then(({ loadFlags }) => loadFlags())
+            .catch((error: unknown) => console.warn("Флаги не загрузились:", error));
           // Знаки меню и колокольчик — тогда же и на каждом возврате в
           // приложение (docs/35-stage4-plan.md §3.17).
           import("./state/badges-api")
