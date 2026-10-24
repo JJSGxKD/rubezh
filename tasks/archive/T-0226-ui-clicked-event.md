@@ -20,6 +20,8 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - tasks/T-0227-ui-track-ids-all-screens.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
