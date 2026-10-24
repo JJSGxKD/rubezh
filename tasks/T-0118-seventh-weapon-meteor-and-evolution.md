@@ -3,7 +3,7 @@ id: T-0118
 title: Седьмое оружие «Метеор» и его эволюция «Огненный ливень»
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead2-19
 size: M
