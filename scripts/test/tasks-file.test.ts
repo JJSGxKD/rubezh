@@ -139,6 +139,13 @@ describe("проверка одной задачи", () => {
     }
   });
 
+  it("runner: owner проходит, неизвестный вид — ошибка с четырьмя видами", () => {
+    expect(validateTask("T-0003-x.md", { ...valid(), runner: "owner" })).toEqual([]);
+    expect(validateTask("T-0003-x.md", { ...valid(), runner: "robot" })).toEqual([
+      "T-0003-x.md: поле runner — ожидается any, local, owner или human, а не robot",
+    ]);
+  });
+
   it("id не совпадает с началом имени файла", () => {
     const errors = validateTask("T-0004-x.md", valid());
     expect(errors).toHaveLength(1);

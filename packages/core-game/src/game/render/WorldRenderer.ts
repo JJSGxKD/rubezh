@@ -85,6 +85,12 @@ export class WorldRenderer {
   private readonly stageCount: number;
   /** последний применённый вид спрайта — чтобы не дёргать Phaser каждый кадр */
   private readonly enemySpriteLook: Uint8Array;
+  /**
+   * Размер (`size` типа), с которым спрайт слота поставлен в последний раз: слот
+   * переходит к другому врагу с тем же видом, но другим размером, и по одному
+   * виду этого не узнать.
+   */
+  private readonly enemySpriteSize: Float32Array;
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly player: Phaser.GameObjects.Image;
   /** ключи текстур по паре «тип и ступень»: индекс = тип × число ступеней + ступень */
@@ -120,6 +126,7 @@ export class WorldRenderer {
     this.world = world;
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
+    this.enemySpriteSize = new Float32Array(world.config.maxEnemies);
     this.artFlashStart = new Int32Array(world.config.maxEnemies).fill(NO_FLASH);
 
     const rankOf = (type: { rank: "normal" | "elite" | "boss" }): EnemyRankLook => (type.rank === "normal" ? undefined : type.rank);
@@ -404,7 +411,7 @@ export class WorldRenderer {
         if (!this.art.shows(i)) look = LOOK.status + statusTone(enemies, i, tick);
         else if (keepsFill(mark)) look = LOOK.status + mark;
       }
-      this.applyLook(sprite, i, look);
+      this.applyLook(sprite, i, look, type.size);
       sprite.setVisible(true);
 
       const x = lerp(enemies.prevX[i], enemies.x[i], t);
@@ -505,13 +512,16 @@ export class WorldRenderer {
    * Вид спрайта меняется только при смене состояния: вызов setAlpha и
    * setScale на каждого врага каждый кадр — лишняя работа на сотнях объектов.
    */
-  private applyLook(sprite: Phaser.GameObjects.Image, index: number, look: number): void {
+  private applyLook(sprite: Phaser.GameObjects.Image, index: number, look: number, size: number): void {
     // Кадр атласа другого размера, чем фигура: смена «фигура ↔ арт» — тоже смена вида.
     const art = this.art.shows(index);
     const key = art ? look + LOOK_ART : look;
-    if (this.enemySpriteLook[index] === key && sprite.visible) return;
+    if (this.enemySpriteLook[index] === key && this.enemySpriteSize[index] === size && sprite.visible) return;
     this.enemySpriteLook[index] = key;
-    const base = art ? this.art.scale : 1;
+    this.enemySpriteSize[index] = size;
+    // Фигура строится по радиусу типа, `size` в нём уже есть; кадр атласа рисуется
+    // постоянным масштабом, и без множителя хитбокс с рисунком разошлись бы.
+    const base = art ? this.art.scale * size : 1;
     sprite.setAlpha(look === LOOK.dim ? 0.35 : look === LOOK.frozenBlink ? 0.6 : 1);
     const hitScale = art ? ART_HIT_SCALE : 1.25;
     sprite.setScale(base * (look === LOOK.hit ? hitScale : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1));
