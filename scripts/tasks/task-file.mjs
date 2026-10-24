@@ -24,7 +24,7 @@ const EPIC_RE = /^E\d+$/;
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
 export const STATUSES = ["draft", "ready", "in-progress", "done", "cancelled"];
 export const SIZES = ["S", "M"];
-export const RUNNERS = ["any", "local", "human"];
+export const RUNNERS = ["any", "local", "owner", "human"];
 export const RELEASES = ["none", "patch", "minor"];
 export const EFFORTS = ["low", "medium", "high", "extra"];
 /** Повторяет таблицу исполнителей в tasks/README.md («Исполнители и effort»): новый исполнитель — правка и там, и здесь. */
