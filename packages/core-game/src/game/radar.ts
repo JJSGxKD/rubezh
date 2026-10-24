@@ -23,6 +23,7 @@ const BLIP_BY_PICKUP: Record<number, number> = {
   [PICKUP_KIND.chestOne]: RADAR_BLIP.chest,
   [PICKUP_KIND.chestThree]: RADAR_BLIP.chest,
   [PICKUP_KIND.chestFive]: RADAR_BLIP.chest,
+  [PICKUP_KIND.freeze]: RADAR_BLIP.freeze,
 };
 
 export function buildRadarSnapshot(world: World): RadarSnapshot {

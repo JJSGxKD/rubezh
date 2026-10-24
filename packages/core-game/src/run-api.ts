@@ -92,6 +92,7 @@ export const RADAR_BLIP = {
   magnet: 3,
   dynamite: 4,
   chest: 5,
+  freeze: 6,
 } as const;
 
 export type RadarBlipKind = (typeof RADAR_BLIP)[keyof typeof RADAR_BLIP];
@@ -654,7 +655,7 @@ export interface RunDevCheats {
   spawnPaused: boolean;
 }
 
-export type RunDevPickup = "medkit" | "magnet" | "dynamite";
+export type RunDevPickup = "medkit" | "magnet" | "dynamite" | "freeze";
 
 export type RunDevCommand =
   | { kind: "levelUp"; count: number }
@@ -676,6 +677,8 @@ export interface RunCues {
   heal: number;
   magnet: number;
   dynamite: number;
+  /** подобрана заморозка */
+  freeze: number;
   /** взрывы подрывников; `explosionsNear` — из них рядом с игроком */
   explosions: number;
   explosionsNear: number;
