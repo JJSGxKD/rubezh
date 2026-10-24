@@ -3,8 +3,8 @@ id: T-0229
 title: Поле `size` у врага — радиус крупнее или мельче паттерна
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
