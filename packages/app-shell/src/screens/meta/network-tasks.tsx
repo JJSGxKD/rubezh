@@ -6,6 +6,7 @@ import { Card } from "../../design-system/components";
 import { t } from "../../i18n";
 import { track, useShell } from "../../state/shell";
 import { NETWORK_TASK_CHECKS_MS, createTasksApi, isFeedTask, networkTaskConfirmed, type NetworkTaskItem } from "../../state/tasks-api";
+import { mainAccrual, rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { AdLabel } from "./ad-label";
 import { FeedRow, type FeedProgress } from "./network-feed-row";
@@ -86,6 +87,7 @@ export function NetworkTasks(props: NetworkTasksProps): ReactNode {
       if (networkTaskConfirmed(item, fresh)) {
         settle(item.network, "rewarded", { ...item, ...fresh, reward: item.reward });
         track("ad_reward_claimed", { place: "task", source: "ad", network: item.network });
+        rewardFeedback(mainAccrual(item.reward));
         void loadWallet();
         return;
       }
@@ -102,6 +104,7 @@ export function NetworkTasks(props: NetworkTasksProps): ReactNode {
   const onFeedDone = (item: NetworkTaskItem, progress: FeedProgress): void => {
     setFinished((current) => new Map(current).set(item.network, { item: { ...item, ...progress }, status: "rewarded" }));
     track("ad_reward_claimed", { place: "task", source: "ad", network: item.network });
+    rewardFeedback(mainAccrual(item.reward));
     void loadWallet();
   };
 

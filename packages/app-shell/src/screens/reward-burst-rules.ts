@@ -28,6 +28,9 @@ export function burstVectors(count: number): BurstCoin[] {
 
 export type BurstIcon = "coin" | "gem" | "shard";
 
+/** Звук начисления по значку выброса — `rewardFeedback` в `state/ui-feedback.ts`. */
+export const ICON_RESOURCE = { coin: "coins", gem: "gems", shard: "shards" } as const satisfies Record<BurstIcon, string>;
+
 /**
  * Чем выстреливает награда из нескольких валют — самым ценным, что в ней
  * есть: самоцвет за звёзды, монета за игру, осколок — добавка к ним.

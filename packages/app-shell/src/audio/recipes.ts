@@ -389,6 +389,59 @@ export const SOUND_RECIPES = {
     bus: "ui", level: 0.55, voices: 1, gap: 0.3, send: 0.4, dur: 1, variants: 1,
     layers: [1174.66, 1479.98, 1760, 2349.32].map((f, i) => ({ kind: "bell" as const, f, t: i * 0.06, peak: 0.12, decay: 0.5, index: 0.6 })),
   },
+  // Начисление награды вне забега (design/art/direction-v2.md §7.6): у каждой
+  // валюты свой звук, и на слух понятно, что пришло, ещё до цифры. Монеты —
+  // россыпь металлических звонов, как горсть на столе; самоцвет — хрустальный
+  // перелив вверх; осколок — короткий стеклянный. Звучат поверх общего звона
+  // награды, поэтому тише и начинаются с запаздыванием — когда значки долетели.
+  uiCoins: {
+    bus: "ui", level: 0.5, voices: 1, gap: 0.25, send: 0.2, dur: 0.9, variants: 2, pitch: [1, 1.06],
+    layers: [0.1, 0.17, 0.26, 0.33, 0.43, 0.52, 0.64].flatMap((t, i) => [
+      { kind: "bell" as const, f: [2637, 3136, 2793, 3520, 2960, 3322, 3951][i] ?? 3000, t, peak: 0.09 - i * 0.006, decay: 0.16, index: 1.3 },
+      { kind: "hiss" as const, t, dur: 0.012, seed: 300 + i, filter: "highpass" as const, f0: 7000, peak: 0.04, decay: 0.01 },
+    ]),
+  },
+  uiGems: {
+    bus: "ui", level: 0.5, voices: 1, gap: 0.3, send: 0.45, dur: 1.1, variants: 1,
+    layers: [
+      ...[1760, 2217.46, 2637.02, 3520].map((f, i) => ({ kind: "bell" as const, f, t: 0.08 + i * 0.08, peak: 0.1, decay: 0.5, index: 0.5 })),
+      { kind: "hiss", t: 0.1, dur: 0.5, seed: 311, filter: "highpass", f0: 8000, attack: 0.12, peak: 0.03, decay: 0.3 },
+    ],
+  },
+  uiShards: {
+    bus: "ui", level: 0.45, voices: 1, gap: 0.25, send: 0.3, dur: 0.7, variants: 1,
+    layers: [2093, 2793.83, 3135.96].map((f, i) => ({ kind: "bell" as const, f, t: 0.08 + i * 0.07, peak: 0.09, decay: 0.3, index: 0.9 })),
+  },
+  // Трещотка колеса: щелчок на каждый сектор, прошедший под стрелкой. Короткий
+  // и сухой — на быстром начале щелчки идут часто, длинный звук слился бы в гул.
+  uiWheelTick: {
+    bus: "ui", level: 0.45, voices: 3, gap: 0.025, send: 0, dur: 0.06, variants: 3, pitch: [1, 1.04, 0.97],
+    layers: [
+      { kind: "tone", wave: "triangle", f0: 1900, f1: 1300, glide: 0.01, peak: 0.12, decay: 0.018 },
+      { kind: "hiss", dur: 0.01, seed: 320, filter: "highpass", f0: 4000, peak: 0.06, decay: 0.008 },
+    ],
+  },
+  // Счёт баланса в шапке: монета ложится на монету — короткий звонкий щелчок.
+  // Тон поднимает скорость воспроизведения (`rate`), поэтому вариант один.
+  uiTally: {
+    bus: "ui", level: 0.35, voices: 3, gap: 0.03, send: 0.05, dur: 0.08, variants: 1,
+    layers: [
+      { kind: "bell", f: 3729.31, peak: 0.08, decay: 0.045, index: 1.6 },
+      { kind: "tone", wave: "triangle", f0: 2200, f1: 1700, glide: 0.008, peak: 0.05, decay: 0.012 },
+    ],
+  },
+  // Покупка: глухой стук кошеля, монеты внутри и светлый звон «готово». Глухо
+  // и тепло, чтобы не путаться с начислением наград — те звенят в открытую.
+  uiPurchase: {
+    bus: "ui", level: 0.55, voices: 1, gap: 0.5, send: 0.3, dur: 1, variants: 1,
+    layers: [
+      { kind: "tone", f0: 150, f1: 95, glide: 0.06, peak: 0.3, decay: 0.09 },
+      { kind: "hiss", dur: 0.09, seed: 330, filter: "bandpass", f0: 900, f1: 500, glide: 0.08, q: 1.2, peak: 0.12, decay: 0.06 },
+      ...[0.05, 0.1, 0.16].map((t, i) => ({ kind: "bell" as const, f: [2349.32, 2793.83, 2489.02][i] ?? 2500, t, peak: 0.05, decay: 0.07, index: 1.4 })),
+      { kind: "bell", f: 1567.98, t: 0.24, peak: 0.11, decay: 0.45, index: 0.5 },
+      { kind: "bell", f: 2349.32, t: 0.3, peak: 0.08, decay: 0.55, index: 0.5 },
+    ],
+  },
   uiError: {
     bus: "ui", level: 0.5, voices: 1, gap: 0.2, send: 0.05, dur: 0.32, variants: 1,
     layers: [
@@ -409,5 +462,11 @@ export const UI_SOUNDS: readonly SoundId[] = [
   "uiSheetOpen",
   "uiSheetClose",
   "uiReward",
+  "uiCoins",
+  "uiGems",
+  "uiShards",
+  "uiWheelTick",
+  "uiTally",
+  "uiPurchase",
   "uiError",
 ];

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, Swords } from "lucide-react";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
-import { DIFFICULTIES, DROPS, LOADOUT_LIMITS } from "@bh/core-game";
+import { DIFFICULTIES, DROPS, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN } from "@bh/core-game";
 import {
   Badge,
   Card,
@@ -12,15 +12,19 @@ import {
   SegmentedControl,
 } from "../../design-system/components";
 import { formatDecimal, formatDuration, t } from "../../i18n";
+import "../../i18n/boosts";
 import "../../i18n/guide";
 import { useNavigation } from "../../state/navigation";
 import { useProgress } from "../../state/progress";
+import { boostIcon } from "../boost-icons";
+import { BOOST_RUN_GLYPH, GameGlyph } from "../game-glyphs";
 import { ItemIcon, ItemTile } from "../item-icons";
 import { formatChange } from "../run/upgrade-format";
 import {
   eliteEnemies,
   enemyStages,
   evolutionRecipes,
+  guideBoosts,
   passiveCategories,
   passiveRange,
   regularEnemies,
@@ -174,7 +178,27 @@ function Basics(): ReactNode {
 
       <Topic index={8} icon={<History size={20} />} title={t("guide.basics.save.title")} text={t("guide.basics.save.text")} />
 
-      <Topic index={9} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
+      {/* Бусты — после сложности: и то и другое выбирают в листе «Перед забегом». */}
+      <Topic index={9} icon={<GameGlyph glyph={BOOST_RUN_GLYPH} size={20} />} title={t("guide.basics.boosts.title")} text={t("guide.basics.boosts.text", { max: MAX_BOOSTS_PER_RUN })}>
+        <ul className="grid gap-2">
+          {guideBoosts().map((boost) => {
+            const Icon = boostIcon(boost.id);
+            return (
+              <li key={boost.id} className="surface-sunken flex items-start gap-3 rounded-md px-3 py-2">
+                <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
+                  <Icon size={18} aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display text-sm font-semibold text-text">{t(boost.nameKey)}</span>
+                  <span className="block text-xs text-text-muted">{t(boost.descriptionKey)}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </Topic>
+
+      <Topic index={10} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
     </>
   );
 }

@@ -1,14 +1,15 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ENEMIES, LOADOUT_LIMITS, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
-import { hasTranslation } from "../src/i18n";
+import { BOOSTS, ENEMIES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { hasTranslation, t } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
 import "../src/i18n/guide";
 import {
   eliteEnemies,
   evolutionRecipes,
   enemyResists,
+  guideBoosts,
   passiveCategories,
   passiveRange,
   regularEnemies,
@@ -156,5 +157,16 @@ describe("гайдбук", () => {
       expect(hasTranslation(weapon.nameKey), weapon.nameKey).toBe(true);
       expect(hasTranslation(weapon.descriptionKey), weapon.descriptionKey).toBe(true);
     }
+  });
+
+  it("описывает каждый буст из контента и называет, сколько их на забег", async () => {
+    // Тексты бустов — словарь листа «Перед забегом»: гайдбук подтягивает его сам.
+    await import("../src/i18n/boosts");
+    expect(guideBoosts().map((boost) => boost.id)).toEqual(BOOSTS.map((boost) => boost.id));
+    for (const boost of guideBoosts()) {
+      expect(hasTranslation(boost.nameKey), boost.id).toBe(true);
+      expect(hasTranslation(boost.descriptionKey), boost.id).toBe(true);
+    }
+    expect(t("guide.basics.boosts.text", { max: MAX_BOOSTS_PER_RUN })).toContain(String(MAX_BOOSTS_PER_RUN));
   });
 });

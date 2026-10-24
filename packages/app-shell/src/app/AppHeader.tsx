@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Bell, Menu, Plus } from "lucide-react";
 import { Avatar } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
@@ -10,6 +10,7 @@ import { useProgress } from "../state/progress";
 import { uiFeedback } from "../state/ui-feedback";
 import { useShell } from "../state/shell";
 import { useWallet } from "../state/wallet";
+import { BalanceValue } from "./BalanceValue";
 
 /**
  * Шапка разделов нижней панели (docs/27-design-system-and-app-shell.md §6,
@@ -57,8 +58,8 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
         </button>
 
         <div className={`flex min-w-0 flex-1 items-center justify-end gap-1.5 transition-opacity duration-(--duration-base) ease-base ${offline ? "opacity-60" : ""}`}>
-          <CurrencyButton icon={<CoinIcon size={20} />} label={t("currency.coins")} value={balances?.coins ?? 0} target="history" />
-          <CurrencyButton icon={<GemIcon size={20} />} label={t("currency.premium")} value={balances?.gems ?? 0} target="shop" buy />
+          <CurrencyButton id="coins" icon={<CoinIcon size={20} />} label={t("currency.coins")} value={balances?.coins ?? null} target="history" />
+          <CurrencyButton id="gems" icon={<GemIcon size={20} />} label={t("currency.premium")} value={balances?.gems ?? null} target="shop" buy />
         </div>
 
         {/* Лента — только с входом: без аккаунта уведомлениям неоткуда взяться.
@@ -162,20 +163,27 @@ function LevelAvatar(props: { name: string; url: string | null | undefined }): R
  * Валюта — одна кнопка на всю плашку: маленький «плюс» отдельной целью
  * нажатия был бы меньше 44 px (§4.6). Цель нажатия — 44 px в высоту, а
  * плашка — 32: вытянутая на всю цель, она выглядела бы кнопкой-столбиком.
+ *
+ * `null` — кошелёк ещё не пришёл (или сборка без входа): на плашке ноль.
  */
-function CurrencyButton(props: { icon: ReactNode; label: string; value: number; target: ScreenId; buy?: boolean }): ReactNode {
+function CurrencyButton(props: { id: string; icon: ReactNode; label: string; value: number | null; target: ScreenId; buy?: boolean }): ReactNode {
+  const icon = useRef<HTMLSpanElement>(null);
   const open = (): void => {
     uiFeedback("tap");
     if (props.target === "shop") useNavigation.getState().resetTo("shop");
     else useNavigation.getState().push(props.target);
   };
   return (
-    <button type="button" aria-label={`${props.label}: ${formatNumber(props.value)}`} onClick={open} className="group inline-flex min-h-11 shrink-0 items-center">
+    <button type="button" aria-label={`${props.label}: ${formatNumber(props.value ?? 0)}`} onClick={open} className="group inline-flex min-h-11 shrink-0 items-center">
       <span
         className={`surface-sunken inline-flex h-8 items-center gap-1 rounded-pill pl-1 transition-transform duration-(--duration-fast) ease-base group-active:scale-95 ${props.buy === true ? "pr-1" : "pr-2.5"}`}
       >
-        <span className="inline-flex size-6 items-center justify-center">{props.icon}</span>
-        <span className="min-w-6 font-display text-sm font-bold whitespace-nowrap tabular-nums text-text">{formatCompact(props.value)}</span>
+        <span ref={icon} className="inline-flex size-6 items-center justify-center">
+          {props.icon}
+        </span>
+        <span className="min-w-6 font-display text-sm font-bold whitespace-nowrap tabular-nums text-text">
+          <BalanceValue id={props.id} value={props.value} format={formatCompact} bump={icon} />
+        </span>
         {props.buy === true ? (
           <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-on-accent">
             <Plus size={14} strokeWidth={3} />
