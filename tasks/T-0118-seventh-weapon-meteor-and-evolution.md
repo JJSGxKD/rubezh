@@ -18,6 +18,10 @@ zones:
   - packages/core-game/src/game/render/weapon-effects.ts
   - packages/core-game/src/game/render/looks.ts
   - packages/core-game/test/**
+  - backend/api/src/modules/tasks/task-rules.ts
+  - packages/app-shell/src/screens/item-icons.tsx
+  - packages/app-shell/test/evolution-hints.test.ts
+  - packages/app-shell/test/level-unlocks.test.ts
 shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/32-balance.md
